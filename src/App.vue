@@ -1,28 +1,43 @@
+
 <template>
   <div id="app">
-    <img alt="Vue logo" src="./assets/logo.png">
-    <HelloWorld msg="Welcome to Your Vue.js App"/>
+    <Navbar />
+    <b-container >
+      <Datos />
+    </b-container>
   </div>
 </template>
 
 <script>
-import HelloWorld from './components/HelloWorld.vue'
+import Navbar from "./NavBar.vue";
+import Datos from "./datos.vue";
 
 export default {
-  name: 'App',
+  name: "app",
   components: {
-    HelloWorld
-  }
-}
+    Navbar,
+    Datos,
+  },
+  data() {
+    return {
+
+    };
+  },
+  methods: {
+    deleteFriend(payload) {
+      console.log(payload);
+      this.friends = this.friends.filter((friend) => {
+        return friend.name !== payload;
+      });
+    },
+  },
+};
 </script>
 
 <style>
-#app {
-  font-family: Avenir, Helvetica, Arial, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+h1 {
+  color: blueviolet;
   text-align: center;
-  color: #2c3e50;
-  margin-top: 60px;
+  font-weight: normal;
 }
 </style>
