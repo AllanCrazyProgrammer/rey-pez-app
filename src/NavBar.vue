@@ -1,19 +1,18 @@
 <template>
-  <div>
-    <b-navbar toggleable="lg" type="dark" variant="dark">
+    <b-navbar class="sideBorder"  toggleable="lg"  >
       <b-navbar-brand href="#">
-        <img
-          src="https://placekitten.com/g/30/30"
-          class="d-inline-block align-top"
-          alt="Kitten"
-        />
-        Rey Pez
+     
+  <b-img src="https://res.cloudinary.com/hwkcovsmr/image/upload/v1620946647/samples/REY_PEZ_LOGO_nsotww.png"  width="80"  fluid alt="Fluid image"></b-img>
+
       </b-navbar-brand>
 
       <b-navbar-toggle target="nav-collapse"></b-navbar-toggle>
 
       <b-collapse id="nav-collapse" is-nav>
+         <h2>Rey Pez</h2> 
+
         <b-row>
+
           <b-navbar-nav>
             <b-col> <b-nav-item href="#">Cuentas</b-nav-item></b-col>
             <b-col> <b-nav-item href="#">Herramientas</b-nav-item></b-col>
@@ -56,8 +55,18 @@ export default {
 </script>
 
 <style >
+.sideBorder {
+  border-left: 15px solid #3760b0!important;
+  border: 2px solid rgb(0, 0, 0);
+  background-color: white;
+}
+
 h1 {
   color: rgb(40, 40, 216);
+}
+h2 {
+  color: #ecb62b;
+   -webkit-text-stroke: 1px black; /* width and color */
 }
 nav {
   text-align: center;
