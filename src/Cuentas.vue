@@ -5,7 +5,7 @@
     </b-col>
 
     <b-col cols="11">
-      <h1>Cuentas</h1>
+      <h1>{{ $store.state.msg }}</h1>
       <h2>500: {{ din500 }}</h2>
       <h2>200: {{ din200 }}</h2>
       <h2>100: {{ din100 }}</h2>
@@ -24,6 +24,7 @@ import Calcular from "./Calcular";
 
 export default {
   name: "Cuentas",
+
   props: {
     datos: {
       type: Number,
