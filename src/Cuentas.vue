@@ -5,7 +5,7 @@
     </b-col>
 
     <b-col cols="11">
-      <h1>{{ $store.state.msg }}</h1>
+      <h1>{{ msg }}</h1>
       <h2>500: {{ din500 }}</h2>
       <h2>200: {{ din200 }}</h2>
       <h2>100: {{ din100 }}</h2>
@@ -48,8 +48,16 @@ export default {
       din1: 0,
     };
   },
+    computed:{
+    msg () {
+      return this.$store.state.msg
+    }
+  },
+
 
   methods: {
+
+
     getDatos(dataEl) {
       console.log(dataEl);
 

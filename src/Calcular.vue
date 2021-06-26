@@ -2,6 +2,7 @@
   <div>
     <b-col>
       <b-button @click="getArray">Calcular</b-button>
+  
     </b-col>
   </div>
 </template>
@@ -23,13 +24,16 @@ export default {
     misDatos: misDatos,
   }),
 
+
   methods: {
+  
+
     getArray() {
       let misDatos = this.datos;
       misDatos = misDatos.split(`\n`).filter((x) => x);
 
       console.log(misDatos);
-       return this.$emit("dataArray", misDatos);
+      return this.$emit("dataArray", misDatos);
     },
   },
 };

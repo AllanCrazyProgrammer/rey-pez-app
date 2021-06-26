@@ -1,17 +1,17 @@
 import Vue from "vue";
 import Vuex from "vuex";
 
-Vue.use(Vuex)
+Vue.use(Vuex);
 
 export default new Vuex.Store({
-    state: {
-        msg: "cuenta vuex"
+  state: {
+    msg: 5,
+  },
+  mutations: {
+    suma(state) {
+      state.msg = msg + 1;
     },
-    mutations: {
+  },
 
-    },
-
-    actions: {
-
-    }
-})
+  actions: {},
+});
