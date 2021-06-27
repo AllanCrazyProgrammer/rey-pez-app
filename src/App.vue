@@ -2,41 +2,27 @@
 <template>
   <div id="app">
     <Navbar />
-    <b-container >
-      <Datos />
-    </b-container>
   </div>
 </template>
 
 <script>
 import Navbar from "./NavBar.vue";
 import Datos from "./datos.vue";
+import Home from "./views/Home.vue";
 
 export default {
   name: "app",
   components: {
     Navbar,
     Datos,
-  },
-  data() {
-    return {
-
-    };
-  },
-  methods: {
-    deleteFriend(payload) {
-      console.log(payload);
-      this.friends = this.friends.filter((friend) => {
-        return friend.name !== payload;
-      });
-    },
+    Home,
   },
 };
 </script>
 
 <style>
 h1 {
-  color: blueviolet;
+  color: rgb(40, 40, 216);
   text-align: center;
   font-weight: normal;
 }
