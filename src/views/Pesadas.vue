@@ -1,13 +1,20 @@
 <template>
-  <h1>hello</h1>
+  <div id="pesadas">
+    <b-container>
+      <Pesadas />
+    </b-container>
+  </div>
 </template>
-
 <script>
-export default {
+import Pesadas from "../Pesadas.vue";
 
-}
+export default {
+  name: "pesadas",
+  components: {
+    Pesadas,
+  },
+};
 </script>
 
 <style>
-
 </style>

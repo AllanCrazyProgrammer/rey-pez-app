@@ -8,11 +8,9 @@
 
 <script>
 import Datos from "../datos.vue";
-import Navbar from  "../NavBar.vue"
 export default {
   name: "home",
   components: {
-    Navbar,
     Datos,
   },
 };
