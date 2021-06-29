@@ -1,17 +1,17 @@
 <template>
   <div id="pesadas">
     <b-container>
-      <Pesadas />
+      <Despique />
     </b-container>
   </div>
 </template>
 <script>
-import Pesadas from "../Pesadas.vue";
+import Despique from "../Despique.vue";
 
 export default {
   name: "pesadas",
   components: {
-    Pesadas,
+    Despique,
   },
 };
 </script>
