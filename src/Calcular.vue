@@ -1,7 +1,7 @@
 <template>
   <div>
     <b-col>
-      <b-button @click="getArray">Calcular</b-button>
+      <b-button @click="getArray">{{cantidad}}</b-button>
     </b-col>
   </div>
 </template>
@@ -12,7 +12,7 @@ import Cuentas from "./Cuentas.vue";
 
 export default {
   name: "Calcular",
-  props: ["datos"],
+  props: ["datos","cantidad"],
 
   components: {
     Datos,
@@ -36,4 +36,5 @@ export default {
 </script>
 
 <style>
+
 </style>
