@@ -5,9 +5,14 @@
 npm install
 ```
 
+## Node version
+```
+14.16.0
+```
+
 ### Compiles and hot-reloads for development
 ```
-npm run serve
+npm run start
 ```
 
 ### Compiles and minifies for production
