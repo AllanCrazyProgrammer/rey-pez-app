@@ -5,11 +5,15 @@
         <Calcular cantidad="$2" v-bind:datos="datos" @dataArray="getDatos" />
       </b-col>
 
-      <b-col cols="1" offset="1">
+      <b-col cols="1">
         <Calcular cantidad="$1" v-bind:datos="datos" @dataArray="getDatosPeso" />
       </b-col>
 
-      <b-col cols="9">
+      <b-col cols="1">
+        <button @click="printSection">Imprimir sección</button>
+      </b-col>
+
+      <b-col cols="9" id="printSection">
         <h1>Cuentas</h1>
     
 
@@ -59,6 +63,12 @@ export default {
   },
 
   methods: {
+    printSection() {
+      const printSection = document.getElementById('printSection');
+      window.print(printSection);
+    },
+
+
     getDatosPeso(dataEl) {
       for (let i = 0; i < dataEl.length; i++) {
         while (dataEl[i] >= 500) {

@@ -26,15 +26,19 @@
 import Cuentas from "./Cuentas.vue";
 
 export default {
+
   name: "Datos",
   components: {
     Cuentas,
   },
+ 
   data() {
     return {
       datos: "",
     };
   },
+
+  
 };
 </script>
 
