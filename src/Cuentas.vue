@@ -68,104 +68,33 @@ export default {
       window.print(printSection);
     },
 
-
     getDatosPeso(dataEl) {
-      for (let i = 0; i < dataEl.length; i++) {
-        while (dataEl[i] >= 500) {
-          dataEl[i] -= 500;
-          this.din500 += 1;
-        }
-        while (dataEl[i] >= 200) {
-          dataEl[i] -= 200;
-          this.din200 += 1;
-        }
-        while (dataEl[i] >= 100) {
-          dataEl[i] -= 100;
-          this.din100 += 1;
-        }
-        while (dataEl[i] >= 50) {
-          dataEl[i] -= 50;
-          this.din50 += 1;
-        }
-        while (dataEl[i] >= 20) {
-          dataEl[i] -= 20;
-          this.din20 += 1;
-        }
-        while (dataEl[i] >= 10) {
-          dataEl[i] -= 10;
-          this.din10 += 1;
-        }
-
-        while (dataEl[i] >= 5) {
-          dataEl[i] -= 5;
-          this.din5 += 1;
-        }
-        while (dataEl[i] < 5 && dataEl[i] > 0) {
-          dataEl[i] -= 1;
-          this.din1 += 1;
-        }
+  for (let i = 0; i < dataEl.length; i++) {
+    const bills = [500, 200, 100, 50, 20, 10, 5, 1];
+    for (const bill of bills) {
+      while (dataEl[i] >= bill) {
+        dataEl[i] -= bill;
+        this[`din${bill}`] += 1;
       }
-    },
+    }
+  }
+}
+    ,
     getDatos(dataEl) {
-      console.log(dataEl.value);
+  console.log(dataEl.value);
 
-      for (let i = 0; i < dataEl.length; i++) {
-        while (dataEl[i] >= 500) {
-          dataEl[i] -= 500;
-          this.din500 += 1;
-        }
-        while (dataEl[i] >= 200) {
-          dataEl[i] -= 200;
-          this.din200 += 1;
-        }
-        while (dataEl[i] >= 100) {
-          dataEl[i] -= 100;
-          this.din100 += 1;
-        }
-        while (dataEl[i] >= 50) {
-          dataEl[i] -= 50;
-          this.din50 += 1;
-        }
-        while (dataEl[i] >= 20) {
-          dataEl[i] -= 20;
-          this.din20 += 1;
-        }
-        while (dataEl[i] >= 10) {
-          dataEl[i] -= 10;
-          this.din10 += 1;
-        }
-
-        while (dataEl[i] === 9) {
-          dataEl[i] -= 4;
-          this.din2 += 2;
-        }
-
-        while (dataEl[i] >= 5) {
-          dataEl[i] -= 5;
-          this.din5 += 1;
-        }
-
-        while (dataEl[i] == 4) {
-          dataEl[i] -= 4;
-          this.din2 += 2;
-        }
-        while (dataEl[i] == 3) {
-          dataEl[i] -= 3;
-          this.din2 += 1;
-          this.din1 += 1;
-        }
-
-        while (dataEl[i] == 2) {
-          dataEl[i] -= 2;
-          this.din2 += 1;
-        }
-
-        while (dataEl[i] < 5 && dataEl[i] > 0) {
-          dataEl[i] -= 1;
-          this.din1 += 1;
-        }
+  const billetes = [500, 200, 100, 50, 20, 10, 5, 2, 1];
+  for (let i = 0; i < dataEl.length; i++) {
+    for (let j = 0; j < billetes.length; j++) {
+      let billete = billetes[j];
+      while (dataEl[i] >= billete) {
+        dataEl[i] -= billete;
+        this[`din${billete}`] += 1;
       }
-    },
+    }
+  }
+}
+ ,
   },
 };
 </script>
