@@ -22,7 +22,7 @@
             </b-col>
             <b-col
               ><b-nav-item
-                ><router-link to="/pesadas">Pesadas</router-link></b-nav-item
+                ><router-link to="/Notas">Notas</router-link></b-nav-item
               >
             </b-col>
           </b-navbar-nav>

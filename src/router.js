@@ -1,15 +1,15 @@
 import Vue from "vue";
 import VueRouter from "vue-router";
-import Pesadas from "./views/Pesadas.vue";
+import SaleNote from "./views/SaleNote.vue";
 import Home from "./views/Home.vue";
 
 Vue.use(VueRouter);
 
 const routes = [
   {
-    path: "/pesadas",
-    name: "pesadas",
-    component: Pesadas,
+    path: "/Notas",
+    name: "notas",
+    component: SaleNote,
   },
   {
     path: "/",

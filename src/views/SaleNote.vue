@@ -1,0 +1,402 @@
+<template>
+  <div class="sale-note">
+    <h2>Nota de Venta</h2>
+    <div class="folio-date">
+      <p><strong>Folio:</strong> {{ folio }}</p>
+      <p><strong>Fecha de Creación:</strong> {{ formatDate(creationDate) }}</p>
+    </div>
+    <form @submit.prevent="addProduct">
+      <div class="form-row">
+        <div>
+          <label for="client">Cliente:</label>
+          <input type="text" id="client" v-model="client" required />
+        </div>
+        <div>
+          <label for="date">Fecha:</label>
+          <DatePicker v-model="currentDate" value-type="format" format="DD MMMM YYYY" placeholder="Selecciona una fecha" />
+        </div>
+      </div>
+      <div class="form-row">
+        <div>
+          <label for="product">Producto:</label>
+          <input type="text" id="product" v-model="newProduct.product" required />
+        </div>
+        <div>
+          <label for="kilos">Kilos:</label>
+          <input type="number" id="kilos" v-model="newProduct.kilos" required />
+        </div>
+        <div>
+          <label for="pricePerKilo">Precio por Kilo:</label>
+          <input type="number" id="pricePerKilo" v-model="newProduct.pricePerKilo" required />
+        </div>
+        <button type="submit">Agregar Producto</button>
+      </div>
+    </form>
+    <div v-if="products.length || abonos.length">
+      <div ref="printSection" class="print-section">
+        <div class="folio-date">
+          <p><strong>Folio:</strong> {{ folio }}</p>
+          <p><strong>Fecha de Creación:</strong> {{ formatDate(creationDate) }}</p>
+        </div>
+        <div v-if="products.length">
+          <h3>Resumen</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>Producto</th>
+                <th>Kilos</th>
+                <th>Precio por Kilo</th>
+                <th>Total</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(product, index) in products" :key="index">
+                <template v-if="editIndex === index">
+                  <td><input type="text" v-model="editProduct.product" /></td>
+                  <td><input type="number" v-model.number="editProduct.kilos" /></td>
+                  <td><input type="number" v-model.number="editProduct.pricePerKilo" /></td>
+                  <td>${{ formatNumber(editProduct.kilos * editProduct.pricePerKilo) }}</td>
+                  <td>
+                    <button @click="confirmEdit"><span>&#10004;</span></button>
+                    <button @click="cancelEdit"><span>&#10060;</span></button>
+                  </td>
+                </template>
+                <template v-else>
+                  <td>{{ product.product }}</td>
+                  <td>{{ formatNumber(product.kilos) }}</td>
+                  <td>${{ formatNumber(product.pricePerKilo) }}</td>
+                  <td>${{ formatNumber(product.total) }}</td>
+                  <td>
+                    <button @click="editProductDetails(index)">Editar</button>
+                    <button @click="removeProduct(index)"><span>&#10060;</span></button>
+                  </td>
+                </template>
+              </tr>
+            </tbody>
+          </table>
+          <div class="total-general">
+            <h3>Total General: ${{ formatNumber(grandTotal) }}</h3>
+          </div>
+        </div>
+        <div class="abonos-container">
+          <div class="abonos-section">
+            <h3>Registrar Abonos</h3>
+            <form @submit.prevent="addAbono">
+              <div class="form-row">
+                <div>
+                  <label for="abonoMonto">Monto del Abono:</label>
+                  <input type="number" id="abonoMonto" v-model.number="newAbono.monto" required />
+                </div>
+                <div>
+                  <label for="abonoFecha">Fecha del Abono:</label>
+                  <DatePicker v-model="newAbono.fecha" value-type="format" format="DD MMMM YYYY" placeholder="Selecciona una fecha" />
+                </div>
+                <button type="submit">Agregar Abono</button>
+              </div>
+            </form>
+            <div v-if="abonos.length">
+              <h3>Abonos Realizados</h3>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Monto</th>
+                    <th>Fecha</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="(abono, index) in abonos" :key="index">
+                    <td>${{ formatNumber(abono.monto) }}</td>
+                    <td>{{ abono.fecha }}</td>
+                  </tr>
+                </tbody>
+              </table>
+              <h3>Total Abonado: ${{ formatNumber(totalAbonado) }}</h3>
+              <h3>Saldo Restante: ${{ formatNumber(saldoRestante) }}</h3>
+              <h3 v-if="isPaid" class="paid-status">Estado: Pagada</h3>
+              <h3 v-else class="unpaid-status">Estado: No Pagada</h3>
+            </div>
+          </div>
+        </div>
+      </div>
+      <button @click="exportPDF">Exportar a PDF</button>
+      <button @click="printSection">Imprimir</button>
+    </div>
+  </div>
+</template>
+
+
+<script>
+import DatePicker from 'vue2-datepicker';
+import 'vue2-datepicker/index.css';
+import html2pdf from 'html2pdf.js';
+
+export default {
+  components: {
+    DatePicker
+  },
+  data() {
+    const today = new Date();
+    return {
+      folio: Math.floor(Math.random() * 1000000),
+      client: '',
+      currentDate: today.toISOString().substr(0, 10),
+      newProduct: {
+        product: '',
+        kilos: null,
+        pricePerKilo: null,
+        total: 0
+      },
+      editProduct: {
+        product: '',
+        kilos: 0,
+        pricePerKilo: 0,
+        total: 0
+      },
+      products: [],
+      editIndex: -1,
+      newAbono: {
+        monto: null,
+        fecha: today.toISOString().substr(0, 10)
+      },
+      abonos: [],
+      isPaid: false, // Nuevo indicador para determinar si la nota está pagada
+      creationDate: today.toISOString().substr(0, 10)
+    };
+  },
+  computed: {
+    grandTotal() {
+      return this.products.reduce((sum, product) => sum + product.total, 0);
+    },
+    totalAbonado() {
+      return this.abonos.reduce((sum, abono) => sum + Number(abono.monto), 0);
+    },
+    saldoRestante() {
+      return this.grandTotal - this.totalAbonado;
+    }
+  },
+  watch: {
+    saldoRestante(newVal) {
+      this.isPaid = newVal <= 0;
+    }
+  },
+  methods: {
+    addProduct() {
+      this.newProduct.total = this.newProduct.kilos * this.newProduct.pricePerKilo;
+      this.products.push({ ...this.newProduct });
+      this.resetForm();
+    },
+    resetForm() {
+      this.newProduct = {
+        product: '',
+        kilos: null,
+        pricePerKilo: null,
+        total: 0
+      };
+    },
+    removeProduct(index) {
+      this.products.splice(index, 1);
+    },
+    editProductDetails(index) {
+      this.editIndex = index;
+      this.editProduct = { ...this.products[index] };
+    },
+    confirmEdit() {
+      this.editProduct.total = this.editProduct.kilos * this.editProduct.pricePerKilo;
+      this.products[this.editIndex] = { ...this.editProduct };
+      this.editIndex = -1;
+    },
+    cancelEdit() {
+      this.editIndex = -1;
+    },
+    addAbono() {
+      this.abonos.push({ ...this.newAbono });
+      this.resetAbonoForm();
+    },
+    resetAbonoForm() {
+      this.newAbono = {
+        monto: null,
+        fecha: new Date().toISOString().substr(0, 10)
+      };
+    },
+    formatNumber(value) {
+      return value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    },
+    formatDate(date) {
+      const options = { year: 'numeric', month: 'long', day: 'numeric' };
+      return new Date(date).toLocaleDateString('es-ES', options);
+    },
+    exportPDF() {
+      const element = this.$refs.printSection;
+      const options = {
+        margin: 0.5,
+        filename: `Nota_de_Venta_${this.folio}_${new Date().toLocaleDateString()}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2 },
+        jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
+      };
+
+      // Clonar el contenido y ocultar los botones, la columna de acciones y la sección de agregar abonos
+      const clonedElement = element.cloneNode(true);
+      const buttons = clonedElement.querySelectorAll('button');
+      buttons.forEach(button => button.style.display = 'none');
+      const actionColumns = clonedElement.querySelectorAll('td:nth-child(5), th:nth-child(5)');
+      actionColumns.forEach(column => column.style.display = 'none');
+      const abonosForm = clonedElement.querySelector('.abonos-section form');
+      if (abonosForm) abonosForm.style.display = 'none';
+      const abonosTitle = clonedElement.querySelector('.abonos-section h3:first-child');
+      if (abonosTitle) abonosTitle.style.display = 'none';
+
+      html2pdf().from(clonedElement).set(options).save();
+    },
+    printSection() {
+      const printContent = this.$refs.printSection.cloneNode(true);
+      const buttons = printContent.querySelectorAll('button');
+      buttons.forEach(button => button.style.display = 'none');
+      const actionColumns = printContent.querySelectorAll('td:nth-child(5), th:nth-child(5)');
+      actionColumns.forEach(column => column.style.display = 'none');
+      const abonosForm = printContent.querySelector('.abonos-section form');
+      if (abonosForm) abonosForm.style.display = 'none';
+      const abonosTitle = printContent.querySelector('.abonos-section h3:first-child');
+      if (abonosTitle) abonosTitle.style.display = 'none';
+
+      const printWindow = window.open('', '', 'width=800,height=600');
+      printWindow.document.write('<html><head><title>Nota de Venta</title>');
+      printWindow.document.write('</head><body >');
+      printWindow.document.write(printContent.innerHTML);
+      printWindow.document.write('</body></html>');
+      printWindow.document.close();
+      printWindow.print();
+    }
+  }
+};
+</script>
+
+<style scoped>
+.sale-note {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 1em;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+
+.folio-date {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 1em;
+}
+
+.folio-date p {
+  margin: 0;
+  font-size: 1.1em;
+}
+
+.form-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1em;
+  margin-bottom: 1em;
+}
+
+.form-row div {
+  flex: 1;
+  min-width: 120px;
+}
+
+.sale-note label {
+  display: block;
+  margin-bottom: 0.5em;
+}
+
+.sale-note input {
+  width: 100%;
+  padding: 0.5em;
+  box-sizing: border-box;
+}
+
+.sale-note button {
+  padding: 0.5em 1em;
+  background-color: #28a745;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.sale-note button:hover {
+  background-color: #218838;
+}
+
+button span {
+  font-size: 1.2em;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 1em;
+}
+
+table, th, td {
+  border: 1px solid #ccc;
+}
+
+th, td {
+  padding: 0.5em;
+  text-align: left;
+}
+
+th {
+  background-color: #f8f8f8;
+}
+
+td {
+  text-align: center;
+}
+
+button {
+  padding: 0.2em 0.5em;
+  margin: 0 0.2em;
+}
+
+button:hover {
+  background-color: #218838;
+}
+
+.total-general {
+  margin-top: 1em;
+}
+
+.abonos-container {
+  margin-top: 2em;
+  padding: 1em;
+  border-top: 1px solid #ccc;
+}
+
+.abonos-section h3 {
+  margin-top: 1em;
+}
+
+.abonos-section form {
+  margin-bottom: 1em;
+}
+
+.abonos-section {
+  margin-bottom: 2em; /* Añadir espacio al final */
+}
+
+.paid-status {
+  color: green;
+  font-weight: bold;
+}
+
+.unpaid-status {
+  color: red;
+  font-weight: bold;
+}
+
+.print-section {
+  margin-bottom: 2em; /* Añadir espacio al final */
+}
+</style>
