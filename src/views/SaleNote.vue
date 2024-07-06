@@ -2,14 +2,18 @@
   <div class="sale-note">
     <h2>Nota de Venta</h2>
     <div class="folio-date">
-      <p><strong>Folio:</strong> {{ folio }}</p>
-      <p><strong>Fecha de Creación:</strong> {{ formatDate(creationDate) }}</p>
+      <p><strong>Folio:</strong> {{ formattedFolio }}</p>
+      <p><strong>Fecha de Creación:</strong> {{ formattedCreationDate }}</p>
     </div>
     <form @submit.prevent="addProduct">
       <div class="form-row">
         <div>
           <label for="client">Cliente:</label>
-          <input type="text" id="client" v-model="client" required />
+          <select v-model="client" required>
+            <option v-for="client in clients" :key="client.id" :value="client.name">
+              {{ client.name }}
+            </option>
+          </select>
         </div>
         <div>
           <label for="date">Fecha:</label>
@@ -35,8 +39,8 @@
     <div v-if="products.length || abonos.length">
       <div ref="printSection" class="print-section">
         <div class="folio-date">
-          <p><strong>Folio:</strong> {{ folio }}</p>
-          <p><strong>Fecha de Creación:</strong> {{ formatDate(creationDate) }}</p>
+          <p><strong>Folio:</strong> {{ formattedFolio }}</p>
+          <p><strong>Fecha de Creación:</strong> {{ formattedCreationDate }}</p>
         </div>
         <div v-if="products.length">
           <h3>Resumen</h3>
@@ -122,18 +126,22 @@
       <button @click="exportPDF">Exportar a PDF</button>
       <button @click="printSection">Imprimir</button>
     </div>
+    <AddClient />
   </div>
 </template>
-
 
 <script>
 import DatePicker from 'vue2-datepicker';
 import 'vue2-datepicker/index.css';
 import html2pdf from 'html2pdf.js';
+import AddClient from '@/components/AddClient.vue';
+import { db } from '@/firebase';
+import { collection, getDocs } from "firebase/firestore";
 
 export default {
   components: {
-    DatePicker
+    DatePicker,
+    AddClient
   },
   data() {
     const today = new Date();
@@ -154,6 +162,7 @@ export default {
         total: 0
       },
       products: [],
+      clients: [],
       editIndex: -1,
       newAbono: {
         monto: null,
@@ -173,6 +182,12 @@ export default {
     },
     saldoRestante() {
       return this.grandTotal - this.totalAbonado;
+    },
+    formattedFolio() {
+      return `F-${this.folio.toString().padStart(6, '0')}`;
+    },
+    formattedCreationDate() {
+      return this.formatDate(this.creationDate);
     }
   },
   watch: {
@@ -181,7 +196,7 @@ export default {
     }
   },
   methods: {
-    addProduct() {
+    async addProduct() {
       this.newProduct.total = this.newProduct.kilos * this.newProduct.pricePerKilo;
       this.products.push({ ...this.newProduct });
       this.resetForm();
@@ -209,6 +224,14 @@ export default {
     cancelEdit() {
       this.editIndex = -1;
     },
+    async fetchClients() {
+      try {
+        const querySnapshot = await getDocs(collection(db, 'clients'));
+        this.clients = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      } catch (error) {
+        console.error('Error fetching clients: ', error);
+      }
+    },
     addAbono() {
       this.abonos.push({ ...this.newAbono });
       this.resetAbonoForm();
@@ -230,7 +253,7 @@ export default {
       const element = this.$refs.printSection;
       const options = {
         margin: 0.5,
-        filename: `Nota_de_Venta_${this.folio}_${new Date().toLocaleDateString()}.pdf`,
+        filename: `Nota_de_Venta_${this.formattedFolio}_${new Date().toLocaleDateString()}.pdf`,
         image: { type: 'jpeg', quality: 0.98 },
         html2canvas: { scale: 2 },
         jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
@@ -268,9 +291,15 @@ export default {
       printWindow.document.close();
       printWindow.print();
     }
+  },
+  async mounted() {
+    this.fetchClients();
   }
 };
 </script>
+
+
+
 
 <style scoped>
 .sale-note {
@@ -309,7 +338,7 @@ export default {
   margin-bottom: 0.5em;
 }
 
-.sale-note input {
+.sale-note input, .sale-note select {
   width: 100%;
   padding: 0.5em;
   box-sizing: border-box;
