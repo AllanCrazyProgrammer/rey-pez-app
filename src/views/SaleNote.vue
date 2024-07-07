@@ -1,5 +1,10 @@
 <template>
+
+
   <div class="sale-note">
+    <div class="back-button-container">
+      <BackButton to="/NoteMenu" />
+    </div>
     <h2>Nota de Venta</h2>
     <div class="folio-date">
       <p><strong>Folio:</strong> {{ formattedFolio }}</p>
@@ -126,11 +131,13 @@
       <button @click="exportPDF">Exportar a PDF</button>
       <button @click="printSection">Imprimir</button>
     </div>
-    <AddClient />
+  
   </div>
 </template>
 
 <script>
+import BackButton from '@/components/BackButton.vue';
+
 import DatePicker from 'vue2-datepicker';
 import 'vue2-datepicker/index.css';
 import html2pdf from 'html2pdf.js';
@@ -141,7 +148,8 @@ import { collection, getDocs } from "firebase/firestore";
 export default {
   components: {
     DatePicker,
-    AddClient
+    AddClient,
+    BackButton
   },
   data() {
     const today = new Date();
@@ -427,5 +435,10 @@ button:hover {
 
 .print-section {
   margin-bottom: 2em; /* Añadir espacio al final */
+}
+
+.back-button-container {
+  text-align: left; /* Centra el contenido del div horizontalmente */
+  margin-top: 20px; /* Añade un margen inferior para separarlo de los siguientes elementos */
 }
 </style>

@@ -1,5 +1,11 @@
 <template>
+  <div class="container">
+    
     <div class="add-client">
+      <div class="back-button-container">
+      <BackButton to="/NoteMenu" />
+    </div>
+
       <h2>Agregar Cliente</h2>
       <form @submit.prevent="addClient">
         <div class="form-group">
@@ -16,14 +22,21 @@
         </li>
       </ul>
     </div>
-  </template>
   
+  </div>
+</template>
   <script>
 // src/components/AddClient.vue
+import BackButton from './BackButton.vue';
+
 import { db } from '../firebase';
 import { collection, addDoc, getDocs, deleteDoc, doc } from "firebase/firestore";
 
 export default {
+  components: {
+    BackButton
+  },
+
   data() {
     return {
       name: '',
@@ -54,14 +67,17 @@ export default {
         console.error('Error fetching clients: ', error);
       }
     },
-    async deleteClient(id) {
-      try {
-        await deleteDoc(doc(db, 'clients', id));
-        this.fetchClients();
-      } catch (error) {
-        console.error('Error deleting client: ', error);
+    deleteClient(clientId) {
+      if (window.confirm("¿Estás seguro de que deseas eliminar este cliente?")) {
+        deleteDoc(doc(db, "clients", clientId))
+          .then(() => {
+            console.log("Cliente eliminado con éxito");
+          })
+          .catch((error) => {
+            console.error("Error al eliminar el cliente: ", error);
+          });
       }
-    }
+    },
   },
   async mounted() {
     this.fetchClients();
@@ -126,4 +142,9 @@ export default {
   ul li button:hover {
     background-color: #c82333;
   }
+  
+  .back-button-container {
+  text-align: left; /* Centra el contenido del div horizontalmente */
+  margin-top: 20px; /* Añade un margen inferior para separarlo de los siguientes elementos */
+}
   </style>

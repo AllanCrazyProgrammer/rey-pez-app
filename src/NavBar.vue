@@ -17,17 +17,20 @@
 
         <b-row>
           <b-navbar-nav>
-            <b-col
-              ><b-nav-item><router-link to="/">Home</router-link></b-nav-item>
+            <b-col>
+              <b-nav-item>
+                <router-link to="/">Home</router-link>
+              </b-nav-item>
             </b-col>
-            <b-col
-              ><b-nav-item
-                ><router-link to="/Notas">Notas</router-link></b-nav-item
-              >
+            <b-col>
+              <b-nav-item>
+                <router-link to="/noteMenu">Notas</router-link>
+              </b-nav-item>
             </b-col>
           </b-navbar-nav>
         </b-row>
         <!-- Right aligned nav items -->
+        <!-- Comment content goes here -->
         <b-navbar-nav class="ml-auto">
           <b-nav-item-dropdown right>
             <!-- Using 'button-content' slot -->
