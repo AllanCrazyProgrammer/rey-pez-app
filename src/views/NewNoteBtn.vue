@@ -13,7 +13,7 @@ export default {
 </script>
 <style scoped>
 button {
-    background-color: #4CAF50;
+    background-color:  rgb(40, 40, 216);
     border: none;
     color: white;
     padding: 8px 15px; /* Reducido de 10px 20px a 8px 15px */

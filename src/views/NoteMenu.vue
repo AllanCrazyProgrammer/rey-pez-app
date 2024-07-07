@@ -37,7 +37,7 @@ div {
 }
 
 button {
-  background-color: #4CAF50; /* Color de fondo verde */
+  background-color:  #1552cc ; /* Color de fondo verde */
   border: none;
   color: white;
   padding: 15px 32px;
@@ -52,6 +52,7 @@ button {
 }
 
 button:hover {
-  background-color: #45a049; /* Color más oscuro al pasar el mouse */
+  background-color: #0a3892; /* Color más oscuro al pasar el mouse */
+  color: yellow;
 }
 </style>
