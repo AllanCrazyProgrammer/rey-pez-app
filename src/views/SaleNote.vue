@@ -130,6 +130,8 @@
       </div>
       <button @click="exportPDF">Exportar a PDF</button>
       <button @click="printSection">Imprimir</button>
+      <button @click="saveNote">Guardar Nota</button> <!-- Botón para guardar la nota -->
+
     </div>
   
   </div>
@@ -143,7 +145,7 @@ import 'vue2-datepicker/index.css';
 import html2pdf from 'html2pdf.js';
 import AddClient from '@/components/AddClient.vue';
 import { db } from '@/firebase';
-import { collection, getDocs } from "firebase/firestore";
+import { collection, addDoc, getDocs, setDoc, doc } from "firebase/firestore";
 
 export default {
   components: {
@@ -204,6 +206,30 @@ export default {
     }
   },
   methods: {
+
+    async saveNote() {
+      try {
+        const noteData = {
+          folio: this.folio,
+          client: this.client,
+          currentDate: this.currentDate,
+          products: this.products,
+          abonos: this.abonos,
+          isPaid: this.isPaid,
+          creationDate: this.creationDate
+        };
+        if (this.noteId) {
+          await setDoc(doc(db, 'notes', this.noteId), noteData);
+        } else {
+          const docRef = await addDoc(collection(db, 'notes'), noteData);
+          this.noteId = docRef.id;
+        }
+        alert('Nota guardada exitosamente.');
+      } catch (error) {
+        console.error('Error saving note: ', error);
+        alert('Hubo un error al guardar la nota.');
+      }
+    },
     async addProduct() {
       this.newProduct.total = this.newProduct.kilos * this.newProduct.pricePerKilo;
       this.products.push({ ...this.newProduct });

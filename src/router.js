@@ -27,6 +27,12 @@ const routes = [
     name: 'AddClient',
     component: AddClient, // Asegúrate de que AddClient esté importado correctamente
   },
+  {
+    path: "/editar-nota/:noteId",
+    name: "editar-nota",
+    component: SaleNote,
+    props: true
+  }
 ];
 
 const router = new Router({
