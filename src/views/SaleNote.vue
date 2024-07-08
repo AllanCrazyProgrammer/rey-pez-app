@@ -130,7 +130,8 @@
       </div>
       <button @click="exportPDF">Exportar a PDF</button>
       <button @click="printSection">Imprimir</button>
-      <button @click="saveNote">Guardar Nota</button> <!-- Botón para guardar la nota -->
+      <button @click="saveNote">Guardar Nota</button> 
+      <button class="delete-note-button" @click="deleteNote">Eliminar Nota</button>
 
     </div>
   
@@ -145,7 +146,7 @@ import 'vue2-datepicker/index.css';
 import html2pdf from 'html2pdf.js';
 import AddClient from '@/components/AddClient.vue';
 import { db } from '@/firebase';
-import { collection, addDoc, getDocs, setDoc, doc,getDoc } from "firebase/firestore";
+import { collection, addDoc, getDocs, setDoc, doc,getDoc, deleteDoc } from "firebase/firestore";
 
 export default {
   components: {
@@ -156,7 +157,7 @@ export default {
   data() {
     const today = new Date();
     return {
-      folio: Math.floor(Math.random() * 1000000),
+      folio: Math.floor(Math.random() * 10000),
       client: '',
       currentDate: today.toISOString().substr(0, 10),
       newProduct: {
@@ -206,7 +207,24 @@ export default {
     }
   },
   methods: {
+    async deleteNote() {
+  if (this.noteId) {
+    // Agregar confirmación antes de eliminar
+    if (confirm("¿Estás seguro de que quieres eliminar esta nota?")) {
+      try {
+        await deleteDoc(doc(db, "notes", this.noteId));
+        alert("Nota eliminada con éxito");
+        this.$router.push({ name: 'NoteMenu' });
 
+      } catch (error) {
+        console.error("Error al eliminar la nota: ", error);
+        alert(`Error al eliminar la nota: ${error.message}`);
+      }
+    }
+  } else {
+    alert("El ID de la nota no está definido");
+  }
+},
     async saveNote() {
       try {
         const noteData = {
@@ -225,6 +243,7 @@ export default {
           this.noteId = docRef.id;
         }
         alert('Nota guardada exitosamente.');
+        this.$router.push({ name: 'NoteMenu' });
       } catch (error) {
         console.error('Error saving note: ', error);
         alert('Hubo un error al guardar la nota.');
@@ -351,6 +370,7 @@ export default {
       printWindow.print();
     }
   },
+  
   async mounted() {
     this.fetchClients();
 
@@ -366,6 +386,8 @@ export default {
 
 
 <style scoped>
+
+
 .sale-note {
   max-width: 800px;
   margin: 0 auto;
@@ -421,9 +443,21 @@ export default {
   background-color: #218838;
 }
 
-button span {
-  font-size: 1.2em;
+.sale-note .delete-note-button {
+  background-color: #dc3545; /* Rojo */
+  color: white; /* Texto blanco */
+  border: none; /* Sin borde */
+  padding: 10px 20px; /* Padding */
+  margin: 5px 0; /* Margen */
+  cursor: pointer; /* Cursor en forma de mano */
+  border-radius: 5px; /* Bordes redondeados */
 }
+
+.sale-note .delete-note-button:hover {
+  background-color: #c82333; /* Rojo más oscuro al pasar el mouse */
+}
+
+
 
 table {
   width: 100%;
