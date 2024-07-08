@@ -145,7 +145,7 @@ import 'vue2-datepicker/index.css';
 import html2pdf from 'html2pdf.js';
 import AddClient from '@/components/AddClient.vue';
 import { db } from '@/firebase';
-import { collection, addDoc, getDocs, setDoc, doc } from "firebase/firestore";
+import { collection, addDoc, getDocs, setDoc, doc,getDoc } from "firebase/firestore";
 
 export default {
   components: {
@@ -265,7 +265,32 @@ export default {
       } catch (error) {
         console.error('Error fetching clients: ', error);
       }
-    },
+    },async fetchNoteData() {
+    try {
+      const docRef = doc(db, 'notes', this.noteId);
+      const docSnap = await getDoc(docRef);
+
+      if (docSnap.exists()) {
+        const noteData = docSnap.data();
+        // Asignar los datos de la nota a las variables locales, por ejemplo:
+        this.folio = noteData.folio;
+        this.client = noteData.client;
+        this.currentDate = noteData.currentDate;
+        this.products = noteData.products;
+        this.abonos = noteData.abonos;
+        this.isPaid = noteData.isPaid;
+        this.creationDate = noteData.creationDate;
+
+  
+      
+        
+      } else {
+        console.log('No such document!');
+      }
+    } catch (error) {
+      console.error('Error fetching note: ', error);
+    }
+  },
     addAbono() {
       this.abonos.push({ ...this.newAbono });
       this.resetAbonoForm();
@@ -328,6 +353,11 @@ export default {
   },
   async mounted() {
     this.fetchClients();
+
+    if (this.$route.params.noteId) {
+    this.noteId = this.$route.params.noteId;
+    await this.fetchNoteData();
+  }
   }
 };
 </script>

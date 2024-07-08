@@ -18,9 +18,9 @@ const routes = [
     component: Home,
   },
   {
-    path: '/sale-note',
+    path: '/sale-note/:noteId?',
     name: 'SaleNote',
-    component: SaleNote,
+    component: () => import('@/views/SaleNote.vue')
   },
   {
     path: '/add-client',

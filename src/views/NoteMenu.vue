@@ -1,5 +1,5 @@
 <template>
-    <div>
+    <div class="notes-wrapper">
       <!-- Contenido de tu menú aquí -->
       <div class="button-container">
         <div class="button-wrapper">
@@ -9,10 +9,16 @@
           <button @click="goToAddClient">Agregar Cliente</button> <!-- Nuevo botón -->
         </div>
       </div>
+      <div class="filter-container">
+  <select v-model="paymentFilter">
+    <option value="all">Todas</option>
+    <option value="paid">Pagadas</option>
+    <option value="unpaid">No Pagadas</option>
+  </select>
+</div>
       <div class="notes-container">
         <h2>Notas por Cliente</h2>
-        <div v-for="(notes, client) in notesByClient" :key="client">
-          <h3>{{ client }}</h3>
+        <div v-for="(notes, client) in filteredNotesByClient" :key="client">          <h3>{{ client }}</h3>
           <ul>
             <li v-for="note in notes" :key="note.id">
               <button @click="goToEditNote(note.id)">
@@ -33,7 +39,9 @@
     name: 'NoteMenu',
     data() {
       return {
-        notesByClient: {}
+        notesByClient: {},
+        paymentFilter: 'all', // Valor inicial que muestra todas las notas
+       
       };
     },
     methods: {
@@ -66,7 +74,21 @@
     },
     async mounted() {
       this.fetchNotes();
+    },
+    computed: {
+  filteredNotesByClient() {
+    if (this.paymentFilter === 'all') {
+      return this.notesByClient;
     }
+    const filtered = {};
+    for (const [client, notes] of Object.entries(this.notesByClient)) {
+      filtered[client] = notes.filter(note => 
+        this.paymentFilter === 'paid' ? note.isPaid : !note.isPaid
+      );
+    }
+    return filtered;
+  }
+},
   };
   </script>
   
@@ -129,7 +151,23 @@ button:hover {
   list-style: none;
   padding: 0;
 }
+.filter-container {
+  display: flex; /* Usa flexbox para alinear los elementos internos */
+  justify-content: left; /* Centra el contenido izquierda */
+  margin: 10px 0; /* Añade un margen arriba y abajo para separarlo del resto */
+  padding: 5px; /* Añade padding para espacio interno */
+  background-color: #f9f9f9; /* Un fondo suave que contraste ligeramente con el blanco */
+  border-radius: 8px; /* Bordes redondeados para coherencia con los elementos de la lista */
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1); /* Sombra suave para dar profundidad */
+}
 
+.filter-container select {
+  padding: 8px 12px; /* Añade padding para hacer el select más grande y fácil de interactuar */
+  border: 1px solid #ccc; /* Borde sutil */
+  border-radius: 4px; /* Bordes redondeados para el select */
+  background-color: white; /* Fondo blanco para el select */
+  cursor: pointer; /* Cambia el cursor para indicar que el select es interactivo */
+}
 .notes-container ul li {
   margin: 10px 0;
   padding: 10px; /* Añadir padding para hacer cada elemento de la lista más grande */
@@ -137,4 +175,11 @@ button:hover {
   border-radius: 8px; /* Bordes redondeados para los elementos de la lista */
   box-shadow: 0 1px 3px rgba(0,0,0,0.1); /* Sombra para dar profundidad */
 }
+.notes-wrapper {
+  max-width: 1000px; /* Establece un ancho máximo para el contenedor */
+  margin: 0 auto; /* Centra el contenedor horizontalmente */
+  padding: 20px; /* Añade un poco de padding para no tener el contenido pegado a los bordes */
+}
+
+
 </style>
