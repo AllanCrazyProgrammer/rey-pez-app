@@ -67,8 +67,8 @@
         } catch (error) {
           console.error('Error fetching notes: ', error);
         }
-      },
-      goToEditNote(noteId) {
+      }, 
+            goToEditNote(noteId) {
         this.$router.push({ name: 'editar-nota', params: { noteId } });
       }
     },
