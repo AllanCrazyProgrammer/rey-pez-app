@@ -396,11 +396,21 @@ export default {
   border-radius: 4px;
 }
 
+.container {
+  margin: 0 auto;
+  padding: 1em;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
 .folio-date {
   display: flex;
   justify-content: space-between;
   margin-bottom: 1em;
 }
+
 
 .folio-date p {
   margin: 0;
@@ -422,21 +432,24 @@ export default {
 .sale-note label {
   display: block;
   margin-bottom: 0.5em;
+  margin: 0 auto;
 }
-
 .sale-note input, .sale-note select {
   width: 100%;
   padding: 0.5em;
   box-sizing: border-box;
 }
 
+
 .sale-note button {
-  padding: 0.5em 1em;
   background-color: #28a745;
   color: white;
   border: none;
   border-radius: 4px;
   cursor: pointer;
+  margin: .25em 0;
+  margin-left: 5px;
+  margin-right: 5px;
 }
 
 .sale-note button:hover {
@@ -524,11 +537,25 @@ button:hover {
 }
 
 .print-section {
-  margin-bottom: 2em; /* Añadir espacio al final */
+  margin-bottom: 1em; /* Añadir espacio al final */
 }
 
 .back-button-container {
   text-align: left; /* Centra el contenido del div horizontalmente */
   margin-top: 20px; /* Añade un margen inferior para separarlo de los siguientes elementos */
+}
+
+@media (max-width: 768px) {
+  .folio-date {
+    flex-direction: column;
+  }
+
+  .folio-date p {
+    text-align: left;
+  }
+
+  .form-row {
+    flex-direction: column;
+  }
 }
 </style>
