@@ -1,8 +1,10 @@
 <template>
   <div class="mt-5">
+    <div class="fecha-actual">{{ fechaActual }}</div>
+
     <b-row>
-      <b-col cols="5">
-        <button onclick="window.location.reload();">Borrar datos</button>
+      <b-col cols="12" md="5" class="mb-3">
+        <b-button @click="borrarDatos" variant="primary" class="mb-3">Borrar datos</b-button>
         <b-form-textarea
           class="text-center"
           name="dinero"
@@ -37,10 +39,25 @@ export default {
       datos: "",
     };
   },
+  computed: {
+    fechaActual() {
+      const hoy = new Date();
+      const opciones = { year: 'numeric', month: 'long', day: 'numeric' };
+      return hoy.toLocaleDateString('es-ES', opciones);
+    }
+  }
 
   
 };
 </script>
 
 <style>
+
+.fecha-actual {
+  top: 10px;
+  right: 10px;
+  font-size: 20px;
+  color: #333;
+  margin-bottom: 20px;
+}
 </style>
