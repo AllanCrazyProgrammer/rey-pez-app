@@ -5,8 +5,11 @@
       <div class="back-button-container">
       <BackButton to="/NoteMenu" />
     </div>
-
+    <div class="add-client-form" >
       <h2>Agregar Cliente</h2>
+    </div>
+
+      
       <form @submit.prevent="addClient">
         <div class="form-group">
           <label for="name">Nombre:</label>
@@ -14,7 +17,9 @@
         </div>
         <button type="submit">Agregar Cliente</button>
       </form>
-      <h2>Lista de Clientes</h2>
+      <div class="add-client-form" >
+        <h2>Lista de Clientes</h2>
+      </div>
       <ul>
         <li v-for="client in clients" :key="client.id">
           {{ client.name }}
@@ -84,6 +89,7 @@ export default {
   }
 };
 </script>
+
   
   <style scoped>
   .add-client {
@@ -92,6 +98,20 @@ export default {
     padding: 1em;
     border: 1px solid #ccc;
     border-radius: 4px;
+  }
+
+  .add-client-form {
+    margin: 1.5em;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .lista-clientes-form {
+    margin: 1.5em;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
   }
   
   .form-group {
