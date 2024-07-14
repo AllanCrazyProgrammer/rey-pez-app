@@ -32,7 +32,7 @@
         </div>
         <div>
           <label for="kilos">Kilos:</label>
-          <input type="number" id="kilos" v-model="newProduct.kilos" required />
+          <input type="number" step="0.01" v-model.number="newProduct.kilos" required >
         </div>
         <div>
           <label for="pricePerKilo">Precio por Kilo:</label>
@@ -195,7 +195,7 @@ export default {
       return this.grandTotal - this.totalAbonado;
     },
     formattedFolio() {
-      return `F-${this.folio.toString().padStart(6, '0')}`;
+      return `F-${this.folio.toString().padStart(4, '0')}`;
     },
     formattedCreationDate() {
       return this.formatDate(this.creationDate);
