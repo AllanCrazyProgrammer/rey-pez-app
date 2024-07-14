@@ -17,7 +17,7 @@
   .btn-back {
   background-color: #757575; /* Color de fondo gris */
   color: white; /* Color del texto */
-  padding: 15px 25px; /* Espaciado interno aumentado */
+  padding: 0.5em 1em;
   border: none; /* Sin borde */
   border-radius: 5px; /* Bordes redondeados */
   text-decoration: none; /* Remover subrayado de enlaces */

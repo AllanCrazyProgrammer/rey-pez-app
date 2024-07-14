@@ -1,22 +1,18 @@
 <template>
   <div>
     <b-row>
-      <b-col cols="1">
+      <b-col cols="12" md="4" lg="2" class="mb-3">
         <Calcular cantidad="$2" v-bind:datos="datos" @dataArray="getDatos" />
       </b-col>
-
-      <b-col cols="1">
+      <b-col cols="12" md="4" lg="2" class="mb-3">
         <Calcular cantidad="$1" v-bind:datos="datos" @dataArray="getDatosPeso" />
       </b-col>
-
-      <b-col cols="1">
-        <button @click="printSection">Imprimir sección</button>
+      <b-col cols="12" md="4" lg="2" class="mb-3">
+        <button @click="printCuentas" class="btn btn-primary w-100">Imprimir sección</button>
       </b-col>
 
-      <b-col cols="9" id="printSection">
+      <b-col cols="12" lg="6" id="printSection" class="mb-3">
         <h1>Cuentas</h1>
-    
-
         <h2>500: {{ din500 }}</h2>
         <h2>200: {{ din200 }}</h2>
         <h2>100: {{ din100 }}</h2>
@@ -63,10 +59,25 @@ export default {
   },
 
   methods: {
-    printSection() {
-      const printSection = document.getElementById('printSection');
-      window.print(printSection);
+    printCuentas() {
+      const printContents = document.getElementById('printSection').innerHTML;
+      const originalContents = document.body.innerHTML;
+
+      // Obtener la fecha actual
+      const currentDate = new Date().toLocaleDateString();
+
+      // Crear un elemento HTML para la fecha
+      const dateElement = `<div style="text-align: center; font-size: 30px; margin-bottom: 10px;">Fecha: ${currentDate}</div>`;
+
+      // Insertar la fecha en el contenido de impresión
+      const printContentsWithDate = dateElement + printContents;
+
+      document.body.innerHTML = printContentsWithDate;
+      window.print();
+      document.body.innerHTML = originalContents;
+      window.location.reload(); // Recargar la página para restaurar el contenido original
     },
+
 
     getDatosPeso(dataEl) {
   for (let i = 0; i < dataEl.length; i++) {
