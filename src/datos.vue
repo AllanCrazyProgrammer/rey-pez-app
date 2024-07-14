@@ -39,6 +39,11 @@ export default {
       datos: "",
     };
   },
+  methods: {
+    borrarDatos() {
+      this.datos = '';
+    }
+  },
   computed: {
     fechaActual() {
       const hoy = new Date();
