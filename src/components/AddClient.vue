@@ -90,81 +90,103 @@ export default {
 };
 </script>
 
-  
-  <style scoped>
-  .add-client {
-    max-width: 600px;
-    margin: 0 auto;
-    padding: 1em;
-    border: 1px solid #ccc;
-    border-radius: 4px;
-  }
+<style scoped>
+/* Estilos generales */
+.add-client {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 20px;
+  border: 1px solid #ccc;
+  border-radius: 20px;
+  background-color: #e8f0fe;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
 
-  .add-client-form {
-    margin: 1.5em;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-  }
+.add-client-form, .lista-clientes-form {
+  margin: 1.5em;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
 
-  .lista-clientes-form {
-    margin: 1.5em;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-  }
-  
-  .form-group {
-    margin-bottom: 1em;
-  }
-  
-  .form-group label {
-    display: block;
-    margin-bottom: 0.5em;
-  }
-  
-  .form-group input {
-    width: 100%;
-    padding: 0.5em;
-    box-sizing: border-box;
-  }
-  
-  button {
-    padding: 0.5em 1em;
-    background-color: #28a745;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-  }
-  
-  button:hover {
-    background-color: #218838;
-  }
-  
-  ul {
-    list-style: none;
-    padding: 0;
-  }
-  
-  ul li {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 0.5em 0;
-    border-bottom: 1px solid #ccc;
-  }
-  
-  ul li button {
-    background-color: #dc3545;
-  }
-  
-  ul li button:hover {
-    background-color: #c82333;
-  }
-  
-  .back-button-container {
+.form-group {
+  margin-bottom: 1em;
+  width: 100%; /* Asegura que los elementos ocupen todo el ancho del contenedor */
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 0.5em;
+  font-weight: bold;
+  font-size: 1.1em;
+  color: #3760b0; /* Color acorde al estilo general */
+}
+
+.form-group input {
+  width: 100%;
+  padding: 0.5em;
+  box-sizing: border-box;
+  border-radius: 5px;
+  border: 1px solid #ccc;
+  font-size: 1em;
+}
+
+/* Estilos para los botones */
+button {
+  padding: 10px 20px;
+  background-color: #3760b0;
+  color: white;
+  border: none;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+button:hover {
+  background-color: #2a4a87;
+}
+
+ul {
+  list-style: none;
+  padding: 0;
+  width: 100%; /* Asegura que la lista ocupe todo el ancho del contenedor */
+}
+
+ul li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75em 1em;
+  border-bottom: 1px solid #ccc;
+  background-color: #fff;
+  border-radius: 10px;
+  margin-bottom: 0.5em;
+  transition: background-color 0.3s, box-shadow 0.3s;
+}
+
+ul li:hover {
+  background-color: #f1f1f1;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+ul li span {
+  font-size: 1.1em;
+  color: #333;
+}
+
+ul li button {
+  background-color: #dc3545;
+  padding: 5px 10px;
+  border-radius: 20px;
+  color: white;
+}
+
+ul li button:hover {
+  background-color: #c82333;
+}
+
+.back-button-container {
   text-align: left; /* Centra el contenido del div horizontalmente */
   margin-top: 20px; /* Añade un margen inferior para separarlo de los siguientes elementos */
 }
-  </style>
+</style>
