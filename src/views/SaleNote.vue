@@ -78,7 +78,7 @@
                   <td>${{ formatNumber(product.total) }}</td>
                   <td>
                     <button @click="editProductDetails(index)">Editar</button>
-                    <button @click="removeProduct(index)"><span>&#10060;</span></button>
+                    <button @click="removeProduct(index)">Borrar</button>
                   </td>
                 </template>
               </tr>
@@ -383,26 +383,43 @@ export default {
 </script>
 
 
-
-
 <style scoped>
-
-
+/* Estilos generales */
 .sale-note {
   max-width: 800px;
   margin: 0 auto;
-  padding: 1em;
+  padding: 20px;
   border: 1px solid #ccc;
-  border-radius: 4px;
+  border-radius: 20px;
+  background-color: #e8f0fe;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
 }
 
+/* Estilos para los botones */
+button {
+  background-color: #3760b0;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+button:hover {
+  background-color: #2a4a87;
+}
+
+/* Estilos específicos para SaleNote.vue */
 .container {
   margin: 0 auto;
-  padding: 1em;
+  padding: 20px;
   border: 1px solid #ccc;
-  border-radius: 4px;
+  border-radius: 20px;
   max-width: 100%;
   box-sizing: border-box;
+  background-color: #e8f0fe;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
 }
 
 .folio-date {
@@ -410,7 +427,6 @@ export default {
   justify-content: space-between;
   margin-bottom: 1em;
 }
-
 
 .folio-date p {
   margin: 0;
@@ -434,43 +450,42 @@ export default {
   margin-bottom: 0.5em;
   margin: 0 auto;
 }
+
 .sale-note input, .sale-note select {
   width: 100%;
   padding: 0.5em;
   box-sizing: border-box;
+  border-radius: 5px;
+  border: 1px solid #ccc;
 }
 
+.sale-note .action-buttons {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 1em;
+}
 
-.sale-note button {
+.sale-note .save-button {
   background-color: #28a745;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  margin: .25em 0;
-  margin-left: 5px;
-  margin-right: 5px;
 }
 
-.sale-note button:hover {
+.sale-note .save-button:hover {
   background-color: #218838;
 }
 
 .sale-note .delete-note-button {
-  background-color: #dc3545; /* Rojo */
-  color: white; /* Texto blanco */
-  border: none; /* Sin borde */
-  padding: 10px 20px; /* Padding */
-  margin: 5px 0; /* Margen */
-  cursor: pointer; /* Cursor en forma de mano */
-  border-radius: 5px; /* Bordes redondeados */
+  background-color: #dc3545;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  margin: 5px 0;
+  cursor: pointer;
+  border-radius: 20px;
 }
 
 .sale-note .delete-note-button:hover {
-  background-color: #c82333; /* Rojo más oscuro al pasar el mouse */
+  background-color: #c82333;
 }
-
-
 
 table {
   width: 100%;
@@ -493,15 +508,6 @@ th {
 
 td {
   text-align: center;
-}
-
-button {
-  padding: 0.2em 0.5em;
-  margin: 0 0.2em;
-}
-
-button:hover {
-  background-color: #218838;
 }
 
 .total-general {
