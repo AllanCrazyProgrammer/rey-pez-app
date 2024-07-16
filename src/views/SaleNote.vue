@@ -53,10 +53,10 @@
             <thead>
               <tr>
                 <th>Producto</th>
-                <th>Kilos</th>
-                <th>Precio por Kilo</th>
+                <th>Kg</th>
+                <th>Precio</th>
                 <th>Total</th>
-                <th>Acciones</th>
+                <th>Accion</th>
               </tr>
             </thead>
             <tbody>
@@ -321,7 +321,7 @@ export default {
       };
     },
     formatNumber(value) {
-      return value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      return value.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
     },
     formatDate(date) {
       const options = { year: 'numeric', month: 'long', day: 'numeric' };
@@ -499,7 +499,7 @@ table, th, td {
 
 th, td {
   padding: 0.5em;
-  text-align: left;
+  text-align: center;
 }
 
 th {
