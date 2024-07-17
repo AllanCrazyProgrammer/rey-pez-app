@@ -45,7 +45,7 @@ export default {
   data() {
     return {
       notesByClient: {},
-      paymentFilter: 'all', // Valor inicial que muestra todas las notas
+      paymentFilter: 'unpaid', 
     };
   },
   methods: {
@@ -60,7 +60,7 @@ export default {
         const querySnapshot = await getDocs(collection(db, 'notes'));
         const notes = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-        // Organizar las notas por cliente
+        // Organizar las notas por cliente y ordenarlas de más nuevas a más antiguas
         this.notesByClient = notes.reduce((acc, note) => {
           if (!acc[note.client]) {
             acc[note.client] = [];
@@ -68,6 +68,11 @@ export default {
           acc[note.client].push(note);
           return acc;
         }, {});
+
+        // Ordenar las notas de cada cliente
+        for (let client in this.notesByClient) {
+          this.notesByClient[client].sort((a, b) => new Date(b.currentDate) - new Date(a.currentDate));
+        }
       } catch (error) {
         console.error('Error fetching notes: ', error);
       }
@@ -85,12 +90,17 @@ export default {
         return this.notesByClient;
       }
       const filtered = {};
-      for (const [client, notes] of Object.entries(this.notesByClient)) {
-        filtered[client] = notes.filter(note => 
-          this.paymentFilter === 'paid' ? note.isPaid : !note.isPaid
-        );
-      }
-      return filtered;
+  for (const [client, notes] of Object.entries(this.notesByClient)) {
+    filtered[client] = notes.filter(note => 
+      this.paymentFilter === 'all' || 
+      (this.paymentFilter === 'paid' ? note.isPaid : !note.isPaid)
+    );
+    // Solo incluimos clientes que tienen notas después del filtrado
+    if (filtered[client].length === 0) {
+      delete filtered[client];
+    }
+  }
+  return filtered;
     },
     totalDebtByClient() {
       const debtByClient = {};
