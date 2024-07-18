@@ -2,6 +2,8 @@
 <template>
   <div id="app">
     <Navbar />
+    <Footer />
+
   </div>
 </template>
 
@@ -9,11 +11,13 @@
 import Navbar from "./NavBar.vue";
 import Datos from "./datos.vue";
 import Home from "./views/Home.vue";
+import Footer from './Footer.vue';
 
 export default {
   name: "app",
   components: {
     Navbar,
+    Footer,
     Datos,
     Home,
   },
