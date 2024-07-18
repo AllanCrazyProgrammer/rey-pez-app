@@ -97,6 +97,7 @@ export default {
     },
     showAbonoModal(client) {
       this.selectedClient = client;
+      this.abonoAmount = '';  // Inicializar como cadena vacía
       this.showModal = true;
     },
     closeModal() {
