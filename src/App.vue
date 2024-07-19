@@ -25,6 +25,22 @@ export default {
 </script>
 
 <style>
+html, body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+#app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.content-wrapper {
+  flex: 1 0 auto;
+}
+
 h1 {
   color: rgb(40, 40, 216);
   text-align: center;
