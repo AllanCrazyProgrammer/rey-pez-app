@@ -1,23 +1,22 @@
 <template>
-  <!-- Agrega esto en tu archivo HTML principal, generalmente en el <head> -->
   <div>
     <b-navbar class="navbar-custom" toggleable="lg">
-      <b-navbar-brand href="#">
+      <b-navbar-brand href="#" class="mx-auto">
         <b-img
           src="https://res.cloudinary.com/hwkcovsmr/image/upload/v1620946647/samples/REY_PEZ_LOGO_nsotww.png"
           width="100"
           fluid
-          alt="Fluid image"
+          alt="Rey Pez Logo"
+          class="logo-image"
         ></b-img>
       </b-navbar-brand>
 
-      <b-navbar-toggle target="nav-collapse"></b-navbar-toggle>
+      <b-navbar-toggle target="nav-collapse" class="ml-auto"></b-navbar-toggle>
 
       <b-collapse id="nav-collapse" is-nav>
-        <b-navbar-nav class="mx-auto">
-          <h2 class="navbar-title">Rey Pez</h2>
-        </b-navbar-nav>
-        <b-navbar-nav class="nav-links">
+        <h2 class="navbar-title mx-auto">Rey Pez</h2>
+
+        <b-navbar-nav class="mr-auto">
           <b-nav-item>
             <router-link to="/" class="nav-link">Home</router-link>
           </b-nav-item>
@@ -26,30 +25,12 @@
           </b-nav-item>
         </b-navbar-nav>
 
-        <!-- Right aligned nav items -->
-        <b-navbar-nav class="ml-auto">
-          <b-nav-item-dropdown right>
-            <template #button-content>
-              <em>User</em>
-            </template>
-            <b-dropdown-item href="#">Profile</b-dropdown-item>
-            <b-dropdown-item href="#">Sign Out</b-dropdown-item>
-          </b-nav-item-dropdown>
-        </b-navbar-nav>
+
       </b-collapse>
     </b-navbar>
     <router-view />
   </div>
 </template>
-
-<script>
-export default {
-  name: "Navbar",
-  data() {
-    return {};
-  },
-};
-</script>
 
 <script>
 export default {
@@ -80,22 +61,32 @@ export default {
   background: linear-gradient(blue, #3760b0);
   border-top-left-radius: 20px;
   border-bottom-left-radius: 20px;
-  background-image: url('https://www.transparenttextures.com/patterns/wave.png'); /* Simulating waves */
+  background-image: url('https://www.transparenttextures.com/patterns/wave.png');
 }
 
-.navbar-brand img {
+.navbar-brand {
+  display: flex;
+  justify-content: center;
+}
+
+.logo-image {
   border-radius: 50%;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
 }
+
 .navbar-title {
-  color: #3760b0; /* Azul principal */
+  color: #3760b0;
   font-size: 4em;
   margin: 0;
-  font-family: 'Sail', cursive; /* Cambiamos la fuente a "Sail" */
+  font-family: 'Sail', cursive;
   text-align: center;
-  width: 100%;
-  text-shadow: 2px 2px #ecb62b; /* Sombra de texto dorada */
+  text-shadow: 2px 2px #ecb62b;
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1;
 }
+
 .nav-links .nav-link {
   color: #3760b0;
   font-weight: bold;
@@ -130,13 +121,32 @@ export default {
   color: white;
 }
 
+@media (max-width: 991px) {
+  .navbar-title {
+    position: static;
+    transform: none;
+    font-size: 3em;
+    margin: 10px 0;
+  }
+
+  .navbar-brand {
+    margin-right: 0;
+  }
+
+  .navbar-toggler {
+    position: absolute;
+    right: 15px;
+    top: 15px;
+  }
+}
+
 @media (max-width: 768px) {
   .navbar-custom {
     padding: 5px 10px;
   }
 
   .navbar-title {
-    font-size: 1.8em;
+    font-size: 2.5em;
   }
 
   .nav-links .nav-link {
@@ -151,7 +161,7 @@ export default {
   }
 
   .navbar-title {
-    font-size: 1.5em;
+    font-size: 2em;
     margin: 10px 0;
   }
 

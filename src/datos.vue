@@ -1,5 +1,5 @@
 <template>
-  <div class="mt-5">
+  <div class="datos-container">
     <div class="fecha-actual">{{ fechaActual }}</div>
 
     <b-row>
@@ -16,13 +16,12 @@
         ></b-form-textarea>
       </b-col>
 
-      <b-col cols="7">
+      <b-col cols="12" md="7" class="mb-3">
         <Cuentas v-bind:datos="datos" />
       </b-col>
     </b-row>
   </div>
 </template>
-
 
 <script>
 import Cuentas from "./Cuentas.vue";
@@ -56,10 +55,11 @@ export default {
 };
 </script>
 
+
 <style scoped>
 /* Estilos generales */
 .datos-container {
-  max-width: 800px;
+  max-width: 1000px;
   margin: 0 auto;
   padding: 20px;
   border: 1px solid #ccc;
@@ -74,7 +74,7 @@ export default {
   font-size: 1.2em;
   color: #3760b0;
   margin-bottom: 20px;
-  text-align: left; /* Asegura que la fecha esté alineada a la derecha */
+  text-align: left; /* Asegura que la fecha esté alineada a la izquierda */
 }
 
 /* Estilos para los botones */
@@ -168,6 +168,13 @@ td {
 
   .form-group input, .form-group select {
     width: 100%;
+  }
+}
+
+@media (max-width: 576px) {
+  .b-col {
+    flex: 0 0 100%;
+    max-width: 100%;
   }
 }
 </style>

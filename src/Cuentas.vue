@@ -29,7 +29,6 @@
     </b-row>
   </div>
 </template>
-
 <script>
 import Datos from "./datos.vue";
 import Calcular from "./Calcular";
@@ -107,7 +106,8 @@ export default {
     }
   },
 };
-</script><style scoped>
+</script>
+<style scoped>
 /* Estilos generales */
 .cuentas-container {
   max-width: 1000px;
@@ -232,6 +232,12 @@ button:hover {
     width: 100%;
     text-align: center; /* Centra el texto en dispositivos móviles */
     padding: 5px 0;
+  }
+
+  /* Asegura que las columnas ocupen todo el ancho en dispositivos móviles */
+  .cuentas-container .b-col {
+    flex: 0 0 100%;
+    max-width: 100%;
   }
 }
 </style>
