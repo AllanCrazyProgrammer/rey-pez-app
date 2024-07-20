@@ -1,6 +1,4 @@
 <template>
-
-
   <div class="sale-note">
     <div class="back-button-container">
       <BackButton to="/NoteMenu" />
@@ -56,17 +54,20 @@
                 <th>Kg</th>
                 <th>Precio</th>
                 <th>Total</th>
-                <th>Accion</th>
+                <th class="action-column">Accion</th>
               </tr>
             </thead>
             <tbody>
-              <tr v-for="(product, index) in products" :key="index">
+              <tr v-for="(product, index) in products" :key="index"
+                  @touchstart="startLongPress(index)" 
+                  @touchend="endLongPress" 
+                  @touchmove="endLongPress">
                 <template v-if="editIndex === index">
                   <td><input type="text" v-model="editProduct.product" /></td>
                   <td><input type="number" v-model.number="editProduct.kilos" /></td>
                   <td><input type="number" v-model.number="editProduct.pricePerKilo" /></td>
                   <td>${{ formatNumber(editProduct.kilos * editProduct.pricePerKilo) }}</td>
-                  <td>
+                  <td class="action-column">
                     <button @click="confirmEdit"><span>&#10004;</span></button>
                     <button @click="cancelEdit"><span>&#10060;</span></button>
                   </td>
@@ -76,7 +77,7 @@
                   <td>{{ formatNumber(product.kilos) }}</td>
                   <td>${{ formatNumber(product.pricePerKilo) }}</td>
                   <td>${{ formatNumber(product.total) }}</td>
-                  <td>
+                  <td class="action-column">
                     <button @click="editProductDetails(index)">Editar</button>
                     <button @click="removeProduct(index)">Borrar</button>
                   </td>
@@ -132,21 +133,24 @@
       <button @click="printSection">Imprimir</button>
       <button @click="saveNote">Guardar Nota</button> 
       <button class="delete-note-button" @click="deleteNote">Eliminar Nota</button>
-
     </div>
-  
+    <!-- Modal para acciones móviles -->
+    <div v-if="showMobileActions" class="mobile-actions-modal">
+      <button @click="editProductDetails(selectedProductIndex)">Editar</button>
+      <button @click="removeProduct(selectedProductIndex)">Borrar</button>
+      <button @click="showMobileActions = false">Cancelar</button>
+    </div>
   </div>
 </template>
 
 <script>
 import BackButton from '@/components/BackButton.vue';
-
 import DatePicker from 'vue2-datepicker';
 import 'vue2-datepicker/index.css';
 import html2pdf from 'html2pdf.js';
 import AddClient from '@/components/AddClient.vue';
 import { db } from '@/firebase';
-import { collection, addDoc, getDocs, setDoc, doc,getDoc, deleteDoc } from "firebase/firestore";
+import { collection, addDoc, getDocs, setDoc, doc, getDoc, deleteDoc } from "firebase/firestore";
 
 export default {
   components: {
@@ -180,8 +184,12 @@ export default {
         fecha: today.toISOString().substr(0, 10)
       },
       abonos: [],
-      isPaid: false, // Nuevo indicador para determinar si la nota está pagada
-      creationDate: today.toISOString().substr(0, 10)
+      isPaid: false,
+      creationDate: today.toISOString().substr(0, 10),
+      noteId: null,
+      longPressTimer: null,
+      showMobileActions: false,
+      selectedProductIndex: null,
     };
   },
   computed: {
@@ -208,23 +216,21 @@ export default {
   },
   methods: {
     async deleteNote() {
-  if (this.noteId) {
-    // Agregar confirmación antes de eliminar
-    if (confirm("¿Estás seguro de que quieres eliminar esta nota?")) {
-      try {
-        await deleteDoc(doc(db, "notes", this.noteId));
-        alert("Nota eliminada con éxito");
-        this.$router.push({ name: 'NoteMenu' });
-
-      } catch (error) {
-        console.error("Error al eliminar la nota: ", error);
-        alert(`Error al eliminar la nota: ${error.message}`);
+      if (this.noteId) {
+        if (confirm("¿Estás seguro de que quieres eliminar esta nota?")) {
+          try {
+            await deleteDoc(doc(db, "notes", this.noteId));
+            alert("Nota eliminada con éxito");
+            this.$router.push({ name: 'NoteMenu' });
+          } catch (error) {
+            console.error("Error al eliminar la nota: ", error);
+            alert(`Error al eliminar la nota: ${error.message}`);
+          }
+        }
+      } else {
+        alert("El ID de la nota no está definido");
       }
-    }
-  } else {
-    alert("El ID de la nota no está definido");
-  }
-},
+    },
     async saveNote() {
       try {
         const noteData = {
@@ -264,10 +270,12 @@ export default {
     },
     removeProduct(index) {
       this.products.splice(index, 1);
+      this.showMobileActions = false;
     },
     editProductDetails(index) {
       this.editIndex = index;
       this.editProduct = { ...this.products[index] };
+      this.showMobileActions = false;
     },
     confirmEdit() {
       this.editProduct.total = this.editProduct.kilos * this.editProduct.pricePerKilo;
@@ -284,32 +292,27 @@ export default {
       } catch (error) {
         console.error('Error fetching clients: ', error);
       }
-    },async fetchNoteData() {
-    try {
-      const docRef = doc(db, 'notes', this.noteId);
-      const docSnap = await getDoc(docRef);
-
-      if (docSnap.exists()) {
-        const noteData = docSnap.data();
-        // Asignar los datos de la nota a las variables locales, por ejemplo:
-        this.folio = noteData.folio;
-        this.client = noteData.client;
-        this.currentDate = noteData.currentDate;
-        this.products = noteData.products;
-        this.abonos = noteData.abonos;
-        this.isPaid = noteData.isPaid;
-        this.creationDate = noteData.creationDate;
-
-  
-      
-        
-      } else {
-        console.log('No such document!');
+    },
+    async fetchNoteData() {
+      try {
+        const docRef = doc(db, 'notes', this.noteId);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          const noteData = docSnap.data();
+          this.folio = noteData.folio;
+          this.client = noteData.client;
+          this.currentDate = noteData.currentDate;
+          this.products = noteData.products;
+          this.abonos = noteData.abonos;
+          this.isPaid = noteData.isPaid;
+          this.creationDate = noteData.creationDate;
+        } else {
+          console.log('No such document!');
+        }
+      } catch (error) {
+        console.error('Error fetching note: ', error);
       }
-    } catch (error) {
-      console.error('Error fetching note: ', error);
-    }
-  },
+    },
     addAbono() {
       this.abonos.push({ ...this.newAbono });
       this.resetAbonoForm();
@@ -336,8 +339,6 @@ export default {
         html2canvas: { scale: 2 },
         jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
       };
-
-      // Clonar el contenido y ocultar los botones, la columna de acciones y la sección de agregar abonos
       const clonedElement = element.cloneNode(true);
       const buttons = clonedElement.querySelectorAll('button');
       buttons.forEach(button => button.style.display = 'none');
@@ -347,7 +348,6 @@ export default {
       if (abonosForm) abonosForm.style.display = 'none';
       const abonosTitle = clonedElement.querySelector('.abonos-section h3:first-child');
       if (abonosTitle) abonosTitle.style.display = 'none';
-
       html2pdf().from(clonedElement).set(options).save();
     },
     printSection() {
@@ -368,20 +368,27 @@ export default {
       printWindow.document.write('</body></html>');
       printWindow.document.close();
       printWindow.print();
+    },
+    // Nuevos métodos para la funcionalidad móvil
+    startLongPress(index) {
+      this.longPressTimer = setTimeout(() => {
+        this.showMobileActions = true;
+        this.selectedProductIndex = index;
+      }, 500); // 500ms para considerar un toque largo
+    },
+    endLongPress() {
+      clearTimeout(this.longPressTimer);
     }
   },
-  
   async mounted() {
     this.fetchClients();
-
     if (this.$route.params.noteId) {
-    this.noteId = this.$route.params.noteId;
-    await this.fetchNoteData();
-  }
+      this.noteId = this.$route.params.noteId;
+      await this.fetchNoteData();
+    }
   }
 };
 </script>
-
 
 <style scoped>
 /* Estilos generales */
@@ -551,6 +558,27 @@ td {
   margin-top: 20px; /* Añade un margen inferior para separarlo de los siguientes elementos */
 }
 
+/* Nuevos estilos para funcionalidad móvil */
+.mobile-actions-modal {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background-color: white;
+  padding: 20px;
+  display: flex;
+  justify-content: space-around;
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.mobile-actions-modal button {
+  padding: 10px 20px;
+  border: none;
+  background-color: #3760b0;
+  color: white;
+  border-radius: 5px;
+}
+
 @media (max-width: 768px) {
   .folio-date {
     flex-direction: column;
@@ -562,6 +590,41 @@ td {
 
   .form-row {
     flex-direction: column;
+  }
+
+  /* Ocultar la columna de acciones en dispositivos móviles */
+  .action-column {
+    display: none;
+  }
+
+  /* Ajustar el ancho de las columnas restantes */
+  table th,
+  table td {
+    width: 25%; /* 100% / 4 columnas */
+  }
+
+  /* Hacer el texto más pequeño para que quepa mejor */
+  table {
+    font-size: 0.9em;
+  }
+
+  /* Ajustar el padding de las celdas para ahorrar espacio */
+  th, td {
+    padding: 0.3em;
+  }
+
+  table tr {
+    position: relative;
+  }
+
+  table tr::after {
+    content: '⋮';
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 1.5em;
+    color: #3760b0;
   }
 }
 </style>
