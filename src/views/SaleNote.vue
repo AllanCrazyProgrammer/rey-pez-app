@@ -89,46 +89,51 @@
             <h3>Total General: ${{ formatNumber(grandTotal) }}</h3>
           </div>
         </div>
+   
         <div class="abonos-container">
-          <div class="abonos-section">
-            <h3>Registrar Abonos</h3>
-            <form @submit.prevent="addAbono">
-              <div class="form-row">
-                <div>
-                  <label for="abonoMonto">Monto del Abono:</label>
-                  <input type="number" id="abonoMonto" v-model.number="newAbono.monto" required />
-                </div>
-                <div>
-                  <label for="abonoFecha">Fecha del Abono:</label>
-                  <DatePicker v-model="newAbono.fecha" value-type="format" format="DD MMMM YYYY" placeholder="Selecciona una fecha" />
-                </div>
-                <button type="submit">Agregar Abono</button>
-              </div>
-            </form>
-            <div v-if="abonos.length">
-              <h3>Abonos Realizados</h3>
-              <table>
-                <thead>
-                  <tr>
-                    <th>Monto</th>
-                    <th>Fecha</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="(abono, index) in abonos" :key="index">
-                    <td>${{ formatNumber(abono.monto) }}</td>
-                    <td>{{ abono.fecha }}</td>
-                  </tr>
-                </tbody>
-              </table>
-              <h3>Total Abonado: ${{ formatNumber(totalAbonado) }}</h3>
-              <h3>Saldo Restante: ${{ formatNumber(saldoRestante) }}</h3>
-              <h3 v-if="isPaid" class="paid-status">Estado: Pagada</h3>
-              <h3 v-else class="unpaid-status">Estado: No Pagada</h3>
-            </div>
+      <div class="abonos-section">
+        <h3>Registrar Abonos</h3>
+        <form @submit.prevent="addAbono">
+          <div class="form-row">
+          <div>
+            <label for="abonoMonto">Monto del Abono:</label>
+            <input type="number" id="abonoMonto" v-model.number="newAbono.monto" required />
+          </div>
+          <div>
+            <label for="abonoFecha">Fecha del Abono:</label>
+            <DatePicker v-model="newAbono.fecha" value-type="format" format="DD MMMM YYYY" placeholder="Selecciona una fecha" />
+          </div>
+        </div>
+        <button type="submit" class="add-abono-button">Agregar Abono</button>        </form>
+        <div v-if="abonos.length">
+          <h3>Abonos Realizados</h3>
+          <div class="table-responsive">
+            <table class="abonos-table">
+              <thead>
+                <tr>
+                  <th>Monto</th>
+                  <th>Fecha</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="(abono, index) in abonos" :key="index">
+                  <td>${{ formatNumber(abono.monto) }}</td>
+                  <td>{{ formatDate(abono.fecha) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="abonos-summary">
+            <p><strong>Total Abonado:</strong> ${{ formatNumber(totalAbonado) }}</p>
+            <p><strong>Saldo Restante:</strong> ${{ formatNumber(saldoRestante) }}</p>
+            <p class="estado-pago" :class="{ 'pagado': isPaid, 'no-pagado': !isPaid }">
+              <strong>Estado:</strong> {{ isPaid ? 'Pagada' : 'No Pagada' }}
+            </p>
           </div>
         </div>
       </div>
+    </div>
+
       <button @click="exportPDF">Exportar a PDF</button>
       <button @click="printSection">Imprimir</button>
       <button @click="saveNote">Guardar Nota</button> 
@@ -140,6 +145,7 @@
       <button @click="removeProduct(selectedProductIndex)">Borrar</button>
       <button @click="showMobileActions = false">Cancelar</button>
     </div>
+  </div>
   </div>
 </template>
 
@@ -389,9 +395,7 @@ export default {
   }
 };
 </script>
-
 <style scoped>
-/* Estilos generales */
 .sale-note {
   max-width: 800px;
   margin: 0 auto;
@@ -402,7 +406,6 @@ export default {
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
 }
 
-/* Estilos para los botones */
 button {
   background-color: #3760b0;
   color: white;
@@ -417,7 +420,6 @@ button:hover {
   background-color: #2a4a87;
 }
 
-/* Estilos específicos para SaleNote.vue */
 .container {
   margin: 0 auto;
   padding: 20px;
@@ -494,6 +496,10 @@ button:hover {
   background-color: #c82333;
 }
 
+.table-responsive {
+  overflow-x: auto;
+}
+
 table {
   width: 100%;
   border-collapse: collapse;
@@ -513,10 +519,6 @@ th {
   background-color: #f8f8f8;
 }
 
-td {
-  text-align: center;
-}
-
 .total-general {
   margin-top: 1em;
 }
@@ -529,36 +531,54 @@ td {
 
 .abonos-section h3 {
   margin-top: 1em;
+  color: black;
 }
 
-.abonos-section form {
-  margin-bottom: 1em;
+.abonos-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 1em;
 }
 
-.abonos-section {
-  margin-bottom: 2em; /* Añadir espacio al final */
+.abonos-table th,
+.abonos-table td {
+  padding: 0.75em;
+  text-align: left;
+  border-bottom: 1px solid #ddd;
 }
 
-.paid-status {
+.abonos-table th {
+  background-color: #f8f8f8;
+  font-weight: bold;
+  color: black;
+}
+
+.abonos-summary {
+  margin-top: 1em;
+  font-size: 1.1em;
+}
+
+.estado-pago {
+  font-weight: bold;
+}
+
+.pagado {
   color: green;
-  font-weight: bold;
 }
 
-.unpaid-status {
+.no-pagado {
   color: red;
-  font-weight: bold;
 }
 
 .print-section {
-  margin-bottom: 1em; /* Añadir espacio al final */
+  margin-bottom: 1em;
 }
 
 .back-button-container {
-  text-align: left; /* Centra el contenido del div horizontalmente */
-  margin-top: 20px; /* Añade un margen inferior para separarlo de los siguientes elementos */
+  text-align: left;
+  margin-top: 20px;
 }
 
-/* Nuevos estilos para funcionalidad móvil */
 .mobile-actions-modal {
   position: fixed;
   bottom: 0;
@@ -592,23 +612,19 @@ td {
     flex-direction: column;
   }
 
-  /* Ocultar la columna de acciones en dispositivos móviles */
   .action-column {
     display: none;
   }
 
-  /* Ajustar el ancho de las columnas restantes */
   table th,
   table td {
-    width: 25%; /* 100% / 4 columnas */
+    width: 25%;
   }
 
-  /* Hacer el texto más pequeño para que quepa mejor */
   table {
     font-size: 0.9em;
   }
 
-  /* Ajustar el padding de las celdas para ahorrar espacio */
   th, td {
     padding: 0.3em;
   }
@@ -625,6 +641,43 @@ td {
     transform: translateY(-50%);
     font-size: 1.5em;
     color: #3760b0;
+  }
+
+  .abonos-table {
+    font-size: 0.9em;
+  }
+
+  .abonos-table thead {
+    display: table-header-group;
+  }
+
+  .abonos-table tbody {
+    display: table-row-group;
+  }
+
+  .abonos-table tr {
+    display: table-row;
+  }
+
+  .abonos-table th,
+  .abonos-table td {
+    display: table-cell;
+    width: 50%;
+    padding: 0.5em;
+  }
+
+  .abonos-table th {
+    text-align: center;
+    background-color: #f0f0f0;
+    color: black;
+  }
+
+  .abonos-table td {
+    text-align: center;
+  }
+
+  .table-responsive {
+    overflow-x: auto;
   }
 }
 </style>
