@@ -24,14 +24,16 @@
         </div>
       </div>
       <div class="form-row">
-        <div>
-          <label for="product">Producto:</label>
-          <input type="text" id="product" v-model="newProduct.product" required />
-        </div>
+
         <div>
           <label for="kilos">Kilos:</label>
           <input type="number" step="0.01" v-model.number="newProduct.kilos" required >
         </div>
+        <div>
+          <label for="product">Producto:</label>
+          <input type="text" id="product" v-model="newProduct.product" required />
+        </div>
+
         <div>
           <label for="pricePerKilo">Precio por Kilo:</label>
           <input type="number" id="pricePerKilo" v-model="newProduct.pricePerKilo" required />
