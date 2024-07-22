@@ -1,23 +1,26 @@
 <template>
-  <div class="datos-container">
+  <div class="datos-container mt-5">
     <div class="fecha-actual">{{ fechaActual }}</div>
 
     <b-row>
       <b-col cols="12" md="5" class="mb-3">
-        <b-button @click="borrarDatos" variant="primary" class="mb-3">Borrar datos</b-button>
+        <b-button @click="borrarDatos" variant="danger" class="mb-3" block>Borrar datos</b-button>
         <b-form-textarea
           class="text-center"
           name="dinero"
           id="textarea-auto-height"
-          placeholder="Dinero"
+          placeholder="Ingrese cantidades de dinero (una por línea)"
           rows="3"
-          max-rows="100"
-          v-model="datos"
+          max-rows="10"
+          v-model="localDatos"
         ></b-form-textarea>
+        <div class="mt-3 total-sum">
+          <strong>Total: ${{ formatNumber(totalSum) }}</strong>
+        </div>
       </b-col>
 
-      <b-col cols="12" md="7" class="mb-3">
-        <Cuentas v-bind:datos="datos" />
+      <b-col cols="12" md="7">
+        <Cuentas :datos="localDatos" />
       </b-col>
     </b-row>
   </div>
@@ -27,20 +30,27 @@
 import Cuentas from "./Cuentas.vue";
 
 export default {
-
   name: "Datos",
   components: {
     Cuentas,
   },
- 
+  props: {
+    initialDatos: {
+      type: String,
+      default: "",
+    },
+  },
   data() {
     return {
-      datos: "",
+      localDatos: this.initialDatos,
     };
   },
   methods: {
     borrarDatos() {
-      this.datos = '';
+      this.localDatos = '';
+    },
+    formatNumber(value) {
+      return value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
   },
   computed: {
@@ -48,16 +58,17 @@ export default {
       const hoy = new Date();
       const opciones = { year: 'numeric', month: 'long', day: 'numeric' };
       return hoy.toLocaleDateString('es-ES', opciones);
+    },
+    totalSum() {
+      return this.localDatos.split('\n')
+        .filter(line => line.trim())
+        .reduce((sum, line) => sum + parseFloat(line) || 0, 0);
     }
   }
-
-  
 };
 </script>
 
-
 <style scoped>
-/* Estilos generales */
 .datos-container {
   max-width: 1000px;
   margin: 0 auto;
@@ -69,20 +80,24 @@ export default {
 }
 
 .fecha-actual {
-  top: 10px;
-  right: 10px;
   font-size: 1.2em;
   color: #3760b0;
   margin-bottom: 20px;
-  text-align: left; /* Asegura que la fecha esté alineada a la izquierda */
+  text-align: right;
 }
 
-/* Estilos para los botones */
+textarea {
+  resize: vertical;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  padding: 10px;
+}
+
 button {
-  padding: 10px 20px;
   background-color: #3760b0;
   color: white;
   border: none;
+  padding: 10px 20px;
   border-radius: 20px;
   cursor: pointer;
   transition: background-color 0.3s;
@@ -92,73 +107,18 @@ button:hover {
   background-color: #2a4a87;
 }
 
-/* Estilos para tablas */
-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-top: 1em;
+button.btn-danger {
+  background-color: #dc3545;
 }
 
-table, th, td {
-  border: 1px solid #ccc;
+button.btn-danger:hover {
+  background-color: #c82333;
 }
 
-th, td {
-  padding: 0.75em;
-  text-align: left;
-}
-
-th {
-  background-color: #f8f8f8;
-}
-
-td {
-  text-align: center;
-}
-
-.total-general {
-  margin-top: 1em;
-  font-size: 1.1em;
-  font-weight: bold;
-}
-
-/* Estilos específicos para datos */
-.data-section {
-  margin-bottom: 2em; /* Añadir espacio al final */
-}
-
-.data-section h3 {
-  margin-top: 1em;
+.total-sum {
+  font-size: 1.2em;
   color: #3760b0;
-  font-size: 1.3em;
-}
-
-/* Estilos para formularios */
-.form-group {
-  margin-bottom: 1em;
-  width: 100%; /* Asegura que los elementos ocupen todo el ancho del contenedor */
-}
-
-.form-group label {
-  display: block;
-  margin-bottom: 0.5em;
-  font-weight: bold;
-  font-size: 1.1em;
-  color: #3760b0; /* Color acorde al estilo general */
-}
-
-.form-group input, .form-group select {
-  width: 100%;
-  padding: 0.5em;
-  box-sizing: border-box;
-  border-radius: 5px;
-  border: 1px solid #ccc;
-  font-size: 1em;
-}
-
-.back-button-container {
-  text-align: left; /* Centra el contenido del div horizontalmente */
-  margin-top: 20px; /* Añade un margen inferior para separarlo de los siguientes elementos */
+  text-align: right;
 }
 
 @media (max-width: 768px) {
@@ -166,15 +126,22 @@ td {
     padding: 10px;
   }
 
-  .form-group input, .form-group select {
-    width: 100%;
+  .fecha-actual {
+    text-align: center;
+    margin-bottom: 15px;
+  }
+
+  button {
+    padding: 8px 16px;
   }
 }
 
 @media (max-width: 576px) {
-  .b-col {
-    flex: 0 0 100%;
+  .datos-container {
+    padding: 0;
+    margin: 0;
     max-width: 100%;
+    border-radius: 0;
   }
 }
 </style>
