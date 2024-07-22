@@ -142,13 +142,13 @@
     <!-- Modal para acciones móviles -->
     <div v-if="showMobileActions" class="mobile-actions-modal">
       <button @click="editProductDetails(selectedProductIndex)">Editar</button>
-      <button @click="removeProduct(selectedProductIndex)">Borrar</button>
-      <button @click="showMobileActions = false">Cancelar</button>
+    <button @click="removeProduct(selectedProductIndex)">Borrar</button>
+    <button v-if="editIndex !== -1" @click="confirmEdit">Confirmar Edición</button>
+    <button @click="cancelMobileActions">Cancelar</button>
     </div>
   </div>
   </div>
 </template>
-
 <script>
 import BackButton from '@/components/BackButton.vue';
 import DatePicker from 'vue2-datepicker';
@@ -281,12 +281,15 @@ export default {
     editProductDetails(index) {
       this.editIndex = index;
       this.editProduct = { ...this.products[index] };
-      this.showMobileActions = false;
+      // No cerramos el modal aquí para permitir la confirmación en móvil
     },
     confirmEdit() {
-      this.editProduct.total = this.editProduct.kilos * this.editProduct.pricePerKilo;
-      this.products[this.editIndex] = { ...this.editProduct };
-      this.editIndex = -1;
+      if (this.editIndex !== -1) {
+        this.editProduct.total = this.editProduct.kilos * this.editProduct.pricePerKilo;
+        this.products[this.editIndex] = { ...this.editProduct };
+        this.editIndex = -1;
+        this.showMobileActions = false;
+      }
     },
     cancelEdit() {
       this.editIndex = -1;
@@ -375,16 +378,20 @@ export default {
       printWindow.document.close();
       printWindow.print();
     },
-    // Nuevos métodos para la funcionalidad móvil
     startLongPress(index) {
       this.longPressTimer = setTimeout(() => {
         this.showMobileActions = true;
         this.selectedProductIndex = index;
-      }, 500); // 500ms para considerar un toque largo
+      }, 500);
     },
     endLongPress() {
       clearTimeout(this.longPressTimer);
-    }
+    },
+    cancelMobileActions() {
+      this.showMobileActions = false;
+      this.selectedProductIndex = null;
+      this.editIndex = -1;
+    },
   },
   async mounted() {
     this.fetchClients();
@@ -394,8 +401,7 @@ export default {
     }
   }
 };
-</script>
-<style scoped>
+</script><style scoped>
 .sale-note {
   max-width: 800px;
   margin: 0 auto;
@@ -531,7 +537,7 @@ th {
 
 .abonos-section h3 {
   margin-top: 1em;
-  color: black;
+  color: #3760b0;
 }
 
 .abonos-table {
@@ -550,7 +556,7 @@ th {
 .abonos-table th {
   background-color: #f8f8f8;
   font-weight: bold;
-  color: black;
+  color: #3760b0;
 }
 
 .abonos-summary {
@@ -587,16 +593,45 @@ th {
   background-color: white;
   padding: 20px;
   display: flex;
-  justify-content: space-around;
+  flex-direction: column;
+  align-items: center;
   box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
 }
 
 .mobile-actions-modal button {
-  padding: 10px 20px;
+  width: 100%;
+  padding: 15px 20px;
+  margin-bottom: 10px;
   border: none;
   background-color: #3760b0;
   color: white;
   border-radius: 5px;
+  font-size: 16px;
+}
+
+.mobile-actions-modal button:last-child {
+  margin-bottom: 0;
+}
+
+.mobile-actions-modal button:nth-child(3) {
+  background-color: #28a745; /* Color verde para el botón de confirmar */
+}
+
+.add-abono-button {
+  background-color: #28a745;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: background-color 0.3s;
+  margin-top: 1em;
+  width: 100%;
+}
+
+.add-abono-button:hover {
+  background-color: #218838;
 }
 
 @media (max-width: 768px) {
@@ -610,6 +645,11 @@ th {
 
   .form-row {
     flex-direction: column;
+  }
+
+  .form-row div {
+    width: 100%;
+    margin-bottom: 1em;
   }
 
   .action-column {
@@ -669,15 +709,15 @@ th {
   .abonos-table th {
     text-align: center;
     background-color: #f0f0f0;
-    color: black;
   }
 
   .abonos-table td {
     text-align: center;
   }
 
-  .table-responsive {
-    overflow-x: auto;
+  .add-abono-button {
+    width: 100%;
+    margin-top: 1em;
   }
 }
 </style>
