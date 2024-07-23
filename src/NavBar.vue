@@ -15,7 +15,6 @@
 
       <b-collapse id="nav-collapse" is-nav>
         <h2 class="navbar-title mx-auto">Rey Pez</h2>
-
         <b-navbar-nav class="mr-auto">
           <b-nav-item>
             <router-link to="/" class="nav-link">Home</router-link>
@@ -23,6 +22,9 @@
           <b-nav-item>
             <router-link to="/noteMenu" class="nav-link">Notas</router-link>
           </b-nav-item>
+          <b-nav-item>
+    <router-link to="/sacadas" class="nav-link">Sadacas</router-link>
+  </b-nav-item>
         </b-navbar-nav>
 
 

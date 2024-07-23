@@ -4,6 +4,12 @@ import Home from './views/Home.vue';
 import NoteMenu from './views/NoteMenu.vue'; // Asegúrate de que la ruta sea correcta
 import SaleNote from '@/views/SaleNote.vue'; // Asegúrate de que la ruta de importación sea correcta
 import AddClient from '@/components/AddClient.vue';
+import  Sacadas from '@/views/Sacadas.vue';
+import SacadasMenu from '@/views/SacadasMenu.vue'
+import GestionarProductos from '@/components/GestionarProductos.vue'
+import GestionarMedidas from '@/components/GestionarMedidas.vue'
+import GestionarProveedores from '@/components/GestionarProveedores.vue'
+
 Vue.use(Router);
 
 const routes = [
@@ -32,7 +38,38 @@ const routes = [
     name: "editar-nota",
     component: SaleNote,
     props: true
-  }
+  },
+  {
+    path: '/sacadas',
+    name: 'SacadasMenu',
+    component: SacadasMenu
+  },
+  {
+    path: '/sacadas/new',
+    name: 'NuevaSacada',
+    component: Sacadas
+  },
+  {
+    path: '/sacadas/:id',
+    name: 'DetalleSacada',
+    component: Sacadas,
+    props: true
+  },
+  {
+    path: '/gestionar-productos',
+    name: 'GestionarProductos',
+    component: GestionarProductos
+  },
+  {
+    path: '/gestionar-medidas',
+    name: 'GestionarMedidas',
+    component: GestionarMedidas
+  },
+  {
+    path: '/gestionar-proveedores',
+    name: 'GestionarProveedores',
+    component: GestionarProveedores
+  },
 ];
 
 const router = new Router({
