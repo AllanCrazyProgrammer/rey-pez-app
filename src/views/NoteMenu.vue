@@ -9,6 +9,7 @@
       </div>
     </div>
 
+  
     <div class="notes-container">
       <div class="filter-container">
         <select v-model="paymentFilter">
