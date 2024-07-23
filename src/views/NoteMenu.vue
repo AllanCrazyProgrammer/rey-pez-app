@@ -9,7 +9,6 @@
       </div>
     </div>
 
-  
     <div class="notes-container">
       <div class="filter-container">
         <select v-model="paymentFilter">
@@ -49,7 +48,8 @@
         <button @click="closeModal">Cancelar</button>
       </div>
     </div>
-    <!-- Nuevo modal para mostrar historial de abonos -->
+
+    <!-- Modal para mostrar historial de abonos -->
     <div v-if="showAbonosHistoryModal" class="modal">
       <div class="modal-content">
         <h2>Historial de Abonos para {{ selectedClient }}</h2>
@@ -58,23 +58,43 @@
             <tr>
               <th>Fecha</th>
               <th>Monto</th>
+              <th>Acciones</th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="(abono, index) in clientAbonosHistory" :key="index">
+            <tr v-for="(abono, index) in paginatedAbonos" :key="index">
               <td>{{ formatDate(abono.fecha) }}</td>
               <td>{{ abono.monto | currency }}</td>
+              <td>
+                <button @click="openDeleteAbonoModal(abono.globalIndex)" class="delete-button">Borrar</button>
+              </td>
             </tr>
           </tbody>
         </table>
+        <div class="pagination">
+          <button @click="prevPage" :disabled="currentPage === 1">Anterior</button>
+          <span>Página {{ currentPage }} de {{ totalPages }}</span>
+          <button @click="nextPage" :disabled="currentPage === totalPages">Siguiente</button>
+        </div>
         <button @click="closeAbonosHistoryModal">Cerrar</button>
+      </div>
+    </div>
+
+    <!-- Modal para confirmar borrado de abono -->
+    <div v-if="showDeleteAbonoModal" class="modal">
+      <div class="modal-content">
+        <h2>Confirmar borrado de abono</h2>
+        <p>¿Estás seguro de que quieres borrar este abono?</p>
+        <button @click="deleteAbono">Confirmar</button>
+        <button @click="closeDeleteAbonoModal">Cancelar</button>
       </div>
     </div>
   </div>
 </template>
+
 <script>
 import { db } from '@/firebase';
-import { collection, getDocs, doc, updateDoc } from "firebase/firestore";
+import { collection, getDocs, doc, updateDoc, getDoc, deleteDoc } from "firebase/firestore";
 
 export default {
   name: 'NoteMenu',
@@ -87,6 +107,11 @@ export default {
       abonoAmount: 0,
       showAbonosHistoryModal: false,
       clientAbonosHistory: [],
+      showDeleteAbonoModal: false,
+      selectedAbonoIndex: null,
+      selectedAbonoNote: null,
+      currentPage: 1,
+      abonosPerPage: 7,
     };
   },
   methods: {
@@ -101,7 +126,6 @@ export default {
         const querySnapshot = await getDocs(collection(db, 'notes'));
         const notes = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-        // Organizar las notas por cliente
         this.notesByClient = notes.reduce((acc, note) => {
           if (!acc[note.client]) {
             acc[note.client] = [];
@@ -110,7 +134,6 @@ export default {
           return acc;
         }, {});
 
-        // Ordenar las notas de cada cliente de más nuevas a más antiguas
         for (let client in this.notesByClient) {
           this.notesByClient[client].sort((a, b) => new Date(b.currentDate) - new Date(a.currentDate));
         }
@@ -123,7 +146,7 @@ export default {
     },
     showAbonoModal(client) {
       this.selectedClient = client;
-      this.abonoAmount = '';  // Inicializar como cadena vacía
+      this.abonoAmount = '';
       this.showModal = true;
     },
     closeModal() {
@@ -141,7 +164,6 @@ export default {
       const notesToUpdate = [];
       const today = new Date();
 
-      // Ordenar las notas del cliente de más antiguas a más nuevas
       const clientNotes = [...this.notesByClient[this.selectedClient]]
         .sort((a, b) => new Date(a.currentDate) - new Date(b.currentDate))
         .filter(note => !note.isPaid);
@@ -165,7 +187,6 @@ export default {
         }
       }
 
-      // Actualizar las notas en Firestore
       try {
         for (let note of notesToUpdate) {
           const noteRef = doc(db, 'notes', note.id);
@@ -176,7 +197,7 @@ export default {
         }
         alert('Abono aplicado con éxito');
         this.closeModal();
-        await this.fetchNotes(); // Recargar las notas
+        await this.fetchNotes();
       } catch (error) {
         console.error('Error al actualizar las notas:', error);
         alert('Hubo un error al aplicar el abono');
@@ -185,18 +206,24 @@ export default {
     async showAbonosHistory(client) {
       this.selectedClient = client;
       this.clientAbonosHistory = [];
+      this.currentPage = 1;
       
-      // Obtener todas las notas del cliente
       const clientNotes = this.notesByClient[client];
       
-      // Recopilar todos los abonos de todas las notas del cliente
+      let globalIndex = 0;
       for (let note of clientNotes) {
         if (note.abonos && note.abonos.length > 0) {
-          this.clientAbonosHistory.push(...note.abonos);
+          note.abonos.forEach((abono, index) => {
+            this.clientAbonosHistory.push({
+              ...abono,
+              noteId: note.id,
+              abonoIndex: index,
+              globalIndex: globalIndex++
+            });
+          });
         }
       }
       
-      // Ordenar los abonos por fecha, del más reciente al más antiguo
       this.clientAbonosHistory.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
       
       this.showAbonosHistoryModal = true;
@@ -208,7 +235,65 @@ export default {
     formatDate(dateString) {
       const options = { year: 'numeric', month: 'long', day: 'numeric' };
       return new Date(dateString).toLocaleDateString('es-ES', options);
-    }
+    },
+    prevPage() {
+      if (this.currentPage > 1) {
+        this.currentPage--;
+      }
+    },
+    nextPage() {
+      if (this.currentPage < this.totalPages) {
+        this.currentPage++;
+      }
+    },
+    openDeleteAbonoModal(globalIndex) {
+      const abono = this.clientAbonosHistory[globalIndex];
+      this.selectedAbonoIndex = abono.abonoIndex;
+      this.selectedAbonoNote = abono.noteId;
+      this.showDeleteAbonoModal = true;
+    },
+    async deleteAbono() {
+      if (this.selectedAbonoNote) {
+        try {
+          const noteRef = doc(db, 'notes', this.selectedAbonoNote);
+          const noteDoc = await getDoc(noteRef);
+          
+          if (noteDoc.exists()) {
+            const noteData = noteDoc.data();
+            const updatedAbonos = noteData.abonos.filter((_, index) => index !== this.selectedAbonoIndex);
+            
+            await updateDoc(noteRef, { abonos: updatedAbonos });
+            
+            // Actualizar el estado local
+            this.clientAbonosHistory = this.clientAbonosHistory.filter(abono => 
+              !(abono.noteId === this.selectedAbonoNote && abono.abonoIndex === this.selectedAbonoIndex)
+            );
+            
+            // Actualizar notesByClient
+            const clientNoteIndex = this.notesByClient[this.selectedClient].findIndex(note => note.id === this.selectedAbonoNote);
+            if (clientNoteIndex !== -1) {
+              this.notesByClient[this.selectedClient][clientNoteIndex].abonos = updatedAbonos;
+            }
+            
+            this.closeDeleteAbonoModal();
+            
+            // Ajustar la página actual si es necesario
+            this.currentPage = Math.min(this.currentPage, this.totalPages);
+            
+            alert('Abono eliminado con éxito');
+            await this.fetchNotes(); // Actualizar las notas después de eliminar el abono
+          }
+        } catch (error) {
+          console.error('Error al eliminar el abono:', error);
+          alert('Hubo un error al eliminar el abono');
+        }
+      }
+    },
+    closeDeleteAbonoModal() {
+      this.showDeleteAbonoModal = false;
+      this.selectedAbonoIndex = null;
+      this.selectedAbonoNote = null;
+    },
   },
   computed: {
     filteredNotesByClient() {
@@ -218,7 +303,6 @@ export default {
           this.paymentFilter === 'all' || 
           (this.paymentFilter === 'paid' ? note.isPaid : !note.isPaid)
         );
-        // Solo incluimos clientes que tienen notas después del filtrado
         if (filtered[client].length === 0) {
           delete filtered[client];
         }
@@ -234,6 +318,14 @@ export default {
         }, 0);
       }
       return debtByClient;
+    },
+    paginatedAbonos() {
+      const start = (this.currentPage - 1) * this.abonosPerPage;
+      const end = start + this.abonosPerPage;
+      return this.clientAbonosHistory.slice(start, end);
+    },
+    totalPages() {
+      return Math.ceil(this.clientAbonosHistory.length / this.abonosPerPage);
     }
   },
   filters: {
@@ -247,6 +339,7 @@ export default {
   }
 };
 </script>
+
 <style scoped>
 .notes-wrapper {
   padding: 20px;
@@ -469,7 +562,50 @@ li button:hover {
   font-weight: bold;
 }
 
+.delete-button {
+  background-color: #dc3545;
+  color: white;
+  border: none;
+  padding: 5px 10px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.delete-button:hover {
+  background-color: #c82333;
+}
+
+.pagination {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 20px;
+}
+
+.pagination button {
+  background-color: #3760b0;
+  color: white;
+  border: none;
+  padding: 5px 10px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.pagination button:disabled {
+  background-color: #cccccc;
+  cursor: not-allowed;
+}
+
+.pagination span {
+  font-weight: bold;
+}
+
 @media (max-width: 768px) {
+  .modal-content {
+    width: 95%;
+    padding: 15px;
+  }
+
   .client-actions {
     flex-direction: column;
   }
@@ -480,11 +616,6 @@ li button:hover {
     margin: 5px 0;
   }
 
-  .modal-content {
-    width: 95%;
-    padding: 15px;
-  }
-
   .abonos-history-table {
     font-size: 14px;
   }
@@ -492,6 +623,15 @@ li button:hover {
   .abonos-history-table th,
   .abonos-history-table td {
     padding: 6px;
+  }
+
+  .pagination {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .pagination button {
+    margin: 5px 0;
   }
 }
 </style>
