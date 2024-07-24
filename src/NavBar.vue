@@ -23,7 +23,7 @@
             <router-link to="/noteMenu" class="nav-link">Notas</router-link>
           </b-nav-item>
           <b-nav-item>
-    <router-link to="/sacadas" class="nav-link">Sadacas</router-link>
+    <router-link to="/sacadas" class="nav-link">Entradas/Salidas</router-link>
   </b-nav-item>
         </b-navbar-nav>
 
