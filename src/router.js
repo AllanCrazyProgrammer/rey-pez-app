@@ -9,6 +9,7 @@ import SacadasMenu from '@/views/SacadasMenu.vue'
 import GestionarProductos from '@/components/GestionarProductos.vue'
 import GestionarMedidas from '@/components/GestionarMedidas.vue'
 import GestionarProveedores from '@/components/GestionarProveedores.vue'
+import Existencias from '@/components/Existencias.vue'
 
 Vue.use(Router);
 
@@ -70,6 +71,11 @@ const routes = [
     name: 'GestionarProveedores',
     component: GestionarProveedores
   },
+  {
+    path: '/existencias',
+    name: 'Existencias',
+    component: Existencias
+  }
 ];
 
 const router = new Router({
