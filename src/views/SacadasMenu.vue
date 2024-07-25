@@ -122,13 +122,14 @@ export default {
 
 
 
-
-
 <style scoped>
 .sacadas-menu-container {
   max-width: 800px;
   margin: 0 auto;
   padding: 20px;
+  min-height: calc(100vh - 160px); /* Ajusta 160px según la altura de tu navbar + footer */
+  display: flex;
+  flex-direction: column;
 }
 
 h1, h2 {
@@ -160,6 +161,7 @@ h1, h2 {
   background-color: #f0f4f8;
   border-radius: 8px;
   padding: 20px;
+  flex-grow: 1;
 }
 
 .loading, .no-records {

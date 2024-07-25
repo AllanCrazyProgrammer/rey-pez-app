@@ -3,28 +3,33 @@
       <div class="back-button-container">
         <BackButton to="/gestionar-productos" />
       </div>
-      <h1>Gestión de Proveedores</h1>
+      <h1>Gestión de Proveedores y Maquilas</h1>
       
       <div class="add-proveedor-form">
-        <h2>Agregar Proveedor</h2>
+        <h2>Agregar Proveedor/Maquila</h2>
         <form @submit.prevent="addProveedor">
           <div class="form-group">
             <label for="nombre">Nombre:</label>
-            <input v-model="newProveedor.nombre" id="nombre" required placeholder="Nombre del proveedor">
+            <input v-model="newProveedor.nombre" id="nombre" required placeholder="Nombre del proveedor/maquila">
           </div>
-
-          <button type="submit" class="submit-btn">Agregar Proveedor</button>
+          <div class="form-group">
+            <label for="tipo">Tipo:</label>
+            <select v-model="newProveedor.tipo" id="tipo" required>
+              <option value="proveedor">Proveedor</option>
+              <option value="maquila">Maquila</option>
+            </select>
+          </div>
+          <button type="submit" class="submit-btn">Agregar</button>
         </form>
       </div>
   
       <div class="proveedores-list">
-        <h2>Lista de Proveedores</h2>
+        <h2>Lista de Proveedores y Maquilas</h2>
         <ul>
           <li v-for="proveedor in sortedProveedores" :key="proveedor.id">
             <div class="proveedor-info">
               <strong>{{ proveedor.nombre }}</strong>
-              <span v-if="proveedor.telefono">- Tel: {{ proveedor.telefono }}</span>
-              <span v-if="proveedor.direccion">- Dir: {{ proveedor.direccion }}</span>
+              <span>({{ proveedor.tipo === 'proveedor' ? 'Proveedor' : 'Maquila' }})</span>
             </div>
             <button @click="deleteProveedor(proveedor.id)" class="delete-btn">Eliminar</button>
           </li>
@@ -48,7 +53,7 @@
       const proveedores = ref([]);
       const newProveedor = ref({
         nombre: '',
-   
+        tipo: 'proveedor'
       });
   
       const loadProveedores = async () => {
@@ -67,9 +72,9 @@
         try {
           await addDoc(collection(db, 'proveedores'), {
             nombre: newProveedor.value.nombre,
-           
+            tipo: newProveedor.value.tipo
           });
-          newProveedor.value = { nombre: '', telefono: '', direccion: '' };
+          newProveedor.value = { nombre: '', tipo: 'proveedor' };
           loadProveedores();
         } catch (error) {
           console.error("Error al añadir proveedor: ", error);
@@ -77,7 +82,7 @@
       };
   
       const deleteProveedor = async (proveedorId) => {
-        if (confirm('¿Estás seguro de que quieres eliminar este proveedor?')) {
+        if (confirm('¿Estás seguro de que quieres eliminar este proveedor/maquila?')) {
           try {
             await deleteDoc(doc(db, 'proveedores', proveedorId));
             loadProveedores();

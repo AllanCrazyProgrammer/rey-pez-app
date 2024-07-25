@@ -126,6 +126,9 @@
     background-color: #f8f9fa;
     border-radius: 20px;
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    min-height: calc(100vh - 160px); /* Ajusta 160px según la altura de tu navbar + footer */
+    display: flex;
+    flex-direction: column;
   }
   
   h1 {
@@ -158,6 +161,7 @@
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
     gap: 20px;
+    flex-grow: 1;
   }
   
   .proveedor-card {
