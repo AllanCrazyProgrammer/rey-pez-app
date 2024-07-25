@@ -25,8 +25,15 @@
                 {{ medida.nombre }}
               </option>
             </select>
-            <input v-model.number="newEntrada.kilos" type="number" placeholder="Kilos" step="0.1" required />
-            <button @click="addEntrada">Agregar Entrada</button>
+            <input 
+      v-model.number="newEntrada.kilos" 
+      type="number" 
+      inputmode="decimal" 
+      step="0.1" 
+      pattern="[0-9]*" 
+      placeholder="Kilos" 
+      required 
+    />               <button @click="addEntrada">Agregar Entrada</button>
           </div>
           <ul class="list">
             <li v-for="(entrada, index) in entradas" :key="'entrada-' + index">
