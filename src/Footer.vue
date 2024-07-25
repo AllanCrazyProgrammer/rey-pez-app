@@ -24,6 +24,7 @@ export default {
   padding: 20px;
   text-align: center;
   width: 100%;
+  flex-shrink: 0;
 }
 
 .footer-content {

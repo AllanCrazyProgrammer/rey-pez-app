@@ -10,7 +10,22 @@
         <form @submit.prevent="addMedida">
           <div class="form-group">
             <label for="medida">Medida:</label>
-            <input v-model="newMedida" id="medida" required placeholder="Ej: 16/20, 21/25, 26/30, etc.">
+            <input v-model="newMedida.nombre" id="medida" required placeholder="Ej: 16/20, 21/25, 26/30, etc.">
+          </div>
+          <div class="form-group">
+            <label for="tipo">Tipo:</label>
+            <select v-model="newMedida.tipo" id="tipo" required>
+              <option value="general">General</option>
+              <option value="maquila">Maquila</option>
+            </select>
+          </div>
+          <div v-if="newMedida.tipo === 'maquila'" class="form-group">
+            <label for="maquila">Maquila:</label>
+            <select v-model="newMedida.maquilaId" id="maquila" required>
+              <option v-for="maquila in maquilas" :key="maquila.id" :value="maquila.id">
+                {{ maquila.nombre }}
+              </option>
+            </select>
           </div>
           <button type="submit" class="submit-btn">Agregar Medida</button>
         </form>
@@ -18,12 +33,23 @@
   
       <div class="medidas-list">
         <h2>Lista de Medidas</h2>
+        <h3>Medidas Generales</h3>
         <ul>
-          <li v-for="medida in sortedMedidas" :key="medida.id">
+          <li v-for="medida in medidasGenerales" :key="medida.id">
             {{ medida.nombre }}
             <button @click="deleteMedida(medida.id)" class="delete-btn">Eliminar</button>
           </li>
         </ul>
+        <h3>Medidas de Maquilas</h3>
+        <div v-for="maquila in maquilas" :key="maquila.id">
+          <h4>{{ maquila.nombre }}</h4>
+          <ul>
+            <li v-for="medida in getMedidasMaquila(maquila.id)" :key="medida.id">
+              {{ medida.nombre }}
+              <button @click="deleteMedida(medida.id)" class="delete-btn">Eliminar</button>
+            </li>
+          </ul>
+        </div>
       </div>
     </div>
   </template>
@@ -31,7 +57,7 @@
   <script>
   import { ref, onMounted, computed } from 'vue';
   import { db } from '@/firebase';
-  import { collection, addDoc, getDocs, deleteDoc, doc } from 'firebase/firestore';
+  import { collection, addDoc, getDocs, deleteDoc, doc, query, where } from 'firebase/firestore';
   import BackButton from './BackButton.vue';
   
   export default {
@@ -41,7 +67,12 @@
     },
     setup() {
       const medidas = ref([]);
-      const newMedida = ref('');
+      const maquilas = ref([]);
+      const newMedida = ref({
+        nombre: '',
+        tipo: 'general',
+        maquilaId: ''
+      });
   
       const loadMedidas = async () => {
         try {
@@ -55,12 +86,27 @@
         }
       };
   
+      const loadMaquilas = async () => {
+        try {
+          const q = query(collection(db, 'proveedores'), where("tipo", "==", "maquila"));
+          const querySnapshot = await getDocs(q);
+          maquilas.value = querySnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }));
+        } catch (error) {
+          console.error("Error al cargar maquilas: ", error);
+        }
+      };
+  
       const addMedida = async () => {
         try {
           await addDoc(collection(db, 'medidas'), {
-            nombre: newMedida.value
+            nombre: newMedida.value.nombre,
+            tipo: newMedida.value.tipo,
+            maquilaId: newMedida.value.tipo === 'maquila' ? newMedida.value.maquilaId : null
           });
-          newMedida.value = '';
+          newMedida.value = { nombre: '', tipo: 'general', maquilaId: '' };
           loadMedidas();
         } catch (error) {
           console.error("Error al añadir medida: ", error);
@@ -78,32 +124,32 @@
         }
       };
   
-      const sortedMedidas = computed(() => {
-        return [...medidas.value].sort((a, b) => {
-          const getAverageSize = (str) => {
-            const [min, max] = str.split('/').map(Number);
-            return (min + max) / 2;
-          };
-  
-          const avgA = getAverageSize(a.nombre);
-          const avgB = getAverageSize(b.nombre);
-  
-          return avgB - avgA; // Ordenar de mayor a menor (camarones más chicos primero)
-        });
+      const medidasGenerales = computed(() => {
+        return medidas.value.filter(medida => medida.tipo === 'general');
       });
   
-      onMounted(loadMedidas);
+      const getMedidasMaquila = (maquilaId) => {
+        return medidas.value.filter(medida => medida.tipo === 'maquila' && medida.maquilaId === maquilaId);
+      };
+  
+      onMounted(() => {
+        loadMedidas();
+        loadMaquilas();
+      });
   
       return {
         medidas,
+        maquilas,
         newMedida,
         addMedida,
         deleteMedida,
-        sortedMedidas
+        medidasGenerales,
+        getMedidasMaquila
       };
     }
   };
   </script>
+  
   
   <style scoped>
   .gestionar-medidas-container {
