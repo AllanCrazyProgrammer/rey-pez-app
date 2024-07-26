@@ -14,52 +14,60 @@
       </router-link>
     </div>
 
-    <div class="add-product-form">
-      <h2>Agregar Producto</h2>
-      <form @submit.prevent="addProduct">
+    <div class="modify-product-form">
+      <h2>Modificar Existencia de Producto</h2>
+      <form @submit.prevent="modifyProduct">
         <div class="form-group">
-  <label for="producto">Producto:</label>
-  <select v-model="newProduct.nombre" id="producto" required>
-    <option value="">Seleccione un producto</option>
-    <option v-for="producto in productosOpciones" :key="producto" :value="producto">
-      {{ producto }}
-    </option>
-  </select>
-</div>
+          <label for="tipo">Tipo:</label>
+          <select v-model="modifyProductData.tipo" id="tipo" required>
+            <option value="proveedor">Proveedor</option>
+            <option value="maquila">Maquila</option>
+          </select>
+        </div>
         <div class="form-group">
-          <label for="proveedor">Proveedor:</label>
-          <select v-model="newProduct.proveedor" id="proveedor" required>
-            <option value="">Seleccione un proveedor</option>
-            <option v-for="proveedor in proveedores" :key="proveedor.id" :value="proveedor.nombre">
-              {{ proveedor.nombre }}
+          <label for="proveedor">Proveedor/Maquila:</label>
+          <select v-model="modifyProductData.proveedor" id="proveedor" required>
+            <option value="">Seleccione un proveedor/maquila</option>
+            <option v-for="prov in proveedoresFiltrados" :key="prov.id" :value="prov.nombre">
+              {{ prov.nombre }}
             </option>
           </select>
         </div>
         <div class="form-group">
           <label for="medida">Medida:</label>
-          <select v-model="newProduct.medida" id="medida" required>
+          <select v-model="modifyProductData.medida" id="medida" required>
             <option value="">Seleccione una medida</option>
-            <option v-for="medida in medidas" :key="medida.id" :value="medida.nombre">
+            <option v-for="medida in medidasFiltradas" :key="medida.id" :value="medida.nombre">
               {{ medida.nombre }}
             </option>
           </select>
         </div>
         <div class="form-group">
           <label for="kilos">Kilos:</label>
-          <input v-model.number="newProduct.kilos" id="kilos" type="number" step="0.1" required>
+          <input v-model.number="modifyProductData.kilos" id="kilos" type="number" step="0.1" required>
         </div>
-        <button type="submit" class="submit-btn">Añadir Producto</button>
+        <div class="form-group">
+          <label for="operacion">Operación:</label>
+          <select v-model="modifyProductData.operacion" id="operacion" required>
+            <option value="sumar">Sumar</option>
+            <option value="restar">Restar</option>
+          </select>
+        </div>
+      
+        <button type="submit" class="submit-btn">Modificar Existencia</button>
       </form>
     </div>
 
     <div class="products-list">
-      <h2>Lista de Productos</h2>
+      <h2>Existencias Actuales</h2>
       <ul>
-        <li v-for="product in products" :key="product.id">
-          <div class="product-info">
-            <strong>{{ product.proveedor }}</strong> - {{ product.nombre }} - {{ product.medida }} - {{ formatNumber(product.kilos) }} kg
-          </div>
-          <button @click="deleteProduct(product.id)" class="delete-btn">Eliminar</button>
+        <li v-for="(proveedor, proveedorNombre) in existencias" :key="proveedorNombre">
+          <strong>{{ proveedorNombre }}</strong>
+          <ul>
+            <li v-for="(kilos, medida) in proveedor" :key="medida">
+              {{ medida }} - {{ formatNumber(kilos) }} kg
+            </li>
+          </ul>
         </li>
       </ul>
     </div>
@@ -69,9 +77,9 @@
 </template>
 
 <script>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, computed } from 'vue';
 import { db } from '@/firebase';
-import { collection, addDoc, getDocs, deleteDoc, doc } from 'firebase/firestore';
+import { collection, getDocs, doc, updateDoc, query, where, addDoc } from 'firebase/firestore';
 import BackButton from './BackButton.vue';
 
 export default {
@@ -80,31 +88,54 @@ export default {
     BackButton
   },
   setup() {
-    const products = ref([]);
+    const existencias = ref({});
     const medidas = ref([]);
     const proveedores = ref([]);
-    const newProduct = ref({
-      nombre: '',
+    const modifyProductData = ref({
+      tipo: 'proveedor',
       proveedor: '',
       medida: '',
-      kilos: null
+      kilos: null,
+      operacion: 'sumar'
     });
 
-    const productosOpciones = [
-      "Cam s/c",
-      "Cam c/c"
-      // Añade aquí más opciones de productos según necesites
-    ];
-
-    const loadProducts = async () => {
+    const loadExistencias = async () => {
       try {
-        const querySnapshot = await getDocs(collection(db, 'products'));
-        products.value = querySnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }));
+        const sacadasSnapshot = await getDocs(collection(db, 'sacadas'));
+        const newExistencias = {};
+
+        sacadasSnapshot.forEach(doc => {
+          const sacada = doc.data();
+          sacada.entradas.forEach(entrada => {
+            if (!newExistencias[entrada.proveedor]) {
+              newExistencias[entrada.proveedor] = {};
+            }
+            if (!newExistencias[entrada.proveedor][entrada.medida]) {
+              newExistencias[entrada.proveedor][entrada.medida] = 0;
+            }
+            newExistencias[entrada.proveedor][entrada.medida] += entrada.kilos;
+          });
+          sacada.salidas.forEach(salida => {
+            if (!newExistencias[salida.proveedor]) {
+              newExistencias[salida.proveedor] = {};
+            }
+            if (!newExistencias[salida.proveedor][salida.medida]) {
+              newExistencias[salida.proveedor][salida.medida] = 0;
+            }
+            newExistencias[salida.proveedor][salida.medida] -= salida.kilos;
+          });
+        });
+
+        // Filtrar medidas con 0 o menos kilos
+        Object.keys(newExistencias).forEach(proveedor => {
+          newExistencias[proveedor] = Object.fromEntries(
+            Object.entries(newExistencias[proveedor]).filter(([_, kilos]) => kilos > 0)
+          );
+        });
+
+        existencias.value = newExistencias;
       } catch (error) {
-        console.error("Error al cargar productos: ", error);
+        console.error("Error al cargar existencias: ", error);
       }
     };
 
@@ -132,29 +163,29 @@ export default {
       }
     };
 
-    const addProduct = async () => {
+    const modifyProduct = async () => {
       try {
-        await addDoc(collection(db, 'products'), {
-          nombre: newProduct.value.nombre,
-          proveedor: newProduct.value.proveedor,
-          medida: newProduct.value.medida,
-          kilos: Number(newProduct.value.kilos.toFixed(1))
-        });
-        newProduct.value = { nombre: '', proveedor: '', medida: '', kilos: null };
-        loadProducts();
-      } catch (error) {
-        console.error("Error al añadir producto: ", error);
-      }
-    };
+        const { proveedor, medida, kilos, operacion } = modifyProductData.value;
+        const sacadaData = {
+          fecha: new Date(),
+          entradas: [],
+          salidas: []
+        };
 
-    const deleteProduct = async (productId) => {
-      if (confirm('¿Estás seguro de que quieres eliminar este producto?')) {
-        try {
-          await deleteDoc(doc(db, 'products', productId));
-          loadProducts();
-        } catch (error) {
-          console.error("Error al eliminar producto: ", error);
+        if (operacion === 'sumar') {
+          sacadaData.entradas.push({ proveedor, medida, kilos });
+        } else {
+          sacadaData.salidas.push({ proveedor, medida, kilos });
         }
+
+        await addDoc(collection(db, 'sacadas'), sacadaData);
+
+        alert('Existencia modificada con éxito');
+        modifyProductData.value = { tipo: 'proveedor', proveedor: '', medida: '', kilos: null, operacion: 'sumar' };
+        loadExistencias();
+      } catch (error) {
+        console.error("Error al modificar producto: ", error);
+        alert('Error al modificar la existencia del producto');
       }
     };
 
@@ -162,26 +193,37 @@ export default {
       return value.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
     };
 
+    const proveedoresFiltrados = computed(() => {
+      return proveedores.value.filter(prov => 
+        modifyProductData.value.tipo === 'proveedor' ? prov.tipo !== 'maquila' : prov.tipo === 'maquila'
+      );
+    });
+
+    const medidasFiltradas = computed(() => {
+      return medidas.value.filter(medida => 
+        modifyProductData.value.tipo === 'proveedor' ? medida.tipo === 'general' : medida.tipo === 'maquila'
+      );
+    });
+
     onMounted(() => {
-      loadProducts();
+      loadExistencias();
       loadMedidas();
       loadProveedores();
     });
 
     return {
-      products,
+      existencias,
       medidas,
       proveedores,
-      productosOpciones,  
-      newProduct,
-      addProduct,
-      deleteProduct,
-      formatNumber
+      modifyProductData,
+      modifyProduct,
+      formatNumber,
+      proveedoresFiltrados,
+      medidasFiltradas
     };
   }
 };
 </script>
-
 
 <style scoped>
 .gestionar-productos-container {
@@ -218,7 +260,7 @@ h1, h2 {
   background-color: #2a4a87;
 }
 
-.add-product-form, .products-list {
+.modify-product-form, .products-list {
   margin-top: 20px;
 }
 
@@ -237,19 +279,6 @@ h1, h2 {
   padding: 8px;
   border: 1px solid #ccc;
   border-radius: 4px;
-}
-
-.delete-btn {
-  background-color: #dc3545;
-  color: white;
-  border: none;
-  padding: 5px 10px;
-  border-radius: 4px;
-  cursor: pointer;
-}
-
-.delete-btn:hover {
-  background-color: #c82333;
 }
 
 ul {
