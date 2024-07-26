@@ -222,6 +222,7 @@ export default {
           return acc;
         }, {});
     }
+    
   },
   methods: {
     async loadProveedores() {
