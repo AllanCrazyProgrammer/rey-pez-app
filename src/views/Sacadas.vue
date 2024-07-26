@@ -87,27 +87,27 @@
     </div>
     
     <div class="summary">
-      <h3>Resumen del Día</h3>
-      <p>Total Entradas: {{ formatNumber(totalEntradas) }} kg</p>
-      <p>Total Salidas: {{ formatNumber(totalSalidas) }} kg</p>
-      
-      <h4>Resumen de Salidas por Medida (Proveedores)</h4>
-      <table class="medidas-summary">
-        <thead>
-          <tr>
-            <th>Medida</th>
-            <th>Total (kg)</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="(total, medida) in salidasProveedoresPorMedida" :key="medida">
-            <td>{{ medida }}</td>
-            <td>{{ formatNumber(total) }}</td>
-          </tr>
-        </tbody>
-      </table>
+    <h3>Resumen del Día</h3>
+    <p>Total Entradas: {{ formatNumber(totalEntradas) }} kg</p>
+    <p>Total Salidas: {{ formatNumber(totalSalidas) }} kg</p>
+    
+    <h4>Salidas clientes:</h4>
+    <table class="medidas-summary">
+      <thead>
+        <tr>
+          <th>Medida</th>
+          <th>Total (kg)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr v-for="(item, key) in salidasProveedoresPorMedida" :key="key">
+          <td>{{ item.medida }} ({{ item.proveedor }})</td>
+          <td>{{ formatNumber(item.total) }}</td>
+        </tr>
+      </tbody>
+    </table>
 
-      <h4>Resumen de Salidas por Medida (Maquilas)</h4>
+      <h4>Salidas maquilas:</h4>
       <table class="medidas-summary">
         <thead>
           <tr>
@@ -195,10 +195,15 @@ export default {
       return this.salidas
         .filter(salida => salida.tipo === 'proveedor')
         .reduce((acc, salida) => {
-          if (!acc[salida.medida]) {
-            acc[salida.medida] = 0;
+          const key = `${salida.medida}-${salida.proveedor}`;
+          if (!acc[key]) {
+            acc[key] = {
+              medida: salida.medida,
+              proveedor: salida.proveedor,
+              total: 0
+            };
           }
-          acc[salida.medida] += salida.kilos;
+          acc[key].total += salida.kilos;
           return acc;
         }, {});
     },
