@@ -191,6 +191,7 @@ export default {
     totalSalidas() {
       return Number(this.salidas.reduce((total, salida) => total + salida.kilos, 0).toFixed(1));
     },
+    
     salidasProveedoresPorMedida() {
       return this.salidas
         .filter(salida => salida.tipo === 'proveedor')
