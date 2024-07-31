@@ -117,18 +117,20 @@
           </tr>
         </thead>
         <tbody>
-          <template v-for="(maquila, maquilaNombre) in salidasMaquilasPorMedida">
-            <tr :key="maquilaNombre">
-              <td :rowspan="Object.keys(maquila).length">{{ maquilaNombre }}</td>
-              <td>{{ Object.keys(maquila)[0] }}</td>
-              <td>{{ formatNumber(Object.values(maquila)[0]) }}</td>
-            </tr>
-            <tr v-for="(total, medida, index) in maquila" :key="`${maquilaNombre}-${medida}`" v-if="index !== 0">
-              <td>{{ medida }}</td>
-              <td>{{ formatNumber(total) }}</td>
-            </tr>
-          </template>
-        </tbody>
+  <tr v-for="(maquila, maquilaNombre) in salidasMaquilasPorMedida" :key="`${maquilaNombre}-header`">
+    <td :rowspan="Object.keys(maquila).length">{{ maquilaNombre }}</td>
+    <td>{{ Object.keys(maquila)[0] }}</td>
+    <td>{{ formatNumber(Object.values(maquila)[0]) }}</td>
+  </tr>
+  <tr v-for="(maquila, maquilaNombre) in salidasMaquilasPorMedida" :key="`${maquilaNombre}-details`">
+    <template v-for="(total, medida, index) in maquila">
+      <tr v-if="index !== 0" :key="`${maquilaNombre}-${medida}`">
+        <td>{{ medida }}</td>
+        <td>{{ formatNumber(total) }}</td>
+      </tr>
+    </template>
+  </tr>
+</tbody>
       </table>
     </div>
     
@@ -252,16 +254,66 @@ export default {
         this.newEntrada = { tipo: 'proveedor', proveedor: '', medida: '', kilos: null };
       }
     },
-    addSalida() {
+    async addSalida() {
       if (this.newSalida.tipo && this.newSalida.proveedor && this.newSalida.medida && this.newSalida.kilos) {
-        this.salidas.push({
-          tipo: this.newSalida.tipo,
-          proveedor: this.newSalida.proveedor,
-          medida: this.newSalida.medida,
-          kilos: Number(this.newSalida.kilos.toFixed(1))
-        });
-        this.newSalida = { tipo: 'proveedor', proveedor: '', medida: '', kilos: null };
+        // Verificar si hay suficientes kilos disponibles
+        const kilosDisponibles = await this.getKilosDisponibles(this.newSalida.proveedor, this.newSalida.medida);
+        if (kilosDisponibles >= this.newSalida.kilos) {
+          this.salidas.push({
+            tipo: this.newSalida.tipo,
+            proveedor: this.newSalida.proveedor,
+            medida: this.newSalida.medida,
+            kilos: Number(this.newSalida.kilos.toFixed(1))
+          });
+          this.newSalida = { tipo: 'proveedor', proveedor: '', medida: '', kilos: null };
+        } else {
+          alert(`No hay suficientes kilos disponibles. Kilos disponibles: ${kilosDisponibles.toFixed(1)} kg`);
+        }
       }
+    },
+    async getKilosDisponibles(proveedor, medida) {
+      let kilosDisponibles = 0;
+
+      // Obtener todas las sacadas
+      const sacadasRef = collection(db, 'sacadas');
+      const querySnapshot = await getDocs(sacadasRef);
+
+      querySnapshot.forEach((doc) => {
+        const sacada = doc.data();
+        
+        // Convertir la fecha de Firestore a un objeto Date de JavaScript
+        const sacadaFecha = sacada.fecha instanceof Date ? sacada.fecha : sacada.fecha.toDate();
+        
+        // Solo considerar sacadas anteriores a la fecha actual
+        if (sacadaFecha <= this.currentDate) {
+          sacada.entradas.forEach(entrada => {
+            if (entrada.proveedor === proveedor && entrada.medida === medida) {
+              kilosDisponibles += entrada.kilos;
+            }
+          });
+
+          sacada.salidas.forEach(salida => {
+            if (salida.proveedor === proveedor && salida.medida === medida) {
+              kilosDisponibles -= salida.kilos;
+            }
+          });
+        }
+      });
+
+      // Añadir las entradas y salidas actuales (no guardadas)
+      this.entradas.forEach(entrada => {
+        if (entrada.proveedor === proveedor && entrada.medida === medida) {
+          kilosDisponibles += entrada.kilos;
+        }
+      });
+
+      this.salidas.forEach(salida => {
+        if (salida.proveedor === proveedor && salida.medida === medida) {
+          kilosDisponibles -= salida.kilos;
+        }
+      });
+
+      return kilosDisponibles;
     },
     removeEntrada(index) {
       this.entradas.splice(index, 1);
