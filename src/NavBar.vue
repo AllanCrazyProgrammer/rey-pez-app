@@ -23,15 +23,15 @@
             <router-link to="/noteMenu" class="nav-link">Notas</router-link>
           </b-nav-item>
           <b-nav-item>
-    <router-link to="/sacadas" class="nav-link">Entradas/Salidas</router-link>
-  </b-nav-item>
-  <b-nav-item>
-    <router-link to="/existencias"class="nav-link">Existencias</router-link>
-  </b-nav-item>
-
+            <router-link to="/sacadas" class="nav-link">Entradas/Salidas</router-link>
+          </b-nav-item>
+          <b-nav-item>
+            <router-link to="/existencias" class="nav-link">Existencias</router-link>
+          </b-nav-item>
+          <b-nav-item>
+            <router-link to="/cuentas-mexico" class="nav-link">Cuentas México</router-link>
+          </b-nav-item>
         </b-navbar-nav>
-
-
       </b-collapse>
     </b-navbar>
     <router-view />

@@ -10,6 +10,8 @@ import GestionarProductos from '@/components/GestionarProductos.vue'
 import GestionarMedidas from '@/components/GestionarMedidas.vue'
 import GestionarProveedores from '@/components/GestionarProveedores.vue'
 import Existencias from '@/components/Existencias.vue'
+import CuentasMexico from '@/views/CuentasMexico.vue'
+import CuentasOzuna from '@/views/CuentasClientes/CuentasOzuna.vue'
 
 Vue.use(Router);
 
@@ -75,6 +77,16 @@ const routes = [
     path: '/existencias',
     name: 'Existencias',
     component: Existencias
+  },
+  {
+    path: '/cuentas-mexico',
+    name: 'CuentasMexico',
+    component: CuentasMexico
+  },
+  {
+    path: '/cuentas-ozuna',
+    name: 'CuentasOzuna',
+    component: CuentasOzuna
   }
 ];
 
