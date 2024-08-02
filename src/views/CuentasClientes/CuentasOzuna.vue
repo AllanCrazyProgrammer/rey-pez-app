@@ -1,7 +1,10 @@
 <template>
   <div class="cuentas-ozuna-container">
     <h1>Cuentas Ozuna</h1>
-    <div class="fecha-actual">{{ fechaActual }}</div>
+    <div class="fecha-actual">
+      <input type="date" v-model="fechaSeleccionada" @change="actualizarFecha">
+      {{ fechaFormateada }}
+    </div>
 
     <div class="input-section">
       <h2>Ingresar Datos</h2>
@@ -45,7 +48,6 @@
     <div class="saldo-pendiente">
       <div class="input-row">
         <input v-model.number="saldoAnterior" type="number" placeholder="Saldo anterior">
-        <input v-model.number="saldoHoy" type="number" placeholder="Saldo Hoy">
       </div>
       <div class="input-row" v-for="(cobro, index) in cobros" :key="index">
         <input v-model="cobro.descripcion" type="text" placeholder="Descripción">
@@ -62,7 +64,7 @@
       </tr>
       <tr>
         <td>Saldo Hoy</td>
-        <td>${{ formatNumber(saldoHoy) }}</td>
+        <td>${{ formatNumber(totalGeneral) }}</td>
       </tr>
       <tr v-for="(cobro, index) in cobros" :key="index">
         <td>{{ cobro.descripcion }}</td>
@@ -88,21 +90,21 @@ export default {
         costo: null
       },
       saldoAnterior: 0,
-      saldoHoy: 0,
-      cobros: []
+      cobros: [],
+      fechaSeleccionada: new Date().toISOString().split('T')[0]
     }
   },
   computed: {
-    fechaActual() {
-      const hoy = new Date();
+    fechaFormateada() {
+      const fecha = new Date(this.fechaSeleccionada);
       const opciones = { year: 'numeric', month: 'long', day: 'numeric' };
-      return hoy.toLocaleDateString('es-ES', opciones);
+      return fecha.toLocaleDateString('es-ES', opciones);
     },
     totalGeneral() {
       return this.items.reduce((sum, item) => sum + item.total, 0);
     },
     totalSaldo() {
-      return this.saldoAnterior + this.saldoHoy + 
+      return this.saldoAnterior + this.totalGeneral + 
              this.cobros.reduce((sum, cobro) => sum + cobro.monto, 0);
     }
   },
@@ -125,6 +127,10 @@ export default {
     },
     removeCobro(index) {
       this.cobros.splice(index, 1);
+    },
+    actualizarFecha() {
+      // Este método se llama cuando se cambia la fecha manualmente
+      // Puedes agregar lógica adicional aquí si es necesario
     }
   }
 }
@@ -142,6 +148,16 @@ export default {
   text-align: right;
   margin-bottom: 20px;
   font-weight: bold;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+.fecha-actual input[type="date"] {
+  margin-right: 10px;
+  padding: 5px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
 }
 
 .input-section {
