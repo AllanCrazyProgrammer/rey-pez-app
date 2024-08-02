@@ -34,8 +34,9 @@
             placeholder="Kilos" 
             required 
           />
-          <button @click="addSalida">Agregar Salida</button>
+          <button @click="addSalida" :disabled="!isSalidaValid">Agregar Salida</button>
         </div>
+        <p v-if="kilosDisponibles !== null">Kilos disponibles: {{ formatNumber(kilosDisponibles) }} kg</p>
         <ul class="list">
           <li v-for="(salida, index) in salidas" :key="'salida-' + index">
             {{ salida.tipo === 'maquila' ? 'Maquila' : 'Proveedor' }}: {{ salida.proveedor }} - {{ salida.medida }}: {{ formatNumber(salida.kilos) }} kg
@@ -87,25 +88,25 @@
     </div>
     
     <div class="summary">
-    <h3>Resumen del Día</h3>
-    <p>Total Entradas: {{ formatNumber(totalEntradas) }} kg</p>
-    <p>Total Salidas: {{ formatNumber(totalSalidas) }} kg</p>
-    
-    <h4>Salidas clientes:</h4>
-    <table class="medidas-summary">
-      <thead>
-        <tr>
-          <th>Medida</th>
-          <th>Total (kg)</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="(item, key) in salidasProveedoresPorMedida" :key="key">
-          <td>{{ item.medida }} ({{ item.proveedor }})</td>
-          <td>{{ formatNumber(item.total) }}</td>
-        </tr>
-      </tbody>
-    </table>
+      <h3>Resumen del Día</h3>
+      <p>Total Entradas: {{ formatNumber(totalEntradas) }} kg</p>
+      <p>Total Salidas: {{ formatNumber(totalSalidas) }} kg</p>
+      
+      <h4>Salidas clientes:</h4>
+      <table class="medidas-summary">
+        <thead>
+          <tr>
+            <th>Medida</th>
+            <th>Total (kg)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="(item, key) in salidasProveedoresPorMedida" :key="key">
+            <td>{{ item.medida }} ({{ item.proveedor }})</td>
+            <td>{{ formatNumber(item.total) }}</td>
+          </tr>
+        </tbody>
+      </table>
 
       <h4>Salidas maquilas:</h4>
       <table class="medidas-summary">
@@ -117,29 +118,28 @@
           </tr>
         </thead>
         <tbody>
-  <tr v-for="(maquila, maquilaNombre) in salidasMaquilasPorMedida" :key="`${maquilaNombre}-header`">
-    <td :rowspan="Object.keys(maquila).length">{{ maquilaNombre }}</td>
-    <td>{{ Object.keys(maquila)[0] }}</td>
-    <td>{{ formatNumber(Object.values(maquila)[0]) }}</td>
-  </tr>
-  <tr v-for="(maquila, maquilaNombre) in salidasMaquilasPorMedida" :key="`${maquilaNombre}-details`">
-    <template v-for="(total, medida, index) in maquila">
-      <tr v-if="index !== 0" :key="`${maquilaNombre}-${medida}`">
-        <td>{{ medida }}</td>
-        <td>{{ formatNumber(total) }}</td>
-      </tr>
-    </template>
-  </tr>
-</tbody>
+          <template v-for="(maquila, maquilaNombre) in salidasMaquilasPorMedida">
+            <tr :key="`${maquilaNombre}-header`">
+              <td :rowspan="Object.keys(maquila).length">{{ maquilaNombre }}</td>
+              <td>{{ Object.keys(maquila)[0] }}</td>
+              <td>{{ formatNumber(Object.values(maquila)[0]) }}</td>
+            </tr>
+            <tr v-for="(total, medida, index) in maquila" :key="`${maquilaNombre}-${medida}`" v-if="index !== 0">
+              <td>{{ medida }}</td>
+              <td>{{ formatNumber(total) }}</td>
+            </tr>
+          </template>
+        </tbody>
       </table>
     </div>
     
     <button @click="saveReport" class="save-button">{{ isEditing ? 'Actualizar' : 'Guardar' }} Informe del Día</button>
   </div>
 </template>
+
 <script>
 import { db } from '@/firebase';
-import { collection, addDoc, getDocs, doc, getDoc, updateDoc } from 'firebase/firestore';
+import { collection, addDoc, getDocs, doc, getDoc, updateDoc, query, where } from 'firebase/firestore';
 import BackButton from '../components/BackButton.vue';
 
 export default {
@@ -158,7 +158,8 @@ export default {
       newSalida: { tipo: 'proveedor', proveedor: '', medida: '', kilos: null },
       isEditing: false,
       sacadaId: null,
-      isLoaded: false
+      isLoaded: false,
+      kilosDisponibles: null
     };
   },
   computed: {
@@ -193,7 +194,6 @@ export default {
     totalSalidas() {
       return Number(this.salidas.reduce((total, salida) => total + salida.kilos, 0).toFixed(1));
     },
-    
     salidasProveedoresPorMedida() {
       return this.salidas
         .filter(salida => salida.tipo === 'proveedor')
@@ -223,8 +223,16 @@ export default {
           acc[salida.proveedor][salida.medida] += salida.kilos;
           return acc;
         }, {});
+    },
+    isSalidaValid() {
+      return this.newSalida.tipo && 
+             this.newSalida.proveedor && 
+             this.newSalida.medida && 
+             this.newSalida.kilos && 
+             this.newSalida.kilos > 0 &&
+             this.kilosDisponibles !== null &&
+             this.newSalida.kilos <= this.kilosDisponibles;
     }
-    
   },
   methods: {
     async loadProveedores() {
@@ -235,6 +243,19 @@ export default {
       const querySnapshot = await getDocs(collection(db, 'medidas'));
       this.medidas = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     },
+    async checkExistingSacada() {
+      const sacadasRef = collection(db, 'sacadas');
+      const startOfDay = new Date(this.currentDate.setHours(0, 0, 0, 0));
+      const endOfDay = new Date(this.currentDate.setHours(23, 59, 59, 999));
+      
+      const q = query(sacadasRef, 
+        where('fecha', '>=', startOfDay),
+        where('fecha', '<=', endOfDay)
+      );
+      
+      const querySnapshot = await getDocs(q);
+      return !querySnapshot.empty;
+    },
     resetEntradaSelections() {
       this.newEntrada.proveedor = '';
       this.newEntrada.medida = '';
@@ -242,6 +263,7 @@ export default {
     resetSalidaSelections() {
       this.newSalida.proveedor = '';
       this.newSalida.medida = '';
+      this.kilosDisponibles = null;
     },
     addEntrada() {
       if (this.newEntrada.tipo && this.newEntrada.proveedor && this.newEntrada.medida && this.newEntrada.kilos) {
@@ -252,39 +274,40 @@ export default {
           kilos: Number(this.newEntrada.kilos.toFixed(1))
         });
         this.newEntrada = { tipo: 'proveedor', proveedor: '', medida: '', kilos: null };
+        this.updateKilosDisponibles();
       }
     },
     async addSalida() {
-      if (this.newSalida.tipo && this.newSalida.proveedor && this.newSalida.medida && this.newSalida.kilos) {
-        // Verificar si hay suficientes kilos disponibles
-        const kilosDisponibles = await this.getKilosDisponibles(this.newSalida.proveedor, this.newSalida.medida);
-        if (kilosDisponibles >= this.newSalida.kilos) {
-          this.salidas.push({
-            tipo: this.newSalida.tipo,
-            proveedor: this.newSalida.proveedor,
-            medida: this.newSalida.medida,
-            kilos: Number(this.newSalida.kilos.toFixed(1))
-          });
-          this.newSalida = { tipo: 'proveedor', proveedor: '', medida: '', kilos: null };
-        } else {
-          alert(`No hay suficientes kilos disponibles. Kilos disponibles: ${kilosDisponibles.toFixed(1)} kg`);
-        }
+      if (this.isSalidaValid) {
+        this.salidas.push({
+          tipo: this.newSalida.tipo,
+          proveedor: this.newSalida.proveedor,
+          medida: this.newSalida.medida,
+          kilos: Number(this.newSalida.kilos.toFixed(1))
+        });
+        this.newSalida = { tipo: 'proveedor', proveedor: '', medida: '', kilos: null };
+        await this.updateKilosDisponibles();
+      } else {
+        alert(`No hay suficientes kilos disponibles. Kilos disponibles: ${this.kilosDisponibles.toFixed(1)} kg`);
       }
     },
-    async getKilosDisponibles(proveedor, medida) {
+    async updateKilosDisponibles() {
+      if (this.newSalida.proveedor && this.newSalida.medida) {
+        this.kilosDisponibles = await this.getKilosDisponibles(this.newSalida.proveedor, this.newSalida.medida);
+      } else {
+        this.kilosDisponibles = null;
+      }
+    },
+ async getKilosDisponibles(proveedor, medida) {
       let kilosDisponibles = 0;
 
-      // Obtener todas las sacadas
       const sacadasRef = collection(db, 'sacadas');
       const querySnapshot = await getDocs(sacadasRef);
 
       querySnapshot.forEach((doc) => {
         const sacada = doc.data();
-        
-        // Convertir la fecha de Firestore a un objeto Date de JavaScript
         const sacadaFecha = sacada.fecha instanceof Date ? sacada.fecha : sacada.fecha.toDate();
         
-        // Solo considerar sacadas anteriores a la fecha actual
         if (sacadaFecha <= this.currentDate) {
           sacada.entradas.forEach(entrada => {
             if (entrada.proveedor === proveedor && entrada.medida === medida) {
@@ -313,13 +336,15 @@ export default {
         }
       });
 
-      return kilosDisponibles;
+      return Number(kilosDisponibles.toFixed(1));
     },
     removeEntrada(index) {
       this.entradas.splice(index, 1);
+      this.updateKilosDisponibles();
     },
     removeSalida(index) {
       this.salidas.splice(index, 1);
+      this.updateKilosDisponibles();
     },
     formatNumber(value) {
       return value.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
@@ -339,12 +364,21 @@ export default {
         console.log("Salidas cargadas:", this.salidas);
         this.sacadaId = id;
         this.isEditing = true;
+        await this.updateKilosDisponibles();
       } else {
         console.log("No se encontró el documento con ID:", id);
       }
     },
     async saveReport() {
       try {
+        if (!this.isEditing) {
+          const existingSacada = await this.checkExistingSacada();
+          if (existingSacada) {
+            alert("Ya existe un registro de sacada para esta fecha. No se puede crear uno nuevo.");
+            return;
+          }
+        }
+
         const reportData = {
           fecha: this.currentDate,
           entradas: this.entradas,
@@ -360,12 +394,12 @@ export default {
           await addDoc(collection(db, 'sacadas'), reportData);
           alert("Informe del día guardado exitosamente");
         }
-        // Redirigir a la lista de sacadas o reiniciar el formulario según sea necesario
+        this.$router.push('/sacadas');
       } catch (error) {
         console.error("Error al guardar/actualizar el documento: ", error);
         alert("Error al guardar/actualizar el informe del día: " + error.message);
       }
-    }
+    },
   },
   async created() {
     await this.loadProveedores();
@@ -377,6 +411,10 @@ export default {
       console.log("No se encontró ID en la ruta");
     }
     this.isLoaded = true;
+  },
+  watch: {
+    'newSalida.proveedor': 'updateKilosDisponibles',
+    'newSalida.medida': 'updateKilosDisponibles'
   }
 };
 </script>
