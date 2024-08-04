@@ -11,6 +11,7 @@ import GestionarMedidas from '@/components/GestionarMedidas.vue'
 import GestionarProveedores from '@/components/GestionarProveedores.vue'
 import Existencias from '@/components/Existencias.vue'
 import CuentasMexico from '@/views/CuentasMexico.vue'
+import OzunaCuentasMenu from '@/views/CuentasClientes/OzunaCuentasMenu.vue'
 import CuentasOzuna from '@/views/CuentasClientes/CuentasOzuna.vue'
 
 Vue.use(Router);
@@ -85,7 +86,22 @@ const routes = [
   },
   {
     path: '/cuentas-ozuna',
-    name: 'CuentasOzuna',
+    name: 'ozuna-cuentas-menu',
+    component: OzunaCuentasMenu
+  },
+  {
+    path: '/cuentas-ozuna/nueva',
+    name: 'nueva-cuenta-ozuna',
+    component: CuentasOzuna
+  },
+  {
+    path: '/cuentas-ozuna/:id',
+    name: 'ver-cuenta-ozuna',
+    component: CuentasOzuna
+  },
+  {
+    path: '/cuentas-ozuna/editar/:id',
+    name: 'editar-cuenta-ozuna',
     component: CuentasOzuna
   }
 ];

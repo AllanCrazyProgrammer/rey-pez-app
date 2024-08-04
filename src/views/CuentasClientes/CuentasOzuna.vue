@@ -3,7 +3,7 @@
     <h1>Cuentas Ozuna</h1>
     <div class="fecha-actual">
       <input type="date" v-model="fechaSeleccionada" @change="actualizarFecha">
-      {{ fechaFormateada }}
+      <span>{{ fechaFormateada }}</span>
     </div>
 
     <div class="input-section">
@@ -75,10 +75,15 @@
         <td>${{ formatNumber(totalSaldo) }}</td>
       </tr>
     </table>
+
+    <button @click="guardarNota" class="save-button">Guardar Nota</button>
   </div>
 </template>
 
 <script>
+import { db } from '@/firebase';
+import { collection, addDoc } from 'firebase/firestore';
+
 export default {
   name: 'CuentasOzuna',
   data() {
@@ -91,12 +96,12 @@ export default {
       },
       saldoAnterior: 0,
       cobros: [],
-      fechaSeleccionada: new Date().toISOString().split('T')[0]
+      fechaSeleccionada: this.obtenerFechaActual()
     }
   },
   computed: {
     fechaFormateada() {
-      const fecha = new Date(this.fechaSeleccionada);
+      const fecha = new Date(this.fechaSeleccionada + 'T00:00:00');
       const opciones = { year: 'numeric', month: 'long', day: 'numeric' };
       return fecha.toLocaleDateString('es-ES', opciones);
     },
@@ -128,10 +133,31 @@ export default {
     removeCobro(index) {
       this.cobros.splice(index, 1);
     },
-    actualizarFecha() {
-      // Este método se llama cuando se cambia la fecha manualmente
-      // Puedes agregar lógica adicional aquí si es necesario
-    }
+    obtenerFechaActual() {
+      const fecha = new Date();
+      return fecha.getFullYear() + '-' + 
+             String(fecha.getMonth() + 1).padStart(2, '0') + '-' + 
+             String(fecha.getDate()).padStart(2, '0');
+    },
+  
+    async guardarNota() {
+  try {
+    const notaData = {
+      fecha: this.fechaSeleccionada,
+      items: this.items,
+      saldoAnterior: this.saldoAnterior,
+      cobros: this.cobros,
+      totalGeneral: this.totalGeneral,
+      totalSaldo: this.totalSaldo
+    };
+
+    await addDoc(collection(db, 'cuentasOzuna'), notaData);
+    alert('Nota guardada exitosamente');
+  } catch (error) {
+    console.error('Error al guardar la nota:', error);
+    alert('Error al guardar la nota');
+  }
+},
   }
 }
 </script>
@@ -158,6 +184,11 @@ export default {
   padding: 5px;
   border: 1px solid #ddd;
   border-radius: 4px;
+}
+
+.fecha-actual span {
+  min-width: 200px;
+  text-align: left;
 }
 
 .input-section {
@@ -223,5 +254,20 @@ th {
 
 .add-btn {
   margin-top: 10px;
+}
+
+.save-button {
+  margin-top: 20px;
+  padding: 10px 20px;
+  background-color: #4CAF50;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 16px;
+}
+
+.save-button:hover {
+  background-color: #45a049;
 }
 </style>
