@@ -1,69 +1,67 @@
 <template>
-  <div class="container">
-    <div class="cuentas-mexico">
-      <h1>Cuentas México</h1>
-      <div class="botones-container">
-        <router-link to="/cuentas-ozuna" class="boton-cuenta">
-          <div class="card">
-            <h2>Ozuna</h2>
-          </div>
-        </router-link>
+  <div class="page-container">
+    <div class="content-wrap">
+      <div class="cuentas-mexico-container">
+        <h1>Cuentas México</h1>
+        <div class="botones-container">
+          <router-link to="/cuentas-ozuna" class="boton-cuenta">
+            <div class="card">
+              <h2>Ozuna</h2>
+            </div>
+          </router-link>
+          <!-- Agrega más botones aquí si es necesario -->
+        </div>
       </div>
     </div>
   </div>
 </template>
 
-<script>
-export default {
-  name: 'CuentasMexico',
-  // Aquí irá la lógica del componente
-}
-</script>
-
 <style scoped>
-.container {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 20px;
+.page-container {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
 }
 
-.cuentas-mexico {
-  width: 100%;
-  text-align: center;
+.content-wrap {
+  flex: 1;
+}
+
+.cuentas-mexico-container {
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+  height: 100%;
 }
 
 .botones-container {
+  flex-grow: 1;
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   justify-content: center;
-  gap: 20px;
-  margin-top: 20px;
+  align-items: center;
 }
 
 .boton-cuenta {
+  margin: 10px;
   text-decoration: none;
-  color: inherit;
 }
 
 .card {
-  width: 200px;
-  height: 200px;
-  background-color: #4CAF50; /* Verde */
+  background-color: #3760b0;
   border-radius: 10px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  cursor: pointer;
-  transition: background-color 0.3s ease;
+  padding: 20px;
+  width: 200px;
+  text-align: center;
+  transition: transform 0.3s ease;
 }
 
 .card:hover {
-  background-color: #45a049; /* Verde más oscuro para el hover */
+  transform: scale(1.05);
 }
 
 .card h2 {
   font-size: 24px;
-  text-align: center;
-  color: #ffffff; /* Texto blanco para mejor legibilidad */
+  color: #ffffff;
 }
 </style>

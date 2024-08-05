@@ -1,8 +1,11 @@
 <template>
   <div class="cuentas-ozuna-container">
+    <div class="back-button-container">
+      <BackButton to="/cuentas-ozuna" />
+    </div>
     <h1>Cuentas Ozuna</h1>
     <div class="fecha-actual">
-      <input type="date" v-model="fechaSeleccionada" @change="actualizarFecha">
+      <input type="date" v-model="fechaSeleccionada">
       <span>{{ fechaFormateada }}</span>
     </div>
 
@@ -47,7 +50,7 @@
     <h2>Saldo pendiente</h2>
     <div class="saldo-pendiente">
       <div class="input-row">
-        <input v-model.number="saldoAnterior" type="number" placeholder="Saldo anterior">
+        <span>Saldo Acumulado Anterior: ${{ formatNumber(saldoAcumuladoAnterior) }}</span>
       </div>
       <div class="input-row" v-for="(cobro, index) in cobros" :key="index">
         <input v-model="cobro.descripcion" type="text" placeholder="Descripción">
@@ -57,10 +60,20 @@
       <button @click="addCobro" class="add-btn">Agregar Cobro</button>
     </div>
 
+    <h2>Abonos</h2>
+    <div class="abonos">
+      <div class="input-row" v-for="(abono, index) in abonos" :key="index">
+        <input v-model="abono.descripcion" type="text" placeholder="Descripción">
+        <input v-model.number="abono.monto" type="number" placeholder="Monto">
+        <button @click="removeAbono(index)" class="delete-btn">Eliminar</button>
+      </div>
+      <button @click="addAbono" class="add-btn">Agregar Abono</button>
+    </div>
+
     <table class="tabla-saldo">
       <tr>
-        <td>Saldo anterior</td>
-        <td>${{ formatNumber(saldoAnterior) }}</td>
+        <td>Saldo Acumulado Anterior</td>
+        <td>${{ formatNumber(saldoAcumuladoAnterior) }}</td>
       </tr>
       <tr>
         <td>Saldo Hoy</td>
@@ -70,9 +83,17 @@
         <td>{{ cobro.descripcion }}</td>
         <td>${{ formatNumber(cobro.monto) }}</td>
       </tr>
+      <tr v-for="(abono, index) in abonos" :key="'abono-'+index">
+        <td>{{ abono.descripcion }} (Abono)</td>
+        <td>-${{ formatNumber(abono.monto) }}</td>
+      </tr>
       <tr class="total">
         <td>Total</td>
         <td>${{ formatNumber(totalSaldo) }}</td>
+      </tr>
+      <tr class="total">
+        <td>Nuevo Saldo Acumulado</td>
+        <td>${{ formatNumber(nuevoSaldoAcumulado) }}</td>
       </tr>
     </table>
 
@@ -82,10 +103,14 @@
 
 <script>
 import { db } from '@/firebase';
-import { collection, addDoc } from 'firebase/firestore';
+import { collection, addDoc, doc, getDoc, updateDoc, query, where, orderBy, limit, getDocs } from 'firebase/firestore';
+import BackButton from '@/components/BackButton.vue';
 
 export default {
   name: 'CuentasOzuna',
+  components: {
+    BackButton
+  },
   data() {
     return {
       items: [],
@@ -94,8 +119,9 @@ export default {
         medida: '',
         costo: null
       },
-      saldoAnterior: 0,
+      saldoAcumuladoAnterior: 0,
       cobros: [],
+      abonos: [],
       fechaSeleccionada: this.obtenerFechaActual()
     }
   },
@@ -109,11 +135,82 @@ export default {
       return this.items.reduce((sum, item) => sum + item.total, 0);
     },
     totalSaldo() {
-      return this.saldoAnterior + this.totalGeneral + 
-             this.cobros.reduce((sum, cobro) => sum + cobro.monto, 0);
+      return this.totalGeneral + 
+             this.cobros.reduce((sum, cobro) => sum + cobro.monto, 0) -
+             this.abonos.reduce((sum, abono) => sum + abono.monto, 0);
+    },
+    nuevoSaldoAcumulado() {
+      return this.saldoAcumuladoAnterior + this.totalSaldo;
+    }
+  },
+  watch: {
+    fechaSeleccionada() {
+      this.loadSaldoAcumuladoAnterior();
+    }
+  },
+  mounted() {
+    console.log("Mounted ejecutado", this.$route.params, this.$route.query);
+    const id = this.$route.params.id;
+    const isEditing = this.$route.query.edit === 'true';
+    if (id && isEditing) {
+      console.log("Iniciando carga de cuenta existente");
+      this.loadExistingCuenta(id);
+    } else {
+      console.log("Cargando saldo acumulado anterior");
+      this.loadSaldoAcumuladoAnterior();
     }
   },
   methods: {
+    async loadExistingCuenta(id) {
+      try {
+        console.log("Cargando cuenta con ID:", id);
+        const cuentaRef = doc(db, 'cuentasOzuna', id);
+        const cuentaDoc = await getDoc(cuentaRef);
+        if (cuentaDoc.exists()) {
+          const data = cuentaDoc.data();
+          console.log("Datos de la cuenta cargados:", data);
+
+          this.$nextTick(() => {
+            this.items = data.items || [];
+            this.saldoAcumuladoAnterior = data.saldoAcumuladoAnterior || 0;
+            this.cobros = data.cobros || [];
+            this.abonos = data.abonos || [];
+            this.fechaSeleccionada = data.fecha || this.obtenerFechaActual();
+            console.log("Estado actualizado con $nextTick:", {
+              items: this.items,
+              saldoAcumuladoAnterior: this.saldoAcumuladoAnterior,
+              cobros: this.cobros,
+              abonos: this.abonos,
+              fechaSeleccionada: this.fechaSeleccionada
+            });
+          });
+        } else {
+          console.error("No se encontró la cuenta con el ID proporcionado");
+        }
+      } catch (error) {
+        console.error("Error al cargar la cuenta existente: ", error);
+      }
+    },
+    async loadSaldoAcumuladoAnterior() {
+      try {
+        const cuentasRef = collection(db, 'cuentasOzuna');
+        const q = query(
+          cuentasRef,
+          where('fecha', '<', this.fechaSeleccionada),
+          orderBy('fecha', 'desc'),
+          limit(1)
+        );
+        const anteriorSnapshot = await getDocs(q);
+        if (!anteriorSnapshot.empty) {
+          const cuentaAnterior = anteriorSnapshot.docs[0].data();
+          this.saldoAcumuladoAnterior = cuentaAnterior.nuevoSaldoAcumulado || 0;
+        } else {
+          this.saldoAcumuladoAnterior = 0;
+        }
+      } catch (error) {
+        console.error("Error al cargar el saldo acumulado anterior:", error);
+      }
+    },
     formatNumber(value) {
       return value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     },
@@ -133,34 +230,55 @@ export default {
     removeCobro(index) {
       this.cobros.splice(index, 1);
     },
+    addAbono() {
+      this.abonos.push({descripcion: '', monto: 0});
+    },
+    removeAbono(index) {
+      this.abonos.splice(index, 1);
+    },
     obtenerFechaActual() {
       const fecha = new Date();
       return fecha.getFullYear() + '-' + 
              String(fecha.getMonth() + 1).padStart(2, '0') + '-' + 
              String(fecha.getDate()).padStart(2, '0');
     },
-  
     async guardarNota() {
-  try {
-    const notaData = {
-      fecha: this.fechaSeleccionada,
-      items: this.items,
-      saldoAnterior: this.saldoAnterior,
-      cobros: this.cobros,
-      totalGeneral: this.totalGeneral,
-      totalSaldo: this.totalSaldo
-    };
+      try {
+        const notaData = {
+          fecha: this.fechaSeleccionada,
+          items: this.items,
+          saldoAcumuladoAnterior: this.saldoAcumuladoAnterior,
+          cobros: this.cobros,
+          abonos: this.abonos,
+          totalGeneral: this.totalGeneral,
+          totalSaldo: this.totalSaldo,
+          nuevoSaldoAcumulado: this.nuevoSaldoAcumulado
+        };
 
-    await addDoc(collection(db, 'cuentasOzuna'), notaData);
-    alert('Nota guardada exitosamente');
-  } catch (error) {
-    console.error('Error al guardar la nota:', error);
-    alert('Error al guardar la nota');
-  }
-},
+        const id = this.$route.params.id;
+        const isEditing = this.$route.query.edit === 'true';
+
+        if (id && isEditing) {
+          // Actualizar cuenta existente
+          await updateDoc(doc(db, 'cuentasOzuna', id), notaData);
+          alert('Cuenta actualizada exitosamente');
+        } else {
+          // Crear nueva cuenta
+          await addDoc(collection(db, 'cuentasOzuna'), notaData);
+          alert('Cuenta guardada exitosamente');
+        }
+
+        this.$router.push('/cuentas-ozuna');
+      } catch (error) {
+        console.error('Error al guardar la cuenta:', error);
+        alert('Error al guardar la cuenta');
+      }
+    },
   }
 }
 </script>
+
+
 
 <style scoped>
 .cuentas-ozuna-container {
@@ -168,6 +286,10 @@ export default {
   margin: 0 auto;
   padding: 20px;
   font-family: Arial, sans-serif;
+}
+
+.back-button-container {
+  margin-bottom: 20px;
 }
 
 .fecha-actual {
@@ -254,6 +376,10 @@ th {
 
 .add-btn {
   margin-top: 10px;
+}
+
+.abonos {
+  margin-bottom: 20px;
 }
 
 .save-button {

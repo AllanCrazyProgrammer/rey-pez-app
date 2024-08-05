@@ -1,21 +1,21 @@
 <template>
   <div>
     <b-navbar class="navbar-custom" toggleable="lg">
-      <b-navbar-brand href="#" class="mx-auto">
+      <b-navbar-brand href="#" class="d-flex align-items-center">
         <b-img
           src="https://res.cloudinary.com/hwkcovsmr/image/upload/v1620946647/samples/REY_PEZ_LOGO_nsotww.png"
-          width="100"
+          width="60"
           fluid
           alt="Rey Pez Logo"
-          class="logo-image"
+          class="logo-image mr-2"
         ></b-img>
+        <h1 class="navbar-title mb-0">Rey Pez</h1>
       </b-navbar-brand>
 
-      <b-navbar-toggle target="nav-collapse" class="ml-auto"></b-navbar-toggle>
+      <b-navbar-toggle target="nav-collapse"></b-navbar-toggle>
 
       <b-collapse id="nav-collapse" is-nav>
-        <h2 class="navbar-title mx-auto">Rey Pez</h2>
-        <b-navbar-nav class="mr-auto">
+        <b-navbar-nav class="ml-auto">
           <b-nav-item>
             <router-link to="/" class="nav-link">Home</router-link>
           </b-nav-item>
@@ -70,11 +70,6 @@ export default {
   background-image: url('https://www.transparenttextures.com/patterns/wave.png');
 }
 
-.navbar-brand {
-  display: flex;
-  justify-content: center;
-}
-
 .logo-image {
   border-radius: 50%;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
@@ -82,67 +77,36 @@ export default {
 
 .navbar-title {
   color: #3760b0;
-  font-size: 4em;
-  margin: 0;
+  font-size: 2em;
   font-family: 'Sail', cursive;
-  text-align: center;
-  text-shadow: 2px 2px #ecb62b;
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 1;
+  text-shadow: 1px 1px #ecb62b;
 }
 
-.nav-links .nav-link {
-  color: #3760b0;
+.nav-link {
+  color: #3760b0 !important;
   font-weight: bold;
-  margin: 0 15px;
+  margin: 0 10px;
   transition: color 0.3s, transform 0.3s;
-  font-size: 20px;
+  font-size: 16px;
 }
 
-.nav-links .nav-link:hover {
-  color: #2a4a87;
+.nav-link:hover {
+  color: #2a4a87 !important;
   transform: scale(1.1);
-}
-
-.b-nav-item-dropdown .dropdown-menu {
-  background-color: white;
-  border-radius: 10px;
-  border: 1px solid #3760b0;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-}
-
-.b-nav-item-dropdown .dropdown-item {
-  color: #3760b0;
-  transition: background-color 0.3s, color 0.3s;
-}
-
-.b-nav-item-dropdown .dropdown-item:hover {
-  background-color: #2a4a87;
-  color: white;
-}
-
-.b-nav-item-dropdown .dropdown-item em {
-  color: white;
 }
 
 @media (max-width: 991px) {
   .navbar-title {
-    position: static;
-    transform: none;
-    font-size: 3em;
-    margin: 10px 0;
+    font-size: 1.5em;
   }
-
-  .navbar-brand {
-    margin-right: 0;
+  
+  .logo-image {
+    width: 50px;
   }
-
-  .navbar-toggler {
-    position: absolute;
-    right: 15px;
-    top: 15px;
+  
+  .nav-link {
+    font-size: 14px;
+    margin: 5px 0;
   }
 }
 
@@ -150,29 +114,19 @@ export default {
   .navbar-custom {
     padding: 5px 10px;
   }
-
+  
   .navbar-title {
-    font-size: 2.5em;
-  }
-
-  .nav-links .nav-link {
-    margin: 0 10px;
+    font-size: 1.2em;
   }
 }
 
 @media (max-width: 576px) {
   .navbar-custom {
     padding: 5px 10px;
-    flex-direction: column;
   }
-
+  
   .navbar-title {
-    font-size: 2em;
-    margin: 10px 0;
-  }
-
-  .nav-links .nav-link {
-    margin: 5px 0;
+    font-size: 1em;
   }
 }
 </style>

@@ -1,9 +1,10 @@
-
 <template>
   <div id="app">
     <Navbar />
+    <div class="content-wrapper">
+      <router-view />
+    </div>
     <Footer />
-
   </div>
 </template>
 
@@ -39,6 +40,8 @@ html, body {
 
 .content-wrapper {
   flex: 1 0 auto;
+  display: flex;
+  flex-direction: column;
 }
 
 h1 {

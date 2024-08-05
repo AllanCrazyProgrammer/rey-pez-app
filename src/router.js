@@ -100,8 +100,8 @@ const routes = [
     component: CuentasOzuna
   },
   {
-    path: '/cuentas-ozuna/editar/:id',
-    name: 'editar-cuenta-ozuna',
+    path: '/cuentas-ozuna/:id?',
+    name: 'CuentasOzuna',
     component: CuentasOzuna
   }
 ];
