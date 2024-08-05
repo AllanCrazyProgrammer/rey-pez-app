@@ -421,7 +421,7 @@ export default {
 
 <style scoped>
 .sacadas-container {
-  max-width: 1000px;
+  max-width: 1200px;  /* Aumentamos el ancho máximo */
   margin: 0 auto;
   padding: 20px;
   background-color: #e8f0fe;
@@ -439,10 +439,12 @@ export default {
 .sacadas-content {
   display: flex;
   justify-content: space-between;
+  gap: 20px;
 }
 
-.entradas-section, .salidas-section {
-  width: 48%;
+.salidas-section, .entradas-section {
+  flex: 1;
+  min-width: 0;  /* Esto ayuda a prevenir que el contenido se desborde */
 }
 
 h3 {

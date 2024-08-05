@@ -1,80 +1,82 @@
 <template>
-  <div class="existencias-container">
-    <div class="header">
-      <h1>Reporte de Existencias</h1>
-      <button @click="imprimirReporte" class="print-button">
-        Imprimir Reporte
-      </button>
-    </div>
-    
-    <div class="filters">
-      <input v-model="search" placeholder="Buscar por proveedor o medida" class="search-input" />
-    </div>
-    <div class="existencias-grid">
-      <div v-for="(proveedor, proveedorNombre) in filteredExistencias" :key="proveedorNombre" class="proveedor-card">
-        <h2>{{ proveedorNombre }}</h2>
-        <div class="medidas-container">
-          <div v-for="(kilos, medida) in proveedor" :key="medida" class="medida-item">
-            <div class="medida-info">
-              <span class="medida-nombre">{{ medida }}</span>
-              <span class="medida-kilos">{{ formatNumber(kilos) }} kg</span>
-            </div>
-            <div class="medida-bar-container">
-              <div class="medida-bar" :style="{ width: `${(kilos / (proveedorNombre.toLowerCase() === 'ozuna' ? maxKilos.ozuna : maxKilos.normal)) * 100}%` }"></div>
+  <div class="existencias-page">
+    <div class="existencias-container">
+      <div class="header">
+        <h1>Reporte de Existencias</h1>
+        <button @click="imprimirReporte" class="print-button">
+          Imprimir Reporte
+        </button>
+      </div>
+      
+      <div class="filters">
+        <input v-model="search" placeholder="Buscar por proveedor o medida" class="search-input" />
+      </div>
+      <div class="existencias-grid">
+        <div v-for="(proveedor, proveedorNombre) in filteredExistencias" :key="proveedorNombre" class="proveedor-card">
+          <h2>{{ proveedorNombre }}</h2>
+          <div class="medidas-container">
+            <div v-for="(kilos, medida) in proveedor" :key="medida" class="medida-item">
+              <div class="medida-info">
+                <span class="medida-nombre">{{ medida }}</span>
+                <span class="medida-kilos">{{ formatNumber(kilos) }} kg</span>
+              </div>
+              <div class="medida-bar-container">
+                <div class="medida-bar" :style="{ width: `${(kilos / (proveedorNombre.toLowerCase() === 'ozuna' ? maxKilos.ozuna : maxKilos.normal)) * 100}%` }"></div>
+              </div>
             </div>
           </div>
+          <div class="proveedor-total">Total: {{ formatNumber(calcularTotalProveedor(proveedor)) }} kg</div>
         </div>
-        <div class="proveedor-total">Total: {{ formatNumber(calcularTotalProveedor(proveedor)) }} kg</div>
       </div>
-    </div>
-    <div class="total-general">
-      <h2>Total General: {{ formatNumber(totalGeneral) }} kg</h2>
-    </div>
-    <div class="totales-por-medida">
-      <h3>Totales por Medida</h3>
-      <table>
-        <thead>
-          <tr>
-            <th>Medida</th>
-            <th>Total (kg)</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="(total, medida) in totalesPorMedida.totales" :key="medida">
-            <td>{{ medida }}</td>
-            <td>{{ formatNumber(total) }} kg</td>
-          </tr>
-          <tr class="total-row">
-            <td><strong>Total</strong></td>
-            <td><strong>{{ formatNumber(totalPorMedidas) }} kg</strong></td>
-          </tr>
-        </tbody>
-      </table>
+      <div class="total-general">
+        <h2>Total General: {{ formatNumber(totalGeneral) }} kg</h2>
+      </div>
+      <div class="totales-por-medida">
+        <h3>Totales por Medida</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Medida</th>
+              <th>Total (kg)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="(total, medida) in totalesPorMedida.totales" :key="medida">
+              <td>{{ medida }}</td>
+              <td>{{ formatNumber(total) }} kg</td>
+            </tr>
+            <tr class="total-row">
+              <td><strong>Total</strong></td>
+              <td><strong>{{ formatNumber(totalPorMedidas) }} kg</strong></td>
+            </tr>
+          </tbody>
+        </table>
 
-      <h3>Totales Ozuna</h3>
-      <table>
-        <thead>
-          <tr>
-            <th>Medida</th>
-            <th>Total (kg)</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="(total, medida) in totalesPorMedida.ozunaTotales" :key="medida">
-            <td>{{ medida }}</td>
-            <td>{{ formatNumber(total) }} kg</td>
-          </tr>
-          <tr class="total-row">
-            <td><strong>Total</strong></td>
-            <td><strong>{{ formatNumber(totalOzuna) }} kg</strong></td>
-          </tr>
-        </tbody>
-      </table>
+        <h3>Totales Ozuna</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Medida</th>
+              <th>Total (kg)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="(total, medida) in totalesPorMedida.ozunaTotales" :key="medida">
+              <td>{{ medida }}</td>
+              <td>{{ formatNumber(total) }} kg</td>
+            </tr>
+            <tr class="total-row">
+              <td><strong>Total</strong></td>
+              <td><strong>{{ formatNumber(totalOzuna) }} kg</strong></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
 </template>
 <script>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watchEffect } from 'vue';
 import { db } from '@/firebase';
 import { collection, getDocs, onSnapshot } from 'firebase/firestore';
 
@@ -397,11 +399,23 @@ export default {
       return Object.values(proveedor).reduce((total, kilos) => total + kilos, 0);
     };
 
+    let unsubscribe;
+
     onMounted(() => {
       loadExistencias();
-      onSnapshot(collection(db, 'sacadas'), () => {
+      unsubscribe = onSnapshot(collection(db, 'sacadas'), () => {
         loadExistencias();
       });
+    });
+
+    onUnmounted(() => {
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    });
+
+    watchEffect(() => {
+      console.log('Existencias actualizadas:', existencias.value);
     });
 
     return {
@@ -422,13 +436,22 @@ export default {
 </script>
 
 <style scoped>
+.existencias-page {
+  min-height: 100vh;
+  background-color: #f8f9fa;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 20px;
+}
+
 .existencias-container {
   max-width: 1200px;
-  margin: 0 auto;
+  width: 100%;
+  background-color: white;
+  border-radius: 10px;
   padding: 20px;
-  background-color: #f8f9fa;
-  border-radius: 20px;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
 
 .header {

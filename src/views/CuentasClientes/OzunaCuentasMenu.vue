@@ -120,13 +120,12 @@ export default {
 };
 </script>
 
-<style scoped>
-/* ... (mantén los estilos que ya tenías) ... */
-</style>
+
 
 <style scoped>
 .ozuna-cuentas-menu-container {
   max-width: 800px;
+  width: 95%;
   margin: 0 auto;
   padding: 20px;
   min-height: calc(100vh - 160px);
@@ -136,6 +135,7 @@ export default {
 
 h1, h2 {
   color: #3760b0;
+  text-align: center;
 }
 
 .actions-container {
@@ -153,6 +153,8 @@ h1, h2 {
   cursor: pointer;
   text-decoration: none;
   display: inline-block;
+  font-size: 16px;
+  transition: background-color 0.3s ease;
 }
 
 .action-button:hover {
@@ -183,12 +185,17 @@ h1, h2 {
 .cuenta-item {
   background-color: white;
   border-radius: 4px;
-  margin-bottom: 10px;
+  margin-bottom: 15px;
   padding: 15px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   display: flex;
   justify-content: space-between;
   align-items: center;
+  transition: box-shadow 0.3s ease;
+}
+
+.cuenta-item:hover {
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
 }
 
 .cuenta-content {
@@ -199,10 +206,11 @@ h1, h2 {
   color: #3760b0;
   font-weight: bold;
   font-size: 1.1em;
+  display: block;
+  margin-bottom: 5px;
 }
 
 .cuenta-summary {
-  margin-top: 5px;
   font-size: 0.9em;
   color: #666;
 }
@@ -218,6 +226,7 @@ h1, h2 {
   border-radius: 4px;
   cursor: pointer;
   font-size: 0.9em;
+  transition: background-color 0.3s ease;
 }
 
 .edit-btn {
@@ -241,9 +250,6 @@ h1, h2 {
 @media (max-width: 768px) {
   .ozuna-cuentas-menu-container {
     padding: 10px;
-  }
-
-  .action-button {
     width: 100%;
   }
 
@@ -252,13 +258,21 @@ h1, h2 {
     gap: 10px;
   }
 
+  .action-button {
+    width: 100%;
+    text-align: center;
+  }
+
   .cuenta-item {
     flex-direction: column;
     align-items: stretch;
   }
 
+  .cuenta-summary {
+    margin-bottom: 10px;
+  }
+
   .cuenta-actions {
-    margin-top: 10px;
     justify-content: flex-end;
   }
 }
@@ -273,13 +287,14 @@ h1, h2 {
   display: flex;
   justify-content: center;
   align-items: center;
+  z-index: 1000;
 }
 
 .modal-content {
   background-color: white;
   padding: 20px;
   border-radius: 8px;
-  width: 80%;
+  width: 90%;
   max-width: 500px;
 }
 
@@ -295,6 +310,7 @@ h1, h2 {
   border-radius: 4px;
   cursor: pointer;
   margin-left: 10px;
+  transition: background-color 0.3s ease;
 }
 
 .save-btn {
@@ -302,9 +318,17 @@ h1, h2 {
   color: white;
 }
 
+.save-btn:hover {
+  background-color: #45a049;
+}
+
 .cancel-btn {
   background-color: #f44336;
   color: white;
+}
+
+.cancel-btn:hover {
+  background-color: #d32f2f;
 }
 
 textarea {
@@ -313,5 +337,7 @@ textarea {
   margin-top: 10px;
   border: 1px solid #ddd;
   border-radius: 4px;
+  font-size: 16px;
+  resize: vertical;
 }
 </style>

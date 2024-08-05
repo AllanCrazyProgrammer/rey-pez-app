@@ -282,7 +282,8 @@ export default {
 
 <style scoped>
 .cuentas-ozuna-container {
-  max-width: 800px;
+  max-width: 1200px;
+  width: 95%;
   margin: 0 auto;
   padding: 20px;
   font-family: Arial, sans-serif;
@@ -395,5 +396,16 @@ th {
 
 .save-button:hover {
   background-color: #45a049;
+}
+
+@media (max-width: 600px) {
+  .input-row {
+    flex-direction: column;
+  }
+  
+  .input-row input, .input-row button {
+    width: 100%;
+    margin-bottom: 10px;
+  }
 }
 </style>

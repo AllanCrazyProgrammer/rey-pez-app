@@ -22,8 +22,14 @@
           <div class="sacada-content" @click="editSacada(sacada.id)">
             <span class="sacada-date">{{ formatDate(sacada.fecha) }}</span>
             <div class="sacada-summary">
-              <span>Entradas: {{ formatNumber(sacada.totalEntradas) }} kg</span>
-              <span>Salidas: {{ formatNumber(sacada.totalSalidas) }} kg</span>
+              <div class="sacada-entry">
+                <span class="sacada-label">Entradas:</span>
+                <span class="sacada-value">{{ formatNumber(sacada.totalEntradas) }} kg</span>
+              </div>
+              <div class="sacada-entry">
+                <span class="sacada-label">Salidas:</span>
+                <span class="sacada-value">{{ formatNumber(sacada.totalSalidas) }} kg</span>
+              </div>
             </div>
           </div>
           <div class="sacada-actions">
@@ -124,12 +130,19 @@ export default {
 
 <style scoped>
 .sacadas-menu-container {
-  max-width: 800px;
+  max-width: 800px; /* Aumentamos aún más el ancho máximo */
+  width: 95%; /* Establecemos un ancho relativo */
   margin: 0 auto;
   padding: 20px;
   min-height: calc(100vh - 160px); /* Ajusta 160px según la altura de tu navbar + footer */
   display: flex;
   flex-direction: column;
+}
+
+@media (max-width: 1400px) {
+  .sacadas-menu-container {
+    width: 95%; /* Mantenemos el ancho relativo para pantallas más pequeñas */
+  }
 }
 
 h1, h2 {
@@ -162,6 +175,7 @@ h1, h2 {
   border-radius: 8px;
   padding: 20px;
   flex-grow: 1;
+  width: 100%; /* Aseguramos que ocupe todo el ancho disponible */
 }
 
 .loading, .no-records {
@@ -174,7 +188,7 @@ h1, h2 {
   background-color: white;
   border-radius: 4px;
   margin-bottom: 10px;
-  padding: 15px;
+  padding: 20px; /* Aumentamos el padding */
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   display: flex;
   justify-content: space-between;
@@ -184,6 +198,10 @@ h1, h2 {
 .sacada-content {
   flex-grow: 1;
   cursor: pointer;
+  display: flex; /* Añadimos display flex */
+  justify-content: space-between; /* Distribuimos el contenido */
+  align-items: center; /* Alineamos verticalmente */
+  width: 100%; /* Aseguramos que ocupe todo el ancho disponible */
 }
 
 .sacada-date {
@@ -194,10 +212,34 @@ h1, h2 {
 
 .sacada-summary {
   display: flex;
-  justify-content: space-between;
+  flex-direction: column;
+  gap: 5px;
   margin-top: 10px;
   font-size: 0.9em;
   color: #666;
+}
+
+.sacada-entry {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.sacada-label {
+  font-weight: bold;
+  color: #3760b0;
+}
+
+.sacada-value {
+  font-weight: bold;
+}
+
+@media (min-width: 600px) {
+  .sacada-summary {
+    flex-direction: row;
+    justify-content: space-between;
+    gap: 20px;
+  }
 }
 
 .sacada-actions {
@@ -209,10 +251,11 @@ h1, h2 {
   background-color: #f44336;
   color: white;
   border: none;
-  padding: 5px 10px;
+  padding: 8px 12px; /* Aumentamos el padding */
   border-radius: 4px;
   cursor: pointer;
   font-size: 0.9em;
+  margin-left: 10px; /* Añadimos un margen izquierdo para separarlo del contenido */
 }
 
 .delete-btn:hover {
