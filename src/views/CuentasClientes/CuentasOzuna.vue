@@ -26,18 +26,17 @@
           <th>Medida</th>
           <th>Costo</th>
           <th>Total</th>
-          <th>Acciones</th>
+          <th class="desktop-only">Acciones</th>
         </tr>
       </thead>
       <tbody>
-        <tr v-for="(item, index) in items" :key="index">
+        <tr v-for="(item, index) in items" :key="index" @touchstart="iniciarPresion(index)" @touchend="finalizarPresion">
           <td>{{ formatNumber(item.kilos) }}</td>
           <td>{{ item.medida }}</td>
           <td>${{ formatNumber(item.costo) }}</td>
           <td>${{ formatNumber(item.total) }}</td>
-          <td class="action-column">
-            <button @click="removeItem(index)" class="delete-btn desktop-only">Eliminar</button>
-            <button @click="showMobileActionsModal(index)" class="mobile-actions-btn mobile-only">...</button>
+          <td class="action-column desktop-only">
+            <button @click="removeItem(index)" class="delete-btn">Eliminar</button>
           </td>
         </tr>
       </tbody>
@@ -104,6 +103,7 @@
 
     <!-- Modal para acciones móviles -->
     <div v-if="showMobileActions" class="mobile-actions-modal">
+      <button @click="editItem(selectedItemIndex)">Editar</button>
       <button @click="removeItem(selectedItemIndex)">Eliminar</button>
       <button @click="cancelMobileActions">Cancelar</button>
     </div>
@@ -133,7 +133,8 @@ export default {
       abonos: [],
       fechaSeleccionada: this.obtenerFechaActual(),
       showMobileActions: false,
-      selectedItemIndex: null
+      selectedItemIndex: null,
+      presionTimer: null,
     }
   },
   computed: {
@@ -286,6 +287,14 @@ export default {
         alert('Error al guardar la cuenta');
       }
     },
+    iniciarPresion(index) {
+      this.presionTimer = setTimeout(() => {
+        this.showMobileActionsModal(index);
+      }, 500); // 500ms de presión para activar el modal
+    },
+    finalizarPresion() {
+      clearTimeout(this.presionTimer);
+    },
     showMobileActionsModal(index) {
       this.selectedItemIndex = index;
       this.showMobileActions = true;
@@ -293,12 +302,15 @@ export default {
     cancelMobileActions() {
       this.showMobileActions = false;
       this.selectedItemIndex = null;
+    },
+    editItem(index) {
+      // Implementar lógica de edición aquí
+      console.log('Editar item:', index);
+      this.showMobileActions = false;
     }
   }
 }
 </script>
-
-
 
 <style scoped>
 .cuentas-ozuna-container {
@@ -427,13 +439,30 @@ th {
     width: 100%;
     margin-bottom: 10px;
   }
+
+  .desktop-only {
+    display: none;
+  }
+
+  .tabla-principal tr {
+    position: relative;
+  }
+
+  .tabla-principal tr::after {
+    content: '⋮';
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 20px;
+    color: #666;
+  }
 }
 
-.mobile-actions-btn {
-  background-color: transparent;
-  border: none;
-  font-size: 20px;
-  cursor: pointer;
+@media (min-width: 601px) {
+  .mobile-only {
+    display: none;
+  }
 }
 
 .mobile-actions-modal {
@@ -463,17 +492,5 @@ th {
 
 .mobile-actions-modal button:last-child {
   margin-bottom: 0;
-}
-
-@media (max-width: 600px) {
-  .desktop-only {
-    display: none;
-  }
-}
-
-@media (min-width: 601px) {
-  .mobile-only {
-    display: none;
-  }
 }
 </style>
