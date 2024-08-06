@@ -35,7 +35,10 @@
           <td>{{ item.medida }}</td>
           <td>${{ formatNumber(item.costo) }}</td>
           <td>${{ formatNumber(item.total) }}</td>
-          <td><button @click="removeItem(index)" class="delete-btn">Eliminar</button></td>
+          <td class="action-column">
+            <button @click="removeItem(index)" class="delete-btn desktop-only">Eliminar</button>
+            <button @click="showMobileActionsModal(index)" class="mobile-actions-btn mobile-only">...</button>
+          </td>
         </tr>
       </tbody>
       <tfoot>
@@ -98,6 +101,12 @@
     </table>
 
     <button @click="guardarNota" class="save-button">Guardar Nota</button>
+
+    <!-- Modal para acciones móviles -->
+    <div v-if="showMobileActions" class="mobile-actions-modal">
+      <button @click="removeItem(selectedItemIndex)">Eliminar</button>
+      <button @click="cancelMobileActions">Cancelar</button>
+    </div>
   </div>
 </template>
 
@@ -122,7 +131,9 @@ export default {
       saldoAcumuladoAnterior: 0,
       cobros: [],
       abonos: [],
-      fechaSeleccionada: this.obtenerFechaActual()
+      fechaSeleccionada: this.obtenerFechaActual(),
+      showMobileActions: false,
+      selectedItemIndex: null
     }
   },
   computed: {
@@ -223,6 +234,7 @@ export default {
     },
     removeItem(index) {
       this.items.splice(index, 1);
+      this.showMobileActions = false;
     },
     addCobro() {
       this.cobros.push({descripcion: '', monto: 0});
@@ -274,6 +286,14 @@ export default {
         alert('Error al guardar la cuenta');
       }
     },
+    showMobileActionsModal(index) {
+      this.selectedItemIndex = index;
+      this.showMobileActions = true;
+    },
+    cancelMobileActions() {
+      this.showMobileActions = false;
+      this.selectedItemIndex = null;
+    }
   }
 }
 </script>
@@ -406,6 +426,54 @@ th {
   .input-row input, .input-row button {
     width: 100%;
     margin-bottom: 10px;
+  }
+}
+
+.mobile-actions-btn {
+  background-color: transparent;
+  border: none;
+  font-size: 20px;
+  cursor: pointer;
+}
+
+.mobile-actions-modal {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background-color: white;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+}
+
+.mobile-actions-modal button {
+  width: 100%;
+  padding: 15px 20px;
+  margin-bottom: 10px;
+  border: none;
+  background-color: #3760b0;
+  color: white;
+  border-radius: 5px;
+  font-size: 16px;
+}
+
+.mobile-actions-modal button:last-child {
+  margin-bottom: 0;
+}
+
+@media (max-width: 600px) {
+  .desktop-only {
+    display: none;
+  }
+}
+
+@media (min-width: 601px) {
+  .mobile-only {
+    display: none;
   }
 }
 </style>
