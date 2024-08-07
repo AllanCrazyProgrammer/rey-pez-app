@@ -19,19 +19,18 @@
       </div>
       <ul v-else>
         <li v-for="cuenta in cuentas" :key="cuenta.id" class="cuenta-item">
-  <div class="cuenta-content">
-    <span class="cuenta-date">{{ formatDate(cuenta.fecha) }}</span>
-    <div class="cuenta-summary">
-      <span>Total: ${{ formatNumber(cuenta.totalSaldo) }}</span>
-      <span v-if="cuenta.totalAbonos > 0" style="margin-left: 20px;">Abonos: ${{ formatNumber(cuenta.totalAbonos) }}</span>
-      <span style="margin-left: 20px;">Saldo Acumulado: ${{ formatNumber(cuenta.saldoAcumulado) }}</span>
-    </div>
-  </div>
-  <div class="cuenta-actions">
-    <button @click="editarCuenta(cuenta.id)" class="edit-btn">Editar</button>  
-    <button @click="borrarCuenta(cuenta.id)" class="delete-btn">Borrar</button>
-  </div>
-</li>
+          <div class="cuenta-content">
+            <span class="cuenta-date">{{ formatDate(cuenta.fecha) }}</span>
+            <p class="cuenta-summary">
+              <span>Saldo Hoy: ${{ formatNumber(cuenta.saldoHoy) }}</span>
+              <span>Total Acumulado: ${{ formatNumber(cuenta.totalNota) }}</span>
+            </p>
+          </div>
+          <div class="cuenta-actions">
+            <button @click="editarCuenta(cuenta.id)" class="edit-btn">Editar</button>  
+            <button @click="borrarCuenta(cuenta.id)" class="delete-btn">Borrar</button>
+          </div>
+        </li>
       </ul>
     </div>
   </div>
@@ -54,30 +53,18 @@ export default {
       try {
         this.isLoading = true;
         const cuentasRef = collection(db, 'cuentasOzuna');
-        const q = query(cuentasRef, orderBy('fecha', 'asc'));
+        const q = query(cuentasRef, orderBy('fecha', 'desc'));
         const querySnapshot = await getDocs(q);
-        let saldoAcumulado = 0;
         this.cuentas = querySnapshot.docs.map((doc) => {
           const data = doc.data();
-          const totalCuenta = data.totalSaldo || 0;
-          const totalAbonos = (data.abonos || []).reduce((sum, abono) => sum + abono.monto, 0);
-          
-          // Sumamos el total de la cuenta al saldo acumulado si es positivo
-          if (totalCuenta > 0) {
-            saldoAcumulado += totalCuenta;
-          }
-          
-          // Restamos los abonos del saldo acumulado
-          saldoAcumulado -= totalAbonos;
-          
           return {
             id: doc.id,
-            ...data,
-            totalAbonos: totalAbonos,
-            saldoAcumulado: saldoAcumulado
+            fecha: data.fecha,
+            saldoHoy: data.totalGeneral || 0,
+            totalNota: data.totalSaldo || 0
           };
         });
-        this.cuentas.reverse();
+        console.log("Cuentas cargadas:", this.cuentas);
       } catch (error) {
         console.error("Error al cargar cuentas: ", error);
         this.cuentas = [];
@@ -106,7 +93,7 @@ export default {
           await deleteDoc(doc(db, 'cuentasOzuna', id));
           this.cuentas = this.cuentas.filter(cuenta => cuenta.id !== id);
           alert('Registro de cuenta borrado con éxito');
-          this.loadCuentas(); // Recargar las cuentas para actualizar los saldos acumulados
+          this.loadCuentas();
         } catch (error) {
           console.error("Error al borrar el registro de cuenta: ", error);
           alert('Error al borrar el registro de cuenta');
@@ -119,8 +106,6 @@ export default {
   }
 };
 </script>
-
-
 
 <style scoped>
 .ozuna-cuentas-menu-container {
@@ -189,8 +174,7 @@ h1, h2 {
   padding: 15px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   display: flex;
-  justify-content: space-between;
-  align-items: center;
+  flex-direction: column;
   transition: box-shadow 0.3s ease;
 }
 
@@ -199,7 +183,7 @@ h1, h2 {
 }
 
 .cuenta-content {
-  flex-grow: 1;
+  margin-bottom: 10px;
 }
 
 .cuenta-date {
@@ -213,10 +197,19 @@ h1, h2 {
 .cuenta-summary {
   font-size: 0.9em;
   color: #666;
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.cuenta-summary span {
+  flex: 1 1 auto;
 }
 
 .cuenta-actions {
   display: flex;
+  justify-content: flex-end;
   gap: 10px;
 }
 
@@ -264,80 +257,31 @@ h1, h2 {
   }
 
   .cuenta-item {
-    flex-direction: column;
-    align-items: stretch;
+    padding: 10px;
+  }
+
+  .cuenta-date {
+    font-size: 1em;
   }
 
   .cuenta-summary {
-    margin-bottom: 10px;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .cuenta-summary span {
+    width: 100%;
   }
 
   .cuenta-actions {
-    justify-content: flex-end;
+    flex-direction: row;
+    justify-content: space-between;
   }
-}
 
-.modal {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(0, 0, 0, 0.5);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 1000;
-}
-
-.modal-content {
-  background-color: white;
-  padding: 20px;
-  border-radius: 8px;
-  width: 90%;
-  max-width: 500px;
-}
-
-.modal-actions {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 20px;
-}
-
-.save-btn, .cancel-btn {
-  padding: 10px 20px;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  margin-left: 10px;
-  transition: background-color 0.3s ease;
-}
-
-.save-btn {
-  background-color: #4CAF50;
-  color: white;
-}
-
-.save-btn:hover {
-  background-color: #45a049;
-}
-
-.cancel-btn {
-  background-color: #f44336;
-  color: white;
-}
-
-.cancel-btn:hover {
-  background-color: #d32f2f;
-}
-
-textarea {
-  width: 100%;
-  padding: 10px;
-  margin-top: 10px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 16px;
-  resize: vertical;
+  .edit-btn, .delete-btn {
+    padding: 8px 15px;
+    font-size: 0.8em;
+    flex-grow: 1;
+  }
 }
 </style>

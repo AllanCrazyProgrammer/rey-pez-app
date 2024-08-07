@@ -99,7 +99,10 @@
       </tr>
     </table>
 
-    <button @click="guardarNota" class="save-button">Guardar Nota</button>
+    <div class="button-container">
+      <button @click="guardarNota" class="save-button">Guardar Nota</button>
+      <button @click="imprimirTablas" class="print-button">Imprimir</button>
+    </div>
 
     <!-- Modal para acciones móviles -->
     <div v-if="showMobileActions" class="mobile-actions-modal">
@@ -112,7 +115,7 @@
 
 <script>
 import { db } from '@/firebase';
-import { collection, addDoc, doc, getDoc, updateDoc, query, where, orderBy, limit, getDocs } from 'firebase/firestore';
+import { collection, addDoc, doc, getDoc, updateDoc, query, where, getDocs, orderBy } from 'firebase/firestore';
 import BackButton from '@/components/BackButton.vue';
 
 export default {
@@ -147,29 +150,30 @@ export default {
       return this.items.reduce((sum, item) => sum + item.total, 0);
     },
     totalSaldo() {
-      return this.totalGeneral + 
-             this.cobros.reduce((sum, cobro) => sum + cobro.monto, 0) -
-             this.abonos.reduce((sum, abono) => sum + abono.monto, 0);
+      const totalCobros = this.cobros.reduce((sum, cobro) => sum + (cobro.monto || 0), 0);
+      const totalAbonos = this.abonos.reduce((sum, abono) => sum + (abono.monto || 0), 0);
+      return this.saldoAcumuladoAnterior + this.totalGeneral + totalCobros - totalAbonos;
     },
     nuevoSaldoAcumulado() {
-      return this.saldoAcumuladoAnterior + this.totalSaldo;
+      return this.totalSaldo;
     }
   },
   watch: {
-    fechaSeleccionada() {
-      this.loadSaldoAcumuladoAnterior();
+    fechaSeleccionada: {
+      handler: 'loadSaldoAcumuladoAnterior',
+      immediate: true
     }
   },
-  mounted() {
+  async mounted() {
     console.log("Mounted ejecutado", this.$route.params, this.$route.query);
     const id = this.$route.params.id;
     const isEditing = this.$route.query.edit === 'true';
     if (id && isEditing) {
       console.log("Iniciando carga de cuenta existente");
-      this.loadExistingCuenta(id);
+      await this.loadExistingCuenta(id);
     } else {
-      console.log("Cargando saldo acumulado anterior");
-      this.loadSaldoAcumuladoAnterior();
+      console.log("Cargando saldo acumulado anterior para nueva cuenta");
+      await this.loadSaldoAcumuladoAnterior();
     }
   },
   methods: {
@@ -207,20 +211,26 @@ export default {
       try {
         const cuentasRef = collection(db, 'cuentasOzuna');
         const q = query(
-          cuentasRef,
+          cuentasRef, 
           where('fecha', '<', this.fechaSeleccionada),
-          orderBy('fecha', 'desc'),
-          limit(1)
+          orderBy('fecha', 'asc')
         );
-        const anteriorSnapshot = await getDocs(q);
-        if (!anteriorSnapshot.empty) {
-          const cuentaAnterior = anteriorSnapshot.docs[0].data();
-          this.saldoAcumuladoAnterior = cuentaAnterior.nuevoSaldoAcumulado || 0;
-        } else {
-          this.saldoAcumuladoAnterior = 0;
-        }
+        const cuentasSnapshot = await getDocs(q);
+        let saldoAcumulado = 0;
+
+        cuentasSnapshot.forEach((doc) => {
+          const cuenta = doc.data();
+          const totalCuenta = cuenta.totalGeneral || 0;
+          const totalCobros = (cuenta.cobros || []).reduce((sum, cobro) => sum + (cobro.monto || 0), 0);
+          const totalAbonos = (cuenta.abonos || []).reduce((sum, abono) => sum + (abono.monto || 0), 0);
+          saldoAcumulado += totalCuenta + totalCobros - totalAbonos;
+        });
+
+        this.saldoAcumuladoAnterior = saldoAcumulado;
+        console.log("Saldo acumulado anterior calculado:", this.saldoAcumuladoAnterior);
       } catch (error) {
-        console.error("Error al cargar el saldo acumulado anterior:", error);
+        console.error("Error al calcular el saldo acumulado anterior:", error);
+        this.saldoAcumuladoAnterior = 0;
       }
     },
     formatNumber(value) {
@@ -268,19 +278,25 @@ export default {
           nuevoSaldoAcumulado: this.nuevoSaldoAcumulado
         };
 
-        const id = this.$route.params.id;
-        const isEditing = this.$route.query.edit === 'true';
+        console.log("Datos a guardar:", notaData);
 
-        if (id && isEditing) {
-          // Actualizar cuenta existente
-          await updateDoc(doc(db, 'cuentasOzuna', id), notaData);
-          alert('Cuenta actualizada exitosamente');
+        // Buscar si ya existe una nota para esta fecha
+        const cuentasRef = collection(db, 'cuentasOzuna');
+        const q = query(cuentasRef, where('fecha', '==', this.fechaSeleccionada));
+        const querySnapshot = await getDocs(q);
+
+        if (!querySnapshot.empty) {
+          // Si existe, actualizar la nota existente
+          const docId = querySnapshot.docs[0].id;
+          await updateDoc(doc(db, 'cuentasOzuna', docId), notaData);
+          console.log('Cuenta actualizada exitosamente');
         } else {
-          // Crear nueva cuenta
+          // Si no existe, crear una nueva nota
           await addDoc(collection(db, 'cuentasOzuna'), notaData);
-          alert('Cuenta guardada exitosamente');
+          console.log('Nueva cuenta guardada exitosamente');
         }
 
+        alert('Cuenta guardada exitosamente');
         this.$router.push('/cuentas-ozuna');
       } catch (error) {
         console.error('Error al guardar la cuenta:', error);
@@ -307,10 +323,117 @@ export default {
       // Implementar lógica de edición aquí
       console.log('Editar item:', index);
       this.showMobileActions = false;
-    }
+    },
+    imprimirTablas() {
+      const contenidoImprimir = `
+        <html>
+          <head>
+            <title>Cuentas Ozuna - ${this.fechaFormateada}</title>
+            <style>
+              body {
+                font-family: Arial, sans-serif;
+                font-size: 20pt;
+                line-height: 1.6;
+                max-width: 800px;
+                margin: 0 auto;
+                padding: 20px;
+                text-align: center;
+              }
+              h1 { font-size: 30pt; margin-bottom: 20px; }
+              h2 { font-size: 27pt; margin-top: 30px; margin-bottom: 15px; }
+              table {
+                width: 100%;
+                border-collapse: collapse;
+                margin-bottom: 30px;
+                font-size: 20pt;
+              }
+              th, td {
+                border: 1px solid #ddd;
+                padding: 10px;
+                text-align: left;
+              }
+              th { background-color: #f2f2f2; font-weight: bold; }
+              .total { font-weight: bold; }
+              .total td:first-child { text-align: right; }
+              @media print {
+                body { font-size: 20pt; }
+                h1 { font-size: 25pt; }
+                h2 { font-size: 25pt; }
+                table { font-size: 20pt; }
+              }
+            </style>
+          </head>
+          <body>
+            <h1>Cuentas Ozuna - ${this.fechaFormateada}</h1>
+            
+            <h2>Detalles de la cuenta</h2>
+            <table>
+              <thead>
+                <tr>
+                  <th>Kilos</th>
+                  <th>Medida</th>
+                  <th>Costo</th>
+                  <th>Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${this.items.map(item => `
+                  <tr>
+                    <td>${this.formatNumber(item.kilos)}</td>
+                    <td>${item.medida}</td>
+                    <td>$${this.formatNumber(item.costo)}</td>
+                    <td>$${this.formatNumber(item.total)}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+              <tfoot>
+                <tr class="total">
+                  <td colspan="3">Total</td>
+                  <td>$${this.formatNumber(this.totalGeneral)}</td>
+                </tr>
+              </tfoot>
+            </table>
+
+            <h2>Resumen de saldo</h2>
+            <table>
+              <tr>
+                <td>Saldo Anterior</td>
+                <td>$${this.formatNumber(this.saldoAcumuladoAnterior)}</td>
+              </tr>
+              <tr>
+                <td>Saldo Hoy</td>
+                <td>$${this.formatNumber(this.totalGeneral)}</td>
+              </tr>
+              ${this.cobros.map(cobro => `
+                <tr>
+                  <td>${cobro.descripcion}</td>
+                  <td>$${this.formatNumber(cobro.monto)}</td>
+                </tr>
+              `).join('')}
+              ${this.abonos.map(abono => `
+                <tr>
+                  <td>${abono.descripcion} (Abono)</td>
+                  <td>-$${this.formatNumber(abono.monto)}</td>
+                </tr>
+              `).join('')}
+              <tr class="total">
+                <td>Total</td>
+                <td>$${this.formatNumber(this.totalSaldo)}</td>
+              </tr>
+            </table>
+          </body>
+        </html>
+      `;
+
+      const ventanaImprimir = window.open('', '_blank');
+      ventanaImprimir.document.write(contenidoImprimir);
+      ventanaImprimir.document.close();
+      ventanaImprimir.print();
+    },
   }
 }
 </script>
+
 
 <style scoped>
 .cuentas-ozuna-container {
@@ -415,10 +538,15 @@ th {
   margin-bottom: 20px;
 }
 
-.save-button {
+.button-container {
+  display: flex;
+  justify-content: space-between;
   margin-top: 20px;
+}
+
+.save-button,
+.print-button {
   padding: 10px 20px;
-  background-color: #4CAF50;
   color: white;
   border: none;
   border-radius: 4px;
@@ -426,8 +554,20 @@ th {
   font-size: 16px;
 }
 
+.save-button {
+  background-color: #4CAF50;
+}
+
+.print-button {
+  background-color: #3760b0;
+}
+
 .save-button:hover {
   background-color: #45a049;
+}
+
+.print-button:hover {
+  background-color: #2c4d8c;
 }
 
 @media (max-width: 600px) {
