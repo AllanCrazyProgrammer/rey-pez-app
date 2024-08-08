@@ -39,6 +39,7 @@
 <script>
 import { db } from '@/firebase';
 import { collection, getDocs, query, orderBy, deleteDoc, doc } from 'firebase/firestore';
+import { getAllFromIndexedDB, saveToIndexedDB, deleteFromIndexedDB, getCuentasOzunaPendientes, deleteCuentaOzunaPendiente } from '../../indexedDB';
 
 export default {
   name: 'OzunaCuentasMenu',
@@ -52,18 +53,51 @@ export default {
     async loadCuentas() {
       try {
         this.isLoading = true;
-        const cuentasRef = collection(db, 'cuentasOzuna');
-        const q = query(cuentasRef, orderBy('fecha', 'desc'));
-        const querySnapshot = await getDocs(q);
-        this.cuentas = querySnapshot.docs.map((doc) => {
-          const data = doc.data();
-          return {
+        let cuentas = [];
+
+        if (navigator.onLine) {
+          const cuentasRef = collection(db, 'cuentasOzuna');
+          const q = query(cuentasRef, orderBy('fecha', 'desc'));
+          const querySnapshot = await getDocs(q);
+          cuentas = querySnapshot.docs.map((doc) => ({
             id: doc.id,
-            fecha: data.fecha,
-            saldoHoy: data.totalGeneral || 0,
-            totalNota: data.totalSaldo || 0
-          };
-        });
+            ...doc.data()
+          }));
+
+          // Sincronizar cuentas pendientes
+          try {
+            const cuentasPendientes = await getCuentasOzunaPendientes();
+            for (const cuenta of cuentasPendientes) {
+              const cuentaRef = await addDoc(collection(db, 'cuentasOzuna'), cuenta);
+              await deleteCuentaOzunaPendiente(cuenta.id);
+              cuentas.push({ id: cuentaRef.id, ...cuenta });
+            }
+          } catch (error) {
+            console.error("Error al sincronizar cuentas pendientes:", error);
+          }
+
+          // Guardar los datos en IndexedDB para uso offline
+          try {
+            await saveToIndexedDB('cuentasOzunaAll', { id: 'allCuentas', cuentas });
+          } catch (error) {
+            console.error("Error al guardar en IndexedDB:", error);
+          }
+        } else {
+          // Si está offline, obtén los datos de IndexedDB
+          try {
+            const storedData = await getAllFromIndexedDB('cuentasOzunaAll');
+            if (storedData && storedData.length > 0) {
+              cuentas = storedData[0].cuentas || [];
+            }
+            // Agregar cuentas pendientes
+            const cuentasPendientes = await getCuentasOzunaPendientes();
+            cuentas = [...cuentasPendientes, ...cuentas];
+          } catch (error) {
+            console.error("Error al obtener datos de IndexedDB:", error);
+          }
+        }
+
+        this.cuentas = cuentas;
         console.log("Cuentas cargadas:", this.cuentas);
       } catch (error) {
         console.error("Error al cargar cuentas: ", error);
@@ -82,6 +116,7 @@ export default {
       });
     },
     formatNumber(value) {
+      if (value == null) return '0.00';
       return value.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     },
     editarCuenta(id) {
@@ -90,10 +125,16 @@ export default {
     async borrarCuenta(id) {
       if (confirm('¿Estás seguro de que quieres borrar este registro de cuenta?')) {
         try {
-          await deleteDoc(doc(db, 'cuentasOzuna', id));
+          if (navigator.onLine) {
+            await deleteDoc(doc(db, 'cuentasOzuna', id));
+          }
+          await deleteFromIndexedDB('cuentasOzuna', id);
           this.cuentas = this.cuentas.filter(cuenta => cuenta.id !== id);
+          
+          // Actualizar la lista en IndexedDB
+          await saveToIndexedDB('cuentasOzunaAll', { id: 'allCuentas', cuentas: this.cuentas });
+          
           alert('Registro de cuenta borrado con éxito');
-          this.loadCuentas();
         } catch (error) {
           console.error("Error al borrar el registro de cuenta: ", error);
           alert('Error al borrar el registro de cuenta');
@@ -103,9 +144,16 @@ export default {
   },
   mounted() {
     this.loadCuentas();
+    window.addEventListener('online', this.loadCuentas);
+    window.addEventListener('offline', () => console.log('La aplicación está ahora offline'));
+  },
+  beforeUnmount() {
+    window.removeEventListener('online', this.loadCuentas);
+    window.removeEventListener('offline', () => {});
   }
 };
 </script>
+
 
 <style scoped>
 .ozuna-cuentas-menu-container {

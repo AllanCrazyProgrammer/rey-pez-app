@@ -18,6 +18,23 @@ export default {
     Navbar,
     Footer
   },
+  created() {
+    window.addEventListener('online', this.handleOnline);
+    window.addEventListener('offline', this.handleOffline);
+  },
+  beforeUnmount() {
+    window.removeEventListener('online', this.handleOnline);
+    window.removeEventListener('offline', this.handleOffline);
+  },
+  methods: {
+    handleOnline() {
+      console.log('La aplicación está ahora online');
+      // Aquí puedes llamar a una función para sincronizar datos si es necesario
+    },
+    handleOffline() {
+      console.log('La aplicación está ahora offline');
+    }
+  }
 };
 </script>
 

@@ -117,6 +117,7 @@
 import { db } from '@/firebase';
 import { collection, addDoc, doc, getDoc, updateDoc, query, where, getDocs, orderBy } from 'firebase/firestore';
 import BackButton from '@/components/BackButton.vue';
+import { saveCuentaOzunaPendiente } from '@/indexedDB';
 
 export default {
   name: 'CuentasOzuna',
@@ -278,22 +279,21 @@ export default {
           nuevoSaldoAcumulado: this.nuevoSaldoAcumulado
         };
 
-        console.log("Datos a guardar:", notaData);
+        if (navigator.onLine) {
+          // Si está en línea, guarda directamente en Firestore
+          const cuentasRef = collection(db, 'cuentasOzuna');
+          const q = query(cuentasRef, where('fecha', '==', this.fechaSeleccionada));
+          const querySnapshot = await getDocs(q);
 
-        // Buscar si ya existe una nota para esta fecha
-        const cuentasRef = collection(db, 'cuentasOzuna');
-        const q = query(cuentasRef, where('fecha', '==', this.fechaSeleccionada));
-        const querySnapshot = await getDocs(q);
-
-        if (!querySnapshot.empty) {
-          // Si existe, actualizar la nota existente
-          const docId = querySnapshot.docs[0].id;
-          await updateDoc(doc(db, 'cuentasOzuna', docId), notaData);
-          console.log('Cuenta actualizada exitosamente');
+          if (!querySnapshot.empty) {
+            const docId = querySnapshot.docs[0].id;
+            await updateDoc(doc(db, 'cuentasOzuna', docId), notaData);
+          } else {
+            await addDoc(collection(db, 'cuentasOzuna'), notaData);
+          }
         } else {
-          // Si no existe, crear una nueva nota
-          await addDoc(collection(db, 'cuentasOzuna'), notaData);
-          console.log('Nueva cuenta guardada exitosamente');
+          // Si está offline, guarda en IndexedDB
+          await saveCuentaOzunaPendiente(notaData);
         }
 
         alert('Cuenta guardada exitosamente');
@@ -430,6 +430,7 @@ export default {
       ventanaImprimir.document.close();
       ventanaImprimir.print();
     },
+    
   }
 }
 </script>
