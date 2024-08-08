@@ -43,14 +43,16 @@
 
 <script>
 import { db } from '@/firebase';
-import { collection, getDocs, query, orderBy, Timestamp, deleteDoc, doc } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, Timestamp, deleteDoc, doc, setDoc } from 'firebase/firestore';
+import { indexedDBService } from '@/services/indexedDB';
 
 export default {
   name: 'SacadasMenu',
   data() {
     return {
       sacadas: [],
-      isLoading: true
+      isLoading: true,
+      isOnline: navigator.onLine
     };
   },
   methods: {
@@ -71,22 +73,31 @@ export default {
     async loadSacadas() {
       try {
         this.isLoading = true;
-        const sacadasCollection = collection(db, 'sacadas');
-        const q = query(sacadasCollection, orderBy('fecha', 'desc'));
-        const querySnapshot = await getDocs(q);
-        this.sacadas = querySnapshot.docs.map(doc => {
-          const data = doc.data();
-          return {
-            id: doc.id,
-            ...data,
-            fecha: this.convertToDate(data.fecha),
-            totalEntradas: data.totalEntradas || 0,
-            totalSalidas: data.totalSalidas || 0
-          };
-        });
+        if (this.isOnline) {
+          // Cargar datos de Firebase
+          const sacadasCollection = collection(db, 'sacadas');
+          const q = query(sacadasCollection, orderBy('fecha', 'desc'));
+          const querySnapshot = await getDocs(q);
+          this.sacadas = querySnapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+              id: doc.id,
+              ...data,
+              fecha: this.convertToDate(data.fecha),
+              totalEntradas: data.totalEntradas || 0,
+              totalSalidas: data.totalSalidas || 0
+            };
+          });
+          // Guardar en IndexedDB
+          await indexedDBService.saveSacadas(this.sacadas);
+        } else {
+          // Cargar datos de IndexedDB (ya ordenados)
+          this.sacadas = await indexedDBService.getSacadas();
+        }
       } catch (error) {
         console.error("Error al cargar sacadas: ", error);
-        this.sacadas = [];
+        // Intentar cargar desde IndexedDB en caso de error
+        this.sacadas = await indexedDBService.getSacadas();
       } finally {
         this.isLoading = false;
       }
@@ -104,13 +115,40 @@ export default {
     formatNumber(value) {
       return (value || 0).toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
     },
-    editSacada(id) {
+    async editSacada(id) {
+  try {
+    // Primero, intentamos cargar la sacada desde IndexedDB
+    const sacada = await indexedDBService.getSacada(id);
+    if (sacada) {
       this.$router.push(`/sacadas/${id}`);
-    },
+    } else if (this.isOnline) {
+      // Si no está en IndexedDB y estamos online, intentamos cargarla de Firebase
+      const docRef = doc(db, 'sacadas', id);
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        // Si existe en Firebase, la guardamos en IndexedDB antes de navegar
+        await indexedDBService.saveSacada({ id, ...docSnap.data() });
+        this.$router.push(`/sacadas/${id}`);
+      } else {
+        console.error("No se encontró la sacada");
+        alert("No se encontró la sacada");
+      }
+    } else {
+      console.error("No se pudo cargar la sacada");
+      alert("No se pudo cargar la sacada. Verifica tu conexión a internet.");
+    }
+  } catch (error) {
+    console.error("Error al editar la sacada:", error);
+    alert("Ocurrió un error al intentar editar la sacada");
+  }
+},
     async deleteSacada(id) {
       if (confirm('¿Estás seguro de que quieres borrar este registro de sacadas?')) {
         try {
-          await deleteDoc(doc(db, 'sacadas', id));
+          if (this.isOnline) {
+            await deleteDoc(doc(db, 'sacadas', id));
+          }
+          await indexedDBService.deleteSacada(id);
           this.sacadas = this.sacadas.filter(sacada => sacada.id !== id);
           alert('Registro de sacadas borrado con éxito');
         } catch (error) {
@@ -118,10 +156,39 @@ export default {
           alert('Error al borrar el registro de sacadas');
         }
       }
+    },
+    updateOnlineStatus() {
+      this.isOnline = navigator.onLine;
+      if (this.isOnline) {
+        this.syncWithFirebase();
+      }
+    },
+    async syncWithFirebase() {
+      try {
+        const localSacadas = await indexedDBService.getSacadas();
+        const sacadasCollection = collection(db, 'sacadas');
+        
+        for (const sacada of localSacadas) {
+          await setDoc(doc(sacadasCollection, sacada.id), {
+            ...sacada,
+            fecha: new Date(sacada.fecha) // Aseguramos que la fecha sea un objeto Date
+          }, { merge: true });
+        }
+        
+        console.log('Sincronización con Firebase completada');
+      } catch (error) {
+        console.error('Error al sincronizar con Firebase:', error);
+      }
     }
   },
   mounted() {
     this.loadSacadas();
+    window.addEventListener('online', this.updateOnlineStatus);
+    window.addEventListener('offline', this.updateOnlineStatus);
+  },
+  beforeDestroy() {
+    window.removeEventListener('online', this.updateOnlineStatus);
+    window.removeEventListener('offline', this.updateOnlineStatus);
   }
 };
 </script>

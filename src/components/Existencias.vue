@@ -85,41 +85,53 @@ export default {
   setup() {
     const existencias = ref({});
     const search = ref('');
+    const isOffline = ref(false);
 
     const loadExistencias = async () => {
-      const sacadasSnapshot = await getDocs(collection(db, 'sacadas'));
-      const newExistencias = {};
+      try {
+        const sacadasSnapshot = await getDocs(collection(db, 'sacadas'));
+        const newExistencias = {};
 
-      sacadasSnapshot.forEach(doc => {
-        const sacada = doc.data();
-        sacada.entradas.forEach(entrada => {
-          if (!newExistencias[entrada.proveedor]) {
-            newExistencias[entrada.proveedor] = {};
-          }
-          if (!newExistencias[entrada.proveedor][entrada.medida]) {
-            newExistencias[entrada.proveedor][entrada.medida] = 0;
-          }
-          newExistencias[entrada.proveedor][entrada.medida] += entrada.kilos;
+        sacadasSnapshot.forEach(doc => {
+          const sacada = doc.data();
+          sacada.entradas.forEach(entrada => {
+            if (!newExistencias[entrada.proveedor]) {
+              newExistencias[entrada.proveedor] = {};
+            }
+            if (!newExistencias[entrada.proveedor][entrada.medida]) {
+              newExistencias[entrada.proveedor][entrada.medida] = 0;
+            }
+            newExistencias[entrada.proveedor][entrada.medida] += entrada.kilos;
+          });
+          sacada.salidas.forEach(salida => {
+            if (!newExistencias[salida.proveedor]) {
+              newExistencias[salida.proveedor] = {};
+            }
+            if (!newExistencias[salida.proveedor][salida.medida]) {
+              newExistencias[salida.proveedor][salida.medida] = 0;
+            }
+            newExistencias[salida.proveedor][salida.medida] -= salida.kilos;
+          });
         });
-        sacada.salidas.forEach(salida => {
-          if (!newExistencias[salida.proveedor]) {
-            newExistencias[salida.proveedor] = {};
-          }
-          if (!newExistencias[salida.proveedor][salida.medida]) {
-            newExistencias[salida.proveedor][salida.medida] = 0;
-          }
-          newExistencias[salida.proveedor][salida.medida] -= salida.kilos;
+
+        // Filtrar medidas con 0 o menos kilos
+        Object.keys(newExistencias).forEach(proveedor => {
+          newExistencias[proveedor] = Object.fromEntries(
+            Object.entries(newExistencias[proveedor]).filter(([_, kilos]) => kilos > 0)
+          );
         });
-      });
 
-      // Filtrar medidas con 0 o menos kilos
-      Object.keys(newExistencias).forEach(proveedor => {
-        newExistencias[proveedor] = Object.fromEntries(
-          Object.entries(newExistencias[proveedor]).filter(([_, kilos]) => kilos > 0)
-        );
-      });
-
-      existencias.value = newExistencias;
+        existencias.value = newExistencias;
+        localStorage.setItem('existencias', JSON.stringify(newExistencias));
+        isOffline.value = false;
+      } catch (error) {
+        console.error("Error al cargar existencias:", error);
+        const storedExistencias = JSON.parse(localStorage.getItem('existencias'));
+        if (storedExistencias) {
+          existencias.value = storedExistencias;
+          isOffline.value = true;
+        }
+      }
     };
 
     const filteredExistencias = computed(() => {
@@ -401,21 +413,43 @@ export default {
 
     let unsubscribe;
 
-    onMounted(() => {
-      loadExistencias();
-      unsubscribe = onSnapshot(collection(db, 'sacadas'), () => {
-        loadExistencias();
-      });
+    onMounted(async () => {
+      try {
+        const storedExistencias = JSON.parse(localStorage.getItem('existencias'));
+        if (storedExistencias) {
+          console.log('Datos recuperados de LocalStorage:', storedExistencias);
+          existencias.value = storedExistencias;
+        }
+        await loadExistencias();
+        unsubscribe = onSnapshot(collection(db, 'sacadas'), () => {
+          loadExistencias();
+        }, (error) => {
+          console.error('Error en la suscripción de Firestore:', error);
+          isOffline.value = true;
+        });
+
+        // Agregar el event listener para 'online'
+        window.addEventListener('online', () => {
+          console.log('Conexión restablecida. Recargando datos...');
+          loadExistencias();
+        });
+      } catch (error) {
+        console.error('Error al montar el componente:', error);
+        isOffline.value = true;
+      }
     });
 
     onUnmounted(() => {
       if (unsubscribe) {
         unsubscribe();
       }
+      // Remover el event listener cuando el componente se desmonta
+      window.removeEventListener('online', loadExistencias);
     });
 
     watchEffect(() => {
       console.log('Existencias actualizadas:', existencias.value);
+      localStorage.setItem('existencias', JSON.stringify(existencias.value));
     });
 
     return {
@@ -429,7 +463,8 @@ export default {
       totalesPorMedida,
       totalPorMedidas,
       totalOzuna,
-      calcularTotalProveedor
+      calcularTotalProveedor,
+      isOffline
     };
   }
 };

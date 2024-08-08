@@ -139,8 +139,9 @@
 
 <script>
 import { db } from '@/firebase';
-import { collection, addDoc, getDocs, doc, getDoc, updateDoc, query, where } from 'firebase/firestore';
+import { collection, addDoc, getDocs, doc, getDoc, updateDoc, query, where, setDoc } from 'firebase/firestore';
 import BackButton from '../components/BackButton.vue';
+import { indexedDBService } from '@/services/indexedDB';
 
 export default {
   name: 'Sacadas',
@@ -159,7 +160,8 @@ export default {
       isEditing: false,
       sacadaId: null,
       isLoaded: false,
-      kilosDisponibles: null
+      kilosDisponibles: null,
+      isOnline: navigator.onLine
     };
   },
   computed: {
@@ -236,14 +238,40 @@ export default {
   },
   methods: {
     async loadProveedores() {
-      const querySnapshot = await getDocs(collection(db, 'proveedores'));
-      this.proveedores = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      try {
+        if (this.isOnline) {
+          const querySnapshot = await getDocs(collection(db, 'proveedores'));
+          this.proveedores = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          await indexedDBService.saveProveedores(this.proveedores);
+        } else {
+          this.proveedores = await indexedDBService.getProveedores();
+        }
+      } catch (error) {
+        console.error("Error al cargar proveedores: ", error);
+        this.proveedores = await indexedDBService.getProveedores();
+      }
     },
     async loadMedidas() {
-      const querySnapshot = await getDocs(collection(db, 'medidas'));
-      this.medidas = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      try {
+        if (this.isOnline) {
+          const querySnapshot = await getDocs(collection(db, 'medidas'));
+          this.medidas = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          await indexedDBService.saveMedidas(this.medidas);
+        } else {
+          this.medidas = await indexedDBService.getMedidas();
+        }
+      } catch (error) {
+        console.error("Error al cargar medidas: ", error);
+        this.medidas = await indexedDBService.getMedidas();
+      }
     },
     async checkExistingSacada() {
+      if (!this.isOnline) {
+        const sacadas = await indexedDBService.getSacadas();
+        return sacadas.some(sacada => 
+          new Date(sacada.fecha).toDateString() === this.currentDate.toDateString()
+        );
+      }
       const sacadasRef = collection(db, 'sacadas');
       const startOfDay = new Date(this.currentDate.setHours(0, 0, 0, 0));
       const endOfDay = new Date(this.currentDate.setHours(23, 59, 59, 999));
@@ -350,23 +378,28 @@ export default {
       return value.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
     },
     async loadSacada(id) {
-      console.log("Cargando sacada con ID:", id);
-      const docRef = doc(db, 'sacadas', id);
-      const docSnap = await getDoc(docRef);
-      if (docSnap.exists()) {
-        console.log("Documento encontrado:", docSnap.data());
-        const data = docSnap.data();
-        this.currentDate = data.fecha instanceof Date ? data.fecha : data.fecha.toDate();
-        console.log("Fecha cargada:", this.currentDate);
-        this.entradas = data.entradas || [];
-        console.log("Entradas cargadas:", this.entradas);
-        this.salidas = data.salidas || [];
-        console.log("Salidas cargadas:", this.salidas);
-        this.sacadaId = id;
-        this.isEditing = true;
-        await this.updateKilosDisponibles();
-      } else {
-        console.log("No se encontró el documento con ID:", id);
+      try {
+        let sacadaData;
+        if (this.isOnline) {
+          const docRef = doc(db, 'sacadas', id);
+          const docSnap = await getDoc(docRef);
+          if (docSnap.exists()) {
+            sacadaData = docSnap.data();
+          }
+        } else {
+          sacadaData = await indexedDBService.getSacada(id);
+        }
+
+        if (sacadaData) {
+          this.currentDate = sacadaData.fecha instanceof Date ? sacadaData.fecha : new Date(sacadaData.fecha);
+          this.entradas = sacadaData.entradas || [];
+          this.salidas = sacadaData.salidas || [];
+          this.sacadaId = id;
+          this.isEditing = true;
+          await this.updateKilosDisponibles();
+        }
+      } catch (error) {
+        console.error("Error al cargar sacada: ", error);
       }
     },
     async saveReport() {
@@ -387,30 +420,68 @@ export default {
           totalSalidas: this.totalSalidas
         };
 
-        if (this.isEditing) {
-          await updateDoc(doc(db, 'sacadas', this.sacadaId), reportData);
-          alert("Informe del día actualizado exitosamente");
-        } else {
-          await addDoc(collection(db, 'sacadas'), reportData);
-          alert("Informe del día guardado exitosamente");
+        if (this.isOnline) {
+          if (this.isEditing) {
+            await updateDoc(doc(db, 'sacadas', this.sacadaId), reportData);
+          } else {
+            const docRef = await addDoc(collection(db, 'sacadas'), reportData);
+            this.sacadaId = docRef.id;
+          }
         }
+        
+        // Guardar en IndexedDB
+        await indexedDBService.saveSacada({
+          id: this.sacadaId,
+          ...reportData
+        });
+
+        alert(this.isEditing ? "Informe del día actualizado exitosamente" : "Informe del día guardado exitosamente");
         this.$router.push('/sacadas');
       } catch (error) {
         console.error("Error al guardar/actualizar el documento: ", error);
         alert("Error al guardar/actualizar el informe del día: " + error.message);
       }
     },
+    updateOnlineStatus() {
+      this.isOnline = navigator.onLine;
+      if (this.isOnline) {
+        this.syncWithFirebase();
+      }
+    },
+    async syncWithFirebase() {
+      try {
+        const localSacadas = await indexedDBService.getSacadas();
+        const sacadasCollection = collection(db, 'sacadas');
+        
+        for (const sacada of localSacadas) {
+          await setDoc(doc(sacadasCollection, sacada.id), {
+            ...sacada,
+            fecha: new Date(sacada.fecha)
+          }, { merge: true });
+        }
+        
+        console.log('Sincronización con Firebase completada');
+      } catch (error) {
+        console.error('Error al sincronizar con Firebase:', error);
+      }
+    }
   },
   async created() {
-    await this.loadProveedores();
-    await this.loadMedidas();
-    if (this.$route.params.id) {
-      console.log("ID de la ruta encontrado:", this.$route.params.id);
-      await this.loadSacada(this.$route.params.id);
-    } else {
-      console.log("No se encontró ID en la ruta");
-    }
-    this.isLoaded = true;
+  await this.loadProveedores();
+  await this.loadMedidas();
+  const id = this.$route.params.id;
+  if (id) {
+    await this.loadSacada(id);
+  }
+  this.isLoaded = true;
+},
+  mounted() {
+    window.addEventListener('online', this.updateOnlineStatus);
+    window.addEventListener('offline', this.updateOnlineStatus);
+  },
+  beforeDestroy() {
+    window.removeEventListener('online', this.updateOnlineStatus);
+    window.removeEventListener('offline', this.updateOnlineStatus);
   },
   watch: {
     'newSalida.proveedor': 'updateKilosDisponibles',
