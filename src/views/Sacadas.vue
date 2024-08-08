@@ -293,51 +293,61 @@ export default {
     },
     async updateKilosDisponibles() {
       if (this.newSalida.proveedor && this.newSalida.medida) {
+        console.log(`Actualizando kilos disponibles para ${this.newSalida.proveedor} - ${this.newSalida.medida}`);
         this.kilosDisponibles = await this.getKilosDisponibles(this.newSalida.proveedor, this.newSalida.medida);
+        console.log(`Kilos disponibles actualizados: ${this.kilosDisponibles}`);
       } else {
+        console.log('No se puede actualizar kilos disponibles: falta proveedor o medida');
         this.kilosDisponibles = null;
       }
     },
  async getKilosDisponibles(proveedor, medida) {
-      let kilosDisponibles = 0;
+  let kilosDisponibles = 0;
 
-      const sacadasRef = collection(db, 'sacadas');
-      const querySnapshot = await getDocs(sacadasRef);
+  const sacadasRef = collection(db, 'sacadas');
+  const querySnapshot = await getDocs(sacadasRef);
 
-      querySnapshot.forEach((doc) => {
-        const sacada = doc.data();
-        const sacadaFecha = sacada.fecha instanceof Date ? sacada.fecha : sacada.fecha.toDate();
-        
-        if (sacadaFecha <= this.currentDate) {
-          sacada.entradas.forEach(entrada => {
-            if (entrada.proveedor === proveedor && entrada.medida === medida) {
-              kilosDisponibles += entrada.kilos;
-            }
-          });
+  // Ordenar las sacadas por fecha
+  const sacadasOrdenadas = querySnapshot.docs
+    .map(doc => ({ id: doc.id, ...doc.data() }))
+    .sort((a, b) => a.fecha.toDate() - b.fecha.toDate());
 
-          sacada.salidas.forEach(salida => {
-            if (salida.proveedor === proveedor && salida.medida === medida) {
-              kilosDisponibles -= salida.kilos;
-            }
-          });
-        }
-      });
-
-      // Añadir las entradas y salidas actuales (no guardadas)
-      this.entradas.forEach(entrada => {
+  // Calcular el acumulado hasta la fecha actual
+  const fechaActual = new Date();
+  sacadasOrdenadas.forEach((sacada) => {
+    const sacadaFecha = sacada.fecha instanceof Date ? sacada.fecha : sacada.fecha.toDate();
+    
+    if (sacadaFecha <= fechaActual) {
+      sacada.entradas.forEach(entrada => {
         if (entrada.proveedor === proveedor && entrada.medida === medida) {
           kilosDisponibles += entrada.kilos;
         }
       });
 
-      this.salidas.forEach(salida => {
+      sacada.salidas.forEach(salida => {
         if (salida.proveedor === proveedor && salida.medida === medida) {
           kilosDisponibles -= salida.kilos;
         }
       });
+    }
+  });
 
-      return Number(kilosDisponibles.toFixed(1));
-    },
+  // Añadir las entradas y salidas actuales (no guardadas)
+  this.entradas.forEach(entrada => {
+    if (entrada.proveedor === proveedor && entrada.medida === medida) {
+      kilosDisponibles += entrada.kilos;
+    }
+  });
+
+  this.salidas.forEach(salida => {
+    if (salida.proveedor === proveedor && salida.medida === medida) {
+      kilosDisponibles -= salida.kilos;
+    }
+  });
+
+  console.log(`Kilos disponibles para ${proveedor} - ${medida}: ${kilosDisponibles}`);
+  return Number(kilosDisponibles.toFixed(1));
+},
     removeEntrada(index) {
       this.entradas.splice(index, 1);
       this.updateKilosDisponibles();
