@@ -1,17 +1,7 @@
 <template>
- <div class="sacadas-container" v-if="isLoaded">
+  <div class="sacadas-container" v-if="isLoaded">
     <div class="back-button-container">
       <BackButton to="/sacadas" />
-    </div>
-    <div class="date-selector">
-      <label for="sacada-date">Fecha de la sacada:</label>
-      <input 
-        type="date" 
-        id="sacada-date" 
-        v-model="selectedDate" 
-        :min="minDate"
-        @change="onDateChange"
-      >
     </div>
     <h2 class="date-header">{{ formattedDate }}</h2>
     <div class="sacadas-content">
@@ -149,7 +139,7 @@
 
 <script>
 import { db } from '@/firebase';
-import { collection, addDoc, getDocs, doc, getDoc, updateDoc, query, where, Timestamp } from 'firebase/firestore';
+import { collection, addDoc, getDocs, doc, getDoc, updateDoc, query, where } from 'firebase/firestore';
 import BackButton from '../components/BackButton.vue';
 
 export default {
@@ -159,7 +149,6 @@ export default {
   },
   data() {
     return {
-      selectedDate: this.getTodayDateString(),
       currentDate: new Date(),
       entradas: [],
       salidas: [],
@@ -170,20 +159,12 @@ export default {
       isEditing: false,
       sacadaId: null,
       isLoaded: false,
-      kilosDisponibles: null,
-      isFutureDate: false
+      kilosDisponibles: null
     };
   },
   computed: {
     formattedDate() {
-    const date = new Date(this.selectedDate);
-    return this.getFormattedDate(date);
-  },
-    minDate() {
-      // Permitir seleccionar desde 7 días antes de la fecha actual
-      const minDate = new Date(this.currentDate);
-      minDate.setDate(minDate.getDate() - 7);
-      return minDate.toISOString().split('T')[0];
+      return this.currentDate.toLocaleDateString('es-ES', { year: 'numeric', month: '2-digit', day: '2-digit' });
     },
     filteredProveedoresEntrada() {
       return this.proveedores.filter(p => p.tipo === this.newEntrada.tipo);
@@ -249,7 +230,8 @@ export default {
              this.newSalida.medida && 
              this.newSalida.kilos && 
              this.newSalida.kilos > 0 &&
-             (this.isFutureDate || (this.kilosDisponibles !== null && this.newSalida.kilos <= this.kilosDisponibles));
+             this.kilosDisponibles !== null &&
+             this.newSalida.kilos <= this.kilosDisponibles;
     }
   },
   methods: {
@@ -261,66 +243,18 @@ export default {
       const querySnapshot = await getDocs(collection(db, 'medidas'));
       this.medidas = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     },
-
-    getTodayDateString() {
-    const today = new Date();
-    return this.getDateString(today);
-  },
-
-  getDateString(date) {
-    const offset = date.getTimezoneOffset();
-    const adjustedDate = new Date(date.getTime() - (offset * 60 * 1000));
-    return adjustedDate.toISOString().split('T')[0];
-  },
-
-
-
-  getFormattedDate(date) {
-    return date.toLocaleDateString('es-ES', { year: 'numeric', month: '2-digit', day: '2-digit' });
-}
-,
-  async onDateChange() {
-    const selectedDate = new Date(this.selectedDate);
-    selectedDate.setDate(selectedDate.getDate() + 1); // Sumar un día
-    this.formattedDate = this.getFormattedDate(selectedDate);  // Actualiza formattedDate
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    
-    this.isFutureDate = selectedDate > today;
-
-    await this.checkExistingSacada();
-    if (!this.isFutureDate) {
-        await this.updateKilosDisponibles();
-    } else {
-        this.kilosDisponibles = null;
-    }
-},
-async checkExistingSacada() {
-  const sacadasRef = collection(db, 'sacadas');
-  const selectedDate = new Date(this.selectedDate + 'T00:00:00');
-  const startOfDay = new Date(selectedDate);
-  const endOfDay = new Date(selectedDate);
-  endOfDay.setHours(23, 59, 59, 999);
-  
-  const q = query(sacadasRef, 
-    where('fecha', '>=', startOfDay),
-    where('fecha', '<=', endOfDay)
-  );
-  
-  const querySnapshot = await getDocs(q);
-  if (!querySnapshot.empty) {
-    const sacadaDoc = querySnapshot.docs[0];
-    await this.loadSacada(sacadaDoc.id);
-    this.isEditing = true;
-  } else {
-    this.resetSacada();
-    this.isEditing = false;
-  }
-},
-    resetSacada() {
-      this.entradas = [];
-      this.salidas = [];
-      this.sacadaId = null;
+    async checkExistingSacada() {
+      const sacadasRef = collection(db, 'sacadas');
+      const startOfDay = new Date(this.currentDate.setHours(0, 0, 0, 0));
+      const endOfDay = new Date(this.currentDate.setHours(23, 59, 59, 999));
+      
+      const q = query(sacadasRef, 
+        where('fecha', '>=', startOfDay),
+        where('fecha', '<=', endOfDay)
+      );
+      
+      const querySnapshot = await getDocs(q);
+      return !querySnapshot.empty;
     },
     resetEntradaSelections() {
       this.newEntrada.proveedor = '';
@@ -344,7 +278,7 @@ async checkExistingSacada() {
       }
     },
     async addSalida() {
-      if (this.isFutureDate || this.isSalidaValid) {
+      if (this.isSalidaValid) {
         this.salidas.push({
           tipo: this.newSalida.tipo,
           proveedor: this.newSalida.proveedor,
@@ -352,9 +286,7 @@ async checkExistingSacada() {
           kilos: Number(this.newSalida.kilos.toFixed(1))
         });
         this.newSalida = { tipo: 'proveedor', proveedor: '', medida: '', kilos: null };
-        if (!this.isFutureDate) {
-          await this.updateKilosDisponibles();
-        }
+        await this.updateKilosDisponibles();
       } else {
         alert(`No hay suficientes kilos disponibles. Kilos disponibles: ${this.kilosDisponibles.toFixed(1)} kg`);
       }
@@ -369,58 +301,53 @@ async checkExistingSacada() {
         this.kilosDisponibles = null;
       }
     },
-    async getKilosDisponibles(proveedor, medida) {
-      if (this.isFutureDate) {
-        // Para fechas futuras, no calculamos kilos disponibles
-        return Infinity;
-      }
+ async getKilosDisponibles(proveedor, medida) {
+  let kilosDisponibles = 0;
 
-      let kilosDisponibles = 0;
+  const sacadasRef = collection(db, 'sacadas');
+  const querySnapshot = await getDocs(sacadasRef);
 
-      const sacadasRef = collection(db, 'sacadas');
-      const querySnapshot = await getDocs(sacadasRef);
+  // Ordenar las sacadas por fecha
+  const sacadasOrdenadas = querySnapshot.docs
+    .map(doc => ({ id: doc.id, ...doc.data() }))
+    .sort((a, b) => a.fecha.toDate() - b.fecha.toDate());
 
-      // Ordenar las sacadas por fecha
-      const sacadasOrdenadas = querySnapshot.docs
-        .map(doc => ({ id: doc.id, ...doc.data() }))
-        .sort((a, b) => a.fecha.toDate() - b.fecha.toDate());
-
-      // Calcular el acumulado hasta la fecha seleccionada
-      const fechaSeleccionada = new Date(this.selectedDate);
-      sacadasOrdenadas.forEach((sacada) => {
-        const sacadaFecha = sacada.fecha instanceof Date ? sacada.fecha : sacada.fecha.toDate();
-        
-        if (sacadaFecha <= fechaSeleccionada) {
-          sacada.entradas.forEach(entrada => {
-            if (entrada.proveedor === proveedor && entrada.medida === medida) {
-              kilosDisponibles += entrada.kilos;
-            }
-          });
-
-          sacada.salidas.forEach(salida => {
-            if (salida.proveedor === proveedor && salida.medida === medida) {
-              kilosDisponibles -= salida.kilos;
-            }
-          });
-        }
-      });
-
-      // Añadir las entradas y salidas actuales (no guardadas)
-      this.entradas.forEach(entrada => {
+  // Calcular el acumulado hasta la fecha actual
+  const fechaActual = new Date();
+  sacadasOrdenadas.forEach((sacada) => {
+    const sacadaFecha = sacada.fecha instanceof Date ? sacada.fecha : sacada.fecha.toDate();
+    
+    if (sacadaFecha <= fechaActual) {
+      sacada.entradas.forEach(entrada => {
         if (entrada.proveedor === proveedor && entrada.medida === medida) {
           kilosDisponibles += entrada.kilos;
         }
       });
 
-      this.salidas.forEach(salida => {
+      sacada.salidas.forEach(salida => {
         if (salida.proveedor === proveedor && salida.medida === medida) {
           kilosDisponibles -= salida.kilos;
         }
       });
+    }
+  });
 
-      console.log(`Kilos disponibles para ${proveedor} - ${medida}: ${kilosDisponibles}`);
-      return Number(kilosDisponibles.toFixed(1));
-    },
+  // Añadir las entradas y salidas actuales (no guardadas)
+  this.entradas.forEach(entrada => {
+    if (entrada.proveedor === proveedor && entrada.medida === medida) {
+      kilosDisponibles += entrada.kilos;
+    }
+  });
+
+  this.salidas.forEach(salida => {
+    if (salida.proveedor === proveedor && salida.medida === medida) {
+      kilosDisponibles -= salida.kilos;
+    }
+  });
+
+  console.log(`Kilos disponibles para ${proveedor} - ${medida}: ${kilosDisponibles}`);
+  return Number(kilosDisponibles.toFixed(1));
+},
     removeEntrada(index) {
       this.entradas.splice(index, 1);
       this.updateKilosDisponibles();
@@ -433,51 +360,56 @@ async checkExistingSacada() {
       return value.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
     },
     async loadSacada(id) {
-  console.log("Cargando sacada con ID:", id);
-  const docRef = doc(db, 'sacadas', id);
-  const docSnap = await getDoc(docRef);
-  if (docSnap.exists()) {
-    console.log("Documento encontrado:", docSnap.data());
-    const data = docSnap.data();
-      const fecha = data.fecha.toDate();
-      this.selectedDate = this.getDateString(fecha);
-      this.formattedDate = this.getFormattedDate(fecha);
-    console.log("Fecha cargada:", this.selectedDate);
-    this.entradas = data.entradas || [];
-    console.log("Entradas cargadas:", this.entradas);
-    this.salidas = data.salidas || [];
-    console.log("Salidas cargadas:", this.salidas);
-    this.sacadaId = id;
-    this.isEditing = true;
-    await this.updateKilosDisponibles();
-  } else {
-    console.log("No se encontró el documento con ID:", id);
-  }
-},
+      console.log("Cargando sacada con ID:", id);
+      const docRef = doc(db, 'sacadas', id);
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        console.log("Documento encontrado:", docSnap.data());
+        const data = docSnap.data();
+        this.currentDate = data.fecha instanceof Date ? data.fecha : data.fecha.toDate();
+        console.log("Fecha cargada:", this.currentDate);
+        this.entradas = data.entradas || [];
+        console.log("Entradas cargadas:", this.entradas);
+        this.salidas = data.salidas || [];
+        console.log("Salidas cargadas:", this.salidas);
+        this.sacadaId = id;
+        this.isEditing = true;
+        await this.updateKilosDisponibles();
+      } else {
+        console.log("No se encontró el documento con ID:", id);
+      }
+    },
     async saveReport() {
-  try {
-    const reportDate = new Date(this.selectedDate);
-      const reportData = {
-        fecha: reportDate,
-      entradas: this.entradas,
-      salidas: this.salidas,
-      totalEntradas: this.totalEntradas,
-      totalSalidas: this.totalSalidas
-    };
+      try {
+        if (!this.isEditing) {
+          const existingSacada = await this.checkExistingSacada();
+          if (existingSacada) {
+            alert("Ya existe un registro de sacada para esta fecha. No se puede crear uno nuevo.");
+            return;
+          }
+        }
 
-    if (this.isEditing) {
-      await updateDoc(doc(db, 'sacadas', this.sacadaId), reportData);
-      alert("Informe del día actualizado exitosamente");
-    } else {
-      await addDoc(collection(db, 'sacadas'), reportData);
-      alert("Informe del día guardado exitosamente");
-    }
-    this.$router.push('/sacadas');
-  } catch (error) {
-    console.error("Error al guardar/actualizar el documento: ", error);
-    alert("Error al guardar/actualizar el informe del día: " + error.message);
-  }
-},
+        const reportData = {
+          fecha: this.currentDate,
+          entradas: this.entradas,
+          salidas: this.salidas,
+          totalEntradas: this.totalEntradas,
+          totalSalidas: this.totalSalidas
+        };
+
+        if (this.isEditing) {
+          await updateDoc(doc(db, 'sacadas', this.sacadaId), reportData);
+          alert("Informe del día actualizado exitosamente");
+        } else {
+          await addDoc(collection(db, 'sacadas'), reportData);
+          alert("Informe del día guardado exitosamente");
+        }
+        this.$router.push('/sacadas');
+      } catch (error) {
+        console.error("Error al guardar/actualizar el documento: ", error);
+        alert("Error al guardar/actualizar el informe del día: " + error.message);
+      }
+    },
   },
   async created() {
     await this.loadProveedores();
@@ -487,7 +419,6 @@ async checkExistingSacada() {
       await this.loadSacada(this.$route.params.id);
     } else {
       console.log("No se encontró ID en la ruta");
-      await this.checkExistingSacada();
     }
     this.isLoaded = true;
   },
@@ -500,7 +431,7 @@ async checkExistingSacada() {
 
 <style scoped>
 .sacadas-container {
-  max-width: 1200px;
+  max-width: 1200px;  /* Aumentamos el ancho máximo */
   margin: 0 auto;
   padding: 20px;
   background-color: #e8f0fe;
@@ -523,7 +454,7 @@ async checkExistingSacada() {
 
 .salidas-section, .entradas-section {
   flex: 1;
-  min-width: 0;
+  min-width: 0;  /* Esto ayuda a prevenir que el contenido se desborde */
 }
 
 h3 {
@@ -680,24 +611,6 @@ button:active {
   background-color: #f5f5f5;
 }
 
-.date-selector {
-  margin-bottom: 20px;
-  text-align: center;
-}
-
-.date-selector label {
-  margin-right: 10px;
-  font-weight: bold;
-  color: #3760b0;
-}
-
-.date-selector input[type="date"] {
-  padding: 5px 10px;
-  border: 1px solid #3760b0;
-  border-radius: 4px;
-  font-size: 16px;
-}
-
 @media (max-width: 768px) {
   .sacadas-content {
     flex-direction: column;
@@ -727,6 +640,4 @@ button:active {
     padding: 6px;
   }
 }
-</style> 
-
-          
+</style>
