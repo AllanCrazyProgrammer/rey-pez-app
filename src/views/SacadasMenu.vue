@@ -95,7 +95,10 @@ export default {
       if (!(date instanceof Date) || isNaN(date)) {
         return 'Fecha no disponible';
       }
-      return date.toLocaleDateString('es-ES', {
+      // Ajustar la fecha a la zona horaria local
+      const fechaLocal = new Date(date);
+      fechaLocal.setMinutes(fechaLocal.getMinutes() - fechaLocal.getTimezoneOffset());
+      return fechaLocal.toLocaleDateString('es-ES', {
         year: 'numeric',
         month: 'long',
         day: 'numeric'
