@@ -3,7 +3,7 @@
     <div class="back-button-container">
       <BackButton to="/sacadas" />
     </div>
-    <div class="date-selector">
+    <div class="date-selector" v-if="false">
       <label for="sacada-date">Fecha de la sacada:</label>
       <input 
         type="date" 
@@ -175,12 +175,20 @@ export default {
     };
   },
   computed: {
-    formattedDate() {
-    const date = new Date(this.selectedDate);
-    return this.getFormattedDate(date);
-  },
+    formattedDate: {
+      get() {
+        const date = new Date(this.selectedDate);
+        return this.getFormattedDate(date);
+      },
+      set(newValue) {
+        const [day, month, year] = newValue.split('/');
+        // Sumar 1 día a la fecha
+        const selectedDate = new Date(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`);
+        selectedDate.setDate(selectedDate.getDate() + 1);
+        this.selectedDate = selectedDate.toISOString().split('T')[0];
+      }
+    },
     minDate() {
-      // Permitir seleccionar desde 7 días antes de la fecha actual
       const minDate = new Date(this.currentDate);
       minDate.setDate(minDate.getDate() - 7);
       return minDate.toISOString().split('T')[0];
@@ -261,62 +269,44 @@ export default {
       const querySnapshot = await getDocs(collection(db, 'medidas'));
       this.medidas = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     },
-
     getTodayDateString() {
-    const today = new Date();
-    return this.getDateString(today);
-  },
-
-  getDateString(date) {
-    const offset = date.getTimezoneOffset();
-    const adjustedDate = new Date(date.getTime() - (offset * 60 * 1000));
-    return adjustedDate.toISOString().split('T')[0];
-  },
-
-
-
-  getFormattedDate(date) {
-    return date.toLocaleDateString('es-ES', { year: 'numeric', month: '2-digit', day: '2-digit' });
-}
-,
-  async onDateChange() {
-    const selectedDate = new Date(this.selectedDate);
-    selectedDate.setDate(selectedDate.getDate() + 1); // Sumar un día
-    this.formattedDate = this.getFormattedDate(selectedDate);  // Actualiza formattedDate
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    
-    this.isFutureDate = selectedDate > today;
-
-    await this.checkExistingSacada();
-    if (!this.isFutureDate) {
-        await this.updateKilosDisponibles();
-    } else {
-        this.kilosDisponibles = null;
-    }
-},
-async checkExistingSacada() {
-  const sacadasRef = collection(db, 'sacadas');
-  const selectedDate = new Date(this.selectedDate + 'T00:00:00');
-  const startOfDay = new Date(selectedDate);
-  const endOfDay = new Date(selectedDate);
-  endOfDay.setHours(23, 59, 59, 999);
-  
-  const q = query(sacadasRef, 
-    where('fecha', '>=', startOfDay),
-    where('fecha', '<=', endOfDay)
-  );
-  
-  const querySnapshot = await getDocs(q);
-  if (!querySnapshot.empty) {
-    const sacadaDoc = querySnapshot.docs[0];
-    await this.loadSacada(sacadaDoc.id);
-    this.isEditing = true;
-  } else {
-    this.resetSacada();
-    this.isEditing = false;
-  }
-},
+      const today = new Date();
+      // Ajustar la fecha para que sea la correcta
+      today.setHours(0, 0, 0, 0);
+      today.setDate(today.getDate() + 1); // Sumar 1 día
+      return this.getDateString(today);
+    },
+    getDateString(date) {
+      const offset = date.getTimezoneOffset();
+      const adjustedDate = new Date(date.getTime() - (offset * 60 * 1000));
+      return adjustedDate.toISOString().split('T')[0];
+    },
+    getFormattedDate(date) {
+      return date.toLocaleDateString('es-ES', { year: 'numeric', month: '2-digit', day: '2-digit' });
+    },
+    async checkExistingSacada() {
+      const sacadasRef = collection(db, 'sacadas');
+      const selectedDate = new Date(this.selectedDate + 'T00:00:00');
+      const startOfDay = new Date(selectedDate);
+      startOfDay.setUTCHours(0, 0, 0, 0);
+      const endOfDay = new Date(selectedDate);
+      endOfDay.setUTCHours(23, 59, 59, 999);
+      
+      const q = query(sacadasRef, 
+        where('fecha', '>=', startOfDay),
+        where('fecha', '<=', endOfDay)
+      );
+      
+      const querySnapshot = await getDocs(q);
+      if (!querySnapshot.empty) {
+        const sacadaDoc = querySnapshot.docs[0];
+        await this.loadSacada(sacadaDoc.id);
+        this.isEditing = true;
+      } else {
+        this.resetSacada();
+        this.isEditing = false;
+      }
+    },
     resetSacada() {
       this.entradas = [];
       this.salidas = [];
@@ -371,7 +361,6 @@ async checkExistingSacada() {
     },
     async getKilosDisponibles(proveedor, medida) {
       if (this.isFutureDate) {
-        // Para fechas futuras, no calculamos kilos disponibles
         return Infinity;
       }
 
@@ -380,12 +369,10 @@ async checkExistingSacada() {
       const sacadasRef = collection(db, 'sacadas');
       const querySnapshot = await getDocs(sacadasRef);
 
-      // Ordenar las sacadas por fecha
       const sacadasOrdenadas = querySnapshot.docs
         .map(doc => ({ id: doc.id, ...doc.data() }))
         .sort((a, b) => a.fecha.toDate() - b.fecha.toDate());
 
-      // Calcular el acumulado hasta la fecha seleccionada
       const fechaSeleccionada = new Date(this.selectedDate);
       sacadasOrdenadas.forEach((sacada) => {
         const sacadaFecha = sacada.fecha instanceof Date ? sacada.fecha : sacada.fecha.toDate();
@@ -405,7 +392,6 @@ async checkExistingSacada() {
         }
       });
 
-      // Añadir las entradas y salidas actuales (no guardadas)
       this.entradas.forEach(entrada => {
         if (entrada.proveedor === proveedor && entrada.medida === medida) {
           kilosDisponibles += entrada.kilos;
@@ -430,54 +416,58 @@ async checkExistingSacada() {
       this.updateKilosDisponibles();
     },
     formatNumber(value) {
-      return value.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+      return value.toLocaleString('es-ES', { 
+        minimumFractionDigits: 1, 
+        maximumFractionDigits: 1 
+      });
     },
     async loadSacada(id) {
-  console.log("Cargando sacada con ID:", id);
-  const docRef = doc(db, 'sacadas', id);
-  const docSnap = await getDoc(docRef);
-  if (docSnap.exists()) {
-    console.log("Documento encontrado:", docSnap.data());
-    const data = docSnap.data();
-      const fecha = data.fecha.toDate();
-      this.selectedDate = this.getDateString(fecha);
-      this.formattedDate = this.getFormattedDate(fecha);
-    console.log("Fecha cargada:", this.selectedDate);
-    this.entradas = data.entradas || [];
-    console.log("Entradas cargadas:", this.entradas);
-    this.salidas = data.salidas || [];
-    console.log("Salidas cargadas:", this.salidas);
-    this.sacadaId = id;
-    this.isEditing = true;
-    await this.updateKilosDisponibles();
-  } else {
-    console.log("No se encontró el documento con ID:", id);
-  }
-},
+      console.log("Cargando sacada con ID:", id);
+      const docRef = doc(db, 'sacadas', id);
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        console.log("Documento encontrado:", docSnap.data());
+        const data = docSnap.data();
+        const fecha = data.fecha.toDate();
+        fecha.setMinutes(fecha.getMinutes() - fecha.getTimezoneOffset());
+        this.selectedDate = fecha.toISOString().split('T')[0];
+        console.log("Fecha cargada:", this.selectedDate);
+        this.entradas = data.entradas || [];
+        console.log("Entradas cargadas:", this.entradas);
+        this.salidas = data.salidas || [];
+        console.log("Salidas cargadas:", this.salidas);
+        this.sacadaId = id;
+        this.isEditing = true;
+        await this.updateKilosDisponibles();
+      } else {
+        console.log("No se encontró el documento con ID:", id);
+      }
+    },
     async saveReport() {
-  try {
-    const reportDate = new Date(this.selectedDate);
-      const reportData = {
-        fecha: reportDate,
-      entradas: this.entradas,
-      salidas: this.salidas,
-      totalEntradas: this.totalEntradas,
-      totalSalidas: this.totalSalidas
-    };
+      try {
+        const reportDate = new Date(this.selectedDate + 'T00:00:00');
+        reportDate.setMinutes(reportDate.getMinutes() + reportDate.getTimezoneOffset());
+        const reportData = {
+          fecha: reportDate,
+          entradas: this.entradas,
+          salidas: this.salidas,
+          totalEntradas: this.totalEntradas,
+          totalSalidas: this.totalSalidas
+        };
 
-    if (this.isEditing) {
-      await updateDoc(doc(db, 'sacadas', this.sacadaId), reportData);
-      alert("Informe del día actualizado exitosamente");
-    } else {
-      await addDoc(collection(db, 'sacadas'), reportData);
-      alert("Informe del día guardado exitosamente");
-    }
-    this.$router.push('/sacadas');
-  } catch (error) {
-    console.error("Error al guardar/actualizar el documento: ", error);
-    alert("Error al guardar/actualizar el informe del día: " + error.message);
-  }
-},
+        if (this.isEditing) {
+          await updateDoc(doc(db, 'sacadas', this.sacadaId), reportData);
+          alert("Informe del día actualizado exitosamente");
+        } else {
+          await addDoc(collection(db, 'sacadas'), reportData);
+          alert("Informe del día guardado exitosamente");
+        }
+        this.$router.push('/sacadas');
+      } catch (error) {
+        console.error("Error al guardar/actualizar el documento: ", error);
+        alert("Error al guardar/actualizar el informe del día: " + error.message);
+      }
+    },
   },
   async created() {
     await this.loadProveedores();
