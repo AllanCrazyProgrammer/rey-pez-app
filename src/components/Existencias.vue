@@ -112,11 +112,15 @@ export default {
         });
       });
 
-      // Filtrar medidas con 0 o menos kilos
+      // Filtrar proveedores y medidas con 0 o menos kilos
       Object.keys(newExistencias).forEach(proveedor => {
         newExistencias[proveedor] = Object.fromEntries(
           Object.entries(newExistencias[proveedor]).filter(([_, kilos]) => kilos > 0)
         );
+        // Si no quedan medidas para el proveedor, eliminar el proveedor
+        if (Object.keys(newExistencias[proveedor]).length === 0) {
+          delete newExistencias[proveedor];
+        }
       });
 
       existencias.value = newExistencias;
