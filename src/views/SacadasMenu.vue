@@ -18,7 +18,7 @@
         No hay registros de sacadas.
       </div>
       <ul v-else>
-        <li v-for="sacada in sacadas" :key="sacada.id" class="sacada-item">
+        <li v-for="sacada in paginatedSacadas" :key="sacada.id" class="sacada-item">
           <div class="sacada-content" @click="editSacada(sacada.id)">
             <span class="sacada-date">{{ formatDate(sacada.fecha) }}</span>
             <div class="sacada-summary">
@@ -37,37 +37,44 @@
           </div>
         </li>
       </ul>
+      
+      <!-- Agregar paginación -->
+      <div class="pagination">
+        <button @click="prevPage" :disabled="currentPage === 1">Anterior</button>
+        <span>Página {{ currentPage }} de {{ totalPages }}</span>
+        <button @click="nextPage" :disabled="currentPage === totalPages">Siguiente</button>
+      </div>
     </div>
   </div>
 </template>
 
 <script>
+import { formatDate, parseDate } from '@/utils/dateUtils';
 import { db } from '@/firebase';
-import { collection, getDocs, query, orderBy, Timestamp, deleteDoc, doc } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, deleteDoc, doc } from 'firebase/firestore';
+import moment from 'moment'; // Import Moment.js
 
 export default {
   name: 'SacadasMenu',
   data() {
     return {
       sacadas: [],
-      isLoading: true
+      isLoading: true,
+      currentPage: 1,
+      itemsPerPage: 10
     };
   },
-  methods: {
-    convertToDate(dateField) {
-      if (dateField instanceof Timestamp) {
-        return dateField.toDate();
-      } else if (dateField && typeof dateField.toDate === 'function') {
-        return dateField.toDate();
-      } else if (dateField && dateField.seconds) {
-        return new Date(dateField.seconds * 1000);
-      } else if (dateField instanceof Date) {
-        return dateField;
-      } else if (typeof dateField === 'string') {
-        return new Date(dateField);
-      }
-      return null;
+  computed: {
+    paginatedSacadas() {
+      const start = (this.currentPage - 1) * this.itemsPerPage;
+      const end = start + this.itemsPerPage;
+      return this.sacadas.slice(start, end);
     },
+    totalPages() {
+      return Math.ceil(this.sacadas.length / this.itemsPerPage);
+    }
+  },
+  methods: {
     async loadSacadas() {
       try {
         this.isLoading = true;
@@ -76,10 +83,20 @@ export default {
         const querySnapshot = await getDocs(q);
         this.sacadas = querySnapshot.docs.map(doc => {
           const data = doc.data();
+          let fecha;
+          if (data.fecha instanceof Date) {
+            fecha = moment(data.fecha).toDate(); // Use Moment.js to handle dates
+          } else if (data.fecha && typeof data.fecha.toDate === 'function') {
+            fecha = moment(data.fecha.toDate()).toDate(); // Use Moment.js to handle dates
+          } else {
+            fecha = moment(data.fecha).toDate(); // Use Moment.js to handle dates
+          }
+          // Ajustar la fecha para la zona horaria local
+          fecha = moment(fecha).toDate(); // Use Moment.js to handle dates
           return {
             id: doc.id,
             ...data,
-            fecha: this.convertToDate(data.fecha),
+            fecha: fecha,
             totalEntradas: data.totalEntradas || 0,
             totalSalidas: data.totalSalidas || 0
           };
@@ -92,20 +109,10 @@ export default {
       }
     },
     formatDate(date) {
-      if (!(date instanceof Date) || isNaN(date)) {
-        return 'Fecha no disponible';
-      }
-      // Ajustar la fecha a la zona horaria local
-      const fechaLocal = new Date(date);
-      fechaLocal.setMinutes(fechaLocal.getMinutes() - fechaLocal.getTimezoneOffset());
-      return fechaLocal.toLocaleDateString('es-ES', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-      });
+      return moment(date).format('DD [de] MMMM [de] YYYY');
     },
     formatNumber(value) {
-      return (value || 0).toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+      return (value || 0).toLocaleString('es-ES', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
     },
     editSacada(id) {
       this.$router.push(`/sacadas/${id}`);
@@ -121,6 +128,16 @@ export default {
           alert('Error al borrar el registro de sacadas');
         }
       }
+    },
+    prevPage() {
+      if (this.currentPage > 1) {
+        this.currentPage--;
+      }
+    },
+    nextPage() {
+      if (this.currentPage < this.totalPages) {
+        this.currentPage++;
+      }
     }
   },
   mounted() {
@@ -128,8 +145,6 @@ export default {
   }
 };
 </script>
-
-
 
 <style scoped>
 .sacadas-menu-container {
@@ -288,5 +303,31 @@ h1, h2 {
     margin-top: 10px;
     justify-content: flex-end;
   }
+}
+
+.pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-top: 20px;
+}
+
+.pagination button {
+  background-color: #3760b0;
+  color: white;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  margin: 0 10px;
+}
+
+.pagination button:disabled {
+  background-color: #ccc;
+  cursor: not-allowed;
+}
+
+.pagination span {
+  font-weight: bold;
 }
 </style>

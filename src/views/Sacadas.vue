@@ -4,6 +4,9 @@
       <BackButton to="/sacadas" />
     </div>
     <h2 class="date-header">{{ formattedDate }}</h2>
+    <div class="date-selector">
+      <input type="date" v-model="selectedDate" @change="updateCurrentDate">
+    </div>
     <div class="sacadas-content">
       <div class="salidas-section">
         <h3>Salidas</h3>
@@ -34,9 +37,11 @@
             placeholder="Kilos" 
             required 
           />
-          <button @click="addSalida" :disabled="!isSalidaValid">Agregar Salida</button>
+          <button @click="addSalida" :disabled="!isSalidaValid || newSalida.kilos > kilosDisponibles">Agregar Salida</button>
         </div>
-        <p v-if="kilosDisponibles !== null">Kilos disponibles: {{ formatNumber(kilosDisponibles) }} kg</p>
+        <p v-if="kilosDisponibles !== null" class="kilos-disponibles">
+          Kilos disponibles: <span :class="{ 'low-stock': kilosDisponibles < 100 }">{{ formatNumber(kilosDisponibles) }} kg</span>
+        </p>
         <ul class="list">
           <li v-for="(salida, index) in salidas" :key="'salida-' + index">
             {{ salida.tipo === 'maquila' ? 'Maquila' : 'Proveedor' }}: {{ salida.proveedor }} - {{ salida.medida }}: {{ formatNumber(salida.kilos) }} kg
@@ -119,8 +124,8 @@
         </thead>
         <tbody>
           <template v-for="(maquila, maquilaNombre) in salidasMaquilasPorMedida">
-            <tr :key="`${maquilaNombre}-header`">
-              <td :rowspan="Object.keys(maquila).length">{{ maquilaNombre }}</td>
+    <tr :key="`${maquilaNombre}-header`">
+      <td :rowspan="Object.keys(maquila).length">{{ maquilaNombre }}</td>
               <td>{{ Object.keys(maquila)[0] }}</td>
               <td>{{ formatNumber(Object.values(maquila)[0]) }}</td>
             </tr>
@@ -141,6 +146,7 @@
 import { db } from '@/firebase';
 import { collection, addDoc, getDocs, doc, getDoc, updateDoc, query, where } from 'firebase/firestore';
 import BackButton from '../components/BackButton.vue';
+import moment from 'moment';
 
 export default {
   name: 'Sacadas',
@@ -149,7 +155,8 @@ export default {
   },
   data() {
     return {
-      currentDate: new Date(),
+      currentDate: moment(),
+      selectedDate: moment().format('YYYY-MM-DD'),
       entradas: [],
       salidas: [],
       proveedores: [],
@@ -164,7 +171,7 @@ export default {
   },
   computed: {
     formattedDate() {
-      return this.currentDate.toLocaleDateString('es-ES', { year: 'numeric', month: '2-digit', day: '2-digit' });
+      return this.currentDate.format('DD/MM/YYYY');
     },
     filteredProveedoresEntrada() {
       return this.proveedores.filter(p => p.tipo === this.newEntrada.tipo);
@@ -245,12 +252,12 @@ export default {
     },
     async checkExistingSacada() {
       const sacadasRef = collection(db, 'sacadas');
-      const startOfDay = new Date(this.currentDate.setHours(0, 0, 0, 0));
-      const endOfDay = new Date(this.currentDate.setHours(23, 59, 59, 999));
+      const startOfDay = this.currentDate.clone().startOf('day');
+      const endOfDay = this.currentDate.clone().endOf('day');
       
       const q = query(sacadasRef, 
-        where('fecha', '>=', startOfDay),
-        where('fecha', '<=', endOfDay)
+        where('fecha', '>=', startOfDay.toDate()),
+        where('fecha', '<=', endOfDay.toDate())
       );
       
       const querySnapshot = await getDocs(q);
@@ -265,7 +272,7 @@ export default {
       this.newSalida.medida = '';
       this.kilosDisponibles = null;
     },
-    addEntrada() {
+    async addEntrada() {
       if (this.newEntrada.tipo && this.newEntrada.proveedor && this.newEntrada.medida && this.newEntrada.kilos) {
         this.entradas.push({
           tipo: this.newEntrada.tipo,
@@ -274,11 +281,11 @@ export default {
           kilos: Number(this.newEntrada.kilos.toFixed(1))
         });
         this.newEntrada = { tipo: 'proveedor', proveedor: '', medida: '', kilos: null };
-        this.updateKilosDisponibles();
+        await this.updateKilosDisponibles();
       }
     },
     async addSalida() {
-      if (this.isSalidaValid) {
+      if (this.isSalidaValid && this.newSalida.kilos <= this.kilosDisponibles) {
         this.salidas.push({
           tipo: this.newSalida.tipo,
           proveedor: this.newSalida.proveedor,
@@ -287,7 +294,7 @@ export default {
         });
         this.newSalida = { tipo: 'proveedor', proveedor: '', medida: '', kilos: null };
         await this.updateKilosDisponibles();
-      } else {
+      } else if (this.newSalida.kilos > this.kilosDisponibles) {
         alert(`No hay suficientes kilos disponibles. Kilos disponibles: ${this.kilosDisponibles.toFixed(1)} kg`);
       }
     },
@@ -313,11 +320,11 @@ export default {
     .sort((a, b) => a.fecha.toDate() - b.fecha.toDate());
 
   // Calcular el acumulado hasta la fecha actual
-  const fechaActual = new Date();
+  const fechaActual = this.currentDate.clone().endOf('day');
   sacadasOrdenadas.forEach((sacada) => {
     const sacadaFecha = sacada.fecha instanceof Date ? sacada.fecha : sacada.fecha.toDate();
     
-    if (sacadaFecha <= fechaActual) {
+    if (moment(sacadaFecha).isSameOrBefore(fechaActual)) {
       sacada.entradas.forEach(entrada => {
         if (entrada.proveedor === proveedor && entrada.medida === medida) {
           kilosDisponibles += entrada.kilos;
@@ -348,13 +355,13 @@ export default {
   console.log(`Kilos disponibles para ${proveedor} - ${medida}: ${kilosDisponibles}`);
   return Number(kilosDisponibles.toFixed(1));
 },
-    removeEntrada(index) {
+    async removeEntrada(index) {
       this.entradas.splice(index, 1);
-      this.updateKilosDisponibles();
+      await this.updateKilosDisponibles();
     },
-    removeSalida(index) {
+    async removeSalida(index) {
       this.salidas.splice(index, 1);
-      this.updateKilosDisponibles();
+      await this.updateKilosDisponibles();
     },
     formatNumber(value) {
       return value.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
@@ -366,7 +373,7 @@ export default {
       if (docSnap.exists()) {
         console.log("Documento encontrado:", docSnap.data());
         const data = docSnap.data();
-        this.currentDate = data.fecha instanceof Date ? data.fecha : data.fecha.toDate();
+        this.currentDate = moment(data.fecha.toDate());
         console.log("Fecha cargada:", this.currentDate);
         this.entradas = data.entradas || [];
         console.log("Entradas cargadas:", this.entradas);
@@ -390,7 +397,7 @@ export default {
         }
 
         const reportData = {
-          fecha: this.currentDate,
+          fecha: this.currentDate.toDate(),
           entradas: this.entradas,
           salidas: this.salidas,
           totalEntradas: this.totalEntradas,
@@ -410,6 +417,9 @@ export default {
         alert("Error al guardar/actualizar el informe del día: " + error.message);
       }
     },
+    updateCurrentDate() {
+      this.currentDate = moment(this.selectedDate);
+    },
   },
   async created() {
     await this.loadProveedores();
@@ -424,7 +434,8 @@ export default {
   },
   watch: {
     'newSalida.proveedor': 'updateKilosDisponibles',
-    'newSalida.medida': 'updateKilosDisponibles'
+    'newSalida.medida': 'updateKilosDisponibles',
+    'newSalida.kilos': 'updateKilosDisponibles'
   }
 };
 </script>
@@ -640,4 +651,42 @@ button:active {
     padding: 6px;
   }
 }
+
+.date-selector {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.date-selector input {
+  padding: 8px;
+  font-size: 16px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+
+.kilos-disponibles {
+  font-size: 1.2em;
+  font-weight: bold;
+  color: #3760b0;
+  margin-bottom: 15px;
+  padding: 10px;
+  background-color: #f0f4ff;
+  border-radius: 5px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.low-stock {
+  color: #ff4136;
+}
+
+button:disabled {
+  background-color: #cccccc;
+  cursor: not-allowed;
+}
+
+button:disabled:hover {
+  background-color: #cccccc;
+}
 </style>
+
+
