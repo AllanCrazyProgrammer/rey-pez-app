@@ -293,15 +293,47 @@ h1, h2 {
   .sacada-item {
     flex-direction: column;
     align-items: stretch;
+    padding: 15px;
+  }
+
+  .sacada-content {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .sacada-date {
+    margin-bottom: 10px;
+    font-size: 1em;
   }
 
   .sacada-summary {
+    flex-direction: row;
+    justify-content: space-between;
+    width: 100%;
+    margin-top: 5px;
+  }
+
+  .sacada-entry {
     flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .sacada-label {
+    font-size: 1em;
+  }
+
+  .sacada-value {
+    font-size: 1em;
   }
 
   .sacada-actions {
-    margin-top: 10px;
+    margin-top: 15px;
     justify-content: flex-end;
+  }
+
+  .delete-btn {
+    padding: 6px 10px;
+    font-size: 0.8em;
   }
 }
 
