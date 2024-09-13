@@ -3,7 +3,7 @@
     <div class="back-button-container">
       <BackButton to="/NoteMenu" />
     </div>
-    <h2>Nota de Venta</h2>
+    <h2 class="sale-note-title">Nota de Venta</h2>
     <div class="folio-date">
       <p><strong>Folio:</strong> {{ formattedFolio }}</p>
       <p><strong>Fecha de Creación:</strong> {{ formattedCreationDate }}</p>
@@ -136,10 +136,16 @@
       </div>
     </div>
 
-      <button @click="exportPDF">Exportar a PDF</button>
-      <button @click="printSection">Imprimir</button>
-      <button @click="saveNote">Guardar Nota</button> 
-      <button class="delete-note-button" @click="deleteNote">Eliminar Nota</button>
+      <div class="action-buttons">
+        <div class="button-column">
+          <button @click="exportPDF">Exportar a PDF</button>
+          <button @click="printSection">Imprimir</button>
+        </div>
+        <div class="button-column">
+          <button @click="saveNote">Guardar Nota</button> 
+          <button class="delete-note-button" @click="deleteNote">Eliminar Nota</button>
+        </div>
+      </div>
     </div>
     <!-- Modal para acciones móviles -->
     <div v-if="showMobileActions" class="mobile-actions-modal">
@@ -636,6 +642,17 @@ th {
   background-color: #218838;
 }
 
+.action-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  margin-top: 1em;
+}
+
+.action-buttons button {
+  margin-bottom: 10px;
+}
+
 @media (max-width: 768px) {
   .folio-date {
     flex-direction: column;
@@ -721,5 +738,25 @@ th {
     width: 100%;
     margin-top: 1em;
   }
+
+  .action-buttons {
+    flex-direction: row;
+    justify-content: space-between;
+  }
+
+  .button-column {
+    width: 48%; /* Ajusta este valor según necesites */
+    display: flex;
+    flex-direction: column;
+  }
+
+  .action-buttons button {
+    width: 100%;
+    margin-bottom: 10px;
+  }
+}
+
+.sale-note-title {
+  margin-top: 10px;
 }
 </style>

@@ -1,5 +1,7 @@
 <template>
   <div>
+    <div class="safe-area-top"></div>
+
     <b-navbar class="navbar-custom" toggleable="lg">
       <b-navbar-brand href="#" class="d-flex align-items-center">
         <b-img
@@ -126,6 +128,26 @@ export default {
   
   .navbar-title {
     font-size: 1em;
+  }
+}
+
+/* Nuevos estilos para el área segura */
+.safe-area-top {
+  height: env(safe-area-inset-top);
+  background-color: white; /* O el color que prefieras */
+}
+
+/* Ajusta el padding superior de la barra de navegación */
+.navbar-custom {
+  padding-top: calc(20px + env(safe-area-inset-top)); /* Aumentado de 10px a 20px */
+}
+
+@supports not (padding: env(safe-area-inset-top)) {
+  .safe-area-top {
+    height: 20px; /* Añadido una altura fija para navegadores que no soportan env() */
+  }
+  .navbar-custom {
+    padding-top: 30px; /* Aumentado de 10px a 30px */
   }
 }
 </style>
