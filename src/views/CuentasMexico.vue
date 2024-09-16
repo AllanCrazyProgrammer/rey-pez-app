@@ -5,8 +5,13 @@
         <h1>Cuentas México</h1>
         <div class="botones-container">
           <router-link to="/cuentas-ozuna" class="boton-cuenta">
-            <div class="card">
+            <div class="card ozuna">
               <h2>Ozuna</h2>
+            </div>
+          </router-link>
+          <router-link to="/cuentas-catarro" class="boton-cuenta">
+            <div class="card catarro">
+              <h2>Catarro</h2>
             </div>
           </router-link>
           <!-- Agrega más botones aquí si es necesario -->
@@ -91,5 +96,13 @@ h1 {
   .card h2 {
     font-size: 20px;
   }
+}
+
+.card.ozuna {
+  background-color: #3760b0;
+}
+
+.card.catarro {
+  background-color: #d32f2f;
 }
 </style>
