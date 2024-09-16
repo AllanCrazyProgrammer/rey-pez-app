@@ -13,6 +13,8 @@ import Existencias from '@/components/Existencias.vue'
 import CuentasMexico from '@/views/CuentasMexico.vue'
 import OzunaCuentasMenu from '@/views/CuentasClientes/OzunaCuentasMenu.vue'
 import CuentasOzuna from '@/views/CuentasClientes/CuentasOzuna.vue'
+import CatarroCuentasMenu from '@/views/CuentasClientes/CatarroCuentasMenu.vue'
+import CuentasCatarro from '@/views/CuentasClientes/CuentasCatarro.vue'
 
 Vue.use(Router);
 
@@ -103,6 +105,26 @@ const routes = [
     path: '/cuentas-ozuna/:id?',
     name: 'CuentasOzuna',
     component: CuentasOzuna
+  },
+  {
+    path: '/cuentas-catarro',
+    name: 'catarro-cuentas-menu',
+    component: CatarroCuentasMenu
+  },
+  {
+    path: '/cuentas-catarro/nueva',
+    name: 'nueva-cuenta-catarro',
+    component: CuentasCatarro
+  },
+  {
+    path: '/cuentas-catarro/:id',
+    name: 'ver-cuenta-catarro',
+    component: CuentasCatarro
+  },
+  {
+    path: '/cuentas-catarro/:id?',
+    name: 'CuentasCatarro',
+    component: CuentasCatarro
   }
 ];
 
