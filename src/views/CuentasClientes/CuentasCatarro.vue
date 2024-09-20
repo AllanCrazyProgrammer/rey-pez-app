@@ -581,6 +581,7 @@ export default {
 </script>
 
 <style scoped>
+/* Estilos generales */
 .cuentas-catarro-container {
   max-width: 1200px;
   width: 95%;
@@ -1064,6 +1065,6 @@ th {
 .mobile-actions-modal button:last-child {
   background-color: #ccc;
   color: #333;
-  
+
 }
 </style>
