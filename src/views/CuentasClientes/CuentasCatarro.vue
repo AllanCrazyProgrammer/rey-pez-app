@@ -535,7 +535,7 @@ export default {
                 <td>Saldo Hoy</td>
                 <td>$${this.formatNumber(this.totalGeneralVenta)}</td>
               </tr>
-              ${this.cobros.map(cobro => 
+              ${this.cobros.map(cobro => `
                 <tr>
                   <td>${cobro.descripcion}</td>
                   <td>$${this.formatNumber(cobro.monto)}</td>
@@ -581,6 +581,7 @@ export default {
 </script>
 
 <style scoped>
+/* Estilos generales */
 .cuentas-catarro-container {
   max-width: 1200px;
   width: 95%;
@@ -1064,5 +1065,6 @@ th {
 .mobile-actions-modal button:last-child {
   background-color: #ccc;
   color: #333;
+
 }
 </style>
