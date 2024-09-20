@@ -1064,5 +1064,6 @@ th {
 .mobile-actions-modal button:last-child {
   background-color: #ccc;
   color: #333;
+  
 }
 </style>
