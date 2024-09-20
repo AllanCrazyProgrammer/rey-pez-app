@@ -535,7 +535,7 @@ export default {
                 <td>Saldo Hoy</td>
                 <td>$${this.formatNumber(this.totalGeneralVenta)}</td>
               </tr>
-              ${this.cobros.map(cobro => 
+              ${this.cobros.map(cobro => `
                 <tr>
                   <td>${cobro.descripcion}</td>
                   <td>$${this.formatNumber(cobro.monto)}</td>
