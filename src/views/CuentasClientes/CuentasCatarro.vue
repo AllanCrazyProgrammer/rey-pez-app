@@ -5,16 +5,20 @@
     </div>
     <h1>Cuentas Catarro</h1>
     <div class="fecha-actual">
-      <input type="date" v-model="fechaSeleccionada">
-      <span>{{ fechaFormateada }}</span>
+      <div class="fecha-input">
+        <input type="date" v-model="fechaSeleccionada">
+      </div>
+      <div class="fecha-display">
+        {{ fechaFormateada }}
+      </div>
     </div>
   
     <div class="input-section">
       <h2>Ingresar Datos</h2>
       <div class="input-row">
-        <input v-model.number="newItem.kilos" type="number" placeholder="Kilos">
+        <input v-model.number="newItem.kilos" type="number" placeholder="Kilos" inputmode="decimal" pattern="[0-9]*">
         <input v-model="newItem.medida" type="text" placeholder="Medida">
-        <input v-model.number="newItem.costo" type="number" placeholder="Costo">
+        <input v-model.number="newItem.costo" type="number" placeholder="Costo" inputmode="decimal" pattern="[0-9]*">
         <button @click="addItem">Agregar</button>
       </div>
     </div>
@@ -56,7 +60,7 @@
         <tr>
           <th>Kilos</th>
           <th>Medida</th>
-          <th>Precio de Venta</th>
+          <th>Precio</th>
           <th>Total</th>
         </tr>
       </thead>
@@ -65,7 +69,7 @@
           <td>{{ formatNumber(item.kilos) }}</td>
           <td>{{ item.medida }}</td>
           <td>
-            <input v-model.number="item.precioVenta" type="number" @input="calcularTotalVenta(index)">
+            <input v-model.number="item.precioVenta" type="number" @input="calcularTotalVenta(index)" class="precio-venta-input" inputmode="decimal" pattern="[0-9]*">
           </td>
           <td>${{ formatNumber(item.totalVenta) }}</td>
         </tr>
@@ -142,8 +146,8 @@
   
     <!-- Modal para acciones móviles -->
     <div v-if="showMobileActions" class="mobile-actions-modal">
-      <button @click="editItem(selectedItemIndex)">Editar</button>
-      <button @click="removeItem(selectedItemIndex)">Eliminar</button>
+      <button @click="editItem(selectedItemIndex)" class="edit-btn">Editar</button>
+      <button @click="removeItem(selectedItemIndex)" class="delete-btn">Eliminar</button>
       <button @click="cancelMobileActions">Cancelar</button>
     </div>
 
@@ -151,9 +155,9 @@
     <div v-if="showEditModal" class="edit-modal">
       <h3>Editar Item</h3>
       <div class="input-row">
-        <input v-model.number="editingItem.kilos" type="number" placeholder="Kilos">
+        <input v-model.number="editingItem.kilos" type="number" placeholder="Kilos" inputmode="decimal" pattern="[0-9]*">
         <input v-model="editingItem.medida" type="text" placeholder="Medida">
-        <input v-model.number="editingItem.costo" type="number" placeholder="Costo">
+        <input v-model.number="editingItem.costo" type="number" placeholder="Costo" inputmode="decimal" pattern="[0-9]*">
       </div>
       <div class="button-row">
         <button @click="saveEditedItem">Guardar</button>
@@ -257,7 +261,13 @@ export default {
             this.cobros = data.cobros || [];
             this.abonos = data.abonos || [];
             this.fechaSeleccionada = data.fecha || this.obtenerFechaActual();
-            this.itemsVenta = data.itemsVenta || [];
+            
+            // Cargar los itemsVenta con los precios de venta guardados
+            this.itemsVenta = data.itemsVenta || this.items.map(item => ({
+              ...item,
+              precioVenta: item.precioVenta || 0,
+              totalVenta: (item.precioVenta || 0) * item.kilos
+            }));
             
             // Asegurarse de que los totales se calculen correctamente
             this.actualizarItemsVenta();
@@ -309,6 +319,12 @@ export default {
       if (this.newItem.kilos && this.newItem.medida && this.newItem.costo) {
         const total = this.newItem.kilos * this.newItem.costo;
         this.items.push({...this.newItem, total});
+        this.itemsVenta.push({
+          ...this.newItem,
+          total,
+          precioVenta: 0,
+          totalVenta: 0
+        });
         this.newItem = {kilos: null, medida: '', costo: null};
       }
     },
@@ -345,7 +361,7 @@ export default {
           totalGeneral: this.totalGeneral,
           totalSaldo: this.totalSaldo,
           nuevoSaldoAcumulado: this.nuevoSaldoAcumulado,
-          itemsVenta: this.itemsVenta,
+          itemsVenta: this.itemsVenta, // Guardamos los itemsVenta que incluyen el precio de venta
           totalGeneralVenta: this.totalGeneralVenta,
           gananciaDelDia: this.gananciaDelDia
         };
@@ -519,7 +535,7 @@ export default {
                 <td>Saldo Hoy</td>
                 <td>$${this.formatNumber(this.totalGeneralVenta)}</td>
               </tr>
-              ${this.cobros.map(cobro => `
+              ${this.cobros.map(cobro => 
                 <tr>
                   <td>${cobro.descripcion}</td>
                   <td>$${this.formatNumber(cobro.monto)}</td>
@@ -546,10 +562,10 @@ export default {
       ventanaImprimir.print();
     },
     actualizarItemsVenta() {
-      this.itemsVenta = this.items.map(item => ({
+      this.itemsVenta = this.items.map((item, index) => ({
         ...item,
-        precioVenta: item.precioVenta || 0,
-        totalVenta: (item.precioVenta || 0) * item.kilos
+        precioVenta: this.itemsVenta[index]?.precioVenta || 0,
+        totalVenta: (this.itemsVenta[index]?.precioVenta || 0) * item.kilos
       }));
     },
     calcularTotalVenta(index) {
@@ -578,24 +594,24 @@ export default {
 }
 
 .fecha-actual {
-  text-align: right;
-  margin-bottom: 20px;
-  font-weight: bold;
   display: flex;
-  justify-content: flex-end;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-end;
+  margin-bottom: 20px;
 }
 
-.fecha-actual input[type="date"] {
-  margin-right: 10px;
+.fecha-input {
+  margin-bottom: 5px;
+}
+
+.fecha-input input[type="date"] {
   padding: 5px;
   border: 1px solid #ddd;
   border-radius: 4px;
 }
 
-.fecha-actual span {
-  min-width: 200px;
-  text-align: left;
+.fecha-display {
+  font-weight: bold;
 }
 
 .input-section {
@@ -765,60 +781,136 @@ th {
 
 .tabla-venta {
   margin-top: 20px;
+  width: 100%;
+  border-collapse: collapse;
 }
 
-.tabla-venta input[type="number"] {
-  width: 100%;
+.tabla-venta th,
+.tabla-venta td {
+  border: 1px solid #ddd;
+  padding: 8px;
+  text-align: left;
+}
+
+.tabla-venta th {
+  background-color: #f2f2f2;
+  font-weight: bold;
+}
+
+.precio-venta-input {
+  width: 70px;
   padding: 5px;
   border: 1px solid #ddd;
   border-radius: 4px;
+  font-size: 14px;
 }
 
-.tabla-principal,
-.tabla-venta {
-  width: 100%;
-  table-layout: fixed;
+@media (max-width: 600px) {
+  .tabla-venta th,
+  .tabla-venta td {
+    padding: 6px;
+  }
+
+  .precio-venta-input {
+    width: 60px;
+    padding: 3px;
+    font-size: 12px;
+  }
 }
 
 .tabla-principal th,
 .tabla-principal td,
 .tabla-venta th,
 .tabla-venta td {
-  width: 20%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  width: auto;
 }
 
 .tabla-principal th:first-child,
 .tabla-principal td:first-child,
 .tabla-venta th:first-child,
 .tabla-venta td:first-child {
-  width: 15%;
+  width: 20%;
 }
 
 .tabla-principal th:nth-child(2),
 .tabla-principal td:nth-child(2),
 .tabla-venta th:nth-child(2),
 .tabla-venta td:nth-child(2) {
-  width: 15%;
+  width: 20%;
+}
+
+.tabla-principal th:nth-child(3),
+.tabla-principal td:nth-child(3),
+.tabla-venta th:nth-child(3),
+.tabla-venta td:nth-child(3) {
+  width: 30%;
 }
 
 .tabla-principal th:last-child,
 .tabla-principal td:last-child,
 .tabla-venta th:last-child,
 .tabla-venta td:last-child {
-  width: 15%;
+  width: 30%;
 }
 
 @media (max-width: 600px) {
-  .tabla-principal th:last-child,
-  .tabla-principal td:last-child,
-  .tabla-venta th:last-child,
-  .tabla-venta td:last-child {
-    display: none;
+  .tabla-principal th,
+  .tabla-principal td,
+  .tabla-venta th,
+  .tabla-venta td {
+    width: 25%;
   }
-  
+}
+
+@media (max-width: 600px) {
+  .tabla-venta th,
+  .tabla-venta td {
+    padding: 4px;
+  }
+
+  .precio-venta-input {
+    width: 60px;
+    padding: 3px;
+    font-size: 16px;
+  }
+}
+
+.tabla-principal th,
+.tabla-principal td,
+.tabla-venta th,
+.tabla-venta td {
+  width: auto;
+}
+
+.tabla-principal th:first-child,
+.tabla-principal td:first-child,
+.tabla-venta th:first-child,
+.tabla-venta td:first-child {
+  width: 20%;
+}
+
+.tabla-principal th:nth-child(2),
+.tabla-principal td:nth-child(2),
+.tabla-venta th:nth-child(2),
+.tabla-venta td:nth-child(2) {
+  width: 20%;
+}
+
+.tabla-principal th:nth-child(3),
+.tabla-principal td:nth-child(3),
+.tabla-venta th:nth-child(3),
+.tabla-venta td:nth-child(3) {
+  width: 30%;
+}
+
+.tabla-principal th:last-child,
+.tabla-principal td:last-child,
+.tabla-venta th:last-child,
+.tabla-venta td:last-child {
+  width: 30%;
+}
+
+@media (max-width: 600px) {
   .tabla-principal th,
   .tabla-principal td,
   .tabla-venta th,
@@ -887,5 +979,90 @@ th {
   color: #f44336;
   font-weight: bold;
   font-size: 15pt;
+}
+
+.action-column {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.action-column button {
+  flex: 1;
+  margin: 0 2px;
+  padding: 5px 10px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.edit-btn {
+  background-color: #ffa500;
+  color: white;
+}
+
+.delete-btn {
+  background-color: #f44336;
+  color: white;
+}
+
+@media (max-width: 600px) {
+  .desktop-only {
+    display: none;
+  }
+
+  .tabla-principal tr {
+    position: relative;
+  }
+
+  .tabla-principal tr::after {
+    content: '⋮';
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 20px;
+    color: #666;
+  }
+}
+
+.mobile-actions-modal {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background-color: white;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+}
+
+.mobile-actions-modal button {
+  width: 100%;
+  padding: 15px 20px;
+  margin-bottom: 10px;
+  border: none;
+  border-radius: 5px;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.mobile-actions-modal .edit-btn {
+  background-color: #ffa500;
+  color: white;
+}
+
+.mobile-actions-modal .delete-btn {
+  background-color: #f44336;
+  color: white;
+}
+
+.mobile-actions-modal button:last-child {
+  background-color: #ccc;
+  color: #333;
 }
 </style>
