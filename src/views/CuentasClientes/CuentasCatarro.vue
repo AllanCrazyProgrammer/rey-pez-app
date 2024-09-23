@@ -315,7 +315,7 @@ export default {
       return this.totalGeneralVenta - this.abonos.reduce((sum, abono) => sum + (abono.monto || 0), 0);
     },
     estadoCuenta() {
-      return this.saldoPendiente <= 0 ? 'Pagado' : 'No Pagado';
+      return this.totalSaldo <= 0 ? 'Pagado' : 'No Pagado';
     },
     gananciaTotal() {
       return this.itemsVenta.reduce((sum, item) => sum + item.ganancia, 0);
@@ -464,7 +464,7 @@ export default {
           itemsVenta: this.itemsVenta, // Guardamos los itemsVenta que incluyen el precio de venta
           totalGeneralVenta: this.totalGeneralVenta,
           gananciaDelDia: this.gananciaDelDia,
-          estadoPagado: this.saldoPendiente <= 0,
+          estadoPagado: this.totalSaldo <= 0,
         };
   
         console.log("Datos a guardar:", notaData);
