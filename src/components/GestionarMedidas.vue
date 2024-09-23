@@ -19,11 +19,21 @@
               <option value="maquila">Maquila</option>
             </select>
           </div>
-          <div v-if="newMedida.tipo === 'maquila'" class="form-group">
+          <div class="form-group" v-if="newMedida.tipo === 'maquila'">
             <label for="maquila">Maquila:</label>
             <select v-model="newMedida.maquilaId" id="maquila" required>
+              <option value="">Seleccione una maquila</option>
               <option v-for="maquila in maquilas" :key="maquila.id" :value="maquila.id">
                 {{ maquila.nombre }}
+              </option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="proveedor">Proveedor:</label>
+            <select v-model="newMedida.proveedorId" id="proveedor">
+              <option value="">General</option>
+              <option v-for="proveedor in proveedores" :key="proveedor.id" :value="proveedor.id">
+                {{ proveedor.nombre }}
               </option>
             </select>
           </div>
@@ -40,6 +50,16 @@
             <button @click="deleteMedida(medida.id)" class="delete-btn">Eliminar</button>
           </li>
         </ul>
+        <h3>Medidas de Proveedores</h3>
+        <div v-for="proveedor in proveedores" :key="proveedor.id">
+          <h4>{{ proveedor.nombre }}</h4>
+          <ul>
+            <li v-for="medida in getMedidasProveedor(proveedor.id)" :key="medida.id">
+              {{ medida.nombre }}
+              <button @click="deleteMedida(medida.id)" class="delete-btn">Eliminar</button>
+            </li>
+          </ul>
+        </div>
         <h3>Medidas de Maquilas</h3>
         <div v-for="maquila in maquilas" :key="maquila.id">
           <h4>{{ maquila.nombre }}</h4>
@@ -67,11 +87,13 @@
     },
     setup() {
       const medidas = ref([]);
+      const proveedores = ref([]);
       const maquilas = ref([]);
       const newMedida = ref({
         nombre: '',
         tipo: 'general',
-        maquilaId: ''
+        maquilaId: '',
+        proveedorId: ''
       });
   
       const loadMedidas = async () => {
@@ -99,14 +121,27 @@
         }
       };
   
+      const loadProveedores = async () => {
+        try {
+          const querySnapshot = await getDocs(collection(db, 'proveedores'));
+          proveedores.value = querySnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }));
+        } catch (error) {
+          console.error("Error al cargar proveedores: ", error);
+        }
+      };
+  
       const addMedida = async () => {
         try {
           await addDoc(collection(db, 'medidas'), {
             nombre: newMedida.value.nombre,
             tipo: newMedida.value.tipo,
-            maquilaId: newMedida.value.tipo === 'maquila' ? newMedida.value.maquilaId : null
+            maquilaId: newMedida.value.tipo === 'maquila' ? newMedida.value.maquilaId : null,
+            proveedorId: newMedida.value.tipo === 'general' ? newMedida.value.proveedorId : null
           });
-          newMedida.value = { nombre: '', tipo: 'general', maquilaId: '' };
+          newMedida.value = { nombre: '', tipo: 'general', maquilaId: '', proveedorId: '' };
           loadMedidas();
         } catch (error) {
           console.error("Error al añadir medida: ", error);
@@ -125,26 +160,33 @@
       };
   
       const medidasGenerales = computed(() => {
-        return medidas.value.filter(medida => medida.tipo === 'general');
+        return medidas.value.filter(medida => medida.tipo === 'general' && !medida.proveedorId);
       });
   
       const getMedidasMaquila = (maquilaId) => {
         return medidas.value.filter(medida => medida.tipo === 'maquila' && medida.maquilaId === maquilaId);
       };
   
+      const getMedidasProveedor = (proveedorId) => {
+        return medidas.value.filter(medida => medida.proveedorId === proveedorId);
+      };
+  
       onMounted(() => {
         loadMedidas();
         loadMaquilas();
+        loadProveedores();
       });
   
       return {
         medidas,
+        proveedores,
         maquilas,
         newMedida,
         addMedida,
         deleteMedida,
         medidasGenerales,
-        getMedidasMaquila
+        getMedidasMaquila,
+        getMedidasProveedor
       };
     }
   };

@@ -184,7 +184,10 @@ export default {
         const maquila = this.proveedores.find(p => p.nombre === this.newEntrada.proveedor);
         return maquila ? this.medidas.filter(m => m.tipo === 'maquila' && m.maquilaId === maquila.id) : [];
       } else {
-        return this.medidas.filter(m => m.tipo === 'general');
+        const proveedor = this.proveedores.find(p => p.nombre === this.newEntrada.proveedor);
+        return proveedor 
+          ? this.medidas.filter(m => m.proveedorId === proveedor.id || (!m.proveedorId && m.tipo === 'general'))
+          : this.medidas.filter(m => m.tipo === 'general');
       }
     },
     filteredMedidasSalida() {
@@ -192,7 +195,10 @@ export default {
         const maquila = this.proveedores.find(p => p.nombre === this.newSalida.proveedor);
         return maquila ? this.medidas.filter(m => m.tipo === 'maquila' && m.maquilaId === maquila.id) : [];
       } else {
-        return this.medidas.filter(m => m.tipo === 'general');
+        const proveedor = this.proveedores.find(p => p.nombre === this.newSalida.proveedor);
+        return proveedor 
+          ? this.medidas.filter(m => m.proveedorId === proveedor.id || (!m.proveedorId && m.tipo === 'general'))
+          : this.medidas.filter(m => m.tipo === 'general');
       }
     },
     totalEntradas() {
