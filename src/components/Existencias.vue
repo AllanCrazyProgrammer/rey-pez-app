@@ -163,7 +163,7 @@ export default {
     });
 
     const formatNumber = (value) => {
-      return value.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+      return parseFloat(value).toFixed(1).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
     };
 
     const imprimirReporte = () => {
