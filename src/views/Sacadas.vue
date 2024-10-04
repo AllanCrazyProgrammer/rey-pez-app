@@ -124,8 +124,8 @@
         </thead>
         <tbody>
           <template v-for="(maquila, maquilaNombre) in salidasMaquilasPorMedida">
-    <tr :key="`${maquilaNombre}-header`">
-      <td :rowspan="Object.keys(maquila).length">{{ maquilaNombre }}</td>
+            <tr :key="maquilaNombre">
+              <td :rowspan="Object.keys(maquila).length">{{ maquilaNombre }}</td>
               <td>{{ Object.keys(maquila)[0] }}</td>
               <td>{{ formatNumber(Object.values(maquila)[0]) }}</td>
             </tr>
@@ -316,49 +316,58 @@ export default {
     },
  async getKilosDisponibles(proveedor, medida) {
   let kilosDisponibles = 0;
+  let totalEntradas = 0;
+  let totalSalidas = 0;
 
   const sacadasRef = collection(db, 'sacadas');
   const querySnapshot = await getDocs(sacadasRef);
 
-  // Ordenar las sacadas por fecha
   const sacadasOrdenadas = querySnapshot.docs
     .map(doc => ({ id: doc.id, ...doc.data() }))
     .sort((a, b) => a.fecha.toDate() - b.fecha.toDate());
 
-  // Calcular el acumulado hasta la fecha actual
+  console.log(`Calculando kilos disponibles para ${proveedor} - ${medida}`);
+  console.log(`Fecha actual: ${this.currentDate.format('YYYY-MM-DD')}`);
+
   const fechaActual = this.currentDate.clone().endOf('day');
   sacadasOrdenadas.forEach((sacada) => {
     const sacadaFecha = sacada.fecha instanceof Date ? sacada.fecha : sacada.fecha.toDate();
     
     if (moment(sacadaFecha).isSameOrBefore(fechaActual)) {
+      console.log(`Procesando sacada del ${moment(sacadaFecha).format('YYYY-MM-DD')}`);
+      
       sacada.entradas.forEach(entrada => {
         if (entrada.proveedor === proveedor && entrada.medida === medida) {
           kilosDisponibles += entrada.kilos;
+          totalEntradas += entrada.kilos;
+          console.log(`  Entrada: +${entrada.kilos} kg`);
         }
       });
 
       sacada.salidas.forEach(salida => {
         if (salida.proveedor === proveedor && salida.medida === medida) {
           kilosDisponibles -= salida.kilos;
+          totalSalidas += salida.kilos;
+          console.log(`  Salida: -${salida.kilos} kg`);
         }
       });
+
+      console.log(`  Subtotal: ${kilosDisponibles} kg`);
     }
   });
 
-  // Añadir las entradas y salidas actuales (no guardadas)
-  this.entradas.forEach(entrada => {
-    if (entrada.proveedor === proveedor && entrada.medida === medida) {
-      kilosDisponibles += entrada.kilos;
-    }
-  });
-
+  // No restamos las salidas actuales aquí, solo las mostramos para información
   this.salidas.forEach(salida => {
     if (salida.proveedor === proveedor && salida.medida === medida) {
-      kilosDisponibles -= salida.kilos;
+      console.log(`Salida actual (no restada): ${salida.kilos} kg`);
     }
   });
 
-  console.log(`Kilos disponibles para ${proveedor} - ${medida}: ${kilosDisponibles}`);
+  console.log(`Resumen para ${proveedor} - ${medida}:`);
+  console.log(`  Total Entradas: ${totalEntradas} kg`);
+  console.log(`  Total Salidas (sin incluir la actual): ${totalSalidas} kg`);
+  console.log(`  Kilos disponibles finales: ${kilosDisponibles} kg`);
+  
   return Number(kilosDisponibles.toFixed(1));
 },
     async removeEntrada(index) {

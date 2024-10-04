@@ -79,6 +79,7 @@
 import { ref, computed, onMounted, onUnmounted, watchEffect } from 'vue';
 import { db } from '@/firebase';
 import { collection, getDocs, onSnapshot } from 'firebase/firestore';
+import moment from 'moment';
 
 export default {
   name: 'Existencias',
@@ -90,8 +91,13 @@ export default {
       const sacadasSnapshot = await getDocs(collection(db, 'sacadas'));
       const newExistencias = {};
 
+      let totalOzuna3640 = 0;
+
       sacadasSnapshot.forEach(doc => {
         const sacada = doc.data();
+        const sacadaFecha = sacada.fecha instanceof Date ? sacada.fecha : sacada.fecha.toDate();
+        console.log(`Procesando sacada del ${moment(sacadaFecha).format('YYYY-MM-DD')}`);
+
         sacada.entradas.forEach(entrada => {
           if (!newExistencias[entrada.proveedor]) {
             newExistencias[entrada.proveedor] = {};
@@ -100,6 +106,11 @@ export default {
             newExistencias[entrada.proveedor][entrada.medida] = 0;
           }
           newExistencias[entrada.proveedor][entrada.medida] += entrada.kilos;
+
+          if (entrada.proveedor === 'Ozuna' && entrada.medida === '36/40') {
+            totalOzuna3640 += entrada.kilos;
+            console.log(`  Entrada Ozuna 36/40: +${entrada.kilos} kg`);
+          }
         });
         sacada.salidas.forEach(salida => {
           if (!newExistencias[salida.proveedor]) {
@@ -109,8 +120,15 @@ export default {
             newExistencias[salida.proveedor][salida.medida] = 0;
           }
           newExistencias[salida.proveedor][salida.medida] -= salida.kilos;
+
+          if (salida.proveedor === 'Ozuna' && salida.medida === '36/40') {
+            totalOzuna3640 -= salida.kilos;
+            console.log(`  Salida Ozuna 36/40: -${salida.kilos} kg`);
+          }
         });
       });
+
+      console.log(`Total Ozuna 36/40: ${totalOzuna3640} kg`);
 
       // Filtrar proveedores y medidas con 0 o menos kilos
       Object.keys(newExistencias).forEach(proveedor => {
