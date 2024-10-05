@@ -9,6 +9,9 @@
       <router-link to="/cuentas-catarro/nueva" class="action-button new-cuenta-btn">
         Nueva Cuenta
       </router-link>
+      <router-link to="/ventas-ganancias-catarro" class="action-button ventas-ganancias-btn">
+        Ventas y Ganancias
+      </router-link>
     </div>
 
     <div class="filter-container">
@@ -338,5 +341,13 @@ h1, h2 {
 .no-pagado {
   background-color: #f44336;
   color: white;
+}
+
+.ventas-ganancias-btn {
+  background-color: #4CAF50;
+}
+
+.ventas-ganancias-btn:hover {
+  background-color: #45a049;
 }
 </style>

@@ -16,6 +16,7 @@ import CuentasOzuna from '@/views/CuentasClientes/CuentasOzuna.vue'
 import CatarroCuentasMenu from '@/views/CuentasClientes/CatarroCuentasMenu.vue'
 import CuentasCatarro from '@/views/CuentasClientes/CuentasCatarro.vue'
 import EmbarquesMenu from '@/views/Embarques/EmbarquesMenu.vue'; // Asegúrate de que esta ruta de importación sea correcta
+import VentasYGananciasCatarro from '@/views/CuentasClientes/VentasYGananciasCatarro.vue'; // Asegúrate de crear este componente
 
 Vue.use(Router);
 
@@ -131,6 +132,11 @@ const routes = [
     path: '/embarques-menu',
     name: 'EmbarquesMenu',
     component: EmbarquesMenu
+  },
+  {
+    path: "/ventas-ganancias-catarro",
+    name: 'VentasYGananciasCatarro',
+    component: VentasYGananciasCatarro
   }
 ];
 
