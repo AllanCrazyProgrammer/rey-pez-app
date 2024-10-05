@@ -26,16 +26,25 @@
           <th>Medida</th>
           <th>Costo</th>
           <th>Total</th>
-          <th class="desktop-only">Acciones</th>
+          <th>Acciones</th>
         </tr>
       </thead>
       <tbody>
-        <tr v-for="(item, index) in items" :key="index" @touchstart="iniciarPresion(index)" @touchend="finalizarPresion">
-          <td>{{ formatNumber(item.kilos) }}</td>
-          <td>{{ item.medida }}</td>
-          <td>${{ formatNumber(item.costo) }}</td>
+        <tr v-for="(item, index) in items" :key="index">
+          <td @click="editarItem(index, 'kilos')">
+            <span v-if="!item.editando || item.campoEditando !== 'kilos'">{{ formatNumber(item.kilos) }}</span>
+            <input v-else v-model.number="item.kilos" type="number" @blur="finalizarEdicion(index)">
+          </td>
+          <td @click="editarItem(index, 'medida')">
+            <span v-if="!item.editando || item.campoEditando !== 'medida'">{{ item.medida }}</span>
+            <input v-else v-model="item.medida" type="text" @blur="finalizarEdicion(index)">
+          </td>
+          <td @click="editarItem(index, 'costo')">
+            <span v-if="!item.editando || item.campoEditando !== 'costo'">${{ formatNumber(item.costo) }}</span>
+            <input v-else v-model.number="item.costo" type="number" @blur="finalizarEdicion(index)">
+          </td>
           <td>${{ formatNumber(item.total) }}</td>
-          <td class="action-column desktop-only">
+          <td class="action-column">
             <button @click="removeItem(index)" class="delete-btn">Eliminar</button>
           </td>
         </tr>
@@ -430,6 +439,25 @@ export default {
       ventanaImprimir.document.close();
       ventanaImprimir.print();
     },
+    editarItem(index, campo) {
+      this.$set(this.items[index], 'editando', true);
+      this.$set(this.items[index], 'campoEditando', campo);
+      this.$nextTick(() => {
+        const input = this.$el.querySelector(`tr:nth-child(${index + 1}) td:nth-child(${this.getCampoIndex(campo)}) input`);
+        if (input) input.focus();
+      });
+    },
+    finalizarEdicion(index) {
+      const item = this.items[index];
+      item.editando = false;
+      item.campoEditando = null;
+      item.total = item.kilos * item.costo;
+      this.$set(this.items, index, item);
+    },
+    getCampoIndex(campo) {
+      const campos = ['kilos', 'medida', 'costo'];
+      return campos.indexOf(campo) + 1;
+    },
   }
 }
 </script>
@@ -632,5 +660,15 @@ th {
 
 .mobile-actions-modal button:last-child {
   margin-bottom: 0;
+}
+
+.tabla-principal td {
+  cursor: pointer;
+}
+
+.tabla-principal input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 5px;
 }
 </style>
