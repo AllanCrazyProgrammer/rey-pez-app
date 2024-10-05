@@ -24,6 +24,12 @@
             <p class="cuenta-summary">
               <span>Saldo Hoy: ${{ formatNumber(cuenta.saldoHoy) }}</span>
               <span>Total Acumulado: ${{ formatNumber(cuenta.totalNota) }}</span>
+              <span v-if="cuenta.totalAbonos > 0" class="abono-indicator">
+                Abono: ${{ formatNumber(cuenta.totalAbonos) }}
+              </span>
+              <span v-if="cuenta.totalCobros > 0" class="cobro-indicator">
+                Cobro: ${{ formatNumber(cuenta.totalCobros) }}
+              </span>
             </p>
           </div>
           <div class="cuenta-actions">
@@ -57,11 +63,15 @@ export default {
         const querySnapshot = await getDocs(q);
         this.cuentas = querySnapshot.docs.map((doc) => {
           const data = doc.data();
+          const totalAbonos = (data.abonos || []).reduce((sum, abono) => sum + (abono.monto || 0), 0);
+          const totalCobros = (data.cobros || []).reduce((sum, cobro) => sum + (cobro.monto || 0), 0);
           return {
             id: doc.id,
             fecha: data.fecha,
             saldoHoy: data.totalGeneral || 0,
-            totalNota: data.totalSaldo || 0
+            totalNota: data.totalSaldo || 0,
+            totalAbonos: totalAbonos,
+            totalCobros: totalCobros
           };
         });
         console.log("Cuentas cargadas:", this.cuentas);
@@ -238,6 +248,18 @@ h1, h2 {
 
 .delete-btn:hover {
   background-color: #d32f2f;
+}
+
+.abono-indicator {
+  color: #4CAF50;
+  font-weight: bold;
+  margin-left: 10px;
+}
+
+.cobro-indicator {
+  color: #f44336;
+  font-weight: bold;
+  margin-left: 10px;
 }
 
 @media (max-width: 768px) {
