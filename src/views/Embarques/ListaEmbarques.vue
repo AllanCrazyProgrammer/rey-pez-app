@@ -19,7 +19,7 @@
             <td>{{ obtenerClientes(embarque) }}</td>
             <td>{{ calcularTotalKilos(embarque) }} kg</td>
             <td>
-              <button @click="verDetalles(embarque.id)" class="btn-detalles">Ver Detalles</button>
+              <button @click="editarEmbarque(embarque.id)" class="btn-detalles">Editar</button>
             </td>
           </tr>
         </tbody>
@@ -82,6 +82,9 @@ export default {
     },
     irAListaEmbarques() {
       this.$router.push({ name: 'ListaEmbarques' });
+    },
+    editarEmbarque(embarqueId) {
+      this.$router.push({ name: 'NuevoEmbarque', params: { id: embarqueId } });
     }
   },
   mounted() {

@@ -19,6 +19,7 @@ import EmbarquesMenu from '@/views/Embarques/EmbarquesMenu.vue'; // Asegúrate d
 import VentasYGananciasCatarro from '@/views/CuentasClientes/VentasYGananciasCatarro.vue'; // Asegúrate de crear este componente
 import ListaEmbarques from '@/views/Embarques/ListaEmbarques.vue';
 import DetallesEmbarque from '@/views/Embarques/DetallesEmbarque.vue';
+import NuevoEmbarque from '@/views/Embarques/NuevoEmbarque.vue';
 
 Vue.use(Router);
 
@@ -143,13 +144,18 @@ const routes = [
   
   {
     path: "/embarques",
-    name: 'ListaEmbarques',  // Este es el problema
+    name: 'ListaEmbarques',
     component: ListaEmbarques
   },
   {
-    path: '/embarque/:id',
-    name: 'DetallesEmbarque',
-    component: DetallesEmbarque
+    path: "/embarques/:id",
+    name: 'EditarEmbarque',
+    component: NuevoEmbarque
+  },
+  {
+    path: '/nuevo-embarque',
+    name: 'NuevoEmbarque',
+    component: NuevoEmbarque
   }
 ];
 

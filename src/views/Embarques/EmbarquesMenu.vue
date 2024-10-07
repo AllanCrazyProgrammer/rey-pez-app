@@ -25,18 +25,15 @@ export default {
   },
   methods: {
     nuevoEmbarque() {
-      this.mostrarNuevoEmbarque = true;
+      this.$router.push({ name: 'NuevoEmbarque', params: { id: 'nuevo' } });
     },
     listaEmbarques() {
-      // Redirigir a la ruta de ListaEmbarques
       this.$router.push({ name: 'ListaEmbarques' });
     },
     buscarEmbarque() {
-      // Implementar lógica para buscar embarque
       console.log('Buscar embarque');
     },
     reportes() {
-      // Implementar lógica para generar reportes
       console.log('Generar reportes de embarques');
     },
     volverAlMenu() {
