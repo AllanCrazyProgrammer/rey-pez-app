@@ -4,7 +4,7 @@ import Home from './views/Home.vue';
 import NoteMenu from './views/NoteMenu.vue'; // Asegúrate de que la ruta sea correcta
 import SaleNote from '@/views/SaleNote.vue'; // Asegúrate de que la ruta de importación sea correcta
 import AddClient from '@/components/AddClient.vue';
-import  Sacadas from '@/views/Sacadas.vue';
+import Sacadas from '@/views/Sacadas.vue';
 import SacadasMenu from '@/views/SacadasMenu.vue'
 import GestionarProductos from '@/components/GestionarProductos.vue'
 import GestionarMedidas from '@/components/GestionarMedidas.vue'
@@ -17,6 +17,8 @@ import CatarroCuentasMenu from '@/views/CuentasClientes/CatarroCuentasMenu.vue'
 import CuentasCatarro from '@/views/CuentasClientes/CuentasCatarro.vue'
 import EmbarquesMenu from '@/views/Embarques/EmbarquesMenu.vue'; // Asegúrate de que esta ruta de importación sea correcta
 import VentasYGananciasCatarro from '@/views/CuentasClientes/VentasYGananciasCatarro.vue'; // Asegúrate de crear este componente
+import ListaEmbarques from '@/views/Embarques/ListaEmbarques.vue';
+import DetallesEmbarque from '@/views/Embarques/DetallesEmbarque.vue';
 
 Vue.use(Router);
 
@@ -137,11 +139,22 @@ const routes = [
     path: "/ventas-ganancias-catarro",
     name: 'VentasYGananciasCatarro',
     component: VentasYGananciasCatarro
+  },
+  
+  {
+    path: "/embarques",
+    name: 'ListaEmbarques',  // Este es el problema
+    component: ListaEmbarques
+  },
+  {
+    path: '/embarque/:id',
+    name: 'DetallesEmbarque',
+    component: DetallesEmbarque
   }
 ];
 
-const router = new Router({
-  routes,
+export default new Router({
+  mode: 'history',
+  base: process.env.BASE_URL,
+  routes
 });
-
-export default router;
