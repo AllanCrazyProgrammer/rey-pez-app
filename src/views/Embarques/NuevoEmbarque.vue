@@ -1,5 +1,6 @@
 <template>
-  <div class="nuevo-embarque" v-if="embarque">
+  <div class="nuevo-embarque">
+    <h1>{{ modoEdicion ? 'Editar Embarque' : 'Nuevo Embarque' }}</h1>
     <div class="header">
       <div class="fecha-selector">
         <label for="fecha">Fecha de Embarque:</label>
@@ -10,7 +11,7 @@
         <button type="button" @click="redo" :disabled="redoStack.length === 0" class="btn btn-secondary btn-sm">Rehacer</button>
       </div>
     </div>
-    <form @submit.prevent="crearEmbarque">
+    <form @submit.prevent="guardarEmbarque">
       <div v-for="(clienteProductos, clienteId) in productosPorCliente" :key="clienteId" class="cliente-grupo">
         <div class="cliente-header" :data-cliente="obtenerNombreCliente(clienteId)">
           <h3>{{ obtenerNombreCliente(clienteId) }}</h3>
@@ -132,7 +133,7 @@
           </div>
         </div>
       </div>
-      <button type="submit" class="btn btn-success btn-block crear-embarque">Crear Embarque</button>
+      <button type="submit" class="btn btn-success btn-block crear-embarque">{{ modoEdicion ? 'Actualizar Embarque' : 'Guardar Embarque' }}</button>
       <button type="button" @click="generarResumenPDF" class="btn btn-info btn-block generar-pdf">Generar Resumen PDF</button>
     </form>
     <div class="cambios">
@@ -145,7 +146,7 @@
 </template>
 
 <script>
-import { getFirestore, collection, addDoc } from 'firebase/firestore';
+import { getFirestore, collection, addDoc, doc, getDoc, updateDoc } from 'firebase/firestore';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 
@@ -172,6 +173,8 @@ export default {
         reporteTaras: [],
         reporteBolsas: []
       },
+      embarqueId: null,
+      modoEdicion: false,
     };
   },
   methods: {
@@ -227,19 +230,88 @@ export default {
       const cliente = this.clientes.find(c => c.id === parseInt(clienteId));
       return cliente ? cliente.nombre : 'Cliente Desconocido';
     },
-    crearEmbarque() {
+    async cargarEmbarque(id) {
+      if (id === 'nuevo') {
+        this.resetearEmbarque();
+        return;
+      }
+
+      const db = getFirestore();
+      const embarqueRef = doc(db, "embarques", id);
+      const embarqueDoc = await getDoc(embarqueRef);
+
+      if (embarqueDoc.exists()) {
+        const data = embarqueDoc.data();
+        let fecha;
+        if (data.fecha && typeof data.fecha.toDate === 'function') {
+          // Es un Timestamp de Firestore
+          fecha = data.fecha.toDate();
+        } else if (data.fecha instanceof Date) {
+          // Ya es un objeto Date
+          fecha = data.fecha;
+        } else if (typeof data.fecha === 'string') {
+          // Es una cadena, intentamos convertirla a Date
+          fecha = new Date(data.fecha);
+        } else {
+          // Si no podemos determinar el tipo, usamos la fecha actual
+          console.warn('Formato de fecha no reconocido, usando la fecha actual');
+          fecha = new Date();
+        }
+
+        this.embarque = {
+          fecha: fecha.toISOString().split('T')[0],
+          productos: data.clientes.flatMap(cliente =>
+            cliente.productos.map(producto => ({
+              ...producto,
+              clienteId: cliente.id,
+            }))
+          ),
+        };
+        this.embarqueId = id;
+        this.modoEdicion = true;
+      } else {
+        console.error("No se encontró el embarque");
+        this.resetearEmbarque();
+      }
+    },
+    resetearEmbarque() {
+      this.embarque = {
+        fecha: '',
+        productos: [],
+      };
+      this.embarqueId = null;
+      this.modoEdicion = false;
+    },
+    async guardarEmbarque() {
       if (!this.embarque.fecha) {
         alert('Por favor, seleccione una fecha para el embarque.');
         return;
       }
 
-      // Preparar los datos del embarque
+      const embarqueData = this.prepararDatosEmbarque();
+
+      const db = getFirestore();
+      try {
+        if (this.modoEdicion) {
+          await updateDoc(doc(db, "embarques", this.embarqueId), embarqueData);
+          alert('Embarque actualizado exitosamente.');
+        } else {
+          const docRef = await addDoc(collection(db, "embarques"), embarqueData);
+          this.embarqueId = docRef.id;
+          alert('Embarque creado exitosamente y guardado en la base de datos.');
+        }
+        this.$router.push('/lista-embarques');
+      } catch (error) {
+        console.error("Error al guardar el embarque: ", error);
+        alert('Hubo un error al guardar el embarque. Por favor, intente nuevamente.');
+      }
+    },
+    prepararDatosEmbarque() {
       const embarqueData = {
-        fecha: this.embarque.fecha,
+        fecha: new Date(this.embarque.fecha),
         clientes: []
       };
 
-      // Procesar los datos de cada cliente
       Object.entries(this.productosPorCliente).forEach(([clienteId, productos]) => {
         const clienteData = {
           id: clienteId,
@@ -259,22 +331,7 @@ export default {
         embarqueData.clientes.push(clienteData);
       });
 
-      // Agregar el embarque a la base de datos
-      const db = getFirestore();
-      addDoc(collection(db, "embarques"), embarqueData)
-        .then((docRef) => {
-          console.log("Embarque creado con ID: ", docRef.id);
-          // Limpiar localStorage
-          localStorage.removeItem('embarque');
-          // Mostrar notificación al usuario
-          alert('Embarque creado exitosamente y guardado en la base de datos.');
-          // Opcional: Redirigir a una página de confirmación o lista de embarques
-          this.$router.push('/lista-embarques');
-        })
-        .catch((error) => {
-          console.error("Error al crear el embarque: ", error);
-          alert('Hubo un error al crear el embarque. Por favor, intente nuevamente.');
-        });
+      return embarqueData;
     },
     onTipoChange(producto) {
       if (producto.tipo !== 'otro') {
@@ -451,11 +508,8 @@ export default {
     },
   },
   created() {
-    // Cargar datos del localStorage si existen
-    const almacenado = localStorage.getItem('embarque');
-    if (almacenado) {
-      this.embarque = JSON.parse(almacenado);
-    }
+    const embarqueId = this.$route.params.id;
+    this.cargarEmbarque(embarqueId);
     // Inicializar el undoStack con el estado inicial
     this.undoStack.push(JSON.stringify(this.embarque));
     console.log('Component mounted. Estado inicial cargado.');
