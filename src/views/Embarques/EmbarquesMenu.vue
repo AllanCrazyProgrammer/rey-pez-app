@@ -28,8 +28,8 @@ export default {
       this.mostrarNuevoEmbarque = true;
     },
     listaEmbarques() {
-      // Implementar lógica para mostrar lista de embarques
-      console.log('Mostrar lista de embarques');
+      // Redirigir a la ruta de ListaEmbarques
+      this.$router.push({ name: 'ListaEmbarques' });
     },
     buscarEmbarque() {
       // Implementar lógica para buscar embarque

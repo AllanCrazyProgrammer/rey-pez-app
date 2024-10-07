@@ -1,5 +1,5 @@
 <template>
-  <div class="nuevo-embarque">
+  <div class="nuevo-embarque" v-if="embarque">
     <div class="header">
       <div class="fecha-selector">
         <label for="fecha">Fecha de Embarque:</label>
@@ -12,18 +12,33 @@
     </div>
     <form @submit.prevent="crearEmbarque">
       <div v-for="(clienteProductos, clienteId) in productosPorCliente" :key="clienteId" class="cliente-grupo">
-        <h3>{{ obtenerNombreCliente(clienteId) }}</h3>
+        <div class="cliente-header" :data-cliente="obtenerNombreCliente(clienteId)">
+          <h3>{{ obtenerNombreCliente(clienteId) }}</h3>
+          <button type="button" @click="eliminarCliente(clienteId)" class="btn btn-danger btn-sm eliminar-cliente">Eliminar Cliente</button>
+        </div>
         <div class="productos-container">
           <div v-for="(producto, index) in clienteProductos" :key="index" class="producto">
+            <!-- Encabezado de la medida y selección -->
+            <h2 class="encabezado-medida">
+              {{ producto.medida || 'Sin Medida' }} - {{ obtenerTipoProducto(producto) }}
+            </h2>
             <div class="producto-header">
               <input 
                 type="text" 
                 v-model="producto.medida" 
                 class="form-control medida-input" 
-                placeholder="Medida"
+                placeholder="Medida"                
                 :size="producto.medida.length || 1"
               >
-              <select v-model="producto.tipo" class="form-control tipo-select" @change="onTipoChange(producto)">
+              <select 
+                v-model="producto.tipo" 
+                class="form-control tipo-select" 
+                @change="onTipoChange(producto)"
+                :class="{
+                  'tipo-azul': producto.tipo === 'c/h20',
+                  'tipo-verde': producto.tipo === 's/h20'
+                }"
+              >
                 <option value="">Seleccionar</option>
                 <option value="s/h20">S/H20</option>
                 <option value="c/h20">C/H20</option>
@@ -36,7 +51,7 @@
                 class="form-control tipo-input" 
                 placeholder="Especificar"
               >
-              <button type="button" @click="eliminarProducto(producto)" class="btn btn-danger btn-sm">X</button>
+              <button type="button" @click="eliminarProducto(producto)" class="btn btn-danger btn-sm eliminar-producto">X</button>
             </div>
             <div class="sumas-verticales">
               <div class="columna">
@@ -51,7 +66,7 @@
                   >
                   <button type="button" @click="eliminarTara(producto, taraIndex)" class="btn btn-danger btn-sm">-</button>
                 </div>
-                <button type="button" @click="agregarTara(producto)" class="btn btn-success btn-sm">+</button>
+                <button type="button" @click="agregarTara(producto)" class="btn btn-success btn-sm agregar-tara">+</button>
                 <div class="total">Total: {{ totalTaras(producto) }}</div>
               </div>
               <div class="columna">
@@ -66,43 +81,59 @@
                   >
                   <button type="button" @click="eliminarKilo(producto, kiloIndex)" class="btn btn-danger btn-sm">-</button>
                 </div>
-                <button type="button" @click="agregarKilo(producto)" class="btn btn-success btn-sm">+</button>
+                <button type="button" @click="agregarKilo(producto)" class="btn btn-success btn-sm agregar-kilo">+</button>
                 <div class="total">Total: {{ totalKilos(producto) }}</div>
               </div>
             </div>
-            <div class="reporte-taras">
-              <h5>Reporte de Taras</h5>
-              <div v-for="(reporte, reporteIndex) in producto.reportesTaras" :key="reporteIndex" class="input-group">
-                <input 
-                  type="number" 
-                  v-model.number="reporte.tara" 
-                  class="form-control reporte-tara-input" 
-                  placeholder="Tara"
-                >
-                <input 
-                  type="number" 
-                  v-model.number="reporte.bolsas" 
-                  class="form-control reporte-bolsas-input" 
-                  placeholder="Bolsas"
-                >
-                <button type="button" @click="eliminarReporteTara(producto, reporteIndex)" class="btn btn-danger btn-sm">-</button>
+            <div class="reporte-taras-bolsas">
+              <div class="reporte-item">
+                <h5>Taras</h5>
+                <div v-for="(tara, index) in producto.reporteTaras" :key="index" class="input-group mb-2">
+                  <input 
+                    type="text" 
+                    v-model="producto.reporteTaras[index]" 
+                    class="form-control reporte-input" 
+                    placeholder="ej: 20x50"
+                  >
+                  <button type="button" @click="eliminarReporteTara(producto, index)" class="btn btn-danger btn-sm">-</button>
+                </div>
+                <button type="button" @click="agregarReporteTara(producto)" class="btn btn-success btn-sm">+</button>
               </div>
-              <button type="button" @click="agregarReporteTara(producto)" class="btn btn-success btn-sm">+</button>
+              <div class="reporte-item">
+                <h5>Bolsas</h5>
+                <div v-for="(bolsa, index) in producto.reporteBolsas" :key="index" class="input-group mb-2">
+                  <input 
+                    type="text" 
+                    v-model="producto.reporteBolsas[index]" 
+                    class="form-control reporte-input" 
+                    placeholder="ej: 100x50"
+                  >
+                  <button type="button" @click="eliminarReporteBolsa(producto, index)" class="btn btn-danger btn-sm">-</button>
+                </div>
+                <button type="button" @click="agregarReporteBolsa(producto)" class="btn btn-success btn-sm">+</button>
+              </div>
             </div>
           </div>
         </div>
-        <button type="button" @click="agregarProducto(clienteId)" class="btn btn-primary btn-sm">Agregar Producto</button>
+        <button type="button" @click="agregarProducto(clienteId)" class="btn btn-primary btn-sm agregar-producto">Agregar Producto</button>
       </div>
       <div class="cliente-selector">
-        <select v-model="nuevoClienteId" class="form-control">
-          <option value="">Seleccione un cliente</option>
-          <option v-for="cliente in clientes" :key="cliente.id" :value="cliente.id">
-            {{ cliente.nombre }}
-          </option>
-        </select>
-        <button type="button" @click="agregarClienteProducto" class="btn btn-primary">Agregar Cliente</button>
+        <div class="row align-items-center">
+          <div class="col-12 col-md-8">
+            <select v-model="nuevoClienteId" class="form-control">
+              <option value="">Seleccione un cliente</option>
+              <option v-for="cliente in clientes" :key="cliente.id" :value="cliente.id">
+                {{ cliente.nombre }}
+              </option>
+            </select>
+          </div>
+          <div class="col-12 col-md-4 mt-2 mt-md-0">
+            <button type="button" @click="agregarClienteProducto" class="btn btn-primary btn-block agregar-cliente">Agregar Cliente</button>
+          </div>
+        </div>
       </div>
-      <button type="submit" class="btn btn-success">Crear Embarque</button>
+      <button type="submit" class="btn btn-success btn-block crear-embarque">Crear Embarque</button>
+      <button type="button" @click="generarResumenPDF" class="btn btn-info btn-block generar-pdf">Generar Resumen PDF</button>
     </form>
     <div class="cambios">
       <h4>Cambios:</h4>
@@ -114,213 +145,365 @@
 </template>
 
 <script>
-import { ref, computed, onMounted, watch } from 'vue';
+import { getFirestore, collection, addDoc } from 'firebase/firestore';
+import jsPDF from 'jspdf';
+import 'jspdf-autotable';
 
 export default {
   name: 'NuevoEmbarque',
-  setup() {
-    const clientes = ref([
-      { id: 1, nombre: 'Joselito' },
-      { id: 2, nombre: 'Catarro' },
-      { id: 3, nombre: 'Otilio' },
-      { id: 4, nombre: 'Ozuna' },
-    ]);
-
-    const embarque = ref({
-      fecha: '',
-      productos: [],
-    });
-
-    const nuevoClienteId = ref('');
-
-    const productosPorCliente = computed(() => {
-      return embarque.value.productos.reduce((acc, producto) => {
-        if (!acc[producto.clienteId]) {
-          acc[producto.clienteId] = [];
-        }
-        acc[producto.clienteId].push(producto);
-        return acc;
-      }, {});
-    });
-
-    const agregarProducto = (clienteId) => {
-      embarque.value.productos.push({
+  data() {
+    return {
+      clientes: [
+        { id: 1, nombre: 'Joselito' },
+        { id: 2, nombre: 'Catarro' },
+        { id: 3, nombre: 'Otilio' },
+        { id: 4, nombre: 'Ozuna' },
+      ],
+      embarque: {
+        fecha: '',
+        productos: [],
+      },
+      nuevoClienteId: '',
+      undoStack: [],
+      redoStack: [],
+      isUndoRedo: false,
+      cambios: [],
+      producto: {
+        reporteTaras: [],
+        reporteBolsas: []
+      },
+    };
+  },
+  methods: {
+    agregarProducto(clienteId) {
+      this.embarque.productos.push({
         clienteId,
         medida: '',
         tipo: '',
         tipoPersonalizado: '',
         taras: [],
         kilos: [],
-        reportesTaras: [{ tara: null, bolsas: null }],
+        reporteTaras: [],
+        reporteBolsas: [],
       });
-    };
-
-    const eliminarProducto = (producto) => {
-      const index = embarque.value.productos.indexOf(producto);
+    },
+    eliminarProducto(producto) {
+      const index = this.embarque.productos.indexOf(producto);
       if (index > -1) {
-        embarque.value.productos.splice(index, 1);
+        this.embarque.productos.splice(index, 1);
       }
-    };
-
-    const agregarClienteProducto = () => {
-      if (nuevoClienteId.value) {
-        agregarProducto(nuevoClienteId.value);
-        nuevoClienteId.value = '';
+    },
+    agregarClienteProducto() {
+      if (this.nuevoClienteId) {
+        this.agregarProducto(this.nuevoClienteId);
+        this.nuevoClienteId = '';
       }
-    };
-
-    const agregarTara = (producto) => {
+    },
+    eliminarCliente(clienteId) {
+      this.embarque.productos = this.embarque.productos.filter(p => p.clienteId !== clienteId);
+    },
+    agregarTara(producto) {
       producto.taras.push(null);
-    };
-
-    const eliminarTara = (producto, index) => {
+    },
+    eliminarTara(producto, index) {
       producto.taras.splice(index, 1);
-    };
-
-    const agregarKilo = (producto) => {
+    },
+    agregarKilo(producto) {
       producto.kilos.push(null);
-    };
-
-    const eliminarKilo = (producto, index) => {
+    },
+    eliminarKilo(producto, index) {
       producto.kilos.splice(index, 1);
-    };
-
-    const agregarReporteTara = (producto) => {
-      producto.reportesTaras.push({ tara: null, bolsas: null });
-    };
-
-    const eliminarReporteTara = (producto, index) => {
-      producto.reportesTaras.splice(index, 1);
-    };
-
-    const totalTaras = (producto) => {
-      return producto.taras.reduce((sum, tara) => sum + tara, 0);
-    };
-
-    const totalKilos = (producto) => {
-      return producto.kilos.reduce((sum, kilo) => sum + kilo, 0);
-    };
-
-    const obtenerNombreCliente = (clienteId) => {
-      const cliente = clientes.value.find(c => c.id === parseInt(clienteId));
+    },
+    totalTaras(producto) {
+      return producto.taras.reduce((sum, tara) => sum + (tara || 0), 0);
+    },
+    totalKilos(producto) {
+      const sumaKilos = producto.kilos.reduce((sum, kilo) => sum + (kilo || 0), 0);
+      const sumaTaras = this.totalTaras(producto);
+      const descuentoTaras = sumaTaras * 3;
+      return sumaKilos - descuentoTaras;
+    },
+    obtenerNombreCliente(clienteId) {
+      const cliente = this.clientes.find(c => c.id === parseInt(clienteId));
       return cliente ? cliente.nombre : 'Cliente Desconocido';
-    };
-
-    // Manejo de historial para Undo y Redo
-    const undoStack = ref([]);
-    const redoStack = ref([]);
-    const isUndoRedo = ref(false); // Bandera para controlar operaciones de Undo/Redo
-
-    // Cargar datos desde localStorage al montar el componente
-    onMounted(() => {
-      const almacenado = localStorage.getItem('embarque');
-      if (almacenado) {
-        embarque.value = JSON.parse(almacenado);
-      }
-      // Inicializar el undoStack con el estado inicial
-      undoStack.value.push(JSON.stringify(embarque.value));
-      console.log('Component mounted. Estado inicial cargado.');
-    });
-
-    // Guardar datos en localStorage y manejar el historial cada vez que 'embarque' cambia
-    watch(embarque, (nuevoEmbarque, viejoEmbarque) => {
-      if (isUndoRedo.value) {
-        // Si se está realizando Undo/Redo, no registrar en el historial
-        isUndoRedo.value = false;
+    },
+    crearEmbarque() {
+      if (!this.embarque.fecha) {
+        alert('Por favor, seleccione una fecha para el embarque.');
         return;
       }
-      localStorage.setItem('embarque', JSON.stringify(nuevoEmbarque));
-      // Agregar el estado anterior al undoStack
-      undoStack.value.push(JSON.stringify(viejoEmbarque));
-      // Limpiar el redoStack cuando se realiza un nuevo cambio
-      redoStack.value = [];
-      console.log('Embarque actualizado. Estado agregado al undoStack.');
-    }, { deep: true });
 
-    const crearEmbarque = () => {
-      console.log('Embarque creado:', embarque.value);
-      localStorage.removeItem('embarque'); // Limpiar localStorage después de crear
-      // Resetear el historial
-      undoStack.value = [JSON.stringify(embarque.value)];
-      redoStack.value = [];
-      console.log('Historial de undo/redo reseteado.');
-    };
+      // Preparar los datos del embarque
+      const embarqueData = {
+        fecha: this.embarque.fecha,
+        clientes: []
+      };
 
-    const onTipoChange = (producto) => {
+      // Procesar los datos de cada cliente
+      Object.entries(this.productosPorCliente).forEach(([clienteId, productos]) => {
+        const clienteData = {
+          id: clienteId,
+          nombre: this.obtenerNombreCliente(clienteId),
+          productos: productos.map(producto => ({
+            medida: producto.medida,
+            tipo: producto.tipo,
+            tipoPersonalizado: producto.tipoPersonalizado,
+            taras: producto.taras,
+            kilos: producto.kilos,
+            reporteTaras: producto.reporteTaras,
+            reporteBolsas: producto.reporteBolsas,
+            totalTaras: this.totalTaras(producto),
+            totalKilos: this.totalKilos(producto)
+          }))
+        };
+        embarqueData.clientes.push(clienteData);
+      });
+
+      // Agregar el embarque a la base de datos
+      const db = getFirestore();
+      addDoc(collection(db, "embarques"), embarqueData)
+        .then((docRef) => {
+          console.log("Embarque creado con ID: ", docRef.id);
+          // Limpiar localStorage
+          localStorage.removeItem('embarque');
+          // Mostrar notificación al usuario
+          alert('Embarque creado exitosamente y guardado en la base de datos.');
+          // Opcional: Redirigir a una página de confirmación o lista de embarques
+          this.$router.push('/lista-embarques');
+        })
+        .catch((error) => {
+          console.error("Error al crear el embarque: ", error);
+          alert('Hubo un error al crear el embarque. Por favor, intente nuevamente.');
+        });
+    },
+    onTipoChange(producto) {
       if (producto.tipo !== 'otro') {
         producto.tipoPersonalizado = '';
       }
-    };
-
-    const undo = () => {
-      if (undoStack.value.length > 1) { // Asegura que haya al menos un estado previo
+    },
+    undo() {
+      if (this.undoStack.length > 1) { // Asegura que haya al menos un estado previo
         // Obtener el estado actual y moverlo al redoStack
-        const estadoActual = undoStack.value.pop();
-        redoStack.value.push(estadoActual);
+        const estadoActual = this.undoStack.pop();
+        this.redoStack.push(estadoActual);
         // Obtener el estado anterior del undoStack
-        const estadoAnterior = undoStack.value[undoStack.value.length - 1];
-        isUndoRedo.value = true; // Indicar que se está realizando una operación de Undo
-        embarque.value = JSON.parse(estadoAnterior);
+        const estadoAnterior = this.undoStack[this.undoStack.length - 1];
+        this.isUndoRedo = true; // Indicar que se está realizando una operación de Undo
+        this.embarque = JSON.parse(estadoAnterior);
         console.log('Undo realizado. Estado actual restaurado.');
       } else {
         console.log('No hay más acciones para deshacer.');
       }
-    };
-
-    const redo = () => {
-      if (redoStack.value.length > 0) {
+    },
+    redo() {
+      if (this.redoStack.length > 0) {
         // Obtener el último estado del redoStack
-        const estadoRehacer = redoStack.value.pop();
-        undoStack.value.push(estadoRehacer);
-        isUndoRedo.value = true; // Indicar que se está realizando una operación de Redo
-        embarque.value = JSON.parse(estadoRehacer);
+        const estadoRehacer = this.redoStack.pop();
+        this.undoStack.push(estadoRehacer);
+        this.isUndoRedo = true; // Indicar que se está realizando una operación de Redo
+        this.embarque = JSON.parse(estadoRehacer);
         console.log('Redo realizado. Estado actual restaurado.');
       } else {
         console.log('No hay más acciones para rehacer.');
       }
-    };
+    },
+    agregarReporteTara(producto) {
+      if (!Array.isArray(producto.reporteTaras)) {
+        producto.reporteTaras = [];
+      }
+      producto.reporteTaras.push('');
+    },
+    eliminarReporteTara(producto, index) {
+      producto.reporteTaras.splice(index, 1);
+    },
+    agregarReporteBolsa(producto) {
+      if (!Array.isArray(producto.reporteBolsas)) {
+        producto.reporteBolsas = [];
+      }
+      producto.reporteBolsas.push('');
+    },
+    eliminarReporteBolsa(producto, index) {
+      producto.reporteBolsas.splice(index, 1);
+    },
+    obtenerTipoProducto(producto) {
+      if (producto.tipo === 'otro') {
+        return producto.tipoPersonalizado || 'Otro';
+      }
+      return producto.tipo || 'Sin Tipo';
+    },
+    generarResumenPDF() {
+      const doc = new jsPDF();
+      const pageWidth = doc.internal.pageSize.width;
+      const pageHeight = doc.internal.pageSize.height;
+      const margin = 10;
 
-    return {
-      clientes,
-      embarque,
-      nuevoClienteId,
-      productosPorCliente,
-      agregarProducto,
-      eliminarProducto,
-      agregarClienteProducto,
-      agregarTara,
-      eliminarTara,
-      agregarKilo,
-      eliminarKilo,
-      agregarReporteTara,
-      eliminarReporteTara,
-      totalTaras,
-      totalKilos,
-      obtenerNombreCliente,
-      crearEmbarque,
-      onTipoChange,
-      undo,
-      redo,
-      undoStack,
-      redoStack,
-    };
+      // Función para calcular la altura total del contenido
+      const calcularAlturaTotal = () => {
+        let altura = 30; // Aumentamos la altura inicial para el título y la fecha
+        Object.entries(this.productosPorCliente).forEach(([clienteId, productos]) => {
+          altura += 14; // Altura para el encabezado del cliente
+          altura += Math.ceil(productos.length / 3) * 70; // Altura para los productos (3 por fila) + espacio entre filas
+          altura += 5; // Espacio entre clientes
+        });
+        return altura;
+      };
+
+      // Calcular el factor de escala
+      const alturaTotal = calcularAlturaTotal();
+      const escala = Math.min(1, (pageHeight - 2 * margin) / alturaTotal);
+
+      // Definir padding después de calcular escala
+      const padding = 5 * escala; // Padding para cada producto
+
+      doc.setFontSize(22);
+      doc.setFont("helvetica", "bold");
+      doc.text('Resumen de Embarque', 14, 15 * escala);
+
+      // Agregar la fecha del embarque (corregida)
+      doc.setFontSize(14);
+      doc.setFont("helvetica", "normal");
+      const fechaEmbarque = this.embarque.fecha ? new Date(this.embarque.fecha + 'T00:00:00') : null;
+      const fechaFormateada = fechaEmbarque ? fechaEmbarque.toLocaleDateString() : 'Fecha no especificada';
+      doc.text(`Fecha: ${fechaFormateada}`, 14, 25 * escala);
+
+      let yPos = 35 * escala; // Ajustamos la posición inicial para el contenido
+      const productWidth = (pageWidth - 2 * margin) / 3; // 3 productos por fila
+
+      Object.entries(this.productosPorCliente).forEach(([clienteId, productos]) => {
+        const nombreCliente = this.obtenerNombreCliente(clienteId);
+        const clienteColor = this.getClienteColor(nombreCliente);
+        doc.setFillColor(clienteColor);
+        doc.rect(margin, yPos, pageWidth - 2 * margin, 10 * escala, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(14);
+        doc.setFont("helvetica", "bold");
+        doc.text(`Cliente: ${nombreCliente}`, margin + 2, yPos + 7 * escala);
+        yPos += 14 * escala;
+
+        let xPos = margin;
+        productos.forEach((producto, index) => {
+          if (index > 0 && index % 3 === 0) {
+            xPos = margin;
+            yPos += 60 * escala;
+          }
+
+          doc.setDrawColor(0);
+          doc.setFillColor(240, 240, 240);
+          
+          // Dibujar el cuadro con padding
+          doc.roundedRect(xPos, yPos, productWidth - 2, 55 * escala, 2, 2, 'FD');
+
+          doc.setTextColor(0);
+          doc.setFontSize(16);
+          doc.setFont("helvetica", "bold");
+          const medida = producto.medida || 'Sin medida';
+          const tipo = this.obtenerTipoProducto(producto);
+          
+          if (producto.tipo === 'c/h20') {
+            doc.setTextColor(0, 0, 255); // Azul
+          } else {
+            doc.setTextColor(0); // Negro (por defecto)
+          }
+          
+          // Ajustar posiciones de texto considerando el padding
+          doc.text(`${medida} - ${tipo}`, xPos + padding, yPos + padding + 6 * escala);
+
+          doc.setTextColor(0);
+          doc.setFontSize(15);
+          doc.setFont("helvetica", "normal");
+          doc.text(`Taras: ${this.totalTaras(producto)} | Kilos: ${this.totalKilos(producto)}`, xPos + padding, yPos + padding + 15 * escala);
+
+          const tarasBolsas = producto.reporteTaras.map((tara, i) => {
+            const bolsa = producto.reporteBolsas[i] || '';
+            return `(${tara}-${bolsa})`;
+          }).join(' ');
+          doc.setFontSize(14);
+          const splitTarasBolsas = doc.splitTextToSize(tarasBolsas, productWidth - 4 - padding * 2);
+          doc.text(splitTarasBolsas, xPos + padding, yPos + padding + 23 * escala);
+
+          xPos += productWidth;
+        });
+
+        yPos += 65 * escala; // Espacio entre clientes
+      });
+
+      doc.save('resumen-embarque.pdf');
+    },
+    getClienteColor(nombreCliente) {
+      const colores = {
+        'Joselito': '#3498db',
+        'Catarro': '#e74c3c',
+        'Otilio': '#f1c40f',
+        'Ozuna': '#2ecc71'
+      };
+      return colores[nombreCliente] || '#95a5a6'; // Color por defecto
+    },
   },
+  computed: {
+    productosPorCliente() {
+      return this.embarque.productos.reduce((acc, producto) => {
+        if (!acc[producto.clienteId]) {
+          acc[producto.clienteId] = [];
+        }
+        acc[producto.clienteId].push(producto);
+        return acc;
+      }, {});
+    },
+  },
+  created() {
+    // Cargar datos del localStorage si existen
+    const almacenado = localStorage.getItem('embarque');
+    if (almacenado) {
+      this.embarque = JSON.parse(almacenado);
+    }
+    // Inicializar el undoStack con el estado inicial
+    this.undoStack.push(JSON.stringify(this.embarque));
+    console.log('Component mounted. Estado inicial cargado.');
+  },
+  watch: {
+    embarque: {
+      handler(nuevoValor) {
+        if (this.isUndoRedo) {
+          // Si se está realizando Undo/Redo, no registrar en el historial
+          this.isUndoRedo = false;
+          return;
+        }
+        localStorage.setItem('embarque', JSON.stringify(nuevoValor));
+        // Agregar el estado anterior al undoStack
+        this.undoStack.push(JSON.stringify(nuevoValor));
+        // Limpiar el redoStack cuando se realiza un nuevo cambio
+        this.redoStack = [];
+        console.log('Embarque actualizado. Estado agregado al undoStack.');
+      },
+      deep: true
+    }
+  }
 };
 </script>
 
 <style scoped>
+.nuevo-embarque {
+  padding: 20px;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background-color: #f9f9f9;
+  min-height: 100vh;
+}
+
 .header {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
+  flex-direction: column;
+  gap: 15px;
   margin-bottom: 20px;
 }
 
 .fecha-selector {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  justify-content: center;
+  flex-direction: column;
+}
+
+.fecha-selector label {
+  margin-bottom: 5px;
+  font-weight: bold;
 }
 
 .botones-undo-redo {
@@ -329,118 +512,492 @@ export default {
 }
 
 .botones-undo-redo button {
-  padding: 10px 20px;
+  flex: 1;
+  padding: 12px;
   font-size: 1rem;
+  border-radius: 5px;
 }
 
 .botones-undo-redo button:disabled {
-  opacity: 0.5;
+  opacity: 0.6;
   cursor: not-allowed;
 }
 
+.form-control {
+  width: 100%;
+  padding: 10px;
+  font-size: 1rem;
+  border-radius: 5px;
+  border: 1px solid #ccc;
+}
+
 .cliente-grupo {
+  background-color: #ffffff;
   border: 1px solid #ddd;
   padding: 20px;
+  border-radius: 8px;
   margin-bottom: 20px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.cliente-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+  padding: 10px 15px;
+  border-radius: 10px;
+}
+
+.cliente-header h3 {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: bold;
+}
+
+.cliente-header[data-cliente="Joselito"] {
+  background-color: #3498db;
+}
+
+.cliente-header[data-cliente="Joselito"] h3 {
+  color: #ffffff;
+}
+
+.cliente-header[data-cliente="Catarro"] {
+  background-color: #e74c3c;
+}
+
+.cliente-header[data-cliente="Catarro"] h3 {
+  color: #ffffff;
+}
+
+.cliente-header[data-cliente="Otilio"] {
+  background-color: #f1c40f;
+}
+
+.cliente-header[data-cliente="Otilio"] h3 {
+  color: #34495e;
+}
+
+.cliente-header[data-cliente="Ozuna"] {
+  background-color: #2ecc71;
+}
+
+.cliente-header[data-cliente="Ozuna"] h3 {
+  color: #ffffff;
+}
+
+.eliminar-cliente {
+  padding: 8px 12px;
+  font-size: 0.9rem;
 }
 
 .productos-container {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 20px;
 }
 
 .producto {
-  border: 1px solid #ccc;
-  padding: 10px;
-  width: 220px;
+  background-color: #fefefe;
+  border: 2px solid #000000; /* Borde negro */
+  padding: 15px;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  transition: all 0.3s ease;
+}
+
+.producto:hover {
+  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+  transform: translateY(-2px);
 }
 
 .producto-header {
   display: flex;
-  justify-content: flex-start;
-  align-items: center;
-  margin-bottom: 10px;
-  gap: 10px;
   flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 15px;
 }
 
 .medida-input {
-  width: auto;
-  min-width: 100px;
-  max-width: 150px;
-  padding: 5px 10px;
+  flex: 1;
+  min-width: 80px;
+  padding: 8px;
   font-size: 1rem;
+  font-weight: bold;
+  border: 2px solid #007bff;
+  border-radius: 5px;
+  background-color: #eceef1;
 }
 
 .tipo-select {
-  width: auto;
-  min-width: 100px;
-  padding: 5px 10px;
+  flex: 2;
+  min-width: 120px;
+  padding: 8px;
   font-size: 1rem;
+  font-weight: bold;
+  border: 2px solid #28a745;
+  border-radius: 5px;
+  background-color: #e8f5e9;
+  transition: border-color 0.3s, background-color 0.3s;
+}
+
+.tipo-select.tipo-azul {
+  background-color: #d0e7ff;
+  border-color: #0056b3;
+}
+
+.tipo-select.tipo-verde {
+  background-color: #e8f5e9;
+  border-color: #28a745;
+}
+
+.tipo-select:focus {
+  outline: none;
+  border-color: #0056b3;
+  background-color: #d0e7ff;
 }
 
 .tipo-input {
-  width: auto;
-  min-width: 100px;
-  max-width: 150px;
-  padding: 5px 10px;
+  flex: 2;
+  min-width: 120px;
+  max-width: 200px;
+  padding: 8px;
   font-size: 1rem;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+}
+
+.eliminar-producto {
+  padding: 8px 12px;
+  font-size: 0.9rem;
+  background-color: #dc3545;
+  border: none;
+  border-radius: 5px;
+  color: #fff;
 }
 
 .sumas-verticales {
   display: flex;
-  justify-content: space-between;
+  flex-direction: row;
+  gap: 20px;
+  width: 100%;
+  margin-bottom: 20px;
 }
 
 .columna {
-  width: 48%;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.columna h5 {
+  text-align: center;
+  font-size: 1.2rem;
+  margin-bottom: 10px;
+  color: #333;
 }
 
 .input-group {
   display: flex;
-  margin-bottom: 5px;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
 }
 
-.tara-input, .kilo-input {
-  width: auto;
-  min-width: 60px;
-  padding: 5px;
+.tara-input, .kilo-input, .reporte-input {
+  flex: 1;
+  padding: 8px;
   font-size: 1rem;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+}
+
+.input-group button {
+  padding: 8px 12px;
+  font-size: 1rem;
+  border: none;
+  border-radius: 5px;
+}
+
+.agregar-tara, .agregar-kilo, .agregar-producto {
+  width: 100%;
+  padding: 10px;
+  font-size: 1rem;
+  border-radius: 5px;
+}
+
+.agregar-tara, .agregar-kilo {
+  background-color: #28a745;
+  color: #fff;
+}
+
+.agregar-tara:hover, .agregar-kilo:hover {
+  background-color: #218838;
+}
+
+.agregar-producto {
+  background-color: #007bff;
+  color: #fff;
+}
+
+.agregar-producto:hover {
+  background-color: #0056b3;
 }
 
 .total {
-  font-size: 1rem;
   font-weight: bold;
   margin-top: 10px;
+  border-top: 2px solid #ddd;
+  padding-top: 5px;
+  color: #333;
 }
 
-.cliente-selector {
+.reporte-taras-bolsas {
+  display: flex;
+  flex-direction: row;
+  gap: 20px;
+  width: 100%;
   margin-bottom: 20px;
 }
 
-.reporte-taras {
-  margin-top: 20px;
+.reporte-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
 }
 
-.reporte-tara-input, .reporte-bolsas-input {
-  width: auto;
-  min-width: 60px;
-  padding: 5px;
+.reporte-item h5 {
+  text-align: center;
+  font-size: 1.2rem;
+  margin-bottom: 10px;
+  color: #333;
+}
+
+.reporte-input {
+  flex: 1;
+  padding: 8px;
   font-size: 1rem;
+  border: 1px solid #ccc;
+  border-radius: 5px;
 }
 
 .cambios {
+  background-color: #fff;
+  border: 1px solid #ddd;
+  padding: 15px;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  margin-top: 30px;
+}
+
+.cambios h4 {
+  margin-bottom: 10px;
+  color: #333;
+}
+
+.cambios ul {
+  list-style-type: disc;
+  padding-left: 20px;
+  color: #555;
+}
+
+.cliente-selector {
+  background-color: #ffffff;
+  border: 1px solid #ddd;
+  padding: 20px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+}
+
+.cliente-selector .btn-block {
+  width: 100%;
+}
+
+.crear-embarque {
+  background-color: #28a745;
+  color: #fff;
+  padding: 15px;
+  font-size: 1.2rem;
+  border: none;
+  border-radius: 5px;
+}
+
+.crear-embarque:hover {
+  background-color: #218838;
+}
+
+.btn {
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+.btn-primary {
+  background-color: #007bff;
+  border: none;
+  color: #fff;
+}
+
+.btn-primary:hover {
+  background-color: #0056b3;
+}
+
+.btn-secondary {
+  background-color: #6c757d;
+  border: none;
+  color: #fff;
+}
+
+.btn-secondary:hover {
+  background-color: #5a6268;
+}
+
+.btn-danger {
+  background-color: #dc3545;
+  border: none;
+  color: #fff;
+}
+
+.btn-danger:hover {
+  background-color: #c82333;
+}
+
+.btn-success {
+  background-color: #28a745;
+  border: none;
+  color: #fff;
+}
+
+.btn-success:hover {
+  background-color: #218838;
+}
+
+/* Media Queries para Responsividad en iPad */
+@media (min-width: 768px) and (max-width: 1024px) {
+  .productos-container {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 20px;
+  }
+
+  .producto {
+    flex: 0 0 calc(50% - 10px);
+    max-width: calc(50% - 10px);
+  }
+
+  .reporte-taras-bolsas {
+    flex-direction: row;
+  }
+
+  .reporte-item {
+    flex: 0 0 calc(50% - 10px);
+    max-width: calc(50% - 10px);
+  }
+}
+
+/* Media Queries para Dispositivos Móviles */
+@media (max-width: 767px) {
+  .header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .botones-undo-redo {
+    width: 100%;
+    gap: 10px;
+  }
+
+  .productos-container {
+    flex-direction: column;
+  }
+
+  .producto {
+    width: 100%;
+  }
+
+  .sumas-verticales {
+    flex-direction: column;
+    gap: 15px;
+  }
+
+  .reporte-taras-bolsas {
+    flex-direction: column;
+    gap: 15px;
+  }
+
+  .reporte-item {
+    width: 100%;
+  }
+
+  .cliente-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .eliminar-cliente, .eliminar-producto {
+    width: 100%;
+    text-align: center;
+  }
+
+  .agregar-tara, .agregar-kilo, .agregar-producto, .crear-embarque {
+    font-size: 1rem;
+    padding: 12px;
+  }
+}
+
+/* Añadir esta media query al final de la sección <style> */
+
+@media (min-width: 1025px) {
+  .productos-container {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 20px;
+  }
+
+  .producto {
+    flex: 0 0 calc(25% - 15px); /* Cuatro por fila con espacio */
+    max-width: calc(25% - 15px);
+  }
+
+  .reporte-taras-bolsas {
+    flex-direction: row;
+  }
+
+  .reporte-item {
+    flex: 0 0 calc(50% - 10px);
+    max-width: calc(50% - 10px);
+  }
+}
+
+.encabezado-medida {
+  text-align: center;
+  font-size: 1.5rem; /* Tamaño de fuente grande */
+  font-weight: bold;
+  margin-bottom: 15px;
+}
+
+/* Opcional: Ajustes para dispositivos móviles */
+@media (max-width: 767px) {
+  .encabezado-medida {
+    font-size: 1.2rem;
+  }
+}
+
+.generar-pdf {
+  background-color: #17a2b8;
+  color: #fff;
+  padding: 15px;
+  font-size: 1.2rem;
+  border: none;
+  border-radius: 5px;
   margin-top: 20px;
+  margin-bottom: 20px;
 }
 
-button {
-  padding: 10px 20px;
-  font-size: 1rem;
-}
-
-.btn-sm {
-  padding: 5px 10px; /* Reducir el tamaño de los botones pequeños */
-  font-size: 0.875rem; /* Reducir el tamaño de la fuente para botones pequeños */
+.generar-pdf:hover {
+  background-color: #138496;
 }
 </style>
