@@ -23,6 +23,7 @@
             <td>{{ calcularTotalKilos(embarque) }} kg</td>
             <td>
               <button @click="editarEmbarque(embarque.id)" class="btn-detalles">Editar</button>
+              <button @click="eliminarEmbarque(embarque.id)" class="btn-eliminar">Eliminar</button>
             </td>
           </tr>
         </tbody>
@@ -34,7 +35,7 @@
 </template>
 
 <script>
-import { getFirestore, collection, getDocs } from 'firebase/firestore';
+import { getFirestore, collection, getDocs, doc, deleteDoc } from 'firebase/firestore';
 
 export default {
   name: 'ListaEmbarques',
@@ -89,6 +90,20 @@ export default {
     },
     regresarAMenu() {
       this.$router.push({ name: 'EmbarquesMenu' });
+    },
+    
+    async eliminarEmbarque(embarqueId) {
+      if (confirm('¿Estás seguro de que quieres eliminar este embarque?')) {
+        try {
+          const db = getFirestore();
+          await deleteDoc(doc(db, 'embarques', embarqueId));
+          this.embarques = this.embarques.filter(e => e.id !== embarqueId);
+          alert('Embarque eliminado con éxito');
+        } catch (error) {
+          console.error("Error al eliminar el embarque:", error);
+          alert('Hubo un error al eliminar el embarque. Por favor, intente de nuevo.');
+        }
+      }
     }
   },
   mounted() {
@@ -189,5 +204,20 @@ h1 {
 
 .btn-regresar:hover {
   background-color: #ec971f;
+}
+
+.btn-eliminar {
+  background-color: #d9534f;
+  color: white;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.3s;
+  margin-left: 5px;
+}
+
+.btn-eliminar:hover {
+  background-color: #c9302c;
 }
 </style>
