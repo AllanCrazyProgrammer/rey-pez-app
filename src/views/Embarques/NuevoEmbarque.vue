@@ -238,7 +238,7 @@ export default {
       const sumaKilos = producto.kilos.reduce((sum, kilo) => sum + (kilo || 0), 0);
       const sumaTaras = this.totalTaras(producto);
       const descuentoTaras = sumaTaras * 3;
-      return sumaKilos - descuentoTaras;
+      return Number((sumaKilos - descuentoTaras).toFixed(1));
     },
     obtenerNombreCliente(clienteId) {
       const cliente = this.clientes.find(c => c.id === parseInt(clienteId));
@@ -283,6 +283,7 @@ export default {
         };
         this.embarqueId = id;
         this.modoEdicion = true;
+        this.guardadoAutomaticoActivo = true;
       } else {
         console.error("No se encontró el embarque");
         this.resetearEmbarque();
@@ -295,6 +296,7 @@ export default {
       };
       this.embarqueId = null;
       this.modoEdicion = false;
+      this.guardadoAutomaticoActivo = false;
     },
     guardarCambiosEnTiempoReal: debounce(async function() {
       if (!this.guardadoAutomaticoActivo || !this.embarqueId) return;
