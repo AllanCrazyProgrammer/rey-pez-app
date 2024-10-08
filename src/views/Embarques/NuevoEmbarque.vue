@@ -1,6 +1,11 @@
 <template>
   <div class="nuevo-embarque">
     <h1>{{ modoEdicion ? 'Editar Embarque' : 'Nuevo Embarque' }}</h1>
+    <div class="botones">
+      <button @click="volverAListaEmbarques" class="btn-volver">
+        <i class="fas fa-arrow-left"></i> Volver a Lista de Embarques
+      </button>
+    </div>
     <div class="header">
       <div class="fecha-selector">
         <label for="fecha">Fecha de Embarque:</label>
@@ -147,6 +152,7 @@
 
 <script>
 import { getFirestore, collection, addDoc, doc, getDoc, updateDoc } from 'firebase/firestore';
+import { debounce } from 'lodash';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 
@@ -175,6 +181,7 @@ export default {
       },
       embarqueId: null,
       modoEdicion: false,
+      guardadoAutomaticoActivo: false,
     };
   },
   methods: {
@@ -203,7 +210,14 @@ export default {
       }
     },
     eliminarCliente(clienteId) {
+      // Filtrar los productos para eliminar los del cliente seleccionado
       this.embarque.productos = this.embarque.productos.filter(p => p.clienteId !== clienteId);
+      
+      // Actualizar el estado para reflejar los cambios
+      this.$forceUpdate();
+
+      // Opcional: Agregar un mensaje a la lista de cambios
+      this.cambios.push(`Cliente ${this.obtenerNombreCliente(clienteId)} eliminado`);
     },
     agregarTara(producto) {
       producto.taras.push(null);
@@ -282,6 +296,23 @@ export default {
       this.embarqueId = null;
       this.modoEdicion = false;
     },
+    guardarCambiosEnTiempoReal: debounce(async function() {
+      if (!this.guardadoAutomaticoActivo || !this.embarqueId) return;
+
+      const embarqueData = this.prepararDatosEmbarque();
+      const db = getFirestore();
+      
+      try {
+        await updateDoc(doc(db, "embarques", this.embarqueId), embarqueData);
+        console.log('Cambios guardados automáticamente:', new Date().toLocaleString());
+        // Opcional: Mostrar una notificación al usuario
+        this.$emit('guardado-automatico');
+      } catch (error) {
+        console.error("Error al guardar automáticamente:", error);
+        // Opcional: Notificar al usuario sobre el error
+      }
+    }, 2000),
+
     async guardarEmbarque() {
       if (!this.embarque.fecha) {
         alert('Por favor, seleccione una fecha para el embarque.');
@@ -289,8 +320,8 @@ export default {
       }
 
       const embarqueData = this.prepararDatosEmbarque();
-
       const db = getFirestore();
+
       try {
         if (this.modoEdicion) {
           await updateDoc(doc(db, "embarques", this.embarqueId), embarqueData);
@@ -299,7 +330,9 @@ export default {
           const docRef = await addDoc(collection(db, "embarques"), embarqueData);
           this.embarqueId = docRef.id;
           alert('Embarque creado exitosamente y guardado en la base de datos.');
+          this.modoEdicion = true;
         }
+        this.guardadoAutomaticoActivo = true;
         this.$router.push('/lista-embarques');
       } catch (error) {
         console.error("Error al guardar el embarque: ", error);
@@ -423,7 +456,7 @@ export default {
       const fechaFormateada = fechaEmbarque ? fechaEmbarque.toLocaleDateString() : 'Fecha no especificada';
       doc.text(`Fecha: ${fechaFormateada}`, 14, 25 * escala);
 
-      let yPos = 35 * escala; // Ajustamos la posición inicial para el contenido
+      let yPos = 35 * escala; // Ajustamos la posicin inicial para el contenido
       const productWidth = (pageWidth - 2 * margin) / 3; // 3 productos por fila
 
       Object.entries(this.productosPorCliente).forEach(([clienteId, productos]) => {
@@ -495,6 +528,10 @@ export default {
       };
       return colores[nombreCliente] || '#95a5a6'; // Color por defecto
     },
+    volverAListaEmbarques() {
+      // Navegar de vuelta a la lista de embarques
+      this.$router.push({ name: 'ListaEmbarques' });
+    },
   },
   computed: {
     productosPorCliente() {
@@ -510,7 +547,6 @@ export default {
   created() {
     const embarqueId = this.$route.params.id;
     this.cargarEmbarque(embarqueId);
-    // Inicializar el undoStack con el estado inicial
     this.undoStack.push(JSON.stringify(this.embarque));
     console.log('Component mounted. Estado inicial cargado.');
   },
@@ -518,16 +554,16 @@ export default {
     embarque: {
       handler(nuevoValor) {
         if (this.isUndoRedo) {
-          // Si se está realizando Undo/Redo, no registrar en el historial
           this.isUndoRedo = false;
           return;
         }
         localStorage.setItem('embarque', JSON.stringify(nuevoValor));
-        // Agregar el estado anterior al undoStack
         this.undoStack.push(JSON.stringify(nuevoValor));
-        // Limpiar el redoStack cuando se realiza un nuevo cambio
         this.redoStack = [];
         console.log('Embarque actualizado. Estado agregado al undoStack.');
+        
+        // Llamar al método de guardado automático
+        this.guardarCambiosEnTiempoReal();
       },
       deep: true
     }
@@ -1053,5 +1089,33 @@ export default {
 
 .generar-pdf:hover {
   background-color: #138496;
+}
+
+.btn-secondary {
+  margin-right: 10px;
+}
+
+.btn-volver {
+  display: inline-flex;
+  align-items: center;
+  padding: 10px 20px;
+  margin-bottom: 20px;
+  background-color: #3498db;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  font-size: 16px;
+  font-weight: bold;
+  text-decoration: none;
+  transition: background-color 0.3s ease;
+  cursor: pointer;
+}
+
+.btn-volver:hover {
+  background-color: #2980b9;
+}
+
+.btn-volver i {
+  margin-right: 10px;
 }
 </style>

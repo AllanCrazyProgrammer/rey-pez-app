@@ -1,6 +1,9 @@
 <template>
   <div class="lista-embarques">
     <h1>Lista de Embarques</h1>
+    <div class="botones">
+      <button @click="regresarAMenu" class="btn-regresar">Regresar al Menú</button>
+    </div>
     <div v-if="cargando" class="cargando">Cargando embarques...</div>
     <div v-else-if="error" class="error">{{ error }}</div>
     <div v-else>
@@ -26,7 +29,7 @@
       </table>
       <div v-else class="sin-embarques">No hay embarques registrados.</div>
     </div>
-    <button @click="irAListaEmbarques" class="btn-lista-embarques">Ver Lista de Embarques</button>
+ 
   </div>
 </template>
 
@@ -80,11 +83,12 @@ export default {
       console.log('Navegando a detalles del embarque:', embarqueId);
       this.$router.push({ name: 'DetallesEmbarque', params: { id: embarqueId } });
     },
-    irAListaEmbarques() {
-      this.$router.push({ name: 'ListaEmbarques' });
-    },
+  
     editarEmbarque(embarqueId) {
       this.$router.push({ name: 'NuevoEmbarque', params: { id: embarqueId } });
+    },
+    regresarAMenu() {
+      this.$router.push({ name: 'EmbarquesMenu' });
     }
   },
   mounted() {
@@ -165,5 +169,25 @@ h1 {
 
 .btn-lista-embarques:hover {
   background-color: #46b8da;
+}
+
+.botones {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 20px;
+}
+
+.btn-regresar {
+  background-color: #f0ad4e;
+  color: white;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+.btn-regresar:hover {
+  background-color: #ec971f;
 }
 </style>
