@@ -61,29 +61,52 @@
             </div>
             <div class="sumas-verticales">
               <div class="columna">
-                <h5>Taras</h5>
+                <div class="taras-header">
+                  <h5>Taras</h5>
+                  <div class="checkbox-container">
+                    <input type="checkbox" id="restarTaras" v-model="producto.restarTaras">
+                    <label for="restarTaras">-3</label>
+                  </div>
+                </div>
                 <div v-for="(tara, taraIndex) in producto.taras" :key="taraIndex" class="input-group">
                   <input 
-                    type="number" 
+            
                     v-model.number="producto.taras[taraIndex]" 
                     class="form-control tara-input" 
                     placeholder="Tara"
                     :size="String(producto.taras[taraIndex] || '').length || 1"
+                    inputmode="numeric"
+                    pattern="[0-9]*"
                   >
                   <button type="button" @click="eliminarTara(producto, taraIndex)" class="btn btn-danger btn-sm">-</button>
                 </div>
-                <button type="button" @click="agregarTara(producto)" class="btn btn-success btn-sm agregar-tara">+</button>
+                <div v-for="(taraExtra, taraExtraIndex) in producto.tarasExtra" :key="'extra-' + taraExtraIndex" class="input-group">
+                  <input 
+                    v-model.number="producto.tarasExtra[taraExtraIndex]" 
+                    class="form-control tara-input tara-extra-input" 
+                    placeholder="Tara Extra"
+                    :size="String(producto.tarasExtra[taraExtraIndex] || '').length || 1"
+                    inputmode="numeric"
+                    pattern="[0-9]*"
+                  >
+                  <button type="button" @click="eliminarTaraExtra(producto, taraExtraIndex)" class="btn btn-danger btn-sm">-</button>
+                </div>
+                <div class="botones-tara">
+                  <button type="button" @click="agregarTara(producto)" class="btn btn-success btn-sm agregar-tara">+</button>
+                  <button type="button" @click="agregarTaraExtra(producto)" class="btn btn-warning btn-sm agregar-tara-extra">+ Extra</button>
+                </div>
                 <div class="total">Total: {{ totalTaras(producto) }}</div>
               </div>
               <div class="columna">
                 <h5>Kilos</h5>
                 <div v-for="(kilo, kiloIndex) in producto.kilos" :key="kiloIndex" class="input-group">
                   <input 
-                    type="number" 
                     v-model.number="producto.kilos[kiloIndex]" 
                     class="form-control kilo-input" 
                     placeholder="Kilos"
                     :size="String(producto.kilos[kiloIndex] || '').length || 1"
+                    inputmode="numeric"
+                    pattern="[0-9]*"
                   >
                   <button type="button" @click="eliminarKilo(producto, kiloIndex)" class="btn btn-danger btn-sm">-</button>
                 </div>
@@ -99,11 +122,14 @@
                     type="text" 
                     v-model="producto.reporteTaras[index]" 
                     class="form-control reporte-input" 
-                    placeholder="ej: 20x50"
+                    inputmode="numeric"
                   >
                   <button type="button" @click="eliminarReporteTara(producto, index)" class="btn btn-danger btn-sm">-</button>
                 </div>
                 <button type="button" @click="agregarReporteTara(producto)" class="btn btn-success btn-sm">+</button>
+                <div class="total-taras-reporte" :class="{ 'coincide': coincideTaras(producto), 'no-coincide': !coincideTaras(producto) }">
+                   Reportadas: {{ totalTarasReportadas(producto) }}
+                </div>
               </div>
               <div class="reporte-item">
                 <h5>Bolsas</h5>
@@ -112,7 +138,7 @@
                     type="text" 
                     v-model="producto.reporteBolsas[index]" 
                     class="form-control reporte-input" 
-                    placeholder="ej: 100x50"
+                    inputmode="numeric"
                   >
                   <button type="button" @click="eliminarReporteBolsa(producto, index)" class="btn btn-danger btn-sm">-</button>
                 </div>
@@ -195,6 +221,7 @@ export default {
         kilos: [],
         reporteTaras: [],
         reporteBolsas: [],
+        tarasExtra: [], // Añade esta línea
       });
     },
     eliminarProducto(producto) {
@@ -232,12 +259,14 @@ export default {
       producto.kilos.splice(index, 1);
     },
     totalTaras(producto) {
-      return producto.taras.reduce((sum, tara) => sum + (tara || 0), 0);
+      const tarasNormales = producto.taras.reduce((sum, tara) => sum + (tara || 0), 0);
+      const tarasExtra = (producto.tarasExtra || []).reduce((sum, tara) => sum + (tara || 0), 0);
+      return tarasNormales + tarasExtra;
     },
     totalKilos(producto) {
       const sumaKilos = producto.kilos.reduce((sum, kilo) => sum + (kilo || 0), 0);
-      const sumaTaras = this.totalTaras(producto);
-      const descuentoTaras = sumaTaras * 3;
+      const sumaTarasNormales = producto.taras.reduce((sum, tara) => sum + (tara || 0), 0);
+      const descuentoTaras = producto.restarTaras ? 0 : sumaTarasNormales * 3;
       return Number((sumaKilos - descuentoTaras).toFixed(1));
     },
     obtenerNombreCliente(clienteId) {
@@ -497,21 +526,33 @@ export default {
             doc.setTextColor(0); // Negro (por defecto)
           }
           
-          // Ajustar posiciones de texto considerando el padding
-          doc.text(`${medida} - ${tipo}`, xPos + padding, yPos + padding + 6 * escala);
+          // Centrar el contenido
+          const centrarTexto = (texto, y) => {
+            const textWidth = doc.getStringUnitWidth(texto) * doc.internal.getFontSize() / doc.internal.scaleFactor;
+            const textX = xPos + (productWidth - textWidth) / 2;
+            doc.text(texto, textX, y);
+          };
 
+          // Título del producto (medida y tipo)
+          centrarTexto(`${medida}- ${tipo}`, yPos + padding + 6 * escala);
+
+          // Taras y Kilos
           doc.setTextColor(0);
           doc.setFontSize(15);
           doc.setFont("helvetica", "normal");
-          doc.text(`Taras: ${this.totalTaras(producto)} | Kilos: ${this.totalKilos(producto)}`, xPos + padding, yPos + padding + 15 * escala);
+          
+          centrarTexto(`${this.totalTaras(producto)} - ${this.totalKilos(producto)}`, yPos + padding + 15 * escala + 0.5);
 
-          const tarasBolsas = producto.reporteTaras.map((tara, i) => {
-            const bolsa = producto.reporteBolsas[i] || '';
-            return `(${tara}-${bolsa})`;
-          }).join(' ');
+          // Reporte de Taras y Bolsas
+          const tarasBolsasCombinadas = this.combinarTarasBolsas(producto.reporteTaras, producto.reporteBolsas);
+          
           doc.setFontSize(14);
-          const splitTarasBolsas = doc.splitTextToSize(tarasBolsas, productWidth - 4 - padding * 2);
-          doc.text(splitTarasBolsas, xPos + padding, yPos + padding + 23 * escala);
+          const splitTarasBolsas = doc.splitTextToSize(tarasBolsasCombinadas, productWidth - 4 - padding * 2);
+          
+          // Centrar cada línea del reporte de taras y bolsas
+          splitTarasBolsas.forEach((linea, idx) => {
+            centrarTexto(linea, yPos + padding + 23 * escala + 0.5 + (idx * 5 * escala));
+          });
 
           xPos += productWidth;
         });
@@ -533,6 +574,41 @@ export default {
     volverAListaEmbarques() {
       // Navegar de vuelta a la lista de embarques
       this.$router.push({ name: 'ListaEmbarques' });
+    },
+    combinarTarasBolsas(taras, bolsas) {
+      const combinado = {};
+      
+      taras.forEach((tara, index) => {
+        const bolsa = bolsas[index] || '';
+        const [cantidad, medida] = tara.split('-');
+        const key = medida ? `${medida}-${bolsa}` : bolsa;
+        combinado[key] = (combinado[key] || 0) + parseInt(cantidad || 1);
+      });
+
+      return Object.entries(combinado)
+        .map(([key, count]) => `(${count}-${key})`)
+        .join(' ');
+    },
+    totalTarasReportadas(producto) {
+      return producto.reporteTaras.reduce((total, tara) => {
+        const [cantidad] = tara.split('-');
+        return total + (parseInt(cantidad) || 0);
+      }, 0);
+    },
+
+    coincideTaras(producto) {
+      const totalReportadas = this.totalTarasReportadas(producto);
+      const totalRegistradas = this.totalTaras(producto);
+      return totalReportadas === totalRegistradas;
+    },
+    agregarTaraExtra(producto) {
+      if (!Array.isArray(producto.tarasExtra)) {
+        this.$set(producto, 'tarasExtra', []);
+      }
+      producto.tarasExtra.push(null);
+    },
+    eliminarTaraExtra(producto, index) {
+      producto.tarasExtra.splice(index, 1);
     },
   },
   computed: {
@@ -1119,5 +1195,96 @@ export default {
 
 .btn-volver i {
   margin-right: 10px;
+}
+
+.checkbox-container {
+  display: flex;
+  align-items: center;
+  margin-left: 10px;
+}
+
+.checkbox-container input[type="checkbox"] {
+  margin-right: 5px;
+  width: 15px; /* Aumentamos el ancho */
+  height: 15px; /* Aumentamos la altura */
+  cursor: pointer; /* Añadimos cursor pointer para mejor interactividad */
+}
+
+.checkbox-container label {
+  font-size: 0.9rem;
+  color: #555;
+  cursor: pointer; /* Añadimos cursor pointer también a la etiqueta */
+}
+
+.taras-header {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.total-taras-reporte {
+  margin-top: 10px;
+  font-weight: bold;
+  padding: 5px;
+  border-radius: 5px;
+}
+
+.total-taras-reporte.coincide {
+  background-color: #d4edda;
+  color: #155724;
+}
+
+.total-taras-reporte.no-coincide {
+  background-color: #f8d7da;
+  color: #721c24;
+}
+
+.agregar-tara-extra {
+  background-color: #ffa500;
+  color: #fff;
+  margin-top: 1px; /* Ajuste del margen superior a 1px */
+}
+
+.agregar-tara-extra:hover {
+  background-color: #ff8c00;
+}
+
+.tara-extra-input {
+  border-color: #ffa500;
+  border-width: 2px;
+}
+
+.tara-extra-input:focus {
+  border-color: #ff8c00;
+  box-shadow: 0 0 0 0.2rem rgba(255, 165, 0, 0.25);
+}
+
+.botones-tara {
+  display: flex;
+  gap: 5px;
+  margin-top: auto; /* Empuja los botones hacia abajo */
+  height: 38px; /* Altura fija para los botones */
+}
+
+.agregar-tara,
+.agregar-tara-extra,
+.agregar-kilo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 38px; /* Altura fija para todos los botones */
+  font-size: 0.9rem;
+  padding: 0 10px;
+}
+
+.agregar-tara,
+.agregar-tara-extra {
+  flex: 1;
+}
+
+.agregar-kilo {
+  width: 100%;
+  margin-top: 10px;
+  align-self: flex-end; /* Alinea el botón al final de la columna */
 }
 </style>
