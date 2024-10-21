@@ -2,8 +2,8 @@
   <div class="nuevo-embarque">
     <h1>{{ modoEdicion ? 'Editar Embarque' : 'Nuevo Embarque' }}</h1>
     <div class="botones">
-      <button @click="volverAListaEmbarques" class="btn-volver">
-        <i class="fas fa-arrow-left"></i> Volver a Lista de Embarques
+      <button @click="volverAEmbarquesMenu" class="btn-volver">
+        <i class="fas fa-arrow-left"></i> Volver a Embarques Menu
       </button>
     </div>
     <div class="header">
@@ -18,9 +18,9 @@
     </div>
     <form @submit.prevent="guardarEmbarque">
       <div v-for="(clienteProductos, clienteId) in productosPorCliente" :key="clienteId" class="cliente-grupo">
-        <div class="cliente-header" :data-cliente="obtenerNombreCliente(clienteId)">
+        <div class="cliente-header" :data-cliente="obtenerNombreCliente(clienteId)" @click="editarNombreCliente(clienteId)">
           <h3>{{ obtenerNombreCliente(clienteId) }}</h3>
-          <button type="button" @click="eliminarCliente(clienteId)" class="btn btn-danger btn-sm eliminar-cliente">Eliminar Cliente</button>
+          <button type="button" @click.stop="eliminarCliente(clienteId)" class="btn btn-danger btn-sm eliminar-cliente">Eliminar Cliente</button>
         </div>
         <div class="productos-container">
           <div v-for="(producto, index) in clienteProductos" :key="index" class="producto">
@@ -146,15 +146,71 @@
               </div>
             </div>
           </div>
+          <div v-for="(crudo, index) in clienteCrudos[clienteId] || []" :key="'crudo-'+index" class="producto crudo">
+            <h2 class="crudo-header">Crudos</h2>
+            <div v-for="(item, itemIndex) in crudo.items || []" :key="'item-'+itemIndex" class="crudo-item">
+              <div class="crudo-talla-container">
+                <select 
+                  v-model="item.talla" 
+                  class="form-control talla-select"
+                >
+                  <option value="">Elige talla</option>
+                  <option value="Med c/c">Med c/c</option>
+                  <option value="Med-Esp c/c">Med-Esp c/c</option>
+                  <option value="Med-gde c/c">Med-gde c/c</option>
+                  <option value="Gde c/c">Gde c/c</option>
+                  <option value="Extra c/c">Extra c/c</option>
+                  <option value="Jumbo c/c">Jumbo c/c</option>
+                  <option value="Linea">Linea</option>
+                  <option value="Rechazo">Rechazo</option>
+                </select>
+                <input 
+                  type="text" 
+                  v-model="item.barco" 
+                  class="form-control barco-input" 
+                  placeholder="Barco"
+                >
+              </div>
+              <div class="crudo-taras-container">
+                <div class="taras-wrapper">
+                  <input 
+                    type="text" 
+                    v-model="item.taras" 
+                    class="form-control taras-input" 
+                    placeholder="Taras"
+                    @input="actualizarTotalCrudos(clienteId, index)"
+                  >
+                  <input 
+                    v-if="item.mostrarSobrante"
+                    type="text" 
+                    v-model="item.sobrante" 
+                    class="form-control taras-input" 
+                    placeholder="Sbrte"
+                    @input="actualizarTotalCrudos(clienteId, index)"
+                  >
+                </div>
+                <div class="buttons-wrapper">
+                  <button type="button" @click="eliminarCrudoItem(clienteId, index, itemIndex)" class="btn btn-danger btn-sm eliminar-crudo-item">-</button>
+                  <button type="button" @click="toggleSobrante(clienteId, index, itemIndex)" class="btn btn-success btn-sm agregar-sobrante">+</button>
+                </div>
+              </div>
+            </div>
+            <button type="button" @click="agregarCrudoItem(clienteId, index)" class="btn btn-primary btn-sm agregar-crudo-item">+ Agregar Talla/Taras</button>
+            <button type="button" @click="eliminarCrudo(clienteId, index)" class="btn btn-danger btn-sm eliminar-crudo">Eliminar Crudo</button>
+            <div class="total-crudos">Total de taras: {{ calcularTotalCrudos(crudo) }}</div>
+          </div>
         </div>
-        <button type="button" @click="agregarProducto(clienteId)" class="btn btn-primary btn-sm agregar-producto">Agregar Producto</button>
+        <div class="botones-agregar">
+          <button type="button" @click="agregarProducto(clienteId)" class="btn btn-primary btn-sm agregar-producto">Agregar Producto</button>
+          <button type="button" @click="agregarCrudo(clienteId)" class="btn btn-info btn-sm agregar-crudo">Agregar Crudos</button>
+        </div>
       </div>
       <div class="cliente-selector">
         <div class="row align-items-center">
           <div class="col-12 col-md-8">
             <select v-model="nuevoClienteId" class="form-control">
               <option value="">Seleccione un cliente</option>
-              <option v-for="cliente in clientes" :key="cliente.id" :value="cliente.id">
+              <option v-for="cliente in clientesDisponibles" :key="cliente.key" :value="cliente.id">
                 {{ cliente.nombre }}
               </option>
             </select>
@@ -177,7 +233,7 @@
 </template>
 
 <script>
-import { getFirestore, collection, addDoc, doc, getDoc, updateDoc } from 'firebase/firestore';
+import { getFirestore, collection, addDoc, doc, getDoc, updateDoc, onSnapshot } from 'firebase/firestore';
 import { debounce } from 'lodash';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
@@ -186,12 +242,14 @@ export default {
   name: 'NuevoEmbarque',
   data() {
     return {
-      clientes: [
+      clientesPredefinidos: [
         { id: 1, nombre: 'Joselito' },
         { id: 2, nombre: 'Catarro' },
         { id: 3, nombre: 'Otilio' },
         { id: 4, nombre: 'Ozuna' },
       ],
+      clientesPersonalizados: [],
+      ultimoIdPersonalizado: 0,
       embarque: {
         fecha: '',
         productos: [],
@@ -208,7 +266,45 @@ export default {
       embarqueId: null,
       modoEdicion: false,
       guardadoAutomaticoActivo: false,
+      clienteCrudos: {},
+      unsubscribe: null, // Añadir esta línea
     };
+  },
+  computed: {
+  clientesDisponibles() {
+    // Crear un conjunto para almacenar los nombres únicos de clientes
+    const clienteSet = new Set();
+
+    // Añadir clientes predefinidos al conjunto
+    const clientesPredefinidosUnicos = this.clientesPredefinidos.filter(cliente => {
+      if (!clienteSet.has(cliente.nombre)) {
+        clienteSet.add(cliente.nombre);
+        return true;
+      }
+      return false;
+    });
+
+    // Añadir clientes personalizados al conjunto, verificando duplicados
+    const clientesPersonalizadosUnicos = this.clientesPersonalizados.filter(cliente => {
+      if (!clienteSet.has(cliente.nombre)) {
+        clienteSet.add(cliente.nombre);
+        return true;
+      }
+      return false;
+    });
+
+    // Combinar ambas listas y aadir la opción "Otro"
+    return [...clientesPredefinidosUnicos, ...clientesPersonalizadosUnicos, { id: 'otro', nombre: 'Otro', key: 'otro' }];
+  },
+    productosPorCliente() {
+      return this.embarque.productos.reduce((acc, producto) => {
+        if (!acc[producto.clienteId]) {
+          acc[producto.clienteId] = [];
+        }
+        acc[producto.clienteId].push(producto);
+        return acc;
+      }, {});
+    },
   },
   methods: {
     agregarProducto(clienteId) {
@@ -231,10 +327,24 @@ export default {
       }
     },
     agregarClienteProducto() {
-      if (this.nuevoClienteId) {
+      if (this.nuevoClienteId === 'otro') {
+        const nuevoNombre = prompt('Ingrese el nombre del nuevo cliente:');
+        if (nuevoNombre && nuevoNombre.trim() !== '') {
+          this.ultimoIdPersonalizado++;
+          const nuevoClienteId = `personalizado_${this.ultimoIdPersonalizado}`;
+          const nuevoCliente = {
+            id: nuevoClienteId,
+            nombre: nuevoNombre.trim(),
+            editable: true,
+            personalizado: true
+          };
+          this.clientesPersonalizados.push(nuevoCliente);
+          this.agregarProducto(nuevoClienteId);
+        }
+      } else if (this.nuevoClienteId) {
         this.agregarProducto(this.nuevoClienteId);
-        this.nuevoClienteId = '';
       }
+      this.nuevoClienteId = '';
     },
     eliminarCliente(clienteId) {
       // Filtrar los productos para eliminar los del cliente seleccionado
@@ -270,10 +380,31 @@ export default {
       return Number((sumaKilos - descuentoTaras).toFixed(1));
     },
     obtenerNombreCliente(clienteId) {
-      const cliente = this.clientes.find(c => c.id === parseInt(clienteId));
-      return cliente ? cliente.nombre : 'Cliente Desconocido';
+      const clienteEnLista = this.clientesDisponibles.find(c => c.id.toString() === clienteId.toString());
+      if (clienteEnLista) {
+        return clienteEnLista.nombre;
+      }
+      // Buscar en los productos por si el cliente ya no está en la lista
+      const productoConCliente = this.embarque.productos.find(p => p.clienteId.toString() === clienteId.toString());
+      return productoConCliente ? productoConCliente.nombreCliente : 'Cliente Desconocido';
+    },
+    editarNombreCliente(clienteId) {
+      const cliente = this.clientesDisponibles.find(c => c.id === clienteId);
+      if (cliente && cliente.editable) {
+        const nuevoNombre = prompt('Ingrese el nuevo nombre del cliente:', cliente.nombre);
+        if (nuevoNombre !== null && nuevoNombre.trim() !== '') {
+          cliente.nombre = nuevoNombre.trim();
+          // Actualizar el nombre en los productos existentes
+          this.embarque.productos.forEach(producto => {
+            if (producto.clienteId === clienteId) {
+              producto.nombreCliente = nuevoNombre.trim();
+            }
+          });
+        }
+      }
     },
     async cargarEmbarque(id) {
+      console.log('Cargando embarque con ID:', id);
       if (id === 'nuevo') {
         this.resetearEmbarque();
         return;
@@ -281,42 +412,74 @@ export default {
 
       const db = getFirestore();
       const embarqueRef = doc(db, "embarques", id);
-      const embarqueDoc = await getDoc(embarqueRef);
 
-      if (embarqueDoc.exists()) {
-        const data = embarqueDoc.data();
-        let fecha;
-        if (data.fecha && typeof data.fecha.toDate === 'function') {
-          // Es un Timestamp de Firestore
-          fecha = data.fecha.toDate();
-        } else if (data.fecha instanceof Date) {
-          // Ya es un objeto Date
-          fecha = data.fecha;
-        } else if (typeof data.fecha === 'string') {
-          // Es una cadena, intentamos convertirla a Date
-          fecha = new Date(data.fecha);
+      // Usar onSnapshot para escuchar cambios en tiempo real
+      this.unsubscribe = onSnapshot(embarqueRef, (doc) => {
+        if (doc.exists()) {
+          const data = doc.data();
+          console.log('Datos del embarque cargado:', data);
+          
+          let fecha;
+          if (data.fecha && typeof data.fecha.toDate === 'function') {
+            fecha = data.fecha.toDate();
+          } else if (data.fecha instanceof Date) {
+            fecha = data.fecha;
+          } else if (typeof data.fecha === 'string') {
+            fecha = new Date(data.fecha);
+          } else {
+            console.warn('Formato de fecha no reconocido, usando la fecha actual');
+            fecha = new Date();
+          }
+
+          // Crear un Map con los clientes predefinidos
+          const clientesPredefinidosMap = new Map(this.clientesPredefinidos.map(c => [c.id, c]));
+
+          // Filtrar y mapear clientes
+          this.clientesPersonalizados = data.clientes
+            .filter(cliente => !clientesPredefinidosMap.has(cliente.id))
+            .map(cliente => ({
+              id: cliente.id,
+              nombre: cliente.nombre,
+              editable: true,
+              personalizado: true,
+              key: `personalizado_${cliente.id}`
+            }));
+
+          console.log('Clientes personalizados después de filtrar:', this.clientesPersonalizados);
+
+          this.embarque = {
+            fecha: fecha.toISOString().split('T')[0],
+            productos: data.clientes.flatMap(cliente => {
+              const clienteInfo = clientesPredefinidosMap.get(cliente.id) || cliente;
+              return cliente.productos.map(producto => ({
+                ...producto,
+                clienteId: cliente.id,
+                nombreCliente: clienteInfo.nombre,
+              }));
+            }),
+          };
+
+          // Cargar los crudos
+          this.clienteCrudos = {};
+          data.clientes.forEach(cliente => {
+            if (cliente.crudos && cliente.crudos.length > 0) {
+              this.$set(this.clienteCrudos, cliente.id, cliente.crudos);
+            }
+          });
+
+          console.log('Embarque procesado:', this.embarque);
+          console.log('Crudos cargados:', this.clienteCrudos);
+          
+          this.embarqueId = id;
+          this.modoEdicion = true;
+          this.guardadoAutomaticoActivo = true;
         } else {
-          // Si no podemos determinar el tipo, usamos la fecha actual
-          console.warn('Formato de fecha no reconocido, usando la fecha actual');
-          fecha = new Date();
+          console.error("No se encontró el embarque");
+          this.resetearEmbarque();
         }
-
-        this.embarque = {
-          fecha: fecha.toISOString().split('T')[0],
-          productos: data.clientes.flatMap(cliente =>
-            cliente.productos.map(producto => ({
-              ...producto,
-              clienteId: cliente.id,
-            }))
-          ),
-        };
-        this.embarqueId = id;
-        this.modoEdicion = true;
-        this.guardadoAutomaticoActivo = true;
-      } else {
-        console.error("No se encontró el embarque");
-        this.resetearEmbarque();
-      }
+      }, (error) => {
+        console.error("Error al escuchar cambios del embarque:", error);
+      });
     },
     resetearEmbarque() {
       this.embarque = {
@@ -336,13 +499,11 @@ export default {
       try {
         await updateDoc(doc(db, "embarques", this.embarqueId), embarqueData);
         console.log('Cambios guardados automáticamente:', new Date().toLocaleString());
-        // Opcional: Mostrar una notificación al usuario
         this.$emit('guardado-automatico');
       } catch (error) {
         console.error("Error al guardar automáticamente:", error);
-        // Opcional: Notificar al usuario sobre el error
       }
-    }, 2000),
+    }, 500), // Reducimos aún más el tiempo de debounce
 
     async guardarEmbarque() {
       if (!this.embarque.fecha) {
@@ -376,10 +537,13 @@ export default {
         clientes: []
       };
 
+      const clientesPredefinidosMap = new Map(this.clientesPredefinidos.map(c => [c.id, c]));
+
       Object.entries(this.productosPorCliente).forEach(([clienteId, productos]) => {
+        const clientePredefinido = clientesPredefinidosMap.get(parseInt(clienteId));
         const clienteData = {
           id: clienteId,
-          nombre: this.obtenerNombreCliente(clienteId),
+          nombre: clientePredefinido ? clientePredefinido.nombre : this.obtenerNombreCliente(clienteId),
           productos: productos.map(producto => ({
             medida: producto.medida,
             tipo: producto.tipo,
@@ -390,7 +554,8 @@ export default {
             reporteBolsas: producto.reporteBolsas,
             totalTaras: this.totalTaras(producto),
             totalKilos: this.totalKilos(producto)
-          }))
+          })),
+          crudos: this.clienteCrudos[clienteId] || []
         };
         embarqueData.clientes.push(clienteData);
       });
@@ -492,7 +657,7 @@ export default {
 
       Object.entries(this.productosPorCliente).forEach(([clienteId, productos]) => {
         const nombreCliente = this.obtenerNombreCliente(clienteId);
-        const clienteColor = this.getClienteColor(nombreCliente);
+        const clienteColor = this.getClienteColor(clienteId);
         doc.setFillColor(clienteColor);
         doc.rect(margin, yPos, pageWidth - 2 * margin, 10 * escala, 'F');
         doc.setTextColor(255, 255, 255);
@@ -562,18 +727,22 @@ export default {
 
       doc.save('resumen-embarque.pdf');
     },
-    getClienteColor(nombreCliente) {
+    getClienteColor(clienteId) {
+      const cliente = this.clientesDisponibles.find(c => c.id.toString() === clienteId.toString());
+      if (cliente && (cliente.personalizado || clienteId.toString().startsWith('personalizado_'))) {
+        return '#95a5a6'; // Color gris para clientes personalizados
+      }
       const colores = {
-        'Joselito': '#3498db',
-        'Catarro': '#e74c3c',
-        'Otilio': '#f1c40f',
-        'Ozuna': '#2ecc71'
+        '1': '#3498db', // Joselito
+        '2': '#e74c3c', // Catarro
+        '3': '#f1c40f', // Otilio
+        '4': '#2ecc71'  // Ozuna
       };
-      return colores[nombreCliente] || '#95a5a6'; // Color por defecto
+      return colores[clienteId] || '#95a5a6'; // Color por defecto
     },
-    volverAListaEmbarques() {
-      // Navegar de vuelta a la lista de embarques
-      this.$router.push({ name: 'ListaEmbarques' });
+    volverAEmbarquesMenu() {
+      // Navegar de vuelta al menú de embarques
+      this.$router.push({ name: 'EmbarquesMenu' });
     },
     combinarTarasBolsas(taras, bolsas) {
       const combinado = {};
@@ -610,16 +779,73 @@ export default {
     eliminarTaraExtra(producto, index) {
       producto.tarasExtra.splice(index, 1);
     },
-  },
-  computed: {
-    productosPorCliente() {
-      return this.embarque.productos.reduce((acc, producto) => {
-        if (!acc[producto.clienteId]) {
-          acc[producto.clienteId] = [];
-        }
-        acc[producto.clienteId].push(producto);
-        return acc;
-      }, {});
+    agregarCrudo(clienteId) {
+      if (!this.clienteCrudos[clienteId]) {
+        this.$set(this.clienteCrudos, clienteId, []);
+      }
+      this.clienteCrudos[clienteId].push({
+        items: [{ talla: '', barco: '', taras: null }]
+      });
+      this.guardarCambiosEnTiempoReal();
+    },
+    agregarCrudoItem(clienteId, index) {
+      if (!this.clienteCrudos[clienteId]) {
+        this.$set(this.clienteCrudos, clienteId, []);
+      }
+      if (!this.clienteCrudos[clienteId][index]) {
+        this.$set(this.clienteCrudos[clienteId], index, { items: [] });
+      }
+      this.clienteCrudos[clienteId][index].items.push({
+        talla: '',
+        barco: '',
+        taras: null,
+        sobrante: null,
+        mostrarSobrante: false
+      });
+      this.guardarCambiosEnTiempoReal();
+    },
+    eliminarCrudoItem(clienteId, crudoIndex, itemIndex) {
+      this.clienteCrudos[clienteId][crudoIndex].items.splice(itemIndex, 1);
+      if (this.clienteCrudos[clienteId][crudoIndex].items.length === 0) {
+        this.eliminarCrudo(clienteId, crudoIndex);
+      }
+      this.guardarCambiosEnTiempoReal();
+    },
+    eliminarCrudo(clienteId, index) {
+      this.clienteCrudos[clienteId].splice(index, 1);
+      if (this.clienteCrudos[clienteId].length === 0) {
+        this.$delete(this.clienteCrudos, clienteId);
+      }
+      this.guardarCambiosEnTiempoReal();
+    },
+    toggleSobrante(clienteId, crudoIndex, itemIndex) {
+      const item = this.clienteCrudos[clienteId][crudoIndex].items[itemIndex];
+      if (!item.hasOwnProperty('mostrarSobrante')) {
+        this.$set(item, 'mostrarSobrante', true);
+      } else {
+        item.mostrarSobrante = !item.mostrarSobrante;
+      }
+      this.guardarCambiosEnTiempoReal();
+    },
+    calcularTotalCrudos(crudo) {
+      return crudo.items.reduce((total, item) => {
+        let taras = this.extraerNumero(item.taras);
+        let sobrante = this.extraerNumero(item.sobrante);
+        return total + taras + sobrante;
+      }, 0);
+    },
+    extraerNumero(valor) {
+      if (!valor) return 0;
+      const match = valor.toString().match(/^(\d+)/);
+      return match ? parseInt(match[1]) : 0;
+    },
+    actualizarTotalCrudos(clienteId, index) {
+      // Forzar la actualización del componente
+      this.$forceUpdate();
+      this.guardarCambiosEnTiempoReal();
+    },
+    actualizarCrudos() {
+      this.guardarCambiosEnTiempoReal();
     },
   },
   created() {
@@ -644,7 +870,34 @@ export default {
         this.guardarCambiosEnTiempoReal();
       },
       deep: true
+    },
+    clienteCrudos: {
+      handler() {
+        this.guardarCambiosEnTiempoReal();
+      },
+      deep: true
     }
+  },
+  mounted() {
+    // Agregar este evento para actualizar los crudos cuando se modifiquen los inputs
+    this.$nextTick(() => {
+      const crudosInputs = document.querySelectorAll('.crudo input, .crudo select');
+      crudosInputs.forEach(input => {
+        input.addEventListener('input', this.actualizarCrudos);
+      });
+    });
+  },
+  beforeDestroy() {
+    // Cancelar la suscripción a los cambios en tiempo real
+    if (this.unsubscribe) {
+      this.unsubscribe();
+    }
+
+    // Remover los event listeners cuando el componente se destruye
+    const crudosInputs = document.querySelectorAll('.crudo input, .crudo select');
+    crudosInputs.forEach(input => {
+      input.removeEventListener('input', this.actualizarCrudos);
+    });
   }
 };
 </script>
@@ -727,31 +980,30 @@ export default {
   background-color: #3498db;
 }
 
-.cliente-header[data-cliente="Joselito"] h3 {
-  color: #ffffff;
-}
-
 .cliente-header[data-cliente="Catarro"] {
   background-color: #e74c3c;
-}
-
-.cliente-header[data-cliente="Catarro"] h3 {
-  color: #ffffff;
 }
 
 .cliente-header[data-cliente="Otilio"] {
   background-color: #f1c40f;
 }
 
-.cliente-header[data-cliente="Otilio"] h3 {
-  color: #34495e;
-}
-
 .cliente-header[data-cliente="Ozuna"] {
   background-color: #2ecc71;
 }
 
+.cliente-header[data-cliente="Joselito"] h3,
+.cliente-header[data-cliente="Catarro"] h3,
+.cliente-header[data-cliente="Otilio"] h3,
 .cliente-header[data-cliente="Ozuna"] h3 {
+  color: #ffffff;
+}
+
+.cliente-header[data-cliente="Otro"] {
+  background-color: #95a5a6;
+}
+
+.cliente-header[data-cliente="Otro"] h3 {
   color: #ffffff;
 }
 
@@ -762,20 +1014,22 @@ export default {
 
 .productos-container {
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
   gap: 20px;
 }
 
-.producto {
+.producto, .crudo {
+  flex: 0 0 calc(25% - 15px);
+  max-width: calc(25% - 15px);
   background-color: #fefefe;
-  border: 2px solid #000000; /* Borde negro */
+  border: 2px solid #000000;
   padding: 15px;
   border-radius: 8px;
   box-shadow: 0 2px 4px rgba(0,0,0,0.05);
   transition: all 0.3s ease;
 }
 
-.producto:hover {
+.producto:hover, .crudo:hover {
   box-shadow: 0 4px 8px rgba(0,0,0,0.1);
   transform: translateY(-2px);
 }
@@ -1140,6 +1394,14 @@ export default {
   }
 }
 
+.crudo-header {
+  text-align: center;
+  font-size: 1.5rem;
+  font-weight: bold;
+  margin-bottom: 15px;
+  color: #007bff
+}
+
 .encabezado-medida {
   text-align: center;
   font-size: 1.5rem; /* Tamaño de fuente grande */
@@ -1287,4 +1549,226 @@ export default {
   margin-top: 10px;
   align-self: flex-end; /* Alinea el botón al final de la columna */
 }
+
+.cliente-header[data-cliente] {
+  cursor: pointer;
+}
+
+/* Estilo para clientes personalizados */
+.cliente-header[data-cliente] {
+  background-color: #95a5a6; /* Color gris por defecto */
+}
+
+/* Estilos específicos para clientes predefinidos */
+.cliente-header[data-cliente="Joselito"] {
+  background-color: #3498db;
+}
+
+.cliente-header[data-cliente="Catarro"] {
+  background-color: #e74c3c;
+}
+
+.cliente-header[data-cliente="Otilio"] {
+  background-color: #f1c40f;
+}
+
+.cliente-header[data-cliente="Ozuna"] {
+  background-color: #2ecc71;
+}
+
+/* Asegurar que el texto sea blanco para todos los encabezados de cliente */
+.cliente-header[data-cliente] h3 {
+  color: #ffffff;
+}
+
+.botones-agregar {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 15px;
+}
+
+.agregar-crudo {
+  background-color: #17a2b8;
+  color: white;
+}
+
+.agregar-crudo:hover {
+  background-color: #138496;
+}
+
+.crudos-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 15px;
+  margin-top: 15px;
+}
+
+.crudo {
+  background-color: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 5px;
+  padding: 15px;
+  width: calc(50% - 7.5px);
+}
+
+.crudo h3 {
+  margin-top: 0;
+  margin-bottom: 10px;
+  font-size: 1.2rem;
+}
+
+.crudo-inputs {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.talla-select,
+.taras-input {
+  flex: 1;
+}
+
+.eliminar-crudo {
+  width: 100%;
+}
+
+@media (max-width: 768px) {
+  .crudo {
+    width: 100%;
+  }
+}
+
+.talla-select,
+.taras-input {
+  flex: 1;
+}
+
+.eliminar-crudo {
+  width: 100%;
+}
+
+@media (max-width: 768px) {
+  .crudo {
+    width: 100%;
+  }
+}
+
+.crudo-item {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 15px;
+}
+
+.crudo-talla-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.crudo-taras-container {
+  flex: 1;
+  display: flex;
+  align-items: flex-start;
+  gap: 5px;
+}
+
+.talla-select,
+.barco-input {
+  width: 100%;
+}
+
+.taras-input {
+  flex-grow: 1;
+}
+
+.eliminar-crudo-item {
+  align-self: flex-start;
+}
+
+.agregar-crudo-item,
+.eliminar-crudo {
+  width: 100%;
+  margin-top: 10px;
+}
+
+.agregar-sobrante {
+  width: 100%;
+  height: 38px;
+}
+
+.crudo-sobrante-container,
+.crudo-agregar-container {
+  margin-top: 10px;
+}
+
+.sobrante-input {
+  width: calc(100% - 50px);
+}
+
+.crudo-taras-container {
+  display: flex;
+  align-items: flex-start;
+}
+
+.taras-wrapper {
+  flex-grow: 1;
+  margin-right: 10px;
+}
+
+.buttons-wrapper {
+  display: flex;
+  flex-direction: column;
+}
+
+.taras-input {
+  width: 100%;
+  margin-bottom: 10px;
+}
+
+.eliminar-crudo-item,
+.agregar-sobrante {
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.agregar-sobrante {
+  margin-top: 10px;
+}
+
+.total-crudos {
+  text-align: center;
+  font-weight: bold;
+  margin-top: 15px;
+  font-size: 1.2rem;
+  color: #333;
+}
+
+.crudos-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.crudos-input {
+  flex: 1 1 calc(33.33% - 1rem);
+  min-width: 200px;
+}
+
+@media (max-width: 768px) {
+  .crudos-input {
+    flex: 1 1 calc(50% - 1rem);
+  }
+}
+
+@media (max-width: 480px) {
+  .crudos-input {
+    flex: 1 1 100%;
+  }
+}
 </style>
+

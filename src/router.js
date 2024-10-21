@@ -18,7 +18,6 @@ import CuentasCatarro from '@/views/CuentasClientes/CuentasCatarro.vue'
 import EmbarquesMenu from '@/views/Embarques/EmbarquesMenu.vue'; // Asegúrate de que esta ruta de importación sea correcta
 import VentasYGananciasCatarro from '@/views/CuentasClientes/VentasYGananciasCatarro.vue'; // Asegúrate de crear este componente
 import ListaEmbarques from '@/views/Embarques/ListaEmbarques.vue';
-import DetallesEmbarque from '@/views/Embarques/DetallesEmbarque.vue';
 import NuevoEmbarque from '@/views/Embarques/NuevoEmbarque.vue';
 
 Vue.use(Router);

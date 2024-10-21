@@ -1,43 +1,24 @@
 <template>
   <div class="embarques-menu">
-    <div class="menu-options" v-if="!mostrarNuevoEmbarque">
-      <button @click="nuevoEmbarque">Nuevo Embarque</button>
-      <button @click="listaEmbarques">Lista de Embarques</button>
-      <button @click="buscarEmbarque">Buscar Embarque</button>
-      <button @click="reportes">Reportes de Embarques</button>
+    <h1>Menú de Embarques</h1>
+    <div class="menu-options">
+      <button @click="nuevoEmbarque" class="btn-nuevo-embarque">Nuevo Embarque</button>
     </div>
-    <NuevoEmbarque v-if="mostrarNuevoEmbarque" @volver="volverAlMenu" />
+    <ListaEmbarques />
   </div>
 </template>
 
 <script>
-import NuevoEmbarque from './NuevoEmbarque.vue'
+import ListaEmbarques from './ListaEmbarques.vue'
 
 export default {
   name: 'EmbarquesMenu',
   components: {
-    NuevoEmbarque
-  },
-  data() {
-    return {
-      mostrarNuevoEmbarque: false
-    }
+    ListaEmbarques
   },
   methods: {
     nuevoEmbarque() {
       this.$router.push({ name: 'NuevoEmbarque', params: { id: 'nuevo' } });
-    },
-    listaEmbarques() {
-      this.$router.push({ name: 'ListaEmbarques' });
-    },
-    buscarEmbarque() {
-      console.log('Buscar embarque');
-    },
-    reportes() {
-      console.log('Generar reportes de embarques');
-    },
-    volverAlMenu() {
-      this.mostrarNuevoEmbarque = false;
     }
   }
 }
@@ -51,15 +32,27 @@ export default {
 
 .menu-options {
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  margin-top: 20px;
+  justify-content: center;
+  margin-bottom: 20px;
 }
 
-button {
-  margin: 10px;
+.btn-nuevo-embarque {
   padding: 10px 20px;
   font-size: 16px;
   cursor: pointer;
+  background-color: #4CAF50;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  transition: background-color 0.3s;
+}
+
+.btn-nuevo-embarque:hover {
+  background-color: #45a049;
+}
+
+h1 {
+  margin-bottom: 20px;
+  color: #333;
 }
 </style>

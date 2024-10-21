@@ -1,9 +1,6 @@
 <template>
   <div class="lista-embarques">
-    <h1>Lista de Embarques</h1>
-    <div class="botones">
-      <button @click="regresarAMenu" class="btn-regresar">Regresar al Menú</button>
-    </div>
+ 
     <div v-if="cargando" class="cargando">Cargando embarques...</div>
     <div v-else-if="error" class="error">{{ error }}</div>
     <div v-else>
@@ -74,11 +71,12 @@ export default {
       return embarque.clientes.map(cliente => cliente.nombre).join(', ');
     },
     calcularTotalKilos(embarque) {
-      return embarque.clientes.reduce((total, cliente) => {
+      const total = embarque.clientes.reduce((total, cliente) => {
         return total + cliente.productos.reduce((clienteTotal, producto) => {
           return clienteTotal + (producto.totalKilos || 0);
         }, 0);
       }, 0);
+      return total.toFixed(1);
     },
     verDetalles(embarqueId) {
       console.log('Navegando a detalles del embarque:', embarqueId);
