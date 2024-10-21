@@ -618,111 +618,173 @@ export default {
       return producto.tipo || 'Sin Tipo';
     },
     generarResumenPDF() {
-      const doc = new jsPDF();
+      const doc = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4'
+      });
+      
       const pageWidth = doc.internal.pageSize.width;
       const pageHeight = doc.internal.pageSize.height;
       const margin = 10;
+      const columnWidth = (pageWidth - margin * 3) / 2;
 
-      // Función para calcular la altura total del contenido
-      const calcularAlturaTotal = () => {
-        let altura = 30; // Aumentamos la altura inicial para el título y la fecha
-        Object.entries(this.productosPorCliente).forEach(([clienteId, productos]) => {
-          altura += 14; // Altura para el encabezado del cliente
-          altura += Math.ceil(productos.length / 3) * 70; // Altura para los productos (3 por fila) + espacio entre filas
-          altura += 5; // Espacio entre clientes
-        });
-        return altura;
-      };
-
-      // Calcular el factor de escala
-      const alturaTotal = calcularAlturaTotal();
-      const escala = Math.min(1, (pageHeight - 2 * margin) / alturaTotal);
-
-      // Definir padding después de calcular escala
-      const padding = 5 * escala; // Padding para cada producto
-
-      doc.setFontSize(22);
-      doc.setFont("helvetica", "bold");
-      doc.text('Resumen de Embarque', 14, 15 * escala);
-
-      // Agregar la fecha del embarque (corregida)
-      doc.setFontSize(14);
-      doc.setFont("helvetica", "normal");
-      const fechaEmbarque = this.embarque.fecha ? new Date(this.embarque.fecha + 'T00:00:00') : null;
-      const fechaFormateada = fechaEmbarque ? fechaEmbarque.toLocaleDateString() : 'Fecha no especificada';
-      doc.text(`Fecha: ${fechaFormateada}`, 14, 25 * escala);
-
-      let yPos = 35 * escala; // Ajustamos la posicin inicial para el contenido
-      const productWidth = (pageWidth - 2 * margin) / 3; // 3 productos por fila
+      let yPos = margin;
 
       Object.entries(this.productosPorCliente).forEach(([clienteId, productos]) => {
         const nombreCliente = this.obtenerNombreCliente(clienteId);
-        const clienteColor = this.getClienteColor(clienteId);
-        doc.setFillColor(clienteColor);
-        doc.rect(margin, yPos, pageWidth - 2 * margin, 10 * escala, 'F');
+        const colorCliente = this.getClienteColor(clienteId);
+
+        // Sección de cliente
+        doc.setFillColor(colorCliente);
+        doc.rect(margin, yPos, pageWidth - margin * 2, 10, 'F');
         doc.setTextColor(255, 255, 255);
         doc.setFontSize(14);
         doc.setFont("helvetica", "bold");
-        doc.text(`Cliente: ${nombreCliente}`, margin + 2, yPos + 7 * escala);
-        yPos += 14 * escala;
+        doc.text(nombreCliente, margin + 2, yPos + 7);
 
-        let xPos = margin;
-        productos.forEach((producto, index) => {
-          if (index > 0 && index % 3 === 0) {
-            xPos = margin;
-            yPos += 60 * escala;
-          }
+        yPos += 15;
+        let yPosInicial = yPos;
+        doc.setTextColor(0, 0, 0);
+        
+        // Incrementamos el tamaño de fuente para los títulos
+        doc.setFontSize(14);  // Aumentado de 12 a 14
 
-          doc.setDrawColor(0);
-          doc.setFillColor(240, 240, 240);
-          
-          // Dibujar el cuadro con padding
-          doc.roundedRect(xPos, yPos, productWidth - 2, 55 * escala, 2, 2, 'FD');
+        // Títulos "Limpios" y "Crudos" en negrita y cursiva
+        doc.setFont("helvetica", "bolditalic");
+        doc.text("Limpios", margin, yPos);
+        doc.text("Crudos", margin + columnWidth + margin, yPos);
 
-          doc.setTextColor(0);
-          doc.setFontSize(16);
-          doc.setFont("helvetica", "bold");
-          const medida = producto.medida || 'Sin medida';
-          const tipo = this.obtenerTipoProducto(producto);
-          
-          if (producto.tipo === 'c/h20') {
-            doc.setTextColor(0, 0, 255); // Azul
-          } else {
-            doc.setTextColor(0); // Negro (por defecto)
-          }
-          
-          // Centrar el contenido
-          const centrarTexto = (texto, y) => {
-            const textWidth = doc.getStringUnitWidth(texto) * doc.internal.getFontSize() / doc.internal.scaleFactor;
-            const textX = xPos + (productWidth - textWidth) / 2;
-            doc.text(texto, textX, y);
-          };
+        yPos += 8;  // Incrementamos un poco más el espacio después de los títulos
+        let yPosCrudos = yPos;
 
-          // Título del producto (medida y tipo)
-          centrarTexto(`${medida}- ${tipo}`, yPos + padding + 6 * escala);
+        // Volvemos al tamaño de fuente normal para el contenido
+        doc.setFontSize(10);
+        doc.setFont("helvetica", "normal");
 
-          // Taras y Kilos
-          doc.setTextColor(0);
-          doc.setFontSize(15);
-          doc.setFont("helvetica", "normal");
-          
-          centrarTexto(`${this.totalTaras(producto)} - ${this.totalKilos(producto)}`, yPos + padding + 15 * escala + 0.5);
+        let totalTarasCliente = 0;
+        let totalKilosCliente = 0;
 
-          // Reporte de Taras y Bolsas
-          const tarasBolsasCombinadas = this.combinarTarasBolsas(producto.reporteTaras, producto.reporteBolsas);
-          
-          doc.setFontSize(14);
-          const splitTarasBolsas = doc.splitTextToSize(tarasBolsasCombinadas, productWidth - 4 - padding * 2);
-          
-          // Centrar cada línea del reporte de taras y bolsas
-          splitTarasBolsas.forEach((linea, idx) => {
-            centrarTexto(linea, yPos + padding + 23 * escala + 0.5 + (idx * 5 * escala));
-          });
-
-          xPos += productWidth;
+        const productosOrdenados = productos.sort((a, b) => {
+          const medidaA = parseInt(a.medida.split('/')[0]) || 0;
+          const medidaB = parseInt(b.medida.split('/')[0]) || 0;
+          return medidaA - medidaB;
         });
 
-        yPos += 65 * escala; // Espacio entre clientes
+        productosOrdenados.forEach((producto) => {
+          const tipoProducto = this.obtenerTipoProducto(producto);
+          const totalTaras = this.totalTaras(producto);
+          const totalKilos = this.totalKilos(producto);
+          
+          doc.setFont("helvetica", "bold");
+          doc.text(`${producto.medida}`, margin, yPos);
+          
+          let anchoNegrita = doc.getStringUnitWidth(`${producto.medida}`) * doc.internal.getFontSize() / doc.internal.scaleFactor;
+          
+          doc.setFont("helvetica", "normal");
+          doc.setTextColor(0, 0, 0); // Negro para el guion
+          doc.text(" - ", margin + anchoNegrita, yPos);
+          
+          let anchoGuion = doc.getStringUnitWidth(" - ") * doc.internal.getFontSize() / doc.internal.scaleFactor;
+          
+          // Determinar el color del tipo de producto
+          if (producto.tipo === 'otro') {
+            doc.setTextColor(128, 0, 128); // Morado para "otro"
+            doc.text(tipoProducto, margin + anchoNegrita + anchoGuion, yPos);
+          } else {
+            // Separar el tipo de producto si contiene "c/h20"
+            const partesTipo = tipoProducto.split(/(c\/h20)/i);
+            let anchoTipo = 0;
+            
+            partesTipo.forEach((parte, index) => {
+              if (parte.toLowerCase() === 'c/h20') {
+                doc.setTextColor(0, 0, 255); // Azul para "c/h20"
+              } else {
+                doc.setTextColor(0, 0, 0); // Negro para el resto
+              }
+              doc.text(parte, margin + anchoNegrita + anchoGuion + anchoTipo, yPos);
+              anchoTipo += doc.getStringUnitWidth(parte) * doc.internal.getFontSize() / doc.internal.scaleFactor;
+            });
+          }
+          
+          let anchoTipo = doc.getStringUnitWidth(tipoProducto) * doc.internal.getFontSize() / doc.internal.scaleFactor;
+          
+          doc.setTextColor(0, 0, 0); // Restablecer a negro
+          let resto = `: ${totalTaras}T-- `;
+          doc.text(resto, margin + anchoNegrita + anchoGuion + anchoTipo, yPos);
+          
+          let anchoNormal = anchoGuion + anchoTipo + doc.getStringUnitWidth(resto) * doc.internal.getFontSize() / doc.internal.scaleFactor;
+          
+          doc.setFont("helvetica", "bold");
+          doc.text(`${totalKilos} Kg`, margin + anchoNegrita + anchoNormal, yPos);
+          
+          // Reporte de taras y bolsas
+          let reporteCombinado = this.combinarTarasBolsas(producto.reporteTaras, producto.reporteBolsas);
+          
+          if (reporteCombinado) {
+            let anchoKilos = doc.getStringUnitWidth(`${totalKilos} Kg`) * doc.internal.getFontSize() / doc.internal.scaleFactor;
+            doc.setFont("helvetica", "normal");
+            doc.text(reporteCombinado, margin + anchoNegrita + anchoNormal + anchoKilos + 5, yPos);
+          }
+          
+          yPos += 6;
+          totalTarasCliente += totalTaras;
+          totalKilosCliente += totalKilos;
+        });
+
+        // Sección de Crudos
+        if (this.clienteCrudos[clienteId]) {
+          this.clienteCrudos[clienteId].forEach(crudo => {
+            crudo.items.forEach(item => {
+              doc.setFont("helvetica", "bold");
+              doc.text(`${item.talla}`, margin + columnWidth + margin, yPosCrudos);
+              
+              let anchoNegrita = doc.getStringUnitWidth(`${item.talla}`) * doc.internal.getFontSize() / doc.internal.scaleFactor;
+              
+              doc.setFont("helvetica", "normal");
+              let textoCrudo = ` - ${item.barco}: `;
+              if (item.taras) {
+                textoCrudo += `(${item.taras})`;
+              }
+              if (item.sobrante) {
+                textoCrudo += ` (${item.sobrante})`;
+              }
+              textoCrudo += ` - `;
+              doc.text(textoCrudo, margin + columnWidth + margin + anchoNegrita, yPosCrudos);
+              
+              let anchoTexto = doc.getStringUnitWidth(textoCrudo) * doc.internal.getFontSize() / doc.internal.scaleFactor;
+              
+              let kilosTotales = this.calcularKilosCrudos(item);
+              doc.setFont("helvetica", "bold");
+              doc.text(`${kilosTotales} Kg`, margin + columnWidth + margin + anchoNegrita + anchoTexto, yPosCrudos);
+              
+              yPosCrudos += 6;
+              totalKilosCliente += kilosTotales;
+              totalTarasCliente += this.calcularTarasCrudos(item);
+            });
+          });
+        }
+
+        // Usar el yPos más grande entre limpios y crudos
+        yPos = Math.max(yPos, yPosCrudos);
+
+        // Total del cliente
+        yPos += 5;
+        doc.setFillColor(colorCliente);
+        doc.setTextColor(255, 255, 255);
+        doc.rect(margin, yPos - 2, pageWidth - margin * 2, 10, 'F');
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(12);
+        const textoTotal = `Total: ${totalTarasCliente} taras, ${totalKilosCliente.toFixed(2)} kilos`;
+        doc.text(textoTotal, margin + 2, yPos + 5);
+        
+        yPos += 15;
+
+        // Verificar si se necesita una nueva página
+        if (yPos > pageHeight - margin * 2) {
+          doc.addPage();
+          yPos = margin;
+        }
       });
 
       doc.save('resumen-embarque.pdf');
@@ -749,13 +811,12 @@ export default {
       
       taras.forEach((tara, index) => {
         const bolsa = bolsas[index] || '';
-        const [cantidad, medida] = tara.split('-');
-        const key = medida ? `${medida}-${bolsa}` : bolsa;
-        combinado[key] = (combinado[key] || 0) + parseInt(cantidad || 1);
+        const key = bolsa;
+        combinado[key] = (combinado[key] || 0) + parseInt(tara || 1);
       });
 
       return Object.entries(combinado)
-        .map(([key, count]) => `(${count}-${key})`)
+        .map(([bolsa, count]) => `(${count}-${bolsa})`)
         .join(' ');
     },
     totalTarasReportadas(producto) {
@@ -846,6 +907,30 @@ export default {
     },
     actualizarCrudos() {
       this.guardarCambiosEnTiempoReal();
+    },
+    calcularKilosCrudos(item) {
+      let kilosTotales = 0;
+      if (item.taras) {
+        const [cantidad, medida] = item.taras.split('-').map(Number);
+        kilosTotales += cantidad * medida;
+      }
+      if (item.sobrante) {
+        const [cantidadSobrante, medidaSobrante] = item.sobrante.split('-').map(Number);
+        kilosTotales += cantidadSobrante * medidaSobrante;
+      }
+      return kilosTotales;
+    },
+    calcularTarasCrudos(item) {
+      let totalTaras = 0;
+      if (item.taras) {
+        const [cantidad] = item.taras.split('-').map(Number);
+        totalTaras += cantidad;
+      }
+      if (item.sobrante) {
+        const [cantidadSobrante] = item.sobrante.split('-').map(Number);
+        totalTaras += cantidadSobrante;
+      }
+      return totalTaras;
     },
   },
   created() {
@@ -1605,8 +1690,8 @@ export default {
 
 .crudo {
   background-color: #f8f9fa;
-  border: 1px solid #dee2e6;
-  border-radius: 5px;
+  border: 2px solid #007bff;
+  border-radius: 25px;
   padding: 15px;
   width: calc(50% - 7.5px);
 }
