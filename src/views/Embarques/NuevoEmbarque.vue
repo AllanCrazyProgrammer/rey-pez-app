@@ -20,7 +20,10 @@
       <div v-for="(clienteProductos, clienteId) in productosPorCliente" :key="clienteId" class="cliente-grupo">
         <div class="cliente-header" :data-cliente="obtenerNombreCliente(clienteId)" @click="editarNombreCliente(clienteId)">
           <h3>{{ obtenerNombreCliente(clienteId) }}</h3>
-          <button type="button" @click.stop="eliminarCliente(clienteId)" class="btn btn-danger btn-sm eliminar-cliente">Eliminar Cliente</button>
+          <div>
+            <button type="button" @click.stop="generarNotaVenta(clienteId)" class="btn btn-info btn-sm generar-nota">Generar Nota</button>
+            <button type="button" @click.stop="eliminarCliente(clienteId)" class="btn btn-danger btn-sm eliminar-cliente">Eliminar Cliente</button>
+          </div>
         </div>
         <div class="productos-container">
           <div v-for="(producto, index) in clienteProductos" :key="index" class="producto">
@@ -64,8 +67,14 @@
                 <div class="taras-header">
                   <h5>Taras</h5>
                   <div class="checkbox-container">
-                    <input type="checkbox" id="restarTaras" v-model="producto.restarTaras">
-                    <label for="restarTaras">-3</label>
+                    <input 
+                      type="checkbox" 
+                      v-model="producto.restarTaras"
+                      @change="onRestarTarasChange(producto)"
+                      class="form-check-input" 
+                      :id="'restarTarasCheck-' + index"
+                    >
+                    <label :for="'restarTarasCheck-' + index">-3</label>
                   </div>
                 </div>
                 <div v-for="(tara, taraIndex) in producto.taras" :key="taraIndex" class="input-group">
@@ -220,15 +229,11 @@
           </div>
         </div>
       </div>
-      <button type="submit" class="btn btn-success btn-block crear-embarque">{{ modoEdicion ? 'Actualizar Embarque' : 'Guardar Embarque' }}</button>
-      <button type="button" @click="generarResumenPDF" class="btn btn-info btn-block generar-pdf">Generar Resumen PDF</button>
+      <div class="botones-finales">
+        <button type="submit" class="btn btn-success crear-embarque">{{ modoEdicion ? 'Actualizar Embarque' : 'Guardar Embarque' }}</button>
+        <button type="button" @click="generarResumenPDF" class="btn btn-info generar-pdf">Generar Resumen PDF</button>
+      </div>
     </form>
-    <div class="cambios">
-      <h4>Cambios:</h4>
-      <ul>
-        <li v-for="(cambio, index) in cambios" :key="index">{{ cambio }}</li>
-      </ul>
-    </div>
   </div>
 </template>
 
@@ -237,6 +242,7 @@ import { getFirestore, collection, addDoc, doc, getDoc, updateDoc, onSnapshot } 
 import { debounce } from 'lodash';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
+import { generarNotaVentaPDF } from '@/utils/pdfGenerator';
 
 export default {
   name: 'NuevoEmbarque',
@@ -317,7 +323,8 @@ export default {
         kilos: [],
         reporteTaras: [],
         reporteBolsas: [],
-        tarasExtra: [], // Añade esta línea
+        tarasExtra: [], // Asegúrate de que esto esté incluido
+        restarTaras: false, // Inicializa el checkbox
       });
     },
     eliminarProducto(producto) {
@@ -369,15 +376,24 @@ export default {
       producto.kilos.splice(index, 1);
     },
     totalTaras(producto) {
-      const tarasNormales = producto.taras.reduce((sum, tara) => sum + (tara || 0), 0);
+      console.log('Taras normales:', producto.taras);
+      console.log('Taras extra:', producto.tarasExtra);
+      const tarasNormales = (producto.taras || []).reduce((sum, tara) => sum + (tara || 0), 0);
       const tarasExtra = (producto.tarasExtra || []).reduce((sum, tara) => sum + (tara || 0), 0);
+      console.log('Total taras:', tarasNormales + tarasExtra);
       return tarasNormales + tarasExtra;
     },
     totalKilos(producto) {
-      const sumaKilos = producto.kilos.reduce((sum, kilo) => sum + (kilo || 0), 0);
-      const sumaTarasNormales = producto.taras.reduce((sum, tara) => sum + (tara || 0), 0);
-      const descuentoTaras = producto.restarTaras ? 0 : sumaTarasNormales * 3;
-      return Number((sumaKilos - descuentoTaras).toFixed(1));
+      console.log('Kilos:', producto.kilos);
+      console.log('Restar taras:', producto.restarTaras);
+      const sumaKilos = (producto.kilos || []).reduce((sum, kilo) => sum + (kilo || 0), 0);
+      const sumaTarasNormales = (producto.taras || []).reduce((sum, tara) => sum + (tara || 0), 0);
+      const sumaTarasExtra = (producto.tarasExtra || []).reduce((sum, tara) => sum + (tara || 0), 0);
+      const totalTaras = sumaTarasNormales + sumaTarasExtra;
+      const descuentoTaras = producto.restarTaras ? totalTaras * 3 : 0;
+      const resultado = Number((sumaKilos - descuentoTaras).toFixed(1));
+      console.log('Total kilos:', resultado);
+      return resultado;
     },
     obtenerNombreCliente(clienteId) {
       const clienteEnLista = this.clientesDisponibles.find(c => c.id.toString() === clienteId.toString());
@@ -455,6 +471,7 @@ export default {
                 ...producto,
                 clienteId: cliente.id,
                 nombreCliente: clienteInfo.nombre,
+                restarTaras: producto.restarTaras || false, // Asegurarse de que restarTaras esté inicializado
               }));
             }),
           };
@@ -503,7 +520,7 @@ export default {
       } catch (error) {
         console.error("Error al guardar automáticamente:", error);
       }
-    }, 500), // Reducimos aún más el tiempo de debounce
+    }, 300), // Reducimos aún más el tiempo de debounce
 
     async guardarEmbarque() {
       if (!this.embarque.fecha) {
@@ -545,15 +562,8 @@ export default {
           id: clienteId,
           nombre: clientePredefinido ? clientePredefinido.nombre : this.obtenerNombreCliente(clienteId),
           productos: productos.map(producto => ({
-            medida: producto.medida,
-            tipo: producto.tipo,
-            tipoPersonalizado: producto.tipoPersonalizado,
-            taras: producto.taras,
-            kilos: producto.kilos,
-            reporteTaras: producto.reporteTaras,
-            reporteBolsas: producto.reporteBolsas,
-            totalTaras: this.totalTaras(producto),
-            totalKilos: this.totalKilos(producto)
+            ...producto,
+            restarTaras: producto.restarTaras || false, // Asegurarse de que restarTaras se incluya
           })),
           crudos: this.clienteCrudos[clienteId] || []
         };
@@ -659,7 +669,7 @@ export default {
         let yPosCrudos = yPos;
 
         // Volvemos al tamaño de fuente normal para el contenido
-        doc.setFontSize(10);
+        doc.setFontSize(12.5);
         doc.setFont("helvetica", "normal");
 
         let totalTarasCliente = 0;
@@ -932,6 +942,30 @@ export default {
       }
       return totalTaras;
     },
+    generarNotaVenta(clienteId) {
+      const clienteProductos = this.productosPorCliente[clienteId];
+      const clienteCrudos = this.clienteCrudos[clienteId];
+      const embarqueCliente = {
+        fecha: this.embarque.fecha,
+        productos: clienteProductos,
+        clienteCrudos: { [clienteId]: clienteCrudos }
+      };
+      generarNotaVentaPDF(embarqueCliente, this.clientesDisponibles);
+    },
+    onRestarTarasChange(producto) {
+      console.log('Restar taras cambiado:', producto.restarTaras);
+      this.$nextTick(() => {
+        this.actualizarProducto(producto);
+      });
+    },
+
+    actualizarProducto(producto) {
+      const index = this.embarque.productos.findIndex(p => p === producto);
+      if (index !== -1) {
+        this.$set(this.embarque.productos, index, { ...producto });
+      }
+      this.guardarCambiosEnTiempoReal();
+    },
   },
   created() {
     const embarqueId = this.$route.params.id;
@@ -961,6 +995,14 @@ export default {
         this.guardarCambiosEnTiempoReal();
       },
       deep: true
+    },
+    'embarque.productos': {
+      handler(newProductos) {
+        newProductos.forEach(producto => {
+          console.log('Producto actualizado:', producto.restarTaras);
+        });
+      },
+      deep: true
     }
   },
   mounted() {
@@ -982,6 +1024,12 @@ export default {
     const crudosInputs = document.querySelectorAll('.crudo input, .crudo select');
     crudosInputs.forEach(input => {
       input.removeEventListener('input', this.actualizarCrudos);
+    });
+  },
+  updated() {
+    console.log('Componente actualizado');
+    this.embarque.productos.forEach(producto => {
+      console.log('Estado de restarTaras:', producto.restarTaras);
     });
   }
 };
@@ -1853,6 +1901,68 @@ export default {
 @media (max-width: 480px) {
   .crudos-input {
     flex: 1 1 100%;
+  }
+}
+
+.generar-nota {
+  margin-right: 10px;
+  background-color: #17a2b8;
+  color: white;
+}
+
+.generar-nota:hover {
+  background-color: #138496;
+}
+
+
+
+.crear-embarque,
+.generar-pdf {
+  margin-bottom: 10px; /* Añade un pequeño margen inferior a ambos botones */
+}
+
+.botones-finales {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.crear-embarque,
+.generar-pdf {
+  flex: 1;
+  height: 60px; /* Establece una altura fija para ambos botones */
+  font-size: 1.2rem;
+  border: none;
+  border-radius: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 0 15px;
+  line-height: 1.2;
+  margin-top: 0px;
+}
+
+.crear-embarque {
+  background-color: #28a745;
+  color: #fff;
+}
+
+.generar-pdf {
+  background-color: #17a2b8;
+  color: #fff;
+}
+
+/* Estilos para dispositivos móviles */
+@media (max-width: 768px) {
+  .botones-finales {
+    flex-direction: column;
+    gap: 10px;
+  }
+  
+  .crear-embarque,
+  .generar-pdf {
+    width: 100%;
   }
 }
 </style>
