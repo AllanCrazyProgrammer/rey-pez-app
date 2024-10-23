@@ -71,11 +71,17 @@ export default {
       return embarque.clientes.map(cliente => cliente.nombre).join(', ');
     },
     calcularTotalKilos(embarque) {
+      console.log('Calculando total para embarque:', embarque);
       const total = embarque.clientes.reduce((total, cliente) => {
-        return total + cliente.productos.reduce((clienteTotal, producto) => {
-          return clienteTotal + (producto.totalKilos || 0);
-        }, 0);
+        console.log('Cliente:', cliente.nombre);
+        const clienteTotal = cliente.productos ? cliente.productos.reduce((clienteTotal, producto) => {
+          console.log('Producto:', producto.nombre, 'Kilos:', producto.totalKilos);
+          return clienteTotal + (parseFloat(producto.totalKilos) || 0);
+        }, 0) : 0;
+        console.log('Total del cliente:', clienteTotal);
+        return total + clienteTotal;
       }, 0);
+      console.log('Total final:', total);
       return total.toFixed(1);
     },
     verDetalles(embarqueId) {
