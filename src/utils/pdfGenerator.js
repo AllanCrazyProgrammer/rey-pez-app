@@ -24,9 +24,18 @@ export async function generarNotaVentaPDF(embarque, clientesDisponibles) {
               margin: [0, 20, 0, 0]
             },
             {
-              text: `Fecha: ${new Date(embarque.fecha).toLocaleDateString()}`,
-              alignment: 'right',
-              margin: [0, 20, 0, 0]
+              stack: [
+                {
+                  text: `Fecha: ${new Date(embarque.fecha).toLocaleDateString()}`,
+                  alignment: 'right',
+                  margin: [0, 20, 0, 0]
+                },
+                {
+                  text: `Carga con: ${embarque.cargaCon || 'No especificado'}`,
+                  alignment: 'right',
+                  margin: [0, 5, 0, 0]
+                }
+              ]
             }
           ]
         },
@@ -107,6 +116,8 @@ export async function generarNotaVentaPDF(embarque, clientesDisponibles) {
 
 function generarContenidoClientes(embarque, clientesDisponibles) {
   const contenido = [];
+  let totalTarasLimpio = 0;
+  let totalTarasCrudos = 0;
 
   Object.entries(embarque.productos.reduce((acc, producto) => {
     if (!acc[producto.clienteId]) {
@@ -128,6 +139,18 @@ function generarContenidoClientes(embarque, clientesDisponibles) {
       { text: '\n' }
     );
 
+    // Calcular total de taras de limpio
+    const tarasLimpioCliente = productos.reduce((sum, producto) => sum + totalTaras(producto), 0);
+    totalTarasLimpio += tarasLimpioCliente;
+
+    contenido.push(
+      { 
+        text: `Taras de limpio: ${tarasLimpioCliente}`, 
+        margin: [0, 5, 0, 5]
+      },
+      { text: '\n' }
+    );
+
     if (embarque.clienteCrudos && embarque.clienteCrudos[clienteId]) {
       contenido.push(
         { 
@@ -138,8 +161,27 @@ function generarContenidoClientes(embarque, clientesDisponibles) {
         generarTablaCrudos(embarque.clienteCrudos[clienteId], estiloCliente),
         { text: '\n' }
       );
+
+      // Calcular total de taras de crudos
+      const tarasCrudosCliente = embarque.clienteCrudos[clienteId].reduce((sum, crudo) => 
+        sum + crudo.items.reduce((itemSum, item) => itemSum + calcularTarasTotales(item), 0), 0);
+      totalTarasCrudos += tarasCrudosCliente;
+
+      contenido.push(
+        { 
+          text: `Taras de crudo: ${tarasCrudosCliente}`, 
+          margin: [0, 5, 0, 5]
+        },
+        { text: '\n' }
+      );
     }
   });
+
+  // Agregar totales generales al final del documento
+  contenido.push(
+
+    { text: `Total general de taras: ${totalTarasLimpio + totalTarasCrudos}`, style: 'subheader', margin: [0, 5, 0, 5] }
+  );
 
   return contenido;
 }
@@ -296,12 +338,16 @@ function totalTaras(producto) {
 function totalKilos(producto, nombreCliente) {
   const sumaKilos = producto.kilos.reduce((sum, kilo) => sum + (kilo || 0), 0);
   const sumaTarasNormales = producto.taras.reduce((sum, tara) => sum + (tara || 0), 0);
-  const descuentoTaras = producto.restarTaras ? 0 : sumaTarasNormales * 3;
-  let kilosTotales = sumaKilos - descuentoTaras;
+  let kilosTotales = sumaKilos;
 
-  // Agregar 3 kilos para productos de Otilio con tipo s/h20
+  // Si el check de -3 está marcado (restarTaras es true), restamos 3 kilos por cada tara
+  if (producto.restarTaras) {
+    kilosTotales -= sumaTarasNormales * 3;
+  }
+
+  // Agregar 3 kilos solo para productos de Otilio con tipo s/h20
   if (nombreCliente.toLowerCase().includes('otilio') && 
-      (producto.tipo.toLowerCase().includes('s/h20') || producto.tipo.toLowerCase().includes('s/h2o'))) {
+      producto.tipo.toLowerCase().includes('s/h20')) {
     kilosTotales += 3;
   }
 

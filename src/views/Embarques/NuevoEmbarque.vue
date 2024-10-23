@@ -11,11 +11,58 @@
         <label for="fecha">Fecha de Embarque:</label>
         <input type="date" id="fecha" v-model="embarque.fecha" class="form-control" required>
       </div>
-      <div class="botones-undo-redo">
+      <div class="carga-selector">
+        <label for="cargaCon">Carga con:</label>
+        <select id="cargaCon" v-model="embarque.cargaCon" class="form-control" required>
+          <option value="">Seleccionar</option>
+          <option value="Porro">Porro</option>
+          <option value="Caminante">Caminante</option>
+        </select>
+      </div>
+  
+    
+<div class="resumen-container">
+  <div class="resumen-columna">
+    <h4 class="resumen-titulo">Resumen de Taras</h4>
+    <div class="resumen-grid">
+      <div class="resumen-item">
+        <span class="resumen-label">Taras Limpio: </span>
+        <strong class="resumen-value">{{ calcularTarasLimpio() }}</strong>
+      </div>
+      <div class="resumen-item">
+        <span class="resumen-label">Taras Crudo: </span>
+        <strong class="resumen-value">{{ calcularTarasCrudo() }}</strong>
+      </div>
+      <div class="resumen-item total">
+        <span class="resumen-label">Total Taras: </span>
+        <strong class="resumen-value">{{ calcularTotalTaras() }}</strong>
+      </div>
+    </div>
+  </div>
+  <div class="resumen-columna">
+    <h4 class="resumen-titulo">Resumen de Kilos</h4>
+    <div class="resumen-grid">
+      <div class="resumen-item">
+        <span class="resumen-label">Kilos Limpio: </span>
+        <strong class="resumen-value">{{ calcularKilosLimpio() }}</strong>
+      </div>
+      <div class="resumen-item">
+        <span class="resumen-label">Kilos Crudo: </span>
+        <strong class="resumen-value">{{ calcularKilosCrudo() }}</strong>
+      </div>
+      <div class="resumen-item total">
+        <span class="resumen-label">Total Kilos: </span>
+        <strong class="resumen-value">{{ calcularTotalKilos() }}</strong>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="botones-undo-redo">
         <button type="button" @click="undo" :disabled="undoStack.length <= 1" class="btn btn-secondary btn-sm">Deshacer</button>
         <button type="button" @click="redo" :disabled="redoStack.length === 0" class="btn btn-secondary btn-sm">Rehacer</button>
       </div>
     </div>
+      
     <form @submit.prevent="guardarEmbarque">
       <div v-for="(clienteProductos, clienteId) in productosPorCliente" :key="clienteId" class="cliente-grupo">
         <div class="cliente-header" :data-cliente="obtenerNombreCliente(clienteId)" @click="editarNombreCliente(clienteId)">
@@ -154,6 +201,9 @@
                 <button type="button" @click="agregarReporteBolsa(producto)" class="btn btn-success btn-sm">+</button>
               </div>
             </div>
+            <div v-if="reporteExcedeTresParentesis(producto)" class="reporte-extenso">
+              {{ generarReporteExtenso(producto) }}
+            </div>
           </div>
           <div v-for="(crudo, index) in clienteCrudos[clienteId] || []" :key="'crudo-'+index" class="producto crudo">
             <h2 class="crudo-header">Crudos</h2>
@@ -258,6 +308,7 @@ export default {
       ultimoIdPersonalizado: 0,
       embarque: {
         fecha: '',
+        cargaCon: '',
         productos: [],
       },
       nuevoClienteId: '',
@@ -273,7 +324,7 @@ export default {
       modoEdicion: false,
       guardadoAutomaticoActivo: false,
       clienteCrudos: {},
-      unsubscribe: null, // Añadir esta línea
+      unsubscribe: null,
     };
   },
   computed: {
@@ -323,8 +374,8 @@ export default {
         kilos: [],
         reporteTaras: [],
         reporteBolsas: [],
-        tarasExtra: [], // Asegúrate de que esto esté incluido
-        restarTaras: false, // Inicializa el checkbox
+        tarasExtra: [],
+        restarTaras: true, // Cambiado a true para que esté seleccionado por defecto
       });
     },
     eliminarProducto(producto) {
@@ -465,13 +516,14 @@ export default {
 
           this.embarque = {
             fecha: fecha.toISOString().split('T')[0],
+            cargaCon: data.cargaCon || '', // Cargamos el valor de cargaCon
             productos: data.clientes.flatMap(cliente => {
               const clienteInfo = clientesPredefinidosMap.get(cliente.id) || cliente;
               return cliente.productos.map(producto => ({
                 ...producto,
                 clienteId: cliente.id,
                 nombreCliente: clienteInfo.nombre,
-                restarTaras: producto.restarTaras || false, // Asegurarse de que restarTaras esté inicializado
+                restarTaras: producto.restarTaras || false,
               }));
             }),
           };
@@ -501,6 +553,7 @@ export default {
     resetearEmbarque() {
       this.embarque = {
         fecha: '',
+        cargaCon: '', // Reseteamos también cargaCon
         productos: [],
       };
       this.embarqueId = null;
@@ -551,6 +604,7 @@ export default {
     prepararDatosEmbarque() {
       const embarqueData = {
         fecha: new Date(this.embarque.fecha),
+        cargaCon: this.embarque.cargaCon, // Incluimos cargaCon en los datos a guardar
         clientes: []
       };
 
@@ -734,7 +788,18 @@ export default {
           if (reporteCombinado) {
             let anchoKilos = doc.getStringUnitWidth(`${totalKilos} Kg`) * doc.internal.getFontSize() / doc.internal.scaleFactor;
             doc.setFont("helvetica", "normal");
-            doc.text(reporteCombinado, margin + anchoNegrita + anchoNormal + anchoKilos + 5, yPos);
+            
+            // Contar el número de paréntesis
+            const numParentesis = (reporteCombinado.match(/\(/g) || []).length;
+            
+            if (numParentesis > 2) {
+              yPos += 6; // Mover a la siguiente línea
+              let reporteLines = doc.splitTextToSize(reporteCombinado, columnWidth - margin * 2);
+              doc.text(reporteLines, margin, yPos);
+              yPos += (reporteLines.length * 6); // Ajustar yPos basado en el número de líneas
+            } else {
+              doc.text(reporteCombinado, margin + anchoNegrita + anchoNormal + anchoKilos + 5, yPos);
+            }
           }
           
           yPos += 6;
@@ -947,6 +1012,7 @@ export default {
       const clienteCrudos = this.clienteCrudos[clienteId];
       const embarqueCliente = {
         fecha: this.embarque.fecha,
+        cargaCon: this.embarque.cargaCon, // Añadir esta línea
         productos: clienteProductos,
         clienteCrudos: { [clienteId]: clienteCrudos }
       };
@@ -965,6 +1031,55 @@ export default {
         this.$set(this.embarque.productos, index, { ...producto });
       }
       this.guardarCambiosEnTiempoReal();
+    },
+    reporteExcedeTresParentesis(producto) {
+      const reporte = this.combinarTarasBolsas(producto.reporteTaras, producto.reporteBolsas);
+      return (reporte.match(/\(/g) || []).length > 3;
+    },
+
+    generarReporteExtenso(producto) {
+      const reporte = this.combinarTarasBolsas(producto.reporteTaras, producto.reporteBolsas);
+      return reporte.replace(/\) /g, ')\n');
+    },
+
+    calcularTarasLimpio() {
+      return this.embarque.productos.reduce((total, producto) => {
+        return total + this.totalTaras(producto);
+      }, 0);
+    },
+
+    calcularTarasCrudo() {
+      return Object.values(this.clienteCrudos).reduce((total, crudos) => {
+        return total + crudos.reduce((clienteTotal, crudo) => {
+          return clienteTotal + this.calcularTotalCrudos(crudo);
+        }, 0);
+      }, 0);
+    },
+
+    calcularTotalTaras() {
+      return this.calcularTarasLimpio() + this.calcularTarasCrudo();
+    },
+
+    calcularKilosLimpio() {
+      return this.embarque.productos.reduce((total, producto) => {
+        return total + this.totalKilos(producto);
+      }, 0).toFixed(2);
+    },
+
+    calcularKilosCrudo() {
+      return Object.values(this.clienteCrudos).reduce((total, crudos) => {
+        return total + crudos.reduce((clienteTotal, crudo) => {
+          return clienteTotal + crudo.items.reduce((itemTotal, item) => {
+            return itemTotal + this.calcularKilosCrudos(item);
+          }, 0);
+        }, 0);
+      }, 0).toFixed(2);
+    },
+
+    calcularTotalKilos() {
+      const kilosLimpio = parseFloat(this.calcularKilosLimpio());
+      const kilosCrudo = parseFloat(this.calcularKilosCrudo());
+      return (kilosLimpio + kilosCrudo).toFixed(2);
     },
   },
   created() {
@@ -1036,6 +1151,49 @@ export default {
 </script>
 
 <style scoped>
+.resumen-container {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.resumen-columna {
+  flex: 1 1 48%;
+  box-sizing: border-box;
+}
+
+@media (max-width: 768px) {
+  .resumen-columna {
+    flex: 1 1 100%;
+  }
+}
+
+.resumen-columna {
+  flex: 1 1 48%;
+  box-sizing: border-box;
+}
+
+@media (max-width: 768px) {
+  .resumen-columna {
+    flex: 1 1 100%;
+  }
+}
+
+.resumen-columna {
+  background-color: #ffffff;
+  border: 1px solid #ddd;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  margin-bottom: 20px;
+  flex: 1;
+  min-width: 250px;
+}
+
+
+
 .nuevo-embarque {
   padding: 20px;
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -1964,6 +2122,16 @@ export default {
   .generar-pdf {
     width: 100%;
   }
+}
+
+.reporte-extenso {
+  margin-top: 10px;
+  padding: 5px;
+  background-color: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  white-space: pre-wrap;
+  font-size: 0.9em;
 }
 </style>
 
