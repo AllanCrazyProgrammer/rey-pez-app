@@ -100,7 +100,16 @@
                 <option value="c/h20">C/H20</option>
                 <option value="otro">Otro</option>
               </select>
+              <!-- Nuevo input para camarón neto -->
               <input 
+                v-if="producto.tipo === 'c/h20'"
+                type="text"
+                v-model="producto.camaronNeto"
+                class="form-control camaron-neto-input"
+                inputmode="decimal"
+                placeholder="Neto"
+              >
+              <input
                 v-if="producto.tipo === 'otro'"
                 type="text" 
                 v-model="producto.tipoPersonalizado" 
@@ -375,7 +384,8 @@ export default {
         reporteTaras: [],
         reporteBolsas: [],
         tarasExtra: [],
-        restarTaras: true, // Cambiado a true para que esté seleccionado por defecto
+        restarTaras: true,
+        camaronNeto: 0.65, // Valor por defecto
       });
     },
     eliminarProducto(producto) {
@@ -629,6 +639,9 @@ export default {
     onTipoChange(producto) {
       if (producto.tipo !== 'otro') {
         producto.tipoPersonalizado = '';
+      }
+      if (producto.tipo === 'c/h20' && !producto.camaronNeto) {
+        producto.camaronNeto = 0.65;
       }
     },
     undo() {
@@ -1062,8 +1075,44 @@ export default {
 
     calcularKilosLimpio() {
       return this.embarque.productos.reduce((total, producto) => {
-        return total + this.totalKilos(producto);
+        if (producto.tipo === 'c/h20') {
+          // Para productos c/h20, calcular la suma de (taras * bolsa) para cada grupo
+          const reporteTaras = producto.reporteTaras || [];
+          const reporteBolsas = producto.reporteBolsas || [];
+          let sumaTotalKilos = 0;
+
+          for (let i = 0; i < reporteTaras.length; i++) {
+            const taras = parseInt(reporteTaras[i]) || 0;
+            const bolsa = parseInt(reporteBolsas[i]) || 0;
+            sumaTotalKilos += taras * bolsa;
+          }
+
+          // Multiplicar por el valor neto (0.65 por defecto)
+          const kilosReales = sumaTotalKilos * (producto.camaronNeto || 0.65);
+          return total + kilosReales;
+        } else {
+          // Para otros productos, mantener el cálculo original
+          return total + this.totalKilos(producto);
+        }
       }, 0).toFixed(2);
+    },
+
+    obtenerUltimaBolsa(producto) {
+      const bolsas = producto.reporteBolsas || [];
+      // Obtener el último valor válido de bolsa
+      for (let i = bolsas.length - 1; i >= 0; i--) {
+        const valor = parseInt(bolsas[i]);
+        if (!isNaN(valor)) {
+          return valor;
+        }
+      }
+      return 0;
+    },
+
+    totalBolsasReportadas(producto) {
+      return (producto.reporteBolsas || []).reduce((total, bolsa) => {
+        return total + (parseInt(bolsa) || 0);
+      }, 0);
     },
 
     calcularKilosCrudo() {
@@ -1157,17 +1206,6 @@ export default {
   justify-content: space-between;
   gap: 20px;
   flex-wrap: wrap;
-}
-
-.resumen-columna {
-  flex: 1 1 48%;
-  box-sizing: border-box;
-}
-
-@media (max-width: 768px) {
-  .resumen-columna {
-    flex: 1 1 100%;
-  }
 }
 
 .resumen-columna {
@@ -2132,6 +2170,38 @@ export default {
   border-radius: 4px;
   white-space: pre-wrap;
   font-size: 0.9em;
+}
+
+/* Nuevos estilos para el input de camarón neto */
+.camaron-neto-input {
+  width: 70px;
+  padding: 8px;
+  font-size: 1rem;
+  border: 2px solid #0056b3;
+  border-radius: 5px;
+  background-color: #d0e7ff;
+  text-align: center;
+  -moz-appearance: textfield; /* Firefox */
+}
+
+/* Quitar flechas para Chrome, Safari, Edge, Opera */
+.camaron-neto-input::-webkit-outer-spin-button,
+.camaron-neto-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.camaron-neto-input:focus {
+  outline: none;
+  border-color: #003d7a;
+  box-shadow: 0 0 0 0.2rem rgba(0, 86, 179, 0.25);
+}
+
+@media (max-width: 768px) {
+  .camaron-neto-input {
+    width: 60px;
+    font-size: 0.9rem;
+  }
 }
 </style>
 
