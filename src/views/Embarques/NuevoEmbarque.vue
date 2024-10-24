@@ -289,10 +289,18 @@
         </div>
       </div>
       <div class="botones-finales">
-        <button type="submit" class="btn btn-success crear-embarque">{{ modoEdicion ? 'Actualizar Embarque' : 'Guardar Embarque' }}</button>
-        <button type="button" @click="generarResumenPDF" class="btn btn-info generar-pdf">Generar Resumen PDF</button>
+        <button type="submit" class="btn btn-success crear-embarque">
+          {{ modoEdicion ? 'Actualizar Embarque' : 'Guardar Embarque' }}
+        </button>
+        <button type="button" @click="generarResumenPDF" class="btn btn-info generar-pdf">
+          Generar Resumen PDF
+        </button>
+        <router-link :to="{ name: 'Rendimientos', params: { id: embarqueId } }" class="btn btn-warning ver-rendimientos">
+          Ver Rendimientos
+        </router-link>
       </div>
     </form>
+ 
   </div>
 </template>
 
@@ -302,9 +310,13 @@ import { debounce } from 'lodash';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import { generarNotaVentaPDF } from '@/utils/pdfGenerator';
+import Rendimientos from './Rendimientos.vue'
 
 export default {
   name: 'NuevoEmbarque',
+  components: {
+    Rendimientos
+  },
   data() {
     return {
       clientesPredefinidos: [
@@ -2124,7 +2136,8 @@ export default {
 }
 
 .crear-embarque,
-.generar-pdf {
+.generar-pdf,
+.ver-rendimientos {
   flex: 1;
   height: 60px; /* Establece una altura fija para ambos botones */
   font-size: 1.2rem;
@@ -2137,6 +2150,7 @@ export default {
   padding: 0 15px;
   line-height: 1.2;
   margin-top: 0px;
+  text-decoration: none;
 }
 
 .crear-embarque {
@@ -2149,6 +2163,17 @@ export default {
   color: #fff;
 }
 
+.ver-rendimientos {
+  background-color: #ffc107;
+  color: #000;
+}
+
+.ver-rendimientos:hover {
+  background-color: #e0a800;
+  color: #000;
+  text-decoration: none;
+}
+
 /* Estilos para dispositivos móviles */
 @media (max-width: 768px) {
   .botones-finales {
@@ -2157,7 +2182,8 @@ export default {
   }
   
   .crear-embarque,
-  .generar-pdf {
+  .generar-pdf,
+  .ver-rendimientos {
     width: 100%;
   }
 }

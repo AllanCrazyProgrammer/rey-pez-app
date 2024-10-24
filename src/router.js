@@ -19,6 +19,7 @@ import EmbarquesMenu from '@/views/Embarques/EmbarquesMenu.vue'; // Asegúrate d
 import VentasYGananciasCatarro from '@/views/CuentasClientes/VentasYGananciasCatarro.vue'; // Asegúrate de crear este componente
 import ListaEmbarques from '@/views/Embarques/ListaEmbarques.vue';
 import NuevoEmbarque from '@/views/Embarques/NuevoEmbarque.vue';
+import Rendimientos from '@/views/Embarques/Rendimientos.vue';
 
 Vue.use(Router);
 
@@ -155,6 +156,12 @@ const routes = [
     path: '/nuevo-embarque',
     name: 'NuevoEmbarque',
     component: NuevoEmbarque
+  },
+  {
+    path: '/embarques/:id/rendimientos',
+    name: 'Rendimientos', // Cambiamos 'rendimientos' a 'Rendimientos' con mayúscula
+    component: Rendimientos,
+    props: true
   }
 ];
 
