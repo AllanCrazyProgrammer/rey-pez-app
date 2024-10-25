@@ -26,7 +26,12 @@ export async function generarNotaVentaPDF(embarque, clientesDisponibles) {
             {
               stack: [
                 {
-                  text: `Fecha: ${new Date(embarque.fecha).toLocaleDateString()}`,
+                  text: `Fecha: ${new Date(embarque.fecha).toLocaleString('es-MX', { 
+                    timeZone: 'UTC', // Cambiado de 'America/Mexico_City' a 'UTC'
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit'
+                  })}`,
                   alignment: 'right',
                   margin: [0, 20, 0, 0]
                 },
