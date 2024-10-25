@@ -46,8 +46,8 @@ export async function generarNotaVentaPDF(embarque, clientesDisponibles) {
         notaVentaHeader: {
           color: '#3760b0',
           fontSize: 30,
-          bold: true, // Hacemos el texto en negrita para que se parezca más a 'Sail'
-          italics: true, // Añadimos cursiva para simular el estilo de 'Sail'
+          bold: true,
+          italics: true,
         },
         header: {
           fontSize: 30,
@@ -110,7 +110,6 @@ export async function generarNotaVentaPDF(embarque, clientesDisponibles) {
     pdfMake.createPdf(docDefinition).download('nota-venta.pdf');
   } catch (error) {
     console.error('Error al generar el PDF:', error);
-    // Aquí puedes manejar el error, por ejemplo, mostrando un mensaje al usuario
   }
 }
 
@@ -119,15 +118,21 @@ function generarContenidoClientes(embarque, clientesDisponibles) {
   let totalTarasLimpio = 0;
   let totalTarasCrudos = 0;
 
-  Object.entries(embarque.productos.reduce((acc, producto) => {
+  // Agrupar productos por cliente
+  const productosPorCliente = embarque.productos.reduce((acc, producto) => {
     if (!acc[producto.clienteId]) {
       acc[producto.clienteId] = [];
     }
     acc[producto.clienteId].push(producto);
     return acc;
-  }, {})).forEach(([clienteId, productos]) => {
+  }, {});
+
+  Object.entries(productosPorCliente).forEach(([clienteId, productos]) => {
     const nombreCliente = obtenerNombreCliente(clienteId, clientesDisponibles);
     const estiloCliente = obtenerEstiloCliente(nombreCliente);
+    
+    // Agrupar productos por medida y tipo
+    const productosAgrupados = agruparProductos(productos);
     
     contenido.push(
       { 
@@ -135,11 +140,10 @@ function generarContenidoClientes(embarque, clientesDisponibles) {
         style: ['subheader', estiloCliente],
         margin: [0, 5, 0, 5]
       },
-      generarTablaProductos(productos, estiloCliente, nombreCliente),
+      generarTablaProductos(productosAgrupados, estiloCliente, nombreCliente),
       { text: '\n' }
     );
 
-    // Calcular total de taras de limpio
     const tarasLimpioCliente = productos.reduce((sum, producto) => sum + totalTaras(producto), 0);
     totalTarasLimpio += tarasLimpioCliente;
 
@@ -162,7 +166,6 @@ function generarContenidoClientes(embarque, clientesDisponibles) {
         { text: '\n' }
       );
 
-      // Calcular total de taras de crudos
       const tarasCrudosCliente = embarque.clienteCrudos[clienteId].reduce((sum, crudo) => 
         sum + crudo.items.reduce((itemSum, item) => itemSum + calcularTarasTotales(item), 0), 0);
       totalTarasCrudos += tarasCrudosCliente;
@@ -177,13 +180,45 @@ function generarContenidoClientes(embarque, clientesDisponibles) {
     }
   });
 
-  // Agregar totales generales al final del documento
   contenido.push(
-
     { text: `Total general de taras: ${totalTarasLimpio + totalTarasCrudos}`, style: 'subheader', margin: [0, 5, 0, 5] }
   );
 
   return contenido;
+}
+
+function agruparProductos(productos) {
+  // Creamos un objeto para agrupar por medida y tipo
+  const grupos = productos.reduce((acc, producto) => {
+    // La clave única combina medida y tipo (incluyendo s/h2o o c/h2o)
+    const medidaTipo = formatearProducto(producto);
+    
+    if (!acc[medidaTipo]) {
+      acc[medidaTipo] = {
+        ...producto,
+        kilos: [],
+        taras: [],
+        reporteTaras: [],
+        reporteBolsas: [],
+        totalKilos: 0,
+        totalTaras: 0
+      };
+    }
+    
+    // Agregamos los kilos y taras al grupo
+    acc[medidaTipo].kilos = [...acc[medidaTipo].kilos, ...producto.kilos];
+    acc[medidaTipo].taras = [...acc[medidaTipo].taras, ...producto.taras];
+    acc[medidaTipo].reporteTaras = [...acc[medidaTipo].reporteTaras, ...producto.reporteTaras];
+    acc[medidaTipo].reporteBolsas = [...acc[medidaTipo].reporteBolsas, ...producto.reporteBolsas];
+    
+    // Actualizamos los totales
+    acc[medidaTipo].totalKilos = acc[medidaTipo].kilos.reduce((sum, kilo) => sum + (kilo || 0), 0);
+    acc[medidaTipo].totalTaras = acc[medidaTipo].taras.reduce((sum, tara) => sum + (tara || 0), 0);
+    
+    return acc;
+  }, {});
+
+  return Object.values(grupos);
 }
 
 function generarTablaProductos(productos, estiloCliente, nombreCliente) {
@@ -196,7 +231,7 @@ function generarTablaProductos(productos, estiloCliente, nombreCliente) {
     ...productos.map(producto => [
       `${totalKilos(producto, nombreCliente)} kg`,
       formatearProducto(producto),
-      `${totalTaras(producto)}  ${combinarTarasBolsas(producto.reporteTaras, producto.reporteBolsas)}`
+      `${totalTaras(producto)} ${combinarTarasBolsas(producto.reporteTaras, producto.reporteBolsas)}`
     ])
   ];
 
@@ -279,6 +314,11 @@ function formatearProducto(producto) {
     return h2o ? `${medida} ${h2o}` : medida;
   }
   
+  // Mostrar solo la medida si no hay tipo
+  if (medida && !tipoProducto) {
+    return medida.trim();
+  }
+  
   // Para casos como "51/60 - Especial"
   if (medida && tipoProducto) {
     return `${medida} ${tipoProducto}`.trim();
@@ -287,7 +327,6 @@ function formatearProducto(producto) {
   return tipoProducto.trim();
 }
 
-// Función auxiliar para calcular el total de taras
 function calcularTarasTotales(item) {
   let tarasTotales = 0;
   if (item.taras) {
@@ -301,70 +340,97 @@ function calcularTarasTotales(item) {
   return tarasTotales;
 }
 
-// Funciones auxiliares
 function obtenerNombreCliente(clienteId, clientesDisponibles) {
   const cliente = clientesDisponibles.find(c => c.id.toString() === clienteId.toString());
   return cliente ? cliente.nombre : 'Cliente Desconocido';
 }
 
 function obtenerTipoProducto(producto) {
-    let tipo = producto.tipo === 'otro' ? (producto.tipoPersonalizado || 'Otro') : (producto.tipo || 'Sin Tipo');
-    
-    // Si el tipo es numérico (como 41/50), limpiamos el string
-    if (/\d+\/\d+/.test(tipo)) {
-      let parteNumerica = tipo.match(/\d+\/\d+/)[0];
-      let h2o = '';
-      
-      // Verificar si tiene s/h2o o c/h2o
-      if (tipo.toLowerCase().includes('s/h2o') || tipo.toLowerCase().includes('s/h20')) {
-        h2o = 's/h2o';
-      } else if (tipo.toLowerCase().includes('c/h2o') || tipo.toLowerCase().includes('c/h20')) {
-        h2o = 'c/h2o';
-      }
-      
-      // Retornar solo la parte numérica y h2o si existe
-      return h2o ? `${parteNumerica} ${h2o}` : parteNumerica;
+  let tipo = producto.tipo === 'otro' ? (producto.tipoPersonalizado || 'Otro') : (producto.tipo || '');
+
+  if (/\d+\/\d+/.test(tipo)) {
+    let parteNumerica = tipo.match(/\d+\/\d+/)[0];
+    let h2o = '';
+    // Verificar si tiene s/h2o o c/h2o
+    if (tipo.toLowerCase().includes('s/h2o') || tipo.toLowerCase().includes('s/h20')) {
+      h2o = 's/h2o';
+    } else if (tipo.toLowerCase().includes('c/h2o') || tipo.toLowerCase().includes('c/h20')) {
+      h2o = 'c/h2o';
     }
     
-    return tipo;
+    return h2o ? `${parteNumerica} ${h2o}` : parteNumerica;
   }
   
+  return tipo.trim();
+}
+
 function totalTaras(producto) {
-  const tarasNormales = producto.taras.reduce((sum, tara) => sum + (tara || 0), 0);
-  const tarasExtra = (producto.tarasExtra || []).reduce((sum, tara) => sum + (tara || 0), 0);
-  return tarasNormales + tarasExtra;
+  // Asegúrate de que las taras se sumen correctamente
+  return producto.taras.reduce((sum, tara) => sum + (tara || 0), 0);
 }
 
 function totalKilos(producto, nombreCliente) {
-  const sumaKilos = producto.kilos.reduce((sum, kilo) => sum + (kilo || 0), 0);
-  const sumaTarasNormales = producto.taras.reduce((sum, tara) => sum + (tara || 0), 0);
-  let kilosTotales = sumaKilos;
+  // Primero calcular la suma de kilos
+  const sumaKilos = (producto.kilos || []).reduce((sum, kilo) => {
+    // Convertir cada kilo a número, manejar tanto strings como números
+    const kiloNum = typeof kilo === 'string' ? parseFloat(kilo) : (kilo || 0);
+    return sum + kiloNum;
+  }, 0);
 
-  // Si el check de -3 está marcado (restarTaras es true), restamos 3 kilos por cada tara
-  if (producto.restarTaras) {
-    kilosTotales -= sumaTarasNormales * 3;
+  // Si el producto es de tipo c/h20, usar el cálculo basado en reporteTaras y reporteBolsas
+  if (producto.tipo === 'c/h20') {
+    const reporteTaras = producto.reporteTaras || [];
+    const reporteBolsas = producto.reporteBolsas || [];
+    let sumaTotalKilos = 0;
+
+    for (let i = 0; i < reporteTaras.length; i++) {
+      const taras = parseInt(reporteTaras[i]) || 0;
+      const bolsa = parseInt(reporteBolsas[i]) || 0;
+      sumaTotalKilos += taras * bolsa;
+    }
+
+    // Multiplicar por el valor neto (0.65 por defecto)
+    const kilosReales = sumaTotalKilos * (producto.camaronNeto || 0.65);
+    return Number(kilosReales.toFixed(1));
+  } else {
+    // Para otros productos, calcular usando la lógica de taras
+    const sumaTarasNormales = (producto.taras || []).reduce((sum, tara) => {
+      const taraNum = typeof tara === 'string' ? parseFloat(tara) : (tara || 0);
+      return sum + taraNum;
+    }, 0);
+
+    const sumaTarasExtra = (producto.tarasExtra || []).reduce((sum, tara) => {
+      const taraNum = typeof tara === 'string' ? parseFloat(tara) : (tara || 0);
+      return sum + taraNum;
+    }, 0);
+
+    const totalTaras = sumaTarasNormales + sumaTarasExtra;
+    const descuentoTaras = producto.restarTaras ? totalTaras * 3 : 0;
+    
+    const resultado = sumaKilos - descuentoTaras;
+    
+    // Agregar 3 kg si el producto es s/h2o y el cliente es Otilio
+    if ((producto.tipo.toLowerCase().includes('s/h2o') || producto.tipo.toLowerCase().includes('s/h20')) && 
+        nombreCliente.toLowerCase().includes('otilio')) {
+      return Number((resultado + 3).toFixed(1));
+    }
+    
+    return Number(resultado.toFixed(1));
   }
-
-  // Agregar 3 kilos solo para productos de Otilio con tipo s/h20
-  if (nombreCliente.toLowerCase().includes('otilio') && 
-      producto.tipo.toLowerCase().includes('s/h20')) {
-    kilosTotales += 3;
-  }
-
-  return Number(kilosTotales.toFixed(1));
 }
+
 
 function calcularKilosCrudos(item) {
   let kilosTotales = 0;
   if (item.taras) {
     const [cantidad] = item.taras.split('-').map(Number);
-    kilosTotales += cantidad * 20.5; // Usamos 20.5 kg como peso estándar por tara
+    kilosTotales += cantidad * 20.5;
   }
   if (item.sobrante) {
     const [, kilosSobrante] = item.sobrante.split('-').map(Number);
     kilosTotales += kilosSobrante;
   }
-  return kilosTotales.toFixed(1); // Mantenemos un decimal
+  return kilosTotales.toFixed(1);
 }
 
 function combinarTarasBolsas(taras, bolsas) {
@@ -372,8 +438,10 @@ function combinarTarasBolsas(taras, bolsas) {
   
   taras.forEach((tara, index) => {
     const bolsa = bolsas[index] || '';
-    const key = bolsa;
-    combinado[key] = (combinado[key] || 0) + parseInt(tara || 1);
+    if (!combinado[bolsa]) {
+      combinado[bolsa] = 0;
+    }
+    combinado[bolsa] += parseInt(tara || 1);
   });
 
   return Object.entries(combinado)
@@ -381,7 +449,6 @@ function combinarTarasBolsas(taras, bolsas) {
     .join(' ');
 }
 
-// Nueva función para obtener el color del borde basado en el estilo del cliente
 function obtenerColorBorde(estiloCliente) {
   const colores = {
     clienteJoselito: '#0000FF',
@@ -410,3 +477,4 @@ function loadImageAsBase64(url) {
     img.src = url;
   });
 }
+

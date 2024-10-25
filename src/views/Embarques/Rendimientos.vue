@@ -156,9 +156,7 @@ export default {
       this.embarqueData.clientes.forEach(cliente => {
         cliente.productos.forEach(producto => {
           if (producto.medida) {
-            // Normalizar la medida (convertir a minúsculas)
-            const medidaNormalizada = producto.medida.toLowerCase();
-            // Guardar la versión original como se mostró la primera vez
+            const medidaNormalizada = producto.medida.toLowerCase().trim();
             if (!medidasMap.has(medidaNormalizada)) {
               medidasMap.set(medidaNormalizada, producto.medida);
             }
@@ -172,10 +170,10 @@ export default {
     obtenerTotalEmbarcado(medida) {
       if (!this.embarqueData || !this.embarqueData.clientes) return 0;
       
-      const medidaNormalizada = medida.toLowerCase();
+      const medidaNormalizada = medida.toLowerCase().trim();
       return this.embarqueData.clientes.reduce((total, cliente) => {
         return total + cliente.productos
-          .filter(p => p.medida && p.medida.toLowerCase() === medidaNormalizada)
+          .filter(p => p.medida && p.medida.toLowerCase().trim() === medidaNormalizada)
           .reduce((subtotal, producto) => {
             if (producto.tipo === 'c/h20') {
               const totalBolsas = this.calcularTotalBolsas(producto);

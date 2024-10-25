@@ -63,7 +63,7 @@
       </div>
     </div>
       
-    <form @submit.prevent="guardarEmbarque">
+    <form @submit.prevent="guardarEmbarque" @keydown.enter.prevent>
       <div v-for="(clienteProductos, clienteId) in productosPorCliente" :key="clienteId" class="cliente-grupo">
         <div class="cliente-header" :data-cliente="obtenerNombreCliente(clienteId)" @click="editarNombreCliente(clienteId)">
           <h3>{{ obtenerNombreCliente(clienteId) }}</h3>
@@ -79,13 +79,28 @@
               {{ producto.medida || 'Sin Medida' }} - {{ obtenerTipoProducto(producto) }}
             </h2>
             <div class="producto-header">
-              <input 
-                type="text" 
-                v-model="producto.medida" 
-                class="form-control medida-input" 
-                placeholder="Medida"                
-                :size="producto.medida.length || 1"
-              >
+              <div class="medida-autocomplete">
+                <input 
+                  type="text" 
+                  v-model="producto.medida" 
+                  class="form-control medida-input" 
+                  placeholder="Medida"                
+                  :size="producto.medida.length || 1"
+                  @input="onMedidaInput(producto)"
+                  @focus="showSuggestions(producto)"
+                  @blur="hideSuggestions(producto)"
+                >
+                <div class="suggestions-list" v-if="producto.showSuggestions && medidasSugeridas.length > 0">
+                  <div 
+                    v-for="medida in medidasSugeridas" 
+                    :key="medida"
+                    class="suggestion-item"
+                    @mousedown.prevent="selectMedida(producto, medida)"
+                  >
+                    {{ medida }}
+                  </div>
+                </div>
+              </div>
               <select 
                 v-model="producto.tipo" 
                 class="form-control tipo-select" 
@@ -208,6 +223,12 @@
                   <button type="button" @click="eliminarReporteBolsa(producto, index)" class="btn btn-danger btn-sm">-</button>
                 </div>
                 <button type="button" @click="agregarReporteBolsa(producto)" class="btn btn-success btn-sm">+</button>
+                <div class="totales-reporte">
+          
+                  <div class="total-bolsas-reporte">
+                    Bolsas: {{ calcularTotalBolsas(producto) }}
+                  </div>
+                </div>
               </div>
             </div>
             <div v-if="reporteExcedeTresParentesis(producto)" class="reporte-extenso">
@@ -346,6 +367,8 @@ export default {
       guardadoAutomaticoActivo: false,
       clienteCrudos: {},
       unsubscribe: null,
+      medidasSugeridas: [],
+      medidasUsadas: new Set(),
     };
   },
   computed: {
@@ -398,7 +421,9 @@ export default {
         tarasExtra: [],
         restarTaras: true,
         camaronNeto: 0.65, // Valor por defecto
+        showSuggestions: false, // Agregar esta propiedad
       });
+      this.actualizarMedidasUsadas();
     },
     eliminarProducto(producto) {
       const index = this.embarque.productos.indexOf(producto);
@@ -720,6 +745,15 @@ export default {
 
       let yPos = margin;
 
+      // Agregar fecha y quien carga
+      doc.setFontSize(12);
+      doc.setFont("helvetica", "normal");
+      const fechaActual = new Date().toLocaleDateString();
+      doc.text(`Fecha: ${fechaActual}`, margin, yPos);
+      doc.text(`Carga con: ${this.embarque.cargaCon}`, pageWidth - margin, yPos, { align: 'right' });
+      
+      yPos += 4; // Espacio después de la información de encabezado
+
       Object.entries(this.productosPorCliente).forEach(([clienteId, productos]) => {
         const nombreCliente = this.obtenerNombreCliente(clienteId);
         const colorCliente = this.getClienteColor(clienteId);
@@ -744,11 +778,11 @@ export default {
         doc.text("Limpios", margin, yPos);
         doc.text("Crudos", margin + columnWidth + margin, yPos);
 
-        yPos += 8;  // Incrementamos un poco más el espacio después de los títulos
+        yPos += 6;  // Reducimos este valor de 8 a 6 para disminuir el espacio después de los títulos
         let yPosCrudos = yPos;
 
         // Volvemos al tamaño de fuente normal para el contenido
-        doc.setFontSize(12.5);
+        doc.setFontSize(12);
         doc.setFont("helvetica", "normal");
 
         let totalTarasCliente = 0;
@@ -817,17 +851,17 @@ export default {
             // Contar el número de paréntesis
             const numParentesis = (reporteCombinado.match(/\(/g) || []).length;
             
-            if (numParentesis > 2) {
-              yPos += 6; // Mover a la siguiente línea
+            if (numParentesis > 0) {
+              yPos += 4; // Mover a la siguiente línea
               let reporteLines = doc.splitTextToSize(reporteCombinado, columnWidth - margin * 2);
               doc.text(reporteLines, margin, yPos);
-              yPos += (reporteLines.length * 6); // Ajustar yPos basado en el número de líneas
+              yPos += (reporteLines.length * 4); // Ajustar yPos basado en el número de líneas
             } else {
               doc.text(reporteCombinado, margin + anchoNegrita + anchoNormal + anchoKilos + 5, yPos);
             }
           }
           
-          yPos += 6;
+          yPos += 4; // Reducimos este valor de 6 a 4 para disminuir el espacio entre productos
           totalTarasCliente += totalTaras;
           totalKilosCliente += totalKilos;
         });
@@ -858,7 +892,7 @@ export default {
               doc.setFont("helvetica", "bold");
               doc.text(`${kilosTotales} Kg`, margin + columnWidth + margin + anchoNegrita + anchoTexto, yPosCrudos);
               
-              yPosCrudos += 6;
+              yPosCrudos += 4; // Reducimos este valor de 6 a 4 para disminuir el espacio entre productos
               totalKilosCliente += kilosTotales;
               totalTarasCliente += this.calcularTarasCrudos(item);
             });
@@ -878,7 +912,7 @@ export default {
         const textoTotal = `Total: ${totalTarasCliente} taras, ${totalKilosCliente.toFixed(2)} kilos`;
         doc.text(textoTotal, margin + 2, yPos + 5);
         
-        yPos += 15;
+        yPos += 10; // Cambiamos este valor de 15 a 10
 
         // Verificar si se necesita una nueva página
         if (yPos > pageHeight - margin * 2) {
@@ -1142,12 +1176,23 @@ export default {
       const kilosCrudo = parseFloat(this.calcularKilosCrudo());
       return (kilosLimpio + kilosCrudo).toFixed(2);
     },
+
+    calcularTotalBolsas(producto) {
+      let total = 0;
+      for (let i = 0; i < producto.reporteTaras.length; i++) {
+        const tara = parseInt(producto.reporteTaras[i]) || 0;
+        const bolsa = parseInt(producto.reporteBolsas[i]) || 0;
+        total += tara * bolsa;
+      }
+      return total;
+    },
   },
   created() {
     const embarqueId = this.$route.params.id;
     this.cargarEmbarque(embarqueId);
     this.undoStack.push(JSON.stringify(this.embarque));
     console.log('Component mounted. Estado inicial cargado.');
+    this.actualizarMedidasUsadas();
   },
   watch: {
     embarque: {
@@ -1885,6 +1930,12 @@ export default {
   flex: 1;
 }
 
+.total-bolsas {
+  margin-top: 10px;
+  font-weight: bold;
+  color: #28a745;
+}
+
 .agregar-kilo {
   width: 100%;
   margin-top: 10px;
@@ -2228,6 +2279,37 @@ export default {
     width: 60px;
     font-size: 0.9rem;
   }
+}
+
+.totales-reporte {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 10px;
+}
+
+.total-taras-reporte,
+.total-bolsas-reporte {
+  flex: 1;
+  font-weight: bold;
+  padding: 5px;
+  border-radius: 5px;
+  text-align: center;
+}
+
+.total-taras-reporte.coincide {
+  background-color: #d4edda;
+  color: #155724;
+}
+
+.total-taras-reporte.no-coincide {
+  background-color: #f8d7da;
+  color: #721c24;
+}
+
+.total-bolsas-reporte {
+  background-color: #d4edda;
+  color: #155724;
+  margin-left: 5px;
 }
 </style>
 
