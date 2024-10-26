@@ -9,7 +9,10 @@
           <tr>
             <th>Fecha</th>
             <th>Clientes</th>
+            <th>Kilos Limpios</th>
+            <th>Kilos Crudos</th>
             <th>Total Kilos</th>
+            <th>Total Taras</th>
             <th>Acciones</th>
           </tr>
         </thead>
@@ -17,7 +20,10 @@
           <tr v-for="embarque in embarques" :key="embarque.id">
             <td>{{ formatearFecha(embarque.fecha) }}</td>
             <td>{{ obtenerClientes(embarque) }}</td>
-            <td>{{ calcularTotalKilos(embarque) }} kg</td>
+            <td>{{ calcularKilosLimpios(embarque) }} kg</td>
+            <td>{{ calcularKilosCrudos(embarque) }} kg</td>
+            <td>{{ (Number(calcularKilosLimpios(embarque)) + Number(calcularKilosCrudos(embarque))).toFixed(1) }} kg</td>
+            <td>{{ calcularTotalTaras(embarque) }}</td>
             <td>
               <button @click="editarEmbarque(embarque.id)" class="btn-detalles">Editar</button>
               <button @click="eliminarEmbarque(embarque.id)" class="btn-eliminar">Eliminar</button>
@@ -71,18 +77,69 @@ export default {
       return embarque.clientes.map(cliente => cliente.nombre).join(', ');
     },
     calcularTotalKilos(embarque) {
-      console.log('Calculando total para embarque:', embarque);
-      const total = embarque.clientes.reduce((total, cliente) => {
-        console.log('Cliente:', cliente.nombre);
-        const clienteTotal = cliente.productos ? cliente.productos.reduce((clienteTotal, producto) => {
-          console.log('Producto:', producto.nombre, 'Kilos:', producto.totalKilos);
-          return clienteTotal + (parseFloat(producto.totalKilos) || 0);
-        }, 0) : 0;
-        console.log('Total del cliente:', clienteTotal);
-        return total + clienteTotal;
-      }, 0);
-      console.log('Total final:', total);
-      return total.toFixed(1);
+      let totalKilos = 0;
+
+      embarque.clientes.forEach(cliente => {
+        cliente.productos.forEach(producto => {
+          if (producto.tipo === 'c/h20') {
+            // Para productos c/h20, calcular la suma de (taras * bolsa) para cada grupo
+            const reporteTaras = producto.reporteTaras || [];
+            const reporteBolsas = producto.reporteBolsas || [];
+            let sumaTotalKilos = 0;
+
+            for (let i = 0; i < reporteTaras.length; i++) {
+              const taras = parseInt(reporteTaras[i]) || 0;
+              const bolsa = parseInt(reporteBolsas[i]) || 0;
+              sumaTotalKilos += taras * bolsa;
+            }
+
+            // Multiplicar por el valor neto (0.65 por defecto)
+            const kilosReales = sumaTotalKilos * (producto.camaronNeto || 0.65);
+            totalKilos += kilosReales;
+          } else {
+            // Para otros productos
+            const sumaKilos = (producto.kilos || []).reduce((sum, kilo) => sum + (Number(kilo) || 0), 0);
+            const sumaTaras = this.calcularTotalTarasProducto(producto);
+            const descuentoTaras = producto.restarTaras ? sumaTaras * 3 : 0;
+            totalKilos += sumaKilos - descuentoTaras;
+          }
+        });
+      });
+
+      return totalKilos.toFixed(1);
+    },
+    calcularTotalTaras(embarque) {
+      let totalTaras = 0;
+
+      embarque.clientes.forEach(cliente => {
+        // Sumar taras de productos normales
+        cliente.productos.forEach(producto => {
+          totalTaras += this.calcularTotalTarasProducto(producto);
+        });
+
+        // Sumar taras de crudos
+        if (cliente.crudos) {
+          cliente.crudos.forEach(crudo => {
+            crudo.items.forEach(item => {
+              if (item.taras) {
+                const [cantidad] = item.taras.split('-').map(Number);
+                totalTaras += cantidad || 0;
+              }
+              if (item.sobrante) {
+                const [cantidadSobrante] = item.sobrante.split('-').map(Number);
+                totalTaras += cantidadSobrante || 0;
+              }
+            });
+          });
+        }
+      });
+
+      return totalTaras;
+    },
+    calcularTotalTarasProducto(producto) {
+      const tarasNormales = (producto.taras || []).reduce((sum, tara) => sum + (Number(tara) || 0), 0);
+      const tarasExtra = (producto.tarasExtra || []).reduce((sum, tara) => sum + (Number(tara) || 0), 0);
+      return tarasNormales + tarasExtra;
     },
     verDetalles(embarqueId) {
       console.log('Navegando a detalles del embarque:', embarqueId);
@@ -108,7 +165,63 @@ export default {
           alert('Hubo un error al eliminar el embarque. Por favor, intente de nuevo.');
         }
       }
-    }
+    },
+
+    calcularKilosLimpios(embarque) {
+      let totalKilos = 0;
+
+      embarque.clientes.forEach(cliente => {
+        cliente.productos.forEach(producto => {
+          if (producto.tipo === 'c/h20') {
+            // Para productos c/h20, calcular la suma de (taras * bolsa) para cada grupo
+            const reporteTaras = producto.reporteTaras || [];
+            const reporteBolsas = producto.reporteBolsas || [];
+            let sumaTotalKilos = 0;
+
+            for (let i = 0; i < reporteTaras.length; i++) {
+              const taras = parseInt(reporteTaras[i]) || 0;
+              const bolsa = parseInt(reporteBolsas[i]) || 0;
+              sumaTotalKilos += taras * bolsa;
+            }
+
+            // Multiplicar por el valor neto (0.65 por defecto)
+            const kilosReales = sumaTotalKilos * (producto.camaronNeto || 0.65);
+            totalKilos += kilosReales;
+          } else {
+            // Para otros productos
+            const sumaKilos = (producto.kilos || []).reduce((sum, kilo) => sum + (Number(kilo) || 0), 0);
+            const sumaTaras = this.calcularTotalTarasProducto(producto);
+            const descuentoTaras = producto.restarTaras ? sumaTaras * 3 : 0;
+            totalKilos += sumaKilos - descuentoTaras;
+          }
+        });
+      });
+
+      return totalKilos.toFixed(1);
+    },
+
+    calcularKilosCrudos(embarque) {
+      let totalKilosCrudos = 0;
+
+      embarque.clientes.forEach(cliente => {
+        if (cliente.crudos) {
+          cliente.crudos.forEach(crudo => {
+            crudo.items.forEach(item => {
+              if (item.taras) {
+                const [cantidad, medida] = item.taras.split('-').map(Number);
+                totalKilosCrudos += (cantidad || 0) * (medida || 0);
+              }
+              if (item.sobrante) {
+                const [cantidadSobrante, medidaSobrante] = item.sobrante.split('-').map(Number);
+                totalKilosCrudos += (cantidadSobrante || 0) * (medidaSobrante || 0);
+              }
+            });
+          });
+        }
+      });
+
+      return totalKilosCrudos.toFixed(1);
+    },
   },
   mounted() {
     this.cargarEmbarques();
@@ -223,5 +336,26 @@ h1 {
 
 .btn-eliminar:hover {
   background-color: #c9302c;
+}
+
+/* Agregar estos estilos para mejorar la visualización de la tabla */
+.tabla-embarques td {
+  white-space: nowrap;
+  padding: 12px 15px;
+}
+
+.tabla-embarques th {
+  white-space: nowrap;
+  padding: 12px 15px;
+  background-color: #f8f9fa;
+  border-bottom: 2px solid #dee2e6;
+}
+
+@media (max-width: 1200px) {
+  .tabla-embarques {
+    display: block;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
 }
 </style>

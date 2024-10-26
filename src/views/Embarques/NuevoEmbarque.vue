@@ -73,7 +73,7 @@
           </div>
         </div>
         <div class="productos-container">
-          <div v-for="(producto, index) in clienteProductos" :key="index" class="producto">
+          <div v-for="(producto, index) in clienteProductos" :key="index" class="producto" :data-es-venta="producto.esVenta">
             <!-- Encabezado de la medida y selección -->
             <h2 class="encabezado-medida">
               {{ producto.medida || 'Sin Medida' }} - {{ obtenerTipoProducto(producto) }}
@@ -115,7 +115,18 @@
                 <option value="c/h20">C/H20</option>
                 <option value="otro">Otro</option>
               </select>
-              <!-- Nuevo input para camarón neto -->
+
+              <!-- Checkbox de venta movido aquí, después del tipo -->
+              <div v-if="obtenerNombreCliente(producto.clienteId) === 'Ozuna'" class="venta-checkbox-container">
+                <input 
+                  type="checkbox" 
+                  v-model="producto.esVenta" 
+                  class="form-check-input venta-checkbox" 
+                  :id="'ventaCheck-' + producto.id"
+                >
+                <label :for="'ventaCheck-' + producto.id">Venta</label>
+              </div>
+              
               <input 
                 v-if="producto.tipo === 'c/h20'"
                 type="text"
@@ -409,7 +420,9 @@ export default {
   },
   methods: {
     agregarProducto(clienteId) {
+      const productoId = Date.now(); // Generar un ID único
       this.embarque.productos.push({
+        id: productoId,
         clienteId,
         medida: '',
         tipo: '',
@@ -422,6 +435,7 @@ export default {
         restarTaras: true,
         camaronNeto: 0.65, // Valor por defecto
         showSuggestions: false, // Agregar esta propiedad
+        esVenta: false, // Agregar esta propiedad
       });
       this.actualizarMedidasUsadas();
     },
@@ -1423,16 +1437,16 @@ export default {
 .producto-header {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 8px;
   align-items: center;
   margin-bottom: 15px;
 }
 
 .medida-input {
-  flex: 1;
-  min-width: 80px;
+  flex: 2;
+  min-width: 120px;
   padding: 8px;
-  font-size: 1rem;
+  font-size: 1.1rem;
   font-weight: bold;
   border: 2px solid #007bff;
   border-radius: 5px;
@@ -1440,10 +1454,9 @@ export default {
 }
 
 .tipo-select {
-  flex: 2;
-  min-width: 120px;
-  padding: 8px;
-  font-size: 1rem;
+  flex: 1;
+  min-width: 90px;
+  max-width: 110px;
   font-weight: bold;
   border: 2px solid #28a745;
   border-radius: 5px;
@@ -2310,6 +2323,42 @@ export default {
   background-color: #d4edda;
   color: #155724;
   margin-left: 5px;
+}
+
+/* Agregar estos nuevos estilos */
+.venta-checkbox-container {
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  background-color: #f8f9fa;
+  border-radius: 5px;
+  border: 1px solid #dee2e6;
+  height: 38px; /* Ajustar altura para que coincida con otros elementos */
+}
+
+.venta-checkbox {
+  margin-right: 5px;
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.venta-checkbox-container label {
+  font-size: 0.9rem;
+  color: #495057;
+  cursor: pointer;
+  user-select: none;
+  margin-bottom: 0; /* Eliminar margen inferior del label */
+}
+
+/* Estilo especial para productos que son venta */
+.producto[data-es-venta="true"] {
+  border: 2px solid #28a745;
+}
+
+/* Estilo para productos que son maquila */
+.producto[data-es-venta="false"] {
+  border: 2px solid #007bff;
 }
 </style>
 

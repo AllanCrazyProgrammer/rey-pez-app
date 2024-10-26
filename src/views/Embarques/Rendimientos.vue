@@ -256,15 +256,14 @@ export default {
         if (totalEmbarcado === 0) return 0;
         
         this.guardarCambiosEnTiempoReal();
-        return totalKilosCrudos / totalEmbarcado;
+        return totalKilosCrudos / totalEmbarcado; // Invertir la división
       } else {
-        // Lógica existente para medidas normales
         if (!this.kilosCrudos[medida]) return 0;
-        const totalParaCalculo = this.obtenerTotalParaRendimiento(medida);
-        if (totalParaCalculo === 0) return 0;
+        const totalEmbarcado = this.obtenerTotalEmbarcado(medida);
+        if (totalEmbarcado === 0) return 0;
         
         this.guardarCambiosEnTiempoReal();
-        return this.kilosCrudos[medida] / totalParaCalculo;
+        return Number(this.kilosCrudos[medida]) / totalEmbarcado; // Invertir la división
       }
     },
 
