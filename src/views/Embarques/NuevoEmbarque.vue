@@ -127,14 +127,20 @@
                 <label :for="'ventaCheck-' + producto.id">Venta</label>
               </div>
               
-              <input 
-                v-if="producto.tipo === 'c/h20'"
-                type="text"
-                v-model="producto.camaronNeto"
-                class="form-control camaron-neto-input"
-                inputmode="decimal"
-                placeholder="Neto"
-              >
+              <div v-if="producto.tipo === 'c/h20'" class="valores-container">
+                <div class="valor-neto-container">
+                  <label>Valor neto:</label>
+                  <input
+                    type="number"
+                    v-model="producto.camaronNeto"
+                    class="camaron-neto-input"
+                    step="0.01"
+                    min="0"
+                    max="1"
+                  >
+                </div>
+  
+              </div>
               <input
                 v-if="producto.tipo === 'otro'"
                 type="text" 
@@ -434,6 +440,7 @@ export default {
         tarasExtra: [],
         restarTaras: true,
         camaronNeto: 0.65, // Valor por defecto
+        multiplicadorBolsas: 1, // Añadido nuevo campo
         showSuggestions: false, // Agregar esta propiedad
         esVenta: false, // Agregar esta propiedad
       });

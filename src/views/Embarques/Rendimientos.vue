@@ -321,13 +321,13 @@ export default {
       const datosParaPDF = this.medidasUnicas.map(medida => ({
         medida,
         kilosCrudos: this.esMedidaMix(medida) ? 
-          this.kilosCrudos[medida] : 
+          Number(this.kilosCrudos[medida]?.medida1 || 0) + Number(this.kilosCrudos[medida]?.medida2 || 0) :
           Number(this.kilosCrudos[medida] || 0),
         totalEmbarcado: this.obtenerTotalEmbarcado(medida),
         rendimiento: this.getRendimiento(medida)
       }));
 
-      generarPDFRendimientos(datosParaPDF, this.embarqueData);
+      generarPDFRendimientos(datosParaPDF);
     },
   },
 
