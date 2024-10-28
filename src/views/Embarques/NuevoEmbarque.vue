@@ -594,6 +594,8 @@ export default {
                 restarTaras: producto.restarTaras || false,
               }));
             }),
+            // Agregar los kilos crudos
+            kilosCrudos: data.kilosCrudos || {}
           };
 
           // Cargar los crudos
@@ -1090,12 +1092,17 @@ export default {
     generarNotaVenta(clienteId) {
       const clienteProductos = this.productosPorCliente[clienteId];
       const clienteCrudos = this.clienteCrudos[clienteId];
+      
+      // Crear una copia del embarque con todos los datos necesarios
       const embarqueCliente = {
         fecha: this.embarque.fecha,
-        cargaCon: this.embarque.cargaCon, // Añadir esta línea
+        cargaCon: this.embarque.cargaCon,
         productos: clienteProductos,
-        clienteCrudos: { [clienteId]: clienteCrudos }
+        clienteCrudos: { [clienteId]: clienteCrudos },
+        // Agregar los kilos crudos desde Firestore
+        kilosCrudos: this.embarque.kilosCrudos || {}
       };
+
       generarNotaVentaPDF(embarqueCliente, this.clientesDisponibles);
     },
     onRestarTarasChange(producto) {
