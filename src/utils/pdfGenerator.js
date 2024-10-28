@@ -564,11 +564,6 @@ function formatearProducto(producto) {
   let tipoProducto = obtenerTipoProducto(producto);
   let medida = producto.medida || '';
   
-  // Si el tipo es "otro", usamos la medida y luego el tipo personalizado
-  if (producto.tipo === 'otro' && producto.tipoPersonalizado) {
-    return `${medida} ${producto.tipoPersonalizado.trim()}`.trim();
-  }
-  
   // Si la medida tiene el formato numérico (ej. "51/60")
   if (/^\d+\/\d+/.test(medida)) {
     medida = medida.match(/^\d+\/\d+/)[0];
@@ -581,15 +576,19 @@ function formatearProducto(producto) {
       h2o = 'c/h2o';
     }
     
+    // Si el tipo es "otro", retornar la medida con el tipo personalizado
+    if (producto.tipo === 'otro' && producto.tipoPersonalizado) {
+      return `${medida} ${producto.tipoPersonalizado}`;
+    }
+    
     return h2o ? `${medida} ${h2o}` : medida;
   }
   
-  // Mostrar solo la medida si no hay tipo
+  // El resto de la función permanece igual...
   if (medida && !tipoProducto) {
     return medida.trim();
   }
   
-  // Para casos como "51/60 - Especial"
   if (medida && tipoProducto) {
     return `${medida} ${tipoProducto}`.trim();
   }
