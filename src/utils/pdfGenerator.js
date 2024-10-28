@@ -5,6 +5,14 @@ pdfMake.vfs = pdfFonts.pdfMake.vfs;
 
 export async function generarNotaVentaPDF(embarque, clientesDisponibles) {
   try {
+    console.log('Datos del embarque para PDF:', {
+      productos: embarque.productos,
+      kilosCrudos: embarque.kilosCrudos,
+      clienteCrudos: embarque.clienteCrudos,
+      fecha: embarque.fecha,
+      cargaCon: embarque.cargaCon
+    });
+
     if (!embarque || !embarque.productos) {
       console.warn('El embarque no contiene datos de productos válidos');
       return;
@@ -32,7 +40,7 @@ export async function generarNotaVentaPDF(embarque, clientesDisponibles) {
               stack: [
                 {
                   text: `Fecha: ${new Date(embarque.fecha).toLocaleString('es-MX', { 
-                    timeZone: 'UTC', // Cambiado de 'America/Mexico_City' a 'UTC'
+                    timeZone: 'UTC',
                     year: 'numeric',
                     month: '2-digit',
                     day: '2-digit'
@@ -52,7 +60,11 @@ export async function generarNotaVentaPDF(embarque, clientesDisponibles) {
         { text: '\n' },
         ...generarContenidoClientes(embarque, clientesDisponibles),
         // Agregar la nueva sección de rendimientos
-        ...generarSeccionRendimientos(embarque, clientesDisponibles),
+        ...generarSeccionRendimientos({
+          ...embarque,
+          // Asegurarnos de que los kilos crudos estén disponibles
+          kilosCrudos: embarque.kilosCrudos || {}
+        }, clientesDisponibles),
       ],
       styles: {
         notaVentaHeader: {
@@ -250,94 +262,187 @@ function generarContenidoClientes(embarque, clientesDisponibles) {
 
   return contenido;
 }
-
 function generarSeccionRendimientos(embarque, clientesDisponibles) {
   const contenido = [];
   
-  // Filtrar productos de Ozuna que no son para venta
-  const productosOzuna = embarque.productos.filter(producto => 
+  // Obtener todos los productos de Ozuna que son maquila (no son venta)
+  const productosMaquilaOzuna = embarque.productos.filter(producto => 
     producto.clienteId === "4" && !producto.esVenta
   );
 
-  if (productosOzuna.length > 0) {
+  if (productosMaquilaOzuna.length > 0) {
     contenido.push(
-      { text: 'Rendimientos:', style: 'subheader', margin: [0, 20, 0, 10] }
+      { text: 'Rendimientos de Maquila:', style: 'subheader', margin: [0, 20, 0, 10] }
     );
 
-    productosOzuna.forEach(producto => {
-      // Agregar la medida como título
-      contenido.push({
-        text: producto.medida,
-        style: 'medidaHeader',
-        margin: [0, 15, 0, 5],
-        fontSize: 24,
-        bold: true
-      });
-
-      // Kilos en crudo
-      contenido.push({
-        text: 'Kilos en crudo:',
-        margin: [0, 10, 0, 5],
-        fontSize: 18,
-        color: '#666666'
-      });
-
-      // Valor de kilos en crudo
-      contenido.push({
-        text: `${calcularKilosCrudosDesdeReporte(producto)}`,
-        fontSize: 22,
-        margin: [0, 5, 0, 15]
-      });
-
-      // Rendimiento
-      contenido.push({
-        columns: [
-          {
-            text: 'Rendimiento:',
-            width: 'auto',
-            fontSize: 20,
-            bold: true
-          },
-          {
-            text: ` ${(calcularKilosCrudosDesdeReporte(producto) / calcularKilosLimpios(producto)).toFixed(2)}`,
-            width: 'auto',
-            fontSize: 20,
-            color: '#27ae60',
-            bold: true,
-            margin: [5, 0, 0, 0]
-          }
-        ],
-        margin: [0, 5, 0, 15]
-      });
-
-      // Agregar una línea divisoria si no es el último producto
-      if (producto !== productosOzuna[productosOzuna.length - 1]) {
-        contenido.push({
-          canvas: [{
-            type: 'line',
-            x1: 0, y1: 5,
-            x2: 515, y2: 5,
-            lineWidth: 0.5,
-            lineColor: '#CCCCCC'
-          }]
-        });
+    const tablaRendimientos = {
+      table: {
+        headerRows: 1,
+        widths: ['25%', '25%', '25%', '25%'],
+        body: [
+          [
+            { text: 'Medida', style: 'tableHeader' },
+            { text: 'Kilos en Crudo', style: 'tableHeader' },
+            { text: 'Kilos Limpios', style: 'tableHeader' },
+            { text: 'Rendimiento', style: 'tableHeader' }
+          ]
+        ]
+      },
+      layout: {
+        hLineWidth: () => 1,
+        vLineWidth: () => 1,
+        hLineColor: () => '#008000',
+        vLineColor: () => '#008000',
       }
+    };
+
+    let totalKilosCrudos = 0;
+    let totalKilosLimpios = 0;
+
+    // Agrupar productos por medida
+    const productosPorMedida = productosMaquilaOzuna.reduce((acc, producto) => {
+      const medida = producto.medida;
+      if (!acc[medida]) {
+        acc[medida] = [];
+      }
+      acc[medida].push(producto);
+      return acc;
+    }, {});
+
+    Object.entries(productosPorMedida).forEach(([medida, productos]) => {
+      // Calcular kilos limpios
+      const kilosLimpios = productos.reduce((sum, producto) => 
+        sum + calcularKilosLimpios(producto), 0);
+
+      // Obtener kilos crudos del input field de Rendimientos.vue
+      let kilosCrudos = 0;
+      const medidaKey = `${medida} Maquila Ozuna`; // Usar la clave correcta
+      
+      if (embarque.kilosCrudos && embarque.kilosCrudos[medidaKey]) {
+        if (typeof embarque.kilosCrudos[medidaKey] === 'object') {
+          // Para medidas tipo mix
+          kilosCrudos = Number(embarque.kilosCrudos[medidaKey].medida1 || 0) + 
+                       Number(embarque.kilosCrudos[medidaKey].medida2 || 0);
+        } else {
+          // Para medidas normales
+          kilosCrudos = Number(embarque.kilosCrudos[medidaKey]);
+        }
+      }
+
+      // Calcular rendimiento
+      const rendimiento = kilosLimpios > 0 ? kilosCrudos / kilosLimpios : 0;
+
+      totalKilosCrudos += kilosCrudos;
+      totalKilosLimpios += kilosLimpios;
+
+      tablaRendimientos.table.body.push([
+        { text: medida, alignment: 'center' },
+        { text: `${kilosCrudos.toFixed(2)} kg`, alignment: 'center' },
+        { text: `${kilosLimpios.toFixed(2)} kg`, alignment: 'center' },
+        { 
+          text: rendimiento.toFixed(2), 
+          alignment: 'center',
+          color: rendimiento > 1 ? '#27ae60' : '#000000',
+          bold: rendimiento > 1
+        }
+      ]);
     });
+
+    // Agregar fila de totales
+    const rendimientoTotal = totalKilosLimpios > 0 ? totalKilosCrudos / totalKilosLimpios : 0;
+    tablaRendimientos.table.body.push([
+      { text: 'TOTAL', style: 'tableHeader', alignment: 'center' },
+      { text: `${totalKilosCrudos.toFixed(2)} kg`, style: 'tableHeader', alignment: 'center' },
+      { text: `${totalKilosLimpios.toFixed(2)} kg`, style: 'tableHeader', alignment: 'center' },
+      { 
+        text: rendimientoTotal.toFixed(2), 
+        style: 'tableHeader',
+        alignment: 'center',
+        color: rendimientoTotal > 1 ? '#27ae60' : '#000000',
+        bold: rendimientoTotal > 1
+      }
+    ]);
+
+    contenido.push(tablaRendimientos);
   }
 
   return contenido;
 }
 
+function calcularKilosCrudosPorMedida(embarque, medida) {
+  // Buscar en los crudos del cliente Ozuna
+  const crudosOzuna = embarque.clienteCrudos?.["4"] || [];
+  
+  let kilosCrudos = 0;
+  
+  crudosOzuna.forEach(crudo => {
+    crudo.items.forEach(item => {
+      // Verificar si la talla del crudo corresponde a la medida
+      if (convertirTallaAMedida(item.talla) === medida) {
+        // Sumar kilos de taras principales
+        if (item.taras) {
+          const [cantidad, peso] = item.taras.split('-').map(Number);
+          kilosCrudos += cantidad * peso;
+        }
+        // Sumar kilos de sobrante si existe
+        if (item.sobrante) {
+          const [cantidad, peso] = item.sobrante.split('-').map(Number);
+          kilosCrudos += cantidad * peso;
+        }
+      }
+    });
+  });
+  
+  return kilosCrudos;
+}
+
+function convertirTallaAMedida(talla) {
+  // Mapeo de tallas a medidas
+  const mapeoTallas = {
+    'Med c/c': '51/60',
+    'Med-Esp c/c': '41/50',
+    'Med-gde c/c': '36/40',
+    'Gde c/c': '31/35',
+    'Extra c/c': '21/25',
+    'Jumbo c/c': 'U/15'
+    // Agregar más mapeos según sea necesario
+  };
+  
+  return mapeoTallas[talla] || talla;
+}
+
 function calcularKilosLimpios(producto) {
-  const sumaKilos = producto.kilos.reduce((sum, kilo) => sum + (Number(kilo) || 0), 0);
-  const sumaTaras = producto.taras.reduce((sum, tara) => sum + (Number(tara) || 0), 0);
-  const sumaTarasExtra = (producto.tarasExtra || []).reduce((sum, tara) => sum + (Number(tara) || 0), 0);
-  const totalTaras = sumaTaras + sumaTarasExtra;
-  const descuentoTaras = producto.restarTaras ? totalTaras * 3 : 0;
-  return sumaKilos - descuentoTaras;
+  if (producto.tipo === 'c/h20') {
+    // Para productos con agua
+    let totalKilos = 0;
+    const reporteTaras = producto.reporteTaras || [];
+    const reporteBolsas = producto.reporteBolsas || [];
+    
+    for (let i = 0; i < reporteTaras.length; i++) {
+      const taras = parseInt(reporteTaras[i]) || 0;
+      const bolsas = parseInt(reporteBolsas[i]) || 0;
+      totalKilos += taras * bolsas;
+    }
+    
+    return totalKilos * (producto.camaronNeto || 0.65);
+  } else {
+    // Para productos sin agua
+    const sumaKilos = producto.kilos.reduce((sum, kilo) => sum + (Number(kilo) || 0), 0);
+    const sumaTaras = producto.taras.reduce((sum, tara) => sum + (Number(tara) || 0), 0);
+    const sumaTarasExtra = (producto.tarasExtra || []).reduce((sum, tara) => sum + (Number(tara) || 0), 0);
+    const totalTaras = sumaTaras + sumaTarasExtra;
+    const descuentoTaras = producto.restarTaras ? totalTaras * 3 : 0;
+    
+    return sumaKilos - descuentoTaras;
+  }
 }
 
 function calcularKilosCrudosDesdeReporte(producto) {
+  // Si el producto tiene un valor directo de kilos en crudo, usarlo
+  if (producto.kilosCrudos) {
+    return Number(producto.kilosCrudos);
+  }
+  
   let totalKilos = 0;
   
   // Si tenemos reporteTaras y reporteBolsas
