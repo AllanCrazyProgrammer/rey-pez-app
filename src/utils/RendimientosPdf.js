@@ -13,40 +13,40 @@ export const generarPDFRendimientos = async (datosRendimientos, embarqueData) =>
           columns: [
             {
               image: logoBase64,
-              width: 100,
+              width: 80,
               alignment: 'left',
-              margin: [0, 0, 0, 10]
+              margin: [0, 0, 0, 5]
             },
             {
               text: 'Reporte de Rendimientos',
               style: 'header',
               alignment: 'center',
-              margin: [0, 20, 0, 0]
+              margin: [0, 10, 0, 0]
             },
             {
               stack: [
                 {
                   text: `Fecha: ${new Date().toLocaleDateString()}`,
                   alignment: 'right',
-                  margin: [0, 20, 0, 0]
+                  margin: [0, 10, 0, 0]
                 },
               ]
             }
           ]
         },
-        { text: '\n' },
+        { text: '\n', height: 5 },
         generarTablaRendimientos(datosRendimientos)
       ],
       styles: {
         header: {
-          fontSize: 30,
+          fontSize: 24,
           bold: true,
           color: '#3760b0',
-          margin: [0, 0, 0, 10]
+          margin: [0, 0, 0, 5]
         },
         tableHeader: {
           bold: true,
-          fontSize: 28,
+          fontSize: 20,
           color: 'white',
           fillColor: '#3760b0'
         },
@@ -59,7 +59,7 @@ export const generarPDFRendimientos = async (datosRendimientos, embarqueData) =>
         }
       },
       defaultStyle: {
-        fontSize: 25
+        fontSize: 18
       },
       footer: function(currentPage, pageCount) {
         return {
@@ -67,7 +67,7 @@ export const generarPDFRendimientos = async (datosRendimientos, embarqueData) =>
             { 
               text: '© 2024 Rey Pez - Tampico, Tamps.', 
               alignment: 'center', 
-              margin: [0, 10, 0, 0],
+              margin: [0, 5, 0, 0],
               fontSize: 8,
               color: '#3760b0'
             },
@@ -87,6 +87,7 @@ function generarTablaRendimientos(datosRendimientos) {
     [
       { text: 'Medida', style: 'tableHeader' },
       { text: 'Kilos en Crudo', style: 'tableHeader' },
+      { text: 'Total Embarcado', style: 'tableHeader' },
       { text: 'Rendimiento', style: 'tableHeader' }
     ],
     ...datosRendimientos.map(dato => {
@@ -96,6 +97,7 @@ function generarTablaRendimientos(datosRendimientos) {
       return [
         dato.medida,
         formatearKilos(dato.kilosCrudos),
+        formatearKilos(dato.totalEmbarcado),
         {
           text: formatearRendimiento(rendimiento),
           style: rendimientoStyle
@@ -107,25 +109,29 @@ function generarTablaRendimientos(datosRendimientos) {
   return {
     table: {
       headerRows: 1,
-      widths: ['*', '*', '*'],
+      widths: ['*', '*', '*', '*'],
       body: body
     },
     layout: {
       hLineWidth: function(i, node) { 
-        return (i === 0 || i === node.table.body.length) ? 2 : 1; 
+        return (i === 0 || i === node.table.body.length) ? 1.5 : 0.5;
       },
       vLineWidth: function(i, node) { 
-        return (i === 0 || i === node.table.widths.length) ? 2 : 1; 
+        return (i === 0 || i === node.table.widths.length) ? 1.5 : 0.5;
       },
       hLineColor: function(i, node) { 
-        return (i === 0 || i === node.table.body.length) ? '#3760b0' : '#cccccc'; 
+        return (i === 0 || i === node.table.body.length) ? '#3760b0' : '#cccccc';
       },
       vLineColor: function(i, node) { 
-        return (i === 0 || i === node.table.widths.length) ? '#3760b0' : '#cccccc'; 
+        return (i === 0 || i === node.table.widths.length) ? '#3760b0' : '#cccccc';
       },
       fillColor: function(rowIndex, node, columnIndex) {
         return (rowIndex % 2 === 0) ? '#f8f9fa' : null;
-      }
+      },
+      paddingLeft: function(i) { return 4; },
+      paddingRight: function(i) { return 4; },
+      paddingTop: function(i) { return 2; },
+      paddingBottom: function(i) { return 2; }
     }
   };
 }

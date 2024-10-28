@@ -353,23 +353,28 @@ export default {
     },
 
     generarPDF() {
-      // Obtener los productos del cliente Ozuna que son maquila
-      const productosMaquilaOzuna = this.embarqueData.productos.filter(producto => 
-        producto.clienteId === "4" && !producto.esVenta
-      );
+      // Preparar los datos para el PDF
+      const datosRendimientos = this.medidasUnicas.map(medida => {
+        let kilosCrudos;
+        if (this.esMedidaMix(medida)) {
+          kilosCrudos = {
+            medida1: Number(this.kilosCrudos[medida]?.medida1 || 0),
+            medida2: Number(this.kilosCrudos[medida]?.medida2 || 0)
+          };
+        } else {
+          kilosCrudos = Number(this.kilosCrudos[medida] || 0);
+        }
 
-      // Crear el objeto embarque con los datos necesarios
-      const embarqueParaPDF = {
-        fecha: this.embarqueData.fecha,
-        cargaCon: this.embarqueData.cargaCon,
-        productos: productosMaquilaOzuna,
-        clienteCrudos: this.embarqueData.clienteCrudos,
-        // Usar los kilos crudos del componente Rendimientos
-        kilosCrudos: this.kilosCrudos
-      };
+        return {
+          medida: medida,
+          kilosCrudos: kilosCrudos,
+          totalEmbarcado: this.obtenerTotalEmbarcado(medida),
+          rendimiento: this.getRendimiento(medida)
+        };
+      });
 
-      // Llamar a la función para generar el PDF
-      generarNotaVentaPDF(embarqueParaPDF, this.embarqueData.clientes);
+      // Llamar a la función para generar el PDF con los datos procesados
+      generarPDFRendimientos(datosRendimientos, this.embarqueData);
     },
   },
 
