@@ -17,7 +17,9 @@
     <div v-else class="rendimientos-grid">
       <div v-for="(medida, index) in medidasUnicas" :key="index" class="rendimiento-card">
         <div class="medida-info">
-          <span class="medida-label">{{ medida }}</span>
+          <span class="medida-label editable-label" @click="editarNombreMedida(medida)">
+            {{ obtenerNombreMedidaPersonalizado(medida) }}
+          </span>
           
           <div class="input-group">
             <template v-if="esMedidaMix(medida)">
@@ -85,7 +87,8 @@ export default {
       kilosCrudos: {},
       medidasUnicas: [],
       embarqueData: null,
-      guardadoAutomaticoActivo: false
+      guardadoAutomaticoActivo: false,
+      nombresMedidasPersonalizados: {}
     }
   },
 
@@ -112,6 +115,7 @@ export default {
         
         if (embarqueDoc.exists()) {
           this.embarqueData = embarqueDoc.data();
+          this.nombresMedidasPersonalizados = this.embarqueData.nombresMedidasPersonalizados || {};
           this.obtenerMedidasUnicas();
           
           // Inicializar kilosCrudos con los datos de Firestore
@@ -376,6 +380,33 @@ export default {
       // Llamar a la función para generar el PDF con los datos procesados
       generarPDFRendimientos(datosRendimientos, this.embarqueData);
     },
+
+    obtenerNombreMedidaPersonalizado(medida) {
+      return this.nombresMedidasPersonalizados[medida] || medida;
+    },
+
+    async editarNombreMedida(medida) {
+      const nombreActual = this.obtenerNombreMedidaPersonalizado(medida);
+      const nuevoNombre = prompt('Ingrese el nuevo nombre para la medida:', nombreActual);
+      
+      if (nuevoNombre !== null && nuevoNombre.trim() !== '') {
+        this.$set(this.nombresMedidasPersonalizados, medida, nuevoNombre.trim());
+        
+        try {
+          const db = getFirestore();
+          const embarqueId = this.$route.params.id;
+          const embarqueRef = doc(db, 'embarques', embarqueId);
+          
+          await updateDoc(embarqueRef, {
+            nombresMedidasPersonalizados: this.nombresMedidasPersonalizados
+          });
+          
+          console.log('Nombre de medida actualizado correctamente');
+        } catch (error) {
+          console.error('Error al guardar el nuevo nombre:', error);
+        }
+      }
+    },
   },
 
   watch: {
@@ -541,6 +572,15 @@ input {
 
 .btn-pdf i {
   margin-right: 10px;
+}
+
+.medida-label.editable-label {
+  cursor: pointer;
+  transition: color 0.3s ease;
+}
+
+.medida-label.editable-label:hover {
+  color: #3498db;
 }
 </style>
 

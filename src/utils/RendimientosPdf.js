@@ -7,6 +7,8 @@ export const generarPDFRendimientos = async (datosRendimientos, embarqueData) =>
   try {
     const logoBase64 = await loadImageAsBase64('https://res.cloudinary.com/hwkcovsmr/image/upload/v1620946647/samples/REY_PEZ_LOGO_nsotww.png');
     
+    const nombresMedidasPersonalizados = embarqueData?.nombresMedidasPersonalizados || {};
+
     const docDefinition = {
       content: [
         {
@@ -35,7 +37,7 @@ export const generarPDFRendimientos = async (datosRendimientos, embarqueData) =>
           ]
         },
         { text: '\n', height: 5 },
-        generarTablaRendimientos(datosRendimientos)
+        generarTablaRendimientos(datosRendimientos, nombresMedidasPersonalizados)
       ],
       styles: {
         header: {
@@ -82,7 +84,7 @@ export const generarPDFRendimientos = async (datosRendimientos, embarqueData) =>
   }
 };
 
-function generarTablaRendimientos(datosRendimientos) {
+function generarTablaRendimientos(datosRendimientos, nombresMedidasPersonalizados) {
   const body = [
     [
       { text: 'Medida', style: 'tableHeader' },
@@ -94,8 +96,10 @@ function generarTablaRendimientos(datosRendimientos) {
       const rendimiento = dato.rendimiento;
       const rendimientoStyle = rendimiento > 1 ? 'rendimientoAlto' : 'rendimientoBajo';
       
+      const nombreMedida = nombresMedidasPersonalizados[dato.medida] || dato.medida;
+      
       return [
-        dato.medida,
+        nombreMedida,
         formatearKilos(dato.kilosCrudos),
         formatearKilos(dato.totalEmbarcado),
         {
