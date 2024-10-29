@@ -682,14 +682,20 @@ function totalKilos(producto, nombreCliente) {
 
 function calcularKilosCrudos(item) {
   let kilosTotales = 0;
+  
+  // Procesar taras principales
   if (item.taras) {
     const [cantidad, peso] = item.taras.split('-').map(Number);
-    kilosTotales += cantidad * peso;
+    // Multiplicar por 20.5 en lugar del peso especificado
+    kilosTotales += cantidad * 20.5;
   }
+  
+  // Procesar sobrante (se suma directamente el peso especificado)
   if (item.sobrante) {
     const [, kilosSobrante] = item.sobrante.split('-').map(Number);
     kilosTotales += kilosSobrante;
   }
+  
   return kilosTotales.toFixed(2);
 }
 
