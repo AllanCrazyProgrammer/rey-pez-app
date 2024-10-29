@@ -8,7 +8,6 @@
         <thead>
           <tr>
             <th>Fecha</th>
-            <th>Clientes</th>
             <th>Kilos Limpios</th>
             <th>Kilos Crudos</th>
             <th>Total Kilos</th>
@@ -19,7 +18,6 @@
         <tbody>
           <tr v-for="embarque in embarques" :key="embarque.id">
             <td>{{ formatearFecha(embarque.fecha) }}</td>
-            <td>{{ obtenerClientes(embarque) }}</td>
             <td>{{ calcularKilosLimpios(embarque) }} kg</td>
             <td>{{ calcularKilosCrudos(embarque) }} kg</td>
             <td>{{ (Number(calcularKilosLimpios(embarque)) + Number(calcularKilosCrudos(embarque))).toFixed(1) }} kg</td>
@@ -78,9 +76,6 @@ export default {
       // Ajustamos la fecha sumando un día
       fechaObj.setDate(fechaObj.getDate() + 1);
       return fechaObj.toLocaleDateString('es-ES');
-    },
-    obtenerClientes(embarque) {
-      return embarque.clientes.map(cliente => cliente.nombre).join(', ');
     },
     calcularTotalKilos(embarque) {
       let totalKilos = 0;

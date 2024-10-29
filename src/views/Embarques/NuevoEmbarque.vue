@@ -1131,15 +1131,30 @@ export default {
 
     calcularTarasLimpio() {
       return this.embarque.productos.reduce((total, producto) => {
-        return total + this.totalTaras(producto);
+        // Verificar si el cliente es uno de los predefinidos
+        const clienteId = producto.clienteId;
+        const clientePredefinido = this.clientesPredefinidos.find(c => c.id.toString() === clienteId.toString());
+        
+        // Solo sumar si es un cliente predefinido
+        if (clientePredefinido) {
+          return total + this.totalTaras(producto);
+        }
+        return total;
       }, 0);
     },
 
     calcularTarasCrudo() {
-      return Object.values(this.clienteCrudos).reduce((total, crudos) => {
-        return total + crudos.reduce((clienteTotal, crudo) => {
-          return clienteTotal + this.calcularTotalCrudos(crudo);
-        }, 0);
+      return Object.entries(this.clienteCrudos).reduce((total, [clienteId, crudos]) => {
+        // Verificar si el cliente es uno de los predefinidos
+        const clientePredefinido = this.clientesPredefinidos.find(c => c.id.toString() === clienteId.toString());
+        
+        // Solo sumar si es un cliente predefinido
+        if (clientePredefinido) {
+          return total + crudos.reduce((clienteTotal, crudo) => {
+            return clienteTotal + this.calcularTotalCrudos(crudo);
+          }, 0);
+        }
+        return total;
       }, 0);
     },
 
