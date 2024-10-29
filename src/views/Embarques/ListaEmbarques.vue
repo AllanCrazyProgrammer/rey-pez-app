@@ -55,10 +55,16 @@ export default {
         const db = getFirestore();
         const embarquesRef = collection(db, 'embarques');
         const snapshot = await getDocs(embarquesRef);
-        this.embarques = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }));
+        this.embarques = snapshot.docs
+          .map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }))
+          .sort((a, b) => {
+            const fechaA = a.fecha.toDate ? a.fecha.toDate() : new Date(a.fecha);
+            const fechaB = b.fecha.toDate ? b.fecha.toDate() : new Date(b.fecha);
+            return fechaB - fechaA; // Orden descendente
+          });
         this.cargando = false;
       } catch (error) {
         console.error("Error al cargar los embarques:", error);
