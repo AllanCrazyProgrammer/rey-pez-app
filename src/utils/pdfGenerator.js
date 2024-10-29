@@ -265,7 +265,6 @@ function generarContenidoClientes(embarque, clientesDisponibles) {
 function generarSeccionRendimientos(embarque, clientesDisponibles) {
   const contenido = [];
   
-  // Obtener todos los productos de Ozuna que son maquila (no son venta)
   const productosMaquilaOzuna = embarque.productos.filter(producto => 
     producto.clienteId === "4" && !producto.esVenta
   );
@@ -278,12 +277,11 @@ function generarSeccionRendimientos(embarque, clientesDisponibles) {
     const tablaRendimientos = {
       table: {
         headerRows: 1,
-        widths: ['25%', '25%', '25%', '25%'],
+        widths: ['33%', '33%', '34%'],
         body: [
           [
             { text: 'Medida', style: 'tableHeader' },
             { text: 'Kilos en Crudo', style: 'tableHeader' },
-            { text: 'Kilos Limpios', style: 'tableHeader' },
             { text: 'Rendimiento', style: 'tableHeader' }
           ]
         ]
@@ -299,7 +297,6 @@ function generarSeccionRendimientos(embarque, clientesDisponibles) {
     let totalKilosCrudos = 0;
     let totalKilosLimpios = 0;
 
-    // Agrupar productos por medida
     const productosPorMedida = productosMaquilaOzuna.reduce((acc, producto) => {
       const medida = producto.medida;
       if (!acc[medida]) {
@@ -310,26 +307,21 @@ function generarSeccionRendimientos(embarque, clientesDisponibles) {
     }, {});
 
     Object.entries(productosPorMedida).forEach(([medida, productos]) => {
-      // Calcular kilos limpios
       const kilosLimpios = productos.reduce((sum, producto) => 
         sum + calcularKilosLimpios(producto), 0);
 
-      // Obtener kilos crudos del input field de Rendimientos.vue
       let kilosCrudos = 0;
-      const medidaKey = `${medida} Maquila Ozuna`; // Usar la clave correcta
+      const medidaKey = `${medida} Maquila Ozuna`;
       
       if (embarque.kilosCrudos && embarque.kilosCrudos[medidaKey]) {
         if (typeof embarque.kilosCrudos[medidaKey] === 'object') {
-          // Para medidas tipo mix
           kilosCrudos = Number(embarque.kilosCrudos[medidaKey].medida1 || 0) + 
                        Number(embarque.kilosCrudos[medidaKey].medida2 || 0);
         } else {
-          // Para medidas normales
           kilosCrudos = Number(embarque.kilosCrudos[medidaKey]);
         }
       }
 
-      // Calcular rendimiento
       const rendimiento = kilosLimpios > 0 ? kilosCrudos / kilosLimpios : 0;
 
       totalKilosCrudos += kilosCrudos;
@@ -338,7 +330,6 @@ function generarSeccionRendimientos(embarque, clientesDisponibles) {
       tablaRendimientos.table.body.push([
         { text: medida, alignment: 'center' },
         { text: `${kilosCrudos.toFixed(2)} kg`, alignment: 'center' },
-        { text: `${kilosLimpios.toFixed(2)} kg`, alignment: 'center' },
         { 
           text: rendimiento.toFixed(2), 
           alignment: 'center',
@@ -348,12 +339,11 @@ function generarSeccionRendimientos(embarque, clientesDisponibles) {
       ]);
     });
 
-    // Agregar fila de totales
     const rendimientoTotal = totalKilosLimpios > 0 ? totalKilosCrudos / totalKilosLimpios : 0;
+    
     tablaRendimientos.table.body.push([
       { text: 'TOTAL', style: 'tableHeader', alignment: 'center' },
       { text: `${totalKilosCrudos.toFixed(2)} kg`, style: 'tableHeader', alignment: 'center' },
-      { text: `${totalKilosLimpios.toFixed(2)} kg`, style: 'tableHeader', alignment: 'center' },
       { 
         text: rendimientoTotal.toFixed(2), 
         style: 'tableHeader',
