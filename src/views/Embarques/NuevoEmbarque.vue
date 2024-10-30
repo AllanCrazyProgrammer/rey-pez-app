@@ -349,6 +349,11 @@ import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import { generarNotaVentaPDF } from '@/utils/pdfGenerator';
 import Rendimientos from './Rendimientos.vue'
+import pdfMake from 'pdfmake/build/pdfmake';
+import pdfFonts from 'pdfmake/build/vfs_fonts';
+
+// Registrar las fuentes
+pdfMake.vfs = pdfFonts.pdfMake.vfs;
 
 export default {
   name: 'NuevoEmbarque',
@@ -754,197 +759,234 @@ export default {
       }
       return producto.tipo || 'Sin Tipo';
     },
+    
     generarResumenPDF() {
-      const doc = new jsPDF({
-        orientation: 'portrait',
-        unit: 'mm',
-        format: 'a4'
-      });
-      
-      const pageWidth = doc.internal.pageSize.width;
-      const pageHeight = doc.internal.pageSize.height;
-      const margin = 10;
-      const columnWidth = (pageWidth - margin * 3) / 2;
+      const docDefinition = {
+        pageOrientation: 'portrait',
+        pageMargins: [40, 10, 40, 40], // [izquierda, arriba, derecha, abajo] - reducido el margen superior de 40 a 20
+        content: [],
+        styles: {
+          header: {
+            fontSize: 22,
+            bold: true,
+            margin: [0, 0, 0, 5]
+          },
+          clienteHeader: {
+            fontSize: 20, // Aumentado de 15
+            bold: true,
+            color: 'white',
+          },
+          tableHeader: {
+            fontSize: 16, // Aumentado de 13
+            bold: true,
+            color: 'white',
+            fillColor: '#34495e'
+          },
+          crudosHeader: {
+            fontSize: 16, // Aumentado de 13
+            bold: true,
+            color: 'white',
+            fillColor: '#2980b9'
+          },
+          total: {
+            fontSize: 18, // Aumentado de 14
+            bold: true,
+            color: 'white'
+          }
+        }
+      };
 
-      let yPos = margin;
+      // Título y fecha con fuente más grande
+      docDefinition.content.push(
+        { text: 'Resumen de Embarque', style: 'header' },
+        {
+          text: `Fecha: ${new Date(this.embarque.fecha).toLocaleDateString()} | Carga: ${this.embarque.cargaCon || 'N/E'}`,
+          fontSize: 16, // Añadido tamaño de fuente específico
+          margin: [0, 0, 0, 10]
+        }
+      );
 
-      // Agregar fecha y quien carga
-      doc.setFontSize(12);
-      doc.setFont("helvetica", "normal");
-      const fechaActual = new Date().toLocaleDateString();
-      doc.text(`Fecha: ${fechaActual}`, margin, yPos);
-      doc.text(`Carga con: ${this.embarque.cargaCon}`, pageWidth - margin, yPos, { align: 'right' });
-      
-      yPos += 4; // Espacio después de la información de encabezado
-
+      // Procesar cada clientes
       Object.entries(this.productosPorCliente).forEach(([clienteId, productos]) => {
         const nombreCliente = this.obtenerNombreCliente(clienteId);
         const colorCliente = this.getClienteColor(clienteId);
+        const crudos = this.clienteCrudos[clienteId] || [];
 
-        // Sección de cliente
-        doc.setFillColor(colorCliente);
-        doc.rect(margin, yPos, pageWidth - margin * 2, 10, 'F');
-        doc.setTextColor(255, 255, 255);
-        doc.setFontSize(14);
-        doc.setFont("helvetica", "bold");
-        doc.text(nombreCliente, margin + 2, yPos + 7);
+        // Calcular totales
+        const totalTarasCliente = productos.reduce((sum, p) => sum + this.totalTaras(p), 0);
+        const totalKilosCliente = productos.reduce((sum, p) => sum + this.totalKilos(p), 0);
+        const crudosTotalKilos = crudos.reduce((sum, crudo) => 
+          sum + crudo.items.reduce((itemSum, item) => itemSum + this.calcularKilosCrudos(item), 0), 0);
+        const crudosTotalTaras = crudos.reduce((sum, crudo) => 
+          sum + crudo.items.reduce((itemSum, item) => itemSum + this.calcularTarasCrudos(item), 0), 0);
 
-        yPos += 15;
-        let yPosInicial = yPos;
-        doc.setTextColor(0, 0, 0);
-        
-        // Incrementamos el tamaño de fuente para los títulos
-        doc.setFontSize(14);  // Aumentado de 12 a 14
-
-        // Títulos "Limpios" y "Crudos" en negrita y cursiva
-        doc.setFont("helvetica", "bolditalic");
-        doc.text("Limpios", margin, yPos);
-        doc.text("Crudos", margin + columnWidth + margin, yPos);
-
-        yPos += 6;  // Reducimos este valor de 8 a 6 para disminuir el espacio después de los títulos
-        let yPosCrudos = yPos;
-
-        // Volvemos al tamaño de fuente normal para el contenido
-        doc.setFontSize(12);
-        doc.setFont("helvetica", "normal");
-
-        let totalTarasCliente = 0;
-        let totalKilosCliente = 0;
-
-        const productosOrdenados = productos.sort((a, b) => {
-          const medidaA = parseInt(a.medida.split('/')[0]) || 0;
-          const medidaB = parseInt(b.medida.split('/')[0]) || 0;
-          return medidaA - medidaB;
+        // Encabezado del cliente con totales
+        docDefinition.content.push({
+          table: {
+            widths: ['*', 200],
+            body: [[
+              {
+                text: nombreCliente,
+                style: 'clienteHeader',
+                fillColor: colorCliente
+              },
+              {
+                text: `Total: ${totalTarasCliente + crudosTotalTaras}T | ${(totalKilosCliente + crudosTotalKilos).toFixed(1)}Kg`,
+                style: 'total',
+                fillColor: colorCliente,
+                alignment: 'right'
+              }
+            ]]
+          },
+          margin: [0, 10, 0, 0]
         });
 
-        productosOrdenados.forEach((producto) => {
-          const tipoProducto = this.obtenerTipoProducto(producto);
-          const totalTaras = this.totalTaras(producto);
-          const totalKilos = this.totalKilos(producto);
-          
-          doc.setFont("helvetica", "bold");
-          doc.text(`${producto.medida}`, margin, yPos);
-          
-          let anchoNegrita = doc.getStringUnitWidth(`${producto.medida}`) * doc.internal.getFontSize() / doc.internal.scaleFactor;
-          
-          doc.setFont("helvetica", "normal");
-          doc.setTextColor(0, 0, 0); // Negro para el guion
-          doc.text(" - ", margin + anchoNegrita, yPos);
-          
-          let anchoGuion = doc.getStringUnitWidth(" - ") * doc.internal.getFontSize() / doc.internal.scaleFactor;
-          
-          // Determinar el color del tipo de producto
-          if (producto.tipo === 'otro') {
-            doc.setTextColor(128, 0, 128); // Morado para "otro"
-            doc.text(tipoProducto, margin + anchoNegrita + anchoGuion, yPos);
-          } else {
-            // Separar el tipo de producto si contiene "c/h20"
-            const partesTipo = tipoProducto.split(/(c\/h20)/i);
-            let anchoTipo = 0;
-            
-            partesTipo.forEach((parte, index) => {
-              if (parte.toLowerCase() === 'c/h20') {
-                doc.setTextColor(0, 0, 255); // Azul para "c/h20"
-              } else {
-                doc.setTextColor(0, 0, 0); // Negro para el resto
-              }
-              doc.text(parte, margin + anchoNegrita + anchoGuion + anchoTipo, yPos);
-              anchoTipo += doc.getStringUnitWidth(parte) * doc.internal.getFontSize() / doc.internal.scaleFactor;
-            });
-          }
-          
-          let anchoTipo = doc.getStringUnitWidth(tipoProducto) * doc.internal.getFontSize() / doc.internal.scaleFactor;
-          
-          doc.setTextColor(0, 0, 0); // Restablecer a negro
-          let resto = `: ${totalTaras}T-- `;
-          doc.text(resto, margin + anchoNegrita + anchoGuion + anchoTipo, yPos);
-          
-          let anchoNormal = anchoGuion + anchoTipo + doc.getStringUnitWidth(resto) * doc.internal.getFontSize() / doc.internal.scaleFactor;
-          
-          doc.setFont("helvetica", "bold");
-          doc.text(`${totalKilos} Kg`, margin + anchoNegrita + anchoNormal, yPos);
-          
-          // Reporte de taras y bolsas
-          let reporteCombinado = this.combinarTarasBolsas(producto.reporteTaras, producto.reporteBolsas);
-          
-          if (reporteCombinado) {
-            let anchoKilos = doc.getStringUnitWidth(`${totalKilos} Kg`) * doc.internal.getFontSize() / doc.internal.scaleFactor;
-            doc.setFont("helvetica", "normal");
-            
-            // Contar el número de paréntesis
-            const numParentesis = (reporteCombinado.match(/\(/g) || []).length;
-            
-            if (numParentesis > 0) {
-              yPos += 4; // Mover a la siguiente línea
-              let reporteLines = doc.splitTextToSize(reporteCombinado, columnWidth - margin * 2);
-              doc.text(reporteLines, margin, yPos);
-              yPos += (reporteLines.length * 4); // Ajustar yPos basado en el número de líneas
-            } else {
-              doc.text(reporteCombinado, margin + anchoNegrita + anchoNormal + anchoKilos + 5, yPos);
+        // Contenedor para productos y crudos en la misma fila
+        docDefinition.content.push({
+          columns: [
+            // Columna de productos limpios
+            {
+              width: '*',
+              stack: productos.length > 0 ? [{
+                table: {
+                  headerRows: 1,
+                  widths: [140, 25, 50, '*'], // Mantener los anchos ajustados
+                  body: [
+                    [
+                      { text: 'Medida', style: 'tableHeader', fontSize: 20 },
+                      { text: 'T', style: 'tableHeader', fontSize: 20 },
+                      { text: 'Kg', style: 'tableHeader', fontSize: 20 },
+                      { text: 'Taras', style: 'tableHeader', fontSize: 20 }
+                    ],
+                    ...productos.map(producto => [
+                      { 
+                        text: producto.tipo === 'Sin Tipo' ? 
+                          producto.medida : 
+                          producto.tipo === 'otro' ?
+                            `${producto.medida} ${producto.tipoPersonalizado}` :
+                            producto.tipo === 'c/h20' ?
+                              [
+                                { text: `${producto.medida}`, color: '#000000' },
+                                { text: ' c/h20 ', color: '#3498db' },
+                                { text: `(${producto.camaronNeto || 0.65})`, color: '#3498db' }
+                              ] :
+                              `${producto.medida} ${producto.tipo}`, 
+                        fontSize: 18 
+                      },
+                      { text: this.totalTaras(producto), fontSize: 18 },
+                      { text: this.totalKilos(producto).toFixed(1), fontSize: 18 },
+                      { text: this.generarDetallesProductoCompacto(producto), fontSize: 18 }
+                    ])
+                  ]
+                },
+                margin: [0, 5, 5, 10]
+              }] : []
+            },
+            // Columna de crudos
+            {
+              width: '*',
+              stack: crudos.length > 0 ? [{
+                table: {
+                  headerRows: 1,
+                  widths: [45, 55, 25, 40],
+                  body: [
+                    [
+                      { text: 'Talla', style: 'crudosHeader', fontSize: 20 },  // Reducido de 22
+                      { text: 'Barco', style: 'crudosHeader', fontSize: 20 },  // Reducido de 22
+                      { text: 'T', style: 'crudosHeader', fontSize: 20 },      // Reducido de 22
+                      { text: 'Kg', style: 'crudosHeader', fontSize: 20 }      // Reducido de 22
+                    ],
+                    ...crudos.flatMap(crudo =>
+                      crudo.items.map(item => [
+                        { text: this.formatearTallaCrudo(item.talla), fontSize: 18 },  // Reducido de 20
+                        { text: item.barco, fontSize: 18 },                            // Reducido de 20
+                        { text: this.calcularTarasCrudos(item), fontSize: 18 },        // Reducido de 20
+                        { text: this.calcularKilosCrudos(item).toFixed(0), fontSize: 18 } // Reducido de 20
+                      ])
+                    )
+                  ]
+                },
+                margin: [5, 5, 0, 10]
+              }] : []
             }
-          }
-          
-          yPos += 4; // Reducimos este valor de 6 a 4 para disminuir el espacio entre productos
-          totalTarasCliente += totalTaras;
-          totalKilosCliente += totalKilos;
+          ]
         });
-
-        // Sección de Crudos
-        if (this.clienteCrudos[clienteId]) {
-          this.clienteCrudos[clienteId].forEach(crudo => {
-            crudo.items.forEach(item => {
-              doc.setFont("helvetica", "bold");
-              doc.text(`${item.talla}`, margin + columnWidth + margin, yPosCrudos);
-              
-              let anchoNegrita = doc.getStringUnitWidth(`${item.talla}`) * doc.internal.getFontSize() / doc.internal.scaleFactor;
-              
-              doc.setFont("helvetica", "normal");
-              let textoCrudo = ` - ${item.barco}: `;
-              if (item.taras) {
-                textoCrudo += `(${item.taras})`;
-              }
-              if (item.sobrante) {
-                textoCrudo += ` (${item.sobrante})`;
-              }
-              textoCrudo += ` - `;
-              doc.text(textoCrudo, margin + columnWidth + margin + anchoNegrita, yPosCrudos);
-              
-              let anchoTexto = doc.getStringUnitWidth(textoCrudo) * doc.internal.getFontSize() / doc.internal.scaleFactor;
-              
-              let kilosTotales = this.calcularKilosCrudos(item);
-              doc.setFont("helvetica", "bold");
-              doc.text(`${kilosTotales} Kg`, margin + columnWidth + margin + anchoNegrita + anchoTexto, yPosCrudos);
-              
-              yPosCrudos += 4; // Reducimos este valor de 6 a 4 para disminuir el espacio entre productos
-              totalKilosCliente += kilosTotales;
-              totalTarasCliente += this.calcularTarasCrudos(item);
-            });
-          });
-        }
-
-        // Usar el yPos más grande entre limpios y crudos
-        yPos = Math.max(yPos, yPosCrudos);
-
-        // Total del cliente
-        yPos += 5;
-        doc.setFillColor(colorCliente);
-        doc.setTextColor(255, 255, 255);
-        doc.rect(margin, yPos - 2, pageWidth - margin * 2, 10, 'F');
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(12);
-        const textoTotal = `Total: ${totalTarasCliente} taras, ${totalKilosCliente.toFixed(2)} kilos`;
-        doc.text(textoTotal, margin + 2, yPos + 5);
-        
-        yPos += 10; // Cambiamos este valor de 15 a 10
-
-        // Verificar si se necesita una nueva página
-        if (yPos > pageHeight - margin * 2) {
-          doc.addPage();
-          yPos = margin;
-        }
       });
 
-      doc.save('resumen-embarque.pdf');
+      // Pie de página
+      docDefinition.footer = function(currentPage, pageCount) {
+        return {
+          text: `Generado: ${new Date().toLocaleString()} - Página ${currentPage} de ${pageCount}`,
+          alignment: 'left',
+          margin: [40, 0],
+          fontSize: 14, // Aumentado de 11
+          color: '#808080'
+        };
+      };
+
+      // Generar el PDF
+      pdfMake.createPdf(docDefinition).download('resumen-embarque.pdf');
+    },
+
+    // Método auxiliar para generar detalles compactos
+    generarDetallesProductoCompacto(producto) {
+      let detalles = [];
+      
+      if (producto.reporteTaras && producto.reporteTaras.length > 0) {
+        const reporteCombinado = this.combinarTarasBolsasCompacto(producto.reporteTaras, producto.reporteBolsas);
+        if (reporteCombinado) detalles.push(reporteCombinado);
+      }
+      
+      if (producto.esVenta) {
+        detalles.push('V');
+      }
+      
+      return detalles.join('|');
+    },
+
+    // Nuevo método para combinar taras y bolsas de forma más compacta
+    combinarTarasBolsasCompacto(taras, bolsas) {
+      const combinado = {};
+      
+      taras.forEach((tara, index) => {
+        const bolsa = bolsas[index] || '';
+        const key = bolsa;
+        combinado[key] = (combinado[key] || 0) + parseInt(tara || 1);
+      });
+
+      return Object.entries(combinado)
+        .map(([bolsa, count]) => `(${count}-${bolsa})`) // Agregamos los paréntesis aquí
+        .join(' ');
+    },
+
+    // Método auxiliar para generar detalles del producto
+    generarDetallesProducto(producto) {
+      let detalles = [];
+      
+      if (producto.reporteTaras && producto.reporteTaras.length > 0) {
+        const reporteCombinado = this.combinarTarasBolsas(producto.reporteTaras, producto.reporteBolsas);
+        if (reporteCombinado) detalles.push(reporteCombinado);
+      }
+      
+      if (producto.tipo === 'c/h20') {
+        detalles.push(`Neto: ${producto.camaronNeto || 0.65}`);
+      }
+      
+      if (producto.esVenta) {
+        detalles.push('(Venta)');
+      }
+      
+      return detalles.join(' | ');
+    },
+
+    // Método auxiliar para convertir color hex a RGB
+    hexToRgb(hex) {
+      const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+      return result ? {
+        r: parseInt(result[1], 16),
+        g: parseInt(result[2], 16),
+        b: parseInt(result[3], 16)
+      } : null;
     },
     getClienteColor(clienteId) {
       const cliente = this.clientesDisponibles.find(c => c.id.toString() === clienteId.toString());
@@ -1052,6 +1094,7 @@ export default {
         return total + taras + sobrante;
       }, 0);
     },
+
     extraerNumero(valor) {
       if (!valor) return 0;
       const match = valor.toString().match(/^(\d+)/);
@@ -1180,7 +1223,7 @@ export default {
           const kilosReales = sumaTotalKilos * (producto.camaronNeto || 0.65);
           return total + kilosReales;
         } else {
-          // Para otros productos, mantener el cálculo original
+          // Para otros productos, mantener el clculo original
           return total + this.totalKilos(producto);
         }
       }, 0).toFixed(2);
@@ -1228,6 +1271,20 @@ export default {
         total += tara * bolsa;
       }
       return total;
+    },
+
+    formatearTallaCrudo(talla) {
+      const abreviaturas = {
+        'Med c/c': 'Med',
+        'Med-Esp c/c': 'Esp',
+        'Med-gde c/c': 'M-G',
+        'Gde c/c': 'Gde',
+        'Extra c/c': 'Ext',
+        'Jumbo c/c': 'Jbo',
+        'Linea': 'Lin',
+        'Rechazo': 'Rch'
+      };
+      return abreviaturas[talla] || talla;
     },
   },
   created() {
@@ -1297,6 +1354,151 @@ export default {
     });
   }
 };
+
+// Definir la clase fuera del componente Vue
+class EmbarqueReportGenerator {
+  constructor(embarqueData) {
+    this.embarque = embarqueData;
+    this.doc = new jsPDF('landscape', 'pt', 'a4');
+  }
+
+  async save() {
+    const doc = this.doc;
+    
+    // Configurar fuente y tamaño
+    doc.setFont('helvetica');
+    doc.setFontSize(13);
+
+    // Título
+    doc.text('Resumen de Embarque', 40, 40);
+    doc.text(`Fecha: ${this.embarque.fecha || 'No especificada'}`, 40, 60);
+    if (this.embarque.cargaCon) {
+      doc.text(`Carga con: ${this.embarque.cargaCon}`, 40, 80);
+    }
+
+    // Crear tablas para cada cliente
+    let yPos = 100;
+    
+    // Verificar que clientes existe y es un array
+    if (Array.isArray(this.embarque.clientes)) {
+      this.embarque.clientes.forEach(cliente => {
+        if (!cliente) return; // Skip if cliente is null/undefined
+
+        // Encabezado del cliente
+        doc.setFontSize(14);
+        doc.text(`Cliente: ${cliente.nombre || 'Sin nombre'}`, 40, yPos);
+        yPos += 20;
+
+        // Tabla de productos
+        if (Array.isArray(cliente.productos) && cliente.productos.length > 0) {
+          const tableData = cliente.productos.map(producto => [
+            producto.medida || '',
+            producto.tipo || '',
+            this.calcularTotalTaras(producto),
+            this.calcularTotalKilos(producto)
+          ]);
+
+          doc.autoTable({
+            startY: yPos,
+            head: [[
+              { text: 'Medida', style: 'tableHeader' },
+              { text: 'Tipo', style: 'tableHeader' },
+              { text: 'Total Taras', style: 'tableHeader' },
+              { text: 'Total Kilos', style: 'tableHeader' }
+            ]],
+            body: tableData,
+            styles: {
+              fontSize: 14,  // Incrementado de 12
+              cellPadding: 8,
+              overflow: 'linebreak',
+              valign: 'middle'
+            },
+            headStyles: {
+              fillColor: '#34495e',
+              textColor: '#ffffff',
+              halign: 'center',
+              fontSize: 15,  // Incrementado de 13
+              fontStyle: 'bold'
+            },
+            bodyStyles: {
+              fontSize: 14,  // Incrementado de 12
+              fillColor: false,
+              textColor: '#2c3e50'
+            },
+            margin: { left: 40 }
+          });
+
+          yPos = doc.lastAutoTable.finalY + 20;
+        }
+
+        // Tabla de crudos
+        if (Array.isArray(cliente.crudos) && cliente.crudos.length > 0) {
+          const crudosData = cliente.crudos.flatMap(crudo => 
+            (crudo.items || []).map(item => [
+              item.talla || '',
+              item.barco || '',
+              item.taras || '',
+              item.sobrante || ''
+            ])
+          );
+
+          if (crudosData.length > 0) {
+            doc.text('Crudos:', 40, yPos);
+            yPos += 20;
+
+            doc.autoTable({
+              startY: yPos,
+              head: [[
+                { text: 'Talla', style: 'tableHeader' },
+                { text: 'Barco', style: 'tableHeader' },
+                { text: 'Taras', style: 'tableHeader' },
+                { text: 'Sobrante', style: 'tableHeader' }
+              ]],
+              body: crudosData,
+              styles: {
+                fontSize: 14,  // Incrementado de 12
+                cellPadding: 8
+              },
+              headStyles: {
+                fillColor: '#2980b9',
+                textColor: '#ffffff',
+                halign: 'center',
+                fontSize: 15,  // Incrementado de 13
+                fontStyle: 'bold'
+              },
+              bodyStyles: {
+                fontSize: 14,  // Incrementado de 12
+                fillColor: false,
+                textColor: '#2c3e50'
+              },
+              margin: { left: 40 }
+            });
+
+            yPos = doc.lastAutoTable.finalY + 20;
+          }
+        }
+
+        yPos += 20; // Espacio entre clientes
+      });
+    }
+
+    // Retornar el PDF como array buffer
+    return doc.output('arraybuffer');
+  }
+
+  calcularTotalTaras(producto) {
+    const tarasNormales = (producto.taras || []).reduce((sum, tara) => sum + (tara || 0), 0);
+    const tarasExtra = (producto.tarasExtra || []).reduce((sum, tara) => sum + (tara || 0), 0);
+    return tarasNormales + tarasExtra;
+  }
+
+  calcularTotalKilos(producto) {
+    const sumaKilos = (producto.kilos || []).reduce((sum, kilo) => sum + (kilo || 0), 0);
+    const sumaTaras = this.calcularTotalTaras(producto);
+    const descuentoTaras = producto.restarTaras ? sumaTaras * 3 : 0;
+    return Number((sumaKilos - descuentoTaras).toFixed(1));
+  }
+}
 </script>
 
 <style scoped>
