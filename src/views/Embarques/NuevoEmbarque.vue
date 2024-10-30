@@ -850,11 +850,10 @@ export default {
               stack: productos.length > 0 ? [{
                 table: {
                   headerRows: 1,
-                  widths: [140, 25, 50, '*'], // Mantener los anchos ajustados
+                  widths: [140, 50, 85], // Reducido a 3 columnas
                   body: [
                     [
                       { text: 'Medida', style: 'tableHeader', fontSize: 20 },
-                      { text: 'T', style: 'tableHeader', fontSize: 20 },
                       { text: 'Kg', style: 'tableHeader', fontSize: 20 },
                       { text: 'Taras', style: 'tableHeader', fontSize: 20 }
                     ],
@@ -873,9 +872,11 @@ export default {
                               `${producto.medida} ${producto.tipo}`, 
                         fontSize: 18 
                       },
-                      { text: this.totalTaras(producto), fontSize: 18 },
                       { text: this.totalKilos(producto).toFixed(1), fontSize: 18 },
-                      { text: this.generarDetallesProductoCompacto(producto), fontSize: 18 }
+                      { 
+                        text: `${this.totalTaras(producto)}-${this.generarDetallesProductoCompacto(producto)}`, 
+                        fontSize: 18 
+                      }
                     ])
                   ]
                 },
