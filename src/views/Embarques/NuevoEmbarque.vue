@@ -806,7 +806,7 @@ export default {
         }
       );
 
-      // Procesar cada cliente
+      // Procesar cada clientes
       Object.entries(this.productosPorCliente).forEach(([clienteId, productos]) => {
         const nombreCliente = this.obtenerNombreCliente(clienteId);
         const colorCliente = this.getClienteColor(clienteId);
