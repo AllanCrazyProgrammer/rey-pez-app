@@ -120,6 +120,11 @@ export async function generarNotaVentaPDF(embarque, clientesDisponibles) {
           bold: true,
           color: '#2c3e50',
           margin: [0, 10, 0, 5]
+        },
+        precio: {
+          color: '#FFFFFF',
+          background: '#FF0000',
+          padding: [2, 2, 2, 2]
         }
       },
       defaultStyle: {
@@ -520,7 +525,12 @@ function generarTablaCrudos(crudos, estiloCliente) {
     ...crudos.flatMap(crudo => 
       crudo.items.map(item => [
         `${calcularKilosCrudos(item)} kg`,
-        `${item.talla}`,
+        {
+          columns: [
+            { text: item.talla, style: 'default' },
+            item.precio ? { text: `$${item.precio}`, style: 'precio' } : ''
+          ]
+        },
         calcularTarasTotales(item)
       ])
     )
@@ -553,12 +563,12 @@ function obtenerEstiloCliente(nombreCliente) {
 function formatearProducto(producto) {
   let tipoProducto = obtenerTipoProducto(producto);
   let medida = producto.medida || '';
+  let precioStr = producto.precio ? ` $${producto.precio}` : '';
   
   // Si la medida tiene el formato numérico (ej. "51/60")
   if (/^\d+\/\d+/.test(medida)) {
     medida = medida.match(/^\d+\/\d+/)[0];
     
-    // Verificar si tiene s/h2o o c/h2o en el tipo de producto
     let h2o = '';
     if (tipoProducto.toLowerCase().includes('s/h2o') || tipoProducto.toLowerCase().includes('s/h20')) {
       h2o = 's/h2o';
@@ -566,24 +576,37 @@ function formatearProducto(producto) {
       h2o = 'c/h2o';
     }
     
-    // Si el tipo es "otro", retornar la medida con el tipo personalizado
     if (producto.tipo === 'otro' && producto.tipoPersonalizado) {
-      return `${medida} ${producto.tipoPersonalizado}`;
+      return [
+        { text: `${medida} ${producto.tipoPersonalizado}`, style: 'default' },
+        { text: precioStr, style: 'precio' }
+      ];
     }
     
-    return h2o ? `${medida} ${h2o}` : medida;
+    return [
+      { text: h2o ? `${medida} ${h2o}` : `${medida}`, style: 'default' },
+      { text: precioStr, style: 'precio' }
+    ];
   }
   
-  // El resto de la función permanece igual...
   if (medida && !tipoProducto) {
-    return medida.trim();
+    return [
+      { text: `${medida}`, style: 'default' },
+      { text: precioStr, style: 'precio' }
+    ];
   }
   
   if (medida && tipoProducto) {
-    return `${medida} ${tipoProducto}`.trim();
+    return [
+      { text: `${medida} ${tipoProducto}`, style: 'default' },
+      { text: precioStr, style: 'precio' }
+    ];
   }
   
-  return tipoProducto.trim();
+  return [
+    { text: `${tipoProducto}`, style: 'default' },
+    { text: precioStr, style: 'precio' }
+  ];
 }
 
 function calcularTarasTotales(item) {
