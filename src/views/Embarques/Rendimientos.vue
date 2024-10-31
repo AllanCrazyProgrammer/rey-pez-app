@@ -170,6 +170,7 @@ export default {
       if (!this.embarqueData || !this.embarqueData.clientes) return;
       
       const medidasMap = new Map();
+      const mixMedidas = new Map();
       
       this.embarqueData.clientes.forEach(cliente => {
         cliente.productos.forEach(producto => {
@@ -181,13 +182,38 @@ export default {
             if (cliente.nombre === 'Ozuna' && !producto.esVenta) {
               nombreMedida = `${producto.medida} Maquila Ozuna`;
             }
-            
-            if (!medidasMap.has(medidaNormalizada)) {
+
+            // Si la medida termina en "mix", la guardamos en un mapa separado
+            if (medidaNormalizada.endsWith('mix')) {
+              const baseSize = medidaNormalizada.split(' ')[0]; // Obtiene el número base (ej: "51/60")
+              mixMedidas.set(baseSize, nombreMedida);
+            } else if (!medidasMap.has(medidaNormalizada)) {
               medidasMap.set(medidaNormalizada, nombreMedida);
             }
           }
         });
       });
+
+      // Agrupar las medidas mix
+      const mixKeys = Array.from(mixMedidas.keys()).sort();
+      if (mixKeys.length >= 2) {
+        for (let i = 0; i < mixKeys.length; i += 2) {
+          if (i + 1 < mixKeys.length) {
+            const combinedName = `${mixKeys[i]}-${mixKeys[i+1]} mix`;
+            medidasMap.set(combinedName, combinedName);
+            
+            // Inicializar la estructura para los kilos crudos si no existe
+            if (!this.kilosCrudos[combinedName]) {
+              this.$set(this.kilosCrudos, combinedName, {
+                medida1: 0,
+                medida2: 0,
+                etiqueta1: `Kilos en crudo (${mixKeys[i]})`,
+                etiqueta2: `Kilos en crudo (${mixKeys[i+1]})`
+              });
+            }
+          }
+        }
+      }
       
       this.medidasUnicas = Array.from(medidasMap.values());
     },
@@ -195,18 +221,28 @@ export default {
     obtenerTotalEmbarcado(medida) {
       if (!this.embarqueData || !this.embarqueData.clientes) return 0;
       
+      // Si es una medida combinada (mix)
+      if (medida.includes('-') && medida.endsWith('mix')) {
+        const [medida1, medida2] = medida.split('-').map(m => m.trim());
+        const total1 = this.calcularTotalParaMedida(medida1 + ' mix');
+        const total2 = this.calcularTotalParaMedida(medida2.replace(' mix', '') + ' mix');
+        return total1 + total2;
+      }
+      
+      return this.calcularTotalParaMedida(medida);
+    },
+
+    calcularTotalParaMedida(medida) {
       const medidaBase = medida.replace(' Maquila Ozuna', '').toLowerCase().trim();
       return this.embarqueData.clientes.reduce((total, cliente) => {
         return total + cliente.productos
           .filter(p => p.medida && p.medida.toLowerCase().trim() === medidaBase)
           .reduce((subtotal, producto) => {
             if (producto.tipo === 'c/h20') {
-              // Para productos con agua, usar el total de bolsas
               const totalBolsas = this.calcularTotalBolsas(producto);
               const valorNeto = parseFloat(producto.camaronNeto) || 0.65;
               return subtotal + (totalBolsas * valorNeto);
             } else {
-              // Para productos sin agua, calcular kilos - (taras * 3)
               const sumaKilos = producto.kilos.reduce((sum, kilo) => sum + (Number(kilo) || 0), 0);
               const sumaTaras = this.calcularTotalTaras(producto);
               const descuentoTaras = producto.restarTaras ? sumaTaras * 3 : 0;

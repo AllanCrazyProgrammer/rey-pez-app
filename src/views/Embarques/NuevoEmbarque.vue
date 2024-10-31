@@ -265,6 +265,7 @@
                   <option value="Med-Esp c/c">Med-Esp c/c</option>
                   <option value="Med-gde c/c">Med-gde c/c</option>
                   <option value="Gde c/c">Gde c/c</option>
+                  <option value="Gde c/ Extra">Gde c/ Extra c/c</option>
                   <option value="Extra c/c">Extra c/c</option>
                   <option value="Jumbo c/c">Jumbo c/c</option>
                   <option value="Linea">Linea</option>
@@ -763,7 +764,7 @@ export default {
     generarResumenPDF() {
       const docDefinition = {
         pageOrientation: 'portrait',
-        pageMargins: [40, 10, 40, 40], // [izquierda, arriba, derecha, abajo] - reducido el margen superior de 40 a 20
+        pageMargins: [40, 10, 40, 40],
         content: [],
         styles: {
           header: {
@@ -796,137 +797,185 @@ export default {
         }
       };
 
-      // Título y fecha con fuente más grande
+      // Título y fecha
       docDefinition.content.push(
         { text: 'Resumen de Embarque', style: 'header' },
         {
           text: `Fecha: ${new Date(this.embarque.fecha).toLocaleDateString()} | Carga: ${this.embarque.cargaCon || 'N/E'}`,
-          fontSize: 16, // Añadido tamaño de fuente específico
+          fontSize: 16,
           margin: [0, 0, 0, 10]
         }
       );
 
-      // Procesar cada clientes
+      // Altura disponible en la página (A4 = 842pt en portrait)
+      const alturaDisponible = 842 - 80; // Reducimos el espacio reservado para el header
+      let alturaUsada = 80; // Altura inicial usada por el header
+      let contenidoActual = [];
+
+      // Generar contenido para cada cliente
       Object.entries(this.productosPorCliente).forEach(([clienteId, productos]) => {
-        const nombreCliente = this.obtenerNombreCliente(clienteId);
-        const colorCliente = this.getClienteColor(clienteId);
-        const crudos = this.clienteCrudos[clienteId] || [];
+        const alturaCliente = this.calcularAlturaCliente(productos, this.clienteCrudos[clienteId] || []);
+        
+        // Agregar un margen de tolerancia del 10% para el cálculo
+        if (alturaUsada + alturaCliente > alturaDisponible * 1.1) {
+          if (contenidoActual.length > 0) {
+            docDefinition.content.push(...contenidoActual);
+          }
+          docDefinition.content.push({ text: '', pageBreak: 'before' });
+          contenidoActual = [];
+          alturaUsada = 0;
+        }
 
-        // Calcular totales
-        const totalTarasCliente = productos.reduce((sum, p) => sum + this.totalTaras(p), 0);
-        const totalKilosCliente = productos.reduce((sum, p) => sum + this.totalKilos(p), 0);
-        const crudosTotalKilos = crudos.reduce((sum, crudo) => 
-          sum + crudo.items.reduce((itemSum, item) => itemSum + this.calcularKilosCrudos(item), 0), 0);
-        const crudosTotalTaras = crudos.reduce((sum, crudo) => 
-          sum + crudo.items.reduce((itemSum, item) => itemSum + this.calcularTarasCrudos(item), 0), 0);
-
-        // Encabezado del cliente con totales
-        docDefinition.content.push({
-          table: {
-            widths: ['*', 200],
-            body: [[
-              {
-                text: nombreCliente,
-                style: 'clienteHeader',
-                fillColor: colorCliente
-              },
-              {
-                text: `Total: ${totalTarasCliente + crudosTotalTaras}T | ${(totalKilosCliente + crudosTotalKilos).toFixed(1)}Kg`,
-                style: 'total',
-                fillColor: colorCliente,
-                alignment: 'right'
-              }
-            ]]
-          },
-          margin: [0, 10, 0, 0]
-        });
-
-        // Contenedor para productos y crudos en la misma fila
-        docDefinition.content.push({
-          columns: [
-            // Columna de productos limpios
-            {
-              width: '*',
-              stack: productos.length > 0 ? [{
-                table: {
-                  headerRows: 1,
-                  widths: [140, 50, 85], // Reducido a 3 columnas
-                  body: [
-                    [
-                      { text: 'Medida', style: 'tableHeader', fontSize: 20 },
-                      { text: 'Kg', style: 'tableHeader', fontSize: 20 },
-                      { text: 'Taras', style: 'tableHeader', fontSize: 20 }
-                    ],
-                    ...productos.map(producto => [
-                      { 
-                        text: producto.tipo === 'Sin Tipo' ? 
-                          producto.medida : 
-                          producto.tipo === 'otro' ?
-                            `${producto.medida} ${producto.tipoPersonalizado}` :
-                            producto.tipo === 'c/h20' ?
-                              [
-                                { text: `${producto.medida}`, color: '#000000' },
-                                { text: ' c/h20 ', color: '#3498db' },
-                                { text: `(${producto.camaronNeto || 0.65})`, color: '#3498db' }
-                              ] :
-                              `${producto.medida} ${producto.tipo}`, 
-                        fontSize: 18 
-                      },
-                      { text: this.totalKilos(producto).toFixed(1), fontSize: 18 },
-                      { 
-                        text: `${this.totalTaras(producto)}-${this.generarDetallesProductoCompacto(producto)}`, 
-                        fontSize: 18 
-                      }
-                    ])
-                  ]
-                },
-                margin: [0, 5, 5, 10]
-              }] : []
-            },
-            // Columna de crudos
-            {
-              width: '*',
-              stack: crudos.length > 0 ? [{
-                table: {
-                  headerRows: 1,
-                  widths: [45, 55, 25, 40],
-                  body: [
-                    [
-                      { text: 'Talla', style: 'crudosHeader', fontSize: 20 },  // Reducido de 22
-                      { text: 'Barco', style: 'crudosHeader', fontSize: 20 },  // Reducido de 22
-                      { text: 'T', style: 'crudosHeader', fontSize: 20 },      // Reducido de 22
-                      { text: 'Kg', style: 'crudosHeader', fontSize: 20 }      // Reducido de 22
-                    ],
-                    ...crudos.flatMap(crudo =>
-                      crudo.items.map(item => [
-                        { text: this.formatearTallaCrudo(item.talla), fontSize: 18 },  // Reducido de 20
-                        { text: item.barco, fontSize: 18 },                            // Reducido de 20
-                        { text: this.calcularTarasCrudos(item), fontSize: 18 },        // Reducido de 20
-                        { text: this.calcularKilosCrudos(item).toFixed(0), fontSize: 18 } // Reducido de 20
-                      ])
-                    )
-                  ]
-                },
-                margin: [5, 5, 0, 10]
-              }] : []
-            }
-          ]
-        });
+        const contenidoCliente = this.generarContenidoCliente(clienteId, productos, this.clienteCrudos[clienteId] || [], this.getClienteColor(clienteId));
+        contenidoActual.push(...contenidoCliente);
+        alturaUsada += alturaCliente;
       });
 
-      // Pie de página
-      docDefinition.footer = function(currentPage, pageCount) {
-        return {
-          text: `Generado: ${new Date().toLocaleString()} - Página ${currentPage} de ${pageCount}`,
-          alignment: 'left',
-          margin: [40, 0],
-          fontSize: 14, // Aumentado de 11
-          color: '#808080'
-        };
-      };
+      // Agregar el contenido restante
+      if (contenidoActual.length > 0) {
+        docDefinition.content.push(...contenidoActual);
+      }
+
+      // Agregar el pie de página una sola vez al final del documento
+      docDefinition.content.push({
+        text: `Generado: ${new Date().toLocaleString()}`,
+        alignment: 'left',
+        margin: [40, 20],
+        fontSize: 14,
+        color: '#808080'
+      });
 
       // Generar el PDF
       pdfMake.createPdf(docDefinition).download('resumen-embarque.pdf');
+    },
+
+    calcularAlturaCliente(productos, crudos) {
+      // Altura base para el header del cliente (reducida)
+      let altura = 40;
+
+      // Altura para la tabla de productos
+      if (productos.length > 0) {
+        altura += 30; // Header de la tabla
+        altura += productos.length * 25; // Cada fila de producto
+      }
+
+      // Altura para la tabla de crudos
+      if (crudos.length > 0) {
+        altura += 30; // Header de la tabla
+        altura += crudos.reduce((total, crudo) => {
+          return total + (crudo.items.length * 25); // Cada fila de crudo
+        }, 0);
+      }
+
+      // Margen entre clientes
+      altura += 20;
+
+      return altura;
+    },
+
+    generarContenidoCliente(clienteId, productos, crudos, colorCliente) {
+      const nombreCliente = this.obtenerNombreCliente(clienteId);
+      const totalTarasCliente = productos.reduce((sum, p) => sum + this.totalTaras(p), 0);
+      const totalKilosCliente = productos.reduce((sum, p) => sum + this.totalKilos(p), 0);
+      const crudosTotalKilos = crudos.reduce((sum, crudo) => 
+        sum + crudo.items.reduce((itemSum, item) => itemSum + this.calcularKilosCrudos(item), 0), 0);
+      const crudosTotalTaras = crudos.reduce((sum, crudo) => 
+        sum + crudo.items.reduce((itemSum, item) => itemSum + this.calcularTarasCrudos(item), 0), 0);
+
+      const contenido = [{
+        table: {
+          widths: ['*', 200],
+          body: [[
+            {
+              text: nombreCliente,
+              style: 'clienteHeader',
+              fillColor: colorCliente
+            },
+            {
+              text: `Total: ${totalTarasCliente + crudosTotalTaras}T | ${(totalKilosCliente + crudosTotalKilos).toFixed(1)}Kg`,
+              style: 'total',
+              fillColor: colorCliente,
+              alignment: 'right'
+            }
+          ]]
+        },
+        margin: [0, 10, 0, 0]
+      }];
+
+      // Contenedor para productos y crudos en la misma fila
+      contenido.push({
+        columns: [
+          // Columna de productos limpios
+          {
+            width: '*',
+            stack: productos.length > 0 ? [{
+              table: {
+                headerRows: 1,
+                widths: [140, 50, 85],
+                body: [
+                  [
+                    { text: 'Medida', style: 'tableHeader', fontSize: 20 },
+                    { text: 'Kg', style: 'tableHeader', fontSize: 20 },
+                    { text: 'Taras', style: 'tableHeader', fontSize: 20 }
+                  ],
+                  ...productos.map(producto => [
+                    { 
+                      text: producto.tipo === 'Sin Tipo' ? 
+                        producto.medida : 
+                        producto.tipo === 'otro' ?
+                          `${producto.medida} ${producto.tipoPersonalizado}` :
+                          producto.tipo === 'c/h20' ?
+                            [
+                              { text: `${producto.medida}`, color: '#000000' },
+                              { text: ' c/h20 ', color: '#3498db' },
+                              { text: `(${producto.camaronNeto || 0.65})`, color: '#3498db' }
+                            ] :
+                            `${producto.medida} ${producto.tipo}`, 
+                      fontSize: 18 
+                    },
+                    { text: this.totalKilos(producto).toFixed(1), fontSize: 18 },
+                    { 
+                      text: `${this.totalTaras(producto)}-${this.generarDetallesProductoCompacto(producto)}`, 
+                      fontSize: 18 
+                    }
+                  ])
+                ]
+              },
+              margin: [0, 5, 5, 10]
+            }] : []
+          },
+          // Columna de crudos
+          {
+            width: '*',
+            stack: crudos.length > 0 ? [{
+              table: {
+                headerRows: 1,
+                widths: [45, 55, 25, 40],
+                body: [
+                  [
+                    { text: 'Talla', style: 'crudosHeader', fontSize: 20 },
+                    { text: 'Barco', style: 'crudosHeader', fontSize: 20 },
+                    { text: 'T', style: 'crudosHeader', fontSize: 20 },
+                    { text: 'Kg', style: 'crudosHeader', fontSize: 20 }
+                  ],
+                  ...crudos.flatMap(crudo =>
+                    crudo.items.map(item => [
+                      { text: this.formatearTallaCrudo(item.talla), fontSize: 18 },
+                      { text: item.barco, fontSize: 18 },
+                      { text: this.calcularTarasCrudos(item), fontSize: 18 },
+                      { text: this.calcularKilosCrudos(item).toFixed(0), fontSize: 18 }
+                    ])
+                  )
+                ]
+              },
+              margin: [5, 5, 0, 10]
+            }] : []
+          }
+        ]
+      });
+
+      // Eliminamos el pie de página de aquí, ya que se agregará una sola vez al final del documento
+      return contenido;
     },
 
     // Método auxiliar para generar detalles compactos
