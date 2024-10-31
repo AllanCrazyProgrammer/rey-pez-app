@@ -291,19 +291,18 @@ export default {
       // Suma de kilos
       const sumaKilos = producto.kilos.reduce((total, kilo) => total + (Number(kilo) || 0), 0);
       
-      // Cálculo de taras
+      // Solo las taras normales (no extra) afectan al descuento de kilos
       const tarasNormales = (producto.taras || []).reduce((sum, tara) => sum + (Number(tara) || 0), 0);
-      const tarasExtra = (producto.tarasExtra || []).reduce((sum, tara) => sum + (Number(tara) || 0), 0);
-      const totalTaras = tarasNormales + tarasExtra;
       
-      // Descuento de taras si está activado
-      const descuentoTaras = producto.restarTaras ? totalTaras * 3 : 0;
+      // El descuento solo aplica a taras normales cuando restarTaras está activo
+      const descuentoTaras = producto.restarTaras ? tarasNormales * 3 : 0;
       
-      // Retornar kilos netos
+      // Las taras extra no afectan los kilos
       return sumaKilos - descuentoTaras;
     },
 
     calcularTotalTaras(producto) {
+      // Aquí sí sumamos tanto taras normales como extra para el conteo total
       const tarasNormales = (producto.taras || []).reduce((sum, tara) => sum + (Number(tara) || 0), 0);
       const tarasExtra = (producto.tarasExtra || []).reduce((sum, tara) => sum + (Number(tara) || 0), 0);
       return tarasNormales + tarasExtra;

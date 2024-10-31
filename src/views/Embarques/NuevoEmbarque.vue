@@ -1,25 +1,26 @@
 <template>
-  <div class="nuevo-embarque">
-    <h1>{{ modoEdicion ? 'Editar Embarque' : 'Nuevo Embarque' }}</h1>
-    <div class="botones">
-      <button @click="volverAEmbarquesMenu" class="btn-volver">
-        <i class="fas fa-arrow-left"></i> Volver a Embarques Menu
-      </button>
-    </div>
-    <div class="header">
-      <div class="fecha-selector">
-        <label for="fecha">Fecha de Embarque:</label>
-        <input type="date" id="fecha" v-model="embarque.fecha" class="form-control" required>
+  <div class="nuevo-embarque-container">
+    <div class="nuevo-embarque">
+      <h1>{{ modoEdicion ? 'Editar Embarque' : 'Nuevo Embarque' }}</h1>
+      <div class="botones">
+        <button @click="volverAEmbarquesMenu" class="btn-volver">
+          <i class="fas fa-arrow-left"></i> Volver a Embarques Menu
+        </button>
       </div>
-      <div class="carga-selector">
-        <label for="cargaCon">Carga con:</label>
-        <select id="cargaCon" v-model="embarque.cargaCon" class="form-control" required>
-          <option value="">Seleccionar</option>
-          <option value="Porro">Porro</option>
-          <option value="Caminante">Caminante</option>
-        </select>
-      </div>
-  
+      <div class="header">
+        <div class="fecha-selector">
+          <label for="fecha">Fecha de Embarque:</label>
+          <input type="date" id="fecha" v-model="embarque.fecha" class="form-control" required>
+        </div>
+        <div class="carga-selector">
+          <label for="cargaCon">Carga con:</label>
+          <select id="cargaCon" v-model="embarque.cargaCon" class="form-control" required>
+            <option value="">Seleccionar</option>
+            <option value="Porro">Porro</option>
+            <option value="Caminante">Caminante</option>
+          </select>
+        </div>
+    
     
 <div class="resumen-container">
   <div class="resumen-columna">
@@ -76,7 +77,15 @@
           <div v-for="(producto, index) in clienteProductos" :key="index" class="producto" :data-es-venta="producto.esVenta">
             <!-- Encabezado de la medida y selección -->
             <h2 class="encabezado-medida">
+              <button 
+                @click="abrirModalPrecio(producto)" 
+                class="btn-precio"
+                :class="{ 'tiene-precio': producto.precio }"
+              >
+                $
+              </button>
               {{ producto.medida || 'Sin Medida' }} - {{ obtenerTipoProducto(producto) }}
+              <span v-if="producto.precio" class="precio-tag">${{ producto.precio }}</span>
             </h2>
             <div class="producto-header">
               <div class="medida-autocomplete">
@@ -254,57 +263,73 @@
           </div>
           <div v-for="(crudo, index) in clienteCrudos[clienteId] || []" :key="'crudo-'+index" class="producto crudo">
             <h2 class="crudo-header">Crudos</h2>
-            <div v-for="(item, itemIndex) in crudo.items || []" :key="'item-'+itemIndex" class="crudo-item">
-              <div class="crudo-talla-container">
-                <select 
-                  v-model="item.talla" 
-                  class="form-control talla-select"
-                >
-                  <option value="">Elige talla</option>
-                  <option value="Med c/c">Med c/c</option>
-                  <option value="Med-Esp c/c">Med-Esp c/c</option>
-                  <option value="Med-gde c/c">Med-gde c/c</option>
-                  <option value="Gde c/c">Gde c/c</option>
-                  <option value="Gde c/ Extra">Gde c/ Extra c/c</option>
-                  <option value="Extra c/c">Extra c/c</option>
-                  <option value="Jumbo c/c">Jumbo c/c</option>
-                  <option value="Linea">Linea</option>
-                  <option value="Rechazo">Rechazo</option>
-                </select>
-                <input 
-                  type="text" 
-                  v-model="item.barco" 
-                  class="form-control barco-input" 
-                  placeholder="Barco"
-                >
-              </div>
-              <div class="crudo-taras-container">
-                <div class="taras-wrapper">
-                  <input 
-                    type="text" 
-                    v-model="item.taras" 
-                    class="form-control taras-input" 
-                    placeholder="Taras"
-                    @input="actualizarTotalCrudos(clienteId, index)"
+            
+            <div class="crudo-items">
+              <div v-for="(item, itemIndex) in crudo.items || []" :key="'item-'+itemIndex" class="crudo-item">
+                <div class="crudo-talla-container">
+                  <button 
+                    @click="abrirModalPrecio(item)" 
+                    class="btn-precio"
+                    :class="{ 'tiene-precio': item.precio }"
                   >
+                    $
+                  </button>
+                  <select 
+                    v-model="item.talla" 
+                    class="form-control talla-select"
+                  >
+                    <option value="">Elige talla</option>
+                    <option value="Med c/c">Med c/c</option>
+                    <option value="Med-Esp c/c">Med-Esp c/c</option>
+                    <option value="Med-gde c/c">Med-gde c/c</option>
+                    <option value="Gde c/c">Gde c/c</option>
+                    <option value="Gde c/ Extra">Gde c/ Extra c/c</option>
+                    <option value="Extra c/c">Extra c/c</option>
+                    <option value="Jumbo c/c">Jumbo c/c</option>
+                    <option value="Linea">Linea</option>
+                    <option value="Rechazo">Rechazo</option>
+                  </select>
+                  <span v-if="item.precio" class="precio-tag">${{ item.precio }}</span>
+                  
                   <input 
-                    v-if="item.mostrarSobrante"
                     type="text" 
-                    v-model="item.sobrante" 
-                    class="form-control taras-input" 
-                    placeholder="Sbrte"
-                    @input="actualizarTotalCrudos(clienteId, index)"
+                    v-model="item.barco" 
+                    class="form-control barco-input" 
+                    placeholder="Barco"
                   >
                 </div>
-                <div class="buttons-wrapper">
-                  <button type="button" @click="eliminarCrudoItem(clienteId, index, itemIndex)" class="btn btn-danger btn-sm eliminar-crudo-item">-</button>
-                  <button type="button" @click="toggleSobrante(clienteId, index, itemIndex)" class="btn btn-success btn-sm agregar-sobrante">+</button>
+                
+                <div class="crudo-taras-container">
+                  <div class="taras-wrapper">
+                    <input 
+                      type="text" 
+                      v-model="item.taras" 
+                      class="form-control taras-input" 
+                      placeholder="Taras"
+                      @input="actualizarTotalCrudos(clienteId, index)"
+                    >
+                    <input 
+                      v-if="item.mostrarSobrante"
+                      type="text" 
+                      v-model="item.sobrante" 
+                      class="form-control taras-input" 
+                      placeholder="Sbrte"
+                      @input="actualizarTotalCrudos(clienteId, index)"
+                    >
+                  </div>
+                  <div class="buttons-wrapper">
+                    <button type="button" @click="eliminarCrudoItem(clienteId, index, itemIndex)" class="btn btn-danger btn-sm eliminar-crudo-item">-</button>
+                    <button type="button" @click="toggleSobrante(clienteId, index, itemIndex)" class="btn btn-success btn-sm agregar-sobrante">+</button>
+                  </div>
                 </div>
               </div>
             </div>
-            <button type="button" @click="agregarCrudoItem(clienteId, index)" class="btn btn-primary btn-sm agregar-crudo-item">+ Agregar Talla/Taras</button>
-            <button type="button" @click="eliminarCrudo(clienteId, index)" class="btn btn-danger btn-sm eliminar-crudo">Eliminar Crudo</button>
-            <div class="total-crudos">Total de taras: {{ calcularTotalCrudos(crudo) }}</div>
+            
+            <div class="crudo-footer">
+              <button type="button" @click="agregarCrudoItem(clienteId, index)" class="btn btn-primary btn-sm agregar-crudo-item">+ Agregar Talla/Taras</button>
+              <button type="button" @click="eliminarCrudo(clienteId, index)" class="btn btn-danger btn-sm eliminar-crudo">Eliminar Crudo</button>
+              <div class="total-crudos">Total de taras: {{ calcularTotalCrudos(crudo) }}</div>
+            </div>
           </div>
         </div>
         <div class="botones-agregar">
@@ -340,6 +365,31 @@
       </div>
     </form>
  
+  </div>
+    
+    <!-- Modificar el modal para evitar la propagación de eventos -->
+    <div v-if="mostrarModalPrecio" class="modal-precio" @click.stop="cerrarModalPrecio">
+      <div class="modal-contenido" @click.stop>
+        <h3>Establecer Precio</h3>
+        <div class="input-precio">
+          <span class="simbolo-precio">$</span>
+          <input 
+            type="number" 
+            v-model="precioTemp"
+            step="0.01"
+            min="0"
+            placeholder="0.00"
+            @keyup.enter.stop="guardarPrecio"
+            @keydown.stop
+            ref="precioInput"
+          >
+        </div>
+        <div class="modal-botones">
+          <button @click.stop="guardarPrecio" class="btn btn-success">Guardar</button>
+          <button @click.stop="cerrarModalPrecio" class="btn btn-secondary">Cancelar</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -392,6 +442,9 @@ export default {
       unsubscribe: null,
       medidasSugeridas: [],
       medidasUsadas: new Set(),
+      mostrarModalPrecio: false,
+      precioTemp: '',
+      itemSeleccionado: null,
     };
   },
   computed: {
@@ -513,9 +566,8 @@ export default {
       console.log('Restar taras:', producto.restarTaras);
       const sumaKilos = (producto.kilos || []).reduce((sum, kilo) => sum + (kilo || 0), 0);
       const sumaTarasNormales = (producto.taras || []).reduce((sum, tara) => sum + (tara || 0), 0);
-      const sumaTarasExtra = (producto.tarasExtra || []).reduce((sum, tara) => sum + (tara || 0), 0);
-      const totalTaras = sumaTarasNormales + sumaTarasExtra;
-      const descuentoTaras = producto.restarTaras ? totalTaras * 3 : 0;
+      // No incluimos las taras extra en el descuento
+      const descuentoTaras = producto.restarTaras ? sumaTarasNormales * 3 : 0;
       const resultado = Number((sumaKilos - descuentoTaras).toFixed(1));
       console.log('Total kilos:', resultado);
       return resultado;
@@ -637,7 +689,7 @@ export default {
       this.guardadoAutomaticoActivo = false;
     },
     guardarCambiosEnTiempoReal: debounce(async function() {
-      if (!this.guardadoAutomaticoActivo || !this.embarqueId) return;
+      if (!this.guardadoAutomaticoActivo || !this.embarqueId || this.mostrarModalPrecio) return;
 
       const embarqueData = this.prepararDatosEmbarque();
       const db = getFirestore();
@@ -877,10 +929,19 @@ export default {
       const nombreCliente = this.obtenerNombreCliente(clienteId);
       const totalTarasCliente = productos.reduce((sum, p) => sum + this.totalTaras(p), 0);
       const totalKilosCliente = productos.reduce((sum, p) => sum + this.totalKilos(p), 0);
-      const crudosTotalKilos = crudos.reduce((sum, crudo) => 
-        sum + crudo.items.reduce((itemSum, item) => itemSum + this.calcularKilosCrudos(item), 0), 0);
-      const crudosTotalTaras = crudos.reduce((sum, crudo) => 
-        sum + crudo.items.reduce((itemSum, item) => itemSum + this.calcularTarasCrudos(item), 0), 0);
+      
+      // Calcular totales de crudos
+      const crudosTotalKilos = crudos.reduce((sum, crudo) => {
+        return sum + crudo.items.reduce((itemSum, item) => {
+          return itemSum + this.calcularKilosCrudos(item);
+        }, 0);
+      }, 0);
+
+      const crudosTotalTaras = crudos.reduce((sum, crudo) => {
+        return sum + crudo.items.reduce((itemSum, item) => {
+          return itemSum + this.calcularTarasCrudos(item);
+        }, 0);
+      }, 0);
 
       const contenido = [{
         table: {
@@ -902,79 +963,89 @@ export default {
         margin: [0, 10, 0, 0]
       }];
 
-      // Contenedor para productos y crudos en la misma fila
-      contenido.push({
-        columns: [
-          // Columna de productos limpios
-          {
-            width: '*',
-            stack: productos.length > 0 ? [{
-              table: {
-                headerRows: 1,
-                widths: [140, 50, 85],
-                body: [
-                  [
-                    { text: 'Medida', style: 'tableHeader', fontSize: 20 },
-                    { text: 'Kg', style: 'tableHeader', fontSize: 20 },
-                    { text: 'Taras', style: 'tableHeader', fontSize: 20 }
-                  ],
-                  ...productos.map(producto => [
-                    { 
-                      text: producto.tipo === 'Sin Tipo' ? 
-                        producto.medida : 
-                        producto.tipo === 'otro' ?
-                          `${producto.medida} ${producto.tipoPersonalizado}` :
-                          producto.tipo === 'c/h20' ?
-                            [
-                              { text: `${producto.medida}`, color: '#000000' },
-                              { text: ' c/h20 ', color: '#3498db' },
-                              { text: `(${producto.camaronNeto || 0.65})`, color: '#3498db' }
-                            ] :
-                            `${producto.medida} ${producto.tipo}`, 
-                      fontSize: 18 
-                    },
-                    { text: this.totalKilos(producto).toFixed(1), fontSize: 18 },
-                    { 
-                      text: `${this.totalTaras(producto)}-${this.generarDetallesProductoCompacto(producto)}`, 
-                      fontSize: 18 
-                    }
-                  ])
-                ]
-              },
-              margin: [0, 5, 5, 10]
-            }] : []
-          },
-          // Columna de crudos
-          {
-            width: '*',
-            stack: crudos.length > 0 ? [{
-              table: {
-                headerRows: 1,
-                widths: [45, 55, 25, 40],
-                body: [
-                  [
-                    { text: 'Talla', style: 'crudosHeader', fontSize: 20 },
-                    { text: 'Barco', style: 'crudosHeader', fontSize: 20 },
-                    { text: 'T', style: 'crudosHeader', fontSize: 20 },
-                    { text: 'Kg', style: 'crudosHeader', fontSize: 20 }
-                  ],
-                  ...crudos.flatMap(crudo =>
-                    crudo.items.map(item => [
-                      { text: this.formatearTallaCrudo(item.talla), fontSize: 18 },
-                      { text: item.barco, fontSize: 18 },
-                      { text: this.calcularTarasCrudos(item), fontSize: 18 },
-                      { text: this.calcularKilosCrudos(item).toFixed(0), fontSize: 18 }
-                    ])
-                  )
-                ]
-              },
-              margin: [5, 5, 0, 10]
-            }] : []
-          }
-        ]
-      });
+      // Verificar si hay crudos para determinar el layout
+      const hayCrudos = crudos && crudos.length > 0 && crudos.some(crudo => crudo.items && crudo.items.length > 0);
 
-      // Eliminamos el pie de página de aquí, ya que se agregará una sola vez al final del documento
+      // Si hay productos, crear la tabla de productos
+      if (productos.length > 0) {
+        const tablaProductos = {
+          table: {
+            headerRows: 1,
+            widths: hayCrudos ? [140, 50, 85] : [200, 100, 150], // Anchuras más grandes si no hay crudos
+            body: [
+              [
+                { text: 'Medida', style: 'tableHeader', fontSize: 20 },
+                { text: 'Kg', style: 'tableHeader', fontSize: 20 },
+                { text: 'Taras', style: 'tableHeader', fontSize: 20 }
+              ],
+              ...productos.map(producto => [
+                { 
+                  text: producto.tipo === 'Sin Tipo' ? 
+                    producto.medida : 
+                    producto.tipo === 'otro' ?
+                      `${producto.medida} ${producto.tipoPersonalizado}` :
+                      producto.tipo === 'c/h20' ?
+                        [
+                          { text: `${producto.medida}`, color: '#000000' },
+                          { text: ' c/h20 ', color: '#3498db' },
+                          { text: `(${producto.camaronNeto || 0.65})`, color: '#3498db' }
+                        ] :
+                        `${producto.medida} ${producto.tipo}`, 
+                  fontSize: 18 
+                },
+                { text: this.totalKilos(producto).toFixed(1), fontSize: 18 },
+                { 
+                  text: `${this.totalTaras(producto)}-${this.generarDetallesProductoCompacto(producto)}`, 
+                  fontSize: 18 
+                }
+              ])
+            ]
+          },
+          margin: [0, 5, hayCrudos ? 5 : 0, 10]
+        };
+
+        if (hayCrudos) {
+          // Si hay crudos, usar el layout de columnas
+          contenido.push({
+            columns: [
+              {
+                width: '*',
+                stack: [tablaProductos]
+              },
+              {
+                width: '*',
+                stack: [{
+                  table: {
+                    headerRows: 1,
+                    widths: [45, 55, 25, 40],
+                    body: [
+                      [
+                        { text: 'Talla', style: 'crudosHeader', fontSize: 20 },
+                        { text: 'Barco', style: 'crudosHeader', fontSize: 20 },
+                        { text: 'T', style: 'crudosHeader', fontSize: 20 },
+                        { text: 'Kg', style: 'crudosHeader', fontSize: 20 }
+                      ],
+                      ...crudos.flatMap(crudo =>
+                        crudo.items.map(item => [
+                          { text: this.formatearTallaCrudo(item.talla), fontSize: 18 },
+                          { text: item.barco, fontSize: 18 },
+                          { text: this.calcularTarasCrudos(item), fontSize: 18 },
+                          { text: this.calcularKilosCrudos(item).toFixed(0), fontSize: 18 }
+                        ])
+                      )
+                    ]
+                  },
+                  margin: [5, 5, 0, 10]
+                }]
+              }
+            ]
+          });
+        } else {
+          // Si no hay crudos, agregar solo la tabla de productos a todo el ancho
+          contenido.push(tablaProductos);
+        }
+      }
+
       return contenido;
     },
 
@@ -1301,7 +1372,7 @@ export default {
       return Object.values(this.clienteCrudos).reduce((total, crudos) => {
         return total + crudos.reduce((clienteTotal, crudo) => {
           return clienteTotal + crudo.items.reduce((itemTotal, item) => {
-            return itemTotal + this.calcularKilosCrudos(item);
+            return itemTotal + parseFloat(this.calcularKilosCrudos(item));
           }, 0);
         }, 0);
       }, 0).toFixed(2);
@@ -1335,6 +1406,44 @@ export default {
         'Rechazo': 'Rch'
       };
       return abreviaturas[talla] || talla;
+    },
+    abrirModalPrecio(item) {
+      event?.preventDefault();
+      event?.stopPropagation();
+      
+      this.itemSeleccionado = item;
+      this.precioTemp = item.precio || '';
+      this.mostrarModalPrecio = true;
+      this.$nextTick(() => {
+        this.$refs.precioInput?.focus();
+      });
+    },
+    cerrarModalPrecio() {
+      event?.preventDefault();
+      event?.stopPropagation();
+      
+      this.mostrarModalPrecio = false;
+      this.itemSeleccionado = null;
+      this.precioTemp = '';
+    },
+    guardarPrecio() {
+      event?.preventDefault();
+      event?.stopPropagation();
+      
+      if (this.itemSeleccionado) {
+        const precio = parseFloat(this.precioTemp);
+        if (!isNaN(precio)) {
+          this.$set(this.itemSeleccionado, 'precio', precio);
+          const guardadoActivo = this.guardadoAutomaticoActivo;
+          this.guardadoAutomaticoActivo = false;
+          
+          this.$nextTick(() => {
+            this.guardadoAutomaticoActivo = guardadoActivo;
+            this.guardarCambiosEnTiempoReal();
+          });
+        }
+      }
+      this.cerrarModalPrecio();
     },
   },
   created() {
@@ -1583,6 +1692,11 @@ class EmbarqueReportGenerator {
 }
 
 
+
+.nuevo-embarque-container {
+  position: relative;
+  min-height: 100vh;
+}
 
 .nuevo-embarque {
   padding: 20px;
@@ -2292,9 +2406,9 @@ class EmbarqueReportGenerator {
 .crudo {
   background-color: #f8f9fa;
   border: 2px solid #007bff;
-  border-radius: 25px;
   padding: 15px;
-  width: calc(50% - 7.5px);
+  margin-bottom: 15px;
+  border-radius: 8px;
 }
 
 .crudo h3 {
@@ -2303,158 +2417,121 @@ class EmbarqueReportGenerator {
   font-size: 1.2rem;
 }
 
-.crudo-inputs {
+.crudo-items {
   display: flex;
-  gap: 10px;
-  margin-bottom: 10px;
-}
-
-.talla-select,
-.taras-input {
-  flex: 1;
-}
-
-.eliminar-crudo {
-  width: 100%;
-}
-
-@media (max-width: 768px) {
-  .crudo {
-    width: 100%;
-  }
-}
-
-.talla-select,
-.taras-input {
-  flex: 1;
-}
-
-.eliminar-crudo {
-  width: 100%;
-}
-
-@media (max-width: 768px) {
-  .crudo {
-    width: 100%;
-  }
+  flex-direction: column;
+  gap: 15px;
 }
 
 .crudo-item {
   display: flex;
+  flex-direction: column;
   gap: 10px;
-  margin-bottom: 15px;
+  padding: 10px;
+  background-color: #f8f9fa;
+  border-radius: 4px;
+  border: 1px solid #dee2e6;
 }
 
 .crudo-talla-container {
-  flex: 1;
   display: flex;
-  flex-direction: column;
-  gap: 5px;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 5px;
 }
 
-.crudo-taras-container {
-  flex: 1;
-  display: flex;
-  align-items: flex-start;
-  gap: 5px;
+.talla-select {
+  flex: 2;
+  min-width: 120px;
 }
 
-.talla-select,
 .barco-input {
-  width: 100%;
+  flex: 1;
+  min-width: 80px;
 }
 
 .taras-input {
-  flex-grow: 1;
+  width: 60px; /* Reducir el ancho del input de taras */
+  min-width: 60px;
+  padding: 4px 8px;
+  text-align: center;
 }
 
-.eliminar-crudo-item {
-  align-self: flex-start;
-}
-
-.agregar-crudo-item,
-.eliminar-crudo {
-  width: 100%;
-  margin-top: 10px;
-}
-
-.agregar-sobrante {
-  width: 100%;
-  height: 38px;
-}
-
-.crudo-sobrante-container,
-.crudo-agregar-container {
-  margin-top: 10px;
-}
-
-.sobrante-input {
-  width: calc(100% - 50px);
-}
-
-.crudo-taras-container {
-  display: flex;
-  align-items: flex-start;
-}
-
-.taras-wrapper {
-  flex-grow: 1;
-  margin-right: 10px;
-}
-
-.buttons-wrapper {
-  display: flex;
-  flex-direction: column;
-}
-
-.taras-input {
-  width: 100%;
-  margin-bottom: 10px;
-}
-
-.eliminar-crudo-item,
-.agregar-sobrante {
-  width: 38px;
-  height: 38px;
-  padding: 0;
+.btn-precio {
+  padding: 2px 6px;
+  font-size: 0.8rem;
+  height: 24px;
+  min-width: 24px;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-.agregar-sobrante {
-  margin-top: 10px;
-}
-
-.total-crudos {
-  text-align: center;
-  font-weight: bold;
-  margin-top: 15px;
-  font-size: 1.2rem;
-  color: #333;
-}
-
-.crudos-form {
+.crudo-taras-container {
   display: flex;
-  flex-wrap: wrap;
-  gap: 1rem;
+  align-items: center;
+  gap: 8px;
 }
 
-.crudos-input {
-  flex: 1 1 calc(33.33% - 1rem);
-  min-width: 200px;
+.taras-wrapper {
+  display: flex;
+  gap: 8px;
+  align-items: center;
 }
 
-@media (max-width: 768px) {
-  .crudos-input {
-    flex: 1 1 calc(50% - 1rem);
-  }
+.buttons-wrapper {
+  display: flex;
+  gap: 4px;
 }
 
-@media (max-width: 480px) {
-  .crudos-input {
-    flex: 1 1 100%;
-  }
+.eliminar-crudo-item,
+.agregar-sobrante {
+  padding: 4px 8px;
+  height: 24px;
+  min-width: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.precio-tag {
+  font-size: 0.8rem;
+  color: #28a745;
+  font-weight: bold;
+  white-space: nowrap;
+}
+
+/* Ajustar el layout para mejor uso del espacio */
+.crudo-item {
+  padding: 8px;
+  margin-bottom: 8px;
+}
+
+.crudo-items {
+  gap: 8px;
+}
+
+/* Hacer los inputs más compactos en general */
+.form-control {
+  padding: 4px 8px;
+  height: auto;
+  font-size: 0.9rem;
+}
+
+.agregar-crudo-item,
+.eliminar-crudo {
+  width: 100%;
+}
+
+.eliminar-crudo-item,
+.agregar-sobrante {
+  padding: 5px 10px;
+  font-size: 14px;
+}
+
+.btn-precio {
+  padding: 2px 8px;
+  margin-right: 10px;
 }
 
 .generar-nota {
@@ -2640,6 +2717,100 @@ class EmbarqueReportGenerator {
 /* Estilo para productos que son maquila */
 .producto[data-es-venta="false"] {
   border: 2px solid #007bff;
+}
+
+.btn-precio {
+  padding: 2px 8px;
+  font-size: 0.9rem;
+  background-color: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-right: 8px;
+  transition: all 0.2s;
+}
+
+.btn-precio.tiene-precio {
+  background-color: #28a745;
+  color: white;
+  border-color: #28a745;
+}
+
+.precio-tag {
+  font-size: 0.9rem;
+  color: #28a745;
+  font-weight: bold;
+  margin-left: 8px;
+}
+
+/* Agregar o modificar estilos del modal */
+.modal-precio {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.modal-contenido {
+  background-color: white;
+  padding: 20px;
+  border-radius: 8px;
+  width: 300px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  position: relative;
+  z-index: 1001;
+}
+
+.input-precio {
+  display: flex;
+  align-items: center;
+  margin: 20px 0;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  padding: 8px;
+}
+
+.simbolo-precio {
+  font-size: 1.2rem;
+  color: #495057;
+  margin-right: 8px;
+}
+
+.input-precio input {
+  border: none;
+  outline: none;
+  font-size: 1.2rem;
+  width: 100%;
+  -moz-appearance: textfield;
+}
+
+.input-precio input::-webkit-outer-spin-button,
+.input-precio input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.modal-botones {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.modal-botones button {
+  flex: 1;
+  padding: 8px;
+}
+
+.talla-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 5px;
 }
 </style>
 
