@@ -456,7 +456,7 @@ function agruparProductos(productos) {
   // Creamos un objeto para agrupar por medida y tipo
   const grupos = productos.reduce((acc, producto) => {
     // La clave única combina medida y tipo (incluyendo s/h2o o c/h2o)
-    const medidaTipo = formatearProducto(producto);
+    const medidaTipo = `${producto.medida || ''} ${producto.tipo || ''}`.trim();
     
     if (!acc[medidaTipo]) {
       acc[medidaTipo] = {
