@@ -125,6 +125,10 @@ export async function generarNotaVentaPDF(embarque, clientesDisponibles) {
           color: '#FFFFFF',
           background: '#FF0000',
           padding: [2, 2, 2, 2]
+        },
+        tipoConAgua: {
+          color: '#2980b9',  // Color azul
+          bold: true
         }
       },
       defaultStyle: {
@@ -142,7 +146,54 @@ export async function generarNotaVentaPDF(embarque, clientesDisponibles) {
       }
     };
 
-    pdfMake.createPdf(docDefinition).download('nota-venta.pdf');
+    // Crear el documento PDF y verificar número de páginas
+    pdfMake.createPdf(docDefinition).getBuffer((buffer) => {
+      // Crear un Uint8Array del buffer para contar las páginas
+      const pdfData = new Uint8Array(buffer);
+      // Contar ocurrencias de "/Page" para estimar número de páginas
+      const numPages = buffer.toString().match(/\/Page\W/g).length;
+      
+      if (numPages > 1) {
+        // Ajustar tamaños si excede una página
+        const docDefinitionAjustado = {
+          ...docDefinition,
+          defaultStyle: {
+            ...docDefinition.defaultStyle,
+            fontSize: 16 // Reducir de 20 a 16
+          },
+          styles: {
+            ...docDefinition.styles,
+            notaVentaHeader: {
+              ...docDefinition.styles.notaVentaHeader,
+              fontSize: 24 // Reducir de 30 a 24
+            },
+            header: {
+              ...docDefinition.styles.header,
+              fontSize: 24 // Reducir de 30 a 24
+            },
+            subheader: {
+              ...docDefinition.styles.subheader,
+              fontSize: 20 // Reducir de 25 a 20
+            },
+            tableHeader: {
+              ...docDefinition.styles.tableHeader,
+              fontSize: 18 // Reducir de 23 a 18
+            },
+            medidaHeader: {
+              ...docDefinition.styles.medidaHeader,
+              fontSize: 20 // Reducir de 24 a 20
+            }
+          }
+        };
+        
+        // Crear y descargar el PDF con los ajustes
+        pdfMake.createPdf(docDefinitionAjustado).download('nota-venta.pdf');
+      } else {
+        // Si es una sola página, descargar el original
+        pdfMake.createPdf(docDefinition).download('nota-venta.pdf');
+      }
+    });
+
   } catch (error) {
     console.error('Error al generar el PDF:', error);
   }
@@ -526,10 +577,9 @@ function generarTablaCrudos(crudos, estiloCliente) {
       crudo.items.map(item => [
         `${calcularKilosCrudos(item)} kg`,
         {
-          columns: [
-            { text: item.talla, style: 'default' },
-            item.precio ? { text: `$${item.precio}`, style: 'precio' } : ''
-          ]
+          text: item.talla.replace(/\s*c\/\s*c$/i, ' c/c'), // Asegura que c/c esté junto
+          style: 'default',
+          noWrap: true // Evita el salto de línea
         },
         calcularTarasTotales(item)
       ])
@@ -562,8 +612,14 @@ function obtenerEstiloCliente(nombreCliente) {
 
 function formatearProducto(producto) {
   let tipoProducto = obtenerTipoProducto(producto);
-  let medida = producto.medida || '';
+  // Reemplazar cualquier salto de línea en la medida con un espacio
+  let medida = (producto.medida || '').replace(/\s+/g, ' ').trim();
   let precioStr = producto.precio ? ` $${producto.precio}` : '';
+  
+  // Manejar específicamente el caso de "Med-gde c/c"
+  if (medida.includes('-')) {
+    medida = medida.replace(/\s*-\s*/g, '-');
+  }
   
   // Si la medida tiene el formato numérico (ej. "51/60")
   if (/^\d+\/\d+/.test(medida)) {
@@ -578,33 +634,33 @@ function formatearProducto(producto) {
     
     if (producto.tipo === 'otro' && producto.tipoPersonalizado) {
       return [
-        { text: `${medida} ${producto.tipoPersonalizado}`, style: 'default' },
+        { text: `${medida} ${producto.tipoPersonalizado}`, style: producto.tipo === 'c/h20' ? 'tipoConAgua' : 'default' },
         { text: precioStr, style: 'precio' }
       ];
     }
     
     return [
-      { text: h2o ? `${medida} ${h2o}` : `${medida}`, style: 'default' },
+      { text: h2o ? `${medida} ${h2o}` : `${medida}`, style: producto.tipo === 'c/h20' ? 'tipoConAgua' : 'default' },
       { text: precioStr, style: 'precio' }
     ];
   }
   
   if (medida && !tipoProducto) {
     return [
-      { text: `${medida}`, style: 'default' },
+      { text: medida, style: producto.tipo === 'c/h20' ? 'tipoConAgua' : 'default' },
       { text: precioStr, style: 'precio' }
     ];
   }
   
   if (medida && tipoProducto) {
     return [
-      { text: `${medida} ${tipoProducto}`, style: 'default' },
+      { text: `${medida} ${tipoProducto}`, style: producto.tipo === 'c/h20' ? 'tipoConAgua' : 'default' },
       { text: precioStr, style: 'precio' }
     ];
   }
   
   return [
-    { text: `${tipoProducto}`, style: 'default' },
+    { text: tipoProducto, style: producto.tipo === 'c/h20' ? 'tipoConAgua' : 'default' },
     { text: precioStr, style: 'precio' }
   ];
 }
@@ -634,10 +690,12 @@ function obtenerNombreCliente(clienteId, clientesDisponibles) {
 function obtenerTipoProducto(producto) {
   let tipo = producto.tipo === 'otro' ? (producto.tipoPersonalizado || 'Otro') : (producto.tipo || '');
 
+  // Reemplazar saltos de línea o espacios múltiples con un solo espacio
+  tipo = tipo.replace(/\s+/g, ' ').trim();
+  
   if (/\d+\/\d+/.test(tipo)) {
     let parteNumerica = tipo.match(/\d+\/\d+/)[0];
     let h2o = '';
-    // Verificar si tiene s/h2o o c/h2o
     if (tipo.toLowerCase().includes('s/h2o') || tipo.toLowerCase().includes('s/h20')) {
       h2o = 's/h2o';
     } else if (tipo.toLowerCase().includes('c/h2o') || tipo.toLowerCase().includes('c/h20')) {
@@ -647,7 +705,7 @@ function obtenerTipoProducto(producto) {
     return h2o ? `${parteNumerica} ${h2o}` : parteNumerica;
   }
   
-  return tipo.trim();
+  return tipo;
 }
 
 function totalTaras(producto) {
@@ -665,11 +723,9 @@ function totalKilos(producto, nombreCliente) {
     for (let i = 0; i < reporteTaras.length; i++) {
       const taras = parseInt(reporteTaras[i]) || 0;
       const bolsa = parseInt(reporteBolsas[i]) || 0;
-      // Ya no multiplicamos por el multiplicador de bolsas aquí
       sumaTotalKilos += taras * bolsa;
     }
 
-    // Ya no multiplicamos por el valor neto (0.65)
     return Number(sumaTotalKilos.toFixed(1));
   } else {
     // Para otros productos, mantener la lógica existente...
@@ -693,9 +749,13 @@ function totalKilos(producto, nombreCliente) {
     
     const resultado = sumaKilos - descuentoTaras;
     
-    if ((producto.tipo.toLowerCase().includes('s/h2o') || producto.tipo.toLowerCase().includes('s/h20')) && 
-        nombreCliente.toLowerCase().includes('otilio')) {
-      return Number((resultado + 3).toFixed(1));
+    // Agregar 3 kg para Otilio y 1 kg para Catarro en productos s/h2o
+    if (producto.tipo.toLowerCase().includes('s/h2o') || producto.tipo.toLowerCase().includes('s/h20')) {
+      if (nombreCliente.toLowerCase().includes('otilio')) {
+        return Number((resultado + 3).toFixed(1));
+      } else if (nombreCliente.toLowerCase().includes('catarro')) {
+        return Number((resultado + 1).toFixed(1));
+      }
     }
     
     return Number(resultado.toFixed(1));
