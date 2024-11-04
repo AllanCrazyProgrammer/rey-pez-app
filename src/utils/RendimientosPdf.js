@@ -78,6 +78,28 @@ export const generarPDFRendimientos = async (datosRendimientos, embarqueData) =>
       }
     };
 
+    // Después de agregar toda la información de rendimientos, agregar la nota
+    if (embarqueData.notaRendimientos) {
+      docDefinition.content.push({
+        text: '\n',
+        height: 5
+      });
+      docDefinition.content.push({
+        text: 'Nota:',
+        style: 'header',
+        color: 'red',
+        alignment: 'center',
+        margin: [0, 10, 0, 0]
+      });
+      docDefinition.content.push({
+        text: ' ' + embarqueData.notaRendimientos,
+        style: 'header',
+        alignment: 'center',
+        color: 'black',
+        margin: [0, 10, 0, 0]
+      });
+    }
+
     pdfMake.createPdf(docDefinition).open();
   } catch (error) {
     console.error('Error al generar el PDF de rendimientos:', error);
@@ -144,9 +166,10 @@ function formatearKilos(kilos) {
   if (typeof kilos === 'object' && kilos !== null) {
     // Para medidas mix que tienen medida1 y medida2
     const total = (Number(kilos.medida1) || 0) + (Number(kilos.medida2) || 0);
-    return total.toFixed(1) + ' kg';
+    return (total % 1 === 0 ? Math.floor(total) : total.toFixed(1)) + ' kg';
   }
-  return Number(kilos).toFixed(1) + ' kg';
+  const numero = Number(kilos);
+  return (numero % 1 === 0 ? Math.floor(numero) : numero.toFixed(1)) + ' kg';
 }
 
 function formatearRendimiento(rendimiento) {

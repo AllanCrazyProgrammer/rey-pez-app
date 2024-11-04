@@ -5,6 +5,9 @@
         <i class="fas fa-arrow-left"></i> Volver al Embarque
       </button>
       <h2>Rendimientos por Medida</h2>
+      <button @click="abrirModalNota" class="btn-nota">
+        <i class="fas fa-sticky-note"></i> Agregar Nota
+      </button>
       <button @click="generarPDF" class="btn-pdf">
         <i class="fas fa-file-pdf"></i> Generar PDF
       </button>
@@ -71,6 +74,21 @@
         </div>
       </div>
     </div>
+
+    <div v-if="mostrarModal" class="modal-overlay">
+      <div class="modal-content">
+        <h3>Agregar Nota</h3>
+        <textarea 
+          v-model="nota" 
+          placeholder="Escriba su nota aquí..."
+          rows="4"
+        ></textarea>
+        <div class="modal-buttons">
+          <button @click="guardarNota" class="btn-guardar">Guardar</button>
+          <button @click="cerrarModal" class="btn-cancelar">Cancelar</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -88,7 +106,9 @@ export default {
       medidasUnicas: [],
       embarqueData: null,
       guardadoAutomaticoActivo: false,
-      nombresMedidasPersonalizados: {}
+      nombresMedidasPersonalizados: {},
+      mostrarModal: false,
+      nota: ''
     }
   },
 
@@ -412,8 +432,14 @@ export default {
         };
       });
 
+      // Incluir la nota en los datos del embarque
+      const embarqueDataConNota = {
+        ...this.embarqueData,
+        notaRendimientos: this.embarqueData?.notaRendimientos || ''
+      };
+
       // Llamar a la función para generar el PDF con los datos procesados
-      generarPDFRendimientos(datosRendimientos, this.embarqueData);
+      generarPDFRendimientos(datosRendimientos, embarqueDataConNota);
     },
 
     obtenerNombreMedidaPersonalizado(medida) {
@@ -442,6 +468,35 @@ export default {
         }
       }
     },
+
+    abrirModalNota() {
+      this.nota = this.embarqueData?.notaRendimientos || '';
+      this.mostrarModal = true;
+    },
+
+    async guardarNota() {
+      try {
+        const db = getFirestore();
+        const embarqueId = this.$route.params.id;
+        const embarqueRef = doc(db, 'embarques', embarqueId);
+        
+        await updateDoc(embarqueRef, {
+          notaRendimientos: this.nota
+        });
+        
+        this.embarqueData.notaRendimientos = this.nota;
+        
+        this.cerrarModal();
+        console.log('Nota guardada correctamente');
+      } catch (error) {
+        console.error('Error al guardar la nota:', error);
+      }
+    },
+
+    cerrarModal() {
+      this.mostrarModal = false;
+      this.nota = '';
+    }
   },
 
   watch: {
@@ -616,6 +671,90 @@ input {
 
 .medida-label.editable-label:hover {
   color: #3498db;
+}
+
+.btn-nota {
+  display: inline-flex;
+  align-items: center;
+  padding: 10px 20px;
+  background-color: #f39c12;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+  margin-left: auto;
+  margin-right: 10px;
+}
+
+.btn-nota:hover {
+  background-color: #d68910;
+}
+
+.btn-nota i {
+  margin-right: 10px;
+}
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background-color: white;
+  padding: 20px;
+  border-radius: 8px;
+  width: 90%;
+  max-width: 500px;
+}
+
+.modal-content h3 {
+  margin-top: 0;
+  color: #2c3e50;
+}
+
+.modal-content textarea {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  margin: 10px 0;
+  font-size: 16px;
+}
+
+.modal-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 15px;
+}
+
+.btn-guardar {
+  background-color: #2ecc71;
+  color: white;
+  border: none;
+  padding: 8px 15px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.btn-cancelar {
+  background-color: #e74c3c;
+  color: white;
+  border: none;
+  padding: 8px 15px;
+  border-radius: 4px;
+  cursor: pointer;
 }
 </style>
 
