@@ -67,12 +67,22 @@
     <form @submit.prevent="guardarEmbarque" @keydown.enter.prevent>
       <div v-for="(clienteProductos, clienteId) in productosPorCliente" :key="clienteId" class="cliente-grupo">
         <div class="cliente-header" :data-cliente="obtenerNombreCliente(clienteId)" @click="editarNombreCliente(clienteId)">
-          <h3>{{ obtenerNombreCliente(clienteId) }}</h3>
-          <div>
-            <button type="button" @click.stop="generarNotaVenta(clienteId)" class="btn btn-info btn-sm generar-nota">Generar Nota</button>
-            <button type="button" @click.stop="eliminarCliente(clienteId)" class="btn btn-danger btn-sm eliminar-cliente">Eliminar Cliente</button>
-          </div>
-        </div>
+  <h3>{{ obtenerNombreCliente(clienteId) }}</h3>
+  <div class="cliente-header-controls">
+    <div class="juntar-medidas-checkbox">
+      <input 
+        type="checkbox" 
+        :id="'juntar-medidas-' + clienteId"
+        v-model="clientesJuntarMedidas[clienteId]"
+        @change="handleJuntarMedidasChange(clienteId, $event.target.checked)"
+        @click.stop
+      >
+      <label :for="'juntar-medidas-' + clienteId" @click.stop>Juntar medidas</label>
+    </div>
+    <button type="button" @click.stop="generarNotaVenta(clienteId)" class="btn btn-info btn-sm generar-nota">Generar Nota</button>
+    <button type="button" @click.stop="eliminarCliente(clienteId)" class="btn btn-danger btn-sm eliminar-cliente">Eliminar Cliente</button>
+  </div>
+</div>
         <div class="productos-container">
           <div v-for="(producto, index) in clienteProductos" :key="index" class="producto" :data-es-venta="producto.esVenta">
             <!-- Encabezado de la medida y selección -->
@@ -366,17 +376,10 @@
           {{ modoEdicion ? 'Actualizar Embarque' : 'Guardar Embarque' }}
         </button>
         <div class="generar-resumen-container">
-          <button type="button" @click="generarResumenPDF" class="btn btn-info generar-pdf">
-            Generar Resumen PDF
+          <button type="button" @click="generarNotaVentaPDF" class="btn btn-info generar-pdf">
+            Generar Nota PDF
           </button>
-          <div class="checkbox-juntar-medidas">
-            <input 
-              type="checkbox" 
-              v-model="juntarMedidas"
-              id="juntarMedidas"
-            >
-            <label for="juntarMedidas">Juntar medidas</label>
-          </div>
+
         </div>
         <router-link :to="{ name: 'Rendimientos', params: { id: embarqueId } }" class="btn btn-warning ver-rendimientos">
           Ver Rendimientos
@@ -452,6 +455,7 @@ export default {
   },
   data() {
     return {
+      clientesJuntarMedidas: {}, // Agregar esta línea dentro de data()
       clientesPredefinidos: [
         { id: 1, nombre: 'Joselito' },
         { id: 2, nombre: 'Catarro' },
@@ -489,6 +493,8 @@ export default {
       juntarMedidas: false,
     };
   },
+  clientesJuntarMedidas: {},
+
   computed: {
     clientesDisponibles() {
       const clienteSet = new Set();
@@ -643,12 +649,22 @@ export default {
       const db = getFirestore();
       const embarqueRef = doc(db, "embarques", id);
 
-      // Usar onSnapshot para escuchar cambios en tiempo real
       this.unsubscribe = onSnapshot(embarqueRef, (doc) => {
         if (doc.exists()) {
           const data = doc.data();
           console.log('Datos del embarque cargado:', data);
           
+          // Cargar el estado de juntar medidas
+          if (data.clientesJuntarMedidas) {
+            this.clientesJuntarMedidas = data.clientesJuntarMedidas;
+          } else {
+            // Si no existe, inicializar con valores por defecto
+            this.clientesJuntarMedidas = {};
+            data.clientes.forEach(cliente => {
+              this.$set(this.clientesJuntarMedidas, cliente.id, false);
+            });
+          }
+
           let fecha;
           if (data.fecha && typeof data.fecha.toDate === 'function') {
             fecha = data.fecha.toDate();
@@ -718,26 +734,32 @@ export default {
     resetearEmbarque() {
       this.embarque = {
         fecha: '',
-        cargaCon: '', // Reseteamos también cargaCon
+        cargaCon: '',
         productos: [],
       };
+      this.clientesJuntarMedidas = {};
       this.embarqueId = null;
       this.modoEdicion = false;
       this.guardadoAutomaticoActivo = false;
     },
-    guardarCambiosEnTiempoReal: debounce(async function() {
+    guardarCambiosEnTiempoReal: debounce(function() {
       if (!this.guardadoAutomaticoActivo || !this.embarqueId || this.mostrarModalPrecio) return;
 
-      const embarqueData = this.prepararDatosEmbarque();
+      const embarqueData = {
+        ...this.prepararDatosEmbarque(),
+        clientesJuntarMedidas: this.clientesJuntarMedidas
+      };
+
       const db = getFirestore();
       
-      try {
-        await updateDoc(doc(db, "embarques", this.embarqueId), embarqueData);
-        console.log('Cambios guardados automáticamente:', new Date().toLocaleString());
-        this.$emit('guardado-automatico');
-      } catch (error) {
-        console.error("Error al guardar automáticamente:", error);
-      }
+      updateDoc(doc(db, "embarques", this.embarqueId), embarqueData)
+        .then(() => {
+          console.log('Cambios guardados automáticamente:', new Date().toLocaleString());
+          this.$emit('guardado-automatico');
+        })
+        .catch((error) => {
+          console.error("Error al guardar automáticamente:", error);
+        });
     }, 300), // Reducimos aún más el tiempo de debounce
 
     async guardarEmbarque() {
@@ -769,8 +791,9 @@ export default {
     prepararDatosEmbarque() {
       const embarqueData = {
         fecha: new Date(this.embarque.fecha),
-        cargaCon: this.embarque.cargaCon, // Incluimos cargaCon en los datos a guardar
-        clientes: []
+        cargaCon: this.embarque.cargaCon,
+        clientes: [],
+        clientesJuntarMedidas: this.clientesJuntarMedidas // Agregar esta línea
       };
 
       const clientesPredefinidosMap = new Map(this.clientesPredefinidos.map(c => [c.id, c]));
@@ -782,7 +805,7 @@ export default {
           nombre: clientePredefinido ? clientePredefinido.nombre : this.obtenerNombreCliente(clienteId),
           productos: productos.map(producto => ({
             ...producto,
-            restarTaras: producto.restarTaras || false, // Asegurarse de que restarTaras se incluya
+            restarTaras: producto.restarTaras || false,
           })),
           crudos: this.clienteCrudos[clienteId] || []
         };
@@ -1177,8 +1200,8 @@ export default {
         .join(' ');
     },
     totalTarasReportadas(producto) {
-      return (producto.reporteBolsas || []).reduce((total, bolsa) => {
-        return total + (parseInt(bolsa) || 0);  // Corregido: agregado el paréntesis de cierre
+      return (producto.reporteTaras || []).reduce((total, tara) => {
+        return total + (parseInt(tara) || 0);
       }, 0);
     },
 
@@ -1299,11 +1322,11 @@ export default {
         cargaCon: this.embarque.cargaCon,
         productos: clienteProductos,
         clienteCrudos: { [clienteId]: clienteCrudos },
-        // Agregar los kilos crudos desde Firestore
         kilosCrudos: this.embarque.kilosCrudos || {}
       };
 
-      generarNotaVentaPDF(embarqueCliente, this.clientesDisponibles);
+      // Pasar el objeto clientesJuntarMedidas completo
+      generarNotaVentaPDF(embarqueCliente, this.clientesDisponibles, this.clientesJuntarMedidas);
     },
     onRestarTarasChange(producto) {
       console.log('Restar taras cambiado:', producto.restarTaras);
@@ -1409,12 +1432,12 @@ export default {
         return total + crudos.reduce((clienteTotal, crudo) => {
           return clienteTotal + crudo.items.reduce((itemTotal, item) => {
             return itemTotal + parseFloat(this.calcularKilosCrudos(item));
-          }, 0).toFixed(2);
+          }, 0);
         }, 0);
       }, 0);
     },
 
-    calcularTotalKilos: function() {
+    calcularTotalKilos() {
       const kilosLimpio = parseFloat(this.calcularKilosLimpio());
       const kilosCrudo = parseFloat(this.calcularKilosCrudo());
       return (kilosLimpio + kilosCrudo).toFixed(2);
@@ -1524,6 +1547,46 @@ export default {
       }
       this.cerrarModalHilos();
     },
+    generarNotaVentaPDF() {
+      const embarqueCliente = {
+        fecha: this.embarque.fecha,
+        cargaCon: this.embarque.cargaCon,
+        productos: this.embarque.productos,
+        clienteCrudos: this.clienteCrudos,
+        kilosCrudos: this.embarque.kilosCrudos || {}
+      };
+
+      // Pasar el objeto clientesJuntarMedidas completo
+      generarNotaVentaPDF(embarqueCliente, this.clientesDisponibles, this.clientesJuntarMedidas);
+    },
+    handleJuntarMedidasChange(clienteId, checked) {
+      // Actualizar el estado local
+      this.$set(this.clientesJuntarMedidas, clienteId, checked);
+      
+      // Guardar inmediatamente si estamos en modo edición
+      if (this.modoEdicion && this.embarqueId) {
+        this.guardarCambiosEnTiempoReal();
+      }
+    },
+    guardarCambiosEnTiempoReal: debounce(function() {
+      if (!this.guardadoAutomaticoActivo || !this.embarqueId || this.mostrarModalPrecio) return;
+
+      const embarqueData = {
+        ...this.prepararDatosEmbarque(),
+        clientesJuntarMedidas: this.clientesJuntarMedidas
+      };
+
+      const db = getFirestore();
+      
+      updateDoc(doc(db, "embarques", this.embarqueId), embarqueData)
+        .then(() => {
+          console.log('Cambios guardados automáticamente:', new Date().toLocaleString());
+          this.$emit('guardado-automatico');
+        })
+        .catch((error) => {
+          console.error("Error al guardar automáticamente:", error);
+        });
+    }, 300)
   },
   created() {
     const embarqueId = this.$route.params.id;
@@ -1740,6 +1803,37 @@ class EmbarqueReportGenerator {
 </script>
 
 <style scoped>
+
+
+.cliente-header-controls {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.juntar-medidas-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background-color: rgba(255, 255, 255, 0.2);
+  padding: 5px 10px;
+  border-radius: 4px;
+}
+
+.juntar-medidas-checkbox input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.juntar-medidas-checkbox label {
+  color: white;
+  margin: 0;
+  cursor: pointer;
+  user-select: none;
+}
+
+
 .resumen-container {
   display: flex;
   flex-direction: row;

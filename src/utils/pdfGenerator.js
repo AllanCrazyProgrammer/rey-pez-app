@@ -3,14 +3,15 @@ import pdfFonts from 'pdfmake/build/vfs_fonts';
 
 pdfMake.vfs = pdfFonts.pdfMake.vfs;
 
-export async function generarNotaVentaPDF(embarque, clientesDisponibles, combinarMedidas) {
+export async function generarNotaVentaPDF(embarque, clientesDisponibles, clientesJuntarMedidas) {
   try {
     console.log('Datos del embarque para PDF:', {
       productos: embarque.productos,
       kilosCrudos: embarque.kilosCrudos,
       clienteCrudos: embarque.clienteCrudos,
       fecha: embarque.fecha,
-      cargaCon: embarque.cargaCon
+      cargaCon: embarque.cargaCon,
+      clientesJuntarMedidas: clientesJuntarMedidas
     });
 
     if (!embarque || !embarque.productos) {
@@ -58,7 +59,7 @@ export async function generarNotaVentaPDF(embarque, clientesDisponibles, combina
           ]
         },
         { text: '\n' },
-        ...generarContenidoClientes(embarque, clientesDisponibles, combinarMedidas),
+        ...generarContenidoClientes(embarque, clientesDisponibles, clientesJuntarMedidas),
         // Agregar la nueva sección de rendimientos
         ...generarSeccionRendimientos({
           ...embarque,
@@ -199,7 +200,7 @@ export async function generarNotaVentaPDF(embarque, clientesDisponibles, combina
   }
 }
 
-function generarContenidoClientes(embarque, clientesDisponibles, combinarMedidas) {
+function generarContenidoClientes(embarque, clientesDisponibles, clientesJuntarMedidas) {
   const contenido = [];
   let totalTarasLimpio = 0;
   let totalTarasCrudos = 0;
@@ -217,17 +218,17 @@ function generarContenidoClientes(embarque, clientesDisponibles, combinarMedidas
     const nombreCliente = obtenerNombreCliente(clienteId, clientesDisponibles);
     const estiloCliente = obtenerEstiloCliente(nombreCliente);
     
-    // Verificar si combinarMedidas para este cliente está activo
-    if (combinarMedidas) {
-      // Si combinarMedidas está activo para este cliente, combinar las medidas
-      const combinar = combinarMedidas[clienteId];
-      if (combinar) {
-        productos = combinarProductosPorMedida(productos);
-      }
+    // Verificar si este cliente específico tiene activada la opción de juntar medidas
+    const debeJuntarMedidas = clientesJuntarMedidas && clientesJuntarMedidas[clienteId];
+    
+    // Procesar los productos según la configuración de juntar medidas
+    let productosAProcesar = productos;
+    if (debeJuntarMedidas) {
+      productosAProcesar = combinarProductosSimilares(productos);
     }
     
     // Agrupar productos por medida y tipo
-    const productosAgrupados = agruparProductos(productos);
+    const productosAgrupados = agruparProductos(productosAProcesar);
     
     contenido.push(
       { 
@@ -548,17 +549,13 @@ function agruparProductos(productos) {
 }
 
 function generarTablaProductos(productos, estiloCliente, nombreCliente) {
-  // Verificar si algún producto tiene hilos para determinar las columnas
-  const algunProductoTieneHilos = productos.some(p => p.hilos);
-
-  // Definir los headers según si hay productos con hilos
   const headers = [
     { text: 'Cantidad', style: 'tableHeader' },
     { text: 'Producto', style: 'tableHeader' },
     { text: 'Taras', style: 'tableHeader' }
   ];
 
-  // Agregar header de Hilos si es necesario
+  const algunProductoTieneHilos = productos.some(p => p.hilos);
   if (algunProductoTieneHilos) {
     headers.push({ text: 'Hilos', style: 'tableHeader' });
   }
@@ -572,7 +569,6 @@ function generarTablaProductos(productos, estiloCliente, nombreCliente) {
         `${totalTaras(producto)} ${combinarTarasBolsas(producto.reporteTaras, producto.reporteBolsas)}`
       ];
 
-      // Agregar columna de hilos si es necesario
       if (algunProductoTieneHilos) {
         row.push(producto.hilos || '');
       }
@@ -581,10 +577,9 @@ function generarTablaProductos(productos, estiloCliente, nombreCliente) {
     })
   ];
 
-  // Ajustar los anchos de las columnas según si hay hilos
   const widths = algunProductoTieneHilos 
-    ? ['20%', '30%', '30%', '20%']  // Con columna de hilos
-    : ['25%', '35%', '40%'];        // Sin columna de hilos
+    ? ['20%', '30%', '30%', '20%']
+    : ['25%', '35%', '40%'];
 
   return {
     table: {
@@ -647,16 +642,13 @@ function obtenerEstiloCliente(nombreCliente) {
 
 function formatearProducto(producto) {
   let tipoProducto = obtenerTipoProducto(producto);
-  // Reemplazar cualquier salto de línea en la medida con un espacio
   let medida = (producto.medida || '').replace(/\s+/g, ' ').trim();
   let precioStr = producto.precio ? ` $${producto.precio}` : '';
   
-  // Manejar específicamente el caso de "Med-gde c/c"
   if (medida.includes('-')) {
     medida = medida.replace(/\s*-\s*/g, '-');
   }
   
-  // Si la medida tiene el formato numérico (ej. "51/60")
   if (/^\d+\/\d+/.test(medida)) {
     medida = medida.match(/^\d+\/\d+/)[0];
     
@@ -725,7 +717,7 @@ function obtenerNombreCliente(clienteId, clientesDisponibles) {
 function obtenerTipoProducto(producto) {
   let tipo = producto.tipo === 'otro' ? (producto.tipoPersonalizado || 'Otro') : (producto.tipo || '');
 
-  // Reemplazar saltos de línea o espacios múltiples con un solo espacio
+  // Reemplazar saltos de lnea o espacios múltiples con un solo espacio
   tipo = tipo.replace(/\s+/g, ' ').trim();
   
   if (/\d+\/\d+/.test(tipo)) {
@@ -884,5 +876,73 @@ function combinarProductosPorMedida(productos) {
 function normalizarMedida(medida) {
   // Normalizar la medida para combinar productos similares
   return medida.replace(/\s+/g, '').toLowerCase();
+}
+
+// Nueva función para combinar productos similares
+function combinarProductosSimilares(productos) {
+  const productosAgrupados = {};
+
+  productos.forEach(producto => {
+    // Extraer solo el número de medida (ej: "51/60" de "51/60 ahumada")
+    const medidaBase = extraerMedidaBase(producto.medida);
+    const tipo = producto.tipo || '';
+    
+    // Si la medida base es diferente a la medida completa, significa que tiene texto adicional
+    const medidaCompleta = producto.medida || '';
+    
+    // Crear una clave única dependiendo de si queremos combinar o no
+    const clave = `${medidaBase}-${tipo}`;
+    
+    if (!productosAgrupados[clave]) {
+      // Crear una copia del producto como base
+      productosAgrupados[clave] = {
+        ...producto,
+        medida: medidaBase, // Usar la medida base al combinar
+        kilos: [...producto.kilos],
+        taras: [...producto.taras],
+        tarasExtra: [...(producto.tarasExtra || [])],
+        reporteTaras: [...(producto.reporteTaras || [])],
+        reporteBolsas: [...(producto.reporteBolsas || [])]
+      };
+    } else {
+      // Combinar los arrays de kilos y taras
+      productosAgrupados[clave].kilos.push(...producto.kilos);
+      productosAgrupados[clave].taras.push(...producto.taras);
+      if (producto.tarasExtra) {
+        productosAgrupados[clave].tarasExtra.push(...producto.tarasExtra);
+      }
+      if (producto.reporteTaras) {
+        productosAgrupados[clave].reporteTaras.push(...producto.reporteTaras);
+      }
+      if (producto.reporteBolsas) {
+        productosAgrupados[clave].reporteBolsas.push(...producto.reporteBolsas);
+      }
+      
+      // Si hay precio, mantener el más alto
+      if (producto.precio) {
+        productosAgrupados[clave].precio = Math.max(
+          productosAgrupados[clave].precio || 0,
+          producto.precio
+        );
+      }
+      
+      // Si hay hilos, concatenarlos
+      if (producto.hilos) {
+        productosAgrupados[clave].hilos = productosAgrupados[clave].hilos 
+          ? `${productosAgrupados[clave].hilos}, ${producto.hilos}`
+          : producto.hilos;
+      }
+    }
+  });
+
+  return Object.values(productosAgrupados);
+}
+
+// Nueva función para extraer la medida base
+function extraerMedidaBase(medida) {
+  if (!medida) return '';
+  // Buscar patrones como "51/60", "36/40", etc.
+  const match = medida.match(/\d+\/\d+/);
+  return match ? match[0] : medida;
 }
 
