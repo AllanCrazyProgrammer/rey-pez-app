@@ -67,23 +67,42 @@
     <form @submit.prevent="guardarEmbarque" @keydown.enter.prevent>
       <div v-for="(clienteProductos, clienteId) in productosPorCliente" :key="clienteId" class="cliente-grupo">
         <div class="cliente-header" :data-cliente="obtenerNombreCliente(clienteId)" @click="editarNombreCliente(clienteId)">
-          <h3>{{ obtenerNombreCliente(clienteId) }}</h3>
-          <div>
-            <button type="button" @click.stop="generarNotaVenta(clienteId)" class="btn btn-info btn-sm generar-nota">Generar Nota</button>
-            <button type="button" @click.stop="eliminarCliente(clienteId)" class="btn btn-danger btn-sm eliminar-cliente">Eliminar Cliente</button>
-          </div>
-        </div>
+  <h3>{{ obtenerNombreCliente(clienteId) }}</h3>
+  <div class="cliente-header-controls">
+    <div class="juntar-medidas-checkbox">
+      <input 
+        type="checkbox" 
+        :id="'juntar-medidas-' + clienteId"
+        v-model="clientesJuntarMedidas[clienteId]"
+        @change="handleJuntarMedidasChange(clienteId, $event.target.checked)"
+        @click.stop
+      >
+      <label :for="'juntar-medidas-' + clienteId" @click.stop>Juntar medidas</label>
+    </div>
+    <button type="button" @click.stop="generarNotaVenta(clienteId)" class="btn btn-info btn-sm generar-nota">Generar Nota</button>
+    <button type="button" @click.stop="eliminarCliente(clienteId)" class="btn btn-danger btn-sm eliminar-cliente">Eliminar Cliente</button>
+  </div>
+</div>
         <div class="productos-container">
           <div v-for="(producto, index) in clienteProductos" :key="index" class="producto" :data-es-venta="producto.esVenta">
             <!-- Encabezado de la medida y selección -->
             <h2 class="encabezado-medida">
-              <button 
-                @click="abrirModalPrecio(producto)" 
-                class="btn-precio"
-                :class="{ 'tiene-precio': producto.precio }"
-              >
-                $
-              </button>
+              <div class="botones-encabezado">
+                <button 
+                  @click="abrirModalPrecio(producto)" 
+                  class="btn-precio"
+                  :class="{ 'tiene-precio': producto.precio }"
+                >
+                  $
+                </button>
+                <button 
+                  @click="abrirModalHilos(producto)" 
+                  class="btn-hilos"
+                  :class="{ 'tiene-hilos': producto.hilos }"
+                >
+                  H
+                </button>
+              </div>
               {{ producto.medida || 'Sin Medida' }} - {{ obtenerTipoProducto(producto) }}
               <span v-if="producto.precio" class="precio-tag">${{ producto.precio }}</span>
             </h2>
@@ -356,9 +375,12 @@
         <button type="submit" class="btn btn-success crear-embarque">
           {{ modoEdicion ? 'Actualizar Embarque' : 'Guardar Embarque' }}
         </button>
-        <button type="button" @click="generarResumenPDF" class="btn btn-info generar-pdf">
-          Generar Resumen PDF
-        </button>
+        <div class="generar-resumen-container">
+          <button type="button" @click="generarNotaVentaPDF" class="btn btn-info generar-pdf">
+            Generar Nota PDF
+          </button>
+
+        </div>
         <router-link :to="{ name: 'Rendimientos', params: { id: embarqueId } }" class="btn btn-warning ver-rendimientos">
           Ver Rendimientos
         </router-link>
@@ -390,6 +412,26 @@
         </div>
       </div>
     </div>
+    <!-- Modal para Hilos -->
+    <div v-if="mostrarModalHilos" class="modal-hilos" @click.stop="cerrarModalHilos">
+      <div class="modal-contenido" @click.stop>
+        <h3>Establecer Hilos</h3>
+        <div class="input-hilos">
+          <input 
+            type="text" 
+            v-model="hilosTemp"
+            placeholder="Ingrese hilos"
+            @keyup.enter.stop="guardarHilos"
+            @keydown.stop
+            ref="hilosInput"
+          >
+        </div>
+        <div class="modal-botones">
+          <button @click.stop="guardarHilos" class="btn btn-success">Guardar</button>
+          <button @click.stop="cerrarModalHilos" class="btn btn-secondary">Cancelar</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -413,6 +455,7 @@ export default {
   },
   data() {
     return {
+      clientesJuntarMedidas: {}, // Agregar esta línea dentro de data()
       clientesPredefinidos: [
         { id: 1, nombre: 'Joselito' },
         { id: 2, nombre: 'Catarro' },
@@ -445,34 +488,34 @@ export default {
       mostrarModalPrecio: false,
       precioTemp: '',
       itemSeleccionado: null,
+      mostrarModalHilos: false,
+      hilosTemp: '',
+      juntarMedidas: false,
     };
   },
+  clientesJuntarMedidas: {},
+
   computed: {
-  clientesDisponibles() {
-    // Crear un conjunto para almacenar los nombres únicos de clientes
-    const clienteSet = new Set();
+    clientesDisponibles() {
+      const clienteSet = new Set();
+      const clientesPredefinidosUnicos = this.clientesPredefinidos.filter(cliente => {
+        if (!clienteSet.has(cliente.nombre)) {
+          clienteSet.add(cliente.nombre);
+          return true;
+        }
+        return false;
+      });
 
-    // Añadir clientes predefinidos al conjunto
-    const clientesPredefinidosUnicos = this.clientesPredefinidos.filter(cliente => {
-      if (!clienteSet.has(cliente.nombre)) {
-        clienteSet.add(cliente.nombre);
-        return true;
-      }
-      return false;
-    });
+      const clientesPersonalizadosUnicos = this.clientesPersonalizados.filter(cliente => {
+        if (!clienteSet.has(cliente.nombre)) {
+          clienteSet.add(cliente.nombre);
+          return true;
+        }
+        return false;
+      });
 
-    // Añadir clientes personalizados al conjunto, verificando duplicados
-    const clientesPersonalizadosUnicos = this.clientesPersonalizados.filter(cliente => {
-      if (!clienteSet.has(cliente.nombre)) {
-        clienteSet.add(cliente.nombre);
-        return true;
-      }
-      return false;
-    });
-
-    // Combinar ambas listas y aadir la opción "Otro"
-    return [...clientesPredefinidosUnicos, ...clientesPersonalizadosUnicos, { id: 'otro', nombre: 'Otro', key: 'otro' }];
-  },
+      return [...clientesPredefinidosUnicos, ...clientesPersonalizadosUnicos, { id: 'otro', nombre: 'Otro', key: 'otro' }];
+    },
     productosPorCliente() {
       return this.embarque.productos.reduce((acc, producto) => {
         if (!acc[producto.clienteId]) {
@@ -481,7 +524,7 @@ export default {
         acc[producto.clienteId].push(producto);
         return acc;
       }, {});
-    },
+    }
   },
   methods: {
     agregarProducto(clienteId) {
@@ -606,12 +649,22 @@ export default {
       const db = getFirestore();
       const embarqueRef = doc(db, "embarques", id);
 
-      // Usar onSnapshot para escuchar cambios en tiempo real
       this.unsubscribe = onSnapshot(embarqueRef, (doc) => {
         if (doc.exists()) {
           const data = doc.data();
           console.log('Datos del embarque cargado:', data);
           
+          // Cargar el estado de juntar medidas
+          if (data.clientesJuntarMedidas) {
+            this.clientesJuntarMedidas = data.clientesJuntarMedidas;
+          } else {
+            // Si no existe, inicializar con valores por defecto
+            this.clientesJuntarMedidas = {};
+            data.clientes.forEach(cliente => {
+              this.$set(this.clientesJuntarMedidas, cliente.id, false);
+            });
+          }
+
           let fecha;
           if (data.fecha && typeof data.fecha.toDate === 'function') {
             fecha = data.fecha.toDate();
@@ -681,26 +734,32 @@ export default {
     resetearEmbarque() {
       this.embarque = {
         fecha: '',
-        cargaCon: '', // Reseteamos también cargaCon
+        cargaCon: '',
         productos: [],
       };
+      this.clientesJuntarMedidas = {};
       this.embarqueId = null;
       this.modoEdicion = false;
       this.guardadoAutomaticoActivo = false;
     },
-    guardarCambiosEnTiempoReal: debounce(async function() {
+    guardarCambiosEnTiempoReal: debounce(function() {
       if (!this.guardadoAutomaticoActivo || !this.embarqueId || this.mostrarModalPrecio) return;
 
-      const embarqueData = this.prepararDatosEmbarque();
+      const embarqueData = {
+        ...this.prepararDatosEmbarque(),
+        clientesJuntarMedidas: this.clientesJuntarMedidas
+      };
+
       const db = getFirestore();
       
-      try {
-        await updateDoc(doc(db, "embarques", this.embarqueId), embarqueData);
-        console.log('Cambios guardados automáticamente:', new Date().toLocaleString());
-        this.$emit('guardado-automatico');
-      } catch (error) {
-        console.error("Error al guardar automáticamente:", error);
-      }
+      updateDoc(doc(db, "embarques", this.embarqueId), embarqueData)
+        .then(() => {
+          console.log('Cambios guardados automáticamente:', new Date().toLocaleString());
+          this.$emit('guardado-automatico');
+        })
+        .catch((error) => {
+          console.error("Error al guardar automáticamente:", error);
+        });
     }, 300), // Reducimos aún más el tiempo de debounce
 
     async guardarEmbarque() {
@@ -732,8 +791,9 @@ export default {
     prepararDatosEmbarque() {
       const embarqueData = {
         fecha: new Date(this.embarque.fecha),
-        cargaCon: this.embarque.cargaCon, // Incluimos cargaCon en los datos a guardar
-        clientes: []
+        cargaCon: this.embarque.cargaCon,
+        clientes: [],
+        clientesJuntarMedidas: this.clientesJuntarMedidas // Agregar esta línea
       };
 
       const clientesPredefinidosMap = new Map(this.clientesPredefinidos.map(c => [c.id, c]));
@@ -745,7 +805,7 @@ export default {
           nombre: clientePredefinido ? clientePredefinido.nombre : this.obtenerNombreCliente(clienteId),
           productos: productos.map(producto => ({
             ...producto,
-            restarTaras: producto.restarTaras || false, // Asegurarse de que restarTaras se incluya
+            restarTaras: producto.restarTaras || false,
           })),
           crudos: this.clienteCrudos[clienteId] || []
         };
@@ -1140,9 +1200,8 @@ export default {
         .join(' ');
     },
     totalTarasReportadas(producto) {
-      return producto.reporteTaras.reduce((total, tara) => {
-        const [cantidad] = tara.split('-');
-        return total + (parseInt(cantidad) || 0);
+      return (producto.reporteTaras || []).reduce((total, tara) => {
+        return total + (parseInt(tara) || 0);
       }, 0);
     },
 
@@ -1263,11 +1322,11 @@ export default {
         cargaCon: this.embarque.cargaCon,
         productos: clienteProductos,
         clienteCrudos: { [clienteId]: clienteCrudos },
-        // Agregar los kilos crudos desde Firestore
         kilosCrudos: this.embarque.kilosCrudos || {}
       };
 
-      generarNotaVentaPDF(embarqueCliente, this.clientesDisponibles);
+      // Pasar el objeto clientesJuntarMedidas completo
+      generarNotaVentaPDF(embarqueCliente, this.clientesDisponibles, this.clientesJuntarMedidas);
     },
     onRestarTarasChange(producto) {
       console.log('Restar taras cambiado:', producto.restarTaras);
@@ -1375,7 +1434,7 @@ export default {
             return itemTotal + parseFloat(this.calcularKilosCrudos(item));
           }, 0);
         }, 0);
-      }, 0).toFixed(2);
+      }, 0);
     },
 
     calcularTotalKilos() {
@@ -1384,7 +1443,7 @@ export default {
       return (kilosLimpio + kilosCrudo).toFixed(2);
     },
 
-    calcularTotalBolsas(producto) {
+    calcularTotalBolsas: function(producto) {
       let total = 0;
       for (let i = 0; i < producto.reporteTaras.length; i++) {
         const tara = parseInt(producto.reporteTaras[i]) || 0;
@@ -1445,6 +1504,89 @@ export default {
       }
       this.cerrarModalPrecio();
     },
+    abrirModalHilos(item) {
+      event?.preventDefault();
+      event?.stopPropagation();
+      
+      this.itemSeleccionado = item;
+      // Si hilos no existe o es undefined, establecer como string vacío
+      this.hilosTemp = item.hilos || '';
+      this.mostrarModalHilos = true;
+      this.$nextTick(() => {
+        this.$refs.hilosInput?.focus();
+      });
+    },
+    cerrarModalHilos() {
+      event?.preventDefault();
+      event?.stopPropagation();
+      
+      this.mostrarModalHilos = false;
+      this.itemSeleccionado = null;
+      this.hilosTemp = '';
+    },
+    guardarHilos() {
+      event?.preventDefault();
+      event?.stopPropagation();
+      
+      if (this.itemSeleccionado) {
+        const hilos = this.hilosTemp.trim();
+        // Si hilos está vacío, eliminamos la propiedad hilos del item
+        if (!hilos) {
+          this.$delete(this.itemSeleccionado, 'hilos');
+        } else {
+          this.$set(this.itemSeleccionado, 'hilos', hilos);
+        }
+        
+        const guardadoActivo = this.guardadoAutomaticoActivo;
+        this.guardadoAutomaticoActivo = false;
+        
+        this.$nextTick(() => {
+          this.guardadoAutomaticoActivo = guardadoActivo;
+          this.guardarCambiosEnTiempoReal();
+        });
+      }
+      this.cerrarModalHilos();
+    },
+    generarNotaVentaPDF() {
+      const embarqueCliente = {
+        fecha: this.embarque.fecha,
+        cargaCon: this.embarque.cargaCon,
+        productos: this.embarque.productos,
+        clienteCrudos: this.clienteCrudos,
+        kilosCrudos: this.embarque.kilosCrudos || {}
+      };
+
+      // Pasar el objeto clientesJuntarMedidas completo
+      generarNotaVentaPDF(embarqueCliente, this.clientesDisponibles, this.clientesJuntarMedidas);
+    },
+    handleJuntarMedidasChange(clienteId, checked) {
+      // Actualizar el estado local
+      this.$set(this.clientesJuntarMedidas, clienteId, checked);
+      
+      // Guardar inmediatamente si estamos en modo edición
+      if (this.modoEdicion && this.embarqueId) {
+        this.guardarCambiosEnTiempoReal();
+      }
+    },
+    guardarCambiosEnTiempoReal: debounce(function() {
+      if (!this.guardadoAutomaticoActivo || !this.embarqueId || this.mostrarModalPrecio) return;
+
+      const embarqueData = {
+        ...this.prepararDatosEmbarque(),
+        clientesJuntarMedidas: this.clientesJuntarMedidas
+      };
+
+      const db = getFirestore();
+      
+      updateDoc(doc(db, "embarques", this.embarqueId), embarqueData)
+        .then(() => {
+          console.log('Cambios guardados automáticamente:', new Date().toLocaleString());
+          this.$emit('guardado-automatico');
+        })
+        .catch((error) => {
+          console.error("Error al guardar automáticamente:", error);
+        });
+    }, 300)
   },
   created() {
     const embarqueId = this.$route.params.id;
@@ -1661,6 +1803,37 @@ class EmbarqueReportGenerator {
 </script>
 
 <style scoped>
+
+
+.cliente-header-controls {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.juntar-medidas-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background-color: rgba(255, 255, 255, 0.2);
+  padding: 5px 10px;
+  border-radius: 4px;
+}
+
+.juntar-medidas-checkbox input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.juntar-medidas-checkbox label {
+  color: white;
+  margin: 0;
+  cursor: pointer;
+  user-select: none;
+}
+
+
 .resumen-container {
   display: flex;
   flex-direction: row;
@@ -2197,8 +2370,9 @@ class EmbarqueReportGenerator {
 }
 
 .encabezado-medida {
-  text-align: center;
-  font-size: 1.5rem; /* Tamaño de fuente grande */
+  display: flex;
+  align-items: center;
+  font-size: 1.5rem;
   font-weight: bold;
   margin-bottom: 15px;
 }
@@ -2811,6 +2985,165 @@ class EmbarqueReportGenerator {
   display: flex;
   align-items: center;
   margin-bottom: 5px;
+}
+
+/* Estilos para el botón de Hilos */
+.btn-hilos {
+  padding: 2px 8px;
+  font-size: 0.9rem;
+  background-color: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-right: 8px;
+  transition: all 0.2s;
+}
+
+.btn-hilos.tiene-hilos {
+  background-color: #28a745;
+  color: white;
+  border-color: #28a745;
+}
+
+/* Estilos para el modal de Hilos */
+.modal-hilos {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.modal-contenido {
+  background-color: white;
+  padding: 20px;
+  border-radius: 8px;
+  width: 300px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  position: relative;
+  z-index: 1001;
+}
+
+.input-hilos {
+  display: flex;
+  align-items: center;
+  margin: 20px 0;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  padding: 8px;
+}
+
+.input-hilos input {
+  border: none;
+  outline: none;
+  font-size: 1.2rem;
+  width: 100%;
+  -moz-appearance: textfield;
+}
+
+.input-hilos input::-webkit-outer-spin-button,
+.input-hilos input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.modal-botones {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.modal-botones button {
+  flex: 1;
+  padding: 8px;
+}
+
+/* Agregar estos estilos en la sección <style> */
+.botones-encabezado {
+  display: inline-flex;
+  gap: 4px;
+  margin-right: 8px;
+  vertical-align: middle;
+}
+
+.btn-precio,
+.btn-hilos {
+  padding: 2px 8px;
+  font-size: 0.9rem;
+  background-color: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+  height: 24px;
+  min-width: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-precio.tiene-precio,
+.btn-hilos.tiene-hilos {
+  background-color: #28a745;
+  color: white;
+  border-color: #28a745;
+}
+
+.encabezado-medida {
+  display: flex;
+  align-items: center;
+  font-size: 1.5rem;
+  font-weight: bold;
+  margin-bottom: 15px;
+}
+
+.checkbox-juntar-medidas {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.checkbox-juntar-medidas input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.checkbox-juntar-medidas label {
+  font-size: 0.9rem;
+  color: #555;
+  cursor: pointer;
+}
+
+.generar-resumen-container {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.checkbox-juntar-medidas {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.checkbox-juntar-medidas input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+
+.checkbox-juntar-medidas label {
+  font-size: 1rem;
+  color: #333;
+  cursor: pointer;
+  user-select: none;
 }
 </style>
 
