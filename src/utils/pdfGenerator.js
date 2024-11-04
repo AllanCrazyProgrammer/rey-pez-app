@@ -555,6 +555,12 @@ function generarTablaProductos(productos, estiloCliente, nombreCliente) {
     { text: 'Taras', style: 'tableHeader' }
   ];
 
+  // Agregar columna de notas si al menos un producto tiene nota
+  const algunProductoTieneNota = productos.some(p => p.nota);
+  if (algunProductoTieneNota) {
+    headers.push({ text: 'Nota', style: 'tableHeader' });
+  }
+
   const algunProductoTieneHilos = productos.some(p => p.hilos);
   if (algunProductoTieneHilos) {
     headers.push({ text: 'Hilos', style: 'tableHeader' });
@@ -569,6 +575,11 @@ function generarTablaProductos(productos, estiloCliente, nombreCliente) {
         `${totalTaras(producto)} ${combinarTarasBolsas(producto.reporteTaras, producto.reporteBolsas)}`
       ];
 
+      // Agregar columna de nota si existe la columna
+      if (algunProductoTieneNota) {
+        row.push(producto.nota || '');
+      }
+
       if (algunProductoTieneHilos) {
         row.push(producto.hilos || '');
       }
@@ -578,8 +589,8 @@ function generarTablaProductos(productos, estiloCliente, nombreCliente) {
   ];
 
   const widths = algunProductoTieneHilos 
-    ? ['20%', '30%', '30%', '20%']
-    : ['25%', '35%', '40%'];
+    ? (algunProductoTieneNota ? ['15%', '25%', '25%', '20%', '15%'] : ['20%', '30%', '30%', '20%'])
+    : (algunProductoTieneNota ? ['25%', '30%', '25%', '20%'] : ['25%', '35%', '40%']);
 
   return {
     table: {
@@ -645,13 +656,26 @@ function formatearProducto(producto) {
   let medida = (producto.medida || '').replace(/\s+/g, ' ').trim();
   let precioStr = producto.precio ? ` $${producto.precio}` : '';
   
+  // Verificar si la medida contiene "especial" (case insensitive)
+  const esEspecial = medida.toLowerCase().includes('especial');
+  
   if (medida.includes('-')) {
     medida = medida.replace(/\s*-\s*/g, '-');
   }
   
   if (/^\d+\/\d+/.test(medida)) {
+    // Extraer solo la parte numérica (ej: "51/60")
     medida = medida.match(/^\d+\/\d+/)[0];
     
+    // Si es especial, solo mostrar la medida con "especial"
+    if (esEspecial) {
+      return [
+        { text: `${medida} especial`, style: producto.tipo === 'c/h20' ? 'tipoConAgua' : 'default' },
+        { text: precioStr, style: 'precio' }
+      ];
+    }
+    
+    // Si no es especial, continuar con la lógica normal de h2o
     let h2o = '';
     if (tipoProducto.toLowerCase().includes('s/h2o') || tipoProducto.toLowerCase().includes('s/h20')) {
       h2o = 's/h2o';
@@ -672,7 +696,11 @@ function formatearProducto(producto) {
     ];
   }
   
+  // Para medidas que no siguen el patrón numérico
   if (medida && !tipoProducto) {
+    if (esEspecial && !medida.toLowerCase().endsWith('especial')) {
+      medida = `${medida} especial`;
+    }
     return [
       { text: medida, style: producto.tipo === 'c/h20' ? 'tipoConAgua' : 'default' },
       { text: precioStr, style: 'precio' }
@@ -680,6 +708,13 @@ function formatearProducto(producto) {
   }
   
   if (medida && tipoProducto) {
+    if (esEspecial) {
+      // Si es especial, solo mostrar la medida con "especial"
+      return [
+        { text: `${medida} especial`, style: producto.tipo === 'c/h20' ? 'tipoConAgua' : 'default' },
+        { text: precioStr, style: 'precio' }
+      ];
+    }
     return [
       { text: `${medida} ${tipoProducto}`, style: producto.tipo === 'c/h20' ? 'tipoConAgua' : 'default' },
       { text: precioStr, style: 'precio' }
@@ -944,5 +979,78 @@ function extraerMedidaBase(medida) {
   // Buscar patrones como "51/60", "36/40", etc.
   const match = medida.match(/\d+\/\d+/);
   return match ? match[0] : medida;
+}
+
+// Agregar esta función auxiliar
+function formatearMedida(medida) {
+  if (medida && medida.toLowerCase().includes('especial')) {
+    return `${medida} especial`; // Agrega "(ESP)" a las medidas especiales
+  }
+  return medida;
+}
+
+// Modificar la función que genera las filas de la tabla
+function generarFilasTabla(productos, juntarMedidas = false) {
+  let filas = [];
+  let medidaActual = '';
+  let acumulado = {
+    taras: 0,
+    kilos: 0,
+    precio: null,
+    hilos: null
+  };
+
+  productos.forEach((producto, index) => {
+    const medidaFormateada = formatearMedida(producto.medida);
+    
+    if (juntarMedidas) {
+      if (medidaFormateada !== medidaActual) {
+        // Si hay acumulado anterior, agregarlo como fila
+        if (medidaActual) {
+          filas.push([
+            medidaActual,
+            acumulado.taras.toString(),
+            acumulado.kilos.toFixed(1),
+            acumulado.precio ? `$${acumulado.precio}` : '',
+            acumulado.hilos || ''
+          ]);
+        }
+        // Iniciar nuevo acumulado
+        medidaActual = medidaFormateada;
+        acumulado = {
+          taras: calcularTotalTaras(producto),
+          kilos: calcularTotalKilos(producto),
+          precio: producto.precio,
+          hilos: producto.hilos
+        };
+      } else {
+        // Sumar al acumulado actual
+        acumulado.taras += calcularTotalTaras(producto);
+        acumulado.kilos += calcularTotalKilos(producto);
+      }
+    } else {
+      // Si no se están juntando medidas, agregar cada producto como una fila individual
+      filas.push([
+        medidaFormateada,
+        calcularTotalTaras(producto).toString(),
+        calcularTotalKilos(producto).toFixed(1),
+        producto.precio ? `$${producto.precio}` : '',
+        producto.hilos || ''
+      ]);
+    }
+  });
+
+  // Agregar el último acumulado si estamos juntando medidas
+  if (juntarMedidas && medidaActual) {
+    filas.push([
+      medidaActual,
+      acumulado.taras.toString(),
+      acumulado.kilos.toFixed(1),
+      acumulado.precio ? `$${acumulado.precio}` : '',
+      acumulado.hilos || ''
+    ]);
+  }
+
+  return filas;
 }
 

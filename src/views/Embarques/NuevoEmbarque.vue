@@ -102,6 +102,13 @@
                 >
                   H
                 </button>
+                <button 
+                  @click="abrirModalNota(producto)" 
+                  class="btn-nota"
+                  :class="{ 'tiene-nota': producto.nota }"
+                >
+                  N
+                </button>
               </div>
               {{ producto.medida || 'Sin Medida' }} - {{ obtenerTipoProducto(producto) }}
               <span v-if="producto.precio" class="precio-tag">${{ producto.precio }}</span>
@@ -376,8 +383,8 @@
           {{ modoEdicion ? 'Actualizar Embarque' : 'Guardar Embarque' }}
         </button>
         <div class="generar-resumen-container">
-          <button type="button" @click="generarNotaVentaPDF" class="btn btn-info generar-pdf">
-            Generar Nota PDF
+          <button type="button" @click="generarResumenPDF" class="btn btn-info generar-pdf">
+            Resumen Embarque
           </button>
 
         </div>
@@ -429,6 +436,24 @@
         <div class="modal-botones">
           <button @click.stop="guardarHilos" class="btn btn-success">Guardar</button>
           <button @click.stop="cerrarModalHilos" class="btn btn-secondary">Cancelar</button>
+        </div>
+      </div>
+    </div>
+    <!-- Agregar el nuevo modal de notas al final del template -->
+    <div v-if="mostrarModalNota" class="modal-nota" @click.stop="cerrarModalNota">
+      <div class="modal-contenido" @click.stop>
+        <h3>Agregar Nota</h3>
+        <div class="input-nota">
+          <textarea 
+            v-model="notaTemp"
+            placeholder="Escriba su nota aquí"
+            @keyup.enter.stop
+            ref="notaInput"
+          ></textarea>
+        </div>
+        <div class="modal-botones">
+          <button @click.stop="guardarNota" class="btn btn-success">Guardar</button>
+          <button @click.stop="cerrarModalNota" class="btn btn-secondary">Cancelar</button>
         </div>
       </div>
     </div>
@@ -491,6 +516,8 @@ export default {
       mostrarModalHilos: false,
       hilosTemp: '',
       juntarMedidas: false,
+      mostrarModalNota: false,
+      notaTemp: '',
     };
   },
   clientesJuntarMedidas: {},
@@ -908,16 +935,18 @@ export default {
           }
         }
       };
+      const fechaEmbarque = new Date(this.embarque.fecha + 'T00:00:00');
 
       // Título y fecha
       docDefinition.content.push(
-        { text: 'Resumen de Embarque', style: 'header' },
-        {
-          text: `Fecha: ${new Date(this.embarque.fecha).toLocaleDateString()} | Carga: ${this.embarque.cargaCon || 'N/E'}`,
-          fontSize: 16,
-          margin: [0, 0, 0, 10]
-        }
-      );
+    { text: 'Resumen de Embarque', style: 'header' },
+    {
+      text: `Fecha: ${fechaEmbarque.toLocaleDateString()} | Carga: ${this.embarque.cargaCon || 'N/E'}`,
+      fontSize: 16,
+      margin: [0, 0, 0, 10]
+    }
+  );
+
 
       // Altura disponible en la página (A4 = 842pt en portrait)
       const alturaDisponible = 842 - 80; // Reducimos el espacio reservado para el header
@@ -1586,7 +1615,50 @@ export default {
         .catch((error) => {
           console.error("Error al guardar automáticamente:", error);
         });
-    }, 300)
+    }, 300),
+    abrirModalNota(item) {
+      event?.preventDefault();
+      event?.stopPropagation();
+      
+      this.itemSeleccionado = item;
+      this.notaTemp = item.nota || '';
+      this.mostrarModalNota = true;
+      this.$nextTick(() => {
+        this.$refs.notaInput?.focus();
+      });
+    },
+
+    cerrarModalNota() {
+      event?.preventDefault();
+      event?.stopPropagation();
+      
+      this.mostrarModalNota = false;
+      this.itemSeleccionado = null;
+      this.notaTemp = '';
+    },
+
+    guardarNota() {
+      event?.preventDefault();
+      event?.stopPropagation();
+      
+      if (this.itemSeleccionado) {
+        const nota = this.notaTemp.trim();
+        if (nota) {
+          this.$set(this.itemSeleccionado, 'nota', nota);
+        } else {
+          this.$delete(this.itemSeleccionado, 'nota');
+        }
+        
+        const guardadoActivo = this.guardadoAutomaticoActivo;
+        this.guardadoAutomaticoActivo = false;
+        
+        this.$nextTick(() => {
+          this.guardadoAutomaticoActivo = guardadoActivo;
+          this.guardarCambiosEnTiempoReal();
+        });
+      }
+      this.cerrarModalNota();
+    }
   },
   created() {
     const embarqueId = this.$route.params.id;
@@ -3144,6 +3216,60 @@ class EmbarqueReportGenerator {
   color: #333;
   cursor: pointer;
   user-select: none;
+}
+
+.btn-nota {
+  padding: 2px 8px;
+  font-size: 0.9rem;
+  background-color: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+  height: 24px;
+  min-width: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-nota.tiene-nota {
+  background-color: #17a2b8;
+  color: white;
+  border-color: #17a2b8;
+}
+
+.modal-nota {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.input-nota {
+  margin: 20px 0;
+}
+
+.input-nota textarea {
+  width: 100%;
+  min-height: 100px;
+  padding: 8px;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  font-size: 1rem;
+  resize: vertical;
+}
+
+.input-nota textarea:focus {
+  outline: none;
+  border-color: #17a2b8;
+  box-shadow: 0 0 0 0.2rem rgba(23, 162, 184, 0.25);
 }
 </style>
 
