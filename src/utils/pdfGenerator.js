@@ -3,7 +3,7 @@ import pdfFonts from 'pdfmake/build/vfs_fonts';
 
 pdfMake.vfs = pdfFonts.pdfMake.vfs;
 
-export async function generarNotaVentaPDF(embarque, clientesDisponibles) {
+export async function generarNotaVentaPDF(embarque, clientesDisponibles, combinarMedidas) {
   try {
     console.log('Datos del embarque para PDF:', {
       productos: embarque.productos,
@@ -58,7 +58,7 @@ export async function generarNotaVentaPDF(embarque, clientesDisponibles) {
           ]
         },
         { text: '\n' },
-        ...generarContenidoClientes(embarque, clientesDisponibles),
+        ...generarContenidoClientes(embarque, clientesDisponibles, combinarMedidas),
         // Agregar la nueva sección de rendimientos
         ...generarSeccionRendimientos({
           ...embarque,
@@ -137,7 +137,7 @@ export async function generarNotaVentaPDF(embarque, clientesDisponibles) {
       footer: function(currentPage, pageCount) {
         return {
           columns: [
-            { text: '© 2024 Rey Pez - Tampico, Tamps.', alignment: 'center', margin: [0, 10, 0, 0] },
+            { text: ' 2024 Rey Pez - Tampico, Tamps.', alignment: 'center', margin: [0, 10, 0, 0] },
           ],
           margin: [40, 0, 40, 0],
           fontSize: 15,
@@ -199,7 +199,7 @@ export async function generarNotaVentaPDF(embarque, clientesDisponibles) {
   }
 }
 
-function generarContenidoClientes(embarque, clientesDisponibles) {
+function generarContenidoClientes(embarque, clientesDisponibles, combinarMedidas) {
   const contenido = [];
   let totalTarasLimpio = 0;
   let totalTarasCrudos = 0;
@@ -216,6 +216,15 @@ function generarContenidoClientes(embarque, clientesDisponibles) {
   Object.entries(productosPorCliente).forEach(([clienteId, productos]) => {
     const nombreCliente = obtenerNombreCliente(clienteId, clientesDisponibles);
     const estiloCliente = obtenerEstiloCliente(nombreCliente);
+    
+    // Verificar si combinarMedidas para este cliente está activo
+    if (combinarMedidas) {
+      // Si combinarMedidas está activo para este cliente, combinar las medidas
+      const combinar = combinarMedidas[clienteId];
+      if (combinar) {
+        productos = combinarProductosPorMedida(productos);
+      }
+    }
     
     // Agrupar productos por medida y tipo
     const productosAgrupados = agruparProductos(productos);
@@ -318,6 +327,7 @@ function generarContenidoClientes(embarque, clientesDisponibles) {
 
   return contenido;
 }
+
 function generarSeccionRendimientos(embarque, clientesDisponibles) {
   const contenido = [];
   
@@ -538,23 +548,48 @@ function agruparProductos(productos) {
 }
 
 function generarTablaProductos(productos, estiloCliente, nombreCliente) {
-  const body = [
-    [
-      { text: 'Cantidad', style: 'tableHeader' },
-      { text: 'Producto', style: 'tableHeader' },
-      { text: 'Taras', style: 'tableHeader' }
-    ],
-    ...productos.map(producto => [
-      `${totalKilos(producto, nombreCliente)} kg`,
-      formatearProducto(producto),
-      `${totalTaras(producto)} ${combinarTarasBolsas(producto.reporteTaras, producto.reporteBolsas)}`
-    ])
+  // Verificar si algún producto tiene hilos para determinar las columnas
+  const algunProductoTieneHilos = productos.some(p => p.hilos);
+
+  // Definir los headers según si hay productos con hilos
+  const headers = [
+    { text: 'Cantidad', style: 'tableHeader' },
+    { text: 'Producto', style: 'tableHeader' },
+    { text: 'Taras', style: 'tableHeader' }
   ];
+
+  // Agregar header de Hilos si es necesario
+  if (algunProductoTieneHilos) {
+    headers.push({ text: 'Hilos', style: 'tableHeader' });
+  }
+
+  const body = [
+    headers,
+    ...productos.map(producto => {
+      const row = [
+        `${totalKilos(producto, nombreCliente)} kg`,
+        formatearProducto(producto),
+        `${totalTaras(producto)} ${combinarTarasBolsas(producto.reporteTaras, producto.reporteBolsas)}`
+      ];
+
+      // Agregar columna de hilos si es necesario
+      if (algunProductoTieneHilos) {
+        row.push(producto.hilos || '');
+      }
+
+      return row;
+    })
+  ];
+
+  // Ajustar los anchos de las columnas según si hay hilos
+  const widths = algunProductoTieneHilos 
+    ? ['20%', '30%', '30%', '20%']  // Con columna de hilos
+    : ['25%', '35%', '40%'];        // Sin columna de hilos
 
   return {
     table: {
       headerRows: 1,
-      widths: ['25%', '35%', '40%'],
+      widths: widths,
       body: body
     },
     layout: {
@@ -825,5 +860,29 @@ function loadImageAsBase64(url) {
     img.onerror = reject;
     img.src = url;
   });
+}
+
+function combinarProductosPorMedida(productos) {
+  const productosCombinados = {};
+
+  productos.forEach(producto => {
+    const medidaNormalizada = normalizarMedida(producto.medida);
+    if (!productosCombinados[medidaNormalizada]) {
+      productosCombinados[medidaNormalizada] = {
+        ...producto,
+        kilos: 0,
+        bolsas: 0
+      };
+    }
+    productosCombinados[medidaNormalizada].kilos += producto.kilos;
+    productosCombinados[medidaNormalizada].bolsas += producto.bolsas;
+  });
+
+  return Object.values(productosCombinados);
+}
+
+function normalizarMedida(medida) {
+  // Normalizar la medida para combinar productos similares
+  return medida.replace(/\s+/g, '').toLowerCase();
 }
 
