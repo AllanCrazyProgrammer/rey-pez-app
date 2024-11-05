@@ -612,17 +612,19 @@ function generarTablaCrudos(crudos, estiloCliente) {
     [
       { text: 'Cantidad', style: 'tableHeader' },
       { text: 'Talla', style: 'tableHeader' },
-      { text: 'Taras', style: 'tableHeader' }
+      { text: 'Taras', style: 'tableHeader' },
+      { text: 'Precio', style: 'tableHeader' }
     ],
     ...crudos.flatMap(crudo => 
       crudo.items.map(item => [
         `${calcularKilosCrudos(item)} kg`,
         {
-          text: item.talla.replace(/\s*c\/\s*c$/i, ' c/c'), // Asegura que c/c esté junto
+          text: item.talla.replace(/\s*c\/\s*c$/i, ' c/c'),
           style: 'default',
-          noWrap: true // Evita el salto de línea
+          noWrap: true
         },
-        calcularTarasTotales(item)
+        calcularTarasTotales(item),
+        item.precio ? { text: `$${item.precio}`, style: 'precio' } : ''
       ])
     )
   ];
@@ -630,7 +632,7 @@ function generarTablaCrudos(crudos, estiloCliente) {
   return {
     table: {
       headerRows: 1,
-      widths: ['30%', '35%', '35%'],
+      widths: ['25%', '30%', '25%', '20%'],
       body: body
     },
     layout: {
