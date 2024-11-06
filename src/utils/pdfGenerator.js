@@ -1,7 +1,7 @@
 import pdfMake from 'pdfmake/build/pdfmake';
-import pdfFonts from 'pdfmake/build/vfs_fonts';
+import * as pdfFonts from 'pdfmake/build/vfs_fonts';
 
-pdfMake.vfs = pdfFonts.pdfMake.vfs;
+pdfMake.vfs = pdfFonts.default;
 
 export async function generarNotaVentaPDF(embarque, clientesDisponibles, clientesJuntarMedidas) {
   try {
@@ -545,7 +545,26 @@ function agruparProductos(productos) {
     return acc;
   }, {});
 
-  return Object.values(grupos);
+  // Convertir a array y ordenar
+  return Object.values(grupos).sort((a, b) => {
+    // Extraer los números de las medidas (ejemplo: "51/60" -> [51, 60])
+    const getMedidaNumeros = (medida) => {
+      const match = (medida || '').match(/(\d+)\/(\d+)/);
+      if (match) {
+        return [parseInt(match[1]), parseInt(match[2])];
+      }
+      return [Infinity, Infinity]; // Para medidas sin números
+    };
+
+    const [numA1, numA2] = getMedidaNumeros(a.medida);
+    const [numB1, numB2] = getMedidaNumeros(b.medida);
+
+    // Ordenar por el primer número (si son iguales, usar el segundo)
+    if (numA1 === numB1) {
+      return numA2 - numB2;
+    }
+    return numA1 - numB1;
+  });
 }
 
 function generarTablaProductos(productos, estiloCliente, nombreCliente) {
