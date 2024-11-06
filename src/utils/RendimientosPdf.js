@@ -1,7 +1,21 @@
 import pdfMake from 'pdfmake/build/pdfmake';
-import pdfFonts from 'pdfmake/build/vfs_fonts';
+import vfsFonts from 'pdfmake/build/vfs_fonts';
 
-pdfMake.vfs = pdfFonts.pdfMake.vfs;
+// Asignar las fuentes directamente desde el módulo vfsFonts
+if (typeof vfsFonts === 'object') {
+    if (vfsFonts.pdfMake && vfsFonts.pdfMake.vfs) {
+        pdfMake.vfs = vfsFonts.pdfMake.vfs;
+    } else if (vfsFonts.vfs) {
+        pdfMake.vfs = vfsFonts.vfs;
+    } else {
+        pdfMake.vfs = vfsFonts;
+    }
+}
+
+// También necesitamos asegurarnos de que las fuentes estén disponibles globalmente
+if (typeof window !== 'undefined' && !window.pdfMake) {
+    window.pdfMake = pdfMake;
+}
 
 export const generarPDFRendimientos = async (datosRendimientos, embarqueData) => {
   try {

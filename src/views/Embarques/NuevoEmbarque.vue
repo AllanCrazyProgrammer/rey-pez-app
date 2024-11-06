@@ -468,10 +468,23 @@ import 'jspdf-autotable';
 import { generarNotaVentaPDF } from '@/utils/pdfGenerator';
 import Rendimientos from './Rendimientos.vue'
 import pdfMake from 'pdfmake/build/pdfmake';
-import pdfFonts from 'pdfmake/build/vfs_fonts';
+import * as pdfFonts from 'pdfmake/build/vfs_fonts';
 
-// Registrar las fuentes
-pdfMake.vfs = pdfFonts.pdfMake.vfs;
+// Inicializar las fuentes de manera segura
+if (typeof pdfFonts === 'object') {
+    if (pdfFonts.pdfMake && pdfFonts.pdfMake.vfs) {
+        pdfMake.vfs = pdfFonts.pdfMake.vfs;
+    } else if (pdfFonts.vfs) {
+        pdfMake.vfs = pdfFonts.vfs;
+    } else {
+        pdfMake.vfs = pdfFonts;
+    }
+}
+
+// Asegurarse de que pdfMake esté disponible globalmente
+if (typeof window !== 'undefined' && !window.pdfMake) {
+    window.pdfMake = pdfMake;
+}
 
 export default {
   name: 'NuevoEmbarque',
@@ -1015,6 +1028,19 @@ export default {
     },
 
     generarContenidoCliente(clienteId, productos, crudos, colorCliente) {
+      // Ordenar productos por medida
+      const productosOrdenados = [...productos].sort((a, b) => {
+        // Extraer números de las medidas
+        const numA = parseFloat(a.medida.match(/\d+/)?.[0] || 0);
+        const numB = parseFloat(b.medida.match(/\d+/)?.[0] || 0);
+        
+        if (numA === numB) {
+          // Si los números son iguales, ordenar alfabéticamente
+          return a.medida.localeCompare(b.medida);
+        }
+        return numA - numB;
+      });
+
       const nombreCliente = this.obtenerNombreCliente(clienteId);
       const totalTarasCliente = productos.reduce((sum, p) => sum + this.totalTaras(p), 0);
       const totalKilosCliente = productos.reduce((sum, p) => sum + this.totalKilos(p), 0);
@@ -1056,30 +1082,33 @@ export default {
       const hayCrudos = crudos && crudos.length > 0 && crudos.some(crudo => crudo.items && crudo.items.length > 0);
 
       // Si hay productos, crear la tabla de productos
-      if (productos.length > 0) {
+      if (productosOrdenados.length > 0) {
         const tablaProductos = {
           table: {
             headerRows: 1,
-            widths: hayCrudos ? [140, 50, 85] : [200, 100, 150], // Anchuras más grandes si no hay crudos
+            widths: hayCrudos ? [140, 40, 85] : [200, 80, 120], // Ajustados los anchos sin columna de precio
             body: [
               [
                 { text: 'Medida', style: 'tableHeader', fontSize: 20 },
                 { text: 'Kg', style: 'tableHeader', fontSize: 20 },
                 { text: 'Taras', style: 'tableHeader', fontSize: 20 }
               ],
-              ...productos.map(producto => [
+              ...productosOrdenados.map(producto => [
                 { 
-                  text: producto.tipo === 'Sin Tipo' ? 
-                    producto.medida : 
-                    producto.tipo === 'otro' ?
-                      `${producto.medida} ${producto.tipoPersonalizado}` :
-                      producto.tipo === 'c/h20' ?
-                        [
-                          { text: `${producto.medida}`, color: '#000000' },
-                          { text: ' c/h20 ', color: '#3498db' },
-                          { text: `(${producto.camaronNeto || 0.65})`, color: '#3498db' }
-                        ] :
-                        `${producto.medida} ${producto.tipo}`, 
+                  text: [
+                    producto.tipo === 'Sin Tipo' ? 
+                      producto.medida : 
+                      producto.tipo === 'otro' ?
+                        `${producto.medida} ${producto.tipoPersonalizado}` :
+                        producto.tipo === 'c/h20' ?
+                          [
+                            { text: `${producto.medida}`, color: '#000000' },
+                            { text: ' c/h20 ', color: '#3498db' },
+                            { text: `(${producto.camaronNeto || 0.65})`, color: '#3498db' }
+                          ] :
+                          `${producto.medida} ${producto.tipo}`,
+                    producto.precio ? { text: ` $${producto.precio}`, color: '#2ecc71' } : ''
+                  ], 
                   fontSize: 18 
                 },
                 { text: this.totalKilos(producto).toFixed(1), fontSize: 18 },
@@ -1094,7 +1123,6 @@ export default {
         };
 
         if (hayCrudos) {
-          // Si hay crudos, usar el layout de columnas
           contenido.push({
             columns: [
               {
@@ -1106,7 +1134,7 @@ export default {
                 stack: [{
                   table: {
                     headerRows: 1,
-                    widths: [45, 55, 25, 40],
+                    widths: [80, 45, 25, 35], // Ajustados los anchos sin columna de precio
                     body: [
                       [
                         { text: 'Talla', style: 'crudosHeader', fontSize: 20 },
@@ -1116,7 +1144,13 @@ export default {
                       ],
                       ...crudos.flatMap(crudo =>
                         crudo.items.map(item => [
-                          { text: this.formatearTallaCrudo(item.talla), fontSize: 18 },
+                          { 
+                            text: [
+                              { text: this.formatearTallaCrudo(item.talla) },
+                              item.precio ? { text: ` $${item.precio}`, color: '#2ecc71' } : ''
+                            ],
+                            fontSize: 18 
+                          },
                           { text: item.barco, fontSize: 18 },
                           { text: this.calcularTarasCrudos(item), fontSize: 18 },
                           { text: this.calcularKilosCrudos(item).toFixed(0), fontSize: 18 }
@@ -1130,7 +1164,6 @@ export default {
             ]
           });
         } else {
-          // Si no hay crudos, agregar solo la tabla de productos a todo el ancho
           contenido.push(tablaProductos);
         }
       }
