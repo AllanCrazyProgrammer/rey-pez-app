@@ -145,13 +145,43 @@ export default {
     };
 
     const filteredExistencias = computed(() => {
-      if (!search.value) return existencias.value;
+      if (!search.value) {
+        // Ordenar las existencias
+        return Object.fromEntries(
+          Object.entries(existencias.value).map(([proveedor, medidas]) => [
+            proveedor,
+            Object.fromEntries(
+              Object.entries(medidas)
+                .sort((a, b) => {
+                  // Convertir las medidas a números para comparación
+                  const getMedidaNum = (medida) => {
+                    const num = medida.split('/')[0];
+                    return parseInt(num, 10);
+                  };
+                  return getMedidaNum(a[0]) - getMedidaNum(b[0]);
+                })
+            )
+          ])
+        );
+      }
+
       const searchLower = search.value.toLowerCase();
       const filtered = {};
       Object.entries(existencias.value).forEach(([proveedor, medidas]) => {
-        const filteredMedidas = Object.entries(medidas).filter(([medida]) => 
-          proveedor.toLowerCase().includes(searchLower) || medida.toLowerCase().includes(searchLower)
-        );
+        const filteredMedidas = Object.entries(medidas)
+          .filter(([medida]) => 
+            proveedor.toLowerCase().includes(searchLower) || 
+            medida.toLowerCase().includes(searchLower)
+          )
+          .sort((a, b) => {
+            // Ordenar las medidas filtradas
+            const getMedidaNum = (medida) => {
+              const num = medida.split('/')[0];
+              return parseInt(num, 10);
+            };
+            return getMedidaNum(a[0]) - getMedidaNum(b[0]);
+          });
+
         if (filteredMedidas.length > 0) {
           filtered[proveedor] = Object.fromEntries(filteredMedidas);
         }
