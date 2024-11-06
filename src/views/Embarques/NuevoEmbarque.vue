@@ -24,7 +24,12 @@
     
 <div class="resumen-container">
   <div class="resumen-columna">
-    <h4 class="resumen-titulo">Resumen de Taras</h4>
+    <div class="resumen-header">
+      <h4 class="resumen-titulo">Resumen de Taras</h4>
+      <button @click="generarResumenTarasPDF" class="btn btn-info">
+        <i class="fas fa-file-pdf"></i> PDF Taras
+      </button>
+    </div>
     <div class="resumen-grid">
       <div class="resumen-item">
         <span class="resumen-label">Taras Limpio: </span>
@@ -469,6 +474,7 @@ import { generarNotaVentaPDF } from '@/utils/pdfGenerator';
 import Rendimientos from './Rendimientos.vue'
 import pdfMake from 'pdfmake/build/pdfmake';
 import pdfFonts from 'pdfmake/build/vfs_fonts';
+import { generarResumenTarasPDF } from '@/utils/resumenTarasPdf';
 
 // Registrar las fuentes
 pdfMake.vfs = pdfFonts.pdfMake.vfs;
@@ -549,6 +555,8 @@ export default {
           acc[producto.clienteId] = [];
         }
         acc[producto.clienteId].push(producto);
+        // Ordenar los productos después de agregarlos
+        acc[producto.clienteId].sort((a, b) => this.compararMedidas(b.medida, a.medida));
         return acc;
       }, {});
     }
@@ -903,7 +911,7 @@ export default {
     generarResumenPDF() {
       const docDefinition = {
         pageOrientation: 'portrait',
-        pageMargins: [40, 10, 40, 40],
+        pageMargins: [10, 10, 10, 10],
         content: [],
         styles: {
           header: {
@@ -978,13 +986,7 @@ export default {
       }
 
       // Agregar el pie de página una sola vez al final del documento
-      docDefinition.content.push({
-        text: `Generado: ${new Date().toLocaleString()}`,
-        alignment: 'left',
-        margin: [40, 20],
-        fontSize: 14,
-        color: '#808080'
-      });
+     
 
       // Generar el PDF
       pdfMake.createPdf(docDefinition).download('resumen-embarque.pdf');
@@ -1032,6 +1034,12 @@ export default {
         }, 0);
       }, 0);
 
+      // Formatear el total de kilos para eliminar decimales innecesarios
+      const totalKilosFormateado = (totalKilosCliente + crudosTotalKilos).toLocaleString('en-US', {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 1
+      });
+
       const contenido = [{
         table: {
           widths: ['*', 200],
@@ -1042,7 +1050,7 @@ export default {
               fillColor: colorCliente
             },
             {
-              text: `Total: ${totalTarasCliente + crudosTotalTaras}T | ${(totalKilosCliente + crudosTotalKilos).toFixed(1)}Kg`,
+              text: `Total: ${totalTarasCliente + crudosTotalTaras}T | ${totalKilosFormateado}Kg`,
               style: 'total',
               fillColor: colorCliente,
               alignment: 'right'
@@ -1060,34 +1068,61 @@ export default {
         const tablaProductos = {
           table: {
             headerRows: 1,
-            widths: hayCrudos ? [140, 50, 85] : [200, 100, 150], // Anchuras más grandes si no hay crudos
+            widths: hayCrudos ? [190, 50, 85] : [200, 80, 120],
             body: [
               [
                 { text: 'Medida', style: 'tableHeader', fontSize: 20 },
                 { text: 'Kg', style: 'tableHeader', fontSize: 20 },
                 { text: 'Taras', style: 'tableHeader', fontSize: 20 }
               ],
-              ...productos.map(producto => [
-                { 
-                  text: producto.tipo === 'Sin Tipo' ? 
-                    producto.medida : 
-                    producto.tipo === 'otro' ?
-                      `${producto.medida} ${producto.tipoPersonalizado}` :
-                      producto.tipo === 'c/h20' ?
-                        [
-                          { text: `${producto.medida}`, color: '#000000' },
-                          { text: ' c/h20 ', color: '#3498db' },
-                          { text: `(${producto.camaronNeto || 0.65})`, color: '#3498db' }
-                        ] :
-                        `${producto.medida} ${producto.tipo}`, 
-                  fontSize: 18 
-                },
-                { text: this.totalKilos(producto).toFixed(1), fontSize: 18 },
-                { 
-                  text: `${this.totalTaras(producto)}-${this.generarDetallesProductoCompacto(producto)}`, 
-                  fontSize: 18 
+              ...productos.map(producto => {
+                // Formatear los kilos para el producto
+                const kilos = producto.tipo === 'c/h20' ? 
+                  this.calcularKilosProductoCH20(producto) : 
+                  this.totalKilos(producto);
+                
+                const kilosFormateados = kilos.toLocaleString('en-US', {
+                  minimumFractionDigits: 0,
+                  maximumFractionDigits: 1
+                });
+
+                // Construir el texto de la medida con el precio
+                const medidaTexto = [
+                  { text: producto.medida || '', fontSize: 18 }
+                ];
+
+                // Agregar el tipo si existe
+                if (producto.tipo === 'c/h20') {
+                  medidaTexto.push(
+                    { text: ' c/h20', color: '#3498db', fontSize: 18 },
+                    { text: ` (${producto.camaronNeto || 0.65})`, color: '#3498db', fontSize: 18 }
+                  );
+                } else if (producto.tipo === 'otro') {
+                  medidaTexto.push({ text: ` ${producto.tipoPersonalizado}`, fontSize: 18 });
+                } else if (producto.tipo) {
+                  medidaTexto.push({ text: ` ${producto.tipo}`, fontSize: 18 });
                 }
-              ])
+
+                // Agregar el precio si existe
+                if (producto.precio) {
+                  medidaTexto.push({ text: ` $${producto.precio}`, color: '#27ae60', fontSize: 18 });
+                }
+
+                return [
+                  { 
+                    text: medidaTexto,
+                    fontSize: 18 
+                  },
+                  { 
+                    text: kilosFormateados, 
+                    fontSize: 18 
+                  },
+                  { 
+                    text: `${this.totalTaras(producto)}-${this.generarDetallesProductoCompacto(producto)}`, 
+                    fontSize: 18 
+                  }
+                ];
+              })
             ]
           },
           margin: [0, 5, hayCrudos ? 5 : 0, 10]
@@ -1116,7 +1151,13 @@ export default {
                       ],
                       ...crudos.flatMap(crudo =>
                         crudo.items.map(item => [
-                          { text: this.formatearTallaCrudo(item.talla), fontSize: 18 },
+                          { 
+                            text: [
+                              { text: this.formatearTallaCrudo(item.talla), fontSize: 18 },
+                              item.precio ? { text: `\n$${item.precio}`, color: '#27ae60', fontSize: 18 } : ''
+                            ],
+                            fontSize: 18 
+                          },
                           { text: item.barco, fontSize: 18 },
                           { text: this.calcularTarasCrudos(item), fontSize: 18 },
                           { text: this.calcularKilosCrudos(item).toFixed(0), fontSize: 18 }
@@ -1658,6 +1699,55 @@ export default {
         });
       }
       this.cerrarModalNota();
+    },
+    // Agregar este nuevo método para calcular kilos de productos c/h20
+    calcularKilosProductoCH20(producto) {
+      const reporteTaras = producto.reporteTaras || [];
+      const reporteBolsas = producto.reporteBolsas || [];
+      let sumaTotalKilos = 0;
+
+      for (let i = 0; i < reporteTaras.length; i++) {
+        const taras = parseInt(reporteTaras[i]) || 0;
+        const bolsa = parseInt(reporteBolsas[i]) || 0;
+        sumaTotalKilos += taras * bolsa;
+      }
+
+      // Retornar la suma total sin multiplicar por camaronNeto
+      return sumaTotalKilos;
+    },
+    // Agregar esta nueva función para comparar medidas
+    compararMedidas(medidaA, medidaB) {
+      // Si alguna medida es vacía o undefined, ponerla al final
+      if (!medidaA) return 1;
+      if (!medidaB) return -1;
+
+      // Función auxiliar para extraer números de una medida
+      const extraerNumeros = (medida) => {
+        const numeros = medida.match(/\d+/g);
+        if (!numeros) return [0, 0];
+        if (numeros.length === 1) return [parseInt(numeros[0]), parseInt(numeros[0])];
+        return [parseInt(numeros[0]), parseInt(numeros[1])];
+      };
+
+      // Extraer los números de las medidas
+      const [minA, maxA] = extraerNumeros(medidaA);
+      const [minB, maxB] = extraerNumeros(medidaB);
+
+      // Si ambas medidas tienen números, comparar por el número menor
+      if (minA && minB) {
+        return minA - minB;
+      }
+
+      // Si no tienen números, comparar alfabéticamente
+      return medidaA.localeCompare(medidaB);
+    },
+    generarResumenTarasPDF() {
+      const embarqueData = {
+        fecha: this.embarque.fecha,
+        productos: this.embarque.productos,
+        clienteCrudos: this.clienteCrudos
+      };
+      generarResumenTarasPDF(embarqueData, this.clientesDisponibles);
     }
   },
   created() {
