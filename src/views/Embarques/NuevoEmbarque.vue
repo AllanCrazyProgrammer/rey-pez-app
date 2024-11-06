@@ -472,12 +472,7 @@ import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import { generarNotaVentaPDF } from '@/utils/pdfGenerator';
 import Rendimientos from './Rendimientos.vue'
-import pdfMake from 'pdfmake/build/pdfmake';
-import pdfFonts from 'pdfmake/build/vfs_fonts';
 import { generarResumenTarasPDF } from '@/utils/resumenTarasPdf';
-
-// Registrar las fuentes
-pdfMake.vfs = pdfFonts.pdfMake.vfs;
 
 export default {
   name: 'NuevoEmbarque',
@@ -908,88 +903,103 @@ export default {
       return producto.tipo || 'Sin Tipo';
     },
     
-    generarResumenPDF() {
-      const docDefinition = {
-        pageOrientation: 'portrait',
-        pageMargins: [10, 10, 10, 10],
-        content: [],
-        styles: {
-          header: {
-            fontSize: 22,
-            bold: true,
-            margin: [0, 0, 0, 5]
-          },
-          clienteHeader: {
-            fontSize: 20, // Aumentado de 15
-            bold: true,
-            color: 'white',
-          },
-          tableHeader: {
-            fontSize: 16, // Aumentado de 13
-            bold: true,
-            color: 'white',
-            fillColor: '#34495e'
-          },
-          crudosHeader: {
-            fontSize: 16, // Aumentado de 13
-            bold: true,
-            color: 'white',
-            fillColor: '#2980b9'
-          },
-          total: {
-            fontSize: 18, // Aumentado de 14
-            bold: true,
-            color: 'white'
-          }
-        }
-      };
-      const fechaEmbarque = new Date(this.embarque.fecha + 'T00:00:00');
-
-      // Título y fecha
-      docDefinition.content.push(
-    { text: 'Resumen de Embarque', style: 'header' },
-    {
-      text: `Fecha: ${fechaEmbarque.toLocaleDateString()} | Carga: ${this.embarque.cargaCon || 'N/E'}`,
-      fontSize: 16,
-      margin: [0, 0, 0, 10]
-    }
-  );
-
-
-      // Altura disponible en la página (A4 = 842pt en portrait)
-      const alturaDisponible = 842 - 80; // Reducimos el espacio reservado para el header
-      let alturaUsada = 80; // Altura inicial usada por el header
-      let contenidoActual = [];
-
-      // Generar contenido para cada cliente
-      Object.entries(this.productosPorCliente).forEach(([clienteId, productos]) => {
-        const alturaCliente = this.calcularAlturaCliente(productos, this.clienteCrudos[clienteId] || []);
-        
-        // Agregar un margen de tolerancia del 10% para el cálculo
-        if (alturaUsada + alturaCliente > alturaDisponible * 1.1) {
-          if (contenidoActual.length > 0) {
-            docDefinition.content.push(...contenidoActual);
-          }
-          docDefinition.content.push({ text: '', pageBreak: 'before' });
-          contenidoActual = [];
-          alturaUsada = 0;
-        }
-
-        const contenidoCliente = this.generarContenidoCliente(clienteId, productos, this.clienteCrudos[clienteId] || [], this.getClienteColor(clienteId));
-        contenidoActual.push(...contenidoCliente);
-        alturaUsada += alturaCliente;
-      });
-
-      // Agregar el contenido restante
-      if (contenidoActual.length > 0) {
-        docDefinition.content.push(...contenidoActual);
+    async initPdfMake() {
+      if (!window.pdfMake) {
+        const pdfMake = await import('pdfmake/build/pdfmake');
+        const pdfFonts = await import('pdfmake/build/vfs_fonts');
+        pdfMake.default.vfs = pdfFonts.default.pdfMake.vfs;
+        window.pdfMake = pdfMake.default;
       }
+      return window.pdfMake;
+    },
 
-      // Agregar el pie de página una sola vez al final del documento
-     
+    async generarResumenPDF() {
+      try {
+        const pdfMake = await this.initPdfMake();
+        const docDefinition = {
+          pageOrientation: 'portrait',
+          pageMargins: [10, 10, 10, 10],
+          content: [],
+          styles: {
+            header: {
+              fontSize: 22,
+              bold: true,
+              margin: [0, 0, 0, 5]
+            },
+            clienteHeader: {
+              fontSize: 20, // Aumentado de 15
+              bold: true,
+              color: 'white',
+            },
+            tableHeader: {
+              fontSize: 16, // Aumentado de 13
+              bold: true,
+              color: 'white',
+              fillColor: '#34495e'
+            },
+            crudosHeader: {
+              fontSize: 16, // Aumentado de 13
+              bold: true,
+              color: 'white',
+              fillColor: '#2980b9'
+            },
+            total: {
+              fontSize: 18, // Aumentado de 14
+              bold: true,
+              color: 'white'
+            }
+          }
+        };
+        const fechaEmbarque = new Date(this.embarque.fecha + 'T00:00:00');
 
-      // Generar el PDF
-      pdfMake.createPdf(docDefinition).download('resumen-embarque.pdf');
+        // Título y fecha
+        docDefinition.content.push(
+      { text: 'Resumen de Embarque', style: 'header' },
+      {
+        text: `Fecha: ${fechaEmbarque.toLocaleDateString()} | Carga: ${this.embarque.cargaCon || 'N/E'}`,
+        fontSize: 16,
+        margin: [0, 0, 0, 10]
+      }
+    );
+
+
+        // Altura disponible en la página (A4 = 842pt en portrait)
+        const alturaDisponible = 842 - 80; // Reducimos el espacio reservado para el header
+        let alturaUsada = 80; // Altura inicial usada por el header
+        let contenidoActual = [];
+
+        // Generar contenido para cada cliente
+        Object.entries(this.productosPorCliente).forEach(([clienteId, productos]) => {
+          const alturaCliente = this.calcularAlturaCliente(productos, this.clienteCrudos[clienteId] || []);
+          
+          // Agregar un margen de tolerancia del 10% para el cálculo
+          if (alturaUsada + alturaCliente > alturaDisponible * 1.1) {
+            if (contenidoActual.length > 0) {
+              docDefinition.content.push(...contenidoActual);
+            }
+            docDefinition.content.push({ text: '', pageBreak: 'before' });
+            contenidoActual = [];
+            alturaUsada = 0;
+          }
+
+          const contenidoCliente = this.generarContenidoCliente(clienteId, productos, this.clienteCrudos[clienteId] || [], this.getClienteColor(clienteId));
+          contenidoActual.push(...contenidoCliente);
+          alturaUsada += alturaCliente;
+        });
+
+        // Agregar el contenido restante
+        if (contenidoActual.length > 0) {
+          docDefinition.content.push(...contenidoActual);
+        }
+
+        // Agregar el pie de página una sola vez al final del documento
+       
+
+        // Generar el PDF
+        pdfMake.createPdf(docDefinition).download('resumen-embarque.pdf');
+      } catch (error) {
+        console.error('Error al generar PDF:', error);
+      }
     },
 
     calcularAlturaCliente(productos, crudos) {
@@ -3360,6 +3370,17 @@ class EmbarqueReportGenerator {
   outline: none;
   border-color: #17a2b8;
   box-shadow: 0 0 0 0.2rem rgba(23, 162, 184, 0.25);
+}
+
+.resumen-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.resumen-titulo {
+  margin: 0;
 }
 </style>
 
