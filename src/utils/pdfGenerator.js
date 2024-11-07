@@ -797,19 +797,23 @@ function totalTaras(producto) {
 }
 
 function totalKilos(producto, nombreCliente) {
-  // Si el producto es de tipo c/h20, usar el cálculo basado en reporteTaras y reporteBolsas
+  // Si el producto es de tipo c/h20
   if (producto.tipo === 'c/h20') {
-    const reporteTaras = producto.reporteTaras || [];
-    const reporteBolsas = producto.reporteBolsas || [];
-    let sumaTotalKilos = 0;
-
-    for (let i = 0; i < reporteTaras.length; i++) {
-      const taras = parseInt(reporteTaras[i]) || 0;
-      const bolsa = parseInt(reporteBolsas[i]) || 0;
-      sumaTotalKilos += taras * bolsa;
-    }
-
-    return Number(sumaTotalKilos.toFixed(1));
+    const kilosTotales = (producto.kilos || []).reduce((sum, kilo) => {
+      const kiloNum = typeof kilo === 'string' ? parseFloat(kilo) : (kilo || 0);
+      return sum + kiloNum;
+    }, 0);
+    
+    // Calcular el peso total de las taras
+    const pesoTaras = (producto.taras || []).reduce((sum, tara) => {
+      const taraNum = typeof tara === 'string' ? parseFloat(tara) : (tara || 0);
+      return sum + (taraNum * 3); // Multiplicar por 3 kg que pesa cada tara
+    }, 0);
+    
+    // Restar el peso de las taras si producto.restarTaras es true
+    const kilosNetos = producto.restarTaras ? kilosTotales - pesoTaras : kilosTotales;
+    
+    return Number(kilosNetos.toFixed(1));
   } else {
     // Para otros productos, mantener la lógica existente...
     const sumaKilos = (producto.kilos || []).reduce((sum, kilo) => {
@@ -832,7 +836,6 @@ function totalKilos(producto, nombreCliente) {
     
     const resultado = sumaKilos - descuentoTaras;
     
-    // Agregar 3 kg para Otilio y 1 kg para Catarro en productos s/h2o
     if (producto.tipo.toLowerCase().includes('s/h2o') || producto.tipo.toLowerCase().includes('s/h20')) {
       if (nombreCliente.toLowerCase().includes('otilio')) {
         return Number((resultado + 3).toFixed(1));

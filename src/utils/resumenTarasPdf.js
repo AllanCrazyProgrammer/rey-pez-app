@@ -39,32 +39,23 @@ export function generarResumenTarasPDF(embarqueData, clientesDisponibles) {
       fontSize: 18,
       cellPadding: 8
     },
-    didParseCell: function(data) {
-      const clientName = data.row.raw?.[0]?.content;
-      if (clientName && COLORES_CLIENTES[clientName]) {
-        // Convertir el color hex a RGB
-        const hex = COLORES_CLIENTES[clientName];
-        const r = parseInt(hex.slice(1,3), 16);
-        const g = parseInt(hex.slice(3,5), 16);
-        const b = parseInt(hex.slice(5,7), 16);
-        
-        data.cell.styles.lineColor = [r, g, b];
-        data.cell.styles.lineWidth = 0.5;
-      }
-    },
     headStyles: {
-      fillColor: [55, 96, 176], // #3760b0
-      textColor: 255,
+      fillColor: [255, 255, 255],
+      textColor: [0, 0, 0],
       fontSize: 20,
       fontStyle: 'bold',
-      halign: 'center'
+      halign: 'center',
+      lineWidth: 1,
+      lineColor: [0, 0, 0]
     },
     footStyles: {
-      fillColor: [55, 96, 176],
-      textColor: 255,
+      fillColor: [255, 255, 255],
+      textColor: [0, 0, 0],
       fontSize: 20,
       fontStyle: 'bold',
-      halign: 'center'
+      halign: 'center',
+      lineWidth: 1,
+      lineColor: [0, 0, 0]
     },
     bodyStyles: {
       fontSize: 18,
