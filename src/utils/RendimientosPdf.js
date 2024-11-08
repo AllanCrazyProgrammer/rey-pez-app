@@ -121,6 +121,44 @@ export const generarPDFRendimientos = async (datosRendimientos, embarqueData) =>
 };
 
 function generarTablaRendimientos(datosRendimientos, nombresMedidasPersonalizados) {
+  // Agrupar medidas mixtas
+  const datosAgrupados = datosRendimientos.reduce((acc, dato) => {
+    const nombreMedida = nombresMedidasPersonalizados[dato.medida] || dato.medida;
+    
+    // Condicional simple para detectar "mixta" o "Mixta"
+    if (nombreMedida.includes('mixta') || nombreMedida.includes('Mixta')) {
+      if (!acc['Mixta']) {
+        acc['Mixta'] = {
+          medida: 'Mixta',
+          kilosCrudos: 0,
+          totalEmbarcado: 0
+        };
+      }
+      
+      // Sumamos los kilos crudos
+      if (dato.kilosCrudos) {
+        if (typeof dato.kilosCrudos === 'object') {
+          acc['Mixta'].kilosCrudos += 
+            (parseFloat(dato.kilosCrudos.medida1) || 0) + 
+            (parseFloat(dato.kilosCrudos.medida2) || 0);
+        } else {
+          acc['Mixta'].kilosCrudos += parseFloat(dato.kilosCrudos) || 0;
+        }
+      }
+      
+      // Sumamos el total embarcado
+      acc['Mixta'].totalEmbarcado += parseFloat(dato.totalEmbarcado) || 0;
+    } else {
+      // Si no es mixta, la procesamos normalmente
+      acc[nombreMedida] = {
+        medida: nombreMedida,
+        kilosCrudos: parseFloat(dato.kilosCrudos) || 0,
+        totalEmbarcado: parseFloat(dato.totalEmbarcado) || 0
+      };
+    }
+    return acc;
+  }, {});
+
   const body = [
     [
       { text: 'Medida', style: 'tableHeader' },
@@ -128,14 +166,19 @@ function generarTablaRendimientos(datosRendimientos, nombresMedidasPersonalizado
       { text: 'Total Embarcado', style: 'tableHeader' },
       { text: 'Rendimiento', style: 'tableHeader' }
     ],
-    ...datosRendimientos.map(dato => {
-      const rendimiento = dato.rendimiento;
+    ...Object.values(datosAgrupados).map(dato => {
+      const rendimiento = dato.kilosCrudos > 0 ? dato.totalEmbarcado / dato.kilosCrudos : 0;
       const rendimientoStyle = rendimiento > 1 ? 'rendimientoAlto' : 'rendimientoBajo';
       
-      const nombreMedida = nombresMedidasPersonalizados[dato.medida] || dato.medida;
+      // Preparamos el texto de la medida
+      let medidaTexto = dato.medida;
+      if (dato.medidasIncluidas) {
+        const medidasArray = Array.from(dato.medidasIncluidas);
+        medidaTexto = `Mixta (${medidasArray.join(', ')})`;
+      }
       
       return [
-        nombreMedida,
+        medidaTexto,
         formatearKilos(dato.kilosCrudos),
         formatearKilos(dato.totalEmbarcado),
         {
@@ -177,8 +220,11 @@ function generarTablaRendimientos(datosRendimientos, nombresMedidasPersonalizado
 }
 
 function formatearKilos(kilos) {
+  if (typeof kilos === 'number') {
+    return (kilos % 1 === 0 ? Math.floor(kilos) : kilos.toFixed(1)) + ' kg';
+  }
+  // Para medidas mixtas que tienen medida1 y medida2
   if (typeof kilos === 'object' && kilos !== null) {
-    // Para medidas mix que tienen medida1 y medida2
     const total = (Number(kilos.medida1) || 0) + (Number(kilos.medida2) || 0);
     return (total % 1 === 0 ? Math.floor(total) : total.toFixed(1)) + ' kg';
   }
