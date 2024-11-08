@@ -127,8 +127,8 @@
                   placeholder="Medida"                
                   :size="producto.medida.length || 1"
                   @input="onMedidaInput(producto)"
+                  @blur="onMedidaBlur(producto)"
                   @focus="showSuggestions(producto)"
-                  @blur="hideSuggestions(producto)"
                 >
                 <div class="suggestions-list" v-if="producto.showSuggestions && medidasSugeridas.length > 0">
                   <div 
@@ -549,17 +549,22 @@ export default {
         if (!acc[producto.clienteId]) {
           acc[producto.clienteId] = [];
         }
-        acc[producto.clienteId].push(producto);
-        // Ordenar los productos después de agregarlos
-        acc[producto.clienteId].sort((a, b) => this.compararMedidas(b.medida, a.medida));
+        // Solo ordenar si no se está editando actualmente
+        if (!producto.isEditing) {
+          acc[producto.clienteId].push(producto);
+          acc[producto.clienteId].sort((a, b) => this.compararMedidas(b.medida, a.medida));
+        } else {
+          // Si se está editando, mantener el orden actual
+          acc[producto.clienteId].push(producto);
+        }
         return acc;
       }, {});
     }
   },
   methods: {
     agregarProducto(clienteId) {
-      const productoId = Date.now(); // Generar un ID único
-      this.embarque.productos.push({
+      const productoId = Date.now();
+      const nuevoProducto = {
         id: productoId,
         clienteId,
         medida: '',
@@ -571,12 +576,37 @@ export default {
         reporteBolsas: [],
         tarasExtra: [],
         restarTaras: true,
-        camaronNeto: 0.65, // Valor por defecto
-        multiplicadorBolsas: 1, // Añadido nuevo campo
-        showSuggestions: false, // Agregar esta propiedad
-        esVenta: false, // Agregar esta propiedad
-      });
+        camaronNeto: 0.65,
+        multiplicadorBolsas: 1,
+        showSuggestions: false,
+        esVenta: false,
+        isEditing: true, // Iniciar en modo edición
+        isNew: true // Marcar como nuevo producto
+      };
+      
+      this.embarque.productos.push(nuevoProducto);
+      
+      if (!this.guardadoAutomaticoActivo && this.embarqueId) {
+        this.guardadoAutomaticoActivo = true;
+      }
+      
+      if (this.embarqueId) {
+        this.guardarCambiosEnTiempoReal();
+      }
+      
       this.actualizarMedidasUsadas();
+
+      // Esperar a que el DOM se actualice y enfocar el nuevo input
+      this.$nextTick(() => {
+        const inputs = document.querySelectorAll('.medida-input');
+        const nuevoInput = Array.from(inputs).find(input => {
+          const productoId = input.closest('.producto').dataset.productoId;
+          return productoId === String(nuevoProducto.id);
+        });
+        if (nuevoInput) {
+          nuevoInput.focus();
+        }
+      });
     },
     eliminarProducto(producto) {
       const index = this.embarque.productos.indexOf(producto);
@@ -584,7 +614,12 @@ export default {
         this.embarque.productos.splice(index, 1);
       }
     },
-    agregarClienteProducto() {
+    async agregarClienteProducto() {
+      if (!this.embarque.fecha) {
+        alert('Por favor, seleccione una fecha para el embarque.');
+        return;
+      }
+
       if (this.nuevoClienteId === 'otro') {
         const nuevoNombre = prompt('Ingrese el nombre del nuevo cliente:');
         if (nuevoNombre && nuevoNombre.trim() !== '') {
@@ -597,12 +632,39 @@ export default {
             personalizado: true
           };
           this.clientesPersonalizados.push(nuevoCliente);
-          this.agregarProducto(nuevoClienteId);
+          await this.guardarEmbarqueInicial(nuevoClienteId);
         }
       } else if (this.nuevoClienteId) {
-        this.agregarProducto(this.nuevoClienteId);
+        await this.guardarEmbarqueInicial(this.nuevoClienteId);
       }
       this.nuevoClienteId = '';
+    },
+    async guardarEmbarqueInicial(clienteId) {
+      // Si no existe embarqueId, crear nuevo embarque
+      if (!this.embarqueId) {
+        const db = getFirestore();
+        try {
+          // Primero crear el embarque
+          const embarqueData = this.prepararDatosEmbarque();
+          const docRef = await addDoc(collection(db, "embarques"), embarqueData);
+          
+          // Guardar el ID y activar modo edición
+          this.embarqueId = docRef.id;
+          this.modoEdicion = true;
+          this.guardadoAutomaticoActivo = true;
+          
+          // Luego agregar el producto
+          this.agregarProducto(clienteId);
+          
+          console.log('Embarque inicial creado con ID:', this.embarqueId);
+        } catch (error) {
+          console.error("Error al crear el embarque inicial:", error);
+          alert('Hubo un error al crear el embarque. Por favor, intente nuevamente.');
+        }
+      } else {
+        // Si ya existe el embarqueId, solo agregar el producto
+        this.agregarProducto(clienteId);
+      }
     },
     eliminarCliente(clienteId) {
       // Filtrar los productos para eliminar los del cliente seleccionado
@@ -1758,6 +1820,17 @@ export default {
         clienteCrudos: this.clienteCrudos
       };
       generarResumenTarasPDF(embarqueData, this.clientesDisponibles);
+    },
+    onMedidaInput(producto) {
+      producto.isEditing = true; // Marcar como en edición
+      // ... resto del código existente de onMedidaInput ...
+    },
+
+    onMedidaBlur(producto) {
+      setTimeout(() => {
+        producto.isEditing = false;
+        producto.isNew = false; // Quitar la marca de nuevo producto
+      }, 200);
     }
   },
   created() {
