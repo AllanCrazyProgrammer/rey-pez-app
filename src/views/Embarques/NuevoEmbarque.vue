@@ -115,7 +115,13 @@
                   N
                 </button>
               </div>
-              {{ producto.medida || 'Sin Medida' }} - {{ obtenerTipoProducto(producto) }}
+              <span 
+                class="medida-texto" 
+                @click="abrirModalNombreAlternativo(producto)"
+              >
+                {{ producto.nombreAlternativoPDF || producto.medida || 'Sin Medida' }}
+              </span>
+              - {{ obtenerTipoProducto(producto) }}
               <span v-if="producto.precio" class="precio-tag">${{ producto.precio }}</span>
             </h2>
             <div class="producto-header">
@@ -212,7 +218,7 @@
                     class="form-control tara-input" 
                     placeholder="Tara"
                     :size="String(producto.taras[taraIndex] || '').length || 1"
-                    inputmode="numeric"
+                    inputmode="decimal"
                     pattern="[0-9]*"
                   >
                   <button type="button" @click="eliminarTara(producto, taraIndex)" class="btn btn-danger btn-sm">-</button>
@@ -223,7 +229,7 @@
                     class="form-control tara-input tara-extra-input" 
                     placeholder="Tara Extra"
                     :size="String(producto.tarasExtra[taraExtraIndex] || '').length || 1"
-                    inputmode="numeric"
+                    inputmode="decimal"
                     pattern="[0-9]*"
                   >
                   <button type="button" @click="eliminarTaraExtra(producto, taraExtraIndex)" class="btn btn-danger btn-sm">-</button>
@@ -242,7 +248,7 @@
                     class="form-control kilo-input" 
                     placeholder="Kilos"
                     :size="String(producto.kilos[kiloIndex] || '').length || 1"
-                    inputmode="numeric"
+                    inputmode="decimal"
                     pattern="[0-9]*"
                   >
                   <button type="button" @click="eliminarKilo(producto, kiloIndex)" class="btn btn-danger btn-sm">-</button>
@@ -259,7 +265,8 @@
                     type="text" 
                     v-model="producto.reporteTaras[index]" 
                     class="form-control reporte-input" 
-                    inputmode="numeric"
+                    inputmode="decimal"
+                    pattern="[0-9]*"
                   >
                   <button type="button" @click="eliminarReporteTara(producto, index)" class="btn btn-danger btn-sm">-</button>
                 </div>
@@ -275,7 +282,8 @@
                     type="text" 
                     v-model="producto.reporteBolsas[index]" 
                     class="form-control reporte-input" 
-                    inputmode="numeric"
+                    inputmode="decimal"
+                    pattern="[0-9]*"
                   >
                   <button type="button" @click="eliminarReporteBolsa(producto, index)" class="btn btn-danger btn-sm">-</button>
                 </div>
@@ -462,6 +470,26 @@
         </div>
       </div>
     </div>
+    <!-- Agregar este nuevo modal -->
+    <div v-if="mostrarModalNombreAlternativo" class="modal-nombre-alternativo" @click.stop="cerrarModalNombreAlternativo">
+      <div class="modal-contenido" @click.stop>
+        <h3>Nombre Alternativo para PDF</h3>
+        <div class="input-nombre">
+          <input 
+            type="text" 
+            v-model="nombreAlternativoTemp"
+            placeholder="Ingrese nombre alternativo"
+            @keyup.enter.stop="guardarNombreAlternativo"
+            @keydown.stop
+            ref="nombreAlternativoInput"
+          >
+        </div>
+        <div class="modal-botones">
+          <button @click.stop="guardarNombreAlternativo" class="btn btn-success">Guardar</button>
+          <button @click.stop="cerrarModalNombreAlternativo" class="btn btn-secondary">Cancelar</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -519,6 +547,9 @@ export default {
       juntarMedidas: false,
       mostrarModalNota: false,
       notaTemp: '',
+      mostrarModalNombreAlternativo: false,
+      nombreAlternativoTemp: '',
+      productoSeleccionado: null,
     };
   },
   clientesJuntarMedidas: {},
@@ -1831,7 +1862,41 @@ export default {
         producto.isEditing = false;
         producto.isNew = false; // Quitar la marca de nuevo producto
       }, 200);
-    }
+    },
+
+    abrirModalNombreAlternativo(producto) {
+      this.productoSeleccionado = producto;
+      this.nombreAlternativoTemp = producto.nombreAlternativoPDF || producto.medida;
+      this.mostrarModalNombreAlternativo = true;
+      this.$nextTick(() => {
+        this.$refs.nombreAlternativoInput?.focus();
+      });
+    },
+
+    cerrarModalNombreAlternativo() {
+      this.mostrarModalNombreAlternativo = false;
+      this.productoSeleccionado = null;
+      this.nombreAlternativoTemp = '';
+    },
+
+    guardarNombreAlternativo() {
+      if (this.productoSeleccionado) {
+        if (this.nombreAlternativoTemp.trim()) {
+          this.$set(this.productoSeleccionado, 'nombreAlternativoPDF', this.nombreAlternativoTemp.trim());
+        } else {
+          this.$delete(this.productoSeleccionado, 'nombreAlternativoPDF');
+        }
+        
+        const guardadoActivo = this.guardadoAutomaticoActivo;
+        this.guardadoAutomaticoActivo = false;
+        
+        this.$nextTick(() => {
+          this.guardadoAutomaticoActivo = guardadoActivo;
+          this.guardarCambiosEnTiempoReal();
+        });
+      }
+      this.cerrarModalNombreAlternativo();
+    },
   },
   created() {
     const embarqueId = this.$route.params.id;
@@ -3454,6 +3519,45 @@ class EmbarqueReportGenerator {
 
 .resumen-titulo {
   margin: 0;
+}
+
+.modal-nombre-alternativo {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.input-nombre {
+  display: flex;
+  align-items: center;
+  margin: 20px 0;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  padding: 8px;
+}
+
+.input-nombre input {
+  border: none;
+  outline: none;
+  font-size: 1.2rem;
+  width: 100%;
+}
+
+.medida-texto {
+  cursor: pointer;
+  transition: color 0.3s;
+}
+
+.medida-texto:hover {
+  color: #007bff;
+  text-decoration: underline;
 }
 </style>
 

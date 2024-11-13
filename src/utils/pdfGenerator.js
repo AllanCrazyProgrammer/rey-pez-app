@@ -224,7 +224,39 @@ function generarContenidoClientes(embarque, clientesDisponibles, clientesJuntarM
     // Procesar los productos según la configuración de juntar medidas
     let productosAProcesar = productos;
     if (debeJuntarMedidas) {
-      productosAProcesar = combinarProductosSimilares(productos);
+      // No combinar productos c/h2o con diferentes valores netos
+      productosAProcesar = productos.reduce((acc, producto) => {
+        if (producto.tipo === 'c/h20') {
+          // Mantener productos c/h2o separados por valor neto
+          acc.push(producto);
+        } else {
+          // Combinar otros productos normalmente
+          const productoExistente = acc.find(p => 
+            p.medida === producto.medida && 
+            p.tipo === producto.tipo &&
+            p.tipo !== 'c/h20'
+          );
+          
+          if (productoExistente) {
+            // Combinar con producto existente
+            productoExistente.kilos.push(...producto.kilos);
+            productoExistente.taras.push(...producto.taras);
+            if (producto.tarasExtra) {
+              productoExistente.tarasExtra.push(...producto.tarasExtra);
+            }
+            if (producto.reporteTaras) {
+              productoExistente.reporteTaras.push(...producto.reporteTaras);
+            }
+            if (producto.reporteBolsas) {
+              productoExistente.reporteBolsas.push(...producto.reporteBolsas);
+            }
+          } else {
+            // Agregar nuevo producto
+            acc.push({...producto});
+          }
+        }
+        return acc;
+      }, []);
     }
     
     // Agrupar productos por medida y tipo
@@ -515,55 +547,28 @@ function calcularKilosCrudosDesdeReporte(producto) {
 }
 
 function agruparProductos(productos) {
-  // Creamos un objeto para agrupar por medida y tipo
-  const grupos = productos.reduce((acc, producto) => {
-    // La clave única combina medida y tipo (incluyendo s/h2o o c/h2o)
-    const medidaTipo = `${producto.medida || ''} ${producto.tipo || ''}`.trim();
-    
-    if (!acc[medidaTipo]) {
-      acc[medidaTipo] = {
-        ...producto,
-        kilos: [],
-        taras: [],
-        reporteTaras: [],
-        reporteBolsas: [],
-        totalKilos: 0,
-        totalTaras: 0
-      };
+  // Ordenar productos por medida y tipo, manteniendo separados los c/h2o con diferentes valores netos
+  return productos.sort((a, b) => {
+    // Primero ordenar por medida
+    const medidaA = extraerMedidaBase(a.medida);
+    const medidaB = extraerMedidaBase(b.medida);
+    if (medidaA !== medidaB) {
+      return medidaA.localeCompare(medidaB);
     }
     
-    // Agregamos los kilos y taras al grupo
-    acc[medidaTipo].kilos = [...acc[medidaTipo].kilos, ...producto.kilos];
-    acc[medidaTipo].taras = [...acc[medidaTipo].taras, ...producto.taras];
-    acc[medidaTipo].reporteTaras = [...acc[medidaTipo].reporteTaras, ...producto.reporteTaras];
-    acc[medidaTipo].reporteBolsas = [...acc[medidaTipo].reporteBolsas, ...producto.reporteBolsas];
-    
-    // Actualizamos los totales
-    acc[medidaTipo].totalKilos = acc[medidaTipo].kilos.reduce((sum, kilo) => sum + (kilo || 0), 0);
-    acc[medidaTipo].totalTaras = acc[medidaTipo].taras.reduce((sum, tara) => sum + (tara || 0), 0);
-    
-    return acc;
-  }, {});
-
-  // Convertir a array y ordenar
-  return Object.values(grupos).sort((a, b) => {
-    // Extraer los números de las medidas (ejemplo: "51/60" -> [51, 60])
-    const getMedidaNumeros = (medida) => {
-      const match = (medida || '').match(/(\d+)\/(\d+)/);
-      if (match) {
-        return [parseInt(match[1]), parseInt(match[2])];
-      }
-      return [Infinity, Infinity]; // Para medidas sin números
-    };
-
-    const [numA1, numA2] = getMedidaNumeros(a.medida);
-    const [numB1, numB2] = getMedidaNumeros(b.medida);
-
-    // Ordenar por el primer número (si son iguales, usar el segundo)
-    if (numA1 === numB1) {
-      return numA2 - numB2;
+    // Si las medidas son iguales, ordenar por tipo
+    if (a.tipo !== b.tipo) {
+      return a.tipo.localeCompare(b.tipo);
     }
-    return numA1 - numB1;
+    
+    // Si son del mismo tipo y es c/h2o, ordenar por valor neto
+    if (a.tipo === 'c/h20' && b.tipo === 'c/h20') {
+      const valorNetoA = a.camaronNeto || 0.65;
+      const valorNetoB = b.camaronNeto || 0.65;
+      return valorNetoA - valorNetoB;
+    }
+    
+    return 0;
   });
 }
 
@@ -674,76 +679,60 @@ function obtenerEstiloCliente(nombreCliente) {
 
 function formatearProducto(producto) {
   let tipoProducto = obtenerTipoProducto(producto);
-  let medida = (producto.medida || '').replace(/\s+/g, ' ').trim();
+  let medida = (producto.nombreAlternativoPDF || producto.medida || '').replace(/\s+/g, ' ').trim();
   let precioStr = producto.precio ? ` $${producto.precio}` : '';
   
-  // Verificar si la medida contiene "especial" (case insensitive)
-  const esEspecial = medida.toLowerCase().includes('especial');
-  
-  if (medida.includes('-')) {
-    medida = medida.replace(/\s*-\s*/g, '-');
+  // Si es c/h2o
+  if (producto.tipo === 'c/h20') {
+    const valorNeto = producto.camaronNeto || 0.65;
+    
+    // Si es una medida numérica (ej: 51/60)
+    if (/^\d+\/\d+/.test(medida)) {
+      medida = medida.match(/^\d+\/\d+/)[0];
+      return [
+        { text: `${medida} c/h2o`, style: 'tipoConAgua' },
+        { text: precioStr, style: 'precio' }
+      ];
+    } 
+    // Si es un nombre sin medida numérica (ej: piojo, golfo)
+    else {
+      return [
+        { text: `${medida} c/h2o`, style: 'tipoConAgua' },
+        { text: precioStr, style: 'precio' }
+      ];
+    }
   }
   
+  // Si es s/h2o
+  if (producto.tipo === 's/h20') {
+    // Si es una medida numérica (ej: 51/60)
+    if (/^\d+\/\d+/.test(medida)) {
+      medida = medida.match(/^\d+\/\d+/)[0];
+      return [
+        { text: `${medida} s/h2o`, style: 'default' },
+        { text: precioStr, style: 'precio' }
+      ];
+    } 
+    // Si es un nombre sin medida numérica (ej: piojo, golfo)
+    else {
+      return [
+        { text: `${medida} s/h2o`, style: 'default' },
+        { text: precioStr, style: 'precio' }
+      ];
+    }
+  }
+  
+  // Para productos que no son c/h2o ni s/h2o
   if (/^\d+\/\d+/.test(medida)) {
-    // Extraer solo la parte numérica (ej: "51/60")
     medida = medida.match(/^\d+\/\d+/)[0];
-    
-    // Si es especial, solo mostrar la medida con "especial"
-    if (esEspecial) {
-      return [
-        { text: `${medida} especial`, style: producto.tipo === 'c/h20' ? 'tipoConAgua' : 'default' },
-        { text: precioStr, style: 'precio' }
-      ];
-    }
-    
-    // Si no es especial, continuar con la lógica normal de h2o
-    let h2o = '';
-    if (tipoProducto.toLowerCase().includes('s/h2o') || tipoProducto.toLowerCase().includes('s/h20')) {
-      h2o = 's/h2o';
-    } else if (tipoProducto.toLowerCase().includes('c/h2o') || tipoProducto.toLowerCase().includes('c/h20')) {
-      h2o = 'c/h2o';
-    }
-    
-    if (producto.tipo === 'otro' && producto.tipoPersonalizado) {
-      return [
-        { text: `${medida} ${producto.tipoPersonalizado}`, style: producto.tipo === 'c/h20' ? 'tipoConAgua' : 'default' },
-        { text: precioStr, style: 'precio' }
-      ];
-    }
-    
     return [
-      { text: h2o ? `${medida} ${h2o}` : `${medida}`, style: producto.tipo === 'c/h20' ? 'tipoConAgua' : 'default' },
-      { text: precioStr, style: 'precio' }
-    ];
-  }
-  
-  // Para medidas que no siguen el patrón numérico
-  if (medida && !tipoProducto) {
-    if (esEspecial && !medida.toLowerCase().endsWith('especial')) {
-      medida = `${medida} especial`;
-    }
-    return [
-      { text: medida, style: producto.tipo === 'c/h20' ? 'tipoConAgua' : 'default' },
-      { text: precioStr, style: 'precio' }
-    ];
-  }
-  
-  if (medida && tipoProducto) {
-    if (esEspecial) {
-      // Si es especial, solo mostrar la medida con "especial"
-      return [
-        { text: `${medida} especial`, style: producto.tipo === 'c/h20' ? 'tipoConAgua' : 'default' },
-        { text: precioStr, style: 'precio' }
-      ];
-    }
-    return [
-      { text: `${medida} ${tipoProducto}`, style: producto.tipo === 'c/h20' ? 'tipoConAgua' : 'default' },
+      { text: tipoProducto ? `${medida} ${tipoProducto}` : medida, style: 'default' },
       { text: precioStr, style: 'precio' }
     ];
   }
   
   return [
-    { text: tipoProducto, style: producto.tipo === 'c/h20' ? 'tipoConAgua' : 'default' },
+    { text: medida || tipoProducto, style: 'default' },
     { text: precioStr, style: 'precio' }
   ];
 }
@@ -799,21 +788,26 @@ function totalTaras(producto) {
 function totalKilos(producto, nombreCliente) {
   // Si el producto es de tipo c/h20
   if (producto.tipo === 'c/h20') {
-    const kilosTotales = (producto.kilos || []).reduce((sum, kilo) => {
+    const sumaKilos = (producto.kilos || []).reduce((sum, kilo) => {
       const kiloNum = typeof kilo === 'string' ? parseFloat(kilo) : (kilo || 0);
       return sum + kiloNum;
     }, 0);
     
-    // Calcular el peso total de las taras
-    const pesoTaras = (producto.taras || []).reduce((sum, tara) => {
+    const sumaTarasNormales = (producto.taras || []).reduce((sum, tara) => {
       const taraNum = typeof tara === 'string' ? parseFloat(tara) : (tara || 0);
-      return sum + (taraNum * 3); // Multiplicar por 3 kg que pesa cada tara
+      return sum + taraNum;
     }, 0);
+
+    const sumaTarasExtra = (producto.tarasExtra || []).reduce((sum, tara) => {
+      const taraNum = typeof tara === 'string' ? parseFloat(tara) : (tara || 0);
+      return sum + taraNum;
+    }, 0);
+
+    const totalTaras = sumaTarasNormales + sumaTarasExtra;
+    // Solo aplicar el descuento de taras si restarTaras es true
+    const descuentoTaras = producto.restarTaras ? totalTaras * 3 : 0;
     
-    // Restar el peso de las taras si producto.restarTaras es true
-    const kilosNetos = producto.restarTaras ? kilosTotales - pesoTaras : kilosTotales;
-    
-    return Number(kilosNetos.toFixed(1));
+    return Number((sumaKilos - descuentoTaras).toFixed(1));
   } else {
     // Para otros productos, mantener la lógica existente...
     const sumaKilos = (producto.kilos || []).reduce((sum, kilo) => {
@@ -836,6 +830,7 @@ function totalKilos(producto, nombreCliente) {
     
     const resultado = sumaKilos - descuentoTaras;
     
+    // Agregar 3 kg para Otilio y 1 kg para Catarro en productos s/h2o
     if (producto.tipo.toLowerCase().includes('s/h2o') || producto.tipo.toLowerCase().includes('s/h20')) {
       if (nombreCliente.toLowerCase().includes('otilio')) {
         return Number((resultado + 3).toFixed(1));
@@ -942,21 +937,18 @@ function combinarProductosSimilares(productos) {
   const productosAgrupados = {};
 
   productos.forEach(producto => {
-    // Extraer solo el número de medida (ej: "51/60" de "51/60 ahumada")
     const medidaBase = extraerMedidaBase(producto.medida);
     const tipo = producto.tipo || '';
+    const valorNeto = producto.camaronNeto || 0.65;
     
-    // Si la medida base es diferente a la medida completa, significa que tiene texto adicional
-    const medidaCompleta = producto.medida || '';
-    
-    // Crear una clave única dependiendo de si queremos combinar o no
-    const clave = `${medidaBase}-${tipo}`;
+    // Para productos c/h2o, incluir el valor neto en la clave para mantenerlos separados
+    const clave = tipo === 'c/h20' 
+      ? `${medidaBase}-${tipo}-${valorNeto}`
+      : `${medidaBase}-${tipo}`;
     
     if (!productosAgrupados[clave]) {
-      // Crear una copia del producto como base
       productosAgrupados[clave] = {
         ...producto,
-        medida: medidaBase, // Usar la medida base al combinar
         kilos: [...producto.kilos],
         taras: [...producto.taras],
         tarasExtra: [...(producto.tarasExtra || [])],
@@ -964,7 +956,7 @@ function combinarProductosSimilares(productos) {
         reporteBolsas: [...(producto.reporteBolsas || [])]
       };
     } else {
-      // Combinar los arrays de kilos y taras
+      // Combinar arrays solo si son el mismo producto exacto
       productosAgrupados[clave].kilos.push(...producto.kilos);
       productosAgrupados[clave].taras.push(...producto.taras);
       if (producto.tarasExtra) {
@@ -977,7 +969,7 @@ function combinarProductosSimilares(productos) {
         productosAgrupados[clave].reporteBolsas.push(...producto.reporteBolsas);
       }
       
-      // Si hay precio, mantener el más alto
+      // Mantener el precio más alto si existe
       if (producto.precio) {
         productosAgrupados[clave].precio = Math.max(
           productosAgrupados[clave].precio || 0,
@@ -985,7 +977,7 @@ function combinarProductosSimilares(productos) {
         );
       }
       
-      // Si hay hilos, concatenarlos
+      // Concatenar hilos si existen
       if (producto.hilos) {
         productosAgrupados[clave].hilos = productosAgrupados[clave].hilos 
           ? `${productosAgrupados[clave].hilos}, ${producto.hilos}`
