@@ -93,27 +93,40 @@
             <!-- Encabezado de la medida y selección -->
             <h2 class="encabezado-medida">
               <div class="botones-encabezado">
-                <button 
-                  @click="abrirModalPrecio(producto)" 
-                  class="btn-precio"
-                  :class="{ 'tiene-precio': producto.precio }"
-                >
-                  $
-                </button>
-                <button 
-                  @click="abrirModalHilos(producto)" 
-                  class="btn-hilos"
-                  :class="{ 'tiene-hilos': producto.hilos }"
-                >
-                  H
-                </button>
-                <button 
-                  @click="abrirModalNota(producto)" 
-                  class="btn-nota"
-                  :class="{ 'tiene-nota': producto.nota }"
-                >
-                  N
-                </button>
+                <div class="botones-fila-superior">
+                  <button 
+                    @click="abrirModalPrecio(producto)" 
+                    class="btn-precio"
+                    :class="{ 'tiene-precio': producto.precio }"
+                  >
+                    $
+                  </button>
+                  <button 
+                    @click="abrirModalHilos(producto)" 
+                    class="btn-hilos"
+                    :class="{ 'tiene-hilos': producto.hilos }"
+                  >
+                    H
+                  </button>
+                </div>
+                <div class="botones-fila-inferior">
+                  <button 
+                    @click="abrirModalNota(producto)" 
+                    class="btn-nota"
+                    :class="{ 'tiene-nota': producto.nota }"
+                  >
+                    N
+                  </button>
+                  <div class="kg-radio">
+                    <input 
+                      type="checkbox"
+                      v-model="producto.noSumarKilos"
+                      class="kg-checkbox"
+                      :id="'kg-' + producto.id"
+                    >
+                    <label :for="'kg-' + producto.id">kg</label>
+                  </div>
+                </div>
               </div>
               <span 
                 class="medida-texto" 
@@ -580,14 +593,24 @@ export default {
         if (!acc[producto.clienteId]) {
           acc[producto.clienteId] = [];
         }
-        // Solo ordenar si no se está editando actualmente
+        
+        // Solo ordenar si el producto tiene medida y tipo definidos
+        acc[producto.clienteId].push(producto);
+        
+        // Ordenar solo si los productos tienen medida y tipo
         if (!producto.isEditing) {
-          acc[producto.clienteId].push(producto);
-          acc[producto.clienteId].sort((a, b) => this.compararMedidas(b.medida, a.medida));
-        } else {
-          // Si se está editando, mantener el orden actual
-          acc[producto.clienteId].push(producto);
+          acc[producto.clienteId].sort((a, b) => {
+            // Solo ordenar si ambos productos tienen medida y tipo
+            if (a.medida && a.tipo && b.medida && b.tipo) {
+              return this.compararMedidas(b.medida, a.medida);
+            }
+            // Si alguno no tiene medida o tipo, mantener el orden original
+            if (!a.medida || !a.tipo) return 1;
+            if (!b.medida || !b.tipo) return -1;
+            return 0;
+          });
         }
+        
         return acc;
       }, {});
     }
@@ -611,8 +634,9 @@ export default {
         multiplicadorBolsas: 1,
         showSuggestions: false,
         esVenta: false,
-        isEditing: true, // Iniciar en modo edición
-        isNew: true // Marcar como nuevo producto
+        isEditing: true,
+        isNew: true,
+        noSumarKilos: false // Agregar esta línea
       };
       
       this.embarque.productos.push(nuevoProducto);
@@ -916,7 +940,7 @@ export default {
         fecha: new Date(this.embarque.fecha),
         cargaCon: this.embarque.cargaCon,
         clientes: [],
-        clientesJuntarMedidas: this.clientesJuntarMedidas // Agregar esta línea
+        clientesJuntarMedidas: this.clientesJuntarMedidas
       };
 
       const clientesPredefinidosMap = new Map(this.clientesPredefinidos.map(c => [c.id, c]));
@@ -929,6 +953,7 @@ export default {
           productos: productos.map(producto => ({
             ...producto,
             restarTaras: producto.restarTaras || false,
+            noSumarKilos: producto.noSumarKilos || false // Agregar esta línea
           })),
           crudos: this.clienteCrudos[clienteId] || []
         };
@@ -944,6 +969,17 @@ export default {
       if (producto.tipo === 'c/h20' && !producto.camaronNeto) {
         producto.camaronNeto = 0.65;
       }
+      
+      // Marcar temporalmente como editando para evitar ordenamiento inmediato
+      producto.isEditing = true;
+      this.$nextTick(() => {
+        // Después de un breve retraso, permitir el ordenamiento
+        setTimeout(() => {
+          if (producto.medida && producto.tipo) {
+            producto.isEditing = false;
+          }
+        }, 100);
+      });
     },
     undo() {
       if (this.undoStack.length > 1) { // Asegura que haya al menos un estado previo
@@ -1853,14 +1889,17 @@ export default {
       generarResumenTarasPDF(embarqueData, this.clientesDisponibles);
     },
     onMedidaInput(producto) {
-      producto.isEditing = true; // Marcar como en edición
-      // ... resto del código existente de onMedidaInput ...
+      producto.isEditing = true;
+      // Resto del código existente...
     },
 
     onMedidaBlur(producto) {
       setTimeout(() => {
-        producto.isEditing = false;
-        producto.isNew = false; // Quitar la marca de nuevo producto
+        // Solo quitar la marca de edición si tiene tanto medida como tipo
+        if (producto.medida && producto.tipo) {
+          producto.isEditing = false;
+          producto.isNew = false;
+        }
       }, 200);
     },
 
@@ -2681,10 +2720,11 @@ class EmbarqueReportGenerator {
 
 .encabezado-medida {
   display: flex;
-  align-items: center;
+  align-items: flex-start; /* Cambiado a flex-start para mejor alineación con las dos filas */
   font-size: 1.5rem;
   font-weight: bold;
   margin-bottom: 15px;
+  gap: 8px;
 }
 
 /* Opcional: Ajustes para dispositivos móviles */
@@ -3307,6 +3347,11 @@ class EmbarqueReportGenerator {
   cursor: pointer;
   margin-right: 8px;
   transition: all 0.2s;
+  height: 24px;
+  min-width: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .btn-hilos.tiene-hilos {
@@ -3375,14 +3420,22 @@ class EmbarqueReportGenerator {
 
 /* Agregar estos estilos en la sección <style> */
 .botones-encabezado {
-  display: inline-flex;
+  display: flex;
+  flex-direction: column;
   gap: 4px;
   margin-right: 8px;
-  vertical-align: middle;
+}
+
+.botones-fila-superior,
+.botones-fila-inferior {
+  display: flex;
+  gap: 4px;
+  align-items: center;
 }
 
 .btn-precio,
-.btn-hilos {
+.btn-hilos,
+.btn-nota {
   padding: 2px 8px;
   font-size: 0.9rem;
   background-color: #f8f9fa;
@@ -3397,19 +3450,24 @@ class EmbarqueReportGenerator {
   justify-content: center;
 }
 
-.btn-precio.tiene-precio,
-.btn-hilos.tiene-hilos {
-  background-color: #28a745;
-  color: white;
-  border-color: #28a745;
+.kg-radio {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  background-color: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  height: 24px;
 }
 
 .encabezado-medida {
   display: flex;
-  align-items: center;
+  align-items: flex-start; /* Cambiado a flex-start para mejor alineación con las dos filas */
   font-size: 1.5rem;
   font-weight: bold;
   margin-bottom: 15px;
+  gap: 8px;
 }
 
 .checkbox-juntar-medidas {
@@ -3558,6 +3616,51 @@ class EmbarqueReportGenerator {
 .medida-texto:hover {
   color: #007bff;
   text-decoration: underline;
+}
+
+.kg-radio {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 1px;
+}
+
+.kg-checkbox {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.kg-label {
+  font-size: 0.9rem;
+  color: #555;
+  cursor: pointer;
+}
+
+/* Agregar estos estilos */
+.kg-radio {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  background-color: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  height: 24px;
+}
+
+.kg-checkbox {
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+  margin: 0;
+}
+
+.kg-radio label {
+  font-size: 0.9rem;
+  cursor: pointer;
+  user-select: none;
+  margin: 0;
 }
 </style>
 
