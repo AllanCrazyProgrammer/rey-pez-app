@@ -678,61 +678,32 @@ function obtenerEstiloCliente(nombreCliente) {
 }
 
 function formatearProducto(producto) {
-  let tipoProducto = obtenerTipoProducto(producto);
-  let medida = (producto.nombreAlternativoPDF || producto.medida || '').replace(/\s+/g, ' ').trim();
+  // Usar el nombre alternativo del PDF si existe, sino usar la medida original
+  let medida = (producto.nombreAlternativoPDF || producto.medida || '').trim();
   let precioStr = producto.precio ? ` $${producto.precio}` : '';
   
-  // Si es c/h2o
+  // Si es c/h20, agregar el indicador pero mantener el nombre original
   if (producto.tipo === 'c/h20') {
-    const valorNeto = producto.camaronNeto || 0.65;
-    
-    // Si es una medida numérica (ej: 51/60)
-    if (/^\d+\/\d+/.test(medida)) {
-      medida = medida.match(/^\d+\/\d+/)[0];
-      return [
-        { text: `${medida} c/h2o`, style: 'tipoConAgua' },
-        { text: precioStr, style: 'precio' }
-      ];
-    } 
-    // Si es un nombre sin medida numérica (ej: piojo, golfo)
-    else {
-      return [
-        { text: `${medida} c/h2o`, style: 'tipoConAgua' },
-        { text: precioStr, style: 'precio' }
-      ];
-    }
-  }
-  
-  // Si es s/h2o
-  if (producto.tipo === 's/h20') {
-    // Si es una medida numérica (ej: 51/60)
-    if (/^\d+\/\d+/.test(medida)) {
-      medida = medida.match(/^\d+\/\d+/)[0];
-      return [
-        { text: `${medida} s/h2o`, style: 'default' },
-        { text: precioStr, style: 'precio' }
-      ];
-    } 
-    // Si es un nombre sin medida numérica (ej: piojo, golfo)
-    else {
-      return [
-        { text: `${medida} s/h2o`, style: 'default' },
-        { text: precioStr, style: 'precio' }
-      ];
-    }
-  }
-  
-  // Para productos que no son c/h2o ni s/h2o
-  if (/^\d+\/\d+/.test(medida)) {
-    medida = medida.match(/^\d+\/\d+/)[0];
     return [
-      { text: tipoProducto ? `${medida} ${tipoProducto}` : medida, style: 'default' },
+      { text: `${medida} c/h2o`, style: 'tipoConAgua' },
       { text: precioStr, style: 'precio' }
     ];
   }
   
+  // Si es s/h20, agregar el indicador pero mantener el nombre original
+  if (producto.tipo === 's/h20') {
+    return [
+      { text: `${medida} s/h2o`, style: 'default' },
+      { text: precioStr, style: 'precio' }
+    ];
+  }
+  
+  // Para otros tipos, mostrar el nombre exacto con el tipo si existe
+  let tipoProducto = producto.tipo === 'otro' ? producto.tipoPersonalizado : producto.tipo;
+  let textoFinal = tipoProducto ? `${medida} ${tipoProducto}` : medida;
+  
   return [
-    { text: medida || tipoProducto, style: 'default' },
+    { text: textoFinal, style: 'default' },
     { text: precioStr, style: 'precio' }
   ];
 }
@@ -809,7 +780,6 @@ function totalKilos(producto, nombreCliente) {
     
     return Number((sumaKilos - descuentoTaras).toFixed(1));
   } else {
-    // Para otros productos, mantener la lógica existente...
     const sumaKilos = (producto.kilos || []).reduce((sum, kilo) => {
       const kiloNum = typeof kilo === 'string' ? parseFloat(kilo) : (kilo || 0);
       return sum + kiloNum;
@@ -830,8 +800,10 @@ function totalKilos(producto, nombreCliente) {
     
     const resultado = sumaKilos - descuentoTaras;
     
-    // Agregar 3 kg para Otilio y 1 kg para Catarro en productos s/h2o
-    if (producto.tipo.toLowerCase().includes('s/h2o') || producto.tipo.toLowerCase().includes('s/h20')) {
+    // Modificar esta parte para considerar noSumarKilos
+    if (!producto.noSumarKilos && 
+        (producto.tipo.toLowerCase().includes('s/h2o') || 
+         producto.tipo.toLowerCase().includes('s/h20'))) {
       if (nombreCliente.toLowerCase().includes('otilio')) {
         return Number((resultado + 3).toFixed(1));
       } else if (nombreCliente.toLowerCase().includes('catarro')) {

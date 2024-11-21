@@ -23,6 +23,37 @@ export const generarPDFRendimientos = async (datosRendimientos, embarqueData) =>
     
     const nombresMedidasPersonalizados = embarqueData?.nombresMedidasPersonalizados || {};
 
+    // Función auxiliar para formatear la fecha
+    const formatearFecha = (fecha) => {
+      if (!fecha) return 'Sin fecha';
+      
+      let fechaObj;
+      // Si la fecha es un objeto Timestamp de Firestore
+      if (fecha && typeof fecha.toDate === 'function') {
+        fechaObj = fecha.toDate();
+      } 
+      // Si la fecha es una cadena ISO
+      else if (typeof fecha === 'string') {
+        fechaObj = new Date(fecha);
+      }
+      // Si ya es un objeto Date
+      else if (fecha instanceof Date) {
+        fechaObj = fecha;
+      }
+      
+      // Verificar si la fecha es válida
+      if (isNaN(fechaObj.getTime())) {
+        return 'Fecha inválida';
+      }
+
+      // Formatear la fecha
+      return fechaObj.toLocaleDateString('es-MX', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+      });
+    };
+
     const docDefinition = {
       content: [
         {
@@ -42,7 +73,7 @@ export const generarPDFRendimientos = async (datosRendimientos, embarqueData) =>
             {
               stack: [
                 {
-                  text: `Fecha: ${new Date().toLocaleDateString()}`,
+                  text: `Fecha: ${formatearFecha(embarqueData.fecha)}`,
                   alignment: 'right',
                   margin: [0, 10, 0, 0]
                 },
@@ -167,7 +198,7 @@ function generarTablaRendimientos(datosRendimientos, nombresMedidasPersonalizado
       { text: 'Rendimiento', style: 'tableHeader' }
     ],
     ...Object.values(datosAgrupados).map(dato => {
-      const rendimiento = dato.kilosCrudos > 0 ? dato.totalEmbarcado / dato.kilosCrudos : 0;
+      const rendimiento = dato.totalEmbarcado > 0 ? dato.kilosCrudos / dato.totalEmbarcado : 0;
       const rendimientoStyle = rendimiento > 1 ? 'rendimientoAlto' : 'rendimientoBajo';
       
       // Preparamos el texto de la medida
@@ -182,7 +213,7 @@ function generarTablaRendimientos(datosRendimientos, nombresMedidasPersonalizado
         formatearKilos(dato.kilosCrudos),
         formatearKilos(dato.totalEmbarcado),
         {
-          text: formatearRendimiento(rendimiento),
+          text: `(${formatearRendimiento(rendimiento)})`,
           style: rendimientoStyle
         }
       ];

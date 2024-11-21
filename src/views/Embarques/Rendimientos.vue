@@ -20,9 +20,20 @@
     <div v-else class="rendimientos-grid">
       <div v-for="(medida, index) in medidasUnicas" :key="index" class="rendimiento-card">
         <div class="medida-info">
-          <span class="medida-label editable-label" @click="editarNombreMedida(medida)">
-            {{ obtenerNombreMedidaPersonalizado(medida) }}
-          </span>
+          <div class="medida-header">
+            <span class="medida-label editable-label" @click="editarNombreMedida(medida)">
+              {{ obtenerNombreMedidaPersonalizado(medida) }}
+            </span>
+            <div class="ocultar-control">
+              <input 
+                type="checkbox" 
+                :id="'ocultar-' + index"
+                v-model="medidaOculta[medida]"
+                @change="guardarEstadoOculto"
+              >
+              <label :for="'ocultar-' + index">Ocultar en PDF</label>
+            </div>
+          </div>
           
           <div class="input-group">
             <template v-if="esMedidaMix(medida)">
@@ -108,7 +119,8 @@ export default {
       guardadoAutomaticoActivo: false,
       nombresMedidasPersonalizados: {},
       mostrarModal: false,
-      nota: ''
+      nota: '',
+      medidaOculta: {}
     }
   },
 
@@ -137,6 +149,7 @@ export default {
           this.embarqueData = embarqueDoc.data();
           this.nombresMedidasPersonalizados = this.embarqueData.nombresMedidasPersonalizados || {};
           this.obtenerMedidasUnicas();
+          this.medidaOculta = this.embarqueData.medidaOculta || {};
           
           // Inicializar kilosCrudos con los datos de Firestore
           const kilosCrudosGuardados = this.embarqueData.kilosCrudos || {};
@@ -413,24 +426,26 @@ export default {
 
     generarPDF() {
       // Preparar los datos para el PDF
-      const datosRendimientos = this.medidasUnicas.map(medida => {
-        let kilosCrudos;
-        if (this.esMedidaMix(medida)) {
-          kilosCrudos = {
-            medida1: Number(this.kilosCrudos[medida]?.medida1 || 0),
-            medida2: Number(this.kilosCrudos[medida]?.medida2 || 0)
-          };
-        } else {
-          kilosCrudos = Number(this.kilosCrudos[medida] || 0);
-        }
+      const datosRendimientos = this.medidasUnicas
+        .filter(medida => !this.medidaOculta[medida]) // Filtrar medidas ocultas
+        .map(medida => {
+          let kilosCrudos;
+          if (this.esMedidaMix(medida)) {
+            kilosCrudos = {
+              medida1: Number(this.kilosCrudos[medida]?.medida1 || 0),
+              medida2: Number(this.kilosCrudos[medida]?.medida2 || 0)
+            };
+          } else {
+            kilosCrudos = Number(this.kilosCrudos[medida] || 0);
+          }
 
-        return {
-          medida: medida,
-          kilosCrudos: kilosCrudos,
-          totalEmbarcado: this.obtenerTotalEmbarcado(medida),
-          rendimiento: this.getRendimiento(medida)
-        };
-      });
+          return {
+            medida: medida,
+            kilosCrudos: kilosCrudos,
+            totalEmbarcado: this.obtenerTotalEmbarcado(medida),
+            rendimiento: this.getRendimiento(medida)
+          };
+        });
 
       // Incluir la nota en los datos del embarque
       const embarqueDataConNota = {
@@ -496,6 +511,22 @@ export default {
     cerrarModal() {
       this.mostrarModal = false;
       this.nota = '';
+    },
+
+    async guardarEstadoOculto() {
+      try {
+        const db = getFirestore();
+        const embarqueId = this.$route.params.id;
+        const embarqueRef = doc(db, 'embarques', embarqueId);
+        
+        await updateDoc(embarqueRef, {
+          medidaOculta: this.medidaOculta
+        });
+        
+        console.log('Estado de ocultación guardado correctamente');
+      } catch (error) {
+        console.error('Error al guardar estado de ocultación:', error);
+      }
     }
   },
 
@@ -755,6 +786,31 @@ input {
   padding: 8px 15px;
   border-radius: 4px;
   cursor: pointer;
+}
+
+.medida-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.ocultar-control {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.9em;
+  color: #666;
+}
+
+.ocultar-control input[type="checkbox"] {
+  width: auto;
+  margin: 0;
+}
+
+.ocultar-control label {
+  cursor: pointer;
+  user-select: none;
 }
 </style>
 
