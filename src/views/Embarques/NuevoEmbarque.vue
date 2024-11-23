@@ -1047,16 +1047,16 @@ export default {
         const pdfMake = await this.initPdfMake();
         const docDefinition = {
           pageOrientation: 'portrait',
-          pageMargins: [10, 10, 10, 10],
+          pageMargins: [2, 2, 2, 2],
           content: [],
           styles: {
             header: {
-              fontSize: 22,
+              fontSize: 19,
               bold: true,
               margin: [0, 0, 0, 5]
             },
             clienteHeader: {
-              fontSize: 20, // Aumentado de 15
+              fontSize: 18, // Aumentado de 15
               bold: true,
               color: 'white',
             },
@@ -1102,7 +1102,7 @@ export default {
           const alturaCliente = this.calcularAlturaCliente(productos, this.clienteCrudos[clienteId] || []);
           
           // Agregar un margen de tolerancia del 10% para el cálculo
-          if (alturaUsada + alturaCliente > alturaDisponible * 1.1) {
+          if (alturaUsada + alturaCliente > alturaDisponible * 1.2) {
             if (contenidoActual.length > 0) {
               docDefinition.content.push(...contenidoActual);
             }
