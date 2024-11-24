@@ -89,7 +89,13 @@
   </div>
 </div>
         <div class="productos-container">
-          <div v-for="(producto, index) in clienteProductos" :key="index" class="producto" :data-es-venta="producto.esVenta">
+          <div v-for="(producto, index) in clienteProductos" :key="index" class="producto" 
+            :data-es-venta="producto.esVenta"
+            :class="{
+              'reporte-completo': coincideTarasYBolsas(producto),
+              'reporte-incompleto': !coincideTarasYBolsas(producto) && tieneAlgunReporte(producto)
+            }"
+          >
             <!-- Encabezado de la medida y selección -->
             <h2 class="encabezado-medida">
               <div class="botones-encabezado">
@@ -1936,6 +1942,24 @@ export default {
       }
       this.cerrarModalNombreAlternativo();
     },
+
+    // Agregar estos nuevos métodos
+    coincideTarasYBolsas(producto) {
+      const totalTarasRegistradas = this.totalTaras(producto);
+      const totalTarasReportadas = this.totalTarasReportadas(producto);
+      
+      // Si no hay taras registradas ni reportadas, retornar false
+      if (totalTarasRegistradas === 0 && totalTarasReportadas === 0) {
+        return false;
+      }
+      
+      return totalTarasRegistradas === totalTarasReportadas;
+    },
+
+    tieneAlgunReporte(producto) {
+      return (producto.reporteTaras || []).some(tara => tara) || 
+             (producto.reporteBolsas || []).some(bolsa => bolsa);
+    },
   },
   created() {
     const embarqueId = this.$route.params.id;
@@ -2335,15 +2359,14 @@ class EmbarqueReportGenerator {
   gap: 20px;
 }
 
-.producto, .crudo {
-  flex: 0 0 calc(25% - 15px);
-  max-width: calc(25% - 15px);
-  background-color: #fefefe;
-  border: 2px solid #000000;
-  padding: 15px;
+.producto {
+  flex: 0 0 calc(50% - 10px); /* Dos productos por fila en escritorio */
+  background: #fff;
   border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-  transition: all 0.3s ease;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  padding: 1rem;
+  border: 3px solid #007bff; /* Contorno para la medida */
+  transition: border-color 0.3s ease;
 }
 
 .producto:hover, .crudo:hover {
@@ -2421,13 +2444,11 @@ class EmbarqueReportGenerator {
   flex-direction: row;
   gap: 20px;
   width: 100%;
-  margin-bottom: 20px;
 }
 
 .columna {
   flex: 1;
-  display: flex;
-  flex-direction: column;
+  min-width: 0;
 }
 
 .columna h5 {
@@ -2494,7 +2515,7 @@ class EmbarqueReportGenerator {
 
 .reporte-taras-bolsas {
   display: flex;
-  flex-direction: row;
+  flex-direction: column;
   gap: 20px;
   width: 100%;
   margin-bottom: 20px;
@@ -2656,8 +2677,8 @@ class EmbarqueReportGenerator {
   }
 
   .sumas-verticales {
-    flex-direction: column;
-    gap: 15px;
+    flex-direction: row;
+    gap: 10px;
   }
 
   .reporte-taras-bolsas {
@@ -3235,12 +3256,12 @@ class EmbarqueReportGenerator {
 
 /* Estilo especial para productos que son venta */
 .producto[data-es-venta="true"] {
-  border: 2px solid #28a745;
+  border: 3px solid #28a745;
 }
 
 /* Estilo para productos que son maquila */
 .producto[data-es-venta="false"] {
-  border: 2px solid #007bff;
+  border: 3px solid #007bff;
 }
 
 .btn-precio {
@@ -3661,6 +3682,90 @@ class EmbarqueReportGenerator {
   cursor: pointer;
   user-select: none;
   margin: 0;
+}
+
+@media (max-width: 768px) {
+  .producto-header {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .medida-autocomplete {
+    width: 100%;
+  }
+
+  .tipo-select {
+    width: 100%;
+    margin: 0.5rem 0;
+  }
+
+  /* Mantener taras y kilos en la misma fila */
+  .sumas-verticales {
+    flex-direction: row; /* Mantener dirección horizontal */
+    gap: 10px;
+    width: 100%;
+  }
+
+  .columna {
+    flex: 1; /* Distribuir el espacio equitativamente */
+    min-width: 0; /* Permitir que las columnas se reduzcan */
+  }
+
+  /* Ajustar inputs dentro de las columnas */
+  .tara-input, 
+  .kilo-input {
+    width: 100%;
+    min-width: 0;
+    font-size: 14px; /* Reducir tamaño de fuente para mejor ajuste */
+  }
+
+  /* Ajustar los grupos de input */
+  .input-group {
+    display: flex;
+    gap: 5px;
+  }
+
+  .input-group button {
+    padding: 8px;
+    min-width: 30px;
+  }
+
+  /* Ajustar botones de agregar */
+  .botones-tara {
+    display: flex;
+    gap: 5px;
+  }
+
+  .agregar-tara,
+  .agregar-tara-extra,
+  .agregar-kilo {
+    padding: 8px;
+    font-size: 12px;
+    height: auto;
+    white-space: nowrap;
+  }
+
+  /* Resto de los ajustes responsivos... */
+}
+
+.producto.reporte-completo {
+  border: 3px solid #28a745 !important; /* Verde para reporte completo */
+  box-shadow: 0 0 8px rgba(40, 167, 69, 0.2);
+}
+
+.producto.reporte-incompleto {
+  border: 3px solid #dc3545 !important; /* Rojo para reporte incompleto */
+  box-shadow: 0 0 8px rgba(220, 53, 69, 0.2);
+}
+
+/* Mantener el estilo especial para productos que son venta */
+.producto[data-es-venta="true"]:not(.reporte-completo):not(.reporte-incompleto) {
+  border: 3px solid #28a745;
+}
+
+/* Mantener el estilo para productos que son maquila */
+.producto[data-es-venta="false"]:not(.reporte-completo):not(.reporte-incompleto) {
+  border: 3px solid #007bff;
 }
 </style>
 
