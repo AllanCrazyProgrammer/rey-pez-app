@@ -580,53 +580,35 @@ function agruparProductos(productos) {
 }
 
 function generarTablaProductos(productos, estiloCliente, nombreCliente) {
-  const headers = [
-    { text: 'Cantidad', style: 'tableHeader' },
-    { text: 'Producto', style: 'tableHeader' },
-    { text: 'Taras', style: 'tableHeader' }
-  ];
-
-  // Agregar columna de notas si al menos un producto tiene nota
-  const algunProductoTieneNota = productos.some(p => p.nota);
-  if (algunProductoTieneNota) {
-    headers.push({ text: 'Nota', style: 'tableHeader' });
-  }
-
-  const algunProductoTieneHilos = productos.some(p => p.hilos);
-  if (algunProductoTieneHilos) {
-    headers.push({ text: 'Hilos', style: 'tableHeader' });
-  }
-
   const body = [
-    headers,
-    ...productos.map(producto => {
-      const row = [
-        `${totalKilos(producto, nombreCliente)} kg`,
-        formatearProducto(producto),
-        `${totalTaras(producto)} ${combinarTarasBolsas(producto.reporteTaras, producto.reporteBolsas)}`
-      ];
-
-      // Agregar columna de nota si existe la columna
-      if (algunProductoTieneNota) {
-        row.push(producto.nota || '');
-      }
-
-      if (algunProductoTieneHilos) {
-        row.push(producto.hilos || '');
-      }
-
-      return row;
-    })
+    [
+      { text: 'Cantidad', style: 'tableHeader' },
+      { text: 'Producto', style: 'tableHeader' },
+      { text: 'Taras', style: 'tableHeader' }
+    ]
   ];
 
-  const widths = algunProductoTieneHilos 
-    ? (algunProductoTieneNota ? ['15%', '25%', '25%', '20%', '15%'] : ['20%', '30%', '30%', '20%'])
-    : (algunProductoTieneNota ? ['25%', '30%', '25%', '20%'] : ['25%', '35%', '40%']);
+  productos.forEach(producto => {
+    const tarasNormales = (producto.taras || []).reduce((sum, tara) => sum + (tara || 0), 0);
+    const tarasExtra = (producto.tarasExtra || []).reduce((sum, tara) => sum + (tara || 0), 0);
+    
+    // Calcular la suma total de taras
+    const tarasTotales = tarasNormales + tarasExtra;
+    
+    // Generar texto de taras mostrando solo el total
+    let tarasTexto = `${tarasTotales} ${combinarTarasBolsas(producto.reporteTaras, producto.reporteBolsas)}`;
+
+    body.push([
+      `${totalKilos(producto, nombreCliente)} kg`,
+      formatearProducto(producto),
+      tarasTexto
+    ]);
+  });
 
   return {
     table: {
       headerRows: 1,
-      widths: widths,
+      widths: ['25%', '35%', '40%'],
       body: body
     },
     layout: {
@@ -759,69 +741,32 @@ function obtenerTipoProducto(producto) {
 }
 
 function totalTaras(producto) {
-  // Asegúrate de que las taras se sumen correctamente
-  return producto.taras.reduce((sum, tara) => sum + (tara || 0), 0);
+  const tarasNormales = (producto.taras || []).reduce((sum, tara) => sum + (tara || 0), 0);
+  const tarasExtra = (producto.tarasExtra || []).reduce((sum, tara) => sum + (tara || 0), 0);
+  return tarasNormales + tarasExtra;
 }
 
 function totalKilos(producto, nombreCliente) {
-  // Si el producto es de tipo c/h20
-  if (producto.tipo === 'c/h20') {
-    const sumaKilos = (producto.kilos || []).reduce((sum, kilo) => {
-      const kiloNum = typeof kilo === 'string' ? parseFloat(kilo) : (kilo || 0);
-      return sum + kiloNum;
-    }, 0);
-    
-    const sumaTarasNormales = (producto.taras || []).reduce((sum, tara) => {
-      const taraNum = typeof tara === 'string' ? parseFloat(tara) : (tara || 0);
-      return sum + taraNum;
-    }, 0);
-
-    const sumaTarasExtra = (producto.tarasExtra || []).reduce((sum, tara) => {
-      const taraNum = typeof tara === 'string' ? parseFloat(tara) : (tara || 0);
-      return sum + taraNum;
-    }, 0);
-
-    const totalTaras = sumaTarasNormales + sumaTarasExtra;
-    // Solo aplicar el descuento de taras si restarTaras es true
-    const descuentoTaras = producto.restarTaras ? totalTaras * 3 : 0;
-    
-    return Number((sumaKilos - descuentoTaras).toFixed(1));
-  } else {
-    const sumaKilos = (producto.kilos || []).reduce((sum, kilo) => {
-      const kiloNum = typeof kilo === 'string' ? parseFloat(kilo) : (kilo || 0);
-      return sum + kiloNum;
-    }, 0);
-
-    const sumaTarasNormales = (producto.taras || []).reduce((sum, tara) => {
-      const taraNum = typeof tara === 'string' ? parseFloat(tara) : (tara || 0);
-      return sum + taraNum;
-    }, 0);
-
-    const sumaTarasExtra = (producto.tarasExtra || []).reduce((sum, tara) => {
-      const taraNum = typeof tara === 'string' ? parseFloat(tara) : (tara || 0);
-      return sum + taraNum;
-    }, 0);
-
-    const totalTaras = sumaTarasNormales + sumaTarasExtra;
-    const descuentoTaras = producto.restarTaras ? totalTaras * 3 : 0;
-    
-    const resultado = sumaKilos - descuentoTaras;
-    
-    // Modificar esta parte para considerar noSumarKilos
-    if (!producto.noSumarKilos && 
-        (producto.tipo.toLowerCase().includes('s/h2o') || 
-         producto.tipo.toLowerCase().includes('s/h20'))) {
-      if (nombreCliente.toLowerCase().includes('otilio')) {
-        return Number((resultado + 3).toFixed(1));
-      } else if (nombreCliente.toLowerCase().includes('catarro')) {
-        return Number((resultado + 1).toFixed(1));
-      }
+  const sumaKilos = (producto.kilos || []).reduce((sum, kilo) => sum + (kilo || 0), 0);
+  // Solo considerar taras normales para el descuento
+  const sumaTarasNormales = (producto.taras || []).reduce((sum, tara) => sum + (tara || 0), 0);
+  const descuentoTaras = producto.restarTaras ? sumaTarasNormales * 3 : 0;
+  
+  let resultado = sumaKilos - descuentoTaras;
+  
+  // Modificar esta parte para considerar noSumarKilos
+  if (!producto.noSumarKilos && 
+      (producto.tipo.toLowerCase().includes('s/h2o') || 
+       producto.tipo.toLowerCase().includes('s/h20'))) {
+    if (nombreCliente.toLowerCase().includes('otilio')) {
+      resultado += 3;
+    } else if (nombreCliente.toLowerCase().includes('catarro')) {
+      resultado += 1;
     }
-    
-    return Number(resultado.toFixed(1));
   }
+  
+  return Number(resultado.toFixed(1));
 }
-
 
 function calcularKilosCrudos(item) {
   let kilosTotales = 0;
