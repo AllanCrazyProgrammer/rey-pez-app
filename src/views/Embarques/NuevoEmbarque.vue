@@ -241,6 +241,7 @@
                 <div v-for="(tara, taraIndex) in producto.taras" :key="taraIndex" class="input-group">
                   <input 
                     v-model.number="producto.taras[taraIndex]" 
+                    type="tel"
                     class="form-control tara-input" 
                     placeholder="Tara"
                     :size="String(producto.taras[taraIndex] || '').length || 1"
@@ -252,6 +253,7 @@
                 <div v-for="(taraExtra, taraExtraIndex) in producto.tarasExtra" :key="'extra-' + taraExtraIndex" class="input-group">
                   <input 
                     v-model.number="producto.tarasExtra[taraExtraIndex]" 
+                    type="tel"
                     class="form-control tara-input tara-extra-input" 
                     placeholder="Tara Extra"
                     :size="String(producto.tarasExtra[taraExtraIndex] || '').length || 1"
@@ -271,6 +273,7 @@
                 <div v-for="(kilo, kiloIndex) in producto.kilos" :key="kiloIndex" class="input-group">
                   <input 
                     v-model.number="producto.kilos[kiloIndex]" 
+                    type="tel"
                     class="form-control kilo-input" 
                     placeholder="Kilos"
                     :size="String(producto.kilos[kiloIndex] || '').length || 1"
@@ -288,7 +291,7 @@
                 <h5>Taras</h5>
                 <div v-for="(tara, index) in producto.reporteTaras" :key="index" class="input-group mb-2">
                   <input 
-                    type="text" 
+                    type="tel"
                     v-model="producto.reporteTaras[index]" 
                     class="form-control reporte-input" 
                     inputmode="numeric"
@@ -305,7 +308,7 @@
                 <h5>Bolsas</h5>
                 <div v-for="(bolsa, index) in producto.reporteBolsas" :key="index" class="input-group mb-2">
                   <input 
-                    type="text" 
+                    type="tel"
                     v-model="producto.reporteBolsas[index]" 
                     class="form-control reporte-input" 
                     inputmode="numeric"
