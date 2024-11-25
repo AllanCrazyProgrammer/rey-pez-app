@@ -241,24 +241,28 @@
                 <div v-for="(tara, taraIndex) in producto.taras" :key="taraIndex" class="input-group">
                   <input 
                     v-model.number="producto.taras[taraIndex]" 
-                    type="text"
-                    inputmode="decimal"
-                    pattern="\d*"
+                    type="number"
                     class="form-control tara-input" 
                     placeholder="Tara"
                     :size="String(producto.taras[taraIndex] || '').length || 1"
+                    enterkeyhint="done"
+                    inputmode="numeric"
+                    x-inputmode="numeric"
+                    autocomplete="off"
                   >
                   <button type="button" @click="eliminarTara(producto, taraIndex)" class="btn btn-danger btn-sm">-</button>
                 </div>
                 <div v-for="(taraExtra, taraExtraIndex) in producto.tarasExtra" :key="'extra-' + taraExtraIndex" class="input-group">
                   <input 
                     v-model.number="producto.tarasExtra[taraExtraIndex]" 
-                    type="text"
-                    inputmode="decimal"
-                    pattern="\d*"
+                    type="number"
                     class="form-control tara-input tara-extra-input" 
                     placeholder="Tara Extra"
                     :size="String(producto.tarasExtra[taraExtraIndex] || '').length || 1"
+                    enterkeyhint="done"
+                    inputmode="numeric"
+                    x-inputmode="numeric"
+                    autocomplete="off"
                   >
                   <button type="button" @click="eliminarTaraExtra(producto, taraExtraIndex)" class="btn btn-danger btn-sm">-</button>
                 </div>
@@ -273,12 +277,14 @@
                 <div v-for="(kilo, kiloIndex) in producto.kilos" :key="kiloIndex" class="input-group">
                   <input 
                     v-model.number="producto.kilos[kiloIndex]" 
-                    type="text"
-                    inputmode="decimal"
-                    pattern="\d*"
+                    type="number"
                     class="form-control kilo-input" 
                     placeholder="Kilos"
                     :size="String(producto.kilos[kiloIndex] || '').length || 1"
+                    enterkeyhint="done"
+                    inputmode="numeric"
+                    x-inputmode="numeric"
+                    autocomplete="off"
                   >
                   <button type="button" @click="eliminarKilo(producto, kiloIndex)" class="btn btn-danger btn-sm">-</button>
                 </div>
@@ -291,11 +297,13 @@
                 <h5>Taras</h5>
                 <div v-for="(tara, index) in producto.reporteTaras" :key="index" class="input-group mb-2">
                   <input 
-                    type="text"
-                    inputmode="decimal"
-                    pattern="\d*"
+                    type="number"
                     v-model="producto.reporteTaras[index]" 
                     class="form-control reporte-input"
+                    enterkeyhint="done"
+                    inputmode="numeric"
+                    x-inputmode="numeric"
+                    autocomplete="off"
                   >
                   <button type="button" @click="eliminarReporteTara(producto, index)" class="btn btn-danger btn-sm">-</button>
                 </div>
@@ -308,11 +316,13 @@
                 <h5>Bolsas</h5>
                 <div v-for="(bolsa, index) in producto.reporteBolsas" :key="index" class="input-group mb-2">
                   <input 
-                    type="text"
-                    inputmode="decimal"
-                    pattern="\d*"
+                    type="number"
                     v-model="producto.reporteBolsas[index]" 
                     class="form-control reporte-input"
+                    enterkeyhint="done"
+                    inputmode="numeric"
+                    x-inputmode="numeric"
+                    autocomplete="off"
                   >
                   <button type="button" @click="eliminarReporteBolsa(producto, index)" class="btn btn-danger btn-sm">-</button>
                 </div>
@@ -3963,6 +3973,38 @@ input::-webkit-inner-spin-button {
 /* Ocultar flechas para Firefox */
 input[type=number] {
   -moz-appearance: textfield;
+}
+
+/* Agregar estos estilos */
+input[type="number"] {
+  -webkit-appearance: none;
+  -moz-appearance: textfield;
+  appearance: none;
+  margin: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* Forzar el estilo iOS */
+input[type="number"] {
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-size: 16px;
+  background-color: #ffffff;
+  border: 1px solid #d1d1d6;
+  box-shadow: inset 0 1px 2px rgba(0,0,0,0.05);
+}
+
+input[type="number"]:focus {
+  border-color: #007aff;
+  box-shadow: 0 0 0 3px rgba(0,122,255,0.25);
+  outline: none;
 }
 </style>
 
