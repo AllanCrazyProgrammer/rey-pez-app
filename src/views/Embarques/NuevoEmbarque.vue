@@ -71,8 +71,14 @@
       
     <form @submit.prevent="guardarEmbarque" @keydown.enter.prevent>
       <div v-for="(clienteProductos, clienteId) in productosPorCliente" :key="clienteId" class="cliente-grupo">
-        <div class="cliente-header" :data-cliente="obtenerNombreCliente(clienteId)" @click="editarNombreCliente(clienteId)">
-  <h3>{{ obtenerNombreCliente(clienteId) }}</h3>
+        <div class="cliente-header" :data-cliente="obtenerNombreCliente(clienteId)">
+  <div class="cliente-info">
+    <h3>{{ obtenerNombreCliente(clienteId) }}</h3>
+    <div class="cliente-totales">
+      <span>Limpio: {{ calcularTotalLimpioCliente(clienteId) }}T / {{ formatearKilos(calcularKilosLimpioCliente(clienteId)) }}Kg</span>
+      <span>Crudo: {{ calcularTotalCrudoCliente(clienteId) }}T / {{ formatearKilos(calcularKilosCrudoCliente(clienteId)) }}Kg</span>
+    </div>
+  </div>
   <div class="cliente-header-controls">
     <div class="juntar-medidas-checkbox">
       <input 
@@ -144,23 +150,25 @@
               <span v-if="producto.precio" class="precio-tag">${{ producto.precio }}</span>
             </h2>
             <div class="producto-header">
-              <div class="medida-autocomplete">
-                <input 
-                  type="text" 
-                  v-model="producto.medida" 
-                  class="form-control medida-input" 
-                  placeholder="Medida"                
-                  :size="producto.medida.length || 1"
-                  @input="onMedidaInput(producto)"
+              <div class="medida-input-container">
+                <input
+                  type="text"
+                  v-model="producto.medida"
+                  class="medida-input"
+                  placeholder="Medida"
+                  @input="onMedidaInput(producto, $event)"
                   @blur="onMedidaBlur(producto)"
-                  @focus="showSuggestions(producto)"
                 >
-                <div class="suggestions-list" v-if="producto.showSuggestions && medidasSugeridas.length > 0">
-                  <div 
-                    v-for="medida in medidasSugeridas" 
+                <!-- Modificar la condición para mostrar sugerencias -->
+                <div 
+                  v-if="productoEditandoId === producto.id && sugerenciasMedidas.length > 0" 
+                  class="sugerencias-container"
+                >
+                  <div
+                    v-for="medida in sugerenciasMedidas"
                     :key="medida"
-                    class="suggestion-item"
-                    @mousedown.prevent="selectMedida(producto, medida)"
+                    class="sugerencia-item"
+                    @mousedown="seleccionarMedida(producto, medida)"
                   >
                     {{ medida }}
                   </div>
@@ -557,7 +565,9 @@ export default {
       clienteCrudos: {},
       unsubscribe: null,
       medidasSugeridas: [],
-      medidasUsadas: new Set(),
+      medidasUsadas: [], // Array para almacenar medidas únicas usadas
+      mostrarSugerencias: false,
+      sugerenciasMedidas: [],
       mostrarModalPrecio: false,
       precioTemp: '',
       itemSeleccionado: null,
@@ -569,6 +579,7 @@ export default {
       mostrarModalNombreAlternativo: false,
       nombreAlternativoTemp: '',
       productoSeleccionado: null,
+      productoEditandoId: null, // Agregar esta nueva propiedad
     };
   },
   clientesJuntarMedidas: {},
@@ -655,7 +666,7 @@ export default {
         this.guardarCambiosEnTiempoReal();
       }
       
-      this.actualizarMedidasUsadas();
+      this.actualizarMedidasUsadas(); // Actualizar lista de medidas después de agregar
 
       // Esperar a que el DOM se actualice y enfocar el nuevo input
       this.$nextTick(() => {
@@ -1894,19 +1905,32 @@ export default {
       };
       generarResumenTarasPDF(embarqueData, this.clientesDisponibles);
     },
-    onMedidaInput(producto) {
+    onMedidaInput(producto, event) {
+      const valor = event.target.value.trim().toLowerCase();
+      this.productoEditandoId = producto.id; // Guardar el ID del producto actual
+      
+      if (valor) {
+        this.sugerenciasMedidas = this.medidasUsadas.filter(m => 
+          m.toLowerCase().includes(valor) && 
+          m.toLowerCase() !== valor
+        );
+      } else {
+        this.sugerenciasMedidas = [];
+      }
       producto.isEditing = true;
-      // Resto del código existente...
     },
 
     onMedidaBlur(producto) {
+      // Dar un pequeño delay antes de ocultar las sugerencias para permitir clicks
       setTimeout(() => {
-        // Solo quitar la marca de edición si tiene tanto medida como tipo
-        if (producto.medida && producto.tipo) {
-          producto.isEditing = false;
-          producto.isNew = false;
-        }
+        this.productoEditandoId = null;
       }, 200);
+      
+      // Solo quitar la marca de edición si tiene tanto medida como tipo
+      if (producto.medida && producto.tipo) {
+        producto.isEditing = false;
+        producto.isNew = false;
+      }
     },
 
     abrirModalNombreAlternativo(producto) {
@@ -1959,6 +1983,74 @@ export default {
     tieneAlgunReporte(producto) {
       return (producto.reporteTaras || []).some(tara => tara) || 
              (producto.reporteBolsas || []).some(bolsa => bolsa);
+    },
+
+    calcularTotalLimpioCliente(clienteId) {
+      const productos = this.productosPorCliente[clienteId] || [];
+      return productos.reduce((total, producto) => total + this.totalTaras(producto), 0);
+    },
+
+    calcularKilosLimpioCliente(clienteId) {
+      const productos = this.productosPorCliente[clienteId] || [];
+      return productos.reduce((total, producto) => {
+        if (producto.tipo === 'c/h20') {
+          const reporteTaras = producto.reporteTaras || [];
+          const reporteBolsas = producto.reporteBolsas || [];
+          let sumaTotalKilos = 0;
+
+          for (let i = 0; i < reporteTaras.length; i++) {
+            const taras = parseInt(reporteTaras[i]) || 0;
+            const bolsa = parseInt(reporteBolsas[i]) || 0;
+            sumaTotalKilos += taras * bolsa;
+          }
+
+          return total + (sumaTotalKilos * (producto.camaronNeto || 0.65));
+        } else {
+          return total + this.totalKilos(producto);
+        }
+      }, 0);
+    },
+
+    calcularTotalCrudoCliente(clienteId) {
+      const crudos = this.clienteCrudos[clienteId] || [];
+      return crudos.reduce((total, crudo) => {
+        return total + crudo.items.reduce((itemTotal, item) => {
+          return itemTotal + this.calcularTarasCrudos(item);
+        }, 0);
+      }, 0);
+    },
+
+    calcularKilosCrudoCliente(clienteId) {
+      const crudos = this.clienteCrudos[clienteId] || [];
+      return crudos.reduce((total, crudo) => {
+        return total + crudo.items.reduce((itemTotal, item) => {
+          return itemTotal + this.calcularKilosCrudos(item);
+        }, 0);
+      }, 0);
+    },
+
+    formatearKilos(kilos) {
+      return kilos.toLocaleString('en-US', {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 1
+      });
+    },
+
+    // Agregar este nuevo método
+    actualizarMedidasUsadas() {
+      // Obtener todas las medidas únicas del embarque actual
+      const medidas = this.embarque.productos
+        .map(p => p.medida)
+        .filter(m => m && m.trim()) // Filtrar valores vacíos
+        .filter((m, i, arr) => arr.indexOf(m) === i); // Eliminar duplicados
+      this.medidasUsadas = medidas;
+    },
+
+    // Método para seleccionar una sugerencia
+    seleccionarMedida(producto, medida) {
+      producto.medida = medida;
+      this.productoEditandoId = null;
+      this.actualizarProducto(producto);
     },
   },
   created() {
@@ -2365,7 +2457,7 @@ class EmbarqueReportGenerator {
   border-radius: 8px;
   box-shadow: 0 2px 4px rgba(0,0,0,0.1);
   padding: 1rem;
-  border: 3px solid #007bff; /* Contorno para la medida */
+  border: 3px solid #dc3545; /* Contorno para la medida */
   transition: border-color 0.3s ease;
 }
 
@@ -2382,8 +2474,14 @@ class EmbarqueReportGenerator {
   margin-bottom: 15px;
 }
 
+.medida-input-container {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+}
+
 .medida-input {
-  flex: 2;
+  flex: 1;
   min-width: 120px;
   padding: 8px;
   font-size: 1.1rem;
@@ -2395,13 +2493,14 @@ class EmbarqueReportGenerator {
 
 .tipo-select {
   flex: 1;
-  min-width: 90px;
-  max-width: 110px;
+  min-width: 120px;
   font-weight: bold;
   border: 2px solid #28a745;
   border-radius: 5px;
   background-color: #e8f5e9;
   transition: border-color 0.3s, background-color 0.3s;
+  padding: 8px;
+  font-size: 1.1rem;
 }
 
 .tipo-select.tipo-azul {
@@ -2515,8 +2614,8 @@ class EmbarqueReportGenerator {
 
 .reporte-taras-bolsas {
   display: flex;
-  flex-direction: column;
-  gap: 20px;
+  flex-direction: row; /* Cambiar a row para que estén en la misma fila */
+  gap: 15px;
   width: 100%;
   margin-bottom: 20px;
 }
@@ -2682,12 +2781,39 @@ class EmbarqueReportGenerator {
   }
 
   .reporte-taras-bolsas {
-    flex-direction: column;
-    gap: 15px;
+    flex-direction: row; /* Mantener en fila incluso en móvil */
+    gap: 10px;
   }
 
   .reporte-item {
+    flex: 1;
+    min-width: 0; /* Permitir que los items se reduzcan */
+  }
+
+  .reporte-input {
     width: 100%;
+    min-width: 0;
+    font-size: 14px; /* Reducir tamaño de fuente para mejor ajuste */
+  }
+
+  .reporte-item h5 {
+    font-size: 1rem; /* Reducir tamaño del título */
+    margin-bottom: 8px;
+  }
+
+  .input-group {
+    margin-bottom: 5px; /* Reducir espacio entre inputs */
+  }
+
+  .input-group button {
+    padding: 4px 8px; /* Reducir padding de botones */
+    font-size: 12px;
+  }
+
+  .total-taras-reporte,
+  .total-bolsas-reporte {
+    font-size: 0.9rem; /* Reducir tamaño del texto del total */
+    padding: 3px;
   }
 
   .cliente-header {
@@ -3767,5 +3893,60 @@ class EmbarqueReportGenerator {
 .producto[data-es-venta="false"]:not(.reporte-completo):not(.reporte-incompleto) {
   border: 3px solid #007bff;
 }
+
+.cliente-info {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.cliente-totales {
+  display: flex;
+  gap: 15px;
+  color: white;
+  font-size: 0.9rem;
+}
+
+.cliente-totales span {
+  background-color: rgba(0, 0, 0, 0.2);
+  padding: 3px 8px;
+  border-radius: 4px;
+}
+
+@media (max-width: 768px) {
+  .cliente-info {
+    width: 100%;
+  }
+  
+  .cliente-totales {
+    flex-direction: column;
+    gap: 5px;
+  }
+}
+
+.medida-input-container {
+  position: relative;
+  flex: 2;
+}
+
+.sugerencias-container {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  width: calc(50% - 4px); /* Ajustar al ancho del input de medida */
+  z-index: 1000;
+}
+
+.sugerencia-item {
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.sugerencia-item:hover {
+  background-color: #f5f5f5;
+}
+
+/* ... existing styles ... */
 </style>
 
