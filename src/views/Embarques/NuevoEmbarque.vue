@@ -241,24 +241,24 @@
                 <div v-for="(tara, taraIndex) in producto.taras" :key="taraIndex" class="input-group">
                   <input 
                     v-model.number="producto.taras[taraIndex]" 
-                    type="tel"
+                    type="number"
                     class="form-control tara-input" 
                     placeholder="Tara"
                     :size="String(producto.taras[taraIndex] || '').length || 1"
-                    inputmode="numeric"
-                    pattern="[0-9]*"
+                    step="1"
+                    min="0"
                   >
                   <button type="button" @click="eliminarTara(producto, taraIndex)" class="btn btn-danger btn-sm">-</button>
                 </div>
                 <div v-for="(taraExtra, taraExtraIndex) in producto.tarasExtra" :key="'extra-' + taraExtraIndex" class="input-group">
                   <input 
                     v-model.number="producto.tarasExtra[taraExtraIndex]" 
-                    type="tel"
+                    type="number"
                     class="form-control tara-input tara-extra-input" 
                     placeholder="Tara Extra"
                     :size="String(producto.tarasExtra[taraExtraIndex] || '').length || 1"
-                    inputmode="numeric"
-                    pattern="[0-9]*"
+                    step="1"
+                    min="0"
                   >
                   <button type="button" @click="eliminarTaraExtra(producto, taraExtraIndex)" class="btn btn-danger btn-sm">-</button>
                 </div>
@@ -273,12 +273,12 @@
                 <div v-for="(kilo, kiloIndex) in producto.kilos" :key="kiloIndex" class="input-group">
                   <input 
                     v-model.number="producto.kilos[kiloIndex]" 
-                    type="tel"
+                    type="number"
                     class="form-control kilo-input" 
                     placeholder="Kilos"
                     :size="String(producto.kilos[kiloIndex] || '').length || 1"
-                    inputmode="numeric"
-                    pattern="[0-9]*"
+                    step="1"
+                    min="0"
                   >
                   <button type="button" @click="eliminarKilo(producto, kiloIndex)" class="btn btn-danger btn-sm">-</button>
                 </div>
@@ -291,11 +291,11 @@
                 <h5>Taras</h5>
                 <div v-for="(tara, index) in producto.reporteTaras" :key="index" class="input-group mb-2">
                   <input 
-                    type="tel"
+                    type="number"
                     v-model="producto.reporteTaras[index]" 
-                    class="form-control reporte-input" 
-                    inputmode="numeric"
-                    pattern="[0-9]*"
+                    class="form-control reporte-input"
+                    step="1"
+                    min="0"
                   >
                   <button type="button" @click="eliminarReporteTara(producto, index)" class="btn btn-danger btn-sm">-</button>
                 </div>
@@ -308,11 +308,11 @@
                 <h5>Bolsas</h5>
                 <div v-for="(bolsa, index) in producto.reporteBolsas" :key="index" class="input-group mb-2">
                   <input 
-                    type="tel"
+                    type="number"
                     v-model="producto.reporteBolsas[index]" 
-                    class="form-control reporte-input" 
-                    inputmode="numeric"
-                    pattern="[0-9]*"
+                    class="form-control reporte-input"
+                    step="1"
+                    min="0"
                   >
                   <button type="button" @click="eliminarReporteBolsa(producto, index)" class="btn btn-danger btn-sm">-</button>
                 </div>
@@ -3950,5 +3950,19 @@ class EmbarqueReportGenerator {
 }
 
 /* ... existing styles ... */
+
+/* Agregar estos estilos al final de la sección de estilos */
+
+/* Ocultar flechas para Chrome, Safari, Edge, Opera */
+input::-webkit-outer-spin-button,
+input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* Ocultar flechas para Firefox */
+input[type=number] {
+  -moz-appearance: textfield;
+}
 </style>
 
