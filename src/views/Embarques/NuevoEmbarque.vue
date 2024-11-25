@@ -4006,5 +4006,13 @@ input[type="number"]:focus {
   box-shadow: 0 0 0 3px rgba(0,122,255,0.25);
   outline: none;
 }
+@media (min-width: 768px) and (max-width: 1024px) {
+  input[type="number"] {
+    font-size: 1.2rem;
+    padding: 10px;
+    text-align: center;
+  }
+}
+
 </style>
 
