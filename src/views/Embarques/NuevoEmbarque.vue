@@ -241,29 +241,22 @@
                 <div v-for="(tara, taraIndex) in producto.taras" :key="taraIndex" class="input-group">
                   <input 
                     v-model.number="producto.taras[taraIndex]" 
-                    type="number"
-                    class="form-control tara-input" 
+                    type="text" 
+                    inputmode="tel"
+                    class="form-control tara-input ios-numeric" 
                     placeholder="Tara"
                     :size="String(producto.taras[taraIndex] || '').length || 1"
-                    enterkeyhint="done"
-                    inputmode="numeric"
-                    x-inputmode="numeric"
-                    autocomplete="off"
-                    pattern="[0-9]*"
                   >
                   <button type="button" @click="eliminarTara(producto, taraIndex)" class="btn btn-danger btn-sm">-</button>
                 </div>
                 <div v-for="(taraExtra, taraExtraIndex) in producto.tarasExtra" :key="'extra-' + taraExtraIndex" class="input-group">
                   <input 
                     v-model.number="producto.tarasExtra[taraExtraIndex]" 
-                    type="number"
-                    class="form-control tara-input tara-extra-input" 
+                    type="text"
+                    inputmode="tel"
+                    class="form-control tara-input tara-extra-input ios-numeric" 
                     placeholder="Tara Extra"
                     :size="String(producto.tarasExtra[taraExtraIndex] || '').length || 1"
-                    enterkeyhint="done"
-                    inputmode="numeric"
-                    x-inputmode="numeric"
-                    autocomplete="off"
                   >
                   <button type="button" @click="eliminarTaraExtra(producto, taraExtraIndex)" class="btn btn-danger btn-sm">-</button>
                 </div>
@@ -278,14 +271,11 @@
                 <div v-for="(kilo, kiloIndex) in producto.kilos" :key="kiloIndex" class="input-group">
                   <input 
                     v-model.number="producto.kilos[kiloIndex]" 
-                    type="number"
-                    class="form-control kilo-input" 
+                    type="text"
+                    inputmode="tel"
+                    class="form-control kilo-input ios-numeric" 
                     placeholder="Kilos"
                     :size="String(producto.kilos[kiloIndex] || '').length || 1"
-                    enterkeyhint="done"
-                    inputmode="numeric"
-                    x-inputmode="numeric"
-                    autocomplete="off"
                   >
                   <button type="button" @click="eliminarKilo(producto, kiloIndex)" class="btn btn-danger btn-sm">-</button>
                 </div>
@@ -298,13 +288,10 @@
                 <h5>Taras</h5>
                 <div v-for="(tara, index) in producto.reporteTaras" :key="index" class="input-group mb-2">
                   <input 
-                    type="number"
+                    type="text"
+                    inputmode="tel"
                     v-model="producto.reporteTaras[index]" 
-                    class="form-control reporte-input"
-                    enterkeyhint="done"
-                    inputmode="numeric"
-                    x-inputmode="numeric"
-                    autocomplete="off"
+                    class="form-control reporte-input ios-numeric"
                   >
                   <button type="button" @click="eliminarReporteTara(producto, index)" class="btn btn-danger btn-sm">-</button>
                 </div>
@@ -317,13 +304,10 @@
                 <h5>Bolsas</h5>
                 <div v-for="(bolsa, index) in producto.reporteBolsas" :key="index" class="input-group mb-2">
                   <input 
-                    type="number"
+                    type="text"
+                    inputmode="tel"
                     v-model="producto.reporteBolsas[index]" 
-                    class="form-control reporte-input"
-                    enterkeyhint="done"
-                    inputmode="numeric"
-                    x-inputmode="numeric"
-                    autocomplete="off"
+                    class="form-control reporte-input ios-numeric"
                   >
                   <button type="button" @click="eliminarReporteBolsa(producto, index)" class="btn btn-danger btn-sm">-</button>
                 </div>
@@ -4008,6 +3992,46 @@ input[type="number"]:focus {
   outline: none;
 }
 
+/* Estilos específicos para inputs numéricos en iOS */
+.ios-numeric {
+  -webkit-text-security: none !important;
+  -webkit-appearance: none !important;
+  appearance: none !important;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 16px !important;
+  line-height: 1.2;
+  padding: 8px !important;
+  border: 1px solid #d1d1d6;
+  border-radius: 10px;
+  background-color: #ffffff;
+  text-align: right;
+  width: 100%;
+  margin: 0;
+  box-sizing: border-box;
+}
 
+.ios-numeric:focus {
+  outline: none;
+  border-color: #007aff;
+  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.25);
+}
+
+/* Asegurarse de que el texto se alinee correctamente */
+.ios-numeric::placeholder {
+  text-align: right;
+  color: #999;
+}
+
+/* Prevenir zoom en iOS */
+@media screen and (-webkit-min-device-pixel-ratio: 0) {
+  .ios-numeric {
+    font-size: 16px !important;
+  }
+}
+
+/* Asegurarse de que el input tenga suficiente espacio táctil */
+.input-group {
+  min-height: 44px;
+}
 </style>
 
