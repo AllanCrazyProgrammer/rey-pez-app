@@ -242,10 +242,12 @@
                   <input 
                     v-model.number="producto.taras[taraIndex]" 
                     type="text" 
-                    inputmode="tel"
+                    pattern="[0-9]*"
+                    inputmode="numeric"
                     class="form-control tara-input ios-numeric" 
                     placeholder="Tara"
                     :size="String(producto.taras[taraIndex] || '').length || 1"
+                    @focus="$event.target.select()"
                   >
                   <button type="button" @click="eliminarTara(producto, taraIndex)" class="btn btn-danger btn-sm">-</button>
                 </div>
@@ -253,10 +255,12 @@
                   <input 
                     v-model.number="producto.tarasExtra[taraExtraIndex]" 
                     type="text"
-                    inputmode="tel"
+                    pattern="[0-9]*"
+                    inputmode="numeric"
                     class="form-control tara-input tara-extra-input ios-numeric" 
                     placeholder="Tara Extra"
                     :size="String(producto.tarasExtra[taraExtraIndex] || '').length || 1"
+                    @focus="$event.target.select()"
                   >
                   <button type="button" @click="eliminarTaraExtra(producto, taraExtraIndex)" class="btn btn-danger btn-sm">-</button>
                 </div>
@@ -272,10 +276,12 @@
                   <input 
                     v-model.number="producto.kilos[kiloIndex]" 
                     type="text"
-                    inputmode="tel"
+                    pattern="[0-9]*"
+                    inputmode="numeric"
                     class="form-control kilo-input ios-numeric" 
                     placeholder="Kilos"
                     :size="String(producto.kilos[kiloIndex] || '').length || 1"
+                    @focus="$event.target.select()"
                   >
                   <button type="button" @click="eliminarKilo(producto, kiloIndex)" class="btn btn-danger btn-sm">-</button>
                 </div>
@@ -289,9 +295,11 @@
                 <div v-for="(tara, index) in producto.reporteTaras" :key="index" class="input-group mb-2">
                   <input 
                     type="text"
-                    inputmode="tel"
+                    pattern="[0-9]*"
+                    inputmode="numeric"
                     v-model="producto.reporteTaras[index]" 
                     class="form-control reporte-input ios-numeric"
+                    @focus="$event.target.select()"
                   >
                   <button type="button" @click="eliminarReporteTara(producto, index)" class="btn btn-danger btn-sm">-</button>
                 </div>
@@ -305,9 +313,11 @@
                 <div v-for="(bolsa, index) in producto.reporteBolsas" :key="index" class="input-group mb-2">
                   <input 
                     type="text"
-                    inputmode="tel"
+                    pattern="[0-9]*"
+                    inputmode="numeric"
                     v-model="producto.reporteBolsas[index]" 
                     class="form-control reporte-input ios-numeric"
+                    @focus="$event.target.select()"
                   >
                   <button type="button" @click="eliminarReporteBolsa(producto, index)" class="btn btn-danger btn-sm">-</button>
                 </div>
@@ -4032,6 +4042,43 @@ input[type="number"]:focus {
 /* Asegurarse de que el input tenga suficiente espacio táctil */
 .input-group {
   min-height: 44px;
+}
+
+/* Estilos específicos para Chrome en iOS */
+.ios-numeric {
+  -webkit-appearance: none;
+  appearance: none;
+  font-size: 16px;
+  padding: 8px;
+  border: 1px solid #d1d1d6;
+  border-radius: 10px;
+  background-color: #ffffff;
+  text-align: right;
+  width: 100%;
+  margin: 0;
+  box-sizing: border-box;
+}
+
+/* Prevenir el zoom en Chrome iOS */
+@supports (-webkit-touch-callout: none) {
+  .ios-numeric {
+    font-size: 16px !important;
+  }
+}
+
+/* Mejorar la experiencia táctil */
+.input-group {
+  min-height: 44px;
+  touch-action: manipulation;
+}
+
+/* Estilo específico para Chrome en iOS */
+@media screen and (-webkit-min-device-pixel-ratio: 0) {
+  .ios-numeric {
+    -webkit-user-select: text;
+    user-select: text;
+    -webkit-tap-highlight-color: transparent;
+  }
 }
 </style>
 
