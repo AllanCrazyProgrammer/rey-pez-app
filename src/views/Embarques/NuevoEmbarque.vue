@@ -245,7 +245,7 @@
                     class="form-control tara-input" 
                     placeholder="Tara"
                     :size="String(producto.taras[taraIndex] || '').length || 1"
-                    inputmode="decimal"
+                    inputmode="numeric"
                     pattern="[0-9]*"
                   >
                   <button type="button" @click="eliminarTara(producto, taraIndex)" class="btn btn-danger btn-sm">-</button>
@@ -256,7 +256,7 @@
                     class="form-control tara-input tara-extra-input" 
                     placeholder="Tara Extra"
                     :size="String(producto.tarasExtra[taraExtraIndex] || '').length || 1"
-                    inputmode="decimal"
+                    inputmode="numeric"
                     pattern="[0-9]*"
                   >
                   <button type="button" @click="eliminarTaraExtra(producto, taraExtraIndex)" class="btn btn-danger btn-sm">-</button>
@@ -275,7 +275,7 @@
                     class="form-control kilo-input" 
                     placeholder="Kilos"
                     :size="String(producto.kilos[kiloIndex] || '').length || 1"
-                    inputmode="decimal"
+                    inputmode="numeric"
                     pattern="[0-9]*"
                   >
                   <button type="button" @click="eliminarKilo(producto, kiloIndex)" class="btn btn-danger btn-sm">-</button>
@@ -292,7 +292,7 @@
                     type="text" 
                     v-model="producto.reporteTaras[index]" 
                     class="form-control reporte-input" 
-                    inputmode="decimal"
+                    inputmode="numeric"
                     pattern="[0-9]*"
                   >
                   <button type="button" @click="eliminarReporteTara(producto, index)" class="btn btn-danger btn-sm">-</button>
@@ -309,7 +309,7 @@
                     type="text" 
                     v-model="producto.reporteBolsas[index]" 
                     class="form-control reporte-input" 
-                    inputmode="decimal"
+                    inputmode="numeric"
                     pattern="[0-9]*"
                   >
                   <button type="button" @click="eliminarReporteBolsa(producto, index)" class="btn btn-danger btn-sm">-</button>
