@@ -240,7 +240,6 @@
                 </div>
                 <div v-for="(tara, taraIndex) in producto.taras" :key="taraIndex" class="input-group">
                   <input 
-            
                     v-model.number="producto.taras[taraIndex]" 
                     class="form-control tara-input" 
                     placeholder="Tara"
