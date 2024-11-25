@@ -249,6 +249,7 @@
                     inputmode="numeric"
                     x-inputmode="numeric"
                     autocomplete="off"
+                    pattern="[0-9]*"
                   >
                   <button type="button" @click="eliminarTara(producto, taraIndex)" class="btn btn-danger btn-sm">-</button>
                 </div>
