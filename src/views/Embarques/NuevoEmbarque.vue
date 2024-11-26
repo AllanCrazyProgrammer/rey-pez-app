@@ -244,9 +244,7 @@
                   <input 
                     v-model.number="producto.taras[taraIndex]" 
                     type="tel"
-                    inputmode="decimal"
-                    pattern="[0-9]*"
-                    class="form-control tara-input ios-numeric" 
+                    class="form-control tara-input" 
                     placeholder="Tara"
                     :size="String(producto.taras[taraIndex] || '').length || 1"
                     @focus="$event.target.select()"
@@ -257,9 +255,7 @@
                   <input 
                     v-model.number="producto.tarasExtra[taraExtraIndex]" 
                     type="tel"
-                    inputmode="decimal"
-                    pattern="[0-9]*"
-                    class="form-control tara-input tara-extra-input ios-numeric" 
+                    class="form-control tara-input" 
                     placeholder="Tara Extra"
                     :size="String(producto.tarasExtra[taraExtraIndex] || '').length || 1"
                     @focus="$event.target.select()"
@@ -278,9 +274,7 @@
                   <input 
                     v-model.number="producto.kilos[kiloIndex]" 
                     type="tel"
-                    inputmode="decimal"
-                    pattern="[0-9]*"
-                    class="form-control kilo-input ios-numeric" 
+                    class="form-control kilo-input" 
                     placeholder="Kilos"
                     :size="String(producto.kilos[kiloIndex] || '').length || 1"
                     @focus="$event.target.select()"
@@ -296,11 +290,9 @@
                 <h5>Taras</h5>
                 <div v-for="(tara, index) in producto.reporteTaras" :key="index" class="input-group mb-2">
                   <input 
-                    type="number"
-                    inputmode="numeric"
-                    pattern="[0-9]*"
+                    type="tel"
                     v-model="producto.reporteTaras[index]" 
-                    class="form-control reporte-input ios-numeric"
+                    class="form-control reporte-input"
                     @focus="$event.target.select()"
                   >
                   <button type="button" @click="eliminarReporteTara(producto, index)" class="btn btn-danger btn-sm">-</button>
@@ -314,11 +306,9 @@
                 <h5>Bolsas</h5>
                 <div v-for="(bolsa, index) in producto.reporteBolsas" :key="index" class="input-group mb-2">
                   <input 
-                    type="number"
-                    inputmode="numeric"
-                    pattern="[0-9]*"
+                    type="tel"
                     v-model="producto.reporteBolsas[index]" 
-                    class="form-control reporte-input ios-numeric"
+                    class="form-control reporte-input"
                     @focus="$event.target.select()"
                   >
                   <button type="button" @click="eliminarReporteBolsa(producto, index)" class="btn btn-danger btn-sm">-</button>
@@ -452,16 +442,12 @@
         <div class="input-precio">
           <span class="simbolo-precio">$</span>
           <input 
-            type="number" 
+            type="tel" 
             v-model="precioTemp"
-            step="0.01"
-            min="0"
             placeholder="0.00"
-            @keyup.enter.stop="guardarPrecio"
-            @keydown.stop
+            @keyup.enter="guardarPrecio"
             ref="precioInput"
-            inputmode="numeric"
-            pattern="[0-9]*"
+            class="form-control precio-input"
           >
         </div>
         <div class="modal-botones">
@@ -4111,5 +4097,50 @@ input[type="number"]:focus {
     user-select: text;
     -webkit-tap-highlight-color: transparent;
   }
+}
+
+/* Modificar/Simplificar los estilos CSS */
+.form-control {
+  border: 1px solid #d1d1d6;
+  border-radius: 10px;
+  padding: 8px;
+  font-size: 16px;
+  width: 100%;
+  text-align: right;
+  background-color: #ffffff;
+}
+
+/* Eliminar los estilos que pueden causar conflictos */
+input[type="tel"] {
+  /* Remover -webkit-appearance y otros estilos que pueden interferir */
+  text-align: right;
+  font-size: 16px;
+}
+
+/* Estilos específicos para inputs numéricos */
+.tara-input,
+.kilo-input,
+.reporte-input,
+.precio-input {
+  text-align: right;
+  font-size: 16px;
+  padding: 8px;
+  border: 1px solid #d1d1d6;
+  border-radius: 10px;
+  background-color: #ffffff;
+}
+
+/* Estilo para el estado focus */
+.form-control:focus {
+  outline: none;
+  border-color: #007aff;
+  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.25);
+}
+
+/* Remover la clase ios-numeric si existe */
+.ios-numeric {
+  /* Mantener solo los estilos esenciales */
+  text-align: right;
+  font-size: 16px;
 }
 </style>
