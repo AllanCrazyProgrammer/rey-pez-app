@@ -906,9 +906,10 @@ export default {
     guardarCambiosEnTiempoReal: debounce(function() {
       if (!this.guardadoAutomaticoActivo || !this.embarqueId || this.mostrarModalPrecio) return;
 
+      // Crear una copia profunda de los datos antes de guardar
       const embarqueData = {
-        ...this.prepararDatosEmbarque(),
-        clientesJuntarMedidas: this.clientesJuntarMedidas
+        ...JSON.parse(JSON.stringify(this.prepararDatosEmbarque())),
+        clientesJuntarMedidas: { ...this.clientesJuntarMedidas }
       };
 
       const db = getFirestore();
@@ -921,7 +922,7 @@ export default {
         .catch((error) => {
           console.error("Error al guardar automáticamente:", error);
         });
-    }, 300), // Reducimos aún más el tiempo de debounce
+    }, 2000), // Aumentar el tiempo del debounce a 2000ms
 
     async guardarEmbarque() {
       if (!this.embarque.fecha) {
@@ -1815,7 +1816,7 @@ export default {
         .catch((error) => {
           console.error("Error al guardar automáticamente:", error);
         });
-    }, 300),
+    }, 1000),
     abrirModalNota(item) {
       event?.preventDefault();
       event?.stopPropagation();
@@ -2272,7 +2273,14 @@ class EmbarqueReportGenerator {
 
 <style scoped>
 
-
+.totales-reporte {
+    background-color: #e2e3ff; /* Azul claro */
+    color: #2d31a6; /* Azul oscuro */
+    margin-top: 10px;
+    font-weight: bold;
+    padding: 5px;
+    border-radius: 5px;
+}
 .cliente-header-controls {
   display: flex;
   align-items: center;
@@ -2817,7 +2825,12 @@ class EmbarqueReportGenerator {
   .total-bolsas-reporte {
     font-size: 0.9rem; /* Reducir tamaño del texto del total */
     padding: 3px;
+    margin-top: 10px;
+    font-weight: bold;
+    padding: 5px;
+    border-radius: 5px;
   }
+
 
   .cliente-header {
     flex-direction: column;
@@ -4142,5 +4155,108 @@ input[type="tel"] {
   /* Mantener solo los estilos esenciales */
   text-align: right;
   font-size: 16px;
+}
+
+/* Agregar estos nuevos estilos para las sugerencias */
+.sugerencias-medidas {
+  position: absolute;
+  z-index: 1000;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  width: calc(100% - 20px);
+  max-height: 200px;
+  overflow-y: auto;
+  margin-top: 5px;
+  border: 1px solid #ddd;
+}
+
+.sugerencia-item {
+  padding: 12px 15px;
+  color: #2c3e50;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border-bottom: 1px solid #eee;
+  font-weight: 500;
+  background: white;
+}
+
+.sugerencia-item:last-child {
+  border-bottom: none;
+}
+
+.sugerencia-item:hover {
+  background: #f8f9fa;
+  transform: translateX(5px);
+  color: #007bff;
+}
+
+/* Asegurar que el contenedor de la medida tenga posición relativa */
+.medida-input-container {
+  position: relative;
+  display: flex;
+  gap: 8px;
+  width: 100%;
+}
+
+/* Modificar los estilos de los botones finales */
+.botones-finales {
+  display: flex;
+  flex-direction: row; /* Asegura que los botones estén en horizontal */
+  gap: 15px;
+  margin-top: 20px;
+  flex-wrap: wrap; /* Permite que los botones se envuelvan en pantallas pequeñas */
+  justify-content: center; /* Centra los botones horizontalmente */
+  align-items: center;
+  width: 100%; /* Asegura que el contenedor tome todo el ancho disponible */
+}
+
+.botones-finales button,
+.botones-finales a {
+  flex: 0 1 auto; /* Evita que los botones se estiren */
+  min-width: 200px; /* Ancho mínimo para los botones */
+  padding: 12px 24px;
+  font-size: 1rem;
+  text-align: center;
+  white-space: nowrap;
+}
+
+/* Ajustes para pantallas pequeñas */
+@media (max-width: 768px) {
+  .botones-finales {
+    flex-direction: column; /* En móvil, los botones se apilan */
+    align-items: center; /* Centra los botones verticalmente en móvil */
+    width: 100%;
+  }
+
+  .botones-finales button,
+  .botones-finales a {
+    width: 100%;
+    min-width: unset;
+  }
+}
+
+/* Ajustar el contenedor de generar resumen */
+.generar-resumen-container {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  flex: 0 1 auto;
+}
+
+/* Mantener los estilos específicos de cada botón */
+.crear-embarque {
+  background-color: #28a745;
+  color: #fff;
+}
+
+.generar-pdf {
+  background-color: #17a2b8;
+  color: #fff;
+}
+
+.ver-rendimientos {
+  background-color: #ffc107;
+  color: #212529;
 }
 </style>
