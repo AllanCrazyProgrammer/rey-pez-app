@@ -206,7 +206,7 @@
                   <input
                     type="number"
                     v-model="producto.camaronNeto"
-                    class="camaron-neto-input"
+                    class="camaron-neto-input ios-numeric"
                     step="0.01"
                     min="0"
                     max="1"
