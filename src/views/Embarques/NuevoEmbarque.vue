@@ -243,8 +243,8 @@
                 <div v-for="(tara, taraIndex) in producto.taras" :key="taraIndex" class="input-group">
                   <input 
                     v-model.number="producto.taras[taraIndex]" 
-                    type="number" 
-                    inputmode="numeric"
+                    type="tel"
+                    inputmode="decimal"
                     pattern="[0-9]*"
                     class="form-control tara-input ios-numeric" 
                     placeholder="Tara"
@@ -256,8 +256,8 @@
                 <div v-for="(taraExtra, taraExtraIndex) in producto.tarasExtra" :key="'extra-' + taraExtraIndex" class="input-group">
                   <input 
                     v-model.number="producto.tarasExtra[taraExtraIndex]" 
-                    type="number"
-                    inputmode="numeric"
+                    type="tel"
+                    inputmode="decimal"
                     pattern="[0-9]*"
                     class="form-control tara-input tara-extra-input ios-numeric" 
                     placeholder="Tara Extra"
@@ -277,8 +277,8 @@
                 <div v-for="(kilo, kiloIndex) in producto.kilos" :key="kiloIndex" class="input-group">
                   <input 
                     v-model.number="producto.kilos[kiloIndex]" 
-                    type="number"
-                    inputmode="numeric"
+                    type="tel"
+                    inputmode="decimal"
                     pattern="[0-9]*"
                     class="form-control kilo-input ios-numeric" 
                     placeholder="Kilos"
@@ -1019,6 +1019,9 @@ export default {
         this.isUndoRedo = true; // Indicar que se está realizando una operación de Undo
         this.embarque = JSON.parse(estadoAnterior);
         console.log('Undo realizado. Estado actual restaurado.');
+        
+        // Llamar al método de guardado automático
+        this.guardarCambiosEnTiempoReal();
       } else {
         console.log('No hay más acciones para deshacer.');
       }
@@ -1031,6 +1034,9 @@ export default {
         this.isUndoRedo = true; // Indicar que se está realizando una operación de Redo
         this.embarque = JSON.parse(estadoRehacer);
         console.log('Redo realizado. Estado actual restaurado.');
+        
+        // Llamar al método de guardado automático
+        this.guardarCambiosEnTiempoReal();
       } else {
         console.log('No hay más acciones para rehacer.');
       }
@@ -4086,7 +4092,9 @@ input[type="number"]:focus {
 /* Prevenir el zoom en Chrome iOS */
 @supports (-webkit-touch-callout: none) {
   .ios-numeric {
-    font-size: 16px !important;
+    -webkit-user-select: text;
+    user-select: text;
+    -webkit-tap-highlight-color: transparent;
   }
 }
 
