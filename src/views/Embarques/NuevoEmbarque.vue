@@ -210,6 +210,8 @@
                     step="0.01"
                     min="0"
                     max="1"
+                    inputmode="numeric"
+                    pattern="[0-9]*"
                   >
                 </div>
   
@@ -241,9 +243,9 @@
                 <div v-for="(tara, taraIndex) in producto.taras" :key="taraIndex" class="input-group">
                   <input 
                     v-model.number="producto.taras[taraIndex]" 
-                    type="text" 
-                    pattern="[0-9]*"
+                    type="number" 
                     inputmode="numeric"
+                    pattern="[0-9]*"
                     class="form-control tara-input ios-numeric" 
                     placeholder="Tara"
                     :size="String(producto.taras[taraIndex] || '').length || 1"
@@ -254,9 +256,9 @@
                 <div v-for="(taraExtra, taraExtraIndex) in producto.tarasExtra" :key="'extra-' + taraExtraIndex" class="input-group">
                   <input 
                     v-model.number="producto.tarasExtra[taraExtraIndex]" 
-                    type="text"
-                    pattern="[0-9]*"
+                    type="number"
                     inputmode="numeric"
+                    pattern="[0-9]*"
                     class="form-control tara-input tara-extra-input ios-numeric" 
                     placeholder="Tara Extra"
                     :size="String(producto.tarasExtra[taraExtraIndex] || '').length || 1"
@@ -275,9 +277,9 @@
                 <div v-for="(kilo, kiloIndex) in producto.kilos" :key="kiloIndex" class="input-group">
                   <input 
                     v-model.number="producto.kilos[kiloIndex]" 
-                    type="text"
-                    pattern="[0-9]*"
+                    type="number"
                     inputmode="numeric"
+                    pattern="[0-9]*"
                     class="form-control kilo-input ios-numeric" 
                     placeholder="Kilos"
                     :size="String(producto.kilos[kiloIndex] || '').length || 1"
@@ -294,9 +296,9 @@
                 <h5>Taras</h5>
                 <div v-for="(tara, index) in producto.reporteTaras" :key="index" class="input-group mb-2">
                   <input 
-                    type="text"
-                    pattern="[0-9]*"
+                    type="number"
                     inputmode="numeric"
+                    pattern="[0-9]*"
                     v-model="producto.reporteTaras[index]" 
                     class="form-control reporte-input ios-numeric"
                     @focus="$event.target.select()"
@@ -312,9 +314,9 @@
                 <h5>Bolsas</h5>
                 <div v-for="(bolsa, index) in producto.reporteBolsas" :key="index" class="input-group mb-2">
                   <input 
-                    type="text"
-                    pattern="[0-9]*"
+                    type="number"
                     inputmode="numeric"
+                    pattern="[0-9]*"
                     v-model="producto.reporteBolsas[index]" 
                     class="form-control reporte-input ios-numeric"
                     @focus="$event.target.select()"
@@ -458,6 +460,8 @@
             @keyup.enter.stop="guardarPrecio"
             @keydown.stop
             ref="precioInput"
+            inputmode="numeric"
+            pattern="[0-9]*"
           >
         </div>
         <div class="modal-botones">
@@ -2222,10 +2226,10 @@ class EmbarqueReportGenerator {
             doc.autoTable({
               startY: yPos,
               head: [[
-                { text: 'Talla', style: 'tableHeader' },
-                { text: 'Barco', style: 'tableHeader' },
-                { text: 'Taras', style: 'tableHeader' },
-                { text: 'Sobrante', style: 'tableHeader' }
+                { text: 'Talla', style: 'crudosHeader' },
+                { text: 'Barco', style: 'crudosHeader' },
+                { text: 'Taras', style: 'crudosHeader' },
+                { text: 'Sobrante', style: 'crudosHeader' }
               ]],
               body: crudosData,
               styles: {
@@ -2941,13 +2945,13 @@ class EmbarqueReportGenerator {
   margin-right: 5px;
   width: 15px; /* Aumentamos el ancho */
   height: 15px; /* Aumentamos la altura */
-  cursor: pointer; /* Añadimos cursor pointer para mejor interactividad */
+  cursor: pointer;
 }
 
 .checkbox-container label {
   font-size: 0.9rem;
   color: #555;
-  cursor: pointer; /* Añadimos cursor pointer también a la etiqueta */
+  cursor: pointer; /* Añadimos cursor pointer para mejor interactividad */
 }
 
 .taras-header {
@@ -3222,203 +3226,223 @@ class EmbarqueReportGenerator {
   background-color: #138496;
 }
 
-
-
-.crear-embarque,
-.generar-pdf {
-  margin-bottom: 10px; /* Añade un pequeño margen inferior a ambos botones */
+/* Agregar estos estilos en la sección <style> */
+.botones-encabezado {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-right: 8px;
 }
 
-.botones-finales {
+.botones-fila-superior,
+.botones-fila-inferior {
   display: flex;
-  justify-content: space-between;
-  gap: 20px;
-}
-
-.crear-embarque,
-.generar-pdf,
-.ver-rendimientos {
-  flex: 1;
-  height: 60px; /* Establece una altura fija para ambos botones */
-  font-size: 1.2rem;
-  border: none;
-  border-radius: 5px;
-  display: flex;
+  gap: 4px;
   align-items: center;
-  justify-content: center;
-  text-align: center;
-  padding: 0 15px;
-  line-height: 1.2;
-  margin-top: 0px;
-  text-decoration: none;
 }
 
-.crear-embarque {
-  background-color: #28a745;
-  color: #fff;
-}
-
-.generar-pdf {
-  background-color: #17a2b8;
-  color: #fff;
-}
-
-.ver-rendimientos {
-  background-color: #ffc107;
-  color: #000;
-}
-
-.ver-rendimientos:hover {
-  background-color: #e0a800;
-  color: #000;
-  text-decoration: none;
-}
-
-/* Estilos para dispositivos móviles */
-@media (max-width: 768px) {
-  .botones-finales {
-    flex-direction: column;
-    gap: 10px;
-  }
-  
-  .crear-embarque,
-  .generar-pdf,
-  .ver-rendimientos {
-    width: 100%;
-  }
-}
-
-.reporte-extenso {
-  margin-top: 10px;
-  padding: 5px;
-  background-color: #f8f9fa;
-  border: 1px solid #dee2e6;
-  border-radius: 4px;
-  white-space: pre-wrap;
-  font-size: 0.9em;
-}
-
-/* Nuevos estilos para el input de camarón neto */
-.camaron-neto-input {
-  width: 70px;
-  padding: 8px;
-  font-size: 1rem;
-  border: 2px solid #0056b3;
-  border-radius: 5px;
-  background-color: #d0e7ff;
-  text-align: center;
-  -moz-appearance: textfield; /* Firefox */
-}
-
-/* Quitar flechas para Chrome, Safari, Edge, Opera */
-.camaron-neto-input::-webkit-outer-spin-button,
-.camaron-neto-input::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
-}
-
-.camaron-neto-input:focus {
-  outline: none;
-  border-color: #003d7a;
-  box-shadow: 0 0 0 0.2rem rgba(0, 86, 179, 0.25);
-}
-
-@media (max-width: 768px) {
-  .camaron-neto-input {
-    width: 60px;
-    font-size: 0.9rem;
-  }
-}
-
-.totales-reporte {
-  display: flex;
-  justify-content: space-between;
-  margin-top: 10px;
-}
-
-.total-taras-reporte,
-.total-bolsas-reporte {
-  flex: 1;
-  font-weight: bold;
-  padding: 5px;
-  border-radius: 5px;
-  text-align: center;
-}
-
-.total-taras-reporte.coincide {
-  background-color: #d4edda;
-  color: #155724;
-}
-
-.total-taras-reporte.no-coincide {
-  background-color: #f8d7da;
-  color: #721c24;
-}
-
-.total-bolsas-reporte {
-  background-color: #d4edda;
-  color: #155724;
-  margin-left: 5px;
-}
-
-/* Agregar estos nuevos estilos */
-.venta-checkbox-container {
-  display: flex;
-  align-items: center;
-  padding: 0 10px;
-  background-color: #f8f9fa;
-  border-radius: 5px;
-  border: 1px solid #dee2e6;
-  height: 38px; /* Ajustar altura para que coincida con otros elementos */
-}
-
-.venta-checkbox {
-  margin-right: 5px;
-  width: 16px;
-  height: 16px;
-  cursor: pointer;
-}
-
-.venta-checkbox-container label {
-  font-size: 0.9rem;
-  color: #495057;
-  cursor: pointer;
-  user-select: none;
-  margin-bottom: 0; /* Eliminar margen inferior del label */
-}
-
-/* Estilo especial para productos que son venta */
-.producto[data-es-venta="true"] {
-  border: 3px solid #28a745;
-}
-
-/* Estilo para productos que son maquila */
-.producto[data-es-venta="false"] {
-  border: 3px solid #007bff;
-}
-
-.btn-precio {
+.btn-precio,
+.btn-hilos,
+.btn-nota {
   padding: 2px 8px;
   font-size: 0.9rem;
   background-color: #f8f9fa;
   border: 1px solid #dee2e6;
   border-radius: 4px;
   cursor: pointer;
-  margin-right: 8px;
   transition: all 0.2s;
+  height: 24px;
+  min-width: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.btn-precio.tiene-precio {
-  background-color: #28a745;
-  color: white;
-  border-color: #28a745;
+.kg-radio {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  background-color: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  height: 24px;
 }
 
-.precio-tag {
-  font-size: 0.9rem;
-  color: #28a745;
+.encabezado-medida {
+  display: flex;
+  align-items: flex-start; /* Cambiado a flex-start para mejor alineación con las dos filas */
+  font-size: 1.5rem;
   font-weight: bold;
-  margin-left: 8px;
+  margin-bottom: 15px;
+  gap: 8px;
+}
+
+.checkbox-juntar-medidas {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.checkbox-juntar-medidas input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.checkbox-juntar-medidas label {
+  font-size: 0.9rem;
+  color: #555;
+  cursor: pointer;
+}
+
+.generar-resumen-container {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.checkbox-juntar-medidas {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.checkbox-juntar-medidas input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+
+.checkbox-juntar-medidas label {
+  font-size: 1rem;
+  color: #333;
+  cursor: pointer;
+  user-select: none;
+}
+
+.btn-nota {
+  padding: 2px 8px;
+  font-size: 0.9rem;
+  background-color: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+  height: 24px;
+  min-width: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-nota.tiene-nota {
+  background-color: #17a2b8;
+  color: white;
+  border-color: #17a2b8;
+}
+
+.modal-nota {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.input-nota {
+  margin: 20px 0;
+}
+
+.input-nota textarea {
+  width: 100%;
+  min-height: 100px;
+  padding: 8px;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  font-size: 1rem;
+  resize: vertical;
+}
+
+.input-nota textarea:focus {
+  outline: none;
+  border-color: #17a2b8;
+  box-shadow: 0 0 0 0.2rem rgba(23, 162, 184, 0.25);
+}
+
+.resumen-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.resumen-titulo {
+  margin: 0;
+}
+
+.modal-nombre-alternativo {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.input-nombre {
+  display: flex;
+  align-items: center;
+  margin: 20px 0;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  padding: 8px;
+}
+
+.input-nombre input {
+  border: none;
+  outline: none;
+  font-size: 1.2rem;
+  width: 100%;
+}
+
+.medida-texto {
+  cursor: pointer;
+  transition: color 0.3s;
+}
+
+.medida-texto:hover {
+  color: #007bff;
+  text-decoration: underline;
+}
+
+.kg-radio {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 1px;
+}
+
+.kg-checkbox {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.kg-label {
+  font-size: 0.9rem;
+  color: #555;
+  cursor: pointer;
 }
 
 /* Agregar o modificar estilos del modal */
@@ -3572,7 +3596,7 @@ class EmbarqueReportGenerator {
   padding: 8px;
 }
 
-/* Agregar estos estilos en la sección <style> */
+/* Agregar estos estilos al final de la sección <style> */
 .botones-encabezado {
   display: flex;
   flex-direction: column;
@@ -4081,4 +4105,3 @@ input[type="number"]:focus {
   }
 }
 </style>
-
