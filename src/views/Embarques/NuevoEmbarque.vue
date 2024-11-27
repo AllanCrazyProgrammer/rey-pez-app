@@ -2724,7 +2724,7 @@ class EmbarqueReportGenerator {
 }
 
 .btn-danger {
-  background-color: #dc3545;
+  background-color: gray;
   border: none;
   color: #fff;
 }
