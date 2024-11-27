@@ -46,11 +46,15 @@ export const generarPDFRendimientos = async (datosRendimientos, embarqueData) =>
         return 'Fecha inválida';
       }
 
+      // Ajustar la zona horaria a la hora local de México
+      const fechaLocal = new Date(fechaObj.getTime() + (fechaObj.getTimezoneOffset() * 60000));
+      
       // Formatear la fecha
-      return fechaObj.toLocaleDateString('es-MX', {
+      return fechaLocal.toLocaleDateString('es-MX', {
         year: 'numeric',
         month: '2-digit',
-        day: '2-digit'
+        day: '2-digit',
+        timeZone: 'America/Mexico_City'
       });
     };
 
@@ -192,9 +196,8 @@ function generarTablaRendimientos(datosRendimientos, nombresMedidasPersonalizado
 
   const body = [
     [
-      { text: 'Medida', style: 'tableHeader' },
       { text: 'Kilos en Crudo', style: 'tableHeader' },
-      { text: 'Total Embarcado', style: 'tableHeader' },
+      { text: 'Medida', style: 'tableHeader' },
       { text: 'Rendimiento', style: 'tableHeader' }
     ],
     ...Object.values(datosAgrupados).map(dato => {
@@ -209,9 +212,8 @@ function generarTablaRendimientos(datosRendimientos, nombresMedidasPersonalizado
       }
       
       return [
-        medidaTexto,
         formatearKilos(dato.kilosCrudos),
-        formatearKilos(dato.totalEmbarcado),
+        medidaTexto,
         {
           text: `(${formatearRendimiento(rendimiento)})`,
           style: rendimientoStyle
@@ -223,7 +225,7 @@ function generarTablaRendimientos(datosRendimientos, nombresMedidasPersonalizado
   return {
     table: {
       headerRows: 1,
-      widths: ['*', '*', '*', '*'],
+      widths: ['*', '*', '*'],
       body: body
     },
     layout: {
