@@ -3,6 +3,14 @@ import pdfFonts from 'pdfmake/build/vfs_fonts';
 import { generarResumenLimpios } from './resumenLimpios';
 
 pdfMake.vfs = pdfFonts.pdfMake.vfs;
+pdfMake.fonts = {
+  Roboto: {
+    normal: 'Roboto-Regular.ttf',
+    bold: 'Roboto-Medium.ttf',
+    italics: 'Roboto-Italic.ttf',
+    bolditalics: 'Roboto-MediumItalic.ttf'
+  }
+};
 
 // Definir colores para cada cliente
 const clienteColors = {
