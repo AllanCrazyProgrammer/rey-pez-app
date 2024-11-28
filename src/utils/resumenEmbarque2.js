@@ -2,7 +2,15 @@ import pdfMake from 'pdfmake/build/pdfmake';
 import pdfFonts from 'pdfmake/build/vfs_fonts';
 import { generarResumenLimpios } from './resumenLimpios';
 
-pdfMake.vfs = pdfFonts.pdfMake.vfs;
+// Verificar y asignar vfs de manera segura
+if (typeof pdfFonts === 'object' && pdfFonts.hasOwnProperty('default')) {
+  pdfMake.vfs = pdfFonts.default;
+} else if (typeof pdfFonts === 'object' && pdfFonts.pdfMake && pdfFonts.pdfMake.vfs) {
+  pdfMake.vfs = pdfFonts.pdfMake.vfs;
+} else {
+  console.error('No se pudo inicializar vfs para pdfMake');
+}
+
 pdfMake.fonts = {
   Roboto: {
     normal: 'Roboto-Regular.ttf',
