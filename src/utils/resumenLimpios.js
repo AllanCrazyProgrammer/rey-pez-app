@@ -36,10 +36,28 @@ export function generarResumenLimpios(productosPorCliente, clienteColors) {
     contenido.push({
       columns: [
         {
-          text: obtenerNombreCliente(clienteId),
-          style: 'clienteHeader',
-          color: getClienteColor(clienteId),
-          fontSize: fontSize + 1
+          width: 'auto',
+          stack: [
+            {
+              canvas: [
+                {
+                  type: 'rect',
+                  x: 0,
+                  y: 0,
+                  w: 120,
+                  h: 25,
+                  r: 8,
+                  color: getClienteColor(clienteId)
+                }
+              ]
+            },
+            {
+              text: obtenerNombreCliente(clienteId),
+              color: 'white',
+              fontSize: fontSize + 1,
+              relativePosition: { x: 10, y: -20 }
+            }
+          ]
         },
         {
           text: `Total: ${tarasCliente}T | ${formatearKilos(kilosCliente)}Kg`,
