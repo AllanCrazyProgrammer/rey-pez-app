@@ -22,12 +22,19 @@
         </div>
     
     
+    
+    
+    
+    
 <div class="resumen-container">
   <div class="resumen-columna">
     <div class="resumen-header">
       <h4 class="resumen-titulo">Resumen de Taras</h4>
       <button @click="generarResumenTarasPDF" class="btn btn-info">
         <i class="fas fa-file-pdf"></i> PDF Taras
+      </button>
+      <button @click="generarResumenEmbarque" class="btn btn-info ml-2">
+        <i class="fas fa-file-pdf"></i> PDF Resumen
       </button>
     </div>
     <div class="resumen-grid">
@@ -342,6 +349,7 @@
                   <select 
                     v-model="item.talla" 
                     class="form-control talla-select"
+                    @change="onTallaCrudoChange(item)"
                   >
                     <option value="">Elige talla</option>
                     <option value="Med c/c">Med c/c</option>
@@ -425,7 +433,9 @@
           <button type="button" @click="generarResumenPDF" class="btn btn-info generar-pdf">
             Resumen Embarque
           </button>
-
+          <button type="button" @click="generarResumenEmbarque2" class="btn btn-info generar-pdf">
+            Resumen Embarque 2
+          </button>
         </div>
         <router-link :to="{ name: 'Rendimientos', params: { id: embarqueId } }" class="btn btn-warning ver-rendimientos">
           Ver Rendimientos
@@ -525,6 +535,8 @@ import 'jspdf-autotable';
 import { generarNotaVentaPDF } from '@/utils/pdfGenerator';
 import Rendimientos from './Rendimientos.vue'
 import { generarResumenTarasPDF } from '@/utils/resumenTarasPdf';
+import { ResumenEmbarque2Generator } from '@/utils/resumenEmbarque2';
+import { generarResumenEmbarquePDF } from '@/utils/resumenEmbarque2';
 
 export default {
   name: 'NuevoEmbarque',
@@ -1680,6 +1692,8 @@ export default {
         const bolsa = parseInt(producto.reporteBolsas[i]) || 0;
         total += tara * bolsa;
       }
+      // Almacenar el total en el producto
+      producto.totalKilos = total;
       return total;
     },
 
@@ -2055,6 +2069,66 @@ export default {
       producto.medida = medida;
       this.productoEditandoId = null;
       this.actualizarProducto(producto);
+    },
+    generarResumenEmbarque2() {
+      try {
+        // Obtener las medidas únicas de los crudos
+        const medidasCrudos = new Set();
+        Object.values(this.clienteCrudos).forEach(crudos => {
+          crudos.forEach(crudo => {
+            crudo.items.forEach(item => {
+              if (item.talla) {
+                medidasCrudos.add(item.talla);
+              }
+            });
+          });
+        });
+
+        // Crear el objeto embarque con la información necesaria
+        const embarqueData = {
+          ...this.embarque,
+          crudos: Object.entries(this.clienteCrudos).flatMap(([clienteId, crudos]) => 
+            crudos.flatMap(crudo => 
+              crudo.items.map(item => {
+                const tarasArray = [];
+                
+                // Agregar taras principales
+                if (item.taras) {
+                  tarasArray.push(item.taras);
+                }
+                
+                // Agregar sobrante si existe
+                if (item.sobrante) {
+                  tarasArray.push(item.sobrante);
+                }
+                
+                return {
+                  clienteId,
+                  medida: item.talla,
+                  taras: tarasArray,
+                  barco: item.barco
+                };
+              })
+            )
+          ),
+          medidasCrudos: Array.from(medidasCrudos)
+        };
+
+        console.log('Datos del embarque:', embarqueData); // Para depuración
+        generarResumenEmbarquePDF(embarqueData, this.productosPorCliente, this.obtenerNombreCliente);
+      } catch (error) {
+        console.error('Error al generar el PDF:', error);
+      }
+    },
+    generarResumenEmbarque() {
+      generarResumenEmbarquePDF(this.embarque, this.productosPorCliente, this.obtenerNombreCliente);
+    },
+    onTallaCrudoChange(item) {
+      // Asegurarse de que el item tenga todas las propiedades necesarias
+      if (!item.medida) {
+        item.medida = item.talla;
+      }
+      this.guardarCambiosEnTiempoReal();
     },
   },
   created() {
@@ -4258,5 +4332,9 @@ input[type="tel"] {
 .ver-rendimientos {
   background-color: #ffc107;
   color: #212529;
+}
+
+.ml-2 {
+  margin-left: 0.5rem;
 }
 </style>
