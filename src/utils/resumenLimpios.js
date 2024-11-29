@@ -1,10 +1,17 @@
-export function generarResumenLimpios(productosPorCliente, clienteColors) {
+export function generarResumenLimpios(productosPorCliente, clienteColors, escala = 100) {
+  // Calcular el factor de escala (convertir de porcentaje a decimal)
+  const factorEscala = escala / 100;
+
   const contenido = [
     { text: '', pageBreak: 'before' }
   ];
 
   let totalTarasGlobal = 0;
   let totalKilosGlobal = 0;
+
+  // Ajustar dimensiones base
+  const rectWidth = 120;
+  const rectHeight = 25;
 
   Object.entries(productosPorCliente).forEach(([clienteId, productos]) => {
     const tarasCliente = calcularTotalTaras(productos);
@@ -44,8 +51,8 @@ export function generarResumenLimpios(productosPorCliente, clienteColors) {
                   type: 'rect',
                   x: 0,
                   y: 0,
-                  w: 120,
-                  h: 25,
+                  w: rectWidth,
+                  h: rectHeight,
                   r: 8,
                   color: getClienteColor(clienteId)
                 }
@@ -54,7 +61,7 @@ export function generarResumenLimpios(productosPorCliente, clienteColors) {
             {
               text: obtenerNombreCliente(clienteId),
               color: 'white',
-              fontSize: fontSize + 1,
+              fontSize: fontSize * factorEscala,
               relativePosition: { x: 10, y: -20 }
             }
           ]
@@ -64,7 +71,7 @@ export function generarResumenLimpios(productosPorCliente, clienteColors) {
           style: 'total',
           alignment: 'right',
           color: getClienteColor(clienteId),
-          fontSize: fontSize + 1
+          fontSize: fontSize * factorEscala
         }
       ],
       margin: [0, 3, 0, 3]
@@ -89,7 +96,7 @@ export function generarResumenLimpios(productosPorCliente, clienteColors) {
           stack: [
             {
               text: generarTextoMedida(producto),
-              fontSize: fontSize,
+              fontSize: fontSize * factorEscala,
               bold: true,
               margin: [0, 0, 0, 1],
               alignment: 'center'
@@ -116,13 +123,13 @@ export function generarResumenLimpios(productosPorCliente, clienteColors) {
                   { text: `${calcularTotalTarasSimple(producto)}-`, bold: true },
                   { text: `${formatearKilos(calcularKilosProducto(producto))}`, color: 'red', bold: true }
                 ],
-              fontSize: fontSize,
+              fontSize: fontSize * factorEscala,
               margin: [0, 1, 0, 1],
               alignment: 'center'
             },
             {
               text: generarTextoTarasYBolsas(producto),
-              fontSize: fontSize - 1,
+              fontSize: (fontSize - 1) * factorEscala,
               margin: [0, 0, 0, 1],
               alignment: 'center'
             }
@@ -180,15 +187,28 @@ function obtenerNombreCliente(clienteId) {
 
 // Funciones auxiliares
 function generarTextoMedida(producto) {
-  let texto = producto.medida || '';
+  let texto = '';
+  
+  // Si es tipo c/h20, crear un array con elementos coloreados
+  if (producto.tipo === 'c/h20') {
+    return [
+      { text: `${producto.medida || ''} ${producto.fecha || ''} `, color: 'black' },
+      { text: `c/h20 (${producto.camaronNeto || 0.65})`, color: '#3498db' }
+    ];
+  }
+
+  // Para otros tipos, mantener el comportamiento original
+  texto = producto.medida || '';
   
   if (producto.fecha) {
     texto += ` ${producto.fecha}`;
   }
 
-  if (producto.tipo === 'c/h20') {
-    texto += ` c/h20 (${producto.camaronNeto || 0.65})`;
-  } else if (producto.tipo === 'otro') {
+  if (producto.clienteId === '3' && producto.noSumarKilos) {
+    texto += ' sellada';
+  }
+
+  if (producto.tipo === 'otro') {
     texto += ` ${producto.tipoPersonalizado}`;
   } else if (producto.tipo) {
     texto += ` ${producto.tipo}`;
