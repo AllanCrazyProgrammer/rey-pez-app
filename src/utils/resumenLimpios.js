@@ -111,8 +111,11 @@ export function generarResumenLimpios(productosPorCliente, clienteColors) {
             },
             {
               text: calcularTotalTarasSimple(producto) === 0 ? 
-                `${formatearKilos(calcularKilosProducto(producto))}` :
-                `${calcularTotalTarasSimple(producto)}-${formatearKilos(calcularKilosProducto(producto))}`,
+                [{ text: `${formatearKilos(calcularKilosProducto(producto))}`, color: 'red', bold: true }] :
+                [
+                  { text: `${calcularTotalTarasSimple(producto)}-`, bold: true },
+                  { text: `${formatearKilos(calcularKilosProducto(producto))}`, color: 'red', bold: true }
+                ],
               fontSize: fontSize,
               margin: [0, 1, 0, 1],
               alignment: 'center'
