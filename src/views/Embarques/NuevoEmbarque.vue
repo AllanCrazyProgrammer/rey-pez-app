@@ -166,6 +166,13 @@
                   @input="onMedidaInput(producto, $event)"
                   @blur="onMedidaBlur(producto)"
                 >
+                <button 
+                  @click="abrirModalAlt(producto)" 
+                  class="btn-alt"
+                  :class="{ 'tiene-alt': producto.textoAlternativo }"
+                >
+                  Alt
+                </button>
                 <!-- Modificar la condición para mostrar sugerencias -->
                 <div 
                   v-if="productoEditandoId === producto.id && sugerenciasMedidas.length > 0" 
@@ -524,6 +531,26 @@
         </div>
       </div>
     </div>
+    <!-- Agregar el nuevo modal al final del template, antes del cierre de template -->
+    <div v-if="mostrarModalAlt" class="modal-alt" @click.stop="cerrarModalAlt">
+      <div class="modal-contenido" @click.stop>
+        <h3>Texto Alternativo para PDF</h3>
+        <div class="input-alt">
+          <input 
+            type="text" 
+            v-model="altTemp"
+            placeholder="Ingrese texto alternativo"
+            @keyup.enter.stop="guardarAlt"
+            @keydown.stop
+            ref="altInput"
+          >
+        </div>
+        <div class="modal-botones">
+          <button @click.stop="guardarAlt" class="btn btn-success">Guardar</button>
+          <button @click.stop="cerrarModalAlt" class="btn btn-secondary">Cancelar</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -589,6 +616,8 @@ export default {
       nombreAlternativoTemp: '',
       productoSeleccionado: null,
       productoEditandoId: null, // Agregar esta nueva propiedad
+      mostrarModalAlt: false,
+      altTemp: '',
     };
   },
   clientesJuntarMedidas: {},
@@ -2130,6 +2159,47 @@ export default {
       }
       this.guardarCambiosEnTiempoReal();
     },
+    abrirModalAlt(item) {
+      event?.preventDefault();
+      event?.stopPropagation();
+      
+      this.itemSeleccionado = item;
+      this.altTemp = item.textoAlternativo || '';
+      this.mostrarModalAlt = true;
+      this.$nextTick(() => {
+        this.$refs.altInput?.focus();
+      });
+    },
+    cerrarModalAlt() {
+      event?.preventDefault();
+      event?.stopPropagation();
+      
+      this.mostrarModalAlt = false;
+      this.itemSeleccionado = null;
+      this.altTemp = '';
+    },
+    guardarAlt() {
+      event?.preventDefault();
+      event?.stopPropagation();
+      
+      if (this.itemSeleccionado) {
+        const alt = this.altTemp.trim();
+        if (alt) {
+          this.$set(this.itemSeleccionado, 'textoAlternativo', alt);
+        } else {
+          this.$delete(this.itemSeleccionado, 'textoAlternativo');
+        }
+        
+        const guardadoActivo = this.guardadoAutomaticoActivo;
+        this.guardadoAutomaticoActivo = false;
+        
+        this.$nextTick(() => {
+          this.guardadoAutomaticoActivo = guardadoActivo;
+          this.guardarCambiosEnTiempoReal();
+        });
+      }
+      this.cerrarModalAlt();
+    },
   },
   created() {
     const embarqueId = this.$route.params.id;
@@ -2563,6 +2633,7 @@ class EmbarqueReportGenerator {
   display: flex;
   gap: 8px;
   width: 100%;
+  align-items: center;
 }
 
 .medida-input {
@@ -3309,32 +3380,109 @@ class EmbarqueReportGenerator {
 .botones-encabezado {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  margin-right: 8px;
+  gap: 5px;
+  margin-right: 10px;
 }
 
 .botones-fila-superior,
 .botones-fila-inferior {
   display: flex;
-  gap: 4px;
-  align-items: center;
+  gap: 5px;
 }
 
 .btn-precio,
 .btn-hilos,
-.btn-nota {
-  padding: 2px 8px;
-  font-size: 0.9rem;
-  background-color: #f8f9fa;
-  border: 1px solid #dee2e6;
+.btn-nota,
+.btn-alt {
+  width: 30px;
+  height: 30px;
+  border: none;
   border-radius: 4px;
+  font-size: 12px;
+  font-weight: bold;
   cursor: pointer;
-  transition: all 0.2s;
-  height: 24px;
-  min-width: 24px;
   display: flex;
   align-items: center;
   justify-content: center;
+  background-color: #f0f0f0;
+  color: #666;
+  transition: all 0.3s ease;
+}
+
+.btn-alt {
+  background-color: #f0f0f0;
+  color: #666;
+}
+
+.btn-alt:hover {
+  background-color: #e0e0e0;
+}
+
+.btn-alt.tiene-alt {
+  background-color: #4CAF50;
+  color: white;
+}
+
+.modal-alt {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.modal-alt .modal-contenido {
+  background-color: white;
+  padding: 20px;
+  border-radius: 8px;
+  min-width: 300px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.modal-alt h3 {
+  margin-bottom: 15px;
+  color: #333;
+}
+
+.modal-alt .input-alt {
+  margin-bottom: 15px;
+}
+
+.modal-alt input {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.modal-alt .modal-botones {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.modal-alt .btn {
+  padding: 8px 15px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.modal-alt .btn-success {
+  background-color: #4CAF50;
+  color: white;
+}
+
+.modal-alt .btn-secondary {
+  background-color: #6c757d;
+  color: white;
 }
 
 .kg-radio {
