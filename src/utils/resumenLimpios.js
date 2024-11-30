@@ -192,13 +192,13 @@ function generarTextoMedida(producto) {
   // Si es tipo c/h20, crear un array con elementos coloreados
   if (producto.tipo === 'c/h20') {
     return [
-      { text: `${producto.medida || ''} ${producto.fecha || ''} `, color: 'black' },
+      { text: `${producto.textoAlternativo || producto.medida || ''} ${producto.fecha || ''} `, color: 'black' },
       { text: `c/h20 (${producto.camaronNeto || 0.65})`, color: '#3498db' }
     ];
   }
 
-  // Para otros tipos, mantener el comportamiento original
-  texto = producto.medida || '';
+  // Para otros tipos, usar texto alternativo si existe
+  texto = producto.textoAlternativo || producto.medida || '';
   
   if (producto.fecha) {
     texto += ` ${producto.fecha}`;
