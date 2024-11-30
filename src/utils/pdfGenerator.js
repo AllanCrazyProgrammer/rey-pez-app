@@ -130,6 +130,11 @@ export async function generarNotaVentaPDF(embarque, clientesDisponibles, cliente
         tipoConAgua: {
           color: '#2980b9',  // Color azul
           bold: true
+        },
+        nota: {
+          fontSize: 18,
+          color: '#666666',
+          italics: true
         }
       },
       defaultStyle: {
@@ -580,35 +585,57 @@ function agruparProductos(productos) {
 }
 
 function generarTablaProductos(productos, estiloCliente, nombreCliente) {
-  const body = [
-    [
-      { text: 'Cantidad', style: 'tableHeader' },
-      { text: 'Producto', style: 'tableHeader' },
-      { text: 'Taras', style: 'tableHeader' }
-    ]
+  // Verificar si algún producto tiene notas
+  const hayNotas = productos.some(producto => producto.nota && producto.nota.trim() !== '');
+
+  // Definir las columnas del header según si hay notas o no
+  const headerRow = [
+    { text: 'Cantidad', style: 'tableHeader' },
+    { text: 'Producto', style: 'tableHeader' },
+    { text: 'Taras', style: 'tableHeader' }
   ];
+
+  // Agregar columna de notas solo si hay notas
+  if (hayNotas) {
+    headerRow.push({ text: 'Notas', style: 'tableHeader' });
+  }
+
+  const body = [headerRow];
 
   productos.forEach(producto => {
     const tarasNormales = (producto.taras || []).reduce((sum, tara) => sum + (tara || 0), 0);
     const tarasExtra = (producto.tarasExtra || []).reduce((sum, tara) => sum + (tara || 0), 0);
     
-    // Calcular la suma total de taras
     const tarasTotales = tarasNormales + tarasExtra;
-    
-    // Generar texto de taras mostrando solo el total
     let tarasTexto = `${tarasTotales} ${combinarTarasBolsas(producto.reporteTaras, producto.reporteBolsas)}`;
 
-    body.push([
+    // Crear la fila base
+    const row = [
       `${totalKilos(producto, nombreCliente)} kg`,
       formatearProducto(producto),
       tarasTexto
-    ]);
+    ];
+
+    // Agregar columna de nota solo si hay notas en algún producto
+    if (hayNotas) {
+      row.push({
+        text: producto.nota || '',
+        style: 'nota'
+      });
+    }
+
+    body.push(row);
   });
+
+  // Definir los anchos de columna según si hay notas o no
+  const widths = hayNotas 
+    ? ['20%', '30%', '30%', '20%']  // Con columna de notas
+    : ['25%', '35%', '40%'];        // Sin columna de notas
 
   return {
     table: {
       headerRows: 1,
-      widths: ['25%', '35%', '40%'],
+      widths: widths,
       body: body
     },
     layout: {
@@ -621,31 +648,56 @@ function generarTablaProductos(productos, estiloCliente, nombreCliente) {
 }
 
 function generarTablaCrudos(crudos, estiloCliente) {
-  const body = [
-    [
-      { text: 'Cantidad', style: 'tableHeader' },
-      { text: 'Talla', style: 'tableHeader' },
-      { text: 'Taras', style: 'tableHeader' },
-      { text: 'Precio', style: 'tableHeader' }
-    ],
-    ...crudos.flatMap(crudo => 
-      crudo.items.map(item => [
+  // Verificar si algún ítem tiene precio
+  const hayPrecios = crudos.some(crudo => 
+    crudo.items.some(item => item.precio && item.precio.toString().trim() !== '')
+  );
+
+  // Definir las columnas del header según si hay precios o no
+  const headerRow = [
+    { text: 'Cantidad', style: 'tableHeader' },
+    { text: 'Talla', style: 'tableHeader' },
+    { text: 'Taras', style: 'tableHeader' }
+  ];
+
+  // Agregar columna de precio solo si hay precios
+  if (hayPrecios) {
+    headerRow.push({ text: 'Precio', style: 'tableHeader' });
+  }
+
+  const body = [headerRow];
+
+  // Agregar las filas de datos
+  crudos.forEach(crudo => 
+    crudo.items.forEach(item => {
+      const row = [
         `${calcularKilosCrudos(item)} kg`,
         {
           text: item.talla.replace(/\s*c\/\s*c$/i, ' c/c'),
           style: 'default',
           noWrap: true
         },
-        calcularTarasTotales(item),
-        item.precio ? { text: `$${item.precio}`, style: 'precio' } : ''
-      ])
-    )
-  ];
+        calcularTarasTotales(item)
+      ];
+
+      // Agregar precio formateado solo si la columna existe
+      if (hayPrecios) {
+        row.push(item.precio ? { text: `$${Number(item.precio).toLocaleString('en-US')}`, style: 'precio' } : '');
+      }
+
+      body.push(row);
+    })
+  );
+
+  // Definir los anchos de columna según si hay precios o no
+  const widths = hayPrecios
+    ? ['25%', '30%', '25%', '20%']  // Con columna de precio
+    : ['30%', '40%', '30%'];        // Sin columna de precio
 
   return {
     table: {
       headerRows: 1,
-      widths: ['25%', '30%', '25%', '20%'],
+      widths: widths,
       body: body
     },
     layout: {
@@ -667,16 +719,15 @@ function obtenerEstiloCliente(nombreCliente) {
 }
 
 function formatearProducto(producto) {
-  // Usar el nombre alternativo del PDF si existe, sino usar la medida original
   let medida = (producto.nombreAlternativoPDF || producto.medida || '').trim();
-  let precioStr = producto.precio ? ` $${producto.precio}` : '';
+  let precioStr = producto.precio ? ` $${Number(producto.precio).toLocaleString('en-US')}` : '';
   
   // Si es c/h20, agregar el indicador pero mantener el nombre original
   if (producto.tipo === 'c/h20') {
     return [
       { text: `${medida} c/h2o`, style: 'tipoConAgua' },
       { text: precioStr, style: 'precio' }
-    ];
+    ].filter(item => item.text);
   }
   
   // Si es s/h20, agregar el indicador pero mantener el nombre original
@@ -684,7 +735,7 @@ function formatearProducto(producto) {
     return [
       { text: `${medida} s/h2o`, style: 'default' },
       { text: precioStr, style: 'precio' }
-    ];
+    ].filter(item => item.text);
   }
   
   // Para otros tipos, mostrar el nombre exacto con el tipo si existe
@@ -694,7 +745,7 @@ function formatearProducto(producto) {
   return [
     { text: textoFinal, style: 'default' },
     { text: precioStr, style: 'precio' }
-  ];
+  ].filter(item => item.text);
 }
 
 function calcularTarasTotales(item) {

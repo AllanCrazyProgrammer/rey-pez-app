@@ -215,7 +215,9 @@ function generarTextoMedida(producto) {
   }
 
   if (producto.precio) {
-    texto += ` $${producto.precio}`;
+    // Formatear el precio con separador de miles
+    const precioFormateado = Number(producto.precio).toLocaleString('en-US');
+    texto += ` $${precioFormateado}`;
   }
 
   return texto;
