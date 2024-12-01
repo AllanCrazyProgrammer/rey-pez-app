@@ -1859,7 +1859,7 @@ export default {
         .catch((error) => {
           console.error("Error al guardar automáticamente:", error);
         });
-    }, 1000),
+    }, 1500),
     abrirModalNota(item) {
       event?.preventDefault();
       event?.stopPropagation();
