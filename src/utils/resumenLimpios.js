@@ -1,4 +1,16 @@
-export function generarResumenLimpios(productosPorCliente, clienteColors, escala = 100) {
+// Agregar esta función al inicio del archivo, antes de generarResumenLimpios
+function getClienteColor(clienteId) {
+  // Colores predefinidos para cada cliente
+  const colores = {
+    '1': '#3498db', // Joselito (azul)
+    '2': '#e74c3c', // Catarro (rojo)
+    '3': '#f1c40f', // Otilio (amarillo)
+    '4': '#2ecc71'  // Ozuna (verde)
+  };
+  return colores[clienteId] || '#95a5a6'; // Color gris por defecto
+}
+
+export function generarResumenLimpios(productosPorCliente, clienteColors, escala = 100, clientesPersonalizados = []) {
   // Calcular el factor de escala (convertir de porcentaje a decimal)
   const factorEscala = escala / 100;
 
@@ -14,6 +26,7 @@ export function generarResumenLimpios(productosPorCliente, clienteColors, escala
   const rectHeight = 25;
 
   Object.entries(productosPorCliente).forEach(([clienteId, productos]) => {
+    const nombreCliente = obtenerNombreCliente(clienteId, clientesPersonalizados);
     const tarasCliente = calcularTotalTaras(productos);
     const kilosCliente = calcularTotalKilos(productos);
     
@@ -59,7 +72,7 @@ export function generarResumenLimpios(productosPorCliente, clienteColors, escala
               ]
             },
             {
-              text: obtenerNombreCliente(clienteId),
+              text: nombreCliente,
               color: 'white',
               fontSize: fontSize * factorEscala,
               relativePosition: { x: 10, y: -20 }
@@ -164,25 +177,31 @@ export function generarResumenLimpios(productosPorCliente, clienteColors, escala
   return contenido;
 }
 
-function getClienteColor(clienteId) {
-  // Colores predefinidos para cada cliente
-  const colores = {
-    '1': '#3498db', // Joselito (azul)
-    '2': '#e74c3c', // Catarro (rojo)
-    '3': '#f1c40f', // Otilio (amarillo)
-    '4': '#2ecc71'  // Ozuna (verde)
-  };
-  return colores[clienteId] || '#95a5a6'; // Color gris por defecto
-}
+function obtenerNombreCliente(clienteId, clientesPersonalizados = []) {
+  // Convertir clienteId a string para comparación consistente
+  const clienteIdStr = clienteId.toString();
 
-function obtenerNombreCliente(clienteId) {
+  // Si hay clientes personalizados, buscar primero en ellos
+  if (Array.isArray(clientesPersonalizados) && clientesPersonalizados.length > 0) {
+    const clienteEncontrado = clientesPersonalizados.find(cliente => 
+      cliente.id?.toString() === clienteIdStr || 
+      cliente.clienteId?.toString() === clienteIdStr
+    );
+
+    if (clienteEncontrado) {
+      return clienteEncontrado.nombre || clienteEncontrado.nombreCliente;
+    }
+  }
+
+  // Si no se encuentra en los personalizados, usar los nombres predefinidos
   const nombres = {
     '1': 'Joselito',
     '2': 'Catarro',
     '3': 'Otilio',
     '4': 'Ozuna'
   };
-  return nombres[clienteId] || 'Cliente';
+
+  return nombres[clienteIdStr] || `Cliente ${clienteIdStr}`;
 }
 
 // Funciones auxiliares
