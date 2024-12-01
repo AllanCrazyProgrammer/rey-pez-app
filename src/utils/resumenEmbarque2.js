@@ -100,7 +100,7 @@ const ordenarTaras = (taras) => {
   }, []);
 };
 
-export const generarResumenEmbarquePDF = (embarque, productosPorCliente, obtenerNombreCliente) => {
+export const generarResumenEmbarquePDF = (embarque, productosPorCliente, obtenerNombreCliente, clientesPersonalizados = []) => {
   // Obtener y ordenar las medidas de los crudos del embarque
   let medidasCrudos = [];
   if (embarque.medidasCrudos && Array.isArray(embarque.medidasCrudos)) {
@@ -353,7 +353,7 @@ export const generarResumenEmbarquePDF = (embarque, productosPorCliente, obtener
 
   // Agregar el contenido del resumen de productos limpios
   docDefinition.content.push(
-    ...generarResumenLimpios(productosPorCliente, clienteColors)
+    ...generarResumenLimpios(productosPorCliente, clienteColors, 100, clientesPersonalizados)
   );
 
   // Generar y descargar el PDF

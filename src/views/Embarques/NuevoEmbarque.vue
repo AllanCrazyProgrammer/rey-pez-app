@@ -2144,13 +2144,13 @@ export default {
         };
 
         console.log('Datos del embarque:', embarqueData); // Para depuración
-        generarResumenEmbarquePDF(embarqueData, this.productosPorCliente, this.obtenerNombreCliente);
+        generarResumenEmbarquePDF(embarqueData, this.productosPorCliente, this.obtenerNombreCliente, this.clientesDisponibles);
       } catch (error) {
         console.error('Error al generar el PDF:', error);
       }
     },
     generarResumenEmbarque() {
-      generarResumenEmbarquePDF(this.embarque, this.productosPorCliente, this.obtenerNombreCliente);
+      generarResumenEmbarquePDF(this.embarque, this.productosPorCliente, this.obtenerNombreCliente, this.clientesDisponibles);
     },
     onTallaCrudoChange(item) {
       // Asegurarse de que el item tenga todas las propiedades necesarias
