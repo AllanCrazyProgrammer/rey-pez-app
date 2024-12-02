@@ -44,7 +44,7 @@
         </p>
         <ul class="list">
           <li v-for="(salida, index) in salidas" :key="'salida-' + index">
-            {{ salida.tipo === 'maquila' ? 'Maquila' : 'Proveedor' }}: {{ salida.proveedor }} - {{ salida.medida }}: {{ formatNumber(salida.kilos) }} kg
+            {{ salida.tipo === 'maquila' ? 'Maquila' : 'Proveedor' }}: {{ salida.proveedor }} - {{ salida.medida }}{{ salida.precio ? ` ($${salida.precio})` : '' }}: {{ formatNumber(salida.kilos) }} kg
             <button @click="removeSalida(index)" class="delete-btn">&times;</button>
           </li>
         </ul>
@@ -80,11 +80,19 @@
             placeholder="Kilos" 
             required 
           />
+          <input 
+            v-model.number="newEntrada.precio" 
+            type="number" 
+            inputmode="decimal" 
+            step="0.01" 
+            pattern="[0-9]*" 
+            placeholder="Precio (opcional)" 
+          />
           <button @click="addEntrada">Agregar Entrada</button>
         </div>
         <ul class="list">
           <li v-for="(entrada, index) in entradas" :key="'entrada-' + index">
-            {{ entrada.tipo === 'maquila' ? 'Maquila' : 'Proveedor' }}: {{ entrada.proveedor }} - {{ entrada.medida }}: {{ formatNumber(entrada.kilos) }} kg
+            {{ entrada.tipo === 'maquila' ? 'Maquila' : 'Proveedor' }}: {{ entrada.proveedor }} - {{ entrada.medida }}{{ entrada.precio ? ` ($${entrada.precio})` : '' }}: {{ formatNumber(entrada.kilos) }} kg
             <button @click="removeEntrada(index)" class="delete-btn">&times;</button>
           </li>
         </ul>
@@ -161,7 +169,8 @@ export default {
       salidas: [],
       proveedores: [],
       medidas: [],
-      newEntrada: { tipo: 'proveedor', proveedor: '', medida: '', kilos: null },
+      medidasConPrecio: [],
+      newEntrada: { tipo: 'proveedor', proveedor: '', medida: '', kilos: null, precio: null },
       newSalida: { tipo: 'proveedor', proveedor: '', medida: '', kilos: null },
       isEditing: false,
       sacadaId: null,
@@ -196,9 +205,11 @@ export default {
         return maquila ? this.medidas.filter(m => m.tipo === 'maquila' && m.maquilaId === maquila.id) : [];
       } else {
         const proveedor = this.proveedores.find(p => p.nombre === this.newSalida.proveedor);
-        return proveedor 
+        const medidasBase = proveedor 
           ? this.medidas.filter(m => m.proveedorId === proveedor.id || (!m.proveedorId && m.tipo === 'general'))
           : this.medidas.filter(m => m.tipo === 'general');
+          
+        return [...medidasBase, ...this.medidasConPrecio];
       }
     },
     totalEntradas() {
@@ -284,18 +295,24 @@ export default {
           tipo: this.newEntrada.tipo,
           proveedor: this.newEntrada.proveedor,
           medida: this.newEntrada.medida,
-          kilos: Number(this.newEntrada.kilos.toFixed(1))
+          kilos: Number(this.newEntrada.kilos.toFixed(1)),
+          precio: this.newEntrada.precio ? Number(this.newEntrada.precio.toFixed(2)) : null
         });
-        this.newEntrada = { tipo: 'proveedor', proveedor: '', medida: '', kilos: null };
+        this.newEntrada = { tipo: 'proveedor', proveedor: '', medida: '', kilos: null, precio: null };
         await this.updateKilosDisponibles();
       }
     },
     async addSalida() {
       if (this.isSalidaValid && this.newSalida.kilos <= this.kilosDisponibles) {
+        const precioMatch = this.newSalida.medida.match(/\(\$(\d+(\.\d+)?)\)/);
+        const precio = precioMatch ? Number(precioMatch[1]) : null;
+        const medidaBase = precio ? this.newSalida.medida.split(' ($')[0] : this.newSalida.medida;
+
         this.salidas.push({
           tipo: this.newSalida.tipo,
           proveedor: this.newSalida.proveedor,
-          medida: this.newSalida.medida,
+          medida: medidaBase,
+          precio: precio,
           kilos: Number(this.newSalida.kilos.toFixed(1))
         });
         this.newSalida = { tipo: 'proveedor', proveedor: '', medida: '', kilos: null };
@@ -314,62 +331,58 @@ export default {
         this.kilosDisponibles = null;
       }
     },
- async getKilosDisponibles(proveedor, medida) {
-  let kilosDisponibles = 0;
-  let totalEntradas = 0;
-  let totalSalidas = 0;
+    async getKilosDisponibles(proveedor, medida) {
+      let kilosDisponibles = 0;
+      let totalEntradas = 0;
+      let totalSalidas = 0;
 
-  const sacadasRef = collection(db, 'sacadas');
-  const querySnapshot = await getDocs(sacadasRef);
+      const precioMatch = medida.match(/\(\$(\d+(\.\d+)?)\)/);
+      const precio = precioMatch ? Number(precioMatch[1]) : null;
+      const medidaBase = precio ? medida.split(' ($')[0] : medida;
 
-  const sacadasOrdenadas = querySnapshot.docs
-    .map(doc => ({ id: doc.id, ...doc.data() }))
-    .sort((a, b) => a.fecha.toDate() - b.fecha.toDate());
+      const sacadasRef = collection(db, 'sacadas');
+      const querySnapshot = await getDocs(sacadasRef);
 
-  console.log(`Calculando kilos disponibles para ${proveedor} - ${medida}`);
-  console.log(`Fecha actual: ${this.currentDate.format('YYYY-MM-DD')}`);
+      const sacadasOrdenadas = querySnapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() }))
+        .sort((a, b) => a.fecha.toDate() - b.fecha.toDate());
 
-  const fechaActual = this.currentDate.clone().endOf('day');
-  sacadasOrdenadas.forEach((sacada) => {
-    const sacadaFecha = sacada.fecha instanceof Date ? sacada.fecha : sacada.fecha.toDate();
-    
-    if (moment(sacadaFecha).isSameOrBefore(fechaActual)) {
-      console.log(`Procesando sacada del ${moment(sacadaFecha).format('YYYY-MM-DD')}`);
-      
-      sacada.entradas.forEach(entrada => {
-        if (entrada.proveedor === proveedor && entrada.medida === medida) {
-          kilosDisponibles += entrada.kilos;
-          totalEntradas += entrada.kilos;
-          console.log(`  Entrada: +${entrada.kilos} kg`);
+      console.log(`Calculando kilos disponibles para ${proveedor} - ${medida}`);
+      console.log(`Fecha actual: ${this.currentDate.format('YYYY-MM-DD')}`);
+
+      const fechaActual = this.currentDate.clone().endOf('day');
+      sacadasOrdenadas.forEach((sacada) => {
+        const sacadaFecha = sacada.fecha instanceof Date ? sacada.fecha : sacada.fecha.toDate();
+        
+        if (moment(sacadaFecha).isSameOrBefore(fechaActual)) {
+          console.log(`Procesando sacada del ${moment(sacadaFecha).format('YYYY-MM-DD')}`);
+          
+          sacada.entradas.forEach(entrada => {
+            if (entrada.proveedor === proveedor && 
+                entrada.medida === medidaBase && 
+                (!precio || entrada.precio === precio)) {
+              kilosDisponibles += entrada.kilos;
+              totalEntradas += entrada.kilos;
+              console.log(`  Entrada: +${entrada.kilos} kg`);
+            }
+          });
+
+          sacada.salidas.forEach(salida => {
+            if (salida.proveedor === proveedor && 
+                salida.medida === medidaBase && 
+                (!precio || salida.precio === precio)) {
+              kilosDisponibles -= salida.kilos;
+              totalSalidas += salida.kilos;
+              console.log(`  Salida: -${salida.kilos} kg`);
+            }
+          });
+
+          console.log(`  Subtotal: ${kilosDisponibles} kg`);
         }
       });
 
-      sacada.salidas.forEach(salida => {
-        if (salida.proveedor === proveedor && salida.medida === medida) {
-          kilosDisponibles -= salida.kilos;
-          totalSalidas += salida.kilos;
-          console.log(`  Salida: -${salida.kilos} kg`);
-        }
-      });
-
-      console.log(`  Subtotal: ${kilosDisponibles} kg`);
-    }
-  });
-
-  // No restamos las salidas actuales aquí, solo las mostramos para información
-  this.salidas.forEach(salida => {
-    if (salida.proveedor === proveedor && salida.medida === medida) {
-      console.log(`Salida actual (no restada): ${salida.kilos} kg`);
-    }
-  });
-
-  console.log(`Resumen para ${proveedor} - ${medida}:`);
-  console.log(`  Total Entradas: ${totalEntradas} kg`);
-  console.log(`  Total Salidas (sin incluir la actual): ${totalSalidas} kg`);
-  console.log(`  Kilos disponibles finales: ${kilosDisponibles} kg`);
-  
-  return Number(kilosDisponibles.toFixed(1));
-},
+      return Number(kilosDisponibles.toFixed(1));
+    },
     async removeEntrada(index) {
       this.entradas.splice(index, 1);
       await this.updateKilosDisponibles();
@@ -435,6 +448,82 @@ export default {
     updateCurrentDate() {
       this.currentDate = moment(this.selectedDate);
     },
+    async getMedidasConPrecio(proveedor) {
+      const medidasConPrecio = [];
+      const medidasTemp = new Map(); // Usamos un Map para agrupar temporalmente
+
+      // Primero recopilamos todas las medidas con precio de las entradas actuales
+      this.entradas.forEach(entrada => {
+        if (entrada.precio && entrada.proveedor === proveedor) {
+          const key = `${entrada.medida}-${entrada.precio}`;
+          if (!medidasTemp.has(key)) {
+            medidasTemp.set(key, {
+              medida: entrada.medida,
+              precio: entrada.precio,
+              kilos: 0
+            });
+          }
+          medidasTemp.get(key).kilos += entrada.kilos;
+        }
+      });
+
+      // Restamos las salidas actuales
+      this.salidas.forEach(salida => {
+        if (salida.precio && salida.proveedor === proveedor) {
+          const key = `${salida.medida}-${salida.precio}`;
+          if (medidasTemp.has(key)) {
+            medidasTemp.get(key).kilos -= salida.kilos;
+          }
+        }
+      });
+
+      // Obtenemos las sacadas anteriores
+      const sacadasRef = collection(db, 'sacadas');
+      const querySnapshot = await getDocs(sacadasRef);
+      const sacadasOrdenadas = querySnapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() }))
+        .sort((a, b) => a.fecha.toDate() - b.fecha.toDate());
+
+      // Procesamos las sacadas anteriores
+      sacadasOrdenadas.forEach(sacada => {
+        sacada.entradas.forEach(entrada => {
+          if (entrada.precio && entrada.proveedor === proveedor) {
+            const key = `${entrada.medida}-${entrada.precio}`;
+            if (!medidasTemp.has(key)) {
+              medidasTemp.set(key, {
+                medida: entrada.medida,
+                precio: entrada.precio,
+                kilos: 0
+              });
+            }
+            medidasTemp.get(key).kilos += entrada.kilos;
+          }
+        });
+
+        sacada.salidas.forEach(salida => {
+          if (salida.precio && salida.proveedor === proveedor) {
+            const key = `${salida.medida}-${salida.precio}`;
+            if (medidasTemp.has(key)) {
+              medidasTemp.get(key).kilos -= salida.kilos;
+            }
+          }
+        });
+      });
+
+      // Convertimos solo las medidas con existencias positivas a opciones del selector
+      for (const [key, datos] of medidasTemp.entries()) {
+        if (datos.kilos > 0) {
+          medidasConPrecio.push({
+            id: key,
+            nombre: `${datos.medida} ($${datos.precio})`,
+            tipo: 'general',
+            precio: datos.precio
+          });
+        }
+      }
+
+      return medidasConPrecio;
+    },
   },
   async created() {
     await this.loadProveedores();
@@ -450,7 +539,15 @@ export default {
   watch: {
     'newSalida.proveedor': 'updateKilosDisponibles',
     'newSalida.medida': 'updateKilosDisponibles',
-    'newSalida.kilos': 'updateKilosDisponibles'
+    'newSalida.kilos': 'updateKilosDisponibles',
+    async 'newSalida.proveedor'(newProveedor) {
+      this.updateKilosDisponibles();
+      if (newProveedor && this.newSalida.tipo === 'proveedor') {
+        this.medidasConPrecio = await this.getMedidasConPrecio(newProveedor);
+      } else {
+        this.medidasConPrecio = [];
+      }
+    }
   }
 };
 </script>

@@ -21,19 +21,20 @@
                 <tr>
                   <th>Medida</th>
                   <th v-if="proveedor !== 'Ozuna' && proveedor !== 'Joselito'">Proveedor</th>
+                  <th v-if="proveedor !== 'Ozuna' && proveedor !== 'Joselito'">Precio</th>
                   <th class="kilos-cell">Kilos</th>
                 </tr>
               </thead>
               <tbody>
                 <template v-if="proveedor === 'Ozuna' || proveedor === 'Joselito'">
-                  <tr v-for="(kilos, medida) in datos" :key="medida">
-                    <td>{{ medida }}</td>
-                    <td class="kilos-cell">{{ formatNumber(kilos) }}</td>
+                  <tr v-for="(datos, medidaKey) in datos" :key="medidaKey">
+                    <td>{{ datos.medida }}</td>
+                    <td class="kilos-cell">{{ formatNumber(datos.kilos) }}</td>
                   </tr>
                   <tr class="total-row">
                     <td><strong>Total {{ proveedor }}</strong></td>
                     <td class="kilos-cell">
-                      <strong>{{ formatNumber(Object.values(datos).reduce((sum, kilos) => sum + kilos, 0)) }}</strong>
+                      <strong>{{ formatNumber(Object.values(datos).reduce((sum, item) => sum + item.kilos, 0)) }}</strong>
                     </td>
                   </tr>
                 </template>
@@ -41,6 +42,7 @@
                   <tr v-for="medida in datos" :key="medida.medida">
                     <td>{{ medida.medida }}</td>
                     <td>{{ medida.proveedor }}</td>
+                    <td>{{ medida.precio ? '$' + medida.precio.toFixed(2) : '-' }}</td>
                     <td class="kilos-cell">{{ formatNumber(medida.kilos) }}</td>
                   </tr>
                   <tr class="total-row">
@@ -90,24 +92,35 @@ export default {
           if (!newExistencias[entrada.proveedor]) {
             newExistencias[entrada.proveedor] = {};
           }
-          if (!newExistencias[entrada.proveedor][entrada.medida]) {
-            newExistencias[entrada.proveedor][entrada.medida] = 0;
+          const medidaKey = entrada.precio ? `${entrada.medida} ($${entrada.precio})` : entrada.medida;
+          if (!newExistencias[entrada.proveedor][medidaKey]) {
+            newExistencias[entrada.proveedor][medidaKey] = {
+              kilos: 0,
+              precio: entrada.precio,
+              medida: entrada.medida
+            };
           }
-          newExistencias[entrada.proveedor][entrada.medida] += entrada.kilos;
+          newExistencias[entrada.proveedor][medidaKey].kilos += entrada.kilos;
 
           if (entrada.proveedor === 'Ozuna' && entrada.medida === '36/40') {
             totalOzuna3640 += entrada.kilos;
             console.log(`  Entrada Ozuna 36/40: +${entrada.kilos} kg`);
           }
         });
+
         sacada.salidas.forEach(salida => {
           if (!newExistencias[salida.proveedor]) {
             newExistencias[salida.proveedor] = {};
           }
-          if (!newExistencias[salida.proveedor][salida.medida]) {
-            newExistencias[salida.proveedor][salida.medida] = 0;
+          const medidaKey = salida.precio ? `${salida.medida} ($${salida.precio})` : salida.medida;
+          if (!newExistencias[salida.proveedor][medidaKey]) {
+            newExistencias[salida.proveedor][medidaKey] = {
+              kilos: 0,
+              precio: salida.precio,
+              medida: salida.medida
+            };
           }
-          newExistencias[salida.proveedor][salida.medida] -= salida.kilos;
+          newExistencias[salida.proveedor][medidaKey].kilos -= salida.kilos;
 
           if (salida.proveedor === 'Ozuna' && salida.medida === '36/40') {
             totalOzuna3640 -= salida.kilos;
@@ -121,7 +134,8 @@ export default {
       // Filtrar proveedores y medidas con 0 o menos kilos
       Object.keys(newExistencias).forEach(proveedor => {
         newExistencias[proveedor] = Object.fromEntries(
-          Object.entries(newExistencias[proveedor]).filter(([_, kilos]) => kilos > 0)
+          Object.entries(newExistencias[proveedor])
+            .filter(([_, datos]) => datos.kilos > 0)
         );
         // Si no quedan medidas para el proveedor, eliminar el proveedor
         if (Object.keys(newExistencias[proveedor]).length === 0) {
@@ -157,15 +171,16 @@ export default {
       // Agrupar por medida base para otros proveedores
       const medidasAgrupadas = {};
       Object.entries(otrosProveedores).forEach(([proveedor, medidas]) => {
-        Object.entries(medidas).forEach(([medida, kilos]) => {
-          const medidaBase = medida.split(' ')[0];
+        Object.entries(medidas).forEach(([medidaKey, datos]) => {
+          const medidaBase = datos.medida.split(' ')[0];
           if (!medidasAgrupadas[medidaBase]) {
             medidasAgrupadas[medidaBase] = [];
           }
           medidasAgrupadas[medidaBase].push({
             proveedor,
-            medida,
-            kilos
+            medida: datos.medida,
+            precio: datos.precio,
+            kilos: datos.kilos
           });
         });
       });
@@ -214,11 +229,11 @@ export default {
       let max = 0;
       let maxOzuna = 0;
       Object.entries(existencias.value).forEach(([proveedor, medidas]) => {
-        Object.values(medidas).forEach(kilos => {
+        Object.values(medidas).forEach(datos => {
           if (proveedor.toLowerCase() === 'ozuna') {
-            if (kilos > maxOzuna) maxOzuna = kilos;
+            if (datos.kilos > maxOzuna) maxOzuna = datos.kilos;
           } else {
-            if (kilos > max) max = kilos;
+            if (datos.kilos > max) max = datos.kilos;
           }
         });
       });
@@ -228,8 +243,8 @@ export default {
     const totalGeneral = computed(() => {
       return Object.entries(filteredExistencias.value).reduce((total, [proveedor, datos]) => {
         if (proveedor === 'Ozuna' || proveedor === 'Joselito') {
-          // Para maquilas, los datos son un objeto directo de medida -> kilos
-          return total + Object.values(datos).reduce((sum, kilos) => sum + kilos, 0);
+          // Para maquilas, los datos son un objeto directo de medida -> datos
+          return total + Object.values(datos).reduce((sum, item) => sum + item.kilos, 0);
         } else {
           // Para medidas agrupadas, los datos son un array de objetos
           return total + datos.reduce((sum, item) => sum + item.kilos, 0);
