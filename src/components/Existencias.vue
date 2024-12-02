@@ -20,6 +20,7 @@
               <thead>
                 <tr>
                   <th>Medida</th>
+                  <th v-if="proveedor !== 'Ozuna' && proveedor !== 'Joselito'">Proveedor</th>
                   <th class="kilos-cell">Kilos</th>
                 </tr>
               </thead>
@@ -39,10 +40,12 @@
                 <template v-else>
                   <tr v-for="medida in datos" :key="medida.medida">
                     <td>{{ medida.medida }}</td>
+                    <td>{{ medida.proveedor }}</td>
                     <td class="kilos-cell">{{ formatNumber(medida.kilos) }} kg</td>
                   </tr>
                   <tr class="total-row">
                     <td><strong>Total {{ proveedor }}</strong></td>
+                    <td></td>
                     <td class="kilos-cell">
                       <strong>{{ formatNumber(datos.reduce((sum, item) => sum + item.kilos, 0)) }} kg</strong>
                     </td>
