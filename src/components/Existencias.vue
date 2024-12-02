@@ -28,12 +28,12 @@
                 <template v-if="proveedor === 'Ozuna' || proveedor === 'Joselito'">
                   <tr v-for="(kilos, medida) in datos" :key="medida">
                     <td>{{ medida }}</td>
-                    <td class="kilos-cell">{{ formatNumber(kilos) }} kg</td>
+                    <td class="kilos-cell">{{ formatNumber(kilos) }}</td>
                   </tr>
                   <tr class="total-row">
                     <td><strong>Total {{ proveedor }}</strong></td>
                     <td class="kilos-cell">
-                      <strong>{{ formatNumber(Object.values(datos).reduce((sum, kilos) => sum + kilos, 0)) }} kg</strong>
+                      <strong>{{ formatNumber(Object.values(datos).reduce((sum, kilos) => sum + kilos, 0)) }}</strong>
                     </td>
                   </tr>
                 </template>
@@ -41,13 +41,13 @@
                   <tr v-for="medida in datos" :key="medida.medida">
                     <td>{{ medida.medida }}</td>
                     <td>{{ medida.proveedor }}</td>
-                    <td class="kilos-cell">{{ formatNumber(medida.kilos) }} kg</td>
+                    <td class="kilos-cell">{{ formatNumber(medida.kilos) }}</td>
                   </tr>
                   <tr class="total-row">
                     <td><strong>Total {{ proveedor }}</strong></td>
                     <td></td>
                     <td class="kilos-cell">
-                      <strong>{{ formatNumber(datos.reduce((sum, item) => sum + item.kilos, 0)) }} kg</strong>
+                      <strong>{{ formatNumber(datos.reduce((sum, item) => sum + item.kilos, 0)) }}</strong>
                     </td>
                   </tr>
                 </template>
@@ -58,7 +58,7 @@
       </div>
 
       <div class="total-general">
-        <h2>Total General: {{ formatNumber(totalGeneral) }} kg</h2>
+        <h2>Total General: {{ formatNumber(totalGeneral) }}</h2>
       </div>
     </div>
   </div>
