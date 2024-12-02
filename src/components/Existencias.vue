@@ -11,66 +11,51 @@
       <div class="filters">
         <input v-model="search" placeholder="Buscar por proveedor o medida" class="search-input" />
       </div>
+
       <div class="existencias-grid">
-        <div v-for="(proveedor, proveedorNombre) in filteredExistencias" :key="proveedorNombre" class="proveedor-card">
-          <h2>{{ proveedorNombre }}</h2>
-          <div class="medidas-container">
-            <div v-for="(kilos, medida) in proveedor" :key="medida" class="medida-item">
-              <div class="medida-info">
-                <span class="medida-nombre">{{ medida }}</span>
-                <span class="medida-kilos">{{ formatNumber(kilos) }} kg</span>
-              </div>
-              <div class="medida-bar-container">
-                <div class="medida-bar" :style="{ width: `${(kilos / (proveedorNombre.toLowerCase() === 'ozuna' ? maxKilos.ozuna : maxKilos.normal)) * 100}%` }"></div>
-              </div>
-            </div>
+        <template v-for="(datos, proveedor) in filteredExistencias">
+          <div :key="proveedor" class="medida-card" :class="{ 'maquila-card': proveedor === 'Ozuna' || proveedor === 'Joselito' }">
+            <h2>{{ proveedor }}{{ (proveedor === 'Ozuna' || proveedor === 'Joselito') ? ' (Maquila)' : '' }}</h2>
+            <table class="medida-table">
+              <thead>
+                <tr>
+                  <th>Medida</th>
+                  <th class="kilos-cell">Kilos</th>
+                </tr>
+              </thead>
+              <tbody>
+                <template v-if="proveedor === 'Ozuna' || proveedor === 'Joselito'">
+                  <tr v-for="(kilos, medida) in datos" :key="medida">
+                    <td>{{ medida }}</td>
+                    <td class="kilos-cell">{{ formatNumber(kilos) }} kg</td>
+                  </tr>
+                  <tr class="total-row">
+                    <td><strong>Total {{ proveedor }}</strong></td>
+                    <td class="kilos-cell">
+                      <strong>{{ formatNumber(Object.values(datos).reduce((sum, kilos) => sum + kilos, 0)) }} kg</strong>
+                    </td>
+                  </tr>
+                </template>
+                <template v-else>
+                  <tr v-for="medida in datos" :key="medida.medida">
+                    <td>{{ medida.medida }}</td>
+                    <td class="kilos-cell">{{ formatNumber(medida.kilos) }} kg</td>
+                  </tr>
+                  <tr class="total-row">
+                    <td><strong>Total {{ proveedor }}</strong></td>
+                    <td class="kilos-cell">
+                      <strong>{{ formatNumber(datos.reduce((sum, item) => sum + item.kilos, 0)) }} kg</strong>
+                    </td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
           </div>
-          <div class="proveedor-total">Total: {{ formatNumber(calcularTotalProveedor(proveedor)) }} kg</div>
-        </div>
+        </template>
       </div>
+
       <div class="total-general">
         <h2>Total General: {{ formatNumber(totalGeneral) }} kg</h2>
-      </div>
-      <div class="totales-por-medida">
-        <h3>Totales por Medida</h3>
-        <table>
-          <thead>
-            <tr>
-              <th>Medida</th>
-              <th>Total (kg)</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="(total, medida) in totalesPorMedida.totales" :key="medida">
-              <td>{{ medida }}</td>
-              <td>{{ formatNumber(total) }} kg</td>
-            </tr>
-            <tr class="total-row">
-              <td><strong>Total</strong></td>
-              <td><strong>{{ formatNumber(totalPorMedidas) }} kg</strong></td>
-            </tr>
-          </tbody>
-        </table>
-
-        <h3>Totales Ozuna</h3>
-        <table>
-          <thead>
-            <tr>
-              <th>Medida</th>
-              <th>Total (kg)</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="(total, medida) in totalesPorMedida.ozunaTotales" :key="medida">
-              <td>{{ medida }}</td>
-              <td>{{ formatNumber(total) }} kg</td>
-            </tr>
-            <tr class="total-row">
-              <td><strong>Total</strong></td>
-              <td><strong>{{ formatNumber(totalOzuna) }} kg</strong></td>
-            </tr>
-          </tbody>
-        </table>
       </div>
     </div>
   </div>
@@ -145,48 +130,81 @@ export default {
     };
 
     const filteredExistencias = computed(() => {
-      if (!search.value) {
-        // Ordenar las existencias
-        return Object.fromEntries(
-          Object.entries(existencias.value).map(([proveedor, medidas]) => [
-            proveedor,
-            Object.fromEntries(
-              Object.entries(medidas)
-                .sort((a, b) => {
-                  // Convertir las medidas a números para comparación
-                  const getMedidaNum = (medida) => {
-                    const num = medida.split('/')[0];
-                    return parseInt(num, 10);
-                  };
-                  return getMedidaNum(a[0]) - getMedidaNum(b[0]);
-                })
-            )
-          ])
-        );
-      }
-
       const searchLower = search.value.toLowerCase();
-      const filtered = {};
+      
+      // Separar Ozuna y Joselito (maquilas) del resto de proveedores
+      const maquilas = {};
+      const otrosProveedores = {};
+      
+      // Primero procesar los proveedores no maquila
       Object.entries(existencias.value).forEach(([proveedor, medidas]) => {
-        const filteredMedidas = Object.entries(medidas)
-          .filter(([medida]) => 
-            proveedor.toLowerCase().includes(searchLower) || 
-            medida.toLowerCase().includes(searchLower)
-          )
-          .sort((a, b) => {
-            // Ordenar las medidas filtradas
-            const getMedidaNum = (medida) => {
-              const num = medida.split('/')[0];
-              return parseInt(num, 10);
-            };
-            return getMedidaNum(a[0]) - getMedidaNum(b[0]);
-          });
-
-        if (filteredMedidas.length > 0) {
-          filtered[proveedor] = Object.fromEntries(filteredMedidas);
+        if (proveedor !== 'Ozuna' && proveedor !== 'Joselito') {
+          otrosProveedores[proveedor] = medidas;
         }
       });
-      return filtered;
+
+      // Procesar las maquilas después
+      if (existencias.value['Ozuna']) {
+        maquilas['Ozuna'] = existencias.value['Ozuna'];
+      }
+      if (existencias.value['Joselito']) {
+        maquilas['Joselito'] = existencias.value['Joselito'];
+      }
+
+      // Agrupar por medida base para otros proveedores
+      const medidasAgrupadas = {};
+      Object.entries(otrosProveedores).forEach(([proveedor, medidas]) => {
+        Object.entries(medidas).forEach(([medida, kilos]) => {
+          const medidaBase = medida.split(' ')[0];
+          if (!medidasAgrupadas[medidaBase]) {
+            medidasAgrupadas[medidaBase] = [];
+          }
+          medidasAgrupadas[medidaBase].push({
+            proveedor,
+            medida,
+            kilos
+          });
+        });
+      });
+
+      // Ordenar y filtrar según la búsqueda
+      const resultado = {};
+      
+      // Primero agregar las medidas agrupadas
+      Object.entries(medidasAgrupadas)
+        .sort(([medidaA], [medidaB]) => {
+          const numA = parseInt(medidaA.split('/')[0]);
+          const numB = parseInt(medidaB.split('/')[0]);
+          return numA - numB;
+        })
+        .forEach(([medidaBase, items]) => {
+          if (!searchLower || 
+              medidaBase.toLowerCase().includes(searchLower) ||
+              items.some(item => 
+                item.proveedor.toLowerCase().includes(searchLower) || 
+                item.medida.toLowerCase().includes(searchLower)
+              )) {
+            resultado[medidaBase] = items;
+          }
+        });
+
+      // Después agregar las maquilas
+      Object.entries(maquilas).forEach(([proveedor, medidas]) => {
+        if (!searchLower || proveedor.toLowerCase().includes(searchLower)) {
+          resultado[proveedor] = Object.entries(medidas)
+            .sort(([medidaA], [medidaB]) => {
+              const numA = parseInt(medidaA.split('/')[0]);
+              const numB = parseInt(medidaB.split('/')[0]);
+              return numA - numB;
+            })
+            .reduce((acc, [medida, kilos]) => {
+              acc[medida] = kilos;
+              return acc;
+            }, {});
+        }
+      });
+
+      return resultado;
     });
 
     const maxKilos = computed(() => {
@@ -205,250 +223,196 @@ export default {
     });
 
     const totalGeneral = computed(() => {
-      return Object.values(filteredExistencias.value).reduce((total, proveedor) => {
-        return total + Object.values(proveedor).reduce((sum, kilos) => sum + kilos, 0);
+      return Object.entries(filteredExistencias.value).reduce((total, [proveedor, datos]) => {
+        if (proveedor === 'Ozuna' || proveedor === 'Joselito') {
+          // Para maquilas, los datos son un objeto directo de medida -> kilos
+          return total + Object.values(datos).reduce((sum, kilos) => sum + kilos, 0);
+        } else {
+          // Para medidas agrupadas, los datos son un array de objetos
+          return total + datos.reduce((sum, item) => sum + item.kilos, 0);
+        }
       }, 0);
     });
 
     const formatNumber = (value) => {
-      return parseFloat(value).toFixed(1).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+      return Math.round(value).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
     };
 
     const imprimirReporte = () => {
       const fechaActual = new Date().toLocaleDateString('es-ES', {
         year: 'numeric',
-        month: 'short',
+        month: 'long',
         day: 'numeric'
       });
 
       const estilos = `
         <style>
-          @page { size: A4 landscape; margin: 1cm; }
+          @page { 
+            size: A4 landscape; 
+            margin: 0.5cm 0.5cm;
+            @bottom-right {
+              content: "Página " counter(page) " de " counter(pages);
+              font-size: 11pt;
+            }
+          }
           body {
             font-family: Arial, sans-serif;
-            font-size: 14pt;
-            line-height: 1.4;
+            font-size: 18pt;
+            line-height: 1.2;
             color: #333;
+            margin: 0;
+            padding: 0;
           }
-          h1, h2, h3 { color: #2c3e50; margin: 0 0 10px 0; }
+          .header {
+            margin-bottom: 8px;
+            padding-bottom: 4px;
+          }
           h1 {
-            text-align: center;
-            font-size: 24pt;
-            border-bottom: 2px solid #3498db;
-            padding-bottom: 8px;
+            font-size: 26pt;
+            margin: 0;
+            padding: 0;
           }
           .fecha-reporte {
-            text-align: right;
-            font-size: 12pt;
-            margin-bottom: 10px;
-          }
-          .reporte-container {
-            display: flex;
-            flex-wrap: wrap;
-            justify-content: space-between;
-          }
-          .proveedor-card {
-            width: 48%;
-            background-color: #f8f9fa;
-            border-radius: 6px;
-            padding: 12px;
-            margin-bottom: 15px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-          }
-          .proveedor-card h2 {
             font-size: 18pt;
-            border-bottom: 1px solid #bdc3c7;
-            padding-bottom: 5px;
           }
-          .medida-item {
-            margin-bottom: 8px;
+          .existencias-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 8px;
+            margin-top: 10px;
           }
-          .medida-info {
-            display: flex;
-            justify-content: space-between;
-            font-size: 14pt;
-            margin-bottom: 3px;
+          .medida-card {
+            padding: 8px;
           }
-          .medida-nombre { color: #2c3e50; }
-          .medida-kilos { font-weight: bold; }
-          .medida-bar-container {
-            height: 15px;
-            background-color: #ecf0f1;
-            border-radius: 3px;
-            overflow: hidden;
+          .medida-card h2 {
+            font-size: 20pt;
+            margin: 0 0 6px 0;
+            padding-bottom: 4px;
           }
-          .medida-bar {
-            height: 100%;
-            background-color: #3498db;
-          }
-          .proveedor-total {
-            text-align: right;
-            font-weight: bold;
-            margin-top: 8px;
+          th, td {
+            padding: 4px;
             font-size: 16pt;
           }
-          .totales-section {
-            display: flex;
-            justify-content: space-between;
-            margin-top: 20px;
+          @media print {
+            .existencias-grid {
+              display: grid;
+              grid-template-columns: repeat(4, 1fr);
+            }
+            .maquila-card {
+              break-before: page;
+              page-break-before: always;
+            }
+            .medida-card {
+              break-inside: avoid;
+              page-break-inside: avoid;
+            }
           }
-          .totales-table {
-            width: 48%;
+          .total-general {
+            margin-top: 15px;
+            padding: 8px;
+          }
+          .total-general h2 {
+            font-size: 20pt;
           }
           table {
             width: 100%;
             border-collapse: collapse;
+            margin-top: 8px;
+            border: 2px solid #2c3e50;
           }
-          th, td {
-            border: 1px solid #ddd;
-            padding: 6px;
+          th {
+            background-color: #2c3e50;
+            color: white;
             text-align: left;
-            font-size: 13pt;
+            padding: 8px;
+            font-size: 16pt;
+            border: 1px solid #2c3e50;
           }
-          th { 
-            background-color: #f2f2f2; 
-            font-weight: bold;
+          td {
+            padding: 6px 8px;
+            font-size: 16pt;
+            border: 1px solid #bdc3c7;
           }
-          .total-general {
+          tr:nth-child(even) {
+            background-color: #f8f9fa;
+          }
+          .kilos-cell {
             text-align: right;
-            font-size: 18pt;
             font-weight: bold;
-            margin-top: 15px;
-            border-top: 2px solid #3498db;
-            padding-top: 10px;
+            color: #2c3e50;
           }
           .total-row {
-            font-weight: bold;
-            background-color: #f2f2f2;
+            background-color: #ecf0f1 !important;
+            border-top: 2px solid #2c3e50;
           }
           .total-row td {
-            border-top: 2px solid #3498db;
+            font-weight: bold;
+            color: #2c3e50;
+          }
+          .medida-card {
+            padding: 12px;
+            border: 1px solid #bdc3c7;
+            background-color: white;
+          }
+          .maquila-card {
+            background-color: white;
+            border: 2px solid #f39c12;
+          }
+          .maquila-card h2 {
+            color: #d35400;
+            border-bottom: 2px solid #f39c12;
+            padding-bottom: 8px;
+          }
+          .maquila-card th {
+            background-color: #f39c12;
+            border-color: #f39c12;
+          }
+          .maquila-card .total-row {
+            background-color: #f8f9fa !important;
+            border-top: 2px solid #f39c12;
+          }
+          .maquila-card .total-row td {
+            color: #d35400;
+            font-weight: bold;
+          }
+          @media print {
+            .medida-card {
+              box-shadow: none;
+              border: 1px solid #bdc3c7;
+            }
+            .maquila-card {
+              background-color: white;
+              border: 2px solid #f39c12;
+            }
+            table {
+              page-break-inside: avoid;
+            }
           }
         </style>
       `;
 
-      const contenidoImprimir = `
-        <h1>Reporte de Existencias - Rey Pez</h1>
-        <div class="fecha-reporte">${fechaActual}</div>
-        <div class="reporte-container">
-          ${Object.entries(filteredExistencias.value).map(([proveedor, medidas]) => `
-            <div class="proveedor-card">
-              <h2>${proveedor}</h2>
-              <div class="medidas-container">
-                ${Object.entries(medidas).map(([medida, kilos]) => `
-                  <div class="medida-item">
-                    <div class="medida-info">
-                      <span class="medida-nombre">${medida}</span>
-                      <span class="medida-kilos">${formatNumber(kilos)} kg</span>
-                    </div>
-                    <div class="medida-bar-container">
-                      <div class="medida-bar" style="width: ${(kilos / (proveedor.toLowerCase() === 'ozuna' ? maxKilos.value.ozuna : maxKilos.value.normal)) * 100}%;"></div>
-                    </div>
-                  </div>
-                `).join('')}
-              </div>
-              <div class="proveedor-total">
-                Total: ${formatNumber(calcularTotalProveedor(medidas))} kg
-              </div>
-            </div>
-          `).join('')}
+      // Crear el contenido HTML
+      const contenido = document.createElement('div');
+      contenido.innerHTML = `
+        ${estilos}
+        <div class="header">
+          <h1>Reporte de Existencias</h1>
+          <div class="fecha-reporte">Fecha: ${fechaActual}</div>
         </div>
-        <div class="totales-section">
-          <div class="totales-table">
-            <h3>Totales por Medida</h3>
-            <table>
-              <thead>
-                <tr>
-                  <th>Medida</th>
-                  <th>Total (kg)</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${Object.entries(totalesPorMedida.value.totales).map(([medida, total]) => `
-                  <tr>
-                    <td>${medida}</td>
-                    <td>${formatNumber(total)}</td>
-                  </tr>
-                `).join('')}
-                <tr class="total-row">
-                  <td><strong>Total</strong></td>
-                  <td><strong>${formatNumber(totalPorMedidas.value)} kg</strong></td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          <div class="totales-table">
-            <h3>Totales Maquila (Ozuna)</h3>
-            <table>
-              <thead>
-                <tr>
-                  <th>Medida</th>
-                  <th>Total (kg)</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${Object.entries(totalesPorMedida.value.ozunaTotales).map(([medida, total]) => `
-                  <tr>
-                    <td>${medida}</td>
-                    <td>${formatNumber(total)}</td>
-                  </tr>
-                `).join('')}
-                <tr class="total-row">
-                  <td><strong>Total</strong></td>
-                  <td><strong>${formatNumber(totalOzuna.value)} kg</strong></td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-        <div class="total-general">
-          Total General: ${formatNumber(totalGeneral.value)} kg
-        </div>
+        ${document.querySelector('.existencias-grid').outerHTML}
+        ${document.querySelector('.total-general').outerHTML}
       `;
 
-      const ventanaImprimir = window.open('', '_blank');
-      ventanaImprimir.document.write(`
-        <html>
-          <head>
-            <title>Reporte de Existencias - Rey Pez</title>
-            ${estilos}
-          </head>
-          <body>
-            ${contenidoImprimir}
-          </body>
-        </html>
-      `);
-      ventanaImprimir.document.close();
-      ventanaImprimir.print();
-    };
+      // Configurar la impresión
+      const ventanaImpresion = window.open('', '_blank');
+      ventanaImpresion.document.write(contenido.innerHTML);
+      ventanaImpresion.document.close();
 
-    const totalesPorMedida = computed(() => {
-      const totales = {};
-      const ozunaTotales = {};
-
-      Object.entries(filteredExistencias.value).forEach(([proveedor, medidas]) => {
-        Object.entries(medidas).forEach(([medida, kilos]) => {
-          if (proveedor.toLowerCase() === 'ozuna') {
-            ozunaTotales[medida] = (ozunaTotales[medida] || 0) + kilos;
-          } else {
-            totales[medida] = (totales[medida] || 0) + kilos;
-          }
-        });
-      });
-
-      return { totales, ozunaTotales };
-    });
-
-    const totalPorMedidas = computed(() => {
-      return Object.values(totalesPorMedida.value.totales).reduce((sum, kilos) => sum + kilos, 0);
-    });
-
-    const totalOzuna = computed(() => {
-      return Object.values(totalesPorMedida.value.ozunaTotales).reduce((sum, kilos) => sum + kilos, 0);
-    });
-
-    const calcularTotalProveedor = (proveedor) => {
-      return Object.values(proveedor).reduce((total, kilos) => total + kilos, 0);
+      // Esperar a que los estilos se carguen
+      setTimeout(() => {
+        ventanaImpresion.print();
+        ventanaImpresion.close();
+      }, 250);
     };
 
     let unsubscribe;
@@ -477,11 +441,7 @@ export default {
       maxKilos,
       totalGeneral,
       formatNumber,
-      imprimirReporte,
-      totalesPorMedida,
-      totalPorMedidas,
-      totalOzuna,
-      calcularTotalProveedor
+      imprimirReporte
     };
   }
 };
@@ -548,8 +508,9 @@ h1 {
 
 .existencias-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 20px;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-top: 10px;
 }
 
 .proveedor-card {
@@ -619,49 +580,6 @@ h1 {
   font-weight: bold;
   color: #000000;
 }
-.totales-por-medida {
-  margin-top: 30px;
-}
-
-.totales-por-medida h3 {
-  color: #2c3e50;
-  margin-bottom: 10px;
-}
-
-.totales-por-medida table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-bottom: 20px;
-}
-
-.totales-por-medida th,
-.totales-por-medida td {
-  border: 1px solid #ddd;
-  padding: 8px;
-  text-align: left;
-}
-
-.totales-por-medida th {
-  background-color: #f2f2f2;
-  font-weight: bold;
-}
-
-.totales-por-medida tr:nth-child(even) {
-  background-color: #f9f9f9;
-}
-
-.totales-por-medida tr:hover {
-  background-color: #f5f5f5;
-}
-
-.total-row {
-  font-weight: bold;
-  background-color: #f2f2f2;
-}
-
-.total-row td {
-  border-top: 2px solid #3498db;
-}
 
 @media (max-width: 768px) {
   .header {
@@ -675,6 +593,110 @@ h1 {
 
   .existencias-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+.medida-card {
+  background-color: white;
+  border-radius: 10px;
+  padding: 10px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.medida-card h2 {
+  color: #2c3e50;
+  border-bottom: 2px solid #3498db;
+  padding-bottom: 10px;
+  margin-bottom: 15px;
+}
+
+.proveedores-container {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.proveedor-item {
+  margin-bottom: 10px;
+}
+
+.proveedor-info {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 5px;
+}
+
+.proveedor-nombre {
+  font-weight: bold;
+  color: #2c3e50;
+}
+
+.proveedor-kilos {
+  font-weight: bold;
+  color: #000000;
+}
+
+.medida-total {
+  text-align: right;
+  font-weight: bold;
+  margin-top: 10px;
+  color: #2c3e50;
+}
+
+.ozuna-card {
+  background-color: #f8f9fa;
+  border: 2px solid #3498db;
+}
+
+.medida-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 10px;
+}
+
+.medida-table th,
+.medida-table td {
+  padding: 8px;
+  text-align: left;
+  border-bottom: 1px solid #ddd;
+}
+
+.medida-table th {
+  background-color: #f8f9fa;
+  font-weight: bold;
+  color: #2c3e50;
+}
+
+.medida-table .kilos-cell {
+  text-align: right;
+  font-weight: bold;
+}
+
+.medida-table .total-row {
+  background-color: #f8f9fa;
+  font-weight: bold;
+}
+
+.medida-table .total-row td {
+  border-top: 2px solid #3498db;
+}
+
+@media print {
+  .medida-card {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  .medida-card:nth-child(n+7) {
+    break-before: page;
+    page-break-before: always;
+  }
+  .medida-card:nth-child(n+13) {
+    break-before: page;
+    page-break-before: always;
+  }
+  .total-general {
+    break-before: avoid;
+    page-break-before: avoid;
   }
 }
 </style>
