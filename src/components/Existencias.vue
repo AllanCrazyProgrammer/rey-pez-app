@@ -270,12 +270,12 @@ export default {
             margin: 0.5cm 0.5cm;
             @bottom-right {
               content: "Página " counter(page) " de " counter(pages);
-              font-size: 11pt;
+              font-size: 14pt;
             }
           }
           body {
             font-family: Arial, sans-serif;
-            font-size: 18pt;
+            font-size: 23pt;
             line-height: 1.2;
             color: #333;
             margin: 0;
@@ -286,12 +286,12 @@ export default {
             padding-bottom: 4px;
           }
           h1 {
-            font-size: 26pt;
+            font-size: 29pt;
             margin: 0;
             padding: 0;
           }
           .fecha-reporte {
-            font-size: 18pt;
+            font-size: 21pt;
           }
           .existencias-grid {
             display: grid;
@@ -303,13 +303,13 @@ export default {
             padding: 8px;
           }
           .medida-card h2 {
-            font-size: 20pt;
+            font-size: 23pt;
             margin: 0 0 6px 0;
             padding-bottom: 4px;
           }
           th, td {
             padding: 4px;
-            font-size: 16pt;
+            font-size: 19pt;
           }
           @media print {
             .existencias-grid {
@@ -330,7 +330,7 @@ export default {
             padding: 8px;
           }
           .total-general h2 {
-            font-size: 20pt;
+            font-size: 23pt;
           }
           table {
             width: 100%;
@@ -343,12 +343,12 @@ export default {
             color: white;
             text-align: left;
             padding: 8px;
-            font-size: 16pt;
+            font-size: 19pt;
             border: 1px solid #2c3e50;
           }
           td {
             padding: 6px 8px;
-            font-size: 16pt;
+            font-size: 19pt;
             border: 1px solid #bdc3c7;
           }
           tr:nth-child(even) {
