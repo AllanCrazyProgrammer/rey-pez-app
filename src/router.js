@@ -20,6 +20,10 @@ import VentasYGananciasCatarro from '@/views/CuentasClientes/VentasYGananciasCat
 import ListaEmbarques from '@/views/Embarques/ListaEmbarques.vue';
 import NuevoEmbarque from '@/views/Embarques/NuevoEmbarque.vue';
 import Rendimientos from '@/views/Embarques/Rendimientos.vue';
+import MovimientosMenu from '@/views/Movimientos/MovimientosMenu.vue';
+import MovimientosDiarios from '@/views/Movimientos/MovimientosDiarios.vue';
+import RegistrarEntrada from '@/views/Movimientos/RegistrarEntrada.vue';
+import RegistrarSalida from '@/views/Movimientos/RegistrarSalida.vue';
 
 Vue.use(Router);
 
@@ -162,6 +166,26 @@ const routes = [
     name: 'Rendimientos', // Cambiamos 'rendimientos' a 'Rendimientos' con mayúscula
     component: Rendimientos,
     props: true
+  },
+  {
+    path: '/movimientos',
+    name: 'MovimientosMenu',
+    component: MovimientosMenu
+  },
+  {
+    path: '/movimientos/diarios',
+    name: 'MovimientosDiarios',
+    component: MovimientosDiarios
+  },
+  {
+    path: '/movimientos/entrada',
+    name: 'RegistrarEntrada',
+    component: RegistrarEntrada
+  },
+  {
+    path: '/movimientos/salida',
+    name: 'RegistrarSalida',
+    component: RegistrarSalida
   }
 ];
 

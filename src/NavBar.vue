@@ -28,6 +28,9 @@
             <router-link to="/sacadas" class="nav-link">Entradas/Salidas</router-link>
           </b-nav-item>
           <b-nav-item>
+            <router-link to="/movimientos" class="nav-link">Movimientos</router-link>
+          </b-nav-item>
+          <b-nav-item>
             <router-link to="/existencias" class="nav-link">Existencias</router-link>
           </b-nav-item>
           <b-nav-item>
