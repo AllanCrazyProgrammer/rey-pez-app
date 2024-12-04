@@ -202,14 +202,16 @@ export default {
     filteredMedidasSalida() {
       if (this.newSalida.tipo === 'maquila') {
         const maquila = this.proveedores.find(p => p.nombre === this.newSalida.proveedor);
-        return maquila ? this.medidas.filter(m => m.tipo === 'maquila' && m.maquilaId === maquila.id) : [];
+        return maquila ? this.medidas.filter(m => m.tipo === 'maquila' && m.maquilaId === maquila.id).sort((a, b) => a.nombre.localeCompare(b.nombre)) : [];
       } else {
         const proveedor = this.proveedores.find(p => p.nombre === this.newSalida.proveedor);
-        const medidasBase = proveedor 
-          ? this.medidas.filter(m => m.proveedorId === proveedor.id || (!m.proveedorId && m.tipo === 'general'))
-          : this.medidas.filter(m => m.tipo === 'general');
-          
-        return [...medidasBase, ...this.medidasConPrecio];
+        if (!proveedor) return [];
+
+        // Solo usar las medidas con precio que tienen existencias
+        return this.medidasConPrecio.sort((a, b) => {
+          const getMedidaBase = (nombre) => nombre.split(' ')[0];
+          return getMedidaBase(a.nombre).localeCompare(getMedidaBase(b.nombre));
+        });
       }
     },
     totalEntradas() {
@@ -219,7 +221,7 @@ export default {
       return Number(this.salidas.reduce((total, salida) => total + salida.kilos, 0).toFixed(1));
     },
     salidasProveedoresPorMedida() {
-      return this.salidas
+      const salidas = this.salidas
         .filter(salida => salida.tipo === 'proveedor')
         .reduce((acc, salida) => {
           const key = `${salida.medida}-${salida.proveedor}`;
@@ -227,26 +229,54 @@ export default {
             acc[key] = {
               medida: salida.medida,
               proveedor: salida.proveedor,
-              total: 0
+              total: 0,
+              displayName: salida.precio ? `${salida.medida} ($${salida.precio})` : salida.medida
             };
           }
           acc[key].total += salida.kilos;
           return acc;
         }, {});
+      
+      // Convertir a array y ordenar por medida
+      return Object.values(salidas).sort((a, b) => {
+        // Extraer solo la parte de la medida sin el precio para ordenar
+        const medidaA = a.medida.split(' ($')[0];
+        const medidaB = b.medida.split(' ($')[0];
+        return medidaA.localeCompare(medidaB);
+      });
     },
     salidasMaquilasPorMedida() {
-      return this.salidas
+      const salidas = this.salidas
         .filter(salida => salida.tipo === 'maquila')
         .reduce((acc, salida) => {
           if (!acc[salida.proveedor]) {
             acc[salida.proveedor] = {};
           }
-          if (!acc[salida.proveedor][salida.medida]) {
-            acc[salida.proveedor][salida.medida] = 0;
+          const medidaKey = salida.precio ? `${salida.medida} ($${salida.precio})` : salida.medida;
+          if (!acc[salida.proveedor][medidaKey]) {
+            acc[salida.proveedor][medidaKey] = 0;
           }
-          acc[salida.proveedor][salida.medida] += salida.kilos;
+          acc[salida.proveedor][medidaKey] += salida.kilos;
           return acc;
         }, {});
+
+      // Ordenar las medidas dentro de cada maquila
+      for (const maquila in salidas) {
+        const medidasOrdenadas = {};
+        Object.keys(salidas[maquila])
+          .sort((a, b) => {
+            // Extraer solo la parte de la medida sin el precio para ordenar
+            const medidaA = a.split(' ($')[0];
+            const medidaB = b.split(' ($')[0];
+            return medidaA.localeCompare(medidaB);
+          })
+          .forEach(medida => {
+            medidasOrdenadas[medida] = salidas[maquila][medida];
+          });
+        salidas[maquila] = medidasOrdenadas;
+      }
+
+      return salidas;
     },
     isSalidaValid() {
       return this.newSalida.tipo && 
@@ -449,33 +479,8 @@ export default {
       this.currentDate = moment(this.selectedDate);
     },
     async getMedidasConPrecio(proveedor) {
-      const medidasConPrecio = [];
-      const medidasTemp = new Map(); // Usamos un Map para agrupar temporalmente
-
-      // Primero recopilamos todas las medidas con precio de las entradas actuales
-      this.entradas.forEach(entrada => {
-        if (entrada.precio && entrada.proveedor === proveedor) {
-          const key = `${entrada.medida}-${entrada.precio}`;
-          if (!medidasTemp.has(key)) {
-            medidasTemp.set(key, {
-              medida: entrada.medida,
-              precio: entrada.precio,
-              kilos: 0
-            });
-          }
-          medidasTemp.get(key).kilos += entrada.kilos;
-        }
-      });
-
-      // Restamos las salidas actuales
-      this.salidas.forEach(salida => {
-        if (salida.precio && salida.proveedor === proveedor) {
-          const key = `${salida.medida}-${salida.precio}`;
-          if (medidasTemp.has(key)) {
-            medidasTemp.get(key).kilos -= salida.kilos;
-          }
-        }
-      });
+      const medidasDisponibles = new Map();
+      let fechaActual = this.currentDate.clone().endOf('day');
 
       // Obtenemos las sacadas anteriores
       const sacadasRef = collection(db, 'sacadas');
@@ -484,40 +489,64 @@ export default {
         .map(doc => ({ id: doc.id, ...doc.data() }))
         .sort((a, b) => a.fecha.toDate() - b.fecha.toDate());
 
-      // Procesamos las sacadas anteriores
-      sacadasOrdenadas.forEach(sacada => {
-        sacada.entradas.forEach(entrada => {
-          if (entrada.precio && entrada.proveedor === proveedor) {
-            const key = `${entrada.medida}-${entrada.precio}`;
-            if (!medidasTemp.has(key)) {
-              medidasTemp.set(key, {
-                medida: entrada.medida,
-                precio: entrada.precio,
-                kilos: 0
-              });
-            }
-            medidasTemp.get(key).kilos += entrada.kilos;
-          }
-        });
+      // Función para actualizar el balance de una medida
+      const actualizarBalance = (medida, precio, kilos, esEntrada = true) => {
+        const medidaKey = precio ? `${medida} ($${precio})` : medida;
+        
+        if (!medidasDisponibles.has(medidaKey)) {
+          medidasDisponibles.set(medidaKey, {
+            medida: medida,
+            precio: precio,
+            kilos: 0,
+            nombre: medidaKey
+          });
+        }
+        
+        medidasDisponibles.get(medidaKey).kilos += esEntrada ? kilos : -kilos;
+      };
 
-        sacada.salidas.forEach(salida => {
-          if (salida.precio && salida.proveedor === proveedor) {
-            const key = `${salida.medida}-${salida.precio}`;
-            if (medidasTemp.has(key)) {
-              medidasTemp.get(key).kilos -= salida.kilos;
+      // Procesar todas las sacadas anteriores hasta la fecha actual
+      sacadasOrdenadas.forEach(sacada => {
+        const sacadaFecha = sacada.fecha instanceof Date ? sacada.fecha : sacada.fecha.toDate();
+        
+        if (moment(sacadaFecha).isSameOrBefore(fechaActual)) {
+          sacada.entradas.forEach(entrada => {
+            if (entrada.proveedor === proveedor) {
+              actualizarBalance(entrada.medida, entrada.precio, entrada.kilos, true);
             }
-          }
-        });
+          });
+
+          sacada.salidas.forEach(salida => {
+            if (salida.proveedor === proveedor) {
+              actualizarBalance(salida.medida, salida.precio, salida.kilos, false);
+            }
+          });
+        }
       });
 
-      // Convertimos solo las medidas con existencias positivas a opciones del selector
-      for (const [key, datos] of medidasTemp.entries()) {
+      // Procesar entradas y salidas del día actual
+      this.entradas.forEach(entrada => {
+        if (entrada.proveedor === proveedor) {
+          actualizarBalance(entrada.medida, entrada.precio, entrada.kilos, true);
+        }
+      });
+
+      this.salidas.forEach(salida => {
+        if (salida.proveedor === proveedor) {
+          actualizarBalance(salida.medida, salida.precio, salida.kilos, false);
+        }
+      });
+
+      // Convertir solo las medidas con existencias positivas a opciones
+      const medidasConPrecio = [];
+      for (const [_, datos] of medidasDisponibles) {
         if (datos.kilos > 0) {
           medidasConPrecio.push({
-            id: key,
-            nombre: `${datos.medida} ($${datos.precio})`,
+            id: datos.nombre,
+            nombre: datos.nombre,
             tipo: 'general',
-            precio: datos.precio
+            precio: datos.precio,
+            kilos: datos.kilos
           });
         }
       }
