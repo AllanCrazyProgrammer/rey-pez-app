@@ -421,7 +421,7 @@ export default {
         this.itemsVenta.push({
           ...this.newItem,
           total,
-          precioVenta: 0,
+          precioVenta: null,
           totalVenta: 0,
           kilosVenta: this.newItem.kilos
         });
@@ -461,32 +461,41 @@ export default {
           totalGeneral: this.totalGeneral,
           totalSaldo: this.totalSaldo,
           nuevoSaldoAcumulado: this.nuevoSaldoAcumulado,
-          itemsVenta: this.itemsVenta, // Guardamos los itemsVenta que incluyen el precio de venta
+          itemsVenta: this.itemsVenta,
           totalGeneralVenta: this.totalGeneralVenta,
           gananciaDelDia: this.gananciaDelDia,
           estadoPagado: this.totalSaldo <= 0,
         };
-  
+
         console.log("Datos a guardar:", notaData);
-  
-        // Buscar si ya existe una nota para esta fecha
-        const cuentasRef = collection(db, 'cuentasCatarro');
-        const q = query(cuentasRef, where('fecha', '==', this.fechaSeleccionada));
-        const querySnapshot = await getDocs(q);
-  
-        if (!querySnapshot.empty) {
-          // Si existe, actualizar la nota existente
-          const docId = querySnapshot.docs[0].id;
-          await updateDoc(doc(db, 'cuentasCatarro', docId), notaData);
+
+        const id = this.$route.params.id;
+        const isEditing = this.$route.query.edit === 'true';
+
+        if (id && isEditing) {
+          // Si estamos editando una nota existente, actualizarla
+          await updateDoc(doc(db, 'cuentasCatarro', id), notaData);
           console.log('Cuenta actualizada exitosamente');
+          alert('Cuenta guardada exitosamente');
+          this.$router.push('/cuentas-catarro');
         } else {
-          // Si no existe, crear una nueva nota
-          await addDoc(collection(db, 'cuentasCatarro'), notaData);
-          console.log('Nueva cuenta guardada exitosamente');
+          // Si es una nota nueva, buscar si ya existe una nota para esta fecha
+          const cuentasRef = collection(db, 'cuentasCatarro');
+          const q = query(cuentasRef, where('fecha', '==', this.fechaSeleccionada));
+          const querySnapshot = await getDocs(q);
+
+          if (!querySnapshot.empty) {
+            // Si existe una nota para esta fecha, mostrar alerta
+            alert('Ya existe una nota registrada para esta fecha. No se puede crear una nueva.');
+            return;
+          } else {
+            // Si no existe, crear una nueva nota
+            await addDoc(collection(db, 'cuentasCatarro'), notaData);
+            console.log('Nueva cuenta guardada exitosamente');
+            alert('Cuenta guardada exitosamente');
+            this.$router.push('/cuentas-catarro');
+          }
         }
-  
-        alert('Cuenta guardada exitosamente');
-        this.$router.push('/cuentas-catarro');
       } catch (error) {
         console.error('Error al guardar la cuenta:', error);
         alert('Error al guardar la cuenta');
@@ -1298,63 +1307,6 @@ tr:hover {
     width: 60px;
     padding: 3px;
     font-size: 12px;
-  }
-}
-
-.tabla-principal th,
-.tabla-principal td,
-.tabla-venta th,
-.tabla-venta td {
-  width: auto;
-}
-
-.tabla-principal th:first-child,
-.tabla-principal td:first-child,
-.tabla-venta th:first-child,
-.tabla-venta td:first-child {
-  width: 20%;
-}
-
-.tabla-principal th:nth-child(2),
-.tabla-principal td:nth-child(2),
-.tabla-venta th:nth-child(2),
-.tabla-venta td:nth-child(2) {
-  width: 20%;
-}
-
-.tabla-principal th:nth-child(3),
-.tabla-principal td:nth-child(3),
-.tabla-venta th:nth-child(3),
-.tabla-venta td:nth-child(3) {
-  width: 30%;
-}
-
-.tabla-principal th:last-child,
-.tabla-principal td:last-child,
-.tabla-venta th:last-child,
-.tabla-venta td:last-child {
-  width: 30%;
-}
-
-@media (max-width: 600px) {
-  .tabla-principal th,
-  .tabla-principal td,
-  .tabla-venta th,
-  .tabla-venta td {
-    width: 25%;
-  }
-}
-
-@media (max-width: 600px) {
-  .tabla-venta th,
-  .tabla-venta td {
-    padding: 4px;
-  }
-
-  .precio-venta-input {
-    width: 60px;
-    padding: 3px;
-    font-size: 16px;
   }
 }
 
