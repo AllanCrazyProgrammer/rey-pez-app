@@ -4,6 +4,7 @@
     <div class="menu-options">
       <button @click="nuevoEmbarque" class="btn-nuevo-embarque">Nuevo Embarque</button>
       <button @click="mostrarFletes" class="btn-fletes">Fletes</button>
+      <button @click="verCuentaFletes" class="btn-cuenta-fletes">Cuenta de Fletes</button>
     </div>
     <ListaEmbarques />
 
@@ -68,6 +69,9 @@ export default {
     mostrarFletes() {
       this.modalFletesVisible = true;
       this.cargarFletes();
+    },
+    verCuentaFletes() {
+      this.$router.push({ name: 'CuentaFletes' });
     },
     cerrarModalFletes() {
       this.modalFletesVisible = false;
@@ -209,6 +213,15 @@ export default {
 
 .btn-fletes:hover {
   background-color: #1976D2;
+}
+
+.btn-cuenta-fletes {
+  background-color: #FF9800;
+  color: white;
+}
+
+.btn-cuenta-fletes:hover {
+  background-color: #F57C00;
 }
 
 h1 {
