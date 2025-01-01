@@ -12,6 +12,7 @@
       <router-link to="/ventas-ganancias-catarro" class="action-button ventas-ganancias-btn">
         Ventas y Ganancias
       </router-link>
+      <PreciosHistorialModal />
     </div>
 
     <div class="filter-container">
@@ -54,9 +55,15 @@
 <script>
 import { db } from '@/firebase';
 import { collection, getDocs, query, orderBy, deleteDoc, doc } from 'firebase/firestore';
+import BackButton from '@/components/BackButton.vue';
+import PreciosHistorialModal from '@/components/PreciosHistorialModal.vue';
 
 export default {
   name: 'CatarroCuentasMenu',
+  components: {
+    BackButton,
+    PreciosHistorialModal
+  },
   data() {
     return {
       cuentas: [],

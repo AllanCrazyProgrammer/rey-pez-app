@@ -2,6 +2,7 @@
   <div class="cuentas-catarro-container">
     <div class="back-button-container">
       <BackButton to="/cuentas-catarro" />
+      <PreciosHistorialModal />
     </div>
     <h1>Cuentas Catarro</h1>
     <div class="fecha-actual">
@@ -246,11 +247,13 @@
 import { db } from '@/firebase';
 import { collection, addDoc, doc, getDoc, updateDoc, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
 import BackButton from '@/components/BackButton.vue';
+import PreciosHistorialModal from '@/components/PreciosHistorialModal.vue';
   
 export default {
   name: 'CuentasCatarro',
   components: {
-    BackButton
+    BackButton,
+    PreciosHistorialModal
   },
   data() {
     return {
