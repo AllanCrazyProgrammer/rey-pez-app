@@ -33,8 +33,8 @@
       <button @click="generarResumenTarasPDF" class="btn btn-info">
         <i class="fas fa-file-pdf"></i> PDF Taras
       </button>
-      <button @click="generarResumenEmbarque" class="btn btn-info ml-2">
-        <i class="fas fa-file-pdf"></i> PDF Resumen
+      <button @click="generarResumenEmbarque2" class="btn btn-info ml-2">
+        <i class="fas fa-file-pdf"></i> Resumen Embarque
       </button>
     </div>
     <div class="resumen-grid">
@@ -437,11 +437,8 @@
           {{ modoEdicion ? 'Actualizar Embarque' : 'Guardar Embarque' }}
         </button>
         <div class="generar-resumen-container">
-          <button type="button" @click="generarResumenPDF" class="btn btn-info generar-pdf">
-            Resumen Embarque
-          </button>
           <button type="button" @click="generarResumenEmbarque2" class="btn btn-info generar-pdf">
-            Resumen Embarque 2
+            Resumen Embarque
           </button>
         </div>
         <router-link :to="{ name: 'Rendimientos', params: { id: embarqueId } }" class="btn btn-warning ver-rendimientos">
@@ -562,7 +559,6 @@ import 'jspdf-autotable';
 import { generarNotaVentaPDF } from '@/utils/pdfGenerator';
 import Rendimientos from './Rendimientos.vue'
 import { generarResumenTarasPDF } from '@/utils/resumenTarasPdf';
-import { ResumenEmbarque2Generator } from '@/utils/resumenEmbarque2';
 import { generarResumenEmbarquePDF } from '@/utils/resumenEmbarque2';
 
 export default {
@@ -1104,92 +1100,47 @@ export default {
       return window.pdfMake;
     },
 
-    async generarResumenPDF() {
+    async generarResumenEmbarque2() {
       try {
-        const pdfMake = await this.initPdfMake();
-        const docDefinition = {
-          pageOrientation: 'portrait',
-          pageMargins: [2, 2, 2, 2],
-          content: [],
-          styles: {
-            header: {
-              fontSize: 19,
-              bold: true,
-              margin: [0, 0, 0, 5]
-            },
-            clienteHeader: {
-              fontSize: 18, // Aumentado de 15
-              bold: true,
-              color: 'white',
-            },
-            tableHeader: {
-              fontSize: 16, // Aumentado de 13
-              bold: true,
-              color: 'white',
-              fillColor: '#34495e'
-            },
-            crudosHeader: {
-              fontSize: 16, // Aumentado de 13
-              bold: true,
-              color: 'white',
-              fillColor: '#2980b9'
-            },
-            total: {
-              fontSize: 18, // Aumentado de 14
-              bold: true,
-              color: 'white'
-            }
-          }
-        };
-        const fechaEmbarque = new Date(this.embarque.fecha + 'T00:00:00');
-
-        // Título y fecha
-        docDefinition.content.push(
-      { text: 'Resumen de Embarque', style: 'header' },
-      {
-        text: `Fecha: ${fechaEmbarque.toLocaleDateString()} | Carga: ${this.embarque.cargaCon || 'N/E'}`,
-        fontSize: 16,
-        margin: [0, 0, 0, 10]
-      }
-    );
-
-
-        // Altura disponible en la página (A4 = 842pt en portrait)
-        const alturaDisponible = 842 - 80; // Reducimos el espacio reservado para el header
-        let alturaUsada = 80; // Altura inicial usada por el header
-        let contenidoActual = [];
-
-        // Generar contenido para cada cliente
-        Object.entries(this.productosPorCliente).forEach(([clienteId, productos]) => {
-          const alturaCliente = this.calcularAlturaCliente(productos, this.clienteCrudos[clienteId] || []);
-          
-          // Agregar un margen de tolerancia del 10% para el cálculo
-          if (alturaUsada + alturaCliente > alturaDisponible * 1.2) {
-            if (contenidoActual.length > 0) {
-              docDefinition.content.push(...contenidoActual);
-            }
-            docDefinition.content.push({ text: '', pageBreak: 'before' });
-            contenidoActual = [];
-            alturaUsada = 0;
-          }
-
-          const contenidoCliente = this.generarContenidoCliente(clienteId, productos, this.clienteCrudos[clienteId] || [], this.getClienteColor(clienteId));
-          contenidoActual.push(...contenidoCliente);
-          alturaUsada += alturaCliente;
+        const medidasCrudos = new Set();
+        Object.values(this.clienteCrudos).forEach(crudos => {
+          crudos.forEach(crudo => {
+            crudo.items.forEach(item => {
+              if (item.talla) {
+                medidasCrudos.add(item.talla);
+              }
+            });
+          });
         });
 
-        // Agregar el contenido restante
-        if (contenidoActual.length > 0) {
-          docDefinition.content.push(...contenidoActual);
-        }
+        const embarqueData = {
+          ...this.embarque,
+          crudos: Object.entries(this.clienteCrudos).flatMap(([clienteId, crudos]) => 
+            crudos.flatMap(crudo => 
+              crudo.items.map(item => {
+                const tarasArray = [];
+                if (item.taras) {
+                  tarasArray.push(item.taras);
+                }
+                if (item.sobrante) {
+                  tarasArray.push(item.sobrante);
+                }
+                return {
+                  clienteId,
+                  medida: item.talla,
+                  taras: tarasArray,
+                  barco: item.barco
+                };
+              })
+            )
+          ),
+          medidasCrudos: Array.from(medidasCrudos)
+        };
 
-        // Agregar el pie de página una sola vez al final del documento
-       
-
-        // Generar el PDF
-        pdfMake.createPdf(docDefinition).download('resumen-embarque.pdf');
+        console.log('Datos del embarque:', embarqueData);
+        generarResumenEmbarquePDF(embarqueData, this.productosPorCliente, this.obtenerNombreCliente, this.clientesDisponibles);
       } catch (error) {
-        console.error('Error al generar PDF:', error);
+        console.error('Error al generar el PDF:', error);
       }
     },
 
@@ -1609,9 +1560,18 @@ export default {
     actualizarProducto(producto) {
       const index = this.embarque.productos.findIndex(p => p === producto);
       if (index !== -1) {
-        this.$set(this.embarque.productos, index, { ...producto });
+        // Crear una copia profunda del producto para asegurar la reactividad
+        const productoActualizado = JSON.parse(JSON.stringify(producto));
+        this.$set(this.embarque.productos, index, productoActualizado);
+        
+        // Forzar la actualización del componente
+        this.$forceUpdate();
+        
+        // Guardar cambios en Firestore
+        if (this.guardadoAutomaticoActivo && this.embarqueId) {
+          this.guardarCambiosEnTiempoReal();
+        }
       }
-      this.guardarCambiosEnTiempoReal();
     },
     reporteExcedeTresParentesis(producto) {
       const reporte = this.combinarTarasBolsas(producto.reporteTaras, producto.reporteBolsas);
@@ -1954,7 +1914,10 @@ export default {
     },
     onMedidaInput(producto, event) {
       const valor = event.target.value.trim().toLowerCase();
-      this.productoEditandoId = producto.id; // Guardar el ID del producto actual
+      this.productoEditandoId = producto.id;
+      
+      // Actualizar inmediatamente la medida del producto
+      producto.medida = event.target.value.trim();
       
       if (valor) {
         this.sugerenciasMedidas = this.medidasUsadas.filter(m => 
@@ -1965,6 +1928,9 @@ export default {
         this.sugerenciasMedidas = [];
       }
       producto.isEditing = true;
+      
+      // Guardar cambios inmediatamente
+      this.actualizarProducto(producto);
     },
 
     onMedidaBlur(producto) {
@@ -2099,7 +2065,7 @@ export default {
       this.productoEditandoId = null;
       this.actualizarProducto(producto);
     },
-    generarResumenEmbarque2() {
+    async generarResumenEmbarque2() {
       try {
         // Obtener las medidas únicas de los crudos
         const medidasCrudos = new Set();
@@ -2149,9 +2115,6 @@ export default {
         console.error('Error al generar el PDF:', error);
       }
     },
-    generarResumenEmbarque() {
-      generarResumenEmbarquePDF(this.embarque, this.productosPorCliente, this.obtenerNombreCliente, this.clientesDisponibles);
-    },
     onTallaCrudoChange(item) {
       // Asegurarse de que el item tenga todas las propiedades necesarias
       if (!item.medida) {
@@ -2185,21 +2148,14 @@ export default {
       if (this.itemSeleccionado) {
         const alt = this.altTemp.trim();
         if (alt) {
-          this.$set(this.itemSeleccionado, 'textoAlternativo', alt);
+          this.itemSeleccionado.textoAlternativo = alt;
         } else {
-          this.$delete(this.itemSeleccionado, 'textoAlternativo');
+          delete this.itemSeleccionado.textoAlternativo;
         }
-        
-        const guardadoActivo = this.guardadoAutomaticoActivo;
-        this.guardadoAutomaticoActivo = false;
-        
-        this.$nextTick(() => {
-          this.guardadoAutomaticoActivo = guardadoActivo;
-          this.guardarCambiosEnTiempoReal();
-        });
+        this.guardarCambiosEnTiempoReal();
       }
       this.cerrarModalAlt();
-    },
+    }
   },
   created() {
     const embarqueId = this.$route.params.id;
@@ -2268,151 +2224,6 @@ export default {
     });
   }
 };
-
-// Definir la clase fuera del componente Vue
-class EmbarqueReportGenerator {
-  constructor(embarqueData) {
-    this.embarque = embarqueData;
-    this.doc = new jsPDF('landscape', 'pt', 'a4');
-  }
-
-  async save() {
-    const doc = this.doc;
-    
-    // Configurar fuente y tamaño
-    doc.setFont('helvetica');
-    doc.setFontSize(13);
-
-    // Título
-    doc.text('Resumen de Embarque', 40, 40);
-    doc.text(`Fecha: ${this.embarque.fecha || 'No especificada'}`, 40, 60);
-    if (this.embarque.cargaCon) {
-      doc.text(`Carga con: ${this.embarque.cargaCon}`, 40, 80);
-    }
-
-    // Crear tablas para cada cliente
-    let yPos = 100;
-    
-    // Verificar que clientes existe y es un array
-    if (Array.isArray(this.embarque.clientes)) {
-      this.embarque.clientes.forEach(cliente => {
-        if (!cliente) return; // Skip if cliente is null/undefined
-
-        // Encabezado del cliente
-        doc.setFontSize(14);
-        doc.text(`Cliente: ${cliente.nombre || 'Sin nombre'}`, 40, yPos);
-        yPos += 20;
-
-        // Tabla de productos
-        if (Array.isArray(cliente.productos) && cliente.productos.length > 0) {
-          const tableData = cliente.productos.map(producto => [
-            producto.medida || '',
-            producto.tipo || '',
-            this.calcularTotalTaras(producto),
-            this.calcularTotalKilos(producto)
-          ]);
-
-          doc.autoTable({
-            startY: yPos,
-            head: [[
-              { text: 'Medida', style: 'tableHeader' },
-              { text: 'Tipo', style: 'tableHeader' },
-              { text: 'Total Taras', style: 'tableHeader' },
-              { text: 'Total Kilos', style: 'tableHeader' }
-            ]],
-            body: tableData,
-            styles: {
-              fontSize: 14,  // Incrementado de 12
-              cellPadding: 8,
-              overflow: 'linebreak',
-              valign: 'middle'
-            },
-            headStyles: {
-              fillColor: '#34495e',
-              textColor: '#ffffff',
-              halign: 'center',
-              fontSize: 15,  // Incrementado de 13
-              fontStyle: 'bold'
-            },
-            bodyStyles: {
-              fontSize: 14,  // Incrementado de 12
-              fillColor: false,
-              textColor: '#2c3e50'
-            },
-            margin: { left: 40 }
-          });
-
-          yPos = doc.lastAutoTable.finalY + 20;
-        }
-
-        // Tabla de crudos
-        if (Array.isArray(cliente.crudos) && cliente.crudos.length > 0) {
-          const crudosData = cliente.crudos.flatMap(crudo => 
-            (crudo.items || []).map(item => [
-              item.talla || '',
-              item.barco || '',
-              item.taras || '',
-              item.sobrante || ''
-            ])
-          );
-
-          if (crudosData.length > 0) {
-            doc.text('Crudos:', 40, yPos);
-            yPos += 20;
-
-            doc.autoTable({
-              startY: yPos,
-              head: [[
-                { text: 'Talla', style: 'crudosHeader' },
-                { text: 'Barco', style: 'crudosHeader' },
-                { text: 'Taras', style: 'crudosHeader' },
-                { text: 'Sobrante', style: 'crudosHeader' }
-              ]],
-              body: crudosData,
-              styles: {
-                fontSize: 14,  // Incrementado de 12
-                cellPadding: 8
-              },
-              headStyles: {
-                fillColor: '#2980b9',
-                textColor: '#ffffff',
-                halign: 'center',
-                fontSize: 15,  // Incrementado de 13
-                fontStyle: 'bold'
-              },
-              bodyStyles: {
-                fontSize: 14,  // Incrementado de 12
-                fillColor: false,
-                textColor: '#2c3e50'
-              },
-              margin: { left: 40 }
-            });
-
-            yPos = doc.lastAutoTable.finalY + 20;
-          }
-        }
-
-        yPos += 20; // Espacio entre clientes
-      });
-    }
-
-    // Retornar el PDF como array buffer
-    return doc.output('arraybuffer');
-  }
-
-  calcularTotalTaras(producto) {
-    const tarasNormales = (producto.taras || []).reduce((sum, tara) => sum + (tara || 0), 0);
-    const tarasExtra = (producto.tarasExtra || []).reduce((sum, tara) => sum + (tara || 0), 0);
-    return tarasNormales + tarasExtra;
-  }
-
-  calcularTotalKilos(producto) {
-    const sumaKilos = (producto.kilos || []).reduce((sum, kilo) => sum + (kilo || 0), 0);
-    const sumaTaras = this.calcularTotalTaras(producto);
-    const descuentoTaras = producto.restarTaras ? sumaTaras * 3 : 0;
-    return Number((sumaKilos - descuentoTaras).toFixed(1));
-  }
-}
 </script>
 
 <style scoped>

@@ -11,9 +11,7 @@ function getClienteColor(clienteId) {
 }
 
 export function generarResumenLimpios(productosPorCliente, clienteColors, escala = 100, clientesPersonalizados = []) {
-  // Calcular el factor de escala (convertir de porcentaje a decimal)
   const factorEscala = escala / 100;
-
   const contenido = [
     { text: '', pageBreak: 'before' }
   ];
@@ -25,7 +23,130 @@ export function generarResumenLimpios(productosPorCliente, clienteColors, escala
   const rectWidth = 120;
   const rectHeight = 25;
 
+  // Separar clientes predefinidos de personalizados
+  const clientesPredefinidos = [];
+  const clientesExtra = [];
+
   Object.entries(productosPorCliente).forEach(([clienteId, productos]) => {
+    // Verificar si es un cliente predefinido (1-4) o personalizado
+    if (['1', '2', '3', '4'].includes(clienteId)) {
+      clientesPredefinidos.push([clienteId, productos]);
+    } else {
+      clientesExtra.push([clienteId, productos]);
+    }
+  });
+
+  // Procesar clientes personalizados en tríos
+  for (let i = 0; i < clientesExtra.length; i += 3) {
+    const columnas = [];
+    
+    // Procesar hasta tres clientes por fila
+    for (let j = 0; j < 3 && (i + j) < clientesExtra.length; j++) {
+      const [clienteId, productos] = clientesExtra[i + j];
+      const nombreCliente = obtenerNombreCliente(clienteId, clientesPersonalizados);
+      const tarasCliente = calcularTotalTaras(productos);
+      const kilosCliente = calcularTotalKilos(productos);
+      totalTarasGlobal += tarasCliente;
+      totalKilosGlobal += kilosCliente;
+
+      columnas.push({
+        stack: [
+          // Header del cliente
+          {
+            columns: [
+              {
+                width: 'auto',
+                stack: [
+                  {
+                    canvas: [
+                      {
+                        type: 'rect',
+                        x: 0,
+                        y: 0,
+                        w: rectWidth * 0.8,
+                        h: rectHeight,
+                        r: 8,
+                        color: getClienteColor(clienteId)
+                      }
+                    ]
+                  },
+                  {
+                    text: nombreCliente,
+                    color: 'white',
+                    fontSize: 11 * factorEscala,
+                    relativePosition: { x: 10, y: -20 }
+                  }
+                ]
+              },
+              {
+                text: `${tarasCliente}T|${formatearKilos(kilosCliente)}Kg`,
+                style: 'total',
+                alignment: 'right',
+                color: getClienteColor(clienteId),
+                fontSize: 11 * factorEscala
+              }
+            ],
+            margin: [0, 3, 0, 3]
+          },
+          // Productos del cliente
+          ...productos.map(producto => ({
+            stack: [
+              {
+                text: generarTextoMedida(producto),
+                fontSize: 11 * factorEscala,
+                bold: true,
+                margin: [0, 0, 0, 1],
+                alignment: 'center'
+              },
+              {
+                canvas: [
+                  {
+                    type: 'line',
+                    x1: 0,
+                    y1: 1,
+                    x2: 120,
+                    y2: 1,
+                    lineWidth: 0.5,
+                    lineColor: '#000000'
+                  }
+                ],
+                margin: [0, 0, 0, 1]
+              },
+              {
+                text: calcularTotalTarasSimple(producto) === 0 ? 
+                  [{ text: `${formatearKilos(calcularKilosProducto(producto))}`, color: 'red', bold: true }] :
+                  [
+                    { text: `${calcularTotalTarasSimple(producto)}-`, bold: true },
+                    { text: `${formatearKilos(calcularKilosProducto(producto))}`, color: 'red', bold: true }
+                  ],
+                fontSize: 11 * factorEscala,
+                margin: [0, 1, 0, 1],
+                alignment: 'center'
+              },
+              {
+                text: generarTextoTarasYBolsas(producto),
+                fontSize: 10 * factorEscala,
+                margin: [0, 0, 0, 1],
+                alignment: 'center'
+              }
+            ],
+            margin: [0, 0, 0, 5]
+          }))
+        ],
+        width: '32%'
+      });
+    }
+
+    // Agregar las columnas al contenido
+    contenido.push({
+      columns: columnas,
+      columnGap: 10,
+      margin: [0, 0, 0, 15]
+    });
+  }
+
+  // Procesar clientes predefinidos de manera vertical
+  clientesPredefinidos.forEach(([clienteId, productos]) => {
     const nombreCliente = obtenerNombreCliente(clienteId, clientesPersonalizados);
     const tarasCliente = calcularTotalTaras(productos);
     const kilosCliente = calcularTotalKilos(productos);
@@ -52,7 +173,7 @@ export function generarResumenLimpios(productosPorCliente, clienteColors, escala
       marginBottom = 12;
     }
 
-    // Header del cliente con tamaño ajustado
+    // Header del cliente
     contenido.push({
       columns: [
         {
@@ -90,7 +211,7 @@ export function generarResumenLimpios(productosPorCliente, clienteColors, escala
       margin: [0, 3, 0, 3]
     });
 
-    // Calcular cuántas medidas por fila basado en el total
+    // Calcular cuántas medidas por fila
     let medidasPorFila = 3;
     if (totalProductos > 30) {
       medidasPorFila = 4;
@@ -126,8 +247,7 @@ export function generarResumenLimpios(productosPorCliente, clienteColors, escala
                   lineColor: '#000000'
                 }
               ],
-              margin: [0, 0, 0, 1],
-              alignment: 'center'
+              margin: [0, 0, 0, 1]
             },
             {
               text: calcularTotalTarasSimple(producto) === 0 ? 
@@ -148,16 +268,14 @@ export function generarResumenLimpios(productosPorCliente, clienteColors, escala
             }
           ],
           width: `${100/medidasPorFila}%`,
-          unbreakable: true,
           alignment: 'center'
         })),
         columnGap: 5,
-        margin: [0, 0, 0, marginBottom],
-        unbreakable: true
+        margin: [0, 0, 0, marginBottom]
       });
     });
 
-    // Separador entre clientes más delgado
+    // Separador entre clientes
     contenido.push({
       canvas: [
         {
