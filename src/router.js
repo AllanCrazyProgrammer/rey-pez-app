@@ -1,5 +1,6 @@
 import Vue from 'vue';
 import Router from 'vue-router';
+import { useAuthStore } from './stores/auth';
 import Home from './views/Home.vue';
 import NoteMenu from './views/NoteMenu.vue'; // Asegúrate de que la ruta sea correcta
 import SaleNote from '@/views/SaleNote.vue'; // Asegúrate de que la ruta de importación sea correcta
@@ -21,10 +22,16 @@ import ListaEmbarques from '@/views/Embarques/ListaEmbarques.vue';
 import NuevoEmbarque from '@/views/Embarques/NuevoEmbarque.vue';
 import Rendimientos from '@/views/Embarques/Rendimientos.vue';
 import CuentaFletes from '@/views/Embarques/CuentaFletes.vue';
+import Login from './views/Login.vue';
 
 Vue.use(Router);
 
 const routes = [
+  {
+    path: '/login',
+    name: 'Login',
+    component: Login
+  },
   {
     path: '/noteMenu',
     name: 'NoteMenu',
@@ -171,8 +178,31 @@ const routes = [
   }
 ];
 
-export default new Router({
+const router = new Router({
   mode: 'history',
   base: process.env.BASE_URL,
   routes
 });
+
+// Navigation guard
+router.beforeEach((to, from, next) => {
+  // Necesitamos acceder al store después de que la app se haya montado
+  const store = localStorage.getItem('user');
+  const isAuthenticated = store ? true : false;
+
+  // Si la ruta es login y el usuario está autenticado, redirigir al home
+  if (to.path === '/login' && isAuthenticated) {
+    next('/');
+    return;
+  }
+
+  // Si la ruta no es login y el usuario no está autenticado, redirigir a login
+  if (to.path !== '/login' && !isAuthenticated) {
+    next('/login');
+    return;
+  }
+
+  next();
+});
+
+export default router;
