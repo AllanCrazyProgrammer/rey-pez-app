@@ -187,7 +187,7 @@
       </tr>
       <tr class="total">
         <td>Total</td>
-        <td>${{ formatNumber(totalSaldo) }}</td>
+        <td>${{ formatNumber(totalDiaActual) }}</td>
       </tr>
       <tr class="total">
         <td>Nuevo Saldo Acumulado</td>
@@ -308,7 +308,7 @@ export default {
       return this.saldoAcumuladoAnterior + this.totalGeneralVenta + totalCobros - totalAbonos;
     },
     nuevoSaldoAcumulado() {
-      return this.totalSaldo;
+      return this.saldoAcumuladoAnterior + this.totalDiaActual;
     },
     gananciaDelDia() {
       const costoTotal = this.items.reduce((sum, item) => sum + item.total, 0);
@@ -322,6 +322,11 @@ export default {
     },
     gananciaTotal() {
       return this.itemsVenta.reduce((sum, item) => sum + item.ganancia, 0);
+    },
+    totalDiaActual() {
+      const totalCobros = this.cobros.reduce((sum, cobro) => sum + (cobro.monto || 0), 0);
+      const totalAbonos = this.abonos.reduce((sum, abono) => sum + (abono.monto || 0), 0);
+      return this.totalGeneralVenta + totalCobros - totalAbonos;
     }
   },
   watch: {
