@@ -287,7 +287,9 @@ export default {
         kilosVenta: null,
         medida: '',
         precioVenta: null
-      }
+      },
+      autoSaveTimer: null,
+      lastSavedData: null
     }
   },
   computed: {
@@ -337,6 +339,28 @@ export default {
     items: {
       handler: 'actualizarItemsVenta',
       deep: true
+    },
+    items: {
+      handler: 'handleDataChange',
+      deep: true
+    },
+    itemsVenta: {
+      handler: 'handleDataChange',
+      deep: true
+    },
+    cobros: {
+      handler: 'handleDataChange',
+      deep: true
+    },
+    abonos: {
+      handler: 'handleDataChange',
+      deep: true
+    },
+    fechaSeleccionada: {
+      handler: 'handleDataChange'
+    },
+    saldoAcumuladoAnterior: {
+      handler: 'handleDataChange'
     }
   },
   async mounted() {
@@ -847,6 +871,44 @@ export default {
       } else {
         alert('Por favor, complete todos los campos');
       }
+    },
+    handleDataChange() {
+      if (this.$route.params.id && this.$route.query.edit === 'true') {
+        if (this.autoSaveTimer) {
+          clearTimeout(this.autoSaveTimer);
+        }
+        this.autoSaveTimer = setTimeout(async () => {
+          await this.autoSaveNota();
+        }, 1000);
+      }
+    },
+    async autoSaveNota() {
+      try {
+        const currentData = {
+          fecha: this.fechaSeleccionada,
+          items: this.items,
+          saldoAcumuladoAnterior: this.saldoAcumuladoAnterior,
+          cobros: this.cobros,
+          abonos: this.abonos,
+          totalGeneral: this.totalGeneral,
+          totalGeneralVenta: this.totalGeneralVenta,
+          nuevoSaldoAcumulado: this.nuevoSaldoAcumulado,
+          gananciaDelDia: this.gananciaDelDia,
+          estadoPagado: this.estadoCuenta === 'Pagado',
+          itemsVenta: this.itemsVenta
+        };
+
+        const id = this.$route.params.id;
+        await updateDoc(doc(db, 'cuentasCatarro', id), currentData);
+        console.log('Cuenta auto-guardada exitosamente');
+      } catch (error) {
+        console.error('Error en auto-guardado:', error);
+      }
+    }
+  },
+  beforeUnmount() {
+    if (this.autoSaveTimer) {
+      clearTimeout(this.autoSaveTimer);
     }
   }
 }
