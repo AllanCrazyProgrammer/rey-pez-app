@@ -89,10 +89,10 @@ export default {
       try {
         this.isLoading = true;
         const cuentasRef = collection(db, 'cuentasCatarro');
-        const q = query(cuentasRef, orderBy('fecha', 'desc'));
+        const q = query(cuentasRef, orderBy('fecha', 'asc'));
         
         // Usar onSnapshot para actualizaciones en tiempo real
-        this.unsubscribe = onSnapshot(q, (querySnapshot) => {
+        this.unsubscribe = onSnapshot(q, async (querySnapshot) => {
           const cuentasActualizadas = querySnapshot.docs.map((doc) => {
             const data = doc.data();
             return {
@@ -101,14 +101,64 @@ export default {
               saldoHoy: data.totalGeneralVenta || 0,
               totalCobros: (data.cobros || []).reduce((sum, cobro) => sum + (parseFloat(cobro.monto) || 0), 0),
               totalAbonos: (data.abonos || []).reduce((sum, abono) => sum + (parseFloat(abono.monto) || 0), 0),
-              totalNota: 0, // Se calculará en actualizarSaldosAcumulados
-              estadoPagado: data.estadoPagado || false
+              totalNota: data.nuevoSaldoAcumulado || 0,
+              estadoPagado: data.estadoPagado || false,
+              nuevoSaldoAcumulado: data.nuevoSaldoAcumulado || 0,
+              saldoAcumuladoAnterior: data.saldoAcumuladoAnterior || 0
             };
           });
 
-          // Actualizar las cuentas y recalcular saldos
-          this.cuentas = cuentasActualizadas;
-          this.actualizarSaldosAcumulados();
+          // Ordenar las cuentas por fecha
+          const cuentasOrdenadas = cuentasActualizadas.sort((a, b) => 
+            new Date(a.fecha) - new Date(b.fecha)
+          );
+
+          let saldoAcumulado = 0;
+          const actualizaciones = [];
+
+          // Procesar cada cuenta y preparar las actualizaciones
+          for (let i = 0; i < cuentasOrdenadas.length; i++) {
+            const cuenta = cuentasOrdenadas[i];
+            const totalDia = cuenta.saldoHoy + cuenta.totalCobros - cuenta.totalAbonos;
+            saldoAcumulado += totalDia;
+
+            const saldoAnterior = i === 0 ? 0 : cuentasOrdenadas[i-1].nuevoSaldoAcumulado;
+            
+            // Solo actualizar si los valores han cambiado
+            if (cuenta.saldoAcumuladoAnterior !== saldoAnterior || 
+                cuenta.nuevoSaldoAcumulado !== saldoAcumulado || 
+                cuenta.estadoPagado !== (saldoAcumulado <= 0)) {
+              
+              actualizaciones.push({
+                id: cuenta.id,
+                updates: {
+                  saldoAcumuladoAnterior: saldoAnterior,
+                  nuevoSaldoAcumulado: saldoAcumulado,
+                  estadoPagado: saldoAcumulado <= 0
+                }
+              });
+            }
+
+            // Actualizar el objeto local
+            cuenta.totalNota = saldoAcumulado;
+            cuenta.saldoAcumuladoAnterior = saldoAnterior;
+            cuenta.estadoPagado = saldoAcumulado <= 0;
+
+            // Reiniciar saldo si la cuenta está pagada
+            if (saldoAcumulado <= 0) {
+              saldoAcumulado = 0;
+            }
+          }
+
+          // Realizar todas las actualizaciones en paralelo
+          if (actualizaciones.length > 0) {
+            await Promise.all(actualizaciones.map(({ id, updates }) => 
+              updateDoc(doc(db, 'cuentasCatarro', id), updates)
+            ));
+          }
+
+          // Actualizar el estado local con las cuentas ordenadas por fecha descendente
+          this.cuentas = cuentasOrdenadas.reverse(); // Revertir para mostrar las más recientes primero
           this.isLoading = false;
         });
 
@@ -116,69 +166,6 @@ export default {
         console.error("Error al cargar cuentas: ", error);
         this.cuentas = [];
         this.isLoading = false;
-      }
-    },
-    async actualizarSaldosAcumulados() {
-      try {
-        // Ordenar las cuentas por fecha de manera ascendente para el cálculo
-        const cuentasOrdenadas = [...this.cuentas].sort((a, b) => 
-          new Date(a.fecha) - new Date(b.fecha)
-        );
-
-        let saldoAcumulado = 0;
-        let ultimaCuentaPagada = null;
-        
-        // Encontrar la última cuenta pagada
-        for (let i = cuentasOrdenadas.length - 1; i >= 0; i--) {
-          if (cuentasOrdenadas[i].estadoPagado) {
-            ultimaCuentaPagada = cuentasOrdenadas[i];
-            break;
-          }
-        }
-
-        // Si encontramos una cuenta pagada, solo calcular saldos para las cuentas posteriores
-        const indiceCuentaPagada = ultimaCuentaPagada ? 
-          cuentasOrdenadas.findIndex(c => c.id === ultimaCuentaPagada.id) : -1;
-
-        // Actualizar todas las cuentas anteriores a la última pagada con saldo 0
-        for (let i = 0; i <= indiceCuentaPagada; i++) {
-          if (i >= 0) {
-            const cuenta = cuentasOrdenadas[i];
-            const cuentaRef = doc(db, 'cuentasCatarro', cuenta.id);
-            await updateDoc(cuentaRef, {
-              nuevoSaldoAcumulado: 0,
-              estadoPagado: true
-            });
-            cuenta.totalNota = 0;
-          }
-        }
-
-        // Calcular saldos acumulados solo para las cuentas posteriores a la última pagada
-        for (let i = indiceCuentaPagada + 1; i < cuentasOrdenadas.length; i++) {
-          const cuenta = cuentasOrdenadas[i];
-          const cuentaRef = doc(db, 'cuentasCatarro', cuenta.id);
-          
-          // Calcular el total del día (saldo hoy + cobros - abonos)
-          const totalDia = cuenta.saldoHoy + cuenta.totalCobros - cuenta.totalAbonos;
-          
-          if (!cuenta.estadoPagado) {
-            saldoAcumulado += totalDia;
-          }
-
-          // Actualizar el total de la nota y el nuevo saldo acumulado
-          cuenta.totalNota = saldoAcumulado;
-          
-          await updateDoc(cuentaRef, {
-            nuevoSaldoAcumulado: saldoAcumulado,
-            estadoPagado: saldoAcumulado === 0
-          });
-        }
-
-        // Actualizar el estado local de las cuentas
-        this.cuentas = [...this.cuentas]; // Forzar actualización de la vista
-
-      } catch (error) {
-        console.error("Error al actualizar saldos acumulados:", error);
       }
     },
     formatDate(date) {
@@ -200,7 +187,6 @@ export default {
       if (confirm('¿Estás seguro de que quieres borrar este registro de cuenta?')) {
         try {
           await deleteDoc(doc(db, 'cuentasCatarro', id));
-          await this.actualizarSaldosAcumulados();
           alert('Registro de cuenta borrado con éxito');
         } catch (error) {
           console.error("Error al borrar el registro de cuenta: ", error);

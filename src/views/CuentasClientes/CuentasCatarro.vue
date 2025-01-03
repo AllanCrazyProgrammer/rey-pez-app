@@ -242,13 +242,13 @@
     </div>
   </div>
 </template>
-  
+
 <script>
 import { db } from '@/firebase';
 import { collection, addDoc, doc, getDoc, updateDoc, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
 import BackButton from '@/components/BackButton.vue';
 import PreciosHistorialModal from '@/components/PreciosHistorialModal.vue';
-  
+
 export default {
   name: 'CuentasCatarro',
   components: {
@@ -360,7 +360,7 @@ export default {
         if (cuentaDoc.exists()) {
           const data = cuentaDoc.data();
           console.log("Datos de la cuenta cargados:", data);
-  
+
           this.$nextTick(() => {
             this.items = data.items || [];
             this.saldoAcumuladoAnterior = data.saldoAcumuladoAnterior || 0;
@@ -397,49 +397,84 @@ export default {
     },
     async loadSaldoAcumuladoAnterior() {
       try {
+        this.saldoAcumuladoAnterior = await this.obtenerSaldoAcumuladoAnterior();
+        console.log("Saldo acumulado anterior cargado:", this.saldoAcumuladoAnterior);
+      } catch (error) {
+        console.error("Error al cargar el saldo acumulado anterior:", error);
+        this.saldoAcumuladoAnterior = 0;
+      }
+    },
+    async obtenerSaldoAcumuladoAnterior() {
+      try {
         const cuentasRef = collection(db, 'cuentasCatarro');
-        
-        // Convertir la fecha seleccionada a un string en formato YYYY-MM-DD
-        const fechaSeleccionada = this.fechaSeleccionada;
-        
-        // Crear la consulta para obtener la última cuenta antes de la fecha seleccionada
         const q = query(
           cuentasRef,
-          where('fecha', '<', fechaSeleccionada),
+          where('fecha', '<', this.fechaSeleccionada),
           orderBy('fecha', 'desc'),
           limit(1)
         );
 
-        const cuentasSnapshot = await getDocs(q);
+        const querySnapshot = await getDocs(q);
         
-        if (!cuentasSnapshot.empty) {
-          const ultimaCuenta = cuentasSnapshot.docs[0].data();
+        if (!querySnapshot.empty) {
+          const ultimaCuenta = querySnapshot.docs[0].data();
+          return ultimaCuenta.nuevoSaldoAcumulado || 0;
+        }
+        
+        return 0;
+      } catch (error) {
+        console.error('Error al obtener saldo acumulado anterior:', error);
+        return 0;
+      }
+    },
+    async actualizarCuentasPosteriores(fechaActual) {
+      try {
+        const cuentasRef = collection(db, 'cuentasCatarro');
+        const q = query(
+          cuentasRef,
+          orderBy('fecha', 'asc')
+        );
+
+        const querySnapshot = await getDocs(q);
+        const todasLasCuentas = querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+
+        // Ordenar las cuentas por fecha
+        const cuentasOrdenadas = todasLasCuentas.sort((a, b) => 
+          new Date(a.fecha) - new Date(b.fecha)
+        );
+
+        let saldoAcumulado = 0;
+
+        // Procesar cada cuenta en orden cronológico
+        for (let i = 0; i < cuentasOrdenadas.length; i++) {
+          const cuenta = cuentasOrdenadas[i];
+          const cuentaRef = doc(db, 'cuentasCatarro', cuenta.id);
           
-          // Calcular el nuevo saldo acumulado de la última cuenta
-          const totalVenta = parseFloat(ultimaCuenta.totalGeneralVenta || 0);
-          const totalCobros = (ultimaCuenta.cobros || []).reduce((sum, cobro) => sum + (parseFloat(cobro.monto) || 0), 0);
-          const totalAbonos = (ultimaCuenta.abonos || []).reduce((sum, abono) => sum + (parseFloat(abono.monto) || 0), 0);
-          const saldoCalculado = parseFloat(ultimaCuenta.saldoAcumuladoAnterior || 0) + totalVenta + totalCobros - totalAbonos;
+          // Calcular el total del día
+          const totalDia = cuenta.totalGeneralVenta +
+            (cuenta.cobros || []).reduce((sum, cobro) => sum + (parseFloat(cobro.monto) || 0), 0) -
+            (cuenta.abonos || []).reduce((sum, abono) => sum + (parseFloat(abono.monto) || 0), 0);
+
+          // El saldo acumulado es el saldo anterior más el total del día
+          saldoAcumulado = saldoAcumulado + totalDia;
           
-          // Asignar el saldo calculado
-          this.saldoAcumuladoAnterior = saldoCalculado;
-          
-          console.log("Fecha última cuenta:", ultimaCuenta.fecha);
-          console.log("Saldo acumulado anterior:", this.saldoAcumuladoAnterior);
-          console.log("Desglose del cálculo:", {
-            saldoAnterior: ultimaCuenta.saldoAcumuladoAnterior,
-            totalVenta,
-            totalCobros,
-            totalAbonos,
-            saldoCalculado
+          // Actualizar la cuenta
+          await updateDoc(cuentaRef, {
+            saldoAcumuladoAnterior: i === 0 ? 0 : cuentasOrdenadas[i-1].nuevoSaldoAcumulado,
+            nuevoSaldoAcumulado: saldoAcumulado,
+            estadoPagado: saldoAcumulado <= 0
           });
-        } else {
-          console.log("No se encontraron cuentas anteriores");
-          this.saldoAcumuladoAnterior = 0;
+
+          // Si la cuenta está pagada, reiniciar el saldo acumulado
+          if (saldoAcumulado <= 0) {
+            saldoAcumulado = 0;
+          }
         }
       } catch (error) {
-        console.error("Error al cargar el saldo acumulado anterior:", error);
-        this.saldoAcumuladoAnterior = 0;
+        console.error('Error al actualizar cuentas posteriores:', error);
       }
     },
     formatNumber(value) {
@@ -483,22 +518,32 @@ export default {
     },
     async guardarNota() {
       try {
+        // Calcular el total del día actual
+        const totalDia = this.totalGeneralVenta + 
+          this.cobros.reduce((sum, cobro) => sum + (parseFloat(cobro.monto) || 0), 0) - 
+          this.abonos.reduce((sum, abono) => sum + (parseFloat(abono.monto) || 0), 0);
+
+        // Obtener el saldo acumulado anterior más actualizado
+        const saldoAcumuladoActualizado = await this.obtenerSaldoAcumuladoAnterior();
+        
+        // Calcular el nuevo saldo acumulado
+        const nuevoSaldoAcumulado = saldoAcumuladoActualizado + totalDia;
+        
         // Verificar si la nota está pagada
-        const estaPagada = this.totalSaldo <= 0 || this.totalDiaActual === 0;
+        const estaPagada = nuevoSaldoAcumulado <= 0;
         
         const notaData = {
           fecha: this.fechaSeleccionada,
           items: this.items,
-          saldoAcumuladoAnterior: this.saldoAcumuladoAnterior,
+          saldoAcumuladoAnterior: saldoAcumuladoActualizado,
           cobros: this.cobros,
           abonos: this.abonos,
           totalGeneral: this.totalGeneral,
-          totalSaldo: estaPagada ? 0 : this.totalSaldo, // Si está pagada, el saldo es 0
-          nuevoSaldoAcumulado: estaPagada ? 0 : this.nuevoSaldoAcumulado, // Si está pagada, el saldo acumulado es 0
-          itemsVenta: this.itemsVenta,
           totalGeneralVenta: this.totalGeneralVenta,
+          nuevoSaldoAcumulado: estaPagada ? 0 : nuevoSaldoAcumulado,
           gananciaDelDia: this.gananciaDelDia,
           estadoPagado: estaPagada,
+          itemsVenta: this.itemsVenta
         };
 
         console.log("Datos a guardar:", notaData);
@@ -507,25 +552,32 @@ export default {
         const isEditing = this.$route.query.edit === 'true';
 
         if (id && isEditing) {
-          // Si estamos editando una nota existente, actualizarla
+          // Actualizar nota existente
           await updateDoc(doc(db, 'cuentasCatarro', id), notaData);
           console.log('Cuenta actualizada exitosamente');
+          
+          // Actualizar saldos de cuentas posteriores
+          await this.actualizarCuentasPosteriores(this.fechaSeleccionada);
+          
           alert('Cuenta guardada exitosamente');
           this.$router.push('/cuentas-catarro');
         } else {
-          // Si es una nota nueva, buscar si ya existe una nota para esta fecha
+          // Verificar si ya existe una nota para esta fecha
           const cuentasRef = collection(db, 'cuentasCatarro');
           const q = query(cuentasRef, where('fecha', '==', this.fechaSeleccionada));
           const querySnapshot = await getDocs(q);
 
           if (!querySnapshot.empty) {
-            // Si existe una nota para esta fecha, mostrar alerta
             alert('Ya existe una nota registrada para esta fecha. No se puede crear una nueva.');
             return;
           } else {
-            // Si no existe, crear una nueva nota
+            // Crear nueva nota
             await addDoc(collection(db, 'cuentasCatarro'), notaData);
             console.log('Nueva cuenta guardada exitosamente');
+            
+            // Actualizar saldos de cuentas posteriores
+            await this.actualizarCuentasPosteriores(this.fechaSeleccionada);
+            
             alert('Cuenta guardada exitosamente');
             this.$router.push('/cuentas-catarro');
           }
