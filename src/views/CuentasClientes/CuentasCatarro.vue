@@ -289,7 +289,11 @@ export default {
         precioVenta: null
       },
       autoSaveTimer: null,
-      lastSavedData: null
+      lastSavedData: null,
+      saveQueue: [],
+      isSaving: false,
+      lastSaveTime: null,
+      saveMinInterval: 5000, // 5 segundos mínimo entre guardados
     }
   },
   computed: {
@@ -512,18 +516,75 @@ export default {
         maximumFractionDigits: 2 
       });
     },
-    addItem() {
+    async addItem() {
       if (this.newItem.kilos && this.newItem.medida && this.newItem.costo) {
-        const total = this.newItem.kilos * this.newItem.costo;
-        this.items.push({...this.newItem, total});
-        this.itemsVenta.push({
-          ...this.newItem,
-          total,
-          precioVenta: null,
-          totalVenta: 0,
-          kilosVenta: this.newItem.kilos
+        try {
+          const total = this.newItem.kilos * this.newItem.costo;
+          this.items.push({...this.newItem, total});
+          this.itemsVenta.push({
+            ...this.newItem,
+            total,
+            precioVenta: null,
+            totalVenta: 0,
+            kilosVenta: this.newItem.kilos
+          });
+          this.newItem = {kilos: null, medida: '', costo: null};
+
+          // Encolar el guardado
+          await this.queueSave();
+
+        } catch (error) {
+          console.error('Error al guardar el item:', error);
+          alert('Hubo un problema al guardar. Por favor, intente nuevamente.');
+          // Revertir los cambios locales si falló el guardado
+          this.items.pop();
+          this.itemsVenta.pop();
+        }
+      }
+    },
+    async crearNuevaCuenta() {
+      try {
+        // Verificar si ya existe una nota para esta fecha
+        const cuentasRef = collection(db, 'cuentasCatarro');
+        const q = query(cuentasRef, where('fecha', '==', this.fechaSeleccionada));
+        const querySnapshot = await getDocs(q);
+
+        if (!querySnapshot.empty) {
+          throw new Error('Ya existe una nota registrada para esta fecha.');
+        }
+
+        // Preparar solo los datos esenciales inicialmente
+        const notaData = {
+          fecha: this.fechaSeleccionada,
+          items: this.items,
+          itemsVenta: this.itemsVenta,
+          saldoAcumuladoAnterior: await this.obtenerSaldoAcumuladoAnterior(),
+          cobros: [],
+          abonos: [],
+          totalGeneral: this.totalGeneral,
+          totalGeneralVenta: 0,
+          nuevoSaldoAcumulado: this.saldoAcumuladoAnterior,
+          estadoPagado: false
+        };
+
+        const docRef = await addDoc(collection(db, 'cuentasCatarro'), notaData);
+        
+        // Actualizar la URL
+        this.$router.replace({
+          name: this.$route.name,
+          params: { id: docRef.id },
+          query: { edit: 'true' }
         });
-        this.newItem = {kilos: null, medida: '', costo: null};
+
+        return docRef.id;
+      } catch (error) {
+        if (error.message === 'Ya existe una nota registrada para esta fecha.') {
+          alert(error.message);
+        } else {
+          console.error('Error al crear nueva cuenta:', error);
+          alert('Error al crear la cuenta. Por favor, intente nuevamente.');
+        }
+        throw error;
       }
     },
     removeItem(index) {
@@ -893,37 +954,113 @@ export default {
           clearTimeout(this.autoSaveTimer);
         }
         this.autoSaveTimer = setTimeout(async () => {
-          await this.autoSaveNota();
-        }, 1000);
+          await this.queueSave();
+        }, 2000); // Aumentar el delay a 2 segundos
+      }
+    },
+    async queueSave() {
+      // Agregar operación a la cola
+      this.saveQueue.push({
+        timestamp: Date.now(),
+        operation: async () => {
+          if (!this.$route.params.id) {
+            await this.crearNuevaCuenta();
+          } else {
+            await this.autoSaveNota();
+          }
+        }
+      });
+
+      // Procesar la cola si no hay guardado en proceso
+      if (!this.isSaving) {
+        await this.processSaveQueue();
+      }
+    },
+    async processSaveQueue() {
+      if (this.isSaving || this.saveQueue.length === 0) return;
+
+      this.isSaving = true;
+
+      try {
+        while (this.saveQueue.length > 0) {
+          // Verificar el tiempo desde el último guardado
+          const now = Date.now();
+          if (this.lastSaveTime && now - this.lastSaveTime < this.saveMinInterval) {
+            // Esperar antes de intentar el siguiente guardado
+            await new Promise(resolve => 
+              setTimeout(resolve, this.saveMinInterval - (now - this.lastSaveTime))
+            );
+          }
+
+          const nextSave = this.saveQueue[0];
+          await this.retryOperation(nextSave.operation);
+          this.lastSaveTime = Date.now();
+          this.saveQueue.shift();
+        }
+      } catch (error) {
+        console.error('Error procesando cola de guardado:', error);
+        if (error.code === 'resource-exhausted') {
+          // Esperar 10 segundos antes de reintentar si se excedió la cuota
+          await new Promise(resolve => setTimeout(resolve, 10000));
+          // Reintentar el procesamiento
+          await this.processSaveQueue();
+        }
+      } finally {
+        this.isSaving = false;
       }
     },
     async autoSaveNota() {
+      if (!this.$route.params.id) return;
+
       try {
-        const currentData = {
-          fecha: this.fechaSeleccionada,
-          items: this.items,
-          saldoAcumuladoAnterior: this.saldoAcumuladoAnterior,
-          cobros: this.cobros,
-          abonos: this.abonos,
+        // Preparar datos mínimos necesarios
+        const notaData = {
+          items: this.items.map(item => ({
+            kilos: item.kilos,
+            medida: item.medida,
+            costo: item.costo,
+            total: item.total
+          })),
+          itemsVenta: this.itemsVenta.map(item => ({
+            kilosVenta: item.kilosVenta,
+            medida: item.medida,
+            precioVenta: item.precioVenta,
+            totalVenta: item.totalVenta,
+            ganancia: item.ganancia
+          })),
           totalGeneral: this.totalGeneral,
-          totalGeneralVenta: this.totalGeneralVenta,
-          nuevoSaldoAcumulado: this.nuevoSaldoAcumulado,
-          gananciaDelDia: this.gananciaDelDia,
-          estadoPagado: this.estadoCuenta === 'Pagado',
-          itemsVenta: this.itemsVenta
+          totalGeneralVenta: this.totalGeneralVenta
         };
 
-        const id = this.$route.params.id;
-        await updateDoc(doc(db, 'cuentasCatarro', id), currentData);
+        await updateDoc(doc(db, 'cuentasCatarro', this.$route.params.id), notaData);
         console.log('Cuenta auto-guardada exitosamente');
       } catch (error) {
+        if (error.code === 'resource-exhausted') {
+          throw error; // Dejar que el sistema de cola maneje el reintento
+        }
         console.error('Error en auto-guardado:', error);
+        throw error;
+      }
+    },
+    async retryOperation(operation, maxRetries = 3) {
+      for (let i = 0; i < maxRetries; i++) {
+        try {
+          return await operation();
+        } catch (error) {
+          if (i === maxRetries - 1) throw error;
+          const delay = Math.min(1000 * Math.pow(2, i), 10000);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
       }
     }
   },
   beforeUnmount() {
     if (this.autoSaveTimer) {
       clearTimeout(this.autoSaveTimer);
+    }
+    // Intentar procesar cualquier guardado pendiente
+    if (this.saveQueue.length > 0) {
+      this.processSaveQueue();
     }
   }
 }
