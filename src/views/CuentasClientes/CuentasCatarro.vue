@@ -318,7 +318,7 @@ export default {
       return this.totalGeneralVenta - this.abonos.reduce((sum, abono) => sum + (abono.monto || 0), 0);
     },
     estadoCuenta() {
-      return this.totalSaldo <= 0 ? 'Pagado' : 'No Pagado';
+      return this.totalSaldo <= 0 || this.totalDiaActual === 0 ? 'Pagado' : 'No Pagado';
     },
     gananciaTotal() {
       return this.itemsVenta.reduce((sum, item) => sum + item.ganancia, 0);
@@ -398,22 +398,45 @@ export default {
     async loadSaldoAcumuladoAnterior() {
       try {
         const cuentasRef = collection(db, 'cuentasCatarro');
+        
+        // Convertir la fecha seleccionada a un string en formato YYYY-MM-DD
+        const fechaSeleccionada = this.fechaSeleccionada;
+        
+        // Crear la consulta para obtener la última cuenta antes de la fecha seleccionada
         const q = query(
-          cuentasRef, 
-          where('fecha', '<', this.fechaSeleccionada),
+          cuentasRef,
+          where('fecha', '<', fechaSeleccionada),
           orderBy('fecha', 'desc'),
           limit(1)
         );
+
         const cuentasSnapshot = await getDocs(q);
         
         if (!cuentasSnapshot.empty) {
           const ultimaCuenta = cuentasSnapshot.docs[0].data();
-          this.saldoAcumuladoAnterior = ultimaCuenta.nuevoSaldoAcumulado || 0;
+          
+          // Calcular el nuevo saldo acumulado de la última cuenta
+          const totalVenta = parseFloat(ultimaCuenta.totalGeneralVenta || 0);
+          const totalCobros = (ultimaCuenta.cobros || []).reduce((sum, cobro) => sum + (parseFloat(cobro.monto) || 0), 0);
+          const totalAbonos = (ultimaCuenta.abonos || []).reduce((sum, abono) => sum + (parseFloat(abono.monto) || 0), 0);
+          const saldoCalculado = parseFloat(ultimaCuenta.saldoAcumuladoAnterior || 0) + totalVenta + totalCobros - totalAbonos;
+          
+          // Asignar el saldo calculado
+          this.saldoAcumuladoAnterior = saldoCalculado;
+          
+          console.log("Fecha última cuenta:", ultimaCuenta.fecha);
+          console.log("Saldo acumulado anterior:", this.saldoAcumuladoAnterior);
+          console.log("Desglose del cálculo:", {
+            saldoAnterior: ultimaCuenta.saldoAcumuladoAnterior,
+            totalVenta,
+            totalCobros,
+            totalAbonos,
+            saldoCalculado
+          });
         } else {
+          console.log("No se encontraron cuentas anteriores");
           this.saldoAcumuladoAnterior = 0;
         }
-        
-        console.log("Saldo acumulado anterior cargado:", this.saldoAcumuladoAnterior);
       } catch (error) {
         console.error("Error al cargar el saldo acumulado anterior:", error);
         this.saldoAcumuladoAnterior = 0;
@@ -460,6 +483,9 @@ export default {
     },
     async guardarNota() {
       try {
+        // Verificar si la nota está pagada
+        const estaPagada = this.totalSaldo <= 0 || this.totalDiaActual === 0;
+        
         const notaData = {
           fecha: this.fechaSeleccionada,
           items: this.items,
@@ -467,12 +493,12 @@ export default {
           cobros: this.cobros,
           abonos: this.abonos,
           totalGeneral: this.totalGeneral,
-          totalSaldo: this.totalSaldo,
-          nuevoSaldoAcumulado: this.nuevoSaldoAcumulado,
+          totalSaldo: estaPagada ? 0 : this.totalSaldo, // Si está pagada, el saldo es 0
+          nuevoSaldoAcumulado: estaPagada ? 0 : this.nuevoSaldoAcumulado, // Si está pagada, el saldo acumulado es 0
           itemsVenta: this.itemsVenta,
           totalGeneralVenta: this.totalGeneralVenta,
           gananciaDelDia: this.gananciaDelDia,
-          estadoPagado: this.totalSaldo <= 0,
+          estadoPagado: estaPagada,
         };
 
         console.log("Datos a guardar:", notaData);
