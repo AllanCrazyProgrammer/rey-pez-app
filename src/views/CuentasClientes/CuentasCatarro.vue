@@ -299,7 +299,7 @@ export default {
       return fecha.toLocaleDateString('es-ES', opciones);
     },
     totalGeneral() {
-      return this.items.reduce((sum, item) => sum + item.total, 0);
+      return this.items.reduce((sum, item) => sum + (item.total || 0), 0);
     },
     totalGeneralVenta() {
       return this.itemsVenta.reduce((sum, item) => sum + (item.totalVenta || 0), 0);
@@ -310,11 +310,11 @@ export default {
       return this.saldoAcumuladoAnterior + this.totalGeneralVenta + totalCobros - totalAbonos;
     },
     nuevoSaldoAcumulado() {
-      return this.saldoAcumuladoAnterior + this.totalDiaActual;
+      return (this.saldoAcumuladoAnterior || 0) + (this.totalDiaActual || 0);
     },
     gananciaDelDia() {
-      const costoTotal = this.items.reduce((sum, item) => sum + item.total, 0);
-      return this.totalGeneralVenta - costoTotal;
+      const costoTotal = this.items.reduce((sum, item) => sum + (item.total || 0), 0);
+      return (this.totalGeneralVenta || 0) - (costoTotal || 0);
     },
     saldoPendiente() {
       return this.totalGeneralVenta - this.abonos.reduce((sum, abono) => sum + (abono.monto || 0), 0);
@@ -323,12 +323,14 @@ export default {
       return this.totalSaldo <= 0 || this.totalDiaActual === 0 ? 'Pagado' : 'No Pagado';
     },
     gananciaTotal() {
-      return this.itemsVenta.reduce((sum, item) => sum + item.ganancia, 0);
+      return this.itemsVenta.reduce((sum, item) => sum + (item.ganancia || 0), 0);
     },
     totalDiaActual() {
-      const totalCobros = this.cobros.reduce((sum, cobro) => sum + (cobro.monto || 0), 0);
-      const totalAbonos = this.abonos.reduce((sum, abono) => sum + (abono.monto || 0), 0);
-      return this.totalGeneralVenta + totalCobros - totalAbonos;
+      const totalCobros = this.cobros.reduce((sum, cobro) => 
+        sum + (parseFloat(cobro.monto) || 0), 0);
+      const totalAbonos = this.abonos.reduce((sum, abono) => 
+        sum + (parseFloat(abono.monto) || 0), 0);
+      return (this.totalGeneralVenta || 0) + totalCobros - totalAbonos;
     }
   },
   watch: {
@@ -502,7 +504,13 @@ export default {
       }
     },
     formatNumber(value) {
-      return value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      if (value === null || value === undefined) {
+        return '0.00';
+      }
+      return value.toLocaleString('en-US', { 
+        minimumFractionDigits: 2, 
+        maximumFractionDigits: 2 
+      });
     },
     addItem() {
       if (this.newItem.kilos && this.newItem.medida && this.newItem.costo) {
@@ -800,9 +808,16 @@ export default {
     },
     calcularTotalVenta(index) {
       const item = this.itemsVenta[index];
+      if (!item) return;
+      
+      const kilos = parseFloat(item.kilosVenta) || 0;
+      const precio = parseFloat(item.precioVenta) || 0;
+      item.totalVenta = kilos * precio;
+      
       const itemCosto = this.items[index];
-      item.totalVenta = (item.kilosVenta || 0) * (item.precioVenta || 0);
-      item.ganancia = item.totalVenta - (itemCosto ? itemCosto.total : 0);
+      const totalCosto = itemCosto ? (itemCosto.total || 0) : 0;
+      item.ganancia = (item.totalVenta || 0) - totalCosto;
+      
       this.actualizarItemsVenta();
     },
     removeItemVenta(index) {
