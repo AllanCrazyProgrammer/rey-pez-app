@@ -1913,11 +1913,12 @@ export default {
       generarResumenTarasPDF(embarqueData, this.clientesDisponibles);
     },
     onMedidaInput(producto, event) {
-      const valor = event.target.value.trim().toLowerCase();
+      // Eliminar la función trim() para permitir espacios
+      const valor = event.target.value.toLowerCase();
       this.productoEditandoId = producto.id;
       
-      // Actualizar inmediatamente la medida del producto
-      producto.medida = event.target.value.trim();
+      // Actualizar la medida sin eliminar espacios
+      producto.medida = event.target.value;
       
       if (valor) {
         this.sugerenciasMedidas = this.medidasUsadas.filter(m => 
@@ -1940,7 +1941,8 @@ export default {
       }, 200);
       
       // Solo quitar la marca de edición si tiene tanto medida como tipo
-      if (producto.medida && producto.tipo) {
+      // Permitir espacios en la validación
+      if (producto.medida && producto.medida.length > 0 && producto.tipo) {
         producto.isEditing = false;
         producto.isNew = false;
       }
@@ -1963,21 +1965,52 @@ export default {
 
     guardarNombreAlternativo() {
       if (this.productoSeleccionado) {
-        if (this.nombreAlternativoTemp.trim()) {
-          this.$set(this.productoSeleccionado, 'nombreAlternativoPDF', this.nombreAlternativoTemp.trim());
-        } else {
-          this.$delete(this.productoSeleccionado, 'nombreAlternativoPDF');
-        }
-        
+        // Desactivar temporalmente el guardado automático
         const guardadoActivo = this.guardadoAutomaticoActivo;
         this.guardadoAutomaticoActivo = false;
+
+        // Crear una copia del valor para asegurar que tenemos el valor más reciente
+        const nuevoNombre = this.nombreAlternativoTemp.trim();
         
+        if (nuevoNombre) {
+          // Usar Vue.set para asegurar reactividad
+          this.$set(this.productoSeleccionado, 'nombreAlternativoPDF', nuevoNombre);
+          
+          // Forzar la actualización del producto
+          this.actualizarProducto(this.productoSeleccionado);
+        } else {
+          this.$delete(this.productoSeleccionado, 'nombreAlternativoPDF');
+          this.actualizarProducto(this.productoSeleccionado);
+        }
+
+        // Esperar a que Vue actualice el DOM
         this.$nextTick(() => {
+          // Reactivar el guardado automático
           this.guardadoAutomaticoActivo = guardadoActivo;
+          
+          // Forzar un guardado inmediato
           this.guardarCambiosEnTiempoReal();
+          
+          // Cerrar el modal después de asegurarnos que los cambios se guardaron
+          this.cerrarModalNombreAlternativo();
         });
+      } else {
+        this.cerrarModalNombreAlternativo();
       }
-      this.cerrarModalNombreAlternativo();
+    },
+
+    // Asegurarnos de que actualizarProducto maneja correctamente los cambios
+    actualizarProducto(producto) {
+      const index = this.embarque.productos.findIndex(p => p.id === producto.id);
+      if (index !== -1) {
+        // Crear una copia profunda del producto
+        const productoActualizado = JSON.parse(JSON.stringify(producto));
+        // Actualizar el producto en el array
+        this.$set(this.embarque.productos, index, productoActualizado);
+        
+        // Forzar la actualización del componente
+        this.$forceUpdate();
+      }
     },
 
     // Agregar estos nuevos métodos
