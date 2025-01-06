@@ -151,11 +151,11 @@
         <span>Saldo Acumulado Anterior: ${{ formatNumber(saldoAcumuladoAnterior) }}</span>
       </div>
       <div class="input-row" v-for="(cobro, index) in cobros" :key="index">
-        <input v-model="cobro.descripcion" type="text" placeholder="Descripción" class="responsive-input">
-        <input v-model.number="cobro.monto" type="number" placeholder="Monto" class="responsive-input">
+        <input v-model="cobro.descripcion" type="text" placeholder="Flete" class="responsive-input">
+        <input v-model="cobro.monto" type="number" placeholder="Monto" class="responsive-input">
         <button @click="removeCobro(index)" class="delete-btn">Eliminar</button>
       </div>
-      <button @click="addCobro" class="add-btn">Agregar Cobro</button>
+      <button @click="addCobro" class="add-btn">Agregar Flete</button>
     </div>
   
     <h2>Abonos</h2>
@@ -179,7 +179,7 @@
       </tr>
       <tr v-for="(cobro, index) in cobros" :key="index">
         <td>{{ cobro.descripcion }}</td>
-        <td>${{ formatNumber(cobro.monto) }}</td>
+        <td>-${{ formatNumber(cobro.monto) }}</td>
       </tr>
       <tr v-for="(abono, index) in abonos" :key="'abono-'+index">
         <td>{{ abono.descripcion }} (Abono)</td>
@@ -334,7 +334,7 @@ export default {
         sum + (parseFloat(cobro.monto) || 0), 0);
       const totalAbonos = this.abonos.reduce((sum, abono) => 
         sum + (parseFloat(abono.monto) || 0), 0);
-      return (this.totalGeneralVenta || 0) + totalCobros - totalAbonos;
+      return (this.totalGeneralVenta || 0) - totalCobros - totalAbonos;
     }
   },
   watch: {
@@ -599,7 +599,7 @@ export default {
       }
     },
     addCobro() {
-      this.cobros.push({descripcion: '', monto: 0});
+      this.cobros.push({descripcion: 'Flete', monto: 0});
     },
     removeCobro(index) {
       this.cobros.splice(index, 1);
@@ -619,7 +619,7 @@ export default {
     async guardarNota() {
       try {
         // Calcular el total del día actual
-        const totalDia = this.totalGeneralVenta + 
+        const totalDia = this.totalGeneralVenta - 
           this.cobros.reduce((sum, cobro) => sum + (parseFloat(cobro.monto) || 0), 0) - 
           this.abonos.reduce((sum, abono) => sum + (parseFloat(abono.monto) || 0), 0);
 
@@ -1548,21 +1548,6 @@ tr:hover {
   }
 }
 
-.ganancia-positiva {
-  color: #4CAF50;
-}
-
-.ganancia-negativa {
-  color: #f44336;
-}
-
-
-@media (min-width: 601px) {
-  .mobile-only {
-    display: none;
-  }
-}
-
 .mobile-actions-modal {
   position: fixed;
   bottom: 0;
@@ -1804,7 +1789,6 @@ tr:hover {
   border: none;
   border-radius: 5px;
   font-size: 16px;
-  cursor: pointer;
 }
 
 .mobile-actions-modal .edit-btn {
