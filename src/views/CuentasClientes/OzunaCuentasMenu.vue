@@ -129,7 +129,7 @@ export default {
 }
 
 h1, h2 {
-  color: #3760b0;
+  color: #07711e;
   text-align: center;
 }
 
@@ -140,7 +140,7 @@ h1, h2 {
 }
 
 .action-button {
-  background-color: #3760b0;
+  background-color: #07711e;
   color: white;
   border: none;
   padding: 10px 20px;
@@ -153,7 +153,7 @@ h1, h2 {
 }
 
 .action-button:hover {
-  background-color: #2a4a87;
+  background-color: #065d18;
 }
 
 .back-btn {
@@ -197,7 +197,7 @@ h1, h2 {
 }
 
 .cuenta-date {
-  color: #3760b0;
+  color: #07711e;
   font-weight: bold;
   font-size: 1.1em;
   display: block;

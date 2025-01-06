@@ -66,7 +66,7 @@ h1 {
 }
 
 .card {
-  background-color: #3760b0;
+  background-color: #07711e;
   border-radius: 10px;
   padding: 20px;
   text-align: center;
@@ -99,7 +99,7 @@ h1 {
 }
 
 .card.ozuna {
-  background-color: #3760b0;
+  background-color: #07711e;
 }
 
 .card.catarro {
