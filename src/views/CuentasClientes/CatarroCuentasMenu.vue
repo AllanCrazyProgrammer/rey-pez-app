@@ -95,14 +95,18 @@ export default {
         this.unsubscribe = onSnapshot(q, async (querySnapshot) => {
           const cuentasActualizadas = querySnapshot.docs.map((doc) => {
             const data = doc.data();
+            const totalCobros = (data.cobros || []).reduce((sum, cobro) => sum + (parseFloat(cobro.monto) || 0), 0);
+            const totalAbonos = (data.abonos || []).reduce((sum, abono) => sum + (parseFloat(abono.monto) || 0), 0);
+            const totalDiaActual = (data.totalGeneralVenta || 0) - totalCobros - totalAbonos;
+
             return {
               id: doc.id,
               fecha: data.fecha,
               saldoHoy: data.totalGeneralVenta || 0,
-              totalCobros: (data.cobros || []).reduce((sum, cobro) => sum + (parseFloat(cobro.monto) || 0), 0),
-              totalAbonos: (data.abonos || []).reduce((sum, abono) => sum + (parseFloat(abono.monto) || 0), 0),
+              totalCobros,
+              totalAbonos,
               totalNota: data.nuevoSaldoAcumulado || 0,
-              estadoPagado: data.estadoPagado || false,
+              estadoPagado: totalDiaActual === 0,
               nuevoSaldoAcumulado: data.nuevoSaldoAcumulado || 0,
               saldoAcumuladoAnterior: data.saldoAcumuladoAnterior || 0
             };
@@ -119,22 +123,21 @@ export default {
           // Procesar cada cuenta y preparar las actualizaciones
           for (let i = 0; i < cuentasOrdenadas.length; i++) {
             const cuenta = cuentasOrdenadas[i];
-            const totalDia = cuenta.saldoHoy + cuenta.totalCobros - cuenta.totalAbonos;
+            const totalDia = cuenta.saldoHoy - cuenta.totalCobros - cuenta.totalAbonos;
             saldoAcumulado += totalDia;
 
             const saldoAnterior = i === 0 ? 0 : cuentasOrdenadas[i-1].nuevoSaldoAcumulado;
             
             // Solo actualizar si los valores han cambiado
             if (cuenta.saldoAcumuladoAnterior !== saldoAnterior || 
-                cuenta.nuevoSaldoAcumulado !== saldoAcumulado || 
-                cuenta.estadoPagado !== (saldoAcumulado <= 0)) {
+                cuenta.nuevoSaldoAcumulado !== saldoAcumulado) {
               
               actualizaciones.push({
                 id: cuenta.id,
                 updates: {
                   saldoAcumuladoAnterior: saldoAnterior,
                   nuevoSaldoAcumulado: saldoAcumulado,
-                  estadoPagado: saldoAcumulado <= 0
+                  estadoPagado: totalDia === 0
                 }
               });
             }
@@ -142,7 +145,7 @@ export default {
             // Actualizar el objeto local
             cuenta.totalNota = saldoAcumulado;
             cuenta.saldoAcumuladoAnterior = saldoAnterior;
-            cuenta.estadoPagado = saldoAcumulado <= 0;
+            cuenta.estadoPagado = (cuenta.saldoHoy - cuenta.totalCobros - cuenta.totalAbonos) === 0;
 
             // Reiniciar saldo si la cuenta está pagada
             if (saldoAcumulado <= 0) {
