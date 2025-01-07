@@ -16,8 +16,11 @@ import OzunaCuentasMenu from '@/views/CuentasClientes/OzunaCuentasMenu.vue'
 import CuentasOzuna from '@/views/CuentasClientes/CuentasOzuna.vue'
 import CatarroCuentasMenu from '@/views/CuentasClientes/CatarroCuentasMenu.vue'
 import CuentasCatarro from '@/views/CuentasClientes/CuentasCatarro.vue'
+import JoselitoCuentasMenu from '@/views/CuentasClientes/JoselitoCuentasMenu.vue'
+import CuentasJoselito from '@/views/CuentasClientes/CuentasJoselito.vue'
 import EmbarquesMenu from '@/views/Embarques/EmbarquesMenu.vue'; // Asegúrate de que esta ruta de importación sea correcta
 import VentasYGananciasCatarro from '@/views/CuentasClientes/VentasYGananciasCatarro.vue'; // Asegúrate de crear este componente
+import VentasYGananciasJoselito from '@/views/CuentasClientes/VentasYGananciasJoselito.vue';
 import ListaEmbarques from '@/views/Embarques/ListaEmbarques.vue';
 import NuevoEmbarque from '@/views/Embarques/NuevoEmbarque.vue';
 import Rendimientos from '@/views/Embarques/Rendimientos.vue';
@@ -140,6 +143,26 @@ const routes = [
     component: CuentasCatarro
   },
   {
+    path: '/cuentas-joselito',
+    name: 'joselito-cuentas-menu',
+    component: JoselitoCuentasMenu
+  },
+  {
+    path: '/cuentas-joselito/nueva',
+    name: 'nueva-cuenta-joselito',
+    component: CuentasJoselito
+  },
+  {
+    path: '/cuentas-joselito/:id',
+    name: 'ver-cuenta-joselito',
+    component: CuentasJoselito
+  },
+  {
+    path: '/cuentas-joselito/:id?',
+    name: 'CuentasJoselito',
+    component: CuentasJoselito
+  },
+  {
     path: '/embarques-menu',
     name: 'EmbarquesMenu',
     component: EmbarquesMenu
@@ -148,6 +171,11 @@ const routes = [
     path: "/ventas-ganancias-catarro",
     name: 'VentasYGananciasCatarro',
     component: VentasYGananciasCatarro
+  },
+  {
+    path: "/ventas-ganancias-joselito",
+    name: 'VentasYGananciasJoselito',
+    component: VentasYGananciasJoselito
   },
   
   {

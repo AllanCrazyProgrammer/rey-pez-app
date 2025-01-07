@@ -14,6 +14,11 @@
               <h2>Catarro</h2>
             </div>
           </router-link>
+          <router-link to="/cuentas-joselito" class="boton-cuenta">
+            <div class="card joselito">
+              <h2>Joselito</h2>
+            </div>
+          </router-link>
           <!-- Agrega más botones aquí si es necesario -->
         </div>
       </div>
@@ -104,5 +109,9 @@ h1 {
 
 .card.catarro {
   background-color: #d32f2f;
+}
+
+.card.joselito {
+  background-color: #2196F3;
 }
 </style>
