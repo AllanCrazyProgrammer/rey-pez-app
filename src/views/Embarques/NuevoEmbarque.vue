@@ -549,11 +549,21 @@
         </div>
       </div>
     </div>
+    <!-- Agregar el componente de usuarios activos -->
+    <div class="usuarios-activos">
+      <h4>Usuarios Activos:</h4>
+      <div class="usuarios-lista">
+        <div v-for="usuario in usuariosActivos" :key="usuario.userId" class="usuario-activo">
+          <span class="usuario-nombre">{{ usuario.username }}</span>
+          <span class="usuario-status" :class="usuario.status">●</span>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script>
-import { getFirestore, collection, addDoc, doc, getDoc, updateDoc, onSnapshot } from 'firebase/firestore';
+import { getFirestore, collection, addDoc, doc, getDoc, updateDoc, onSnapshot, serverTimestamp } from 'firebase/firestore';
 import { debounce } from 'lodash';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
@@ -561,15 +571,24 @@ import { generarNotaVentaPDF } from '@/utils/pdfGenerator';
 import Rendimientos from './Rendimientos.vue'
 import { generarResumenTarasPDF } from '@/utils/resumenTarasPdf';
 import { generarResumenEmbarquePDF } from '@/utils/resumenEmbarque2';
+import { ref, onValue, onDisconnect, set } from 'firebase/database'
+import { rtdb } from '@/firebase'
+import { useAuthStore } from '@/stores/auth'
+import { ref as vueRef, onMounted, onUnmounted } from 'vue'
 
 export default {
   name: 'NuevoEmbarque',
   components: {
     Rendimientos
   },
+  setup() {
+    const authStore = useAuthStore();
+    return { authStore };
+  },
   data() {
     return {
-      clientesJuntarMedidas: {}, // Agregar esta línea dentro de data()
+      usuariosActivos: [],
+      clientesJuntarMedidas: {},
       clientesPredefinidos: [
         { id: 1, nombre: 'Joselito' },
         { id: 2, nombre: 'Catarro' },
@@ -976,7 +995,24 @@ export default {
           await updateDoc(doc(db, "embarques", this.embarqueId), embarqueData);
           alert('Embarque actualizado exitosamente.');
         } else {
-          const docRef = await addDoc(collection(db, "embarques"), embarqueData);
+          const docRef = await addDoc(collection(db, "embarques"), {
+            ...embarqueData,
+            ultimaEdicion: {
+              userId: this.authStore.userId,
+              username: this.authStore.user.username,
+              timestamp: serverTimestamp()
+            }
+          });
+          
+          // Notificar a otros usuarios sobre el cambio
+          const cambiosRef = ref(rtdb, `cambios/${docRef.id}`)
+          await set(cambiosRef, {
+            tipo: 'guardar',
+            userId: this.authStore.userId,
+            username: this.authStore.user.username,
+            timestamp: serverTimestamp()
+          })
+          
           this.embarqueId = docRef.id;
           alert('Embarque creado exitosamente y guardado en la base de datos.');
           this.modoEdicion = true;
@@ -2189,14 +2225,97 @@ export default {
         this.guardarCambiosEnTiempoReal();
       }
       this.cerrarModalAlt();
+    },
+    async escucharUsuariosActivos() {
+      try {
+        console.log('Iniciando escucha de usuarios activos');
+        const statusRef = ref(rtdb, 'status');
+        
+        // Primero, asegurarse de que el usuario actual esté marcado como activo
+        if (this.authStore.isLoggedIn && this.authStore.user) {
+          console.log('Usuario autenticado:', this.authStore.user.username);
+          const userStatusRef = ref(rtdb, `status/${this.authStore.userId}`);
+          
+          try {
+            await set(userStatusRef, {
+              username: this.authStore.user.username,
+              status: 'online',
+              lastSeen: new Date().toISOString()
+            });
+            console.log('Estado del usuario actualizado correctamente');
+          } catch (error) {
+            console.error('Error al actualizar estado del usuario:', error);
+          }
+        } else {
+          console.log('Usuario no autenticado');
+        }
+
+        // Luego, escuchar cambios en los usuarios activos
+        this.unsubscribeUsuarios = onValue(statusRef, (snapshot) => {
+          const usuarios = [];
+          console.log('Recibiendo actualización de usuarios activos');
+          
+          snapshot.forEach((childSnapshot) => {
+            const usuario = childSnapshot.val();
+            console.log('Usuario encontrado:', usuario);
+            
+            // Solo agregar usuarios que tengan datos válidos
+            if (usuario && usuario.username) {
+              usuarios.push({
+                userId: childSnapshot.key,
+                username: usuario.username,
+                status: usuario.status || 'online',
+                lastSeen: usuario.lastSeen
+              });
+            }
+          });
+
+          console.log('Total usuarios activos:', usuarios.length);
+          this.usuariosActivos = usuarios;
+        }, (error) => {
+          console.error('Error al escuchar usuarios activos:', error);
+        });
+      } catch (error) {
+        console.error('Error al iniciar escucha de usuarios:', error);
+      }
+    },
+
+    async iniciarPresenciaUsuario() {
+      try {
+        if (!this.authStore.isLoggedIn || !this.authStore.user) {
+          console.log('Usuario no autenticado');
+          return;
+        }
+
+        console.log('Iniciando presencia para usuario:', this.authStore.user.username);
+        const userStatusRef = ref(rtdb, `status/${this.authStore.userId}`);
+        
+        // Configurar limpieza al desconectar
+        await onDisconnect(userStatusRef).remove();
+        
+        // Establecer estado inicial
+        await set(userStatusRef, {
+          username: this.authStore.user.username,
+          status: 'online',
+          lastSeen: new Date().toISOString()
+        });
+
+        console.log('Presencia iniciada exitosamente');
+      } catch (error) {
+        console.error('Error al iniciar presencia:', error.message, error.stack);
+      }
     }
   },
-  created() {
+  async created() {
     const embarqueId = this.$route.params.id;
-    this.cargarEmbarque(embarqueId);
+    await this.cargarEmbarque(embarqueId);
     this.undoStack.push(JSON.stringify(this.embarque));
     console.log('Component mounted. Estado inicial cargado.');
     this.actualizarMedidasUsadas();
+    
+    // Iniciar presencia y escucha de usuarios
+    await this.iniciarPresenciaUsuario();
+    this.escucharUsuariosActivos();
   },
   watch: {
     embarque: {
@@ -2250,6 +2369,12 @@ export default {
     crudosInputs.forEach(input => {
       input.removeEventListener('input', this.actualizarCrudos);
     });
+
+    // Limpiar escucha cuando el componente se destruye
+    if (this.unsubscribeUsuarios) {
+      console.log('Limpiando escucha de usuarios activos');
+      this.unsubscribeUsuarios();
+    }
   },
   updated() {
     console.log('Componente actualizado');
@@ -4329,5 +4454,70 @@ input[type="tel"] {
 
 .ml-2 {
   margin-left: 0.5rem;
+}
+
+.usuarios-activos {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  background: white;
+  padding: 20px;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  z-index: 1000;
+  min-width: 200px;
+  border: 1px solid #e1e4e8;
+}
+
+.usuarios-activos h4 {
+  margin: 0 0 15px 0;
+  color: #24292e;
+  font-size: 16px;
+  border-bottom: 1px solid #e1e4e8;
+  padding-bottom: 10px;
+}
+
+.usuarios-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.usuario-activo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  border-radius: 6px;
+  background: #f6f8fa;
+  transition: all 0.2s ease;
+}
+
+.usuario-activo:hover {
+  background: #f1f4f7;
+}
+
+.usuario-nombre {
+  font-weight: 500;
+  color: #24292e;
+}
+
+.usuario-status {
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+}
+
+.usuario-status.online {
+  color: #28a745;
+}
+
+.usuario-status.offline {
+  color: #dc3545;
+}
+
+.usuario-status::before {
+  content: "●";
+  margin-right: 5px;
 }
 </style>
