@@ -254,7 +254,19 @@
 
 <script>
 import { db } from '@/firebase';
-import { collection, addDoc, doc, getDoc, updateDoc, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
+import { 
+  collection, 
+  addDoc, 
+  doc, 
+  getDoc, 
+  updateDoc, 
+  query, 
+  where, 
+  getDocs, 
+  orderBy, 
+  limit, 
+  deleteDoc 
+} from 'firebase/firestore';
 import BackButton from '@/components/BackButton.vue';
 import PreciosHistorialModal from '@/components/PreciosHistorialModal.vue';
 
@@ -856,8 +868,101 @@ export default {
       });
     },
 
-    removeAbono(index) {
-      this.abonos.splice(index, 1);
+    async removeAbono(index) {
+      try {
+        const abono = this.abonos[index];
+        
+        // Si el abono tiene un ID de abono general, eliminarlo del historial
+        if (abono.abonoGeneralId) {
+          try {
+            // Primero verificar si el abono general existe
+            const abonoGeneralRef = doc(db, 'abonosGeneralesJoselito', abono.abonoGeneralId);
+            const abonoGeneralDoc = await getDoc(abonoGeneralRef);
+            
+            if (abonoGeneralDoc.exists()) {
+              // Eliminar el abono del historial
+              await deleteDoc(abonoGeneralRef);
+              console.log('Abono eliminado del historial:', abono.abonoGeneralId);
+              
+              // También eliminar cualquier referencia en otras cuentas
+              const cuentasRef = collection(db, 'cuentasJoselito');
+              const querySnapshot = await getDocs(cuentasRef);
+              
+              const actualizacionesCuentas = querySnapshot.docs.map(async (docSnapshot) => {
+                const cuentaData = docSnapshot.data();
+                if (cuentaData.abonos) {
+                  const abonosActualizados = cuentaData.abonos.filter(a => a.abonoGeneralId !== abono.abonoGeneralId);
+                  
+                  // Solo actualizar si hubo cambios en los abonos
+                  if (abonosActualizados.length !== cuentaData.abonos.length) {
+                    await updateDoc(doc(db, 'cuentasJoselito', docSnapshot.id), {
+                      abonos: abonosActualizados
+                    });
+                  }
+                }
+              });
+              
+              await Promise.all(actualizacionesCuentas);
+            }
+          } catch (error) {
+            console.error('Error al eliminar abono general:', error);
+            throw new Error('Error al eliminar abono del historial');
+          }
+        }
+
+        // Eliminar el abono de la cuenta actual
+        this.abonos.splice(index, 1);
+        
+        // Guardar los cambios en la cuenta actual
+        const id = this.$route.params.id;
+        if (id) {
+          const cuentaRef = doc(db, 'cuentasJoselito', id);
+          await updateDoc(cuentaRef, {
+            abonos: this.abonos,
+            estadoPagado: this.totalDiaActual <= 0
+          });
+        }
+
+        // Actualizar los saldos acumulados de todas las cuentas
+        const cuentasRef = collection(db, 'cuentasJoselito');
+        const q = query(cuentasRef, orderBy('fecha', 'asc'));
+        const querySnapshot = await getDocs(q);
+        const cuentasOrdenadas = querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        })).sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
+
+        let saldoAcumulado = 0;
+        const actualizaciones = [];
+
+        for (let i = 0; i < cuentasOrdenadas.length; i++) {
+          const cuenta = cuentasOrdenadas[i];
+          const totalCobros = (cuenta.cobros || []).reduce((sum, cobro) => 
+            sum + (parseFloat(cobro.monto) || 0), 0);
+          const totalAbonos = (cuenta.abonos || []).reduce((sum, abono) => 
+            sum + (parseFloat(abono.monto) || 0), 0);
+          const totalDia = cuenta.totalGeneralVenta - totalCobros - totalAbonos;
+          
+          saldoAcumulado += totalDia;
+          
+          actualizaciones.push(updateDoc(doc(db, 'cuentasJoselito', cuenta.id), {
+            saldoAcumuladoAnterior: i === 0 ? 0 : cuentasOrdenadas[i-1].nuevoSaldoAcumulado || 0,
+            nuevoSaldoAcumulado: saldoAcumulado,
+            estadoPagado: totalDia <= 0
+          }));
+
+          if (saldoAcumulado <= 0) {
+            saldoAcumulado = 0;
+          }
+        }
+
+        await Promise.all(actualizaciones);
+        
+        console.log('Abono eliminado exitosamente');
+      } catch (error) {
+        console.error('Error al eliminar abono:', error);
+        alert('Error al eliminar el abono: ' + error.message);
+      }
     },
 
     startLongPress(index, field) {
