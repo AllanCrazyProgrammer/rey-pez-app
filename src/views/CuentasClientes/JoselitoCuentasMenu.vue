@@ -15,6 +15,15 @@
       <PreciosHistorialModal />
     </div>
 
+    <div class="abonos-generales-container">
+      <button @click="showAbonoGeneralModal" class="action-button abono-btn">
+        Realizar Abono General
+      </button>
+      <button @click="showAbonosGeneralesHistory" class="action-button history-btn">
+        Historial de Abonos
+      </button>
+    </div>
+
     <div class="filter-container">
       <label for="filter-select">Filtrar por estado:</label>
       <select id="filter-select" v-model="filtroEstado">
@@ -52,12 +61,107 @@
         </li>
       </ul>
     </div>
+
+    <!-- Modal para realizar abono general -->
+    <div v-if="showModal" class="modal">
+      <div class="modal-content">
+        <h2>Realizar Abono General</h2>
+        <div class="input-group">
+          <input 
+            v-model.number="abonoAmount" 
+            type="number" 
+            placeholder="Cantidad a abonar"
+            class="modal-input"
+          >
+          <input 
+            v-model="abonoDescripcion" 
+            type="text" 
+            placeholder="Descripción (opcional)"
+            class="modal-input"
+          >
+          <input 
+            v-model="abonoFecha" 
+            type="date" 
+            class="modal-input"
+            :max="new Date().toISOString().split('T')[0]"
+          >
+        </div>
+        <div class="modal-buttons">
+          <button @click="realizarAbonoGeneral" class="confirm-btn">Confirmar</button>
+          <button @click="closeModal" class="cancel-btn">Cancelar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal para historial de abonos -->
+    <div v-if="showAbonosHistoryModal" class="modal">
+      <div class="modal-content">
+        <h2>Historial de Abonos Generales</h2>
+        <div class="abonos-table-container">
+          <table class="abonos-table">
+            <thead>
+              <tr>
+                <th>Fecha</th>
+                <th>Monto</th>
+                <th>Descripción</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(abono, index) in paginatedAbonos" :key="index">
+                <td>{{ formatDate(abono.fecha) }}</td>
+                <td>${{ formatNumber(abono.monto) }}</td>
+                <td>{{ abono.descripcion || '-' }}</td>
+                <td>
+                  <button 
+                    @click="openDeleteAbonoModal(abono.id)" 
+                    class="delete-btn small"
+                  >
+                    Borrar
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="pagination">
+          <button 
+            @click="prevPage" 
+            :disabled="currentPage === 1"
+            class="pagination-btn"
+          >
+            Anterior
+          </button>
+          <span>Página {{ currentPage }} de {{ totalPages }}</span>
+          <button 
+            @click="nextPage" 
+            :disabled="currentPage === totalPages"
+            class="pagination-btn"
+          >
+            Siguiente
+          </button>
+        </div>
+        <button @click="closeAbonosHistoryModal" class="close-btn">Cerrar</button>
+      </div>
+    </div>
+
+    <!-- Modal para confirmar borrado -->
+    <div v-if="showDeleteAbonoModal" class="modal">
+      <div class="modal-content">
+        <h2>Confirmar Borrado</h2>
+        <p>¿Estás seguro de que quieres borrar este abono?</p>
+        <div class="modal-buttons">
+          <button @click="deleteAbono" class="confirm-btn">Confirmar</button>
+          <button @click="closeDeleteAbonoModal" class="cancel-btn">Cancelar</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script>
 import { db } from '@/firebase';
-import { collection, query, orderBy, deleteDoc, doc, onSnapshot, where, updateDoc } from 'firebase/firestore';
+import { collection, query, orderBy, deleteDoc, doc, onSnapshot, where, updateDoc, addDoc, getDocs, getDoc } from 'firebase/firestore';
 import BackButton from '@/components/BackButton.vue';
 import PreciosHistorialModal from '@/components/PreciosHistorialModal.vue';
 
@@ -73,7 +177,17 @@ export default {
       isLoading: true,
       filtroEstado: 'todas',
       unsubscribe: null,
-      error: null
+      error: null,
+      showModal: false,
+      showAbonosHistoryModal: false,
+      showDeleteAbonoModal: false,
+      abonoAmount: null,
+      abonoDescripcion: '',
+      abonoFecha: new Date().toISOString().split('T')[0],
+      selectedAbonoId: null,
+      abonosGenerales: [],
+      currentPage: 1,
+      abonosPerPage: 7,
     };
   },
   computed: {
@@ -86,6 +200,14 @@ export default {
         default:
           return this.cuentas;
       }
+    },
+    paginatedAbonos() {
+      const start = (this.currentPage - 1) * this.abonosPerPage;
+      const end = start + this.abonosPerPage;
+      return this.abonosGenerales.slice(start, end);
+    },
+    totalPages() {
+      return Math.ceil(this.abonosGenerales.length / this.abonosPerPage);
     }
   },
   methods: {
@@ -202,6 +324,254 @@ export default {
           console.error("Error al borrar el registro de cuenta: ", error);
           alert('Error al borrar el registro de cuenta');
         }
+      }
+    },
+    showAbonoGeneralModal() {
+      this.showModal = true;
+      this.abonoAmount = null;
+      this.abonoDescripcion = '';
+      this.abonoFecha = new Date().toISOString().split('T')[0];
+    },
+    closeModal() {
+      this.showModal = false;
+      this.abonoAmount = null;
+      this.abonoDescripcion = '';
+      this.abonoFecha = new Date().toISOString().split('T')[0];
+    },
+    async realizarAbonoGeneral() {
+      if (!this.abonoAmount || this.abonoAmount <= 0) {
+        alert('Por favor ingrese una cantidad válida');
+        return;
+      }
+
+      if (!this.abonoFecha) {
+        alert('Por favor seleccione una fecha para el abono');
+        return;
+      }
+
+      try {
+        // Obtener las cuentas no pagadas ordenadas por fecha (la más antigua primero)
+        const cuentasNoPagadas = this.cuentas
+          .filter(cuenta => !cuenta.estadoPagado)
+          .sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
+
+        if (cuentasNoPagadas.length === 0) {
+          alert('No hay cuentas pendientes por pagar');
+          return;
+        }
+
+        let montoRestante = this.abonoAmount;
+        const actualizaciones = [];
+
+        // Preparar los datos del abono general
+        const abonoGeneralData = {
+          monto: this.abonoAmount,
+          descripcion: this.abonoDescripcion,
+          fecha: this.abonoFecha,
+          tipo: 'general'
+        };
+
+        // Crear el abono general
+        const abonoGeneralRef = await addDoc(collection(db, 'abonosGeneralesJoselito'), abonoGeneralData);
+
+        // Procesar las cuentas en paralelo
+        const promesasCuentas = cuentasNoPagadas.map(async (cuenta) => {
+          if (montoRestante <= 0) return null;
+
+          const cuentaRef = doc(db, 'cuentasJoselito', cuenta.id);
+          const cuentaDoc = await getDoc(cuentaRef);
+          const cuentaData = cuentaDoc.data();
+
+          const totalCobros = (cuentaData.cobros || []).reduce((sum, cobro) => 
+            sum + (parseFloat(cobro.monto) || 0), 0);
+          const totalAbonos = (cuentaData.abonos || []).reduce((sum, abono) => 
+            sum + (parseFloat(abono.monto) || 0), 0);
+          const saldoPendiente = cuentaData.totalGeneralVenta - totalCobros - totalAbonos;
+
+          if (saldoPendiente > 0) {
+            const montoAplicar = Math.min(montoRestante, saldoPendiente);
+            montoRestante -= montoAplicar;
+
+            if (montoAplicar > 0) {
+              const abonosActuales = cuentaData.abonos || [];
+              return {
+                ref: cuentaRef,
+                data: {
+                  abonos: [
+                    ...abonosActuales,
+                    {
+                      monto: montoAplicar,
+                      fecha: this.abonoFecha,
+                      descripcion: this.abonoDescripcion || 'Abono general automático',
+                      tipo: 'general',
+                      abonoGeneralId: abonoGeneralRef.id
+                    }
+                  ],
+                  estadoPagado: montoAplicar >= saldoPendiente
+                }
+              };
+            }
+          }
+          return null;
+        });
+
+        // Esperar a que se procesen todas las cuentas
+        const resultados = await Promise.all(promesasCuentas);
+
+        // Filtrar los resultados nulos y aplicar las actualizaciones
+        const actualizacionesFiltradas = resultados.filter(r => r !== null);
+        await Promise.all(actualizacionesFiltradas.map(({ ref, data }) => updateDoc(ref, data)));
+
+        // Recargar los datos
+        await this.loadCuentas();
+        await this.fetchAbonosGenerales();
+        
+        this.closeModal();
+        alert('Abono realizado con éxito');
+      } catch (error) {
+        console.error('Error al realizar abono:', error);
+        alert('Error al realizar el abono');
+      }
+    },
+    async showAbonosGeneralesHistory() {
+      this.currentPage = 1;
+      await this.fetchAbonosGenerales();
+      this.showAbonosHistoryModal = true;
+    },
+    async fetchAbonosGenerales() {
+      try {
+        const q = query(
+          collection(db, 'abonosGeneralesJoselito'),
+          orderBy('fecha', 'desc')
+        );
+        const querySnapshot = await getDocs(q);
+        this.abonosGenerales = querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+      } catch (error) {
+        console.error('Error al obtener abonos:', error);
+      }
+    },
+    closeAbonosHistoryModal() {
+      this.showAbonosHistoryModal = false;
+    },
+    openDeleteAbonoModal(abonoId) {
+      this.selectedAbonoId = abonoId;
+      this.showDeleteAbonoModal = true;
+    },
+    async deleteAbono() {
+      try {
+        // Primero obtener el abono que se va a eliminar
+        const abonoRef = doc(db, 'abonosGeneralesJoselito', this.selectedAbonoId);
+        const abonoDoc = await getDoc(abonoRef);
+        const abonoData = abonoDoc.data();
+
+        if (!abonoData) {
+          throw new Error('No se encontró el abono');
+        }
+
+        const actualizaciones = [];
+
+        // Obtener todas las cuentas
+        const cuentasRef = collection(db, 'cuentasJoselito');
+        const cuentasSnapshot = await getDocs(cuentasRef);
+        
+        // Procesar cada cuenta
+        for (const cuentaDoc of cuentasSnapshot.docs) {
+          const cuentaData = cuentaDoc.data();
+          
+          // Verificar si la cuenta tiene abonos
+          if (cuentaData.abonos && Array.isArray(cuentaData.abonos)) {
+            // Filtrar los abonos usando el ID del abono general
+            const abonosFiltrados = cuentaData.abonos.filter(abono => 
+              abono.abonoGeneralId !== this.selectedAbonoId
+            );
+
+            // Si se encontró y eliminó algún abono
+            if (abonosFiltrados.length !== cuentaData.abonos.length) {
+              // Recalcular totales
+              const totalAbonos = abonosFiltrados.reduce((sum, abono) => 
+                sum + (parseFloat(abono.monto) || 0), 0);
+              const totalCobros = (cuentaData.cobros || []).reduce((sum, cobro) => 
+                sum + (parseFloat(cobro.monto) || 0), 0);
+              const saldoPendiente = cuentaData.totalGeneralVenta - totalCobros - totalAbonos;
+
+              // Preparar la actualización
+              actualizaciones.push(updateDoc(doc(db, 'cuentasJoselito', cuentaDoc.id), {
+                abonos: abonosFiltrados,
+                estadoPagado: saldoPendiente <= 0
+              }));
+            }
+          }
+        }
+
+        // Eliminar el abono del historial
+        await deleteDoc(abonoRef);
+
+        // Aplicar todas las actualizaciones
+        if (actualizaciones.length > 0) {
+          await Promise.all(actualizaciones);
+        }
+
+        // Recargar los datos
+        await this.loadCuentas();
+        await this.fetchAbonosGenerales();
+        this.closeDeleteAbonoModal();
+        alert('Abono eliminado con éxito de todas las cuentas');
+      } catch (error) {
+        console.error('Error al eliminar abono:', error);
+        alert('Error al eliminar el abono: ' + error.message);
+      }
+    },
+    closeDeleteAbonoModal() {
+      this.showDeleteAbonoModal = false;
+      this.selectedAbonoId = null;
+    },
+    prevPage() {
+      if (this.currentPage > 1) this.currentPage--;
+    },
+    nextPage() {
+      if (this.currentPage < this.totalPages) this.currentPage++;
+    },
+    async actualizarSaldosAcumulados() {
+      try {
+        const cuentasRef = collection(db, 'cuentasJoselito');
+        const q = query(cuentasRef, orderBy('fecha', 'asc'));
+        const querySnapshot = await getDocs(q);
+        const cuentasOrdenadas = querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        })).sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
+
+        let saldoAcumulado = 0;
+        const actualizaciones = [];
+
+        for (let i = 0; i < cuentasOrdenadas.length; i++) {
+          const cuenta = cuentasOrdenadas[i];
+          const totalCobros = (cuenta.cobros || []).reduce((sum, cobro) => 
+            sum + (parseFloat(cobro.monto) || 0), 0);
+          const totalAbonos = (cuenta.abonos || []).reduce((sum, abono) => 
+            sum + (parseFloat(abono.monto) || 0), 0);
+          const totalDia = cuenta.totalGeneralVenta - totalCobros - totalAbonos;
+          
+          saldoAcumulado += totalDia;
+          
+          actualizaciones.push(updateDoc(doc(db, 'cuentasJoselito', cuenta.id), {
+            saldoAcumuladoAnterior: i === 0 ? 0 : cuentasOrdenadas[i-1].nuevoSaldoAcumulado || 0,
+            nuevoSaldoAcumulado: saldoAcumulado,
+            estadoPagado: totalDia <= 0
+          }));
+
+          if (saldoAcumulado <= 0) {
+            saldoAcumulado = 0;
+          }
+        }
+
+        await Promise.all(actualizaciones);
+      } catch (error) {
+        console.error('Error al actualizar saldos acumulados:', error);
+        throw error;
       }
     }
   },
@@ -438,5 +808,155 @@ h1, h2 {
   margin: 10px 0;
   background-color: #ffebee;
   border-radius: 4px;
+}
+
+.abonos-generales-container {
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+  margin: 20px 0;
+}
+
+.abono-btn {
+  background-color: #4CAF50;
+}
+
+.history-btn {
+  background-color: #2196F3;
+}
+
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background-color: white;
+  padding: 20px;
+  border-radius: 8px;
+  max-width: 500px;
+  width: 90%;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 20px 0;
+}
+
+.modal-input {
+  width: 100%;
+  padding: 10px;
+  margin-bottom: 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 16px;
+}
+
+.modal-input[type="date"] {
+  font-family: inherit;
+  color: #333;
+  background-color: white;
+}
+
+.modal-input[type="date"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 0.6;
+  filter: invert(0.8);
+}
+
+.modal-input[type="date"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+}
+
+.modal-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.confirm-btn {
+  background-color: #4CAF50;
+  color: white;
+}
+
+.cancel-btn {
+  background-color: #f44336;
+  color: white;
+}
+
+.abonos-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 20px 0;
+}
+
+.abonos-table th,
+.abonos-table td {
+  padding: 12px;
+  text-align: left;
+  border-bottom: 1px solid #ddd;
+}
+
+.abonos-table th {
+  background-color: #f5f5f5;
+}
+
+.pagination {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 20px 0;
+}
+
+.pagination-btn {
+  padding: 5px 10px;
+  background-color: #2196F3;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.pagination-btn:disabled {
+  background-color: #ccc;
+  cursor: not-allowed;
+}
+
+.delete-btn.small {
+  padding: 5px 10px;
+  font-size: 0.8em;
+}
+
+@media (max-width: 768px) {
+  .abonos-generales-container {
+    flex-direction: column;
+  }
+
+  .modal-content {
+    width: 95%;
+    padding: 15px;
+  }
+
+  .abonos-table {
+    font-size: 14px;
+  }
+
+  .abonos-table th,
+  .abonos-table td {
+    padding: 8px;
+  }
 }
 </style> 
