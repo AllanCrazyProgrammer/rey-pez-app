@@ -38,6 +38,13 @@
               <span>Saldo Hoy: ${{ formatNumber(cuenta.saldoHoy) }}</span>
               <span>Total Acumulado: ${{ formatNumber(cuenta.totalNota) }}</span>
             </p>
+            <div v-if="cuenta.abonos && cuenta.abonos.length > 0" class="abonos-info">
+              <p v-for="(abono, index) in cuenta.abonos" :key="index" class="abono-detail">
+                <span class="abono-label">Abono:</span>
+                <span class="abono-monto">${{ formatNumber(abono.monto) }}</span>
+                <span class="abono-descripcion">{{ abono.descripcion || 'Sin descripción' }}</span>
+              </p>
+            </div>
             <span :class="['estado-cuenta', cuenta.estadoPagado ? 'pagado' : 'no-pagado']">
               {{ cuenta.estadoPagado ? 'Pagado' : 'No Pagado' }}
             </span>
@@ -95,8 +102,10 @@ export default {
         this.unsubscribe = onSnapshot(q, async (querySnapshot) => {
           const cuentasActualizadas = querySnapshot.docs.map((doc) => {
             const data = doc.data();
-            const totalCobros = (data.cobros || []).reduce((sum, cobro) => sum + (parseFloat(cobro.monto) || 0), 0);
-            const totalAbonos = (data.abonos || []).reduce((sum, abono) => sum + (parseFloat(abono.monto) || 0), 0);
+            const totalCobros = (data.cobros || []).reduce((sum, cobro) => 
+              sum + (parseFloat(cobro.monto) || 0), 0);
+            const totalAbonos = (data.abonos || []).reduce((sum, abono) => 
+              sum + (parseFloat(abono.monto) || 0), 0);
             const totalDiaActual = (data.totalGeneralVenta || 0) - totalCobros - totalAbonos;
 
             return {
@@ -108,7 +117,8 @@ export default {
               totalNota: data.nuevoSaldoAcumulado || 0,
               estadoPagado: totalDiaActual === 0,
               nuevoSaldoAcumulado: data.nuevoSaldoAcumulado || 0,
-              saldoAcumuladoAnterior: data.saldoAcumuladoAnterior || 0
+              saldoAcumuladoAnterior: data.saldoAcumuladoAnterior || 0,
+              abonos: data.abonos || []
             };
           });
 
@@ -145,7 +155,7 @@ export default {
             // Actualizar el objeto local
             cuenta.totalNota = saldoAcumulado;
             cuenta.saldoAcumuladoAnterior = saldoAnterior;
-            cuenta.estadoPagado = (cuenta.saldoHoy - cuenta.totalCobros - cuenta.totalAbonos) === 0;
+            cuenta.estadoPagado = totalDia === 0;
 
             // Reiniciar saldo si la cuenta está pagada
             if (saldoAcumulado <= 0) {
@@ -167,6 +177,7 @@ export default {
 
       } catch (error) {
         console.error("Error al cargar cuentas: ", error);
+        this.error = error.message;
         this.cuentas = [];
         this.isLoading = false;
       }
@@ -423,5 +434,41 @@ h1, h2 {
 
 .ventas-ganancias-btn:hover {
   background-color: #45a049;
+}
+
+.abonos-info {
+  margin: 10px 0;
+  padding: 5px 0;
+}
+
+.abono-detail {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin: 5px 0;
+  font-size: 0.9em;
+  color: #d32f2f;
+}
+
+.abono-label {
+  font-weight: bold;
+}
+
+.abono-monto {
+  color: #4CAF50;
+  font-weight: bold;
+}
+
+.abono-descripcion {
+  color: #666;
+  font-style: italic;
+}
+
+@media (max-width: 768px) {
+  .abono-detail {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 5px;
+  }
 }
 </style>
