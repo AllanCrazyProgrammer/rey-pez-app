@@ -3,6 +3,7 @@
     <div class="back-button-container">
       <BackButton to="/cuentas-joselito" />
       <PreciosHistorialModal />
+      <StashModal cliente="joselito" />
     </div>
     <h1>Cuentas Joselito</h1>
     <div class="fecha-actual">
@@ -269,12 +270,14 @@ import {
 } from 'firebase/firestore';
 import BackButton from '@/components/BackButton.vue';
 import PreciosHistorialModal from '@/components/PreciosHistorialModal.vue';
+import StashModal from '@/components/StashModal.vue';
 
 export default {
   name: 'CuentasJoselito',
   components: {
     BackButton,
-    PreciosHistorialModal
+    PreciosHistorialModal,
+    StashModal
   },
   data() {
     return {
@@ -1267,22 +1270,28 @@ tr:hover {
 /* Estilos de botones */
 .button-container {
   display: flex;
-  justify-content: space-between;
+  justify-content: center;
+  gap: 20px;
   margin-top: 20px;
+  flex-wrap: wrap;
 }
 
 .save-button,
 .print-button {
-  padding: 10px 20px;
+  padding: 12px 25px;
   color: white;
   border: none;
-  border-radius: 4px;
+  border-radius: 8px;
   cursor: pointer;
   font-size: 16px;
+  transition: all 0.3s ease;
+  min-width: 150px;
+  text-align: center;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .save-button {
-  background-color: #2196F3;
+  background-color: #4CAF50;
 }
 
 .print-button {
@@ -1290,11 +1299,37 @@ tr:hover {
 }
 
 .save-button:hover {
-  background-color: #1976D2;
+  background-color: #45a049;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
 }
 
 .print-button:hover {
   background-color: #2c4d8c;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+@media (max-width: 600px) {
+  .button-container {
+    flex-direction: row;
+    gap: 10px;
+  }
+
+  .save-button,
+  .print-button {
+    min-width: 120px;
+    padding: 10px 20px;
+  }
+}
+
+.back-button-container {
+  display: flex;
+  gap: 15px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  align-items: center;
 }
 
 /* Estilos de modal */

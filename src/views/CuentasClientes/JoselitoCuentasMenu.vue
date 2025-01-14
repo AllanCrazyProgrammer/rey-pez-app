@@ -13,6 +13,7 @@
         Ventas y Ganancias
       </router-link>
       <PreciosHistorialModal />
+      <StashModal cliente="joselito" />
     </div>
 
     <div class="cuentas-list">
@@ -55,12 +56,14 @@ import { db } from '@/firebase';
 import { collection, query, orderBy, deleteDoc, doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import BackButton from '@/components/BackButton.vue';
 import PreciosHistorialModal from '@/components/PreciosHistorialModal.vue';
+import StashModal from '@/components/StashModal.vue';
 
 export default {
   name: 'JoselitoCuentasMenu',
   components: {
     BackButton,
-    PreciosHistorialModal
+    PreciosHistorialModal,
+    StashModal
   },
   data() {
     return {

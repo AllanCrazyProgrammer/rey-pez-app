@@ -3,6 +3,7 @@
     <div class="back-button-container">
       <BackButton to="/cuentas-catarro" />
       <PreciosHistorialModal />
+      <StashModal cliente="catarro" />
     </div>
     <h1>Cuentas Catarro</h1>
     <div class="fecha-actual">
@@ -248,12 +249,14 @@ import { db } from '@/firebase';
 import { collection, addDoc, doc, getDoc, updateDoc, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
 import BackButton from '@/components/BackButton.vue';
 import PreciosHistorialModal from '@/components/PreciosHistorialModal.vue';
+import StashModal from '@/components/StashModal.vue';
 
 export default {
   name: 'CuentasCatarro',
   components: {
     BackButton,
-    PreciosHistorialModal
+    PreciosHistorialModal,
+    StashModal
   },
   data() {
     return {
@@ -1101,7 +1104,72 @@ export default {
 }
 
 .back-button-container {
+  display: flex;
+  gap: 15px;
   margin-bottom: 20px;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  align-items: center;
+}
+
+.back-button-container a,
+.back-button-container button {
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 16px;
+  text-decoration: none;
+  color: white;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  border: none;
+  cursor: pointer;
+  min-width: 120px;
+  text-align: center;
+}
+
+.back-button-container a:hover,
+.back-button-container button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+/* Colores específicos para cada botón */
+.back-button-container a:first-child {
+  background-color: #6c757d;
+}
+
+.back-button-container a:first-child:hover {
+  background-color: #5a6268;
+}
+
+.back-button-container button:nth-child(2) {
+  background-color: #4CAF50;
+}
+
+.back-button-container button:nth-child(2):hover {
+  background-color: #45a049;
+}
+
+.back-button-container button:last-child {
+  background-color: #9c27b0;
+}
+
+.back-button-container button:last-child:hover {
+  background-color: #7b1fa2;
+}
+
+@media (max-width: 600px) {
+  .back-button-container {
+    justify-content: center;
+    gap: 10px;
+  }
+
+  .back-button-container a,
+  .back-button-container button {
+    min-width: 100px;
+    padding: 8px 15px;
+    font-size: 14px;
+  }
 }
 
 /* Estilos de fecha */
@@ -1256,18 +1324,24 @@ tr:hover {
 /* Estilos de botones */
 .button-container {
   display: flex;
-  justify-content: space-between;
+  justify-content: center;
+  gap: 20px;
   margin-top: 20px;
+  flex-wrap: wrap;
 }
 
 .save-button,
 .print-button {
-  padding: 10px 20px;
+  padding: 12px 25px;
   color: white;
   border: none;
-  border-radius: 4px;
+  border-radius: 8px;
   cursor: pointer;
   font-size: 16px;
+  transition: all 0.3s ease;
+  min-width: 150px;
+  text-align: center;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .save-button {
@@ -1280,10 +1354,27 @@ tr:hover {
 
 .save-button:hover {
   background-color: #45a049;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
 }
 
 .print-button:hover {
   background-color: #2c4d8c;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+@media (max-width: 600px) {
+  .button-container {
+    flex-direction: row;
+    gap: 10px;
+  }
+
+  .save-button,
+  .print-button {
+    min-width: 120px;
+    padding: 10px 20px;
+  }
 }
 
 /* Estilos de modal */
