@@ -26,6 +26,8 @@ import NuevoEmbarque from '@/views/Embarques/NuevoEmbarque.vue';
 import Rendimientos from '@/views/Embarques/Rendimientos.vue';
 import CuentaFletes from '@/views/Embarques/CuentaFletes.vue';
 import Login from './views/Login.vue';
+import OtilioCuentasMenu from '@/views/CuentasClientes/OtilioCuentasMenu.vue'
+import CuentasOtilio from '@/views/CuentasClientes/CuentasOtilio.vue'
 
 Vue.use(Router);
 
@@ -203,6 +205,26 @@ const routes = [
     path: '/cuenta-fletes',
     name: 'CuentaFletes',
     component: CuentaFletes
+  },
+  {
+    path: '/cuentas-otilio',
+    name: 'otilio-cuentas-menu',
+    component: OtilioCuentasMenu
+  },
+  {
+    path: '/cuentas-otilio/nueva',
+    name: 'nueva-cuenta-otilio',
+    component: CuentasOtilio
+  },
+  {
+    path: '/cuentas-otilio/:id',
+    name: 'ver-cuenta-otilio',
+    component: CuentasOtilio
+  },
+  {
+    path: '/cuentas-otilio/:id?',
+    name: 'CuentasOtilio',
+    component: CuentasOtilio
   }
 ];
 

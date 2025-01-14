@@ -19,6 +19,11 @@
               <h2>Joselito</h2>
             </div>
           </router-link>
+          <router-link to="/cuentas-otilio" class="boton-cuenta">
+            <div class="card otilio">
+              <h2>Otilio</h2>
+            </div>
+          </router-link>
           <!-- Agrega más botones aquí si es necesario -->
         </div>
       </div>
@@ -113,5 +118,17 @@ h1 {
 
 .card.joselito {
   background-color: #2196F3;
+}
+
+.card.otilio {
+  background-color: #FFD700;
+  color: #000;
+  transition: all 0.3s ease;
+}
+
+.card.otilio:hover {
+  background-color: #FFC000;
+  transform: translateY(-5px);
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
 }
 </style>
