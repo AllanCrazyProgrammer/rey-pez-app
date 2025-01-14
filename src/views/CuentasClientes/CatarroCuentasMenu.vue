@@ -13,6 +13,7 @@
         Ventas y Ganancias
       </router-link>
       <PreciosHistorialModal />
+      <StashModal cliente="catarro" />
     </div>
 
     <div class="filter-container">
@@ -64,12 +65,14 @@ import { db } from '@/firebase';
 import { collection, query, orderBy, deleteDoc, doc, onSnapshot, where, updateDoc } from 'firebase/firestore';
 import BackButton from '@/components/BackButton.vue';
 import PreciosHistorialModal from '@/components/PreciosHistorialModal.vue';
+import StashModal from '@/components/StashModal.vue';
 
 export default {
   name: 'CatarroCuentasMenu',
   components: {
     BackButton,
-    PreciosHistorialModal
+    PreciosHistorialModal,
+    StashModal
   },
   data() {
     return {
