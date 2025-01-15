@@ -9,8 +9,63 @@
       <router-link to="/cuentas-otilio/nueva" class="action-button new-cuenta-btn">
         Nueva Cuenta
       </router-link>
+      <button @click="showAbonosModal = true" class="action-button abonos-btn">
+        Abonos
+      </button>
       <PreciosHistorialModal />
       <StashModal cliente="otilio" />
+    </div>
+
+    <!-- Modal de Abonos -->
+    <div v-if="showAbonosModal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>Historial de Abonos</h2>
+          <button @click="showAbonosModal = false" class="close-modal-btn">&times;</button>
+        </div>
+        
+        <div class="fecha-filtros">
+          <div class="fecha-grupo">
+            <label>Desde:</label>
+            <input 
+              type="date" 
+              v-model="fechaInicio" 
+              class="fecha-input"
+              @change="calcularTotalAbonos"
+            >
+          </div>
+          <div class="fecha-grupo">
+            <label>Hasta:</label>
+            <input 
+              type="date" 
+              v-model="fechaFin" 
+              class="fecha-input"
+              @change="calcularTotalAbonos"
+            >
+          </div>
+        </div>
+
+        <div v-if="totalAbonosPeriodo !== null" class="total-abonos">
+          <span class="total-label">Total de abonos en el periodo:</span>
+          <span class="total-monto">${{ formatNumber(totalAbonosPeriodo) }}</span>
+        </div>
+
+        <div class="abonos-list">
+          <div v-if="abonosHistorial.length === 0" class="no-records">
+            No hay abonos registrados.
+          </div>
+          <div v-else>
+            <div v-for="(abono, index) in abonosHistorial" :key="index" class="abono-item">
+              <div class="abono-fecha">{{ formatDate(abono.fecha) }}</div>
+              <div class="abono-details">
+                <span class="abono-monto">${{ formatNumber(abono.monto) }}</span>
+                <span class="abono-descripcion">{{ abono.descripcion }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <button @click="showAbonosModal = false" class="close-btn">Cerrar</button>
+      </div>
     </div>
 
     <div class="cuentas-list">
@@ -50,7 +105,7 @@
 
 <script>
 import { db } from '@/firebase';
-import { collection, query, orderBy, deleteDoc, doc, onSnapshot, updateDoc } from 'firebase/firestore';
+import { collection, query, orderBy, deleteDoc, doc, onSnapshot, updateDoc, getDocs } from 'firebase/firestore';
 import BackButton from '@/components/BackButton.vue';
 import PreciosHistorialModal from '@/components/PreciosHistorialModal.vue';
 import StashModal from '@/components/StashModal.vue';
@@ -68,6 +123,11 @@ export default {
       isLoading: true,
       unsubscribe: null,
       error: null,
+      showAbonosModal: false,
+      abonosHistorial: [],
+      fechaInicio: '',
+      fechaFin: '',
+      totalAbonosPeriodo: null
     };
   },
   methods: {
@@ -173,6 +233,64 @@ export default {
           console.error("Error al borrar el registro de cuenta: ", error);
           alert('Error al borrar el registro de cuenta');
         }
+      }
+    },
+    calcularTotalAbonos() {
+      if (!this.fechaInicio || !this.fechaFin) {
+        this.totalAbonosPeriodo = null;
+        return;
+      }
+
+      const inicio = new Date(this.fechaInicio);
+      const fin = new Date(this.fechaFin);
+      
+      // Ajustar fin al final del día
+      fin.setHours(23, 59, 59, 999);
+
+      const abonosFiltrados = this.abonosHistorial.filter(abono => {
+        const fechaAbono = new Date(abono.fecha);
+        return fechaAbono >= inicio && fechaAbono <= fin;
+      });
+
+      this.totalAbonosPeriodo = abonosFiltrados.reduce((total, abono) => 
+        total + (parseFloat(abono.monto) || 0), 0);
+    },
+    async cargarHistorialAbonos() {
+      try {
+        const cuentasRef = collection(db, 'cuentasOtilio');
+        const querySnapshot = await getDocs(cuentasRef);
+        
+        let todosLosAbonos = [];
+        querySnapshot.forEach(doc => {
+          const cuenta = doc.data();
+          if (cuenta.abonos && cuenta.abonos.length > 0) {
+            cuenta.abonos.forEach(abono => {
+              todosLosAbonos.push({
+                ...abono,
+                fecha: cuenta.fecha
+              });
+            });
+          }
+        });
+
+        // Ordenar abonos por fecha, del más reciente al más antiguo
+        this.abonosHistorial = todosLosAbonos.sort((a, b) => 
+          new Date(b.fecha) - new Date(a.fecha)
+        );
+
+        // Recalcular total si hay fechas seleccionadas
+        if (this.fechaInicio && this.fechaFin) {
+          this.calcularTotalAbonos();
+        }
+      } catch (error) {
+        console.error("Error al cargar historial de abonos:", error);
+      }
+    }
+  },
+  watch: {
+    showAbonosModal(newValue) {
+      if (newValue) {
+        this.cargarHistorialAbonos();
       }
     }
   },
@@ -408,6 +526,204 @@ h1, h2 {
     flex-direction: column;
     align-items: flex-start;
     gap: 5px;
+  }
+}
+
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background-color: white;
+  padding: 20px;
+  border-radius: 8px;
+  width: 90%;
+  max-width: 600px;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.abonos-list {
+  margin: 20px 0;
+}
+
+.abono-item {
+  background-color: #fff9e6;
+  border-radius: 4px;
+  margin-bottom: 10px;
+  padding: 15px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.abono-fecha {
+  font-weight: bold;
+  color: #000000;
+  margin-bottom: 5px;
+}
+
+.abono-details {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.abono-monto {
+  color: #4CAF50;
+  font-weight: bold;
+  font-size: 1.1em;
+}
+
+.abono-descripcion {
+  color: #666;
+  font-style: italic;
+}
+
+.close-btn {
+  width: 100%;
+  padding: 10px;
+  background-color: #6c757d;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-top: 10px;
+}
+
+.close-btn:hover {
+  background-color: #5a6268;
+}
+
+.abonos-btn {
+  background-color: #4CAF50;
+  color: white;
+}
+
+.abonos-btn:hover {
+  background-color: #45a049;
+}
+
+.no-records {
+  text-align: center;
+  color: #666;
+  padding: 20px;
+}
+
+@media (max-width: 768px) {
+  .modal-content {
+    width: 95%;
+    max-height: 90vh;
+  }
+
+  .abono-details {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 5px;
+  }
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 10px;
+  border-bottom: 2px solid #FFD700;
+}
+
+.modal-header h2 {
+  margin: 0;
+  color: #000000;
+}
+
+.close-modal-btn {
+  background: none;
+  border: none;
+  font-size: 24px;
+  color: #666;
+  cursor: pointer;
+  padding: 5px 10px;
+  transition: color 0.3s ease;
+}
+
+.close-modal-btn:hover {
+  color: #000000;
+}
+
+.fecha-filtros {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 20px;
+  padding: 15px;
+  background-color: #fff9e6;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.fecha-grupo {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.fecha-grupo label {
+  margin-bottom: 5px;
+  color: #666;
+  font-weight: bold;
+}
+
+.fecha-input {
+  padding: 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 16px;
+  transition: border-color 0.3s ease;
+}
+
+.fecha-input:focus {
+  border-color: #FFD700;
+  outline: none;
+}
+
+.total-abonos {
+  background-color: #4CAF50;
+  color: white;
+  padding: 15px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.total-label {
+  font-weight: bold;
+}
+
+.total-monto {
+  font-size: 1.2em;
+  font-weight: bold;
+}
+
+@media (max-width: 768px) {
+  .fecha-filtros {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .total-abonos {
+    flex-direction: column;
+    gap: 5px;
+    text-align: center;
   }
 }
 </style> 
