@@ -21,6 +21,7 @@
           <input v-model.number="newItem.kilos" type="number" placeholder="Kilos" inputmode="decimal" pattern="[0-9]*" class="responsive-input">
           <input v-model="newItem.medida" type="text" placeholder="Medida" class="responsive-input">
           <input v-model.number="newItem.costo" type="number" placeholder="Costo" inputmode="decimal" pattern="[0-9]*" class="responsive-input">
+          <input v-model.number="newItem.precioVenta" type="number" placeholder="Precio Venta" inputmode="decimal" pattern="[0-9]*" class="responsive-input">
           <button @click="addItem">Agregar</button>
         </div>
       </div>
@@ -285,7 +286,8 @@
         newItem: {
           kilos: null,
           medida: '',
-          costo: null
+          costo: null,
+          precioVenta: null
         },
         saldoAcumuladoAnterior: 0,
         cobros: [],
@@ -734,26 +736,37 @@
       },
   
       async addItem() {
-        if (!this.newItem.kilos || !this.newItem.medida || !this.newItem.costo) {
+        if (!this.newItem.kilos || !this.newItem.medida || !this.newItem.costo || !this.newItem.precioVenta) {
           alert('Por favor complete todos los campos');
           return;
         }
   
         const total = this.newItem.kilos * this.newItem.costo;
         this.items.push({
-          ...this.newItem,
+          kilos: this.newItem.kilos,
+          medida: this.newItem.medida,
+          costo: this.newItem.costo,
           total
+        });
+  
+        // Agregar directamente a itemsVenta con el precio de venta
+        const totalVenta = this.newItem.kilos * this.newItem.precioVenta;
+        const ganancia = totalVenta - total;
+        this.itemsVenta.push({
+          kilosVenta: this.newItem.kilos,
+          medida: this.newItem.medida,
+          precioVenta: this.newItem.precioVenta,
+          totalVenta,
+          ganancia
         });
   
         // Limpiar el formulario
         this.newItem = {
           kilos: null,
           medida: '',
-          costo: null
+          costo: null,
+          precioVenta: null
         };
-  
-        // Actualizar items de venta
-        this.actualizarItemsVenta();
       },
   
       actualizarItemsVenta() {
@@ -1149,16 +1162,24 @@
     display: flex;
     gap: 10px;
     margin-bottom: 10px;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
+    align-items: center;
+  }
+  
+  .input-row button {
+    padding: 10px 20px;
+    height: 40px;
+    white-space: nowrap;
   }
   
   .responsive-input {
     width: 100%;
-    max-width: 300px;
+    max-width: 180px;
     padding: 10px;
     border: 1px solid #ddd;
     border-radius: 5px;
     transition: border-color 0.3s ease;
+    font-size: 15px;
   }
   
   .responsive-input:focus {

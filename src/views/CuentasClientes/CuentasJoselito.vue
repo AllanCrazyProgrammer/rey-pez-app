@@ -21,6 +21,7 @@
         <input v-model.number="newItem.kilos" type="number" placeholder="Kilos" inputmode="decimal" pattern="[0-9]*" class="responsive-input">
         <input v-model="newItem.medida" type="text" placeholder="Medida" class="responsive-input">
         <input v-model.number="newItem.costo" type="number" placeholder="Costo" inputmode="decimal" pattern="[0-9]*" class="responsive-input">
+        <input v-model.number="newItem.precioVenta" type="number" placeholder="Precio Venta" inputmode="decimal" pattern="[0-9]*" class="responsive-input">
         <button @click="addItem">Agregar</button>
       </div>
     </div>
@@ -285,7 +286,8 @@ export default {
       newItem: {
         kilos: null,
         medida: '',
-        costo: null
+        costo: null,
+        precioVenta: null
       },
       saldoAcumuladoAnterior: 0,
       cobros: [],
@@ -734,26 +736,48 @@ export default {
     },
 
     async addItem() {
-      if (!this.newItem.kilos || !this.newItem.medida || !this.newItem.costo) {
+      if (!this.newItem.kilos || !this.newItem.medida || !this.newItem.costo || !this.newItem.precioVenta) {
         alert('Por favor complete todos los campos');
         return;
       }
 
-      const total = this.newItem.kilos * this.newItem.costo;
-      this.items.push({
-        ...this.newItem,
-        total
-      });
+      try {
+        const total = this.newItem.kilos * this.newItem.costo;
+        this.items.push({
+          kilos: this.newItem.kilos,
+          medida: this.newItem.medida,
+          costo: this.newItem.costo,
+          total
+        });
 
-      // Limpiar el formulario
-      this.newItem = {
-        kilos: null,
-        medida: '',
-        costo: null
-      };
+        // Agregar directamente a itemsVenta con el precio de venta
+        const totalVenta = this.newItem.kilos * this.newItem.precioVenta;
+        const ganancia = totalVenta - total;
+        this.itemsVenta.push({
+          kilosVenta: this.newItem.kilos,
+          medida: this.newItem.medida,
+          precioVenta: this.newItem.precioVenta,
+          totalVenta,
+          ganancia
+        });
 
-      // Actualizar items de venta
-      this.actualizarItemsVenta();
+        this.newItem = {
+          kilos: null,
+          medida: '',
+          costo: null,
+          precioVenta: null
+        };
+
+        // Encolar el guardado
+        await this.queueSave();
+
+      } catch (error) {
+        console.error('Error al guardar el item:', error);
+        alert('Hubo un problema al guardar. Por favor, intente nuevamente.');
+        // Revertir los cambios locales si falló el guardado
+        this.items.pop();
+        this.itemsVenta.pop();
+      }
     },
 
     actualizarItemsVenta() {
@@ -1149,16 +1173,18 @@ export default {
   display: flex;
   gap: 10px;
   margin-bottom: 10px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  align-items: center;
 }
 
 .responsive-input {
   width: 100%;
-  max-width: 300px;
+  max-width: 180px;
   padding: 10px;
   border: 1px solid #ddd;
   border-radius: 5px;
   transition: border-color 0.3s ease;
+  font-size: 15px;
 }
 
 .responsive-input:focus {

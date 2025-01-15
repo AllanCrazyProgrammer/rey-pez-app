@@ -21,6 +21,7 @@
         <input v-model.number="newItem.kilos" type="number" placeholder="Kilos" inputmode="decimal" pattern="[0-9]*" class="responsive-input">
         <input v-model="newItem.medida" type="text" placeholder="Medida" class="responsive-input">
         <input v-model.number="newItem.costo" type="number" placeholder="Costo" inputmode="decimal" pattern="[0-9]*" class="responsive-input">
+        <input v-model.number="newItem.precioVenta" type="number" placeholder="Precio Venta" inputmode="decimal" pattern="[0-9]*" class="responsive-input">
         <button @click="addItem">Agregar</button>
       </div>
     </div>
@@ -264,7 +265,8 @@ export default {
       newItem: {
         kilos: null,
         medida: '',
-        costo: null
+        costo: null,
+        precioVenta: null
       },
       saldoAcumuladoAnterior: 0,
       cobros: [],
@@ -519,29 +521,47 @@ export default {
       });
     },
     async addItem() {
-      if (this.newItem.kilos && this.newItem.medida && this.newItem.costo) {
-        try {
-          const total = this.newItem.kilos * this.newItem.costo;
-          this.items.push({...this.newItem, total});
-          this.itemsVenta.push({
-            ...this.newItem,
-            total,
-            precioVenta: null,
-            totalVenta: 0,
-            kilosVenta: this.newItem.kilos
-          });
-          this.newItem = {kilos: null, medida: '', costo: null};
+      if (!this.newItem.kilos || !this.newItem.medida || !this.newItem.costo || !this.newItem.precioVenta) {
+        alert('Por favor complete todos los campos');
+        return;
+      }
 
-          // Encolar el guardado
-          await this.queueSave();
+      try {
+        const total = this.newItem.kilos * this.newItem.costo;
+        this.items.push({
+          kilos: this.newItem.kilos,
+          medida: this.newItem.medida,
+          costo: this.newItem.costo,
+          total
+        });
 
-        } catch (error) {
-          console.error('Error al guardar el item:', error);
-          alert('Hubo un problema al guardar. Por favor, intente nuevamente.');
-          // Revertir los cambios locales si falló el guardado
-          this.items.pop();
-          this.itemsVenta.pop();
-        }
+        // Agregar directamente a itemsVenta con el precio de venta
+        const totalVenta = this.newItem.kilos * this.newItem.precioVenta;
+        const ganancia = totalVenta - total;
+        this.itemsVenta.push({
+          kilosVenta: this.newItem.kilos,
+          medida: this.newItem.medida,
+          precioVenta: this.newItem.precioVenta,
+          totalVenta,
+          ganancia
+        });
+
+        this.newItem = {
+          kilos: null,
+          medida: '',
+          costo: null,
+          precioVenta: null
+        };
+
+        // Encolar el guardado
+        await this.queueSave();
+
+      } catch (error) {
+        console.error('Error al guardar el item:', error);
+        alert('Hubo un problema al guardar. Por favor, intente nuevamente.');
+        // Revertir los cambios locales si falló el guardado
+        this.items.pop();
+        this.itemsVenta.pop();
       }
     },
     async crearNuevaCuenta() {
@@ -1203,16 +1223,18 @@ export default {
   display: flex;
   gap: 10px;
   margin-bottom: 10px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  align-items: center;
 }
 
 .responsive-input {
   width: 100%;
-  max-width: 300px;
+  max-width: 180px;
   padding: 10px;
   border: 1px solid #ddd;
   border-radius: 5px;
   transition: border-color 0.3s ease;
+  font-size: 15px;
 }
 
 .responsive-input:focus {
@@ -1878,50 +1900,36 @@ tr:hover {
   padding: 15px 20px;
   margin-bottom: 10px;
   border: none;
+  background-color: #3760b0;
+  color: white;
   border-radius: 5px;
   font-size: 16px;
 }
 
-.mobile-actions-modal .edit-btn {
-  background-color: #ffa500;
-  color: white;
-}
-
-.mobile-actions-modal .delete-btn {
-  background-color: #f44336;
-  color: white;
-}
-
 .mobile-actions-modal button:last-child {
-  background-color: #ccc;
-  color: #333;
+  margin-bottom: 0;
 }
 
-.estado-cuenta {
-  text-align: center;
-  font-weight: bold;
-  font-size: 20px;
+.tabla-venta {
   margin-top: 20px;
-  padding: 10px;
-  border-radius: 5px;
-}
-
-.pagado {
-  color: #4CAF50;
-  background-color: #e8f5e9;
-}
-
-.no-pagado {
-  color: #f44336;
-  background-color: #ffebee;
-}
-
-.tabla-venta td:first-child {
-  cursor: pointer;
-}
-
-.tabla-venta input[type="number"] {
   width: 100%;
+  border-collapse: collapse;
+}
+
+.tabla-venta th,
+.tabla-venta td {
+  border: 1px solid #ddd;
+  padding: 8px;
+  text-align: left;
+}
+
+.tabla-venta th {
+  background-color: #f2f2f2;
+  font-weight: bold;
+}
+
+.precio-venta-input {
+  width: 70px;
   padding: 5px;
   border: 1px solid #ddd;
   border-radius: 4px;
@@ -1929,88 +1937,15 @@ tr:hover {
 }
 
 @media (max-width: 600px) {
-  .tabla-venta input[type="number"] {
-    font-size: 16px; /* Aumentar el tamaño para dispositivos móviles */
-  }
-}
-
-.add-product-button {
-  margin-bottom: 10px;
-}
-
-.modal {
-  position: fixed;
-  z-index: 1000;
-  left: 0;
-  top: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(0,0,0,0.4);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
-
-.modal-content {
-  background-color: #fefefe;
-  padding: 20px;
-  border-radius: 8px;
-  width: 80%;
-  max-width: 500px;
-}
-
-.modal h3 {
-  margin-top: 0;
-  margin-bottom: 15px;
-}
-
-.modal .input-row {
-  display: flex;
-  gap: 10px;
-  margin-bottom: 15px;
-}
-
-.modal .button-row {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-}
-
-@media (max-width: 600px) {
-  .modal-content {
-    width: 90%;
+  .tabla-venta th,
+  .tabla-venta td {
+    padding: 6px;
   }
 
-  .modal .input-row {
-    flex-direction: column;
-  }
-
-  .modal .input-row input {
-    width: 100%;
-  }
-}
-
-.precio-venta-input {
-  width: 60px; /* Reducir el ancho */
-  padding: 5px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 18px; /* Ajustar el tamaño a 18px */
-}
-
-/* Aumentar el tamaño de los números */
-.tabla-venta td,
-.tabla-venta input[type="number"],
-.tabla-venta .precio-venta-input {
-  font-size: 18px;
-  font-weight: 500;
-}
-
-@media (max-width: 600px) {
   .precio-venta-input {
-    width: 50px; /* Reducir el ancho para dispositivos móviles */
+    width: 60px;
     padding: 3px;
-    font-size: 18px; /* Mantener el tamaño a 18px */
+    font-size: 12px;
   }
 }
 
