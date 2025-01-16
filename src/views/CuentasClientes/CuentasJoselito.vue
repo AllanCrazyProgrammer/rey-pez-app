@@ -768,8 +768,8 @@ export default {
           precioVenta: null
         };
 
-        // Encolar el guardado
-        await this.queueSave();
+        // Guardar los cambios
+        await this.guardarSilencioso();
 
       } catch (error) {
         console.error('Error al guardar el item:', error);
