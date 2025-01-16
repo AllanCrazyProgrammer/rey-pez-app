@@ -12,8 +12,63 @@
       <router-link to="/ventas-ganancias-joselito" class="action-button ventas-ganancias-btn">
         Ventas y Ganancias
       </router-link>
+      <button @click="showAbonosModal = true" class="action-button abonos-btn">
+        Abonos
+      </button>
       <PreciosHistorialModal />
       <StashModal cliente="joselito" />
+    </div>
+
+    <!-- Modal de Abonos -->
+    <div v-if="showAbonosModal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>Historial de Abonos</h2>
+          <button @click="showAbonosModal = false" class="close-modal-btn">&times;</button>
+        </div>
+        
+        <div class="fecha-filtros">
+          <div class="fecha-grupo">
+            <label>Desde:</label>
+            <input 
+              type="date" 
+              v-model="fechaInicio" 
+              class="fecha-input"
+              @change="calcularTotalAbonos"
+            >
+          </div>
+          <div class="fecha-grupo">
+            <label>Hasta:</label>
+            <input 
+              type="date" 
+              v-model="fechaFin" 
+              class="fecha-input"
+              @change="calcularTotalAbonos"
+            >
+          </div>
+        </div>
+
+        <div v-if="totalAbonosPeriodo !== null" class="total-abonos">
+          <span class="total-label">Total de abonos en el periodo:</span>
+          <span class="total-monto">${{ formatNumber(totalAbonosPeriodo) }}</span>
+        </div>
+
+        <div class="abonos-list">
+          <div v-if="abonosHistorial.length === 0" class="no-records">
+            No hay abonos registrados.
+          </div>
+          <div v-else>
+            <div v-for="(abono, index) in abonosHistorial" :key="index" class="abono-item">
+              <div class="abono-fecha">{{ formatDate(abono.fecha) }}</div>
+              <div class="abono-details">
+                <span class="abono-monto">${{ formatNumber(abono.monto) }}</span>
+                <span class="abono-descripcion">{{ abono.descripcion }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <button @click="showAbonosModal = false" class="close-btn">Cerrar</button>
+      </div>
     </div>
 
     <div class="cuentas-list">
@@ -53,7 +108,7 @@
 
 <script>
 import { db } from '@/firebase';
-import { collection, query, orderBy, deleteDoc, doc, onSnapshot, updateDoc } from 'firebase/firestore';
+import { collection, query, orderBy, deleteDoc, doc, onSnapshot, updateDoc, getDocs } from 'firebase/firestore';
 import BackButton from '@/components/BackButton.vue';
 import PreciosHistorialModal from '@/components/PreciosHistorialModal.vue';
 import StashModal from '@/components/StashModal.vue';
@@ -71,6 +126,11 @@ export default {
       isLoading: true,
       unsubscribe: null,
       error: null,
+      showAbonosModal: false,
+      fechaInicio: '',
+      fechaFin: '',
+      totalAbonosPeriodo: null,
+      abonosHistorial: []
     };
   },
   methods: {
@@ -118,7 +178,6 @@ export default {
 
             const saldoAnterior = i === 0 ? 0 : cuentasOrdenadas[i-1].nuevoSaldoAcumulado;
             
-            // Solo actualizar si los valores han cambiado
             if (cuenta.saldoAcumuladoAnterior !== saldoAnterior || 
                 cuenta.nuevoSaldoAcumulado !== saldoAcumulado) {
               
@@ -131,25 +190,21 @@ export default {
               });
             }
 
-            // Actualizar el objeto local
             cuenta.totalNota = saldoAcumulado;
             cuenta.saldoAcumuladoAnterior = saldoAnterior;
 
-            // Reiniciar saldo si es menor o igual a cero
             if (saldoAcumulado <= 0) {
               saldoAcumulado = 0;
             }
           }
 
-          // Realizar todas las actualizaciones en paralelo
           if (actualizaciones.length > 0) {
             await Promise.all(actualizaciones.map(({ id, updates }) => 
               updateDoc(doc(db, 'cuentasJoselito', id), updates)
             ));
           }
 
-          // Actualizar el estado local con las cuentas ordenadas por fecha descendente
-          this.cuentas = cuentasOrdenadas.reverse(); // Revertir para mostrar las más recientes primero
+          this.cuentas = cuentasOrdenadas.reverse();
           this.isLoading = false;
         });
 
@@ -185,6 +240,64 @@ export default {
           alert('Error al borrar el registro de cuenta');
         }
       }
+    },
+    calcularTotalAbonos() {
+      if (!this.fechaInicio || !this.fechaFin) {
+        this.totalAbonosPeriodo = null;
+        return;
+      }
+
+      const inicio = new Date(this.fechaInicio);
+      const fin = new Date(this.fechaFin);
+      
+      // Ajustar fin al final del día
+      fin.setHours(23, 59, 59, 999);
+
+      const abonosFiltrados = this.abonosHistorial.filter(abono => {
+        const fechaAbono = new Date(abono.fecha);
+        return fechaAbono >= inicio && fechaAbono <= fin;
+      });
+
+      this.totalAbonosPeriodo = abonosFiltrados.reduce((total, abono) => 
+        total + (parseFloat(abono.monto) || 0), 0);
+    },
+    async cargarHistorialAbonos() {
+      try {
+        const cuentasRef = collection(db, 'cuentasJoselito');
+        const querySnapshot = await getDocs(cuentasRef);
+        
+        let todosLosAbonos = [];
+        querySnapshot.forEach(doc => {
+          const cuenta = doc.data();
+          if (cuenta.abonos && cuenta.abonos.length > 0) {
+            cuenta.abonos.forEach(abono => {
+              todosLosAbonos.push({
+                ...abono,
+                fecha: cuenta.fecha
+              });
+            });
+          }
+        });
+
+        // Ordenar abonos por fecha, del más reciente al más antiguo
+        this.abonosHistorial = todosLosAbonos.sort((a, b) => 
+          new Date(b.fecha) - new Date(a.fecha)
+        );
+
+        // Recalcular total si hay fechas seleccionadas
+        if (this.fechaInicio && this.fechaFin) {
+          this.calcularTotalAbonos();
+        }
+      } catch (error) {
+        console.error("Error al cargar historial de abonos:", error);
+      }
+    }
+  },
+  watch: {
+    showAbonosModal(newValue) {
+      if (newValue) {
+        this.cargarHistorialAbonos();
+      }
     }
   },
   created() {
@@ -216,25 +329,32 @@ h1, h2 {
 
 .actions-container {
   display: flex;
-  justify-content: space-between;
-  margin-bottom: 20px;
+  justify-content: center;
+  gap: 20px;
+  margin: 30px 0;
+  flex-wrap: wrap;
 }
 
 .action-button {
   background-color: #2196F3;
   color: white;
   border: none;
-  padding: 10px 20px;
-  border-radius: 4px;
+  padding: 12px 24px;
+  border-radius: 8px;
   cursor: pointer;
   text-decoration: none;
   display: inline-block;
   font-size: 16px;
-  transition: background-color 0.3s ease;
+  transition: all 0.3s ease;
+  min-width: 160px;
+  text-align: center;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .action-button:hover {
   background-color: #1976D2;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
 }
 
 .back-btn {
@@ -243,6 +363,44 @@ h1, h2 {
 
 .back-btn:hover {
   background-color: #5a6268;
+}
+
+.new-cuenta-btn {
+  background-color: #2196F3;
+}
+
+.new-cuenta-btn:hover {
+  background-color: #1976D2;
+}
+
+.ventas-ganancias-btn {
+  background-color: #4CAF50;
+}
+
+.ventas-ganancias-btn:hover {
+  background-color: #45a049;
+}
+
+.abonos-btn {
+  background-color: #FF9800;
+}
+
+.abonos-btn:hover {
+  background-color: #F57C00;
+}
+
+@media (max-width: 768px) {
+  .actions-container {
+    flex-direction: column;
+    gap: 10px;
+    padding: 0 15px;
+  }
+
+  .action-button {
+    width: 100%;
+    min-width: unset;
+    padding: 15px;
+  }
 }
 
 .cuentas-list {
@@ -423,6 +581,168 @@ h1, h2 {
 
 @media (max-width: 768px) {
   .abono-detail {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 5px;
+  }
+}
+
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background-color: white;
+  padding: 20px;
+  border-radius: 8px;
+  width: 90%;
+  max-width: 800px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 10px;
+  border-bottom: 2px solid #2196F3;
+}
+
+.modal-header h2 {
+  margin: 0;
+  color: #000000;
+}
+
+.close-modal-btn {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: #666;
+}
+
+.fecha-filtros {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.fecha-grupo {
+  flex: 1;
+}
+
+.fecha-grupo label {
+  display: block;
+  margin-bottom: 5px;
+  color: #666;
+}
+
+.fecha-input {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+.total-abonos {
+  background-color: #e8f5e9;
+  padding: 15px;
+  border-radius: 4px;
+  margin-bottom: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.total-label {
+  font-weight: bold;
+  color: #2e7d32;
+}
+
+.total-monto {
+  font-size: 1.2em;
+  font-weight: bold;
+  color: #2e7d32;
+}
+
+.abonos-list {
+  margin-bottom: 20px;
+}
+
+.abono-item {
+  background-color: #f5f5f5;
+  padding: 15px;
+  border-radius: 4px;
+  margin-bottom: 10px;
+}
+
+.abono-fecha {
+  font-weight: bold;
+  color: #000000;
+  margin-bottom: 5px;
+}
+
+.abono-details {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.abono-monto {
+  color: #4CAF50;
+  font-weight: bold;
+  font-size: 1.1em;
+}
+
+.abono-descripcion {
+  color: #666;
+  font-style: italic;
+}
+
+.close-btn {
+  width: 100%;
+  padding: 10px;
+  background-color: #6c757d;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-top: 10px;
+}
+
+.close-btn:hover {
+  background-color: #5a6268;
+}
+
+.no-records {
+  text-align: center;
+  color: #666;
+  padding: 20px;
+}
+
+@media (max-width: 768px) {
+  .modal-content {
+    width: 95%;
+    max-height: 90vh;
+  }
+
+  .fecha-filtros {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .abono-details {
     flex-direction: column;
     align-items: flex-start;
     gap: 5px;
