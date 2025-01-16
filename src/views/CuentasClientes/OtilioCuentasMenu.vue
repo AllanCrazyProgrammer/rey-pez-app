@@ -91,6 +91,10 @@
                 <span class="abono-monto">${{ formatNumber(abono.monto) }}</span>
                 <span class="abono-descripcion">{{ abono.descripcion || 'Sin descripción' }}</span>
               </p>
+              <p class="total-abonos-dia">
+                <span class="total-label">Total</span>
+                <span class="total-monto">${{ formatNumber(cuenta.abonos.reduce((sum, abono) => sum + (parseFloat(abono.monto) || 0), 0)) }}</span>
+              </p>
             </div>
           </div>
           <div class="cuenta-actions">
@@ -724,6 +728,34 @@ h1, h2 {
     flex-direction: column;
     gap: 5px;
     text-align: center;
+  }
+}
+
+.total-abonos-dia {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #ddd;
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  font-weight: bold;
+  color: #4CAF50;
+  gap: 10px;
+}
+
+.total-abonos-dia .total-label {
+  color: #666;
+}
+
+.total-abonos-dia .total-monto {
+  font-size: 1.1em;
+}
+
+@media (max-width: 768px) {
+  .total-abonos-dia {
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
   }
 }
 </style> 
