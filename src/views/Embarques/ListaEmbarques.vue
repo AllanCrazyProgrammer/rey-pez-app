@@ -111,27 +111,31 @@ export default {
     },
     calcularTotalTaras(embarque) {
       let totalTaras = 0;
+      const clientesPredefinidos = ['OTILIO', 'JOSELITO', 'CATARRO', 'OZUNA'];
 
       embarque.clientes.forEach(cliente => {
-        // Sumar taras de productos normales
-        cliente.productos.forEach(producto => {
-          totalTaras += this.calcularTotalTarasProducto(producto);
-        });
-
-        // Sumar taras de crudos
-        if (cliente.crudos) {
-          cliente.crudos.forEach(crudo => {
-            crudo.items.forEach(item => {
-              if (item.taras) {
-                const [cantidad] = item.taras.split('-').map(Number);
-                totalTaras += cantidad || 0;
-              }
-              if (item.sobrante) {
-                const [cantidadSobrante] = item.sobrante.split('-').map(Number);
-                totalTaras += cantidadSobrante || 0;
-              }
-            });
+        // Solo procesar si el cliente está en la lista de predefinidos
+        if (clientesPredefinidos.includes(cliente.nombre.toUpperCase())) {
+          // Sumar taras de productos normales
+          cliente.productos.forEach(producto => {
+            totalTaras += this.calcularTotalTarasProducto(producto);
           });
+
+          // Sumar taras de crudos
+          if (cliente.crudos) {
+            cliente.crudos.forEach(crudo => {
+              crudo.items.forEach(item => {
+                if (item.taras) {
+                  const [cantidad] = item.taras.split('-').map(Number);
+                  totalTaras += cantidad || 0;
+                }
+                if (item.sobrante) {
+                  const [cantidadSobrante] = item.sobrante.split('-').map(Number);
+                  totalTaras += cantidadSobrante || 0;
+                }
+              });
+            });
+          }
         }
       });
 
