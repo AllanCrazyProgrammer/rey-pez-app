@@ -799,7 +799,6 @@ function totalTaras(producto) {
 
 function totalKilos(producto, nombreCliente) {
   const sumaKilos = (producto.kilos || []).reduce((sum, kilo) => sum + (kilo || 0), 0);
-  // Solo considerar taras normales para el descuento
   const sumaTarasNormales = (producto.taras || []).reduce((sum, tara) => sum + (tara || 0), 0);
   const descuentoTaras = producto.restarTaras ? sumaTarasNormales * 3 : 0;
   
@@ -809,11 +808,13 @@ function totalKilos(producto, nombreCliente) {
   if (!producto.noSumarKilos && 
       (producto.tipo.toLowerCase().includes('s/h2o') || 
        producto.tipo.toLowerCase().includes('s/h20'))) {
-    if (nombreCliente.toLowerCase().includes('otilio')) {
-      resultado += 3;
-    } else if (nombreCliente.toLowerCase().includes('catarro')) {
+    if (nombreCliente.toLowerCase().includes('catarro')) {
       resultado += 1;
     }
+    // Comentado: ya no sumar 3kg para Otilio
+    // if (nombreCliente.toLowerCase().includes('otilio')) {
+    //   resultado += 3;
+    // }
   }
   
   return Number(resultado.toFixed(1));
