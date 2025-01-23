@@ -78,13 +78,19 @@
         No hay registros de cuentas que coincidan con el filtro.
       </div>
       <ul v-else>
-        <li v-for="cuenta in cuentas" :key="cuenta.id" class="cuenta-item">
+        <li v-for="cuenta in cuentas" 
+            :key="cuenta.id" 
+            class="cuenta-item"
+            :class="{ 'tiene-observacion': cuenta.tieneObservacion }">
           <div class="cuenta-content">
             <span class="cuenta-date">{{ formatDate(cuenta.fecha) }}</span>
             <p class="cuenta-summary">
               <span>Saldo Hoy: ${{ formatNumber(cuenta.saldoHoy) }}</span>
               <span>Total Acumulado: ${{ formatNumber(cuenta.totalNota) }}</span>
             </p>
+            <div v-if="cuenta.tieneObservacion" class="observacion-badge" @click="mostrarObservacion(cuenta)">
+              Ver observación
+            </div>
             <div v-if="cuenta.abonos && cuenta.abonos.length > 0" class="abonos-info">
               <p v-for="(abono, index) in cuenta.abonos" :key="index" class="abono-detail">
                 <span class="abono-label">Abono:</span>
@@ -103,6 +109,17 @@
           </div>
         </li>
       </ul>
+    </div>
+
+    <!-- Modal para mostrar observación -->
+    <div v-if="showObservacionModal" class="modal-overlay">
+      <div class="modal-content">
+        <h3>Observación</h3>
+        <p class="observacion-text">{{ observacionActual }}</p>
+        <div class="modal-buttons">
+          <button @click="showObservacionModal = false" class="btn-cerrar">Cerrar</button>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -131,7 +148,9 @@ export default {
       abonosHistorial: [],
       fechaInicio: '',
       fechaFin: '',
-      totalAbonosPeriodo: null
+      totalAbonosPeriodo: null,
+      showObservacionModal: false,
+      observacionActual: ''
     };
   },
   methods: {
@@ -158,7 +177,9 @@ export default {
               totalNota: data.nuevoSaldoAcumulado || 0,
               nuevoSaldoAcumulado: data.nuevoSaldoAcumulado || 0,
               saldoAcumuladoAnterior: data.saldoAcumuladoAnterior || 0,
-              abonos: data.abonos || []
+              abonos: data.abonos || [],
+              tieneObservacion: data.tieneObservacion || false,
+              observacion: data.observacion || ''
             };
           });
 
@@ -289,6 +310,10 @@ export default {
       } catch (error) {
         console.error("Error al cargar historial de abonos:", error);
       }
+    },
+    mostrarObservacion(cuenta) {
+      this.observacionActual = cuenta.observacion;
+      this.showObservacionModal = true;
     }
   },
   watch: {
@@ -757,5 +782,64 @@ h1, h2 {
     align-items: center;
     gap: 10px;
   }
+}
+
+.tiene-observacion {
+  border: 2px solid #ff0000 !important;
+}
+
+.observacion-badge {
+  background-color: #ff0000;
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.9em;
+  cursor: pointer;
+  display: inline-block;
+  margin-top: 8px;
+}
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background-color: white;
+  padding: 20px;
+  border-radius: 8px;
+  width: 90%;
+  max-width: 500px;
+}
+
+.observacion-text {
+  margin: 15px 0;
+  padding: 10px;
+  background-color: #f5f5f5;
+  border-radius: 4px;
+  white-space: pre-wrap;
+}
+
+.btn-cerrar {
+  background-color: #4CAF50;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.modal-buttons {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 15px;
 }
 </style> 

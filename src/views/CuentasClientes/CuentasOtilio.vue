@@ -251,6 +251,30 @@
       <div :class="['estado-cuenta', estadoCuenta.toLowerCase(), { 'no-pagado': estadoCuenta === 'No Pagado' }]">
         {{ estadoCuenta }}
       </div>
+
+      <div class="guardar-container">
+        <div class="observacion-container">
+          <div class="checkbox-group">
+            <input type="checkbox" v-model="tieneObservacion" id="observacionCheck">
+            <label for="observacionCheck">Tiene observación</label>
+          </div>
+          <button v-if="tieneObservacion" @click="showObservacionModal = true" class="btn-editar">
+            {{ observacion ? 'Editar observación' : 'Agregar observación' }}
+          </button>
+        </div>
+      </div>
+
+      <!-- Modal de Observación -->
+      <div v-if="showObservacionModal" class="modal-overlay">
+        <div class="modal-content">
+          <h3>Agregar Observación</h3>
+          <textarea v-model="observacion" placeholder="Escribe tu observación aquí..." rows="4"></textarea>
+          <div class="modal-buttons">
+            <button @click="guardarObservacion" class="btn-guardar">Guardar</button>
+            <button @click="cancelarObservacion" class="btn-cancelar">Cancelar</button>
+          </div>
+        </div>
+      </div>
     </div>
   </template>
   
@@ -320,7 +344,10 @@
         isSaving: false,
         lastSaveTime: null,
         saveMinInterval: 5000,
-        selectedField: null
+        selectedField: null,
+        tieneObservacion: false,
+        showObservacionModal: false,
+        observacion: ''
       }
     },
     computed: {
@@ -1082,7 +1109,28 @@
         } catch (error) {
           console.error('Error al guardar silenciosamente:', error);
         }
-      }
+      },
+      async guardarCuenta() {
+        try {
+          const cuentaData = {
+            // ... existing code ...
+            tieneObservacion: this.tieneObservacion,
+            observacion: this.observacion,
+          };
+          // ... rest of the existing guardarCuenta code ...
+        } catch (error) {
+          console.error('Error al guardar la cuenta:', error);
+          alert('Error al guardar la cuenta');
+        }
+      },
+      guardarObservacion() {
+        this.showObservacionModal = false;
+      },
+      cancelarObservacion() {
+        this.tieneObservacion = false;
+        this.observacion = '';
+        this.showObservacionModal = false;
+      },
     },
     created() {
       const id = this.$route.params.id;
@@ -1108,6 +1156,11 @@
           this.abonos = [];
           this.fechaSeleccionada = this.obtenerFechaActual();
           this.estadoPagado = false;
+        }
+      },
+      tieneObservacion(newValue) {
+        if (newValue) {
+          this.showObservacionModal = true;
         }
       }
     }
@@ -1521,5 +1574,89 @@
   
   .text-right {
     text-align: right;
+  }
+
+  .guardar-container {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    margin: 20px 0;
+  }
+
+  .observacion-container {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 10px 0;
+  }
+
+  .checkbox-group {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .checkbox-group input[type="checkbox"] {
+    margin: 0;
+  }
+
+  .checkbox-group label {
+    margin: 0;
+    cursor: pointer;
+  }
+
+  .modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+  }
+
+  .modal-content {
+    background-color: white;
+    padding: 20px;
+    border-radius: 8px;
+    width: 90%;
+    max-width: 500px;
+  }
+
+  .modal-content textarea {
+    width: 100%;
+    padding: 10px;
+    margin: 10px 0;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    resize: vertical;
+  }
+
+  .modal-buttons {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 15px;
+  }
+
+  .btn-guardar {
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+
+  .btn-cancelar {
+    background-color: #f44336;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
   }
   </style> 

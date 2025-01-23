@@ -242,6 +242,30 @@
     <div :class="['estado-cuenta', estadoCuenta.toLowerCase(), { 'no-pagado': estadoCuenta === 'No Pagado' }]">
       {{ estadoCuenta }}
     </div>
+
+    <div class="guardar-container">
+      <div class="observacion-container">
+        <div class="checkbox-group">
+          <input type="checkbox" v-model="tieneObservacion" id="observacionCheck">
+          <label for="observacionCheck">Tiene observación</label>
+        </div>
+        <button v-if="tieneObservacion" @click="showObservacionModal = true" class="btn-editar">
+          {{ observacion ? 'Editar observación' : 'Agregar observación' }}
+        </button>
+      </div>
+    </div>
+
+    <!-- Modal de Observación -->
+    <div v-if="showObservacionModal" class="modal-overlay">
+      <div class="modal-content">
+        <h3>Agregar Observación</h3>
+        <textarea v-model="observacion" placeholder="Escribe tu observación aquí..." rows="4"></textarea>
+        <div class="modal-buttons">
+          <button @click="guardarObservacion" class="btn-guardar">Guardar</button>
+          <button @click="cancelarObservacion" class="btn-cancelar">Cancelar</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -299,6 +323,9 @@ export default {
       isSaving: false,
       lastSaveTime: null,
       saveMinInterval: 5000, // Aumentar a 5 segundos mínimo entre guardados
+      tieneObservacion: false,
+      showObservacionModal: false,
+      observacion: '',
     }
   },
   computed: {
@@ -371,7 +398,14 @@ export default {
     },
     'newItem.kilos': 'handleDataChange',
     'newItem.medida': 'handleDataChange',
-    'newItem.costo': 'handleDataChange'
+    'newItem.costo': 'handleDataChange',
+    tieneObservacion: {
+      handler(newValue, oldValue) {
+        if (!newValue) {
+          this.observacion = '';
+        }
+      }
+    }
   },
   async mounted() {
     console.log("Mounted ejecutado", this.$route.params, this.$route.query);
@@ -401,6 +435,8 @@ export default {
             this.cobros = data.cobros || [];
             this.abonos = data.abonos || [];
             this.fechaSeleccionada = data.fecha || this.obtenerFechaActual();
+            this.tieneObservacion = data.tieneObservacion || false;
+            this.observacion = data.observacion || '';
             
             // Cargar los itemsVenta con los precios de venta guardados
             this.itemsVenta = data.itemsVenta || this.items.map(item => ({
@@ -419,7 +455,9 @@ export default {
               cobros: this.cobros,
               abonos: this.abonos,
               fechaSeleccionada: this.fechaSeleccionada,
-              itemsVenta: this.itemsVenta
+              itemsVenta: this.itemsVenta,
+              tieneObservacion: this.tieneObservacion,
+              observacion: this.observacion
             });
           });
         } else {
@@ -586,7 +624,9 @@ export default {
           totalGeneral: this.totalGeneral,
           totalGeneralVenta: 0,
           nuevoSaldoAcumulado: this.saldoAcumuladoAnterior,
-          estadoPagado: false
+          estadoPagado: false,
+          tieneObservacion: this.tieneObservacion,
+          observacion: this.observacion,
         };
 
         const docRef = await addDoc(collection(db, 'cuentasCatarro'), notaData);
@@ -666,7 +706,9 @@ export default {
           nuevoSaldoAcumulado: estaPagada ? 0 : nuevoSaldoAcumulado,
           gananciaDelDia: this.gananciaDelDia,
           estadoPagado: estaPagada,
-          itemsVenta: this.itemsVenta
+          itemsVenta: this.itemsVenta,
+          tieneObservacion: this.tieneObservacion,
+          observacion: this.observacion,
         };
 
         console.log("Datos a guardar:", notaData);
@@ -1084,7 +1126,9 @@ export default {
           nuevoSaldoAcumulado: this.nuevoSaldoAcumulado,
           cobros: this.cobros,
           abonos: this.abonos,
-          estadoPagado: this.estadoCuenta === 'Pagado'
+          estadoPagado: this.estadoCuenta === 'Pagado',
+          tieneObservacion: this.tieneObservacion,
+          observacion: this.observacion,
         };
 
         await updateDoc(doc(db, 'cuentasCatarro', this.$route.params.id), notaData);
@@ -1096,7 +1140,18 @@ export default {
         console.error('Error en auto-guardado:', error);
         throw error;
       }
-    }
+    },
+    guardarCuenta() {
+      this.guardarNota();
+    },
+    guardarObservacion() {
+      this.showObservacionModal = false;
+    },
+    cancelarObservacion() {
+      this.tieneObservacion = false;
+      this.observacion = '';
+      this.showObservacionModal = false;
+    },
   },
   beforeUnmount() {
     if (this.autoSaveTimer) {
@@ -1314,7 +1369,10 @@ tr:hover {
 .tabla-principal th:first-child,
 .tabla-principal td:first-child,
 .tabla-venta th:first-child,
-.tabla-venta td:first-child,
+.tabla-venta td:first-child {
+  width: 20%;
+}
+
 .tabla-principal th:nth-child(2),
 .tabla-principal td:nth-child(2),
 .tabla-venta th:nth-child(2),
@@ -1325,7 +1383,10 @@ tr:hover {
 .tabla-principal th:nth-child(3),
 .tabla-principal td:nth-child(3),
 .tabla-venta th:nth-child(3),
-.tabla-venta td:nth-child(3),
+.tabla-venta td:nth-child(3) {
+  width: 30%;
+}
+
 .tabla-principal th:last-child,
 .tabla-principal td:last-child,
 .tabla-venta th:last-child,
@@ -1347,21 +1408,21 @@ tr:hover {
 .button-container {
   display: flex;
   justify-content: center;
-  gap: 20px;
-  margin-top: 20px;
+  gap: 15px;
+  margin: 20px 0;
   flex-wrap: wrap;
 }
 
 .save-button,
 .print-button {
-  padding: 12px 25px;
+  padding: 10px 20px;
   color: white;
   border: none;
-  border-radius: 8px;
+  border-radius: 6px;
   cursor: pointer;
   font-size: 16px;
   transition: all 0.3s ease;
-  min-width: 150px;
+  min-width: 130px;
   text-align: center;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
@@ -1390,12 +1451,15 @@ tr:hover {
   .button-container {
     flex-direction: row;
     gap: 10px;
+    padding: 0 10px;
   }
 
   .save-button,
   .print-button {
-    min-width: 120px;
-    padding: 10px 20px;
+    flex: 1;
+    min-width: unset;
+    padding: 12px 15px;
+    font-size: 14px;
   }
 }
 
@@ -1729,226 +1793,6 @@ tr:hover {
   }
 }
 
-.tabla-principal th,
-.tabla-principal td,
-.tabla-venta th,
-.tabla-venta td {
-  width: auto;
-}
-
-.tabla-principal th:first-child,
-.tabla-principal td:first-child,
-.tabla-venta th:first-child,
-.tabla-venta td:first-child {
-  width: 20%;
-}
-
-.tabla-principal th:nth-child(2),
-.tabla-principal td:nth-child(2),
-.tabla-venta th:nth-child(2),
-.tabla-venta td:nth-child(2) {
-  width: 20%;
-}
-
-.tabla-principal th:nth-child(3),
-.tabla-principal td:nth-child(3),
-.tabla-venta th:nth-child(3),
-.tabla-venta td:nth-child(3) {
-  width: 30%;
-}
-
-.tabla-principal th:last-child,
-.tabla-principal td:last-child,
-.tabla-venta th:last-child,
-.tabla-venta td:last-child {
-  width: 30%;
-}
-
-@media (max-width: 600px) {
-  .tabla-principal th,
-  .tabla-principal td,
-  .tabla-venta th,
-  .tabla-venta td {
-    width: 25%;
-  }
-}
-
-.edit-modal {
-  position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  background-color: white;
-  padding: 20px;
-  border-radius: 8px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-  z-index: 1000;
-}
-
-.edit-modal h3 {
-  margin-top: 0;
-  margin-bottom: 15px;
-}
-
-.edit-modal .input-row {
-  display: flex;
-  gap: 10px;
-  margin-bottom: 15px;
-}
-
-.edit-modal .button-row {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-}
-
-.edit-btn {
-  background-color: #ffa500;
-  margin-right: 5px;
-}
-
-.edit-btn:hover {
-  background-color: #ff8c00;
-}
-
-.ganancia-del-dia {
-  margin-top: 20px;
-  padding: 15px;
-  background-color: #f0f0f0;
-  border-radius: 8px;
-  text-align: center;
-}
-
-.ganancia-del-dia h3 {
-  margin-bottom: 10px;
-}
-
-.ganancia-positiva {
-  color: #4CAF50;
-  font-weight: bold;
-  font-size: 15pt;
-}
-
-.ganancia-negativa {
-  color: #f44336;
-  font-weight: bold;
-  font-size: 15pt;
-}
-
-.action-column {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.action-column button {
-  flex: 1;
-  margin: 0 2px;
-  padding: 5px 10px;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 14px;
-}
-
-.edit-btn {
-  background-color: #ffa500;
-  color: white;
-}
-
-.delete-btn {
-  background-color: #f44336;
-  color: white;
-}
-
-@media (max-width: 600px) {
-  .desktop-only {
-    display: none;
-  }
-
-  .tabla-principal tr {
-    position: relative;
-  }
-
-  .tabla-principal tr::after {
-    content: '⋮';
-    position: absolute;
-    right: 10px;
-    top: 50%;
-    transform: translateY(-50%);
-    font-size: 20px;
-    color: #666;
-  }
-}
-
-.mobile-actions-modal {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  background-color: white;
-  padding: 20px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
-  z-index: 1000;
-}
-
-.mobile-actions-modal button {
-  width: 100%;
-  padding: 15px 20px;
-  margin-bottom: 10px;
-  border: none;
-  background-color: #3760b0;
-  color: white;
-  border-radius: 5px;
-  font-size: 16px;
-}
-
-.mobile-actions-modal button:last-child {
-  margin-bottom: 0;
-}
-
-.tabla-venta {
-  margin-top: 20px;
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.tabla-venta th,
-.tabla-venta td {
-  border: 1px solid #ddd;
-  padding: 8px;
-  text-align: left;
-}
-
-.tabla-venta th {
-  background-color: #f2f2f2;
-  font-weight: bold;
-}
-
-.precio-venta-input {
-  width: 70px;
-  padding: 5px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 14px;
-}
-
-@media (max-width: 600px) {
-  .tabla-venta th,
-  .tabla-venta td {
-    padding: 6px;
-  }
-
-  .precio-venta-input {
-    width: 60px;
-    padding: 3px;
-    font-size: 12px;
-  }
-}
-
 .total {
   background-color: #f2f2f2;
   font-weight: bold;
@@ -1958,5 +1802,93 @@ tr:hover {
 .total td {
   padding: 10px;
   border-top: 2px solid #ddd;
+}
+
+.guardar-container {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  margin: 20px 0;
+}
+
+.observacion-container {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.checkbox-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-editar {
+  background-color: #2196F3;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.btn-editar:hover {
+  background-color: #1976D2;
+}
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background-color: white;
+  padding: 20px;
+  border-radius: 8px;
+  width: 90%;
+  max-width: 500px;
+}
+
+.modal-content textarea {
+  width: 100%;
+  padding: 10px;
+  margin: 10px 0;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  resize: vertical;
+}
+
+.modal-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 15px;
+}
+
+.btn-guardar {
+  background-color: #4CAF50;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.btn-cancelar {
+  background-color: #f44336;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
 }
 </style>
