@@ -8,6 +8,9 @@
       <button @click="abrirModalNota" class="btn-nota">
         <i class="fas fa-sticky-note"></i> Agregar Nota
       </button>
+      <button @click="abrirModalCostos" class="btn-costos">
+        <i class="fas fa-dollar-sign"></i> Costos
+      </button>
       <button @click="generarPDF" class="btn-pdf">
         <i class="fas fa-file-pdf"></i> Generar PDF
       </button>
@@ -116,6 +119,14 @@
         </div>
       </div>
     </div>
+
+    <CostosModal 
+      :showModal="showCostosModal"
+      @update:showModal="showCostosModal = $event"
+      :costosPorMedida="costosPorMedida"
+      :rendimientos="rendimientosPorMedida"
+      @guardar="guardarCostos"
+    />
   </div>
 </template>
 
@@ -123,9 +134,14 @@
 import { getFirestore, doc, getDoc, updateDoc } from 'firebase/firestore';
 import { debounce } from 'lodash';
 import { generarPDFRendimientos } from '@/utils/RendimientosPdf';
+import CostosModal from '@/components/CostosModal.vue';
 
 export default {
   name: 'Rendimientos',
+  
+  components: {
+    CostosModal
+  },
   
   data() {
     return {
@@ -137,7 +153,8 @@ export default {
       mostrarModal: false,
       nota: '',
       medidaOculta: {},
-      costosPorMedida: {}  // Nuevo objeto para almacenar los costos
+      costosPorMedida: {},
+      showCostosModal: false
     }
   },
 
@@ -148,7 +165,6 @@ export default {
   },
 
   methods: {
-    // Mover este método al principio de methods
     obtenerNombreCliente(clienteId) {
       if (!this.embarqueData || !this.embarqueData.clientes) return '';
       const cliente = this.embarqueData.clientes.find(c => c.id.toString() === clienteId.toString());
@@ -167,13 +183,11 @@ export default {
           this.nombresMedidasPersonalizados = this.embarqueData.nombresMedidasPersonalizados || {};
           this.obtenerMedidasUnicas();
           this.medidaOculta = this.embarqueData.medidaOculta || {};
-          this.costosPorMedida = this.embarqueData.costosPorMedida || {};  // Cargar costos guardados
+          this.costosPorMedida = this.embarqueData.costosPorMedida || {};
           
-          // Inicializar kilosCrudos con los datos de Firestore
           const kilosCrudosGuardados = this.embarqueData.kilosCrudos || {};
           this.kilosCrudos = { ...kilosCrudosGuardados };
           
-          // Asegurar que todas las medidas tengan una estructura válida
           this.medidasUnicas.forEach(medida => {
             if (!this.kilosCrudos[medida]) {
               if (this.esMedidaMix(medida)) {
@@ -229,14 +243,12 @@ export default {
             const medidaNormalizada = producto.medida.toLowerCase().trim();
             let nombreMedida = producto.medida;
             
-            // Verificar si es un producto de Ozuna y no es venta
             if (cliente.nombre === 'Ozuna' && !producto.esVenta) {
               nombreMedida = `${producto.medida} Maquila Ozuna`;
             }
 
-            // Si la medida termina en "mix", la guardamos en un mapa separado
             if (medidaNormalizada.endsWith('mix')) {
-              const baseSize = medidaNormalizada.split(' ')[0]; // Obtiene el número base (ej: "51/60")
+              const baseSize = medidaNormalizada.split(' ')[0];
               mixMedidas.set(baseSize, nombreMedida);
             } else if (!medidasMap.has(medidaNormalizada)) {
               medidasMap.set(medidaNormalizada, nombreMedida);
@@ -245,7 +257,6 @@ export default {
         });
       });
 
-      // Agrupar las medidas mix
       const mixKeys = Array.from(mixMedidas.keys()).sort();
       if (mixKeys.length >= 2) {
         for (let i = 0; i < mixKeys.length; i += 2) {
@@ -253,7 +264,6 @@ export default {
             const combinedName = `${mixKeys[i]}-${mixKeys[i+1]} mix`;
             medidasMap.set(combinedName, combinedName);
             
-            // Inicializar la estructura para los kilos crudos si no existe
             if (!this.kilosCrudos[combinedName]) {
               this.$set(this.kilosCrudos, combinedName, {
                 medida1: 0,
@@ -272,7 +282,6 @@ export default {
     obtenerTotalEmbarcado(medida) {
       if (!this.embarqueData || !this.embarqueData.clientes) return 0;
       
-      // Si es una medida combinada (mix)
       if (medida.includes('-') && medida.endsWith('mix')) {
         const [medida1, medida2] = medida.split('-').map(m => m.trim());
         const total1 = this.calcularTotalParaMedida(medida1 + ' mix');
@@ -313,7 +322,6 @@ export default {
         )
       );
 
-      // Si algún producto de esta medida es c/h20, usar total embarcado
       const tieneCH20 = productos.some(p => p.tipo === 'c/h20');
       
       if (tieneCH20) {
@@ -339,21 +347,14 @@ export default {
     calcularTotalKilos(producto) {
       if (!producto.kilos) return 0;
       
-      // Suma de kilos
       const sumaKilos = producto.kilos.reduce((total, kilo) => total + (Number(kilo) || 0), 0);
-      
-      // Solo las taras normales (no extra) afectan al descuento de kilos
       const tarasNormales = (producto.taras || []).reduce((sum, tara) => sum + (Number(tara) || 0), 0);
-      
-      // El descuento solo aplica a taras normales cuando restarTaras está activo
       const descuentoTaras = producto.restarTaras ? tarasNormales * 3 : 0;
       
-      // Las taras extra no afectan los kilos
       return sumaKilos - descuentoTaras;
     },
 
     calcularTotalTaras(producto) {
-      // Aquí sí sumamos tanto taras normales como extra para el conteo total
       const tarasNormales = (producto.taras || []).reduce((sum, tara) => sum + (Number(tara) || 0), 0);
       const tarasExtra = (producto.tarasExtra || []).reduce((sum, tara) => sum + (Number(tara) || 0), 0);
       return tarasNormales + tarasExtra;
@@ -385,7 +386,6 @@ export default {
         kilosCrudos = Number(this.kilosCrudos[medida] || 0);
       }
       
-      // El rendimiento es kilos crudos / kilos embarcados
       const rendimiento = kilosCrudos / totalEmbarcado;
       
       this.guardarCambiosEnTiempoReal();
@@ -443,12 +443,10 @@ export default {
     },
 
     generarPDF() {
-      // Verificar si hay algún costo ingresado
       const hayAlgunCosto = Object.values(this.costosPorMedida).some(costo => Number(costo) > 0);
 
-      // Preparar los datos para el PDF
       const datosRendimientos = this.medidasUnicas
-        .filter(medida => !this.medidaOculta[medida]) // Filtrar medidas ocultas
+        .filter(medida => !this.medidaOculta[medida])
         .map(medida => {
           let kilosCrudos;
           if (this.esMedidaMix(medida)) {
@@ -462,7 +460,6 @@ export default {
 
           const costo = Number(this.costosPorMedida[medida]) || 0;
           const rendimiento = this.getRendimiento(medida);
-          // Solo calcular costoFinal si hay un costo ingresado
           const costoFinal = costo > 0 ? ((costo * rendimiento) + 20).toFixed(1) : null;
 
           return {
@@ -475,14 +472,12 @@ export default {
           };
         });
 
-      // Incluir la nota en los datos del embarque
       const embarqueDataConNota = {
         ...this.embarqueData,
         notaRendimientos: this.embarqueData?.notaRendimientos || '',
         mostrarColumnaCosto: hayAlgunCosto
       };
 
-      // Llamar a la función para generar el PDF con los datos procesados
       generarPDFRendimientos(datosRendimientos, embarqueDataConNota);
     },
 
@@ -558,15 +553,20 @@ export default {
       }
     },
 
-    // Nuevo método para guardar los costos
-    async guardarCostos() {
+    abrirModalCostos() {
+      this.showCostosModal = true;
+    },
+
+    async guardarCostos(nuevoCostos) {
       try {
         const db = getFirestore();
         const embarqueId = this.$route.params.id;
         const embarqueRef = doc(db, 'embarques', embarqueId);
         
+        this.costosPorMedida = nuevoCostos;
+        
         await updateDoc(embarqueRef, {
-          costosPorMedida: this.costosPorMedida
+          costosPorMedida: nuevoCostos
         });
         
         console.log('Costos guardados correctamente');
@@ -575,19 +575,18 @@ export default {
       }
     },
 
-    // Nuevo método para resetear el costo de una medida
-    resetearCosto(medida) {
-      this.$set(this.costosPorMedida, medida, 0);
-      this.guardarCostos();
-    },
-
     calcularCostoFinal(medida) {
       const costo = Number(this.costosPorMedida[medida]) || 0;
-      // Tomamos el rendimiento con 2 decimales
       const rendimiento = Number(this.getRendimiento(medida).toFixed(2));
-      // Realizar los cálculos con más precisión y mostrar un decimal
       const resultado = ((costo * rendimiento) + 20);
       return resultado.toFixed(1);
+    },
+
+    rendimientosPorMedida() {
+      return this.medidasUnicas.reduce((acc, medida) => {
+        acc[medida] = this.getRendimiento(medida);
+        return acc;
+      }, {});
     }
   },
 
@@ -892,6 +891,30 @@ input {
   border: 1px solid #ddd;
   border-radius: 4px;
   font-size: 1em;
+}
+
+.btn-costos {
+  display: inline-flex;
+  align-items: center;
+  padding: 10px 20px;
+  background-color: #2ecc71;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+  margin-left: auto;
+  margin-right: 10px;
+}
+
+.btn-costos:hover {
+  background-color: #27ae60;
+}
+
+.btn-costos i {
+  margin-right: 10px;
 }
 </style>
 
