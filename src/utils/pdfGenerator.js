@@ -316,52 +316,6 @@ function generarContenidoClientes(embarque, clientesDisponibles, clientesJuntarM
         },
         { text: '\n' }
       );
-
-      // Agregar sección de rendimientos para Ozuna
-      if (nombreCliente.toLowerCase().includes('ozuna')) {
-        contenido.push(
-          { 
-            text: 'Rendimientos de Maquila:', 
-            style: ['subheader', estiloCliente],
-            margin: [0, 10, 0, 5]
-          }
-        );
-
-        let totalKilosCrudos = 0;
-        let totalKilosLimpios = 0;
-
-        embarque.clienteCrudos[clienteId].forEach(crudo => {
-          crudo.items.forEach(item => {
-            const kilosCrudos = parseFloat(calcularKilosCrudos(item));
-            const kilosLimpios = productos.reduce((sum, producto) => 
-              sum + (producto.medida === item.talla && !producto.esVenta ? totalKilos(producto, nombreCliente) : 0), 0);
-            
-            totalKilosCrudos += kilosCrudos;
-            totalKilosLimpios += kilosLimpios;
-
-            const rendimiento = kilosLimpios > 0 ? (kilosCrudos / kilosLimpios).toFixed(2) : 'N/A';
-            
-            contenido.push(
-              { 
-                text: `Talla: ${item.talla}, Kilos Crudos: ${kilosCrudos.toFixed(2)} kg, Kilos Limpios: ${kilosLimpios.toFixed(2)} kg, Rendimiento: ${rendimiento}`, 
-                margin: [0, 5, 0, 5]
-              }
-            );
-          });
-        });
-
-        // Calcular y mostrar el rendimiento total
-        const rendimientoTotal = totalKilosLimpios > 0 ? (totalKilosCrudos / totalKilosLimpios).toFixed(2) : 'N/A';
-        contenido.push(
-          { 
-            text: `Rendimiento Total: ${rendimientoTotal}`, 
-            style: ['subheader', estiloCliente],
-            margin: [0, 10, 0, 5]
-          }
-        );
-        
-        contenido.push({ text: '\n' });
-      }
     }
   });
 
