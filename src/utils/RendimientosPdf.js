@@ -86,7 +86,7 @@ export const generarPDFRendimientos = async (datosRendimientos, embarqueData) =>
           ]
         },
         { text: '\n', height: 5 },
-        generarTablaRendimientos(datosRendimientos, nombresMedidasPersonalizados)
+        generarTablaRendimientos(datosRendimientos, nombresMedidasPersonalizados, embarqueData)
       ],
       styles: {
         header: {
@@ -107,6 +107,10 @@ export const generarPDFRendimientos = async (datosRendimientos, embarqueData) =>
         },
         rendimientoBajo: {
           color: '#000000'
+        },
+        costoStyle: {
+          color: '#e74c3c',
+          bold: true
         }
       },
       defaultStyle: {
@@ -155,8 +159,7 @@ export const generarPDFRendimientos = async (datosRendimientos, embarqueData) =>
   }
 };
 
-function generarTablaRendimientos(datosRendimientos, nombresMedidasPersonalizados) {
-  // Agrupar medidas mixtas
+function generarTablaRendimientos(datosRendimientos, nombresMedidasPersonalizados, embarqueData) {
   const datosAgrupados = datosRendimientos.reduce((acc, dato) => {
     const nombreMedida = nombresMedidasPersonalizados[dato.medida] || dato.medida;
     
@@ -166,7 +169,8 @@ function generarTablaRendimientos(datosRendimientos, nombresMedidasPersonalizado
         acc['Mixta'] = {
           medida: 'Mixta',
           kilosCrudos: 0,
-          totalEmbarcado: 0
+          totalEmbarcado: 0,
+          costoFinal: dato.costoFinal
         };
       }
       
@@ -188,7 +192,8 @@ function generarTablaRendimientos(datosRendimientos, nombresMedidasPersonalizado
       acc[nombreMedida] = {
         medida: nombreMedida,
         kilosCrudos: parseFloat(dato.kilosCrudos) || 0,
-        totalEmbarcado: parseFloat(dato.totalEmbarcado) || 0
+        totalEmbarcado: parseFloat(dato.totalEmbarcado) || 0,
+        costoFinal: dato.costoFinal
       };
     }
     return acc;
@@ -198,7 +203,8 @@ function generarTablaRendimientos(datosRendimientos, nombresMedidasPersonalizado
     [
       { text: 'Kilos en Crudo', style: 'tableHeader' },
       { text: 'Medida', style: 'tableHeader' },
-      { text: 'Rendimiento', style: 'tableHeader' }
+      { text: 'Rendimiento', style: 'tableHeader' },
+      ...(embarqueData.mostrarColumnaCosto ? [{ text: 'Costo Final', style: 'tableHeader' }] : [])
     ],
     ...Object.values(datosAgrupados).map(dato => {
       const rendimiento = dato.totalEmbarcado > 0 ? dato.kilosCrudos / dato.totalEmbarcado : 0;
@@ -217,7 +223,11 @@ function generarTablaRendimientos(datosRendimientos, nombresMedidasPersonalizado
         {
           text: `(${formatearRendimiento(rendimiento)})`,
           style: rendimientoStyle
-        }
+        },
+        ...(embarqueData.mostrarColumnaCosto ? [{
+          text: dato.costoFinal ? `$${Number(dato.costoFinal).toFixed(1)}` : '',
+          style: 'costoStyle'
+        }] : [])
       ];
     })
   ];
@@ -225,7 +235,7 @@ function generarTablaRendimientos(datosRendimientos, nombresMedidasPersonalizado
   return {
     table: {
       headerRows: 1,
-      widths: ['*', '*', '*'],
+      widths: embarqueData.mostrarColumnaCosto ? ['*', '*', '*', '*'] : ['*', '*', '*'],
       body: body
     },
     layout: {
