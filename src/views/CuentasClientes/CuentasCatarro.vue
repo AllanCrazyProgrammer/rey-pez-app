@@ -245,14 +245,10 @@
 
     <div class="guardar-container">
       <div class="observacion-container">
-        <div class="checkbox-group">
-          <input type="checkbox" v-model="tieneObservacion" id="observacionCheck">
-          <label for="observacionCheck">Tiene observación</label>
-        </div>
-        <button v-if="tieneObservacion" @click="showObservacionModal = true" class="btn-editar">
-          {{ observacion ? 'Editar observación' : 'Agregar observación' }}
-        </button>
+        <input type="checkbox" v-model="tieneObservacion" id="observacionCheck">
+        <label for="observacionCheck">Tiene observación</label>
       </div>
+      <button @click="guardarCuenta" class="btn-guardar">Guardar</button>
     </div>
 
     <!-- Modal de Observación -->
@@ -399,11 +395,9 @@ export default {
     'newItem.kilos': 'handleDataChange',
     'newItem.medida': 'handleDataChange',
     'newItem.costo': 'handleDataChange',
-    tieneObservacion: {
-      handler(newValue, oldValue) {
-        if (!newValue) {
-          this.observacion = '';
-        }
+    tieneObservacion(newValue) {
+      if (newValue) {
+        this.showObservacionModal = true;
       }
     }
   },
@@ -435,8 +429,6 @@ export default {
             this.cobros = data.cobros || [];
             this.abonos = data.abonos || [];
             this.fechaSeleccionada = data.fecha || this.obtenerFechaActual();
-            this.tieneObservacion = data.tieneObservacion || false;
-            this.observacion = data.observacion || '';
             
             // Cargar los itemsVenta con los precios de venta guardados
             this.itemsVenta = data.itemsVenta || this.items.map(item => ({
@@ -455,9 +447,7 @@ export default {
               cobros: this.cobros,
               abonos: this.abonos,
               fechaSeleccionada: this.fechaSeleccionada,
-              itemsVenta: this.itemsVenta,
-              tieneObservacion: this.tieneObservacion,
-              observacion: this.observacion
+              itemsVenta: this.itemsVenta
             });
           });
         } else {
@@ -1408,21 +1398,21 @@ tr:hover {
 .button-container {
   display: flex;
   justify-content: center;
-  gap: 15px;
-  margin: 20px 0;
+  gap: 20px;
+  margin-top: 20px;
   flex-wrap: wrap;
 }
 
 .save-button,
 .print-button {
-  padding: 10px 20px;
+  padding: 12px 25px;
   color: white;
   border: none;
-  border-radius: 6px;
+  border-radius: 8px;
   cursor: pointer;
   font-size: 16px;
   transition: all 0.3s ease;
-  min-width: 130px;
+  min-width: 150px;
   text-align: center;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
@@ -1451,15 +1441,12 @@ tr:hover {
   .button-container {
     flex-direction: row;
     gap: 10px;
-    padding: 0 10px;
   }
 
   .save-button,
   .print-button {
-    flex: 1;
-    min-width: unset;
-    padding: 12px 15px;
-    font-size: 14px;
+    min-width: 120px;
+    padding: 10px 20px;
   }
 }
 
@@ -1814,27 +1801,7 @@ tr:hover {
 .observacion-container {
   display: flex;
   align-items: center;
-  gap: 15px;
-}
-
-.checkbox-group {
-  display: flex;
-  align-items: center;
   gap: 8px;
-}
-
-.btn-editar {
-  background-color: #2196F3;
-  color: white;
-  border: none;
-  padding: 8px 16px;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: background-color 0.3s ease;
-}
-
-.btn-editar:hover {
-  background-color: #1976D2;
 }
 
 .modal-overlay {

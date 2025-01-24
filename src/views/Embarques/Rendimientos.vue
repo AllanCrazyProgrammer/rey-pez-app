@@ -35,6 +35,22 @@
             </div>
           </div>
           
+          <!-- Input para el costo -->
+          <div class="costo-input">
+            <div class="costo-container">
+              <input 
+                type="number" 
+                v-model="costosPorMedida[medida]" 
+                @input="guardarCostos"
+                placeholder="Precio"
+                step="0.01"
+              >
+              <span class="costo-final" v-if="costosPorMedida[medida]">
+                Costo Final: ${{ calcularCostoFinal(medida) }}
+              </span>
+            </div>
+          </div>
+          
           <div class="input-group">
             <template v-if="esMedidaMix(medida)">
               <div class="mix-inputs">
@@ -120,7 +136,8 @@ export default {
       nombresMedidasPersonalizados: {},
       mostrarModal: false,
       nota: '',
-      medidaOculta: {}
+      medidaOculta: {},
+      costosPorMedida: {}  // Nuevo objeto para almacenar los costos
     }
   },
 
@@ -150,6 +167,7 @@ export default {
           this.nombresMedidasPersonalizados = this.embarqueData.nombresMedidasPersonalizados || {};
           this.obtenerMedidasUnicas();
           this.medidaOculta = this.embarqueData.medidaOculta || {};
+          this.costosPorMedida = this.embarqueData.costosPorMedida || {};  // Cargar costos guardados
           
           // Inicializar kilosCrudos con los datos de Firestore
           const kilosCrudosGuardados = this.embarqueData.kilosCrudos || {};
@@ -425,6 +443,9 @@ export default {
     },
 
     generarPDF() {
+      // Verificar si hay algún costo ingresado
+      const hayAlgunCosto = Object.values(this.costosPorMedida).some(costo => Number(costo) > 0);
+
       // Preparar los datos para el PDF
       const datosRendimientos = this.medidasUnicas
         .filter(medida => !this.medidaOculta[medida]) // Filtrar medidas ocultas
@@ -439,18 +460,26 @@ export default {
             kilosCrudos = Number(this.kilosCrudos[medida] || 0);
           }
 
+          const costo = Number(this.costosPorMedida[medida]) || 0;
+          const rendimiento = this.getRendimiento(medida);
+          // Solo calcular costoFinal si hay un costo ingresado
+          const costoFinal = costo > 0 ? ((costo * rendimiento) + 20).toFixed(1) : null;
+
           return {
             medida: medida,
             kilosCrudos: kilosCrudos,
             totalEmbarcado: this.obtenerTotalEmbarcado(medida),
-            rendimiento: this.getRendimiento(medida)
+            rendimiento: rendimiento,
+            costo: costo,
+            costoFinal: costoFinal
           };
         });
 
       // Incluir la nota en los datos del embarque
       const embarqueDataConNota = {
         ...this.embarqueData,
-        notaRendimientos: this.embarqueData?.notaRendimientos || ''
+        notaRendimientos: this.embarqueData?.notaRendimientos || '',
+        mostrarColumnaCosto: hayAlgunCosto
       };
 
       // Llamar a la función para generar el PDF con los datos procesados
@@ -527,6 +556,38 @@ export default {
       } catch (error) {
         console.error('Error al guardar estado de ocultación:', error);
       }
+    },
+
+    // Nuevo método para guardar los costos
+    async guardarCostos() {
+      try {
+        const db = getFirestore();
+        const embarqueId = this.$route.params.id;
+        const embarqueRef = doc(db, 'embarques', embarqueId);
+        
+        await updateDoc(embarqueRef, {
+          costosPorMedida: this.costosPorMedida
+        });
+        
+        console.log('Costos guardados correctamente');
+      } catch (error) {
+        console.error('Error al guardar los costos:', error);
+      }
+    },
+
+    // Nuevo método para resetear el costo de una medida
+    resetearCosto(medida) {
+      this.$set(this.costosPorMedida, medida, 0);
+      this.guardarCostos();
+    },
+
+    calcularCostoFinal(medida) {
+      const costo = Number(this.costosPorMedida[medida]) || 0;
+      // Tomamos el rendimiento con 2 decimales
+      const rendimiento = Number(this.getRendimiento(medida).toFixed(2));
+      // Realizar los cálculos con más precisión y mostrar un decimal
+      const resultado = ((costo * rendimiento) + 20);
+      return resultado.toFixed(1);
     }
   },
 
@@ -811,6 +872,26 @@ input {
 .ocultar-control label {
   cursor: pointer;
   user-select: none;
+}
+
+.costo-container {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.costo-final {
+  color: #2c3e50;
+  font-weight: bold;
+  font-size: 1em;
+}
+
+.costo-input input {
+  width: 120px;
+  padding: 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 1em;
 }
 </style>
 
