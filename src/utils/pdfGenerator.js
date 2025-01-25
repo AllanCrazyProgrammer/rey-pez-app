@@ -511,6 +511,11 @@ function calcularKilosCrudosDesdeReporte(producto) {
   return totalKilos;
 }
 
+function extraerMedidaBase(medida) {
+  // Eliminar cualquier texto después de un espacio y convertir a minúsculas
+  return medida.split(' ')[0].toLowerCase();
+}
+
 function agruparProductos(productos) {
   // Ordenar productos por medida y tipo, manteniendo separados los c/h2o con diferentes valores netos
   return productos.sort((a, b) => {
@@ -545,7 +550,7 @@ function generarTablaProductos(productos, estiloCliente, nombreCliente) {
 
   // Definir las columnas del header
   const headerRow = [
-    { text: 'Cantidad', style: 'tableHeader' },
+    { text: 'Kg', style: 'tableHeader' },
     { text: 'Producto', style: 'tableHeader' },
     { text: 'Taras', style: 'tableHeader' }
   ];

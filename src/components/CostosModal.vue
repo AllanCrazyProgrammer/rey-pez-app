@@ -159,7 +159,7 @@
 
 <script>
 import { db } from '@/firebase';
-import { collection, addDoc, query, where, getDocs, orderBy, deleteDoc, doc } from 'firebase/firestore';
+import { collection, addDoc, query, where, getDocs, orderBy, deleteDoc, doc, serverTimestamp, onSnapshot } from 'firebase/firestore';
 
 export default {
   name: 'CostosModal',
@@ -188,7 +188,8 @@ export default {
       historialCostos: [],
       historialesPorMedida: {},
       cargandoHistorial: false,
-      errorHistorial: null
+      errorHistorial: null,
+      unsubscribeCostos: null
     }
   },
 
@@ -198,10 +199,22 @@ export default {
     }
   },
 
+  async created() {
+    // Iniciar la escucha de cambios en precios globales
+    await this.iniciarEscuchaCostos();
+  },
+
+  beforeDestroy() {
+    // Limpiar la suscripción al desmontar el componente
+    if (this.unsubscribeCostos) {
+      this.unsubscribeCostos();
+    }
+  },
+
   watch: {
     showModal(newVal) {
       if (newVal) {
-        this.inicializarCostosLocales()
+        this.inicializarCostosLocales();
       }
     }
   },
@@ -242,25 +255,27 @@ export default {
 
     async actualizarCostos(medida) {
       try {
-        // Primero guardamos el precio actual en el historial
-        const precioAnterior = {
+        // Guardar el nuevo precio en la colección de precios globales
+        const nuevoPrecio = {
           medida: medida,
-          costoBase: this.costosPorMedida[medida]?.costoBase,
-          fecha: this.costosPorMedida[medida]?.fecha
+          costoBase: this.costosLocales[medida].costoBase,
+          fecha: this.costosLocales[medida].fecha,
+          timestamp: serverTimestamp()
         };
 
-        if (precioAnterior.costoBase && precioAnterior.fecha) {
-          await addDoc(collection(db, 'costos'), precioAnterior);
-        }
+        await addDoc(collection(db, 'precios_globales'), nuevoPrecio);
 
-        // Actualizamos el precio actual
-        this.$emit('update:costos', {
-          ...this.costosPorMedida,
-          [medida]: {
-            costoBase: this.costosLocales[medida].costoBase,
-            fecha: this.costosLocales[medida].fecha
-          }
-        });
+        // Guardar en el historial
+        const precioHistorial = {
+          medida: medida,
+          costoBase: this.costosLocales[medida].costoBase,
+          fecha: this.costosLocales[medida].fecha
+        };
+
+        await addDoc(collection(db, 'costos'), precioHistorial);
+
+        // Actualizar precios en productos existentes
+        await this.actualizarPreciosProductos(medida, nuevoPrecio.costoBase);
 
         // Recargamos el historial
         await this.cargarHistorial(medida);
@@ -277,19 +292,17 @@ export default {
       }
 
       try {
-        // Si la medida ya existe, guardamos el precio actual en el historial
-        if (this.costosPorMedida[this.newCost.medida]) {
-          const precioAnterior = {
-            medida: this.newCost.medida,
-            costoBase: this.costosPorMedida[this.newCost.medida].costoBase,
-            fecha: this.costosPorMedida[this.newCost.medida].fecha
-          };
-          
-          if (precioAnterior.costoBase && precioAnterior.fecha) {
-            await addDoc(collection(db, 'costos'), precioAnterior);
-          }
-        }
+        // Guardar el precio actual en la colección de precios globales
+        const precioGlobal = {
+          medida: this.newCost.medida,
+          costoBase: this.newCost.costo,
+          fecha: this.newCost.fecha,
+          timestamp: serverTimestamp()
+        };
 
+        await addDoc(collection(db, 'precios_globales'), precioGlobal);
+
+        // Guardar en el historial
         const costoDoc = {
           medida: this.newCost.medida,
           costoBase: this.newCost.costo,
@@ -303,6 +316,7 @@ export default {
           fecha: this.newCost.fecha
         });
 
+        // Actualizar los costos en el embarque actual
         this.actualizarCostos(this.newCost.medida);
         
         // Limpiar el formulario
@@ -312,11 +326,40 @@ export default {
           fecha: new Date().toISOString().split('T')[0]
         };
 
-        // Recargar el historial
-        await this.cargarHistorial(this.newCost.medida);
       } catch (error) {
         console.error('Error al agregar precio:', error);
         alert('Error al guardar el precio');
+      }
+    },
+
+    async iniciarEscuchaCostos() {
+      try {
+        const db = getFirestore();
+        const preciosRef = collection(db, 'precios_globales');
+        const q = query(preciosRef, orderBy('timestamp', 'desc'));
+        
+        // Crear un listener para cambios en la colección de precios globales
+        this.unsubscribeCostos = onSnapshot(q, (snapshot) => {
+          const preciosActuales = {};
+          
+          snapshot.forEach(doc => {
+            const precio = doc.data();
+            // Solo actualizar si es el precio más reciente para esta medida
+            if (!preciosActuales[precio.medida] || 
+                new Date(precio.fecha) > new Date(preciosActuales[precio.medida].fecha)) {
+              preciosActuales[precio.medida] = {
+                costoBase: precio.costoBase,
+                fecha: precio.fecha
+              };
+            }
+          });
+          
+          // Actualizar los precios locales y emitir el evento de actualización
+          this.costosLocales = preciosActuales;
+          this.$emit('update:costos', preciosActuales);
+        });
+      } catch (error) {
+        console.error('Error al iniciar escucha de costos:', error);
       }
     },
 

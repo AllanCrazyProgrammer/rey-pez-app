@@ -131,7 +131,7 @@
 </template>
 
 <script>
-import { getFirestore, doc, getDoc, updateDoc } from 'firebase/firestore';
+import { getFirestore, doc, getDoc, updateDoc, collection, query, orderBy, onSnapshot } from 'firebase/firestore';
 import { debounce } from 'lodash';
 import { generarPDFRendimientos } from '@/utils/RendimientosPdf';
 import CostosModal from '@/components/CostosModal.vue';
@@ -154,12 +154,14 @@ export default {
       nota: '',
       medidaOculta: {},
       costosPorMedida: {},
-      showCostosModal: false
+      showCostosModal: false,
+      unsubscribePreciosGlobales: null
     }
   },
 
   async created() {
     await this.cargarEmbarque();
+    await this.iniciarEscuchaPreciosGlobales();
     // Aplicar debounce después de definir el método
     this.guardarCambiosEnTiempoReal = debounce(this.guardarCambiosEnTiempoReal, 300);
   },
@@ -565,13 +567,11 @@ export default {
         
         this.costosPorMedida = nuevoCostos;
         
-        await updateDoc(embarqueRef, {
-          costosPorMedida: nuevoCostos
-        });
-        
-        console.log('Costos guardados correctamente');
+        // Ya no necesitamos guardar los costos en el embarque
+        // ya que ahora se manejan globalmente
+        console.log('Costos actualizados correctamente');
       } catch (error) {
-        console.error('Error al guardar los costos:', error);
+        console.error('Error al actualizar los costos:', error);
       }
     },
 
@@ -587,6 +587,31 @@ export default {
         acc[medida] = this.getRendimiento(medida);
         return acc;
       }, {});
+    },
+
+    async iniciarEscuchaPreciosGlobales() {
+      try {
+        const db = getFirestore();
+        const preciosRef = collection(db, 'precios_globales');
+        const q = query(preciosRef, orderBy('timestamp', 'desc'));
+        
+        this.unsubscribePreciosGlobales = onSnapshot(q, (snapshot) => {
+          const preciosActuales = {};
+          
+          snapshot.forEach(doc => {
+            const precio = doc.data();
+            if (!preciosActuales[precio.medida] || 
+                new Date(precio.fecha) > new Date(preciosActuales[precio.medida].fecha)) {
+              preciosActuales[precio.medida] = precio.costoBase;
+            }
+          });
+          
+          // Actualizar los precios locales
+          this.costosPorMedida = preciosActuales;
+        });
+      } catch (error) {
+        console.error('Error al iniciar escucha de precios globales:', error);
+      }
     }
   },
 
@@ -600,6 +625,9 @@ export default {
   },
 
   beforeDestroy() {
+    if (this.unsubscribePreciosGlobales) {
+      this.unsubscribePreciosGlobales();
+    }
     if (this.guardarCambiosEnTiempoReal.cancel) {
       this.guardarCambiosEnTiempoReal.cancel();
     }
