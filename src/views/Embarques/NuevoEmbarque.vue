@@ -544,14 +544,10 @@
         </div>
       </div>
     </div>
-    <!-- Agregar el componente de usuarios activos -->
-    <div class="usuarios-activos">
-      <h4>Usuarios Activos:</h4>
-      <div class="usuarios-lista">
-        <div v-for="usuario in usuariosActivos" :key="usuario.userId" class="usuario-activo">
-          <span class="usuario-nombre">{{ usuario.username }}</span>
-          <span class="usuario-status" :class="usuario.status">●</span>
-        </div>
+    <!-- Reemplazar el componente de usuarios activos por el total de taras -->
+    <div class="total-taras-flotante">
+      <div class="total-taras-contenido">
+        <span class="total-taras-valor">{{ calcularTotalTaras() }}T</span>
       </div>
     </div>
   </div>
@@ -4450,6 +4446,30 @@ input[type="tel"] {
 
 .ml-2 {
   margin-left: 0.5rem;
+}
+
+/* Reemplazar los estilos de usuarios-activos por estos nuevos */
+.total-taras-flotante {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  background-color: #2c3e50;
+  padding: 10px 15px;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  z-index: 1000;
+}
+
+.total-taras-contenido {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.total-taras-valor {
+  color: white;
+  font-size: 1.2rem;
+  font-weight: bold;
 }
 
 .usuarios-activos {
