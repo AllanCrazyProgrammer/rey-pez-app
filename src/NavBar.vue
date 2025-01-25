@@ -36,6 +36,9 @@
           <b-nav-item>
             <router-link to="/embarques-menu" class="nav-link">Embarques</router-link>
           </b-nav-item>
+          <b-nav-item>
+            <router-link to="/procesos" class="nav-link">Procesos</router-link>
+          </b-nav-item>
         </b-navbar-nav>
       </b-collapse>
     </b-navbar>

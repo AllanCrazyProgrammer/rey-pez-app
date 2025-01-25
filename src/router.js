@@ -28,6 +28,8 @@ import CuentaFletes from '@/views/Embarques/CuentaFletes.vue';
 import Login from './views/Login.vue';
 import OtilioCuentasMenu from '@/views/CuentasClientes/OtilioCuentasMenu.vue'
 import CuentasOtilio from '@/views/CuentasClientes/CuentasOtilio.vue'
+import ProcesosMenu from '@/views/Procesos/ProcesosMenu.vue'
+import Preparacion from '@/views/Procesos/Preparacion.vue'
 
 Vue.use(Router);
 
@@ -225,6 +227,16 @@ const routes = [
     path: '/cuentas-otilio/:id?',
     name: 'CuentasOtilio',
     component: CuentasOtilio
+  },
+  {
+    path: '/procesos',
+    name: 'ProcesosMenu',
+    component: ProcesosMenu
+  },
+  {
+    path: '/procesos/preparacion',
+    name: 'Preparacion',
+    component: Preparacion
   }
 ];
 
