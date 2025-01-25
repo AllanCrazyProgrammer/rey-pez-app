@@ -1451,8 +1451,10 @@ export default {
       }, 0);
     },
     totalBolsasReportadas(producto) {
-      return (producto.reporteBolsas || []).reduce((total, bolsa) => {
-        return total + (parseInt(bolsa) || 0);
+      return (producto.reporteTaras || []).reduce((total, tara, index) => {
+        const taraNum = parseInt(tara) || 0;
+        const bolsaNum = parseInt(producto.reporteBolsas[index]) || 0;
+        return total + (taraNum * bolsaNum);
       }, 0);
     },
     coincideTaras(producto) {
