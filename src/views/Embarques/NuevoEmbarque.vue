@@ -294,6 +294,7 @@
                     @focus="$event.target.select()"
                   >
                 </div>
+                <div style="height: 38px"></div>
                 <div class="total">Total: {{ totalKilos(producto) }}</div>
               </div>
             </div>
@@ -1104,15 +1105,6 @@ export default {
     },
     eliminarReporteTara(producto, index) {
       producto.reporteTaras.splice(index, 1);
-      producto.reporteBolsas.splice(index, 1);
-    },
-    agregarReporteBolsa(producto) {
-      if (!Array.isArray(producto.reporteBolsas)) {
-        producto.reporteBolsas = [];
-      }
-      producto.reporteBolsas.push('');
-    },
-    eliminarReporteBolsa(producto, index) {
       producto.reporteBolsas.splice(index, 1);
     },
     obtenerTipoProducto(producto) {
