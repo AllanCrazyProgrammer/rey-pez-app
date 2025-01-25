@@ -1,7 +1,7 @@
 <template>
   <div class="nuevo-embarque-container">
     <div class="nuevo-embarque">
-      <h1>{{ modoEdicion ? 'Editar Embarque' : 'Nuevo Embarque' }}</h1>
+      <h1>{{ modoEdicion ? 'Embarque' : 'Nuevo Embarque' }}</h1>
       <div class="botones">
         <button @click="volverAEmbarquesMenu" class="btn-volver">
           <i class="fas fa-arrow-left"></i> Volver a Embarques Menu
@@ -1927,6 +1927,7 @@ export default {
     generarResumenTarasPDF() {
       const embarqueData = {
         fecha: this.embarque.fecha,
+        cargaCon: this.embarque.cargaCon,
         productos: this.embarque.productos,
         clienteCrudos: this.clienteCrudos
       };

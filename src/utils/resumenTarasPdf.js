@@ -25,12 +25,16 @@ export function generarResumenTarasPDF(embarqueData, clientesDisponibles) {
   const fecha = fechaEmbarque.toLocaleDateString();
   doc.text(`Fecha: ${fecha}`, 14, 30);
 
+  // Agregar información de quién carga
+  doc.setFontSize(18);
+  doc.text(`Carga con: ${embarqueData.cargaCon || 'No especificado'}`, 14, 40);
+
   // Preparar los datos para la tabla
   const datos = prepararDatosTabla(embarqueData, clientesDisponibles);
 
   // Actualizar configuración de la tabla
   doc.autoTable({
-    startY: 40,
+    startY: 50,
     head: [['Cliente', 'Abiertas', 'Cerradas', 'Total']],
     body: datos.filas,
     foot: [['Total', datos.totales.abiertas, datos.totales.cerradas, datos.totales.total]],
@@ -70,7 +74,7 @@ export function generarResumenTarasPDF(embarqueData, clientesDisponibles) {
       const pageHeight = pageSize.height ? pageSize.height : pageSize.getHeight();
       doc.setFontSize(8);
       doc.setTextColor(55, 96, 176);
-      doc.text('© 2024 Rey Pez - Tampico, Tamps.', pageSize.width / 2, pageHeight - 10, { align: 'center' });
+      doc.text('© 2025 Rey Pez - Tampico, Tamps.', pageSize.width / 2, pageHeight - 10, { align: 'center' });
     }
   });
 
