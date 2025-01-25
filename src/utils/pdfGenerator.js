@@ -539,17 +539,20 @@ function agruparProductos(productos) {
 }
 
 function generarTablaProductos(productos, estiloCliente, nombreCliente) {
-  // Verificar si algún producto tiene notas
+  // Verificar si algún producto tiene notas o hilos
   const hayNotas = productos.some(producto => producto.nota && producto.nota.trim() !== '');
+  const hayHilos = productos.some(producto => producto.hilos);
 
-  // Definir las columnas del header según si hay notas o no
+  // Definir las columnas del header
   const headerRow = [
     { text: 'Cantidad', style: 'tableHeader' },
     { text: 'Producto', style: 'tableHeader' },
     { text: 'Taras', style: 'tableHeader' }
   ];
 
-  // Agregar columna de notas solo si hay notas
+  if (hayHilos) {
+    headerRow.push({ text: 'Hilos', style: 'tableHeader' });
+  }
   if (hayNotas) {
     headerRow.push({ text: 'Notas', style: 'tableHeader' });
   }
@@ -563,14 +566,15 @@ function generarTablaProductos(productos, estiloCliente, nombreCliente) {
     const tarasTotales = tarasNormales + tarasExtra;
     let tarasTexto = `${tarasTotales} ${combinarTarasBolsas(producto.reporteTaras, producto.reporteBolsas)}`;
 
-    // Crear la fila base
     const row = [
       `${totalKilos(producto, nombreCliente)} kg`,
       formatearProducto(producto),
       tarasTexto
     ];
 
-    // Agregar columna de nota solo si hay notas en algún producto
+    if (hayHilos) {
+      row.push(producto.hilos || '');
+    }
     if (hayNotas) {
       row.push({
         text: producto.nota || '',
@@ -581,10 +585,16 @@ function generarTablaProductos(productos, estiloCliente, nombreCliente) {
     body.push(row);
   });
 
-  // Definir los anchos de columna según si hay notas o no
-  const widths = hayNotas 
-    ? ['20%', '30%', '30%', '20%']  // Con columna de notas
-    : ['25%', '35%', '40%'];        // Sin columna de notas
+  let widths;
+  if (hayHilos && hayNotas) {
+    widths = ['15%', '25%', '25%', '15%', '20%'];
+  } else if (hayHilos) {
+    widths = ['20%', '30%', '30%', '20%'];
+  } else if (hayNotas) {
+    widths = ['20%', '30%', '30%', '20%'];
+  } else {
+    widths = ['25%', '35%', '40%'];
+  }
 
   return {
     table: {
@@ -880,7 +890,7 @@ function combinarProductosSimilares(productos) {
     if (!productosAgrupados[clave]) {
       productosAgrupados[clave] = {
         ...producto,
-        medida: medidaNombre, // Asegurarnos de mantener el nombre alternativo
+        medida: medidaNombre,
         kilos: [...producto.kilos],
         taras: [...producto.taras],
         tarasExtra: [...(producto.tarasExtra || [])],
@@ -888,7 +898,7 @@ function combinarProductosSimilares(productos) {
         reporteBolsas: [...(producto.reporteBolsas || [])]
       };
     } else {
-      // Combinar arrays solo si son el mismo producto exacto
+      // Combinar los kilos y taras
       productosAgrupados[clave].kilos.push(...producto.kilos);
       productosAgrupados[clave].taras.push(...producto.taras);
       if (producto.tarasExtra) {
@@ -900,112 +910,8 @@ function combinarProductosSimilares(productos) {
       if (producto.reporteBolsas) {
         productosAgrupados[clave].reporteBolsas.push(...producto.reporteBolsas);
       }
-      
-      // Mantener el precio más alto si existe
-      if (producto.precio) {
-        productosAgrupados[clave].precio = Math.max(
-          productosAgrupados[clave].precio || 0,
-          producto.precio
-        );
-      }
-      
-      // Concatenar hilos si existen
-      if (producto.hilos) {
-        productosAgrupados[clave].hilos = productosAgrupados[clave].hilos 
-          ? `${productosAgrupados[clave].hilos}, ${producto.hilos}`
-          : producto.hilos;
-      }
-
-      // Concatenar notas si existen
-      if (producto.nota) {
-        productosAgrupados[clave].nota = productosAgrupados[clave].nota
-          ? `${productosAgrupados[clave].nota}, ${producto.nota}`
-          : producto.nota;
-      }
     }
   });
-
+  
   return Object.values(productosAgrupados);
 }
-
-// Nueva función para extraer la medida base
-function extraerMedidaBase(medida) {
-  if (!medida) return '';
-  // Buscar patrones como "51/60", "36/40", etc.
-  const match = medida.match(/\d+\/\d+/);
-  return match ? match[0] : medida;
-}
-
-// Agregar esta función auxiliar
-function formatearMedida(medida) {
-  if (medida && medida.toLowerCase().includes('especial')) {
-    return `${medida} especial`; // Agrega "(ESP)" a las medidas especiales
-  }
-  return medida;
-}
-
-// Modificar la función que genera las filas de la tabla
-function generarFilasTabla(productos, juntarMedidas = false) {
-  let filas = [];
-  let medidaActual = '';
-  let acumulado = {
-    taras: 0,
-    kilos: 0,
-    precio: null,
-    hilos: null
-  };
-
-  productos.forEach((producto, index) => {
-    const medidaFormateada = formatearMedida(producto.medida);
-    
-    if (juntarMedidas) {
-      if (medidaFormateada !== medidaActual) {
-        // Si hay acumulado anterior, agregarlo como fila
-        if (medidaActual) {
-          filas.push([
-            medidaActual,
-            acumulado.taras.toString(),
-            acumulado.kilos.toFixed(1),
-            acumulado.precio ? `$${acumulado.precio}` : '',
-            acumulado.hilos || ''
-          ]);
-        }
-        // Iniciar nuevo acumulado
-        medidaActual = medidaFormateada;
-        acumulado = {
-          taras: calcularTotalTaras(producto),
-          kilos: calcularTotalKilos(producto),
-          precio: producto.precio,
-          hilos: producto.hilos
-        };
-      } else {
-        // Sumar al acumulado actual
-        acumulado.taras += calcularTotalTaras(producto);
-        acumulado.kilos += calcularTotalKilos(producto);
-      }
-    } else {
-      // Si no se están juntando medidas, agregar cada producto como una fila individual
-      filas.push([
-        medidaFormateada,
-        calcularTotalTaras(producto).toString(),
-        calcularTotalKilos(producto).toFixed(1),
-        producto.precio ? `$${producto.precio}` : '',
-        producto.hilos || ''
-      ]);
-    }
-  });
-
-  // Agregar el último acumulado si estamos juntando medidas
-  if (juntarMedidas && medidaActual) {
-    filas.push([
-      medidaActual,
-      acumulado.taras.toString(),
-      acumulado.kilos.toFixed(1),
-      acumulado.precio ? `$${acumulado.precio}` : '',
-      acumulado.hilos || ''
-    ]);
-  }
-
-  return filas;
-}
-
