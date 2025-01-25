@@ -293,9 +293,7 @@
                     :size="String(producto.kilos[kiloIndex] || '').length || 1"
                     @focus="$event.target.select()"
                   >
-                  <button type="button" @click="eliminarKilo(producto, kiloIndex)" class="btn btn-danger btn-sm">-</button>
                 </div>
-                <button type="button" @click="agregarKilo(producto)" class="btn btn-success btn-sm agregar-kilo">+</button>
                 <div class="total">Total: {{ totalKilos(producto) }}</div>
               </div>
             </div>
@@ -325,14 +323,10 @@
                     class="form-control reporte-input"
                     @focus="$event.target.select()"
                   >
-                  <button type="button" @click="eliminarReporteBolsa(producto, index)" class="btn btn-danger btn-sm">-</button>
                 </div>
-                <button type="button" @click="agregarReporteBolsa(producto)" class="btn btn-success btn-sm">+</button>
-                <div class="totales-reporte">
-          
-                  <div class="total-bolsas-reporte">
-                    Bolsas: {{ calcularTotalBolsas(producto) }}
-                  </div>
+                <div style="height: 38px"></div>
+                <div class="total-bolsas-reporte">
+                  Bolsas: {{ totalBolsasReportadas(producto) }}
                 </div>
               </div>
             </div>
@@ -804,14 +798,10 @@ export default {
     },
     agregarTara(producto) {
       producto.taras.push(null);
+      producto.kilos.push(null);
     },
     eliminarTara(producto, index) {
       producto.taras.splice(index, 1);
-    },
-    agregarKilo(producto) {
-      producto.kilos.push(null);
-    },
-    eliminarKilo(producto, index) {
       producto.kilos.splice(index, 1);
     },
     totalTaras(producto) {
@@ -1104,12 +1094,17 @@ export default {
     },
     agregarReporteTara(producto) {
       if (!Array.isArray(producto.reporteTaras)) {
-        producto.reporteTaras = [];
+        this.$set(producto, 'reporteTaras', []);
       }
-      producto.reporteTaras.push('');
+      if (!Array.isArray(producto.reporteBolsas)) {
+        this.$set(producto, 'reporteBolsas', []);
+      }
+      producto.reporteTaras.push(null);
+      producto.reporteBolsas.push(null);
     },
     eliminarReporteTara(producto, index) {
       producto.reporteTaras.splice(index, 1);
+      producto.reporteBolsas.splice(index, 1);
     },
     agregarReporteBolsa(producto) {
       if (!Array.isArray(producto.reporteBolsas)) {
@@ -1463,7 +1458,11 @@ export default {
         return total + (parseInt(tara) || 0);
       }, 0);
     },
-
+    totalBolsasReportadas(producto) {
+      return (producto.reporteBolsas || []).reduce((total, bolsa) => {
+        return total + (parseInt(bolsa) || 0);
+      }, 0);
+    },
     coincideTaras(producto) {
       const totalReportadas = this.totalTarasReportadas(producto);
       const totalRegistradas = this.totalTaras(producto);
@@ -1687,12 +1686,6 @@ export default {
         }
       }
       return 0;
-    },
-
-    totalBolsasReportadas(producto) {
-      return (producto.reporteBolsas || []).reduce((total, bolsa) => {
-        return total + (parseInt(bolsa) || 0);
-      }, 0);
     },
 
     calcularKilosCrudo() {
@@ -2736,6 +2729,7 @@ export default {
   border-top: 2px solid #ddd;
   padding-top: 5px;
   color: #333;
+  text-align: center;
 }
 
 .reporte-taras-bolsas {
@@ -3095,6 +3089,14 @@ export default {
 .total-taras-reporte.no-coincide {
   background-color: #f8d7da;
   color: #721c24;
+}
+
+.total-bolsas-reporte {
+  font-weight: bold;
+  padding: 5px;
+  border-radius: 5px;
+  background-color: #e2e3e5;
+  color: #383d41;
 }
 
 .agregar-tara-extra {
