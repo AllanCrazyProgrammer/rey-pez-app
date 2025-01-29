@@ -199,12 +199,19 @@ function generarTablaRendimientos(datosRendimientos, nombresMedidasPersonalizado
     return acc;
   }, {});
 
+  // Verificar si hay al menos un costo final con valor
+  const hayCostosFinales = Object.values(datosAgrupados).some(dato => 
+    dato.costoFinal && dato.costoFinal !== '0' && dato.costoFinal !== 0
+  );
+
+  const mostrarColumnaCosto = embarqueData.mostrarColumnaCosto && hayCostosFinales;
+
   const body = [
     [
       { text: 'Kilos en Crudo', style: 'tableHeader' },
       { text: 'Medida', style: 'tableHeader' },
       { text: 'Rendimiento', style: 'tableHeader' },
-      ...(embarqueData.mostrarColumnaCosto ? [{ text: 'Costo Final', style: 'tableHeader' }] : [])
+      ...(mostrarColumnaCosto ? [{ text: 'Costo Final', style: 'tableHeader' }] : [])
     ],
     ...Object.values(datosAgrupados).map(dato => {
       const rendimiento = dato.totalEmbarcado > 0 ? dato.kilosCrudos / dato.totalEmbarcado : 0;
@@ -224,7 +231,7 @@ function generarTablaRendimientos(datosRendimientos, nombresMedidasPersonalizado
           text: `(${formatearRendimiento(rendimiento)})`,
           style: rendimientoStyle
         },
-        ...(embarqueData.mostrarColumnaCosto ? [{
+        ...(mostrarColumnaCosto ? [{
           text: dato.costoFinal ? `$${Number(dato.costoFinal).toFixed(1)}` : '',
           style: 'costoStyle'
         }] : [])
@@ -235,7 +242,7 @@ function generarTablaRendimientos(datosRendimientos, nombresMedidasPersonalizado
   return {
     table: {
       headerRows: 1,
-      widths: embarqueData.mostrarColumnaCosto ? ['*', '*', '*', '*'] : ['*', '*', '*'],
+      widths: mostrarColumnaCosto ? ['*', '*', '*', '*'] : ['*', '*', '*'],
       body: body
     },
     layout: {
