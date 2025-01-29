@@ -74,6 +74,40 @@
         <button type="button" @click="undo" :disabled="undoStack.length <= 1" class="btn btn-secondary btn-sm">Deshacer</button>
         <button type="button" @click="redo" :disabled="redoStack.length === 0" class="btn btn-secondary btn-sm">Rehacer</button>
       </div>
+      <div class="botones-notas-clientes">
+        <button 
+          type="button" 
+          @click="generarNotaVenta('1')" 
+          class="btn-nota-cliente"
+          style="background-color: #3498db;"
+        >
+          Joselito
+        </button>
+        <button 
+          type="button" 
+          @click="generarNotaVenta('2')" 
+          class="btn-nota-cliente"
+          style="background-color: #e74c3c;"
+        >
+          Catarro
+        </button>
+        <button 
+          type="button" 
+          @click="generarNotaVenta('3')" 
+          class="btn-nota-cliente"
+          style="background-color: #f1c40f; color: black;"
+        >
+          Otilio
+        </button>
+        <button 
+          type="button" 
+          @click="generarNotaVenta('4')" 
+          class="btn-nota-cliente"
+          style="background-color: #2ecc71;"
+        >
+          Ozuna
+        </button>
+      </div>
     </div>
       
     <form @submit.prevent="guardarEmbarque" @keydown.enter.prevent>
@@ -4536,5 +4570,27 @@ input[type="tel"] {
 .usuario-status::before {
   content: "●";
   margin-right: 5px;
+}
+
+.botones-notas-clientes {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin: 10px 0;
+}
+
+.btn-nota-cliente {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 4px;
+  color: white;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.btn-nota-cliente:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
 }
 </style>
