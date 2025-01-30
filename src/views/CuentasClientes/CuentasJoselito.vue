@@ -1115,15 +1115,75 @@ export default {
 
     async guardarCuenta() {
       try {
+        const id = this.$route.params.id;
+        const isEditing = this.$route.query.edit === 'true';
+
+        // Preparar los datos de la cuenta
         const cuentaData = {
-          // ... existing code ...
+          fecha: this.fechaSeleccionada,
+          items: this.items.map(item => ({
+            kilos: Number(item.kilos) || 0,
+            medida: String(item.medida || ''),
+            costo: Number(item.costo) || 0,
+            total: Number(item.kilos * item.costo) || 0
+          })),
+          itemsVenta: this.itemsVenta.map(item => ({
+            kilosVenta: Number(item.kilosVenta) || 0,
+            medida: String(item.medida || ''),
+            precioVenta: Number(item.precioVenta) || 0,
+            totalVenta: Number(item.kilosVenta * item.precioVenta) || 0,
+            ganancia: Number(item.ganancia) || 0
+          })),
+          saldoAcumuladoAnterior: Number(this.saldoAcumuladoAnterior) || 0,
+          cobros: this.cobros,
+          abonos: this.abonos,
+          totalGeneral: Number(this.totalGeneral) || 0,
+          totalGeneralVenta: Number(this.totalGeneralVenta) || 0,
+          totalDia: Number(this.totalDiaActual) || 0,
+          nuevoSaldoAcumulado: Number(this.nuevoSaldoAcumulado) || 0,
+          gananciaDelDia: Number(this.gananciaDelDia) || 0,
+          estadoPagado: Boolean(this.totalDiaActual <= 0),
           tieneObservacion: this.tieneObservacion,
           observacion: this.observacion,
+          ultimaActualizacion: new Date().toISOString()
         };
-        // ... rest of the existing guardarCuenta code ...
+
+        let docRef;
+        
+        if (id && isEditing) {
+          // Actualizar documento existente
+          docRef = doc(db, 'cuentasJoselito', id);
+          await updateDoc(docRef, cuentaData);
+          console.log('Documento actualizado exitosamente:', id);
+        } else {
+          // Crear nuevo documento
+          docRef = await addDoc(collection(db, 'cuentasJoselito'), cuentaData);
+          console.log('Nuevo documento creado:', docRef.id);
+          
+          // Actualizar URL con el nuevo ID
+          await this.$router.push({
+            name: 'CuentasJoselito',
+            params: { id: docRef.id },
+            query: { edit: 'true' }
+          });
+        }
+
+        // Verificar que los datos se guardaron correctamente
+        const savedDoc = await getDoc(docRef);
+        if (!savedDoc.exists()) {
+          throw new Error('Error al verificar el documento guardado');
+        }
+
+        // Actualizar cuentas posteriores
+        await this.actualizarCuentasPosteriores(this.fechaSeleccionada);
+
+        alert('Cuenta guardada exitosamente');
+        return docRef.id;
+
       } catch (error) {
         console.error('Error al guardar la cuenta:', error);
-        alert('Error al guardar la cuenta');
+        alert('Error al guardar la cuenta: ' + error.message);
+        throw error;
       }
     },
 
