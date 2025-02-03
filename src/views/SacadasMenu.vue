@@ -9,6 +9,9 @@
       <router-link to="/gestionar-productos" class="action-button">
         Gestionar Productos
       </router-link>
+      <button @click="showHistorialModal" class="action-button">
+        Ver Historial de Productos
+      </button>
     </div>
 
     <div class="sacadas-list">
@@ -45,6 +48,13 @@
         <button @click="nextPage" :disabled="currentPage === totalPages">Siguiente</button>
       </div>
     </div>
+
+    <HistorialProductoModal 
+      :is-open="isHistorialModalOpen"
+      :proveedores="proveedores"
+      :medidas="medidas"
+      @close="closeHistorialModal"
+    />
   </div>
 </template>
 
@@ -53,15 +63,22 @@ import { formatDate, parseDate } from '@/utils/dateUtils';
 import { db } from '@/firebase';
 import { collection, getDocs, query, orderBy, deleteDoc, doc } from 'firebase/firestore';
 import moment from 'moment'; // Import Moment.js
+import HistorialProductoModal from '@/components/HistorialProductoModal.vue';
 
 export default {
   name: 'SacadasMenu',
+  components: {
+    HistorialProductoModal
+  },
   data() {
     return {
       sacadas: [],
       isLoading: true,
       currentPage: 1,
-      itemsPerPage: 10
+      itemsPerPage: 10,
+      isHistorialModalOpen: false,
+      proveedores: [],
+      medidas: []
     };
   },
   computed: {
@@ -138,10 +155,36 @@ export default {
       if (this.currentPage < this.totalPages) {
         this.currentPage++;
       }
+    },
+    async loadProveedores() {
+      try {
+        const querySnapshot = await getDocs(collection(db, 'proveedores'));
+        this.proveedores = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      } catch (error) {
+        console.error('Error al cargar proveedores:', error);
+      }
+    },
+    async loadMedidas() {
+      try {
+        const querySnapshot = await getDocs(collection(db, 'medidas'));
+        this.medidas = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      } catch (error) {
+        console.error('Error al cargar medidas:', error);
+      }
+    },
+    showHistorialModal() {
+      this.isHistorialModalOpen = true;
+    },
+    closeHistorialModal() {
+      this.isHistorialModalOpen = false;
     }
   },
-  mounted() {
-    this.loadSacadas();
+  async mounted() {
+    await Promise.all([
+      this.loadSacadas(),
+      this.loadProveedores(),
+      this.loadMedidas()
+    ]);
   }
 };
 </script>
