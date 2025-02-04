@@ -23,9 +23,18 @@
           </transition>
         </div>
       </div>
-      <button @click="mostrarModalNuevoDia" class="btn-nuevo">
-        <i class="fas fa-plus"></i> Nuevo Día
-      </button>
+      <div class="header-actions">
+        <button @click="mostrarModalNuevoDia" class="btn-nuevo">
+          <i class="fas fa-plus"></i> Nuevo Día
+        </button>
+        <button 
+          v-if="diaSeleccionado" 
+          @click="confirmarBorrarDia(diaSeleccionado)" 
+          class="btn-eliminar-dia"
+        >
+          <i class="fas fa-trash"></i> Eliminar Día
+        </button>
+      </div>
     </div>
 
     <!-- Tabla de medidas (solo se muestra si hay un día seleccionado) -->
@@ -510,6 +519,11 @@ export default {
   font-size: clamp(1.5rem, 4vw, 2rem);
 }
 
+.header-actions {
+  display: flex;
+  gap: 10px;
+}
+
 .btn-nuevo {
   background: linear-gradient(135deg, #2980b9, #3498db);
   color: white;
@@ -526,6 +540,25 @@ export default {
 
 .btn-nuevo:hover {
   background: linear-gradient(135deg, #3498db, #2980b9);
+  transform: translateY(-2px);
+}
+
+.btn-eliminar-dia {
+  background: linear-gradient(135deg, #e74c3c, #c0392b);
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 5px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.3s ease;
+  white-space: nowrap;
+}
+
+.btn-eliminar-dia:hover {
+  background: linear-gradient(135deg, #c0392b, #e74c3c);
   transform: translateY(-2px);
 }
 
@@ -709,6 +742,16 @@ th, td {
   .header {
     flex-direction: column;
     gap: 15px;
+  }
+
+  .header-actions {
+    width: 100%;
+    flex-direction: column;
+  }
+
+  .btn-eliminar-dia {
+    width: 100%;
+    justify-content: center;
   }
 
   .btn-nuevo {
