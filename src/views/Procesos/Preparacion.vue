@@ -1,136 +1,144 @@
 <template>
   <div class="preparacion-container">
     <div class="header">
-      <h1>Preparación</h1>
+      <div class="header-left">
+        <h1>Preparación</h1>
+        <div class="dias-dropdown">
+          <button @click="toggleDiasList" class="dropdown-button">
+            {{ diaSeleccionado ? formatearFecha(diaSeleccionado.fecha) : 'Seleccionar Día' }}
+            <i :class="['fas', diasListOpen ? 'fa-chevron-up' : 'fa-chevron-down']"></i>
+          </button>
+          <transition name="slide">
+            <div v-if="diasListOpen" class="dias-dropdown-content">
+              <div 
+                v-for="dia in diasOrdenados" 
+                :key="dia.id" 
+                class="dia-option"
+                :class="{ 'selected': diaSeleccionado && diaSeleccionado.id === dia.id }"
+                @click="seleccionarDia(dia)"
+              >
+                {{ formatearFecha(dia.fecha) }}
+              </div>
+            </div>
+          </transition>
+        </div>
+      </div>
       <button @click="mostrarModalNuevoDia" class="btn-nuevo">
         <i class="fas fa-plus"></i> Nuevo Día
       </button>
     </div>
 
-    <!-- Lista de días -->
-    <div class="dias-list" v-if="dias.length > 0">
-      <div v-for="dia in diasOrdenados" :key="dia.id" class="dia-card">
-        <div class="dia-header">
-          <h3>{{ formatearFecha(dia.fecha) }}</h3>
-          <div class="dia-actions">
-            <button @click="confirmarBorrarDia(dia)" class="btn-delete">
-              <i class="fas fa-trash"></i>
-            </button>
-          </div>
-        </div>
-        
-        <!-- Tabla de medidas -->
-        <div class="tabla-container">
-          <table>
-            <thead>
-              <tr>
-                <th>Medida</th>
-                <th>Proveedor</th>
-                <th>Tinas/Baños</th>
-                <th>Cajas</th>
-                <th>Cal</th>
-                <th>Sal</th>
-                <th>%</th>
-                <th>Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="(medida, index) in dia.medidas" :key="index">
-                <td>
-                  <select 
-                    v-model="medida.medida" 
-                    class="form-control medida-select"
-                    @change="guardarCambios(dia)"
-                  >
-                    <option value="">Seleccionar medida</option>
-                    <option v-for="m in medidasDisponibles" :key="m" :value="m">
-                      {{ m }}
-                    </option>
-                  </select>
-                </td>
-                <td>
-                  <select 
-                    v-model="medida.proveedor" 
-                    class="form-control proveedor-select"
-                    @change="guardarCambios(dia)"
-                  >
-                    <option value="">Sin proveedor</option>
-                    <option v-for="p in proveedoresDisponibles" :key="p" :value="p">
-                      {{ p }}
-                    </option>
-                  </select>
-                </td>
-                <td>
-                  <input 
-                    type="number" 
-                    v-model="medida.tinas" 
-                    placeholder=""
-                    @change="guardarCambios(dia)"
-                    class="form-control"
-                  >
-                </td>
-                <td>
-                  <select 
-                    v-model="medida.cajas" 
-                    class="form-control"
-                    @change="guardarCambios(dia)"
-                  >
-                    <option value="">Seleccionar</option>
-                    <option v-for="n in 25" :key="n" :value="n">{{ n }}</option>
-                  </select>
-                </td>
-                <td>
-                  <select 
-                    v-model="medida.cal" 
-                    class="form-control"
-                    @change="guardarCambios(dia)"
-                  >
-                    <option value="">Seleccionar</option>
-                    <option v-for="c in calDisponible" :key="c" :value="c">{{ c }}</option>
-                  </select>
-                </td>
-                <td>
-                  <select 
-                    v-model="medida.sal" 
-                    class="form-control"
-                    @change="guardarCambios(dia)"
-                  >
-                    <option value="">Seleccionar</option>
-                    <option v-for="s in salDisponible" :key="s" :value="s">{{ s }}</option>
-                  </select>
-                </td>
-                <td>
-                  <input 
-                    type="text" 
-                    v-model="medida.porcentaje" 
-                    placeholder=""
-                    @change="guardarCambios(dia)"
-                    class="form-control porcentaje-input"
-                  >
-                </td>
-                <td>
-                  <button 
-                    @click="eliminarMedidaExistente(dia, index)" 
-                    class="btn-delete"
-                    v-if="dia.medidas.length > 1"
-                  >
-                    <i class="fas fa-trash"></i>
-                  </button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-          
-          <button @click="agregarMedidaExistente(dia)" class="btn-agregar">
-            <i class="fas fa-plus"></i> Agregar Medida
-          </button>
-        </div>
-      </div>
+    <!-- Tabla de medidas (solo se muestra si hay un día seleccionado) -->
+    <div v-if="diaSeleccionado" class="tabla-container">
+      <table>
+        <thead>
+          <tr>
+            <th>Medida</th>
+            <th>Proveedor</th>
+            <th>Tinas/Baños</th>
+            <th>Cajas/Kg</th>
+            <th>Cal</th>
+            <th>Sal</th>
+            <th>%</th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="(medida, index) in diaSeleccionado.medidas" :key="index">
+            <td>
+              <select 
+                v-model="medida.medida" 
+                class="form-control medida-select"
+                @change="guardarCambios(diaSeleccionado)"
+              >
+                <option value="">Seleccionar medida</option>
+                <option v-for="m in medidasDisponibles" :key="m" :value="m">
+                  {{ m }}
+                </option>
+              </select>
+            </td>
+            <td>
+              <select 
+                v-model="medida.proveedor" 
+                class="form-control proveedor-select"
+                @change="guardarCambios(diaSeleccionado)"
+              >
+                <option value="">Sin proveedor</option>
+                <option v-for="p in proveedoresDisponibles" :key="p" :value="p">
+                  {{ p }}
+                </option>
+              </select>
+            </td>
+            <td>
+              <select 
+                v-model="medida.tinas" 
+                class="form-control"
+                @change="guardarCambios(diaSeleccionado)"
+              >
+                <option value="">Seleccionar</option>
+                <option value="Tina">Tina</option>
+                <option value="Baño">Baño</option>
+              </select>
+            </td>
+            <td>
+              <input 
+                type="number" 
+                v-model="medida.cajas" 
+                placeholder=""
+                @change="guardarCambios(diaSeleccionado)"
+                class="form-control"
+              >
+            </td>
+            <td>
+              <select 
+                v-model="medida.cal" 
+                class="form-control"
+                @change="guardarCambios(diaSeleccionado)"
+              >
+                <option value="">Seleccionar</option>
+                <option v-for="c in calDisponible" :key="c" :value="c">{{ c }}</option>
+              </select>
+            </td>
+            <td>
+              <select 
+                v-model="medida.sal" 
+                class="form-control"
+                @change="guardarCambios(diaSeleccionado)"
+              >
+                <option value="">Seleccionar</option>
+                <option v-for="s in salDisponible" :key="s" :value="s">{{ s }}</option>
+              </select>
+            </td>
+            <td>
+              <input 
+                type="text" 
+                v-model="medida.porcentaje" 
+                placeholder=""
+                @change="guardarCambios(diaSeleccionado)"
+                class="form-control porcentaje-input"
+              >
+            </td>
+            <td>
+              <button 
+                @click="eliminarMedidaExistente(diaSeleccionado, index)" 
+                class="btn-delete"
+                v-if="diaSeleccionado.medidas.length > 1"
+              >
+                <i class="fas fa-trash"></i>
+              </button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      
+      <button @click="agregarMedidaExistente(diaSeleccionado)" class="btn-agregar">
+        <i class="fas fa-plus"></i> Agregar Medida
+      </button>
     </div>
 
-    <!-- Mensaje cuando no hay días -->
-    <div v-else class="no-dias">
-      <p>No hay días registrados. Comienza creando uno nuevo.</p>
+    <!-- Mensaje cuando no hay día seleccionado -->
+    <div v-else class="no-dia-seleccionado">
+      <p>Selecciona un día existente o crea uno nuevo para comenzar.</p>
     </div>
 
     <!-- Modal para nuevo día -->
@@ -184,22 +192,23 @@
                   </select>
                 </td>
                 <td>
-                  <input 
-                    type="number" 
-                    v-model="medida.tinas" 
-                    placeholder=""
-                    @change="guardarCambios(dia)"
-                    class="form-control"
-                  >
-                </td>
-                <td>
                   <select 
-                    v-model="medida.cajas" 
+                    v-model="medida.tinas" 
                     class="form-control"
                   >
                     <option value="">Seleccionar</option>
-                    <option v-for="n in 25" :key="n" :value="n">{{ n }}</option>
+                    <option value="Tina">Tina</option>
+                    <option value="Baño">Baño</option>
                   </select>
+                </td>
+                <td>
+                  <input 
+                    type="number" 
+                    v-model="medida.cajas" 
+                    placeholder=""
+                    @change="guardarCambios(diaSeleccionado)"
+                    class="form-control"
+                  >
                 </td>
                 <td>
                   <select 
@@ -262,6 +271,8 @@ export default {
         fecha: '',
         medidas: []
       },
+      diasListOpen: false,
+      diaSeleccionado: null,
       medidasDisponibles: [
         'Golfo',
         'Piojo',
@@ -277,7 +288,7 @@ export default {
       ],
       proveedoresDisponibles: [
        "Ahumada",
-       "Seleta",
+       "Selecta",
        "Tirado",
        "Ozuna",
        "Mx",
@@ -446,10 +457,27 @@ export default {
       
       dia.medidas.push(nuevaMedida)
       await this.guardarCambios(dia)
+    },
+    toggleDiasList() {
+      this.diasListOpen = !this.diasListOpen
+    },
+    seleccionarDia(dia) {
+      this.diaSeleccionado = dia
+      this.diasListOpen = false
     }
   },
-  mounted() {
-    this.cargarDias()
+  async mounted() {
+    await this.cargarDias()
+    // Si hay un día en la URL, seleccionarlo
+    if (this.$route.query.fecha) {
+      const diaEncontrado = this.dias.find(d => d.fecha === this.$route.query.fecha)
+      if (diaEncontrado) {
+        this.diaSeleccionado = diaEncontrado
+      }
+    } else if (this.dias.length > 0) {
+      // Si no hay día en la URL, seleccionar el más reciente
+      this.diaSeleccionado = this.diasOrdenados[0]
+    }
   }
 }
 </script>
@@ -469,6 +497,12 @@ export default {
   margin-bottom: 20px;
   flex-wrap: wrap;
   gap: 15px;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 20px;
 }
 
 .header h1 {
@@ -495,64 +529,59 @@ export default {
   transform: translateY(-2px);
 }
 
-.dias-list {
-  display: grid;
-  gap: 20px;
+.dias-dropdown {
+  position: relative;
+  min-width: 300px;
 }
 
-.dia-card {
+.dropdown-button {
   background: white;
-  border-radius: 10px;
-  padding: 15px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-  width: 100%;
-  overflow-x: auto;
-}
-
-.dia-header {
+  border: 2px solid #3498db;
+  color: #2c3e50;
+  padding: 10px 20px;
+  border-radius: 6px;
+  cursor: pointer;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 15px;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.dia-header h3 {
-  margin: 0;
-  font-size: clamp(1rem, 3vw, 1.25rem);
-}
-
-.dia-actions {
-  display: flex;
-  gap: 10px;
-}
-
-.btn-edit, .btn-delete, .btn-toggle-edit {
-  border: none;
-  padding: 8px;
-  border-radius: 5px;
-  cursor: pointer;
+  width: 100%;
+  font-size: 1em;
   transition: all 0.3s ease;
 }
 
-.btn-edit {
-  background-color: #f39c12;
-  color: white;
+.dropdown-button:hover {
+  background: #f8f9fa;
 }
 
-.btn-delete {
-  background-color: #e74c3c;
-  color: white;
+.dias-dropdown-content {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: white;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  margin-top: 5px;
+  max-height: 300px;
+  overflow-y: auto;
+  z-index: 1000;
 }
 
-.btn-toggle-edit {
-  background-color: #3498db;
-  color: white;
+.dia-option {
+  padding: 12px 20px;
+  cursor: pointer;
+  transition: all 0.2s ease;
 }
 
-.btn-toggle-edit.editing {
-  background-color: #27ae60;
+.dia-option:hover {
+  background: #f8f9fa;
+  color: #3498db;
+}
+
+.dia-option.selected {
+  background: #e8f4fc;
+  color: #2980b9;
+  font-weight: 500;
 }
 
 .tabla-container, .tabla-medidas-container {
@@ -644,73 +673,46 @@ th, td {
   white-space: nowrap;
 }
 
-.no-dias {
+.no-dia-seleccionado {
   text-align: center;
-  padding: 30px;
+  padding: 40px;
   background: #f8f9fa;
-  border-radius: 10px;
+  border-radius: 8px;
   margin-top: 20px;
+  color: #666;
 }
 
-/* Estilos específicos para móviles */
+/* Animaciones para el dropdown */
+.slide-enter-active,
+.slide-leave-active {
+  transition: all 0.3s ease;
+}
+
+.slide-enter-from,
+.slide-leave-to {
+  opacity: 0;
+  transform: translateY(-10px);
+}
+
 @media (max-width: 768px) {
-  .preparacion-container {
-    padding: 10px;
+  .header-left {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 15px;
+  }
+
+  .dias-dropdown {
+    min-width: unset;
+    width: 100%;
   }
 
   .header {
-    justify-content: center;
-    text-align: center;
+    flex-direction: column;
+    gap: 15px;
   }
 
-  .dia-header {
-    justify-content: center;
-    text-align: center;
-  }
-
-  .form-control {
-    font-size: 16px; /* Mejor tamaño para inputs en móviles */
-    padding: 8px;
-  }
-
-  .btn-nuevo, .btn-agregar {
+  .btn-nuevo {
     width: 100%;
-    justify-content: center;
-  }
-
-  .tabla-container {
-    margin: 10px -15px;
-    padding: 0 15px;
-    width: calc(100% + 30px);
-  }
-
-  .dia-card {
-    padding: 10px;
-  }
-
-  /* Indicador de scroll horizontal */
-  .tabla-container::after {
-    content: '← Desliza →';
-    display: block;
-    text-align: center;
-    font-size: 12px;
-    color: #666;
-    padding: 5px 0;
-  }
-}
-
-/* Optimizaciones para tablets */
-@media (min-width: 769px) and (max-width: 1024px) {
-  .preparacion-container {
-    padding: 15px;
-  }
-
-  .form-control {
-    max-width: 120px;
-  }
-
-  .medida-select, .proveedor-select {
-    max-width: 150px;
   }
 }
 </style> 
