@@ -1,7 +1,7 @@
 <template>
   <footer class="footer">
     <div class="footer-content">
-      <p>© 2024 Rey Pez - Allan Reyes</p>
+      <p>© 2025 Rey Pez - Allan Reyes</p>
       <nav class="footer-nav">
         <router-link to="/" class="footer-link">Home</router-link>
         <router-link to="/noteMenu" class="footer-link">Notas</router-link>
