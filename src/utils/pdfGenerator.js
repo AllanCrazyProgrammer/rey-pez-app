@@ -143,7 +143,7 @@ export async function generarNotaVentaPDF(embarque, clientesDisponibles, cliente
       footer: function(currentPage, pageCount) {
         return {
           columns: [
-            { text: ' 2024 Rey Pez - Tampico, Tamps.', alignment: 'center', margin: [0, 10, 0, 0] },
+            { text: ' 20 Rey Pez - Tampico, Tamps.', alignment: 'center', margin: [0, 10, 0, 0] },
           ],
           margin: [40, 0, 40, 0],
           fontSize: 15,
