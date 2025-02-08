@@ -94,11 +94,13 @@ export default {
   },
   computed: {
     pedidosFiltrados() {
-      return this.pedidos.filter(pedido => {
-        const cumpleTipo = this.filtroTipo === 'todos' || pedido.tipo === this.filtroTipo
-        const cumpleFecha = !this.filtroFecha || pedido.fecha === this.filtroFecha
-        return cumpleTipo && cumpleFecha
-      })
+      return this.pedidos
+        .filter(pedido => {
+          const cumpleTipo = this.filtroTipo === 'todos' || pedido.tipo === this.filtroTipo
+          const cumpleFecha = !this.filtroFecha || pedido.fecha === this.filtroFecha
+          return cumpleTipo && cumpleFecha
+        })
+        .sort((a, b) => new Date(b.fecha) - new Date(a.fecha))
     }
   },
   methods: {
