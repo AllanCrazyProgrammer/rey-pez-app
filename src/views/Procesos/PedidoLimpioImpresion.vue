@@ -23,9 +23,9 @@
           </thead>
           <tbody>
             <tr v-for="(item, index) in pedidoOtilio" :key="'otilio-'+index">
-              <td>{{ item.kilos || '' }}</td>
+              <td>{{ item.kilos }}<i v-if="item.esTara">T</i></td>
               <td>{{ item.medida }}</td>
-              <td>{{ item.tipo }}</td>
+              <td :class="{ 'text-blue': item.tipo === 'C/H20' }">{{ item.tipo }}</td>
             </tr>
           </tbody>
         </table>
@@ -46,13 +46,14 @@
             </thead>
             <tbody>
               <tr v-for="(item, index) in pedidoCatarro" :key="'catarro-'+index">
-                <td>{{ item.kilos || '' }}</td>
+                <td>{{ item.kilos }}<i v-if="item.esTara">T</i></td>
                 <td>{{ item.medida }}</td>
-                <td>{{ item.tipo }}</td>
+                <td :class="{ 'text-blue': item.tipo === 'C/H20' }">{{ item.tipo }}</td>
               </tr>
             </tbody>
           </table>
         </div>
+        <hr class="cliente-separator">
 
         <!-- Joselito -->
         <div class="cliente-seccion">
@@ -67,13 +68,14 @@
             </thead>
             <tbody>
               <tr v-for="(item, index) in pedidoJoselito" :key="'joselito-'+index">
-                <td>{{ item.kilos || '' }}</td>
+                <td>{{ item.kilos }}<i v-if="item.esTara">T</i></td>
                 <td>{{ item.medida }}</td>
-                <td>{{ item.tipo }}</td>
+                <td :class="{ 'text-blue': item.tipo === 'C/H20' }">{{ item.tipo }}</td>
               </tr>
             </tbody>
           </table>
         </div>
+        <hr class="cliente-separator">
 
         <!-- Ozuna -->
         <div class="cliente-seccion ozuna-seccion">
@@ -88,9 +90,9 @@
             </thead>
             <tbody>
               <tr v-for="(item, index) in pedidoOzuna" :key="'ozuna-'+index">
-                <td>{{ item.kilos || '' }}</td>
+                <td>{{ item.kilos }}<i v-if="item.esTara">T</i></td>
                 <td>{{ item.medida }}</td>
-                <td>{{ item.tipo }}</td>
+                <td :class="{ 'text-blue': item.tipo === 'C/H20' }">{{ item.tipo }}</td>
               </tr>
             </tbody>
           </table>
@@ -148,9 +150,19 @@ export default {
       if (!items || items.length === 0) return null;
 
       const body = items.map(item => [
-        { text: item.kilos?.toString() || '', fontSize: fontSize * 2 },
+        { 
+          text: item.kilos ? (item.esTara ? [
+            { text: item.kilos.toString(), fontSize: fontSize * 2 },
+            { text: 'T', fontSize: fontSize * 2, italics: true }
+          ] : item.kilos.toString()) : '', 
+          fontSize: fontSize * 2 
+        },
         { text: item.medida || '', fontSize: fontSize * 2 },
-        { text: item.tipo || '', fontSize: fontSize * 2 }
+        { 
+          text: item.tipo || '', 
+          fontSize: fontSize * 2,
+          color: item.tipo === 'C/H20' ? '#3498db' : undefined 
+        }
       ]);
 
       return {
@@ -196,6 +208,8 @@ export default {
           },
           this.generarTablaCliente(this.pedidoCatarro, 18),
           { text: '', margin: [0, 0, 0, 0] },
+          { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 535, y2: 0, lineWidth: 1 }] },
+          { text: '', margin: [0, 20, 0, 0] },
 
           // Joselito
           {
@@ -206,6 +220,8 @@ export default {
           },
           this.generarTablaCliente(this.pedidoJoselito, 18),
           { text: '', margin: [0, 0, 0, 0] },
+          { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 535, y2: 0, lineWidth: 1 }] },
+          { text: '', margin: [0, 20, 0, 0] },
 
           // Ozuna
           {
@@ -357,6 +373,25 @@ h4 {
 
   .preview-page {
     page-break-after: always;
+  }
+}
+
+.text-blue {
+  color: #3498db;
+}
+
+.cliente-separator {
+  border: none;
+  height: 1px;
+  background-color: #000;
+  margin: 30px 0;
+}
+
+@media print {
+  .cliente-separator {
+    background-color: #000;
+    height: 1px;
+    margin: 30px 0;
   }
 }
 </style> 

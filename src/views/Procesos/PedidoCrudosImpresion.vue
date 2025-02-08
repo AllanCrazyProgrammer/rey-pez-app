@@ -107,7 +107,8 @@ export default {
     },
     obtenerDiaSemana(fecha) {
       const dias = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
-      const date = new Date(fecha);
+      const [year, month, day] = fecha.split('-').map(Number);
+      const date = new Date(year, month - 1, day);
       return dias[date.getDay()];
     },
     calcularTotalColumna(columna) {

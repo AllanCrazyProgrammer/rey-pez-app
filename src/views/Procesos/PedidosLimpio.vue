@@ -53,10 +53,10 @@
               </div>
               <div class="input-group">
                 <label>Tipo:</label>
-                <select v-model="item.tipo" class="input-grande input-tipo">
+                <select v-model="item.tipo" class="input-grande input-tipo" :class="{ 'text-blue': item.tipo === 'C/H20' || item.tipo === '1.35 y .15' }">
                   <option value="">Seleccionar tipo</option>
                   <option value="S/H20">S/H20</option>
-                  <option value="C/H20">C/H20</option>
+                  <option value="C/H20" class="text-blue">C/H20</option>
                   <option value="Sellada">Sellada</option>
                 </select>
               </div>
@@ -104,10 +104,10 @@
               </div>
               <div class="input-group">
                 <label>Tipo:</label>
-                <select v-model="item.tipo" class="input-grande input-tipo">
+                <select v-model="item.tipo" class="input-grande input-tipo" :class="{ 'text-blue': item.tipo === 'C/H20' || item.tipo === '1.35 y .15' }">
                   <option value="">Seleccionar tipo</option>
                   <option value="S/H20">S/H20</option>
-                  <option value="C/H20">C/H20</option>
+                  <option value="C/H20" class="text-blue">C/H20</option>
                 </select>
               </div>
               <button @click="eliminarPedidoCatarro(index)" class="btn-eliminar" v-if="pedidoCatarro.length > 1">
@@ -154,11 +154,11 @@
               </div>
               <div class="input-group">
                 <label>Tipo:</label>
-                <select v-model="item.tipo" class="input-grande input-tipo">
+                <select v-model="item.tipo" class="input-grande input-tipo" :class="{ 'text-blue': item.tipo === 'C/H20' || item.tipo === '1.35 y .15' }">
                   <option value="">Seleccionar tipo</option>
                   <option value="S/H20">S/H20</option>
-                  <option value="C/H20">C/H20</option>
-                  <option value="1.35 y .15">1.35 y .15</option>
+                  <option value="C/H20" class="text-blue">C/H20</option>
+                  <option value="1.35 y .15" class="text-blue">1.35 y .15</option>
                 </select>
               </div>
               <button @click="eliminarPedidoJoselito(index)" class="btn-eliminar" v-if="pedidoJoselito.length > 1">
@@ -205,9 +205,10 @@
               </div>
               <div class="input-group">
                 <label>Tipo:</label>
-                <select v-model="item.tipo" class="input-grande input-tipo">
+                <select v-model="item.tipo" class="input-grande input-tipo" :class="{ 'text-blue': item.tipo === 'C/H20' || item.tipo === '1.35 y .15' }">
                   <option value="">Seleccionar tipo</option>
                   <option value="S/H20">S/H20</option>
+                  <option value="C/H20" class="text-blue">C/H20</option>
                 </select>
               </div>
               <button @click="eliminarPedidoOzuna(index)" class="btn-eliminar" v-if="pedidoOzuna.length > 1">
@@ -741,5 +742,17 @@ select.input-medida:focus {
   transform: scale(1.05);
   box-shadow: 0 2px 4px rgba(0,0,0,0.2);
   border-color: #3498db;
+}
+
+.text-blue {
+  color: #3498db !important;
+}
+
+select.text-blue {
+  color: #3498db !important;
+}
+
+select option.text-blue {
+  color: #3498db;
 }
 </style> 
