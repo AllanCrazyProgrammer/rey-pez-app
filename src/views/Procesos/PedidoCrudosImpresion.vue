@@ -34,6 +34,12 @@
               {{ pedidos[cliente][columna.toLowerCase()] || '' }}
             </td>
           </tr>
+          <tr class="fila-totales">
+            <td><strong>Total</strong></td>
+            <td v-for="columna in obtenerColumnasConDatos()" :key="columna + '-total'">
+              {{ calcularTotalColumna(columna) }}
+            </td>
+          </tr>
         </tbody>
       </table>
     </div>
@@ -104,6 +110,13 @@ export default {
       const date = new Date(fecha);
       return dias[date.getDay()];
     },
+    calcularTotalColumna(columna) {
+      const col = columna.toLowerCase();
+      return Object.keys(this.pedidos).reduce((sum, cliente) => {
+        const valor = parseFloat(this.pedidos[cliente][col]) || 0;
+        return sum + valor;
+      }, 0);
+    },
     generarPDF() {
       const clientesConDatos = this.obtenerClientesConDatos()
       const columnasConDatos = this.obtenerColumnasConDatos()
@@ -135,6 +148,22 @@ export default {
           bold: true
         }
       })
+
+      // Agregar fila de totales al PDF
+      const totales = columnasConDatos.map(columna => {
+        const total = this.calcularTotalColumna(columna);
+        return { 
+          text: total.toString(), 
+          alignment: 'center', 
+          bold: true,
+          fillColor: '#f8f9fa' // Fondo gris claro para destacar
+        };
+      });
+      
+      body.push([
+        { text: 'Total', bold: true, fillColor: '#f8f9fa' }, 
+        ...totales
+      ]);
 
       const docDefinition = {
         pageOrientation: 'landscape',
@@ -276,6 +305,13 @@ export default {
   font-size: 18px;
 }
 
+.fila-totales td {
+  background-color: #34495e;
+  color: white;
+  font-weight: bold;
+  border: 2px solid #2c3e50 !important;
+}
+
 @media print {
   .buttons-container,
   .impresion-container > h2,
@@ -333,6 +369,11 @@ export default {
 
   .content-wrapper {
     background-color: white;
+  }
+
+  .fila-totales td {
+    background-color: #d3d3d3 !important;
+    color: #000 !important;
   }
 
   @page {

@@ -52,12 +52,19 @@
                 placeholder="">
             </td>
           </tr>
+          <tr class="fila-totales">
+            <td><strong>Total</strong></td>
+            <td v-for="columna in columnas" :key="columna + '-total'">
+              {{ totalesColumnas[columna.toLowerCase()] || 0 }}
+            </td>
+          </tr>
         </tbody>
       </table>
     </div>
 
     <div class="kilos-info">
-      <h3>Total Kilos de Crudo: <span>{{ kilosCrudo.toFixed(2) }} kg</span></h3>
+      <h3>Total Kilos de Crudo: <span>{{ Math.floor(kilosCrudo) }} kg</span></h3>
+      <h3>Total Taras de Crudo: <span>{{ Math.floor(tarasCrudo) }} T</span></h3>
     </div>
 
     <div class="buttons-container">
@@ -115,6 +122,20 @@ export default {
         }
       }
       return totalPiezas * 19;
+    },
+    totalesColumnas() {
+      const totales = {};
+      this.columnas.forEach(columna => {
+        const col = columna.toLowerCase();
+        totales[col] = this.clientes.reduce((sum, cliente) => {
+          const valor = parseFloat(this.pedidos[cliente][col]) || 0;
+          return sum + valor;
+        }, 0);
+      });
+      return totales;
+    },
+    tarasCrudo() {
+      return this.kilosCrudo / 19;
     }
   },
   methods: {
@@ -445,5 +466,15 @@ input.cliente-ozuna:focus {
 .kilos-info span {
   color: #3498db;
   font-weight: bold;
+}
+
+.fila-totales {
+  background-color: #f8f9fa;
+  font-weight: bold;
+}
+
+.fila-totales td {
+  padding: 12px;
+  border: 2px solid #2c3e50 !important;
 }
 </style> 

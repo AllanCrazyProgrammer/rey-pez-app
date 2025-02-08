@@ -52,7 +52,10 @@
                     {{ capitalizarPrimeraLetra(pedido.tipo) }}
                   </span>
                   <span v-if="pedido.tipo === 'crudo'" class="kilos-badge">
-                    {{ calcularKilos(pedido) }} kg
+                    <div class="kilos-taras-container">
+                      <div>{{ Math.round(calcularKilos(pedido)) }} Kg</div>
+                      <div>{{ Math.round(calcularTaras(pedido)) }} T</div>
+                    </div>
                   </span>
                   <div class="acciones">
                     <button @click="editarPedido(pedido)" class="btn-editar" title="Ver">
@@ -133,6 +136,10 @@ export default {
         }
       }
       return (totalPiezas * 19).toFixed(2);
+    },
+    calcularTaras(pedido) {
+      const kilos = parseFloat(this.calcularKilos(pedido));
+      return (kilos / 19).toFixed(2);
     },
     imprimirPedido(pedido) {
       this.$router.push({
@@ -365,6 +372,14 @@ tr:hover td {
   color: #1565c0;
 }
 
+.kilos-taras-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  font-size: 0.9em;
+}
+
 .acciones {
   display: flex;
   gap: 8px;
@@ -487,6 +502,10 @@ tr:hover td {
 
   .btn-imprimir {
     min-width: 70px;
+  }
+
+  .kilos-taras-container {
+    font-size: 0.8em;
   }
 }
 
