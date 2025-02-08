@@ -30,6 +30,10 @@ import OtilioCuentasMenu from '@/views/CuentasClientes/OtilioCuentasMenu.vue'
 import CuentasOtilio from '@/views/CuentasClientes/CuentasOtilio.vue'
 import ProcesosMenu from '@/views/Procesos/ProcesosMenu.vue'
 import Preparacion from '@/views/Procesos/Preparacion.vue'
+import PedidosMenu from '@/views/Procesos/PedidosMenu.vue'
+import Pedidos from '@/views/Procesos/Pedidos.vue'
+import PedidosCrudo from '@/views/Procesos/PedidosCrudo.vue'
+import PedidoCrudosImpresion from '@/views/Procesos/PedidoCrudosImpresion.vue'
 
 Vue.use(Router);
 
@@ -237,6 +241,27 @@ const routes = [
     path: '/procesos/preparacion',
     name: 'Preparacion',
     component: Preparacion
+  },
+  {
+    path: '/procesos/pedidos',
+    name: 'PedidosMenu',
+    component: PedidosMenu
+  },
+  {
+    path: '/procesos/pedidos/nuevo',
+    name: 'NuevoPedido',
+    component: Pedidos
+  },
+  {
+    path: '/procesos/pedidos/crudo',
+    name: 'PedidosCrudo',
+    component: PedidosCrudo
+  },
+  {
+    path: '/procesos/pedidos-crudos-impresion',
+    name: 'PedidoCrudosImpresion',
+    component: PedidoCrudosImpresion,
+    props: true
   }
 ];
 

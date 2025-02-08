@@ -3,10 +3,17 @@
     <h1 class="menu-title">Menú de Procesos</h1>
     
     <div class="actions-container">
+  
+      <router-link to="/procesos/pedidos" class="action-button">
+        <span class="button-text">Pedidos</span>
+        <i class="fas fa-arrow-right"></i>
+      </router-link>
+    
       <router-link to="/procesos/preparacion" class="action-button">
         <span class="button-text">Preparación</span>
         <i class="fas fa-arrow-right"></i>
       </router-link>
+    
     </div>
   </div>
 </template>
