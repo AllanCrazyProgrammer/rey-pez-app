@@ -12,7 +12,7 @@
     <div id="pdfPreview" class="pdf-preview">
       <!-- Vista previa de Otilio -->
       <div class="preview-page">
-        <h3>Otilio</h3>
+        <h3 class="cliente-header otilio-header">Otilio</h3>
         <table class="preview-table">
           <thead>
             <tr>
@@ -33,31 +33,9 @@
 
       <!-- Vista previa de otros clientes -->
       <div class="preview-page">
-        <!-- Catarro -->
-        <div class="cliente-seccion">
-          <h4>Catarro</h4>
-          <table class="preview-table">
-            <thead>
-              <tr>
-                <th>Kilos/Taras</th>
-                <th>Medida</th>
-                <th>Tipo</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="(item, index) in pedidoCatarro" :key="'catarro-'+index">
-                <td>{{ item.kilos }}<i v-if="item.esTara">T</i></td>
-                <td>{{ item.medida }}</td>
-                <td :class="{ 'text-blue': item.tipo === 'C/H20' }">{{ item.tipo }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <hr class="cliente-separator">
-
         <!-- Joselito -->
         <div class="cliente-seccion">
-          <h4>Joselito</h4>
+          <h4 class="cliente-header joselito-header">Joselito</h4>
           <table class="preview-table">
             <thead>
               <tr>
@@ -75,27 +53,45 @@
             </tbody>
           </table>
         </div>
-        <hr class="cliente-separator">
 
-        <!-- Ozuna -->
-        <div class="cliente-seccion ozuna-seccion">
-          <h4>Ozuna</h4>
-          <table class="preview-table">
-            <thead>
-              <tr>
-                <th>Kilos/Taras</th>
-                <th>Medida</th>
-                <th>Tipo</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="(item, index) in pedidoOzuna" :key="'ozuna-'+index">
-                <td>{{ item.kilos }}<i v-if="item.esTara">T</i></td>
-                <td>{{ item.medida }}</td>
-                <td :class="{ 'text-blue': item.tipo === 'C/H20' }">{{ item.tipo }}</td>
-              </tr>
-            </tbody>
-          </table>
+        <div class="bottom-section">
+          <!-- Catarro -->
+          <div class="bottom-cliente">
+            <h4 class="cliente-header catarro-header">Catarro</h4>
+            <table class="preview-table">
+              <thead>
+                <tr>
+                  <th>Kilos/Taras</th>
+                  <th>Medida</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="(item, index) in pedidoCatarro" :key="'catarro-'+index">
+                  <td>{{ item.kilos }}<i v-if="item.esTara">T</i></td>
+                  <td>{{ item.medida }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Ozuna -->
+          <div class="bottom-cliente">
+            <h4 class="cliente-header ozuna-header">Ozuna</h4>
+            <table class="preview-table">
+              <thead>
+                <tr>
+                  <th>Kilos/Taras</th>
+                  <th>Medida</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="(item, index) in pedidoOzuna" :key="'ozuna-'+index">
+                  <td>{{ item.kilos }}<i v-if="item.esTara">T</i></td>
+                  <td>{{ item.medida }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>
@@ -184,53 +180,77 @@ export default {
       const diaSemana = this.obtenerDiaSemana(this.fecha);
       
       const docDefinition = {
-        pageSize: 'A4',
+        pageSize: 'letter',
         pageOrientation: 'portrait',
-        pageMargins: [30, 0, 30, 0],
+        pageMargins: [10, 0, 10, 0],
         content: [
           // Primera página - Otilio
           {
             text: 'OTILIO',
             style: 'clienteHeader',
             fontSize: 48,
-            margin: [0, 0, 0, 0]
+            margin: [0, 0, 0, 0],
+            background: '#FFEB3B'
           },
-          this.generarTablaCliente(this.pedidoOtilio, 20),
+          this.generarTablaCliente(this.pedidoOtilio, 26),
           { text: '', pageBreak: 'after' },
 
-          // Segunda página - Otros clientes
-          // Catarro
-          {
-            text: 'CATARRO',
-            style: 'clienteHeader',
-            fontSize: 40,
-            margin: [0, 0, 0, 0]
-          },
-          this.generarTablaCliente(this.pedidoCatarro, 18),
-          { text: '', margin: [0, 0, 0, 0] },
-          { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 535, y2: 0, lineWidth: 1 }] },
-          { text: '', margin: [0, 20, 0, 0] },
-
+          // Segunda página
           // Joselito
           {
             text: 'JOSELITO',
             style: 'clienteHeader',
-            fontSize: 40,
-            margin: [0, 0, 0, 0]
+            fontSize: 48,
+            margin: [0, 0, 0, 0],
+            background: '#2196F3'
           },
-          this.generarTablaCliente(this.pedidoJoselito, 18),
-          { text: '', margin: [0, 0, 0, 0] },
-          { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 535, y2: 0, lineWidth: 1 }] },
-          { text: '', margin: [0, 20, 0, 0] },
+          this.generarTablaCliente(this.pedidoJoselito, 26),
+          { text: '', margin: [0, 30, 0, 0] },
+          // Línea horizontal que separa Joselito de la sección inferior
+          { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 592, y2: 0, lineWidth: 2 }] },
+          { text: '', margin: [0, 30, 0, 0] },
 
-          // Ozuna
+          // Sección inferior
           {
-            text: 'OZUNA',
-            style: 'clienteHeader',
-            fontSize: 36,
-            margin: [0, 0, 0, 0]
-          },
-          this.generarTablaCliente(this.pedidoOzuna, 16)
+            columns: [
+              // Catarro
+              {
+                stack: [
+                  {
+                    text: 'CATARRO',
+                    style: 'clienteHeader',
+                    fontSize: 36,
+                    margin: [0, 0, 0, 0],
+                    background: '#FF5252'
+                  },
+                  this.generarTablaClienteReducido(this.pedidoCatarro, 26)
+                ],
+                width: '47%'
+              },
+              // Línea vertical
+              {
+                stack: [
+                  { canvas: [{ type: 'line', x1: 15, y1: 0, x2: 15, y2: 300, lineWidth: 1.5 }] }
+                ],
+                width: '6%',
+                margin: [0, 20, 0, 0]
+              },
+              // Ozuna
+              {
+                stack: [
+                  {
+                    text: 'OZUNA',
+                    style: 'clienteHeader',
+                    fontSize: 36,
+                    margin: [0, 0, 0, 0],
+                    background: '#4CAF50'
+                  },
+                  this.generarTablaClienteReducido(this.pedidoOzuna, 26)
+                ],
+                width: '47%'
+              }
+            ]
+          }
         ],
         styles: {
           header: {
@@ -249,6 +269,40 @@ export default {
       };
 
       pdfMake.createPdf(docDefinition).download('Ped-limpio-' + this.fecha + '.pdf');
+    },
+    generarTablaClienteReducido(items, fontSize = 16) {
+      if (!items || items.length === 0) return null;
+
+      const body = items.map(item => [
+        { 
+          text: item.kilos ? (item.esTara ? [
+            { text: item.kilos.toString(), fontSize: fontSize * 2 },
+            { text: 'T', fontSize: fontSize * 2, italics: true }
+          ] : item.kilos.toString()) : '', 
+          fontSize: fontSize * 2,
+          margin: [0, 0, 0, 0]
+        },
+        { 
+          text: item.medida || '', 
+          fontSize: fontSize * 2,
+          margin: [0, 0, 0, 0]
+        }
+      ]);
+
+      return {
+        table: {
+          widths: ['45%', '55%'],
+          body
+        },
+        layout: {
+          hLineWidth: () => 0,
+          vLineWidth: () => 0,
+          paddingLeft: () => 4,
+          paddingRight: () => 4,
+          paddingTop: () => 8,
+          paddingBottom: () => 8
+        }
+      };
     }
   }
 }
@@ -311,25 +365,50 @@ export default {
 .preview-page {
   margin-bottom: 40px;
   page-break-after: always;
+  position: relative;
 }
 
 .preview-page:last-child {
   page-break-after: avoid;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
 }
 
 .cliente-seccion {
   margin-bottom: 30px;
+  position: relative;
 }
 
-.ozuna-seccion {
-  max-width: 800px;
+.bottom-section {
+  margin-top: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  width: 100%;
+  position: relative;
+  padding-top: 20px;
+  border-top: 2px solid #000;
+}
+
+.bottom-cliente {
+  width: 47%;
+  position: relative;
+}
+
+.bottom-cliente:first-child {
+  margin-right: 5%;
+}
+
+.bottom-cliente:last-child {
+  margin-left: 5%;
 }
 
 .preview-table {
   width: 100%;
   border-collapse: collapse;
-  margin-top: 10px;
-  margin-bottom: 20px;
+  margin-top: 5px;
+  margin-bottom: 10px;
 }
 
 .preview-table th,
@@ -374,6 +453,22 @@ h4 {
   .preview-page {
     page-break-after: always;
   }
+
+  .bottom-section {
+    border-top: 2px solid #000 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    justify-content: space-between;
+    align-items: flex-start;
+  }
+  
+  .bottom-cliente:first-child {
+    margin-right: 5%;
+  }
+  
+  .bottom-cliente:last-child {
+    margin-left: 5%;
+  }
 }
 
 .text-blue {
@@ -392,6 +487,42 @@ h4 {
     background-color: #000;
     height: 1px;
     margin: 30px 0;
+  }
+}
+
+.cliente-header {
+  padding: 8px;
+  border-radius: 8px;
+  margin-bottom: 15px;
+  color: #000;
+}
+
+.otilio-header {
+  background-color: #FFEB3B; /* Amarillo */
+}
+
+h4.cliente-header.catarro-header {
+  background-color: #FF5252; /* Rojo */
+}
+
+h4.cliente-header.joselito-header {
+  background-color: #2196F3; /* Azul */
+}
+
+h4.cliente-header.ozuna-header {
+  background-color: #4CAF50; /* Verde */
+}
+
+/* Asegurar contraste y legibilidad */
+.cliente-header {
+  text-shadow: 1px 1px 1px rgba(255, 255, 255, 0.5);
+  font-weight: bold;
+}
+
+@media print {
+  .cliente-header {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
 }
 </style> 
