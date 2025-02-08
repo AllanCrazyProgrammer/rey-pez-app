@@ -34,6 +34,8 @@ import PedidosMenu from '@/views/Procesos/PedidosMenu.vue'
 import Pedidos from '@/views/Procesos/Pedidos.vue'
 import PedidosCrudo from '@/views/Procesos/PedidosCrudo.vue'
 import PedidoCrudosImpresion from '@/views/Procesos/PedidoCrudosImpresion.vue'
+import PedidosLimpio from '@/views/Procesos/PedidosLimpio.vue'
+import PedidoLimpioImpresion from '@/views/Procesos/PedidoLimpioImpresion.vue'
 
 Vue.use(Router);
 
@@ -258,9 +260,20 @@ const routes = [
     component: PedidosCrudo
   },
   {
+    path: '/procesos/pedidos/limpio',
+    name: 'PedidosLimpio',
+    component: PedidosLimpio
+  },
+  {
     path: '/procesos/pedidos-crudos-impresion',
     name: 'PedidoCrudosImpresion',
     component: PedidoCrudosImpresion,
+    props: true
+  },
+  {
+    path: '/procesos/pedidos-limpio-impresion',
+    name: 'PedidoLimpioImpresion',
+    component: PedidoLimpioImpresion,
     props: true
   }
 ];
