@@ -36,18 +36,18 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="pedido in pedidosFiltrados" :key="pedido.id">
+            <tr v-for="grupo in pedidosFiltrados" :key="grupo.fecha">
               <td class="fecha-celda">
                 <div class="fecha-container">
-                  <div class="fecha-dia">{{ obtenerDia(pedido.fecha) }}</div>
+                  <div class="fecha-dia">{{ obtenerDia(grupo.fecha) }}</div>
                   <div class="fecha-mes-ano">
-                    <span class="mes">{{ obtenerMes(pedido.fecha) }}</span>
-                    <span class="ano">{{ obtenerAno(pedido.fecha) }}</span>
+                    <span class="mes">{{ obtenerMes(grupo.fecha) }}</span>
+                    <span class="ano">{{ obtenerAno(grupo.fecha) }}</span>
                   </div>
                 </div>
               </td>
               <td class="detalles-celda">
-                <div class="tipo-acciones">
+                <div v-for="pedido in grupo.pedidos" :key="pedido.id" class="tipo-acciones">
                   <span class="tipo-badge" :class="pedido.tipo">
                     {{ capitalizarPrimeraLetra(pedido.tipo) }}
                   </span>
@@ -65,6 +65,9 @@
                       <i class="fas fa-print"></i>
                       Imprimir
                     </button>
+                    <button @click="eliminarPedido(pedido)" class="btn-eliminar" title="Eliminar">
+                      <i class="fas fa-trash"></i>
+                    </button>
                   </div>
                 </div>
               </td>
@@ -81,7 +84,7 @@
 
 <script>
 import { db } from '@/firebase'
-import { collection, query, orderBy, onSnapshot } from 'firebase/firestore'
+import { collection, query, orderBy, onSnapshot, deleteDoc, doc } from 'firebase/firestore'
 
 export default {
   name: 'PedidosMenu',
@@ -94,12 +97,27 @@ export default {
   },
   computed: {
     pedidosFiltrados() {
-      return this.pedidos
-        .filter(pedido => {
-          const cumpleTipo = this.filtroTipo === 'todos' || pedido.tipo === this.filtroTipo
-          const cumpleFecha = !this.filtroFecha || pedido.fecha === this.filtroFecha
-          return cumpleTipo && cumpleFecha
-        })
+      // Primero filtramos los pedidos según los criterios
+      const pedidosFiltrados = this.pedidos.filter(pedido => {
+        const cumpleTipo = this.filtroTipo === 'todos' || pedido.tipo === this.filtroTipo
+        const cumpleFecha = !this.filtroFecha || pedido.fecha === this.filtroFecha
+        return cumpleTipo && cumpleFecha
+      })
+
+      // Agrupamos los pedidos por fecha
+      const pedidosAgrupados = pedidosFiltrados.reduce((acc, pedido) => {
+        if (!acc[pedido.fecha]) {
+          acc[pedido.fecha] = {
+            fecha: pedido.fecha,
+            pedidos: []
+          }
+        }
+        acc[pedido.fecha].pedidos.push(pedido)
+        return acc
+      }, {})
+
+      // Convertimos el objeto en array y ordenamos por fecha descendente
+      return Object.values(pedidosAgrupados)
         .sort((a, b) => new Date(b.fecha) - new Date(a.fecha))
     }
   },
@@ -157,8 +175,20 @@ export default {
       const ruta = pedido.tipo === 'crudo' ? '/procesos/pedidos/crudo' : '/procesos/pedidos/limpio'
       this.$router.push({
         path: ruta,
-        query: { edit: 'true', id: pedido.id }
+        query: { edit: 'true', id: pedido.id, fecha: pedido.fecha }
       })
+    },
+    async eliminarPedido(pedido) {
+      try {
+        const confirmar = window.confirm('¿Está seguro que desea eliminar este pedido? Esta acción no se puede deshacer.')
+        if (confirmar) {
+          await deleteDoc(doc(db, 'pedidos', pedido.id))
+          alert('Pedido eliminado exitosamente')
+        }
+      } catch (error) {
+        console.error('Error al eliminar el pedido:', error)
+        alert('Error al eliminar el pedido. Por favor intente nuevamente.')
+      }
     }
   },
   created() {
@@ -345,6 +375,12 @@ tr:hover td {
   display: flex;
   align-items: center;
   gap: 16px;
+  padding: 8px 0;
+  border-bottom: 1px solid #edf2f7;
+}
+
+.tipo-acciones:last-child {
+  border-bottom: none;
 }
 
 .tipo-badge {
@@ -429,6 +465,27 @@ tr:hover td {
   font-size: 0.9em;
 }
 
+.btn-eliminar {
+  background-color: #fee2e2;
+  color: #dc2626;
+  padding: 6px 12px;
+  border: none;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 0.9em;
+  min-width: 40px;
+}
+
+.btn-eliminar:hover {
+  background-color: #fecaca;
+  transform: translateY(-2px);
+}
+
 @media (max-width: 768px) {
   .tabla-pedidos {
     padding: 0.5rem;
@@ -463,6 +520,11 @@ tr:hover td {
 
   .btn-imprimir {
     min-width: 80px;
+  }
+
+  .btn-eliminar {
+    padding: 6px 12px;
+    font-size: 0.85em;
   }
 }
 
@@ -507,6 +569,11 @@ tr:hover td {
   }
 
   .kilos-taras-container {
+    font-size: 0.8em;
+  }
+
+  .btn-eliminar {
+    padding: 4px 8px;
     font-size: 0.8em;
   }
 }
