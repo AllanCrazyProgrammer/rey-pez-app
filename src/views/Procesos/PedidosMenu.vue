@@ -392,13 +392,13 @@ tr:hover td {
 }
 
 .tipo-badge.crudo {
-  background-color: #fef3c7;
-  color: #92400e;
+  background-color: #1e88e5;
+  color: #ffffff;
 }
 
 .tipo-badge.limpio {
-  background-color: #dcfce7;
-  color: #166534;
+  background-color: #fff3e0;
+  color: #e65100;
 }
 
 .kilos-badge {
