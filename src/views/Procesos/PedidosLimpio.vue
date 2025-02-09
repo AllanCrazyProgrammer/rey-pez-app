@@ -757,41 +757,109 @@ export default {
 }
 
 @media (max-width: 768px) {
+  .pedidos-limpio-container {
+    padding: 10px;
+    min-height: auto;
+  }
+
   .tabs-container {
-    flex-direction: column;
+    gap: 5px;
+    margin-bottom: 15px;
   }
-  
+
   .tab-button {
-    width: 100%;
-    border-radius: 6px;
-    margin: 2px 0;
+    padding: 12px 15px;
+    font-size: 18px;
+    min-width: auto;
+    flex: 1;
+    border-radius: 8px;
+    margin: 2px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
   }
-  
-  .tab-button.active {
-    transform: none;
-  }
-  
+
   .clientes-content {
-    border-radius: 6px;
+    padding: 15px;
+    border-radius: 8px;
+    min-height: 300px;
   }
 
   .input-row {
-    flex-direction: column;
-    gap: 8px;
-    padding: 10px;
+    padding: 15px;
+    border: 1px solid #eee;
+    margin-bottom: 10px;
+    background: white;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
   }
 
-  .input-group-compact {
-    width: 100%;
+  .input-field {
+    font-size: 16px;
+    height: 40px;
+    padding: 8px 10px;
   }
 
-  .kilos, .medida, .tipo {
-    width: 100%;
+  .label-container {
+    font-size: 18px;
+    margin-bottom: 5px;
   }
 
   .btn-eliminar {
-    align-self: flex-end;
-    margin-top: 8px;
+    width: 35px;
+    height: 35px;
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    background-color: #ff4444;
+  }
+
+  .btn-agregar {
+    width: 100%;
+    padding: 12px;
+    font-size: 16px;
+    margin-top: 20px;
+    border-radius: 8px;
+  }
+
+  .buttons-container {
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 20px;
+  }
+
+  .btn-guardar,
+  .btn-imprimir,
+  .btn-cancelar {
+    width: 100%;
+    padding: 15px;
+    font-size: 16px;
+    border-radius: 8px;
+  }
+
+  .tara-checkbox label {
+    font-size: 16px;
+  }
+
+  .btn-proveedor {
+    width: 20px;
+    height: 20px;
+    font-size: 10px;
+  }
+
+  /* Mejor contraste para textos */
+  .input-group-compact label {
+    color: #2c3e50;
+    font-weight: 500;
+  }
+
+  /* Separación entre elementos */
+  .pedido-item {
+    margin-bottom: 15px;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 15px;
+  }
+
+  .pedido-item:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
   }
 }
 
