@@ -16,204 +16,234 @@
         <MedidasModal @medidas-actualizadas="actualizarMedidas" />
       </div>
 
-      <!-- Primera página - Otilio -->
-      <div class="clientes-grid">
-        <div class="cliente-seccion">
-          <h2 class="cliente-titulo">Otilio</h2>
+      <!-- Sistema de Tabs para clientes -->
+      <div class="tabs-container">
+        <button 
+          v-for="cliente in clientes" 
+          :key="cliente.id"
+          @click="clienteActivo = cliente.id"
+          :class="['tab-button', { 'active': clienteActivo === cliente.id }]"
+          :data-cliente="cliente.id"
+        >
+          {{ cliente.nombre }}
+        </button>
+      </div>
+
+      <!-- Contenido de cada cliente -->
+      <div class="clientes-content">
+        <!-- Otilio -->
+        <div v-show="clienteActivo === 'otilio'" class="cliente-seccion">
           <div class="pedido-grid">
             <div v-for="(item, index) in pedidoOtilio" :key="index" class="pedido-item">
-              <div class="kilos-container">
-                <div class="label-container">
-                  <label>Kilos/Taras:</label>
-                  <div class="tara-checkbox">
-                    <input type="checkbox" v-model="item.esTara" id="taraOtilio">
-                    <label for="taraOtilio">T</label>
+              <div class="input-row">
+                <div class="input-group-compact kilos">
+                  <div class="label-container">
+                    <label>Kilos:</label>
+                    <div class="tara-checkbox">
+                      <input type="checkbox" v-model="item.esTara" :id="'tara' + index">
+                      <label :for="'tara' + index">T</label>
+                    </div>
                   </div>
+                  <input type="number" v-model="item.kilos" class="input-field">
                 </div>
-                <input type="number" v-model="item.kilos" class="input-grande input-kilos">
-              </div>
-              <div class="input-group">
-                <div class="label-container">
-                  <label>Medida:</label>
-                  <button 
-                    class="btn-proveedor"
-                    @click="abrirModalProveedor(item)"
-                    :class="{ 'active': item.esProveedor }"
-                    :title="item.proveedor || 'Agregar proveedor'"
-                  >
-                    P
-                  </button>
+
+                <div class="input-group-compact medida">
+                  <div class="label-container">
+                    <label>Medida:</label>
+                    <button 
+                      class="btn-proveedor"
+                      @click="abrirModalProveedor(item)"
+                      :class="{ 'active': item.esProveedor }"
+                      :title="item.proveedor || 'Agregar proveedor'"
+                    >
+                      P
+                    </button>
+                  </div>
+                  <select v-model="item.medida" class="input-field">
+                    <option value="">Seleccionar</option>
+                    <option v-for="medida in medidasOrdenadas" :key="medida.id" :value="medida.nombre">
+                      {{ medida.nombre }}
+                    </option>
+                  </select>
                 </div>
-                <select v-model="item.medida" class="input-grande input-medida">
-                  <option value="">Seleccionar medida</option>
-                  <option v-for="medida in medidasOrdenadas" :key="medida.id" :value="medida.nombre">
-                    {{ medida.nombre }}
-                  </option>
-                </select>
+
+                <div class="input-group-compact tipo">
+                  <label>Tipo:</label>
+                  <select v-model="item.tipo" class="input-field" :class="{ 'text-blue': item.tipo === 'C/H20' || item.tipo === '1.35 y .15' }">
+                    <option value="">Seleccionar</option>
+                    <option value="S/H20">S/H20</option>
+                    <option value="C/H20" class="text-blue">C/H20</option>
+                    <option value="1.35 y .15" class="text-blue">1.35 y .15</option>
+                  </select>
+                </div>
+
+                <button @click="eliminarPedidoOtilio(index)" class="btn-eliminar" v-if="pedidoOtilio.length > 1">
+                  <i class="fas fa-trash"></i>
+                </button>
               </div>
-              <div class="input-group">
-                <label>Tipo:</label>
-                <select v-model="item.tipo" class="input-grande input-tipo" :class="{ 'text-blue': item.tipo === 'C/H20' || item.tipo === '1.35 y .15' }">
-                  <option value="">Seleccionar tipo</option>
-                  <option value="S/H20">S/H20</option>
-                  <option value="C/H20" class="text-blue">C/H20</option>
-                  <option value="Sellada">Sellada</option>
-                </select>
-              </div>
-              <button @click="eliminarPedidoOtilio(index)" class="btn-eliminar" v-if="pedidoOtilio.length > 1">
-                <i class="fas fa-trash"></i>
-              </button>
             </div>
           </div>
           <button @click="agregarFilaOtilio" class="btn-agregar">+ Agregar Fila</button>
         </div>
 
         <!-- Catarro -->
-        <div class="cliente-seccion">
-          <h3 class="cliente-titulo">Catarro</h3>
+        <div v-show="clienteActivo === 'catarro'" class="cliente-seccion">
           <div class="pedido-grid">
             <div v-for="(item, index) in pedidoCatarro" :key="index" class="pedido-item">
-              <div class="kilos-container">
-                <div class="label-container">
-                  <label>Kilos/Taras:</label>
-                  <div class="tara-checkbox">
-                    <input type="checkbox" v-model="item.esTara" id="taraCatarro">
-                    <label for="taraCatarro">T</label>
+              <div class="input-row">
+                <div class="input-group-compact kilos">
+                  <div class="label-container">
+                    <label>Kilos:</label>
+                    <div class="tara-checkbox">
+                      <input type="checkbox" v-model="item.esTara" :id="'tara' + index">
+                      <label :for="'tara' + index">T</label>
+                    </div>
                   </div>
+                  <input type="number" v-model="item.kilos" class="input-field">
                 </div>
-                <input type="number" v-model="item.kilos" class="input-grande input-kilos">
-              </div>
-              <div class="input-group">
-                <div class="label-container">
-                  <label>Medida:</label>
-                  <button 
-                    class="btn-proveedor"
-                    @click="abrirModalProveedor(item)"
-                    :class="{ 'active': item.esProveedor }"
-                    :title="item.proveedor || 'Agregar proveedor'"
-                  >
-                    P
-                  </button>
+
+                <div class="input-group-compact medida">
+                  <div class="label-container">
+                    <label>Medida:</label>
+                    <button 
+                      class="btn-proveedor"
+                      @click="abrirModalProveedor(item)"
+                      :class="{ 'active': item.esProveedor }"
+                      :title="item.proveedor || 'Agregar proveedor'"
+                    >
+                      P
+                    </button>
+                  </div>
+                  <select v-model="item.medida" class="input-field">
+                    <option value="">Seleccionar</option>
+                    <option v-for="medida in medidasOrdenadas" :key="medida.id" :value="medida.nombre">
+                      {{ medida.nombre }}
+                    </option>
+                  </select>
                 </div>
-                <select v-model="item.medida" class="input-grande input-medida">
-                  <option value="">Seleccionar medida</option>
-                  <option v-for="medida in medidasOrdenadas" :key="medida.id" :value="medida.nombre">
-                    {{ medida.nombre }}
-                  </option>
-                </select>
+
+                <div class="input-group-compact tipo">
+                  <label>Tipo:</label>
+                  <select v-model="item.tipo" class="input-field" :class="{ 'text-blue': item.tipo === 'C/H20' || item.tipo === '1.35 y .15' }">
+                    <option value="">Seleccionar</option>
+                    <option value="S/H20">S/H20</option>
+                    <option value="C/H20" class="text-blue">C/H20</option>
+                  </select>
+                </div>
+
+                <button @click="eliminarPedidoCatarro(index)" class="btn-eliminar" v-if="pedidoCatarro.length > 1">
+                  <i class="fas fa-trash"></i>
+                </button>
               </div>
-              <div class="input-group">
-                <label>Tipo:</label>
-                <select v-model="item.tipo" class="input-grande input-tipo" :class="{ 'text-blue': item.tipo === 'C/H20' || item.tipo === '1.35 y .15' }">
-                  <option value="">Seleccionar tipo</option>
-                  <option value="S/H20">S/H20</option>
-                  <option value="C/H20" class="text-blue">C/H20</option>
-                </select>
-              </div>
-              <button @click="eliminarPedidoCatarro(index)" class="btn-eliminar" v-if="pedidoCatarro.length > 1">
-                <i class="fas fa-trash"></i>
-              </button>
             </div>
           </div>
           <button @click="agregarFilaCatarro" class="btn-agregar">+ Agregar Fila</button>
         </div>
 
         <!-- Joselito -->
-        <div class="cliente-seccion">
-          <h3 class="cliente-titulo">Joselito</h3>
+        <div v-show="clienteActivo === 'joselito'" class="cliente-seccion">
           <div class="pedido-grid">
             <div v-for="(item, index) in pedidoJoselito" :key="index" class="pedido-item">
-              <div class="kilos-container">
-                <div class="label-container">
-                  <label>Kilos/Taras:</label>
-                  <div class="tara-checkbox">
-                    <input type="checkbox" v-model="item.esTara" id="taraJoselito">
-                    <label for="taraJoselito">T</label>
+              <div class="input-row">
+                <div class="input-group-compact kilos">
+                  <div class="label-container">
+                    <label>Kilos:</label>
+                    <div class="tara-checkbox">
+                      <input type="checkbox" v-model="item.esTara" :id="'tara' + index">
+                      <label :for="'tara' + index">T</label>
+                    </div>
                   </div>
+                  <input type="number" v-model="item.kilos" class="input-field">
                 </div>
-                <input type="number" v-model="item.kilos" class="input-grande input-kilos">
-              </div>
-              <div class="input-group">
-                <div class="label-container">
-                  <label>Medida:</label>
-                  <button 
-                    class="btn-proveedor"
-                    @click="abrirModalProveedor(item)"
-                    :class="{ 'active': item.esProveedor }"
-                    :title="item.proveedor || 'Agregar proveedor'"
-                  >
-                    P
-                  </button>
+
+                <div class="input-group-compact medida">
+                  <div class="label-container">
+                    <label>Medida:</label>
+                    <button 
+                      class="btn-proveedor"
+                      @click="abrirModalProveedor(item)"
+                      :class="{ 'active': item.esProveedor }"
+                      :title="item.proveedor || 'Agregar proveedor'"
+                    >
+                      P
+                    </button>
+                  </div>
+                  <select v-model="item.medida" class="input-field">
+                    <option value="">Seleccionar</option>
+                    <option v-for="medida in medidasOrdenadas" :key="medida.id" :value="medida.nombre">
+                      {{ medida.nombre }}
+                    </option>
+                  </select>
                 </div>
-                <select v-model="item.medida" class="input-grande input-medida">
-                  <option value="">Seleccionar medida</option>
-                  <option v-for="medida in medidasOrdenadas" :key="medida.id" :value="medida.nombre">
-                    {{ medida.nombre }}
-                  </option>
-                </select>
+
+                <div class="input-group-compact tipo">
+                  <label>Tipo:</label>
+                  <select v-model="item.tipo" class="input-field" :class="{ 'text-blue': item.tipo === 'C/H20' || item.tipo === '1.35 y .15' }">
+                    <option value="">Seleccionar</option>
+                    <option value="S/H20">S/H20</option>
+                    <option value="C/H20" class="text-blue">C/H20</option>
+                    <option value="1.35 y .15" class="text-blue">1.35 y .15</option>
+                  </select>
+                </div>
+
+                <button @click="eliminarPedidoJoselito(index)" class="btn-eliminar" v-if="pedidoJoselito.length > 1">
+                  <i class="fas fa-trash"></i>
+                </button>
               </div>
-              <div class="input-group">
-                <label>Tipo:</label>
-                <select v-model="item.tipo" class="input-grande input-tipo" :class="{ 'text-blue': item.tipo === 'C/H20' || item.tipo === '1.35 y .15' }">
-                  <option value="">Seleccionar tipo</option>
-                  <option value="S/H20">S/H20</option>
-                  <option value="C/H20" class="text-blue">C/H20</option>
-                  <option value="1.35 y .15" class="text-blue">1.35 y .15</option>
-                </select>
-              </div>
-              <button @click="eliminarPedidoJoselito(index)" class="btn-eliminar" v-if="pedidoJoselito.length > 1">
-                <i class="fas fa-trash"></i>
-              </button>
             </div>
           </div>
           <button @click="agregarFilaJoselito" class="btn-agregar">+ Agregar Fila</button>
         </div>
 
         <!-- Ozuna -->
-        <div class="cliente-seccion">
-          <h3 class="cliente-titulo">Ozuna</h3>
+        <div v-show="clienteActivo === 'ozuna'" class="cliente-seccion">
           <div class="pedido-grid">
             <div v-for="(item, index) in pedidoOzuna" :key="index" class="pedido-item">
-              <div class="kilos-container">
-                <div class="label-container">
-                  <label>Kilos/Taras:</label>
-                  <div class="tara-checkbox">
-                    <input type="checkbox" v-model="item.esTara" id="taraOzuna">
-                    <label for="taraOzuna">T</label>
+              <div class="input-row">
+                <div class="input-group-compact kilos">
+                  <div class="label-container">
+                    <label>Kilos:</label>
+                    <div class="tara-checkbox">
+                      <input type="checkbox" v-model="item.esTara" :id="'tara' + index">
+                      <label :for="'tara' + index">T</label>
+                    </div>
                   </div>
+                  <input type="number" v-model="item.kilos" class="input-field">
                 </div>
-                <input type="number" v-model="item.kilos" class="input-grande input-kilos">
-              </div>
-              <div class="input-group">
-                <div class="label-container">
-                  <label>Medida:</label>
-                  <button 
-                    class="btn-proveedor"
-                    @click="abrirModalProveedor(item)"
-                    :class="{ 'active': item.esProveedor }"
-                    :title="item.proveedor || 'Agregar proveedor'"
-                  >
-                    P
-                  </button>
+
+                <div class="input-group-compact medida">
+                  <div class="label-container">
+                    <label>Medida:</label>
+                    <button 
+                      class="btn-proveedor"
+                      @click="abrirModalProveedor(item)"
+                      :class="{ 'active': item.esProveedor }"
+                      :title="item.proveedor || 'Agregar proveedor'"
+                    >
+                      P
+                    </button>
+                  </div>
+                  <select v-model="item.medida" class="input-field">
+                    <option value="">Seleccionar</option>
+                    <option v-for="medida in medidasOrdenadas" :key="medida.id" :value="medida.nombre">
+                      {{ medida.nombre }}
+                    </option>
+                  </select>
                 </div>
-                <select v-model="item.medida" class="input-grande input-medida">
-                  <option value="">Seleccionar medida</option>
-                  <option v-for="medida in medidasOrdenadas" :key="medida.id" :value="medida.nombre">
-                    {{ medida.nombre }}
-                  </option>
-                </select>
+
+                <div class="input-group-compact tipo">
+                  <label>Tipo:</label>
+                  <select v-model="item.tipo" class="input-field" :class="{ 'text-blue': item.tipo === 'C/H20' || item.tipo === '1.35 y .15' }">
+                    <option value="">Seleccionar</option>
+                    <option value="S/H20">S/H20</option>
+                    <option value="C/H20" class="text-blue">C/H20</option>
+                  </select>
+                </div>
+
+                <button @click="eliminarPedidoOzuna(index)" class="btn-eliminar" v-if="pedidoOzuna.length > 1">
+                  <i class="fas fa-trash"></i>
+                </button>
               </div>
-              <div class="input-group">
-                <label>Tipo:</label>
-                <select v-model="item.tipo" class="input-grande input-tipo" :class="{ 'text-blue': item.tipo === 'C/H20' || item.tipo === '1.35 y .15' }">
-                  <option value="">Seleccionar tipo</option>
-                  <option value="S/H20">S/H20</option>
-                  <option value="C/H20" class="text-blue">C/H20</option>
-                </select>
-              </div>
-              <button @click="eliminarPedidoOzuna(index)" class="btn-eliminar" v-if="pedidoOzuna.length > 1">
-                <i class="fas fa-trash"></i>
-              </button>
             </div>
           </div>
           <button @click="agregarFilaOzuna" class="btn-agregar">+ Agregar Fila</button>
@@ -274,7 +304,14 @@ export default {
       itemSeleccionado: null,
       medidas: [],
       editando: false,
-      pedidoId: null
+      pedidoId: null,
+      clienteActivo: 'otilio',
+      clientes: [
+        { id: 'otilio', nombre: 'Otilio' },
+        { id: 'catarro', nombre: 'Catarro' },
+        { id: 'joselito', nombre: 'Joselito' },
+        { id: 'ozuna', nombre: 'Ozuna' }
+      ]
     }
   },
   async created() {
@@ -459,100 +496,107 @@ export default {
   gap: 10px;
 }
 
-.clientes-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 20px;
-  margin-bottom: 40px;
-}
-
-.cliente-seccion {
-  background-color: #ffffff;
-  padding: 20px;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-}
-
-.cliente-titulo {
-  font-size: 24px;
-  margin-bottom: 20px;
-  color: #2c3e50;
-  border-bottom: 2px solid #3498db;
-  padding-bottom: 10px;
-}
-
-.pedido-grid {
-  display: grid;
-  gap: 15px;
-  margin-bottom: 20px;
-}
-
-.pedido-item {
-  position: relative;
-  display: grid;
-  grid-template-columns: 0.8fr 2fr 1fr;
-  gap: 15px;
-  padding: 15px;
-  padding-right: 45px;
-  background-color: #f8f9fa;
-  border-radius: 8px;
-  transition: all 0.3s ease;
-  align-items: flex-end;
-}
-
-.pedido-item:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-}
-
-.input-group {
+.tabs-container {
   display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-
-.label-container {
-  display: flex;
-  align-items: center;
   gap: 10px;
-  margin-bottom: 0;
-  height: 30px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
 }
 
-.input-grande {
-  padding: 8px 12px;
-  font-size: 16px;
-  border: 2px solid #bdc3c7;
+.tab-button {
+  padding: 12px 25px;
+  font-size: 23px;
+  border: none;
   border-radius: 6px;
-  height: 40px;
-  min-width: 0;
-}
-
-.input-kilos {
-  width: 100%;
-  min-width: 100px;
-}
-
-.input-medida {
-  width: 100%;
+  background-color: #f0f0f0;
+  color: #666;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  position: relative;
+  margin: 0 2px;
   min-width: 160px;
 }
 
-.input-tipo {
-  width: 100%;
-  min-width: 120px;
+/* Estilos base para los botones con sus colores correspondientes */
+.tab-button[data-cliente="otilio"] {
+  background-color: #f1c40f50;
+  color: #2c3e50;
+}
+
+.tab-button[data-cliente="catarro"] {
+  background-color: #e74c3c50;
+  color: white;
+}
+
+.tab-button[data-cliente="joselito"] {
+  background-color: #3498db50;
+  color: white;
+}
+
+.tab-button[data-cliente="ozuna"] {
+  background-color: #27ae6050;
+  color: white;
+}
+
+/* Estados activos con color sólido */
+.tab-button[data-cliente="otilio"].active {
+  background-color: #f1c40f;
+}
+
+.tab-button[data-cliente="catarro"].active {
+  background-color: #e74c3c;
+}
+
+.tab-button[data-cliente="joselito"].active {
+  background-color: #3498db;
+}
+
+.tab-button[data-cliente="ozuna"].active {
+  background-color: #27ae60;
+}
+
+/* Estados hover */
+.tab-button[data-cliente="otilio"]:hover:not(.active) {
+  background-color: #f1c40f80;
+}
+
+.tab-button[data-cliente="catarro"]:hover:not(.active) {
+  background-color: #e74c3c80;
+}
+
+.tab-button[data-cliente="joselito"]:hover:not(.active) {
+  background-color: #3498db80;
+}
+
+.tab-button[data-cliente="ozuna"]:hover:not(.active) {
+  background-color: #27ae6080;
+}
+
+.clientes-content {
+  border: 1px solid #ddd;
+  border-radius: 0 8px 8px 8px;
+  padding: 20px;
+  background: white;
+  min-height: 400px;
+}
+
+.cliente-seccion {
+  background-color: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+}
+
+.cliente-titulo {
+  display: none;
+}
+
+.pedido-grid {
+  margin-bottom: 15px;
 }
 
 .btn-agregar {
-  background-color: #2ecc71;
-  color: white;
-  padding: 10px 20px;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 16px;
-  margin-top: 10px;
+  margin-top: 15px;
 }
 
 .buttons-container {
@@ -587,51 +631,103 @@ export default {
   color: white;
 }
 
-.kilos-container {
+.input-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  position: relative;
+  background-color: #f8f9fa;
+  padding: 12px;
+  border-radius: 8px;
   width: 100%;
+}
+
+.input-group-compact {
   display: flex;
   flex-direction: column;
+  gap: 4px;
+}
+
+.kilos {
+  width: 150px;
+  flex-shrink: 0;
+}
+
+.medida {
+  flex: 2;
+  min-width: 200px;
+}
+
+.tipo {
+  width: 180px;
+  flex-shrink: 0;
+}
+
+.input-field {
+  height: 45px;
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 23px;
+  width: 100%;
+}
+
+.input-field:focus {
+  border-color: #3498db;
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
+}
+
+.label-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 23px;
+  color: #666;
 }
 
 .tara-checkbox {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 3px;
 }
 
 .tara-checkbox input[type="checkbox"] {
-  width: 18px;
-  height: 18px;
-  cursor: pointer;
+  width: 16px;
+  height: 16px;
   margin: 0;
 }
 
 .tara-checkbox label {
-  font-size: 14px;
-  color: #34495e;
-  cursor: pointer;
-  margin: 0;
+  font-size: 21px;
 }
 
-.proveedor-checkbox {
+.btn-proveedor {
+  width: 24px;
+  height: 24px;
+  font-size: 12px;
+  padding: 0;
+  margin-left: 4px;
+}
+
+.btn-eliminar {
+  position: static;
+  transform: none;
+  height: 40px;
+  width: 40px;
   display: flex;
   align-items: center;
-  gap: 5px;
-  margin-left: 10px;
+  justify-content: center;
+  margin-left: auto;
+  background-color: #e74c3c;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  transition: background-color 0.3s ease;
 }
 
-.proveedor-checkbox input[type="checkbox"] {
-  width: 18px;
-  height: 18px;
-  cursor: pointer;
-  margin: 0;
-}
-
-.proveedor-checkbox label {
-  font-size: 14px;
-  color: #34495e;
-  cursor: pointer;
-  margin: 0;
+.btn-eliminar:hover {
+  background-color: #c0392b;
 }
 
 @media (max-width: 1400px) {
@@ -641,49 +737,68 @@ export default {
 }
 
 @media (max-width: 1200px) {
-  .clientes-grid {
-    grid-template-columns: 1fr 1fr;
-    gap: 15px;
+  .tabs-container {
+    flex-direction: column;
   }
   
-  .pedido-item {
-    grid-template-columns: 1fr;
-  }
-  
-  .input-grande {
+  .tab-button {
     width: 100%;
+    border-radius: 6px;
+    margin: 2px 0;
   }
   
-  .input-kilos,
-  .input-medida,
-  .input-tipo {
-    min-width: 0;
+  .tab-button.active {
+    transform: none;
+  }
+  
+  .clientes-content {
+    border-radius: 6px;
   }
 }
 
 @media (max-width: 768px) {
-  .clientes-grid {
-    grid-template-columns: 1fr;
+  .tabs-container {
+    flex-direction: column;
   }
   
-  .cliente-seccion {
-    margin-bottom: 20px;
+  .tab-button {
+    width: 100%;
+    border-radius: 6px;
+    margin: 2px 0;
+  }
+  
+  .tab-button.active {
+    transform: none;
+  }
+  
+  .clientes-content {
+    border-radius: 6px;
   }
 
-  .header-container {
+  .input-row {
     flex-direction: column;
-    gap: 15px;
+    gap: 8px;
+    padding: 10px;
   }
-  
-  .fecha-container {
+
+  .input-group-compact {
     width: 100%;
+  }
+
+  .kilos, .medida, .tipo {
+    width: 100%;
+  }
+
+  .btn-eliminar {
+    align-self: flex-end;
+    margin-top: 8px;
   }
 }
 
 select.input-medida {
   width: 100%;
   padding: 8px 12px;
-  font-size: 16px;
+  font-size: 23px;
   border: 2px solid #bdc3c7;
   border-radius: 6px;
   background-color: white;
@@ -694,54 +809,6 @@ select.input-medida {
 select.input-medida:focus {
   border-color: #3498db;
   outline: none;
-}
-
-.btn-eliminar {
-  background-color: #e74c3c;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  padding: 8px;
-  cursor: pointer;
-  position: absolute;
-  right: 10px;
-  top: 50%;
-  transform: translateY(-50%);
-  transition: all 0.3s ease;
-}
-
-.btn-eliminar:hover {
-  background-color: #c0392b;
-}
-
-.btn-proveedor {
-  background-color: #95a5a6;
-  color: white;
-  border: 2px solid #7f8c8d;
-  border-radius: 4px;
-  width: 30px;
-  height: 30px;
-  cursor: pointer;
-  margin-left: 10px;
-  font-weight: bold;
-  transition: all 0.3s ease;
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-}
-
-.btn-proveedor.active {
-  background-color: #27ae60;
-  border: 3px solid #2ecc71;
-  box-shadow: 0 0 8px rgba(46, 204, 113, 0.5);
-}
-
-.btn-proveedor:hover {
-  transform: scale(1.05);
-  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-  border-color: #3498db;
 }
 
 .text-blue {
