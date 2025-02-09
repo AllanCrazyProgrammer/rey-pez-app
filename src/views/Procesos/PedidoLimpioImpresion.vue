@@ -153,11 +153,38 @@ export default {
           ] : item.kilos.toString()) : '', 
           fontSize: fontSize * 2 
         },
-        { text: item.medida || '', fontSize: fontSize * 2 },
         { 
-          text: item.tipo || '', 
-          fontSize: fontSize * 2,
-          color: item.tipo === 'C/H20' ? '#3498db' : undefined 
+          stack: [
+            { text: item.medida || '', fontSize: fontSize * 2 },
+            item.proveedor ? { 
+              text: item.proveedor, 
+              fontSize: fontSize * 1.3, 
+              color: '#ffffff',
+              background: '#9b59b6',
+              margin: [0, 1, 0, 0],
+              padding: [2, 1],
+              alignment: 'center'
+            } : '',
+            
+          ]
+        },
+        { 
+          stack: [
+            { 
+              text: item.tipo || '', 
+              fontSize: fontSize * 2,
+              color: item.tipo === 'C/H20' ? '#3498db' : undefined 
+            },
+            item.nota ? { 
+              text: item.nota, 
+              fontSize: fontSize * 1.3, 
+              color: '#ffffff',
+              background: '#e74c3c',
+              margin: [0, 1, 0, 0],
+              padding: [2, 1],
+              alignment: 'center'
+            } : ''
+          ]
         }
       ]);
 
@@ -283,8 +310,27 @@ export default {
           margin: [0, 0, 0, 0]
         },
         { 
-          text: item.medida || '', 
-          fontSize: fontSize * 2,
+          stack: [
+            { text: item.medida || '', fontSize: fontSize * 2 },
+            item.proveedor ? { 
+              text: item.proveedor, 
+              fontSize: fontSize * 1.3, 
+              color: '#ffffff',
+              background: '#9b59b6',
+              margin: [0, 1, 0, 0],
+              padding: [2, 1],
+              alignment: 'center'
+            } : '',
+            item.nota ? { 
+              text: item.nota, 
+              fontSize: fontSize * 1.3, 
+              color: '#ffffff',
+              background: '#e74c3c',
+              margin: [0, 1, 0, 0],
+              padding: [2, 1],
+              alignment: 'center'
+            } : ''
+          ],
           margin: [0, 0, 0, 0]
         }
       ]);

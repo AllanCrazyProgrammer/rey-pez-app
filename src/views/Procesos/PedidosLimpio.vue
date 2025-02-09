@@ -68,12 +68,18 @@
                 </div>
 
                 <div class="input-group-compact tipo">
-                  <label>Tipo:</label>
+                  <div class="label-container">
+                    <label>Tipo:</label>
+                    <select v-model="item.nota" class="input-field-notas">
+                      <option value="">Notas</option>
+                      <option value="Sellado">Sellado</option>
+                      <option value="Kileado">Kileado</option>
+                    </select>
+                  </div>
                   <select v-model="item.tipo" class="input-field" :class="{ 'text-blue': item.tipo === 'C/H20' || item.tipo === '1.35 y .15' }">
                     <option value="">Seleccionar</option>
                     <option value="S/H20">S/H20</option>
                     <option value="C/H20" class="text-blue">C/H20</option>
-                    <option value="1.35 y .15" class="text-blue">1.35 y .15</option>
                   </select>
                 </div>
 
@@ -123,7 +129,14 @@
                 </div>
 
                 <div class="input-group-compact tipo">
-                  <label>Tipo:</label>
+                  <div class="label-container">
+                    <label>Tipo:</label>
+                    <select v-model="item.nota" class="input-field-notas">
+                      <option value="">Notas</option>
+                      <option value="Sellado">Sellado</option>
+                      <option value="Kileado">Kileado</option>
+                    </select>
+                  </div>
                   <select v-model="item.tipo" class="input-field" :class="{ 'text-blue': item.tipo === 'C/H20' || item.tipo === '1.35 y .15' }">
                     <option value="">Seleccionar</option>
                     <option value="S/H20">S/H20</option>
@@ -177,12 +190,18 @@
                 </div>
 
                 <div class="input-group-compact tipo">
-                  <label>Tipo:</label>
+                  <div class="label-container">
+                    <label>Tipo:</label>
+                    <select v-model="item.nota" class="input-field-notas">
+                      <option value="">Notas</option>
+                      <option value="Sellado">Sellado</option>
+                      <option value="Kileado">Kileado</option>
+                    </select>
+                  </div>
                   <select v-model="item.tipo" class="input-field" :class="{ 'text-blue': item.tipo === 'C/H20' || item.tipo === '1.35 y .15' }">
                     <option value="">Seleccionar</option>
                     <option value="S/H20">S/H20</option>
                     <option value="C/H20" class="text-blue">C/H20</option>
-                    <option value="1.35 y .15" class="text-blue">1.35 y .15</option>
                   </select>
                 </div>
 
@@ -232,7 +251,14 @@
                 </div>
 
                 <div class="input-group-compact tipo">
-                  <label>Tipo:</label>
+                  <div class="label-container">
+                    <label>Tipo:</label>
+                    <select v-model="item.nota" class="input-field-notas">
+                      <option value="">Notas</option>
+                      <option value="Sellado">Sellado</option>
+                      <option value="Kileado">Kileado</option>
+                    </select>
+                  </div>
                   <select v-model="item.tipo" class="input-field" :class="{ 'text-blue': item.tipo === 'C/H20' || item.tipo === '1.35 y .15' }">
                     <option value="">Seleccionar</option>
                     <option value="S/H20">S/H20</option>
@@ -311,7 +337,8 @@ export default {
         { id: 'catarro', nombre: 'Catarro' },
         { id: 'joselito', nombre: 'Joselito' },
         { id: 'ozuna', nombre: 'Ozuna' }
-      ]
+      ],
+      itemSeleccionadoNotas: null,
     }
   },
   async created() {
@@ -469,6 +496,17 @@ export default {
       } else {
         item.proveedor = ''
       }
+    },
+    abrirMenuNotas(item) {
+      if (this.itemSeleccionadoNotas === item) {
+        this.itemSeleccionadoNotas = null;
+      } else {
+        this.itemSeleccionadoNotas = item;
+      }
+    },
+    seleccionarNota(item, nota) {
+      item.nota = nota;
+      this.itemSeleccionadoNotas = null;
     }
   }
 }
@@ -678,6 +716,22 @@ export default {
   box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
 }
 
+.input-field-notas {
+  height: 30px;
+  padding: 4px 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 16px;
+  width: 120px;
+  margin-left: 8px;
+}
+
+.input-field-notas:focus {
+  border-color: #3498db;
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
+}
+
 .label-container {
   display: flex;
   align-items: center;
@@ -708,6 +762,14 @@ export default {
   font-size: 12px;
   padding: 0;
   margin-left: 4px;
+  border: 2px solid transparent;
+  transition: all 0.3s ease;
+}
+
+.btn-proveedor.active {
+  border: 2px solid #27ae60;
+  color: #27ae60;
+  background-color: rgba(39, 174, 96, 0.1);
 }
 
 .btn-eliminar {
@@ -784,7 +846,8 @@ export default {
   }
 
   .input-row {
-    padding: 20px;
+    padding: 15px;
+    padding-right: 45px;
     border: 1px solid #eee;
     margin-bottom: 10px;
     background: white;
@@ -803,12 +866,17 @@ export default {
   }
 
   .btn-eliminar {
-    width: 35px;
-    height: 35px;
+    width: 28px;
+    height: 28px;
     position: absolute;
-    top: 5px;
-    right: 5px;
+    top: 10px;
+    right: 1px;
     background-color: #ff4444;
+    font-size: 12px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 
   .btn-agregar {
@@ -861,34 +929,14 @@ export default {
     border-bottom: none;
     padding-bottom: 0;
   }
-}
 
-select.input-medida {
-  width: 100%;
-  padding: 8px 12px;
-  font-size: 23px;
-  border: 2px solid #bdc3c7;
-  border-radius: 6px;
-  background-color: white;
-  cursor: pointer;
-  height: 40px;
-}
-
-select.input-medida:focus {
-  border-color: #3498db;
-  outline: none;
-}
-
-.text-blue {
-  color: #3498db !important;
-}
-
-select.text-blue {
-  color: #3498db !important;
-}
-
-select option.text-blue {
-  color: #3498db;
+  .tipo-container {
+    width: 100%;
+  }
+  
+  .tipo-notas-container {
+    width: 100%;
+  }
 }
 
 @media (max-width: 375px) {
@@ -961,6 +1009,92 @@ select option.text-blue {
     width: 20px;
     height: 20px;
     font-size: 12px;
+    border-width: 1.5px;
   }
+
+  .btn-proveedor.active {
+    border-width: 1.5px;
+  }
+
+  .input-field-notas {
+    width: 80px;
+    font-size: 12px;
+    height: 25px;
+    padding: 2px 4px;
+  }
+
+  .tipo {
+    width: 100%;
+  }
+}
+
+.btn-notas {
+  width: 24px;
+  height: 24px;
+  font-size: 12px;
+  padding: 0;
+  margin-left: 4px;
+  border: 2px solid transparent;
+  transition: all 0.3s ease;
+  background-color: #95a5a6;
+  color: white;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.btn-notas.active {
+  border: 2px solid #7f8c8d;
+  background-color: #7f8c8d;
+}
+
+.menu-notas {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  z-index: 1000;
+  min-width: 120px;
+}
+
+.menu-item {
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.menu-item:hover {
+  background-color: #f5f5f5;
+}
+
+@media (max-width: 768px) {
+  .btn-notas {
+    width: 28px;
+    height: 28px;
+    font-size: 14px;
+  }
+}
+
+@media (max-width: 375px) {
+  .btn-notas {
+    width: 20px;
+    height: 20px;
+    font-size: 12px;
+    border-width: 1.5px;
+  }
+}
+
+.text-blue {
+  color: #3498db !important;
+}
+
+select.text-blue {
+  color: #3498db !important;
+}
+
+select option.text-blue {
+  color: #3498db;
 }
 </style> 
