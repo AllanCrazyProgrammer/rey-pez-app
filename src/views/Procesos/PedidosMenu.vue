@@ -529,6 +529,9 @@ tr:hover td {
   font-weight: 600;
   font-size: 0.9em;
   text-transform: capitalize;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .tipo-badge.crudo {
@@ -546,16 +549,26 @@ tr:hover td {
   border-radius: 20px;
   font-weight: 600;
   font-size: 0.9em;
-  background-color: #e3f2fd;
-  color: #1565c0;
+  background-color: transparent;
+  color: inherit;
+  margin-left: 8px;
 }
 
 .kilos-taras-container {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  gap: 2px;
+  gap: 8px;
   font-size: 0.9em;
+  margin-left: auto;
+}
+
+.kilos-taras-container div {
+  background-color: rgba(255, 255, 255, 0.5);
+  padding: 2px 8px;
+  border-radius: 12px;
+  min-width: 60px;
+  text-align: center;
 }
 
 .acciones {
@@ -725,6 +738,107 @@ tr:hover td {
   .nuevo-pedido-buttons {
     flex-direction: column;
     gap: 10px;
+  }
+}
+
+@media (max-width: 375px) {
+  .pedidos-menu-container {
+    padding: 20px 10px;
+  }
+
+  .menu-title {
+    font-size: 1.8em;
+    margin-bottom: 20px;
+  }
+
+  .nuevo-pedido-buttons {
+    gap: 8px;
+  }
+
+  .btn-nuevo-pedido {
+    padding: 12px;
+    font-size: 0.95em;
+  }
+
+  .tabla-pedidos {
+    padding: 0.25rem;
+  }
+
+  th, td {
+    padding: 8px 4px;
+    font-size: 0.8rem;
+  }
+
+  .fecha-celda {
+    width: 70px;
+  }
+
+  .fecha-container {
+    padding: 4px 2px;
+  }
+
+  .fecha-dia {
+    font-size: 1.2em;
+  }
+
+  .fecha-mes-ano {
+    font-size: 0.7em;
+  }
+
+  .tipo-acciones {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    padding: 6px 0;
+  }
+
+  .acciones {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .btn-editar, .btn-imprimir, .btn-eliminar {
+    padding: 4px 6px;
+    font-size: 0.75em;
+    min-width: auto;
+  }
+
+  .tipo-badge {
+    padding: 3px 6px;
+    font-size: 0.75em;
+  }
+
+  .kilos-taras-container {
+    gap: 4px;
+    font-size: 0.75em;
+    margin-left: 8px;
+  }
+
+  .kilos-taras-container div {
+    padding: 1px 4px;
+    border-radius: 8px;
+    min-width: 45px;
+  }
+
+  .totales-dia {
+    font-size: 0.8em;
+    margin-top: 4px;
+    padding-top: 4px;
+  }
+
+  .filtros {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .filtro-tipo, .filtro-fecha {
+    width: 100%;
+  }
+
+  .filtro-tipo select, .filtro-fecha input {
+    width: 100%;
+    padding: 6px;
   }
 }
 

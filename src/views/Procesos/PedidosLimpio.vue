@@ -1168,13 +1168,40 @@ export default {
   }
 
   .tabs-container {
-    gap: 5px;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
     margin-bottom: 15px;
+    width: 100%;
+  }
+
+  .tab-wrapper {
+    width: 100%;
   }
 
   .tab-button {
-    font-size: 23px;
-    padding: 16px 20px;
+    width: 100%;
+    min-width: unset;
+    font-size: 18px;
+    padding: 12px 8px;
+    margin: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 50px;
+  }
+
+  .tab-totales {
+    font-size: 12px;
+    padding: 4px;
+    width: 100%;
+    text-align: center;
+    margin-top: -5px;
+  }
+
+  .tab-totales div {
+    display: inline-block;
+    margin: 0 5px;
   }
 
   .clientes-content {
