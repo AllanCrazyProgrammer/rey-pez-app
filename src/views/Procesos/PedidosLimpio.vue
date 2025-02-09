@@ -738,21 +738,26 @@ export default {
 
 @media (max-width: 1200px) {
   .tabs-container {
-    flex-direction: column;
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
   }
   
   .tab-button {
-    width: 100%;
-    border-radius: 6px;
-    margin: 2px 0;
+    width: calc(50% - 8px);
+    padding: 8px 15px;
+    font-size: 18px;
+    min-width: auto;
+    margin: 0;
   }
-  
-  .tab-button.active {
-    transform: none;
-  }
-  
-  .clientes-content {
-    border-radius: 6px;
+}
+
+@media (max-width: 480px) {
+  .tab-button {
+    width: calc(50% - 4px);
+    padding: 6px 10px;
+    font-size: 16px;
   }
 }
 
@@ -768,13 +773,8 @@ export default {
   }
 
   .tab-button {
-    padding: 12px 15px;
-    font-size: 18px;
-    min-width: auto;
-    flex: 1;
-    border-radius: 8px;
-    margin: 2px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    font-size: 23px;
+    padding: 16px 20px;
   }
 
   .clientes-content {
@@ -784,7 +784,7 @@ export default {
   }
 
   .input-row {
-    padding: 15px;
+    padding: 20px;
     border: 1px solid #eee;
     margin-bottom: 10px;
     background: white;
@@ -792,13 +792,13 @@ export default {
   }
 
   .input-field {
-    font-size: 16px;
-    height: 40px;
+    font-size: 23px;
+    height: 50px;
     padding: 8px 10px;
   }
 
   .label-container {
-    font-size: 18px;
+    font-size: 23px;
     margin-bottom: 5px;
   }
 
@@ -813,8 +813,8 @@ export default {
 
   .btn-agregar {
     width: 100%;
-    padding: 12px;
-    font-size: 16px;
+    padding: 18px;
+    font-size: 23px;
     margin-top: 20px;
     border-radius: 8px;
   }
@@ -829,19 +829,19 @@ export default {
   .btn-imprimir,
   .btn-cancelar {
     width: 100%;
-    padding: 15px;
-    font-size: 16px;
+    padding: 18px;
+    font-size: 23px;
     border-radius: 8px;
   }
 
   .tara-checkbox label {
-    font-size: 16px;
+    font-size: 21px;
   }
 
   .btn-proveedor {
-    width: 20px;
-    height: 20px;
-    font-size: 10px;
+    width: 28px;
+    height: 28px;
+    font-size: 14px;
   }
 
   /* Mejor contraste para textos */
@@ -889,5 +889,78 @@ select.text-blue {
 
 select option.text-blue {
   color: #3498db;
+}
+
+@media (max-width: 344px) {
+  .pedidos-limpio-container {
+    padding: 5px;
+    width: 100%;
+  }
+
+  .tabs-container {
+    gap: 3px;
+    margin-bottom: 8px;
+  }
+  
+  .tab-button {
+    width: calc(50% - 3px);
+    padding: 6px 4px;
+    font-size: 14px;
+    border-radius: 4px;
+  }
+
+  .input-row {
+    flex-direction: column;
+    padding: 8px;
+    gap: 6px;
+  }
+
+  .input-group-compact {
+    width: 100%;
+  }
+
+  .kilos, .medida, .tipo {
+    width: 100%;
+    min-width: unset;
+  }
+
+  .input-field {
+    height: 36px;
+    font-size: 14px;
+    padding: 4px 6px;
+  }
+
+  .label-container {
+    font-size: 14px;
+  }
+
+  .tara-checkbox label {
+    font-size: 14px;
+  }
+
+  .btn-eliminar {
+    width: 24px;
+    height: 24px;
+    font-size: 12px;
+  }
+
+  .buttons-container {
+    gap: 6px;
+    flex-direction: column;
+  }
+
+  .btn-guardar,
+  .btn-imprimir,
+  .btn-cancelar {
+    width: 100%;
+    padding: 8px 12px;
+    font-size: 14px;
+  }
+
+  .btn-proveedor {
+    width: 20px;
+    height: 20px;
+    font-size: 12px;
+  }
 }
 </style> 
