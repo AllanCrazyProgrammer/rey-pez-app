@@ -252,7 +252,7 @@ const routes = [
   {
     path: '/procesos/pedidos/nuevo',
     name: 'NuevoPedido',
-    component: Pedidos
+    component: PedidosLimpio
   },
   {
     path: '/procesos/pedidos/crudo',

@@ -3,12 +3,20 @@
     <h1 class="menu-title">Menú de Pedidos</h1>
     
     <div class="actions-container">
-      <router-link to="/procesos/pedidos/nuevo" class="action-button">
-        <button class="btn-nuevo-pedido">
-          <i class="fas fa-plus"></i>
-          Nuevo Pedido
-        </button>
-      </router-link>
+      <div class="nuevo-pedido-buttons">
+        <router-link to="/procesos/pedidos/crudo" class="action-button">
+          <button class="btn-nuevo-pedido crudo">
+            <i class="fas fa-plus"></i>
+            Nuevo Pedido Crudo
+          </button>
+        </router-link>
+        <router-link to="/procesos/pedidos/limpio" class="action-button">
+          <button class="btn-nuevo-pedido limpio">
+            <i class="fas fa-plus"></i>
+            Nuevo Pedido Limpio
+          </button>
+        </router-link>
+      </div>
     </div>
 
     <div class="pedidos-list">
@@ -239,10 +247,15 @@ export default {
   max-width: 500px;
 }
 
+.nuevo-pedido-buttons {
+  display: flex;
+  gap: 20px;
+  width: 100%;
+}
+
 .btn-nuevo-pedido {
   width: 100%;
   padding: 15px;
-  background-color: #3498db;
   color: white;
   border: none;
   border-radius: 8px;
@@ -255,8 +268,20 @@ export default {
   gap: 10px;
 }
 
-.btn-nuevo-pedido:hover {
-  background-color: #2980b9;
+.btn-nuevo-pedido.crudo {
+  background-color: #1e88e5;
+}
+
+.btn-nuevo-pedido.crudo:hover {
+  background-color: #1565c0;
+}
+
+.btn-nuevo-pedido.limpio {
+  background-color: #ff9800;
+}
+
+.btn-nuevo-pedido.limpio:hover {
+  background-color: #f57c00;
 }
 
 .action-button {
@@ -526,6 +551,11 @@ tr:hover td {
     padding: 6px 12px;
     font-size: 0.85em;
   }
+
+  .nuevo-pedido-buttons {
+    flex-direction: column;
+    gap: 10px;
+  }
 }
 
 @media (max-width: 480px) {
@@ -575,6 +605,11 @@ tr:hover td {
   .btn-eliminar {
     padding: 4px 8px;
     font-size: 0.8em;
+  }
+
+  .nuevo-pedido-buttons {
+    flex-direction: column;
+    gap: 10px;
   }
 }
 

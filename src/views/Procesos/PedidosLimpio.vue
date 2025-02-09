@@ -33,6 +33,7 @@
       <div class="clientes-content">
         <!-- Otilio -->
         <div v-show="clienteActivo === 'otilio'" class="cliente-seccion">
+          <button @click="agregarFilaOtilio" class="btn-agregar">+ Agregar Fila</button>
           <div class="pedido-grid">
             <div v-for="(item, index) in pedidoOtilio" :key="index" class="pedido-item">
               <div class="input-row">
@@ -89,11 +90,11 @@
               </div>
             </div>
           </div>
-          <button @click="agregarFilaOtilio" class="btn-agregar">+ Agregar Fila</button>
         </div>
 
         <!-- Catarro -->
         <div v-show="clienteActivo === 'catarro'" class="cliente-seccion">
+          <button @click="agregarFilaCatarro" class="btn-agregar">+ Agregar Fila</button>
           <div class="pedido-grid">
             <div v-for="(item, index) in pedidoCatarro" :key="index" class="pedido-item">
               <div class="input-row">
@@ -150,11 +151,11 @@
               </div>
             </div>
           </div>
-          <button @click="agregarFilaCatarro" class="btn-agregar">+ Agregar Fila</button>
         </div>
 
         <!-- Joselito -->
         <div v-show="clienteActivo === 'joselito'" class="cliente-seccion">
+          <button @click="agregarFilaJoselito" class="btn-agregar">+ Agregar Fila</button>
           <div class="pedido-grid">
             <div v-for="(item, index) in pedidoJoselito" :key="index" class="pedido-item">
               <div class="input-row">
@@ -211,11 +212,11 @@
               </div>
             </div>
           </div>
-          <button @click="agregarFilaJoselito" class="btn-agregar">+ Agregar Fila</button>
         </div>
 
         <!-- Ozuna -->
         <div v-show="clienteActivo === 'ozuna'" class="cliente-seccion">
+          <button @click="agregarFilaOzuna" class="btn-agregar">+ Agregar Fila</button>
           <div class="pedido-grid">
             <div v-for="(item, index) in pedidoOzuna" :key="index" class="pedido-item">
               <div class="input-row">
@@ -272,7 +273,6 @@
               </div>
             </div>
           </div>
-          <button @click="agregarFilaOzuna" class="btn-agregar">+ Agregar Fila</button>
         </div>
       </div>
 
@@ -412,16 +412,16 @@ export default {
       }
     },
     agregarFilaOtilio() {
-      this.pedidoOtilio.push({ kilos: null, medida: '', tipo: '', esTara: true, esProveedor: false, proveedor: '' })
+      this.pedidoOtilio.unshift({ kilos: null, medida: '', tipo: '', esTara: true, esProveedor: false, proveedor: '' })
     },
     agregarFilaCatarro() {
-      this.pedidoCatarro.push({ kilos: null, medida: '', tipo: 'S/H20', esTara: false, esProveedor: false, proveedor: '' })
+      this.pedidoCatarro.unshift({ kilos: null, medida: '', tipo: 'S/H20', esTara: false, esProveedor: false, proveedor: '' })
     },
     agregarFilaJoselito() {
-      this.pedidoJoselito.push({ kilos: null, medida: '', tipo: '', esTara: false, esProveedor: false, proveedor: '' })
+      this.pedidoJoselito.unshift({ kilos: null, medida: '', tipo: '', esTara: false, esProveedor: false, proveedor: '' })
     },
     agregarFilaOzuna() {
-      this.pedidoOzuna.push({ kilos: null, medida: '', tipo: 'S/H20', esTara: false, esProveedor: false, proveedor: '' })
+      this.pedidoOzuna.unshift({ kilos: null, medida: '', tipo: 'S/H20', esTara: false, esProveedor: false, proveedor: '' })
     },
     async guardarPedido() {
       try {
@@ -634,7 +634,20 @@ export default {
 }
 
 .btn-agregar {
-  margin-top: 15px;
+  margin-bottom: 15px;
+  width: 100%;
+  padding: 18px;
+  font-size: 23px;
+  border-radius: 8px;
+  background-color: #3498db;
+  color: white;
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.btn-agregar:hover {
+  background-color: #2980b9;
 }
 
 .buttons-container {
