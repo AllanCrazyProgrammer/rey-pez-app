@@ -891,7 +891,7 @@ select option.text-blue {
   color: #3498db;
 }
 
-@media (max-width: 350px) {
+@media (max-width: 360px) {
   .pedidos-limpio-container {
     padding: 5px;
     width: 100%;
