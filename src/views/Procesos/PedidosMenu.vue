@@ -52,6 +52,10 @@
                     <span class="mes">{{ obtenerMes(grupo.fecha) }}</span>
                     <span class="ano">{{ obtenerAno(grupo.fecha) }}</span>
                   </div>
+                  <div class="totales-dia">
+                    <div>{{ calcularTotalesDia(grupo.pedidos).taras }} T</div>
+                    <div>{{ calcularTotalesDia(grupo.pedidos).kilos }} Kg</div>
+                  </div>
                 </div>
               </td>
               <td class="detalles-celda">
@@ -59,10 +63,10 @@
                   <span class="tipo-badge" :class="pedido.tipo">
                     {{ capitalizarPrimeraLetra(pedido.tipo) }}
                   </span>
-                  <span v-if="pedido.tipo === 'crudo'" class="kilos-badge">
+                  <span :class="['kilos-badge', pedido.tipo]">
                     <div class="kilos-taras-container">
-                      <div>{{ Math.round(calcularKilos(pedido)) }} Kg</div>
-                      <div>{{ Math.round(calcularTaras(pedido)) }} T</div>
+                      <div>{{ pedido.tipo === 'crudo' ? Math.round(calcularKilos(pedido)) : Math.round(calcularKilosLimpio(pedido)) }} Kg</div>
+                      <div>{{ pedido.tipo === 'crudo' ? Math.round(calcularTaras(pedido)) : Math.round(calcularTarasLimpio(pedido)) }} T</div>
                     </div>
                   </span>
                   <div class="acciones">
@@ -169,15 +173,107 @@ export default {
       const kilos = parseFloat(this.calcularKilos(pedido));
       return (kilos / 19).toFixed(2);
     },
-    imprimirPedido(pedido) {
-      this.$router.push({
-        name: pedido.tipo === 'crudo' ? 'PedidoCrudosImpresion' : 'PedidoLimpiosImpresion',
-        params: {
-          fecha: pedido.fecha,
-          pedidos: pedido.pedidos,
-          columnas: pedido.columnas
+    calcularKilosLimpio(pedido) {
+      let totalKilos = 0;
+      
+      // Sumar kilos de cada cliente
+      if (pedido.otilio) {
+        totalKilos += this.calcularKilosCliente(pedido.otilio);
+      }
+      if (pedido.catarro) {
+        totalKilos += this.calcularKilosCliente(pedido.catarro);
+      }
+      if (pedido.joselito) {
+        totalKilos += this.calcularKilosCliente(pedido.joselito);
+      }
+      if (pedido.ozuna) {
+        totalKilos += this.calcularKilosCliente(pedido.ozuna);
+      }
+      
+      return totalKilos;
+    },
+    calcularTarasLimpio(pedido) {
+      let totalTaras = 0;
+      
+      // Sumar taras de cada cliente
+      if (pedido.otilio) {
+        totalTaras += this.calcularTarasCliente(pedido.otilio);
+      }
+      if (pedido.catarro) {
+        totalTaras += this.calcularTarasCliente(pedido.catarro);
+      }
+      if (pedido.joselito) {
+        totalTaras += this.calcularTarasCliente(pedido.joselito);
+      }
+      if (pedido.ozuna) {
+        totalTaras += this.calcularTarasCliente(pedido.ozuna);
+      }
+      
+      return totalTaras;
+    },
+    calcularKilosCliente(items) {
+      let kilosSinH2O = 0;
+      let kilosConH2O = 0;
+      let kilosTaras = 0;
+
+      items.forEach(item => {
+        if (item.kilos) {
+          if (item.esTara) {
+            if (item.tipo === 'C/H20') {
+              kilosConH2O += Number(item.kilos) * 30 * 0.65;
+            } else {
+              kilosTaras += Number(item.kilos) * 30;
+            }
+          } else if (item.tipo === 'S/H20') {
+            kilosSinH2O += Number(item.kilos);
+          } else if (item.tipo === 'C/H20') {
+            kilosConH2O += Number(item.kilos);
+          }
         }
-      })
+      });
+
+      return kilosSinH2O + kilosTaras + kilosConH2O;
+    },
+    calcularTarasCliente(items) {
+      let tarasDirectas = 0;
+      let kilosSinH2O = 0;
+
+      items.forEach(item => {
+        if (item.kilos) {
+          if (item.esTara) {
+            tarasDirectas += Number(item.kilos);
+          } else if (item.tipo === 'S/H20') {
+            kilosSinH2O += Number(item.kilos);
+          }
+        }
+      });
+
+      const tarasPorKilos = kilosSinH2O / 27;
+      return tarasDirectas + tarasPorKilos;
+    },
+    imprimirPedido(pedido) {
+      if (pedido.tipo === 'crudo') {
+        this.$router.push({
+          name: 'PedidoCrudosImpresion',
+          params: {
+            fecha: pedido.fecha,
+            pedidos: pedido.pedidos,
+            columnas: pedido.columnas
+          }
+        });
+      } else {
+        // Para pedidos limpios
+        this.$router.push({
+          name: 'PedidoLimpioImpresion',
+          params: {
+            fecha: pedido.fecha,
+            pedidoOtilio: pedido.otilio || [],
+            pedidoCatarro: pedido.catarro || [],
+            pedidoJoselito: pedido.joselito || [],
+            pedidoOzuna: pedido.ozuna || []
+          }
+        });
+      }
     },
     editarPedido(pedido) {
       const ruta = pedido.tipo === 'crudo' ? '/procesos/pedidos/crudo' : '/procesos/pedidos/limpio'
@@ -197,6 +293,25 @@ export default {
         console.error('Error al eliminar el pedido:', error)
         alert('Error al eliminar el pedido. Por favor intente nuevamente.')
       }
+    },
+    calcularTotalesDia(pedidos) {
+      let totalKilos = 0;
+      let totalTaras = 0;
+
+      pedidos.forEach(pedido => {
+        if (pedido.tipo === 'crudo') {
+          totalKilos += Math.round(parseFloat(this.calcularKilos(pedido)));
+          totalTaras += Math.round(parseFloat(this.calcularTaras(pedido)));
+        } else if (pedido.tipo === 'limpio') {
+          totalKilos += Math.round(this.calcularKilosLimpio(pedido));
+          totalTaras += Math.round(this.calcularTarasLimpio(pedido));
+        }
+      });
+
+      return {
+        kilos: totalKilos,
+        taras: totalTaras
+      };
     }
   },
   created() {
@@ -277,11 +392,11 @@ export default {
 }
 
 .btn-nuevo-pedido.limpio {
-  background-color: #ff9800;
+  background-color: #e65100;
 }
 
 .btn-nuevo-pedido.limpio:hover {
-  background-color: #f57c00;
+  background-color: #ff9800;
 }
 
 .action-button {
@@ -422,8 +537,8 @@ tr:hover td {
 }
 
 .tipo-badge.limpio {
-  background-color: #fff3e0;
-  color: #e65100;
+  background-color: #e65100;
+  color: white;
 }
 
 .kilos-badge {
@@ -618,5 +733,23 @@ tr:hover td {
   padding: 20px;
   color: #666;
   font-style: italic;
+}
+
+.kilos-badge.limpio {
+  background-color: #fff3e0;
+  color: #e65100;
+}
+
+.totales-dia {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #edf2f7;
+  font-size: 0.9em;
+  color: #2c3e50;
+  font-weight: 600;
+}
+
+.totales-dia div {
+  line-height: 1.4;
 }
 </style> 

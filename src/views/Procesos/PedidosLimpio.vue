@@ -13,20 +13,46 @@
             required
             :max="fechaMaxima">
         </div>
+        <div class="totales-generales">
+          <div class="total-item">
+            <span class="total-label">Total Taras:</span>
+            <span class="total-value">{{ totalesGenerales.tarasTotal }} kg</span>
+          </div>
+          <div class="total-item">
+            <span class="total-label">Total Kilos:</span>
+            <span class="total-value">{{ totalesGenerales.kilosTotal }} kg</span>
+          </div>
+        </div>
         <MedidasModal @medidas-actualizadas="actualizarMedidas" />
       </div>
 
       <!-- Sistema de Tabs para clientes -->
       <div class="tabs-container">
-        <button 
-          v-for="cliente in clientes" 
-          :key="cliente.id"
-          @click="clienteActivo = cliente.id"
-          :class="['tab-button', { 'active': clienteActivo === cliente.id }]"
-          :data-cliente="cliente.id"
-        >
-          {{ cliente.nombre }}
-        </button>
+        <div v-for="cliente in clientes" :key="cliente.id" class="tab-wrapper">
+          <button 
+            @click="clienteActivo = cliente.id"
+            :class="['tab-button', { 'active': clienteActivo === cliente.id }]"
+            :data-cliente="cliente.id"
+          >
+            {{ cliente.nombre }}
+          </button>
+          <div class="tab-totales" v-if="cliente.id === 'otilio'">
+            <div>Taras: {{ calculosOtilio.tarasTotal }} kg</div>
+            <div>Kilos: {{ calculosOtilio.kilosTotal }} kg</div>
+          </div>
+          <div class="tab-totales" v-if="cliente.id === 'catarro'">
+            <div>Taras: {{ calculosCatarro.tarasTotal }} kg</div>
+            <div>Kilos: {{ calculosCatarro.kilosTotal }} kg</div>
+          </div>
+          <div class="tab-totales" v-if="cliente.id === 'joselito'">
+            <div>Taras: {{ calculosJoselito.tarasTotal }} kg</div>
+            <div>Kilos: {{ calculosJoselito.kilosTotal }} kg</div>
+          </div>
+          <div class="tab-totales" v-if="cliente.id === 'ozuna'">
+            <div>Taras: {{ calculosOzuna.tarasTotal }} kg</div>
+            <div>Kilos: {{ calculosOzuna.kilosTotal }} kg</div>
+          </div>
+        </div>
       </div>
 
       <!-- Contenido de cada cliente -->
@@ -34,6 +60,7 @@
         <!-- Otilio -->
         <div v-show="clienteActivo === 'otilio'" class="cliente-seccion">
           <button @click="agregarFilaOtilio" class="btn-agregar">+ Agregar Fila</button>
+          
           <div class="pedido-grid">
             <div v-for="(item, index) in pedidoOtilio" :key="index" class="pedido-item">
               <div class="input-row">
@@ -95,6 +122,7 @@
         <!-- Catarro -->
         <div v-show="clienteActivo === 'catarro'" class="cliente-seccion">
           <button @click="agregarFilaCatarro" class="btn-agregar">+ Agregar Fila</button>
+          
           <div class="pedido-grid">
             <div v-for="(item, index) in pedidoCatarro" :key="index" class="pedido-item">
               <div class="input-row">
@@ -156,6 +184,7 @@
         <!-- Joselito -->
         <div v-show="clienteActivo === 'joselito'" class="cliente-seccion">
           <button @click="agregarFilaJoselito" class="btn-agregar">+ Agregar Fila</button>
+          
           <div class="pedido-grid">
             <div v-for="(item, index) in pedidoJoselito" :key="index" class="pedido-item">
               <div class="input-row">
@@ -217,6 +246,7 @@
         <!-- Ozuna -->
         <div v-show="clienteActivo === 'ozuna'" class="cliente-seccion">
           <button @click="agregarFilaOzuna" class="btn-agregar">+ Agregar Fila</button>
+          
           <div class="pedido-grid">
             <div v-for="(item, index) in pedidoOzuna" :key="index" class="pedido-item">
               <div class="input-row">
@@ -377,6 +407,178 @@ export default {
 
       // Combinar ambas listas con especiales primero
       return [...medidasEspeciales, ...medidasGranja]
+    },
+    // Cálculos para Otilio
+    calculosOtilio() {
+      let tarasDirectas = 0;
+      let kilosSinH2O = 0;
+      let kilosConH2O = 0;
+      let kilosTaras = 0;
+
+      this.pedidoOtilio.forEach(item => {
+        if (item.kilos) {
+          if (item.esTara) {
+            tarasDirectas += Number(item.kilos);
+            if (item.tipo === 'C/H20') {
+              kilosConH2O += Number(item.kilos) * 30 * 0.65;
+            } else {
+              kilosTaras += Number(item.kilos) * 30;
+            }
+          } else if (item.tipo === 'S/H20') {
+            kilosSinH2O += Number(item.kilos);
+          } else if (item.tipo === 'C/H20') {
+            kilosConH2O += Number(item.kilos);
+          }
+        }
+      });
+
+      const tarasPorKilos = kilosSinH2O / 27;
+      const tarasTotal = Math.round(tarasDirectas + tarasPorKilos);
+      const totalKilosSinH2O = kilosSinH2O + kilosTaras;
+      const kilosTotal = Math.round(totalKilosSinH2O + kilosConH2O);
+
+      return {
+        tarasDirectas: tarasDirectas.toFixed(2),
+        tarasPorKilos: tarasPorKilos.toFixed(2),
+        tarasTotal: tarasTotal.toString(),
+        kilosSinH2O: Math.round(totalKilosSinH2O).toString(),
+        kilosConH2O: kilosConH2O.toFixed(2),
+        kilosTotal: kilosTotal.toString()
+      };
+    },
+    // Cálculos para Catarro
+    calculosCatarro() {
+      let tarasDirectas = 0;
+      let kilosSinH2O = 0;
+      let kilosConH2O = 0;
+      let kilosTaras = 0;
+
+      this.pedidoCatarro.forEach(item => {
+        if (item.kilos) {
+          if (item.esTara) {
+            tarasDirectas += Number(item.kilos);
+            if (item.tipo === 'C/H20') {
+              kilosConH2O += Number(item.kilos) * 30 * 0.65;
+            } else {
+              kilosTaras += Number(item.kilos) * 30;
+            }
+          } else if (item.tipo === 'S/H20') {
+            kilosSinH2O += Number(item.kilos);
+          } else if (item.tipo === 'C/H20') {
+            kilosConH2O += Number(item.kilos);
+          }
+        }
+      });
+
+      const tarasPorKilos = kilosSinH2O / 27;
+      const tarasTotal = Math.round(tarasDirectas + tarasPorKilos);
+      const totalKilosSinH2O = kilosSinH2O + kilosTaras;
+      const kilosTotal = Math.round(totalKilosSinH2O + kilosConH2O);
+
+      return {
+        tarasDirectas: tarasDirectas.toFixed(2),
+        tarasPorKilos: tarasPorKilos.toFixed(2),
+        tarasTotal: tarasTotal.toString(),
+        kilosSinH2O: Math.round(totalKilosSinH2O).toString(),
+        kilosConH2O: kilosConH2O.toFixed(2),
+        kilosTotal: kilosTotal.toString()
+      };
+    },
+    // Cálculos para Joselito
+    calculosJoselito() {
+      let tarasDirectas = 0;
+      let kilosSinH2O = 0;
+      let kilosConH2O = 0;
+      let kilosTaras = 0;
+
+      this.pedidoJoselito.forEach(item => {
+        if (item.kilos) {
+          if (item.esTara) {
+            tarasDirectas += Number(item.kilos);
+            if (item.tipo === 'C/H20') {
+              kilosConH2O += Number(item.kilos) * 30 * 0.65;
+            } else {
+              kilosTaras += Number(item.kilos) * 30;
+            }
+          } else if (item.tipo === 'S/H20') {
+            kilosSinH2O += Number(item.kilos);
+          } else if (item.tipo === 'C/H20') {
+            kilosConH2O += Number(item.kilos);
+          }
+        }
+      });
+
+      const tarasPorKilos = kilosSinH2O / 25;
+      const tarasTotal = Math.round(tarasDirectas + tarasPorKilos);
+      const totalKilosSinH2O = kilosSinH2O + kilosTaras;
+      const kilosTotal = Math.round(totalKilosSinH2O + kilosConH2O);
+
+      return {
+        tarasDirectas: tarasDirectas.toFixed(2),
+        tarasPorKilos: tarasPorKilos.toFixed(2),
+        tarasTotal: tarasTotal.toString(),
+        kilosSinH2O: Math.round(totalKilosSinH2O).toString(),
+        kilosConH2O: kilosConH2O.toFixed(2),
+        kilosTotal: kilosTotal.toString()
+      };
+    },
+    // Cálculos para Ozuna
+    calculosOzuna() {
+      let tarasDirectas = 0;
+      let kilosSinH2O = 0;
+      let kilosConH2O = 0;
+      let kilosTaras = 0;
+
+      this.pedidoOzuna.forEach(item => {
+        if (item.kilos) {
+          if (item.esTara) {
+            tarasDirectas += Number(item.kilos);
+            if (item.tipo === 'C/H20') {
+              kilosConH2O += Number(item.kilos) * 30 * 0.65;
+            } else {
+              kilosTaras += Number(item.kilos) * 30;
+            }
+          } else if (item.tipo === 'S/H20') {
+            kilosSinH2O += Number(item.kilos);
+          } else if (item.tipo === 'C/H20') {
+            kilosConH2O += Number(item.kilos);
+          }
+        }
+      });
+
+      const tarasPorKilos = kilosSinH2O / 27;
+      const tarasTotal = Math.round(tarasDirectas + tarasPorKilos);
+      const totalKilosSinH2O = kilosSinH2O + kilosTaras;
+      const kilosTotal = Math.round(totalKilosSinH2O + kilosConH2O);
+
+      return {
+        tarasDirectas: tarasDirectas.toFixed(2),
+        tarasPorKilos: tarasPorKilos.toFixed(2),
+        tarasTotal: tarasTotal.toString(),
+        kilosSinH2O: Math.round(totalKilosSinH2O).toString(),
+        kilosConH2O: kilosConH2O.toFixed(2),
+        kilosTotal: kilosTotal.toString()
+      };
+    },
+    totalesGenerales() {
+      const tarasTotal = Math.round(
+        Number(this.calculosOtilio.tarasTotal) +
+        Number(this.calculosCatarro.tarasTotal) +
+        Number(this.calculosJoselito.tarasTotal) +
+        Number(this.calculosOzuna.tarasTotal)
+      );
+
+      const kilosTotal = Math.round(
+        Number(this.calculosOtilio.kilosTotal) +
+        Number(this.calculosCatarro.kilosTotal) +
+        Number(this.calculosJoselito.kilosTotal) +
+        Number(this.calculosOzuna.kilosTotal)
+      );
+
+      return {
+        tarasTotal: tarasTotal.toString(),
+        kilosTotal: kilosTotal.toString()
+      };
     }
   },
   methods: {
@@ -507,6 +709,85 @@ export default {
     seleccionarNota(item, nota) {
       item.nota = nota;
       this.itemSeleccionadoNotas = null;
+    },
+    ordenarPedidosPorMedida(pedidos) {
+      // Creamos una copia del array para no mutar el original directamente
+      const pedidosOrdenados = [...pedidos];
+      
+      // Separamos los pedidos con medida y tipo de los que no los tienen
+      const pedidosCompletos = pedidosOrdenados.filter(p => p.medida && p.tipo);
+      const pedidosIncompletos = pedidosOrdenados.filter(p => !p.medida || !p.tipo);
+      
+      // Ordenamos solo los pedidos completos
+      pedidosCompletos.sort((a, b) => {
+        if (a.medida === b.medida) {
+          return a.tipo.localeCompare(b.tipo);
+        }
+        return a.medida.localeCompare(b.medida);
+      });
+      
+      // Retornamos primero los incompletos y luego los ordenados
+      return [...pedidosIncompletos, ...pedidosCompletos];
+    }
+  },
+  watch: {
+    'pedidoOtilio': {
+      deep: true,
+      handler(newVal) {
+        // Verificamos si realmente necesitamos ordenar
+        const needsSort = newVal.some(item => item.medida && item.tipo);
+        if (needsSort) {
+          const ordenados = this.ordenarPedidosPorMedida(newVal);
+          // Solo actualizamos si el orden es diferente
+          if (JSON.stringify(ordenados) !== JSON.stringify(newVal)) {
+            this.$nextTick(() => {
+              this.pedidoOtilio = ordenados;
+            });
+          }
+        }
+      }
+    },
+    'pedidoCatarro': {
+      deep: true,
+      handler(newVal) {
+        const needsSort = newVal.some(item => item.medida && item.tipo);
+        if (needsSort) {
+          const ordenados = this.ordenarPedidosPorMedida(newVal);
+          if (JSON.stringify(ordenados) !== JSON.stringify(newVal)) {
+            this.$nextTick(() => {
+              this.pedidoCatarro = ordenados;
+            });
+          }
+        }
+      }
+    },
+    'pedidoJoselito': {
+      deep: true,
+      handler(newVal) {
+        const needsSort = newVal.some(item => item.medida && item.tipo);
+        if (needsSort) {
+          const ordenados = this.ordenarPedidosPorMedida(newVal);
+          if (JSON.stringify(ordenados) !== JSON.stringify(newVal)) {
+            this.$nextTick(() => {
+              this.pedidoJoselito = ordenados;
+            });
+          }
+        }
+      }
+    },
+    'pedidoOzuna': {
+      deep: true,
+      handler(newVal) {
+        const needsSort = newVal.some(item => item.medida && item.tipo);
+        if (needsSort) {
+          const ordenados = this.ordenarPedidosPorMedida(newVal);
+          if (JSON.stringify(ordenados) !== JSON.stringify(newVal)) {
+            this.$nextTick(() => {
+              this.pedidoOzuna = ordenados;
+            });
+          }
+        }
+      }
     }
   }
 }
@@ -526,6 +807,7 @@ export default {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 20px;
+  gap: 20px;
 }
 
 .fecha-container {
@@ -534,11 +816,54 @@ export default {
   gap: 10px;
 }
 
+.totales-generales {
+  display: flex;
+  gap: 20px;
+  background-color: #f8f9fa;
+  padding: 10px 20px;
+  border-radius: 8px;
+  border: 1px solid #dee2e6;
+}
+
+.total-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.total-label {
+  font-size: 14px;
+  color: #6c757d;
+}
+
+.total-value {
+  font-size: 18px;
+  font-weight: bold;
+  color: #2c3e50;
+}
+
 .tabs-container {
   display: flex;
   gap: 10px;
   margin-bottom: 20px;
   flex-wrap: wrap;
+}
+
+.tab-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.tab-totales {
+  font-size: 14px;
+  color: #666;
+  text-align: center;
+  background-color: rgba(255, 255, 255, 0.9);
+  padding: 4px 8px;
+  border-radius: 4px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
 }
 
 .tab-button {
@@ -1109,5 +1434,94 @@ select.text-blue {
 
 select option.text-blue {
   color: #3498db;
+}
+
+/* Estilos para el resumen de cálculos */
+.resumen-calculos {
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  padding: 20px;
+  margin: 20px 0;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.resumen-calculos h3 {
+  margin: 0 0 15px 0;
+  color: #2c3e50;
+  font-size: 1.2em;
+}
+
+.calculos-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 15px;
+}
+
+.calculo-item {
+  background-color: white;
+  padding: 12px;
+  border-radius: 6px;
+  border: 1px solid #eee;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.calculo-item.total {
+  background-color: #f1f8ff;
+  border-color: #3498db;
+}
+
+.calculo-label {
+  font-size: 0.9em;
+  color: #666;
+}
+
+.calculo-valor {
+  font-size: 1.2em;
+  font-weight: 600;
+  color: #2c3e50;
+}
+
+.calculo-item.total .calculo-valor {
+  color: #3498db;
+}
+
+@media (max-width: 768px) {
+  .calculos-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .resumen-calculos {
+    padding: 15px;
+    margin: 15px 0;
+  }
+  
+  .calculo-item {
+    padding: 10px;
+  }
+  
+  .calculo-label {
+    font-size: 0.85em;
+  }
+  
+  .calculo-valor {
+    font-size: 1.1em;
+  }
+}
+
+@media (max-width: 480px) {
+  .calculos-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .resumen-calculos {
+    padding: 12px;
+    margin: 12px 0;
+  }
+  
+  .calculo-item {
+    padding: 8px;
+  }
 }
 </style> 
