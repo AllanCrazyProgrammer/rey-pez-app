@@ -16,7 +16,7 @@
         <div class="totales-generales">
           <div class="total-item">
             <span class="total-label">Total Taras:</span>
-            <span class="total-value">{{ totalesGenerales.tarasTotal }} kg</span>
+            <span class="total-value">{{ totalesGenerales.tarasTotal }} T</span>
           </div>
           <div class="total-item">
             <span class="total-label">Total Kilos:</span>
@@ -37,21 +37,45 @@
             {{ cliente.nombre }}
           </button>
           <div class="tab-totales" v-if="cliente.id === 'otilio'">
-            <div>Taras: {{ calculosOtilio.tarasTotal }} kg</div>
+            <div>Taras: {{ calculosOtilio.tarasTotal }} T</div>
             <div>Kilos: {{ calculosOtilio.kilosTotal }} kg</div>
           </div>
           <div class="tab-totales" v-if="cliente.id === 'catarro'">
-            <div>Taras: {{ calculosCatarro.tarasTotal }} kg</div>
+            <div>Taras: {{ calculosCatarro.tarasTotal }} T</div>
             <div>Kilos: {{ calculosCatarro.kilosTotal }} kg</div>
           </div>
           <div class="tab-totales" v-if="cliente.id === 'joselito'">
-            <div>Taras: {{ calculosJoselito.tarasTotal }} kg</div>
+            <div>Taras: {{ calculosJoselito.tarasTotal }} T</div>
             <div>Kilos: {{ calculosJoselito.kilosTotal }} kg</div>
           </div>
           <div class="tab-totales" v-if="cliente.id === 'ozuna'">
-            <div>Taras: {{ calculosOzuna.tarasTotal }} kg</div>
+            <div>Taras: {{ calculosOzuna.tarasTotal }} T</div>
             <div>Kilos: {{ calculosOzuna.kilosTotal }} kg</div>
           </div>
+        </div>
+
+        <!-- Clientes Temporales -->
+        <div v-for="(cliente, id) in clientesTemporales" :key="id" class="tab-wrapper">
+          <button 
+            @click="clienteActivo = cliente.id"
+            :class="['tab-button temporal', { 'active': clienteActivo === cliente.id }]"
+          >
+            {{ cliente.nombre }}
+          </button>
+          <div class="tab-totales">
+            <div>Taras: {{ calcularTotalesTemporales(cliente.id).tarasTotal }} T</div>
+            <div>Kilos: {{ calcularTotalesTemporales(cliente.id).kilosTotal }} kg</div>
+          </div>
+        </div>
+        
+        <!-- Botón para agregar nuevo cliente -->
+        <div class="tab-wrapper">
+          <button 
+            @click="mostrarModalNuevoCliente = true"
+            class="tab-button nuevo-cliente"
+          >
+            + Nuevo Cliente
+          </button>
         </div>
       </div>
 
@@ -232,6 +256,7 @@
                     <option value="">Seleccionar</option>
                     <option value="S/H20">S/H20</option>
                     <option value="C/H20" class="text-blue">C/H20</option>
+                    <option value="1.35 y .15">1.35 y .15</option>
                   </select>
                 </div>
 
@@ -304,6 +329,72 @@
             </div>
           </div>
         </div>
+
+        <!-- Clientes Temporales -->
+        <div v-for="(cliente, id) in clientesTemporales" 
+             :key="id"
+             v-show="clienteActivo === cliente.id" 
+             class="cliente-seccion">
+          <button @click="agregarFilaTemporal(cliente.id)" class="btn-agregar">+ Agregar Fila</button>
+          
+          <div class="pedido-grid">
+            <div v-for="(item, index) in cliente.pedidos" :key="index" class="pedido-item">
+              <div class="input-row">
+                <div class="input-group-compact kilos">
+                  <div class="label-container">
+                    <label>Kilos:</label>
+                    <div class="tara-checkbox">
+                      <input type="checkbox" v-model="item.esTara" :id="'tara' + cliente.id + index">
+                      <label :for="'tara' + cliente.id + index">T</label>
+                    </div>
+                  </div>
+                  <input type="number" v-model="item.kilos" class="input-field">
+                </div>
+
+                <div class="input-group-compact medida">
+                  <div class="label-container">
+                    <label>Medida:</label>
+                    <button 
+                      class="btn-proveedor"
+                      @click="abrirModalProveedor(item)"
+                      :class="{ 'active': item.esProveedor }"
+                      :title="item.proveedor || 'Agregar proveedor'"
+                    >
+                      P
+                    </button>
+                  </div>
+                  <select v-model="item.medida" class="input-field">
+                    <option value="">Seleccionar</option>
+                    <option v-for="medida in medidasOrdenadas" :key="medida.id" :value="medida.nombre">
+                      {{ medida.nombre }}
+                    </option>
+                  </select>
+                </div>
+
+                <div class="input-group-compact tipo">
+                  <div class="label-container">
+                    <label>Tipo:</label>
+                    <select v-model="item.nota" class="input-field-notas">
+                      <option value="">Notas</option>
+                      <option value="Sellado">Sellado</option>
+                      <option value="Kileado">Kileado</option>
+                    </select>
+                  </div>
+                  <select v-model="item.tipo" class="input-field" :class="{ 'text-blue': item.tipo === 'C/H20' || item.tipo === '1.35 y .15' }">
+                    <option value="">Seleccionar</option>
+                    <option value="S/H20">S/H20</option>
+                    <option value=".9 y .1">.9 y .1</option>
+                    <option value=".9">.9</option>
+                  </select>
+                </div>
+
+                <button @click="eliminarPedidoTemporal(cliente.id, index)" class="btn-eliminar" v-if="cliente.pedidos.length > 1">
+                  <i class="fas fa-trash"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div class="buttons-container">
@@ -322,6 +413,7 @@
       :pedidoCatarro="pedidoCatarro"
       :pedidoJoselito="pedidoJoselito"
       :pedidoOzuna="pedidoOzuna"
+      :clientesTemporales="clientesTemporales"
       @volver="mostrarImpresion = false"
     />
 
@@ -330,6 +422,12 @@
       :proveedor="itemSeleccionado ? itemSeleccionado.proveedor : ''"
       @cerrar="mostrarModalProveedor = false"
       @guardar="guardarProveedor"
+    />
+
+    <NuevoClienteModal
+      :mostrar="mostrarModalNuevoCliente"
+      @cerrar="mostrarModalNuevoCliente = false"
+      @guardar="agregarClienteTemporal"
     />
   </div>
 </template>
@@ -340,13 +438,15 @@ import { collection, addDoc, Timestamp, getDocs, doc, getDoc, updateDoc } from '
 import PedidoLimpioImpresion from './PedidoLimpioImpresion.vue'
 import MedidasModal from '@/components/MedidasModal.vue'
 import ProveedorModal from '@/components/ProveedorModal.vue'
+import NuevoClienteModal from '@/components/NuevoClienteModal.vue'
 
 export default {
   name: 'PedidosLimpio',
   components: {
     PedidoLimpioImpresion,
     MedidasModal,
-    ProveedorModal
+    ProveedorModal,
+    NuevoClienteModal
   },
   data() {
     return {
@@ -355,6 +455,8 @@ export default {
       pedidoCatarro: [{ kilos: null, medida: '', tipo: 'S/H20', esTara: false, esProveedor: false, proveedor: '' }],
       pedidoJoselito: [{ kilos: null, medida: '', tipo: '', esTara: false, esProveedor: false, proveedor: '' }],
       pedidoOzuna: [{ kilos: null, medida: '', tipo: 'S/H20', esTara: false, esProveedor: false, proveedor: '' }],
+      clientesTemporales: {},
+      mostrarModalNuevoCliente: false,
       mostrarImpresion: false,
       mostrarModalProveedor: false,
       itemSeleccionado: null,
@@ -603,6 +705,7 @@ export default {
           this.pedidoCatarro = pedido.catarro || [{ kilos: null, medida: '', tipo: 'S/H20', esTara: false, esProveedor: false, proveedor: '' }];
           this.pedidoJoselito = pedido.joselito || [{ kilos: null, medida: '', tipo: '', esTara: false, esProveedor: false, proveedor: '' }];
           this.pedidoOzuna = pedido.ozuna || [{ kilos: null, medida: '', tipo: 'S/H20', esTara: false, esProveedor: false, proveedor: '' }];
+          this.clientesTemporales = pedido.clientesTemporales || {};
         } else {
           console.error('No se encontró el pedido');
           alert('No se encontró el pedido');
@@ -633,6 +736,7 @@ export default {
           catarro: this.pedidoCatarro,
           joselito: this.pedidoJoselito,
           ozuna: this.pedidoOzuna,
+          clientesTemporales: this.clientesTemporales,
           tipo: 'limpio',
           createdAt: this.editando ? Timestamp.fromDate(new Date(this.fecha)) : Timestamp.now()
         }
@@ -728,7 +832,78 @@ export default {
       
       // Retornamos primero los incompletos y luego los ordenados
       return [...pedidosIncompletos, ...pedidosCompletos];
-    }
+    },
+    isClienteTemporal(clienteId) {
+      return !['otilio', 'catarro', 'joselito', 'ozuna'].includes(clienteId);
+    },
+    calcularTotalesTemporales(clienteId) {
+      if (!this.clientesTemporales[clienteId]?.pedidos) return { tarasTotal: '0', kilosTotal: '0' };
+
+      let tarasDirectas = 0;
+      let kilosSinH2O = 0;
+      let kilosConH2O = 0;
+      let kilosTaras = 0;
+
+      this.clientesTemporales[clienteId].pedidos.forEach(item => {
+        if (item.kilos) {
+          if (item.esTara) {
+            tarasDirectas += Number(item.kilos);
+            if (item.tipo === 'C/H20') {
+              kilosConH2O += Number(item.kilos) * 30 * 0.65;
+            } else {
+              kilosTaras += Number(item.kilos) * 30;
+            }
+          } else if (item.tipo === 'S/H20') {
+            kilosSinH2O += Number(item.kilos);
+          } else if (item.tipo === 'C/H20') {
+            kilosConH2O += Number(item.kilos);
+          }
+        }
+      });
+
+      const tarasPorKilos = kilosSinH2O / 27;
+      const tarasTotal = Math.round(tarasDirectas + tarasPorKilos);
+      const totalKilosSinH2O = kilosSinH2O + kilosTaras;
+      const kilosTotal = Math.round(totalKilosSinH2O + kilosConH2O);
+
+      return {
+        tarasTotal: tarasTotal.toString(),
+        kilosTotal: kilosTotal.toString()
+      };
+    },
+    agregarClienteTemporal(nuevoCliente) {
+      const clienteData = {
+        id: nuevoCliente.id,
+        nombre: nuevoCliente.nombre,
+        pedidos: [{ kilos: null, medida: '', tipo: '', esTara: false, esProveedor: false, proveedor: '' }]
+      };
+      this.$set(this.clientesTemporales, nuevoCliente.id, clienteData);
+      this.clienteActivo = nuevoCliente.id;
+      this.mostrarModalNuevoCliente = false;
+    },
+    agregarFilaTemporal(clienteId) {
+      if (!this.clientesTemporales[clienteId]) return;
+      
+      this.clientesTemporales[clienteId].pedidos.unshift({
+        kilos: null,
+        medida: '',
+        tipo: '',
+        esTara: false,
+        esProveedor: false,
+        proveedor: ''
+      });
+    },
+    eliminarPedidoTemporal(clienteId, index) {
+      if (!this.clientesTemporales[clienteId]) return;
+      
+      this.clientesTemporales[clienteId].pedidos.splice(index, 1);
+      if (this.clientesTemporales[clienteId].pedidos.length === 0) {
+        this.$delete(this.clientesTemporales, clienteId);
+        if (this.clienteActivo === clienteId) {
+          this.clienteActivo = 'otilio';
+        }
+      }
+    },
   },
   watch: {
     'pedidoOtilio': {
@@ -933,6 +1108,29 @@ export default {
 
 .tab-button[data-cliente="ozuna"]:hover:not(.active) {
   background-color: #27ae6080;
+}
+
+.tab-button.temporal {
+  background-color: #95a5a6;
+  color: white;
+}
+
+.tab-button.temporal.active {
+  background-color: #7f8c8d;
+}
+
+.tab-button.temporal:hover:not(.active) {
+  background-color: #7f8c8d80;
+}
+
+.tab-button.nuevo-cliente {
+  background-color: #ecf0f1;
+  color: #2c3e50;
+  border: 2px dashed #95a5a6;
+}
+
+.tab-button.nuevo-cliente:hover {
+  background-color: #bdc3c7;
 }
 
 .clientes-content {

@@ -65,7 +65,7 @@
                   </span>
                   <span :class="['kilos-badge', pedido.tipo]">
                     <div class="kilos-taras-container">
-                      <div>{{ pedido.tipo === 'crudo' ? Math.round(calcularKilos(pedido)) : Math.round(calcularKilosLimpio(pedido)) }} Kg</div>
+                      <div>{{ pedido.tipo === 'crudo' ? formatearNumero(Math.round(calcularKilos(pedido))) : formatearNumero(Math.round(calcularKilosLimpio(pedido))) }} Kg</div>
                       <div>{{ pedido.tipo === 'crudo' ? Math.round(calcularTaras(pedido)) : Math.round(calcularTarasLimpio(pedido)) }} T</div>
                     </div>
                   </span>
@@ -134,6 +134,9 @@ export default {
     }
   },
   methods: {
+    formatearNumero(numero) {
+      return numero.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    },
     obtenerDia(fecha) {
       const date = new Date(fecha + 'T00:00:00')
       return date.getDate().toString().padStart(2, '0')
@@ -309,7 +312,7 @@ export default {
       });
 
       return {
-        kilos: totalKilos,
+        kilos: this.formatearNumero(totalKilos),
         taras: totalTaras
       };
     }

@@ -5,8 +5,11 @@
       <button @click="generarPDF" class="btn-generar">
         <span class="icon">📄</span> Generar PDF
       </button>
-      <button @click="$router.push('/procesos/pedidos')" class="btn-volver">
-        Volver
+      <button @click="$router.push('/procesos/pedidos')" class="btn-menu">
+        Menú
+      </button>
+      <button @click="$emit('volver')" class="btn-volver">
+        Volver al Pedido
       </button>
     </div>
     <div id="pdfPreview" class="pdf-preview">
@@ -28,13 +31,48 @@
                 {{ item.medida }}
                 <span v-if="item.proveedor" class="proveedor-tag">{{ item.proveedor }}</span>
               </td>
-              <td :class="{ 'text-blue': item.tipo === 'C/H20' }">
+              <td :class="{ 
+                'text-blue': item.tipo === 'C/H20', 
+                'text-blue compact': item.tipo === '1.35 y .15' 
+              }">
                 {{ item.tipo }}
                 <span v-if="item.nota" class="nota-tag">{{ item.nota }}</span>
               </td>
             </tr>
           </tbody>
         </table>
+
+        <!-- Clientes Temporales -->
+        <template v-for="(cliente, id) in clientesTemporales">
+          <div :key="id" class="cliente-seccion temporal">
+            <h3 class="cliente-header temporal-header">{{ cliente.nombre }}</h3>
+            <table class="preview-table">
+              <thead>
+                <tr>
+                  <th>Kilos/Taras</th>
+                  <th>Medida</th>
+                  <th>Tipo</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="(item, index) in cliente.pedidos" :key="'temp-'+id+'-'+index">
+                  <td>{{ item.kilos }}<i v-if="item.esTara">T</i></td>
+                  <td>
+                    {{ item.medida }}
+                    <span v-if="item.proveedor" class="proveedor-tag">{{ item.proveedor }}</span>
+                  </td>
+                  <td :class="{ 
+                    'text-blue': item.tipo === 'C/H20', 
+                    'text-blue compact': item.tipo === '1.35 y .15' 
+                  }">
+                    {{ item.tipo }}
+                    <span v-if="item.nota" class="nota-tag">{{ item.nota }}</span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </template>
       </div>
 
       <!-- Vista previa de otros clientes -->
@@ -57,7 +95,10 @@
                   {{ item.medida }}
                   <span v-if="item.proveedor" class="proveedor-tag">{{ item.proveedor }}</span>
                 </td>
-                <td :class="{ 'text-blue': item.tipo === 'C/H20' }">
+                <td :class="{ 
+                  'text-blue': item.tipo === 'C/H20', 
+                  'text-blue compact': item.tipo === '1.35 y .15' 
+                }">
                   {{ item.tipo }}
                   <span v-if="item.nota" class="nota-tag">{{ item.nota }}</span>
                 </td>
@@ -152,6 +193,10 @@ export default {
     pedidoOzuna: {
       type: Array,
       required: true
+    },
+    clientesTemporales: {
+      type: Object,
+      default: () => ({})
     }
   },
   methods: {
@@ -172,8 +217,21 @@ export default {
           fontSize: fontSize * 2 
         },
         { 
+          text: item.medida || '', 
+          fontSize: fontSize * 2 
+        },
+        { 
           stack: [
-            { text: item.medida || '', fontSize: fontSize * 2 },
+            { 
+              text: [
+                { 
+                  text: item.tipo || '', 
+                  fontSize: fontSize * (item.tipo === '1.35 y .15' ? 1.6 : 2),
+                  color: (item.tipo === 'C/H20' || item.tipo === '1.35 y .15') ? '#0000FF' : undefined,
+                  margin: item.tipo === '1.35 y .15' ? [0, 0, 0, 0] : undefined
+                }
+              ]
+            },
             item.proveedor ? { 
               text: item.proveedor, 
               fontSize: fontSize * 1.3, 
@@ -183,16 +241,6 @@ export default {
               padding: [2, 1],
               alignment: 'center'
             } : '',
-            
-          ]
-        },
-        { 
-          stack: [
-            { 
-              text: item.tipo || '', 
-              fontSize: fontSize * 2,
-              color: item.tipo === 'C/H20' ? '#0000FF' : undefined 
-            },
             item.nota ? { 
               text: item.nota, 
               fontSize: fontSize * 1.3, 
@@ -208,7 +256,7 @@ export default {
 
       return {
         table: {
-          widths: ['*', '*', '*'],
+          widths: ['30%', '35%', '35%'],
           body
         },
         layout: {
@@ -227,7 +275,7 @@ export default {
       const docDefinition = {
         pageSize: 'letter',
         pageOrientation: 'portrait',
-        pageMargins: [10, 0, 10, 0],
+        pageMargins: [0, 0, 0, 0],
         content: [
           // Primera página - Otilio
           {
@@ -308,7 +356,21 @@ export default {
                 width: '47%'
               }
             ]
-          }
+          },
+          { text: '', pageBreak: 'after' },
+
+          // Tercera página - Clientes Temporales
+       
+          ...Object.values(this.clientesTemporales).map(cliente => [
+            {
+              text: cliente.nombre.toUpperCase(),
+              style: 'clienteHeader',
+              fontSize: 36,
+              margin: [0, 30, 0, 10],
+              background: '#95a5a6'
+            },
+            this.generarTablaCliente(cliente.pedidos, 26)
+          ]).flat()
         ],
         styles: {
           header: {
@@ -380,6 +442,47 @@ export default {
           paddingBottom: () => 8
         }
       };
+    },
+    obtenerNombreCliente(clienteId) {
+      // Convertir el ID a un nombre más presentable
+      return clienteId.split('-').map(word => 
+        word.charAt(0).toUpperCase() + word.slice(1)
+      ).join(' ');
+    },
+    calcularTotalesTemporales(clienteId) {
+      if (!this.clientesTemporales[clienteId]) return { tarasTotal: '0', kilosTotal: '0' };
+
+      let tarasDirectas = 0;
+      let kilosSinH2O = 0;
+      let kilosConH2O = 0;
+      let kilosTaras = 0;
+
+      this.clientesTemporales[clienteId].forEach(item => {
+        if (item.kilos) {
+          if (item.esTara) {
+            tarasDirectas += Number(item.kilos);
+            if (item.tipo === 'C/H20') {
+              kilosConH2O += Number(item.kilos) * 30 * 0.65;
+            } else {
+              kilosTaras += Number(item.kilos) * 30;
+            }
+          } else if (item.tipo === 'S/H20') {
+            kilosSinH2O += Number(item.kilos);
+          } else if (item.tipo === 'C/H20') {
+            kilosConH2O += Number(item.kilos);
+          }
+        }
+      });
+
+      const tarasPorKilos = kilosSinH2O / 27;
+      const tarasTotal = Math.round(tarasDirectas + tarasPorKilos);
+      const totalKilosSinH2O = kilosSinH2O + kilosTaras;
+      const kilosTotal = Math.round(totalKilosSinH2O + kilosConH2O);
+
+      return {
+        tarasTotal: tarasTotal.toString(),
+        kilosTotal: kilosTotal.toString()
+      };
     }
   }
 }
@@ -399,6 +502,7 @@ export default {
 }
 
 .btn-generar,
+.btn-menu,
 .btn-volver {
   padding: 10px 20px;
   border: none;
@@ -420,13 +524,22 @@ export default {
   background-color: #2c3e50;
 }
 
-.btn-volver {
+.btn-menu {
   background-color: #95a5a6;
   color: white;
 }
 
-.btn-volver:hover {
+.btn-menu:hover {
   background-color: #7f8c8d;
+}
+
+.btn-volver {
+  background-color: #3498db;
+  color: white;
+}
+
+.btn-volver:hover {
+  background-color: #2980b9;
 }
 
 .icon {
@@ -552,6 +665,11 @@ h4 {
   color: #0000FF;
 }
 
+.text-blue.compact {
+  font-size: 0.9em;
+  margin-left: -5px;
+}
+
 .cliente-separator {
   border: none;
   height: 1px;
@@ -662,6 +780,47 @@ h4.cliente-header.ozuna-header {
   .nota-tag {
     font-size: 0.7em;
     padding: 1px 2px;
+  }
+}
+
+.seccion-cliente.temporal {
+  border: 2px solid #95a5a6;
+  background-color: #f8f9fa;
+}
+
+.seccion-cliente.temporal h3 {
+  color: #7f8c8d;
+}
+
+.cliente-seccion.temporal {
+  margin-top: 30px;
+  padding: 20px;
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  border: 2px solid #95a5a6;
+}
+
+.temporal-header {
+  background-color: #95a5a6;
+  color: white;
+  padding: 10px;
+  border-radius: 6px;
+  margin-bottom: 15px;
+}
+
+@media print {
+  .cliente-seccion.temporal {
+    page-break-inside: avoid;
+    border: 2px solid #95a5a6 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .temporal-header {
+    background-color: #95a5a6 !important;
+    color: white !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
 }
 </style> 
