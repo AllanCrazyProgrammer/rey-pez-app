@@ -208,17 +208,22 @@ export default {
     generarTablaCliente(items, fontSize = 16) {
       if (!items || items.length === 0) return null;
 
+      const reducirEspacio = items.length > 7;
+      const paddingValue = reducirEspacio ? 2 : 16;
+
       const body = items.map(item => [
         { 
           text: item.kilos ? (item.esTara ? [
-            { text: item.kilos.toString(), fontSize: fontSize * 2 },
-            { text: 'T', fontSize: fontSize * 2, italics: true }
+            { text: item.kilos.toString(), fontSize: fontSize * 1.6 },
+            { text: 'T', fontSize: fontSize * 1.6, italics: true }
           ] : item.kilos.toString()) : '', 
-          fontSize: fontSize * 2 
+          fontSize: fontSize * 1.6,
+          margin: [0, 2, 0, 2]
         },
         { 
           text: item.medida || '', 
-          fontSize: fontSize * 2 
+          fontSize: fontSize * 1.8,
+          margin: [0, 2, 0, 2]
         },
         { 
           stack: [
@@ -226,31 +231,26 @@ export default {
               text: [
                 { 
                   text: item.tipo || '', 
-                  fontSize: fontSize * (item.tipo === '1.35 y .15' ? 1.6 : 2),
+                  fontSize: fontSize * (item.tipo === '1.35 y .15' ? 1.5 : 1.8),
                   color: (item.tipo === 'C/H20' || item.tipo === '1.35 y .15') ? '#0000FF' : undefined,
-                  margin: item.tipo === '1.35 y .15' ? [0, 0, 0, 0] : undefined
+                  margin: item.tipo === '1.35 y .15' ? [0, 0, 0, 0] : [0, 2, 0, 2]
                 }
               ]
             },
             item.proveedor ? { 
               text: item.proveedor, 
-              fontSize: fontSize * 1.3, 
-              color: '#ffffff',
-              background: '#9b59b6',
+              fontSize: fontSize * 1.1,
               margin: [0, 1, 0, 0],
-              padding: [2, 1],
-              alignment: 'center'
+              padding: [1, 1]
             } : '',
             item.nota ? { 
               text: item.nota, 
-              fontSize: fontSize * 1.3, 
-              color: '#ffffff',
-              background: '#e74c3c',
+              fontSize: fontSize * 1.1,
               margin: [0, 1, 0, 0],
-              padding: [2, 1],
-              alignment: 'center'
+              padding: [1, 1]
             } : ''
-          ]
+          ],
+          margin: [0, 2, 0, 2]
         }
       ]);
 
@@ -262,20 +262,24 @@ export default {
         layout: {
           hLineWidth: () => 0,
           vLineWidth: () => 0,
-          paddingLeft: () => 12,
-          paddingRight: () => 12,
-          paddingTop: () => 16,
-          paddingBottom: () => 16
+          paddingLeft: () => 8,
+          paddingRight: () => 8,
+          paddingTop: () => paddingValue,
+          paddingBottom: () => paddingValue
         }
       };
     },
     generarPDF() {
       const diaSemana = this.obtenerDiaSemana(this.fecha);
+      const necesitaCompacto = this.pedidoJoselito.length > 7;
+      const espaciadoReducido = necesitaCompacto ? 0.5 : 30;
+      const fontSizeJoselito = necesitaCompacto ? 16 : 26;
+      const fontSizeInferior = necesitaCompacto ? 18 : 36;
       
       const docDefinition = {
         pageSize: 'letter',
         pageOrientation: 'portrait',
-        pageMargins: [0, 0, 0, 0],
+        pageMargins: [10, 10, 10, 10],
         content: [
           // Primera página - Otilio
           {
@@ -306,15 +310,21 @@ export default {
           {
             text: 'JOSELITO',
             style: 'clienteHeader',
-            fontSize: 48,
-            margin: [0, 0, 0, 0],
+            fontSize: necesitaCompacto ? 24 : 48,
+            margin: [0, 0, 0, necesitaCompacto ? 0.5 : 0],
             background: '#2196F3'
           },
-          this.generarTablaCliente(this.pedidoJoselito, 26),
-          { text: '', margin: [0, 30, 0, 0] },
-          // Línea horizontal que separa Joselito de la sección inferior
-          { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 592, y2: 0, lineWidth: 2 }] },
-          { text: '', margin: [0, 30, 0, 0] },
+          this.generarTablaCliente(this.pedidoJoselito, fontSizeJoselito),
+          { text: '', margin: [0, espaciadoReducido, 0, 0] },
+          { canvas: [{ 
+            type: 'line', 
+            x1: 0, 
+            y1: 0, 
+            x2: 592, 
+            y2: 0, 
+            lineWidth: necesitaCompacto ? 0.3 : 2 
+          }] },
+          { text: '', margin: [0, espaciadoReducido, 0, 0] },
 
           // Sección inferior
           {
@@ -325,21 +335,28 @@ export default {
                   {
                     text: 'CATARRO',
                     style: 'clienteHeader',
-                    fontSize: 36,
-                    margin: [0, 0, 0, 0],
+                    fontSize: fontSizeInferior,
+                    margin: [0, 0, 0, necesitaCompacto ? 1 : 0],
                     background: '#FF5252'
                   },
-                  this.generarTablaClienteReducido(this.pedidoCatarro, 26)
+                  this.generarTablaClienteReducido(this.pedidoCatarro, fontSizeJoselito)
                 ],
                 width: '47%'
               },
               // Línea vertical
               {
                 stack: [
-                  { canvas: [{ type: 'line', x1: 15, y1: 0, x2: 15, y2: 300, lineWidth: 1.5 }] }
+                  { canvas: [{ 
+                    type: 'line', 
+                    x1: 10,
+                    y1: 0, 
+                    x2: 10, 
+                    y2: necesitaCompacto ? 30 : 150,
+                    lineWidth: necesitaCompacto ? 0.3 : 1.5 
+                  }] }
                 ],
                 width: '6%',
-                margin: [0, 20, 0, 0]
+                margin: [0, necesitaCompacto ? 2 : 20, 0, 0]
               },
               // Ozuna
               {
@@ -347,30 +364,16 @@ export default {
                   {
                     text: 'OZUNA',
                     style: 'clienteHeader',
-                    fontSize: 36,
-                    margin: [0, 0, 0, 0],
+                    fontSize: fontSizeInferior,
+                    margin: [0, 0, 0, necesitaCompacto ? 1 : 0],
                     background: '#4CAF50'
                   },
-                  this.generarTablaClienteReducido(this.pedidoOzuna, 26)
+                  this.generarTablaClienteReducido(this.pedidoOzuna, fontSizeJoselito)
                 ],
                 width: '47%'
               }
             ]
-          },
-          { text: '', pageBreak: 'after' },
-
-          // Tercera página - Clientes Temporales
-       
-          ...Object.values(this.clientesTemporales).map(cliente => [
-            {
-              text: cliente.nombre.toUpperCase(),
-              style: 'clienteHeader',
-              fontSize: 36,
-              margin: [0, 30, 0, 10],
-              background: '#95a5a6'
-            },
-            this.generarTablaCliente(cliente.pedidos, 26)
-          ]).flat()
+          }
         ],
         styles: {
           header: {
@@ -396,35 +399,27 @@ export default {
       const body = items.map(item => [
         { 
           text: item.kilos ? (item.esTara ? [
-            { text: item.kilos.toString(), fontSize: fontSize * 2 },
-            { text: 'T', fontSize: fontSize * 2, italics: true }
+            { text: item.kilos.toString(), fontSize: fontSize * 1.4 },
+            { text: 'T', fontSize: fontSize * 1.4, italics: true }
           ] : item.kilos.toString()) : '', 
-          fontSize: fontSize * 2,
-          margin: [0, 0, 0, 0]
+          fontSize: fontSize * 1.4,
+          margin: [0, 1, 0, 1]
         },
         { 
           stack: [
-            { text: item.medida || '', fontSize: fontSize * 2 },
+            { text: item.medida || '', fontSize: fontSize * 1.6 },
             item.proveedor ? { 
               text: item.proveedor, 
-              fontSize: fontSize * 1.3, 
-              color: '#ffffff',
-              background: '#9b59b6',
-              margin: [0, 1, 0, 0],
-              padding: [2, 1],
-              alignment: 'center'
+              fontSize: fontSize * 0.9,
+              padding: [1, 0]
             } : '',
             item.nota ? { 
               text: item.nota, 
-              fontSize: fontSize * 1.3, 
-              color: '#ffffff',
-              background: '#e74c3c',
-              margin: [0, 1, 0, 0],
-              padding: [2, 1],
-              alignment: 'center'
+              fontSize: fontSize * 0.9,
+              padding: [1, 0]
             } : ''
           ],
-          margin: [0, 0, 0, 0]
+          margin: [0, 1, 0, 1]
         }
       ]);
 
@@ -436,10 +431,10 @@ export default {
         layout: {
           hLineWidth: () => 0,
           vLineWidth: () => 0,
-          paddingLeft: () => 4,
-          paddingRight: () => 4,
-          paddingTop: () => 8,
-          paddingBottom: () => 8
+          paddingLeft: () => 1,
+          paddingRight: () => 1,
+          paddingTop: () => 1,
+          paddingBottom: () => 1
         }
       };
     },
@@ -570,6 +565,10 @@ export default {
   position: relative;
 }
 
+.cliente-seccion.compacto {
+  margin-bottom: 15px;
+}
+
 .bottom-section {
   margin-top: 20px;
   display: flex;
@@ -601,6 +600,11 @@ export default {
   margin-bottom: 10px;
 }
 
+.preview-table.compacto {
+  margin-top: 2px;
+  margin-bottom: 5px;
+}
+
 .preview-table th,
 .preview-table td {
   border: 1px solid #000;
@@ -608,9 +612,9 @@ export default {
   text-align: center;
 }
 
-.preview-table th {
-  background-color: #f2f2f2;
-  font-weight: bold;
+.preview-table.compacto th,
+.preview-table.compacto td {
+  padding: 4px;
 }
 
 h3 {
@@ -822,5 +826,15 @@ h4.cliente-header.ozuna-header {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
+}
+
+.preview-table th {
+  background-color: #f2f2f2;
+  font-weight: bold;
+}
+
+.preview-table.compacto th,
+.preview-table.compacto td {
+  padding: 4px;
 }
 </style> 

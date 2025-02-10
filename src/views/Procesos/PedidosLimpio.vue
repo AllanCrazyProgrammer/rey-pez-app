@@ -597,6 +597,7 @@ export default {
       let kilosSinH2O = 0;
       let kilosConH2O = 0;
       let kilosTaras = 0;
+      let kilos135 = 0;
 
       this.pedidoJoselito.forEach(item => {
         if (item.kilos) {
@@ -611,6 +612,8 @@ export default {
             kilosSinH2O += Number(item.kilos);
           } else if (item.tipo === 'C/H20') {
             kilosConH2O += Number(item.kilos);
+          } else if (item.tipo === '1.35 y .15') {
+            kilos135 += Number(item.kilos) * 1.35;
           }
         }
       });
@@ -618,7 +621,7 @@ export default {
       const tarasPorKilos = kilosSinH2O / 25;
       const tarasTotal = Math.round(tarasDirectas + tarasPorKilos);
       const totalKilosSinH2O = kilosSinH2O + kilosTaras;
-      const kilosTotal = Math.round(totalKilosSinH2O + kilosConH2O);
+      const kilosTotal = Math.round(totalKilosSinH2O + kilosConH2O + kilos135);
 
       return {
         tarasDirectas: tarasDirectas.toFixed(2),
