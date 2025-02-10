@@ -30,12 +30,17 @@
   <div class="resumen-columna">
     <div class="resumen-header">
       <h4 class="resumen-titulo">Resumen de Taras</h4>
-      <button @click="generarResumenTarasPDF" class="btn btn-info">
-        <i class="fas fa-file-pdf"></i> PDF Taras
-      </button>
-      <button @click="generarResumenEmbarque2" class="btn btn-info ml-2">
-        <i class="fas fa-file-pdf"></i> Resumen Embarque
-      </button>
+      <div class="resumen-botones">
+        <button @click="generarResumenTarasPDF" class="btn btn-info">
+          <i class="fas fa-file-pdf"></i> PDF Taras
+        </button>
+        <button @click="generarResumenEmbarque2" class="btn btn-info">
+          <i class="fas fa-file-pdf"></i> Resumen Embarque
+        </button>
+        <router-link :to="{ name: 'Rendimientos', params: { id: embarqueId } }" class="btn btn-warning">
+          <i class="fas fa-chart-line"></i> Rendimientos
+        </router-link>
+      </div>
     </div>
     <div class="resumen-grid">
       <div class="resumen-item">
@@ -3605,10 +3610,83 @@ export default {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 15px;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .resumen-titulo {
   margin: 0;
+  flex: 1;
+}
+
+.resumen-botones {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+@media (max-width: 375px) {
+  .resumen-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .resumen-botones {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .resumen-botones .btn {
+    width: 100%;
+    margin: 0;
+    padding: 10px;
+    font-size: 14px;
+  }
+
+  .productos-container {
+    flex-direction: column;
+    gap: 15px;
+  }
+
+  .producto {
+    flex: 0 0 100%;
+    width: 100%;
+  }
+
+  .botones-notas-clientes {
+    flex-direction: column;
+    width: 100%;
+    gap: 8px;
+    padding: 0 10px;
+  }
+
+  .btn-nota-cliente {
+    width: 100%;
+    font-size: 14px;
+    padding: 10px 8px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .cliente-header-controls {
+    flex-direction: column;
+    width: 100%;
+    gap: 8px;
+  }
+
+  .cliente-header {
+    padding: 10px;
+  }
+
+  .cliente-totales {
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .cliente-totales span {
+    font-size: 12px;
+  }
 }
 
 .modal-nombre-alternativo {
@@ -4592,5 +4670,66 @@ input[type="tel"] {
 .btn-nota-cliente:hover {
   transform: translateY(-2px);
   box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+@media (max-width: 768px) {
+  .productos-container {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .producto {
+    flex: 0 0 calc(50% - 5px);
+    width: calc(50% - 5px);
+  }
+}
+
+@media (max-width: 375px) {
+  .productos-container {
+    flex-direction: column;
+    gap: 15px;
+  }
+
+  .producto {
+    flex: 0 0 100%;
+    width: 100%;
+  }
+
+  .botones-notas-clientes {
+    flex-direction: column;
+    width: 100%;
+    gap: 8px;
+    padding: 0 10px;
+  }
+
+  .btn-nota-cliente {
+    width: 100%;
+    font-size: 14px;
+    padding: 10px 8px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .cliente-header-controls {
+    flex-direction: column;
+    width: 100%;
+    gap: 8px;
+  }
+
+  .cliente-header {
+    padding: 10px;
+  }
+
+  .cliente-totales {
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .cliente-totales span {
+    font-size: 12px;
+  }
 }
 </style>
