@@ -261,7 +261,6 @@
                     <option value="">Seleccionar</option>
                     <option value="S/H20">S/H20</option>
                     <option value="C/H20" class="text-blue">C/H20</option>
-                    <option value="1.35 y .15">1.35 y .15</option>
                   </select>
                 </div>
 
@@ -598,6 +597,7 @@ export default {
       let kilosConH2O = 0;
       let kilosTaras = 0;
       let kilos135 = 0;
+      let kilosTaras135 = 0;
 
       this.pedidoJoselito.forEach(item => {
         if (item.kilos) {
@@ -605,6 +605,8 @@ export default {
             tarasDirectas += Number(item.kilos);
             if (item.tipo === 'C/H20') {
               kilosConH2O += Number(item.kilos) * 30 * 0.65;
+            } else if (item.tipo === '1.35 y .15') {
+              kilosTaras135 += Number(item.kilos) * 30;
             } else {
               kilosTaras += Number(item.kilos) * 30;
             }
@@ -619,8 +621,9 @@ export default {
       });
 
       const tarasPorKilos = kilosSinH2O / 25;
-      const tarasTotal = Math.round(tarasDirectas + tarasPorKilos);
-      const totalKilosSinH2O = kilosSinH2O + kilosTaras;
+      const tarasPor135 = kilos135 / (1.35 * 25);
+      const tarasTotal = Math.round(tarasDirectas + tarasPorKilos + tarasPor135);
+      const totalKilosSinH2O = kilosSinH2O + kilosTaras + kilosTaras135;
       const kilosTotal = Math.round(totalKilosSinH2O + kilosConH2O + kilos135);
 
       return {

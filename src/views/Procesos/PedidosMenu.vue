@@ -218,12 +218,16 @@ export default {
       let kilosSinH2O = 0;
       let kilosConH2O = 0;
       let kilosTaras = 0;
+      let kilos135 = 0;
+      let kilosTaras135 = 0;
 
       items.forEach(item => {
         if (item.kilos) {
           if (item.esTara) {
             if (item.tipo === 'C/H20') {
               kilosConH2O += Number(item.kilos) * 30 * 0.65;
+            } else if (item.tipo === '1.35 y .15') {
+              kilosTaras135 += Number(item.kilos) * 30;
             } else {
               kilosTaras += Number(item.kilos) * 30;
             }
@@ -231,15 +235,18 @@ export default {
             kilosSinH2O += Number(item.kilos);
           } else if (item.tipo === 'C/H20') {
             kilosConH2O += Number(item.kilos);
+          } else if (item.tipo === '1.35 y .15') {
+            kilos135 += Number(item.kilos) * 1.35;
           }
         }
       });
 
-      return kilosSinH2O + kilosTaras + kilosConH2O;
+      return kilosSinH2O + kilosTaras + kilosTaras135 + kilosConH2O + kilos135;
     },
     calcularTarasCliente(items) {
       let tarasDirectas = 0;
       let kilosSinH2O = 0;
+      let kilos135 = 0;
 
       items.forEach(item => {
         if (item.kilos) {
@@ -247,12 +254,16 @@ export default {
             tarasDirectas += Number(item.kilos);
           } else if (item.tipo === 'S/H20') {
             kilosSinH2O += Number(item.kilos);
+          } else if (item.tipo === '1.35 y .15') {
+            kilos135 += Number(item.kilos);
           }
         }
       });
 
-      const tarasPorKilos = kilosSinH2O / 27;
-      return tarasDirectas + tarasPorKilos;
+      const tarasPorKilos = kilosSinH2O / 25;
+      const tarasPor135 = kilos135 / (1.35 * 25);
+
+      return tarasDirectas + tarasPorKilos + tarasPor135;
     },
     imprimirPedido(pedido) {
       if (pedido.tipo === 'crudo') {
