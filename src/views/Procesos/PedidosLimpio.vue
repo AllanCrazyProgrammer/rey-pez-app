@@ -4,6 +4,11 @@
       <h2>Pedido de Camarón Limpio</h2>
       
       <div class="header-container">
+        <div class="volver-container">
+          <button @click="$router.push('/procesos/pedidos')" class="btn-volver">
+            <i class="fas fa-arrow-left"></i> Volver
+          </button>
+        </div>
         <div class="fecha-container">
           <label for="fecha">Fecha:</label>
           <input 
@@ -983,6 +988,33 @@ export default {
   align-items: center;
   margin-bottom: 20px;
   gap: 20px;
+}
+
+.volver-container {
+  display: flex;
+  align-items: center;
+}
+
+.btn-volver {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  font-size: 16px;
+  background-color: #6c757d;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.btn-volver:hover {
+  background-color: #5a6268;
+}
+
+.btn-volver i {
+  font-size: 14px;
 }
 
 .fecha-container {
