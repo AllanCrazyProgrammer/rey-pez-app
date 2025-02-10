@@ -1089,86 +1089,144 @@ export default {
   cursor: pointer;
   transition: all 0.3s ease;
   position: relative;
-  margin: 0 2px;
-  min-width: 160px;
+  overflow: hidden;
 }
 
-/* Estilos base para los botones con sus colores correspondientes */
+/* Estilos base para los botones con sus colores correspondientes y efectos hover */
 .tab-button[data-cliente="otilio"] {
-  background-color: #f1c40f50;
+  background-color: rgba(241, 196, 15, 0.3);
   color: #2c3e50;
+  transition: all 0.3s ease;
+}
+
+.tab-button[data-cliente="otilio"]:hover {
+  background-color: rgba(241, 196, 15, 0.6);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.tab-button[data-cliente="otilio"].active {
+  background-color: #f1c40f;
+  transform: translateY(-4px);
+  box-shadow: 0 8px 16px rgba(241, 196, 15, 0.5);
 }
 
 .tab-button[data-cliente="catarro"] {
-  background-color: #e74c3c50;
-  color: white;
+  background-color: rgba(231, 76, 60, 0.3);
+  color: #2c3e50;
+  transition: all 0.3s ease;
 }
 
-.tab-button[data-cliente="joselito"] {
-  background-color: #3498db50;
-  color: white;
-}
-
-.tab-button[data-cliente="ozuna"] {
-  background-color: #27ae6050;
-  color: white;
-}
-
-/* Estados activos con color sólido */
-.tab-button[data-cliente="otilio"].active {
-  background-color: #f1c40f;
+.tab-button[data-cliente="catarro"]:hover {
+  background-color: rgba(231, 76, 60, 0.6);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
 }
 
 .tab-button[data-cliente="catarro"].active {
   background-color: #e74c3c;
+  color: white;
+  transform: translateY(-4px);
+  box-shadow: 0 8px 16px rgba(231, 76, 60, 0.5);
+}
+
+.tab-button[data-cliente="joselito"] {
+  background-color: rgba(52, 152, 219, 0.3);
+  color: #2c3e50;
+  transition: all 0.3s ease;
+}
+
+.tab-button[data-cliente="joselito"]:hover {
+  background-color: rgba(52, 152, 219, 0.6);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
 }
 
 .tab-button[data-cliente="joselito"].active {
   background-color: #3498db;
+  color: white;
+  transform: translateY(-4px);
+  box-shadow: 0 8px 16px rgba(52, 152, 219, 0.5);
+}
+
+.tab-button[data-cliente="ozuna"] {
+  background-color: rgba(39, 174, 96, 0.3);
+  color: #2c3e50;
+  transition: all 0.3s ease;
+}
+
+.tab-button[data-cliente="ozuna"]:hover {
+  background-color: rgba(39, 174, 96, 0.6);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
 }
 
 .tab-button[data-cliente="ozuna"].active {
   background-color: #27ae60;
-}
-
-/* Estados hover */
-.tab-button[data-cliente="otilio"]:hover:not(.active) {
-  background-color: #f1c40f80;
-}
-
-.tab-button[data-cliente="catarro"]:hover:not(.active) {
-  background-color: #e74c3c80;
-}
-
-.tab-button[data-cliente="joselito"]:hover:not(.active) {
-  background-color: #3498db80;
-}
-
-.tab-button[data-cliente="ozuna"]:hover:not(.active) {
-  background-color: #27ae6080;
-}
-
-.tab-button.temporal {
-  background-color: #95a5a6;
   color: white;
+  transform: translateY(-4px);
+  box-shadow: 0 8px 16px rgba(39, 174, 96, 0.5);
+}
+
+/* Estilos para clientes temporales */
+.tab-button.temporal {
+  background-color: rgba(149, 165, 166, 0.3);
+  color: #2c3e50;
+  transition: all 0.3s ease;
+}
+
+.tab-button.temporal:hover {
+  background-color: rgba(149, 165, 166, 0.6);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
 }
 
 .tab-button.temporal.active {
-  background-color: #7f8c8d;
+  background-color: #95a5a6;
+  color: white;
+  transform: translateY(-4px);
+  box-shadow: 0 8px 16px rgba(149, 165, 166, 0.5);
 }
 
-.tab-button.temporal:hover:not(.active) {
-  background-color: #7f8c8d80;
+/* Ajustes responsivos */
+@media (max-width: 1200px) {
+  .tab-button {
+    transition: all 0.3s ease;
+  }
+
+  .tab-button:hover {
+    transform: translateY(-4px);
+  }
+
+  .tab-button.active {
+    transform: translateY(-4px);
+  }
 }
 
-.tab-button.nuevo-cliente {
-  background-color: #ecf0f1;
-  color: #2c3e50;
-  border: 2px dashed #95a5a6;
+@media (max-width: 768px) {
+  .tab-button {
+    height: auto;
+    min-height: 50px;
+  }
+
+  .tab-button:hover,
+  .tab-button.active {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 12px rgba(0,0,0,0.2);
+  }
 }
 
-.tab-button.nuevo-cliente:hover {
-  background-color: #bdc3c7;
+@media (max-width: 375px) {
+  .tab-button {
+    min-height: 40px;
+    font-size: 14px;
+  }
+
+  .tab-button:hover,
+  .tab-button.active {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+  }
 }
 
 .clientes-content {
