@@ -24,8 +24,14 @@
           <tbody>
             <tr v-for="(item, index) in pedidoOtilio" :key="'otilio-'+index">
               <td>{{ item.kilos }}<i v-if="item.esTara">T</i></td>
-              <td>{{ item.medida }}</td>
-              <td :class="{ 'text-blue': item.tipo === 'C/H20' }">{{ item.tipo }}</td>
+              <td>
+                {{ item.medida }}
+                <span v-if="item.proveedor" class="proveedor-tag">{{ item.proveedor }}</span>
+              </td>
+              <td :class="{ 'text-blue': item.tipo === 'C/H20' }">
+                {{ item.tipo }}
+                <span v-if="item.nota" class="nota-tag">{{ item.nota }}</span>
+              </td>
             </tr>
           </tbody>
         </table>
@@ -47,8 +53,14 @@
             <tbody>
               <tr v-for="(item, index) in pedidoJoselito" :key="'joselito-'+index">
                 <td>{{ item.kilos }}<i v-if="item.esTara">T</i></td>
-                <td>{{ item.medida }}</td>
-                <td :class="{ 'text-blue': item.tipo === 'C/H20' }">{{ item.tipo }}</td>
+                <td>
+                  {{ item.medida }}
+                  <span v-if="item.proveedor" class="proveedor-tag">{{ item.proveedor }}</span>
+                </td>
+                <td :class="{ 'text-blue': item.tipo === 'C/H20' }">
+                  {{ item.tipo }}
+                  <span v-if="item.nota" class="nota-tag">{{ item.nota }}</span>
+                </td>
               </tr>
             </tbody>
           </table>
@@ -68,7 +80,10 @@
               <tbody>
                 <tr v-for="(item, index) in pedidoCatarro" :key="'catarro-'+index">
                   <td>{{ item.kilos }}<i v-if="item.esTara">T</i></td>
-                  <td>{{ item.medida }}</td>
+                  <td>
+                    {{ item.medida }}
+                    <span v-if="item.proveedor" class="proveedor-tag">{{ item.proveedor }}</span>
+                  </td>
                 </tr>
               </tbody>
             </table>
@@ -87,7 +102,10 @@
               <tbody>
                 <tr v-for="(item, index) in pedidoOzuna" :key="'ozuna-'+index">
                   <td>{{ item.kilos }}<i v-if="item.esTara">T</i></td>
-                  <td>{{ item.medida }}</td>
+                  <td>
+                    {{ item.medida }}
+                    <span v-if="item.proveedor" class="proveedor-tag">{{ item.proveedor }}</span>
+                  </td>
                 </tr>
               </tbody>
             </table>
@@ -173,7 +191,7 @@ export default {
             { 
               text: item.tipo || '', 
               fontSize: fontSize * 2,
-              color: item.tipo === 'C/H20' ? '#3498db' : undefined 
+              color: item.tipo === 'C/H20' ? '#0000FF' : undefined 
             },
             item.nota ? { 
               text: item.nota, 
@@ -213,11 +231,24 @@ export default {
         content: [
           // Primera página - Otilio
           {
-            text: 'OTILIO',
-            style: 'clienteHeader',
-            fontSize: 48,
-            margin: [0, 0, 0, 0],
-            background: '#FFEB3B'
+            columns: [
+              {
+                text: 'OTILIO',
+                style: 'clienteHeader',
+                fontSize: 48,
+                width: '*',
+                alignment: 'left',
+                background: '#FFEB3B'
+              },
+              {
+                text: this.fecha,
+                fontSize: 36,
+                italics: true,
+                width: 'auto',
+                alignment: 'right'
+              }
+            ],
+            margin: [0, 0, 0, 10]
           },
           this.generarTablaCliente(this.pedidoOtilio, 26),
           { text: '', pageBreak: 'after' },
@@ -434,7 +465,7 @@ export default {
   width: 100%;
   position: relative;
   padding-top: 20px;
-  border-top: 2px solid #000;
+  border-top: none;
 }
 
 .bottom-cliente {
@@ -518,7 +549,7 @@ h4 {
 }
 
 .text-blue {
-  color: #3498db;
+  color: #0000FF;
 }
 
 .cliente-separator {
@@ -569,6 +600,68 @@ h4.cliente-header.ozuna-header {
   .cliente-header {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
+  }
+}
+
+/* Estilos para dispositivos móviles pequeños */
+@media (max-width: 375px) {
+  .bottom-section {
+    flex-direction: column;
+    gap: 20px;
+    border-top: none;
+    padding-top: 0;
+  }
+
+  .bottom-cliente {
+    width: 100%;
+    margin: 0 !important;
+    padding: 15px 0;
+    border-top: none;
+  }
+
+  .preview-table {
+    font-size: 14px;
+  }
+
+  .preview-table th,
+  .preview-table td {
+    padding: 4px;
+  }
+
+  h4.cliente-header {
+    font-size: 18px;
+    text-align: center;
+    margin-bottom: 15px;
+  }
+}
+
+/* Estilos para las etiquetas de proveedor y notas */
+.proveedor-tag {
+  display: block;
+  background-color: #9b59b6;
+  color: white;
+  padding: 2px 4px;
+  border-radius: 3px;
+  font-size: 0.8em;
+  margin-top: 2px;
+}
+
+.nota-tag {
+  display: block;
+  background-color: #e74c3c;
+  color: white;
+  padding: 2px 4px;
+  border-radius: 3px;
+  font-size: 0.8em;
+  margin-top: 2px;
+}
+
+/* Ajustes responsivos para las etiquetas */
+@media (max-width: 375px) {
+  .proveedor-tag,
+  .nota-tag {
+    font-size: 0.7em;
+    padding: 1px 2px;
   }
 }
 </style> 

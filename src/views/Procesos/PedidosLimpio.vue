@@ -1347,7 +1347,7 @@ export default {
   }
 }
 
-@media (max-width: 375px) {
+@media (max-width: 375px) {  /*Pixel fold cerrado*/
   .pedidos-limpio-container {
     padding: 5px;
     width: 100%;
