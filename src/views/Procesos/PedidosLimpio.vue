@@ -1140,16 +1140,59 @@ export default {
   .tabs-container {
     flex-direction: row;
     flex-wrap: wrap;
-    justify-content: center;
-    gap: 8px;
+    justify-content: space-between;
+    gap: 15px;
+    margin-bottom: 20px;
   }
   
-  .tab-button {
+  .tab-wrapper {
     width: calc(50% - 8px);
-    padding: 8px 15px;
-    font-size: 18px;
-    min-width: auto;
     margin: 0;
+  }
+
+  .tab-button {
+    width: 100%;
+    padding: 12px 15px;
+    font-size: 20px;
+    min-width: unset;
+    margin: 0;
+    height: auto;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .tab-totales {
+    width: 100%;
+    text-align: center;
+    background-color: rgba(255, 255, 255, 0.9);
+    padding: 8px;
+    border-radius: 4px;
+    font-size: 14px;
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+  }
+
+  /* Ajustes específicos para cada botón de cliente */
+  .tab-button[data-cliente="otilio"] {
+    background-color: #f1c40f;
+    color: #2c3e50;
+  }
+
+  .tab-button[data-cliente="catarro"] {
+    background-color: #e74c3c;
+    color: white;
+  }
+
+  .tab-button[data-cliente="joselito"] {
+    background-color: #3498db;
+    color: white;
+  }
+
+  .tab-button[data-cliente="ozuna"] {
+    background-color: #27ae60;
+    color: white;
   }
 }
 
@@ -1308,6 +1351,52 @@ export default {
   .pedidos-limpio-container {
     padding: 5px;
     width: 100%;
+  }
+
+  .header-container {
+    flex-direction: column;
+    gap: 10px;
+    align-items: stretch;
+    margin-bottom: 15px;
+  }
+
+  .fecha-container {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .fecha-container input {
+    width: 65%;
+    font-size: 14px;
+    height: 36px;
+  }
+
+  .totales-generales {
+    width: 100%;
+    padding: 8px;
+    flex-direction: row;
+    justify-content: space-around;
+    gap: 5px;
+  }
+
+  .total-item {
+    flex: 1;
+  }
+
+  .total-label {
+    font-size: 12px;
+  }
+
+  .total-value {
+    font-size: 14px;
+  }
+
+  /* Ajustes para el botón de medidas */
+  :deep(.btn-medidas) {
+    width: 100%;
+    height: 36px;
+    font-size: 14px;
+    padding: 8px;
   }
 
   .tabs-container {
