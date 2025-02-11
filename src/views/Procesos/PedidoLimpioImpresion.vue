@@ -289,11 +289,11 @@ export default {
       const body = items.map(item => [
         { 
           text: item.kilos ? (item.esTara ? [
-            { text: item.kilos.toString(), fontSize: fontSize * 1.6 },
-            { text: 'T', fontSize: fontSize * 1.6, italics: true }
-          ] : item.kilos.toString()) : '', 
-          fontSize: fontSize * 1.6,
-          margin: [0, 2, 0, 2]
+            { text: item.kilos.toString(), fontSize: fontSize * 2 },
+            { text: 'T', fontSize: fontSize * 1.2, italics: true, alignment: 'right', margin: [0, -8, 0, 0] }
+          ] : { text: item.kilos.toString(), fontSize: fontSize * 2 }) : '', 
+          alignment: 'center',
+          margin: [0, -2, 0, -2]
         },
         { 
           stack: [
@@ -498,18 +498,18 @@ export default {
       const body = items.map(item => [
         { 
           text: item.kilos ? (item.esTara ? [
-            { text: item.kilos.toString(), fontSize: fontSize * 1.4 },
-            { text: 'T', fontSize: fontSize * 1.4, italics: true }
-          ] : item.kilos.toString()) : '', 
-          fontSize: fontSize * 1.4,
-          margin: [0, 1, 0, 1]
+            { text: item.kilos.toString(), fontSize: fontSize * 2 },
+            { text: 'T', fontSize: fontSize * 1.2, italics: true, alignment: 'right', margin: [0, -8, 0, 0] }
+          ] : { text: item.kilos.toString(), fontSize: fontSize * 2 }) : '', 
+          alignment: 'center',
+          margin: [0, -2, 0, -2]
         },
         { 
           stack: [
-            { text: item.medida || '', fontSize: fontSize * 1.6 },
+            { text: item.medida || '', fontSize: fontSize * 1.8 },
             item.proveedor ? { 
               text: item.proveedor, 
-              fontSize: fontSize * 0.9,
+              fontSize: fontSize * 1.1,
               color: '#FFFFFF',
               background: '#FF0000',
               padding: [2, 1],
@@ -594,8 +594,7 @@ export default {
           if (!medidasMap.has(key)) {
             medidasMap.set(key, {
               medida: medida,
-              total: 0,
-              kilosNetos: 0
+              total: 0
             });
           }
           
@@ -603,24 +602,26 @@ export default {
           const kilos = Number(item.kilos) || 0;
           
           if (item.esTara) {
+            // Procesar taras
             if (item.tipo === 'C/H20') {
-              registro.kilosNetos += kilos * 30 * 0.65;
+              registro.total += kilos * 30 * 0.65; // Tara con agua
             } else {
-              registro.kilosNetos += kilos * 30;
+              registro.total += kilos * 30; // Tara normal
             }
           } else {
-            if (item.tipo === 'S/H20') {
-              registro.total += kilos;
-            } else if (item.tipo === 'C/H20') {
-              registro.total += kilos * 0.65;
+            // Procesar kilos directos
+            if (item.tipo === 'C/H20') {
+              registro.total += kilos * 0.65; // Kilos con agua
             } else if (item.tipo === '1.35 y .15') {
-              registro.total += kilos * 1.35;
+              registro.total += kilos * 1.35; // Kilos con factor 1.35
+            } else {
+              registro.total += kilos; // Kilos normales
             }
           }
         });
       };
 
-      // Procesar todos los pedidos
+      // Procesar todos los pedidos regulares
       procesarPedido(this.pedidoOtilio);
       procesarPedido(this.pedidoCatarro);
       procesarPedido(this.pedidoJoselito);
@@ -628,20 +629,18 @@ export default {
       
       // Procesar clientes temporales
       Object.values(this.clientesTemporales).forEach(cliente => {
-        procesarPedido(cliente.pedidos);
+        if (cliente.pedidos && Array.isArray(cliente.pedidos)) {
+          procesarPedido(cliente.pedidos);
+        }
       });
 
-      // Calcular totales finales
-      const resultados = [];
-      for (const [key, value] of medidasMap) {
-        const totalFinal = Math.round(value.total + value.kilosNetos);
-        resultados.push({
+      // Convertir el mapa a un array ordenado
+      return Array.from(medidasMap.values())
+        .map(value => ({
           medida: value.medida,
-          total: totalFinal
-        });
-      }
-
-      return resultados.sort((a, b) => a.medida.localeCompare(b.medida));
+          total: Math.round(value.total)
+        }))
+        .sort((a, b) => a.medida.localeCompare(b.medida));
     },
     calcularRendimiento(medida) {
       // Asegurarse de que el valor sea numérico
@@ -1213,6 +1212,42 @@ h4.cliente-header.ozuna-header {
 @media print {
   .resumen-medidas {
     display: none; /* Ocultar en impresión */
+  }
+}
+
+.preview-table td:first-child {
+  font-size: 1.6em;
+  line-height: 1;
+  padding-top: 2px;
+  padding-bottom: 2px;
+  vertical-align: middle;
+}
+
+.preview-table td:first-child i {
+  font-size: 0.7em;
+  font-style: italic;
+  vertical-align: super;
+  margin-left: 2px;
+}
+
+.preview-table.compacto td:first-child {
+  font-size: 1.4em;
+  padding-top: 1px;
+  padding-bottom: 1px;
+}
+
+/* Eliminar los estilos específicos de bottom-cliente ya que ahora todos usarán el mismo tamaño */
+.bottom-cliente .preview-table td {
+  padding: 6px;
+}
+
+@media (max-width: 375px) {
+  .preview-table td:first-child {
+    font-size: 1.4em;
+  }
+  
+  .preview-table td {
+    padding: 4px;
   }
 }
 </style> 
