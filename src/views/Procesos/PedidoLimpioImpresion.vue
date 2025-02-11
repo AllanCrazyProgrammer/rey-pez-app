@@ -296,8 +296,18 @@ export default {
           margin: [0, 2, 0, 2]
         },
         { 
-          text: item.medida || '', 
-          fontSize: fontSize * 1.8,
+          stack: [
+            { text: item.medida || '', fontSize: fontSize * 1.8 },
+            item.proveedor ? { 
+              text: item.proveedor, 
+              fontSize: fontSize * 1.1,
+              color: '#FFFFFF',
+              background: '#FF0000',
+              margin: [0, 2, 0, 0],
+              padding: [2, 1],
+              alignment: 'center'
+            } : ''
+          ],
           margin: [0, 2, 0, 2]
         },
         { 
@@ -312,12 +322,6 @@ export default {
                 }
               ]
             },
-            item.proveedor ? { 
-              text: item.proveedor, 
-              fontSize: fontSize * 1.1,
-              margin: [0, 1, 0, 0],
-              padding: [1, 1]
-            } : '',
             item.nota ? { 
               text: item.nota, 
               fontSize: fontSize * 1.1,
@@ -448,7 +452,21 @@ export default {
                 width: '47%'
               }
             ]
-          }
+          },
+          { text: '', pageBreak: 'after' },
+
+          // Tercera página - Clientes Temporales
+          ...Object.entries(this.clientesTemporales).map(([clienteId, cliente]) => [
+            {
+              text: cliente.nombre.toUpperCase(),
+              style: 'clienteHeader',
+              fontSize: 36,
+              margin: [0, 0, 0, 10],
+              background: '#95a5a6'
+            },
+            this.generarTablaCliente(cliente.pedidos, 22),
+            { text: '', margin: [0, 20, 0, 20] }
+          ]).flat()
         ],
         styles: {
           header: {
@@ -492,7 +510,10 @@ export default {
             item.proveedor ? { 
               text: item.proveedor, 
               fontSize: fontSize * 0.9,
-              padding: [1, 0]
+              color: '#FFFFFF',
+              background: '#FF0000',
+              padding: [2, 1],
+              alignment: 'center'
             } : '',
             item.nota ? { 
               text: item.nota, 
