@@ -78,9 +78,9 @@
       <!-- Vista previa de otros clientes -->
       <div class="preview-page">
         <!-- Joselito -->
-        <div class="cliente-seccion">
-          <h4 class="cliente-header joselito-header">Joselito</h4>
-          <table class="preview-table">
+        <div class="cliente-seccion" :class="{ compacto: pedidoJoselito.length >= 5 }">
+          <h4 class="cliente-header joselito-header" :class="{ compacto: pedidoJoselito.length >= 5 }">Joselito</h4>
+          <table class="preview-table" :class="{ compacto: pedidoJoselito.length >= 5 }">
             <thead>
               <tr>
                 <th>Kilos/Taras</th>
@@ -350,10 +350,10 @@ export default {
     },
     generarPDF() {
       const diaSemana = this.obtenerDiaSemana(this.fecha);
-      const necesitaCompacto = this.pedidoJoselito.length > 7;
+      const necesitaCompacto = this.pedidoJoselito.length >= 5;
       const espaciadoReducido = necesitaCompacto ? 0.5 : 30;
-      const fontSizeJoselito = necesitaCompacto ? 16 : 26;
-      const fontSizeInferior = necesitaCompacto ? 18 : 36;
+      const fontSizeJoselito = necesitaCompacto ? 22 : 26;
+      const fontSizeInferior = necesitaCompacto ? 24 : 36;
       
       const docDefinition = {
         pageSize: 'letter',
@@ -750,7 +750,7 @@ export default {
 }
 
 .cliente-seccion.compacto {
-  margin-bottom: 15px;
+  margin-bottom: 8px;
 }
 
 .bottom-section {
@@ -785,8 +785,8 @@ export default {
 }
 
 .preview-table.compacto {
-  margin-top: 2px;
-  margin-bottom: 5px;
+  margin-top: 1px;
+  margin-bottom: 2px;
 }
 
 .preview-table th,
@@ -798,7 +798,8 @@ export default {
 
 .preview-table.compacto th,
 .preview-table.compacto td {
-  padding: 4px;
+  padding: 2px;
+  font-size: 0.9em;
 }
 
 h3 {
@@ -878,6 +879,12 @@ h4 {
   border-radius: 8px;
   margin-bottom: 15px;
   color: #000;
+}
+
+.cliente-header.compacto {
+  padding: 4px;
+  margin-bottom: 5px;
+  font-size: 0.9em;
 }
 
 .otilio-header {
