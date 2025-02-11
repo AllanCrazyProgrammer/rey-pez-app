@@ -297,7 +297,6 @@
                     <option value="">Seleccionar</option>
                     <option value="S/H20">S/H20</option>
                     <option value="C/H20" class="text-blue">C/H20</option>
-                    <option value="1.35 y .15" class="text-blue">1.35 y .15</option>
                   </select>
                 </div>
 
@@ -563,13 +562,26 @@ export default {
       const medidasGranja = this.medidas.filter(m => m.tipo === 'granja')
 
       // Ordenar medidas especiales alfabéticamente
-      medidasEspeciales.sort((a, b) => a.nombre.localeCompare(b.nombre))
+      medidasEspeciales.sort((a, b) => {
+        // Convertir a números si es posible para ordenar numéricamente
+        const numA = parseFloat(a.nombre)
+        const numB = parseFloat(b.nombre)
+        if (!isNaN(numA) && !isNaN(numB)) {
+          return numA - numB
+        }
+        return a.nombre.localeCompare(b.nombre)
+      })
 
       // Ordenar medidas de granja por número
       medidasGranja.sort((a, b) => {
-        const numA = parseInt(a.nombre.split('/')[0])
-        const numB = parseInt(b.nombre.split('/')[0])
-        return numA - numB
+        // Extraer los números de las medidas (ejemplo: "21/25" -> 21)
+        const numA = parseFloat(a.nombre.split('/')[0])
+        const numB = parseFloat(b.nombre.split('/')[0])
+        
+        if (!isNaN(numA) && !isNaN(numB)) {
+          return numA - numB
+        }
+        return a.nombre.localeCompare(b.nombre)
       })
 
       // Combinar ambas listas con especiales primero
@@ -826,8 +838,28 @@ export default {
         alert('Error al guardar el pedido. Por favor intente nuevamente.');
       }
     },
-    mostrarVistaImpresion() {
-      this.mostrarImpresion = true
+    async mostrarVistaImpresion() {
+      try {
+        const pedidoData = {
+          fecha: this.fecha,
+          otilio: this.pedidoOtilio,
+          catarro: this.pedidoCatarro,
+          joselito: this.pedidoJoselito,
+          ozuna: this.pedidoOzuna,
+          clientesTemporales: this.clientesTemporales,
+          tipo: 'limpio',
+          createdAt: this.editando ? Timestamp.fromDate(new Date(this.fecha)) : Timestamp.now()
+        }
+        
+        if (this.editando && this.pedidoId) {
+          await updateDoc(doc(db, 'pedidos', this.pedidoId), pedidoData);
+        } else {
+          await addDoc(collection(db, 'pedidos'), pedidoData);
+        }
+        this.mostrarImpresion = true;
+      } catch (error) {
+        console.error('Error al guardar el pedido:', error);
+      }
     },
     actualizarMedidas(nuevasMedidas) {
       this.medidas = nuevasMedidas

@@ -13,7 +13,6 @@
       </button>
     </div>
     <div id="pdfPreview" class="pdf-preview">
-      <!-- Vista previa de Otilio -->
       <div class="preview-page">
         <h3 class="cliente-header otilio-header">Otilio</h3>
         <table class="preview-table">
@@ -41,38 +40,6 @@
             </tr>
           </tbody>
         </table>
-
-        <!-- Clientes Temporales -->
-        <template v-for="(cliente, id) in clientesTemporales">
-          <div :key="id" class="cliente-seccion temporal">
-            <h3 class="cliente-header temporal-header">{{ cliente.nombre }}</h3>
-            <table class="preview-table">
-              <thead>
-                <tr>
-                  <th>Kilos/Taras</th>
-                  <th>Medida</th>
-                  <th>Tipo</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="(item, index) in cliente.pedidos" :key="'temp-'+id+'-'+index">
-                  <td>{{ item.kilos }}<i v-if="item.esTara">T</i></td>
-                  <td>
-                    {{ item.medida }}
-                    <span v-if="item.proveedor" class="proveedor-tag">{{ item.proveedor }}</span>
-                  </td>
-                  <td :class="{ 
-                    'text-blue': item.tipo === 'C/H20', 
-                    'text-blue compact': item.tipo === '1.35 y .15' 
-                  }">
-                    {{ item.tipo }}
-                    <span v-if="item.nota" class="nota-tag">{{ item.nota }}</span>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </template>
       </div>
 
       <!-- Vista previa de otros clientes -->
@@ -154,6 +121,40 @@
         </div>
       </div>
 
+      <!-- Clientes Temporales -->
+      <div v-if="Object.keys(clientesTemporales).length > 0" class="preview-page">
+        <template v-for="(cliente, id) in clientesTemporales">
+          <div :key="id" class="cliente-seccion temporal">
+            <h3 class="cliente-header temporal-header">{{ cliente.nombre }}</h3>
+            <table class="preview-table">
+              <thead>
+                <tr>
+                  <th>Kilos/Taras</th>
+                  <th>Medida</th>
+                  <th>Tipo</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="(item, index) in cliente.pedidos" :key="'temp-'+id+'-'+index">
+                  <td>{{ item.kilos }}<i v-if="item.esTara">T</i></td>
+                  <td>
+                    {{ item.medida }}
+                    <span v-if="item.proveedor" class="proveedor-tag">{{ item.proveedor }}</span>
+                  </td>
+                  <td :class="{ 
+                    'text-blue': item.tipo === 'C/H20', 
+                    'text-blue compact': item.tipo === '1.35 y .15' 
+                  }">
+                    {{ item.tipo }}
+                    <span v-if="item.nota" class="nota-tag">{{ item.nota }}</span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </template>
+      </div>
+
       <!-- Sección de resumen por medida (solo en vista previa) -->
       <div class="resumen-medidas">
         <h3 class="resumen-header">Resumen por Medida</h3>
@@ -169,9 +170,9 @@
           </thead>
           <tbody>
             <tr v-for="(medida, index) in calcularTotalesPorMedida()" :key="index">
-              <td>{{ medida.medida }}</td>
-              <td>{{ medida.total }} kg</td>
-              <td>
+              <td data-label="Medida">{{ medida.medida }}</td>
+              <td data-label="Total Kilos">{{ medida.total }} kg</td>
+              <td data-label="Rendimientos">
                 <div class="rendimientos-column">
                   <input 
                     type="number" 
@@ -186,14 +187,14 @@
                   </div>
                 </div>
               </td>
-              <td>
+              <td data-label="Masters">
                 <div v-if="esMedidaGranja(medida.medida)" class="checkbox-group">
                   <label>
                     <input 
                       type="radio" 
                       :name="'master-' + medida.medida"
                       :checked="divisores[medida.medida] === 20"
-                      @change="toggleDivisor(medida.medida, 20)"
+                      @change="toggleDivisor(medida, 20)"
                     >
                     20
                   </label>
@@ -202,13 +203,13 @@
                       type="radio" 
                       :name="'master-' + medida.medida"
                       :checked="divisores[medida.medida] === 22"
-                      @change="toggleDivisor(medida.medida, 22)"
+                      @change="toggleDivisor(medida, 22)"
                     >
                     22
                   </label>
                 </div>
               </td>
-              <td>
+              <td data-label="Cajas">
                 <template v-if="rendimientos[medida.medida]">
                   <span v-if="esMedidaGranja(medida.medida) && divisores[medida.medida]" class="cajas-result">
                     {{ Math.round((medida.total * rendimientos[medida.medida]) / divisores[medida.medida]) }}
@@ -297,7 +298,7 @@ export default {
         },
         { 
           stack: [
-            { text: item.medida || '', fontSize: fontSize * 1.8 },
+            { text: item.medida || '', fontSize: fontSize * 2 },
             item.proveedor ? { 
               text: item.proveedor, 
               fontSize: fontSize * 1.1,
@@ -316,7 +317,7 @@ export default {
               text: [
                 { 
                   text: item.tipo || '', 
-                  fontSize: fontSize * (item.tipo === '1.35 y .15' ? 1.5 : 1.8),
+                  fontSize: fontSize * 2,
                   color: (item.tipo === 'C/H20' || item.tipo === '1.35 y .15') ? '#0000FF' : undefined,
                   margin: item.tipo === '1.35 y .15' ? [0, 0, 0, 0] : [0, 2, 0, 2]
                 }
@@ -456,17 +457,19 @@ export default {
           { text: '', pageBreak: 'after' },
 
           // Tercera página - Clientes Temporales
-          ...Object.entries(this.clientesTemporales).map(([clienteId, cliente]) => [
-            {
-              text: cliente.nombre.toUpperCase(),
-              style: 'clienteHeader',
-              fontSize: 36,
-              margin: [0, 0, 0, 10],
-              background: '#95a5a6'
-            },
-            this.generarTablaCliente(cliente.pedidos, 22),
-            { text: '', margin: [0, 20, 0, 20] }
-          ]).flat()
+          ...(Object.keys(this.clientesTemporales).length > 0 ? [
+            ...Object.entries(this.clientesTemporales).map(([clienteId, cliente]) => [
+              {
+                text: cliente.nombre.toUpperCase(),
+                style: 'clienteHeader',
+                fontSize: 36,
+                margin: [0, 0, 0, 10],
+                background: '#95a5a6'
+              },
+              this.generarTablaCliente(cliente.pedidos, 22),
+              { text: '', margin: [0, 20, 0, 20] }
+            ]).flat()
+          ] : [])
         ],
         styles: {
           header: {
@@ -506,7 +509,7 @@ export default {
         },
         { 
           stack: [
-            { text: item.medida || '', fontSize: fontSize * 1.8 },
+            { text: item.medida || '', fontSize: fontSize * 2 },
             item.proveedor ? { 
               text: item.proveedor, 
               fontSize: fontSize * 1.1,
@@ -1153,42 +1156,99 @@ h4.cliente-header.ozuna-header {
 
 /* Ajustes responsivos */
 @media (max-width: 375px) {
+  .resumen-medidas {
+    padding: 0;
+    margin: 10px 0;
+  }
+
+  .resumen-header {
+    font-size: 16px;
+    padding: 8px;
+    margin-bottom: 10px;
+  }
+
+  .resumen-table {
+    display: block;
+    width: 100%;
+  }
+
+  .resumen-table thead {
+    display: none;
+  }
+
+  .resumen-table tbody,
+  .resumen-table tr,
   .resumen-table td {
-    padding: 4px 2px;
-    font-size: 11px;
+    display: block;
+    width: 100%;
+  }
+
+  .resumen-table tr {
+    margin-bottom: 15px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 8px;
+    background: #fff;
+  }
+
+  .resumen-table td {
+    text-align: left;
+    padding: 4px 8px;
+    border: none;
+    position: relative;
+    padding-left: 45%;
+    min-height: 35px;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+  }
+
+  .resumen-table td::before {
+    content: attr(data-label);
+    position: absolute;
+    left: 0;
+    width: 40%;
+    padding-right: 10px;
+    font-weight: bold;
+    text-align: right;
+    color: #666;
   }
 
   .rendimientos-column {
-    gap: 5px;
+    flex-direction: row;
+    width: 100%;
+    justify-content: flex-start;
+    padding-left: 0;
+    gap: 8px;
   }
 
   .rendimiento-box {
     width: 60px;
     min-width: 60px;
     max-width: 60px;
-    font-size: 12px;
-    padding: 4px 6px;
+    font-size: 14px;
+    padding: 4px;
+    height: 30px;
   }
 
   .rendimiento-total {
-    min-width: 40px;
-    font-size: 12px;
+    min-width: 30px;
+    font-size: 14px;
   }
 
   .checkbox-group {
-    gap: 8px;
+    padding-left: 0;
+    justify-content: flex-start;
+    gap: 15px;
   }
 
   .checkbox-group label {
-    font-size: 11px;
-  }
-
-  .checkbox-group input[type="radio"] {
-    width: 12px;
-    height: 12px;
+    font-size: 14px;
   }
 
   .cajas-result {
+    padding-left: 0;
+    text-align: left;
     font-size: 14px;
   }
 }
@@ -1223,6 +1283,15 @@ h4.cliente-header.ozuna-header {
   vertical-align: middle;
 }
 
+.preview-table td:nth-child(2),
+.preview-table td:nth-child(3) {
+  font-size: 1.6em;
+  line-height: 1;
+  padding-top: 2px;
+  padding-bottom: 2px;
+  vertical-align: middle;
+}
+
 .preview-table td:first-child i {
   font-size: 0.7em;
   font-style: italic;
@@ -1230,24 +1299,37 @@ h4.cliente-header.ozuna-header {
   margin-left: 2px;
 }
 
-.preview-table.compacto td:first-child {
+.preview-table.compacto td:first-child,
+.preview-table.compacto td:nth-child(2),
+.preview-table.compacto td:nth-child(3) {
   font-size: 1.4em;
   padding-top: 1px;
   padding-bottom: 1px;
 }
 
-/* Eliminar los estilos específicos de bottom-cliente ya que ahora todos usarán el mismo tamaño */
-.bottom-cliente .preview-table td {
-  padding: 6px;
+/* Ajustar el tamaño de los elementos secundarios */
+.proveedor-tag,
+.nota-tag {
+  font-size: 0.5em;
+  display: block;
+  margin-top: 4px;
 }
 
+/* Ajustes responsivos */
 @media (max-width: 375px) {
-  .preview-table td:first-child {
+  .preview-table td:first-child,
+  .preview-table td:nth-child(2),
+  .preview-table td:nth-child(3) {
     font-size: 1.4em;
   }
   
   .preview-table td {
     padding: 4px;
+  }
+  
+  .proveedor-tag,
+  .nota-tag {
+    font-size: 0.4em;
   }
 }
 </style> 

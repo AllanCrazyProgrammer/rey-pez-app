@@ -284,7 +284,8 @@ export default {
             pedidoOtilio: pedido.otilio || [],
             pedidoCatarro: pedido.catarro || [],
             pedidoJoselito: pedido.joselito || [],
-            pedidoOzuna: pedido.ozuna || []
+            pedidoOzuna: pedido.ozuna || [],
+            clientesTemporales: pedido.clientesTemporales || {}
           }
         });
       }
