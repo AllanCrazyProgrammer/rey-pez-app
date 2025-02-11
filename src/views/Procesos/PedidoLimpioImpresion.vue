@@ -153,6 +153,75 @@
           </div>
         </div>
       </div>
+
+      <!-- Sección de resumen por medida (solo en vista previa) -->
+      <div class="resumen-medidas">
+        <h3 class="resumen-header">Resumen por Medida</h3>
+        <table class="resumen-table">
+          <thead>
+            <tr>
+              <th>Medida</th>
+              <th>Total Kilos</th>
+              <th>Rendimientos</th>
+              <th>Masters</th>
+              <th>Cajas</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="(medida, index) in calcularTotalesPorMedida()" :key="index">
+              <td>{{ medida.medida }}</td>
+              <td>{{ medida.total }} kg</td>
+              <td>
+                <div class="rendimientos-column">
+                  <input 
+                    type="number" 
+                    step="0.01"
+                    v-model="rendimientos[medida.medida]"
+                    @input="calcularRendimiento(medida)"
+                    placeholder="1.00"
+                    class="rendimiento-box"
+                  >
+                  <div v-if="rendimientos[medida.medida]" class="rendimiento-total">
+                    {{ Math.round(medida.total * rendimientos[medida.medida]) }}
+                  </div>
+                </div>
+              </td>
+              <td>
+                <div v-if="esMedidaGranja(medida.medida)" class="checkbox-group">
+                  <label>
+                    <input 
+                      type="radio" 
+                      :name="'master-' + medida.medida"
+                      :checked="divisores[medida.medida] === 20"
+                      @change="toggleDivisor(medida.medida, 20)"
+                    >
+                    20
+                  </label>
+                  <label>
+                    <input 
+                      type="radio" 
+                      :name="'master-' + medida.medida"
+                      :checked="divisores[medida.medida] === 22"
+                      @change="toggleDivisor(medida.medida, 22)"
+                    >
+                    22
+                  </label>
+                </div>
+              </td>
+              <td>
+                <template v-if="rendimientos[medida.medida]">
+                  <span v-if="esMedidaGranja(medida.medida) && divisores[medida.medida]" class="cajas-result">
+                    {{ Math.round((medida.total * rendimientos[medida.medida]) / divisores[medida.medida]) }}
+                  </span>
+                  <span v-else class="cajas-result">
+                    {{ Math.round(medida.total * rendimientos[medida.medida]) }} kg
+                  </span>
+                </template>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
 </template>
@@ -197,6 +266,12 @@ export default {
     clientesTemporales: {
       type: Object,
       default: () => ({})
+    }
+  },
+  data() {
+    return {
+      rendimientos: {},
+      divisores: {}
     }
   },
   methods: {
@@ -384,6 +459,12 @@ export default {
           clienteHeader: {
             bold: true,
             alignment: 'center'
+          },
+          tableHeader: {
+            bold: true,
+            fontSize: 14,
+            color: 'black',
+            alignment: 'center'
           }
         },
         defaultStyle: {
@@ -478,6 +559,88 @@ export default {
         tarasTotal: tarasTotal.toString(),
         kilosTotal: kilosTotal.toString()
       };
+    },
+    calcularTotalesPorMedida() {
+      const medidasMap = new Map();
+      
+      const procesarPedido = (pedido) => {
+        pedido.forEach(item => {
+          if (!item.medida) return;
+          
+          const medida = item.medida;
+          const key = medida.toLowerCase().trim();
+          
+          if (!medidasMap.has(key)) {
+            medidasMap.set(key, {
+              medida: medida,
+              total: 0,
+              kilosNetos: 0
+            });
+          }
+          
+          const registro = medidasMap.get(key);
+          const kilos = Number(item.kilos) || 0;
+          
+          if (item.esTara) {
+            if (item.tipo === 'C/H20') {
+              registro.kilosNetos += kilos * 30 * 0.65;
+            } else {
+              registro.kilosNetos += kilos * 30;
+            }
+          } else {
+            if (item.tipo === 'S/H20') {
+              registro.total += kilos;
+            } else if (item.tipo === 'C/H20') {
+              registro.total += kilos * 0.65;
+            } else if (item.tipo === '1.35 y .15') {
+              registro.total += kilos * 1.35;
+            }
+          }
+        });
+      };
+
+      // Procesar todos los pedidos
+      procesarPedido(this.pedidoOtilio);
+      procesarPedido(this.pedidoCatarro);
+      procesarPedido(this.pedidoJoselito);
+      procesarPedido(this.pedidoOzuna);
+      
+      // Procesar clientes temporales
+      Object.values(this.clientesTemporales).forEach(cliente => {
+        procesarPedido(cliente.pedidos);
+      });
+
+      // Calcular totales finales
+      const resultados = [];
+      for (const [key, value] of medidasMap) {
+        const totalFinal = Math.round(value.total + value.kilosNetos);
+        resultados.push({
+          medida: value.medida,
+          total: totalFinal
+        });
+      }
+
+      return resultados.sort((a, b) => a.medida.localeCompare(b.medida));
+    },
+    calcularRendimiento(medida) {
+      // Asegurarse de que el valor sea numérico
+      const valor = parseFloat(this.rendimientos[medida.medida]);
+      if (isNaN(valor)) {
+        this.rendimientos[medida.medida] = '';
+      }
+    },
+    toggleDivisor(medida, valor) {
+      // Si el valor seleccionado es el mismo que ya está, lo deseleccionamos
+      if (this.divisores[medida] === valor) {
+        this.$set(this.divisores, medida, null)
+      } else {
+        // Si no, establecemos el nuevo valor
+        this.$set(this.divisores, medida, valor)
+      }
+    },
+    esMedidaGranja(medida) {
+      // Verifica si la medida comienza con un número
+      return /^\d/.test(medida);
     }
   }
 }
@@ -660,7 +823,7 @@ h4 {
     margin-right: 5%;
   }
   
-  .bottom-cliente:last-child {
+ .bottom-cliente:last-child {
     margin-left: 5%;
   }
 }
@@ -836,5 +999,192 @@ h4.cliente-header.ozuna-header {
 .preview-table.compacto th,
 .preview-table.compacto td {
   padding: 4px;
+}
+
+.resumen-medidas {
+  margin-top: 30px;
+  page-break-before: avoid;
+  max-width: 800px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.resumen-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 15px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Ajustar los anchos de las columnas */
+.resumen-table th:nth-child(1),
+.resumen-table td:nth-child(1) {
+  width: 15%; /* Columna de Medida */
+}
+
+.resumen-table th:nth-child(2),
+.resumen-table td:nth-child(2) {
+  width: 15%; /* Columna de Total Kilos */
+}
+
+.resumen-table th:nth-child(3),
+.resumen-table td:nth-child(3) {
+  width: 35%; /* Aumentada ligeramente para acomodar el input más grande */
+}
+
+.resumen-table th:nth-child(4),
+.resumen-table td:nth-child(4) {
+  width: 18%; /* Reducida ligeramente */
+}
+
+.resumen-table th:nth-child(5),
+.resumen-table td:nth-child(5) {
+  width: 17%; /* Reducida ligeramente */
+}
+
+.resumen-table th,
+.resumen-table td {
+  padding: 8px;
+  vertical-align: middle;
+  text-align: center;
+  border: 1px solid #ddd;
+}
+
+.resumen-table th {
+  background-color: #f2f2f2;
+  font-weight: bold;
+  color: #333;
+}
+
+.rendimientos-column {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: nowrap;
+  margin: 0 auto;
+  width: fit-content;
+}
+
+.rendimiento-box {
+  width: 80px;
+  min-width: 80px;
+  max-width: 80px;
+  padding: 6px 8px;
+  font-size: 16px;
+  border: 2px solid #4CAF50;
+  border-radius: 4px;
+  color: #4CAF50;
+  text-align: center;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.rendimiento-total {
+  min-width: 60px;
+  font-size: 16px;
+  color: #666;
+}
+
+.checkbox-group {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin: 0 auto;
+  width: fit-content;
+}
+
+.checkbox-group label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 14px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.checkbox-group input[type="radio"] {
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+  margin: 0;
+}
+
+.cajas-result {
+  display: block;
+  text-align: center;
+  font-size: 16px;
+  font-weight: bold;
+  color: #2196F3;
+}
+
+.cajas-result:not([data-granja]) {
+  color: #4CAF50;
+}
+
+/* Ajustes responsivos */
+@media (max-width: 375px) {
+  .resumen-table td {
+    padding: 4px 2px;
+    font-size: 11px;
+  }
+
+  .rendimientos-column {
+    gap: 5px;
+  }
+
+  .rendimiento-box {
+    width: 60px;
+    min-width: 60px;
+    max-width: 60px;
+    font-size: 12px;
+    padding: 4px 6px;
+  }
+
+  .rendimiento-total {
+    min-width: 40px;
+    font-size: 12px;
+  }
+
+  .checkbox-group {
+    gap: 8px;
+  }
+
+  .checkbox-group label {
+    font-size: 11px;
+  }
+
+  .checkbox-group input[type="radio"] {
+    width: 12px;
+    height: 12px;
+  }
+
+  .cajas-result {
+    font-size: 14px;
+  }
+}
+
+/* Ajustes para impresión */
+@media print {
+  .rendimiento-box {
+    border: none;
+    background: none;
+  }
+}
+
+.resumen-header {
+  background-color: #343a40;
+  color: white;
+  padding: 12px;
+  border-radius: 4px;
+  margin-bottom: 15px;
+}
+
+@media print {
+  .resumen-medidas {
+    display: none; /* Ocultar en impresión */
+  }
 }
 </style> 

@@ -88,7 +88,19 @@
       <div class="clientes-content">
         <!-- Otilio -->
         <div v-show="clienteActivo === 'otilio'" class="cliente-seccion">
-          <button @click="agregarFilaOtilio" class="btn-agregar">+ Agregar Fila</button>
+          <button 
+            @click="agregarFilaOtilio" 
+            class="btn-agregar"
+            :class="{
+              'bg-otilio': clienteActivo === 'otilio',
+              'bg-catarro': clienteActivo === 'catarro',
+              'bg-joselito': clienteActivo === 'joselito',
+              'bg-ozuna': clienteActivo === 'ozuna',
+              'bg-temporal': isClienteTemporal(clienteActivo)
+            }"
+          >
+            + Agregar Fila
+          </button>
           
           <div class="pedido-grid">
             <div v-for="(item, index) in pedidoOtilio" :key="index" class="pedido-item">
@@ -150,7 +162,19 @@
 
         <!-- Catarro -->
         <div v-show="clienteActivo === 'catarro'" class="cliente-seccion">
-          <button @click="agregarFilaCatarro" class="btn-agregar">+ Agregar Fila</button>
+          <button 
+            @click="agregarFilaCatarro" 
+            class="btn-agregar"
+            :class="{
+              'bg-otilio': clienteActivo === 'otilio',
+              'bg-catarro': clienteActivo === 'catarro',
+              'bg-joselito': clienteActivo === 'joselito',
+              'bg-ozuna': clienteActivo === 'ozuna',
+              'bg-temporal': isClienteTemporal(clienteActivo)
+            }"
+          >
+            + Agregar Fila
+          </button>
           
           <div class="pedido-grid">
             <div v-for="(item, index) in pedidoCatarro" :key="index" class="pedido-item">
@@ -212,7 +236,19 @@
 
         <!-- Joselito -->
         <div v-show="clienteActivo === 'joselito'" class="cliente-seccion">
-          <button @click="agregarFilaJoselito" class="btn-agregar">+ Agregar Fila</button>
+          <button 
+            @click="agregarFilaJoselito" 
+            class="btn-agregar"
+            :class="{
+              'bg-otilio': clienteActivo === 'otilio',
+              'bg-catarro': clienteActivo === 'catarro',
+              'bg-joselito': clienteActivo === 'joselito',
+              'bg-ozuna': clienteActivo === 'ozuna',
+              'bg-temporal': isClienteTemporal(clienteActivo)
+            }"
+          >
+            + Agregar Fila
+          </button>
           
           <div class="pedido-grid">
             <div v-for="(item, index) in pedidoJoselito" :key="index" class="pedido-item">
@@ -261,6 +297,7 @@
                     <option value="">Seleccionar</option>
                     <option value="S/H20">S/H20</option>
                     <option value="C/H20" class="text-blue">C/H20</option>
+                    <option value="1.35 y .15" class="text-blue">1.35 y .15</option>
                   </select>
                 </div>
 
@@ -274,7 +311,19 @@
 
         <!-- Ozuna -->
         <div v-show="clienteActivo === 'ozuna'" class="cliente-seccion">
-          <button @click="agregarFilaOzuna" class="btn-agregar">+ Agregar Fila</button>
+          <button 
+            @click="agregarFilaOzuna" 
+            class="btn-agregar"
+            :class="{
+              'bg-otilio': clienteActivo === 'otilio',
+              'bg-catarro': clienteActivo === 'catarro',
+              'bg-joselito': clienteActivo === 'joselito',
+              'bg-ozuna': clienteActivo === 'ozuna',
+              'bg-temporal': isClienteTemporal(clienteActivo)
+            }"
+          >
+            + Agregar Fila
+          </button>
           
           <div class="pedido-grid">
             <div v-for="(item, index) in pedidoOzuna" :key="index" class="pedido-item">
@@ -339,7 +388,19 @@
              :key="id"
              v-show="clienteActivo === cliente.id" 
              class="cliente-seccion">
-          <button @click="agregarFilaTemporal(cliente.id)" class="btn-agregar">+ Agregar Fila</button>
+          <button 
+            @click="agregarFilaTemporal(cliente.id)" 
+            class="btn-agregar"
+            :class="{
+              'bg-otilio': clienteActivo === 'otilio',
+              'bg-catarro': clienteActivo === 'catarro',
+              'bg-joselito': clienteActivo === 'joselito',
+              'bg-ozuna': clienteActivo === 'ozuna',
+              'bg-temporal': isClienteTemporal(clienteActivo)
+            }"
+          >
+            + Agregar Fila
+          </button>
           
           <div class="pedido-grid">
             <div v-for="(item, index) in cliente.pedidos" :key="index" class="pedido-item">
@@ -1258,15 +1319,14 @@ export default {
   padding: 18px;
   font-size: 23px;
   border-radius: 8px;
-  background-color: #3498db;
-  color: white;
   border: none;
   cursor: pointer;
-  transition: background-color 0.3s ease;
+  transition: all 0.3s ease;
 }
 
 .btn-agregar:hover {
-  background-color: #2980b9;
+  opacity: 0.9;
+  transform: translateY(-2px);
 }
 
 .buttons-container {
@@ -1933,5 +1993,21 @@ select option.text-blue {
   .calculo-item {
     padding: 8px;
   }
+}
+
+.bg-otilio {
+  background-color: #f1c40f !important;
+}
+.bg-catarro {
+  background-color: #e74c3c !important;
+}
+.bg-joselito {
+  background-color: #3498db !important;
+}
+.bg-ozuna {
+  background-color: #27ae60 !important;
+}
+.bg-temporal {
+  background-color: #95a5a6 !important;
 }
 </style> 
