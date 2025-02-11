@@ -478,6 +478,10 @@
       :pedidoJoselito="pedidoJoselito"
       :pedidoOzuna="pedidoOzuna"
       :clientesTemporales="clientesTemporales"
+      :rendimientosGuardados="rendimientosGuardados"
+      :divisoresGuardados="divisoresGuardados"
+      @actualizar-rendimientos="actualizarRendimientos"
+      @actualizar-divisores="actualizarDivisores"
       @volver="mostrarImpresion = false"
     />
 
@@ -535,6 +539,8 @@ export default {
         { id: 'ozuna', nombre: 'Ozuna' }
       ],
       itemSeleccionadoNotas: null,
+      rendimientosGuardados: {},
+      divisoresGuardados: {}
     }
   },
   async created() {
@@ -781,19 +787,19 @@ export default {
     },
     async cargarPedido(id) {
       try {
-        const pedidoDoc = await getDoc(doc(db, 'pedidos', id));
-        if (pedidoDoc.exists()) {
-          const pedido = pedidoDoc.data();
-          this.fecha = pedido.fecha;
-          this.pedidoOtilio = pedido.otilio || [{ kilos: null, medida: '', tipo: '', esTara: true, esProveedor: false, proveedor: '' }];
-          this.pedidoCatarro = pedido.catarro || [{ kilos: null, medida: '', tipo: 'S/H20', esTara: false, esProveedor: false, proveedor: '' }];
-          this.pedidoJoselito = pedido.joselito || [{ kilos: null, medida: '', tipo: '', esTara: false, esProveedor: false, proveedor: '' }];
-          this.pedidoOzuna = pedido.ozuna || [{ kilos: null, medida: '', tipo: 'S/H20', esTara: false, esProveedor: false, proveedor: '' }];
-          this.clientesTemporales = pedido.clientesTemporales || {};
-        } else {
-          console.error('No se encontró el pedido');
-          alert('No se encontró el pedido');
-          this.$router.push('/procesos/pedidos');
+        const docRef = doc(db, 'pedidos', id);
+        const docSnap = await getDoc(docRef);
+        
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          this.fecha = data.fecha;
+          this.pedidoOtilio = data.otilio || [];
+          this.pedidoCatarro = data.catarro || [];
+          this.pedidoJoselito = data.joselito || [];
+          this.pedidoOzuna = data.ozuna || [];
+          this.clientesTemporales = data.clientesTemporales || {};
+          this.rendimientosGuardados = data.rendimientos || {};
+          this.divisoresGuardados = data.divisores || {};
         }
       } catch (error) {
         console.error('Error al cargar el pedido:', error);
@@ -821,6 +827,8 @@ export default {
           joselito: this.pedidoJoselito,
           ozuna: this.pedidoOzuna,
           clientesTemporales: this.clientesTemporales,
+          rendimientos: this.rendimientosGuardados,
+          divisores: this.divisoresGuardados,
           tipo: 'limpio',
           createdAt: this.editando ? Timestamp.fromDate(new Date(this.fecha)) : Timestamp.now()
         }
@@ -847,6 +855,8 @@ export default {
           joselito: this.pedidoJoselito,
           ozuna: this.pedidoOzuna,
           clientesTemporales: this.clientesTemporales,
+          rendimientos: this.rendimientosGuardados,
+          divisores: this.divisoresGuardados,
           tipo: 'limpio',
           createdAt: this.editando ? Timestamp.fromDate(new Date(this.fecha)) : Timestamp.now()
         }
@@ -1006,6 +1016,28 @@ export default {
         if (this.clienteActivo === clienteId) {
           this.clienteActivo = 'otilio';
         }
+      }
+    },
+    actualizarRendimientos(nuevosRendimientos) {
+      this.rendimientosGuardados = { ...nuevosRendimientos };
+      // Si estamos editando, guardamos los cambios inmediatamente
+      if (this.editando && this.pedidoId) {
+        updateDoc(doc(db, 'pedidos', this.pedidoId), {
+          rendimientos: this.rendimientosGuardados
+        }).catch(error => {
+          console.error('Error al actualizar rendimientos:', error);
+        });
+      }
+    },
+    actualizarDivisores(nuevosDivisores) {
+      this.divisoresGuardados = { ...nuevosDivisores };
+      // Si estamos editando, guardamos los cambios inmediatamente
+      if (this.editando && this.pedidoId) {
+        updateDoc(doc(db, 'pedidos', this.pedidoId), {
+          divisores: this.divisoresGuardados
+        }).catch(error => {
+          console.error('Error al actualizar divisores:', error);
+        });
       }
     },
   },

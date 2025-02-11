@@ -194,7 +194,7 @@
                       type="radio" 
                       :name="'master-' + medida.medida"
                       :checked="divisores[medida.medida] === 20"
-                      @change="toggleDivisor(medida, 20)"
+                      @click="toggleDivisor(medida, 20)"
                     >
                     20
                   </label>
@@ -203,7 +203,7 @@
                       type="radio" 
                       :name="'master-' + medida.medida"
                       :checked="divisores[medida.medida] === 22"
-                      @change="toggleDivisor(medida, 22)"
+                      @click="toggleDivisor(medida, 22)"
                     >
                     22
                   </label>
@@ -267,12 +267,20 @@ export default {
     clientesTemporales: {
       type: Object,
       default: () => ({})
+    },
+    rendimientosGuardados: {
+      type: Object,
+      default: () => ({})
+    },
+    divisoresGuardados: {
+      type: Object,
+      default: () => ({})
     }
   },
   data() {
     return {
-      rendimientos: {},
-      divisores: {}
+      rendimientos: this.rendimientosGuardados || {},
+      divisores: this.divisoresGuardados || {}
     }
   },
   methods: {
@@ -651,15 +659,19 @@ export default {
       if (isNaN(valor)) {
         this.rendimientos[medida.medida] = '';
       }
+      // Emitir el evento para guardar los rendimientos
+      this.$emit('actualizar-rendimientos', this.rendimientos);
     },
     toggleDivisor(medida, valor) {
       // Si el valor seleccionado es el mismo que ya está, lo deseleccionamos
-      if (this.divisores[medida] === valor) {
-        this.$set(this.divisores, medida, null)
+      if (this.divisores[medida.medida] === valor) {
+        this.$set(this.divisores, medida.medida, null);
       } else {
         // Si no, establecemos el nuevo valor
-        this.$set(this.divisores, medida, valor)
+        this.$set(this.divisores, medida.medida, valor);
       }
+      // Emitir el evento para guardar los divisores
+      this.$emit('actualizar-divisores', this.divisores);
     },
     esMedidaGranja(medida) {
       // Verifica si la medida comienza con un número
