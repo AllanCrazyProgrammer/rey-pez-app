@@ -1,6 +1,18 @@
 <template>
   <div class="impresion-container">
     <h2>Vista previa de impresión - Pedido de Camarón Limpio</h2>
+    <div class="scale-control">
+      <label>Escala del contenido:</label>
+      <input 
+        type="range" 
+        v-model="contentScale" 
+        min="0.5" 
+        max="2" 
+        step="0.1"
+        class="scale-slider"
+      >
+      <span class="scale-value">{{ (contentScale * 100).toFixed(0) }}%</span>
+    </div>
     <div class="buttons-container">
       <button @click="generarPDF" class="btn-generar">
         <span class="icon">📄</span> Generar PDF
@@ -280,7 +292,8 @@ export default {
   data() {
     return {
       rendimientos: this.rendimientosGuardados || {},
-      divisores: this.divisoresGuardados || {}
+      divisores: this.divisoresGuardados || {},
+      contentScale: 1,
     }
   },
   methods: {
@@ -364,6 +377,15 @@ export default {
       const fontSizeJoselito = necesitaCompacto ? 22 : 26;
       const fontSizeInferior = necesitaCompacto ? 24 : 36;
       
+      const escala = this.contentScale;
+      const fontSizeBase = {
+        otilio: 48 * escala,
+        joselito: (necesitaCompacto ? 24 : 48) * escala,
+        inferior: fontSizeInferior * escala,
+        tabla: 26 * escala,
+        tablaJoselito: fontSizeJoselito * escala
+      };
+      
       const docDefinition = {
         pageSize: 'letter',
         pageOrientation: 'portrait',
@@ -375,22 +397,22 @@ export default {
               {
                 text: 'OTILIO',
                 style: 'clienteHeader',
-                fontSize: 48,
+                fontSize: fontSizeBase.otilio,
                 width: '*',
                 alignment: 'left',
                 background: '#FFEB3B'
               },
               {
                 text: this.fecha,
-                fontSize: 36,
+                fontSize: fontSizeBase.otilio * 0.75,
                 italics: true,
                 width: 'auto',
                 alignment: 'right'
               }
             ],
-            margin: [0, 0, 0, 10]
+            margin: [0, 0, 0, 10 * escala]
           },
-          this.generarTablaCliente(this.pedidoOtilio, 26),
+          this.generarTablaCliente(this.pedidoOtilio, fontSizeBase.tabla),
           { text: '', pageBreak: 'after' },
 
           // Segunda página
@@ -398,11 +420,11 @@ export default {
           {
             text: 'JOSELITO',
             style: 'clienteHeader',
-            fontSize: necesitaCompacto ? 24 : 48,
+            fontSize: fontSizeBase.joselito,
             margin: [0, 0, 0, necesitaCompacto ? 0.5 : 0],
             background: '#2196F3'
           },
-          this.generarTablaCliente(this.pedidoJoselito, fontSizeJoselito),
+          this.generarTablaCliente(this.pedidoJoselito, fontSizeBase.tablaJoselito),
           { text: '', margin: [0, espaciadoReducido, 0, 0] },
           { canvas: [{ 
             type: 'line', 
@@ -423,11 +445,11 @@ export default {
                   {
                     text: 'CATARRO',
                     style: 'clienteHeader',
-                    fontSize: fontSizeInferior,
+                    fontSize: fontSizeBase.inferior,
                     margin: [0, 0, 0, necesitaCompacto ? 1 : 0],
                     background: '#FF5252'
                   },
-                  this.generarTablaClienteReducido(this.pedidoCatarro, fontSizeJoselito)
+                  this.generarTablaClienteReducido(this.pedidoCatarro, fontSizeBase.tablaJoselito)
                 ],
                 width: '47%'
               },
@@ -452,11 +474,11 @@ export default {
                   {
                     text: 'OZUNA',
                     style: 'clienteHeader',
-                    fontSize: fontSizeInferior,
+                    fontSize: fontSizeBase.inferior,
                     margin: [0, 0, 0, necesitaCompacto ? 1 : 0],
                     background: '#4CAF50'
                   },
-                  this.generarTablaClienteReducido(this.pedidoOzuna, fontSizeJoselito)
+                  this.generarTablaClienteReducido(this.pedidoOzuna, fontSizeBase.tablaJoselito)
                 ],
                 width: '47%'
               }
@@ -686,6 +708,62 @@ export default {
   max-width: 1200px;
   margin: 0 auto;
   padding: 20px;
+}
+
+.scale-control {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 20px;
+  background-color: #f5f5f5;
+  padding: 10px;
+  border-radius: 8px;
+}
+
+.scale-slider {
+  flex: 1;
+  -webkit-appearance: none;
+  height: 8px;
+  background: #ddd;
+  border-radius: 4px;
+  outline: none;
+  opacity: 0.7;
+  transition: opacity 0.2s;
+}
+
+.scale-slider:hover {
+  opacity: 1;
+}
+
+.scale-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  background: #34495e;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.scale-slider::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  background: #34495e;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.scale-value {
+  min-width: 60px;
+  text-align: center;
+  font-weight: bold;
+  color: #34495e;
+}
+
+@media print {
+  .scale-control {
+    display: none;
+  }
 }
 
 .buttons-container {
