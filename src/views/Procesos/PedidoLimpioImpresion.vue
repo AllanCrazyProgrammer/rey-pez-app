@@ -1375,16 +1375,10 @@ h4.cliente-header.ozuna-header {
   }
 }
 
-.preview-table td:first-child {
-  font-size: 1.6em;
-  line-height: 1;
-  padding-top: 2px;
-  padding-bottom: 2px;
-  vertical-align: middle;
-}
-
+.preview-table td:first-child,
 .preview-table td:nth-child(2),
-.preview-table td:nth-child(3) {
+.preview-table td:nth-child(3),
+.preview-table td:nth-child(4) {
   font-size: 1.6em;
   line-height: 1;
   padding-top: 2px;
@@ -1401,16 +1395,17 @@ h4.cliente-header.ozuna-header {
 
 .preview-table.compacto td:first-child,
 .preview-table.compacto td:nth-child(2),
-.preview-table.compacto td:nth-child(3) {
-  font-size: 1.4em;
-  padding-top: 1px;
-  padding-bottom: 1px;
+.preview-table.compacto td:nth-child(3),
+.preview-table.compacto td:nth-child(4) {
+  font-size: 1.6em;
+  padding-top: 2px;
+  padding-bottom: 2px;
 }
 
 /* Ajustar el tamaño de los elementos secundarios */
 .proveedor-tag,
 .nota-tag {
-  font-size: 0.5em;
+  font-size: 0.6em;
   display: block;
   margin-top: 4px;
 }
@@ -1419,7 +1414,8 @@ h4.cliente-header.ozuna-header {
 @media (max-width: 375px) {
   .preview-table td:first-child,
   .preview-table td:nth-child(2),
-  .preview-table td:nth-child(3) {
+  .preview-table td:nth-child(3),
+  .preview-table td:nth-child(4) {
     font-size: 1.4em;
   }
   
@@ -1429,8 +1425,14 @@ h4.cliente-header.ozuna-header {
   
   .proveedor-tag,
   .nota-tag {
-    font-size: 0.4em;
+    font-size: 0.5em;
   }
+}
+
+/* Asegurar que el tipo solo cambie el color */
+.text-blue,
+.text-blue.compact {
+  color: #0000FF;
 }
 
 /* Estilos para los checkboxes */
