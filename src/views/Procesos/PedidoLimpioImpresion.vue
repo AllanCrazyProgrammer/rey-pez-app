@@ -30,6 +30,7 @@
         <table class="preview-table">
           <thead>
             <tr>
+              <th>✓</th>
               <th>Kilos/Taras</th>
               <th>Medida</th>
               <th>Tipo</th>
@@ -37,6 +38,7 @@
           </thead>
           <tbody>
             <tr v-for="(item, index) in pedidoOtilio" :key="'otilio-'+index">
+              <td><input type="checkbox" v-model="item.completado" class="pedido-checkbox"></td>
               <td>{{ item.kilos }}<i v-if="item.esTara">T</i></td>
               <td>
                 {{ item.medida }}
@@ -62,6 +64,7 @@
           <table class="preview-table" :class="{ compacto: pedidoJoselito.length >= 5 }">
             <thead>
               <tr>
+                <th>✓</th>
                 <th>Kilos/Taras</th>
                 <th>Medida</th>
                 <th>Tipo</th>
@@ -69,6 +72,7 @@
             </thead>
             <tbody>
               <tr v-for="(item, index) in pedidoJoselito" :key="'joselito-'+index">
+                <td><input type="checkbox" v-model="item.completado" class="pedido-checkbox"></td>
                 <td>{{ item.kilos }}<i v-if="item.esTara">T</i></td>
                 <td>
                   {{ item.medida }}
@@ -93,12 +97,14 @@
             <table class="preview-table">
               <thead>
                 <tr>
+                  <th>✓</th>
                   <th>Kilos/Taras</th>
                   <th>Medida</th>
                 </tr>
               </thead>
               <tbody>
                 <tr v-for="(item, index) in pedidoCatarro" :key="'catarro-'+index">
+                  <td><input type="checkbox" v-model="item.completado" class="pedido-checkbox"></td>
                   <td>{{ item.kilos }}<i v-if="item.esTara">T</i></td>
                   <td>
                     {{ item.medida }}
@@ -115,12 +121,14 @@
             <table class="preview-table">
               <thead>
                 <tr>
+                  <th>✓</th>
                   <th>Kilos/Taras</th>
                   <th>Medida</th>
                 </tr>
               </thead>
               <tbody>
                 <tr v-for="(item, index) in pedidoOzuna" :key="'ozuna-'+index">
+                  <td><input type="checkbox" v-model="item.completado" class="pedido-checkbox"></td>
                   <td>{{ item.kilos }}<i v-if="item.esTara">T</i></td>
                   <td>
                     {{ item.medida }}
@@ -141,6 +149,7 @@
             <table class="preview-table">
               <thead>
                 <tr>
+                  <th>✓</th>
                   <th>Kilos/Taras</th>
                   <th>Medida</th>
                   <th>Tipo</th>
@@ -148,6 +157,7 @@
               </thead>
               <tbody>
                 <tr v-for="(item, index) in cliente.pedidos" :key="'temp-'+id+'-'+index">
+                  <td><input type="checkbox" v-model="item.completado" class="pedido-checkbox"></td>
                   <td>{{ item.kilos }}<i v-if="item.esTara">T</i></td>
                   <td>
                     {{ item.medida }}
@@ -1420,6 +1430,61 @@ h4.cliente-header.ozuna-header {
   .proveedor-tag,
   .nota-tag {
     font-size: 0.4em;
+  }
+}
+
+/* Estilos para los checkboxes */
+.pedido-checkbox {
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+  border: 2px solid #4CAF50;
+  border-radius: 4px;
+  appearance: none;
+  -webkit-appearance: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto;
+  transition: all 0.2s ease;
+}
+
+.pedido-checkbox:checked {
+  background-color: #4CAF50;
+  position: relative;
+}
+
+.pedido-checkbox:checked::after {
+  content: '✓';
+  color: white;
+  font-size: 14px;
+  position: absolute;
+}
+
+.preview-table td:first-child {
+  width: 40px;
+  text-align: center;
+  vertical-align: middle;
+}
+
+@media print {
+  .pedido-checkbox {
+    border: 2px solid #000;
+  }
+  
+  .pedido-checkbox:checked {
+    background-color: #000;
+  }
+}
+
+@media (max-width: 375px) {
+  .pedido-checkbox {
+    width: 16px;
+    height: 16px;
+  }
+  
+  .pedido-checkbox:checked::after {
+    font-size: 12px;
   }
 }
 </style> 
