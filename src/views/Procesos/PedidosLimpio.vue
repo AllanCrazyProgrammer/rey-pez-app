@@ -297,6 +297,7 @@
                     <option value="">Seleccionar</option>
                     <option value="S/H20">S/H20</option>
                     <option value="C/H20" class="text-blue">C/H20</option>
+                    <option value="1.35 y .15">1.35 y .15</option>
                   </select>
                 </div>
 
