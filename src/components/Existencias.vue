@@ -21,7 +21,6 @@
                 <tr>
                   <th>Medida</th>
                   <th v-if="proveedor !== 'Ozuna' && proveedor !== 'Joselito'">Proveedor</th>
-                  <th v-if="proveedor !== 'Ozuna' && proveedor !== 'Joselito'">Precio</th>
                   <th class="kilos-cell">Kilos</th>
                 </tr>
               </thead>
@@ -42,7 +41,6 @@
                   <tr v-for="medida in datos" :key="medida.medida">
                     <td>{{ medida.medida }}</td>
                     <td>{{ medida.proveedor }}</td>
-                    <td>{{ medida.precio ? '$' + medida.precio.toFixed(2) : '-' }}</td>
                     <td class="kilos-cell">{{ formatNumber(medida.kilos) }}</td>
                   </tr>
                   <tr class="total-row">
@@ -80,59 +78,66 @@ export default {
     const loadExistencias = async () => {
       const sacadasSnapshot = await getDocs(collection(db, 'sacadas'));
       const newExistencias = {};
+      console.log('=== Rastreando Selecta 51/60 1ra Nacional ===');
+      let totalSelecta5160 = 0;
 
-      let totalOzuna3640 = 0;
+      // Ordenar las sacadas por fecha
+      const sacadasOrdenadas = sacadasSnapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() }))
+        .sort((a, b) => {
+          const fechaA = a.fecha instanceof Date ? a.fecha : a.fecha.toDate();
+          const fechaB = b.fecha instanceof Date ? b.fecha : b.fecha.toDate();
+          return fechaA - fechaB;
+        });
 
-      sacadasSnapshot.forEach(doc => {
-        const sacada = doc.data();
+      sacadasOrdenadas.forEach(sacada => {
         const sacadaFecha = sacada.fecha instanceof Date ? sacada.fecha : sacada.fecha.toDate();
-        console.log(`Procesando sacada del ${moment(sacadaFecha).format('YYYY-MM-DD')}`);
 
         sacada.entradas.forEach(entrada => {
+          if (entrada.proveedor === 'Selecta' && entrada.medida === '51/60 1ra Nacional') {
+            totalSelecta5160 += entrada.kilos;
+            console.log(`Entrada: ${entrada.kilos} kg - Fecha: ${moment(sacadaFecha).format('DD/MM/YYYY')} - Total: ${totalSelecta5160} kg`);
+          }
           if (!newExistencias[entrada.proveedor]) {
             newExistencias[entrada.proveedor] = {};
           }
-          const medidaKey = entrada.precio ? `${entrada.medida} ($${entrada.precio})` : entrada.medida;
+          const medidaKey = entrada.medida;
           if (!newExistencias[entrada.proveedor][medidaKey]) {
             newExistencias[entrada.proveedor][medidaKey] = {
               kilos: 0,
-              precio: entrada.precio,
               medida: entrada.medida
             };
           }
           newExistencias[entrada.proveedor][medidaKey].kilos += entrada.kilos;
-
-          if (entrada.proveedor === 'Ozuna' && entrada.medida === '36/40') {
-            totalOzuna3640 += entrada.kilos;
-            console.log(`  Entrada Ozuna 36/40: +${entrada.kilos} kg`);
-          }
         });
 
         sacada.salidas.forEach(salida => {
+          if (salida.proveedor === 'Selecta' && salida.medida === '51/60 1ra Nacional') {
+            totalSelecta5160 -= salida.kilos;
+            console.log(`Salida: ${salida.kilos} kg - Fecha: ${moment(sacadaFecha).format('DD/MM/YYYY')} - Total: ${totalSelecta5160} kg`);
+          }
           if (!newExistencias[salida.proveedor]) {
             newExistencias[salida.proveedor] = {};
           }
-          const medidaKey = salida.precio ? `${salida.medida} ($${salida.precio})` : salida.medida;
+          const medidaKey = salida.medida;
           if (!newExistencias[salida.proveedor][medidaKey]) {
             newExistencias[salida.proveedor][medidaKey] = {
               kilos: 0,
-              precio: salida.precio,
               medida: salida.medida
             };
           }
           newExistencias[salida.proveedor][medidaKey].kilos -= salida.kilos;
-
-          if (salida.proveedor === 'Ozuna' && salida.medida === '36/40') {
-            totalOzuna3640 -= salida.kilos;
-            console.log(`  Salida Ozuna 36/40: -${salida.kilos} kg`);
-          }
         });
       });
 
-      console.log(`Total Ozuna 36/40: ${totalOzuna3640} kg`);
+      console.log(`=== Total final Selecta 51/60 1ra Nacional: ${totalSelecta5160} kg ===`);
 
       // Filtrar proveedores y medidas con 0 o menos kilos
       Object.keys(newExistencias).forEach(proveedor => {
+        if (proveedor === 'Selecta' && newExistencias[proveedor]['51/60 1ra Nacional']) {
+          console.log('[DEBUG] Resultado final Selecta 51/60 1ra Nacional:', 
+            newExistencias[proveedor]['51/60 1ra Nacional'].kilos);
+        }
         newExistencias[proveedor] = Object.fromEntries(
           Object.entries(newExistencias[proveedor])
             .filter(([_, datos]) => datos.kilos > 0)
@@ -172,16 +177,28 @@ export default {
       const medidasAgrupadas = {};
       Object.entries(otrosProveedores).forEach(([proveedor, medidas]) => {
         Object.entries(medidas).forEach(([medidaKey, datos]) => {
+          // Extraer solo los números de la medida (ej: "41/50" de "41/50 chuy" o "41/50 1ra Nacional")
           const medidaBase = datos.medida.split(' ')[0];
           if (!medidasAgrupadas[medidaBase]) {
             medidasAgrupadas[medidaBase] = [];
           }
-          medidasAgrupadas[medidaBase].push({
-            proveedor,
-            medida: datos.medida,
-            precio: datos.precio,
-            kilos: datos.kilos
-          });
+          
+          // Buscar si ya existe una entrada para este proveedor y medida completa
+          const existingIndex = medidasAgrupadas[medidaBase].findIndex(
+            item => item.proveedor === proveedor && item.medida === datos.medida
+          );
+          
+          if (existingIndex >= 0) {
+            // Si existe, sumar los kilos
+            medidasAgrupadas[medidaBase][existingIndex].kilos += datos.kilos;
+          } else {
+            // Si no existe, agregar nueva entrada
+            medidasAgrupadas[medidaBase].push({
+              proveedor,
+              medida: datos.medida,
+              kilos: datos.kilos
+            });
+          }
         });
       });
 
