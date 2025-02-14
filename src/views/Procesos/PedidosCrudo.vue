@@ -67,6 +67,40 @@
       <h3>Total Taras de Crudo: <span>{{ Math.floor(tarasCrudo) }} T</span></h3>
     </div>
 
+    <div class="desglose-medida">
+      <h2>Desglose por Medida</h2>
+      <table class="tabla-desglose">
+        <thead>
+          <tr>
+            <th>Medida</th>
+            <th>Cliente</th>
+            <th>Barco</th>
+          </tr>
+        </thead>
+        <tbody>
+          <template v-for="medida in columnas">
+            <template v-if="clientesConPedidoPorMedida(medida).length > 0">
+              <tr v-for="(cliente, index) in clientesConPedidoPorMedida(medida)" 
+                  :key="medida + cliente"
+                  class="fila-desglose">
+                <td class="medida-cell" v-if="index === 0" :rowspan="clientesConPedidoPorMedida(medida).length">
+                  {{ medida }}
+                </td>
+                <td :class="'cliente-' + cliente.toLowerCase()">{{ cliente }}</td>
+                <td>
+                  <input 
+                    type="text" 
+                    v-model="barcosPorPedido[cliente][medida.toLowerCase()]" 
+                    class="input-barco"
+                    placeholder="Nombre del barco">
+                </td>
+              </tr>
+            </template>
+          </template>
+        </tbody>
+      </table>
+    </div>
+
     <div class="buttons-container">
       <button @click="guardarPedido" class="btn-guardar">Guardar Pedido</button>
       <button @click="imprimirPedido" class="btn-imprimir">Imprimir</button>
@@ -93,6 +127,12 @@ export default {
         Catarro: { med: null, 'med-esp': null, 'med-gde': null, gde: null, extra: null },
         Otilio: { med: null, 'med-esp': null, 'med-gde': null, gde: null, extra: null },
         Ozuna: { med: null, 'med-esp': null, 'med-gde': null, gde: null, extra: null }
+      },
+      barcosPorPedido: {
+        '8a': {},
+        'Catarro': {},
+        'Otilio': {},
+        'Ozuna': {}
       },
       isEditing: false,
       pedidoId: null
@@ -171,11 +211,18 @@ export default {
         })
       }
     },
+    clientesConPedidoPorMedida(medida) {
+      return this.clientes.filter(cliente => {
+        const cantidad = this.pedidos[cliente][medida.toLowerCase()]
+        return cantidad && cantidad > 0
+      })
+    },
     async guardarPedido() {
       try {
         const pedidoData = {
           fecha: this.fecha,
           pedidos: this.pedidos,
+          barcosPorPedido: this.barcosPorPedido,
           columnas: this.columnas,
           tipo: 'crudo',
           kilos: this.kilosCrudo,
@@ -208,6 +255,7 @@ export default {
           const data = pedidoDoc.data()
           this.fecha = data.fecha
           this.pedidos = data.pedidos
+          this.barcosPorPedido = data.barcosPorPedido || this.initializeBarcosPorPedido()
           this.columnasAdicionales = data.columnas.filter(col => !this.columnasBase.includes(col))
         } else {
           alert('El pedido no existe')
@@ -218,6 +266,13 @@ export default {
         alert('Error al cargar el pedido')
         this.$router.push('/procesos/pedidos')
       }
+    },
+    initializeBarcosPorPedido() {
+      const barcos = {}
+      this.clientes.forEach(cliente => {
+        barcos[cliente] = {}
+      })
+      return barcos
     },
     imprimirPedido() {
       this.$router.push({
@@ -476,5 +531,68 @@ input.cliente-ozuna:focus {
 .fila-totales td {
   padding: 12px;
   border: 2px solid #2c3e50 !important;
+}
+
+.desglose-medida {
+  margin: 30px 0;
+  padding: 20px;
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.desglose-medida h2 {
+  text-align: center;
+  margin-bottom: 20px;
+  color: #2c3e50;
+}
+
+.tabla-desglose {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 15px;
+}
+
+.tabla-desglose th {
+  background-color: #f8f9fa;
+  padding: 12px;
+  text-align: left;
+  font-weight: bold;
+  border: 1px solid #dee2e6;
+}
+
+.tabla-desglose td {
+  padding: 12px;
+  border: 1px solid #dee2e6;
+  vertical-align: middle;
+}
+
+.medida-cell {
+  font-weight: bold;
+  background-color: #f8f9fa;
+  text-align: center;
+}
+
+.fila-desglose td {
+  border-bottom: 1px solid #dee2e6;
+}
+
+.fila-desglose:last-child td {
+  border-bottom: 1px solid #dee2e6;
+}
+
+.input-barco {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+  background-color: white;
+}
+
+.input-barco:focus {
+  outline: none;
+  border-color: #3498db;
+  box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.3);
 }
 </style> 
