@@ -145,7 +145,7 @@
                       <option value="Kileado">Kileado</option>
                     </select>
                   </div>
-                  <select v-model="item.tipo" class="input-field" :class="{ 'text-blue': item.tipo === 'C/H20' || item.tipo === '1.35 y .15' }">
+                  <select v-model="item.tipo" class="input-field" :class="{ 'text-blue': item.tipo === 'C/H20' }">
                     <option value="">Seleccionar</option>
                     <option value="S/H20">S/H20</option>
                     <option value="C/H20" class="text-blue">C/H20</option>
@@ -219,7 +219,7 @@
                       <option value="Kileado">Kileado</option>
                     </select>
                   </div>
-                  <select v-model="item.tipo" class="input-field" :class="{ 'text-blue': item.tipo === 'C/H20' || item.tipo === '1.35 y .15' }">
+                  <select v-model="item.tipo" class="input-field" :class="{ 'text-blue': item.tipo === 'C/H20' }">
                     <option value="">Seleccionar</option>
                     <option value="S/H20">S/H20</option>
                     <option value="C/H20" class="text-blue">C/H20</option>
@@ -293,11 +293,10 @@
                       <option value="Kileado">Kileado</option>
                     </select>
                   </div>
-                  <select v-model="item.tipo" class="input-field" :class="{ 'text-blue': item.tipo === 'C/H20' || item.tipo === '1.35 y .15' }">
+                  <select v-model="item.tipo" class="input-field" :class="{ 'text-blue': item.tipo === 'C/H20' }">
                     <option value="">Seleccionar</option>
                     <option value="S/H20">S/H20</option>
                     <option value="C/H20" class="text-blue">C/H20</option>
-                    <option value="1.35 y .15">1.35 y .15</option>
                   </select>
                 </div>
 
@@ -368,10 +367,21 @@
                       <option value="Kileado">Kileado</option>
                     </select>
                   </div>
-                  <select v-model="item.tipo" class="input-field" :class="{ 'text-blue': item.tipo === 'C/H20' || item.tipo === '1.35 y .15' }">
+                  <select v-model="item.tipo" class="input-field" :class="{ 'text-blue': item.tipo === 'C/H20' }">
                     <option value="">Seleccionar</option>
                     <option value="S/H20">S/H20</option>
                     <option value="C/H20" class="text-blue">C/H20</option>
+                  </select>
+                </div>
+
+                <div v-if="clienteActivo === 'ozuna'" class="input-group-compact operacion">
+                  <div class="label-container">
+                    <label>Operación:</label>
+                  </div>
+                  <select v-model="item.tipoOperacion" class="input-field">
+                    <option value="">Seleccionar</option>
+                    <option value="Venta">Venta</option>
+                    <option value="Maquila">Maquila</option>
                   </select>
                 </div>
 
@@ -445,11 +455,22 @@
                       <option value="Kileado">Kileado</option>
                     </select>
                   </div>
-                  <select v-model="item.tipo" class="input-field" :class="{ 'text-blue': item.tipo === 'C/H20' || item.tipo === '1.35 y .15' }">
+                  <select v-model="item.tipo" class="input-field" :class="{ 'text-blue': item.tipo === 'C/H20' }">
                     <option value="">Seleccionar</option>
                     <option value="S/H20">S/H20</option>
                     <option value=".9 y .1">.9 y .1</option>
                     <option value=".9">.9</option>
+                  </select>
+                </div>
+
+                <div class="input-group-compact operacion">
+                  <div class="label-container">
+                    <label>Operación:</label>
+                  </div>
+                  <select v-model="item.tipoOperacion" class="input-field">
+                    <option value="">Seleccionar</option>
+                    <option value="Venta">Venta</option>
+                    <option value="Maquila">Maquila</option>
                   </select>
                 </div>
 
@@ -523,7 +544,7 @@ export default {
       pedidoOtilio: [{ kilos: null, medida: '', tipo: '', esTara: true, esProveedor: false, proveedor: '' }],
       pedidoCatarro: [{ kilos: null, medida: '', tipo: 'S/H20', esTara: false, esProveedor: false, proveedor: '' }],
       pedidoJoselito: [{ kilos: null, medida: '', tipo: '', esTara: false, esProveedor: false, proveedor: '' }],
-      pedidoOzuna: [{ kilos: null, medida: '', tipo: 'S/H20', esTara: false, esProveedor: false, proveedor: '' }],
+      pedidoOzuna: [{ kilos: null, medida: '', tipo: 'S/H20', esTara: false, esProveedor: false, proveedor: '', tipoOperacion: 'Maquila' }],
       clientesTemporales: {},
       mostrarModalNuevoCliente: false,
       mostrarImpresion: false,
@@ -817,7 +838,7 @@ export default {
       this.pedidoJoselito.unshift({ kilos: null, medida: '', tipo: '', esTara: false, esProveedor: false, proveedor: '' })
     },
     agregarFilaOzuna() {
-      this.pedidoOzuna.unshift({ kilos: null, medida: '', tipo: 'S/H20', esTara: false, esProveedor: false, proveedor: '' })
+      this.pedidoOzuna.unshift({ kilos: null, medida: '', tipo: 'S/H20', esTara: false, esProveedor: false, proveedor: '', tipoOperacion: 'Maquila' })
     },
     async guardarPedido() {
       try {
@@ -1458,6 +1479,11 @@ export default {
   flex-shrink: 0;
 }
 
+.operacion {
+  width: 180px;
+  flex-shrink: 0;
+}
+
 .input-field {
   height: 45px;
   padding: 8px 12px;
@@ -1764,6 +1790,10 @@ export default {
   .tipo-notas-container {
     width: 100%;
   }
+
+  .operacion {
+    width: 100%;
+  }
 }
 
 @media (max-width: 375px) {  /*Pixel fold cerrado*/
@@ -1840,7 +1870,7 @@ export default {
     width: 100%;
   }
 
-  .kilos, .medida, .tipo {
+  .kilos, .medida, .tipo, .operacion {
     width: 100%;
     min-width: unset;
   }
@@ -1896,8 +1926,14 @@ export default {
     padding: 2px 4px;
   }
 
-  .tipo {
+  .operacion {
     width: 100%;
+  }
+
+  .operacion .input-field {
+    height: 36px;
+    font-size: 14px;
+    padding: 4px 6px;
   }
 }
 

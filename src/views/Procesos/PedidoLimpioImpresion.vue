@@ -242,6 +242,13 @@
                 </template>
               </td>
             </tr>
+            <tr class="total-row">
+              <td>Total:</td>
+              <td>{{ calcularTotalKilos() }} kg</td>
+              <td></td>
+              <td></td>
+              <td></td>
+            </tr>
           </tbody>
         </table>
       </div>
@@ -627,16 +634,21 @@ export default {
     calcularTotalesPorMedida() {
       const medidasMap = new Map();
       
-      const procesarPedido = (pedido) => {
+      const procesarPedido = (pedido, esPedidoOzuna = false) => {
         pedido.forEach(item => {
           if (!item.medida) return;
           
           const medida = item.medida;
-          const key = medida.toLowerCase().trim();
+          // Para Ozuna, si es maquila, agregamos el sufijo "Maq"
+          const key = esPedidoOzuna && item.tipoOperacion === 'Maquila' 
+            ? (medida.toLowerCase().trim() + '-maq')
+            : medida.toLowerCase().trim();
           
           if (!medidasMap.has(key)) {
             medidasMap.set(key, {
-              medida: medida,
+              medida: esPedidoOzuna && item.tipoOperacion === 'Maquila' 
+                ? medida + ' Maq'
+                : medida,
               total: 0
             });
           }
@@ -668,7 +680,7 @@ export default {
       procesarPedido(this.pedidoOtilio);
       procesarPedido(this.pedidoCatarro);
       procesarPedido(this.pedidoJoselito);
-      procesarPedido(this.pedidoOzuna);
+      procesarPedido(this.pedidoOzuna, true); // Indicamos que es pedido de Ozuna
       
       // Procesar clientes temporales
       Object.values(this.clientesTemporales).forEach(cliente => {
@@ -683,7 +695,16 @@ export default {
           medida: value.medida,
           total: Math.round(value.total)
         }))
-        .sort((a, b) => a.medida.localeCompare(b.medida));
+        .sort((a, b) => {
+          // Primero ordenamos por medida base (sin el sufijo Maq)
+          const medidaA = a.medida.replace(' Maq', '');
+          const medidaB = b.medida.replace(' Maq', '');
+          if (medidaA === medidaB) {
+            // Si las medidas base son iguales, ponemos primero la que no es maquila
+            return a.medida.includes('Maq') ? 1 : -1;
+          }
+          return medidaA.localeCompare(medidaB);
+        });
     },
     calcularRendimiento(medida) {
       // Asegurarse de que el valor sea numérico
@@ -708,6 +729,11 @@ export default {
     esMedidaGranja(medida) {
       // Verifica si la medida comienza con un número
       return /^\d/.test(medida);
+    },
+    calcularTotalKilos() {
+      const totales = this.calcularTotalesPorMedida();
+      const sumaTotal = totales.reduce((sum, medida) => sum + medida.total, 0);
+      return sumaTotal.toLocaleString(); // Formateamos con comas para mejor legibilidad
     }
   }
 }
@@ -1487,6 +1513,24 @@ h4.cliente-header.ozuna-header {
   
   .pedido-checkbox:checked::after {
     font-size: 12px;
+  }
+}
+
+.resumen-table tr.total-row {
+  background-color: #f8f9fa;
+  font-weight: bold;
+}
+
+.resumen-table tr.total-row td {
+  border-top: 2px solid #000;
+  padding: 12px 8px;
+}
+
+@media print {
+  .resumen-table tr.total-row {
+    background-color: #f8f9fa !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
 }
 </style> 

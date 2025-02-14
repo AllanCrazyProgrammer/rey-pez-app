@@ -157,7 +157,8 @@ export default {
           text: total.toString(), 
           alignment: 'center', 
           bold: true,
-          fillColor: '#f8f9fa' // Fondo gris claro para destacar
+          italics: true,
+          fillColor: '#f8f9fa'
         };
       });
       
@@ -187,8 +188,12 @@ export default {
                 return null
               },
               defaultBorder: true,
-              hLineWidth: function(i) { return 1; },
-              vLineWidth: function(i) { return 1; },
+              hLineWidth: function(i, node) { 
+                return (i === node.table.body.length - 1 || i === node.table.body.length) ? 2 : 1;
+              },
+              vLineWidth: function(i, node) { 
+                return (node.table.body.length - 1 === node.row) ? 2 : 1;
+              },
               hLineColor: function(i) { return '#000000'; },
               vLineColor: function(i) { return '#000000'; },
               paddingLeft: function(i) { return 10; },
