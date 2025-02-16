@@ -719,10 +719,9 @@ export default {
   },
   methods: {
     agregarProducto(clienteId) {
-      const productoId = Date.now();
       const nuevoProducto = {
-        id: productoId,
-        clienteId,
+        id: Date.now(),
+        clienteId: clienteId,
         medida: '',
         tipo: '',
         tipoPersonalizado: '',
@@ -738,9 +737,13 @@ export default {
         esVenta: false,
         isEditing: true,
         isNew: true,
-        noSumarKilos: false // Agregar esta línea
+        noSumarKilos: false
       };
+
+      // Establecer tipo por defecto según el cliente
+      this.setTipoDefaultParaCliente(nuevoProducto);
       
+      // Agregar directamente al embarque.productos
       this.embarque.productos.push(nuevoProducto);
       
       if (!this.guardadoAutomaticoActivo && this.embarqueId) {
@@ -751,7 +754,7 @@ export default {
         this.guardarCambiosEnTiempoReal();
       }
       
-      this.actualizarMedidasUsadas(); // Actualizar lista de medidas después de agregar
+      this.actualizarMedidasUsadas();
 
       // Esperar a que el DOM se actualice y enfocar el nuevo input
       this.$nextTick(() => {
@@ -1096,6 +1099,13 @@ export default {
           }
         }, 100);
       });
+    },
+    // Agregar este nuevo método
+    setTipoDefaultParaCliente(producto) {
+      const clienteNombre = this.obtenerNombreCliente(producto.clienteId);
+      if (clienteNombre === 'Catarro') {
+        producto.tipo = 's/h20';
+      }
     },
     undo() {
       if (this.undoStack.length > 1) { // Asegura que haya al menos un estado previo
@@ -5400,6 +5410,271 @@ input[type="tel"] {
   .botones-finales a {
     padding: 10px 16px;
     font-size: 0.9rem;
+  }
+}
+
+@media (max-width: 768px) {
+  /* Ajustes del header del cliente */
+  .cliente-header {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    background-color: inherit;
+    min-height: 50px;
+  }
+
+  /* Nombre del cliente y totales */
+  .cliente-info {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .cliente-info h3 {
+    font-size: 1.4rem;
+    margin: 0;
+    white-space: nowrap;
+  }
+
+  /* Totales de limpio/crudo */
+  .cliente-totales {
+    display: flex;
+    flex-direction: row;
+    gap: 8px;
+  }
+
+  .cliente-totales span {
+    background: rgba(0, 0, 0, 0.2);
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.9rem;
+    white-space: nowrap;
+  }
+
+  /* Controles del header */
+  .cliente-header-controls {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+  }
+
+  /* Checkbox de juntar medidas */
+  .juntar-medidas-checkbox {
+    display: flex;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.2);
+    padding: 4px 8px;
+    border-radius: 4px;
+    height: 32px;
+  }
+
+  .juntar-medidas-checkbox label {
+    font-size: 0.9rem;
+    color: white;
+    white-space: nowrap;
+  }
+
+  /* Botones de acción */
+  .generar-nota,
+  .eliminar-cliente {
+    height: 32px;
+    padding: 0 12px;
+    font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+    white-space: nowrap;
+  }
+
+  /* Ajuste para mantener todo en una línea */
+  .cliente-header > * {
+    flex-shrink: 0;
+  }
+
+  .cliente-info {
+    flex-shrink: 1;
+    min-width: 0;
+  }
+
+  /* Hacer scroll horizontal si es necesario */
+  .cliente-header {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* IE and Edge */
+  }
+
+  .cliente-header::-webkit-scrollbar {
+    display: none; /* Chrome, Safari, Opera */
+  }
+
+  /* Ajustar espaciado entre elementos */
+  .cliente-header > *:not(:last-child) {
+    margin-right: 8px;
+  }
+
+  /* Mantener los botones visibles */
+  .cliente-header-controls {
+    position: sticky;
+    right: 0;
+    background: inherit;
+    padding-left: 8px;
+  }
+}
+
+/* Ajustes adicionales para pantallas muy pequeñas */
+@media (max-width: 480px) {
+  .cliente-header {
+    padding: 6px 8px;
+  }
+
+  .cliente-info h3 {
+    font-size: 1.2rem;
+  }
+
+  .cliente-totales span {
+    font-size: 0.8rem;
+    padding: 3px 6px;
+  }
+
+  .generar-nota,
+  .eliminar-cliente {
+    padding: 0 8px;
+    font-size: 0.8rem;
+  }
+}
+
+@media (max-width: 768px) {
+  /* Contenedor de productos en dos columnas */
+  .productos-container {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr); /* Dos columnas */
+    gap: 8px;
+    padding: 8px;
+  }
+
+  /* Ajustes del producto individual */
+  .producto {
+    width: 100%;
+    margin-bottom: 8px;
+    padding: 8px;
+    min-width: 0; /* Permite que el contenido se ajuste */
+  }
+
+  /* Ajustar el contenido dentro del producto */
+  .producto-header {
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  /* Contenedor de medida más compacto */
+  .medida-input-container {
+    width: 100%;
+  }
+
+  /* Hacer los inputs más pequeños pero usables */
+  .form-control {
+    font-size: 14px;
+    height: 32px;
+    padding: 4px 6px;
+  }
+
+  /* Optimizar sección de taras y kilos */
+  .sumas-verticales {
+    display: flex;
+    gap: 6px;
+  }
+
+  .columna {
+    flex: 1;
+    min-width: 0;
+  }
+
+  /* Ajustar inputs de taras y kilos */
+  .input-group {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 4px;
+  }
+
+  .input-group input {
+    width: calc(100% - 30px); /* Dejar espacio para el botón */
+    font-size: 14px;
+  }
+
+  .input-group button {
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    font-size: 12px;
+  }
+
+  /* Ajustar botones de agregar */
+  .botones-tara {
+    display: flex;
+    gap: 4px;
+  }
+
+  .agregar-tara,
+  .agregar-tara-extra {
+    padding: 4px 8px;
+    font-size: 12px;
+    height: 26px;
+  }
+
+  /* Ajustar reporte de taras y bolsas */
+  .reporte-taras-bolsas {
+    display: flex;
+    gap: 6px;
+  }
+
+  .reporte-item {
+    flex: 1;
+    min-width: 0;
+  }
+
+  /* Responsive para pantallas muy pequeñas */
+  @media (max-width: 480px) {
+    .productos-container {
+      grid-template-columns: repeat(2, 1fr); /* Mantener dos columnas */
+      gap: 6px;
+      padding: 6px;
+    }
+
+    .producto {
+      padding: 6px;
+    }
+
+    .form-control {
+      font-size: 13px;
+      height: 30px;
+    }
+
+    .input-group input {
+      font-size: 13px;
+    }
+  }
+
+  /* Ajustes para mantener la usabilidad */
+  .tipo-select,
+  .medida-input {
+    width: 100%;
+    margin-bottom: 4px;
+  }
+
+  /* Mantener los botones de acción accesibles */
+  .botones-accion {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+  }
+
+  /* Ajustar el espacio entre productos */
+  .producto:not(:last-child) {
+    margin-bottom: 8px;
   }
 }
 
