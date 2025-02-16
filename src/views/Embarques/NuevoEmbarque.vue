@@ -117,29 +117,29 @@
       
     <form @submit.prevent="guardarEmbarque" @keydown.enter.prevent>
       <div v-for="(clienteProductos, clienteId) in productosPorCliente" :key="clienteId" class="cliente-grupo">
-        <div class="cliente-header" :data-cliente="obtenerNombreCliente(clienteId)">
-  <div class="cliente-info">
-    <h3>{{ obtenerNombreCliente(clienteId) }}</h3>
-    <div class="cliente-totales">
-      <span>Limpio: {{ calcularTotalLimpioCliente(clienteId) }}T / {{ formatearKilos(calcularKilosLimpioCliente(clienteId)) }}Kg</span>
-      <span>Crudo: {{ calcularTotalCrudoCliente(clienteId) }}T / {{ formatearKilos(calcularKilosCrudoCliente(clienteId)) }}Kg</span>
-    </div>
-  </div>
-  <div class="cliente-header-controls">
-    <div class="juntar-medidas-checkbox">
-      <input 
-        type="checkbox" 
-        :id="'juntar-medidas-' + clienteId"
-        v-model="clientesJuntarMedidas[clienteId]"
-        @change="handleJuntarMedidasChange(clienteId, $event.target.checked)"
-        @click.stop
-      >
-      <label :for="'juntar-medidas-' + clienteId" @click.stop>Juntar medidas</label>
-    </div>
-    <button type="button" @click.stop="generarNotaVenta(clienteId)" class="btn btn-info btn-sm generar-nota">Generar Nota</button>
-    <button type="button" @click.stop="eliminarCliente(clienteId)" class="btn btn-danger btn-sm eliminar-cliente">Eliminar Cliente</button>
-  </div>
-</div>
+        <div class="cliente-header sticky-header" :data-cliente="obtenerNombreCliente(clienteId)" :style="{ top: calcularPosicionSticky(clienteId) + 'px' }">
+          <div class="cliente-info">
+            <h3>{{ obtenerNombreCliente(clienteId) }}</h3>
+            <div class="cliente-totales">
+              <span>Limpio: {{ calcularTotalLimpioCliente(clienteId) }}T / {{ formatearKilos(calcularKilosLimpioCliente(clienteId)) }}Kg</span>
+              <span>Crudo: {{ calcularTotalCrudoCliente(clienteId) }}T / {{ formatearKilos(calcularKilosCrudoCliente(clienteId)) }}Kg</span>
+            </div>
+          </div>
+          <div class="cliente-header-controls">
+            <div class="juntar-medidas-checkbox">
+              <input 
+                type="checkbox" 
+                :id="'juntar-medidas-' + clienteId"
+                v-model="clientesJuntarMedidas[clienteId]"
+                @change="handleJuntarMedidasChange(clienteId, $event.target.checked)"
+                @click.stop
+              >
+              <label :for="'juntar-medidas-' + clienteId" @click.stop>Juntar medidas</label>
+            </div>
+            <button type="button" @click.stop="generarNotaVenta(clienteId)" class="btn btn-info btn-sm generar-nota">Generar Nota</button>
+            <button type="button" @click.stop="eliminarCliente(clienteId)" class="btn btn-danger btn-sm eliminar-cliente">Eliminar Cliente</button>
+          </div>
+        </div>
         <div class="productos-container">
           <div v-for="(producto, index) in clienteProductos" :key="index" class="producto" 
             :data-es-venta="producto.esVenta"
@@ -664,6 +664,7 @@ export default {
       productoEditandoId: null, // Agregar esta nueva propiedad
       mostrarModalAlt: false,
       altTemp: '',
+      clientesOffsets: {},
     };
   },
   clientesJuntarMedidas: {},
@@ -1204,27 +1205,35 @@ export default {
     },
 
     calcularAlturaCliente(productos, crudos) {
-      // Altura base para el header del cliente (reducida)
-      let altura = 40;
+      try {
+        // Altura base para el header del cliente
+        let altura = 40;
 
-      // Altura para la tabla de productos
-      if (productos.length > 0) {
-        altura += 30; // Header de la tabla
-        altura += productos.length * 25; // Cada fila de producto
+        // Altura para la tabla de productos
+        if (Array.isArray(productos) && productos.length > 0) {
+          altura += 30; // Header de la tabla
+          altura += productos.length * 25; // Cada fila de producto
+        }
+
+        // Altura para la tabla de crudos
+        if (Array.isArray(crudos) && crudos.length > 0) {
+          altura += 30; // Header de la tabla
+          altura += crudos.reduce((total, crudo) => {
+            if (crudo && Array.isArray(crudo.items)) {
+              return total + (crudo.items.length * 25); // Cada fila de crudo
+            }
+            return total;
+          }, 0);
+        }
+
+        // Margen entre clientes
+        altura += 20;
+
+        return altura;
+      } catch (error) {
+        console.error('Error en calcularAlturaCliente:', error);
+        return 60; // Retornar altura base en caso de error
       }
-
-      // Altura para la tabla de crudos
-      if (crudos.length > 0) {
-        altura += 30; // Header de la tabla
-        altura += crudos.reduce((total, crudo) => {
-          return total + (crudo.items.length * 25); // Cada fila de crudo
-        }, 0);
-      }
-
-      // Margen entre clientes
-      altura += 20;
-
-      return altura;
     },
 
     generarContenidoCliente(clienteId, productos, crudos, colorCliente) {
@@ -2327,7 +2336,53 @@ export default {
       } catch (error) {
         console.error('Error al iniciar presencia:', error.message, error.stack);
       }
-    }
+    },
+    calcularPosicionSticky(clienteId) {
+      const clientes = Object.keys(this.productosPorCliente);
+      const index = clientes.indexOf(clienteId.toString());
+      
+      if (index === 0) return 0;
+      
+      let offset = 0;
+      for (let i = 0; i < index; i++) {
+        const prevClienteId = clientes[i];
+        const headerHeight = this.$el.querySelector(`[data-cliente="${this.obtenerNombreCliente(prevClienteId)}"]`)?.offsetHeight || 0;
+        offset += headerHeight;
+      }
+      
+      return offset;
+    },
+    calcularAlturaCliente(productos = [], crudos = []) {
+      try {
+        // Altura base para el header del cliente
+        let altura = 40;
+
+        // Altura para la tabla de productos
+        if (Array.isArray(productos) && productos.length > 0) {
+          altura += 30; // Header de la tabla
+          altura += productos.length * 25; // Cada fila de producto
+        }
+
+        // Altura para la tabla de crudos
+        if (Array.isArray(crudos) && crudos.length > 0) {
+          altura += 30; // Header de la tabla
+          altura += crudos.reduce((total, crudo) => {
+            if (crudo && Array.isArray(crudo.items)) {
+              return total + (crudo.items.length * 25); // Cada fila de crudo
+            }
+            return total;
+          }, 0);
+        }
+
+        // Margen entre clientes
+        altura += 20;
+
+        return altura;
+      } catch (error) {
+        console.error('Error en calcularAlturaCliente:', error);
+        return 60; // Retornar altura base en caso de error
+      }
+    },
   },
   async created() {
     const embarqueId = this.$route.params.id;
@@ -4730,6 +4785,886 @@ input[type="tel"] {
 
   .cliente-totales span {
     font-size: 12px;
+  }
+}
+
+.sticky-header {
+  position: sticky;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  padding: 4px 8px; /* Reducir padding */
+  min-height: 40px; /* Reducir altura mínima */
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: inherit;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+/* Optimizar el layout del header */
+.cliente-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+}
+
+/* Agrupar título y totales */
+.cliente-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+}
+
+.cliente-info h3 {
+  margin: 0;
+  font-size: 1.4rem; /* Reducir tamaño de fuente */
+  white-space: nowrap;
+}
+
+/* Optimizar los totales */
+.cliente-totales {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: nowrap;
+}
+
+.cliente-totales span {
+  background-color: rgba(0, 0, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+/* Optimizar los controles del header */
+.cliente-header-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Ajustar los botones para que ocupen menos espacio */
+.btn-nota-cliente {
+  padding: 4px 8px;
+  font-size: 0.85rem;
+  height: 28px;
+  display: flex;
+  align-items: center;
+}
+
+@media (max-width: 768px) {
+  .sticky-header {
+    padding: 4px;
+  }
+
+  .cliente-header {
+    flex-wrap: nowrap; /* Cambiar a nowrap para mantener todo en una línea */
+    gap: 4px; /* Reducir el espacio entre elementos */
+  }
+
+  .cliente-info {
+    flex-direction: row;
+    width: auto;
+    gap: 6px; /* Reducir el espacio entre nombre y totales */
+  }
+
+  .cliente-info h3 {
+    font-size: 1.2rem; /* Reducir un poco el tamaño de la fuente */
+  }
+
+  .cliente-totales {
+    flex: 0 1 auto; /* Evitar que los totales crezcan demasiado */
+    gap: 4px;
+  }
+
+  .cliente-totales span {
+    padding: 1px 4px;
+    font-size: 0.8rem;
+  }
+
+  /* Ajustar los controles del header */
+  .cliente-header-controls {
+    flex: 0 0 auto;
+    margin-top: 0; /* Eliminar el margen superior */
+    gap: 4px;
+  }
+
+  /* Hacer los botones más pequeños */
+  .cliente-header-controls button,
+  .juntar-medidas-checkbox {
+    padding: 2px 6px;
+    font-size: 0.75rem;
+    height: 24px;
+    min-width: auto;
+  }
+
+  /* Ajustar el checkbox de juntar medidas */
+  .juntar-medidas-checkbox label {
+    font-size: 0.75rem;
+  }
+
+  .juntar-medidas-checkbox input[type="checkbox"] {
+    width: 14px;
+    height: 14px;
+  }
+
+  /* Ajustar los botones específicos */
+  .generar-nota,
+  .eliminar-cliente {
+    padding: 2px 6px;
+    font-size: 0.75rem;
+    white-space: nowrap;
+  }
+}
+
+/* Ajustes adicionales para pantallas muy pequeñas */
+@media (max-width: 480px) {
+  .cliente-header {
+    flex-wrap: wrap; /* Permitir wrap solo en pantallas muy pequeñas */
+  }
+
+  .cliente-info {
+    flex-direction: row;
+    align-items: center;
+    width: auto;
+  }
+
+  .cliente-header-controls {
+    justify-content: flex-start;
+    margin-top: 4px;
+  }
+}
+
+/* Estilos base del sticky header */
+.sticky-header {
+  position: sticky;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  padding: 4px 8px;
+  min-height: 36px;
+  background: inherit;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+/* Layout principal del header */
+.cliente-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+/* Contenedor del nombre y totales */
+.cliente-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0; /* Permite que el contenedor se encoja */
+}
+
+.cliente-info h3 {
+  margin: 0;
+  font-size: 1.4rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Contenedor de los totales */
+.cliente-totales {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 1;
+}
+
+.cliente-totales span {
+  background-color: rgba(0, 0, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+/* Controles del header */
+.cliente-header-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto; /* Empuja los controles hacia la derecha */
+}
+
+@media (max-width: 768px) {
+  .sticky-header {
+    padding: 4px;
+  }
+
+  .cliente-header {
+    gap: 6px;
+  }
+
+  /* Ajustar el nombre del cliente */
+  .cliente-info h3 {
+    font-size: 1.1rem;
+    max-width: 120px; /* Limitar el ancho del nombre */
+  }
+
+  /* Comprimir los totales */
+  .cliente-totales {
+    gap: 2px;
+  }
+
+  .cliente-totales span {
+    padding: 1px 4px;
+    font-size: 0.7rem;
+  }
+
+  /* Ajustar los controles */
+  .cliente-header-controls {
+    gap: 2px;
+  }
+
+  /* Hacer los botones más compactos */
+  .cliente-header-controls button,
+  .juntar-medidas-checkbox {
+    padding: 1px 4px;
+    font-size: 0.7rem;
+    height: 20px;
+    min-width: auto;
+  }
+
+  /* Ajustar el checkbox */
+  .juntar-medidas-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+  }
+
+  .juntar-medidas-checkbox input[type="checkbox"] {
+    width: 12px;
+    height: 12px;
+    margin: 0;
+  }
+
+  .juntar-medidas-checkbox label {
+    font-size: 0.7rem;
+  }
+
+  /* Ajustar botones específicos */
+  .generar-nota,
+  .eliminar-cliente {
+    padding: 1px 4px;
+    font-size: 0.7rem;
+  }
+}
+
+/* Mantener la legibilidad en pantallas muy pequeñas */
+@media (max-width: 480px) {
+  .cliente-header {
+    flex-wrap: wrap;
+  }
+
+  .cliente-info h3 {
+    max-width: none;
+    font-size: 1rem;
+  }
+
+  .cliente-header-controls {
+    width: 100%;
+    justify-content: flex-start;
+    margin-top: 4px;
+  }
+}
+
+/* Estilos base del header del cliente */
+.sticky-header {
+  position: sticky;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  background: inherit;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  padding: 2px 4px; /* Reducido el padding */
+}
+
+/* Layout principal del header */
+.cliente-header {
+  display: flex;
+  align-items: center; /* Cambiado a una sola línea */
+  gap: 8px;
+  width: 100%;
+  min-height: 40px; /* Altura mínima para mantener legibilidad */
+}
+
+/* Contenedor del nombre */
+.cliente-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 0 1 auto; /* Permite que se encoja pero no crezca */
+}
+
+.cliente-info h3 {
+  margin: 0;
+  font-size: 1.6rem;
+  font-weight: bold;
+  color: white;
+  white-space: nowrap;
+}
+
+/* Contenedor de los totales */
+.cliente-totales {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-right: 12px; /* Espacio antes de los controles */
+}
+
+.cliente-totales span {
+  color: white;
+  font-size: 0.9rem;
+  white-space: nowrap;
+  padding: 2px 6px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 3px;
+}
+
+/* Controles del header */
+.cliente-header-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto; /* Empuja los controles a la derecha */
+}
+
+/* Checkbox de juntar medidas */
+.juntar-medidas-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(255, 255, 255, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  height: 28px;
+}
+
+.juntar-medidas-checkbox input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+}
+
+.juntar-medidas-checkbox label {
+  color: white;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+/* Botones de acción */
+.generar-nota,
+.eliminar-cliente {
+  padding: 2px 8px;
+  height: 28px;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  border: none;
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
+}
+
+.generar-nota {
+  background-color: #17a2b8;
+}
+
+.eliminar-cliente {
+  background-color: #6c757d;
+}
+
+/* Media queries existentes para responsive */
+@media (max-width: 768px) {
+  .cliente-info h3 {
+    font-size: 1.2rem;
+  }
+
+  .cliente-totales span {
+    font-size: 0.8rem;
+    padding: 1px 4px;
+  }
+
+  .cliente-header-controls {
+    gap: 4px;
+  }
+
+  .juntar-medidas-checkbox,
+  .generar-nota,
+  .eliminar-cliente {
+    padding: 1px 6px;
+    height: 24px;
+    font-size: 0.75rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .cliente-header {
+    flex-wrap: wrap;
+  }
+
+  .cliente-info {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+
+  .cliente-totales {
+    width: 100%;
+    justify-content: flex-start;
+    margin-right: 0;
+  }
+
+  .cliente-header-controls {
+    width: 100%;
+    justify-content: flex-start;
+    margin-top: 4px;
+  }
+}
+
+@media (max-width: 768px) {
+  /* Ajustes del contenedor principal */
+  .productos-container {
+    padding: 8px;
+    gap: 12px;
+  }
+
+  /* Optimización del producto individual */
+  .producto {
+    padding: 10px;
+    margin-bottom: 8px;
+  }
+
+  /* Header del producto más compacto */
+  .producto-header {
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+
+  /* Ajuste de inputs y controles */
+  .medida-input-container {
+    gap: 4px;
+  }
+
+  .form-control {
+    height: 32px;
+    padding: 4px 8px;
+  }
+
+  /* Optimizar sección de taras y kilos */
+  .sumas-verticales {
+    gap: 8px;
+    margin-top: 8px;
+  }
+
+  .columna {
+    gap: 4px;
+  }
+
+  .input-group {
+    margin-bottom: 4px;
+  }
+
+  .input-group input {
+    height: 32px;
+    padding: 4px 8px;
+  }
+
+  .input-group button {
+    padding: 4px;
+    min-width: 32px;
+    height: 32px;
+  }
+
+  /* Botones de acción más compactos */
+  .botones-tara {
+    gap: 4px;
+  }
+
+  .agregar-tara,
+  .agregar-kilo {
+    padding: 6px 10px;
+    height: 32px;
+    font-size: 0.9rem;
+  }
+
+  /* Optimizar encabezado del cliente */
+  .cliente-header {
+    padding: 8px;
+    gap: 6px;
+  }
+
+  .cliente-info {
+    gap: 6px;
+  }
+
+  .cliente-totales {
+    gap: 6px;
+  }
+
+  .cliente-totales span {
+    padding: 2px 6px;
+    font-size: 0.8rem;
+  }
+
+  /* Ajustar controles del header */
+  .cliente-header-controls {
+    gap: 6px;
+  }
+
+  .cliente-header-controls button {
+    padding: 4px 8px;
+    height: 32px;
+    font-size: 0.85rem;
+  }
+
+  /* Optimizar modales */
+  .modal-contenido {
+    width: 90%;
+    max-width: 320px;
+    padding: 16px;
+  }
+
+  .input-precio,
+  .input-nombre {
+    margin: 12px 0;
+  }
+
+  /* Ajustar botones flotantes */
+  .total-taras-flotante {
+    bottom: 12px;
+    right: 12px;
+    padding: 8px 12px;
+  }
+
+  /* Optimizar lista de usuarios activos */
+  .usuarios-activos {
+    top: 12px;
+    right: 12px;
+    padding: 12px;
+    min-width: 160px;
+  }
+
+  .usuario-activo {
+    padding: 6px;
+    gap: 6px;
+  }
+
+  /* Ajustar botones de notas */
+  .botones-notas-clientes {
+    gap: 6px;
+    padding: 0 8px;
+  }
+
+  .btn-nota-cliente {
+    padding: 6px 12px;
+    font-size: 0.9rem;
+  }
+
+  /* Optimizar checkbox y controles */
+  .checkbox-juntar-medidas {
+    gap: 4px;
+  }
+
+  .checkbox-juntar-medidas input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+  }
+
+  /* Ajustar espaciado de los botones finales */
+  .botones-finales {
+    gap: 8px;
+    margin-top: 16px;
+    padding: 0 8px;
+  }
+
+  .botones-finales button,
+  .botones-finales a {
+    padding: 10px 16px;
+    font-size: 0.9rem;
+  }
+}
+
+@media (max-width: 768px) {
+  /* Ajustes del header del cliente */
+  .cliente-header {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    background-color: inherit;
+    min-height: 50px;
+  }
+
+  /* Nombre del cliente y totales */
+  .cliente-info {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .cliente-info h3 {
+    font-size: 1.4rem;
+    margin: 0;
+    white-space: nowrap;
+  }
+
+  /* Totales de limpio/crudo */
+  .cliente-totales {
+    display: flex;
+    flex-direction: row;
+    gap: 8px;
+  }
+
+  .cliente-totales span {
+    background: rgba(0, 0, 0, 0.2);
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.9rem;
+    white-space: nowrap;
+  }
+
+  /* Controles del header */
+  .cliente-header-controls {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+  }
+
+  /* Checkbox de juntar medidas */
+  .juntar-medidas-checkbox {
+    display: flex;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.2);
+    padding: 4px 8px;
+    border-radius: 4px;
+    height: 32px;
+  }
+
+  .juntar-medidas-checkbox label {
+    font-size: 0.9rem;
+    color: white;
+    white-space: nowrap;
+  }
+
+  /* Botones de acción */
+  .generar-nota,
+  .eliminar-cliente {
+    height: 32px;
+    padding: 0 12px;
+    font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+    white-space: nowrap;
+  }
+
+  /* Ajuste para mantener todo en una línea */
+  .cliente-header > * {
+    flex-shrink: 0;
+  }
+
+  .cliente-info {
+    flex-shrink: 1;
+    min-width: 0;
+  }
+
+  /* Hacer scroll horizontal si es necesario */
+  .cliente-header {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* IE and Edge */
+  }
+
+  .cliente-header::-webkit-scrollbar {
+    display: none; /* Chrome, Safari, Opera */
+  }
+
+  /* Ajustar espaciado entre elementos */
+  .cliente-header > *:not(:last-child) {
+    margin-right: 8px;
+  }
+
+  /* Mantener los botones visibles */
+  .cliente-header-controls {
+    position: sticky;
+    right: 0;
+    background: inherit;
+    padding-left: 8px;
+  }
+}
+
+/* Ajustes adicionales para pantallas muy pequeñas */
+@media (max-width: 480px) {
+  .cliente-header {
+    padding: 6px 8px;
+  }
+
+  .cliente-info h3 {
+    font-size: 1.2rem;
+  }
+
+  .cliente-totales span {
+    font-size: 0.8rem;
+    padding: 3px 6px;
+  }
+
+  .generar-nota,
+  .eliminar-cliente {
+    padding: 0 8px;
+    font-size: 0.8rem;
+  }
+}
+
+@media (max-width: 768px) {
+  /* Contenedor de productos en dos columnas */
+  .productos-container {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr); /* Dos columnas */
+    gap: 8px;
+    padding: 8px;
+  }
+
+  /* Ajustes del producto individual */
+  .producto {
+    width: 100%;
+    margin-bottom: 8px;
+    padding: 8px;
+    min-width: 0; /* Permite que el contenido se ajuste */
+  }
+
+  /* Ajustar el contenido dentro del producto */
+  .producto-header {
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  /* Contenedor de medida más compacto */
+  .medida-input-container {
+    width: 100%;
+  }
+
+  /* Hacer los inputs más pequeños pero usables */
+  .form-control {
+    font-size: 14px;
+    height: 32px;
+    padding: 4px 6px;
+  }
+
+  /* Optimizar sección de taras y kilos */
+  .sumas-verticales {
+    display: flex;
+    gap: 6px;
+  }
+
+  .columna {
+    flex: 1;
+    min-width: 0;
+  }
+
+  /* Ajustar inputs de taras y kilos */
+  .input-group {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 4px;
+  }
+
+  .input-group input {
+    width: calc(100% - 30px); /* Dejar espacio para el botón */
+    font-size: 14px;
+  }
+
+  .input-group button {
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    font-size: 12px;
+  }
+
+  /* Ajustar botones de agregar */
+  .botones-tara {
+    display: flex;
+    gap: 4px;
+  }
+
+  .agregar-tara,
+  .agregar-tara-extra {
+    padding: 4px 8px;
+    font-size: 12px;
+    height: 26px;
+  }
+
+  /* Ajustar reporte de taras y bolsas */
+  .reporte-taras-bolsas {
+    display: flex;
+    gap: 6px;
+  }
+
+  .reporte-item {
+    flex: 1;
+    min-width: 0;
+  }
+
+  /* Responsive para pantallas muy pequeñas */
+  @media (max-width: 480px) {
+    .productos-container {
+      grid-template-columns: repeat(2, 1fr); /* Mantener dos columnas */
+      gap: 6px;
+      padding: 6px;
+    }
+
+    .producto {
+      padding: 6px;
+    }
+
+    .form-control {
+      font-size: 13px;
+      height: 30px;
+    }
+
+    .input-group input {
+      font-size: 13px;
+    }
+  }
+
+  /* Ajustes para mantener la usabilidad */
+  .tipo-select,
+  .medida-input {
+    width: 100%;
+    margin-bottom: 4px;
+  }
+
+  /* Mantener los botones de acción accesibles */
+  .botones-accion {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+  }
+
+  /* Ajustar el espacio entre productos */
+  .producto:not(:last-child) {
+    margin-bottom: 8px;
   }
 }
 </style>
