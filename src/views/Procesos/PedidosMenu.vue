@@ -285,7 +285,10 @@ export default {
             pedidoCatarro: pedido.catarro || [],
             pedidoJoselito: pedido.joselito || [],
             pedidoOzuna: pedido.ozuna || [],
-            clientesTemporales: pedido.clientesTemporales || {}
+            clientesTemporales: pedido.clientesTemporales || {},
+            rendimientosGuardados: pedido.rendimientos || {},
+            divisoresGuardados: pedido.divisores || {},
+            completadosGuardados: pedido.completados || {}
           }
         });
       }

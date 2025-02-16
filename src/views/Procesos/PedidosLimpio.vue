@@ -502,8 +502,10 @@
       :clientesTemporales="clientesTemporales"
       :rendimientosGuardados="rendimientosGuardados"
       :divisoresGuardados="divisoresGuardados"
+      :completadosGuardados="completadosGuardados"
       @actualizar-rendimientos="actualizarRendimientos"
       @actualizar-divisores="actualizarDivisores"
+      @actualizar-completados="actualizarCompletados"
       @volver="mostrarImpresion = false"
     />
 
@@ -562,7 +564,8 @@ export default {
       ],
       itemSeleccionadoNotas: null,
       rendimientosGuardados: {},
-      divisoresGuardados: {}
+      divisoresGuardados: {},
+      completadosGuardados: {}
     }
   },
   async created() {
@@ -822,6 +825,7 @@ export default {
           this.clientesTemporales = data.clientesTemporales || {};
           this.rendimientosGuardados = data.rendimientos || {};
           this.divisoresGuardados = data.divisores || {};
+          this.completadosGuardados = data.completados || {};
         }
       } catch (error) {
         console.error('Error al cargar el pedido:', error);
@@ -844,6 +848,7 @@ export default {
       try {
         const pedidoData = {
           fecha: this.fecha,
+          tipo: 'limpio',
           otilio: this.pedidoOtilio,
           catarro: this.pedidoCatarro,
           joselito: this.pedidoJoselito,
@@ -851,21 +856,22 @@ export default {
           clientesTemporales: this.clientesTemporales,
           rendimientos: this.rendimientosGuardados,
           divisores: this.divisoresGuardados,
-          tipo: 'limpio',
-          createdAt: this.editando ? Timestamp.fromDate(new Date(this.fecha)) : Timestamp.now()
-        }
-        
+          completados: this.completadosGuardados,
+          createdAt: Timestamp.now()
+        };
+
         if (this.editando && this.pedidoId) {
+          // Actualizar pedido existente
           await updateDoc(doc(db, 'pedidos', this.pedidoId), pedidoData);
-          alert('Pedido actualizado exitosamente');
         } else {
+          // Crear nuevo pedido
           await addDoc(collection(db, 'pedidos'), pedidoData);
-          alert('Pedido guardado exitosamente');
         }
+
         this.$router.push('/procesos/pedidos');
       } catch (error) {
         console.error('Error al guardar el pedido:', error);
-        alert('Error al guardar el pedido. Por favor intente nuevamente.');
+        alert('Error al guardar el pedido');
       }
     },
     async mostrarVistaImpresion() {
@@ -1060,6 +1066,43 @@ export default {
         }).catch(error => {
           console.error('Error al actualizar divisores:', error);
         });
+      }
+    },
+    actualizarCompletados(completados) {
+      this.completadosGuardados = completados;
+      // Guardar en Firebase inmediatamente
+      if (this.editando && this.pedidoId) {
+        // Si estamos editando, actualizar el documento existente
+        updateDoc(doc(db, 'pedidos', this.pedidoId), {
+          completados: completados
+        }).catch(error => {
+          console.error('Error al actualizar estados completados:', error);
+        });
+      } else {
+        // Si es un pedido nuevo, crear un nuevo documento
+        const pedidoData = {
+          fecha: this.fecha,
+          tipo: 'limpio',
+          otilio: this.pedidoOtilio,
+          catarro: this.pedidoCatarro,
+          joselito: this.pedidoJoselito,
+          ozuna: this.pedidoOzuna,
+          clientesTemporales: this.clientesTemporales,
+          rendimientos: this.rendimientosGuardados,
+          divisores: this.divisoresGuardados,
+          completados: completados,
+          createdAt: Timestamp.now()
+        };
+        
+        addDoc(collection(db, 'pedidos'), pedidoData)
+          .then(docRef => {
+            // Actualizar el estado local para reflejar que ahora estamos editando
+            this.editando = true;
+            this.pedidoId = docRef.id;
+          })
+          .catch(error => {
+            console.error('Error al crear nuevo pedido:', error);
+          });
       }
     },
   },
@@ -1590,6 +1633,39 @@ export default {
     margin-bottom: 20px;
   }
   
+  .input-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .input-group-compact {
+    margin: 0;
+  }
+
+  .kilos, .medida {
+    margin-bottom: 12px;
+  }
+
+  .kilos {
+    width: calc(40% - 6px);
+    min-width: unset;
+    flex: none;
+  }
+
+  .medida {
+    width: calc(60% - 6px);
+    min-width: unset;
+    flex: none;
+  }
+
+  .tipo, .operacion {
+    width: calc(50% - 6px);
+    min-width: unset;
+    margin: 0;
+    flex: none;
+  }
+
   .tab-wrapper {
     width: calc(50% - 8px);
     margin: 0;
@@ -1667,16 +1743,41 @@ export default {
     width: 100%;
   }
 
-  .tab-button {
-    width: 100%;
-    min-width: unset;
-    font-size: 18px;
-    padding: 12px 8px;
-    margin: 0;
+  .input-row {
     display: flex;
-    justify-content: center;
-    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 15px;
+    padding-right: 45px;
+    border: 1px solid #eee;
+    margin-bottom: 10px;
+    background: white;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  }
+
+  .kilos {
+    width: calc(40% - 4px);
+    min-width: unset;
+    flex: none;
+  }
+
+  .medida {
+    width: calc(60% - 4px);
+    min-width: unset;
+    flex: none;
+  }
+
+  .tipo, .operacion {
+    width: calc(50% - 4px);
+    min-width: unset;
+    margin-left: 0;
+    flex: 1;
+  }
+
+  .input-field {
+    font-size: 23px;
     height: 50px;
+    padding: 8px 10px;
   }
 
   .tab-totales {

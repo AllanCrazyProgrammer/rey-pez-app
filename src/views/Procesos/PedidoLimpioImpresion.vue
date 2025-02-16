@@ -38,7 +38,7 @@
           </thead>
           <tbody>
             <tr v-for="(item, index) in pedidoOtilio" :key="'otilio-'+index">
-              <td><input type="checkbox" v-model="item.completado" class="pedido-checkbox"></td>
+              <td><input type="checkbox" v-model="item.completado" @change="actualizarCompletado('otilio', index, item.completado)" class="pedido-checkbox"></td>
               <td>{{ item.kilos }}<i v-if="item.esTara">T</i></td>
               <td>
                 {{ item.medida }}
@@ -72,7 +72,7 @@
             </thead>
             <tbody>
               <tr v-for="(item, index) in pedidoJoselito" :key="'joselito-'+index">
-                <td><input type="checkbox" v-model="item.completado" class="pedido-checkbox"></td>
+                <td><input type="checkbox" v-model="item.completado" @change="actualizarCompletado('joselito', index, item.completado)" class="pedido-checkbox"></td>
                 <td>{{ item.kilos }}<i v-if="item.esTara">T</i></td>
                 <td>
                   {{ item.medida }}
@@ -104,7 +104,7 @@
               </thead>
               <tbody>
                 <tr v-for="(item, index) in pedidoCatarro" :key="'catarro-'+index">
-                  <td><input type="checkbox" v-model="item.completado" class="pedido-checkbox"></td>
+                  <td><input type="checkbox" v-model="item.completado" @change="actualizarCompletado('catarro', index, item.completado)" class="pedido-checkbox"></td>
                   <td>{{ item.kilos }}<i v-if="item.esTara">T</i></td>
                   <td>
                     {{ item.medida }}
@@ -128,7 +128,7 @@
               </thead>
               <tbody>
                 <tr v-for="(item, index) in pedidoOzuna" :key="'ozuna-'+index">
-                  <td><input type="checkbox" v-model="item.completado" class="pedido-checkbox"></td>
+                  <td><input type="checkbox" v-model="item.completado" @change="actualizarCompletado('ozuna', index, item.completado)" class="pedido-checkbox"></td>
                   <td>{{ item.kilos }}<i v-if="item.esTara">T</i></td>
                   <td>
                     {{ item.medida }}
@@ -304,6 +304,10 @@ export default {
     divisoresGuardados: {
       type: Object,
       default: () => ({})
+    },
+    completadosGuardados: {
+      type: Object,
+      default: () => ({})
     }
   },
   data() {
@@ -311,9 +315,62 @@ export default {
       rendimientos: this.rendimientosGuardados || {},
       divisores: this.divisoresGuardados || {},
       contentScale: 1,
+      completados: this.completadosGuardados || {}
     }
   },
+  created() {
+    // Inicializar los estados de completado si no existen
+    if (!this.completados.otilio) this.completados.otilio = {};
+    if (!this.completados.catarro) this.completados.catarro = {};
+    if (!this.completados.joselito) this.completados.joselito = {};
+    if (!this.completados.ozuna) this.completados.ozuna = {};
+    
+    // Inicializar los estados desde las props
+    this.rendimientos = { ...this.rendimientosGuardados };
+    this.divisores = { ...this.divisoresGuardados };
+    this.completados = { ...this.completadosGuardados };
+    
+    // Aplicar estados guardados a los pedidos
+    this.aplicarEstadosCompletado();
+  },
   methods: {
+    aplicarEstadosCompletado() {
+      // Aplicar estados a Otilio
+      this.pedidoOtilio.forEach((item, index) => {
+        if (this.completados.otilio[index] !== undefined) {
+          this.$set(item, 'completado', this.completados.otilio[index]);
+        }
+      });
+      
+      // Aplicar estados a Catarro
+      this.pedidoCatarro.forEach((item, index) => {
+        if (this.completados.catarro[index] !== undefined) {
+          this.$set(item, 'completado', this.completados.catarro[index]);
+        }
+      });
+      
+      // Aplicar estados a Joselito
+      this.pedidoJoselito.forEach((item, index) => {
+        if (this.completados.joselito[index] !== undefined) {
+          this.$set(item, 'completado', this.completados.joselito[index]);
+        }
+      });
+      
+      // Aplicar estados a Ozuna
+      this.pedidoOzuna.forEach((item, index) => {
+        if (this.completados.ozuna[index] !== undefined) {
+          this.$set(item, 'completado', this.completados.ozuna[index]);
+        }
+      });
+    },
+    actualizarCompletado(cliente, index, valor) {
+      if (!this.completados[cliente]) {
+        this.$set(this.completados, cliente, {});
+      }
+      this.$set(this.completados[cliente], index, valor);
+      // Emitir el evento inmediatamente para guardar en Firebase
+      this.$emit('actualizar-completados', this.completados);
+    },
     obtenerDiaSemana(fecha) {
       const dias = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
       const date = new Date(fecha);
@@ -734,6 +791,69 @@ export default {
       const totales = this.calcularTotalesPorMedida();
       const sumaTotal = totales.reduce((sum, medida) => sum + medida.total, 0);
       return sumaTotal.toLocaleString(); // Formateamos con comas para mejor legibilidad
+    }
+  },
+  watch: {
+    // Observar cambios en las props para actualizar los estados locales
+    rendimientosGuardados: {
+      handler(newVal) {
+        this.rendimientos = { ...newVal };
+      },
+      deep: true
+    },
+    divisoresGuardados: {
+      handler(newVal) {
+        this.divisores = { ...newVal };
+      },
+      deep: true
+    },
+    completadosGuardados: {
+      handler(newVal) {
+        this.completados = { ...newVal };
+        this.aplicarEstadosCompletado();
+      },
+      deep: true
+    },
+    // Observar cambios en los pedidos para actualizar los estados completados
+    pedidoOtilio: {
+      deep: true,
+      handler(newVal) {
+        newVal.forEach((item, index) => {
+          if (item.completado !== undefined) {
+            this.actualizarCompletado('otilio', index, item.completado);
+          }
+        });
+      }
+    },
+    pedidoJoselito: {
+      deep: true,
+      handler(newVal) {
+        newVal.forEach((item, index) => {
+          if (item.completado !== undefined) {
+            this.actualizarCompletado('joselito', index, item.completado);
+          }
+        });
+      }
+    },
+    pedidoCatarro: {
+      deep: true,
+      handler(newVal) {
+        newVal.forEach((item, index) => {
+          if (item.completado !== undefined) {
+            this.actualizarCompletado('catarro', index, item.completado);
+          }
+        });
+      }
+    },
+    pedidoOzuna: {
+      deep: true,
+      handler(newVal) {
+        newVal.forEach((item, index) => {
+          if (item.completado !== undefined) {
+            this.actualizarCompletado('ozuna', index, item.completado);
+          }
+        });
+      }
     }
   }
 }
