@@ -341,8 +341,8 @@ export default {
           this.$set(item, 'completado', this.completados.otilio[index]);
         }
       });
-      
-      // Aplicar estados a Catarro
+       
+      // Aplicar estados a Catarroo
       this.pedidoCatarro.forEach((item, index) => {
         if (this.completados.catarro[index] !== undefined) {
           this.$set(item, 'completado', this.completados.catarro[index]);
