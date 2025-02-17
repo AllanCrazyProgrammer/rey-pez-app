@@ -249,7 +249,12 @@ function generarContenidoClientes(embarque, clientesDisponibles, clientesJuntarM
             taras: [...producto.taras],
             tarasExtra: [...(producto.tarasExtra || [])],
             reporteTaras: [...(producto.reporteTaras || [])],
-            reporteBolsas: [...(producto.reporteBolsas || [])]
+            reporteBolsas: [...(producto.reporteBolsas || [])],
+            // Crear un array para rastrear qué taras tienen descuento
+            tarasInfo: producto.taras.map(tara => ({
+              valor: tara,
+              restarTaras: producto.restarTaras
+            }))
           };
         } else {
           // Combinar los kilos y taras
@@ -264,6 +269,15 @@ function generarContenidoClientes(embarque, clientesDisponibles, clientesJuntarM
           if (producto.reporteBolsas) {
             productosAgrupados[clave].reporteBolsas.push(...producto.reporteBolsas);
           }
+          // Agregar la información de las nuevas taras
+          productosAgrupados[clave].tarasInfo.push(
+            ...producto.taras.map(tara => ({
+              valor: tara,
+              restarTaras: producto.restarTaras
+            }))
+          );
+          // Mantener el array de taras sincronizado
+          productosAgrupados[clave].taras = productosAgrupados[clave].tarasInfo.map(t => t.valor);
         }
       });
       
@@ -768,8 +782,20 @@ function totalTaras(producto) {
 
 function totalKilos(producto, nombreCliente) {
   const sumaKilos = (producto.kilos || []).reduce((sum, kilo) => sum + (kilo || 0), 0);
-  const sumaTarasNormales = (producto.taras || []).reduce((sum, tara) => sum + (tara || 0), 0);
-  const descuentoTaras = producto.restarTaras ? sumaTarasNormales * 3 : 0;
+  
+  // Calcular el descuento de taras
+  let descuentoTaras = 0;
+  
+  if (producto.tarasInfo) {
+    // Si tiene tarasInfo (productos combinados), usar esa información
+    descuentoTaras = producto.tarasInfo.reduce((sum, tara) => {
+      return sum + (tara.restarTaras ? (Number(tara.valor) || 0) * 3 : 0);
+    }, 0);
+  } else {
+    // Para productos normales (no combinados), usar la lógica original
+    const sumaTarasNormales = (producto.taras || []).reduce((sum, tara) => sum + (tara || 0), 0);
+    descuentoTaras = producto.restarTaras ? sumaTarasNormales * 3 : 0;
+  }
   
   let resultado = sumaKilos - descuentoTaras;
   
@@ -780,10 +806,6 @@ function totalKilos(producto, nombreCliente) {
     if (nombreCliente.toLowerCase().includes('catarro')) {
       resultado += 1;
     }
-    // Comentado: ya no sumar 3kg para Otilio
-    // if (nombreCliente.toLowerCase().includes('otilio')) {
-    //   resultado += 3;
-    // }
   }
   
   return Number(resultado.toFixed(1));
@@ -900,12 +922,28 @@ function combinarProductosSimilares(productos) {
         taras: [...producto.taras],
         tarasExtra: [...(producto.tarasExtra || [])],
         reporteTaras: [...(producto.reporteTaras || [])],
-        reporteBolsas: [...(producto.reporteBolsas || [])]
+        reporteBolsas: [...(producto.reporteBolsas || [])],
+        // Crear un array para rastrear qué taras tienen descuento
+        tarasInfo: producto.taras.map(tara => ({
+          valor: tara,
+          restarTaras: producto.restarTaras
+        }))
       };
     } else {
       // Combinar los kilos y taras
       productosAgrupados[clave].kilos.push(...producto.kilos);
-      productosAgrupados[clave].taras.push(...producto.taras);
+      
+      // Agregar la información de las nuevas taras
+      productosAgrupados[clave].tarasInfo.push(
+        ...producto.taras.map(tara => ({
+          valor: tara,
+          restarTaras: producto.restarTaras
+        }))
+      );
+      
+      // Mantener el array de taras sincronizado
+      productosAgrupados[clave].taras = productosAgrupados[clave].tarasInfo.map(t => t.valor);
+      
       if (producto.tarasExtra) {
         productosAgrupados[clave].tarasExtra.push(...producto.tarasExtra);
       }
