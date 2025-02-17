@@ -1635,100 +1635,79 @@ export default {
   
   .input-row {
     display: flex;
-    flex-wrap: wrap;
     gap: 12px;
+    padding: 15px;
+    background: white;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    border-radius: 8px;
+    margin-bottom: 10px;
   }
 
+  /* Estilos base para todos los clientes */
   .input-group-compact {
     margin: 0;
   }
 
-  .kilos, .medida {
-    margin-bottom: 12px;
+  /* Estilos específicos para Ozuna */
+  [data-cliente="ozuna"] .input-row {
+    flex-wrap: wrap;
   }
 
-  .kilos {
+  [data-cliente="ozuna"] .kilos {
     width: calc(40% - 6px);
-    min-width: unset;
     flex: none;
   }
 
-  .medida {
+  [data-cliente="ozuna"] .medida {
     width: calc(60% - 6px);
-    min-width: unset;
     flex: none;
   }
 
-  .tipo, .operacion {
+  [data-cliente="ozuna"] .tipo,
+  [data-cliente="ozuna"] .operacion {
     width: calc(50% - 6px);
-    min-width: unset;
-    margin: 0;
     flex: none;
+    margin-top: 12px;
   }
 
-  .tab-wrapper {
-    width: calc(50% - 8px);
-    margin: 0;
+  /* Estilos para Otilio, Catarro y Joselito */
+  [data-cliente="otilio"] .input-row,
+  [data-cliente="catarro"] .input-row,
+  [data-cliente="joselito"] .input-row {
+    flex-wrap: nowrap;
+    align-items: flex-start;
   }
 
-  .tab-button {
-    width: 100%;
-    padding: 12px 15px;
-    font-size: 20px;
-    min-width: unset;
-    margin: 0;
-    height: auto;
-    display: flex;
-    justify-content: center;
-    align-items: center;
+  [data-cliente="otilio"] .kilos,
+  [data-cliente="catarro"] .kilos,
+  [data-cliente="joselito"] .kilos {
+    width: 25%;
+    min-width: 120px;
+    max-width: 150px;
   }
 
-  .tab-totales {
-    width: 100%;
-    text-align: center;
-    background-color: rgba(255, 255, 255, 0.9);
-    padding: 8px;
-    border-radius: 4px;
-    font-size: 14px;
-    display: flex;
-    justify-content: center;
-    gap: 15px;
+  [data-cliente="otilio"] .medida,
+  [data-cliente="catarro"] .medida,
+  [data-cliente="joselito"] .medida {
+    width: 45%;
+    min-width: 180px;
   }
 
-  /* Ajustes específicos para cada botón de cliente */
-  .tab-button[data-cliente="otilio"] {
-    background-color: #f1c40f;
-    color: #2c3e50;
+  [data-cliente="otilio"] .tipo,
+  [data-cliente="catarro"] .tipo,
+  [data-cliente="joselito"] .tipo {
+    width: 30%;
+    min-width: 150px;
   }
 
-  .tab-button[data-cliente="catarro"] {
-    background-color: #e74c3c;
-    color: white;
-  }
-
-  .tab-button[data-cliente="joselito"] {
-    background-color: #3498db;
-    color: white;
-  }
-
-  .tab-button[data-cliente="ozuna"] {
-    background-color: #27ae60;
-    color: white;
-  }
-}
-
-@media (max-width: 480px) {
-  .tab-button {
-    width: calc(50% - 4px);
-    padding: 6px 10px;
-    font-size: 16px;
+  .label-container {
+    margin-bottom: 4px;
   }
 }
 
 @media (max-width: 768px) {
   .pedidos-limpio-container {
     padding: 10px;
-    min-height: auto;
   }
 
   .tabs-container {
@@ -1745,155 +1724,156 @@ export default {
 
   .input-row {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: wrap !important;
     gap: 8px;
-    padding: 15px;
-    padding-right: 45px;
-    border: 1px solid #eee;
-    margin-bottom: 10px;
+    padding: 12px;
     background: white;
     box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-  }
-
-  .kilos {
-    width: calc(40% - 4px);
-    min-width: unset;
-    flex: none;
-  }
-
-  .medida {
-    width: calc(60% - 4px);
-    min-width: unset;
-    flex: none;
-  }
-
-  .tipo, .operacion {
-    width: calc(50% - 4px);
-    min-width: unset;
-    margin-left: 0;
-    flex: 1;
-  }
-
-  .input-field {
-    font-size: 23px;
-    height: 50px;
-    padding: 8px 10px;
-  }
-
-  .tab-totales {
-    font-size: 12px;
-    padding: 4px;
-    width: 100%;
-    text-align: center;
-    margin-top: -5px;
-  }
-
-  .tab-totales div {
-    display: inline-block;
-    margin: 0 5px;
-  }
-
-  .clientes-content {
-    padding: 15px;
     border-radius: 8px;
-    min-height: 300px;
+    margin-bottom: 10px;
   }
 
-  .input-row {
-    padding: 15px;
-    padding-right: 45px;
-    border: 1px solid #eee;
-    margin-bottom: 10px;
-    background: white;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  /* Estilos base para todos los clientes */
+  .input-group-compact {
+    margin: 0;
+  }
+
+  /* Estilos específicos para Ozuna */
+  [data-cliente="ozuna"] .input-row {
+    flex-wrap: wrap !important;
+  }
+
+  [data-cliente="ozuna"] .kilos {
+    width: calc(40% - 6px);
+    flex: none;
+  }
+
+  [data-cliente="ozuna"] .medida {
+    width: calc(60% - 6px);
+    flex: none;
+  }
+
+  [data-cliente="ozuna"] .tipo,
+  [data-cliente="ozuna"] .operacion {
+    width: calc(50% - 6px);
+    flex: none;
+    margin-top: 12px;
+  }
+
+  /* Estilos para Otilio, Catarro y Joselito */
+  [data-cliente="otilio"] .input-row,
+  [data-cliente="catarro"] .input-row,
+  [data-cliente="joselito"] .input-row {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap !important;
+    gap: 8px;
+  }
+
+  [data-cliente="otilio"] .kilos,
+  [data-cliente="catarro"] .kilos,
+  [data-cliente="joselito"] .kilos {
+    width: calc(40% - 6px);
+    flex: none;
+  }
+
+  [data-cliente="otilio"] .medida,
+  [data-cliente="catarro"] .medida,
+  [data-cliente="joselito"] .medida {
+    width: calc(60% - 6px);
+    flex: none;
+  }
+
+  [data-cliente="otilio"] .tipo,
+  [data-cliente="catarro"] .tipo,
+  [data-cliente="joselito"] .tipo {
+    width: calc(100% - 40px);
+    flex: none;
+    margin-top: 8px;
   }
 
   .input-field {
-    font-size: 23px;
-    height: 50px;
-    padding: 8px 10px;
+    font-size: 14px;
+    height: 38px;
+    padding: 4px 6px;
+    width: 100%;
   }
 
   .label-container {
-    font-size: 23px;
-    margin-bottom: 5px;
+    font-size: 13px;
+    margin-bottom: 2px;
+    white-space: nowrap;
+  }
+
+  .tara-checkbox {
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .tara-checkbox label {
+    font-size: 13px;
+  }
+
+  .btn-eliminar {
+    width: 32px;
+    height: 32px;
+    margin-left: 4px;
+    flex: 0 0 32px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 8px;
+  }
+
+  .input-group-compact {
+    min-width: 0;
+  }
+
+  .input-field-notas {
+    height: 25px;
+    font-size: 12px;
+    padding: 2px 4px;
+    width: 80px;
+  }
+}
+
+@media (max-width: 576px) {
+  .input-row {
+    padding: 8px;
+  }
+
+  [data-cliente="otilio"] .kilos,
+  [data-cliente="catarro"] .kilos,
+  [data-cliente="joselito"] .kilos {
+    width: calc(40% - 4px);
+  }
+
+  [data-cliente="otilio"] .medida,
+  [data-cliente="catarro"] .medida,
+  [data-cliente="joselito"] .medida {
+    width: calc(60% - 4px);
+  }
+
+  [data-cliente="otilio"] .tipo,
+  [data-cliente="catarro"] .tipo,
+  [data-cliente="joselito"] .tipo {
+    width: calc(100% - 36px);
+  }
+
+  .input-field {
+    font-size: 13px;
+    padding: 4px;
+  }
+
+  .label-container {
+    font-size: 12px;
   }
 
   .btn-eliminar {
     width: 28px;
     height: 28px;
-    position: absolute;
-    top: 10px;
-    right: 1px;
-    background-color: #ff4444;
-    font-size: 12px;
-    padding: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .btn-agregar {
-    width: 100%;
-    padding: 18px;
-    font-size: 23px;
-    margin-top: 20px;
-    border-radius: 8px;
-  }
-
-  .buttons-container {
-    flex-direction: column;
-    gap: 10px;
-    margin-top: 20px;
-  }
-
-  .btn-guardar,
-  .btn-imprimir,
-  .btn-cancelar {
-    width: 100%;
-    padding: 18px;
-    font-size: 23px;
-    border-radius: 8px;
-  }
-
-  .tara-checkbox label {
-    font-size: 21px;
-  }
-
-  .btn-proveedor {
-    width: 28px;
-    height: 28px;
-    font-size: 14px;
-  }
-
-  /* Mejor contraste para textos */
-  .input-group-compact label {
-    color: #2c3e50;
-    font-weight: 500;
-  }
-
-  /* Separación entre elementos */
-  .pedido-item {
-    margin-bottom: 15px;
-    border-bottom: 1px solid #eee;
-    padding-bottom: 15px;
-  }
-
-  .pedido-item:last-child {
-    border-bottom: none;
-    padding-bottom: 0;
-  }
-
-  .tipo-container {
-    width: 100%;
-  }
-  
-  .tipo-notas-container {
-    width: 100%;
-  }
-
-  .operacion {
-    width: 100%;
+    flex: 0 0 28px;
   }
 }
 
