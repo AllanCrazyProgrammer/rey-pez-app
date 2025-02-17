@@ -6,15 +6,22 @@
         <button @click="volverAEmbarquesMenu" class="btn-volver">
           <i class="fas fa-arrow-left"></i> Volver a Embarques Menu
         </button>
+        <button 
+          @click="toggleBloqueo" 
+          :class="['btn-bloqueo', { 'bloqueado': embarqueBloqueado }]"
+        >
+          <i :class="['fas', embarqueBloqueado ? 'fa-lock' : 'fa-lock-open']"></i>
+          {{ embarqueBloqueado ? 'Desbloquear' : 'Bloquear' }} Embarque
+        </button>
       </div>
       <div class="header">
         <div class="fecha-selector">
           <label for="fecha">Fecha de Embarque:</label>
-          <input type="date" id="fecha" v-model="embarque.fecha" class="form-control" required>
+          <input type="date" id="fecha" v-model="embarque.fecha" class="form-control" required :disabled="embarqueBloqueado">
         </div>
         <div class="carga-selector">
           <label for="cargaCon">Carga con:</label>
-          <select id="cargaCon" v-model="embarque.cargaCon" class="form-control" required>
+          <select id="cargaCon" v-model="embarque.cargaCon" class="form-control" required :disabled="embarqueBloqueado">
             <option value="">Seleccionar</option>
             <option value="Porro">Porro</option>
             <option value="Caminante">Caminante</option>
@@ -117,7 +124,7 @@
       
     <form @submit.prevent="guardarEmbarque" @keydown.enter.prevent>
       <div v-for="(clienteProductos, clienteId) in productosPorCliente" :key="clienteId" class="cliente-grupo">
-        <div class="cliente-header sticky-header" :data-cliente="obtenerNombreCliente(clienteId)" :style="{ top: calcularPosicionSticky(clienteId) + 'px' }">
+        <div class="cliente-header sticky-header" :data-cliente="obtenerNombreCliente(clienteId)" :style="{  }">
           <div class="cliente-info">
             <h3>{{ obtenerNombreCliente(clienteId) }}</h3>
             <div class="cliente-totales">
@@ -133,11 +140,12 @@
                 v-model="clientesJuntarMedidas[clienteId]"
                 @change="handleJuntarMedidasChange(clienteId, $event.target.checked)"
                 @click.stop
+                :disabled="embarqueBloqueado"
               >
               <label :for="'juntar-medidas-' + clienteId" @click.stop>Juntar medidas</label>
             </div>
             <button type="button" @click.stop="generarNotaVenta(clienteId)" class="btn btn-info btn-sm generar-nota">Generar Nota</button>
-            <button type="button" @click.stop="eliminarCliente(clienteId)" class="btn btn-danger btn-sm eliminar-cliente">Eliminar Cliente</button>
+            <button type="button" @click.stop="eliminarCliente(clienteId)" class="btn btn-danger btn-sm eliminar-cliente" :disabled="embarqueBloqueado">Eliminar Cliente</button>
           </div>
         </div>
         <div class="productos-container">
@@ -156,6 +164,7 @@
                     @click="abrirModalPrecio(producto)" 
                     class="btn-precio"
                     :class="{ 'tiene-precio': producto.precio }"
+                    :disabled="embarqueBloqueado"
                   >
                     $
                   </button>
@@ -163,6 +172,7 @@
                     @click="abrirModalHilos(producto)" 
                     class="btn-hilos"
                     :class="{ 'tiene-hilos': producto.hilos }"
+                    :disabled="embarqueBloqueado"
                   >
                     H
                   </button>
@@ -172,6 +182,7 @@
                     @click="abrirModalNota(producto)" 
                     class="btn-nota"
                     :class="{ 'tiene-nota': producto.nota }"
+                    :disabled="embarqueBloqueado"
                   >
                     N
                   </button>
@@ -181,6 +192,7 @@
                       v-model="producto.noSumarKilos"
                       class="kg-checkbox"
                       :id="'kg-' + producto.id"
+                      :disabled="embarqueBloqueado"
                     >
                     <label :for="'kg-' + producto.id">kg</label>
                   </div>
@@ -188,11 +200,18 @@
               </div>
               <span 
                 class="medida-texto" 
-                @click="abrirModalNombreAlternativo(producto)"
+                @click="embarqueBloqueado ? null : abrirModalNombreAlternativo(producto)"
+                :class="{ 'disabled': embarqueBloqueado }"
               >
-                {{ producto.nombreAlternativoPDF || producto.medida || 'Sin Medida' }}
+                <template v-if="producto.tipo === 'c/h20'">
+                  {{ producto.nombreAlternativoPDF || producto.medida || 'Sin Medida' }}
+                  <span class="ch20-text">c/h20</span>
+                </template>
+                <template v-else>
+                  {{ producto.nombreAlternativoPDF || producto.medida || 'Sin Medida' }}
+                  - {{ obtenerTipoProducto(producto) }}
+                </template>
               </span>
-              - {{ obtenerTipoProducto(producto) }}
               <span v-if="producto.precio" class="precio-tag">${{ producto.precio }}</span>
             </h2>
             <div class="producto-header">
@@ -204,11 +223,13 @@
                   placeholder="Medida"
                   @input="onMedidaInput(producto, $event)"
                   @blur="onMedidaBlur(producto)"
+                  :disabled="embarqueBloqueado"
                 >
                 <button 
                   @click="abrirModalAlt(producto)" 
                   class="btn-alt"
                   :class="{ 'tiene-alt': producto.textoAlternativo }"
+                  :disabled="embarqueBloqueado"
                 >
                   Alt
                 </button>
@@ -235,6 +256,7 @@
                   'tipo-azul': producto.tipo === 'c/h20',
                   'tipo-verde': producto.tipo === 's/h20'
                 }"
+                :disabled="embarqueBloqueado"
               >
                 <option value="">Seleccionar</option>
                 <option value="s/h20">S/H20</option>
@@ -249,6 +271,7 @@
                   v-model="producto.esVenta" 
                   class="form-check-input venta-checkbox" 
                   :id="'ventaCheck-' + producto.id"
+                  :disabled="embarqueBloqueado"
                 >
                 <label :for="'ventaCheck-' + producto.id">Venta</label>
               </div>
@@ -265,6 +288,7 @@
                     max="1"
                     inputmode="numeric"
                     pattern="[0-9]*"
+                    :disabled="embarqueBloqueado"
                   >
                 </div>
   
@@ -275,8 +299,9 @@
                 v-model="producto.tipoPersonalizado" 
                 class="form-control tipo-input" 
                 placeholder="Especificar"
+                :disabled="embarqueBloqueado"
               >
-              <button type="button" @click="eliminarProducto(producto)" class="btn btn-danger btn-sm eliminar-producto">X</button>
+              <button type="button" @click="eliminarProducto(producto)" class="btn btn-danger btn-sm eliminar-producto" :disabled="embarqueBloqueado">X</button>
             </div>
             <div class="sumas-verticales">
               <div class="columna">
@@ -286,11 +311,9 @@
                     <input 
                       type="checkbox" 
                       v-model="producto.restarTaras"
-                      @change="onRestarTarasChange(producto)"
-                      class="form-check-input" 
-                      :id="'restarTarasCheck-' + index"
+                      :disabled="embarqueBloqueado"
                     >
-                    <label :for="'restarTarasCheck-' + index">-3</label>
+                    <label>-3</label>
                   </div>
                 </div>
                 <div v-for="(tara, taraIndex) in producto.taras" :key="taraIndex" class="input-group">
@@ -301,8 +324,9 @@
                     placeholder="Tara"
                     :size="String(producto.taras[taraIndex] || '').length || 1"
                     @focus="$event.target.select()"
+                    :disabled="embarqueBloqueado"
                   >
-                  <button type="button" @click="eliminarTara(producto, taraIndex)" class="btn btn-danger btn-sm">-</button>
+                  <button type="button" @click="eliminarTara(producto, taraIndex)" class="btn btn-danger btn-sm" :disabled="embarqueBloqueado">-</button>
                 </div>
                 <div v-for="(taraExtra, taraExtraIndex) in producto.tarasExtra" :key="'extra-' + taraExtraIndex" class="input-group">
                   <input 
@@ -312,12 +336,13 @@
                     placeholder="Tara Extra"
                     :size="String(producto.tarasExtra[taraExtraIndex] || '').length || 1"
                     @focus="$event.target.select()"
+                    :disabled="embarqueBloqueado"
                   >
-                  <button type="button" @click="eliminarTaraExtra(producto, taraExtraIndex)" class="btn btn-danger btn-sm">-</button>
+                  <button type="button" @click="eliminarTaraExtra(producto, taraExtraIndex)" class="btn btn-danger btn-sm" :disabled="embarqueBloqueado">-</button>
                 </div>
                 <div class="botones-tara">
-                  <button type="button" @click="agregarTara(producto)" class="btn btn-success btn-sm agregar-tara">+</button>
-                  <button type="button" @click="agregarTaraExtra(producto)" class="btn btn-warning btn-sm agregar-tara-extra">+ Extra</button>
+                  <button type="button" @click="agregarTara(producto)" class="btn btn-success btn-sm agregar-tara" :disabled="embarqueBloqueado">+</button>
+                  <button type="button" @click="agregarTaraExtra(producto)" class="btn btn-warning btn-sm agregar-tara-extra" :disabled="embarqueBloqueado">+ Extra</button>
                 </div>
                 <div class="total">Total: {{ totalTaras(producto) }}</div>
               </div>
@@ -331,6 +356,7 @@
                     placeholder="Kilos"
                     :size="String(producto.kilos[kiloIndex] || '').length || 1"
                     @focus="$event.target.select()"
+                    :disabled="embarqueBloqueado"
                   >
                 </div>
                 <div style="height: 38px"></div>
@@ -346,10 +372,11 @@
                     v-model="producto.reporteTaras[index]" 
                     class="form-control reporte-input"
                     @focus="$event.target.select()"
+                    :disabled="embarqueBloqueado"
                   >
-                  <button type="button" @click="eliminarReporteTara(producto, index)" class="btn btn-danger btn-sm">-</button>
+                  <button type="button" @click="eliminarReporteTara(producto, index)" class="btn btn-danger btn-sm" :disabled="embarqueBloqueado">-</button>
                 </div>
-                <button type="button" @click="agregarReporteTara(producto)" class="btn btn-success btn-sm">+</button>
+                <button type="button" @click="agregarReporteTara(producto)" class="btn btn-success btn-sm" :disabled="embarqueBloqueado">+</button>
                 <div class="total-taras-reporte" :class="{ 'coincide': coincideTaras(producto), 'no-coincide': !coincideTaras(producto) }">
                    Reportadas: {{ totalTarasReportadas(producto) }}
                 </div>
@@ -362,6 +389,7 @@
                     v-model="producto.reporteBolsas[index]" 
                     class="form-control reporte-input"
                     @focus="$event.target.select()"
+                    :disabled="embarqueBloqueado"
                   >
                 </div>
                 <div style="height: 38px"></div>
@@ -384,6 +412,7 @@
                     @click="abrirModalPrecio(item)" 
                     class="btn-precio"
                     :class="{ 'tiene-precio': item.precio }"
+                    :disabled="embarqueBloqueado"
                   >
                     $
                   </button>
@@ -391,6 +420,7 @@
                     v-model="item.talla" 
                     class="form-control talla-select"
                     @change="onTallaCrudoChange(item)"
+                    :disabled="embarqueBloqueado"
                   >
                     <option value="">Elige talla</option>
                     <option value="Med c/c">Med c/c</option>
@@ -411,6 +441,7 @@
                     v-model="item.barco" 
                     class="form-control barco-input" 
                     placeholder="Barco"
+                    :disabled="embarqueBloqueado"
                   >
                 </div>
                 
@@ -422,6 +453,7 @@
                       class="form-control taras-input" 
                       placeholder="Taras"
                       @input="actualizarTotalCrudos(clienteId, index)"
+                      :disabled="embarqueBloqueado"
                     >
                     <input 
                       v-if="item.mostrarSobrante"
@@ -430,32 +462,33 @@
                       class="form-control taras-input" 
                       placeholder="Sbrte"
                       @input="actualizarTotalCrudos(clienteId, index)"
+                      :disabled="embarqueBloqueado"
                     >
                   </div>
                   <div class="buttons-wrapper">
-                    <button type="button" @click="eliminarCrudoItem(clienteId, index, itemIndex)" class="btn btn-danger btn-sm eliminar-crudo-item">-</button>
-                    <button type="button" @click="toggleSobrante(clienteId, index, itemIndex)" class="btn btn-success btn-sm agregar-sobrante">+</button>
+                    <button type="button" @click="eliminarCrudoItem(clienteId, index, itemIndex)" class="btn btn-danger btn-sm eliminar-crudo-item" :disabled="embarqueBloqueado">-</button>
+                    <button type="button" @click="toggleSobrante(clienteId, index, itemIndex)" class="btn btn-success btn-sm agregar-sobrante" :disabled="embarqueBloqueado">+</button>
                   </div>
                 </div>
               </div>
             </div>
             
             <div class="crudo-footer">
-              <button type="button" @click="agregarCrudoItem(clienteId, index)" class="btn btn-primary btn-sm agregar-crudo-item">+ Agregar Talla/Taras</button>
-              <button type="button" @click="eliminarCrudo(clienteId, index)" class="btn btn-danger btn-sm eliminar-crudo">Eliminar Crudo</button>
+              <button type="button" @click="agregarCrudoItem(clienteId, index)" class="btn btn-primary btn-sm agregar-crudo-item" :disabled="embarqueBloqueado">+ Agregar Talla/Taras</button>
+              <button type="button" @click="eliminarCrudo(clienteId, index)" class="btn btn-danger btn-sm eliminar-crudo" :disabled="embarqueBloqueado">Eliminar Crudo</button>
               <div class="total-crudos">Total de taras: {{ calcularTotalCrudos(crudo) }}</div>
             </div>
           </div>
         </div>
         <div class="botones-agregar">
-          <button type="button" @click="agregarProducto(clienteId)" class="btn btn-primary btn-sm agregar-producto">Agregar Producto</button>
-          <button type="button" @click="agregarCrudo(clienteId)" class="btn btn-info btn-sm agregar-crudo">Agregar Crudos</button>
+          <button type="button" @click="agregarProducto(clienteId)" class="btn btn-primary btn-sm agregar-producto" :disabled="embarqueBloqueado">Agregar Producto</button>
+          <button type="button" @click="agregarCrudo(clienteId)" class="btn btn-info btn-sm agregar-crudo" :disabled="embarqueBloqueado">Agregar Crudos</button>
         </div>
       </div>
       <div class="cliente-selector">
         <div class="row align-items-center">
           <div class="col-12 col-md-8">
-            <select v-model="nuevoClienteId" class="form-control">
+            <select v-model="nuevoClienteId" class="form-control" :disabled="embarqueBloqueado">
               <option value="">Seleccione un cliente</option>
               <option v-for="cliente in clientesDisponibles" :key="cliente.key" :value="cliente.id">
                 {{ cliente.nombre }}
@@ -463,20 +496,20 @@
             </select>
           </div>
           <div class="col-12 col-md-4 mt-2 mt-md-0">
-            <button type="button" @click="agregarClienteProducto" class="btn btn-primary btn-block agregar-cliente">Agregar Cliente</button>
+            <button type="button" @click="agregarClienteProducto" class="btn btn-primary btn-block agregar-cliente" :disabled="embarqueBloqueado">Agregar Cliente</button>
           </div>
         </div>
       </div>
       <div class="botones-finales">
-        <button type="submit" class="btn btn-success crear-embarque">
+        <button type="submit" class="btn btn-success crear-embarque" :disabled="embarqueBloqueado">
           {{ modoEdicion ? 'Actualizar Embarque' : 'Guardar Embarque' }}
         </button>
         <div class="generar-resumen-container">
-          <button type="button" @click="generarResumenEmbarque2" class="btn btn-info generar-pdf">
+          <button type="button" @click="generarResumenEmbarque2" class="btn btn-info generar-pdf" :disabled="embarqueBloqueado">
             Resumen Embarque
           </button>
         </div>
-        <router-link :to="{ name: 'Rendimientos', params: { id: embarqueId } }" class="btn btn-warning ver-rendimientos">
+        <router-link :to="{ name: 'Rendimientos', params: { id: embarqueId } }" class="btn btn-warning ver-rendimientos" :disabled="embarqueBloqueado">
           Ver Rendimientos
         </router-link>
       </div>
@@ -665,6 +698,7 @@ export default {
       mostrarModalAlt: false,
       altTemp: '',
       clientesOffsets: {},
+      embarqueBloqueado: false,
     };
   },
   clientesJuntarMedidas: {},
@@ -902,6 +936,9 @@ export default {
           const data = doc.data();
           console.log('Datos del embarque cargado:', data);
           
+          // Cargar el estado de bloqueo
+          this.embarqueBloqueado = data.embarqueBloqueado || false;
+          
           // Cargar el estado de juntar medidas
           if (data.clientesJuntarMedidas) {
             this.clientesJuntarMedidas = data.clientesJuntarMedidas;
@@ -989,6 +1026,7 @@ export default {
       this.embarqueId = null;
       this.modoEdicion = false;
       this.guardadoAutomaticoActivo = false;
+      this.embarqueBloqueado = false;
     },
     guardarCambiosEnTiempoReal: debounce(function() {
       if (!this.guardadoAutomaticoActivo || !this.embarqueId || this.mostrarModalPrecio) return;
@@ -1059,7 +1097,8 @@ export default {
         fecha: new Date(this.embarque.fecha),
         cargaCon: this.embarque.cargaCon,
         clientes: [],
-        clientesJuntarMedidas: this.clientesJuntarMedidas
+        clientesJuntarMedidas: this.clientesJuntarMedidas,
+        embarqueBloqueado: this.embarqueBloqueado
       };
 
       const clientesPredefinidosMap = new Map(this.clientesPredefinidos.map(c => [c.id, c]));
@@ -2391,6 +2430,19 @@ export default {
       } catch (error) {
         console.error('Error en calcularAlturaCliente:', error);
         return 60; // Retornar altura base en caso de error
+      }
+    },
+    toggleBloqueo() {
+      this.embarqueBloqueado = !this.embarqueBloqueado;
+      
+      // Guardar el estado en Firebase si estamos en modo edición
+      if (this.modoEdicion && this.embarqueId) {
+        const db = getFirestore();
+        updateDoc(doc(db, "embarques", this.embarqueId), {
+          embarqueBloqueado: this.embarqueBloqueado
+        }).catch(error => {
+          console.error("Error al guardar estado de bloqueo:", error);
+        });
       }
     },
   },
@@ -5940,6 +5992,175 @@ input[type="tel"] {
   /* Ajustar el espacio entre productos */
   .producto:not(:last-child) {
     margin-bottom: 8px;
+  }
+}
+
+.btn-bloqueo {
+  padding: 8px 16px;
+  border-radius: 4px;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.3s ease;
+}
+
+.btn-bloqueo:not(.bloqueado) {
+  background-color: #2ecc71;
+  color: white;
+}
+
+.btn-bloqueo.bloqueado {
+  background-color: #e74c3c;
+  color: white;
+}
+
+.btn-bloqueo i {
+  font-size: 1.1em;
+}
+
+@media (max-width: 768px) {
+  .botones {
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .btn-bloqueo {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+[disabled] {
+  opacity: 0.6;
+  cursor: not-allowed !important;
+}
+
+.bloqueado button:disabled,
+.bloqueado input:disabled,
+.bloqueado select:disabled {
+  background-color: #f5f5f5;
+  border-color: #ddd;
+}
+
+.btn-bloqueo:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.medida-texto.disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.disabled {
+  pointer-events: none;
+  opacity: 0.6;
+}
+
+input:disabled,
+select:disabled,
+button:disabled {
+  background-color: #f5f5f5;
+  border-color: #ddd;
+  cursor: not-allowed;
+}
+
+.btn-alt:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-nota-cliente {
+  padding: 8px 16px;
+  margin: 4px;
+  border: none;
+  border-radius: 4px;
+  color: white;
+  cursor: pointer;
+  font-weight: bold;
+  transition: opacity 0.3s;
+}
+
+.btn-nota-cliente:hover {
+  opacity: 0.8;
+}
+
+.medida-texto {
+  font-weight: bold;
+}
+
+.medida-texto .ch20-text {
+  color: #3498db;
+}
+
+@media (max-width: 768px) {
+  .cliente-info h3 {
+    font-size: 1.2rem;
+  }
+
+  .cliente-totales span {
+    font-size: 0.8rem;
+    padding: 1px 4px;
+  }
+
+  .cliente-header-controls {
+    gap: 4px;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+
+  .juntar-medidas-checkbox,
+  .generar-nota,
+  .eliminar-cliente {
+    padding: 1px 6px;
+    height: 24px;
+    font-size: 0.75rem;
+    width: auto;
+    min-width: fit-content;
+  }
+
+  .cliente-totales {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .cliente-totales span {
+    width: auto;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
+@media (max-width: 480px) {
+  .cliente-header-controls {
+    width: 100%;
+  }
+  
+  .cliente-totales {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 768px) {
+  .cliente-info h3 {
+    font-size: 1.2rem;
+    display: none;
+  }
+
+  .cliente-totales span {
+    font-size: 0.8rem;
+    padding: 1px 4px;
+  }
+
+  .cliente-header-controls {
+    gap: 4px;
+    flex-wrap: wrap;
+    justify-content: flex-start;
   }
 }
 </style>

@@ -363,4 +363,59 @@ h1 {
     white-space: nowrap;
   }
 }
+
+@media (max-width: 768px) {
+  .tabla-embarques th:nth-child(4),
+  .tabla-embarques td:nth-child(4) {
+    display: none;
+  }
+
+  .tabla-embarques th,
+  .tabla-embarques td {
+    padding: 8px 6px;
+    font-size: 14px;
+  }
+
+  /* Fecha */
+  .tabla-embarques th:nth-child(1),
+  .tabla-embarques td:nth-child(1) {
+    width: 25%;
+    min-width: 80px;
+  }
+
+  /* Kilos Limpios */
+  .tabla-embarques th:nth-child(2),
+  .tabla-embarques td:nth-child(2) {
+    width: 20%;
+    min-width: 70px;
+  }
+
+  /* Kilos Crudos */
+  .tabla-embarques th:nth-child(3),
+  .tabla-embarques td:nth-child(3) {
+    width: 20%;
+    min-width: 70px;
+  }
+
+  /* Total Taras */
+  .tabla-embarques th:nth-child(5),
+  .tabla-embarques td:nth-child(5) {
+    width: 15%;
+    min-width: 60px;
+  }
+
+  /* Columna de Acciones */
+  .tabla-embarques th:nth-child(6),
+  .tabla-embarques td:nth-child(6) {
+    width: 20%;
+    min-width: 120px;
+  }
+
+  .btn-detalles,
+  .btn-eliminar {
+    padding: 6px 8px;
+    font-size: 13px;
+    margin-left: 2px;
+  }
+}
 </style>
