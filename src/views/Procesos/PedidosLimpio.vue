@@ -374,15 +374,17 @@
                   </select>
                 </div>
 
-                <div v-if="clienteActivo === 'ozuna'" class="input-group-compact operacion">
+                <div v-if="clienteActivo === 'ozuna'" class="input-group-compact maquila">
                   <div class="label-container">
-                    <label>Operación:</label>
+                    <label>Maquila:</label>
+                    <div class="maquila-checkbox">
+                      <input 
+                        type="checkbox" 
+                        v-model="item.esMaquila" 
+                        :id="'maquila' + index"
+                      >
+                    </div>
                   </div>
-                  <select v-model="item.tipoOperacion" class="input-field">
-                    <option value="">Seleccionar</option>
-                    <option value="Venta">Venta</option>
-                    <option value="Maquila">Maquila</option>
-                  </select>
                 </div>
 
                 <button @click="eliminarPedidoOzuna(index)" class="btn-eliminar" v-if="pedidoOzuna.length > 1">
@@ -546,7 +548,7 @@ export default {
       pedidoOtilio: [{ kilos: null, medida: '', tipo: '', esTara: true, esProveedor: false, proveedor: '' }],
       pedidoCatarro: [{ kilos: null, medida: '', tipo: 'S/H20', esTara: false, esProveedor: false, proveedor: '' }],
       pedidoJoselito: [{ kilos: null, medida: '', tipo: '', esTara: false, esProveedor: false, proveedor: '' }],
-      pedidoOzuna: [{ kilos: null, medida: '', tipo: 'S/H20', esTara: false, esProveedor: false, proveedor: '', tipoOperacion: 'Maquila' }],
+      pedidoOzuna: [{ kilos: null, medida: '', tipo: 'S/H20', esTara: false, esProveedor: false, proveedor: '', esMaquila: true }],
       clientesTemporales: {},
       mostrarModalNuevoCliente: false,
       mostrarImpresion: false,
@@ -842,7 +844,7 @@ export default {
       this.pedidoJoselito.unshift({ kilos: null, medida: '', tipo: '', esTara: false, esProveedor: false, proveedor: '' })
     },
     agregarFilaOzuna() {
-      this.pedidoOzuna.unshift({ kilos: null, medida: '', tipo: 'S/H20', esTara: false, esProveedor: false, proveedor: '', tipoOperacion: 'Maquila' })
+      this.pedidoOzuna.unshift({ kilos: null, medida: '', tipo: 'S/H20', esTara: false, esProveedor: false, proveedor: '', esMaquila: true })
     },
     async guardarPedido() {
       try {
@@ -2191,5 +2193,39 @@ select option.text-blue {
 }
 .bg-temporal {
   background-color: #95a5a6 !important;
+}
+
+/* Estilos CSS al final del archivo */
+.maquila-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.maquila-checkbox input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  cursor: pointer;
+}
+
+@media (max-width: 768px) {
+  [data-cliente="ozuna"] .maquila {
+    width: calc(50% - 6px);
+    flex: none;
+    margin-top: 12px;
+  }
+
+  .maquila-checkbox input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+  }
+}
+
+@media (max-width: 375px) {
+  .maquila-checkbox input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+  }
 }
 </style> 

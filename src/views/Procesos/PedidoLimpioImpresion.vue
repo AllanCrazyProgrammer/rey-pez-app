@@ -696,14 +696,14 @@ export default {
           if (!item.medida) return;
           
           const medida = item.medida;
-          // Para Ozuna, si es maquila, agregamos el sufijo "Maq"
-          const key = esPedidoOzuna && item.tipoOperacion === 'Maquila' 
+          // Para Ozuna, si es maquila (esMaquila es true), agregamos el sufijo "Maq"
+          const key = esPedidoOzuna && item.esMaquila 
             ? (medida.toLowerCase().trim() + '-maq')
             : medida.toLowerCase().trim();
           
           if (!medidasMap.has(key)) {
             medidasMap.set(key, {
-              medida: esPedidoOzuna && item.tipoOperacion === 'Maquila' 
+              medida: esPedidoOzuna && item.esMaquila 
                 ? medida + ' Maq'
                 : medida,
               total: 0
