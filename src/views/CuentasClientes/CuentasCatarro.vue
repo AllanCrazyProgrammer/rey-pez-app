@@ -198,7 +198,9 @@
     </table>
   
     <div class="button-container">
-      <button @click="guardarNota" class="save-button">Guardar Nota</button>
+      <button @click="guardarNota" class="save-button" :disabled="isGuardando">
+        {{ isGuardando ? 'Guardando...' : 'Guardar Nota' }}
+      </button>
       <button @click="imprimirTablas" class="print-button">Imprimir</button>
     </div>
   
@@ -245,16 +247,27 @@
 
     <div class="guardar-container">
       <div class="observacion-container">
-        <input type="checkbox" v-model="tieneObservacion" id="observacionCheck">
-        <label for="observacionCheck">Tiene observación</label>
+        <button @click="agregarObservacion" class="btn-agregar-observacion">
+          <i class="fas fa-plus"></i> Agregar observación
+        </button>
       </div>
-      <button @click="guardarCuenta" class="btn-guardar">Guardar</button>
+      <!-- Mostrar observación existente -->
+      <div v-if="observacion" class="observacion-existente">
+        <div class="observacion-header">
+          <p class="observacion-titulo">Observación actual:</p>
+          <div class="observacion-buttons">
+            <button @click="editarObservacion" class="btn-editar">Editar</button>
+            <button @click="eliminarObservacion" class="btn-eliminar" title="Eliminar observación">×</button>
+          </div>
+        </div>
+        <p class="observacion-texto">{{ observacion }}</p>
+      </div>
     </div>
 
     <!-- Modal de Observación -->
     <div v-if="showObservacionModal" class="modal-overlay">
       <div class="modal-content">
-        <h3>Agregar Observación</h3>
+        <h3>{{ observacion ? 'Editar' : 'Agregar' }} Observación</h3>
         <textarea v-model="observacion" placeholder="Escribe tu observación aquí..." rows="4"></textarea>
         <div class="modal-buttons">
           <button @click="guardarObservacion" class="btn-guardar">Guardar</button>
@@ -322,6 +335,7 @@ export default {
       tieneObservacion: false,
       showObservacionModal: false,
       observacion: '',
+      isGuardando: false,
     }
   },
   computed: {
@@ -396,9 +410,7 @@ export default {
     'newItem.medida': 'handleDataChange',
     'newItem.costo': 'handleDataChange',
     tieneObservacion(newValue) {
-      if (newValue) {
-        this.showObservacionModal = true;
-      }
+      // Eliminar este watch o modificarlo para que no abra el modal automáticamente
     }
   },
   async mounted() {
@@ -429,6 +441,8 @@ export default {
             this.cobros = data.cobros || [];
             this.abonos = data.abonos || [];
             this.fechaSeleccionada = data.fecha || this.obtenerFechaActual();
+            this.tieneObservacion = data.tieneObservacion || false;
+            this.observacion = data.observacion || '';
             
             // Cargar los itemsVenta con los precios de venta guardados
             this.itemsVenta = data.itemsVenta || this.items.map(item => ({
@@ -447,7 +461,9 @@ export default {
               cobros: this.cobros,
               abonos: this.abonos,
               fechaSeleccionada: this.fechaSeleccionada,
-              itemsVenta: this.itemsVenta
+              itemsVenta: this.itemsVenta,
+              tieneObservacion: this.tieneObservacion,
+              observacion: this.observacion
             });
           });
         } else {
@@ -494,49 +510,36 @@ export default {
         const cuentasRef = collection(db, 'cuentasCatarro');
         const q = query(
           cuentasRef,
-          orderBy('fecha', 'asc')
+          where('fecha', '>=', fechaActual),
+          orderBy('fecha', 'asc'),
+          limit(50) // Limitar la cantidad de documentos a procesar
         );
 
         const querySnapshot = await getDocs(q);
-        const todasLasCuentas = querySnapshot.docs.map(doc => ({
+        const cuentasParaActualizar = querySnapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data()
         }));
 
-        // Ordenar las cuentas por fecha
-        const cuentasOrdenadas = todasLasCuentas.sort((a, b) => 
-          new Date(a.fecha) - new Date(b.fecha)
-        );
+        let saldoAcumulado = this.nuevoSaldoAcumulado;
 
-        let saldoAcumulado = 0;
-
-        // Procesar cada cuenta en orden cronológico
-        for (let i = 0; i < cuentasOrdenadas.length; i++) {
-          const cuenta = cuentasOrdenadas[i];
-          const cuentaRef = doc(db, 'cuentasCatarro', cuenta.id);
-          
-          // Calcular el total del día
+        // Usar Promise.all para actualizar las cuentas en paralelo
+        await Promise.all(cuentasParaActualizar.map(async (cuenta) => {
           const totalDia = cuenta.totalGeneralVenta +
             (cuenta.cobros || []).reduce((sum, cobro) => sum + (parseFloat(cobro.monto) || 0), 0) -
             (cuenta.abonos || []).reduce((sum, abono) => sum + (parseFloat(abono.monto) || 0), 0);
 
-          // El saldo acumulado es el saldo anterior más el total del día
           saldoAcumulado = saldoAcumulado + totalDia;
           
-          // Actualizar la cuenta
-          await updateDoc(cuentaRef, {
-            saldoAcumuladoAnterior: i === 0 ? 0 : cuentasOrdenadas[i-1].nuevoSaldoAcumulado,
+          return updateDoc(doc(db, 'cuentasCatarro', cuenta.id), {
+            saldoAcumuladoAnterior: cuenta.id === this.$route.params.id ? this.saldoAcumuladoAnterior : saldoAcumulado - totalDia,
             nuevoSaldoAcumulado: saldoAcumulado,
             estadoPagado: saldoAcumulado <= 0
           });
-
-          // Si la cuenta está pagada, reiniciar el saldo acumulado
-          if (saldoAcumulado <= 0) {
-            saldoAcumulado = 0;
-          }
-        }
+        }));
       } catch (error) {
         console.error('Error al actualizar cuentas posteriores:', error);
+        throw error;
       }
     },
     formatNumber(value) {
@@ -671,6 +674,9 @@ export default {
     },
     async guardarNota() {
       try {
+        // Deshabilitar el botón de guardar mientras se procesa
+        this.isGuardando = true;
+
         // Calcular el total del día actual
         const totalDia = this.totalGeneralVenta - 
           this.cobros.reduce((sum, cobro) => sum + (parseFloat(cobro.monto) || 0), 0) - 
@@ -699,9 +705,8 @@ export default {
           itemsVenta: this.itemsVenta,
           tieneObservacion: this.tieneObservacion,
           observacion: this.observacion,
+          ultimaActualizacion: new Date().toISOString()
         };
-
-        console.log("Datos a guardar:", notaData);
 
         const id = this.$route.params.id;
         const isEditing = this.$route.query.edit === 'true';
@@ -709,10 +714,9 @@ export default {
         if (id && isEditing) {
           // Actualizar nota existente
           await updateDoc(doc(db, 'cuentasCatarro', id), notaData);
-          console.log('Cuenta actualizada exitosamente');
           
-          // Actualizar saldos de cuentas posteriores
-          await this.actualizarCuentasPosteriores(this.fechaSeleccionada);
+          // Actualizar saldos de cuentas posteriores en segundo plano
+          this.actualizarCuentasPosteriores(this.fechaSeleccionada).catch(console.error);
           
           alert('Cuenta guardada exitosamente');
           this.$router.push('/cuentas-catarro');
@@ -728,10 +732,9 @@ export default {
           } else {
             // Crear nueva nota
             await addDoc(collection(db, 'cuentasCatarro'), notaData);
-            console.log('Nueva cuenta guardada exitosamente');
             
-            // Actualizar saldos de cuentas posteriores
-            await this.actualizarCuentasPosteriores(this.fechaSeleccionada);
+            // Actualizar saldos de cuentas posteriores en segundo plano
+            this.actualizarCuentasPosteriores(this.fechaSeleccionada).catch(console.error);
             
             alert('Cuenta guardada exitosamente');
             this.$router.push('/cuentas-catarro');
@@ -740,6 +743,8 @@ export default {
       } catch (error) {
         console.error('Error al guardar la cuenta:', error);
         alert('Error al guardar la cuenta');
+      } finally {
+        this.isGuardando = false;
       }
     },
     iniciarPresion(index) {
@@ -1119,6 +1124,7 @@ export default {
           estadoPagado: this.estadoCuenta === 'Pagado',
           tieneObservacion: this.tieneObservacion,
           observacion: this.observacion,
+          ultimaActualizacion: new Date().toISOString()
         };
 
         await updateDoc(doc(db, 'cuentasCatarro', this.$route.params.id), notaData);
@@ -1134,13 +1140,29 @@ export default {
     guardarCuenta() {
       this.guardarNota();
     },
+    agregarObservacion() {
+      this.showObservacionModal = true;
+    },
     guardarObservacion() {
+      if (this.observacion.trim()) {
+        this.tieneObservacion = true;
+      }
       this.showObservacionModal = false;
     },
     cancelarObservacion() {
-      this.tieneObservacion = false;
-      this.observacion = '';
+      if (!this.tieneObservacion) {
+        this.observacion = '';
+      }
       this.showObservacionModal = false;
+    },
+    editarObservacion() {
+      this.showObservacionModal = true;
+    },
+    eliminarObservacion() {
+      if (confirm('¿Estás seguro de que deseas eliminar esta observación?')) {
+        this.observacion = '';
+        this.tieneObservacion = false;
+      }
     },
   },
   beforeUnmount() {
@@ -1437,6 +1459,19 @@ tr:hover {
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
 }
 
+.save-button:disabled {
+  background-color: #cccccc;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.save-button:disabled:hover {
+  background-color: #cccccc;
+  transform: none;
+  box-shadow: none;
+}
+
 @media (max-width: 600px) {
   .button-container {
     flex-direction: row;
@@ -1493,32 +1528,56 @@ tr:hover {
   background-color: #ff8c00;
 }
 
-/* Estilos de ganancia */
-.ganancia-del-dia {
-  margin-top: 20px;
-  padding: 15px;
-  background-color: #e0f7fa;
-  border-radius: 8px;
-  text-align: center;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+.btn-agregar-observacion {
+  background-color: #9c27b0;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  transition: all 0.3s ease;
 }
 
-.ganancia-del-dia h3 {
-  margin-bottom: 10px;
+.btn-agregar-observacion:hover {
+  background-color: #7b1fa2;
+  transform: translateY(-2px);
 }
 
-.ganancia-positiva,
-.ganancia-negativa {
+.btn-agregar-observacion i {
+  font-size: 12px;
+}
+
+.observacion-buttons {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.btn-eliminar {
+  background-color: #f44336;
+  color: white;
+  border: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 20px;
+  line-height: 1;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
   font-weight: bold;
-  font-size: 15pt;
 }
 
-.ganancia-positiva {
-  color: #4CAF50;
-}
-
-.ganancia-negativa {
-  color: #f44336;
+.btn-eliminar:hover {
+  background-color: #d32f2f;
+  transform: scale(1.1);
 }
 
 /* Estilos de estado de cuenta */
@@ -1540,322 +1599,5 @@ tr:hover {
 .no-pagado {
   color: #f44336;
   background-color: #ffebee;
-}
-
-/* Media queries */
-@media (max-width: 600px) {
-  .input-row {
-    flex-direction: column;
-  }
-  
-  .input-row input, .input-row button {
-    width: 100%;
-    margin-bottom: 10px;
-  }
-
-  .desktop-only {
-    display: none;
-  }
-
-  .tabla-principal tr {
-    position: relative;
-  }
-
-  .tabla-principal tr::after {
-    content: '⋮';
-    position: absolute;
-    right: 10px;
-    top: 50%;
-    transform: translateY(-50%);
-    font-size: 20px;
-    color: #666;
-  }
-
-  .tabla-principal th,
-  .tabla-principal td,
-  .tabla-venta th,
-  .tabla-venta td {
-    width: 25%;
-    padding: 6px;
-  }
-
-  .precio-venta-input,
-  .tabla-venta input[type="number"] {
-    width: 60px;
-    padding: 3px;
-    font-size: 1px;
-  }
-
-  .button-container {
-    flex-direction: column;
-    gap: 10px;
-  }
-}
-
-@media (min-width: 601px) {
-  .mobile-only {
-    display: none;
-  }
-}
-
-/* Estilos específicos de tabla de venta */
-.tabla-venta {
-  margin-top: 20px;
-  width: 100%;
-  border-collapse: separate;
-  border-spacing: 0;
-  border: 1px solid #e0e0e0;
-  border-radius: 8px;
-  overflow: hidden;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.tabla-venta th,
-.tabla-venta td {
-  border: none;
-  border-bottom: 1px solid #e0e0e0;
-  padding: 12px;
-  text-align: right;
-  font-size: 16px;
-}
-
-.tabla-venta th {
-  background-color: #f5f5f5;
-  font-weight: bold;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: #333;
-}
-
-.tabla-venta tr:last-child td {
-  border-bottom: none;
-}
-
-.tabla-venta tr:nth-child(even) {
-  background-color: #f9f9f9;
-}
-
-.tabla-venta tr:hover {
-  background-color: #f0f0f0;
-}
-
-.tabla-venta td:first-child,
-.tabla-venta th:first-child {
-  text-align: left;
-}
-
-.precio-venta-input {
-  width: 60px; /* Reducir el ancho */
-  padding: 5px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 18px; /* Ajustar el tamaño a 18px */
-}
-
-/* Aumentar el tamaño de los números */
-.tabla-venta td,
-.tabla-venta input[type="number"],
-.tabla-venta .precio-venta-input {
-  font-size: 18px;
-  font-weight: 500;
-}
-
-.tabla-venta th {
-  font-size: 16px;
-}
-
-/* Estilos para las ganancias */
-.ganancia-positiva,
-.ganancia-negativa {
-  font-weight: bold;
-  padding: 4px 8px;
-  border-radius: 4px;
-}
-
-.ganancia-positiva {
-  background-color: #e8f5e9;
-  color: #2e7d32;
-}
-
-.ganancia-negativa {
-  background-color: #ffebee;
-  color: #c62828;
-}
-
-@media (max-width: 600px) {
-  .tabla-venta th,
-  .tabla-venta td {
-    padding: 10px;
-    font-size: 16px;
-  }
-
-  .tabla-venta td,
-  .tabla-venta input[type="number"],
-  .tabla-venta .precio-venta-input {
-    font-size: 16px;
-  }
-
-  .tabla-venta th {
-    font-size: 14px;
-  }
-
-  .precio-venta-input {
-    width: 50px; /* Reducir el ancho para dispositivos móviles */
-    padding: 3px;
-    font-size: 18px; /* Mantener el tamaño a 18px */
-  }
-}
-
-@media (min-width: 601px) {
-  .mobile-only {
-    display: none;
-  }
-}
-
-.mobile-actions-modal {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  background-color: white;
-  padding: 20px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
-  z-index: 1000;
-}
-
-.mobile-actions-modal button {
-  width: 100%;
-  padding: 15px 20px;
-  margin-bottom: 10px;
-  border: none;
-  background-color: #3760b0;
-  color: white;
-  border-radius: 5px;
-  font-size: 16px;
-}
-
-.mobile-actions-modal button:last-child {
-  margin-bottom: 0;
-}
-
-.tabla-venta {
-  margin-top: 20px;
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.tabla-venta th,
-.tabla-venta td {
-  border: 1px solid #ddd;
-  padding: 8px;
-  text-align: left;
-}
-
-.tabla-venta th {
-  background-color: #f2f2f2;
-  font-weight: bold;
-}
-
-.precio-venta-input {
-  width: 70px;
-  padding: 5px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 14px;
-}
-
-@media (max-width: 600px) {
-  .tabla-venta th,
-  .tabla-venta td {
-    padding: 6px;
-  }
-
-  .precio-venta-input {
-    width: 60px;
-    padding: 3px;
-    font-size: 12px;
-  }
-}
-
-.total {
-  background-color: #f2f2f2;
-  font-weight: bold;
-  text-align: right;
-}
-
-.total td {
-  padding: 10px;
-  border-top: 2px solid #ddd;
-}
-
-.guardar-container {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-  margin: 20px 0;
-}
-
-.observacion-container {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(0, 0, 0, 0.5);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 1000;
-}
-
-.modal-content {
-  background-color: white;
-  padding: 20px;
-  border-radius: 8px;
-  width: 90%;
-  max-width: 500px;
-}
-
-.modal-content textarea {
-  width: 100%;
-  padding: 10px;
-  margin: 10px 0;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  resize: vertical;
-}
-
-.modal-buttons {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  margin-top: 15px;
-}
-
-.btn-guardar {
-  background-color: #4CAF50;
-  color: white;
-  border: none;
-  padding: 8px 16px;
-  border-radius: 4px;
-  cursor: pointer;
-}
-
-.btn-cancelar {
-  background-color: #f44336;
-  color: white;
-  border: none;
-  padding: 8px 16px;
-  border-radius: 4px;
-  cursor: pointer;
 }
 </style>

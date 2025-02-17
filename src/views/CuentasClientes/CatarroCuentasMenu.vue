@@ -39,8 +39,9 @@
               <span>Saldo Hoy: ${{ formatNumber(cuenta.saldoHoy) }}</span>
               <span>Total Acumulado: ${{ formatNumber(cuenta.totalNota) }}</span>
             </p>
-            <div v-if="cuenta.tieneObservacion" class="observacion-badge" @click="mostrarObservacion(cuenta)">
-              Ver observación
+            <div v-if="cuenta.tieneObservacion" class="observacion-container">
+              <p class="observacion-texto">{{ cuenta.observacion }}</p>
+              <button class="delete-observacion-btn" @click="borrarObservacion(cuenta.id)" title="Borrar observación">×</button>
             </div>
             <div v-if="cuenta.abonos && cuenta.abonos.length > 0" class="abonos-info">
               <p v-for="(abono, index) in cuenta.abonos" :key="index" class="abono-detail">
@@ -59,17 +60,6 @@
           </div>
         </li>
       </ul>
-    </div>
-
-    <!-- Modal para mostrar observación -->
-    <div v-if="showObservacionModal" class="modal-overlay">
-      <div class="modal-content">
-        <h3>Observación</h3>
-        <p class="observacion-text">{{ observacionActual }}</p>
-        <div class="modal-buttons">
-          <button @click="showObservacionModal = false" class="btn-cerrar">Cerrar</button>
-        </div>
-      </div>
     </div>
   </div>
 </template>
@@ -93,9 +83,7 @@ export default {
       cuentas: [],
       isLoading: true,
       filtroEstado: 'todas',
-      unsubscribe: null,
-      showObservacionModal: false,
-      observacionActual: ''
+      unsubscribe: null
     };
   },
   computed: {
@@ -229,9 +217,19 @@ export default {
         }
       }
     },
-    mostrarObservacion(cuenta) {
-      this.observacionActual = cuenta.observacion;
-      this.showObservacionModal = true;
+    async borrarObservacion(id) {
+      if (confirm('¿Estás seguro de que quieres borrar esta observación?')) {
+        try {
+          await updateDoc(doc(db, 'cuentasCatarro', id), {
+            tieneObservacion: false,
+            observacion: ''
+          });
+          alert('Observación borrada con éxito');
+        } catch (error) {
+          console.error("Error al borrar la observación: ", error);
+          alert('Error al borrar la observación');
+        }
+      }
     }
   },
   mounted() {
@@ -501,15 +499,51 @@ h1, h2 {
   border: 2px solid #ff0000 !important;
 }
 
-.observacion-badge {
-  background-color: #ff0000;
-  color: white;
-  padding: 4px 8px;
+.observacion-container {
+  margin: 10px 0;
+  padding: 10px;
+  background-color: #fff3f3;
+  border-left: 4px solid #ff0000;
   border-radius: 4px;
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.observacion-texto {
+  margin: 0;
+  flex-grow: 1;
+  white-space: pre-wrap;
+  color: #d32f2f;
   font-size: 0.9em;
+}
+
+.delete-observacion-btn {
+  background: none;
+  border: none;
+  color: #ff0000;
+  font-size: 1.2em;
   cursor: pointer;
-  display: inline-block;
-  margin: 8px;
+  padding: 0 5px;
+  line-height: 1;
+  border-radius: 50%;
+  transition: background-color 0.3s ease;
+}
+
+.delete-observacion-btn:hover {
+  background-color: rgba(255, 0, 0, 0.1);
+}
+
+@media (max-width: 768px) {
+  .observacion-container {
+    padding: 8px;
+    margin: 8px 0;
+  }
+  
+  .observacion-texto {
+    font-size: 0.85em;
+  }
 }
 
 .modal-overlay {
