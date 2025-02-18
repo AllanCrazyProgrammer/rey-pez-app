@@ -293,10 +293,11 @@
                       <option value="Kileado">Kileado</option>
                     </select>
                   </div>
-                  <select v-model="item.tipo" class="input-field" :class="{ 'text-blue': item.tipo === 'C/H20' }">
+                  <select v-model="item.tipo" class="input-field" :class="{ 'text-blue': item.tipo === 'C/H20' || item.tipo === '1.35 y .15' }">
                     <option value="">Seleccionar</option>
                     <option value="S/H20">S/H20</option>
                     <option value="C/H20" class="text-blue">C/H20</option>
+                    <option value="1.35 y .15" class="text-blue">1.35 y .15</option>
                   </select>
                 </div>
 
