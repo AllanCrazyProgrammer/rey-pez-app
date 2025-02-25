@@ -173,7 +173,14 @@ export default {
         // Obtener el ancho del contenedor padre y ajustar el tamaño del canvas
         const containerWidth = this.$el ? (this.$el.clientWidth || document.documentElement.clientWidth) : 800;
         this.canvasWidth = Math.min(containerWidth - 40, 800);
-        this.canvasHeight = Math.min(window.innerHeight / 2, 400);
+        
+        // Ajustar altura según el ancho de la pantalla
+        if (window.innerWidth <= 768) {
+          // En móviles, hacer el canvas más pequeño en altura
+          this.canvasHeight = Math.min(window.innerHeight / 3, 300);
+        } else {
+          this.canvasHeight = Math.min(window.innerHeight / 2, 400);
+        }
       } catch (error) {
         console.error('Error al dimensionar el canvas:', error);
       }
@@ -599,19 +606,39 @@ export default {
 
 /* Responsive */
 @media (max-width: 768px) {
-  .toolbar {
-    flex-direction: column;
-    align-items: flex-start;
+  .canvas-dibujo-container {
+    padding: 10px;
+    margin: 15px 0;
   }
   
-  .toolbar > div {
-    margin: 5px 0;
+  .toolbar {
+    padding: 5px;
+    gap: 4px;
+    justify-content: center;
+  }
+  
+  .toolbar button {
+    padding: 6px 8px;
+    font-size: 12px;
+    flex-grow: 1;
+    text-align: center;
+    min-width: 70px;
   }
   
   .separator {
     width: 100%;
     height: 1px;
     margin: 5px 0;
+  }
+  
+  .color-btn {
+    width: 25px;
+    height: 25px;
+  }
+  
+  #status-bar {
+    font-size: 10px;
+    padding: 3px 5px;
   }
 }
 </style> 

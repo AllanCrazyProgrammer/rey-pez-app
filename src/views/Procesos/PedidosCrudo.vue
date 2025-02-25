@@ -425,8 +425,6 @@ th {
   font-weight: bold;
 }
 
-
-
 input[type="number"] {
   width: 80px;
   padding: 8px;
@@ -676,6 +674,61 @@ input.cliente-ozuna:focus {
   .btn-imprimir {
     width: 100%;
     margin-bottom: 10px;
+  }
+  
+  /* Mejoras para tablas responsivas */
+  .tabla-pedidos {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  table {
+    min-width: 600px; /* Asegura que la tabla tenga un ancho mínimo */
+  }
+  
+  th, td {
+    padding: 8px;
+    font-size: 14px;
+  }
+  
+  input[type="number"] {
+    width: 60px;
+    padding: 6px;
+    font-size: 14px;
+  }
+  
+  .desglose-medida {
+    padding: 10px;
+    margin: 15px 0;
+  }
+  
+  .desglose-medida h2 {
+    font-size: 18px;
+    margin-bottom: 10px;
+  }
+  
+  .tabla-desglose {
+    min-width: 500px;
+  }
+  
+  .tabla-desglose th,
+  .tabla-desglose td {
+    padding: 8px;
+    font-size: 14px;
+  }
+  
+  .input-barco {
+    padding: 6px;
+    font-size: 12px;
+  }
+  
+  .kilos-info {
+    padding: 10px;
+    margin: 15px 0;
+  }
+  
+  .kilos-info h3 {
+    font-size: 16px;
   }
 }
 </style> 
