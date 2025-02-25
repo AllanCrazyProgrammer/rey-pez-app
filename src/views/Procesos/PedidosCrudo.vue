@@ -67,7 +67,7 @@
       <h3>Total Taras de Crudo: <span>{{ Math.floor(tarasCrudo) }} T</span></h3>
     </div>
 
-    <div class="desglose-medida">
+    <!-- <div class="desglose-medida">
       <h2>Desglose por Medida</h2>
       <table class="tabla-desglose">
         <thead>
@@ -99,7 +99,7 @@
           </template>
         </tbody>
       </table>
-    </div>
+    </div> -->
 
     <!-- Componente de Canvas para dibujo y notas -->
     <canvas-dibujo ref="canvasDibujo"></canvas-dibujo>
