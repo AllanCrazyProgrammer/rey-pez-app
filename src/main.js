@@ -28,3 +28,14 @@ const app = new Vue({
     }
   }
 }).$mount("#app");
+
+// Primero verificamos si ya existe window.fabric
+if (!window.fabric) {
+  // Si no existe, importamos fabric
+  import('fabric').then(fabricModule => {
+    window.fabric = fabricModule.fabric;
+    console.log('Fabric.js cargado globalmente');
+  }).catch(error => {
+    console.error('Error al cargar Fabric.js:', error);
+  });
+}

@@ -101,6 +101,9 @@
       </table>
     </div>
 
+    <!-- Componente de Canvas para dibujo y notas -->
+    <canvas-dibujo ref="canvasDibujo"></canvas-dibujo>
+
     <div class="buttons-container">
       <button @click="guardarPedido" class="btn-guardar">Guardar Pedido</button>
       <button @click="imprimirPedido" class="btn-imprimir">Imprimir</button>
@@ -112,9 +115,13 @@
 <script>
 import { db } from '@/firebase'
 import { collection, addDoc, Timestamp, doc, getDoc, updateDoc } from 'firebase/firestore'
+import CanvasDibujo from '@/components/CanvasDibujo.vue'
 
 export default {
   name: 'PedidosCrudo',
+  components: {
+    CanvasDibujo
+  },
   data() {
     return {
       fecha: new Date().toISOString().split('T')[0],
@@ -135,7 +142,8 @@ export default {
         'Ozuna': {}
       },
       isEditing: false,
-      pedidoId: null
+      pedidoId: null,
+      dibujoCanvas: null
     }
   },
   computed: {
@@ -219,6 +227,16 @@ export default {
     },
     async guardarPedido() {
       try {
+        // Obtener datos del canvas si existe
+        let dibujoData = null;
+        if (this.$refs.canvasDibujo && this.$refs.canvasDibujo.canvas) {
+          // Convertir el objeto canvas a una cadena de texto (string)
+          // Firestore no admite arrays anidados que pueden estar en el objeto JSON
+          const canvasJSON = this.$refs.canvasDibujo.canvas.toJSON();
+          dibujoData = JSON.stringify(canvasJSON);
+          console.log('Canvas guardado como string');
+        }
+        
         const pedidoData = {
           fecha: this.fecha,
           pedidos: this.pedidos,
@@ -226,7 +244,8 @@ export default {
           columnas: this.columnas,
           tipo: 'crudo',
           kilos: this.kilosCrudo,
-          createdAt: Timestamp.now()
+          createdAt: Timestamp.now(),
+          dibujoCanvas: dibujoData // Ahora es una cadena de texto
         }
         
         if (this.isEditing && this.pedidoId) {
@@ -257,6 +276,20 @@ export default {
           this.pedidos = data.pedidos
           this.barcosPorPedido = data.barcosPorPedido || this.initializeBarcosPorPedido()
           this.columnasAdicionales = data.columnas.filter(col => !this.columnasBase.includes(col))
+          
+          // Guardar los datos del dibujo para cargarlos cuando el componente esté listo
+          if (data.dibujoCanvas) {
+            console.log('Dibujo encontrado en el pedido, preparando para cargar');
+            this.dibujoCanvas = data.dibujoCanvas;
+            
+            // Intentar cargar el dibujo después de que el DOM se actualice
+            this.$nextTick(() => {
+              console.log('DOM actualizado, intentando cargar el dibujo');
+              this.cargarDibujoEnCanvas();
+            });
+          } else {
+            console.log('No hay dibujo guardado en este pedido');
+          }
         } else {
           alert('El pedido no existe')
           this.$router.push('/procesos/pedidos')
@@ -283,6 +316,28 @@ export default {
           columnas: this.columnas
         }
       })
+    },
+    // Método para cargar el dibujo en el canvas cuando esté listo
+    cargarDibujoEnCanvas() {
+      try {
+        // Verificar que el componente canvas esté disponible
+        if (this.$refs.canvasDibujo && this.$refs.canvasDibujo.canvas && this.dibujoCanvas) {
+          // Convertir la cadena de texto de vuelta a un objeto JSON
+          const canvasJSON = JSON.parse(this.dibujoCanvas);
+          
+          this.$refs.canvasDibujo.canvas.loadFromJSON(canvasJSON, () => {
+            this.$refs.canvasDibujo.canvas.renderAll();
+            console.log('Dibujo cargado correctamente en el canvas');
+          });
+        } else {
+          // Si el canvas no está listo, intentar nuevamente después de un breve retraso
+          setTimeout(() => {
+            this.cargarDibujoEnCanvas();
+          }, 500);
+        }
+      } catch (error) {
+        console.error('Error al cargar el dibujo en el canvas:', error);
+      }
     }
   },
   async created() {
@@ -594,5 +649,31 @@ input.cliente-ozuna:focus {
   outline: none;
   border-color: #3498db;
   box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.3);
+}
+
+/* Media queries para responsividad */
+@media (max-width: 768px) {
+  .pedidos-crudo-container {
+    padding: 10px;
+  }
+  
+  .agregar-columna {
+    flex-direction: column;
+  }
+  
+  .input-nueva-columna {
+    max-width: 100%;
+  }
+  
+  .buttons-container {
+    flex-direction: column;
+  }
+  
+  .btn-guardar,
+  .btn-cancelar,
+  .btn-imprimir {
+    width: 100%;
+    margin-bottom: 10px;
+  }
 }
 </style> 
