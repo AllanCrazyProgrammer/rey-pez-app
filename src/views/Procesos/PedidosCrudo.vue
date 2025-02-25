@@ -425,6 +425,8 @@ th {
   font-weight: bold;
 }
 
+
+
 input[type="number"] {
   width: 80px;
   padding: 8px;
