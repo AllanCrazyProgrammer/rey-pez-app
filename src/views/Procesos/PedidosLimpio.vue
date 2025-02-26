@@ -372,6 +372,7 @@
                     <option value="">Seleccionar</option>
                     <option value="S/H20">S/H20</option>
                     <option value="C/H20" class="text-blue">C/H20</option>
+                    <option value=".7 y .3">.7 y .3</option>
                   </select>
                 </div>
 
@@ -748,6 +749,7 @@ export default {
       let kilosSinH2O = 0;
       let kilosConH2O = 0;
       let kilosTaras = 0;
+      let kilos7y3 = 0;
 
       this.pedidoOzuna.forEach(item => {
         if (item.kilos) {
@@ -762,6 +764,8 @@ export default {
             kilosSinH2O += Number(item.kilos);
           } else if (item.tipo === 'C/H20') {
             kilosConH2O += Number(item.kilos);
+          } else if (item.tipo === '.7 y .3') {
+            kilos7y3 += Number(item.kilos) * 0.7;
           }
         }
       });
@@ -769,7 +773,7 @@ export default {
       const tarasPorKilos = kilosSinH2O / 27;
       const tarasTotal = Math.round(tarasDirectas + tarasPorKilos);
       const totalKilosSinH2O = kilosSinH2O + kilosTaras;
-      const kilosTotal = Math.round(totalKilosSinH2O + kilosConH2O);
+      const kilosTotal = Math.round(totalKilosSinH2O + kilosConH2O + kilos7y3);
 
       return {
         tarasDirectas: tarasDirectas.toFixed(2),
@@ -777,6 +781,7 @@ export default {
         tarasTotal: tarasTotal.toString(),
         kilosSinH2O: Math.round(totalKilosSinH2O).toString(),
         kilosConH2O: kilosConH2O.toFixed(2),
+        kilos7y3: kilos7y3.toFixed(2),
         kilosTotal: kilosTotal.toString()
       };
     },

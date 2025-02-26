@@ -660,6 +660,7 @@ export default {
       let kilosSinH2O = 0;
       let kilosConH2O = 0;
       let kilosTaras = 0;
+      let kilos7y3 = 0;
 
       this.clientesTemporales[clienteId].forEach(item => {
         if (item.kilos) {
@@ -674,6 +675,8 @@ export default {
             kilosSinH2O += Number(item.kilos);
           } else if (item.tipo === 'C/H20') {
             kilosConH2O += Number(item.kilos);
+          } else if (item.tipo === '.7 y .3') {
+            kilos7y3 += Number(item.kilos) * 0.7;
           }
         }
       });
@@ -681,7 +684,7 @@ export default {
       const tarasPorKilos = kilosSinH2O / 27;
       const tarasTotal = Math.round(tarasDirectas + tarasPorKilos);
       const totalKilosSinH2O = kilosSinH2O + kilosTaras;
-      const kilosTotal = Math.round(totalKilosSinH2O + kilosConH2O);
+      const kilosTotal = Math.round(totalKilosSinH2O + kilosConH2O + kilos7y3);
 
       return {
         tarasTotal: tarasTotal.toString(),
@@ -726,6 +729,8 @@ export default {
               registro.total += kilos * 0.65; // Kilos con agua
             } else if (item.tipo === '1.35 y .15') {
               registro.total += kilos * 1.35; // Kilos con factor 1.35
+            } else if (esPedidoOzuna && item.tipo === '.7 y .3') {
+              registro.total += kilos * 0.7; // Para Ozuna, kilos con factor 0.7
             } else {
               registro.total += kilos; // Kilos normales
             }
