@@ -220,6 +220,7 @@ export default {
       let kilosTaras = 0;
       let kilos135 = 0;
       let kilosTaras135 = 0;
+      let kilos7y3 = 0;
 
       items.forEach(item => {
         if (item.kilos) {
@@ -237,11 +238,13 @@ export default {
             kilosConH2O += Number(item.kilos);
           } else if (item.tipo === '1.35 y .15') {
             kilos135 += Number(item.kilos) * 1.35;
+          } else if (item.tipo === '.7 y .3') {
+            kilos7y3 += Number(item.kilos) * 0.7;
           }
         }
       });
 
-      return kilosSinH2O + kilosTaras + kilosTaras135 + kilosConH2O + kilos135;
+      return kilosSinH2O + kilosTaras + kilosTaras135 + kilosConH2O + kilos135 + kilos7y3;
     },
     calcularTarasCliente(items) {
       let tarasDirectas = 0;
