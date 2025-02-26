@@ -1,10 +1,79 @@
 <template>
   <div class="nuevo-embarque-container">
+    <div class="sidebar-clientes" :class="{ 'sidebar-collapsed': sidebarCollapsed }">
+      <div class="sidebar-header">
+        <h3>Clientes</h3>
+        <button @click="toggleSidebar" class="toggle-sidebar-btn">
+          <i class="fas" :class="sidebarCollapsed ? 'fa-chevron-right' : 'fa-chevron-left'"></i>
+        </button>
+      </div>
+      <div class="sidebar-clientes-contenido">
+        <!-- Solo mostrar clientes personalizados -->
+        <button 
+          v-for="cliente in clientesPersonalizados" 
+          :key="cliente.id"
+          type="button" 
+          @click="seleccionarCliente(cliente.id.toString())" 
+          class="btn-nota-cliente"
+          :class="{ 'activo': clienteActivo === cliente.id.toString() }"
+          :style="{ backgroundColor: obtenerColorCliente(cliente.nombre), color: obtenerColorTextoCliente(cliente.nombre) }"
+          :title="sidebarCollapsed ? cliente.nombre : ''"
+        >
+          <span>{{ cliente.nombre }}</span>
+        </button>
+        
+        <!-- Botón para agregar nuevo cliente -->
+        <button 
+          type="button" 
+          @click="mostrarModalNuevoCliente = true" 
+          class="btn-agregar-cliente"
+          :title="sidebarCollapsed ? 'Agregar Cliente' : ''"
+        >
+          <i class="fas fa-plus"></i>
+          <span v-if="!sidebarCollapsed">Agregar Cliente</span>
+        </button>
+      </div>
+      <div class="sidebar-toggle-mobile">
+        <button @click="toggleSidebar" class="toggle-sidebar-mobile-btn">
+          <i class="fas" :class="sidebarCollapsed ? 'fa-chevron-right' : 'fa-chevron-left'"></i>
+        </button>
+      </div>
+      <!-- Agregar esto dentro del elemento que representa la barra lateral -->
+      <div class="sidebar-resumen">
+        <h4>Resumen Taras</h4>
+        <div class="sidebar-item">
+          <span>Limpio:</span>
+          <strong>{{ calcularTarasLimpio() }}</strong>
+        </div>
+        <div class="sidebar-item">
+          <span>Crudo:</span>
+          <strong>{{ calcularTarasCrudo() }}</strong>
+        </div>
+        <div class="sidebar-item total">
+          <span>Total:</span>
+          <strong>{{ calcularTotalTaras() }}-T</strong>
+        </div>
+        
+        <h4>Resumen Kilos</h4>
+        <div class="sidebar-item">
+          <span>Limpio:</span>
+          <strong>{{ Math.floor(calcularKilosLimpio()) }}</strong>
+        </div>
+        <div class="sidebar-item">
+          <span>Crudo:</span>
+          <strong>{{ calcularKilosCrudo() }}</strong>
+        </div>
+        <div class="sidebar-item total">
+          <span>Total:</span>
+          <strong>{{ Math.floor(calcularTotalKilos()) }}</strong>
+        </div>
+      </div>
+    </div>
     <div class="nuevo-embarque">
       <h1>{{ modoEdicion ? 'Embarque' : 'Nuevo Embarque' }}</h1>
       <div class="botones">
         <button @click="volverAEmbarquesMenu" class="btn-volver">
-          <i class="fas fa-arrow-left"></i> Volver a Embarques Menu
+          <i class="fas fa-arrow-left"></i> Volver a Menu
         </button>
         <button 
           @click="toggleBloqueo" 
@@ -14,30 +83,25 @@
           {{ embarqueBloqueado ? 'Desbloquear' : 'Bloquear' }} Embarque
         </button>
       </div>
+      
       <div class="header">
-        <div class="fecha-selector">
-          <label for="fecha">Fecha de Embarque:</label>
-          <input type="date" id="fecha" v-model="embarque.fecha" class="form-control" required :disabled="embarqueBloqueado">
+        <div class="header-row">
+          <div class="fecha-selector">
+            <label for="fecha">Fecha de Embarque:</label>
+            <input type="date" id="fecha" v-model="embarque.fecha" class="form-control" required :disabled="embarqueBloqueado">
+          </div>
+          <div class="carga-selector">
+            <label for="cargaCon">Carga con:</label>
+            <select id="cargaCon" v-model="embarque.cargaCon" class="form-control" required :disabled="embarqueBloqueado">
+              <option value="">Seleccionar</option>
+              <option value="Porro">Porro</option>
+              <option value="Caminante">Caminante</option>
+            </select>
+          </div>
         </div>
-        <div class="carga-selector">
-          <label for="cargaCon">Carga con:</label>
-          <select id="cargaCon" v-model="embarque.cargaCon" class="form-control" required :disabled="embarqueBloqueado">
-            <option value="">Seleccionar</option>
-            <option value="Porro">Porro</option>
-            <option value="Caminante">Caminante</option>
-          </select>
-        </div>
-    
-    
-    
-    
-    
-    
-<div class="resumen-container">
-  <div class="resumen-columna">
-    <div class="resumen-header">
-      <h4 class="resumen-titulo">Resumen de Taras</h4>
-      <div class="resumen-botones">
+      </div>
+      
+      <div class="botones-accion">
         <button @click="generarResumenTarasPDF" class="btn btn-info">
           <i class="fas fa-file-pdf"></i> PDF Taras
         </button>
@@ -48,578 +112,414 @@
           <i class="fas fa-chart-line"></i> Rendimientos
         </router-link>
       </div>
-    </div>
-    <div class="resumen-grid">
-      <div class="resumen-item">
-        <span class="resumen-label">Taras Limpio: </span>
-        <strong class="resumen-value">{{ calcularTarasLimpio() }}</strong>
-      </div>
-      <div class="resumen-item">
-        <span class="resumen-label">Taras Crudo: </span>
-        <strong class="resumen-value">{{ calcularTarasCrudo() }}</strong>
-      </div>
-      <div class="resumen-item total">
-        <span class="resumen-label">Total Taras: </span>
-        <strong class="resumen-value">{{ calcularTotalTaras() }}</strong>
-      </div>
-    </div>
-  </div>
-  <div class="resumen-columna">
-    <h4 class="resumen-titulo">Resumen de Kilos</h4>
-    <div class="resumen-grid">
-      <div class="resumen-item">
-        <span class="resumen-label">Kilos Limpio: </span>
-        <strong class="resumen-value">{{ calcularKilosLimpio() }}</strong>
-      </div>
-      <div class="resumen-item">
-        <span class="resumen-label">Kilos Crudo: </span>
-        <strong class="resumen-value">{{ calcularKilosCrudo() }}</strong>
-      </div>
-      <div class="resumen-item total">
-        <span class="resumen-label">Total Kilos: </span>
-        <strong class="resumen-value">{{ calcularTotalKilos() }}</strong>
-      </div>
-    </div>
-  </div>
-</div>
-<div class="botones-undo-redo">
+      
+  
+      
+      <div class="botones-undo-redo">
         <button type="button" @click="undo" :disabled="undoStack.length <= 1" class="btn btn-secondary btn-sm">Deshacer</button>
         <button type="button" @click="redo" :disabled="redoStack.length === 0" class="btn btn-secondary btn-sm">Rehacer</button>
       </div>
-      <div class="botones-notas-clientes">
-        <button 
-          type="button" 
-          @click="generarNotaVenta('1')" 
-          class="btn-nota-cliente"
-          style="background-color: #3498db;"
-        >
-          Joselito
-        </button>
-        <button 
-          type="button" 
-          @click="generarNotaVenta('2')" 
-          class="btn-nota-cliente"
-          style="background-color: #e74c3c;"
-        >
-          Catarro
-        </button>
-        <button 
-          type="button" 
-          @click="generarNotaVenta('3')" 
-          class="btn-nota-cliente"
-          style="background-color: #f1c40f; color: black;"
-        >
-          Otilio
-        </button>
-        <button 
-          type="button" 
-          @click="generarNotaVenta('4')" 
-          class="btn-nota-cliente"
-          style="background-color: #2ecc71;"
-        >
-          Ozuna
-        </button>
-      </div>
-    </div>
       
-    <form @submit.prevent="guardarEmbarque" @keydown.enter.prevent>
-      <div v-for="(clienteProductos, clienteId) in productosPorCliente" :key="clienteId" class="cliente-grupo">
-        <div class="cliente-header sticky-header" :data-cliente="obtenerNombreCliente(clienteId)" :style="{  }">
-          <div class="cliente-info">
-            <h3>{{ obtenerNombreCliente(clienteId) }}</h3>
-            <div class="cliente-totales">
-              <span>Limpio: {{ calcularTotalLimpioCliente(clienteId) }}T / {{ formatearKilos(calcularKilosLimpioCliente(clienteId)) }}Kg</span>
-              <span>Crudo: {{ calcularTotalCrudoCliente(clienteId) }}T / {{ formatearKilos(calcularKilosCrudoCliente(clienteId)) }}Kg</span>
-            </div>
-          </div>
-          <div class="cliente-header-controls">
-            <div class="juntar-medidas-checkbox">
-              <input 
-                type="checkbox" 
-                :id="'juntar-medidas-' + clienteId"
-                v-model="clientesJuntarMedidas[clienteId]"
-                @change="handleJuntarMedidasChange(clienteId, $event.target.checked)"
-                @click.stop
-                :disabled="embarqueBloqueado"
-              >
-              <label :for="'juntar-medidas-' + clienteId" @click.stop>Juntar medidas</label>
-            </div>
-            <button type="button" @click.stop="generarNotaVenta(clienteId)" class="btn btn-info btn-sm generar-nota">Generar Nota</button>
-            <button type="button" @click.stop="eliminarCliente(clienteId)" class="btn btn-danger btn-sm eliminar-cliente" :disabled="embarqueBloqueado">Eliminar Cliente</button>
-          </div>
-        </div>
-        <div class="productos-container">
-          <div v-for="(producto, index) in clienteProductos" :key="index" class="producto" 
-            :data-es-venta="producto.esVenta"
-            :class="{
-              'reporte-completo': coincideTarasYBolsas(producto),
-              'reporte-incompleto': !coincideTarasYBolsas(producto) && tieneAlgunReporte(producto)
-            }"
-          >
-            <!-- Encabezado de la medida y selección -->
-            <h2 class="encabezado-medida">
-              <div class="botones-encabezado">
-                <div class="botones-fila-superior">
-                  <button 
-                    @click="abrirModalPrecio(producto)" 
-                    class="btn-precio"
-                    :class="{ 'tiene-precio': producto.precio }"
-                    :disabled="embarqueBloqueado"
-                  >
-                    $
-                  </button>
-                  <button 
-                    @click="abrirModalHilos(producto)" 
-                    class="btn-hilos"
-                    :class="{ 'tiene-hilos': producto.hilos }"
-                    :disabled="embarqueBloqueado"
-                  >
-                    H
-                  </button>
-                </div>
-                <div class="botones-fila-inferior">
-                  <button 
-                    @click="abrirModalNota(producto)" 
-                    class="btn-nota"
-                    :class="{ 'tiene-nota': producto.nota }"
-                    :disabled="embarqueBloqueado"
-                  >
-                    N
-                  </button>
-                  <div class="kg-radio">
-                    <input 
-                      type="checkbox"
-                      v-model="producto.noSumarKilos"
-                      class="kg-checkbox"
-                      :id="'kg-' + producto.id"
-                      :disabled="embarqueBloqueado"
-                    >
-                    <label :for="'kg-' + producto.id">kg</label>
-                  </div>
-                </div>
-              </div>
-              <span 
-                class="medida-texto" 
-                @click="embarqueBloqueado ? null : abrirModalNombreAlternativo(producto)"
-                :class="{ 'disabled': embarqueBloqueado }"
-              >
-                <template v-if="producto.tipo === 'c/h20'">
-                  {{ producto.nombreAlternativoPDF || producto.medida || 'Sin Medida' }}
-                  <span class="ch20-text">c/h20</span>
-                </template>
-                <template v-else>
-                  {{ producto.nombreAlternativoPDF || producto.medida || 'Sin Medida' }}
-                  - {{ obtenerTipoProducto(producto) }}
-                </template>
-              </span>
-              <span v-if="producto.precio" class="precio-tag">${{ producto.precio }}</span>
-            </h2>
-            <div class="producto-header">
-              <div class="medida-input-container">
-                <input
-                  type="text"
-                  v-model="producto.medida"
-                  class="medida-input"
-                  placeholder="Medida"
-                  @input="onMedidaInput(producto, $event)"
-                  @blur="onMedidaBlur(producto)"
-                  :disabled="embarqueBloqueado"
-                >
-                <button 
-                  @click="abrirModalAlt(producto)" 
-                  class="btn-alt"
-                  :class="{ 'tiene-alt': producto.textoAlternativo }"
-                  :disabled="embarqueBloqueado"
-                >
-                  Alt
+      <form @submit.prevent="guardarEmbarque" @keydown.enter.prevent>
+        <div v-for="(clienteProductos, clienteId) in productosPorCliente" 
+             :key="clienteId" 
+             class="cliente-grupo"
+             v-show="clienteActivo === clienteId || clienteActivo === null">
+          <div class="cliente-header sticky-header" :data-cliente="obtenerNombreCliente(clienteId)" :style="{  }">
+            <div class="cliente-info">
+              <h3>
+                {{ obtenerNombreCliente(clienteId) }}
+                <button type="button" @click.stop="generarNotaVenta(clienteId)" class="btn-pdf-mini" title="Generar PDF">
+                  <i class="fas fa-file-pdf"></i>
                 </button>
-                <!-- Modificar la condición para mostrar sugerencias -->
-                <div 
-                  v-if="productoEditandoId === producto.id && sugerenciasMedidas.length > 0" 
-                  class="sugerencias-container"
-                >
-                  <div
-                    v-for="medida in sugerenciasMedidas"
-                    :key="medida"
-                    class="sugerencia-item"
-                    @mousedown="seleccionarMedida(producto, medida)"
-                  >
-                    {{ medida }}
-                  </div>
-                </div>
+              </h3>
+              <div class="cliente-totales">
+                <span>Limpio: {{ calcularTotalLimpioCliente(clienteId) }}T / {{ formatearKilos(calcularKilosLimpioCliente(clienteId)) }}Kg</span>
+                <span>Crudo: {{ calcularTotalCrudoCliente(clienteId) }}T / {{ formatearKilos(calcularKilosCrudoCliente(clienteId)) }}Kg</span>
               </div>
-              <select 
-                v-model="producto.tipo" 
-                class="form-control tipo-select" 
-                @change="onTipoChange(producto)"
-                :class="{
-                  'tipo-azul': producto.tipo === 'c/h20',
-                  'tipo-verde': producto.tipo === 's/h20'
-                }"
-                :disabled="embarqueBloqueado"
-              >
-                <option value="">Seleccionar</option>
-                <option value="s/h20">S/H20</option>
-                <option value="c/h20">C/H20</option>
-                <option value="otro">Otro</option>
-              </select>
-
-              <!-- Checkbox de venta movido aquí, después del tipo -->
-              <div v-if="obtenerNombreCliente(producto.clienteId) === 'Ozuna'" class="venta-checkbox-container">
+            </div>
+            <div class="cliente-header-controls">
+              <div class="juntar-medidas-checkbox">
                 <input 
                   type="checkbox" 
-                  v-model="producto.esVenta" 
-                  class="form-check-input venta-checkbox" 
-                  :id="'ventaCheck-' + producto.id"
+                  :id="'juntar-medidas-' + clienteId"
+                  v-model="clientesJuntarMedidas[clienteId]"
+                  @change="handleJuntarMedidasChange(clienteId, $event.target.checked)"
+                  @click.stop
                   :disabled="embarqueBloqueado"
                 >
-                <label :for="'ventaCheck-' + producto.id">Venta</label>
+                <label :for="'juntar-medidas-' + clienteId" @click.stop>Juntar medidas</label>
               </div>
-              
-              <div v-if="producto.tipo === 'c/h20'" class="valores-container">
-                <div class="valor-neto-container">
-                  <label>Valor neto:</label>
-                  <input
-                    type="number"
-                    v-model="producto.camaronNeto"
-                    class="camaron-neto-input ios-numeric"
-                    step="0.01"
-                    min="0"
-                    max="1"
-                    inputmode="numeric"
-                    pattern="[0-9]*"
-                    :disabled="embarqueBloqueado"
-                  >
-                </div>
-  
-              </div>
-              <input
-                v-if="producto.tipo === 'otro'"
-                type="text" 
-                v-model="producto.tipoPersonalizado" 
-                class="form-control tipo-input" 
-                placeholder="Especificar"
-                :disabled="embarqueBloqueado"
-              >
-              <button type="button" @click="eliminarProducto(producto)" class="btn btn-danger btn-sm eliminar-producto" :disabled="embarqueBloqueado">X</button>
-            </div>
-            <div class="sumas-verticales">
-              <div class="columna">
-                <div class="taras-header">
-                  <h5>Taras</h5>
-                  <div class="checkbox-container">
-                    <input 
-                      type="checkbox" 
-                      v-model="producto.restarTaras"
-                      :disabled="embarqueBloqueado"
-                    >
-                    <label>-3</label>
-                  </div>
-                </div>
-                <div v-for="(tara, taraIndex) in producto.taras" :key="taraIndex" class="input-group">
-                  <input 
-                    v-model.number="producto.taras[taraIndex]" 
-                    type="tel"
-                    class="form-control tara-input" 
-                    placeholder="Tara"
-                    :size="String(producto.taras[taraIndex] || '').length || 1"
-                    @focus="$event.target.select()"
-                    :disabled="embarqueBloqueado"
-                  >
-                  <button type="button" @click="eliminarTara(producto, taraIndex)" class="btn btn-danger btn-sm" :disabled="embarqueBloqueado">-</button>
-                </div>
-                <div v-for="(taraExtra, taraExtraIndex) in producto.tarasExtra" :key="'extra-' + taraExtraIndex" class="input-group">
-                  <input 
-                    v-model.number="producto.tarasExtra[taraExtraIndex]" 
-                    type="tel"
-                    class="form-control tara-input" 
-                    placeholder="Tara Extra"
-                    :size="String(producto.tarasExtra[taraExtraIndex] || '').length || 1"
-                    @focus="$event.target.select()"
-                    :disabled="embarqueBloqueado"
-                  >
-                  <button type="button" @click="eliminarTaraExtra(producto, taraExtraIndex)" class="btn btn-danger btn-sm" :disabled="embarqueBloqueado">-</button>
-                </div>
-                <div class="botones-tara">
-                  <button type="button" @click="agregarTara(producto)" class="btn btn-success btn-sm agregar-tara" :disabled="embarqueBloqueado">+</button>
-                  <button type="button" @click="agregarTaraExtra(producto)" class="btn btn-warning btn-sm agregar-tara-extra" :disabled="embarqueBloqueado">+ Extra</button>
-                </div>
-                <div class="total">Total: {{ totalTaras(producto) }}</div>
-              </div>
-              <div class="columna">
-                <h5>Kilos</h5>
-                <div v-for="(kilo, kiloIndex) in producto.kilos" :key="kiloIndex" class="input-group">
-                  <input 
-                    v-model.number="producto.kilos[kiloIndex]" 
-                    type="tel"
-                    class="form-control kilo-input" 
-                    placeholder="Kilos"
-                    :size="String(producto.kilos[kiloIndex] || '').length || 1"
-                    @focus="$event.target.select()"
-                    :disabled="embarqueBloqueado"
-                  >
-                </div>
-                <div style="height: 38px"></div>
-                <div class="total">Total: {{ totalKilos(producto) }}</div>
-              </div>
-            </div>
-            <div class="reporte-taras-bolsas">
-              <div class="reporte-item">
-                <h5>Taras</h5>
-                <div v-for="(tara, index) in producto.reporteTaras" :key="index" class="input-group mb-2">
-                  <input 
-                    type="tel"
-                    v-model="producto.reporteTaras[index]" 
-                    class="form-control reporte-input"
-                    @focus="$event.target.select()"
-                    :disabled="embarqueBloqueado"
-                  >
-                  <button type="button" @click="eliminarReporteTara(producto, index)" class="btn btn-danger btn-sm" :disabled="embarqueBloqueado">-</button>
-                </div>
-                <button type="button" @click="agregarReporteTara(producto)" class="btn btn-success btn-sm" :disabled="embarqueBloqueado">+</button>
-                <div class="total-taras-reporte" :class="{ 'coincide': coincideTaras(producto), 'no-coincide': !coincideTaras(producto) }">
-                   Reportadas: {{ totalTarasReportadas(producto) }}
-                </div>
-              </div>
-              <div class="reporte-item">
-                <h5>Bolsas</h5>
-                <div v-for="(bolsa, index) in producto.reporteBolsas" :key="index" class="input-group mb-2">
-                  <input 
-                    type="tel"
-                    v-model="producto.reporteBolsas[index]" 
-                    class="form-control reporte-input"
-                    @focus="$event.target.select()"
-                    :disabled="embarqueBloqueado"
-                  >
-                </div>
-                <div style="height: 38px"></div>
-                <div class="total-bolsas-reporte">
-                  Bolsas: {{ totalBolsasReportadas(producto) }}
-                </div>
-              </div>
-            </div>
-            <div v-if="reporteExcedeTresParentesis(producto)" class="reporte-extenso">
-              {{ generarReporteExtenso(producto) }}
+              <button type="button" @click.stop="eliminarCliente(clienteId)" class="btn btn-danger btn-sm eliminar-cliente" :disabled="embarqueBloqueado">Eliminar Cliente</button>
             </div>
           </div>
-          <div v-for="(crudo, index) in clienteCrudos[clienteId] || []" :key="'crudo-'+index" class="producto crudo">
-            <h2 class="crudo-header">Crudos</h2>
-            
-            <div class="crudo-items">
-              <div v-for="(item, itemIndex) in crudo.items || []" :key="'item-'+itemIndex" class="crudo-item">
-                <div class="crudo-talla-container">
+          <div class="productos-container">
+            <div v-for="(producto, index) in clienteProductos" :key="index" class="producto" 
+              :data-es-venta="producto.esVenta"
+              :class="{
+                'reporte-completo': coincideTarasYBolsas(producto),
+                'reporte-incompleto': !coincideTarasYBolsas(producto) && tieneAlgunReporte(producto)
+              }"
+            >
+              <!-- Encabezado de la medida y selección -->
+              <h2 class="encabezado-medida">
+                <div class="botones-encabezado">
+                  <div class="botones-fila-superior">
+                    <button 
+                      @click="abrirModalPrecio(producto)" 
+                      class="btn-precio"
+                      :class="{ 'tiene-precio': producto.precio }"
+                      :disabled="embarqueBloqueado"
+                    >
+                      $
+                    </button>
+                    <button 
+                      @click="abrirModalHilos(producto)" 
+                      class="btn-hilos"
+                      :class="{ 'tiene-hilos': producto.hilos }"
+                      :disabled="embarqueBloqueado"
+                    >
+                      H
+                    </button>
+                  </div>
+                  <div class="botones-fila-inferior">
+                    <button 
+                      @click="abrirModalNota(producto)" 
+                      class="btn-nota"
+                      :class="{ 'tiene-nota': producto.nota }"
+                      :disabled="embarqueBloqueado"
+                    >
+                      N
+                    </button>
+                    <div class="kg-radio">
+                      <input 
+                        type="checkbox"
+                        v-model="producto.noSumarKilos"
+                        class="kg-checkbox"
+                        :id="'kg-' + producto.id"
+                        :disabled="embarqueBloqueado"
+                      >
+                      <label :for="'kg-' + producto.id">kg</label>
+                    </div>
+                  </div>
+                </div>
+                <span 
+                  class="medida-texto" 
+                  @click="embarqueBloqueado ? null : abrirModalNombreAlternativo(producto)"
+                  :class="{ 'disabled': embarqueBloqueado }"
+                >
+                  <template v-if="producto.tipo === 'c/h20'">
+                    {{ producto.nombreAlternativoPDF || producto.medida || 'Sin Medida' }}
+                    <span class="ch20-text">c/h20</span>
+                  </template>
+                  <template v-else>
+                    {{ producto.nombreAlternativoPDF || producto.medida || 'Sin Medida' }}
+                    - {{ obtenerTipoProducto(producto) }}
+                  </template>
+                </span>
+                <span v-if="producto.precio" class="precio-tag">${{ producto.precio }}</span>
+              </h2>
+              <div class="producto-header">
+                <div class="medida-input-container">
+                  <input
+                    type="text"
+                    v-model="producto.medida"
+                    class="medida-input"
+                    placeholder="Medida"
+                    @input="onMedidaInput(producto, $event)"
+                    @blur="onMedidaBlur(producto)"
+                    :disabled="embarqueBloqueado"
+                  >
                   <button 
-                    @click="abrirModalPrecio(item)" 
-                    class="btn-precio"
-                    :class="{ 'tiene-precio': item.precio }"
+                    @click="abrirModalAlt(producto)" 
+                    class="btn-alt"
+                    :class="{ 'tiene-alt': producto.textoAlternativo }"
                     :disabled="embarqueBloqueado"
                   >
-                    $
+                    Alt
                   </button>
-                  <select 
-                    v-model="item.talla" 
-                    class="form-control talla-select"
-                    @change="onTallaCrudoChange(item)"
-                    :disabled="embarqueBloqueado"
+                  <!-- Modificar la condición para mostrar sugerencias -->
+                  <div 
+                    v-if="productoEditandoId === producto.id && sugerenciasMedidas.length > 0" 
+                    class="sugerencias-container"
                   >
-                    <option value="">Elige talla</option>
-                    <option value="Med c/c">Med c/c</option>
-                    <option value="Med-Esp c/c">Med-Esp c/c</option>
-                    <option value="Med-gde c/c">Med-gde c/c</option>
-                    <option value="Gde c/c">Gde c/c</option>
-                    <option value="Gde c/ Extra">Gde c/ Extra c/c</option>
-                    <option value="Extra c/c">Extra c/c</option>
-                    <option value="Jumbo c/c">Jumbo c/c</option>
-                    <option value="Linea">Linea</option>
-                    <option value="Lag gde c/c">Lag gde c/c</option>
-                    <option value="Rechazo">Rechazo</option>
-                  </select>
-                  <span v-if="item.precio" class="precio-tag">${{ item.precio }}</span>
-                  
+                    <div
+                      v-for="medida in sugerenciasMedidas"
+                      :key="medida"
+                      class="sugerencia-item"
+                      @mousedown="seleccionarMedida(producto, medida)"
+                    >
+                      {{ medida }}
+                    </div>
+                  </div>
+                </div>
+                <select 
+                  v-model="producto.tipo" 
+                  class="form-control tipo-select" 
+                  @change="onTipoChange(producto)"
+                  :class="{
+                    'tipo-azul': producto.tipo === 'c/h20',
+                    'tipo-verde': producto.tipo === 's/h20'
+                  }"
+                  :disabled="embarqueBloqueado"
+                >
+                  <option value="">Seleccionar</option>
+                  <option value="s/h20">S/H20</option>
+                  <option value="c/h20">C/H20</option>
+                  <option value="otro">Otro</option>
+                </select>
+
+                <!-- Checkbox de venta movido aquí, después del tipo -->
+                <div v-if="obtenerNombreCliente(producto.clienteId) === 'Ozuna'" class="venta-checkbox-container">
                   <input 
-                    type="text" 
-                    v-model="item.barco" 
-                    class="form-control barco-input" 
-                    placeholder="Barco"
+                    type="checkbox" 
+                    v-model="producto.esVenta" 
+                    class="form-check-input venta-checkbox" 
+                    :id="'ventaCheck-' + producto.id"
                     :disabled="embarqueBloqueado"
                   >
+                  <label :for="'ventaCheck-' + producto.id">Venta</label>
                 </div>
                 
-                <div class="crudo-taras-container">
-                  <div class="taras-wrapper">
-                    <input 
-                      type="text" 
-                      v-model="item.taras" 
-                      class="form-control taras-input" 
-                      placeholder="Taras"
-                      @input="actualizarTotalCrudos(clienteId, index)"
-                      :disabled="embarqueBloqueado"
-                    >
-                    <input 
-                      v-if="item.mostrarSobrante"
-                      type="text" 
-                      v-model="item.sobrante" 
-                      class="form-control taras-input" 
-                      placeholder="Sbrte"
-                      @input="actualizarTotalCrudos(clienteId, index)"
+                <div v-if="producto.tipo === 'c/h20'" class="valores-container">
+                  <div class="valor-neto-container">
+                    <label>Valor neto:</label>
+                    <input
+                      type="number"
+                      v-model="producto.camaronNeto"
+                      class="camaron-neto-input ios-numeric"
+                      step="0.01"
+                      min="0"
+                      max="1"
+                      inputmode="numeric"
+                      pattern="[0-9]*"
                       :disabled="embarqueBloqueado"
                     >
                   </div>
-                  <div class="buttons-wrapper">
-                    <button type="button" @click="eliminarCrudoItem(clienteId, index, itemIndex)" class="btn btn-danger btn-sm eliminar-crudo-item" :disabled="embarqueBloqueado">-</button>
-                    <button type="button" @click="toggleSobrante(clienteId, index, itemIndex)" class="btn btn-success btn-sm agregar-sobrante" :disabled="embarqueBloqueado">+</button>
+
+                </div>
+                <input
+                  v-if="producto.tipo === 'otro'"
+                  type="text" 
+                  v-model="producto.tipoPersonalizado" 
+                  class="form-control tipo-input" 
+                  placeholder="Especificar"
+                  :disabled="embarqueBloqueado"
+                >
+                <button type="button" @click="eliminarProducto(producto)" class="btn btn-danger btn-sm eliminar-producto" :disabled="embarqueBloqueado">X</button>
+              </div>
+              <div class="sumas-verticales">
+                <div class="columna">
+                  <div class="taras-header">
+                    <h5>Taras</h5>
+                    <div class="checkbox-container">
+                      <input 
+                        type="checkbox" 
+                        v-model="producto.restarTaras"
+                        :disabled="embarqueBloqueado"
+                      >
+                      <label>-3</label>
+                    </div>
+                  </div>
+                  <div v-for="(tara, taraIndex) in producto.taras" :key="taraIndex" class="input-group">
+                    <input 
+                      v-model.number="producto.taras[taraIndex]" 
+                      type="tel"
+                      class="form-control tara-input" 
+                      placeholder="Tara"
+                      :size="String(producto.taras[taraIndex] || '').length || 1"
+                      @focus="$event.target.select()"
+                      :disabled="embarqueBloqueado"
+                    >
+                    <button type="button" @click="eliminarTara(producto, taraIndex)" class="btn btn-danger btn-sm" :disabled="embarqueBloqueado">-</button>
+                  </div>
+                  <div v-for="(taraExtra, taraExtraIndex) in producto.tarasExtra" :key="'extra-' + taraExtraIndex" class="input-group">
+                    <input 
+                      v-model.number="producto.tarasExtra[taraExtraIndex]" 
+                      type="tel"
+                      class="form-control tara-input" 
+                      placeholder="Tara Extra"
+                      :size="String(producto.tarasExtra[taraExtraIndex] || '').length || 1"
+                      @focus="$event.target.select()"
+                      :disabled="embarqueBloqueado"
+                    >
+                    <button type="button" @click="eliminarTaraExtra(producto, taraExtraIndex)" class="btn btn-danger btn-sm" :disabled="embarqueBloqueado">-</button>
+                  </div>
+                  <div class="botones-tara">
+                    <button type="button" @click="agregarTara(producto)" class="btn btn-success btn-sm agregar-tara" :disabled="embarqueBloqueado">+</button>
+                    <button type="button" @click="agregarTaraExtra(producto)" class="btn btn-warning btn-sm agregar-tara-extra" :disabled="embarqueBloqueado">+ Extra</button>
+                  </div>
+                  <div class="total">Total: {{ totalTaras(producto) }}</div>
+                </div>
+                <div class="columna">
+                  <h5>Kilos</h5>
+                  <div v-for="(kilo, kiloIndex) in producto.kilos" :key="kiloIndex" class="input-group">
+                    <input 
+                      v-model.number="producto.kilos[kiloIndex]" 
+                      type="tel"
+                      class="form-control kilo-input" 
+                      placeholder="Kilos"
+                      :size="String(producto.kilos[kiloIndex] || '').length || 1"
+                      @focus="$event.target.select()"
+                      :disabled="embarqueBloqueado"
+                    >
+                  </div>
+                  <div style="height: 38px"></div>
+                  <div class="total">Total: {{ totalKilos(producto) }}</div>
+                </div>
+              </div>
+              <div class="reporte-taras-bolsas">
+                <div class="reporte-item">
+                  <h5>Taras</h5>
+                  <div v-for="(tara, index) in producto.reporteTaras" :key="index" class="input-group mb-2">
+                    <input 
+                      type="tel"
+                      v-model="producto.reporteTaras[index]" 
+                      class="form-control reporte-input"
+                      @focus="$event.target.select()"
+                      :disabled="embarqueBloqueado"
+                    >
+                    <button type="button" @click="eliminarReporteTara(producto, index)" class="btn btn-danger btn-sm" :disabled="embarqueBloqueado">-</button>
+                  </div>
+                  <button type="button" @click="agregarReporteTara(producto)" class="btn btn-success btn-sm" :disabled="embarqueBloqueado">+</button>
+                  <div class="total-taras-reporte" :class="{ 'coincide': coincideTaras(producto), 'no-coincide': !coincideTaras(producto) }">
+                     Reportadas: {{ totalTarasReportadas(producto) }}
+                  </div>
+                </div>
+                <div class="reporte-item">
+                  <h5>Bolsas</h5>
+                  <div v-for="(bolsa, index) in producto.reporteBolsas" :key="index" class="input-group mb-2">
+                    <input 
+                      type="tel"
+                      v-model="producto.reporteBolsas[index]" 
+                      class="form-control reporte-input"
+                      @focus="$event.target.select()"
+                      :disabled="embarqueBloqueado"
+                    >
+                  </div>
+                  <div style="height: 38px"></div>
+                  <div class="total-bolsas-reporte">
+                    Bolsas: {{ totalBolsasReportadas(producto) }}
                   </div>
                 </div>
               </div>
+              <div v-if="reporteExcedeTresParentesis(producto)" class="reporte-extenso">
+                {{ generarReporteExtenso(producto) }}
+              </div>
             </div>
-            
-            <div class="crudo-footer">
-              <button type="button" @click="agregarCrudoItem(clienteId, index)" class="btn btn-primary btn-sm agregar-crudo-item" :disabled="embarqueBloqueado">+ Agregar Talla/Taras</button>
-              <button type="button" @click="eliminarCrudo(clienteId, index)" class="btn btn-danger btn-sm eliminar-crudo" :disabled="embarqueBloqueado">Eliminar Crudo</button>
-              <div class="total-crudos">Total de taras: {{ calcularTotalCrudos(crudo) }}</div>
+            <div v-for="(crudo, index) in clienteCrudos[clienteId] || []" :key="'crudo-'+index" class="producto crudo">
+              <h2 class="crudo-header">Crudos</h2>
+              
+              <div class="crudo-items">
+                <div v-for="(item, itemIndex) in crudo.items || []" :key="'item-'+itemIndex" class="crudo-item">
+                  <div class="crudo-talla-container">
+                    <button 
+                      @click="abrirModalPrecio(item)" 
+                      class="btn-precio"
+                      :class="{ 'tiene-precio': item.precio }"
+                      :disabled="embarqueBloqueado"
+                    >
+                      $
+                    </button>
+                    <select 
+                      v-model="item.talla" 
+                      class="form-control talla-select"
+                      @change="onTallaCrudoChange(item)"
+                      :disabled="embarqueBloqueado"
+                    >
+                      <option value="">Elige talla</option>
+                      <option value="Med c/c">Med c/c</option>
+                      <option value="Med-Esp c/c">Med-Esp c/c</option>
+                      <option value="Med-gde c/c">Med-gde c/c</option>
+                      <option value="Gde c/c">Gde c/c</option>
+                      <option value="Gde c/ Extra">Gde c/ Extra c/c</option>
+                      <option value="Extra c/c">Extra c/c</option>
+                      <option value="Jumbo c/c">Jumbo c/c</option>
+                      <option value="Linea">Linea</option>
+                      <option value="Lag gde c/c">Lag gde c/c</option>
+                      <option value="Rechazo">Rechazo</option>
+                    </select>
+                    <span v-if="item.precio" class="precio-tag">${{ item.precio }}</span>
+                    
+                    <input 
+                      type="text" 
+                      v-model="item.barco" 
+                      class="form-control barco-input" 
+                      placeholder="Barco"
+                      :disabled="embarqueBloqueado"
+                    >
+                  </div>
+                  
+                  <div class="crudo-taras-container">
+                    <div class="taras-wrapper">
+                      <input 
+                        type="text" 
+                        v-model="item.taras" 
+                        class="form-control taras-input" 
+                        placeholder="Taras"
+                        @input="actualizarTotalCrudos(clienteId, index)"
+                        :disabled="embarqueBloqueado"
+                      >
+                      <input 
+                        v-if="item.mostrarSobrante"
+                        type="text" 
+                        v-model="item.sobrante" 
+                        class="form-control taras-input" 
+                        placeholder="Sbrte"
+                        @input="actualizarTotalCrudos(clienteId, index)"
+                        :disabled="embarqueBloqueado"
+                      >
+                    </div>
+                    <div class="buttons-wrapper">
+                      <button type="button" @click="eliminarCrudoItem(clienteId, index, itemIndex)" class="btn btn-danger btn-sm eliminar-crudo-item" :disabled="embarqueBloqueado">-</button>
+                      <button type="button" @click="toggleSobrante(clienteId, index, itemIndex)" class="btn btn-success btn-sm agregar-sobrante" :disabled="embarqueBloqueado">+</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <div class="crudo-footer">
+                <button type="button" @click="agregarCrudoItem(clienteId, index)" class="btn btn-primary btn-sm agregar-crudo-item" :disabled="embarqueBloqueado">+ Agregar Talla/Taras</button>
+                <button type="button" @click="eliminarCrudo(clienteId, index)" class="btn btn-danger btn-sm eliminar-crudo" :disabled="embarqueBloqueado">Eliminar Crudo</button>
+                <div class="total-crudos">Total de taras: {{ calcularTotalCrudos(crudo) }}</div>
+              </div>
             </div>
           </div>
-        </div>
-        <div class="botones-agregar">
-          <button type="button" @click="agregarProducto(clienteId)" class="btn btn-primary btn-sm agregar-producto" :disabled="embarqueBloqueado">Agregar Producto</button>
-          <button type="button" @click="agregarCrudo(clienteId)" class="btn btn-info btn-sm agregar-crudo" :disabled="embarqueBloqueado">Agregar Crudos</button>
-        </div>
-      </div>
-      <div class="cliente-selector">
-        <div class="row align-items-center">
-          <div class="col-12 col-md-8">
-            <select v-model="nuevoClienteId" class="form-control" :disabled="embarqueBloqueado">
-              <option value="">Seleccione un cliente</option>
-              <option v-for="cliente in clientesDisponibles" :key="cliente.key" :value="cliente.id">
-                {{ cliente.nombre }}
-              </option>
-            </select>
-          </div>
-          <div class="col-12 col-md-4 mt-2 mt-md-0">
-            <button type="button" @click="agregarClienteProducto" class="btn btn-primary btn-block agregar-cliente" :disabled="embarqueBloqueado">Agregar Cliente</button>
+          <div class="botones-agregar">
+            <button type="button" @click="agregarProducto(clienteId)" class="btn btn-primary btn-sm agregar-producto" :disabled="embarqueBloqueado">Agregar Producto</button>
+            <button type="button" @click="agregarCrudo(clienteId)" class="btn btn-info btn-sm agregar-crudo" :disabled="embarqueBloqueado">Agregar Crudos</button>
           </div>
         </div>
-      </div>
-      <div class="botones-finales">
-        <button type="submit" class="btn btn-success crear-embarque" :disabled="embarqueBloqueado">
-          {{ modoEdicion ? 'Actualizar Embarque' : 'Guardar Embarque' }}
-        </button>
-        <div class="generar-resumen-container">
-          <button type="button" @click="generarResumenEmbarque2" class="btn btn-info generar-pdf" :disabled="embarqueBloqueado">
-            Resumen Embarque
+      </form> <!-- Cerrando el form que se abrió para guardarEmbarque -->
+    </div> <!-- Cerrando nuevo-embarque-container -->
+
+    <!-- Modal para agregar nuevo cliente -->
+    <div class="modal-overlay" v-if="mostrarModalNuevoCliente" @click.self="cerrarModalNuevoCliente">
+      <div class="modal-contenido">
+        <div class="modal-header">
+          <h3>Agregar Nuevo Cliente</h3>
+          <button @click="cerrarModalNuevoCliente" class="btn-cerrar-modal">
+            <i class="fas fa-times"></i>
           </button>
         </div>
-        <router-link :to="{ name: 'Rendimientos', params: { id: embarqueId } }" class="btn btn-warning ver-rendimientos" :disabled="embarqueBloqueado">
-          Ver Rendimientos
-        </router-link>
-      </div>
-    </form>
- 
-  </div>
-    
-    <!-- Modificar el modal para evitar la propagación de eventos -->
-    <div v-if="mostrarModalPrecio" class="modal-precio" @click.stop="cerrarModalPrecio">
-      <div class="modal-contenido" @click.stop>
-        <h3>Establecer Precio</h3>
-        <div class="input-precio">
-          <span class="simbolo-precio">$</span>
-          <input 
-            type="tel" 
-            v-model="precioTemp"
-            placeholder="0.00"
-            @keyup.enter="guardarPrecio"
-            ref="precioInput"
-            class="form-control precio-input"
-          >
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="nombreCliente">Nombre del Cliente:</label>
+            <input 
+              type="text" 
+              id="nombreCliente" 
+              v-model="nuevoClienteNombre" 
+              class="form-control" 
+              placeholder="Ingrese el nombre del cliente"
+              @keyup.enter="agregarNuevoCliente"
+            >
+          </div>
+
         </div>
-        <div class="modal-botones">
-          <button @click.stop="guardarPrecio" class="btn btn-success">Guardar</button>
-          <button @click.stop="cerrarModalPrecio" class="btn btn-secondary">Cancelar</button>
+        <div class="modal-footer">
+          <button @click="cerrarModalNuevoCliente" class="btn btn-secondary">Cancelar</button>
+          <button @click="agregarNuevoCliente" class="btn btn-primary">Agregar</button>
         </div>
-      </div>
-    </div>
-    <!-- Modal para Hilos -->
-    <div v-if="mostrarModalHilos" class="modal-hilos" @click.stop="cerrarModalHilos">
-      <div class="modal-contenido" @click.stop>
-        <h3>Establecer Hilos</h3>
-        <div class="input-hilos">
-          <input 
-            type="text" 
-            v-model="hilosTemp"
-            placeholder="Ingrese hilos"
-            @keyup.enter.stop="guardarHilos"
-            @keydown.stop
-            ref="hilosInput"
-          >
-        </div>
-        <div class="modal-botones">
-          <button @click.stop="guardarHilos" class="btn btn-success">Guardar</button>
-          <button @click.stop="cerrarModalHilos" class="btn btn-secondary">Cancelar</button>
-        </div>
-      </div>
-    </div>
-    <!-- Agregar el nuevo modal de notas al final del template -->
-    <div v-if="mostrarModalNota" class="modal-nota" @click.stop="cerrarModalNota">
-      <div class="modal-contenido" @click.stop>
-        <h3>Agregar Nota</h3>
-        <div class="input-nota">
-          <textarea 
-            v-model="notaTemp"
-            placeholder="Escriba su nota aquí"
-            @keyup.enter.stop
-            ref="notaInput"
-          ></textarea>
-        </div>
-        <div class="modal-botones">
-          <button @click.stop="guardarNota" class="btn btn-success">Guardar</button>
-          <button @click.stop="cerrarModalNota" class="btn btn-secondary">Cancelar</button>
-        </div>
-      </div>
-    </div>
-    <!-- Agregar este nuevo modal -->
-    <div v-if="mostrarModalNombreAlternativo" class="modal-nombre-alternativo" @click.stop="cerrarModalNombreAlternativo">
-      <div class="modal-contenido" @click.stop>
-        <h3>Nombre Alternativo para PDF</h3>
-        <div class="input-nombre">
-          <input 
-            type="text" 
-            v-model="nombreAlternativoTemp"
-            placeholder="Ingrese nombre alternativo"
-            @keyup.enter.stop="guardarNombreAlternativo"
-            @keydown.stop
-            ref="nombreAlternativoInput"
-          >
-        </div>
-        <div class="modal-botones">
-          <button @click.stop="guardarNombreAlternativo" class="btn btn-success">Guardar</button>
-          <button @click.stop="cerrarModalNombreAlternativo" class="btn btn-secondary">Cancelar</button>
-        </div>
-      </div>
-    </div>
-    <!-- Agregar el nuevo modal al final del template, antes del cierre de template -->
-    <div v-if="mostrarModalAlt" class="modal-alt" @click.stop="cerrarModalAlt">
-      <div class="modal-contenido" @click.stop>
-        <h3>Texto Alternativo para PDF</h3>
-        <div class="input-alt">
-          <input 
-            type="text" 
-            v-model="altTemp"
-            placeholder="Ingrese texto alternativo"
-            @keyup.enter.stop="guardarAlt"
-            @keydown.stop
-            ref="altInput"
-          >
-        </div>
-        <div class="modal-botones">
-          <button @click.stop="guardarAlt" class="btn btn-success">Guardar</button>
-          <button @click.stop="cerrarModalAlt" class="btn btn-secondary">Cancelar</button>
-        </div>
-      </div>
-    </div>
-    <!-- Reemplazar el componente de usuarios activos por el total de taras -->
-    <div class="total-taras-flotante">
-      <div class="total-taras-contenido">
-        <span class="total-taras-valor">{{ calcularTotalTaras() }}T</span>
       </div>
     </div>
   </div>
@@ -653,17 +553,18 @@ export default {
       usuariosActivos: [],
       clientesJuntarMedidas: {},
       clientesPredefinidos: [
-        { id: 1, nombre: 'Joselito' },
-        { id: 2, nombre: 'Catarro' },
-        { id: 3, nombre: 'Otilio' },
-        { id: 4, nombre: 'Ozuna' },
+        { id: 1, nombre: 'Joselito', color: '#3498db', textColor: 'white' },
+        { id: 2, nombre: 'Catarro', color: '#e74c3c', textColor: 'white' },
+        { id: 3, nombre: 'Otilio', color: '#f1c40f', textColor: 'black' },
+        { id: 4, nombre: 'Ozuna', color: '#2ecc71', textColor: 'white' },
       ],
       clientesPersonalizados: [],
       ultimoIdPersonalizado: 0,
       embarque: {
-        fecha: '',
+        fecha: null,
         cargaCon: '',
         productos: [],
+        crudos: []
       },
       nuevoClienteId: '',
       undoStack: [],
@@ -699,6 +600,11 @@ export default {
       altTemp: '',
       clientesOffsets: {},
       embarqueBloqueado: false,
+      clienteActivo: null, // Nueva propiedad para rastrear el cliente activo
+      sidebarCollapsed: false,
+      mostrarModalNuevoCliente: false,
+      nuevoClienteNombre: '',
+      nuevoClienteColor: '#007bff',
     };
   },
   clientesJuntarMedidas: {},
@@ -2445,6 +2351,108 @@ export default {
         });
       }
     },
+    seleccionarCliente(clienteId) {
+      // Verificar si ya existe el embarque, si no, crear uno
+      if (!this.embarque.fecha) {
+        alert('Por favor, seleccione una fecha para el embarque.');
+        return;
+      }
+
+      // Verificar si el cliente ya existe en el embarque
+      const clienteExiste = this.embarque.productos.some(p => p.clienteId.toString() === clienteId.toString());
+      
+      if (!clienteExiste) {
+        // Si el cliente no existe, lo agregamos
+        this.guardarEmbarqueInicial(clienteId).then(() => {
+          // Establecer el cliente activo
+          this.clienteActivo = clienteId;
+        });
+      } else {
+        // Si el cliente ya existe, simplemente lo establecemos como activo
+        this.clienteActivo = clienteId;
+      }
+    },
+    scrollToCliente(clienteId) {
+      // Buscar el elemento del cliente y hacer scroll hasta él
+      this.$nextTick(() => {
+        const clienteHeader = document.querySelector(`.cliente-header[data-cliente="${this.obtenerNombreCliente(clienteId)}"]`);
+        if (clienteHeader) {
+          // Eliminar la clase de resaltado de todos los headers de cliente
+          document.querySelectorAll('.cliente-header').forEach(header => {
+            header.classList.remove('cliente-seleccionado');
+          });
+          
+          // Agregar la clase de resaltado al cliente seleccionado
+          clienteHeader.classList.add('cliente-seleccionado');
+          
+          // Hacer scroll al cliente
+          clienteHeader.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          
+          // Quitar la clase después de 2 segundos
+          setTimeout(() => {
+            clienteHeader.classList.remove('cliente-seleccionado');
+          }, 2000);
+        }
+      });
+    },
+    toggleSidebar() {
+      this.sidebarCollapsed = !this.sidebarCollapsed;
+    },
+    cerrarModalNuevoCliente() {
+      this.mostrarModalNuevoCliente = false;
+      this.nuevoClienteNombre = '';
+      this.nuevoClienteColor = '#007bff';
+    },
+    agregarNuevoCliente() {
+      if (this.nuevoClienteNombre.trim() === '') {
+        alert('Por favor, ingrese un nombre para el nuevo cliente.');
+        return;
+      }
+
+      const nuevoCliente = {
+        id: Date.now().toString(), // Convertir a string para mantener consistencia con los IDs existentes
+        nombre: this.nuevoClienteNombre,
+        color: this.nuevoClienteColor,
+        editable: true,
+        personalizado: true
+      };
+
+      this.clientesPersonalizados.push(nuevoCliente);
+      this.guardarClientesPersonalizados();
+      this.cerrarModalNuevoCliente();
+      
+      // Seleccionar automáticamente el cliente recién creado
+      this.seleccionarCliente(nuevoCliente.id);
+    },
+    guardarClientesPersonalizados() {
+      localStorage.setItem('clientesPersonalizados', JSON.stringify(this.clientesPersonalizados));
+    },
+    cargarClientesPersonalizados() {
+      const clientesGuardados = localStorage.getItem('clientesPersonalizados');
+      if (clientesGuardados) {
+        this.clientesPersonalizados = JSON.parse(clientesGuardados);
+      }
+    },
+    obtenerColorCliente(nombreCliente) {
+      const nombreNormalizado = nombreCliente.toLowerCase();
+      if (nombreNormalizado.includes('joselito')) {
+        return '#3498db'; // Azul para Joselito
+      } else if (nombreNormalizado.includes('catarro')) {
+        return '#e74c3c'; // Rojo para Catarro
+      } else if (nombreNormalizado.includes('otilio')) {
+        return '#f1c40f'; // Amarillo para Otilio
+      } else if (nombreNormalizado.includes('ozuna')) {
+        return '#2ecc71'; // Verde para Ozuna
+      }
+      return '#95a5a6'; // Color gris para otros clientes personalizados
+    },
+    obtenerColorTextoCliente(nombreCliente) {
+      const nombreNormalizado = nombreCliente.toLowerCase();
+      if (nombreNormalizado.includes('otilio')) {
+        return 'black'; // Texto negro para Otilio (fondo amarillo)
+      }
+      return 'white'; // Texto blanco para el resto
+    },
   },
   async created() {
     const embarqueId = this.$route.params.id;
@@ -2452,6 +2460,9 @@ export default {
     this.undoStack.push(JSON.stringify(this.embarque));
     console.log('Component mounted. Estado inicial cargado.');
     this.actualizarMedidasUsadas();
+    
+    // Cargar clientes personalizados
+    this.cargarClientesPersonalizados();
     
     // Iniciar presencia y escucha de usuarios
     await this.iniciarPresenciaUsuario();
@@ -2615,19 +2626,22 @@ export default {
   margin-bottom: 20px;
 }
 
-.fecha-selector {
+.header-row {
   display: flex;
-  flex-direction: column;
+  gap: 20px;
+  align-items: flex-start;
+  flex-wrap: wrap;
 }
 
-.fecha-selector label {
-  margin-bottom: 5px;
-  font-weight: bold;
+.fecha-selector, .carga-selector {
+  flex: 1;
+  min-width: 200px;
 }
 
 .botones-undo-redo {
   display: flex;
   gap: 10px;
+  margin-bottom: 15px;
 }
 
 .botones-undo-redo button {
@@ -3176,7 +3190,6 @@ export default {
   display: inline-flex;
   align-items: center;
   padding: 10px 20px;
-  margin-bottom: 20px;
   background-color: #3498db;
   color: white;
   border: none;
@@ -4769,24 +4782,59 @@ input[type="tel"] {
 
 .botones-notas-clientes {
   display: flex;
-  justify-content: center;
+  flex-wrap: wrap;
   gap: 10px;
-  margin: 10px 0;
+  margin-top: 5px;
+  margin-bottom: 20px;
+  justify-content: center;
 }
 
 .btn-nota-cliente {
-  padding: 8px 16px;
+  padding: 10px 15px;
   border: none;
-  border-radius: 4px;
+  border-radius: 5px;
   color: white;
   font-weight: bold;
   cursor: pointer;
   transition: all 0.3s ease;
+  min-width: 100px;
+  text-align: center;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
 .btn-nota-cliente:hover {
+  opacity: 0.9;
   transform: translateY(-2px);
-  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+.btn-nota-cliente:active {
+  transform: translateY(1px);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.btn-nota-cliente.activo {
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.5);
+}
+
+@media (max-width: 768px) {
+  .botones-notas-clientes {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background-color: #f8f9fa;
+    padding: 10px;
+    border-bottom: 1px solid #ddd;
+    margin: 0 -15px 15px;
+    width: calc(100% + 30px);
+  }
+  
+  .btn-nota-cliente {
+    flex: 1;
+    min-width: 80px;
+    font-size: 0.9rem;
+    padding: 8px 10px;
+  }
 }
 
 @media (max-width: 768px) {
@@ -6022,12 +6070,15 @@ input[type="tel"] {
 
 @media (max-width: 768px) {
   .botones {
-    flex-direction: column;
+    flex-direction: row; /* Cambiado de column a row para mantener los botones en la misma fila */
     gap: 8px;
+    flex-wrap: wrap; /* Permite que los botones se envuelvan si no caben en una línea */
+    justify-content: space-between; /* Distribuye el espacio entre los botones */
   }
   
-  .btn-bloqueo {
-    width: 100%;
+  .btn-bloqueo, .btn-volver {
+    flex: 1; /* Permite que los botones crezcan para ocupar el espacio disponible */
+    min-width: 150px; /* Establece un ancho mínimo para los botones */
     justify-content: center;
   }
 }
@@ -6162,5 +6213,506 @@ button:disabled {
     flex-wrap: wrap;
     justify-content: flex-start;
   }
+}
+
+/* Estilo para el cliente seleccionado */
+.cliente-seleccionado {
+  animation: highlight-cliente 2s ease;
+}
+
+@keyframes highlight-cliente {
+  0% {
+    background-color: rgba(255, 255, 0, 0.3);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+/* Estilo para el botón de PDF mini */
+.btn-pdf-mini {
+  background: none;
+  border: none;
+  color: #e74c3c;
+  font-size: 0.8rem;
+  padding: 0 5px;
+  cursor: pointer;
+  vertical-align: middle;
+  opacity: 0.7;
+  transition: opacity 0.3s ease;
+}
+
+.btn-pdf-mini:hover {
+  opacity: 1;
+}
+
+@media (max-width: 768px) {
+  .btn-pdf-mini {
+    display: inline-block;
+  }
+  
+  .cliente-info h3 {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+}
+
+/* Estilos para la barra lateral de clientes */
+.nuevo-embarque-container {
+  display: flex;
+  width: 100%;
+  position: relative;
+}
+
+.sidebar-clientes {
+  width: 100px;
+  position: fixed;
+  left: 0;
+  top: 0;
+  height: 100vh;
+  background-color: rgba(0, 0, 0, 0.7);
+  z-index: 1000;
+  padding: 15px 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transition: width 0.3s ease;
+}
+
+.sidebar-header {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 10px;
+  margin-bottom: 20px;
+}
+
+.sidebar-header h3 {
+  color: white;
+  font-size: 16px;
+  margin: 0;
+}
+
+.toggle-sidebar-btn {
+  background: none;
+  border: none;
+  color: white;
+  cursor: pointer;
+  padding: 5px;
+  font-size: 14px;
+}
+
+.sidebar-clientes-contenido {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  width: 100%;
+  align-items: center;
+}
+
+.sidebar-clientes .btn-nota-cliente {
+  width: 80px;
+  padding: 12px 0;
+  margin: 0;
+  border-radius: 6px;
+  font-size: 14px;
+  text-align: center;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.sidebar-clientes .btn-nota-cliente span {
+  display: block;
+  transition: opacity 0.3s ease;
+}
+
+.sidebar-clientes .btn-nota-cliente:hover {
+  transform: translateX(5px);
+  opacity: 1;
+}
+
+.sidebar-clientes .btn-nota-cliente.activo {
+  transform: translateX(5px);
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+}
+
+.sidebar-collapsed {
+  width: 40px;
+}
+
+.sidebar-collapsed .sidebar-header h3,
+.sidebar-collapsed .btn-nota-cliente span {
+  opacity: 0;
+}
+
+.sidebar-collapsed .btn-nota-cliente {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  padding: 0;
+}
+
+.sidebar-toggle-mobile {
+  display: none;
+  position: absolute;
+  top: 50%;
+  right: -15px;
+  transform: translateY(-50%);
+}
+
+.toggle-sidebar-mobile-btn {
+  background-color: rgba(0, 0, 0, 0.7);
+  border: none;
+  color: white;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  box-shadow: 0 0 5px rgba(0, 0, 0, 0.3);
+}
+
+.nuevo-embarque {
+  flex: 1;
+  margin-left: 100px;
+  width: calc(100% - 100px);
+  transition: margin-left 0.3s ease, width 0.3s ease;
+}
+
+.sidebar-collapsed + .nuevo-embarque {
+  margin-left: 40px;
+  width: calc(100% - 40px);
+}
+
+/* Ajustes responsivos para la barra lateral */
+@media (max-width: 768px) {
+  .sidebar-clientes {
+    width: 70px;
+  }
+  
+  .sidebar-clientes .btn-nota-cliente {
+    width: 60px;
+    font-size: 12px;
+    padding: 10px 0;
+  }
+  
+  .nuevo-embarque {
+    margin-left: 70px;
+    width: calc(100% - 70px);
+  }
+  
+  .sidebar-collapsed {
+    width: 30px;
+  }
+  
+  .sidebar-collapsed + .nuevo-embarque {
+    margin-left: 30px;
+    width: calc(100% - 30px);
+  }
+  
+  .sidebar-toggle-mobile {
+    display: block;
+  }
+}
+
+@media (max-width: 480px) {
+  .sidebar-clientes {
+    width: 50px;
+  }
+  
+  .sidebar-clientes .btn-nota-cliente {
+    width: 40px;
+    font-size: 10px;
+    padding: 8px 0;
+  }
+  
+  .nuevo-embarque {
+    margin-left: 50px;
+    width: calc(100% - 50px);
+  }
+  
+  .sidebar-collapsed {
+    width: 0;
+    padding: 0;
+    overflow: hidden;
+  }
+  
+  .sidebar-collapsed + .nuevo-embarque {
+    margin-left: 0;
+    width: 100%;
+  }
+}
+
+/* Estilos para el modal de nuevo cliente */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.modal-contenido {
+  background-color: white;
+  padding: 20px;
+  border-radius: 8px;
+  width: 300px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  position: relative;
+  z-index: 1001;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.btn-cerrar-modal {
+  background: none;
+  border: none;
+  color: #333;
+  font-size: 1.5rem;
+  cursor: pointer;
+}
+
+.modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.form-group label {
+  font-weight: bold;
+}
+
+.form-control {
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.btn-secondary {
+  background-color: #6c757d;
+  color: white;
+}
+
+.btn-primary {
+  background-color: #28a745;
+  color: white;
+}
+
+/* Estilos para el botón de agregar cliente */
+.btn-agregar-cliente {
+  width: 80px;
+  padding: 12px 0;
+  margin: 0;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  text-align: center;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+  font-weight: bold;
+  background-color: #27ae60;
+  color: white;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-agregar-cliente i {
+  font-size: 16px;
+  margin-bottom: 5px;
+}
+
+.btn-agregar-cliente:hover {
+  transform: translateX(5px);
+  opacity: 0.9;
+}
+
+.sidebar-collapsed .btn-agregar-cliente {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  padding: 0;
+}
+
+.sidebar-collapsed .btn-agregar-cliente span {
+  display: none;
+}
+
+.color-picker {
+  height: 40px;
+  padding: 0;
+  width: 100%;
+}
+
+/* Estilos para el modal de nuevo cliente */
+/* ... existing code ... */
+
+.sidebar-collapsed .btn-agregar-cliente span {
+  display: none;
+}
+
+.color-picker {
+  height: 40px;
+  padding: 0;
+  width: 100%;
+}
+
+/* Estilos para el resumen en la barra lateral */
+.sidebar-resumen {
+  position: fixed;
+  bottom: 20px;
+  left: 0;
+  width: 100px;
+  background-color: #c7e2fe;
+  padding: 10px;
+  border-radius: 0 5px 5px 0;
+  box-shadow: 2px 2px 5px rgba(0,0,0,0.1);
+  font-size: 12px;
+  z-index: 100;
+}
+
+.sidebar-resumen h4 {
+  font-size: 13px;
+  margin: 8px 0 5px 0;
+  color: #333;
+  font-weight: bold;
+  border-bottom: 1px solid #ddd;
+}
+
+.sidebar-resumen .sidebar-item {
+  display: flex;
+  justify-content: space-between;
+  margin: 3px 0;
+}
+
+.sidebar-resumen .total {
+  margin-top: 5px;
+  font-weight: bold;
+  border-top: 1px solid #ddd;
+  padding-top: 3px;
+}
+
+/* Estilos para el modal de nuevo cliente */
+/* ... existing code ... */
+
+.botones-accion {
+  display: flex;
+  gap: 10px;
+  margin: 15px 0;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.botones-accion .btn {
+  padding: 8px 15px;
+  font-size: 14px;
+}
+
+.botones {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 15px;
+  align-items: center;
+}
+
+@media (max-width: 768px) {
+  .botones {
+    flex-direction: row; /* Cambiado de column a row para mantener los botones en la misma fila */
+    gap: 8px;
+    flex-wrap: wrap; /* Permite que los botones se envuelvan si no caben en una línea */
+    justify-content: space-between; /* Distribuye el espacio entre los botones */
+  }
+}
+
+.botones {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 15px;
+  align-items: center;
+}
+
+.btn-volver, .btn-bloqueo {
+  flex: 1;
+  padding: 8px 16px;
+  min-width: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 1rem;
+  border-radius: 4px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+@media (max-width: 768px) {
+  .botones {
+    flex-direction: row;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: space-between;
+  }
+  
+  .btn-volver, .btn-bloqueo {
+    min-width: 150px;
+  }
+}
+
+.sidebar-resumen .sidebar-item.taras-total {
+  color: #ff0000;
+  font-weight: bold;
+}
+
+.sidebar-resumen .sidebar-item.taras-total span {
+  color: #ff0000;
+}
+
+.sidebar-resumen .sidebar-item.total {
+  border-top: 1px solid #ddd;
+  margin-top: 5px;
+  padding-top: 5px;
+  color: #ff0000;
+  font-weight: bold;
+}
+
+.sidebar-resumen .sidebar-item.total strong {
+  color: #ff0000;
 }
 </style>
