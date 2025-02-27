@@ -176,7 +176,17 @@ export const generarResumenEmbarquePDF = (embarque, productosPorCliente, obtener
   // Crear encabezados de la tabla
   const tableHeaders = [
     { text: 'Cliente', style: 'tableHeader' },
-    ...medidasCrudos.map(medida => ({ text: medida, style: 'tableHeader' }))
+    ...medidasCrudos.map(medida => {
+      // Buscar si algún crudo con esta medida tiene textoAlternativo
+      const crudoConAlt = embarque.crudos.find(c => 
+        c.medida.replace('c/c', '').trim() === medida && c.textoAlternativo
+      );
+      
+      // Usar el textoAlternativo si existe
+      const textoMostrado = crudoConAlt ? crudoConAlt.textoAlternativo : medida;
+      
+      return { text: textoMostrado, style: 'tableHeader' };
+    })
   ];
 
   // Preparar datos de la tabla
@@ -281,9 +291,12 @@ export const generarResumenEmbarquePDF = (embarque, productosPorCliente, obtener
       const nombreCliente = obtenerNombreCliente(primerCrudo.clienteId);
       const nombreMostrado = nombreCliente === 'Joselito' ? '8A' : nombreCliente;
       
+      // Usar textoAlternativo si está disponible
+      const medidaMostrada = primerCrudo.textoAlternativo || medida;
+      
       desglosePorMedida.push([
         { 
-          text: medida, 
+          text: medidaMostrada, 
           style: 'dataCell', 
           rowSpan: crudosDeMedida.length,
           alignment: 'center',

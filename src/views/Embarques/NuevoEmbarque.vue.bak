@@ -8,27 +8,13 @@
         </button>
       </div>
       <div class="sidebar-clientes-contenido">
-        <!-- Mostrar clientes predefinidos -->
+        <!-- Solo mostrar clientes personalizados -->
         <button 
-          v-for="cliente in clientesPredefinidos" 
+          v-for="cliente in clientesPersonalizados" 
           :key="cliente.id"
           type="button" 
           @click="seleccionarCliente(cliente.id.toString())" 
           class="btn-nota-cliente"
-          :class="{ 'activo': clienteActivo === cliente.id.toString() }"
-          :style="{ backgroundColor: cliente.color, color: cliente.textColor }"
-          :title="sidebarCollapsed ? cliente.nombre : ''"
-        >
-          <span>{{ cliente.nombre }}</span>
-        </button>
-        
-        <!-- Mostrar clientes personalizados específicos de este embarque -->
-        <button 
-          v-for="cliente in clientesPersonalizadosEmbarque" 
-          :key="cliente.id"
-          type="button" 
-          @click="seleccionarCliente(cliente.id.toString())" 
-          class="btn-nota-cliente cliente-personalizado"
           :class="{ 'activo': clienteActivo === cliente.id.toString() }"
           :style="{ backgroundColor: obtenerColorCliente(cliente.nombre), color: obtenerColorTextoCliente(cliente.nombre) }"
           :title="sidebarCollapsed ? cliente.nombre : ''"
@@ -143,8 +129,8 @@
             <div class="cliente-info">
               <h3>
                 {{ obtenerNombreCliente(clienteId) }}
-                <button type="button" @click.stop="generarNotaVenta(clienteId)" class="btn-pdf-mini" title="Vista previa PDF">
-                  <i class="fas fa-eye"></i>
+                <button type="button" @click.stop="generarNotaVenta(clienteId)" class="btn-pdf-mini" title="Generar PDF">
+                  <i class="fas fa-file-pdf"></i>
                 </button>
               </h3>
               <div class="cliente-totales">
@@ -164,14 +150,6 @@
                 >
                 <label :for="'juntar-medidas-' + clienteId" @click.stop>Juntar medidas</label>
               </div>
-              <button 
-                type="button" 
-                @click.stop="generarNotaVenta(clienteId)" 
-                class="btn btn-primary btn-sm generar-pdf-cliente" 
-                title="Generar Nota de Venta PDF"
-              >
-                <i class="fas fa-file-pdf"></i> Generar Nota PDF
-              </button>
               <button type="button" @click.stop="eliminarCliente(clienteId)" class="btn btn-danger btn-sm eliminar-cliente" :disabled="embarqueBloqueado">Eliminar Cliente</button>
             </div>
           </div>
@@ -191,6 +169,7 @@
                       @click="abrirModalPrecio(producto)" 
                       class="btn-precio"
                       :class="{ 'tiene-precio': producto.precio }"
+                      :disabled="embarqueBloqueado"
                     >
                       $
                     </button>
@@ -198,6 +177,7 @@
                       @click="abrirModalHilos(producto)" 
                       class="btn-hilos"
                       :class="{ 'tiene-hilos': producto.hilos }"
+                      :disabled="embarqueBloqueado"
                     >
                       H
                     </button>
@@ -207,6 +187,7 @@
                       @click="abrirModalNota(producto)" 
                       class="btn-nota"
                       :class="{ 'tiene-nota': producto.nota }"
+                      :disabled="embarqueBloqueado"
                     >
                       N
                     </button>
@@ -225,20 +206,15 @@
                 <span 
                   class="medida-texto" 
                   @click="embarqueBloqueado ? null : abrirModalNombreAlternativo(producto)"
-                  :class="{ 
-                    'disabled': embarqueBloqueado,
-                    'tiene-nombre-alternativo': producto.nombreAlternativoPDF
-                  }"
+                  :class="{ 'disabled': embarqueBloqueado }"
                 >
                   <template v-if="producto.tipo === 'c/h20'">
                     {{ producto.nombreAlternativoPDF || producto.medida || 'Sin Medida' }}
                     <span class="ch20-text">c/h20</span>
-                    <span v-if="producto.nombreAlternativoPDF" class="pdf-badge" title="Nombre personalizado para PDF">PDF</span>
                   </template>
                   <template v-else>
                     {{ producto.nombreAlternativoPDF || producto.medida || 'Sin Medida' }}
                     - {{ obtenerTipoProducto(producto) }}
-                    <span v-if="producto.nombreAlternativoPDF" class="pdf-badge" title="Nombre personalizado para PDF">PDF</span>
                   </template>
                 </span>
                 <span v-if="producto.precio" class="precio-tag">${{ producto.precio }}</span>
@@ -546,161 +522,6 @@
         </div>
       </div>
     </div>
-    
-    <!-- Modal para cambiar nombre alternativo para PDF -->
-    <div class="modal-overlay" v-if="mostrarModalNombreAlternativo" @click.self="cerrarModalNombreAlternativo">
-      <div class="modal-contenido">
-        <div class="modal-header">
-          <h3>Nombre para PDF</h3>
-          <button @click="cerrarModalNombreAlternativo" class="btn-cerrar-modal">
-            <i class="fas fa-times"></i>
-          </button>
-        </div>
-        <div class="modal-body">
-          <div class="form-group">
-            <label for="nombreAlternativoPDF">Nombre que aparecerá en el PDF:</label>
-            <input 
-              type="text" 
-              id="nombreAlternativoPDF" 
-              v-model="nombreAlternativoTemp" 
-              class="form-control" 
-              placeholder="Ingrese el nombre para el PDF"
-              @keyup.enter="guardarNombreAlternativo"
-              ref="nombreAlternativoInput"
-            >
-            <small class="form-text text-muted">
-              Este nombre solo se mostrará en el PDF generado. El nombre original se mantendrá en la aplicación.
-            </small>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button @click="cerrarModalNombreAlternativo" class="btn btn-secondary">Cancelar</button>
-          <button @click="guardarNombreAlternativo" class="btn btn-primary">Guardar</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Modal para precio -->
-    <div class="modal-overlay" v-if="mostrarModalPrecio" @click.self="cerrarModalPrecio">
-      <div class="modal-contenido">
-        <div class="modal-header">
-          <h3>Establecer Precio</h3>
-          <button @click="cerrarModalPrecio" class="btn-cerrar-modal">
-            <i class="fas fa-times"></i>
-          </button>
-        </div>
-        <div class="modal-body">
-          <div class="form-group">
-            <label for="precioInput">Precio:</label>
-            <input 
-              type="number" 
-              id="precioInput" 
-              v-model="precioTemp" 
-              class="form-control" 
-              placeholder="Ingrese el precio"
-              @keyup.enter="guardarPrecio"
-              ref="precioInput"
-            >
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button @click="cerrarModalPrecio" class="btn btn-secondary">Cancelar</button>
-          <button @click="guardarPrecio" class="btn btn-primary">Guardar</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Modal para hilos -->
-    <div class="modal-overlay" v-if="mostrarModalHilos" @click.self="cerrarModalHilos">
-      <div class="modal-contenido">
-        <div class="modal-header">
-          <h3>Establecer Hilos</h3>
-          <button @click="cerrarModalHilos" class="btn-cerrar-modal">
-            <i class="fas fa-times"></i>
-          </button>
-        </div>
-        <div class="modal-body">
-          <div class="form-group">
-            <label for="hilosInput">Hilos:</label>
-            <input 
-              type="text" 
-              id="hilosInput" 
-              v-model="hilosTemp" 
-              class="form-control" 
-              placeholder="Ingrese los hilos"
-              @keyup.enter="guardarHilos"
-              ref="hilosInput"
-            >
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button @click="cerrarModalHilos" class="btn btn-secondary">Cancelar</button>
-          <button @click="guardarHilos" class="btn btn-primary">Guardar</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Modal para notas -->
-    <div class="modal-overlay" v-if="mostrarModalNota" @click.self="cerrarModalNota">
-      <div class="modal-contenido">
-        <div class="modal-header">
-          <h3>Establecer Nota</h3>
-          <button @click="cerrarModalNota" class="btn-cerrar-modal">
-            <i class="fas fa-times"></i>
-          </button>
-        </div>
-        <div class="modal-body">
-          <div class="form-group">
-            <label for="notaInput">Nota:</label>
-            <textarea 
-              id="notaInput" 
-              v-model="notaTemp" 
-              class="form-control" 
-              placeholder="Ingrese la nota"
-              @keyup.enter="guardarNota"
-              ref="notaInput"
-            ></textarea>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button @click="cerrarModalNota" class="btn btn-secondary">Cancelar</button>
-          <button @click="guardarNota" class="btn btn-primary">Guardar</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Modal para Alt (nombre alternativo para PDF) -->
-    <div class="modal-overlay" v-if="mostrarModalAlt" @click.self="cerrarModalAlt">
-      <div class="modal-contenido">
-        <div class="modal-header">
-          <h3>Nombre Alternativo para PDF</h3>
-          <button @click="cerrarModalAlt" class="btn-cerrar-modal">
-            <i class="fas fa-times"></i>
-          </button>
-        </div>
-        <div class="modal-body">
-          <div class="form-group">
-            <label for="altInput">Nombre alternativo:</label>
-            <input 
-              type="text" 
-              id="altInput" 
-              v-model="altTemp" 
-              class="form-control" 
-              placeholder="Ingrese el nombre alternativo para PDF"
-              @keyup.enter="guardarAlt"
-              ref="altInput"
-            >
-            <small class="form-text text-muted">
-              Este nombre solo se mostrará en el PDF de resumen de embarque.
-            </small>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button @click="cerrarModalAlt" class="btn btn-secondary">Cancelar</button>
-          <button @click="guardarAlt" class="btn btn-primary">Guardar</button>
-        </div>
-      </div>
-    </div>
   </div>
 </template>
 
@@ -810,18 +631,17 @@ export default {
       return [...clientesPredefinidosUnicos, ...clientesPersonalizadosUnicos, { id: 'otro', nombre: 'Otro', key: 'otro' }];
     },
     productosPorCliente() {
-      const productosPorCliente = {};
-      
-      this.embarque.productos.forEach(producto => {
-        const clienteId = producto.clienteId;
-        if (!productosPorCliente[clienteId]) {
-          productosPorCliente[clienteId] = [];
+      return this.embarque.productos.reduce((acc, producto) => {
+        if (!acc[producto.clienteId]) {
+          acc[producto.clienteId] = [];
         }
-        productosPorCliente[clienteId].push(producto);
+        
+        // Solo ordenar si el producto tiene medida y tipo definidos
+        acc[producto.clienteId].push(producto);
         
         // Ordenar solo si los productos tienen medida y tipo
         if (!producto.isEditing) {
-          productosPorCliente[clienteId].sort((a, b) => {
+          acc[producto.clienteId].sort((a, b) => {
             // Solo ordenar si ambos productos tienen medida y tipo
             if (a.medida && a.tipo && b.medida && b.tipo) {
               return this.compararMedidas(b.medida, a.medida);
@@ -832,33 +652,21 @@ export default {
             return 0;
           });
         }
-      });
-      
-      return productosPorCliente;
-    },
-    clientesPersonalizadosEmbarque() {
-      // Obtener IDs de clientes que tienen productos en este embarque
-      const clientesEnEmbarque = Object.keys(this.productosPorCliente);
-      
-      // Filtrar los clientes personalizados que están en este embarque
-      // y que no son parte de los predefinidos
-      const clientesPredefinidosIds = this.clientesPredefinidos.map(c => c.id.toString());
-      
-      return this.clientesPersonalizados.filter(cliente => 
-        clientesEnEmbarque.includes(cliente.id.toString()) && 
-        !clientesPredefinidosIds.includes(cliente.id.toString())
-      );
-    },
+        
+        return acc;
+      }, {});
+    }
   },
   methods: {
     agregarProducto(clienteId) {
-      // Eliminar la verificación que impide agregar múltiples productos para el mismo cliente
-      // const existeProductoParaCliente = this.embarque.productos.some(p => p.clienteId.toString() === clienteId.toString());
+      // Verificar si ya existe un producto para este cliente
+      const existeProductoParaCliente = this.embarque.productos.some(p => p.clienteId.toString() === clienteId.toString());
       
-      // if (existeProductoParaCliente) {
-      //   console.log(`Ya existe un producto para el cliente ${clienteId}`);
-      //   return;
-      // }
+      // Si ya existe un producto para este cliente, no crear uno nuevo
+      if (existeProductoParaCliente) {
+        console.log(`Ya existe un producto para el cliente ${clienteId}`);
+        return;
+      }
       
       const nuevoProducto = {
         id: Date.now(),
@@ -1137,58 +945,17 @@ export default {
       this.modoEdicion = false;
       this.guardadoAutomaticoActivo = false;
       this.embarqueBloqueado = false;
-      this.clientesPersonalizados = []; // Reiniciar clientes personalizados
       
       // Agregar automáticamente los clientes predeterminados
       this.$nextTick(async () => {
         if (this.embarque.fecha) {
           try {
-            // Crear el embarque inicial con el primer cliente (Joselito)
+            // Crear el embarque inicial con el primer cliente
             await this.guardarEmbarqueInicial(this.clientesPredefinidos[0].id.toString());
-            
-            // Esperar un momento para asegurar que el primer cliente se haya agregado correctamente
-            await new Promise(resolve => setTimeout(resolve, 100));
             
             // Agregar el resto de clientes predeterminados
             for (let i = 1; i < this.clientesPredefinidos.length; i++) {
-              // Crear un producto para cada cliente predeterminado
-              const clienteId = this.clientesPredefinidos[i].id.toString();
-              
-              // Verificar si ya existe un producto para este cliente
-              const existeProducto = this.embarque.productos.some(p => p.clienteId.toString() === clienteId);
-              
-              // Solo agregar si no existe
-              if (!existeProducto) {
-                const nuevoProducto = {
-                  id: Date.now() + i,
-                  clienteId: clienteId,
-                  medida: '',
-                  tipo: '',
-                  tipoPersonalizado: '',
-                  taras: [],
-                  kilos: [],
-                  reporteTaras: [],
-                  reporteBolsas: [],
-                  tarasExtra: [],
-                  restarTaras: true,
-                  camaronNeto: 0.65,
-                  multiplicadorBolsas: 1,
-                  showSuggestions: false,
-                  esVenta: false,
-                  isEditing: true,
-                  isNew: true,
-                  noSumarKilos: false
-                };
-                
-                // Establecer tipo por defecto según el cliente
-                this.setTipoDefaultParaCliente(nuevoProducto);
-                
-                // Agregar directamente al embarque.productos
-                this.embarque.productos.push(nuevoProducto);
-                
-                // Esperar un momento entre cada adición
-                await new Promise(resolve => setTimeout(resolve, 50));
-              }
+              await this.agregarProducto(this.clientesPredefinidos[i].id.toString());
             }
             
             // Establecer el primer cliente como activo
@@ -1402,23 +1169,17 @@ export default {
             crudos.flatMap(crudo => 
               crudo.items.map(item => {
                 const tarasArray = [];
-                
-                // Agregar taras principales
                 if (item.taras) {
                   tarasArray.push(item.taras);
                 }
-                
-                // Agregar sobrante si existe
                 if (item.sobrante) {
                   tarasArray.push(item.sobrante);
                 }
-                
                 return {
                   clienteId,
                   medida: item.talla,
                   taras: tarasArray,
-                  barco: item.barco,
-                  textoAlternativo: item.textoAlternativo // Incluir el texto alternativo
+                  barco: item.barco
                 };
               })
             )
@@ -2688,41 +2449,11 @@ export default {
         nombre: this.nuevoClienteNombre,
         color: this.nuevoClienteColor,
         editable: true,
-        personalizado: true,
-        key: `personalizado_${Date.now()}`
+        personalizado: true
       };
 
-      // Agregar a la lista de clientes personalizados
       this.clientesPersonalizados.push(nuevoCliente);
-      
-      // Crear un producto para este cliente en el embarque actual
-      const nuevoProducto = {
-        id: Date.now(),
-        clienteId: nuevoCliente.id,
-        medida: '',
-        tipo: '',
-        tipoPersonalizado: '',
-        taras: [],
-        kilos: [],
-        reporteTaras: [],
-        reporteBolsas: [],
-        tarasExtra: [],
-        restarTaras: true,
-        camaronNeto: 0.65,
-        multiplicadorBolsas: 1,
-        showSuggestions: false,
-        esVenta: false,
-        isEditing: true,
-        isNew: true,
-        noSumarKilos: false
-      };
-      
-      // Agregar el producto al embarque
-      this.embarque.productos.push(nuevoProducto);
-      
-      // Guardar los cambios
       this.guardarClientesPersonalizados();
-      this.guardarCambiosEnTiempoReal();
       this.cerrarModalNuevoCliente();
       
       // Seleccionar automáticamente el cliente recién creado
@@ -2734,10 +2465,7 @@ export default {
     cargarClientesPersonalizados() {
       const clientesGuardados = localStorage.getItem('clientesPersonalizados');
       if (clientesGuardados) {
-        // Solo cargar la lista de clientes personalizados disponibles
-        // pero no agregarlos automáticamente al embarque
         this.clientesPersonalizados = JSON.parse(clientesGuardados);
-        console.log('Clientes personalizados disponibles cargados:', this.clientesPersonalizados);
       }
     },
     obtenerColorCliente(nombreCliente) {
@@ -3849,27 +3577,17 @@ export default {
 }
 
 .btn-alt {
-  background-color: #6c757d;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  padding: 2px 8px;
-  font-size: 12px;
-  cursor: pointer;
-  margin-left: 5px;
-  transition: all 0.3s ease;
+  background-color: #f0f0f0;
+  color: #666;
 }
 
 .btn-alt:hover {
-  background-color: #5a6268;
+  background-color: #e0e0e0;
 }
 
 .btn-alt.tiene-alt {
-  background-color: #28a745;
-}
-
-.btn-alt.tiene-alt:hover {
-  background-color: #218838;
+  background-color: #4CAF50;
+  color: white;
 }
 
 .modal-alt {
@@ -4500,8 +4218,6 @@ export default {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 15px;
-  flex-wrap: wrap;
-  gap: 10px;
 }
 
 .resumen-titulo {
@@ -7033,640 +6749,5 @@ button:disabled {
 
 .sidebar-resumen .sidebar-item.total strong {
   color: #ff0000;
-}
-
-/* Estilos para el botón de generar PDF */
-.generar-pdf-cliente {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  background-color: #3760b0;
-  border-color: #3760b0;
-  margin-right: 10px;
-}
-
-.generar-pdf-cliente:hover {
-  background-color: #2a4b8a;
-  border-color: #2a4b8a;
-}
-
-@media (max-width: 768px) {
-  .generar-pdf-cliente {
-    padding: 4px 8px;
-    font-size: 12px;
-  }
-  
-  .cliente-header-controls {
-    flex-wrap: wrap;
-    gap: 5px;
-  }
-}
-
-/* Estilos para el modal de nombre alternativo */
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(0, 0, 0, 0.5);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 1000;
-}
-
-.modal-contenido {
-  background-color: white;
-  border-radius: 8px;
-  width: 90%;
-  max-width: 500px;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 15px;
-  border-bottom: 1px solid #e0e0e0;
-}
-
-.modal-header h3 {
-  margin: 0;
-  color: #3760b0;
-}
-
-.btn-cerrar-modal {
-  background: none;
-  border: none;
-  font-size: 20px;
-  cursor: pointer;
-  color: #666;
-}
-
-.modal-body {
-  padding: 15px;
-}
-
-.modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  padding: 15px;
-  border-top: 1px solid #e0e0e0;
-}
-
-/* Estilos específicos para el modal de nombre alternativo */
-#nombreAlternativoPDF {
-  font-size: 16px;
-  padding: 8px;
-}
-
-.form-text {
-  font-size: 14px;
-  color: #666;
-  margin-top: 5px;
-}
-
-@media (max-width: 768px) {
-  .modal-contenido {
-    width: 95%;
-  }
-}
-
-/* Mejorar la visualización del nombre de la medida para indicar que es clickeable */
-.medida-texto {
-  cursor: pointer;
-  position: relative;
-  transition: all 0.2s ease;
-  padding-right: 20px;
-}
-
-.medida-texto:not(.disabled):hover {
-  color: #3760b0;
-}
-
-.medida-texto:not(.disabled)::after {
-  content: '\f040'; /* Ícono de lápiz de FontAwesome */
-  font-family: 'Font Awesome 5 Free';
-  font-weight: 900;
-  position: absolute;
-  right: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  font-size: 12px;
-  opacity: 0;
-  transition: opacity 0.2s ease;
-}
-
-.medida-texto:not(.disabled):hover::after {
-  opacity: 1;
-}
-
-.medida-texto.tiene-nombre-alternativo {
-  color: #3760b0;
-  font-weight: bold;
-}
-
-@media (max-width: 768px) {
-  .modal-contenido {
-    width: 95%;
-  }
-}
-
-.pdf-badge {
-  display: inline-block;
-  background-color: #3760b0;
-  color: white;
-  font-size: 10px;
-  padding: 2px 4px;
-  border-radius: 3px;
-  margin-left: 5px;
-  vertical-align: middle;
-  font-weight: bold;
-}
-
-@media (max-width: 768px) {
-  .modal-contenido {
-    width: 95%;
-  }
-  
-  .pdf-badge {
-    font-size: 8px;
-    padding: 1px 3px;
-  }
-}
-
-.cliente-personalizado {
-  border: 2px dashed #fff;
-  position: relative;
-}
-
-.cliente-personalizado::after {
-  content: "P";
-  position: absolute;
-  top: 2px;
-  right: 2px;
-  font-size: 10px;
-  background-color: rgba(255, 255, 255, 0.7);
-  color: #333;
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-/* Modal para Alt (nombre alternativo para PDF) */
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(0, 0, 0, 0.5);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 1000;
-}
-
-.modal-contenido {
-  background-color: white;
-  padding: 20px;
-  border-radius: 8px;
-  width: 300px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-  position: relative;
-  z-index: 1001;
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-}
-
-.modal-header h3 {
-  margin: 0;
-  font-size: 1.5rem;
-}
-
-.btn-cerrar-modal {
-  background: none;
-  border: none;
-  color: #333;
-  font-size: 1.5rem;
-  cursor: pointer;
-}
-
-.modal-body {
-  display: flex;
-  flex-direction: column;
-  gap: 15px;
-}
-
-.form-group {
-  display: flex;
-  flex-direction: column;
-}
-
-.form-group label {
-  font-weight: bold;
-}
-
-.form-control {
-  padding: 8px;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-}
-
-.modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-}
-
-.btn-secondary {
-  background-color: #6c757d;
-  color: white;
-}
-
-.btn-primary {
-  background-color: #28a745;
-  color: white;
-}
-
-/* Estilos para el botón de agregar cliente */
-.btn-agregar-cliente {
-  width: 80px;
-  padding: 12px 0;
-  margin: 0;
-  border: none;
-  border-radius: 6px;
-  font-size: 14px;
-  text-align: center;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
-  transition: all 0.3s ease;
-  position: relative;
-  overflow: hidden;
-  cursor: pointer;
-  font-weight: bold;
-  background-color: #27ae60;
-  color: white;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-}
-
-.btn-agregar-cliente i {
-  font-size: 16px;
-  margin-bottom: 5px;
-}
-
-.btn-agregar-cliente:hover {
-  transform: translateX(5px);
-  opacity: 0.9;
-}
-
-.sidebar-collapsed .btn-agregar-cliente {
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  padding: 0;
-}
-
-.sidebar-collapsed .btn-agregar-cliente span {
-  display: none;
-}
-
-.color-picker {
-  height: 40px;
-  padding: 0;
-  width: 100%;
-}
-
-/* Estilos para el modal de nuevo cliente */
-/* ... existing code ... */
-
-.sidebar-collapsed .btn-agregar-cliente span {
-  display: none;
-}
-
-.color-picker {
-  height: 40px;
-  padding: 0;
-  width: 100%;
-}
-
-/* Estilos para el resumen en la barra lateral */
-.sidebar-resumen {
-  position: fixed;
-  bottom: 20px;
-  left: 0;
-  width: 100px;
-  background-color: #c7e2fe;
-  padding: 10px;
-  border-radius: 0 5px 5px 0;
-  box-shadow: 2px 2px 5px rgba(0,0,0,0.1);
-  font-size: 12px;
-  z-index: 100;
-}
-
-.sidebar-resumen h4 {
-  font-size: 13px;
-  margin: 8px 0 5px 0;
-  color: #333;
-  font-weight: bold;
-  border-bottom: 1px solid #ddd;
-}
-
-.sidebar-resumen .sidebar-item {
-  display: flex;
-  justify-content: space-between;
-  margin: 3px 0;
-}
-
-.sidebar-resumen .total {
-  margin-top: 5px;
-  font-weight: bold;
-  border-top: 1px solid #ddd;
-  padding-top: 3px;
-}
-
-/* Estilos para el modal de nuevo cliente */
-/* ... existing code ... */
-
-.botones-accion {
-  display: flex;
-  gap: 10px;
-  margin: 15px 0;
-  flex-wrap: wrap;
-  justify-content: center;
-}
-
-.botones-accion .btn {
-  padding: 8px 15px;
-  font-size: 14px;
-}
-
-.botones {
-  display: flex;
-  gap: 10px;
-  margin-bottom: 15px;
-  align-items: center;
-}
-
-@media (max-width: 768px) {
-  .botones {
-    flex-direction: row; /* Cambiado de column a row para mantener los botones en la misma fila */
-    gap: 8px;
-    flex-wrap: wrap; /* Permite que los botones se envuelvan si no caben en una línea */
-    justify-content: space-between; /* Distribuye el espacio entre los botones */
-  }
-}
-
-.botones {
-  display: flex;
-  gap: 10px;
-  margin-bottom: 15px;
-  align-items: center;
-}
-
-.btn-volver, .btn-bloqueo {
-  flex: 1;
-  padding: 8px 16px;
-  min-width: 200px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  font-size: 1rem;
-  border-radius: 4px;
-  border: none;
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-@media (max-width: 768px) {
-  .botones {
-    flex-direction: row;
-    gap: 8px;
-    flex-wrap: wrap;
-    justify-content: space-between;
-  }
-  
-  .btn-volver, .btn-bloqueo {
-    min-width: 150px;
-  }
-}
-
-.sidebar-resumen .sidebar-item.taras-total {
-  color: #ff0000;
-  font-weight: bold;
-}
-
-.sidebar-resumen .sidebar-item.taras-total span {
-  color: #ff0000;
-}
-
-.sidebar-resumen .sidebar-item.total {
-  border-top: 1px solid #ddd;
-  margin-top: 5px;
-  padding-top: 5px;
-  color: #ff0000;
-  font-weight: bold;
-}
-
-.sidebar-resumen .sidebar-item.total strong {
-  color: #ff0000;
-}
-
-/* Estilos para el botón de generar PDF */
-.generar-pdf-cliente {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  background-color: #3760b0;
-  border-color: #3760b0;
-  margin-right: 10px;
-}
-
-.generar-pdf-cliente:hover {
-  background-color: #2a4b8a;
-  border-color: #2a4b8a;
-}
-
-@media (max-width: 768px) {
-  .generar-pdf-cliente {
-    padding: 4px 8px;
-    font-size: 12px;
-  }
-  
-  .cliente-header-controls {
-    flex-wrap: wrap;
-    gap: 5px;
-  }
-}
-
-/* Estilos para el modal de nombre alternativo */
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(0, 0, 0, 0.5);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 1000;
-}
-
-.modal-contenido {
-  background-color: white;
-  border-radius: 8px;
-  width: 90%;
-  max-width: 500px;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 15px;
-  border-bottom: 1px solid #e0e0e0;
-}
-
-.modal-header h3 {
-  margin: 0;
-  color: #3760b0;
-}
-
-.btn-cerrar-modal {
-  background: none;
-  border: none;
-  font-size: 20px;
-  cursor: pointer;
-  color: #666;
-}
-
-.modal-body {
-  padding: 15px;
-}
-
-.modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  padding: 15px;
-  border-top: 1px solid #e0e0e0;
-}
-
-/* Estilos específicos para el modal de nombre alternativo */
-#nombreAlternativoPDF {
-  font-size: 16px;
-  padding: 8px;
-}
-
-.form-text {
-  font-size: 14px;
-  color: #666;
-  margin-top: 5px;
-}
-
-@media (max-width: 768px) {
-  .modal-contenido {
-    width: 95%;
-  }
-}
-
-/* Mejorar la visualización del nombre de la medida para indicar que es clickeable */
-.medida-texto {
-  cursor: pointer;
-  position: relative;
-  transition: all 0.2s ease;
-  padding-right: 20px;
-}
-
-.medida-texto:not(.disabled):hover {
-  color: #3760b0;
-}
-
-.medida-texto:not(.disabled)::after {
-  content: '\f040'; /* Ícono de lápiz de FontAwesome */
-  font-family: 'Font Awesome 5 Free';
-  font-weight: 900;
-  position: absolute;
-  right: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  font-size: 12px;
-  opacity: 0;
-  transition: opacity 0.2s ease;
-}
-
-.medida-texto:not(.disabled):hover::after {
-  opacity: 1;
-}
-
-.medida-texto.tiene-nombre-alternativo {
-  color: #3760b0;
-  font-weight: bold;
-}
-
-@media (max-width: 768px) {
-  .modal-contenido {
-    width: 95%;
-  }
-}
-
-.pdf-badge {
-  display: inline-block;
-  background-color: #3760b0;
-  color: white;
-  font-size: 10px;
-  padding: 2px 4px;
-  border-radius: 3px;
-  margin-left: 5px;
-  vertical-align: middle;
-  font-weight: bold;
-}
-
-@media (max-width: 768px) {
-  .modal-contenido {
-    width: 95%;
-  }
-  
-  .pdf-badge {
-    font-size: 8px;
-    padding: 1px 3px;
-  }
-}
-
-.cliente-personalizado {
-  border: 2px dashed #fff;
-  position: relative;
-}
-
-.cliente-personalizado::after {
-  content: "P";
-  position: absolute;
-  top: 2px;
-  right: 2px;
-  font-size: 10px;
-  background-color: rgba(255, 255, 255, 0.7);
-  color: #333;
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
 </style>
