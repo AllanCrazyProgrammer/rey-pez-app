@@ -3,6 +3,18 @@
     <div class="content-wrap">
       <div class="cuentas-mexico-container">
         <h1>Cuentas México</h1>
+        
+        <!-- Botón de Agenda de Transacciones destacado arriba -->
+        <div class="agenda-container">
+          <div class="card agenda" @click="abrirAgenda()">
+            <div class="card-content">
+              <i class="fas fa-calendar-alt"></i>
+              <h2>Agenda de Transacciones</h2>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Contenedor de botones de clientes -->
         <div class="botones-container">
           <router-link to="/cuentas-ozuna" class="boton-cuenta">
             <div class="card ozuna">
@@ -28,8 +40,40 @@
         </div>
       </div>
     </div>
+    
+    <!-- Modal de agenda de transacciones -->
+    <TransaccionesAgendaModal
+      :mostrar="mostrarModalAgenda"
+      :cliente="clienteSeleccionado"
+      @cerrar="cerrarModalAgenda"
+    />
   </div>
 </template>
+
+<script>
+import TransaccionesAgendaModal from '@/components/TransaccionesAgendaModal.vue';
+
+export default {
+  name: 'CuentasMexico',
+  components: {
+    TransaccionesAgendaModal
+  },
+  data() {
+    return {
+      mostrarModalAgenda: false,
+      clienteSeleccionado: 'mexico'
+    };
+  },
+  methods: {
+    abrirAgenda() {
+      this.mostrarModalAgenda = true;
+    },
+    cerrarModalAgenda() {
+      this.mostrarModalAgenda = false;
+    }
+  }
+}
+</script>
 
 <style scoped>
 .page-container {
@@ -60,6 +104,34 @@ h1 {
   text-align: center;
 }
 
+.agenda-container {
+  width: 100%;
+  max-width: 600px;
+  margin-bottom: 30px;
+}
+
+.agenda-container .card.agenda {
+  width: 100%;
+  padding: 25px;
+  background-color: #3760b0;
+  background-image: linear-gradient(135deg, #3760b0 0%, #1e4785 100%);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.agenda-container .card.agenda:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 8px 16px rgba(55, 96, 176, 0.3);
+}
+
+.agenda-container .card-content i {
+  font-size: 32px;
+  margin-bottom: 10px;
+}
+
+.agenda-container .card-content h2 {
+  font-size: 26px;
+}
+
 .botones-container {
   display: flex;
   flex-wrap: wrap;
@@ -85,6 +157,7 @@ h1 {
   display: flex;
   align-items: center;
   justify-content: center;
+  cursor: pointer;
 }
 
 .card:hover {
@@ -98,13 +171,41 @@ h1 {
   margin: 0;
 }
 
+.card-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.card-content i {
+  font-size: 28px;
+  color: #ffffff;
+}
+
 @media (max-width: 600px) {
+  .agenda-container {
+    max-width: 100%;
+  }
+  
+  .agenda-container .card-content h2 {
+    font-size: 22px;
+  }
+  
+  .agenda-container .card-content i {
+    font-size: 28px;
+  }
+
   .boton-cuenta {
     flex: 1 1 100%;
   }
 
   .card h2 {
     font-size: 20px;
+  }
+  
+  .card-content i {
+    font-size: 24px;
   }
 }
 
@@ -130,5 +231,9 @@ h1 {
   background-color: #FFC000;
   transform: translateY(-5px);
   box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+}
+
+.card.otilio h2 {
+  color: #000;
 }
 </style>
