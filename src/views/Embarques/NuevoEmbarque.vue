@@ -116,13 +116,15 @@
       </div>
       
       <div class="botones-accion">
-        <button @click="generarResumenTarasPDF" class="btn btn-info">
-          <i class="fas fa-file-pdf"></i> PDF Taras
+        <button @click="generarResumenTarasPDF" class="btn btn-info" :disabled="isGeneratingPdf">
+          <span v-if="isGeneratingPdf && pdfType === 'taras'" class="loader-inline"></span>
+          <i v-else class="fas fa-file-pdf"></i> PDF Taras
         </button>
-        <button @click="generarResumenEmbarque2" class="btn btn-info">
-          <i class="fas fa-file-pdf"></i> Resumen Embarque
+        <button @click="generarResumenEmbarque2" class="btn btn-info" :disabled="isGeneratingPdf">
+          <span v-if="isGeneratingPdf && pdfType === 'resumen'" class="loader-inline"></span>
+          <i v-else class="fas fa-file-pdf"></i> Resumen Embarque
         </button>
-        <router-link :to="{ name: 'Rendimientos', params: { id: embarqueId } }" class="btn btn-warning">
+        <router-link :to="{ name: 'Rendimientos', params: { id: embarqueId } }" class="btn btn-warning" :class="{ 'disabled': isGeneratingPdf }">
           <i class="fas fa-chart-line"></i> Rendimientos
         </router-link>
       </div>
@@ -169,8 +171,10 @@
                 @click.stop="generarNotaVenta(clienteId)" 
                 class="btn btn-primary btn-sm generar-pdf-cliente" 
                 title="Generar Nota de Venta PDF"
+                :disabled="isGeneratingPdf"
               >
-                <i class="fas fa-file-pdf"></i> Generar Nota PDF
+                <span v-if="isGeneratingPdf && pdfType === 'cliente-' + clienteId" class="loader-inline"></span>
+                <i v-else class="fas fa-file-pdf"></i> Generar Nota PDF
               </button>
               <button type="button" @click.stop="eliminarCliente(clienteId)" class="btn btn-danger btn-sm eliminar-cliente" :disabled="embarqueBloqueado">Eliminar Cliente</button>
             </div>
@@ -707,16 +711,36 @@
 <script>
 import { getFirestore, collection, addDoc, doc, getDoc, updateDoc, onSnapshot, serverTimestamp } from 'firebase/firestore';
 import { debounce } from 'lodash';
-import jsPDF from 'jspdf';
-import 'jspdf-autotable';
-import { generarNotaVentaPDF } from '@/utils/pdfGenerator';
-import Rendimientos from './Rendimientos.vue'
-import { generarResumenTarasPDF } from '@/utils/resumenTarasPdf';
-import { generarResumenEmbarquePDF } from '@/utils/resumenEmbarque2';
 import { ref, onValue, onDisconnect, set } from 'firebase/database'
 import { rtdb } from '@/firebase'
 import { useAuthStore } from '@/stores/auth'
-import { ref as vueRef, onMounted, onUnmounted } from 'vue'
+import { ref as vueRef, onMounted, onUnmounted, defineAsyncComponent } from 'vue'
+
+// Lazy loaded components
+const Rendimientos = defineAsyncComponent(() => import('./Rendimientos.vue'))
+
+// Import PDF generators directly
+import { generarNotaVentaPDF } from '@/utils/pdfGenerator';
+import { generarResumenTarasPDF } from '@/utils/resumenTarasPdf';
+import { generarResumenEmbarquePDF } from '@/utils/resumenEmbarque2';
+
+// Lazy load PDF libraries when needed
+const loadPdfLibs = async () => {
+  try {
+    const jsPDFModule = await import('jspdf')
+    await import('jspdf-autotable')
+    
+    // Ensure global pdfMake availability if needed by other libraries
+    if (typeof window !== 'undefined' && !window.jsPDF) {
+      window.jsPDF = jsPDFModule.default
+    }
+    
+    return jsPDFModule.default
+  } catch (error) {
+    console.error('Error loading PDF libraries:', error)
+    throw new Error('No se pudieron cargar las bibliotecas de PDF: ' + error.message)
+  }
+}
 
 export default {
   name: 'NuevoEmbarque',
@@ -774,16 +798,19 @@ export default {
       mostrarModalNombreAlternativo: false,
       nombreAlternativoTemp: '',
       productoSeleccionado: null,
-      productoEditandoId: null, // Agregar esta nueva propiedad
+      productoEditandoId: null,
       mostrarModalAlt: false,
       altTemp: '',
       clientesOffsets: {},
       embarqueBloqueado: false,
-      clienteActivo: null, // Nueva propiedad para rastrear el cliente activo
+      clienteActivo: null,
       sidebarCollapsed: false,
       mostrarModalNuevoCliente: false,
       nuevoClienteNombre: '',
       nuevoClienteColor: '#007bff',
+      // New properties for PDF generation
+      isGeneratingPdf: false,
+      pdfType: null,
     };
   },
   clientesJuntarMedidas: {},
@@ -1373,17 +1400,13 @@ export default {
       return producto.tipo || 'Sin Tipo';
     },
     
-    async initPdfMake() {
-      if (!window.pdfMake) {
-        const pdfMake = await import('pdfmake/build/pdfmake');
-        const pdfFonts = await import('pdfmake/build/vfs_fonts');
-        pdfMake.default.vfs = pdfFonts.default.pdfMake.vfs;
-        window.pdfMake = pdfMake.default;
-      }
-      return window.pdfMake;
-    },
+    // Removed initPdfMake method in favor of lazy loading PDF libraries directly in each PDF generation method
 
     async generarResumenEmbarque2() {
+      // Show loading indicator
+      this.$set(this, 'isGeneratingPdf', true);
+      this.$set(this, 'pdfType', 'resumen');
+      
       try {
         const medidasCrudos = new Set();
         Object.values(this.clienteCrudos).forEach(crudos => {
@@ -1426,10 +1449,19 @@ export default {
           medidasCrudos: Array.from(medidasCrudos)
         };
 
-        console.log('Datos del embarque:', embarqueData);
+        console.log('Generando PDF de resumen de embarque...');
+        
+        // Use directly imported function
         generarResumenEmbarquePDF(embarqueData, this.productosPorCliente, this.obtenerNombreCliente, this.clientesDisponibles);
+        
+        console.log('PDF generado con éxito');
       } catch (error) {
         console.error('Error al generar el PDF:', error);
+        alert('Hubo un error al generar el resumen de embarque: ' + error.message);
+      } finally {
+        // Hide loading indicator
+        this.$set(this, 'isGeneratingPdf', false);
+        this.$set(this, 'pdfType', null);
       }
     },
 
@@ -1837,21 +1869,38 @@ export default {
       }
       return totalTaras;
     },
-    generarNotaVenta(clienteId) {
-      const clienteProductos = this.productosPorCliente[clienteId];
-      const clienteCrudos = this.clienteCrudos[clienteId];
+    async generarNotaVenta(clienteId) {
+      // Show loading indicator
+      this.$set(this, 'isGeneratingPdf', true);
+      this.$set(this, 'pdfType', 'cliente-' + clienteId);
       
-      // Crear una copia del embarque con todos los datos necesarios
-      const embarqueCliente = {
-        fecha: this.embarque.fecha,
-        cargaCon: this.embarque.cargaCon,
-        productos: clienteProductos,
-        clienteCrudos: { [clienteId]: clienteCrudos },
-        kilosCrudos: this.embarque.kilosCrudos || {}
-      };
+      try {
+        const clienteProductos = this.productosPorCliente[clienteId];
+        const clienteCrudos = this.clienteCrudos[clienteId];
+        
+        // Crear una copia del embarque con todos los datos necesarios
+        const embarqueCliente = {
+          fecha: this.embarque.fecha,
+          cargaCon: this.embarque.cargaCon,
+          productos: clienteProductos,
+          clienteCrudos: { [clienteId]: clienteCrudos },
+          kilosCrudos: this.embarque.kilosCrudos || {}
+        };
 
-      // Pasar el objeto clientesJuntarMedidas completo
-      generarNotaVentaPDF(embarqueCliente, this.clientesDisponibles, this.clientesJuntarMedidas);
+        console.log(`Generando nota de venta para cliente ${clienteId}...`);
+        
+        // Use directly imported function
+        generarNotaVentaPDF(embarqueCliente, this.clientesDisponibles, this.clientesJuntarMedidas);
+        
+        console.log('Nota de venta generada con éxito');
+      } catch (error) {
+        console.error('Error al generar la nota de venta:', error);
+        alert('Hubo un error al generar la nota de venta: ' + error.message);
+      } finally {
+        // Hide loading indicator
+        this.$set(this, 'isGeneratingPdf', false);
+        this.$set(this, 'pdfType', null);
+      }
     },
     onRestarTarasChange(producto) {
       console.log('Restar taras cambiado:', producto.restarTaras);
@@ -2077,17 +2126,34 @@ export default {
       }
       this.cerrarModalHilos();
     },
-    generarNotaVentaPDF() {
-      const embarqueCliente = {
-        fecha: this.embarque.fecha,
-        cargaCon: this.embarque.cargaCon,
-        productos: this.embarque.productos,
-        clienteCrudos: this.clienteCrudos,
-        kilosCrudos: this.embarque.kilosCrudos || {}
-      };
+    async generarNotaVentaPDF() {
+      // Show loading indicator
+      this.$set(this, 'isGeneratingPdf', true);
+      this.$set(this, 'pdfType', 'all');
+      
+      try {
+        const embarqueCliente = {
+          fecha: this.embarque.fecha,
+          cargaCon: this.embarque.cargaCon,
+          productos: this.embarque.productos,
+          clienteCrudos: this.clienteCrudos,
+          kilosCrudos: this.embarque.kilosCrudos || {}
+        };
 
-      // Pasar el objeto clientesJuntarMedidas completo
-      generarNotaVentaPDF(embarqueCliente, this.clientesDisponibles, this.clientesJuntarMedidas);
+        console.log('Generando notas de venta para todos los clientes...');
+        
+        // Use directly imported function
+        generarNotaVentaPDF(embarqueCliente, this.clientesDisponibles, this.clientesJuntarMedidas);
+        
+        console.log('Notas de venta generadas con éxito');
+      } catch (error) {
+        console.error('Error al generar notas de venta:', error);
+        alert('Hubo un error al generar las notas de venta: ' + error.message);
+      } finally {
+        // Hide loading indicator
+        this.$set(this, 'isGeneratingPdf', false);
+        this.$set(this, 'pdfType', null);
+      }
     },
     handleJuntarMedidasChange(clienteId, checked) {
       // Actualizar el estado local
@@ -2201,14 +2267,33 @@ export default {
       // Si no tienen números, comparar alfabéticamente
       return medidaA.localeCompare(medidaB);
     },
-    generarResumenTarasPDF() {
-      const embarqueData = {
-        fecha: this.embarque.fecha,
-        cargaCon: this.embarque.cargaCon,
-        productos: this.embarque.productos,
-        clienteCrudos: this.clienteCrudos
-      };
-      generarResumenTarasPDF(embarqueData, this.clientesDisponibles);
+    async generarResumenTarasPDF() {
+      // Show loading indicator
+      this.$set(this, 'isGeneratingPdf', true);
+      this.$set(this, 'pdfType', 'taras');
+      
+      try {
+        const embarqueData = {
+          fecha: this.embarque.fecha,
+          cargaCon: this.embarque.cargaCon,
+          productos: this.embarque.productos,
+          clienteCrudos: this.clienteCrudos
+        };
+        
+        console.log('Generando PDF de taras...');
+        
+        // Use directly imported function
+        generarResumenTarasPDF(embarqueData, this.clientesDisponibles);
+        
+        console.log('PDF de taras generado con éxito');
+      } catch (error) {
+        console.error('Error al generar PDF de taras:', error);
+        alert('Hubo un error al generar el PDF de taras: ' + error.message);
+      } finally {
+        // Hide loading indicator
+        this.$set(this, 'isGeneratingPdf', false);
+        this.$set(this, 'pdfType', null);
+      }
     },
     onMedidaInput(producto, event) {
       // Eliminar la función trim() para permitir espacios
@@ -7668,5 +7753,22 @@ button:disabled {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+/* Loader spinner styles */
+.loader-inline {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  border-top-color: #fff;
+  animation: spin 1s ease-in-out infinite;
+  margin-right: 8px;
+  vertical-align: middle;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 </style>
