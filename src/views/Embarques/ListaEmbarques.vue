@@ -16,15 +16,23 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="embarque in embarques" :key="embarque.id">
-            <td>{{ formatearFecha(embarque.fecha) }}</td>
+          <tr v-for="embarque in embarques" :key="embarque.id" :class="{ 'fila-bloqueada': embarque.embarqueBloqueado }">
+            <td>
+              {{ formatearFecha(embarque.fecha) }}
+              <span v-if="embarque.embarqueBloqueado" class="indicador-bloqueado" title="Este embarque está bloqueado">🔒</span>
+            </td>
             <td>{{ calcularKilosLimpios(embarque) }} kg</td>
             <td>{{ calcularKilosCrudos(embarque) }} kg</td>
             <td>{{ (Number(calcularKilosLimpios(embarque)) + Number(calcularKilosCrudos(embarque))).toFixed(1) }} kg</td>
             <td>{{ calcularTotalTaras(embarque) }}</td>
             <td>
               <button @click="editarEmbarque(embarque.id)" class="btn-detalles">Editar</button>
-              <button @click="eliminarEmbarque(embarque.id)" class="btn-eliminar">Eliminar</button>
+              <button 
+                @click="embarque.embarqueBloqueado ? mostrarMensajeBloqueado() : eliminarEmbarque(embarque.id)" 
+                class="btn-eliminar" 
+                :class="{ 'btn-deshabilitado': embarque.embarqueBloqueado }"
+                :title="embarque.embarqueBloqueado ? 'Este embarque está bloqueado y no puede ser eliminado' : ''"
+              >Eliminar</button>
             </td>
           </tr>
         </tbody>
@@ -54,10 +62,36 @@ export default {
         const embarquesRef = collection(db, 'embarques');
         const snapshot = await getDocs(embarquesRef);
         this.embarques = snapshot.docs
-          .map(doc => ({
-            id: doc.id,
-            ...doc.data()
-          }))
+          .map(doc => {
+            const data = doc.data();
+            // Procesar la propiedad embarqueBloqueado para manejar diferentes tipos de datos
+            let embarqueBloqueado = false;
+            
+            if (data.embarqueBloqueado !== undefined) {
+              // Si es booleano, usar directamente
+              if (typeof data.embarqueBloqueado === 'boolean') {
+                embarqueBloqueado = data.embarqueBloqueado;
+              } 
+              // Si es string, verificar si es 'true', '1', 'si', etc.
+              else if (typeof data.embarqueBloqueado === 'string') {
+                embarqueBloqueado = ['true', '1', 'si', 'yes', 'verdadero'].includes(data.embarqueBloqueado.toLowerCase());
+              } 
+              // Si es número, verificar si es diferente de 0
+              else if (typeof data.embarqueBloqueado === 'number') {
+                embarqueBloqueado = data.embarqueBloqueado !== 0;
+              }
+            }
+            
+            const embarque = {
+              id: doc.id,
+              ...data,
+              embarqueBloqueado: embarqueBloqueado
+            };
+            
+            console.log(`Embarque ID: ${embarque.id}, Bloqueado: ${embarque.embarqueBloqueado}, Valor original: ${data.embarqueBloqueado}, Tipo original: ${typeof data.embarqueBloqueado}`);
+            
+            return embarque;
+          })
           .sort((a, b) => {
             const fechaA = a.fecha.toDate ? a.fecha.toDate() : new Date(a.fecha);
             const fechaB = b.fecha.toDate ? b.fecha.toDate() : new Date(b.fecha);
@@ -159,6 +193,15 @@ export default {
     },
     
     async eliminarEmbarque(embarqueId) {
+      // Encontrar el embarque por ID
+      const embarque = this.embarques.find(e => e.id === embarqueId);
+      
+      // Verificar si el embarque está bloqueado
+      if (embarque && embarque.embarqueBloqueado) {
+        alert('Este embarque está bloqueado y no puede ser eliminado.');
+        return;
+      }
+      
       if (confirm('¿Estás seguro de que quieres eliminar este embarque?')) {
         try {
           const db = getFirestore();
@@ -227,9 +270,26 @@ export default {
 
       return totalKilosCrudos.toFixed(1);
     },
+    
+    mostrarMensajeBloqueado() {
+      alert('Este embarque está bloqueado y no puede ser eliminado.');
+    }
   },
   mounted() {
     this.cargarEmbarques();
+  },
+  created() {
+    // Verificar el estado de la propiedad embarqueBloqueado en cada embarque después de cargar los datos
+    this.$nextTick(() => {
+      setTimeout(() => {
+        if (this.embarques.length > 0) {
+          console.log('Verificando estado de bloqueo de embarques:');
+          this.embarques.forEach(embarque => {
+            console.log(`ID: ${embarque.id}, Bloqueado: ${embarque.embarqueBloqueado}, Tipo: ${typeof embarque.embarqueBloqueado}`);
+          });
+        }
+      }, 1000); // Esperar 1 segundo para asegurarse de que los datos estén cargados
+    });
   }
 };
 </script>
@@ -341,6 +401,29 @@ h1 {
 
 .btn-eliminar:hover {
   background-color: #c9302c;
+}
+
+.btn-deshabilitado {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-deshabilitado:hover {
+  background-color: #d9534f;
+}
+
+.fila-bloqueada {
+  background-color: rgba(255, 235, 235, 0.5) !important;
+}
+
+.fila-bloqueada:hover {
+  background-color: rgba(255, 235, 235, 0.8) !important;
+}
+
+.indicador-bloqueado {
+  margin-left: 5px;
+  font-size: 14px;
+  color: #d9534f;
 }
 
 /* Agregar estos estilos para mejorar la visualización de la tabla */
