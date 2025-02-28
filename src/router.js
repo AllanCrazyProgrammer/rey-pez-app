@@ -36,6 +36,7 @@ import PedidosCrudo from '@/views/Procesos/PedidosCrudo.vue'
 import PedidoCrudosImpresion from '@/views/Procesos/PedidoCrudosImpresion.vue'
 import PedidosLimpio from '@/views/Procesos/PedidosLimpio.vue'
 import PedidoLimpioImpresion from '@/views/Procesos/PedidoLimpioImpresion.vue'
+import Bitacoras from '@/views/Procesos/Bitacoras.vue'
 
 Vue.use(Router);
 
@@ -275,6 +276,11 @@ const routes = [
     name: 'PedidoLimpioImpresion',
     component: PedidoLimpioImpresion,
     props: true
+  },
+  {
+    path: '/procesos/bitacoras',
+    name: 'Bitacoras',
+    component: Bitacoras
   }
 ];
 

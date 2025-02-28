@@ -13,6 +13,11 @@
         <span class="button-text">Preparación</span>
         <i class="fas fa-arrow-right"></i>
       </router-link>
+      
+      <router-link to="/procesos/bitacoras" class="action-button">
+        <span class="button-text">Bitácoras</span>
+        <i class="fas fa-arrow-right"></i>
+      </router-link>
     
     </div>
   </div>
