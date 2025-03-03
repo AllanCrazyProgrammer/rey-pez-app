@@ -11,6 +11,7 @@
           <option value="2">Cuarto Frío #2</option>
           <option value="3">Cuarto Frío #3</option>
           <option value="4">Cuarto Frío #4</option>
+          <option value="5">Cuarto Frío Don Chuy</option>
         </select>
       </div>
       
@@ -50,12 +51,15 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-if="bitacoras.length === 0">
+          <tr v-if="cargando">
+            <td colspan="7" class="loading-data">Cargando bitácoras...</td>
+          </tr>
+          <tr v-else-if="bitacoras.length === 0">
             <td colspan="7" class="no-data">No hay bitácoras registradas</td>
           </tr>
-          <tr v-for="(bitacora, index) in bitacorasFiltradas" :key="index">
+          <tr v-for="(bitacora, index) in bitacorasFiltradas" :key="bitacora.id">
             <td>{{ formatearFecha(bitacora.fecha) }}</td>
-            <td>Cuarto Frío #{{ bitacora.cuartoId }}</td>
+            <td>{{ formatearNombreCuarto(bitacora.cuartoId) }}</td>
             <td>{{ bitacora.temperatura }}°C</td>
             <td>{{ bitacora.tecnico }}</td>
             <td>{{ bitacora.tipoMantenimiento }}</td>
@@ -66,6 +70,9 @@
               </button>
               <button @click="verDetalles(bitacora)" class="btn-accion ver">
                 <i class="fas fa-eye"></i>
+              </button>
+              <button @click="confirmarEliminarBitacora(bitacora)" class="btn-accion eliminar">
+                <i class="fas fa-trash"></i>
               </button>
             </td>
           </tr>
@@ -92,6 +99,7 @@
               <option value="2">Cuarto Frío #2</option>
               <option value="3">Cuarto Frío #3</option>
               <option value="4">Cuarto Frío #4</option>
+              <option value="5">Cuarto Frío Don Chuy</option>
             </select>
           </div>
           
@@ -144,7 +152,9 @@
         
         <div class="modal-footer">
           <button @click="cerrarFormulario" class="btn-cancelar">Cancelar</button>
-          <button @click="guardarBitacora" class="btn-guardar">Guardar</button>
+          <button @click="guardarBitacora" class="btn-guardar" :disabled="guardando">
+            {{ guardando ? 'Guardando...' : 'Guardar' }}
+          </button>
         </div>
       </div>
     </div>
@@ -162,7 +172,7 @@
         <div class="modal-body detalles">
           <div class="detalle-grupo">
             <h3>Información General</h3>
-            <p><strong>Cuarto Frío:</strong> Cuarto Frío #{{ bitacoraDetalle.cuartoId }}</p>
+            <p><strong>Cuarto Frío:</strong> {{ formatearNombreCuarto(bitacoraDetalle.cuartoId) }}</p>
             <p><strong>Fecha:</strong> {{ formatearFecha(bitacoraDetalle.fecha) }}</p>
             <p><strong>Temperatura:</strong> {{ bitacoraDetalle.temperatura }}°C</p>
             <p><strong>Técnico:</strong> {{ bitacoraDetalle.tecnico }}</p>
@@ -191,10 +201,50 @@
         </div>
       </div>
     </div>
+
+    <!-- Modal de confirmación para eliminar -->
+    <div v-if="mostrarConfirmacionEliminar" class="modal-overlay">
+      <div class="modal-content modal-confirmacion">
+        <div class="modal-header">
+          <h2>Confirmar Eliminación</h2>
+          <button @click="mostrarConfirmacionEliminar = false" class="btn-cerrar">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+        
+        <div class="modal-body">
+          <p class="mensaje-confirmacion">
+            ¿Está seguro que desea eliminar la bitácora del {{ formatearFecha(bitacoraEliminar.fecha) }} 
+            para el {{ formatearNombreCuarto(bitacoraEliminar.cuartoId) }}?
+          </p>
+          <p class="advertencia">Esta acción no se puede deshacer.</p>
+        </div>
+        
+        <div class="modal-footer">
+          <button @click="mostrarConfirmacionEliminar = false" class="btn-cancelar">Cancelar</button>
+          <button @click="eliminarBitacora" class="btn-eliminar" :disabled="eliminando">
+            {{ eliminando ? 'Eliminando...' : 'Eliminar' }}
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script>
+import { db } from '@/firebase';
+import { 
+  collection, 
+  addDoc, 
+  getDocs, 
+  doc, 
+  updateDoc, 
+  deleteDoc, 
+  query, 
+  orderBy, 
+  serverTimestamp 
+} from 'firebase/firestore';
+
 export default {
   name: 'Bitacoras',
   data() {
@@ -202,12 +252,17 @@ export default {
       bitacoras: [],
       mostrarFormulario: false,
       mostrarDetalles: false,
+      mostrarConfirmacionEliminar: false,
       modoEdicion: false,
       bitacoraActual: this.inicializarBitacora(),
       bitacoraDetalle: {},
+      bitacoraEliminar: {},
       filtrosCuarto: '',
       filtroFechaDesde: '',
-      filtroFechaHasta: ''
+      filtroFechaHasta: '',
+      cargando: true,
+      guardando: false,
+      eliminando: false
     }
   },
   computed: {
@@ -243,52 +298,55 @@ export default {
         tipoMantenimiento: '',
         estado: '',
         observaciones: '',
-        accionesRealizadas: ''
+        accionesRealizadas: '',
+        createdAt: null,
+        updatedAt: null
       };
     },
-    cargarBitacoras() {
-      // Aquí se cargarían las bitácoras desde la base de datos
-      // Por ahora usaremos datos de ejemplo
-      this.bitacoras = [
-        {
-          id: 1,
-          cuartoId: 1,
-          fecha: '2023-10-15',
-          temperatura: -18.5,
-          tecnico: 'Juan Pérez',
-          tipoMantenimiento: 'Preventivo',
-          estado: 'Óptimo',
-          observaciones: 'Funcionamiento normal del sistema de refrigeración.',
-          accionesRealizadas: 'Limpieza de filtros y revisión de niveles de refrigerante.'
-        },
-        {
-          id: 2,
-          cuartoId: 2,
-          fecha: '2023-10-10',
-          temperatura: -16.8,
-          tecnico: 'María Gómez',
-          tipoMantenimiento: 'Correctivo',
-          estado: 'Regular',
-          observaciones: 'Se detectó acumulación de hielo en el evaporador.',
-          accionesRealizadas: 'Descongelamiento manual y ajuste del ciclo de descongelación automática.'
-        },
-        {
-          id: 3,
-          cuartoId: 3,
-          fecha: '2023-10-05',
-          temperatura: -15.2,
-          tecnico: 'Carlos Rodríguez',
-          tipoMantenimiento: 'Revisión',
-          estado: 'Requiere Atención',
-          observaciones: 'Temperatura por encima del rango óptimo. Posible fuga de refrigerante.',
-          accionesRealizadas: 'Revisión del sistema. Se programó mantenimiento correctivo.'
-        }
-      ];
+    async cargarBitacoras() {
+      this.cargando = true;
+      try {
+        const bitacorasRef = collection(db, 'bitacoras');
+        const q = query(bitacorasRef, orderBy('fecha', 'desc'));
+        const querySnapshot = await getDocs(q);
+        
+        this.bitacoras = querySnapshot.docs.map(doc => {
+          const data = doc.data();
+          // Asegurarse de que el ID sea una cadena de texto
+          const id = doc.id.toString();
+          console.log(`Cargando bitácora con ID: ${id}`);
+          
+          return {
+            id: id,
+            cuartoId: data.cuartoId || '',
+            fecha: data.fecha || new Date().toISOString().substr(0, 10),
+            temperatura: data.temperatura || 0,
+            tecnico: data.tecnico || '',
+            tipoMantenimiento: data.tipoMantenimiento || '',
+            estado: data.estado || '',
+            observaciones: data.observaciones || '',
+            accionesRealizadas: data.accionesRealizadas || '',
+            createdAt: data.createdAt || null,
+            updatedAt: data.updatedAt || null
+          };
+        });
+        
+        console.log(`Se cargaron ${this.bitacoras.length} bitácoras`);
+      } catch (error) {
+        console.error('Error al cargar bitácoras:', error);
+        alert(`Error al cargar las bitácoras: ${error.message || 'Error desconocido'}`);
+      } finally {
+        this.cargando = false;
+      }
     },
     formatearFecha(fecha) {
       if (!fecha) return '';
       const opciones = { year: 'numeric', month: 'long', day: 'numeric' };
       return new Date(fecha).toLocaleDateString('es-ES', opciones);
+    },
+    formatearNombreCuarto(cuartoId) {
+      if (!cuartoId) return '';
+      return cuartoId === '5' ? 'Cuarto Frío Don Chuy' : `Cuarto Frío #${cuartoId}`;
     },
     aplicarFiltros() {
       // Los filtros ya se aplican automáticamente a través del computed property
@@ -306,26 +364,70 @@ export default {
       this.mostrarFormulario = false;
       this.modoEdicion = false;
       this.bitacoraActual = this.inicializarBitacora();
+      this.guardando = false;
     },
-    guardarBitacora() {
+    async guardarBitacora() {
       if (this.validarFormulario()) {
-        if (this.modoEdicion) {
-          // Actualizar bitácora existente
-          const index = this.bitacoras.findIndex(b => b.id === this.bitacoraActual.id);
-          if (index !== -1) {
-            this.bitacoras.splice(index, 1, { ...this.bitacoraActual });
-          }
-        } else {
-          // Crear nueva bitácora
-          const nuevaBitacora = {
+        this.guardando = true;
+        try {
+          // Asegurarse de que los datos sean válidos
+          const bitacoraData = {
             ...this.bitacoraActual,
-            id: this.bitacoras.length > 0 ? Math.max(...this.bitacoras.map(b => b.id)) + 1 : 1
+            cuartoId: this.bitacoraActual.cuartoId.toString(),
+            temperatura: parseFloat(this.bitacoraActual.temperatura) || 0,
+            tecnico: this.bitacoraActual.tecnico.trim(),
+            tipoMantenimiento: this.bitacoraActual.tipoMantenimiento,
+            estado: this.bitacoraActual.estado,
+            observaciones: this.bitacoraActual.observaciones || '',
+            accionesRealizadas: this.bitacoraActual.accionesRealizadas || '',
+            updatedAt: serverTimestamp()
           };
-          this.bitacoras.push(nuevaBitacora);
+          
+          if (this.modoEdicion) {
+            // Verificar que el ID sea válido
+            if (!bitacoraData.id) {
+              throw new Error('ID de bitácora no válido para actualización');
+            }
+            
+            console.log('Actualizando bitácora con ID:', bitacoraData.id);
+            
+            // Actualizar bitácora existente
+            const { id, ...dataSinId } = bitacoraData;
+            const bitacoraRef = doc(db, 'bitacoras', id.toString());
+            await updateDoc(bitacoraRef, dataSinId);
+            
+            // Actualizar en el array local
+            const index = this.bitacoras.findIndex(b => b.id === id);
+            if (index !== -1) {
+              this.bitacoras.splice(index, 1, bitacoraData);
+            }
+            
+            console.log('Bitácora actualizada con éxito');
+          } else {
+            // Crear nueva bitácora
+            bitacoraData.createdAt = serverTimestamp();
+            console.log('Creando nueva bitácora');
+            
+            const docRef = await addDoc(collection(db, 'bitacoras'), bitacoraData);
+            
+            // Agregar al array local con el ID generado
+            const nuevaBitacora = {
+              ...bitacoraData,
+              id: docRef.id.toString()
+            };
+            
+            console.log('Nueva bitácora creada con ID:', nuevaBitacora.id);
+            this.bitacoras.unshift(nuevaBitacora);
+          }
+          
+          this.cerrarFormulario();
+          alert(this.modoEdicion ? 'Bitácora actualizada con éxito' : 'Bitácora creada con éxito');
+        } catch (error) {
+          console.error('Error al guardar bitácora:', error);
+          alert(`Error al guardar la bitácora: ${error.message || 'Error desconocido'}`);
+        } finally {
+          this.guardando = false;
         }
-        
-        this.cerrarFormulario();
-        // Aquí se guardaría en la base de datos
       }
     },
     validarFormulario() {
@@ -344,6 +446,47 @@ export default {
     editarBitacoraDesdeDetalles() {
       this.editarBitacora(this.bitacoraDetalle);
       this.mostrarDetalles = false;
+    },
+    confirmarEliminarBitacora(bitacora) {
+      if (!bitacora || !bitacora.id) {
+        console.error('Intento de eliminar una bitácora sin ID válido:', bitacora);
+        alert('No se puede eliminar esta bitácora porque no tiene un ID válido');
+        return;
+      }
+      
+      console.log('Preparando eliminación de bitácora con ID:', bitacora.id);
+      this.bitacoraEliminar = { ...bitacora };
+      this.mostrarConfirmacionEliminar = true;
+    },
+    async eliminarBitacora() {
+      this.eliminando = true;
+      try {
+        // Verificar que el ID de la bitácora sea válido
+        if (!this.bitacoraEliminar || !this.bitacoraEliminar.id) {
+          throw new Error('ID de bitácora no válido');
+        }
+        
+        const bitacoraId = this.bitacoraEliminar.id.toString();
+        console.log('Intentando eliminar bitácora con ID:', bitacoraId);
+        
+        const bitacoraRef = doc(db, 'bitacoras', bitacoraId);
+        await deleteDoc(bitacoraRef);
+        
+        // Eliminar del array local
+        const index = this.bitacoras.findIndex(b => b.id === bitacoraId);
+        if (index !== -1) {
+          this.bitacoras.splice(index, 1);
+        }
+        
+        this.mostrarConfirmacionEliminar = false;
+        alert('Bitácora eliminada con éxito');
+      } catch (error) {
+        console.error('Error al eliminar bitácora:', error);
+        alert(`Error al eliminar la bitácora: ${error.message || 'Error desconocido'}`);
+      } finally {
+        this.eliminando = false;
+        this.bitacoraEliminar = {};
+      }
     }
   }
 }
@@ -468,11 +611,15 @@ export default {
   background-color: #f1f1f1;
 }
 
-.no-data {
+.no-data, .loading-data {
   text-align: center;
   padding: 30px;
   color: #777;
   font-style: italic;
+}
+
+.loading-data {
+  color: #3498db;
 }
 
 .acciones {
@@ -498,11 +645,15 @@ export default {
   color: #3498db;
 }
 
+.btn-accion.eliminar {
+  color: #e74c3c;
+}
+
 .btn-accion:hover {
   background-color: rgba(0,0,0,0.05);
 }
 
-.estado-optimo {
+.estado-óptimo {
   color: #27ae60;
   font-weight: 500;
 }
@@ -544,6 +695,10 @@ export default {
   max-height: 90vh;
   overflow-y: auto;
   box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+}
+
+.modal-confirmacion {
+  max-width: 500px;
 }
 
 .modal-header {
@@ -611,12 +766,31 @@ export default {
   transition: background-color 0.3s;
 }
 
+.btn-eliminar {
+  background-color: #e74c3c;
+  color: white;
+  border: none;
+  padding: 8px 15px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
 .btn-cancelar:hover, .btn-cerrar-detalles:hover {
   background-color: #7f8c8d;
 }
 
 .btn-guardar:hover, .btn-editar-detalles:hover {
   background-color: #2980b9;
+}
+
+.btn-eliminar:hover {
+  background-color: #c0392b;
+}
+
+.btn-guardar:disabled, .btn-eliminar:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
 }
 
 /* Detalles modal */
@@ -669,6 +843,18 @@ export default {
 .estado-tag.estado-crítico {
   background-color: #fdedeb;
   color: #e74c3c;
+}
+
+.mensaje-confirmacion {
+  font-size: 1.1em;
+  margin-bottom: 15px;
+  text-align: center;
+}
+
+.advertencia {
+  color: #e74c3c;
+  text-align: center;
+  font-weight: 500;
 }
 
 /* Responsive design */
