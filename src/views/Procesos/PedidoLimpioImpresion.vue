@@ -422,7 +422,10 @@ export default {
               text: item.nota, 
               fontSize: fontSize * 1.1,
               margin: [0, 1, 0, 0],
-              padding: [1, 1]
+              padding: [1, 1],
+              bold: true,
+              background: '#FF0000',
+              color: '#FFFFFF'
             } : ''
           ],
           margin: [0, 2, 0, 2]
@@ -625,7 +628,10 @@ export default {
             item.nota ? { 
               text: item.nota, 
               fontSize: fontSize * 0.9,
-              padding: [1, 0]
+              padding: [1, 0],
+              bold: true,
+              background: '#FF0000',
+              color: '#FFFFFF'
             } : ''
           ],
           margin: [0, 1, 0, 1]
