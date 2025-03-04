@@ -1,5 +1,8 @@
 <template>
   <div class="cuentas-catarro-container">
+    <div v-if="isSaving" class="auto-save-indicator">
+      <span class="save-dot"></span> Guardando...
+    </div>
     <div class="back-button-container">
       <BackButton to="/cuentas-catarro" />
       <PreciosHistorialModal />
@@ -275,6 +278,11 @@
         </div>
       </div>
     </div>
+
+    <!-- Mensaje de guardado automático -->
+    <div v-if="showSaveMessage" class="auto-save-message">
+      {{ lastSaveMessage }}
+    </div>
   </div>
 </template>
 
@@ -336,6 +344,9 @@ export default {
       showObservacionModal: false,
       observacion: '',
       isGuardando: false,
+      lastSaveMessage: '',
+      showSaveMessage: false,
+      saveMessageTimer: null,
     }
   },
   computed: {
@@ -409,6 +420,7 @@ export default {
     'newItem.kilos': 'handleDataChange',
     'newItem.medida': 'handleDataChange',
     'newItem.costo': 'handleDataChange',
+    observacion: 'handleDataChange',
     tieneObservacion(newValue) {
       // Eliminar este watch o modificarlo para que no abra el modal automáticamente
     }
@@ -1128,7 +1140,20 @@ export default {
         };
 
         await updateDoc(doc(db, 'cuentasCatarro', this.$route.params.id), notaData);
-        console.log('Cuenta auto-guardada exitosamente');
+        
+        // Mostrar mensaje de confirmación
+        this.lastSaveMessage = `Guardado automático: ${new Date().toLocaleTimeString()}`;
+        this.showSaveMessage = true;
+        
+        // Ocultar el mensaje después de 3 segundos
+        if (this.saveMessageTimer) {
+          clearTimeout(this.saveMessageTimer);
+        }
+        this.saveMessageTimer = setTimeout(() => {
+          this.showSaveMessage = false;
+        }, 3000);
+        
+        console.log('Cuenta auto-guardada exitosamente:', new Date().toLocaleTimeString());
       } catch (error) {
         if (error.code === 'resource-exhausted') {
           throw error; // Dejar que el sistema de cola maneje el reintento
@@ -1162,6 +1187,31 @@ export default {
       if (confirm('¿Estás seguro de que deseas eliminar esta observación?')) {
         this.observacion = '';
         this.tieneObservacion = false;
+      }
+    },
+    async retryOperation(operation, maxRetries = 3) {
+      let retries = 0;
+      while (retries < maxRetries) {
+        try {
+          return await operation();
+        } catch (error) {
+          retries++;
+          console.error(`Error en operación (intento ${retries}/${maxRetries}):`, error);
+          
+          // Si es un error de cuota excedida, esperar más tiempo
+          if (error.code === 'resource-exhausted') {
+            await new Promise(resolve => setTimeout(resolve, 5000 * Math.pow(2, retries)));
+          } else {
+            // Para otros errores, esperar menos tiempo
+            await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, retries)));
+          }
+          
+          // Si es el último intento, lanzar el error
+          if (retries >= maxRetries) {
+            console.error('Se alcanzó el número máximo de intentos. Operación fallida.');
+            throw error;
+          }
+        }
       }
     },
   },
@@ -1599,5 +1649,52 @@ tr:hover {
 .no-pagado {
   color: #f44336;
   background-color: #ffebee;
+}
+
+.auto-save-indicator {
+  position: fixed;
+  top: 10px;
+  right: 10px;
+  background-color: rgba(0, 0, 0, 0.7);
+  color: white;
+  padding: 5px 10px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  font-size: 14px;
+  z-index: 1000;
+}
+
+.save-dot {
+  width: 8px;
+  height: 8px;
+  background-color: #4CAF50;
+  border-radius: 50%;
+  margin-right: 8px;
+  animation: blink 1.5s infinite;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+/* Estilos de mensaje de guardado automático */
+.auto-save-message {
+  position: fixed;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: rgba(0, 0, 0, 0.7);
+  color: white;
+  padding: 5px 10px;
+  border-radius: 4px;
+  z-index: 1001;
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-20px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 </style>

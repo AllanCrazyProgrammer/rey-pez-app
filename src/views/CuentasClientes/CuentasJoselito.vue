@@ -1,5 +1,8 @@
 <template>
   <div class="cuentas-joselito-container">
+    <div v-if="isSaving" class="auto-save-indicator">
+      <span class="save-dot"></span> Guardando...
+    </div>
     <div class="back-button-container">
       <BackButton to="/cuentas-joselito" />
       <PreciosHistorialModal />
@@ -278,6 +281,11 @@
     <div :class="['estado-cuenta', estadoCuenta.toLowerCase(), { 'no-pagado': estadoCuenta === 'No Pagado' }]">
       {{ estadoCuenta }}
     </div>
+
+    <!-- Mostrar mensaje de confirmación -->
+    <div v-if="showSaveMessage" class="save-message">
+      {{ lastSaveMessage }}
+    </div>
   </div>
 </template>
 
@@ -353,6 +361,9 @@ export default {
       showObservacionModal: false,
       observacion: '',
       debounceTimers: {},
+      lastSaveMessage: '',
+      showSaveMessage: false,
+      saveMessageTimer: null,
     }
   },
   computed: {
@@ -581,15 +592,17 @@ export default {
         // Preparar los datos inicialess
         const notaData = {
           fecha: this.fechaSeleccionada,
-          items: [],
-          itemsVenta: [],
-          saldoAcumuladoAnterior: 0,
+          items: this.items,
+          itemsVenta: this.itemsVenta,
+          saldoAcumuladoAnterior: saldoAnterior,
           cobros: [],
           abonos: [],
-          totalGeneral: 0,
-          totalGeneralVenta: 0,
-          nuevoSaldoAcumulado: 0,
+          totalGeneral: this.totalGeneral,
+          totalGeneralVenta: this.totalGeneralVenta,
+          nuevoSaldoAcumulado: saldoAnterior + this.totalDiaActual,
           estadoPagado: false,
+          tieneObservacion: this.tieneObservacion,
+          observacion: this.observacion,
           ultimaActualizacion: new Date().toISOString()
         };
 
@@ -782,6 +795,22 @@ export default {
       }
 
       try {
+        // Si no hay un ID de documento existente, crear uno nuevo primero
+        if (!this.$route.params.id) {
+          // Guardar temporalmente el nuevo item
+          const newItemTemp = { ...this.newItem };
+          
+          // Crear la cuenta primero (sin items)
+          const docId = await this.crearNuevaCuenta();
+          
+          if (!docId) {
+            throw new Error('No se pudo crear la cuenta');
+          }
+          
+          // Restaurar el nuevo item después de crear la cuenta
+          this.newItem = newItemTemp;
+        }
+        
         const total = this.newItem.kilos * this.newItem.costo;
         this.items.push({
           kilos: this.newItem.kilos,
@@ -808,9 +837,7 @@ export default {
           precioVenta: null
         };
 
-        // Guardar los cambios
-        await this.guardarSilencioso();
-
+        // El guardado automático se activará por los watchers
       } catch (error) {
         console.error('Error al guardar el item:', error);
         alert('Hubo un problema al guardar. Por favor, intente nuevamente.');
@@ -838,9 +865,16 @@ export default {
       });
     },
 
-    removeItem(index) {
-      this.items.splice(index, 1);
-      this.itemsVenta.splice(index, 1);
+    async removeItem(index) {
+      try {
+        this.items.splice(index, 1);
+        this.itemsVenta.splice(index, 1);
+        this.showMobileActions = false;
+        
+        // El guardado automático se activará por los watchers
+      } catch (error) {
+        console.error('Error al eliminar item:', error);
+      }
     },
 
     editField(index, field) {
@@ -853,14 +887,22 @@ export default {
     },
 
     finishEditing() {
-      this.editingField = { index: null, field: null };
-      // Recalcular totales si es necesario
-      if (this.items.length > 0) {
-        this.items = this.items.map(item => ({
-          ...item,
-          total: item.kilos * item.costo
-        }));
+      const { index, field } = this.editingField;
+      if (index !== null && field !== null) {
+        try {
+          const item = this.items[index];
+          if (field === 'kilos' || field === 'costo') {
+            item[field] = parseFloat(item[field]) || 0;
+          }
+          item.total = item.kilos * item.costo;
+          this.actualizarItemsVenta();
+          
+          // El guardado automático se activará por los watchers
+        } catch (error) {
+          console.error('Error al finalizar edición:', error);
+        }
       }
+      this.editingField = { index: null, field: null };
     },
 
     addNewProduct() {
@@ -886,27 +928,22 @@ export default {
 
     calcularTotalVenta(index) {
       const item = this.itemsVenta[index];
-      if (item) {
-        // Asegurar que los valores sean números
-        const kilos = Number(item.kilosVenta) || 0;
-        const precio = Number(item.precioVenta) || 0;
-        const costoUnitario = Number(this.items[index]?.costo) || 0;
+      if (!item) return;
+      
+      try {
+        const kilos = parseFloat(item.kilosVenta) || 0;
+        const precio = parseFloat(item.precioVenta) || 0;
+        item.totalVenta = kilos * precio;
         
-        // Calcular total y ganancia
-        const totalVenta = kilos * precio;
-        const ganancia = totalVenta - (kilos * costoUnitario);
+        const itemCosto = this.items[index];
+        const totalCosto = itemCosto ? (itemCosto.total || 0) : 0;
+        item.ganancia = (item.totalVenta || 0) - totalCosto;
         
-        // Actualizar el objeto con los nuevos valores
-        this.$set(this.itemsVenta, index, {
-          ...item,
-          kilosVenta: kilos,
-          precioVenta: precio,
-          totalVenta: totalVenta,
-          ganancia: ganancia
-        });
+        this.actualizarItemsVenta();
         
-        // Guardar silenciosamente después de modificaciones con debounce
-        this.debounceGuardarSilencioso(index);
+        // El guardado automático se activará por los watchers
+      } catch (error) {
+        console.error('Error al calcular total de venta:', error);
       }
     },
 
@@ -915,118 +952,23 @@ export default {
     },
 
     addCobro() {
-      this.cobros.push({
-        descripcion: '',
-        monto: 0
-      });
+      this.cobros.push({descripcion: 'Flete', monto: 0});
+      // El guardado automático se activará por los watchers
     },
 
     removeCobro(index) {
       this.cobros.splice(index, 1);
+      // El guardado automático se activará por los watchers
     },
 
     addAbono() {
-      this.abonos.push({
-        descripcion: '',
-        monto: 0
-      });
+      this.abonos.push({descripcion: '', monto: 0});
+      // El guardado automático se activará por los watchers
     },
 
-    async removeAbono(index) {
-      try {
-        const abono = this.abonos[index];
-        
-        // Si el abono tiene un ID de abono general, eliminarlo del historial
-        if (abono.abonoGeneralId) {
-          try {
-            // Primero verificar si el abono general existe
-            const abonoGeneralRef = doc(db, 'abonosGeneralesJoselito', abono.abonoGeneralId);
-            const abonoGeneralDoc = await getDoc(abonoGeneralRef);
-            
-            if (abonoGeneralDoc.exists()) {
-              // Eliminar el abono del historial
-              await deleteDoc(abonoGeneralRef);
-              console.log('Abono eliminado del historial:', abono.abonoGeneralId);
-              
-              // También eliminar cualquier referencia en otras cuentas
-              const cuentasRef = collection(db, 'cuentasJoselito');
-              const querySnapshot = await getDocs(cuentasRef);
-              
-              const actualizacionesCuentas = querySnapshot.docs.map(async (docSnapshot) => {
-                const cuentaData = docSnapshot.data();
-                if (cuentaData.abonos) {
-                  const abonosActualizados = cuentaData.abonos.filter(a => a.abonoGeneralId !== abono.abonoGeneralId);
-                  
-                  // Solo actualizar si hubo cambios en los abonos
-                  if (abonosActualizados.length !== cuentaData.abonos.length) {
-                    await updateDoc(doc(db, 'cuentasJoselito', docSnapshot.id), {
-                      abonos: abonosActualizados
-                    });
-                  }
-                }
-              });
-              
-              await Promise.all(actualizacionesCuentas);
-            }
-          } catch (error) {
-            console.error('Error al eliminar abono general:', error);
-            throw new Error('Error al eliminar abono del historial');
-          }
-        }
-
-        // Eliminar el abono de la cuenta actual
-        this.abonos.splice(index, 1);
-        
-        // Guardar los cambios en la cuenta actual
-        const id = this.$route.params.id;
-        if (id) {
-          const cuentaRef = doc(db, 'cuentasJoselito', id);
-          await updateDoc(cuentaRef, {
-            abonos: this.abonos,
-            estadoPagado: this.totalDiaActual <= 0
-          });
-        }
-
-        // Actualizar los saldos acumulados de todas las cuentas
-        const cuentasRef = collection(db, 'cuentasJoselito');
-        const q = query(cuentasRef, orderBy('fecha', 'asc'));
-        const querySnapshot = await getDocs(q);
-        const cuentasOrdenadas = querySnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        })).sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
-
-        let saldoAcumulado = 0;
-        const actualizaciones = [];
-
-        for (let i = 0; i < cuentasOrdenadas.length; i++) {
-          const cuenta = cuentasOrdenadas[i];
-          const totalCobros = (cuenta.cobros || []).reduce((sum, cobro) => 
-            sum + (parseFloat(cobro.monto) || 0), 0);
-          const totalAbonos = (cuenta.abonos || []).reduce((sum, abono) => 
-            sum + (parseFloat(abono.monto) || 0), 0);
-          const totalDia = cuenta.totalGeneralVenta - totalCobros - totalAbonos;
-          
-          saldoAcumulado += totalDia;
-          
-          actualizaciones.push(updateDoc(doc(db, 'cuentasJoselito', cuenta.id), {
-            saldoAcumuladoAnterior: i === 0 ? 0 : cuentasOrdenadas[i-1].nuevoSaldoAcumulado || 0,
-            nuevoSaldoAcumulado: saldoAcumulado,
-            estadoPagado: totalDia <= 0
-          }));
-
-          if (saldoAcumulado <= 0) {
-            saldoAcumulado = 0;
-          }
-        }
-
-        await Promise.all(actualizaciones);
-        
-        console.log('Abono eliminado exitosamente');
-      } catch (error) {
-        console.error('Error al eliminar abono:', error);
-        alert('Error al eliminar el abono: ' + error.message);
-      }
+    removeAbono(index) {
+      this.abonos.splice(index, 1);
+      // El guardado automático se activará por los watchers
     },
 
     startLongPress(index, field) {
@@ -1273,6 +1215,146 @@ export default {
         this.tieneObservacion = false;
       }
     },
+
+    handleDataChange() {
+      if (this.$route.params.id && this.$route.query.edit === 'true') {
+        if (this.autoSaveTimer) {
+          clearTimeout(this.autoSaveTimer);
+        }
+        this.autoSaveTimer = setTimeout(async () => {
+          await this.queueSave();
+        }, 2000); // Delay de 2 segundos para evitar demasiadas operaciones
+      }
+    },
+
+    async queueSave() {
+      // Agregar operación a la cola con timestamp
+      this.saveQueue.push({
+        timestamp: Date.now(),
+        operation: async () => {
+          await this.autoSaveNota();
+        }
+      });
+
+      // Procesar la cola si no hay guardado en proceso
+      if (!this.isSaving) {
+        await this.processSaveQueue();
+      }
+    },
+
+    async processSaveQueue() {
+      if (this.isSaving || this.saveQueue.length === 0) return;
+
+      this.isSaving = true;
+
+      try {
+        while (this.saveQueue.length > 0) {
+          // Verificar el tiempo desde el último guardado
+          const now = Date.now();
+          if (this.lastSaveTime && now - this.lastSaveTime < this.saveMinInterval) {
+            // Esperar antes de intentar el siguiente guardado
+            await new Promise(resolve => 
+              setTimeout(resolve, this.saveMinInterval - (now - this.lastSaveTime))
+            );
+          }
+
+          const nextSave = this.saveQueue[0];
+          await this.retryOperation(nextSave.operation);
+          this.lastSaveTime = Date.now();
+          this.saveQueue.shift();
+        }
+      } catch (error) {
+        console.error('Error procesando cola de guardado:', error);
+        if (error.code === 'resource-exhausted') {
+          // Esperar 10 segundos antes de reintentar si se excedió la cuota
+          await new Promise(resolve => setTimeout(resolve, 10000));
+          // Reintentar el procesamiento
+          await this.processSaveQueue();
+        }
+      } finally {
+        this.isSaving = false;
+      }
+    },
+
+    async retryOperation(operation, maxRetries = 3) {
+      let retries = 0;
+      while (retries < maxRetries) {
+        try {
+          return await operation();
+        } catch (error) {
+          retries++;
+          console.error(`Error en operación (intento ${retries}/${maxRetries}):`, error);
+          
+          // Si es un error de cuota excedida, esperar más tiempo
+          if (error.code === 'resource-exhausted') {
+            await new Promise(resolve => setTimeout(resolve, 5000 * Math.pow(2, retries)));
+          } else {
+            // Para otros errores, esperar menos tiempo
+            await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, retries)));
+          }
+          
+          // Si es el último intento, lanzar el error
+          if (retries >= maxRetries) {
+            console.error('Se alcanzó el número máximo de intentos. Operación fallida.');
+            throw error;
+          }
+        }
+      }
+    },
+
+    async autoSaveNota() {
+      if (!this.$route.params.id) return;
+
+      try {
+        // Preparar datos completos para guardar
+        const notaData = {
+          items: this.items.map(item => ({
+            kilos: Number(item.kilos) || 0,
+            medida: String(item.medida || ''),
+            costo: Number(item.costo) || 0,
+            total: Number(item.kilos * item.costo) || 0
+          })),
+          itemsVenta: this.itemsVenta.map(item => ({
+            kilosVenta: Number(item.kilosVenta) || 0,
+            medida: String(item.medida || ''),
+            precioVenta: Number(item.precioVenta) || 0,
+            totalVenta: Number(item.totalVenta) || 0,
+            ganancia: Number(item.ganancia) || 0
+          })),
+          totalGeneral: Number(this.totalGeneral) || 0,
+          totalGeneralVenta: Number(this.totalGeneralVenta) || 0,
+          nuevoSaldoAcumulado: Number(this.nuevoSaldoAcumulado) || 0,
+          cobros: this.cobros,
+          abonos: this.abonos,
+          estadoPagado: this.estadoCuenta === 'Pagado',
+          tieneObservacion: Boolean(this.observacion && this.observacion.trim()),
+          observacion: String(this.observacion || ''),
+          ultimaActualizacion: new Date().toISOString()
+        };
+
+        await updateDoc(doc(db, 'cuentasJoselito', this.$route.params.id), notaData);
+        
+        // Mostrar mensaje de confirmación
+        this.lastSaveMessage = `Guardado automático: ${new Date().toLocaleTimeString()}`;
+        this.showSaveMessage = true;
+        
+        // Ocultar el mensaje después de 3 segundos
+        if (this.saveMessageTimer) {
+          clearTimeout(this.saveMessageTimer);
+        }
+        this.saveMessageTimer = setTimeout(() => {
+          this.showSaveMessage = false;
+        }, 3000);
+        
+        console.log('Cuenta auto-guardada exitosamente:', new Date().toLocaleTimeString());
+      } catch (error) {
+        if (error.code === 'resource-exhausted') {
+          throw error; // Dejar que el sistema de cola maneje el reintento
+        }
+        console.error('Error en auto-guardado:', error);
+        throw error;
+      }
+    },
   },
   created() {
     const id = this.$route.params.id;
@@ -1304,18 +1386,47 @@ export default {
       if (newValue) {
         this.showObservacionModal = true;
       }
-    }
+    },
+    // Watchers para guardado automático
+    items: {
+      handler: 'handleDataChange',
+      deep: true
+    },
+    itemsVenta: {
+      handler: 'handleDataChange',
+      deep: true
+    },
+    cobros: {
+      handler: 'handleDataChange',
+      deep: true
+    },
+    abonos: {
+      handler: 'handleDataChange',
+      deep: true
+    },
+    fechaSeleccionada: {
+      handler: 'handleDataChange'
+    },
+    saldoAcumuladoAnterior: {
+      handler: 'handleDataChange'
+    },
+    observacion: 'handleDataChange'
   },
   beforeUnmount() {
-    // Limpiar todos los timers al desmontar el componente
+    // Limpiar temporizadores
     if (this.autoSaveTimer) {
       clearTimeout(this.autoSaveTimer);
     }
     
-    // Limpiar todos los timers de debounce
+    // Limpiar todos los temporizadores de debounce
     Object.values(this.debounceTimers).forEach(timer => {
       clearTimeout(timer);
     });
+    
+    // Intentar procesar cualquier guardado pendiente
+    if (this.saveQueue.length > 0) {
+      this.processSaveQueue();
+    }
   }
 };
 </script>
@@ -1820,5 +1931,54 @@ h1, h2 {
     width: 100%;
     justify-content: center;
   }
+}
+
+.auto-save-indicator {
+  position: fixed;
+  top: 10px;
+  right: 10px;
+  background-color: rgba(0, 0, 0, 0.7);
+  color: white;
+  padding: 5px 10px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  font-size: 14px;
+  z-index: 1000;
+}
+
+.save-dot {
+  width: 8px;
+  height: 8px;
+  background-color: #4CAF50;
+  border-radius: 50%;
+  margin-right: 8px;
+  animation: blink 1.5s infinite;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+/* Estilos de mensaje de confirmación */
+.save-message {
+  position: fixed;
+  top: 10px;
+  right: 10px;
+  background-color: rgba(0, 0, 0, 0.7);
+  color: white;
+  padding: 5px 10px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  font-size: 14px;
+  z-index: 1000;
+}
+
+.save-message p {
+  margin: 0;
+  white-space: pre-wrap;
+  color: #fff;
 }
 </style> 
