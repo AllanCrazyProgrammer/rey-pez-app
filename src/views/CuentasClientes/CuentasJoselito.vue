@@ -578,7 +578,7 @@ export default {
         const saldoAnterior = await this.obtenerSaldoAcumuladoAnterior();
         console.log('Saldo anterior obtenido:', saldoAnterior);
 
-        // Preparar los datos iniciales
+        // Preparar los datos inicialess
         const notaData = {
           fecha: this.fechaSeleccionada,
           items: [],
