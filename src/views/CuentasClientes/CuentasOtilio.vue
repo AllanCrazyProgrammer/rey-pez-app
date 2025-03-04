@@ -1,5 +1,8 @@
 <template>
     <div class="cuentas-otilio-container">
+      <div v-if="isSaving" class="auto-save-indicator">
+        <span class="save-dot"></span> Guardando...
+      </div>
       <div class="back-button-container">
         <BackButton to="/cuentas-otilio" />
         <PreciosHistorialModal />
@@ -209,7 +212,9 @@
       </table>
   
       <div class="button-container">
-        <button @click="guardarNota" class="save-button">Guardar Nota</button>
+        <button @click="guardarNota" class="save-button" :disabled="isGuardando">
+          {{ isGuardando ? 'Guardando...' : 'Guardar Nota' }}
+        </button>
         <button @click="imprimirTablas" class="print-button">Imprimir</button>
       </div>
   
@@ -254,26 +259,38 @@
 
       <div class="guardar-container">
         <div class="observacion-container">
-          <div class="checkbox-group">
-            <input type="checkbox" v-model="tieneObservacion" id="observacionCheck">
-            <label for="observacionCheck">Tiene observación</label>
-          </div>
-          <button v-if="tieneObservacion" @click="showObservacionModal = true" class="btn-editar">
-            {{ observacion ? 'Editar observación' : 'Agregar observación' }}
+          <button @click="agregarObservacion" class="btn-agregar-observacion">
+            <i class="fas fa-plus"></i> Agregar observación
           </button>
+        </div>
+        <!-- Mostrar observación existente -->
+        <div v-if="observacion" class="observacion-existente">
+          <div class="observacion-header">
+            <p class="observacion-titulo">Observación actual:</p>
+            <div class="observacion-buttons">
+              <button @click="editarObservacion" class="btn-editar">Editar</button>
+              <button @click="eliminarObservacion" class="btn-eliminar" title="Eliminar observación">×</button>
+            </div>
+          </div>
+          <p class="observacion-texto">{{ observacion }}</p>
         </div>
       </div>
 
       <!-- Modal de Observación -->
       <div v-if="showObservacionModal" class="modal-overlay">
         <div class="modal-content">
-          <h3>Agregar Observación</h3>
+          <h3>{{ observacion ? 'Editar' : 'Agregar' }} Observación</h3>
           <textarea v-model="observacion" placeholder="Escribe tu observación aquí..." rows="4"></textarea>
           <div class="modal-buttons">
             <button @click="guardarObservacion" class="btn-guardar">Guardar</button>
             <button @click="cancelarObservacion" class="btn-cancelar">Cancelar</button>
           </div>
         </div>
+      </div>
+
+      <!-- Mensaje de guardado automático -->
+      <div v-if="showSaveMessage" class="auto-save-message">
+        {{ lastSaveMessage }}
       </div>
     </div>
   </template>
@@ -347,7 +364,12 @@
         selectedField: null,
         tieneObservacion: false,
         showObservacionModal: false,
-        observacion: ''
+        observacion: '',
+        isGuardando: false,
+        lastSaveMessage: '',
+        showSaveMessage: false,
+        saveMessageTimer: null,
+        saveMessage: ''
       }
     },
     computed: {
@@ -443,6 +465,11 @@
               monto: Number(abono.monto) || 0
             }));
             this.fechaSeleccionada = data.fecha || this.obtenerFechaActual();
+            
+            // Cargar observaciones sin abrir el modal
+            this.showObservacionModal = false; // Asegurar que el modal esté cerrado
+            this.tieneObservacion = data.tieneObservacion || false;
+            this.observacion = data.observacion || '';
           } else {
             throw new Error("No se encontró la cuenta especificada");
           }
@@ -547,6 +574,9 @@
       async crearNuevaCuenta() {
         try {
           console.log('Iniciando creación de nueva cuenta...');
+          this.isGuardando = true;
+          this.lastSaveMessage = 'Creando nueva cuenta...';
+          this.showSaveMessage = true;
           
           // Verificar si ya existe una nota para esta fecha
           const cuentasRef = collection(db, 'cuentasOtilio');
@@ -559,30 +589,43 @@
           console.log('Query snapshot obtenido:', querySnapshot.size, 'documentos encontrados');
   
           if (!querySnapshot.empty) {
-            throw new Error('Ya existe una nota registrada para esta fecha.');
+            this.isGuardando = false;
+            this.lastSaveMessage = 'Ya existe una nota para esta fecha';
+            this.showSaveMessage = true;
+            setTimeout(() => {
+              this.showSaveMessage = false;
+            }, 3000);
+            return null;
           }
   
           // Obtener el saldo acumulado anterior
           console.log('Obteniendo saldo acumulado anterior...');
-          const saldoAnterior = await this.obtenerSaldoAcumuladoAnterior();
-          console.log('Saldo anterior obtenido:', saldoAnterior);
+          // Verificar si ya tenemos el saldo cargado
+          if (this.saldoAcumuladoAnterior === 0 || this.saldoAcumuladoAnterior === null) {
+            this.lastSaveMessage = 'Cargando saldo acumulado anterior...';
+            this.saldoAcumuladoAnterior = await this.obtenerSaldoAcumuladoAnterior();
+          }
+          console.log('Saldo anterior obtenido:', this.saldoAcumuladoAnterior);
   
           // Preparar los datos iniciales
           const notaData = {
             fecha: this.fechaSeleccionada,
-            items: [],
-            itemsVenta: [],
-            saldoAcumuladoAnterior: 0,
-            cobros: [],
-            abonos: [],
-            totalGeneral: 0,
-            totalGeneralVenta: 0,
+            items: this.items || [],
+            itemsVenta: this.itemsVenta || [],
+            saldoAcumuladoAnterior: this.saldoAcumuladoAnterior || 0,
+            cobros: this.cobros || [],
+            abonos: this.abonos || [],
+            totalGeneral: this.totalGeneral || 0,
+            totalGeneralVenta: this.totalGeneralVenta || 0,
             nuevoSaldoAcumulado: 0,
             estadoPagado: false,
+            tieneObservacion: Boolean(this.tieneObservacion),
+            observacion: String(this.observacion || ''),
             ultimaActualizacion: new Date().toISOString()
           };
   
           console.log('Datos preparados para crear nueva cuenta:', notaData);
+          this.lastSaveMessage = 'Guardando nueva cuenta...';
   
           try {
             // Intentar crear el documento en Firestore
@@ -599,6 +642,13 @@
   
             // Actualizar la URL y forzar la recarga del componente
             console.log('Actualizando URL...');
+            this.lastSaveMessage = 'Cuenta creada exitosamente';
+            
+            setTimeout(() => {
+              this.showSaveMessage = false;
+              this.isGuardando = false;
+            }, 2000);
+            
             await this.$router.push({
               name: 'CuentasOtilio',
               params: { id: docRef.id },
@@ -609,28 +659,61 @@
             console.log('Cargando datos de la nueva cuenta...');
             await this.loadExistingCuenta(docRef.id);
   
-            alert('Cuenta creada exitosamente');
             return docRef.id;
           } catch (firestoreError) {
             console.error('Error específico de Firestore:', firestoreError);
+            this.isGuardando = false;
+            this.lastSaveMessage = `Error: ${firestoreError.message}`;
+            this.showSaveMessage = true;
+            setTimeout(() => {
+              this.showSaveMessage = false;
+            }, 3000);
             throw new Error(`Error al crear el documento en Firestore: ${firestoreError.message}`);
           }
         } catch (error) {
           console.error('Error detallado al crear nueva cuenta:', error);
-          if (error.message === 'Ya existe una nota registrada para esta fecha.') {
-            alert(error.message);
-          } else {
-            alert(`Error al crear la cuenta: ${error.message}\nPor favor, revise la consola para más detalles.`);
-          }
+          this.isGuardando = false;
+          this.lastSaveMessage = `Error: ${error.message}`;
+          this.showSaveMessage = true;
+          setTimeout(() => {
+            this.showSaveMessage = false;
+          }, 3000);
           throw error;
         }
       },
   
       async guardarNota() {
         try {
+          // Deshabilitar el botón de guardar mientras se procesa
+          this.isGuardando = true;
+          
           // Validar datos antes de guardar
           if (!this.fechaSeleccionada) {
             throw new Error('La fecha es requerida');
+          }
+  
+          // Verificar si ya existe una nota para esta fecha antes de continuar
+          const id = this.$route.params.id;
+          const isEditing = this.$route.query.edit === 'true';
+          
+          if (!id || !isEditing) {
+            // Solo verificar duplicados si estamos creando una nueva nota
+            try {
+              const cuentasRef = collection(db, 'cuentasOtilio');
+              const q = query(cuentasRef, where('fecha', '==', this.fechaSeleccionada));
+              const querySnapshot = await getDocs(q);
+              
+              if (!querySnapshot.empty) {
+                alert('Ya existe una nota registrada para esta fecha. No se puede crear una nueva.');
+                this.isGuardando = false;
+                return;
+              }
+            } catch (networkError) {
+              console.error('Error de red al verificar notas existentes:', networkError);
+              alert('Error de conexión al verificar notas existentes. Por favor, verifica tu conexión a internet e intenta nuevamente.');
+              this.isGuardando = false;
+              return;
+            }
           }
   
           // Preparar los datos asegurándose que todos los números sean parseados correctamente
@@ -667,12 +750,12 @@
             nuevoSaldoAcumulado: Number(this.nuevoSaldoAcumulado) || 0,
             gananciaDelDia: Number(this.gananciaDelDia) || 0,
             estadoPagado: Boolean(this.totalDiaActual <= 0),
+            tieneObservacion: this.tieneObservacion,
+            observacion: this.observacion,
             ultimaActualizacion: new Date().toISOString()
           };
   
           // Obtener referencia del documento
-          const id = this.$route.params.id;
-          const isEditing = this.$route.query.edit === 'true';
           
           let docRef;
           
@@ -682,6 +765,17 @@
             await updateDoc(docRef, notaData);
             console.log('Documento actualizado exitosamente:', id);
           } else {
+            // Verificar si ya existe una nota para esta fecha antes de crear una nueva
+            const cuentasRef = collection(db, 'cuentasOtilio');
+            const q = query(cuentasRef, where('fecha', '==', this.fechaSeleccionada));
+            const querySnapshot = await getDocs(q);
+            
+            if (!querySnapshot.empty) {
+              alert('Ya existe una nota registrada para esta fecha. No se puede crear una nueva.');
+              this.isGuardando = false;
+              return null;
+            }
+            
             // Crear nuevo documento
             docRef = await addDoc(collection(db, 'cuentasOtilio'), notaData);
             console.log('Nuevo documento creado:', docRef.id);
@@ -719,8 +813,23 @@
   
         } catch (error) {
           console.error('Error al guardar nota:', error);
-          alert(`Error al guardar: ${error.message}`);
-          throw error;
+          
+          // Mejorar los mensajes de error para el usuario
+          let errorMessage = 'Error al guardar la nota.';
+          
+          if (error.code === 'unavailable' || error.code === 'network-request-failed') {
+            errorMessage = 'Error de conexión. Por favor, verifica tu conexión a internet e intenta nuevamente.';
+          } else if (error.code === 'permission-denied') {
+            errorMessage = 'No tienes permisos para realizar esta operación.';
+          } else if (error.code === 'resource-exhausted') {
+            errorMessage = 'Se ha excedido el límite de operaciones. Por favor, intenta más tarde.';
+          } else if (error.message) {
+            errorMessage = `Error al guardar: ${error.message}`;
+          }
+          
+          alert(errorMessage);
+        } finally {
+          this.isGuardando = false;
         }
       },
   
@@ -1100,6 +1209,8 @@
               nuevoSaldoAcumulado: Number(this.nuevoSaldoAcumulado) || 0,
               gananciaDelDia: Number(this.gananciaDelDia) || 0,
               estadoPagado: Boolean(this.totalDiaActual <= 0),
+              tieneObservacion: this.tieneObservacion,
+              observacion: this.observacion,
               ultimaActualizacion: new Date().toISOString()
             };
   
@@ -1113,9 +1224,40 @@
       async guardarCuenta() {
         try {
           const cuentaData = {
-            // ... existing code ...
-            tieneObservacion: this.tieneObservacion,
-            observacion: this.observacion,
+            fecha: this.fechaSeleccionada,
+            items: this.items.map(item => ({
+              kilos: Number(item.kilos) || 0,
+              medida: String(item.medida || ''),
+              costo: Number(item.costo) || 0,
+              total: Number(item.kilos * item.costo) || 0
+            })),
+            itemsVenta: this.itemsVenta.map(item => ({
+              kilosVenta: Number(item.kilosVenta) || 0,
+              medida: String(item.medida || ''),
+              precioVenta: Number(item.precioVenta) || 0,
+              totalVenta: Number(item.kilosVenta * item.precioVenta) || 0,
+              ganancia: Number(item.ganancia) || 0
+            })),
+            saldoAcumuladoAnterior: Number(this.saldoAcumuladoAnterior) || 0,
+            cobros: this.cobros.map(cobro => ({
+              descripcion: String(cobro.descripcion || ''),
+              monto: Number(cobro.monto) || 0
+            })),
+            abonos: this.abonos.map(abono => ({
+              descripcion: String(abono.descripcion || ''),
+              monto: Number(abono.monto) || 0
+            })),
+            totalGeneral: Number(this.totalGeneral) || 0,
+            totalGeneralVenta: Number(this.totalGeneralVenta) || 0,
+            totalCobros: Number(this.cobros.reduce((sum, cobro) => sum + (Number(cobro.monto) || 0), 0)),
+            totalAbonos: Number(this.abonos.reduce((sum, abono) => sum + (Number(abono.monto) || 0), 0)),
+            totalDia: Number(this.totalDiaActual) || 0,
+            nuevoSaldoAcumulado: Number(this.nuevoSaldoAcumulado) || 0,
+            gananciaDelDia: Number(this.gananciaDelDia) || 0,
+            estadoPagado: Boolean(this.totalDiaActual <= 0),
+            tieneObservacion: Boolean(this.tieneObservacion),
+            observacion: String(this.observacion || ''),
+            ultimaActualizacion: new Date().toISOString()
           };
           // ... rest of the existing guardarCuenta code ...
         } catch (error) {
@@ -1123,21 +1265,304 @@
           alert('Error al guardar la cuenta');
         }
       },
+      agregarObservacion() {
+        this.showObservacionModal = true;
+      },
       guardarObservacion() {
+        // Actualizar el estado de tieneObservacion basado en el contenido
+        this.tieneObservacion = this.observacion.trim().length > 0;
+        
+        // Cerrar el modal
         this.showObservacionModal = false;
+        
+        // Si estamos editando una cuenta existente, guardar los cambios
+        if (this.$route.params.id && this.$route.query.edit === 'true') {
+          this.handleDataChange();
+        }
       },
       cancelarObservacion() {
+        if (!this.tieneObservacion) {
+          this.observacion = '';
+        }
+        this.showObservacionModal = false;
+      },
+      editarObservacion() {
+        this.showObservacionModal = true;
+      },
+      eliminarObservacion() {
+        if (confirm('¿Estás seguro de que deseas eliminar esta observación?')) {
+          this.observacion = '';
+          this.tieneObservacion = false;
+          
+          // Si estamos editando una cuenta existente, guardar los cambios
+          if (this.$route.params.id && this.$route.query.edit === 'true') {
+            this.handleDataChange();
+          }
+        }
+      },
+      handleDataChange() {
+        if (this.$route.params.id && this.$route.query.edit === 'true') {
+          if (this.autoSaveTimer) {
+            clearTimeout(this.autoSaveTimer);
+          }
+          this.autoSaveTimer = setTimeout(async () => {
+            await this.queueSave();
+          }, 2000); // Delay de 2 segundos
+        }
+      },
+      async queueSave() {
+        // Agregar operación a la cola con timestamp
+        this.saveQueue.push({
+          timestamp: Date.now(),
+          operation: async () => {
+            if (!this.$route.params.id) {
+              // No intentar crear una nueva cuenta automáticamente
+              // Solo mostrar un mensaje en la consola
+              console.log('No hay ID de cuenta, no se realizará guardado automático');
+              return;
+            } else {
+              await this.autoSaveNota();
+            }
+          }
+        });
+
+        // Procesar la cola si no hay guardado en proceso
+        if (!this.isSaving) {
+          await this.processSaveQueue();
+        }
+      },
+      async processSaveQueue() {
+        if (this.isSaving || this.saveQueue.length === 0) return;
+
+        this.isSaving = true;
+
+        try {
+          while (this.saveQueue.length > 0) {
+            // Verificar el tiempo desde el último guardado
+            const now = Date.now();
+            if (this.lastSaveTime && now - this.lastSaveTime < this.saveMinInterval) {
+              // Esperar antes de intentar el siguiente guardado
+              await new Promise(resolve => 
+                setTimeout(resolve, this.saveMinInterval - (now - this.lastSaveTime))
+              );
+            }
+
+            const nextSave = this.saveQueue[0];
+            await this.retryOperation(nextSave.operation);
+            this.lastSaveTime = Date.now();
+            this.saveQueue.shift();
+          }
+        } catch (error) {
+          console.error('Error procesando cola de guardado:', error);
+          if (error.code === 'resource-exhausted') {
+            // Esperar 10 segundos antes de reintentar si se excedió la cuota
+            await new Promise(resolve => setTimeout(resolve, 10000));
+            // Reintentar el procesamiento
+            await this.processSaveQueue();
+          }
+        } finally {
+          this.isSaving = false;
+        }
+      },
+      async autoSaveNota() {
+        try {
+          const id = this.$route.params.id;
+          if (!id) return;
+          
+          // Preparar los datos para guardar
+          const notaData = {
+            fecha: this.fechaSeleccionada,
+            items: this.items.map(item => ({
+              kilos: Number(item.kilos) || 0,
+              medida: String(item.medida || ''),
+              costo: Number(item.costo) || 0,
+              total: Number(item.kilos * item.costo) || 0
+            })),
+            itemsVenta: this.itemsVenta.map(item => ({
+              kilosVenta: Number(item.kilosVenta) || 0,
+              medida: String(item.medida || ''),
+              precioVenta: Number(item.precioVenta) || 0,
+              totalVenta: Number(item.kilosVenta * item.precioVenta) || 0,
+              ganancia: Number(item.ganancia) || 0
+            })),
+            saldoAcumuladoAnterior: Number(this.saldoAcumuladoAnterior) || 0,
+            cobros: this.cobros.map(cobro => ({
+              descripcion: String(cobro.descripcion || ''),
+              monto: Number(cobro.monto) || 0
+            })),
+            abonos: this.abonos.map(abono => ({
+              descripcion: String(abono.descripcion || ''),
+              monto: Number(abono.monto) || 0
+            })),
+            // Calcular totales
+            totalGeneral: Number(this.totalGeneral) || 0,
+            totalGeneralVenta: Number(this.totalGeneralVenta) || 0,
+            totalCobros: Number(this.cobros.reduce((sum, cobro) => sum + (Number(cobro.monto) || 0), 0)),
+            totalAbonos: Number(this.abonos.reduce((sum, abono) => sum + (Number(abono.monto) || 0), 0)),
+            totalDia: Number(this.totalDiaActual) || 0,
+            nuevoSaldoAcumulado: Number(this.nuevoSaldoAcumulado) || 0,
+            gananciaDelDia: Number(this.gananciaDelDia) || 0,
+            estadoPagado: Boolean(this.totalDiaActual <= 0),
+            tieneObservacion: Boolean(this.tieneObservacion),
+            observacion: String(this.observacion || ''),
+            ultimaActualizacion: new Date().toISOString()
+          };
+
+          await updateDoc(doc(db, 'cuentasOtilio', id), notaData);
+          
+          // Mostrar mensaje de confirmación
+          this.lastSaveMessage = `Guardado automático: ${new Date().toLocaleTimeString()}`;
+          this.showSaveMessage = true;
+          
+          // Ocultar el mensaje después de 3 segundos
+          if (this.saveMessageTimer) {
+            clearTimeout(this.saveMessageTimer);
+          }
+          this.saveMessageTimer = setTimeout(() => {
+            this.showSaveMessage = false;
+          }, 3000);
+          
+          console.log('Cuenta auto-guardada exitosamente:', new Date().toLocaleTimeString());
+        } catch (error) {
+          console.error('Error en auto-guardado:', error);
+          
+          // Mejorar los mensajes de error para el usuario
+          if (error.code === 'resource-exhausted') {
+            this.lastSaveMessage = 'Límite de operaciones excedido. Reintentando...';
+            throw error; // Dejar que el sistema de cola maneje el reintento
+          } else if (error.code === 'unavailable' || error.code === 'network-request-failed') {
+            this.lastSaveMessage = 'Error de conexión al guardar automáticamente';
+          } else {
+            this.lastSaveMessage = 'Error al guardar automáticamente';
+          }
+          
+          this.showSaveMessage = true;
+          
+          if (this.saveMessageTimer) {
+            clearTimeout(this.saveMessageTimer);
+          }
+          this.saveMessageTimer = setTimeout(() => {
+            this.showSaveMessage = false;
+          }, 3000);
+          
+          throw error;
+        }
+      },
+      async retryOperation(operation, maxRetries = 3) {
+        let retries = 0;
+        while (retries < maxRetries) {
+          try {
+            return await operation();
+          } catch (error) {
+            retries++;
+            console.error(`Error en operación (intento ${retries}/${maxRetries}):`, error);
+            
+            // Si es un error de cuota excedida, esperar más tiempo
+            if (error.code === 'resource-exhausted') {
+              await new Promise(resolve => setTimeout(resolve, 5000 * Math.pow(2, retries)));
+            } else {
+              // Para otros errores, esperar menos tiempo
+              await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, retries)));
+            }
+            
+            // Si es el último intento, lanzar el error
+            if (retries >= maxRetries) {
+              console.error('Se alcanzó el número máximo de intentos. Operación fallida.');
+              throw error;
+            }
+          }
+        }
+      },
+      
+      limpiarDatos() {
+        // Limpiar todos los datos del formulario
+        this.items = [];
+        this.itemsVenta = [];
+        this.saldoAcumuladoAnterior = 0;
+        this.cobros = [];
+        this.abonos = [];
+        this.fechaSeleccionada = this.obtenerFechaActual();
+        this.estadoPagado = false;
         this.tieneObservacion = false;
         this.observacion = '';
-        this.showObservacionModal = false;
+        this.newItem = {
+          kilos: null,
+          medida: '',
+          costo: null,
+          precioVenta: null
+        };
+        
+        // Cargar el saldo acumulado anterior para la fecha actual
+        this.loadSaldoAcumuladoAnterior();
+      },
+      
+      async loadSaldoAcumuladoAnterior() {
+        try {
+          this.isSaving = true;
+          this.lastSaveMessage = 'Cargando saldo acumulado anterior...';
+          this.showSaveMessage = true;
+          
+          // Obtener el saldo acumulado anterior
+          this.saldoAcumuladoAnterior = await this.obtenerSaldoAcumuladoAnterior();
+          console.log("Saldo acumulado anterior cargado:", this.saldoAcumuladoAnterior);
+          
+          this.lastSaveMessage = 'Saldo acumulado anterior cargado correctamente';
+          
+          // Configurar un temporizador para ocultar el mensaje después de 3 segundos
+          this.saveMessageTimer = setTimeout(() => {
+            this.showSaveMessage = false;
+            this.isSaving = false;
+          }, 3000);
+          
+          return this.saldoAcumuladoAnterior;
+        } catch (error) {
+          console.error("Error al cargar el saldo acumulado anterior:", error);
+          this.saldoAcumuladoAnterior = 0;
+          this.lastSaveMessage = 'Error al cargar el saldo acumulado anterior';
+          this.showSaveMessage = true;
+          
+          // Configurar un temporizador para ocultar el mensaje después de 3 segundos
+          this.saveMessageTimer = setTimeout(() => {
+            this.showSaveMessage = false;
+            this.isSaving = false;
+          }, 3000);
+          
+          return 0;
+        }
       },
     },
     created() {
       const id = this.$route.params.id;
       const isEditing = this.$route.query.edit === 'true';
+      const isNewRoute = this.$route.path === '/cuentas-otilio/nueva';
       
       if (id && isEditing) {
         this.loadExistingCuenta(id);
+      } else if (isNewRoute) {
+        // Si estamos en la ruta de nueva cuenta, crear automáticamente
+        this.$nextTick(async () => {
+          try {
+            // Limpiar datos primero
+            this.limpiarDatos();
+            
+            // Esperar a que se cargue el saldo acumulado anterior
+            await this.loadSaldoAcumuladoAnterior();
+            
+            // Esperar un momento para asegurar que los datos estén actualizados
+            setTimeout(async () => {
+              // Crear nueva cuenta automáticamente
+              const docId = await this.crearNuevaCuenta();
+              if (docId) {
+                console.log('Nueva cuenta creada automáticamente con ID:', docId);
+              }
+            }, 800); // Aumentamos el tiempo de espera para asegurar que el saldo se cargue
+          } catch (error) {
+            console.error('Error al crear nueva cuenta automáticamente:', error);
+          }
+        });
+      } else {
+        // Si no estamos editando, cargar el saldo acumulado anterior
+        this.limpiarDatos();
       }
     },
     watch: {
@@ -1149,19 +1574,46 @@
           this.loadExistingCuenta(id);
         } else {
           // Limpiar los datos si no estamos editando
-          this.items = [];
-          this.itemsVenta = [];
-          this.saldoAcumuladoAnterior = 0;
-          this.cobros = [];
-          this.abonos = [];
-          this.fechaSeleccionada = this.obtenerFechaActual();
-          this.estadoPagado = false;
+          this.limpiarDatos();
         }
       },
-      tieneObservacion(newValue) {
-        if (newValue) {
-          this.showObservacionModal = true;
-        }
+      items: {
+        handler: 'handleDataChange',
+        deep: true
+      },
+      itemsVenta: {
+        handler: 'handleDataChange',
+        deep: true
+      },
+      cobros: {
+        handler: 'handleDataChange',
+        deep: true
+      },
+      abonos: {
+        handler: 'handleDataChange',
+        deep: true
+      },
+      fechaSeleccionada: {
+        handler: 'handleDataChange'
+      },
+      saldoAcumuladoAnterior: {
+        handler: 'handleDataChange'
+      },
+      'newItem.kilos': 'handleDataChange',
+      'newItem.medida': 'handleDataChange',
+      'newItem.costo': 'handleDataChange',
+      observacion: 'handleDataChange'
+    },
+    beforeUnmount() {
+      if (this.autoSaveTimer) {
+        clearTimeout(this.autoSaveTimer);
+      }
+      if (this.saveMessageTimer) {
+        clearTimeout(this.saveMessageTimer);
+      }
+      // Intentar procesar cualquier guardado pendiente
+      if (this.saveQueue.length > 0) {
+        this.processSaveQueue();
       }
     }
   };
@@ -1658,5 +2110,139 @@
     padding: 8px 16px;
     border-radius: 4px;
     cursor: pointer;
+  }
+
+  .auto-save-indicator {
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    background-color: rgba(0, 0, 0, 0.7);
+    color: white;
+    padding: 5px 10px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    font-size: 14px;
+    z-index: 1000;
+  }
+
+  .save-dot {
+    width: 8px;
+    height: 8px;
+    background-color: #4CAF50;
+    border-radius: 50%;
+    margin-right: 8px;
+    animation: blink 1.5s infinite;
+  }
+
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+  }
+
+  /* Estilos de mensaje de guardado automático */
+  .auto-save-message {
+    position: fixed;
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: rgba(0, 0, 0, 0.7);
+    color: white;
+    padding: 5px 10px;
+    border-radius: 4px;
+    z-index: 1001;
+    animation: fadeIn 0.3s ease;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .btn-agregar-observacion {
+    background-color: #9c27b0;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    transition: all 0.3s ease;
+  }
+
+  .btn-agregar-observacion:hover {
+    background-color: #7b1fa2;
+    transform: translateY(-2px);
+  }
+
+  .btn-agregar-observacion i {
+    font-size: 12px;
+  }
+
+  .observacion-existente {
+    margin-top: 10px;
+    padding: 10px;
+    background-color: #f5f5f5;
+    border-radius: 4px;
+    border-left: 4px solid #9c27b0;
+  }
+
+  .observacion-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 5px;
+  }
+
+  .observacion-titulo {
+    font-weight: bold;
+    margin: 0;
+  }
+
+  .observacion-buttons {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .btn-editar {
+    background-color: #2196F3;
+    color: white;
+    border: none;
+    padding: 4px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+  }
+
+  .btn-eliminar {
+    background-color: #f44336;
+    color: white;
+    border: none;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 20px;
+    line-height: 1;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+    font-weight: bold;
+  }
+
+  .btn-eliminar:hover {
+    background-color: #d32f2f;
+    transform: scale(1.1);
+  }
+
+  .observacion-texto {
+    margin: 5px 0 0 0;
+    white-space: pre-wrap;
   }
   </style> 

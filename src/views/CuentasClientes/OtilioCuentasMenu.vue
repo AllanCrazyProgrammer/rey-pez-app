@@ -178,8 +178,8 @@ export default {
               nuevoSaldoAcumulado: data.nuevoSaldoAcumulado || 0,
               saldoAcumuladoAnterior: data.saldoAcumuladoAnterior || 0,
               abonos: data.abonos || [],
-              tieneObservacion: data.tieneObservacion || false,
-              observacion: data.observacion || ''
+              tieneObservacion: Boolean(data.tieneObservacion) || false,
+              observacion: String(data.observacion || '')
             };
           });
 
@@ -312,8 +312,12 @@ export default {
       }
     },
     mostrarObservacion(cuenta) {
-      this.observacionActual = cuenta.observacion;
-      this.showObservacionModal = true;
+      if (cuenta && cuenta.observacion) {
+        this.observacionActual = cuenta.observacion;
+        this.showObservacionModal = true;
+      } else {
+        console.error('No hay observación disponible para mostrar');
+      }
     }
   },
   watch: {

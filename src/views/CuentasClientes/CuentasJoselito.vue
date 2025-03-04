@@ -459,6 +459,9 @@ export default {
             monto: Number(abono.monto) || 0
           }));
           this.fechaSeleccionada = data.fecha || this.obtenerFechaActual();
+          
+          // Cargar observaciones sin abrir el modal
+          this.showObservacionModal = false; // Asegurar que el modal esté cerrado
           this.tieneObservacion = data.tieneObservacion || false;
           this.observacion = data.observacion || '';
         } else {
@@ -1380,11 +1383,6 @@ export default {
         this.abonos = [];
         this.fechaSeleccionada = this.obtenerFechaActual();
         this.estadoPagado = false;
-      }
-    },
-    tieneObservacion(newValue) {
-      if (newValue) {
-        this.showObservacionModal = true;
       }
     },
     // Watchers para guardado automático

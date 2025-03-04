@@ -420,10 +420,7 @@ export default {
     'newItem.kilos': 'handleDataChange',
     'newItem.medida': 'handleDataChange',
     'newItem.costo': 'handleDataChange',
-    observacion: 'handleDataChange',
-    tieneObservacion(newValue) {
-      // Eliminar este watch o modificarlo para que no abra el modal automáticamente
-    }
+    observacion: 'handleDataChange'
   },
   async mounted() {
     console.log("Mounted ejecutado", this.$route.params, this.$route.query);
@@ -453,6 +450,9 @@ export default {
             this.cobros = data.cobros || [];
             this.abonos = data.abonos || [];
             this.fechaSeleccionada = data.fecha || this.obtenerFechaActual();
+            
+            // Cargar observaciones sin abrir el modal
+            this.showObservacionModal = false; // Asegurar que el modal esté cerrado
             this.tieneObservacion = data.tieneObservacion || false;
             this.observacion = data.observacion || '';
             
