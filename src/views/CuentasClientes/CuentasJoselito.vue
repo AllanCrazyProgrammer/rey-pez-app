@@ -210,8 +210,20 @@
 
     <div class="guardar-container">
       <div class="observacion-container">
-        <input type="checkbox" v-model="tieneObservacion" id="observacionCheck">
-        <label for="observacionCheck">Tiene observación</label>
+        <button @click="agregarObservacion" class="btn-agregar-observacion">
+          <i class="fas fa-plus"></i> Agregar observación
+        </button>
+      </div>
+      <!-- Mostrar observación existente -->
+      <div v-if="observacion" class="observacion-existente">
+        <div class="observacion-header">
+          <p class="observacion-titulo">Observación actual:</p>
+          <div class="observacion-buttons">
+            <button @click="editarObservacion" class="btn-editar">Editar</button>
+            <button @click="eliminarObservacion" class="btn-eliminar" title="Eliminar observación">×</button>
+          </div>
+        </div>
+        <p class="observacion-texto">{{ observacion }}</p>
       </div>
       <button @click="guardarCuenta" class="btn-guardar">Guardar</button>
     </div>
@@ -219,7 +231,7 @@
     <!-- Modal de Observación -->
     <div v-if="showObservacionModal" class="modal-overlay">
       <div class="modal-content">
-        <h3>Agregar Observación</h3>
+        <h3>{{ observacion ? 'Editar' : 'Agregar' }} Observación</h3>
         <textarea v-model="observacion" placeholder="Escribe tu observación aquí..." rows="4"></textarea>
         <div class="modal-buttons">
           <button @click="guardarObservacion" class="btn-guardar">Guardar</button>
@@ -282,7 +294,8 @@ import {
   getDocs, 
   orderBy, 
   limit, 
-  deleteDoc 
+  deleteDoc,
+  writeBatch
 } from 'firebase/firestore';
 import BackButton from '@/components/BackButton.vue';
 import PreciosHistorialModal from '@/components/PreciosHistorialModal.vue';
@@ -339,6 +352,7 @@ export default {
       tieneObservacion: false,
       showObservacionModal: false,
       observacion: '',
+      debounceTimers: {},
     }
   },
   computed: {
@@ -434,6 +448,8 @@ export default {
             monto: Number(abono.monto) || 0
           }));
           this.fechaSeleccionada = data.fecha || this.obtenerFechaActual();
+          this.tieneObservacion = data.tieneObservacion || false;
+          this.observacion = data.observacion || '';
         } else {
           throw new Error("No se encontró la cuenta especificada");
         }
@@ -503,6 +519,7 @@ export default {
         );
 
         let saldoAcumulado = 0;
+        const batch = writeBatch(db);
 
         // Procesar cada cuenta en orden cronológico
         for (let i = 0; i < cuentasOrdenadas.length; i++) {
@@ -517,8 +534,8 @@ export default {
           // El saldo acumulado es el saldo anterior más el total del día
           saldoAcumulado = saldoAcumulado + totalDia;
           
-          // Actualizar la cuenta
-          await updateDoc(cuentaRef, {
+          // Actualizar la cuenta usando batch
+          batch.update(cuentaRef, {
             saldoAcumuladoAnterior: i === 0 ? 0 : cuentasOrdenadas[i-1].nuevoSaldoAcumulado,
             nuevoSaldoAcumulado: saldoAcumulado,
             estadoPagado: saldoAcumulado <= 0
@@ -529,6 +546,9 @@ export default {
             saldoAcumulado = 0;
           }
         }
+
+        // Ejecutar todas las actualizaciones en una sola operación
+        await batch.commit();
       } catch (error) {
         console.error('Error al actualizar cuentas posteriores:', error);
         throw error;
@@ -658,6 +678,8 @@ export default {
           nuevoSaldoAcumulado: Number(this.nuevoSaldoAcumulado) || 0,
           gananciaDelDia: Number(this.gananciaDelDia) || 0,
           estadoPagado: Boolean(this.totalDiaActual <= 0),
+          tieneObservacion: this.tieneObservacion,
+          observacion: this.observacion,
           ultimaActualizacion: new Date().toISOString()
         };
 
@@ -883,11 +905,8 @@ export default {
           ganancia: ganancia
         });
         
-        // Guardar silenciosamente después de modificaciones
-        if (this.autoSaveTimer) clearTimeout(this.autoSaveTimer);
-        this.autoSaveTimer = setTimeout(() => {
-          this.guardarSilencioso();
-        }, 1000);
+        // Guardar silenciosamente después de modificaciones con debounce
+        this.debounceGuardarSilencioso(index);
       }
     },
 
@@ -1072,14 +1091,50 @@ export default {
       }
     },
 
+    debounceGuardarSilencioso(index) {
+      // Cancelar el timer existente para este índice si existe
+      if (this.debounceTimers[index]) {
+        clearTimeout(this.debounceTimers[index]);
+      }
+      
+      // Crear un nuevo timer para este índice
+      this.debounceTimers[index] = setTimeout(() => {
+        this.guardarSilencioso();
+        delete this.debounceTimers[index]; // Limpiar la referencia
+      }, 1000);
+    },
+
     async guardarSilencioso() {
       try {
         const id = this.$route.params.id;
         const isEditing = this.$route.query.edit === 'true';
         
         if (id && isEditing) {
+          // Verificar si hay una operación de guardado en curso
+          if (this.isSaving) {
+            // Si hay una operación en curso, encolar esta solicitud
+            this.saveQueue.push(true);
+            return;
+          }
+          
+          // Verificar si ha pasado suficiente tiempo desde el último guardado
+          const now = Date.now();
+          if (this.lastSaveTime && now - this.lastSaveTime < this.saveMinInterval) {
+            // Si no ha pasado suficiente tiempo, programar un guardado posterior
+            if (!this.autoSaveTimer) {
+              this.autoSaveTimer = setTimeout(() => {
+                this.guardarSilencioso();
+              }, this.saveMinInterval - (now - this.lastSaveTime));
+            }
+            return;
+          }
+          
+          // Marcar como guardando
+          this.isSaving = true;
+          this.lastSaveTime = now;
+          
+          // Preparar solo los datos que necesitan ser actualizados
           const notaData = {
-            fecha: this.fechaSeleccionada,
             items: this.items.map(item => ({
               kilos: Number(item.kilos) || 0,
               medida: String(item.medida || ''),
@@ -1093,23 +1148,29 @@ export default {
               totalVenta: Number(item.kilosVenta * item.precioVenta) || 0,
               ganancia: Number(item.ganancia) || 0
             })),
-            saldoAcumuladoAnterior: Number(this.saldoAcumuladoAnterior) || 0,
-            cobros: this.cobros,
-            abonos: this.abonos,
             totalGeneral: Number(this.totalGeneral) || 0,
             totalGeneralVenta: Number(this.totalGeneralVenta) || 0,
-            totalDia: Number(this.totalDiaActual) || 0,
-            nuevoSaldoAcumulado: Number(this.nuevoSaldoAcumulado) || 0,
             gananciaDelDia: Number(this.gananciaDelDia) || 0,
-            estadoPagado: Boolean(this.totalDiaActual <= 0),
             ultimaActualizacion: new Date().toISOString()
           };
 
           const docRef = doc(db, 'cuentasJoselito', id);
           await updateDoc(docRef, notaData);
+          
+          // Marcar como no guardando
+          this.isSaving = false;
+          
+          // Procesar la cola de guardados
+          if (this.saveQueue.length > 0) {
+            this.saveQueue.shift(); // Eliminar el primer elemento
+            setTimeout(() => {
+              this.guardarSilencioso();
+            }, 100);
+          }
         }
       } catch (error) {
         console.error('Error al guardar silenciosamente:', error);
+        this.isSaving = false;
       }
     },
 
@@ -1168,14 +1229,11 @@ export default {
           });
         }
 
-        // Verificar que los datos se guardaron correctamente
-        const savedDoc = await getDoc(docRef);
-        if (!savedDoc.exists()) {
-          throw new Error('Error al verificar el documento guardado');
-        }
-
-        // Actualizar cuentas posteriores
-        await this.actualizarCuentasPosteriores(this.fechaSeleccionada);
+        // Actualizar cuentas posteriores en segundo plano
+        setTimeout(() => {
+          this.actualizarCuentasPosteriores(this.fechaSeleccionada)
+            .catch(error => console.error('Error al actualizar cuentas posteriores:', error));
+        }, 100);
 
         alert('Cuenta guardada exitosamente');
         return docRef.id;
@@ -1186,15 +1244,34 @@ export default {
         throw error;
       }
     },
-
+    
+    agregarObservacion() {
+      this.showObservacionModal = true;
+    },
+    
     guardarObservacion() {
+      if (this.observacion.trim()) {
+        this.tieneObservacion = true;
+      }
       this.showObservacionModal = false;
     },
-
+    
     cancelarObservacion() {
-      this.tieneObservacion = false;
-      this.observacion = '';
+      if (!this.tieneObservacion) {
+        this.observacion = '';
+      }
       this.showObservacionModal = false;
+    },
+    
+    editarObservacion() {
+      this.showObservacionModal = true;
+    },
+    
+    eliminarObservacion() {
+      if (confirm('¿Estás seguro de que deseas eliminar esta observación?')) {
+        this.observacion = '';
+        this.tieneObservacion = false;
+      }
     },
   },
   created() {
@@ -1228,6 +1305,17 @@ export default {
         this.showObservacionModal = true;
       }
     }
+  },
+  beforeUnmount() {
+    // Limpiar todos los timers al desmontar el componente
+    if (this.autoSaveTimer) {
+      clearTimeout(this.autoSaveTimer);
+    }
+    
+    // Limpiar todos los timers de debounce
+    Object.values(this.debounceTimers).forEach(timer => {
+      clearTimeout(timer);
+    });
   }
 };
 </script>
@@ -1646,58 +1734,91 @@ h1, h2 {
   gap: 8px;
 }
 
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(0, 0, 0, 0.5);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 1000;
-}
-
-.modal-content {
-  background-color: white;
-  padding: 20px;
-  border-radius: 8px;
-  width: 90%;
-  max-width: 500px;
-}
-
-.modal-content textarea {
-  width: 100%;
-  padding: 10px;
-  margin: 10px 0;
-  border: 1px solid #ddd;
+.btn-agregar-observacion {
+  background-color: #2196F3;
+  color: white;
+  border: none;
+  padding: 8px 16px;
   border-radius: 4px;
-  resize: vertical;
-}
-
-.modal-buttons {
+  cursor: pointer;
   display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  margin-top: 15px;
+  align-items: center;
+  gap: 5px;
 }
 
-.btn-guardar {
+.btn-agregar-observacion:hover {
+  background-color: #1976D2;
+}
+
+.btn-agregar-observacion i {
+  font-size: 14px;
+}
+
+.observacion-existente {
+  background-color: #e3f2fd;
+  padding: 10px;
+  border-radius: 4px;
+  margin: 10px 0;
+  width: 100%;
+}
+
+.observacion-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 5px;
+}
+
+.observacion-titulo {
+  font-weight: bold;
+  margin: 0;
+  color: #2196F3;
+}
+
+.observacion-buttons {
+  display: flex;
+  gap: 5px;
+}
+
+.btn-editar {
   background-color: #4CAF50;
   color: white;
   border: none;
-  padding: 8px 16px;
+  padding: 4px 8px;
   border-radius: 4px;
   cursor: pointer;
+  font-size: 12px;
 }
 
-.btn-cancelar {
+.btn-eliminar {
   background-color: #f44336;
   color: white;
   border: none;
-  padding: 8px 16px;
+  padding: 4px 8px;
   border-radius: 4px;
   cursor: pointer;
+  font-size: 12px;
+}
+
+.observacion-texto {
+  margin: 0;
+  white-space: pre-wrap;
+  color: #333;
+}
+
+@media (max-width: 600px) {
+  .guardar-container {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .observacion-container {
+    margin-bottom: 10px;
+  }
+  
+  .btn-agregar-observacion {
+    width: 100%;
+    justify-content: center;
+  }
 }
 </style> 
