@@ -114,6 +114,7 @@
               v-if="editingKilosIndex === index"
               v-model.number="item.kilosVenta"
               type="number"
+              @input="actualizarTotalKilos(index)"
               @blur="finishEditingKilos"
               @keyup.enter="finishEditingKilos"
               ref="kilosInput"
@@ -125,7 +126,7 @@
               :value="item.precioVenta"
               @input="(e) => {
                 item.precioVenta = Number(e.target.value);
-                calcularTotalVenta(index);
+                actualizarTotalKilos(index);
               }"
               type="number" 
               class="precio-venta-input" 
@@ -935,19 +936,10 @@ export default {
     },
 
     calcularTotalVenta(index) {
-      const item = this.itemsVenta[index];
-      if (!item) return;
+      if (!this.itemsVenta[index]) return;
       
       try {
-        const kilos = parseFloat(item.kilosVenta) || 0;
-        const precio = parseFloat(item.precioVenta) || 0;
-        item.totalVenta = kilos * precio;
-        
-        const itemCosto = this.items[index];
-        const totalCosto = itemCosto ? (itemCosto.total || 0) : 0;
-        item.ganancia = (item.totalVenta || 0) - totalCosto;
-        
-        this.actualizarItemsVenta();
+        this.actualizarTotalKilos(index);
         
         // El guardado automático se activará por los watchers
       } catch (error) {
@@ -1031,8 +1023,23 @@ export default {
     },
 
     finishEditingKilos() {
+      if (this.editingKilosIndex !== null) {
+        this.calcularTotalVenta(this.editingKilosIndex);
+      }
       this.editingKilosIndex = null;
-      this.calcularTotalVenta(this.editingKilosIndex);
+    },
+
+    actualizarTotalKilos(index) {
+      if (index !== null && this.itemsVenta[index]) {
+        const item = this.itemsVenta[index];
+        const kilos = parseFloat(item.kilosVenta) || 0;
+        const precio = parseFloat(item.precioVenta) || 0;
+        item.totalVenta = kilos * precio;
+        
+        const itemCosto = this.items[index];
+        const totalCosto = itemCosto ? (itemCosto.total || 0) : 0;
+        item.ganancia = (item.totalVenta || 0) - totalCosto;
+      }
     },
 
     toggleGananciasMobile(index) {
