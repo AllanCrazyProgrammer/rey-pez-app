@@ -5,10 +5,16 @@
     </div>
     <div class="back-button-container">
       <BackButton to="/cuentas-catarro" />
-      <PreciosHistorialModal />
+      <PreciosHistorialModal clienteActual="catarro" />
       <StashModal cliente="catarro" />
     </div>
     <h1>Cuentas Catarro</h1>
+    
+    <!-- Botón de precios específicos para Catarro -->
+    <div class="precios-button-container">
+      <PreciosClienteButton clienteId="catarro" />
+    </div>
+    
     <div class="fecha-actual">
       <div class="fecha-input">
         <input type="date" v-model="fechaSeleccionada">
@@ -292,13 +298,15 @@ import { collection, addDoc, doc, getDoc, updateDoc, query, where, getDocs, orde
 import BackButton from '@/components/BackButton.vue';
 import PreciosHistorialModal from '@/components/PreciosHistorialModal.vue';
 import StashModal from '@/components/StashModal.vue';
+import PreciosClienteButton from '@/components/PreciosClienteButton.vue';
 
 export default {
   name: 'CuentasCatarro',
   components: {
     BackButton,
     PreciosHistorialModal,
-    StashModal
+    StashModal,
+    PreciosClienteButton
   },
   data() {
     return {
@@ -1696,5 +1704,11 @@ tr:hover {
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(-20px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+.precios-button-container {
+  display: flex;
+  justify-content: center;
+  margin: 15px 0;
 }
 </style>

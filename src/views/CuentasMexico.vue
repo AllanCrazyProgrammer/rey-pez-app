@@ -14,6 +14,11 @@
           </div>
         </div>
         
+        <!-- Botón de Precios de Venta -->
+        <div class="precios-container">
+          <PreciosHistorialModal />
+        </div>
+        
         <!-- Contenedor de botones de clientes -->
         <div class="botones-container">
           <router-link to="/cuentas-ozuna" class="boton-cuenta">
@@ -52,11 +57,13 @@
 
 <script>
 import TransaccionesAgendaModal from '@/components/TransaccionesAgendaModal.vue';
+import PreciosHistorialModal from '@/components/PreciosHistorialModal.vue';
 
 export default {
   name: 'CuentasMexico',
   components: {
-    TransaccionesAgendaModal
+    TransaccionesAgendaModal,
+    PreciosHistorialModal
   },
   data() {
     return {
@@ -235,5 +242,13 @@ h1 {
 
 .card.otilio h2 {
   color: #000;
+}
+
+.precios-container {
+  width: 100%;
+  max-width: 600px;
+  margin-bottom: 30px;
+  display: flex;
+  justify-content: center;
 }
 </style>

@@ -5,10 +5,13 @@
     </div>
     <div class="back-button-container">
       <BackButton to="/cuentas-joselito" />
-      <PreciosHistorialModal />
+      <PreciosHistorialModal clienteActual="joselito" />
       <StashModal cliente="joselito" />
     </div>
     <h1>Cuentas Joselito</h1>
+    
+
+    
     <div class="fecha-actual">
       <div class="fecha-input">
         <input type="date" v-model="fechaSeleccionada">
@@ -308,13 +311,15 @@ import {
 import BackButton from '@/components/BackButton.vue';
 import PreciosHistorialModal from '@/components/PreciosHistorialModal.vue';
 import StashModal from '@/components/StashModal.vue';
+import PreciosClienteButton from '@/components/PreciosClienteButton.vue';
 
 export default {
   name: 'CuentasJoselito',
   components: {
     BackButton,
     PreciosHistorialModal,
-    StashModal
+    StashModal,
+    PreciosClienteButton
   },
   data() {
     return {
@@ -1978,5 +1983,11 @@ h1, h2 {
   margin: 0;
   white-space: pre-wrap;
   color: #fff;
+}
+
+.precios-button-container {
+  display: flex;
+  justify-content: center;
+  margin: 15px 0;
 }
 </style> 

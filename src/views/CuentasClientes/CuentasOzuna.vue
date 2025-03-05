@@ -4,6 +4,12 @@
       <BackButton to="/cuentas-ozuna" />
     </div>
     <h1>Cuentas Ozuna</h1>
+    
+    <!-- Botón de precios específicos para Ozuna -->
+    <div class="precios-button-container">
+      <PreciosClienteButton clienteId="ozuna" />
+    </div>
+    
     <div class="fecha-actual">
       <input type="date" v-model="fechaSeleccionada">
       <span>{{ fechaFormateada }}</span>
@@ -126,11 +132,13 @@
 import { db } from '@/firebase';
 import { collection, addDoc, doc, getDoc, updateDoc, query, where, getDocs, orderBy } from 'firebase/firestore';
 import BackButton from '@/components/BackButton.vue';
+import PreciosClienteButton from '@/components/PreciosClienteButton.vue';
 
 export default {
   name: 'CuentasOzuna',
   components: {
-    BackButton
+    BackButton,
+    PreciosClienteButton
   },
   data() {
     return {
@@ -474,6 +482,12 @@ export default {
 
 .back-button-container {
   margin-bottom: 20px;
+}
+
+.precios-button-container {
+  display: flex;
+  justify-content: center;
+  margin: 15px 0;
 }
 
 .fecha-actual {
