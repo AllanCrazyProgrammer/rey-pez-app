@@ -176,6 +176,18 @@
                 <span v-if="isGeneratingPdf && pdfType === 'cliente-' + clienteId" class="loader-inline"></span>
                 <i v-else class="fas fa-file-pdf"></i> Generar Nota PDF
               </button>
+              <!-- Agregar botón para crear cuenta de Joselito -->
+              <button 
+                v-if="esClienteJoselito(clienteId)"
+                type="button" 
+                @click.stop="crearCuentaJoselito(obtenerEmbarqueCliente(clienteId), productosPorCliente[clienteId], clienteCrudos[clienteId] || [])" 
+                class="btn btn-success btn-sm crear-cuenta-joselito" 
+                title="Crear Cuenta para Joselito"
+                :disabled="isCreatingAccount"
+              >
+                <span v-if="isCreatingAccount" class="loader-inline"></span>
+                <i v-else class="fas fa-plus-circle"></i> Crear Cuenta
+              </button>
               <button type="button" @click.stop="eliminarCliente(clienteId)" class="btn btn-danger btn-sm eliminar-cliente" :disabled="embarqueBloqueado">Eliminar Cliente</button>
             </div>
           </div>
@@ -811,6 +823,7 @@ export default {
       // New properties for PDF generation
       isGeneratingPdf: false,
       pdfType: null,
+      isCreatingAccount: false,
     };
   },
   clientesJuntarMedidas: {},
@@ -1892,6 +1905,8 @@ export default {
         // Use directly imported function
         generarNotaVentaPDF(embarqueCliente, this.clientesDisponibles, this.clientesJuntarMedidas);
         
+        // Eliminamos la creación automática de la cuenta
+        
         console.log('Nota de venta generada con éxito');
       } catch (error) {
         console.error('Error al generar la nota de venta:', error);
@@ -2232,14 +2247,42 @@ export default {
       const reporteBolsas = producto.reporteBolsas || [];
       let sumaTotalKilos = 0;
 
-      for (let i = 0; i < reporteTaras.length; i++) {
-        const taras = parseInt(reporteTaras[i]) || 0;
-        const bolsa = parseInt(reporteBolsas[i]) || 0;
-        sumaTotalKilos += taras * bolsa;
-      }
+      console.log('Calculando kilos para producto c/h20:', producto.medida);
+      console.log('reporteTaras:', reporteTaras);
+      console.log('reporteBolsas:', reporteBolsas);
+      console.log('camaronNeto:', producto.camaronNeto);
 
-      // Retornar la suma total sin multiplicar por camaronNeto
-      return sumaTotalKilos;
+      // Verificar si hay datos de reporteTaras y reporteBolsas
+      if (reporteTaras.length > 0 && reporteBolsas.length > 0) {
+        for (let i = 0; i < reporteTaras.length; i++) {
+          const taras = parseInt(reporteTaras[i]) || 0;
+          const bolsa = parseInt(reporteBolsas[i]) || 0;
+          sumaTotalKilos += taras * bolsa;
+          console.log(`Grupo ${i+1}: ${taras} taras * ${bolsa} bolsas = ${taras * bolsa} kg`);
+        }
+
+        console.log('sumaTotalKilos antes de multiplicar:', sumaTotalKilos);
+        
+        // Asegurarnos de que camaronNeto no sea 0
+        const valorNeto = (producto.camaronNeto && producto.camaronNeto > 0) ? producto.camaronNeto : 0.65;
+        const resultado = sumaTotalKilos * valorNeto;
+        
+        console.log(`Resultado final: ${sumaTotalKilos} * ${valorNeto} = ${resultado}`);
+        
+        return resultado;
+      } else {
+        // Si no hay datos de reporteTaras o reporteBolsas, usar los kilos directamente
+        console.log('No hay datos de reporteTaras o reporteBolsas, usando kilos directamente');
+        const kilos = (producto.kilos || []).reduce((sum, kilo) => sum + (Number(kilo) || 0), 0);
+        console.log('Kilos calculados directamente:', kilos);
+        
+        // Multiplicar por el valor neto
+        const valorNeto = (producto.camaronNeto && producto.camaronNeto > 0) ? producto.camaronNeto : 0.65;
+        const resultado = kilos * valorNeto;
+        console.log(`Kilos después de multiplicar por valorNeto (${valorNeto}):`, resultado);
+        
+        return resultado;
+      }
     },
     // Agregar esta nueva función para comparar medidas
     compararMedidas(medidaA, medidaB) {
@@ -2382,7 +2425,7 @@ export default {
       }
     },
 
-    // Asegurarnos de que actualizarProducto maneja correctamente los cambios
+    // Asegurarnos de que actualizarProducto maneje correctamente los cambios
     actualizarProducto(producto) {
       const index = this.embarque.productos.findIndex(p => p.id === producto.id);
       if (index !== -1) {
@@ -2844,6 +2887,288 @@ export default {
         return 'black'; // Texto negro para Otilio (fondo amarillo)
       }
       return 'white'; // Texto blanco para el resto
+    },
+    // Agregar nuevo método para crear cuenta de Joselito
+    async crearCuentaJoselito(embarqueCliente, clienteProductos, clienteCrudos) {
+      // Mostrar indicador de carga
+      this.$set(this, 'isCreatingAccount', true);
+      
+      try {
+        // Importar funciones necesarias de Firebase
+        const { collection, query, where, getDocs, addDoc, orderBy, limit } = await import('firebase/firestore');
+        const { db } = await import('@/firebase');
+        
+        // Verificar si ya existe una cuenta para esta fecha
+        const fechaEmbarque = new Date(embarqueCliente.fecha);
+        const fechaFormateada = fechaEmbarque.toISOString().split('T')[0]; // Formato YYYY-MM-DD
+        
+        const cuentasRef = collection(db, 'cuentasJoselito');
+        const q = query(cuentasRef, where('fecha', '==', fechaFormateada));
+        const querySnapshot = await getDocs(q);
+        
+        if (!querySnapshot.empty) {
+          console.log('Ya existe una cuenta para Joselito en esta fecha');
+          alert('Ya existe una cuenta para Joselito en esta fecha');
+          return;
+        }
+        
+        // Obtener los precios actuales para Joselito
+        const preciosRef = collection(db, 'precios');
+        const qPrecios = query(preciosRef, orderBy('fecha', 'desc'));
+        const preciosSnapshot = await getDocs(qPrecios);
+        
+        // Crear un mapa para organizar los precios por producto
+        const preciosMap = new Map();
+        
+        preciosSnapshot.docs.forEach(doc => {
+          const precio = doc.data();
+          // Dar prioridad a los precios específicos de Joselito
+          const clave = precio.producto.toLowerCase();
+          
+          // Si ya existe un precio para este producto y es específico de Joselito, no lo sobrescribimos
+          if (preciosMap.has(clave) && preciosMap.get(clave).clienteId === 'joselito') {
+            return;
+          }
+          
+          // Si es un precio específico de Joselito o no hay precio específico para este producto
+          if (precio.clienteId === 'joselito' || !preciosMap.has(clave)) {
+            preciosMap.set(clave, {
+              precio: precio.precio,
+              clienteId: precio.clienteId
+            });
+          }
+        });
+        
+        console.log('Precios obtenidos:', preciosMap);
+        
+        // Preparar los items para la cuenta de Joselito
+        const items = clienteProductos.map(producto => {
+          // Calcular kilos totales considerando la resta de taras
+          let kilos = 0;
+          
+          if (producto.tipo && producto.tipo.toLowerCase() === 'c/h20') {
+            // Para productos c/h20, usar la función calcularKilosProductoCH20
+            kilos = this.calcularKilosProductoCH20(producto);
+            console.log(`Cuenta Joselito - Usando calcularKilosProductoCH20 para ${producto.medida}: ${kilos} kg`);
+          } else {
+            // Para otros productos, mantener el cálculo original
+            kilos = (producto.kilos || []).reduce((sum, kilo) => sum + (Number(kilo) || 0), 0);
+            
+            // Restar taras si está seleccionado el checkbox
+            if (producto.restarTaras) {
+              const sumaTaras = (producto.taras || []).reduce((sum, tara) => sum + (Number(tara) || 0), 0);
+              kilos -= sumaTaras * 3; // Restar 3 kg por cada tara
+            }
+            
+            // Lógica especial para productos s/h2o o s/h20 para cliente Catarro
+            if (!producto.noSumarKilos && 
+                (producto.tipo.toLowerCase().includes('s/h2o') || 
+                 producto.tipo.toLowerCase().includes('s/h20'))) {
+              // Verificar si el cliente es Catarro
+              const clienteInfo = this.clientesDisponibles.find(c => c.id.toString() === producto.clienteId.toString());
+              if (clienteInfo && clienteInfo.nombre.toLowerCase().includes('catarro')) {
+                kilos += 1; // Sumar 1 kg para Catarro con productos s/h2o o s/h20
+              }
+            }
+          }
+          
+          // Buscar el precio actual para este producto
+          let precioVenta = producto.precio || 0;
+          const medidaNormalizada = producto.medida.toLowerCase();
+          
+          // Intentar encontrar un precio exacto para la medida
+          if (preciosMap.has(medidaNormalizada)) {
+            precioVenta = preciosMap.get(medidaNormalizada).precio;
+          } else {
+            // Si no hay precio exacto, buscar por coincidencia parcial
+            for (const [clave, datosPrecio] of preciosMap.entries()) {
+              if (medidaNormalizada.includes(clave) || clave.includes(medidaNormalizada)) {
+                precioVenta = datosPrecio.precio;
+                break;
+              }
+            }
+          }
+          
+          return {
+            kilos: Number(kilos.toFixed(1)), // Redondear a 1 decimal
+            medida: producto.medida,
+            costo: 1, // Costo por defecto es 1
+            precioVenta, // Usar el precio obtenido como precio de venta
+            total: Number((kilos * 1).toFixed(2)) // Total basado en costo = 1
+          };
+        });
+        
+        // Agregar items de productos crudos si existen
+        if (clienteCrudos && clienteCrudos.length > 0) {
+          clienteCrudos.forEach(crudo => {
+            crudo.items.forEach(item => {
+              // Calcular kilos para productos crudos
+              let kilosTotales = 0;
+              
+              // Verificar si el producto crudo es de tipo c/h20
+              const esTipoConAgua = item.tipo && item.tipo.toLowerCase() === 'c/h20';
+              
+              if (item.taras) {
+                const [cantidad, peso] = item.taras.split('-').map(Number);
+                kilosTotales += cantidad * peso;
+              }
+              if (item.sobrante) {
+                const [cantidadSobrante, pesoSobrante] = item.sobrante.split('-').map(Number);
+                kilosTotales += cantidadSobrante * pesoSobrante;
+              }
+              
+              // Si es tipo c/h20, multiplicar por el valor neto
+              if (esTipoConAgua) {
+                kilosTotales = kilosTotales * (item.camaronNeto || 0.65);
+              }
+              
+              // Buscar el precio actual para este producto crudo
+              let precioVenta = item.precio || 0;
+              const medidaNormalizada = `${item.talla} (crudo)`.toLowerCase();
+              
+              // Intentar encontrar un precio exacto para la medida
+              if (preciosMap.has(medidaNormalizada)) {
+                precioVenta = preciosMap.get(medidaNormalizada).precio;
+              } else {
+                // Si no hay precio exacto, buscar por coincidencia parcial
+                for (const [clave, datosPrecio] of preciosMap.entries()) {
+                  if ((clave.includes(item.talla.toLowerCase()) && clave.includes('crudo')) || 
+                      (medidaNormalizada.includes(clave))) {
+                    precioVenta = datosPrecio.precio;
+                    break;
+                  }
+                }
+              }
+              
+              items.push({
+                kilos: Number(kilosTotales.toFixed(1)), // Redondear a 1 decimal
+                medida: `${item.talla} (crudo)`,
+                costo: 1, // Costo por defecto es 1
+                precioVenta, // Usar el precio obtenido como precio de venta
+                total: Number((kilosTotales * 1).toFixed(2)) // Total basado en costo = 1
+              });
+            });
+          });
+        }
+        
+        // Verificar si hay items para crear la cuenta
+        if (items.length === 0) {
+          alert('No hay productos para crear la cuenta de Joselito');
+          return;
+        }
+        
+        // Calcular el total general
+        const totalGeneral = Number(items.reduce((sum, item) => sum + item.total, 0).toFixed(2));
+        
+        // Calcular el total general de venta
+        const totalGeneralVenta = Number(items.reduce((sum, item) => sum + (item.kilos * item.precioVenta), 0).toFixed(2));
+        
+        // Calcular la ganancia del día
+        const gananciaDelDia = Number((totalGeneralVenta - totalGeneral).toFixed(2));
+        
+        // Obtener el saldo acumulado anterior
+        let saldoAcumuladoAnterior = 0;
+        
+        // Buscar la cuenta más reciente anterior a la fecha actual
+        const qCuentaAnterior = query(
+          cuentasRef,
+          where('fecha', '<', fechaFormateada),
+          orderBy('fecha', 'desc'),
+          limit(1)
+        );
+        
+        const cuentasAnteriores = await getDocs(qCuentaAnterior);
+        
+        if (!cuentasAnteriores.empty) {
+          const cuentaAnterior = cuentasAnteriores.docs[0].data();
+          saldoAcumuladoAnterior = cuentaAnterior.nuevoSaldoAcumulado || 0;
+          console.log(`Saldo acumulado anterior encontrado: ${saldoAcumuladoAnterior}`);
+        } else {
+          console.log('No se encontraron cuentas anteriores, usando saldo 0');
+        }
+        
+        // Calcular el nuevo saldo acumulado
+        const nuevoSaldoAcumulado = saldoAcumuladoAnterior + totalGeneral;
+        
+        // Crear la estructura de la cuenta
+        const cuentaData = {
+          fecha: fechaFormateada,
+          items: items,
+          itemsVenta: items.map(item => ({
+            kilosVenta: item.kilos,
+            medida: item.medida,
+            precioVenta: item.precioVenta,
+            totalVenta: Number((item.kilos * item.precioVenta).toFixed(2)),
+            ganancia: Number(((item.kilos * item.precioVenta) - item.total).toFixed(2))
+          })),
+          saldoAcumuladoAnterior: saldoAcumuladoAnterior,
+          cobros: [],
+          abonos: [],
+          totalGeneral: totalGeneral,
+          totalGeneralVenta: totalGeneralVenta,
+          totalDia: totalGeneralVenta, // Total del día es igual al total general de venta en este caso
+          nuevoSaldoAcumulado: nuevoSaldoAcumulado,
+          gananciaDelDia: gananciaDelDia, // Ganancia calculada
+          estadoPagado: false,
+          tieneObservacion: true,
+          observacion: `Cuenta creada manualmente desde embarque del ${fechaFormateada}. Carga con: ${embarqueCliente.cargaCon || 'No especificado'}`,
+          ultimaActualizacion: new Date().toISOString()
+        };
+        
+        // Crear la cuenta en Firestore
+        const docRef = await addDoc(cuentasRef, cuentaData);
+        console.log('Cuenta de Joselito creada con ID:', docRef.id);
+        
+        // Contar cuántos productos tienen precios actualizados
+        const productosConPrecioActualizado = items.filter(item => item.precioVenta > 0).length;
+        
+        // Mostrar alerta al usuario con información detallada
+        alert(`Se ha creado la cuenta para Joselito con fecha ${fechaFormateada}\n\n` +
+              `Total de productos: ${items.length}\n` +
+              `Productos con precio actualizado: ${productosConPrecioActualizado}\n` +
+              `Total costo: $${totalGeneral.toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})}\n` +
+              `Total venta: $${totalGeneralVenta.toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})}\n` +
+              `Ganancia: $${gananciaDelDia.toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`);
+        
+        // Registrar información detallada para depuración
+        console.log('Detalles de la cuenta creada:', {
+          fecha: fechaFormateada,
+          items: items,
+          totalGeneral: totalGeneral,
+          totalGeneralVenta: totalGeneralVenta,
+          gananciaDelDia: gananciaDelDia,
+          saldoAcumuladoAnterior: saldoAcumuladoAnterior,
+          nuevoSaldoAcumulado: nuevoSaldoAcumulado
+        });
+        
+        return docRef.id;
+      } catch (error) {
+        console.error('Error al crear cuenta para Joselito:', error);
+        // Mostrar alerta de error
+        alert(`No se pudo crear la cuenta para Joselito: ${error.message}`);
+      } finally {
+        // Ocultar indicador de carga
+        this.$set(this, 'isCreatingAccount', false);
+      }
+    },
+    // Agregar método para verificar si el cliente es Joselito
+    esClienteJoselito(clienteId) {
+      const clienteInfo = this.clientesDisponibles.find(c => c.id.toString() === clienteId.toString());
+      return clienteInfo && clienteInfo.nombre.toLowerCase().includes('joselito');
+    },
+    
+    // Agregar método para obtener el embarque del cliente
+    obtenerEmbarqueCliente(clienteId) {
+      const clienteProductos = this.productosPorCliente[clienteId];
+      const clienteCrudos = this.clienteCrudos[clienteId];
+      
+      return {
+        fecha: this.embarque.fecha,
+        cargaCon: this.embarque.cargaCon,
+        productos: clienteProductos,
+        clienteCrudos: { [clienteId]: clienteCrudos },
+        kilosCrudos: this.embarque.kilosCrudos || {}
+      };
     },
   },
   async created() {
@@ -4632,26 +4957,6 @@ export default {
   text-decoration: underline;
 }
 
-.kg-radio {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  margin-top: 1px;
-}
-
-.kg-checkbox {
-  width: 16px;
-  height: 16px;
-  cursor: pointer;
-}
-
-.kg-label {
-  font-size: 0.9rem;
-  color: #555;
-  cursor: pointer;
-}
-
-/* Agregar estos estilos */
 .kg-radio {
   display: flex;
   align-items: center;
@@ -7770,5 +8075,33 @@ button:disabled {
 
 @keyframes spin {
   to { transform: rotate(360deg); }
+}
+
+.generar-pdf-cliente {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background-color: #3760b0;
+  border-color: #3760b0;
+}
+
+.crear-cuenta-joselito {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background-color: #28a745;
+  border-color: #28a745;
+  color: white;
+}
+
+.crear-cuenta-joselito:hover {
+  background-color: #218838;
+  border-color: #1e7e34;
+}
+
+.crear-cuenta-joselito:disabled {
+  background-color: #6c757d;
+  border-color: #6c757d;
+  cursor: not-allowed;
 }
 </style>

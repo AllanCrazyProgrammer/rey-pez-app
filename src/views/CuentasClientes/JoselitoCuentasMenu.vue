@@ -15,7 +15,7 @@
       <button @click="showAbonosModal = true" class="action-button abonos-btn">
         Abonos
       </button>
-      <PreciosHistorialModal />
+      <PreciosHistorialModal clienteActual="joselito" />
       <StashModal cliente="joselito" />
     </div>
 

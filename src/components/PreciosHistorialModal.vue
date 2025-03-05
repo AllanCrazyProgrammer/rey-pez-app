@@ -1,15 +1,15 @@
 <template>
   <div>
     <!-- Botón para abrir el modal -->
-    <button @click="showModal = true" class="precio-historial-btn">
-      Precios de Venta
+    <button @click="abrirModal" class="precio-historial-btn">
+      {{ clienteActual ? `Precios de Venta - ${obtenerNombreCliente(clienteActual)}` : 'Precios de Venta' }}
     </button>
 
     <!-- Modal -->
     <div v-if="showModal" class="modal-overlay">
       <div class="modal-content">
         <div class="modal-header">
-          <h2>Precios de Venta</h2>
+          <h2>{{ clienteActual ? `Precios de Venta - ${obtenerNombreCliente(clienteActual)}` : 'Precios de Venta' }}</h2>
           <button @click="showModal = false" class="close-btn">&times;</button>
         </div>
 
@@ -23,7 +23,52 @@
             </datalist>
             <input v-model.number="newPrice.precio" type="number" placeholder="Precio">
             <input v-model="newPrice.fecha" type="date" :max="currentDate">
+            
+            <!-- Nuevo campo para seleccionar cliente específico -->
+            <div class="cliente-especifico">
+              <input type="checkbox" id="clienteEspecifico" v-model="newPrice.esClienteEspecifico">
+              <label for="clienteEspecifico">Precio para cliente específico</label>
+            </div>
+            
+            <!-- Selector de cliente que aparece solo cuando se marca la casilla -->
+            <div v-if="newPrice.esClienteEspecifico" class="cliente-selector">
+              <label>Seleccionar cliente:</label>
+              <div class="cliente-botones">
+                <button 
+                  v-for="cliente in clientes" 
+                  :key="cliente.id" 
+                  @click="seleccionarCliente(cliente.id)"
+                  class="cliente-btn"
+                  :class="{'cliente-seleccionado': newPrice.clienteId === cliente.id}"
+                  :style="{ backgroundColor: cliente.color }">
+                  {{ cliente.nombre }}
+                </button>
+              </div>
+            </div>
+            
             <button @click="agregarPrecio" class="add-btn">Agregar</button>
+          </div>
+        </div>
+
+        <!-- Filtro para mostrar precios específicos por cliente -->
+        <div class="filter-section">
+          <label>Filtrar por cliente:</label>
+          <div class="cliente-filtro-botones">
+            <button 
+              @click="filtroCliente = ''" 
+              class="cliente-filtro-btn"
+              :class="{'cliente-filtro-seleccionado': filtroCliente === ''}">
+              Todos
+            </button>
+            <button 
+              v-for="cliente in clientes" 
+              :key="cliente.id" 
+              @click="filtroCliente = cliente.id"
+              class="cliente-filtro-btn"
+              :class="{'cliente-filtro-seleccionado': filtroCliente === cliente.id}"
+              :style="{ backgroundColor: cliente.color }">
+              {{ cliente.nombre }}
+            </button>
           </div>
         </div>
 
@@ -33,10 +78,18 @@
           <div v-for="categoria in categorias" :key="categoria" class="categoria-section">
             <h4 class="categoria-title">{{ categoria }}</h4>
             <div class="products-grid">
-              <div v-for="producto in preciosOrdenados[categoria]" :key="producto.id" class="product-card">
+              <div 
+                v-for="producto in filtrarPreciosPorCliente(preciosOrdenados[categoria])" 
+                :key="producto.id" 
+                class="product-card" 
+                :class="{'precio-especifico': producto.clienteId}"
+                :style="producto.clienteId ? { borderColor: obtenerColorCliente(producto.clienteId), backgroundColor: obtenerColorClienteConOpacidad(producto.clienteId) } : {}">
                 <h4>{{ producto.producto }}</h4>
                 <p class="price">${{ formatNumber(producto.precio) }}</p>
                 <p class="date">Desde: {{ formatDate(producto.fecha) }}</p>
+                <p v-if="producto.clienteId" class="cliente-especifico-tag" :style="{ backgroundColor: obtenerColorCliente(producto.clienteId) }">
+                  Cliente: {{ obtenerNombreCliente(producto.clienteId) }}
+                </p>
                 <p class="historial-count">
                   {{ producto.historial.length }} precio{{ producto.historial.length !== 1 ? 's' : '' }} registrado{{ producto.historial.length !== 1 ? 's' : '' }}
                 </p>
@@ -60,6 +113,7 @@
                 <tr>
                   <th>Fecha</th>
                   <th>Precio</th>
+                  <th>Cliente</th>
                   <th>Cambio</th>
                   <th>Acciones</th>
                 </tr>
@@ -68,6 +122,15 @@
                 <tr v-for="(precio, index) in historialPrecios" :key="index">
                   <td>{{ formatDate(precio.fecha) }}</td>
                   <td>${{ formatNumber(precio.precio) }}</td>
+                  <td>
+                    <span 
+                      v-if="precio.clienteId" 
+                      class="cliente-especifico-tag"
+                      :style="{ backgroundColor: obtenerColorCliente(precio.clienteId) }">
+                      {{ obtenerNombreCliente(precio.clienteId) }}
+                    </span>
+                    <span v-else>General</span>
+                  </td>
                   <td>
                     <span v-if="index < historialPrecios.length - 1" 
                           :class="{'precio-subio': precio.precio < historialPrecios[index + 1].precio,
@@ -96,6 +159,12 @@ import { collection, addDoc, query, where, getDocs, orderBy, deleteDoc, doc } fr
 
 export default {
   name: 'PreciosHistorialModal',
+  props: {
+    clienteActual: {
+      type: String,
+      default: ''
+    }
+  },
   data() {
     return {
       showModal: false,
@@ -104,11 +173,20 @@ export default {
       historialPrecios: [],
       productoSeleccionado: null,
       categorias: ['Camarón S/C', 'Camarón C/C', 'Otros'],
+      clientes: [
+        { id: 'joselito', nombre: 'Joselito', color: '#2196F3' },
+        { id: 'catarro', nombre: 'Catarro', color: '#d32f2f' },
+        { id: 'otilio', nombre: 'Otilio', color: '#FFD700' },
+        { id: 'ozuna', nombre: 'Ozuna', color: '#07711e' }
+      ],
+      filtroCliente: '',
       newPrice: {
         producto: '',
         precio: null,
         fecha: new Date().toISOString().split('T')[0],
-        categoria: 'Otros'
+        categoria: 'Otros',
+        esClienteEspecifico: false,
+        clienteId: ''
       }
     };
   },
@@ -185,23 +263,30 @@ export default {
         const q = query(preciosRef, orderBy('fecha', 'desc'));
         const preciosSnapshot = await getDocs(q);
         
-        // Crear un mapa para organizar los precios por producto
+        // Crear un mapa para organizar los precios por producto y cliente
         const preciosMap = new Map();
         
         preciosSnapshot.docs.forEach(doc => {
           const precio = { id: doc.id, ...doc.data() };
-          if (!preciosMap.has(precio.producto)) {
-            preciosMap.set(precio.producto, {
+          // Clave única para cada combinación de producto y cliente
+          const clave = precio.clienteId 
+            ? `${precio.producto}-${precio.clienteId}` 
+            : precio.producto;
+            
+          if (!preciosMap.has(clave)) {
+            preciosMap.set(clave, {
               producto: precio.producto,
               precioActual: precio.precio,
               fechaActual: precio.fecha,
+              clienteId: precio.clienteId || null,
               historial: []
             });
           }
-          preciosMap.get(precio.producto).historial.push({
+          preciosMap.get(clave).historial.push({
             id: doc.id,
             fecha: precio.fecha,
-            precio: precio.precio
+            precio: precio.precio,
+            clienteId: precio.clienteId || null
           });
         });
         
@@ -210,15 +295,86 @@ export default {
           producto: item.producto,
           precio: item.precioActual,
           fecha: item.fechaActual,
+          clienteId: item.clienteId,
           historial: item.historial
         }));
       } catch (error) {
         console.error('Error al cargar precios:', error);
       }
     },
+    obtenerNombreCliente(clienteId) {
+      const cliente = this.clientes.find(c => c.id === clienteId);
+      return cliente ? cliente.nombre : 'Cliente desconocido';
+    },
+    obtenerColorCliente(clienteId) {
+      const cliente = this.clientes.find(c => c.id === clienteId);
+      return cliente ? cliente.color : '#2196F3';
+    },
+    obtenerColorClienteConOpacidad(clienteId) {
+      const cliente = this.clientes.find(c => c.id === clienteId);
+      if (!cliente) return 'rgba(33, 150, 243, 0.1)';
+      
+      // Convertir color hexadecimal a rgba con opacidad
+      let hex = cliente.color.replace('#', '');
+      let r = parseInt(hex.substring(0, 2), 16);
+      let g = parseInt(hex.substring(2, 4), 16);
+      let b = parseInt(hex.substring(4, 6), 16);
+      
+      return `rgba(${r}, ${g}, ${b}, 0.15)`;
+    },
+    seleccionarCliente(clienteId) {
+      this.newPrice.clienteId = clienteId;
+    },
+    filtrarPreciosPorCliente(productos) {
+      if (!this.filtroCliente) {
+        // Si no hay filtro, mostrar todos los precios dando prioridad a los específicos
+        // Agrupar por producto para mostrar solo el precio específico si existe
+        const productosAgrupados = {};
+        
+        // Primero agregar todos los precios generales
+        productos.forEach(producto => {
+          if (!producto.clienteId) {
+            productosAgrupados[producto.producto] = producto;
+          }
+        });
+        
+        // Luego sobrescribir con precios específicos si existen
+        productos.forEach(producto => {
+          if (producto.clienteId) {
+            productosAgrupados[producto.producto] = producto;
+          }
+        });
+        
+        return Object.values(productosAgrupados);
+      } else {
+        // Si hay filtro, mostrar solo los precios para ese cliente específico
+        // o los precios generales si no hay específicos
+        const productosEspecificos = productos.filter(p => p.clienteId === this.filtroCliente);
+        const productosGenerales = productos.filter(p => !p.clienteId);
+        
+        // Crear un mapa de productos específicos para verificación rápida
+        const productosEspecificosMap = {};
+        productosEspecificos.forEach(p => {
+          productosEspecificosMap[p.producto] = true;
+        });
+        
+        // Filtrar productos generales que no tienen versión específica
+        const productosGeneralesFiltrados = productosGenerales.filter(
+          p => !productosEspecificosMap[p.producto]
+        );
+        
+        // Combinar productos específicos con generales que no tienen versión específica
+        return [...productosEspecificos, ...productosGeneralesFiltrados];
+      }
+    },
     async agregarPrecio() {
       if (!this.newPrice.producto || !this.newPrice.precio || !this.newPrice.fecha) {
         alert('Por favor complete todos los campos');
+        return;
+      }
+
+      if (this.newPrice.esClienteEspecifico && !this.newPrice.clienteId) {
+        alert('Por favor seleccione un cliente');
         return;
       }
 
@@ -237,19 +393,28 @@ export default {
           categoria = 'Camarón C/C';
         }
 
-        await addDoc(collection(db, 'precios'), {
+        const nuevoPrecio = {
           producto: this.newPrice.producto,
           precio: this.newPrice.precio,
           fecha: fechaAjustada,
           categoria: categoria
-        });
+        };
+
+        // Agregar clienteId solo si es un precio específico
+        if (this.newPrice.esClienteEspecifico && this.newPrice.clienteId) {
+          nuevoPrecio.clienteId = this.newPrice.clienteId;
+        }
+
+        await addDoc(collection(db, 'precios'), nuevoPrecio);
 
         // Limpiar el formulario
         this.newPrice = {
           producto: '',
           precio: null,
           fecha: new Date().toISOString().split('T')[0],
-          categoria: 'Otros'
+          categoria: 'Otros',
+          esClienteEspecifico: false,
+          clienteId: ''
         };
 
         // Recargar precios actuales
@@ -288,6 +453,37 @@ export default {
       } catch (error) {
         console.error('Error al cargar historial:', error);
         alert('Error al cargar el historial de precios');
+      }
+    },
+    // Método para abrir el modal y establecer el filtro de cliente
+    abrirModal() {
+      // Establecer el filtro de cliente si hay un cliente actual
+      if (this.clienteActual && this.clientes.some(c => c.id === this.clienteActual)) {
+        this.filtroCliente = this.clienteActual;
+        
+        // Preseleccionar el cliente para nuevos precios
+        this.newPrice.esClienteEspecifico = true;
+        this.newPrice.clienteId = this.clienteActual;
+      }
+      
+      this.showModal = true;
+    }
+  },
+  watch: {
+    // Observar cambios en clienteActual para actualizar el filtro
+    clienteActual: {
+      immediate: true,
+      handler(nuevoCliente) {
+        if (nuevoCliente && this.clientes.some(c => c.id === nuevoCliente)) {
+          this.filtroCliente = nuevoCliente;
+          
+          // Si estamos agregando un nuevo precio y el cliente está definido,
+          // preseleccionamos ese cliente y marcamos como precio específico
+          if (nuevoCliente) {
+            this.newPrice.esClienteEspecifico = true;
+            this.newPrice.clienteId = nuevoCliente;
+          }
+        }
       }
     }
   },
@@ -357,6 +553,7 @@ export default {
 
 .form-group {
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
   margin-top: 10px;
 }
@@ -366,6 +563,65 @@ export default {
   border: 1px solid #ddd;
   border-radius: 4px;
   flex: 1;
+}
+
+.cliente-especifico {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: 10px 0;
+  width: 100%;
+}
+
+.cliente-selector {
+  width: 100%;
+  margin: 10px 0;
+}
+
+.cliente-botones, .cliente-filtro-botones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 5px;
+}
+
+.cliente-btn, .cliente-filtro-btn {
+  padding: 8px 15px;
+  border: none;
+  border-radius: 20px;
+  cursor: pointer;
+  color: white;
+  font-weight: bold;
+  transition: all 0.3s ease;
+  flex: 1;
+  min-width: 80px;
+  text-align: center;
+}
+
+.cliente-btn:hover, .cliente-filtro-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.cliente-seleccionado, .cliente-filtro-seleccionado {
+  transform: scale(1.05);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+.cliente-filtro-btn:first-child {
+  background-color: #607D8B;
+}
+
+.filter-section {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.filter-label {
+  font-size: 0.9em;
+  color: #666;
 }
 
 .add-btn {
@@ -389,6 +645,22 @@ export default {
   padding: 15px;
   border-radius: 8px;
   text-align: center;
+  position: relative;
+  border: 2px solid;
+}
+
+.precio-especifico {
+  border: 2px solid;
+}
+
+.cliente-especifico-tag {
+  font-size: 0.8em;
+  background-color: #2196F3;
+  color: white;
+  padding: 2px 6px;
+  border-radius: 10px;
+  display: inline-block;
+  margin: 5px 0;
 }
 
 .product-card h4 {
