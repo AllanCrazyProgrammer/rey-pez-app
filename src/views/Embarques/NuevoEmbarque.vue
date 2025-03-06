@@ -1861,12 +1861,44 @@ export default {
     calcularKilosCrudos(item) {
       let kilosTotales = 0;
       if (item.taras) {
-        const [cantidad, medida] = item.taras.split('-').map(Number);
-        kilosTotales += cantidad * medida;
+        // Verificar si la tara tiene formato "5-19" o similar
+        const formatoGuion = /^(\d+)-(\d+)$/.exec(item.taras);
+        if (formatoGuion) {
+          const cantidad = parseInt(formatoGuion[1]) || 0;
+          let medida = parseInt(formatoGuion[2]) || 0;
+          
+          // Si la medida es 19, sustituirla por 20
+          if (medida === 19) {
+            medida = 20;
+            console.log(`Ajustando tara de formato ${item.taras} a ${cantidad}-${medida}`);
+          }
+          
+          kilosTotales += cantidad * medida;
+        } else {
+          // Formato original si no coincide con el patrón
+          const [cantidad, medida] = item.taras.split('-').map(Number);
+          kilosTotales += cantidad * medida;
+        }
       }
       if (item.sobrante) {
-        const [cantidadSobrante, medidaSobrante] = item.sobrante.split('-').map(Number);
-        kilosTotales += cantidadSobrante * medidaSobrante;
+        // Verificar si el sobrante tiene formato "5-19" o similar
+        const formatoGuion = /^(\d+)-(\d+)$/.exec(item.sobrante);
+        if (formatoGuion) {
+          const cantidadSobrante = parseInt(formatoGuion[1]) || 0;
+          let medidaSobrante = parseInt(formatoGuion[2]) || 0;
+          
+          // Si la medida es 19, sustituirla por 20
+          if (medidaSobrante === 19) {
+            medidaSobrante = 20;
+            console.log(`Ajustando sobrante de formato ${item.sobrante} a ${cantidadSobrante}-${medidaSobrante}`);
+          }
+          
+          kilosTotales += cantidadSobrante * medidaSobrante;
+        } else {
+          // Formato original si no coincide con el patrón
+          const [cantidadSobrante, medidaSobrante] = item.sobrante.split('-').map(Number);
+          kilosTotales += cantidadSobrante * medidaSobrante;
+        }
       }
       return kilosTotales;
     },
@@ -3009,12 +3041,44 @@ export default {
               const esTipoConAgua = item.tipo && item.tipo.toLowerCase() === 'c/h20';
               
               if (item.taras) {
-                const [cantidad, peso] = item.taras.split('-').map(Number);
-                kilosTotales += cantidad * peso;
+                // Verificar si la tara tiene formato "5-19" o similar
+                const formatoGuion = /^(\d+)-(\d+)$/.exec(item.taras);
+                if (formatoGuion) {
+                  const cantidad = parseInt(formatoGuion[1]) || 0;
+                  let peso = parseInt(formatoGuion[2]) || 0;
+                  
+                  // Si el peso es 19, sustituirlo por 20
+                  if (peso === 19) {
+                    peso = 20;
+                    console.log(`Cuenta Joselito - Ajustando tara de formato ${item.taras} a ${cantidad}-${peso}`);
+                  }
+                  
+                  kilosTotales += cantidad * peso;
+                } else {
+                  // Formato original si no coincide con el patrón
+                  const [cantidad, peso] = item.taras.split('-').map(Number);
+                  kilosTotales += cantidad * peso;
+                }
               }
               if (item.sobrante) {
-                const [cantidadSobrante, pesoSobrante] = item.sobrante.split('-').map(Number);
-                kilosTotales += cantidadSobrante * pesoSobrante;
+                // Verificar si el sobrante tiene formato "5-19" o similar
+                const formatoGuion = /^(\d+)-(\d+)$/.exec(item.sobrante);
+                if (formatoGuion) {
+                  const cantidadSobrante = parseInt(formatoGuion[1]) || 0;
+                  let pesoSobrante = parseInt(formatoGuion[2]) || 0;
+                  
+                  // Si el peso es 19, sustituirlo por 20
+                  if (pesoSobrante === 19) {
+                    pesoSobrante = 20;
+                    console.log(`Cuenta Joselito - Ajustando sobrante de formato ${item.sobrante} a ${cantidadSobrante}-${pesoSobrante}`);
+                  }
+                  
+                  kilosTotales += cantidadSobrante * pesoSobrante;
+                } else {
+                  // Formato original si no coincide con el patrón
+                  const [cantidadSobrante, pesoSobrante] = item.sobrante.split('-').map(Number);
+                  kilosTotales += cantidadSobrante * pesoSobrante;
+                }
               }
               
               // Si es tipo c/h20, multiplicar por el valor neto

@@ -290,6 +290,12 @@
     <div v-if="showSaveMessage" class="save-message">
       {{ lastSaveMessage }}
     </div>
+
+    <div class="precios-button-container">
+      <button @click="consolidarItemsRepetidos" class="consolidar-btn" title="Consolidar medidas repetidas">
+        Consolidar Medidas Repetidas
+      </button>
+    </div>
   </div>
 </template>
 
@@ -429,6 +435,39 @@ export default {
         maximumFractionDigits: 2 
       });
     },
+    // Método para normalizar medidas y hacer comparaciones consistentes
+    normalizarMedida(medida) {
+      if (!medida) return '';
+      
+      // Convertir a minúsculas y eliminar espacios al inicio y final
+      let medidaNormalizada = medida.toLowerCase().trim();
+      
+      // Eliminar todos los espacios en blanco
+      medidaNormalizada = medidaNormalizada.replace(/\s+/g, '');
+      
+      // Normalizar formatos comunes de medidas
+      // Por ejemplo, "51/60" y "51-60" deberían considerarse iguales
+      medidaNormalizada = medidaNormalizada.replace(/-/g, '/');
+      
+      // Normalizar "c/c", "cc", "conc" a "c/c"
+      medidaNormalizada = medidaNormalizada.replace(/c\/c|cc|conc/g, 'c/c');
+      
+      // Normalizar "s/c", "sc", "sinc" a "s/c"
+      medidaNormalizada = medidaNormalizada.replace(/s\/c|sc|sinc/g, 's/c');
+      
+      // Normalizar "med" o "medium" a "med"
+      medidaNormalizada = medidaNormalizada.replace(/^medium$|^med$/g, 'med');
+      
+      // Normalizar "gde" o "grande" a "gde"
+      medidaNormalizada = medidaNormalizada.replace(/^grande$|^gde$/g, 'gde');
+      
+      // Normalizar "esp" o "especial" a "esp"
+      medidaNormalizada = medidaNormalizada.replace(/^especial$|^esp$/g, 'esp');
+      
+      console.log(`Medida original: "${medida}" -> Normalizada: "${medidaNormalizada}"`);
+      
+      return medidaNormalizada;
+    },
     async loadExistingCuenta(id) {
       try {
         const cuentaRef = doc(db, 'cuentasJoselito', id);
@@ -454,6 +493,9 @@ export default {
             ganancia: Number(item.ganancia) || 0
           }));
 
+          // Consolidar ítems con la misma medida
+          this.consolidarItemsRepetidos();
+
           // Cargar el resto de datos
           this.saldoAcumuladoAnterior = Number(data.saldoAcumuladoAnterior) || 0;
           this.cobros = (data.cobros || []).map(cobro => ({
@@ -476,6 +518,97 @@ export default {
       } catch (error) {
         console.error("Error al cargar la cuenta existente:", error);
         throw error;
+      }
+    },
+
+    // Método para consolidar ítems con la misma medida
+    consolidarItemsRepetidos() {
+      // Guardar la cantidad original de ítems para comparar después
+      const itemsOriginalCount = this.items.length;
+      const itemsVentaOriginalCount = this.itemsVenta.length;
+      
+      // Crear mapas para agrupar por medida normalizada
+      const itemsMap = new Map();
+      const itemsVentaMap = new Map();
+      
+      // Procesar items de costo
+      this.items.forEach(item => {
+        const medidaNormalizada = this.normalizarMedida(item.medida);
+        
+        if (itemsMap.has(medidaNormalizada)) {
+          // Si ya existe, sumar los kilos
+          const itemExistente = itemsMap.get(medidaNormalizada);
+          itemExistente.kilos += item.kilos;
+          // Usar el costo más reciente
+          itemExistente.costo = item.costo;
+          // Recalcular total
+          itemExistente.total = itemExistente.kilos * itemExistente.costo;
+        } else {
+          // Si no existe, agregar al mapa
+          itemsMap.set(medidaNormalizada, { ...item });
+        }
+      });
+      
+      // Procesar items de venta
+      this.itemsVenta.forEach(item => {
+        const medidaNormalizada = this.normalizarMedida(item.medida);
+        
+        if (itemsVentaMap.has(medidaNormalizada)) {
+          // Si ya existe, sumar los kilos
+          const itemExistente = itemsVentaMap.get(medidaNormalizada);
+          itemExistente.kilosVenta += item.kilosVenta;
+          // Usar el precio más reciente
+          itemExistente.precioVenta = item.precioVenta;
+          // Recalcular total y ganancia
+          itemExistente.totalVenta = itemExistente.kilosVenta * itemExistente.precioVenta;
+          
+          // Buscar el costo correspondiente
+          const itemCosto = itemsMap.get(medidaNormalizada);
+          if (itemCosto) {
+            itemExistente.ganancia = itemExistente.totalVenta - itemCosto.total;
+          }
+        } else {
+          // Si no existe, agregar al mapa
+          itemsVentaMap.set(medidaNormalizada, { ...item });
+        }
+      });
+      
+      // Actualizar los arrays con los ítems consolidados
+      this.items = Array.from(itemsMap.values());
+      this.itemsVenta = Array.from(itemsVentaMap.values());
+      
+      // Calcular cuántos ítems se consolidaron
+      const itemsConsolidados = itemsOriginalCount - this.items.length;
+      const itemsVentaConsolidados = itemsVentaOriginalCount - this.itemsVenta.length;
+      
+      console.log('Ítems consolidados:', itemsConsolidados, 'ítems de costo,', itemsVentaConsolidados, 'ítems de venta');
+      
+      // Mostrar mensaje de confirmación
+      if (itemsConsolidados > 0 || itemsVentaConsolidados > 0) {
+        this.lastSaveMessage = `Se consolidaron ${itemsConsolidados} medidas repetidas en la tabla de costos y ${itemsVentaConsolidados} en la tabla de ventas.`;
+        this.showSaveMessage = true;
+        
+        // Ocultar el mensaje después de 3 segundos
+        if (this.saveMessageTimer) {
+          clearTimeout(this.saveMessageTimer);
+        }
+        this.saveMessageTimer = setTimeout(() => {
+          this.showSaveMessage = false;
+        }, 3000);
+        
+        // Guardar los cambios automáticamente
+        this.handleDataChange();
+      } else {
+        this.lastSaveMessage = "No se encontraron medidas repetidas para consolidar.";
+        this.showSaveMessage = true;
+        
+        // Ocultar el mensaje después de 3 segundos
+        if (this.saveMessageTimer) {
+          clearTimeout(this.saveMessageTimer);
+        }
+        this.saveMessageTimer = setTimeout(() => {
+          this.showSaveMessage = false;
+        }, 3000);
       }
     },
 
@@ -820,24 +953,79 @@ export default {
           this.newItem = newItemTemp;
         }
         
-        const total = this.newItem.kilos * this.newItem.costo;
-        this.items.push({
-          kilos: this.newItem.kilos,
-          medida: this.newItem.medida,
-          costo: this.newItem.costo,
-          total
-        });
+        // Verificar si ya existe un ítem con la misma medida (normalizando la comparación)
+        const medidaNormalizada = this.normalizarMedida(this.newItem.medida);
+        const medidaExistente = this.items.findIndex(item => 
+          this.normalizarMedida(item.medida) === medidaNormalizada
+        );
+        
+        if (medidaExistente !== -1) {
+          // Si la medida ya existe, sumar los kilos al ítem existente
+          const itemExistente = this.items[medidaExistente];
+          const kilosAnteriores = itemExistente.kilos;
+          
+          // Calcular los kilos si es un crudo
+          const kilosCalculados = this.calcularKilosCrudos(this.newItem.medida, this.newItem.kilos);
+          
+          const nuevosKilos = kilosAnteriores + kilosCalculados;
+          
+          // Usar el costo más reciente (el del nuevo ítem)
+          const costoNuevo = this.newItem.costo || itemExistente.costo;
+          
+          // Actualizar kilos y recalcular total
+          itemExistente.kilos = nuevosKilos;
+          itemExistente.costo = costoNuevo;
+          itemExistente.total = nuevosKilos * costoNuevo;
+          
+          // Actualizar también en itemsVenta
+          if (this.itemsVenta[medidaExistente]) {
+            // Usar el precio de venta más reciente (el del nuevo ítem)
+            const precioVenta = this.newItem.precioVenta || this.itemsVenta[medidaExistente].precioVenta;
+            
+            this.itemsVenta[medidaExistente].kilosVenta = nuevosKilos;
+            this.itemsVenta[medidaExistente].precioVenta = precioVenta;
+            this.itemsVenta[medidaExistente].totalVenta = nuevosKilos * precioVenta;
+            this.itemsVenta[medidaExistente].ganancia = this.itemsVenta[medidaExistente].totalVenta - itemExistente.total;
+          }
+          
+          // Mostrar mensaje de confirmación
+          this.lastSaveMessage = `Se sumaron ${this.formatNumber(this.newItem.kilos)} kilos a la medida "${this.newItem.medida}". 
+Total: ${this.formatNumber(nuevosKilos)} kilos.
+Costo: $${this.formatNumber(costoNuevo)} | Precio: $${this.formatNumber(precioVenta)}`;
+          this.showSaveMessage = true;
+          
+          // Ocultar el mensaje después de 3 segundos
+          if (this.saveMessageTimer) {
+            clearTimeout(this.saveMessageTimer);
+          }
+          this.saveMessageTimer = setTimeout(() => {
+            this.showSaveMessage = false;
+          }, 3000);
+        } else {
+          // Si la medida no existe, agregar un nuevo ítem
+          const total = this.newItem.kilos * this.newItem.costo;
+          
+          // Calcular los kilos si es un crudo
+          const kilosCalculados = this.calcularKilosCrudos(this.newItem.medida, this.newItem.kilos);
+          
+          this.items.push({
+            kilos: kilosCalculados,
+            medida: this.newItem.medida,
+            costo: this.newItem.costo,
+            total: kilosCalculados * this.newItem.costo
+          });
 
-        // Agregar directamente a itemsVenta con el precio de venta
-        const totalVenta = this.newItem.kilos * this.newItem.precioVenta;
-        const ganancia = totalVenta - total;
-        this.itemsVenta.push({
-          kilosVenta: this.newItem.kilos,
-          medida: this.newItem.medida,
-          precioVenta: this.newItem.precioVenta,
-          totalVenta,
-          ganancia
-        });
+          // Agregar directamente a itemsVenta con el precio de venta
+          const totalVenta = kilosCalculados * this.newItem.precioVenta;
+          const ganancia = totalVenta - (kilosCalculados * this.newItem.costo);
+          this.itemsVenta.push({
+            kilosVenta: kilosCalculados,
+            medida: this.newItem.medida,
+            precioVenta: this.newItem.precioVenta,
+            totalVenta,
+            ganancia
+          });
+        }
 
         this.newItem = {
           kilos: null,
@@ -850,9 +1038,6 @@ export default {
       } catch (error) {
         console.error('Error al guardar el item:', error);
         alert('Hubo un problema al guardar. Por favor, intente nuevamente.');
-        // Revertir los cambios locales si falló el guardado
-        this.items.pop();
-        this.itemsVenta.pop();
       }
     },
 
@@ -920,12 +1105,61 @@ export default {
         return;
       }
 
-      const totalVenta = this.newProduct.kilosVenta * this.newProduct.precioVenta;
-      this.itemsVenta.push({
-        ...this.newProduct,
-        totalVenta,
-        ganancia: totalVenta - (this.newProduct.kilosVenta * (this.items[this.itemsVenta.length]?.costo || 0))
-      });
+      // Verificar si ya existe un ítem con la misma medida (normalizando la comparación)
+      const medidaNormalizada = this.normalizarMedida(this.newProduct.medida);
+      const medidaExistente = this.itemsVenta.findIndex(item => 
+        this.normalizarMedida(item.medida) === medidaNormalizada
+      );
+      
+      if (medidaExistente !== -1) {
+        // Si la medida ya existe, sumar los kilos al ítem existente
+        const itemExistente = this.itemsVenta[medidaExistente];
+        const kilosAnteriores = itemExistente.kilosVenta;
+        
+        // Calcular los kilos si es un crudo
+        const kilosCalculados = this.calcularKilosCrudos(this.newProduct.medida, this.newProduct.kilosVenta);
+        
+        const nuevosKilos = kilosAnteriores + kilosCalculados;
+        
+        // Usar el precio de venta más reciente (el del nuevo producto)
+        const precioVenta = this.newProduct.precioVenta || itemExistente.precioVenta;
+        
+        // Actualizar kilos y recalcular total
+        itemExistente.kilosVenta = nuevosKilos;
+        itemExistente.precioVenta = precioVenta;
+        itemExistente.totalVenta = nuevosKilos * precioVenta;
+        
+        // Recalcular ganancia
+        const costoUnitario = this.items[medidaExistente]?.costo || 0;
+        const costoTotal = nuevosKilos * costoUnitario;
+        itemExistente.ganancia = itemExistente.totalVenta - costoTotal;
+        
+        // Mostrar mensaje de confirmación
+        this.lastSaveMessage = `Se sumaron ${this.formatNumber(this.newProduct.kilosVenta)} kilos a la medida "${this.newProduct.medida}". 
+Total: ${this.formatNumber(nuevosKilos)} kilos.
+Precio: $${this.formatNumber(precioVenta)}`;
+        this.showSaveMessage = true;
+        
+        // Ocultar el mensaje después de 3 segundos
+        if (this.saveMessageTimer) {
+          clearTimeout(this.saveMessageTimer);
+        }
+        this.saveMessageTimer = setTimeout(() => {
+          this.showSaveMessage = false;
+        }, 3000);
+      } else {
+        // Si la medida no existe, agregar un nuevo ítem
+        // Calcular los kilos si es un crudo
+        const kilosCalculados = this.calcularKilosCrudos(this.newProduct.medida, this.newProduct.kilosVenta);
+        
+        const totalVenta = kilosCalculados * this.newProduct.precioVenta;
+        this.itemsVenta.push({
+          ...this.newProduct,
+          kilosVenta: kilosCalculados,
+          totalVenta,
+          ganancia: totalVenta - (kilosCalculados * (this.items[this.itemsVenta.length]?.costo || 0))
+        });
+      }
 
       this.showAddProductModal = false;
       this.newProduct = {
@@ -1032,10 +1266,20 @@ export default {
     actualizarTotalKilos(index) {
       if (index !== null && this.itemsVenta[index]) {
         const item = this.itemsVenta[index];
-        const kilos = parseFloat(item.kilosVenta) || 0;
+        let kilos = parseFloat(item.kilosVenta) || 0;
         const precio = parseFloat(item.precioVenta) || 0;
+        
+        // Verificar si es un crudo y calcular los kilos
+        if (item.medida) {
+          kilos = this.calcularKilosCrudos(item.medida, kilos);
+          // Actualizar el valor de kilosVenta
+          item.kilosVenta = kilos;
+        }
+        
+        // Calcular el total de venta
         item.totalVenta = kilos * precio;
         
+        // Calcular la ganancia
         const itemCosto = this.items[index];
         const totalCosto = itemCosto ? (itemCosto.total || 0) : 0;
         item.ganancia = (item.totalVenta || 0) - totalCosto;
@@ -1369,6 +1613,99 @@ export default {
         console.error('Error en auto-guardado:', error);
         throw error;
       }
+    },
+
+    // Método para calcular los kilos de crudos
+    calcularKilosCrudos(medida, kilosOriginales) {
+      // Verificar si es un crudo y tiene el formato adecuado
+      const medidaLower = medida.toLowerCase().trim();
+      
+      // Verificar si tiene formato de números separados por guión (ej: "5-19")
+      const formatoGuion = /^(\d+)-(\d+)$/.exec(medidaLower);
+      if (formatoGuion) {
+        const cajas = parseInt(formatoGuion[1]) || 0;
+        const kilosPorCaja = parseInt(formatoGuion[2]) || 0;
+        
+        // Si el segundo número es 19, sustituirlo por 20
+        const kiloPorCaja = kilosPorCaja === 19 ? 20 : kilosPorCaja;
+        
+        // Calcular kilos totales: cajas * kiloPorCaja
+        const kilosCalculados = cajas * kiloPorCaja;
+        
+        // Mostrar mensaje informativo solo si se sustituyó 19 por 20
+        if (kilosPorCaja === 19 && kilosCalculados !== kilosOriginales) {
+          this.lastSaveMessage = `Cálculo de crudos: ${cajas} cajas * 20kg = ${kilosCalculados}kg (formato ${medidaLower})`;
+          this.showSaveMessage = true;
+          
+          // Ocultar el mensaje después de 3 segundos
+          if (this.saveMessageTimer) {
+            clearTimeout(this.saveMessageTimer);
+          }
+          this.saveMessageTimer = setTimeout(() => {
+            this.showSaveMessage = false;
+          }, 3000);
+        }
+        
+        return kilosCalculados;
+      }
+      
+      // Verificar si es un crudo
+      const esCrudo = medidaLower.includes('crudo');
+      
+      // Verificar formato con asterisco y posible suma (ej: "6*19+5")
+      if (esCrudo && /^\d+\*\d+(\+\d+)?$/.test(medidaLower)) {
+        // Extraer los números del formato
+        const partes = medidaLower.split(/[\*\+]/);
+        if (partes.length >= 2) {
+          const cajas = parseInt(partes[0]) || 0;
+          const kilosPorCaja = parseInt(partes[1]) || 0;
+          
+          // Si el segundo número es 19, sustituirlo por 20
+          const kiloPorCaja = kilosPorCaja === 19 ? 20 : kilosPorCaja;
+          
+          let kilosSobrantes = 0;
+          
+          if (partes.length > 2) {
+            kilosSobrantes = parseInt(partes[2]) || 0;
+          }
+          
+          // Calcular kilos totales: cajas * kiloPorCaja + sobrante
+          const kilosCalculados = (cajas * kiloPorCaja) + kilosSobrantes;
+          
+          // Mostrar mensaje informativo solo si se sustituyó 19 por 20
+          if (kilosPorCaja === 19 && kilosCalculados !== kilosOriginales) {
+            this.lastSaveMessage = `Cálculo de crudos: ${cajas} cajas * 20kg + ${kilosSobrantes}kg = ${kilosCalculados}kg`;
+            this.showSaveMessage = true;
+            
+            // Ocultar el mensaje después de 3 segundos
+            if (this.saveMessageTimer) {
+              clearTimeout(this.saveMessageTimer);
+            }
+            this.saveMessageTimer = setTimeout(() => {
+              this.showSaveMessage = false;
+            }, 3000);
+          }
+          
+          return kilosCalculados;
+        }
+      }
+      
+      // Si no tiene el formato esperado, devolver los kilos originales
+      return kilosOriginales;
+    },
+
+    // Método público que puede ser llamado desde otros componentes
+    crearCuentaConProductos(productos) {
+      const embarqueData = {
+        productos: productos.map(p => ({
+          medida: p.medida,
+          kilos: p.kilos,
+          precio: p.precio,
+          costo: p.costo
+        }))
+      };
+      
+      return this.crearCuentaDesdeEmbarque(embarqueData);
     },
   },
   created() {
@@ -1974,8 +2311,9 @@ h1, h2 {
 /* Estilos de mensaje de confirmación */
 .save-message {
   position: fixed;
-  top: 10px;
-  right: 10px;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
   background-color: rgba(0, 0, 0, 0.7);
   color: white;
   padding: 5px 10px;
@@ -1984,17 +2322,56 @@ h1, h2 {
   align-items: center;
   font-size: 14px;
   z-index: 1000;
+  animation: fadeInOut 3s ease-in-out;
+  max-width: 90%;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
 }
 
 .save-message p {
   margin: 0;
   white-space: pre-wrap;
   color: #fff;
+  text-align: center;
+}
+
+@keyframes fadeInOut {
+  0% { opacity: 0; transform: translate(-50%, 20px); }
+  10% { opacity: 1; transform: translate(-50%, 0); }
+  90% { opacity: 1; transform: translate(-50%, 0); }
+  100% { opacity: 0; transform: translate(-50%, 20px); }
+}
+
+@media (max-width: 600px) {
+  .save-message {
+    font-size: 12px;
+    padding: 8px 12px;
+    bottom: 10px;
+  }
 }
 
 .precios-button-container {
   display: flex;
   justify-content: center;
   margin: 15px 0;
+}
+
+.consolidar-btn {
+  background-color: #4CAF50;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 16px;
+  transition: background-color 0.3s ease;
+  min-width: 200px;
+  text-align: center;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.consolidar-btn:hover {
+  background-color: #45a049;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
 }
 </style> 
