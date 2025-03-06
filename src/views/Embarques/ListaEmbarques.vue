@@ -256,12 +256,42 @@ export default {
           cliente.crudos.forEach(crudo => {
             crudo.items.forEach(item => {
               if (item.taras) {
-                const [cantidad, medida] = item.taras.split('-').map(Number);
-                totalKilosCrudos += (cantidad || 0) * (medida || 0);
+                // Verificar si la tara tiene formato "5-19" o similar
+                const formatoGuion = /^(\d+)-(\d+)$/.exec(item.taras);
+                if (formatoGuion) {
+                  const cantidad = parseInt(formatoGuion[1]) || 0;
+                  let medida = parseInt(formatoGuion[2]) || 0;
+                  
+                  // Si la medida es 19, sustituirla por 20
+                  if (medida === 19) {
+                    medida = 20;
+                  }
+                  
+                  totalKilosCrudos += (cantidad || 0) * (medida || 0);
+                } else {
+                  // Formato original si no coincide con el patrón
+                  const [cantidad, medida] = item.taras.split('-').map(Number);
+                  totalKilosCrudos += (cantidad || 0) * (medida || 0);
+                }
               }
               if (item.sobrante) {
-                const [cantidadSobrante, medidaSobrante] = item.sobrante.split('-').map(Number);
-                totalKilosCrudos += (cantidadSobrante || 0) * (medidaSobrante || 0);
+                // Verificar si el sobrante tiene formato "5-19" o similar
+                const formatoGuion = /^(\d+)-(\d+)$/.exec(item.sobrante);
+                if (formatoGuion) {
+                  const cantidadSobrante = parseInt(formatoGuion[1]) || 0;
+                  let medidaSobrante = parseInt(formatoGuion[2]) || 0;
+                  
+                  // Si la medida es 19, sustituirla por 20
+                  if (medidaSobrante === 19) {
+                    medidaSobrante = 20;
+                  }
+                  
+                  totalKilosCrudos += (cantidadSobrante || 0) * (medidaSobrante || 0);
+                } else {
+                  // Formato original si no coincide con el patrón
+                  const [cantidadSobrante, medidaSobrante] = item.sobrante.split('-').map(Number);
+                  totalKilosCrudos += (cantidadSobrante || 0) * (medidaSobrante || 0);
+                }
               }
             });
           });
