@@ -1860,6 +1860,8 @@ export default {
     },
     calcularKilosCrudos(item) {
       let kilosTotales = 0;
+      
+      // Procesar taras
       if (item.taras) {
         // Verificar si la tara tiene formato "5-19" o similar
         const formatoGuion = /^(\d+)-(\d+)$/.exec(item.taras);
@@ -1880,6 +1882,8 @@ export default {
           kilosTotales += cantidad * medida;
         }
       }
+      
+      // Procesar sobrante
       if (item.sobrante) {
         // Verificar si el sobrante tiene formato "5-19" o similar
         const formatoGuion = /^(\d+)-(\d+)$/.exec(item.sobrante);
@@ -1900,6 +1904,7 @@ export default {
           kilosTotales += cantidadSobrante * medidaSobrante;
         }
       }
+      
       return kilosTotales;
     },
     calcularTarasCrudos(item) {
@@ -3036,10 +3041,12 @@ export default {
             crudo.items.forEach(item => {
               // Calcular kilos para productos crudos
               let kilosTotales = 0;
+              let kilosCostos = 0;
               
               // Verificar si el producto crudo es de tipo c/h20
               const esTipoConAgua = item.tipo && item.tipo.toLowerCase() === 'c/h20';
               
+              // Procesar taras
               if (item.taras) {
                 // Verificar si la tara tiene formato "5-19" o similar
                 const formatoGuion = /^(\d+)-(\d+)$/.exec(item.taras);
@@ -3047,19 +3054,29 @@ export default {
                   const cantidad = parseInt(formatoGuion[1]) || 0;
                   let peso = parseInt(formatoGuion[2]) || 0;
                   
-                  // Si el peso es 19, sustituirlo por 20
+                  // Guardar el peso original para la tabla de costos
+                  const pesoOriginal = peso;
+                  
+                  // Si el peso es 19, sustituirlo por 20 solo para el cálculo de venta
                   if (peso === 19) {
                     peso = 20;
-                    console.log(`Cuenta Joselito - Ajustando tara de formato ${item.taras} a ${cantidad}-${peso}`);
+                    console.log(`Cuenta Joselito - Ajustando tara de formato ${item.taras} a ${cantidad}-${peso} para cálculo de venta`);
                   }
                   
+                  // Calcular kilos totales con el peso ajustado (para la tabla de venta)
                   kilosTotales += cantidad * peso;
+                  
+                  // Calcular kilos para la tabla de costos con el peso original
+                  kilosCostos += cantidad * pesoOriginal;
                 } else {
                   // Formato original si no coincide con el patrón
                   const [cantidad, peso] = item.taras.split('-').map(Number);
                   kilosTotales += cantidad * peso;
+                  kilosCostos += cantidad * peso;
                 }
               }
+              
+              // Procesar sobrante
               if (item.sobrante) {
                 // Verificar si el sobrante tiene formato "5-19" o similar
                 const formatoGuion = /^(\d+)-(\d+)$/.exec(item.sobrante);
@@ -3067,23 +3084,32 @@ export default {
                   const cantidadSobrante = parseInt(formatoGuion[1]) || 0;
                   let pesoSobrante = parseInt(formatoGuion[2]) || 0;
                   
-                  // Si el peso es 19, sustituirlo por 20
+                  // Guardar el peso original para la tabla de costos
+                  const pesoSobranteOriginal = pesoSobrante;
+                  
+                  // Si el peso es 19, sustituirlo por 20 solo para el cálculo de venta
                   if (pesoSobrante === 19) {
                     pesoSobrante = 20;
-                    console.log(`Cuenta Joselito - Ajustando sobrante de formato ${item.sobrante} a ${cantidadSobrante}-${pesoSobrante}`);
+                    console.log(`Cuenta Joselito - Ajustando sobrante de formato ${item.sobrante} a ${cantidadSobrante}-${pesoSobrante} para cálculo de venta`);
                   }
                   
+                  // Calcular kilos totales con el peso ajustado (para la tabla de venta)
                   kilosTotales += cantidadSobrante * pesoSobrante;
+                  
+                  // Calcular kilos para la tabla de costos con el peso original
+                  kilosCostos += cantidadSobrante * pesoSobranteOriginal;
                 } else {
                   // Formato original si no coincide con el patrón
                   const [cantidadSobrante, pesoSobrante] = item.sobrante.split('-').map(Number);
                   kilosTotales += cantidadSobrante * pesoSobrante;
+                  kilosCostos += cantidadSobrante * pesoSobrante;
                 }
               }
               
               // Si es tipo c/h20, multiplicar por el valor neto
               if (esTipoConAgua) {
                 kilosTotales = kilosTotales * (item.camaronNeto || 0.65);
+                kilosCostos = kilosCostos * (item.camaronNeto || 0.65);
               }
               
               // Buscar el precio actual para este producto crudo
@@ -3104,12 +3130,15 @@ export default {
                 }
               }
               
+              // Agregar a la lista de items
               items.push({
-                kilos: Number(kilosTotales.toFixed(1)), // Redondear a 1 decimal
+                kilos: Number(kilosCostos.toFixed(1)), // Redondear a 1 decimal
                 medida: `${item.talla} (crudo)`,
                 costo: 1, // Costo por defecto es 1
                 precioVenta, // Usar el precio obtenido como precio de venta
-                total: Number((kilosTotales * 1).toFixed(2)) // Total basado en costo = 1
+                total: Number((kilosCostos * 1).toFixed(2)), // Total basado en costo = 1
+                kilosVenta: Number(kilosTotales.toFixed(1)), // Kilos para la tabla de venta
+                totalVenta: Number((kilosTotales * precioVenta).toFixed(2)) // Total de venta
               });
             });
           });
@@ -3125,7 +3154,11 @@ export default {
         const totalGeneral = Number(items.reduce((sum, item) => sum + item.total, 0).toFixed(2));
         
         // Calcular el total general de venta
-        const totalGeneralVenta = Number(items.reduce((sum, item) => sum + (item.kilos * item.precioVenta), 0).toFixed(2));
+        const totalGeneralVenta = Number(items.reduce((sum, item) => {
+          // Si el item tiene kilosVenta, usar ese valor, de lo contrario usar kilos
+          const kilosParaVenta = item.kilosVenta || item.kilos;
+          return sum + (kilosParaVenta * item.precioVenta);
+        }, 0).toFixed(2));
         
         // Calcular la ganancia del día
         const gananciaDelDia = Number((totalGeneralVenta - totalGeneral).toFixed(2));
@@ -3159,11 +3192,11 @@ export default {
           fecha: fechaFormateada,
           items: items,
           itemsVenta: items.map(item => ({
-            kilosVenta: item.kilos,
+            kilosVenta: item.kilosVenta || item.kilos,
             medida: item.medida,
             precioVenta: item.precioVenta,
-            totalVenta: Number((item.kilos * item.precioVenta).toFixed(2)),
-            ganancia: Number(((item.kilos * item.precioVenta) - item.total).toFixed(2))
+            totalVenta: item.totalVenta || Number((item.kilos * item.precioVenta).toFixed(2)),
+            ganancia: Number(((item.kilosVenta || item.kilos) * item.precioVenta - item.total).toFixed(2))
           })),
           saldoAcumuladoAnterior: saldoAcumuladoAnterior,
           cobros: [],

@@ -493,6 +493,26 @@ export default {
             ganancia: Number(item.ganancia) || 0
           }));
 
+          // Recalcular los kilos de la tabla de venta para productos con formato "5-19"
+          this.items.forEach((item, index) => {
+            if (index < this.itemsVenta.length) {
+              const medidaLower = item.medida.toLowerCase().trim();
+              const formatoGuion = /^(\d+)-(\d+)$/.exec(medidaLower);
+              if (formatoGuion) {
+                const cajas = parseInt(formatoGuion[1]) || 0;
+                const kilosPorCaja = parseInt(formatoGuion[2]) || 0;
+                
+                // Si el segundo número es 19, recalcular usando 20 para la tabla de venta
+                if (kilosPorCaja === 19) {
+                  const kilosVenta = cajas * 20;
+                  this.itemsVenta[index].kilosVenta = kilosVenta;
+                  this.itemsVenta[index].totalVenta = kilosVenta * this.itemsVenta[index].precioVenta;
+                  this.itemsVenta[index].ganancia = this.itemsVenta[index].totalVenta - item.total;
+                }
+              }
+            }
+          });
+
           // Consolidar ítems con la misma medida
           this.consolidarItemsRepetidos();
 
@@ -561,12 +581,6 @@ export default {
           itemExistente.precioVenta = item.precioVenta;
           // Recalcular total y ganancia
           itemExistente.totalVenta = itemExistente.kilosVenta * itemExistente.precioVenta;
-          
-          // Buscar el costo correspondiente
-          const itemCosto = itemsMap.get(medidaNormalizada);
-          if (itemCosto) {
-            itemExistente.ganancia = itemExistente.totalVenta - itemCosto.total;
-          }
         } else {
           // Si no existe, agregar al mapa
           itemsVentaMap.set(medidaNormalizada, { ...item });
@@ -576,6 +590,34 @@ export default {
       // Actualizar los arrays con los ítems consolidados
       this.items = Array.from(itemsMap.values());
       this.itemsVenta = Array.from(itemsVentaMap.values());
+      
+      // Recalcular las ganancias basadas en los costos
+      this.items.forEach((item, index) => {
+        if (index < this.itemsVenta.length) {
+          const medidaNormalizada = this.normalizarMedida(item.medida);
+          const itemVenta = this.itemsVenta.find(iv => this.normalizarMedida(iv.medida) === medidaNormalizada);
+          
+          if (itemVenta) {
+            // Verificar si es un formato "5-19" y ajustar los kilos de venta
+            const medidaLower = item.medida.toLowerCase().trim();
+            const formatoGuion = /^(\d+)-(\d+)$/.exec(medidaLower);
+            if (formatoGuion) {
+              const cajas = parseInt(formatoGuion[1]) || 0;
+              const kilosPorCaja = parseInt(formatoGuion[2]) || 0;
+              
+              // Si el segundo número es 19, recalcular usando 20 para la tabla de venta
+              if (kilosPorCaja === 19) {
+                const kilosVenta = cajas * 20;
+                itemVenta.kilosVenta = kilosVenta;
+                itemVenta.totalVenta = kilosVenta * itemVenta.precioVenta;
+              }
+            }
+            
+            // Recalcular la ganancia
+            itemVenta.ganancia = itemVenta.totalVenta - item.total;
+          }
+        }
+      });
       
       // Calcular cuántos ítems se consolidaron
       const itemsConsolidados = itemsOriginalCount - this.items.length;
@@ -964,8 +1006,8 @@ export default {
           const itemExistente = this.items[medidaExistente];
           const kilosAnteriores = itemExistente.kilos;
           
-          // Calcular los kilos si es un crudo
-          const kilosCalculados = this.calcularKilosCrudos(this.newItem.medida, this.newItem.kilos);
+          // Calcular los kilos si es un crudo para la tabla de costos (usar 19)
+          const kilosCalculados = this.calcularKilosCrudos(this.newItem.medida, this.newItem.kilos, true);
           
           const nuevosKilos = kilosAnteriores + kilosCalculados;
           
@@ -982,9 +1024,12 @@ export default {
             // Usar el precio de venta más reciente (el del nuevo ítem)
             const precioVenta = this.newItem.precioVenta || this.itemsVenta[medidaExistente].precioVenta;
             
-            this.itemsVenta[medidaExistente].kilosVenta = nuevosKilos;
+            // Calcular los kilos para la tabla de venta (usar 20)
+            const kilosVenta = this.calcularKilosCrudos(this.newItem.medida, this.newItem.kilos, false);
+            
+            this.itemsVenta[medidaExistente].kilosVenta = kilosAnteriores + kilosVenta;
             this.itemsVenta[medidaExistente].precioVenta = precioVenta;
-            this.itemsVenta[medidaExistente].totalVenta = nuevosKilos * precioVenta;
+            this.itemsVenta[medidaExistente].totalVenta = this.itemsVenta[medidaExistente].kilosVenta * precioVenta;
             this.itemsVenta[medidaExistente].ganancia = this.itemsVenta[medidaExistente].totalVenta - itemExistente.total;
           }
           
@@ -1005,8 +1050,8 @@ Costo: $${this.formatNumber(costoNuevo)} | Precio: $${this.formatNumber(precioVe
           // Si la medida no existe, agregar un nuevo ítem
           const total = this.newItem.kilos * this.newItem.costo;
           
-          // Calcular los kilos si es un crudo
-          const kilosCalculados = this.calcularKilosCrudos(this.newItem.medida, this.newItem.kilos);
+          // Calcular los kilos si es un crudo para la tabla de costos (usar 19)
+          const kilosCalculados = this.calcularKilosCrudos(this.newItem.medida, this.newItem.kilos, true);
           
           this.items.push({
             kilos: kilosCalculados,
@@ -1015,11 +1060,14 @@ Costo: $${this.formatNumber(costoNuevo)} | Precio: $${this.formatNumber(precioVe
             total: kilosCalculados * this.newItem.costo
           });
 
+          // Calcular los kilos para la tabla de venta (usar 20)
+          const kilosVenta = this.calcularKilosCrudos(this.newItem.medida, this.newItem.kilos, false);
+          
           // Agregar directamente a itemsVenta con el precio de venta
-          const totalVenta = kilosCalculados * this.newItem.precioVenta;
+          const totalVenta = kilosVenta * this.newItem.precioVenta;
           const ganancia = totalVenta - (kilosCalculados * this.newItem.costo);
           this.itemsVenta.push({
-            kilosVenta: kilosCalculados,
+            kilosVenta: kilosVenta,
             medida: this.newItem.medida,
             precioVenta: this.newItem.precioVenta,
             totalVenta,
@@ -1048,12 +1096,28 @@ Costo: $${this.formatNumber(costoNuevo)} | Precio: $${this.formatNumber(precioVe
         const itemVentaExistente = itemsVentaActuales[index] || {};
         const precioVenta = Number(itemVentaExistente.precioVenta) || 0;
         
+        // Verificar si es un formato "5-19" y recalcular los kilos para la tabla de venta
+        let kilosVenta = Number(item.kilos) || 0;
+        
+        // Si la medida tiene formato "5-19", recalcular los kilos para la tabla de venta
+        const medidaLower = item.medida.toLowerCase().trim();
+        const formatoGuion = /^(\d+)-(\d+)$/.exec(medidaLower);
+        if (formatoGuion) {
+          const cajas = parseInt(formatoGuion[1]) || 0;
+          const kilosPorCaja = parseInt(formatoGuion[2]) || 0;
+          
+          // Si el segundo número es 19, recalcular usando 20 para la tabla de venta
+          if (kilosPorCaja === 19) {
+            kilosVenta = cajas * 20;
+          }
+        }
+        
         return {
-          kilosVenta: Number(item.kilos) || 0,
+          kilosVenta: kilosVenta,
           medida: item.medida,
           precioVenta: precioVenta,
-          totalVenta: (Number(item.kilos) || 0) * precioVenta,
-          ganancia: ((Number(item.kilos) || 0) * precioVenta) - 
+          totalVenta: kilosVenta * precioVenta,
+          ganancia: (kilosVenta * precioVenta) - 
                     ((Number(item.kilos) || 0) * (Number(item.costo) || 0))
         };
       });
@@ -1088,7 +1152,27 @@ Costo: $${this.formatNumber(costoNuevo)} | Precio: $${this.formatNumber(precioVe
           if (field === 'kilos' || field === 'costo') {
             item[field] = parseFloat(item[field]) || 0;
           }
+          
+          // Si se está editando la medida, verificar si es un formato "5-19"
+          if (field === 'medida') {
+            // Si la nueva medida tiene formato "5-19", calcular los kilos usando 19
+            const medidaLower = item.medida.toLowerCase().trim();
+            const formatoGuion = /^(\d+)-(\d+)$/.exec(medidaLower);
+            if (formatoGuion) {
+              const cajas = parseInt(formatoGuion[1]) || 0;
+              const kilosPorCaja = parseInt(formatoGuion[2]) || 0;
+              
+              // Si el segundo número es 19, calcular los kilos usando 19 para la tabla de costos
+              if (kilosPorCaja === 19) {
+                item.kilos = cajas * 19;
+              }
+            }
+          }
+          
+          // Recalcular el total
           item.total = item.kilos * item.costo;
+          
+          // Actualizar la tabla de venta
           this.actualizarItemsVenta();
           
           // El guardado automático se activará por los watchers
@@ -1116,8 +1200,8 @@ Costo: $${this.formatNumber(costoNuevo)} | Precio: $${this.formatNumber(precioVe
         const itemExistente = this.itemsVenta[medidaExistente];
         const kilosAnteriores = itemExistente.kilosVenta;
         
-        // Calcular los kilos si es un crudo
-        const kilosCalculados = this.calcularKilosCrudos(this.newProduct.medida, this.newProduct.kilosVenta);
+        // Calcular los kilos si es un crudo para la tabla de venta (usar 20)
+        const kilosCalculados = this.calcularKilosCrudos(this.newProduct.medida, this.newProduct.kilosVenta, false);
         
         const nuevosKilos = kilosAnteriores + kilosCalculados;
         
@@ -1149,8 +1233,8 @@ Precio: $${this.formatNumber(precioVenta)}`;
         }, 3000);
       } else {
         // Si la medida no existe, agregar un nuevo ítem
-        // Calcular los kilos si es un crudo
-        const kilosCalculados = this.calcularKilosCrudos(this.newProduct.medida, this.newProduct.kilosVenta);
+        // Calcular los kilos si es un crudo para la tabla de venta (usar 20)
+        const kilosCalculados = this.calcularKilosCrudos(this.newProduct.medida, this.newProduct.kilosVenta, false);
         
         const totalVenta = kilosCalculados * this.newProduct.precioVenta;
         this.itemsVenta.push({
@@ -1269,9 +1353,9 @@ Precio: $${this.formatNumber(precioVenta)}`;
         let kilos = parseFloat(item.kilosVenta) || 0;
         const precio = parseFloat(item.precioVenta) || 0;
         
-        // Verificar si es un crudo y calcular los kilos
+        // Verificar si es un crudo y calcular los kilos para la tabla de venta (usar 20)
         if (item.medida) {
-          kilos = this.calcularKilosCrudos(item.medida, kilos);
+          kilos = this.calcularKilosCrudos(item.medida, kilos, false);
           // Actualizar el valor de kilosVenta
           item.kilosVenta = kilos;
         }
@@ -1616,7 +1700,7 @@ Precio: $${this.formatNumber(precioVenta)}`;
     },
 
     // Método para calcular los kilos de crudos
-    calcularKilosCrudos(medida, kilosOriginales) {
+    calcularKilosCrudos(medida, kilosOriginales, esParaCostos = false) {
       // Verificar si es un crudo y tiene el formato adecuado
       const medidaLower = medida.toLowerCase().trim();
       
@@ -1626,14 +1710,14 @@ Precio: $${this.formatNumber(precioVenta)}`;
         const cajas = parseInt(formatoGuion[1]) || 0;
         const kilosPorCaja = parseInt(formatoGuion[2]) || 0;
         
-        // Si el segundo número es 19, sustituirlo por 20
-        const kiloPorCaja = kilosPorCaja === 19 ? 20 : kilosPorCaja;
+        // Si el segundo número es 19, sustituirlo por 20 solo si NO es para la tabla de costos
+        const kiloPorCaja = (kilosPorCaja === 19 && !esParaCostos) ? 20 : kilosPorCaja;
         
         // Calcular kilos totales: cajas * kiloPorCaja
         const kilosCalculados = cajas * kiloPorCaja;
         
-        // Mostrar mensaje informativo solo si se sustituyó 19 por 20
-        if (kilosPorCaja === 19 && kilosCalculados !== kilosOriginales) {
+        // Mostrar mensaje informativo solo si se sustituyó 19 por 20 y no es para costos
+        if (kilosPorCaja === 19 && !esParaCostos && kilosCalculados !== kilosOriginales) {
           this.lastSaveMessage = `Cálculo de crudos: ${cajas} cajas * 20kg = ${kilosCalculados}kg (formato ${medidaLower})`;
           this.showSaveMessage = true;
           
@@ -1644,6 +1728,9 @@ Precio: $${this.formatNumber(precioVenta)}`;
           this.saveMessageTimer = setTimeout(() => {
             this.showSaveMessage = false;
           }, 3000);
+        } else if (kilosPorCaja === 19 && esParaCostos) {
+          // Mensaje para la tabla de costos
+          console.log(`Cálculo de crudos para tabla de costos: ${cajas} cajas * 19kg = ${kilosCalculados}kg (formato ${medidaLower})`);
         }
         
         return kilosCalculados;
