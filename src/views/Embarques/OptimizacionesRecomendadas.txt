@@ -1,0 +1,105 @@
+# Optimizaciones Recomendadas para NuevoEmbarque.vue
+
+## 1. Importar el componente BotonCrearCuenta
+
+```javascript
+import { getFirestore, collection, addDoc, doc, getDoc, updateDoc, onSnapshot, serverTimestamp } from 'firebase/firestore';
+import { debounce } from 'lodash';
+import { ref, onValue, onDisconnect, set } from 'firebase/database'
+import { rtdb } from '@/firebase'
+import { useAuthStore } from '@/stores/auth'
+import { ref as vueRef, onMounted, onUnmounted, defineAsyncComponent } from 'vue'
+import BotonCrearCuenta from '@/components/Embarques/BotonCrearCuenta.vue';
+
+// Lazy loaded components
+const Rendimientos = defineAsyncComponent(() => import('./Rendimientos.vue'))
+```
+
+## 2. Registrar el componente
+
+```javascript
+export default {
+  name: 'NuevoEmbarque',
+  components: {
+    Rendimientos,
+    BotonCrearCuenta
+  },
+  setup() {
+    const authStore = useAuthStore();
+    return { authStore };
+  },
+```
+
+## 3. Añadir método unificado para manejar la creación de cuentas
+
+```javascript
+methods: {
+  // Método unificado para manejar la creación de cuentas
+  manejarCreacionCuenta(datos) {
+    const { tipoCliente, embarqueCliente, productos, crudos } = datos;
+    
+    if (tipoCliente === 'Joselito') {
+      this.crearCuentaJoselito(embarqueCliente, productos, crudos);
+    } else if (tipoCliente === 'Catarro') {
+      this.crearCuentaCatarro(embarqueCliente, productos, crudos);
+    }
+  },
+  
+  // Métodos para verificar el tipo de cliente
+  esClienteJoselito(clienteId) {
+    return this.obtenerNombreCliente(clienteId) === 'Joselito';
+  },
+  
+  esClienteCatarro(clienteId) {
+    return this.obtenerNombreCliente(clienteId) === 'Catarro';
+  },
+```
+
+## 4. Reemplazar los botones duplicados con el componente BotonCrearCuenta
+
+Reemplazar:
+
+```html
+<!-- Botón para crear cuenta de Joselito -->
+<button 
+  v-if="esClienteJoselito(clienteId)"
+  type="button" 
+  @click.stop="crearCuentaJoselito(obtenerEmbarqueCliente(clienteId), productosPorCliente[clienteId], clienteCrudos[clienteId] || [])" 
+  class="btn btn-success btn-sm crear-cuenta-joselito" 
+  title="Crear Cuenta para Joselito"
+  :disabled="isCreatingAccount"
+>
+  <span v-if="isCreatingAccount" class="loader-inline"></span>
+  <i v-else class="fas fa-plus-circle"></i> Crear Cuenta
+</button>
+<!-- Agregar botón para crear cuenta de Catarro -->
+<button 
+  v-if="esClienteCatarro(clienteId)"
+  type="button" 
+  @click.stop="crearCuentaCatarro(obtenerEmbarqueCliente(clienteId), productosPorCliente[clienteId], clienteCrudos[clienteId] || [])" 
+  class="btn btn-success btn-sm crear-cuenta-catarro" 
+  title="Crear Cuenta para Catarro"
+  :disabled="isCreatingAccount"
+>
+  <span v-if="isCreatingAccount" class="loader-inline"></span>
+  <i v-else class="fas fa-plus-circle"></i> Crear Cuenta
+</button>
+```
+
+Con:
+
+```html
+<!-- Botón para crear cuenta optimizado -->
+<BotonCrearCuenta
+  v-if="esClienteJoselito(clienteId) || esClienteCatarro(clienteId)"
+  :tipoCliente="obtenerNombreCliente(clienteId)"
+  :clienteId="clienteId"
+  :embarqueCliente="obtenerEmbarqueCliente(clienteId)"
+  :productos="productosPorCliente[clienteId]"
+  :crudos="clienteCrudos[clienteId] || []"
+  :isCreatingAccount="isCreatingAccount"
+  @crear-cuenta="manejarCreacionCuenta"
+/>
+```
+
+Estas optimizaciones reducirán la duplicación de código, mejorarán la mantenibilidad y harán que el código sea más modular y reutilizable. 
