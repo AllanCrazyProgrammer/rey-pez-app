@@ -586,11 +586,20 @@ export default {
           total
         });
 
-        // Agregar directamente a itemsVenta con el precio de venta
-        const totalVenta = this.newItem.kilos * this.newItem.precioVenta;
+        // Verificar si necesitamos ajustar los kilos para la tabla de venta
+        let kilosVenta = this.newItem.kilos;
+        
+        // Usar la función calcularKilosCrudos para ajustar de 19 a 20 kg si es necesario
+        const kilosAjustados = this.calcularKilosCrudos(this.newItem.medida, this.newItem.kilos, false);
+        if (kilosAjustados !== this.newItem.kilos) {
+          kilosVenta = kilosAjustados;
+        }
+
+        // Agregar directamente a itemsVenta con el precio de venta y los kilos ajustados
+        const totalVenta = kilosVenta * this.newItem.precioVenta;
         const ganancia = totalVenta - total;
         this.itemsVenta.push({
-          kilosVenta: this.newItem.kilos,
+          kilosVenta: kilosVenta,
           medida: this.newItem.medida,
           precioVenta: this.newItem.precioVenta,
           totalVenta,
@@ -991,7 +1000,17 @@ export default {
       if (index !== null) {
         try {
           const item = this.itemsVenta[index];
-          item.kilosVenta = parseFloat(item.kilosVenta) || item.kilos;
+          const itemCosto = this.items[index];
+          
+          // Verificar si necesitamos ajustar los kilos para la tabla de venta
+          if (itemCosto) {
+            // Usar la función calcularKilosCrudos para ajustar de 19 a 20 kg si es necesario
+            const kilosAjustados = this.calcularKilosCrudos(item.medida, parseFloat(item.kilosVenta) || itemCosto.kilos, false);
+            item.kilosVenta = kilosAjustados;
+          } else {
+            item.kilosVenta = parseFloat(item.kilosVenta) || 0;
+          }
+          
           this.calcularTotalVenta(index);
           
           // Encolar el guardado después de la edición
@@ -1044,14 +1063,22 @@ export default {
     },
     addNewProduct() {
       if (this.newProduct.kilosVenta && this.newProduct.medida && this.newProduct.precioVenta) {
-        const totalVenta = this.newProduct.kilosVenta * this.newProduct.precioVenta;
+        // Verificar si necesitamos ajustar los kilos para la tabla de venta
+        const kilosAjustados = this.calcularKilosCrudos(this.newProduct.medida, this.newProduct.kilosVenta, false);
+        
+        const totalVenta = kilosAjustados * this.newProduct.precioVenta;
         this.itemsVenta.push({
-          ...this.newProduct,
+          kilosVenta: kilosAjustados,
+          medida: this.newProduct.medida,
+          precioVenta: this.newProduct.precioVenta,
           totalVenta,
           ganancia: totalVenta // La ganancia será igual al total de venta ya que no tiene costo asociado
         });
         this.showAddProductModal = false;
         this.newProduct = { kilosVenta: null, medida: '', precioVenta: null };
+        
+        // Encolar el guardado
+        this.queueSave();
       } else {
         alert('Por favor, complete todos los campos');
       }
@@ -1221,6 +1248,72 @@ export default {
           }
         }
       }
+    },
+    // Método para calcular los kilos de crudos
+    calcularKilosCrudos(medida, kilosOriginales, esParaCostos = false) {
+      // Verificar si es un crudo y tiene el formato adecuado
+      const medidaLower = medida.toLowerCase().trim();
+      
+      // Verificar si tiene formato de números separados por guión (ej: "5-19")
+      const formatoGuion = /^(\d+)-(\d+)$/.exec(medidaLower);
+      if (formatoGuion) {
+        const cajas = parseInt(formatoGuion[1]) || 0;
+        const kilosPorCaja = parseInt(formatoGuion[2]) || 0;
+        
+        // Si el segundo número es 19, sustituirlo por 20 solo si NO es para la tabla de costos
+        const kiloPorCaja = (kilosPorCaja === 19 && !esParaCostos) ? 20 : kilosPorCaja;
+        
+        // Calcular kilos totales: cajas * kiloPorCaja
+        const kilosCalculados = cajas * kiloPorCaja;
+        
+        // Mostrar mensaje informativo solo si se sustituyó 19 por 20 y no es para costos
+        if (kilosPorCaja === 19 && !esParaCostos && kilosCalculados !== kilosOriginales) {
+          this.lastSaveMessage = `Cálculo de crudos: ${cajas} cajas * 20kg = ${kilosCalculados}kg (formato ${medidaLower})`;
+          this.showSaveMessage = true;
+          
+          // Ocultar el mensaje después de 3 segundos
+          if (this.saveMessageTimer) {
+            clearTimeout(this.saveMessageTimer);
+          }
+          this.saveMessageTimer = setTimeout(() => {
+            this.showSaveMessage = false;
+          }, 3000);
+        } else if (kilosPorCaja === 19 && esParaCostos) {
+          // Mensaje para la tabla de costos
+          console.log(`Cálculo de crudos para tabla de costos: ${cajas} cajas * 19kg = ${kilosCalculados}kg (formato ${medidaLower})`);
+        }
+        
+        return kilosCalculados;
+      }
+      
+      // Verificar si es un crudo
+      const esCrudo = medidaLower.includes('crudo');
+      
+      // Verificar formato con asterisco y posible suma (ej: "6*19+5")
+      if (esCrudo && /^\d+\*\d+(\+\d+)?$/.test(medidaLower)) {
+        // Extraer los números del formato
+        const partes = medidaLower.split(/[\*\+]/);
+        if (partes.length >= 2) {
+          const cajas = parseInt(partes[0]) || 0;
+          const kilosPorCaja = parseInt(partes[1]) || 0;
+          
+          // Si el segundo número es 19, sustituirlo por 20 solo si NO es para la tabla de costos
+          const kiloPorCaja = (kilosPorCaja === 19 && !esParaCostos) ? 20 : kilosPorCaja;
+          
+          // Calcular kilos totales: cajas * kiloPorCaja
+          let kilosCalculados = cajas * kiloPorCaja;
+          
+          // Sumar el tercer número si existe (formato "6*19+5")
+          if (partes.length > 2) {
+            kilosCalculados += parseInt(partes[2]) || 0;
+          }
+          
+          return kilosCalculados;
+        }
+      }
+      
+      // Si no coincide con ningún formato especial, devolver los kilos originales
+      return kilosOriginales;
     },
   },
   beforeUnmount() {
