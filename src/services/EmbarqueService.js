@@ -25,6 +25,25 @@ export default {
   },
 
   /**
+   * Crea un nuevo embarque en la colección embarques2
+   * @param {Object} embarqueData - Datos del embarque a crear
+   * @returns {Promise<string>} - ID del embarque creado
+   */
+  async crearEmbarque2(embarqueData) {
+    try {
+      const docRef = await addDoc(collection(db, "embarques2"), {
+        ...embarqueData,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+      return docRef.id;
+    } catch (error) {
+      console.error("Error al crear embarque en embarques2:", error);
+      throw error;
+    }
+  },
+
+  /**
    * Actualiza un embarque existente
    * @param {string} embarqueId - ID del embarque a actualizar
    * @param {Object} embarqueData - Datos actualizados del embarque
@@ -39,6 +58,25 @@ export default {
       });
     } catch (error) {
       console.error("Error al actualizar embarque:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * Actualiza un embarque existente en la colección embarques2
+   * @param {string} embarqueId - ID del embarque a actualizar
+   * @param {Object} embarqueData - Datos actualizados del embarque
+   * @returns {Promise<void>}
+   */
+  async actualizarEmbarque2(embarqueId, embarqueData) {
+    try {
+      const embarqueRef = doc(db, "embarques2", embarqueId);
+      await updateDoc(embarqueRef, {
+        ...embarqueData,
+        updatedAt: serverTimestamp()
+      });
+    } catch (error) {
+      console.error("Error al actualizar embarque en embarques2:", error);
       throw error;
     }
   },
@@ -65,6 +103,27 @@ export default {
   },
 
   /**
+   * Obtiene un embarque por su ID de la colección embarques2
+   * @param {string} embarqueId - ID del embarque a obtener
+   * @returns {Promise<Object|null>} - Datos del embarque o null si no existe
+   */
+  async obtenerEmbarque2(embarqueId) {
+    try {
+      const embarqueRef = doc(db, "embarques2", embarqueId);
+      const embarqueSnap = await getDoc(embarqueRef);
+      
+      if (embarqueSnap.exists()) {
+        return { id: embarqueSnap.id, ...embarqueSnap.data() };
+      } else {
+        return null;
+      }
+    } catch (error) {
+      console.error("Error al obtener embarque de embarques2:", error);
+      throw error;
+    }
+  },
+
+  /**
    * Configura un listener para cambios en un embarque
    * @param {string} embarqueId - ID del embarque a observar
    * @param {Function} callback - Función a llamar cuando hay cambios
@@ -79,6 +138,48 @@ export default {
         callback(null);
       }
     });
+  },
+
+  /**
+   * Configura un listener para cambios en un embarque de la colección embarques2
+   * @param {string} embarqueId - ID del embarque a observar
+   * @param {Function} callback - Función a llamar cuando hay cambios
+   * @returns {Function} - Función para desuscribirse
+   */
+  observarEmbarque2(embarqueId, callback) {
+    const embarqueRef = doc(db, "embarques2", embarqueId);
+    return onSnapshot(embarqueRef, (doc) => {
+      if (doc.exists()) {
+        callback({ id: doc.id, ...doc.data() });
+      } else {
+        callback(null);
+      }
+    });
+  },
+
+  /**
+   * Obtiene todos los embarques de la colección embarques2
+   * @returns {Promise<Array>} - Lista de embarques
+   */
+  async obtenerTodosEmbarques2() {
+    try {
+      const q = query(
+        collection(db, "embarques2"),
+        orderBy("createdAt", "desc")
+      );
+      
+      const querySnapshot = await getDocs(q);
+      const embarques = [];
+      
+      querySnapshot.forEach((doc) => {
+        embarques.push({ id: doc.id, ...doc.data() });
+      });
+      
+      return embarques;
+    } catch (error) {
+      console.error("Error al obtener todos los embarques de embarques2:", error);
+      throw error;
+    }
   },
 
   /**

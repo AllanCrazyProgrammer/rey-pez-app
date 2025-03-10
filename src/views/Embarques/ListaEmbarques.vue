@@ -61,7 +61,8 @@
 
 <script>
 import { getFirestore, collection, getDocs, doc, deleteDoc } from 'firebase/firestore';
-import { adaptarTodosLosEmbarques } from '@/components/Embarques/EmbarqueAdapter';
+import { adaptarTodosLosEmbarques, adaptarEmbarqueAntiguo } from '@/components/Embarques/EmbarqueAdapter';
+import EmbarqueService from '@/services/EmbarqueService';
 
 export default {
   name: 'ListaEmbarques',
@@ -78,30 +79,32 @@ export default {
       try {
         this.cargando = true;
         
-        if (this.modoCompatibilidad) {
-          // Usar el adaptador para cargar y transformar todos los embarques
-          const embarquesAdaptados = await adaptarTodosLosEmbarques(false);
-          this.embarques = embarquesAdaptados.sort((a, b) => {
-            const fechaA = a.fecha ? (a.fecha.toDate ? a.fecha.toDate() : new Date(a.fecha)) : new Date();
-            const fechaB = b.fecha ? (b.fecha.toDate ? b.fecha.toDate() : new Date(b.fecha)) : new Date();
-            return fechaB - fechaA; // Orden descendente
-          });
-        } else {
-          // Carga directa (formato nuevo)
-          const db = getFirestore();
-          const embarquesRef = collection(db, 'embarques');
-          const snapshot = await getDocs(embarquesRef);
-          this.embarques = snapshot.docs
-            .map(doc => ({
-              id: doc.id,
-              ...doc.data()
-            }))
-            .sort((a, b) => {
-              const fechaA = a.fecha ? (a.fecha.toDate ? a.fecha.toDate() : new Date(a.fecha)) : new Date();
-              const fechaB = b.fecha ? (b.fecha.toDate ? b.fecha.toDate() : new Date(b.fecha)) : new Date();
-              return fechaB - fechaA; // Orden descendente
-            });
-        }
+        // Usar el adaptador para cargar todos los embarques de la colección original
+        const embarquesAdaptados = await adaptarTodosLosEmbarques(false);
+        
+        // Cargar embarques de la nueva colección embarques2
+        const embarques2 = await EmbarqueService.obtenerTodosEmbarques2();
+        
+        // Agregar prefijo a los IDs de embarques2 para identificarlos
+        const embarques2Adaptados = embarques2.map(embarque => ({
+          ...embarque,
+          id: `emb2_${embarque.id}`,
+          esEmbarques2: true // Agregar un indicador para saber que es de la nueva colección
+        }));
+        
+        // Combinar ambos arrays
+        const todosLosEmbarques = [...embarquesAdaptados, ...embarques2Adaptados];
+        
+        // Ordenar por fecha
+        this.embarques = todosLosEmbarques.sort((a, b) => {
+          const fechaA = a.fecha ? (a.fecha.toDate ? a.fecha.toDate() : new Date(a.fecha)) : new Date();
+          const fechaB = b.fecha ? (b.fecha.toDate ? b.fecha.toDate() : new Date(b.fecha)) : new Date();
+          return fechaB - fechaA; // Orden descendente
+        });
+        
+        console.log(`Se cargaron ${embarquesAdaptados.length} embarques de la colección original`);
+        console.log(`Se cargaron ${embarques2Adaptados.length} embarques de la colección embarques2`);
+        console.log(`Total: ${this.embarques.length} embarques`);
         
         this.cargando = false;
       } catch (error) {
@@ -280,7 +283,23 @@ export default {
         alert('Error: No se puede editar el embarque. ID inválido.');
         return;
       }
-      // Asegurarnos de usar la ruta correcta
+      
+      // Intentar limpiar la caché local para forzar una carga fresca
+      try {
+        localStorage.removeItem(`rey_pez_app_embarque_${embarqueId}`);
+        console.log('Caché local limpiada para embarque:', embarqueId);
+      } catch (error) {
+        console.warn('No se pudo limpiar la caché local:', error);
+      }
+      
+      // Verificar si el embarque es de la colección embarques2
+      if (embarqueId.startsWith('emb2_')) {
+        console.log(`Editando embarque de la colección embarques2: ${embarqueId}`);
+      } else {
+        console.log(`Editando embarque de la colección original: ${embarqueId}`);
+      }
+      
+      // Usar la ruta exacta que está definida en el router
       this.$router.push(`/embarques/${embarqueId}`);
     },
     
@@ -297,7 +316,20 @@ export default {
       if (confirm('¿Estás seguro de que quieres eliminar este embarque?')) {
         try {
           const db = getFirestore();
-          await deleteDoc(doc(db, 'embarques', embarqueId));
+          
+          // Verificar si el embarque es de la colección embarques2
+          if (embarqueId.startsWith('emb2_')) {
+            // Eliminar de la colección embarques2
+            const idReal = embarqueId.replace('emb2_', '');
+            await deleteDoc(doc(db, 'embarques2', idReal));
+            console.log(`Embarque eliminado de la colección embarques2: ${idReal}`);
+          } else {
+            // Eliminar de la colección original
+            await deleteDoc(doc(db, 'embarques', embarqueId));
+            console.log(`Embarque eliminado de la colección original: ${embarqueId}`);
+          }
+          
+          // Actualizar la lista
           this.embarques = this.embarques.filter(e => e.id !== embarqueId);
           alert('Embarque eliminado con éxito');
         } catch (error) {
