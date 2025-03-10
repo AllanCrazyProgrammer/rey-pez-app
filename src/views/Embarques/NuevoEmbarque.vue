@@ -124,7 +124,7 @@
 </template>
 
 <script>
-import { collection, doc, getDoc, getDocs, addDoc, updateDoc, deleteDoc, query, where, orderBy } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, addDoc, updateDoc, deleteDoc, query, where, orderBy, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/firebase';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
@@ -569,6 +569,8 @@ export default {
           clientesPersonalizados: this.clientesPersonalizadosEmbarque,
           clienteActivo: this.clienteActivo,
           ultimaActualizacion: new Date().toISOString(),
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
           metodoGuardado: 'directo' // Marcar que se guardó directamente
         };
         
@@ -678,6 +680,8 @@ export default {
           clientesPersonalizados: this.clientesPersonalizadosEmbarque,
           clienteActivo: this.clienteActivo,
           ultimaActualizacion: new Date().toISOString(),
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
         };
         
         console.log('Datos preparados para guardar:', embarqueData);

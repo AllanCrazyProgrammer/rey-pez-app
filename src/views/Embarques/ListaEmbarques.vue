@@ -7,6 +7,10 @@
         <i class="fas fa-plus"></i> Nuevo Embarque
       </button>
       
+      <button @click="cargarEmbarques" class="btn-recargar" :disabled="cargando">
+        <i class="fas fa-sync"></i> Recargar Lista
+      </button>
+      
       <button @click="migrarDatos" class="btn-migrar" :disabled="cargando">
         <i class="fas fa-sync"></i> Migrar Datos
       </button>
@@ -37,6 +41,7 @@
             <td>
               {{ formatearFecha(embarque.fecha) }}
               <span v-if="embarque.bloqueado || embarque.embarqueBloqueado" class="indicador-bloqueado" title="Este embarque está bloqueado">🔒</span>
+              <span v-if="embarque.esEmbarques2" class="indicador-embarques2" title="Este embarque está en la nueva colección">🆕</span>
             </td>
             <td>{{ calcularKilosLimpios(embarque) }} kg</td>
             <td>{{ calcularKilosCrudos(embarque) }} kg</td>
@@ -50,6 +55,9 @@
                 :class="{ 'btn-deshabilitado': embarque.bloqueado || embarque.embarqueBloqueado }"
                 :title="(embarque.bloqueado || embarque.embarqueBloqueado) ? 'Este embarque está bloqueado y no puede ser eliminado' : ''"
               >Eliminar</button>
+              <button @click="verDetallesEmbarque(embarque)" class="btn-info">
+                <i class="fas fa-info-circle"></i>
+              </button>
             </td>
           </tr>
         </tbody>
@@ -78,27 +86,63 @@ export default {
     async cargarEmbarques() {
       try {
         this.cargando = true;
+        console.log('Iniciando carga de embarques...');
         
         // Usar el adaptador para cargar todos los embarques de la colección original
         const embarquesAdaptados = await adaptarTodosLosEmbarques(false);
+        console.log(`Embarques cargados de la colección original: ${embarquesAdaptados.length}`);
         
         // Cargar embarques de la nueva colección embarques2
+        console.log('Cargando embarques de la colección embarques2...');
         const embarques2 = await EmbarqueService.obtenerTodosEmbarques2();
+        console.log(`Embarques obtenidos de la colección embarques2: ${embarques2.length}`);
+        
+        if (embarques2.length > 0) {
+          console.log('Primer embarque de embarques2:', embarques2[0]);
+        }
         
         // Agregar prefijo a los IDs de embarques2 para identificarlos
-        const embarques2Adaptados = embarques2.map(embarque => ({
-          ...embarque,
-          id: `emb2_${embarque.id}`,
-          esEmbarques2: true // Agregar un indicador para saber que es de la nueva colección
-        }));
+        const embarques2Adaptados = embarques2.map(embarque => {
+          console.log(`Procesando embarque de embarques2: ${embarque.id}`);
+          return {
+            ...embarque,
+            id: `emb2_${embarque.id}`,
+            esEmbarques2: true // Agregar un indicador para saber que es de la nueva colección
+          };
+        });
         
         // Combinar ambos arrays
         const todosLosEmbarques = [...embarquesAdaptados, ...embarques2Adaptados];
         
         // Ordenar por fecha
         this.embarques = todosLosEmbarques.sort((a, b) => {
-          const fechaA = a.fecha ? (a.fecha.toDate ? a.fecha.toDate() : new Date(a.fecha)) : new Date();
-          const fechaB = b.fecha ? (b.fecha.toDate ? b.fecha.toDate() : new Date(b.fecha)) : new Date();
+          // Intentar obtener las fechas de diferentes formatos
+          let fechaA, fechaB;
+          
+          if (a.fecha) {
+            if (a.fecha.toDate && typeof a.fecha.toDate === 'function') {
+              fechaA = a.fecha.toDate();
+            } else if (typeof a.fecha === 'string') {
+              fechaA = new Date(a.fecha);
+            } else {
+              fechaA = new Date();
+            }
+          } else {
+            fechaA = new Date();
+          }
+          
+          if (b.fecha) {
+            if (b.fecha.toDate && typeof b.fecha.toDate === 'function') {
+              fechaB = b.fecha.toDate();
+            } else if (typeof b.fecha === 'string') {
+              fechaB = new Date(b.fecha);
+            } else {
+              fechaB = new Date();
+            }
+          } else {
+            fechaB = new Date();
+          }
+          
           return fechaB - fechaA; // Orden descendente
         });
         
@@ -115,10 +159,36 @@ export default {
     },
     formatearFecha(fecha) {
       if (!fecha) return 'Fecha no disponible';
-      const fechaObj = fecha.toDate ? fecha.toDate() : new Date(fecha);
-      // Ajustamos la fecha sumando un día
-      fechaObj.setDate(fechaObj.getDate() + 1);
-      return fechaObj.toLocaleDateString('es-ES');
+      
+      let fechaObj;
+      
+      try {
+        // Manejar diferentes formatos de fecha
+        if (fecha.toDate && typeof fecha.toDate === 'function') {
+          // Es un timestamp de Firestore
+          fechaObj = fecha.toDate();
+        } else if (typeof fecha === 'string') {
+          // Es una cadena de texto
+          fechaObj = new Date(fecha);
+        } else if (fecha instanceof Date) {
+          // Es un objeto Date
+          fechaObj = fecha;
+        } else {
+          // Formato desconocido
+          return 'Formato de fecha desconocido';
+        }
+        
+        // Verificar si la fecha es válida
+        if (isNaN(fechaObj.getTime())) {
+          return 'Fecha inválida';
+        }
+        
+        // Formatear la fecha
+        return fechaObj.toLocaleDateString('es-ES');
+      } catch (error) {
+        console.error('Error al formatear fecha:', error, fecha);
+        return 'Error al formatear fecha';
+      }
     },
     calcularKilosLimpios(embarque) {
       // Para el formato nuevo (usando items)
@@ -321,10 +391,12 @@ export default {
           if (embarqueId.startsWith('emb2_')) {
             // Eliminar de la colección embarques2
             const idReal = embarqueId.replace('emb2_', '');
+            console.log(`Intentando eliminar embarque de embarques2 con ID real: ${idReal}`);
             await deleteDoc(doc(db, 'embarques2', idReal));
             console.log(`Embarque eliminado de la colección embarques2: ${idReal}`);
           } else {
             // Eliminar de la colección original
+            console.log(`Intentando eliminar embarque de la colección original: ${embarqueId}`);
             await deleteDoc(doc(db, 'embarques', embarqueId));
             console.log(`Embarque eliminado de la colección original: ${embarqueId}`);
           }
@@ -332,6 +404,9 @@ export default {
           // Actualizar la lista
           this.embarques = this.embarques.filter(e => e.id !== embarqueId);
           alert('Embarque eliminado con éxito');
+          
+          // Recargar la lista para asegurar que se actualice correctamente
+          await this.cargarEmbarques();
         } catch (error) {
           console.error("Error al eliminar el embarque:", error);
           alert('Hubo un error al eliminar el embarque. Por favor, intente de nuevo.');
@@ -341,6 +416,27 @@ export default {
     
     mostrarMensajeBloqueado() {
       alert('Este embarque está bloqueado y no puede ser eliminado.');
+    },
+    
+    verDetallesEmbarque(embarque) {
+      console.log('Detalles del embarque:', {
+        id: embarque.id,
+        esEmbarques2: embarque.esEmbarques2 || false,
+        fecha: embarque.fecha,
+        items: embarque.items?.length || 0,
+        bloqueado: embarque.bloqueado || embarque.embarqueBloqueado || false,
+        createdAt: embarque.createdAt,
+        updatedAt: embarque.updatedAt
+      });
+      
+      // Mostrar alerta con información básica
+      alert(`
+        ID: ${embarque.id}
+        Colección: ${embarque.esEmbarques2 ? 'embarques2' : 'embarques'}
+        Fecha: ${this.formatearFecha(embarque.fecha)}
+        Items: ${embarque.items?.length || 0}
+        Bloqueado: ${embarque.bloqueado || embarque.embarqueBloqueado || false}
+      `);
     },
     
     migrarDatos() {
@@ -495,13 +591,24 @@ h1 {
   background-color: #c9302c;
 }
 
+.btn-info {
+  background-color: #17a2b8;
+  color: white;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.3s;
+  margin-left: 5px;
+}
+
+.btn-info:hover {
+  background-color: #138496;
+}
+
 .btn-deshabilitado {
   opacity: 0.5;
   cursor: not-allowed;
-}
-
-.btn-deshabilitado:hover {
-  background-color: #d9534f;
 }
 
 .fila-bloqueada {
@@ -516,6 +623,12 @@ h1 {
   margin-left: 5px;
   font-size: 14px;
   color: #d9534f;
+}
+
+.indicador-embarques2 {
+  margin-left: 5px;
+  font-size: 14px;
+  color: #17a2b8;
 }
 
 /* Agregar estos estilos para mejorar la visualización de la tabla */
@@ -619,6 +732,20 @@ h1 {
 
 .btn-nuevo:hover {
   background-color: #218838;
+}
+
+.btn-recargar {
+  background-color: #6610f2;
+  color: white;
+}
+
+.btn-recargar:hover {
+  background-color: #520dc2;
+}
+
+.btn-recargar:disabled {
+  background-color: #6c757d;
+  cursor: not-allowed;
 }
 
 .btn-migrar {

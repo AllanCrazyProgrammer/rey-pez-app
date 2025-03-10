@@ -163,18 +163,22 @@ export default {
    */
   async obtenerTodosEmbarques2() {
     try {
-      const q = query(
-        collection(db, "embarques2"),
-        orderBy("createdAt", "desc")
-      );
+      console.log('Obteniendo todos los embarques de la colección embarques2...');
       
-      const querySnapshot = await getDocs(q);
+      // Obtener todos los documentos de la colección embarques2
+      const embarquesRef = collection(db, "embarques2");
+      const querySnapshot = await getDocs(embarquesRef);
+      
       const embarques = [];
       
       querySnapshot.forEach((doc) => {
-        embarques.push({ id: doc.id, ...doc.data() });
+        const embarque = doc.data();
+        embarque.id = doc.id;
+        embarques.push(embarque);
+        console.log(`Embarque cargado de embarques2: ${doc.id}`);
       });
       
+      console.log(`Total de embarques cargados de embarques2: ${embarques.length}`);
       return embarques;
     } catch (error) {
       console.error("Error al obtener todos los embarques de embarques2:", error);
