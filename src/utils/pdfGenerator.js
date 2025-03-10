@@ -848,10 +848,10 @@ function combinarTarasBolsas(taras, bolsas) {
 
 function obtenerColorBorde(estiloCliente) {
   const colores = {
-    clienteJoselito: '#0000FF',
-    clienteCatarro: '#FF0000',
-    clienteOtilio: '#FFD700',
-    clienteOzuna: '#008000',
+    clienteJoselito: '#3498db', // Azul
+    clienteCatarro: '#e74c3c',  // Rojo
+    clienteOtilio: '#f1c40f',   // Amarillo
+    clienteOzuna: '#2ecc71',    // Verde
     clienteOtro: '#808080'
   };
   return colores[estiloCliente] || '#000000';

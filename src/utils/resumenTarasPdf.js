@@ -5,8 +5,8 @@ import 'jspdf-autotable';
 const COLORES_CLIENTES = {
   'Joselito': '#3498db', // Azul
   'Catarro': '#e74c3c',  // Rojo
-  'Otilio': '#f39c12',   // Naranja
-  'Ozuna': '#27ae60'     // Verde
+  'Otilio': '#f1c40f',   // Amarillo
+  'Ozuna': '#2ecc71'     // Verde
 };
 
 export function generarResumenTarasPDF(embarqueData, clientesDisponibles) {

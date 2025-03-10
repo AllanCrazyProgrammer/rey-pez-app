@@ -1,38 +1,31 @@
 <template>
-  <div class="producto-card" :class="{'producto-editable': !soloLectura}">
+  <div class="producto-card producto-editable" :class="{'card-blocked': disabled}">
     <div class="producto-header">
-      <div v-if="!soloLectura" class="producto-acciones">
-        <button class="btn btn-sm btn-outline-primary" @click="toggleTipoMoneda">
+      <div v-if="!editMode" class="producto-acciones">
+        <button class="btn btn-sm btn-control" @click="toggleTipoMoneda">
           $
         </button>
-        <button class="btn btn-sm btn-outline-primary" @click="toggleTipoProducto">
+        <button class="btn btn-sm btn-control" 
+          :class="{'btn-has-content': hilos && hilos.length > 0}"
+          @click="abrirModalHilos">
           H
         </button>
-        <button class="btn btn-sm btn-outline-primary" @click="toggleModoNumerico">
+        <button class="btn btn-sm btn-control" 
+          :class="{'btn-has-content': notas && notas.length > 0}"
+          @click="abrirModalNotas">
           N
         </button>
-        <label class="checkbox-container ml-2">
-          <input type="checkbox" v-model="usaKilos">
-          <span class="checkmark"></span>
-          kg
-        </label>
       </div>
 
-      <div v-if="!soloLectura" class="tipo-talla-input">
+      <div v-if="!editMode" class="tipo-talla-input">
         <input 
           type="text" 
-          v-model="tallaProducto" 
+          v-model="medidaProducto" 
           class="form-control talla-input"
-          placeholder="Talla"
-          :class="{ 'is-invalid': errores.tallaProducto }"
+          placeholder="Medida"
+          :class="{ 'is-invalid': errores.medidaProducto }"
           :disabled="disabled"
-          list="tallas-disponibles"
         />
-        <datalist id="tallas-disponibles">
-          <option v-for="talla in tallasDisponibles" :key="talla" :value="talla">
-            {{ talla }}
-          </option>
-        </datalist>
         
         <span class="separador">-</span>
         
@@ -49,10 +42,10 @@
       </div>
 
       <div v-else class="tipo-talla">
-        {{ producto.talla }} - {{ producto.tipo }}
+        {{ producto.medida || producto.media || producto.talla }} - {{ producto.tipo }}
       </div>
       
-      <div v-if="!soloLectura && mostrarPrecio" class="precio-container">
+      <div v-if="!editMode && mostrarPrecio" class="precio-container">
         <input 
           type="number" 
           v-model.number="precioProducto" 
@@ -79,7 +72,7 @@
               type="checkbox" 
               id="restarTresPorTara" 
               v-model="restarTresPorTara"
-              :disabled="disabled || soloLectura"
+              :disabled="disabled || editMode"
             >
             <label class="form-check-label" for="restarTresPorTara">-3</label>
           </div>
@@ -90,7 +83,7 @@
       </div>
       
       <!-- Vista de edición -->
-      <div v-if="!soloLectura" class="taras-kilos-items">
+      <div v-if="!editMode" class="taras-kilos-items">
         <div v-for="(item, index) in tarasKilosItems" :key="index" class="tara-kilo-row">
           <div class="tara-input">
             <input 
@@ -140,7 +133,7 @@
       </div>
       
       <!-- Botones de acción para taras y kilos (solo en modo edición) -->
-      <div v-if="!soloLectura" class="taras-kilos-actions">
+      <div v-if="!editMode" class="taras-kilos-actions">
         <button 
           type="button" 
           class="btn btn-success btn-add"
@@ -163,20 +156,20 @@
       <!-- Totales -->
       <div class="taras-kilos-totals">
         <div class="total-taras">
-          <h6>Total: {{ soloLectura ? calcularTotalTaras(producto.tarasKilos) : totalTaras }}</h6>
+          <h6>Total: {{ editMode ? calcularTotalTaras(producto.tarasKilos) : totalTaras }}</h6>
           <span>Taras</span>
         </div>
         <div class="total-kilos">
-          <h6>Total: {{ soloLectura ? calcularTotalKilos(producto) : totalKilos }}</h6>
-          <span>{{ usaKilos ? 'Kilos' : 'Bolsas' }}</span>
+          <h6>Total: {{ editMode ? calcularTotalKilos(producto) : totalKilos }}</h6>
+          <span>Kilos</span>
           <span v-if="restarTresPorTara" class="descuento-info">
-            (Descuento: {{ soloLectura ? calcularTotalTaras(producto.tarasKilos) * 3 : totalTaras * 3 }} kg)
+            (Descuento: {{ editMode ? calcularTotalTaras(producto.tarasKilos) * 3 : totalTaras * 3 }} kg)
           </span>
         </div>
       </div>
       
       <!-- Campo para camarón neto (condicional) -->
-      <div v-if="!soloLectura && tipoProducto === 'C/H20'" class="camaron-neto-section">
+      <div v-if="tipoProducto === 'C/H20'" class="camaron-neto-section">
         <label for="camaronNeto">Camarón Neto (%): <span class="campo-requerido">*</span></label>
         <input 
           type="number" 
@@ -201,28 +194,89 @@
     </div>
     
     <!-- Botones para modo edición -->
-    <div v-if="!soloLectura" class="card-actions">
-      <button 
-        @click="validarYEmitirProducto" 
-        class="btn btn-primary"
-        :disabled="disabled"
-      >
-        <i class="fas fa-plus"></i> Agregar
-      </button>
+    <div class="card-actions">
+      <!-- Botones para productos nuevos -->
+      <template v-if="!producto">
+        <button 
+          @click="validarYEmitirProducto" 
+          class="btn btn-primary"
+          :disabled="disabled"
+        >
+          <i class="fas fa-plus"></i> Agregar
+        </button>
+        
+        <button 
+          @click="limpiarFormulario" 
+          class="btn btn-secondary"
+          :disabled="disabled"
+        >
+          <i class="fas fa-broom"></i> Limpiar
+        </button>
+      </template>
       
-      <button 
-        @click="limpiarFormulario" 
-        class="btn btn-secondary"
-        :disabled="disabled"
-      >
-        <i class="fas fa-broom"></i> Limpiar
-      </button>
+      <!-- Botones para productos existentes -->
+      <template v-else>
+        <button 
+          @click="validarYEmitirProducto" 
+          class="btn btn-primary"
+          :disabled="disabled"
+        >
+          <i class="fas fa-save"></i> Actualizar
+        </button>
+        
+        <button 
+          @click="eliminarProducto" 
+          class="btn btn-danger"
+          :disabled="disabled"
+        >
+          <i class="fas fa-trash"></i> Eliminar
+        </button>
+      </template>
     </div>
-    
-    <!-- Botón eliminar para productos guardados -->
-    <button v-if="soloLectura" @click="eliminarProducto" class="btn btn-sm btn-danger producto-delete">
-      <i class="fas fa-times"></i>
-    </button>
+
+    <!-- Modal para Hilos -->
+    <div class="modal-overlay" v-if="mostrarModalHilos" @click="cerrarModalHilos">
+      <div class="modal-contenido" @click.stop>
+        <div class="modal-header">
+          <h5 class="modal-title">Hilos</h5>
+          <button type="button" class="close" @click="cerrarModalHilos">&times;</button>
+        </div>
+        <div class="modal-body">
+          <textarea 
+            v-model="hilos" 
+            class="form-control" 
+            placeholder="Escribe los hilos aquí..."
+            rows="5"
+          ></textarea>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" @click="cerrarModalHilos">Cancelar</button>
+          <button type="button" class="btn btn-primary" @click="guardarHilos">Guardar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal para Notas -->
+    <div class="modal-overlay" v-if="mostrarModalNotas" @click="cerrarModalNotas">
+      <div class="modal-contenido" @click.stop>
+        <div class="modal-header">
+          <h5 class="modal-title">Notas</h5>
+          <button type="button" class="close" @click="cerrarModalNotas">&times;</button>
+        </div>
+        <div class="modal-body">
+          <textarea 
+            v-model="notas" 
+            class="form-control" 
+            placeholder="Escribe tus notas aquí..."
+            rows="5"
+          ></textarea>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" @click="cerrarModalNotas">Cancelar</button>
+          <button type="button" class="btn btn-primary" @click="guardarNotas">Guardar</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -268,20 +322,27 @@ export default {
     fecha: {
       type: String,
       default: ''
+    },
+    /**
+     * Indica si la tarjeta está en modo edición
+     */
+    modoEdicion: {
+      type: Boolean,
+      default: false
     }
   },
   data() {
     return {
       // Datos del formulario
       tipoProducto: '',
-      tallaProducto: '',
+      medidaProducto: '',
       precioProducto: null,
       camaronNetoLocal: 0.65,
       
       // Control de errores
       errores: {
         tipoProducto: '',
-        tallaProducto: '',
+        medidaProducto: '',
         precioProducto: '',
         camaronNeto: ''
       },
@@ -292,16 +353,30 @@ export default {
       // Controles de UI para la tarjeta
       mostrarPrecio: true,
       modoNumerico: false,
-      usaKilos: true
+      
+      // ID del producto (para edición)
+      productoId: null,
+      
+      // Propiedades para modales
+      mostrarModalHilos: false,
+      mostrarModalNotas: false,
+      hilos: '',
+      notas: ''
     };
+  },
+  mounted() {
+    // Cargar datos del producto si existe, sin importar el valor de soloLectura
+    if (this.producto) {
+      this.cargarDatosProducto();
+    }
   },
   computed: {
     /**
-     * Determina las tallas disponibles según el tipo de producto seleccionado
-     * @returns {Array} - Lista de tallas disponibles
+     * Fuerza que todos los ProductoCard estén siempre en modo editable
+     * @returns {Boolean} - Siempre false para forzar el modo editable
      */
-    tallasDisponibles() {
-      return ['16/20', '21/25', '26/30', '31/35', '36/40', '41/50', '51/60', '61/70', '71/90', '91/110', '110/130', '130/150', '150/200', '200/300', '300/500'];
+    editMode() {
+      return false; // Fuerza siempre el modo editable
     },
 
     /**
@@ -328,6 +403,55 @@ export default {
     }
   },
   methods: {
+    /**
+     * Carga los datos del producto para edición o visualización
+     */
+    cargarDatosProducto() {
+      if (!this.producto) return;
+      
+      this.productoId = this.producto.id;
+      this.tipoProducto = this.producto.tipo || '';
+      // Priorizar el campo medida, luego media, luego talla para compatibilidad
+      this.medidaProducto = this.producto.medida || this.producto.media || this.producto.talla || '';
+      
+      // Añadir logs para diagnosticar el problema con medida
+      console.log('ProductoCard - Cargando datos del producto:', {
+        id: this.producto.id,
+        medida: this.producto.medida,
+        media: this.producto.media,
+        talla: this.producto.talla,
+        medidaFinal: this.medidaProducto
+      });
+      
+      this.precioProducto = this.producto.precio || null;
+      this.camaronNetoLocal = this.producto.camaronNeto || 0.65;
+      this.restarTresPorTara = this.producto.restarTresPorTara !== undefined ? this.producto.restarTresPorTara : true;
+      this.hilos = this.producto.hilos || '';
+      this.notas = this.producto.notas || '';
+      
+      // Cargar tarasKilos
+      if (this.producto.tarasKilos && Array.isArray(this.producto.tarasKilos)) {
+        this.tarasKilosItems = this.producto.tarasKilos.map(tk => ({
+          tara: tk.tara,
+          kilos: tk.kilos,
+          errorTara: '',
+          errorKilos: ''
+        }));
+      } else {
+        // Compatibilidad con el formato antiguo
+        this.tarasKilosItems = [{ 
+          tara: this.producto.tara || null, 
+          kilos: this.producto.kilos || null, 
+          errorTara: '', 
+          errorKilos: '' 
+        }];
+      }
+      
+      // Asegurarse de que haya al menos un elemento
+      if (this.tarasKilosItems.length === 0) {
+        this.tarasKilosItems = [{ tara: null, kilos: null, errorTara: '', errorKilos: '' }];
+      }
+    },
     /**
      * Valida un campo numérico y establece mensajes de error si es necesario
      * @param {String} campo - El nombre del campo a validar
@@ -377,8 +501,8 @@ export default {
       }
       
       // Validar talla
-      if (!this.tallaProducto) {
-        this.errores.tallaProducto = 'Debe seleccionar una talla';
+      if (!this.medidaProducto) {
+        this.errores.medidaProducto = 'Debe ingresar un valor para la medida';
         return false;
       }
       
@@ -432,25 +556,44 @@ export default {
     },
     
     /**
-     * Valida los datos y emite el evento para agregar el producto
+     * Valida los datos y emite el evento para agregar o actualizar el producto
      */
     validarYEmitirProducto() {
       if (this.validarFormulario()) {
-        const nuevoProducto = {
+        const datosProducto = {
           cliente: this.clienteActivo,
           tipo: this.tipoProducto,
-          talla: this.tallaProducto,
+          talla: this.medidaProducto,
+          media: this.medidaProducto,
+          medida: this.medidaProducto,
           tarasKilos: [...this.tarasKilosItems],
           restarTresPorTara: this.restarTresPorTara,
           kilosTotales: this.calcularKilosTotales(),
           precio: this.precioProducto,
           total: parseFloat((this.calcularKilosTotales() * (this.tipoProducto === 'C/H20' ? this.camaronNetoLocal : 1) * this.precioProducto).toFixed(2)),
           camaronNeto: this.tipoProducto === 'C/H20' ? this.camaronNetoLocal : null,
+          hilos: this.hilos,
+          notas: this.notas,
           fecha: this.fecha,
           timestamp: new Date().toISOString()
         };
         
-        this.$emit('agregar-producto', nuevoProducto);
+        console.log('ProductoCard - Emitiendo producto con datos:', {
+          cliente: datosProducto.cliente,
+          tipo: datosProducto.tipo,
+          medida: datosProducto.medida,
+          media: datosProducto.media,
+          talla: datosProducto.talla
+        });
+        
+        // Si estamos editando un producto existente, mantener su ID
+        if (this.modoEdicion && this.productoId) {
+          datosProducto.id = this.productoId;
+          this.$emit('actualizar-producto', datosProducto);
+        } else {
+          this.$emit('agregar-producto', datosProducto);
+        }
+        
         this.limpiarFormulario();
       }
     },
@@ -460,11 +603,13 @@ export default {
      */
     limpiarFormulario() {
       this.tipoProducto = '';
-      this.tallaProducto = '';
+      this.medidaProducto = '';
       this.precioProducto = null;
       this.camaronNetoLocal = 0.65;
       this.tarasKilosItems = [{ tara: null, kilos: null, errorTara: '', errorKilos: '' }];
       this.restarTresPorTara = true;
+      this.hilos = '';
+      this.notas = '';
       
       // Limpiar errores
       Object.keys(this.errores).forEach(key => this.errores[key] = '');
@@ -555,6 +700,8 @@ export default {
      * @returns {Number} - Total de kilos
      */
     calcularTotalKilos(producto) {
+      if (!producto || !producto.tarasKilos) return 0;
+      
       let total = producto.tarasKilos.reduce((sum, item) => sum + (Number(item.kilos) || 0), 0);
       
       if (producto.restarTresPorTara) {
@@ -563,7 +710,12 @@ export default {
         total = Math.max(0, total - descuento);
       }
       
-      return Math.round(total);
+      // Aplicar factor de camarón neto si es C/H20
+      if (producto.tipo === 'C/H20' && producto.camaronNeto) {
+        total = total * producto.camaronNeto;
+      }
+      
+      return parseFloat(total.toFixed(2));
     },
     
     /**
@@ -574,17 +726,60 @@ export default {
     },
     
     /**
-     * Alterna entre los tipos de producto
+     * Abre el modal para editar hilos
      */
-    toggleTipoProducto() {
-      this.tipoProducto = this.tipoProducto === 'S/H20' ? 'C/H20' : 'S/H20';
+    abrirModalHilos() {
+      this.mostrarModalHilos = true;
     },
     
     /**
-     * Alterna el modo numérico
+     * Cierra el modal de hilos
      */
-    toggleModoNumerico() {
-      this.modoNumerico = !this.modoNumerico;
+    cerrarModalHilos() {
+      this.mostrarModalHilos = false;
+    },
+    
+    /**
+     * Guarda los hilos y cierra el modal
+     */
+    guardarHilos() {
+      // Si estamos en modo edición, actualizamos directamente
+      if (this.producto) {
+        this.$emit('actualizar-hilos', { id: this.productoId, hilos: this.hilos });
+      }
+      this.cerrarModalHilos();
+    },
+    
+    /**
+     * Abre el modal para editar notas
+     */
+    abrirModalNotas() {
+      this.mostrarModalNotas = true;
+    },
+    
+    /**
+     * Cierra el modal de notas
+     */
+    cerrarModalNotas() {
+      this.mostrarModalNotas = false;
+    },
+    
+    /**
+     * Guarda las notas y cierra el modal
+     */
+    guardarNotas() {
+      // Si estamos en modo edición, actualizamos directamente
+      if (this.producto) {
+        this.$emit('actualizar-notas', { id: this.productoId, notas: this.notas });
+      }
+      this.cerrarModalNotas();
+    },
+    
+    /**
+     * Permite editar el producto actual
+     */
+    editarProducto() {
+      this.$emit('editar-producto', this.producto);
     }
   }
 };
@@ -592,24 +787,31 @@ export default {
 
 <style scoped>
 .producto-card {
-  flex: 0 0 calc(25% - 20px);
-  border: 2px solid #dc3545;
+  flex: 0 0 calc(33.33% - 20px);
+  border: 2px solid #28a745;
   border-radius: 8px;
   padding: 15px;
   background-color: white;
   position: relative;
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  margin-bottom: 20px;
+  max-width: 350px;
 }
 
 .producto-editable {
-  border-color: #007bff;
+  border-color: #28a745;
+}
+
+.card-blocked {
+  opacity: 0.7;
+  pointer-events: none;
 }
 
 .producto-header {
   display: flex;
   flex-direction: column;
   margin-bottom: 15px;
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid #dee2e6;
   padding-bottom: 10px;
 }
 
@@ -621,21 +823,37 @@ export default {
 
 .producto-acciones button {
   margin-right: 5px;
-  width: 45px;
-  height: 45px;
+  width: 30px;
+  height: 30px;
   padding: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: bold;
-  font-size: 1.2rem;
+  border-radius: 4px;
+  background-color: #f8f9fa;
+  border: 1px solid #ced4da;
+  transition: all 0.3s ease;
+}
+
+.btn-control {
+  color: #495057;
+}
+
+.btn-has-content {
+  background-color: #28a745 !important;
+  color: white !important;
+  border-color: #28a745 !important;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  transform: translateY(-1px);
+  font-weight: bold;
 }
 
 .checkbox-container {
   display: inline-flex;
   align-items: center;
   margin-left: 10px;
-  font-size: 1rem;
+  font-size: 0.9rem;
 }
 
 .tipo-talla-input {
@@ -646,14 +864,15 @@ export default {
 
 .talla-input, .tipo-input {
   flex: 1;
-  height: 50px;
-  font-size: 1.1rem;
+  height: 38px;
+  font-size: 1rem;
+  border-radius: 4px;
 }
 
 .separador {
   margin: 0 5px;
   font-weight: bold;
-  font-size: 1.5rem;
+  font-size: 1.2rem;
 }
 
 .precio-container {
@@ -663,35 +882,38 @@ export default {
 .precio-input {
   font-weight: bold;
   color: #28a745;
-  height: 50px;
-  font-size: 1.5rem;
+  height: 38px;
+  font-size: 1.2rem;
   text-align: center;
 }
 
 .tipo-talla {
   font-weight: bold;
-  font-size: 1.3rem;
+  font-size: 1.2rem;
   text-align: center;
   padding: 10px 0;
+  color: #343a40;
 }
 
 .precio {
   color: #28a745;
   font-weight: bold;
-  font-size: 1.3rem;
+  font-size: 1.2rem;
   text-align: center;
 }
 
 /* Taras y kilos */
 .taras-kilos-section {
-  font-size: 1rem;
+  font-size: 0.95rem;
 }
 
 .taras-kilos-header {
   display: flex;
   justify-content: space-between;
-  margin-bottom: 15px;
+  margin-bottom: 10px;
   font-weight: bold;
+  border-bottom: 1px solid #dee2e6;
+  padding-bottom: 5px;
 }
 
 .header-taras, .header-kilos {
@@ -706,9 +928,13 @@ export default {
   align-items: center;
 }
 
+.form-check-input {
+  margin-right: 5px;
+}
+
 .tara-kilo-row, .tara-kilo-item {
   display: flex;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
   align-items: center;
 }
 
@@ -716,12 +942,9 @@ export default {
   flex: 1;
 }
 
-.tara-input {
-  margin-right: 5px;
-}
-
-.kilo-input {
-  margin-left: 5px;
+.tara-input .form-control, .kilo-input .form-control {
+  text-align: center;
+  font-weight: 500;
 }
 
 .action-btn {
@@ -751,7 +974,7 @@ export default {
 }
 
 .btn-add, .btn-add-extra {
-  height: 45px;
+  height: 38px;
   padding: 0;
   display: flex;
   align-items: center;
@@ -759,7 +982,7 @@ export default {
 }
 
 .btn-add {
-  width: 45px;
+  width: 38px;
   background-color: #28a745;
   color: white;
   border: none;
@@ -768,7 +991,7 @@ export default {
 
 .btn-add-extra {
   background-color: #ffc107;
-  color: white;
+  color: #212529;
   border: none;
   border-radius: 4px;
   width: auto;
@@ -777,7 +1000,7 @@ export default {
 
 .taras-kilos-totals {
   display: flex;
-  border-top: 1px solid #e0e0e0;
+  border-top: 1px solid #dee2e6;
   padding-top: 15px;
   margin-top: 10px;
 }
@@ -808,7 +1031,7 @@ export default {
 .camaron-neto-section {
   margin: 20px 0;
   padding-top: 15px;
-  border-top: 1px solid #e0e0e0;
+  border-top: 1px solid #dee2e6;
 }
 
 .producto-footer {
@@ -839,14 +1062,19 @@ export default {
 
 .card-actions .btn {
   flex: 1;
-  height: 45px;
-  font-size: 1.1rem;
+  height: 38px;
+  font-size: 1rem;
 }
 
-.producto-delete {
+.producto-acciones-lectura {
   position: absolute;
   top: 5px;
   right: 5px;
+  display: flex;
+  gap: 5px;
+}
+
+.producto-edit, .producto-delete {
   width: 30px;
   height: 30px;
   padding: 0;
@@ -856,14 +1084,10 @@ export default {
   border-radius: 50%;
 }
 
-.campo-requerido {
-  color: #dc3545;
-}
-
 /* Responsivo */
 @media (max-width: 1200px) {
   .producto-card {
-    flex: 0 0 calc(33.333% - 20px);
+    flex: 0 0 calc(50% - 20px);
   }
 }
 
@@ -877,35 +1101,69 @@ export default {
   .producto-card {
     flex: 0 0 100%;
   }
-  
-  .producto-header {
-    flex-direction: column;
-  }
-  
-  .tipo-talla-input {
-    flex-direction: column;
-  }
-  
-  .separador {
-    display: none;
-  }
-  
-  .talla-input, .tipo-input {
-    width: 100%;
-    margin-bottom: 10px;
-  }
-  
-  .action-btn {
-    width: 100%;
-    margin: 5px 0;
-  }
-  
-  .taras-kilos-actions {
-    flex-direction: column;
-  }
-  
-  .btn-add, .btn-add-extra {
-    width: 100%;
+}
+
+/* Estilos para los modales */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.modal-contenido {
+  background-color: white;
+  border-radius: 8px;
+  width: 90%;
+  max-width: 500px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px 20px;
+  border-bottom: 1px solid #dee2e6;
+}
+
+.modal-title {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.modal-body {
+  padding: 20px;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 15px 20px;
+  border-top: 1px solid #dee2e6;
+}
+
+.close {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  padding: 0;
+}
+
+@media (max-width: 576px) {
+  .modal-contenido {
+    width: 95%;
   }
 }
 </style> 

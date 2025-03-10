@@ -7,7 +7,7 @@
           <label for="filtroTipo">Filtrar por tipo:</label>
           <select id="filtroTipo" v-model="filtroTipo" class="form-control">
             <option value="todos">Todos</option>
-            <option value="limpio">Limpio</option>
+            <option value="S/H20">S/H20</option>
             <option value="crudo">Crudo</option>
           </select>
         </div>
@@ -29,7 +29,7 @@
           <tr>
             <th>Cliente</th>
             <th>Tipo</th>
-            <th>Talla</th>
+            <th>Detalle</th>
             <th>Cantidad</th>
             <th>Kilos</th>
             <th>Precio</th>
@@ -41,11 +41,18 @@
           <tr v-for="(item, index) in itemsFiltrados" :key="index">
             <td>{{ item.cliente }}</td>
             <td>{{ item.tipo }}</td>
-            <td>{{ item.talla }}</td>
-            <td>{{ item.cantidad }}</td>
-            <td>{{ item.kilos }}</td>
-            <td>${{ item.precio.toFixed(2) }}</td>
-            <td>${{ item.total.toFixed(2) }}</td>
+            <td>
+              <span v-if="item.tipo === 'crudo'">
+                {{ item.barco || 'Med' }} {{ item.medida || 'c/c' }}
+              </span>
+              <span v-else>
+                {{ item.talla || '-' }}
+              </span>
+            </td>
+            <td>{{ formatearCantidad(item) }}</td>
+            <td>{{ formatearKilos(item) }}</td>
+            <td>${{ (item.precio || 0).toFixed(2) }}</td>
+            <td>${{ (item.total || 0).toFixed(2) }}</td>
             <td v-if="mostrarAcciones" class="acciones">
               <button @click="editarItem(item)" class="btn btn-sm btn-primary">
                 <i class="fas fa-edit"></i>
@@ -68,7 +75,7 @@
       </table>
     </div>
     
-    <div class="resumen-por-cliente" v-if="mostrarResumenPorCliente">
+    <div class="resumen-por-cliente" v-if="mostrarResumenPorCliente && clientesUnicos.length > 0">
       <h3>Resumen por Cliente</h3>
       <div class="tarjetas-resumen">
         <div 
@@ -98,69 +105,56 @@
 
 <script>
 import { ref, computed } from 'vue';
-import { useClienteUtils } from '@/composables/useClienteUtils';
 
 /**
  * @component EmbarqueResumen
- * @description Muestra un resumen de los productos del embarque con opciones de filtrado
+ * @description Muestra un resumen de todos los productos agregados al embarque
  */
 export default {
   name: 'EmbarqueResumen',
   props: {
     /**
-     * Lista de productos del embarque
-     * @type {Array}
-     * @required
+     * Lista de items del embarque
      */
     items: {
       type: Array,
       required: true
     },
     /**
-     * Indica si se deben mostrar las acciones de editar y eliminar
-     * @type {Boolean}
+     * Indica si se muestran las acciones de edición/eliminación
      */
     mostrarAcciones: {
       type: Boolean,
       default: true
-    },
-    /**
-     * Indica si se debe mostrar el resumen por cliente
-     * @type {Boolean}
-     */
-    mostrarResumenPorCliente: {
-      type: Boolean,
-      default: true
     }
   },
-  setup(props) {
-    // Estado local
+  setup(props, { emit }) {
+    // Filtros para la tabla
     const filtroTipo = ref('todos');
     const filtroCliente = ref('todos');
-    
-    // Utilizamos el composable para obtener las funciones de utilidad
-    const { obtenerColorCliente, obtenerColorTextoCliente, formatearNombreCliente } = useClienteUtils();
+    const mostrarResumenPorCliente = ref(true);
     
     // Clientes únicos para el filtro
     const clientesUnicos = computed(() => {
       return [...new Set(props.items.map(item => item.cliente))];
     });
     
-    // Productos filtrados según los criterios seleccionados
+    // Items filtrados según los criterios
     const itemsFiltrados = computed(() => {
       return props.items.filter(item => {
-        const cumpleFiltroTipo = filtroTipo.value === 'todos' || 
-          (filtroTipo.value === 'limpio' && item.tipo.toLowerCase().includes('limpio')) ||
-          (filtroTipo.value === 'crudo' && item.tipo.toLowerCase().includes('crudo'));
+        // Filtrar por tipo
+        const tipoMatch = filtroTipo.value === 'todos' || 
+          (filtroTipo.value === 'S/H20' && (item.tipo === 'S/H20' || item.tipo.toLowerCase() === 's/h20')) ||
+          (filtroTipo.value === 'crudo' && (item.tipo === 'crudo' || item.tipo.toLowerCase() === 'crudo'));
         
-        const cumpleFiltroCliente = filtroCliente.value === 'todos' || 
-          item.cliente === filtroCliente.value;
+        // Filtrar por cliente
+        const clienteMatch = filtroCliente.value === 'todos' || item.cliente === filtroCliente.value;
         
-        return cumpleFiltroTipo && cumpleFiltroCliente;
+        return tipoMatch && clienteMatch;
       });
     });
     
-    // Resumen por cliente
+    // Resumen por cliente para las tarjetas
     const resumenPorCliente = computed(() => {
       const resumen = {};
       
@@ -172,57 +166,120 @@ export default {
           };
         }
         
-        resumen[item.cliente].kilos += item.kilos;
-        resumen[item.cliente].total += item.total;
+        resumen[item.cliente].kilos += Number(item.kilosTotales || 0);
+        resumen[item.cliente].total += Number(item.total || 0);
       });
       
       return resumen;
     });
     
-    /**
-     * Calcula el total de kilos de los productos filtrados
-     * @returns {String} - Total de kilos formateado
-     */
+    // Calcular el total de kilos
     const calcularTotalKilos = () => {
-      return itemsFiltrados.value.reduce((total, item) => total + item.kilos, 0).toFixed(2);
+      return itemsFiltrados.value.reduce((total, item) => {
+        return total + Number(item.kilosTotales || 0);
+      }, 0).toFixed(2);
     };
     
-    /**
-     * Calcula el total de precio de los productos filtrados
-     * @returns {Number} - Total de precio
-     */
+    // Calcular el total de precio
     const calcularTotalPrecio = () => {
-      return itemsFiltrados.value.reduce((total, item) => total + item.total, 0);
+      return itemsFiltrados.value.reduce((total, item) => {
+        return total + Number(item.total || 0);
+      }, 0);
+    };
+    
+    // Formatear el nombre del cliente para mostrar
+    const formatearNombreCliente = (cliente) => {
+      if (!cliente) return '';
+      
+      // Mapeo de IDs numéricos a nombres de clientes
+      const clienteIdToName = {
+        '0': 'Catarro',
+        '1': 'Joselito',
+        '2': 'Otilio',
+        '3': 'Ozuna',
+        0: 'Catarro',
+        1: 'Joselito',
+        2: 'Otilio',
+        3: 'Ozuna'
+      };
+      
+      // Si el cliente es un número o string que parece un número, buscar en el mapeo
+      if (clienteIdToName[cliente]) {
+        return clienteIdToName[cliente];
+      }
+      
+      return cliente.charAt(0).toUpperCase() + cliente.slice(1).toLowerCase();
+    };
+    
+    // Obtener color para el cliente
+    const obtenerColorCliente = (cliente) => {
+      // Normalizar el nombre del cliente
+      const nombreNormalizado = formatearNombreCliente(cliente).toLowerCase();
+      
+      // Colores predefinidos por cliente
+      const coloresClientes = {
+        'catarro': '#e74c3c', // Rojo
+        'joselito': '#3498db', // Azul
+        'ozuna': '#2ecc71',   // Verde
+        'otilio': '#f1c40f'   // Amarillo
+      };
+      
+      // Retornar el color del cliente o un color por defecto
+      return coloresClientes[nombreNormalizado] || '#6c757d';
+    };
+    
+    // Obtener color del texto según el color de fondo
+    const obtenerColorTextoCliente = (cliente) => {
+      // Normalizar el nombre del cliente
+      const nombreNormalizado = formatearNombreCliente(cliente).toLowerCase();
+      
+      // Para el cliente Otilio (amarillo) usamos texto negro, para los demás texto blanco
+      return nombreNormalizado === 'otilio' ? '#333333' : '#FFFFFF';
+    };
+    
+    // Obtener el formato de cantidad para mostrar
+    const formatearCantidad = (item) => {
+      if (item.tipo === 'crudo') {
+        return item.taras || (item.tarasKilos && item.tarasKilos.length > 0 ? item.tarasKilos[0].tara : '-');
+      } else if (item.tarasKilos && Array.isArray(item.tarasKilos)) {
+        return item.tarasKilos.reduce((sum, tk) => sum + (Number(tk.tara) || 0), 0);
+      } else {
+        return '-';
+      }
+    };
+    
+    // Obtener kilos para mostrar
+    const formatearKilos = (item) => {
+      return (Number(item.kilosTotales) || 0).toFixed(2);
+    };
+    
+    // Manejar la edición de un item
+    const editarItem = (item) => {
+      emit('editar-item', item);
+    };
+    
+    // Manejar la eliminación de un item
+    const eliminarItem = (item) => {
+      emit('eliminar-item', item);
     };
     
     return {
       filtroTipo,
       filtroCliente,
+      mostrarResumenPorCliente,
       clientesUnicos,
       itemsFiltrados,
       resumenPorCliente,
       calcularTotalKilos,
       calcularTotalPrecio,
+      formatearNombreCliente,
       obtenerColorCliente,
       obtenerColorTextoCliente,
-      formatearNombreCliente
+      formatearCantidad,
+      formatearKilos,
+      editarItem,
+      eliminarItem
     };
-  },
-  methods: {
-    /**
-     * Emite evento para editar un producto
-     * @param {Object} item - Producto a editar
-     */
-    editarItem(item) {
-      this.$emit('editar-item', item);
-    },
-    /**
-     * Emite evento para eliminar un producto
-     * @param {Object} item - Producto a eliminar
-     */
-    eliminarItem(item) {
-      this.$emit('eliminar-item', item);
-    }
   }
 };
 </script>

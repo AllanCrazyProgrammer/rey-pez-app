@@ -42,13 +42,17 @@
       
       <!-- Formulario de embarque -->
       <EmbarqueForm
+        ref="embarqueForm"
         :clienteActivo="clienteActivo"
         :embarqueBloqueado="embarqueBloqueado"
         :fecha="fechaEmbarque"
         :cargaCon="cargaCon"
+        :items="itemsEmbarque"
         @agregar-producto="agregarProducto"
+        @actualizar-producto="actualizarProducto"
         @actualizar-fecha="actualizarFecha"
         @actualizar-carga-con="actualizarCargaCon"
+        @eliminar-item="eliminarItem"
       />
       
       <!-- Resumen del embarque -->
@@ -80,6 +84,7 @@ import { collection, doc, getDoc, getDocs, addDoc, updateDoc, deleteDoc, query, 
 import { db } from '@/firebase';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
+import { cargarYAdaptarEmbarque } from '@/components/Embarques/EmbarqueAdapter';
 
 // Componentes
 import ClienteSidebar from '@/components/Embarques/ClienteSidebar.vue';
@@ -105,13 +110,13 @@ export default {
   data() {
     return {
       // Estado del embarque
-      modoEdicion: this.$route.params.id ? true : false,
+      modoEdicion: this.$route.params.id && this.$route.params.id !== 'undefined' && this.$route.params.id !== 'null' && this.$route.params.id !== 'nuevo',
       embarqueBloqueado: false,
       guardando: false,
       generandoPdf: false,
       
       // Datos del embarque
-      embarqueId: this.$route.params.id || null,
+      embarqueId: this.$route.params.id && this.$route.params.id !== 'undefined' && this.$route.params.id !== 'null' && this.$route.params.id !== 'nuevo' ? this.$route.params.id : null,
       fechaEmbarque: new Date().toISOString().split('T')[0],
       cargaCon: '',
       itemsEmbarque: [],
@@ -129,16 +134,28 @@ export default {
       
       // Clientes predefinidos
       clientesPredefinidos: [
-        { id: 1, nombre: 'Catarro', color: '#FF5733', textColor: '#FFFFFF' },
-        { id: 2, nombre: 'Joselito', color: '#33FF57', textColor: '#000000' },
-        { id: 3, nombre: 'Ozuna', color: '#3357FF', textColor: '#FFFFFF' },
-        { id: 4, nombre: 'Otilio', color: '#8033FF', textColor: '#FFFFFF' }
+        { id: '0', nombre: 'Catarro', color: '#e74c3c', textColor: '#FFFFFF' },
+        { id: '1', nombre: 'Joselito', color: '#3498db', textColor: '#FFFFFF' },
+        { id: '2', nombre: 'Otilio', color: '#f1c40f', textColor: '#333333' },
+        { id: '3', nombre: 'Ozuna', color: '#2ecc71', textColor: '#FFFFFF' }
       ]
     };
   },
   mounted() {
-    if (this.modoEdicion && this.embarqueId) {
-      this.cargarEmbarque();
+    // Verificar que el ID sea válido antes de intentar cargar el embarque
+    if (this.modoEdicion && this.embarqueId && this.embarqueId !== 'undefined' && this.embarqueId !== 'null') {
+      console.log('Iniciando carga de embarque con ID:', this.embarqueId);
+      this.cargarEmbarque(this.embarqueId);
+    } else if (this.modoEdicion) {
+      console.warn('Se intentó cargar un embarque con ID inválido:', this.embarqueId);
+      this.mostrarError('No se pudo encontrar el embarque. ID inválido: ' + this.embarqueId);
+      this.resetearEmbarque();
+      // Si es posible, redirigir a la página de nuevo embarque
+      if (this.$router) {
+        this.$router.replace('/nuevo-embarque');
+      }
+    } else {
+      console.log('Iniciando nuevo embarque');
     }
   },
   methods: {
@@ -204,7 +221,49 @@ export default {
      * @param {String} clienteId - ID del cliente seleccionado
      */
     seleccionarCliente(clienteId) {
-      this.clienteActivo = clienteId;
+      // Normalizar el ID del cliente 
+      this.clienteActivo = this.normalizarNombreCliente(clienteId);
+      
+      // Notificar al formulario de embarque para que actualice sus productos
+      this.$nextTick(() => {
+        if (this.$refs.embarqueForm) {
+          // Si hay un producto en edición, cancelar la edición al cambiar de cliente
+          if (this.$refs.embarqueForm.productoEditando) {
+            this.$refs.embarqueForm.cancelarEdicion();
+          }
+        }
+      });
+      
+      console.log(`Cliente seleccionado: ${this.clienteActivo}`);
+    },
+    
+    /**
+     * Normaliza el nombre del cliente, convirtiendo IDs numéricos a nombres
+     * @param {String|Number} clienteId - ID o nombre del cliente
+     * @returns {String} - Nombre normalizado del cliente
+     */
+    normalizarNombreCliente(clienteId) {
+      if (clienteId === null || clienteId === undefined) return '';
+      
+      // Mapeo de IDs numéricos a nombres de clientes
+      const clienteIdToName = {
+        '0': 'Catarro',
+        '1': 'Joselito',
+        '2': 'Otilio',
+        '3': 'Ozuna',
+        0: 'Catarro',
+        1: 'Joselito',
+        2: 'Otilio',
+        3: 'Ozuna'
+      };
+      
+      // Si el clienteId es un número o string que parece un número, buscar en el mapeo
+      if (clienteIdToName[clienteId]) {
+        return clienteIdToName[clienteId];
+      }
+      
+      // Si es un string, usar directamente
+      return String(clienteId);
     },
     
     /**
@@ -242,7 +301,25 @@ export default {
      * @param {Object} producto - Producto a agregar
      */
     agregarProducto(producto) {
-      this.itemsEmbarque.push(producto);
+      // Verificar si ya existe un producto similar
+      const indiceExistente = this.itemsEmbarque.findIndex(item => 
+        item.cliente === producto.cliente && 
+        item.tipo === producto.tipo && 
+        item.talla === producto.talla
+      );
+      
+      if (indiceExistente !== -1) {
+        // Si existe, preguntar si desea actualizar
+        if (confirm(`Ya existe un producto similar (${producto.talla} - ${producto.tipo}). ¿Desea agregar este como nuevo producto?`)) {
+          this.itemsEmbarque.push(producto);
+        } else {
+          // Actualizar el existente
+          this.itemsEmbarque[indiceExistente] = producto;
+        }
+      } else {
+        // Agregar como nuevo producto
+        this.itemsEmbarque.push(producto);
+      }
     },
     
     /**
@@ -250,8 +327,24 @@ export default {
      * @param {Object} item - Producto a editar
      */
     editarItem(item) {
-      // Implementar lógica para editar
-      console.log('Editar item:', item);
+      // Buscamos el componente EmbarqueForm y le pedimos que inicie la edición
+      const embarqueForm = this.$refs.embarqueForm;
+      if (embarqueForm) {
+        embarqueForm.iniciarEdicionProducto(item);
+      }
+    },
+    
+    /**
+     * Actualiza un producto existente
+     * @param {Object} productoActualizado - Producto con datos actualizados
+     */
+    actualizarProducto(productoActualizado) {
+      // Buscar el índice del producto a actualizar
+      const indice = this.itemsEmbarque.findIndex(item => item.id === productoActualizado.id);
+      if (indice !== -1) {
+        // Actualizamos el producto en la lista
+        this.itemsEmbarque.splice(indice, 1, productoActualizado);
+      }
     },
     
     /**
@@ -259,9 +352,11 @@ export default {
      * @param {Object} item - Producto a eliminar
      */
     eliminarItem(item) {
-      const index = this.itemsEmbarque.findIndex(i => i === item);
-      if (index !== -1) {
-        this.itemsEmbarque.splice(index, 1);
+      if (confirm('¿Estás seguro de que quieres eliminar este producto?')) {
+        const index = this.itemsEmbarque.findIndex(i => i === item || i.id === item.id);
+        if (index !== -1) {
+          this.itemsEmbarque.splice(index, 1);
+        }
       }
     },
     
@@ -381,53 +476,107 @@ export default {
     },
     
     /**
-     * Carga los datos de un embarque existente
+     * Carga un embarque específico
+     * @param {String} id - ID del embarque a cargar
      */
-    async cargarEmbarque() {
+    async cargarEmbarque(id) {
+      console.log('Cargando embarque con ID:', id);
+      if (id === 'nuevo') {
+        this.resetearEmbarque();
+        return;
+      }
+
       try {
-        // Recuperar el documento de embarque
-        const embarqueDoc = await getDoc(doc(db, 'embarques', this.embarqueId));
+        // Mostrar indicador de carga
+        this.cargando = true;
         
-        if (embarqueDoc.exists()) {
-          const embarqueData = embarqueDoc.data();
+        // Usar el adaptador para cargar y normalizar los datos del embarque
+        const embarqueAdaptado = await cargarYAdaptarEmbarque(id);
+        
+        if (embarqueAdaptado) {
+          console.log('Embarque cargado y adaptado:', embarqueAdaptado);
           
-          // Cargar datos principales
-          this.fechaEmbarque = typeof embarqueData.fecha === 'string' ? embarqueData.fecha : new Date().toISOString().split('T')[0];
-          this.cargaCon = embarqueData.cargaCon || '';
-          this.embarqueBloqueado = embarqueData.bloqueado || false;
-          
-          // Cargar items del embarque
-          if (embarqueData.items && Array.isArray(embarqueData.items)) {
-            this.itemsEmbarque = embarqueData.items.map(item => ({
-              ...item,
-              // Asegurar que todos los campos numéricos sean realmente números
-              kilos: parseFloat(item.kilos || 0),
-              tara: parseFloat(item.tara || 0),
-              precio: parseFloat(item.precio || 0),
-              total: parseFloat(item.total || 0)
-            }));
+          // Procesamiento adicional para asegurar que todos los productos tengan los campos necesarios
+          if (embarqueAdaptado.items && Array.isArray(embarqueAdaptado.items)) {
+            embarqueAdaptado.items = embarqueAdaptado.items.map(item => {
+              // Asegurarse de que los campos talla, media y medida estén presentes
+              const medidaValue = item.medida || item.media || item.talla || '';
+              return {
+                ...item,
+                medida: medidaValue,
+                media: medidaValue,
+                talla: medidaValue
+              };
+            });
           }
           
-          // Cargar clientes personalizados
-          if (embarqueData.clientesPersonalizados && Array.isArray(embarqueData.clientesPersonalizados)) {
-            this.clientesPersonalizadosEmbarque = embarqueData.clientesPersonalizados;
+          // Asignar datos del embarque a la vista
+          // Asegurarse de que fechaEmbarque siempre sea un string en formato YYYY-MM-DD
+          if (embarqueAdaptado.fecha) {
+            if (typeof embarqueAdaptado.fecha === 'string') {
+              this.fechaEmbarque = embarqueAdaptado.fecha;
+            } else if (embarqueAdaptado.fecha instanceof Date) {
+              this.fechaEmbarque = embarqueAdaptado.fecha.toISOString().split('T')[0];
+            } else if (embarqueAdaptado.fecha.toDate && typeof embarqueAdaptado.fecha.toDate === 'function') {
+              // Es un Timestamp de Firestore
+              const fechaDate = embarqueAdaptado.fecha.toDate();
+              this.fechaEmbarque = fechaDate.toISOString().split('T')[0];
+            } else {
+              // Fallback
+              this.fechaEmbarque = new Date().toISOString().split('T')[0];
+              console.warn('Formato de fecha no reconocido, utilizando fecha actual:', embarqueAdaptado.fecha);
+            }
+          } else {
+            this.fechaEmbarque = new Date().toISOString().split('T')[0];
           }
           
-          // Si hay un cliente activo guardado, seleccionarlo
-          if (embarqueData.clienteActivo) {
-            this.clienteActivo = embarqueData.clienteActivo;
-          }
+          this.cargaCon = embarqueAdaptado.cargaCon || '';
+          this.embarqueBloqueado = embarqueAdaptado.bloqueado || false;
+          this.itemsEmbarque = embarqueAdaptado.items || [];
+          this.clienteActivo = embarqueAdaptado.clienteActivo || '';
+          this.embarqueId = id;
           
-          console.log('Embarque cargado correctamente:', this.embarqueId);
+          console.log('Datos del embarque cargados en la vista:', {
+            fecha: this.fechaEmbarque,
+            cargaCon: this.cargaCon,
+            bloqueado: this.embarqueBloqueado,
+            clienteActivo: this.clienteActivo,
+            items: this.itemsEmbarque.length
+          });
         } else {
-          console.error('No se encontró el embarque:', this.embarqueId);
-          alert('No se encontró el embarque solicitado');
-          this.$router.push('/embarques');
+          console.error('No se pudo cargar el embarque');
+          this.mostrarError('No se pudo cargar el embarque. Verifique la consola para más detalles.');
+          this.resetearEmbarque();
         }
       } catch (error) {
         console.error('Error al cargar embarque:', error);
-        alert('Error al cargar el embarque: ' + error.message);
+        this.mostrarError('Error al cargar el embarque: ' + error.message);
+        this.resetearEmbarque();
+      } finally {
+        this.cargando = false;
       }
+    },
+    
+    /**
+     * Resetea el estado del embarque
+     */
+    resetearEmbarque() {
+      this.fechaEmbarque = new Date().toISOString().split('T')[0];
+      this.cargaCon = '';
+      this.itemsEmbarque = [];
+      this.clienteActivo = '';
+      this.embarqueBloqueado = false;
+      this.embarqueId = null;
+      this.modoEdicion = false;
+    },
+    
+    /**
+     * Muestra un mensaje de error
+     * @param {String} mensaje - Mensaje de error a mostrar
+     */
+    mostrarError(mensaje) {
+      console.error(mensaje);
+      alert(mensaje);
     }
   }
 };

@@ -1,10 +1,27 @@
 <template>
   <div class="lista-embarques">
+    <h1>Lista de Embarques</h1>
+    
+    <div class="opciones-lista">
+      <button @click="$router.push('/nuevo-embarque')" class="btn-nuevo">
+        <i class="fas fa-plus"></i> Nuevo Embarque
+      </button>
+      
+      <button @click="migrarDatos" class="btn-migrar" :disabled="cargando">
+        <i class="fas fa-sync"></i> Migrar Datos
+      </button>
+      
+      <button @click="$router.push('/embarques-menu')" class="btn-regresar">
+        <i class="fas fa-arrow-left"></i> Regresar al Menú
+      </button>
+    </div>
  
     <div v-if="cargando" class="cargando">Cargando embarques...</div>
     <div v-else-if="error" class="error">{{ error }}</div>
     <div v-else>
-      <table v-if="embarques.length > 0" class="tabla-embarques">
+      <div v-if="embarques.length === 0" class="sin-embarques">No hay embarques registrados.</div>
+      
+      <table v-else class="tabla-embarques">
         <thead>
           <tr>
             <th>Fecha</th>
@@ -16,10 +33,10 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="embarque in embarques" :key="embarque.id" :class="{ 'fila-bloqueada': embarque.embarqueBloqueado }">
+          <tr v-for="embarque in embarques" :key="embarque.id" :class="{ 'fila-bloqueada': embarque.bloqueado || embarque.embarqueBloqueado }">
             <td>
               {{ formatearFecha(embarque.fecha) }}
-              <span v-if="embarque.embarqueBloqueado" class="indicador-bloqueado" title="Este embarque está bloqueado">🔒</span>
+              <span v-if="embarque.bloqueado || embarque.embarqueBloqueado" class="indicador-bloqueado" title="Este embarque está bloqueado">🔒</span>
             </td>
             <td>{{ calcularKilosLimpios(embarque) }} kg</td>
             <td>{{ calcularKilosCrudos(embarque) }} kg</td>
@@ -28,16 +45,15 @@
             <td>
               <button @click="editarEmbarque(embarque.id)" class="btn-detalles">Editar</button>
               <button 
-                @click="embarque.embarqueBloqueado ? mostrarMensajeBloqueado() : eliminarEmbarque(embarque.id)" 
+                @click="(embarque.bloqueado || embarque.embarqueBloqueado) ? mostrarMensajeBloqueado() : eliminarEmbarque(embarque.id)" 
                 class="btn-eliminar" 
-                :class="{ 'btn-deshabilitado': embarque.embarqueBloqueado }"
-                :title="embarque.embarqueBloqueado ? 'Este embarque está bloqueado y no puede ser eliminado' : ''"
+                :class="{ 'btn-deshabilitado': embarque.bloqueado || embarque.embarqueBloqueado }"
+                :title="(embarque.bloqueado || embarque.embarqueBloqueado) ? 'Este embarque está bloqueado y no puede ser eliminado' : ''"
               >Eliminar</button>
             </td>
           </tr>
         </tbody>
       </table>
-      <div v-else class="sin-embarques">No hay embarques registrados.</div>
     </div>
  
   </div>
@@ -45,6 +61,7 @@
 
 <script>
 import { getFirestore, collection, getDocs, doc, deleteDoc } from 'firebase/firestore';
+import { adaptarTodosLosEmbarques } from '@/components/Embarques/EmbarqueAdapter';
 
 export default {
   name: 'ListaEmbarques',
@@ -52,51 +69,40 @@ export default {
     return {
       embarques: [],
       cargando: true,
-      error: null
+      error: null,
+      modoCompatibilidad: true // Activar modo compatibilidad por defecto
     };
   },
   methods: {
     async cargarEmbarques() {
       try {
-        const db = getFirestore();
-        const embarquesRef = collection(db, 'embarques');
-        const snapshot = await getDocs(embarquesRef);
-        this.embarques = snapshot.docs
-          .map(doc => {
-            const data = doc.data();
-            // Procesar la propiedad embarqueBloqueado para manejar diferentes tipos de datos
-            let embarqueBloqueado = false;
-            
-            if (data.embarqueBloqueado !== undefined) {
-              // Si es booleano, usar directamente
-              if (typeof data.embarqueBloqueado === 'boolean') {
-                embarqueBloqueado = data.embarqueBloqueado;
-              } 
-              // Si es string, verificar si es 'true', '1', 'si', etc.
-              else if (typeof data.embarqueBloqueado === 'string') {
-                embarqueBloqueado = ['true', '1', 'si', 'yes', 'verdadero'].includes(data.embarqueBloqueado.toLowerCase());
-              } 
-              // Si es número, verificar si es diferente de 0
-              else if (typeof data.embarqueBloqueado === 'number') {
-                embarqueBloqueado = data.embarqueBloqueado !== 0;
-              }
-            }
-            
-            const embarque = {
-              id: doc.id,
-              ...data,
-              embarqueBloqueado: embarqueBloqueado
-            };
-            
-            console.log(`Embarque ID: ${embarque.id}, Bloqueado: ${embarque.embarqueBloqueado}, Valor original: ${data.embarqueBloqueado}, Tipo original: ${typeof data.embarqueBloqueado}`);
-            
-            return embarque;
-          })
-          .sort((a, b) => {
-            const fechaA = a.fecha.toDate ? a.fecha.toDate() : new Date(a.fecha);
-            const fechaB = b.fecha.toDate ? b.fecha.toDate() : new Date(b.fecha);
+        this.cargando = true;
+        
+        if (this.modoCompatibilidad) {
+          // Usar el adaptador para cargar y transformar todos los embarques
+          const embarquesAdaptados = await adaptarTodosLosEmbarques(false);
+          this.embarques = embarquesAdaptados.sort((a, b) => {
+            const fechaA = a.fecha ? (a.fecha.toDate ? a.fecha.toDate() : new Date(a.fecha)) : new Date();
+            const fechaB = b.fecha ? (b.fecha.toDate ? b.fecha.toDate() : new Date(b.fecha)) : new Date();
             return fechaB - fechaA; // Orden descendente
           });
+        } else {
+          // Carga directa (formato nuevo)
+          const db = getFirestore();
+          const embarquesRef = collection(db, 'embarques');
+          const snapshot = await getDocs(embarquesRef);
+          this.embarques = snapshot.docs
+            .map(doc => ({
+              id: doc.id,
+              ...doc.data()
+            }))
+            .sort((a, b) => {
+              const fechaA = a.fecha ? (a.fecha.toDate ? a.fecha.toDate() : new Date(a.fecha)) : new Date();
+              const fechaB = b.fecha ? (b.fecha.toDate ? b.fecha.toDate() : new Date(b.fecha)) : new Date();
+              return fechaB - fechaA; // Orden descendente
+            });
+        }
+        
         this.cargando = false;
       } catch (error) {
         console.error("Error al cargar los embarques:", error);
@@ -111,85 +117,171 @@ export default {
       fechaObj.setDate(fechaObj.getDate() + 1);
       return fechaObj.toLocaleDateString('es-ES');
     },
-    calcularTotalKilos(embarque) {
-      let totalKilos = 0;
+    calcularKilosLimpios(embarque) {
+      // Para el formato nuevo (usando items)
+      if (embarque.items && Array.isArray(embarque.items)) {
+        return embarque.items
+          .filter(item => item.tipo === 'S/H20' || item.tipo.toLowerCase() === 's/h20')
+          .reduce((total, item) => total + (Number(item.kilosTotales) || 0), 0)
+          .toFixed(1);
+      }
+      
+      // Para el formato antiguo (usando clientes)
+      if (embarque.clientes) {
+        let totalKilos = 0;
 
-      embarque.clientes.forEach(cliente => {
-        cliente.productos.forEach(producto => {
-          if (producto.tipo === 'c/h20') {
-            // Para productos c/h20, calcular la suma de (taras * bolsa) para cada grupo
-            const reporteTaras = producto.reporteTaras || [];
-            const reporteBolsas = producto.reporteBolsas || [];
-            let sumaTotalKilos = 0;
-
-            for (let i = 0; i < reporteTaras.length; i++) {
-              const taras = parseInt(reporteTaras[i]) || 0;
-              const bolsa = parseInt(reporteBolsas[i]) || 0;
-              sumaTotalKilos += taras * bolsa;
-            }
-
-            // Multiplicar por el valor neto (0.65 por defecto)
-            const kilosReales = sumaTotalKilos * (producto.camaronNeto || 0.65);
-            totalKilos += kilosReales;
-          } else {
-            // Para otros productos
-            const sumaKilos = (producto.kilos || []).reduce((sum, kilo) => sum + (Number(kilo) || 0), 0);
-            const sumaTaras = this.calcularTotalTarasProducto(producto);
-            const descuentoTaras = producto.restarTaras ? sumaTaras * 3 : 0;
-            totalKilos += sumaKilos - descuentoTaras;
+        embarque.clientes.forEach(cliente => {
+          if (cliente.productos) {
+            cliente.productos.forEach(producto => {
+              if (producto.tipo && producto.tipo.toLowerCase() !== 'c/h20') {
+                if (Array.isArray(producto.kilos)) {
+                  const sumaKilos = producto.kilos.reduce((sum, kilo) => sum + (Number(kilo) || 0), 0);
+                  const sumaTaras = Array.isArray(producto.taras) 
+                    ? producto.taras.reduce((sum, tara) => sum + (Number(tara) || 0), 0) 
+                    : 0;
+                  const descuentoTaras = producto.restarTaras ? sumaTaras * 3 : 0;
+                  totalKilos += sumaKilos - descuentoTaras;
+                } else {
+                  totalKilos += Number(producto.kilos) || 0;
+                }
+              }
+            });
           }
         });
-      });
 
-      return totalKilos.toFixed(1);
+        return totalKilos.toFixed(1);
+      }
+      
+      return "0.0";
+    },
+    calcularKilosCrudos(embarque) {
+      // Para el formato nuevo (usando items)
+      if (embarque.items && Array.isArray(embarque.items)) {
+        return embarque.items
+          .filter(item => item.tipo === 'crudo' || item.tipo === 'C/H20' || item.tipo.toLowerCase() === 'c/h20')
+          .reduce((total, item) => total + (Number(item.kilosTotales) || 0), 0)
+          .toFixed(1);
+      }
+      
+      // Para el formato antiguo
+      if (embarque.clientes) {
+        let totalKilosCrudos = 0;
+        
+        // Sumar kilos de productos c/h20
+        embarque.clientes.forEach(cliente => {
+          if (cliente.productos) {
+            cliente.productos.forEach(producto => {
+              if (producto.tipo && producto.tipo.toLowerCase() === 'c/h20') {
+                if (producto.reporteTaras && producto.reporteBolsas) {
+                  let sumaTotalKilos = 0;
+                  for (let i = 0; i < producto.reporteTaras.length; i++) {
+                    const taras = parseInt(producto.reporteTaras[i]) || 0;
+                    const bolsa = parseInt(producto.reporteBolsas[i]) || 0;
+                    sumaTotalKilos += taras * bolsa;
+                  }
+                  const kilosReales = sumaTotalKilos * (producto.camaronNeto || 0.65);
+                  totalKilosCrudos += kilosReales;
+                } else if (Array.isArray(producto.kilos)) {
+                  totalKilosCrudos += producto.kilos.reduce((sum, kilo) => sum + (Number(kilo) || 0), 0);
+                }
+              }
+            });
+          }
+        });
+
+        // Sumar kilos de crudos
+        embarque.clientes.forEach(cliente => {
+          if (cliente.crudos) {
+            cliente.crudos.forEach(crudo => {
+              if (crudo.items) {
+                crudo.items.forEach(item => {
+                  if (item.taras) {
+                    const [cantidad, medida] = item.taras.split('-').map(Number);
+                    totalKilosCrudos += (cantidad || 0) * (medida === 19 ? 20 : (medida || 0));
+                  }
+                  if (item.sobrante) {
+                    const [cantidadSobrante, medidaSobrante] = item.sobrante.split('-').map(Number);
+                    totalKilosCrudos += (cantidadSobrante || 0) * (medidaSobrante === 19 ? 20 : (medidaSobrante || 0));
+                  }
+                });
+              }
+            });
+          }
+        });
+
+        return totalKilosCrudos.toFixed(1);
+      }
+      
+      return "0.0";
     },
     calcularTotalTaras(embarque) {
-      let totalTaras = 0;
-      const clientesPredefinidos = ['OTILIO', 'JOSELITO', 'CATARRO', 'OZUNA'];
-
-      embarque.clientes.forEach(cliente => {
-        // Solo procesar si el cliente está en la lista de predefinidos
-        if (clientesPredefinidos.includes(cliente.nombre.toUpperCase())) {
+      // Para el formato nuevo (usando items)
+      if (embarque.items && Array.isArray(embarque.items)) {
+        return embarque.items
+          .reduce((total, item) => {
+            if (item.tarasKilos && Array.isArray(item.tarasKilos)) {
+              return total + item.tarasKilos.reduce((sum, tk) => sum + (Number(tk.tara) || 0), 0);
+            }
+            return total;
+          }, 0);
+      }
+      
+      // Para el formato antiguo
+      if (embarque.clientes) {
+        let totalTaras = 0;
+        
+        embarque.clientes.forEach(cliente => {
           // Sumar taras de productos normales
-          cliente.productos.forEach(producto => {
-            totalTaras += this.calcularTotalTarasProducto(producto);
-          });
+          if (cliente.productos) {
+            cliente.productos.forEach(producto => {
+              if (Array.isArray(producto.taras)) {
+                totalTaras += producto.taras.reduce((sum, tara) => sum + (Number(tara) || 0), 0);
+              } else if (producto.taras) {
+                totalTaras += Number(producto.taras) || 0;
+              }
+              
+              if (Array.isArray(producto.tarasExtra)) {
+                totalTaras += producto.tarasExtra.reduce((sum, tara) => sum + (Number(tara) || 0), 0);
+              }
+              
+              if (Array.isArray(producto.reporteTaras)) {
+                totalTaras += producto.reporteTaras.reduce((sum, tara) => sum + (Number(tara) || 0), 0);
+              }
+            });
+          }
 
           // Sumar taras de crudos
           if (cliente.crudos) {
             cliente.crudos.forEach(crudo => {
-              crudo.items.forEach(item => {
-                if (item.taras) {
-                  const [cantidad] = item.taras.split('-').map(Number);
-                  totalTaras += cantidad || 0;
-                }
-                if (item.sobrante) {
-                  const [cantidadSobrante] = item.sobrante.split('-').map(Number);
-                  totalTaras += cantidadSobrante || 0;
-                }
-              });
+              if (crudo.items) {
+                crudo.items.forEach(item => {
+                  if (item.taras) {
+                    const [cantidad] = item.taras.split('-').map(Number);
+                    totalTaras += cantidad || 0;
+                  }
+                  if (item.sobrante) {
+                    const [cantidadSobrante] = item.sobrante.split('-').map(Number);
+                    totalTaras += cantidadSobrante || 0;
+                  }
+                });
+              }
             });
           }
-        }
-      });
+        });
 
-      return totalTaras;
+        return totalTaras;
+      }
+      
+      return 0;
     },
-    calcularTotalTarasProducto(producto) {
-      const tarasNormales = (producto.taras || []).reduce((sum, tara) => sum + (Number(tara) || 0), 0);
-      const tarasExtra = (producto.tarasExtra || []).reduce((sum, tara) => sum + (Number(tara) || 0), 0);
-      return tarasNormales + tarasExtra;
-    },
-    verDetalles(embarqueId) {
-      console.log('Navegando a detalles del embarque:', embarqueId);
-      this.$router.push({ name: 'DetallesEmbarque', params: { id: embarqueId } });
-    },
-  
     editarEmbarque(embarqueId) {
-      this.$router.push({ name: 'NuevoEmbarque', params: { id: embarqueId } });
-    },
-    regresarAMenu() {
-      this.$router.push({ name: 'EmbarquesMenu' });
+      if (!embarqueId || embarqueId === 'undefined' || embarqueId === 'null') {
+        console.error('Error: Se intentó editar un embarque con ID inválido:', embarqueId);
+        alert('Error: No se puede editar el embarque. ID inválido.');
+        return;
+      }
+      // Asegurarnos de usar la ruta correcta
+      this.$router.push(`/embarques/${embarqueId}`);
     },
     
     async eliminarEmbarque(embarqueId) {
@@ -197,7 +289,7 @@ export default {
       const embarque = this.embarques.find(e => e.id === embarqueId);
       
       // Verificar si el embarque está bloqueado
-      if (embarque && embarque.embarqueBloqueado) {
+      if (embarque && (embarque.bloqueado || embarque.embarqueBloqueado)) {
         alert('Este embarque está bloqueado y no puede ser eliminado.');
         return;
       }
@@ -214,111 +306,49 @@ export default {
         }
       }
     },
-
-    calcularKilosLimpios(embarque) {
-      let totalKilos = 0;
-
-      embarque.clientes.forEach(cliente => {
-        cliente.productos.forEach(producto => {
-          if (producto.tipo === 'c/h20') {
-            // Para productos c/h20, calcular la suma de (taras * bolsa) para cada grupo
-            const reporteTaras = producto.reporteTaras || [];
-            const reporteBolsas = producto.reporteBolsas || [];
-            let sumaTotalKilos = 0;
-
-            for (let i = 0; i < reporteTaras.length; i++) {
-              const taras = parseInt(reporteTaras[i]) || 0;
-              const bolsa = parseInt(reporteBolsas[i]) || 0;
-              sumaTotalKilos += taras * bolsa;
-            }
-
-            // Multiplicar por el valor neto (0.65 por defecto)
-            const kilosReales = sumaTotalKilos * (producto.camaronNeto || 0.65);
-            totalKilos += kilosReales;
-          } else {
-            // Para otros productos
-            const sumaKilos = (producto.kilos || []).reduce((sum, kilo) => sum + (Number(kilo) || 0), 0);
-            const sumaTaras = this.calcularTotalTarasProducto(producto);
-            const descuentoTaras = producto.restarTaras ? sumaTaras * 3 : 0;
-            totalKilos += sumaKilos - descuentoTaras;
-          }
-        });
-      });
-
-      return totalKilos.toFixed(1);
-    },
-
-    calcularKilosCrudos(embarque) {
-      let totalKilosCrudos = 0;
-
-      embarque.clientes.forEach(cliente => {
-        if (cliente.crudos) {
-          cliente.crudos.forEach(crudo => {
-            crudo.items.forEach(item => {
-              if (item.taras) {
-                // Verificar si la tara tiene formato "5-19" o similar
-                const formatoGuion = /^(\d+)-(\d+)$/.exec(item.taras);
-                if (formatoGuion) {
-                  const cantidad = parseInt(formatoGuion[1]) || 0;
-                  let medida = parseInt(formatoGuion[2]) || 0;
-                  
-                  // Si la medida es 19, sustituirla por 20
-                  if (medida === 19) {
-                    medida = 20;
-                  }
-                  
-                  totalKilosCrudos += (cantidad || 0) * (medida || 0);
-                } else {
-                  // Formato original si no coincide con el patrón
-                  const [cantidad, medida] = item.taras.split('-').map(Number);
-                  totalKilosCrudos += (cantidad || 0) * (medida || 0);
-                }
-              }
-              if (item.sobrante) {
-                // Verificar si el sobrante tiene formato "5-19" o similar
-                const formatoGuion = /^(\d+)-(\d+)$/.exec(item.sobrante);
-                if (formatoGuion) {
-                  const cantidadSobrante = parseInt(formatoGuion[1]) || 0;
-                  let medidaSobrante = parseInt(formatoGuion[2]) || 0;
-                  
-                  // Si la medida es 19, sustituirla por 20
-                  if (medidaSobrante === 19) {
-                    medidaSobrante = 20;
-                  }
-                  
-                  totalKilosCrudos += (cantidadSobrante || 0) * (medidaSobrante || 0);
-                } else {
-                  // Formato original si no coincide con el patrón
-                  const [cantidadSobrante, medidaSobrante] = item.sobrante.split('-').map(Number);
-                  totalKilosCrudos += (cantidadSobrante || 0) * (medidaSobrante || 0);
-                }
-              }
-            });
-          });
-        }
-      });
-
-      return totalKilosCrudos.toFixed(1);
-    },
     
     mostrarMensajeBloqueado() {
       alert('Este embarque está bloqueado y no puede ser eliminado.');
+    },
+    
+    migrarDatos() {
+      if (confirm('¿Estás seguro de que quieres migrar TODOS los embarques al nuevo formato? Esta acción modificará la base de datos y no se puede deshacer.')) {
+        this.cargando = true;
+        
+        // Ejecutar la migración con actualizarDB = true
+        adaptarTodosLosEmbarques(true)
+          .then(embarquesAdaptados => {
+            this.embarques = embarquesAdaptados.sort((a, b) => {
+              const fechaA = a.fecha ? (a.fecha.toDate ? a.fecha.toDate() : new Date(a.fecha)) : new Date();
+              const fechaB = b.fecha ? (b.fecha.toDate ? b.fecha.toDate() : new Date(b.fecha)) : new Date();
+              return fechaB - fechaA;
+            });
+            
+            alert('¡Migración completada con éxito! Se adaptaron ' + embarquesAdaptados.length + ' embarques.');
+            this.cargando = false;
+          })
+          .catch(error => {
+            console.error('Error durante la migración:', error);
+            alert('Error durante la migración: ' + error.message);
+            this.cargando = false;
+          });
+      }
     }
   },
   mounted() {
     this.cargarEmbarques();
   },
   created() {
-    // Verificar el estado de la propiedad embarqueBloqueado en cada embarque después de cargar los datos
+    // Log para depuración
     this.$nextTick(() => {
       setTimeout(() => {
         if (this.embarques.length > 0) {
           console.log('Verificando estado de bloqueo de embarques:');
           this.embarques.forEach(embarque => {
-            console.log(`ID: ${embarque.id}, Bloqueado: ${embarque.embarqueBloqueado}, Tipo: ${typeof embarque.embarqueBloqueado}`);
+            console.log(`ID: ${embarque.id}, Bloqueado: ${embarque.bloqueado || embarque.embarqueBloqueado}, Formato: ${embarque.items ? 'Nuevo' : 'Antiguo'}`);
           });
         }
-      }, 1000); // Esperar 1 segundo para asegurarse de que los datos estén cargados
+      }, 1000);
     });
   }
 };
@@ -530,5 +560,56 @@ h1 {
     font-size: 13px;
     margin-left: 2px;
   }
+}
+
+.opciones-lista {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.btn-nuevo, .btn-migrar, .btn-regresar {
+  padding: 8px 15px;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.btn-nuevo {
+  background-color: #28a745;
+  color: white;
+}
+
+.btn-nuevo:hover {
+  background-color: #218838;
+}
+
+.btn-migrar {
+  background-color: #17a2b8;
+  color: white;
+}
+
+.btn-migrar:hover {
+  background-color: #138496;
+}
+
+.btn-migrar:disabled {
+  background-color: #6c757d;
+  cursor: not-allowed;
+}
+
+.btn-regresar {
+  background-color: #6c757d;
+  color: white;
+  margin-left: auto;
+}
+
+.btn-regresar:hover {
+  background-color: #5a6268;
 }
 </style>

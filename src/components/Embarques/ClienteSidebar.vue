@@ -219,10 +219,11 @@ export default {
   left: 0;
   background-color: #f8f9fa;
   border-right: 1px solid #dee2e6;
-  transition: all 0.3s ease;
+  transition: all 0.3s;
+  z-index: 100;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
-  z-index: 1000;
 }
 
 .sidebar-collapsed {
@@ -230,11 +231,11 @@ export default {
 }
 
 .sidebar-header {
+  padding: 15px;
+  border-bottom: 1px solid #dee2e6;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 15px;
-  border-bottom: 1px solid #dee2e6;
 }
 
 .sidebar-header h3 {
@@ -245,49 +246,68 @@ export default {
   text-overflow: ellipsis;
 }
 
-.sidebar-collapsed .sidebar-header h3 {
-  display: none;
-}
-
 .toggle-sidebar-btn {
   background: none;
   border: none;
   cursor: pointer;
+  font-size: 1rem;
   color: #6c757d;
 }
 
 .sidebar-clientes-contenido {
-  flex: 1;
-  overflow-y: auto;
   padding: 15px;
+  flex-grow: 1;
+  overflow-y: auto;
 }
 
 .btn-nota-cliente {
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
   width: 100%;
+  height: 50px;
+  margin-bottom: 10px;
+  padding: 10px 15px;
   text-align: left;
-  padding: 10px;
-  margin-bottom: 8px;
   border: none;
-  border-radius: 5px;
+  border-radius: 8px;
   cursor: pointer;
+  font-weight: 500;
   transition: all 0.2s;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  position: relative;
+}
+
+.btn-nota-cliente.activo {
+  transform: scale(0.98);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.6), 0 0 0 6px rgba(0, 0, 0, 0.2);
+  position: relative;
+}
+
+.btn-nota-cliente.activo::after {
+  content: "✓";
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  transform: translateY(-50%);
+  font-size: 1rem;
+  font-weight: bold;
 }
 
 .sidebar-collapsed .btn-nota-cliente {
-  padding: 10px 5px;
-  text-align: center;
+  padding: 10px;
+  justify-content: center;
 }
 
 .sidebar-collapsed .btn-nota-cliente span {
   display: none;
 }
 
-.btn-nota-cliente.activo {
-  box-shadow: 0 0 0 3px rgba(0,123,255,0.5);
+.cliente-personalizado {
+  background-color: #6c757d;
+  color: white;
 }
 
 .btn-agregar-cliente {
@@ -295,22 +315,23 @@ export default {
   align-items: center;
   justify-content: center;
   width: 100%;
-  padding: 10px;
-  margin-top: 15px;
-  background-color: #28a745;
-  color: white;
-  border: none;
-  border-radius: 5px;
+  height: 50px;
+  margin-top: 20px;
+  padding: 10px 15px;
+  border: 2px dashed #dee2e6;
+  border-radius: 8px;
+  background-color: transparent;
+  color: #6c757d;
   cursor: pointer;
-  transition: background-color 0.2s;
+  transition: all 0.2s;
+}
+
+.btn-agregar-cliente:hover {
+  background-color: #e9ecef;
 }
 
 .sidebar-collapsed .btn-agregar-cliente span {
   display: none;
-}
-
-.btn-agregar-cliente:hover {
-  background-color: #218838;
 }
 
 .sidebar-toggle-mobile {
@@ -320,58 +341,65 @@ export default {
 .sidebar-resumen {
   padding: 15px;
   border-top: 1px solid #dee2e6;
-  background-color: #f1f3f5;
-}
-
-.sidebar-collapsed .sidebar-resumen {
-  display: none;
+  background-color: #e9ecef;
 }
 
 .sidebar-resumen h4 {
   margin: 0 0 10px 0;
-  font-size: 1rem;
-  color: #495057;
+  font-size: 1.1rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .sidebar-item {
   display: flex;
   justify-content: space-between;
   margin-bottom: 5px;
+  font-size: 0.9rem;
 }
 
-.sidebar-item.total {
-  margin-top: 10px;
-  padding-top: 5px;
-  border-top: 1px dashed #ced4da;
-  font-weight: bold;
+.sidebar-collapsed .sidebar-resumen h4,
+.sidebar-collapsed .sidebar-item span:first-child {
+  display: none;
+}
+
+.sidebar-collapsed .sidebar-item {
+  justify-content: center;
 }
 
 @media (max-width: 768px) {
   .sidebar-clientes {
-    transform: translateX(-100%);
+    width: 100%;
+    height: auto;
+    position: relative;
+    border-right: none;
+    border-bottom: 1px solid #dee2e6;
   }
   
-  .sidebar-clientes.sidebar-collapsed {
-    transform: translateX(0);
-    width: 60px;
+  .sidebar-collapsed {
+    width: 100%;
   }
   
   .sidebar-toggle-mobile {
     display: block;
-    position: fixed;
-    top: 50%;
-    left: 0;
-    transform: translateY(-50%);
-    z-index: 1001;
+    padding: 10px;
+    text-align: center;
+    border-top: 1px solid #dee2e6;
   }
   
   .toggle-sidebar-mobile-btn {
-    background-color: #007bff;
-    color: white;
+    background: none;
     border: none;
-    border-radius: 0 5px 5px 0;
-    padding: 10px;
     cursor: pointer;
+    font-size: 1rem;
+    color: #6c757d;
+    width: 100%;
+    padding: 5px;
+  }
+  
+  .btn-nota-cliente, .btn-agregar-cliente {
+    height: 40px;
   }
 }
 </style> 
