@@ -363,24 +363,43 @@ export const cargarYAdaptarEmbarque = async (id, actualizarDB = false) => {
       return null;
     }
     
+    // Verificar si el ID tiene el prefijo emb2_
+    const esEmbarques2 = id.startsWith('emb2_');
+    const idReal = esEmbarques2 ? id.replace('emb2_', '') : id;
+    const coleccion = esEmbarques2 ? 'embarques2' : 'embarques';
+    
+    console.log(`Cargando embarque de la colección ${coleccion} con ID real: ${idReal}`);
+    
     // Obtener referencia al documento del embarque
-    const embarqueRef = doc(db, "embarques", id);
+    const embarqueRef = doc(db, coleccion, idReal);
     const embarqueSnap = await getDoc(embarqueRef);
     
     if (!embarqueSnap.exists()) {
-      console.error(`Embarque con ID ${id} no encontrado`);
+      console.error(`Embarque con ID ${id} no encontrado en la colección ${coleccion}`);
       return null;
     }
     
-    // Obtener datos del embarque y adaptarlos
+    // Obtener datos del embarque
     const embarqueData = embarqueSnap.data();
     console.log('EmbarqueAdapter - Datos originales del embarque:', embarqueData);
     
-    const embarqueAdaptado = adaptarEmbarqueAntiguo(embarqueData);
+    // Si es de la colección embarques2, ya tiene el formato nuevo
+    let embarqueAdaptado;
+    if (esEmbarques2) {
+      embarqueAdaptado = {
+        ...embarqueData,
+        id: id, // Mantener el ID con prefijo
+        esEmbarques2: true
+      };
+    } else {
+      // Si es de la colección original, adaptarlo
+      embarqueAdaptado = adaptarEmbarqueAntiguo(embarqueData);
+    }
+    
     console.log('EmbarqueAdapter - Embarque adaptado:', embarqueAdaptado);
     
     // Si se solicita, actualizar el documento en Firestore con los datos adaptados
-    if (actualizarDB) {
+    if (actualizarDB && !esEmbarques2) {
       try {
         await updateDoc(embarqueRef, embarqueAdaptado);
         console.log(`Embarque ${id} actualizado con estructura adaptada`);
@@ -403,27 +422,12 @@ export const cargarYAdaptarEmbarque = async (id, actualizarDB = false) => {
       });
     }
     
-    // Asegurarse de que la fecha esté en formato string YYYY-MM-DD
-    if (embarqueAdaptado.fecha) {
-      if (typeof embarqueAdaptado.fecha === 'string') {
-        // Ya está en formato string, no hacer nada
-      } else if (embarqueAdaptado.fecha instanceof Date) {
-        embarqueAdaptado.fecha = embarqueAdaptado.fecha.toISOString().split('T')[0];
-      } else if (embarqueAdaptado.fecha.toDate && typeof embarqueAdaptado.fecha.toDate === 'function') {
-        // Es un Timestamp de Firestore
-        const fechaDate = embarqueAdaptado.fecha.toDate();
-        embarqueAdaptado.fecha = fechaDate.toISOString().split('T')[0];
-      } else {
-        console.warn('Formato de fecha no reconocido en adaptador:', embarqueAdaptado.fecha);
-        embarqueAdaptado.fecha = new Date().toISOString().split('T')[0];
-      }
-    } else {
-      embarqueAdaptado.fecha = new Date().toISOString().split('T')[0];
-    }
+    // Asegurarse de que el embarque tenga el ID correcto
+    embarqueAdaptado.id = id;
     
     return embarqueAdaptado;
   } catch (error) {
-    console.error(`Error al cargar y adaptar embarque ${id}:`, error);
+    console.error('Error al cargar y adaptar embarque:', error);
     return null;
   }
 }; 

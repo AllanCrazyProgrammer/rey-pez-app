@@ -838,6 +838,10 @@ export default {
         // Mostrar indicador de carga
         this.cargando = true;
         
+        // Verificar si el ID tiene el prefijo emb2_
+        const esEmbarques2 = id.startsWith('emb2_');
+        console.log(`Tipo de embarque: ${esEmbarques2 ? 'embarques2' : 'embarques'}`);
+        
         // Primero cargar directamente para asegurar que tengamos datos inmediatamente
         const embarqueAdaptado = await cargarYAdaptarEmbarque(id, false);
         
@@ -859,19 +863,42 @@ export default {
           // Esperar un momento antes de configurar la observación para evitar condiciones de carrera
           setTimeout(() => {
             // Configurar la observación para actualizaciones futuras, pero proteger contra datos nulos
-            SincronizacionService.observarEmbarque(id, (embarqueActualizado) => {
-              if (embarqueActualizado && Object.keys(embarqueActualizado).length > 0) {
-                console.log('Embarque actualizado recibido via sincronización:', embarqueActualizado);
-                // Verificar que los datos actualizados son válidos antes de aplicarlos
-                if (embarqueActualizado.items && Array.isArray(embarqueActualizado.items)) {
-                  this.actualizarDatosEmbarque(embarqueActualizado);
+            if (esEmbarques2) {
+              // Si es de la colección embarques2
+              const idSinPrefijo = id.replace('emb2_', '');
+              SincronizacionService.observarEmbarque2(idSinPrefijo, (embarqueActualizado) => {
+                if (embarqueActualizado && Object.keys(embarqueActualizado).length > 0) {
+                  console.log('Embarque actualizado recibido via sincronización (embarques2):', embarqueActualizado);
+                  // Verificar que los datos actualizados son válidos antes de aplicarlos
+                  if (embarqueActualizado.items && Array.isArray(embarqueActualizado.items)) {
+                    this.actualizarDatosEmbarque({
+                      ...embarqueActualizado,
+                      id: `emb2_${embarqueActualizado.id}`,
+                      esEmbarques2: true
+                    });
+                  } else {
+                    console.warn('Se recibieron datos incompletos o inválidos del servicio de sincronización');
+                  }
                 } else {
-                  console.warn('Se recibieron datos incompletos o inválidos del servicio de sincronización');
+                  console.warn('Se recibió un objeto de embarque vacío o nulo del servicio de sincronización');
                 }
-              } else {
-                console.warn('Se recibió un objeto de embarque vacío o nulo del servicio de sincronización');
-              }
-            });
+              });
+            } else {
+              // Si es de la colección original
+              SincronizacionService.observarEmbarque(id, (embarqueActualizado) => {
+                if (embarqueActualizado && Object.keys(embarqueActualizado).length > 0) {
+                  console.log('Embarque actualizado recibido via sincronización:', embarqueActualizado);
+                  // Verificar que los datos actualizados son válidos antes de aplicarlos
+                  if (embarqueActualizado.items && Array.isArray(embarqueActualizado.items)) {
+                    this.actualizarDatosEmbarque(embarqueActualizado);
+                  } else {
+                    console.warn('Se recibieron datos incompletos o inválidos del servicio de sincronización');
+                  }
+                } else {
+                  console.warn('Se recibió un objeto de embarque vacío o nulo del servicio de sincronización');
+                }
+              });
+            }
           }, 300);
         } else {
           console.error('No se pudo cargar el embarque');
