@@ -580,8 +580,15 @@ export default {
           // ACTUALIZAR EMBARQUE EXISTENTE
           this.mostrarMensaje(`Actualizando embarque directamente con ID: ${this.embarqueId}...`, 'info');
           
+          // Determinar la colección a utilizar
+          const esEmbarques2 = this.embarqueId.startsWith('emb2_');
+          const idReal = esEmbarques2 ? this.embarqueId.replace('emb2_', '') : this.embarqueId;
+          const coleccion = esEmbarques2 ? 'embarques2' : 'embarques';
+          
+          console.log(`Guardando en colección: ${coleccion}, ID real: ${idReal}`);
+          
           // Obtener referencia al documento
-          const embarqueRef = doc(db, 'embarques', this.embarqueId);
+          const embarqueRef = doc(db, coleccion, idReal);
           
           // Actualizar documento directamente
           await updateDoc(embarqueRef, embarqueData);
@@ -595,13 +602,13 @@ export default {
           this.mostrarMensaje('¡Embarque actualizado correctamente con método directo!', 'success');
         } else {
           // CREAR NUEVO EMBARQUE
-          this.mostrarMensaje('Creando nuevo embarque directamente...', 'info');
+          this.mostrarMensaje('Creando nuevo embarque directamente en la colección embarques2...', 'info');
           
-          // Crear nuevo documento
-          const docRef = await addDoc(collection(db, 'embarques'), embarqueData);
+          // Crear nuevo documento en la colección embarques2
+          const docRef = await addDoc(collection(db, 'embarques2'), embarqueData);
           
-          // Guardar el ID y activar modo edición
-          this.embarqueId = docRef.id;
+          // Guardar el ID con prefijo para identificar que es de la nueva colección
+          this.embarqueId = `emb2_${docRef.id}`;
           this.modoEdicion = true;
           
           this.mostrarMensaje(`¡Nuevo embarque creado correctamente con ID: ${this.embarqueId}!`, 'success');
