@@ -114,6 +114,7 @@
             :disabled="embarqueBloqueado"
             :fecha="fechaLocal"
             @guardar-producto="actualizarProducto"
+            @actualizar-producto="actualizarProducto"
             @cancelar-edicion="cancelarEdicion"
             @error="mostrarError"
             class="producto-card"
@@ -125,8 +126,10 @@
             :key="generarIdUnico(producto, index, 'limpio')" 
             :producto="producto"
             :solo-lectura="true"
+            :embarqueId="embarqueId"
             @eliminar-producto="eliminarProducto(producto)"
             @editar-producto="iniciarEdicionProducto(producto)"
+            @actualizar-producto="actualizarProducto"
             class="producto-card"
           />
           
@@ -156,6 +159,43 @@
       </div>
     </div>
     
+    <div class="form-actions">
+      <button 
+        type="button" 
+        class="btn btn-primary"
+        @click="guardarEmbarque"
+        :disabled="embarqueBloqueado"
+      >
+        <i class="fas fa-save"></i> Guardar Embarque
+      </button>
+      
+      <button 
+        type="button" 
+        class="btn btn-secondary"
+        @click="toggleBloqueo"
+      >
+        <i :class="embarqueBloqueado ? 'fas fa-lock-open' : 'fas fa-lock'"></i>
+        {{ embarqueBloqueado ? 'Desbloquear' : 'Bloquear' }}
+      </button>
+      
+      <button 
+        type="button" 
+        class="btn btn-info"
+        @click="mostrarDiagnostico = !mostrarDiagnostico"
+      >
+        <i class="fas fa-stethoscope"></i> Diagnóstico
+      </button>
+    </div>
+    
+    <!-- Panel de diagnóstico -->
+    <div v-if="mostrarDiagnostico" class="diagnostico-container">
+      <DiagnosticoPanel 
+        :embarque-id="embarqueId" 
+        :items-count="items.length"
+        @recarga-completada="onRecargaCompletada"
+      />
+    </div>
+    
     <div class="mensajes-error" v-if="mensajeErrorGeneral">
       <div class="alert alert-danger">{{ mensajeErrorGeneral }}</div>
     </div>
@@ -165,6 +205,7 @@
 <script>
 import ProductoCard from './ProductoCard.vue';
 import CrudosCard from './CrudosCard.vue';
+import DiagnosticoPanel from '@/components/DiagnosticoPanel.vue';
 
 /**
  * @component EmbarqueForm
@@ -174,7 +215,8 @@ export default {
   name: 'EmbarqueForm',
   components: {
     ProductoCard,
-    CrudosCard
+    CrudosCard,
+    DiagnosticoPanel
   },
   props: {
     /**
@@ -211,6 +253,13 @@ export default {
     items: {
       type: Array,
       default: () => []
+    },
+    /**
+     * ID del embarque actual
+     */
+    embarqueId: {
+      type: String,
+      default: ''
     }
   },
   data() {
@@ -229,7 +278,8 @@ export default {
       mostrarFormularioLimpio: false,
       mostrarFormularioCrudo: false,
       
-      productoNuevoTemporal: null
+      productoNuevoTemporal: null,
+      mostrarDiagnostico: false
     };
   },
   computed: {
@@ -513,6 +563,31 @@ export default {
       }
       
       return `Cliente ID: ${this.clienteActivo}`;
+    },
+    
+    /**
+     * Maneja la recarga completada desde el panel de diagnóstico
+     */
+    onRecargaCompletada(datosActualizados) {
+      if (datosActualizados && datosActualizados.items) {
+        this.$emit('actualizar-datos', datosActualizados);
+      }
+    },
+    
+    /**
+     * Alterna el estado de bloqueo del embarque
+     */
+    toggleBloqueo() {
+      // Emitir evento para cambiar el estado de bloqueo
+      this.$emit('toggle-bloqueo', !this.embarqueBloqueado);
+    },
+    
+    /**
+     * Guarda el embarque actual
+     */
+    guardarEmbarque() {
+      // Emitir evento para guardar el embarque
+      this.$emit('guardar-embarque');
     }
   }
 };
@@ -807,5 +882,35 @@ export default {
 
 :deep(.input-destacado:focus) {
   box-shadow: 0 0 0 0.2rem rgba(52, 152, 219, 0.25);
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.btn-primary {
+  background-color: #3498db;
+  border-color: #3498db;
+}
+
+.btn-secondary {
+  background-color: #f39c12;
+  border-color: #f39c12;
+}
+
+.btn-info {
+  background-color: #2ecc71;
+  border-color: #2ecc71;
+}
+
+.diagnostico-container {
+  margin-top: 20px;
+  padding: 20px;
+  background-color: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
 }
 </style> 

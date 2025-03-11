@@ -1,8 +1,52 @@
 <template>
-  <div class="producto-card producto-editable" :class="{'card-blocked': disabled}">
+  <div class="producto-card producto-editable" :class="{'card-blocked': disabled || bloqueadoPorOtroUsuario}">
+    <!-- Indicador de bloqueo si el producto está siendo editado por otro usuario -->
+    <div class="bloqueo-indicador" v-if="bloqueadoPorOtroUsuario">
+      <i class="fas fa-lock"></i>
+      <span>Editado por {{ usuarioBloqueando }}</span>
+    </div>
+    
+    <!-- Indicador de estado de sincronización -->
+    <div class="sync-indicator" v-if="sincronizando">
+      <i class="fas fa-sync fa-spin"></i>
+      <span>Sincronizando...</span>
+    </div>
+
+    <!-- Encabezado de la medida y selección -->
+    <h2 class="encabezado-medida">
+      <div class="botones-encabezado">
+       
+    
+      </div>
+      <span 
+        class="medida-texto" 
+        @click="disabled ? null : abrirModalNombreAlternativo"
+        :class="{ 
+          'disabled': disabled,
+          'tiene-nombre-alternativo': nombreAlternativoPDF,
+          'tipo-ch20': tipoProducto === 'C/H20',
+          'tipo-sh20': tipoProducto === 'S/H20'
+        }"
+      >
+        <template v-if="tipoProducto === 'C/H20'">
+          {{ nombreAlternativoPDF || medidaProducto || 'Sin Medida' }}
+          <span class="ch20-text tipo-ch20">C/H20</span>
+          <span v-if="nombreAlternativoPDF" class="pdf-badge" title="Nombre personalizado para PDF">PDF</span>
+        </template>
+        <template v-else>
+          {{ nombreAlternativoPDF || medidaProducto || 'Sin Medida' }}
+          - {{ tipoProducto }}
+          <span v-if="nombreAlternativoPDF" class="pdf-badge" title="Nombre personalizado para PDF">PDF</span>
+        </template>
+      </span>
+      <span v-if="precioProducto" class="precio-tag">${{ precioProducto }}</span>
+    </h2>
+
     <div class="producto-header">
       <div v-if="!editMode" class="producto-acciones">
-        <button class="btn btn-sm btn-control" @click="toggleTipoMoneda">
+        <button class="btn btn-sm btn-control" 
+          :class="{'btn-has-content': precioProducto}"
+          @click="abrirModalPrecio">
           $
         </button>
         <button class="btn btn-sm btn-control" 
@@ -39,24 +83,28 @@
           <option value="S/H20">S/H20</option>
           <option value="C/H20">C/H20</option>
         </select>
+
+        <div v-if="tipoProducto === 'C/H20'" class="camaron-neto-inline">
+          <input 
+            type="number" 
+            v-model.number="camaronNetoLocal" 
+            class="form-control neto-input"
+            :disabled="disabled"
+            :class="{ 'is-invalid': errores.camaronNeto }"
+            step="0.01"
+            min="0.01"
+            max="1"
+            required
+            @input="validarCampoNumerico('camaronNeto')"
+            title="Porcentaje (0.65 = 65%)"
+          />
+        </div>
       </div>
 
       <div v-else class="tipo-talla">
         {{ producto.medida || producto.media || producto.talla }} - {{ producto.tipo }}
       </div>
       
-      <div v-if="!editMode && mostrarPrecio" class="precio-container">
-        <input 
-          type="number" 
-          v-model.number="precioProducto" 
-          class="form-control precio-input"
-          placeholder="$"
-          :class="{ 'is-invalid': errores.precioProducto }"
-          :disabled="disabled"
-          step="0.01"
-          min="0"
-        />
-      </div>
       <div v-else-if="producto && producto.precio" class="precio">
         ${{ producto.precio }}
       </div>
@@ -162,37 +210,63 @@
         <div class="total-kilos">
           <h6>Total: {{ editMode ? calcularTotalKilos(producto) : totalKilos }}</h6>
           <span>Kilos</span>
-          <span v-if="restarTresPorTara" class="descuento-info">
-            (Descuento: {{ editMode ? calcularTotalTaras(producto.tarasKilos) * 3 : totalTaras * 3 }} kg)
-          </span>
+         
         </div>
       </div>
       
       <!-- Campo para camarón neto (condicional) -->
-      <div v-if="tipoProducto === 'C/H20'" class="camaron-neto-section">
-        <label for="camaronNeto">Camarón Neto (%): <span class="campo-requerido">*</span></label>
-        <input 
-          type="number" 
-          id="camaronNeto" 
-          v-model.number="camaronNetoLocal" 
-          class="form-control"
-          :disabled="disabled"
-          :class="{ 'is-invalid': errores.camaronNeto }"
-          step="0.01"
-          min="0.01"
-          max="1"
-          required
-          @input="validarCampoNumerico('camaronNeto')"
-        />
-        <small class="form-text text-muted">Porcentaje (0.65 = 65%)</small>
-      </div>
+      <!-- Eliminar o comentar el div con clase camaron-neto-section -->
       
-      <div class="producto-footer">
-        <div class="reportadas">Reportadas: 0</div>
-        <div class="bolsas">Bolsas: 0</div>
-      </div>
+   
     </div>
     
+    <!-- Nueva sección para reporte de taras y bolsas -->
+    <div class="reporte-taras-bolsas">
+      <div class="reporte-header">
+        <h5>Reporte de Taras y Bolsas</h5>
+        <button type="button" @click="agregarReporteTaraYBolsa" class="btn btn-success btn-sm" :disabled="disabled">
+          <i class="fas fa-plus"></i> Agregar
+        </button>
+      </div>
+      
+      <div class="reporte-contenido">
+        <div class="reporte-columna">
+          <h6>Taras</h6>
+          <div v-for="(tara, index) in reporteTaras" :key="index" class="input-group mb-2">
+            <input 
+              type="tel"
+              v-model="reporteTaras[index]" 
+              class="form-control reporte-input"
+              @focus="$event.target.select()"
+              @input="actualizarTotales"
+              :disabled="disabled"
+            >
+            <button v-if="index === reporteTaras.length - 1" type="button" @click="eliminarReporteTaraYBolsa(index)" class="btn btn-danger btn-sm" :disabled="disabled || reporteTaras.length <= 1">-</button>
+          </div>
+          <div class="total-taras-reporte" :class="{ 'coincide': coincideTaras, 'no-coincide': !coincideTaras }">
+            Reporte: {{ totalTarasReportadas }}
+          </div>
+        </div>
+        
+        <div class="reporte-columna">
+          <h6>Bolsas</h6>
+          <div v-for="(bolsa, index) in reporteBolsas" :key="index" class="input-group mb-2">
+            <input 
+              type="tel"
+              v-model="reporteBolsas[index]" 
+              class="form-control reporte-input"
+              @focus="$event.target.select()"
+              @input="actualizarTotales"
+              :disabled="disabled"
+            >
+          </div>
+          <div class="total-bolsas-reporte">
+            Bolsas: {{ totalBolsasReportadas }}
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Botones para modo edición -->
     <div class="card-actions">
       <!-- Botones para productos nuevos -->
@@ -277,6 +351,53 @@
         </div>
       </div>
     </div>
+
+    <!-- Modal para nombre alternativo -->
+    <div class="modal-overlay" v-if="mostrarModalNombreAlt" @click="cerrarModalNombreAlt">
+      <div class="modal-contenido" @click.stop>
+        <div class="modal-header">
+          <h5 class="modal-title">Nombre Alternativo para PDF</h5>
+          <button type="button" class="close" @click="cerrarModalNombreAlt">&times;</button>
+        </div>
+        <div class="modal-body">
+          <input 
+            type="text" 
+            v-model="nombreAlternativoPDF" 
+            class="form-control" 
+            placeholder="Ingrese nombre alternativo para PDF"
+          />
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" @click="cerrarModalNombreAlt">Cancelar</button>
+          <button type="button" class="btn btn-primary" @click="guardarNombreAlt">Guardar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal para Precio -->
+    <div class="modal-overlay" v-if="mostrarModalPrecio" @click="cerrarModalPrecio">
+      <div class="modal-contenido" @click.stop>
+        <div class="modal-header">
+          <h5 class="modal-title">Precio del Producto</h5>
+          <button type="button" class="close" @click="cerrarModalPrecio">&times;</button>
+        </div>
+        <div class="modal-body">
+          <input 
+            type="number" 
+            v-model.number="precioProducto" 
+            class="form-control"
+            placeholder="Ingrese el precio"
+            step="0.01"
+            min="0"
+          />
+          <small class="form-text text-muted">Ingrese el precio por kilo del producto</small>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" @click="cerrarModalPrecio">Cancelar</button>
+          <button type="button" class="btn btn-primary" @click="guardarPrecio">Guardar</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -285,6 +406,8 @@
  * @component ProductoCard
  * @description Componente para mostrar y editar un producto de embarque
  */
+import SincronizacionService from '@/services/SincronizacionService';
+
 export default {
   name: 'ProductoCard',
   props: {
@@ -329,6 +452,13 @@ export default {
     modoEdicion: {
       type: Boolean,
       default: false
+    },
+    /**
+     * ID del embarque actual
+     */
+    embarqueId: {
+      type: String,
+      default: ''
     }
   },
   data() {
@@ -361,13 +491,52 @@ export default {
       mostrarModalHilos: false,
       mostrarModalNotas: false,
       hilos: '',
-      notas: ''
+      notas: '',
+      nombreAlternativoPDF: '',
+      reporteTaras: [],
+      reporteBolsas: [],
+      noSumarKilos: false,
+      mostrarModalNombreAlt: false,
+      mostrarModalPrecio: false,
+      
+      // Indica si el producto está bloqueado por otro usuario
+      bloqueadoPorOtroUsuario: false,
+      usuarioBloqueando: null,
+      
+      // Tiempo de debounce para guardado automático
+      tiempoDebounce: null,
+      
+      // Nuevo estado para indicar sincronización
+      sincronizando: false
     };
   },
   mounted() {
+    console.log('ProductoCard montado:', {
+      embarqueId: this.embarqueId,
+      producto: this.producto?.id,
+      medida: this.producto?.medida,
+      tipo: this.producto?.tipo
+    });
+    
     // Cargar datos del producto si existe, sin importar el valor de soloLectura
     if (this.producto) {
       this.cargarDatosProducto();
+    }
+    
+    // Verificar si está bloqueado por otro usuario
+    if (this.embarqueId && this.producto && this.producto.id) {
+      this.verificarBloqueo();
+    }
+  },
+  beforeDestroy() {
+    // Limpiar cualquier timeout pendiente
+    if (this.tiempoDebounce) {
+      clearTimeout(this.tiempoDebounce);
+    }
+    
+    // Liberar bloqueo si existe
+    if (this.embarqueId && this.productoId) {
+      SincronizacionService.desbloquearProducto(this.embarqueId, this.productoId);
     }
   },
   computed: {
@@ -400,18 +569,92 @@ export default {
       }
       
       return total.toFixed(2);
+    },
+
+    /**
+     * Calcula el total de taras reportadas
+     */
+    totalTarasReportadas() {
+      return this.reporteTaras.reduce((total, tara) => total + (Number(tara) || 0), 0);
+    },
+
+    /**
+     * Calcula el total de bolsas reportadas multiplicando cada bolsa por el total de taras
+     */
+    totalBolsasReportadas() {
+      let total = 0;
+      
+      // Si no hay bolsas reportadas o taras, retornar 0
+      if (!this.reporteBolsas.length || this.totalTaras === 0) {
+        return 0;
+      }
+      
+      // Para cada bolsa reportada, multiplicar por el total de taras
+      for (let i = 0; i < this.reporteBolsas.length; i++) {
+        const bolsaValue = Number(this.reporteBolsas[i]) || 0;
+        
+        // Si no hay valor de bolsa, continuar con la siguiente
+        if (bolsaValue <= 0) {
+          continue;
+        }
+        
+        // Multiplicar cada bolsa por el total de taras
+        total += bolsaValue * this.totalTaras;
+      }
+      
+      return total;
+    },
+
+    /**
+     * Verifica si coinciden las taras reportadas con las taras ingresadas
+     */
+    coincideTaras() {
+      return this.totalTarasReportadas === this.totalTaras;
     }
   },
   methods: {
+    /**
+     * Verifica si el producto está bloqueado por otro usuario
+     */
+    verificarBloqueo() {
+      if (!this.embarqueId || !this.productoId) return;
+      
+      const bloqueo = SincronizacionService.obtenerBloqueo(this.embarqueId, this.productoId);
+      if (bloqueo) {
+        this.bloqueadoPorOtroUsuario = true;
+        this.usuarioBloqueando = bloqueo.username;
+      } else {
+        this.bloqueadoPorOtroUsuario = false;
+        this.usuarioBloqueando = null;
+      }
+    },
+    
+    /**
+     * Intenta bloquear el producto para edición
+     * @returns {Boolean} - true si se pudo bloquear
+     */
+    async intentarBloquear() {
+      if (!this.embarqueId || !this.productoId) return true;
+      
+      const resultado = await SincronizacionService.bloquearProducto(this.embarqueId, this.productoId);
+      this.bloqueadoPorOtroUsuario = !resultado;
+      return resultado;
+    },
+    
     /**
      * Carga los datos del producto para edición o visualización
      */
     cargarDatosProducto() {
       if (!this.producto) return;
       
+      console.log('Cargando datos del producto:', {
+        id: this.producto.id,
+        medida: this.producto.medida,
+        tipo: this.producto.tipo
+      });
+      
       this.productoId = this.producto.id;
       this.tipoProducto = this.producto.tipo || '';
-      // Priorizar el campo medida, luego media, luego talla para compatibilidad
       this.medidaProducto = this.producto.medida || this.producto.media || this.producto.talla || '';
       
       // Añadir logs para diagnosticar el problema con medida
@@ -451,6 +694,30 @@ export default {
       if (this.tarasKilosItems.length === 0) {
         this.tarasKilosItems = [{ tara: null, kilos: null, errorTara: '', errorKilos: '' }];
       }
+      
+      this.nombreAlternativoPDF = this.producto.nombreAlternativoPDF || '';
+      this.noSumarKilos = this.producto.noSumarKilos || false;
+      
+      // Cargar reporteTaras y reporteBolsas
+      this.reporteTaras = [...(this.producto.reporteTaras || [''])];
+      this.reporteBolsas = [...(this.producto.reporteBolsas || [''])];
+      
+      // Asegurar que ambos arrays tengan la misma longitud
+      const maxLength = Math.max(this.reporteTaras.length, this.reporteBolsas.length);
+      
+      // Rellenar con valores vacíos si es necesario
+      while (this.reporteTaras.length < maxLength) {
+        this.reporteTaras.push('');
+      }
+      
+      while (this.reporteBolsas.length < maxLength) {
+        this.reporteBolsas.push('');
+      }
+      
+      // Actualizar los totales después de cargar los datos
+      this.$nextTick(() => {
+        this.actualizarTotales();
+      });
     },
     /**
      * Valida un campo numérico y establece mensajes de error si es necesario
@@ -558,44 +825,80 @@ export default {
     /**
      * Valida los datos y emite el evento para agregar o actualizar el producto
      */
-    validarYEmitirProducto() {
+    async validarYEmitirProducto() {
       if (this.validarFormulario()) {
-        const datosProducto = {
-          cliente: this.clienteActivo,
-          tipo: this.tipoProducto,
-          talla: this.medidaProducto,
-          media: this.medidaProducto,
-          medida: this.medidaProducto,
-          tarasKilos: [...this.tarasKilosItems],
-          restarTresPorTara: this.restarTresPorTara,
-          kilosTotales: this.calcularKilosTotales(),
-          precio: this.precioProducto,
-          total: parseFloat((this.calcularKilosTotales() * (this.tipoProducto === 'C/H20' ? this.camaronNetoLocal : 1) * this.precioProducto).toFixed(2)),
-          camaronNeto: this.tipoProducto === 'C/H20' ? this.camaronNetoLocal : null,
-          hilos: this.hilos,
-          notas: this.notas,
-          fecha: this.fecha,
-          timestamp: new Date().toISOString()
-        };
+        // Verificar bloqueo si es una actualización
+        if (this.productoId && !(await this.intentarBloquear())) {
+          alert(`No se puede actualizar porque el producto está siendo editado por ${this.usuarioBloqueando}`);
+          return;
+        }
         
-        console.log('ProductoCard - Emitiendo producto con datos:', {
-          cliente: datosProducto.cliente,
-          tipo: datosProducto.tipo,
-          medida: datosProducto.medida,
-          media: datosProducto.media,
-          talla: datosProducto.talla
-        });
+        // Asegurar que los totales estén actualizados
+        this.actualizarTotales();
         
-        // Si estamos editando un producto existente, mantener su ID
+        // Obtener datos preparados del producto
+        const datosProducto = this.prepararDatosProducto();
+        
+        // Si estamos en modo edición, actualizar el producto
         if (this.modoEdicion && this.productoId) {
-          datosProducto.id = this.productoId;
+          // Usar el servicio de sincronización
+          if (this.embarqueId) {
+            SincronizacionService.actualizarProducto(this.embarqueId, datosProducto);
+          }
+          
+          // Emitir evento para el componente padre
           this.$emit('actualizar-producto', datosProducto);
         } else {
-          this.$emit('agregar-producto', datosProducto);
+          // Si es un producto nuevo, agregar
+          if (this.embarqueId) {
+            const productoGuardado = SincronizacionService.agregarProducto(this.embarqueId, datosProducto);
+            this.$emit('agregar-producto', productoGuardado);
+          } else {
+            this.$emit('agregar-producto', datosProducto);
+          }
         }
         
         this.limpiarFormulario();
       }
+    },
+    
+    /**
+     * Prepara los datos del producto para guardar
+     * @returns {Object} - Datos del producto listos para guardar
+     */
+    prepararDatosProducto() {
+      // Filtrar valores vacíos de reporteTaras y reporteBolsas
+      const reporteTarasFiltradas = this.reporteTaras.filter(tara => tara !== '');
+      const reporteBolsasFiltradas = this.reporteBolsas.filter(bolsa => bolsa !== '');
+      
+      // Calcular kilos totales
+      const kilosTotales = this.calcularKilosTotales();
+      
+      return {
+        id: this.productoId,
+        cliente: this.clienteActivo,
+        tipo: this.tipoProducto,
+        talla: this.medidaProducto,
+        media: this.medidaProducto,
+        medida: this.medidaProducto,
+        tarasKilos: [...this.tarasKilosItems],
+        restarTresPorTara: this.restarTresPorTara,
+        kilosTotales: kilosTotales,
+        precio: this.precioProducto,
+        total: parseFloat((kilosTotales * (this.tipoProducto === 'C/H20' ? this.camaronNetoLocal : 1) * this.precioProducto).toFixed(2)),
+        camaronNeto: this.tipoProducto === 'C/H20' ? this.camaronNetoLocal : null,
+        hilos: this.hilos,
+        notas: this.notas,
+        fecha: this.fecha,
+        timestamp: new Date().toISOString(),
+        nombreAlternativoPDF: this.nombreAlternativoPDF,
+        noSumarKilos: this.noSumarKilos,
+        reporteTaras: reporteTarasFiltradas,
+        reporteBolsas: reporteBolsasFiltradas,
+        totalTarasReportadas: this.totalTarasReportadas,
+        totalBolsasReportadas: this.totalBolsasReportadas,
+        coincideTaras: this.coincideTaras
+      };
     },
     
     /**
@@ -613,6 +916,16 @@ export default {
       
       // Limpiar errores
       Object.keys(this.errores).forEach(key => this.errores[key] = '');
+      
+      this.nombreAlternativoPDF = '';
+      this.noSumarKilos = false;
+      
+      // Inicializar con al menos un campo vacío para taras y bolsas
+      this.reporteTaras = [''];
+      this.reporteBolsas = [''];
+      
+      // Actualizar totales
+      this.actualizarTotales();
     },
     
     /**
@@ -677,10 +990,24 @@ export default {
     },
     
     /**
-     * Emite evento para eliminar un producto
+     * Elimina un producto
      */
-    eliminarProducto() {
-      this.$emit('eliminar-producto');
+    async eliminarProducto() {
+      if (confirm('¿Estás seguro de que quieres eliminar este producto?')) {
+        // Verificar bloqueo
+        if (this.productoId && !(await this.intentarBloquear())) {
+          alert(`No se puede eliminar porque el producto está siendo editado por ${this.usuarioBloqueando}`);
+          return;
+        }
+        
+        // Usar el servicio para eliminar
+        if (this.embarqueId && this.productoId) {
+          SincronizacionService.eliminarProducto(this.embarqueId, this.productoId);
+        }
+        
+        // Emitir evento
+        this.$emit('eliminar-producto');
+      }
     },
     
     /**
@@ -746,6 +1073,12 @@ export default {
       // Si estamos en modo edición, actualizamos directamente
       if (this.producto) {
         this.$emit('actualizar-hilos', { id: this.productoId, hilos: this.hilos });
+        
+        // Actualizar también con el servicio
+        if (this.embarqueId && this.productoId) {
+          const productoActualizado = { ...this.producto, hilos: this.hilos };
+          SincronizacionService.actualizarProducto(this.embarqueId, productoActualizado);
+        }
       }
       this.cerrarModalHilos();
     },
@@ -771,6 +1104,12 @@ export default {
       // Si estamos en modo edición, actualizamos directamente
       if (this.producto) {
         this.$emit('actualizar-notas', { id: this.productoId, notas: this.notas });
+        
+        // Actualizar también con el servicio
+        if (this.embarqueId && this.productoId) {
+          const productoActualizado = { ...this.producto, notas: this.notas };
+          SincronizacionService.actualizarProducto(this.embarqueId, productoActualizado);
+        }
       }
       this.cerrarModalNotas();
     },
@@ -780,6 +1119,195 @@ export default {
      */
     editarProducto() {
       this.$emit('editar-producto', this.producto);
+    },
+
+    // Métodos para el reporte de taras y bolsas
+    agregarReporteTaraYBolsa() {
+      this.reporteTaras.push('');
+      this.reporteBolsas.push('');
+      this.actualizarTotales();
+    },
+    eliminarReporteTaraYBolsa(index) {
+      this.reporteTaras.splice(index, 1);
+      this.reporteBolsas.splice(index, 1);
+      this.actualizarTotales();
+    },
+    actualizarTotales() {
+      // Este método se llama cuando cambia cualquier valor en los inputs de taras o bolsas
+      // No necesita hacer nada específico ya que las propiedades computadas se actualizarán automáticamente
+      
+      // Depurar el cálculo de bolsas
+      this.depurarCalculoBolsas();
+      
+      // Si estamos en modo edición, podemos emitir un evento para actualizar el producto
+      if (this.producto) {
+        const datosActualizados = {
+          id: this.productoId,
+          reporteTaras: [...this.reporteTaras],
+          reporteBolsas: [...this.reporteBolsas],
+          totalTarasReportadas: this.totalTarasReportadas,
+          totalBolsasReportadas: this.totalBolsasReportadas,
+          coincideTaras: this.coincideTaras
+        };
+        
+        this.$emit('actualizar-reporte', datosActualizados);
+        
+        // Además guardar automáticamente con el servicio
+        this.guardarCambiosAutomatico();
+      }
+    },
+    /**
+     * Depura el cálculo de bolsas para verificar que sea correcto
+     */
+    depurarCalculoBolsas() {
+      console.log('Depurando cálculo de bolsas:');
+      console.log('Total de taras:', this.totalTaras);
+      console.log('Bolsas reportadas:', this.reporteBolsas);
+      
+      let total = 0;
+      for (let i = 0; i < this.reporteBolsas.length; i++) {
+        const bolsaValue = Number(this.reporteBolsas[i]) || 0;
+        
+        // Multiplicar cada bolsa por el total de taras
+        const subtotal = bolsaValue * this.totalTaras;
+        console.log(`Bolsa ${i+1}: ${bolsaValue} × Total Taras ${this.totalTaras} = ${subtotal}`);
+        total += subtotal;
+      }
+      
+      console.log('Total calculado:', total);
+      console.log('Total de propiedad computada:', this.totalBolsasReportadas);
+    },
+    abrirModalNombreAlternativo() {
+      this.mostrarModalNombreAlt = true;
+    },
+    cerrarModalNombreAlt() {
+      this.mostrarModalNombreAlt = false;
+    },
+    guardarNombreAlt() {
+      this.nombreAlternativoPDF = this.nombreAlternativoPDF.trim();
+      if (this.producto) {
+        this.$emit('actualizar-nombre-alternativo', {
+          id: this.productoId,
+          nombreAlternativoPDF: this.nombreAlternativoPDF
+        });
+        
+        // Actualizar también con el servicio
+        if (this.embarqueId && this.productoId) {
+          const productoActualizado = { ...this.producto, nombreAlternativoPDF: this.nombreAlternativoPDF };
+          SincronizacionService.actualizarProducto(this.embarqueId, productoActualizado);
+        }
+      }
+      this.cerrarModalNombreAlt();
+    },
+    abrirModalPrecio() {
+      this.mostrarModalPrecio = true;
+    },
+    cerrarModalPrecio() {
+      this.mostrarModalPrecio = false;
+    },
+    guardarPrecio() {
+      if (this.producto) {
+        this.$emit('actualizar-precio', {
+          id: this.productoId,
+          precio: this.precioProducto
+        });
+        
+        // Actualizar también con el servicio
+        if (this.embarqueId && this.productoId) {
+          const productoActualizado = { ...this.producto, precio: this.precioProducto };
+          SincronizacionService.actualizarProducto(this.embarqueId, productoActualizado);
+        }
+      }
+      this.cerrarModalPrecio();
+    },
+    /**
+     * Guarda los cambios realizados en el producto automáticamente
+     */
+    guardarCambiosAutomatico() {
+      // Cancelar cualquier timeout pendiente
+      if (this.tiempoDebounce) {
+        clearTimeout(this.tiempoDebounce);
+      }
+      
+      // Activar indicador de sincronización
+      this.sincronizando = true;
+      
+      // Programar nuevo guardado con delay para evitar múltiples llamadas
+      this.tiempoDebounce = setTimeout(() => {
+        if (!this.producto || !this.productoId || !this.embarqueId) {
+          this.sincronizando = false;
+          return;
+        }
+        
+        // Preparar datos actualizados del producto
+        const productoActualizado = this.prepararDatosProducto();
+        
+        // Emitir evento para notificar al componente padre
+        this.$emit('actualizar-producto', productoActualizado);
+        
+        // Usar el servicio de sincronización para actualizar
+        SincronizacionService.actualizarProducto(this.embarqueId, productoActualizado)
+          .then(() => {
+            console.log('Producto actualizado correctamente');
+            // Desactivar indicador después de un breve tiempo para que sea visible
+            setTimeout(() => {
+              this.sincronizando = false;
+            }, 500);
+          })
+          .catch(error => {
+            console.error('Error al actualizar producto:', error);
+            this.sincronizando = false;
+          });
+      }, 1000);
+    }
+  },
+  watch: {
+    // Observadores para guardar automáticamente al cambiar valores importantes
+    producto: {
+      handler(nuevoProducto) {
+        if (nuevoProducto) {
+          console.log('Producto actualizado externamente:', {
+            id: nuevoProducto.id,
+            medida: nuevoProducto.medida,
+            tipo: nuevoProducto.tipo
+          });
+          this.cargarDatosProducto();
+        }
+      },
+      deep: true
+    },
+    tipoProducto() {
+      if (this.producto && this.embarqueId) {
+        this.guardarCambiosAutomatico();
+      }
+    },
+    medidaProducto() {
+      if (this.producto && this.embarqueId) {
+        this.guardarCambiosAutomatico();
+      }
+    },
+    precioProducto() {
+      if (this.producto && this.embarqueId) {
+        this.guardarCambiosAutomatico();
+      }
+    },
+    camaronNetoLocal() {
+      if (this.producto && this.embarqueId) {
+        this.guardarCambiosAutomatico();
+      }
+    },
+    restarTresPorTara() {
+      if (this.producto && this.embarqueId) {
+        this.guardarCambiosAutomatico();
+      }
+    },
+    tarasKilosItems: {
+      handler() {
+        if (this.producto && this.embarqueId) {
+          this.guardarCambiosAutomatico();
+        }
+      },
+      deep: true
     }
   }
 };
@@ -805,6 +1333,18 @@ export default {
 .card-blocked {
   opacity: 0.7;
   pointer-events: none;
+}
+
+.card-blocked::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.05);
+  z-index: 5;
+  border-radius: 8px;
 }
 
 .producto-header {
@@ -860,6 +1400,7 @@ export default {
   display: flex;
   align-items: center;
   margin-bottom: 10px;
+  gap: 10px;
 }
 
 .talla-input, .tipo-input {
@@ -1047,6 +1588,16 @@ export default {
   border-radius: 4px;
 }
 
+.reportadas.coincide {
+  background-color: #d4edda;
+  color: #155724;
+}
+
+.reportadas.no-coincide {
+  background-color: #f8d7da;
+  color: #721c24;
+}
+
 .bolsas {
   background-color: #e2e3e5;
   padding: 5px 10px;
@@ -1165,5 +1716,268 @@ export default {
   .modal-contenido {
     width: 95%;
   }
+}
+
+.encabezado-medida {
+  display: flex;
+  align-items: center;
+  padding: 10px;
+  background-color: #f8f9fa;
+  border-radius: 8px 8px 0 0;
+  margin: -15px -15px 15px -15px;
+  border-bottom: 1px solid #dee2e6;
+}
+
+.botones-encabezado {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-right: 15px;
+}
+
+.botones-fila-superior,
+.botones-fila-inferior {
+  display: flex;
+  gap: 5px;
+}
+
+.btn-precio,
+.btn-hilos,
+.btn-nota {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  border-radius: 4px;
+  background-color: #f8f9fa;
+  border: 1px solid #ced4da;
+  transition: all 0.3s ease;
+}
+
+.tiene-precio,
+.tiene-hilos,
+.tiene-nota {
+  background-color: #28a745;
+  color: white;
+  border-color: #28a745;
+}
+
+.kg-radio {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.9rem;
+}
+
+.medida-texto {
+  flex: 1;
+  font-size: 2rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0 10px;
+  transition: all 0.3s ease;
+}
+
+.medida-texto:hover:not(.disabled) {
+  color: #28a745;
+}
+
+.disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.tiene-nombre-alternativo {
+  color: #28a745;
+}
+
+.ch20-text {
+  font-size: 2rem;
+  color: #6c757d;
+  margin-left: 5px;
+}
+
+.pdf-badge {
+  font-size: 0.7rem;
+  background-color: #17a2b8;
+  color: white;
+  padding: 2px 6px;
+  border-radius: 10px;
+  margin-left: 5px;
+  vertical-align: middle;
+}
+
+.precio-tag {
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: #28a745;
+  background-color: #e9ecef;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.reporte-taras-bolsas {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid #dee2e6;
+  background-color: #f8f9fa;
+  padding: 15px;
+  border-radius: 8px;
+}
+
+.reporte-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.reporte-header h5 {
+  margin: 0;
+  color: #495057;
+}
+
+.reporte-contenido {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+.reporte-columna {
+  display: flex;
+  flex-direction: column;
+}
+
+.reporte-columna h6 {
+  margin-bottom: 10px;
+  color: #495057;
+  text-align: center;
+}
+
+.reporte-input {
+  text-align: center;
+  font-weight: 500;
+}
+
+.total-taras-reporte,
+.total-bolsas-reporte {
+  margin-top: 15px;
+  padding: 8px;
+  border-radius: 4px;
+  text-align: center;
+  font-weight: 500;
+}
+
+.total-taras-reporte.coincide {
+  background-color: #d4edda;
+  color: #155724;
+}
+
+.total-taras-reporte.no-coincide {
+  background-color: #f8d7da;
+  color: #721c24;
+}
+
+.total-bolsas-reporte {
+  background-color: #e2e3e5;
+  color: #383d41;
+  padding: 8px;
+  border-radius: 4px;
+  text-align: center;
+  font-weight: 500;
+  margin-top: 15px;
+}
+
+.bolsas-info {
+  display: block;
+  font-size: 0.8rem;
+  color: #6c757d;
+  font-weight: normal;
+}
+
+@media (max-width: 576px) {
+  .reporte-contenido {
+    grid-template-columns: 1fr;
+    gap: 15px;
+  }
+}
+
+.tipo-ch20 {
+  color: #007bff !important; /* Color azul de Bootstrap */
+}
+
+.ch20-text {
+  font-size: 2rem;
+  margin-left: 5px;
+  font-weight: 600;
+}
+
+.camaron-neto-inline {
+  display: inline-block;
+  width: 80px;
+  vertical-align: middle;
+  margin-left: 5px;
+}
+
+.neto-input {
+  height: 38px;
+  padding: 2px 5px;
+  font-size: 0.9rem;
+  text-align: center;
+  border-radius: 4px;
+  border: 1px solid #ced4da;
+  width: 100%;
+}
+
+.neto-input:focus {
+  border-color: #28a745;
+  box-shadow: 0 0 0 0.2rem rgba(40, 167, 69, 0.25);
+}
+
+.neto-input.is-invalid {
+  border-color: #dc3545;
+}
+
+/* Estilos para indicadores de bloqueo y sincronización */
+.bloqueo-indicador {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  padding: 5px;
+  background-color: rgba(220, 53, 69, 0.9);
+  color: white;
+  font-size: 0.8rem;
+  text-align: center;
+  z-index: 10;
+  border-radius: 8px 8px 0 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+}
+
+.sync-indicator {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 5px;
+  background-color: rgba(25, 135, 84, 0.9);
+  color: white;
+  font-size: 0.8rem;
+  text-align: center;
+  z-index: 10;
+  border-radius: 0 0 8px 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
 }
 </style> 

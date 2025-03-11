@@ -309,14 +309,16 @@ export default {
 <style scoped>
 .crudo-card {
   width: 100%;
-  max-width: 425px;
+  max-width: 33.333%;
+  min-width: 300px;
   border: 2px solid #007bff;
   border-radius: 8px;
   padding: 15px;
   background-color: white;
   position: relative;
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-  margin: 0 auto 20px;
+  margin: 0 10px 20px;
+  flex: 1;
 }
 
 .card-blocked {
@@ -437,9 +439,17 @@ export default {
   margin-top: 10px;
 }
 
+/* Estilos responsivos */
+@media (max-width: 1200px) {
+  .crudo-card {
+    max-width: 50%;
+  }
+}
+
 @media (max-width: 768px) {
   .crudo-card {
     max-width: 100%;
+    margin: 0 0 20px;
   }
   
   .crudo-talla-container {
