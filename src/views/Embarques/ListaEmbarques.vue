@@ -363,14 +363,19 @@ export default {
       }
       
       // Verificar si el embarque es de la colección embarques2
-      if (embarqueId.startsWith('emb2_')) {
+      const esEmbarques2 = embarqueId.startsWith('emb2_');
+      
+      if (esEmbarques2) {
         console.log(`Editando embarque de la colección embarques2: ${embarqueId}`);
       } else {
         console.log(`Editando embarque de la colección original: ${embarqueId}`);
       }
       
-      // Usar la ruta exacta que está definida en el router
-      this.$router.push(`/embarques/${embarqueId}`);
+      // Usar la ruta con nombre para asegurar que se pase correctamente el parámetro
+      this.$router.push({
+        name: 'EditarEmbarque',
+        params: { id: embarqueId }
+      });
     },
     
     async eliminarEmbarque(embarqueId) {

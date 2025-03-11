@@ -212,20 +212,38 @@ export default {
     window.addEventListener('online', this.actualizarEstadoConexion);
     window.addEventListener('offline', this.actualizarEstadoConexion);
     
+    // Obtener el ID del embarque de los parámetros de la ruta
+    const embarqueId = this.$route.params.id;
+    
     // Verificar que el ID sea válido antes de intentar cargar el embarque
-    if (this.modoEdicion && this.embarqueId && this.embarqueId !== 'undefined' && this.embarqueId !== 'null') {
+    if (embarqueId && embarqueId !== 'undefined' && embarqueId !== 'null' && embarqueId !== 'nuevo') {
+      // Estamos en modo edición
+      this.modoEdicion = true;
+      this.embarqueId = embarqueId;
+      
       console.log('Iniciando carga de embarque con ID:', this.embarqueId);
+      
+      // Verificar si es un embarque de la colección embarques2
+      const esEmbarques2 = embarqueId.startsWith('emb2_');
+      console.log(`Tipo de embarque: ${esEmbarques2 ? 'embarques2' : 'embarques'}`);
+      
+      // Cargar el embarque
       this.cargarEmbarque(this.embarqueId);
-    } else if (this.modoEdicion) {
-      console.warn('Se intentó cargar un embarque con ID inválido:', this.embarqueId);
-      this.mostrarError('No se pudo encontrar el embarque. ID inválido: ' + this.embarqueId);
+    } else if (embarqueId === 'nuevo') {
+      // Estamos creando un nuevo embarque
+      this.modoEdicion = false;
+      this.embarqueId = null;
+      console.log('Iniciando nuevo embarque');
+    } else {
+      // ID inválido
+      console.warn('Se intentó cargar un embarque con ID inválido:', embarqueId);
+      this.mostrarError('No se pudo encontrar el embarque. ID inválido: ' + embarqueId);
       this.resetearEmbarque();
+      
       // Si es posible, redirigir a la página de nuevo embarque
       if (this.$router) {
         this.$router.replace('/nuevo-embarque');
       }
-    } else {
-      console.log('Iniciando nuevo embarque');
     }
   },
   beforeDestroy() {
@@ -873,6 +891,8 @@ export default {
             if (esEmbarques2) {
               // Si es de la colección embarques2
               const idSinPrefijo = id.replace('emb2_', '');
+              console.log(`Configurando observación para embarque2 con ID sin prefijo: ${idSinPrefijo}`);
+              
               SincronizacionService.observarEmbarque2(idSinPrefijo, (embarqueActualizado) => {
                 if (embarqueActualizado && Object.keys(embarqueActualizado).length > 0) {
                   console.log('Embarque actualizado recibido via sincronización (embarques2):', embarqueActualizado);
@@ -892,6 +912,8 @@ export default {
               });
             } else {
               // Si es de la colección original
+              console.log(`Configurando observación para embarque original con ID: ${id}`);
+              
               SincronizacionService.observarEmbarque(id, (embarqueActualizado) => {
                 if (embarqueActualizado && Object.keys(embarqueActualizado).length > 0) {
                   console.log('Embarque actualizado recibido via sincronización:', embarqueActualizado);
@@ -1117,12 +1139,21 @@ export default {
       
       try {
         console.log('Recargando embarque desde la base de datos:', this.embarqueId);
+        
+        // Verificar si el ID tiene el prefijo emb2_
+        const esEmbarques2 = this.embarqueId.startsWith('emb2_');
+        console.log(`Tipo de embarque a recargar: ${esEmbarques2 ? 'embarques2' : 'embarques'}`);
+        
+        // Cargar el embarque
         const embarqueRecargado = await cargarYAdaptarEmbarque(this.embarqueId, false);
         
         if (embarqueRecargado && embarqueRecargado.items && embarqueRecargado.items.length > 0) {
           // Actualizar datos
           this.actualizarDatosEmbarque(embarqueRecargado);
           console.log('Embarque recargado exitosamente desde la base de datos');
+          
+          // Guardar una copia de seguridad
+          this.ultimosDatosValidos = JSON.parse(JSON.stringify(embarqueRecargado));
         } else {
           console.error('No se pudo recargar el embarque desde la base de datos');
         }
