@@ -1,0 +1,77 @@
+<!-- NuevoEmbarque.vue -->
+<template>
+  <div class="nuevo-embarque-container">
+    <div class="sidebar-clientes" :class="{ 'sidebar-collapsed': sidebarCollapsed }">
+      <div class="sidebar-header">
+        <h3>Clientes</h3>
+        <button @click="toggleSidebar" class="toggle-sidebar-btn">
+          <i class="fas" :class="sidebarCollapsed ? 'fa-chevron-right' : 'fa-chevron-left'"></i>
+        </button>
+      </div>
+      <!-- ... resto del template ... -->
+    </div>
+  </div>
+</template>
+
+<script>
+export default {
+  name: 'NuevoEmbarque',
+  data() {
+    return {
+      sidebarCollapsed: false,
+      clientesPredefinidos: [],
+      clientesPersonalizadosEmbarque: [],
+      clienteActivo: null,
+      mostrarModalNuevoCliente: false,
+      embarqueBloqueado: false
+    }
+  },
+  methods: {
+    toggleSidebar() {
+      this.sidebarCollapsed = !this.sidebarCollapsed
+    },
+    seleccionarCliente(id) {
+      this.clienteActivo = id
+    },
+    obtenerColorCliente(nombre) {
+      // Implementación del método
+      return '#someColor'
+    },
+    obtenerColorTextoCliente(nombre) {
+      // Implementación del método
+      return '#someColor'
+    }
+    // ... resto de los métodos ...
+  }
+}
+</script>
+
+<style scoped>
+.nuevo-embarque-container {
+  display: flex;
+  height: 100%;
+  position: relative;
+}
+
+.sidebar-clientes {
+  width: 250px;
+  background-color: #f5f5f5;
+  border-right: 1px solid #ddd;
+  transition: width 0.3s ease;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ... resto de los estilos ... */
+
+@media (max-width: 768px) {
+  .modal-contenido {
+    width: 95%;
+  }
+  
+  .pdf-badge {
+    font-size: 8px;
+    padding: 1px 3px;
+  }
+}
+</style> 
