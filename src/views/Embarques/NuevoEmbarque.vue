@@ -22,7 +22,7 @@
           <span>{{ cliente.nombre }}</span>
         </button>
         
-        <!-- Mostrar clientes personalizados específicos de este embarque -->
+        <!-- Mostrar clientes personalizados específicos de este embarque - ->
         <button 
           v-for="cliente in clientesPersonalizadosEmbarque" 
           :key="cliente.id"
