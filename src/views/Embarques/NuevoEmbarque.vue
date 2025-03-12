@@ -622,6 +622,7 @@ export default {
       clientesDisponibles: [],
       clientesPersonalizadosEmbarque: [],
       usuariosActivos: [],
+      actualizacionAutomatica: false,
       
       // Estado para deshacer/rehacer
       historialEstados: [],
@@ -851,9 +852,25 @@ export default {
     },
 
     toggleBloqueo() {
-      this.embarqueBloqueado = !this.embarqueBloqueado;
-      this.embarque.bloqueado = this.embarqueBloqueado; // Sincronizar con la propiedad del embarque
-      this.guardarCambiosEnTiempoReal();
+      const accion = this.embarqueBloqueado ? 'desbloquear' : 'bloquear';
+      const mensaje = `¿Estás seguro de que quieres ${accion} este embarque?`;
+      
+      if (confirm(mensaje)) {
+        this.embarqueBloqueado = !this.embarqueBloqueado;
+        this.embarque.bloqueado = this.embarqueBloqueado; // Sincronizar con la propiedad del embarque
+        this.guardarCambiosEnTiempoReal();
+        
+        // Mostrar mensaje de éxito
+        const mensajeExito = this.embarqueBloqueado ? 
+          'Embarque bloqueado correctamente. No se podrá eliminar hasta que se desbloquee.' : 
+          'Embarque desbloqueado correctamente.';
+        
+        if (this.$toast) {
+          this.$toast.success(mensajeExito);
+        } else {
+          alert(mensajeExito);
+        }
+      }
     },
 
     async generarResumenTarasPDF() {
@@ -1047,6 +1064,9 @@ export default {
         
         const embarqueRef = ref(rtdb, `embarques/${this.embarqueId}`);
         
+        // Asegurarse de que la propiedad bloqueado esté sincronizada
+        this.embarque.bloqueado = this.embarqueBloqueado;
+        
         const datosAGuardar = {
           ...this.embarque,
           productosPorCliente: this.productosPorCliente,
@@ -1060,8 +1080,18 @@ export default {
         
         await set(embarqueRef, datosAGuardar);
         console.log('Cambios guardados exitosamente');
+        
+        // Mostrar mensaje de éxito si no es una actualización automática
+        if (this.$toast && !this.actualizacionAutomatica) {
+          this.$toast.success('Cambios guardados correctamente');
+        }
       } catch (error) {
         console.error('Error al guardar cambios:', error);
+        if (this.$toast) {
+          this.$toast.error(`Error al guardar cambios: ${error.message || 'Error desconocido'}`);
+        } else {
+          alert(`Error al guardar cambios: ${error.message || 'Error desconocido'}`);
+        }
       }
     },
 
@@ -1270,6 +1300,11 @@ export default {
           // Verificar y corregir la estructura del embarque
           this.verificarEstructuraEmbarque();
           
+          // Actualizar propiedades reactivas
+          this.embarqueBloqueado = this.embarque.bloqueado || false;
+          this.productosPorCliente = this.embarque.productosPorCliente || {};
+          this.clienteCrudos = this.embarque.clienteCrudos || {};
+          
           // Cargar clientes personalizados del embarque
           if (data.clientesPersonalizados) {
             this.clientesPersonalizadosEmbarque = data.clientesPersonalizados;
@@ -1285,7 +1320,18 @@ export default {
             console.log('Cliente activo seleccionado automáticamente:', this.clienteActivo);
           }
           
+          // Configurar escucha en tiempo real para cambios en el embarque
+          this.configurarEscuchaEmbarque();
+          
+          // Guardar estado para deshacer/rehacer
+          this.guardarEstadoActual();
+          
           console.log('Embarque cargado exitosamente');
+          
+          // Mostrar mensaje de éxito
+          if (this.$toast) {
+            this.$toast.success('Embarque cargado correctamente');
+          }
         } else {
           console.error('No se encontraron datos para el embarque con ID:', this.embarqueId);
           // Inicializar un nuevo embarque ya que no existe
@@ -1308,6 +1354,56 @@ export default {
           alert(`Error al cargar embarque: ${errorMessage}`);
         }
       }
+    },
+    
+    configurarEscuchaEmbarque() {
+      // Cancelar cualquier escucha previa
+      if (this.unsubscribeEmbarque) {
+        this.unsubscribeEmbarque();
+      }
+      
+      // Configurar nueva escucha
+      const embarqueRef = ref(rtdb, `embarques/${this.embarqueId}`);
+      this.unsubscribeEmbarque = onValue(embarqueRef, (snapshot) => {
+        if (snapshot.exists()) {
+          const data = snapshot.val();
+          
+          // Verificar si los datos son diferentes a los actuales
+          const cambioExterno = JSON.stringify(data) !== JSON.stringify(this.embarque);
+          
+          if (cambioExterno) {
+            console.log('Cambios externos detectados en el embarque, actualizando...');
+            
+            // Marcar como actualización automática para evitar mensajes de éxito
+            this.actualizacionAutomatica = true;
+            
+            // Actualizar el objeto embarque con los datos obtenidos
+            for (const key in data) {
+              if (Object.prototype.hasOwnProperty.call(data, key)) {
+                Vue.set(this.embarque, key, data[key]);
+              }
+            }
+            
+            // Actualizar propiedades reactivas
+            this.embarqueBloqueado = this.embarque.bloqueado || false;
+            this.productosPorCliente = this.embarque.productosPorCliente || {};
+            this.clienteCrudos = this.embarque.clienteCrudos || {};
+            
+            // Guardar estado para deshacer/rehacer
+            this.guardarEstadoActual();
+            
+            // Mostrar notificación de actualización
+            if (this.$toast) {
+              this.$toast.info('El embarque ha sido actualizado con cambios externos');
+            }
+            
+            // Restablecer la bandera de actualización automática
+            setTimeout(() => {
+              this.actualizacionAutomatica = false;
+            }, 100);
+          }
+        }
+      });
     },
 
     escucharUsuariosActivos() {
@@ -1866,12 +1962,17 @@ export default {
         await this.iniciarPresenciaUsuario();
       }
       
-      // Cargar embarque si estamos en modo edición
+      // Verificar si estamos en modo edición (recibimos un ID de embarque)
       if (this.$route.params.id) {
         this.embarqueId = this.$route.params.id;
         this.modoEdicion = true;
         console.log('Modo edición activado para embarque ID:', this.embarqueId);
+        
+        // Cargar el embarque desde la base de datos
         await this.cargarEmbarque();
+        
+        // Actualizar el título de la página
+        document.title = `Embarque ${this.embarqueId}`;
       } else {
         console.log('Modo nuevo embarque activado');
         // Inicializar fecha con la fecha actual
@@ -1882,9 +1983,17 @@ export default {
           this.clienteActivo = this.clientesPredefinidos[0].id.toString();
           console.log('Cliente activo seleccionado automáticamente:', this.clienteActivo);
         }
+        
+        // Actualizar el título de la página
+        document.title = 'Nuevo Embarque';
       }
     } catch (error) {
       console.error('Error en created hook:', error);
+      if (this.$toast) {
+        this.$toast.error(`Error al inicializar: ${error.message || 'Error desconocido'}`);
+      } else {
+        alert(`Error al inicializar: ${error.message || 'Error desconocido'}`);
+      }
     }
   },
 

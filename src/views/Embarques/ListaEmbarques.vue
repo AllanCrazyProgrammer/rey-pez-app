@@ -186,6 +186,7 @@ export default {
     },
   
     editarEmbarque(embarqueId) {
+      console.log('Editando embarque con ID:', embarqueId);
       this.$router.push({ name: 'NuevoEmbarque', params: { id: embarqueId } });
     },
     regresarAMenu() {
