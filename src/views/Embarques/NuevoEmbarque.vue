@@ -1,88 +1,19 @@
 <template>
   <div class="nuevo-embarque-container">
-    <div class="sidebar-clientes" :class="{ 'sidebar-collapsed': sidebarCollapsed }">
-      <div class="sidebar-header">
-        <h3>Clientes</h3>
-        <button @click="toggleSidebar" class="toggle-sidebar-btn">
-          <i class="fas" :class="sidebarCollapsed ? 'fa-chevron-right' : 'fa-chevron-left'"></i>
-        </button>
-      </div>
-      <div class="sidebar-clientes-contenido">
-        <!-- Mostrar clientes predefinidos -->
-        <button 
-          v-for="cliente in clientesPredefinidos" 
-          :key="cliente.id"
-          type="button" 
-          @click="seleccionarCliente(cliente.id.toString())" 
-          class="btn-nota-cliente"
-          :class="{ 'activo': clienteActivo === cliente.id.toString() }"
-          :style="{ backgroundColor: cliente.color, color: cliente.textColor }"
-          :title="sidebarCollapsed ? cliente.nombre : ''"
-        >
-          <span>{{ cliente.nombre }}</span>
-        </button>
-        
-        <button 
-          v-for="cliente in clientesPersonalizadosEmbarque" 
-          :key="cliente.id"
-          type="button" 
-          @click="seleccionarCliente(cliente.id.toString())" 
-          class="btn-nota-cliente cliente-personalizado"
-          :class="{ 'activo': clienteActivo === cliente.id.toString() }"
-          :style="{ backgroundColor: obtenerColorCliente(cliente.nombre), color: obtenerColorTextoCliente(cliente.nombre) }"
-          :title="sidebarCollapsed ? cliente.nombre : ''"
-        >
-          <span>{{ cliente.nombre }}</span>
-        </button>
-        
-        <!-- Botón para agregar nuevo cliente -->
-        <button 
-          type="button" 
-          @click="mostrarModalNuevoCliente = true" 
-          class="btn-agregar-cliente"
-          :title="sidebarCollapsed ? 'Agregar Cliente' : ''"
-        >
-          <i class="fas fa-plus"></i>
-          <span v-if="!sidebarCollapsed">Agregar Cliente</span>
-        </button>
-      </div>
-      <div class="sidebar-toggle-mobile">
-        <button @click="toggleSidebar" class="toggle-sidebar-mobile-btn">
-          <i class="fas" :class="sidebarCollapsed ? 'fa-chevron-right' : 'fa-chevron-left'"></i>
-        </button>
-      </div>
-      <!-- Agregar esto dentro del elemento que representa la barra lateral -->
-      <div class="sidebar-resumen">
-        <h4>Resumen Taras</h4>
-        <div class="sidebar-item">
-          <span>Limpio:</span>
-          <strong>{{ calcularTarasLimpio() }}</strong>
-        </div>
-        <div class="sidebar-item">
-          <span>Crudo:</span>
-          <strong>{{ calcularTarasCrudo() }}</strong>
-        </div>
-        <div class="sidebar-item total">
-          <span>Total:</span>
-          <strong>{{ calcularTotalTaras() }}-T</strong>
-        </div>
-        
-        <h4>Resumen Kilos</h4>
-        <div class="sidebar-item">
-          <span>Limpio:</span>
-          <strong>{{ Math.floor(calcularKilosLimpio()) }}</strong>
-        </div>
-        <div class="sidebar-item">
-          <span>Crudo:</span>
-          <strong>{{ calcularKilosCrudo() }}</strong>
-        </div>
-        <div class="sidebar-item total">
-          <span>Total:</span>
-          <strong>{{ Math.floor(calcularTotalKilos()) }}</strong>
-        </div>
-      </div>
-    </div>
-    <div class="nuevo-embarque">
+
+     <Sidebar
+          :embarque="embarque"
+          :clientesPredefinidos="clientesPredefinidos"
+          :clientesPersonalizadosEmbarque="clientesPersonalizadosEmbarque"
+          :clienteCrudos="clienteCrudos"
+          :clienteActivo="clienteActivo"
+          @seleccionar-cliente="clienteActivo = $event"
+          @toggle-sidebar="sidebarCollapsed = $event"
+          @mostrar-modal-nuevo-cliente="mostrarModalNuevoCliente = true"
+        />
+
+
+        <div class="nuevo-embarque">
       <h1>{{ modoEdicion ? 'Embarque' : 'Nuevo Embarque' }}</h1>
       <div class="botones">
         <button @click="volverAEmbarquesMenu" class="btn-volver">
@@ -738,6 +669,7 @@ import { ref, onValue, onDisconnect, set } from 'firebase/database'
 import { rtdb } from '@/firebase'
 import { useAuthStore } from '@/stores/auth'
 import { ref as vueRef, onMounted, onUnmounted, defineAsyncComponent } from 'vue'
+import Sidebar from '@/components/Sidebar.vue'
 
 // Lazy loaded components
 const Rendimientos = defineAsyncComponent(() => import('./Rendimientos.vue'))
@@ -768,7 +700,8 @@ const loadPdfLibs = async () => {
 export default {
   name: 'NuevoEmbarque',
   components: {
-    Rendimientos
+    Rendimientos,
+    Sidebar
   },
   setup() {
     const authStore = useAuthStore();
@@ -4701,6 +4634,7 @@ export default {
   z-index: 1000;
 }
 
+
 .modal-alt .modal-contenido {
   background-color: white;
   padding: 20px;
@@ -8015,457 +7949,6 @@ button:disabled {
   justify-content: center;
 }
 
-/* Modal para Alt (nombre alternativo para PDF) */
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(0, 0, 0, 0.5);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 1000;
-}
-
-.modal-contenido {
-  background-color: white;
-  padding: 20px;
-  border-radius: 8px;
-  width: 300px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-  position: relative;
-  z-index: 1001;
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-}
-
-.modal-header h3 {
-  margin: 0;
-  font-size: 1.5rem;
-}
-
-.btn-cerrar-modal {
-  background: none;
-  border: none;
-  color: #333;
-  font-size: 1.5rem;
-  cursor: pointer;
-}
-
-.modal-body {
-  display: flex;
-  flex-direction: column;
-  gap: 15px;
-}
-
-.form-group {
-  display: flex;
-  flex-direction: column;
-}
-
-.form-group label {
-  font-weight: bold;
-}
-
-.form-control {
-  padding: 8px;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-}
-
-.modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-}
-
-.btn-secondary {
-  background-color: #6c757d;
-  color: white;
-}
-
-.btn-primary {
-  background-color: #28a745;
-  color: white;
-}
-
-/* Estilos para el botón de agregar cliente */
-.btn-agregar-cliente {
-  width: 80px;
-  padding: 12px 0;
-  margin: 0;
-  border: none;
-  border-radius: 6px;
-  font-size: 14px;
-  text-align: center;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
-  transition: all 0.3s ease;
-  position: relative;
-  overflow: hidden;
-  cursor: pointer;
-  font-weight: bold;
-  background-color: #27ae60;
-  color: white;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-}
-
-.btn-agregar-cliente i {
-  font-size: 16px;
-  margin-bottom: 5px;
-}
-
-.btn-agregar-cliente:hover {
-  transform: translateX(5px);
-  opacity: 0.9;
-}
-
-.sidebar-collapsed .btn-agregar-cliente {
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  padding: 0;
-}
-
-.sidebar-collapsed .btn-agregar-cliente span {
-  display: none;
-}
-
-.color-picker {
-  height: 40px;
-  padding: 0;
-  width: 100%;
-}
-
-/* Estilos para el modal de nuevo cliente */
-/* ... existing code ... */
-
-.sidebar-collapsed .btn-agregar-cliente span {
-  display: none;
-}
-
-.color-picker {
-  height: 40px;
-  padding: 0;
-  width: 100%;
-}
-
-/* Estilos para el resumen en la barra lateral */
-.sidebar-resumen {
-  position: fixed;
-  bottom: 20px;
-  left: 0;
-  width: 100px;
-  background-color: #c7e2fe;
-  padding: 10px;
-  border-radius: 0 5px 5px 0;
-  box-shadow: 2px 2px 5px rgba(0,0,0,0.1);
-  font-size: 12px;
-  z-index: 100;
-}
-
-.sidebar-resumen h4 {
-  font-size: 13px;
-  margin: 8px 0 5px 0;
-  color: #333;
-  font-weight: bold;
-  border-bottom: 1px solid #ddd;
-}
-
-.sidebar-resumen .sidebar-item {
-  display: flex;
-  justify-content: space-between;
-  margin: 3px 0;
-}
-
-.sidebar-resumen .total {
-  margin-top: 5px;
-  font-weight: bold;
-  border-top: 1px solid #ddd;
-  padding-top: 3px;
-}
-
-/* Estilos para el modal de nuevo cliente */
-/* ... existing code ... */
-
-.botones-accion {
-  display: flex;
-  gap: 10px;
-  margin: 15px 0;
-  flex-wrap: wrap;
-  justify-content: center;
-}
-
-.botones-accion .btn {
-  padding: 8px 15px;
-  font-size: 14px;
-}
-
-.botones {
-  display: flex;
-  gap: 10px;
-  margin-bottom: 15px;
-  align-items: center;
-}
-
-@media (max-width: 768px) {
-  .botones {
-    flex-direction: row; /* Cambiado de column a row para mantener los botones en la misma fila */
-    gap: 8px;
-    flex-wrap: wrap; /* Permite que los botones se envuelvan si no caben en una línea */
-    justify-content: space-between; /* Distribuye el espacio entre los botones */
-  }
-}
-
-.botones {
-  display: flex;
-  gap: 10px;
-  margin-bottom: 15px;
-  align-items: center;
-}
-
-.btn-volver, .btn-bloqueo {
-  flex: 1;
-  padding: 8px 16px;
-  min-width: 200px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  font-size: 1rem;
-  border-radius: 4px;
-  border: none;
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-@media (max-width: 768px) {
-  .botones {
-    flex-direction: row;
-    gap: 8px;
-    flex-wrap: wrap;
-    justify-content: space-between;
-  }
-  
-  .btn-volver, .btn-bloqueo {
-    min-width: 150px;
-  }
-}
-
-.sidebar-resumen .sidebar-item.taras-total {
-  color: #ff0000;
-  font-weight: bold;
-}
-
-.sidebar-resumen .sidebar-item.taras-total span {
-  color: #ff0000;
-}
-
-.sidebar-resumen .sidebar-item.total {
-  border-top: 1px solid #ddd;
-  margin-top: 5px;
-  padding-top: 5px;
-  color: #ff0000;
-  font-weight: bold;
-}
-
-.sidebar-resumen .sidebar-item.total strong {
-  color: #ff0000;
-}
-
-/* Estilos para el botón de generar PDF */
-.generar-pdf-cliente {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  background-color: #3760b0;
-  border-color: #3760b0;
-  margin-right: 10px;
-}
-
-.generar-pdf-cliente:hover {
-  background-color: #2a4b8a;
-  border-color: #2a4b8a;
-}
-
-@media (max-width: 768px) {
-  .generar-pdf-cliente {
-    padding: 4px 8px;
-    font-size: 12px;
-  }
-  
-  .cliente-header-controls {
-    flex-wrap: wrap;
-    gap: 5px;
-  }
-}
-
-/* Estilos para el modal de nombre alternativo */
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(0, 0, 0, 0.5);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 1000;
-}
-
-.modal-contenido {
-  background-color: white;
-  border-radius: 8px;
-  width: 90%;
-  max-width: 500px;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 15px;
-  border-bottom: 1px solid #e0e0e0;
-}
-
-.modal-header h3 {
-  margin: 0;
-  color: #3760b0;
-}
-
-.btn-cerrar-modal {
-  background: none;
-  border: none;
-  font-size: 20px;
-  cursor: pointer;
-  color: #666;
-}
-
-.modal-body {
-  padding: 15px;
-}
-
-.modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  padding: 15px;
-  border-top: 1px solid #e0e0e0;
-}
-
-/* Estilos específicos para el modal de nombre alternativo */
-#nombreAlternativoPDF {
-  font-size: 16px;
-  padding: 8px;
-}
-
-.form-text {
-  font-size: 14px;
-  color: #666;
-  margin-top: 5px;
-}
-
-@media (max-width: 768px) {
-  .modal-contenido {
-    width: 95%;
-  }
-}
-
-/* Mejorar la visualización del nombre de la medida para indicar que es clickeable */
-.medida-texto {
-  cursor: pointer;
-  position: relative;
-  transition: all 0.2s ease;
-  padding-right: 20px;
-}
-
-.medida-texto:not(.disabled):hover {
-  color: #3760b0;
-}
-
-.medida-texto:not(.disabled)::after {
-  content: '\f040'; /* Ícono de lápiz de FontAwesome */
-  font-family: 'Font Awesome 5 Free';
-  font-weight: 900;
-  position: absolute;
-  right: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  font-size: 12px;
-  opacity: 0;
-  transition: opacity 0.2s ease;
-}
-
-.medida-texto:not(.disabled):hover::after {
-  opacity: 1;
-}
-
-.medida-texto.tiene-nombre-alternativo {
-  color: #3760b0;
-  font-weight: bold;
-}
-
-@media (max-width: 768px) {
-  .modal-contenido {
-    width: 95%;
-  }
-}
-
-.pdf-badge {
-  display: inline-block;
-  background-color: #3760b0;
-  color: white;
-  font-size: 10px;
-  padding: 2px 4px;
-  border-radius: 3px;
-  margin-left: 5px;
-  vertical-align: middle;
-  font-weight: bold;
-}
-
-@media (max-width: 768px) {
-  .modal-contenido {
-    width: 95%;
-  }
-  
-  .pdf-badge {
-    font-size: 8px;
-    padding: 1px 3px;
-  }
-}
-
-.cliente-personalizado {
-  border: 2px dashed #fff;
-  position: relative;
-}
-
-.cliente-personalizado::after {
-  content: "P";
-  position: absolute;
-  top: 2px;
-  right: 2px;
-  font-size: 10px;
-  background-color: rgba(255, 255, 255, 0.7);
-  color: #333;
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
 /* Loader spinner styles */
 .loader-inline {
   display: inline-block;
@@ -8556,3 +8039,8 @@ button:disabled {
   transform: none;
 }
 </style>
+
+
+ 
+
+
