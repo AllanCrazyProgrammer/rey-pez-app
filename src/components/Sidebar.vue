@@ -1,8 +1,8 @@
 <template>
   <div class="sidebar-clientes" :class="{ 'sidebar-collapsed': sidebarCollapsed }">
     <div class="sidebar-header">
-      <h3>Clientes</h3>
-      <button @click="toggleSidebar" class="toggle-sidebar-btn">
+      <h3><i class="fas fa-users"></i> Clientes</h3>
+      <button @click="toggleSidebar" class="toggle-sidebar-btn" :title="sidebarCollapsed ? 'Expandir' : 'Colapsar'">
         <i class="fas" :class="sidebarCollapsed ? 'fa-chevron-right' : 'fa-chevron-left'"></i>
       </button>
     </div>
@@ -18,7 +18,8 @@
         :style="{ backgroundColor: cliente.color, color: cliente.textColor }"
         :title="sidebarCollapsed ? cliente.nombre : ''"
       >
-        <span>{{ cliente.nombre }}</span>
+        <i class="fas fa-user-circle" v-if="sidebarCollapsed"></i>
+        <span v-else>{{ cliente.nombre }}</span>
       </button>
       
       <button 
@@ -31,7 +32,8 @@
         :style="{ backgroundColor: obtenerColorCliente(cliente.nombre), color: obtenerColorTextoCliente(cliente.nombre) }"
         :title="sidebarCollapsed ? cliente.nombre : ''"
       >
-        <span>{{ cliente.nombre }}</span>
+        <i class="fas fa-user-circle" v-if="sidebarCollapsed"></i>
+        <span v-else>{{ cliente.nombre }}</span>
       </button>
       
       <!-- Botón para agregar nuevo cliente -->
@@ -50,34 +52,39 @@
         <i class="fas" :class="sidebarCollapsed ? 'fa-chevron-right' : 'fa-chevron-left'"></i>
       </button>
     </div>
-    <!-- Agregar esto dentro del elemento que representa la barra lateral -->
-    <div class="sidebar-resumen">
-      <h4>Resumen Taras</h4>
-      <div class="sidebar-item">
-        <span>Limpio:</span>
-        <strong>{{ calcularTarasLimpio() }}</strong>
-      </div>
-      <div class="sidebar-item">
-        <span>Crudo:</span>
-        <strong>{{ calcularTarasCrudo() }}</strong>
-      </div>
-      <div class="sidebar-item total">
-        <span>Total:</span>
-        <strong>{{ calcularTotalTaras() }}-T</strong>
+
+    <!-- Resumen de taras y kilos -->
+    <div class="sidebar-resumen" :class="{ 'resumen-collapsed': sidebarCollapsed }">
+      <div class="resumen-seccion">
+        <h4><i class="fas fa-balance-scale"></i> Resumen Taras</h4>
+        <div class="sidebar-item">
+          <span>Limpio:</span>
+          <strong>{{ calcularTarasLimpio() }}</strong>
+        </div>
+        <div class="sidebar-item">
+          <span>Crudo:</span>
+          <strong>{{ calcularTarasCrudo() }}</strong>
+        </div>
+        <div class="sidebar-item total">
+          <span>Total:</span>
+          <strong>{{ calcularTotalTaras() }}-T</strong>
+        </div>
       </div>
       
-      <h4>Resumen Kilos</h4>
-      <div class="sidebar-item">
-        <span>Limpio:</span>
-        <strong>{{ Math.floor(calcularKilosLimpio()) }}</strong>
-      </div>
-      <div class="sidebar-item">
-        <span>Crudo:</span>
-        <strong>{{ calcularKilosCrudo() }}</strong>
-      </div>
-      <div class="sidebar-item total">
-        <span>Total:</span>
-        <strong>{{ Math.floor(calcularTotalKilos()) }}</strong>
+      <div class="resumen-seccion">
+        <h4><i class="fas fa-weight"></i> Resumen Kilos</h4>
+        <div class="sidebar-item">
+          <span>Limpio:</span>
+          <strong>{{ Math.floor(calcularKilosLimpio()) }}</strong>
+        </div>
+        <div class="sidebar-item">
+          <span>Crudo:</span>
+          <strong>{{ calcularKilosCrudo() }}</strong>
+        </div>
+        <div class="sidebar-item total">
+          <span>Total:</span>
+          <strong>{{ Math.floor(calcularTotalKilos()) }}</strong>
+        </div>
       </div>
     </div>
   </div>
@@ -300,19 +307,20 @@ export default {
 
 <style scoped>
 .sidebar-clientes {
-  width: 200px;
+  width: 145px !important;
   position: fixed;
   left: 0;
   top: 0;
   height: 100vh;
-  background-color: rgba(0, 0, 0, 0.7);
+  background: linear-gradient(135deg, #2c3e50, #1a2530);
   z-index: 1000;
-  padding: 15px 0;
+  padding: 10px 0;
   display: flex;
   flex-direction: column;
   align-items: center;
-  transition: width 0.3s ease;
-  overflow-y: auto;
+  transition: all 0.4s cubic-bezier(0.215, 0.61, 0.355, 1);
+  box-shadow: 3px 0 20px rgba(0, 0, 0, 0.3);
+  border-right: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .sidebar-header {
@@ -320,214 +328,458 @@ export default {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0 10px;
-  margin-bottom: 20px;
+  padding: 0 15px;
+  margin-bottom: 15px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding-bottom: 10px;
+  position: relative;
 }
 
 .sidebar-header h3 {
-  color: white;
+  color: #ecf0f1;
   font-size: 18px;
   margin: 0;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  position: relative;
+  text-shadow: 0 2px 3px rgba(0, 0, 0, 0.2);
+}
+
+.sidebar-header h3 i {
+  background: linear-gradient(45deg, #3498db, #2ecc71);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  font-size: 24px;
 }
 
 .toggle-sidebar-btn {
-  background: none;
+  background: rgba(255, 255, 255, 0.1);
   border: none;
   color: white;
   cursor: pointer;
-  padding: 5px;
+  padding: 10px;
   font-size: 14px;
+  border-radius: 50%;
+  transition: all 0.3s;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(5px);
+}
+
+.toggle-sidebar-btn:hover {
+  background: rgba(52, 152, 219, 0.3);
+  transform: rotate(360deg);
 }
 
 .sidebar-clientes-contenido {
   display: flex;
   flex-direction: column;
-  gap: 15px;
+  gap: 8px;
   width: 100%;
   align-items: center;
-  margin-bottom: 20px;
+  margin-bottom: 15px;
+  padding: 0 15px;
+  flex: 1;
+  overflow-y: auto;
 }
 
 .btn-nota-cliente {
-  width: 170px;
-  padding: 12px 0;
+  width: 100%;
+  padding: 10px 12px;
   margin: 0;
   border: none;
-  border-radius: 6px;
-  font-size: 16px;
+  border-radius: 8px;
+  font-size: 14px;
   text-align: center;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
-  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
   position: relative;
   overflow: hidden;
   cursor: pointer;
-  font-weight: bold;
+  font-weight: 600;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  letter-spacing: 0.5px;
+}
+
+.btn-nota-cliente::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(45deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0));
+  transition: all 0.3s ease;
 }
 
 .btn-nota-cliente span {
   display: block;
-  transition: opacity 0.3s ease;
+  transition: opacity 0.25s ease;
+  position: relative;
+  z-index: 1;
 }
 
 .btn-nota-cliente:hover {
-  transform: translateX(5px);
-  opacity: 0.9;
+  transform: translateX(5px) scale(1.03);
+  opacity: 0.95;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+}
+
+.btn-nota-cliente:hover::before {
+  transform: translateX(-100%);
 }
 
 .btn-nota-cliente.activo {
-  transform: translateX(5px);
-  box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+  transform: translateX(8px);
+  box-shadow: 0 0 20px rgba(255, 255, 255, 0.3);
+  position: relative;
+}
+
+.btn-nota-cliente.activo::before {
+  content: '';
+  position: absolute;
+  left: -8px;
+  top: 50%;
+  transform: translateY(-50%);
+  height: 70%;
+  width: 5px;
+  background: linear-gradient(180deg, #3498db, #2ecc71);
+  border-radius: 10px;
+  box-shadow: 0 0 10px rgba(52, 152, 219, 0.7);
 }
 
 .btn-agregar-cliente {
-  width: 170px;
-  padding: 12px 0;
-  margin: 10px 0;
+  width: 100%;
+  padding: 10px 12px;
+  margin: 10px 0 0;
   border: none;
-  border-radius: 6px;
-  background-color: #2ecc71;
+  border-radius: 8px;
+  background: linear-gradient(45deg, #27ae60, #2ecc71);
   color: white;
-  font-size: 16px;
+  font-size: 14px;
   text-align: center;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
-  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  transition: all 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
   cursor: pointer;
   display: flex;
   justify-content: center;
   align-items: center;
   gap: 8px;
+  font-weight: 600;
+  position: relative;
+  overflow: hidden;
+  letter-spacing: 0.5px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.btn-agregar-cliente::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0));
+  transition: all 0.5s ease;
 }
 
 .btn-agregar-cliente:hover {
-  background-color: #27ae60;
-  transform: translateY(-2px);
+  background: linear-gradient(45deg, #2ecc71, #27ae60);
+  transform: translateY(-5px);
+  box-shadow: 0 7px 15px rgba(0, 0, 0, 0.2);
+}
+
+.btn-agregar-cliente:hover::before {
+  left: 100%;
+}
+
+.btn-agregar-cliente i {
+  font-size: 18px;
+  transition: transform 0.3s ease;
+}
+
+.btn-agregar-cliente:hover i {
+  transform: rotate(90deg);
 }
 
 .sidebar-collapsed {
-  width: 60px;
+  width: 80px !important;
 }
 
 .sidebar-collapsed .sidebar-header h3,
 .sidebar-collapsed .btn-nota-cliente span,
 .sidebar-collapsed .btn-agregar-cliente span {
-  opacity: 0;
+  display: none;
 }
 
 .sidebar-collapsed .btn-nota-cliente {
-  width: 40px;
-  height: 40px;
+  width: 55px;
+  height: 55px;
+  border-radius: 50%;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sidebar-collapsed .btn-nota-cliente i {
+  font-size: 20px;
+}
+
+.sidebar-collapsed .btn-agregar-cliente {
+  width: 55px;
+  height: 55px;
   border-radius: 50%;
   padding: 0;
 }
 
-.sidebar-collapsed .btn-agregar-cliente {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  padding: 0;
+.sidebar-collapsed .btn-agregar-cliente i {
+  font-size: 20px;
 }
 
 .sidebar-toggle-mobile {
   display: none;
   position: absolute;
   top: 50%;
-  right: -15px;
+  right: -20px;
   transform: translateY(-50%);
 }
 
 .toggle-sidebar-mobile-btn {
-  background-color: rgba(0, 0, 0, 0.7);
+  background: linear-gradient(135deg, #34495e, #2c3e50);
   border: none;
   color: white;
-  width: 30px;
-  height: 30px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
   display: flex;
   justify-content: center;
   align-items: center;
   cursor: pointer;
-  box-shadow: 0 0 5px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3);
+  transition: all 0.3s;
+  z-index: 10;
+}
+
+.toggle-sidebar-mobile-btn:hover {
+  background: linear-gradient(135deg, #2c3e50, #34495e);
+  transform: scale(1.1);
 }
 
 .sidebar-resumen {
   padding: 15px;
-  background-color: rgba(135, 206, 250, 0.2);
-  border-radius: 8px;
+  background: linear-gradient(135deg, rgba(52, 152, 219, 0.15), rgba(46, 204, 113, 0.1));
+  border-radius: 10px;
   margin-top: auto;
   width: 90%;
-  margin-bottom: 20px;
+  margin-bottom: 15px;
+  border: 1px solid rgba(52, 152, 219, 0.15);
+  transition: all 0.4s ease;
+  box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(5px);
+}
+
+.resumen-collapsed {
+  display: none;
+}
+
+.resumen-seccion {
+  margin-bottom: 15px;
+  position: relative;
+}
+
+.resumen-seccion:last-child {
+  margin-bottom: 0;
+}
+
+.resumen-seccion::after {
+  content: '';
+  position: absolute;
+  bottom: -12px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 50px;
+  height: 2px;
+  background: linear-gradient(90deg, rgba(52, 152, 219, 0.3), rgba(46, 204, 113, 0.3));
+  border-radius: 2px;
+}
+
+.resumen-seccion:last-child::after {
+  display: none;
 }
 
 .sidebar-resumen h4 {
-  color: white;
+  color: #3498db;
   font-size: 16px;
   margin-top: 0;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
   text-align: center;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  position: relative;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.sidebar-resumen h4 i {
+  background: linear-gradient(45deg, #3498db, #2ecc71);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  font-size: 20px;
 }
 
 .sidebar-item {
   display: flex;
   justify-content: space-between;
-  margin-bottom: 5px;
-  color: white;
+  margin-bottom: 8px;
+  color: #ecf0f1;
+  font-size: 14px;
+  padding: 6px 8px;
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 6px;
+  transition: all 0.3s;
+}
+
+.sidebar-item:hover {
+  background: rgba(0, 0, 0, 0.15);
+  transform: translateX(3px);
+}
+
+.sidebar-item span {
+  opacity: 0.9;
+}
+
+.sidebar-item strong {
+  font-weight: 700;
+  letter-spacing: 0.5px;
 }
 
 .sidebar-item.total {
-  margin-top: 5px;
-  padding-top: 5px;
-  border-top: 1px solid rgba(255, 255, 255, 0.3);
+  margin-top: 8px;
+  padding: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
   font-weight: bold;
-  color: #ff6347;
+  color: #e74c3c;
+  font-size: 15px;
+  background: rgba(231, 76, 60, 0.1);
+  border-radius: 8px;
 }
 
-/* Ajustes responsivos para la barra lateral */
+.sidebar-item.total strong {
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+/* Ajustes responsivos */
+@media (max-width: 1200px) {
+  .sidebar-clientes {
+    width: 220px !important;
+  }
+}
+
 @media (max-width: 992px) {
   .sidebar-clientes {
-    width: 180px;
+    width: 200px !important;
   }
   
   .btn-nota-cliente, .btn-agregar-cliente {
-    width: 150px;
-    font-size: 14px;
+    padding: 8px 10px;
+    font-size: 13px;
+  }
+  
+  .sidebar-item {
+    font-size: 13px;
+  }
+  
+  .sidebar-resumen {
+    padding: 12px;
   }
 }
 
 @media (max-width: 768px) {
   .sidebar-clientes {
-    width: 150px;
-  }
-  
-  .btn-nota-cliente, .btn-agregar-cliente {
-    width: 120px;
-    font-size: 14px;
-    padding: 10px 0;
+    width: 180px !important;
   }
   
   .sidebar-collapsed {
-    width: 50px;
+    width: 60px !important;
   }
   
-  .sidebar-toggle-mobile {
-    display: block;
+  .sidebar-header h3 {
+    font-size: 16px;
+  }
+  
+  .sidebar-resumen {
+    padding: 10px;
+  }
+  
+  .sidebar-resumen h4 {
+    font-size: 14px;
   }
 }
 
-@media (max-width: 480px) {
+@media (max-width: 576px) {
   .sidebar-clientes {
-    width: 120px;
-  }
-  
-  .btn-nota-cliente, .btn-agregar-cliente {
-    width: 100px;
-    font-size: 12px;
-    padding: 8px 0;
+    width: 220px !important;
+    transform: translateX(0);
   }
   
   .sidebar-collapsed {
-    width: 0;
+    width: 0 !important;
     padding: 0;
-    overflow: hidden;
+    transform: translateX(-100%);
   }
+}
+
+/* Mantener las animaciones y efectos existentes */
+.btn-nota-cliente,
+.btn-agregar-cliente,
+.toggle-sidebar-btn,
+.toggle-sidebar-mobile-btn {
+  will-change: transform;
+}
+
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(52, 152, 219, 0.7);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(52, 152, 219, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(52, 152, 219, 0);
+  }
+}
+
+.btn-nota-cliente.activo {
+  animation: pulse 2s infinite;
+}
+
+/* Scroll personalizado para la barra lateral */
+.sidebar-clientes::-webkit-scrollbar {
+  width: 6px;
+}
+
+.sidebar-clientes::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 3px;
+}
+
+.sidebar-clientes::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(52, 152, 219, 0.5), rgba(46, 204, 113, 0.5));
+  border-radius: 3px;
+}
+
+.sidebar-clientes::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, rgba(52, 152, 219, 0.7), rgba(46, 204, 113, 0.7));
 }
 </style> 
