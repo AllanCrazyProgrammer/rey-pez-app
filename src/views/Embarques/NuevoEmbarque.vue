@@ -7329,6 +7329,7 @@ button:disabled {
   transition: width 0.3s ease;
 }
 
+
 .sidebar-header {
   width: 100%;
   display: flex;
@@ -8042,5 +8043,6 @@ button:disabled {
 
 
  
+
 
 
