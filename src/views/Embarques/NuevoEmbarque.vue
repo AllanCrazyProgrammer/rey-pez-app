@@ -1,250 +1,154 @@
 <template>
   <div class="nuevo-embarque-container">
 
-     <Sidebar
-          :embarque="embarque"
-          :clientesPredefinidos="clientesPredefinidos"
-          :clientesPersonalizadosEmbarque="clientesPersonalizadosEmbarque"
-          :clienteCrudos="clienteCrudos"
-          :clienteActivo="clienteActivo"
-          @seleccionar-cliente="clienteActivo = $event"
-          @toggle-sidebar="sidebarCollapsed = $event"
-          @mostrar-modal-nuevo-cliente="mostrarModalNuevoCliente = true"
-        />
+    <Sidebar :embarque="embarque" :clientesPredefinidos="clientesPredefinidos"
+      :clientesPersonalizadosEmbarque="clientesPersonalizadosEmbarque" :clienteCrudos="clienteCrudos"
+      :clienteActivo="clienteActivo" @seleccionar-cliente="clienteActivo = $event"
+      @toggle-sidebar="sidebarCollapsed = $event" @mostrar-modal-nuevo-cliente="mostrarModalNuevoCliente = true" />
 
 
-        <div class="nuevo-embarque">
-      <h1>{{ modoEdicion ? 'Embarque' : 'Nuevo Embarque' }}</h1>
-      <div class="botones">
-        <button @click="volverAEmbarquesMenu" class="btn-volver">
-          <i class="fas fa-arrow-left"></i> Volver a Menu
-        </button>
-        <button 
-          @click="toggleBloqueo" 
-          :class="['btn-bloqueo', { 'bloqueado': embarqueBloqueado }]"
-        >
-          <i :class="['fas', embarqueBloqueado ? 'fa-lock' : 'fa-lock-open']"></i>
-          {{ embarqueBloqueado ? 'Desbloquear' : 'Bloquear' }} Embarque
-        </button>
-      </div>
-      
-      <div class="header">
-        <div class="header-row">
-          <div class="fecha-selector">
-            <label for="fecha">Fecha de Embarque:</label>
-            <input type="date" id="fecha" v-model="embarque.fecha" class="form-control" required :disabled="embarqueBloqueado">
-          </div>
-          <div class="carga-selector">
-            <label for="cargaCon">Carga con:</label>
-            <select id="cargaCon" v-model="embarque.cargaCon" class="form-control" required :disabled="embarqueBloqueado">
-              <option value="">Seleccionar</option>
-              <option value="Porro">Porro</option>
-              <option value="Caminante">Caminante</option>
-            </select>
-          </div>
-        </div>
-      </div>
-      
-      <div class="botones-accion">
-        <button @click="generarResumenTarasPDF" class="btn btn-info" :disabled="isGeneratingPdf">
-          <span v-if="isGeneratingPdf && pdfType === 'taras'" class="loader-inline"></span>
-          <i v-else class="fas fa-file-pdf"></i> PDF Taras
-        </button>
-        <button @click="generarResumenEmbarque2" class="btn btn-info" :disabled="isGeneratingPdf">
-          <span v-if="isGeneratingPdf && pdfType === 'resumen'" class="loader-inline"></span>
-          <i v-else class="fas fa-file-pdf"></i> Resumen Embarque
-        </button>
-        <router-link :to="{ name: 'Rendimientos', params: { id: embarqueId } }" class="btn btn-warning" :class="{ 'disabled': isGeneratingPdf }">
-          <i class="fas fa-chart-line"></i> Rendimientos
-        </router-link>
-      </div>
-      
-  
-      
+    <div class="nuevo-embarque">
+
+      <header-embarque :modo-edicion="modoEdicion" :embarque-bloqueado="embarqueBloqueado" :embarque="embarque"
+        :is-generating-pdf="isGeneratingPdf" :pdf-type="pdfType" :embarque-id="embarqueId"
+        @volver="volverAEmbarquesMenu" @toggle-bloqueo="toggleBloqueo" @update:fecha="embarque.fecha = $event"
+        @update:cargaCon="embarque.cargaCon = $event" @generar-taras="generarResumenTarasPDF"
+        @generar-resumen="generarResumenEmbarque2" />
+
+
+
       <div class="botones-undo-redo">
-        <button type="button" @click="undo" :disabled="undoStack.length <= 1" class="btn btn-secondary btn-sm">Deshacer</button>
-        <button type="button" @click="redo" :disabled="redoStack.length === 0" class="btn btn-secondary btn-sm">Rehacer</button>
+        <button type="button" @click="undo" :disabled="undoStack.length <= 1"
+          class="btn btn-secondary btn-sm">Deshacer</button>
+        <button type="button" @click="redo" :disabled="redoStack.length === 0"
+          class="btn btn-secondary btn-sm">Rehacer</button>
       </div>
-      
-      <form @submit.prevent="guardarEmbarque" @keydown.enter.prevent>
-        <div v-for="(clienteProductos, clienteId) in productosPorCliente" 
-             :key="clienteId" 
-             class="cliente-grupo"
-             v-show="clienteActivo === clienteId || clienteActivo === null">
-          <div class="cliente-header sticky-header" :data-cliente="obtenerNombreCliente(clienteId)" :style="{  }">
+
+<form @submit.prevent="guardarEmbarque" @keydown.enter.prevent>
+        <div v-for="(clienteProductos, clienteId) in productosPorCliente" :key="clienteId" class="cliente-grupo"
+          v-show="clienteActivo === clienteId || clienteActivo === null">
+          <div class="cliente-header sticky-header" :data-cliente="obtenerNombreCliente(clienteId)" :style="{}">
             <div class="cliente-info">
               <h3>
                 {{ obtenerNombreCliente(clienteId) }}
-                <button type="button" @click.stop="generarNotaVenta(clienteId)" class="btn-pdf-mini" title="Vista previa PDF">
-                  <i class="fas fa-eye"></i>
+                <button type="button" @click.stop="generarNotaVenta(clienteId)" class="btn-pdf-mini"
+                  title="Vista previa PDF">
+                        <i class="fas fa-eye"></i>
                 </button>
               </h3>
               <div class="cliente-totales">
-                <span>Limpio: {{ calcularTotalLimpioCliente(clienteId) }}T / {{ formatearKilos(calcularKilosLimpioCliente(clienteId)) }}Kg</span>
-                <span>Crudo: {{ calcularTotalCrudoCliente(clienteId) }}T / {{ formatearKilos(calcularKilosCrudoCliente(clienteId)) }}Kg</span>
+                <span>Limpio: {{ calcularTotalLimpioCliente(clienteId) }}T / {{
+                  formatearKilos(calcularKilosLimpioCliente(clienteId)) }}Kg</span>
+                <span>Crudo: {{ calcularTotalCrudoCliente(clienteId) }}T / {{
+                  formatearKilos(calcularKilosCrudoCliente(clienteId)) }}Kg</span>
               </div>
             </div>
             <div class="cliente-header-controls">
               <div class="juntar-medidas-checkbox">
-                <input 
-                  type="checkbox" 
-                  :id="'juntar-medidas-' + clienteId"
-                  v-model="clientesJuntarMedidas[clienteId]"
-                  @change="handleJuntarMedidasChange(clienteId, $event.target.checked)"
-                  @click.stop
-                  :disabled="embarqueBloqueado"
-                >
+                <input type="checkbox" :id="'juntar-medidas-' + clienteId" v-model="clientesJuntarMedidas[clienteId]"
+                  @change="handleJuntarMedidasChange(clienteId, $event.target.checked)" @click.stop
+                  :disabled="embarqueBloqueado">
                 <label :for="'juntar-medidas-' + clienteId" @click.stop>Juntar medidas</label>
               </div>
-              <button 
-                type="button" 
-                @click.stop="generarNotaVenta(clienteId)" 
-                class="btn btn-primary btn-sm generar-pdf-cliente" 
-                title="Generar Nota de Venta PDF"
-                :disabled="isGeneratingPdf"
-              >
+              <button type="button" @click.stop="generarNotaVenta(clienteId)"
+                class="btn btn-primary btn-sm generar-pdf-cliente" title="Generar Nota de Venta PDF"
+                :disabled="isGeneratingPdf">
                 <span v-if="isGeneratingPdf && pdfType === 'cliente-' + clienteId" class="loader-inline"></span>
                 <i v-else class="fas fa-file-pdf"></i> Generar Nota PDF
               </button>
               <!-- Agregar botón para crear cuenta de Joselito -->
-              <button 
-                v-if="esClienteJoselito(clienteId)"
-                type="button" 
-                @click.stop="crearCuentaJoselito(obtenerEmbarqueCliente(clienteId), productosPorCliente[clienteId], clienteCrudos[clienteId] || [])" 
-                class="btn btn-success btn-sm crear-cuenta-joselito" 
-                title="Crear Cuenta para Joselito"
-                :disabled="isCreatingAccount"
-              >
+              <button v-if="esClienteJoselito(clienteId)" type="button"
+                @click.stop="crearCuentaJoselito(obtenerEmbarqueCliente(clienteId), productosPorCliente[clienteId], clienteCrudos[clienteId] || [])"
+                class="btn btn-success btn-sm crear-cuenta-joselito" title="Crear Cuenta para Joselito"
+                :disabled="isCreatingAccount">
                 <span v-if="isCreatingAccount" class="loader-inline"></span>
                 <i v-else class="fas fa-plus-circle"></i> Crear Cuenta
               </button>
               <!-- Agregar botón para crear cuenta de Catarro -->
-              <button 
-                v-if="esClienteCatarro(clienteId)"
-                type="button" 
-                @click.stop="crearCuentaCatarro(obtenerEmbarqueCliente(clienteId), productosPorCliente[clienteId], clienteCrudos[clienteId] || [])" 
-                class="btn btn-success btn-sm crear-cuenta-catarro" 
-                title="Crear Cuenta para Catarro"
-                :disabled="isCreatingAccount"
-              >
+              <button v-if="esClienteCatarro(clienteId)" type="button"
+                @click.stop="crearCuentaCatarro(obtenerEmbarqueCliente(clienteId), productosPorCliente[clienteId], clienteCrudos[clienteId] || [])"
+                class="btn btn-success btn-sm crear-cuenta-catarro" title="Crear Cuenta para Catarro"
+                :disabled="isCreatingAccount">
                 <span v-if="isCreatingAccount" class="loader-inline"></span>
                 <i v-else class="fas fa-plus-circle"></i> Crear Cuenta
               </button>
-              <button type="button" @click.stop="eliminarCliente(clienteId)" class="btn btn-danger btn-sm eliminar-cliente" :disabled="embarqueBloqueado">Eliminar Cliente</button>
+              <button type="button" @click.stop="eliminarCliente(clienteId)"
+                class="btn btn-danger btn-sm eliminar-cliente" :disabled="embarqueBloqueado">Eliminar Cliente</button>
             </div>
           </div>
           <div class="productos-container">
-            <div v-for="(producto, index) in clienteProductos" :key="index" class="producto" 
-              :data-es-venta="producto.esVenta"
-              :class="{
+            <div v-for="(producto, index) in clienteProductos" :key="index" class="producto"
+              :data-es-venta="producto.esVenta" :class="{
                 'reporte-completo': coincideTarasYBolsas(producto),
                 'reporte-incompleto': !coincideTarasYBolsas(producto) && tieneAlgunReporte(producto)
-              }"
-            >
+              }">
               <!-- Encabezado de la medida y selección -->
               <h2 class="encabezado-medida">
                 <div class="botones-encabezado">
                   <div class="botones-fila-superior">
-                    <button 
-                      @click="abrirModalPrecio(producto)" 
-                      class="btn-precio"
-                      :class="{ 'tiene-precio': producto.precio }"
-                    >
+                    <button @click="abrirModalPrecio(producto)" class="btn-precio"
+                      :class="{ 'tiene-precio': producto.precio }">
                       $
                     </button>
-                    <button 
-                      @click="abrirModalHilos(producto)" 
-                      class="btn-hilos"
-                      :class="{ 'tiene-hilos': producto.hilos }"
-                    >
+                    <button @click="abrirModalHilos(producto)" class="btn-hilos"
+                      :class="{ 'tiene-hilos': producto.hilos }">
                       H
                     </button>
                   </div>
                   <div class="botones-fila-inferior">
-                    <button 
-                      @click="abrirModalNota(producto)" 
-                      class="btn-nota"
-                      :class="{ 'tiene-nota': producto.nota }"
-                    >
+                    <button @click="abrirModalNota(producto)" class="btn-nota" :class="{ 'tiene-nota': producto.nota }">
                       N
                     </button>
                     <div class="kg-radio">
-                      <input 
-                        type="checkbox"
-                        v-model="producto.noSumarKilos"
-                        class="kg-checkbox"
-                        :id="'kg-' + producto.id"
-                        :disabled="embarqueBloqueado"
-                      >
+                      <input type="checkbox" v-model="producto.noSumarKilos" class="kg-checkbox"
+                        :id="'kg-' + producto.id" :disabled="embarqueBloqueado">
                       <label :for="'kg-' + producto.id">kg</label>
                     </div>
                   </div>
                 </div>
-                <span 
-                  class="medida-texto" 
-                  @click="embarqueBloqueado ? null : abrirModalNombreAlternativo(producto)"
-                  :class="{ 
+                <span class="medida-texto" @click="embarqueBloqueado ? null : abrirModalNombreAlternativo(producto)"
+                  :class="{
                     'disabled': embarqueBloqueado,
                     'tiene-nombre-alternativo': producto.nombreAlternativoPDF
-                  }"
-                >
+                  }">
                   <template v-if="producto.tipo === 'c/h20'">
                     {{ producto.nombreAlternativoPDF || producto.medida || 'Sin Medida' }}
                     <span class="ch20-text">c/h20</span>
-                    <span v-if="producto.nombreAlternativoPDF" class="pdf-badge" title="Nombre personalizado para PDF">PDF</span>
+                    <span v-if="producto.nombreAlternativoPDF" class="pdf-badge"
+                      title="Nombre personalizado para PDF">PDF</span>
                   </template>
                   <template v-else>
                     {{ producto.nombreAlternativoPDF || producto.medida || 'Sin Medida' }}
                     - {{ obtenerTipoProducto(producto) }}
-                    <span v-if="producto.nombreAlternativoPDF" class="pdf-badge" title="Nombre personalizado para PDF">PDF</span>
+                    <span v-if="producto.nombreAlternativoPDF" class="pdf-badge"
+                      title="Nombre personalizado para PDF">PDF</span>
                   </template>
                 </span>
                 <span v-if="producto.precio" class="precio-tag">${{ producto.precio }}</span>
               </h2>
               <div class="producto-header">
                 <div class="medida-input-container">
-                  <input
-                    type="text"
-                    v-model="producto.medida"
-                    class="medida-input"
-                    placeholder="Medida"
-                    @input="onMedidaInput(producto, $event)"
-                    @blur="onMedidaBlur(producto)"
-                    :disabled="embarqueBloqueado"
-                  >
-                  <button 
-                    @click="abrirModalAlt(producto)" 
-                    class="btn-alt"
-                    :class="{ 'tiene-alt': producto.textoAlternativo }"
-                    :disabled="embarqueBloqueado"
-                  >
+                  <input type="text" v-model="producto.medida" class="medida-input" placeholder="Medida"
+                    @input="onMedidaInput(producto, $event)" @blur="onMedidaBlur(producto)"
+                    :disabled="embarqueBloqueado">
+                  <button @click="abrirModalAlt(producto)" class="btn-alt"
+                    :class="{ 'tiene-alt': producto.textoAlternativo }" :disabled="embarqueBloqueado">
                     Alt
                   </button>
                   <!-- Modificar la condición para mostrar sugerencias -->
-                  <div 
-                    v-if="productoEditandoId === producto.id && sugerenciasMedidas.length > 0" 
-                    class="sugerencias-container"
-                  >
-                    <div
-                      v-for="medida in sugerenciasMedidas"
-                      :key="medida"
-                      class="sugerencia-item"
-                      @mousedown="seleccionarMedida(producto, medida)"
-                    >
+                  <div v-if="productoEditandoId === producto.id && sugerenciasMedidas.length > 0"
+                    class="sugerencias-container">
+                    <div v-for="medida in sugerenciasMedidas" :key="medida" class="sugerencia-item"
+                      @mousedown="seleccionarMedida(producto, medida)">
                       {{ medida }}
                     </div>
                   </div>
                 </div>
-                <select 
-                  v-model="producto.tipo" 
-                  class="form-control tipo-select" 
-                  @change="onTipoChange(producto)"
+                <select v-model="producto.tipo" class="form-control tipo-select" @change="onTipoChange(producto)"
                   :class="{
                     'tipo-azul': producto.tipo === 'c/h20',
                     'tipo-verde': producto.tipo === 's/h20'
-                  }"
-                  :disabled="embarqueBloqueado"
-                >
+                  }" :disabled="embarqueBloqueado">
                   <option value="">Seleccionar</option>
                   <option value="s/h20">S/H20</option>
                   <option value="c/h20">C/H20</option>
@@ -253,98 +157,63 @@
 
                 <!-- Checkbox de venta movido aquí, después del tipo -->
                 <div v-if="obtenerNombreCliente(producto.clienteId) === 'Ozuna'" class="venta-checkbox-container">
-                  <input 
-                    type="checkbox" 
-                    v-model="producto.esVenta" 
-                    class="form-check-input venta-checkbox" 
-                    :id="'ventaCheck-' + producto.id"
-                    :disabled="embarqueBloqueado"
-                  >
+                  <input type="checkbox" v-model="producto.esVenta" class="form-check-input venta-checkbox"
+                    :id="'ventaCheck-' + producto.id" :disabled="embarqueBloqueado">
                   <label :for="'ventaCheck-' + producto.id">Venta</label>
                 </div>
-                
+
                 <div v-if="producto.tipo === 'c/h20'" class="valores-container">
                   <div class="valor-neto-container">
                     <label>Valor neto:</label>
-                    <input
-                      type="number"
-                      v-model="producto.camaronNeto"
-                      class="camaron-neto-input ios-numeric"
-                      step="0.01"
-                      min="0"
-                      max="1"
-                      inputmode="numeric"
-                      pattern="[0-9]*"
-                      :disabled="embarqueBloqueado"
-                    >
+                    <input type="number" v-model="producto.camaronNeto" class="camaron-neto-input ios-numeric"
+                      step="0.01" min="0" max="1" inputmode="numeric" pattern="[0-9]*" :disabled="embarqueBloqueado">
                   </div>
 
                 </div>
-                <input
-                  v-if="producto.tipo === 'otro'"
-                  type="text" 
-                  v-model="producto.tipoPersonalizado" 
-                  class="form-control tipo-input" 
-                  placeholder="Especificar"
-                  :disabled="embarqueBloqueado"
-                >
-                <button type="button" @click="eliminarProducto(producto)" class="btn btn-danger btn-sm eliminar-producto" :disabled="embarqueBloqueado">X</button>
+                <input v-if="producto.tipo === 'otro'" type="text" v-model="producto.tipoPersonalizado"
+                  class="form-control tipo-input" placeholder="Especificar" :disabled="embarqueBloqueado">
+                <button type="button" @click="eliminarProducto(producto)"
+                  class="btn btn-danger btn-sm eliminar-producto" :disabled="embarqueBloqueado">X</button>
               </div>
               <div class="sumas-verticales">
                 <div class="columna">
                   <div class="taras-header">
                     <h5>Taras</h5>
                     <div class="checkbox-container">
-                      <input 
-                        type="checkbox" 
-                        v-model="producto.restarTaras"
-                        :disabled="embarqueBloqueado"
-                      >
+                      <input type="checkbox" v-model="producto.restarTaras" :disabled="embarqueBloqueado">
                       <label>-3</label>
                     </div>
                   </div>
                   <div v-for="(tara, taraIndex) in producto.taras" :key="taraIndex" class="input-group">
-                    <input 
-                      v-model.number="producto.taras[taraIndex]" 
-                      type="tel"
-                      class="form-control tara-input" 
-                      placeholder="Tara"
-                      :size="String(producto.taras[taraIndex] || '').length || 1"
-                      @focus="$event.target.select()"
-                      :disabled="embarqueBloqueado"
-                    >
-                    <button type="button" @click="eliminarTara(producto, taraIndex)" class="btn btn-danger btn-sm" :disabled="embarqueBloqueado">-</button>
+                    <input v-model.number="producto.taras[taraIndex]" type="tel" class="form-control tara-input"
+                      placeholder="Tara" :size="String(producto.taras[taraIndex] || '').length || 1"
+                      @focus="$event.target.select()" :disabled="embarqueBloqueado">
+                    <button type="button" @click="eliminarTara(producto, taraIndex)" class="btn btn-danger btn-sm"
+                      :disabled="embarqueBloqueado">-</button>
                   </div>
-                  <div v-for="(taraExtra, taraExtraIndex) in producto.tarasExtra" :key="'extra-' + taraExtraIndex" class="input-group">
-                    <input 
-                      v-model.number="producto.tarasExtra[taraExtraIndex]" 
-                      type="tel"
-                      class="form-control tara-input" 
-                      placeholder="Tara Extra"
+                  <div v-for="(taraExtra, taraExtraIndex) in producto.tarasExtra" :key="'extra-' + taraExtraIndex"
+                    class="input-group">
+                    <input v-model.number="producto.tarasExtra[taraExtraIndex]" type="tel"
+                      class="form-control tara-input" placeholder="Tara Extra"
                       :size="String(producto.tarasExtra[taraExtraIndex] || '').length || 1"
-                      @focus="$event.target.select()"
-                      :disabled="embarqueBloqueado"
-                    >
-                    <button type="button" @click="eliminarTaraExtra(producto, taraExtraIndex)" class="btn btn-danger btn-sm" :disabled="embarqueBloqueado">-</button>
+                      @focus="$event.target.select()" :disabled="embarqueBloqueado">
+                    <button type="button" @click="eliminarTaraExtra(producto, taraExtraIndex)"
+                      class="btn btn-danger btn-sm" :disabled="embarqueBloqueado">-</button>
                   </div>
                   <div class="botones-tara">
-                    <button type="button" @click="agregarTara(producto)" class="btn btn-success btn-sm agregar-tara" :disabled="embarqueBloqueado">+</button>
-                    <button type="button" @click="agregarTaraExtra(producto)" class="btn btn-warning btn-sm agregar-tara-extra" :disabled="embarqueBloqueado">+ Extra</button>
+                    <button type="button" @click="agregarTara(producto)" class="btn btn-success btn-sm agregar-tara"
+                      :disabled="embarqueBloqueado">+</button>
+                    <button type="button" @click="agregarTaraExtra(producto)"
+                      class="btn btn-warning btn-sm agregar-tara-extra" :disabled="embarqueBloqueado">+ Extra</button>
                   </div>
                   <div class="total">Total: {{ totalTaras(producto) }}</div>
                 </div>
                 <div class="columna">
                   <h5>Kilos</h5>
                   <div v-for="(kilo, kiloIndex) in producto.kilos" :key="kiloIndex" class="input-group">
-                    <input 
-                      v-model.number="producto.kilos[kiloIndex]" 
-                      type="tel"
-                      class="form-control kilo-input" 
-                      placeholder="Kilos"
-                      :size="String(producto.kilos[kiloIndex] || '').length || 1"
-                      @focus="$event.target.select()"
-                      :disabled="embarqueBloqueado"
-                    >
+                    <input v-model.number="producto.kilos[kiloIndex]" type="tel" class="form-control kilo-input"
+                      placeholder="Kilos" :size="String(producto.kilos[kiloIndex] || '').length || 1"
+                      @focus="$event.target.select()" :disabled="embarqueBloqueado">
                   </div>
                   <div style="height: 38px"></div>
                   <div class="total">Total: {{ totalKilos(producto) }}</div>
@@ -354,30 +223,23 @@
                 <div class="reporte-item">
                   <h5>Taras</h5>
                   <div v-for="(tara, index) in producto.reporteTaras" :key="index" class="input-group mb-2">
-                    <input 
-                      type="tel"
-                      v-model="producto.reporteTaras[index]" 
-                      class="form-control reporte-input"
-                      @focus="$event.target.select()"
-                      :disabled="embarqueBloqueado"
-                    >
-                    <button type="button" @click="eliminarReporteTara(producto, index)" class="btn btn-danger btn-sm" :disabled="embarqueBloqueado">-</button>
+                    <input type="tel" v-model="producto.reporteTaras[index]" class="form-control reporte-input"
+                      @focus="$event.target.select()" :disabled="embarqueBloqueado">
+                    <button type="button" @click="eliminarReporteTara(producto, index)" class="btn btn-danger btn-sm"
+                      :disabled="embarqueBloqueado">-</button>
                   </div>
-                  <button type="button" @click="agregarReporteTara(producto)" class="btn btn-success btn-sm" :disabled="embarqueBloqueado">+</button>
-                  <div class="total-taras-reporte" :class="{ 'coincide': coincideTaras(producto), 'no-coincide': !coincideTaras(producto) }">
-                     Reportadas: {{ totalTarasReportadas(producto) }}
+                  <button type="button" @click="agregarReporteTara(producto)" class="btn btn-success btn-sm"
+                    :disabled="embarqueBloqueado">+</button>
+                  <div class="total-taras-reporte"
+                    :class="{ 'coincide': coincideTaras(producto), 'no-coincide': !coincideTaras(producto) }">
+                    Reportadas: {{ totalTarasReportadas(producto) }}
                   </div>
                 </div>
                 <div class="reporte-item">
                   <h5>Bolsas</h5>
                   <div v-for="(bolsa, index) in producto.reporteBolsas" :key="index" class="input-group mb-2">
-                    <input 
-                      type="tel"
-                      v-model="producto.reporteBolsas[index]" 
-                      class="form-control reporte-input"
-                      @focus="$event.target.select()"
-                      :disabled="embarqueBloqueado"
-                    >
+                    <input type="tel" v-model="producto.reporteBolsas[index]" class="form-control reporte-input"
+                      @focus="$event.target.select()" :disabled="embarqueBloqueado">
                   </div>
                   <div style="height: 38px"></div>
                   <div class="total-bolsas-reporte">
@@ -389,26 +251,18 @@
                 {{ generarReporteExtenso(producto) }}
               </div>
             </div>
-            <div v-for="(crudo, index) in clienteCrudos[clienteId] || []" :key="'crudo-'+index" class="producto crudo">
+            <div v-for="(crudo, index) in clienteCrudos[clienteId] || []" :key="'crudo-' + index" class="producto crudo">
               <h2 class="crudo-header">Crudos</h2>
-              
+
               <div class="crudo-items">
-                <div v-for="(item, itemIndex) in crudo.items || []" :key="'item-'+itemIndex" class="crudo-item">
+                <div v-for="(item, itemIndex) in crudo.items || []" :key="'item-' + itemIndex" class="crudo-item">
                   <div class="crudo-talla-container">
-                    <button 
-                      @click="abrirModalPrecio(item)" 
-                      class="btn-precio"
-                      :class="{ 'tiene-precio': item.precio }"
-                      :disabled="embarqueBloqueado"
-                    >
+                    <button @click="abrirModalPrecio(item)" class="btn-precio" :class="{ 'tiene-precio': item.precio }"
+                      :disabled="embarqueBloqueado">
                       $
                     </button>
-                    <select 
-                      v-model="item.talla" 
-                      class="form-control talla-select"
-                      @change="onTallaCrudoChange(item)"
-                      :disabled="embarqueBloqueado"
-                    >
+                    <select v-model="item.talla" class="form-control talla-select" @change="onTallaCrudoChange(item)"
+                      :disabled="embarqueBloqueado">
                       <option value="">Elige talla</option>
                       <option value="Med c/c">Med c/c</option>
                       <option value="Med-Esp c/c">Med-Esp c/c</option>
@@ -422,54 +276,44 @@
                       <option value="Rechazo">Rechazo</option>
                     </select>
                     <span v-if="item.precio" class="precio-tag">${{ item.precio }}</span>
-                    
-                    <input 
-                      type="text" 
-                      v-model="item.barco" 
-                      class="form-control barco-input" 
-                      placeholder="Barco"
-                      :disabled="embarqueBloqueado"
-                    >
+
+                    <input type="text" v-model="item.barco" class="form-control barco-input" placeholder="Barco"
+                      :disabled="embarqueBloqueado">
                   </div>
-                  
+
                   <div class="crudo-taras-container">
                     <div class="taras-wrapper">
-                      <input 
-                        type="text" 
-                        v-model="item.taras" 
-                        class="form-control taras-input" 
-                        placeholder="Taras"
-                        @input="actualizarTotalCrudos(clienteId, index)"
-                        :disabled="embarqueBloqueado"
-                      >
-                      <input 
-                        v-if="item.mostrarSobrante"
-                        type="text" 
-                        v-model="item.sobrante" 
-                        class="form-control taras-input" 
-                        placeholder="Sbrte"
-                        @input="actualizarTotalCrudos(clienteId, index)"
-                        :disabled="embarqueBloqueado"
-                      >
+                      <input type="text" v-model="item.taras" class="form-control taras-input" placeholder="Taras"
+                        @input="actualizarTotalCrudos(clienteId, index)" :disabled="embarqueBloqueado">
+                      <input v-if="item.mostrarSobrante" type="text" v-model="item.sobrante"
+                        class="form-control taras-input" placeholder="Sbrte"
+                        @input="actualizarTotalCrudos(clienteId, index)" :disabled="embarqueBloqueado">
                     </div>
                     <div class="buttons-wrapper">
-                      <button type="button" @click="eliminarCrudoItem(clienteId, index, itemIndex)" class="btn btn-danger btn-sm eliminar-crudo-item" :disabled="embarqueBloqueado">-</button>
-                      <button type="button" @click="toggleSobrante(clienteId, index, itemIndex)" class="btn btn-success btn-sm agregar-sobrante" :disabled="embarqueBloqueado">+</button>
+                      <button type="button" @click="eliminarCrudoItem(clienteId, index, itemIndex)"
+                        class="btn btn-danger btn-sm eliminar-crudo-item" :disabled="embarqueBloqueado">-</button>
+                      <button type="button" @click="toggleSobrante(clienteId, index, itemIndex)"
+                        class="btn btn-success btn-sm agregar-sobrante" :disabled="embarqueBloqueado">+</button>
                     </div>
                   </div>
                 </div>
               </div>
-              
+
               <div class="crudo-footer">
-                <button type="button" @click="agregarCrudoItem(clienteId, index)" class="btn btn-primary btn-sm agregar-crudo-item" :disabled="embarqueBloqueado">+ Agregar Talla/Taras</button>
-                <button type="button" @click="eliminarCrudo(clienteId, index)" class="btn btn-danger btn-sm eliminar-crudo" :disabled="embarqueBloqueado">Eliminar Crudo</button>
+                <button type="button" @click="agregarCrudoItem(clienteId, index)"
+                  class="btn btn-primary btn-sm agregar-crudo-item" :disabled="embarqueBloqueado">+ Agregar
+                  Talla/Taras</button>
+                <button type="button" @click="eliminarCrudo(clienteId, index)"
+                  class="btn btn-danger btn-sm eliminar-crudo" :disabled="embarqueBloqueado">Eliminar Crudo</button>
                 <div class="total-crudos">Total de taras: {{ calcularTotalCrudos(crudo) }}</div>
               </div>
             </div>
           </div>
           <div class="botones-agregar">
-            <button type="button" @click="agregarProducto(clienteId)" class="btn btn-primary btn-sm agregar-producto" :disabled="embarqueBloqueado">Agregar Producto</button>
-            <button type="button" @click="agregarCrudo(clienteId)" class="btn btn-info btn-sm agregar-crudo" :disabled="embarqueBloqueado">Agregar Crudos</button>
+            <button type="button" @click="agregarProducto(clienteId)" class="btn btn-primary btn-sm agregar-producto"
+              :disabled="embarqueBloqueado">Agregar Producto</button>
+            <button type="button" @click="agregarCrudo(clienteId)" class="btn btn-info btn-sm agregar-crudo"
+              :disabled="embarqueBloqueado">Agregar Crudos</button>
           </div>
         </div>
       </form> <!-- Cerrando el form que se abrió para guardarEmbarque -->
@@ -487,14 +331,8 @@
         <div class="modal-body">
           <div class="form-group">
             <label for="nombreCliente">Nombre del Cliente:</label>
-            <input 
-              type="text" 
-              id="nombreCliente" 
-              v-model="nuevoClienteNombre" 
-              class="form-control" 
-              placeholder="Ingrese el nombre del cliente"
-              @keyup.enter="agregarNuevoCliente"
-            >
+            <input type="text" id="nombreCliente" v-model="nuevoClienteNombre" class="form-control"
+              placeholder="Ingrese el nombre del cliente" @keyup.enter="agregarNuevoCliente">
           </div>
 
         </div>
@@ -504,7 +342,7 @@
         </div>
       </div>
     </div>
-    
+
     <!-- Modal para cambiar nombre alternativo para PDF -->
     <div class="modal-overlay" v-if="mostrarModalNombreAlternativo" @click.self="cerrarModalNombreAlternativo">
       <div class="modal-contenido">
@@ -517,15 +355,9 @@
         <div class="modal-body">
           <div class="form-group">
             <label for="nombreAlternativoPDF">Nombre que aparecerá en el PDF:</label>
-            <input 
-              type="text" 
-              id="nombreAlternativoPDF" 
-              v-model="nombreAlternativoTemp" 
-              class="form-control" 
-              placeholder="Ingrese el nombre para el PDF"
-              @keyup.enter="guardarNombreAlternativo"
-              ref="nombreAlternativoInput"
-            >
+            <input type="text" id="nombreAlternativoPDF" v-model="nombreAlternativoTemp" class="form-control"
+              placeholder="Ingrese el nombre para el PDF" @keyup.enter="guardarNombreAlternativo"
+              ref="nombreAlternativoInput">
             <small class="form-text text-muted">
               Este nombre solo se mostrará en el PDF generado. El nombre original se mantendrá en la aplicación.
             </small>
@@ -550,15 +382,8 @@
         <div class="modal-body">
           <div class="form-group">
             <label for="precioInput">Precio:</label>
-            <input 
-              type="number" 
-              id="precioInput" 
-              v-model="precioTemp" 
-              class="form-control" 
-              placeholder="Ingrese el precio"
-              @keyup.enter="guardarPrecio"
-              ref="precioInput"
-            >
+            <input type="number" id="precioInput" v-model="precioTemp" class="form-control"
+              placeholder="Ingrese el precio" @keyup.enter="guardarPrecio" ref="precioInput">
           </div>
         </div>
         <div class="modal-footer">
@@ -580,15 +405,8 @@
         <div class="modal-body">
           <div class="form-group">
             <label for="hilosInput">Hilos:</label>
-            <input 
-              type="text" 
-              id="hilosInput" 
-              v-model="hilosTemp" 
-              class="form-control" 
-              placeholder="Ingrese los hilos"
-              @keyup.enter="guardarHilos"
-              ref="hilosInput"
-            >
+            <input type="text" id="hilosInput" v-model="hilosTemp" class="form-control" placeholder="Ingrese los hilos"
+              @keyup.enter="guardarHilos" ref="hilosInput">
           </div>
         </div>
         <div class="modal-footer">
@@ -610,14 +428,8 @@
         <div class="modal-body">
           <div class="form-group">
             <label for="notaInput">Nota:</label>
-            <textarea 
-              id="notaInput" 
-              v-model="notaTemp" 
-              class="form-control" 
-              placeholder="Ingrese la nota"
-              @keyup.enter="guardarNota"
-              ref="notaInput"
-            ></textarea>
+            <textarea id="notaInput" v-model="notaTemp" class="form-control" placeholder="Ingrese la nota"
+              @keyup.enter="guardarNota" ref="notaInput"></textarea>
           </div>
         </div>
         <div class="modal-footer">
@@ -639,15 +451,8 @@
         <div class="modal-body">
           <div class="form-group">
             <label for="altInput">Nombre alternativo:</label>
-            <input 
-              type="text" 
-              id="altInput" 
-              v-model="altTemp" 
-              class="form-control" 
-              placeholder="Ingrese el nombre alternativo para PDF"
-              @keyup.enter="guardarAlt"
-              ref="altInput"
-            >
+            <input type="text" id="altInput" v-model="altTemp" class="form-control"
+              placeholder="Ingrese el nombre alternativo para PDF" @keyup.enter="guardarAlt" ref="altInput">
             <small class="form-text text-muted">
               Este nombre solo se mostrará en el PDF de resumen de embarque.
             </small>
@@ -670,6 +475,7 @@ import { rtdb } from '@/firebase'
 import { useAuthStore } from '@/stores/auth'
 import { ref as vueRef, onMounted, onUnmounted, defineAsyncComponent } from 'vue'
 import Sidebar from '@/components/Sidebar.vue'
+import HeaderEmbarque from '../Embarques/components/HeaderEmbarque.vue'
 
 // Lazy loaded components
 const Rendimientos = defineAsyncComponent(() => import('./Rendimientos.vue'))
@@ -684,12 +490,12 @@ const loadPdfLibs = async () => {
   try {
     const jsPDFModule = await import('jspdf')
     await import('jspdf-autotable')
-    
+
     // Ensure global pdfMake availability if needed by other libraries
     if (typeof window !== 'undefined' && !window.jsPDF) {
       window.jsPDF = jsPDFModule.default
     }
-    
+
     return jsPDFModule.default
   } catch (error) {
     console.error('Error loading PDF libraries:', error)
@@ -701,7 +507,8 @@ export default {
   name: 'NuevoEmbarque',
   components: {
     Rendimientos,
-    Sidebar
+    Sidebar,
+    HeaderEmbarque
   },
   setup() {
     const authStore = useAuthStore();
@@ -795,14 +602,14 @@ export default {
     },
     productosPorCliente() {
       const productosPorCliente = {};
-      
+
       this.embarque.productos.forEach(producto => {
         const clienteId = producto.clienteId;
         if (!productosPorCliente[clienteId]) {
           productosPorCliente[clienteId] = [];
         }
         productosPorCliente[clienteId].push(producto);
-        
+
         // Ordenar solo si los productos tienen medida y tipo
         if (!producto.isEditing) {
           productosPorCliente[clienteId].sort((a, b) => {
@@ -817,19 +624,19 @@ export default {
           });
         }
       });
-      
+
       return productosPorCliente;
     },
     clientesPersonalizadosEmbarque() {
       // Obtener IDs de clientes que tienen productos en este embarque
       const clientesEnEmbarque = Object.keys(this.productosPorCliente);
-      
+
       // Filtrar los clientes personalizados que están en este embarque
       // y que no son parte de los predefinidos
       const clientesPredefinidosIds = this.clientesPredefinidos.map(c => c.id.toString());
-      
-      return this.clientesPersonalizados.filter(cliente => 
-        clientesEnEmbarque.includes(cliente.id.toString()) && 
+
+      return this.clientesPersonalizados.filter(cliente =>
+        clientesEnEmbarque.includes(cliente.id.toString()) &&
         !clientesPredefinidosIds.includes(cliente.id.toString())
       );
     },
@@ -838,12 +645,12 @@ export default {
     agregarProducto(clienteId) {
       // Eliminar la verificación que impide agregar múltiples productos para el mismo cliente
       // const existeProductoParaCliente = this.embarque.productos.some(p => p.clienteId.toString() === clienteId.toString());
-      
+
       // if (existeProductoParaCliente) {
       //   console.log(`Ya existe un producto para el cliente ${clienteId}`);
       //   return;
       // }
-      
+
       const nuevoProducto = {
         id: Date.now(),
         clienteId: clienteId,
@@ -867,18 +674,18 @@ export default {
 
       // Establecer tipo por defecto según el cliente
       this.setTipoDefaultParaCliente(nuevoProducto);
-      
+
       // Agregar directamente al embarque.productos
       this.embarque.productos.push(nuevoProducto);
-      
+
       if (!this.guardadoAutomaticoActivo && this.embarqueId) {
         this.guardadoAutomaticoActivo = true;
       }
-      
+
       if (this.embarqueId) {
         this.guardarCambiosEnTiempoReal();
       }
-      
+
       this.actualizarMedidasUsadas();
 
       // Esperar a que el DOM se actualice y enfocar el nuevo input
@@ -932,15 +739,15 @@ export default {
           // Primero crear el embarque
           const embarqueData = this.prepararDatosEmbarque();
           const docRef = await addDoc(collection(db, "embarques"), embarqueData);
-          
+
           // Guardar el ID y activar modo edición
           this.embarqueId = docRef.id;
           this.modoEdicion = true;
           this.guardadoAutomaticoActivo = true;
-          
+
           // Luego agregar el producto
           this.agregarProducto(clienteId);
-          
+
           console.log('Embarque inicial creado con ID:', this.embarqueId);
           return this.embarqueId; // Retornar el ID para encadenar operaciones
         } catch (error) {
@@ -957,7 +764,7 @@ export default {
     eliminarCliente(clienteId) {
       // Filtrar los productos para eliminar los del cliente seleccionado
       this.embarque.productos = this.embarque.productos.filter(p => p.clienteId !== clienteId);
-      
+
       // Actualizar el estado para reflejar los cambios
       this.$forceUpdate();
 
@@ -1029,10 +836,10 @@ export default {
         if (doc.exists()) {
           const data = doc.data();
           console.log('Datos del embarque cargado:', data);
-          
+
           // Cargar el estado de bloqueo
           this.embarqueBloqueado = data.embarqueBloqueado || false;
-          
+
           // Cargar el estado de juntar medidas
           if (data.clientesJuntarMedidas) {
             this.clientesJuntarMedidas = data.clientesJuntarMedidas;
@@ -1098,7 +905,7 @@ export default {
 
           console.log('Embarque procesado:', this.embarque);
           console.log('Crudos cargados:', this.clienteCrudos);
-          
+
           this.embarqueId = id;
           this.modoEdicion = true;
           this.guardadoAutomaticoActivo = true;
@@ -1122,25 +929,25 @@ export default {
       this.guardadoAutomaticoActivo = false;
       this.embarqueBloqueado = false;
       this.clientesPersonalizados = []; // Reiniciar clientes personalizados
-      
+
       // Agregar automáticamente los clientes predeterminados
       this.$nextTick(async () => {
         if (this.embarque.fecha) {
           try {
             // Crear el embarque inicial con el primer cliente (Joselito)
             await this.guardarEmbarqueInicial(this.clientesPredefinidos[0].id.toString());
-            
+
             // Esperar un momento para asegurar que el primer cliente se haya agregado correctamente
             await new Promise(resolve => setTimeout(resolve, 100));
-            
+
             // Agregar el resto de clientes predeterminados
             for (let i = 1; i < this.clientesPredefinidos.length; i++) {
               // Crear un producto para cada cliente predeterminado
               const clienteId = this.clientesPredefinidos[i].id.toString();
-              
+
               // Verificar si ya existe un producto para este cliente
               const existeProducto = this.embarque.productos.some(p => p.clienteId.toString() === clienteId);
-              
+
               // Solo agregar si no existe
               if (!existeProducto) {
                 const nuevoProducto = {
@@ -1163,21 +970,21 @@ export default {
                   isNew: true,
                   noSumarKilos: false
                 };
-                
+
                 // Establecer tipo por defecto según el cliente
                 this.setTipoDefaultParaCliente(nuevoProducto);
-                
+
                 // Agregar directamente al embarque.productos
                 this.embarque.productos.push(nuevoProducto);
-                
+
                 // Esperar un momento entre cada adición
                 await new Promise(resolve => setTimeout(resolve, 50));
               }
             }
-            
+
             // Establecer el primer cliente como activo
             this.clienteActivo = this.clientesPredefinidos[0].id.toString();
-            
+
             // Guardar los cambios
             this.guardarCambiosEnTiempoReal();
           } catch (error) {
@@ -1186,7 +993,7 @@ export default {
         }
       });
     },
-    guardarCambiosEnTiempoReal: debounce(function() {
+    guardarCambiosEnTiempoReal: debounce(function () {
       if (!this.guardadoAutomaticoActivo || !this.embarqueId || this.mostrarModalPrecio) return;
 
       // Crear una copia profunda de los datos antes de guardar
@@ -1196,7 +1003,7 @@ export default {
       };
 
       const db = getFirestore();
-      
+
       updateDoc(doc(db, "embarques", this.embarqueId), embarqueData)
         .then(() => {
           console.log('Cambios guardados automáticamente:', new Date().toLocaleString());
@@ -1229,7 +1036,7 @@ export default {
               timestamp: serverTimestamp()
             }
           });
-          
+
           // Notificar a otros usuarios sobre el cambio
           const cambiosRef = ref(rtdb, `cambios/${docRef.id}`)
           await set(cambiosRef, {
@@ -1238,7 +1045,7 @@ export default {
             username: this.authStore.user.username,
             timestamp: serverTimestamp()
           })
-          
+
           this.embarqueId = docRef.id;
           alert('Embarque creado exitosamente y guardado en la base de datos.');
           this.modoEdicion = true;
@@ -1285,7 +1092,7 @@ export default {
       if (producto.tipo === 'c/h20' && !producto.camaronNeto) {
         producto.camaronNeto = 0.65;
       }
-      
+
       // Marcar temporalmente como editando para evitar ordenamiento inmediato
       producto.isEditing = true;
       this.$nextTick(() => {
@@ -1314,7 +1121,7 @@ export default {
         this.isUndoRedo = true; // Indicar que se está realizando una operación de Undo
         this.embarque = JSON.parse(estadoAnterior);
         console.log('Undo realizado. Estado actual restaurado.');
-        
+
         // Llamar al método de guardado automático
         this.guardarCambiosEnTiempoReal();
       } else {
@@ -1329,7 +1136,7 @@ export default {
         this.isUndoRedo = true; // Indicar que se está realizando una operación de Redo
         this.embarque = JSON.parse(estadoRehacer);
         console.log('Redo realizado. Estado actual restaurado.');
-        
+
         // Llamar al método de guardado automático
         this.guardarCambiosEnTiempoReal();
       } else {
@@ -1356,14 +1163,14 @@ export default {
       }
       return producto.tipo || 'Sin Tipo';
     },
-    
+
     // Removed initPdfMake method in favor of lazy loading PDF libraries directly in each PDF generation method
 
     async generarResumenEmbarque2() {
       // Show loading indicator
       this.$set(this, 'isGeneratingPdf', true);
       this.$set(this, 'pdfType', 'resumen');
-      
+
       try {
         const medidasCrudos = new Set();
         Object.values(this.clienteCrudos).forEach(crudos => {
@@ -1378,21 +1185,21 @@ export default {
 
         const embarqueData = {
           ...this.embarque,
-          crudos: Object.entries(this.clienteCrudos).flatMap(([clienteId, crudos]) => 
-            crudos.flatMap(crudo => 
+          crudos: Object.entries(this.clienteCrudos).flatMap(([clienteId, crudos]) =>
+            crudos.flatMap(crudo =>
               crudo.items.map(item => {
                 const tarasArray = [];
-                
+
                 // Agregar taras principales
                 if (item.taras) {
                   tarasArray.push(item.taras);
                 }
-                
+
                 // Agregar sobrante si existe
                 if (item.sobrante) {
                   tarasArray.push(item.sobrante);
                 }
-                
+
                 return {
                   clienteId,
                   medida: item.talla,
@@ -1407,10 +1214,10 @@ export default {
         };
 
         console.log('Generando PDF de resumen de embarque...');
-        
+
         // Use directly imported function
         generarResumenEmbarquePDF(embarqueData, this.productosPorCliente, this.obtenerNombreCliente, this.clientesDisponibles);
-        
+
         console.log('PDF generado con éxito');
       } catch (error) {
         console.error('Error al generar el PDF:', error);
@@ -1458,7 +1265,7 @@ export default {
       const nombreCliente = this.obtenerNombreCliente(clienteId);
       const totalTarasCliente = productos.reduce((sum, p) => sum + this.totalTaras(p), 0);
       const totalKilosCliente = productos.reduce((sum, p) => sum + this.totalKilos(p), 0);
-      
+
       // Calcular totales de crudos
       const crudosTotalKilos = crudos.reduce((sum, crudo) => {
         return sum + crudo.items.reduce((itemSum, item) => {
@@ -1515,10 +1322,10 @@ export default {
               ],
               ...productos.map(producto => {
                 // Formatear los kilos para el producto
-                const kilos = producto.tipo === 'c/h20' ? 
-                  this.calcularKilosProductoCH20(producto) : 
+                const kilos = producto.tipo === 'c/h20' ?
+                  this.calcularKilosProductoCH20(producto) :
                   this.totalKilos(producto);
-                
+
                 const kilosFormateados = kilos.toLocaleString('en-US', {
                   minimumFractionDigits: 0,
                   maximumFractionDigits: 1
@@ -1547,17 +1354,17 @@ export default {
                 }
 
                 return [
-                  { 
+                  {
                     text: medidaTexto,
-                    fontSize: 18 
+                    fontSize: 18
                   },
-                  { 
-                    text: kilosFormateados, 
-                    fontSize: 18 
+                  {
+                    text: kilosFormateados,
+                    fontSize: 18
                   },
-                  { 
-                    text: `${this.totalTaras(producto)}-${this.generarDetallesProductoCompacto(producto)}`, 
-                    fontSize: 18 
+                  {
+                    text: `${this.totalTaras(producto)}-${this.generarDetallesProductoCompacto(producto)}`,
+                    fontSize: 18
                   }
                 ];
               })
@@ -1589,12 +1396,12 @@ export default {
                       ],
                       ...crudos.flatMap(crudo =>
                         crudo.items.map(item => [
-                          { 
+                          {
                             text: [
                               { text: this.formatearTallaCrudo(item.talla), fontSize: 18 },
                               item.precio ? { text: `\n$${item.precio}`, color: '#27ae60', fontSize: 18 } : ''
                             ],
-                            fontSize: 18 
+                            fontSize: 18
                           },
                           { text: item.barco, fontSize: 18 },
                           { text: this.calcularTarasCrudos(item), fontSize: 18 },
@@ -1620,23 +1427,23 @@ export default {
     // Método auxiliar para generar detalles compactos
     generarDetallesProductoCompacto(producto) {
       let detalles = [];
-      
+
       if (producto.reporteTaras && producto.reporteTaras.length > 0) {
         const reporteCombinado = this.combinarTarasBolsasCompacto(producto.reporteTaras, producto.reporteBolsas);
         if (reporteCombinado) detalles.push(reporteCombinado);
       }
-      
+
       if (producto.esVenta) {
         detalles.push('V');
       }
-      
+
       return detalles.join('|');
     },
 
     // Nuevo método para combinar taras y bolsas de forma más compacta
     combinarTarasBolsasCompacto(taras, bolsas) {
       const combinado = {};
-      
+
       taras.forEach((tara, index) => {
         const bolsa = bolsas[index] || '';
         const key = bolsa;
@@ -1651,20 +1458,20 @@ export default {
     // Método auxiliar para generar detalles del producto
     generarDetallesProducto(producto) {
       let detalles = [];
-      
+
       if (producto.reporteTaras && producto.reporteTaras.length > 0) {
         const reporteCombinado = this.combinarTarasBolsas(producto.reporteTaras, producto.reporteBolsas);
         if (reporteCombinado) detalles.push(reporteCombinado);
       }
-      
+
       if (producto.tipo === 'c/h20') {
         detalles.push(`Neto: ${producto.camaronNeto || 0.65}`);
       }
-      
+
       if (producto.esVenta) {
         detalles.push('(Venta)');
       }
-      
+
       return detalles.join(' | ');
     },
 
@@ -1696,7 +1503,7 @@ export default {
     },
     combinarTarasBolsas(taras, bolsas) {
       const combinado = {};
-      
+
       taras.forEach((tara, index) => {
         const bolsa = bolsas[index] || '';
         const key = bolsa;
@@ -1804,7 +1611,7 @@ export default {
     },
     calcularKilosCrudos(item) {
       let kilosTotales = 0;
-      
+
       // Procesar taras
       if (item.taras) {
         // Verificar si la tara tiene formato "5-19" o similar
@@ -1812,13 +1619,13 @@ export default {
         if (formatoGuion) {
           const cantidad = parseInt(formatoGuion[1]) || 0;
           let medida = parseInt(formatoGuion[2]) || 0;
-          
+
           // Si la medida es 19, sustituirla por 20
           if (medida === 19) {
             medida = 20;
             console.log(`Ajustando tara de formato ${item.taras} a ${cantidad}-${medida}`);
           }
-          
+
           kilosTotales += cantidad * medida;
         } else {
           // Formato original si no coincide con el patrón
@@ -1826,7 +1633,7 @@ export default {
           kilosTotales += cantidad * medida;
         }
       }
-      
+
       // Procesar sobrante
       if (item.sobrante) {
         // Verificar si el sobrante tiene formato "5-19" o similar
@@ -1834,13 +1641,13 @@ export default {
         if (formatoGuion) {
           const cantidadSobrante = parseInt(formatoGuion[1]) || 0;
           let medidaSobrante = parseInt(formatoGuion[2]) || 0;
-          
+
           // Si la medida es 19, sustituirla por 20
           if (medidaSobrante === 19) {
             medidaSobrante = 20;
             console.log(`Ajustando sobrante de formato ${item.sobrante} a ${cantidadSobrante}-${medidaSobrante}`);
           }
-          
+
           kilosTotales += cantidadSobrante * medidaSobrante;
         } else {
           // Formato original si no coincide con el patrón
@@ -1848,7 +1655,7 @@ export default {
           kilosTotales += cantidadSobrante * medidaSobrante;
         }
       }
-      
+
       return kilosTotales;
     },
     calcularTarasCrudos(item) {
@@ -1867,11 +1674,11 @@ export default {
       // Show loading indicator
       this.$set(this, 'isGeneratingPdf', true);
       this.$set(this, 'pdfType', 'cliente-' + clienteId);
-      
+
       try {
         const clienteProductos = this.productosPorCliente[clienteId];
         const clienteCrudos = this.clienteCrudos[clienteId];
-        
+
         // Crear una copia del embarque con todos los datos necesarios
         const embarqueCliente = {
           fecha: this.embarque.fecha,
@@ -1882,12 +1689,12 @@ export default {
         };
 
         console.log(`Generando nota de venta para cliente ${clienteId}...`);
-        
+
         // Use directly imported function
         generarNotaVentaPDF(embarqueCliente, this.clientesDisponibles, this.clientesJuntarMedidas);
-        
+
         // Eliminamos la creación automática de la cuenta
-        
+
         console.log('Nota de venta generada con éxito');
       } catch (error) {
         console.error('Error al generar la nota de venta:', error);
@@ -1911,10 +1718,10 @@ export default {
         // Crear una copia profunda del producto para asegurar la reactividad
         const productoActualizado = JSON.parse(JSON.stringify(producto));
         this.$set(this.embarque.productos, index, productoActualizado);
-        
+
         // Forzar la actualización del componente
         this.$forceUpdate();
-        
+
         // Guardar cambios en Firestore
         if (this.guardadoAutomaticoActivo && this.embarqueId) {
           this.guardarCambiosEnTiempoReal();
@@ -1936,7 +1743,7 @@ export default {
         // Verificar si el cliente es uno de los predefinidos
         const clienteId = producto.clienteId;
         const clientePredefinido = this.clientesPredefinidos.find(c => c.id.toString() === clienteId.toString());
-        
+
         // Solo sumar si es un cliente predefinido
         if (clientePredefinido) {
           return total + this.totalTaras(producto);
@@ -1949,7 +1756,7 @@ export default {
       return Object.entries(this.clienteCrudos).reduce((total, [clienteId, crudos]) => {
         // Verificar si el cliente es uno de los predefinidos
         const clientePredefinido = this.clientesPredefinidos.find(c => c.id.toString() === clienteId.toString());
-        
+
         // Solo sumar si es un cliente predefinido
         if (clientePredefinido) {
           return total + crudos.reduce((clienteTotal, crudo) => {
@@ -2016,7 +1823,7 @@ export default {
       return (kilosLimpio + kilosCrudo).toFixed(2);
     },
 
-    calcularTotalBolsas: function(producto) {
+    calcularTotalBolsas: function (producto) {
       let total = 0;
       for (let i = 0; i < producto.reporteTaras.length; i++) {
         const tara = parseInt(producto.reporteTaras[i]) || 0;
@@ -2044,7 +1851,7 @@ export default {
     abrirModalPrecio(item) {
       event?.preventDefault();
       event?.stopPropagation();
-      
+
       this.itemSeleccionado = item;
       this.precioTemp = item.precio || '';
       this.mostrarModalPrecio = true;
@@ -2055,7 +1862,7 @@ export default {
     cerrarModalPrecio() {
       event?.preventDefault();
       event?.stopPropagation();
-      
+
       this.mostrarModalPrecio = false;
       this.itemSeleccionado = null;
       this.precioTemp = '';
@@ -2063,14 +1870,14 @@ export default {
     guardarPrecio() {
       event?.preventDefault();
       event?.stopPropagation();
-      
+
       if (this.itemSeleccionado) {
         const precio = parseFloat(this.precioTemp);
         if (!isNaN(precio)) {
           this.$set(this.itemSeleccionado, 'precio', precio);
           const guardadoActivo = this.guardadoAutomaticoActivo;
           this.guardadoAutomaticoActivo = false;
-          
+
           this.$nextTick(() => {
             this.guardadoAutomaticoActivo = guardadoActivo;
             this.guardarCambiosEnTiempoReal();
@@ -2082,7 +1889,7 @@ export default {
     abrirModalHilos(item) {
       event?.preventDefault();
       event?.stopPropagation();
-      
+
       this.itemSeleccionado = item;
       // Si hilos no existe o es undefined, establecer como string vacío
       this.hilosTemp = item.hilos || '';
@@ -2094,7 +1901,7 @@ export default {
     cerrarModalHilos() {
       event?.preventDefault();
       event?.stopPropagation();
-      
+
       this.mostrarModalHilos = false;
       this.itemSeleccionado = null;
       this.hilosTemp = '';
@@ -2102,7 +1909,7 @@ export default {
     guardarHilos() {
       event?.preventDefault();
       event?.stopPropagation();
-      
+
       if (this.itemSeleccionado) {
         const hilos = this.hilosTemp.trim();
         // Si hilos está vacío, eliminamos la propiedad hilos del item
@@ -2111,10 +1918,10 @@ export default {
         } else {
           this.$set(this.itemSeleccionado, 'hilos', hilos);
         }
-        
+
         const guardadoActivo = this.guardadoAutomaticoActivo;
         this.guardadoAutomaticoActivo = false;
-        
+
         this.$nextTick(() => {
           this.guardadoAutomaticoActivo = guardadoActivo;
           this.guardarCambiosEnTiempoReal();
@@ -2126,7 +1933,7 @@ export default {
       // Show loading indicator
       this.$set(this, 'isGeneratingPdf', true);
       this.$set(this, 'pdfType', 'all');
-      
+
       try {
         const embarqueCliente = {
           fecha: this.embarque.fecha,
@@ -2137,10 +1944,10 @@ export default {
         };
 
         console.log('Generando notas de venta para todos los clientes...');
-        
+
         // Use directly imported function
         generarNotaVentaPDF(embarqueCliente, this.clientesDisponibles, this.clientesJuntarMedidas);
-        
+
         console.log('Notas de venta generadas con éxito');
       } catch (error) {
         console.error('Error al generar notas de venta:', error);
@@ -2154,13 +1961,13 @@ export default {
     handleJuntarMedidasChange(clienteId, checked) {
       // Actualizar el estado local
       this.$set(this.clientesJuntarMedidas, clienteId, checked);
-      
+
       // Guardar inmediatamente si estamos en modo edición
       if (this.modoEdicion && this.embarqueId) {
         this.guardarCambiosEnTiempoReal();
       }
     },
-    guardarCambiosEnTiempoReal: debounce(function() {
+    guardarCambiosEnTiempoReal: debounce(function () {
       if (!this.guardadoAutomaticoActivo || !this.embarqueId || this.mostrarModalPrecio) return;
 
       const embarqueData = {
@@ -2169,7 +1976,7 @@ export default {
       };
 
       const db = getFirestore();
-      
+
       updateDoc(doc(db, "embarques", this.embarqueId), embarqueData)
         .then(() => {
           console.log('Cambios guardados automáticamente:', new Date().toLocaleString());
@@ -2182,7 +1989,7 @@ export default {
     abrirModalNota(item) {
       event?.preventDefault();
       event?.stopPropagation();
-      
+
       this.itemSeleccionado = item;
       this.notaTemp = item.nota || '';
       this.mostrarModalNota = true;
@@ -2194,7 +2001,7 @@ export default {
     cerrarModalNota() {
       event?.preventDefault();
       event?.stopPropagation();
-      
+
       this.mostrarModalNota = false;
       this.itemSeleccionado = null;
       this.notaTemp = '';
@@ -2203,7 +2010,7 @@ export default {
     guardarNota() {
       event?.preventDefault();
       event?.stopPropagation();
-      
+
       if (this.itemSeleccionado) {
         const nota = this.notaTemp.trim();
         if (nota) {
@@ -2211,10 +2018,10 @@ export default {
         } else {
           this.$delete(this.itemSeleccionado, 'nota');
         }
-        
+
         const guardadoActivo = this.guardadoAutomaticoActivo;
         this.guardadoAutomaticoActivo = false;
-        
+
         this.$nextTick(() => {
           this.guardadoAutomaticoActivo = guardadoActivo;
           this.guardarCambiosEnTiempoReal();
@@ -2239,29 +2046,29 @@ export default {
           const taras = parseInt(reporteTaras[i]) || 0;
           const bolsa = parseInt(reporteBolsas[i]) || 0;
           sumaTotalKilos += taras * bolsa;
-          console.log(`Grupo ${i+1}: ${taras} taras * ${bolsa} bolsas = ${taras * bolsa} kg`);
+          console.log(`Grupo ${i + 1}: ${taras} taras * ${bolsa} bolsas = ${taras * bolsa} kg`);
         }
 
         console.log('sumaTotalKilos antes de multiplicar:', sumaTotalKilos);
-        
+
         // Asegurarnos de que camaronNeto no sea 0
         const valorNeto = (producto.camaronNeto && producto.camaronNeto > 0) ? producto.camaronNeto : 0.65;
         const resultado = sumaTotalKilos * valorNeto;
-        
+
         console.log(`Resultado final: ${sumaTotalKilos} * ${valorNeto} = ${resultado}`);
-        
+
         return resultado;
       } else {
         // Si no hay datos de reporteTaras o reporteBolsas, usar los kilos directamente
         console.log('No hay datos de reporteTaras o reporteBolsas, usando kilos directamente');
         const kilos = (producto.kilos || []).reduce((sum, kilo) => sum + (Number(kilo) || 0), 0);
         console.log('Kilos calculados directamente:', kilos);
-        
+
         // Multiplicar por el valor neto
         const valorNeto = (producto.camaronNeto && producto.camaronNeto > 0) ? producto.camaronNeto : 0.65;
         const resultado = kilos * valorNeto;
         console.log(`Kilos después de multiplicar por valorNeto (${valorNeto}):`, resultado);
-        
+
         return resultado;
       }
     },
@@ -2295,7 +2102,7 @@ export default {
       // Show loading indicator
       this.$set(this, 'isGeneratingPdf', true);
       this.$set(this, 'pdfType', 'taras');
-      
+
       try {
         const embarqueData = {
           fecha: this.embarque.fecha,
@@ -2303,12 +2110,12 @@ export default {
           productos: this.embarque.productos,
           clienteCrudos: this.clienteCrudos
         };
-        
+
         console.log('Generando PDF de taras...');
-        
+
         // Use directly imported function
         generarResumenTarasPDF(embarqueData, this.clientesDisponibles);
-        
+
         console.log('PDF de taras generado con éxito');
       } catch (error) {
         console.error('Error al generar PDF de taras:', error);
@@ -2323,20 +2130,20 @@ export default {
       // Eliminar la función trim() para permitir espacios
       const valor = event.target.value.toLowerCase();
       this.productoEditandoId = producto.id;
-      
+
       // Actualizar la medida sin eliminar espacios
       producto.medida = event.target.value;
-      
+
       if (valor) {
-        this.sugerenciasMedidas = this.medidasUsadas.filter(m => 
-          m.toLowerCase().includes(valor) && 
+        this.sugerenciasMedidas = this.medidasUsadas.filter(m =>
+          m.toLowerCase().includes(valor) &&
           m.toLowerCase() !== valor
         );
       } else {
         this.sugerenciasMedidas = [];
       }
       producto.isEditing = true;
-      
+
       // Guardar cambios inmediatamente
       this.actualizarProducto(producto);
     },
@@ -2346,7 +2153,7 @@ export default {
       setTimeout(() => {
         this.productoEditandoId = null;
       }, 200);
-      
+
       // Solo quitar la marca de edición si tiene tanto medida como tipo
       // Permitir espacios en la validación
       if (producto.medida && producto.medida.length > 0 && producto.tipo) {
@@ -2378,11 +2185,11 @@ export default {
 
         // Crear una copia del valor para asegurar que tenemos el valor más reciente
         const nuevoNombre = this.nombreAlternativoTemp.trim();
-        
+
         if (nuevoNombre) {
           // Usar Vue.set para asegurar reactividad
           this.$set(this.productoSeleccionado, 'nombreAlternativoPDF', nuevoNombre);
-          
+
           // Forzar la actualización del producto
           this.actualizarProducto(this.productoSeleccionado);
         } else {
@@ -2394,10 +2201,10 @@ export default {
         this.$nextTick(() => {
           // Reactivar el guardado automático
           this.guardadoAutomaticoActivo = guardadoActivo;
-          
+
           // Forzar un guardado inmediato
           this.guardarCambiosEnTiempoReal();
-          
+
           // Cerrar el modal después de asegurarnos que los cambios se guardaron
           this.cerrarModalNombreAlternativo();
         });
@@ -2414,7 +2221,7 @@ export default {
         const productoActualizado = JSON.parse(JSON.stringify(producto));
         // Actualizar el producto en el array
         this.$set(this.embarque.productos, index, productoActualizado);
-        
+
         // Forzar la actualización del componente
         this.$forceUpdate();
       }
@@ -2424,18 +2231,18 @@ export default {
     coincideTarasYBolsas(producto) {
       const totalTarasRegistradas = this.totalTaras(producto);
       const totalTarasReportadas = this.totalTarasReportadas(producto);
-      
+
       // Si no hay taras registradas ni reportadas, retornar false
       if (totalTarasRegistradas === 0 && totalTarasReportadas === 0) {
         return false;
       }
-      
+
       return totalTarasRegistradas === totalTarasReportadas;
     },
 
     tieneAlgunReporte(producto) {
-      return (producto.reporteTaras || []).some(tara => tara) || 
-             (producto.reporteBolsas || []).some(bolsa => bolsa);
+      return (producto.reporteTaras || []).some(tara => tara) ||
+        (producto.reporteBolsas || []).some(bolsa => bolsa);
     },
 
     calcularTotalLimpioCliente(clienteId) {
@@ -2522,21 +2329,21 @@ export default {
         // Crear el objeto embarque con la información necesaria
         const embarqueData = {
           ...this.embarque,
-          crudos: Object.entries(this.clienteCrudos).flatMap(([clienteId, crudos]) => 
-            crudos.flatMap(crudo => 
+          crudos: Object.entries(this.clienteCrudos).flatMap(([clienteId, crudos]) =>
+            crudos.flatMap(crudo =>
               crudo.items.map(item => {
                 const tarasArray = [];
-                
+
                 // Agregar taras principales
                 if (item.taras) {
                   tarasArray.push(item.taras);
                 }
-                
+
                 // Agregar sobrante si existe
                 if (item.sobrante) {
                   tarasArray.push(item.sobrante);
                 }
-                
+
                 return {
                   clienteId,
                   medida: item.talla,
@@ -2565,7 +2372,7 @@ export default {
     abrirModalAlt(item) {
       event?.preventDefault();
       event?.stopPropagation();
-      
+
       this.itemSeleccionado = item;
       this.altTemp = item.textoAlternativo || '';
       this.mostrarModalAlt = true;
@@ -2576,7 +2383,7 @@ export default {
     cerrarModalAlt() {
       event?.preventDefault();
       event?.stopPropagation();
-      
+
       this.mostrarModalAlt = false;
       this.itemSeleccionado = null;
       this.altTemp = '';
@@ -2584,7 +2391,7 @@ export default {
     guardarAlt() {
       event?.preventDefault();
       event?.stopPropagation();
-      
+
       if (this.itemSeleccionado) {
         const alt = this.altTemp.trim();
         if (alt) {
@@ -2600,12 +2407,12 @@ export default {
       try {
         console.log('Iniciando escucha de usuarios activos');
         const statusRef = ref(rtdb, 'status');
-        
+
         // Primero, asegurarse de que el usuario actual esté marcado como activo
         if (this.authStore.isLoggedIn && this.authStore.user) {
           console.log('Usuario autenticado:', this.authStore.user.username);
           const userStatusRef = ref(rtdb, `status/${this.authStore.userId}`);
-          
+
           try {
             await set(userStatusRef, {
               username: this.authStore.user.username,
@@ -2624,11 +2431,11 @@ export default {
         this.unsubscribeUsuarios = onValue(statusRef, (snapshot) => {
           const usuarios = [];
           console.log('Recibiendo actualización de usuarios activos');
-          
+
           snapshot.forEach((childSnapshot) => {
             const usuario = childSnapshot.val();
             console.log('Usuario encontrado:', usuario);
-            
+
             // Solo agregar usuarios que tengan datos válidos
             if (usuario && usuario.username) {
               usuarios.push({
@@ -2659,10 +2466,10 @@ export default {
 
         console.log('Iniciando presencia para usuario:', this.authStore.user.username);
         const userStatusRef = ref(rtdb, `status/${this.authStore.userId}`);
-        
+
         // Configurar limpieza al desconectar
         await onDisconnect(userStatusRef).remove();
-        
+
         // Establecer estado inicial
         await set(userStatusRef, {
           username: this.authStore.user.username,
@@ -2678,52 +2485,22 @@ export default {
     calcularPosicionSticky(clienteId) {
       const clientes = Object.keys(this.productosPorCliente);
       const index = clientes.indexOf(clienteId.toString());
-      
+
       if (index === 0) return 0;
-      
+
       let offset = 0;
       for (let i = 0; i < index; i++) {
         const prevClienteId = clientes[i];
         const headerHeight = this.$el.querySelector(`[data-cliente="${this.obtenerNombreCliente(prevClienteId)}"]`)?.offsetHeight || 0;
         offset += headerHeight;
       }
-      
+
       return offset;
     },
-    calcularAlturaCliente(productos = [], crudos = []) {
-      try {
-        // Altura base para el header del cliente
-        let altura = 40;
 
-        // Altura para la tabla de productos
-        if (Array.isArray(productos) && productos.length > 0) {
-          altura += 30; // Header de la tabla
-          altura += productos.length * 25; // Cada fila de producto
-        }
-
-        // Altura para la tabla de crudos
-        if (Array.isArray(crudos) && crudos.length > 0) {
-          altura += 30; // Header de la tabla
-          altura += crudos.reduce((total, crudo) => {
-            if (crudo && Array.isArray(crudo.items)) {
-              return total + (crudo.items.length * 25); // Cada fila de crudo
-            }
-            return total;
-          }, 0);
-        }
-
-        // Margen entre clientes
-        altura += 20;
-
-        return altura;
-      } catch (error) {
-        console.error('Error en calcularAlturaCliente:', error);
-        return 60; // Retornar altura base en caso de error
-      }
-    },
     toggleBloqueo() {
       this.embarqueBloqueado = !this.embarqueBloqueado;
-      
+
       // Guardar el estado en Firebase si estamos en modo edición
       if (this.modoEdicion && this.embarqueId) {
         const db = getFirestore();
@@ -2743,7 +2520,7 @@ export default {
 
       // Verificar si el cliente ya existe en el embarque
       const clienteExiste = this.embarque.productos.some(p => p.clienteId.toString() === clienteId.toString());
-      
+
       if (!clienteExiste) {
         // Si el cliente no existe, lo agregamos
         this.guardarEmbarqueInicial(clienteId).then(() => {
@@ -2764,13 +2541,13 @@ export default {
           document.querySelectorAll('.cliente-header').forEach(header => {
             header.classList.remove('cliente-seleccionado');
           });
-          
+
           // Agregar la clase de resaltado al cliente seleccionado
           clienteHeader.classList.add('cliente-seleccionado');
-          
+
           // Hacer scroll al cliente
           clienteHeader.scrollIntoView({ behavior: 'smooth', block: 'start' });
-          
+
           // Quitar la clase después de 2 segundos
           setTimeout(() => {
             clienteHeader.classList.remove('cliente-seleccionado');
@@ -2803,7 +2580,7 @@ export default {
 
       // Agregar a la lista de clientes personalizados
       this.clientesPersonalizados.push(nuevoCliente);
-      
+
       // Crear un producto para este cliente en el embarque actual
       const nuevoProducto = {
         id: Date.now(),
@@ -2825,15 +2602,15 @@ export default {
         isNew: true,
         noSumarKilos: false
       };
-      
+
       // Agregar el producto al embarque
       this.embarque.productos.push(nuevoProducto);
-      
+
       // Guardar los cambios
       this.guardarClientesPersonalizados();
       this.guardarCambiosEnTiempoReal();
       this.cerrarModalNuevoCliente();
-      
+
       // Seleccionar automáticamente el cliente recién creado
       this.seleccionarCliente(nuevoCliente.id);
     },
@@ -2873,44 +2650,44 @@ export default {
     async crearCuentaJoselito(embarqueCliente, clienteProductos, clienteCrudos) {
       // Mostrar indicador de carga
       this.$set(this, 'isCreatingAccount', true);
-      
+
       try {
         // Importar funciones necesarias de Firebase
         const { collection, query, where, getDocs, addDoc, orderBy, limit } = await import('firebase/firestore');
         const { db } = await import('@/firebase');
-        
+
         // Verificar si ya existe una cuenta para esta fecha
         const fechaEmbarque = new Date(embarqueCliente.fecha);
         const fechaFormateada = fechaEmbarque.toISOString().split('T')[0]; // Formato YYYY-MM-DD
-        
+
         const cuentasRef = collection(db, 'cuentasJoselito');
         const q = query(cuentasRef, where('fecha', '==', fechaFormateada));
         const querySnapshot = await getDocs(q);
-        
+
         if (!querySnapshot.empty) {
           console.log('Ya existe una cuenta para Joselito en esta fecha');
           alert('Ya existe una cuenta para Joselito en esta fecha');
           return;
         }
-        
+
         // Obtener los precios actuales para Joselito
         const preciosRef = collection(db, 'precios');
         const qPrecios = query(preciosRef, orderBy('fecha', 'desc'));
         const preciosSnapshot = await getDocs(qPrecios);
-        
+
         // Crear un mapa para organizar los precios por producto
         const preciosMap = new Map();
-        
+
         preciosSnapshot.docs.forEach(doc => {
           const precio = doc.data();
           // Dar prioridad a los precios específicos de Joselito
           const clave = precio.producto.toLowerCase();
-          
+
           // Si ya existe un precio para este producto y es específico de Joselito, no lo sobrescribimos
           if (preciosMap.has(clave) && preciosMap.get(clave).clienteId === 'joselito') {
             return;
           }
-          
+
           // Si es un precio específico de Joselito o no hay precio específico para este producto
           if (precio.clienteId === 'joselito' || !preciosMap.has(clave)) {
             preciosMap.set(clave, {
@@ -2919,14 +2696,14 @@ export default {
             });
           }
         });
-        
+
         console.log('Precios obtenidos:', preciosMap);
-        
+
         // Preparar los items para la cuenta de Joselito
         const items = clienteProductos.map(producto => {
           // Calcular kilos totales considerando la resta de taras
           let kilos = 0;
-          
+
           if (producto.tipo && producto.tipo.toLowerCase() === 'c/h20') {
             // Para productos c/h20, usar la función calcularKilosProductoCH20
             kilos = this.calcularKilosProductoCH20(producto);
@@ -2934,17 +2711,17 @@ export default {
           } else {
             // Para otros productos, mantener el cálculo original
             kilos = (producto.kilos || []).reduce((sum, kilo) => sum + (Number(kilo) || 0), 0);
-            
+
             // Restar taras si está seleccionado el checkbox
             if (producto.restarTaras) {
               const sumaTaras = (producto.taras || []).reduce((sum, tara) => sum + (Number(tara) || 0), 0);
               kilos -= sumaTaras * 3; // Restar 3 kg por cada tara
             }
-            
+
             // Lógica especial para productos s/h2o o s/h20 para cliente Catarro
-            if (!producto.noSumarKilos && 
-                (producto.tipo.toLowerCase().includes('s/h2o') || 
-                 producto.tipo.toLowerCase().includes('s/h20'))) {
+            if (!producto.noSumarKilos &&
+              (producto.tipo.toLowerCase().includes('s/h2o') ||
+                producto.tipo.toLowerCase().includes('s/h20'))) {
               // Verificar si el cliente es Catarro
               const clienteInfo = this.clientesDisponibles.find(c => c.id.toString() === producto.clienteId.toString());
               if (clienteInfo && clienteInfo.nombre.toLowerCase().includes('catarro')) {
@@ -2952,11 +2729,11 @@ export default {
               }
             }
           }
-          
+
           // Buscar el precio actual para este producto
           let precioVenta = producto.precio || 0;
           const medidaNormalizada = producto.medida.toLowerCase();
-          
+
           // Intentar encontrar un precio exacto para la medida
           if (preciosMap.has(medidaNormalizada)) {
             precioVenta = preciosMap.get(medidaNormalizada).precio;
@@ -2969,7 +2746,7 @@ export default {
               }
             }
           }
-          
+
           return {
             kilos: Number(kilos.toFixed(1)), // Redondear a 1 decimal
             medida: producto.medida,
@@ -2978,7 +2755,7 @@ export default {
             total: Number((kilos * 1).toFixed(2)) // Total basado en costo = 1
           };
         });
-        
+
         // Agregar items de productos crudos si existen
         if (clienteCrudos && clienteCrudos.length > 0) {
           clienteCrudos.forEach(crudo => {
@@ -2986,10 +2763,10 @@ export default {
               // Calcular kilos para productos crudos
               let kilosTotales = 0;
               let kilosCostos = 0;
-              
+
               // Verificar si el producto crudo es de tipo c/h20
               const esTipoConAgua = item.tipo && item.tipo.toLowerCase() === 'c/h20';
-              
+
               // Procesar taras
               if (item.taras) {
                 // Verificar si la tara tiene formato "5-19" o similar
@@ -2997,19 +2774,19 @@ export default {
                 if (formatoGuion) {
                   const cantidad = parseInt(formatoGuion[1]) || 0;
                   let peso = parseInt(formatoGuion[2]) || 0;
-                  
+
                   // Guardar el peso original para la tabla de costos
                   const pesoOriginal = peso;
-                  
+
                   // Si el peso es 19, sustituirlo por 20 solo para el cálculo de venta
                   if (peso === 19) {
                     peso = 20;
                     console.log(`Cuenta Joselito - Ajustando tara de formato ${item.taras} a ${cantidad}-${peso} para cálculo de venta`);
                   }
-                  
+
                   // Calcular kilos totales con el peso ajustado (para la tabla de venta)
                   kilosTotales += cantidad * peso;
-                  
+
                   // Calcular kilos para la tabla de costos con el peso original
                   kilosCostos += cantidad * pesoOriginal;
                 } else {
@@ -3019,7 +2796,7 @@ export default {
                   kilosCostos += cantidad * peso;
                 }
               }
-              
+
               // Procesar sobrante
               if (item.sobrante) {
                 // Verificar si el sobrante tiene formato "5-19" o similar
@@ -3027,19 +2804,19 @@ export default {
                 if (formatoGuion) {
                   const cantidadSobrante = parseInt(formatoGuion[1]) || 0;
                   let pesoSobrante = parseInt(formatoGuion[2]) || 0;
-                  
+
                   // Guardar el peso original para la tabla de costos
                   const pesoSobranteOriginal = pesoSobrante;
-                  
+
                   // Si el peso es 19, sustituirlo por 20 solo para el cálculo de venta
                   if (pesoSobrante === 19) {
                     pesoSobrante = 20;
                     console.log(`Cuenta Joselito - Ajustando sobrante de formato ${item.sobrante} a ${cantidadSobrante}-${pesoSobrante} para cálculo de venta`);
                   }
-                  
+
                   // Calcular kilos totales con el peso ajustado (para la tabla de venta)
                   kilosTotales += cantidadSobrante * pesoSobrante;
-                  
+
                   // Calcular kilos para la tabla de costos con el peso original
                   kilosCostos += cantidadSobrante * pesoSobranteOriginal;
                 } else {
@@ -3049,31 +2826,31 @@ export default {
                   kilosCostos += cantidadSobrante * pesoSobrante;
                 }
               }
-              
+
               // Si es tipo c/h20, multiplicar por el valor neto
               if (esTipoConAgua) {
                 kilosTotales = kilosTotales * (item.camaronNeto || 0.65);
                 kilosCostos = kilosCostos * (item.camaronNeto || 0.65);
               }
-              
+
               // Buscar el precio actual para este producto crudo
               let precioVenta = item.precio || 0;
               const medidaNormalizada = `${item.talla} (crudo)`.toLowerCase();
-              
+
               // Intentar encontrar un precio exacto para la medida
               if (preciosMap.has(medidaNormalizada)) {
                 precioVenta = preciosMap.get(medidaNormalizada).precio;
               } else {
                 // Si no hay precio exacto, buscar por coincidencia parcial
                 for (const [clave, datosPrecio] of preciosMap.entries()) {
-                  if ((clave.includes(item.talla.toLowerCase()) && clave.includes('crudo')) || 
-                      (medidaNormalizada.includes(clave))) {
+                  if ((clave.includes(item.talla.toLowerCase()) && clave.includes('crudo')) ||
+                    (medidaNormalizada.includes(clave))) {
                     precioVenta = datosPrecio.precio;
                     break;
                   }
                 }
               }
-              
+
               // Agregar a la lista de items
               items.push({
                 kilos: Number(kilosCostos.toFixed(1)), // Redondear a 1 decimal
@@ -3087,29 +2864,29 @@ export default {
             });
           });
         }
-        
+
         // Verificar si hay items para crear la cuenta
         if (items.length === 0) {
           alert('No hay productos para crear la cuenta de Joselito');
           return;
         }
-        
+
         // Calcular el total general
         const totalGeneral = Number(items.reduce((sum, item) => sum + item.total, 0).toFixed(2));
-        
+
         // Calcular el total general de venta
         const totalGeneralVenta = Number(items.reduce((sum, item) => {
           // Si el item tiene kilosVenta, usar ese valor, de lo contrario usar kilos
           const kilosParaVenta = item.kilosVenta || item.kilos;
           return sum + (kilosParaVenta * item.precioVenta);
         }, 0).toFixed(2));
-        
+
         // Calcular la ganancia del día
         const gananciaDelDia = Number((totalGeneralVenta - totalGeneral).toFixed(2));
-        
+
         // Obtener el saldo acumulado anterior
         let saldoAcumuladoAnterior = 0;
-        
+
         // Buscar la cuenta más reciente anterior a la fecha actual
         const qCuentaAnterior = query(
           cuentasRef,
@@ -3117,9 +2894,9 @@ export default {
           orderBy('fecha', 'desc'),
           limit(1)
         );
-        
+
         const cuentasAnteriores = await getDocs(qCuentaAnterior);
-        
+
         if (!cuentasAnteriores.empty) {
           const cuentaAnterior = cuentasAnteriores.docs[0].data();
           saldoAcumuladoAnterior = cuentaAnterior.nuevoSaldoAcumulado || 0;
@@ -3127,10 +2904,10 @@ export default {
         } else {
           console.log('No se encontraron cuentas anteriores, usando saldo 0');
         }
-        
+
         // Calcular el nuevo saldo acumulado
         const nuevoSaldoAcumulado = saldoAcumuladoAnterior + totalGeneral;
-        
+
         // Crear la estructura de la cuenta
         const cuentaData = {
           fecha: fechaFormateada,
@@ -3155,22 +2932,22 @@ export default {
           observacion: `Cuenta creada manualmente desde embarque del ${fechaFormateada}. Carga con: ${embarqueCliente.cargaCon || 'No especificado'}`,
           ultimaActualizacion: new Date().toISOString()
         };
-        
+
         // Crear la cuenta en Firestore
         const docRef = await addDoc(cuentasRef, cuentaData);
         console.log('Cuenta de Joselito creada con ID:', docRef.id);
-        
+
         // Contar cuántos productos tienen precios actualizados
         const productosConPrecioActualizado = items.filter(item => item.precioVenta > 0).length;
-        
+
         // Mostrar alerta al usuario con información detallada
         alert(`Se ha creado la cuenta para Joselito con fecha ${fechaFormateada}\n\n` +
-              `Total de productos: ${items.length}\n` +
-              `Productos con precio actualizado: ${productosConPrecioActualizado}\n` +
-              `Total costo: $${totalGeneral.toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})}\n` +
-              `Total venta: $${totalGeneralVenta.toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})}\n` +
-              `Ganancia: $${gananciaDelDia.toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`);
-        
+          `Total de productos: ${items.length}\n` +
+          `Productos con precio actualizado: ${productosConPrecioActualizado}\n` +
+          `Total costo: $${totalGeneral.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}\n` +
+          `Total venta: $${totalGeneralVenta.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}\n` +
+          `Ganancia: $${gananciaDelDia.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
+
         // Registrar información detallada para depuración
         console.log('Detalles de la cuenta creada:', {
           fecha: fechaFormateada,
@@ -3181,7 +2958,7 @@ export default {
           saldoAcumuladoAnterior: saldoAcumuladoAnterior,
           nuevoSaldoAcumulado: nuevoSaldoAcumulado
         });
-        
+
         return docRef.id;
       } catch (error) {
         console.error('Error al crear cuenta para Joselito:', error);
@@ -3197,18 +2974,18 @@ export default {
       const clienteInfo = this.clientesDisponibles.find(c => c.id.toString() === clienteId.toString());
       return clienteInfo && clienteInfo.nombre.toLowerCase().includes('joselito');
     },
-    
+
     // Agregar método para verificar si el cliente es Catarro
     esClienteCatarro(clienteId) {
       const clienteInfo = this.clientesDisponibles.find(c => c.id.toString() === clienteId.toString());
       return clienteInfo && clienteInfo.nombre.toLowerCase().includes('catarro');
     },
-    
+
     // Agregar método para obtener el embarque del cliente
     obtenerEmbarqueCliente(clienteId) {
       const clienteProductos = this.productosPorCliente[clienteId];
       const clienteCrudos = this.clienteCrudos[clienteId];
-      
+
       return {
         fecha: this.embarque.fecha,
         cargaCon: this.embarque.cargaCon,
@@ -3221,43 +2998,43 @@ export default {
     async crearCuentaCatarro(embarqueCliente, clienteProductos, clienteCrudos) {
       // Mostrar indicador de carga
       this.$set(this, 'isCreatingAccount', true);
-      
+
       try {
         // Importar funciones necesarias de Firebase
         const { collection, query, where, getDocs, addDoc, orderBy, limit } = await import('firebase/firestore');
         const { db } = await import('@/firebase');
-        
+
         // Verificar si ya existe una cuenta para esta fecha
         const fechaEmbarque = new Date(embarqueCliente.fecha);
         const fechaFormateada = fechaEmbarque.toISOString().split('T')[0]; // Formato YYYY-MM-DD
-        
+
         const cuentasRef = collection(db, 'cuentasCatarro');
         const q = query(cuentasRef, where('fecha', '==', fechaFormateada));
         const querySnapshot = await getDocs(q);
-        
+
         if (!querySnapshot.empty) {
           console.log('Ya existe una cuenta para Catarro en esta fecha');
           alert('Ya existe una cuenta para Catarro en esta fecha');
           return;
         }
-        
+
         // Obtener los precios actuales para Catarro
         const preciosRef = collection(db, 'precios');
         const qPrecios = query(preciosRef, orderBy('fecha', 'desc'));
         const preciosSnapshot = await getDocs(qPrecios);
-        
+
         // Crear un mapa para organizar los precios por producto
         const preciosMap = new Map();
-        
+
         preciosSnapshot.docs.forEach(doc => {
           const precio = doc.data();
           const clave = precio.producto.toLowerCase();
-          
+
           // Si ya existe un precio para este producto y es específico de Catarro, no lo sobrescribimos
           if (preciosMap.has(clave) && preciosMap.get(clave).clienteId === 'catarro') {
             return;
           }
-          
+
           // Si es un precio específico de Catarro o no hay precio específico para este producto
           if (precio.clienteId === 'catarro' || !preciosMap.has(clave)) {
             preciosMap.set(clave, {
@@ -3266,14 +3043,14 @@ export default {
             });
           }
         });
-        
+
         console.log('Precios obtenidos:', preciosMap);
-        
+
         // Preparar los items para la cuenta de Catarro
         const items = clienteProductos.map(producto => {
           // Calcular kilos totales considerando la resta de taras
           let kilos = 0;
-          
+
           if (producto.tipo && producto.tipo.toLowerCase() === 'c/h20') {
             // Para productos c/h20, usar la función calcularKilosProductoCH20
             kilos = this.calcularKilosProductoCH20(producto);
@@ -3281,25 +3058,25 @@ export default {
           } else {
             // Para otros productos, mantener el cálculo original
             kilos = (producto.kilos || []).reduce((sum, kilo) => sum + (Number(kilo) || 0), 0);
-            
+
             // Restar taras si está seleccionado el checkbox
             if (producto.restarTaras) {
               const sumaTaras = (producto.taras || []).reduce((sum, tara) => sum + (Number(tara) || 0), 0);
               kilos -= sumaTaras * 3; // Restar 3 kg por cada tara
             }
-            
+
             // Lógica especial para productos s/h2o o s/h20 para Catarro
-            if (!producto.noSumarKilos && 
-                (producto.tipo.toLowerCase().includes('s/h2o') || 
-                 producto.tipo.toLowerCase().includes('s/h20'))) {
+            if (!producto.noSumarKilos &&
+              (producto.tipo.toLowerCase().includes('s/h2o') ||
+                producto.tipo.toLowerCase().includes('s/h20'))) {
               kilos += 1; // Sumar 1 kg para Catarro con productos s/h2o o s/h20
             }
           }
-          
+
           // Buscar el precio actual para este producto
           let precioVenta = producto.precio || 0;
           const medidaNormalizada = producto.medida.toLowerCase();
-          
+
           // Intentar encontrar un precio exacto para la medida
           if (preciosMap.has(medidaNormalizada)) {
             precioVenta = preciosMap.get(medidaNormalizada).precio;
@@ -3312,7 +3089,7 @@ export default {
               }
             }
           }
-          
+
           return {
             kilos: Number(kilos.toFixed(1)), // Redondear a 1 decimal
             medida: producto.medida,
@@ -3321,7 +3098,7 @@ export default {
             total: Number((kilos * 1).toFixed(2)) // Total basado en costo = 1
           };
         });
-        
+
         // Agregar items de productos crudos si existen
         if (clienteCrudos && clienteCrudos.length > 0) {
           clienteCrudos.forEach(crudo => {
@@ -3329,10 +3106,10 @@ export default {
               // Calcular kilos para productos crudos
               let kilosTotales = 0;
               let kilosCostos = 0;
-              
+
               // Verificar si el producto crudo es de tipo c/h20
               const esTipoConAgua = item.tipo && item.tipo.toLowerCase() === 'c/h20';
-              
+
               // Procesar taras
               if (item.taras) {
                 // Verificar si la tara tiene formato "5-19" o similar
@@ -3340,7 +3117,7 @@ export default {
                 if (formatoGuion) {
                   const cantidad = parseInt(formatoGuion[1]) || 0;
                   let peso = parseInt(formatoGuion[2]) || 0;
-                  
+
                   // Para Catarro, no se hace el ajuste de 19 a 20 kg
                   kilosTotales += cantidad * peso;
                   kilosCostos += cantidad * peso;
@@ -3351,38 +3128,38 @@ export default {
                   kilosCostos += cantidad * peso;
                 }
               }
-              
+
               // Procesar sobrante
               if (item.sobrante) {
                 const [cantidadSobrante, pesoSobrante] = item.sobrante.split('-').map(Number);
                 kilosTotales += cantidadSobrante * pesoSobrante;
                 kilosCostos += cantidadSobrante * pesoSobrante;
               }
-              
+
               // Si es tipo c/h20, multiplicar por el valor neto
               if (esTipoConAgua) {
                 kilosTotales = kilosTotales * (item.camaronNeto || 0.65);
                 kilosCostos = kilosCostos * (item.camaronNeto || 0.65);
               }
-              
+
               // Buscar el precio actual para este producto crudo
               let precioVenta = item.precio || 0;
               const medidaNormalizada = `${item.talla} (crudo)`.toLowerCase();
-              
+
               // Intentar encontrar un precio exacto para la medida
               if (preciosMap.has(medidaNormalizada)) {
                 precioVenta = preciosMap.get(medidaNormalizada).precio;
               } else {
                 // Si no hay precio exacto, buscar por coincidencia parcial
                 for (const [clave, datosPrecio] of preciosMap.entries()) {
-                  if ((clave.includes(item.talla.toLowerCase()) && clave.includes('crudo')) || 
-                      (medidaNormalizada.includes(clave))) {
+                  if ((clave.includes(item.talla.toLowerCase()) && clave.includes('crudo')) ||
+                    (medidaNormalizada.includes(clave))) {
                     precioVenta = datosPrecio.precio;
                     break;
                   }
                 }
               }
-              
+
               // Agregar a la lista de items
               items.push({
                 kilos: Number(kilosCostos.toFixed(1)), // Redondear a 1 decimal
@@ -3396,13 +3173,13 @@ export default {
             });
           });
         }
-        
+
         // Verificar si hay items para crear la cuenta
         if (items.length === 0) {
           alert('No hay productos para crear la cuenta de Catarro');
           return;
         }
-        
+
         // Calcular totales
         const totalGeneral = items.reduce((sum, item) => sum + item.total, 0);
         const totalGeneralVenta = items.reduce((sum, item) => {
@@ -3410,7 +3187,7 @@ export default {
           return sum + totalVenta;
         }, 0);
         const gananciaDelDia = totalGeneralVenta - totalGeneral;
-        
+
         // Obtener el saldo acumulado anterior
         let saldoAcumuladoAnterior = 0;
         const qCuentaAnterior = query(
@@ -3419,9 +3196,9 @@ export default {
           orderBy('fecha', 'desc'),
           limit(1)
         );
-        
+
         const cuentasAnteriores = await getDocs(qCuentaAnterior);
-        
+
         if (!cuentasAnteriores.empty) {
           const cuentaAnterior = cuentasAnteriores.docs[0].data();
           saldoAcumuladoAnterior = cuentaAnterior.nuevoSaldoAcumulado || 0;
@@ -3429,10 +3206,10 @@ export default {
         } else {
           console.log('No se encontraron cuentas anteriores, usando saldo 0');
         }
-        
+
         // Calcular el nuevo saldo acumulado
         const nuevoSaldoAcumulado = saldoAcumuladoAnterior + totalGeneralVenta;
-        
+
         // Crear la estructura de la cuenta
         const cuentaData = {
           fecha: fechaFormateada,
@@ -3457,22 +3234,22 @@ export default {
           observacion: `Cuenta creada manualmente desde embarque del ${fechaFormateada}. Carga con: ${embarqueCliente.cargaCon || 'No especificado'}`,
           ultimaActualizacion: new Date().toISOString()
         };
-        
+
         // Crear la cuenta en Firestore
         const docRef = await addDoc(cuentasRef, cuentaData);
         console.log('Cuenta de Catarro creada con ID:', docRef.id);
-        
+
         // Contar cuántos productos tienen precios actualizados
         const productosConPrecioActualizado = items.filter(item => item.precioVenta > 0).length;
-        
+
         // Mostrar alerta al usuario con información detallada
         alert(`Se ha creado la cuenta para Catarro con fecha ${fechaFormateada}\n\n` +
-              `Total de productos: ${items.length}\n` +
-              `Productos con precio actualizado: ${productosConPrecioActualizado}\n` +
-              `Total costo: $${totalGeneral.toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})}\n` +
-              `Total venta: $${totalGeneralVenta.toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})}\n` +
-              `Ganancia: $${gananciaDelDia.toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`);
-        
+          `Total de productos: ${items.length}\n` +
+          `Productos con precio actualizado: ${productosConPrecioActualizado}\n` +
+          `Total costo: $${totalGeneral.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}\n` +
+          `Total venta: $${totalGeneralVenta.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}\n` +
+          `Ganancia: $${gananciaDelDia.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
+
         // Registrar información detallada para depuración
         console.log('Detalles de la cuenta creada:', {
           fecha: fechaFormateada,
@@ -3483,7 +3260,7 @@ export default {
           saldoAcumuladoAnterior: saldoAcumuladoAnterior,
           nuevoSaldoAcumulado: nuevoSaldoAcumulado
         });
-        
+
         return docRef.id;
       } catch (error) {
         console.error('Error al crear cuenta para Catarro:', error);
@@ -3492,15 +3269,15 @@ export default {
         this.$set(this, 'isCreatingAccount', false);
       }
     },
-    
+
     async crearCuentaParaCliente() {
       if (!this.clienteActual) return;
-      
+
       try {
         const embarqueCliente = this.obtenerEmbarqueCliente(this.clienteActual.id);
         const clienteProductos = this.productosPorCliente[this.clienteActual.id] || [];
         const clienteCrudos = this.clienteCrudos[this.clienteActual.id] || [];
-        
+
         if (this.esClienteCatarro(this.clienteActual.id)) {
           await this.crearCuentaCatarro(embarqueCliente, clienteProductos, clienteCrudos);
         }
@@ -3516,10 +3293,10 @@ export default {
     this.undoStack.push(JSON.stringify(this.embarque));
     console.log('Component mounted. Estado inicial cargado.');
     this.actualizarMedidasUsadas();
-    
+
     // Cargar clientes personalizados
     this.cargarClientesPersonalizados();
-    
+
     // Iniciar presencia y escucha de usuarios
     await this.iniciarPresenciaUsuario();
     this.escucharUsuariosActivos();
@@ -3535,7 +3312,7 @@ export default {
         this.undoStack.push(JSON.stringify(nuevoValor));
         this.redoStack = [];
         console.log('Embarque actualizado. Estado agregado al undoStack.');
-        
+
         // Llamar al método de guardado automático
         this.guardarCambiosEnTiempoReal();
       },
@@ -3593,15 +3370,17 @@ export default {
 </script>
 
 <style scoped>
-
 .totales-reporte {
-    background-color: #e2e3ff; /* Azul claro */
-    color: #2d31a6; /* Azul oscuro */
-    margin-top: 10px;
-    font-weight: bold;
-    padding: 5px;
-    border-radius: 5px;
+  background-color: #e2e3ff;
+  /* Azul claro */
+  color: #2d31a6;
+  /* Azul oscuro */
+  margin-top: 10px;
+  font-weight: bold;
+  padding: 5px;
+  border-radius: 5px;
 }
+
 .cliente-header-controls {
   display: flex;
   align-items: center;
@@ -3689,7 +3468,8 @@ export default {
   flex-wrap: wrap;
 }
 
-.fecha-selector, .carga-selector {
+.fecha-selector,
+.carga-selector {
   flex: 1;
   min-width: 200px;
 }
@@ -3787,17 +3567,20 @@ export default {
 }
 
 .producto {
-  flex: 0 0 calc(50% - 10px); /* Dos productos por fila en escritorio */
+  flex: 0 0 calc(50% - 10px);
+  /* Dos productos por fila en escritorio */
   background: #fff;
   border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   padding: 1rem;
-  border: 3px solid #dc3545; /* Contorno para la medida */
+  border: 3px solid #dc3545;
+  /* Contorno para la medida */
   transition: border-color 0.3s ease;
 }
 
-.producto:hover, .crudo:hover {
-  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+.producto:hover,
+.crudo:hover {
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
   transform: translateY(-2px);
 }
 
@@ -3900,7 +3683,9 @@ export default {
   margin-bottom: 10px;
 }
 
-.tara-input, .kilo-input, .reporte-input {
+.tara-input,
+.kilo-input,
+.reporte-input {
   flex: 1;
   padding: 8px;
   font-size: 1rem;
@@ -3915,19 +3700,23 @@ export default {
   border-radius: 5px;
 }
 
-.agregar-tara, .agregar-kilo, .agregar-producto {
+.agregar-tara,
+.agregar-kilo,
+.agregar-producto {
   width: 100%;
   padding: 10px;
   font-size: 1rem;
   border-radius: 5px;
 }
 
-.agregar-tara, .agregar-kilo {
+.agregar-tara,
+.agregar-kilo {
   background-color: #28a745;
   color: #fff;
 }
 
-.agregar-tara:hover, .agregar-kilo:hover {
+.agregar-tara:hover,
+.agregar-kilo:hover {
   background-color: #218838;
 }
 
@@ -3951,7 +3740,8 @@ export default {
 
 .reporte-taras-bolsas {
   display: flex;
-  flex-direction: row; /* Cambiar a row para que estén en la misma fila */
+  flex-direction: row;
+  /* Cambiar a row para que estén en la misma fila */
   gap: 15px;
   width: 100%;
   margin-bottom: 20px;
@@ -3983,7 +3773,7 @@ export default {
   border: 1px solid #ddd;
   padding: 15px;
   border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
   margin-top: 30px;
 }
 
@@ -4118,38 +3908,45 @@ export default {
   }
 
   .reporte-taras-bolsas {
-    flex-direction: row; /* Mantener en fila incluso en móvil */
+    flex-direction: row;
+    /* Mantener en fila incluso en móvil */
     gap: 10px;
   }
 
   .reporte-item {
     flex: 1;
-    min-width: 0; /* Permitir que los items se reduzcan */
+    min-width: 0;
+    /* Permitir que los items se reduzcan */
   }
 
   .reporte-input {
     width: 100%;
     min-width: 0;
-    font-size: 14px; /* Reducir tamaño de fuente para mejor ajuste */
+    font-size: 14px;
+    /* Reducir tamaño de fuente para mejor ajuste */
   }
 
   .reporte-item h5 {
-    font-size: 1rem; /* Reducir tamaño del título */
+    font-size: 1rem;
+    /* Reducir tamaño del título */
     margin-bottom: 8px;
   }
 
   .input-group {
-    margin-bottom: 5px; /* Reducir espacio entre inputs */
+    margin-bottom: 5px;
+    /* Reducir espacio entre inputs */
   }
 
   .input-group button {
-    padding: 4px 8px; /* Reducir padding de botones */
+    padding: 4px 8px;
+    /* Reducir padding de botones */
     font-size: 12px;
   }
 
   .total-taras-reporte,
   .total-bolsas-reporte {
-    font-size: 0.9rem; /* Reducir tamaño del texto del total */
+    font-size: 0.9rem;
+    /* Reducir tamaño del texto del total */
     padding: 3px;
     margin-top: 10px;
     font-weight: bold;
@@ -4164,12 +3961,16 @@ export default {
     gap: 10px;
   }
 
-  .eliminar-cliente, .eliminar-producto {
+  .eliminar-cliente,
+  .eliminar-producto {
     width: 100%;
     text-align: center;
   }
 
-  .agregar-tara, .agregar-kilo, .agregar-producto, .crear-embarque {
+  .agregar-tara,
+  .agregar-kilo,
+  .agregar-producto,
+  .crear-embarque {
     font-size: 1rem;
     padding: 12px;
   }
@@ -4185,7 +3986,8 @@ export default {
   }
 
   .producto {
-    flex: 0 0 calc(25% - 15px); /* Cuatro por fila con espacio */
+    flex: 0 0 calc(25% - 15px);
+    /* Cuatro por fila con espacio */
     max-width: calc(25% - 15px);
   }
 
@@ -4209,7 +4011,8 @@ export default {
 
 .encabezado-medida {
   display: flex;
-  align-items: flex-start; /* Cambiado a flex-start para mejor alineación con las dos filas */
+  align-items: flex-start;
+  /* Cambiado a flex-start para mejor alineación con las dos filas */
   font-size: 1.5rem;
   font-weight: bold;
   margin-bottom: 15px;
@@ -4273,15 +4076,18 @@ export default {
 
 .checkbox-container input[type="checkbox"] {
   margin-right: 5px;
-  width: 15px; /* Aumentamos el ancho */
-  height: 15px; /* Aumentamos la altura */
+  width: 15px;
+  /* Aumentamos el ancho */
+  height: 15px;
+  /* Aumentamos la altura */
   cursor: pointer;
 }
 
 .checkbox-container label {
   font-size: 0.9rem;
   color: #555;
-  cursor: pointer; /* Añadimos cursor pointer para mejor interactividad */
+  cursor: pointer;
+  /* Añadimos cursor pointer para mejor interactividad */
 }
 
 .taras-header {
@@ -4318,7 +4124,8 @@ export default {
 .agregar-tara-extra {
   background-color: #ffa500;
   color: #fff;
-  margin-top: 1px; /* Ajuste del margen superior a 1px */
+  margin-top: 1px;
+  /* Ajuste del margen superior a 1px */
 }
 
 .agregar-tara-extra:hover {
@@ -4338,8 +4145,10 @@ export default {
 .botones-tara {
   display: flex;
   gap: 5px;
-  margin-top: auto; /* Empuja los botones hacia abajo */
-  height: 38px; /* Altura fija para los botones */
+  margin-top: auto;
+  /* Empuja los botones hacia abajo */
+  height: 38px;
+  /* Altura fija para los botones */
 }
 
 .agregar-tara,
@@ -4348,7 +4157,8 @@ export default {
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 38px; /* Altura fija para todos los botones */
+  height: 38px;
+  /* Altura fija para todos los botones */
   font-size: 0.9rem;
   padding: 0 10px;
 }
@@ -4367,7 +4177,8 @@ export default {
 .agregar-kilo {
   width: 100%;
   margin-top: 10px;
-  align-self: flex-end; /* Alinea el botón al final de la columna */
+  align-self: flex-end;
+  /* Alinea el botón al final de la columna */
 }
 
 .cliente-header[data-cliente] {
@@ -4376,7 +4187,8 @@ export default {
 
 /* Estilo para clientes personalizados */
 .cliente-header[data-cliente] {
-  background-color: #95a5a6; /* Color gris por defecto */
+  background-color: #95a5a6;
+  /* Color gris por defecto */
 }
 
 /* Estilos específicos para clientes predefinidos */
@@ -4471,7 +4283,8 @@ export default {
 }
 
 .taras-input {
-  width: 60px; /* Reducir el ancho del input de taras */
+  width: 60px;
+  /* Reducir el ancho del input de taras */
   min-width: 60px;
   padding: 4px 8px;
   text-align: center;
@@ -4697,7 +4510,8 @@ export default {
 
 .encabezado-medida {
   display: flex;
-  align-items: flex-start; /* Cambiado a flex-start para mejor alineación con las dos filas */
+  align-items: flex-start;
+  /* Cambiado a flex-start para mejor alineación con las dos filas */
   font-size: 1.5rem;
   font-weight: bold;
   margin-bottom: 15px;
@@ -5140,7 +4954,8 @@ export default {
 
 .encabezado-medida {
   display: flex;
-  align-items: flex-start; /* Cambiado a flex-start para mejor alineación con las dos filas */
+  align-items: flex-start;
+  /* Cambiado a flex-start para mejor alineación con las dos filas */
   font-size: 1.5rem;
   font-weight: bold;
   margin-bottom: 15px;
@@ -5339,22 +5154,26 @@ export default {
 
   /* Mantener taras y kilos en la misma fila */
   .sumas-verticales {
-    flex-direction: row; /* Mantener dirección horizontal */
+    flex-direction: row;
+    /* Mantener dirección horizontal */
     gap: 10px;
     width: 100%;
   }
 
   .columna {
-    flex: 1; /* Distribuir el espacio equitativamente */
-    min-width: 0; /* Permitir que las columnas se reduzcan */
+    flex: 1;
+    /* Distribuir el espacio equitativamente */
+    min-width: 0;
+    /* Permitir que las columnas se reduzcan */
   }
 
   /* Ajustar inputs dentro de las columnas */
-  .tara-input, 
+  .tara-input,
   .kilo-input {
     width: 100%;
     min-width: 0;
-    font-size: 14px; /* Reducir tamaño de fuente para mejor ajuste */
+    font-size: 14px;
+    /* Reducir tamaño de fuente para mejor ajuste */
   }
 
   /* Ajustar los grupos de input */
@@ -5387,12 +5206,14 @@ export default {
 }
 
 .producto.reporte-completo {
-  border: 3px solid #28a745 !important; /* Verde para reporte completo */
+  border: 3px solid #28a745 !important;
+  /* Verde para reporte completo */
   box-shadow: 0 0 8px rgba(40, 167, 69, 0.2);
 }
 
 .producto.reporte-incompleto {
-  border: 3px solid #dc3545 !important; /* Rojo para reporte incompleto */
+  border: 3px solid #dc3545 !important;
+  /* Rojo para reporte incompleto */
   box-shadow: 0 0 8px rgba(220, 53, 69, 0.2);
 }
 
@@ -5429,7 +5250,7 @@ export default {
   .cliente-info {
     width: 100%;
   }
-  
+
   .cliente-totales {
     flex-direction: column;
     gap: 5px;
@@ -5445,7 +5266,8 @@ export default {
   position: absolute;
   top: 100%;
   left: 0;
-  width: calc(50% - 4px); /* Ajustar al ancho del input de medida */
+  width: calc(50% - 4px);
+  /* Ajustar al ancho del input de medida */
   z-index: 1000;
 }
 
@@ -5498,12 +5320,12 @@ input[type="number"] {
   font-size: 16px;
   background-color: #ffffff;
   border: 1px solid #d1d1d6;
-  box-shadow: inset 0 1px 2px rgba(0,0,0,0.05);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
 input[type="number"]:focus {
   border-color: #007aff;
-  box-shadow: 0 0 0 3px rgba(0,122,255,0.25);
+  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.25);
   outline: none;
 }
 
@@ -5639,7 +5461,7 @@ input[type="tel"] {
   z-index: 1000;
   background: white;
   border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   width: calc(100% - 20px);
   max-height: 200px;
   overflow-y: auto;
@@ -5678,19 +5500,25 @@ input[type="tel"] {
 /* Modificar los estilos de los botones finales */
 .botones-finales {
   display: flex;
-  flex-direction: row; /* Asegura que los botones estén en horizontal */
+  flex-direction: row;
+  /* Asegura que los botones estén en horizontal */
   gap: 15px;
   margin-top: 20px;
-  flex-wrap: wrap; /* Permite que los botones se envuelvan en pantallas pequeñas */
-  justify-content: center; /* Centra los botones horizontalmente */
+  flex-wrap: wrap;
+  /* Permite que los botones se envuelvan en pantallas pequeñas */
+  justify-content: center;
+  /* Centra los botones horizontalmente */
   align-items: center;
-  width: 100%; /* Asegura que el contenedor tome todo el ancho disponible */
+  width: 100%;
+  /* Asegura que el contenedor tome todo el ancho disponible */
 }
 
 .botones-finales button,
 .botones-finales a {
-  flex: 0 1 auto; /* Evita que los botones se estiren */
-  min-width: 200px; /* Ancho mínimo para los botones */
+  flex: 0 1 auto;
+  /* Evita que los botones se estiren */
+  min-width: 200px;
+  /* Ancho mínimo para los botones */
   padding: 12px 24px;
   font-size: 1rem;
   text-align: center;
@@ -5700,8 +5528,10 @@ input[type="tel"] {
 /* Ajustes para pantallas pequeñas */
 @media (max-width: 768px) {
   .botones-finales {
-    flex-direction: column; /* En móvil, los botones se apilan */
-    align-items: center; /* Centra los botones verticalmente en móvil */
+    flex-direction: column;
+    /* En móvil, los botones se apilan */
+    align-items: center;
+    /* Centra los botones verticalmente en móvil */
     width: 100%;
   }
 
@@ -5771,7 +5601,7 @@ input[type="tel"] {
   background: white;
   padding: 20px;
   border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   z-index: 1000;
   min-width: 200px;
   border: 1px solid #e1e4e8;
@@ -5877,7 +5707,7 @@ input[type="tel"] {
     margin: 0 -15px 15px;
     width: calc(100% + 30px);
   }
-  
+
   .btn-nota-cliente {
     flex: 1;
     min-width: 80px;
@@ -5953,13 +5783,15 @@ input[type="tel"] {
   left: 0;
   right: 0;
   z-index: 100;
-  padding: 4px 8px; /* Reducir padding */
-  min-height: 40px; /* Reducir altura mínima */
+  padding: 4px 8px;
+  /* Reducir padding */
+  min-height: 40px;
+  /* Reducir altura mínima */
   display: flex;
   align-items: center;
   justify-content: space-between;
   background: inherit;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 /* Optimizar el layout del header */
@@ -5981,7 +5813,8 @@ input[type="tel"] {
 
 .cliente-info h3 {
   margin: 0;
-  font-size: 1.4rem; /* Reducir tamaño de fuente */
+  font-size: 1.4rem;
+  /* Reducir tamaño de fuente */
   white-space: nowrap;
 }
 
@@ -6023,22 +5856,27 @@ input[type="tel"] {
   }
 
   .cliente-header {
-    flex-wrap: nowrap; /* Cambiar a nowrap para mantener todo en una línea */
-    gap: 4px; /* Reducir el espacio entre elementos */
+    flex-wrap: nowrap;
+    /* Cambiar a nowrap para mantener todo en una línea */
+    gap: 4px;
+    /* Reducir el espacio entre elementos */
   }
 
   .cliente-info {
     flex-direction: row;
     width: auto;
-    gap: 6px; /* Reducir el espacio entre nombre y totales */
+    gap: 6px;
+    /* Reducir el espacio entre nombre y totales */
   }
 
   .cliente-info h3 {
-    font-size: 1.2rem; /* Reducir un poco el tamaño de la fuente */
+    font-size: 1.2rem;
+    /* Reducir un poco el tamaño de la fuente */
   }
 
   .cliente-totales {
-    flex: 0 1 auto; /* Evitar que los totales crezcan demasiado */
+    flex: 0 1 auto;
+    /* Evitar que los totales crezcan demasiado */
     gap: 4px;
   }
 
@@ -6050,7 +5888,8 @@ input[type="tel"] {
   /* Ajustar los controles del header */
   .cliente-header-controls {
     flex: 0 0 auto;
-    margin-top: 0; /* Eliminar el margen superior */
+    margin-top: 0;
+    /* Eliminar el margen superior */
     gap: 4px;
   }
 
@@ -6085,7 +5924,8 @@ input[type="tel"] {
 /* Ajustes adicionales para pantallas muy pequeñas */
 @media (max-width: 480px) {
   .cliente-header {
-    flex-wrap: wrap; /* Permitir wrap solo en pantallas muy pequeñas */
+    flex-wrap: wrap;
+    /* Permitir wrap solo en pantallas muy pequeñas */
   }
 
   .cliente-info {
@@ -6110,7 +5950,7 @@ input[type="tel"] {
   padding: 4px 8px;
   min-height: 36px;
   background: inherit;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 /* Layout principal del header */
@@ -6126,7 +5966,8 @@ input[type="tel"] {
   display: flex;
   align-items: center;
   gap: 8px;
-  min-width: 0; /* Permite que el contenedor se encoja */
+  min-width: 0;
+  /* Permite que el contenedor se encoja */
 }
 
 .cliente-info h3 {
@@ -6158,7 +5999,8 @@ input[type="tel"] {
   display: flex;
   align-items: center;
   gap: 4px;
-  margin-left: auto; /* Empuja los controles hacia la derecha */
+  margin-left: auto;
+  /* Empuja los controles hacia la derecha */
 }
 
 @media (max-width: 768px) {
@@ -6173,7 +6015,8 @@ input[type="tel"] {
   /* Ajustar el nombre del cliente */
   .cliente-info h3 {
     font-size: 1.1rem;
-    max-width: 120px; /* Limitar el ancho del nombre */
+    max-width: 120px;
+    /* Limitar el ancho del nombre */
   }
 
   /* Comprimir los totales */
@@ -6251,17 +6094,20 @@ input[type="tel"] {
   right: 0;
   z-index: 100;
   background: inherit;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-  padding: 2px 4px; /* Reducido el padding */
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  padding: 2px 4px;
+  /* Reducido el padding */
 }
 
 /* Layout principal del header */
 .cliente-header {
   display: flex;
-  align-items: center; /* Cambiado a una sola línea */
+  align-items: center;
+  /* Cambiado a una sola línea */
   gap: 8px;
   width: 100%;
-  min-height: 40px; /* Altura mínima para mantener legibilidad */
+  min-height: 40px;
+  /* Altura mínima para mantener legibilidad */
 }
 
 /* Contenedor del nombre */
@@ -6269,7 +6115,8 @@ input[type="tel"] {
   display: flex;
   align-items: center;
   gap: 12px;
-  flex: 0 1 auto; /* Permite que se encoja pero no crezca */
+  flex: 0 1 auto;
+  /* Permite que se encoja pero no crezca */
 }
 
 .cliente-info h3 {
@@ -6285,7 +6132,8 @@ input[type="tel"] {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-right: 12px; /* Espacio antes de los controles */
+  margin-right: 12px;
+  /* Espacio antes de los controles */
 }
 
 .cliente-totales span {
@@ -6302,7 +6150,8 @@ input[type="tel"] {
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-left: auto; /* Empuja los controles a la derecha */
+  margin-left: auto;
+  /* Empuja los controles a la derecha */
 }
 
 /* Checkbox de juntar medidas */
@@ -6400,6 +6249,7 @@ input[type="tel"] {
 }
 
 @media (max-width: 768px) {
+
   /* Ajustes del contenedor principal */
   .productos-container {
     padding: 8px;
@@ -6563,6 +6413,7 @@ input[type="tel"] {
 }
 
 @media (max-width: 768px) {
+
   /* Ajustes del header del cliente */
   .cliente-header {
     display: flex;
@@ -6639,7 +6490,7 @@ input[type="tel"] {
   }
 
   /* Ajuste para mantener todo en una línea */
-  .cliente-header > * {
+  .cliente-header>* {
     flex-shrink: 0;
   }
 
@@ -6652,16 +6503,19 @@ input[type="tel"] {
   .cliente-header {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
-    scrollbar-width: none; /* Firefox */
-    -ms-overflow-style: none; /* IE and Edge */
+    scrollbar-width: none;
+    /* Firefox */
+    -ms-overflow-style: none;
+    /* IE and Edge */
   }
 
   .cliente-header::-webkit-scrollbar {
-    display: none; /* Chrome, Safari, Opera */
+    display: none;
+    /* Chrome, Safari, Opera */
   }
 
   /* Ajustar espaciado entre elementos */
-  .cliente-header > *:not(:last-child) {
+  .cliente-header>*:not(:last-child) {
     margin-right: 8px;
   }
 
@@ -6697,10 +6551,12 @@ input[type="tel"] {
 }
 
 @media (max-width: 768px) {
+
   /* Contenedor de productos en dos columnas */
   .productos-container {
     display: grid;
-    grid-template-columns: repeat(2, 1fr); /* Dos columnas */
+    grid-template-columns: repeat(2, 1fr);
+    /* Dos columnas */
     gap: 8px;
     padding: 8px;
   }
@@ -6710,7 +6566,8 @@ input[type="tel"] {
     width: 100%;
     margin-bottom: 8px;
     padding: 8px;
-    min-width: 0; /* Permite que el contenido se ajuste */
+    min-width: 0;
+    /* Permite que el contenido se ajuste */
   }
 
   /* Ajustar el contenido dentro del producto */
@@ -6750,7 +6607,8 @@ input[type="tel"] {
   }
 
   .input-group input {
-    width: calc(100% - 30px); /* Dejar espacio para el botón */
+    width: calc(100% - 30px);
+    /* Dejar espacio para el botón */
     font-size: 14px;
   }
 
@@ -6788,7 +6646,8 @@ input[type="tel"] {
   /* Responsive para pantallas muy pequeñas */
   @media (max-width: 480px) {
     .productos-container {
-      grid-template-columns: repeat(2, 1fr); /* Mantener dos columnas */
+      grid-template-columns: repeat(2, 1fr);
+      /* Mantener dos columnas */
       gap: 6px;
       padding: 6px;
     }
@@ -6828,6 +6687,7 @@ input[type="tel"] {
 }
 
 @media (max-width: 768px) {
+
   /* Ajustes del header del cliente */
   .cliente-header {
     display: flex;
@@ -6904,7 +6764,7 @@ input[type="tel"] {
   }
 
   /* Ajuste para mantener todo en una línea */
-  .cliente-header > * {
+  .cliente-header>* {
     flex-shrink: 0;
   }
 
@@ -6917,16 +6777,19 @@ input[type="tel"] {
   .cliente-header {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
-    scrollbar-width: none; /* Firefox */
-    -ms-overflow-style: none; /* IE and Edge */
+    scrollbar-width: none;
+    /* Firefox */
+    -ms-overflow-style: none;
+    /* IE and Edge */
   }
 
   .cliente-header::-webkit-scrollbar {
-    display: none; /* Chrome, Safari, Opera */
+    display: none;
+    /* Chrome, Safari, Opera */
   }
 
   /* Ajustar espaciado entre elementos */
-  .cliente-header > *:not(:last-child) {
+  .cliente-header>*:not(:last-child) {
     margin-right: 8px;
   }
 
@@ -6962,10 +6825,12 @@ input[type="tel"] {
 }
 
 @media (max-width: 768px) {
+
   /* Contenedor de productos en dos columnas */
   .productos-container {
     display: grid;
-    grid-template-columns: repeat(2, 1fr); /* Dos columnas */
+    grid-template-columns: repeat(2, 1fr);
+    /* Dos columnas */
     gap: 8px;
     padding: 8px;
   }
@@ -6975,7 +6840,8 @@ input[type="tel"] {
     width: 100%;
     margin-bottom: 8px;
     padding: 8px;
-    min-width: 0; /* Permite que el contenido se ajuste */
+    min-width: 0;
+    /* Permite que el contenido se ajuste */
   }
 
   /* Ajustar el contenido dentro del producto */
@@ -7015,7 +6881,8 @@ input[type="tel"] {
   }
 
   .input-group input {
-    width: calc(100% - 30px); /* Dejar espacio para el botón */
+    width: calc(100% - 30px);
+    /* Dejar espacio para el botón */
     font-size: 14px;
   }
 
@@ -7053,7 +6920,8 @@ input[type="tel"] {
   /* Responsive para pantallas muy pequeñas */
   @media (max-width: 480px) {
     .productos-container {
-      grid-template-columns: repeat(2, 1fr); /* Mantener dos columnas */
+      grid-template-columns: repeat(2, 1fr);
+      /* Mantener dos columnas */
       gap: 6px;
       padding: 6px;
     }
@@ -7119,15 +6987,21 @@ input[type="tel"] {
 
 @media (max-width: 768px) {
   .botones {
-    flex-direction: row; /* Cambiado de column a row para mantener los botones en la misma fila */
+    flex-direction: row;
+    /* Cambiado de column a row para mantener los botones en la misma fila */
     gap: 8px;
-    flex-wrap: wrap; /* Permite que los botones se envuelvan si no caben en una línea */
-    justify-content: space-between; /* Distribuye el espacio entre los botones */
+    flex-wrap: wrap;
+    /* Permite que los botones se envuelvan si no caben en una línea */
+    justify-content: space-between;
+    /* Distribuye el espacio entre los botones */
   }
-  
-  .btn-bloqueo, .btn-volver {
-    flex: 1; /* Permite que los botones crezcan para ocupar el espacio disponible */
-    min-width: 150px; /* Establece un ancho mínimo para los botones */
+
+  .btn-bloqueo,
+  .btn-volver {
+    flex: 1;
+    /* Permite que los botones crezcan para ocupar el espacio disponible */
+    min-width: 150px;
+    /* Establece un ancho mínimo para los botones */
     justify-content: center;
   }
 }
@@ -7239,7 +7113,7 @@ button:disabled {
   .cliente-header-controls {
     width: 100%;
   }
-  
+
   .cliente-totales {
     width: 100%;
     justify-content: flex-start;
@@ -7273,6 +7147,7 @@ button:disabled {
   0% {
     background-color: rgba(255, 255, 0, 0.3);
   }
+
   100% {
     background-color: transparent;
   }
@@ -7299,7 +7174,7 @@ button:disabled {
   .btn-pdf-mini {
     display: inline-block;
   }
-  
+
   .cliente-info h3 {
     display: flex;
     align-items: center;
@@ -7435,7 +7310,7 @@ button:disabled {
   transition: margin-left 0.3s ease, width 0.3s ease;
 }
 
-.sidebar-collapsed + .nuevo-embarque {
+.sidebar-collapsed+.nuevo-embarque {
   margin-left: 40px;
   width: calc(100% - 40px);
 }
@@ -7445,27 +7320,27 @@ button:disabled {
   .sidebar-clientes {
     width: 70px;
   }
-  
+
   .sidebar-clientes .btn-nota-cliente {
     width: 60px;
     font-size: 12px;
     padding: 10px 0;
   }
-  
+
   .nuevo-embarque {
     margin-left: 70px;
     width: calc(100% - 70px);
   }
-  
+
   .sidebar-collapsed {
     width: 30px;
   }
-  
-  .sidebar-collapsed + .nuevo-embarque {
+
+  .sidebar-collapsed+.nuevo-embarque {
     margin-left: 30px;
     width: calc(100% - 30px);
   }
-  
+
   .sidebar-toggle-mobile {
     display: block;
   }
@@ -7475,25 +7350,25 @@ button:disabled {
   .sidebar-clientes {
     width: 50px;
   }
-  
+
   .sidebar-clientes .btn-nota-cliente {
     width: 40px;
     font-size: 10px;
     padding: 8px 0;
   }
-  
+
   .nuevo-embarque {
     margin-left: 50px;
     width: calc(100% - 50px);
   }
-  
+
   .sidebar-collapsed {
     width: 0;
     padding: 0;
     overflow: hidden;
   }
-  
-  .sidebar-collapsed + .nuevo-embarque {
+
+  .sidebar-collapsed+.nuevo-embarque {
     margin-left: 0;
     width: 100%;
   }
@@ -7652,7 +7527,7 @@ button:disabled {
   background-color: #c7e2fe;
   padding: 10px;
   border-radius: 0 5px 5px 0;
-  box-shadow: 2px 2px 5px rgba(0,0,0,0.1);
+  box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.1);
   font-size: 12px;
   z-index: 100;
 }
@@ -7703,10 +7578,13 @@ button:disabled {
 
 @media (max-width: 768px) {
   .botones {
-    flex-direction: row; /* Cambiado de column a row para mantener los botones en la misma fila */
+    flex-direction: row;
+    /* Cambiado de column a row para mantener los botones en la misma fila */
     gap: 8px;
-    flex-wrap: wrap; /* Permite que los botones se envuelvan si no caben en una línea */
-    justify-content: space-between; /* Distribuye el espacio entre los botones */
+    flex-wrap: wrap;
+    /* Permite que los botones se envuelvan si no caben en una línea */
+    justify-content: space-between;
+    /* Distribuye el espacio entre los botones */
   }
 }
 
@@ -7717,7 +7595,8 @@ button:disabled {
   align-items: center;
 }
 
-.btn-volver, .btn-bloqueo {
+.btn-volver,
+.btn-bloqueo {
   flex: 1;
   padding: 8px 16px;
   min-width: 200px;
@@ -7739,8 +7618,9 @@ button:disabled {
     flex-wrap: wrap;
     justify-content: space-between;
   }
-  
-  .btn-volver, .btn-bloqueo {
+
+  .btn-volver,
+  .btn-bloqueo {
     min-width: 150px;
   }
 }
@@ -7786,7 +7666,7 @@ button:disabled {
     padding: 4px 8px;
     font-size: 12px;
   }
-  
+
   .cliente-header-controls {
     flex-wrap: wrap;
     gap: 5px;
@@ -7879,7 +7759,8 @@ button:disabled {
 }
 
 .medida-texto:not(.disabled)::after {
-  content: '\f040'; /* Ícono de lápiz de FontAwesome */
+  content: '\f040';
+  /* Ícono de lápiz de FontAwesome */
   font-family: 'Font Awesome 5 Free';
   font-weight: 900;
   position: absolute;
@@ -7922,7 +7803,7 @@ button:disabled {
   .modal-contenido {
     width: 95%;
   }
-  
+
   .pdf-badge {
     font-size: 8px;
     padding: 1px 3px;
@@ -7964,7 +7845,9 @@ button:disabled {
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .generar-pdf-cliente {
@@ -8040,9 +7923,3 @@ button:disabled {
   transform: none;
 }
 </style>
-
-
- 
-
-
-
