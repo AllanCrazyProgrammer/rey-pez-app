@@ -12,9 +12,8 @@
       <header-embarque :modo-edicion="modoEdicion" :embarque-bloqueado="embarqueBloqueado" :embarque="embarque"
         :is-generating-pdf="isGeneratingPdf" :pdf-type="pdfType" :embarque-id="embarqueId"
         @volver="volverAEmbarquesMenu" @toggle-bloqueo="toggleBloqueo" @update:fecha="embarque.fecha = $event"
-        @update:cargaCon="embarque.cargaCon = $event" @generar-taras="generarResumenTarasPDF"
-        @generar-resumen="generarResumenEmbarque2" />
-
+        @update:cargaCon="embarque.cargaCon = $event" @generar-taras="generarPDF('taras')"
+        @generar-resumen="generarPDF('resumen')" />
 
 
       <div class="botones-undo-redo">
@@ -24,16 +23,15 @@
           class="btn btn-secondary btn-sm">Rehacer</button>
       </div>
 
-<form @submit.prevent="guardarEmbarque" @keydown.enter.prevent>
+      <form @submit.prevent="guardarEmbarque" @keydown.enter.prevent>
         <div v-for="(clienteProductos, clienteId) in productosPorCliente" :key="clienteId" class="cliente-grupo"
           v-show="clienteActivo === clienteId || clienteActivo === null">
           <div class="cliente-header sticky-header" :data-cliente="obtenerNombreCliente(clienteId)" :style="{}">
             <div class="cliente-info">
               <h3>
                 {{ obtenerNombreCliente(clienteId) }}
-                <button type="button" @click.stop="generarNotaVenta(clienteId)" class="btn-pdf-mini"
-                  title="Vista previa PDF">
-                        <i class="fas fa-eye"></i>
+                <button @click.stop="generarPDF('cliente', clienteId)" class="btn-pdf-mini" title="Vista previa PDF">
+                  <i class="fas fa-eye"></i>
                 </button>
               </h3>
               <div class="cliente-totales">
@@ -50,12 +48,14 @@
                   :disabled="embarqueBloqueado">
                 <label :for="'juntar-medidas-' + clienteId" @click.stop>Juntar medidas</label>
               </div>
-              <button type="button" @click.stop="generarNotaVenta(clienteId)"
+              <button type="button" @click.stop="generarPDF('cliente', clienteId)"
                 class="btn btn-primary btn-sm generar-pdf-cliente" title="Generar Nota de Venta PDF"
                 :disabled="isGeneratingPdf">
                 <span v-if="isGeneratingPdf && pdfType === 'cliente-' + clienteId" class="loader-inline"></span>
                 <i v-else class="fas fa-file-pdf"></i> Generar Nota PDF
               </button>
+
+
               <!-- Agregar botón para crear cuenta de Joselito -->
               <button v-if="esClienteJoselito(clienteId)" type="button"
                 @click.stop="crearCuentaJoselito(obtenerEmbarqueCliente(clienteId), productosPorCliente[clienteId], clienteCrudos[clienteId] || [])"
@@ -64,6 +64,8 @@
                 <span v-if="isCreatingAccount" class="loader-inline"></span>
                 <i v-else class="fas fa-plus-circle"></i> Crear Cuenta
               </button>
+
+
               <!-- Agregar botón para crear cuenta de Catarro -->
               <button v-if="esClienteCatarro(clienteId)" type="button"
                 @click.stop="crearCuentaCatarro(obtenerEmbarqueCliente(clienteId), productosPorCliente[clienteId], clienteCrudos[clienteId] || [])"
@@ -251,7 +253,8 @@
                 {{ generarReporteExtenso(producto) }}
               </div>
             </div>
-            <div v-for="(crudo, index) in clienteCrudos[clienteId] || []" :key="'crudo-' + index" class="producto crudo">
+            <div v-for="(crudo, index) in clienteCrudos[clienteId] || []" :key="'crudo-' + index"
+              class="producto crudo">
               <h2 class="crudo-header">Crudos</h2>
 
               <div class="crudo-items">
@@ -476,34 +479,29 @@ import { useAuthStore } from '@/stores/auth'
 import { ref as vueRef, onMounted, onUnmounted, defineAsyncComponent } from 'vue'
 import Sidebar from '@/components/Sidebar.vue'
 import HeaderEmbarque from '../Embarques/components/HeaderEmbarque.vue'
+import pdfGenerationMixin from './mixins/pdfGenerationMixin';
+
+
+
+
+
 
 // Lazy loaded components
 const Rendimientos = defineAsyncComponent(() => import('./Rendimientos.vue'))
 
-// Import PDF generators directly
-import { generarNotaVentaPDF } from '@/utils/pdfGenerator';
-import { generarResumenTarasPDF } from '@/utils/resumenTarasPdf';
-import { generarResumenEmbarquePDF } from '@/utils/resumenEmbarque2';
 
-// Lazy load PDF libraries when needed
-const loadPdfLibs = async () => {
-  try {
-    const jsPDFModule = await import('jspdf')
-    await import('jspdf-autotable')
 
-    // Ensure global pdfMake availability if needed by other libraries
-    if (typeof window !== 'undefined' && !window.jsPDF) {
-      window.jsPDF = jsPDFModule.default
-    }
 
-    return jsPDFModule.default
-  } catch (error) {
-    console.error('Error loading PDF libraries:', error)
-    throw new Error('No se pudieron cargar las bibliotecas de PDF: ' + error.message)
-  }
-}
 
 export default {
+
+  mixins: [
+    // otros mixins que ya tengas
+    pdfGenerationMixin
+  ],
+
+
+
   name: 'NuevoEmbarque',
   components: {
     Rendimientos,
@@ -1164,70 +1162,8 @@ export default {
       return producto.tipo || 'Sin Tipo';
     },
 
-    // Removed initPdfMake method in favor of lazy loading PDF libraries directly in each PDF generation method
 
-    async generarResumenEmbarque2() {
-      // Show loading indicator
-      this.$set(this, 'isGeneratingPdf', true);
-      this.$set(this, 'pdfType', 'resumen');
 
-      try {
-        const medidasCrudos = new Set();
-        Object.values(this.clienteCrudos).forEach(crudos => {
-          crudos.forEach(crudo => {
-            crudo.items.forEach(item => {
-              if (item.talla) {
-                medidasCrudos.add(item.talla);
-              }
-            });
-          });
-        });
-
-        const embarqueData = {
-          ...this.embarque,
-          crudos: Object.entries(this.clienteCrudos).flatMap(([clienteId, crudos]) =>
-            crudos.flatMap(crudo =>
-              crudo.items.map(item => {
-                const tarasArray = [];
-
-                // Agregar taras principales
-                if (item.taras) {
-                  tarasArray.push(item.taras);
-                }
-
-                // Agregar sobrante si existe
-                if (item.sobrante) {
-                  tarasArray.push(item.sobrante);
-                }
-
-                return {
-                  clienteId,
-                  medida: item.talla,
-                  taras: tarasArray,
-                  barco: item.barco,
-                  textoAlternativo: item.textoAlternativo // Incluir el texto alternativo
-                };
-              })
-            )
-          ),
-          medidasCrudos: Array.from(medidasCrudos)
-        };
-
-        console.log('Generando PDF de resumen de embarque...');
-
-        // Use directly imported function
-        generarResumenEmbarquePDF(embarqueData, this.productosPorCliente, this.obtenerNombreCliente, this.clientesDisponibles);
-
-        console.log('PDF generado con éxito');
-      } catch (error) {
-        console.error('Error al generar el PDF:', error);
-        alert('Hubo un error al generar el resumen de embarque: ' + error.message);
-      } finally {
-        // Hide loading indicator
-        this.$set(this, 'isGeneratingPdf', false);
-        this.$set(this, 'pdfType', null);
-      }
-    },
 
     calcularAlturaCliente(productos, crudos) {
       try {
@@ -1670,41 +1606,7 @@ export default {
       }
       return totalTaras;
     },
-    async generarNotaVenta(clienteId) {
-      // Show loading indicator
-      this.$set(this, 'isGeneratingPdf', true);
-      this.$set(this, 'pdfType', 'cliente-' + clienteId);
 
-      try {
-        const clienteProductos = this.productosPorCliente[clienteId];
-        const clienteCrudos = this.clienteCrudos[clienteId];
-
-        // Crear una copia del embarque con todos los datos necesarios
-        const embarqueCliente = {
-          fecha: this.embarque.fecha,
-          cargaCon: this.embarque.cargaCon,
-          productos: clienteProductos,
-          clienteCrudos: { [clienteId]: clienteCrudos },
-          kilosCrudos: this.embarque.kilosCrudos || {}
-        };
-
-        console.log(`Generando nota de venta para cliente ${clienteId}...`);
-
-        // Use directly imported function
-        generarNotaVentaPDF(embarqueCliente, this.clientesDisponibles, this.clientesJuntarMedidas);
-
-        // Eliminamos la creación automática de la cuenta
-
-        console.log('Nota de venta generada con éxito');
-      } catch (error) {
-        console.error('Error al generar la nota de venta:', error);
-        alert('Hubo un error al generar la nota de venta: ' + error.message);
-      } finally {
-        // Hide loading indicator
-        this.$set(this, 'isGeneratingPdf', false);
-        this.$set(this, 'pdfType', null);
-      }
-    },
     onRestarTarasChange(producto) {
       console.log('Restar taras cambiado:', producto.restarTaras);
       this.$nextTick(() => {
@@ -1929,35 +1831,7 @@ export default {
       }
       this.cerrarModalHilos();
     },
-    async generarNotaVentaPDF() {
-      // Show loading indicator
-      this.$set(this, 'isGeneratingPdf', true);
-      this.$set(this, 'pdfType', 'all');
 
-      try {
-        const embarqueCliente = {
-          fecha: this.embarque.fecha,
-          cargaCon: this.embarque.cargaCon,
-          productos: this.embarque.productos,
-          clienteCrudos: this.clienteCrudos,
-          kilosCrudos: this.embarque.kilosCrudos || {}
-        };
-
-        console.log('Generando notas de venta para todos los clientes...');
-
-        // Use directly imported function
-        generarNotaVentaPDF(embarqueCliente, this.clientesDisponibles, this.clientesJuntarMedidas);
-
-        console.log('Notas de venta generadas con éxito');
-      } catch (error) {
-        console.error('Error al generar notas de venta:', error);
-        alert('Hubo un error al generar las notas de venta: ' + error.message);
-      } finally {
-        // Hide loading indicator
-        this.$set(this, 'isGeneratingPdf', false);
-        this.$set(this, 'pdfType', null);
-      }
-    },
     handleJuntarMedidasChange(clienteId, checked) {
       // Actualizar el estado local
       this.$set(this.clientesJuntarMedidas, clienteId, checked);
@@ -2098,34 +1972,7 @@ export default {
       // Si no tienen números, comparar alfabéticamente
       return medidaA.localeCompare(medidaB);
     },
-    async generarResumenTarasPDF() {
-      // Show loading indicator
-      this.$set(this, 'isGeneratingPdf', true);
-      this.$set(this, 'pdfType', 'taras');
 
-      try {
-        const embarqueData = {
-          fecha: this.embarque.fecha,
-          cargaCon: this.embarque.cargaCon,
-          productos: this.embarque.productos,
-          clienteCrudos: this.clienteCrudos
-        };
-
-        console.log('Generando PDF de taras...');
-
-        // Use directly imported function
-        generarResumenTarasPDF(embarqueData, this.clientesDisponibles);
-
-        console.log('PDF de taras generado con éxito');
-      } catch (error) {
-        console.error('Error al generar PDF de taras:', error);
-        alert('Hubo un error al generar el PDF de taras: ' + error.message);
-      } finally {
-        // Hide loading indicator
-        this.$set(this, 'isGeneratingPdf', false);
-        this.$set(this, 'pdfType', null);
-      }
-    },
     onMedidaInput(producto, event) {
       // Eliminar la función trim() para permitir espacios
       const valor = event.target.value.toLowerCase();
@@ -2312,56 +2159,7 @@ export default {
       this.productoEditandoId = null;
       this.actualizarProducto(producto);
     },
-    async generarResumenEmbarque2() {
-      try {
-        // Obtener las medidas únicas de los crudos
-        const medidasCrudos = new Set();
-        Object.values(this.clienteCrudos).forEach(crudos => {
-          crudos.forEach(crudo => {
-            crudo.items.forEach(item => {
-              if (item.talla) {
-                medidasCrudos.add(item.talla);
-              }
-            });
-          });
-        });
 
-        // Crear el objeto embarque con la información necesaria
-        const embarqueData = {
-          ...this.embarque,
-          crudos: Object.entries(this.clienteCrudos).flatMap(([clienteId, crudos]) =>
-            crudos.flatMap(crudo =>
-              crudo.items.map(item => {
-                const tarasArray = [];
-
-                // Agregar taras principales
-                if (item.taras) {
-                  tarasArray.push(item.taras);
-                }
-
-                // Agregar sobrante si existe
-                if (item.sobrante) {
-                  tarasArray.push(item.sobrante);
-                }
-
-                return {
-                  clienteId,
-                  medida: item.talla,
-                  taras: tarasArray,
-                  barco: item.barco
-                };
-              })
-            )
-          ),
-          medidasCrudos: Array.from(medidasCrudos)
-        };
-
-        console.log('Datos del embarque:', embarqueData); // Para depuración
-        generarResumenEmbarquePDF(embarqueData, this.productosPorCliente, this.obtenerNombreCliente, this.clientesDisponibles);
-      } catch (error) {
-        console.error('Error al generar el PDF:', error);
-      }
-    },
     onTallaCrudoChange(item) {
       // Asegurarse de que el item tenga todas las propiedades necesarias
       if (!item.medida) {
