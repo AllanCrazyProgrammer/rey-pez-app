@@ -551,7 +551,7 @@ input.cliente-canelo {
   color: black;
 }
 
-/* Estilos cuando el input está enfocado  */
+/* Estilos cuando el input está enfocado */
 input.cliente-8a:focus {
   outline: none;
   box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.3);
