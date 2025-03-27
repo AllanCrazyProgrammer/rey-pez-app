@@ -125,7 +125,7 @@ export default {
   data() {
     return {
       fecha: new Date().toISOString().split('T')[0],
-      clientes: ['8a', 'Catarro', 'Otilio', 'Ozuna'],
+      clientes: ['8a', 'Catarro', 'Otilio', 'Ozuna', 'Canelo'],
       columnasBase: ['Med', 'Med-Esp', 'Med-gde', 'Gde', 'Extra'],
       columnasAdicionales: [],
       nuevaColumna: '',
@@ -133,13 +133,15 @@ export default {
         '8a': { med: null, 'med-esp': null, 'med-gde': null, gde: null, extra: null },
         Catarro: { med: null, 'med-esp': null, 'med-gde': null, gde: null, extra: null },
         Otilio: { med: null, 'med-esp': null, 'med-gde': null, gde: null, extra: null },
-        Ozuna: { med: null, 'med-esp': null, 'med-gde': null, gde: null, extra: null }
+        Ozuna: { med: null, 'med-esp': null, 'med-gde': null, gde: null, extra: null },
+        Canelo: { med: null, 'med-esp': null, 'med-gde': null, gde: null, extra: null }
       },
       barcosPorPedido: {
         '8a': {},
         'Catarro': {},
         'Otilio': {},
-        'Ozuna': {}
+        'Ozuna': {},
+        'Canelo': {}
       },
       isEditing: false,
       pedidoId: null,
@@ -513,6 +515,11 @@ input[type="number"] {
   color: white;
 }
 
+.cliente-canelo {
+  background-color: #9b59b6;
+  color: white;
+}
+
 /* Estilos para los inputs de cada cliente */
 input.cliente-8a {
   background-color: #ebf5fb;
@@ -538,6 +545,12 @@ input.cliente-ozuna {
   color: black;
 }
 
+input.cliente-canelo {
+  background-color: #f5eef8;
+  border-color: #9b59b6;
+  color: black;
+}
+
 /* Estilos cuando el input está enfocado */
 input.cliente-8a:focus {
   outline: none;
@@ -557,6 +570,11 @@ input.cliente-otilio:focus {
 input.cliente-ozuna:focus {
   outline: none;
   box-shadow: 0 0 0 2px rgba(46, 204, 113, 0.3);
+}
+
+input.cliente-canelo:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(155, 89, 182, 0.3);
 }
 
 .kilos-info {
