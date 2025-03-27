@@ -44,7 +44,10 @@ export default {
                 // Usar el nombre alternativo si existe, o el nombre original como valor inicial
                 this.nombreLocal = this.nombreAlternativo || this.nombreOriginal;
                 this.$nextTick(() => {
-                    this.$refs.nombreInput?.focus();
+                    if (this.$refs.nombreInput) {
+                        this.$refs.nombreInput.focus();
+                        this.$refs.nombreInput.select();
+                    }
                 });
             }
         },

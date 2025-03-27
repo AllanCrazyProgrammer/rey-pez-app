@@ -25,7 +25,7 @@
                     </div>
                 </div>
             </div>
-            <span class="medida-texto" @click="embarqueBloqueado ? null : abrirModalNombreAlternativo" :class="{
+            <span class="medida-texto" @click="handleNombreAlternativoClick" :class="{
                 'disabled': embarqueBloqueado,
                 'tiene-nombre-alternativo': producto.nombreAlternativoPDF
             }">
@@ -300,6 +300,13 @@ export default {
         // Método para actualizar el componente padre
         actualizarProducto() {
             this.$emit('update:producto', this.producto);
+        },
+
+        // Método para manejar el clic en el nombre para abrir el modal
+        handleNombreAlternativoClick() {
+            if (!this.embarqueBloqueado) {
+                this.abrirModalNombreAlternativo();
+            }
         },
 
         // Métodos para taras
