@@ -141,7 +141,7 @@
                 'reporte-incompleto': !coincideTarasYBolsas(producto) && tieneAlgunReporte(producto)
               }"
             >
-              <!-- Encabezado de la medida y selección -->
+              <!-- Encabezado de la medida y selección  -->
               <h2 class="encabezado-medida">
                 <div class="botones-encabezado">
                   <div class="botones-fila-superior">
