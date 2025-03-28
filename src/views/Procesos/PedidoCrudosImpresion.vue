@@ -98,7 +98,8 @@ export default {
         '8a': '#3498db',
         'catarro': '#e74c3c',
         'otilio': '#f1c40f',
-        'ozuna': '#2ecc71'
+        'ozuna': '#2ecc71',
+        'canelo': '#8e44ad'
       }
       return colores[cliente.toLowerCase()] || '#000000'
     },
