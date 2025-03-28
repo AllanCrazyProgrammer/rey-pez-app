@@ -1,7 +1,9 @@
 <template>
     <div class="producto" :data-es-venta="producto.esVenta" :class="{
         'reporte-completo': coincideTarasYBolsas,
-        'reporte-incompleto': !coincideTarasYBolsas && tieneAlgunReporte
+        'reporte-incompleto': !coincideTarasYBolsas && tieneAlgunReporte,
+        'taras-reportadas': coincideTaras,
+        'taras-no-reportadas': totalTaras > 0 && !coincideTaras
     }">
         <!-- Encabezado de la medida y selección -->
         <h2 class="encabezado-medida">
@@ -493,6 +495,14 @@ export default {
     border-left: 4px solid #f39c12;
 }
 
+.producto.taras-reportadas {
+    border: 2px solid #2ecc71;
+}
+
+.producto.taras-no-reportadas {
+    border: 2px solid #e74c3c;
+}
+
 .encabezado-medida {
     display: flex;
     justify-content: space-between;
@@ -504,7 +514,7 @@ export default {
 
 .medida-texto {
     flex-grow: 1;
-    font-size: 1.2rem;
+    font-size: 1.3rem;
     font-weight: 600;
     cursor: pointer;
 }
@@ -527,7 +537,7 @@ export default {
     color: white;
     padding: 2px 4px;
     border-radius: 3px;
-    font-size: 0.7rem;
+    font-size: 0.8rem;
     margin-left: 5px;
 }
 
@@ -535,6 +545,7 @@ export default {
     color: #27ae60;
     font-weight: bold;
     padding: 0 10px;
+    font-size: 1.1rem;
 }
 
 .producto-header {
@@ -693,13 +704,13 @@ export default {
 .taras-header h5,
 .columna h5 {
     margin: 0;
-    font-size: 1rem;
+    font-size: 1.1rem;
 }
 
 .checkbox-container {
     display: flex;
     align-items: center;
-    font-size: 14px;
+    font-size: 0.9rem;
 }
 
 .input-group {
@@ -725,6 +736,7 @@ export default {
 .total {
     font-weight: bold;
     padding: 5px 0;
+    font-size: 1.1rem;
 }
 
 .reporte-taras-bolsas {
@@ -750,6 +762,7 @@ export default {
 .total-bolsas-reporte {
     margin-top: 10px;
     font-weight: bold;
+    font-size: 1.1rem;
 }
 
 .total-taras-reporte.coincide {
@@ -766,14 +779,14 @@ export default {
     border-radius: 4px;
     margin-top: 10px;
     white-space: pre-line;
-    font-size: 0.9em;
+    font-size: 1rem;
 }
 
 .venta-checkbox-container {
     display: flex;
     align-items: center;
     margin-right: 10px;
-    font-size: 14px;
+    font-size: 0.95rem;
 }
 
 .valores-container-debajo {
@@ -791,7 +804,7 @@ export default {
     display: flex;
     align-items: center;
     gap: 5px;
-    font-size: 14px;
+    font-size: 0.95rem;
 }
 
 .camaron-neto-input {
@@ -820,6 +833,14 @@ export default {
     .producto {
         flex: 0 0 100%;
         max-width: 100%;
+    }
+    
+    .medida-texto {
+        font-size: 1.2rem;
+    }
+    
+    .total, .total-taras-reporte, .total-bolsas-reporte {
+        font-size: 1rem;
     }
 }
 </style>

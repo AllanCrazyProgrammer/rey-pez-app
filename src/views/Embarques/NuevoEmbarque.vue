@@ -387,6 +387,19 @@ export default {
     },
 
     async agregarClienteProducto() {
+      // Verificar si hay algún modal abierto
+      const modalAbierto = this.mostrarModalPrecio || 
+                          this.mostrarModalHilos || 
+                          this.mostrarModalNota || 
+                          this.mostrarModalAlt || 
+                          this.mostrarModalNombreAlternativo || 
+                          this.mostrarModalNuevoCliente;
+                          
+      // No continuar si hay un modal abierto
+      if (modalAbierto) {
+        return;
+      }
+      
       if (!this.embarque.fecha) {
         alert('Por favor, seleccione una fecha para el embarque.');
         return;
@@ -413,6 +426,19 @@ export default {
     },
 
     async guardarEmbarqueInicial(clienteId) {
+      // Verificar si hay algún modal abierto
+      const modalAbierto = this.mostrarModalPrecio || 
+                          this.mostrarModalHilos || 
+                          this.mostrarModalNota || 
+                          this.mostrarModalAlt || 
+                          this.mostrarModalNombreAlternativo || 
+                          this.mostrarModalNuevoCliente;
+                          
+      // No continuar si hay un modal abierto
+      if (modalAbierto) {
+        return null;
+      }
+      
       // Si no existe embarqueId, crear nuevo embarque
       if (!this.embarqueId) {
         const db = getFirestore();
@@ -433,7 +459,9 @@ export default {
           return this.embarqueId; // Retornar el ID para encadenar operaciones
         } catch (error) {
           console.error("Error al crear el embarque inicial:", error);
-          alert('Hubo un error al crear el embarque. Por favor, intente nuevamente.');
+          if (!modalAbierto) {
+            alert('Hubo un error al crear el embarque. Por favor, intente nuevamente.');
+          }
           return null;
         }
       } else {
@@ -578,6 +606,19 @@ export default {
     },
 
     resetearEmbarque() {
+      // Verificar si hay algún modal abierto
+      const modalAbierto = this.mostrarModalPrecio || 
+                           this.mostrarModalHilos || 
+                           this.mostrarModalNota || 
+                           this.mostrarModalAlt || 
+                           this.mostrarModalNombreAlternativo || 
+                           this.mostrarModalNuevoCliente;
+                            
+      // No reiniciar si hay un modal abierto
+      if (modalAbierto) {
+        return;
+      }
+      
       this.embarque = {
         fecha: new Date().toISOString().split('T')[0], // Establecer fecha actual por defecto
         cargaCon: '',
@@ -636,7 +677,10 @@ export default {
     },
 
     guardarCambiosEnTiempoReal: debounce(function () {
-      if (!this.guardadoAutomaticoActivo || !this.embarqueId || this.mostrarModalPrecio) return;
+      if (!this.guardadoAutomaticoActivo || !this.embarqueId || 
+          this.mostrarModalPrecio || this.mostrarModalHilos || 
+          this.mostrarModalNota || this.mostrarModalAlt || 
+          this.mostrarModalNombreAlternativo || this.mostrarModalNuevoCliente) return;
 
       // Crear una copia profunda de los datos antes de guardar
       const embarqueData = {
@@ -659,6 +703,19 @@ export default {
     async guardarEmbarque() {
       if (!this.embarque.fecha) {
         alert('Por favor, seleccione una fecha para el embarque.');
+        return;
+      }
+
+      // Verificar si hay algún modal abierto
+      const modalAbierto = this.mostrarModalPrecio || 
+                          this.mostrarModalHilos || 
+                          this.mostrarModalNota || 
+                          this.mostrarModalAlt || 
+                          this.mostrarModalNombreAlternativo || 
+                          this.mostrarModalNuevoCliente;
+                          
+      // No continuar si hay un modal abierto
+      if (modalAbierto) {
         return;
       }
 
@@ -816,17 +873,43 @@ export default {
     },
 
     agregarCrudoItem(clienteId, index) {
+      // Asegurarnos de que la estructura esté correctamente inicializada
       if (!this.clienteCrudos[clienteId]) {
         this.$set(this.clienteCrudos, clienteId, []);
       }
+      
+      // Si el índice no existe o está fuera de rango, agregamos un nuevo objeto crudo
       if (!this.clienteCrudos[clienteId][index]) {
         this.$set(this.clienteCrudos[clienteId], index, { items: [] });
       }
+      
+      // Si items no existe, inicializamos como array vacío
+      if (!Array.isArray(this.clienteCrudos[clienteId][index].items)) {
+        this.$set(this.clienteCrudos[clienteId][index], 'items', []);
+      }
+      
+      // Finalmente agregamos el nuevo item
       this.clienteCrudos[clienteId][index].items.push(crearNuevoCrudoItem());
       this.guardarCambiosEnTiempoReal();
     },
 
     eliminarCrudoItem(clienteId, crudoIndex, itemIndex) {
+      // Validar que todas las propiedades existan
+      if (!this.clienteCrudos[clienteId]) {
+        console.error('Cliente no encontrado:', clienteId);
+        return;
+      }
+      
+      if (!this.clienteCrudos[clienteId][crudoIndex]) {
+        console.error('Índice de crudo no válido:', crudoIndex);
+        return;
+      }
+      
+      if (!this.clienteCrudos[clienteId][crudoIndex].items) {
+        console.error('El objeto crudo no tiene propiedad items');
+        return;
+      }
+      
       this.clienteCrudos[clienteId][crudoIndex].items.splice(itemIndex, 1);
       if (this.clienteCrudos[clienteId][crudoIndex].items.length === 0) {
         this.eliminarCrudo(clienteId, crudoIndex);
@@ -834,7 +917,13 @@ export default {
       this.guardarCambiosEnTiempoReal();
     },
 
-    eliminarCrudo(clienteId, index) {
+    eliminarCrudo(index, clienteId) {
+      // Validar que exista el cliente
+      if (!this.clienteCrudos[clienteId]) {
+        console.error('Cliente no encontrado:', clienteId);
+        return;
+      }
+      
       this.clienteCrudos[clienteId].splice(index, 1);
       if (this.clienteCrudos[clienteId].length === 0) {
         this.$delete(this.clienteCrudos, clienteId);
@@ -843,6 +932,29 @@ export default {
     },
 
     toggleSobrante(clienteId, crudoIndex, itemIndex) {
+      // Validar que todas las propiedades existan
+      if (!this.clienteCrudos[clienteId]) {
+        console.error('Cliente no encontrado:', clienteId);
+        return;
+      }
+      
+      if (!this.clienteCrudos[clienteId][crudoIndex]) {
+        console.error('Índice de crudo no válido:', crudoIndex);
+        return;
+      }
+      
+      if (!this.clienteCrudos[clienteId][crudoIndex].items) {
+        // Si no existe items, inicializarlo como array vacío
+        this.$set(this.clienteCrudos[clienteId][crudoIndex], 'items', []);
+        console.error('El objeto crudo no tiene propiedad items');
+        return;
+      }
+      
+      if (!this.clienteCrudos[clienteId][crudoIndex].items[itemIndex]) {
+        console.error('Índice de item no válido:', itemIndex);
+        return;
+      }
+      
       const item = this.clienteCrudos[clienteId][crudoIndex].items[itemIndex];
       if (!item.hasOwnProperty('mostrarSobrante')) {
         this.$set(item, 'mostrarSobrante', true);
@@ -1065,6 +1177,19 @@ export default {
 
     // Métodos de manipulación de clientes
     seleccionarCliente(clienteId) {
+      // Verificar si hay algún modal abierto
+      const modalAbierto = this.mostrarModalPrecio || 
+                          this.mostrarModalHilos || 
+                          this.mostrarModalNota || 
+                          this.mostrarModalAlt || 
+                          this.mostrarModalNombreAlternativo || 
+                          this.mostrarModalNuevoCliente;
+                          
+      // No continuar si hay un modal abierto
+      if (modalAbierto) {
+        return;
+      }
+      
       // Verificar si ya existe el embarque, si no, crear uno
       if (!this.embarque.fecha) {
         alert('Por favor, seleccione una fecha para el embarque.');

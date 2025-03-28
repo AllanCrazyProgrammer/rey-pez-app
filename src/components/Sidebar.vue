@@ -217,6 +217,9 @@ export default {
         // Solo sumar si es un cliente predefinido
         if (clientePredefinido) {
           return total + crudos.reduce((clienteTotal, crudo) => {
+            if (!crudo || !crudo.items || !Array.isArray(crudo.items)) {
+              return clienteTotal;
+            }
             return clienteTotal + crudo.items.reduce((itemTotal, item) => {
               return itemTotal + this.calcularKilosCrudos(item);
             }, 0);
@@ -243,6 +246,9 @@ export default {
       return Number((sumaKilos - descuentoTaras).toFixed(1));
     },
     calcularTotalCrudos(crudo) {
+      if (!crudo || !crudo.items || !Array.isArray(crudo.items)) {
+        return 0;
+      }
       return crudo.items.reduce((total, item) => {
         let taras = this.extraerNumero(item.taras);
         let sobrante = this.extraerNumero(item.sobrante);

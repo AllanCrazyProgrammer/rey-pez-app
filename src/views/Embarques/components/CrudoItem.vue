@@ -3,7 +3,7 @@
         <h2 class="crudo-header">Crudos</h2>
 
         <div class="crudo-items">
-            <div v-for="(item, itemIndex) in crudo.items || []" :key="'item-' + itemIndex" class="crudo-item">
+            <div v-for="(item, itemIndex) in crudoData.items || []" :key="'item-' + itemIndex" class="crudo-item">
                 <div class="crudo-talla-container">
                     <button @click="abrirModalPrecio(item)" class="btn-precio" :class="{ 'tiene-precio': item.precio }"
                         :disabled="embarqueBloqueado">
@@ -64,7 +64,7 @@ export default {
     props: {
         crudo: {
             type: Object,
-            required: true
+            default: () => ({ items: [] })
         },
         embarqueBloqueado: {
             type: Boolean,
@@ -89,9 +89,27 @@ export default {
         'mostrar-modal-precio'
     ],
 
+    data() {
+        return {
+            crudoData: this.crudo || { items: [] }
+        };
+    },
+
+    watch: {
+        crudo: {
+            handler(newVal) {
+                this.crudoData = newVal || { items: [] };
+            },
+            immediate: true
+        }
+    },
+
     computed: {
         calcularTotalCrudos() {
-            return this.crudo.items.reduce((total, item) => {
+            if (!this.crudoData || !this.crudoData.items || !Array.isArray(this.crudoData.items)) {
+                return 0;
+            }
+            return this.crudoData.items.reduce((total, item) => {
                 let taras = this.extraerNumero(item.taras);
                 let sobrante = this.extraerNumero(item.sobrante);
                 return total + taras + sobrante;
@@ -107,7 +125,7 @@ export default {
         },
 
         actualizarCrudo() {
-            this.$emit('update:crudo', this.crudo);
+            this.$emit('update:crudo', this.crudoData);
         },
 
         abrirModalPrecio(item) {
@@ -123,19 +141,51 @@ export default {
         },
 
         agregarCrudoItem() {
-            this.$emit('agregar-crudo-item', this.clienteId, this.crudoIndex);
+            // Agregar nuevo elemento vacío al array
+            if (!this.crudoData.items) {
+                this.crudoData.items = [];
+            }
+            
+            this.crudoData.items.push({
+                talla: '',
+                barco: '',
+                taras: '',
+                sobrante: '',
+                precio: null,
+                mostrarSobrante: false
+            });
+            
+            // Actualizar el componente padre
+            this.actualizarCrudo();
         },
 
         eliminarCrudoItem(itemIndex) {
-            this.$emit('eliminar-crudo-item', this.clienteId, this.crudoIndex, itemIndex);
+            // Eliminar el elemento del array
+            if (this.crudoData.items && this.crudoData.items.length > itemIndex) {
+                this.crudoData.items.splice(itemIndex, 1);
+                
+                // Actualizar el componente padre
+                this.actualizarCrudo();
+            }
         },
 
         eliminarCrudo() {
-            this.$emit('eliminar-crudo', this.clienteId, this.crudoIndex);
+            this.$emit('eliminar-crudo', this.crudoIndex, this.clienteId);
         },
 
         toggleSobrante(itemIndex) {
-            this.$emit('toggle-sobrante', this.clienteId, this.crudoIndex, itemIndex);
+            // Cambiar el estado de mostrarSobrante directamente
+            if (this.crudoData.items && this.crudoData.items.length > itemIndex) {
+                this.crudoData.items[itemIndex].mostrarSobrante = !this.crudoData.items[itemIndex].mostrarSobrante;
+                
+                // Si se oculta el sobrante, limpiar su valor
+                if (!this.crudoData.items[itemIndex].mostrarSobrante) {
+                    this.crudoData.items[itemIndex].sobrante = '';
+                }
+                
+                // Actualizar el componente padre
+                this.actualizarCrudo();
+            }
         }
     }
 }

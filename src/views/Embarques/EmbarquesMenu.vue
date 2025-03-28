@@ -120,7 +120,7 @@ export default {
               // Calcular taras de crudo
               if (clienteJoselito.crudos && Array.isArray(clienteJoselito.crudos)) {
                 tarasCrudo = clienteJoselito.crudos.reduce((total, crudo) => {
-                  if (!Array.isArray(crudo.items)) return total;
+                  if (!crudo || !crudo.items || !Array.isArray(crudo.items)) return total;
                   
                   return total + crudo.items.reduce((itemTotal, item) => {
                     let tarasItem = 0;

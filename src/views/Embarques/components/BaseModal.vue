@@ -1,9 +1,9 @@
 <template>
     <div class="modal-overlay" v-if="mostrar" @click.self="cerrar">
-        <div class="modal-contenido">
+        <div class="modal-contenido" @click.stop>
             <div class="modal-header">
                 <h3>{{ titulo }}</h3>
-                <button @click="cerrar" class="btn-cerrar-modal">
+                <button @click.stop="cerrar" class="btn-cerrar-modal">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
@@ -11,8 +11,8 @@
                 <slot></slot>
             </div>
             <div class="modal-footer">
-                <button @click="cerrar" class="btn btn-secondary">Cancelar</button>
-                <button @click="confirmar" class="btn btn-primary">{{ textoBotonConfirmar }}</button>
+                <button @click.stop="cerrar" class="btn btn-secondary">Cancelar</button>
+                <button @click.stop="confirmar" class="btn btn-primary">{{ textoBotonConfirmar }}</button>
             </div>
         </div>
     </div>

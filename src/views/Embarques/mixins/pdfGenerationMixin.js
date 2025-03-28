@@ -98,11 +98,14 @@ export default {
       const medidasCrudos = new Set();
       Object.values(this.clienteCrudos).forEach((crudos) => {
         crudos.forEach((crudo) => {
-          crudo.items.forEach((item) => {
-            if (item.talla) {
-              medidasCrudos.add(item.talla);
-            }
-          });
+          // Verificar que crudo no sea null y tenga la propiedad items
+          if (crudo && crudo.items && Array.isArray(crudo.items)) {
+            crudo.items.forEach((item) => {
+              if (item.talla) {
+                medidasCrudos.add(item.talla);
+              }
+            });
+          }
         });
       });
 
@@ -125,8 +128,13 @@ export default {
         ...this.embarque,
         crudos: Object.entries(this.clienteCrudos).flatMap(
           ([clienteId, crudos]) =>
-            crudos.flatMap((crudo) =>
-              crudo.items.map((item) => {
+            crudos.flatMap((crudo) => {
+              // Si crudo es null o no tiene items, devolver un array vacío
+              if (!crudo || !crudo.items || !Array.isArray(crudo.items)) {
+                return [];
+              }
+              
+              return crudo.items.map((item) => {
                 const tarasArray = [];
 
                 // Agregar taras principales
@@ -146,8 +154,8 @@ export default {
                   barco: item.barco,
                   textoAlternativo: item.textoAlternativo,
                 };
-              })
-            )
+              });
+            })
         ),
         medidasCrudos: Array.from(medidasCrudos),
       };

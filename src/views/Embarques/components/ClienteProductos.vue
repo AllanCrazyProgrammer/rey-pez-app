@@ -66,7 +66,7 @@
             <CrudoItem v-for="(crudo, index) in crudos" :key="'crudo-' + index" :crudo="crudo"
                 :embarque-bloqueado="embarqueBloqueado" :cliente-id="clienteId" :crudo-index="index"
                 @update:crudo="actualizarCrudo(index, $event)"
-                @eliminar-crudo="$emit('eliminar-crudo', clienteId, $event)"
+                @eliminar-crudo="$emit('eliminar-crudo', $event, clienteId)"
                 @eliminar-crudo-item="$emit('eliminar-crudo-item', clienteId, ...$event)"
                 @agregar-crudo-item="$emit('agregar-crudo-item', clienteId, $event)"
                 @toggle-sobrante="$emit('toggle-sobrante', clienteId, ...$event)"
@@ -215,6 +215,9 @@ export default {
         // Calcular totales de crudo
         calcularTotalCrudoCliente() {
             return this.crudos.reduce((total, crudo) => {
+                if (!crudo || !crudo.items || !Array.isArray(crudo.items)) {
+                    return total;
+                }
                 return total + crudo.items.reduce((itemTotal, item) => {
                     let taras = this.extraerNumero(item.taras);
                     let sobrante = this.extraerNumero(item.sobrante);
@@ -225,6 +228,9 @@ export default {
 
         calcularKilosCrudoCliente() {
             return this.crudos.reduce((total, crudo) => {
+                if (!crudo || !crudo.items || !Array.isArray(crudo.items)) {
+                    return total;
+                }
                 return total + crudo.items.reduce((itemTotal, item) => {
                     return itemTotal + this.calcularKilosCrudos(item);
                 }, 0);

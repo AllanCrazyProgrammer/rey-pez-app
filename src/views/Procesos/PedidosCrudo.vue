@@ -357,6 +357,7 @@ export default {
   max-width: 800px;
   margin: 0 auto;
   padding: 20px;
+  font-size: 16px;
 }
 
 .fecha-container {
@@ -370,21 +371,23 @@ export default {
 }
 
 .input-nueva-columna {
-  padding: 8px;
+  padding: 10px;
   border: 1px solid #ddd;
   border-radius: 4px;
   flex: 1;
   max-width: 200px;
+  font-size: 1rem;
 }
 
 .btn-agregar-columna {
-  padding: 8px 16px;
+  padding: 10px 16px;
   background-color: #2ecc71;
   color: white;
   border: none;
   border-radius: 4px;
   cursor: pointer;
   transition: background-color 0.3s ease;
+  font-size: 1rem;
 }
 
 .btn-agregar-columna:hover {
@@ -418,6 +421,7 @@ th, td {
   border: 1px solid #ddd;
   padding: 12px;
   text-align: center;
+  font-size: 1.05rem;
 }
 
 th {
@@ -431,7 +435,7 @@ input[type="number"] {
   text-align: center;
   border: 1px solid #ddd;
   border-radius: 4px;
-  font-size: 16px;
+  font-size: 1.1rem;
   font-weight: bold;
   color: black;
 }
@@ -457,11 +461,11 @@ input[type="number"] {
 
 .btn-guardar,
 .btn-cancelar {
-  padding: 10px 20px;
+  padding: 12px 24px;
   border: none;
   border-radius: 4px;
   cursor: pointer;
-  font-size: 1em;
+  font-size: 1.1rem;
   transition: background-color 0.3s ease;
 }
 
@@ -571,11 +575,13 @@ input.cliente-ozuna:focus {
 .kilos-info h3 {
   color: #2c3e50;
   margin: 0;
+  font-size: 1.3rem;
 }
 
 .kilos-info span {
   color: #3498db;
   font-weight: bold;
+  font-size: 1.4rem;
 }
 
 .fila-totales {
@@ -600,6 +606,7 @@ input.cliente-ozuna:focus {
   text-align: center;
   margin-bottom: 20px;
   color: #2c3e50;
+  font-size: 1.4rem;
 }
 
 .tabla-desglose {
@@ -626,6 +633,7 @@ input.cliente-ozuna:focus {
   font-weight: bold;
   background-color: #f8f9fa;
   text-align: center;
+  font-size: 1.1rem;
 }
 
 .fila-desglose td {
@@ -641,7 +649,7 @@ input.cliente-ozuna:focus {
   padding: 8px;
   border: 1px solid #ddd;
   border-radius: 4px;
-  font-size: 14px;
+  font-size: 1rem;
   background-color: white;
 }
 
@@ -688,13 +696,13 @@ input.cliente-ozuna:focus {
   
   th, td {
     padding: 8px;
-    font-size: 14px;
+    font-size: 0.95rem;
   }
   
   input[type="number"] {
     width: 60px;
     padding: 6px;
-    font-size: 14px;
+    font-size: 0.95rem;
   }
   
   .desglose-medida {
@@ -703,7 +711,7 @@ input.cliente-ozuna:focus {
   }
   
   .desglose-medida h2 {
-    font-size: 18px;
+    font-size: 1.2rem;
     margin-bottom: 10px;
   }
   
@@ -714,12 +722,12 @@ input.cliente-ozuna:focus {
   .tabla-desglose th,
   .tabla-desglose td {
     padding: 8px;
-    font-size: 14px;
+    font-size: 0.95rem;
   }
   
   .input-barco {
     padding: 6px;
-    font-size: 12px;
+    font-size: 0.95rem;
   }
   
   .kilos-info {
@@ -728,7 +736,11 @@ input.cliente-ozuna:focus {
   }
   
   .kilos-info h3 {
-    font-size: 16px;
+    font-size: 1.1rem;
+  }
+  
+  .kilos-info span {
+    font-size: 1.2rem;
   }
 }
 </style> 
