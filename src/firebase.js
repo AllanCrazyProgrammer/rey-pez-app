@@ -1,6 +1,6 @@
 // src/firebase.js
 import { initializeApp } from "firebase/app";
-import { getFirestore, enableIndexedDbPersistence } from "firebase/firestore";
+import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from "firebase/firestore";
 import { getDatabase, ref, onDisconnect, serverTimestamp, set } from "firebase/database";
 
 // Tu configuración de Firebase
@@ -17,18 +17,15 @@ const firebaseConfig = {
 // Inicializar Firebase
 const app = initializeApp(firebaseConfig);
 
-// Inicializar Firestore y Realtime Database
-const db = getFirestore(app);
-const rtdb = getDatabase(app);
-
-// Habilitar persistencia offline
-enableIndexedDbPersistence(db).catch((err) => {
-  if (err.code === 'failed-precondition') {
-    console.error('Persistencia múltiple no permitida');
-  } else if (err.code === 'unimplemented') {
-    console.error('Persistencia no soportada por el navegador');
-  }
+// Inicializar Firestore con persistencia de caché
+const db = initializeFirestore(app, {
+  localCache: persistentLocalCache({
+    tabManager: persistentMultipleTabManager(),
+  })
 });
+
+// Inicializar Realtime Database
+const rtdb = getDatabase(app);
 
 // Función para manejar la presencia de usuarios
 const handleUserPresence = async (userId, username) => {
