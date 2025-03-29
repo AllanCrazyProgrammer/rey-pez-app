@@ -245,15 +245,15 @@ export default {
             const medidaNormalizada = producto.medida.toLowerCase().trim();
             let nombreMedida = producto.medida;
             
-            if (cliente.nombre === 'Ozuna' && !producto.esVenta) {
+            if (cliente.nombre === 'Ozuna') {
               nombreMedida = `${producto.medida} Maquila Ozuna`;
             }
 
             if (medidaNormalizada.endsWith('mix')) {
               const baseSize = medidaNormalizada.split(' ')[0];
               mixMedidas.set(baseSize, nombreMedida);
-            } else if (!medidasMap.has(medidaNormalizada)) {
-              medidasMap.set(medidaNormalizada, nombreMedida);
+            } else if (!medidasMap.has(nombreMedida)) {
+              medidasMap.set(nombreMedida, nombreMedida);
             }
           }
         });
@@ -295,10 +295,23 @@ export default {
     },
 
     calcularTotalParaMedida(medida) {
+      const esOzuna = medida.includes('Maquila Ozuna');
       const medidaBase = medida.replace(' Maquila Ozuna', '').toLowerCase().trim();
+      
       return this.embarqueData.clientes.reduce((total, cliente) => {
         return total + cliente.productos
-          .filter(p => p.medida && p.medida.toLowerCase().trim() === medidaBase)
+          .filter(p => {
+            if (!p.medida) return false;
+            
+            // Si la medida original es de Ozuna
+            if (esOzuna) {
+              // Solo incluir si el producto es de cliente Ozuna
+              return p.medida.toLowerCase().trim() === medidaBase && cliente.nombre === 'Ozuna';
+            } else {
+              // Solo incluir si el producto coincide con la medida y NO es de Ozuna
+              return p.medida.toLowerCase().trim() === medidaBase && cliente.nombre !== 'Ozuna';
+            }
+          })
           .reduce((subtotal, producto) => {
             if (producto.tipo === 'c/h20') {
               const totalBolsas = this.calcularTotalBolsas(producto);
@@ -336,10 +349,23 @@ export default {
     obtenerTotalReal(medida) {
       if (!this.embarqueData || !this.embarqueData.clientes) return 0;
       
-      const medidaBase = medida.replace(' Maquila', '').toLowerCase();
+      const esOzuna = medida.includes('Maquila Ozuna');
+      const medidaBase = medida.replace(' Maquila Ozuna', '').toLowerCase().trim();
+      
       return this.embarqueData.clientes.reduce((total, cliente) => {
         return total + cliente.productos
-          .filter(p => p.medida && p.medida.toLowerCase() === medidaBase)
+          .filter(p => {
+            if (!p.medida) return false;
+            
+            // Si la medida original es de Ozuna
+            if (esOzuna) {
+              // Solo incluir si el producto es de cliente Ozuna
+              return p.medida.toLowerCase().trim() === medidaBase && cliente.nombre === 'Ozuna';
+            } else {
+              // Solo incluir si el producto coincide con la medida y NO es de Ozuna
+              return p.medida.toLowerCase().trim() === medidaBase && cliente.nombre !== 'Ozuna';
+            }
+          })
           .reduce((subtotal, producto) => {
             return subtotal + this.calcularTotalKilos(producto);
           }, 0);
