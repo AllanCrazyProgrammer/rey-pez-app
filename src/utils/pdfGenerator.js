@@ -313,12 +313,17 @@ function contarTotalProductos(embarque) {
   // Contar productos crudos con kilos > 0
   if (embarque.clienteCrudos) {
     Object.values(embarque.clienteCrudos).forEach(crudos => {
-      crudos.forEach(crudo => {
-        contador += (crudo.items || []).filter(item => {
-          // Simplificamos la verificación para el conteo
-          return item.taras || item.sobrante;
-        }).length;
-      });
+      // Verificar que crudos sea un array antes de usar forEach
+      if (Array.isArray(crudos)) {
+        crudos.forEach(crudo => {
+          if (crudo && Array.isArray(crudo.items)) {
+            contador += crudo.items.filter(item => {
+              // Simplificamos la verificación para el conteo
+              return item && (item.taras || item.sobrante);
+            }).length;
+          }
+        });
+      }
     });
   }
   
