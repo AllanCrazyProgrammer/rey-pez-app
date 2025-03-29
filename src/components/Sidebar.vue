@@ -14,7 +14,7 @@
         type="button" 
         @click="seleccionarCliente(cliente.id.toString())" 
         class="btn-nota-cliente"
-        :class="{ 'activo': clienteActivo === cliente.id.toString() }"
+        :class="{ 'activo': clienteActivoLocal === cliente.id.toString() }"
         :style="{ backgroundColor: cliente.color, color: cliente.textColor }"
         :title="sidebarCollapsed ? cliente.nombre : ''"
       >
@@ -28,7 +28,7 @@
         type="button" 
         @click="seleccionarCliente(cliente.id.toString())" 
         class="btn-nota-cliente cliente-personalizado"
-        :class="{ 'activo': clienteActivo === cliente.id.toString() }"
+        :class="{ 'activo': clienteActivoLocal === cliente.id.toString() }"
         :style="{ backgroundColor: obtenerColorCliente(cliente.nombre), color: obtenerColorTextoCliente(cliente.nombre) }"
         :title="sidebarCollapsed ? cliente.nombre : ''"
       >
@@ -118,8 +118,18 @@ export default {
   data() {
     return {
       sidebarCollapsed: false,
-      clienteActivo: null,
+      clienteActivoLocal: null,
     };
+  },
+  created() {
+    // Inicializar clienteActivoLocal con el valor del prop
+    this.clienteActivoLocal = this.clienteActivo;
+  },
+  watch: {
+    // Observar cambios en el prop para actualizar la variable local
+    clienteActivo(newVal) {
+      this.clienteActivoLocal = newVal;
+    }
   },
   methods: {
     toggleSidebar() {
@@ -127,7 +137,7 @@ export default {
       this.$emit('toggle-sidebar', this.sidebarCollapsed);
     },
     seleccionarCliente(clienteId) {
-      this.clienteActivo = clienteId;
+      this.clienteActivoLocal = clienteId;
       this.$emit('seleccionar-cliente', clienteId);
     },
     mostrarModalNuevoCliente() {

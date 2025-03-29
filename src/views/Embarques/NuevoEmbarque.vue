@@ -135,7 +135,7 @@
 </template>
 
 <script>
-import { getFirestore, collection, addDoc, doc, getDoc, updateDoc, onSnapshot, serverTimestamp } from 'firebase/firestore';
+import { getFirestore, collection, addDoc, doc, getDoc, updateDoc, onSnapshot, serverTimestamp, getDocs } from 'firebase/firestore';
 import { debounce } from 'lodash';
 import { ref, onValue, onDisconnect, set } from 'firebase/database'
 import { rtdb } from '@/firebase'
@@ -455,7 +455,6 @@ export default {
           // Luego agregar el producto
           this.agregarProducto(clienteId);
 
-          console.log('Embarque inicial creado con ID:', this.embarqueId);
           return this.embarqueId; // Retornar el ID para encadenar operaciones
         } catch (error) {
           console.error("Error al crear el embarque inicial:", error);
@@ -510,7 +509,6 @@ export default {
 
     // Métodos de carga y guardado
     async cargarEmbarque(id) {
-      console.log('Cargando embarque con ID:', id);
       if (id === 'nuevo') {
         this.resetearEmbarque();
         return;
@@ -522,7 +520,6 @@ export default {
       this.unsubscribe = onSnapshot(embarqueRef, (doc) => {
         if (doc.exists()) {
           const data = doc.data();
-          console.log('Datos del embarque cargado:', data);
 
           // Cargar el estado de bloqueo
           this.embarqueBloqueado = data.embarqueBloqueado || false;
@@ -564,8 +561,6 @@ export default {
               key: `personalizado_${cliente.id}`
             }));
 
-          console.log('Clientes personalizados después de filtrar:', this.clientesPersonalizados);
-
           this.embarque = {
             fecha: fecha.toISOString().split('T')[0],
             cargaCon: data.cargaCon || '', // Cargamos el valor de cargaCon
@@ -589,9 +584,6 @@ export default {
               this.$set(this.clienteCrudos, cliente.id, cliente.crudos);
             }
           });
-
-          console.log('Embarque procesado:', this.embarque);
-          console.log('Crudos cargados:', this.clienteCrudos);
 
           this.embarqueId = id;
           this.modoEdicion = true;
@@ -1324,7 +1316,6 @@ export default {
         // Solo cargar la lista de clientes personalizados disponibles
         // pero no agregarlos automáticamente al embarque
         this.clientesPersonalizados = JSON.parse(clientesGuardados);
-        console.log('Clientes personalizados disponibles cargados:', this.clientesPersonalizados);
       }
     },
 
@@ -1390,7 +1381,6 @@ export default {
           return;
         }
 
-        console.log('Iniciando presencia para usuario:', this.authStore.user.username);
         const userStatusRef = ref(rtdb, `status/${this.authStore.userId}`);
 
         // Configurar limpieza al desconectar
@@ -1402,8 +1392,6 @@ export default {
           status: 'online',
           lastSeen: new Date().toISOString()
         });
-
-        console.log('Presencia iniciada exitosamente');
       } catch (error) {
         console.error('Error al iniciar presencia:', error.message, error.stack);
       }
@@ -1478,7 +1466,6 @@ export default {
         localStorage.setItem('embarque', JSON.stringify(nuevoValor));
         this.undoStack.push(JSON.stringify(nuevoValor));
         this.redoStack = [];
-        console.log('Embarque actualizado. Estado agregado al undoStack.');
 
         // Llamar al método de guardado automático
         this.guardarCambiosEnTiempoReal();
@@ -1494,7 +1481,7 @@ export default {
     'embarque.productos': {
       handler(newProductos) {
         newProductos.forEach(producto => {
-          console.log('Producto actualizado:', producto.restarTaras);
+          // Eliminando console.log de "Producto actualizado"
         });
       },
       deep: true
@@ -1505,7 +1492,6 @@ export default {
     const embarqueId = this.$route.params.id;
     await this.cargarEmbarque(embarqueId);
     this.undoStack.push(JSON.stringify(this.embarque));
-    console.log('Component mounted. Estado inicial cargado.');
     this.actualizarMedidasUsadas();
 
     // Cargar clientes personalizados
@@ -1517,6 +1503,26 @@ export default {
   },
 
   mounted() {
+    // Si hay un ID de embarque en los parámetros, cargar ese embarque
+    const embarqueId = this.$route.params.id;
+    if (embarqueId && embarqueId !== 'nuevo') {
+      this.cargarEmbarque(embarqueId);
+    } else {
+      // Si no hay ID, inicializar un nuevo embarque
+      this.resetearEmbarque();
+    }
+    
+    // Cargar los clientes personalizados
+    this.cargarClientesPersonalizados();
+    
+    // Iniciar presencia después de cargar todo
+    if (this.authStore.user && this.embarqueId) {
+      this.iniciarPresencia();
+    }
+    
+    // Configurar el escuchador para el evento beforeunload
+    window.addEventListener('beforeunload', this.handleBeforeUnload);
+
     // Agregar este evento para actualizar los crudos cuando se modifiquen los inputs
     this.$nextTick(() => {
       const crudosInputs = document.querySelectorAll('.crudo input, .crudo select');
@@ -1546,10 +1552,7 @@ export default {
   },
 
   updated() {
-    console.log('Componente actualizado');
-    this.embarque.productos.forEach(producto => {
-      console.log('Estado de restarTaras:', producto.restarTaras);
-    });
+    // Eliminar console.log
   }
 };
 </script>

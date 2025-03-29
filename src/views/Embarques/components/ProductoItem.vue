@@ -160,7 +160,7 @@
                     <input type="tel" v-model="producto.reporteBolsas[index]" class="form-control reporte-input"
                         @focus="$event.target.select()" :disabled="embarqueBloqueado" @input="actualizarProducto">
                 </div>
-                <div style="height: 38px"></div>
+                <div style="height: 31px"></div>
                 <div class="total-bolsas-reporte">
                     Bolsas: {{ totalBolsasReportadas }}
                 </div>

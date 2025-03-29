@@ -21,7 +21,7 @@
         <span v-if="isGeneratingPdf && pdfType === 'resumen'" class="loader-inline"></span>
         <i v-else class="fas fa-file-pdf"></i> Resumen Embarque
       </button>
-      <router-link :to="{ name: 'Rendimientos', params: { id: embarqueId } }" class="btn btn-warning"
+      <router-link v-if="embarqueId && embarqueId !== ''" :to="{ name: 'Rendimientos', params: { id: embarqueId } }" class="btn btn-warning"
         :class="{ 'disabled': isGeneratingPdf }">
         <i class="fas fa-chart-line"></i> Rendimientos
       </router-link>

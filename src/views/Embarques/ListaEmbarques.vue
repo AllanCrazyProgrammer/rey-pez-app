@@ -88,8 +88,6 @@ export default {
               embarqueBloqueado: embarqueBloqueado
             };
             
-            console.log(`Embarque ID: ${embarque.id}, Bloqueado: ${embarque.embarqueBloqueado}, Valor original: ${data.embarqueBloqueado}, Tipo original: ${typeof data.embarqueBloqueado}`);
-            
             return embarque;
           })
           .sort((a, b) => {
@@ -316,12 +314,7 @@ export default {
     // Verificar el estado de la propiedad embarqueBloqueado en cada embarque después de cargar los datos
     this.$nextTick(() => {
       setTimeout(() => {
-        if (this.embarques.length > 0) {
-          console.log('Verificando estado de bloqueo de embarques:');
-          this.embarques.forEach(embarque => {
-            console.log(`ID: ${embarque.id}, Bloqueado: ${embarque.embarqueBloqueado}, Tipo: ${typeof embarque.embarqueBloqueado}`);
-          });
-        }
+        // Eliminar todo el bloque de console.log
       }, 1000); // Esperar 1 segundo para asegurarse de que los datos estén cargados
     });
   }
