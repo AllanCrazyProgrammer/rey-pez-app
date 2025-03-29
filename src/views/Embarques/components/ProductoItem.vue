@@ -73,7 +73,7 @@
                 <option value="otro">Otro</option>
             </select>
 
-            <!-- Checkbox de venta para Ozuna -->
+            <!-- Checkbox de venta para Ozunaa -->
             <div v-if="isClienteOzuna" class="venta-checkbox-container">
                 <input type="checkbox" v-model="producto.esVenta" class="form-check-input venta-checkbox"
                     :id="'ventaCheck-' + producto.id" :disabled="embarqueBloqueado">
