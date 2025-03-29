@@ -716,6 +716,7 @@ export default {
 .input-group {
     display: flex;
     margin-bottom: 5px;
+    flex-wrap: nowrap !important; /* Sobreescribe cualquier flex-wrap heredado */
 }
 
 .tara-input,
