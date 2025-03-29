@@ -285,6 +285,8 @@ export default {
     },
     
     productosPorCliente() {
+      console.log("Calculando productosPorCliente. Contenido de embarque.productos:", this.embarque.productos);
+      
       const productosPorCliente = {};
 
       this.embarque.productos.forEach(producto => {
@@ -355,6 +357,9 @@ export default {
 
       // Establecer tipo por defecto según el cliente
       this.setTipoDefaultParaCliente(nuevoProducto);
+      
+      // Establecer el nombre del cliente basado en el id
+      nuevoProducto.nombreCliente = this.obtenerNombreCliente(clienteId);
 
       // Agregar directamente al embarque.productos
       this.embarque.productos.push(nuevoProducto);
@@ -373,7 +378,7 @@ export default {
       this.$nextTick(() => {
         const inputs = document.querySelectorAll('.medida-input');
         const nuevoInput = Array.from(inputs).find(input => {
-          const productoId = input.closest('.producto').dataset.productoId;
+          const productoId = input.closest('.producto')?.dataset?.productoId;
           return productoId === String(nuevoProducto.id);
         });
         if (nuevoInput) {
@@ -523,6 +528,9 @@ export default {
 
             // Luego agregar el producto
             this.agregarProducto(clienteId);
+            
+            // Activar este cliente
+            this.clienteActivo = clienteId;
 
             this._creandoEmbarque = false;
             return this.embarqueId; // Retornar el ID para encadenar operaciones
@@ -537,6 +545,8 @@ export default {
         } else {
           // Si ya existe el embarqueId, solo agregar el producto
           this.agregarProducto(clienteId);
+          // Activar este cliente
+          this.clienteActivo = clienteId;
           this._creandoEmbarque = false;
           return this.embarqueId;
         }
@@ -798,80 +808,78 @@ export default {
         this.embarqueBloqueado = false;
         this.clientesPersonalizados = []; // Reiniciar clientes personalizados
 
-        // Agregar automáticamente los clientes predeterminados solo si no es una recarga
-        if (!esRecargaPagina) {
-          this.$nextTick(async () => {
-            if (this.embarque.fecha) {
-              try {
-                // Antes de crear un nuevo embarque, comprobar nuevamente si ya existe uno con esta fecha
-                // Esta doble verificación es crucial para evitar duplicados en cargas rápidas
-                const verificacionRef = collection(db, "embarques");
-                const verificacionSnapshot = await getDocs(verificacionRef);
+        // Agregar automáticamente los clientes predeterminados
+        this.$nextTick(async () => {
+          if (this.embarque.fecha) {
+            try {
+              // Antes de crear un nuevo embarque, comprobar nuevamente si ya existe uno con esta fecha
+              // Esta doble verificación es crucial para evitar duplicados en cargas rápidas
+              const verificacionRef = collection(db, "embarques");
+              const verificacionSnapshot = await getDocs(verificacionRef);
+              
+              const existeEmbarqueConFecha = verificacionSnapshot.docs.some(doc => {
+                const data = doc.data();
+                let fechaDoc;
                 
-                const existeEmbarqueConFecha = verificacionSnapshot.docs.some(doc => {
-                  const data = doc.data();
-                  let fechaDoc;
-                  
-                  if (data.fecha && typeof data.fecha.toDate === 'function') {
-                    fechaDoc = data.fecha.toDate();
-                  } else if (data.fecha instanceof Date) {
-                    fechaDoc = data.fecha;
-                  } else if (typeof data.fecha === 'string') {
-                    fechaDoc = new Date(data.fecha);
-                  } else {
-                    return false;
-                  }
-                  
-                  const fechaDocISO = fechaDoc.toISOString().split('T')[0];
-                  return fechaDocISO === this.embarque.fecha;
-                });
-                
-                if (existeEmbarqueConFecha) {
-                  console.warn('Se detectó un embarque con la misma fecha durante la inicialización');
-                  alert('Ya existe un embarque para la fecha seleccionada. Se cancelará la creación automática.');
-                  return;
+                if (data.fecha && typeof data.fecha.toDate === 'function') {
+                  fechaDoc = data.fecha.toDate();
+                } else if (data.fecha instanceof Date) {
+                  fechaDoc = data.fecha;
+                } else if (typeof data.fecha === 'string') {
+                  fechaDoc = new Date(data.fecha);
+                } else {
+                  return false;
                 }
                 
-                // Crear el embarque inicial con el primer cliente (Joselito)
-                await this.guardarEmbarqueInicial(this.clientesPredefinidos[0].id.toString());
-
-                // Esperar un momento para asegurar que el primer cliente se haya agregado correctamente
-                await new Promise(resolve => setTimeout(resolve, 100));
-
-                // Agregar el resto de clientes predeterminados
-                for (let i = 1; i < this.clientesPredefinidos.length; i++) {
-                  // Crear un producto para cada cliente predeterminado
-                  const clienteId = this.clientesPredefinidos[i].id.toString();
-
-                  // Verificar si ya existe un producto para este cliente
-                  const existeProducto = this.embarque.productos.some(p => p.clienteId.toString() === clienteId);
-
-                  // Solo agregar si no existe
-                  if (!existeProducto) {
-                    const nuevoProducto = crearNuevoProducto(clienteId);
-
-                    // Establecer tipo por defecto según el cliente
-                    this.setTipoDefaultParaCliente(nuevoProducto);
-
-                    // Agregar directamente al embarque.productos
-                    this.embarque.productos.push(nuevoProducto);
-
-                    // Esperar un momento entre cada adición
-                    await new Promise(resolve => setTimeout(resolve, 50));
-                  }
-                }
-
-                // Establecer el primer cliente como activo
-                this.clienteActivo = this.clientesPredefinidos[0].id.toString();
-
-                // Guardar los cambios
-                this.guardarCambiosEnTiempoReal();
-              } catch (error) {
-                console.error("Error al crear clientes predeterminados:", error);
+                const fechaDocISO = fechaDoc.toISOString().split('T')[0];
+                return fechaDocISO === this.embarque.fecha;
+              });
+              
+              if (existeEmbarqueConFecha) {
+                console.warn('Se detectó un embarque con la misma fecha durante la inicialización');
+                alert('Ya existe un embarque para la fecha seleccionada. Se cancelará la creación automática.');
+                return;
               }
+              
+              // Crear el embarque inicial con el primer cliente (Joselito)
+              await this.guardarEmbarqueInicial(this.clientesPredefinidos[0].id.toString());
+
+              // Esperar un momento para asegurar que el primer cliente se haya agregado correctamente
+              await new Promise(resolve => setTimeout(resolve, 100));
+
+              // Agregar el resto de clientes predeterminados
+              for (let i = 1; i < this.clientesPredefinidos.length; i++) {
+                // Crear un producto para cada cliente predeterminado
+                const clienteId = this.clientesPredefinidos[i].id.toString();
+
+                // Verificar si ya existe un producto para este cliente
+                const existeProducto = this.embarque.productos.some(p => p.clienteId.toString() === clienteId);
+
+                // Solo agregar si no existe
+                if (!existeProducto) {
+                  const nuevoProducto = crearNuevoProducto(clienteId);
+
+                  // Establecer tipo por defecto según el cliente
+                  this.setTipoDefaultParaCliente(nuevoProducto);
+
+                  // Agregar directamente al embarque.productos
+                  this.embarque.productos.push(nuevoProducto);
+
+                  // Esperar un momento entre cada adición
+                  await new Promise(resolve => setTimeout(resolve, 50));
+                }
+              }
+
+              // Establecer el primer cliente como activo
+              this.clienteActivo = this.clientesPredefinidos[0].id.toString();
+
+              // Guardar los cambios
+              this.guardarCambiosEnTiempoReal();
+            } catch (error) {
+              console.error("Error al crear clientes predeterminados:", error);
             }
-          });
-        }
+          }
+        });
       } catch (error) {
         console.error("Error al verificar fechas de embarques existentes:", error);
         // En caso de error, inicializar con valores por defecto pero sin crear automáticamente
@@ -1042,6 +1050,8 @@ export default {
     },
 
     prepararDatosEmbarque() {
+      console.log("Preparando datos del embarque:", this.embarque);
+      
       const embarqueData = {
         fecha: new Date(this.embarque.fecha),
         cargaCon: this.embarque.cargaCon,
@@ -1051,6 +1061,19 @@ export default {
       };
 
       const clientesPredefinidosMap = new Map(this.clientesPredefinidos.map(c => [c.id, c]));
+
+      // Si no hay clientes en productosPorCliente, añadir al menos el primero para evitar errores
+      if (Object.keys(this.productosPorCliente).length === 0 && this.clientesPredefinidos.length > 0) {
+        const primerClienteId = this.clientesPredefinidos[0].id.toString();
+        const primerCliente = this.clientesPredefinidos[0];
+        const nuevoProducto = crearNuevoProducto(primerClienteId);
+        nuevoProducto.nombreCliente = primerCliente.nombre;
+        this.embarque.productos.push(nuevoProducto);
+        this.clienteActivo = primerClienteId;
+        
+        // Forzar la actualización de productosPorCliente
+        this.$forceUpdate();
+      }
 
       Object.entries(this.productosPorCliente).forEach(([clienteId, productos]) => {
         const clientePredefinido = clientesPredefinidosMap.get(parseInt(clienteId));
@@ -1067,6 +1090,7 @@ export default {
         embarqueData.clientes.push(clienteData);
       });
 
+      console.log("Datos del embarque preparados:", embarqueData);
       return embarqueData;
     },
 

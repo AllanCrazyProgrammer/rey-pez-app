@@ -25,6 +25,8 @@
         :class="{ 'disabled': isGeneratingPdf }">
         <i class="fas fa-chart-line"></i> Rendimientos
       </router-link>
+      <precios-historial-modal :clienteActual="clienteEmbarque">
+      </precios-historial-modal>
     </div>
 
     <div class="header">
@@ -49,8 +51,13 @@
 </template>
 
 <script>
+import PreciosHistorialModal from '@/components/PreciosHistorialModal.vue';
+
 export default {
   name: 'HeaderEmbarque',
+  components: {
+    PreciosHistorialModal
+  },
   props: {
     modoEdicion: {
       type: Boolean,
@@ -76,6 +83,10 @@ export default {
       default: ''
     },
     embarqueId: {
+      type: String,
+      default: ''
+    },
+    clienteEmbarque: {
       type: String,
       default: ''
     }
@@ -230,6 +241,11 @@ label {
 .btn-warning {
   background-color: #ffc107;
   color: #212529;
+}
+
+.btn-success {
+  background-color: #28a745;
+  color: white;
 }
 
 .btn:disabled,

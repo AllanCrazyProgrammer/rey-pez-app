@@ -8,13 +8,12 @@ pdfMake.vfs = pdfFonts.default;
 
 export async function generarNotaVentaPDF(embarque, clientesDisponibles, clientesJuntarMedidas) {
   try {
-    console.log('Datos del embarque para PDF:', {
+    console.log('Generando nota para PDF:', {
       productos: embarque.productos,
       kilosCrudos: embarque.kilosCrudos,
       clienteCrudos: embarque.clienteCrudos,
       fecha: embarque.fecha,
-      cargaCon: embarque.cargaCon,
-      clientesJuntarMedidas: clientesJuntarMedidas
+      cargaCon: embarque.cargaCon
     });
 
     if (!embarque || !embarque.productos) {
@@ -24,51 +23,108 @@ export async function generarNotaVentaPDF(embarque, clientesDisponibles, cliente
 
     const logoBase64 = await loadImageAsBase64('https://res.cloudinary.com/hwkcovsmr/image/upload/v1620946647/samples/REY_PEZ_LOGO_nsotww.png');
     
+    // Primero generamos el contenido con precios
+    const contenidoConPrecios = [
+      {
+        columns: [
+          {
+            image: logoBase64,
+            width: 100,
+            alignment: 'left',
+            margin: [0, 0, 0, 10]
+          },
+          {
+            text: 'Nota de Venta',
+            style: 'notaVentaHeader',
+            alignment: 'center',
+            margin: [0, 20, 0, 0]
+          },
+          {
+            stack: [
+              {
+                text: `Fecha: ${new Date(embarque.fecha).toLocaleString('es-MX', { 
+                  timeZone: 'UTC',
+                  year: 'numeric',
+                  month: '2-digit',
+                  day: '2-digit'
+                })}`,
+                alignment: 'right',
+                margin: [0, 20, 0, 0]
+              },
+              {
+                text: `Carga con: ${embarque.cargaCon || 'No especificado'}`,
+                alignment: 'right',
+                margin: [0, 5, 0, 0]
+              }
+            ]
+          }
+        ]
+      },
+      { text: '\n' },
+      ...generarContenidoClientes(embarque, clientesDisponibles, clientesJuntarMedidas),
+      // Agregar la nueva sección de rendimientos
+      ...generarSeccionRendimientos({
+        ...embarque,
+        // Asegurarnos de que los kilos crudos estén disponibles
+        kilosCrudos: embarque.kilosCrudos || {}
+      }, clientesDisponibles),
+    ];
+    
+    // Ahora generamos el contenido sin precios (segunda página)
+    const contenidoSinPrecios = [
+      {
+        columns: [
+          {
+            image: logoBase64,
+            width: 100,
+            alignment: 'left',
+            margin: [0, 0, 0, 10]
+          },
+          {
+            text: 'Nota de Embarque',
+            style: 'notaVentaHeader',
+            alignment: 'center',
+            margin: [0, 20, 0, 0]
+          },
+          {
+            stack: [
+              {
+                text: `Fecha: ${new Date(embarque.fecha).toLocaleString('es-MX', { 
+                  timeZone: 'UTC',
+                  year: 'numeric',
+                  month: '2-digit',
+                  day: '2-digit'
+                })}`,
+                alignment: 'right',
+                margin: [0, 20, 0, 0]
+              },
+              {
+                text: `Carga con: ${embarque.cargaCon || 'No especificado'}`,
+                alignment: 'right',
+                margin: [0, 5, 0, 0]
+              }
+            ]
+          }
+        ]
+      },
+      { text: '\n' },
+      ...generarContenidoClientesSinPrecios(embarque, clientesDisponibles, clientesJuntarMedidas),
+      // Agregar la nueva sección de rendimientos
+      ...generarSeccionRendimientos({
+        ...embarque,
+        // Asegurarnos de que los kilos crudos estén disponibles
+        kilosCrudos: embarque.kilosCrudos || {}
+      }, clientesDisponibles),
+    ];
+
     const docDefinition = {
       content: [
-        {
-          columns: [
-            {
-              image: logoBase64,
-              width: 100,
-              alignment: 'left',
-              margin: [0, 0, 0, 10]
-            },
-            {
-              text: 'Nota de Venta',
-              style: 'notaVentaHeader',
-              alignment: 'center',
-              margin: [0, 20, 0, 0]
-            },
-            {
-              stack: [
-                {
-                  text: `Fecha: ${new Date(embarque.fecha).toLocaleString('es-MX', { 
-                    timeZone: 'UTC',
-                    year: 'numeric',
-                    month: '2-digit',
-                    day: '2-digit'
-                  })}`,
-                  alignment: 'right',
-                  margin: [0, 20, 0, 0]
-                },
-                {
-                  text: `Carga con: ${embarque.cargaCon || 'No especificado'}`,
-                  alignment: 'right',
-                  margin: [0, 5, 0, 0]
-                }
-              ]
-            }
-          ]
-        },
-        { text: '\n' },
-        ...generarContenidoClientes(embarque, clientesDisponibles, clientesJuntarMedidas),
-        // Agregar la nueva sección de rendimientos
-        ...generarSeccionRendimientos({
-          ...embarque,
-          // Asegurarnos de que los kilos crudos estén disponibles
-          kilosCrudos: embarque.kilosCrudos || {}
-        }, clientesDisponibles),
+        // Primera página con precios
+        ...contenidoConPrecios,
+        // Salto de página
+        { text: '', pageBreak: 'before' },
+        // Segunda página sin precios
+        ...contenidoSinPrecios
       ],
       styles: {
         notaVentaHeader: {
@@ -142,6 +198,13 @@ export async function generarNotaVentaPDF(embarque, clientesDisponibles, cliente
           bold: true,
           fontSize: 21
         },
+        granTotal: {
+          color: '#FFFFFF',
+          background: '#8e44ad', // Un poco más oscuro que el morado normal
+          padding: [4, 4, 4, 4],
+          bold: true,
+          fontSize: 24
+        },
         tipoConAgua: {
           color: '#2980b9',  // Color azul
           bold: true
@@ -174,49 +237,8 @@ export async function generarNotaVentaPDF(embarque, clientesDisponibles, cliente
       // Contar ocurrencias de "/Page" para estimar número de páginas
       const numPages = buffer.toString().match(/\/Page\W/g).length;
       
-      if (numPages > 1) {
-        // Ajustar tamaños si excede una página
-        const docDefinitionAjustado = {
-          ...docDefinition,
-          defaultStyle: {
-            ...docDefinition.defaultStyle,
-            fontSize: 16 // Reducir de 20 a 16
-          },
-          styles: {
-            ...docDefinition.styles,
-            notaVentaHeader: {
-              ...docDefinition.styles.notaVentaHeader,
-              fontSize: 24 // Reducir de 30 a 24
-            },
-            header: {
-              ...docDefinition.styles.header,
-              fontSize: 24 // Reducir de 30 a 24
-            },
-            subheader: {
-              ...docDefinition.styles.subheader,
-              fontSize: 20 // Reducir de 25 a 20
-            },
-            tableHeader: {
-              ...docDefinition.styles.tableHeader,
-              fontSize: 18 // Reducir de 23 a 18
-            },
-            medidaHeader: {
-              ...docDefinition.styles.medidaHeader,
-              fontSize: 20 // Reducir de 24 a 20
-            },
-            totalPrecio: {
-              ...docDefinition.styles.totalPrecio,
-              fontSize: 16 // Reducir de 21 a 16
-            }
-          }
-        };
-        
-        // Crear y descargar el PDF con los ajustes
-        pdfMake.createPdf(docDefinitionAjustado).download('nota-venta.pdf');
-      } else {
-        // Si es una sola página, descargar el original
-        pdfMake.createPdf(docDefinition).download('nota-venta.pdf');
-      }
+      // Descargamos directamente el PDF sin ajustar tamaños, ya que ahora tiene dos páginas por diseño
+      pdfMake.createPdf(docDefinition).download('nota-venta.pdf');
     });
 
   } catch (error) {
@@ -245,6 +267,12 @@ function generarContenidoClientes(embarque, clientesDisponibles, clientesJuntarM
     // Verificar si este cliente específico tiene activada la opción de juntar medidas
     const debeJuntarMedidas = clientesJuntarMedidas && clientesJuntarMedidas[clienteId];
     
+    // Filtrar productos que tengan al menos 1 kilo real
+    const productosConKilos = productos.filter(producto => {
+      const kilos = totalKilos(producto, nombreCliente);
+      return kilos > 0;
+    });
+    
     // Agregar encabezado del cliente
     contenido.push(
       { 
@@ -254,16 +282,14 @@ function generarContenidoClientes(embarque, clientesDisponibles, clientesJuntarM
       }
     );
 
-    // Verificar si hay productos (limpio) para este cliente y verificar si tienen valor real
-    let hayProductosReales = false;
-    
-    if (productos.length > 0) {
+    // Verificar si hay productos (limpio) con kilos reales para este cliente
+    if (productosConKilos.length > 0) {
       // Procesar los productos según la configuración de juntar medidas
-      let productosAProcesar = productos;
+      let productosAProcesar = productosConKilos;
       if (debeJuntarMedidas) {
         const productosAgrupados = {};
         
-        productos.forEach(producto => {
+        productosConKilos.forEach(producto => {
           const medidaNombre = producto.nombreAlternativoPDF || producto.medida;
           const tipo = producto.tipo || '';
           const valorNeto = producto.camaronNeto || 0.65;
@@ -319,14 +345,15 @@ function generarContenidoClientes(embarque, clientesDisponibles, clientesJuntarM
       // Agrupar productos por medida y tipo
       const productosAgrupados = agruparProductos(productosAProcesar);
       
-      // Verificar si hay productos con kilos > 0
-      hayProductosReales = productosAgrupados.some(producto => {
+      // Verificar nuevamente si después de agrupar hay productos válidos con kilos
+      // (puede ocurrir que al combinar queden solo productos con 0 kilos)
+      const hayProductosValidos = productosAgrupados.some(producto => {
         const kilos = totalKilos(producto, nombreCliente);
         return kilos > 0;
       });
       
-      // Mostrar sección de limpios solo si hay productos con kilos > 0
-      if (hayProductosReales) {
+      if (hayProductosValidos) {
+        // Mostrar sección de limpios solo si hay productos con kilos válidos
         contenido.push(
           { 
             text: 'Limpio:', 
@@ -338,45 +365,69 @@ function generarContenidoClientes(embarque, clientesDisponibles, clientesJuntarM
         );
 
         const tarasLimpioCliente = productos.reduce((sum, producto) => sum + totalTaras(producto), 0);
-        totalTarasLimpio += tarasLimpioCliente;
-
-        contenido.push(
-          { 
-            text: `Taras de limpio: ${tarasLimpioCliente}`, 
-            margin: [0, 5, 0, 5]
-          },
-          { text: '\n' }
-        );
+        if (tarasLimpioCliente > 0) {
+          totalTarasLimpio += tarasLimpioCliente;
+          contenido.push(
+            { 
+              text: `Taras de limpio: ${tarasLimpioCliente}`, 
+              margin: [0, 5, 0, 5]
+            },
+            { text: '\n' }
+          );
+        }
       }
     }
 
     // Verificar si hay crudos para este cliente
     if (embarque.clienteCrudos && embarque.clienteCrudos[clienteId]) {
-      contenido.push(
-        { 
-          text: 'Crudos:', 
-          style: ['subheader', estiloCliente],
-          margin: [0, 5, 0, 5]
-        },
-        generarTablaCrudos(embarque.clienteCrudos[clienteId], estiloCliente),
-        { text: '\n' }
+      // Verificar si hay crudos con kilos reales
+      const hayKilosCrudos = embarque.clienteCrudos[clienteId].some(crudo => 
+        crudo.items.some(item => {
+          const kilosTexto = calcularKilosCrudos(item, nombreCliente);
+          const kilos = parseFloat(kilosTexto);
+          return kilos > 0;
+        })
       );
+      
+      if (hayKilosCrudos) {
+        contenido.push(
+          { 
+            text: 'Crudos:', 
+            style: ['subheader', estiloCliente],
+            margin: [0, 5, 0, 5]
+          },
+          generarTablaCrudos(embarque.clienteCrudos[clienteId], estiloCliente),
+          { text: '\n' }
+        );
 
-      const tarasCrudosCliente = embarque.clienteCrudos[clienteId].reduce((sum, crudo) => 
-        sum + crudo.items.reduce((itemSum, item) => itemSum + calcularTarasTotales(item), 0), 0);
-      totalTarasCrudos += tarasCrudosCliente;
-
-      contenido.push(
-        { 
-          text: `Taras de crudo: ${tarasCrudosCliente}`, 
-          margin: [0, 5, 0, 5]
-        },
-        { text: '\n' }
-      );
+        const tarasCrudosCliente = embarque.clienteCrudos[clienteId].reduce((sum, crudo) => 
+          sum + crudo.items.reduce((itemSum, item) => itemSum + calcularTarasTotales(item), 0), 0);
+        
+        if (tarasCrudosCliente > 0) {
+          totalTarasCrudos += tarasCrudosCliente;
+          contenido.push(
+            { 
+              text: `Taras de crudo: ${tarasCrudosCliente}`, 
+              margin: [0, 5, 0, 5]
+            },
+            { text: '\n' }
+          );
+        }
+      }
     }
     
-    // Si no hay productos con valor real ni crudos, mostrar mensaje
-    if (!hayProductosReales && (!embarque.clienteCrudos || !embarque.clienteCrudos[clienteId])) {
+    // Si no hay ni productos con kilos ni crudos con kilos, mostrar mensaje
+    const hayProductosConKilos = productosConKilos.length > 0;
+    const hayKilosCrudos = embarque.clienteCrudos && embarque.clienteCrudos[clienteId] && 
+                          embarque.clienteCrudos[clienteId].some(crudo => 
+                            crudo.items.some(item => {
+                              const kilosTexto = calcularKilosCrudos(item, nombreCliente);
+                              const kilos = parseFloat(kilosTexto);
+                              return kilos > 0;
+                            })
+                          );
+                          
+    if (!hayProductosConKilos && !hayKilosCrudos) {
       contenido.push(
         { 
           text: 'No hay medidas registradas para este cliente', 
@@ -616,13 +667,38 @@ function agruparProductos(productos) {
 }
 
 function generarTablaProductos(productos, estiloCliente, nombreCliente) {
+  // Filtrar productos que tengan kilos reales
+  const productosConKilos = productos.filter(producto => {
+    const kilos = totalKilos(producto, nombreCliente);
+    return kilos > 0;
+  });
+  
+  // Si no hay productos con kilos, devolver una tabla vacía
+  if (productosConKilos.length === 0) {
+    return {
+      table: {
+        headerRows: 1,
+        widths: ['100%'],
+        body: [
+          [{ text: 'No hay productos con kilos registrados', italics: true, alignment: 'center' }]
+        ]
+      },
+      layout: {
+        hLineWidth: function(i, node) { return (i === 0 || i === node.table.body.length) ? 2 : 1; },
+        vLineWidth: function(i, node) { return (i === 0 || i === node.table.widths.length) ? 2 : 1; },
+        hLineColor: function(i, node) { return (i === 0 || i === node.table.body.length) ? obtenerColorBorde(estiloCliente) : 'black'; },
+        vLineColor: function(i, node) { return (i === 0 || i === node.table.widths.length) ? obtenerColorBorde(estiloCliente) : 'black'; },
+      }
+    };
+  }
+  
   // Verificar si algún producto tiene notas o hilos
-  const hayNotas = productos.some(producto => producto.nota && producto.nota.trim() !== '');
-  const hayHilos = productos.some(producto => producto.hilos);
+  const hayNotas = productosConKilos.some(producto => producto.nota && producto.nota.trim() !== '');
+  const hayHilos = productosConKilos.some(producto => producto.hilos);
   // Verificar si es el cliente Canelo
   const esClienteCanelo = nombreCliente.toLowerCase().includes('canelo');
   // Verificar si hay productos con precio (solo relevante para Canelo)
-  const hayPrecios = esClienteCanelo && productos.some(producto => producto.precio && producto.precio.toString().trim() !== '');
+  const hayPrecios = esClienteCanelo && productosConKilos.some(producto => producto.precio && producto.precio.toString().trim() !== '');
 
   // Definir las columnas del header
   const headerRow = [
@@ -645,8 +721,11 @@ function generarTablaProductos(productos, estiloCliente, nombreCliente) {
   }
 
   const body = [headerRow];
+  
+  // Variable para calcular el gran total
+  let granTotal = 0;
 
-  productos.forEach(producto => {
+  productosConKilos.forEach(producto => {
     const tarasNormales = (producto.taras || []).reduce((sum, tara) => sum + (tara || 0), 0);
     const tarasExtra = (producto.tarasExtra || []).reduce((sum, tara) => sum + (tara || 0), 0);
     
@@ -656,42 +735,100 @@ function generarTablaProductos(productos, estiloCliente, nombreCliente) {
     // Calcular kilos para este producto
     const kilos = totalKilos(producto, nombreCliente);
     
-    const row = [
-      // Eliminar decimales para los kilos (redondeando al entero más cercano)
-      `${Math.round(kilos)} kg`,
-      // Para cliente Canelo, mostramos solo el nombre del producto sin precio (el precio irá en otra columna)
-      esClienteCanelo && hayPrecios 
-        ? (producto.nombreAlternativoPDF || producto.medida || '') + (producto.tipo === 'c/h20' ? ' c/h2o' : (producto.tipo === 's/h20' ? ' s/h2o' : (producto.tipo === 'otro' ? ` ${producto.tipoPersonalizado || ''}` : ` ${producto.tipo || ''}`)))
-        : formatearProducto(producto),
-      tarasTexto
-    ];
+    // Verificar que tenga kilos > 0
+    if (kilos > 0) {
+      const row = [
+        // Eliminar decimales para los kilos (redondeando al entero más cercano)
+        `${Math.round(kilos)} kg`,
+        // Para cliente Canelo, mostramos solo el nombre del producto sin precio (el precio irá en otra columna)
+        esClienteCanelo && hayPrecios 
+          ? (producto.nombreAlternativoPDF || producto.medida || '') + (producto.tipo === 'c/h20' ? ' c/h2o' : (producto.tipo === 's/h20' ? ' s/h2o' : (producto.tipo === 'otro' ? ` ${producto.tipoPersonalizado || ''}` : ` ${producto.tipo || ''}`)))
+          : formatearProducto(producto),
+        tarasTexto
+      ];
 
-    // Agregar columnas de Precio y Total solo para cliente Canelo
-    if (esClienteCanelo && hayPrecios) {
-      // Agregar columna de precio
-      row.push(producto.precio 
-        ? { text: `$${Number(producto.precio).toLocaleString('en-US')}`, style: 'precio' } 
-        : '');
-      
-      // Agregar columna de total (kilos × precio)
-      const total = producto.precio ? kilos * Number(producto.precio) : 0;
-      row.push(producto.precio 
-        ? { text: `$${Math.round(total).toLocaleString('en-US')}`, style: 'totalPrecio' } 
-        : '');
-    }
+      // Agregar columnas de Precio y Total solo para cliente Canelo
+      if (esClienteCanelo && hayPrecios) {
+        // Agregar columna de precio
+        row.push(producto.precio 
+          ? { text: `$${Number(producto.precio).toLocaleString('en-US')}`, style: 'precio' } 
+          : '');
+        
+        // Agregar columna de total (kilos × precio)
+        const total = producto.precio ? kilos * Number(producto.precio) : 0;
+        // Sumar al gran total
+        granTotal += total;
+        
+        row.push(producto.precio 
+          ? { text: `$${Math.round(total).toLocaleString('en-US')}`, style: 'totalPrecio' } 
+          : '');
+      }
 
-    if (hayHilos) {
-      row.push(producto.hilos || '');
-    }
-    if (hayNotas) {
-      row.push({
-        text: producto.nota || '',
-        style: 'nota'
-      });
-    }
+      if (hayHilos) {
+        row.push(producto.hilos || '');
+      }
+      if (hayNotas) {
+        row.push({
+          text: producto.nota || '',
+          style: 'nota'
+        });
+      }
 
-    body.push(row);
+      body.push(row);
+    }
   });
+
+  // Agregar fila con el gran total para cliente Canelo con precios
+  if (esClienteCanelo && hayPrecios && granTotal > 0) {
+    // Crear una fila completa para el gran total
+    const numColumnas = headerRow.length; 
+    const filaGranTotal = [
+      {
+        text: 'GRAN TOTAL:',
+        bold: true,
+        alignment: 'right',
+        color: '#9b59b6',
+        border: [true, true, true, true],
+        colSpan: numColumnas - 1
+      }
+    ];
+    
+    // Agregar celdas vacías para mantener la estructura de columnas (excepto la última)
+    for (let i = 1; i < numColumnas - 1; i++) {
+      filaGranTotal.push({});
+    }
+    
+    // Agregar el valor del gran total
+    filaGranTotal.push({ 
+      text: `$${Math.round(granTotal).toLocaleString('en-US')}`,
+      bold: true,
+      fontSize: 24,
+      color: '#9b59b6',
+      border: [true, true, true, true],
+      alignment: 'center'
+    });
+    
+    body.push(filaGranTotal);
+  }
+
+  // Si no hay filas con productos, mostrar mensaje
+  if (body.length === 1) {
+    return {
+      table: {
+        headerRows: 1,
+        widths: ['100%'],
+        body: [
+          [{ text: 'No hay productos con kilos registrados', italics: true, alignment: 'center' }]
+        ]
+      },
+      layout: {
+        hLineWidth: function(i, node) { return (i === 0 || i === node.table.body.length) ? 2 : 1; },
+        vLineWidth: function(i, node) { return (i === 0 || i === node.table.widths.length) ? 2 : 1; },
+        hLineColor: function(i, node) { return (i === 0 || i === node.table.body.length) ? obtenerColorBorde(estiloCliente) : 'black'; },
+        vLineColor: function(i, node) { return (i === 0 || i === node.table.widths.length) ? obtenerColorBorde(estiloCliente) : 'black'; },
+      }
+    };
+  }
 
   // Calcular los anchos según el número de columnas
   let widths;
@@ -742,16 +879,45 @@ function generarTablaCrudos(crudos, estiloCliente) {
   // Comprobar si es cliente Canelo
   const esClienteCanelo = nombreCliente.toLowerCase().includes('canelo');
   
+  // Filtrar items que tengan kilos reales
+  const crudosFiltrados = crudos.map(crudo => {
+    const itemsFiltrados = crudo.items.filter(item => {
+      const kilosTexto = calcularKilosCrudos(item, nombreCliente);
+      const kilos = parseFloat(kilosTexto);
+      return kilos > 0;
+    });
+    return { ...crudo, items: itemsFiltrados };
+  }).filter(crudo => crudo.items.length > 0);
+
+  // Si no hay crudos con kilos, devolver una tabla vacía
+  if (crudosFiltrados.length === 0 || crudosFiltrados.every(crudo => crudo.items.length === 0)) {
+    return {
+      table: {
+        headerRows: 1,
+        widths: ['100%'],
+        body: [
+          [{ text: 'No hay crudos con kilos registrados', italics: true, alignment: 'center' }]
+        ]
+      },
+      layout: {
+        hLineWidth: function(i, node) { return (i === 0 || i === node.table.body.length) ? 2 : 1; },
+        vLineWidth: function(i, node) { return (i === 0 || i === node.table.widths.length) ? 2 : 1; },
+        hLineColor: function(i, node) { return (i === 0 || i === node.table.body.length) ? obtenerColorBorde(estiloCliente) : 'black'; },
+        vLineColor: function(i, node) { return (i === 0 || i === node.table.widths.length) ? obtenerColorBorde(estiloCliente) : 'black'; },
+      }
+    };
+  }
+  
   // Agregamos un log para depuración
   console.log('Generando tabla de crudos:', {
     estiloCliente,
     nombreCliente,
     esClienteCanelo,
-    hayPreciosEnCrudos: crudos.some(crudo => crudo.items.some(item => !!item.precio))
+    hayPreciosEnCrudos: crudosFiltrados.some(crudo => crudo.items.some(item => !!item.precio))
   });
   
   // Verificar si algún ítem tiene precio
-  const hayPrecios = crudos.some(crudo => 
+  const hayPrecios = crudosFiltrados.some(crudo => 
     crudo.items.some(item => item.precio && item.precio.toString().trim() !== '')
   );
 
@@ -772,51 +938,112 @@ function generarTablaCrudos(crudos, estiloCliente) {
   }
 
   const body = [headerRow];
+  
+  // Variable para calcular el gran total
+  let granTotal = 0;
 
   // Agregar las filas de datos
-  crudos.forEach(crudo => 
+  crudosFiltrados.forEach(crudo => 
     crudo.items.forEach(item => {
       // Calcular kilos para este item
       const kilosTexto = calcularKilosCrudos(item, nombreCliente);
       const kilos = parseFloat(kilosTexto);
       
-      // Depuración de cada item
-      if (esClienteCanelo && item.precio) {
-        console.log('Item con precio para Canelo:', {
-          talla: item.talla,
-          kilos,
-          precio: item.precio,
-          total: kilos * Number(item.precio)
-        });
-      }
-      
-      const row = [
-        // Eliminar decimales para los kilos (redondeando al entero más cercano)
-        `${Math.round(kilos)} kg`,
-        {
-          text: item.talla.replace(/\s*c\/\s*c$/i, ' c/c'),
-          style: 'default',
-          noWrap: true
-        },
-        calcularTarasTotales(item)
-      ];
-
-      // Agregar precio formateado solo si la columna existe
-      if (hayPrecios) {
-        row.push(item.precio ? { text: `$${Number(item.precio).toLocaleString('en-US')}`, style: 'precio' } : '');
-        
-        // Agregar total solo para Canelo (forzar reconocimiento explícito)
-        if (esClienteCanelo || nombreCliente === 'canelo') {
-          const total = item.precio ? kilos * Number(item.precio) : 0;
-          row.push(item.precio 
-            ? { text: `$${Math.round(total).toLocaleString('en-US')}`, style: 'totalPrecio' } 
-            : '');
+      // Solo procesar items con kilos > 0
+      if (kilos > 0) {
+        // Depuración de cada item
+        if (esClienteCanelo && item.precio) {
+          console.log('Item con precio para Canelo:', {
+            talla: item.talla,
+            kilos,
+            precio: item.precio,
+            total: kilos * Number(item.precio)
+          });
         }
-      }
+        
+        const row = [
+          // Eliminar decimales para los kilos (redondeando al entero más cercano)
+          `${Math.round(kilos)} kg`,
+          {
+            text: item.talla.replace(/\s*c\/\s*c$/i, ' c/c'),
+            style: 'default',
+            noWrap: true
+          },
+          calcularTarasTotales(item)
+        ];
 
-      body.push(row);
+        // Agregar precio formateado solo si la columna existe
+        if (hayPrecios) {
+          row.push(item.precio ? { text: `$${Number(item.precio).toLocaleString('en-US')}`, style: 'precio' } : '');
+          
+          // Agregar total solo para Canelo (forzar reconocimiento explícito)
+          if (esClienteCanelo || nombreCliente === 'canelo') {
+            const total = item.precio ? kilos * Number(item.precio) : 0;
+            // Sumar al gran total
+            granTotal += total;
+            
+            row.push(item.precio 
+              ? { text: `$${Math.round(total).toLocaleString('en-US')}`, style: 'totalPrecio' } 
+              : '');
+          }
+        }
+
+        body.push(row);
+      }
     })
   );
+  
+  // Agregar fila con el gran total para cliente Canelo con precios
+  if ((esClienteCanelo || nombreCliente === 'canelo') && hayPrecios && granTotal > 0) {
+    // Crear una fila completa para el gran total
+    const numColumnas = headerRow.length;
+    const filaGranTotal = [
+      {
+        text: 'GRAN TOTAL:',
+        bold: true,
+        alignment: 'right',
+        color: '#9b59b6',
+        border: [true, true, true, true],
+        colSpan: numColumnas - 1
+      }
+    ];
+    
+    // Agregar celdas vacías para mantener la estructura de columnas (excepto la última)
+    for (let i = 1; i < numColumnas - 1; i++) {
+      filaGranTotal.push({});
+    }
+    
+    // Agregar el valor del gran total
+    filaGranTotal.push({ 
+      text: `$${Math.round(granTotal).toLocaleString('en-US')}`,
+      bold: true,
+      fontSize: 24,
+      color: '#9b59b6',
+      border: [true, true, true, true],
+      alignment: 'center'
+    });
+    
+    body.push(filaGranTotal);
+  }
+
+  // Si solo tenemos el encabezado pero no filas, mostrar mensaje
+  if (body.length === 1) {
+    return {
+      table: {
+        headerRows: 1,
+        widths: ['100%'],
+        body: [
+          [{ text: 'No hay crudos con kilos registrados', italics: true, alignment: 'center' }]
+        ]
+      },
+      layout: {
+        hLineWidth: function(i, node) { return (i === 0 || i === node.table.body.length) ? 2 : 1; },
+        vLineWidth: function(i, node) { return (i === 0 || i === node.table.widths.length) ? 2 : 1; },
+        hLineColor: function(i, node) { return (i === 0 || i === node.table.body.length) ? obtenerColorBorde(estiloCliente) : 'black'; },
+        vLineColor: function(i, node) { return (i === 0 || i === node.table.widths.length) ? obtenerColorBorde(estiloCliente) : 'black'; },
+      }
+    };
+  }
 
   // Definir los anchos de columna según si hay precios o no y si es Canelo
   let widths;
@@ -1136,4 +1363,659 @@ function obtenerNombreClienteDesdeEstilo(estiloCliente) {
     case 'clienteCanelo': return 'canelo';
     default: return 'otro';
   }
+}
+
+export async function generarNotaVentaSinPreciosPDF(embarque, clientesDisponibles, clientesJuntarMedidas) {
+  try {
+    console.log('Generando nota sin precios para PDF:', {
+      productos: embarque.productos,
+      kilosCrudos: embarque.kilosCrudos,
+      clienteCrudos: embarque.clienteCrudos,
+      fecha: embarque.fecha,
+      cargaCon: embarque.cargaCon
+    });
+
+    if (!embarque || !embarque.productos) {
+      console.warn('El embarque no contiene datos de productos válidos');
+      return;
+    }
+
+    const logoBase64 = await loadImageAsBase64('https://res.cloudinary.com/hwkcovsmr/image/upload/v1620946647/samples/REY_PEZ_LOGO_nsotww.png');
+    
+    const docDefinition = {
+      content: [
+        {
+          columns: [
+            {
+              image: logoBase64,
+              width: 100,
+              alignment: 'left',
+              margin: [0, 0, 0, 10]
+            },
+            {
+              text: 'Nota de Embarque',
+              style: 'notaVentaHeader',
+              alignment: 'center',
+              margin: [0, 20, 0, 0]
+            },
+            {
+              stack: [
+                {
+                  text: `Fecha: ${new Date(embarque.fecha).toLocaleString('es-MX', { 
+                    timeZone: 'UTC',
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit'
+                  })}`,
+                  alignment: 'right',
+                  margin: [0, 20, 0, 0]
+                },
+                {
+                  text: `Carga con: ${embarque.cargaCon || 'No especificado'}`,
+                  alignment: 'right',
+                  margin: [0, 5, 0, 0]
+                }
+              ]
+            }
+          ]
+        },
+        { text: '\n' },
+        ...generarContenidoClientesSinPrecios(embarque, clientesDisponibles, clientesJuntarMedidas),
+        // Agregar la nueva sección de rendimientos
+        ...generarSeccionRendimientos({
+          ...embarque,
+          // Asegurarnos de que los kilos crudos estén disponibles
+          kilosCrudos: embarque.kilosCrudos || {}
+        }, clientesDisponibles),
+      ],
+      styles: {
+        notaVentaHeader: {
+          color: '#3760b0',
+          fontSize: 30,
+          bold: true,
+          italics: true,
+        },
+        header: {
+          fontSize: 30,
+          bold: true,
+          color: '#2980b9',
+          margin: [0, 0, 0, 10]
+        },
+        subheader: {
+          fontSize: 25,
+          bold: true,
+          margin: [0, 10, 0, 5]
+        },
+        tableHeader: {
+          bold: true,
+          fontSize: 23,
+          color: 'black',
+          fillColor: '#ecf0f1'
+        },
+        clienteJoselito: {
+          color: '#FFFFFF',
+          background: '#0000FF',
+          padding: [2, 2, 2, 2]
+        },
+        clienteCatarro: {
+          color: '#FFFFFF',
+          background: '#FF0000',
+          padding: [2, 2, 2, 2]
+        },
+        clienteOtilio: {
+          color: '#000000',
+          background: '#FFD700',
+          padding: [2, 2, 2, 2]
+        },
+        clienteOzuna: {
+          color: '#FFFFFF',
+          background: '#008000',
+          padding: [2, 2, 2, 2]
+        },
+        clienteCanelo: {
+          color: '#FFFFFF',
+          background: '#9b59b6',
+          padding: [2, 2, 2, 2]
+        },
+        clienteOtro: {
+          color: '#000000',
+          background: '#808080',
+          padding: [2, 2, 2, 2]
+        },
+        medidaHeader: {
+          fontSize: 24,
+          bold: true,
+          color: '#2c3e50',
+          margin: [0, 10, 0, 5]
+        },
+        tipoConAgua: {
+          color: '#2980b9',  // Color azul
+          bold: true
+        },
+        nota: {
+          fontSize: 18,
+          color: '#666666',
+          italics: true
+        }
+      },
+      defaultStyle: {
+        fontSize: 20
+      },
+      footer: function(currentPage, pageCount) {
+        return {
+          columns: [
+            { text: ' 2025 Rey Pez - Tampico, Tamps.', alignment: 'center', margin: [0, 10, 0, 0] },
+          ],
+          margin: [40, 0, 40, 0],
+          fontSize: 20,
+          color: '#3760b0'
+        };
+      }
+    };
+
+    // Crear el documento PDF y verificar número de páginas
+    pdfMake.createPdf(docDefinition).getBuffer((buffer) => {
+      // Crear un Uint8Array del buffer para contar las páginas
+      const pdfData = new Uint8Array(buffer);
+      // Contar ocurrencias de "/Page" para estimar número de páginas
+      const numPages = buffer.toString().match(/\/Page\W/g).length;
+      
+      if (numPages > 1) {
+        // Ajustar tamaños si excede una página
+        const docDefinitionAjustado = {
+          ...docDefinition,
+          defaultStyle: {
+            ...docDefinition.defaultStyle,
+            fontSize: 16 // Reducir de 20 a 16
+          },
+          styles: {
+            ...docDefinition.styles,
+            notaVentaHeader: {
+              ...docDefinition.styles.notaVentaHeader,
+              fontSize: 24 // Reducir de 30 a 24
+            },
+            header: {
+              ...docDefinition.styles.header,
+              fontSize: 24 // Reducir de 30 a 24
+            },
+            subheader: {
+              ...docDefinition.styles.subheader,
+              fontSize: 20 // Reducir de 25 a 20
+            },
+            tableHeader: {
+              ...docDefinition.styles.tableHeader,
+              fontSize: 18 // Reducir de 23 a 18
+            },
+            medidaHeader: {
+              ...docDefinition.styles.medidaHeader,
+              fontSize: 20 // Reducir de 24 a 20
+            }
+          }
+        };
+        
+        // Crear y descargar el PDF con los ajustes
+        pdfMake.createPdf(docDefinitionAjustado).download('nota-embarque.pdf');
+      } else {
+        // Si es una sola página, descargar el original
+        pdfMake.createPdf(docDefinition).download('nota-embarque.pdf');
+      }
+    });
+
+  } catch (error) {
+    console.error('Error al generar el PDF sin precios:', error);
+  }
+}
+
+function generarContenidoClientesSinPrecios(embarque, clientesDisponibles, clientesJuntarMedidas) {
+  const contenido = [];
+  let totalTarasLimpio = 0;
+  let totalTarasCrudos = 0;
+
+  // Agrupar productos por cliente
+  const productosPorCliente = embarque.productos.reduce((acc, producto) => {
+    if (!acc[producto.clienteId]) {
+      acc[producto.clienteId] = [];
+    }
+    acc[producto.clienteId].push(producto);
+    return acc;
+  }, {});
+
+  Object.entries(productosPorCliente).forEach(([clienteId, productos]) => {
+    const nombreCliente = obtenerNombreCliente(clienteId, clientesDisponibles);
+    const estiloCliente = obtenerEstiloCliente(nombreCliente);
+    
+    // Verificar si este cliente específico tiene activada la opción de juntar medidas
+    const debeJuntarMedidas = clientesJuntarMedidas && clientesJuntarMedidas[clienteId];
+    
+    // Filtrar productos que tengan al menos 1 kilo real
+    const productosConKilos = productos.filter(producto => {
+      const kilos = totalKilos(producto, nombreCliente);
+      return kilos > 0;
+    });
+    
+    // Agregar encabezado del cliente
+    contenido.push(
+      { 
+        text: `Cliente: ${nombreCliente}`, 
+        style: ['subheader', estiloCliente],
+        margin: [0, 5, 0, 5]
+      }
+    );
+
+    // Verificar si hay productos (limpio) con kilos reales para este cliente
+    if (productosConKilos.length > 0) {
+      // Procesar los productos según la configuración de juntar medidas
+      let productosAProcesar = productosConKilos;
+      if (debeJuntarMedidas) {
+        const productosAgrupados = {};
+        
+        productosConKilos.forEach(producto => {
+          const medidaNombre = producto.nombreAlternativoPDF || producto.medida;
+          const tipo = producto.tipo || '';
+          const valorNeto = producto.camaronNeto || 0.65;
+          
+          // Crear una clave única para agrupar
+          const clave = tipo === 'c/h20' 
+            ? `${medidaNombre}-${tipo}-${valorNeto}`
+            : `${medidaNombre}-${tipo}`;
+          
+          if (!productosAgrupados[clave]) {
+            productosAgrupados[clave] = {
+              ...producto,
+              medida: medidaNombre,
+              kilos: [...producto.kilos],
+              taras: [...producto.taras],
+              tarasExtra: [...(producto.tarasExtra || [])],
+              reporteTaras: [...(producto.reporteTaras || [])],
+              reporteBolsas: [...(producto.reporteBolsas || [])],
+              // Crear un array para rastrear qué taras tienen descuento
+              tarasInfo: producto.taras.map(tara => ({
+                valor: tara,
+                restarTaras: producto.restarTaras
+              }))
+            };
+          } else {
+            // Combinar los kilos y taras
+            productosAgrupados[clave].kilos.push(...producto.kilos);
+            productosAgrupados[clave].taras.push(...producto.taras);
+            if (producto.tarasExtra) {
+              productosAgrupados[clave].tarasExtra.push(...producto.tarasExtra);
+            }
+            if (producto.reporteTaras) {
+              productosAgrupados[clave].reporteTaras.push(...producto.reporteTaras);
+            }
+            if (producto.reporteBolsas) {
+              productosAgrupados[clave].reporteBolsas.push(...producto.reporteBolsas);
+            }
+            // Agregar la información de las nuevas taras
+            productosAgrupados[clave].tarasInfo.push(
+              ...producto.taras.map(tara => ({
+                valor: tara,
+                restarTaras: producto.restarTaras
+              }))
+            );
+            // Mantener el array de taras sincronizado
+            productosAgrupados[clave].taras = productosAgrupados[clave].tarasInfo.map(t => t.valor);
+          }
+        });
+        
+        productosAProcesar = Object.values(productosAgrupados);
+      }
+      
+      // Agrupar productos por medida y tipo
+      const productosAgrupados = agruparProductos(productosAProcesar);
+      
+      // Verificar nuevamente si después de agrupar hay productos válidos con kilos
+      // (puede ocurrir que al combinar queden solo productos con 0 kilos)
+      const hayProductosValidos = productosAgrupados.some(producto => {
+        const kilos = totalKilos(producto, nombreCliente);
+        return kilos > 0;
+      });
+      
+      if (hayProductosValidos) {
+        // Mostrar sección de limpios solo si hay productos con kilos válidos
+        contenido.push(
+          { 
+            text: 'Limpio:', 
+            style: ['subheader', estiloCliente],
+            margin: [0, 5, 0, 5]
+          },
+          generarTablaProductosSinPrecios(productosAgrupados, estiloCliente, nombreCliente),
+          { text: '\n' }
+        );
+
+        const tarasLimpioCliente = productos.reduce((sum, producto) => sum + totalTaras(producto), 0);
+        if (tarasLimpioCliente > 0) {
+          totalTarasLimpio += tarasLimpioCliente;
+          contenido.push(
+            { 
+              text: `Taras de limpio: ${tarasLimpioCliente}`, 
+              margin: [0, 5, 0, 5]
+            },
+            { text: '\n' }
+          );
+        }
+      }
+    }
+
+    // Verificar si hay crudos para este cliente
+    if (embarque.clienteCrudos && embarque.clienteCrudos[clienteId]) {
+      // Verificar si hay crudos con kilos reales
+      const hayKilosCrudos = embarque.clienteCrudos[clienteId].some(crudo => 
+        crudo.items.some(item => {
+          const kilosTexto = calcularKilosCrudos(item, nombreCliente);
+          const kilos = parseFloat(kilosTexto);
+          return kilos > 0;
+        })
+      );
+      
+      if (hayKilosCrudos) {
+        contenido.push(
+          { 
+            text: 'Crudos:', 
+            style: ['subheader', estiloCliente],
+            margin: [0, 5, 0, 5]
+          },
+          generarTablaCrudosSinPrecios(embarque.clienteCrudos[clienteId], estiloCliente),
+          { text: '\n' }
+        );
+
+        const tarasCrudosCliente = embarque.clienteCrudos[clienteId].reduce((sum, crudo) => 
+          sum + crudo.items.reduce((itemSum, item) => itemSum + calcularTarasTotales(item), 0), 0);
+        
+        if (tarasCrudosCliente > 0) {
+          totalTarasCrudos += tarasCrudosCliente;
+          contenido.push(
+            { 
+              text: `Taras de crudo: ${tarasCrudosCliente}`, 
+              margin: [0, 5, 0, 5]
+            },
+            { text: '\n' }
+          );
+        }
+      }
+    }
+    
+    // Si no hay ni productos con kilos ni crudos con kilos, mostrar mensaje
+    const hayProductosConKilos = productosConKilos.length > 0;
+    const hayKilosCrudos = embarque.clienteCrudos && embarque.clienteCrudos[clienteId] && 
+                          embarque.clienteCrudos[clienteId].some(crudo => 
+                            crudo.items.some(item => {
+                              const kilosTexto = calcularKilosCrudos(item, nombreCliente);
+                              const kilos = parseFloat(kilosTexto);
+                              return kilos > 0;
+                            })
+                          );
+                          
+    if (!hayProductosConKilos && !hayKilosCrudos) {
+      contenido.push(
+        { 
+          text: 'No hay medidas registradas para este cliente', 
+          italics: true,
+          margin: [0, 5, 0, 10]
+        },
+        { text: '\n' }
+      );
+    }
+  });
+
+  // Agregar total general de taras solo si hay taras
+  if (totalTarasLimpio + totalTarasCrudos > 0) {
+    contenido.push(
+      { text: `Total general de taras: ${totalTarasLimpio + totalTarasCrudos}`, style: 'subheader', margin: [0, 5, 0, 5] }
+    );
+  }
+
+  return contenido;
+}
+
+function generarTablaProductosSinPrecios(productos, estiloCliente, nombreCliente) {
+  // Filtrar productos que tengan kilos reales
+  const productosConKilos = productos.filter(producto => {
+    const kilos = totalKilos(producto, nombreCliente);
+    return kilos > 0;
+  });
+  
+  // Si no hay productos con kilos, devolver una tabla vacía
+  if (productosConKilos.length === 0) {
+    return {
+      table: {
+        headerRows: 1,
+        widths: ['100%'],
+        body: [
+          [{ text: 'No hay productos con kilos registrados', italics: true, alignment: 'center' }]
+        ]
+      },
+      layout: {
+        hLineWidth: function(i, node) { return (i === 0 || i === node.table.body.length) ? 2 : 1; },
+        vLineWidth: function(i, node) { return (i === 0 || i === node.table.widths.length) ? 2 : 1; },
+        hLineColor: function(i, node) { return (i === 0 || i === node.table.body.length) ? obtenerColorBorde(estiloCliente) : 'black'; },
+        vLineColor: function(i, node) { return (i === 0 || i === node.table.widths.length) ? obtenerColorBorde(estiloCliente) : 'black'; },
+      }
+    };
+  }
+  
+  // Verificar si algún producto tiene notas o hilos
+  const hayNotas = productosConKilos.some(producto => producto.nota && producto.nota.trim() !== '');
+  const hayHilos = productosConKilos.some(producto => producto.hilos);
+
+  // Definir las columnas del header
+  const headerRow = [
+    { text: 'Kg', style: 'tableHeader' },
+    { text: 'Producto', style: 'tableHeader' },
+    { text: 'Taras', style: 'tableHeader' }
+  ];
+
+  if (hayHilos) {
+    headerRow.push({ text: 'Hilos', style: 'tableHeader' });
+  }
+  if (hayNotas) {
+    headerRow.push({ text: 'Notas', style: 'tableHeader' });
+  }
+
+  const body = [headerRow];
+
+  productosConKilos.forEach(producto => {
+    const tarasNormales = (producto.taras || []).reduce((sum, tara) => sum + (tara || 0), 0);
+    const tarasExtra = (producto.tarasExtra || []).reduce((sum, tara) => sum + (tara || 0), 0);
+    
+    const tarasTotales = tarasNormales + tarasExtra;
+    let tarasTexto = `${tarasTotales} ${combinarTarasBolsas(producto.reporteTaras, producto.reporteBolsas)}`;
+
+    // Calcular kilos para este producto
+    const kilos = totalKilos(producto, nombreCliente);
+    
+    // Verificar que tenga kilos > 0
+    if (kilos > 0) {
+      const row = [
+        // Eliminar decimales para los kilos (redondeando al entero más cercano)
+        `${Math.round(kilos)} kg`,
+        // Formatear el nombre del producto sin precios
+        formatearProductoSinPrecio(producto),
+        tarasTexto
+      ];
+
+      if (hayHilos) {
+        row.push(producto.hilos || '');
+      }
+      if (hayNotas) {
+        row.push({
+          text: producto.nota || '',
+          style: 'nota'
+        });
+      }
+
+      body.push(row);
+    }
+  });
+
+  // Si no hay filas con productos, mostrar mensaje
+  if (body.length === 1) {
+    return {
+      table: {
+        headerRows: 1,
+        widths: ['100%'],
+        body: [
+          [{ text: 'No hay productos con kilos registrados', italics: true, alignment: 'center' }]
+        ]
+      },
+      layout: {
+        hLineWidth: function(i, node) { return (i === 0 || i === node.table.body.length) ? 2 : 1; },
+        vLineWidth: function(i, node) { return (i === 0 || i === node.table.widths.length) ? 2 : 1; },
+        hLineColor: function(i, node) { return (i === 0 || i === node.table.body.length) ? obtenerColorBorde(estiloCliente) : 'black'; },
+        vLineColor: function(i, node) { return (i === 0 || i === node.table.widths.length) ? obtenerColorBorde(estiloCliente) : 'black'; },
+      }
+    };
+  }
+
+  // Calcular los anchos según el número de columnas
+  let widths;
+  // Mantener los anchos originales sin columnas de precio
+  if (hayHilos && hayNotas) {
+    widths = ['20%', '30%', '25%', '10%', '15%'];
+  } else if (hayHilos) {
+    widths = ['25%', '35%', '25%', '15%'];
+  } else if (hayNotas) {
+    widths = ['25%', '35%', '25%', '15%'];
+  } else {
+    widths = ['25%', '45%', '30%'];
+  }
+
+  return {
+    table: {
+      headerRows: 1,
+      widths: widths,
+      body: body
+    },
+    layout: {
+      hLineWidth: function(i, node) { return (i === 0 || i === node.table.body.length) ? 2 : 1; },
+      vLineWidth: function(i, node) { return (i === 0 || i === node.table.widths.length) ? 2 : 1; },
+      hLineColor: function(i, node) { return (i === 0 || i === node.table.body.length) ? obtenerColorBorde(estiloCliente) : 'black'; },
+      vLineColor: function(i, node) { return (i === 0 || i === node.table.widths.length) ? obtenerColorBorde(estiloCliente) : 'black'; },
+    }
+  };
+}
+
+function generarTablaCrudosSinPrecios(crudos, estiloCliente) {
+  // Obtener el nombre del cliente a partir del estilo
+  const nombreCliente = obtenerNombreClienteDesdeEstilo(estiloCliente);
+  
+  // Filtrar items que tengan kilos reales
+  const crudosFiltrados = crudos.map(crudo => {
+    const itemsFiltrados = crudo.items.filter(item => {
+      const kilosTexto = calcularKilosCrudos(item, nombreCliente);
+      const kilos = parseFloat(kilosTexto);
+      return kilos > 0;
+    });
+    return { ...crudo, items: itemsFiltrados };
+  }).filter(crudo => crudo.items.length > 0);
+
+  // Si no hay crudos con kilos, devolver una tabla vacía
+  if (crudosFiltrados.length === 0 || crudosFiltrados.every(crudo => crudo.items.length === 0)) {
+    return {
+      table: {
+        headerRows: 1,
+        widths: ['100%'],
+        body: [
+          [{ text: 'No hay crudos con kilos registrados', italics: true, alignment: 'center' }]
+        ]
+      },
+      layout: {
+        hLineWidth: function(i, node) { return (i === 0 || i === node.table.body.length) ? 2 : 1; },
+        vLineWidth: function(i, node) { return (i === 0 || i === node.table.widths.length) ? 2 : 1; },
+        hLineColor: function(i, node) { return (i === 0 || i === node.table.body.length) ? obtenerColorBorde(estiloCliente) : 'black'; },
+        vLineColor: function(i, node) { return (i === 0 || i === node.table.widths.length) ? obtenerColorBorde(estiloCliente) : 'black'; },
+      }
+    };
+  }
+
+  // Definir las columnas del header (sin precio ni total)
+  const headerRow = [
+    { text: 'Cantidad', style: 'tableHeader' },
+    { text: 'Talla', style: 'tableHeader' },
+    { text: 'Taras', style: 'tableHeader' }
+  ];
+
+  const body = [headerRow];
+
+  // Agregar las filas de datos
+  crudosFiltrados.forEach(crudo => 
+    crudo.items.forEach(item => {
+      // Calcular kilos para este item
+      const kilosTexto = calcularKilosCrudos(item, nombreCliente);
+      const kilos = parseFloat(kilosTexto);
+      
+      // Solo procesar items con kilos > 0
+      if (kilos > 0) {
+        const row = [
+          // Eliminar decimales para los kilos (redondeando al entero más cercano)
+          `${Math.round(kilos)} kg`,
+          {
+            text: item.talla.replace(/\s*c\/\s*c$/i, ' c/c'),
+            style: 'default',
+            noWrap: true
+          },
+          calcularTarasTotales(item)
+        ];
+
+        body.push(row);
+      }
+    })
+  );
+
+  // Si solo tenemos el encabezado pero no filas, mostrar mensaje
+  if (body.length === 1) {
+    return {
+      table: {
+        headerRows: 1,
+        widths: ['100%'],
+        body: [
+          [{ text: 'No hay crudos con kilos registrados', italics: true, alignment: 'center' }]
+        ]
+      },
+      layout: {
+        hLineWidth: function(i, node) { return (i === 0 || i === node.table.body.length) ? 2 : 1; },
+        vLineWidth: function(i, node) { return (i === 0 || i === node.table.widths.length) ? 2 : 1; },
+        hLineColor: function(i, node) { return (i === 0 || i === node.table.body.length) ? obtenerColorBorde(estiloCliente) : 'black'; },
+        vLineColor: function(i, node) { return (i === 0 || i === node.table.widths.length) ? obtenerColorBorde(estiloCliente) : 'black'; },
+      }
+    };
+  }
+
+  // Definir los anchos de columna (sin columnas de precio ni total)
+  const widths = ['30%', '40%', '30%'];
+
+  return {
+    table: {
+      headerRows: 1,
+      widths: widths,
+      body: body
+    },
+    layout: {
+      hLineWidth: function(i, node) { return (i === 0 || i === node.table.body.length) ? 2 : 1; },
+      vLineWidth: function(i, node) { return (i === 0 || i === node.table.widths.length) ? 2 : 1; },
+      hLineColor: function(i, node) { return (i === 0 || i === node.table.body.length) ? obtenerColorBorde(estiloCliente) : 'black'; },
+      vLineColor: function(i, node) { return (i === 0 || i === node.table.widths.length) ? obtenerColorBorde(estiloCliente) : 'black'; },
+    }
+  };
+}
+
+function formatearProductoSinPrecio(producto) {
+  let medida = (producto.nombreAlternativoPDF || producto.medida || '').trim();
+  
+  // Si es c/h20, agregar el indicador pero mantener el nombre original
+  if (producto.tipo === 'c/h20') {
+    return { text: `${medida} c/h2o`, style: 'tipoConAgua' };
+  }
+  
+  // Si es s/h20, agregar el indicador pero mantener el nombre original
+  if (producto.tipo === 's/h20') {
+    return { text: `${medida} s/h2o`, style: 'default' };
+  }
+  
+  // Para otros tipos, mostrar el nombre exacto con el tipo si existe
+  let tipoProducto = producto.tipo === 'otro' ? producto.tipoPersonalizado : producto.tipo;
+  let textoFinal = tipoProducto ? `${medida} ${tipoProducto}` : medida;
+  
+  return { text: textoFinal, style: 'default' };
 }

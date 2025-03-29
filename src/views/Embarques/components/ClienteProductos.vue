@@ -24,7 +24,7 @@
                     <label :for="'juntar-medidas-' + clienteId" @click.stop>Juntar medidas</label>
                 </div>
                 <button type="button" @click.stop="$emit('generar-pdf', 'cliente', clienteId)"
-                    class="btn btn-primary btn-sm generar-pdf-cliente" title="Generar Nota de Venta PDF"
+                    class="btn btn-primary btn-sm generar-pdf-cliente" title="Generar Nota de Venta PDF (incluye página sin precios)"
                     :disabled="isGeneratingPdf">
                     <span v-if="isGeneratingPdf && pdfType === 'cliente-' + clienteId" class="loader-inline"></span>
                     <i v-else class="fas fa-file-pdf"></i> Generar Nota PDF
