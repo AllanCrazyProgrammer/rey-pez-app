@@ -237,13 +237,92 @@ export async function generarNotaVentaPDF(embarque, clientesDisponibles, cliente
       // Contar ocurrencias de "/Page" para estimar número de páginas
       const numPages = buffer.toString().match(/\/Page\W/g).length;
       
-      // Descargamos directamente el PDF sin ajustar tamaños, ya que ahora tiene dos páginas por diseño
-      pdfMake.createPdf(docDefinition).download('nota-venta.pdf');
+      // Contamos el total de productos para ambas páginas
+      const totalProductos = contarTotalProductos(embarque);
+      
+      // Si hay 8 o más productos, reducimos el tamaño de fuente
+      if (totalProductos >= 8) {
+        const docDefinitionAjustado = {
+          ...docDefinition,
+          defaultStyle: {
+            ...docDefinition.defaultStyle,
+            fontSize: 16 // Reducir de 20 a 16
+          },
+          styles: {
+            ...docDefinition.styles,
+            notaVentaHeader: {
+              ...docDefinition.styles.notaVentaHeader,
+              fontSize: 24 // Reducir de 30 a 24
+            },
+            header: {
+              ...docDefinition.styles.header,
+              fontSize: 24 // Reducir de 30 a 24
+            },
+            subheader: {
+              ...docDefinition.styles.subheader,
+              fontSize: 20 // Reducir de 25 a 20
+            },
+            tableHeader: {
+              ...docDefinition.styles.tableHeader,
+              fontSize: 18 // Reducir de 23 a 18
+            },
+            medidaHeader: {
+              ...docDefinition.styles.medidaHeader,
+              fontSize: 20 // Reducir de 24 a 20
+            },
+            nota: {
+              ...docDefinition.styles.nota,
+              fontSize: 15 // Reducir de 18 a 15
+            },
+            totalPrecio: {
+              ...docDefinition.styles.totalPrecio,
+              fontSize: 18 // Reducir de 21 a 18
+            },
+            granTotal: {
+              ...docDefinition.styles.granTotal,
+              fontSize: 20 // Reducir de 24 a 20
+            }
+          }
+        };
+        
+        // Crear y descargar el PDF con los ajustes
+        pdfMake.createPdf(docDefinitionAjustado).download('nota-venta.pdf');
+      } else {
+        // Si son menos de 8 productos, descargar el original
+        pdfMake.createPdf(docDefinition).download('nota-venta.pdf');
+      }
     });
 
   } catch (error) {
     console.error('Error al generar el PDF:', error);
   }
+}
+
+// Función auxiliar para contar el total de productos
+function contarTotalProductos(embarque) {
+  let contador = 0;
+  
+  // Contar productos normales con kilos > 0
+  if (embarque.productos && Array.isArray(embarque.productos)) {
+    contador += embarque.productos.filter(producto => {
+      const kilos = (producto.kilos || []).reduce((sum, kilo) => sum + (Number(kilo) || 0), 0);
+      return kilos > 0;
+    }).length;
+  }
+  
+  // Contar productos crudos con kilos > 0
+  if (embarque.clienteCrudos) {
+    Object.values(embarque.clienteCrudos).forEach(crudos => {
+      crudos.forEach(crudo => {
+        contador += (crudo.items || []).filter(item => {
+          // Simplificamos la verificación para el conteo
+          return item.taras || item.sobrante;
+        }).length;
+      });
+    });
+  }
+  
+  return contador;
 }
 
 function generarContenidoClientes(embarque, clientesDisponibles, clientesJuntarMedidas) {
@@ -1520,8 +1599,12 @@ export async function generarNotaVentaSinPreciosPDF(embarque, clientesDisponible
       // Contar ocurrencias de "/Page" para estimar número de páginas
       const numPages = buffer.toString().match(/\/Page\W/g).length;
       
-      if (numPages > 1) {
-        // Ajustar tamaños si excede una página
+      // Contamos el total de productos
+      const totalProductos = contarTotalProductos(embarque);
+      
+      // Si hay 8 o más productos o más de una página, reducimos el tamaño de fuente
+      if (totalProductos >= 8 || numPages > 1) {
+        // Ajustar tamaños si excede una página o tiene muchos productos
         const docDefinitionAjustado = {
           ...docDefinition,
           defaultStyle: {
@@ -1549,6 +1632,10 @@ export async function generarNotaVentaSinPreciosPDF(embarque, clientesDisponible
             medidaHeader: {
               ...docDefinition.styles.medidaHeader,
               fontSize: 20 // Reducir de 24 a 20
+            },
+            nota: {
+              ...docDefinition.styles.nota,
+              fontSize: 15 // Reducir de 18 a 15
             }
           }
         };
@@ -1556,7 +1643,7 @@ export async function generarNotaVentaSinPreciosPDF(embarque, clientesDisponible
         // Crear y descargar el PDF con los ajustes
         pdfMake.createPdf(docDefinitionAjustado).download('nota-embarque.pdf');
       } else {
-        // Si es una sola página, descargar el original
+        // Si es una sola página y menos de 8 productos, descargar el original
         pdfMake.createPdf(docDefinition).download('nota-embarque.pdf');
       }
     });
