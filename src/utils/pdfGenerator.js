@@ -135,6 +135,13 @@ export async function generarNotaVentaPDF(embarque, clientesDisponibles, cliente
           background: '#FF0000',
           padding: [2, 2, 2, 2]
         },
+        totalPrecio: {
+          color: '#FFFFFF',
+          background: '#9b59b6',
+          padding: [2, 2, 2, 2],
+          bold: true,
+          fontSize: 21
+        },
         tipoConAgua: {
           color: '#2980b9',  // Color azul
           bold: true
@@ -196,6 +203,10 @@ export async function generarNotaVentaPDF(embarque, clientesDisponibles, cliente
             medidaHeader: {
               ...docDefinition.styles.medidaHeader,
               fontSize: 20 // Reducir de 24 a 20
+            },
+            totalPrecio: {
+              ...docDefinition.styles.totalPrecio,
+              fontSize: 16 // Reducir de 21 a 16
             }
           }
         };
@@ -234,88 +245,112 @@ function generarContenidoClientes(embarque, clientesDisponibles, clientesJuntarM
     // Verificar si este cliente específico tiene activada la opción de juntar medidas
     const debeJuntarMedidas = clientesJuntarMedidas && clientesJuntarMedidas[clienteId];
     
-    // Procesar los productos según la configuración de juntar medidas
-    let productosAProcesar = productos;
-    if (debeJuntarMedidas) {
-      const productosAgrupados = {};
-      
-      productos.forEach(producto => {
-        const medidaNombre = producto.nombreAlternativoPDF || producto.medida;
-        const tipo = producto.tipo || '';
-        const valorNeto = producto.camaronNeto || 0.65;
-        
-        // Crear una clave única para agrupar
-        const clave = tipo === 'c/h20' 
-          ? `${medidaNombre}-${tipo}-${valorNeto}`
-          : `${medidaNombre}-${tipo}`;
-        
-        if (!productosAgrupados[clave]) {
-          productosAgrupados[clave] = {
-            ...producto,
-            medida: medidaNombre,
-            kilos: [...producto.kilos],
-            taras: [...producto.taras],
-            tarasExtra: [...(producto.tarasExtra || [])],
-            reporteTaras: [...(producto.reporteTaras || [])],
-            reporteBolsas: [...(producto.reporteBolsas || [])],
-            // Crear un array para rastrear qué taras tienen descuento
-            tarasInfo: producto.taras.map(tara => ({
-              valor: tara,
-              restarTaras: producto.restarTaras
-            }))
-          };
-        } else {
-          // Combinar los kilos y taras
-          productosAgrupados[clave].kilos.push(...producto.kilos);
-          productosAgrupados[clave].taras.push(...producto.taras);
-          if (producto.tarasExtra) {
-            productosAgrupados[clave].tarasExtra.push(...producto.tarasExtra);
-          }
-          if (producto.reporteTaras) {
-            productosAgrupados[clave].reporteTaras.push(...producto.reporteTaras);
-          }
-          if (producto.reporteBolsas) {
-            productosAgrupados[clave].reporteBolsas.push(...producto.reporteBolsas);
-          }
-          // Agregar la información de las nuevas taras
-          productosAgrupados[clave].tarasInfo.push(
-            ...producto.taras.map(tara => ({
-              valor: tara,
-              restarTaras: producto.restarTaras
-            }))
-          );
-          // Mantener el array de taras sincronizado
-          productosAgrupados[clave].taras = productosAgrupados[clave].tarasInfo.map(t => t.valor);
-        }
-      });
-      
-      productosAProcesar = Object.values(productosAgrupados);
-    }
-    
-    // Agrupar productos por medida y tipo
-    const productosAgrupados = agruparProductos(productosAProcesar);
-    
+    // Agregar encabezado del cliente
     contenido.push(
       { 
         text: `Cliente: ${nombreCliente}`, 
         style: ['subheader', estiloCliente],
         margin: [0, 5, 0, 5]
-      },
-      generarTablaProductos(productosAgrupados, estiloCliente, nombreCliente),
-      { text: '\n' }
+      }
     );
 
-    const tarasLimpioCliente = productos.reduce((sum, producto) => sum + totalTaras(producto), 0);
-    totalTarasLimpio += tarasLimpioCliente;
+    // Verificar si hay productos (limpio) para este cliente y verificar si tienen valor real
+    let hayProductosReales = false;
+    
+    if (productos.length > 0) {
+      // Procesar los productos según la configuración de juntar medidas
+      let productosAProcesar = productos;
+      if (debeJuntarMedidas) {
+        const productosAgrupados = {};
+        
+        productos.forEach(producto => {
+          const medidaNombre = producto.nombreAlternativoPDF || producto.medida;
+          const tipo = producto.tipo || '';
+          const valorNeto = producto.camaronNeto || 0.65;
+          
+          // Crear una clave única para agrupar
+          const clave = tipo === 'c/h20' 
+            ? `${medidaNombre}-${tipo}-${valorNeto}`
+            : `${medidaNombre}-${tipo}`;
+          
+          if (!productosAgrupados[clave]) {
+            productosAgrupados[clave] = {
+              ...producto,
+              medida: medidaNombre,
+              kilos: [...producto.kilos],
+              taras: [...producto.taras],
+              tarasExtra: [...(producto.tarasExtra || [])],
+              reporteTaras: [...(producto.reporteTaras || [])],
+              reporteBolsas: [...(producto.reporteBolsas || [])],
+              // Crear un array para rastrear qué taras tienen descuento
+              tarasInfo: producto.taras.map(tara => ({
+                valor: tara,
+                restarTaras: producto.restarTaras
+              }))
+            };
+          } else {
+            // Combinar los kilos y taras
+            productosAgrupados[clave].kilos.push(...producto.kilos);
+            productosAgrupados[clave].taras.push(...producto.taras);
+            if (producto.tarasExtra) {
+              productosAgrupados[clave].tarasExtra.push(...producto.tarasExtra);
+            }
+            if (producto.reporteTaras) {
+              productosAgrupados[clave].reporteTaras.push(...producto.reporteTaras);
+            }
+            if (producto.reporteBolsas) {
+              productosAgrupados[clave].reporteBolsas.push(...producto.reporteBolsas);
+            }
+            // Agregar la información de las nuevas taras
+            productosAgrupados[clave].tarasInfo.push(
+              ...producto.taras.map(tara => ({
+                valor: tara,
+                restarTaras: producto.restarTaras
+              }))
+            );
+            // Mantener el array de taras sincronizado
+            productosAgrupados[clave].taras = productosAgrupados[clave].tarasInfo.map(t => t.valor);
+          }
+        });
+        
+        productosAProcesar = Object.values(productosAgrupados);
+      }
+      
+      // Agrupar productos por medida y tipo
+      const productosAgrupados = agruparProductos(productosAProcesar);
+      
+      // Verificar si hay productos con kilos > 0
+      hayProductosReales = productosAgrupados.some(producto => {
+        const kilos = totalKilos(producto, nombreCliente);
+        return kilos > 0;
+      });
+      
+      // Mostrar sección de limpios solo si hay productos con kilos > 0
+      if (hayProductosReales) {
+        contenido.push(
+          { 
+            text: 'Limpio:', 
+            style: ['subheader', estiloCliente],
+            margin: [0, 5, 0, 5]
+          },
+          generarTablaProductos(productosAgrupados, estiloCliente, nombreCliente),
+          { text: '\n' }
+        );
 
-    contenido.push(
-      { 
-        text: `Taras de limpio: ${tarasLimpioCliente}`, 
-        margin: [0, 5, 0, 5]
-      },
-      { text: '\n' }
-    );
+        const tarasLimpioCliente = productos.reduce((sum, producto) => sum + totalTaras(producto), 0);
+        totalTarasLimpio += tarasLimpioCliente;
 
+        contenido.push(
+          { 
+            text: `Taras de limpio: ${tarasLimpioCliente}`, 
+            margin: [0, 5, 0, 5]
+          },
+          { text: '\n' }
+        );
+      }
+    }
+
+    // Verificar si hay crudos para este cliente
     if (embarque.clienteCrudos && embarque.clienteCrudos[clienteId]) {
       contenido.push(
         { 
@@ -339,11 +374,26 @@ function generarContenidoClientes(embarque, clientesDisponibles, clientesJuntarM
         { text: '\n' }
       );
     }
+    
+    // Si no hay productos con valor real ni crudos, mostrar mensaje
+    if (!hayProductosReales && (!embarque.clienteCrudos || !embarque.clienteCrudos[clienteId])) {
+      contenido.push(
+        { 
+          text: 'No hay medidas registradas para este cliente', 
+          italics: true,
+          margin: [0, 5, 0, 10]
+        },
+        { text: '\n' }
+      );
+    }
   });
 
-  contenido.push(
-    { text: `Total general de taras: ${totalTarasLimpio + totalTarasCrudos}`, style: 'subheader', margin: [0, 5, 0, 5] }
-  );
+  // Agregar total general de taras solo si hay taras
+  if (totalTarasLimpio + totalTarasCrudos > 0) {
+    contenido.push(
+      { text: `Total general de taras: ${totalTarasLimpio + totalTarasCrudos}`, style: 'subheader', margin: [0, 5, 0, 5] }
+    );
+  }
 
   return contenido;
 }
@@ -569,6 +619,10 @@ function generarTablaProductos(productos, estiloCliente, nombreCliente) {
   // Verificar si algún producto tiene notas o hilos
   const hayNotas = productos.some(producto => producto.nota && producto.nota.trim() !== '');
   const hayHilos = productos.some(producto => producto.hilos);
+  // Verificar si es el cliente Canelo
+  const esClienteCanelo = nombreCliente.toLowerCase().includes('canelo');
+  // Verificar si hay productos con precio (solo relevante para Canelo)
+  const hayPrecios = esClienteCanelo && productos.some(producto => producto.precio && producto.precio.toString().trim() !== '');
 
   // Definir las columnas del header
   const headerRow = [
@@ -576,6 +630,12 @@ function generarTablaProductos(productos, estiloCliente, nombreCliente) {
     { text: 'Producto', style: 'tableHeader' },
     { text: 'Taras', style: 'tableHeader' }
   ];
+
+  // Agregar columnas de Precio y Total solo para cliente Canelo y si hay precios
+  if (esClienteCanelo && hayPrecios) {
+    headerRow.push({ text: 'Precio', style: 'tableHeader' });
+    headerRow.push({ text: 'Total', style: 'tableHeader' });
+  }
 
   if (hayHilos) {
     headerRow.push({ text: 'Hilos', style: 'tableHeader' });
@@ -593,11 +653,32 @@ function generarTablaProductos(productos, estiloCliente, nombreCliente) {
     const tarasTotales = tarasNormales + tarasExtra;
     let tarasTexto = `${tarasTotales} ${combinarTarasBolsas(producto.reporteTaras, producto.reporteBolsas)}`;
 
+    // Calcular kilos para este producto
+    const kilos = totalKilos(producto, nombreCliente);
+    
     const row = [
-      `${totalKilos(producto, nombreCliente)} kg`,
-      formatearProducto(producto),
+      // Eliminar decimales para los kilos (redondeando al entero más cercano)
+      `${Math.round(kilos)} kg`,
+      // Para cliente Canelo, mostramos solo el nombre del producto sin precio (el precio irá en otra columna)
+      esClienteCanelo && hayPrecios 
+        ? (producto.nombreAlternativoPDF || producto.medida || '') + (producto.tipo === 'c/h20' ? ' c/h2o' : (producto.tipo === 's/h20' ? ' s/h2o' : (producto.tipo === 'otro' ? ` ${producto.tipoPersonalizado || ''}` : ` ${producto.tipo || ''}`)))
+        : formatearProducto(producto),
       tarasTexto
     ];
+
+    // Agregar columnas de Precio y Total solo para cliente Canelo
+    if (esClienteCanelo && hayPrecios) {
+      // Agregar columna de precio
+      row.push(producto.precio 
+        ? { text: `$${Number(producto.precio).toLocaleString('en-US')}`, style: 'precio' } 
+        : '');
+      
+      // Agregar columna de total (kilos × precio)
+      const total = producto.precio ? kilos * Number(producto.precio) : 0;
+      row.push(producto.precio 
+        ? { text: `$${Math.round(total).toLocaleString('en-US')}`, style: 'totalPrecio' } 
+        : '');
+    }
 
     if (hayHilos) {
       row.push(producto.hilos || '');
@@ -612,15 +693,32 @@ function generarTablaProductos(productos, estiloCliente, nombreCliente) {
     body.push(row);
   });
 
+  // Calcular los anchos según el número de columnas
   let widths;
-  if (hayHilos && hayNotas) {
-    widths = ['15%', '25%', '25%', '15%', '20%'];
-  } else if (hayHilos) {
-    widths = ['20%', '30%', '30%', '20%'];
-  } else if (hayNotas) {
-    widths = ['20%', '30%', '30%', '20%'];
+  if (esClienteCanelo && hayPrecios) {
+    // Columnas base + Precio + Total
+    const numColumnas = 5 + (hayHilos ? 1 : 0) + (hayNotas ? 1 : 0);
+    
+    if (hayHilos && hayNotas) {
+      widths = ['10%', '20%', '20%', '15%', '15%', '10%', '10%'];
+    } else if (hayHilos) {
+      widths = ['15%', '20%', '20%', '15%', '15%', '15%'];
+    } else if (hayNotas) {
+      widths = ['15%', '20%', '20%', '15%', '15%', '15%'];
+    } else {
+      widths = ['15%', '25%', '20%', '20%', '20%'];
+    }
   } else {
-    widths = ['25%', '35%', '40%'];
+    // Mantener los anchos originales si no es Canelo o no hay precios
+    if (hayHilos && hayNotas) {
+      widths = ['15%', '25%', '25%', '15%', '20%'];
+    } else if (hayHilos) {
+      widths = ['20%', '30%', '30%', '20%'];
+    } else if (hayNotas) {
+      widths = ['20%', '30%', '30%', '20%'];
+    } else {
+      widths = ['25%', '35%', '40%'];
+    }
   }
 
   return {
@@ -641,6 +739,16 @@ function generarTablaProductos(productos, estiloCliente, nombreCliente) {
 function generarTablaCrudos(crudos, estiloCliente) {
   // Obtener el nombre del cliente a partir del estilo
   const nombreCliente = obtenerNombreClienteDesdeEstilo(estiloCliente);
+  // Comprobar si es cliente Canelo
+  const esClienteCanelo = nombreCliente.toLowerCase().includes('canelo');
+  
+  // Agregamos un log para depuración
+  console.log('Generando tabla de crudos:', {
+    estiloCliente,
+    nombreCliente,
+    esClienteCanelo,
+    hayPreciosEnCrudos: crudos.some(crudo => crudo.items.some(item => !!item.precio))
+  });
   
   // Verificar si algún ítem tiene precio
   const hayPrecios = crudos.some(crudo => 
@@ -657,6 +765,10 @@ function generarTablaCrudos(crudos, estiloCliente) {
   // Agregar columna de precio solo si hay precios
   if (hayPrecios) {
     headerRow.push({ text: 'Precio', style: 'tableHeader' });
+    // Agregar columna de total solo para Canelo y si hay precios
+    if (esClienteCanelo) {
+      headerRow.push({ text: 'Total', style: 'tableHeader' });
+    }
   }
 
   const body = [headerRow];
@@ -664,8 +776,23 @@ function generarTablaCrudos(crudos, estiloCliente) {
   // Agregar las filas de datos
   crudos.forEach(crudo => 
     crudo.items.forEach(item => {
+      // Calcular kilos para este item
+      const kilosTexto = calcularKilosCrudos(item, nombreCliente);
+      const kilos = parseFloat(kilosTexto);
+      
+      // Depuración de cada item
+      if (esClienteCanelo && item.precio) {
+        console.log('Item con precio para Canelo:', {
+          talla: item.talla,
+          kilos,
+          precio: item.precio,
+          total: kilos * Number(item.precio)
+        });
+      }
+      
       const row = [
-        `${calcularKilosCrudos(item, nombreCliente)} kg`,
+        // Eliminar decimales para los kilos (redondeando al entero más cercano)
+        `${Math.round(kilos)} kg`,
         {
           text: item.talla.replace(/\s*c\/\s*c$/i, ' c/c'),
           style: 'default',
@@ -677,16 +804,31 @@ function generarTablaCrudos(crudos, estiloCliente) {
       // Agregar precio formateado solo si la columna existe
       if (hayPrecios) {
         row.push(item.precio ? { text: `$${Number(item.precio).toLocaleString('en-US')}`, style: 'precio' } : '');
+        
+        // Agregar total solo para Canelo (forzar reconocimiento explícito)
+        if (esClienteCanelo || nombreCliente === 'canelo') {
+          const total = item.precio ? kilos * Number(item.precio) : 0;
+          row.push(item.precio 
+            ? { text: `$${Math.round(total).toLocaleString('en-US')}`, style: 'totalPrecio' } 
+            : '');
+        }
       }
 
       body.push(row);
     })
   );
 
-  // Definir los anchos de columna según si hay precios o no
-  const widths = hayPrecios
-    ? ['25%', '30%', '25%', '20%']  // Con columna de precio
-    : ['30%', '40%', '30%'];        // Sin columna de precio
+  // Definir los anchos de columna según si hay precios o no y si es Canelo
+  let widths;
+  if (hayPrecios) {
+    if (esClienteCanelo) {
+      widths = ['20%', '25%', '20%', '15%', '20%']; // Con columna de precio y total
+    } else {
+      widths = ['25%', '30%', '25%', '20%']; // Con columna de precio pero sin total
+    }
+  } else {
+    widths = ['30%', '40%', '30%']; // Sin columna de precio
+  }
 
   return {
     table: {
@@ -820,7 +962,12 @@ function totalKilos(producto, nombreCliente) {
     }
   }
   
-  return Number(resultado.toFixed(1));
+  // Retornamos un número redondeado a entero para cliente Canelo, o con un decimal para el resto
+  if (nombreCliente.toLowerCase().includes('canelo')) {
+    return Math.round(resultado);
+  } else {
+    return Number(resultado.toFixed(1));
+  }
 }
 
 function calcularKilosCrudos(item, clienteNombre) {
@@ -840,6 +987,12 @@ function calcularKilosCrudos(item, clienteNombre) {
     kilosTotales += kilosSobrante;
   }
   
+  // Para Canelo, redondeamos a entero (sin decimales)
+  if (clienteNombre && clienteNombre.toLowerCase().includes('canelo')) {
+    return Math.round(kilosTotales).toString();
+  }
+  
+  // Para otros clientes, mantenemos los dos decimales
   return kilosTotales.toFixed(2);
 }
 
