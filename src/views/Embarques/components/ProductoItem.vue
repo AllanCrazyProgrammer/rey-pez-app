@@ -842,5 +842,13 @@ export default {
     .total, .total-taras-reporte, .total-bolsas-reporte {
         font-size: 1rem;
     }
+    
+    .reporte-taras-bolsas {
+        flex-direction: column;
+    }
+    
+    .reporte-item {
+        margin-bottom: 15px;
+    }
 }
 </style>
