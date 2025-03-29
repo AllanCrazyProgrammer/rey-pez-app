@@ -61,40 +61,123 @@ export default {
         const db = getFirestore();
         const embarquesRef = collection(db, 'embarques');
         const snapshot = await getDocs(embarquesRef);
-        this.embarques = snapshot.docs
-          .map(doc => {
-            const data = doc.data();
-            // Procesar la propiedad embarqueBloqueado para manejar diferentes tipos de datos
+        
+        // Agrupar embarques por fecha para detectar duplicados
+        const embarquesPorFecha = {};
+        
+        snapshot.docs.forEach(doc => {
+          const data = doc.data();
+          let fechaEmbarque;
+          
+          // Manejar diferentes formatos de fecha
+          if (data.fecha && typeof data.fecha.toDate === 'function') {
+            fechaEmbarque = data.fecha.toDate();
+          } else if (data.fecha instanceof Date) {
+            fechaEmbarque = data.fecha;
+          } else if (typeof data.fecha === 'string') {
+            fechaEmbarque = new Date(data.fecha);
+          } else {
+            // Si no se puede determinar la fecha, usar el ID como clave
+            embarquesPorFecha[doc.id] = [{ id: doc.id, data: data }];
+            return;
+          }
+          
+          const fechaISO = fechaEmbarque.toISOString().split('T')[0];
+          
+          if (!embarquesPorFecha[fechaISO]) {
+            embarquesPorFecha[fechaISO] = [];
+          }
+          
+          embarquesPorFecha[fechaISO].push({
+            id: doc.id,
+            data: data,
+            fecha: fechaEmbarque
+          });
+        });
+        
+        // Eliminar embarques duplicados (mantener solo el más reciente)
+        const embarquesParaEliminar = [];
+        
+        for (const fecha in embarquesPorFecha) {
+          if (embarquesPorFecha[fecha].length > 1) {
+            console.warn(`Se encontraron ${embarquesPorFecha[fecha].length} embarques con la fecha ${fecha}`);
+            
+            // Ordenar por el más completo (más clientes o productos)
+            embarquesPorFecha[fecha].sort((a, b) => {
+              const productosA = a.data.clientes ? a.data.clientes.reduce((sum, cliente) => 
+                sum + (cliente.productos ? cliente.productos.length : 0), 0) : 0;
+              
+              const productosB = b.data.clientes ? b.data.clientes.reduce((sum, cliente) => 
+                sum + (cliente.productos ? cliente.productos.length : 0), 0) : 0;
+              
+              return productosB - productosA; // Ordenar de mayor a menor cantidad de productos
+            });
+            
+            // Mantener el primer embarque (el más completo) y marcar los demás para eliminación
+            for (let i = 1; i < embarquesPorFecha[fecha].length; i++) {
+              embarquesParaEliminar.push(embarquesPorFecha[fecha][i].id);
+            }
+          }
+        }
+        
+        // Eliminar los embarques duplicados
+        if (embarquesParaEliminar.length > 0) {
+          console.warn(`Se eliminarán ${embarquesParaEliminar.length} embarques duplicados`);
+          
+          for (const id of embarquesParaEliminar) {
+            try {
+              await deleteDoc(doc(db, 'embarques', id));
+              console.log(`Embarque duplicado con ID ${id} eliminado correctamente`);
+            } catch (error) {
+              console.error(`Error al eliminar embarque duplicado con ID ${id}:`, error);
+            }
+          }
+          
+          // Después de eliminar, volver a cargar los embarques
+          if (embarquesParaEliminar.length > 0) {
+            return this.cargarEmbarques();
+          }
+        }
+        
+        // Procesar los embarques (uno por fecha)
+        const embarquesFiltrados = [];
+        
+        for (const fecha in embarquesPorFecha) {
+          if (embarquesPorFecha[fecha].length > 0) {
+            const embarque = embarquesPorFecha[fecha][0];
+            
+            // Procesar la propiedad embarqueBloqueado
             let embarqueBloqueado = false;
             
-            if (data.embarqueBloqueado !== undefined) {
+            if (embarque.data.embarqueBloqueado !== undefined) {
               // Si es booleano, usar directamente
-              if (typeof data.embarqueBloqueado === 'boolean') {
-                embarqueBloqueado = data.embarqueBloqueado;
+              if (typeof embarque.data.embarqueBloqueado === 'boolean') {
+                embarqueBloqueado = embarque.data.embarqueBloqueado;
               } 
               // Si es string, verificar si es 'true', '1', 'si', etc.
-              else if (typeof data.embarqueBloqueado === 'string') {
-                embarqueBloqueado = ['true', '1', 'si', 'yes', 'verdadero'].includes(data.embarqueBloqueado.toLowerCase());
+              else if (typeof embarque.data.embarqueBloqueado === 'string') {
+                embarqueBloqueado = ['true', '1', 'si', 'yes', 'verdadero'].includes(embarque.data.embarqueBloqueado.toLowerCase());
               } 
               // Si es número, verificar si es diferente de 0
-              else if (typeof data.embarqueBloqueado === 'number') {
-                embarqueBloqueado = data.embarqueBloqueado !== 0;
+              else if (typeof embarque.data.embarqueBloqueado === 'number') {
+                embarqueBloqueado = embarque.data.embarqueBloqueado !== 0;
               }
             }
             
-            const embarque = {
-              id: doc.id,
-              ...data,
+            embarquesFiltrados.push({
+              id: embarque.id,
+              ...embarque.data,
               embarqueBloqueado: embarqueBloqueado
-            };
-            
-            return embarque;
-          })
-          .sort((a, b) => {
-            const fechaA = a.fecha.toDate ? a.fecha.toDate() : new Date(a.fecha);
-            const fechaB = b.fecha.toDate ? b.fecha.toDate() : new Date(b.fecha);
-            return fechaB - fechaA; // Orden descendente
-          });
+            });
+          }
+        }
+        
+        this.embarques = embarquesFiltrados.sort((a, b) => {
+          const fechaA = a.fecha.toDate ? a.fecha.toDate() : new Date(a.fecha);
+          const fechaB = b.fecha.toDate ? b.fecha.toDate() : new Date(b.fecha);
+          return fechaB - fechaA; // Orden descendente
+        });
+        
         this.cargando = false;
       } catch (error) {
         console.error("Error al cargar los embarques:", error);

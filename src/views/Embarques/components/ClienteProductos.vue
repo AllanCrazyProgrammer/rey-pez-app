@@ -366,6 +366,7 @@ export default {
 
 .cliente-info {
     flex: 1;
+    
 }
 
 .cliente-info h3 {
@@ -487,22 +488,27 @@ button:disabled {
 /* Estilos específicos para cada cliente */
 .cliente-header[data-cliente="Joselito"] {
     background-color: rgba(52, 152, 219, 0.1);
-    border-left: 4px solid #3498db;
+    border-left: 10px solid #3498db;
 }
 
 .cliente-header[data-cliente="Catarro"] {
     background-color: rgba(231, 76, 60, 0.1);
-    border-left: 4px solid #e74c3c;
+    border-left: 10px solid #e74c3c;
 }
 
 .cliente-header[data-cliente="Otilio"] {
     background-color: rgba(241, 196, 15, 0.1);
-    border-left: 4px solid #f1c40f;
+    border-left: 10px solid #f1c40f;
 }
 
 .cliente-header[data-cliente="Ozuna"] {
     background-color: rgba(46, 204, 113, 0.1);
-    border-left: 4px solid #2ecc71;
+    border-left: 10px solid #2ecc71;
+}
+
+.cliente-header[data-cliente="Canelo"] {
+    background-color: rgba(156, 91, 182, 0.332);
+    border-left: 10px solid #7e3a99;
 }
 
 /* Responsive adjustments */

@@ -6,7 +6,8 @@ const COLORES_CLIENTES = {
   'Joselito': '#3498db', // Azul
   'Catarro': '#e74c3c',  // Rojo
   'Otilio': '#f39c12',   // Naranja
-  'Ozuna': '#27ae60'     // Verde
+  'Ozuna': '#27ae60',    // Verde
+  'Canelo': '#9b59b6'    // Morado
 };
 
 export function generarResumenTarasPDF(embarqueData, clientesDisponibles) {
@@ -95,7 +96,8 @@ function prepararDatosTabla(embarqueData, clientesDisponibles) {
     { id: '1', nombre: 'Joselito' },
     { id: '2', nombre: 'Catarro' },
     { id: '3', nombre: 'Otilio' },
-    { id: '4', nombre: 'Ozuna' }
+    { id: '4', nombre: 'Ozuna' },
+    { id: '5', nombre: 'Canelo' }
   ];
 
   clientesPredefinidos.forEach(cliente => {

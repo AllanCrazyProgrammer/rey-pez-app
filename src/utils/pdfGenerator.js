@@ -1,3 +1,6 @@
+//Generador de Notas de Venta Pdf
+
+
 import pdfMake from 'pdfmake/build/pdfmake';
 import * as pdfFonts from 'pdfmake/build/vfs_fonts';
 
@@ -111,6 +114,11 @@ export async function generarNotaVentaPDF(embarque, clientesDisponibles, cliente
           background: '#008000',
           padding: [2, 2, 2, 2]
         },
+        clienteCanelo: {
+          color: '#FFFFFF',
+          background: '#9b59b6',
+          padding: [2, 2, 2, 2]
+        },
         clienteOtro: {
           color: '#000000',
           background: '#808080',
@@ -143,10 +151,10 @@ export async function generarNotaVentaPDF(embarque, clientesDisponibles, cliente
       footer: function(currentPage, pageCount) {
         return {
           columns: [
-            { text: ' 20 Rey Pez - Tampico, Tamps.', alignment: 'center', margin: [0, 10, 0, 0] },
+            { text: ' 2025 Rey Pez - Tampico, Tamps.', alignment: 'center', margin: [0, 10, 0, 0] },
           ],
           margin: [40, 0, 40, 0],
-          fontSize: 15,
+          fontSize: 20,
           color: '#3760b0'
         };
       }
@@ -631,6 +639,9 @@ function generarTablaProductos(productos, estiloCliente, nombreCliente) {
 }
 
 function generarTablaCrudos(crudos, estiloCliente) {
+  // Obtener el nombre del cliente a partir del estilo
+  const nombreCliente = obtenerNombreClienteDesdeEstilo(estiloCliente);
+  
   // Verificar si algún ítem tiene precio
   const hayPrecios = crudos.some(crudo => 
     crudo.items.some(item => item.precio && item.precio.toString().trim() !== '')
@@ -654,7 +665,7 @@ function generarTablaCrudos(crudos, estiloCliente) {
   crudos.forEach(crudo => 
     crudo.items.forEach(item => {
       const row = [
-        `${calcularKilosCrudos(item)} kg`,
+        `${calcularKilosCrudos(item, nombreCliente)} kg`,
         {
           text: item.talla.replace(/\s*c\/\s*c$/i, ' c/c'),
           style: 'default',
@@ -698,6 +709,7 @@ function obtenerEstiloCliente(nombreCliente) {
   if (nombreLowerCase.includes('catarro')) return 'clienteCatarro';
   if (nombreLowerCase.includes('otilio')) return 'clienteOtilio';
   if (nombreLowerCase.includes('ozuna')) return 'clienteOzuna';
+  if (nombreLowerCase.includes('canelo')) return 'clienteCanelo';
   return 'clienteOtro';
 }
 
@@ -811,16 +823,17 @@ function totalKilos(producto, nombreCliente) {
   return Number(resultado.toFixed(1));
 }
 
-function calcularKilosCrudos(item) {
+function calcularKilosCrudos(item, clienteNombre) {
   let kilosTotales = 0;
   
   // Procesar taras principales
   if (item.taras) {
     const [cantidad, peso] = item.taras.split('-').map(Number);
-    // Multiplicar por 20.5 en lugar del peso especificado
-    kilosTotales += cantidad * 20.5;
+    // Verificar si el cliente es Canelo para usar 20 en lugar de 20.5
+    const multiplicador = clienteNombre && clienteNombre.toLowerCase().includes('canelo') ? 20 : 20.5;
+    kilosTotales += cantidad * multiplicador;
   }
-  
+
   // Procesar sobrante (se suma directamente el peso especificado)
   if (item.sobrante) {
     const [, kilosSobrante] = item.sobrante.split('-').map(Number);
@@ -852,6 +865,7 @@ function obtenerColorBorde(estiloCliente) {
     clienteCatarro: '#FF0000',
     clienteOtilio: '#FFD700',
     clienteOzuna: '#008000',
+    clienteCanelo: '#9b59b6',
     clienteOtro: '#808080'
   };
   return colores[estiloCliente] || '#000000';
@@ -957,4 +971,16 @@ function combinarProductosSimilares(productos) {
   });
   
   return Object.values(productosAgrupados);
+}
+
+// Nueva función para obtener el nombre del cliente a partir del estilo
+function obtenerNombreClienteDesdeEstilo(estiloCliente) {
+  switch (estiloCliente) {
+    case 'clienteJoselito': return 'joselito';
+    case 'clienteCatarro': return 'catarro';
+    case 'clienteOtilio': return 'otilio';
+    case 'clienteOzuna': return 'ozuna';
+    case 'clienteCanelo': return 'canelo';
+    default: return 'otro';
+  }
 }

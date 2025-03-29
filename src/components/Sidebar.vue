@@ -149,7 +149,8 @@ export default {
         'Joselito': '#3498db',
         'Catarro': '#e74c3c',
         'Otilio': '#f1c40f',
-        'Ozuna': '#2ecc71'
+        'Ozuna': '#2ecc71',
+        'Canelo': '#9b59b6'
       };
       return colores[nombreCliente] || '#95a5a6'; // Color por defecto
     },

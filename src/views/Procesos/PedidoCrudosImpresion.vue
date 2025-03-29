@@ -99,7 +99,7 @@ export default {
         'catarro': '#e74c3c',
         'otilio': '#f1c40f',
         'ozuna': '#2ecc71',
-        'canelo': '#8e44ad'
+        'canelo': '#9b59b6'
       }
       return colores[cliente.toLowerCase()] || '#000000'
     },

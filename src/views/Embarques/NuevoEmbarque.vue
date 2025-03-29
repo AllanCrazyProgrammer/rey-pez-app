@@ -26,7 +26,8 @@
         @update:fecha="embarque.fecha = $event"
         @update:cargaCon="embarque.cargaCon = $event" 
         @generar-taras="generarPDF('taras')"
-        @generar-resumen="generarPDF('resumen')" 
+        @generar-resumen="generarPDF('resumen')"
+        @verificar-fecha="verificarFechaExistente" 
       />
 
       <!-- Botones Undo/Redo -->
@@ -135,7 +136,7 @@
 </template>
 
 <script>
-import { getFirestore, collection, addDoc, doc, getDoc, updateDoc, onSnapshot, serverTimestamp, getDocs } from 'firebase/firestore';
+import { getFirestore, collection, addDoc, doc, getDoc, updateDoc, onSnapshot, serverTimestamp, getDocs, setDoc, deleteDoc } from 'firebase/firestore';
 import { debounce } from 'lodash';
 import { ref, onValue, onDisconnect, set } from 'firebase/database'
 import { rtdb } from '@/firebase'
@@ -256,6 +257,8 @@ export default {
       isGeneratingPdf: false,
       pdfType: null,
       isCreatingAccount: false,
+      _creandoEmbarque: false,
+      _guardandoEmbarque: false,
     };
   },
   
@@ -439,34 +442,108 @@ export default {
         return null;
       }
       
-      // Si no existe embarqueId, crear nuevo embarque
-      if (!this.embarqueId) {
-        const db = getFirestore();
-        try {
-          // Primero crear el embarque
-          const embarqueData = this.prepararDatosEmbarque();
-          const docRef = await addDoc(collection(db, "embarques"), embarqueData);
+      // Control para evitar múltiples llamadas simultáneas
+      if (this._creandoEmbarque) {
+        console.warn('Ya hay una operación de creación de embarque en curso');
+        return null;
+      }
+      
+      this._creandoEmbarque = true;
+      
+      try {
+        // Si no existe embarqueId, crear nuevo embarque
+        if (!this.embarqueId) {
+          const db = getFirestore();
+          try {
+            // Verificar primero si ya existe un embarque con la misma fecha
+            const fechaSeleccionada = new Date(this.embarque.fecha);
+            
+            // Convertir a formato ISO para comparación (solo el año, mes y día)
+            const fechaISO = fechaSeleccionada.toISOString().split('T')[0];
+            
+            // Obtener todos los embarques
+            const embarquesRef = collection(db, "embarques");
+            const snapshot = await getDocs(embarquesRef);
+            
+            // Buscar si ya existe un embarque con esta fecha
+            const embarquesConMismaFecha = snapshot.docs.filter(doc => {
+              const data = doc.data();
+              let fechaEmbarque;
+              
+              // Manejar diferentes formatos de fecha
+              if (data.fecha && typeof data.fecha.toDate === 'function') {
+                fechaEmbarque = data.fecha.toDate();
+              } else if (data.fecha instanceof Date) {
+                fechaEmbarque = data.fecha;
+              } else if (typeof data.fecha === 'string') {
+                fechaEmbarque = new Date(data.fecha);
+              } else {
+                return false;
+              }
+              
+              // Convertir a formato ISO para comparar solo año, mes y día
+              const fechaEmbarqueISO = fechaEmbarque.toISOString().split('T')[0];
+              
+              // Comparar las fechas en formato ISO
+              return fechaEmbarqueISO === fechaISO && doc.id !== this.embarqueId;
+            });
+            
+            if (embarquesConMismaFecha.length > 0) {
+              alert('Ya existe un embarque para la fecha seleccionada. Por favor, seleccione otra fecha.');
+              this._creandoEmbarque = false;
+              return null;
+            }
+            
+            // Crear una "reserva" para esta fecha para evitar condiciones de carrera
+            // Esta es una operación atómica que impedirá que otros procesos creen embarques con la misma fecha
+            const reservaRef = doc(db, "reservas_fechas", fechaISO);
+            await setDoc(reservaRef, {
+              fecha: fechaISO,
+              timestamp: serverTimestamp(),
+              usuario: this.authStore.userId || 'anónimo',
+              expiración: new Date(Date.now() + 60000) // Expira en 1 minuto
+            });
+            
+            // Si no existe un embarque con la misma fecha, proceder a crear uno nuevo
+            const embarqueData = this.prepararDatosEmbarque();
+            const docRef = await addDoc(collection(db, "embarques"), embarqueData);
 
-          // Guardar el ID y activar modo edición
-          this.embarqueId = docRef.id;
-          this.modoEdicion = true;
-          this.guardadoAutomaticoActivo = true;
+            // Eliminar la reserva una vez creado el embarque
+            try {
+              await deleteDoc(reservaRef);
+            } catch (error) {
+              console.error("Error al eliminar la reserva de fecha:", error);
+              // No es crítico si falla esto, la reserva expirará automáticamente
+            }
 
-          // Luego agregar el producto
-          this.agregarProducto(clienteId);
+            // Guardar el ID y activar modo edición
+            this.embarqueId = docRef.id;
+            this.modoEdicion = true;
+            this.guardadoAutomaticoActivo = true;
 
-          return this.embarqueId; // Retornar el ID para encadenar operaciones
-        } catch (error) {
-          console.error("Error al crear el embarque inicial:", error);
-          if (!modalAbierto) {
-            alert('Hubo un error al crear el embarque. Por favor, intente nuevamente.');
+            // Luego agregar el producto
+            this.agregarProducto(clienteId);
+
+            this._creandoEmbarque = false;
+            return this.embarqueId; // Retornar el ID para encadenar operaciones
+          } catch (error) {
+            this._creandoEmbarque = false;
+            console.error("Error al crear el embarque inicial:", error);
+            if (!modalAbierto) {
+              alert('Hubo un error al crear el embarque. Por favor, intente nuevamente.');
+            }
+            return null;
           }
-          return null;
+        } else {
+          // Si ya existe el embarqueId, solo agregar el producto
+          this.agregarProducto(clienteId);
+          this._creandoEmbarque = false;
+          return this.embarqueId;
         }
-      } else {
-        // Si ya existe el embarqueId, solo agregar el producto
-        this.agregarProducto(clienteId);
-        return this.embarqueId;
+      } catch (error) {
+        this._creandoEmbarque = false;
+        console.error("Error inesperado en guardarEmbarqueInicial:", error);
+        return null;
       }
     },
 
@@ -597,7 +674,7 @@ export default {
       });
     },
 
-    resetearEmbarque() {
+    async resetearEmbarque() {
       // Verificar si hay algún modal abierto
       const modalAbierto = this.mostrarModalPrecio || 
                            this.mostrarModalHilos || 
@@ -611,61 +688,205 @@ export default {
         return;
       }
       
-      this.embarque = {
-        fecha: new Date().toISOString().split('T')[0], // Establecer fecha actual por defecto
-        cargaCon: '',
-        productos: [],
-      };
-      this.clientesJuntarMedidas = {};
-      this.embarqueId = null;
-      this.modoEdicion = false;
-      this.guardadoAutomaticoActivo = false;
-      this.embarqueBloqueado = false;
-      this.clientesPersonalizados = []; // Reiniciar clientes personalizados
-
-      // Agregar automáticamente los clientes predeterminados
-      this.$nextTick(async () => {
-        if (this.embarque.fecha) {
-          try {
-            // Crear el embarque inicial con el primer cliente (Joselito)
-            await this.guardarEmbarqueInicial(this.clientesPredefinidos[0].id.toString());
-
-            // Esperar un momento para asegurar que el primer cliente se haya agregado correctamente
-            await new Promise(resolve => setTimeout(resolve, 100));
-
-            // Agregar el resto de clientes predeterminados
-            for (let i = 1; i < this.clientesPredefinidos.length; i++) {
-              // Crear un producto para cada cliente predeterminado
-              const clienteId = this.clientesPredefinidos[i].id.toString();
-
-              // Verificar si ya existe un producto para este cliente
-              const existeProducto = this.embarque.productos.some(p => p.clienteId.toString() === clienteId);
-
-              // Solo agregar si no existe
-              if (!existeProducto) {
-                const nuevoProducto = crearNuevoProducto(clienteId);
-
-                // Establecer tipo por defecto según el cliente
-                this.setTipoDefaultParaCliente(nuevoProducto);
-
-                // Agregar directamente al embarque.productos
-                this.embarque.productos.push(nuevoProducto);
-
-                // Esperar un momento entre cada adición
-                await new Promise(resolve => setTimeout(resolve, 50));
-              }
+      // Verificar si estamos en una recarga de página
+      const esRecargaPagina = performance && performance.navigation && 
+                              performance.navigation.type === 1;
+      
+      // Si es una recarga y tenemos un ID guardado en localStorage, no continuar
+      // Ya que el mounted se encargará de redireccionar apropiadamente
+      if (esRecargaPagina && localStorage.getItem('ultimoEmbarqueId')) {
+        console.log("Recarga detectada con ID existente, no creando un nuevo embarque");
+        return;
+      }
+      
+      // Establecer una fecha por defecto (fecha actual)
+      const fechaActual = new Date().toISOString().split('T')[0];
+      
+      try {
+        const db = getFirestore();
+        const embarquesRef = collection(db, "embarques");
+        const snapshot = await getDocs(embarquesRef);
+        
+        // Primero verificar si hay duplicados y eliminarlos
+        // Agrupar embarques por fecha para detectar duplicados
+        const embarquesPorFecha = {};
+        snapshot.docs.forEach(doc => {
+          const data = doc.data();
+          let fechaEmbarque;
+          
+          // Manejar diferentes formatos de fecha
+          if (data.fecha && typeof data.fecha.toDate === 'function') {
+            fechaEmbarque = data.fecha.toDate();
+          } else if (data.fecha instanceof Date) {
+            fechaEmbarque = data.fecha;
+          } else if (typeof data.fecha === 'string') {
+            fechaEmbarque = new Date(data.fecha);
+          } else {
+            return;
+          }
+          
+          const fechaISO = fechaEmbarque.toISOString().split('T')[0];
+          
+          if (!embarquesPorFecha[fechaISO]) {
+            embarquesPorFecha[fechaISO] = [];
+          }
+          
+          embarquesPorFecha[fechaISO].push({
+            id: doc.id,
+            fecha: fechaISO,
+            data: doc.data()
+          });
+        });
+        
+        // Verificar si ya existe un embarque con la fecha actual
+        const embarquesConMismaFecha = embarquesPorFecha[fechaActual] || [];
+        
+        // Inicializar el embarque con la fecha actual o encontrar la siguiente fecha disponible
+        let fechaEmbarque = fechaActual;
+        
+        if (embarquesConMismaFecha.length > 0) {
+          // Si ya existe un embarque con la fecha actual, buscar la próxima fecha disponible
+          let fechaTentativa = new Date(fechaActual);
+          let fechaDisponible = false;
+          
+          // Probar con las siguientes 7 fechas
+          for (let i = 1; i <= 7 && !fechaDisponible; i++) {
+            fechaTentativa.setDate(fechaTentativa.getDate() + 1);
+            const fechaTentativaISO = fechaTentativa.toISOString().split('T')[0];
+            
+            // Verificar si esta fecha tentativa ya está ocupada
+            if (!embarquesPorFecha[fechaTentativaISO] || embarquesPorFecha[fechaTentativaISO].length === 0) {
+              fechaDisponible = true;
+              fechaEmbarque = fechaTentativaISO;
             }
-
-            // Establecer el primer cliente como activo
-            this.clienteActivo = this.clientesPredefinidos[0].id.toString();
-
-            // Guardar los cambios
-            this.guardarCambiosEnTiempoReal();
-          } catch (error) {
-            console.error("Error al crear clientes predeterminados:", error);
+          }
+          
+          if (!fechaDisponible) {
+            // Si no se encontró una fecha disponible, mostrar mensaje y usar la fecha actual de todos modos
+            console.warn('No se encontró una fecha disponible en los próximos 7 días');
+            // No crear automáticamente un embarque, dejar que el usuario seleccione otra fecha
+            this.embarque = {
+              fecha: fechaActual, // Usar la fecha actual pero no crear automáticamente
+              cargaCon: '',
+              productos: [],
+            };
+            this.clientesJuntarMedidas = {};
+            this.embarqueId = null;
+            this.modoEdicion = false;
+            this.guardadoAutomaticoActivo = false;
+            this.embarqueBloqueado = false;
+            this.clientesPersonalizados = [];
+            
+            // Informar al usuario si no se trata de una recarga
+            if (!esRecargaPagina) {
+              alert(`Ya existe un embarque para hoy y los próximos días. Por favor, seleccione manualmente una fecha diferente.`);
+            }
+            return;
           }
         }
-      });
+        
+        // Inicializar el embarque con la fecha disponible
+        this.embarque = {
+          fecha: fechaEmbarque,
+          cargaCon: '',
+          productos: [],
+        };
+        this.clientesJuntarMedidas = {};
+        this.embarqueId = null;
+        this.modoEdicion = false;
+        this.guardadoAutomaticoActivo = false;
+        this.embarqueBloqueado = false;
+        this.clientesPersonalizados = []; // Reiniciar clientes personalizados
+
+        // Agregar automáticamente los clientes predeterminados solo si no es una recarga
+        if (!esRecargaPagina) {
+          this.$nextTick(async () => {
+            if (this.embarque.fecha) {
+              try {
+                // Antes de crear un nuevo embarque, comprobar nuevamente si ya existe uno con esta fecha
+                // Esta doble verificación es crucial para evitar duplicados en cargas rápidas
+                const verificacionRef = collection(db, "embarques");
+                const verificacionSnapshot = await getDocs(verificacionRef);
+                
+                const existeEmbarqueConFecha = verificacionSnapshot.docs.some(doc => {
+                  const data = doc.data();
+                  let fechaDoc;
+                  
+                  if (data.fecha && typeof data.fecha.toDate === 'function') {
+                    fechaDoc = data.fecha.toDate();
+                  } else if (data.fecha instanceof Date) {
+                    fechaDoc = data.fecha;
+                  } else if (typeof data.fecha === 'string') {
+                    fechaDoc = new Date(data.fecha);
+                  } else {
+                    return false;
+                  }
+                  
+                  const fechaDocISO = fechaDoc.toISOString().split('T')[0];
+                  return fechaDocISO === this.embarque.fecha;
+                });
+                
+                if (existeEmbarqueConFecha) {
+                  console.warn('Se detectó un embarque con la misma fecha durante la inicialización');
+                  alert('Ya existe un embarque para la fecha seleccionada. Se cancelará la creación automática.');
+                  return;
+                }
+                
+                // Crear el embarque inicial con el primer cliente (Joselito)
+                await this.guardarEmbarqueInicial(this.clientesPredefinidos[0].id.toString());
+
+                // Esperar un momento para asegurar que el primer cliente se haya agregado correctamente
+                await new Promise(resolve => setTimeout(resolve, 100));
+
+                // Agregar el resto de clientes predeterminados
+                for (let i = 1; i < this.clientesPredefinidos.length; i++) {
+                  // Crear un producto para cada cliente predeterminado
+                  const clienteId = this.clientesPredefinidos[i].id.toString();
+
+                  // Verificar si ya existe un producto para este cliente
+                  const existeProducto = this.embarque.productos.some(p => p.clienteId.toString() === clienteId);
+
+                  // Solo agregar si no existe
+                  if (!existeProducto) {
+                    const nuevoProducto = crearNuevoProducto(clienteId);
+
+                    // Establecer tipo por defecto según el cliente
+                    this.setTipoDefaultParaCliente(nuevoProducto);
+
+                    // Agregar directamente al embarque.productos
+                    this.embarque.productos.push(nuevoProducto);
+
+                    // Esperar un momento entre cada adición
+                    await new Promise(resolve => setTimeout(resolve, 50));
+                  }
+                }
+
+                // Establecer el primer cliente como activo
+                this.clienteActivo = this.clientesPredefinidos[0].id.toString();
+
+                // Guardar los cambios
+                this.guardarCambiosEnTiempoReal();
+              } catch (error) {
+                console.error("Error al crear clientes predeterminados:", error);
+              }
+            }
+          });
+        }
+      } catch (error) {
+        console.error("Error al verificar fechas de embarques existentes:", error);
+        // En caso de error, inicializar con valores por defecto pero sin crear automáticamente
+        this.embarque = {
+          fecha: fechaActual,
+          cargaCon: '',
+          productos: [],
+        };
+        this.clientesJuntarMedidas = {};
+        this.embarqueId = null;
+        this.modoEdicion = false;
+        this.guardadoAutomaticoActivo = false;
+        this.embarqueBloqueado = false;
+        this.clientesPersonalizados = [];
+      }
     },
 
     guardarCambiosEnTiempoReal: debounce(function () {
@@ -710,6 +931,14 @@ export default {
       if (modalAbierto) {
         return;
       }
+      
+      // Control para evitar múltiples guardados simultáneos
+      if (this._guardandoEmbarque) {
+        console.warn('Ya hay una operación de guardado en curso');
+        return;
+      }
+      
+      this._guardandoEmbarque = true;
 
       const embarqueData = this.prepararDatosEmbarque();
       const db = getFirestore();
@@ -718,32 +947,95 @@ export default {
         if (this.modoEdicion) {
           await updateDoc(doc(db, "embarques", this.embarqueId), embarqueData);
           alert('Embarque actualizado exitosamente.');
+          this._guardandoEmbarque = false;
         } else {
-          const docRef = await addDoc(collection(db, "embarques"), {
-            ...embarqueData,
-            ultimaEdicion: {
+          // Verificar primero si ya existe un embarque con la misma fecha
+          const fechaSeleccionada = new Date(this.embarque.fecha);
+          
+          // Convertir a formato ISO para comparación (solo el año, mes y día)
+          const fechaISO = fechaSeleccionada.toISOString().split('T')[0];
+          
+          // Obtener todos los embarques
+          const embarquesRef = collection(db, "embarques");
+          const snapshot = await getDocs(embarquesRef);
+          
+          // Buscar si ya existe un embarque con esta fecha
+          const embarquesConMismaFecha = snapshot.docs.filter(doc => {
+            const data = doc.data();
+            let fechaEmbarque;
+            
+            // Manejar diferentes formatos de fecha
+            if (data.fecha && typeof data.fecha.toDate === 'function') {
+              fechaEmbarque = data.fecha.toDate();
+            } else if (data.fecha instanceof Date) {
+              fechaEmbarque = data.fecha;
+            } else if (typeof data.fecha === 'string') {
+              fechaEmbarque = new Date(data.fecha);
+            } else {
+              return false;
+            }
+            
+            // Convertir a formato ISO para comparar solo año, mes y día
+            const fechaEmbarqueISO = fechaEmbarque.toISOString().split('T')[0];
+            
+            // Comparar las fechas en formato ISO
+            return fechaEmbarqueISO === fechaISO;
+          });
+          
+          if (embarquesConMismaFecha.length > 0) {
+            alert('Ya existe un embarque para la fecha seleccionada. Por favor, seleccione otra fecha.');
+            this._guardandoEmbarque = false;
+            return;
+          }
+          
+          // Crear una "reserva" para esta fecha para evitar condiciones de carrera
+          const reservaRef = doc(db, "reservas_fechas", fechaISO);
+          await setDoc(reservaRef, {
+            fecha: fechaISO,
+            timestamp: serverTimestamp(),
+            usuario: this.authStore.userId || 'anónimo',
+            expiración: new Date(Date.now() + 60000) // Expira en 1 minuto
+          });
+          
+          try {
+            // Si no existe un embarque con la misma fecha, proceder a crear uno nuevo
+            const docRef = await addDoc(collection(db, "embarques"), {
+              ...embarqueData,
+              ultimaEdicion: {
+                userId: this.authStore.userId,
+                username: this.authStore.user.username,
+                timestamp: serverTimestamp()
+              }
+            });
+
+            // Notificar a otros usuarios sobre el cambio
+            const cambiosRef = ref(rtdb, `cambios/${docRef.id}`)
+            await set(cambiosRef, {
+              tipo: 'guardar',
               userId: this.authStore.userId,
               username: this.authStore.user.username,
               timestamp: serverTimestamp()
+            });
+
+            this.embarqueId = docRef.id;
+            alert('Embarque creado exitosamente y guardado en la base de datos.');
+            this.modoEdicion = true;
+          } finally {
+            // Eliminar la reserva una vez creado el embarque o en caso de error
+            try {
+              await deleteDoc(reservaRef);
+            } catch (error) {
+              console.error("Error al eliminar la reserva de fecha:", error);
+              // No es crítico si falla esto, la reserva expirará automáticamente
             }
-          });
-
-          // Notificar a otros usuarios sobre el cambio
-          const cambiosRef = ref(rtdb, `cambios/${docRef.id}`)
-          await set(cambiosRef, {
-            tipo: 'guardar',
-            userId: this.authStore.userId,
-            username: this.authStore.user.username,
-            timestamp: serverTimestamp()
-          })
-
-          this.embarqueId = docRef.id;
-          alert('Embarque creado exitosamente y guardado en la base de datos.');
-          this.modoEdicion = true;
+            
+            this._guardandoEmbarque = false;
+          }
         }
         this.guardadoAutomaticoActivo = true;
         this.$router.push('/lista-embarques');
       } catch (error) {
+        this._guardandoEmbarque = false;
         console.error("Error al guardar el embarque: ", error);
         alert('Hubo un error al guardar el embarque. Por favor, intente nuevamente.');
       }
@@ -1454,6 +1746,82 @@ export default {
         kilosCrudos: this.embarque.kilosCrudos || {}
       };
     },
+
+    async verificarFechaExistente(nuevaFecha) {
+      // Si estamos en modo edición y el embarque está bloqueado, no permitir cambios
+      if (this.embarqueBloqueado) {
+        alert('El embarque está bloqueado. No se puede cambiar la fecha.');
+        return;
+      }
+
+      // Si la nueva fecha es la misma que la actual, no hacer nada
+      if (nuevaFecha === this.embarque.fecha) {
+        // La fecha no ha cambiado, no es necesario verificar
+        return;
+      }
+
+      try {
+        const db = getFirestore();
+        
+        // Convertir la nueva fecha para consistencia en la comparación
+        const fechaSeleccionada = new Date(nuevaFecha);
+        const fechaISO = fechaSeleccionada.toISOString().split('T')[0];
+        
+        // Obtener todos los embarques
+        const embarquesRef = collection(db, "embarques");
+        const snapshot = await getDocs(embarquesRef);
+        
+        // Buscar si ya existe un embarque con esta fecha
+        const embarquesConMismaFecha = snapshot.docs.filter(doc => {
+          // No incluir el embarque actual en la comparación
+          if (this.embarqueId && doc.id === this.embarqueId) {
+            return false;
+          }
+          
+          const data = doc.data();
+          let fechaEmbarque;
+          
+          // Manejar diferentes formatos de fecha
+          if (data.fecha && typeof data.fecha.toDate === 'function') {
+            fechaEmbarque = data.fecha.toDate();
+          } else if (data.fecha instanceof Date) {
+            fechaEmbarque = data.fecha;
+          } else if (typeof data.fecha === 'string') {
+            fechaEmbarque = new Date(data.fecha);
+          } else {
+            return false;
+          }
+          
+          // Convertir a formato ISO para comparar solo año, mes y día
+          const fechaEmbarqueISO = fechaEmbarque.toISOString().split('T')[0];
+          
+          // Comparar las fechas en formato ISO
+          return fechaEmbarqueISO === fechaISO;
+        });
+        
+        if (embarquesConMismaFecha.length > 0) {
+          alert('Ya existe un embarque para la fecha seleccionada. Por favor, seleccione otra fecha.');
+          return;
+        }
+        
+        // Guardar el ID del embarque actual antes de cambiar la fecha
+        // Esto es crucial para recargas de página
+        if (this.embarqueId) {
+          localStorage.setItem('ultimoEmbarqueId', this.embarqueId);
+        }
+        
+        // Si no existe un embarque con la misma fecha, actualizar la fecha
+        this.embarque.fecha = nuevaFecha;
+        
+        // Si estamos en modo edición, guardar los cambios inmediatamente
+        if (this.modoEdicion && this.embarqueId) {
+          this.guardarCambiosEnTiempoReal();
+        }
+      } catch (error) {
+        console.error("Error al verificar fecha existente:", error);
+        alert('Hubo un error al verificar la fecha. Por favor, intente nuevamente.');
+      }
+    },
   },
 
   watch: {
@@ -1503,13 +1871,40 @@ export default {
   },
 
   mounted() {
+    // Detectar si es una recarga de página
+    const esRecarga = this.detectarRecarga();
+    
     // Si hay un ID de embarque en los parámetros, cargar ese embarque
     const embarqueId = this.$route.params.id;
+    
+    // Si estamos recargando la página pero ya teníamos un ID de embarque en la URL
     if (embarqueId && embarqueId !== 'nuevo') {
+      // Cargar el embarque existente
       this.cargarEmbarque(embarqueId);
     } else {
-      // Si no hay ID, inicializar un nuevo embarque
-      this.resetearEmbarque();
+      // Verificar si hay un ID guardado en localStorage (para casos de recarga)
+      const ultimoEmbarqueId = localStorage.getItem('ultimoEmbarqueId');
+      const ultimaRuta = localStorage.getItem('ultimaRuta');
+      
+      // Si venimos de recargar la página mientras editábamos un embarque específico
+      if (esRecarga && ultimoEmbarqueId && ultimaRuta && ultimaRuta.includes('nuevo-embarque')) {
+        console.log(`Detectada recarga de página, restaurando embarque ${ultimoEmbarqueId}`);
+        // Redirigir a la ruta correcta con el ID adecuado
+        this.$router.replace({ name: 'NuevoEmbarque', params: { id: ultimoEmbarqueId } });
+        return; // Detener la ejecución, ya que la redirección cargará nuevamente el componente
+      } else if (embarqueId === 'nuevo') {
+        // Si específicamente se solicita un nuevo embarque, reiniciar
+        this.resetearEmbarque();
+      } else {
+        // Comportamiento predeterminado: crear un nuevo embarque
+        this.resetearEmbarque();
+      }
+    }
+    
+    // Guardar esta ruta y su ID para futuras recargas
+    localStorage.setItem('ultimaRuta', window.location.pathname);
+    if (embarqueId && embarqueId !== 'nuevo') {
+      localStorage.setItem('ultimoEmbarqueId', embarqueId);
     }
     
     // Cargar los clientes personalizados
@@ -1532,6 +1927,45 @@ export default {
     });
   },
 
+  // Método para detectar si es una recarga de página
+  detectarRecarga() {
+    // Verificar si el navegador soporta Navigation Timing API
+    if (window.performance && window.performance.navigation) {
+      return window.performance.navigation.type === 1; // 1 = recarga
+    } 
+    
+    // Para navegadores modernos que no soportan la API anterior
+    if (window.performance && window.performance.getEntriesByType && window.performance.getEntriesByType('navigation')) {
+      const navigationEntries = window.performance.getEntriesByType('navigation');
+      if (navigationEntries.length > 0 && navigationEntries[0].type) {
+        return navigationEntries[0].type === 'reload';
+      }
+    }
+    
+    // Si no se puede determinar, verificar con localStorage
+    const ultimaVisita = localStorage.getItem('ultimaVisita');
+    const ahora = Date.now();
+    
+    // Guardar timestamp actual
+    localStorage.setItem('ultimaVisita', ahora);
+    
+    // Si la última visita fue en los últimos 5 segundos, consideramos que es una recarga
+    if (ultimaVisita && ahora - parseInt(ultimaVisita) < 5000) {
+      return true;
+    }
+    
+    return false;
+  },
+
+  // También añadimos el método handleBeforeUnload si no existe
+  handleBeforeUnload(event) {
+    // Guardar el ID del embarque actual antes de recargar
+    if (this.embarqueId) {
+      localStorage.setItem('ultimoEmbarqueId', this.embarqueId);
+      localStorage.setItem('ultimaRuta', window.location.pathname);
+    }
+  },
+
   beforeDestroy() {
     // Cancelar la suscripción a los cambios en tiempo real
     if (this.unsubscribe) {
@@ -1549,6 +1983,9 @@ export default {
       console.log('Limpiando escucha de usuarios activos');
       this.unsubscribeUsuarios();
     }
+    
+    // Eliminar el escuchador de beforeunload
+    window.removeEventListener('beforeunload', this.handleBeforeUnload);
   },
 
   updated() {
@@ -1640,6 +2077,11 @@ export default {
 
 .cliente-header[data-cliente="Ozuna"] {
   background-color: #2ecc71;
+}
+
+.cliente-header[data-cliente="Canelo"] {
+  background-color: rgba(155, 89, 182, 0.1);
+  border-left: 4px solid #9b59b6;
 }
 
 .cliente-header[data-cliente="Otro"] {
@@ -1930,5 +2372,9 @@ input[type="number"]::-webkit-outer-spin-button {
   .productos-container {
     flex-direction: column;
   }
+}
+
+.cliente-header[data-cliente="Canelo"] h3 {
+  color: #000000;
 }
 </style>

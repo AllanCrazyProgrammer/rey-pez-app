@@ -102,7 +102,10 @@ export default {
       this.$emit('toggle-bloqueo');
     },
     actualizarFecha() {
-      this.$emit('update:fecha', this.fechaLocal);
+      if (this.embarqueId) {
+        localStorage.setItem('ultimoEmbarqueId', this.embarqueId);
+      }
+      this.$emit('verificar-fecha', this.fechaLocal);
     },
     actualizarCargaCon() {
       this.$emit('update:cargaCon', this.cargaConLocal);

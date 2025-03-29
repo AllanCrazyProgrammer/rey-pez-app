@@ -25,7 +25,8 @@ const clienteColors = {
   'Joselito': '#3498db',
   'Catarro': '#e74c3c',
   'Otilio': '#f1c40f',
-  'Ozuna': '#2ecc71'
+  'Ozuna': '#2ecc71',
+  'Canelo': '#9b59b6'
 };
 
 // Definir el orden específico de las medidas
