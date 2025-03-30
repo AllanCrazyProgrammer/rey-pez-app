@@ -3,7 +3,8 @@
         'reporte-completo': coincideTarasYBolsas,
         'reporte-incompleto': !coincideTarasYBolsas && tieneAlgunReporte,
         'taras-reportadas': coincideTaras,
-        'taras-no-reportadas': totalTaras > 0 && !coincideTaras
+        'taras-no-reportadas': totalTaras > 0 && !coincideTaras,
+        'medida-vacia': !producto.medida
     }">
         <!-- Encabezado de la medida y selección -->
         <h2 class="encabezado-medida">
@@ -397,12 +398,6 @@ export default {
                 this.editandoMedida = false;
             }, 200);
 
-            // Solo quitar la marca de edición si tiene tanto medida como tipo
-            if (this.producto.medida && this.producto.medida.length > 0 && this.producto.tipo) {
-                this.producto.isEditing = false;
-                this.producto.isNew = false;
-            }
-
             this.actualizarProducto();
         },
 
@@ -419,18 +414,6 @@ export default {
             if (this.producto.tipo === 'c/h20' && !this.producto.camaronNeto) {
                 this.producto.camaronNeto = 0.65;
             }
-
-            // Marcar temporalmente como editando para evitar ordenamiento inmediato
-            this.producto.isEditing = true;
-            this.$nextTick(() => {
-                // Después de un breve retraso, permitir el ordenamiento
-                setTimeout(() => {
-                    if (this.producto.medida && this.producto.tipo) {
-                        this.producto.isEditing = false;
-                    }
-                    this.actualizarProducto();
-                }, 100);
-            });
 
             this.actualizarProducto();
         },
@@ -500,6 +483,10 @@ export default {
 }
 
 .producto.taras-no-reportadas {
+    border: 2px solid #e74c3c;
+}
+
+.producto.medida-vacia {
     border: 2px solid #e74c3c;
 }
 

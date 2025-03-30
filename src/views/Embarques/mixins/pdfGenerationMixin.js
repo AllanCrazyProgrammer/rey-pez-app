@@ -45,6 +45,16 @@ export default {
       const clienteProductos = this.productosPorCliente[clienteId];
       const clienteCrudos = this.clienteCrudos[clienteId];
 
+      // Ordenar los productos antes de generar el PDF
+      if (clienteProductos) {
+        clienteProductos.forEach(producto => {
+          if (producto.medida && producto.tipo) {
+            producto.isEditing = false;
+            producto.isNew = false;
+          }
+        });
+      }
+
       const embarqueCliente = {
         fecha: this.embarque.fecha,
         cargaCon: this.embarque.cargaCon,
@@ -63,6 +73,16 @@ export default {
     },
 
     async generarPDFTodosClientes() {
+      // Ordenar los productos antes de generar el PDF
+      if (this.embarque.productos) {
+        this.embarque.productos.forEach(producto => {
+          if (producto.medida && producto.tipo) {
+            producto.isEditing = false;
+            producto.isNew = false;
+          }
+        });
+      }
+
       const embarqueCliente = {
         fecha: this.embarque.fecha,
         cargaCon: this.embarque.cargaCon,
