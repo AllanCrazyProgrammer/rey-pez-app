@@ -330,7 +330,8 @@ function generarTextoMedida(producto) {
   if (producto.tipo === 'c/h20') {
     return [
       { text: `${producto.textoAlternativo || producto.medida || ''} ${producto.fecha || ''} `, color: 'black' },
-      { text: `c/h20 (${producto.camaronNeto || 0.65})`, color: '#3498db' }
+      { text: `c/h20 (${producto.camaronNeto || 0.65})`, color: '#3498db' },
+      producto.precio ? { text: ` $${Number(producto.precio).toLocaleString('en-US')}`, color: 'red', bold: true } : {}
     ];
   }
 
@@ -352,9 +353,11 @@ function generarTextoMedida(producto) {
   }
 
   if (producto.precio) {
-    // Formatear el precio con separador de miles
-    const precioFormateado = Number(producto.precio).toLocaleString('en-US');
-    texto += ` $${precioFormateado}`;
+    // No añadir al texto, lo mostraremos separado en rojo
+    return [
+      { text: texto, color: 'black' },
+      { text: ` $${Number(producto.precio).toLocaleString('en-US')}`, color: 'red', bold: true }
+    ];
   }
 
   return texto;

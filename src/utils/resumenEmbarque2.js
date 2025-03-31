@@ -214,17 +214,36 @@ export const generarResumenEmbarquePDF = (embarque, productosPorCliente, obtener
       
       if (crudosCliente.length > 0) {
         let todasLasTaras = [];
+        let mostrarPrecio = false;
+        let precio = null;
         
         crudosCliente.forEach(crudo => {
           if (crudo.taras && Array.isArray(crudo.taras)) {
             todasLasTaras = todasLasTaras.concat(crudo.taras.filter(tara => tara));
           }
+          // Guardar el precio si existe
+          if (crudo.precio) {
+            mostrarPrecio = true;
+            precio = crudo.precio;
+          }
         });
         
         const tarasOrdenadas = ordenarTaras(todasLasTaras);
         
+        // Crear un stack con las taras y, si existe, el precio
+        const contenido = [{ text: tarasOrdenadas.join('\n'), style: 'dataCell' }];
+        
+        if (mostrarPrecio) {
+          contenido.push({ 
+            text: `$${Number(precio).toLocaleString('en-US')}`, 
+            color: 'red', 
+            bold: true,
+            fontSize: 16
+          });
+        }
+        
         row.push({ 
-          text: tarasOrdenadas.join('\n'),
+          stack: contenido,
           style: 'dataCell'
         });
       } else {

@@ -173,6 +173,7 @@ export default {
                   taras: tarasArray,
                   barco: item.barco,
                   textoAlternativo: item.textoAlternativo,
+                  precio: item.precio
                 };
               });
             })
