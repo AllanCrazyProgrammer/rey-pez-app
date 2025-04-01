@@ -245,7 +245,8 @@ export default {
             const medidaNormalizada = producto.medida.toLowerCase().trim();
             let nombreMedida = producto.medida;
             
-            if (cliente.nombre === 'Ozuna') {
+            // Solo añadir "Maquila Ozuna" si es de Ozuna y NO es una venta
+            if (cliente.nombre === 'Ozuna' && !producto.esVenta) {
               nombreMedida = `${producto.medida} Maquila Ozuna`;
             }
 
@@ -305,11 +306,14 @@ export default {
             
             // Si la medida original es de Ozuna
             if (esOzuna) {
-              // Solo incluir si el producto es de cliente Ozuna
-              return p.medida.toLowerCase().trim() === medidaBase && cliente.nombre === 'Ozuna';
+              // Solo incluir si el producto es de cliente Ozuna y NO es una venta
+              return p.medida.toLowerCase().trim() === medidaBase && 
+                     cliente.nombre === 'Ozuna' && 
+                     !p.esVenta;
             } else {
-              // Solo incluir si el producto coincide con la medida y NO es de Ozuna
-              return p.medida.toLowerCase().trim() === medidaBase && cliente.nombre !== 'Ozuna';
+              // Solo incluir si el producto coincide con la medida y NO es de Ozuna o es de Ozuna pero es VENTA
+              return p.medida.toLowerCase().trim() === medidaBase && 
+                     (cliente.nombre !== 'Ozuna' || p.esVenta);
             }
           })
           .reduce((subtotal, producto) => {
@@ -359,11 +363,14 @@ export default {
             
             // Si la medida original es de Ozuna
             if (esOzuna) {
-              // Solo incluir si el producto es de cliente Ozuna
-              return p.medida.toLowerCase().trim() === medidaBase && cliente.nombre === 'Ozuna';
+              // Solo incluir si el producto es de cliente Ozuna y NO es una venta
+              return p.medida.toLowerCase().trim() === medidaBase && 
+                     cliente.nombre === 'Ozuna' && 
+                     !p.esVenta;
             } else {
-              // Solo incluir si el producto coincide con la medida y NO es de Ozuna
-              return p.medida.toLowerCase().trim() === medidaBase && cliente.nombre !== 'Ozuna';
+              // Solo incluir si el producto coincide con la medida y NO es de Ozuna o es de Ozuna pero es VENTA
+              return p.medida.toLowerCase().trim() === medidaBase && 
+                     (cliente.nombre !== 'Ozuna' || p.esVenta);
             }
           })
           .reduce((subtotal, producto) => {
