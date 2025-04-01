@@ -12,7 +12,7 @@ if (typeof vfsFonts === 'object') {
     }
 }
 
-// También necesitamos asegurarnos de que las fuentes estén disponibles globalmente
+// También necesitamos asegurarnos de que las fuentes estén disponibles globalmentew
 if (typeof window !== 'undefined' && !window.pdfMake) {
     window.pdfMake = pdfMake;
 }
