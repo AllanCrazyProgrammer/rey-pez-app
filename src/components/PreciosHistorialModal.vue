@@ -22,7 +22,7 @@
               <option v-for="producto in preciosActuales" :key="producto.id" :value="producto.producto"></option>
             </datalist>
             <input v-model.number="newPrice.precio" type="number" placeholder="Precio">
-            <input v-model="newPrice.fecha" type="date" :max="currentDate">
+            <input v-model="newPrice.fecha" type="date">
             
             <!-- Nuevo campo para seleccionar cliente específico -->
             <div class="cliente-especifico">
