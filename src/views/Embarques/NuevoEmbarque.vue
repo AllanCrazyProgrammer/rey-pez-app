@@ -862,7 +862,7 @@ export default {
                   // Establecer tipo por defecto según el cliente
                   this.setTipoDefaultParaCliente(nuevoProducto);
 
-                  // Agregar directamente al embarque.productos
+                  // Agregar directamente al embarque.productoss
                   this.embarque.productos.push(nuevoProducto);
 
                   // Esperar un momento entre cada adición
