@@ -873,6 +873,9 @@ export default {
               // Establecer el primer cliente como activo
               this.clienteActivo = this.clientesPredefinidos[0].id.toString();
 
+              // Forzar la actualización del componente
+              this.$forceUpdate();
+
               // Guardar los cambios
               this.guardarCambiosEnTiempoReal();
             } catch (error) {
