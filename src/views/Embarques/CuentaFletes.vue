@@ -80,13 +80,26 @@
             <tr>
               <th>Fecha</th>
               <th>Tipo</th>
-              <th>Taras Limpio</th>
-              <th>Taras Crudo</th>
+              <th colspan="2">Joselito</th>
+              <th colspan="2">Canelo</th>
               <th>Total Taras</th>
               <th>Monto del Día</th>
               <th>Deuda Acumulada</th>
               <th>Estado</th>
               <th>Acciones</th>
+            </tr>
+            <tr>
+              <th></th>
+              <th></th>
+              <th>Limpio</th>
+              <th>Crudo</th>
+              <th>Limpio</th>
+              <th>Crudo</th>
+              <th></th>
+              <th></th>
+              <th></th>
+              <th></th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
@@ -97,9 +110,11 @@
               >
                 <td>{{ formatearFecha(item.fecha) }}</td>
                 <td>{{ item.tipo === 'abono' ? 'Abono' : 'Flete' }}</td>
-                <td>{{ item.tipo === 'abono' ? '-' : item.tarasLimpio }}</td>
-                <td>{{ item.tipo === 'abono' ? '-' : item.tarasCrudo }}</td>
-                <td>{{ item.tipo === 'abono' ? '-' : (item.tarasLimpio + item.tarasCrudo) }}</td>
+                <td>{{ item.tipo === 'abono' ? '-' : item.tarasLimpioJoselito }}</td>
+                <td>{{ item.tipo === 'abono' ? '-' : item.tarasCrudoJoselito }}</td>
+                <td>{{ item.tipo === 'abono' ? '-' : item.tarasLimpioCanelo }}</td>
+                <td>{{ item.tipo === 'abono' ? '-' : item.tarasCrudoCanelo }}</td>
+                <td>{{ item.tipo === 'abono' ? '-' : (item.tarasLimpioJoselito + item.tarasCrudoJoselito + item.tarasLimpioCanelo + item.tarasCrudoCanelo) }}</td>
                 <td>{{ item.tipo === 'abono' ? 
                   formatearMonto(-item.monto) : 
                   formatearMonto(calcularMontoDia(item)) }}</td>
@@ -150,17 +165,41 @@
               <span class="value">{{ item.tipo === 'abono' ? 'Abono' : 'Flete' }}</span>
             </div>
             <template v-if="item.tipo === 'flete'">
-              <div class="flete-row">
-                <span class="label">Taras Limpio:</span>
-                <span class="value">{{ item.tarasLimpio }}</span>
+              <div class="cliente-section">
+                <h4 class="cliente-title">Joselito</h4>
+                <div class="flete-row">
+                  <span class="label">Taras Limpio:</span>
+                  <span class="value">{{ item.tarasLimpioJoselito }}</span>
+                </div>
+                <div class="flete-row">
+                  <span class="label">Taras Crudo:</span>
+                  <span class="value">{{ item.tarasCrudoJoselito }}</span>
+                </div>
+                <div class="flete-row">
+                  <span class="label">Subtotal Taras:</span>
+                  <span class="value">{{ item.tarasLimpioJoselito + item.tarasCrudoJoselito }}</span>
+                </div>
               </div>
-              <div class="flete-row">
-                <span class="label">Taras Crudo:</span>
-                <span class="value">{{ item.tarasCrudo }}</span>
+              
+              <div class="cliente-section">
+                <h4 class="cliente-title">Canelo</h4>
+                <div class="flete-row">
+                  <span class="label">Taras Limpio:</span>
+                  <span class="value">{{ item.tarasLimpioCanelo }}</span>
+                </div>
+                <div class="flete-row">
+                  <span class="label">Taras Crudo:</span>
+                  <span class="value">{{ item.tarasCrudoCanelo }}</span>
+                </div>
+                <div class="flete-row">
+                  <span class="label">Subtotal Taras:</span>
+                  <span class="value">{{ item.tarasLimpioCanelo + item.tarasCrudoCanelo }}</span>
+                </div>
               </div>
-              <div class="flete-row">
+              
+              <div class="flete-row total-row">
                 <span class="label">Total Taras:</span>
-                <span class="value">{{ item.tarasLimpio + item.tarasCrudo }}</span>
+                <span class="value">{{ item.tarasLimpioJoselito + item.tarasCrudoJoselito + item.tarasLimpioCanelo + item.tarasCrudoCanelo }}</span>
               </div>
             </template>
             <div class="flete-row">
@@ -196,25 +235,58 @@
     <div class="resumen">
       <h3>Resumen de Cuenta</h3>
       <div class="resumen-detalles">
-        <div class="resumen-card">
-          <span class="resumen-label">Total Taras Limpio:</span>
-          <span class="resumen-value">{{ totalTarasLimpio }}</span>
+        <div class="resumen-cliente">
+          <h4>Cliente Joselito</h4>
+          <div class="resumen-grid">
+            <div class="resumen-card">
+              <span class="resumen-label">Taras Limpio:</span>
+              <span class="resumen-value">{{ totalTarasLimpioJoselito }}</span>
+            </div>
+            <div class="resumen-card">
+              <span class="resumen-label">Taras Crudo:</span>
+              <span class="resumen-value">{{ totalTarasCrudoJoselito }}</span>
+            </div>
+            <div class="resumen-card">
+              <span class="resumen-label">Total:</span>
+              <span class="resumen-value">{{ totalTarasLimpioJoselito + totalTarasCrudoJoselito }}</span>
+            </div>
+          </div>
         </div>
-        <div class="resumen-card">
-          <span class="resumen-label">Total Taras Crudo:</span>
-          <span class="resumen-value">{{ totalTarasCrudo }}</span>
+        
+        <div class="resumen-cliente">
+          <h4>Cliente Canelo</h4>
+          <div class="resumen-grid">
+            <div class="resumen-card">
+              <span class="resumen-label">Taras Limpio:</span>
+              <span class="resumen-value">{{ totalTarasLimpioCanelo }}</span>
+            </div>
+            <div class="resumen-card">
+              <span class="resumen-label">Taras Crudo:</span>
+              <span class="resumen-value">{{ totalTarasCrudoCanelo }}</span>
+            </div>
+            <div class="resumen-card">
+              <span class="resumen-label">Total:</span>
+              <span class="resumen-value">{{ totalTarasLimpioCanelo + totalTarasCrudoCanelo }}</span>
+            </div>
+          </div>
         </div>
-        <div class="resumen-card">
-          <span class="resumen-label">Deuda Total:</span>
-          <span class="resumen-value">{{ formatearMonto(deudaTotal) }}</span>
-        </div>
-        <div class="resumen-card">
-          <span class="resumen-label">Monto Pagado:</span>
-          <span class="resumen-value">{{ formatearMonto(montoPagado) }}</span>
-        </div>
-        <div class="resumen-card">
-          <span class="resumen-label">Saldo Pendiente:</span>
-          <span class="resumen-value">{{ formatearMonto(saldoPendiente) }}</span>
+        
+        <div class="resumen-totales">
+          <h4>Totales Generales</h4>
+          <div class="resumen-grid">
+            <div class="resumen-card">
+              <span class="resumen-label">Deuda Total:</span>
+              <span class="resumen-value">{{ formatearMonto(deudaTotal) }}</span>
+            </div>
+            <div class="resumen-card">
+              <span class="resumen-label">Monto Pagado:</span>
+              <span class="resumen-value">{{ formatearMonto(montoPagado) }}</span>
+            </div>
+            <div class="resumen-card saldo-pendiente">
+              <span class="resumen-label">Saldo Pendiente:</span>
+              <span class="resumen-value">{{ formatearMonto(saldoPendiente) }}</span>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -265,10 +337,26 @@ export default {
       return items.sort((a, b) => b.fecha - a.fecha);
     },
     totalTarasLimpio() {
-      return this.fletesFiltrados.reduce((total, flete) => total + flete.tarasLimpio, 0);
+      return this.fletesFiltrados.reduce((total, flete) => 
+        total + (flete.tarasLimpioJoselito + flete.tarasLimpioCanelo), 0
+      );
     },
     totalTarasCrudo() {
-      return this.fletesFiltrados.reduce((total, flete) => total + flete.tarasCrudo, 0);
+      return this.fletesFiltrados.reduce((total, flete) => 
+        total + (flete.tarasCrudoJoselito + flete.tarasCrudoCanelo), 0
+      );
+    },
+    totalTarasLimpioJoselito() {
+      return this.fletesFiltrados.reduce((total, flete) => total + flete.tarasLimpioJoselito, 0);
+    },
+    totalTarasCrudoJoselito() {
+      return this.fletesFiltrados.reduce((total, flete) => total + flete.tarasCrudoJoselito, 0);
+    },
+    totalTarasLimpioCanelo() {
+      return this.fletesFiltrados.reduce((total, flete) => total + flete.tarasLimpioCanelo, 0);
+    },
+    totalTarasCrudoCanelo() {
+      return this.fletesFiltrados.reduce((total, flete) => total + flete.tarasCrudoCanelo, 0);
     },
     deudaTotal() {
       return this.fletesFiltrados.reduce((total, flete) => 
@@ -301,17 +389,25 @@ export default {
             const data = doc.data();
             let fecha = data.fecha.toDate ? data.fecha.toDate() : new Date(data.fecha);
             
+            // Buscar clientes Joselito y Canelo
             const clienteJoselito = data.clientes?.find(cliente => 
               cliente.id === '1' || cliente.id === 1 || cliente.nombre === 'Joselito'
             );
             
-            if (clienteJoselito) {
-              let tarasLimpio = 0;
-              let tarasCrudo = 0;
+            const clienteCanelo = data.clientes?.find(cliente => 
+              cliente.id === '5' || cliente.id === 5 || cliente.nombre === 'Canelo'
+            );
+            
+            let tarasLimpioJoselito = 0;
+            let tarasCrudoJoselito = 0;
+            let tarasLimpioCanelo = 0;
+            let tarasCrudoCanelo = 0;
 
-              // Calcular taras de limpio
+            // Calcular taras de Joselito
+            if (clienteJoselito) {
+              // Calcular taras de limpio Joselito
               if (clienteJoselito.productos && Array.isArray(clienteJoselito.productos)) {
-                tarasLimpio = clienteJoselito.productos.reduce((total, producto) => {
+                tarasLimpioJoselito = clienteJoselito.productos.reduce((total, producto) => {
                   let tarasProducto = 0;
                   if (Array.isArray(producto.taras)) {
                     tarasProducto += producto.taras.reduce((sum, tara) => 
@@ -325,9 +421,9 @@ export default {
                 }, 0);
               }
 
-              // Calcular taras de crudo
+              // Calcular taras de crudo Joselito
               if (clienteJoselito.crudos && Array.isArray(clienteJoselito.crudos)) {
-                tarasCrudo = clienteJoselito.crudos.reduce((total, crudo) => {
+                tarasCrudoJoselito = clienteJoselito.crudos.reduce((total, crudo) => {
                   if (!Array.isArray(crudo.items)) return total;
                   
                   return total + crudo.items.reduce((itemTotal, item) => {
@@ -344,12 +440,58 @@ export default {
                   }, 0);
                 }, 0);
               }
+            }
 
+            // Calcular taras de Canelo
+            if (clienteCanelo) {
+              // Calcular taras de limpio Canelo
+              if (clienteCanelo.productos && Array.isArray(clienteCanelo.productos)) {
+                tarasLimpioCanelo = clienteCanelo.productos.reduce((total, producto) => {
+                  let tarasProducto = 0;
+                  if (Array.isArray(producto.taras)) {
+                    tarasProducto += producto.taras.reduce((sum, tara) => 
+                      sum + (parseInt(tara) || 0), 0);
+                  }
+                  if (Array.isArray(producto.tarasExtra)) {
+                    tarasProducto += producto.tarasExtra.reduce((sum, tara) => 
+                      sum + (parseInt(tara) || 0), 0);
+                  }
+                  return total + tarasProducto;
+                }, 0);
+              }
+
+              // Calcular taras de crudo Canelo
+              if (clienteCanelo.crudos && Array.isArray(clienteCanelo.crudos)) {
+                tarasCrudoCanelo = clienteCanelo.crudos.reduce((total, crudo) => {
+                  if (!Array.isArray(crudo.items)) return total;
+                  
+                  return total + crudo.items.reduce((itemTotal, item) => {
+                    let tarasItem = 0;
+                    if (item.taras) {
+                      const [cantidad] = item.taras.split('-');
+                      tarasItem += parseInt(cantidad) || 0;
+                    }
+                    if (item.sobrante) {
+                      const [cantidadSobrante] = item.sobrante.split('-');
+                      tarasItem += parseInt(cantidadSobrante) || 0;
+                    }
+                    return itemTotal + tarasItem;
+                  }, 0);
+                }, 0);
+              }
+            }
+
+            // Solo guardar fletes que tengan al menos un cliente (Joselito o Canelo)
+            if (clienteJoselito || clienteCanelo) {
               return {
                 id: doc.id,
                 fecha,
-                tarasLimpio,
-                tarasCrudo,
+                tarasLimpioJoselito,
+                tarasCrudoJoselito,
+                tarasLimpioCanelo,
+                tarasCrudoCanelo,
+                tarasLimpio: tarasLimpioJoselito + tarasLimpioCanelo, // Total para compatibilidad
+                tarasCrudo: tarasCrudoJoselito + tarasCrudoCanelo, // Total para compatibilidad
                 cargaCon: data.cargaCon || 'No especificado',
                 pagado: data.fletePagado || false
               };
@@ -357,7 +499,7 @@ export default {
             return null;
           })
           .filter(flete => flete !== null)
-          .sort((a, b) => b.fecha - a.fecha); // Ordenar por fecha descendente (más reciente primero)
+          .sort((a, b) => b.fecha - a.fecha); // Ordenar por fecha descendente
         
         this.fletes = fletesData;
 
@@ -393,8 +535,8 @@ export default {
       }).format(monto);
     },
     calcularMontoDia(flete) {
-      return (flete.tarasLimpio * this.costoTaraLimpio) + 
-             (flete.tarasCrudo * this.costoTaraCrudo);
+      return ((flete.tarasLimpioJoselito + flete.tarasLimpioCanelo) * this.costoTaraLimpio) + 
+             ((flete.tarasCrudoJoselito + flete.tarasCrudoCanelo) * this.costoTaraCrudo);
     },
     calcularDeudaAcumulada(index) {
       // Obtener todos los items hasta el índice actual y ordenarlos por fecha ascendente
@@ -507,27 +649,41 @@ export default {
             <thead>
               <tr>
                 <th>Fecha</th>
-                <th>Taras Limpio</th>
-                <th>Taras Crudo</th>
+                <th colspan="2">Joselito</th>
+                <th colspan="2">Canelo</th>
                 <th>Total Taras</th>
                 <th>Monto</th>
+              </tr>
+              <tr>
+                <th></th>
+                <th>Limpio</th>
+                <th>Crudo</th>
+                <th>Limpio</th>
+                <th>Crudo</th>
+                <th></th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
               ${this.fletesPendientes.map(flete => `
                 <tr>
                   <td>${this.formatearFecha(flete.fecha)}</td>
-                  <td>${flete.tarasLimpio}</td>
-                  <td>${flete.tarasCrudo}</td>
-                  <td>${flete.tarasLimpio + flete.tarasCrudo}</td>
+                  <td>${flete.tarasLimpioJoselito}</td>
+                  <td>${flete.tarasCrudoJoselito}</td>
+                  <td>${flete.tarasLimpioCanelo}</td>
+                  <td>${flete.tarasCrudoCanelo}</td>
+                  <td>${flete.tarasLimpioJoselito + flete.tarasCrudoJoselito + flete.tarasLimpioCanelo + flete.tarasCrudoCanelo}</td>
                   <td>${this.formatearMonto(this.calcularMontoDia(flete))}</td>
                 </tr>
               `).join('')}
               <tr class="fila-total">
-                <td colspan="1"><strong>TOTAL FLETES</strong></td>
-                <td><strong>${this.fletesPendientes.reduce((sum, f) => sum + f.tarasLimpio, 0)}</strong></td>
-                <td><strong>${this.fletesPendientes.reduce((sum, f) => sum + f.tarasCrudo, 0)}</strong></td>
-                <td><strong>${this.fletesPendientes.reduce((sum, f) => sum + f.tarasLimpio + f.tarasCrudo, 0)}</strong></td>
+                <td><strong>TOTAL</strong></td>
+                <td><strong>${this.fletesPendientes.reduce((sum, f) => sum + f.tarasLimpioJoselito, 0)}</strong></td>
+                <td><strong>${this.fletesPendientes.reduce((sum, f) => sum + f.tarasCrudoJoselito, 0)}</strong></td>
+                <td><strong>${this.fletesPendientes.reduce((sum, f) => sum + f.tarasLimpioCanelo, 0)}</strong></td>
+                <td><strong>${this.fletesPendientes.reduce((sum, f) => sum + f.tarasCrudoCanelo, 0)}</strong></td>
+                <td><strong>${this.fletesPendientes.reduce((sum, f) => 
+                  sum + f.tarasLimpioJoselito + f.tarasCrudoJoselito + f.tarasLimpioCanelo + f.tarasCrudoCanelo, 0)}</strong></td>
                 <td><strong>${this.formatearMonto(
                   this.fletesPendientes.reduce((sum, f) => sum + this.calcularMontoDia(f), 0)
                 )}</strong></td>
@@ -542,7 +698,7 @@ export default {
               <thead>
                 <tr>
                   <th>Fecha</th>
-                  <th colspan="3">Descripción</th>
+                  <th colspan="5">Descripción</th>
                   <th>Monto</th>
                 </tr>
               </thead>
@@ -550,12 +706,12 @@ export default {
                 ${this.abonosFiltrados.map(abono => `
                   <tr class="fila-abono">
                     <td>${this.formatearFecha(abono.fecha)}</td>
-                    <td colspan="3">${abono.descripcion || 'Abono realizado'}</td>
+                    <td colspan="5">${abono.descripcion || 'Abono realizado'}</td>
                     <td>${this.formatearMonto(abono.monto)}</td>
                   </tr>
                 `).join('')}
                 <tr class="fila-total">
-                  <td colspan="4"><strong>TOTAL ABONOS</strong></td>
+                  <td colspan="6"><strong>TOTAL ABONOS</strong></td>
                   <td><strong>${this.formatearMonto(
                     this.abonosFiltrados.reduce((sum, a) => sum + a.monto, 0)
                   )}</strong></td>
@@ -567,8 +723,29 @@ export default {
           <div class="resumen-pdf">
             <h3>Resumen de Cuenta</h3>
             <div class="resumen-grid">
-              <p><strong>Total Taras Limpio:</strong> ${this.fletesPendientes.reduce((sum, f) => sum + f.tarasLimpio, 0)}</p>
-              <p><strong>Total Taras Crudo:</strong> ${this.fletesPendientes.reduce((sum, f) => sum + f.tarasCrudo, 0)}</p>
+              <div class="resumen-clientes">
+                <div class="cliente-column">
+                  <h4>Cliente Joselito</h4>
+                  <p><strong>Taras Limpio:</strong> ${this.fletesPendientes.reduce((sum, f) => sum + f.tarasLimpioJoselito, 0)}</p>
+                  <p><strong>Taras Crudo:</strong> ${this.fletesPendientes.reduce((sum, f) => sum + f.tarasCrudoJoselito, 0)}</p>
+                  <p><strong>Total Taras Joselito:</strong> ${this.fletesPendientes.reduce((sum, f) => 
+                    sum + f.tarasLimpioJoselito + f.tarasCrudoJoselito, 0)}</p>
+                </div>
+                
+                <div class="cliente-column">
+                  <h4>Cliente Canelo</h4>
+                  <p><strong>Taras Limpio:</strong> ${this.fletesPendientes.reduce((sum, f) => sum + f.tarasLimpioCanelo, 0)}</p>
+                  <p><strong>Taras Crudo:</strong> ${this.fletesPendientes.reduce((sum, f) => sum + f.tarasCrudoCanelo, 0)}</p>
+                  <p><strong>Total Taras Canelo:</strong> ${this.fletesPendientes.reduce((sum, f) => 
+                    sum + f.tarasLimpioCanelo + f.tarasCrudoCanelo, 0)}</p>
+                </div>
+              </div>
+              
+              <h4>Totales Generales</h4>
+              <p><strong>Total Taras Limpio:</strong> ${this.fletesPendientes.reduce((sum, f) => 
+                sum + f.tarasLimpioJoselito + f.tarasLimpioCanelo, 0)}</p>
+              <p><strong>Total Taras Crudo:</strong> ${this.fletesPendientes.reduce((sum, f) => 
+                sum + f.tarasCrudoJoselito + f.tarasCrudoCanelo, 0)}</p>
               <p><strong>Monto Total Fletes:</strong> ${this.formatearMonto(
                 this.fletesPendientes.reduce((sum, f) => sum + this.calcularMontoDia(f), 0)
               )}</p>
@@ -583,8 +760,7 @@ export default {
               )}</p>
             </div>
           </div>
-
-         
+        </div>
       `;
 
       // Estilos para el PDF
@@ -601,6 +777,12 @@ export default {
         h3 {
           color: #333;
           margin: 20px 0 10px 0;
+        }
+        h4 {
+          color: #333;
+          margin: 15px 0 5px 0;
+          border-bottom: 1px solid #ddd;
+          padding-bottom: 5px;
         }
         .tabla-pdf {
           width: 100%;
@@ -639,12 +821,30 @@ export default {
           margin-top: 10px;
           padding-top: 10px;
           border-top: 2px solid #ddd;
-          font-size: 1.2em;
         }
         .footer-pdf {
           margin-top: 30px;
           padding-top: 15px;
           border-top: 1px solid #ddd;
+        }
+        .resumen-clientes {
+          display: flex;
+          justify-content: space-between;
+          margin-bottom: 20px;
+          gap: 15px;
+        }
+        .cliente-column {
+          flex: 1;
+          padding: 10px;
+          background-color: #f9f9f9;
+          border-radius: 5px;
+          border: 1px solid #eee;
+        }
+        .cliente-column h4 {
+          text-align: center;
+          margin-top: 0;
+          border-bottom: 1px solid #ddd;
+          padding-bottom: 5px;
         }
       `;
       contenido.appendChild(style);
@@ -1078,6 +1278,73 @@ export default {
 
   .btn-agregar-abono {
     width: 100%;
+  }
+}
+
+.cliente-section {
+  margin-bottom: 15px;
+  padding: 10px;
+  background-color: #f9f9f9;
+  border-radius: 6px;
+}
+
+.cliente-title {
+  margin: 0 0 10px 0;
+  padding-bottom: 5px;
+  border-bottom: 1px solid #ddd;
+  font-size: 1em;
+  color: #333;
+}
+
+.total-row {
+  font-weight: bold;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 2px solid #ddd;
+}
+
+.resumen-cliente, .resumen-totales {
+  margin-bottom: 25px;
+  padding: 15px;
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.resumen-cliente h4, .resumen-totales h4 {
+  margin-top: 0;
+  margin-bottom: 15px;
+  color: #333;
+  text-align: center;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #ddd;
+}
+
+.resumen-totales {
+  background-color: #f8f9fa;
+}
+
+.saldo-pendiente {
+  border-left: 4px solid #f44336;
+}
+
+@media (max-width: 992px) {
+  .resumen-detalles {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+}
+
+@media (min-width: 993px) {
+  .resumen-detalles {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+  
+  .resumen-totales {
+    grid-column: 1 / -1;
   }
 }
 </style> 
