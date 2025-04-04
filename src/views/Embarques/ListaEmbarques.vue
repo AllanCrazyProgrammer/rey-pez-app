@@ -226,7 +226,7 @@ export default {
     },
     calcularTotalTaras(embarque) {
       let totalTaras = 0;
-      const clientesPredefinidos = ['OTILIO', 'JOSELITO', 'CATARRO', 'OZUNA'];
+      const clientesPredefinidos = ['OTILIO', 'JOSELITO', 'CATARRO', 'OZUNA', 'CANELO'];
 
       embarque.clientes.forEach(cliente => {
         // Solo procesar si el cliente está en la lista de predefinidos
