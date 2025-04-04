@@ -240,56 +240,78 @@ export async function generarNotaVentaPDF(embarque, clientesDisponibles, cliente
       // Contamos el total de productos para ambas páginas
       const totalProductos = contarTotalProductos(embarque);
       
-      // Si hay 8 o más productos, reducimos el tamaño de fuente
-      if (totalProductos >= 8) {
+      console.log(`Total de productos: ${totalProductos}, Páginas generadas: ${numPages}`);
+      
+      // Determinar el nivel de reducción de escala basado en el número de productos y páginas
+      let nivelReduccion = 'ninguno';
+      
+      if (totalProductos >= 8 && totalProductos < 12) {
+        nivelReduccion = 'moderado';
+      } else if (totalProductos >= 12 || numPages > 2) {
+        nivelReduccion = 'agresivo';
+      }
+      
+      if (nivelReduccion !== 'ninguno') {
         const docDefinitionAjustado = {
           ...docDefinition,
           defaultStyle: {
             ...docDefinition.defaultStyle,
-            fontSize: 16 // Reducir de 20 a 16
+            fontSize: nivelReduccion === 'moderado' ? 16 : 14 // Reducir a 14 si es agresivo
           },
           styles: {
             ...docDefinition.styles,
             notaVentaHeader: {
               ...docDefinition.styles.notaVentaHeader,
-              fontSize: 24 // Reducir de 30 a 24
+              fontSize: nivelReduccion === 'moderado' ? 24 : 20 // Reducir de 30 a 20 si es agresivo
             },
             header: {
               ...docDefinition.styles.header,
-              fontSize: 24 // Reducir de 30 a 24
+              fontSize: nivelReduccion === 'moderado' ? 24 : 20 // Reducir de 30 a 20 si es agresivo
             },
             subheader: {
               ...docDefinition.styles.subheader,
-              fontSize: 20 // Reducir de 25 a 20
+              fontSize: nivelReduccion === 'moderado' ? 20 : 17 // Reducir de 25 a 17 si es agresivo
             },
             tableHeader: {
               ...docDefinition.styles.tableHeader,
-              fontSize: 18 // Reducir de 23 a 18
+              fontSize: nivelReduccion === 'moderado' ? 18 : 15 // Reducir de 23 a 15 si es agresivo
             },
             medidaHeader: {
               ...docDefinition.styles.medidaHeader,
-              fontSize: 20 // Reducir de 24 a 20
+              fontSize: nivelReduccion === 'moderado' ? 20 : 16 // Reducir de 24 a 16 si es agresivo
             },
             nota: {
               ...docDefinition.styles.nota,
-              fontSize: 15 // Reducir de 18 a 15
+              fontSize: nivelReduccion === 'moderado' ? 15 : 12 // Reducir de 18 a 12 si es agresivo
             },
             totalPrecio: {
               ...docDefinition.styles.totalPrecio,
-              fontSize: 18 // Reducir de 21 a 18
+              fontSize: nivelReduccion === 'moderado' ? 18 : 15 // Reducir de 21 a 15 si es agresivo
             },
             granTotal: {
               ...docDefinition.styles.granTotal,
-              fontSize: 20 // Reducir de 24 a 20
+              fontSize: nivelReduccion === 'moderado' ? 20 : 17 // Reducir de 24 a 17 si es agresivo
             }
+          },
+          footer: function(currentPage, pageCount) {
+            return {
+              columns: [
+                { text: ' 2025 Rey Pez - Tampico, Tamps.', alignment: 'center', margin: [0, 10, 0, 0] },
+              ],
+              margin: [40, 0, 40, 0],
+              fontSize: nivelReduccion === 'moderado' ? 16 : 14, // Reducir también el footer
+              color: '#3760b0'
+            };
           }
         };
         
         // Crear y descargar el PDF con los ajustes
         pdfMake.createPdf(docDefinitionAjustado).download('nota-venta.pdf');
+        console.log(`PDF generado con nivel de reducción: ${nivelReduccion}`);
       } else {
-        // Si son menos de 8 productos, descargar el original
+        // Si son pocos productos, descargar el original
         pdfMake.createPdf(docDefinition).download('nota-venta.pdf');
+        console.log('PDF generado sin reducción de escala');
       }
     });
 
@@ -1607,49 +1629,71 @@ export async function generarNotaVentaSinPreciosPDF(embarque, clientesDisponible
       // Contamos el total de productos
       const totalProductos = contarTotalProductos(embarque);
       
-      // Si hay 8 o más productos o más de una página, reducimos el tamaño de fuente
-      if (totalProductos >= 8 || numPages > 1) {
+      console.log(`Total de productos: ${totalProductos}, Páginas generadas: ${numPages}`);
+      
+      // Determinar el nivel de reducción de escala basado en el número de productos y páginas
+      let nivelReduccion = 'ninguno';
+      
+      if (totalProductos >= 8 && totalProductos < 12) {
+        nivelReduccion = 'moderado';
+      } else if (totalProductos >= 12 || numPages > 1) {
+        nivelReduccion = 'agresivo';
+      }
+      
+      if (nivelReduccion !== 'ninguno') {
         // Ajustar tamaños si excede una página o tiene muchos productos
         const docDefinitionAjustado = {
           ...docDefinition,
           defaultStyle: {
             ...docDefinition.defaultStyle,
-            fontSize: 16 // Reducir de 20 a 16
+            fontSize: nivelReduccion === 'moderado' ? 16 : 14 // Reducir más si es agresivo
           },
           styles: {
             ...docDefinition.styles,
             notaVentaHeader: {
               ...docDefinition.styles.notaVentaHeader,
-              fontSize: 24 // Reducir de 30 a 24
+              fontSize: nivelReduccion === 'moderado' ? 24 : 20 // Reducir más si es agresivo
             },
             header: {
               ...docDefinition.styles.header,
-              fontSize: 24 // Reducir de 30 a 24
+              fontSize: nivelReduccion === 'moderado' ? 24 : 20
             },
             subheader: {
               ...docDefinition.styles.subheader,
-              fontSize: 20 // Reducir de 25 a 20
+              fontSize: nivelReduccion === 'moderado' ? 20 : 17
             },
             tableHeader: {
               ...docDefinition.styles.tableHeader,
-              fontSize: 18 // Reducir de 23 a 18
+              fontSize: nivelReduccion === 'moderado' ? 18 : 15
             },
             medidaHeader: {
               ...docDefinition.styles.medidaHeader,
-              fontSize: 20 // Reducir de 24 a 20
+              fontSize: nivelReduccion === 'moderado' ? 20 : 16
             },
             nota: {
               ...docDefinition.styles.nota,
-              fontSize: 15 // Reducir de 18 a 15
+              fontSize: nivelReduccion === 'moderado' ? 15 : 12
             }
+          },
+          footer: function(currentPage, pageCount) {
+            return {
+              columns: [
+                { text: ' 2025 Rey Pez - Tampico, Tamps.', alignment: 'center', margin: [0, 10, 0, 0] },
+              ],
+              margin: [40, 0, 40, 0],
+              fontSize: nivelReduccion === 'moderado' ? 16 : 14, // Reducir también el footer
+              color: '#3760b0'
+            };
           }
         };
         
         // Crear y descargar el PDF con los ajustes
         pdfMake.createPdf(docDefinitionAjustado).download('nota-embarque.pdf');
+        console.log(`PDF sin precios generado con nivel de reducción: ${nivelReduccion}`);
       } else {
         // Si es una sola página y menos de 8 productos, descargar el original
         pdfMake.createPdf(docDefinition).download('nota-embarque.pdf');
+        console.log('PDF sin precios generado sin reducción de escala');
       }
     });
 
