@@ -319,6 +319,7 @@ import BackButton from '@/components/BackButton.vue';
 import PreciosHistorialModal from '@/components/PreciosHistorialModal.vue';
 import StashModal from '@/components/StashModal.vue';
 import PreciosClienteButton from '@/components/PreciosClienteButton.vue';
+import EmbarqueCuentasService from '@/utils/services/EmbarqueCuentasService';
 
 export default {
   name: 'CuentasJoselito',
@@ -1779,20 +1780,6 @@ Precio: $${this.formatNumber(precioVenta)}`;
       
       // Si no tiene el formato esperado, devolver los kilos originales
       return kilosOriginales;
-    },
-
-    // Método público que puede ser llamado desde otros componentes
-    crearCuentaConProductos(productos) {
-      const embarqueData = {
-        productos: productos.map(p => ({
-          medida: p.medida,
-          kilos: p.kilos,
-          precio: p.precio,
-          costo: p.costo
-        }))
-      };
-      
-      return this.crearCuentaDesdeEmbarque(embarqueData);
     },
   },
   created() {

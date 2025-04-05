@@ -299,6 +299,7 @@ import BackButton from '@/components/BackButton.vue';
 import PreciosHistorialModal from '@/components/PreciosHistorialModal.vue';
 import StashModal from '@/components/StashModal.vue';
 import PreciosClienteButton from '@/components/PreciosClienteButton.vue';
+import EmbarqueCuentasService from '@/utils/services/EmbarqueCuentasService';
 
 export default {
   name: 'CuentasCatarro',

@@ -166,6 +166,9 @@ import AltModal from './components/modals/AltModal.vue';
 // Lazy loaded components
 const Rendimientos = defineAsyncComponent(() => import('./Rendimientos.vue'))
 
+// Después de las imports existentes, agregar:
+import EmbarqueCuentasService from '@/utils/services/EmbarqueCuentasService';
+
 export default {
   mixins: [
     pdfGenerationMixin,
@@ -1739,16 +1742,42 @@ export default {
     },
 
     // Métodos para creación de cuentas
-    async crearCuentaJoselito(embarqueCliente, clienteProductos, clienteCrudos) {
-      // Implementación específica para crear cuenta de Joselito
-      // La implementación actual se mantiene sin cambios
-      // ...
+    async crearCuentaJoselito(clienteId, clienteProductos, clienteCrudos) {
+      try {
+        this.isCreatingAccount = true;
+        
+        // Obtener los datos del embarque formateados para este cliente
+        const embarqueCliente = this.obtenerEmbarqueCliente(clienteId);
+        
+        // Llamar al servicio para crear la cuenta
+        await EmbarqueCuentasService.crearCuentaJoselito(embarqueCliente, this.$router);
+        
+        alert('Cuenta de Joselito creada exitosamente y abierta en una nueva pestaña.');
+      } catch (error) {
+        console.error("Error al crear cuenta de Joselito:", error);
+        alert(`Error al crear cuenta: ${error.message}`);
+      } finally {
+        this.isCreatingAccount = false;
+      }
     },
 
-    async crearCuentaCatarro(embarqueCliente, clienteProductos, clienteCrudos) {
-      // Implementación específica para crear cuenta de Catarro
-      // La implementación actual se mantiene sin cambios
-      // ...
+    async crearCuentaCatarro(clienteId, clienteProductos, clienteCrudos) {
+      try {
+        this.isCreatingAccount = true;
+        
+        // Obtener los datos del embarque formateados para este cliente
+        const embarqueCliente = this.obtenerEmbarqueCliente(clienteId);
+        
+        // Llamar al servicio para crear la cuenta
+        await EmbarqueCuentasService.crearCuentaCatarro(embarqueCliente, this.$router);
+        
+        alert('Cuenta de Catarro creada exitosamente y abierta en una nueva pestaña.');
+      } catch (error) {
+        console.error("Error al crear cuenta de Catarro:", error);
+        alert(`Error al crear cuenta: ${error.message}`);
+      } finally {
+        this.isCreatingAccount = false;
+      }
     },
 
     esClienteJoselito(clienteId) {
