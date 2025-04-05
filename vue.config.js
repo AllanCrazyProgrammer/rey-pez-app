@@ -30,5 +30,22 @@ module.exports = {
   // Transpilación para soporte de navegadores
   transpileDependencies: [],
   // Configuración para producción
-  productionSourceMap: false
+  productionSourceMap: false,
+  // Configuración de webpack para asegurar carga correcta de chunks
+  configureWebpack: {
+    optimization: {
+      splitChunks: {
+        chunks: 'all',
+        automaticNameDelimiter: '.',
+        maxSize: 244000
+      }
+    },
+    output: {
+      chunkFilename: 'js/[name].[contenthash].js'
+    }
+  },
+  chainWebpack: config => {
+    // Usar named chunk IDs para mejor depuración
+    config.optimization.set('chunkIds', 'named');
+  }
 } 
