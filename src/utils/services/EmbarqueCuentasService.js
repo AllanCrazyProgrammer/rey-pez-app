@@ -340,8 +340,8 @@ const extraerValorSobrante = (texto) => {
  */
 const prepararItemsJoselito = (productos, clienteCrudos = {}, preciosVenta = new Map()) => {
   if (!productos || !Array.isArray(productos)) return [];
-  
-  // Agrupar por medida normalizada para evitar duplicadose
+   
+  // Agrupar por medida normalizada para evitar duplicados
   const productosAgrupados = new Map();
   
   // Primero procesar los productos normales
