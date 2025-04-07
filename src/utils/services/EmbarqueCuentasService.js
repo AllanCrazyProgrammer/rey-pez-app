@@ -761,7 +761,7 @@ export const crearCuentaJoselito = async (embarqueData, router) => {
     
     // Abrir la cuenta en una nueva pestaña en lugar de navegar directamente
     if (router) {
-      const rutaCompleta = `${window.location.origin}/#/cuentas-joselito/${docRef.id}?edit=true`;
+      const rutaCompleta = `${window.location.origin}/cuentas-joselito/${docRef.id}?edit=true`;
       window.open(rutaCompleta, '_blank');
     }
     
@@ -799,7 +799,7 @@ export const crearCuentaCatarro = async (embarqueData, router) => {
     
     // Abrir la cuenta en una nueva pestaña en lugar de navegar directamente
     if (router) {
-      const rutaCompleta = `${window.location.origin}/#/cuentas-catarro/${docRef.id}?edit=true`;
+      const rutaCompleta = `${window.location.origin}/cuentas-catarro/${docRef.id}?edit=true`;
       window.open(rutaCompleta, '_blank');
     }
     
@@ -1026,7 +1026,7 @@ export const crearCuentaOzuna = async (embarqueData, router) => {
     
     // Abrir la cuenta en una nueva pestaña en lugar de navegar directamente
     if (router) {
-      const rutaCompleta = `${window.location.origin}/#/cuentas-ozuna/${docRef.id}?edit=true`;
+      const rutaCompleta = `${window.location.origin}/cuentas-ozuna/${docRef.id}?edit=true`;
       window.open(rutaCompleta, '_blank');
     }
     
