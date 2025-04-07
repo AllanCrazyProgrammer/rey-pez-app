@@ -1,9 +1,10 @@
 <template>
-    <div class="producto crudo">
+    <div class="producto crudo" :class="{'crudo-ozuna': isClienteOzuna}">
         <h2 class="crudo-header">Crudos</h2>
 
         <div class="crudo-items">
-            <div v-for="(item, itemIndex) in crudoData.items || []" :key="'item-' + itemIndex" class="crudo-item">
+            <div v-for="(item, itemIndex) in crudoData.items || []" :key="'item-' + itemIndex" class="crudo-item"
+                :data-es-venta="item.esVenta">
                 <div class="crudo-talla-container">
                     <button @click="abrirModalPrecio(item)" class="btn-precio" :class="{ 'tiene-precio': item.precio }"
                         :disabled="embarqueBloqueado">
@@ -24,6 +25,13 @@
                         <option value="Rechazo">Rechazo</option>
                     </select>
                     <span v-if="item.precio" class="precio-tag">${{ item.precio }}</span>
+
+                    <!-- Checkbox de venta para Ozuna -->
+                    <div v-if="isClienteOzuna" class="venta-checkbox-container" style="display: none;">
+                        <input type="checkbox" v-model="item.esVenta" class="form-check-input venta-checkbox"
+                            :id="'ventaCrudo-' + crudoIndex + '-' + itemIndex" :disabled="embarqueBloqueado" @change="actualizarCrudo">
+                        <label :for="'ventaCrudo-' + crudoIndex + '-' + itemIndex">Venta</label>
+                    </div>
 
                     <input type="text" v-model="item.barco" class="form-control barco-input" placeholder="Barco"
                         :disabled="embarqueBloqueado" @input="actualizarCrudo">
@@ -99,6 +107,15 @@ export default {
         crudo: {
             handler(newVal) {
                 this.crudoData = newVal || { items: [] };
+                
+                // Si es cliente Ozuna, forzar esVenta=true para todos los items
+                if (this.isClienteOzuna && this.crudoData.items) {
+                    this.crudoData.items.forEach(item => {
+                        if (item) {
+                            this.$set(item, 'esVenta', true);
+                        }
+                    });
+                }
             },
             immediate: true
         }
@@ -114,6 +131,13 @@ export default {
                 let sobrante = this.extraerNumero(item.sobrante);
                 return total + taras + sobrante;
             }, 0);
+        },
+
+        // Verificar si el cliente es Ozuna
+        isClienteOzuna() {
+            return this.clienteId === '4' || this.clienteId === 4 || 
+                   (this.$parent && this.$parent.nombreCliente && 
+                    this.$parent.nombreCliente.toLowerCase().includes('ozuna'));
         }
     },
 
@@ -146,14 +170,17 @@ export default {
                 this.crudoData.items = [];
             }
             
-            this.crudoData.items.push({
+            const nuevoItem = {
                 talla: '',
                 barco: '',
                 taras: '',
                 sobrante: '',
                 precio: null,
-                mostrarSobrante: false
-            });
+                mostrarSobrante: false,
+                esVenta: this.isClienteOzuna // Auto-establecer esVenta a true para Ozuna
+            };
+            
+            this.crudoData.items.push(nuevoItem);
             
             // Actualizar el componente padre
             this.actualizarCrudo();
@@ -198,11 +225,10 @@ export default {
     flex: 0 0 calc(25% - 6px); /* Exactamente 25% menos el gap */
     margin: 0 0 8px 0;
     padding: 12px;
-    background-color: #f8f9fa;
-    border-left: 4px solid #3498db;
-    border-radius: 5px;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-    box-sizing: border-box;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background-color: #f9f9f9;
+    position: relative;
 }
 
 /* Ajustes responsive */
@@ -346,5 +372,49 @@ input:disabled,
 button:disabled {
     opacity: 0.7;
     cursor: not-allowed;
+}
+
+/* Estilos para indicadores de venta */
+.venta-checkbox-container {
+    display: flex;
+    align-items: center;
+    margin-left: 10px;
+    gap: 5px;
+}
+
+.venta-checkbox-container label {
+    font-size: 13px;
+    color: #07711e;
+    font-weight: bold;
+}
+
+.venta-checkbox {
+    cursor: pointer;
+    height: 16px;
+    width: 16px;
+}
+
+/* Estilo para items marcados como venta */
+.crudo-item[data-es-venta="true"] {
+    border-left: 4px solid #07711e;
+    background-color: rgba(7, 113, 30, 0.05);
+}
+
+/* Estilo para los crudos de Ozuna */
+.crudo-ozuna {
+    position: relative;
+}
+
+.crudo-ozuna::before {
+    content: "VENTA";
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    background-color: #07711e;
+    color: white;
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 10px;
+    opacity: 0.7;
 }
 </style>

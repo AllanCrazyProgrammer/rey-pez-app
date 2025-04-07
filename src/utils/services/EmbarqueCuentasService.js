@@ -810,7 +810,235 @@ export const crearCuentaCatarro = async (embarqueData, router) => {
   }
 };
 
+/**
+ * Prepara los datos necesarios para crear una cuenta de Ozuna
+ * @param {Object} embarqueData - Datos del embarque
+ * @returns {Promise<Object>} - Datos preparados para la cuenta
+ */
+const prepararDatosCuentaOzuna = async (embarqueData) => {
+  const { fecha, productos, clienteCrudos } = embarqueData;
+  
+  // Obtener los crudos del cliente Ozuna (suponiendo que su ID es '4')
+  const crudosOzuna = clienteCrudos ? (clienteCrudos['4'] || []) : [];
+  
+  // Obtener los precios de venta más recientes
+  const preciosVenta = await obtenerPreciosVenta('ozuna');
+  
+  // Preparar los items de la cuenta
+  const items = [];
+  
+  // Procesar productos normales
+  if (Array.isArray(productos)) {
+    productos.forEach(producto => {
+      if (producto) {
+        // Calcular kilos dependiendo del tipo de producto
+        let kilos = 0;
+        
+        if (producto.tipo === 'c/h20') {
+          // Para productos c/h20, calcular con el valor neto
+          const reporteTaras = producto.reporteTaras || [];
+          const reporteBolsas = producto.reporteBolsas || [];
+          let sumaTotalKilos = 0;
+
+          for (let i = 0; i < reporteTaras.length; i++) {
+            const taras = parseInt(reporteTaras[i]) || 0;
+            const bolsa = parseInt(reporteBolsas[i]) || 0;
+            sumaTotalKilos += taras * bolsa;
+          }
+
+          // Multiplicar por el valor neto (0.65 por defecto)
+          kilos = sumaTotalKilos * (producto.camaronNeto || 0.65);
+        } else {
+          // Para otros productos, calcular con taras y descuentos
+          const sumaKilos = producto.kilos?.reduce((sum, k) => sum + (parseFloat(k) || 0), 0) || 0;
+          const sumaTarasNormales = producto.taras?.reduce((sum, tara) => sum + (parseInt(tara) || 0), 0) || 0;
+          // No incluimos las taras extra en el descuento, solo las taras normales
+          const descuentoTaras = producto.restarTaras ? sumaTarasNormales * 3 : 0;
+          kilos = Number((sumaKilos - descuentoTaras).toFixed(1));
+        }
+        
+        const medida = producto.medida || '';
+        
+        // Determinar el costo según si es venta o maquila
+        let costo = 0;
+        
+        if (producto.esVenta) {
+          // Si es venta, buscar precio en la base de datos o considerar precio manual
+          const medidaNormalizada = normalizarMedida(medida);
+          const precioEncontrado = preciosVenta.get(medidaNormalizada);
+          
+          // Usar precio encontrado o precio manual
+          costo = parseFloat(producto.precio) || precioEncontrado || 0;
+        } else {
+          // Si es maquila, usar valor por defecto de 20
+          costo = 20;
+        }
+        
+        // Solo agregar el item si tiene kilos
+        if (kilos > 0) {
+          items.push({
+            kilos,
+            medida,
+            costo,
+            total: kilos * costo,
+            esVenta: producto.esVenta || false,
+            editando: false,
+            campoEditando: null
+          });
+        }
+      }
+    });
+  }
+  
+  // Procesar crudos
+  if (Array.isArray(crudosOzuna)) {
+    crudosOzuna.forEach(crudo => {
+      if (crudo && Array.isArray(crudo.items)) {
+        crudo.items.forEach(item => {
+          if (item) {
+            // Calcular kilos utilizando el mismo método que en la vista
+            let kilosTotales = 0;
+            
+            // Procesar taras
+            if (item.taras) {
+              // Verificar si la tara tiene formato "5-19" o similar
+              const formatoGuion = /^(\d+)-(\d+)$/.exec(item.taras);
+              if (formatoGuion) {
+                const cantidad = parseInt(formatoGuion[1]) || 0;
+                let medida = parseInt(formatoGuion[2]) || 0;
+                
+                // Para Ozuna, SIEMPRE interpretar 10-19 como 10*20=200
+                if (medida === 19) {
+                  medida = 20;
+                }
+                
+                kilosTotales += cantidad * medida;
+              } else {
+                // Formato original si no coincide con el patrón
+                const partes = item.taras.split('-').map(Number);
+                if (partes.length >= 2) {
+                  let valorPorTara = partes[1] || 0;
+                  // Si el segundo valor es 19, sustituirlo por 20
+                  if (valorPorTara === 19) valorPorTara = 20;
+                  kilosTotales += (partes[0] || 0) * valorPorTara;
+                }
+              }
+            }
+            
+            // Procesar sobrante
+            if (item.sobrante) {
+              // Verificar si el sobrante tiene formato "5-19" o similar
+              const formatoGuion = /^(\d+)-(\d+)$/.exec(item.sobrante);
+              if (formatoGuion) {
+                const cantidadSobrante = parseInt(formatoGuion[1]) || 0;
+                let medidaSobrante = parseInt(formatoGuion[2]) || 0;
+                
+                // Si la medida es 19, sustituirla por 20
+                if (medidaSobrante === 19) {
+                  medidaSobrante = 20;
+                }
+                
+                kilosTotales += cantidadSobrante * medidaSobrante;
+              } else {
+                // Formato original si no coincide con el patrón
+                const partes = item.sobrante.split('-').map(Number);
+                if (partes.length >= 2) {
+                  let valorSobrante = partes[1] || 0;
+                  // Si el segundo valor es 19, sustituirlo por 20
+                  if (valorSobrante === 19) valorSobrante = 20;
+                  kilosTotales += (partes[0] || 0) * valorSobrante;
+                }
+              }
+            }
+            
+            const kilos = kilosTotales;
+            const medida = item.medida || item.talla || 'Crudo';
+            
+            // Para crudos de Ozuna, siempre considerar como venta sin importar el estado del checkbox
+            // Buscar precio en la base de datos
+            const medidaNormalizada = normalizarMedida(medida);
+            const precioEncontrado = preciosVenta.get(medidaNormalizada);
+            
+            // Usar precio encontrado o precio manual
+            const costo = parseFloat(item.precio) || precioEncontrado || 0;
+            
+            // Solo agregar el item si tiene kilos
+            if (kilos > 0) {
+              items.push({
+                kilos,
+                medida,
+                costo,
+                total: kilos * costo,
+                esVenta: true, // Siempre es venta para crudos en Ozuna
+                editando: false,
+                campoEditando: null
+              });
+            }
+          }
+        });
+      }
+    });
+  }
+  
+  // Calcular total general
+  const totalGeneral = items.reduce((sum, item) => sum + (item.total || 0), 0);
+  
+  // Obtener saldo acumulado anterior
+  const saldoAcumuladoAnterior = await obtenerSaldoAcumuladoAnterior('cuentasOzuna', fecha);
+  
+  return {
+    fecha,
+    items,
+    saldoAcumuladoAnterior,
+    cobros: [],
+    abonos: [],
+    totalGeneral,
+    totalSaldo: saldoAcumuladoAnterior + totalGeneral,
+    nuevoSaldoAcumulado: saldoAcumuladoAnterior + totalGeneral,
+    ultimaActualizacion: new Date().toISOString()
+  };
+};
+
+/**
+ * Crea una cuenta de cliente Ozuna a partir de los datos de un embarque
+ * @param {Object} embarqueData - Datos del embarque
+ * @param {Object} router - Router de Vue para navegar después de crear la cuenta
+ * @returns {Promise<string>} - El ID de la cuenta creada
+ */
+export const crearCuentaOzuna = async (embarqueData, router) => {
+  try {
+    console.log('Iniciando creación de cuenta Ozuna desde embarque');
+    
+    // Verificar si ya existe una cuenta para esta fecha
+    const existeCuenta = await existeCuentaParaFecha('cuentasOzuna', embarqueData.fecha);
+    if (existeCuenta) {
+      throw new Error('Ya existe una cuenta de Ozuna registrada para esta fecha.');
+    }
+    
+    // Preparar los datos para la cuenta
+    const datosCuenta = await prepararDatosCuentaOzuna(embarqueData);
+    
+    // Crear la cuenta en Firestore
+    const db = getFirestore();
+    const docRef = await addDoc(collection(db, 'cuentasOzuna'), datosCuenta);
+    
+    console.log('Cuenta de Ozuna creada con ID:', docRef.id);
+    
+    // Abrir la cuenta en una nueva pestaña en lugar de navegar directamente
+    if (router) {
+      const rutaCompleta = `${window.location.origin}/#/cuentas-ozuna/${docRef.id}?edit=true`;
+      window.open(rutaCompleta, '_blank');
+    }
+    
+    return docRef.id;
+  } catch (error) {
+    console.error('Error al crear cuenta de Ozuna:', error);
+    throw error;
+  }
+};
+
 export default {
   crearCuentaJoselito,
-  crearCuentaCatarro
+  crearCuentaCatarro,
+  crearCuentaOzuna
 }; 

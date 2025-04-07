@@ -86,6 +86,7 @@
           @generar-pdf="generarPDF"
           @crear-cuenta-joselito="crearCuentaJoselito" 
           @crear-cuenta-catarro="crearCuentaCatarro" 
+          @crear-cuenta-ozuna="crearCuentaOzuna"
         />
       </form>
     </div>
@@ -1745,17 +1746,15 @@ export default {
     async crearCuentaJoselito(clienteId, clienteProductos, clienteCrudos) {
       try {
         this.isCreatingAccount = true;
-        
-        // Obtener los datos del embarque formateados para este cliente
-        const embarqueCliente = this.obtenerEmbarqueCliente(clienteId);
-        
-        // Llamar al servicio para crear la cuenta
+        const embarqueCliente = { 
+          ...this.embarque,
+          productos: clienteProductos,
+          crudos: clienteCrudos
+        };
         await EmbarqueCuentasService.crearCuentaJoselito(embarqueCliente, this.$router);
-        
-        alert('Cuenta de Joselito creada exitosamente y abierta en una nueva pestaña.');
       } catch (error) {
-        console.error("Error al crear cuenta de Joselito:", error);
-        alert(`Error al crear cuenta: ${error.message}`);
+        console.error('Error al crear cuenta para Joselito:', error);
+        alert('Error al crear cuenta para Joselito');
       } finally {
         this.isCreatingAccount = false;
       }
@@ -1876,6 +1875,48 @@ export default {
       } catch (error) {
         console.error("Error al verificar fecha existente:", error);
         alert('Hubo un error al verificar la fecha. Por favor, intente nuevamente.');
+      }
+    },
+
+    // Método para crear cuenta de Catarro
+    async crearCuentaCatarro(clienteId, clienteProductos, clienteCrudos) {
+      try {
+        this.isCreatingAccount = true;
+        const embarqueCliente = { 
+          ...this.embarque,
+          productos: clienteProductos,
+          crudos: clienteCrudos
+        };
+        await EmbarqueCuentasService.crearCuentaCatarro(embarqueCliente, this.$router);
+      } catch (error) {
+        console.error('Error al crear cuenta para Catarro:', error);
+        alert('Error al crear cuenta para Catarro');
+      } finally {
+        this.isCreatingAccount = false;
+      }
+    },
+
+    // Método para crear cuenta de Ozuna
+    async crearCuentaOzuna(clienteId, clienteProductos, clienteCrudos) {
+      try {
+        this.isCreatingAccount = true;
+        
+        // Asegurar que el ID de cliente sea '4' para Ozuna
+        const ozunaClienteId = '4';
+        
+        const embarqueCliente = { 
+          ...this.embarque,
+          productos: clienteProductos,
+          clienteCrudos: { [ozunaClienteId]: clienteCrudos }
+        };
+        
+        await EmbarqueCuentasService.crearCuentaOzuna(embarqueCliente, this.$router);
+        alert('Cuenta de Ozuna creada exitosamente y abierta en una nueva pestaña.');
+      } catch (error) {
+        console.error('Error al crear cuenta para Ozuna:', error);
+        alert(`Error al crear cuenta para Ozuna: ${error.message}`);
+      } finally {
+        this.isCreatingAccount = false;
       }
     },
   },

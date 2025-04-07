@@ -45,6 +45,14 @@
                     <span v-if="isCreatingAccount" class="loader-inline"></span>
                     <i v-else class="fas fa-plus-circle"></i> Crear Cuenta
                 </button>
+
+                <!-- Botón para crear cuenta de Ozuna -->
+                <button v-if="esClienteOzuna" type="button" @click.stop="crearCuentaOzuna"
+                    class="btn btn-success btn-sm crear-cuenta-ozuna" title="Crear Cuenta para Ozuna"
+                    :disabled="isCreatingAccount">
+                    <span v-if="isCreatingAccount" class="loader-inline"></span>
+                    <i v-else class="fas fa-plus-circle"></i> Crear Cuenta
+                </button>
                 <button type="button" @click.stop="$emit('eliminar-cliente', clienteId)"
                     class="btn btn-danger btn-sm eliminar-cliente" :disabled="embarqueBloqueado">Eliminar
                     Cliente</button>
@@ -160,7 +168,8 @@ export default {
         'seleccionar-medida',
         'generar-pdf',
         'crear-cuenta-joselito',
-        'crear-cuenta-catarro'
+        'crear-cuenta-catarro',
+        'crear-cuenta-ozuna'
     ],
 
     computed: {
@@ -172,6 +181,11 @@ export default {
         // Verificar si el cliente es Catarro
         esClienteCatarro() {
             return this.nombreCliente.toLowerCase().includes('catarro');
+        },
+
+        // Verificar si el cliente es Ozuna
+        esClienteOzuna() {
+            return this.nombreCliente.toLowerCase().includes('ozuna');
         },
 
         // Calcular totales de limpio
@@ -328,6 +342,10 @@ export default {
 
         crearCuentaCatarro() {
             this.$emit('crear-cuenta-catarro', this.clienteId, this.productos, this.crudos);
+        },
+
+        crearCuentaOzuna() {
+            this.$emit('crear-cuenta-ozuna', this.clienteId, this.productos, this.crudos);
         }
     }
 }

@@ -773,8 +773,20 @@ export default {
 .venta-checkbox-container {
     display: flex;
     align-items: center;
-    margin-right: 10px;
-    font-size: 0.95rem;
+    margin-left: 10px;
+    gap: 5px;
+}
+
+.venta-checkbox-container label {
+    font-size: 13px;
+    color: #07711e;
+    font-weight: bold;
+}
+
+.venta-checkbox {
+    cursor: pointer;
+    height: 16px;
+    width: 16px;
 }
 
 .valores-container-debajo {
@@ -838,5 +850,11 @@ export default {
     .reporte-item {
         margin-bottom: 15px;
     }
+}
+
+/* Estilos para indicadores de venta */
+.producto[data-es-venta="true"] {
+    border-left: 4px solid #07711e;
+    background-color: rgba(7, 113, 30, 0.05);
 }
 </style>
