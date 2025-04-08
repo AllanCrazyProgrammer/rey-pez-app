@@ -573,7 +573,7 @@ const prepararItemsVentaJoselito = (productos, clienteCrudos = {}, preciosVenta 
           const medida = item.talla;
           const medidaNormalizada = normalizarMedida(medida);
           
-          // Calcular kilos de taras principales (formato "10-19" o similarr)
+          // Calcularr kilos de taras principales (formato "10-19" o similarr)
           let kilosTaras = 0;
           if (item.taras) {
             const partes = item.taras.split('-');
