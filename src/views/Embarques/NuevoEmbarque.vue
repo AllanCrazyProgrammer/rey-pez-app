@@ -1764,16 +1764,20 @@ export default {
       try {
         this.isCreatingAccount = true;
         
-        // Obtener los datos del embarque formateados para este cliente
-        const embarqueCliente = this.obtenerEmbarqueCliente(clienteId);
+        // Asegurar que el ID de cliente sea '2' para Catarro
+        const catarroClienteId = '2';
         
-        // Llamar al servicio para crear la cuenta
+        const embarqueCliente = { 
+          ...this.embarque,
+          productos: clienteProductos,
+          clienteCrudos: { [catarroClienteId]: clienteCrudos }
+        };
+        
         await EmbarqueCuentasService.crearCuentaCatarro(embarqueCliente, this.$router);
-        
         alert('Cuenta de Catarro creada exitosamente y abierta en una nueva pestaña.');
       } catch (error) {
-        console.error("Error al crear cuenta de Catarro:", error);
-        alert(`Error al crear cuenta: ${error.message}`);
+        console.error('Error al crear cuenta para Catarro:', error);
+        alert(`Error al crear cuenta para Catarro: ${error.message}`);
       } finally {
         this.isCreatingAccount = false;
       }
@@ -1882,15 +1886,21 @@ export default {
     async crearCuentaCatarro(clienteId, clienteProductos, clienteCrudos) {
       try {
         this.isCreatingAccount = true;
+        
+        // Asegurar que el ID de cliente sea '2' para Catarro
+        const catarroClienteId = '2';
+        
         const embarqueCliente = { 
           ...this.embarque,
           productos: clienteProductos,
-          crudos: clienteCrudos
+          clienteCrudos: { [catarroClienteId]: clienteCrudos }
         };
+        
         await EmbarqueCuentasService.crearCuentaCatarro(embarqueCliente, this.$router);
+        alert('Cuenta de Catarro creada exitosamente y abierta en una nueva pestaña.');
       } catch (error) {
         console.error('Error al crear cuenta para Catarro:', error);
-        alert('Error al crear cuenta para Catarro');
+        alert(`Error al crear cuenta para Catarro: ${error.message}`);
       } finally {
         this.isCreatingAccount = false;
       }
