@@ -844,8 +844,8 @@ function generarTablaProductos(productos, estiloCliente, nombreCliente) {
     // Verificar que tenga kilos > 0
     if (kilos > 0) {
       const row = [
-        // Eliminar decimales para los kilos (redondeando al entero más cercano)
-        `${Math.round(kilos)} kg`,
+        // Mostrar un decimal para Ozuna
+        nombreCliente.toLowerCase().includes('ozuna') ? `${kilos.toFixed(1)} kg` : `${Math.round(kilos)} kg`,
         // Para cliente Canelo, mostramos solo el nombre del producto sin precio (el precio irá en otra columna)
         esClienteCanelo && hayPrecios 
           ? (producto.nombreAlternativoPDF || producto.medida || '') + (producto.tipo === 'c/h20' ? ' c/h2o' : (producto.tipo === 's/h20' ? ' s/h2o' : (producto.tipo === 'otro' ? ` ${producto.tipoPersonalizado || ''}` : ` ${producto.tipo || ''}`)))
@@ -1295,9 +1295,11 @@ function totalKilos(producto, nombreCliente) {
     }
   }
   
-  // Retornamos un número redondeado a entero para cliente Canelo, o con un decimal para el resto
+  // Retornamos un número redondeado a entero para cliente Canelo, o con un decimal para Ozuna
   if (nombreCliente.toLowerCase().includes('canelo')) {
     return Math.round(resultado);
+  } else if (nombreCliente.toLowerCase().includes('ozuna')) {
+    return Number(resultado.toFixed(1));
   } else {
     return Number(resultado.toFixed(1));
   }
@@ -1325,8 +1327,8 @@ function calcularKilosCrudos(item, clienteNombre) {
     return Math.round(kilosTotales).toString();
   }
   
-  // Para otros clientes, mantenemos los dos decimales
-  return kilosTotales.toFixed(2);
+  // Para Ozuna y otros clientes, mantenemos un decimal
+  return kilosTotales.toFixed(1);
 }
 
 function combinarTarasBolsas(taras, bolsas) {
