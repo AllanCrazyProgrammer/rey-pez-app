@@ -821,68 +821,73 @@ export default {
             <style>
               body {
                 font-family: Arial, sans-serif;
-                font-size: 20pt;
-                line-height: 1.6;
+                font-size: 14pt;
+                line-height: 1.4;
                 max-width: 800px;
                 margin: 0 auto;
-                padding: 20px;
+                padding: 15px;
                 text-align: center;
               }
-              h1 { font-size: 30pt; margin-bottom: 20px; }
-              h2 { font-size: 27pt; margin-top: 30px; margin-bottom: 15px; }
+              h1 { 
+                font-size: 22pt; 
+                margin-bottom: 15px; 
+              }
+              h2 { 
+                font-size: 18pt; 
+                margin-top: 20px; 
+                margin-bottom: 10px; 
+              }
               table {
                 width: 100%;
                 border-collapse: collapse;
-                margin-bottom: 30px;
-                font-size: 20pt;
+                margin-bottom: 20px;
+                font-size: 13pt;
               }
               th, td {
                 border: 1px solid #ddd;
-                padding: 10px;
+                padding: 8px 10px;
                 text-align: left;
               }
-              th { background-color: #f2f2f2; font-weight: bold; }
-              .total { font-weight: bold; }
-              .total td:first-child { text-align: right; }
+              th { 
+                background-color: #f2f2f2; 
+                font-weight: bold;
+                font-size: 13pt;
+              }
+              .total { 
+                font-weight: bold; 
+                font-size: 13pt;
+              }
+              .total td:first-child { 
+                text-align: right; 
+              }
+              .ganancia-positiva { 
+                color: #4CAF50; 
+              }
+              .ganancia-negativa { 
+                color: #f44336; 
+              }
               @media print {
-                body { font-size: 20pt; }
-                h1 { font-size: 25pt; }
-                h2 { font-size: 25pt; }
-                table { font-size: 20pt; }
+                body { 
+                  font-size: 14pt; 
+                }
+                h1 { 
+                  font-size: 22pt; 
+                }
+                h2 { 
+                  font-size: 18pt; 
+                }
+                table { 
+                  font-size: 13pt; 
+                }
+                th, td {
+                  padding: 8px 10px;
+                }
               }
             </style>
           </head>
           <body>
             <h1>Cuentas Catarro - ${this.fechaFormateada}</h1>
             
-            <h2>Detalles de la cuenta</h2>
-            <table>
-              <thead>
-                <tr>
-                  <th>Kilos</th>
-                  <th>Medida</th>
-                  <th>Costo</th>
-                  <th>Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${this.items.map(item => `
-                  <tr>
-                    <td>${this.formatNumber(item.kilos)}</td>
-                    <td>${item.medida}</td>
-                    <td>$${this.formatNumber(item.costo)}</td>
-                    <td>$${this.formatNumber(item.total)}</td>
-                  </tr>
-                `).join('')}
-              </tbody>
-              <tfoot>
-                <tr class="total">
-                  <td colspan="3">Total</td>
-                  <td>$${this.formatNumber(this.totalGeneral)}</td>
-                </tr>
-              </tfoot>
-            </table>
-
             <h2>Precios de Venta</h2>
             <table>
               <thead>
