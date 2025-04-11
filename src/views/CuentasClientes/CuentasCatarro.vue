@@ -860,6 +860,10 @@ export default {
               .total td:first-child { 
                 text-align: right; 
               }
+              .highlight {
+                background-color: #e8f5e9;
+                font-weight: bold;
+              }
               @media print {
                 body { 
                   font-size: 14pt; 
@@ -913,7 +917,7 @@ export default {
             <h2>Resumen de saldo</h2>
             <table>
               <tr>
-                <td>Saldo Anterior</td>
+                <td>Saldo Acumulado Anterior</td>
                 <td>$${this.formatNumber(this.saldoAcumuladoAnterior)}</td>
               </tr>
               <tr>
@@ -923,7 +927,7 @@ export default {
               ${this.cobros.map(cobro => `
                 <tr>
                   <td>${cobro.descripcion}</td>
-                  <td>$${this.formatNumber(cobro.monto)}</td>
+                  <td>-$${this.formatNumber(cobro.monto)}</td>
                 </tr>
               `).join('')}
               ${this.abonos.map(abono => `
@@ -934,7 +938,11 @@ export default {
               `).join('')}
               <tr class="total">
                 <td>Total</td>
-                <td>$${this.formatNumber(this.totalSaldo)}</td>
+                <td>$${this.formatNumber(this.totalDiaActual)}</td>
+              </tr>
+              <tr class="highlight">
+                <td>Nuevo Saldo Acumulado</td>
+                <td>$${this.formatNumber(this.nuevoSaldoAcumulado)}</td>
               </tr>
             </table>
           </body>
