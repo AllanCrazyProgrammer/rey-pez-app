@@ -860,12 +860,6 @@ export default {
               .total td:first-child { 
                 text-align: right; 
               }
-              .ganancia-positiva { 
-                color: #4CAF50; 
-              }
-              .ganancia-negativa { 
-                color: #f44336; 
-              }
               @media print {
                 body { 
                   font-size: 14pt; 
@@ -896,7 +890,6 @@ export default {
                   <th>Medida</th>
                   <th>Precio de Venta</th>
                   <th>Total</th>
-                  <th>Ganancias</th>
                 </tr>
               </thead>
               <tbody>
@@ -906,7 +899,6 @@ export default {
                     <td>${item.medida}</td>
                     <td>$${this.formatNumber(item.precioVenta)}</td>
                     <td>$${this.formatNumber(item.totalVenta)}</td>
-                    <td class="${item.ganancia > 0 ? 'ganancia-positiva' : 'ganancia-negativa'}">$${this.formatNumber(item.ganancia)}</td>
                   </tr>
                 `).join('')}
               </tbody>
@@ -914,7 +906,6 @@ export default {
                 <tr class="total">
                   <td colspan="3">Total Venta</td>
                   <td>$${this.formatNumber(this.totalGeneralVenta)}</td>
-                  <td>$${this.formatNumber(this.gananciaTotal)}</td>
                 </tr>
               </tfoot>
             </table>
