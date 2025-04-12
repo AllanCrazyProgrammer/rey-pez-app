@@ -6,6 +6,13 @@
         'taras-no-reportadas': totalTaras > 0 && !coincideTaras,
         'medida-vacia': !producto.medida
     }">
+        <!-- Checkbox de venta para Ozuna -->
+        <div v-if="isClienteOzuna" class="venta-checkbox-container">
+            <input type="checkbox" v-model="producto.esVenta" class="form-check-input venta-checkbox"
+                :id="'ventaCheck-' + producto.id" :disabled="embarqueBloqueado">
+            <label :for="'ventaCheck-' + producto.id">Venta</label>
+        </div>
+
         <!-- Encabezado de la medida y selección -->
         <h2 class="encabezado-medida">
             <div class="botones-encabezado">
@@ -73,13 +80,6 @@
                 <option value="c/h20">C/H20</option>
                 <option value="otro">Otro</option>
             </select>
-
-            <!-- Checkbox de venta para Ozunaa -->
-            <div v-if="isClienteOzuna" class="venta-checkbox-container">
-                <input type="checkbox" v-model="producto.esVenta" class="form-check-input venta-checkbox"
-                    :id="'ventaCheck-' + producto.id" :disabled="embarqueBloqueado">
-                <label :for="'ventaCheck-' + producto.id">Venta</label>
-            </div>
 
             <input v-if="producto.tipo === 'otro'" type="text" v-model="producto.tipoPersonalizado"
                 class="form-control tipo-input" placeholder="Especificar" :disabled="embarqueBloqueado">
@@ -773,7 +773,7 @@ export default {
 .venta-checkbox-container {
     display: flex;
     align-items: center;
-    margin-left: 10px;
+    margin-bottom: 10px;
     gap: 5px;
 }
 
@@ -781,12 +781,14 @@ export default {
     font-size: 13px;
     color: #07711e;
     font-weight: bold;
+    margin: 0;
 }
 
 .venta-checkbox {
     cursor: pointer;
     height: 16px;
     width: 16px;
+    margin: 0;
 }
 
 .valores-container-debajo {
