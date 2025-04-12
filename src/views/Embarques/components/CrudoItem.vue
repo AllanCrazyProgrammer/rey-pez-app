@@ -222,7 +222,7 @@ export default {
 
 <style scoped>
 .producto.crudo {
-    flex: 0 0 calc(25% - 6px); /* Exactamente 25% menos el gap */
+    flex: 0 0 calc(25% - 6px);
     margin: 0 0 8px 0;
     padding: 12px;
     border: 1px solid #ddd;
@@ -239,17 +239,64 @@ export default {
     }
 }
 
-@media screen and (max-width: 1100px) {
+/* Ajuste específico para Galaxy Z Fold 5 y pantallas similares */
+@media screen and (max-width: 900px) {
     .producto.crudo {
-        flex: 0 0 calc(50% - 4px);
-        max-width: calc(50% - 4px);
+        flex: 0 0 calc(50% - 8px) !important;
+        max-width: calc(50% - 8px) !important;
+    }
+
+    .crudo-header {
+        font-size: 1rem;
+    }
+
+    .btn-precio {
+        width: 20px;
+        height: 20px;
+        font-size: 12px;
+    }
+
+    .talla-select {
+        min-width: 90px;
+        font-size: 0.9rem;
+    }
+
+    .barco-input {
+        min-width: 70px;
+        font-size: 0.9rem;
+    }
+
+    .taras-input {
+        padding: 4px;
+        font-size: 0.9rem;
+    }
+
+    .crudo-items {
+        gap: 8px;
+    }
+
+    .crudo-item {
+        padding: 6px;
+    }
+
+    .crudo-talla-container {
+        gap: 6px;
+    }
+
+    .crudo-taras-container {
+        gap: 6px;
+    }
+
+    .buttons-wrapper {
+        gap: 4px;
     }
 }
 
-@media screen and (max-width: 768px) {
+/* Solo para pantallas muy pequeñas */
+@media screen and (max-width: 480px) {
     .producto.crudo {
-        flex: 0 0 100%;
-        max-width: 100%;
+        flex: 0 0 100% !important;
+        max-width: 100% !important;
     }
 }
 

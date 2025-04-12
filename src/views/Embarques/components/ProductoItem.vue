@@ -452,6 +452,7 @@ export default {
 <style scoped>
 /* Estilos específicos del componente ProductoItem */
 .productos-container {
+    display: flex;
     flex-wrap: wrap;
     gap: 8px;
     width: 100%;
@@ -459,7 +460,7 @@ export default {
 }
 
 .producto {
-    flex: 0 0 calc(25% - 6px); /* Exactamente 25% menos el gap */
+    flex: 0 0 calc(25% - 6px);
     margin: 0 0 8px 0;
     padding: 12px;
     background-color: #fff;
@@ -824,33 +825,50 @@ export default {
     }
 }
 
-@media screen and (max-width: 1100px) {
+/* Ajuste específico para Galaxy Z Fold 5 y pantallas similares */
+@media screen and (max-width: 900px) {
     .producto {
-        flex: 0 0 calc(50% - 4px);
-        max-width: calc(50% - 4px);
-    }
-}
-
-@media screen and (max-width: 768px) {
-    .producto {
-        flex: 0 0 100%;
-        max-width: 100%;
+        flex: 0 0 calc(50% - 8px) !important;
+        max-width: calc(50% - 8px) !important;
     }
     
     .medida-texto {
-        font-size: 1.2rem;
-    }
-    
-    .total, .total-taras-reporte, .total-bolsas-reporte {
         font-size: 1rem;
     }
     
-    .reporte-taras-bolsas {
-        flex-direction: column;
+    .tipo-select {
+        min-width: 90px;
     }
     
-    .reporte-item {
-        margin-bottom: 15px;
+    .botones-encabezado {
+        margin-right: 8px;
+    }
+
+    .btn-precio,
+    .btn-hilos,
+    .btn-nota {
+        width: 20px;
+        height: 20px;
+        font-size: 12px;
+    }
+
+    .input-group {
+        margin-bottom: 4px;
+    }
+
+    .tara-input,
+    .kilo-input,
+    .reporte-input {
+        padding: 4px;
+        font-size: 0.9rem;
+    }
+}
+
+/* Solo para pantallas muy pequeñas */
+@media screen and (max-width: 480px) {
+    .producto {
+        flex: 0 0 100% !important;
+        max-width: 100% !important;
     }
 }
 
