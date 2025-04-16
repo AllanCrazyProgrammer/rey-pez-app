@@ -869,7 +869,7 @@ export default {
           if (this.embarque.fecha) {
             try {
               // Antes de crear un nuevo embarque, comprobar nuevamente si ya existe uno con esta fecha
-              // Esta doble verificación es crucial para evitar duplicados en cargas rápidas
+              // Esta doblee verificación es crucial para evitar duplicados en cargas rápidas
               const verificacionRef = collection(db, "embarques");
               const verificacionSnapshot = await getDocs(verificacionRef);
               
