@@ -868,7 +868,7 @@ export default {
         this.$nextTick(async () => {
           if (this.embarque.fecha) {
             try {
-              // Antes de crear un nuevo embarque, comprobar nuevamente si ya existe uno con esta fecha
+              // Antess sde crear un nuevo embarque, comprobar nuevamente si ya existe uno con esta fecha
               // Esta doblee verificación es crucial para evitar duplicados en cargas rápidas
               const verificacionRef = collection(db, "embarques");
               const verificacionSnapshot = await getDocs(verificacionRef);
