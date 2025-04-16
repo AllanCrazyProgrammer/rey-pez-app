@@ -732,7 +732,12 @@ export default {
           this.modoEdicion = true;
           this.guardadoAutomaticoActivo = true;
         } else {
-          console.error("No se encontró el embarque");
+          // Si el embarque no existe, limpiar localStorage y reiniciar estado
+          localStorage.removeItem('embarque');
+          localStorage.removeItem('ultimoEmbarqueId');
+          localStorage.removeItem('ultimaRuta');
+          // Opcional: localStorage.removeItem('clientesPersonalizados');
+          alert('El embarque no existe o está corrupto. Se reiniciará el formulario para evitar errores.');
           this.resetearEmbarque();
         }
       }, (error) => {
