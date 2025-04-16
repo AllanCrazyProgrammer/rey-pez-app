@@ -736,7 +736,7 @@ export default {
           localStorage.removeItem('embarque');
           localStorage.removeItem('ultimoEmbarqueId');
           localStorage.removeItem('ultimaRuta');
-          // Opcional: localStorage.removeItem('clientesPersonalizados');
+          // Opcional : localStorage.removeItem('clientesPersonalizados');
           alert('El embarque no existe o está corrupto. Se reiniciará el formulario para evitar errores.');
           this.resetearEmbarque();
         }
