@@ -394,7 +394,33 @@ export default {
     eliminarProducto(producto) {
       const index = this.embarque.productos.indexOf(producto);
       if (index > -1) {
+        // Guardar clienteId antes de eliminar el producto
+        const clienteId = producto.clienteId;
+        
+        // Eliminar el producto
         this.embarque.productos.splice(index, 1);
+        
+        // Verificar si era el último producto para este cliente
+        const todaviaExistenProductos = this.embarque.productos.some(p => p.clienteId === clienteId);
+        
+        // Si era el último, crear uno nuevo inmediatamente
+        if (!todaviaExistenProductos) {
+          const nuevoProducto = crearNuevoProducto(clienteId);
+          
+          // Establecer tipo por defecto según el cliente
+          this.setTipoDefaultParaCliente(nuevoProducto);
+          
+          // Establecer el nombre del cliente basado en el id
+          nuevoProducto.nombreCliente = this.obtenerNombreCliente(clienteId);
+          
+          // Agregar directamente al embarque.productos
+          this.embarque.productos.push(nuevoProducto);
+          
+          // Guardar cambios si es necesario
+          if (this.embarqueId) {
+            this.guardarCambiosEnTiempoReal();
+          }
+        }
       }
     },
 
@@ -667,6 +693,32 @@ export default {
             // Agregar los kilos crudos
             kilosCrudos: data.kilosCrudos || {}
           };
+
+          // Verificar que cada cliente tenga al menos un producto
+          const clientesIds = data.clientes.map(cliente => cliente.id.toString());
+          clientesIds.forEach(clienteId => {
+            // Verificar si existe al menos un producto para este cliente
+            const existeProducto = this.embarque.productos.some(p => p.clienteId.toString() === clienteId);
+            
+            // Si no existe ningún producto para este cliente, crear uno
+            if (!existeProducto) {
+              const nuevoProducto = crearNuevoProducto(clienteId);
+              
+              // Buscar cliente info
+              const clienteInfo = clientesPredefinidosMap.get(parseInt(clienteId)) || 
+                                  data.clientes.find(c => c.id.toString() === clienteId);
+              
+              // Establecer datos básicos
+              nuevoProducto.nombreCliente = clienteInfo ? clienteInfo.nombre : 'Cliente Desconocido';
+              
+              // Establecer tipo por defecto según el cliente
+              this.setTipoDefaultParaCliente(nuevoProducto);
+              
+              // Agregar al embarque
+              this.embarque.productos.push(nuevoProducto);
+              console.log(`Se ha creado un producto para el cliente ${nuevoProducto.nombreCliente} que no tenía ninguno.`);
+            }
+          });
 
           // Cargar los crudos
           this.clienteCrudos = {};
@@ -1082,6 +1134,36 @@ export default {
         this.$forceUpdate();
       }
 
+      // Asegurar que cada cliente tenga al menos un producto
+      const clientesDisponiblesIds = this.clientesDisponibles
+        .filter(c => c.id !== 'otro') // Excluir la opción "Otro"
+        .map(c => c.id.toString());
+
+      // Verificar cada cliente disponible
+      clientesDisponiblesIds.forEach(clienteId => {
+        // Verificar si ya existe un producto para este cliente
+        const existeProducto = this.embarque.productos.some(p => p.clienteId.toString() === clienteId);
+        
+        // Solo agregar si no existe
+        if (!existeProducto) {
+          const clienteInfo = clientesPredefinidosMap.get(parseInt(clienteId)) || 
+                              this.clientesDisponibles.find(c => c.id.toString() === clienteId);
+          
+          if (clienteInfo) {
+            const nuevoProducto = crearNuevoProducto(clienteId);
+            nuevoProducto.nombreCliente = clienteInfo.nombre;
+            
+            // Establecer tipo por defecto según el cliente
+            this.setTipoDefaultParaCliente(nuevoProducto);
+            
+            // Agregar al embarque
+            this.embarque.productos.push(nuevoProducto);
+            console.log(`Se ha creado un producto para el cliente ${nuevoProducto.nombreCliente} que no tenía ninguno.`);
+          }
+        }
+      });
+
+      // Procesar los productos por cliente
       Object.entries(this.productosPorCliente).forEach(([clienteId, productos]) => {
         const clientePredefinido = clientesPredefinidosMap.get(parseInt(clienteId));
         const clienteData = {
