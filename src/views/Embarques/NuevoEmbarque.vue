@@ -2017,7 +2017,7 @@ export default {
       }
     },
 
-    // Sincronizar cambios pendientes al reconectar
+    // Sincronizar cambios pendientes al reconectarr
     syncOffline() {
       if (this.embarqueId) {
         this.guardarCambiosEnTiempoReal();
