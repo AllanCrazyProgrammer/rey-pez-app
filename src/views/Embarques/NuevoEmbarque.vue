@@ -2016,6 +2016,16 @@ export default {
         this.isCreatingAccount = false;
       }
     },
+
+    // Sincronizar cambios pendientes al reconectar
+    syncOffline() {
+      if (this.embarqueId) {
+        this.guardarCambiosEnTiempoReal();
+      } else {
+        // Si aún no existe en Firestore, crearlo
+        this.guardarEmbarque().catch(error => console.error('Error al sincronizar embarque offline:', error));
+      }
+    },
   },
 
   watch: {
@@ -2036,6 +2046,8 @@ export default {
     },
     clienteCrudos: {
       handler() {
+        // Guardar crudos en localStorage para persistencia offline
+        localStorage.setItem('clienteCrudos', JSON.stringify(this.clienteCrudos));
         this.guardarCambiosEnTiempoReal();
       },
       deep: true
@@ -2051,15 +2063,25 @@ export default {
   },
 
   async created() {
+    // Si estamos offline y hay datos guardados, cargar desde localStorage
+    const localEmbarque = localStorage.getItem('embarque');
+    if (!navigator.onLine && localEmbarque) {
+      this.embarque = JSON.parse(localEmbarque);
+      const localCrudos = localStorage.getItem('clienteCrudos');
+      if (localCrudos) this.clienteCrudos = JSON.parse(localCrudos);
+      this.undoStack.push(JSON.stringify(this.embarque));
+      this.actualizarMedidasUsadas();
+      this.cargarClientesPersonalizados();
+      this.guardadoAutomaticoActivo = true;
+      // Escuchar reconexión para sincronizar cambios con Firestore
+      window.addEventListener('online', this.syncOffline);
+      return;
+    }
     const embarqueId = this.$route.params.id;
     await this.cargarEmbarque(embarqueId);
     this.undoStack.push(JSON.stringify(this.embarque));
     this.actualizarMedidasUsadas();
-
-    // Cargar clientes personalizados
     this.cargarClientesPersonalizados();
-
-    // Iniciar presencia y escucha de usuarios
     await this.iniciarPresenciaUsuario();
     this.escucharUsuariosActivos();
   },
@@ -2178,8 +2200,9 @@ export default {
       this.unsubscribeUsuarios();
     }
     
-    // Eliminar el escuchador de beforeunload
+    // Eliminar los escuchadores de recarga y reconexión
     window.removeEventListener('beforeunload', this.handleBeforeUnload);
+    window.removeEventListener('online', this.syncOffline);
   },
 
   updated() {

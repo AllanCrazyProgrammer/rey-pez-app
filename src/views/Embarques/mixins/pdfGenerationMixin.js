@@ -1,4 +1,8 @@
 // mixins/pdfGenerationMixin.js
+import { generarNotaVentaPDF } from "@/utils/pdfGenerator";
+import { generarResumenTarasPDF } from "@/utils/resumenTarasPdf";
+import { generarResumenEmbarquePDF } from "@/utils/resumenEmbarque2";
+
 export default {
   methods: {
     /**
@@ -63,8 +67,7 @@ export default {
         kilosCrudos: this.embarque.kilosCrudos || {},
       };
 
-      // Importar dinámicamente solo cuando se necesita
-      const { generarNotaVentaPDF } = await import("@/utils/pdfGenerator");
+      // Llamar directamente (importación estática) – funciona sin internet
       generarNotaVentaPDF(
         embarqueCliente,
         this.clientesDisponibles,
@@ -91,7 +94,6 @@ export default {
         kilosCrudos: this.embarque.kilosCrudos || {},
       };
 
-      const { generarNotaVentaPDF } = await import("@/utils/pdfGenerator");
       generarNotaVentaPDF(
         embarqueCliente,
         this.clientesDisponibles,
@@ -107,9 +109,6 @@ export default {
         clienteCrudos: this.clienteCrudos,
       };
 
-      const { generarResumenTarasPDF } = await import(
-        "@/utils/resumenTarasPdf"
-      );
       generarResumenTarasPDF(embarqueData, this.clientesDisponibles);
     },
 
@@ -131,9 +130,6 @@ export default {
 
       const embarqueData = this.prepararDatosResumenEmbarque(medidasCrudos);
 
-      const { generarResumenEmbarquePDF } = await import(
-        "@/utils/resumenEmbarque2"
-      );
       generarResumenEmbarquePDF(
         embarqueData,
         this.productosPorCliente,
