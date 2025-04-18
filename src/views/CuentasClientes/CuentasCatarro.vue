@@ -10,7 +10,7 @@
     </div>
     <h1>Cuentas Catarro</h1>
     
-    <!--  Botón   de precios específicos para Catarro -->
+    <!--  Botón   de precios específicos para Catarro - ->
     <div class="precios-button-container">
       <PreciosClienteButton clienteId="catarro" />
     </div>
