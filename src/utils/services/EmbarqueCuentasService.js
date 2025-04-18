@@ -422,10 +422,11 @@ const prepararItemsJoselito = (productos, clienteCrudos = {}, preciosVenta = new
           // Calcular kilos de taras principales (formato "10-19" o similar)
           let kilosTaras = 0;
           if (item.taras) {
-            const partes = item.taras.split('-');
-            if (partes.length === 2) {
-              const cantidadTaras = parseInt(partes[0]) || 0;
-              kilosTaras = cantidadTaras * 20; // SIEMPRE multiplicar por 20
+            // Aceptar formato con decimales: "10-18.5", "10-19", etc.
+            const formatoGuion = /^(\d+)-(\d+(?:\.\d+)?)$/.exec(item.taras);
+            if (formatoGuion) {
+              const cantidad = parseInt(formatoGuion[1]) || 0;
+              kilosTaras = cantidad * 20; // SIEMPRE multiplicar por 20
             } else {
               kilosTaras = parseInt(item.taras) || 0;
             }
@@ -573,10 +574,11 @@ const prepararItemsVentaJoselito = (productos, clienteCrudos = {}, preciosVenta 
           // Calcularr kilos de taras principales (formato "10-19" o similarr)
           let kilosTaras = 0;
           if (item.taras) {
-            const partes = item.taras.split('-');
-            if (partes.length === 2) {
-              const cantidadTaras = parseInt(partes[0]) || 0;
-              kilosTaras = cantidadTaras * 20; // SIEMPRE multiplicar por 20
+            // Aceptar formato con decimales: "10-18.5", "10-19", etc.
+            const formatoGuion = /^(\d+)-(\d+(?:\.\d+)?)$/.exec(item.taras);
+            if (formatoGuion) {
+              const cantidad = parseInt(formatoGuion[1]) || 0;
+              kilosTaras = cantidad * 20; // SIEMPRE multiplicar por 20
             } else {
               kilosTaras = parseInt(item.taras) || 0;
             }
@@ -780,13 +782,11 @@ const prepararDatosCuentaCatarro = async (embarqueData) => {
             
             // Procesar taras
             if (item.taras) {
-              const formatoGuion = /^(\d+)-(\d+)$/.exec(item.taras);
+              // Aceptar formato con decimales: "10-18.5", "10-19", etc.
+              const formatoGuion = /^(\d+)-(\d+(?:\.\d+)?)$/.exec(item.taras);
               if (formatoGuion) {
                 const cantidad = parseInt(formatoGuion[1]) || 0;
-                let valorPorTara = parseInt(formatoGuion[2]) || 0;
-                
-                // Para costos, mantener valor original
-                kilosTaras = cantidad * valorPorTara;
+                kilosTaras = cantidad * 20; // SIEMPRE multiplicar por 20
               } else {
                 kilosTaras = parseInt(item.taras) || 0;
               }
@@ -817,15 +817,11 @@ const prepararDatosCuentaCatarro = async (embarqueData) => {
             // Calcular kilos para ventas (ajustar 19 a 20)
             let kilosTarasVenta = 0;
             if (item.taras) {
-              const formatoGuion = /^(\d+)-(\d+)$/.exec(item.taras);
+              // Aceptar formato con decimales: "10-18.5", "10-19", etc.
+              const formatoGuion = /^(\d+)-(\d+(?:\.\d+)?)$/.exec(item.taras);
               if (formatoGuion) {
                 const cantidad = parseInt(formatoGuion[1]) || 0;
-                let valorPorTara = parseInt(formatoGuion[2]) || 0;
-                
-                // Para ventas, convertir 19 a 20 siempre
-                if (valorPorTara === 19) valorPorTara = 20;
-                
-                kilosTarasVenta = cantidad * valorPorTara;
+                kilosTarasVenta = cantidad * 20; // SIEMPRE multiplicar por 20
               } else {
                 kilosTarasVenta = parseInt(item.taras) || 0;
               }

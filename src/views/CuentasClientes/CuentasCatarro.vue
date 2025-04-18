@@ -10,7 +10,6 @@
     </div>
     <h1>Cuentas Catarro</h1>
     
-    <!--  Botón   de precios específicos para Catarro - ->
     <div class="precios-button-container">
       <PreciosClienteButton clienteId="catarro" />
     </div>
@@ -212,8 +211,7 @@
       </button>
       <button @click="imprimirTablas" class="print-button">Imprimir</button>
     </div>
-  
-    <!-- Modal para acciones móviles -->
+    <!- Modal para acciones móviles -->
     <div v-if="showMobileActions" class="mobile-actions-modal">
       <button @click="editItem(selectedItemIndex)" class="edit-btn">Editar</button>
       <button @click="removeItem(selectedItemIndex)" class="delete-btn">Eliminar</button>
