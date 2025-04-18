@@ -425,19 +425,16 @@ const prepararItemsJoselito = (productos, clienteCrudos = {}, preciosVenta = new
             const partes = item.taras.split('-');
             if (partes.length === 2) {
               const cantidadTaras = parseInt(partes[0]) || 0;
-              const valorPorTara = parseInt(partes[1]) || 0;
-              // Cálculo exacto para "Med c/c" con taras "10-19" = 190kg
-              kilosTaras = cantidadTaras * valorPorTara;
+              kilosTaras = cantidadTaras * 20; // SIEMPRE multiplicar por 20
             } else {
               kilosTaras = parseInt(item.taras) || 0;
             }
           }
           
-          // Calcular kilos de sobrante - interpretar usando la función dedicada
+          // Calcular kilos de sobrante - sumar tal cual
           let kilosSobrante = 0;
           if (item.sobrante && item.mostrarSobrante) {
-            // Usar la función extraerValorSobrante para obtener el valor correcto
-            kilosSobrante = extraerValorSobrante(item.sobrante);
+            kilosSobrante = parseInt(item.sobrante.split('-').pop()) || 0;
           }
           
           // Para el caso específico "Med c/c" con taras "10-19" y sobrante "1-10",
@@ -579,21 +576,16 @@ const prepararItemsVentaJoselito = (productos, clienteCrudos = {}, preciosVenta 
             const partes = item.taras.split('-');
             if (partes.length === 2) {
               const cantidadTaras = parseInt(partes[0]) || 0;
-              // Para ventas, convertir 19 a 20 siempre
-              let valorPorTara = parseInt(partes[1]) || 0;
-              if (valorPorTara === 19) valorPorTara = 20;
-              // Cálculo exacto para "Med c/c" con taras "10-19" convertido a "10-20" = 200kg
-              kilosTaras = cantidadTaras * valorPorTara;
+              kilosTaras = cantidadTaras * 20; // SIEMPRE multiplicar por 20
             } else {
               kilosTaras = parseInt(item.taras) || 0;
             }
           }
           
-          // Calcular kilos de sobrante - interpretar usando la función dedicada
+          // Calcular kilos de sobrante - sumar tal cual
           let kilosSobrante = 0;
           if (item.sobrante && item.mostrarSobrante) {
-            // Usar la función extraerValorSobrante para obtener el valor correcto
-            kilosSobrante = extraerValorSobrante(item.sobrante);
+            kilosSobrante = parseInt(item.sobrante.split('-').pop()) || 0;
           }
           
           // Para el caso específico "Med c/c" con taras "10-19" y sobrante "1-10",

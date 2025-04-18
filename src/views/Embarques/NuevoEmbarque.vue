@@ -1833,10 +1833,12 @@ export default {
     async crearCuentaJoselito(clienteId, clienteProductos, clienteCrudos) {
       try {
         this.isCreatingAccount = true;
+        // Asegurar que el ID de cliente sea '1' para Joselito
+        const joselitoClienteId = '1';
         const embarqueCliente = { 
           ...this.embarque,
           productos: clienteProductos,
-          crudos: clienteCrudos
+          clienteCrudos: { [joselitoClienteId]: clienteCrudos }
         };
         await EmbarqueCuentasService.crearCuentaJoselito(embarqueCliente, this.$router);
       } catch (error) {
