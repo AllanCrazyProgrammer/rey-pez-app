@@ -37,7 +37,30 @@ module.exports = {
       splitChunks: {
         chunks: 'all',
         automaticNameDelimiter: '.',
-        maxSize: 244000
+        maxSize: 244000,
+        // Mejorar la estabilidad de los nombres de chunks
+        name: false,
+        cacheGroups: {
+          vendors: {
+            test: /[\\/]node_modules[\\/]/,
+            priority: -10,
+            reuseExistingChunk: true,
+            name(module) {
+              // Obtener el nombre del paquete npm
+              const packageName = module.context.match(/[\\/]node_modules[\\/](.*?)([\\/]|$)/)[1];
+              // Normalizar algunos nombres específicos
+              if (packageName.includes('pdfmake')) {
+                return 'pdfmake-chunk';
+              }
+              return `npm.${packageName.replace('@', '')}`;
+            }
+          },
+          default: {
+            minChunks: 2,
+            priority: -20,
+            reuseExistingChunk: true
+          }
+        }
       }
     },
     output: {
@@ -45,7 +68,14 @@ module.exports = {
     }
   },
   chainWebpack: config => {
-    // Usar named chunk IDs para mejor depuración
-    config.optimization.set('chunkIds', 'named');
+    // Usar hashed para una generación más estable de los hashes en producción
+    config.optimization.set('moduleIds', 'hashed');
+    // Usar named chunk IDs para mejor depuración en desarrollo
+    if (process.env.NODE_ENV === 'development') {
+      config.optimization.set('chunkIds', 'named');
+    } else {
+      // En producción, usar natural para mejor caching
+      config.optimization.set('chunkIds', 'natural');
+    }
   }
 } 

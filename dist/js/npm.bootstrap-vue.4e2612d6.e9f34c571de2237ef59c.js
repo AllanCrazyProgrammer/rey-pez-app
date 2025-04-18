@@ -1,0 +1,1 @@
+(window["webpackJsonp"]=window["webpackJsonp"]||[]).push([["npm.bootstrap-vue.4e2612d6"],{"2dd8":function(n,o,p){}}]);

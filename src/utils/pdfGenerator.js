@@ -1,10 +1,25 @@
 //Generador de Notas de Venta Pdf
 
-
 import pdfMake from 'pdfmake/build/pdfmake';
 import * as pdfFonts from 'pdfmake/build/vfs_fonts';
 
-pdfMake.vfs = pdfFonts.default;
+// Manejar inicialización de pdfMake de manera más robusta
+try {
+  // Intentar usar la versión importada
+  if (pdfFonts.default) {
+    pdfMake.vfs = pdfFonts.default;
+  } else if (typeof pdfFonts === 'object') {
+    pdfMake.vfs = pdfFonts;
+  }
+} catch (error) {
+  console.warn('Error al inicializar pdfMake local:', error);
+}
+
+// Verificar disponibilidad global como fallback
+if (typeof window !== 'undefined' && window.pdfMake) {
+  console.log('Usando pdfMake global (CDN)');
+  pdfMake = window.pdfMake;
+}
 
 export async function generarNotaVentaPDF(embarque, clientesDisponibles, clientesJuntarMedidas) {
   try {
