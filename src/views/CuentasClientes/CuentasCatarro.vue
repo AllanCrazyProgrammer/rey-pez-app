@@ -1,6 +1,6 @@
 <template>
   <div class="cuentas-catarro-container">
-    <div v-if="isSaving" class="auto-save-indicator">
+    <div v-if="isSaving && !showSaveMessage" class="auto-save-indicator">
       <span class="save-dot"></span> Guardando...
     </div>
     <div class="back-button-container">
@@ -286,7 +286,7 @@
     </div>
 
     <!-- Mensaje de guardado automático -->
-    <div v-if="showSaveMessage" class="auto-save-message">
+    <div v-if="showSaveMessage && lastSaveMessage && lastSaveMessage !== 'Guardado automáticamente'" class="auto-save-message">
       {{ lastSaveMessage }}
     </div>
   </div>
@@ -1179,26 +1179,26 @@ export default {
           ultimaActualizacion: new Date().toISOString()
         };
 
-        await updateDoc(doc(db, 'cuentasCatarro', this.$route.params.id), notaData);
-        
-        // Mostrar mensaje de confirmación
-        this.lastSaveMessage = `Guardado automático: ${new Date().toLocaleTimeString()}`;
+        // Guardar en Firestore
+        const docRef = doc(db, 'cuentasCatarro', this.$route.params.id);
+        await updateDoc(docRef, notaData);
+
+        // Mostrar mensaje solo si no es guardado automático frecuente
+        this.lastSaveMessage = '';
+        this.showSaveMessage = false;
+        // Puedes dejar visible el indicador de "Guardando..." brevemente si quieres feedback visual
+      } catch (error) {
+        if (error.code === 'resource-exhausted') {
+          throw error; // Dejar que el sistema de cola maneje el reintento
+        }
+        this.lastSaveMessage = 'Error en auto-guardado';
         this.showSaveMessage = true;
-        
-        // Ocultar el mensaje después de 3 segundos
         if (this.saveMessageTimer) {
           clearTimeout(this.saveMessageTimer);
         }
         this.saveMessageTimer = setTimeout(() => {
           this.showSaveMessage = false;
         }, 3000);
-        
-        console.log('Cuenta auto-guardada exitosamente:', new Date().toLocaleTimeString());
-      } catch (error) {
-        if (error.code === 'resource-exhausted') {
-          throw error; // Dejar que el sistema de cola maneje el reintento
-        }
-        console.error('Error en auto-guardado:', error);
         throw error;
       }
     },
