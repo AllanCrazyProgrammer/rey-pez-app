@@ -112,7 +112,7 @@ export default {
       generarResumenTarasPDF(embarqueData, this.clientesDisponibles);
     },
 
-    async generarPDFResumen() {
+    async generarPDFResumen(escala = 100) {
       // Obtener las medidas únicas de los crudos
       const medidasCrudos = new Set();
       Object.values(this.clienteCrudos).forEach((crudos) => {
@@ -134,7 +134,8 @@ export default {
         embarqueData,
         this.productosPorCliente,
         this.obtenerNombreCliente,
-        this.clientesDisponibles
+        this.clientesDisponibles,
+        escala
       );
     },
 

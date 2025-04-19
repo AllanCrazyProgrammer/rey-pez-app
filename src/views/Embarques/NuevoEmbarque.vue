@@ -26,9 +26,25 @@
         @update:fecha="embarque.fecha = $event"
         @update:cargaCon="embarque.cargaCon = $event" 
         @generar-taras="generarPDF('taras')"
-        @generar-resumen="generarPDF('resumen')"
+        @generar-resumen="mostrarEscalaResumen = true"
         @verificar-fecha="verificarFechaExistente" 
       />
+
+      <!-- Slider de escala para el resumen PDF -->
+      <div v-if="mostrarEscalaResumen" class="scale-control scale-control-resumen">
+        <label>Escala del resumen PDF:</label>
+        <input 
+          type="range" 
+          v-model="escalaResumen" 
+          min="30" 
+          max="100" 
+          step="1"
+          class="scale-slider"
+        >
+        <span class="scale-value">{{ escalaResumen }}%</span>
+        <button class="btn btn-primary" @click="generarPDFResumenConEscala">Generar PDF Resumen</button>
+        <button class="btn btn-secondary" @click="mostrarEscalaResumen = false">Cancelar</button>
+      </div>
 
       <!-- Botones Undo/Redo -->
       <div class="botones-undo-redo">
@@ -263,6 +279,8 @@ export default {
       isCreatingAccount: false,
       _creandoEmbarque: false,
       _guardandoEmbarque: false,
+      mostrarEscalaResumen: false,
+      escalaResumen: 100,
     };
   },
   
@@ -2028,6 +2046,20 @@ export default {
         this.guardarEmbarque().catch(error => console.error('Error al sincronizar embarque offline:', error));
       }
     },
+
+    async generarPDFResumenConEscala() {
+      this.mostrarEscalaResumen = false;
+      // Llama al mixin pero pasando la escala como argumento extra
+      if (this.$options.mixins && this.$options.mixins.some(m => m.methods && m.methods.generarPDFResumen)) {
+        // Llama al método del mixin pero con escala
+        await this.generarPDFResumen(this.escalaResumen);
+      } else if (typeof this.generarPDFResumen === 'function') {
+        await this.generarPDFResumen(this.escalaResumen);
+      } else {
+        // fallback: llama al método general
+        await this.generarPDF('resumen', null, this.escalaResumen);
+      }
+    },
   },
 
   watch: {
@@ -2595,5 +2627,16 @@ input[type="number"]::-webkit-outer-spin-button {
 
 .cliente-header[data-cliente="Canelo"] h3 {
   color: #000000;
+}
+
+.scale-control-resumen {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 20px;
+  background-color: #f5f5f5;
+  padding: 10px;
+  border-radius: 8px;
+  justify-content: center;
 }
 </style>

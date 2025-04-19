@@ -101,7 +101,7 @@ const ordenarTaras = (taras) => {
   }, []);
 };
 
-export const generarResumenEmbarquePDF = (embarque, productosPorCliente, obtenerNombreCliente, clientesPersonalizados = []) => {
+export const generarResumenEmbarquePDF = (embarque, productosPorCliente, obtenerNombreCliente, clientesPersonalizados = [], escala = 100) => {
   // Obtener y ordenar las medidas de los crudos del embarque
   let medidasCrudos = [];
   if (embarque.medidasCrudos && Array.isArray(embarque.medidasCrudos)) {
@@ -115,6 +115,7 @@ export const generarResumenEmbarquePDF = (embarque, productosPorCliente, obtener
   console.log('Medidas de crudos encontradas:', medidasCrudos);
 
   // Configuración de la página en tamaño carta vertical
+  const scaleFactor = escala / 100;
   const docDefinition = {
     pageSize: 'LETTER',
     pageOrientation: 'portrait',
@@ -124,50 +125,50 @@ export const generarResumenEmbarquePDF = (embarque, productosPorCliente, obtener
           widths: ['*', 'auto', '*'],
           body: [
             [
-              { text: `Carga: ${embarque.cargaCon}`, alignment: 'left', fontSize: 20, border: [false, false, false, true] },
-              { text: 'Embarque', alignment: 'center', fontSize: 25, bold: true, border: [false, false, false, true] },
+              { text: `Carga: ${embarque.cargaCon}`, alignment: 'left', fontSize: 20 * scaleFactor, border: [false, false, false, true] },
+              { text: 'Embarque', alignment: 'center', fontSize: 25 * scaleFactor, bold: true, border: [false, false, false, true] },
               { text: `${new Date(new Date(embarque.fecha).getTime() + 24 * 60 * 60 * 1000).toLocaleDateString('es-MX', {
                 day: '2-digit',
                 month: 'short',
                 year: 'numeric',
                 timeZone: 'America/Mexico_City'
-              })}`, alignment: 'right', fontSize: 20, border: [false, false, false, true] }
+              })}`, alignment: 'right', fontSize: 20 * scaleFactor, border: [false, false, false, true] }
             ]
           ]
         },
-        margin: [0, 0, 0, 20]
+        margin: [0, 0, 0, 20 * scaleFactor]
       }
     ],
     styles: {
       header: {
-        fontSize: 25,
+        fontSize: 25 * scaleFactor,
         bold: true,
         alignment: 'center',
         margin: [0, 0, 0, 0]
       },
       tableHeader: {
         bold: true,
-        fontSize: 19,
+        fontSize: 19 * scaleFactor,
         fillColor: '#eeeeee',
         alignment: 'center'
       },
       clienteHeader: {
-        fontSize: 18,
+        fontSize: 18 * scaleFactor,
         bold: true,
         color: 'white',
       },
       clienteCell: {
         bold: true,
-        fontSize: 17,
+        fontSize: 17 * scaleFactor,
         alignment: 'left',
         color: 'white'
       },
       dataCell: {
-        fontSize: 19,
+        fontSize: 19 * scaleFactor,
         alignment: 'center'
       },
       total: {
-        fontSize: 18,
+        fontSize: 18 * scaleFactor,
         bold: true,
         color: 'white'
       }
@@ -386,7 +387,7 @@ export const generarResumenEmbarquePDF = (embarque, productosPorCliente, obtener
 
   // Agregar el contenido del resumen de productos limpios
   docDefinition.content.push(
-    ...generarResumenLimpios(productosPorCliente, clienteColors, 100, clientesPersonalizados)
+    ...generarResumenLimpios(productosPorCliente, clienteColors, escala, clientesPersonalizados)
   );
 
   // Generar y descargar el PDF
