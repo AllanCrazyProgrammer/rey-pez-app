@@ -12,12 +12,12 @@ import { formatDate } from '../dateUtils';
  */
 const normalizarMedida = (medida) => {
   if (!medida) return '';
-  
-  // Convertir a minúsculas
-  let medidaNormalizada = medida.toLowerCase();
-  
-  // Eliminar espacios al inicio y final
-  medidaNormalizada = medidaNormalizada.trim();
+  let medidaNormalizada = medida.toLowerCase().trim();
+
+  // Eliminar palabras irrelevantes para consolidar
+  medidaNormalizada = medidaNormalizada.replace(/\b(ayer|hoy|nuevo|viejo|alt|pdf)\b/g, '');
+  // Eliminar dobles espacios y espacios al inicio/final
+  medidaNormalizada = medidaNormalizada.replace(/\s+/g, ' ').trim();
   
   // Casos especiales para medidas compuestas con c/c y s/c
   const esConCascara = medidaNormalizada.includes('c/c');
@@ -476,7 +476,22 @@ const prepararItemsJoselito = (productos, clienteCrudos = {}, preciosVenta = new
     });
   }
   
-  return Array.from(productosAgrupados.values());
+  // Consolidar ítems por medida normalizada (garantiza unicidad y suma de kilos)
+  const itemsConsolidados = new Map();
+  for (const item of productosAgrupados.values()) {
+    const medidaNorm = normalizarMedida(item.medida);
+    if (itemsConsolidados.has(medidaNorm)) {
+      const existente = itemsConsolidados.get(medidaNorm);
+      existente.kilos += item.kilos;
+      existente.costo = item.costo; // último costo
+      existente.precioVenta = item.precioVenta;
+      existente.total = existente.kilos * existente.costo;
+    } else {
+      // Usar la medida normalizada como nombre final
+      itemsConsolidados.set(medidaNorm, { ...item, medida: medidaNorm });
+    }
+  }
+  return Array.from(itemsConsolidados.values());
 };
 
 /**
@@ -628,14 +643,24 @@ const prepararItemsVentaJoselito = (productos, clienteCrudos = {}, preciosVenta 
     });
   }
   
+  // Consolidar ítems de venta por medida normalizada
+  const itemsVentaConsolidados = new Map();
+  for (const item of itemsVentaAgrupados.values()) {
+    const medidaNorm = normalizarMedida(item.medida);
+    if (itemsVentaConsolidados.has(medidaNorm)) {
+      const existente = itemsVentaConsolidados.get(medidaNorm);
+      existente.kilosVenta += item.kilosVenta;
+      existente.precioVenta = item.precioVenta; // último precio
+      existente.totalVenta = existente.kilosVenta * existente.precioVenta;
+    } else {
+      // Usar la medida normalizada como nombre final
+      itemsVentaConsolidados.set(medidaNorm, { ...item, medida: medidaNorm });
+    }
+  }
   // Calcular ganancias comparando con los items de costo
-  const itemsVenta = Array.from(itemsVentaAgrupados.values());
-  
+  const itemsVenta = Array.from(itemsVentaConsolidados.values());
   itemsVenta.forEach(itemVenta => {
-    const itemCosto = itemsCosto.find(costo => 
-      normalizarMedida(costo.medida) === normalizarMedida(itemVenta.medida)
-    );
-    
+    const itemCosto = itemsCosto.find(costo => normalizarMedida(costo.medida) === normalizarMedida(itemVenta.medida));
     if (itemCosto) {
       itemVenta.ganancia = itemVenta.totalVenta - itemCosto.total;
     }
