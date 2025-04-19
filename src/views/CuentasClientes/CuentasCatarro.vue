@@ -572,7 +572,14 @@ export default {
     },
     async addItem() {
       if (!this.newItem.kilos || !this.newItem.medida || !this.newItem.costo || !this.newItem.precioVenta) {
-        alert('Por favor complete todos los campos');
+        if (this.lastSaveMessage !== 'Por favor complete todos los campos' || !this.showSaveMessage) {
+          this.lastSaveMessage = 'Por favor complete todos los campos';
+          this.showSaveMessage = true;
+          if (this.saveMessageTimer) clearTimeout(this.saveMessageTimer);
+          this.saveMessageTimer = setTimeout(() => {
+            this.showSaveMessage = false;
+          }, 3000);
+        }
         return;
       }
 
@@ -617,7 +624,14 @@ export default {
 
       } catch (error) {
         console.error('Error al guardar el item:', error);
-        alert('Hubo un problema al guardar. Por favor, intente nuevamente.');
+        if (this.lastSaveMessage !== 'Hubo un problema al guardar. Por favor, intente nuevamente.' || !this.showSaveMessage) {
+          this.lastSaveMessage = 'Hubo un problema al guardar. Por favor, intente nuevamente.';
+          this.showSaveMessage = true;
+          if (this.saveMessageTimer) clearTimeout(this.saveMessageTimer);
+          this.saveMessageTimer = setTimeout(() => {
+            this.showSaveMessage = false;
+          }, 3000);
+        }
         // Revertir los cambios locales si falló el guardado
         this.items.pop();
         this.itemsVenta.pop();
@@ -746,7 +760,14 @@ export default {
           // Actualizar saldos de cuentas posteriores en segundo plano
           this.actualizarCuentasPosteriores(this.fechaSeleccionada).catch(console.error);
           
-          alert('Cuenta guardada exitosamente');
+          if (this.lastSaveMessage !== 'Cuenta guardada exitosamente' || !this.showSaveMessage) {
+            this.lastSaveMessage = 'Cuenta guardada exitosamente';
+            this.showSaveMessage = true;
+            if (this.saveMessageTimer) clearTimeout(this.saveMessageTimer);
+            this.saveMessageTimer = setTimeout(() => {
+              this.showSaveMessage = false;
+            }, 3000);
+          }
           this.$router.push('/cuentas-catarro');
         } else {
           // Verificar si ya existe una nota para esta fecha
@@ -764,13 +785,27 @@ export default {
             // Actualizar saldos de cuentas posteriores en segundo plano
             this.actualizarCuentasPosteriores(this.fechaSeleccionada).catch(console.error);
             
-            alert('Cuenta guardada exitosamente');
+            if (this.lastSaveMessage !== 'Cuenta guardada exitosamente' || !this.showSaveMessage) {
+              this.lastSaveMessage = 'Cuenta guardada exitosamente';
+              this.showSaveMessage = true;
+              if (this.saveMessageTimer) clearTimeout(this.saveMessageTimer);
+              this.saveMessageTimer = setTimeout(() => {
+                this.showSaveMessage = false;
+              }, 3000);
+            }
             this.$router.push('/cuentas-catarro');
           }
         }
       } catch (error) {
         console.error('Error al guardar la cuenta:', error);
-        alert('Error al guardar la cuenta');
+        if (this.lastSaveMessage !== 'Error al guardar la cuenta' || !this.showSaveMessage) {
+          this.lastSaveMessage = 'Error al guardar la cuenta';
+          this.showSaveMessage = true;
+          if (this.saveMessageTimer) clearTimeout(this.saveMessageTimer);
+          this.saveMessageTimer = setTimeout(() => {
+            this.showSaveMessage = false;
+          }, 3000);
+        }
       } finally {
         this.isGuardando = false;
       }
@@ -1065,6 +1100,18 @@ export default {
       }
     },
     addNewProduct() {
+      if (!(this.newProduct.kilosVenta && this.newProduct.medida && this.newProduct.precioVenta)) {
+        if (this.lastSaveMessage !== 'Por favor complete todos los campos' || !this.showSaveMessage) {
+          this.lastSaveMessage = 'Por favor complete todos los campos';
+          this.showSaveMessage = true;
+          if (this.saveMessageTimer) clearTimeout(this.saveMessageTimer);
+          this.saveMessageTimer = setTimeout(() => {
+            this.showSaveMessage = false;
+          }, 3000);
+        }
+        return;
+      }
+
       if (this.newProduct.kilosVenta && this.newProduct.medida && this.newProduct.precioVenta) {
         // Verificar si necesitamos ajustar los kilos para la tabla de venta
         const kilosAjustados = this.calcularKilosCrudos(this.newProduct.medida, this.newProduct.kilosVenta, false);

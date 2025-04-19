@@ -120,6 +120,12 @@
         </div>
       </div>
     </div>
+
+    <template v-if="showSaveMessage && lastSaveMessage">
+      <div class="save-message">
+        {{ lastSaveMessage }}
+      </div>
+    </template>
   </div>
 </template>
 
@@ -149,7 +155,10 @@ export default {
       totalAbonosPeriodo: null,
       abonosHistorial: [],
       showObservacionModal: false,
-      observacionActual: ''
+      observacionActual: '',
+      lastSaveMessage: '',
+      showSaveMessage: false,
+      saveMessageTimer: null
     };
   },
   methods: {
@@ -255,10 +264,24 @@ export default {
       if (confirm('¿Estás seguro de que quieres borrar este registro de cuenta?')) {
         try {
           await deleteDoc(doc(db, 'cuentasJoselito', id));
-          alert('Registro de cuenta borrado con éxito');
+          if (this.lastSaveMessage !== 'Registro de cuenta borrado con éxito' || !this.showSaveMessage) {
+            this.lastSaveMessage = 'Registro de cuenta borrado con éxito';
+            this.showSaveMessage = true;
+            if (this.saveMessageTimer) clearTimeout(this.saveMessageTimer);
+            this.saveMessageTimer = setTimeout(() => {
+              this.showSaveMessage = false;
+            }, 3000);
+          }
         } catch (error) {
           console.error("Error al borrar el registro de cuenta: ", error);
-          alert('Error al borrar el registro de cuenta');
+          if (this.lastSaveMessage !== 'Error al borrar el registro de cuenta' || !this.showSaveMessage) {
+            this.lastSaveMessage = 'Error al borrar el registro de cuenta';
+            this.showSaveMessage = true;
+            if (this.saveMessageTimer) clearTimeout(this.saveMessageTimer);
+            this.saveMessageTimer = setTimeout(() => {
+              this.showSaveMessage = false;
+            }, 3000);
+          }
         }
       }
     },
@@ -831,5 +854,21 @@ h1, h2 {
   display: flex;
   justify-content: flex-end;
   margin-top: 15px;
+}
+
+.save-message {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: rgba(0, 0, 0, 0.7);
+  color: white;
+  padding: 8px 16px;
+  border-radius: 4px;
+  font-size: 15px;
+  z-index: 2000;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+  max-width: 90vw;
+  text-align: center;
 }
 </style> 

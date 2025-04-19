@@ -975,7 +975,12 @@ export default {
 
     async addItem() {
       if (!this.newItem.kilos || !this.newItem.medida || !this.newItem.costo || !this.newItem.precioVenta) {
-        alert('Por favor complete todos los campos');
+        this.lastSaveMessage = 'Por favor complete todos los campos';
+        this.showSaveMessage = true;
+        if (this.saveMessageTimer) clearTimeout(this.saveMessageTimer);
+        this.saveMessageTimer = setTimeout(() => {
+          this.showSaveMessage = false;
+        }, 3000);
         return;
       }
 
@@ -984,14 +989,11 @@ export default {
         if (!this.$route.params.id) {
           // Guardar temporalmente el nuevo item
           const newItemTemp = { ...this.newItem };
-          
           // Crear la cuenta primero (sin items)
           const docId = await this.crearNuevaCuenta();
-          
           if (!docId) {
             throw new Error('No se pudo crear la cuenta');
           }
-          
           // Restaurar el nuevo item después de crear la cuenta
           this.newItem = newItemTemp;
         }
@@ -1086,7 +1088,12 @@ Costo: $${this.formatNumber(costoNuevo)} | Precio: $${this.formatNumber(precioVe
         // El guardado automático se activará por los watchers
       } catch (error) {
         console.error('Error al guardar el item:', error);
-        alert('Hubo un problema al guardar. Por favor, intente nuevamente.');
+        this.lastSaveMessage = 'Hubo un problema al guardar. Por favor, intente nuevamente.';
+        this.showSaveMessage = true;
+        if (this.saveMessageTimer) clearTimeout(this.saveMessageTimer);
+        this.saveMessageTimer = setTimeout(() => {
+          this.showSaveMessage = false;
+        }, 3000);
       }
     },
 
@@ -1186,7 +1193,12 @@ Costo: $${this.formatNumber(costoNuevo)} | Precio: $${this.formatNumber(precioVe
 
     addNewProduct() {
       if (!this.newProduct.kilosVenta || !this.newProduct.medida || !this.newProduct.precioVenta) {
-        alert('Por favor complete todos los campos');
+        this.lastSaveMessage = 'Por favor complete todos los campos';
+        this.showSaveMessage = true;
+        if (this.saveMessageTimer) clearTimeout(this.saveMessageTimer);
+        this.saveMessageTimer = setTimeout(() => {
+          this.showSaveMessage = false;
+        }, 3000);
         return;
       }
 
