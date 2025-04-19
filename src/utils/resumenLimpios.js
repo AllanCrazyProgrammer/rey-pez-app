@@ -23,16 +23,19 @@ export function generarResumenLimpios(productosPorCliente, clienteColors, escala
   const rectWidth = 120;
   const rectHeight = 25;
 
-  // Separar clientes predefinidos de personalizados
+  // Separar clientes predefinidos de personalizados, EXCLUYENDO los de 0 kilos
   const clientesPredefinidos = [];
   const clientesExtra = [];
 
   Object.entries(productosPorCliente).forEach(([clienteId, productos]) => {
-    // Verificar si es un cliente predefinido (1-4) o personalizado
-    if (['1', '2', '3', '4'].includes(clienteId)) {
-      clientesPredefinidos.push([clienteId, productos]);
-    } else {
-      clientesExtra.push([clienteId, productos]);
+    const kilosCliente = calcularTotalKilos(productos);
+    if (kilosCliente > 0) {
+      // Verificar si es un cliente predefinido (1-4) o personalizado
+      if (["1", "2", "3", "4"].includes(clienteId)) {
+        clientesPredefinidos.push([clienteId, productos]);
+      } else {
+        clientesExtra.push([clienteId, productos]);
+      }
     }
   });
 
