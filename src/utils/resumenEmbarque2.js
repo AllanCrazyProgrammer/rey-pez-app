@@ -263,7 +263,7 @@ export const generarResumenEmbarquePDF = (embarque, productosPorCliente, obtener
     alignment: 'center'
   }];
 
-  // Calcular el total para cada medida
+  // Calcular el total para cada medidaa
   medidasCrudos.forEach(medida => {
     let totalTaras = 0;
     embarque.crudos.forEach(crudo => {
