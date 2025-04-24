@@ -255,6 +255,35 @@ export const generarResumenEmbarquePDF = (embarque, productosPorCliente, obtener
     tableData.push(row);
   });
 
+  // Calcular totales por medida
+  const totalesRow = [{ 
+    text: 'TOTAL', 
+    style: 'total',
+    fillColor: '#7f8c8d',
+    alignment: 'center'
+  }];
+
+  // Calcular el total para cada medida
+  medidasCrudos.forEach(medida => {
+    let totalTaras = 0;
+    embarque.crudos.forEach(crudo => {
+      if (crudo.medida.replace('c/c', '').trim() === medida && crudo.taras && Array.isArray(crudo.taras)) {
+        // Contar el número de taras para esta medida
+        totalTaras += crudo.taras.filter(tara => tara).length;
+      }
+    });
+
+    totalesRow.push({ 
+      text: totalTaras > 0 ? totalTaras.toString() : '', 
+      style: 'total',
+      fillColor: '#7f8c8d',
+      alignment: 'center'
+    });
+  });
+
+  // Agregar la fila de totales
+  tableData.push(totalesRow);
+
   // Agregar la tabla al documento
   docDefinition.content.push({
     table: {
