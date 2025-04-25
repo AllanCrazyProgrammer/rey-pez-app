@@ -262,16 +262,44 @@ export const generarResumenEmbarquePDF = (embarque, productosPorCliente, obtener
     fillColor: '#7f8c8d',
     alignment: 'center'
   }];
-
+  
+  // Variable para almacenar el total general de todas las medidas
+  let totalGeneral = 0;
+  
   // Calcular el total para cada medidaa
   medidasCrudos.forEach(medida => {
-    let totalTaras = 0;
+    // Mapa para almacenar las taras visibles en la tabla
+    let tarasVisiblesPorMedida = [];
+    
+    // Recorrer todos los clientes para esta medida
     embarque.crudos.forEach(crudo => {
       if (crudo.medida.replace('c/c', '').trim() === medida && crudo.taras && Array.isArray(crudo.taras)) {
-        // Contar el número de taras para esta medida
-        totalTaras += crudo.taras.filter(tara => tara).length;
+        // Añadir las taras válidas a la lista
+        const tarasValidas = crudo.taras.filter(tara => tara);
+        tarasVisiblesPorMedida = tarasVisiblesPorMedida.concat(tarasValidas);
       }
     });
+
+    // Ordenar las taras como se muestran en la tabla
+    const tarasOrdenadas = ordenarTaras(tarasVisiblesPorMedida);
+    
+    // Sumar el primer número de cada tara (la cantidad)
+    let totalTaras = 0;
+    tarasOrdenadas.forEach(tara => {
+      if (typeof tara === 'string' && tara.includes('-')) {
+        const cantidad = parseInt(tara.split('-')[0]);
+        if (!isNaN(cantidad)) {
+          totalTaras += cantidad;
+        }
+      } else if (typeof tara === 'number') {
+        totalTaras += tara;
+      } else if (typeof tara === 'string' && !isNaN(parseInt(tara))) {
+        totalTaras += parseInt(tara);
+      }
+    });
+    
+    // Sumar al total general
+    totalGeneral += totalTaras;
 
     totalesRow.push({ 
       text: totalTaras > 0 ? totalTaras.toString() : '', 
@@ -280,7 +308,7 @@ export const generarResumenEmbarquePDF = (embarque, productosPorCliente, obtener
       alignment: 'center'
     });
   });
-
+  
   // Agregar la fila de totales
   tableData.push(totalesRow);
 
@@ -312,6 +340,44 @@ export const generarResumenEmbarquePDF = (embarque, productosPorCliente, obtener
       paddingTop: function(i) { return 4; },
       paddingBottom: function(i) { return 4; }
     }
+  });
+  
+  // Agregar el gran total debajo de la tabla
+  docDefinition.content.push({
+    columns: [
+      {
+        width: '*',
+        text: ''
+      },
+      {
+        width: 'auto',
+        table: {
+          body: [
+            [
+              { 
+                text: 'GRAN TOTAL:', 
+                bold: true, 
+                fontSize: 22 * scaleFactor,
+                alignment: 'right',
+                margin: [0, 0, 10, 0]
+              },
+              { 
+                text: totalGeneral.toString(), 
+                bold: true,
+                fontSize: 22 * scaleFactor,
+                alignment: 'center'
+              }
+            ]
+          ]
+        },
+        layout: 'noBorders'
+      },
+      {
+        width: '*',
+        text: ''
+      }
+    ],
+    margin: [0, 15, 0, 15]
   });
 
   // Agregar espacio después de la primera tabla
