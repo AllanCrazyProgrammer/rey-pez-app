@@ -280,7 +280,7 @@ export const generarResumenEmbarquePDF = (embarque, productosPorCliente, obtener
       }
     });
 
-    // Ordenar las taras como se muestran en la tabla
+    // Ordenar las taras como se muestran en la tablaa
     const tarasOrdenadas = ordenarTaras(tarasVisiblesPorMedida);
     
     // Sumar el primer número de cada tara (la cantidad)
