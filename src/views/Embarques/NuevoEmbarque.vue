@@ -1268,11 +1268,14 @@ export default {
     actualizarProducto(producto) {
       const index = this.embarque.productos.findIndex(p => p.id === producto.id);
       if (index !== -1) {
-        // Crear una copia profunda del producto
-        const productoActualizado = JSON.parse(JSON.stringify(producto));
-        // Actualizar el producto en el array
-        this.$set(this.embarque.productos, index, productoActualizado);
-
+        // En lugar de crear una copia profunda completa, actualizamos solo las propiedades necesarias
+        // para evitar problemas de duplicación
+        Object.keys(producto).forEach(key => {
+          if (key !== 'id' && key !== 'clienteId') { // Mantener ID y clienteId intactos
+            this.$set(this.embarque.productos[index], key, producto[key]);
+          }
+        });
+        
         // Forzar la actualización del componente
         this.$forceUpdate();
       }
@@ -1479,8 +1482,19 @@ export default {
           this.$delete(this.productoSeleccionado, 'nombreAlternativoPDF');
         }
 
-        // Forzar la actualización del producto
-        this.actualizarProducto(this.productoSeleccionado);
+        // En lugar de crear una copia completa del producto, actualizamos directamente
+        // la propiedad en el array original
+        const index = this.embarque.productos.findIndex(p => p.id === this.productoSeleccionado.id);
+        if (index !== -1) {
+          if (nuevoNombre) {
+            this.$set(this.embarque.productos[index], 'nombreAlternativoPDF', nuevoNombre);
+          } else {
+            this.$delete(this.embarque.productos[index], 'nombreAlternativoPDF');
+          }
+          
+          // Forzar la actualización del componente sin crear duplicados
+          this.$forceUpdate();
+        }
 
         // Esperar a que Vue actualice el DOM
         this.$nextTick(() => {
