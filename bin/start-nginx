@@ -1,0 +1,4 @@
+#!/bin/sh
+
+# Start nginx and tell it where the config file is
+nginx -c /app/config/nginx.conf
