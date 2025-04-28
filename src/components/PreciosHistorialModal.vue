@@ -13,7 +13,7 @@
           <button @click="showModal = false" class="close-btn">&times;</button>
         </div>
 
-        <!-- Formulario para agregar nuevo precio -->
+        <!-- Formulario para agregar nuevo precio  -->
         <div class="add-price-form">
           <h3>Agregar Nuevo Precio</h3>
           <div class="form-group">
