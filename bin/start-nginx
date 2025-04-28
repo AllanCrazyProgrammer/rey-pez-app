@@ -1,4 +1,7 @@
 #!/bin/sh
 
+# Render the nginx.conf.erb to nginx.conf
+erb /app/config/nginx.conf.erb > /app/config/nginx.conf
+
 # Start nginx and tell it where the config file is
 nginx -c /app/config/nginx.conf
