@@ -172,7 +172,7 @@ import {
   crearNuevoCrudoItem 
 } from '@/constants.js/embarque';
 
-// Importar componentes modales
+// Importar componentes modaless
 import NuevoClienteModal from './components/modals/NuevoClienteModal.vue';
 import NombreAlternativoModal from './components/modals/NombreAlternativoModal.vue';
 import PrecioModal from './components/modals/PrecioModal.vue';
