@@ -281,6 +281,7 @@ export default {
       _guardandoEmbarque: false,
       mostrarEscalaResumen: false,
       escalaResumen: 100,
+      _guardandoInicial: false, // Bandera para el guardado inicial automático
     };
   },
   
@@ -375,6 +376,33 @@ export default {
     },
 
     agregarProducto(clienteId) {
+      // --- INICIO: Verificación anti-duplicados ---
+      const existeProductoNuevoVacio = this.embarque.productos.some(p => 
+          p.clienteId === clienteId && 
+          (p.isNew || p.isEditing) && // Considerado nuevo o en edición inicial
+          !p.medida                  // Sin medida asignada todavía
+      );
+
+      if (existeProductoNuevoVacio) {
+          console.warn(`Ya existe un producto nuevo vacío para el cliente ${this.obtenerNombreCliente(clienteId)}. No se agregará otro.`);
+          // Opcional: Intentar enfocar el input existente
+          this.$nextTick(() => {
+             const inputs = document.querySelectorAll('.medida-input');
+             const inputExistente = Array.from(inputs).find(input => {
+                 const productoElement = input.closest('.producto');
+                 if (!productoElement) return false;
+                 const productoId = productoElement.dataset?.productoId;
+                 const productoData = this.embarque.productos.find(p => String(p.id) === productoId);
+                 return productoData && productoData.clienteId === clienteId && !productoData.medida;
+             });
+             if (inputExistente) {
+                 inputExistente.focus();
+             }
+          });
+          return; // Detener la ejecución para no agregar duplicado
+      }
+      // --- FIN: Verificación anti-duplicados ---
+      
       const nuevoProducto = crearNuevoProducto(clienteId);
 
       // Establecer tipo por defecto según el cliente
@@ -410,35 +438,20 @@ export default {
     },
 
     eliminarProducto(producto) {
-      const index = this.embarque.productos.indexOf(producto);
+      const index = this.embarque.productos.findIndex(p => p.id === producto.id); // Usar findIndex con ID para mayor seguridad
       if (index > -1) {
-        // Guardar clienteId antes de eliminar el producto
-        const clienteId = producto.clienteId;
-        
-        // Eliminar el producto
+        // Eliminar el producto del array
         this.embarque.productos.splice(index, 1);
-        
-        // Verificar si era el último producto para este cliente
-        const todaviaExistenProductos = this.embarque.productos.some(p => p.clienteId === clienteId);
-        
-        // Si era el último, crear uno nuevo inmediatamente
-        if (!todaviaExistenProductos) {
-          const nuevoProducto = crearNuevoProducto(clienteId);
-          
-          // Establecer tipo por defecto según el cliente
-          this.setTipoDefaultParaCliente(nuevoProducto);
-          
-          // Establecer el nombre del cliente basado en el id
-          nuevoProducto.nombreCliente = this.obtenerNombreCliente(clienteId);
-          
-          // Agregar directamente al embarque.productos
-          this.embarque.productos.push(nuevoProducto);
-          
-          // Guardar cambios si es necesario
-          if (this.embarqueId) {
-            this.guardarCambiosEnTiempoReal();
-          }
+
+        // Guardar cambios si es necesario (después de la eliminación)
+        if (this.embarqueId) {
+          this.guardarCambiosEnTiempoReal();
         }
+        
+        // Actualizar las medidas usadas después de eliminar
+        this.actualizarMedidasUsadas();
+      } else {
+        console.warn('Intento de eliminar un producto no encontrado:', producto);
       }
     },
 
@@ -494,6 +507,16 @@ export default {
       if (modalAbierto) {
         return null;
       }
+
+      // --- INICIO: Verificación de guardado inicial en curso ---
+      if (!this.embarqueId && this._guardandoInicial) {
+          console.warn('Guardado inicial automático aún en progreso. Esperando para agregar cliente/producto.');
+          // Podríamos esperar un poco y reintentar, o simplemente no hacer nada y
+          // asumir que el usuario reintentará la acción si es necesario.
+          // Por ahora, salimos para evitar conflictos.
+          return null;
+      }
+      // --- FIN: Verificación de guardado inicial en curso ---
       
       // Control para evitar múltiples llamadas simultáneas
       if (this._creandoEmbarque) {
@@ -868,18 +891,21 @@ export default {
             
             // Informar al usuario si no se trata de una recarga
             if (!esRecargaPagina) {
-              alert(`Ya existe un embarque para hoy y los próximos días. Por favor, seleccione manualmente una fecha diferente.`);
+              alert(`Ya existe un embarque para hoy y los próximos días. Por favor, seleccione manually una fecha diferente.`);
             }
             return;
           }
         }
         
-        // Inicializar el embarque con la fecha disponible
+        // --- INICIO: Refactorización creación inicial ---
+        // 1. Inicializar el embarque con la fecha disponible y arrays vacíos
         this.embarque = {
           fecha: fechaEmbarque,
           cargaCon: '',
-          productos: [],
+          productos: [], // Empezar vacío
+          crudos: []
         };
+        this.clienteCrudos = {};
         this.clientesJuntarMedidas = {};
         this.embarqueId = null;
         this.modoEdicion = false;
@@ -887,81 +913,72 @@ export default {
         this.embarqueBloqueado = false;
         this.clientesPersonalizados = []; // Reiniciar clientes personalizados
 
-        // Agregar automáticamente los clientes predeterminados
-        this.$nextTick(async () => {
-          if (this.embarque.fecha) {
-            try {
-              // Antess sde crear un nuevo embarque, comprobar nuevamente si ya existe uno con esta fecha
-              // Esta doblee verificación es crucial para evitar duplicados en cargas rápidas
-              const verificacionRef = collection(db, "embarques");
-              const verificacionSnapshot = await getDocs(verificacionRef);
-              
-              const existeEmbarqueConFecha = verificacionSnapshot.docs.some(doc => {
-                const data = doc.data();
-                let fechaDoc;
-                
-                if (data.fecha && typeof data.fecha.toDate === 'function') {
-                  fechaDoc = data.fecha.toDate();
-                } else if (data.fecha instanceof Date) {
-                  fechaDoc = data.fecha;
-                } else if (typeof data.fecha === 'string') {
-                  fechaDoc = new Date(data.fecha);
-                } else {
-                  return false;
-                }
-                
-                const fechaDocISO = fechaDoc.toISOString().split('T')[0];
-                return fechaDocISO === this.embarque.fecha;
-              });
-              
-              if (existeEmbarqueConFecha) {
-                console.warn('Se detectó un embarque con la misma fecha durante la inicialización');
-                alert('Ya existe un embarque para la fecha seleccionada. Se cancelará la creación automática.');
-                return;
-              }
-              
-              // Crear el embarque inicial con el primer cliente (Joselito)
-              await this.guardarEmbarqueInicial(this.clientesPredefinidos[0].id.toString());
-
-              // Esperar un momento para asegurar que el primer cliente se haya agregado correctamente
-              await new Promise(resolve => setTimeout(resolve, 100));
-
-              // Agregar el resto de clientes predeterminados
-              for (let i = 1; i < this.clientesPredefinidos.length; i++) {
-                // Crear un producto para cada cliente predeterminado
-                const clienteId = this.clientesPredefinidos[i].id.toString();
-
-                // Verificar si ya existe un producto para este cliente
-                const existeProducto = this.embarque.productos.some(p => p.clienteId.toString() === clienteId);
-
-                // Solo agregar si no existe
-                if (!existeProducto) {
-                  const nuevoProducto = crearNuevoProducto(clienteId);
-
-                  // Establecer tipo por defecto según el cliente
-                  this.setTipoDefaultParaCliente(nuevoProducto);
-
-                  // Agregar directamente al embarque.productoss
-                  this.embarque.productos.push(nuevoProducto);
-
-                  // Esperar un momento entre cada adición
-                  await new Promise(resolve => setTimeout(resolve, 50));
-                }
-              }
-
-              // Establecer el primer cliente como activo
-              this.clienteActivo = this.clientesPredefinidos[0].id.toString();
-
-              // Forzar la actualización del componente
-              this.$forceUpdate();
-
-              // Guardar los cambios
-              this.guardarCambiosEnTiempoReal();
-            } catch (error) {
-              console.error("Error al crear clientes predeterminados:", error);
-            }
-          }
+        // 2. Crear productos para todos los clientes predefinidos localmente
+        const productosIniciales = this.clientesPredefinidos.map(cliente => {
+            const nuevoProducto = crearNuevoProducto(cliente.id.toString());
+            nuevoProducto.nombreCliente = cliente.nombre;
+            this.setTipoDefaultParaCliente(nuevoProducto);
+            return nuevoProducto;
         });
+        
+        // 3. Asignar los productos iniciales al estado
+        this.embarque.productos = productosIniciales;
+        
+        // 4. Establecer el primer cliente como activo
+        if (this.clientesPredefinidos.length > 0) {
+            this.clienteActivo = this.clientesPredefinidos[0].id.toString();
+        }
+
+        // 5. Intentar guardar este estado inicial en Firebase (si la fecha es válida)
+        if (this.embarque.fecha) {
+            this._guardandoInicial = true; // <- Establecer bandera ANTES del async
+            this.$nextTick(async () => {
+                try {
+                    // Doble verificación de fecha antes de guardar
+                    const verificacionRef = collection(db, "embarques");
+                    const verificacionSnapshot = await getDocs(verificacionRef);
+                    const existeEmbarqueConFecha = verificacionSnapshot.docs.some(doc => {
+                        const data = doc.data();
+                        let fechaDoc;
+                        if (data.fecha && typeof data.fecha.toDate === 'function') {
+                            fechaDoc = data.fecha.toDate();
+                        } else if (data.fecha instanceof Date) {
+                            fechaDoc = data.fecha;
+                        } else if (typeof data.fecha === 'string') {
+                            fechaDoc = new Date(data.fecha);
+                        } else {
+                            return false;
+                        }
+                        const fechaDocISO = fechaDoc.toISOString().split('T')[0];
+                        return fechaDocISO === this.embarque.fecha;
+                    });
+
+                    if (existeEmbarqueConFecha) {
+                        console.warn('Se detectó un embarque con la misma fecha durante la inicialización, no se guardará automáticamente.');
+                        // No mostramos alerta aquí, el usuario puede cambiar la fecha y guardar manualmente
+                        return; // Salir sin guardar si la fecha ya existe
+                    }
+                    
+                    // Guardar el embarque inicial completo
+                    const embarqueData = this.prepararDatosEmbarque();
+                    const docRef = await addDoc(collection(db, "embarques"), embarqueData);
+                    this.embarqueId = docRef.id;
+                    this.modoEdicion = true;
+                    this.guardadoAutomaticoActivo = true;
+                    console.log(`Nuevo embarque inicial creado con ID: ${this.embarqueId} para la fecha ${this.embarque.fecha}`);
+                    
+                    // Guardar el ID para recargas
+                    localStorage.setItem('ultimoEmbarqueId', this.embarqueId);
+
+                } catch (error) {
+                    console.error("Error al guardar el embarque inicial automáticamente:", error);
+                    // No alertar al usuario, podría ser confuso. Se puede guardar manually.
+                } finally {
+                    this._guardandoInicial = false; // <- Limpiar bandera DESPUÉS del async
+                }
+            });
+        } 
+        // --- FIN: Refactorización creación inicial ---
       } catch (error) {
         console.error("Error al verificar fechas de embarques existentes:", error);
         // En caso de error, inicializar con valores por defecto pero sin crear automáticamente
@@ -2060,6 +2077,47 @@ export default {
         await this.generarPDF('resumen', null, this.escalaResumen);
       }
     },
+
+    // --- INICIO: Mover estas funciones dentro de methods ---
+    // Método para detectar si es una recarga de página
+    detectarRecarga() {
+      // Verificar si el navegador soporta Navigation Timing API
+      if (window.performance && window.performance.navigation) {
+        return window.performance.navigation.type === 1; // 1 = recarga
+      } 
+      
+      // Para navegadores modernos que no soportan la API anterior
+      if (window.performance && window.performance.getEntriesByType && window.performance.getEntriesByType('navigation')) {
+        const navigationEntries = window.performance.getEntriesByType('navigation');
+        if (navigationEntries.length > 0 && navigationEntries[0].type) {
+          return navigationEntries[0].type === 'reload';
+        }
+      }
+      
+      // Si no se puede determinar, verificar con localStorage
+      const ultimaVisita = localStorage.getItem('ultimaVisita');
+      const ahora = Date.now();
+      
+      // Guardar timestamp actual
+      localStorage.setItem('ultimaVisita', ahora);
+      
+      // Si la última visita fue en los últimos 5 segundos, consideramos que es una recarga
+      if (ultimaVisita && ahora - parseInt(ultimaVisita) < 5000) {
+        return true;
+      }
+      
+      return false;
+    },
+
+    // También añadimos el método handleBeforeUnload si no existe
+    handleBeforeUnload(event) {
+      // Guardar el ID del embarque actual antes de recargar
+      if (this.embarqueId) {
+        localStorage.setItem('ultimoEmbarqueId', this.embarqueId);
+        localStorage.setItem('ultimaRuta', window.location.pathname);
+      }
+    },
+    // --- FIN: Mover estas funciones dentro de methods ---
   },
 
   watch: {
@@ -2121,8 +2179,35 @@ export default {
   },
 
   mounted() {
+    // --- INICIO: Lógica simplificada --- 
+    const embarqueId = this.$route.params.id;
+
+    if (embarqueId === 'nuevo') {
+        console.log('Montando componente para un NUEVO embarque.');
+        this.resetearEmbarque();
+    } else if (embarqueId) {
+        console.log(`Montando componente para cargar embarque existente: ${embarqueId}`);
+        this.cargarEmbarque(embarqueId);
+    } else {
+        // Caso inesperado (sin ID y no es 'nuevo') - redirigir o mostrar error?
+        console.error('ID de embarque no encontrado en la ruta. Redirigiendo a nuevo.');
+        this.$router.replace({ name: 'NuevoEmbarque', params: { id: 'nuevo' } });
+        return; // Detener ejecución adicional
+    }
+    
+    // Guardar esta ruta y su ID para futuras recargas (esto puede seguir siendo útil)
+    localStorage.setItem('ultimaRuta', window.location.pathname);
+    if (embarqueId && embarqueId !== 'nuevo') {
+      localStorage.setItem('ultimoEmbarqueId', embarqueId);
+    } else {
+      // Si es nuevo, limpiar el ID guardado para evitar confusiones en futuras recargas
+      localStorage.removeItem('ultimoEmbarqueId');
+    }
+    // --- FIN: Lógica simplificada ---
+
+    /* Código anterior eliminado:
     // Detectar si es una recarga de página
-    const esRecarga = this.detectarRecarga();
+    const esRecarga = this.detectarRecarga(); // Ahora debería funcionar
     
     // Si hay un ID de embarque en los parámetros, cargar ese embarque
     const embarqueId = this.$route.params.id;
@@ -2156,17 +2241,27 @@ export default {
     if (embarqueId && embarqueId !== 'nuevo') {
       localStorage.setItem('ultimoEmbarqueId', embarqueId);
     }
+    */
     
     // Cargar los clientes personalizados
     this.cargarClientesPersonalizados();
     
     // Iniciar presencia después de cargar todo
-    if (this.authStore.user && this.embarqueId) {
-      this.iniciarPresencia();
+    // Ajuste: Verificar si hay usuario antes de llamar a iniciarPresencia
+    if (this.authStore.isLoggedIn && this.authStore.user) {
+        // La llamada a iniciarPresenciaUsuario y escucharUsuariosActivos ya se hace en created
+        // this.iniciarPresenciaUsuario(); // Probablemente redundante aquí si ya está en created
+        // this.escucharUsuariosActivos(); // Probablemente redundante aquí si ya está en created
+        // Asegurémonos de que iniciarPresencia() se llame si es necesario
+        if (this.embarqueId) { // Quizás solo iniciar si ya hay un embarque cargado/creado?
+             // this.iniciarPresencia(); // Revisar qué hace exactamente iniciarPresencia()
+        }
+    } else {
+        console.log('Usuario no autenticado en mounted, no se inicia presencia.');
     }
     
     // Configurar el escuchador para el evento beforeunload
-    window.addEventListener('beforeunload', this.handleBeforeUnload);
+    window.addEventListener('beforeunload', this.handleBeforeUnload); // Ahora debería funcionar
 
     // Agregar este evento para actualizar los crudos cuando se modifiquen los inputs
     this.$nextTick(() => {
@@ -2175,45 +2270,6 @@ export default {
         input.addEventListener('input', this.actualizarCrudos);
       });
     });
-  },
-
-  // Método para detectar si es una recarga de página
-  detectarRecarga() {
-    // Verificar si el navegador soporta Navigation Timing API
-    if (window.performance && window.performance.navigation) {
-      return window.performance.navigation.type === 1; // 1 = recarga
-    } 
-    
-    // Para navegadores modernos que no soportan la API anterior
-    if (window.performance && window.performance.getEntriesByType && window.performance.getEntriesByType('navigation')) {
-      const navigationEntries = window.performance.getEntriesByType('navigation');
-      if (navigationEntries.length > 0 && navigationEntries[0].type) {
-        return navigationEntries[0].type === 'reload';
-      }
-    }
-    
-    // Si no se puede determinar, verificar con localStorage
-    const ultimaVisita = localStorage.getItem('ultimaVisita');
-    const ahora = Date.now();
-    
-    // Guardar timestamp actual
-    localStorage.setItem('ultimaVisita', ahora);
-    
-    // Si la última visita fue en los últimos 5 segundos, consideramos que es una recarga
-    if (ultimaVisita && ahora - parseInt(ultimaVisita) < 5000) {
-      return true;
-    }
-    
-    return false;
-  },
-
-  // También añadimos el método handleBeforeUnload si no existe
-  handleBeforeUnload(event) {
-    // Guardar el ID del embarque actual antes de recargar
-    if (this.embarqueId) {
-      localStorage.setItem('ultimoEmbarqueId', this.embarqueId);
-      localStorage.setItem('ultimaRuta', window.location.pathname);
-    }
   },
 
   beforeDestroy() {
