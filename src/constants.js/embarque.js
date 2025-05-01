@@ -8,6 +8,9 @@ export const CLIENTE_COLORS = {
   DEFAULT: "#95a5a6",
 };
 
+// Importamos uuid de manera compatible con Vue 2
+import { v4 as uuidv4 } from 'uuid';
+
 // Clientes predefinidos
 export const CLIENTES_PREDEFINIDOS = [
   {
@@ -30,7 +33,7 @@ export const CLIENTES_PREDEFINIDOS = [
 // Estructura para un nuevo producto
 export function crearNuevoProducto(clienteId) {
   return {
-    id: Date.now(),
+    id: uuidv4(), // Usar UUID en lugar de Date.now() para evitar colisiones
     clienteId: clienteId,
     medida: "",
     tipo: "",

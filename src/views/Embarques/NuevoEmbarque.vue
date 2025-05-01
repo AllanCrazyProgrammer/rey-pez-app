@@ -164,6 +164,7 @@ import HeaderEmbarque from '../Embarques/components/HeaderEmbarque.vue'
 import pdfGenerationMixin from './mixins/pdfGenerationMixin';
 import calculosMixin from './mixins/calculosMixin';
 import ClienteProductos from './components/ClienteProductos.vue';
+import { v4 as uuidv4 } from 'uuid'; // Importar uuid para IDs únicos
 
 // Importar constantes y utilidades
 import { 
@@ -438,10 +439,27 @@ export default {
     },
 
     eliminarProducto(producto) {
-      const index = this.embarque.productos.findIndex(p => p.id === producto.id); // Usar findIndex con ID para mayor seguridad
+      console.log(`Intentando eliminar producto con ID: ${producto.id}, Medida: ${producto.medida}, Cliente: ${this.obtenerNombreCliente(producto.clienteId)}`);
+      
+      const index = this.embarque.productos.findIndex(p => p.id === producto.id); 
+      
       if (index > -1) {
+        // Log antes de eliminar para verificar qué se va a borrar
+        console.log(`Encontrado en índice ${index}. Producto en this.embarque.productos[${index}]:`, JSON.stringify(this.embarque.productos[index]));
+        
+        // Asegurarse de que el producto encontrado coincide razonablemente con el que se quiere eliminar (opcional, como sanity check)
+        if (this.embarque.productos[index].medida === producto.medida && this.embarque.productos[index].clienteId === producto.clienteId) {
+          console.log("Confirmado: El producto encontrado coincide con el producto a eliminar.");
+        } else {
+          console.warn("Advertencia: El producto encontrado por ID tiene medida o clienteId diferente al esperado.", 
+                       "Esperado:", producto, 
+                       "Encontrado:", this.embarque.productos[index]);
+          // Considera si deberías detener la eliminación aquí si hay discrepancia
+        }
+
         // Eliminar el producto del array
         this.embarque.productos.splice(index, 1);
+        console.log(`Producto con ID ${producto.id} eliminado del array embarque.productos.`);
 
         // Guardar cambios si es necesario (después de la eliminación)
         if (this.embarqueId) {
@@ -451,7 +469,12 @@ export default {
         // Actualizar las medidas usadas después de eliminar
         this.actualizarMedidasUsadas();
       } else {
-        console.warn('Intento de eliminar un producto no encontrado:', producto);
+        console.warn('Intento de eliminar un producto NO ENCONTRADO en this.embarque.productos por ID:', producto);
+        // Podrías intentar buscar de otra forma como diagnóstico, pero no para eliminar:
+        const potentialMatches = this.embarque.productos.filter(p => p.clienteId === producto.clienteId && p.medida === producto.medida);
+        if (potentialMatches.length > 0) {
+          console.warn(`Se encontraron ${potentialMatches.length} productos con la misma medida y cliente, pero diferente ID.`);
+        }
       }
     },
 
@@ -1706,12 +1729,49 @@ export default {
 
     // Métodos para medidas y sugerencias
     actualizarMedidasUsadas() {
-      // Obtener todas las medidas únicas del embarque actual
-      const medidas = this.embarque.productos
-        .map(p => p.medida)
-        .filter(m => m && m.trim()) // Filtrar valores vacíos
-        .filter((m, i, arr) => arr.indexOf(m) === i); // Eliminar duplicados
-      this.medidasUsadas = medidas;
+      // Obtener todas las medidas únicas usadas en el embarque
+      this.medidasUsadas = [...new Set(this.embarque.productos
+        .filter(p => p.medida && p.medida.trim() !== '')
+        .map(p => p.medida.trim()))];
+    },
+
+    // Método para validar y reparar IDs duplicados
+    validarYRepararIDsProductos() {
+      console.log("Validando IDs de productos en busca de duplicados...");
+      const idsEncontrados = new Map();
+      let idsCorregidos = 0;
+
+      this.embarque.productos.forEach(producto => {
+        if (idsEncontrados.has(producto.id)) {
+          console.warn(`ID duplicado encontrado: ${producto.id} - Medida: ${producto.medida} - Cliente: ${this.obtenerNombreCliente(producto.clienteId)}`);
+          console.warn(`Conflicto con producto existente:`, 
+                      `Medida: ${idsEncontrados.get(producto.id).medida}`, 
+                      `Cliente: ${this.obtenerNombreCliente(idsEncontrados.get(producto.id).clienteId)}`);
+          
+          // Generar un nuevo ID para este producto usando uuid
+          const nuevoId = uuidv4();
+          console.log(`Corrigiendo ID duplicado: ${producto.id} -> ${nuevoId} para producto ${producto.medida}`);
+          
+          // Asignar el nuevo ID
+          producto.id = nuevoId;
+          idsCorregidos++;
+          
+          // Agregar el nuevo ID al mapa
+          idsEncontrados.set(nuevoId, producto);
+        } else {
+          // Registrar el ID para detectar duplicados futuros
+          idsEncontrados.set(producto.id, producto);
+        }
+      });
+
+      if (idsCorregidos > 0) {
+        console.log(`Se corrigieron ${idsCorregidos} productos con IDs duplicados.`);
+        this.guardarCambiosEnTiempoReal();
+      } else {
+        console.log("No se encontraron IDs duplicados en los productos.");
+      }
+      
+      return idsCorregidos;
     },
 
     onMedidaInput(producto, event) {
@@ -2283,6 +2343,12 @@ export default {
       crudosInputs.forEach(input => {
         input.addEventListener('input', this.actualizarCrudos);
       });
+    });
+
+    // Al final del mounted, después de cargar el embarque
+    this.$nextTick(() => {
+      // Validar y reparar posibles IDs duplicados
+      this.validarYRepararIDsProductos();
     });
   },
 
