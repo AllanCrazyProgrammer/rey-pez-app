@@ -26,7 +26,7 @@
               </thead>
               <tbody>
                 <template v-if="proveedor === 'Ozuna' || proveedor === 'Joselito'">
-                  <tr v-for="(datos, medidaKey) in datos" :key="medidaKey">
+                  <tr v-for="(datos, medidaKey) in datos" :key="medidaKey" v-if="datos.kilos > 0">
                     <td>{{ datos.medida }}</td>
                     <td class="kilos-cell">{{ formatNumber(datos.kilos) }}</td>
                   </tr>
@@ -38,7 +38,7 @@
                   </tr>
                 </template>
                 <template v-else>
-                  <tr v-for="medida in datos" :key="medida.medida">
+                  <tr v-for="medida in datos" :key="medida.medida" v-if="medida.kilos > 0">
                     <td>{{ medida.medida }}</td>
                     <td>{{ medida.proveedor }}</td>
                     <td class="kilos-cell">{{ formatNumber(medida.kilos) }}</td>
@@ -132,7 +132,7 @@ export default {
 
       console.log(`=== Total final Selecta 51/60 1ra Nacional: ${totalSelecta5160} kg ===`);
 
-      // Filtrar proveedores y medidas con 0 o menos kilos
+      // Filtrar proveedores y medidas con 0 kilos o menos
       Object.keys(newExistencias).forEach(proveedor => {
         if (proveedor === 'Selecta' && newExistencias[proveedor]['51/60 1ra Nacional']) {
           console.log('[DEBUG] Resultado final Selecta 51/60 1ra Nacional:', 
@@ -167,16 +167,32 @@ export default {
 
       // Procesar las maquilas después
       if (existencias.value['Ozuna']) {
-        maquilas['Ozuna'] = existencias.value['Ozuna'];
+        // Filtrar medidas con 0 kilos
+        const medidasFiltradas = Object.fromEntries(
+          Object.entries(existencias.value['Ozuna']).filter(([_, datos]) => datos.kilos > 1)
+        );
+        if (Object.keys(medidasFiltradas).length > 0) {
+          maquilas['Ozuna'] = medidasFiltradas;
+        }
       }
+      
       if (existencias.value['Joselito']) {
-        maquilas['Joselito'] = existencias.value['Joselito'];
+        // Filtrar medidas con 0 kilos
+        const medidasFiltradas = Object.fromEntries(
+          Object.entries(existencias.value['Joselito']).filter(([_, datos]) => datos.kilos > 1)
+        );
+        if (Object.keys(medidasFiltradas).length > 0) {
+          maquilas['Joselito'] = medidasFiltradas;
+        }
       }
 
       // Agrupar por medida base para otros proveedores
       const medidasAgrupadas = {};
       Object.entries(otrosProveedores).forEach(([proveedor, medidas]) => {
         Object.entries(medidas).forEach(([medidaKey, datos]) => {
+          // Solo procesar medidas con kilos > 0
+          if (datos.kilos <= 1) return;
+          
           // Extraer solo los números de la medida (ej: "41/50" de "41/50 chuy" o "41/50 1ra Nacional")
           const medidaBase = datos.medida.split(' ')[0];
           if (!medidasAgrupadas[medidaBase]) {
@@ -213,20 +229,25 @@ export default {
           return numA - numB;
         })
         .forEach(([medidaBase, items]) => {
-          if (!searchLower || 
+          // Filtrar items con 0 kilos
+          const itemsFiltrados = items.filter(item => item.kilos > 1);
+          
+          if (itemsFiltrados.length > 0 && (!searchLower || 
               medidaBase.toLowerCase().includes(searchLower) ||
-              items.some(item => 
+              itemsFiltrados.some(item => 
                 item.proveedor.toLowerCase().includes(searchLower) || 
                 item.medida.toLowerCase().includes(searchLower)
-              )) {
-            resultado[medidaBase] = items;
+              ))) {
+            resultado[medidaBase] = itemsFiltrados;
           }
         });
 
       // Después agregar las maquilas
       Object.entries(maquilas).forEach(([proveedor, medidas]) => {
         if (!searchLower || proveedor.toLowerCase().includes(searchLower)) {
-          resultado[proveedor] = Object.entries(medidas)
+          // Filtrar medidas con 0 kilos
+          const medidasFiltradas = Object.entries(medidas)
+            .filter(([_, datos]) => datos.kilos > 1)
             .sort(([medidaA], [medidaB]) => {
               const numA = parseInt(medidaA.split('/')[0]);
               const numB = parseInt(medidaB.split('/')[0]);
@@ -236,6 +257,10 @@ export default {
               acc[medida] = kilos;
               return acc;
             }, {});
+            
+          if (Object.keys(medidasFiltradas).length > 0) {
+            resultado[proveedor] = medidasFiltradas;
+          }
         }
       });
 
