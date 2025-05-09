@@ -103,6 +103,7 @@
           @crear-cuenta-joselito="crearCuentaJoselito" 
           @crear-cuenta-catarro="crearCuentaCatarro" 
           @crear-cuenta-ozuna="crearCuentaOzuna"
+          @crear-cuenta-otilio="crearCuentaOtilio"
         />
       </form>
     </div>
@@ -2123,6 +2124,30 @@ export default {
       } catch (error) {
         console.error('Error al crear cuenta para Ozuna:', error);
         alert(`Error al crear cuenta para Ozuna: ${error.message}`);
+      } finally {
+        this.isCreatingAccount = false;
+      }
+    },
+
+    // Método para crear cuenta de Otilio
+    async crearCuentaOtilio(clienteId, clienteProductos, clienteCrudos) {
+      try {
+        this.isCreatingAccount = true;
+        
+        // Asegurar que el ID de cliente sea '3' para Otilio
+        const otilioClienteId = '3';
+        
+        const embarqueCliente = { 
+          ...this.embarque,
+          productos: clienteProductos,
+          clienteCrudos: { [otilioClienteId]: clienteCrudos }
+        };
+        
+        await EmbarqueCuentasService.crearCuentaOtilio(embarqueCliente, this.$router);
+        alert('Cuenta de Otilio creada exitosamente y abierta en una nueva pestaña.');
+      } catch (error) {
+        console.error('Error al crear cuenta para Otilio:', error);
+        alert(`Error al crear cuenta para Otilio: ${error.message}`);
       } finally {
         this.isCreatingAccount = false;
       }

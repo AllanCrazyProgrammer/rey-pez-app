@@ -53,6 +53,15 @@
                     <span v-if="isCreatingAccount" class="loader-inline"></span>
                     <i v-else class="fas fa-plus-circle"></i> Crear Cuenta
                 </button>
+
+                <!-- Botón para crear cuenta de Otilio -->
+                <button v-if="esClienteOtilio" type="button" @click.stop="crearCuentaOtilio"
+                    class="btn btn-success btn-sm crear-cuenta-otilio" title="Crear Cuenta para Otilio"
+                    :disabled="isCreatingAccount">
+                    <span v-if="isCreatingAccount" class="loader-inline"></span>
+                    <i v-else class="fas fa-plus-circle"></i> Crear Cuenta
+                </button>
+
                 <button type="button" @click.stop="$emit('eliminar-cliente', clienteId)"
                     class="btn btn-danger btn-sm eliminar-cliente" :disabled="embarqueBloqueado">Eliminar
                     Cliente</button>
@@ -169,7 +178,8 @@ export default {
         'generar-pdf',
         'crear-cuenta-joselito',
         'crear-cuenta-catarro',
-        'crear-cuenta-ozuna'
+        'crear-cuenta-ozuna',
+        'crear-cuenta-otilio'
     ],
 
     computed: {
@@ -186,6 +196,11 @@ export default {
         // Verificar si el cliente es Ozuna
         esClienteOzuna() {
             return this.nombreCliente.toLowerCase().includes('ozuna');
+        },
+
+        // Verificar si el cliente es Otilio
+        esClienteOtilio() {
+            return this.nombreCliente.toLowerCase().includes('otilio');
         },
 
         // Calcular totales de limpio
@@ -346,6 +361,10 @@ export default {
 
         crearCuentaOzuna() {
             this.$emit('crear-cuenta-ozuna', this.clienteId, this.productos, this.crudos);
+        },
+
+        crearCuentaOtilio() {
+            this.$emit('crear-cuenta-otilio', this.clienteId, this.productos, this.crudos);
         }
     }
 }

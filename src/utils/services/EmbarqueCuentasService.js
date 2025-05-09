@@ -224,14 +224,20 @@ const existeCuentaParaFecha = async (coleccion, fecha) => {
 /**
  * Obtiene los precios de venta más recientes desde Firestore
  * @param {string} clienteId - ID del cliente (joselito, catarro, etc.)
+ * @param {string} fechaEmbarque - Fecha del embarque para filtrar precios (formato YYYY-MM-DD)
  * @returns {Promise<Map>} - Mapa con los precios más recientes por medida
  */
-const obtenerPreciosVenta = async (clienteId) => {
+const obtenerPreciosVenta = async (clienteId, fechaEmbarque) => {
   try {
     const db = getFirestore();
     const preciosRef = collection(db, 'precios');
     const q = query(preciosRef, orderBy('fecha', 'desc'));
     const snapshot = await getDocs(q);
+    
+    // Convertir fechaEmbarque a objeto Date para comparación
+    const fechaLimite = fechaEmbarque ? new Date(fechaEmbarque) : new Date();
+    // Asegurar que la fecha límite está en formato YYYY-MM-DD
+    const fechaLimiteISO = fechaLimite.toISOString().split('T')[0];
     
     // Mapa para almacenar los precios más recientes por medida
     const preciosPorMedida = new Map();
@@ -243,50 +249,41 @@ const obtenerPreciosVenta = async (clienteId) => {
     
     snapshot.docs.forEach(doc => {
       const precio = doc.data();
-      const productoOriginal = precio.producto;
-      const medidaNormalizada = normalizarMedida(precio.producto);
+      const fechaPrecio = new Date(precio.fecha);
+      const fechaPrecioISO = fechaPrecio.toISOString().split('T')[0];
       
-      // Guardar registro para diagnóstico
-      registroNormalizaciones.push({
-        original: productoOriginal,
-        normalizada: medidaNormalizada,
-        precio: precio.precio,
-        clienteId: precio.clienteId || 'general'
-      });
-      
-      // Si es un precio específico para este cliente, tiene prioridad
-      if (precio.clienteId === clienteId) {
-        if (!preciosEspecificos.has(medidaNormalizada)) {
-          preciosEspecificos.set(medidaNormalizada, precio.precio);
+      // Solo considerar precios con fecha anterior o igual a la fecha del embarque
+      if (fechaPrecioISO <= fechaLimiteISO) {
+        const productoOriginal = precio.producto;
+        const medidaNormalizada = normalizarMedida(precio.producto);
+        
+        // Guardar registro para diagnóstico
+        registroNormalizaciones.push({
+          original: productoOriginal,
+          normalizada: medidaNormalizada,
+          precio: precio.precio,
+          clienteId: precio.clienteId || 'general',
+          fecha: fechaPrecioISO
+        });
+        
+        // Si es un precio específico para este cliente, tiene prioridad
+        if (precio.clienteId === clienteId) {
+          if (!preciosEspecificos.has(medidaNormalizada)) {
+            preciosEspecificos.set(medidaNormalizada, precio.precio);
+          }
+        } 
+        // Para precios generales, almacenar solo si no existe aún
+        else if (!precio.clienteId && !preciosPorMedida.has(medidaNormalizada)) {
+          preciosPorMedida.set(medidaNormalizada, precio.precio);
         }
-      } 
-      // Para precios generales, almacenar solo si no existe aún
-      else if (!precio.clienteId && !preciosPorMedida.has(medidaNormalizada)) {
-        preciosPorMedida.set(medidaNormalizada, precio.precio);
       }
     });
     
     // Imprimir registros para diagnóstico
-    console.log('=== Normalización de medidas para precios ===');
+    console.log(`=== Normalización de medidas para precios (fecha embarque: ${fechaLimiteISO}) ===`);
     console.log('Medidas específicas para', clienteId, ':', Array.from(preciosEspecificos.entries()));
     console.log('Medidas generales:', Array.from(preciosPorMedida.entries()));
     console.log('Detalles de normalización:', registroNormalizaciones);
-    
-    // Ejemplos de prueba para diagnóstico
-    const casos = [
-      'Med c/c', 
-      'Med-gde c/c', 
-      'Med Gde c/c', 
-      'MedGde c/c', 
-      'Med-Esp c/c', 
-      'Med Esp c/c'
-    ];
-    console.log('=== Casos de prueba de normalización ===');
-    casos.forEach(caso => {
-      const normalizado = normalizarMedida(caso);
-      const precio = preciosEspecificos.get(normalizado) || preciosPorMedida.get(normalizado) || 0;
-      console.log(`${caso} -> ${normalizado} -> Precio: ${precio}`);
-    });
     
     // Combinar ambos mapas, dando prioridad a los precios específicos
     const preciosFinales = new Map([...preciosPorMedida, ...preciosEspecificos]);
@@ -435,7 +432,7 @@ const prepararItemsJoselito = (productos, clienteCrudos = {}, preciosVenta = new
           // Calcular kilos de sobrante - sumar tal cual
           let kilosSobrante = 0;
           if (item.sobrante && item.mostrarSobrante) {
-            kilosSobrante = parseInt(item.sobrante.split('-').pop()) || 0;
+            kilosSobrante = extraerValorSobrante(item.sobrante);
           }
           
           // Para el caso específico "Med c/c" con taras "10-19" y sobrante "1-10",
@@ -467,8 +464,7 @@ const prepararItemsJoselito = (productos, clienteCrudos = {}, preciosVenta = new
               medida: medida,
               costo: costo,
               precioVenta: precioVenta,
-              total: kilosTotales * costo,
-              esCrudo: true
+              total: kilosTotales * costo
             });
           }
         });
@@ -680,8 +676,8 @@ const prepararDatosCuentaJoselito = async (embarqueData) => {
   // Obtener los crudos del cliente Joselito
   const crudosJoselito = clienteCrudos ? (clienteCrudos['1'] || []) : [];
   
-  // Obtener los precios de venta más recientes
-  const preciosVenta = await obtenerPreciosVenta('joselito');
+  // Obtener los precios de venta más recientes según la fecha del embarque
+  const preciosVenta = await obtenerPreciosVenta('joselito', fecha);
   
   // Preparar items y calcular totales
   const items = prepararItemsJoselito(productos, { '1': crudosJoselito }, preciosVenta);
@@ -722,8 +718,8 @@ const prepararDatosCuentaCatarro = async (embarqueData) => {
   // Obtener los crudos del cliente Catarro
   const crudosCatarro = clienteCrudos ? (clienteCrudos['2'] || []) : [];
   
-  // Obtener los precios de venta más recientes
-  const preciosVenta = await obtenerPreciosVenta('catarro');
+  // Obtener los precios de venta más recientes según la fecha del embarque
+  const preciosVenta = await obtenerPreciosVenta('catarro', fecha);
   
   // Preparar los items de la cuenta
   const items = [];
@@ -766,8 +762,8 @@ const prepararDatosCuentaCatarro = async (embarqueData) => {
         
         // Obtener el costo y el precio de venta
         const costo = producto.precio || producto.costo || 0;
-        // Buscar el precio de venta en el mapa de precios
-        const precioVenta = preciosVenta.get(medidaNormalizada) || producto.precioVenta || costo;
+        // Buscar el precio de venta en el mapa de precios o usar precio manual
+        const precioVenta = producto.precio || preciosVenta.get(medidaNormalizada) || 0;
         
         // Calcular kilos para costos y ventas
         const kilosCosto = calcularKilosCrudos(medida, kilos, true);
@@ -835,9 +831,9 @@ const prepararDatosCuentaCatarro = async (embarqueData) => {
             const medida = item.talla || 'Crudo';
             const medidaNormalizada = normalizarMedida(medida);
             
-            // Obtener costo y precio de venta
+            // Obtener costo y precio de venta (primero buscar precio manual)
             const costo = item.precio || 0;
-            const precioVenta = preciosVenta.get(medidaNormalizada) || item.precioVenta || costo;
+            const precioVenta = item.precio || preciosVenta.get(medidaNormalizada) || 0;
             
             // Calcular kilos para ventas (ajustar 19 a 20)
             let kilosTarasVenta = 0;
@@ -895,6 +891,414 @@ const prepararDatosCuentaCatarro = async (embarqueData) => {
   
   // Obtener saldo acumulado anterior
   const saldoAcumuladoAnterior = await obtenerSaldoAcumuladoAnterior('cuentasCatarro', fecha);
+  
+  return {
+    fecha,
+    items,
+    itemsVenta,
+    saldoAcumuladoAnterior,
+    cobros: [],
+    abonos: [],
+    totalGeneral,
+    totalGeneralVenta,
+    nuevoSaldoAcumulado: saldoAcumuladoAnterior + totalGeneralVenta,
+    estadoPagado: false,
+    tieneObservacion: false,
+    observacion: '',
+    ultimaActualizacion: new Date().toISOString()
+  };
+};
+
+/**
+ * Prepara los datos necesarios para crear una cuenta de Ozuna
+ * @param {Object} embarqueData - Datos del embarque
+ * @returns {Promise<Object>} - Datos preparados para la cuenta
+ */
+const prepararDatosCuentaOzuna = async (embarqueData) => {
+  const { fecha, productos, clienteCrudos } = embarqueData;
+  
+  // Obtener los crudos del cliente Ozuna (suponiendo que su ID es '4')
+  const crudosOzuna = clienteCrudos ? (clienteCrudos['4'] || []) : [];
+  
+  // Obtener los precios de venta más recientes según la fecha del embarque
+  const preciosVenta = await obtenerPreciosVenta('ozuna', fecha);
+  
+  // Preparar los items de la cuenta
+  const items = [];
+  
+  // Procesar productos normales
+  if (Array.isArray(productos)) {
+    productos.forEach(producto => {
+      if (producto) {
+        // Calcular kilos dependiendo del tipo de producto
+        let kilos = 0;
+        
+        if (producto.tipo === 'c/h20') {
+          // Para productos c/h20, calcular con el valor neto
+          const reporteTaras = producto.reporteTaras || [];
+          const reporteBolsas = producto.reporteBolsas || [];
+          let sumaTotalKilos = 0;
+
+          for (let i = 0; i < reporteTaras.length; i++) {
+            const taras = parseInt(reporteTaras[i]) || 0;
+            const bolsa = parseInt(reporteBolsas[i]) || 0;
+            sumaTotalKilos += taras * bolsa;
+          }
+
+          // Multiplicar por el valor neto (0.65 por defecto)
+          kilos = sumaTotalKilos * (producto.camaronNeto || 0.65);
+        } else {
+          // Para otros productos, calcular con taras y descuentos
+          const sumaKilos = producto.kilos?.reduce((sum, k) => sum + (parseFloat(k) || 0), 0) || 0;
+          const sumaTarasNormales = producto.taras?.reduce((sum, tara) => sum + (parseInt(tara) || 0), 0) || 0;
+          // No incluimos las taras extra en el descuento, solo las taras normales
+          const descuentoTaras = producto.restarTaras ? sumaTarasNormales * 3 : 0;
+          kilos = Number((sumaKilos - descuentoTaras).toFixed(1));
+        }
+        
+        const medida = producto.medida || '';
+        
+        // Determinar el costo según si es venta o maquila
+        let costo = 0;
+        
+        if (producto.esVenta) {
+          // Si es venta, buscar precio en la base de datos o considerar precio manual
+          const medidaNormalizada = normalizarMedida(medida);
+          // Primero usar precio manual si existe
+          const precioEncontrado = preciosVenta.get(medidaNormalizada);
+          
+          // Usar precio encontrado o precio manual
+          costo = parseFloat(producto.precio) || precioEncontrado || 0;
+        } else {
+          // Si es maquila, usar valor por defecto de 20
+          costo = 20;
+        }
+        
+        // Solo agregar el item si tiene kilos
+        if (kilos > 0) {
+          items.push({
+            kilos,
+            medida,
+            costo,
+            total: kilos * costo,
+            esVenta: producto.esVenta || false,
+            editando: false,
+            campoEditando: null
+          });
+        }
+      }
+    });
+  }
+  
+  // Procesar crudos
+  if (Array.isArray(crudosOzuna)) {
+    crudosOzuna.forEach(crudo => {
+      if (crudo && Array.isArray(crudo.items)) {
+        crudo.items.forEach(item => {
+          if (item) {
+            // Calcular kilos utilizando el mismo método que en la vista
+            let kilosTotales = 0;
+            
+            // Procesar taras
+            if (item.taras) {
+              // Verificar si la tara tiene formato "5-19" o similar
+              const formatoGuion = /^(\d+)-(\d+)$/.exec(item.taras);
+              if (formatoGuion) {
+                const cantidad = parseInt(formatoGuion[1]) || 0;
+                let medida = parseInt(formatoGuion[2]) || 0;
+                
+                // Para Ozuna, SIEMPRE interpretar 10-19 como 10*20=200
+                if (medida === 19) {
+                  medida = 20;
+                }
+                
+                kilosTotales += cantidad * medida;
+              } else {
+                // Formato original si no coincide con el patrón
+                const partes = item.taras.split('-').map(Number);
+                if (partes.length >= 2) {
+                  let valorPorTara = partes[1] || 0;
+                  // Si el segundo valor es 19, sustituirlo por 20
+                  if (valorPorTara === 19) valorPorTara = 20;
+                  kilosTotales += (partes[0] || 0) * valorPorTara;
+                }
+              }
+            }
+            
+            // Procesar sobrante
+            if (item.sobrante) {
+              // Verificar si el sobrante tiene formato "5-19" o similar
+              const formatoGuion = /^(\d+)-(\d+)$/.exec(item.sobrante);
+              if (formatoGuion) {
+                const cantidadSobrante = parseInt(formatoGuion[1]) || 0;
+                let medidaSobrante = parseInt(formatoGuion[2]) || 0;
+                
+                // Si la medida es 19, sustituirla por 20
+                if (medidaSobrante === 19) {
+                  medidaSobrante = 20;
+                }
+                
+                kilosTotales += cantidadSobrante * medidaSobrante;
+              } else {
+                // Formato original si no coincide con el patrón
+                const partes = item.sobrante.split('-').map(Number);
+                if (partes.length >= 2) {
+                  let valorSobrante = partes[1] || 0;
+                  // Si el segundo valor es 19, sustituirlo por 20
+                  if (valorSobrante === 19) valorSobrante = 20;
+                  kilosTotales += (partes[0] || 0) * valorSobrante;
+                }
+              }
+            }
+            
+            const kilos = kilosTotales;
+            const medida = item.medida || item.talla || 'Crudo';
+            
+            // Para crudos de Ozuna, siempre considerar como venta sin importar el estado del checkbox
+            // Buscar precio en la base de datos o usar precio manual si existe
+            const medidaNormalizada = normalizarMedida(medida);
+            const precioEncontrado = preciosVenta.get(medidaNormalizada);
+            
+            // Usar precio encontrado o precio manual
+            const costo = parseFloat(item.precio) || precioEncontrado || 0;
+            
+            // Solo agregar el item si tiene kilos
+            if (kilos > 0) {
+              items.push({
+                kilos,
+                medida,
+                costo,
+                total: kilos * costo,
+                esVenta: true, // Siempre es venta para crudos en Ozuna
+                editando: false,
+                campoEditando: null
+              });
+            }
+          }
+        });
+      }
+    });
+  }
+  
+  // Calcular total general
+  const totalGeneral = items.reduce((sum, item) => sum + (item.total || 0), 0);
+  
+  // Obtener saldo acumulado anterior
+  const saldoAcumuladoAnterior = await obtenerSaldoAcumuladoAnterior('cuentasOzuna', fecha);
+  
+  return {
+    fecha,
+    items,
+    saldoAcumuladoAnterior,
+    cobros: [],
+    abonos: [],
+    totalGeneral,
+    totalSaldo: saldoAcumuladoAnterior + totalGeneral,
+    nuevoSaldoAcumulado: saldoAcumuladoAnterior + totalGeneral,
+    ultimaActualizacion: new Date().toISOString()
+  };
+};
+
+/**
+ * Prepara los datos necesarios para crear una cuenta de Otilio
+ * @param {Object} embarqueData - Datos del embarque
+ * @returns {Promise<Object>} - Datos preparados para la cuenta
+ */
+const prepararDatosCuentaOtilio = async (embarqueData) => {
+  const { fecha, productos, clienteCrudos } = embarqueData;
+  
+  // Obtener los crudos del cliente Otilio (su ID es '3')
+  const crudosOtilio = clienteCrudos ? (clienteCrudos['3'] || []) : [];
+  
+  // Obtener los precios de venta más recientes según la fecha del embarque
+  const preciosVenta = await obtenerPreciosVenta('otilio', fecha);
+  
+  // Preparar los items de la cuenta (tabla de costos)
+  const items = [];
+  // Preparar los items de venta (tabla de precios)
+  const itemsVenta = [];
+  
+  // Procesar productos normales
+  if (Array.isArray(productos)) {
+    productos.forEach(producto => {
+      if (producto) {
+        // Calcular kilos dependiendo del tipo de producto
+        let kilos = 0;
+        
+        if (producto.tipo === 'c/h20') {
+          // Para productos c/h20, calcular con el valor neto
+          const reporteTaras = producto.reporteTaras || [];
+          const reporteBolsas = producto.reporteBolsas || [];
+          let sumaTotalKilos = 0;
+
+          for (let i = 0; i < reporteTaras.length; i++) {
+            const taras = parseInt(reporteTaras[i]) || 0;
+            const bolsa = parseInt(reporteBolsas[i]) || 0;
+            sumaTotalKilos += taras * bolsa;
+          }
+
+          // Multiplicar por el valor neto (0.65 por defecto)
+          kilos = sumaTotalKilos * (producto.camaronNeto || 0.65);
+        } else {
+          // Para otros productos, calcular con taras y descuentos
+          const sumaKilos = producto.kilos?.reduce((sum, k) => sum + (parseFloat(k) || 0), 0) || 0;
+          const sumaTarasNormales = producto.taras?.reduce((sum, tara) => sum + (parseInt(tara) || 0), 0) || 0;
+          // No incluimos las taras extra en el descuento, solo las taras normales
+          const descuentoTaras = producto.restarTaras ? sumaTarasNormales * 3 : 0;
+          kilos = Number((sumaKilos - descuentoTaras).toFixed(1));
+        }
+        
+        const medida = producto.medida || '';
+        const medidaNormalizada = normalizarMedida(medida);
+        
+        // Determinar el costo para la tabla de costos
+        const costo = 20; // Para Otilio, usamos un costo base fijo de 20 para maquila
+        
+        // Buscar el precio de venta: primero usar precio manual, luego buscar en los precios históricos
+        const precioVenta = parseFloat(producto.precio) || 
+                           preciosVenta.get(medidaNormalizada) || 0;
+        
+        // Calcular kilos para costos y ventas
+        const kilosCosto = calcularKilosCrudos(medida, kilos, true);
+        const kilosVenta = calcularKilosCrudos(medida, kilos, false);
+        
+        // Solo agregar el item si tiene kilos
+        if (kilos > 0) {
+          // Item para la tabla de costos
+          items.push({
+            kilos: kilosCosto,
+            medida,
+            costo,
+            total: kilosCosto * costo,
+            editando: false,
+            campoEditando: null
+          });
+          
+          // Item para la tabla de ventas
+          itemsVenta.push({
+            kilosVenta: kilosVenta,
+            medida,
+            precioVenta,
+            totalVenta: kilosVenta * precioVenta,
+            ganancia: kilosVenta * precioVenta - kilosCosto * costo,
+            editando: false,
+            campoEditando: null
+          });
+        }
+      }
+    });
+  }
+  
+  // Procesar crudos
+  if (Array.isArray(crudosOtilio)) {
+    crudosOtilio.forEach(crudo => {
+      if (crudo && Array.isArray(crudo.items)) {
+        crudo.items.forEach(item => {
+          if (item) {
+            // Calcular kilos utilizando el mismo método que en la vista
+            let kilosTotales = 0;
+            
+            // Procesar taras
+            if (item.taras) {
+              // Verificar si la tara tiene formato "5-19" o similar
+              const formatoGuion = /^(\d+)-(\d+)$/.exec(item.taras);
+              if (formatoGuion) {
+                const cantidad = parseInt(formatoGuion[1]) || 0;
+                let medida = parseInt(formatoGuion[2]) || 0;
+                
+                // Para Otilio, si la medida es 19, sustituirla por 20
+                if (medida === 19) {
+                  medida = 20;
+                }
+                
+                kilosTotales += cantidad * medida;
+              } else {
+                // Formato original si no coincide con el patrón
+                const partes = item.taras.split('-').map(Number);
+                if (partes.length >= 2) {
+                  let valorPorTara = partes[1] || 0;
+                  // Si el segundo valor es 19, sustituirlo por 20
+                  if (valorPorTara === 19) valorPorTara = 20;
+                  kilosTotales += (partes[0] || 0) * valorPorTara;
+                }
+              }
+            }
+            
+            // Procesar sobrante
+            if (item.sobrante) {
+              // Verificar si el sobrante tiene formato "5-19" o similar
+              const formatoGuion = /^(\d+)-(\d+)$/.exec(item.sobrante);
+              if (formatoGuion) {
+                const cantidadSobrante = parseInt(formatoGuion[1]) || 0;
+                let medidaSobrante = parseInt(formatoGuion[2]) || 0;
+                
+                // Si la medida es 19, sustituirla por 20
+                if (medidaSobrante === 19) {
+                  medidaSobrante = 20;
+                }
+                
+                kilosTotales += cantidadSobrante * medidaSobrante;
+              } else {
+                // Formato original si no coincide con el patrón
+                const partes = item.sobrante.split('-').map(Number);
+                if (partes.length >= 2) {
+                  let valorSobrante = partes[1] || 0;
+                  // Si el segundo valor es 19, sustituirlo por 20
+                  if (valorSobrante === 19) valorSobrante = 20;
+                  kilosTotales += (partes[0] || 0) * valorSobrante;
+                }
+              }
+            }
+            
+            const kilosCosto = kilosTotales;
+            const kilosVenta = kilosTotales; // Mismos kilos para venta
+            const medida = item.medida || item.talla || 'Crudo';
+            const medidaNormalizada = normalizarMedida(medida);
+            
+            // Para crudos, usar costo base fijo de 20
+            const costo = 20;
+            
+            // Buscar precio en la base de datos o usar precio manual
+            const precioVenta = parseFloat(item.precio) || 
+                               preciosVenta.get(medidaNormalizada) || 0;
+            
+            // Solo agregar el item si tiene kilos
+            if (kilosCosto > 0) {
+              // Item para la tabla de costos
+              items.push({
+                kilos: kilosCosto,
+                medida,
+                costo,
+                total: kilosCosto * costo,
+                esCrudo: true,
+                editando: false,
+                campoEditando: null
+              });
+              
+              // Item para la tabla de ventas
+              itemsVenta.push({
+                kilosVenta: kilosVenta,
+                medida,
+                precioVenta,
+                totalVenta: kilosVenta * precioVenta,
+                ganancia: kilosVenta * precioVenta - kilosCosto * costo,
+                esCrudo: true,
+                editando: false,
+                campoEditando: null
+              });
+            }
+          }
+        });
+      }
+    });
+  }
+  
+  // Calcular totales
+  const totalGeneral = items.reduce((sum, item) => sum + (item.total || 0), 0);
+  const totalGeneralVenta = itemsVenta.reduce((sum, item) => sum + (item.totalVenta || 0), 0);
+  
+  // Obtener saldo acumulado anterior
+  const saldoAcumuladoAnterior = await obtenerSaldoAcumuladoAnterior('cuentasOtilio', fecha);
   
   return {
     fecha,
@@ -990,195 +1394,6 @@ export const crearCuentaCatarro = async (embarqueData, router) => {
 };
 
 /**
- * Prepara los datos necesarios para crear una cuenta de Ozuna
- * @param {Object} embarqueData - Datos del embarque
- * @returns {Promise<Object>} - Datos preparados para la cuenta
- */
-const prepararDatosCuentaOzuna = async (embarqueData) => {
-  const { fecha, productos, clienteCrudos } = embarqueData;
-  
-  // Obtener los crudos del cliente Ozuna (suponiendo que su ID es '4')
-  const crudosOzuna = clienteCrudos ? (clienteCrudos['4'] || []) : [];
-  
-  // Obtener los precios de venta más recientes
-  const preciosVenta = await obtenerPreciosVenta('ozuna');
-  
-  // Preparar los items de la cuenta
-  const items = [];
-  
-  // Procesar productos normales
-  if (Array.isArray(productos)) {
-    productos.forEach(producto => {
-      if (producto) {
-        // Calcular kilos dependiendo del tipo de producto
-        let kilos = 0;
-        
-        if (producto.tipo === 'c/h20') {
-          // Para productos c/h20, calcular con el valor neto
-          const reporteTaras = producto.reporteTaras || [];
-          const reporteBolsas = producto.reporteBolsas || [];
-          let sumaTotalKilos = 0;
-
-          for (let i = 0; i < reporteTaras.length; i++) {
-            const taras = parseInt(reporteTaras[i]) || 0;
-            const bolsa = parseInt(reporteBolsas[i]) || 0;
-            sumaTotalKilos += taras * bolsa;
-          }
-
-          // Multiplicar por el valor neto (0.65 por defecto)
-          kilos = sumaTotalKilos * (producto.camaronNeto || 0.65);
-        } else {
-          // Para otros productos, calcular con taras y descuentos
-          const sumaKilos = producto.kilos?.reduce((sum, k) => sum + (parseFloat(k) || 0), 0) || 0;
-          const sumaTarasNormales = producto.taras?.reduce((sum, tara) => sum + (parseInt(tara) || 0), 0) || 0;
-          // No incluimos las taras extra en el descuento, solo las taras normales
-          const descuentoTaras = producto.restarTaras ? sumaTarasNormales * 3 : 0;
-          kilos = Number((sumaKilos - descuentoTaras).toFixed(1));
-        }
-        
-        const medida = producto.medida || '';
-        
-        // Determinar el costo según si es venta o maquila
-        let costo = 0;
-        
-        if (producto.esVenta) {
-          // Si es venta, buscar precio en la base de datos o considerar precio manual
-          const medidaNormalizada = normalizarMedida(medida);
-          const precioEncontrado = preciosVenta.get(medidaNormalizada);
-          
-          // Usar precio encontrado o precio manual
-          costo = parseFloat(producto.precio) || precioEncontrado || 0;
-        } else {
-          // Si es maquila, usar valor por defecto de 20
-          costo = 20;
-        }
-        
-        // Solo agregar el item si tiene kilos
-        if (kilos > 0) {
-          items.push({
-            kilos,
-            medida,
-            costo,
-            total: kilos * costo,
-            esVenta: producto.esVenta || false,
-            editando: false,
-            campoEditando: null
-          });
-        }
-      }
-    });
-  }
-  
-  // Procesar crudos
-  if (Array.isArray(crudosOzuna)) {
-    crudosOzuna.forEach(crudo => {
-      if (crudo && Array.isArray(crudo.items)) {
-        crudo.items.forEach(item => {
-          if (item) {
-            // Calcular kilos utilizando el mismo método que en la vista
-            let kilosTotales = 0;
-            
-            // Procesar taras
-            if (item.taras) {
-              // Verificar si la tara tiene formato "5-19" o similar
-              const formatoGuion = /^(\d+)-(\d+)$/.exec(item.taras);
-              if (formatoGuion) {
-                const cantidad = parseInt(formatoGuion[1]) || 0;
-                let medida = parseInt(formatoGuion[2]) || 0;
-                
-                // Para Ozuna, SIEMPRE interpretar 10-19 como 10*20=200
-                if (medida === 19) {
-                  medida = 20;
-                }
-                
-                kilosTotales += cantidad * medida;
-              } else {
-                // Formato original si no coincide con el patrón
-                const partes = item.taras.split('-').map(Number);
-                if (partes.length >= 2) {
-                  let valorPorTara = partes[1] || 0;
-                  // Si el segundo valor es 19, sustituirlo por 20
-                  if (valorPorTara === 19) valorPorTara = 20;
-                  kilosTotales += (partes[0] || 0) * valorPorTara;
-                }
-              }
-            }
-            
-            // Procesar sobrante
-            if (item.sobrante) {
-              // Verificar si el sobrante tiene formato "5-19" o similar
-              const formatoGuion = /^(\d+)-(\d+)$/.exec(item.sobrante);
-              if (formatoGuion) {
-                const cantidadSobrante = parseInt(formatoGuion[1]) || 0;
-                let medidaSobrante = parseInt(formatoGuion[2]) || 0;
-                
-                // Si la medida es 19, sustituirla por 20
-                if (medidaSobrante === 19) {
-                  medidaSobrante = 20;
-                }
-                
-                kilosTotales += cantidadSobrante * medidaSobrante;
-              } else {
-                // Formato original si no coincide con el patrón
-                const partes = item.sobrante.split('-').map(Number);
-                if (partes.length >= 2) {
-                  let valorSobrante = partes[1] || 0;
-                  // Si el segundo valor es 19, sustituirlo por 20
-                  if (valorSobrante === 19) valorSobrante = 20;
-                  kilosTotales += (partes[0] || 0) * valorSobrante;
-                }
-              }
-            }
-            
-            const kilos = kilosTotales;
-            const medida = item.medida || item.talla || 'Crudo';
-            
-            // Para crudos de Ozuna, siempre considerar como venta sin importar el estado del checkbox
-            // Buscar precio en la base de datos
-            const medidaNormalizada = normalizarMedida(medida);
-            const precioEncontrado = preciosVenta.get(medidaNormalizada);
-            
-            // Usar precio encontrado o precio manual
-            const costo = parseFloat(item.precio) || precioEncontrado || 0;
-            
-            // Solo agregar el item si tiene kilos
-            if (kilos > 0) {
-              items.push({
-                kilos,
-                medida,
-                costo,
-                total: kilos * costo,
-                esVenta: true, // Siempre es venta para crudos en Ozuna
-                editando: false,
-                campoEditando: null
-              });
-            }
-          }
-        });
-      }
-    });
-  }
-  
-  // Calcular total general
-  const totalGeneral = items.reduce((sum, item) => sum + (item.total || 0), 0);
-  
-  // Obtener saldo acumulado anterior
-  const saldoAcumuladoAnterior = await obtenerSaldoAcumuladoAnterior('cuentasOzuna', fecha);
-  
-  return {
-    fecha,
-    items,
-    saldoAcumuladoAnterior,
-    cobros: [],
-    abonos: [],
-    totalGeneral,
-    totalSaldo: saldoAcumuladoAnterior + totalGeneral,
-    nuevoSaldoAcumulado: saldoAcumuladoAnterior + totalGeneral,
-    ultimaActualizacion: new Date().toISOString()
-  };
-};
-
-/**
  * Crea una cuenta de cliente Ozuna a partir de los datos de un embarque
  * @param {Object} embarqueData - Datos del embarque
  * @param {Object} router - Router de Vue para navegar después de crear la cuenta
@@ -1216,8 +1431,47 @@ export const crearCuentaOzuna = async (embarqueData, router) => {
   }
 };
 
+/**
+ * Crea una cuenta de cliente Otilio a partir de los datos de un embarque
+ * @param {Object} embarqueData - Datos del embarque
+ * @param {Object} router - Router de Vue para navegar después de crear la cuenta
+ * @returns {Promise<string>} - El ID de la cuenta creada
+ */
+export const crearCuentaOtilio = async (embarqueData, router) => {
+  try {
+    console.log('Iniciando creación de cuenta Otilio desde embarque');
+    
+    // Verificar si ya existe una cuenta para esta fecha
+    const existeCuenta = await existeCuentaParaFecha('cuentasOtilio', embarqueData.fecha);
+    if (existeCuenta) {
+      throw new Error('Ya existe una cuenta de Otilio registrada para esta fecha.');
+    }
+    
+    // Preparar los datos para la cuenta
+    const datosCuenta = await prepararDatosCuentaOtilio(embarqueData);
+    
+    // Crear la cuenta en Firestore
+    const db = getFirestore();
+    const docRef = await addDoc(collection(db, 'cuentasOtilio'), datosCuenta);
+    
+    console.log('Cuenta de Otilio creada con ID:', docRef.id);
+    
+    // Abrir la cuenta en una nueva pestaña en lugar de navegar directamente
+    if (router) {
+      const rutaCompleta = `${window.location.origin}/cuentas-otilio/${docRef.id}?edit=true`;
+      window.open(rutaCompleta, '_blank');
+    }
+    
+    return docRef.id;
+  } catch (error) {
+    console.error('Error al crear cuenta de Otilio:', error);
+    throw error;
+  }
+};
+
 export default {
   crearCuentaJoselito,
   crearCuentaCatarro,
-  crearCuentaOzuna
+  crearCuentaOzuna,
+  crearCuentaOtilio
 }; 
