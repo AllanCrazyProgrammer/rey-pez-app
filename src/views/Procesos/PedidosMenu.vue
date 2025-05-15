@@ -284,6 +284,7 @@ export default {
           name: 'PedidoLimpioImpresion',
           params: {
             fecha: pedido.fecha,
+            id: pedido.id,
             pedidoOtilio: pedido.otilio || [],
             pedidoCatarro: pedido.catarro || [],
             pedidoJoselito: pedido.joselito || [],

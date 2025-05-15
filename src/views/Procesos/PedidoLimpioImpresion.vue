@@ -20,8 +20,8 @@
       <button @click="$router.push('/procesos/pedidos')" class="btn-menu">
         Menú
       </button>
-      <button @click="$emit('volver')" class="btn-volver">
-        Volver al Pedido
+      <button @click="volverAEditar" class="btn-volver">
+        Editar Pedido
       </button>
     </div>
     <div id="pdfPreview" class="pdf-preview">
@@ -143,38 +143,36 @@
 
       <!-- Clientes Temporales -->
       <div v-if="Object.keys(clientesTemporales).length > 0" class="preview-page">
-        <template v-for="(cliente, id) in clientesTemporales">
-          <div :key="id" class="cliente-seccion temporal">
-            <h3 class="cliente-header temporal-header">{{ cliente.nombre }}</h3>
-            <table class="preview-table">
-              <thead>
-                <tr>
-                  <th>✓</th>
-                  <th>Kilos/Taras</th>
-                  <th>Medida</th>
-                  <th>Tipo</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="(item, index) in cliente.pedidos" :key="'temp-'+id+'-'+index">
-                  <td><input type="checkbox" v-model="item.completado" class="pedido-checkbox"></td>
-                  <td>{{ item.kilos }}<i v-if="item.esTara">T</i></td>
-                  <td>
-                    {{ item.medida }}
-                    <span v-if="item.proveedor" class="proveedor-tag">{{ item.proveedor }}</span>
-                  </td>
-                  <td :class="{ 
-                    'text-blue': item.tipo === 'C/H20', 
-                    'text-blue compact': item.tipo === '1.35 y .15' 
-                  }">
-                    {{ item.tipo }}
-                    <span v-if="item.nota" class="nota-tag">{{ item.nota }}</span>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </template>
+        <div v-for="(cliente, id) in clientesTemporales" :key="id" class="cliente-seccion temporal">
+          <h3 class="cliente-header temporal-header">{{ cliente.nombre }}</h3>
+          <table class="preview-table">
+            <thead>
+              <tr>
+                <th>✓</th>
+                <th>Kilos/Taras</th>
+                <th>Medida</th>
+                <th>Tipo</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(item, index) in cliente.pedidos" :key="'temp-'+id+'-'+index">
+                <td><input type="checkbox" v-model="item.completado" class="pedido-checkbox"></td>
+                <td>{{ item.kilos }}<i v-if="item.esTara">T</i></td>
+                <td>
+                  {{ item.medida }}
+                  <span v-if="item.proveedor" class="proveedor-tag">{{ item.proveedor }}</span>
+                </td>
+                <td :class="{ 
+                  'text-blue': item.tipo === 'C/H20', 
+                  'text-blue compact': item.tipo === '1.35 y .15' 
+                }">
+                  {{ item.tipo }}
+                  <span v-if="item.nota" class="nota-tag">{{ item.nota }}</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <!-- Sección de resumen por medida (solo en vista previa) -->
@@ -277,6 +275,10 @@ export default {
       type: String,
       required: true
     },
+    id: {
+      type: String,
+      default: ''
+    },
     pedidoOtilio: {
       type: Array,
       required: true
@@ -334,6 +336,16 @@ export default {
     this.aplicarEstadosCompletado();
   },
   methods: {
+    volverAEditar() {
+      if (this.id) {
+        this.$router.push({
+          path: '/procesos/pedidos/limpio',
+          query: { edit: 'true', id: this.id, fecha: this.fecha }
+        });
+      } else {
+        this.$router.push('/procesos/pedidos');
+      }
+    },
     aplicarEstadosCompletado() {
       // Aplicar estados a Otilio
       this.pedidoOtilio.forEach((item, index) => {
