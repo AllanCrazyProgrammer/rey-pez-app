@@ -327,25 +327,8 @@ export default {
     },
     filtrarPreciosPorCliente(productos) {
       if (!this.filtroCliente) {
-        // Si no hay filtro, mostrar todos los precios dando prioridad a los específicos
-        // Agrupar por producto para mostrar solo el precio específico si existe
-        const productosAgrupados = {};
-        
-        // Primero agregar todos los precios generales
-        productos.forEach(producto => {
-          if (!producto.clienteId) {
-            productosAgrupados[producto.producto] = producto;
-          }
-        });
-        
-        // Luego sobrescribir con precios específicos si existen
-        productos.forEach(producto => {
-          if (producto.clienteId) {
-            productosAgrupados[producto.producto] = producto;
-          }
-        });
-        
-        return Object.values(productosAgrupados);
+        // Si no hay filtro ("Todos"), mostrar solo los precios generales
+        return productos.filter(producto => !producto.clienteId);
       } else {
         // Si hay filtro, mostrar solo los precios para ese cliente específico
         // o los precios generales si no hay específicos
