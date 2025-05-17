@@ -28,6 +28,8 @@ import CuentaFletes from '@/views/Embarques/CuentaFletes.vue';
 import Login from './views/Login.vue';
 import OtilioCuentasMenu from '@/views/CuentasClientes/OtilioCuentasMenu.vue'
 import CuentasOtilio from '@/views/CuentasClientes/CuentasOtilio.vue'
+import OtilioIndependienteCuentasMenu from '@/views/CuentasClientes/OtilioIndependienteCuentasMenu.vue'
+import CuentasOtilioIndependiente from '@/views/CuentasClientes/CuentasOtilioIndependiente.vue'
 import ProcesosMenu from '@/views/Procesos/ProcesosMenu.vue'
 import Preparacion from '@/views/Procesos/Preparacion.vue'
 import PedidosMenu from '@/views/Procesos/PedidosMenu.vue'
@@ -234,6 +236,26 @@ const routes = [
     path: '/cuentas-otilio/:id?',
     name: 'CuentasOtilio',
     component: CuentasOtilio
+  },
+  {
+    path: '/cuentas-otilio-independiente',
+    name: 'otilio-independiente-cuentas-menu',
+    component: OtilioIndependienteCuentasMenu
+  },
+  {
+    path: '/cuentas-otilio-independiente/nueva',
+    name: 'nueva-cuenta-otilio-independiente',
+    component: CuentasOtilioIndependiente
+  },
+  {
+    path: '/cuentas-otilio-independiente/:id',
+    name: 'ver-cuenta-otilio-independiente',
+    component: CuentasOtilioIndependiente
+  },
+  {
+    path: '/cuentas-otilio-independiente/:id?',
+    name: 'CuentasOtilioIndependiente',
+    component: CuentasOtilioIndependiente
   },
   {
     path: '/procesos',

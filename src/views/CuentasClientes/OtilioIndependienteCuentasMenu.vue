@@ -1,22 +1,19 @@
 <template>
   <div class="otilio-cuentas-menu-container">
-    <h1>Menú de Cuentas Otilio</h1>
+    <h1>Menú de Cuentas Independientes Otilio</h1>
     
     <div class="actions-container">
-      <router-link to="/cuentas-mexico" class="action-button back-btn">
-        Cuentas México
+      <router-link to="/cuentas-otilio" class="action-button back-btn">
+        Volver a Cuentas Otilio
       </router-link>
-      <router-link to="/cuentas-otilio/nueva" class="action-button new-cuenta-btn">
+      <router-link to="/cuentas-otilio-independiente/nueva" class="action-button new-cuenta-btn">
         Nueva Cuenta
-      </router-link>
-      <router-link to="/cuentas-otilio-independiente" class="action-button independiente-btn">
-        Cuentas Independientes
       </router-link>
       <button @click="showAbonosModal = true" class="action-button abonos-btn">
         Abonos
       </button>
-      <PreciosHistorialModal clienteActual="otilio" />
-      <StashModal cliente="otilio" />
+      <PreciosHistorialModal clienteActual="otilioIndependiente" />
+      <StashModal cliente="otilioIndependiente" />
     </div>
 
     <!-- Modal de Abonos -->
@@ -72,7 +69,7 @@
     </div>
 
     <div class="cuentas-list">
-      <h2>Registros de Cuentas</h2>
+      <h2>Registros de Cuentas Independientes</h2>
       <div v-if="error" class="error-message">
         Error al cargar los datos: {{ error }}
       </div>
@@ -135,7 +132,7 @@ import PreciosHistorialModal from '@/components/PreciosHistorialModal.vue';
 import StashModal from '@/components/StashModal.vue';
 
 export default {
-  name: 'OtilioCuentasMenu',
+  name: 'OtilioIndependienteCuentasMenu',
   components: {
     BackButton,
     PreciosHistorialModal,
@@ -160,7 +157,7 @@ export default {
     async loadCuentas() {
       try {
         this.isLoading = true;
-        const cuentasRef = collection(db, 'cuentasOtilio');
+        const cuentasRef = collection(db, 'cuentasOtilioIndependiente');
         const q = query(cuentasRef, orderBy('fecha', 'asc'));
         
         this.unsubscribe = onSnapshot(q, async (querySnapshot) => {
@@ -222,7 +219,7 @@ export default {
 
           if (actualizaciones.length > 0) {
             await Promise.all(actualizaciones.map(({ id, updates }) => 
-              updateDoc(doc(db, 'cuentasOtilio', id), updates)
+              updateDoc(doc(db, 'cuentasOtilioIndependiente', id), updates)
             ));
           }
 
@@ -250,12 +247,12 @@ export default {
       return value.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     },
     editarCuenta(id) {
-      this.$router.push(`/cuentas-otilio/${id}?edit=true`);
+      this.$router.push(`/cuentas-otilio-independiente/${id}?edit=true`);
     },
     async borrarCuenta(id) {
       if (confirm('¿Estás seguro de que quieres borrar este registro de cuenta?')) {
         try {
-          await deleteDoc(doc(db, 'cuentasOtilio', id));
+          await deleteDoc(doc(db, 'cuentasOtilioIndependiente', id));
           alert('Registro de cuenta borrado con éxito');
         } catch (error) {
           console.error("Error al borrar el registro de cuenta: ", error);
@@ -285,7 +282,7 @@ export default {
     },
     async cargarHistorialAbonos() {
       try {
-        const cuentasRef = collection(db, 'cuentasOtilio');
+        const cuentasRef = collection(db, 'cuentasOtilioIndependiente');
         const querySnapshot = await getDocs(cuentasRef);
         
         let todosLosAbonos = [];
@@ -351,13 +348,13 @@ export default {
   display: flex;
   flex-direction: column;
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  background-color: #fff9e6;
+  background-color: #f3e5f5; /* Mantenemos el fondo con tono morado */
   border-radius: 8px;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
 
 h1, h2 {
-  color: #FFD700;
+  color: #9c27b0; /* Morado para diferenciar */
   text-align: center;
   margin-bottom: 30px;
   font-size: 2rem;
@@ -372,8 +369,8 @@ h1, h2 {
 }
 
 .action-button {
-  background-color: #FFD700;
-  color: black;
+  background-color: #9c27b0;
+  color: white;
   border: none;
   padding: 15px 30px;
   border-radius: 10px;
@@ -391,7 +388,7 @@ h1, h2 {
 }
 
 .action-button:hover {
-  background-color: #FFC000;
+  background-color: #7b1fa2;
   transform: translateY(-5px);
   box-shadow: 0 8px 15px rgba(0, 0, 0, 0.3);
 }
@@ -419,15 +416,6 @@ h1, h2 {
   background-color: #c82333;
 }
 
-.independiente-btn {
-  background-color: #9c27b0;
-  color: white;
-}
-
-.independiente-btn:hover {
-  background-color: #7b1fa2;
-}
-
 .abonos-btn {
   background-color: #28a745;
   color: white;
@@ -438,7 +426,7 @@ h1, h2 {
 }
 
 .cuentas-list {
-  background-color: #fff9e6;
+  background-color: #f3e5f5; /* Fondo más claro con tono morado */
   border-radius: 8px;
   padding: 20px;
   flex-grow: 1;
@@ -470,7 +458,7 @@ h1, h2 {
 }
 
 .cuenta-date {
-  color: #000000;
+  color: #9c27b0; /* Color morado para la fecha */
   font-weight: bold;
   font-size: 1.1em;
   display: block;
@@ -506,12 +494,12 @@ h1, h2 {
 }
 
 .edit-btn {
-  background-color: #FFD700;
-  color: black;
+  background-color: #9c27b0;
+  color: white;
 }
 
 .edit-btn:hover {
-  background-color: #FFC000;
+  background-color: #7b1fa2;
 }
 
 .delete-btn {
@@ -568,17 +556,6 @@ h1, h2 {
     font-size: 0.8em;
     flex-grow: 1;
   }
-  
-  .modal-content {
-    width: 95%;
-    max-height: 90vh;
-  }
-
-  .abono-details {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 5px;
-  }
 }
 
 .error-message {
@@ -618,6 +595,14 @@ h1, h2 {
   font-style: italic;
 }
 
+@media (max-width: 768px) {
+  .abono-detail {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 5px;
+  }
+}
+
 .modal {
   position: fixed;
   top: 0;
@@ -646,7 +631,7 @@ h1, h2 {
 }
 
 .abono-item {
-  background-color: #fff9e6;
+  background-color: #f3e5f5; /* Fondo más claro con tono morado */
   border-radius: 4px;
   margin-bottom: 10px;
   padding: 15px;
@@ -655,7 +640,7 @@ h1, h2 {
 
 .abono-fecha {
   font-weight: bold;
-  color: #000000;
+  color: #9c27b0;
   margin-bottom: 5px;
 }
 
@@ -679,7 +664,7 @@ h1, h2 {
 .close-btn {
   width: 100%;
   padding: 10px;
-  background-color: #6c757d;
+  background-color: #9c27b0;
   color: white;
   border: none;
   border-radius: 4px;
@@ -688,7 +673,7 @@ h1, h2 {
 }
 
 .close-btn:hover {
-  background-color: #5a6268;
+  background-color: #7b1fa2;
 }
 
 .modal-header {
@@ -697,12 +682,12 @@ h1, h2 {
   align-items: center;
   margin-bottom: 20px;
   padding-bottom: 10px;
-  border-bottom: 2px solid #FFD700;
+  border-bottom: 2px solid #9c27b0;
 }
 
 .modal-header h2 {
   margin: 0;
-  color: #000000;
+  color: #9c27b0;
 }
 
 .close-modal-btn {
@@ -724,7 +709,7 @@ h1, h2 {
   gap: 20px;
   margin-bottom: 20px;
   padding: 15px;
-  background-color: #fff9e6;
+  background-color: #f3e5f5;
   border-radius: 8px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
@@ -750,12 +735,12 @@ h1, h2 {
 }
 
 .fecha-input:focus {
-  border-color: #FFD700;
+  border-color: #9c27b0;
   outline: none;
 }
 
 .total-abonos {
-  background-color: #4CAF50;
+  background-color: #9c27b0;
   color: white;
   padding: 15px;
   border-radius: 8px;
@@ -796,7 +781,7 @@ h1, h2 {
   justify-content: flex-start;
   align-items: center;
   font-weight: bold;
-  color: #4CAF50;
+  color: #9c27b0;
   gap: 10px;
 }
 
@@ -806,14 +791,6 @@ h1, h2 {
 
 .total-abonos-dia .total-monto {
   font-size: 1.1em;
-}
-
-@media (max-width: 768px) {
-  .total-abonos-dia {
-    flex-direction: row;
-    align-items: center;
-    gap: 10px;
-  }
 }
 
 .tiene-observacion {
@@ -844,24 +821,16 @@ h1, h2 {
   z-index: 1000;
 }
 
-.modal-content {
-  background-color: white;
-  padding: 20px;
-  border-radius: 8px;
-  width: 90%;
-  max-width: 500px;
-}
-
 .observacion-text {
   margin: 15px 0;
   padding: 10px;
-  background-color: #f5f5f5;
+  background-color: #f3e5f5;
   border-radius: 4px;
   white-space: pre-wrap;
 }
 
 .btn-cerrar {
-  background-color: #4CAF50;
+  background-color: #9c27b0;
   color: white;
   border: none;
   padding: 8px 16px;
@@ -873,13 +842,5 @@ h1, h2 {
   display: flex;
   justify-content: flex-end;
   margin-top: 15px;
-}
-
-@media (max-width: 768px) {
-  .abono-detail {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 5px;
-  }
 }
 </style> 
