@@ -1,0 +1,1643 @@
+<template>
+  <div class="lista-deudas-container">
+    <div class="back-button-container">
+      <BackButton to="/procesos/deudas" />
+    </div>
+    <h1>Lista de Deudas a Proveedores</h1>
+    
+    <div class="filtros-container">
+      <div class="filtro">
+        <label for="filtroProveedor">Proveedor:</label>
+        <select id="filtroProveedor" v-model="filtroProveedor">
+          <option value="">Todos</option>
+          <option v-for="proveedor in proveedores" :key="proveedor.id" :value="proveedor.id">
+            {{ proveedor.nombre }}
+          </option>
+        </select>
+      </div>
+      
+      <div class="filtro">
+        <label for="filtroEstado">Estado:</label>
+        <select id="filtroEstado" v-model="filtroEstado">
+          <option value="">Todos</option>
+          <option value="pendiente">Pendiente</option>
+          <option value="pagado">Pagado</option>
+        </select>
+      </div>
+      
+      <div class="filtro-fecha">
+        <label>Fecha:</label>
+        <div class="fecha-inputs">
+          <input type="date" v-model="filtroFechaDesde" placeholder="Desde">
+          <span>a</span>
+          <input type="date" v-model="filtroFechaHasta" placeholder="Hasta">
+        </div>
+      </div>
+    </div>
+    
+    <div class="resumen-container">
+      <div class="resumen-card saldo-pendiente">
+        <h3>Saldo Pendiente</h3>
+        <p>${{ formatNumber(totalPendiente) }}</p>
+      </div>
+    </div>
+    
+    <div class="acciones-container">
+      <router-link to="/procesos/deudas/nueva" class="btn-nueva-deuda">
+        <i class="fas fa-plus"></i> Nueva Deuda
+      </router-link>
+    </div>
+    
+    <div v-if="cargando" class="loading-spinner">
+      <div class="spinner"></div>
+      <p>Cargando deudas...</p>
+    </div>
+    
+    <div v-else-if="deudas.length === 0" class="no-data">
+      <p>No hay deudas registradas.</p>
+      <router-link to="/procesos/deudas/nueva" class="btn-nueva-deuda">
+        Crear Nueva Deuda
+      </router-link>
+    </div>
+    
+    <div v-else class="tabla-container">
+      <table class="tabla-deudas">
+        <thead>
+          <tr>
+            <th>Fecha</th>
+            <th>Proveedor</th>
+            <th>Monto Total</th>
+            <th>Saldo Pendiente</th>
+            <th>Estado</th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="deuda in deudasFiltradas" :key="deuda.id" :class="{ 'deuda-pagada': deuda.estado === 'pagado' }">
+            <td>{{ formatearFecha(deuda.fecha) }}</td>
+            <td>{{ deuda.proveedorNombre }}</td>
+            <td>${{ formatNumber(deuda.total) }}</td>
+            <td>${{ formatNumber(deuda.saldoPendiente) }}</td>
+            <td>
+              <span :class="'estado-badge ' + deuda.estado">
+                {{ deuda.estado === 'pendiente' ? 'Pendiente' : 'Pagado' }}
+              </span>
+            </td>
+            <td class="acciones">
+              <button @click="verDetalle(deuda)" class="btn-detalle" title="Ver detalles">
+                <i class="fas fa-eye"></i>
+              </button>
+              <button @click="agregarAbono(deuda)" class="btn-abono" :disabled="deuda.estado === 'pagado'" title="Agregar abono">
+                <i class="fas fa-money-bill"></i>
+              </button>
+              <button @click="eliminarDeuda(deuda)" class="btn-eliminar" title="Eliminar deuda">
+                <i class="fas fa-trash-alt"></i>
+              </button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    
+    <!-- Modal de Detalle de Deuda -->
+    <div v-if="showDetalleModal" class="modal-overlay" @click="closeModalOnOverlay">
+      <div class="modal-content" @click.stop>
+        <div class="modal-header">
+          <h2>Detalle de Deuda</h2>
+          <button @click="showDetalleModal = false" class="close-button">×</button>
+        </div>
+        <div class="modal-body">
+          <div class="deuda-info editable-container">
+            <p>
+              <strong>Proveedor:</strong> 
+              <span class="editable-field" @click="habilitarEdicionDeuda('proveedorNombre')">
+                <span v-if="!campoEditandoDeuda || campoEditandoDeuda !== 'proveedorNombre'">
+                  {{ deudaSeleccionada?.proveedorNombre }}
+                </span>
+                <input 
+                  v-else 
+                  v-model="deudaEditada.proveedorNombre" 
+                  @blur="guardarCambiosDeuda" 
+                  @keyup.enter="guardarCambiosDeuda"
+                  ref="inputProveedorNombre"
+                  type="text"
+                >
+              </span>
+            </p>
+            <p>
+              <strong>Fecha:</strong> 
+              <span class="editable-field" @click="habilitarEdicionDeuda('fecha')">
+                <span v-if="!campoEditandoDeuda || campoEditandoDeuda !== 'fecha'">
+                  {{ formatearFecha(deudaSeleccionada?.fecha) }}
+                </span>
+                <input 
+                  v-else 
+                  v-model="deudaEditada.fecha" 
+                  @blur="guardarCambiosDeuda" 
+                  @keyup.enter="guardarCambiosDeuda"
+                  ref="inputFecha"
+                  type="date"
+                >
+              </span>
+            </p>
+            <p>
+              <strong>Estado:</strong> 
+              <span :class="'estado-badge ' + deudaSeleccionada?.estado">
+                {{ deudaSeleccionada?.estado === 'pendiente' ? 'Pendiente' : 'Pagado' }}
+              </span>
+            </p>
+          </div>
+          
+          <h3>Productos <span class="small-text">(haga clic en un campo para editarlo)</span></h3>
+          <table class="tabla-productos">
+            <thead>
+              <tr>
+                <th>Kilos</th>
+                <th>Producto</th>
+                <th>Precio</th>
+                <th>Total</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(producto, index) in productos" :key="index">
+                <td @click="habilitarEdicionProducto(index, 'kilos')" class="editable-cell">
+                  <span v-if="!producto.editando || producto.campoEditando !== 'kilos'">
+                    {{ formatNumber(producto.kilos) }}
+                  </span>
+                  <input 
+                    v-else 
+                    v-model.number="producto.kilos" 
+                    @blur="guardarCambiosProducto(index)" 
+                    @keyup.enter="guardarCambiosProducto(index)"
+                    ref="inputKilos"
+                    type="number"
+                    step="0.01"
+                  >
+                </td>
+                <td @click="habilitarEdicionProducto(index, 'producto')" class="editable-cell">
+                  <span v-if="!producto.editando || producto.campoEditando !== 'producto'">
+                    {{ producto.producto }}
+                  </span>
+                  <input 
+                    v-else 
+                    v-model="producto.producto" 
+                    @blur="guardarCambiosProducto(index)" 
+                    @keyup.enter="guardarCambiosProducto(index)"
+                    ref="inputProducto"
+                    type="text"
+                  >
+                </td>
+                <td @click="habilitarEdicionProducto(index, 'precio')" class="editable-cell">
+                  <span v-if="!producto.editando || producto.campoEditando !== 'precio'">
+                    ${{ formatNumber(producto.precio) }}
+                  </span>
+                  <input 
+                    v-else 
+                    v-model.number="producto.precio" 
+                    @blur="guardarCambiosProducto(index)" 
+                    @keyup.enter="guardarCambiosProducto(index)"
+                    ref="inputPrecio"
+                    type="number"
+                    step="0.01"
+                  >
+                </td>
+                <td>${{ formatNumber(producto.total) }}</td>
+                <td>
+                  <button @click="eliminarProducto(index)" class="btn-eliminar-sm">
+                    <i class="fas fa-trash-alt"></i>
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+            <tfoot>
+              <tr>
+                <td colspan="3" class="total-label">Total</td>
+                <td>${{ formatNumber(totalProductos) }}</td>
+                <td></td>
+              </tr>
+            </tfoot>
+          </table>
+          
+          <div class="add-product-section">
+            <h4>Agregar Producto</h4>
+            <div class="add-product-form">
+              <input v-model.number="nuevoProducto.kilos" type="number" placeholder="Kilos" step="0.01">
+              <input v-model="nuevoProducto.producto" type="text" placeholder="Producto">
+              <input v-model.number="nuevoProducto.precio" type="number" placeholder="Precio" step="0.01">
+              <button @click="agregarProducto" class="btn-agregar">Agregar</button>
+            </div>
+          </div>
+          
+          <h3>Abonos</h3>
+          <div v-if="abonos.length === 0" class="no-abonos">
+            <p>No hay abonos registrados para esta deuda.</p>
+          </div>
+          <table v-else class="tabla-abonos">
+            <thead>
+              <tr>
+                <th>Fecha</th>
+                <th>Descripción</th>
+                <th>Monto</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(abono, index) in abonos" :key="index">
+                <td @click="habilitarEdicionAbono(index, 'fecha')" class="editable-cell">
+                  <span v-if="!abono.editando || abono.campoEditando !== 'fecha'">
+                    {{ formatearFecha(abono.fecha) }}
+                  </span>
+                  <input 
+                    v-else 
+                    v-model="abono.fecha" 
+                    @blur="guardarCambiosAbono(index)" 
+                    @keyup.enter="guardarCambiosAbono(index)"
+                    ref="inputFechaAbono"
+                    type="date"
+                  >
+                </td>
+                <td @click="habilitarEdicionAbono(index, 'descripcion')" class="editable-cell">
+                  <span v-if="!abono.editando || abono.campoEditando !== 'descripcion'">
+                    {{ abono.descripcion }}
+                  </span>
+                  <input 
+                    v-else 
+                    v-model="abono.descripcion" 
+                    @blur="guardarCambiosAbono(index)" 
+                    @keyup.enter="guardarCambiosAbono(index)"
+                    ref="inputDescripcionAbono"
+                    type="text"
+                  >
+                </td>
+                <td @click="habilitarEdicionAbono(index, 'monto')" class="editable-cell">
+                  <span v-if="!abono.editando || abono.campoEditando !== 'monto'">
+                    ${{ formatNumber(abono.monto) }}
+                  </span>
+                  <input 
+                    v-else 
+                    v-model.number="abono.monto" 
+                    @blur="guardarCambiosAbono(index)" 
+                    @keyup.enter="guardarCambiosAbono(index)"
+                    ref="inputMontoAbono"
+                    type="number"
+                    step="0.01"
+                  >
+                </td>
+                <td>
+                  <button @click="eliminarAbono(index)" class="btn-eliminar-sm">
+                    <i class="fas fa-trash-alt"></i>
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+            <tfoot>
+              <tr>
+                <td colspan="2" class="total-label">Total Abonos</td>
+                <td>${{ formatNumber(totalAbonos) }}</td>
+                <td></td>
+              </tr>
+            </tfoot>
+          </table>
+          
+          <div class="resumen-deuda">
+            <div class="resumen-item">
+              <span>Total deuda:</span>
+              <span>${{ formatNumber(deudaSeleccionada?.total) }}</span>
+            </div>
+            <div class="resumen-item">
+              <span>Total abonos:</span>
+              <span>${{ formatNumber(totalAbonos) }}</span>
+            </div>
+            <div class="resumen-item total">
+              <span>Saldo pendiente:</span>
+              <span>${{ formatNumber(calcularSaldoPendiente()) }}</span>
+            </div>
+          </div>
+          
+          <div class="modal-actions">
+            <button @click="actualizarDeuda" class="btn-actualizar" :disabled="guardando">
+              {{ guardando ? 'Guardando...' : 'Actualizar Deuda' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Modal de Agregar Abono -->
+    <div v-if="showAbonoModal" class="modal-overlay" @click="closeModalOnOverlay">
+      <div class="modal-content" @click.stop>
+        <div class="modal-header">
+          <h2>Agregar Abono</h2>
+          <button @click="showAbonoModal = false" class="close-button">×</button>
+        </div>
+        <div class="modal-body">
+          <div class="deuda-info">
+            <p><strong>Proveedor:</strong> {{ deudaSeleccionada?.proveedorNombre }}</p>
+            <p><strong>Fecha Deuda:</strong> {{ formatearFecha(deudaSeleccionada?.fecha) }}</p>
+            <p><strong>Saldo Pendiente:</strong> ${{ formatNumber(deudaSeleccionada?.saldoPendiente) }}</p>
+          </div>
+          
+          <form @submit.prevent="guardarAbono" class="form-abono">
+            <div class="form-group">
+              <label for="fechaAbono">Fecha:</label>
+              <input id="fechaAbono" type="date" v-model="nuevoAbono.fecha" required>
+            </div>
+            <div class="form-group">
+              <label for="descripcionAbono">Descripción:</label>
+              <input id="descripcionAbono" type="text" v-model="nuevoAbono.descripcion" required placeholder="Ej: Pago parcial, Transferencia, etc.">
+            </div>
+            <div class="form-group">
+              <label for="montoAbono">Monto:</label>
+              <input id="montoAbono" type="number" v-model.number="nuevoAbono.monto" required min="1" :max="deudaSeleccionada?.saldoPendiente">
+            </div>
+            
+            <div class="form-actions">
+              <button type="button" @click="showAbonoModal = false" class="btn-cancelar">Cancelar</button>
+              <button type="submit" class="btn-guardar" :disabled="guardando">
+                {{ guardando ? 'Guardando...' : 'Guardar Abono' }}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script>
+import { ref, computed, onMounted } from 'vue';
+import { db } from '@/firebase';
+import { collection, addDoc, getDocs, query, where, orderBy, doc, getDoc, updateDoc, deleteDoc, writeBatch, getDocs as getDocsWithQuery } from 'firebase/firestore';
+import { useRouter } from 'vue-router';
+import BackButton from '@/components/BackButton.vue';
+
+export default {
+  name: 'ListaDeudas',
+  components: {
+    BackButton
+  },
+  data() {
+    return {
+      deudas: [],
+      proveedores: [],
+      cargando: true,
+      guardando: false,
+      
+      // Filtros
+      filtroProveedor: '',
+      filtroEstado: '',
+      filtroFechaDesde: '',
+      filtroFechaHasta: '',
+      
+      // Modales
+      showDetalleModal: false,
+      showAbonoModal: false,
+      deudaSeleccionada: null,
+      productos: [],
+      abonos: [],
+      
+      // Nuevo abono
+      nuevoAbono: {
+        fecha: this.obtenerFechaActual(),
+        descripcion: '',
+        monto: null
+      },
+      
+      // Edición
+      campoEditandoDeuda: null,
+      deudaEditada: {
+        proveedorNombre: '',
+        fecha: ''
+      },
+      nuevoProducto: {
+        kilos: null,
+        producto: '',
+        precio: null
+      }
+    };
+  },
+  computed: {
+    deudasFiltradas() {
+      return this.deudas.filter(deuda => {
+        // Filtro por proveedor
+        if (this.filtroProveedor && deuda.proveedorId !== this.filtroProveedor) {
+          return false;
+        }
+        
+        // Filtro por estado
+        if (this.filtroEstado && deuda.estado !== this.filtroEstado) {
+          return false;
+        }
+        
+        // Filtro por fecha desde
+        if (this.filtroFechaDesde && deuda.fecha < this.filtroFechaDesde) {
+          return false;
+        }
+        
+        // Filtro por fecha hasta
+        if (this.filtroFechaHasta && deuda.fecha > this.filtroFechaHasta) {
+          return false;
+        }
+        
+        return true;
+      });
+    },
+    totalDeudas() {
+      return this.deudasFiltradas.reduce((sum, deuda) => sum + deuda.total, 0);
+    },
+    totalPendiente() {
+      return this.deudasFiltradas.reduce((sum, deuda) => sum + deuda.saldoPendiente, 0);
+    },
+    totalPagado() {
+      return this.deudasFiltradas.reduce((sum, deuda) => sum + (deuda.total - deuda.saldoPendiente), 0);
+    },
+    totalProductos() {
+      return this.productos.reduce((sum, producto) => sum + producto.total, 0);
+    },
+    totalAbonos() {
+      return this.abonos.reduce((sum, abono) => sum + abono.monto, 0);
+    }
+  },
+  methods: {
+    obtenerFechaActual() {
+      const fecha = new Date();
+      return fecha.toISOString().split('T')[0];
+    },
+    async loadDeudas() {
+      try {
+        this.cargando = true;
+        const querySnapshot = await getDocs(
+          query(collection(db, 'deudas'), orderBy('fechaCreacion', 'desc'))
+        );
+        
+        this.deudas = querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+      } catch (error) {
+        console.error("Error al cargar deudas: ", error);
+      } finally {
+        this.cargando = false;
+      }
+    },
+    async loadProveedores() {
+      try {
+        const querySnapshot = await getDocs(collection(db, 'proveedoresDeuda'));
+        this.proveedores = querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+      } catch (error) {
+        console.error("Error al cargar proveedores: ", error);
+      }
+    },
+    formatNumber(number) {
+      return number ? number.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00';
+    },
+    formatearFecha(fechaString) {
+      if (!fechaString) return '';
+      
+      const fecha = new Date(fechaString + 'T00:00:00');
+      const opciones = { year: 'numeric', month: 'long', day: 'numeric' };
+      return fecha.toLocaleDateString('es-ES', opciones);
+    },
+    closeModalOnOverlay(event) {
+      if (event.target === event.currentTarget) {
+        this.showDetalleModal = false;
+        this.showAbonoModal = false;
+      }
+    },
+    async verDetalle(deuda) {
+      this.deudaSeleccionada = deuda;
+      this.productos = [];
+      this.abonos = [];
+      
+      try {
+        // Cargar productos
+        const productosSnapshot = await getDocs(
+          collection(db, 'deudas', deuda.id, 'productos')
+        );
+        
+        this.productos = productosSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        
+        // Cargar abonos
+        const abonosSnapshot = await getDocs(
+          query(
+            collection(db, 'deudas', deuda.id, 'abonos'),
+            orderBy('fechaCreacion', 'desc')
+          )
+        );
+        
+        this.abonos = abonosSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        
+        this.showDetalleModal = true;
+      } catch (error) {
+        console.error("Error al cargar detalle de deuda: ", error);
+      }
+    },
+    agregarAbono(deuda) {
+      this.deudaSeleccionada = deuda;
+      this.nuevoAbono = {
+        fecha: this.obtenerFechaActual(),
+        descripcion: '',
+        monto: null
+      };
+      this.showAbonoModal = true;
+    },
+    async guardarAbono() {
+      if (!this.nuevoAbono.descripcion || !this.nuevoAbono.monto) {
+        alert('Por favor complete todos los campos del abono');
+        return;
+      }
+      
+      if (this.nuevoAbono.monto <= 0) {
+        alert('El monto del abono debe ser mayor a cero');
+        return;
+      }
+      
+      if (this.nuevoAbono.monto > this.deudaSeleccionada.saldoPendiente) {
+        alert('El monto del abono no puede ser mayor al saldo pendiente');
+        return;
+      }
+      
+      try {
+        this.guardando = true;
+        
+        // Guardar el abono
+        await addDoc(collection(db, 'deudas', this.deudaSeleccionada.id, 'abonos'), {
+          descripcion: this.nuevoAbono.descripcion,
+          monto: this.nuevoAbono.monto,
+          fecha: this.nuevoAbono.fecha,
+          fechaCreacion: new Date()
+        });
+        
+        // Actualizar el saldo pendiente de la deuda
+        const nuevoSaldoPendiente = this.deudaSeleccionada.saldoPendiente - this.nuevoAbono.monto;
+        const nuevoEstado = nuevoSaldoPendiente <= 0 ? 'pagado' : 'pendiente';
+        
+        await updateDoc(doc(db, 'deudas', this.deudaSeleccionada.id), {
+          saldoPendiente: nuevoSaldoPendiente,
+          estado: nuevoEstado
+        });
+        
+        // Actualizar la deuda en el array local
+        this.deudas = this.deudas.map(d => {
+          if (d.id === this.deudaSeleccionada.id) {
+            return {
+              ...d,
+              saldoPendiente: nuevoSaldoPendiente,
+              estado: nuevoEstado
+            };
+          }
+          return d;
+        });
+        
+        this.deudaSeleccionada.saldoPendiente = nuevoSaldoPendiente;
+        this.deudaSeleccionada.estado = nuevoEstado;
+        
+        this.showAbonoModal = false;
+        alert('Abono registrado correctamente');
+      } catch (error) {
+        console.error("Error al guardar abono: ", error);
+        alert('Error al guardar abono: ' + error.message);
+      } finally {
+        this.guardando = false;
+      }
+    },
+    async eliminarDeuda(deuda) {
+      if (confirm(`¿Está seguro que desea eliminar la deuda de ${deuda.proveedorNombre}? Esta acción no se puede deshacer.`)) {
+        try {
+          this.cargando = true;
+          
+          // Eliminar los productos de la deuda
+          const productosSnapshot = await getDocs(collection(db, 'deudas', deuda.id, 'productos'));
+          const batch = writeBatch(db);
+          
+          productosSnapshot.forEach((documento) => {
+            batch.delete(doc(db, 'deudas', deuda.id, 'productos', documento.id));
+          });
+          
+          // Eliminar los abonos de la deuda
+          const abonosSnapshot = await getDocs(collection(db, 'deudas', deuda.id, 'abonos'));
+          
+          abonosSnapshot.forEach((documento) => {
+            batch.delete(doc(db, 'deudas', deuda.id, 'abonos', documento.id));
+          });
+          
+          // Ejecutar el batch para eliminar todos los documentos relacionados
+          await batch.commit();
+          
+          // Eliminar la deuda principal
+          await deleteDoc(doc(db, 'deudas', deuda.id));
+          
+          // Actualizar la lista de deudas localmente
+          this.deudas = this.deudas.filter(d => d.id !== deuda.id);
+          
+          alert('Deuda eliminada correctamente');
+        } catch (error) {
+          console.error("Error al eliminar la deuda: ", error);
+          alert('Error al eliminar la deuda: ' + error.message);
+        } finally {
+          this.cargando = false;
+        }
+      }
+    },
+    // Métodos para edición de deuda
+    habilitarEdicionDeuda(campo) {
+      this.campoEditandoDeuda = campo;
+      if (campo === 'proveedorNombre') {
+        this.deudaEditada.proveedorNombre = this.deudaSeleccionada.proveedorNombre;
+        this.$nextTick(() => {
+          this.$refs.inputProveedorNombre.focus();
+        });
+      } else if (campo === 'fecha') {
+        this.deudaEditada.fecha = this.deudaSeleccionada.fecha;
+        this.$nextTick(() => {
+          this.$refs.inputFecha.focus();
+        });
+      }
+    },
+    
+    async guardarCambiosDeuda() {
+      if (!this.campoEditandoDeuda) return;
+      
+      const campo = this.campoEditandoDeuda;
+      this.campoEditandoDeuda = null;
+      
+      if (campo === 'proveedorNombre' && this.deudaEditada.proveedorNombre === this.deudaSeleccionada.proveedorNombre) return;
+      if (campo === 'fecha' && this.deudaEditada.fecha === this.deudaSeleccionada.fecha) return;
+      
+      try {
+        // Actualizar en Firestore
+        await updateDoc(doc(db, 'deudas', this.deudaSeleccionada.id), {
+          [campo]: this.deudaEditada[campo]
+        });
+        
+        // Actualizar el objeto local
+        this.deudaSeleccionada[campo] = this.deudaEditada[campo];
+        
+        // Actualizar en la lista principal
+        this.deudas = this.deudas.map(d => {
+          if (d.id === this.deudaSeleccionada.id) {
+            return {
+              ...d,
+              [campo]: this.deudaEditada[campo]
+            };
+          }
+          return d;
+        });
+      } catch (error) {
+        console.error("Error al actualizar deuda: ", error);
+        alert('Error al guardar cambios: ' + error.message);
+      }
+    },
+    
+    // Métodos para edición de productos
+    habilitarEdicionProducto(index, campo) {
+      this.productos = this.productos.map((producto, i) => {
+        if (i === index) {
+          return {
+            ...producto,
+            editando: true,
+            campoEditando: campo
+          };
+        } else {
+          return {
+            ...producto,
+            editando: false,
+            campoEditando: null
+          };
+        }
+      });
+      
+      this.$nextTick(() => {
+        const refName = `input${campo.charAt(0).toUpperCase() + campo.slice(1)}`;
+        if (this.$refs[refName] && this.$refs[refName][0]) {
+          this.$refs[refName][0].focus();
+        }
+      });
+    },
+    
+    async guardarCambiosProducto(index) {
+      const producto = this.productos[index];
+      if (!producto.editando) return;
+      
+      // Recalcular total
+      if (producto.campoEditando === 'kilos' || producto.campoEditando === 'precio') {
+        producto.total = producto.kilos * producto.precio;
+      }
+      
+      try {
+        // Actualizar en Firestore
+        await updateDoc(doc(db, 'deudas', this.deudaSeleccionada.id, 'productos', producto.id), {
+          kilos: producto.kilos,
+          producto: producto.producto,
+          precio: producto.precio,
+          total: producto.total
+        });
+        
+        // Actualizar el total de la deuda
+        const nuevoTotal = this.productos.reduce((sum, p) => sum + p.total, 0);
+        const nuevoSaldoPendiente = nuevoTotal - this.totalAbonos;
+        
+        await updateDoc(doc(db, 'deudas', this.deudaSeleccionada.id), {
+          total: nuevoTotal,
+          saldoPendiente: nuevoSaldoPendiente,
+          estado: nuevoSaldoPendiente <= 0 ? 'pagado' : 'pendiente'
+        });
+        
+        // Actualizar deuda local
+        this.deudaSeleccionada.total = nuevoTotal;
+        this.deudaSeleccionada.saldoPendiente = nuevoSaldoPendiente;
+        this.deudaSeleccionada.estado = nuevoSaldoPendiente <= 0 ? 'pagado' : 'pendiente';
+        
+        // Actualizar en la lista principal
+        this.deudas = this.deudas.map(d => {
+          if (d.id === this.deudaSeleccionada.id) {
+            return {
+              ...d,
+              total: nuevoTotal,
+              saldoPendiente: nuevoSaldoPendiente,
+              estado: nuevoSaldoPendiente <= 0 ? 'pagado' : 'pendiente'
+            };
+          }
+          return d;
+        });
+        
+        // Desactivar modo edición
+        producto.editando = false;
+        producto.campoEditando = null;
+      } catch (error) {
+        console.error("Error al actualizar producto: ", error);
+        alert('Error al guardar cambios del producto: ' + error.message);
+      }
+    },
+    
+    async agregarProducto() {
+      if (!this.nuevoProducto.kilos || !this.nuevoProducto.producto || !this.nuevoProducto.precio) {
+        alert('Por favor complete todos los campos del producto');
+        return;
+      }
+      
+      try {
+        this.guardando = true;
+        
+        const total = this.nuevoProducto.kilos * this.nuevoProducto.precio;
+        
+        // Guardar en Firestore
+        const productoRef = await addDoc(collection(db, 'deudas', this.deudaSeleccionada.id, 'productos'), {
+          kilos: this.nuevoProducto.kilos,
+          producto: this.nuevoProducto.producto,
+          precio: this.nuevoProducto.precio,
+          total: total
+        });
+        
+        // Agregar a la lista local
+        this.productos.push({
+          id: productoRef.id,
+          kilos: this.nuevoProducto.kilos,
+          producto: this.nuevoProducto.producto,
+          precio: this.nuevoProducto.precio,
+          total: total,
+          editando: false,
+          campoEditando: null
+        });
+        
+        // Actualizar el total de la deuda
+        const nuevoTotal = this.productos.reduce((sum, p) => sum + p.total, 0);
+        const nuevoSaldoPendiente = nuevoTotal - this.totalAbonos;
+        
+        await updateDoc(doc(db, 'deudas', this.deudaSeleccionada.id), {
+          total: nuevoTotal,
+          saldoPendiente: nuevoSaldoPendiente,
+          estado: nuevoSaldoPendiente <= 0 ? 'pagado' : 'pendiente'
+        });
+        
+        // Actualizar deuda local
+        this.deudaSeleccionada.total = nuevoTotal;
+        this.deudaSeleccionada.saldoPendiente = nuevoSaldoPendiente;
+        this.deudaSeleccionada.estado = nuevoSaldoPendiente <= 0 ? 'pagado' : 'pendiente';
+        
+        // Actualizar en la lista principal
+        this.deudas = this.deudas.map(d => {
+          if (d.id === this.deudaSeleccionada.id) {
+            return {
+              ...d,
+              total: nuevoTotal,
+              saldoPendiente: nuevoSaldoPendiente,
+              estado: nuevoSaldoPendiente <= 0 ? 'pagado' : 'pendiente'
+            };
+          }
+          return d;
+        });
+        
+        // Limpiar formulario
+        this.nuevoProducto = {
+          kilos: null,
+          producto: '',
+          precio: null
+        };
+      } catch (error) {
+        console.error("Error al agregar producto: ", error);
+        alert('Error al agregar producto: ' + error.message);
+      } finally {
+        this.guardando = false;
+      }
+    },
+    
+    async eliminarProducto(index) {
+      if (!confirm('¿Está seguro de eliminar este producto?')) return;
+      
+      const producto = this.productos[index];
+      
+      try {
+        this.guardando = true;
+        
+        // Eliminar de Firestore
+        await deleteDoc(doc(db, 'deudas', this.deudaSeleccionada.id, 'productos', producto.id));
+        
+        // Eliminar de la lista local
+        this.productos.splice(index, 1);
+        
+        // Actualizar el total de la deuda
+        const nuevoTotal = this.productos.reduce((sum, p) => sum + p.total, 0);
+        const nuevoSaldoPendiente = nuevoTotal - this.totalAbonos;
+        
+        await updateDoc(doc(db, 'deudas', this.deudaSeleccionada.id), {
+          total: nuevoTotal,
+          saldoPendiente: nuevoSaldoPendiente,
+          estado: nuevoSaldoPendiente <= 0 ? 'pagado' : 'pendiente'
+        });
+        
+        // Actualizar deuda local
+        this.deudaSeleccionada.total = nuevoTotal;
+        this.deudaSeleccionada.saldoPendiente = nuevoSaldoPendiente;
+        this.deudaSeleccionada.estado = nuevoSaldoPendiente <= 0 ? 'pagado' : 'pendiente';
+        
+        // Actualizar en la lista principal
+        this.deudas = this.deudas.map(d => {
+          if (d.id === this.deudaSeleccionada.id) {
+            return {
+              ...d,
+              total: nuevoTotal,
+              saldoPendiente: nuevoSaldoPendiente,
+              estado: nuevoSaldoPendiente <= 0 ? 'pagado' : 'pendiente'
+            };
+          }
+          return d;
+        });
+      } catch (error) {
+        console.error("Error al eliminar producto: ", error);
+        alert('Error al eliminar producto: ' + error.message);
+      } finally {
+        this.guardando = false;
+      }
+    },
+    
+    // Métodos para edición de abonos
+    habilitarEdicionAbono(index, campo) {
+      this.abonos = this.abonos.map((abono, i) => {
+        if (i === index) {
+          return {
+            ...abono,
+            editando: true,
+            campoEditando: campo
+          };
+        } else {
+          return {
+            ...abono,
+            editando: false,
+            campoEditando: null
+          };
+        }
+      });
+      
+      this.$nextTick(() => {
+        const refName = `input${campo.charAt(0).toUpperCase() + campo.slice(1)}Abono`;
+        if (this.$refs[refName] && this.$refs[refName][0]) {
+          this.$refs[refName][0].focus();
+        }
+      });
+    },
+    
+    async guardarCambiosAbono(index) {
+      const abono = this.abonos[index];
+      if (!abono.editando) return;
+      
+      const montoAnterior = this.abonos.find(a => a.id === abono.id)?.monto || 0;
+      
+      try {
+        // Actualizar en Firestore
+        await updateDoc(doc(db, 'deudas', this.deudaSeleccionada.id, 'abonos', abono.id), {
+          fecha: abono.fecha,
+          descripcion: abono.descripcion,
+          monto: abono.monto
+        });
+        
+        // Si cambió el monto, actualizar el saldo pendiente
+        if (abono.monto !== montoAnterior) {
+          const nuevoSaldoPendiente = this.calcularSaldoPendiente();
+          
+          await updateDoc(doc(db, 'deudas', this.deudaSeleccionada.id), {
+            saldoPendiente: nuevoSaldoPendiente,
+            estado: nuevoSaldoPendiente <= 0 ? 'pagado' : 'pendiente'
+          });
+          
+          // Actualizar deuda local
+          this.deudaSeleccionada.saldoPendiente = nuevoSaldoPendiente;
+          this.deudaSeleccionada.estado = nuevoSaldoPendiente <= 0 ? 'pagado' : 'pendiente';
+          
+          // Actualizar en la lista principal
+          this.deudas = this.deudas.map(d => {
+            if (d.id === this.deudaSeleccionada.id) {
+              return {
+                ...d,
+                saldoPendiente: nuevoSaldoPendiente,
+                estado: nuevoSaldoPendiente <= 0 ? 'pagado' : 'pendiente'
+              };
+            }
+            return d;
+          });
+        }
+        
+        // Desactivar modo edición
+        abono.editando = false;
+        abono.campoEditando = null;
+      } catch (error) {
+        console.error("Error al actualizar abono: ", error);
+        alert('Error al guardar cambios del abono: ' + error.message);
+      }
+    },
+    
+    async eliminarAbono(index) {
+      if (!confirm('¿Está seguro de eliminar este abono?')) return;
+      
+      const abono = this.abonos[index];
+      
+      try {
+        this.guardando = true;
+        
+        // Eliminar de Firestore
+        await deleteDoc(doc(db, 'deudas', this.deudaSeleccionada.id, 'abonos', abono.id));
+        
+        // Eliminar de la lista local
+        this.abonos.splice(index, 1);
+        
+        // Actualizar el saldo pendiente
+        const nuevoSaldoPendiente = this.calcularSaldoPendiente();
+        
+        await updateDoc(doc(db, 'deudas', this.deudaSeleccionada.id), {
+          saldoPendiente: nuevoSaldoPendiente,
+          estado: nuevoSaldoPendiente <= 0 ? 'pagado' : 'pendiente'
+        });
+        
+        // Actualizar deuda local
+        this.deudaSeleccionada.saldoPendiente = nuevoSaldoPendiente;
+        this.deudaSeleccionada.estado = nuevoSaldoPendiente <= 0 ? 'pagado' : 'pendiente';
+        
+        // Actualizar en la lista principal
+        this.deudas = this.deudas.map(d => {
+          if (d.id === this.deudaSeleccionada.id) {
+            return {
+              ...d,
+              saldoPendiente: nuevoSaldoPendiente,
+              estado: nuevoSaldoPendiente <= 0 ? 'pagado' : 'pendiente'
+            };
+          }
+          return d;
+        });
+      } catch (error) {
+        console.error("Error al eliminar abono: ", error);
+        alert('Error al eliminar abono: ' + error.message);
+      } finally {
+        this.guardando = false;
+      }
+    },
+    
+    calcularSaldoPendiente() {
+      return this.deudaSeleccionada?.total - this.totalAbonos;
+    },
+    
+    async actualizarDeuda() {
+      try {
+        this.guardando = true;
+        
+        // Actualizar saldo pendiente y estado
+        const nuevoSaldoPendiente = this.calcularSaldoPendiente();
+        const nuevoEstado = nuevoSaldoPendiente <= 0 ? 'pagado' : 'pendiente';
+        
+        await updateDoc(doc(db, 'deudas', this.deudaSeleccionada.id), {
+          saldoPendiente: nuevoSaldoPendiente,
+          estado: nuevoEstado
+        });
+        
+        // Actualizar deuda local
+        this.deudaSeleccionada.saldoPendiente = nuevoSaldoPendiente;
+        this.deudaSeleccionada.estado = nuevoEstado;
+        
+        // Actualizar en la lista principal
+        this.deudas = this.deudas.map(d => {
+          if (d.id === this.deudaSeleccionada.id) {
+            return {
+              ...d,
+              saldoPendiente: nuevoSaldoPendiente,
+              estado: nuevoEstado
+            };
+          }
+          return d;
+        });
+        
+        alert('Deuda actualizada correctamente');
+        this.showDetalleModal = false;
+      } catch (error) {
+        console.error("Error al actualizar deuda: ", error);
+        alert('Error al actualizar deuda: ' + error.message);
+      } finally {
+        this.guardando = false;
+      }
+    }
+  },
+  async mounted() {
+    await Promise.all([this.loadDeudas(), this.loadProveedores()]);
+  }
+};
+</script>
+
+<style scoped>
+.lista-deudas-container {
+  max-width: 1100px;
+  width: 95%;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+h1 {
+  color: #2c3e50;
+  text-align: center;
+  margin-bottom: 30px;
+  border-bottom: 3px solid #3498db;
+  padding-bottom: 10px;
+}
+
+/* Filtros */
+.filtros-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 15px;
+  margin-bottom: 30px;
+  background-color: #f8f9fa;
+  padding: 15px;
+  border-radius: 10px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.filtro, .filtro-fecha {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 200px;
+}
+
+.filtro label, .filtro-fecha label {
+  margin-bottom: 5px;
+  color: #34495e;
+}
+
+.filtro select, .filtro-fecha input {
+  padding: 10px;
+  border-radius: 5px;
+  border: 1px solid #ddd;
+  font-size: 1em;
+}
+
+.fecha-inputs {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.fecha-inputs span {
+  color: #7f8c8d;
+}
+
+/* Resumen */
+.resumen-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  margin-bottom: 30px;
+}
+
+.resumen-card {
+  flex: 1;
+  min-width: 200px;
+  background-color: #fff;
+  padding: 15px;
+  border-radius: 10px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  text-align: center;
+}
+
+.resumen-card h3 {
+  color: #2c3e50;
+  margin: 0 0 10px 0;
+  font-size: 1em;
+}
+
+.resumen-card p {
+  color: #3498db;
+  font-size: 1.5em;
+  font-weight: bold;
+  margin: 0;
+}
+
+/* Acciones */
+.acciones-container {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 20px;
+}
+
+.btn-nueva-deuda {
+  background-color: #2ecc71;
+  color: white;
+  text-decoration: none;
+  padding: 10px 20px;
+  border-radius: 5px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: background-color 0.3s;
+}
+
+.btn-nueva-deuda:hover {
+  background-color: #27ae60;
+}
+
+/* Tabla */
+.tabla-container {
+  overflow-x: auto;
+}
+
+.tabla-deudas {
+  width: 100%;
+  border-collapse: collapse;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  margin-bottom: 30px;
+}
+
+.tabla-deudas th, .tabla-deudas td {
+  padding: 12px 15px;
+  text-align: left;
+  border-bottom: 1px solid #ddd;
+}
+
+.tabla-deudas th {
+  background-color: #3498db;
+  color: white;
+}
+
+.tabla-deudas tbody tr:hover {
+  background-color: #f5f5f5;
+}
+
+.tabla-deudas .deuda-pagada {
+  background-color: #f8f9fa;
+  color: #7f8c8d;
+}
+
+.estado-badge {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 10px;
+  font-size: 0.9em;
+  text-transform: uppercase;
+}
+
+.estado-badge.pendiente {
+  background-color: #f39c12;
+  color: white;
+}
+
+.estado-badge.pagado {
+  background-color: #2ecc71;
+  color: white;
+}
+
+.acciones {
+  display: flex;
+  gap: 5px;
+}
+
+.btn-detalle, .btn-abono {
+  background-color: #3498db;
+  color: white;
+  border: none;
+  padding: 5px 10px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.btn-detalle:hover {
+  background-color: #2980b9;
+}
+
+.btn-abono {
+  background-color: #9b59b6;
+}
+
+.btn-abono:hover {
+  background-color: #8e44ad;
+}
+
+.btn-abono:disabled {
+  background-color: #95a5a6;
+  cursor: not-allowed;
+}
+
+/* Estados de carga */
+.loading-spinner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  margin: 50px 0;
+}
+
+.spinner {
+  border: 4px solid rgba(0, 0, 0, 0.1);
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border-left-color: #3498db;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.no-data {
+  text-align: center;
+  margin: 50px 0;
+  color: #7f8c8d;
+}
+
+/* Modal styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background-color: white;
+  border-radius: 10px;
+  width: 90%;
+  max-width: 800px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+}
+
+.modal-header {
+  padding: 15px 20px;
+  border-bottom: 1px solid #eee;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.modal-header h2 {
+  margin: 0;
+  color: #2c3e50;
+}
+
+.close-button {
+  background: none;
+  border: none;
+  font-size: 1.5em;
+  cursor: pointer;
+  color: #7f8c8d;
+}
+
+.modal-body {
+  padding: 20px;
+}
+
+.deuda-info {
+  background-color: #f8f9fa;
+  padding: 15px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+}
+
+.deuda-info p {
+  margin: 5px 0;
+}
+
+/* Tablas dentro del modal */
+.tabla-productos, .tabla-abonos {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 20px;
+}
+
+.tabla-productos th, .tabla-productos td,
+.tabla-abonos th, .tabla-abonos td {
+  padding: 10px 12px;
+  text-align: left;
+  border-bottom: 1px solid #ddd;
+}
+
+.tabla-productos th, .tabla-abonos th {
+  background-color: #f8f9fa;
+  color: #2c3e50;
+}
+
+.total-label {
+  text-align: right;
+  font-weight: bold;
+}
+
+.no-abonos {
+  background-color: #f8f9fa;
+  padding: 15px;
+  border-radius: 8px;
+  text-align: center;
+  color: #7f8c8d;
+  margin-bottom: 20px;
+}
+
+.resumen-deuda {
+  background-color: #f8f9fa;
+  padding: 15px;
+  border-radius: 8px;
+  margin-top: 20px;
+}
+
+.resumen-item {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.resumen-item.total {
+  font-weight: bold;
+  font-size: 1.2em;
+  color: #3498db;
+  border-top: 1px solid #ddd;
+  padding-top: 10px;
+  margin-top: 10px;
+}
+
+/* Formulario de abono */
+.form-abono {
+  margin-top: 20px;
+}
+
+.form-group {
+  margin-bottom: 15px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 5px;
+  color: #34495e;
+}
+
+.form-group input {
+  width: 100%;
+  padding: 10px;
+  border-radius: 5px;
+  border: 1px solid #ddd;
+  font-size: 1em;
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.btn-cancelar {
+  background-color: #95a5a6;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.btn-guardar {
+  background-color: #3498db;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.btn-guardar:disabled {
+  background-color: #95a5a6;
+  cursor: not-allowed;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .filtros-container {
+    flex-direction: column;
+  }
+  
+  .filtro, .filtro-fecha {
+    width: 100%;
+  }
+  
+  .resumen-card {
+    width: 100%;
+  }
+  
+  .tabla-deudas {
+    font-size: 0.9em;
+  }
+  
+  .acciones {
+    flex-direction: column;
+    gap: 5px;
+  }
+  
+  .btn-detalle, .btn-abono {
+    width: 100%;
+  }
+  
+  .modal-content {
+    width: 95%;
+  }
+}
+
+.btn-eliminar {
+  background-color: #e74c3c;
+  color: white;
+  border: none;
+  padding: 5px 10px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.btn-eliminar:hover {
+  background-color: #c0392b;
+}
+
+.small-text {
+  font-size: 0.8em;
+  color: #7f8c8d;
+  font-weight: normal;
+}
+
+.editable-container p {
+  margin: 10px 0;
+}
+
+.editable-field, .editable-cell {
+  cursor: pointer;
+  padding: 3px;
+  border-radius: 3px;
+  transition: background-color 0.2s;
+}
+
+.editable-field:hover, .editable-cell:hover {
+  background-color: rgba(52, 152, 219, 0.1);
+}
+
+.editable-field input, .editable-cell input {
+  width: 100%;
+  padding: 5px;
+  border: 1px solid #3498db;
+  border-radius: 3px;
+  font-size: 1em;
+}
+
+.btn-eliminar-sm {
+  background-color: #e74c3c;
+  color: white;
+  border: none;
+  padding: 3px 8px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.btn-eliminar-sm:hover {
+  background-color: #c0392b;
+}
+
+.add-product-section {
+  background-color: #f8f9fa;
+  padding: 15px;
+  border-radius: 8px;
+  margin: 20px 0;
+}
+
+.add-product-section h4 {
+  color: #2c3e50;
+  margin-top: 0;
+  margin-bottom: 10px;
+}
+
+.add-product-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.add-product-form input {
+  padding: 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  flex: 1;
+  min-width: 100px;
+}
+
+.btn-agregar {
+  background-color: #2ecc71;
+  color: white;
+  border: none;
+  padding: 8px 15px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.btn-agregar:hover {
+  background-color: #27ae60;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: center;
+  margin-top: 20px;
+}
+
+.btn-actualizar {
+  background-color: #3498db;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 1.1em;
+}
+
+.btn-actualizar:hover {
+  background-color: #2980b9;
+}
+
+.btn-actualizar:disabled {
+  background-color: #95a5a6;
+  cursor: not-allowed;
+}
+
+.resumen-card.saldo-pendiente {
+  flex: 1;
+  min-width: 300px;
+  max-width: 500px;
+  margin: 0 auto;
+  background-color: #fff;
+  padding: 20px;
+  border-radius: 10px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+  text-align: center;
+  border-left: 5px solid #3498db;
+}
+
+.resumen-card.saldo-pendiente h3 {
+  color: #2c3e50;
+  margin: 0 0 15px 0;
+  font-size: 1.3em;
+}
+
+.resumen-card.saldo-pendiente p {
+  color: #3498db;
+  font-size: 2em;
+  font-weight: bold;
+  margin: 0;
+}
+</style> 

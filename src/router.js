@@ -39,6 +39,9 @@ import PedidoCrudosImpresion from '@/views/Procesos/PedidoCrudosImpresion.vue'
 import PedidosLimpio from '@/views/Procesos/PedidosLimpio.vue'
 import PedidoLimpioImpresion from '@/views/Procesos/PedidoLimpioImpresion.vue'
 import Bitacoras from '@/views/Procesos/Bitacoras.vue'
+import DeudasMenu from '@/views/Procesos/DeudasMenu.vue'
+import NuevaDeuda from '@/views/Procesos/NuevaDeuda.vue'
+import ListaDeudas from '@/views/Procesos/ListaDeudas.vue'
 
 Vue.use(Router);
 
@@ -303,6 +306,21 @@ const routes = [
     path: '/procesos/bitacoras',
     name: 'Bitacoras',
     component: Bitacoras
+  },
+  {
+    path: '/procesos/deudas',
+    name: 'DeudasMenu',
+    component: DeudasMenu
+  },
+  {
+    path: '/procesos/deudas/lista',
+    name: 'ListaDeudas',
+    component: ListaDeudas
+  },
+  {
+    path: '/procesos/deudas/nueva',
+    name: 'NuevaDeuda',
+    component: NuevaDeuda
   }
 ];
 
