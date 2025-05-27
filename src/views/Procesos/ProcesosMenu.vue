@@ -23,6 +23,11 @@
         <span class="button-text">Deudas</span>
         <i class="fas fa-arrow-right"></i>
       </router-link>
+      
+      <router-link to="/procesos/prestamos" class="action-button">
+        <span class="button-text">Préstamos</span>
+        <i class="fas fa-arrow-right"></i>
+      </router-link>
     
     </div>
   </div>
