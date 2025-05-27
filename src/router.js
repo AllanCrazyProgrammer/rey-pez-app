@@ -42,6 +42,9 @@ import Bitacoras from '@/views/Procesos/Bitacoras.vue'
 import DeudasMenu from '@/views/Procesos/DeudasMenu.vue'
 import NuevaDeuda from '@/views/Procesos/NuevaDeuda.vue'
 import ListaDeudas from '@/views/Procesos/ListaDeudas.vue'
+import PrestamosMenu from '@/views/Procesos/PrestamosMenu.vue'
+import PrestamosDespicadoras from '@/views/Procesos/PrestamosDespicadoras.vue'
+import PrestamosTrabajadores from '@/views/Procesos/PrestamosTrabajadores.vue'
 
 Vue.use(Router);
 
@@ -321,6 +324,21 @@ const routes = [
     path: '/procesos/deudas/nueva',
     name: 'NuevaDeuda',
     component: NuevaDeuda
+  },
+  {
+    path: '/procesos/prestamos',
+    name: 'PrestamosMenu',
+    component: PrestamosMenu
+  },
+  {
+    path: '/procesos/prestamos/despicadoras',
+    name: 'PrestamosDespicadoras',
+    component: PrestamosDespicadoras
+  },
+  {
+    path: '/procesos/prestamos/trabajadores',
+    name: 'PrestamosTrabajadores',
+    component: PrestamosTrabajadores
   }
 ];
 
