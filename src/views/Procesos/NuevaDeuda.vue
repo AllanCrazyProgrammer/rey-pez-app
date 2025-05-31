@@ -25,13 +25,10 @@
 
     <div class="input-section" v-if="proveedorSeleccionado">
       <h2>Ingresar Productos</h2>
-      <div class="input-row">
-        <input v-model.number="newItem.kilos" type="number" placeholder="Kilos">
-        <input v-model="newItem.producto" type="text" placeholder="Producto">
-        <input v-model.number="newItem.precio" type="number" placeholder="Precio">
-        <span class="total-calculado">Total: ${{ calcularTotal(newItem) }}</span>
-        <button @click="addItem" class="add-btn">Agregar</button>
-      </div>
+      <ProductoSelector 
+        :proveedor-id="proveedorSeleccionado"
+        @agregar-producto="addItem"
+      />
     </div>
 
     <table class="tabla-principal" v-if="items.length > 0">
@@ -115,11 +112,13 @@ import { db } from '@/firebase';
 import { collection, addDoc, getDocs, doc, setDoc } from 'firebase/firestore';
 import { useRouter } from 'vue-router';
 import BackButton from '@/components/BackButton.vue';
+import ProductoSelector from '@/components/Deudas/ProductoSelector.vue';
 
 export default {
   name: 'NuevaDeuda',
   components: {
-    BackButton
+    BackButton,
+    ProductoSelector
   },
   data() {
     return {
@@ -128,12 +127,7 @@ export default {
       fechaSeleccionada: this.obtenerFechaActual(),
       items: [],
       abonos: [],
-      guardando: false,
-      newItem: {
-        kilos: null,
-        producto: '',
-        precio: null
-      }
+      guardando: false
     };
   },
   computed: {
@@ -172,38 +166,18 @@ export default {
       const proveedor = this.proveedores.find(p => p.id === this.proveedorSeleccionado);
       return proveedor ? proveedor.nombre : '';
     },
-    calcularTotal(item) {
-      if (item.kilos && item.precio) {
-        return this.formatNumber(item.kilos * item.precio);
-      }
-      return '0.00';
-    },
     formatNumber(number) {
       return number ? number.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00';
     },
-    addItem() {
-      if (!this.newItem.kilos || !this.newItem.producto || !this.newItem.precio) {
-        alert('Por favor complete todos los campos del producto');
-        return;
-      }
-
-      const total = this.newItem.kilos * this.newItem.precio;
-      
+    addItem(item) {
       this.items.push({
-        kilos: this.newItem.kilos,
-        producto: this.newItem.producto,
-        precio: this.newItem.precio,
-        total: total,
+        kilos: item.kilos,
+        producto: item.producto,
+        precio: item.precio,
+        total: item.total,
         editando: false,
         campoEditando: null
       });
-
-      // Limpiar formulario
-      this.newItem = {
-        kilos: null,
-        producto: '',
-        precio: null
-      };
     },
     removeItem(index) {
       this.items.splice(index, 1);

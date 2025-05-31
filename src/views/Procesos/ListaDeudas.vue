@@ -46,6 +46,10 @@
       <router-link to="/procesos/deudas/nueva" class="btn-nueva-deuda">
         <i class="fas fa-plus"></i> Nueva Deuda
       </router-link>
+      
+      <button @click="openHistorialPreciosModal" class="btn-historial-precios">
+        <i class="fas fa-chart-line"></i> Historial de Precios
+      </button>
     </div>
     
     <div v-if="cargando" class="loading-spinner">
@@ -221,12 +225,10 @@
           
           <div class="add-product-section">
             <h4>Agregar Producto</h4>
-            <div class="add-product-form">
-              <input v-model.number="nuevoProducto.kilos" type="number" placeholder="Kilos" step="0.01">
-              <input v-model="nuevoProducto.producto" type="text" placeholder="Producto">
-              <input v-model.number="nuevoProducto.precio" type="number" placeholder="Precio" step="0.01">
-              <button @click="agregarProducto" class="btn-agregar">Agregar</button>
-            </div>
+            <ProductoSelector 
+              :proveedor-id="deudaSeleccionada?.proveedorId"
+              @agregar-producto="agregarProductoDesdeSelector"
+            />
           </div>
           
           <h3>Abonos</h3>
@@ -362,6 +364,13 @@
         </div>
       </div>
     </div>
+    
+    <!-- Modal de Historial de Precios -->
+    <PreciosProveedorPanel 
+      :mostrar="showHistorialPreciosModal" 
+      :proveedores="proveedores"
+      @cerrar="showHistorialPreciosModal = false" 
+    />
   </div>
 </template>
 
@@ -371,11 +380,15 @@ import { db } from '@/firebase';
 import { collection, addDoc, getDocs, query, where, orderBy, doc, getDoc, updateDoc, deleteDoc, writeBatch, getDocs as getDocsWithQuery } from 'firebase/firestore';
 import { useRouter } from 'vue-router';
 import BackButton from '@/components/BackButton.vue';
+import PreciosProveedorPanel from '@/components/Deudas/Precios/PreciosProveedorPanel.vue';
+import ProductoSelector from '@/components/Deudas/ProductoSelector.vue';
 
 export default {
   name: 'ListaDeudas',
   components: {
-    BackButton
+    BackButton,
+    PreciosProveedorPanel,
+    ProductoSelector
   },
   data() {
     return {
@@ -393,6 +406,7 @@ export default {
       // Modales
       showDetalleModal: false,
       showAbonoModal: false,
+      showHistorialPreciosModal: false,
       deudaSeleccionada: null,
       productos: [],
       abonos: [],
@@ -409,11 +423,6 @@ export default {
       deudaEditada: {
         proveedorNombre: '',
         fecha: ''
-      },
-      nuevoProducto: {
-        kilos: null,
-        producto: '',
-        precio: null
       }
     };
   },
@@ -506,6 +515,7 @@ export default {
       if (event.target === event.currentTarget) {
         this.showDetalleModal = false;
         this.showAbonoModal = false;
+        this.showHistorialPreciosModal = false;
       }
     },
     async verDetalle(deuda) {
@@ -1062,6 +1072,74 @@ export default {
       } finally {
         this.guardando = false;
       }
+    },
+    openHistorialPreciosModal() {
+      this.showHistorialPreciosModal = true;
+      if (this.proveedores.length === 0) {
+        this.loadProveedores();
+      }
+    },
+    agregarProductoDesdeSelector(producto) {
+      this.agregarProductoDirecto(producto);
+    },
+    
+    async agregarProductoDirecto(producto) {
+      try {
+        this.guardando = true;
+        
+        // Guardar en Firestore
+        const productoRef = await addDoc(collection(db, 'deudas', this.deudaSeleccionada.id, 'productos'), {
+          kilos: producto.kilos,
+          producto: producto.producto,
+          precio: producto.precio,
+          total: producto.total
+        });
+        
+        // Agregar a la lista local
+        this.productos.push({
+          id: productoRef.id,
+          kilos: producto.kilos,
+          producto: producto.producto,
+          precio: producto.precio,
+          total: producto.total,
+          editando: false,
+          campoEditando: null
+        });
+        
+        // Actualizar el total de la deuda
+        const nuevoTotal = this.productos.reduce((sum, p) => sum + p.total, 0);
+        const nuevoSaldoPendiente = nuevoTotal - this.totalAbonos;
+        
+        await updateDoc(doc(db, 'deudas', this.deudaSeleccionada.id), {
+          total: nuevoTotal,
+          saldoPendiente: nuevoSaldoPendiente,
+          estado: nuevoSaldoPendiente <= 0 ? 'pagado' : 'pendiente'
+        });
+        
+        // Actualizar deuda local
+        this.deudaSeleccionada.total = nuevoTotal;
+        this.deudaSeleccionada.saldoPendiente = nuevoSaldoPendiente;
+        this.deudaSeleccionada.estado = nuevoSaldoPendiente <= 0 ? 'pagado' : 'pendiente';
+        
+        // Actualizar en la lista principal
+        this.deudas = this.deudas.map(d => {
+          if (d.id === this.deudaSeleccionada.id) {
+            return {
+              ...d,
+              total: nuevoTotal,
+              saldoPendiente: nuevoSaldoPendiente,
+              estado: nuevoSaldoPendiente <= 0 ? 'pagado' : 'pendiente'
+            };
+          }
+          return d;
+        });
+        
+      } catch (error) {
+        console.error("Error al agregar producto: ", error);
+        alert('Error al agregar producto: ' + error.message);
+      } finally {
+        this.guardando = false;
+      }
     }
   },
   async mounted() {
@@ -1162,6 +1240,7 @@ h1 {
 .acciones-container {
   display: flex;
   justify-content: flex-end;
+  gap: 15px;
   margin-bottom: 20px;
 }
 
@@ -1179,6 +1258,29 @@ h1 {
 
 .btn-nueva-deuda:hover {
   background-color: #27ae60;
+}
+
+.btn-historial-precios {
+  background: linear-gradient(135deg, #f39c12, #e67e22);
+  color: white;
+  border: none;
+  padding: 12px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 1em;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.btn-historial-precios:hover {
+  background: linear-gradient(135deg, #e67e22, #f39c12);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.15);
 }
 
 /* Tabla */
@@ -1481,6 +1583,18 @@ h1 {
     font-size: 0.9em;
   }
   
+  .acciones-container {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+  
+  .btn-nueva-deuda,
+  .btn-historial-precios {
+    width: 100%;
+    justify-content: center;
+  }
+  
   .acciones {
     flex-direction: column;
     gap: 5px;
@@ -1561,33 +1675,6 @@ h1 {
   color: #2c3e50;
   margin-top: 0;
   margin-bottom: 10px;
-}
-
-.add-product-form {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.add-product-form input {
-  padding: 8px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  flex: 1;
-  min-width: 100px;
-}
-
-.btn-agregar {
-  background-color: #2ecc71;
-  color: white;
-  border: none;
-  padding: 8px 15px;
-  border-radius: 4px;
-  cursor: pointer;
-}
-
-.btn-agregar:hover {
-  background-color: #27ae60;
 }
 
 .modal-actions {
