@@ -23,13 +23,6 @@ if (typeof window !== 'undefined' && window.pdfMake) {
 
 export async function generarNotaVentaPDF(embarque, clientesDisponibles, clientesJuntarMedidas) {
   try {
-    console.log('Generando nota para PDF:', {
-      productos: embarque.productos,
-      kilosCrudos: embarque.kilosCrudos,
-      clienteCrudos: embarque.clienteCrudos,
-      fecha: embarque.fecha,
-      cargaCon: embarque.cargaCon
-    });
 
     if (!embarque || !embarque.productos) {
       console.warn('El embarque no contiene datos de productos válidos');
@@ -1301,19 +1294,29 @@ function totalKilos(producto, nombreCliente) {
   
   let resultado = sumaKilos - descuentoTaras;
   
+  // Acceder a propiedades de forma segura
+  const clienteNombreLower = nombreCliente ? nombreCliente.toLowerCase() : '';
+  const tipoProducto = producto.tipo || '';
+  
   // Modificar esta parte para considerar noSumarKilos
   if (!producto.noSumarKilos && 
-      (producto.tipo.toLowerCase().includes('s/h2o') || 
-       producto.tipo.toLowerCase().includes('s/h20'))) {
-    if (nombreCliente.toLowerCase().includes('catarro')) {
+      (tipoProducto.toLowerCase().includes('s/h2o') || 
+       tipoProducto.toLowerCase().includes('s/h20'))) {
+    if (clienteNombreLower.includes('catarro')) {
       resultado += 1;
+    }
+    // Para cliente Otilio: sumar 1 kilo por cada 100 kilos en productos s/h2o
+    if (clienteNombreLower.includes('otilio') || 
+        (producto.nombreCliente && producto.nombreCliente.toLowerCase().includes('otilio'))) {
+      const kilosAdicionales = Math.floor(resultado / 100);
+      resultado += kilosAdicionales;
     }
   }
   
-  // Retornamos un número redondeado a entero para cliente Canelo, o con un decimal para Ozuna
-  if (nombreCliente.toLowerCase().includes('canelo')) {
+  // Retornamos un número redondeado a entero para cliente Canelo y Otilio, o con un decimal para Ozuna
+  if (clienteNombreLower.includes('canelo') || clienteNombreLower.includes('otilio')) {
     return Math.round(resultado);
-  } else if (nombreCliente.toLowerCase().includes('ozuna')) {
+  } else if (clienteNombreLower.includes('ozuna')) {
     return Number(resultado.toFixed(1));
   } else {
     return Number(resultado.toFixed(1));
