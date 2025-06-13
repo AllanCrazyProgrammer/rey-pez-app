@@ -65,6 +65,10 @@
     </div>
     
     <div v-else class="tabla-container">
+      <div class="paginacion-info">
+        <p>Mostrando {{ (paginaActual - 1) * deudasPorPagina + 1 }} - {{ Math.min(paginaActual * deudasPorPagina, totalDeudas) }} de {{ totalDeudas }} deudas</p>
+      </div>
+      
       <table class="tabla-deudas">
         <thead>
           <tr>
@@ -77,7 +81,7 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="deuda in deudasFiltradas" :key="deuda.id" :class="{ 'deuda-pagada': deuda.estado === 'pagado' }">
+          <tr v-for="deuda in deudasPaginadas" :key="deuda.id" :class="{ 'deuda-pagada': deuda.estado === 'pagado' }">
             <td>{{ formatearFecha(deuda.fecha) }}</td>
             <td>{{ deuda.proveedorNombre }}</td>
             <td>${{ formatNumber(deuda.total) }}</td>
@@ -101,6 +105,35 @@
           </tr>
         </tbody>
       </table>
+      
+      <div class="paginacion-container" v-if="totalPaginas > 1">
+        <button 
+          @click="cambiarPagina(paginaActual - 1)" 
+          :disabled="paginaActual === 1"
+          class="btn-paginacion"
+        >
+          <i class="fas fa-chevron-left"></i> Anterior
+        </button>
+        
+        <div class="paginas-numeros">
+          <button 
+            v-for="pagina in paginasVisibles" 
+            :key="pagina"
+            @click="cambiarPagina(pagina)"
+            :class="['btn-pagina', { 'activa': pagina === paginaActual }]"
+          >
+            {{ pagina }}
+          </button>
+        </div>
+        
+        <button 
+          @click="cambiarPagina(paginaActual + 1)" 
+          :disabled="paginaActual === totalPaginas"
+          class="btn-paginacion"
+        >
+          Siguiente <i class="fas fa-chevron-right"></i>
+        </button>
+      </div>
     </div>
     
     <!-- Modal de Detalle de Deuda -->
@@ -397,6 +430,10 @@ export default {
       cargando: true,
       guardando: false,
       
+      // Paginación
+      paginaActual: 1,
+      deudasPorPagina: 15,
+      
       // Filtros
       filtroProveedor: '',
       filtroEstado: '',
@@ -453,6 +490,37 @@ export default {
       });
     },
     totalDeudas() {
+      return this.deudasFiltradas.length;
+    },
+    totalPaginas() {
+      return Math.ceil(this.totalDeudas / this.deudasPorPagina);
+    },
+    deudasPaginadas() {
+      const inicio = (this.paginaActual - 1) * this.deudasPorPagina;
+      const fin = inicio + this.deudasPorPagina;
+      return this.deudasFiltradas.slice(inicio, fin);
+    },
+    paginasVisibles() {
+      const paginas = [];
+      const totalPaginas = this.totalPaginas;
+      const actual = this.paginaActual;
+      
+      // Mostrar máximo 5 páginas
+      let inicio = Math.max(1, actual - 2);
+      let fin = Math.min(totalPaginas, inicio + 4);
+      
+      // Ajustar si estamos cerca del final
+      if (fin - inicio < 4) {
+        inicio = Math.max(1, fin - 4);
+      }
+      
+      for (let i = inicio; i <= fin; i++) {
+        paginas.push(i);
+      }
+      
+      return paginas;
+    },
+    totalMontoDeudas() {
       return this.deudasFiltradas.reduce((sum, deuda) => sum + deuda.total, 0);
     },
     totalPendiente() {
@@ -473,11 +541,18 @@ export default {
       const fecha = new Date();
       return fecha.toISOString().split('T')[0];
     },
+    cambiarPagina(pagina) {
+      if (pagina >= 1 && pagina <= this.totalPaginas) {
+        this.paginaActual = pagina;
+        // Scroll hacia arriba al cambiar de página
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    },
     async loadDeudas() {
       try {
         this.cargando = true;
         const querySnapshot = await getDocs(
-          query(collection(db, 'deudas'), orderBy('fechaCreacion', 'desc'))
+          query(collection(db, 'deudas'), orderBy('fecha', 'desc'))
         );
         
         this.deudas = querySnapshot.docs.map(doc => ({
@@ -1142,6 +1217,21 @@ export default {
       }
     }
   },
+  watch: {
+    // Resetear página cuando cambien los filtros
+    filtroProveedor() {
+      this.paginaActual = 1;
+    },
+    filtroEstado() {
+      this.paginaActual = 1;
+    },
+    filtroFechaDesde() {
+      this.paginaActual = 1;
+    },
+    filtroFechaHasta() {
+      this.paginaActual = 1;
+    }
+  },
   async mounted() {
     await Promise.all([this.loadDeudas(), this.loadProveedores()]);
   }
@@ -1726,5 +1816,85 @@ h1 {
   font-size: 2em;
   font-weight: bold;
   margin: 0;
+}
+
+/* Paginación */
+.paginacion-info {
+  text-align: center;
+  margin-bottom: 15px;
+  color: #7f8c8d;
+  font-size: 0.95em;
+}
+
+.paginacion-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-top: 20px;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.btn-paginacion {
+  background-color: #3498db;
+  color: white;
+  border: none;
+  padding: 10px 15px;
+  border-radius: 5px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  transition: background-color 0.3s;
+}
+
+.btn-paginacion:hover:not(:disabled) {
+  background-color: #2980b9;
+}
+
+.btn-paginacion:disabled {
+  background-color: #95a5a6;
+  cursor: not-allowed;
+}
+
+.paginas-numeros {
+  display: flex;
+  gap: 5px;
+}
+
+.btn-pagina {
+  background-color: #ecf0f1;
+  color: #2c3e50;
+  border: none;
+  padding: 10px 12px;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: all 0.3s;
+  min-width: 40px;
+}
+
+.btn-pagina:hover {
+  background-color: #bdc3c7;
+}
+
+.btn-pagina.activa {
+  background-color: #3498db;
+  color: white;
+}
+
+@media (max-width: 768px) {
+  .paginacion-container {
+    flex-direction: column;
+    gap: 15px;
+  }
+  
+  .paginas-numeros {
+    order: 2;
+  }
+  
+  .btn-paginacion {
+    width: 120px;
+    justify-content: center;
+  }
 }
 </style> 
