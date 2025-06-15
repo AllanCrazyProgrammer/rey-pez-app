@@ -129,8 +129,8 @@
                 <span>{{ item.medida }}</span>
                 <input 
                   type="checkbox" 
-                  v-model="item.verificado" 
-                  @change="handleVerificacionChange(index)"
+                  :checked="item.verificado"
+                  @change="toggleVerificacion(index, $event)"
                   class="verificacion-checkbox"
                   :title="item.verificado ? 'Medida verificada' : 'Marcar como verificada'"
                 >
@@ -390,7 +390,8 @@
         lastSaveMessage: '',
         showSaveMessage: false,
         saveMessageTimer: null,
-        saveMessage: ''
+        saveMessage: '',
+        isSavingVerificacion: false
       }
     },
     computed: {
@@ -491,14 +492,14 @@
               total: Number(item.total) || 0
             }));
   
-            // Cargar los itemsVenta incluyendo el estado de verificación
+            // Cargar los itemsVenta con el estado de verificación
             this.itemsVenta = (data.itemsVenta || []).map(item => ({
               kilosVenta: Number(item.kilosVenta) || 0,
               medida: item.medida || '',
               precioVenta: Number(item.precioVenta) || 0,
               totalVenta: Number(item.totalVenta) || 0,
               ganancia: Number(item.ganancia) || 0,
-              verificado: Boolean(item.verificado) // Agregar el estado de verificación
+              verificado: Boolean(item.verificado || false)
             }));
   
             // Cargar el resto de datos
@@ -1007,7 +1008,7 @@
           ...this.newProduct,
           totalVenta,
           ganancia: totalVenta - (this.newProduct.kilosVenta * (this.items[this.itemsVenta.length]?.costo || 0)),
-          verificado: false // Inicializar el estado de verificación
+          verificado: false // Inicializar verificado como false
         });
   
         this.showAddProductModal = false;
@@ -1579,13 +1580,55 @@
           return 0;
         }
       },
-      handleVerificacionChange(index) {
-        const item = this.itemsVenta[index];
-        if (item) {
-          // Asegurarnos de que el valor sea booleano
-          item.verificado = Boolean(item.verificado);
-          // Guardar el cambio
-          this.handleDataChange();
+      async toggleVerificacion(index, event) {
+        if (this.isSavingVerificacion) return;
+        
+        try {
+          this.isSavingVerificacion = true;
+          const checked = event.target.checked;
+          
+          // Actualizar el estado local
+          this.$set(this.itemsVenta[index], 'verificado', checked);
+          
+          // Obtener el ID de la cuenta actual
+          const id = this.$route.params.id;
+          if (!id) return;
+
+          // Referencia al documento
+          const docRef = doc(db, 'cuentasOtilio', id);
+          
+          // Actualizar en Firebase
+          await updateDoc(docRef, {
+            itemsVenta: this.itemsVenta.map(item => ({
+              kilosVenta: Number(item.kilosVenta) || 0,
+              medida: String(item.medida || ''),
+              precioVenta: Number(item.precioVenta) || 0,
+              totalVenta: Number(item.totalVenta) || 0,
+              ganancia: Number(item.ganancia) || 0,
+              verificado: Boolean(item.verificado)
+            }))
+          });
+
+          // Mostrar mensaje de éxito
+          this.lastSaveMessage = 'Verificación guardada';
+          this.showSaveMessage = true;
+          setTimeout(() => {
+            this.showSaveMessage = false;
+          }, 2000);
+
+        } catch (error) {
+          console.error('Error al guardar verificación:', error);
+          // Revertir el cambio local en caso de error
+          this.$set(this.itemsVenta[index], 'verificado', !event.target.checked);
+          
+          // Mostrar mensaje de error
+          this.lastSaveMessage = 'Error al guardar verificación';
+          this.showSaveMessage = true;
+          setTimeout(() => {
+            this.showSaveMessage = false;
+          }, 3000);
+        } finally {
+          this.isSavingVerificacion = false;
         }
       },
     },
