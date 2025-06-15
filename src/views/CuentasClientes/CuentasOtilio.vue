@@ -53,6 +53,7 @@
                 v-if="editingField.index === index && editingField.field === 'kilos'"
                 v-model.number="item.kilos"
                 type="number"
+                @input="actualizarTotalEnTiempoReal(index)"
                 @blur="finishEditing"
                 @keyup.enter="finishEditing"
                 ref="editInput"
@@ -117,12 +118,24 @@
                 v-if="editingKilosIndex === index"
                 v-model.number="item.kilosVenta"
                 type="number"
+                @input="calcularTotalVenta(index)"
                 @blur="finishEditingKilos"
                 @keyup.enter="finishEditingKilos"
                 ref="kilosInput"
               >
             </td>
-            <td>{{ item.medida }}</td>
+            <td>
+              <div class="medida-container">
+                <span>{{ item.medida }}</span>
+                <input 
+                  type="checkbox" 
+                  v-model="item.verificado" 
+                  @change="handleVerificacionChange(index)"
+                  class="verificacion-checkbox"
+                  :title="item.verificado ? 'Medida verificada' : 'Marcar como verificada'"
+                >
+              </div>
+            </td>
             <td>
               <input 
                 :value="item.precioVenta"
@@ -428,6 +441,31 @@
                String(fecha.getMonth() + 1).padStart(2, '0') + '-' + 
                String(fecha.getDate()).padStart(2, '0');
       },
+      actualizarTotalEnTiempoReal(index) {
+        const item = this.items[index];
+        if (item) {
+          // Convertir valores a números
+          const kilos = Number(item.kilos) || 0;
+          const costo = Number(item.costo) || 0;
+          
+          // Actualizar el total
+          this.$set(item, 'total', kilos * costo);
+          
+          // Actualizar también el item correspondiente en la tabla de venta
+          if (this.itemsVenta[index]) {
+            const itemVenta = this.itemsVenta[index];
+            const precioVenta = Number(itemVenta.precioVenta) || 0;
+            
+            // Actualizar kilos venta y recalcular totales
+            this.$set(itemVenta, 'kilosVenta', kilos);
+            this.$set(itemVenta, 'totalVenta', kilos * precioVenta);
+            this.$set(itemVenta, 'ganancia', (kilos * precioVenta) - (kilos * costo));
+          }
+          
+          // Encolar el guardado automático
+          this.handleDataChange();
+        }
+      },
       formatNumber(value) {
         if (value === null || value === undefined) {
           return '0.00';
@@ -453,13 +491,14 @@
               total: Number(item.total) || 0
             }));
   
-            // Cargar los itemsVenta sin recalcular
+            // Cargar los itemsVenta incluyendo el estado de verificación
             this.itemsVenta = (data.itemsVenta || []).map(item => ({
               kilosVenta: Number(item.kilosVenta) || 0,
               medida: item.medida || '',
               precioVenta: Number(item.precioVenta) || 0,
               totalVenta: Number(item.totalVenta) || 0,
-              ganancia: Number(item.ganancia) || 0
+              ganancia: Number(item.ganancia) || 0,
+              verificado: Boolean(item.verificado) // Agregar el estado de verificación
             }));
   
             // Cargar el resto de datos
@@ -737,8 +776,9 @@
               kilosVenta: Number(item.kilosVenta) || 0,
               medida: String(item.medida || ''),
               precioVenta: Number(item.precioVenta) || 0,
-              totalVenta: Number(item.kilosVenta * item.precioVenta) || 0,
-              ganancia: Number(item.ganancia) || 0
+              totalVenta: Number(item.totalVenta) || 0,
+              ganancia: Number(item.ganancia) || 0,
+              verificado: Boolean(item.verificado) // Asegurar que se guarde el estado de verificación
             })),
             saldoAcumuladoAnterior: Number(this.saldoAcumuladoAnterior) || 0,
             cobros: this.cobros.map(cobro => ({
@@ -966,7 +1006,8 @@
         this.itemsVenta.push({
           ...this.newProduct,
           totalVenta,
-          ganancia: totalVenta - (this.newProduct.kilosVenta * (this.items[this.itemsVenta.length]?.costo || 0))
+          ganancia: totalVenta - (this.newProduct.kilosVenta * (this.items[this.itemsVenta.length]?.costo || 0)),
+          verificado: false // Inicializar el estado de verificación
         });
   
         this.showAddProductModal = false;
@@ -979,30 +1020,30 @@
   
       calcularTotalVenta(index) {
         const item = this.itemsVenta[index];
-        if (item) {
+        if (!item) return;
+        
+        try {
           // Asegurar que los valores sean números
           const kilos = Number(item.kilosVenta) || 0;
           const precio = Number(item.precioVenta) || 0;
-          const costoUnitario = Number(this.items[index]?.costo) || 0;
           
-          // Calcular total y ganancia
+          // Calcular el total de venta
           const totalVenta = kilos * precio;
-          const ganancia = totalVenta - (kilos * costoUnitario);
           
-          // Actualizar el objeto con los nuevos valores
-          this.$set(this.itemsVenta, index, {
-            ...item,
-            kilosVenta: kilos,
-            precioVenta: precio,
-            totalVenta: totalVenta,
-            ganancia: ganancia
-          });
+          // Calcular la ganancia usando el costo de la tabla principal
+          const itemCosto = this.items[index];
+          const costoTotal = itemCosto ? (kilos * (Number(itemCosto.costo) || 0)) : 0;
+          const ganancia = totalVenta - costoTotal;
           
-          // Guardar silenciosamente después de modificaciones
-          if (this.autoSaveTimer) clearTimeout(this.autoSaveTimer);
-          this.autoSaveTimer = setTimeout(() => {
-            this.guardarSilencioso();
-          }, 1000);
+          // Actualizar los valores usando $set para asegurar reactividad
+          this.$set(item, 'kilosVenta', kilos);
+          this.$set(item, 'totalVenta', totalVenta);
+          this.$set(item, 'ganancia', ganancia);
+          
+          // Encolar el guardado automático
+          this.handleDataChange();
+        } catch (error) {
+          console.error('Error al calcular total de venta:', error);
         }
       },
   
@@ -1536,6 +1577,15 @@
           }, 3000);
           
           return 0;
+        }
+      },
+      handleVerificacionChange(index) {
+        const item = this.itemsVenta[index];
+        if (item) {
+          // Asegurarnos de que el valor sea booleano
+          item.verificado = Boolean(item.verificado);
+          // Guardar el cambio
+          this.handleDataChange();
         }
       },
     },
@@ -2258,5 +2308,23 @@
     display: flex;
     justify-content: center;
     margin: 15px 0;
+  }
+
+  .medida-container {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .verificacion-checkbox {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    accent-color: #ffd700;
+  }
+
+  .verificacion-checkbox:hover {
+    transform: scale(1.1);
+    transition: transform 0.2s ease;
   }
   </style> 
