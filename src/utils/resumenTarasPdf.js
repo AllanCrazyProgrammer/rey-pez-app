@@ -7,7 +7,7 @@ const COLORES_CLIENTES = {
   'Catarro': '#e74c3c',  // Rojo
   'Otilio': '#f39c12',   // Naranja
   'Ozuna': '#27ae60',    // Verde
-  'Canelo': '#9b59b6'    // Morado
+  'Elizabeth': '#9b59b6'    // Morado
 };
 
 export function generarResumenTarasPDF(embarqueData, clientesDisponibles) {
@@ -97,7 +97,7 @@ function prepararDatosTabla(embarqueData, clientesDisponibles) {
     { id: '2', nombre: 'Catarro' },
     { id: '3', nombre: 'Otilio' },
     { id: '4', nombre: 'Ozuna' },
-    { id: '5', nombre: 'Canelo' }
+    { id: '5', nombre: 'Elizabeth' }
   ];
 
   clientesPredefinidos.forEach(cliente => {

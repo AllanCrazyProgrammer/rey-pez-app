@@ -178,7 +178,7 @@ export async function generarNotaVentaPDF(embarque, clientesDisponibles, cliente
           background: '#008000',
           padding: [2, 2, 2, 2]
         },
-        clienteCanelo: {
+        clienteElizabeth: {
           color: '#FFFFFF',
           background: '#9b59b6',
           padding: [2, 2, 2, 2]
@@ -1192,7 +1192,7 @@ function obtenerEstiloCliente(nombreCliente) {
   if (nombreLowerCase.includes('catarro')) return 'clienteCatarro';
   if (nombreLowerCase.includes('otilio')) return 'clienteOtilio';
   if (nombreLowerCase.includes('ozuna')) return 'clienteOzuna';
-  if (nombreLowerCase.includes('canelo')) return 'clienteCanelo';
+  if (nombreLowerCase.includes('elizabeth')) return 'clienteElizabeth';
   return 'clienteOtro';
 }
 
@@ -1314,7 +1314,7 @@ function totalKilos(producto, nombreCliente) {
   }
   
   // Retornamos un número redondeado a entero para cliente Canelo y Otilio, o con un decimal para Ozuna
-  if (clienteNombreLower.includes('canelo') || clienteNombreLower.includes('otilio')) {
+  if (clienteNombreLower.includes('elizabeth') || clienteNombreLower.includes('otilio')) {
     return Math.round(resultado);
   } else if (clienteNombreLower.includes('ozuna')) {
     return Number(resultado.toFixed(1));
@@ -1330,7 +1330,7 @@ function calcularKilosCrudos(item, clienteNombre) {
   if (item.taras) {
     const [cantidad, peso] = item.taras.split('-').map(Number);
     // Verificar si el cliente es Canelo para usar 20 en lugar de 20.5
-    const multiplicador = clienteNombre && clienteNombre.toLowerCase().includes('canelo') ? 20 : 20.5;
+    const multiplicador = clienteNombre && clienteNombre.toLowerCase().includes('elizabeth') ? 20 : 20.5;
     kilosTotales += cantidad * multiplicador;
   }
 
@@ -1341,7 +1341,7 @@ function calcularKilosCrudos(item, clienteNombre) {
   }
   
   // Para Canelo, redondeamos a entero (sin decimales)
-  if (clienteNombre && clienteNombre.toLowerCase().includes('canelo')) {
+  if (clienteNombre && clienteNombre.toLowerCase().includes('elizabeth')) {
     return Math.round(kilosTotales).toString();
   }
   
