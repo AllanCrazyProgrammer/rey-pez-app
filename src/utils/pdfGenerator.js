@@ -809,10 +809,10 @@ function generarTablaProductos(productos, estiloCliente, nombreCliente) {
   // Verificar si algún producto tiene notas o hilos
   const hayNotas = productosConKilos.some(producto => producto.nota && producto.nota.trim() !== '');
   const hayHilos = productosConKilos.some(producto => producto.hilos);
-  // Verificar si es el cliente Canelo
-  const esClienteCanelo = nombreCliente.toLowerCase().includes('canelo');
-  // Verificar si hay productos con precio (solo relevante para Canelo)
-  const hayPrecios = esClienteCanelo && productosConKilos.some(producto => producto.precio && producto.precio.toString().trim() !== '');
+  // Verificar si es el cliente Elizabeth
+  const esClienteElizabeth = nombreCliente.toLowerCase().includes('elizabeth');
+  // Verificar si hay productos con precio (solo relevante para Elizabeth)
+  const hayPrecios = esClienteElizabeth && productosConKilos.some(producto => producto.precio && producto.precio.toString().trim() !== '');
 
   // Definir las columnas del header
   const headerRow = [
@@ -821,8 +821,8 @@ function generarTablaProductos(productos, estiloCliente, nombreCliente) {
     { text: 'Taras', style: 'tableHeader' }
   ];
 
-  // Agregar columnas de Precio y Total solo para cliente Canelo y si hay precios
-  if (esClienteCanelo && hayPrecios) {
+  // Agregar columnas de Precio y Total solo para cliente Elizabeth y si hay precios
+  if (esClienteElizabeth && hayPrecios) {
     headerRow.push({ text: 'Precio', style: 'tableHeader' });
     headerRow.push({ text: 'Total', style: 'tableHeader' });
   }
@@ -854,15 +854,15 @@ function generarTablaProductos(productos, estiloCliente, nombreCliente) {
       const row = [
         // Mostrar un decimal para Ozuna
         nombreCliente.toLowerCase().includes('ozuna') ? `${kilos.toFixed(1)} kg` : `${Math.round(kilos)} kg`,
-        // Para cliente Canelo, mostramos solo el nombre del producto sin precio (el precio irá en otra columna)
-        esClienteCanelo && hayPrecios 
+        // Para cliente Elizabeth, mostramos solo el nombre del producto sin precio (el precio irá en otra columna)
+        esClienteElizabeth && hayPrecios 
           ? (producto.nombreAlternativoPDF || producto.medida || '') + (producto.tipo === 'c/h20' ? ' c/h2o' : (producto.tipo === 's/h20' ? ' s/h2o' : (producto.tipo === 'otro' ? ` ${producto.tipoPersonalizado || ''}` : ` ${producto.tipo || ''}`)))
           : formatearProducto(producto),
         tarasTexto
       ];
 
-      // Agregar columnas de Precio y Total solo para cliente Canelo
-      if (esClienteCanelo && hayPrecios) {
+      // Agregar columnas de Precio y Total solo para cliente Elizabeth
+      if (esClienteElizabeth && hayPrecios) {
         // Agregar columna de precio
         row.push(producto.precio 
           ? { text: `$${Number(producto.precio).toLocaleString('en-US')}`, style: 'precio' } 
@@ -892,8 +892,8 @@ function generarTablaProductos(productos, estiloCliente, nombreCliente) {
     }
   });
 
-  // Agregar fila con el gran total para cliente Canelo con precios
-  if (esClienteCanelo && hayPrecios && granTotal > 0) {
+  // Agregar fila con el gran total para cliente Elizabeth con precios
+  if (esClienteElizabeth && hayPrecios && granTotal > 0) {
     // Crear una fila completa para el gran total
     const numColumnas = headerRow.length; 
     const filaGranTotal = [
@@ -946,7 +946,7 @@ function generarTablaProductos(productos, estiloCliente, nombreCliente) {
 
   // Calcular los anchos según el número de columnas
   let widths;
-  if (esClienteCanelo && hayPrecios) {
+  if (esClienteElizabeth && hayPrecios) {
     // Columnas base + Precio + Total
     const numColumnas = 5 + (hayHilos ? 1 : 0) + (hayNotas ? 1 : 0);
     
@@ -960,7 +960,7 @@ function generarTablaProductos(productos, estiloCliente, nombreCliente) {
       widths = ['15%', '25%', '20%', '20%', '20%'];
     }
   } else {
-    // Mantener los anchos originales si no es Canelo o no hay precios
+    // Mantener los anchos originales si no es Elizabeth o no hay precios
     if (hayHilos && hayNotas) {
       widths = ['15%', '25%', '25%', '15%', '20%'];
     } else if (hayHilos) {
@@ -990,8 +990,8 @@ function generarTablaProductos(productos, estiloCliente, nombreCliente) {
 function generarTablaCrudos(crudos, estiloCliente) {
   // Obtener el nombre del cliente a partir del estilo
   const nombreCliente = obtenerNombreClienteDesdeEstilo(estiloCliente);
-  // Comprobar si es cliente Canelo
-  const esClienteCanelo = nombreCliente.toLowerCase().includes('canelo');
+  // Comprobar si es cliente Elizabeth
+  const esClienteElizabeth = nombreCliente.toLowerCase().includes('elizabeth');
   
   // Filtrar items que tengan kilos reales
   const crudosFiltrados = crudos.map(crudo => {
@@ -1045,8 +1045,8 @@ function generarTablaCrudos(crudos, estiloCliente) {
   // Agregar columna de precio solo si hay precios
   if (hayPrecios) {
     headerRow.push({ text: 'Precio', style: 'tableHeader' });
-    // Agregar columna de total solo para Canelo y si hay precios
-    if (esClienteCanelo) {
+    // Agregar columna de total solo para Elizabeth y si hay precios
+    if (esClienteElizabeth) {
       headerRow.push({ text: 'Total', style: 'tableHeader' });
     }
   }
@@ -1107,8 +1107,8 @@ function generarTablaCrudos(crudos, estiloCliente) {
     })
   );
   
-  // Agregar fila con el gran total para cliente Canelo con precios
-  if ((esClienteCanelo || nombreCliente === 'canelo') && hayPrecios && granTotal > 0) {
+  // Agregar fila con el gran total para cliente Elizabeth con precios
+  if ((esClienteElizabeth || nombreCliente === 'elizabeth') && hayPrecios && granTotal > 0) {
     // Crear una fila completa para el gran total
     const numColumnas = headerRow.length;
     const filaGranTotal = [
@@ -1159,10 +1159,10 @@ function generarTablaCrudos(crudos, estiloCliente) {
     };
   }
 
-  // Definir los anchos de columna según si hay precios o no y si es Canelo
+  // Definir los anchos de columna según si hay precios o no y si es Elizabeth
   let widths;
   if (hayPrecios) {
-    if (esClienteCanelo) {
+    if (esClienteElizabeth) {
       widths = ['20%', '25%', '20%', '15%', '20%']; // Con columna de precio y total
     } else {
       widths = ['25%', '30%', '25%', '20%']; // Con columna de precio pero sin total
@@ -1329,7 +1329,7 @@ function calcularKilosCrudos(item, clienteNombre) {
   // Procesar taras principales
   if (item.taras) {
     const [cantidad, peso] = item.taras.split('-').map(Number);
-    // Verificar si el cliente es Canelo para usar 20 en lugar de 20.5
+    // Verificar si el cliente es Elizabeth para usar 20 en lugar de 20.5
     const multiplicador = clienteNombre && clienteNombre.toLowerCase().includes('elizabeth') ? 20 : 20.5;
     kilosTotales += cantidad * multiplicador;
   }
@@ -1340,7 +1340,7 @@ function calcularKilosCrudos(item, clienteNombre) {
     kilosTotales += kilosSobrante;
   }
   
-  // Para Canelo, redondeamos a entero (sin decimales)
+  // Para Elizabeth, redondeamos a entero (sin decimales)
   if (clienteNombre && clienteNombre.toLowerCase().includes('elizabeth')) {
     return Math.round(kilosTotales).toString();
   }
@@ -1486,7 +1486,7 @@ function obtenerNombreClienteDesdeEstilo(estiloCliente) {
     case 'clienteCatarro': return 'catarro';
     case 'clienteOtilio': return 'otilio';
     case 'clienteOzuna': return 'ozuna';
-    case 'clienteCanelo': return 'canelo';
+    case 'clienteElizabeth': return 'elizabeth';
     default: return 'otro';
   }
 }
