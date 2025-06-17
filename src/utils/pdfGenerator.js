@@ -553,10 +553,52 @@ function generarContenidoClientes(embarque, clientesDisponibles, clientesJuntarM
     }
   });
 
-  // Agregar total general de taras solo si hay taras
+  // Calcular el total de dinero
+  let totalDinero = 0;
+  
+  // Sumar todos los totales de productos limpios
+  Object.entries(productosPorCliente).forEach(([clienteId, productos]) => {
+    productos.forEach(producto => {
+      if (producto.precio) {
+        const kilos = totalKilos(producto, obtenerNombreCliente(clienteId, clientesDisponibles));
+        totalDinero += kilos * Number(producto.precio);
+      }
+    });
+  });
+
+  // Sumar todos los totales de crudos
+  if (embarque.clienteCrudos) {
+    Object.entries(embarque.clienteCrudos).forEach(([clienteId, crudos]) => {
+      crudos.forEach(crudo => {
+        crudo.items.forEach(item => {
+          if (item.precio) {
+            const kilos = parseFloat(calcularKilosCrudos(item, obtenerNombreCliente(clienteId, clientesDisponibles)));
+            totalDinero += kilos * Number(item.precio);
+          }
+        });
+      });
+    });
+  }
+
+  // Agregar total general de taras y dinero solo si hay taras
   if (totalTarasLimpio + totalTarasCrudos > 0) {
     contenido.push(
-      { text: `Total general de taras: ${totalTarasLimpio + totalTarasCrudos}`, style: 'subheader', margin: [0, 5, 0, 5] }
+      { 
+        columns: [
+          {
+            text: `Total general de taras: ${totalTarasLimpio + totalTarasCrudos}`,
+            style: 'subheader',
+            width: '50%'
+          },
+          {
+            text: `Total general: $${Math.round(totalDinero).toLocaleString('en-US')}`,
+            style: ['subheader', 'granTotal'],
+            alignment: 'right',
+            width: '50%'
+          }
+        ],
+        margin: [0, 5, 0, 5]
+      }
     );
   }
 
@@ -1026,7 +1068,7 @@ function generarTablaCrudos(crudos, estiloCliente) {
   console.log('Generando tabla de crudos:', {
     estiloCliente,
     nombreCliente,
-    esClienteCanelo,
+    esClienteElizabeth,
     hayPreciosEnCrudos: crudosFiltrados.some(crudo => crudo.items.some(item => !!item.precio))
   });
   
@@ -1066,8 +1108,8 @@ function generarTablaCrudos(crudos, estiloCliente) {
       // Solo procesar items con kilos > 0
       if (kilos > 0) {
         // Depuración de cada item
-        if (esClienteCanelo && item.precio) {
-          console.log('Item con precio para Canelo:', {
+        if (esClienteElizabeth && item.precio) {
+          console.log('Item con precio para Elizabeth:', {
             talla: item.talla,
             kilos,
             precio: item.precio,
@@ -1090,8 +1132,8 @@ function generarTablaCrudos(crudos, estiloCliente) {
         if (hayPrecios) {
           row.push(item.precio ? { text: `$${Number(item.precio).toLocaleString('en-US')}`, style: 'precio' } : '');
           
-          // Agregar total solo para Canelo (forzar reconocimiento explícito)
-          if (esClienteCanelo || nombreCliente === 'canelo') {
+          // Agregar total solo para Elizabeth (forzar reconocimiento explícito)
+          if (esClienteElizabeth || nombreCliente === 'elizabeth') {
             const total = item.precio ? kilos * Number(item.precio) : 0;
             // Sumar al gran total
             granTotal += total;
@@ -1313,7 +1355,7 @@ function totalKilos(producto, nombreCliente) {
     }
   }
   
-  // Retornamos un número redondeado a entero para cliente Canelo y Otilio, o con un decimal para Ozuna
+  // Retornamos un número redondeado a entero para cliente Elizabeth y Otilio, o con un decimal para Ozuna
   if (clienteNombreLower.includes('elizabeth') || clienteNombreLower.includes('otilio')) {
     return Math.round(resultado);
   } else if (clienteNombreLower.includes('ozuna')) {
@@ -1371,7 +1413,7 @@ function obtenerColorBorde(estiloCliente) {
     clienteCatarro: '#FF0000',
     clienteOtilio: '#FFD700',
     clienteOzuna: '#008000',
-    clienteCanelo: '#9b59b6',
+    clienteElizabeth: '#9b59b6',
     clienteOtro: '#808080'
   };
   return colores[estiloCliente] || '#000000';
@@ -1598,7 +1640,7 @@ export async function generarNotaVentaSinPreciosPDF(embarque, clientesDisponible
           background: '#008000',
           padding: [2, 2, 2, 2]
         },
-        clienteCanelo: {
+        clienteElizabeth: {
           color: '#FFFFFF',
           background: '#9b59b6',
           padding: [2, 2, 2, 2]
@@ -1915,10 +1957,52 @@ function generarContenidoClientesSinPrecios(embarque, clientesDisponibles, clien
     }
   });
 
-  // Agregar total general de taras solo si hay taras
+  // Calcular el total de dinero
+  let totalDinero = 0;
+  
+  // Sumar todos los totales de productos limpios
+  Object.entries(productosPorCliente).forEach(([clienteId, productos]) => {
+    productos.forEach(producto => {
+      if (producto.precio) {
+        const kilos = totalKilos(producto, obtenerNombreCliente(clienteId, clientesDisponibles));
+        totalDinero += kilos * Number(producto.precio);
+      }
+    });
+  });
+
+  // Sumar todos los totales de crudos
+  if (embarque.clienteCrudos) {
+    Object.entries(embarque.clienteCrudos).forEach(([clienteId, crudos]) => {
+      crudos.forEach(crudo => {
+        crudo.items.forEach(item => {
+          if (item.precio) {
+            const kilos = parseFloat(calcularKilosCrudos(item, obtenerNombreCliente(clienteId, clientesDisponibles)));
+            totalDinero += kilos * Number(item.precio);
+          }
+        });
+      });
+    });
+  }
+
+  // Agregar total general de taras y dinero solo si hay taras
   if (totalTarasLimpio + totalTarasCrudos > 0) {
     contenido.push(
-      { text: `Total general de taras: ${totalTarasLimpio + totalTarasCrudos}`, style: 'subheader', margin: [0, 5, 0, 5] }
+      { 
+        columns: [
+          {
+            text: `Total general de taras: ${totalTarasLimpio + totalTarasCrudos}`,
+            style: 'subheader',
+            width: '50%'
+          },
+          {
+            text: `Total general: $${Math.round(totalDinero).toLocaleString('en-US')}`,
+            style: ['subheader', 'granTotal'],
+            alignment: 'right',
+            width: '50%'
+          }
+        ],
+        margin: [0, 5, 0, 5]
+      }
     );
   }
 
