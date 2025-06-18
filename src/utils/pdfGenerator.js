@@ -23,10 +23,16 @@ if (typeof window !== 'undefined' && window.pdfMake) {
 
 export async function generarNotaVentaPDF(embarque, clientesDisponibles, clientesJuntarMedidas) {
   try {
-
-    if (!embarque || !embarque.productos) {
-      console.warn('El embarque no contiene datos de productos válidos');
+    // Validación más robusta de los datos de entrada
+    if (!embarque || !embarque.productos || !Array.isArray(embarque.productos)) {
+      console.warn('El embarque no contiene datos de productos válidos', { embarque });
       return;
+    }
+
+    // Asegurarse de que clientesDisponibles sea un array
+    if (!Array.isArray(clientesDisponibles)) {
+      console.warn('Lista de clientes no válida, usando array vacío');
+      clientesDisponibles = [];
     }
 
     const logoBase64 = await loadImageAsBase64('https://res.cloudinary.com/hwkcovsmr/image/upload/v1620946647/samples/REY_PEZ_LOGO_nsotww.png');
@@ -365,6 +371,22 @@ function generarContenidoClientes(embarque, clientesDisponibles, clientesJuntarM
   let totalTarasLimpio = 0;
   let totalTarasCrudos = 0;
 
+  // Validar que embarque y productos existan
+  if (!embarque || !embarque.productos || !Array.isArray(embarque.productos)) {
+    console.warn('Datos de embarque inválidos o productos no encontrados');
+    return [{
+      text: 'No hay datos de productos disponibles',
+      italics: true,
+      margin: [0, 5, 0, 10]
+    }];
+  }
+
+  // Validar que clientesDisponibles sea un array
+  if (!Array.isArray(clientesDisponibles)) {
+    console.warn('Lista de clientes no válida');
+    clientesDisponibles = [];
+  }
+
   // Agrupar productos por cliente
   const productosPorCliente = embarque.productos.reduce((acc, producto) => {
     if (!acc[producto.clienteId]) {
@@ -373,6 +395,15 @@ function generarContenidoClientes(embarque, clientesDisponibles, clientesJuntarM
     acc[producto.clienteId].push(producto);
     return acc;
   }, {});
+
+  // Determinar si hay algún cliente Elizabeth
+  let hayClienteElizabeth = false;
+  Object.entries(productosPorCliente).forEach(([clienteId]) => {
+    const nombreCliente = obtenerNombreCliente(clienteId, clientesDisponibles);
+    if (nombreCliente.toLowerCase().includes('elizabeth')) {
+      hayClienteElizabeth = true;
+    }
+  });
 
   Object.entries(productosPorCliente).forEach(([clienteId, productos]) => {
     const nombreCliente = obtenerNombreCliente(clienteId, clientesDisponibles);
@@ -495,13 +526,7 @@ function generarContenidoClientes(embarque, clientesDisponibles, clientesJuntarM
     // Verificar si hay crudos para este cliente
     if (embarque.clienteCrudos && embarque.clienteCrudos[clienteId]) {
       // Verificar si hay crudos con kilos reales
-      const hayKilosCrudos = embarque.clienteCrudos[clienteId].some(crudo => 
-        crudo.items.some(item => {
-          const kilosTexto = calcularKilosCrudos(item, nombreCliente);
-          const kilos = parseFloat(kilosTexto);
-          return kilos > 0;
-        })
-      );
+      const hayKilosCrudos = verificarKilosCrudos(embarque.clienteCrudos, clienteId, nombreCliente);
       
       if (hayKilosCrudos) {
         contenido.push(
@@ -551,62 +576,51 @@ function generarContenidoClientes(embarque, clientesDisponibles, clientesJuntarM
         { text: '\n' }
       );
     }
-  });
 
-  // Calcular el total de dinero
-  let totalDinero = 0;
-  
-  // Sumar todos los totales de productos limpios
-  Object.entries(productosPorCliente).forEach(([clienteId, productos]) => {
-    productos.forEach(producto => {
-      if (producto.precio) {
-        const kilos = totalKilos(producto, obtenerNombreCliente(clienteId, clientesDisponibles));
-        totalDinero += kilos * Number(producto.precio);
-      }
+    // Calcular el total de dinero
+    let totalDinero = 0;
+    
+    // Sumar todos los totales de productos limpios
+    Object.entries(productosPorCliente).forEach(([clienteId, productos]) => {
+      productos.forEach(producto => {
+        if (producto.precio) {
+          const kilos = totalKilos(producto, obtenerNombreCliente(clienteId, clientesDisponibles));
+          totalDinero += kilos * Number(producto.precio);
+        }
+      });
     });
-  });
 
-  // Sumar todos los totales de crudos
-  if (embarque.clienteCrudos) {
-    Object.entries(embarque.clienteCrudos).forEach(([clienteId, crudos]) => {
-      crudos.forEach(crudo => {
-        crudo.items.forEach(item => {
+    // Sumar todos los totales de crudos
+    if (embarque.clienteCrudos) {
+      Object.keys(embarque.clienteCrudos).forEach(clienteId => {
+        procesarCrudosDeFormaSegura(embarque.clienteCrudos, clienteId, clientesDisponibles, (item) => {
           if (item.precio) {
             const kilos = parseFloat(calcularKilosCrudos(item, obtenerNombreCliente(clienteId, clientesDisponibles)));
             totalDinero += kilos * Number(item.precio);
           }
         });
       });
-    });
-  }
+    }
 
-  // Agregar total general de taras y dinero solo si hay taras
-  if (totalTarasLimpio + totalTarasCrudos > 0) {
-    contenido.push(
-      { 
-        columns: [
-          {
-            text: `Total general de taras: ${totalTarasLimpio + totalTarasCrudos}`,
-            style: 'subheader',
-            width: '50%'
-          },
-          {
-            text: `Total general: $${Math.round(totalDinero).toLocaleString('en-US')}`,
-            style: ['subheader', 'granTotal'],
-            alignment: 'right',
-            width: '50%'
-          }
-        ],
-        margin: [0, 5, 0, 5]
-      }
-    );
-  }
+    // Agregar total general de taras y dinero solo si hay taras
+    if (totalTarasLimpio + totalTarasCrudos > 0) {
+      contenido.push(
+        ...generarTotalGeneral(totalTarasLimpio, totalTarasCrudos, totalDinero, hayClienteElizabeth)
+      );
+    }
+  });
 
   return contenido;
 }
 
 function generarSeccionRendimientos(embarque, clientesDisponibles) {
   const contenido = [];
+  
+  // Validar que embarque y productos existan
+  if (!embarque || !embarque.productos || !Array.isArray(embarque.productos)) {
+    console.warn('Datos de embarque inválidos o productos no encontrados para rendimientos');
+    return [];
+  }
   
   const productosMaquilaOzuna = embarque.productos.filter(producto => 
     producto.clienteId === "4" && !producto.esVenta
@@ -1035,47 +1049,49 @@ function generarTablaCrudos(crudos, estiloCliente) {
   // Comprobar si es cliente Elizabeth
   const esClienteElizabeth = nombreCliente.toLowerCase().includes('elizabeth');
   
-  // Filtrar items que tengan kilos reales
-  const crudosFiltrados = crudos.map(crudo => {
-    const itemsFiltrados = crudo.items.filter(item => {
-      const kilosTexto = calcularKilosCrudos(item, nombreCliente);
-      const kilos = parseFloat(kilosTexto);
-      return kilos > 0;
-    });
-    return { ...crudo, items: itemsFiltrados };
-  }).filter(crudo => crudo.items.length > 0);
+  // Crear una estructura temporal para almacenar los items filtrados
+  const itemsFiltrados = [];
+  let hayPrecios = false;
 
-  // Si no hay crudos con kilos, devolver una tabla vacía
-  if (crudosFiltrados.length === 0 || crudosFiltrados.every(crudo => crudo.items.length === 0)) {
-    return {
-      table: {
-        headerRows: 1,
-        widths: ['100%'],
-        body: [
-          [{ text: 'No hay crudos con kilos registrados', italics: true, alignment: 'center' }]
-        ]
-      },
-      layout: {
-        hLineWidth: function(i, node) { return (i === 0 || i === node.table.body.length) ? 2 : 1; },
-        vLineWidth: function(i, node) { return (i === 0 || i === node.table.widths.length) ? 2 : 1; },
-        hLineColor: function(i, node) { return (i === 0 || i === node.table.body.length) ? obtenerColorBorde(estiloCliente) : 'black'; },
-        vLineColor: function(i, node) { return (i === 0 || i === node.table.widths.length) ? obtenerColorBorde(estiloCliente) : 'black'; },
+  // Procesar los crudos de forma segura
+  try {
+    if (!Array.isArray(crudos)) {
+      console.warn('Los crudos proporcionados no son un array válido');
+      return generarTablaVacia(estiloCliente);
+    }
+
+    crudos.forEach(crudo => {
+      if (!crudo || !Array.isArray(crudo.items)) {
+        console.warn('Estructura de crudo no válida', { crudo });
+        return;
       }
-    };
+
+      crudo.items.forEach(item => {
+        if (!item) {
+          console.warn('Item no válido en crudo', { crudo });
+          return;
+        }
+
+        const kilosTexto = calcularKilosCrudos(item, nombreCliente);
+        const kilos = parseFloat(kilosTexto);
+        
+        if (kilos > 0) {
+          itemsFiltrados.push(item);
+          if (item.precio && item.precio.toString().trim() !== '') {
+            hayPrecios = true;
+          }
+        }
+      });
+    });
+  } catch (error) {
+    console.error('Error al procesar crudos:', error);
+    return generarTablaVacia(estiloCliente);
   }
-  
-  // Agregamos un log para depuración
-  console.log('Generando tabla de crudos:', {
-    estiloCliente,
-    nombreCliente,
-    esClienteElizabeth,
-    hayPreciosEnCrudos: crudosFiltrados.some(crudo => crudo.items.some(item => !!item.precio))
-  });
-  
-  // Verificar si algún ítem tiene precio
-  const hayPrecios = crudosFiltrados.some(crudo => 
-    crudo.items.some(item => item.precio && item.precio.toString().trim() !== '')
-  );
+
+  // Si no hay items con kilos, devolver una tabla vacía
+  if (itemsFiltrados.length === 0) {
+    return generarTablaVacia(estiloCliente);
+  }
 
   // Definir las columnas del header según si hay precios o no
   const headerRow = [
@@ -1099,59 +1115,40 @@ function generarTablaCrudos(crudos, estiloCliente) {
   let granTotal = 0;
 
   // Agregar las filas de datos
-  crudosFiltrados.forEach(crudo => 
-    crudo.items.forEach(item => {
-      // Calcular kilos para este item
-      const kilosTexto = calcularKilosCrudos(item, nombreCliente);
-      const kilos = parseFloat(kilosTexto);
+  itemsFiltrados.forEach(item => {
+    const kilosTexto = calcularKilosCrudos(item, nombreCliente);
+    const kilos = parseFloat(kilosTexto);
+    
+    const row = [
+      `${Math.round(kilos)} kg`,
+      {
+        text: item.talla.replace(/\s*c\/\s*c$/i, ' c/c'),
+        style: 'default',
+        noWrap: true
+      },
+      calcularTarasTotales(item)
+    ];
+
+    // Agregar precio formateado solo si la columna existe
+    if (hayPrecios) {
+      row.push(item.precio ? { text: `$${Number(item.precio).toLocaleString('en-US')}`, style: 'precio' } : '');
       
-      // Solo procesar items con kilos > 0
-      if (kilos > 0) {
-        // Depuración de cada item
-        if (esClienteElizabeth && item.precio) {
-          console.log('Item con precio para Elizabeth:', {
-            talla: item.talla,
-            kilos,
-            precio: item.precio,
-            total: kilos * Number(item.precio)
-          });
-        }
+      // Agregar total solo para Elizabeth
+      if (esClienteElizabeth) {
+        const total = item.precio ? kilos * Number(item.precio) : 0;
+        granTotal += total;
         
-        const row = [
-          // Eliminar decimales para los kilos (redondeando al entero más cercano)
-          `${Math.round(kilos)} kg`,
-          {
-            text: item.talla.replace(/\s*c\/\s*c$/i, ' c/c'),
-            style: 'default',
-            noWrap: true
-          },
-          calcularTarasTotales(item)
-        ];
-
-        // Agregar precio formateado solo si la columna existe
-        if (hayPrecios) {
-          row.push(item.precio ? { text: `$${Number(item.precio).toLocaleString('en-US')}`, style: 'precio' } : '');
-          
-          // Agregar total solo para Elizabeth (forzar reconocimiento explícito)
-          if (esClienteElizabeth || nombreCliente === 'elizabeth') {
-            const total = item.precio ? kilos * Number(item.precio) : 0;
-            // Sumar al gran total
-            granTotal += total;
-            
-            row.push(item.precio 
-              ? { text: `$${Math.round(total).toLocaleString('en-US')}`, style: 'totalPrecio' } 
-              : '');
-          }
-        }
-
-        body.push(row);
+        row.push(item.precio 
+          ? { text: `$${Math.round(total).toLocaleString('en-US')}`, style: 'totalPrecio' } 
+          : '');
       }
-    })
-  );
+    }
+
+    body.push(row);
+  });
   
   // Agregar fila con el gran total para cliente Elizabeth con precios
-  if ((esClienteElizabeth || nombreCliente === 'elizabeth') && hayPrecios && granTotal > 0) {
-    // Crear una fila completa para el gran total
+  if (esClienteElizabeth && hayPrecios && granTotal > 0) {
     const numColumnas = headerRow.length;
     const filaGranTotal = [
       {
@@ -1164,7 +1161,7 @@ function generarTablaCrudos(crudos, estiloCliente) {
       }
     ];
     
-    // Agregar celdas vacías para mantener la estructura de columnas (excepto la última)
+    // Agregar celdas vacías para mantener la estructura de columnas
     for (let i = 1; i < numColumnas - 1; i++) {
       filaGranTotal.push({});
     }
@@ -1182,26 +1179,7 @@ function generarTablaCrudos(crudos, estiloCliente) {
     body.push(filaGranTotal);
   }
 
-  // Si solo tenemos el encabezado pero no filas, mostrar mensaje
-  if (body.length === 1) {
-    return {
-      table: {
-        headerRows: 1,
-        widths: ['100%'],
-        body: [
-          [{ text: 'No hay crudos con kilos registrados', italics: true, alignment: 'center' }]
-        ]
-      },
-      layout: {
-        hLineWidth: function(i, node) { return (i === 0 || i === node.table.body.length) ? 2 : 1; },
-        vLineWidth: function(i, node) { return (i === 0 || i === node.table.widths.length) ? 2 : 1; },
-        hLineColor: function(i, node) { return (i === 0 || i === node.table.body.length) ? obtenerColorBorde(estiloCliente) : 'black'; },
-        vLineColor: function(i, node) { return (i === 0 || i === node.table.widths.length) ? obtenerColorBorde(estiloCliente) : 'black'; },
-      }
-    };
-  }
-
-  // Definir los anchos de columna según si hay precios o no y si es Elizabeth
+  // Definir los anchos de columna según si hay precios o no
   let widths;
   if (hayPrecios) {
     if (esClienteElizabeth) {
@@ -1218,6 +1196,24 @@ function generarTablaCrudos(crudos, estiloCliente) {
       headerRows: 1,
       widths: widths,
       body: body
+    },
+    layout: {
+      hLineWidth: function(i, node) { return (i === 0 || i === node.table.body.length) ? 2 : 1; },
+      vLineWidth: function(i, node) { return (i === 0 || i === node.table.widths.length) ? 2 : 1; },
+      hLineColor: function(i, node) { return (i === 0 || i === node.table.body.length) ? obtenerColorBorde(estiloCliente) : 'black'; },
+      vLineColor: function(i, node) { return (i === 0 || i === node.table.widths.length) ? obtenerColorBorde(estiloCliente) : 'black'; },
+    }
+  };
+}
+
+function generarTablaVacia(estiloCliente) {
+  return {
+    table: {
+      headerRows: 1,
+      widths: ['100%'],
+      body: [
+        [{ text: 'No hay crudos con kilos registrados', italics: true, alignment: 'center' }]
+      ]
     },
     layout: {
       hLineWidth: function(i, node) { return (i === 0 || i === node.table.body.length) ? 2 : 1; },
@@ -1535,6 +1531,18 @@ function obtenerNombreClienteDesdeEstilo(estiloCliente) {
 
 export async function generarNotaVentaSinPreciosPDF(embarque, clientesDisponibles, clientesJuntarMedidas) {
   try {
+    // Validación más robusta de los datos de entrada
+    if (!embarque || !embarque.productos || !Array.isArray(embarque.productos)) {
+      console.warn('El embarque no contiene datos de productos válidos', { embarque });
+      return;
+    }
+
+    // Asegurarse de que clientesDisponibles sea un array
+    if (!Array.isArray(clientesDisponibles)) {
+      console.warn('Lista de clientes no válida, usando array vacío');
+      clientesDisponibles = [];
+    }
+
     console.log('Generando nota sin precios para PDF:', {
       productos: embarque.productos,
       kilosCrudos: embarque.kilosCrudos,
@@ -1542,11 +1550,6 @@ export async function generarNotaVentaSinPreciosPDF(embarque, clientesDisponible
       fecha: embarque.fecha,
       cargaCon: embarque.cargaCon
     });
-
-    if (!embarque || !embarque.productos) {
-      console.warn('El embarque no contiene datos de productos válidos');
-      return;
-    }
 
     const logoBase64 = await loadImageAsBase64('https://res.cloudinary.com/hwkcovsmr/image/upload/v1620946647/samples/REY_PEZ_LOGO_nsotww.png');
     
@@ -1769,6 +1772,22 @@ function generarContenidoClientesSinPrecios(embarque, clientesDisponibles, clien
   let totalTarasLimpio = 0;
   let totalTarasCrudos = 0;
 
+  // Validar que embarque y productos existan
+  if (!embarque || !embarque.productos || !Array.isArray(embarque.productos)) {
+    console.warn('Datos de embarque inválidos o productos no encontrados');
+    return [{
+      text: 'No hay datos de productos disponibles',
+      italics: true,
+      margin: [0, 5, 0, 10]
+    }];
+  }
+
+  // Validar que clientesDisponibles sea un array
+  if (!Array.isArray(clientesDisponibles)) {
+    console.warn('Lista de clientes no válida');
+    clientesDisponibles = [];
+  }
+
   // Agrupar productos por cliente
   const productosPorCliente = embarque.productos.reduce((acc, producto) => {
     if (!acc[producto.clienteId]) {
@@ -1777,6 +1796,15 @@ function generarContenidoClientesSinPrecios(embarque, clientesDisponibles, clien
     acc[producto.clienteId].push(producto);
     return acc;
   }, {});
+
+  // Determinar si hay algún cliente Elizabeth
+  let hayClienteElizabeth = false;
+  Object.entries(productosPorCliente).forEach(([clienteId]) => {
+    const nombreCliente = obtenerNombreCliente(clienteId, clientesDisponibles);
+    if (nombreCliente.toLowerCase().includes('elizabeth')) {
+      hayClienteElizabeth = true;
+    }
+  });
 
   Object.entries(productosPorCliente).forEach(([clienteId, productos]) => {
     const nombreCliente = obtenerNombreCliente(clienteId, clientesDisponibles);
@@ -1899,13 +1927,7 @@ function generarContenidoClientesSinPrecios(embarque, clientesDisponibles, clien
     // Verificar si hay crudos para este cliente
     if (embarque.clienteCrudos && embarque.clienteCrudos[clienteId]) {
       // Verificar si hay crudos con kilos reales
-      const hayKilosCrudos = embarque.clienteCrudos[clienteId].some(crudo => 
-        crudo.items.some(item => {
-          const kilosTexto = calcularKilosCrudos(item, nombreCliente);
-          const kilos = parseFloat(kilosTexto);
-          return kilos > 0;
-        })
-      );
+      const hayKilosCrudos = verificarKilosCrudos(embarque.clienteCrudos, clienteId, nombreCliente);
       
       if (hayKilosCrudos) {
         contenido.push(
@@ -1955,56 +1977,39 @@ function generarContenidoClientesSinPrecios(embarque, clientesDisponibles, clien
         { text: '\n' }
       );
     }
-  });
 
-  // Calcular el total de dinero
-  let totalDinero = 0;
-  
-  // Sumar todos los totales de productos limpios
-  Object.entries(productosPorCliente).forEach(([clienteId, productos]) => {
-    productos.forEach(producto => {
-      if (producto.precio) {
-        const kilos = totalKilos(producto, obtenerNombreCliente(clienteId, clientesDisponibles));
-        totalDinero += kilos * Number(producto.precio);
-      }
+    // Calcular el total de dinero
+    let totalDinero = 0;
+    
+    // Sumar todos los totales de productos limpios
+    Object.entries(productosPorCliente).forEach(([clienteId, productos]) => {
+      productos.forEach(producto => {
+        if (producto.precio) {
+          const kilos = totalKilos(producto, obtenerNombreCliente(clienteId, clientesDisponibles));
+          totalDinero += kilos * Number(producto.precio);
+        }
+      });
     });
-  });
 
-  // Sumar todos los totales de crudos
-  if (embarque.clienteCrudos) {
-    Object.entries(embarque.clienteCrudos).forEach(([clienteId, crudos]) => {
-      crudos.forEach(crudo => {
-        crudo.items.forEach(item => {
+    // Sumar todos los totales de crudos
+    if (embarque.clienteCrudos) {
+      Object.keys(embarque.clienteCrudos).forEach(clienteId => {
+        procesarCrudosDeFormaSegura(embarque.clienteCrudos, clienteId, clientesDisponibles, (item) => {
           if (item.precio) {
             const kilos = parseFloat(calcularKilosCrudos(item, obtenerNombreCliente(clienteId, clientesDisponibles)));
             totalDinero += kilos * Number(item.precio);
           }
         });
       });
-    });
-  }
+    }
 
-  // Agregar total general de taras y dinero solo si hay taras
-  if (totalTarasLimpio + totalTarasCrudos > 0) {
-    contenido.push(
-      { 
-        columns: [
-          {
-            text: `Total general de taras: ${totalTarasLimpio + totalTarasCrudos}`,
-            style: 'subheader',
-            width: '50%'
-          },
-          {
-            text: `Total general: $${Math.round(totalDinero).toLocaleString('en-US')}`,
-            style: ['subheader', 'granTotal'],
-            alignment: 'right',
-            width: '50%'
-          }
-        ],
-        margin: [0, 5, 0, 5]
-      }
-    );
-  }
+    // Agregar total general de taras y dinero solo si hay taras
+    if (totalTarasLimpio + totalTarasCrudos > 0) {
+      contenido.push(
+        ...generarTotalGeneral(totalTarasLimpio, totalTarasCrudos, totalDinero, hayClienteElizabeth)
+      );
+    }
+  });
 
   return contenido;
 }
@@ -2258,4 +2263,111 @@ function formatearProductoSinPrecio(producto) {
   let textoFinal = tipoProducto ? `${medida} ${tipoProducto}` : medida;
   
   return { text: textoFinal, style: 'default' };
+}
+
+function procesarCrudosDeFormaSegura(clienteCrudos, clienteId, clientesDisponibles, callback) {
+  if (!clienteCrudos || !clienteCrudos[clienteId]) {
+    return;
+  }
+
+  try {
+    const crudos = clienteCrudos[clienteId];
+    if (!Array.isArray(crudos)) {
+      console.warn(`Crudos no válidos para el cliente ${clienteId}`, { crudos });
+      return;
+    }
+
+    for (const crudo of crudos) {
+      if (!crudo || !Array.isArray(crudo.items)) {
+        console.warn(`Estructura de crudo no válida para el cliente ${clienteId}`, { crudo });
+        continue;
+      }
+
+      for (const item of crudo.items) {
+        if (!item) {
+          console.warn(`Item no válido en crudo para el cliente ${clienteId}`, { crudo });
+          continue;
+        }
+
+        callback(item);
+      }
+    }
+  } catch (error) {
+    console.error(`Error al procesar crudos para el cliente ${clienteId}:`, error);
+  }
+}
+
+function verificarKilosCrudos(clienteCrudos, clienteId, nombreCliente) {
+  let hayKilos = false;
+  
+  if (!clienteCrudos || !clienteCrudos[clienteId]) {
+    return false;
+  }
+
+  try {
+    const crudos = clienteCrudos[clienteId];
+    if (!Array.isArray(crudos)) {
+      console.warn(`Crudos no válidos para el cliente ${clienteId}`, { crudos });
+      return false;
+    }
+
+    for (const crudo of crudos) {
+      if (!crudo || !Array.isArray(crudo.items)) {
+        console.warn(`Estructura de crudo no válida para el cliente ${clienteId}`, { crudo });
+        continue;
+      }
+
+      for (const item of crudo.items) {
+        if (!item) {
+          console.warn(`Item no válido en crudo para el cliente ${clienteId}`, { crudo });
+          continue;
+        }
+
+        const kilosTexto = calcularKilosCrudos(item, nombreCliente);
+        const kilos = parseFloat(kilosTexto);
+        if (kilos > 0) {
+          hayKilos = true;
+          break;
+        }
+      }
+      if (hayKilos) break;
+    }
+  } catch (error) {
+    console.error(`Error al verificar kilos crudos para el cliente ${clienteId}:`, error);
+    return false;
+  }
+
+  return hayKilos;
+}
+
+function generarTotalGeneral(totalTarasLimpio, totalTarasCrudos, totalDinero, esClienteElizabeth) {
+  if (totalTarasLimpio + totalTarasCrudos <= 0) {
+    return [];
+  }
+
+  // Agregar siempre el total de taras
+  const columnas = [
+    {
+      text: `Total general de taras: ${totalTarasLimpio + totalTarasCrudos}`,
+      style: 'subheader',
+      width: '100%'
+    }
+  ];
+
+  // Agregar el total en dinero solo para Elizabeth
+  if (esClienteElizabeth) {
+    columnas.push({
+      text: `Total general: $${Math.round(totalDinero).toLocaleString('en-US')}`,
+      style: ['subheader', 'granTotal'],
+      alignment: 'right',
+      width: '50%'
+    });
+    // Ajustar el ancho de la primera columna cuando hay dos columnas
+    columnas[0].width = '50%';
+  }
+
+  return [{
+    columns: columnas,
+    margin: [0, 5, 0, 5]
+  }];
 }
