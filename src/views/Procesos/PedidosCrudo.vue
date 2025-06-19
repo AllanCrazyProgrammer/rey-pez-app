@@ -129,20 +129,8 @@ export default {
       columnasBase: ['Med', 'Med-Esp', 'Med-gde', 'Gde', 'Extra'],
       columnasAdicionales: [],
       nuevaColumna: '',
-      pedidos: {
-        '8a': { med: null, 'med-esp': null, 'med-gde': null, gde: null, extra: null },
-        Catarro: { med: null, 'med-esp': null, 'med-gde': null, gde: null, extra: null },
-        Otilio: { med: null, 'med-esp': null, 'med-gde': null, gde: null, extra: null },
-        Ozuna: { med: null, 'med-esp': null, 'med-gde': null, gde: null, extra: null },
-        Elizabeth: { med: null, 'med-esp': null, 'med-gde': null, gde: null, extra: null }
-      },
-      barcosPorPedido: {
-        '8a': {},
-        'Catarro': {},
-        'Otilio': {},
-        'Ozuna': {},
-        'Elizabeth': {}
-      },
+      pedidos: {},
+      barcosPorPedido: {},
       isEditing: false,
       pedidoId: null,
       dibujoCanvas: null
@@ -178,6 +166,9 @@ export default {
       this.columnas.forEach(columna => {
         const col = columna.toLowerCase();
         totales[col] = this.clientes.reduce((sum, cliente) => {
+          if (!this.pedidos[cliente] || !this.pedidos[cliente][col]) {
+            return sum;
+          }
           const valor = parseFloat(this.pedidos[cliente][col]) || 0;
           return sum + valor;
         }, 0);
@@ -205,6 +196,9 @@ export default {
       
       const nombreProp = this.normalizarNombreColumna(nombreColumna)
       this.clientes.forEach(cliente => {
+        if (!this.pedidos[cliente]) {
+          this.pedidos[cliente] = {}
+        }
         this.$set(this.pedidos[cliente], nombreProp, null)
       })
 
@@ -342,13 +336,29 @@ export default {
       }
     }
   },
-  async created() {
+  created() {
+    // Inicializar pedidos
+    this.clientes.forEach(cliente => {
+      this.$set(this.pedidos, cliente, {});
+      this.columnasBase.forEach(columna => {
+        const columnaNormalizada = this.normalizarNombreColumna(columna);
+        if (!this.pedidos[cliente][columnaNormalizada]) {
+          this.$set(this.pedidos[cliente], columnaNormalizada, null);
+        }
+      });
+    });
+
+    // Inicializar barcosPorPedido
+    this.clientes.forEach(cliente => {
+      this.$set(this.barcosPorPedido, cliente, {});
+    });
+
     // Verificar si estamos en modo edición
-    const { edit, id } = this.$route.query
+    const { edit, id } = this.$route.query;
     if (edit === 'true' && id) {
-      this.isEditing = true
-      this.pedidoId = id
-      await this.cargarPedido(id)
+      this.isEditing = true;
+      this.pedidoId = id;
+      this.cargarPedido(id);
     }
   }
 }
