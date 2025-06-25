@@ -1,114 +1,101 @@
 <template>
   <div class="pedidos-crudo-container">
-    <h2>Pedido de Camarón Crudo</h2>
+    <header class="page-header">
+      <h2>Pedido de Camarón Crudo</h2>
+    </header>
     
-    <div class="fecha-container">
-      <label for="fecha">Fecha:</label>
-      <input 
-        type="date" 
-        id="fecha" 
-        v-model="fecha" 
-        required
-        :max="fechaMaxima">
-    </div>
+    <section class="fecha-section">
+      <div class="fecha-container">
+        <label for="fecha">Fecha:</label>
+        <input 
+          type="date" 
+          id="fecha" 
+          v-model="fecha" 
+          required
+          :max="fechaMaxima"
+          class="fecha-input">
+      </div>
 
-    <div class="agregar-columna">
-      <input 
-        type="text" 
-        v-model="nuevaColumna" 
-        placeholder="Nombre de nueva columna"
-        class="input-nueva-columna">
-      <button @click="agregarColumna" class="btn-agregar-columna">
-        Agregar Columna
-      </button>
-    </div>
+      <div class="agregar-columna">
+        <input 
+          type="text" 
+          v-model="nuevaColumna" 
+          placeholder="Nombre de nueva columna"
+          class="input-nueva-columna"
+          @keyup.enter="agregarColumna">
+        <button @click="agregarColumna" class="btn-agregar-columna" :disabled="!nuevaColumna.trim()">
+          Agregar Columna
+        </button>
+      </div>
+    </section>
 
-    <div class="tabla-pedidos">
-      <table>
-        <thead>
-          <tr>
-            <th>Cliente</th>
-            <th v-for="columna in columnas" :key="columna">
-              {{ columna }}
-              <span 
-                v-if="!columnasBase.includes(columna)" 
-                class="eliminar-columna"
-                @click="eliminarColumna(columna)"
-              >
-                ×
-              </span>
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="(cliente, index) in clientes" :key="index">
-            <td :class="'cliente-' + cliente.toLowerCase()">{{ cliente }}</td>
-            <td v-for="columna in columnas" :key="columna">
-              <input 
-                type="number" 
-                v-model="pedidos[cliente][columna.toLowerCase()]" 
-                class="numero-input"
-                :class="'cliente-' + cliente.toLowerCase()"
-                placeholder="">
-            </td>
-          </tr>
-          <tr class="fila-totales">
-            <td><strong>Total</strong></td>
-            <td v-for="columna in columnas" :key="columna + '-total'">
-              {{ totalesColumnas[columna.toLowerCase()] || 0 }}
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+    <section class="tabla-section">
+      <div class="tabla-pedidos">
+        <table>
+          <thead>
+            <tr>
+              <th>Cliente</th>
+              <th v-for="columna in columnas" :key="columna" class="th-columna">
+                {{ columna }}
+                <button 
+                  v-if="!columnasBase.includes(columna)" 
+                  class="eliminar-columna"
+                  @click="eliminarColumna(columna)"
+                  :aria-label="`Eliminar columna ${columna}`"
+                  title="Eliminar columna">
+                  ×
+                </button>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="cliente in clientes" :key="cliente">
+              <td :class="`cliente-${cliente.toLowerCase()}`">{{ cliente }}</td>
+              <td v-for="columna in columnas" :key="`${cliente}-${columna}`">
+                <input 
+                  type="number" 
+                  v-model.number="pedidos[cliente][columna.toLowerCase()]" 
+                  class="numero-input"
+                  :class="`cliente-${cliente.toLowerCase()}`"
+                  placeholder="0"
+                  min="0"
+                  step="1">
+              </td>
+            </tr>
+            <tr class="fila-totales">
+              <td><strong>Total</strong></td>
+              <td v-for="columna in columnas" :key="`${columna}-total`">
+                <strong>{{ obtenerTotalColumna(columna) }}</strong>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
 
-    <div class="kilos-info">
-      <h3>Total Kilos de Crudo: <span>{{ Math.floor(kilosCrudo) }} kg</span></h3>
-      <h3>Total Taras de Crudo: <span>{{ Math.floor(tarasCrudo) }} T</span></h3>
-    </div>
-
-    <!-- <div class="desglose-medida">
-      <h2>Desglose por Medida</h2>
-      <table class="tabla-desglose">
-        <thead>
-          <tr>
-            <th>Medida</th>
-            <th>Cliente</th>
-            <th>Barco</th>
-          </tr>
-        </thead>
-        <tbody>
-          <template v-for="medida in columnas">
-            <template v-if="clientesConPedidoPorMedida(medida).length > 0">
-              <tr v-for="(cliente, index) in clientesConPedidoPorMedida(medida)" 
-                  :key="medida + cliente"
-                  class="fila-desglose">
-                <td class="medida-cell" v-if="index === 0" :rowspan="clientesConPedidoPorMedida(medida).length">
-                  {{ medida }}
-                </td>
-                <td :class="'cliente-' + cliente.toLowerCase()">{{ cliente }}</td>
-                <td>
-                  <input 
-                    type="text" 
-                    v-model="barcosPorPedido[cliente][medida.toLowerCase()]" 
-                    class="input-barco"
-                    placeholder="Nombre del barco">
-                </td>
-              </tr>
-            </template>
-          </template>
-        </tbody>
-      </table>
-    </div> -->
+    <section class="resumen-section">
+      <div class="kilos-info">
+        <div class="info-item">
+          <span class="label">Total Kilos de Crudo:</span>
+          <span class="value">{{ kilosCrudoFormateado }} kg</span>
+        </div>
+        <div class="info-item">
+          <span class="label">Total Taras de Crudo:</span>
+          <span class="value">{{ tarasCrudoFormateado }} T</span>
+        </div>
+      </div>
+    </section>
 
     <!-- Componente de Canvas para dibujo y notas -->
     <canvas-dibujo ref="canvasDibujo"></canvas-dibujo>
 
-    <div class="buttons-container">
-      <button @click="guardarPedido" class="btn-guardar">Guardar Pedido</button>
-      <button @click="imprimirPedido" class="btn-imprimir">Imprimir</button>
-      <button @click="$router.push('/procesos/pedidos')" class="btn-cancelar">Cancelar</button>
-    </div>
+    <footer class="buttons-container">
+      <button @click="guardarPedido" class="btn-primary">
+        {{ isEditing ? 'Actualizar Pedido' : 'Guardar Pedido' }}
+      </button>
+      <button @click="imprimirPedido" class="btn-secondary">Imprimir</button>
+      <button @click="cancelar" class="btn-tertiary">Cancelar</button>
+    </footer>
   </div>
 </template>
 
@@ -129,18 +116,14 @@ export default {
       columnasBase: ['Med', 'Med-Esp', 'Med-gde', 'Gde', 'Extra'],
       columnasAdicionales: [],
       nuevaColumna: '',
-      pedidos: {},
-      barcosPorPedido: {},
+      pedidos: this.inicializarPedidos(),
       isEditing: false,
       pedidoId: null,
-      dibujoCanvas: null
+      dibujoCanvas: null,
+      isLoading: false
     }
   },
   computed: {
-    fechaMinima() {
-      const hoy = new Date()
-      return hoy.toISOString().split('T')[0]
-    },
     fechaMaxima() {
       const maxDate = new Date()
       maxDate.setMonth(maxDate.getMonth() + 3)
@@ -149,56 +132,58 @@ export default {
     columnas() {
       return [...this.columnasBase, ...this.columnasAdicionales]
     },
-    kilosCrudo() {
-      let totalPiezas = 0;
-      for (const cliente in this.pedidos) {
-        for (const columna in this.pedidos[cliente]) {
-          const valor = this.pedidos[cliente][columna];
-          if (valor && !isNaN(valor)) {
-            totalPiezas += parseFloat(valor);
-          }
-        }
-      }
-      return totalPiezas * 19;
+    totalPiezas() {
+      return Object.values(this.pedidos).reduce((total, clientePedidos) => {
+        return total + Object.values(clientePedidos).reduce((subtotal, cantidad) => {
+          return subtotal + (Number(cantidad) || 0)
+        }, 0)
+      }, 0)
     },
-    totalesColumnas() {
-      const totales = {};
-      this.columnas.forEach(columna => {
-        const col = columna.toLowerCase();
-        totales[col] = this.clientes.reduce((sum, cliente) => {
-          if (!this.pedidos[cliente] || !this.pedidos[cliente][col]) {
-            return sum;
-          }
-          const valor = parseFloat(this.pedidos[cliente][col]) || 0;
-          return sum + valor;
-        }, 0);
-      });
-      return totales;
+    kilosCrudo() {
+      return this.totalPiezas * 19
+    },
+    kilosCrudoFormateado() {
+      return Math.floor(this.kilosCrudo).toLocaleString()
     },
     tarasCrudo() {
-      return this.kilosCrudo / 19;
+      return this.kilosCrudo / 19
+    },
+    tarasCrudoFormateado() {
+      return Math.floor(this.tarasCrudo).toLocaleString()
     }
   },
   methods: {
-    normalizarNombreColumna(columna) {
-      return columna.toLowerCase();
+    inicializarPedidos() {
+      const pedidos = {}
+      this.clientes.forEach(cliente => {
+        pedidos[cliente] = {}
+        this.columnasBase.forEach(columna => {
+          pedidos[cliente][columna.toLowerCase()] = null
+        })
+      })
+      return pedidos
+    },
+    obtenerTotalColumna(columna) {
+      const col = columna.toLowerCase()
+      return this.clientes.reduce((sum, cliente) => {
+        const valor = Number(this.pedidos[cliente]?.[col]) || 0
+        return sum + valor
+      }, 0)
     },
     agregarColumna() {
-      if (!this.nuevaColumna.trim()) return
-      
       const nombreColumna = this.nuevaColumna.trim()
+      if (!nombreColumna) return
+      
       if (this.columnas.includes(nombreColumna)) {
-        alert('Esta columna ya existe')
+        this.mostrarMensaje('Esta columna ya existe', 'warning')
         return
       }
 
       this.columnasAdicionales.push(nombreColumna)
+      const nombreProp = nombreColumna.toLowerCase()
       
-      const nombreProp = this.normalizarNombreColumna(nombreColumna)
+      // Agregar la nueva columna a todos los clientes
       this.clientes.forEach(cliente => {
-        if (!this.pedidos[cliente]) {
-          this.pedidos[cliente] = {}
-        }
         this.$set(this.pedidos[cliente], nombreProp, null)
       })
 
@@ -208,100 +193,101 @@ export default {
       const index = this.columnasAdicionales.indexOf(columna)
       if (index > -1) {
         this.columnasAdicionales.splice(index, 1)
+        const nombreProp = columna.toLowerCase()
         
-        const nombreProp = this.normalizarNombreColumna(columna)
+        // Eliminar la columna de todos los clientes
         this.clientes.forEach(cliente => {
           this.$delete(this.pedidos[cliente], nombreProp)
         })
       }
     },
-    clientesConPedidoPorMedida(medida) {
-      return this.clientes.filter(cliente => {
-        const cantidad = this.pedidos[cliente][medida.toLowerCase()]
-        return cantidad && cantidad > 0
-      })
-    },
     async guardarPedido() {
+      if (this.isLoading) return
+      
+      this.isLoading = true
       try {
-        // Obtener datos del canvas si existe
-        let dibujoData = null;
-        if (this.$refs.canvasDibujo && this.$refs.canvasDibujo.canvas) {
-          // Convertir el objeto canvas a una cadena de texto (string)
-          // Firestore no admite arrays anidados que pueden estar en el objeto JSON
-          const canvasJSON = this.$refs.canvasDibujo.canvas.toJSON();
-          dibujoData = JSON.stringify(canvasJSON);
-          console.log('Canvas guardado como string');
-        }
+        const dibujoData = await this.obtenerDatosCanvas()
         
         const pedidoData = {
           fecha: this.fecha,
           pedidos: this.pedidos,
-          barcosPorPedido: this.barcosPorPedido,
           columnas: this.columnas,
           tipo: 'crudo',
           kilos: this.kilosCrudo,
+          piezas: this.totalPiezas,
           createdAt: Timestamp.now(),
-          dibujoCanvas: dibujoData // Ahora es una cadena de texto
+          dibujoCanvas: dibujoData
         }
         
         if (this.isEditing && this.pedidoId) {
-          // Actualizar pedido existente
-          const pedidoRef = doc(db, 'pedidos', this.pedidoId)
-          await updateDoc(pedidoRef, pedidoData)
-          alert('Pedido actualizado exitosamente')
+          await updateDoc(doc(db, 'pedidos', this.pedidoId), pedidoData)
+          this.mostrarMensaje('Pedido actualizado exitosamente', 'success')
         } else {
-          // Crear nuevo pedido
           await addDoc(collection(db, 'pedidos'), pedidoData)
-          alert('Pedido guardado exitosamente')
+          this.mostrarMensaje('Pedido guardado exitosamente', 'success')
         }
         
         this.$router.push('/procesos/pedidos')
       } catch (error) {
         console.error('Error al guardar el pedido:', error)
-        alert('Error al guardar el pedido. Por favor intente nuevamente.')
+        this.mostrarMensaje('Error al guardar el pedido. Por favor intente nuevamente.', 'error')
+      } finally {
+        this.isLoading = false
       }
     },
+    async obtenerDatosCanvas() {
+      if (this.$refs.canvasDibujo?.canvas) {
+        try {
+          const canvasJSON = this.$refs.canvasDibujo.canvas.toJSON()
+          return JSON.stringify(canvasJSON)
+        } catch (error) {
+          console.error('Error al obtener datos del canvas:', error)
+          return null
+        }
+      }
+      return null
+    },
     async cargarPedido(id) {
+      this.isLoading = true
       try {
-        const pedidoRef = doc(db, 'pedidos', id)
-        const pedidoDoc = await getDoc(pedidoRef)
+        const pedidoDoc = await getDoc(doc(db, 'pedidos', id))
         
-        if (pedidoDoc.exists()) {
-          const data = pedidoDoc.data()
-          this.fecha = data.fecha
-          this.pedidos = data.pedidos
-          this.barcosPorPedido = data.barcosPorPedido || this.initializeBarcosPorPedido()
-          this.columnasAdicionales = data.columnas.filter(col => !this.columnasBase.includes(col))
-          
-          // Guardar los datos del dibujo para cargarlos cuando el componente esté listo
-          if (data.dibujoCanvas) {
-            console.log('Dibujo encontrado en el pedido, preparando para cargar');
-            this.dibujoCanvas = data.dibujoCanvas;
-            
-            // Intentar cargar el dibujo después de que el DOM se actualice
-            this.$nextTick(() => {
-              console.log('DOM actualizado, intentando cargar el dibujo');
-              this.cargarDibujoEnCanvas();
-            });
-          } else {
-            console.log('No hay dibujo guardado en este pedido');
-          }
-        } else {
-          alert('El pedido no existe')
+        if (!pedidoDoc.exists()) {
+          this.mostrarMensaje('El pedido no existe', 'error')
           this.$router.push('/procesos/pedidos')
+          return
+        }
+
+        const data = pedidoDoc.data()
+        this.fecha = data.fecha
+        this.pedidos = data.pedidos
+        this.columnasAdicionales = data.columnas?.filter(col => !this.columnasBase.includes(col)) || []
+        
+        if (data.dibujoCanvas) {
+          this.dibujoCanvas = data.dibujoCanvas
+          this.$nextTick(() => {
+            this.cargarDibujoEnCanvas()
+          })
         }
       } catch (error) {
         console.error('Error al cargar el pedido:', error)
-        alert('Error al cargar el pedido')
+        this.mostrarMensaje('Error al cargar el pedido', 'error')
         this.$router.push('/procesos/pedidos')
+      } finally {
+        this.isLoading = false
       }
     },
-    initializeBarcosPorPedido() {
-      const barcos = {}
-      this.clientes.forEach(cliente => {
-        barcos[cliente] = {}
-      })
-      return barcos
+    cargarDibujoEnCanvas() {
+      if (!this.$refs.canvasDibujo?.canvas || !this.dibujoCanvas) return
+      
+      try {
+        const canvasJSON = JSON.parse(this.dibujoCanvas)
+        this.$refs.canvasDibujo.canvas.loadFromJSON(canvasJSON, () => {
+          this.$refs.canvasDibujo.canvas.renderAll()
+        })
+      } catch (error) {
+        console.error('Error al cargar el dibujo en el canvas:', error)
+      }
     },
     imprimirPedido() {
       this.$router.push({
@@ -313,384 +299,335 @@ export default {
         }
       })
     },
-    // Método para cargar el dibujo en el canvas cuando esté listo
-    cargarDibujoEnCanvas() {
-      try {
-        // Verificar que el componente canvas esté disponible
-        if (this.$refs.canvasDibujo && this.$refs.canvasDibujo.canvas && this.dibujoCanvas) {
-          // Convertir la cadena de texto de vuelta a un objeto JSON
-          const canvasJSON = JSON.parse(this.dibujoCanvas);
-          
-          this.$refs.canvasDibujo.canvas.loadFromJSON(canvasJSON, () => {
-            this.$refs.canvasDibujo.canvas.renderAll();
-            console.log('Dibujo cargado correctamente en el canvas');
-          });
-        } else {
-          // Si el canvas no está listo, intentar nuevamente después de un breve retraso
-          setTimeout(() => {
-            this.cargarDibujoEnCanvas();
-          }, 500);
-        }
-      } catch (error) {
-        console.error('Error al cargar el dibujo en el canvas:', error);
+    cancelar() {
+      this.$router.push('/procesos/pedidos')
+    },
+    mostrarMensaje(mensaje, tipo = 'info') {
+      // Implementar sistema de notificaciones si está disponible
+      if (tipo === 'error') {
+        alert(mensaje) // Fallback temporal
+      } else {
+        alert(mensaje) // Fallback temporal
       }
     }
   },
   created() {
-    // Inicializar pedidos
-    this.clientes.forEach(cliente => {
-      this.$set(this.pedidos, cliente, {});
-      this.columnasBase.forEach(columna => {
-        const columnaNormalizada = this.normalizarNombreColumna(columna);
-        if (!this.pedidos[cliente][columnaNormalizada]) {
-          this.$set(this.pedidos[cliente], columnaNormalizada, null);
-        }
-      });
-    });
-
-    // Inicializar barcosPorPedido
-    this.clientes.forEach(cliente => {
-      this.$set(this.barcosPorPedido, cliente, {});
-    });
-
     // Verificar si estamos en modo edición
-    const { edit, id } = this.$route.query;
+    const { edit, id } = this.$route.query
     if (edit === 'true' && id) {
-      this.isEditing = true;
-      this.pedidoId = id;
-      this.cargarPedido(id);
+      this.isEditing = true
+      this.pedidoId = id
+      this.cargarPedido(id)
     }
   }
 }
 </script>
 
 <style scoped>
+/* Variables CSS para consistencia */
+:root {
+  --color-primary: #3498db;
+  --color-secondary: #2ecc71;
+  --color-danger: #e74c3c;
+  --color-warning: #f1c40f;
+  --color-purple: #9b59b6;
+  --color-gray: #95a5a6;
+  --color-dark: #2c3e50;
+  --color-light: #f8f9fa;
+  --border-radius: 8px;
+  --spacing: 1rem;
+  --transition: all 0.3s ease;
+}
+
 .pedidos-crudo-container {
-  max-width: 800px;
+  max-width: 1000px;
   margin: 0 auto;
-  padding: 20px;
-  font-size: 16px;
+  padding: var(--spacing);
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.page-header h2 {
+  text-align: center;
+  color: var(--color-dark);
+  margin-bottom: var(--spacing);
+  font-size: 1.8rem;
+  font-weight: 600;
+}
+
+.fecha-section {
+  background: white;
+  padding: var(--spacing);
+  border-radius: var(--border-radius);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  margin-bottom: var(--spacing);
 }
 
 .fecha-container {
-  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: var(--spacing);
+}
+
+.fecha-container label {
+  font-weight: 600;
+  color: var(--color-dark);
+}
+
+.fecha-input {
+  padding: 0.5rem;
+  border: 2px solid #e1e5e9;
+  border-radius: var(--border-radius);
+  font-size: 1rem;
+  transition: var(--transition);
+}
+
+.fecha-input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
 }
 
 .agregar-columna {
   display: flex;
-  gap: 10px;
-  margin-bottom: 20px;
+  gap: 0.5rem;
+  flex-wrap: wrap;
 }
 
 .input-nueva-columna {
-  padding: 10px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
   flex: 1;
-  max-width: 200px;
+  min-width: 200px;
+  padding: 0.75rem;
+  border: 2px solid #e1e5e9;
+  border-radius: var(--border-radius);
   font-size: 1rem;
+  transition: var(--transition);
+}
+
+.input-nueva-columna:focus {
+  outline: none;
+  border-color: var(--color-secondary);
+  box-shadow: 0 0 0 3px rgba(46, 204, 113, 0.1);
 }
 
 .btn-agregar-columna {
-  padding: 10px 16px;
-  background-color: #2ecc71;
+  padding: 0.75rem 1rem;
+  background-color: var(--color-secondary);
   color: white;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--border-radius);
   cursor: pointer;
-  transition: background-color 0.3s ease;
   font-size: 1rem;
+  font-weight: 600;
+  transition: var(--transition);
 }
 
-.btn-agregar-columna:hover {
+.btn-agregar-columna:hover:not(:disabled) {
   background-color: #27ae60;
+  transform: translateY(-1px);
 }
 
-.eliminar-columna {
-  display: inline-block;
-  margin-left: 5px;
-  color: #e74c3c;
-  cursor: pointer;
-  font-weight: bold;
+.btn-agregar-columna:disabled {
+  background-color: var(--color-gray);
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
-.eliminar-columna:hover {
-  color: #c0392b;
+.tabla-section {
+  background: white;
+  border-radius: var(--border-radius);
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  margin-bottom: var(--spacing);
 }
 
 .tabla-pedidos {
-  margin-top: 20px;
   overflow-x: auto;
 }
 
 table {
   width: 100%;
   border-collapse: collapse;
-  margin-bottom: 20px;
+}
+
+.th-columna {
+  position: relative;
+}
+
+.eliminar-columna {
+  background: var(--color-danger);
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 0.5rem;
+  cursor: pointer;
+  font-size: 0.8rem;
+  transition: var(--transition);
+}
+
+.eliminar-columna:hover {
+  background-color: #c0392b;
+  transform: scale(1.1);
 }
 
 th, td {
-  border: 1px solid #ddd;
-  padding: 12px;
+  padding: 0.75rem;
   text-align: center;
-  font-size: 1.05rem;
+  border: 1px solid #e1e5e9;
 }
 
 th {
-  background-color: #f2f2f2;
-  font-weight: bold;
+  background-color: var(--color-light);
+  font-weight: 600;
+  color: var(--color-dark);
+  font-size: 1rem;
 }
 
-input[type="number"] {
+.numero-input {
   width: 80px;
-  padding: 8px;
+  padding: 0.5rem;
   text-align: center;
-  border: 1px solid #ddd;
-  border-radius: 4px;
+  border: 2px solid transparent;
+  border-radius: var(--border-radius);
+  font-size: 1rem;
+  font-weight: 600;
+  transition: var(--transition);
+}
+
+.numero-input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+}
+
+/* Estilos para clientes - Optimizados */
+.cliente-8a { background-color: var(--color-primary); color: white; }
+.cliente-catarro { background-color: var(--color-danger); color: white; }
+.cliente-otilio { background-color: var(--color-warning); color: black; }
+.cliente-ozuna { background-color: var(--color-secondary); color: white; }
+.cliente-elizabeth { background-color: var(--color-purple); color: white; }
+
+/* Inputs de clientes */
+.numero-input.cliente-8a { background-color: #ebf5fb; border-color: var(--color-primary); }
+.numero-input.cliente-catarro { background-color: #fdedec; border-color: var(--color-danger); }
+.numero-input.cliente-otilio { background-color: #fef9e7; border-color: var(--color-warning); }
+.numero-input.cliente-ozuna { background-color: #eafaf1; border-color: var(--color-secondary); }
+.numero-input.cliente-elizabeth { background-color: #f5eef8; border-color: var(--color-purple); }
+
+.fila-totales {
+  background-color: var(--color-dark);
+  color: white;
+  font-weight: 600;
+}
+
+.fila-totales td {
+  border: 2px solid var(--color-dark);
   font-size: 1.1rem;
-  font-weight: bold;
-  color: black;
 }
 
-/* Eliminar flechas de incremento/decremento en Chrome, Safari, Edge, Opera */
-input[type="number"]::-webkit-inner-spin-button,
-input[type="number"]::-webkit-outer-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
+.resumen-section {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: var(--spacing);
+  border-radius: var(--border-radius);
+  margin-bottom: var(--spacing);
 }
 
-/* Eliminar flechas de incremento/decremento en Firefox */
-input[type="number"] {
-  -moz-appearance: textfield;
+.kilos-info {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: var(--spacing);
+}
+
+.info-item {
+  text-align: center;
+  padding: 1rem;
+}
+
+.info-item .label {
+  display: block;
+  font-size: 1rem;
+  margin-bottom: 0.5rem;
+  opacity: 0.9;
+}
+
+.info-item .value {
+  display: block;
+  font-size: 1.8rem;
+  font-weight: 700;
 }
 
 .buttons-container {
   display: flex;
-  gap: 10px;
-  justify-content: flex-end;
-  margin-top: 20px;
+  gap: var(--spacing);
+  justify-content: center;
+  margin-top: calc(var(--spacing) * 2);
+  flex-wrap: wrap;
 }
 
-.btn-guardar,
-.btn-cancelar {
-  padding: 12px 24px;
+.btn-primary,
+.btn-secondary,
+.btn-tertiary {
+  padding: 0.75rem 1.5rem;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--border-radius);
   cursor: pointer;
-  font-size: 1.1rem;
-  transition: background-color 0.3s ease;
-}
-
-.btn-guardar {
-  background-color: #3498db;
-  color: white;
-}
-
-.btn-guardar:hover {
-  background-color: #2980b9;
-}
-
-.btn-cancelar {
-  background-color: #95a5a6;
-  color: white;
-}
-
-.btn-cancelar:hover {
-  background-color: #7f8c8d;
-}
-
-.btn-imprimir {
-  background-color: #9b59b6;
-  color: white;
-}
-
-.btn-imprimir:hover {
-  background-color: #8e44ad;
-}
-
-/* Estilos para los clientes */
-.cliente-8a {
-  background-color: #3498db;
-  color: white;
-}
-
-.cliente-catarro {
-  background-color: #e74c3c;
-  color: white;
-}
-
-.cliente-otilio {
-  background-color: #f1c40f;
-  color: black;
-}
-
-.cliente-ozuna {
-  background-color: #2ecc71;
-  color: white;
-}
-
-.cliente-elizabeth {
-  background-color: #9b59b6;
-  color: white;
-}
-
-/* Estilos para los inputs de cada cliente */
-input.cliente-8a {
-  background-color: #ebf5fb;
-  border-color: #3498db;
-  color: black;
-}
-
-input.cliente-catarro {
-  background-color: #fdedec;
-  border-color: #e74c3c;
-  color: black;
-}
-
-input.cliente-otilio {
-  background-color: #fef9e7;
-  border-color: #f1c40f;
-  color: black;
-}
-
-input.cliente-ozuna {
-  background-color: #eafaf1;
-  border-color: #2ecc71;
-  color: black;
-}
-
-input.cliente-elizabeth {
-  background-color: #f5eef8;
-  border-color: #9b59b6;
-  color: black;
-}
-
-/* Estilos cuando el input está enfocado */
-input.cliente-8a:focus {
-  outline: none;
-  box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.3);
-}
-
-input.cliente-catarro:focus {
-  outline: none;
-  box-shadow: 0 0 0 2px rgba(231, 76, 60, 0.3);
-}
-
-input.cliente-otilio:focus {
-  outline: none;
-  box-shadow: 0 0 0 2px rgba(241, 196, 15, 0.3);
-}
-
-input.cliente-ozuna:focus {
-  outline: none;
-  box-shadow: 0 0 0 2px rgba(46, 204, 113, 0.3);
-}
-
-input.cliente-elizabeth:focus {
-  outline: none;
-  box-shadow: 0 0 0 2px rgba(155, 89, 182, 0.3);
-}
-
-.kilos-info {
-  margin: 20px 0;
-  padding: 15px;
-  background-color: #f8f9fa;
-  border-radius: 8px;
-  text-align: center;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.kilos-info h3 {
-  color: #2c3e50;
-  margin: 0;
-  font-size: 1.3rem;
-}
-
-.kilos-info span {
-  color: #3498db;
-  font-weight: bold;
-  font-size: 1.4rem;
-}
-
-.fila-totales {
-  background-color: #f8f9fa;
-  font-weight: bold;
-}
-
-.fila-totales td {
-  padding: 12px;
-  border: 2px solid #2c3e50 !important;
-}
-
-.desglose-medida {
-  margin: 30px 0;
-  padding: 20px;
-  background-color: white;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.desglose-medida h2 {
-  text-align: center;
-  margin-bottom: 20px;
-  color: #2c3e50;
-  font-size: 1.4rem;
-}
-
-.tabla-desglose {
-  width: 100%;
-  border-collapse: collapse;
-  margin-top: 15px;
-}
-
-.tabla-desglose th {
-  background-color: #f8f9fa;
-  padding: 12px;
-  text-align: left;
-  font-weight: bold;
-  border: 1px solid #dee2e6;
-}
-
-.tabla-desglose td {
-  padding: 12px;
-  border: 1px solid #dee2e6;
-  vertical-align: middle;
-}
-
-.medida-cell {
-  font-weight: bold;
-  background-color: #f8f9fa;
-  text-align: center;
-  font-size: 1.1rem;
-}
-
-.fila-desglose td {
-  border-bottom: 1px solid #dee2e6;
-}
-
-.fila-desglose:last-child td {
-  border-bottom: 1px solid #dee2e6;
-}
-
-.input-barco {
-  width: 100%;
-  padding: 8px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
   font-size: 1rem;
-  background-color: white;
+  font-weight: 600;
+  transition: var(--transition);
+  min-width: 120px;
 }
 
-.input-barco:focus {
-  outline: none;
-  border-color: #3498db;
-  box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.3);
+.btn-primary {
+  background-color: var(--color-primary);
+  color: white;
 }
 
-/* Media queries para responsividad */
+.btn-primary:hover {
+  background-color: #2980b9;
+  transform: translateY(-2px);
+}
+
+.btn-secondary {
+  background-color: var(--color-purple);
+  color: white;
+}
+
+.btn-secondary:hover {
+  background-color: #8e44ad;
+  transform: translateY(-2px);
+}
+
+.btn-tertiary {
+  background-color: var(--color-gray);
+  color: white;
+}
+
+.btn-tertiary:hover {
+  background-color: #7f8c8d;
+  transform: translateY(-2px);
+}
+
+/* Ocultar controles de número en navegadores webkit */
+.numero-input::-webkit-outer-spin-button,
+.numero-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.numero-input[type=number] {
+  -moz-appearance: textfield;
+}
+
+/* Responsive Design */
 @media (max-width: 768px) {
   .pedidos-crudo-container {
-    padding: 10px;
+    padding: 0.5rem;
   }
   
   .agregar-columna {
@@ -698,77 +635,71 @@ input.cliente-elizabeth:focus {
   }
   
   .input-nueva-columna {
-    max-width: 100%;
+    min-width: auto;
   }
   
-  .buttons-container {
-    flex-direction: column;
-  }
-  
-  .btn-guardar,
-  .btn-cancelar,
-  .btn-imprimir {
-    width: 100%;
-    margin-bottom: 10px;
-  }
-  
-  /* Mejoras para tablas responsivas */
   .tabla-pedidos {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
   }
   
   table {
-    min-width: 600px; /* Asegura que la tabla tenga un ancho mínimo */
+    min-width: 600px;
   }
   
   th, td {
-    padding: 8px;
-    font-size: 0.95rem;
+    padding: 0.5rem;
+    font-size: 0.9rem;
   }
   
-  input[type="number"] {
+  .numero-input {
     width: 60px;
-    padding: 6px;
-    font-size: 0.95rem;
+    padding: 0.4rem;
+    font-size: 0.9rem;
   }
   
-  .desglose-medida {
-    padding: 10px;
-    margin: 15px 0;
+  .buttons-container {
+    flex-direction: column;
   }
   
-  .desglose-medida h2 {
-    font-size: 1.2rem;
-    margin-bottom: 10px;
-  }
-  
-  .tabla-desglose {
-    min-width: 500px;
-  }
-  
-  .tabla-desglose th,
-  .tabla-desglose td {
-    padding: 8px;
-    font-size: 0.95rem;
-  }
-  
-  .input-barco {
-    padding: 6px;
-    font-size: 0.95rem;
+  .btn-primary,
+  .btn-secondary,
+  .btn-tertiary {
+    width: 100%;
   }
   
   .kilos-info {
-    padding: 10px;
-    margin: 15px 0;
+    grid-template-columns: 1fr;
   }
   
-  .kilos-info h3 {
-    font-size: 1.1rem;
+  .info-item .value {
+    font-size: 1.5rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .page-header h2 {
+    font-size: 1.5rem;
   }
   
-  .kilos-info span {
-    font-size: 1.2rem;
+  .fecha-container {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  table {
+    min-width: 500px;
+  }
+  
+  th, td {
+    padding: 0.4rem;
+    font-size: 0.8rem;
+  }
+  
+  .numero-input {
+    width: 50px;
+    padding: 0.3rem;
+    font-size: 0.8rem;
   }
 }
 </style> 
