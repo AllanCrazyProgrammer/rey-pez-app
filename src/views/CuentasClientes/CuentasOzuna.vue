@@ -155,6 +155,8 @@ export default {
       showMobileActions: false,
       selectedItemIndex: null,
       presionTimer: null,
+      autoSaveTimeout: null,
+      currentDocId: null,
     }
   },
   computed: {
@@ -176,9 +178,23 @@ export default {
     }
   },
   watch: {
+    items: {
+      deep: true,
+      handler: 'triggerAutoSave'
+    },
+    cobros: {
+      deep: true,
+      handler: 'triggerAutoSave'
+    },
+    abonos: {
+      deep: true,
+      handler: 'triggerAutoSave'
+    },
     fechaSeleccionada: {
-      handler: 'loadSaldoAcumuladoAnterior',
-      immediate: true
+      handler: async function(newVal) {
+        await this.loadSaldoAcumuladoAnterior();
+        this.triggerAutoSave();
+      }
     }
   },
   async mounted() {
@@ -194,6 +210,53 @@ export default {
     }
   },
   methods: {
+    triggerAutoSave() {
+      if (this.autoSaveTimeout) {
+        clearTimeout(this.autoSaveTimeout);
+      }
+      this.autoSaveTimeout = setTimeout(() => {
+        this.autoSave();
+      }, 500);
+    },
+
+    async autoSave() {
+      try {
+        const notaData = {
+          fecha: this.fechaSeleccionada,
+          items: this.items,
+          saldoAcumuladoAnterior: this.saldoAcumuladoAnterior,
+          cobros: this.cobros,
+          abonos: this.abonos,
+          totalGeneral: this.totalGeneral,
+          totalSaldo: this.totalSaldo,
+          nuevoSaldoAcumulado: this.nuevoSaldoAcumulado,
+          lastAutoSave: new Date().toISOString()
+        };
+
+        if (this.currentDocId) {
+          await updateDoc(doc(db, 'cuentasOzuna', this.currentDocId), notaData);
+          console.log('Auto-guardado exitoso (actualización)');
+          return;
+        }
+
+        const cuentasRef = collection(db, 'cuentasOzuna');
+        const q = query(cuentasRef, where('fecha', '==', this.fechaSeleccionada));
+        const querySnapshot = await getDocs(q);
+
+        if (!querySnapshot.empty) {
+          this.currentDocId = querySnapshot.docs[0].id;
+          await updateDoc(doc(db, 'cuentasOzuna', this.currentDocId), notaData);
+          console.log('Auto-guardado exitoso (actualización)');
+        } else {
+          const docRef = await addDoc(collection(db, 'cuentasOzuna'), notaData);
+          this.currentDocId = docRef.id;
+          console.log('Auto-guardado exitoso (nuevo documento)');
+        }
+      } catch (error) {
+        console.error('Error en auto-guardado:', error);
+      }
+    },
+
     async loadExistingCuenta(id) {
       try {
         console.log("Cargando cuenta con ID:", id);
@@ -202,6 +265,7 @@ export default {
         if (cuentaDoc.exists()) {
           const data = cuentaDoc.data();
           console.log("Datos de la cuenta cargados:", data);
+          this.currentDocId = id;
 
           this.$nextTick(() => {
             this.items = data.items || [];
@@ -209,13 +273,7 @@ export default {
             this.cobros = data.cobros || [];
             this.abonos = data.abonos || [];
             this.fechaSeleccionada = data.fecha || this.obtenerFechaActual();
-            console.log("Estado actualizado con $nextTick:", {
-              items: this.items,
-              saldoAcumuladoAnterior: this.saldoAcumuladoAnterior,
-              cobros: this.cobros,
-              abonos: this.abonos,
-              fechaSeleccionada: this.fechaSeleccionada
-            });
+            console.log("Estado actualizado con $nextTick");
           });
         } else {
           console.error("No se encontró la cuenta con el ID proporcionado");
@@ -224,6 +282,7 @@ export default {
         console.error("Error al cargar la cuenta existente: ", error);
       }
     },
+
     async loadSaldoAcumuladoAnterior() {
       try {
         const cuentasRef = collection(db, 'cuentasOzuna');
@@ -295,21 +354,12 @@ export default {
           nuevoSaldoAcumulado: this.nuevoSaldoAcumulado
         };
 
-        console.log("Datos a guardar:", notaData);
-
-        // Buscar si ya existe una nota para esta fecha
-        const cuentasRef = collection(db, 'cuentasOzuna');
-        const q = query(cuentasRef, where('fecha', '==', this.fechaSeleccionada));
-        const querySnapshot = await getDocs(q);
-
-        if (!querySnapshot.empty) {
-          // Si existe, actualizar la nota existente
-          const docId = querySnapshot.docs[0].id;
-          await updateDoc(doc(db, 'cuentasOzuna', docId), notaData);
+        if (this.currentDocId) {
+          await updateDoc(doc(db, 'cuentasOzuna', this.currentDocId), notaData);
           console.log('Cuenta actualizada exitosamente');
         } else {
-          // Si no existe, crear una nueva nota
-          await addDoc(collection(db, 'cuentasOzuna'), notaData);
+          const docRef = await addDoc(collection(db, 'cuentasOzuna'), notaData);
+          this.currentDocId = docRef.id;
           console.log('Nueva cuenta guardada exitosamente');
         }
 
