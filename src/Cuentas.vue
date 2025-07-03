@@ -2,22 +2,41 @@
   <div class="cuentas-container">
     <b-row>
       <b-col cols="12" md="6" class="mb-3">
-        <Calcular cantidad="$2" :datos="datos" @dataArray="getDatos" />
+        <Calcular cantidad="$2" :datos="datos" @dataArray="procesarDatos" />
       </b-col>
       <b-col cols="12" md="6" class="mb-3">
-        <Calcular cantidad="$1" :datos="datos" @dataArray="getDatos" />
+        <Calcular cantidad="$1" :datos="datos" @dataArray="procesarDatos" />
       </b-col>
       <b-col cols="12" class="mb-3">
-        <b-button @click="printCuentas" variant="primary" block>Imprimir sección</b-button>
+        <b-button 
+          @click="imprimirCuentas" 
+          variant="primary" 
+          block
+          :disabled="!tieneDatos"
+        >
+          Imprimir sección
+        </b-button>
       </b-col>
       <b-col cols="12" class="mb-3">
-        <div ref="printSection" class="print-section">
+        <div ref="seccionImpresion" class="seccion-impresion">
           <h1>Cuentas</h1>
-          <p class="print-date">{{ formattedDate }}</p>
-          <div class="cuenta-list">
-            <div v-for="(value, denomination) in bills" :key="denomination" class="cuenta-item">
-              <h2>{{ denomination }}: {{ value }}</h2>
-            </div>
+          <p class="fecha-impresion">{{ fechaFormateada }}</p>
+                     <div class="lista-cuentas">
+             <div 
+               v-for="(cantidad, denominacion) in billetes" 
+               :key="denominacion" 
+               class="cuenta-item"
+               v-show="cantidad > 0"
+             >
+               <span class="denominacion">${{ denominacion }}</span>
+               <span class="cantidad">{{ cantidad }}</span>
+             </div>
+           </div>
+          <div class="total-general">
+            <strong>Total: ${{ totalGeneral.toLocaleString() }}</strong>
+          </div>
+          <div v-if="totalGeneral > 0" class="promedio-general">
+            <small>Promedio: ${{ Math.round(promedioPorLinea).toLocaleString() }}</small>
           </div>
         </div>
       </b-col>
@@ -41,7 +60,7 @@ export default {
   },
   data() {
     return {
-      bills: {
+      billetes: {
         500: 0,
         200: 0,
         100: 0,
@@ -55,114 +74,192 @@ export default {
     };
   },
   computed: {
-    formattedDate() {
-      const options = { year: 'numeric', month: 'long', day: 'numeric' };
-      return new Date().toLocaleDateString('es-ES', options);
+    fechaFormateada() {
+      const opciones = { year: 'numeric', month: 'long', day: 'numeric' };
+      return new Date().toLocaleDateString('es-ES', opciones);
     },
+    tieneDatos() {
+      return Object.values(this.billetes).some(cantidad => cantidad > 0);
+    },
+    totalGeneral() {
+      return Object.entries(this.billetes)
+        .reduce((total, [denominacion, cantidad]) => total + (denominacion * cantidad), 0);
+    },
+    promedioPorLinea() {
+      // Calcular el promedio basado en los datos procesados
+      if (!this.datos || this.datos.trim().length === 0) return 0;
+      
+      const lineasValidas = this.datos.split('\n')
+        .map(linea => linea.trim())
+        .filter(linea => linea.length > 0 && !isNaN(parseFloat(linea.replace(/[$,\s]/g, ''))))
+        .map(linea => parseFloat(linea.replace(/[$,\s]/g, '')));
+      
+      if (lineasValidas.length === 0) return 0;
+      
+      const total = lineasValidas.reduce((suma, valor) => suma + valor, 0);
+      return total / lineasValidas.length;
+    }
   },
   methods: {
-    printCuentas() {
-      const printSection = this.$refs.printSection;
-      if (!printSection) {
-        console.error('Print section not found');
+    imprimirCuentas() {
+      const seccionImpresion = this.$refs.seccionImpresion;
+      if (!seccionImpresion) {
+        console.error('Sección de impresión no encontrada');
         return;
       }
 
-      const printContent = printSection.innerHTML;
-      const printStyles = `
+      const contenidoImpresion = seccionImpresion.innerHTML;
+      const estilosImpresion = `
         <style>
+          @media print {
+            * {
+              -webkit-print-color-adjust: exact !important;
+              color-adjust: exact !important;
+            }
+          }
           body {
-            font-family: Arial, sans-serif;
+            font-family: 'Arial', sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: white;
+            color: #000;
             display: flex;
             justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-            background-color: #f0f0f0;
           }
-          .print-container {
-            background-color: white;
-            padding: 40px;
-            border-radius: 10px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            max-width: 600px;
+          .contenedor-impresion {
+            max-width: 400px;
             width: 100%;
+            margin: 0 auto;
+            padding: 30px;
+            background-color: white;
+            border: 1px solid #ddd;
           }
-          h1 {
-            color: #3760b0;
-            text-align: center;
-            margin-bottom: 10px;
-            font-size: 24px;
-          }
-          .print-date {
-            text-align: center;
-            color: #666;
-            font-style: italic;
-            margin-bottom: 20px;
-          }
-          .cuenta-list {
-            display: flex;
-            flex-wrap: wrap;
-            justify-content: space-between;
-          }
-          .cuenta-item {
-            width: 45%;
-            margin-bottom: 15px;
-            background-color: #f8f9fa;
-            padding: 10px;
-            border-radius: 5px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-          }
-          h2 {
-            color: #333;
-            margin: 0;
-            font-size: 18px;
-            text-align: center;
-          }
+                     h1 {
+             color: #000;
+             text-align: center;
+             margin-bottom: 15px;
+             font-size: 28px;
+             font-weight: bold;
+           }
+           .fecha-impresion {
+             text-align: center;
+             color: #666;
+             font-size: 16px;
+             margin-bottom: 25px;
+           }
+           .lista-cuentas {
+             border-collapse: collapse;
+             width: 100%;
+             margin-bottom: 25px;
+           }
+                     .cuenta-item {
+             display: flex;
+             justify-content: space-between;
+             align-items: center;
+             padding: 8px 0;
+             border-bottom: 1px solid #eee;
+           }
+           .denominacion {
+             font-weight: bold;
+             color: #000;
+             font-size: 24px;
+             flex: 1;
+           }
+           .cantidad {
+             color: #333;
+             font-size: 24px;
+             font-weight: bold;
+             text-align: right;
+             flex: 1;
+           }
+                     .total-general {
+             text-align: center;
+             padding: 20px;
+             border: 2px solid #000;
+             background-color: white;
+             font-size: 22px;
+             font-weight: bold;
+             margin-top: 15px;
+           }
+           .promedio-general {
+             text-align: center;
+             padding: 10px;
+             color: #666;
+             font-size: 16px;
+             margin-top: 10px;
+           }
         </style>
       `;
       
-      const printWindow = window.open('', '_blank');
-      if (!printWindow) {
-        console.error('Unable to open print window');
+      const ventanaImpresion = window.open('', '_blank');
+      if (!ventanaImpresion) {
+        console.error('No se pudo abrir la ventana de impresión');
         return;
       }
 
-      printWindow.document.write(`
+      ventanaImpresion.document.write(`
+        <!DOCTYPE html>
         <html>
           <head>
-            <title>Imprimir Cuentas</title>
-            ${printStyles}
+            <title>Cuentas - ${this.fechaFormateada}</title>
+            <meta charset="UTF-8">
+            ${estilosImpresion}
           </head>
           <body>
-            <div class="print-container">
-              ${printContent}
+            <div class="contenedor-impresion">
+              ${contenidoImpresion}
             </div>
           </body>
         </html>
       `);
       
-      printWindow.document.close();
-      printWindow.focus();
+      ventanaImpresion.document.close();
+      ventanaImpresion.focus();
       
-      printWindow.print();
-      printWindow.onafterprint = () => {
-        printWindow.close();
-      };
+      // Esperar a que se cargue antes de imprimir
+      setTimeout(() => {
+        ventanaImpresion.print();
+        ventanaImpresion.onafterprint = () => {
+          ventanaImpresion.close();
+        };
+      }, 250);
     },
-    getDatos({ data, isTwo }) {
-      const denominations = isTwo 
-        ? [500, 200, 100, 50, 20, 10, 5, 2] 
-        : [500, 200, 100, 50, 20, 10, 5, 1];
+    procesarDatos({ data, isTwo }) {
+      // Resetear contadores
+      this.reiniciarBilletes();
       
-      data.forEach(amount => {
-        let remainingAmount = parseInt(amount);
-        denominations.forEach(denomination => {
-          while (remainingAmount >= denomination) {
-            remainingAmount -= denomination;
-            this.bills[denomination]++;
-          }
-        });
+      if (!data || !Array.isArray(data)) {
+        return;
+      }
+
+      const denominaciones = isTwo 
+        ? [500, 200, 100, 50, 20, 10, 5, 2, 1] 
+        : [500, 200, 100, 50, 20, 10, 5, 1, 2];
+      
+      data.forEach(cantidad => {
+        const montoRestante = this.calcularBilletes(cantidad, denominaciones);
+        if (montoRestante > 0) {
+          console.warn(`No se pudo calcular completamente la cantidad: ${cantidad}, restante: ${montoRestante}`);
+        }
+      });
+    },
+    calcularBilletes(cantidad, denominaciones) {
+      let montoRestante = parseInt(cantidad) || 0;
+      if (montoRestante <= 0) return 0;
+      
+      denominaciones.forEach(denominacion => {
+        const cantidadBilletes = Math.floor(montoRestante / denominacion);
+        if (cantidadBilletes > 0) {
+          this.billetes[denominacion] += cantidadBilletes;
+          montoRestante -= cantidadBilletes * denominacion;
+        }
+      });
+      
+      return montoRestante;
+    },
+    reiniciarBilletes() {
+      Object.keys(this.billetes).forEach(denominacion => {
+        this.billetes[denominacion] = 0;
       });
     },
   },
@@ -174,119 +271,159 @@ export default {
   max-width: 800px;
   margin: 0 auto;
   padding: 20px;
-  border: 1px solid #ccc;
-  border-radius: 20px;
-  background-color: #e8f0fe;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  border: 1px solid #ddd;
+  border-radius: 12px;
+  background-color: #f8f9fa;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 h1 {
   text-align: center;
-  color: #3760b0;
+  color: #2c3e50;
   margin-bottom: 20px;
   font-size: 2em;
+  font-weight: 600;
 }
 
-h2 {
+.fecha-impresion {
   text-align: center;
-  color: #333;
-  margin-bottom: 10px;
-  font-size: 1.5em;
-}
-
-.print-date {
-  text-align: center;
-  color: #666;
+  color: #6c757d;
   font-style: italic;
   margin-bottom: 20px;
+  font-size: 14px;
 }
 
-.cuenta-list {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-around;
+.lista-cuentas {
+  background-color: white;
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .cuenta-item {
-  width: 30%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.cuenta-item:last-child {
+  border-bottom: none;
+}
+
+.denominacion {
+  font-weight: 600;
+  color: #495057;
+  font-size: 22px;
+}
+
+.cantidad {
+  color: #007bff;
+  font-weight: 600;
+  font-size: 22px;
+  text-align: right;
+}
+
+.total-general {
+  text-align: center;
+  padding: 15px;
+  background-color: #e9ecef;
+  border-radius: 8px;
+  margin-top: 20px;
+  font-size: 18px;
+  font-weight: 600;
+  color: #495057;
+}
+
+.promedio-general {
   text-align: center;
   padding: 10px;
-  margin-bottom: 10px;
-  background-color: #ffffff;
-  border-radius: 10px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  color: #6c757d;
+  font-size: 14px;
+  margin-top: 10px;
 }
 
-.print-section {
-  padding: 40px;
-  border: 1px solid #ccc;
-  border-radius: 20px;
-  background-color: #ffffff;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+.seccion-impresion {
+  background-color: white;
+  padding: 20px;
+  border-radius: 8px;
+  border: 1px solid #dee2e6;
   margin-top: 20px;
-  font-size: 1.2em;
 }
 
-button {
-  background-color: #3760b0;
-  color: white;
-  border: none;
-  padding: 10px 20px;
-  border-radius: 20px;
-  cursor: pointer;
-  transition: background-color 0.3s;
+/* Estilos para impresión */
+@media print {
+  .cuentas-container {
+    box-shadow: none;
+    border: none;
+    background-color: white;
+  }
+  
+  .seccion-impresion {
+    border: none;
+    box-shadow: none;
+    background-color: white;
+  }
 }
 
-button:hover {
-  background-color: #2a4a87;
-}
-
+/* Responsive Design */
 @media (max-width: 768px) {
   .cuentas-container {
-    padding: 10px;
-  }
-
-  .print-section {
-    padding: 20px;
-    font-size: 1em;
+    padding: 15px;
+    margin: 10px;
   }
 
   h1 {
     font-size: 1.5em;
   }
 
-  h2 {
-    font-size: 1.2em;
+  .cuenta-item {
+    flex-direction: column;
+    text-align: center;
+    padding: 8px;
   }
 
-  .cuenta-item {
-    width: 45%;
+  .denominacion,
+  .cantidad {
+    margin-bottom: 3px;
+  }
+  
+  .denominacion {
+    font-size: 20px;
+  }
+  
+  .cantidad {
+    font-size: 20px;
   }
 }
 
 @media (max-width: 576px) {
   .cuentas-container {
-    padding: 0;
-    margin: 0;
-    max-width: 100%;
-    border-radius: 0;
+    padding: 10px;
+    margin: 5px;
+    border-radius: 8px;
+  }
+
+  .seccion-impresion {
+    padding: 15px;
   }
 
   h1 {
-    font-size: 1.2em;
+    font-size: 1.3em;
   }
-
-  h2 {
-    font-size: 1em;
+  
+  .denominacion {
+    font-size: 18px;
   }
-
-  .print-section {
-    padding: 15px;
-    font-size: 0.9em;
+  
+  .cantidad {
+    font-size: 18px;
   }
-
-  .cuenta-item {
-    width: 100%;
+  
+  .promedio-general {
+    font-size: 12px;
+    margin-top: 8px;
   }
 }
 </style>
