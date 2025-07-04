@@ -170,7 +170,7 @@ function generarTablaRendimientos(datosRendimientos, nombresMedidasPersonalizado
           medida: 'Mixta',
           kilosCrudos: 0,
           totalEmbarcado: 0,
-          costoFinal: dato.costoFinal
+          costoFinal: 0
         };
       }
       
@@ -187,24 +187,23 @@ function generarTablaRendimientos(datosRendimientos, nombresMedidasPersonalizado
       
       // Sumamos el total embarcado
       acc['Mixta'].totalEmbarcado += parseFloat(dato.totalEmbarcado) || 0;
+      
+      // Sumamos el costo final
+      acc['Mixta'].costoFinal += parseFloat(dato.costoFinal) || 0;
     } else {
       // Si no es mixta, la procesamos normalmente
       acc[nombreMedida] = {
         medida: nombreMedida,
         kilosCrudos: parseFloat(dato.kilosCrudos) || 0,
         totalEmbarcado: parseFloat(dato.totalEmbarcado) || 0,
-        costoFinal: dato.costoFinal
+        costoFinal: dato.costoFinal || 0
       };
     }
     return acc;
   }, {});
 
-  // Verificar si hay al menos un costo final con valor
-  const hayCostosFinales = Object.values(datosAgrupados).some(dato => 
-    dato.costoFinal && dato.costoFinal !== '0' && dato.costoFinal !== 0
-  );
-
-  const mostrarColumnaCosto = embarqueData.mostrarColumnaCosto && hayCostosFinales;
+  // Siempre mostrar la columna de costos si está habilitada
+  const mostrarColumnaCosto = embarqueData.mostrarColumnaCosto;
 
   const body = [
     [
@@ -232,7 +231,7 @@ function generarTablaRendimientos(datosRendimientos, nombresMedidasPersonalizado
           style: rendimientoStyle
         },
         ...(mostrarColumnaCosto ? [{
-          text: dato.costoFinal ? `$${Number(dato.costoFinal).toFixed(1)}` : '',
+          text: dato.costoFinal ? `$${Number(dato.costoFinal).toFixed(1)}` : '$0.0',
           style: 'costoStyle'
         }] : [])
       ];

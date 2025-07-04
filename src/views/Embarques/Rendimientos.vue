@@ -8,8 +8,8 @@
       <button @click="abrirModalNota" class="btn-nota">
         <i class="fas fa-sticky-note"></i> Agregar Nota
       </button>
-      <button @click="abrirModalCostos" class="btn-costos">
-        <i class="fas fa-dollar-sign"></i> Costos
+      <button @click="irAGestionCostos" class="btn-costos">
+        <i class="fas fa-dollar-sign"></i> Gestión de Costos
       </button>
       <button @click="generarPDF" class="btn-pdf">
         <i class="fas fa-file-pdf"></i> Generar PDF
@@ -37,22 +37,7 @@
               <label :for="'ocultar-' + index">Ocultar en PDF</label>
             </div>
           </div>
-          
-          <!-- Input para el costo -->
-          <div class="costo-input">
-            <div class="costo-container">
-              <input 
-                type="number" 
-                v-model="costosPorMedida[medida]" 
-                @input="guardarCostos"
-                placeholder="Precio"
-                step="0.01"
-              >
-              <span class="costo-final" v-if="costosPorMedida[medida]">
-                Costo Final: ${{ calcularCostoFinal(medida) }}
-              </span>
-            </div>
-          </div>
+
           
           <div class="input-group">
             <template v-if="esMedidaMix(medida)">
@@ -120,28 +105,17 @@
       </div>
     </div>
 
-    <CostosModal 
-      :showModal="showCostosModal"
-      @update:showModal="showCostosModal = $event"
-      :costosPorMedida="costosPorMedida"
-      :rendimientos="rendimientosPorMedida"
-      @guardar="guardarCostos"
-    />
+
   </div>
 </template>
 
 <script>
-import { getFirestore, doc, getDoc, updateDoc, collection, query, orderBy, onSnapshot } from 'firebase/firestore';
+import { getFirestore, doc, getDoc, updateDoc } from 'firebase/firestore';
 import { debounce } from 'lodash';
 import { generarPDFRendimientos } from '@/utils/RendimientosPdf';
-import CostosModal from '@/components/CostosModal.vue';
 
 export default {
   name: 'Rendimientos',
-  
-  components: {
-    CostosModal
-  },
   
   data() {
     return {
@@ -152,18 +126,19 @@ export default {
       nombresMedidasPersonalizados: {},
       mostrarModal: false,
       nota: '',
-      medidaOculta: {},
-      costosPorMedida: {},
-      showCostosModal: false,
-      unsubscribePreciosGlobales: null
+      medidaOculta: {}
     }
   },
 
   async created() {
     await this.cargarEmbarque();
-    await this.iniciarEscuchaPreciosGlobales();
     // Aplicar debounce después de definir el método
     this.guardarCambiosEnTiempoReal = debounce(this.guardarCambiosEnTiempoReal, 300);
+  },
+
+  // Recargar datos cuando se vuelve a este componente
+  async activated() {
+    await this.cargarEmbarque();
   },
 
   methods: {
@@ -185,7 +160,6 @@ export default {
           this.nombresMedidasPersonalizados = this.embarqueData.nombresMedidasPersonalizados || {};
           this.obtenerMedidasUnicas();
           this.medidaOculta = this.embarqueData.medidaOculta || {};
-          this.costosPorMedida = this.embarqueData.costosPorMedida || {};
           
           const kilosCrudosGuardados = this.embarqueData.kilosCrudos || {};
           this.kilosCrudos = { ...kilosCrudosGuardados };
@@ -205,7 +179,6 @@ export default {
             }
           });
           
-          console.log('Datos cargados:', this.kilosCrudos);
           this.guardadoAutomaticoActivo = true;
         } else {
           console.error('No se encontró el embarque');
@@ -478,8 +451,6 @@ export default {
     },
 
     generarPDF() {
-      const hayAlgunCosto = Object.values(this.costosPorMedida).some(costo => Number(costo) > 0);
-
       const datosRendimientos = this.medidasUnicas
         .filter(medida => !this.medidaOculta[medida])
         .map(medida => {
@@ -493,16 +464,18 @@ export default {
             kilosCrudos = Number(this.kilosCrudos[medida] || 0);
           }
 
-          const costo = Number(this.costosPorMedida[medida]) || 0;
           const rendimiento = this.getRendimiento(medida);
-          const costoFinal = costo > 0 ? ((costo * rendimiento) + 20).toFixed(1) : null;
+
+          // Calcular costo final para el PDF usando los costos configurados
+          const costoBase = this.embarqueData?.costosPorMedida?.[medida] || 0;
+          const costoExtra = this.embarqueData?.costoExtra || 17;
+          const costoFinal = ((costoBase * rendimiento) + costoExtra).toFixed(1);
 
           return {
             medida: medida,
             kilosCrudos: kilosCrudos,
             totalEmbarcado: this.obtenerTotalEmbarcado(medida),
             rendimiento: rendimiento,
-            costo: costo,
             costoFinal: costoFinal
           };
         });
@@ -510,7 +483,7 @@ export default {
       const embarqueDataConNota = {
         ...this.embarqueData,
         notaRendimientos: this.embarqueData?.notaRendimientos || '',
-        mostrarColumnaCosto: hayAlgunCosto
+        mostrarColumnaCosto: true // Siempre mostrar la columna de costos
       };
 
       generarPDFRendimientos(datosRendimientos, embarqueDataConNota);
@@ -588,63 +561,11 @@ export default {
       }
     },
 
-    abrirModalCostos() {
-      this.showCostosModal = true;
-    },
-
-    async guardarCostos(nuevoCostos) {
-      try {
-        const db = getFirestore();
-        const embarqueId = this.$route.params.id;
-        const embarqueRef = doc(db, 'embarques', embarqueId);
-        
-        this.costosPorMedida = nuevoCostos;
-        
-        // Ya no necesitamos guardar los costos en el embarque
-        // ya que ahora se manejan globalmente
-        console.log('Costos actualizados correctamente');
-      } catch (error) {
-        console.error('Error al actualizar los costos:', error);
-      }
-    },
-
-    calcularCostoFinal(medida) {
-      const costo = Number(this.costosPorMedida[medida]) || 0;
-      const rendimiento = Number(this.getRendimiento(medida).toFixed(2));
-      const resultado = ((costo * rendimiento) + 20);
-      return resultado.toFixed(1);
-    },
-
-    rendimientosPorMedida() {
-      return this.medidasUnicas.reduce((acc, medida) => {
-        acc[medida] = this.getRendimiento(medida);
-        return acc;
-      }, {});
-    },
-
-    async iniciarEscuchaPreciosGlobales() {
-      try {
-        const db = getFirestore();
-        const preciosRef = collection(db, 'precios_globales');
-        const q = query(preciosRef, orderBy('timestamp', 'desc'));
-        
-        this.unsubscribePreciosGlobales = onSnapshot(q, (snapshot) => {
-          const preciosActuales = {};
-          
-          snapshot.forEach(doc => {
-            const precio = doc.data();
-            if (!preciosActuales[precio.medida] || 
-                new Date(precio.fecha) > new Date(preciosActuales[precio.medida].fecha)) {
-              preciosActuales[precio.medida] = precio.costoBase;
-            }
-          });
-          
-          // Actualizar los precios locales
-          this.costosPorMedida = preciosActuales;
-        });
-      } catch (error) {
-        console.error('Error al iniciar escucha de precios globales:', error);
-      }
+    irAGestionCostos() {
+      this.$router.push({
+        name: 'GestionCostos',
+        params: { id: this.$route.params.id }
+      });
     }
   },
 
@@ -658,9 +579,6 @@ export default {
   },
 
   beforeDestroy() {
-    if (this.unsubscribePreciosGlobales) {
-      this.unsubscribePreciosGlobales();
-    }
     if (this.guardarCambiosEnTiempoReal.cancel) {
       this.guardarCambiosEnTiempoReal.cancel();
     }
@@ -934,25 +852,7 @@ input {
   user-select: none;
 }
 
-.costo-container {
-  display: flex;
-  align-items: center;
-  gap: 15px;
-}
 
-.costo-final {
-  color: #2c3e50;
-  font-weight: bold;
-  font-size: 1em;
-}
-
-.costo-input input {
-  width: 120px;
-  padding: 8px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 1em;
-}
 
 .btn-costos {
   display: inline-flex;
