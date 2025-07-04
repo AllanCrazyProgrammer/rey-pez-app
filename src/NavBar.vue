@@ -31,6 +31,9 @@
             <router-link to="/existencias" class="nav-link">Existencias</router-link>
           </b-nav-item>
           <b-nav-item>
+            <router-link to="/existencias-crudos" class="nav-link">Existencias Crudos</router-link>
+          </b-nav-item>
+          <b-nav-item>
             <router-link to="/cuentas-mexico" class="nav-link">Cuentas México</router-link>
           </b-nav-item>
           <b-nav-item>

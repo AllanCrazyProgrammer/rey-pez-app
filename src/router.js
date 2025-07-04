@@ -45,6 +45,8 @@ import ListaDeudas from '@/views/Procesos/ListaDeudas.vue'
 import PrestamosMenu from '@/views/Procesos/PrestamosMenu.vue'
 import PrestamosDespicadoras from '@/views/Procesos/PrestamosDespicadoras.vue'
 import PrestamosTrabajadores from '@/views/Procesos/PrestamosTrabajadores.vue'
+import ExistenciasCrudos from '@/views/ExistenciasCrudos.vue'
+import RegistroCrudos from '@/views/RegistroCrudos.vue'
 
 Vue.use(Router);
 
@@ -115,6 +117,22 @@ const routes = [
     path: '/existencias',
     name: 'Existencias',
     component: Existencias
+  },
+  {
+    path: '/existencias-crudos',
+    name: 'ExistenciasCrudos',
+    component: ExistenciasCrudos
+  },
+  {
+    path: '/existencias-crudos/new',
+    name: 'NuevoRegistroCrudos',
+    component: RegistroCrudos
+  },
+  {
+    path: '/existencias-crudos/:id',
+    name: 'EditarRegistroCrudos',
+    component: RegistroCrudos,
+    props: true
   },
   {
     path: '/cuentas-mexico',
