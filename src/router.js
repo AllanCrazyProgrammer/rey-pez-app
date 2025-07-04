@@ -25,6 +25,7 @@ import ListaEmbarques from '@/views/Embarques/ListaEmbarques.vue';
 import NuevoEmbarque from '@/views/Embarques/NuevoEmbarque.vue';
 import Rendimientos from '@/views/Embarques/Rendimientos.vue';
 import CuentaFletes from '@/views/Embarques/CuentaFletes.vue';
+import GestionCostos from '@/components/GestionCostos.vue';
 import Login from './views/Login.vue';
 import OtilioCuentasMenu from '@/views/CuentasClientes/OtilioCuentasMenu.vue'
 import CuentasOtilio from '@/views/CuentasClientes/CuentasOtilio.vue'
@@ -234,6 +235,12 @@ const routes = [
     path: '/embarques/:id/rendimientos',
     name: 'Rendimientos', // Cambiamos 'rendimientos' a 'Rendimientos' con mayúscula
     component: Rendimientos,
+    props: true
+  },
+  {
+    path: '/embarques/:id/costos',
+    name: 'GestionCostos',
+    component: GestionCostos,
     props: true
   },
   {
