@@ -365,9 +365,25 @@ export default {
 
     calcularCostoFinal(medida) {
       const costo = Number(this.costosEmbarque[medida]) || 0;
-      const rendimiento = Number(this.rendimientos[medida]) || 0;
-      const costoExtra = Number(this.costoExtra) || 0;
-      const resultado = ((costo * rendimiento) + costoExtra);
+      const rendimientoOriginal = Number(this.rendimientos[medida]) || 0;
+      // Usar rendimiento redondeado a 2 decimales (igual que se muestra en la UI)
+      const rendimiento = Math.round(rendimientoOriginal * 100) / 100;
+      const costoExtra = Number(this.costoExtra) || 18;
+      
+      // Para medidas de Ozuna maquila, no agregar costo extra ya que no son ventas directas
+      const esMedidaOzunaMaquila = medida.includes('Maquila Ozuna');
+      
+      // Solo sumar costo extra si la medida tiene formato numérico (ej: "51/60", "20/30")
+      // No sumar para medidas de texto (ej: "macuil", "pulpa", etc.) ni para Ozuna Maquila
+      const esMedidaNumerica = /^\d+\/\d+$/.test(medida.trim()) || /^\d+$/.test(medida.trim());
+      
+      let resultado;
+      if (esMedidaOzunaMaquila || !esMedidaNumerica) {
+        resultado = Math.round(costo * rendimiento);
+      } else {
+        resultado = Math.round((costo * rendimiento) + costoExtra);
+      }
+      
       return resultado.toFixed(1);
     },
 

@@ -27,14 +27,25 @@
             <span class="medida-label editable-label" @click="editarNombreMedida(medida)">
               {{ obtenerNombreMedidaPersonalizado(medida) }}
             </span>
-            <div class="ocultar-control">
-              <input 
-                type="checkbox" 
-                :id="'ocultar-' + index"
-                v-model="medidaOculta[medida]"
-                @change="guardarEstadoOculto"
-              >
-              <label :for="'ocultar-' + index">Ocultar en PDF</label>
+            <div class="controles-medida">
+              <div class="ocultar-control">
+                <input 
+                  type="checkbox" 
+                  :id="'ocultar-' + index"
+                  v-model="medidaOculta[medida]"
+                  @change="guardarEstadoOculto"
+                >
+                <label :for="'ocultar-' + index">Ocultar en PDF</label>
+              </div>
+              <div class="analizar-ganancia-control">
+                <input 
+                  type="checkbox" 
+                  :id="'analizar-' + index"
+                  v-model="analizarGanancia[medida]"
+                  @change="guardarEstadoAnalisis"
+                >
+                <label :for="'analizar-' + index">Analizar ganancia</label>
+              </div>
             </div>
           </div>
 
@@ -78,13 +89,79 @@
           </div>
           
           <div class="resultados">
-            <p>Total embarcado: {{ obtenerTotalEmbarcado(medida).toFixed(1) }} kg</p>
+            <p>Total embarcado: {{ formatearNumero(obtenerTotalEmbarcado(medida)) }} kg</p>
             <p class="rendimiento">
               Rendimiento: 
               <span :class="{ 'rendimiento-alto': getRendimiento(medida) > 1 }">
                 {{ getRendimiento(medida).toFixed(2) }}
               </span>
             </p>
+            
+            <!-- Sección de ganancia -->
+            <div v-if="gananciasCalculadas[medida] && analizarGanancia[medida]" class="ganancia-info">
+              <div class="ganancia-header">
+                <h4>💰 Análisis de Ganancia</h4>
+              </div>
+              <div class="ganancia-detalles">
+                <div class="ganancia-item">
+                  <span class="label">Precio de Venta:</span>
+                  <div class="precio-venta-container">
+                    <span class="valor precio-venta">${{ formatearPrecio(gananciasCalculadas[medida].precioVenta) }}</span>
+                    
+                    <!-- Precio promedio de múltiples clientes -->
+                    <span v-if="gananciasCalculadas[medida].esPromedio" 
+                          class="precio-promedio-badge"
+                          :title="`Precio promedio ponderado. Clientes con precios específicos: ${gananciasCalculadas[medida].clientesConEspecifico.join(', ')}`">
+                      📊 Promedio
+                    </span>
+                    
+                    <!-- Precio específico de un cliente -->
+                    <span v-else-if="gananciasCalculadas[medida].esEspecifico" 
+                          class="precio-especifico-badge"
+                          :title="`Precio específico más reciente para ${gananciasCalculadas[medida].clienteEspecifico}`">
+                      📌 {{ gananciasCalculadas[medida].clienteEspecifico }}
+                    </span>
+                    
+                    <!-- Precio general -->
+                    <span v-else class="precio-general-badge" title="Precio general">
+                      🌐 General
+                    </span>
+                  </div>
+                </div>
+                <div class="ganancia-item">
+                  <span class="label">Costo Final:</span>
+                  <span class="valor costo-final">${{ formatearPrecio(gananciasCalculadas[medida].costoFinal) }}</span>
+                </div>
+                <div class="ganancia-item">
+                  <span class="label">Ganancia/kg:</span>
+                  <span class="valor ganancia-unitaria" 
+                        :class="{ 
+                          'ganancia-positiva': gananciasCalculadas[medida].gananciaUnitaria > 0,
+                          'ganancia-negativa': gananciasCalculadas[medida].gananciaUnitaria < 0
+                        }">
+                    ${{ formatearPrecio(gananciasCalculadas[medida].gananciaUnitaria) }}
+                  </span>
+                </div>
+                <div class="ganancia-item ganancia-total-item">
+                  <span class="label">Ganancia Total:</span>
+                  <span class="valor ganancia-total"
+                        :class="{ 
+                          'ganancia-positiva': gananciasCalculadas[medida].gananciaTotal > 0,
+                          'ganancia-negativa': gananciasCalculadas[medida].gananciaTotal < 0
+                        }">
+                    ${{ formatearPrecio(gananciasCalculadas[medida].gananciaTotal) }}
+                  </span>
+                </div>
+                <div class="ganancia-fecha">
+                  <span class="fecha-precio">Precio del: {{ formatearFecha(gananciasCalculadas[medida].fechaPrecio) }}</span>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Mensaje cuando no hay precio de venta -->
+            <div v-else-if="analizarGanancia[medida]" class="sin-precio-venta">
+              <p class="aviso-sin-precio">⚠️ No se encontró precio de venta para esta medida</p>
+            </div>
           </div>
         </div>
       </div>
@@ -110,7 +187,7 @@
 </template>
 
 <script>
-import { getFirestore, doc, getDoc, updateDoc } from 'firebase/firestore';
+import { getFirestore, doc, getDoc, updateDoc, collection, getDocs, query, where, orderBy } from 'firebase/firestore';
 import { debounce } from 'lodash';
 import { generarPDFRendimientos } from '@/utils/RendimientosPdf';
 
@@ -126,12 +203,16 @@ export default {
       nombresMedidasPersonalizados: {},
       mostrarModal: false,
       nota: '',
-      medidaOculta: {}
+      medidaOculta: {},
+      preciosVenta: {},
+      gananciasCalculadas: {},
+      analizarGanancia: {}
     }
   },
 
   async created() {
     await this.cargarEmbarque();
+    await this.cargarPreciosVenta();
     // Aplicar debounce después de definir el método
     this.guardarCambiosEnTiempoReal = debounce(this.guardarCambiosEnTiempoReal, 300);
   },
@@ -139,6 +220,7 @@ export default {
   // Recargar datos cuando se vuelve a este componente
   async activated() {
     await this.cargarEmbarque();
+    await this.cargarPreciosVenta();
   },
 
   methods: {
@@ -146,6 +228,16 @@ export default {
       if (!this.embarqueData || !this.embarqueData.clientes) return '';
       const cliente = this.embarqueData.clientes.find(c => c.id.toString() === clienteId.toString());
       return cliente ? cliente.nombre : '';
+    },
+
+    // Mapear nombres de clientes del embarque con IDs del sistema de precios
+    obtenerClienteIdParaPrecios(nombreCliente) {
+      const nombre = nombreCliente.toLowerCase();
+      if (nombre.includes('joselito')) return 'joselito';
+      if (nombre.includes('catarro')) return 'catarro';
+      if (nombre.includes('otilio')) return 'otilio';
+      if (nombre.includes('ozuna')) return 'ozuna';
+      return null; // Cliente no reconocido
     },
 
     async cargarEmbarque() {
@@ -160,6 +252,7 @@ export default {
           this.nombresMedidasPersonalizados = this.embarqueData.nombresMedidasPersonalizados || {};
           this.obtenerMedidasUnicas();
           this.medidaOculta = this.embarqueData.medidaOculta || {};
+          this.analizarGanancia = this.embarqueData.analizarGanancia || {};
           
           const kilosCrudosGuardados = this.embarqueData.kilosCrudos || {};
           this.kilosCrudos = { ...kilosCrudosGuardados };
@@ -180,12 +273,320 @@ export default {
           });
           
           this.guardadoAutomaticoActivo = true;
+          
+          // Calcular ganancias después de cargar embarque
+          if (Object.keys(this.preciosVenta).length > 0) {
+            this.calcularGanancias();
+          }
         } else {
           console.error('No se encontró el embarque');
         }
       } catch (error) {
         console.error('Error al cargar el embarque:', error);
       }
+    },
+
+    async cargarPreciosVenta() {
+      try {
+        const db = getFirestore();
+        const preciosRef = collection(db, 'precios');
+        const q = query(preciosRef, orderBy('fecha', 'desc'));
+        const preciosSnapshot = await getDocs(q);
+        
+        // Crear un mapa para organizar los precios por producto
+        const preciosMap = new Map();
+        
+        preciosSnapshot.docs.forEach(docSnapshot => {
+          const precio = { id: docSnapshot.id, ...docSnapshot.data() };
+          const clave = precio.producto.toLowerCase().trim();
+          
+          if (!preciosMap.has(clave)) {
+            preciosMap.set(clave, []);
+          }
+          preciosMap.get(clave).push(precio);
+        });
+        
+        // Organizar precios por producto (mantener estructura existente)
+        const preciosOrganizados = {};
+        preciosMap.forEach((precios, producto) => {
+          // Ordenar por fecha (más reciente primero)
+          const preciosOrdenados = precios.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+          preciosOrganizados[producto] = preciosOrdenados;
+        });
+        
+        this.preciosVenta = preciosOrganizados;
+        
+        // Calcular ganancias después de cargar precios
+        if (this.embarqueData) {
+          this.calcularGanancias();
+        }
+        
+      } catch (error) {
+        console.error('Error al cargar precios de venta:', error);
+      }
+    },
+
+    obtenerPrecioVentaParaFecha(medida, fechaEmbarque, clienteId = null) {
+      // Normalizar el nombre de la medida para buscar en precios
+      const medidaNormalizada = medida.toLowerCase().trim().replace(' maquila ozuna', '');
+      
+      // Buscar precios para esta medida
+      const preciosProducto = this.preciosVenta[medidaNormalizada];
+      if (!preciosProducto || preciosProducto.length === 0) {
+        return null;
+      }
+      
+      // Encontrar el precio más reciente que sea anterior o igual a la fecha del embarque
+      const fechaEmbarqueObj = new Date(fechaEmbarque);
+      
+      // Primero buscar precio específico para el cliente si se proporciona
+      if (clienteId) {
+        for (const precio of preciosProducto) {
+          const fechaPrecio = new Date(precio.fecha);
+          if (fechaPrecio <= fechaEmbarqueObj && precio.clienteId === clienteId) {
+            return precio;
+          }
+        }
+      }
+      
+      // Si no hay precio específico, buscar precio general
+      for (const precio of preciosProducto) {
+        const fechaPrecio = new Date(precio.fecha);
+        if (fechaPrecio <= fechaEmbarqueObj && !precio.clienteId) {
+          return precio;
+        }
+      }
+      
+      // Si no hay precios anteriores, usar el más antiguo (general primero)
+      const preciosGenerales = preciosProducto.filter(p => !p.clienteId);
+      if (preciosGenerales.length > 0) {
+        return preciosGenerales[preciosGenerales.length - 1];
+      }
+      
+      return preciosProducto[preciosProducto.length - 1];
+    },
+
+    calcularCostoFinal(medida) {
+      const costosEmbarque = this.embarqueData?.costosPorMedida || {};
+      const costo = Number(costosEmbarque[medida]) || 0;
+      const rendimientoOriginal = this.getRendimiento(medida);
+      // Usar rendimiento redondeado a 2 decimales (igual que se muestra en la UI)
+      const rendimiento = Math.round(rendimientoOriginal * 100) / 100;
+      const costoExtra = Number(this.embarqueData?.costoExtra) || 18;
+      
+      // Para medidas de Ozuna maquila, no agregar costo extra ya que no son ventas directas
+      const esMedidaOzunaMaquila = medida.includes('Maquila Ozuna');
+      
+      // Solo sumar costo extra si la medida tiene formato numérico (ej: "51/60", "20/30")
+      // No sumar para medidas de texto (ej: "macuil", "pulpa", etc.) ni para Ozuna Maquila
+      const esMedidaNumerica = /^\d+\/\d+$/.test(medida.trim()) || /^\d+$/.test(medida.trim());
+      
+      if (esMedidaOzunaMaquila || !esMedidaNumerica) {
+        return Math.round(costo * rendimiento);
+      } else {
+        return Math.round((costo * rendimiento) + costoExtra);
+      }
+    },
+
+    calcularGanancias() {
+      if (!this.embarqueData) return;
+      
+      const fechaEmbarque = this.embarqueData.fecha || new Date().toISOString().split('T')[0];
+      const ganancias = {};
+      
+      this.medidasUnicas.forEach(medida => {
+        // Solo calcular ganancias si el análisis está activado para esta medida
+        if (!this.analizarGanancia[medida]) return;
+        
+        const costoFinal = this.calcularCostoFinal(medida);
+        
+        // Obtener clientes que tienen productos de esta medida
+        const clientesConMedida = this.obtenerClientesConMedida(medida);
+        
+        // Calcular precio promedio ponderado y ganancias reales
+        const resultadoCalculo = this.calcularPrecioYGanancias(medida, fechaEmbarque, clientesConMedida, costoFinal);
+        
+        if (!resultadoCalculo) return; // Si no hay precios, saltar esta medida
+        
+        ganancias[medida] = resultadoCalculo;
+      });
+      
+      this.gananciasCalculadas = ganancias;
+    },
+
+    // Nuevo método que calcula precio promedio ponderado y ganancias
+    calcularPrecioYGanancias(medida, fechaEmbarque, clientesConMedida, costoFinal) {
+      let gananciasPorCliente = [];
+      let totalEmbarcadoGeneral = 0;
+      let gananciaTotalSumada = 0;
+      let totalVentasPonderadas = 0;
+      
+      // Obtener precio general más reciente
+      const precioGeneral = this.obtenerPrecioVentaParaFecha(medida, fechaEmbarque, null);
+      const fechaGeneral = precioGeneral ? new Date(precioGeneral.fecha) : null;
+      
+      // Calcular ganancias por cada cliente
+      clientesConMedida.forEach(({ cliente, totalEmbarcado }) => {
+        const clienteIdParaPrecios = this.obtenerClienteIdParaPrecios(cliente.nombre);
+        
+        // Buscar precio específico para el cliente
+        const precioEspecifico = this.obtenerPrecioVentaParaFecha(medida, fechaEmbarque, clienteIdParaPrecios);
+        
+        // Decidir qué precio usar: específico solo si es más reciente que el general
+        let precioAUsar = precioGeneral; // Por defecto usar general
+        let esEspecifico = false;
+        
+        if (precioEspecifico && precioEspecifico.clienteId) {
+          const fechaEspecifico = new Date(precioEspecifico.fecha);
+          // Solo usar específico si es más reciente que el general (o si no hay general)
+          if (!fechaGeneral || fechaEspecifico > fechaGeneral) {
+            precioAUsar = precioEspecifico;
+            esEspecifico = true;
+          }
+        }
+        
+        if (precioAUsar) {
+          const precioUnitario = Math.round(precioAUsar.precio);
+          const gananciaUnitaria = Math.round(precioUnitario - costoFinal);
+          const gananciaTotal = Math.round(gananciaUnitaria * totalEmbarcado);
+          
+          gananciasPorCliente.push({
+            cliente: cliente.nombre,
+            precioVenta: precioUnitario,
+            totalEmbarcado: totalEmbarcado,
+            gananciaUnitaria: gananciaUnitaria,
+            gananciaTotal: gananciaTotal,
+            fechaPrecio: precioAUsar.fecha,
+            esEspecifico: esEspecifico,
+            clienteId: precioAUsar.clienteId || null
+          });
+          
+          totalEmbarcadoGeneral += totalEmbarcado;
+          gananciaTotalSumada += gananciaTotal;
+          totalVentasPonderadas += precioUnitario * totalEmbarcado;
+        }
+      });
+      
+      if (gananciasPorCliente.length === 0) return null;
+      
+      // Calcular precio promedio ponderado
+      const precioPromedioPonderado = totalEmbarcadoGeneral > 0 ? 
+        Math.round(totalVentasPonderadas / totalEmbarcadoGeneral) : 0;
+      
+      // Determinar información para mostrar
+      const clientesConEspecifico = gananciasPorCliente.filter(g => g.esEspecifico);
+      const preciosUnicos = new Set(gananciasPorCliente.map(g => g.precioVenta));
+      const tieneMultiplesPrecios = preciosUnicos.size > 1;
+      const soloUnCliente = gananciasPorCliente.length === 1;
+      
+      // Debug
+      console.log(`[${medida}] Cálculo de precios:`, {
+        precioGeneral: precioGeneral?.precio,
+        fechaGeneral: precioGeneral?.fecha,
+        clientesConEspecifico: clientesConEspecifico.map(c => ({ cliente: c.cliente, precio: c.precioVenta, fecha: c.fechaPrecio })),
+        precioPromedio: precioPromedioPonderado,
+        tieneMultiplesPrecios,
+        soloUnCliente,
+        totalClientes: gananciasPorCliente.length
+      });
+      
+      let infoMostrar = {
+        esPromedio: tieneMultiplesPrecios,
+        esEspecifico: false,
+        clienteEspecifico: null,
+        clientesConEspecifico: clientesConEspecifico.map(c => c.cliente),
+        fechaMasReciente: gananciasPorCliente.reduce((fecha, g) => {
+          const fechaActual = new Date(g.fechaPrecio);
+          return !fecha || fechaActual > fecha ? fechaActual : fecha;
+        }, null)
+      };
+      
+      // Si solo hay un cliente con precio específico más reciente, mostrarlo como específico
+      if (clientesConEspecifico.length === 1 && soloUnCliente) {
+        infoMostrar.esEspecifico = true;
+        infoMostrar.esPromedio = false;
+        infoMostrar.clienteEspecifico = clientesConEspecifico[0].cliente;
+      }
+      
+      return {
+        precioVenta: precioPromedioPonderado,
+        costoFinal: Math.round(costoFinal),
+        gananciaUnitaria: Math.round(precioPromedioPonderado - costoFinal),
+        gananciaTotal: gananciaTotalSumada,
+        totalEmbarcado: Math.round(totalEmbarcadoGeneral),
+        fechaPrecio: infoMostrar.fechaMasReciente?.toISOString().split('T')[0],
+        esPromedio: infoMostrar.esPromedio,
+        esEspecifico: infoMostrar.esEspecifico,
+        clienteEspecifico: infoMostrar.clienteEspecifico,
+        clientesConEspecifico: infoMostrar.clientesConEspecifico,
+        detallesPorCliente: gananciasPorCliente
+      };
+    },
+
+
+
+    // Método auxiliar para obtener nombre de cliente desde ID
+    obtenerNombreClienteDeId(clienteId) {
+      const mapeo = {
+        'joselito': 'Joselito',
+        'catarro': 'Catarro', 
+        'otilio': 'Otilio',
+        'ozuna': 'Ozuna'
+      };
+      return mapeo[clienteId] || clienteId;
+    },
+
+    // Nuevo método para obtener clientes que tienen productos de una medida específica
+    obtenerClientesConMedida(medida) {
+      if (!this.embarqueData || !this.embarqueData.clientes) return [];
+      
+      const clientesConMedida = [];
+      const esOzuna = medida.includes('Maquila Ozuna');
+      const medidaBase = medida.replace(' Maquila Ozuna', '').toLowerCase().trim();
+      
+      this.embarqueData.clientes.forEach(cliente => {
+        let totalEmbarcado = 0;
+        
+        cliente.productos.forEach(producto => {
+          if (!producto.medida) return;
+          
+          let incluir = false;
+          
+          // Lógica para determinar si incluir el producto
+          if (esOzuna) {
+            // Solo incluir si el producto es de cliente Ozuna y NO es una venta
+            incluir = producto.medida.toLowerCase().trim() === medidaBase && 
+                     cliente.nombre === 'Ozuna' && 
+                     !producto.esVenta;
+          } else {
+            // Solo incluir si el producto coincide con la medida y NO es de Ozuna o es de Ozuna pero es VENTA
+            incluir = producto.medida.toLowerCase().trim() === medidaBase && 
+                     (cliente.nombre !== 'Ozuna' || producto.esVenta);
+          }
+          
+          if (incluir) {
+            if (producto.tipo === 'c/h20') {
+              const totalBolsas = this.calcularTotalBolsas(producto);
+              const valorNeto = parseFloat(producto.camaronNeto) || 0.65;
+              totalEmbarcado += (totalBolsas * valorNeto);
+            } else {
+              const sumaKilos = producto.kilos.reduce((sum, kilo) => sum + (Number(kilo) || 0), 0);
+              const sumaTaras = this.calcularTotalTaras(producto);
+              const descuentoTaras = producto.restarTaras ? sumaTaras * 3 : 0;
+              totalEmbarcado += (sumaKilos - descuentoTaras);
+            }
+          }
+        });
+        
+        if (totalEmbarcado > 0) {
+          clientesConMedida.push({
+            cliente: cliente,
+            totalEmbarcado: totalEmbarcado
+          });
+        }
+      });
+      
+      return clientesConMedida;
     },
 
     async guardarCambiosEnTiempoReal() {
@@ -197,7 +598,9 @@ export default {
         const embarqueRef = doc(db, 'embarques', embarqueId);
         
         await updateDoc(embarqueRef, {
-          kilosCrudos: this.kilosCrudos
+          kilosCrudos: this.kilosCrudos,
+          medidaOculta: this.medidaOculta,
+          analizarGanancia: this.analizarGanancia
         });
         
         console.log('Rendimientos guardados:', this.kilosCrudos);
@@ -466,10 +869,8 @@ export default {
 
           const rendimiento = this.getRendimiento(medida);
 
-          // Calcular costo final para el PDF usando los costos configurados
-          const costoBase = this.embarqueData?.costosPorMedida?.[medida] || 0;
-          const costoExtra = this.embarqueData?.costoExtra || 17;
-          const costoFinal = ((costoBase * rendimiento) + costoExtra).toFixed(1);
+          // Calcular costo final para el PDF usando el método que considera Ozuna Maquila
+          const costoFinal = this.calcularCostoFinal(medida);
 
           return {
             medida: medida,
@@ -486,7 +887,15 @@ export default {
         mostrarColumnaCosto: true // Siempre mostrar la columna de costos
       };
 
-      generarPDFRendimientos(datosRendimientos, embarqueDataConNota);
+      // Filtrar ganancias solo para medidas visibles Y que tengan análisis activado
+      const gananciasVisibles = Object.entries(this.gananciasCalculadas)
+        .filter(([medida]) => !this.medidaOculta[medida] && this.analizarGanancia[medida])
+        .reduce((acc, [medida, ganancia]) => {
+          acc[medida] = ganancia;
+          return acc;
+        }, {});
+
+      generarPDFRendimientos(datosRendimientos, embarqueDataConNota, gananciasVisibles);
     },
 
     obtenerNombreMedidaPersonalizado(medida) {
@@ -561,10 +970,50 @@ export default {
       }
     },
 
+    async guardarEstadoAnalisis() {
+      try {
+        const db = getFirestore();
+        const embarqueId = this.$route.params.id;
+        const embarqueRef = doc(db, 'embarques', embarqueId);
+        
+        await updateDoc(embarqueRef, {
+          analizarGanancia: this.analizarGanancia
+        });
+        
+        console.log('Estado de análisis de ganancia guardado correctamente');
+      } catch (error) {
+        console.error('Error al guardar estado de análisis de ganancia:', error);
+      }
+    },
+
     irAGestionCostos() {
       this.$router.push({
         name: 'GestionCostos',
         params: { id: this.$route.params.id }
+      });
+    },
+
+    formatearPrecio(precio) {
+      if (!precio) return '0';
+      const numeroRedondeado = Math.round(precio);
+      // Formatear manualmente con comas para asegurar compatibilidad
+      return numeroRedondeado.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    },
+    
+    formatearNumero(numero) {
+      if (!numero) return '0';
+      const numeroRedondeado = Math.round(numero);
+      // Formatear manualmente con comas para asegurar compatibilidad
+      return numeroRedondeado.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    },
+
+    formatearFecha(fechaString) {
+      if (!fechaString) return '';
+      const fecha = new Date(fechaString);
+      return fecha.toLocaleDateString('es-ES', { 
+        year: 'numeric', 
+        month: 'short', 
+        day: 'numeric' 
       });
     }
   },
@@ -573,6 +1022,19 @@ export default {
     kilosCrudos: {
       handler() {
         this.guardarCambiosEnTiempoReal();
+        // Recalcular ganancias cuando cambien los kilos crudos
+        this.$nextTick(() => {
+          this.calcularGanancias();
+        });
+      },
+      deep: true
+    },
+    analizarGanancia: {
+      handler() {
+        // Recalcular ganancias cuando se active/desactive el análisis
+        this.$nextTick(() => {
+          this.calcularGanancias();
+        });
       },
       deep: true
     }
@@ -834,6 +1296,12 @@ input {
   margin-bottom: 10px;
 }
 
+.controles-medida {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .ocultar-control {
   display: flex;
   align-items: center;
@@ -852,7 +1320,98 @@ input {
   user-select: none;
 }
 
+.analizar-ganancia-control {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.9em;
+  color: #27ae60;
+  font-weight: bold;
+}
 
+.analizar-ganancia-control input[type="checkbox"] {
+  width: auto;
+  margin: 0;
+}
+
+.analizar-ganancia-control label {
+  cursor: pointer;
+  user-select: none;
+}
+
+.ganancia-info {
+  margin-top: 15px;
+  padding: 15px;
+  background-color: #f9f9f9;
+  border: 1px solid #eee;
+  border-radius: 5px;
+}
+
+.ganancia-header h4 {
+  margin-top: 0;
+  margin-bottom: 10px;
+  color: #34495e;
+  font-size: 1.1em;
+}
+
+.ganancia-detalles {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.ganancia-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.ganancia-item .label {
+  font-weight: bold;
+  color: #555;
+}
+
+.ganancia-item .valor {
+  font-weight: bold;
+  font-size: 1.1em;
+}
+
+.ganancia-positiva {
+  color: #27ae60;
+}
+
+.ganancia-negativa {
+  color: #e74c3c;
+}
+
+.ganancia-total-item {
+  grid-column: 1 / -1; /* Ocupa dos columnas */
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #eee;
+}
+
+.ganancia-fecha {
+  margin-top: 10px;
+  font-size: 0.9em;
+  color: #777;
+}
+
+.sin-precio-venta {
+  margin-top: 10px;
+  padding: 10px;
+  background-color: #fff3cd;
+  border: 1px solid #ffeeba;
+  border-radius: 5px;
+  color: #856404;
+  font-weight: bold;
+  text-align: center;
+}
+
+.aviso-sin-precio {
+  margin: 0;
+  padding: 0;
+}
 
 .btn-costos {
   display: inline-flex;
@@ -876,6 +1435,66 @@ input {
 
 .btn-costos i {
   margin-right: 10px;
+}
+
+.precio-venta-container {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.precio-especifico-badge, .precio-general-badge, .precio-promedio-badge {
+  font-size: 0.75em;
+  padding: 2px 6px;
+  border-radius: 8px;
+  font-weight: bold;
+  white-space: nowrap;
+}
+
+.precio-especifico-badge {
+  background-color: #e8f5e8;
+  color: #2d5a2d;
+  border: 1px solid #a5d6a7;
+}
+
+.precio-general-badge {
+  background-color: #e3f2fd;
+  color: #1565c0;
+  border: 1px solid #90caf9;
+}
+
+.precio-promedio-badge {
+  background-color: #fff3e0;
+  color: #e65100;
+  border: 1px solid #ffcc80;
+}
+
+@media (max-width: 768px) {
+  .controles-medida {
+    flex-direction: column;
+    gap: 10px;
+  }
+  
+  .medida-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  
+  .ocultar-control,
+  .analizar-ganancia-control {
+    font-size: 0.8em;
+  }
+  
+  .ganancia-detalles {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  
+  .precio-venta-container {
+    align-items: flex-start;
+  }
 }
 </style>
 
