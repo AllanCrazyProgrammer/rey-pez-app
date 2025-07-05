@@ -206,7 +206,8 @@ export default {
       medidaOculta: {},
       preciosVenta: {},
       gananciasCalculadas: {},
-      analizarGanancia: {}
+      analizarGanancia: {},
+      diasRecientes: 3 // Días para considerar un embarque como "reciente"
     }
   },
 
@@ -219,8 +220,13 @@ export default {
 
   // Recargar datos cuando se vuelve a este componente
   async activated() {
+    console.log('Recargando datos de rendimientos...');
     await this.cargarEmbarque();
     await this.cargarPreciosVenta();
+    // Forzar recálculo de ganancias después de recargar precios
+    this.$nextTick(() => {
+      this.calcularGanancias();
+    });
   },
 
   methods: {
@@ -333,37 +339,120 @@ export default {
       // Buscar precios para esta medida
       const preciosProducto = this.preciosVenta[medidaNormalizada];
       if (!preciosProducto || preciosProducto.length === 0) {
+        console.log(`[${medida}] No se encontraron precios para la medida normalizada: ${medidaNormalizada}`);
         return null;
       }
       
-      // Encontrar el precio más reciente que sea anterior o igual a la fecha del embarque
-      const fechaEmbarqueObj = new Date(fechaEmbarque);
+      // Crear fecha del embarque solo con año-mes-día (sin hora)
+      const fechaEmbarqueStr = new Date(fechaEmbarque).toISOString().split('T')[0];
+      const fechaEmbarqueObj = new Date(fechaEmbarqueStr);
+      const fechaHoy = new Date().toISOString().split('T')[0];
+      const fechaHoyObj = new Date(fechaHoy);
+      const diasDiferencia = Math.floor((fechaHoyObj - fechaEmbarqueObj) / (1000 * 60 * 60 * 24));
       
-      // Primero buscar precio específico para el cliente si se proporciona
-      if (clienteId) {
+      const embarqueEsReciente = diasDiferencia <= this.diasRecientes;
+      const embarqueEsHoyOFuturo = fechaEmbarqueStr >= fechaHoy;
+      const debeUsarPreciosRecientes = embarqueEsReciente || embarqueEsHoyOFuturo;
+      
+      console.log(`[${medida}] 🔍 ANÁLISIS DE PRECIOS:`);
+      console.log(`[${medida}] Fecha embarque: ${fechaEmbarqueStr}`);
+      console.log(`[${medida}] Fecha hoy: ${fechaHoy}`);
+      console.log(`[${medida}] Días de diferencia: ${diasDiferencia}`);
+      console.log(`[${medida}] Cliente ID: ${clienteId || 'general'}`);
+      console.log(`[${medida}] Precios disponibles:`, preciosProducto.map(p => ({
+        precio: p.precio,
+        fecha: new Date(p.fecha).toISOString().split('T')[0],
+        clienteId: p.clienteId || 'general',
+        valido: new Date(p.fecha).toISOString().split('T')[0] <= fechaEmbarqueStr
+      })));
+      
+      console.log(`[${medida}] Lógica a aplicar:`, {
+        embarqueEsReciente: embarqueEsReciente,
+        embarqueEsHoyOFuturo: embarqueEsHoyOFuturo,
+        debeUsarPreciosRecientes: debeUsarPreciosRecientes
+      });
+      
+      if (debeUsarPreciosRecientes) {
+        let razonPrecioReciente = '';
+        if (embarqueEsHoyOFuturo) {
+          razonPrecioReciente = '(embarque de hoy/futuro)';
+        } else if (embarqueEsReciente) {
+          razonPrecioReciente = `(embarque reciente: hace ${diasDiferencia} día${diasDiferencia !== 1 ? 's' : ''})`;
+        }
+        
+        console.log(`[${medida}] 🚀 Usando precio más reciente ${razonPrecioReciente}`);
+        
+        // Para embarques de hoy o futuros, buscar el precio más reciente
+        if (clienteId) {
+          const precioEspecificoReciente = preciosProducto.find(p => p.clienteId === clienteId);
+          if (precioEspecificoReciente) {
+            console.log(`[${medida}] ✅ Precio específico más reciente encontrado para ${clienteId}:`, {
+              precio: precioEspecificoReciente.precio,
+              fecha: new Date(precioEspecificoReciente.fecha).toISOString().split('T')[0]
+            });
+            return precioEspecificoReciente;
+          }
+        }
+        
+        // Si no hay específico, usar el precio general más reciente
+        const precioGeneralReciente = preciosProducto.find(p => !p.clienteId);
+        if (precioGeneralReciente) {
+          console.log(`[${medida}] ✅ Precio general más reciente encontrado:`, {
+            precio: precioGeneralReciente.precio,
+            fecha: new Date(precioGeneralReciente.fecha).toISOString().split('T')[0]
+          });
+          return precioGeneralReciente;
+        }
+      } else {
+        // LÓGICA ORIGINAL: Para embarques pasados, buscar el precio válido para esa fecha
+        console.log(`[${medida}] 📅 Embarque es del pasado, usando lógica de fecha exacta`);
+        
+        // Primero buscar precio específico para el cliente si se proporciona
+        if (clienteId) {
+          for (const precio of preciosProducto) {
+            const fechaPrecioStr = new Date(precio.fecha).toISOString().split('T')[0];
+            if (fechaPrecioStr <= fechaEmbarqueStr && precio.clienteId === clienteId) {
+              console.log(`[${medida}] ✅ Precio específico histórico encontrado para ${clienteId}:`, {
+                precio: precio.precio,
+                fecha: fechaPrecioStr,
+                fechaComparacion: `${fechaPrecioStr} <= ${fechaEmbarqueStr}`
+              });
+              return precio;
+            }
+          }
+        }
+        
+        // Si no hay precio específico, buscar precio general
         for (const precio of preciosProducto) {
-          const fechaPrecio = new Date(precio.fecha);
-          if (fechaPrecio <= fechaEmbarqueObj && precio.clienteId === clienteId) {
+          const fechaPrecioStr = new Date(precio.fecha).toISOString().split('T')[0];
+          if (fechaPrecioStr <= fechaEmbarqueStr && !precio.clienteId) {
+            console.log(`[${medida}] ✅ Precio general histórico encontrado:`, {
+              precio: precio.precio,
+              fecha: fechaPrecioStr,
+              fechaComparacion: `${fechaPrecioStr} <= ${fechaEmbarqueStr}`
+            });
             return precio;
           }
         }
       }
       
-      // Si no hay precio específico, buscar precio general
-      for (const precio of preciosProducto) {
-        const fechaPrecio = new Date(precio.fecha);
-        if (fechaPrecio <= fechaEmbarqueObj && !precio.clienteId) {
-          return precio;
-        }
-      }
-      
-      // Si no hay precios anteriores, usar el más antiguo (general primero)
+      // FALLBACK: Si no se encuentra nada, usar el más antiguo disponible
       const preciosGenerales = preciosProducto.filter(p => !p.clienteId);
       if (preciosGenerales.length > 0) {
-        return preciosGenerales[preciosGenerales.length - 1];
+        const precioFallback = preciosGenerales[preciosGenerales.length - 1];
+        console.log(`[${medida}] ⚠️ FALLBACK: Usando precio general más antiguo:`, {
+          precio: precioFallback.precio,
+          fecha: new Date(precioFallback.fecha).toISOString().split('T')[0]
+        });
+        return precioFallback;
       }
       
-      return preciosProducto[preciosProducto.length - 1];
+      const precioFallback = preciosProducto[preciosProducto.length - 1];
+      console.log(`[${medida}] ⚠️ FALLBACK FINAL: Usando último precio disponible:`, {
+        precio: precioFallback.precio,
+        fecha: new Date(precioFallback.fecha).toISOString().split('T')[0]
+      });
+      return precioFallback;
     },
 
     calcularCostoFinal(medida) {
@@ -479,15 +568,27 @@ export default {
       const tieneMultiplesPrecios = preciosUnicos.size > 1;
       const soloUnCliente = gananciasPorCliente.length === 1;
       
-      // Debug
+      // Debug detallado
       console.log(`[${medida}] Cálculo de precios:`, {
-        precioGeneral: precioGeneral?.precio,
+        fechaEmbarque: fechaEmbarque,
+        precioGeneral: precioGeneral ? { precio: precioGeneral.precio, fecha: precioGeneral.fecha, clienteId: precioGeneral.clienteId } : null,
         fechaGeneral: precioGeneral?.fecha,
-        clientesConEspecifico: clientesConEspecifico.map(c => ({ cliente: c.cliente, precio: c.precioVenta, fecha: c.fechaPrecio })),
+        clientesConEspecifico: clientesConEspecifico.map(c => ({ 
+          cliente: c.cliente, 
+          precio: c.precioVenta, 
+          fecha: c.fechaPrecio,
+          clienteId: c.clienteId 
+        })),
         precioPromedio: precioPromedioPonderado,
         tieneMultiplesPrecios,
         soloUnCliente,
-        totalClientes: gananciasPorCliente.length
+        totalClientes: gananciasPorCliente.length,
+        detallesPorCliente: gananciasPorCliente.map(g => ({
+          cliente: g.cliente,
+          precio: g.precioVenta,
+          fecha: g.fechaPrecio,
+          esEspecifico: g.esEspecifico
+        }))
       });
       
       let infoMostrar = {
@@ -993,6 +1094,8 @@ export default {
       });
     },
 
+
+
     formatearPrecio(precio) {
       if (!precio) return '0';
       const numeroRedondeado = Math.round(precio);
@@ -1015,6 +1118,21 @@ export default {
         month: 'short', 
         day: 'numeric' 
       });
+    },
+
+    mostrarIndicadorPrecioReciente(medida) {
+      if (!this.embarqueData || !this.embarqueData.fecha) return false;
+      
+      const fechaEmbarqueStr = new Date(this.embarqueData.fecha).toISOString().split('T')[0];
+      const fechaHoy = new Date().toISOString().split('T')[0];
+      const fechaEmbarqueObj = new Date(fechaEmbarqueStr);
+      const fechaHoyObj = new Date(fechaHoy);
+      const diasDiferencia = Math.floor((fechaHoyObj - fechaEmbarqueObj) / (1000 * 60 * 60 * 24));
+      
+      const embarqueEsReciente = diasDiferencia <= this.diasRecientes;
+      const embarqueEsHoyOFuturo = fechaEmbarqueStr >= fechaHoy;
+      
+      return embarqueEsReciente || embarqueEsHoyOFuturo;
     }
   },
 
@@ -1037,7 +1155,8 @@ export default {
         });
       },
       deep: true
-    }
+    },
+
   },
 
   beforeDestroy() {
@@ -1395,6 +1514,20 @@ input {
   margin-top: 10px;
   font-size: 0.9em;
   color: #777;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.indicador-precio-reciente {
+  font-size: 0.8em;
+  color: #28a745;
+  font-weight: bold;
+  background-color: #d4edda;
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid #c3e6cb;
+  align-self: flex-start;
 }
 
 .sin-precio-venta {
@@ -1436,6 +1569,8 @@ input {
 .btn-costos i {
   margin-right: 10px;
 }
+
+
 
 .precio-venta-container {
   display: flex;
