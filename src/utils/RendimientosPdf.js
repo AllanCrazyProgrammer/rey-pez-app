@@ -17,7 +17,7 @@ if (typeof window !== 'undefined' && !window.pdfMake) {
     window.pdfMake = pdfMake;
 }
 
-export const generarPDFRendimientos = async (datosRendimientos, embarqueData) => {
+export const generarPDFRendimientos = async (datosRendimientos, embarqueData, gananciasCalculadas) => {
   try {
     const logoBase64 = await loadImageAsBase64('https://res.cloudinary.com/hwkcovsmr/image/upload/v1620946647/samples/REY_PEZ_LOGO_nsotww.png');
     
@@ -86,7 +86,9 @@ export const generarPDFRendimientos = async (datosRendimientos, embarqueData) =>
           ]
         },
         { text: '\n', height: 5 },
-        generarTablaRendimientos(datosRendimientos, nombresMedidasPersonalizados, embarqueData)
+        generarTablaRendimientos(datosRendimientos, nombresMedidasPersonalizados, embarqueData),
+        { text: '\n', height: 10 },
+        generarTablaGanancias(gananciasCalculadas, nombresMedidasPersonalizados, embarqueData)
       ],
       styles: {
         header: {
@@ -111,6 +113,26 @@ export const generarPDFRendimientos = async (datosRendimientos, embarqueData) =>
         costoStyle: {
           color: '#e74c3c',
           bold: true
+        },
+        gananciaPositiva: {
+          color: '#27ae60',
+          bold: true
+        },
+        gananciaNegativa: {
+          color: '#e74c3c',
+          bold: true
+        },
+        tableTotal: {
+          bold: true,
+          fontSize: 20,
+          color: '#2c3e50',
+          fillColor: '#e8f4f8'
+        },
+        tableTotalNegativo: {
+          bold: true,
+          fontSize: 20,
+          color: '#e74c3c',
+          fillColor: '#e8f4f8'
         }
       },
       defaultStyle: {
@@ -268,6 +290,112 @@ function generarTablaRendimientos(datosRendimientos, nombresMedidasPersonalizado
   };
 }
 
+function generarTablaGanancias(gananciasCalculadas, nombresMedidasPersonalizados, embarqueData) {
+  if (!gananciasCalculadas || Object.keys(gananciasCalculadas).length === 0) {
+    return {
+      text: 'No hay datos de ganancias disponibles',
+      style: 'header',
+      alignment: 'center',
+      margin: [0, 10, 0, 10]
+    };
+  }
+
+  // Filtrar medidas que no estén ocultas
+  const medidasOcultas = embarqueData?.medidaOculta || {};
+  const gananciasVisibles = Object.entries(gananciasCalculadas)
+    .filter(([medida]) => !medidasOcultas[medida]);
+
+  if (gananciasVisibles.length === 0) {
+    return {
+      text: 'No hay datos de ganancias para mostrar',
+      style: 'header',
+      alignment: 'center',
+      margin: [0, 10, 0, 10]
+    };
+  }
+
+  // Calcular el total de ganancias
+  const totalGanancias = gananciasVisibles.reduce((total, [medida, ganancia]) => {
+    return total + (ganancia.gananciaTotal || 0);
+  }, 0);
+
+  const body = [
+    [
+      { text: 'Medida', style: 'tableHeader' },
+      { text: 'Ganancia/kg', style: 'tableHeader' },
+      { text: 'Ganancia Total', style: 'tableHeader' }
+    ],
+    ...gananciasVisibles.map(([medida, ganancia]) => {
+      const nombreMedida = nombresMedidasPersonalizados[medida] || medida;
+      const gananciaUnitaria = ganancia.gananciaUnitaria || 0;
+      const gananciaTotal = ganancia.gananciaTotal || 0;
+      
+      return [
+        nombreMedida,
+        {
+          text: `$${formatearPrecio(gananciaUnitaria)}`,
+          style: gananciaUnitaria >= 0 ? 'gananciaPositiva' : 'gananciaNegativa'
+        },
+        {
+          text: `$${formatearPrecio(gananciaTotal)}`,
+          style: gananciaTotal >= 0 ? 'gananciaPositiva' : 'gananciaNegativa'
+        }
+      ];
+    }),
+    // Fila del total
+    [
+      { text: 'TOTAL GANANCIAS', style: 'tableTotal' },
+      { text: '', style: 'tableTotal' },
+      { 
+        text: `$${formatearPrecio(totalGanancias)}`, 
+        style: totalGanancias >= 0 ? 'tableTotal' : 'tableTotalNegativo' 
+      }
+    ]
+  ];
+
+  return {
+    stack: [
+      {
+        text: 'Resumen de Ganancias',
+        style: 'header',
+        alignment: 'center',
+        margin: [0, 0, 0, 10]
+      },
+      {
+        table: {
+          headerRows: 1,
+          widths: ['*', '*', '*'],
+          body: body
+        },
+        layout: {
+          hLineWidth: function(i, node) { 
+            return (i === 0 || i === node.table.body.length || i === node.table.body.length - 1) ? 1.5 : 0.5;
+          },
+          vLineWidth: function(i, node) { 
+            return (i === 0 || i === node.table.widths.length) ? 1.5 : 0.5;
+          },
+          hLineColor: function(i, node) { 
+            return (i === 0 || i === node.table.body.length || i === node.table.body.length - 1) ? '#3760b0' : '#cccccc';
+          },
+          vLineColor: function(i, node) { 
+            return (i === 0 || i === node.table.widths.length) ? '#3760b0' : '#cccccc';
+          },
+          fillColor: function(rowIndex, node, columnIndex) {
+            if (rowIndex === node.table.body.length - 1) {
+              return '#e8f4f8'; // Color de fondo para la fila del total
+            }
+            return (rowIndex % 2 === 0) ? '#f8f9fa' : null;
+          },
+          paddingLeft: function(i) { return 4; },
+          paddingRight: function(i) { return 4; },
+          paddingTop: function(i) { return 2; },
+          paddingBottom: function(i) { return 2; }
+        }
+      }
+    ]
+  };
+}
+
 function formatearKilos(kilos) {
   if (typeof kilos === 'number') {
     return (kilos % 1 === 0 ? Math.floor(kilos) : kilos.toFixed(1)) + ' kg';
@@ -283,6 +411,12 @@ function formatearKilos(kilos) {
 
 function formatearRendimiento(rendimiento) {
   return Number(rendimiento).toFixed(2);
+}
+
+function formatearPrecio(precio) {
+  if (!precio) return '0';
+  const numeroRedondeado = Math.round(precio);
+  return numeroRedondeado.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 }
 
 function loadImageAsBase64(url) {
