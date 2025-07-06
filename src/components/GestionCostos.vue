@@ -267,6 +267,7 @@ export default {
       const medidasSet = new Set();
       
       this.embarqueData.clientes.forEach(cliente => {
+        // Procesar productos normales
         cliente.productos.forEach(producto => {
           if (producto.medida) {
             let nombreMedida = producto.medida;
@@ -279,6 +280,19 @@ export default {
             medidasSet.add(nombreMedida);
           }
         });
+
+        // Procesar crudos también
+        if (cliente.crudos && Array.isArray(cliente.crudos)) {
+          cliente.crudos.forEach(crudo => {
+            if (crudo && crudo.items && Array.isArray(crudo.items)) {
+              crudo.items.forEach(item => {
+                if (item.talla) {
+                  medidasSet.add(item.talla);
+                }
+              });
+            }
+          });
+        }
       });
       
       this.medidasEmbarque = Array.from(medidasSet);

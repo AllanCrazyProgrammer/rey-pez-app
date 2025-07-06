@@ -167,6 +167,107 @@
       </div>
     </div>
 
+    <!-- Sección de Ganancias de Crudos -->
+    <div v-if="embarqueData && obtenerTallasCrudosUnicas().length > 0" class="crudos-ganancias-section">
+      <h2>💰 Ganancias de Crudos por Talla</h2>
+      
+      <div class="crudos-ganancias-grid">
+        <div v-for="talla in obtenerTallasCrudosUnicas()" :key="'crudo-' + talla" class="crudo-ganancia-card">
+          <div class="crudo-ganancia-header">
+            <h4>{{ talla }}</h4>
+            <div class="crudo-ganancia-controls">
+              <label class="checkbox-container">
+                <input 
+                  type="checkbox" 
+                  v-model="analizarGananciaCrudos[talla]"
+                  @change="guardarEstadoAnalisisCrudos"
+                >
+                <span class="checkmark"></span>
+                Analizar ganancia
+              </label>
+            </div>
+          </div>
+          
+          <!-- Información de ganancia -->
+          <div v-if="gananciasCalculadasCrudos[talla] && analizarGananciaCrudos[talla]" class="crudo-ganancia-info">
+            <div class="crudo-ganancia-detalles">
+              <div class="ganancia-item">
+                <span class="label">Total Kilos:</span>
+                <span class="valor">{{ formatearNumero(gananciasCalculadasCrudos[talla].totalKilos) }} kg</span>
+              </div>
+              <div class="ganancia-item">
+                <span class="label">Precio Promedio:</span>
+                <div class="precio-container">
+                  <span class="valor precio-venta">${{ formatearPrecio(gananciasCalculadasCrudos[talla].precioVenta) }}</span>
+                  <span v-if="gananciasCalculadasCrudos[talla].hayPreciosIndividuales" 
+                        class="precio-individual-badge"
+                        title="Incluye precios individuales">
+                    📝 Individual
+                  </span>
+                  <span v-else class="precio-sistema-badge" title="Precio del sistema">
+                    🌐 Sistema
+                  </span>
+                </div>
+              </div>
+              <div class="ganancia-item">
+                <span class="label">Costo Base:</span>
+                <span class="valor costo-base">${{ formatearPrecio(gananciasCalculadasCrudos[talla].costoBase) }}</span>
+              </div>
+              <div class="ganancia-item">
+                <span class="label">Ganancia/kg:</span>
+                <span class="valor ganancia-unitaria" 
+                      :class="{ 
+                        'ganancia-positiva': gananciasCalculadasCrudos[talla].gananciaUnitaria > 0,
+                        'ganancia-negativa': gananciasCalculadasCrudos[talla].gananciaUnitaria < 0
+                      }">
+                  ${{ formatearPrecio(gananciasCalculadasCrudos[talla].gananciaUnitaria) }}
+                </span>
+              </div>
+              <div class="ganancia-item ganancia-total-item">
+                <span class="label">Ganancia Total:</span>
+                <span class="valor ganancia-total"
+                      :class="{ 
+                        'ganancia-positiva': gananciasCalculadasCrudos[talla].gananciaTotal > 0,
+                        'ganancia-negativa': gananciasCalculadasCrudos[talla].gananciaTotal < 0
+                      }">
+                  ${{ formatearPrecio(gananciasCalculadasCrudos[talla].gananciaTotal) }}
+                </span>
+              </div>
+              
+              <!-- Detalles por cliente -->
+              <div v-if="gananciasCalculadasCrudos[talla].detallesPorCliente.length > 1" class="detalles-clientes">
+                <h5>Detalle por Cliente:</h5>
+                <div v-for="detalle in gananciasCalculadasCrudos[talla].detallesPorCliente" :key="detalle.cliente" class="detalle-cliente">
+                  <span class="cliente-nombre">{{ detalle.cliente }}:</span>
+                  <span class="cliente-kilos">{{ formatearNumero(detalle.kilos) }}kg</span>
+                  <span class="cliente-precio">${{ formatearPrecio(detalle.precioVenta) }}</span>
+                  <span class="cliente-ganancia" :class="{ 
+                    'ganancia-positiva': detalle.gananciaTotal > 0,
+                    'ganancia-negativa': detalle.gananciaTotal < 0
+                  }">
+                    ${{ formatearPrecio(detalle.gananciaTotal) }}
+                  </span>
+                  <span class="fuente-precio" :title="'Fuente del precio: ' + detalle.fuentePrecio">
+                    {{ detalle.fuentePrecio === 'individual' ? '📝' : detalle.fuentePrecio === 'sistema-especifico' ? '📌' : '🌐' }}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Mensaje cuando no hay análisis activado -->
+          <div v-else-if="!analizarGananciaCrudos[talla]" class="sin-analisis-crudo">
+            <p class="aviso-sin-analisis">Activar análisis de ganancia para ver detalles</p>
+          </div>
+          
+          <!-- Mensaje cuando no hay datos -->
+          <div v-else class="sin-datos-crudo">
+            <p class="aviso-sin-datos">⚠️ No se encontraron datos de venta para esta talla</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div v-if="mostrarModal" class="modal-overlay">
       <div class="modal-content">
         <h3>Agregar Nota</h3>
@@ -206,7 +307,9 @@ export default {
       medidaOculta: {},
       preciosVenta: {},
       gananciasCalculadas: {},
+      gananciasCalculadasCrudos: {}, // Nueva propiedad para ganancias de crudos
       analizarGanancia: {},
+      analizarGananciaCrudos: {}, // Nueva propiedad para controlar análisis de crudos
       diasRecientes: 3 // Días para considerar un embarque como "reciente"
     }
   },
@@ -229,11 +332,143 @@ export default {
     });
   },
 
-  methods: {
+      methods: {
     obtenerNombreCliente(clienteId) {
       if (!this.embarqueData || !this.embarqueData.clientes) return '';
       const cliente = this.embarqueData.clientes.find(c => c.id.toString() === clienteId.toString());
       return cliente ? cliente.nombre : '';
+    },
+
+    // Calcular taras de crudo por medida
+    calcularTarasCrudosPorMedida() {
+      if (!this.embarqueData || !this.embarqueData.clientes) return {};
+      
+      const tarasPorMedida = {};
+      
+      this.embarqueData.clientes.forEach(cliente => {
+        if (cliente.crudos && Array.isArray(cliente.crudos)) {
+          cliente.crudos.forEach(crudo => {
+            if (crudo && crudo.items && Array.isArray(crudo.items)) {
+              crudo.items.forEach(item => {
+                if (item.talla) {
+                  const medida = item.talla;
+                  
+                  if (!tarasPorMedida[medida]) {
+                    tarasPorMedida[medida] = {
+                      totalTaras: 0,
+                      totalKilos: 0,
+                      detalles: []
+                    };
+                  }
+                  
+                  let tarasItem = 0;
+                  let kilosItem = 0;
+                  
+                  // Procesar taras principales
+                  if (item.taras) {
+                    const formatoGuion = /^(\d+)-(\d+)$/.exec(item.taras);
+                    if (formatoGuion) {
+                      const cantidad = parseInt(formatoGuion[1]) || 0;
+                      let peso = parseInt(formatoGuion[2]) || 0;
+                      
+                      // Si el peso es 19, sustituirlo por 20
+                      if (peso === 19) {
+                        peso = 20;
+                      }
+                      
+                      tarasItem += cantidad;
+                      kilosItem += cantidad * peso;
+                    } else {
+                      // Formato original si no coincide con el patrón
+                      const [cantidad, peso] = item.taras.split('-').map(Number);
+                      tarasItem += cantidad || 0;
+                      kilosItem += (cantidad || 0) * (peso || 0);
+                    }
+                  }
+                  
+                  // Procesar sobrantes
+                  if (item.sobrante) {
+                    const formatoGuion = /^(\d+)-(\d+)$/.exec(item.sobrante);
+                    if (formatoGuion) {
+                      const cantidadSobrante = parseInt(formatoGuion[1]) || 0;
+                      let pesoSobrante = parseInt(formatoGuion[2]) || 0;
+                      
+                      // Si el peso es 19, sustituirlo por 20
+                      if (pesoSobrante === 19) {
+                        pesoSobrante = 20;
+                      }
+                      
+                      tarasItem += cantidadSobrante;
+                      kilosItem += cantidadSobrante * pesoSobrante;
+                    } else {
+                      // Formato original si no coincide con el patrón
+                      const [cantidadSobrante, pesoSobrante] = item.sobrante.split('-').map(Number);
+                      tarasItem += cantidadSobrante || 0;
+                      kilosItem += (cantidadSobrante || 0) * (pesoSobrante || 0);
+                    }
+                  }
+                  
+                  tarasPorMedida[medida].totalTaras += tarasItem;
+                  tarasPorMedida[medida].totalKilos += kilosItem;
+                  
+                  // Agregar detalles para debugging
+                  if (tarasItem > 0) {
+                    tarasPorMedida[medida].detalles.push({
+                      cliente: cliente.nombre,
+                      taras: item.taras,
+                      sobrante: item.sobrante,
+                      tarasCalculadas: tarasItem,
+                      kilosCalculados: kilosItem
+                    });
+                  }
+                }
+              });
+            }
+          });
+        }
+      });
+      
+      return tarasPorMedida;
+    },
+
+    // Calcular costos para crudos (costo base + 3.5)
+    calcularCostosCrudos(tarasCrudosPorMedida) {
+      if (!tarasCrudosPorMedida || !this.embarqueData) return {};
+      
+      const costosCrudos = {};
+      const costosEmbarque = this.embarqueData.costosPorMedida || {};
+      
+      // Obtener todas las medidas de crudo únicas
+      const medidasCrudo = Object.keys(tarasCrudosPorMedida);
+      
+      console.log('🔍 DEBUG - Calculando costos para crudos:', {
+        medidasCrudo: medidasCrudo,
+        costosDisponibles: Object.keys(costosEmbarque),
+        costosCompleto: costosEmbarque
+      });
+      
+      medidasCrudo.forEach(medida => {
+        // Obtener el costo base para esta medida
+        const costoBase = Number(costosEmbarque[medida]) || 0;
+        
+        // Calcular el costo final para crudos (costo base + 3.5)
+        const costoFinal = costoBase + 3.5;
+        
+        costosCrudos[medida] = {
+          costoBase: costoBase,
+          costoFinal: costoFinal
+        };
+        
+        console.log(`💰 Costo calculado para crudo ${medida}:`, {
+          medidaBuscada: medida,
+          costoEncontrado: costosEmbarque[medida],
+          costoBase: costoBase,
+          costoFinal: costoFinal,
+          existeEnCostos: medida in costosEmbarque
+        });
+      });
+      
+      return costosCrudos;
     },
 
     // Mapear nombres de clientes del embarque con IDs del sistema de precios
@@ -259,6 +494,7 @@ export default {
           this.obtenerMedidasUnicas();
           this.medidaOculta = this.embarqueData.medidaOculta || {};
           this.analizarGanancia = this.embarqueData.analizarGanancia || {};
+          this.analizarGananciaCrudos = this.embarqueData.analizarGananciaCrudos || {}; // Cargar analizarGananciaCrudos
           
           const kilosCrudosGuardados = this.embarqueData.kilosCrudos || {};
           this.kilosCrudos = { ...kilosCrudosGuardados };
@@ -336,10 +572,26 @@ export default {
       // Normalizar el nombre de la medida para buscar en precios
       const medidaNormalizada = medida.toLowerCase().trim().replace(' maquila ozuna', '');
       
-      // Buscar precios para esta medida
-      const preciosProducto = this.preciosVenta[medidaNormalizada];
+      // Buscar precios para esta medida - primero intento directo
+      let preciosProducto = this.preciosVenta[medidaNormalizada];
+      
+      // Si no se encuentra, intenta variaciones (guión vs espacio)
+      if (!preciosProducto || preciosProducto.length === 0) {
+        // Convertir guiones a espacios y viceversa
+        const medidaConEspacio = medidaNormalizada.replace(/-/g, ' ');
+        const medidaConGuion = medidaNormalizada.replace(/ /g, '-');
+        
+        // Buscar en todas las variaciones
+        preciosProducto = this.preciosVenta[medidaConEspacio] || this.preciosVenta[medidaConGuion];
+        
+        if (preciosProducto) {
+          console.log(`[${medida}] Precio encontrado con variación: ${medidaConEspacio !== medidaNormalizada ? medidaConEspacio : medidaConGuion}`);
+        }
+      }
+      
       if (!preciosProducto || preciosProducto.length === 0) {
         console.log(`[${medida}] No se encontraron precios para la medida normalizada: ${medidaNormalizada}`);
+        console.log(`[${medida}] Precios disponibles:`, Object.keys(this.preciosVenta));
         return null;
       }
       
@@ -354,23 +606,10 @@ export default {
       const embarqueEsHoyOFuturo = fechaEmbarqueStr >= fechaHoy;
       const debeUsarPreciosRecientes = embarqueEsReciente || embarqueEsHoyOFuturo;
       
-      console.log(`[${medida}] 🔍 ANÁLISIS DE PRECIOS:`);
-      console.log(`[${medida}] Fecha embarque: ${fechaEmbarqueStr}`);
-      console.log(`[${medida}] Fecha hoy: ${fechaHoy}`);
-      console.log(`[${medida}] Días de diferencia: ${diasDiferencia}`);
-      console.log(`[${medida}] Cliente ID: ${clienteId || 'general'}`);
-      console.log(`[${medida}] Precios disponibles:`, preciosProducto.map(p => ({
-        precio: p.precio,
-        fecha: new Date(p.fecha).toISOString().split('T')[0],
-        clienteId: p.clienteId || 'general',
-        valido: new Date(p.fecha).toISOString().split('T')[0] <= fechaEmbarqueStr
-      })));
-      
-      console.log(`[${medida}] Lógica a aplicar:`, {
-        embarqueEsReciente: embarqueEsReciente,
-        embarqueEsHoyOFuturo: embarqueEsHoyOFuturo,
-        debeUsarPreciosRecientes: debeUsarPreciosRecientes
-      });
+      // Debug simplificado solo para errores
+      if (!preciosProducto || preciosProducto.length === 0) {
+        console.log(`[${medida}] ⚠️ No se encontraron precios disponibles`);
+      }
       
       if (debeUsarPreciosRecientes) {
         let razonPrecioReciente = '';
@@ -380,16 +619,12 @@ export default {
           razonPrecioReciente = `(embarque reciente: hace ${diasDiferencia} día${diasDiferencia !== 1 ? 's' : ''})`;
         }
         
-        console.log(`[${medida}] 🚀 Usando precio más reciente ${razonPrecioReciente}`);
+        // Precio más reciente aplicado
         
         // Para embarques de hoy o futuros, buscar el precio más reciente
         if (clienteId) {
           const precioEspecificoReciente = preciosProducto.find(p => p.clienteId === clienteId);
           if (precioEspecificoReciente) {
-            console.log(`[${medida}] ✅ Precio específico más reciente encontrado para ${clienteId}:`, {
-              precio: precioEspecificoReciente.precio,
-              fecha: new Date(precioEspecificoReciente.fecha).toISOString().split('T')[0]
-            });
             return precioEspecificoReciente;
           }
         }
@@ -397,26 +632,16 @@ export default {
         // Si no hay específico, usar el precio general más reciente
         const precioGeneralReciente = preciosProducto.find(p => !p.clienteId);
         if (precioGeneralReciente) {
-          console.log(`[${medida}] ✅ Precio general más reciente encontrado:`, {
-            precio: precioGeneralReciente.precio,
-            fecha: new Date(precioGeneralReciente.fecha).toISOString().split('T')[0]
-          });
           return precioGeneralReciente;
         }
       } else {
         // LÓGICA ORIGINAL: Para embarques pasados, buscar el precio válido para esa fecha
-        console.log(`[${medida}] 📅 Embarque es del pasado, usando lógica de fecha exacta`);
         
         // Primero buscar precio específico para el cliente si se proporciona
         if (clienteId) {
           for (const precio of preciosProducto) {
             const fechaPrecioStr = new Date(precio.fecha).toISOString().split('T')[0];
             if (fechaPrecioStr <= fechaEmbarqueStr && precio.clienteId === clienteId) {
-              console.log(`[${medida}] ✅ Precio específico histórico encontrado para ${clienteId}:`, {
-                precio: precio.precio,
-                fecha: fechaPrecioStr,
-                fechaComparacion: `${fechaPrecioStr} <= ${fechaEmbarqueStr}`
-              });
               return precio;
             }
           }
@@ -426,11 +651,6 @@ export default {
         for (const precio of preciosProducto) {
           const fechaPrecioStr = new Date(precio.fecha).toISOString().split('T')[0];
           if (fechaPrecioStr <= fechaEmbarqueStr && !precio.clienteId) {
-            console.log(`[${medida}] ✅ Precio general histórico encontrado:`, {
-              precio: precio.precio,
-              fecha: fechaPrecioStr,
-              fechaComparacion: `${fechaPrecioStr} <= ${fechaEmbarqueStr}`
-            });
             return precio;
           }
         }
@@ -439,20 +659,10 @@ export default {
       // FALLBACK: Si no se encuentra nada, usar el más antiguo disponible
       const preciosGenerales = preciosProducto.filter(p => !p.clienteId);
       if (preciosGenerales.length > 0) {
-        const precioFallback = preciosGenerales[preciosGenerales.length - 1];
-        console.log(`[${medida}] ⚠️ FALLBACK: Usando precio general más antiguo:`, {
-          precio: precioFallback.precio,
-          fecha: new Date(precioFallback.fecha).toISOString().split('T')[0]
-        });
-        return precioFallback;
+        return preciosGenerales[preciosGenerales.length - 1];
       }
       
-      const precioFallback = preciosProducto[preciosProducto.length - 1];
-      console.log(`[${medida}] ⚠️ FALLBACK FINAL: Usando último precio disponible:`, {
-        precio: precioFallback.precio,
-        fecha: new Date(precioFallback.fecha).toISOString().split('T')[0]
-      });
-      return precioFallback;
+      return preciosProducto[preciosProducto.length - 1];
     },
 
     calcularCostoFinal(medida) {
@@ -501,6 +711,9 @@ export default {
       });
       
       this.gananciasCalculadas = ganancias;
+      
+      // Calcular también las ganancias de crudos
+      this.calcularGananciasCrudos();
     },
 
     // Nuevo método que calcula precio promedio ponderado y ganancias
@@ -624,7 +837,262 @@ export default {
       };
     },
 
+    // ============ MÉTODOS PARA CÁLCULO DE GANANCIAS DE CRUDOS ============
 
+    // Obtener todas las tallas de crudos únicas
+    obtenerTallasCrudosUnicas() {
+      if (!this.embarqueData || !this.embarqueData.clientes) return [];
+      
+      const tallasSet = new Set();
+      let totalItems = 0;
+      let itemsDeVenta = 0;
+      
+      this.embarqueData.clientes.forEach(cliente => {
+        if (cliente.crudos && Array.isArray(cliente.crudos)) {
+          cliente.crudos.forEach(crudo => {
+            if (crudo && crudo.items && Array.isArray(crudo.items)) {
+              crudo.items.forEach(item => {
+                totalItems++;
+                if (item.talla && item.esVenta) { // Solo considerar ventas
+                  tallasSet.add(item.talla);
+                  itemsDeVenta++;
+                }
+              });
+            }
+          });
+        }
+      });
+      
+      return Array.from(tallasSet).sort();
+    },
+
+    // Calcular ganancias de crudos por talla
+    calcularGananciasCrudos() {
+      if (!this.embarqueData) return;
+      
+      const fechaEmbarque = this.embarqueData.fecha || new Date().toISOString().split('T')[0];
+      const ganancias = {};
+      const tallasCrudos = this.obtenerTallasCrudosUnicas();
+      
+              tallasCrudos.forEach(talla => {
+        // Solo calcular ganancias si el análisis está activado para esta talla
+        if (!this.analizarGananciaCrudos[talla]) {
+          return;
+        }
+        const resultadoCalculo = this.calcularGananciasPorTallaCrudo(talla, fechaEmbarque);
+        
+        if (resultadoCalculo) {
+          ganancias[talla] = resultadoCalculo;
+        }
+      });
+      
+      this.gananciasCalculadasCrudos = ganancias;
+    },
+
+    // Calcular ganancias para una talla específica de crudo
+    calcularGananciasPorTallaCrudo(talla, fechaEmbarque) {
+      if (!this.embarqueData || !this.embarqueData.clientes) return null;
+      
+      let totalKilos = 0;
+      let totalGanancias = 0;
+      let totalVentas = 0;
+      let detallesPorCliente = [];
+      let hayPreciosIndividuales = false;
+      
+      // Calcular el costo base para esta talla usando el sistema existente
+      const costoBase = this.calcularCostoCrudoPorTalla(talla);
+      
+      // Iterar por todos los clientes y sus crudos
+      this.embarqueData.clientes.forEach(cliente => {
+        if (cliente.crudos && Array.isArray(cliente.crudos)) {
+          cliente.crudos.forEach(crudo => {
+            if (crudo && crudo.items && Array.isArray(crudo.items)) {
+              crudo.items.forEach(item => {
+                if (item.talla === talla && item.esVenta) {
+                  // Calcular kilos del item
+                  const kilosItem = this.calcularKilosCrudosItem(item);
+                  totalKilos += kilosItem;
+                  
+                  // Determinar precio a usar
+                  let precioAUsar = null;
+                  let fuentePrecio = '';
+                  
+                  if (item.precio && item.precio > 0) {
+                    // Usar precio individual del item
+                    precioAUsar = item.precio;
+                    fuentePrecio = 'individual';
+                    hayPreciosIndividuales = true;
+                  } else {
+                    // Usar precio del sistema general
+                    const clienteIdParaPrecios = this.obtenerClienteIdParaPrecios(cliente.nombre);
+                    const precioSistema = this.obtenerPrecioVentaParaFecha(talla, fechaEmbarque, clienteIdParaPrecios);
+                    if (precioSistema) {
+                      precioAUsar = precioSistema.precio;
+                      fuentePrecio = precioSistema.clienteId ? 'sistema-especifico' : 'sistema-general';
+                    }
+                  }
+                  
+                  if (precioAUsar && kilosItem > 0) {
+                    const gananciaUnitaria = precioAUsar - costoBase;
+                    const gananciaTotal = gananciaUnitaria * kilosItem;
+                    
+                    totalGanancias += gananciaTotal;
+                    totalVentas += precioAUsar * kilosItem;
+                    
+                    detallesPorCliente.push({
+                      cliente: cliente.nombre,
+                      kilos: kilosItem,
+                      precioVenta: precioAUsar,
+                      gananciaUnitaria: gananciaUnitaria,
+                      gananciaTotal: gananciaTotal,
+                      fuentePrecio: fuentePrecio,
+                      taras: item.taras,
+                      sobrante: item.sobrante
+                    });
+                                      }
+                }
+              });
+            }
+          });
+        }
+      });
+      
+      if (totalKilos === 0 || detallesPorCliente.length === 0) {
+        return null;
+      }
+      
+      // Calcular precio promedio ponderado
+      const precioPromedioPonderado = totalVentas / totalKilos;
+      const gananciaUnitariaPromedio = totalGanancias / totalKilos;
+      
+      const resultado = {
+        talla: talla,
+        totalKilos: Math.round(totalKilos),
+        precioVenta: Math.round(precioPromedioPonderado),
+        costoBase: Math.round(costoBase),
+        gananciaUnitaria: Math.round(gananciaUnitariaPromedio),
+        gananciaTotal: Math.round(totalGanancias),
+        hayPreciosIndividuales: hayPreciosIndividuales,
+        detallesPorCliente: detallesPorCliente,
+        fechaCalculo: new Date().toISOString().split('T')[0]
+      };
+      
+      // Ganancia calculada exitosamente
+      
+      return resultado;
+    },
+
+    // Calcular costo para una talla de crudo
+    calcularCostoCrudoPorTalla(talla) {
+      // Usar el sistema de costos existente
+      const costosEmbarque = this.embarqueData?.costosPorMedida || {};
+      
+      // Buscar primero con nombre exacto
+      let costo = Number(costosEmbarque[talla]) || 0;
+      let medidaEncontrada = talla;
+      
+      // Si no se encuentra, buscar insensible a mayúsculas/minúsculas
+      if (costo === 0) {
+        const tallaLower = talla.toLowerCase();
+        for (const [medida, costoValue] of Object.entries(costosEmbarque)) {
+          if (medida.toLowerCase() === tallaLower) {
+            costo = Number(costoValue) || 0;
+            medidaEncontrada = medida;
+            break;
+          }
+        }
+      }
+      
+      console.log(`🔍 DEBUG - Calculando costo para talla ${talla}:`, {
+        tallaBuscada: talla,
+        medidaEncontrada: medidaEncontrada,
+        costosDisponibles: Object.keys(costosEmbarque),
+        costoEncontrado: costosEmbarque[medidaEncontrada],
+        costoCalculado: costo,
+        esCrudo: talla.includes('c/c'),
+        busquedaCaseInsensitive: talla !== medidaEncontrada
+      });
+      
+      // Para crudos, no aplicar costo extra ya que son materias primas
+      return costo;
+    },
+
+    // Calcular kilos de un item de crudo
+    calcularKilosCrudosItem(item) {
+      let kilosTotales = 0;
+      let detalleCalculo = {
+        talla: item.talla,
+        taras: item.taras,
+        sobrante: item.sobrante,
+        kilosDeTaras: 0,
+        kilosDeSobrante: 0
+      };
+      
+      // Procesar taras principales
+      if (item.taras) {
+        const formatoGuion = /^(\d+)-(\d+)$/.exec(item.taras);
+        if (formatoGuion) {
+          const cantidad = parseInt(formatoGuion[1]) || 0;
+          let peso = parseInt(formatoGuion[2]) || 0;
+          
+          // Si el peso es 19, sustituirlo por 20
+          if (peso === 19) {
+            peso = 20;
+          }
+          
+          detalleCalculo.kilosDeTaras = cantidad * peso;
+          kilosTotales += detalleCalculo.kilosDeTaras;
+        } else {
+          // Formato original si no coincide con el patrón
+          const [cantidad, peso] = item.taras.split('-').map(Number);
+          detalleCalculo.kilosDeTaras = (cantidad || 0) * (peso || 0);
+          kilosTotales += detalleCalculo.kilosDeTaras;
+        }
+      }
+      
+      // Procesar sobrantes
+      if (item.sobrante) {
+        const formatoGuion = /^(\d+)-(\d+)$/.exec(item.sobrante);
+        if (formatoGuion) {
+          const cantidadSobrante = parseInt(formatoGuion[1]) || 0;
+          let pesoSobrante = parseInt(formatoGuion[2]) || 0;
+          
+          // Si el peso es 19, sustituirlo por 20
+          if (pesoSobrante === 19) {
+            pesoSobrante = 20;
+          }
+          
+          detalleCalculo.kilosDeSobrante = cantidadSobrante * pesoSobrante;
+          kilosTotales += detalleCalculo.kilosDeSobrante;
+        } else {
+          // Formato original si no coincide con el patrón
+          const [cantidadSobrante, pesoSobrante] = item.sobrante.split('-').map(Number);
+          detalleCalculo.kilosDeSobrante = (cantidadSobrante || 0) * (pesoSobrante || 0);
+          kilosTotales += detalleCalculo.kilosDeSobrante;
+        }
+      }
+      
+      detalleCalculo.kilosTotales = kilosTotales;
+      
+      return kilosTotales;
+    },
+
+    // Método auxiliar para guardar estado de análisis de crudos
+    async guardarEstadoAnalisisCrudos() {
+      try {
+        const db = getFirestore();
+        const embarqueId = this.$route.params.id;
+        const embarqueRef = doc(db, 'embarques', embarqueId);
+        
+        await updateDoc(embarqueRef, {
+          analizarGananciaCrudos: this.analizarGananciaCrudos
+        });
+        
+        console.log('Estado de análisis de ganancia de crudos guardado correctamente');
+      } catch (error) {
+        console.error('Error al guardar estado de análisis de crudos:', error);
+      }
+    },
 
     // Método auxiliar para obtener nombre de cliente desde ID
     obtenerNombreClienteDeId(clienteId) {
@@ -701,7 +1169,8 @@ export default {
         await updateDoc(embarqueRef, {
           kilosCrudos: this.kilosCrudos,
           medidaOculta: this.medidaOculta,
-          analizarGanancia: this.analizarGanancia
+          analizarGanancia: this.analizarGanancia,
+          analizarGananciaCrudos: this.analizarGananciaCrudos // Guardar analizarGananciaCrudos
         });
         
         console.log('Rendimientos guardados:', this.kilosCrudos);
@@ -996,7 +1465,21 @@ export default {
           return acc;
         }, {});
 
-      generarPDFRendimientos(datosRendimientos, embarqueDataConNota, gananciasVisibles);
+      // Calcular taras de crudo por medida
+      const tarasCrudosPorMedida = this.calcularTarasCrudosPorMedida();
+
+      // Filtrar ganancias de crudos solo para tallas que tengan análisis activado
+      const gananciasVisiblesCrudos = Object.entries(this.gananciasCalculadasCrudos)
+        .filter(([talla]) => this.analizarGananciaCrudos[talla])
+        .reduce((acc, [talla, ganancia]) => {
+          acc[talla] = ganancia;
+          return acc;
+        }, {});
+
+      // Calcular costos para crudos (costo base + 3.5)
+      const costosCrudos = this.calcularCostosCrudos(tarasCrudosPorMedida);
+
+      generarPDFRendimientos(datosRendimientos, embarqueDataConNota, gananciasVisibles, tarasCrudosPorMedida, gananciasVisiblesCrudos, costosCrudos);
     },
 
     obtenerNombreMedidaPersonalizado(medida) {
@@ -1078,7 +1561,8 @@ export default {
         const embarqueRef = doc(db, 'embarques', embarqueId);
         
         await updateDoc(embarqueRef, {
-          analizarGanancia: this.analizarGanancia
+          analizarGanancia: this.analizarGanancia,
+          analizarGananciaCrudos: this.analizarGananciaCrudos // Guardar analizarGananciaCrudos
         });
         
         console.log('Estado de análisis de ganancia guardado correctamente');
@@ -1152,6 +1636,15 @@ export default {
         // Recalcular ganancias cuando se active/desactive el análisis
         this.$nextTick(() => {
           this.calcularGanancias();
+        });
+      },
+      deep: true
+    },
+    analizarGananciaCrudos: {
+      handler() {
+        // Recalcular ganancias de crudos cuando se active/desactive el análisis
+        this.$nextTick(() => {
+          this.calcularGananciasCrudos();
         });
       },
       deep: true
@@ -1605,6 +2098,196 @@ input {
   border: 1px solid #ffcc80;
 }
 
+/* Estilos para la sección de ganancias de crudos */
+.crudos-ganancias-section {
+  margin-top: 40px;
+  padding: 20px;
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  border: 1px solid #e9ecef;
+}
+
+.crudos-ganancias-section h2 {
+  color: #2c3e50;
+  margin-bottom: 20px;
+  text-align: center;
+  font-size: 1.6em;
+}
+
+.crudos-ganancias-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+  gap: 20px;
+}
+
+.crudo-ganancia-card {
+  background-color: #ffffff;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  transition: box-shadow 0.3s ease;
+}
+
+.crudo-ganancia-card:hover {
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.crudo-ganancia-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.crudo-ganancia-header h4 {
+  margin: 0;
+  color: #2c3e50;
+  font-size: 1.2em;
+  font-weight: bold;
+}
+
+.crudo-ganancia-controls {
+  display: flex;
+  align-items: center;
+}
+
+.checkbox-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+  font-size: 0.9em;
+  color: #27ae60;
+  font-weight: bold;
+}
+
+.checkbox-container input[type="checkbox"] {
+  width: auto;
+  margin: 0;
+  cursor: pointer;
+}
+
+.checkmark {
+  cursor: pointer;
+}
+
+.crudo-ganancia-info {
+  margin-top: 15px;
+}
+
+.crudo-ganancia-detalles {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 15px;
+}
+
+.detalles-clientes {
+  margin-top: 15px;
+  padding: 15px;
+  background-color: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 5px;
+}
+
+.detalles-clientes h5 {
+  margin-top: 0;
+  margin-bottom: 10px;
+  color: #495057;
+  font-size: 1em;
+}
+
+.detalle-cliente {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto auto;
+  gap: 10px;
+  align-items: center;
+  padding: 8px;
+  background-color: #ffffff;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  margin-bottom: 8px;
+}
+
+.cliente-nombre {
+  font-weight: bold;
+  color: #2c3e50;
+}
+
+.cliente-kilos {
+  font-size: 0.9em;
+  color: #6c757d;
+}
+
+.cliente-precio {
+  font-weight: bold;
+  color: #007bff;
+}
+
+.cliente-ganancia {
+  font-weight: bold;
+  font-size: 1.1em;
+}
+
+.fuente-precio {
+  font-size: 1.2em;
+  cursor: help;
+}
+
+.precio-individual-badge, .precio-sistema-badge {
+  font-size: 0.75em;
+  padding: 2px 6px;
+  border-radius: 8px;
+  font-weight: bold;
+  white-space: nowrap;
+}
+
+.precio-individual-badge {
+  background-color: #e8f5e8;
+  color: #2d5a2d;
+  border: 1px solid #a5d6a7;
+}
+
+.precio-sistema-badge {
+  background-color: #e3f2fd;
+  color: #1565c0;
+  border: 1px solid #90caf9;
+}
+
+.sin-analisis-crudo {
+  margin-top: 15px;
+  padding: 20px;
+  background-color: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 5px;
+  text-align: center;
+}
+
+.aviso-sin-analisis {
+  margin: 0;
+  color: #6c757d;
+  font-style: italic;
+}
+
+.sin-datos-crudo {
+  margin-top: 15px;
+  padding: 20px;
+  background-color: #fff3cd;
+  border: 1px solid #ffeeba;
+  border-radius: 5px;
+  text-align: center;
+}
+
+.aviso-sin-datos {
+  margin: 0;
+  color: #856404;
+  font-weight: bold;
+}
+
 @media (max-width: 768px) {
   .controles-medida {
     flex-direction: column;
@@ -1629,6 +2312,30 @@ input {
   
   .precio-venta-container {
     align-items: flex-start;
+  }
+  
+  .crudos-ganancias-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .crudo-ganancia-detalles {
+    grid-template-columns: 1fr;
+  }
+  
+  .crudo-ganancia-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  
+  .detalle-cliente {
+    grid-template-columns: 1fr;
+    gap: 5px;
+    text-align: left;
+  }
+  
+  .cliente-nombre {
+    font-size: 1.1em;
   }
 }
 </style>

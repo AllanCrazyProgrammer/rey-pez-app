@@ -17,7 +17,7 @@ if (typeof window !== 'undefined' && !window.pdfMake) {
     window.pdfMake = pdfMake;
 }
 
-export const generarPDFRendimientos = async (datosRendimientos, embarqueData, gananciasCalculadas) => {
+export const generarPDFRendimientos = async (datosRendimientos, embarqueData, gananciasCalculadas, tarasCrudosPorMedida = {}, gananciasVisiblesCrudos = {}, costosCrudos = {}) => {
   try {
     const logoBase64 = await loadImageAsBase64('https://res.cloudinary.com/hwkcovsmr/image/upload/v1620946647/samples/REY_PEZ_LOGO_nsotww.png');
     
@@ -88,7 +88,9 @@ export const generarPDFRendimientos = async (datosRendimientos, embarqueData, ga
         { text: '\n', height: 5 },
         generarTablaRendimientos(datosRendimientos, nombresMedidasPersonalizados, embarqueData),
         { text: '\n', height: 10 },
-        generarTablaGanancias(gananciasCalculadas, nombresMedidasPersonalizados, embarqueData)
+        generarTablaGanancias(gananciasCalculadas, nombresMedidasPersonalizados, embarqueData),
+        { text: '\n', height: 10 },
+        generarTablaTarasCrudo(tarasCrudosPorMedida, gananciasVisiblesCrudos, costosCrudos)
       ],
       styles: {
         header: {
@@ -365,6 +367,138 @@ function generarTablaGanancias(gananciasCalculadas, nombresMedidasPersonalizados
         table: {
           headerRows: 1,
           widths: ['*', '*', '*'],
+          body: body
+        },
+        layout: {
+          hLineWidth: function(i, node) { 
+            return (i === 0 || i === node.table.body.length || i === node.table.body.length - 1) ? 1.5 : 0.5;
+          },
+          vLineWidth: function(i, node) { 
+            return (i === 0 || i === node.table.widths.length) ? 1.5 : 0.5;
+          },
+          hLineColor: function(i, node) { 
+            return (i === 0 || i === node.table.body.length || i === node.table.body.length - 1) ? '#3760b0' : '#cccccc';
+          },
+          vLineColor: function(i, node) { 
+            return (i === 0 || i === node.table.widths.length) ? '#3760b0' : '#cccccc';
+          },
+          fillColor: function(rowIndex, node, columnIndex) {
+            if (rowIndex === node.table.body.length - 1) {
+              return '#e8f4f8'; // Color de fondo para la fila del total
+            }
+            return (rowIndex % 2 === 0) ? '#f8f9fa' : null;
+          },
+          paddingLeft: function(i) { return 4; },
+          paddingRight: function(i) { return 4; },
+          paddingTop: function(i) { return 2; },
+          paddingBottom: function(i) { return 2; }
+        }
+      }
+    ]
+  };
+}
+
+function generarTablaTarasCrudo(tarasCrudosPorMedida, gananciasVisiblesCrudos = {}, costosCrudos = {}) {
+  if (!tarasCrudosPorMedida || Object.keys(tarasCrudosPorMedida).length === 0) {
+    return {
+      text: 'No hay datos de taras de crudo disponibles',
+      style: 'header',
+      alignment: 'center',
+      margin: [0, 10, 0, 10]
+    };
+  }
+
+  // Calcular totales
+  const totalKilos = Object.values(tarasCrudosPorMedida).reduce((total, data) => {
+    return total + (data.totalKilos || 0);
+  }, 0);
+
+  // Calcular total de ganancias
+  const totalGanancias = Object.entries(tarasCrudosPorMedida).reduce((total, [medida, data]) => {
+    const gananciaCrudo = gananciasVisiblesCrudos[medida];
+    const costoCrudo = costosCrudos[medida];
+    
+    if (gananciaCrudo && costoCrudo && data.totalKilos > 0) {
+      const gananciaUnitaria = gananciaCrudo.precioVenta - costoCrudo.costoFinal;
+      const gananciaTotal = gananciaUnitaria * data.totalKilos;
+      return total + gananciaTotal;
+    }
+    return total;
+  }, 0);
+
+  const body = [
+    [
+      { text: 'Medida', style: 'tableHeader' },
+      { text: 'Kilos', style: 'tableHeader' },
+      { text: 'Precio', style: 'tableHeader' },
+      { text: 'Costo', style: 'tableHeader' },
+      { text: 'Ganancia', style: 'tableHeader' }
+    ],
+    ...Object.entries(tarasCrudosPorMedida).map(([medida, data]) => {
+      // Obtener el precio desde las ganancias de crudos
+      const gananciaCrudo = gananciasVisiblesCrudos[medida];
+      const precio = gananciaCrudo ? gananciaCrudo.precioVenta : null;
+      
+      // Obtener el costo desde los costos de crudos
+      const costoCrudo = costosCrudos[medida];
+      const costo = costoCrudo ? costoCrudo.costoFinal : null;
+      
+      // Calcular ganancia total para esta medida
+      let gananciaTotal = null;
+      if (precio && costo && data.totalKilos > 0) {
+        const gananciaUnitaria = precio - costo;
+        gananciaTotal = gananciaUnitaria * data.totalKilos;
+      }
+      
+      return [
+        medida,
+        {
+          text: `${(data.totalKilos || 0).toFixed(1)} kg`,
+          alignment: 'center'
+        },
+        {
+          text: precio ? `$${formatearPrecio(precio)}` : 'N/A',
+          alignment: 'center',
+          style: precio ? 'gananciaPositiva' : 'rendimientoBajo'
+        },
+        {
+          text: costo ? `$${costo.toFixed(2)}` : 'N/A',
+          alignment: 'center',
+          style: costo ? 'costoStyle' : 'rendimientoBajo'
+        },
+        {
+          text: gananciaTotal !== null ? `$${formatearPrecio(gananciaTotal)}` : 'N/A',
+          alignment: 'center',
+          style: gananciaTotal !== null ? (gananciaTotal >= 0 ? 'gananciaPositiva' : 'gananciaNegativa') : 'rendimientoBajo'
+        }
+      ];
+    }),
+    // Fila del total
+    [
+      { text: 'TOTAL', style: 'tableTotal' },
+      { text: `${totalKilos.toFixed(1)} kg`, style: 'tableTotal', alignment: 'center' },
+      { text: '', style: 'tableTotal', alignment: 'center' },
+      { text: '', style: 'tableTotal', alignment: 'center' },
+      { 
+        text: `$${formatearPrecio(totalGanancias)}`, 
+        style: totalGanancias >= 0 ? 'tableTotal' : 'tableTotalNegativo', 
+        alignment: 'center' 
+      }
+    ]
+  ];
+
+  return {
+    stack: [
+      {
+        text: 'Resumen de Taras de Crudo',
+        style: 'header',
+        alignment: 'center',
+        margin: [0, 0, 0, 10]
+      },
+      {
+        table: {
+          headerRows: 1,
+          widths: ['*', '*', '*', '*', '*'],
           body: body
         },
         layout: {
