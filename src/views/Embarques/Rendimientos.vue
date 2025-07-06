@@ -11,6 +11,9 @@
       <button @click="irAGestionCostos" class="btn-costos">
         <i class="fas fa-dollar-sign"></i> Gestión de Costos
       </button>
+      <button @click="abrirModalConfiguracion" class="btn-configuracion">
+        <i class="fas fa-cog"></i> Configurar Pesos
+      </button>
       <button @click="generarPDF" class="btn-pdf">
         <i class="fas fa-file-pdf"></i> Generar PDF
       </button>
@@ -234,8 +237,8 @@
                 </span>
               </div>
               
-              <!-- Detalles por cliente -->
-              <div v-if="gananciasCalculadasCrudos[talla].detallesPorCliente.length > 1" class="detalles-clientes">
+              <!-- Detalles por cliente (solo si hay precios diferentes) -->
+              <div v-if="deberMostrarDetallePorCliente(talla)" class="detalles-clientes">
                 <h5>Detalle por Cliente:</h5>
                 <div v-for="detalle in gananciasCalculadasCrudos[talla].detallesPorCliente" :key="detalle.cliente" class="detalle-cliente">
                   <span class="cliente-nombre">{{ detalle.cliente }}:</span>
@@ -283,6 +286,41 @@
       </div>
     </div>
 
+    <!-- Modal de Configuración de Pesos -->
+    <div v-if="mostrarModalConfiguracion" class="modal-overlay">
+      <div class="modal-content">
+        <h3>Configurar Pesos de Taras</h3>
+        <div class="configuracion-grid">
+          <div class="config-item">
+            <label>Peso para cálculo de costos:</label>
+            <input 
+              type="number" 
+              v-model="pesoTaraCosto" 
+              min="1" 
+              max="50"
+              placeholder="Peso en kg"
+            >
+            <small class="config-help">Peso por defecto usado para calcular costos de crudos</small>
+          </div>
+          <div class="config-item">
+            <label>Peso para cálculo de ventas:</label>
+            <input 
+              type="number" 
+              v-model="pesoTaraVenta" 
+              min="1" 
+              max="50"
+              placeholder="Peso en kg"
+            >
+            <small class="config-help">Peso por defecto usado para calcular ventas de crudos</small>
+          </div>
+        </div>
+        <div class="modal-buttons">
+          <button @click="guardarConfiguracion" class="btn-guardar">Guardar</button>
+          <button @click="cerrarModalConfiguracion" class="btn-cancelar">Cancelar</button>
+        </div>
+      </div>
+    </div>
+
 
   </div>
 </template>
@@ -310,7 +348,11 @@ export default {
       gananciasCalculadasCrudos: {}, // Nueva propiedad para ganancias de crudos
       analizarGanancia: {},
       analizarGananciaCrudos: {}, // Nueva propiedad para controlar análisis de crudos
-      diasRecientes: 3 // Días para considerar un embarque como "reciente"
+      diasRecientes: 3, // Días para considerar un embarque como "reciente"
+      // Configuración de pesos por defecto
+      pesoTaraCosto: 19, // Peso por defecto para cálculo de costos
+      pesoTaraVenta: 20, // Peso por defecto para cálculo de ventas
+      mostrarModalConfiguracion: false
     }
   },
 
@@ -351,15 +393,20 @@ export default {
             if (crudo && crudo.items && Array.isArray(crudo.items)) {
               crudo.items.forEach(item => {
                 if (item.talla) {
-                  const medida = item.talla;
+                  // Para Ozuna: solo considerar si es venta
+                  // Para otros clientes: todos los crudos son venta
+                  const esVenta = cliente.nombre === 'Ozuna' ? item.esVenta : true;
                   
-                  if (!tarasPorMedida[medida]) {
-                    tarasPorMedida[medida] = {
-                      totalTaras: 0,
-                      totalKilos: 0,
-                      detalles: []
-                    };
-                  }
+                  if (esVenta) {
+                    const medida = item.talla;
+                    
+                    if (!tarasPorMedida[medida]) {
+                      tarasPorMedida[medida] = {
+                        totalTaras: 0,
+                        totalKilos: 0,
+                        detalles: []
+                      };
+                    }
                   
                   let tarasItem = 0;
                   let kilosItem = 0;
@@ -371,9 +418,9 @@ export default {
                       const cantidad = parseInt(formatoGuion[1]) || 0;
                       let peso = parseInt(formatoGuion[2]) || 0;
                       
-                      // Si el peso es 19, sustituirlo por 20
+                      // Si el peso es 19, usar el peso configurado para costos
                       if (peso === 19) {
-                        peso = 20;
+                        peso = this.pesoTaraCosto;
                       }
                       
                       tarasItem += cantidad;
@@ -393,9 +440,9 @@ export default {
                       const cantidadSobrante = parseInt(formatoGuion[1]) || 0;
                       let pesoSobrante = parseInt(formatoGuion[2]) || 0;
                       
-                      // Si el peso es 19, sustituirlo por 20
+                      // Si el peso es 19, usar el peso configurado para costos
                       if (pesoSobrante === 19) {
-                        pesoSobrante = 20;
+                        pesoSobrante = this.pesoTaraCosto;
                       }
                       
                       tarasItem += cantidadSobrante;
@@ -411,15 +458,16 @@ export default {
                   tarasPorMedida[medida].totalTaras += tarasItem;
                   tarasPorMedida[medida].totalKilos += kilosItem;
                   
-                  // Agregar detalles para debugging
-                  if (tarasItem > 0) {
-                    tarasPorMedida[medida].detalles.push({
-                      cliente: cliente.nombre,
-                      taras: item.taras,
-                      sobrante: item.sobrante,
-                      tarasCalculadas: tarasItem,
-                      kilosCalculados: kilosItem
-                    });
+                    // Agregar detalles para debugging
+                    if (tarasItem > 0) {
+                      tarasPorMedida[medida].detalles.push({
+                        cliente: cliente.nombre,
+                        taras: item.taras,
+                        sobrante: item.sobrante,
+                        tarasCalculadas: tarasItem,
+                        kilosCalculados: kilosItem
+                      });
+                    }
                   }
                 }
               });
@@ -441,12 +489,6 @@ export default {
       // Obtener todas las medidas de crudo únicas
       const medidasCrudo = Object.keys(tarasCrudosPorMedida);
       
-      console.log('🔍 DEBUG - Calculando costos para crudos:', {
-        medidasCrudo: medidasCrudo,
-        costosDisponibles: Object.keys(costosEmbarque),
-        costosCompleto: costosEmbarque
-      });
-      
       medidasCrudo.forEach(medida => {
         // Obtener el costo base para esta medida
         const costoBase = Number(costosEmbarque[medida]) || 0;
@@ -458,14 +500,6 @@ export default {
           costoBase: costoBase,
           costoFinal: costoFinal
         };
-        
-        console.log(`💰 Costo calculado para crudo ${medida}:`, {
-          medidaBuscada: medida,
-          costoEncontrado: costosEmbarque[medida],
-          costoBase: costoBase,
-          costoFinal: costoFinal,
-          existeEnCostos: medida in costosEmbarque
-        });
       });
       
       return costosCrudos;
@@ -495,6 +529,10 @@ export default {
           this.medidaOculta = this.embarqueData.medidaOculta || {};
           this.analizarGanancia = this.embarqueData.analizarGanancia || {};
           this.analizarGananciaCrudos = this.embarqueData.analizarGananciaCrudos || {}; // Cargar analizarGananciaCrudos
+          
+          // Cargar configuración de pesos
+          this.pesoTaraCosto = this.embarqueData.pesoTaraCosto || 19;
+          this.pesoTaraVenta = this.embarqueData.pesoTaraVenta || 20;
           
           const kilosCrudosGuardados = this.embarqueData.kilosCrudos || {};
           this.kilosCrudos = { ...kilosCrudosGuardados };
@@ -846,16 +884,26 @@ export default {
       const tallasSet = new Set();
       let totalItems = 0;
       let itemsDeVenta = 0;
+      let itemsSinVenta = 0;
       
-      this.embarqueData.clientes.forEach(cliente => {
+            this.embarqueData.clientes.forEach(cliente => {
         if (cliente.crudos && Array.isArray(cliente.crudos)) {
-          cliente.crudos.forEach(crudo => {
+          cliente.crudos.forEach((crudo, crudoIndex) => {
             if (crudo && crudo.items && Array.isArray(crudo.items)) {
-              crudo.items.forEach(item => {
+              crudo.items.forEach((item, itemIndex) => {
                 totalItems++;
-                if (item.talla && item.esVenta) { // Solo considerar ventas
-                  tallasSet.add(item.talla);
-                  itemsDeVenta++;
+                
+                if (item.talla) {
+                  // Para Ozuna: solo mostrar si es venta
+                  // Para otros clientes: todos los crudos son venta
+                  const esVenta = cliente.nombre === 'Ozuna' ? item.esVenta : true;
+                  
+                  if (esVenta) {
+                    tallasSet.add(item.talla);
+                    itemsDeVenta++;
+                  } else {
+                    itemsSinVenta++;
+                  }
                 }
               });
             }
@@ -908,48 +956,54 @@ export default {
           cliente.crudos.forEach(crudo => {
             if (crudo && crudo.items && Array.isArray(crudo.items)) {
               crudo.items.forEach(item => {
-                if (item.talla === talla && item.esVenta) {
-                  // Calcular kilos del item
-                  const kilosItem = this.calcularKilosCrudosItem(item);
-                  totalKilos += kilosItem;
+                if (item.talla === talla) {
+                  // Para Ozuna: solo considerar si es venta
+                  // Para otros clientes: todos los crudos son venta
+                  const esVenta = cliente.nombre === 'Ozuna' ? item.esVenta : true;
                   
-                  // Determinar precio a usar
-                  let precioAUsar = null;
-                  let fuentePrecio = '';
-                  
-                  if (item.precio && item.precio > 0) {
-                    // Usar precio individual del item
-                    precioAUsar = item.precio;
-                    fuentePrecio = 'individual';
-                    hayPreciosIndividuales = true;
-                  } else {
-                    // Usar precio del sistema general
-                    const clienteIdParaPrecios = this.obtenerClienteIdParaPrecios(cliente.nombre);
-                    const precioSistema = this.obtenerPrecioVentaParaFecha(talla, fechaEmbarque, clienteIdParaPrecios);
-                    if (precioSistema) {
-                      precioAUsar = precioSistema.precio;
-                      fuentePrecio = precioSistema.clienteId ? 'sistema-especifico' : 'sistema-general';
+                  if (esVenta) {
+                    // Calcular kilos del item
+                    const kilosItem = this.calcularKilosCrudosItem(item);
+                    totalKilos += kilosItem;
+                    
+                    // Determinar precio a usar
+                    let precioAUsar = null;
+                    let fuentePrecio = '';
+                    
+                    if (item.precio && item.precio > 0) {
+                      // Usar precio individual del item
+                      precioAUsar = item.precio;
+                      fuentePrecio = 'individual';
+                      hayPreciosIndividuales = true;
+                    } else {
+                      // Usar precio del sistema general
+                      const clienteIdParaPrecios = this.obtenerClienteIdParaPrecios(cliente.nombre);
+                      const precioSistema = this.obtenerPrecioVentaParaFecha(talla, fechaEmbarque, clienteIdParaPrecios);
+                      if (precioSistema) {
+                        precioAUsar = precioSistema.precio;
+                        fuentePrecio = precioSistema.clienteId ? 'sistema-especifico' : 'sistema-general';
+                      }
+                    }
+                    
+                    if (precioAUsar && kilosItem > 0) {
+                      const gananciaUnitaria = precioAUsar - costoBase;
+                      const gananciaTotal = gananciaUnitaria * kilosItem;
+                      
+                      totalGanancias += gananciaTotal;
+                      totalVentas += precioAUsar * kilosItem;
+                      
+                      detallesPorCliente.push({
+                        cliente: cliente.nombre,
+                        kilos: kilosItem,
+                        precioVenta: precioAUsar,
+                        gananciaUnitaria: gananciaUnitaria,
+                        gananciaTotal: gananciaTotal,
+                        fuentePrecio: fuentePrecio,
+                        taras: item.taras,
+                        sobrante: item.sobrante
+                      });
                     }
                   }
-                  
-                  if (precioAUsar && kilosItem > 0) {
-                    const gananciaUnitaria = precioAUsar - costoBase;
-                    const gananciaTotal = gananciaUnitaria * kilosItem;
-                    
-                    totalGanancias += gananciaTotal;
-                    totalVentas += precioAUsar * kilosItem;
-                    
-                    detallesPorCliente.push({
-                      cliente: cliente.nombre,
-                      kilos: kilosItem,
-                      precioVenta: precioAUsar,
-                      gananciaUnitaria: gananciaUnitaria,
-                      gananciaTotal: gananciaTotal,
-                      fuentePrecio: fuentePrecio,
-                      taras: item.taras,
-                      sobrante: item.sobrante
-                    });
-                                      }
                 }
               });
             }
@@ -1003,6 +1057,27 @@ export default {
         }
       }
       
+      // Si aún no se encuentra costo, inicializar costosPorMedida si no existe
+      if (costo === 0 && (!this.embarqueData.costosPorMedida || Object.keys(this.embarqueData.costosPorMedida).length === 0)) {
+        console.log(`⚠️ No se encontró costo para talla ${talla}. Inicializando costosPorMedida automáticamente.`);
+        this.inicializarCostosPorMedida();
+        
+        // Intentar buscar nuevamente después de inicializar
+        const costosEmbarqueActualizados = this.embarqueData?.costosPorMedida || {};
+        costo = Number(costosEmbarqueActualizados[talla]) || 0;
+        
+        if (costo === 0) {
+          const tallaLower = talla.toLowerCase();
+          for (const [medida, costoValue] of Object.entries(costosEmbarqueActualizados)) {
+            if (medida.toLowerCase() === tallaLower) {
+              costo = Number(costoValue) || 0;
+              medidaEncontrada = medida;
+              break;
+            }
+          }
+        }
+      }
+      
       console.log(`🔍 DEBUG - Calculando costo para talla ${talla}:`, {
         tallaBuscada: talla,
         medidaEncontrada: medidaEncontrada,
@@ -1035,9 +1110,9 @@ export default {
           const cantidad = parseInt(formatoGuion[1]) || 0;
           let peso = parseInt(formatoGuion[2]) || 0;
           
-          // Si el peso es 19, sustituirlo por 20
+          // Si el peso es 19, usar el peso configurado para ventas
           if (peso === 19) {
-            peso = 20;
+            peso = this.pesoTaraVenta;
           }
           
           detalleCalculo.kilosDeTaras = cantidad * peso;
@@ -1057,9 +1132,9 @@ export default {
           const cantidadSobrante = parseInt(formatoGuion[1]) || 0;
           let pesoSobrante = parseInt(formatoGuion[2]) || 0;
           
-          // Si el peso es 19, sustituirlo por 20
+          // Si el peso es 19, usar el peso configurado para ventas
           if (pesoSobrante === 19) {
-            pesoSobrante = 20;
+            pesoSobrante = this.pesoTaraVenta;
           }
           
           detalleCalculo.kilosDeSobrante = cantidadSobrante * pesoSobrante;
@@ -1091,6 +1166,106 @@ export default {
         console.log('Estado de análisis de ganancia de crudos guardado correctamente');
       } catch (error) {
         console.error('Error al guardar estado de análisis de crudos:', error);
+      }
+    },
+
+    // Inicializar costos por medida automáticamente
+    async inicializarCostosPorMedida() {
+      try {
+        const db = getFirestore();
+        
+        // Cargar costos registrados desde el historial
+        const historialRef = collection(db, 'historial_costos');
+        const historialSnapshot = await getDocs(historialRef);
+        
+        const historialCompleto = [];
+        historialSnapshot.forEach(doc => {
+          const data = doc.data();
+          historialCompleto.push({
+            ...data,
+            id: doc.id
+          });
+        });
+        
+        // Ordenar por timestamp descendente
+        historialCompleto.sort((a, b) => {
+          const timestampA = a.timestamp?.toDate?.() || new Date(a.timestamp);
+          const timestampB = b.timestamp?.toDate?.() || new Date(b.timestamp);
+          return timestampB - timestampA;
+        });
+        
+        // Obtener solo los costos más recientes por medida (que no estén eliminados)
+        const costosRegistrados = {};
+        const medidasProcesadas = new Set();
+        
+        historialCompleto.forEach(entrada => {
+          if (!medidasProcesadas.has(entrada.medida)) {
+            // Si no está marcada como eliminada, es el costo actual
+            if (!entrada.eliminado && !entrada.medidaEliminada) {
+              costosRegistrados[entrada.medida] = {
+                costoBase: entrada.costoBase,
+                fecha: entrada.fecha,
+                timestamp: entrada.timestamp,
+                id: entrada.id
+              };
+            }
+            medidasProcesadas.add(entrada.medida);
+          }
+        });
+        
+        // Aplicar costos a las medidas del embarque si no tienen costo asignado
+        const costosEmbarque = this.embarqueData?.costosPorMedida || {};
+        let costosActualizados = false;
+        
+        // Obtener todas las tallas de crudos para aplicar costos
+        const tallasCrudos = this.obtenerTallasCrudosUnicas();
+        
+        tallasCrudos.forEach(talla => {
+          // Buscar costo registrado para esta talla (exacto o insensible a mayúsculas)
+          let costoEncontrado = null;
+          
+          if (costosRegistrados[talla]) {
+            costoEncontrado = costosRegistrados[talla];
+          } else {
+            // Búsqueda insensible a mayúsculas/minúsculas
+            const tallaLower = talla.toLowerCase();
+            for (const [medida, costoInfo] of Object.entries(costosRegistrados)) {
+              if (medida.toLowerCase() === tallaLower) {
+                costoEncontrado = costoInfo;
+                break;
+              }
+            }
+          }
+          
+          // Si se encontró un costo y no está asignado en el embarque, aplicarlo
+          if (costoEncontrado && !costosEmbarque[talla]) {
+            costosEmbarque[talla] = costoEncontrado.costoBase;
+            costosActualizados = true;
+            console.log(`💰 Aplicando costo automático para ${talla}: $${costoEncontrado.costoBase}`);
+          }
+        });
+        
+        // Guardar cambios en Firebase si hubo actualizaciones
+        if (costosActualizados) {
+          // Actualizar los datos locales
+          if (!this.embarqueData.costosPorMedida) {
+            this.embarqueData.costosPorMedida = {};
+          }
+          Object.assign(this.embarqueData.costosPorMedida, costosEmbarque);
+          
+          // Guardar en Firebase
+          const embarqueId = this.$route.params.id;
+          const embarqueRef = doc(db, 'embarques', embarqueId);
+          
+          await updateDoc(embarqueRef, {
+            costosPorMedida: costosEmbarque
+          });
+          
+          console.log('✅ Costos inicializados y guardados automáticamente');
+        }
+        
+      } catch (error) {
+        console.error('Error al inicializar costos por medida:', error);
       }
     },
 
@@ -1479,7 +1654,13 @@ export default {
       // Calcular costos para crudos (costo base + 3.5)
       const costosCrudos = this.calcularCostosCrudos(tarasCrudosPorMedida);
 
-      generarPDFRendimientos(datosRendimientos, embarqueDataConNota, gananciasVisibles, tarasCrudosPorMedida, gananciasVisiblesCrudos, costosCrudos);
+      // Pasar la configuración de pesos al PDF
+      const configuracionPesos = {
+        pesoTaraCosto: this.pesoTaraCosto,
+        pesoTaraVenta: this.pesoTaraVenta
+      };
+
+      generarPDFRendimientos(datosRendimientos, embarqueDataConNota, gananciasVisibles, tarasCrudosPorMedida, gananciasVisiblesCrudos, costosCrudos, configuracionPesos);
     },
 
     obtenerNombreMedidaPersonalizado(medida) {
@@ -1589,9 +1770,10 @@ export default {
     
     formatearNumero(numero) {
       if (!numero) return '0';
-      const numeroRedondeado = Math.round(numero);
+      // Redondear hacia abajo para eliminar decimales
+      const numeroSinDecimales = Math.floor(numero);
       // Formatear manualmente con comas para asegurar compatibilidad
-      return numeroRedondeado.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+      return numeroSinDecimales.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
     },
 
     formatearFecha(fechaString) {
@@ -1617,6 +1799,54 @@ export default {
       const embarqueEsHoyOFuturo = fechaEmbarqueStr >= fechaHoy;
       
       return embarqueEsReciente || embarqueEsHoyOFuturo;
+    },
+
+    // Métodos para configuración de pesos
+    abrirModalConfiguracion() {
+      this.mostrarModalConfiguracion = true;
+    },
+
+    cerrarModalConfiguracion() {
+      this.mostrarModalConfiguracion = false;
+    },
+
+    async guardarConfiguracion() {
+      try {
+        const db = getFirestore();
+        const embarqueId = this.$route.params.id;
+        const embarqueRef = doc(db, 'embarques', embarqueId);
+        
+        await updateDoc(embarqueRef, {
+          pesoTaraCosto: Number(this.pesoTaraCosto),
+          pesoTaraVenta: Number(this.pesoTaraVenta)
+        });
+        
+        console.log('Configuración de pesos guardada correctamente');
+        this.cerrarModalConfiguracion();
+        
+        // Recalcular ganancias después de cambiar los pesos
+        this.calcularGanancias();
+        
+      } catch (error) {
+        console.error('Error al guardar configuración de pesos:', error);
+        alert('Error al guardar la configuración. Intente nuevamente.');
+      }
+    },
+
+    // Determinar si se debe mostrar el detalle por cliente
+    deberMostrarDetallePorCliente(talla) {
+      const gananciaCrudo = this.gananciasCalculadasCrudos[talla];
+      if (!gananciaCrudo || !gananciaCrudo.detallesPorCliente) return false;
+      
+      // Solo mostrar si hay más de un cliente
+      if (gananciaCrudo.detallesPorCliente.length <= 1) return false;
+      
+      // Verificar si hay precios diferentes entre los clientes
+      const precios = gananciaCrudo.detallesPorCliente.map(detalle => detalle.precioVenta);
+      const preciosUnicos = new Set(precios);
+      
+      // Solo mostrar detalle si hay precios diferentes
+      return preciosUnicos.size > 1;
     }
   },
 
@@ -1641,13 +1871,49 @@ export default {
       deep: true
     },
     analizarGananciaCrudos: {
-      handler() {
-        // Recalcular ganancias de crudos cuando se active/desactive el análisis
-        this.$nextTick(() => {
-          this.calcularGananciasCrudos();
+      handler(newValue, oldValue) {
+        // Verificar si se activó algún análisis nuevo
+        const seMadeChangio = Object.keys(newValue).some(talla => {
+          return newValue[talla] && !oldValue[talla];
         });
+        
+        // Si se activó algún análisis nuevo, inicializar costos automáticamente
+        if (seMadeChangio) {
+          this.inicializarCostosPorMedida().then(() => {
+            // Recalcular ganancias después de inicializar costos
+            this.$nextTick(() => {
+              this.calcularGananciasCrudos();
+            });
+          });
+        } else {
+          // Solo recalcular ganancias si no se activó nuevo análisis
+          this.$nextTick(() => {
+            this.calcularGananciasCrudos();
+          });
+        }
       },
       deep: true
+    },
+
+    // Watchers para configuración de pesos
+    pesoTaraCosto: {
+      handler() {
+        if (this.embarqueData) {
+          this.$nextTick(() => {
+            this.calcularGanancias();
+          });
+        }
+      }
+    },
+
+    pesoTaraVenta: {
+      handler() {
+        if (this.embarqueData) {
+          this.$nextTick(() => {
+            this.calcularGanancias();
+          });
+        }
+      }
     },
 
   },
@@ -1901,6 +2167,39 @@ input {
   cursor: pointer;
 }
 
+.configuracion-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  margin: 20px 0;
+}
+
+.config-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.config-item label {
+  font-weight: bold;
+  color: #2c3e50;
+  margin-bottom: 5px;
+}
+
+.config-item input {
+  padding: 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 16px;
+}
+
+.config-help {
+  font-size: 0.85em;
+  color: #666;
+  font-style: italic;
+  margin-top: 5px;
+}
+
 .medida-header {
   display: flex;
   justify-content: space-between;
@@ -2060,6 +2359,30 @@ input {
 }
 
 .btn-costos i {
+  margin-right: 10px;
+}
+
+.btn-configuracion {
+  display: inline-flex;
+  align-items: center;
+  padding: 10px 20px;
+  background-color: #9b59b6;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+  margin-left: auto;
+  margin-right: 10px;
+}
+
+.btn-configuracion:hover {
+  background-color: #8e44ad;
+}
+
+.btn-configuracion i {
   margin-right: 10px;
 }
 
@@ -2336,6 +2659,21 @@ input {
   
   .cliente-nombre {
     font-size: 1.1em;
+  }
+
+  .configuracion-grid {
+    grid-template-columns: 1fr;
+    gap: 15px;
+  }
+
+  .header-container {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .btn-configuracion {
+    margin-left: 0;
+    margin-right: 0;
   }
 }
 </style>

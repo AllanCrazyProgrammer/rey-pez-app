@@ -15,7 +15,7 @@
                         <option value="">Elige talla</option>
                         <option value="Med c/c">Med c/c</option>
                         <option value="Med-Esp c/c">Med-Esp c/c</option>
-                        <option value="Med-gde c/c">Med-gde c/c</option>
+                        <option value="Med-Gde c/c">Med-Gde c/c</option>
                         <option value="Gde c/c">Gde c/c</option>
                         <option value="Gde c/ Extra">Gde c/ Extra c/c</option>
                         <option value="Extra c/c">Extra c/c</option>

@@ -416,6 +416,8 @@ export default {
       // Agregar directamente al embarque.productos
       this.embarque.productos.push(nuevoProducto);
 
+      // NO crear crudos automáticamente - el usuario los agrega manualmente cuando los necesite
+
       if (!this.guardadoAutomaticoActivo && this.embarqueId) {
         this.guardadoAutomaticoActivo = true;
       }
@@ -624,6 +626,8 @@ export default {
             // Luego agregar el producto
             this.agregarProducto(clienteId);
             
+            // NO crear crudos automáticamente - el usuario los agrega manualmente cuando los necesite
+            
             // Activar este cliente
             this.clienteActivo = clienteId;
 
@@ -640,6 +644,9 @@ export default {
         } else {
           // Si ya existe el embarqueId, solo agregar el producto
           this.agregarProducto(clienteId);
+          
+          // NO crear crudos automáticamente - el usuario los agrega manualmente cuando los necesite
+          
           // Activar este cliente
           this.clienteActivo = clienteId;
           this._creandoEmbarque = false;
@@ -790,6 +797,9 @@ export default {
           data.clientes.forEach(cliente => {
             if (cliente.crudos && cliente.crudos.length > 0) {
               this.$set(this.clienteCrudos, cliente.id, cliente.crudos);
+            } else {
+              // NO crear crudos automáticamente - el usuario los agrega manualmente cuando los necesite
+              this.$set(this.clienteCrudos, cliente.id, []);
             }
           });
 
@@ -945,15 +955,18 @@ export default {
             return nuevoProducto;
         });
         
-        // 3. Asignar los productos iniciales al estado
+        // 3. NO inicializar crudos automáticamente - el usuario los agrega manualmente cuando los necesite
+        this.clienteCrudos = {};
+        
+        // 4. Asignar los productos iniciales al estado
         this.embarque.productos = productosIniciales;
         
-        // 4. Establecer el primer cliente como activo
+        // 5. Establecer el primer cliente como activo
         if (this.clientesPredefinidos.length > 0) {
             this.clienteActivo = this.clientesPredefinidos[0].id.toString();
         }
 
-        // 5. Intentar guardar este estado inicial en Firebase (si la fecha es válida)
+        // 6. Intentar guardar este estado inicial en Firebase (si la fecha es válida)
         if (this.embarque.fecha) {
             this._guardandoInicial = true; // <- Establecer bandera ANTES del async
             this.$nextTick(async () => {
@@ -1230,6 +1243,10 @@ export default {
       // Procesar los productos por cliente
       Object.entries(this.productosPorCliente).forEach(([clienteId, productos]) => {
         const clientePredefinido = clientesPredefinidosMap.get(parseInt(clienteId));
+        
+        // NO crear crudos automáticamente - solo usar los que ya existen
+        let crudosCliente = this.clienteCrudos[clienteId] || [];
+        
         const clienteData = {
           id: clienteId,
           nombre: clientePredefinido ? clientePredefinido.nombre : this.obtenerNombreCliente(clienteId),
@@ -1238,7 +1255,7 @@ export default {
             restarTaras: producto.restarTaras || false,
             noSumarKilos: producto.noSumarKilos || false // Agregar esta línea
           })),
-          crudos: this.clienteCrudos[clienteId] || []
+          crudos: crudosCliente
         };
         embarqueData.clientes.push(clienteData);
       });
@@ -1477,6 +1494,11 @@ export default {
 
       // Agregar el producto al embarque
       this.embarque.productos.push(nuevoProducto);
+
+      // NO crear crudos automáticamente - el usuario los agrega manualmente cuando los necesite
+      if (!this.clienteCrudos[nuevoCliente.id]) {
+        this.$set(this.clienteCrudos, nuevoCliente.id, []);
+      }
 
       // Guardar los cambios
       this.guardarClientesPersonalizados();
