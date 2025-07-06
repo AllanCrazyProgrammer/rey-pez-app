@@ -17,7 +17,7 @@ if (typeof window !== 'undefined' && !window.pdfMake) {
     window.pdfMake = pdfMake;
 }
 
-export const generarPDFRendimientos = async (datosRendimientos, embarqueData, gananciasCalculadas, tarasCrudosPorMedida = {}, gananciasVisiblesCrudos = {}, costosCrudos = {}, configuracionPesos = {}) => {
+export const generarPDFRendimientos = async (datosRendimientos, embarqueData, gananciasCalculadas, tarasCrudosPorMedida = {}, gananciasVisiblesCrudos = {}, costosCrudos = {}, configuracionPesos = {}, gananciasVisiblesMaquila = {}) => {
   try {
     const logoBase64 = await loadImageAsBase64('https://res.cloudinary.com/hwkcovsmr/image/upload/v1620946647/samples/REY_PEZ_LOGO_nsotww.png');
     
@@ -60,6 +60,7 @@ export const generarPDFRendimientos = async (datosRendimientos, embarqueData, ga
 
     const docDefinition = {
       content: [
+        // PRIMERA PÁGINA - RENDIMIENTOS
         {
           columns: [
             {
@@ -87,10 +88,17 @@ export const generarPDFRendimientos = async (datosRendimientos, embarqueData, ga
         },
         { text: '\n', height: 5 },
         generarTablaRendimientos(datosRendimientos, nombresMedidasPersonalizados, embarqueData),
+        
+        // SALTO DE PÁGINA
+        { text: '', pageBreak: 'after' },
+        
+        // SEGUNDA PÁGINA - RESÚMENES
+   
+        generarTablaGanancias(gananciasCalculadas, nombresMedidasPersonalizados, embarqueData, gananciasVisiblesMaquila),
         { text: '\n', height: 10 },
-        generarTablaGanancias(gananciasCalculadas, nombresMedidasPersonalizados, embarqueData),
+        generarTablaTarasCrudo(tarasCrudosPorMedida, gananciasVisiblesCrudos, costosCrudos, configuracionPesos),
         { text: '\n', height: 10 },
-        generarTablaTarasCrudo(tarasCrudosPorMedida, gananciasVisiblesCrudos, costosCrudos, configuracionPesos)
+        generarResumenGananciasTotal(gananciasCalculadas, gananciasVisiblesMaquila, gananciasVisiblesCrudos)
       ],
       styles: {
         header: {
@@ -101,7 +109,7 @@ export const generarPDFRendimientos = async (datosRendimientos, embarqueData, ga
         },
         tableHeader: {
           bold: true,
-          fontSize: 20,
+          fontSize: 14,
           color: 'white',
           fillColor: '#3760b0'
         },
@@ -144,7 +152,7 @@ export const generarPDFRendimientos = async (datosRendimientos, embarqueData, ga
         return {
           columns: [
             { 
-              text: '© 2024 Rey Pez - Tampico, Tamps.', 
+              text: '© 2025 Rey Pez - Tampico, Tamps.', 
               alignment: 'center', 
               margin: [0, 5, 0, 0],
               fontSize: 8,
@@ -265,7 +273,7 @@ function generarTablaRendimientos(datosRendimientos, nombresMedidasPersonalizado
   return {
     table: {
       headerRows: 1,
-      widths: mostrarColumnaCosto ? ['*', '*', '*', '*'] : ['*', '*', '*'],
+      widths: mostrarColumnaCosto ? ['25%', '25%', '25%', '25%'] : ['35%', '35%', '30%'],
       body: body
     },
     layout: {
@@ -292,8 +300,12 @@ function generarTablaRendimientos(datosRendimientos, nombresMedidasPersonalizado
   };
 }
 
-function generarTablaGanancias(gananciasCalculadas, nombresMedidasPersonalizados, embarqueData) {
-  if (!gananciasCalculadas || Object.keys(gananciasCalculadas).length === 0) {
+function generarTablaGanancias(gananciasCalculadas, nombresMedidasPersonalizados, embarqueData, gananciasVisiblesMaquila = {}) {
+  // Verificar si hay datos de ganancias normales o de maquila
+  const tieneGananciasNormales = gananciasCalculadas && Object.keys(gananciasCalculadas).length > 0;
+  const tieneGananciasMaquila = gananciasVisiblesMaquila && Object.keys(gananciasVisiblesMaquila).length > 0;
+
+  if (!tieneGananciasNormales && !tieneGananciasMaquila) {
     return {
       text: 'No hay datos de ganancias disponibles',
       style: 'header',
@@ -304,10 +316,102 @@ function generarTablaGanancias(gananciasCalculadas, nombresMedidasPersonalizados
 
   // Filtrar medidas que no estén ocultas
   const medidasOcultas = embarqueData?.medidaOculta || {};
-  const gananciasVisibles = Object.entries(gananciasCalculadas)
-    .filter(([medida]) => !medidasOcultas[medida]);
+  const gananciasVisibles = tieneGananciasNormales ? 
+    Object.entries(gananciasCalculadas).filter(([medida]) => !medidasOcultas[medida]) : [];
 
-  if (gananciasVisibles.length === 0) {
+  // Preparar las filas de ganancias normales
+  const filasGananciasNormales = gananciasVisibles.map(([medida, ganancia]) => {
+    const nombreMedida = nombresMedidasPersonalizados[medida] || medida;
+    const gananciaUnitaria = ganancia.gananciaUnitaria || 0;
+    const gananciaTotal = ganancia.gananciaTotal || 0;
+    const totalEmbarcado = ganancia.totalEmbarcado || 0;
+    const precioVenta = ganancia.precioVenta || 0;
+    const costoBase = ganancia.costoBase || 0;
+    
+    return [
+      nombreMedida,
+      `${formatearNumero(totalEmbarcado)} kg`,
+      {
+        stack: [
+          {
+            text: `Compra: $${formatearPrecio(costoBase)}`,
+            fontSize: 14,
+            alignment: 'center',
+            margin: [0, 0, 0, 2],
+            color: '#e74c3c'
+          },
+          {
+            text: `Venta: $${formatearPrecio(precioVenta)}`,
+            fontSize: 14,
+            alignment: 'center',
+            color: '#27ae60'
+          }
+        ],
+        alignment: 'center'
+      },
+      {
+        text: `$${formatearPrecio(gananciaUnitaria)}`,
+        style: gananciaUnitaria >= 0 ? 'gananciaPositiva' : 'gananciaNegativa'
+      },
+      {
+        text: `$${formatearPrecio(gananciaTotal)}`,
+        style: gananciaTotal >= 0 ? 'gananciaPositiva' : 'gananciaNegativa'
+      }
+    ];
+  });
+
+  // Preparar las filas de ganancias de maquila
+  const filasGananciasMaquila = Object.entries(gananciasVisiblesMaquila).map(([medida, ganancia]) => {
+    const nombreMedida = nombresMedidasPersonalizados[medida] || medida;
+    const precioMaquila = ganancia.precioMaquila || 0;
+    const gananciaTotal = ganancia.gananciaTotal || 0;
+    const totalEmbarcado = ganancia.totalEmbarcado || 0;
+    
+    return [
+      `${nombreMedida} (Maquila)`,
+      `${formatearNumero(totalEmbarcado)} kg`,
+      {
+        stack: [
+          {
+            text: `Compra: N/A`,
+            fontSize: 14,
+            alignment: 'center',
+            margin: [0, 0, 0, 2],
+            color: '#6c757d'
+          },
+          {
+            text: `Venta: $${formatearPrecio(precioMaquila)}`,
+            fontSize: 14,
+            alignment: 'center',
+            color: '#27ae60'
+          }
+        ],
+        alignment: 'center'
+      },
+      {
+        text: `$${formatearPrecio(precioMaquila)}`,
+        style: 'gananciaPositiva'
+      },
+      {
+        text: `$${formatearPrecio(gananciaTotal)}`,
+        style: 'gananciaPositiva'
+      }
+    ];
+  });
+
+  // Calcular totales
+  const totalGananciasNormales = gananciasVisibles.reduce((total, [medida, ganancia]) => {
+    return total + (ganancia.gananciaTotal || 0);
+  }, 0);
+
+  const totalGananciasMaquila = Object.values(gananciasVisiblesMaquila).reduce((total, ganancia) => {
+    return total + (ganancia.gananciaTotal || 0);
+  }, 0);
+
+  const totalGeneral = totalGananciasNormales + totalGananciasMaquila;
+
+  // Si no hay datos para mostrar después del filtro
+  if (filasGananciasNormales.length === 0 && filasGananciasMaquila.length === 0) {
     return {
       text: 'No hay datos de ganancias para mostrar',
       style: 'header',
@@ -316,41 +420,25 @@ function generarTablaGanancias(gananciasCalculadas, nombresMedidasPersonalizados
     };
   }
 
-  // Calcular el total de ganancias
-  const totalGanancias = gananciasVisibles.reduce((total, [medida, ganancia]) => {
-    return total + (ganancia.gananciaTotal || 0);
-  }, 0);
-
   const body = [
     [
       { text: 'Medida', style: 'tableHeader' },
+      { text: 'Kilos', style: 'tableHeader' },
+      { text: 'Precios', style: 'tableHeader' },
       { text: 'Ganancia/kg', style: 'tableHeader' },
       { text: 'Ganancia Total', style: 'tableHeader' }
     ],
-    ...gananciasVisibles.map(([medida, ganancia]) => {
-      const nombreMedida = nombresMedidasPersonalizados[medida] || medida;
-      const gananciaUnitaria = ganancia.gananciaUnitaria || 0;
-      const gananciaTotal = ganancia.gananciaTotal || 0;
-      
-      return [
-        nombreMedida,
-        {
-          text: `$${formatearPrecio(gananciaUnitaria)}`,
-          style: gananciaUnitaria >= 0 ? 'gananciaPositiva' : 'gananciaNegativa'
-        },
-        {
-          text: `$${formatearPrecio(gananciaTotal)}`,
-          style: gananciaTotal >= 0 ? 'gananciaPositiva' : 'gananciaNegativa'
-        }
-      ];
-    }),
+    ...filasGananciasNormales,
+    ...filasGananciasMaquila,
     // Fila del total
     [
       { text: 'TOTAL GANANCIAS', style: 'tableTotal' },
       { text: '', style: 'tableTotal' },
+      { text: '', style: 'tableTotal' },
+      { text: '', style: 'tableTotal' },
       { 
-        text: `$${formatearPrecio(totalGanancias)}`, 
-        style: totalGanancias >= 0 ? 'tableTotal' : 'tableTotalNegativo' 
+        text: `$${formatearPrecio(totalGeneral)}`, 
+        style: totalGeneral >= 0 ? 'tableTotal' : 'tableTotalNegativo' 
       }
     ]
   ];
@@ -358,7 +446,7 @@ function generarTablaGanancias(gananciasCalculadas, nombresMedidasPersonalizados
   return {
     stack: [
       {
-        text: 'Resumen de Ganancias',
+        text: 'Resumen de limpios',
         style: 'header',
         alignment: 'center',
         margin: [0, 0, 0, 10]
@@ -366,7 +454,7 @@ function generarTablaGanancias(gananciasCalculadas, nombresMedidasPersonalizados
       {
         table: {
           headerRows: 1,
-          widths: ['*', '*', '*'],
+          widths: ['25%', '15%', '25%', '15%', '20%'],
           body: body
         },
         layout: {
@@ -583,7 +671,7 @@ function generarTablaTarasCrudo(tarasCrudosPorMedida, gananciasVisiblesCrudos = 
   return {
     stack: [
       {
-        text: 'Resumen de Taras de Crudo',
+        text: 'Resumen de Crudos',
         style: 'header',
         alignment: 'center',
         margin: [0, 0, 0, 10]
@@ -591,7 +679,7 @@ function generarTablaTarasCrudo(tarasCrudosPorMedida, gananciasVisiblesCrudos = 
       {
         table: {
           headerRows: 1,
-          widths: ['*', '*', '*', '*', '*'],
+          widths: ['25%', '20%', '18%', '18%', '19%'],
           body: body
         },
         layout: {
@@ -623,6 +711,38 @@ function generarTablaTarasCrudo(tarasCrudosPorMedida, gananciasVisiblesCrudos = 
   };
 }
 
+function generarResumenGananciasTotal(gananciasCalculadas, gananciasVisiblesMaquila, gananciasVisiblesCrudos) {
+  // Calcular totales por categoría
+  const totalGananciasNormales = Object.values(gananciasCalculadas).reduce((total, ganancia) => {
+    return total + (ganancia.gananciaTotal || 0);
+  }, 0);
+
+  const totalGananciasMaquila = Object.values(gananciasVisiblesMaquila).reduce((total, ganancia) => {
+    return total + (ganancia.gananciaTotal || 0);
+  }, 0);
+
+  const totalGananciasCrudos = Object.values(gananciasVisiblesCrudos).reduce((total, ganancia) => {
+    return total + (ganancia.gananciaTotal || 0);
+  }, 0);
+
+  const totalGeneral = totalGananciasNormales + totalGananciasMaquila + totalGananciasCrudos;
+
+  // Si no hay datos, no mostrar nada
+  if (totalGeneral === 0) {
+    return { text: '', margin: [0, 0, 0, 0] };
+  }
+
+  return {
+    text: `TOTAL GENERAL: $${formatearPrecio(totalGeneral)}`,
+    style: totalGeneral >= 0 ? 'tableTotal' : 'tableTotalNegativo',
+    alignment: 'center',
+    fontSize: 28,
+    margin: [0, 10, 0, 0]
+  };
+}
+
+
+
 function formatearKilos(kilos) {
   if (typeof kilos === 'number') {
     return Math.floor(kilos) + ' kg';
@@ -646,6 +766,13 @@ function formatearPrecio(precio) {
   return numeroRedondeado.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 }
 
+function formatearNumero(numero) {
+  if (!numero) return '0';
+  // Redondear hacia abajo para eliminar decimales
+  const numeroSinDecimales = Math.floor(numero);
+  return numeroSinDecimales.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+}
+
 function loadImageAsBase64(url) {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -663,3 +790,4 @@ function loadImageAsBase64(url) {
     img.src = url;
   });
 }
+

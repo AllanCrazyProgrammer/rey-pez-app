@@ -49,6 +49,25 @@
                 >
                 <label :for="'analizar-' + index">Analizar ganancia</label>
               </div>
+              <div class="maquila-ganancia-control">
+                <input 
+                  type="checkbox" 
+                  :id="'maquila-' + index"
+                  v-model="analizarMaquilaGanancia[medida]"
+                  @change="guardarEstadoAnalisis"
+                >
+                <label :for="'maquila-' + index">Maquila ganancia</label>
+              </div>
+              <div v-if="analizarMaquilaGanancia[medida]" class="maquila-precio-input">
+                <input 
+                  type="number" 
+                  step="0.01"
+                  v-model="precioMaquila[medida]"
+                  @input="guardarEstadoAnalisis"
+                  placeholder="Precio por kg"
+                  class="precio-maquila-input"
+                >
+              </div>
             </div>
           </div>
 
@@ -164,6 +183,29 @@
             <!-- Mensaje cuando no hay precio de venta -->
             <div v-else-if="analizarGanancia[medida]" class="sin-precio-venta">
               <p class="aviso-sin-precio">⚠️ No se encontró precio de venta para esta medida</p>
+            </div>
+            
+            <!-- Sección de maquila ganancia -->
+            <div v-if="analizarMaquilaGanancia[medida]" class="maquila-ganancia-info">
+              <div class="maquila-ganancia-header">
+                <h4>🏭 Maquila Ganancia</h4>
+              </div>
+              <div class="maquila-ganancia-detalles">
+                <div class="ganancia-item">
+                  <span class="label">Kilos Embarcados:</span>
+                  <span class="valor">{{ formatearNumero(obtenerTotalEmbarcado(medida)) }} kg</span>
+                </div>
+                <div class="ganancia-item">
+                  <span class="label">Precio Maquila:</span>
+                  <span class="valor precio-maquila">${{ formatearPrecio(precioMaquila[medida] || 0) }}</span>
+                </div>
+                <div class="ganancia-item ganancia-total-item">
+                  <span class="label">Ganancia Total Maquila:</span>
+                  <span class="valor ganancia-total ganancia-positiva">
+                    ${{ formatearPrecio(calcularGananciaMaquila(medida)) }}
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -352,7 +394,9 @@ export default {
       // Configuración de pesos por defecto
       pesoTaraCosto: 19, // Peso por defecto para cálculo de costos
       pesoTaraVenta: 20, // Peso por defecto para cálculo de ventas
-      mostrarModalConfiguracion: false
+      mostrarModalConfiguracion: false,
+      analizarMaquilaGanancia: {},
+      precioMaquila: {}
     }
   },
 
@@ -529,6 +573,8 @@ export default {
           this.medidaOculta = this.embarqueData.medidaOculta || {};
           this.analizarGanancia = this.embarqueData.analizarGanancia || {};
           this.analizarGananciaCrudos = this.embarqueData.analizarGananciaCrudos || {}; // Cargar analizarGananciaCrudos
+          this.analizarMaquilaGanancia = this.embarqueData.analizarMaquilaGanancia || {};
+          this.precioMaquila = this.embarqueData.precioMaquila || {};
           
           // Cargar configuración de pesos
           this.pesoTaraCosto = this.embarqueData.pesoTaraCosto || 19;
@@ -737,11 +783,15 @@ export default {
         
         const costoFinal = this.calcularCostoFinal(medida);
         
+        // Obtener el costo base original (sin cálculos adicionales)
+        const costosEmbarque = this.embarqueData?.costosPorMedida || {};
+        const costoBase = Number(costosEmbarque[medida]) || 0;
+        
         // Obtener clientes que tienen productos de esta medida
         const clientesConMedida = this.obtenerClientesConMedida(medida);
         
         // Calcular precio promedio ponderado y ganancias reales
-        const resultadoCalculo = this.calcularPrecioYGanancias(medida, fechaEmbarque, clientesConMedida, costoFinal);
+        const resultadoCalculo = this.calcularPrecioYGanancias(medida, fechaEmbarque, clientesConMedida, costoFinal, costoBase);
         
         if (!resultadoCalculo) return; // Si no hay precios, saltar esta medida
         
@@ -755,7 +805,7 @@ export default {
     },
 
     // Nuevo método que calcula precio promedio ponderado y ganancias
-    calcularPrecioYGanancias(medida, fechaEmbarque, clientesConMedida, costoFinal) {
+    calcularPrecioYGanancias(medida, fechaEmbarque, clientesConMedida, costoFinal, costoBase) {
       let gananciasPorCliente = [];
       let totalEmbarcadoGeneral = 0;
       let gananciaTotalSumada = 0;
@@ -863,6 +913,7 @@ export default {
       return {
         precioVenta: precioPromedioPonderado,
         costoFinal: Math.round(costoFinal),
+        costoBase: Math.round(costoBase || 0),
         gananciaUnitaria: Math.round(precioPromedioPonderado - costoFinal),
         gananciaTotal: gananciaTotalSumada,
         totalEmbarcado: Math.round(totalEmbarcadoGeneral),
@@ -1345,7 +1396,9 @@ export default {
           kilosCrudos: this.kilosCrudos,
           medidaOculta: this.medidaOculta,
           analizarGanancia: this.analizarGanancia,
-          analizarGananciaCrudos: this.analizarGananciaCrudos // Guardar analizarGananciaCrudos
+          analizarGananciaCrudos: this.analizarGananciaCrudos, // Guardar analizarGananciaCrudos
+          analizarMaquilaGanancia: this.analizarMaquilaGanancia,
+          precioMaquila: this.precioMaquila
         });
         
         console.log('Rendimientos guardados:', this.kilosCrudos);
@@ -1660,7 +1713,19 @@ export default {
         pesoTaraVenta: this.pesoTaraVenta
       };
 
-      generarPDFRendimientos(datosRendimientos, embarqueDataConNota, gananciasVisibles, tarasCrudosPorMedida, gananciasVisiblesCrudos, costosCrudos, configuracionPesos);
+      // Calcular ganancias de maquila para el PDF
+      const gananciasVisiblesMaquila = {};
+      Object.keys(this.analizarMaquilaGanancia).forEach(medida => {
+        if (this.analizarMaquilaGanancia[medida] && !this.medidaOculta[medida]) {
+          gananciasVisiblesMaquila[medida] = {
+            totalEmbarcado: this.obtenerTotalEmbarcado(medida),
+            precioMaquila: Number(this.precioMaquila[medida]) || 0,
+            gananciaTotal: this.calcularGananciaMaquila(medida)
+          };
+        }
+      });
+
+      generarPDFRendimientos(datosRendimientos, embarqueDataConNota, gananciasVisibles, tarasCrudosPorMedida, gananciasVisiblesCrudos, costosCrudos, configuracionPesos, gananciasVisiblesMaquila);
     },
 
     obtenerNombreMedidaPersonalizado(medida) {
@@ -1743,7 +1808,9 @@ export default {
         
         await updateDoc(embarqueRef, {
           analizarGanancia: this.analizarGanancia,
-          analizarGananciaCrudos: this.analizarGananciaCrudos // Guardar analizarGananciaCrudos
+          analizarGananciaCrudos: this.analizarGananciaCrudos, // Guardar analizarGananciaCrudos
+          analizarMaquilaGanancia: this.analizarMaquilaGanancia,
+          precioMaquila: this.precioMaquila
         });
         
         console.log('Estado de análisis de ganancia guardado correctamente');
@@ -1847,6 +1914,13 @@ export default {
       
       // Solo mostrar detalle si hay precios diferentes
       return preciosUnicos.size > 1;
+    },
+
+    // Calcular ganancia de maquila para una medida
+    calcularGananciaMaquila(medida) {
+      const totalEmbarcado = this.obtenerTotalEmbarcado(medida);
+      const precioMaquila = Number(this.precioMaquila[medida]) || 0;
+      return totalEmbarcado * precioMaquila;
     }
   },
 
@@ -1914,6 +1988,21 @@ export default {
           });
         }
       }
+    },
+
+    // Watchers para maquila ganancia
+    analizarMaquilaGanancia: {
+      handler() {
+        this.guardarCambiosEnTiempoReal();
+      },
+      deep: true
+    },
+
+    precioMaquila: {
+      handler() {
+        this.guardarCambiosEnTiempoReal();
+      },
+      deep: true
     },
 
   },
@@ -2246,6 +2335,25 @@ input {
 }
 
 .analizar-ganancia-control label {
+  cursor: pointer;
+  user-select: none;
+}
+
+.maquila-ganancia-control {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.9em;
+  color: #27ae60;
+  font-weight: bold;
+}
+
+.maquila-ganancia-control input[type="checkbox"] {
+  width: auto;
+  margin: 0;
+}
+
+.maquila-ganancia-control label {
   cursor: pointer;
   user-select: none;
 }
@@ -2611,6 +2719,47 @@ input {
   font-weight: bold;
 }
 
+.maquila-precio-input {
+  margin-top: 10px;
+  padding: 10px;
+  background-color: #f9f9f9;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+.precio-maquila-input {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+.maquila-ganancia-info {
+  margin-top: 15px;
+  padding: 15px;
+  background-color: #f4f8ff;
+  border: 1px solid #b3d9ff;
+  border-radius: 5px;
+}
+
+.maquila-ganancia-header h4 {
+  margin-top: 0;
+  margin-bottom: 10px;
+  color: #2c5282;
+  font-size: 1.1em;
+}
+
+.maquila-ganancia-detalles {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.precio-maquila {
+  color: #2c5282;
+  font-weight: bold;
+}
+
 @media (max-width: 768px) {
   .controles-medida {
     flex-direction: column;
@@ -2624,11 +2773,17 @@ input {
   }
   
   .ocultar-control,
-  .analizar-ganancia-control {
+  .analizar-ganancia-control,
+  .maquila-ganancia-control {
     font-size: 0.8em;
   }
   
   .ganancia-detalles {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  
+  .maquila-ganancia-detalles {
     grid-template-columns: 1fr;
     gap: 8px;
   }
