@@ -119,7 +119,7 @@
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="(precio, index) in historialPrecios" :key="index">
+                <tr v-for="(precio, index) in historialPaginado" :key="index">
                   <td>{{ formatDate(precio.fecha) }}</td>
                   <td>${{ formatNumber(precio.precio) }}</td>
                   <td>
@@ -132,10 +132,10 @@
                     <span v-else>General</span>
                   </td>
                   <td>
-                    <span v-if="index < historialPrecios.length - 1" 
-                          :class="{'precio-subio': precio.precio < historialPrecios[index + 1].precio,
-                                 'precio-bajo': precio.precio > historialPrecios[index + 1].precio}">
-                      {{ calcularCambio(precio.precio, historialPrecios[index + 1].precio) }}
+                    <span v-if="calcularIndiceGlobal(index) < historialPrecios.length - 1" 
+                          :class="{'precio-subio': precio.precio < historialPrecios[calcularIndiceGlobal(index) + 1].precio,
+                                 'precio-bajo': precio.precio > historialPrecios[calcularIndiceGlobal(index) + 1].precio}">
+                      {{ calcularCambio(precio.precio, historialPrecios[calcularIndiceGlobal(index) + 1].precio) }}
                     </span>
                   </td>
                   <td class="actions-cell">
@@ -146,6 +146,49 @@
                 </tr>
               </tbody>
             </table>
+            
+            <!-- Información de paginación -->
+            <div v-if="historialPrecios.length > 0" class="pagination-info">
+              <span>Mostrando {{ infoPaginacion.inicio }}-{{ infoPaginacion.fin }} de {{ infoPaginacion.total }} registros</span>
+              <div class="items-per-page">
+                <label>Registros por página:</label>
+                <select v-model="itemsPorPagina" @change="paginaActual = 1">
+                  <option :value="5">5</option>
+                  <option :value="10">10</option>
+                  <option :value="20">20</option>
+                  <option :value="50">50</option>
+                </select>
+              </div>
+            </div>
+            
+            <!-- Controles de paginación -->
+            <div v-if="totalPaginas > 1" class="pagination-controls">
+              <button @click="paginaActual = 1" :disabled="paginaActual === 1" class="pagination-btn">
+                «
+              </button>
+              <button @click="paginaActual--" :disabled="paginaActual === 1" class="pagination-btn">
+                ‹
+              </button>
+              
+              <!-- Números de página -->
+              <div class="pagination-numbers">
+                <button 
+                  v-for="numero in numerosVisibles" 
+                  :key="numero"
+                  @click="paginaActual = numero"
+                  :class="{'pagination-btn': true, 'active': numero === paginaActual}"
+                  class="pagination-number">
+                  {{ numero }}
+                </button>
+              </div>
+              
+              <button @click="paginaActual++" :disabled="paginaActual === totalPaginas" class="pagination-btn">
+                ›
+              </button>
+              <button @click="paginaActual = totalPaginas" :disabled="paginaActual === totalPaginas" class="pagination-btn">
+                »
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -172,6 +215,9 @@ export default {
       preciosActuales: [],
       historialPrecios: [],
       productoSeleccionado: null,
+      // Nuevas variables para paginación
+      paginaActual: 1,
+      itemsPorPagina: 10,
       categorias: ['Camarón S/C', 'Camarón C/C', 'Otros'],
       clientes: [
         { id: 'joselito', nombre: 'Joselito', color: '#2196F3' },
@@ -193,6 +239,44 @@ export default {
   computed: {
     currentDate() {
       return new Date().toISOString().split('T')[0];
+    },
+    // Computed property para paginación
+    totalPaginas() {
+      return Math.ceil(this.historialPrecios.length / this.itemsPorPagina);
+    },
+    historialPaginado() {
+      const inicio = (this.paginaActual - 1) * this.itemsPorPagina;
+      const fin = inicio + this.itemsPorPagina;
+      return this.historialPrecios.slice(inicio, fin);
+    },
+    // Información de paginación para mostrar al usuario
+    infoPaginacion() {
+      const inicio = (this.paginaActual - 1) * this.itemsPorPagina + 1;
+      const fin = Math.min(this.paginaActual * this.itemsPorPagina, this.historialPrecios.length);
+      return {
+        inicio,
+        fin,
+        total: this.historialPrecios.length
+      };
+    },
+    // Números de página visibles para la navegación
+    numerosVisibles() {
+      const maxVisible = 5;
+      const total = this.totalPaginas;
+      const actual = this.paginaActual;
+      
+      if (total <= maxVisible) {
+        return Array.from({ length: total }, (_, i) => i + 1);
+      }
+      
+      let inicio = Math.max(1, actual - Math.floor(maxVisible / 2));
+      let fin = Math.min(total, inicio + maxVisible - 1);
+      
+      if (fin - inicio + 1 < maxVisible) {
+        inicio = Math.max(1, fin - maxVisible + 1);
+      }
+      
+      return Array.from({ length: fin - inicio + 1 }, (_, i) => inicio + i);
     },
     preciosOrdenados() {
       const preciosAgrupados = {};
@@ -256,6 +340,9 @@ export default {
       const porcentaje = (diferencia / precioAnterior) * 100;
       const signo = diferencia > 0 ? '+' : '';
       return `${signo}${this.formatNumber(diferencia)} (${signo}${porcentaje.toFixed(1)}%)`;
+    },
+    calcularIndiceGlobal(indicePagina) {
+      return (this.paginaActual - 1) * this.itemsPorPagina + indicePagina;
     },
     async cargarPreciosActuales() {
       try {
@@ -432,6 +519,7 @@ export default {
       try {
         this.productoSeleccionado = producto;
         this.historialPrecios = producto.historial;
+        this.paginaActual = 1; // Resetear la página al mostrar el historial
         this.showHistorialModal = true;
       } catch (error) {
         console.error('Error al cargar historial:', error);
@@ -766,6 +854,98 @@ export default {
   font-weight: bold;
 }
 
+.pagination-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 15px 0;
+  padding: 10px;
+  background-color: #f8f9fa;
+  border-radius: 5px;
+  font-size: 0.9em;
+  color: #666;
+}
+
+.items-per-page {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.items-per-page label {
+  font-weight: 500;
+}
+
+.items-per-page select {
+  padding: 4px 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background-color: white;
+}
+
+.pagination-controls {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 5px;
+  margin-top: 20px;
+  padding: 15px;
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  border: 1px solid #e9ecef;
+}
+
+.pagination-numbers {
+  display: flex;
+  gap: 2px;
+  margin: 0 10px;
+}
+
+.pagination-btn {
+  background-color: #fff;
+  color: #007bff;
+  border: 1px solid #dee2e6;
+  padding: 8px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  min-width: 40px;
+  text-align: center;
+}
+
+.pagination-number {
+  background-color: #fff;
+  color: #007bff;
+  border: 1px solid #dee2e6;
+  padding: 8px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  min-width: 40px;
+  text-align: center;
+}
+
+.pagination-btn:hover:not(:disabled),
+.pagination-number:hover:not(.active) {
+  background-color: #e9ecef;
+  border-color: #adb5bd;
+}
+
+.pagination-btn:disabled {
+  background-color: #f8f9fa;
+  color: #6c757d;
+  cursor: not-allowed;
+  border-color: #dee2e6;
+}
+
+.pagination-number.active {
+  background-color: #007bff;
+  color: white;
+  border-color: #007bff;
+}
+
 @media (max-width: 600px) {
   .form-group {
     flex-direction: column;
@@ -782,6 +962,44 @@ export default {
   
   .historial-modal {
     width: 95%;
+  }
+  
+  .pagination-info {
+    flex-direction: column;
+    gap: 10px;
+    text-align: center;
+  }
+  
+  .items-per-page {
+    justify-content: center;
+  }
+  
+  .pagination-controls {
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 10px;
+  }
+  
+  .pagination-numbers {
+    margin: 0 5px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  
+  .pagination-btn,
+  .pagination-number {
+    min-width: 35px;
+    padding: 6px 10px;
+    font-size: 14px;
+  }
+  
+  .historial-content table {
+    font-size: 12px;
+  }
+  
+  .historial-content th,
+  .historial-content td {
+    padding: 8px 4px;
   }
 }
 

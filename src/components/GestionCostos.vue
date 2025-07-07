@@ -42,7 +42,12 @@
 
     <!-- Sección de medidas del embarque -->
     <div class="medidas-embarque-section" v-if="embarqueData">
-      <h3>Medidas del Embarque Actual</h3>
+      <div class="seccion-header">
+        <h3>Medidas del Embarque Actual</h3>
+        <button @click="sincronizarCostos" class="btn-sincronizar" title="Sincronizar costos con los valores más recientes">
+          <i class="fas fa-sync-alt"></i> Sincronizar Costos
+        </button>
+      </div>
       
       <!-- Campo de costo extra -->
       <div class="costo-extra-section">
@@ -247,11 +252,21 @@ export default {
         
         if (embarqueDoc.exists()) {
           this.embarqueData = embarqueDoc.data();
+          
+          // Si el embarque no tiene fecha, establecer la fecha actual
+          if (!this.embarqueData.fecha) {
+            this.embarqueData.fecha = new Date().toISOString().split('T')[0];
+            // Guardar la fecha en el embarque
+            await updateDoc(embarqueRef, {
+              fecha: this.embarqueData.fecha
+            });
+          }
+          
           this.obtenerMedidasEmbarque();
           this.medidaSeleccionada = this.embarqueData.medidaSeleccionada || {};
           this.medidaOculta = this.embarqueData.medidaOculta || {}; // Cargar configuración de ocultación
           this.costosEmbarque = this.embarqueData.costosPorMedida || {};
-          this.costoExtra = this.embarqueData.costoExtra || 18; // Cargar costo extra guardado o usar 18 por defecto
+          this.costoExtra = this.embarqueData.costoExtra || 18;
           this.calcularRendimientos();
           // Aplicar costos de medidas registradas automáticamente
           await this.aplicarCostosRegistrados();
@@ -404,7 +419,6 @@ export default {
     async iniciarEscuchaPreciosGlobales() {
       try {
         const db = getFirestore();
-        // Cambiar a escuchar solo el historial de costos
         const historialRef = collection(db, 'historial_costos');
         
         this.unsubscribePreciosGlobales = onSnapshot(historialRef, (snapshot) => {
@@ -419,29 +433,35 @@ export default {
             });
           });
           
-          // Ordenar por timestamp descendente
+          // Ordenar por fecha descendente
           historialCompleto.sort((a, b) => {
-            const timestampA = a.timestamp?.toDate?.() || new Date(a.timestamp);
-            const timestampB = b.timestamp?.toDate?.() || new Date(b.timestamp);
-            return timestampB - timestampA;
+            const fechaA = new Date(a.fecha);
+            const fechaB = new Date(b.fecha);
+            return fechaB - fechaA;
           });
           
-          // Obtener solo los costos más recientes por medida (que no estén eliminados)
+          // Obtener la fecha del embarque
+          const fechaEmbarque = this.embarqueData?.fecha || new Date().toISOString().split('T')[0];
+          
+          // Obtener solo los costos válidos para la fecha del embarque
           const costosActuales = {};
           const medidasProcesadas = new Set();
           
           historialCompleto.forEach(entrada => {
             if (!medidasProcesadas.has(entrada.medida)) {
-              // Si no está marcada como eliminada, es el costo actual
-              if (!entrada.eliminado && !entrada.medidaEliminada) {
+              // Verificar si la fecha del costo es válida para el embarque
+              const fechaCosto = new Date(entrada.fecha);
+              const fechaEmb = new Date(fechaEmbarque);
+              
+              if (fechaCosto <= fechaEmb && !entrada.eliminado && !entrada.medidaEliminada) {
                 costosActuales[entrada.medida] = {
                   costoBase: entrada.costoBase,
                   fecha: entrada.fecha,
                   timestamp: entrada.timestamp,
                   id: entrada.id
                 };
+                medidasProcesadas.add(entrada.medida);
               }
-              medidasProcesadas.add(entrada.medida);
             }
           });
           
@@ -481,7 +501,7 @@ export default {
       this.nuevaMedida = { nombre: '', costo: 0 };
     },
 
-    async guardarNuevoCosto(costo) {
+    async guardarNuevoCosto(data) {
       if (!this.nuevaMedida.nombre.trim()) {
         alert('Por favor ingrese el nombre de la medida');
         return;
@@ -489,13 +509,15 @@ export default {
 
       try {
         const db = getFirestore();
+        const fecha = new Date(data.fecha);
+        fecha.setHours(12, 0, 0, 0); // Establecer la hora a 12:00 PM
         
         // Solo agregar al historial (no más precios_globales)
         await addDoc(collection(db, 'historial_costos'), {
           medida: this.nuevaMedida.nombre,
-          costoBase: Number(costo || 0),
-          timestamp: new Date(),
-          fecha: new Date().toISOString().split('T')[0],
+          costoBase: Number(data.costo || 0),
+          timestamp: fecha,
+          fecha: data.fecha,
           nuevo: true
         });
 
@@ -528,17 +550,20 @@ export default {
       };
     },
 
-    async guardarCostoEditado(nuevoCosto) {
+    async guardarCostoEditado(data) {
       try {
         const db = getFirestore();
         const medida = this.costoEditando.medida;
         
+        const fecha = new Date(data.fecha);
+        fecha.setHours(12, 0, 0, 0); // Establecer la hora a 12:00 PM
+        
         // Solo agregar entrada al historial
         await addDoc(collection(db, 'historial_costos'), {
           medida: medida,
-          costoBase: Number(nuevoCosto),
-          fecha: new Date().toISOString().split('T')[0],
-          timestamp: new Date()
+          costoBase: Number(data.costo),
+          fecha: data.fecha,
+          timestamp: fecha
         });
 
         this.cerrarModalEditarCosto();
@@ -692,9 +717,16 @@ export default {
       let costosActualizados = false;
       
       this.medidasEmbarque.forEach(medida => {
-        if (this.costosRegistrados[medida] && !this.costosEmbarque[medida]) {
-          this.$set(this.costosEmbarque, medida, this.costosRegistrados[medida].costoBase);
-          costosActualizados = true;
+        if (this.costosRegistrados[medida]) {
+          const costoRegistrado = this.costosRegistrados[medida].costoBase;
+          const costoEmbarque = this.costosEmbarque[medida];
+          
+          // Actualizar si no hay costo asignado o si hay diferencia con el costo registrado
+          if (!costoEmbarque || costoEmbarque !== costoRegistrado) {
+            this.$set(this.costosEmbarque, medida, costoRegistrado);
+            costosActualizados = true;
+            console.log(`Actualizando costo de ${medida}: ${costoEmbarque} -> ${costoRegistrado}`);
+          }
         }
       });
 
@@ -708,6 +740,8 @@ export default {
           await updateDoc(embarqueRef, {
             costosPorMedida: this.costosEmbarque
           });
+          
+          console.log('Costos sincronizados correctamente');
         } catch (error) {
           console.error('Error al guardar costos aplicados:', error);
         }
@@ -757,60 +791,88 @@ export default {
       this.cargandoHistorial = false;
     },
 
+    async sincronizarCostos() {
+      try {
+        await this.aplicarCostosRegistrados();
+        alert('Costos sincronizados con los valores más recientes.');
+      } catch (error) {
+        console.error('Error al sincronizar costos:', error);
+        alert('Error al sincronizar costos.');
+      }
+    },
 
 
     formatearFecha(fecha) {
       if (!fecha) return 'N/A';
       
-      let date;
-      // Manejar diferentes tipos de timestamp
-      if (fecha.toDate && typeof fecha.toDate === 'function') {
-        // Firebase Timestamp
-        date = fecha.toDate();
-      } else if (fecha.seconds) {
-        // Firebase Timestamp object
-        date = new Date(fecha.seconds * 1000);
-      } else {
-        // String o Date normal
-        date = new Date(fecha);
-      }
-      
-      // Verificar si la fecha es válida
-      if (isNaN(date.getTime())) {
+      try {
+        // Si es una fecha string, usarla directamente
+        if (typeof fecha === 'string') {
+          const [year, month, day] = fecha.split('-');
+          return `${day}/${month}/${year}`;
+        }
+        
+        // Si es un timestamp de Firebase
+        if (fecha.toDate && typeof fecha.toDate === 'function') {
+          fecha = fecha.toDate();
+        } else if (fecha.seconds) {
+          fecha = new Date(fecha.seconds * 1000);
+        }
+        
+        // Si es un objeto Date
+        if (fecha instanceof Date) {
+          const day = fecha.getDate().toString().padStart(2, '0');
+          const month = (fecha.getMonth() + 1).toString().padStart(2, '0');
+          const year = fecha.getFullYear();
+          return `${day}/${month}/${year}`;
+        }
+        
         return 'Fecha inválida';
+      } catch (error) {
+        console.error('Error al formatear fecha:', error);
+        return 'Error en fecha';
       }
-      
-      return date.toLocaleDateString('es-ES');
     },
 
     formatearFechaCompleta(fecha) {
       if (!fecha) return 'N/A';
       
-      let date;
-      // Manejar diferentes tipos de timestamp
-      if (fecha.toDate && typeof fecha.toDate === 'function') {
-        // Firebase Timestamp
-        date = fecha.toDate();
-      } else if (fecha.seconds) {
-        // Firebase Timestamp object
-        date = new Date(fecha.seconds * 1000);
-      } else {
-        // String o Date normal
-        date = new Date(fecha);
-      }
-      
-      // Verificar si la fecha es válida
-      if (isNaN(date.getTime())) {
+      try {
+        // Si es una fecha string, convertirla a Date
+        if (typeof fecha === 'string') {
+          const [year, month, day] = fecha.split('-');
+          return new Date(year, month - 1, day).toLocaleDateString('es-ES', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+          });
+        }
+        
+        // Si es un timestamp de Firebase
+        if (fecha.toDate && typeof fecha.toDate === 'function') {
+          fecha = fecha.toDate();
+        } else if (fecha.seconds) {
+          fecha = new Date(fecha.seconds * 1000);
+        }
+        
+        // Si es un objeto Date
+        if (fecha instanceof Date) {
+          return fecha.toLocaleDateString('es-ES', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+          });
+        }
+        
         return 'Fecha inválida';
+      } catch (error) {
+        console.error('Error al formatear fecha completa:', error);
+        return 'Error en fecha';
       }
-      
-      return date.toLocaleDateString('es-ES', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      });
     }
   },
 
@@ -1228,6 +1290,37 @@ export default {
   font-style: italic;
 }
 
+.seccion-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #eee;
+}
+
+.btn-sincronizar {
+  background-color: #f39c12;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  padding: 8px 15px;
+  font-size: 14px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-sincronizar:hover {
+  background-color: #e67e22;
+}
+
+.btn-sincronizar i {
+  margin-right: 0;
+}
 
 
 @media (max-width: 768px) {
@@ -1239,6 +1332,17 @@ export default {
     flex-direction: column;
     align-items: stretch;
     gap: 15px;
+  }
+  
+  .seccion-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+  
+  .btn-sincronizar {
+    width: 100%;
+    justify-content: center;
   }
   
   .costo-actions {

@@ -20,6 +20,18 @@
                 min="0"
             >
         </div>
+
+        <!-- Agregar selector de fecha -->
+        <div class="form-group">
+            <label for="fechaInput">Fecha:</label>
+            <input 
+                type="date" 
+                id="fechaInput" 
+                v-model="fechaLocal" 
+                class="form-control"
+                :max="maxDate"
+            >
+        </div>
         
         <div v-if="mostrarInfo" class="info-adicional">
             <p v-if="costoAnterior !== null" class="costo-anterior">
@@ -64,11 +76,16 @@ export default {
         fechaUltimaActualizacion: {
             type: String,
             default: ''
+        },
+        fecha: {
+            type: String,
+            default: () => new Date().toISOString().split('T')[0]
         }
     },
     data() {
         return {
-            costoLocal: ''
+            costoLocal: '',
+            fechaLocal: ''
         };
     },
     computed: {
@@ -86,12 +103,16 @@ export default {
         },
         mostrarInfo() {
             return !this.esNuevo && (this.costoAnterior !== null || this.fechaUltimaActualizacion);
+        },
+        maxDate() {
+            return new Date().toISOString().split('T')[0];
         }
     },
     watch: {
         mostrar(newVal) {
             if (newVal) {
                 this.costoLocal = this.costo;
+                this.fechaLocal = this.fecha;
                 this.$nextTick(() => {
                     this.$refs.costoInput?.focus();
                 });
@@ -99,16 +120,26 @@ export default {
         },
         costo(newVal) {
             this.costoLocal = newVal;
+        },
+        fecha(newVal) {
+            this.fechaLocal = newVal;
         }
     },
     methods: {
         guardarCosto() {
             const costo = parseFloat(this.costoLocal);
             if (!isNaN(costo) && costo >= 0) {
-                this.$emit('guardar', costo);
+                // Enviar tanto el costo como la fecha
+                this.$emit('guardar', {
+                    costo: costo,
+                    fecha: this.fechaLocal
+                });
             } else if (this.costoLocal === '') {
                 // Si está vacío, permitir borrar el costo
-                this.$emit('guardar', null);
+                this.$emit('guardar', {
+                    costo: null,
+                    fecha: this.fechaLocal
+                });
             } else {
                 // Mostrar error si el costo no es válido
                 alert('Por favor ingrese un costo válido (mayor o igual a 0)');
@@ -155,6 +186,21 @@ input[type="number"]::-webkit-outer-spin-button {
 input[type="number"] {
     -moz-appearance: textfield;
     appearance: textfield;
+}
+
+input[type="date"] {
+    width: 100%;
+    padding: 10px;
+    font-size: 1rem;
+    border-radius: 5px;
+    border: 1px solid #ccc;
+    transition: border-color 0.3s ease;
+}
+
+input[type="date"]:focus {
+    outline: none;
+    border-color: #3498db;
+    box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
 }
 
 .info-adicional {
