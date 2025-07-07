@@ -342,9 +342,22 @@ export default {
     },
     async addSalida() {
       if (this.isSalidaValid && this.newSalida.kilos <= this.kilosDisponibles) {
-        const precioMatch = this.newSalida.medida.match(/\(\$(\d+(\.\d+)?)\)/);
-        const precio = precioMatch ? Number(precioMatch[1]) : null;
-        const medidaBase = precio ? this.newSalida.medida.split(' ($')[0] : this.newSalida.medida;
+        // Extraer precio y medida base del formato del dropdown
+        let precio = null;
+        let medidaBase = this.newSalida.medida;
+        
+        // Si contiene " ($" es una medida con precio
+        if (this.newSalida.medida.includes(' ($')) {
+          const precioMatch = this.newSalida.medida.match(/\(\$(\d+(?:\.\d+)?)\)/);
+          if (precioMatch) {
+            precio = Number(precioMatch[1]);
+            medidaBase = this.newSalida.medida.split(' ($')[0];
+          }
+        } else if (this.newSalida.medida.includes(' - (')) {
+          // Si contiene " - (" es una medida sin precio o con fecha
+          medidaBase = this.newSalida.medida.split(' - (')[0];
+          precio = null;
+        }
 
         this.salidas.push({
           tipo: this.newSalida.tipo,
@@ -374,9 +387,22 @@ export default {
       let totalEntradas = 0;
       let totalSalidas = 0;
 
-      const precioMatch = medida.match(/\(\$(\d+(\.\d+)?)\)/);
-      const precio = precioMatch ? Number(precioMatch[1]) : null;
-      const medidaBase = precio ? medida.split(' ($')[0] : medida;
+      // Extraer precio correctamente del formato de display
+      let precio = null;
+      let medidaBase = medida;
+      
+      // Si la medida contiene " ($" significa que tiene precio
+      if (medida.includes(' ($')) {
+        const precioMatch = medida.match(/\(\$(\d+(?:\.\d+)?)\)/);
+        if (precioMatch) {
+          precio = Number(precioMatch[1]);
+          medidaBase = medida.split(' ($')[0];
+        }
+      } else if (medida.includes(' - (')) {
+        // Si contiene " - (" pero no " ($", es una fecha o "Sin precio"
+        medidaBase = medida.split(' - (')[0];
+        precio = null;
+      }
 
       const sacadasRef = collection(db, 'sacadas');
       const querySnapshot = await getDocs(sacadasRef);
@@ -396,22 +422,30 @@ export default {
           console.log(`Procesando sacada del ${moment(sacadaFecha).format('YYYY-MM-DD')}`);
           
           sacada.entradas.forEach(entrada => {
-            if (entrada.proveedor === proveedor && 
-                entrada.medida === medidaBase && 
-                (!precio || entrada.precio === precio)) {
+            // Comparar medida y precio correctamente
+            const medidaCoincide = entrada.proveedor === proveedor && entrada.medida === medidaBase;
+            const precioCoincide = precio === null ? 
+              (entrada.precio === null || entrada.precio === undefined) : 
+              entrada.precio === precio;
+              
+            if (medidaCoincide && precioCoincide) {
               kilosDisponibles += entrada.kilos;
               totalEntradas += entrada.kilos;
-              console.log(`  Entrada: +${entrada.kilos} kg`);
+              console.log(`  Entrada: +${entrada.kilos} kg (precio: ${entrada.precio || 'sin precio'})`);
             }
           });
 
           sacada.salidas.forEach(salida => {
-            if (salida.proveedor === proveedor && 
-                salida.medida === medidaBase && 
-                (!precio || salida.precio === precio)) {
+            // Comparar medida y precio correctamente
+            const medidaCoincide = salida.proveedor === proveedor && salida.medida === medidaBase;
+            const precioCoincide = precio === null ? 
+              (salida.precio === null || salida.precio === undefined) : 
+              salida.precio === precio;
+              
+            if (medidaCoincide && precioCoincide) {
               kilosDisponibles -= salida.kilos;
               totalSalidas += salida.kilos;
-              console.log(`  Salida: -${salida.kilos} kg`);
+              console.log(`  Salida: -${salida.kilos} kg (precio: ${salida.precio || 'sin precio'})`);
             }
           });
 
@@ -499,14 +533,18 @@ export default {
 
       // Función para actualizar el balance de una medida y rastrear fechas
       const actualizarBalance = (medida, precio, kilos, fecha, esEntrada = true) => {
-        const medidaKey = precio ? `${medida} ($${precio})` : medida;
+        // Normalizar precio: undefined se convierte en null
+        const precioNormalizado = precio !== null && precio !== undefined ? precio : null;
+        const medidaKey = precioNormalizado !== null ? `${medida} ($${precioNormalizado})` : medida;
+        
+        console.log(`[DEBUG] actualizarBalance - medida: ${medida}, precio original: ${precio}, precio normalizado: ${precioNormalizado}, medidaKey: ${medidaKey}`);
         
         if (!medidasDisponibles.has(medidaKey)) {
           medidasDisponibles.set(medidaKey, {
             medida: medida,
-            precio: precio,
+            precio: precioNormalizado,
             kilos: 0,
-            nombre: medidaKey,
+            nombre: medidaKey, // Este ya está construido correctamente con precioNormalizado
             primeraFecha: null,
             esElMasAntiguo: false
           });
@@ -515,8 +553,8 @@ export default {
         const datos = medidasDisponibles.get(medidaKey);
         datos.kilos += esEntrada ? kilos : -kilos;
         
-        // Rastrear la fecha de la primera entrada con este precio
-        if (esEntrada && (datos.primeraFecha === null || fecha < datos.primeraFecha)) {
+        // Rastrear la fecha de la primera entrada con este precio (solo si tiene precio)
+        if (esEntrada && precioNormalizado !== null && (datos.primeraFecha === null || fecha < datos.primeraFecha)) {
           datos.primeraFecha = fecha;
         }
       };
@@ -528,12 +566,14 @@ export default {
         if (moment(sacadaFecha).isSameOrBefore(fechaActual)) {
           sacada.entradas.forEach(entrada => {
             if (entrada.proveedor === proveedor) {
+              console.log(`[DEBUG] Procesando entrada: ${entrada.medida}, precio: ${entrada.precio} (tipo: ${typeof entrada.precio})`);
               actualizarBalance(entrada.medida, entrada.precio, entrada.kilos, sacadaFecha, true);
             }
           });
 
           sacada.salidas.forEach(salida => {
             if (salida.proveedor === proveedor) {
+              console.log(`[DEBUG] Procesando salida: ${salida.medida}, precio: ${salida.precio} (tipo: ${typeof salida.precio})`);
               actualizarBalance(salida.medida, salida.precio, salida.kilos, sacadaFecha, false);
             }
           });
@@ -555,7 +595,7 @@ export default {
         }
       });
 
-      // Encontrar cuál es el precio más antiguo para cada medida base
+      // Encontrar cuál es el precio más antiguo para cada medida base (solo para medidas con precio)
       const medidasPorBase = new Map();
       for (const [_, datos] of medidasDisponibles) {
         if (datos.kilos > 0 && datos.precio !== null && datos.primeraFecha !== null) {
@@ -567,7 +607,7 @@ export default {
         }
       }
 
-      // Marcar cuál es el más antiguo para cada medida base
+      // Marcar cuál es el más antiguo para cada medida base (solo para medidas con precio)
       for (const [_, grupoMedidas] of medidasPorBase) {
         if (grupoMedidas.length > 1) {
           // Encontrar el más antiguo
@@ -578,21 +618,28 @@ export default {
         }
       }
 
-      // Convertir solo las medidas con existencias positivas a opciones
+      // Convertir TODAS las medidas con existencias positivas a opciones (con precio y sin precio)
       const medidasConPrecio = [];
       for (const [_, datos] of medidasDisponibles) {
         if (datos.kilos > 0) {
+          console.log(`[DEBUG] Construyendo nombre para medida: ${datos.medida}, precio: ${datos.precio}, kilos: ${datos.kilos}`);
+          
           let nombreDisplay = datos.nombre;
           
-          // Agregar indicadores visuales
-          if (datos.precio !== null) {
+          // Agregar indicadores visuales solo para medidas con precio
+          if (datos.precio !== null && datos.primeraFecha !== null) {
             const fechaStr = moment(datos.primeraFecha).format('DD/MM/YY');
             if (datos.esElMasAntiguo) {
-              nombreDisplay = `🕐 ${datos.nombre} - Más antiguo (${fechaStr})`;
+              nombreDisplay = `🕐 ${datos.medida} ($${datos.precio}) - Más antiguo (${fechaStr})`;
             } else {
-              nombreDisplay = `${datos.nombre} - (${fechaStr})`;
+              nombreDisplay = `${datos.medida} ($${datos.precio}) - (${fechaStr})`;
             }
+          } else if (datos.precio === null) {
+            // Indicar claramente que no tiene precio
+            nombreDisplay = `${datos.medida} - (Sin precio)`;
           }
+          
+          console.log(`[DEBUG] Nombre final construido: ${nombreDisplay}`);
 
           medidasConPrecio.push({
             id: datos.nombre,
@@ -602,12 +649,12 @@ export default {
             precio: datos.precio,
             kilos: datos.kilos,
             primeraFecha: datos.primeraFecha,
-            esElMasAntiguo: datos.esElMasAntiguo
+            esElMasAntiguo: datos.esElMasAntiguo || false
           });
         }
       }
 
-      // Ordenar: primero por medida base, luego por fecha (más antiguo primero)
+      // Ordenar: primero por medida base, luego sin precio primero, después por fecha (más antiguo primero)
       return medidasConPrecio.sort((a, b) => {
         const medidaBaseA = a.nombreOriginal.split(' ($')[0];
         const medidaBaseB = b.nombreOriginal.split(' ($')[0];
@@ -616,7 +663,11 @@ export default {
           return medidaBaseA.localeCompare(medidaBaseB);
         }
         
-        // Si es la misma medida base, ordenar por fecha (más antiguo primero)
+        // Si es la misma medida base, priorizar las sin precio primero
+        if (a.precio === null && b.precio !== null) return -1;
+        if (a.precio !== null && b.precio === null) return 1;
+        
+        // Si ambas tienen precio, ordenar por fecha (más antiguo primero)
         if (a.primeraFecha && b.primeraFecha) {
           return a.primeraFecha - b.primeraFecha;
         }
