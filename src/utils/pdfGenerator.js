@@ -21,7 +21,7 @@ if (typeof window !== 'undefined' && window.pdfMake) {
   pdfMake = window.pdfMake;
 }
 
-export async function generarNotaVentaPDF(embarque, clientesDisponibles, clientesJuntarMedidas) {
+export async function generarNotaVentaPDF(embarque, clientesDisponibles, clientesJuntarMedidas, clientesReglaOtilio = {}) {
   try {
     // Validación más robusta de los datos de entrada
     if (!embarque || !embarque.productos || !Array.isArray(embarque.productos)) {
@@ -75,7 +75,7 @@ export async function generarNotaVentaPDF(embarque, clientesDisponibles, cliente
         ]
       },
       { text: '\n' },
-      ...generarContenidoClientes(embarque, clientesDisponibles, clientesJuntarMedidas),
+              ...generarContenidoClientes(embarque, clientesDisponibles, clientesJuntarMedidas, clientesReglaOtilio),
       // Agregar la nueva sección de rendimientos
       ...generarSeccionRendimientos({
         ...embarque,
@@ -122,7 +122,7 @@ export async function generarNotaVentaPDF(embarque, clientesDisponibles, cliente
         ]
       },
       { text: '\n' },
-      ...generarContenidoClientesSinPrecios(embarque, clientesDisponibles, clientesJuntarMedidas),
+              ...generarContenidoClientesSinPrecios(embarque, clientesDisponibles, clientesJuntarMedidas, clientesReglaOtilio),
       // Agregar la nueva sección de rendimientos
       ...generarSeccionRendimientos({
         ...embarque,
@@ -366,7 +366,7 @@ function contarTotalProductos(embarque) {
   return contador;
 }
 
-function generarContenidoClientes(embarque, clientesDisponibles, clientesJuntarMedidas) {
+function generarContenidoClientes(embarque, clientesDisponibles, clientesJuntarMedidas, clientesReglaOtilio = {}) {
   const contenido = [];
   let totalTarasLimpio = 0;
   let totalTarasCrudos = 0;
@@ -412,9 +412,12 @@ function generarContenidoClientes(embarque, clientesDisponibles, clientesJuntarM
     // Verificar si este cliente específico tiene activada la opción de juntar medidas
     const debeJuntarMedidas = clientesJuntarMedidas && clientesJuntarMedidas[clienteId];
     
+    // Verificar si este cliente específico tiene activada la regla de Otilio
+    const aplicarReglaOtilioCliente = clientesReglaOtilio && clientesReglaOtilio[clienteId];
+    
     // Filtrar productos que tengan al menos 1 kilo real
     const productosConKilos = productos.filter(producto => {
-      const kilos = totalKilos(producto, nombreCliente);
+      const kilos = totalKilos(producto, nombreCliente, aplicarReglaOtilioCliente);
       return kilos > 0;
     });
     
@@ -493,7 +496,7 @@ function generarContenidoClientes(embarque, clientesDisponibles, clientesJuntarM
       // Verificar nuevamente si después de agrupar hay productos válidos con kilos
       // (puede ocurrir que al combinar queden solo productos con 0 kilos)
       const hayProductosValidos = productosAgrupados.some(producto => {
-        const kilos = totalKilos(producto, nombreCliente);
+        const kilos = totalKilos(producto, nombreCliente, aplicarReglaOtilioCliente);
         return kilos > 0;
       });
       
@@ -505,7 +508,7 @@ function generarContenidoClientes(embarque, clientesDisponibles, clientesJuntarM
             style: ['subheader', estiloCliente],
             margin: [0, 5, 0, 5]
           },
-          generarTablaProductos(productosAgrupados, estiloCliente, nombreCliente),
+          generarTablaProductos(productosAgrupados, estiloCliente, nombreCliente, aplicarReglaOtilioCliente),
           { text: '\n' }
         );
 
@@ -584,7 +587,8 @@ function generarContenidoClientes(embarque, clientesDisponibles, clientesJuntarM
     Object.entries(productosPorCliente).forEach(([clienteId, productos]) => {
       productos.forEach(producto => {
         if (producto.precio) {
-          const kilos = totalKilos(producto, obtenerNombreCliente(clienteId, clientesDisponibles));
+          const aplicarReglaOtilioProducto = clientesReglaOtilio && clientesReglaOtilio[clienteId];
+          const kilos = totalKilos(producto, obtenerNombreCliente(clienteId, clientesDisponibles), aplicarReglaOtilioProducto);
           totalDinero += kilos * Number(producto.precio);
         }
       });
@@ -836,10 +840,10 @@ function agruparProductos(productos) {
   });
 }
 
-function generarTablaProductos(productos, estiloCliente, nombreCliente) {
+function generarTablaProductos(productos, estiloCliente, nombreCliente, aplicarReglaOtilio = true) {
   // Filtrar productos que tengan kilos reales
   const productosConKilos = productos.filter(producto => {
-    const kilos = totalKilos(producto, nombreCliente);
+    const kilos = totalKilos(producto, nombreCliente, aplicarReglaOtilio);
     return kilos > 0;
   });
   
@@ -903,7 +907,7 @@ function generarTablaProductos(productos, estiloCliente, nombreCliente) {
     let tarasTexto = `${tarasTotales} ${combinarTarasBolsas(producto.reporteTaras, producto.reporteBolsas)}`;
 
     // Calcular kilos para este producto
-    const kilos = totalKilos(producto, nombreCliente);
+    const kilos = totalKilos(producto, nombreCliente, aplicarReglaOtilio);
     
     // Verificar que tenga kilos > 0
     if (kilos > 0) {
@@ -1313,7 +1317,7 @@ function totalTaras(producto) {
   return tarasNormales + tarasExtra;
 }
 
-function totalKilos(producto, nombreCliente) {
+function totalKilos(producto, nombreCliente, aplicarReglaOtilio = true) {
   const sumaKilos = (producto.kilos || []).reduce((sum, kilo) => sum + (kilo || 0), 0);
   
   // Calcular el descuento de taras
@@ -1343,9 +1347,10 @@ function totalKilos(producto, nombreCliente) {
     if (clienteNombreLower.includes('catarro')) {
       resultado += 1;
     }
-    // Para cliente Otilio: sumar 1 kilo por cada 100 kilos en productos s/h2o
-    if (clienteNombreLower.includes('otilio') || 
-        (producto.nombreCliente && producto.nombreCliente.toLowerCase().includes('otilio'))) {
+    // Para cliente Otilio: sumar 1 kilo por cada 100 kilos en productos s/h2o (solo si aplicarReglaOtilio es true)
+    if (aplicarReglaOtilio && 
+        (clienteNombreLower.includes('otilio') || 
+         (producto.nombreCliente && producto.nombreCliente.toLowerCase().includes('otilio')))) {
       const kilosAdicionales = Math.floor(resultado / 100);
       resultado += kilosAdicionales;
     }
@@ -1529,7 +1534,7 @@ function obtenerNombreClienteDesdeEstilo(estiloCliente) {
   }
 }
 
-export async function generarNotaVentaSinPreciosPDF(embarque, clientesDisponibles, clientesJuntarMedidas) {
+export async function generarNotaVentaSinPreciosPDF(embarque, clientesDisponibles, clientesJuntarMedidas, clientesReglaOtilio = {}) {
   try {
     // Validación más robusta de los datos de entrada
     if (!embarque || !embarque.productos || !Array.isArray(embarque.productos)) {
@@ -1591,7 +1596,7 @@ export async function generarNotaVentaSinPreciosPDF(embarque, clientesDisponible
           ]
         },
         { text: '\n' },
-        ...generarContenidoClientesSinPrecios(embarque, clientesDisponibles, clientesJuntarMedidas),
+        ...generarContenidoClientesSinPrecios(embarque, clientesDisponibles, clientesJuntarMedidas, clientesReglaOtilio),
         // Agregar la nueva sección de rendimientos
         ...generarSeccionRendimientos({
           ...embarque,
@@ -1767,7 +1772,7 @@ export async function generarNotaVentaSinPreciosPDF(embarque, clientesDisponible
   }
 }
 
-function generarContenidoClientesSinPrecios(embarque, clientesDisponibles, clientesJuntarMedidas) {
+function generarContenidoClientesSinPrecios(embarque, clientesDisponibles, clientesJuntarMedidas, clientesReglaOtilio = {}) {
   const contenido = [];
   let totalTarasLimpio = 0;
   let totalTarasCrudos = 0;
@@ -1813,9 +1818,12 @@ function generarContenidoClientesSinPrecios(embarque, clientesDisponibles, clien
     // Verificar si este cliente específico tiene activada la opción de juntar medidas
     const debeJuntarMedidas = clientesJuntarMedidas && clientesJuntarMedidas[clienteId];
     
+    // Verificar si este cliente específico tiene activada la regla de Otilio
+    const aplicarReglaOtilioCliente = clientesReglaOtilio && clientesReglaOtilio[clienteId];
+    
     // Filtrar productos que tengan al menos 1 kilo real
     const productosConKilos = productos.filter(producto => {
-      const kilos = totalKilos(producto, nombreCliente);
+      const kilos = totalKilos(producto, nombreCliente, aplicarReglaOtilioCliente);
       return kilos > 0;
     });
     
@@ -1894,7 +1902,7 @@ function generarContenidoClientesSinPrecios(embarque, clientesDisponibles, clien
       // Verificar nuevamente si después de agrupar hay productos válidos con kilos
       // (puede ocurrir que al combinar queden solo productos con 0 kilos)
       const hayProductosValidos = productosAgrupados.some(producto => {
-        const kilos = totalKilos(producto, nombreCliente);
+        const kilos = totalKilos(producto, nombreCliente, aplicarReglaOtilioCliente);
         return kilos > 0;
       });
       
@@ -1906,7 +1914,7 @@ function generarContenidoClientesSinPrecios(embarque, clientesDisponibles, clien
             style: ['subheader', estiloCliente],
             margin: [0, 5, 0, 5]
           },
-          generarTablaProductosSinPrecios(productosAgrupados, estiloCliente, nombreCliente),
+          generarTablaProductosSinPrecios(productosAgrupados, estiloCliente, nombreCliente, aplicarReglaOtilioCliente),
           { text: '\n' }
         );
 
@@ -1985,7 +1993,8 @@ function generarContenidoClientesSinPrecios(embarque, clientesDisponibles, clien
     Object.entries(productosPorCliente).forEach(([clienteId, productos]) => {
       productos.forEach(producto => {
         if (producto.precio) {
-          const kilos = totalKilos(producto, obtenerNombreCliente(clienteId, clientesDisponibles));
+          const aplicarReglaOtilioProducto = clientesReglaOtilio && clientesReglaOtilio[clienteId];
+          const kilos = totalKilos(producto, obtenerNombreCliente(clienteId, clientesDisponibles), aplicarReglaOtilioProducto);
           totalDinero += kilos * Number(producto.precio);
         }
       });
@@ -2014,10 +2023,10 @@ function generarContenidoClientesSinPrecios(embarque, clientesDisponibles, clien
   return contenido;
 }
 
-function generarTablaProductosSinPrecios(productos, estiloCliente, nombreCliente) {
+function generarTablaProductosSinPrecios(productos, estiloCliente, nombreCliente, aplicarReglaOtilio = true) {
   // Filtrar productos que tengan kilos reales
   const productosConKilos = productos.filter(producto => {
-    const kilos = totalKilos(producto, nombreCliente);
+    const kilos = totalKilos(producto, nombreCliente, aplicarReglaOtilio);
     return kilos > 0;
   });
   
@@ -2068,7 +2077,7 @@ function generarTablaProductosSinPrecios(productos, estiloCliente, nombreCliente
     let tarasTexto = `${tarasTotales} ${combinarTarasBolsas(producto.reporteTaras, producto.reporteBolsas)}`;
 
     // Calcular kilos para este producto
-    const kilos = totalKilos(producto, nombreCliente);
+    const kilos = totalKilos(producto, nombreCliente, aplicarReglaOtilio);
     
     // Verificar que tenga kilos > 0
     if (kilos > 0) {

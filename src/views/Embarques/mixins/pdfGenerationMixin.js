@@ -71,7 +71,8 @@ export default {
       generarNotaVentaPDF(
         embarqueCliente,
         this.clientesDisponibles,
-        this.clientesJuntarMedidas
+        this.clientesJuntarMedidas,
+        this.clientesReglaOtilio
       );
     },
 
@@ -97,7 +98,8 @@ export default {
       generarNotaVentaPDF(
         embarqueCliente,
         this.clientesDisponibles,
-        this.clientesJuntarMedidas
+        this.clientesJuntarMedidas,
+        this.clientesReglaOtilio
       );
     },
 

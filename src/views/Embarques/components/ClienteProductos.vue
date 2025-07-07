@@ -23,6 +23,15 @@
                         :disabled="embarqueBloqueado">
                     <label :for="'juntar-medidas-' + clienteId" @click.stop>Juntar medidas</label>
                 </div>
+                
+                <!-- Checkbox para regla de Otilio (sumar 1 kilo por cada 100 kilos) -->
+                <div v-if="esClienteOtilio" class="regla-otilio-checkbox">
+                    <input type="checkbox" :id="'regla-otilio-' + clienteId"
+                        v-model="clientesReglaOtilio[clienteId]" @change="handleReglaOtilioChange" @click.stop
+                        :disabled="embarqueBloqueado">
+                    <label :for="'regla-otilio-' + clienteId" @click.stop>Sumar 1 kg por cada 100 kg</label>
+                </div>
+                
                 <button type="button" @click.stop="$emit('generar-pdf', 'cliente', clienteId)"
                     class="btn btn-primary btn-sm generar-pdf-cliente" title="Generar Nota de Venta PDF (incluye página sin precios)"
                     :disabled="isGeneratingPdf">
@@ -127,6 +136,10 @@ export default {
             type: Object,
             default: () => ({})
         },
+        clientesReglaOtilio: {
+            type: Object,
+            default: () => ({})
+        },
         nombreCliente: {
             type: String,
             required: true
@@ -161,6 +174,7 @@ export default {
         'update:productos',
         'update:crudos',
         'juntarMedidas-change',
+        'reglaOtilio-change',
         'eliminar-cliente',
         'eliminar-producto',
         'eliminar-crudo',
@@ -351,6 +365,10 @@ export default {
             this.$emit('juntarMedidas-change', this.clienteId, event.target.checked);
         },
 
+        handleReglaOtilioChange(event) {
+            this.$emit('reglaOtilio-change', this.clienteId, event.target.checked);
+        },
+
         crearCuentaJoselito() {
             this.$emit('crear-cuenta-joselito', this.clienteId, this.productos, this.crudos);
         },
@@ -445,6 +463,13 @@ export default {
 }
 
 .juntar-medidas-checkbox {
+    display: flex;
+    align-items: center;
+    margin-right: 10px;
+    font-size: 0.9rem;
+}
+
+.regla-otilio-checkbox {
     display: flex;
     align-items: center;
     margin-right: 10px;

@@ -75,6 +75,7 @@
           :productos="clienteProductos" 
           :crudos="clienteCrudos[clienteId] || []"
           :clientes-juntar-medidas="clientesJuntarMedidas" 
+          :clientes-regla-otilio="clientesReglaOtilio"
           :nombre-cliente="obtenerNombreCliente(clienteId)"
           :cliente-activo="clienteActivo" 
           :embarque-bloqueado="embarqueBloqueado" 
@@ -85,6 +86,7 @@
           @update:productos="actualizarProductosCliente(clienteId, $event)"
           @update:crudos="actualizarCrudosCliente(clienteId, $event)" 
           @juntarMedidas-change="handleJuntarMedidasChange"
+          @reglaOtilio-change="handleReglaOtilioChange"
           @eliminar-cliente="eliminarCliente" 
           @eliminar-producto="eliminarProducto" 
           @eliminar-crudo="eliminarCrudo"
@@ -219,6 +221,7 @@ export default {
     return {
       usuariosActivos: [],
       clientesJuntarMedidas: {},
+      clientesReglaOtilio: {},
       clientesPredefinidos: CLIENTES_PREDEFINIDOS, // Usar constantes importadas
       clientesPersonalizados: [],
       ultimoIdPersonalizado: 0,
@@ -724,6 +727,19 @@ export default {
             });
           }
 
+          // Cargar el estado de regla de Otilio
+          if (data.clientesReglaOtilio) {
+            this.clientesReglaOtilio = data.clientesReglaOtilio;
+          } else {
+            // Si no existe, inicializar con valores por defecto
+            this.clientesReglaOtilio = {};
+            data.clientes.forEach(cliente => {
+              // Activar por defecto para clientes de Otilio
+              const esOtilio = cliente.nombre && cliente.nombre.toLowerCase().includes('otilio');
+              this.$set(this.clientesReglaOtilio, cliente.id, esOtilio);
+            });
+          }
+
           let fecha;
           if (data.fecha && typeof data.fecha.toDate === 'function') {
             fecha = data.fecha.toDate();
@@ -917,6 +933,7 @@ export default {
               productos: [],
             };
             this.clientesJuntarMedidas = {};
+            this.clientesReglaOtilio = {};
             this.embarqueId = null;
             this.modoEdicion = false;
             this.guardadoAutomaticoActivo = false;
@@ -941,6 +958,7 @@ export default {
         };
         this.clienteCrudos = {};
         this.clientesJuntarMedidas = {};
+        this.clientesReglaOtilio = {};
         this.embarqueId = null;
         this.modoEdicion = false;
         this.guardadoAutomaticoActivo = false;
@@ -960,6 +978,12 @@ export default {
         
         // 4. Asignar los productos iniciales al estado
         this.embarque.productos = productosIniciales;
+        
+        // 4.1. Inicializar la regla de Otilio activada por defecto para clientes de Otilio
+        this.clientesPredefinidos.forEach(cliente => {
+            const esOtilio = cliente.nombre && cliente.nombre.toLowerCase().includes('otilio');
+            this.$set(this.clientesReglaOtilio, cliente.id.toString(), esOtilio);
+        });
         
         // 5. Establecer el primer cliente como activo
         if (this.clientesPredefinidos.length > 0) {
@@ -1025,6 +1049,12 @@ export default {
           productos: [],
         };
         this.clientesJuntarMedidas = {};
+        this.clientesReglaOtilio = {};
+        // Inicializar regla de Otilio activada por defecto para clientes predefinidos
+        this.clientesPredefinidos.forEach(cliente => {
+            const esOtilio = cliente.nombre && cliente.nombre.toLowerCase().includes('otilio');
+            this.$set(this.clientesReglaOtilio, cliente.id.toString(), esOtilio);
+        });
         this.embarqueId = null;
         this.modoEdicion = false;
         this.guardadoAutomaticoActivo = false;
@@ -1042,7 +1072,8 @@ export default {
       // Crear una copia profunda de los datos antes de guardar
       const embarqueData = {
         ...JSON.parse(JSON.stringify(this.prepararDatosEmbarque())),
-        clientesJuntarMedidas: { ...this.clientesJuntarMedidas }
+        clientesJuntarMedidas: { ...this.clientesJuntarMedidas },
+        clientesReglaOtilio: { ...this.clientesReglaOtilio }
       };
 
       const db = getFirestore();
@@ -1193,6 +1224,7 @@ export default {
         cargaCon: this.embarque.cargaCon,
         clientes: [],
         clientesJuntarMedidas: this.clientesJuntarMedidas,
+        clientesReglaOtilio: this.clientesReglaOtilio,
         embarqueBloqueado: this.embarqueBloqueado
       };
 
@@ -1472,6 +1504,16 @@ export default {
       }
     },
 
+    handleReglaOtilioChange(clienteId, checked) {
+      // Actualizar el estado local
+      this.$set(this.clientesReglaOtilio, clienteId, checked);
+
+      // Guardar inmediatamente si estamos en modo edición
+      if (this.modoEdicion && this.embarqueId) {
+        this.guardarCambiosEnTiempoReal();
+      }
+    },
+
     // Métodos para modales
     // Modal Nuevo Cliente
     agregarNuevoCliente(cliente) {
@@ -1499,6 +1541,10 @@ export default {
       if (!this.clienteCrudos[nuevoCliente.id]) {
         this.$set(this.clienteCrudos, nuevoCliente.id, []);
       }
+
+      // Inicializar regla de Otilio si es un cliente de Otilio
+      const esOtilio = nuevoCliente.nombre && nuevoCliente.nombre.toLowerCase().includes('otilio');
+      this.$set(this.clientesReglaOtilio, nuevoCliente.id, esOtilio);
 
       // Guardar los cambios
       this.guardarClientesPersonalizados();
