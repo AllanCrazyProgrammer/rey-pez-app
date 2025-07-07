@@ -13,48 +13,51 @@
       </div>
 
       <div class="existencias-grid">
-        <template v-for="(datos, proveedor) in filteredExistencias">
-          <div :key="proveedor" class="medida-card" :class="{ 'maquila-card': proveedor === 'Ozuna' || proveedor === 'Joselito' }">
-            <h2>{{ proveedor }}{{ (proveedor === 'Ozuna' || proveedor === 'Joselito') ? ' (Maquila)' : '' }}</h2>
-            <table class="medida-table">
-              <thead>
-                <tr>
-                  <th>Medida</th>
-                  <th v-if="proveedor !== 'Ozuna' && proveedor !== 'Joselito'">Proveedor</th>
-                  <th class="kilos-cell">Kilos</th>
+        <div v-for="(datos, proveedor) in filteredExistencias" :key="proveedor" class="medida-card" :class="{ 'maquila-card': proveedor === 'Ozuna' || proveedor === 'Joselito' }">
+          <h2>{{ proveedor }}{{ (proveedor === 'Ozuna' || proveedor === 'Joselito') ? ' (Maquila)' : '' }}</h2>
+          <table class="medida-table">
+            <thead>
+              <tr>
+                <th>Medida</th>
+                <th v-if="proveedor !== 'Ozuna' && proveedor !== 'Joselito'">Proveedor</th>
+                <th v-if="tienePrecio">Precio</th>
+                <th class="kilos-cell">Kilos</th>
+              </tr>
+            </thead>
+            <tbody>
+              <template v-if="proveedor === 'Ozuna' || proveedor === 'Joselito'">
+                <tr v-for="(datos, medidaKey) in datos" :key="medidaKey" v-if="datos.kilos > 0">
+                  <td>{{ datos.medida }}</td>
+                  <td v-if="tienePrecio" class="precio-cell">{{ datos.precio ? `$${datos.precio}` : '-' }}</td>
+                  <td class="kilos-cell">{{ formatNumber(datos.kilos) }}</td>
                 </tr>
-              </thead>
-              <tbody>
-                <template v-if="proveedor === 'Ozuna' || proveedor === 'Joselito'">
-                  <tr v-for="(datos, medidaKey) in datos" :key="medidaKey" v-if="datos.kilos > 0">
-                    <td>{{ datos.medida }}</td>
-                    <td class="kilos-cell">{{ formatNumber(datos.kilos) }}</td>
-                  </tr>
-                  <tr class="total-row">
-                    <td><strong>Total {{ proveedor }}</strong></td>
-                    <td class="kilos-cell">
-                      <strong>{{ formatNumber(Object.values(datos).reduce((sum, item) => sum + item.kilos, 0)) }}</strong>
-                    </td>
-                  </tr>
-                </template>
-                <template v-else>
-                  <tr v-for="medida in datos" :key="medida.medida" v-if="medida.kilos > 0">
-                    <td>{{ medida.medida }}</td>
-                    <td>{{ medida.proveedor }}</td>
-                    <td class="kilos-cell">{{ formatNumber(medida.kilos) }}</td>
-                  </tr>
-                  <tr class="total-row">
-                    <td><strong>Total {{ proveedor }}</strong></td>
-                    <td></td>
-                    <td class="kilos-cell">
-                      <strong>{{ formatNumber(datos.reduce((sum, item) => sum + item.kilos, 0)) }}</strong>
-                    </td>
-                  </tr>
-                </template>
-              </tbody>
-            </table>
-          </div>
-        </template>
+                <tr class="total-row">
+                  <td><strong>Total {{ proveedor }}</strong></td>
+                  <td v-if="tienePrecio"></td>
+                  <td class="kilos-cell">
+                    <strong>{{ formatNumber(Object.values(datos).reduce((sum, item) => sum + item.kilos, 0)) }}</strong>
+                  </td>
+                </tr>
+              </template>
+              <template v-else>
+                <tr v-for="medida in datos" :key="`${medida.medida}-${medida.proveedor}-${medida.precio || 'sin-precio'}`" v-if="medida.kilos > 0">
+                  <td>{{ medida.medida }}</td>
+                  <td>{{ medida.proveedor }}</td>
+                  <td v-if="tienePrecio" class="precio-cell">{{ medida.precio ? `$${medida.precio}` : '-' }}</td>
+                  <td class="kilos-cell">{{ formatNumber(medida.kilos) }}</td>
+                </tr>
+                <tr class="total-row">
+                  <td><strong>Total {{ proveedor }}</strong></td>
+                  <td></td>
+                  <td v-if="tienePrecio"></td>
+                  <td class="kilos-cell">
+                    <strong>{{ formatNumber(datos.reduce((sum, item) => sum + item.kilos, 0)) }}</strong>
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <div class="total-general">
@@ -74,10 +77,19 @@ export default {
   setup() {
     const existencias = ref({});
     const search = ref('');
+    const tienePrecio = ref(false);
+
+    // Función para implementar FIFO: encuentra la entrada más antigua para una salida
+    const procesarSalidaFIFO = (entradas, salida) => {
+      // Esta función ya no se necesita - respetamos la selección manual del usuario
+      return 0;
+    };
 
     const loadExistencias = async () => {
       const sacadasSnapshot = await getDocs(collection(db, 'sacadas'));
       const newExistencias = {};
+      let hayPrecios = false;
+      
       console.log('=== Rastreando Selecta 51/60 1ra Nacional ===');
       let totalSelecta5160 = 0;
 
@@ -90,42 +102,72 @@ export default {
           return fechaA - fechaB;
         });
 
+      const fechaHoy = moment().startOf('day');
+
+      // Procesar entradas y salidas directamente - sin FIFO
       sacadasOrdenadas.forEach(sacada => {
         const sacadaFecha = sacada.fecha instanceof Date ? sacada.fecha : sacada.fecha.toDate();
+        const momentFecha = moment(sacadaFecha);
 
+        // Procesar entradas
         sacada.entradas.forEach(entrada => {
+          // Solo aplicar lógica de precio desde hoy en adelante
+          const usarPrecio = momentFecha.isSameOrAfter(fechaHoy) && entrada.precio !== null && entrada.precio !== undefined;
+          
+          if (usarPrecio) {
+            hayPrecios = true;
+          }
+
           if (entrada.proveedor === 'Selecta' && entrada.medida === '51/60 1ra Nacional') {
             totalSelecta5160 += entrada.kilos;
-            console.log(`Entrada: ${entrada.kilos} kg - Fecha: ${moment(sacadaFecha).format('DD/MM/YYYY')} - Total: ${totalSelecta5160} kg`);
+            console.log(`Entrada: ${entrada.kilos} kg - Fecha: ${momentFecha.format('DD/MM/YYYY')} - Precio: ${entrada.precio || 'N/A'}`);
           }
+
           if (!newExistencias[entrada.proveedor]) {
             newExistencias[entrada.proveedor] = {};
           }
-          const medidaKey = entrada.medida;
+
+          // Crear clave única que incluye precio si existe
+          const precio = usarPrecio ? entrada.precio : null;
+          const medidaKey = precio !== null ? `${entrada.medida}_$${precio}` : entrada.medida;
+
           if (!newExistencias[entrada.proveedor][medidaKey]) {
             newExistencias[entrada.proveedor][medidaKey] = {
               kilos: 0,
-              medida: entrada.medida
+              medida: entrada.medida,
+              precio: precio
             };
           }
+
           newExistencias[entrada.proveedor][medidaKey].kilos += entrada.kilos;
         });
 
+        // Procesar salidas - respetando la selección exacta del usuario
         sacada.salidas.forEach(salida => {
+          // Solo aplicar lógica de precio desde hoy en adelante
+          const usarPrecio = momentFecha.isSameOrAfter(fechaHoy) && salida.precio !== null && salida.precio !== undefined;
+
           if (salida.proveedor === 'Selecta' && salida.medida === '51/60 1ra Nacional') {
             totalSelecta5160 -= salida.kilos;
-            console.log(`Salida: ${salida.kilos} kg - Fecha: ${moment(sacadaFecha).format('DD/MM/YYYY')} - Total: ${totalSelecta5160} kg`);
+            console.log(`Salida: ${salida.kilos} kg - Fecha: ${momentFecha.format('DD/MM/YYYY')} - Precio: ${salida.precio || 'N/A'}`);
           }
+
           if (!newExistencias[salida.proveedor]) {
             newExistencias[salida.proveedor] = {};
           }
-          const medidaKey = salida.medida;
+
+          // Crear la misma clave que usó el usuario al seleccionar
+          const precio = usarPrecio ? salida.precio : null;
+          const medidaKey = precio !== null ? `${salida.medida}_$${precio}` : salida.medida;
+
           if (!newExistencias[salida.proveedor][medidaKey]) {
             newExistencias[salida.proveedor][medidaKey] = {
               kilos: 0,
-              medida: salida.medida
+              medida: salida.medida,
+              precio: precio
             };
           }
+
           newExistencias[salida.proveedor][medidaKey].kilos -= salida.kilos;
         });
       });
@@ -149,6 +191,7 @@ export default {
       });
 
       existencias.value = newExistencias;
+      tienePrecio.value = hayPrecios;
     };
 
     const filteredExistencias = computed(() => {
@@ -199,9 +242,11 @@ export default {
             medidasAgrupadas[medidaBase] = [];
           }
           
-          // Buscar si ya existe una entrada para este proveedor y medida completa
+          // Buscar si ya existe una entrada para este proveedor, medida completa y precio
           const existingIndex = medidasAgrupadas[medidaBase].findIndex(
-            item => item.proveedor === proveedor && item.medida === datos.medida
+            item => item.proveedor === proveedor && 
+                   item.medida === datos.medida && 
+                   item.precio === datos.precio
           );
           
           if (existingIndex >= 0) {
@@ -212,6 +257,7 @@ export default {
             medidasAgrupadas[medidaBase].push({
               proveedor,
               medida: datos.medida,
+              precio: datos.precio,
               kilos: datos.kilos
             });
           }
@@ -238,7 +284,16 @@ export default {
                 item.proveedor.toLowerCase().includes(searchLower) || 
                 item.medida.toLowerCase().includes(searchLower)
               ))) {
-            resultado[medidaBase] = itemsFiltrados;
+            resultado[medidaBase] = itemsFiltrados.sort((a, b) => {
+              // Ordenar por proveedor, luego por precio (null al final)
+              if (a.proveedor !== b.proveedor) {
+                return a.proveedor.localeCompare(b.proveedor);
+              }
+              if (a.precio === null && b.precio === null) return 0;
+              if (a.precio === null) return 1;
+              if (b.precio === null) return -1;
+              return a.precio - b.precio;
+            });
           }
         });
 
@@ -305,62 +360,67 @@ export default {
         day: 'numeric'
       });
 
+      const columnasPrecio = tienePrecio.value ? `
+        <th>Precio</th>
+      ` : '';
+
+      const celdaPrecio = tienePrecio.value ? `
+        <td class="precio-cell">{{ datos.precio ? '$' + datos.precio : '-' }}</td>
+      ` : '';
+
       const estilos = `
         <style>
           @page { 
             size: A4 landscape; 
-            margin: 0.5cm 0.5cm;
-            @bottom-right {
-              content: "Página " counter(page) " de " counter(pages);
-              font-size: 11pt;
-            }
+            margin: 0.2cm 0.2cm;
           }
           body {
             font-family: Arial, sans-serif;
-            font-size: 18pt;
-            line-height: 1.2;
+            font-size: 28pt;
+            line-height: 1.1;
             color: #333;
             margin: 0;
             padding: 0;
           }
           .header {
-            margin-bottom: 8px;
-            padding-bottom: 4px;
+            margin-bottom: 6px;
+            padding-bottom: 2px;
           }
           h1 {
-            font-size: 26pt;
+            font-size: 34pt;
             margin: 0;
             padding: 0;
           }
           .fecha-reporte {
-            font-size: 18pt;
+            font-size: 28pt;
           }
           .existencias-grid {
             display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 8px;
-            margin-top: 10px;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 6px;
+            margin-top: 6px;
           }
           .medida-card {
             padding: 8px;
           }
           .medida-card h2 {
-            font-size: 20pt;
-            margin: 0 0 6px 0;
-            padding-bottom: 4px;
+            font-size: 26pt;
+            margin: 0 0 4px 0;
+            padding-bottom: 2px;
           }
           th, td {
-            padding: 4px;
-            font-size: 16pt;
+            padding: 2px 4px;
+            font-size: 22pt;
+          }
+          .precio-cell {
+            text-align: center;
+            color: #27ae60;
+            font-weight: bold;
           }
           @media print {
             .existencias-grid {
               display: grid;
-              grid-template-columns: repeat(4, 1fr);
-            }
-            .maquila-card {
-              break-before: page;
-              page-break-before: always;
+              grid-template-columns: repeat(3, 1fr);
             }
             .medida-card {
               break-inside: avoid;
@@ -368,29 +428,29 @@ export default {
             }
           }
           .total-general {
-            margin-top: 15px;
-            padding: 8px;
+            margin-top: 8px;
+            padding: 4px;
           }
           .total-general h2 {
-            font-size: 20pt;
+            font-size: 30pt;
           }
           table {
             width: 100%;
             border-collapse: collapse;
-            margin-top: 8px;
-            border: 2px solid #2c3e50;
+            margin-top: 4px;
+            border: 1px solid #2c3e50;
           }
           th {
             background-color: #2c3e50;
             color: white;
             text-align: left;
-            padding: 8px;
-            font-size: 16pt;
+            padding: 3px 5px;
+            font-size: 22pt;
             border: 1px solid #2c3e50;
           }
           td {
-            padding: 6px 8px;
-            font-size: 16pt;
+            padding: 3px 5px;
+            font-size: 22pt;
             border: 1px solid #bdc3c7;
           }
           tr:nth-child(even) {
@@ -410,7 +470,7 @@ export default {
             color: #2c3e50;
           }
           .medida-card {
-            padding: 12px;
+            padding: 8px;
             border: 1px solid #bdc3c7;
             background-color: white;
           }
@@ -421,7 +481,7 @@ export default {
           .maquila-card h2 {
             color: #d35400;
             border-bottom: 2px solid #f39c12;
-            padding-bottom: 8px;
+            padding-bottom: 4px;
           }
           .maquila-card th {
             background-color: #f39c12;
@@ -451,21 +511,29 @@ export default {
         </style>
       `;
 
-      // Crear el contenido HTML
-      const contenido = document.createElement('div');
-      contenido.innerHTML = `
-        ${estilos}
-        <div class="header">
-          <h1>Reporte de Existencias</h1>
-          <div class="fecha-reporte">Fecha: ${fechaActual}</div>
-        </div>
-        ${document.querySelector('.existencias-grid').outerHTML}
-        ${document.querySelector('.total-general').outerHTML}
+      // Crear el contenido HTML completo
+      const htmlCompleto = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <title>Reporte de Existencias</title>
+          ${estilos}
+        </head>
+        <body>
+          <div class="header">
+            <h1>Reporte de Existencias</h1>
+            <div class="fecha-reporte">Fecha: ${fechaActual}</div>
+          </div>
+          ${document.querySelector('.existencias-grid').outerHTML}
+          ${document.querySelector('.total-general').outerHTML}
+        </body>
+        </html>
       `;
 
       // Configurar la impresión
       const ventanaImpresion = window.open('', '_blank');
-      ventanaImpresion.document.write(contenido.innerHTML);
+      ventanaImpresion.document.write(htmlCompleto);
       ventanaImpresion.document.close();
 
       // Esperar a que los estilos se carguen
@@ -500,6 +568,7 @@ export default {
       search,
       maxKilos,
       totalGeneral,
+      tienePrecio,
       formatNumber,
       imprimirReporte
     };
@@ -568,7 +637,7 @@ h1 {
 
 .existencias-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 8px;
   margin-top: 10px;
 }
@@ -741,18 +810,17 @@ h1 {
   border-top: 2px solid #3498db;
 }
 
+.precio-cell {
+  text-align: center;
+  color: #27ae60;
+  font-weight: bold;
+  font-size: 14px;
+}
+
 @media print {
   .medida-card {
     break-inside: avoid;
     page-break-inside: avoid;
-  }
-  .medida-card:nth-child(n+7) {
-    break-before: page;
-    page-break-before: always;
-  }
-  .medida-card:nth-child(n+13) {
-    break-before: page;
-    page-break-before: always;
   }
   .total-general {
     break-before: avoid;

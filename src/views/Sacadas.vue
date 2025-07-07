@@ -131,17 +131,11 @@
           </tr>
         </thead>
         <tbody>
-          <template v-for="(maquila, maquilaNombre) in salidasMaquilasPorMedida">
-            <tr :key="maquilaNombre">
-              <td :rowspan="Object.keys(maquila).length">{{ maquilaNombre }}</td>
-              <td>{{ Object.keys(maquila)[0] }}</td>
-              <td>{{ formatNumber(Object.values(maquila)[0]) }}</td>
-            </tr>
-            <tr v-for="(total, medida, index) in maquila" :key="`${maquilaNombre}-${medida}`" v-if="index !== 0">
-              <td>{{ medida }}</td>
-              <td>{{ formatNumber(total) }}</td>
-            </tr>
-          </template>
+          <tr v-for="fila in salidasMaquilasFlat" :key="fila.key">
+            <td>{{ fila.maquila }}</td>
+            <td>{{ fila.medida }}</td>
+            <td>{{ formatNumber(fila.total) }}</td>
+          </tr>
         </tbody>
       </table>
     </div>
@@ -277,6 +271,20 @@ export default {
       }
 
       return salidas;
+    },
+    salidasMaquilasFlat() {
+      const filas = [];
+      Object.entries(this.salidasMaquilasPorMedida).forEach(([maquila, medidas]) => {
+        Object.entries(medidas).forEach(([medida, total]) => {
+          filas.push({
+            key: `${maquila}-${medida}`,
+            maquila: maquila,
+            medida: medida,
+            total: total
+          });
+        });
+      });
+      return filas;
     },
     isSalidaValid() {
       return this.newSalida.tipo && 
@@ -489,8 +497,8 @@ export default {
         .map(doc => ({ id: doc.id, ...doc.data() }))
         .sort((a, b) => a.fecha.toDate() - b.fecha.toDate());
 
-      // Función para actualizar el balance de una medida
-      const actualizarBalance = (medida, precio, kilos, esEntrada = true) => {
+      // Función para actualizar el balance de una medida y rastrear fechas
+      const actualizarBalance = (medida, precio, kilos, fecha, esEntrada = true) => {
         const medidaKey = precio ? `${medida} ($${precio})` : medida;
         
         if (!medidasDisponibles.has(medidaKey)) {
@@ -498,11 +506,19 @@ export default {
             medida: medida,
             precio: precio,
             kilos: 0,
-            nombre: medidaKey
+            nombre: medidaKey,
+            primeraFecha: null,
+            esElMasAntiguo: false
           });
         }
         
-        medidasDisponibles.get(medidaKey).kilos += esEntrada ? kilos : -kilos;
+        const datos = medidasDisponibles.get(medidaKey);
+        datos.kilos += esEntrada ? kilos : -kilos;
+        
+        // Rastrear la fecha de la primera entrada con este precio
+        if (esEntrada && (datos.primeraFecha === null || fecha < datos.primeraFecha)) {
+          datos.primeraFecha = fecha;
+        }
       };
 
       // Procesar todas las sacadas anteriores hasta la fecha actual
@@ -512,13 +528,13 @@ export default {
         if (moment(sacadaFecha).isSameOrBefore(fechaActual)) {
           sacada.entradas.forEach(entrada => {
             if (entrada.proveedor === proveedor) {
-              actualizarBalance(entrada.medida, entrada.precio, entrada.kilos, true);
+              actualizarBalance(entrada.medida, entrada.precio, entrada.kilos, sacadaFecha, true);
             }
           });
 
           sacada.salidas.forEach(salida => {
             if (salida.proveedor === proveedor) {
-              actualizarBalance(salida.medida, salida.precio, salida.kilos, false);
+              actualizarBalance(salida.medida, salida.precio, salida.kilos, sacadaFecha, false);
             }
           });
         }
@@ -527,31 +543,86 @@ export default {
       // Procesar entradas y salidas del día actual
       this.entradas.forEach(entrada => {
         if (entrada.proveedor === proveedor) {
-          actualizarBalance(entrada.medida, entrada.precio, entrada.kilos, true);
+          const fechaActual = this.currentDate.toDate();
+          actualizarBalance(entrada.medida, entrada.precio, entrada.kilos, fechaActual, true);
         }
       });
 
       this.salidas.forEach(salida => {
         if (salida.proveedor === proveedor) {
-          actualizarBalance(salida.medida, salida.precio, salida.kilos, false);
+          const fechaActual = this.currentDate.toDate();
+          actualizarBalance(salida.medida, salida.precio, salida.kilos, fechaActual, false);
         }
       });
+
+      // Encontrar cuál es el precio más antiguo para cada medida base
+      const medidasPorBase = new Map();
+      for (const [_, datos] of medidasDisponibles) {
+        if (datos.kilos > 0 && datos.precio !== null && datos.primeraFecha !== null) {
+          const medidaBase = datos.medida;
+          if (!medidasPorBase.has(medidaBase)) {
+            medidasPorBase.set(medidaBase, []);
+          }
+          medidasPorBase.get(medidaBase).push(datos);
+        }
+      }
+
+      // Marcar cuál es el más antiguo para cada medida base
+      for (const [_, grupoMedidas] of medidasPorBase) {
+        if (grupoMedidas.length > 1) {
+          // Encontrar el más antiguo
+          const masAntiguo = grupoMedidas.reduce((min, actual) => 
+            actual.primeraFecha < min.primeraFecha ? actual : min
+          );
+          masAntiguo.esElMasAntiguo = true;
+        }
+      }
 
       // Convertir solo las medidas con existencias positivas a opciones
       const medidasConPrecio = [];
       for (const [_, datos] of medidasDisponibles) {
         if (datos.kilos > 0) {
+          let nombreDisplay = datos.nombre;
+          
+          // Agregar indicadores visuales
+          if (datos.precio !== null) {
+            const fechaStr = moment(datos.primeraFecha).format('DD/MM/YY');
+            if (datos.esElMasAntiguo) {
+              nombreDisplay = `🕐 ${datos.nombre} - Más antiguo (${fechaStr})`;
+            } else {
+              nombreDisplay = `${datos.nombre} - (${fechaStr})`;
+            }
+          }
+
           medidasConPrecio.push({
             id: datos.nombre,
-            nombre: datos.nombre,
+            nombre: nombreDisplay,
+            nombreOriginal: datos.nombre,
             tipo: 'general',
             precio: datos.precio,
-            kilos: datos.kilos
+            kilos: datos.kilos,
+            primeraFecha: datos.primeraFecha,
+            esElMasAntiguo: datos.esElMasAntiguo
           });
         }
       }
 
-      return medidasConPrecio;
+      // Ordenar: primero por medida base, luego por fecha (más antiguo primero)
+      return medidasConPrecio.sort((a, b) => {
+        const medidaBaseA = a.nombreOriginal.split(' ($')[0];
+        const medidaBaseB = b.nombreOriginal.split(' ($')[0];
+        
+        if (medidaBaseA !== medidaBaseB) {
+          return medidaBaseA.localeCompare(medidaBaseB);
+        }
+        
+        // Si es la misma medida base, ordenar por fecha (más antiguo primero)
+        if (a.primeraFecha && b.primeraFecha) {
+          return a.primeraFecha - b.primeraFecha;
+        }
+        
+        return 0;
+      });
     },
   },
   async created() {
@@ -827,6 +898,19 @@ button:disabled {
 
 button:disabled:hover {
   background-color: #cccccc;
+}
+
+/* Estilos para indicadores de precio más antiguo */
+.input-group select option[value*="🕐"] {
+  background-color: #fff3cd;
+  color: #856404;
+  font-weight: bold;
+}
+
+.precio-mas-antiguo {
+  background-color: #fff3cd !important;
+  color: #856404 !important;
+  font-weight: bold !important;
 }
 </style>
 
