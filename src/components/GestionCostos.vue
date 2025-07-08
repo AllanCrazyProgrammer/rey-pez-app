@@ -712,21 +712,95 @@ export default {
 
 
 
+    // Función auxiliar para encontrar el costo correspondiente a una medida
+    encontrarCostoParaMedida(medidaEmbarque) {
+      // 1. Buscar coincidencia exacta primero
+      if (this.costosRegistrados[medidaEmbarque]) {
+        return {
+          medidaEncontrada: medidaEmbarque,
+          costo: this.costosRegistrados[medidaEmbarque].costoBase
+        };
+      }
+      
+      // 2. Si la medida contiene "Maquila Ozuna", buscar sin ese sufijo
+      if (medidaEmbarque.includes('Maquila Ozuna')) {
+        const medidaBase = medidaEmbarque.replace(' Maquila Ozuna', '').trim();
+        if (this.costosRegistrados[medidaBase]) {
+          return {
+            medidaEncontrada: medidaBase,
+            costo: this.costosRegistrados[medidaBase].costoBase
+          };
+        }
+      }
+      
+      // 3. Buscar variaciones con espacios/guiones
+      const medidaConEspacio = medidaEmbarque.replace(/-/g, ' ');
+      const medidaConGuion = medidaEmbarque.replace(/ /g, '-');
+      
+      if (this.costosRegistrados[medidaConEspacio]) {
+        return {
+          medidaEncontrada: medidaConEspacio,
+          costo: this.costosRegistrados[medidaConEspacio].costoBase
+        };
+      }
+      
+      if (this.costosRegistrados[medidaConGuion]) {
+        return {
+          medidaEncontrada: medidaConGuion,
+          costo: this.costosRegistrados[medidaConGuion].costoBase
+        };
+      }
+      
+      // 4. Buscar coincidencias parciales (el costo registrado está contenido en la medida del embarque)
+      const medidaEmbarqueLower = medidaEmbarque.toLowerCase().trim();
+      
+      for (const [medidaRegistrada, costoInfo] of Object.entries(this.costosRegistrados)) {
+        const medidaRegistradaLower = medidaRegistrada.toLowerCase().trim();
+        
+        // Si la medida registrada está contenida en la medida del embarque
+        if (medidaEmbarqueLower.includes(medidaRegistradaLower) && medidaRegistradaLower.length > 2) {
+          return {
+            medidaEncontrada: medidaRegistrada,
+            costo: costoInfo.costoBase
+          };
+        }
+        
+        // Si la medida del embarque (sin sufijos) está contenida en la medida registrada
+        const medidaEmbarqueSinSufijos = medidaEmbarqueLower
+          .replace(/\s+maquila\s+ozuna/g, '')
+          .replace(/\s+c\/c/g, '')
+          .trim();
+          
+        if (medidaRegistradaLower.includes(medidaEmbarqueSinSufijos) && medidaEmbarqueSinSufijos.length > 2) {
+          return {
+            medidaEncontrada: medidaRegistrada,
+            costo: costoInfo.costoBase
+          };
+        }
+      }
+      
+      return null; // No se encontró coincidencia
+    },
+
     async aplicarCostosRegistrados() {
       // Aplicar costos de medidas registradas automáticamente a las medidas del embarque
       let costosActualizados = false;
       
       this.medidasEmbarque.forEach(medida => {
-        if (this.costosRegistrados[medida]) {
-          const costoRegistrado = this.costosRegistrados[medida].costoBase;
+        const costoEncontrado = this.encontrarCostoParaMedida(medida);
+        
+        if (costoEncontrado) {
+          const costoRegistrado = costoEncontrado.costo;
           const costoEmbarque = this.costosEmbarque[medida];
           
           // Actualizar si no hay costo asignado o si hay diferencia con el costo registrado
           if (!costoEmbarque || costoEmbarque !== costoRegistrado) {
             this.$set(this.costosEmbarque, medida, costoRegistrado);
             costosActualizados = true;
-            console.log(`Actualizando costo de ${medida}: ${costoEmbarque} -> ${costoRegistrado}`);
+            console.log(`Actualizando costo de ${medida}: ${costoEmbarque} -> ${costoRegistrado} (encontrado como: ${costoEncontrado.medidaEncontrada})`);
           }
+        } else {
+          console.log(`No se encontró costo para la medida: ${medida}`);
         }
       });
 

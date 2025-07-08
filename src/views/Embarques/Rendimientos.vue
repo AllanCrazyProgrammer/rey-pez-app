@@ -652,31 +652,74 @@ export default {
       }
     },
 
-    obtenerPrecioVentaParaFecha(medida, fechaEmbarque, clienteId = null) {
-      // Normalizar el nombre de la medida para buscar en precios
-      const medidaNormalizada = medida.toLowerCase().trim().replace(' maquila ozuna', '');
+    // Función auxiliar para encontrar precios con búsqueda inteligente
+    encontrarPreciosParaMedida(medida) {
+      // 1. Buscar coincidencia exacta primero
+      let preciosProducto = this.preciosVenta[medida.toLowerCase().trim()];
+      if (preciosProducto && preciosProducto.length > 0) {
+        return { medidaEncontrada: medida, precios: preciosProducto };
+      }
       
-      // Buscar precios para esta medida - primero intento directo
-      let preciosProducto = this.preciosVenta[medidaNormalizada];
+      // 2. Normalizar quitando sufijos comunes
+      const medidaNormalizada = medida.toLowerCase().trim()
+        .replace(' maquila ozuna', '')
+        .replace(/\s+(vayon|ahumada|sin\s+cal|cal|c\/c|crudo|limpio).*$/g, '')
+        .trim();
       
-      // Si no se encuentra, intenta variaciones (guión vs espacio)
-      if (!preciosProducto || preciosProducto.length === 0) {
-        // Convertir guiones a espacios y viceversa
-        const medidaConEspacio = medidaNormalizada.replace(/-/g, ' ');
-        const medidaConGuion = medidaNormalizada.replace(/ /g, '-');
+      // 3. Buscar con medida normalizada
+      preciosProducto = this.preciosVenta[medidaNormalizada];
+      if (preciosProducto && preciosProducto.length > 0) {
+        return { medidaEncontrada: medidaNormalizada, precios: preciosProducto };
+      }
+      
+      // 4. Buscar variaciones con espacios/guiones
+      const medidaConEspacio = medidaNormalizada.replace(/-/g, ' ');
+      const medidaConGuion = medidaNormalizada.replace(/ /g, '-');
+      
+      preciosProducto = this.preciosVenta[medidaConEspacio];
+      if (preciosProducto && preciosProducto.length > 0) {
+        return { medidaEncontrada: medidaConEspacio, precios: preciosProducto };
+      }
+      
+      preciosProducto = this.preciosVenta[medidaConGuion];
+      if (preciosProducto && preciosProducto.length > 0) {
+        return { medidaEncontrada: medidaConGuion, precios: preciosProducto };
+      }
+      
+      // 5. Buscar coincidencias parciales
+      const medidaLower = medidaNormalizada.toLowerCase();
+      
+      for (const [claveProducto, precios] of Object.entries(this.preciosVenta)) {
+        const claveProductoLower = claveProducto.toLowerCase().trim();
         
-        // Buscar en todas las variaciones
-        preciosProducto = this.preciosVenta[medidaConEspacio] || this.preciosVenta[medidaConGuion];
+        // Si la clave del producto está contenida en la medida
+        if (medidaLower.includes(claveProductoLower) && claveProductoLower.length > 2) {
+          return { medidaEncontrada: claveProducto, precios: precios };
+        }
         
-        if (preciosProducto) {
-          console.log(`[${medida}] Precio encontrado con variación: ${medidaConEspacio !== medidaNormalizada ? medidaConEspacio : medidaConGuion}`);
+        // Si la medida está contenida en la clave del producto
+        if (claveProductoLower.includes(medidaLower) && medidaLower.length > 2) {
+          return { medidaEncontrada: claveProducto, precios: precios };
         }
       }
       
-      if (!preciosProducto || preciosProducto.length === 0) {
-        console.log(`[${medida}] No se encontraron precios para la medida normalizada: ${medidaNormalizada}`);
+      return null; // No se encontró
+    },
+
+    obtenerPrecioVentaParaFecha(medida, fechaEmbarque, clienteId = null) {
+      // Usar la función auxiliar mejorada para buscar precios
+      const resultadoBusqueda = this.encontrarPreciosParaMedida(medida);
+      
+      if (!resultadoBusqueda) {
+        console.log(`[${medida}] No se encontraron precios para ninguna variación`);
         console.log(`[${medida}] Precios disponibles:`, Object.keys(this.preciosVenta));
         return null;
+      }
+      
+      const { medidaEncontrada, precios: preciosProducto } = resultadoBusqueda;
+      
+      if (medidaEncontrada !== medida) {
+        console.log(`[${medida}] Precio encontrado como: ${medidaEncontrada}`);
       }
       
       // Crear fecha del embarque solo con año-mes-día (sin hora)
