@@ -402,9 +402,9 @@ export default {
       // Para medidas de Ozuna maquila, no agregar costo extra ya que no son ventas directas
       const esMedidaOzunaMaquila = medida.includes('Maquila Ozuna');
       
-      // Solo sumar costo extra si la medida tiene formato numérico (ej: "51/60", "20/30")
+      // Solo sumar costo extra si la medida empieza con formato numérico (ej: "51/60", "20/30")
       // No sumar para medidas de texto (ej: "macuil", "pulpa", etc.) ni para Ozuna Maquila
-      const esMedidaNumerica = /^\d+\/\d+$/.test(medida.trim()) || /^\d+$/.test(medida.trim());
+      const esMedidaNumerica = /^\d+\/\d+/.test(medida.trim()) || /^\d+\s/.test(medida.trim()) || /^\d+$/.test(medida.trim());
       
       let resultado;
       if (esMedidaOzunaMaquila || !esMedidaNumerica) {
