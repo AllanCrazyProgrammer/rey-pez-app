@@ -102,8 +102,6 @@ export default {
           return fechaA - fechaB;
         });
 
-      const fechaHoy = moment().startOf('day');
-
       // Procesar entradas y salidas directamente - sin FIFO
       sacadasOrdenadas.forEach(sacada => {
         const sacadaFecha = sacada.fecha instanceof Date ? sacada.fecha : sacada.fecha.toDate();
@@ -111,8 +109,8 @@ export default {
 
         // Procesar entradas
         sacada.entradas.forEach(entrada => {
-          // Solo aplicar lógica de precio desde hoy en adelante
-          const usarPrecio = momentFecha.isSameOrAfter(fechaHoy) && entrada.precio !== null && entrada.precio !== undefined;
+          // Mostrar precios si están disponibles
+          const usarPrecio = entrada.precio !== null && entrada.precio !== undefined;
           
           if (usarPrecio) {
             hayPrecios = true;
@@ -144,8 +142,8 @@ export default {
 
         // Procesar salidas - respetando la selección exacta del usuario
         sacada.salidas.forEach(salida => {
-          // Solo aplicar lógica de precio desde hoy en adelante
-          const usarPrecio = momentFecha.isSameOrAfter(fechaHoy) && salida.precio !== null && salida.precio !== undefined;
+          // Mostrar precios si están disponibles
+          const usarPrecio = salida.precio !== null && salida.precio !== undefined;
 
           if (salida.proveedor === 'Selecta' && salida.medida === '51/60 1ra Nacional') {
             totalSelecta5160 -= salida.kilos;
