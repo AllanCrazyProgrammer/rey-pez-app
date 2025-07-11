@@ -58,6 +58,7 @@
                 >
                 <label :for="'maquila-' + index">Maquila ganancia</label>
               </div>
+
               <div v-if="analizarMaquilaGanancia[medida]" class="maquila-precio-input">
                 <input 
                   type="number" 
@@ -152,7 +153,12 @@
                 </div>
                 <div class="ganancia-item">
                   <span class="label">Costo Final:</span>
-                  <span class="valor costo-final">${{ formatearPrecio(gananciasCalculadas[medida].costoFinal) }}</span>
+                  <div class="costo-final-container">
+                    <span class="valor costo-final">${{ formatearPrecio(gananciasCalculadas[medida].costoFinal) }}</span>
+                    <span v-if="aplicarCostoExtra[medida]" class="costo-extra-indicator">
+                      (+ ${{ embarqueData?.costoExtra || 18 }} extra)
+                    </span>
+                  </div>
                 </div>
                 <div class="ganancia-item">
                   <span class="label">Ganancia/kg:</span>
@@ -390,6 +396,7 @@ export default {
       gananciasCalculadasCrudos: {}, // Nueva propiedad para ganancias de crudos
       analizarGanancia: {},
       analizarGananciaCrudos: {}, // Nueva propiedad para controlar análisis de crudos
+      aplicarCostoExtra: {}, // Para controlar a qué medidas aplicar costo extra
       diasRecientes: 3, // Días para considerar un embarque como "reciente"
       // Configuración de pesos por defecto
       pesoTaraCosto: 19, // Peso por defecto para cálculo de costos
@@ -573,6 +580,7 @@ export default {
           this.medidaOculta = this.embarqueData.medidaOculta || {};
           this.analizarGanancia = this.embarqueData.analizarGanancia || {};
           this.analizarGananciaCrudos = this.embarqueData.analizarGananciaCrudos || {}; // Cargar analizarGananciaCrudos
+          this.aplicarCostoExtra = this.embarqueData.aplicarCostoExtra || {}; // Cargar configuración de costo extra
           this.analizarMaquilaGanancia = this.embarqueData.analizarMaquilaGanancia || {};
           this.precioMaquila = this.embarqueData.precioMaquila || {};
           
@@ -599,6 +607,8 @@ export default {
           });
           
           this.guardadoAutomaticoActivo = true;
+          
+
           
           // Calcular ganancias después de cargar embarque
           if (Object.keys(this.preciosVenta).length > 0) {
@@ -800,17 +810,13 @@ export default {
       const rendimiento = Math.round(rendimientoOriginal * 100) / 100;
       const costoExtra = Number(this.embarqueData?.costoExtra) || 18;
       
-      // Para medidas de Ozuna maquila, no agregar costo extra ya que no son ventas directas
-      const esMedidaOzunaMaquila = medida.includes('Maquila Ozuna');
+      // Verificar si está marcado para aplicar costo extra
+      const aplicarExtra = this.aplicarCostoExtra[medida] || false;
       
-      // Solo sumar costo extra si la medida empieza con formato numérico (ej: "51/60", "20/30")
-      // No sumar para medidas de texto (ej: "macuil", "pulpa", etc.) ni para Ozuna Maquila
-      const esMedidaNumerica = /^\d+\/\d+/.test(medida.trim()) || /^\d+\s/.test(medida.trim()) || /^\d+$/.test(medida.trim());
-      
-      if (esMedidaOzunaMaquila || !esMedidaNumerica) {
-        return Math.round(costo * rendimiento);
-      } else {
+      if (aplicarExtra) {
         return Math.round((costo * rendimiento) + costoExtra);
+      } else {
+        return Math.round(costo * rendimiento);
       }
     },
 
@@ -1440,6 +1446,7 @@ export default {
           medidaOculta: this.medidaOculta,
           analizarGanancia: this.analizarGanancia,
           analizarGananciaCrudos: this.analizarGananciaCrudos, // Guardar analizarGananciaCrudos
+
           analizarMaquilaGanancia: this.analizarMaquilaGanancia,
           precioMaquila: this.precioMaquila
         });
@@ -1862,6 +1869,8 @@ export default {
       }
     },
 
+
+
     irAGestionCostos() {
       this.$router.push({
         name: 'GestionCostos',
@@ -1964,7 +1973,9 @@ export default {
       const totalEmbarcado = this.obtenerTotalEmbarcado(medida);
       const precioMaquila = Number(this.precioMaquila[medida]) || 0;
       return totalEmbarcado * precioMaquila;
-    }
+    },
+
+
   },
 
   watch: {
@@ -2047,6 +2058,8 @@ export default {
       },
       deep: true
     },
+
+
 
   },
 
@@ -2400,6 +2413,8 @@ input {
   cursor: pointer;
   user-select: none;
 }
+
+
 
 .ganancia-info {
   margin-top: 15px;
@@ -2803,6 +2818,20 @@ input {
   font-weight: bold;
 }
 
+.costo-final-container {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.costo-extra-indicator {
+  font-size: 0.8em;
+  color: #f39c12;
+  font-weight: normal;
+  margin-left: 5px;
+}
+
 @media (max-width: 768px) {
   .controles-medida {
     flex-direction: column;
@@ -2832,6 +2861,10 @@ input {
   }
   
   .precio-venta-container {
+    align-items: flex-start;
+  }
+  
+  .costo-final-container {
     align-items: flex-start;
   }
   

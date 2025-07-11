@@ -79,6 +79,15 @@
                 <span class="checkmark"></span>
                 Mostrar en PDF
               </label>
+              <label class="checkbox-container">
+                <input 
+                  type="checkbox" 
+                  v-model="aplicarCostoExtra[medida]"
+                  @change="guardarConfiguracionCostoExtra"
+                >
+                <span class="checkmark"></span>
+                Aplicar costo extra
+              </label>
             </div>
           </div>
           <div class="medida-info">
@@ -94,6 +103,9 @@
               </button>
               <div v-if="costosEmbarque[medida] && rendimientos[medida]" class="costo-calculado">
                 <strong>Costo Final: ${{ calcularCostoFinal(medida) }}</strong>
+                <span v-if="aplicarCostoExtra[medida]" class="costo-extra-indicator">
+                  (+ ${{ costoExtra }} extra)
+                </span>
               </div>
             </div>
             <p v-if="rendimientos[medida]">
@@ -207,6 +219,7 @@ export default {
       costosEmbarque: {},
       medidaSeleccionada: {},
       medidaOculta: {}, // Para el sistema de ocultación en PDF
+      aplicarCostoExtra: {}, // Para controlar a qué medidas aplicar costo extra
       rendimientos: {},
       costoExtra: 18, // Valor por defecto
       mostrarModalNuevaMedida: false,
@@ -265,9 +278,12 @@ export default {
           this.obtenerMedidasEmbarque();
           this.medidaSeleccionada = this.embarqueData.medidaSeleccionada || {};
           this.medidaOculta = this.embarqueData.medidaOculta || {}; // Cargar configuración de ocultación
+          this.aplicarCostoExtra = this.embarqueData.aplicarCostoExtra || {}; // Cargar configuración de costo extra
           this.costosEmbarque = this.embarqueData.costosPorMedida || {};
           this.costoExtra = this.embarqueData.costoExtra || 18;
           this.calcularRendimientos();
+          // Inicializar configuración de costo extra si no existe
+          await this.inicializarConfiguracionCostoExtra();
           // Aplicar costos de medidas registradas automáticamente
           await this.aplicarCostosRegistrados();
         }
@@ -399,18 +415,14 @@ export default {
       const rendimiento = Math.round(rendimientoOriginal * 100) / 100;
       const costoExtra = Number(this.costoExtra) || 18;
       
-      // Para medidas de Ozuna maquila, no agregar costo extra ya que no son ventas directas
-      const esMedidaOzunaMaquila = medida.includes('Maquila Ozuna');
-      
-      // Solo sumar costo extra si la medida empieza con formato numérico (ej: "51/60", "20/30")
-      // No sumar para medidas de texto (ej: "macuil", "pulpa", etc.) ni para Ozuna Maquila
-      const esMedidaNumerica = /^\d+\/\d+/.test(medida.trim()) || /^\d+\s/.test(medida.trim()) || /^\d+$/.test(medida.trim());
+      // Verificar si está marcado para aplicar costo extra
+      const aplicarExtra = this.aplicarCostoExtra[medida] || false;
       
       let resultado;
-      if (esMedidaOzunaMaquila || !esMedidaNumerica) {
-        resultado = Math.round(costo * rendimiento);
-      } else {
+      if (aplicarExtra) {
         resultado = Math.round((costo * rendimiento) + costoExtra);
+      } else {
+        resultado = Math.round(costo * rendimiento);
       }
       
       return resultado.toFixed(1);
@@ -680,6 +692,22 @@ export default {
       }
     },
 
+    async guardarConfiguracionCostoExtra() {
+      try {
+        const db = getFirestore();
+        const embarqueId = this.$route.params.id;
+        const embarqueRef = doc(db, 'embarques', embarqueId);
+        
+        await updateDoc(embarqueRef, {
+          aplicarCostoExtra: this.aplicarCostoExtra
+        });
+
+        console.log('Configuración de costo extra guardada correctamente');
+      } catch (error) {
+        console.error('Error al guardar la configuración de costo extra:', error);
+      }
+    },
+
     async guardarCostoExtra() {
       try {
         const db = getFirestore();
@@ -708,6 +736,35 @@ export default {
         name: 'Rendimientos',
         params: { id: this.$route.params.id }
       });
+    },
+
+    async inicializarConfiguracionCostoExtra() {
+      // Si ya existe configuración, no hacer nada (respetar configuración manual del usuario)
+      if (Object.keys(this.aplicarCostoExtra).length > 0) {
+        return;
+      }
+
+      // Aplicar la lógica anterior para inicializar automáticamente
+      let configuracionActualizada = false;
+      
+      this.medidasEmbarque.forEach(medida => {
+        // Aplicar la misma lógica que había antes
+        const esMedidaOzunaMaquila = medida.includes('Maquila Ozuna');
+        const esMedidaNumerica = /^\d+\/\d+/.test(medida.trim()) || /^\d+\s/.test(medida.trim()) || /^\d+$/.test(medida.trim());
+        
+        // Si era una medida que antes tenía costo extra automático, marcarla
+        if (!esMedidaOzunaMaquila && esMedidaNumerica) {
+          this.$set(this.aplicarCostoExtra, medida, true);
+          configuracionActualizada = true;
+        } else {
+          this.$set(this.aplicarCostoExtra, medida, false);
+        }
+      });
+
+      // Guardar la configuración inicial si se actualizó
+      if (configuracionActualizada) {
+        await this.guardarConfiguracionCostoExtra();
+      }
     },
 
 
@@ -1152,6 +1209,19 @@ export default {
   border-left: 3px solid #27ae60;
 }
 
+.costo-extra-indicator {
+  font-size: 0.8em;
+  color: #f39c12;
+  font-weight: normal;
+  margin-left: 5px;
+}
+
+.medida-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .checkbox-container {
   display: flex;
   align-items: center;
@@ -1457,6 +1527,15 @@ export default {
   .costo-extra-section {
     padding: 10px;
     flex-wrap: wrap;
+  }
+  
+  .medida-actions {
+    flex-direction: column;
+    gap: 5px;
+  }
+  
+  .checkbox-container {
+    font-size: 0.8em;
   }
 }
 </style> 
