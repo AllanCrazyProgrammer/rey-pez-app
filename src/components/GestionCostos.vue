@@ -47,6 +47,9 @@
         <button @click="sincronizarCostos" class="btn-sincronizar" title="Sincronizar costos con los valores más recientes">
           <i class="fas fa-sync-alt"></i> Sincronizar Costos
         </button>
+        <button @click="sugerirCrearMedidasFaltantes" class="btn-crear-medidas" title="Crear medidas faltantes">
+          <i class="fas fa-plus-circle"></i> Crear Medidas Faltantes
+        </button>
       </div>
       
       <!-- Campo de costo extra -->
@@ -66,7 +69,7 @@
       </div>
       
       <div class="medidas-grid">
-        <div v-for="medida in medidasVisibles" :key="medida" class="medida-card">
+        <div v-for="medida in medidasVisibles" :key="`${medida}-${costosEmbarque[medida] || 'global'}`" class="medida-card">
           <div class="medida-header">
             <h4>{{ medida }}</h4>
             <div class="medida-actions">
@@ -93,15 +96,28 @@
           <div class="medida-info">
             <div class="costo-container">
               <div class="costo-valor">
-                <span v-if="costosEmbarque[medida]" class="costo-actual">
-                  <strong>Costo:</strong> ${{ Number(costosEmbarque[medida]).toFixed(2) }}
-                </span>
-                <span v-else class="sin-costo">Sin costo asignado</span>
+                <div class="costo-display" @click="editarCostoEmbarque(medida)" :class="{ 'clickeable': true, 'costo-especifico': costosEmbarque[medida] }">
+                  <strong>Costo:</strong> 
+                  <span class="costo-amount">${{ costosActuales[medida] || '0.00' }}</span>
+                  <span v-if="costosEmbarque[medida]" class="badge-especifico">Específico</span>
+                  <i class="fas fa-edit costo-edit-icon"></i>
+                </div>
+                <div class="costo-origen">
+                  <span v-if="costosEmbarque[medida]" class="costo-especifico">
+                    <i class="fas fa-ship"></i> Costo específico del embarque
+                    <button @click.stop="limpiarCostoEspecifico(medida)" class="btn-limpiar-costo" title="Volver al costo global">
+                      <i class="fas fa-times"></i>
+                    </button>
+                  </span>
+                  <span v-else-if="encontrarCostoParaMedida(medida)" class="costo-global">
+                    <i class="fas fa-globe"></i> Costo global ({{ encontrarCostoParaMedida(medida).medidaEncontrada }})
+                  </span>
+                  <span v-else class="sin-costo">
+                    <i class="fas fa-exclamation-triangle"></i> Sin costo asignado
+                  </span>
+                </div>
               </div>
-              <button @click="editarCostoEmbarque(medida)" class="btn-editar-costo-embarque">
-                <i class="fas fa-dollar-sign"></i> {{ costosEmbarque[medida] ? 'Cambiar' : 'Asignar' }} Costo
-              </button>
-              <div v-if="costosEmbarque[medida] && rendimientos[medida]" class="costo-calculado">
+              <div v-if="(costosEmbarque[medida] || encontrarCostoParaMedida(medida)) && rendimientos[medida]" class="costo-calculado">
                 <strong>Costo Final: ${{ calcularCostoFinal(medida) }}</strong>
                 <span v-if="aplicarCostoExtra[medida]" class="costo-extra-indicator">
                   (+ ${{ costoExtra }} extra)
@@ -149,6 +165,7 @@
       :costo="costoEmbarqueEditando.costo"
       :medida="costoEmbarqueEditando.medida"
       :esNuevo="false"
+      :esCostoEmbarque="true"
       @cerrar="cerrarModalCostoEmbarque"
       @guardar="guardarCostoEmbarque"
     />
@@ -244,7 +261,8 @@ export default {
         medida: '',
         costo: 0
       },
-      unsubscribePreciosGlobales: null
+      unsubscribePreciosGlobales: null,
+      guardarCostoExtraDebounced: null
     }
   },
 
@@ -409,7 +427,17 @@ export default {
     },
 
     calcularCostoFinal(medida) {
-      const costo = Number(this.costosEmbarque[medida]) || 0;
+      // Usar el costo actual (específico del embarque o global)
+      let costo = 0;
+      if (this.costosEmbarque[medida]) {
+        costo = Number(this.costosEmbarque[medida]);
+      } else {
+        const costoGlobal = this.encontrarCostoParaMedida(medida);
+        if (costoGlobal) {
+          costo = Number(costoGlobal.costo);
+        }
+      }
+      
       const rendimientoOriginal = Number(this.rendimientos[medida]) || 0;
       // Usar rendimiento redondeado a 2 decimales (igual que se muestra en la UI)
       const rendimiento = Math.round(rendimientoOriginal * 100) / 100;
@@ -633,9 +661,21 @@ export default {
     },
 
     editarCostoEmbarque(medida) {
+      // Usar el costo actual como valor inicial (específico del embarque o global)
+      let costoInicial = 0;
+      
+      if (this.costosEmbarque[medida]) {
+        costoInicial = this.costosEmbarque[medida];
+      } else {
+        const costoGlobal = this.encontrarCostoParaMedida(medida);
+        if (costoGlobal) {
+          costoInicial = costoGlobal.costo;
+        }
+      }
+      
       this.costoEmbarqueEditando = {
         medida: medida,
-        costo: this.costosEmbarque[medida] || 0
+        costo: costoInicial
       };
       this.mostrarModalCostoEmbarque = true;
     },
@@ -658,9 +698,11 @@ export default {
         // Actualizar el costo local
         if (nuevoCosto !== null) {
           this.$set(this.costosEmbarque, medida, Number(nuevoCosto));
+          console.log(`Costo específico establecido para ${medida}: ${this.costosEmbarque[medida]}`);
         } else {
           // Si es null, eliminar el costo
           this.$delete(this.costosEmbarque, medida);
+          console.log(`Costo específico eliminado para ${medida}`);
         }
         
         // Guardar en Firebase
@@ -673,6 +715,29 @@ export default {
       } catch (error) {
         console.error('Error al actualizar el costo del embarque:', error);
         alert('Error al actualizar el costo del embarque');
+      }
+    },
+
+    async limpiarCostoEspecifico(medida) {
+      if (confirm(`¿Volver al costo global para "${medida}"?`)) {
+        try {
+          const db = getFirestore();
+          const embarqueId = this.$route.params.id;
+          const embarqueRef = doc(db, 'embarques', embarqueId);
+          
+          // Eliminar el costo específico
+          this.$delete(this.costosEmbarque, medida);
+          
+          // Guardar en Firebase
+          await updateDoc(embarqueRef, {
+            costosPorMedida: this.costosEmbarque
+          });
+          
+          console.log(`Costo específico eliminado para ${medida}, volviendo al costo global`);
+        } catch (error) {
+          console.error('Error al eliminar el costo específico:', error);
+          alert('Error al eliminar el costo específico');
+        }
       }
     },
 
@@ -769,10 +834,26 @@ export default {
 
 
 
+    // Función auxiliar para normalizar nombres de medidas
+    normalizarMedida(medida) {
+      if (!medida) return '';
+      return medida
+        .toLowerCase()
+        .trim()
+        .replace(/\s+/g, ' ')  // Múltiples espacios a uno solo
+        .replace(/\s*\/\s*/g, '/') // Espacios alrededor de /
+        .replace(/\s*-\s*/g, '-'); // Espacios alrededor de -
+    },
+
     // Función auxiliar para encontrar el costo correspondiente a una medida
     encontrarCostoParaMedida(medidaEmbarque) {
+      if (!medidaEmbarque) return null;
+      
+      console.log(`🔍 Buscando costo para: "${medidaEmbarque}"`);
+      
       // 1. Buscar coincidencia exacta primero
       if (this.costosRegistrados[medidaEmbarque]) {
+        console.log(`✓ Coincidencia exacta encontrada: "${medidaEmbarque}"`);
         return {
           medidaEncontrada: medidaEmbarque,
           costo: this.costosRegistrados[medidaEmbarque].costoBase
@@ -782,7 +863,9 @@ export default {
       // 2. Si la medida contiene "Maquila Ozuna", buscar sin ese sufijo
       if (medidaEmbarque.includes('Maquila Ozuna')) {
         const medidaBase = medidaEmbarque.replace(' Maquila Ozuna', '').trim();
+        console.log(`🔍 Buscando medida base sin "Maquila Ozuna": "${medidaBase}"`);
         if (this.costosRegistrados[medidaBase]) {
+          console.log(`✓ Encontrado costo para medida base: "${medidaBase}"`);
           return {
             medidaEncontrada: medidaBase,
             costo: this.costosRegistrados[medidaBase].costoBase
@@ -790,45 +873,47 @@ export default {
         }
       }
       
-      // 3. Buscar variaciones con espacios/guiones
-      const medidaConEspacio = medidaEmbarque.replace(/-/g, ' ');
-      const medidaConGuion = medidaEmbarque.replace(/ /g, '-');
+      // 3. Normalizar la medida del embarque y buscar variaciones
+      const medidaEmbarqueNormalizada = this.normalizarMedida(medidaEmbarque);
+      console.log(`🔍 Medida normalizada: "${medidaEmbarqueNormalizada}"`);
       
-      if (this.costosRegistrados[medidaConEspacio]) {
-        return {
-          medidaEncontrada: medidaConEspacio,
-          costo: this.costosRegistrados[medidaConEspacio].costoBase
-        };
+      // Buscar todas las medidas registradas con una lógica más permisiva
+      for (const [medidaRegistrada, costoInfo] of Object.entries(this.costosRegistrados)) {
+        const medidaRegistradaNormalizada = this.normalizarMedida(medidaRegistrada);
+        
+        // Coincidencia exacta normalizada
+        if (medidaEmbarqueNormalizada === medidaRegistradaNormalizada) {
+          console.log(`✓ Coincidencia normalizada encontrada: "${medidaRegistrada}"`);
+          return {
+            medidaEncontrada: medidaRegistrada,
+            costo: costoInfo.costoBase
+          };
+        }
       }
       
-      if (this.costosRegistrados[medidaConGuion]) {
-        return {
-          medidaEncontrada: medidaConGuion,
-          costo: this.costosRegistrados[medidaConGuion].costoBase
-        };
-      }
+      // 4. Buscar coincidencias parciales más flexibles
+      const medidaBaseSinSufijos = medidaEmbarqueNormalizada
+        .replace(/\s+maquila\s+ozuna/g, '')
+        .replace(/\s+c\/c/g, '')
+        .trim();
       
-      // 4. Buscar coincidencias parciales (el costo registrado está contenido en la medida del embarque)
-      const medidaEmbarqueLower = medidaEmbarque.toLowerCase().trim();
+      console.log(`🔍 Buscando coincidencias parciales para: "${medidaBaseSinSufijos}"`);
       
       for (const [medidaRegistrada, costoInfo] of Object.entries(this.costosRegistrados)) {
-        const medidaRegistradaLower = medidaRegistrada.toLowerCase().trim();
+        const medidaRegistradaNormalizada = this.normalizarMedida(medidaRegistrada);
         
         // Si la medida registrada está contenida en la medida del embarque
-        if (medidaEmbarqueLower.includes(medidaRegistradaLower) && medidaRegistradaLower.length > 2) {
+        if (medidaBaseSinSufijos.includes(medidaRegistradaNormalizada) && medidaRegistradaNormalizada.length > 2) {
+          console.log(`✓ Coincidencia parcial encontrada (registrada contenida en embarque): "${medidaRegistrada}"`);
           return {
             medidaEncontrada: medidaRegistrada,
             costo: costoInfo.costoBase
           };
         }
         
-        // Si la medida del embarque (sin sufijos) está contenida en la medida registrada
-        const medidaEmbarqueSinSufijos = medidaEmbarqueLower
-          .replace(/\s+maquila\s+ozuna/g, '')
-          .replace(/\s+c\/c/g, '')
-          .trim();
-          
-        if (medidaRegistradaLower.includes(medidaEmbarqueSinSufijos) && medidaEmbarqueSinSufijos.length > 2) {
+        // Si la medida del embarque está contenida en la medida registrada
+        if (medidaRegistradaNormalizada.includes(medidaBaseSinSufijos) && medidaBaseSinSufijos.length > 2) {
+          console.log(`✓ Coincidencia parcial encontrada (embarque contenido en registrada): "${medidaRegistrada}"`);
           return {
             medidaEncontrada: medidaRegistrada,
             costo: costoInfo.costoBase
@@ -836,12 +921,76 @@ export default {
         }
       }
       
+      console.log(`✗ No se encontró coincidencia para: "${medidaEmbarque}"`);
       return null; // No se encontró coincidencia
     },
 
+    // Función para sugerir crear medidas faltantes
+    async sugerirCrearMedidasFaltantes() {
+      const medidasFaltantes = [];
+      const medidasParaCrear = new Set();
+      
+      this.medidasEmbarque.forEach(medida => {
+        if (!this.costosEmbarque[medida] && !this.encontrarCostoParaMedida(medida)) {
+          medidasFaltantes.push(medida);
+          
+          // Para medidas "Maquila Ozuna", crear la medida base
+          if (medida.includes('Maquila Ozuna')) {
+            const medidaBase = medida.replace(' Maquila Ozuna', '').trim();
+            medidasParaCrear.add(medidaBase);
+          } else {
+            medidasParaCrear.add(medida);
+          }
+        }
+      });
+      
+      if (medidasFaltantes.length > 0) {
+        console.log(`📝 Medidas sin costo encontradas: ${medidasFaltantes.join(', ')}`);
+        
+        const medidasACrear = Array.from(medidasParaCrear);
+        const mensaje = `Se encontraron ${medidasFaltantes.length} medidas sin costo asignado:\n\n${medidasFaltantes.map(m => `• ${m}`).join('\n')}\n\nSe crearán ${medidasACrear.length} medidas base:\n\n${medidasACrear.map(m => `• ${m}`).join('\n')}\n\n¿Desea crear estas medidas con un costo base de $130?\n\n(Podrá editarlas después individualmente si es necesario)`;
+        
+        if (confirm(mensaje)) {
+          await this.crearMedidasFaltantes(medidasACrear);
+        }
+      } else {
+        alert('Todas las medidas ya tienen costos asignados.');
+      }
+    },
+
+    async crearMedidasFaltantes(medidas) {
+      try {
+        const db = getFirestore();
+        const fecha = new Date();
+        fecha.setHours(12, 0, 0, 0);
+        const fechaString = fecha.toISOString().split('T')[0];
+        
+        const promesas = medidas.map(medida => {
+          return addDoc(collection(db, 'historial_costos'), {
+            medida: medida,
+            costoBase: 130,
+            timestamp: fecha,
+            fecha: fechaString,
+            nuevo: true
+          });
+        });
+        
+        await Promise.all(promesas);
+        console.log(`✓ Se crearon ${medidas.length} medidas faltantes`);
+        alert(`Se crearon ${medidas.length} medidas con costo base de $130`);
+      } catch (error) {
+        console.error('Error al crear medidas faltantes:', error);
+        alert('Error al crear las medidas faltantes');
+      }
+    },
+
     async aplicarCostosRegistrados() {
-      // Aplicar costos de medidas registradas automáticamente a las medidas del embarque
+      // Aplicar costos de medidas registradas automáticamente SOLO si no hay costo específico del embarque
       let costosActualizados = false;
+      
+      // Debug: mostrar qué medidas están disponibles
+      console.log('Medidas del embarque:', this.medidasEmbarque);
+      console.log('Costos registrados disponibles:', Object.keys(this.costosRegistrados));
       
       this.medidasEmbarque.forEach(medida => {
         const costoEncontrado = this.encontrarCostoParaMedida(medida);
@@ -850,14 +999,16 @@ export default {
           const costoRegistrado = costoEncontrado.costo;
           const costoEmbarque = this.costosEmbarque[medida];
           
-          // Actualizar si no hay costo asignado o si hay diferencia con el costo registrado
-          if (!costoEmbarque || costoEmbarque !== costoRegistrado) {
+          // Solo actualizar si NO hay costo específico del embarque
+          if (!costoEmbarque) {
             this.$set(this.costosEmbarque, medida, costoRegistrado);
             costosActualizados = true;
-            console.log(`Actualizando costo de ${medida}: ${costoEmbarque} -> ${costoRegistrado} (encontrado como: ${costoEncontrado.medidaEncontrada})`);
+            console.log(`✓ Aplicando costo global de ${medida}: ${costoRegistrado} (encontrado como: ${costoEncontrado.medidaEncontrada})`);
+          } else {
+            console.log(`→ Manteniendo costo específico de ${medida}: ${costoEmbarque} (no se sobrescribe con costo global: ${costoRegistrado})`);
           }
         } else {
-          console.log(`No se encontró costo para la medida: ${medida}`);
+          console.log(`✗ No se encontró costo para la medida: ${medida}`);
         }
       });
 
@@ -877,6 +1028,9 @@ export default {
           console.error('Error al guardar costos aplicados:', error);
         }
       }
+      
+      // Sugerir crear medidas faltantes después de aplicar costos (opcional)
+      // await this.sugerirCrearMedidasFaltantes();
     },
 
     async verHistorial(medida) {
@@ -924,11 +1078,51 @@ export default {
 
     async sincronizarCostos() {
       try {
-        await this.aplicarCostosRegistrados();
+        await this.sincronizarCostosForzado();
         alert('Costos sincronizados con los valores más recientes.');
       } catch (error) {
         console.error('Error al sincronizar costos:', error);
         alert('Error al sincronizar costos.');
+      }
+    },
+
+    async sincronizarCostosForzado() {
+      // Sincronización forzada que sobrescribe incluso los costos específicos del embarque
+      let costosActualizados = false;
+      
+      this.medidasEmbarque.forEach(medida => {
+        const costoEncontrado = this.encontrarCostoParaMedida(medida);
+        
+        if (costoEncontrado) {
+          const costoRegistrado = costoEncontrado.costo;
+          const costoEmbarque = this.costosEmbarque[medida];
+          
+          // En sincronización forzada, actualizar siempre que haya diferencia
+          if (!costoEmbarque || costoEmbarque !== costoRegistrado) {
+            this.$set(this.costosEmbarque, medida, costoRegistrado);
+            costosActualizados = true;
+            console.log(`✓ Sincronización forzada - Actualizando costo de ${medida}: ${costoEmbarque} -> ${costoRegistrado} (encontrado como: ${costoEncontrado.medidaEncontrada})`);
+          }
+        } else {
+          console.log(`✗ No se encontró costo para sincronizar: ${medida}`);
+        }
+      });
+
+      // Guardar automáticamente en Firebase si hubo cambios
+      if (costosActualizados) {
+        try {
+          const db = getFirestore();
+          const embarqueId = this.$route.params.id;
+          const embarqueRef = doc(db, 'embarques', embarqueId);
+          
+          await updateDoc(embarqueRef, {
+            costosPorMedida: this.costosEmbarque
+          });
+          
+          console.log('Costos sincronizados forzadamente');
+        } catch (error) {
+          console.error('Error al guardar costos sincronizados:', error);
+        }
       }
     },
 
@@ -1004,13 +1198,37 @@ export default {
         console.error('Error al formatear fecha completa:', error);
         return 'Error en fecha';
       }
-    }
+    },
+
+
   },
 
   computed: {
     // Filtrar medidas que NO están marcadas para ocultar en PDF
     medidasVisibles() {
       return this.medidasEmbarque.filter(medida => !this.medidaOculta[medida]);
+    },
+    
+    // Computed property para obtener los costos actuales de forma reactiva
+    costosActuales() {
+      const costos = {};
+      
+      this.medidasEmbarque.forEach(medida => {
+        // Primero verificar si hay un costo específico del embarque
+        if (this.costosEmbarque[medida]) {
+          costos[medida] = Number(this.costosEmbarque[medida]).toFixed(2);
+        } else {
+          // Si no hay costo específico, buscar en los costos globales
+          const costoGlobal = this.encontrarCostoParaMedida(medida);
+          if (costoGlobal) {
+            costos[medida] = Number(costoGlobal.costo).toFixed(2);
+          } else {
+            costos[medida] = '0.00';
+          }
+        }
+      });
+      
+      return costos;
     }
   },
 
@@ -1443,9 +1661,7 @@ export default {
   border-bottom: 1px solid #eee;
 }
 
-.btn-sincronizar {
-  background-color: #f39c12;
-  color: white;
+.btn-sincronizar, .btn-crear-medidas {
   border: none;
   border-radius: 5px;
   padding: 8px 15px;
@@ -1456,14 +1672,151 @@ export default {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  color: white;
+}
+
+.btn-sincronizar {
+  background-color: #f39c12;
 }
 
 .btn-sincronizar:hover {
   background-color: #e67e22;
 }
 
-.btn-sincronizar i {
+.btn-crear-medidas {
+  background-color: #2ecc71;
+}
+
+.btn-crear-medidas:hover {
+  background-color: #27ae60;
+}
+
+.btn-sincronizar i, .btn-crear-medidas i {
   margin-right: 0;
+}
+
+.costo-display {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  padding: 8px 12px;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  background-color: #f8f9fa;
+  transition: all 0.3s ease;
+  margin-bottom: 8px;
+}
+
+.costo-display:hover {
+  background-color: #e3f2fd;
+  border-color: #3498db;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(52, 152, 219, 0.2);
+}
+
+.costo-display strong {
+  color: #2c3e50;
+  font-size: 0.95em;
+}
+
+.costo-amount {
+  color: #27ae60;
+  font-weight: bold;
+  font-size: 1.1em;
+}
+
+.costo-edit-icon {
+  font-size: 0.8em;
+  color: #3498db;
+  margin-left: auto;
+  transition: transform 0.2s ease;
+}
+
+.costo-display:hover .costo-edit-icon {
+  transform: scale(1.1);
+}
+
+.costo-display.costo-especifico {
+  border-color: #27ae60;
+  background-color: #f0f8f0;
+}
+
+.costo-display.costo-especifico:hover {
+  background-color: #e8f5e8;
+  border-color: #27ae60;
+}
+
+.badge-especifico {
+  background-color: #27ae60;
+  color: white;
+  font-size: 0.7em;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-weight: bold;
+  text-transform: uppercase;
+}
+
+.costo-origen {
+  font-size: 0.8em;
+  color: #666;
+  margin-top: 2px;
+}
+
+.costo-especifico, .costo-global {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.costo-especifico {
+  color: #27ae60;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.costo-especifico i {
+  color: #27ae60;
+}
+
+.btn-limpiar-costo {
+  background-color: #e74c3c;
+  color: white;
+  border: none;
+  border-radius: 3px;
+  padding: 2px 5px;
+  cursor: pointer;
+  font-size: 0.7em;
+  transition: background-color 0.3s ease;
+  margin-left: auto;
+}
+
+.btn-limpiar-costo:hover {
+  background-color: #c0392b;
+}
+
+.costo-global {
+  color: #3498db;
+}
+
+.costo-global i {
+  color: #3498db;
+}
+
+.sin-costo {
+  color: #e74c3c;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.sin-costo i {
+  color: #e74c3c;
+}
+
+.clickeable {
+  cursor: pointer;
 }
 
 
@@ -1484,9 +1837,10 @@ export default {
     gap: 10px;
   }
   
-  .btn-sincronizar {
+  .btn-sincronizar, .btn-crear-medidas {
     width: 100%;
     justify-content: center;
+    margin-bottom: 10px;
   }
   
   .costo-actions {
@@ -1536,6 +1890,24 @@ export default {
   
   .checkbox-container {
     font-size: 0.8em;
+  }
+  
+  .costo-display {
+    padding: 6px 10px;
+    margin-bottom: 6px;
+  }
+  
+  .costo-display:hover {
+    transform: none;
+    box-shadow: none;
+  }
+  
+  .costo-amount {
+    font-size: 1em;
+  }
+  
+  .costo-origen {
+    font-size: 0.75em;
   }
 }
 </style> 

@@ -21,8 +21,8 @@
             >
         </div>
 
-        <!-- Agregar selector de fecha -->
-        <div class="form-group">
+        <!-- Agregar selector de fecha solo si no es costo de embarque -->
+        <div v-if="!esCostoEmbarque" class="form-group">
             <label for="fechaInput">Fecha:</label>
             <input 
                 type="date" 
@@ -80,6 +80,10 @@ export default {
         fecha: {
             type: String,
             default: () => new Date().toISOString().split('T')[0]
+        },
+        esCostoEmbarque: {
+            type: Boolean,
+            default: false
         }
     },
     data() {
@@ -90,16 +94,40 @@ export default {
     },
     computed: {
         titulo() {
-            return this.esNuevo ? 'Registrar Nueva Medida' : `Actualizar Costo - ${this.medida}`;
+            if (this.esNuevo) {
+                return 'Registrar Nueva Medida';
+            } else if (this.esCostoEmbarque) {
+                return `Costo Específico - ${this.medida}`;
+            } else {
+                return `Actualizar Costo - ${this.medida}`;
+            }
         },
         etiquetaCosto() {
-            return this.esNuevo ? 'Costo Base' : 'Nuevo Costo';
+            if (this.esNuevo) {
+                return 'Costo Base';
+            } else if (this.esCostoEmbarque) {
+                return 'Costo para este embarque';
+            } else {
+                return 'Nuevo Costo';
+            }
         },
         placeholder() {
-            return this.esNuevo ? 'Ingrese el costo base' : 'Ingrese el nuevo costo';
+            if (this.esNuevo) {
+                return 'Ingrese el costo base';
+            } else if (this.esCostoEmbarque) {
+                return 'Ingrese el costo específico';
+            } else {
+                return 'Ingrese el nuevo costo';
+            }
         },
         textoBoton() {
-            return this.esNuevo ? 'Registrar' : 'Actualizar';
+            if (this.esNuevo) {
+                return 'Registrar';
+            } else if (this.esCostoEmbarque) {
+                return 'Guardar';
+            } else {
+                return 'Actualizar';
+            }
         },
         mostrarInfo() {
             return !this.esNuevo && (this.costoAnterior !== null || this.fechaUltimaActualizacion);
@@ -129,17 +157,26 @@ export default {
         guardarCosto() {
             const costo = parseFloat(this.costoLocal);
             if (!isNaN(costo) && costo >= 0) {
-                // Enviar tanto el costo como la fecha
-                this.$emit('guardar', {
-                    costo: costo,
-                    fecha: this.fechaLocal
-                });
+                // Para costos de embarque, solo enviar el costo
+                if (this.esCostoEmbarque) {
+                    this.$emit('guardar', costo);
+                } else {
+                    // Para costos globales, enviar costo y fecha
+                    this.$emit('guardar', {
+                        costo: costo,
+                        fecha: this.fechaLocal
+                    });
+                }
             } else if (this.costoLocal === '') {
                 // Si está vacío, permitir borrar el costo
-                this.$emit('guardar', {
-                    costo: null,
-                    fecha: this.fechaLocal
-                });
+                if (this.esCostoEmbarque) {
+                    this.$emit('guardar', null);
+                } else {
+                    this.$emit('guardar', {
+                        costo: null,
+                        fecha: this.fechaLocal
+                    });
+                }
             } else {
                 // Mostrar error si el costo no es válido
                 alert('Por favor ingrese un costo válido (mayor o igual a 0)');
