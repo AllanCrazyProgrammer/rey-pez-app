@@ -1041,14 +1041,18 @@ export default {
     calcularGananciasPorTallaCrudo(talla, fechaEmbarque) {
       if (!this.embarqueData || !this.embarqueData.clientes) return null;
       
-      let totalKilos = 0;
-      let totalGanancias = 0;
+      let totalKilosVenta = 0;
       let totalVentas = 0;
       let detallesPorCliente = [];
       let hayPreciosIndividuales = false;
       
       // Calcular el costo base para esta talla usando el sistema existente
       const costoBase = this.calcularCostoCrudoPorTalla(talla);
+      const costoFinal = costoBase + 3.5; // Sumar 3.5 al costo
+
+      // Obtener los kilos de costo para esta talla
+      const tarasData = this.calcularTarasCrudosPorMedida();
+      const totalKilosCosto = tarasData[talla]?.totalKilos || 0;
       
       // Iterar por todos los clientes y sus crudos
       this.embarqueData.clientes.forEach(cliente => {
@@ -1063,8 +1067,8 @@ export default {
                   
                   if (esVenta) {
                     // Calcular kilos del item
-                    const kilosItem = this.calcularKilosCrudosItem(item);
-                    totalKilos += kilosItem;
+                    const kilosVentaItem = this.calcularKilosCrudosItem(item);
+                    totalKilosVenta += kilosVentaItem;
                     
                     // Determinar precio a usar
                     let precioAUsar = null;
@@ -1085,19 +1089,15 @@ export default {
                       }
                     }
                     
-                    if (precioAUsar && kilosItem > 0) {
-                      const gananciaUnitaria = precioAUsar - costoBase;
-                      const gananciaTotal = gananciaUnitaria * kilosItem;
-                      
-                      totalGanancias += gananciaTotal;
-                      totalVentas += precioAUsar * kilosItem;
+                    if (precioAUsar && kilosVentaItem > 0) {
+                      totalVentas += precioAUsar * kilosVentaItem;
                       
                       detallesPorCliente.push({
                         cliente: cliente.nombre,
-                        kilos: kilosItem,
+                        kilos: kilosVentaItem,
                         precioVenta: precioAUsar,
-                        gananciaUnitaria: gananciaUnitaria,
-                        gananciaTotal: gananciaTotal,
+                        gananciaUnitaria: 0, // Se recalcula después
+                        gananciaTotal: 0, // Se recalcula después
                         fuentePrecio: fuentePrecio,
                         taras: item.taras,
                         sobrante: item.sobrante
@@ -1111,19 +1111,30 @@ export default {
         }
       });
       
-      if (totalKilos === 0 || detallesPorCliente.length === 0) {
+      if (totalKilosVenta === 0) {
         return null;
       }
       
+      const totalCosto = costoFinal * totalKilosCosto;
+      const totalGanancias = totalVentas - totalCosto;
+      
       // Calcular precio promedio ponderado
-      const precioPromedioPonderado = totalVentas / totalKilos;
-      const gananciaUnitariaPromedio = totalGanancias / totalKilos;
+      const precioPromedioPonderado = totalKilosVenta > 0 ? totalVentas / totalKilosVenta : 0;
+      const gananciaUnitariaPromedio = totalKilosVenta > 0 ? totalGanancias / totalKilosVenta : 0;
+
+      // Actualizar los detalles de ganancia por cliente (es una aproximación)
+      detallesPorCliente.forEach(detalle => {
+        detalle.gananciaUnitaria = gananciaUnitariaPromedio;
+        detalle.gananciaTotal = detalle.gananciaUnitaria * detalle.kilos;
+      });
       
       const resultado = {
         talla: talla,
-        totalKilos: Math.round(totalKilos),
+        totalKilos: Math.round(totalKilosVenta),
+        totalKilosCosto: Math.round(totalKilosCosto),
         precioVenta: Math.round(precioPromedioPonderado),
-        costoBase: Math.round(costoBase),
+        costoBase: costoFinal,
+        costoTotal: Math.round(totalCosto), // Añadido para posible uso
         gananciaUnitaria: Math.round(gananciaUnitariaPromedio),
         gananciaTotal: Math.round(totalGanancias),
         hayPreciosIndividuales: hayPreciosIndividuales,
