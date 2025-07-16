@@ -1420,15 +1420,18 @@ export default {
           }
           
           if (incluir) {
-            if (producto.tipo === 'c/h20') {
-              const totalBolsas = this.calcularTotalBolsas(producto);
-              const valorNeto = parseFloat(producto.camaronNeto) || 0.65;
-              totalEmbarcado += (totalBolsas * valorNeto);
-            } else {
-              const sumaKilos = producto.kilos.reduce((sum, kilo) => sum + (Number(kilo) || 0), 0);
-              const sumaTaras = this.calcularTotalTaras(producto);
-              const descuentoTaras = producto.restarTaras ? sumaTaras * 3 : 0;
-              totalEmbarcado += (sumaKilos - descuentoTaras);
+            // Excluir productos refrigerados del cálculo de ganancias
+            if (!producto.refrigerar) {
+              if (producto.tipo === 'c/h20') {
+                const totalBolsas = this.calcularTotalBolsas(producto);
+                const valorNeto = parseFloat(producto.camaronNeto) || 0.65;
+                totalEmbarcado += (totalBolsas * valorNeto);
+              } else {
+                const sumaKilos = producto.kilos.reduce((sum, kilo) => sum + (Number(kilo) || 0), 0);
+                const sumaTaras = this.calcularTotalTaras(producto);
+                const descuentoTaras = producto.restarTaras ? sumaTaras * 3 : 0;
+                totalEmbarcado += (sumaKilos - descuentoTaras);
+              }
             }
           }
         });

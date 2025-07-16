@@ -87,6 +87,16 @@
                 :disabled="embarqueBloqueado">X</button>
         </div>
         
+        <!-- Checkbox de refrigeración - Solo para clientes agregados -->
+        <div v-if="esClienteAgregado" class="refrigeracion-checkbox-container">
+            <input type="checkbox" v-model="producto.refrigerar" class="form-check-input refrigeracion-checkbox"
+                :id="'refrigerarCheck-' + producto.id" :disabled="embarqueBloqueado"
+                @change="actualizarProducto">
+            <label :for="'refrigerarCheck-' + producto.id" class="refrigeracion-label">
+                🧊 Refrigerar
+            </label>
+        </div>
+        
         <!-- Mostrar valor neto debajo del tipo -->
         <div v-if="producto.tipo === 'c/h20'" class="valores-container-debajo">
             <div class="valor-neto-container">
@@ -219,6 +229,12 @@ export default {
         // Detectar si el cliente es Ozuna
         isClienteOzuna() {
             return this.nombreCliente.toLowerCase() === 'ozuna';
+        },
+
+        // Detectar si es un cliente agregado (no predefinido)
+        esClienteAgregado() {
+            const clientesPredefinidos = ['joselito', 'catarro', 'ozuna', 'otilio', 'elizabeth'];
+            return !clientesPredefinidos.includes(this.nombreCliente.toLowerCase());
         },
 
         // Cálculo del total de taras
@@ -786,6 +802,32 @@ export default {
 }
 
 .venta-checkbox {
+    cursor: pointer;
+    height: 16px;
+    width: 16px;
+    margin: 0;
+}
+
+.refrigeracion-checkbox-container {
+    display: flex;
+    align-items: center;
+    margin-bottom: 10px;
+    padding: 5px;
+    background-color: #e3f2fd;
+    border-radius: 4px;
+    gap: 5px;
+}
+
+.refrigeracion-label {
+    font-size: 13px;
+    color: #1976d2;
+    font-weight: bold;
+    margin: 0;
+    cursor: pointer;
+    user-select: none;
+}
+
+.refrigeracion-checkbox {
     cursor: pointer;
     height: 16px;
     width: 16px;

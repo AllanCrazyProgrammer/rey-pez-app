@@ -51,6 +51,7 @@ export function crearNuevoProducto(clienteId) {
     isEditing: true,
     isNew: true,
     noSumarKilos: false,
+    refrigerar: false,
   };
 }
 
