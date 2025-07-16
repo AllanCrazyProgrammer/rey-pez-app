@@ -95,7 +95,7 @@ export function generarResumenLimpios(productosPorCliente, clienteColors, escala
           ...productos.map(producto => ({
             stack: [
               {
-                text: generarTextoMedida(producto),
+                text: generarTextoMedida(producto, clienteId),
                 fontSize: 11 * factorEscala,
                 bold: true,
                 margin: [0, 0, 0, 1],
@@ -232,7 +232,7 @@ export function generarResumenLimpios(productosPorCliente, clienteColors, escala
         columns: filaProductos.map(producto => ({
           stack: [
             {
-              text: generarTextoMedida(producto),
+              text: generarTextoMedida(producto, clienteId),
               fontSize: fontSize * factorEscala,
               bold: true,
               margin: [0, 0, 0, 1],
@@ -326,16 +326,28 @@ function obtenerNombreCliente(clienteId, clientesPersonalizados = []) {
 }
 
 // Funciones auxiliares
-function generarTextoMedida(producto) {
+function generarTextoMedida(producto, clienteId = null) {
   let texto = '';
+  const resultadoTexto = [];
+  
+  // Verificar si es maquila de Ozuna (clienteId = '4' y no es venta)
+  const esMaquilaOzuna = clienteId === '4' && !producto.esVenta;
+  
+  // Si es maquila de Ozuna, agregar "maquila" con fondo verde y letras blancas al inicio
+  if (esMaquilaOzuna) {
+    resultadoTexto.push({ text: 'maquila\n', background: '#2ecc71', color: 'white', bold: true });
+  }
   
   // Si es tipo c/h20, crear un array con elementos coloreados
   if (producto.tipo === 'c/h20') {
-    return [
+    resultadoTexto.push(
       { text: `${producto.textoAlternativo || producto.medida || ''} ${producto.fecha || ''} `, color: 'black' },
-      { text: `c/h20 (${producto.camaronNeto || 0.65})`, color: '#3498db' },
-      producto.precio ? { text: ` $${Number(producto.precio).toLocaleString('en-US')}`, color: 'red', bold: true } : {}
-    ];
+      { text: `c/h20 (${producto.camaronNeto || 0.65})`, color: '#3498db' }
+    );
+    if (producto.precio) {
+      resultadoTexto.push({ text: ` $${Number(producto.precio).toLocaleString('en-US')}`, color: 'red', bold: true });
+    }
+    return resultadoTexto;
   }
 
   // Para otros tipos, usar texto alternativo si existe
@@ -355,15 +367,15 @@ function generarTextoMedida(producto) {
     texto += ` ${producto.tipo}`;
   }
 
+  // Agregar el texto principal
+  resultadoTexto.push({ text: texto, color: 'black' });
+
   if (producto.precio) {
     // No añadir al texto, lo mostraremos separado en rojo
-    return [
-      { text: texto, color: 'black' },
-      { text: ` $${Number(producto.precio).toLocaleString('en-US')}`, color: 'red', bold: true }
-    ];
+    resultadoTexto.push({ text: ` $${Number(producto.precio).toLocaleString('en-US')}`, color: 'red', bold: true });
   }
 
-  return texto;
+  return resultadoTexto.length > (esMaquilaOzuna ? 1 : 0) ? resultadoTexto : texto;
 }
 
 function calcularKilosProducto(producto) {
