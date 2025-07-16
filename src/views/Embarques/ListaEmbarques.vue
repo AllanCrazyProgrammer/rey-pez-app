@@ -39,6 +39,8 @@
       </table>
       <div v-else class="sin-embarques">No hay embarques registrados.</div>
     </div>
+
+
  
   </div>
 </template>
@@ -386,7 +388,7 @@ export default {
       return totalKilosCrudos.toFixed(1);
     },
     
-    mostrarMensajeBloqueado() {
+        mostrarMensajeBloqueado() {
       alert('Este embarque está bloqueado y no puede ser eliminado.');
     }
   },
@@ -449,6 +451,8 @@ h1 {
 .tabla-embarques tr:hover {
   background-color: #f5f5f5;
 }
+
+
 
 .btn-detalles {
   background-color: #5bc0de;
@@ -548,6 +552,8 @@ h1 {
   background-color: #f8f9fa;
   border-bottom: 2px solid #dee2e6;
 }
+
+
 
 @media (max-width: 1200px) {
   .tabla-embarques {
