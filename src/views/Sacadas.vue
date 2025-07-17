@@ -345,17 +345,23 @@ export default {
         // Extraer precio y medida base del formato del dropdown
         let precio = null;
         let medidaBase = this.newSalida.medida;
+        let medidaParaParsear = this.newSalida.medida;
+        
+        // Primero, quitar el emoji si existe
+        if (medidaParaParsear.startsWith('🕐 ')) {
+          medidaParaParsear = medidaParaParsear.substring(2).trim();
+        }
         
         // Si contiene " ($" es una medida con precio
-        if (this.newSalida.medida.includes(' ($')) {
-          const precioMatch = this.newSalida.medida.match(/\(\$(\d+(?:\.\d+)?)\)/);
+        if (medidaParaParsear.includes(' ($')) {
+          const precioMatch = medidaParaParsear.match(/\(\$(\d+(?:\.\d+)?)\)/);
           if (precioMatch) {
             precio = Number(precioMatch[1]);
-            medidaBase = this.newSalida.medida.split(' ($')[0];
+            medidaBase = medidaParaParsear.split(' ($')[0];
           }
-        } else if (this.newSalida.medida.includes(' - (')) {
+        } else if (medidaParaParsear.includes(' - (')) {
           // Si contiene " - (" es una medida sin precio o con fecha
-          medidaBase = this.newSalida.medida.split(' - (')[0];
+          medidaBase = medidaParaParsear.split(' - (')[0];
           precio = null;
         }
 
@@ -374,11 +380,15 @@ export default {
     },
     async updateKilosDisponibles() {
       if (this.newSalida.proveedor && this.newSalida.medida) {
-        console.log(`Actualizando kilos disponibles para ${this.newSalida.proveedor} - ${this.newSalida.medida}`);
+        console.log(`[UPDATE] Actualizando kilos disponibles:`);
+        console.log(`  Proveedor: "${this.newSalida.proveedor}"`);
+        console.log(`  Medida seleccionada: "${this.newSalida.medida}"`);
         this.kilosDisponibles = await this.getKilosDisponibles(this.newSalida.proveedor, this.newSalida.medida);
-        console.log(`Kilos disponibles actualizados: ${this.kilosDisponibles}`);
+        console.log(`  Kilos disponibles calculados: ${this.kilosDisponibles}`);
       } else {
-        console.log('No se puede actualizar kilos disponibles: falta proveedor o medida');
+        console.log('[UPDATE] No se puede actualizar kilos disponibles: falta proveedor o medida');
+        console.log(`  Proveedor: "${this.newSalida.proveedor}"`);
+        console.log(`  Medida: "${this.newSalida.medida}"`);
         this.kilosDisponibles = null;
       }
     },
@@ -390,6 +400,11 @@ export default {
       // Extraer precio correctamente del formato de display
       let precio = null;
       let medidaBase = medida;
+      
+      // Primero, quitar el emoji si existe
+      if (medida.startsWith('🕐 ')) {
+        medida = medida.substring(2).trim();
+      }
       
       // Si la medida contiene " ($" significa que tiene precio
       if (medida.includes(' ($')) {
@@ -411,7 +426,8 @@ export default {
         .map(doc => ({ id: doc.id, ...doc.data() }))
         .sort((a, b) => a.fecha.toDate() - b.fecha.toDate());
 
-      console.log(`Calculando kilos disponibles para ${proveedor} - ${medida}`);
+      console.log(`Calculando kilos disponibles para ${proveedor} - Medida original: "${medida}"`);
+      console.log(`Medida base parseada: "${medidaBase}", Precio: ${precio}`);
       console.log(`Fecha actual: ${this.currentDate.format('YYYY-MM-DD')}`);
 
       const fechaActual = this.currentDate.clone().endOf('day');
@@ -431,7 +447,9 @@ export default {
             if (medidaCoincide && precioCoincide) {
               kilosDisponibles += entrada.kilos;
               totalEntradas += entrada.kilos;
-              console.log(`  Entrada: +${entrada.kilos} kg (precio: ${entrada.precio || 'sin precio'})`);
+              console.log(`  ✅ Entrada coincide: +${entrada.kilos} kg (medida: ${entrada.medida}, precio: ${entrada.precio || 'sin precio'})`);
+            } else if (entrada.proveedor === proveedor && entrada.medida === medidaBase) {
+              console.log(`  ❌ Entrada NO coincide por precio: ${entrada.kilos} kg (medida: ${entrada.medida}, precio entrada: ${entrada.precio}, precio buscado: ${precio})`);
             }
           });
 
@@ -445,13 +463,20 @@ export default {
             if (medidaCoincide && precioCoincide) {
               kilosDisponibles -= salida.kilos;
               totalSalidas += salida.kilos;
-              console.log(`  Salida: -${salida.kilos} kg (precio: ${salida.precio || 'sin precio'})`);
+              console.log(`  ✅ Salida coincide: -${salida.kilos} kg (medida: ${salida.medida}, precio: ${salida.precio || 'sin precio'})`);
+            } else if (salida.proveedor === proveedor && salida.medida === medidaBase) {
+              console.log(`  ❌ Salida NO coincide por precio: ${salida.kilos} kg (medida: ${salida.medida}, precio salida: ${salida.precio}, precio buscado: ${precio})`);
             }
           });
 
-          console.log(`  Subtotal: ${kilosDisponibles} kg`);
+          console.log(`  Subtotal hasta ${moment(sacadaFecha).format('DD/MM/YYYY')}: ${kilosDisponibles.toFixed(1)} kg`);
         }
       });
+
+      console.log(`\n📊 RESUMEN FINAL:`);
+      console.log(`  Total entradas: ${totalEntradas.toFixed(1)} kg`);
+      console.log(`  Total salidas: ${totalSalidas.toFixed(1)} kg`);
+      console.log(`  Kilos disponibles: ${kilosDisponibles.toFixed(1)} kg`);
 
       return Number(kilosDisponibles.toFixed(1));
     },
