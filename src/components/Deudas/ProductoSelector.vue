@@ -343,10 +343,11 @@ export default {
 
 .input-row {
   display: grid;
-  grid-template-columns: 120px 2fr 120px auto auto;
+  grid-template-columns: 120px 2fr 140px 120px;
   gap: 15px;
   align-items: center;
   margin-bottom: 15px;
+  max-width: 100%;
 }
 
 .input-kilos, .input-precio {
@@ -409,8 +410,9 @@ export default {
   font-weight: 600;
   color: #2c3e50;
   border: 2px solid transparent;
-  min-width: 120px;
+  min-width: 130px;
   text-align: center;
+  white-space: nowrap;
 }
 
 .add-btn {
@@ -423,7 +425,9 @@ export default {
   font-size: 1em;
   font-weight: 500;
   transition: all 0.3s ease;
-  min-width: 100px;
+  min-width: 110px;
+  text-align: center;
+  white-space: nowrap;
 }
 
 .add-btn:hover:not(:disabled) {
@@ -502,10 +506,42 @@ export default {
 }
 
 /* Responsive adjustments */
+@media (max-width: 1024px) {
+  .input-row {
+    grid-template-columns: 100px 2fr 130px 100px;
+    gap: 12px;
+  }
+  
+  .total-calculado {
+    min-width: 120px;
+    font-size: 0.9em;
+  }
+  
+  .add-btn {
+    min-width: 90px;
+    padding: 12px 16px;
+    font-size: 0.9em;
+  }
+}
+
 @media (max-width: 768px) {
   .input-row {
     grid-template-columns: 1fr;
     gap: 10px;
+  }
+  
+  .input-kilos, .input-precio, .total-calculado, .add-btn {
+    width: 100%;
+  }
+  
+  .total-calculado {
+    order: 4;
+  }
+  
+  .add-btn {
+    order: 5;
+    min-width: auto;
+    width: 100%;
   }
   
   .precio-historico {
@@ -517,6 +553,24 @@ export default {
   .stats-producto {
     flex-direction: column;
     gap: 8px;
+  }
+}
+
+@media (max-width: 480px) {
+  .input-row {
+    gap: 10px;
+  }
+  
+  .add-btn {
+    padding: 15px 16px;
+    font-size: 0.95rem;
+    min-width: auto;
+  }
+  
+  .total-calculado {
+    font-size: 0.9rem;
+    padding: 12px 15px;
+    min-width: auto;
   }
 }
 </style> 

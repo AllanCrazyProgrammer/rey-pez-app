@@ -4,6 +4,11 @@ import router from "./router";
 import { createPinia, PiniaVuePlugin } from "pinia";
 import { useAuthStore } from "./stores/auth";
 
+// Helper de autenticación para desarrollo
+if (process.env.NODE_ENV === 'development') {
+  import('./utils/authHelper.js');
+}
+
 import { BootstrapVue, IconsPlugin } from "bootstrap-vue";
 import "bootstrap/dist/css/bootstrap.css";
 import "bootstrap-vue/dist/bootstrap-vue.css";

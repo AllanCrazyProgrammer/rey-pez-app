@@ -1,54 +1,88 @@
 <template>
-  <div class="lista-deudas-container">
+  <div class="lista-deudas">
     <div class="back-button-container">
       <BackButton to="/procesos/deudas" />
     </div>
-    <h1>Lista de Deudas a Proveedores</h1>
     
+    <!-- Header moderno -->
+    <div class="header-section">
+      <div class="header-content">
+        <h1 class="main-title">
+          <i class="icon-list">📋</i>
+          Lista de Deudas a Proveedores
+        </h1>
+        <p class="subtitle">Administra y monitorea todas las deudas pendientes</p>
+      </div>
+    </div>
+    
+    <!-- Filtros modernos -->
     <div class="filtros-container">
-      <div class="filtro">
-        <label for="filtroProveedor">Proveedor:</label>
-        <select id="filtroProveedor" v-model="filtroProveedor">
-          <option value="">Todos</option>
-          <option v-for="proveedor in proveedores" :key="proveedor.id" :value="proveedor.id">
-            {{ proveedor.nombre }}
-          </option>
-        </select>
-      </div>
-      
-      <div class="filtro">
-        <label for="filtroEstado">Estado:</label>
-        <select id="filtroEstado" v-model="filtroEstado">
-          <option value="">Todos</option>
-          <option value="pendiente">Pendiente</option>
-          <option value="pagado">Pagado</option>
-        </select>
-      </div>
-      
-      <div class="filtro-fecha">
-        <label>Fecha:</label>
-        <div class="fecha-inputs">
-          <input type="date" v-model="filtroFechaDesde" placeholder="Desde">
-          <span>a</span>
-          <input type="date" v-model="filtroFechaHasta" placeholder="Hasta">
+      <div class="filtros-card">
+        <h3 class="filtros-title">
+          <i class="icon-filter">🔍</i>
+          Filtros de Búsqueda
+        </h3>
+        <div class="filtros-grid">
+          <div class="filtro-group">
+            <label for="filtroProveedor">Proveedor:</label>
+            <select id="filtroProveedor" v-model="filtroProveedor" class="modern-select">
+              <option value="">Todos los proveedores</option>
+              <option v-for="proveedor in proveedores" :key="proveedor.id" :value="proveedor.id">
+                {{ proveedor.nombre }}
+              </option>
+            </select>
+            <!-- Indicador de color del proveedor seleccionado -->
+            <div v-if="filtroProveedor" class="proveedor-color-indicator">
+              <div 
+                class="color-dot" 
+                :style="{ backgroundColor: getProveedorColor(filtroProveedor) }"
+              ></div>
+              <span>{{ getNombreProveedorSeleccionado() }}</span>
+            </div>
+          </div>
+          
+          <div class="filtro-group">
+            <label for="filtroEstado">Estado:</label>
+            <select id="filtroEstado" v-model="filtroEstado" class="modern-select">
+              <option value="">Todos los estados</option>
+              <option value="pendiente">No Pagados (Pendientes)</option>
+              <option value="pagado">Pagados</option>
+            </select>
+          </div>
+          
+          <div class="filtro-group fecha-group">
+            <label>Rango de fechas:</label>
+            <div class="fecha-inputs">
+              <input type="date" v-model="filtroFechaDesde" class="modern-input" placeholder="Desde">
+              <span class="fecha-separator">a</span>
+              <input type="date" v-model="filtroFechaHasta" class="modern-input" placeholder="Hasta">
+            </div>
+          </div>
         </div>
       </div>
     </div>
     
+    <!-- Resumen moderno -->
     <div class="resumen-container">
       <div class="resumen-card saldo-pendiente">
-        <h3>Saldo Pendiente</h3>
-        <p>${{ formatNumber(totalPendiente) }}</p>
+        <div class="card-icon">💰</div>
+        <div class="card-content">
+          <h3>Saldo Pendiente</h3>
+          <p class="amount">${{ formatNumber(totalPendiente) }}</p>
+        </div>
       </div>
     </div>
     
+    <!-- Acciones modernas -->
     <div class="acciones-container">
-      <router-link to="/procesos/deudas/nueva" class="btn-nueva-deuda">
-        <i class="fas fa-plus"></i> Nueva Deuda
+      <router-link to="/procesos/deudas/nueva" class="btn-action btn-nueva-deuda">
+        <i class="icon">➕</i>
+        <span>Nueva Deuda</span>
       </router-link>
       
-      <button @click="openHistorialPreciosModal" class="btn-historial-precios">
-        <i class="fas fa-chart-line"></i> Historial de Precios
+      <button @click="openHistorialPreciosModal" class="btn-action btn-historial-precios">
+        <i class="icon">📈</i>
+        <span>Historial de Precios</span>
       </button>
     </div>
 
@@ -69,87 +103,98 @@
       </div>
     </div>
     
-    <div v-if="cargando" class="loading-spinner">
-      <div class="spinner"></div>
+    <!-- Estados de carga -->
+    <div v-if="cargando" class="loading-state">
+      <div class="loading-spinner"></div>
       <p>Cargando deudas...</p>
     </div>
     
-    <div v-else-if="deudas.length === 0" class="no-data">
-      <p>No hay deudas registradas.</p>
-      <router-link to="/procesos/deudas/nueva" class="btn-nueva-deuda">
-        Crear Nueva Deuda
+    <div v-else-if="deudas.length === 0" class="empty-state">
+      <div class="empty-icon">📄</div>
+      <h3>No hay deudas registradas</h3>
+      <p>Comienza creando tu primera deuda a proveedores</p>
+      <router-link to="/procesos/deudas/nueva" class="btn-action btn-nueva-deuda">
+        <i class="icon">➕</i>
+        <span>Crear Nueva Deuda</span>
       </router-link>
     </div>
     
-    <div v-else class="tabla-container">
+    <div v-else class="deudas-container">
       <div class="paginacion-info">
-        <p>Mostrando {{ (paginaActual - 1) * deudasPorPagina + 1 }} - {{ Math.min(paginaActual * deudasPorPagina, totalDeudas) }} de {{ totalDeudas }} deudas</p>
+        <p>Mostrando {{ totalDeudas }} deudas agrupadas por proveedor</p>
       </div>
       
-      <table class="tabla-deudas">
-        <thead>
-          <tr>
-            <th>Fecha</th>
-            <th>Proveedor</th>
-            <th>Monto Total</th>
-            <th>Saldo Pendiente</th>
-            <th>Estado</th>
-            <th>Acciones</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="deuda in deudasPaginadas" :key="deuda.id" :class="{ 'deuda-pagada': deuda.estado === 'pagado' }">
-            <td>{{ formatearFecha(deuda.fecha) }}</td>
-            <td>{{ deuda.proveedorNombre }}</td>
-            <td>${{ formatNumber(deuda.total) }}</td>
-            <td>${{ formatNumber(deuda.saldoPendiente) }}</td>
-            <td>
-              <span :class="'estado-badge ' + deuda.estado">
-                {{ deuda.estado === 'pendiente' ? 'Pendiente' : 'Pagado' }}
-              </span>
-            </td>
-            <td class="acciones">
-              <button @click="verDetalle(deuda)" class="btn-detalle" title="Ver detalles">
-                <i class="fas fa-eye"></i>
-              </button>
-              <button @click="agregarAbono(deuda)" class="btn-abono" :disabled="deuda.estado === 'pagado'" title="Agregar abono">
-                <i class="fas fa-money-bill"></i>
-              </button>
-              <button @click="eliminarDeuda(deuda)" class="btn-eliminar" title="Eliminar deuda">
-                <i class="fas fa-trash-alt"></i>
-              </button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-      
-      <div class="paginacion-container" v-if="totalPaginas > 1">
-        <button 
-          @click="cambiarPagina(paginaActual - 1)" 
-          :disabled="paginaActual === 1"
-          class="btn-paginacion"
-        >
-          <i class="fas fa-chevron-left"></i> Anterior
-        </button>
-        
-        <div class="paginas-numeros">
-          <button 
-            v-for="pagina in paginasVisibles" 
-            :key="pagina"
-            @click="cambiarPagina(pagina)"
-            :class="['btn-pagina', { 'activa': pagina === paginaActual }]"
-          >
-            {{ pagina }}
-          </button>
+      <!-- Deudas agrupadas por proveedor -->
+      <div v-for="grupo in deudasAgrupadasPorProveedor" :key="grupo.proveedor.id" class="proveedor-grupo">
+        <!-- Título del proveedor -->
+        <div class="proveedor-header">
+          <div class="proveedor-title">
+            <div 
+              class="proveedor-color-circle" 
+              :style="{ backgroundColor: grupo.proveedor.color }"
+            ></div>
+                         <h2 
+               :class="['proveedor-nombre', 'clickeable', { 'filtrado': filtroProveedor === grupo.proveedor.id }]" 
+               @click="filtrarPorProveedor(grupo.proveedor.id)" 
+               :title="filtroProveedor === grupo.proveedor.id ? 'Haz clic para quitar el filtro' : 'Haz clic para filtrar por este proveedor'"
+             >
+               {{ grupo.proveedor.nombre }}
+               <i :class="['fas', filtroProveedor === grupo.proveedor.id ? 'fa-check-circle' : 'fa-filter', 'filter-icon']"></i>
+             </h2>
+          </div>
+          <div class="proveedor-resumen">
+            <div class="resumen-item">
+              <span class="label">Total Deuda:</span>
+              <span class="value">${{ formatNumber(grupo.totalDeuda) }}</span>
+            </div>
+            <div class="resumen-item">
+              <span class="label">Saldo Pendiente:</span>
+              <span class="value pendiente">${{ formatNumber(grupo.totalPendiente) }}</span>
+            </div>
+            <div class="resumen-item">
+              <span class="label">Deudas:</span>
+              <span class="value">{{ grupo.deudas.length }}</span>
+            </div>
+          </div>
         </div>
         
-        <button 
-          @click="cambiarPagina(paginaActual + 1)" 
-          :disabled="paginaActual === totalPaginas"
-          class="btn-paginacion"
-        >
-          Siguiente <i class="fas fa-chevron-right"></i>
-        </button>
+        <!-- Tabla de deudas del proveedor -->
+        <div class="tabla-container-proveedor">
+          <table class="tabla-deudas-proveedor">
+            <thead>
+              <tr>
+                <th>Fecha</th>
+                <th>Monto Total</th>
+                <th>Saldo Pendiente</th>
+                <th>Estado</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="deuda in grupo.deudas" :key="deuda.id" :class="{ 'deuda-pagada': deuda.estado === 'pagado' }">
+                <td>{{ formatearFecha(deuda.fecha) }}</td>
+                <td>${{ formatNumber(deuda.total) }}</td>
+                <td>${{ formatNumber(deuda.saldoPendiente) }}</td>
+                <td>
+                  <span :class="'estado-badge ' + deuda.estado">
+                    {{ deuda.estado === 'pendiente' ? 'Pendiente' : 'Pagado' }}
+                  </span>
+                </td>
+                <td class="acciones">
+                  <button @click="verDetalle(deuda)" class="btn-detalle" title="Ver detalles">
+                    <i class="fas fa-eye"></i>
+                  </button>
+                  <button @click="agregarAbono(deuda)" class="btn-abono" :disabled="deuda.estado === 'pagado'" title="Agregar abono">
+                    <i class="fas fa-money-bill"></i>
+                  </button>
+                  <button @click="eliminarDeuda(deuda)" class="btn-eliminar" title="Eliminar deuda">
+                    <i class="fas fa-trash-alt"></i>
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
     
@@ -473,7 +518,7 @@ export default {
       
       // Filtros
       filtroProveedor: '',
-      filtroEstado: '',
+      filtroEstado: 'pendiente', // Por defecto mostrar solo deudas pendientes
       filtroFechaDesde: '',
       filtroFechaHasta: '',
       
@@ -539,6 +584,36 @@ export default {
       const inicio = (this.paginaActual - 1) * this.deudasPorPagina;
       const fin = inicio + this.deudasPorPagina;
       return this.deudasFiltradas.slice(inicio, fin);
+    },
+    deudasAgrupadasPorProveedor() {
+      const grupos = {};
+      
+      this.deudasFiltradas.forEach(deuda => {
+        const proveedorId = deuda.proveedorId;
+        const proveedorNombre = deuda.proveedorNombre;
+        
+        if (!grupos[proveedorId]) {
+          grupos[proveedorId] = {
+            proveedor: {
+              id: proveedorId,
+              nombre: proveedorNombre,
+              color: this.getProveedorColor(proveedorId)
+            },
+            deudas: [],
+            totalDeuda: 0,
+            totalPendiente: 0
+          };
+        }
+        
+        grupos[proveedorId].deudas.push(deuda);
+        grupos[proveedorId].totalDeuda += deuda.total;
+        grupos[proveedorId].totalPendiente += deuda.saldoPendiente;
+      });
+      
+      // Convertir a array y ordenar por nombre de proveedor
+      return Object.values(grupos).sort((a, b) => 
+        a.proveedor.nombre.localeCompare(b.proveedor.nombre)
+      );
     },
     paginasVisibles() {
       const paginas = [];
@@ -1208,6 +1283,11 @@ export default {
       return proveedor ? proveedor.nombre : '';
     },
     
+    getProveedorColor(proveedorId) {
+      const proveedor = this.proveedores.find(p => p.id === proveedorId);
+      return proveedor && proveedor.color ? proveedor.color : '#cccccc';
+    },
+    
     abrirAbonoGeneral() {
       if (!this.filtroProveedor) {
         alert('Por favor, seleccione un proveedor primero.');
@@ -1326,6 +1406,23 @@ export default {
       this.agregarProductoDirecto(producto);
     },
     
+    filtrarPorProveedor(proveedorId) {
+      // Si ya está filtrado por este proveedor, limpiar el filtro
+      if (this.filtroProveedor === proveedorId) {
+        this.filtroProveedor = '';
+      } else {
+        this.filtroProveedor = proveedorId;
+      }
+      
+      this.paginaActual = 1; // Resetear a la primera página
+      
+      // Scroll hacia arriba suavemente para ver los filtros
+      window.scrollTo({ 
+        top: 0, 
+        behavior: 'smooth' 
+      });
+    },
+    
     async agregarProductoDirecto(producto) {
       try {
         this.guardando = true;
@@ -1407,63 +1504,141 @@ export default {
 </script>
 
 <style scoped>
-.lista-deudas-container {
-  max-width: 1100px;
-  width: 95%;
-  margin: 0 auto;
-  padding: 20px;
+.lista-deudas {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 30px;
+  color: white;
+  position: relative;
 }
 
-h1 {
-  color: #2c3e50;
+.back-button-container {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  z-index: 10;
+}
+
+/* Header moderno */
+.header-section {
   text-align: center;
-  margin-bottom: 30px;
-  border-bottom: 3px solid #3498db;
-  padding-bottom: 10px;
+  margin-bottom: 40px;
+  margin-top: 60px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 20px;
+  padding: 30px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
-/* Filtros */
-.filtros-container {
+.header-content {
+  width: 100%;
+}
+
+.main-title {
+  font-size: 2.8rem;
+  font-weight: 700;
+  margin: 0 0 15px 0;
   display: flex;
-  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
   gap: 15px;
-  margin-bottom: 30px;
-  background-color: #f8f9fa;
-  padding: 15px;
-  border-radius: 10px;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  color: white;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
 }
 
-.filtro, .filtro-fecha {
+.icon-list {
+  font-size: 3rem;
+}
+
+.subtitle {
+  font-size: 1.2rem;
+  margin: 0;
+  opacity: 0.9;
+  font-weight: 300;
+}
+
+/* Filtros modernos */
+.filtros-container {
+  margin-bottom: 30px;
+}
+
+.filtros-card {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 20px;
+  padding: 25px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.filtros-title {
+  font-size: 1.3rem;
+  font-weight: 600;
+  margin: 0 0 20px 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: white;
+}
+
+.icon-filter {
+  font-size: 1.4rem;
+}
+
+.filtros-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 20px;
+}
+
+.filtro-group {
   display: flex;
   flex-direction: column;
-  flex: 1;
-  min-width: 200px;
 }
 
-.filtro label, .filtro-fecha label {
-  margin-bottom: 5px;
-  color: #34495e;
+.filtro-group label {
+  margin-bottom: 8px;
+  color: white;
+  font-weight: 500;
+  font-size: 0.9rem;
 }
 
-.filtro select, .filtro-fecha input {
-  padding: 10px;
-  border-radius: 5px;
-  border: 1px solid #ddd;
-  font-size: 1em;
+.modern-select,
+.modern-input {
+  padding: 12px 15px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+  font-size: 1rem;
+  transition: all 0.3s ease;
+}
+
+.modern-select:focus,
+.modern-input:focus {
+  outline: none;
+  border-color: rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.2);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.1);
+}
+
+.modern-select option {
+  background: #667eea;
+  color: white;
 }
 
 .fecha-inputs {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 15px;
 }
 
-.fecha-inputs span {
-  color: #7f8c8d;
+.fecha-separator {
+  color: white;
+  font-weight: 500;
 }
 
-/* Resumen */
+/* Resumen moderno */
 .resumen-container {
   display: flex;
   flex-wrap: wrap;
@@ -1473,104 +1648,433 @@ h1 {
 
 .resumen-card {
   flex: 1;
-  min-width: 200px;
-  background-color: #fff;
-  padding: 15px;
-  border-radius: 10px;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-  text-align: center;
+  min-width: 280px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 20px;
+  padding: 25px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  display: flex;
+  align-items: center;
+  gap: 20px;
 }
 
-.resumen-card h3 {
-  color: #2c3e50;
+.card-icon {
+  font-size: 3rem;
+  opacity: 0.8;
+}
+
+.card-content {
+  flex: 1;
+}
+
+.card-content h3 {
+  color: white;
   margin: 0 0 10px 0;
-  font-size: 1em;
+  font-size: 1.1rem;
+  font-weight: 500;
+  opacity: 0.9;
 }
 
-.resumen-card p {
-  color: #3498db;
-  font-size: 1.5em;
-  font-weight: bold;
+.amount {
+  color: white;
+  font-size: 2.2rem;
+  font-weight: 700;
   margin: 0;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
 }
 
-/* Acciones */
+/* Acciones modernas */
 .acciones-container {
   display: flex;
-  justify-content: flex-end;
-  gap: 15px;
-  margin-bottom: 20px;
+  justify-content: center;
+  gap: 20px;
+  margin-bottom: 30px;
+  flex-wrap: wrap;
+}
+
+.btn-action {
+  padding: 15px 25px;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  transition: all 0.3s ease;
+  min-width: 180px;
+  justify-content: center;
+  text-decoration: none;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+  color: white;
+}
+
+.btn-action:hover {
+  transform: translateY(-3px);
+  text-decoration: none;
+  color: white;
 }
 
 .btn-nueva-deuda {
-  background-color: #2ecc71;
-  color: white;
-  text-decoration: none;
-  padding: 10px 20px;
-  border-radius: 5px;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  transition: background-color 0.3s;
+  background: linear-gradient(45deg, #4CAF50, #45a049);
 }
 
 .btn-nueva-deuda:hover {
-  background-color: #27ae60;
+  box-shadow: 0 12px 35px rgba(76, 175, 80, 0.4);
+  background: linear-gradient(45deg, #45a049, #3d8b40);
 }
 
 .btn-historial-precios {
-  background: linear-gradient(135deg, #f39c12, #e67e22);
-  color: white;
-  border: none;
-  padding: 12px 20px;
-  border-radius: 8px;
-  cursor: pointer;
-  text-decoration: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 1em;
-  font-weight: 500;
-  transition: all 0.3s ease;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  background: linear-gradient(45deg, #FF9800, #F57C00);
 }
 
 .btn-historial-precios:hover {
-  background: linear-gradient(135deg, #e67e22, #f39c12);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 12px 35px rgba(255, 152, 0, 0.4);
+  background: linear-gradient(45deg, #F57C00, #E65100);
 }
 
-/* Tabla */
+.icon {
+  font-size: 1.2rem;
+}
+
+/* Estados de carga y vacío */
+.loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 20px;
+  color: white;
+  text-align: center;
+}
+
+.loading-spinner {
+  width: 50px;
+  height: 50px;
+  border: 5px solid rgba(255, 255, 255, 0.3);
+  border-top: 5px solid white;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 20px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 80px 20px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 20px;
+  color: white;
+  text-align: center;
+}
+
+.empty-icon {
+  font-size: 5rem;
+  margin-bottom: 25px;
+  opacity: 0.8;
+}
+
+.empty-state h3 {
+  font-size: 1.8rem;
+  margin-bottom: 10px;
+  font-weight: 600;
+}
+
+.empty-state p {
+  font-size: 1.1rem;
+  margin-bottom: 30px;
+  opacity: 0.8;
+}
+
+/* Contenedor de deudas */
+.deudas-container {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 20px;
+  padding: 20px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+/* Grupo de proveedor */
+.proveedor-grupo {
+  margin-bottom: 40px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 15px;
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.proveedor-header {
+  background: linear-gradient(135deg, rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.5));
+  backdrop-filter: blur(10px);
+  padding: 25px 30px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 20px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+}
+
+.proveedor-header * {
+  color: #ffffff !important;
+}
+
+.proveedor-header .label,
+.proveedor-header span {
+  color: #ffffff !important;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8) !important;
+}
+
+.proveedor-header .value {
+  color: #ffffff !important;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8) !important;
+}
+
+.proveedor-header h2,
+.proveedor-header .proveedor-nombre {
+  color: #ffffff !important;
+  text-shadow: 3px 3px 6px rgba(0, 0, 0, 0.8) !important;
+}
+
+.proveedor-resumen * {
+  color: #ffffff !important;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8) !important;
+}
+
+.proveedor-resumen .value.pendiente {
+  color: #ffa500 !important;
+  background: rgba(255, 165, 0, 0.15) !important;
+  padding: 8px 12px !important;
+  border-radius: 10px !important;
+  border: 2px solid rgba(255, 165, 0, 0.4) !important;
+  font-weight: 800 !important;
+}
+
+.proveedor-title {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.proveedor-color-circle {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 3px solid white;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+  flex-shrink: 0;
+}
+
+.proveedor-nombre {
+  font-size: 2.2rem;
+  font-weight: 700;
+  margin: 0;
+  color: #ffffff;
+  text-shadow: 3px 3px 6px rgba(0, 0, 0, 0.7);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.proveedor-nombre.clickeable {
+  cursor: pointer;
+  transition: all 0.3s ease;
+  position: relative;
+}
+
+.proveedor-nombre.clickeable:hover {
+  transform: scale(1.05);
+  text-shadow: 4px 4px 8px rgba(0, 0, 0, 0.8);
+  color: #e3f2fd !important;
+}
+
+.proveedor-nombre.clickeable:active {
+  transform: scale(0.98);
+}
+
+.filter-icon {
+  margin-left: 15px;
+  font-size: 0.7em;
+  opacity: 0.7;
+  transition: all 0.3s ease;
+}
+
+.proveedor-nombre.clickeable:hover .filter-icon {
+  opacity: 1;
+  transform: rotate(10deg);
+  color: #81c784 !important;
+}
+
+.proveedor-nombre.filtrado {
+  background: linear-gradient(45deg, rgba(129, 199, 132, 0.2), rgba(76, 175, 80, 0.2));
+  padding: 10px 20px;
+  border-radius: 15px;
+  border: 2px solid rgba(129, 199, 132, 0.5);
+  box-shadow: 0 4px 15px rgba(129, 199, 132, 0.3);
+}
+
+.proveedor-nombre.filtrado .filter-icon {
+  color: #4caf50 !important;
+  opacity: 1;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+  100% { transform: scale(1); }
+}
+
+.proveedor-resumen {
+  display: flex;
+  gap: 30px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.proveedor-resumen .resumen-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  min-width: 120px;
+}
+
+.proveedor-resumen .label {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #ffffff;
+  margin-bottom: 5px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.5);
+}
+
+.proveedor-resumen .value {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: #ffffff;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.6);
+}
+
+.proveedor-header .proveedor-resumen .value.pendiente {
+  color: #ffa500 !important;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8) !important;
+  background: rgba(255, 165, 0, 0.1) !important;
+  padding: 5px 10px !important;
+  border-radius: 8px !important;
+  border: 1px solid rgba(255, 165, 0, 0.3) !important;
+}
+
+/* Tabla de proveedor */
+.tabla-container-proveedor {
+  overflow-x: auto;
+  background: rgba(255, 255, 255, 0.95);
+  margin: 0;
+}
+
+.tabla-deudas-proveedor {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.tabla-deudas-proveedor th,
+.tabla-deudas-proveedor td {
+  padding: 15px 20px;
+  text-align: left;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+  color: #2c3e50;
+}
+
+.tabla-deudas-proveedor th {
+  background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+  color: #2c3e50;
+  font-weight: 600;
+  font-size: 0.95rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 2px solid #dee2e6;
+}
+
+.tabla-deudas-proveedor tbody tr {
+  transition: all 0.3s ease;
+  background: white;
+}
+
+.tabla-deudas-proveedor tbody tr:hover {
+  background: #f8f9fa;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.tabla-deudas-proveedor .deuda-pagada {
+  background: #f1f3f4;
+  opacity: 0.7;
+}
+
+.tabla-deudas-proveedor .deuda-pagada:hover {
+  background: #e8eaed;
+}
+
+/* Tabla moderna (mantener para compatibilidad) */
 .tabla-container {
   overflow-x: auto;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 20px;
+  padding: 20px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 .tabla-deudas {
   width: 100%;
   border-collapse: collapse;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-  margin-bottom: 30px;
+  margin-bottom: 20px;
 }
 
-.tabla-deudas th, .tabla-deudas td {
-  padding: 12px 15px;
+.tabla-deudas th, 
+.tabla-deudas td {
+  padding: 15px 12px;
   text-align: left;
-  border-bottom: 1px solid #ddd;
-}
-
-.tabla-deudas th {
-  background-color: #3498db;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
   color: white;
 }
 
+.tabla-deudas th {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  font-weight: 600;
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.tabla-deudas tbody tr {
+  transition: all 0.3s ease;
+}
+
 .tabla-deudas tbody tr:hover {
-  background-color: #f5f5f5;
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .tabla-deudas .deuda-pagada {
-  background-color: #f8f9fa;
-  color: #7f8c8d;
+  background: rgba(255, 255, 255, 0.05);
+  opacity: 0.6;
 }
 
 .estado-badge {
@@ -1702,6 +2206,32 @@ h1 {
 
 .modal-body {
   padding: 20px;
+  color: #2c3e50 !important;
+}
+
+/* Asegurar que todos los textos del modal sean visibles */
+.modal-body * {
+  color: #2c3e50 !important;
+}
+
+.modal-body strong {
+  color: #34495e !important;
+}
+
+.modal-body span {
+  color: #2c3e50 !important;
+}
+
+.modal-body p {
+  color: #2c3e50 !important;
+}
+
+.modal-body td {
+  color: #2c3e50 !important;
+}
+
+.modal-body th {
+  color: #2c3e50 !important;
 }
 
 .deuda-info {
@@ -1713,6 +2243,11 @@ h1 {
 
 .deuda-info p {
   margin: 5px 0;
+  color: #2c3e50 !important;
+}
+
+.deuda-info strong {
+  color: #34495e !important;
 }
 
 /* Tablas dentro del modal */
@@ -1727,16 +2262,27 @@ h1 {
   padding: 10px 12px;
   text-align: left;
   border-bottom: 1px solid #ddd;
+  color: #2c3e50 !important;
 }
 
 .tabla-productos th, .tabla-abonos th {
   background-color: #f8f9fa;
-  color: #2c3e50;
+  color: #2c3e50 !important;
+  font-weight: 600;
+}
+
+.tabla-productos td, .tabla-abonos td {
+  color: #34495e !important;
+}
+
+.tabla-productos span, .tabla-abonos span {
+  color: #2c3e50 !important;
 }
 
 .total-label {
   text-align: right;
   font-weight: bold;
+  color: #2c3e50 !important;
 }
 
 .no-abonos {
@@ -1744,8 +2290,42 @@ h1 {
   padding: 15px;
   border-radius: 8px;
   text-align: center;
-  color: #7f8c8d;
+  color: #7f8c8d !important;
   margin-bottom: 20px;
+}
+
+/* Asegurar que el estado badge sea visible en el modal */
+.modal-body .estado-badge {
+  color: white !important;
+}
+
+.modal-body .estado-badge.pendiente {
+  background-color: #f39c12 !important;
+  color: white !important;
+}
+
+.modal-body .estado-badge.pagado {
+  background-color: #27ae60 !important;
+  color: white !important;
+}
+
+/* Asegurar que los títulos de sección sean visibles */
+.modal-body h3, .modal-body h4 {
+  color: #2c3e50 !important;
+}
+
+/* Texto de ayuda en formularios */
+.modal-body .help-text {
+  color: #7f8c8d !important;
+}
+
+/* Links y elementos interactivos */
+.modal-body a {
+  color: #3498db !important;
+}
+
+.modal-body .text-muted {
+  color: #7f8c8d !important;
 }
 
 .resumen-deuda {
@@ -1759,15 +2339,24 @@ h1 {
   display: flex;
   justify-content: space-between;
   margin-bottom: 10px;
+  color: #2c3e50 !important;
+}
+
+.resumen-item span {
+  color: #2c3e50 !important;
 }
 
 .resumen-item.total {
   font-weight: bold;
   font-size: 1.2em;
-  color: #3498db;
+  color: #3498db !important;
   border-top: 1px solid #ddd;
   padding-top: 10px;
   margin-top: 10px;
+}
+
+.resumen-item.total span {
+  color: #3498db !important;
 }
 
 /* Formulario de abono */
@@ -1888,6 +2477,7 @@ h1 {
 
 .editable-container p {
   margin: 10px 0;
+  color: #2c3e50 !important;
 }
 
 .editable-field, .editable-cell {
@@ -1895,6 +2485,11 @@ h1 {
   padding: 3px;
   border-radius: 3px;
   transition: background-color 0.2s;
+  color: #2c3e50 !important;
+}
+
+.editable-field span, .editable-cell span {
+  color: #2c3e50 !important;
 }
 
 .editable-field:hover, .editable-cell:hover {
@@ -1907,6 +2502,7 @@ h1 {
   border: 1px solid #3498db;
   border-radius: 3px;
   font-size: 1em;
+  color: #2c3e50 !important;
 }
 
 .btn-eliminar-sm {
@@ -2114,7 +2710,63 @@ h1 {
   box-shadow: 0 4px 12px rgba(155, 89, 182, 0.3);
 }
 
+/* Responsive Design */
 @media (max-width: 768px) {
+  .lista-deudas {
+    padding: 20px;
+  }
+
+  .header-section {
+    padding: 20px;
+    margin-bottom: 30px;
+    margin-top: 80px;
+  }
+
+  .main-title {
+    font-size: 2.2rem;
+  }
+
+  .subtitle {
+    font-size: 1rem;
+  }
+
+  .filtros-grid {
+    grid-template-columns: 1fr;
+    gap: 15px;
+  }
+
+  .fecha-inputs {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .acciones-container {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .btn-action {
+    width: 100%;
+    max-width: 350px;
+    justify-content: center;
+  }
+
+  .resumen-card {
+    min-width: auto;
+    width: 100%;
+  }
+
+  .tabla-container {
+    padding: 15px;
+  }
+
+  .tabla-deudas th,
+  .tabla-deudas td {
+    padding: 10px 8px;
+    font-size: 0.9rem;
+  }
+
   .paginacion-container {
     flex-direction: column;
     gap: 15px;
@@ -2138,6 +2790,276 @@ h1 {
   .btn-historial-abonos {
     justify-content: center;
     width: 100%;
+  }
+
+  .back-button-container {
+    top: 15px;
+    left: 15px;
+  }
+  
+  /* Responsive para grupos de proveedor */
+  .proveedor-header {
+    flex-direction: column;
+    align-items: stretch;
+    text-align: center;
+    padding: 20px;
+    gap: 15px;
+  }
+  
+  .proveedor-title {
+    justify-content: center;
+    gap: 15px;
+  }
+  
+  .proveedor-nombre {
+    font-size: 1.8rem;
+  }
+  
+  .proveedor-nombre.clickeable:hover {
+    transform: scale(1.02);
+  }
+  
+  .filter-icon {
+    margin-left: 10px;
+    font-size: 0.6em;
+  }
+  
+  .proveedor-nombre.filtrado {
+    padding: 8px 15px;
+    border-radius: 12px;
+  }
+  
+  .proveedor-color-circle {
+    width: 35px;
+    height: 35px;
+  }
+  
+  .proveedor-resumen {
+    justify-content: center;
+    gap: 20px;
+  }
+  
+  .proveedor-resumen .resumen-item {
+    min-width: 100px;
+  }
+  
+  .proveedor-resumen .label {
+    color: #ffffff !important;
+    text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.7) !important;
+  }
+  
+  .proveedor-resumen .value {
+    font-size: 1.2rem;
+    color: #ffffff !important;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.7) !important;
+  }
+  
+  .tabla-deudas-proveedor th,
+  .tabla-deudas-proveedor td {
+    padding: 10px 12px;
+    font-size: 0.9rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .lista-deudas {
+    padding: 15px;
+  }
+
+  .header-section {
+    padding: 15px;
+    margin-top: 70px;
+  }
+
+  .main-title {
+    font-size: 1.8rem;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .icon-list {
+    font-size: 2.5rem;
+  }
+
+  .filtros-card {
+    padding: 20px;
+  }
+
+  .btn-action {
+    padding: 12px 20px;
+    font-size: 0.9rem;
+    min-width: auto;
+  }
+
+  .card-icon {
+    font-size: 2.5rem;
+  }
+
+  .amount {
+    font-size: 1.8rem;
+  }
+
+  .back-button-container {
+    top: 10px;
+    left: 10px;
+  }
+  
+  /* Responsive para grupos de proveedor en móviles pequeños */
+  .proveedor-header {
+    padding: 15px;
+    gap: 12px;
+  }
+  
+  .proveedor-nombre {
+    font-size: 1.5rem;
+  }
+  
+  .proveedor-nombre.clickeable:hover {
+    transform: scale(1.01);
+  }
+  
+  .filter-icon {
+    margin-left: 8px;
+    font-size: 0.5em;
+  }
+  
+  .proveedor-nombre.filtrado {
+    padding: 6px 12px;
+    border-radius: 10px;
+  }
+  
+  .proveedor-color-circle {
+    width: 30px;
+    height: 30px;
+  }
+  
+  .proveedor-resumen {
+    gap: 15px;
+  }
+  
+  .proveedor-resumen .resumen-item {
+    min-width: 80px;
+  }
+  
+  .proveedor-resumen .label {
+    font-size: 0.75rem;
+    color: #ffffff !important;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.7) !important;
+  }
+  
+  .proveedor-resumen .value {
+    font-size: 1rem;
+    color: #ffffff !important;
+    text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.7) !important;
+  }
+  
+  .tabla-deudas-proveedor th,
+  .tabla-deudas-proveedor td {
+    padding: 8px 10px;
+    font-size: 0.8rem;
+  }
+  
+  .deudas-container {
+    padding: 15px;
+  }
+  
+  .proveedor-grupo {
+    margin-bottom: 25px;
+  }
+}
+
+/* Estilos para indicadores de color de proveedores */
+.proveedor-color-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 12px;
+  border: 2px solid rgba(102, 126, 234, 0.2);
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.color-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid white;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.proveedor-cell {
+  padding: 12px 15px !important;
+}
+
+.proveedor-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.proveedor-color-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid white;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  flex-shrink: 0;
+}
+
+/* Mejoras para la tabla con colores */
+.tabla-deudas tbody tr:hover .proveedor-color-dot {
+  transform: scale(1.2);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+.tabla-deudas tbody tr.deuda-pagada .proveedor-color-dot {
+  opacity: 0.6;
+  filter: grayscale(30%);
+}
+
+/* Responsive para indicadores de color */
+@media (max-width: 768px) {
+  .proveedor-color-indicator {
+    font-size: 0.8rem;
+    padding: 6px 10px;
+    gap: 6px;
+  }
+  
+  .color-dot {
+    width: 14px;
+    height: 14px;
+  }
+  
+  .proveedor-color-dot {
+    width: 12px;
+    height: 12px;
+  }
+  
+  .proveedor-info {
+    gap: 8px;
+  }
+}
+
+@media (max-width: 480px) {
+  .proveedor-color-indicator {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    font-size: 0.75rem;
+  }
+  
+  .proveedor-info {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+  
+  .proveedor-color-dot {
+    width: 10px;
+    height: 10px;
   }
 }
 </style> 

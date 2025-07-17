@@ -1,47 +1,144 @@
 <template>
   <div class="lista-embarques">
- 
-    <div v-if="cargando" class="cargando">Cargando embarques...</div>
-    <div v-else-if="error" class="error">{{ error }}</div>
-    <div v-else>
-      <table v-if="embarques.length > 0" class="tabla-embarques">
-        <thead>
-          <tr>
-            <th>Fecha</th>
-            <th>Kilos Limpios</th>
-            <th>Kilos Crudos</th>
-            <th>Total Kilos</th>
-            <th>Total Taras</th>
-            <th>Acciones</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="embarque in embarques" :key="embarque.id" :class="{ 'fila-bloqueada': embarque.embarqueBloqueado }">
-            <td>
-              {{ formatearFecha(embarque.fecha) }}
-              <span v-if="embarque.embarqueBloqueado" class="indicador-bloqueado" title="Este embarque está bloqueado">🔒</span>
-            </td>
-            <td>{{ calcularKilosLimpios(embarque) }} kg</td>
-            <td>{{ calcularKilosCrudos(embarque) }} kg</td>
-            <td>{{ (Number(calcularKilosLimpios(embarque)) + Number(calcularKilosCrudos(embarque))).toFixed(1) }} kg</td>
-            <td>{{ calcularTotalTaras(embarque) }}</td>
-            <td>
-              <button @click="editarEmbarque(embarque.id)" class="btn-detalles">Editar</button>
-              <button 
-                @click="embarque.embarqueBloqueado ? mostrarMensajeBloqueado() : eliminarEmbarque(embarque.id)" 
-                class="btn-eliminar" 
-                :class="{ 'btn-deshabilitado': embarque.embarqueBloqueado }"
-                :title="embarque.embarqueBloqueado ? 'Este embarque está bloqueado y no puede ser eliminado' : ''"
-              >Eliminar</button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-      <div v-else class="sin-embarques">No hay embarques registrados.</div>
+    <!-- Header principal -->
+    <div class="header-section">
+      <div class="header-content">
+        <h1 class="main-title">
+          <i class="icon-ship">🚢</i>
+          Lista de Embarques
+        </h1>
+        <p class="subtitle">Gestiona todos tus embarques de manera eficiente</p>
+      </div>
+      <div class="header-actions">
+        <button @click="cargarEmbarques" class="btn-refresh" title="Actualizar lista">
+          <i class="icon">🔄</i>
+          Actualizar
+        </button>
+      </div>
     </div>
 
+    <!-- Estados de carga -->
+    <div v-if="cargando" class="loading-state">
+      <div class="loading-spinner"></div>
+      <p>Cargando embarques...</p>
+    </div>
 
- 
+    <div v-else-if="error" class="error-state">
+      <i class="icon-error">⚠️</i>
+      <h3>Error al cargar</h3>
+      <p>{{ error }}</p>
+      <button @click="cargarEmbarques" class="btn-retry">Reintentar</button>
+    </div>
+
+    <!-- Lista de embarques -->
+    <div v-else class="embarques-container">
+      <div v-if="embarques.length > 0" class="embarques-grid">
+        <div 
+          v-for="embarque in embarques" 
+          :key="embarque.id" 
+          class="embarque-card"
+          :class="{ 'card-blocked': embarque.embarqueBloqueado }"
+        >
+          <!-- Header de la card -->
+          <div class="card-header">
+            <div class="fecha-section">
+              <i class="icon-calendar">📅</i>
+              <div class="fecha-info">
+                <span class="fecha-label">Fecha</span>
+                <span class="fecha-value">{{ formatearFecha(embarque.fecha) }}</span>
+              </div>
+            </div>
+            <div class="status-section">
+              <span v-if="embarque.embarqueBloqueado" class="status-badge blocked">
+                <i class="icon-lock">🔒</i>
+                Bloqueado
+              </span>
+              <span v-else class="status-badge active">
+                <i class="icon-check">✅</i>
+                Activo
+              </span>
+            </div>
+          </div>
+
+          <!-- Contenido principal -->
+          <div class="card-content">
+            <!-- Estadísticas -->
+            <div class="stats-grid">
+              <div class="stat-item">
+                <i class="icon-clean">🥤</i>
+                <div class="stat-info">
+                  <span class="stat-label">Kilos Limpios</span>
+                  <span class="stat-value">{{ calcularKilosLimpios(embarque) }} kg</span>
+                </div>
+              </div>
+              <div class="stat-item">
+                <i class="icon-raw">🦐</i>
+                <div class="stat-info">
+                  <span class="stat-label">Kilos Crudos</span>
+                  <span class="stat-value">{{ calcularKilosCrudos(embarque) }} kg</span>
+                </div>
+              </div>
+              <div class="stat-item">
+                <i class="icon-total">⚖️</i>
+                <div class="stat-info">
+                  <span class="stat-label">Total Kilos</span>
+                  <span class="stat-value total">{{ (Number(calcularKilosLimpios(embarque)) + Number(calcularKilosCrudos(embarque))).toFixed(1) }} kg</span>
+                </div>
+              </div>
+              <div class="stat-item">
+                <i class="icon-taras">📦</i>
+                <div class="stat-info">
+                  <span class="stat-label">Total Taras</span>
+                  <span class="stat-value">{{ calcularTotalTaras(embarque) }}</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Información adicional -->
+            <div class="additional-info">
+              <div class="info-item">
+                <i class="icon-truck">🚚</i>
+                <span class="info-label">Carga con:</span>
+                <span class="info-value">{{ embarque.cargaCon || 'No especificado' }}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Acciones -->
+          <div class="card-actions">
+            <button 
+              @click="editarEmbarque(embarque.id)" 
+              class="btn-action btn-edit"
+              title="Editar embarque"
+            >
+              <i class="icon">✏️</i>
+              Editar
+            </button>
+            <button 
+              @click="eliminarEmbarque(embarque.id)" 
+              class="btn-action btn-delete"
+              :class="{ 'btn-disabled': embarque.embarqueBloqueado }"
+              :disabled="embarque.embarqueBloqueado"
+              :title="embarque.embarqueBloqueado ? 'Este embarque está bloqueado' : 'Eliminar embarque'"
+            >
+              <i class="icon">🗑️</i>
+              Eliminar
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Estado vacío -->
+      <div v-else class="empty-state">
+        <div class="empty-icon">📋</div>
+        <h3>No hay embarques registrados</h3>
+        <p>Comienza creando tu primer embarque</p>
+        <button @click="$router.push({ name: 'NuevoEmbarque', params: { id: 'nuevo' } })" class="btn-create">
+          <i class="icon">➕</i>
+          Crear Embarque
+        </button>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -60,6 +157,8 @@ export default {
   methods: {
     async cargarEmbarques() {
       try {
+        this.cargando = true;
+        this.error = null;
         const db = getFirestore();
         const embarquesRef = collection(db, 'embarques');
         const snapshot = await getDocs(embarquesRef);
@@ -102,8 +201,6 @@ export default {
         
         for (const fecha in embarquesPorFecha) {
           if (embarquesPorFecha[fecha].length > 1) {
-            console.warn(`Se encontraron ${embarquesPorFecha[fecha].length} embarques con la fecha ${fecha}`);
-            
             // Ordenar por el más completo (más clientes o productos)
             embarquesPorFecha[fecha].sort((a, b) => {
               const productosA = a.data.clientes ? a.data.clientes.reduce((sum, cliente) => 
@@ -124,12 +221,9 @@ export default {
         
         // Eliminar los embarques duplicados
         if (embarquesParaEliminar.length > 0) {
-          console.warn(`Se eliminarán ${embarquesParaEliminar.length} embarques duplicados`);
-          
           for (const id of embarquesParaEliminar) {
             try {
               await deleteDoc(doc(db, 'embarques', id));
-              console.log(`Embarque duplicado con ID ${id} eliminado correctamente`);
             } catch (error) {
               console.error(`Error al eliminar embarque duplicado con ID ${id}:`, error);
             }
@@ -145,134 +239,194 @@ export default {
         const embarquesFiltrados = [];
         
         for (const fecha in embarquesPorFecha) {
-          if (embarquesPorFecha[fecha].length > 0) {
-            const embarque = embarquesPorFecha[fecha][0];
-            
-            // Procesar la propiedad embarqueBloqueado
-            let embarqueBloqueado = false;
-            
-            if (embarque.data.embarqueBloqueado !== undefined) {
-              // Si es booleano, usar directamente
-              if (typeof embarque.data.embarqueBloqueado === 'boolean') {
-                embarqueBloqueado = embarque.data.embarqueBloqueado;
-              } 
-              // Si es string, verificar si es 'true', '1', 'si', etc.
-              else if (typeof embarque.data.embarqueBloqueado === 'string') {
-                embarqueBloqueado = ['true', '1', 'si', 'yes', 'verdadero'].includes(embarque.data.embarqueBloqueado.toLowerCase());
-              } 
-              // Si es número, verificar si es diferente de 0
-              else if (typeof embarque.data.embarqueBloqueado === 'number') {
-                embarqueBloqueado = embarque.data.embarqueBloqueado !== 0;
-              }
-            }
-            
-            embarquesFiltrados.push({
-              id: embarque.id,
-              ...embarque.data,
-              embarqueBloqueado: embarqueBloqueado
-            });
-          }
+          const embarque = embarquesPorFecha[fecha][0]; // Tomar el primer embarque (el más completo)
+          
+          embarquesFiltrados.push({
+            id: embarque.id,
+            fecha: embarque.fecha,
+            embarqueBloqueado: embarque.data.embarqueBloqueado || false,
+            clientes: embarque.data.clientes || [],
+            cargaCon: embarque.data.cargaCon || 'No especificado'
+          });
         }
         
-        this.embarques = embarquesFiltrados.sort((a, b) => {
-          const fechaA = a.fecha.toDate ? a.fecha.toDate() : new Date(a.fecha);
-          const fechaB = b.fecha.toDate ? b.fecha.toDate() : new Date(b.fecha);
-          return fechaB - fechaA; // Orden descendente
-        });
-        
-        this.cargando = false;
+        this.embarques = embarquesFiltrados.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
       } catch (error) {
-        console.error("Error al cargar los embarques:", error);
-        this.error = "Hubo un error al cargar los embarques. Por favor, intente de nuevo más tarde.";
+        console.error('Error al cargar embarques:', error);
+        this.error = 'Error al cargar los embarques. Por favor, intenta nuevamente.';
+      } finally {
         this.cargando = false;
       }
     },
-    formatearFecha(fecha) {
-      if (!fecha) return 'Fecha no disponible';
-      const fechaObj = fecha.toDate ? fecha.toDate() : new Date(fecha);
-      // Ajustamos la fecha sumando un día
-      fechaObj.setDate(fechaObj.getDate() + 1);
-      return fechaObj.toLocaleDateString('es-ES');
-    },
-    calcularTotalKilos(embarque) {
-      let totalKilos = 0;
 
+    calcularKilosLimpios(embarque) {
+      if (!embarque.clientes) return '0.0';
+      
+      let totalKilos = 0;
+      
       embarque.clientes.forEach(cliente => {
+        if (!cliente.productos) return;
+        
         cliente.productos.forEach(producto => {
           if (producto.tipo === 'c/h20') {
-            // Para productos c/h20, calcular la suma de (taras * bolsa) para cada grupo
+            // Para productos c/h20, calcular con el valor neto
             const reporteTaras = producto.reporteTaras || [];
             const reporteBolsas = producto.reporteBolsas || [];
-            let sumaTotalKilos = 0;
+            let sumaTotalBolsas = 0;
 
             for (let i = 0; i < reporteTaras.length; i++) {
               const taras = parseInt(reporteTaras[i]) || 0;
               const bolsa = parseInt(reporteBolsas[i]) || 0;
-              sumaTotalKilos += taras * bolsa;
+              sumaTotalBolsas += taras * bolsa;
             }
 
             // Multiplicar por el valor neto (0.65 por defecto)
-            const kilosReales = sumaTotalKilos * (producto.camaronNeto || 0.65);
+            const kilosReales = sumaTotalBolsas * (producto.camaronNeto || 0.65);
             totalKilos += kilosReales;
           } else {
-            // Para otros productos
+            // Para otros productos, usar el cálculo estándar
             const sumaKilos = (producto.kilos || []).reduce((sum, kilo) => sum + (Number(kilo) || 0), 0);
-            const sumaTaras = this.calcularTotalTarasProducto(producto);
-            const descuentoTaras = producto.restarTaras ? sumaTaras * 3 : 0;
-            totalKilos += sumaKilos - descuentoTaras;
+            const sumaTarasNormales = (producto.taras || []).reduce((sum, tara) => sum + (Number(tara) || 0), 0);
+            const descuentoTaras = producto.restarTaras ? sumaTarasNormales * 3 : 0;
+            totalKilos += (sumaKilos - descuentoTaras);
           }
         });
       });
-
+      
       return totalKilos.toFixed(1);
     },
-    calcularTotalTaras(embarque) {
-      let totalTaras = 0;
-      const clientesPredefinidos = ['OTILIO', 'JOSELITO', 'CATARRO', 'OZUNA', 'ELIZABETH'];
 
+    calcularKilosCrudos(embarque) {
+      if (!embarque.clientes) return '0.0';
+      
+      let totalKilosCrudos = 0;
+      
       embarque.clientes.forEach(cliente => {
-        // Solo procesar si el cliente está en la lista de predefinidos
-        if (clientesPredefinidos.includes(cliente.nombre.toUpperCase())) {
-          // Sumar taras de productos normales
-          cliente.productos.forEach(producto => {
-            totalTaras += this.calcularTotalTarasProducto(producto);
-          });
-
-          // Sumar taras de crudos
-          if (cliente.crudos && Array.isArray(cliente.crudos)) {
-            cliente.crudos.forEach(crudo => {
-              if (crudo && crudo.items && Array.isArray(crudo.items)) {
-                crudo.items.forEach(item => {
-                  if (item.taras) {
-                    const [cantidad] = item.taras.split('-').map(Number);
-                    totalTaras += cantidad || 0;
-                  }
-                  if (item.sobrante) {
-                    const [cantidadSobrante] = item.sobrante.split('-').map(Number);
-                    totalTaras += cantidadSobrante || 0;
-                  }
-                });
+        if (!cliente.crudos || !Array.isArray(cliente.crudos)) return;
+        
+        cliente.crudos.forEach(crudo => {
+          if (!crudo || !crudo.items || !Array.isArray(crudo.items)) return;
+          
+          crudo.items.forEach(item => {
+            let kilosItem = 0;
+            
+            // Procesar taras principales
+            if (item.taras) {
+              const formatoGuion = /^(\d+)-(\d+)$/.exec(item.taras);
+              if (formatoGuion) {
+                const cantidad = parseInt(formatoGuion[1]) || 0;
+                let medida = parseInt(formatoGuion[2]) || 0;
+                
+                // Si la medida es 19, sustituirla por 20 para el cálculo de ventas
+                if (medida === 19) {
+                  medida = 20;
+                }
+                
+                kilosItem += cantidad * medida;
+              } else {
+                // Formato original si no coincide con el patrón
+                const [cantidad, medida] = item.taras.split('-').map(Number);
+                kilosItem += (cantidad || 0) * (medida || 0);
               }
-            });
-          }
+            }
+            
+            // Procesar sobrantes
+            if (item.sobrante) {
+              const formatoGuion = /^(\d+)-(\d+)$/.exec(item.sobrante);
+              if (formatoGuion) {
+                const cantidadSobrante = parseInt(formatoGuion[1]) || 0;
+                let medidaSobrante = parseInt(formatoGuion[2]) || 0;
+                
+                // Si la medida es 19, sustituirla por 20 para el cálculo de ventas
+                if (medidaSobrante === 19) {
+                  medidaSobrante = 20;
+                }
+                
+                kilosItem += cantidadSobrante * medidaSobrante;
+              } else {
+                // Formato original si no coincide con el patrón
+                const [cantidadSobrante, medidaSobrante] = item.sobrante.split('-').map(Number);
+                kilosItem += (cantidadSobrante || 0) * (medidaSobrante || 0);
+              }
+            }
+            
+            totalKilosCrudos += kilosItem;
+          });
+        });
+      });
+      
+      return totalKilosCrudos.toFixed(1);
+    },
+
+    calcularTotalTaras(embarque) {
+      if (!embarque.clientes) return 0;
+      
+      let totalTaras = 0;
+      
+      // Calcular taras de productos limpios
+      embarque.clientes.forEach(cliente => {
+        if (cliente.productos) {
+          cliente.productos.forEach(producto => {
+            const taras = Array.isArray(producto.taras) ? producto.taras : [];
+            const tarasExtra = Array.isArray(producto.tarasExtra) ? producto.tarasExtra : [];
+            const todasLasTaras = [...taras, ...tarasExtra];
+            
+            totalTaras += todasLasTaras.reduce((sum, tara) => {
+              return sum + (parseInt(tara) || 0);
+            }, 0);
+          });
+        }
+        
+        // Calcular taras de crudos
+        if (cliente.crudos) {
+          cliente.crudos.forEach(crudo => {
+            if (crudo.items && Array.isArray(crudo.items)) {
+              crudo.items.forEach(item => {
+                if (item.taras) {
+                  const [cantidad] = item.taras.split('-');
+                  totalTaras += parseInt(cantidad) || 0;
+                }
+                if (item.sobrante) {
+                  const [cantidadSobrante] = item.sobrante.split('-');
+                  totalTaras += parseInt(cantidadSobrante) || 0;
+                }
+              });
+            }
+          });
         }
       });
-
+      
       return totalTaras;
     },
-    calcularTotalTarasProducto(producto) {
-      const tarasNormales = (producto.taras || []).reduce((sum, tara) => sum + (Number(tara) || 0), 0);
-      const tarasExtra = (producto.tarasExtra || []).reduce((sum, tara) => sum + (Number(tara) || 0), 0);
-      return tarasNormales + tarasExtra;
+
+    formatearFecha(fecha) {
+      if (!fecha) return 'Fecha no disponible';
+      
+      let fechaObj;
+      if (fecha.toDate && typeof fecha.toDate === 'function') {
+        fechaObj = fecha.toDate();
+      } else if (fecha instanceof Date) {
+        fechaObj = fecha;
+      } else if (typeof fecha === 'string') {
+        fechaObj = new Date(fecha);
+      } else {
+        return 'Fecha inválida';
+      }
+      
+      // Ajustar para mostrar la fecha correcta (compensar diferencia horaria)
+      const fechaAjustada = new Date(fechaObj.getTime() + fechaObj.getTimezoneOffset() * 60000);
+      
+      return fechaAjustada.toLocaleDateString('es-ES', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+      });
     },
-    verDetalles(embarqueId) {
-      console.log('Navegando a detalles del embarque:', embarqueId);
-      this.$router.push({ name: 'DetallesEmbarque', params: { id: embarqueId } });
-    },
-  
+
     editarEmbarque(embarqueId) {
       this.$router.push({ name: 'NuevoEmbarque', params: { id: embarqueId } });
     },
+
     regresarAMenu() {
       this.$router.push({ name: 'EmbarquesMenu' });
     },
@@ -291,330 +445,512 @@ export default {
         try {
           const db = getFirestore();
           await deleteDoc(doc(db, 'embarques', embarqueId));
-          this.embarques = this.embarques.filter(e => e.id !== embarqueId);
           alert('Embarque eliminado con éxito');
+          await this.cargarEmbarques(); // Volver a cargar los embarques para reflejar la eliminación
         } catch (error) {
           console.error("Error al eliminar el embarque:", error);
           alert('Hubo un error al eliminar el embarque. Por favor, intente de nuevo.');
         }
       }
-    },
-
-    calcularKilosLimpios(embarque) {
-      let totalKilos = 0;
-
-      embarque.clientes.forEach(cliente => {
-        cliente.productos.forEach(producto => {
-          if (producto.tipo === 'c/h20') {
-            // Para productos c/h20, calcular la suma de (taras * bolsa) para cada grupo
-            const reporteTaras = producto.reporteTaras || [];
-            const reporteBolsas = producto.reporteBolsas || [];
-            let sumaTotalKilos = 0;
-
-            for (let i = 0; i < reporteTaras.length; i++) {
-              const taras = parseInt(reporteTaras[i]) || 0;
-              const bolsa = parseInt(reporteBolsas[i]) || 0;
-              sumaTotalKilos += taras * bolsa;
-            }
-
-            // Multiplicar por el valor neto (0.65 por defecto)
-            const kilosReales = sumaTotalKilos * (producto.camaronNeto || 0.65);
-            totalKilos += kilosReales;
-          } else {
-            // Para otros productos
-            const sumaKilos = (producto.kilos || []).reduce((sum, kilo) => sum + (Number(kilo) || 0), 0);
-            const sumaTaras = this.calcularTotalTarasProducto(producto);
-            const descuentoTaras = producto.restarTaras ? sumaTaras * 3 : 0;
-            totalKilos += sumaKilos - descuentoTaras;
-          }
-        });
-      });
-
-      return totalKilos.toFixed(1);
-    },
-
-    calcularKilosCrudos(embarque) {
-      let totalKilosCrudos = 0;
-
-      embarque.clientes.forEach(cliente => {
-        if (cliente.crudos && Array.isArray(cliente.crudos)) {
-          cliente.crudos.forEach(crudo => {
-            if (crudo && crudo.items && Array.isArray(crudo.items)) {
-              crudo.items.forEach(item => {
-                if (item.taras) {
-                  // Verificar si la tara tiene formato "5-19" o similar
-                  const formatoGuion = /^(\d+)-(\d+)$/.exec(item.taras);
-                  if (formatoGuion) {
-                    const cantidad = parseInt(formatoGuion[1]) || 0;
-                    let medida = parseInt(formatoGuion[2]) || 0;
-                    
-                    // Si la medida es 19, sustituirla por 20
-                    if (medida === 19) {
-                      medida = 20;
-                    }
-                    
-                    totalKilosCrudos += (cantidad || 0) * (medida || 0);
-                  } else {
-                    // Formato original si no coincide con el patrón
-                    const [cantidad, medida] = item.taras.split('-').map(Number);
-                    totalKilosCrudos += (cantidad || 0) * (medida || 0);
-                  }
-                }
-                if (item.sobrante) {
-                  // Verificar si el sobrante tiene formato "5-19" o similar
-                  const formatoGuion = /^(\d+)-(\d+)$/.exec(item.sobrante);
-                  if (formatoGuion) {
-                    const cantidadSobrante = parseInt(formatoGuion[1]) || 0;
-                    let medidaSobrante = parseInt(formatoGuion[2]) || 0;
-                    
-                    // Si la medida es 19, sustituirla por 20
-                    if (medidaSobrante === 19) {
-                      medidaSobrante = 20;
-                    }
-                    
-                    totalKilosCrudos += (cantidadSobrante || 0) * (medidaSobrante || 0);
-                  } else {
-                    // Formato original si no coincide con el patrón
-                    const [cantidadSobrante, medidaSobrante] = item.sobrante.split('-').map(Number);
-                    totalKilosCrudos += (cantidadSobrante || 0) * (medidaSobrante || 0);
-                  }
-                }
-              });
-            }
-          });
-        }
-      });
-
-      return totalKilosCrudos.toFixed(1);
-    },
-    
-        mostrarMensajeBloqueado() {
-      alert('Este embarque está bloqueado y no puede ser eliminado.');
     }
   },
-  mounted() {
-    this.cargarEmbarques();
-  },
-  created() {
-    // Verificar el estado de la propiedad embarqueBloqueado en cada embarque después de cargar los datos
-    this.$nextTick(() => {
-      setTimeout(() => {
-        // Eliminar todo el bloque de console.log
-      }, 1000); // Esperar 1 segundo para asegurarse de que los datos estén cargados
-    });
+
+  async mounted() {
+    await this.cargarEmbarques();
   }
 };
 </script>
 
 <style scoped>
 .lista-embarques {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   padding: 20px;
-  font-family: Arial, sans-serif;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 
-h1 {
-  color: #333;
+/* Header Section */
+.header-section {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 30px;
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(10px);
+  border-radius: 20px;
+  padding: 25px 30px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+}
+
+.header-content {
+  flex: 1;
+}
+
+.main-title {
+  margin: 0;
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: white;
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+}
+
+.icon-ship {
+  font-size: 2.2rem;
+  animation: float 3s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+}
+
+.subtitle {
+  margin: 8px 0 0 0;
+  font-size: 1.1rem;
+  color: rgba(255, 255, 255, 0.8);
+  font-weight: 300;
+}
+
+.header-actions {
+  display: flex;
+  gap: 15px;
+}
+
+.btn-refresh {
+  background: linear-gradient(45deg, #4CAF50, #45a049);
+  color: white;
+  border: none;
+  padding: 12px 20px;
+  border-radius: 15px;
+  cursor: pointer;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(76, 175, 80, 0.3);
+}
+
+.btn-refresh:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(76, 175, 80, 0.4);
+}
+
+/* Estados de carga y error */
+.loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(10px);
+  border-radius: 20px;
+  color: white;
+  text-align: center;
+}
+
+.loading-spinner {
+  width: 50px;
+  height: 50px;
+  border: 4px solid rgba(255, 255, 255, 0.3);
+  border-left: 4px solid white;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
   margin-bottom: 20px;
 }
 
-.cargando, .error, .sin-embarques {
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.error-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(10px);
+  border-radius: 20px;
+  color: white;
   text-align: center;
-  padding: 20px;
-  font-size: 18px;
 }
 
-.error {
-  color: #d9534f;
+.icon-error {
+  font-size: 4rem;
+  margin-bottom: 20px;
 }
 
-.tabla-embarques {
-  width: 100%;
-  border-collapse: collapse;
+.btn-retry {
+  background: linear-gradient(45deg, #ff6b6b, #ee5a52);
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 15px;
+  cursor: pointer;
+  font-weight: 600;
   margin-top: 20px;
+  transition: all 0.3s ease;
 }
 
-.tabla-embarques th, .tabla-embarques td {
-  border: 1px solid #ddd;
-  padding: 12px;
-  text-align: left;
+.btn-retry:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(255, 107, 107, 0.4);
 }
 
-.tabla-embarques th {
-  background-color: #f2f2f2;
-  font-weight: bold;
+/* Container principal */
+.embarques-container {
+  max-width: 1400px;
+  margin: 0 auto;
 }
 
-.tabla-embarques tr:nth-child(even) {
-  background-color: #f9f9f9;
+.embarques-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+  gap: 25px;
+  padding: 10px;
 }
 
-.tabla-embarques tr:hover {
-  background-color: #f5f5f5;
+/* Cards de embarques */
+.embarque-card {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border-radius: 20px;
+  padding: 25px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
 }
 
-
-
-.btn-detalles {
-  background-color: #5bc0de;
-  color: white;
-  border: none;
-  padding: 8px 12px;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: background-color 0.3s;
+.embarque-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, #667eea, #764ba2);
 }
 
-.btn-detalles:hover {
-  background-color: #46b8da;
+.embarque-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 15px 40px rgba(0, 0, 0, 0.15);
 }
 
-.btn-lista-embarques {
-  background-color: #5bc0de;
-  color: white;
-  border: none;
-  padding: 8px 12px;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: background-color 0.3s;
+.card-blocked {
+  background: rgba(255, 235, 235, 0.95);
+  border-left: 5px solid #ff6b6b;
 }
 
-.btn-lista-embarques:hover {
-  background-color: #46b8da;
-}
-
-.botones {
+/* Header de la card */
+.card-header {
   display: flex;
   justify-content: space-between;
-  margin-top: 20px;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 15px;
+  border-bottom: 2px solid rgba(0, 0, 0, 0.05);
 }
 
-.btn-regresar {
-  background-color: #f0ad4e;
+.fecha-section {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.icon-calendar {
+  font-size: 1.5rem;
+}
+
+.fecha-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.fecha-label {
+  font-size: 0.85rem;
+  color: #666;
+  font-weight: 500;
+}
+
+.fecha-value {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #333;
+}
+
+.status-section {
+  display: flex;
+  align-items: center;
+}
+
+.status-badge {
+  padding: 8px 15px;
+  border-radius: 25px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.status-badge.active {
+  background: linear-gradient(45deg, #4CAF50, #45a049);
+  color: white;
+}
+
+.status-badge.blocked {
+  background: linear-gradient(45deg, #ff6b6b, #ee5a52);
+  color: white;
+}
+
+/* Contenido principal */
+.card-content {
+  margin-bottom: 20px;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 15px;
+  margin-bottom: 20px;
+}
+
+.stat-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 15px;
+  background: linear-gradient(135deg, #f8f9ff, #e8ecff);
+  border-radius: 15px;
+  border: 1px solid rgba(102, 126, 234, 0.1);
+  transition: all 0.3s ease;
+}
+
+.stat-item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 15px rgba(102, 126, 234, 0.1);
+}
+
+.stat-item i {
+  font-size: 1.5rem;
+}
+
+.stat-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.stat-label {
+  font-size: 0.8rem;
+  color: #666;
+  font-weight: 500;
+}
+
+.stat-value {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #333;
+}
+
+.stat-value.total {
+  color: #667eea;
+  font-size: 1.2rem;
+}
+
+.additional-info {
+  padding: 15px;
+  background: rgba(102, 126, 234, 0.05);
+  border-radius: 15px;
+  border: 1px solid rgba(102, 126, 234, 0.1);
+}
+
+.info-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.info-label {
+  font-weight: 600;
+  color: #666;
+}
+
+.info-value {
+  color: #333;
+  font-weight: 500;
+}
+
+/* Acciones */
+.card-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  padding-top: 15px;
+  border-top: 2px solid rgba(0, 0, 0, 0.05);
+}
+
+.btn-action {
+  padding: 10px 18px;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.3s ease;
+  min-width: 100px;
+  justify-content: center;
+}
+
+.btn-edit {
+  background: linear-gradient(45deg, #667eea, #764ba2);
+  color: white;
+  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+}
+
+.btn-edit:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+}
+
+.btn-delete {
+  background: linear-gradient(45deg, #ff6b6b, #ee5a52);
+  color: white;
+  box-shadow: 0 4px 15px rgba(255, 107, 107, 0.3);
+}
+
+.btn-delete:hover:not(.btn-disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(255, 107, 107, 0.4);
+}
+
+.btn-disabled {
+  background: #cccccc !important;
+  cursor: not-allowed !important;
+  opacity: 0.6;
+  box-shadow: none !important;
+}
+
+.btn-disabled:hover {
+  transform: none !important;
+}
+
+/* Estado vacío */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 80px 20px;
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(10px);
+  border-radius: 20px;
+  color: white;
+  text-align: center;
+}
+
+.empty-icon {
+  font-size: 5rem;
+  margin-bottom: 25px;
+  opacity: 0.8;
+}
+
+.empty-state h3 {
+  font-size: 1.8rem;
+  margin-bottom: 10px;
+  font-weight: 600;
+}
+
+.empty-state p {
+  font-size: 1.1rem;
+  margin-bottom: 30px;
+  opacity: 0.8;
+}
+
+.btn-create {
+  background: linear-gradient(45deg, #4CAF50, #45a049);
   color: white;
   border: none;
-  padding: 8px 12px;
-  border-radius: 4px;
+  padding: 15px 30px;
+  border-radius: 15px;
   cursor: pointer;
-  transition: background-color 0.3s;
+  font-weight: 600;
+  font-size: 1.1rem;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(76, 175, 80, 0.3);
 }
 
-.btn-regresar:hover {
-  background-color: #ec971f;
+.btn-create:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(76, 175, 80, 0.4);
 }
 
-.btn-eliminar {
-  background-color: #d9534f;
-  color: white;
-  border: none;
-  padding: 8px 12px;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: background-color 0.3s;
-  margin-left: 5px;
-}
-
-.btn-eliminar:hover {
-  background-color: #c9302c;
-}
-
-.btn-deshabilitado {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.btn-deshabilitado:hover {
-  background-color: #d9534f;
-}
-
-.fila-bloqueada {
-  background-color: rgba(255, 235, 235, 0.5) !important;
-}
-
-.fila-bloqueada:hover {
-  background-color: rgba(255, 235, 235, 0.8) !important;
-}
-
-.indicador-bloqueado {
-  margin-left: 5px;
-  font-size: 14px;
-  color: #d9534f;
-}
-
-/* Agregar estos estilos para mejorar la visualización de la tabla */
-.tabla-embarques td {
-  white-space: nowrap;
-  padding: 12px 15px;
-}
-
-.tabla-embarques th {
-  white-space: nowrap;
-  padding: 12px 15px;
-  background-color: #f8f9fa;
-  border-bottom: 2px solid #dee2e6;
-}
-
-
-
-@media (max-width: 1200px) {
-  .tabla-embarques {
-    display: block;
-    overflow-x: auto;
-    white-space: nowrap;
-  }
-}
-
+/* Responsive */
 @media (max-width: 768px) {
-  .tabla-embarques th:nth-child(4),
-  .tabla-embarques td:nth-child(4) {
-    display: none;
+  .lista-embarques {
+    padding: 15px;
   }
 
-  .tabla-embarques th,
-  .tabla-embarques td {
-    padding: 8px 6px;
-    font-size: 14px;
+  .header-section {
+    flex-direction: column;
+    gap: 20px;
+    text-align: center;
   }
 
-  /* Fecha */
-  .tabla-embarques th:nth-child(1),
-  .tabla-embarques td:nth-child(1) {
-    width: 25%;
-    min-width: 80px;
+  .main-title {
+    font-size: 2rem;
   }
 
-  /* Kilos Limpios */
-  .tabla-embarques th:nth-child(2),
-  .tabla-embarques td:nth-child(2) {
-    width: 20%;
-    min-width: 70px;
+  .embarques-grid {
+    grid-template-columns: 1fr;
+    gap: 20px;
   }
 
-  /* Kilos Crudos */
-  .tabla-embarques th:nth-child(3),
-  .tabla-embarques td:nth-child(3) {
-    width: 20%;
-    min-width: 70px;
+  .embarque-card {
+    padding: 20px;
   }
 
-  /* Total Taras */
-  .tabla-embarques th:nth-child(5),
-  .tabla-embarques td:nth-child(5) {
-    width: 15%;
-    min-width: 60px;
+  .stats-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
   }
 
-  /* Columna de Acciones */
-  .tabla-embarques th:nth-child(6),
-  .tabla-embarques td:nth-child(6) {
-    width: 20%;
-    min-width: 120px;
+  .card-actions {
+    flex-direction: column;
   }
 
-  .btn-detalles,
-  .btn-eliminar {
-    padding: 6px 8px;
-    font-size: 13px;
-    margin-left: 2px;
+  .btn-action {
+    width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .embarque-card {
+    padding: 15px;
+  }
+
+  .main-title {
+    font-size: 1.5rem;
+  }
+
+  .card-header {
+    flex-direction: column;
+    gap: 15px;
+    text-align: center;
   }
 }
 </style>

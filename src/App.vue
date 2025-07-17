@@ -11,6 +11,7 @@
 <script>
 import Navbar from "./NavBar.vue";
 import Footer from './Footer.vue';
+import { useAuthStore } from './stores/auth';
 
 export default {
   name: "app",
@@ -18,6 +19,18 @@ export default {
     Navbar,
     Footer
   },
+  created() {
+    // Inicializar el store de autenticación al cargar la aplicación
+    const authStore = useAuthStore();
+    authStore.checkAuth();
+    
+    // Debug: mostrar estado de autenticación
+    console.log('App inicializada - Estado de auth:', {
+      isAuthenticated: authStore.isAuthenticated,
+      user: authStore.user,
+      localStorage: localStorage.getItem('user') ? 'exists' : 'null'
+    });
+  }
 };
 </script>
 <style>

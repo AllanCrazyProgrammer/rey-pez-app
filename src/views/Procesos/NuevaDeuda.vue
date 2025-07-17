@@ -1,74 +1,119 @@
 <template>
-  <div class="nueva-deuda-container">
+  <div class="nueva-deuda">
     <div class="back-button-container">
       <BackButton to="/procesos/deudas" />
     </div>
-    <h1>Nueva Deuda a Proveedor</h1>
     
-    <div class="fecha-actual">
-      <input type="date" v-model="fechaSeleccionada">
-      <span>{{ fechaFormateada }}</span>
+    <!-- Header moderno -->
+    <div class="header-section">
+      <div class="header-content">
+        <h1 class="main-title">
+          <i class="icon-new">➕</i>
+          Nueva Deuda a Proveedor
+        </h1>
+        <p class="subtitle">Registra una nueva deuda con productos y abonos iniciales</p>
+      </div>
     </div>
 
-    <div class="proveedor-selector">
-      <h2>Seleccionar Proveedor</h2>
-      <select v-model="proveedorSeleccionado" required>
+    <!-- Sección de fecha -->
+    <div class="fecha-card">
+      <h3 class="section-title">
+        <i class="icon-calendar">📅</i>
+        Fecha de la Deuda
+      </h3>
+      <div class="fecha-container">
+        <input type="date" v-model="fechaSeleccionada" class="modern-input">
+        <span class="fecha-display">{{ fechaFormateada }}</span>
+      </div>
+    </div>
+
+    <!-- Selector de proveedor -->
+    <div class="proveedor-card">
+      <h3 class="section-title">
+        <i class="icon-supplier">🏭</i>
+        Seleccionar Proveedor
+      </h3>
+      <select v-model="proveedorSeleccionado" required class="modern-select">
         <option value="" disabled>Seleccione un proveedor</option>
         <option v-for="proveedor in proveedores" :key="proveedor.id" :value="proveedor.id">
           {{ proveedor.nombre }}
         </option>
       </select>
-      <span v-if="proveedorSeleccionado && getNombreProveedor()" class="proveedor-info">
-        Proveedor: {{ getNombreProveedor() }}
-      </span>
+      <div v-if="proveedorSeleccionado && getNombreProveedor()" class="proveedor-selected-info">
+        <div class="proveedor-color-display">
+          <div 
+            class="color-indicator-large" 
+            :style="{ backgroundColor: getProveedorColor(proveedorSeleccionado) }"
+          ></div>
+          <div class="proveedor-details">
+            <span class="proveedor-nombre">{{ getNombreProveedor() }}</span>
+            <span class="proveedor-label">Proveedor seleccionado</span>
+          </div>
+        </div>
+      </div>
     </div>
 
-    <div class="input-section" v-if="proveedorSeleccionado">
-      <h2>Ingresar Productos</h2>
+    <!-- Sección de productos -->
+    <div class="productos-card" v-if="proveedorSeleccionado">
+      <h3 class="section-title">
+        <i class="icon-products">📦</i>
+        Ingresar Productos
+      </h3>
       <ProductoSelector 
         :proveedor-id="proveedorSeleccionado"
         @agregar-producto="addItem"
       />
     </div>
 
-    <table class="tabla-principal" v-if="items.length > 0">
-      <thead>
-        <tr>
-          <th>Kilos</th>
-          <th>Producto</th>
-          <th>Precio</th>
-          <th>Total</th>
-          <th>Acciones</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="(item, index) in items" :key="index">
-          <td @click="editarItem(index, 'kilos')">
-            <span v-if="!item.editando || item.campoEditando !== 'kilos'">{{ formatNumber(item.kilos) }}</span>
-            <input v-else v-model.number="item.kilos" type="number" @blur="finalizarEdicion(index)" @keyup.enter="finalizarEdicion(index)">
-          </td>
-          <td @click="editarItem(index, 'producto')">
-            <span v-if="!item.editando || item.campoEditando !== 'producto'">{{ item.producto }}</span>
-            <input v-else v-model="item.producto" type="text" @blur="finalizarEdicion(index)" @keyup.enter="finalizarEdicion(index)">
-          </td>
-          <td @click="editarItem(index, 'precio')">
-            <span v-if="!item.editando || item.campoEditando !== 'precio'">${{ formatNumber(item.precio) }}</span>
-            <input v-else v-model.number="item.precio" type="number" @blur="finalizarEdicion(index)" @keyup.enter="finalizarEdicion(index)">
-          </td>
-          <td>${{ formatNumber(item.total) }}</td>
-          <td class="action-column">
-            <button @click="removeItem(index)" class="delete-btn">Eliminar</button>
-          </td>
-        </tr>
-      </tbody>
-      <tfoot>
-        <tr>
-          <td colspan="3" class="total-label">Total</td>
-          <td>${{ formatNumber(totalGeneral) }}</td>
-          <td></td>
-        </tr>
-      </tfoot>
-    </table>
+    <!-- Tabla de productos -->
+    <div class="tabla-container" v-if="items.length > 0">
+      <h3 class="section-title">
+        <i class="icon-list">📋</i>
+        Productos Agregados
+      </h3>
+      <div class="tabla-wrapper">
+        <table class="tabla-productos">
+          <thead>
+            <tr>
+              <th>Kilos</th>
+              <th>Producto</th>
+              <th>Precio</th>
+              <th>Total</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="(item, index) in items" :key="index">
+              <td @click="editarItem(index, 'kilos')" class="editable">
+                <span v-if="!item.editando || item.campoEditando !== 'kilos'">{{ formatNumber(item.kilos) }}</span>
+                <input v-else v-model.number="item.kilos" type="number" class="table-input" @blur="finalizarEdicion(index)" @keyup.enter="finalizarEdicion(index)">
+              </td>
+              <td @click="editarItem(index, 'producto')" class="editable">
+                <span v-if="!item.editando || item.campoEditando !== 'producto'">{{ item.producto }}</span>
+                <input v-else v-model="item.producto" type="text" class="table-input" @blur="finalizarEdicion(index)" @keyup.enter="finalizarEdicion(index)">
+              </td>
+              <td @click="editarItem(index, 'precio')" class="editable">
+                <span v-if="!item.editando || item.campoEditando !== 'precio'">${{ formatNumber(item.precio) }}</span>
+                <input v-else v-model.number="item.precio" type="number" class="table-input" @blur="finalizarEdicion(index)" @keyup.enter="finalizarEdicion(index)">
+              </td>
+              <td class="total-cell">${{ formatNumber(item.total) }}</td>
+              <td class="action-column">
+                <button @click="removeItem(index)" class="btn-delete">
+                  <i class="icon-trash">🗑️</i>
+                </button>
+              </td>
+            </tr>
+          </tbody>
+          <tfoot>
+            <tr class="total-row">
+              <td colspan="3" class="total-label">Total General</td>
+              <td class="total-amount">${{ formatNumber(totalGeneral) }}</td>
+              <td></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
 
     <div class="abonos-section" v-if="items.length > 0">
       <h2>Abonos Iniciales</h2>
@@ -169,6 +214,10 @@ export default {
     getNombreProveedor() {
       const proveedor = this.proveedores.find(p => p.id === this.proveedorSeleccionado);
       return proveedor ? proveedor.nombre : '';
+    },
+    getProveedorColor(proveedorId) {
+      const proveedor = this.proveedores.find(p => p.id === proveedorId);
+      return proveedor && proveedor.color ? proveedor.color : '#cccccc';
     },
     formatNumber(number) {
       return number ? number.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00';
@@ -292,38 +341,140 @@ export default {
 </script>
 
 <style scoped>
-.nueva-deuda-container {
-  max-width: 1000px;
-  width: 95%;
-  margin: 0 auto;
-  padding: 20px;
+.nueva-deuda {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 30px;
+  color: white;
+  position: relative;
 }
 
-h1 {
-  color: #2c3e50;
+.back-button-container {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  z-index: 10;
+}
+
+/* Header moderno */
+.header-section {
   text-align: center;
-  margin-bottom: 30px;
-  border-bottom: 3px solid #3498db;
-  padding-bottom: 10px;
+  margin-bottom: 40px;
+  margin-top: 60px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 20px;
+  padding: 30px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
-h2 {
-  color: #3498db;
-  margin-top: 30px;
-  margin-bottom: 15px;
+.header-content {
+  width: 100%;
 }
 
-.fecha-actual {
+.main-title {
+  font-size: 2.8rem;
+  font-weight: 700;
+  margin: 0 0 15px 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 15px;
+  color: white;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.icon-new {
+  font-size: 3rem;
+}
+
+.subtitle {
+  font-size: 1.2rem;
+  margin: 0;
+  opacity: 0.9;
+  font-weight: 300;
+}
+
+/* Cards de sección */
+.fecha-card,
+.proveedor-card,
+.productos-card,
+.tabla-container {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 20px;
+  padding: 25px;
+  margin-bottom: 25px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.section-title {
+  font-size: 1.3rem;
+  font-weight: 600;
+  margin: 0 0 20px 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: white;
+}
+
+/* Estilos de fecha */
+.fecha-container {
   display: flex;
   align-items: center;
   gap: 20px;
-  margin-bottom: 20px;
+  flex-wrap: wrap;
 }
 
-.fecha-actual input {
-  padding: 10px;
-  border-radius: 5px;
-  border: 1px solid #ddd;
+.fecha-display {
+  color: white;
+  font-weight: 500;
+  padding: 10px 15px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+/* Estilos de proveedor */
+.proveedor-info {
+  margin-top: 15px;
+  padding: 12px 16px;
+  background: rgba(76, 175, 80, 0.2);
+  border-radius: 10px;
+  border: 1px solid rgba(76, 175, 80, 0.3);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.proveedor-info span {
+  color: white;
+}
+
+/* Inputs y selects modernos */
+.modern-input,
+.modern-select {
+  width: 100%;
+  padding: 12px 15px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+  font-size: 1rem;
+  transition: all 0.3s ease;
+}
+
+.modern-input:focus,
+.modern-select:focus {
+  outline: none;
+  border-color: rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.2);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.1);
+}
+
+.modern-select option {
+  background: #667eea;
+  color: white;
 }
 
 .proveedor-selector {
@@ -389,27 +540,173 @@ h2 {
   background-color: #2980b9;
 }
 
-/* Tabla styles */
-.tabla-principal {
+/* Tabla moderna */
+.tabla-wrapper {
+  overflow-x: auto;
+}
+
+.tabla-productos {
   width: 100%;
   border-collapse: collapse;
-  margin-bottom: 30px;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  margin-top: 15px;
 }
 
-.tabla-principal th, .tabla-principal td {
-  padding: 12px 15px;
+.tabla-productos th,
+.tabla-productos td {
+  padding: 15px 12px;
   text-align: left;
-  border-bottom: 1px solid #ddd;
-}
-
-.tabla-principal th {
-  background-color: #3498db;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
   color: white;
 }
 
-.tabla-principal tbody tr:hover {
-  background-color: #f5f5f5;
+.tabla-productos th {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  font-weight: 600;
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.tabla-productos tbody tr {
+  transition: all 0.3s ease;
+}
+
+.tabla-productos tbody tr:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.editable {
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.editable:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.table-input {
+  background: rgba(255, 255, 255, 0.9);
+  color: #333;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 5px;
+  padding: 5px 8px;
+  width: 100%;
+}
+
+.total-cell {
+  font-weight: 600;
+  color: #4CAF50;
+}
+
+.total-row {
+  background: rgba(255, 255, 255, 0.1);
+  font-weight: 600;
+}
+
+.total-label {
+  text-align: right;
+  font-weight: 600;
+  font-size: 1.1rem;
+}
+
+.total-amount {
+  font-weight: 700;
+  font-size: 1.2rem;
+  color: #4CAF50;
+}
+
+.btn-delete {
+  background: linear-gradient(45deg, #FF6B6B, #EE5A52);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-delete:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 15px rgba(255, 107, 107, 0.4);
+}
+
+.icon-trash {
+  font-size: 1rem;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .nueva-deuda {
+    padding: 20px;
+  }
+
+  .header-section {
+    padding: 20px;
+    margin-bottom: 30px;
+    margin-top: 80px;
+  }
+
+  .main-title {
+    font-size: 2.2rem;
+  }
+
+  .subtitle {
+    font-size: 1rem;
+  }
+
+  .fecha-container {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 15px;
+  }
+
+  .tabla-productos th,
+  .tabla-productos td {
+    padding: 10px 8px;
+    font-size: 0.9rem;
+  }
+
+  .back-button-container {
+    top: 15px;
+    left: 15px;
+  }
+}
+
+@media (max-width: 480px) {
+  .nueva-deuda {
+    padding: 15px;
+  }
+
+  .header-section {
+    padding: 15px;
+    margin-top: 70px;
+  }
+
+  .main-title {
+    font-size: 1.8rem;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .icon-new {
+    font-size: 2.5rem;
+  }
+
+  .fecha-card,
+  .proveedor-card,
+  .productos-card,
+  .tabla-container {
+    padding: 20px;
+  }
+
+  .back-button-container {
+    top: 10px;
+    left: 10px;
+  }
 }
 
 .tabla-principal tfoot {
@@ -510,6 +807,49 @@ h2 {
 }
 
 /* Responsive adjustments */
+/* Estilos para indicador de color del proveedor */
+.proveedor-selected-info {
+  margin-top: 15px;
+  padding: 15px;
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 15px;
+  border: 2px solid rgba(102, 126, 234, 0.2);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+}
+
+.proveedor-color-display {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.color-indicator-large {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 3px solid white;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  flex-shrink: 0;
+}
+
+.proveedor-details {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.proveedor-nombre {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #2c3e50;
+}
+
+.proveedor-label {
+  font-size: 0.85rem;
+  color: #7f8c8d;
+  font-style: italic;
+}
+
 @media (max-width: 768px) {
   .input-row {
     flex-direction: column;
@@ -526,6 +866,28 @@ h2 {
   
   .action-column {
     width: auto;
+  }
+  
+  .proveedor-selected-info {
+    padding: 12px;
+    margin-top: 12px;
+  }
+  
+  .proveedor-color-display {
+    gap: 12px;
+  }
+  
+  .color-indicator-large {
+    width: 28px;
+    height: 28px;
+  }
+  
+  .proveedor-nombre {
+    font-size: 1rem;
+  }
+  
+  .proveedor-label {
+    font-size: 0.8rem;
   }
 }
 </style> 
