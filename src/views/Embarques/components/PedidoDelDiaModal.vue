@@ -88,7 +88,10 @@
                         <span class="item-checkmark"></span>
                       </label>
                       <span class="item-limpio" :class="{ 'completado': getItemCompletadoState(pedido.id, 'limpio', 'otilio', index) }">
-                        {{ item.kilos }}{{ item.esTara ? ' T' : ' kg' }} - {{ item.medida || 'Sin medida' }} - {{ item.tipo || 'Sin tipo' }}
+                        {{ item.kilos }}{{ item.esTara ? ' T' : ' kg' }} - {{ item.medida || 'Sin medida' }} - 
+                        <span class="tipo-producto" :class="{ 'no-sh20': item.tipo && item.tipo !== 'S/H20' }">
+                          {{ item.tipo || 'Sin tipo' }}
+                        </span>
                       </span>
                     </div>
                   </div>
@@ -106,7 +109,10 @@
                         <span class="item-checkmark"></span>
                       </label>
                       <span class="item-limpio" :class="{ 'completado': getItemCompletadoState(pedido.id, 'limpio', 'catarro', index) }">
-                        {{ item.kilos }}{{ item.esTara ? ' T' : ' kg' }} - {{ item.medida || 'Sin medida' }} - {{ item.tipo || 'Sin tipo' }}
+                        {{ item.kilos }}{{ item.esTara ? ' T' : ' kg' }} - {{ item.medida || 'Sin medida' }} - 
+                        <span class="tipo-producto" :class="{ 'no-sh20': item.tipo && item.tipo !== 'S/H20' }">
+                          {{ item.tipo || 'Sin tipo' }}
+                        </span>
                       </span>
                     </div>
                   </div>
@@ -124,7 +130,10 @@
                         <span class="item-checkmark"></span>
                       </label>
                       <span class="item-limpio" :class="{ 'completado': getItemCompletadoState(pedido.id, 'limpio', 'joselito', index) }">
-                        {{ item.kilos }}{{ item.esTara ? ' T' : ' kg' }} - {{ item.medida || 'Sin medida' }} - {{ item.tipo || 'Sin tipo' }}
+                        {{ item.kilos }}{{ item.esTara ? ' T' : ' kg' }} - {{ item.medida || 'Sin medida' }} - 
+                        <span class="tipo-producto" :class="{ 'no-sh20': item.tipo && item.tipo !== 'S/H20' }">
+                          {{ item.tipo || 'Sin tipo' }}
+                        </span>
                       </span>
                     </div>
                   </div>
@@ -142,7 +151,10 @@
                         <span class="item-checkmark"></span>
                       </label>
                       <span class="item-limpio" :class="{ 'completado': getItemCompletadoState(pedido.id, 'limpio', 'ozuna', index) }">
-                        {{ item.kilos }}{{ item.esTara ? ' T' : ' kg' }} - {{ item.medida || 'Sin medida' }} - {{ item.tipo || 'Sin tipo' }}
+                        {{ item.kilos }}{{ item.esTara ? ' T' : ' kg' }} - {{ item.medida || 'Sin medida' }} - 
+                        <span class="tipo-producto" :class="{ 'no-sh20': item.tipo && item.tipo !== 'S/H20' }">
+                          {{ item.tipo || 'Sin tipo' }}
+                        </span>
                       </span>
                     </div>
                   </div>
@@ -160,7 +172,10 @@
                         <span class="item-checkmark"></span>
                       </label>
                       <span class="item-limpio" :class="{ 'completado': getItemCompletadoState(pedido.id, 'limpio', id, index) }">
-                        {{ item.kilos }}{{ item.esTara ? ' T' : ' kg' }} - {{ item.medida || 'Sin medida' }} - {{ item.tipo || 'Sin tipo' }}
+                        {{ item.kilos }}{{ item.esTara ? ' T' : ' kg' }} - {{ item.medida || 'Sin medida' }} - 
+                        <span class="tipo-producto" :class="{ 'no-sh20': item.tipo && item.tipo !== 'S/H20' }">
+                          {{ item.tipo || 'Sin tipo' }}
+                        </span>
                       </span>
                     </div>
                   </div>
@@ -1050,6 +1065,16 @@ export default {
   text-decoration: line-through;
   opacity: 0.6;
   color: #94a3b8;
+}
+
+.tipo-producto.no-sh20 {
+  color: #2563eb;
+  font-weight: 700;
+  background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+  padding: 2px 8px;
+  border-radius: 6px;
+  border: 1px solid #3b82f6;
+  display: inline-block;
 }
 
 /* Colores específicos para cada cliente */

@@ -46,7 +46,7 @@
               </td>
               <td :class="{ 
                 'text-blue': item.tipo === 'C/H20', 
-                'text-blue compact': item.tipo === '1.35 y .15' 
+                'text-blue compact': item.tipo === '1.35 y .15' || item.tipo === '1.5 y .3'
               }">
                 {{ item.tipo }}
                 <span v-if="item.nota" class="nota-tag">{{ item.nota }}</span>
@@ -80,7 +80,7 @@
                 </td>
                 <td :class="{ 
                   'text-blue': item.tipo === 'C/H20', 
-                  'text-blue compact': item.tipo === '1.35 y .15' 
+                  'text-blue compact': item.tipo === '1.35 y .15' || item.tipo === '1.5 y .3'
                 }">
                   {{ item.tipo }}
                   <span v-if="item.nota" class="nota-tag">{{ item.nota }}</span>
@@ -164,7 +164,7 @@
                 </td>
                 <td :class="{ 
                   'text-blue': item.tipo === 'C/H20', 
-                  'text-blue compact': item.tipo === '1.35 y .15' 
+                  'text-blue compact': item.tipo === '1.35 y .15' || item.tipo === '1.5 y .3'
                 }">
                   {{ item.tipo }}
                   <span v-if="item.nota" class="nota-tag">{{ item.nota }}</span>
@@ -425,8 +425,8 @@ export default {
                 { 
                   text: item.tipo || '', 
                   fontSize: fontSize * 2,
-                  color: (item.tipo === 'C/H20' || item.tipo === '1.35 y .15') ? '#0000FF' : undefined,
-                  margin: item.tipo === '1.35 y .15' ? [0, 0, 0, 0] : [0, 2, 0, 2]
+                  color: (item.tipo === 'C/H20' || item.tipo === '1.35 y .15' || item.tipo === '1.5 y .3') ? '#0000FF' : undefined,
+                  margin: (item.tipo === '1.35 y .15' || item.tipo === '1.5 y .3') ? [0, 0, 0, 0] : [0, 2, 0, 2]
                 }
               ]
             },
@@ -678,6 +678,10 @@ export default {
       let kilosSinH2O = 0;
       let kilosConH2O = 0;
       let kilosTaras = 0;
+      let kilos135 = 0;
+      let kilosTaras135 = 0;
+      let kilos15y3 = 0;
+      let kilosTaras15y3 = 0;
       let kilos7y3 = 0;
 
       this.clientesTemporales[clienteId].forEach(item => {
@@ -686,6 +690,10 @@ export default {
             tarasDirectas += Number(item.kilos);
             if (item.tipo === 'C/H20') {
               kilosConH2O += Number(item.kilos) * 30 * 0.65;
+            } else if (item.tipo === '1.35 y .15') {
+              kilosTaras135 += Number(item.kilos) * 30;
+            } else if (item.tipo === '1.5 y .3') {
+              kilosTaras15y3 += Number(item.kilos) * 30;
             } else {
               kilosTaras += Number(item.kilos) * 30;
             }
@@ -693,6 +701,10 @@ export default {
             kilosSinH2O += Number(item.kilos);
           } else if (item.tipo === 'C/H20') {
             kilosConH2O += Number(item.kilos);
+          } else if (item.tipo === '1.35 y .15') {
+            kilos135 += Number(item.kilos) * 1.35;
+          } else if (item.tipo === '1.5 y .3') {
+            kilos15y3 += Number(item.kilos) * 1.5;
           } else if (item.tipo === '.7 y .3') {
             kilos7y3 += Number(item.kilos) * 0.7;
           }
@@ -700,9 +712,11 @@ export default {
       });
 
       const tarasPorKilos = kilosSinH2O / 27;
-      const tarasTotal = Math.round(tarasDirectas + tarasPorKilos);
-      const totalKilosSinH2O = kilosSinH2O + kilosTaras;
-      const kilosTotal = Math.round(totalKilosSinH2O + kilosConH2O + kilos7y3);
+      const tarasPor135 = kilos135 / (1.35 * 25);
+      const tarasPor15y3 = kilos15y3 / (1.5 * 25);
+      const tarasTotal = Math.round(tarasDirectas + tarasPorKilos + tarasPor135 + tarasPor15y3);
+      const totalKilosSinH2O = kilosSinH2O + kilosTaras + kilosTaras135 + kilosTaras15y3;
+      const kilosTotal = Math.round(totalKilosSinH2O + kilosConH2O + kilos135 + kilos15y3 + kilos7y3);
 
       return {
         tarasTotal: tarasTotal.toString(),
@@ -738,6 +752,10 @@ export default {
             // Procesar taras
             if (item.tipo === 'C/H20') {
               registro.total += kilos * 30 * 0.65; // Tara con agua
+            } else if (item.tipo === '1.35 y .15') {
+              registro.total += kilos * 30; // Tara con factor 1.35
+            } else if (item.tipo === '1.5 y .3') {
+              registro.total += kilos * 30; // Tara con factor 1.5
             } else {
               registro.total += kilos * 30; // Tara normal
             }
@@ -747,6 +765,8 @@ export default {
               registro.total += kilos * 0.65; // Kilos con agua
             } else if (item.tipo === '1.35 y .15') {
               registro.total += kilos * 1.35; // Kilos con factor 1.35
+            } else if (item.tipo === '1.5 y .3') {
+              registro.total += kilos * 1.5; // Kilos con factor 1.5
             } else if (esPedidoOzuna && item.tipo === '.7 y .3') {
               registro.total += kilos * 0.7; // Para Ozuna, kilos con factor 0.7
             } else {
