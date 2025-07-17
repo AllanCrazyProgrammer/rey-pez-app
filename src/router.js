@@ -48,6 +48,9 @@ import PrestamosDespicadoras from '@/views/Procesos/PrestamosDespicadoras.vue'
 import PrestamosTrabajadores from '@/views/Procesos/PrestamosTrabajadores.vue'
 import ExistenciasCrudos from '@/views/ExistenciasCrudos.vue'
 import RegistroCrudos from '@/views/RegistroCrudos.vue'
+import BarcosMenu from '@/views/Barcos/BarcosMenu.vue'
+import NuevaDeudaBarco from '@/views/Barcos/NuevaDeudaBarco.vue'
+import ListaDeudasBarcos from '@/views/Barcos/ListaDeudasBarcos.vue'
 
 Vue.use(Router);
 
@@ -364,6 +367,21 @@ const routes = [
     path: '/procesos/prestamos/trabajadores',
     name: 'PrestamosTrabajadores',
     component: PrestamosTrabajadores
+  },
+  {
+    path: '/barcos',
+    name: 'BarcosMenu',
+    component: BarcosMenu
+  },
+  {
+    path: '/barcos/deudas/nueva',
+    name: 'NuevaDeudaBarco',
+    component: NuevaDeudaBarco
+  },
+  {
+    path: '/barcos/deudas/lista',
+    name: 'ListaDeudasBarcos',
+    component: ListaDeudasBarcos
   }
 ];
 

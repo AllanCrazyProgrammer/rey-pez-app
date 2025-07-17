@@ -117,6 +117,8 @@
             <i class="nav-icon">⚙️</i>
             <span class="nav-text">Procesos</span>
           </router-link>
+          
+
         </div>
       </div>
 

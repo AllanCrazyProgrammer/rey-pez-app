@@ -48,6 +48,15 @@
       </router-link>
       
       <router-link 
+        to="/barcos" 
+        class="btn-action btn-barcos"
+        aria-label="Gestionar deudas de barcos"
+      >
+        <i class="icon">⛵</i>
+        <span>Barcos</span>
+      </router-link>
+      
+      <router-link 
         to="/procesos/prestamos" 
         class="btn-action btn-prestamos"
         aria-label="Gestionar préstamos"
@@ -192,6 +201,15 @@ export default {
 .btn-deudas:hover {
   box-shadow: 0 12px 35px rgba(243, 156, 18, 0.4);
   background: linear-gradient(45deg, #E67E22, #D35400);
+}
+
+.btn-barcos {
+  background: linear-gradient(45deg, #1ABC9C, #16A085);
+}
+
+.btn-barcos:hover {
+  box-shadow: 0 12px 35px rgba(26, 188, 156, 0.4);
+  background: linear-gradient(45deg, #16A085, #138D75);
 }
 
 .btn-prestamos {
