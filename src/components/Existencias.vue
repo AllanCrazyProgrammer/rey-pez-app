@@ -60,8 +60,12 @@
         </div>
       </div>
 
+      <div class="valor-total" v-if="tienePrecio">
+        <h2>Valor Total: ${{ formatNumber(valorTotal) }}</h2>
+      </div>
+
       <div class="total-general">
-        <h2>Total General: {{ formatNumber(totalGeneral) }}</h2>
+        <h2>Kilos Totales: {{ formatNumber(totalGeneral) }}</h2>
       </div>
     </div>
   </div>
@@ -347,6 +351,28 @@ export default {
       }, 0);
     });
 
+    const valorTotal = computed(() => {
+      return Object.entries(filteredExistencias.value).reduce((total, [proveedor, datos]) => {
+        if (proveedor === 'Ozuna' || proveedor === 'Joselito') {
+          // Para maquilas, los datos son un objeto directo de medida -> datos
+          return total + Object.values(datos).reduce((sum, item) => {
+            if (item.precio && item.precio > 0) {
+              return sum + (item.kilos * item.precio);
+            }
+            return sum;
+          }, 0);
+        } else {
+          // Para medidas agrupadas, los datos son un array de objetos
+          return total + datos.reduce((sum, item) => {
+            if (item.precio && item.precio > 0) {
+              return sum + (item.kilos * item.precio);
+            }
+            return sum;
+          }, 0);
+        }
+      }, 0);
+    });
+
     const formatNumber = (value) => {
       return Math.round(value).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
     };
@@ -366,49 +392,52 @@ export default {
         <td class="precio-cell">{{ datos.precio ? '$' + datos.precio : '-' }}</td>
       ` : '';
 
+      // Calcular valor total para el PDF
+      const valorTotalPdf = valorTotal.value;
+
       const estilos = `
         <style>
           @page { 
             size: A4 landscape; 
-            margin: 0.2cm 0.2cm;
+            margin: 0.3cm 0.3cm;
           }
           body {
             font-family: Arial, sans-serif;
-            font-size: 28pt;
-            line-height: 1.1;
+            font-size: 16pt;
+            line-height: 1.0;
             color: #333;
             margin: 0;
             padding: 0;
           }
           .header {
-            margin-bottom: 6px;
-            padding-bottom: 2px;
+            margin-bottom: 4px;
+            padding-bottom: 1px;
           }
           h1 {
-            font-size: 34pt;
+            font-size: 20pt;
             margin: 0;
             padding: 0;
           }
           .fecha-reporte {
-            font-size: 28pt;
+            font-size: 14pt;
           }
           .existencias-grid {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
-            gap: 6px;
-            margin-top: 6px;
+            gap: 3px;
+            margin-top: 4px;
           }
           .medida-card {
-            padding: 8px;
+            padding: 4px;
           }
           .medida-card h2 {
-            font-size: 26pt;
-            margin: 0 0 4px 0;
+            font-size: 16pt;
+            margin: 0 0 3px 0;
             padding-bottom: 2px;
           }
           th, td {
             padding: 2px 4px;
-            font-size: 22pt;
+            font-size: 14pt;
           }
           .precio-cell {
             text-align: center;
@@ -425,30 +454,40 @@ export default {
               page-break-inside: avoid;
             }
           }
+          .valor-total {
+            margin-top: 4px;
+            padding: 2px;
+            text-align: right;
+          }
+          .valor-total h2 {
+            font-size: 20pt;
+            color: #27ae60;
+            margin: 0;
+          }
           .total-general {
-            margin-top: 8px;
-            padding: 4px;
+            margin-top: 2px;
+            padding: 2px;
           }
           .total-general h2 {
-            font-size: 30pt;
+            font-size: 20pt;
           }
           table {
             width: 100%;
             border-collapse: collapse;
-            margin-top: 4px;
+            margin-top: 3px;
             border: 1px solid #2c3e50;
           }
           th {
             background-color: #2c3e50;
             color: white;
             text-align: left;
-            padding: 3px 5px;
-            font-size: 22pt;
+            padding: 2px 4px;
+            font-size: 14pt;
             border: 1px solid #2c3e50;
           }
           td {
-            padding: 3px 5px;
-            font-size: 22pt;
+            padding: 2px 4px;
+            font-size: 14pt;
             border: 1px solid #bdc3c7;
           }
           tr:nth-child(even) {
@@ -461,25 +500,25 @@ export default {
           }
           .total-row {
             background-color: #ecf0f1 !important;
-            border-top: 2px solid #2c3e50;
+            border-top: 1px solid #2c3e50;
           }
           .total-row td {
             font-weight: bold;
             color: #2c3e50;
           }
           .medida-card {
-            padding: 8px;
+            padding: 4px;
             border: 1px solid #bdc3c7;
             background-color: white;
           }
           .maquila-card {
             background-color: white;
-            border: 2px solid #f39c12;
+            border: 1px solid #f39c12;
           }
           .maquila-card h2 {
             color: #d35400;
-            border-bottom: 2px solid #f39c12;
-            padding-bottom: 4px;
+            border-bottom: 1px solid #f39c12;
+            padding-bottom: 1px;
           }
           .maquila-card th {
             background-color: #f39c12;
@@ -487,7 +526,7 @@ export default {
           }
           .maquila-card .total-row {
             background-color: #f8f9fa !important;
-            border-top: 2px solid #f39c12;
+            border-top: 1px solid #f39c12;
           }
           .maquila-card .total-row td {
             color: #d35400;
@@ -497,19 +536,37 @@ export default {
             .medida-card {
               box-shadow: none;
               border: 1px solid #bdc3c7;
+              break-inside: avoid;
+              page-break-inside: avoid;
             }
             .maquila-card {
               background-color: white;
-              border: 2px solid #f39c12;
+              border: 1px solid #f39c12;
             }
             table {
               page-break-inside: avoid;
+            }
+            .valor-total, .total-general {
+              page-break-before: avoid;
+              break-before: avoid;
             }
           }
         </style>
       `;
 
       // Crear el contenido HTML completo
+      const valorTotalHtml = tienePrecio.value ? `
+        <div class="valor-total">
+          <h2>Valor Total: $${formatNumber(valorTotalPdf)}</h2>
+        </div>
+      ` : '';
+
+      const kilosTotalesHtml = `
+        <div class="total-general">
+          <h2>Kilos Totales: ${formatNumber(totalGeneral.value)}</h2>
+        </div>
+      `;
+
       const htmlCompleto = `
         <!DOCTYPE html>
         <html>
@@ -524,7 +581,8 @@ export default {
             <div class="fecha-reporte">Fecha: ${fechaActual}</div>
           </div>
           ${document.querySelector('.existencias-grid').outerHTML}
-          ${document.querySelector('.total-general').outerHTML}
+          ${valorTotalHtml}
+          ${kilosTotalesHtml}
         </body>
         </html>
       `;
@@ -566,6 +624,7 @@ export default {
       search,
       maxKilos,
       totalGeneral,
+      valorTotal,
       tienePrecio,
       formatNumber,
       imprimirReporte
@@ -700,12 +759,30 @@ h1 {
   color: #2c3e50;
 }
 
-.total-general {
+.valor-total {
   margin-top: 20px;
   text-align: right;
-  font-size: 20px;
+  font-size: 26px;
+  font-weight: bold;
+  color: #27ae60;
+}
+
+.valor-total h2 {
+  margin: 0;
+  font-size: 26px;
+}
+
+.total-general {
+  margin-top: 10px;
+  text-align: right;
+  font-size: 26px;
   font-weight: bold;
   color: #000000;
+}
+
+.total-general h2 {
+  margin: 0;
+  font-size: 26px;
 }
 
 @media (max-width: 768px) {
