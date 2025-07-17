@@ -149,7 +149,11 @@ export default {
   methods: {
     obtenerFechaActual() {
       const fecha = new Date();
-      return fecha.toISOString().split('T')[0];
+      // Usar la zona horaria local para evitar problemas de UTC
+      const año = fecha.getFullYear();
+      const mes = String(fecha.getMonth() + 1).padStart(2, '0'); // getMonth() retorna 0-11
+      const dia = String(fecha.getDate()).padStart(2, '0');
+      return `${año}-${mes}-${dia}`;
     },
     async loadProveedores() {
       try {
