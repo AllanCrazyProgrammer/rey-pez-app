@@ -51,6 +51,23 @@
         <i class="fas fa-chart-line"></i> Historial de Precios
       </button>
     </div>
+
+    <!-- Sección de Abonos por Proveedor -->
+    <div v-if="filtroProveedor" class="abonos-proveedor-section">
+      <div class="proveedor-selected-info">
+        <h3>Gestión de Abonos - {{ getNombreProveedorSeleccionado() }}</h3>
+        <div class="abonos-actions">
+          <button @click="abrirAbonoGeneral" class="btn-abono-general" :disabled="!tieneDeudasPendientes">
+            <i class="fas fa-money-check-alt"></i>
+            Abono General
+          </button>
+          <button @click="abrirHistorialAbonos" class="btn-historial-abonos">
+            <i class="fas fa-history"></i>
+            Historial de Abonos
+          </button>
+        </div>
+      </div>
+    </div>
     
     <div v-if="cargando" class="loading-spinner">
       <div class="spinner"></div>
@@ -404,6 +421,21 @@
       :proveedores="proveedores"
       @cerrar="showHistorialPreciosModal = false" 
     />
+
+    <!-- Modal de Abono General -->
+    <AbonoGeneralModal
+      :mostrar="showAbonoGeneralModal"
+      :proveedor="proveedorSeleccionadoParaAbono"
+      @cerrar="showAbonoGeneralModal = false"
+      @abono-aplicado="onAbonoAplicado"
+    />
+
+    <!-- Modal de Historial de Abonos -->
+    <HistorialAbonosModal
+      :mostrar="showHistorialAbonosModal"
+      :proveedor="proveedorSeleccionadoParaAbono"
+      @cerrar="showHistorialAbonosModal = false"
+    />
   </div>
 </template>
 
@@ -415,13 +447,17 @@ import { useRouter } from 'vue-router';
 import BackButton from '@/components/BackButton.vue';
 import PreciosProveedorPanel from '@/components/Deudas/Precios/PreciosProveedorPanel.vue';
 import ProductoSelector from '@/components/Deudas/ProductoSelector.vue';
+import AbonoGeneralModal from '@/components/Deudas/AbonoGeneralModal.vue';
+import HistorialAbonosModal from '@/components/Deudas/HistorialAbonosModal.vue';
 
 export default {
   name: 'ListaDeudas',
   components: {
     BackButton,
     PreciosProveedorPanel,
-    ProductoSelector
+    ProductoSelector,
+    AbonoGeneralModal,
+    HistorialAbonosModal
   },
   data() {
     return {
@@ -444,9 +480,12 @@ export default {
       showDetalleModal: false,
       showAbonoModal: false,
       showHistorialPreciosModal: false,
+      showAbonoGeneralModal: false,
+      showHistorialAbonosModal: false,
       deudaSeleccionada: null,
       productos: [],
       abonos: [],
+      proveedorSeleccionadoParaAbono: null,
       
       // Nuevo abono
       nuevoAbono: {
@@ -534,6 +573,10 @@ export default {
     },
     totalAbonos() {
       return this.abonos.reduce((sum, abono) => sum + abono.monto, 0);
+    },
+    
+    tieneDeudasPendientes() {
+      return this.deudasFiltradas.some(deuda => deuda.estado === 'pendiente');
     }
   },
   methods: {
@@ -1153,6 +1196,32 @@ export default {
       if (this.proveedores.length === 0) {
         this.loadProveedores();
       }
+    },
+    
+    getNombreProveedorSeleccionado() {
+      const proveedor = this.proveedores.find(p => p.id === this.filtroProveedor);
+      return proveedor ? proveedor.nombre : '';
+    },
+    
+    abrirAbonoGeneral() {
+      const proveedor = this.proveedores.find(p => p.id === this.filtroProveedor);
+      if (proveedor) {
+        this.proveedorSeleccionadoParaAbono = proveedor;
+        this.showAbonoGeneralModal = true;
+      }
+    },
+    
+    abrirHistorialAbonos() {
+      const proveedor = this.proveedores.find(p => p.id === this.filtroProveedor);
+      if (proveedor) {
+        this.proveedorSeleccionadoParaAbono = proveedor;
+        this.showHistorialAbonosModal = true;
+      }
+    },
+    
+    onAbonoAplicado() {
+      // Recargar las deudas para mostrar los cambios
+      this.loadDeudas();
     },
     agregarProductoDesdeSelector(producto) {
       this.agregarProductoDirecto(producto);
@@ -1882,6 +1951,70 @@ h1 {
   color: white;
 }
 
+/* Estilos para la sección de abonos por proveedor */
+.abonos-proveedor-section {
+  background: linear-gradient(135deg, #e8f4fd, #d4edfc);
+  border-radius: 15px;
+  padding: 20px;
+  margin: 20px 0;
+  border-left: 4px solid #3498db;
+  box-shadow: 0 4px 12px rgba(52, 152, 219, 0.1);
+}
+
+.proveedor-selected-info h3 {
+  margin: 0 0 15px 0;
+  color: #2c3e50;
+  font-weight: 600;
+  font-size: 1.2em;
+}
+
+.abonos-actions {
+  display: flex;
+  gap: 15px;
+  align-items: center;
+}
+
+.btn-abono-general,
+.btn-historial-abonos {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  border: none;
+  border-radius: 8px;
+  font-size: 1em;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-decoration: none;
+}
+
+.btn-abono-general {
+  background: linear-gradient(135deg, #27ae60, #2ecc71);
+  color: white;
+}
+
+.btn-abono-general:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(39, 174, 96, 0.3);
+}
+
+.btn-abono-general:disabled {
+  background: linear-gradient(135deg, #bdc3c7, #95a5a6);
+  cursor: not-allowed;
+  transform: none;
+}
+
+.btn-historial-abonos {
+  background: linear-gradient(135deg, #9b59b6, #8e44ad);
+  color: white;
+}
+
+.btn-historial-abonos:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(155, 89, 182, 0.3);
+}
+
 @media (max-width: 768px) {
   .paginacion-container {
     flex-direction: column;
@@ -1895,6 +2028,17 @@ h1 {
   .btn-paginacion {
     width: 120px;
     justify-content: center;
+  }
+  
+  .abonos-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .btn-abono-general,
+  .btn-historial-abonos {
+    justify-content: center;
+    width: 100%;
   }
 }
 </style> 
