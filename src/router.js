@@ -25,6 +25,7 @@ import ListaEmbarques from '@/views/Embarques/ListaEmbarques.vue';
 import NuevoEmbarque from '@/views/Embarques/NuevoEmbarque.vue';
 import Rendimientos from '@/views/Embarques/Rendimientos.vue';
 import CuentaFletes from '@/views/Embarques/CuentaFletes.vue';
+import RecuperacionEmergencia from '@/views/Embarques/RecuperacionEmergencia.vue';
 import GestionCostos from '@/components/GestionCostos.vue';
 import Login from './views/Login.vue';
 import OtilioCuentasMenu from '@/views/CuentasClientes/OtilioCuentasMenu.vue'
@@ -223,6 +224,11 @@ const routes = [
     path: "/embarques",
     name: 'ListaEmbarques',
     component: ListaEmbarques
+  },
+  {
+    path: "/embarques/recuperacion-emergencia",
+    name: 'RecuperacionEmergencia',
+    component: RecuperacionEmergencia
   },
   {
     path: "/embarques/:id",

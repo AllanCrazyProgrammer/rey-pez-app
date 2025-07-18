@@ -19,6 +19,11 @@
         <i class="icon">📊</i>
         Cuenta de Fletes
       </button>
+      <!-- BOTÓN DE EMERGENCIA PARA RECUPERACIÓN -->
+      <button @click="recuperacionEmergencia" class="btn-action btn-emergencia">
+        <i class="icon">🆘</i>
+        🚨 Recuperar Datos Perdidos
+      </button>
     </div>
     <ListaEmbarques />
   </div>
@@ -42,6 +47,9 @@ export default {
     },
     verCuentaFletes() {
       this.$router.push({ name: 'CuentaFletes' });
+    },
+    recuperacionEmergencia() {
+      this.$router.push('/embarques/recuperacion-emergencia');
     }
   }
 }
@@ -149,6 +157,26 @@ export default {
   transform: translateY(-3px);
   box-shadow: 0 12px 35px rgba(255, 152, 0, 0.4);
   background: linear-gradient(45deg, #F57C00, #E65100);
+}
+
+.btn-emergencia {
+  background: linear-gradient(45deg, #ff4757, #ff3742);
+  color: white;
+  border: 2px solid #ff6b7a;
+  animation: pulse-emergency 2s infinite;
+}
+
+.btn-emergencia:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 35px rgba(255, 71, 87, 0.5);
+  background: linear-gradient(45deg, #ff3742, #ff2837);
+  animation: none;
+}
+
+@keyframes pulse-emergency {
+  0% { box-shadow: 0 8px 25px rgba(255, 71, 87, 0.3); }
+  50% { box-shadow: 0 8px 25px rgba(255, 71, 87, 0.6); }
+  100% { box-shadow: 0 8px 25px rgba(255, 71, 87, 0.3); }
 }
 
 .icon {

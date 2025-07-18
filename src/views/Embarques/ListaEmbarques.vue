@@ -139,19 +139,38 @@
         </button>
       </div>
     </div>
+
+    <!-- Notificaciones de respaldo -->
+    <NotificacionRespaldo
+      :visible="mostrarNotificacion"
+      :tipo="tipoNotificacion"
+      :titulo="tituloNotificacion"
+      :mensaje="mensajeNotificacion"
+      @close="cerrarNotificacion"
+    />
   </div>
 </template>
 
 <script>
 import { getFirestore, collection, getDocs, doc, deleteDoc } from 'firebase/firestore';
+import BackupService from './BackupService.js';
+import NotificacionRespaldo from './NotificacionRespaldo.vue';
 
 export default {
   name: 'ListaEmbarques',
+  components: {
+    NotificacionRespaldo
+  },
   data() {
     return {
       embarques: [],
       cargando: true,
-      error: null
+      error: null,
+      // Notificaciones de respaldo
+      mostrarNotificacion: false,
+      tipoNotificacion: 'success',
+      tituloNotificacion: '',
+      mensajeNotificacion: ''
     };
   },
   methods: {
@@ -196,11 +215,14 @@ export default {
           });
         });
         
-        // Eliminar embarques duplicados (mantener solo el más reciente)
+        // Eliminar embarques duplicados CON RESPALDO AUTOMÁTICO
         const embarquesParaEliminar = [];
         
+        // NUEVO ALGORITMO INTELIGENTE CON RESPALDOS AUTOMÁTICOS
         for (const fecha in embarquesPorFecha) {
           if (embarquesPorFecha[fecha].length > 1) {
+            console.log(`[DUPLICADOS] Encontrados ${embarquesPorFecha[fecha].length} embarques para ${fecha}`);
+            
             // Ordenar por el más completo (más clientes o productos)
             embarquesPorFecha[fecha].sort((a, b) => {
               const productosA = a.data.clientes ? a.data.clientes.reduce((sum, cliente) => 
@@ -209,28 +231,74 @@ export default {
               const productosB = b.data.clientes ? b.data.clientes.reduce((sum, cliente) => 
                 sum + (cliente.productos ? cliente.productos.length : 0), 0) : 0;
               
-              return productosB - productosA; // Ordenar de mayor a menor cantidad de productos
+              // Considerar también si tiene datos de crudos
+              const crudosA = a.data.clientes ? a.data.clientes.reduce((sum, cliente) => 
+                sum + (cliente.crudos ? cliente.crudos.length : 0), 0) : 0;
+              
+              const crudosB = b.data.clientes ? b.data.clientes.reduce((sum, cliente) => 
+                sum + (cliente.crudos ? cliente.crudos.length : 0), 0) : 0;
+              
+              // Calcular "puntaje de completitud"
+              const puntajeA = productosA + (crudosA * 2); // Los crudos pesan más
+              const puntajeB = productosB + (crudosB * 2);
+              
+              return puntajeB - puntajeA; // Ordenar de mayor a menor completitud
             });
             
-            // Mantener el primer embarque (el más completo) y marcar los demás para eliminación
+            // Solo marcar para eliminación si el primero tiene claramente más datos
+            const principal = embarquesPorFecha[fecha][0];
+            const puntajePrincipal = this.calcularPuntajeCompletitud(principal.data);
+            
             for (let i = 1; i < embarquesPorFecha[fecha].length; i++) {
-              embarquesParaEliminar.push(embarquesPorFecha[fecha][i].id);
+              const candidato = embarquesPorFecha[fecha][i];
+              const puntajeCandidato = this.calcularPuntajeCompletitud(candidato.data);
+              
+              // Solo eliminar si hay una diferencia significativa
+              if (puntajePrincipal > puntajeCandidato || puntajeCandidato === 0) {
+                embarquesParaEliminar.push({
+                  id: candidato.id,
+                  data: candidato.data,
+                  razon: `duplicado_inferior_${fecha}`,
+                  puntajePrincipal,
+                  puntajeCandidato
+                });
+              }
             }
           }
         }
         
-        // Eliminar los embarques duplicados
+        // Crear respaldos antes de eliminar
         if (embarquesParaEliminar.length > 0) {
-          for (const id of embarquesParaEliminar) {
+          console.log(`[RESPALDOS] Creando respaldos para ${embarquesParaEliminar.length} embarques antes de eliminar`);
+          
+          for (const embarqueAEliminar of embarquesParaEliminar) {
             try {
-              await deleteDoc(doc(db, 'embarques', id));
+              // CREAR RESPALDO AUTOMÁTICO antes de eliminar
+              await BackupService.crearRespaldoEmergencia(
+                embarqueAEliminar.id, 
+                embarqueAEliminar.razon
+              );
+              console.log(`[RESPALDO] Respaldo creado para embarque ${embarqueAEliminar.id}`);
             } catch (error) {
-              console.error(`Error al eliminar embarque duplicado con ID ${id}:`, error);
+              console.error(`[RESPALDO] Error al crear respaldo para ${embarqueAEliminar.id}:`, error);
+              // NO eliminar si no se pudo crear el respaldo
+              continue;
+            }
+          }
+          
+          // Solo AHORA eliminar los embarques (después de respaldar)
+          for (const embarqueAEliminar of embarquesParaEliminar) {
+            try {
+              await deleteDoc(doc(db, 'embarques', embarqueAEliminar.id));
+              console.log(`[ELIMINACIÓN] Embarque ${embarqueAEliminar.id} eliminado (respaldado)`);
+            } catch (error) {
+              console.error(`[ELIMINACIÓN] Error al eliminar embarque ${embarqueAEliminar.id}:`, error);
             }
           }
           
           // Después de eliminar, volver a cargar los embarques
           if (embarquesParaEliminar.length > 0) {
+            console.log(`[LIMPIEZA] Recargando lista después de eliminar ${embarquesParaEliminar.length} duplicados`);
             return this.cargarEmbarques();
           }
         }
@@ -441,17 +509,125 @@ export default {
         return;
       }
       
-      if (confirm('¿Estás seguro de que quieres eliminar este embarque?')) {
+      if (confirm('¿Estás seguro de que quieres eliminar este embarque?\n\nSe creará un respaldo automático antes de eliminarlo.')) {
         try {
+          console.log(`[ELIMINACIÓN MANUAL] Iniciando eliminación con respaldo para embarque ${embarqueId}`);
+          
+          // PASO 1: Crear respaldo automático ANTES de eliminar
+          try {
+            await BackupService.crearRespaldoEmergencia(embarqueId, 'eliminacion_manual_usuario');
+            console.log(`[RESPALDO MANUAL] Respaldo creado exitosamente para embarque ${embarqueId}`);
+            
+            // Mostrar notificación de respaldo exitoso
+            this.mostrarNotificacionRespaldo(
+              'success', 
+              '💾 Respaldo creado', 
+              'Se ha creado un respaldo de seguridad antes de eliminar el embarque'
+            );
+            
+          } catch (respaldoError) {
+            console.error(`[RESPALDO MANUAL] Error al crear respaldo:`, respaldoError);
+            
+            // Mostrar notificación de error en respaldo
+            this.mostrarNotificacionRespaldo(
+              'error', 
+              '❌ Error en respaldo', 
+              'No se pudo crear el respaldo de seguridad. El embarque NO será eliminado por seguridad.'
+            );
+            
+            return; // NO eliminar si no se pudo respaldar
+          }
+          
+          // PASO 2: Solo ahora eliminar el embarque (ya respaldado)
           const db = getFirestore();
           await deleteDoc(doc(db, 'embarques', embarqueId));
-          alert('Embarque eliminado con éxito');
+          
+          console.log(`[ELIMINACIÓN MANUAL] Embarque ${embarqueId} eliminado exitosamente`);
+          
+          // Mostrar notificación de eliminación exitosa
+          this.mostrarNotificacionRespaldo(
+            'success', 
+            '✅ Embarque eliminado', 
+            'El embarque fue eliminado exitosamente. Puedes recuperarlo desde la herramienta de emergencia si es necesario.'
+          );
+          
           await this.cargarEmbarques(); // Volver a cargar los embarques para reflejar la eliminación
+          
         } catch (error) {
-          console.error("Error al eliminar el embarque:", error);
-          alert('Hubo un error al eliminar el embarque. Por favor, intente de nuevo.');
+          console.error("[ELIMINACIÓN MANUAL] Error al eliminar el embarque:", error);
+          
+          // Mostrar notificación de error en eliminación
+          this.mostrarNotificacionRespaldo(
+            'error', 
+            '❌ Error al eliminar', 
+            'Hubo un error al eliminar el embarque. El respaldo fue creado exitosamente.'
+          );
         }
       }
+    },
+
+    // Método para calcular el puntaje de completitud de un embarque
+    calcularPuntajeCompletitud(embarqueData) {
+      if (!embarqueData.clientes) return 0;
+      
+      let puntaje = 0;
+      
+      embarqueData.clientes.forEach(cliente => {
+        // Puntos por productos
+        if (cliente.productos && Array.isArray(cliente.productos)) {
+          cliente.productos.forEach(producto => {
+            // Producto básico vale 1 punto
+            puntaje += 1;
+            
+            // Si tiene datos de taras/bolsas, vale más
+            if (producto.reporteTaras && producto.reporteTaras.length > 0) {
+              puntaje += 2;
+            }
+            
+            // Si tiene reportes de bolsas, vale más
+            if (producto.reporteBolsas && producto.reporteBolsas.length > 0) {
+              puntaje += 2;
+            }
+            
+            // Si tiene medida definida, vale más
+            if (producto.medida && producto.medida.trim() !== '') {
+              puntaje += 1;
+            }
+          });
+        }
+        
+        // Puntos por crudos (valen más porque son más críticos)
+        if (cliente.crudos && Array.isArray(cliente.crudos)) {
+          cliente.crudos.forEach(crudo => {
+            puntaje += 3; // Los crudos valen más
+            
+            // Si tiene kilos definidos, vale extra
+            if (crudo.kilos && parseFloat(crudo.kilos) > 0) {
+              puntaje += 2;
+            }
+          });
+        }
+      });
+      
+      // Puntos extra por tener información general
+      if (embarqueData.cargaCon && embarqueData.cargaCon.trim() !== '') {
+        puntaje += 1;
+      }
+      
+      console.log(`[PUNTAJE] Embarque calculado con puntaje: ${puntaje}`);
+      return puntaje;
+    },
+
+    // Métodos para notificaciones de respaldo
+    mostrarNotificacionRespaldo(tipo, titulo, mensaje) {
+      this.tipoNotificacion = tipo;
+      this.tituloNotificacion = titulo;
+      this.mensajeNotificacion = mensaje;
+      this.mostrarNotificacion = true;
+    },
+
+    cerrarNotificacion() {
+      this.mostrarNotificacion = false;
     }
   },
 
