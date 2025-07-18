@@ -287,6 +287,8 @@ export default {
       mostrarEscalaResumen: false,
       escalaResumen: 100,
       _guardandoInicial: false, // Bandera para el guardado inicial automático
+      _inicializandoEmbarque: false, // Bandera para evitar watchers durante la inicialización
+      debouncedSave: null, // Para debounce del guardado automático
     };
   },
   
@@ -803,6 +805,9 @@ export default {
         return;
       }
 
+      // Activar bandera para evitar watchers durante la carga
+      this._inicializandoEmbarque = true;
+
       const db = getFirestore();
       const embarqueRef = doc(db, "embarques", id);
 
@@ -919,6 +924,11 @@ export default {
           this.embarqueId = id;
           this.modoEdicion = true;
           this.guardadoAutomaticoActivo = true;
+          
+          // Desactivar bandera después de cargar completamente
+          this.$nextTick(() => {
+            this._inicializandoEmbarque = false;
+          });
         } else {
           // Si el embarque no existe, limpiar localStorage y reiniciar estado
           localStorage.removeItem('embarque');
@@ -930,6 +940,8 @@ export default {
         }
       }, (error) => {
         console.error("Error al escuchar cambios del embarque:", error);
+        // Desactivar bandera en caso de error también
+        this._inicializandoEmbarque = false;
       });
     },
 
@@ -949,6 +961,9 @@ export default {
       }
       
       console.log('[LOG] Iniciando reseteo de embarque.');
+      
+      // Activar bandera para evitar watchers durante la inicialización
+      this._inicializandoEmbarque = true;
       // Establecer una fecha por defecto (fecha actual)
       const fechaActual = new Date().toISOString().split('T')[0];
       
@@ -1152,6 +1167,11 @@ export default {
         this.embarqueBloqueado = false;
         this.clientesPersonalizados = [];
       }
+      
+      // Desactivar bandera después de completar la inicialización
+      this.$nextTick(() => {
+        this._inicializandoEmbarque = false;
+      });
     },
 
     async guardarCambiosEnTiempoReal() {
@@ -1160,23 +1180,29 @@ export default {
           this.mostrarModalNota || this.mostrarModalAlt || 
           this.mostrarModalNombreAlternativo || this.mostrarModalNuevoCliente) return;
 
-      // Crear una copia profunda de los datos antes de guardar
-      const embarqueData = {
-        ...JSON.parse(JSON.stringify(this.prepararDatosEmbarque())),
-        clientesJuntarMedidas: { ...this.clientesJuntarMedidas },
-        clientesReglaOtilio: { ...this.clientesReglaOtilio }
-      };
+      // Usar debounce para evitar guardados excesivos
+      if (!this.debouncedSave) {
+        this.debouncedSave = debounce(async () => {
+          try {
+            // Crear una copia profunda de los datos antes de guardar
+            const embarqueData = {
+              ...JSON.parse(JSON.stringify(this.prepararDatosEmbarque())),
+              clientesJuntarMedidas: { ...this.clientesJuntarMedidas },
+              clientesReglaOtilio: { ...this.clientesReglaOtilio }
+            };
 
-      const db = getFirestore();
+            const db = getFirestore();
 
-      updateDoc(doc(db, "embarques", this.embarqueId), embarqueData)
-        .then(() => {
-          console.log('Cambios guardados automáticamente:', new Date().toLocaleString());
-          this.$emit('guardado-automatico');
-        })
-        .catch((error) => {
-          console.error("Error al guardar automáticamente:", error);
-        });
+            await updateDoc(doc(db, "embarques", this.embarqueId), embarqueData);
+            console.log('Cambios guardados automáticamente:', new Date().toLocaleString());
+            this.$emit('guardado-automatico');
+          } catch (error) {
+            console.error("Error al guardar automáticamente:", error);
+          }
+        }, 1000); // Esperar 1 segundo entre guardados
+      }
+
+      this.debouncedSave();
     },
 
     async guardarEmbarque() {
@@ -1952,8 +1978,8 @@ export default {
       }
       producto.isEditing = true;
 
-      // Guardar cambios inmediatamente
-      this.actualizarProducto(producto);
+      // NO llamar a actualizarProducto aquí para evitar loops
+      // La reactividad de Vue se encargará de la actualización
     },
 
     onMedidaBlur(producto) {
@@ -1968,12 +1994,16 @@ export default {
         producto.isEditing = false;
         producto.isNew = false;
       }
+      
+      // Actualizar medidas usadas cuando se termine de editar
+      this.actualizarMedidasUsadas();
     },
 
     seleccionarMedida(producto, medida) {
       producto.medida = medida;
       this.productoEditandoId = null;
-      this.actualizarProducto(producto);
+      // NO llamar a actualizarProducto aquí para evitar loops
+      // La reactividad de Vue se encargará de la actualización
     },
 
     onTallaCrudoChange(item) {
@@ -2411,11 +2441,17 @@ export default {
           this.isUndoRedo = false;
           return;
         }
+        
+        // Evitar guardado excesivo durante la inicialización
+        if (this._inicializandoEmbarque) {
+          return;
+        }
+        
         localStorage.setItem('embarque', JSON.stringify(nuevoValor));
         this.undoStack.push(JSON.stringify(nuevoValor));
         this.redoStack = [];
 
-        // Llamar al método de guardado automático
+        // Llamar al método de guardado automático con debounce
         this.guardarCambiosEnTiempoReal();
       },
       deep: true
@@ -2585,6 +2621,11 @@ export default {
     // Cancelar la suscripción a los cambios en tiempo real
     if (this.unsubscribe) {
       this.unsubscribe();
+    }
+
+    // Limpiar debounce del guardado automático
+    if (this.debouncedSave && this.debouncedSave.cancel) {
+      this.debouncedSave.cancel();
     }
 
     // Remover los event listeners cuando el componente se destruye
