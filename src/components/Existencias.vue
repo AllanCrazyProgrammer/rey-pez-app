@@ -64,6 +64,14 @@
         <h2>Valor Total: ${{ formatNumber(valorTotal) }}</h2>
       </div>
 
+      <div class="saldo-pendiente-deudas" v-if="tienePrecio">
+        <h2>Saldo Pendiente Deudas: ${{ formatNumber(saldoPendienteDeudas) }}</h2>
+      </div>
+
+      <div class="valor-libre" v-if="tienePrecio">
+        <h2>Valor Libre: ${{ formatNumber(valorLibre) }}</h2>
+      </div>
+
       <div class="total-general">
         <h2>Kilos Totales: {{ formatNumber(totalGeneral) }}</h2>
       </div>
@@ -73,7 +81,7 @@
 <script>
 import { ref, computed, onMounted, onUnmounted, watchEffect } from 'vue';
 import { db } from '@/firebase';
-import { collection, getDocs, onSnapshot } from 'firebase/firestore';
+import { collection, getDocs, onSnapshot, query, orderBy } from 'firebase/firestore';
 import moment from 'moment';
 
 export default {
@@ -82,6 +90,7 @@ export default {
     const existencias = ref({});
     const search = ref('');
     const tienePrecio = ref(false);
+    const deudas = ref([]);
 
     // Función para implementar FIFO: encuentra la entrada más antigua para una salida
     const procesarSalidaFIFO = (entradas, salida) => {
@@ -194,6 +203,21 @@ export default {
 
       existencias.value = newExistencias;
       tienePrecio.value = hayPrecios;
+    };
+
+    const loadDeudas = async () => {
+      try {
+        const querySnapshot = await getDocs(
+          query(collection(db, 'deudas'), orderBy('fecha', 'desc'))
+        );
+        
+        deudas.value = querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+      } catch (error) {
+        console.error("Error al cargar deudas: ", error);
+      }
     };
 
     const filteredExistencias = computed(() => {
@@ -373,6 +397,17 @@ export default {
       }, 0);
     });
 
+    const saldoPendienteDeudas = computed(() => {
+      return deudas.value
+        .filter(deuda => deuda.estado === 'pendiente')
+        .reduce((sum, deuda) => sum + (deuda.saldoPendiente || 0), 0);
+    });
+
+    const valorLibre = computed(() => {
+      if (!tienePrecio.value) return 0;
+      return valorTotal.value - saldoPendienteDeudas.value;
+    });
+
     const formatNumber = (value) => {
       return Math.round(value).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
     };
@@ -392,8 +427,10 @@ export default {
         <td class="precio-cell">{{ datos.precio ? '$' + datos.precio : '-' }}</td>
       ` : '';
 
-      // Calcular valor total para el PDF
+      // Calcular valores para el PDF
       const valorTotalPdf = valorTotal.value;
+      const saldoPendientePdf = saldoPendienteDeudas.value;
+      const valorLibrePdf = valorLibre.value;
 
       const estilos = `
         <style>
@@ -462,6 +499,27 @@ export default {
           .valor-total h2 {
             font-size: 20pt;
             color: #27ae60;
+            margin: 0;
+          }
+          .saldo-pendiente-deudas {
+            margin-top: 2px;
+            padding: 2px;
+            text-align: right;
+          }
+          .saldo-pendiente-deudas h2 {
+            font-size: 18pt;
+            color: #e74c3c;
+            margin: 0;
+          }
+          .valor-libre {
+            margin-top: 2px;
+            padding: 2px;
+            text-align: right;
+            border-top: 2px solid #3498db;
+          }
+          .valor-libre h2 {
+            font-size: 20pt;
+            color: #3498db;
             margin: 0;
           }
           .total-general {
@@ -561,6 +619,18 @@ export default {
         </div>
       ` : '';
 
+      const saldoPendienteHtml = tienePrecio.value ? `
+        <div class="saldo-pendiente-deudas">
+          <h2>Saldo Pendiente Deudas: $${formatNumber(saldoPendientePdf)}</h2>
+        </div>
+      ` : '';
+
+      const valorLibreHtml = tienePrecio.value ? `
+        <div class="valor-libre">
+          <h2>Valor Libre: $${formatNumber(valorLibrePdf)}</h2>
+        </div>
+      ` : '';
+
       const kilosTotalesHtml = `
         <div class="total-general">
           <h2>Kilos Totales: ${formatNumber(totalGeneral.value)}</h2>
@@ -582,6 +652,8 @@ export default {
           </div>
           ${document.querySelector('.existencias-grid').outerHTML}
           ${valorTotalHtml}
+          ${saldoPendienteHtml}
+          ${valorLibreHtml}
           ${kilosTotalesHtml}
         </body>
         </html>
@@ -603,9 +675,22 @@ export default {
 
     onMounted(() => {
       loadExistencias();
+      loadDeudas();
       unsubscribe = onSnapshot(collection(db, 'sacadas'), () => {
         loadExistencias();
       });
+      
+      // También escuchar cambios en deudas
+      const unsubscribeDeudas = onSnapshot(collection(db, 'deudas'), () => {
+        loadDeudas();
+      });
+      
+      // Guardar ambos unsubscribers
+      const originalUnsubscribe = unsubscribe;
+      unsubscribe = () => {
+        originalUnsubscribe();
+        unsubscribeDeudas();
+      };
     });
 
     onUnmounted(() => {
@@ -625,6 +710,8 @@ export default {
       maxKilos,
       totalGeneral,
       valorTotal,
+      saldoPendienteDeudas,
+      valorLibre,
       tienePrecio,
       formatNumber,
       imprimirReporte
@@ -772,6 +859,34 @@ h1 {
   font-size: 26px;
 }
 
+.saldo-pendiente-deudas {
+  margin-top: 10px;
+  text-align: right;
+  font-size: 24px;
+  font-weight: bold;
+  color: #e74c3c;
+}
+
+.saldo-pendiente-deudas h2 {
+  margin: 0;
+  font-size: 24px;
+}
+
+.valor-libre {
+  margin-top: 10px;
+  text-align: right;
+  font-size: 26px;
+  font-weight: bold;
+  color: #3498db;
+  border-top: 2px solid #3498db;
+  padding-top: 10px;
+}
+
+.valor-libre h2 {
+  margin: 0;
+  font-size: 26px;
+}
+
 .total-general {
   margin-top: 10px;
   text-align: right;
@@ -797,6 +912,13 @@ h1 {
 
   .existencias-grid {
     grid-template-columns: 1fr;
+  }
+
+  .valor-total h2,
+  .saldo-pendiente-deudas h2,
+  .valor-libre h2,
+  .total-general h2 {
+    font-size: 20px;
   }
 }
 
@@ -897,6 +1019,9 @@ h1 {
     break-inside: avoid;
     page-break-inside: avoid;
   }
+  .valor-total,
+  .saldo-pendiente-deudas,
+  .valor-libre,
   .total-general {
     break-before: avoid;
     page-break-before: avoid;
