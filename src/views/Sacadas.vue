@@ -38,6 +38,8 @@
             required 
           />
           <button @click="addSalida" :disabled="!isSalidaValid || newSalida.kilos > kilosDisponibles">Agregar Salida</button>
+          <button @click="limpiarSeleccionSalida" class="clear-button" v-if="newSalida.proveedor">🗑️ Limpiar</button>
+          <button @click="refrescarMedidasManual" class="refresh-button" v-if="newSalida.proveedor && newSalida.tipo === 'proveedor'">🔄 Refrescar</button>
         </div>
         <p v-if="kilosDisponibles !== null" class="kilos-disponibles">
           Kilos disponibles: <span :class="{ 'low-stock': kilosDisponibles < 100 }">{{ formatNumber(kilosDisponibles) }} kg</span>
@@ -326,9 +328,38 @@ export default {
       this.newSalida.proveedor = '';
       this.newSalida.medida = '';
       this.kilosDisponibles = null;
+      this.medidasConPrecio = [];
+    },
+    limpiarSeleccionSalida() {
+      this.newSalida = { tipo: 'proveedor', proveedor: '', medida: '', kilos: null };
+      this.kilosDisponibles = null;
+      this.medidasConPrecio = [];
+    },
+    async refrescarMedidasDespuesSalida(proveedor) {
+      // Forzar recálculo completo
+      this.medidasConPrecio = [];
+      await this.$nextTick();
+      
+      this.medidasConPrecio = await this.getMedidasConPrecio(proveedor);
+      
+      return this.medidasConPrecio;
+    },
+    async refrescarMedidasManual() {
+      if (this.newSalida.proveedor && this.newSalida.tipo === 'proveedor') {
+        await this.refrescarMedidasDespuesSalida(this.newSalida.proveedor);
+        
+        // También actualizar kilos disponibles si hay una medida seleccionada
+        if (this.newSalida.medida) {
+          await this.updateKilosDisponibles();
+        }
+      }
     },
     async addEntrada() {
       if (this.newEntrada.tipo && this.newEntrada.proveedor && this.newEntrada.medida && this.newEntrada.kilos) {
+        // Guardar datos antes de resetear
+        const proveedorEntrada = this.newEntrada.proveedor;
+        const tipoEntrada = this.newEntrada.tipo;
+
         this.entradas.push({
           tipo: this.newEntrada.tipo,
           proveedor: this.newEntrada.proveedor,
@@ -336,7 +367,21 @@ export default {
           kilos: Number(this.newEntrada.kilos.toFixed(1)),
           precio: this.newEntrada.precio ? Number(this.newEntrada.precio.toFixed(2)) : null
         });
-        this.newEntrada = { tipo: 'proveedor', proveedor: '', medida: '', kilos: null, precio: null };
+        
+        // Resetear pero mantener proveedor y tipo para facilitar más entradas
+        this.newEntrada = { 
+          tipo: tipoEntrada, 
+          proveedor: proveedorEntrada, 
+          medida: '', 
+          kilos: null, 
+          precio: null 
+        };
+        
+        // Si el proveedor de entrada es el mismo que el de salida, actualizar medidas disponibles para salidas
+        if (this.newSalida.proveedor === proveedorEntrada && this.newSalida.tipo === 'proveedor') {
+          this.medidasConPrecio = await this.getMedidasConPrecio(proveedorEntrada);
+        }
+        
         await this.updateKilosDisponibles();
       }
     },
@@ -365,6 +410,10 @@ export default {
           precio = null;
         }
 
+        // Guardar el proveedor antes de resetear
+        const proveedorAnterior = this.newSalida.proveedor;
+        const tipoAnterior = this.newSalida.tipo;
+
         this.salidas.push({
           tipo: this.newSalida.tipo,
           proveedor: this.newSalida.proveedor,
@@ -372,7 +421,23 @@ export default {
           precio: precio,
           kilos: Number(this.newSalida.kilos.toFixed(1))
         });
-        this.newSalida = { tipo: 'proveedor', proveedor: '', medida: '', kilos: null };
+        
+        // Resetear pero mantener proveedor y tipo para facilitar más salidas
+        this.newSalida = { 
+          tipo: tipoAnterior, 
+          proveedor: proveedorAnterior, 
+          medida: '', 
+          kilos: null 
+        };
+        
+        // Actualizar las medidas disponibles después de la salida
+        if (tipoAnterior === 'proveedor' && proveedorAnterior) {
+          await this.refrescarMedidasDespuesSalida(proveedorAnterior);
+          
+          // Resetear los kilos disponibles para forzar recálculo
+          this.kilosDisponibles = null;
+        }
+        
         await this.updateKilosDisponibles();
       } else if (this.newSalida.kilos > this.kilosDisponibles) {
         alert(`No hay suficientes kilos disponibles. Kilos disponibles: ${this.kilosDisponibles.toFixed(1)} kg`);
@@ -380,15 +445,8 @@ export default {
     },
     async updateKilosDisponibles() {
       if (this.newSalida.proveedor && this.newSalida.medida) {
-        console.log(`[UPDATE] Actualizando kilos disponibles:`);
-        console.log(`  Proveedor: "${this.newSalida.proveedor}"`);
-        console.log(`  Medida seleccionada: "${this.newSalida.medida}"`);
         this.kilosDisponibles = await this.getKilosDisponibles(this.newSalida.proveedor, this.newSalida.medida);
-        console.log(`  Kilos disponibles calculados: ${this.kilosDisponibles}`);
       } else {
-        console.log('[UPDATE] No se puede actualizar kilos disponibles: falta proveedor o medida');
-        console.log(`  Proveedor: "${this.newSalida.proveedor}"`);
-        console.log(`  Medida: "${this.newSalida.medida}"`);
         this.kilosDisponibles = null;
       }
     },
@@ -426,17 +484,11 @@ export default {
         .map(doc => ({ id: doc.id, ...doc.data() }))
         .sort((a, b) => a.fecha.toDate() - b.fecha.toDate());
 
-      console.log(`Calculando kilos disponibles para ${proveedor} - Medida original: "${medida}"`);
-      console.log(`Medida base parseada: "${medidaBase}", Precio: ${precio}`);
-      console.log(`Fecha actual: ${this.currentDate.format('YYYY-MM-DD')}`);
-
       const fechaActual = this.currentDate.clone().endOf('day');
       sacadasOrdenadas.forEach((sacada) => {
         const sacadaFecha = sacada.fecha instanceof Date ? sacada.fecha : sacada.fecha.toDate();
         
         if (moment(sacadaFecha).isSameOrBefore(fechaActual)) {
-          console.log(`Procesando sacada del ${moment(sacadaFecha).format('YYYY-MM-DD')}`);
-          
           sacada.entradas.forEach(entrada => {
             // Comparar medida y precio correctamente
             const medidaCoincide = entrada.proveedor === proveedor && entrada.medida === medidaBase;
@@ -447,9 +499,6 @@ export default {
             if (medidaCoincide && precioCoincide) {
               kilosDisponibles += entrada.kilos;
               totalEntradas += entrada.kilos;
-              console.log(`  ✅ Entrada coincide: +${entrada.kilos} kg (medida: ${entrada.medida}, precio: ${entrada.precio || 'sin precio'})`);
-            } else if (entrada.proveedor === proveedor && entrada.medida === medidaBase) {
-              console.log(`  ❌ Entrada NO coincide por precio: ${entrada.kilos} kg (medida: ${entrada.medida}, precio entrada: ${entrada.precio}, precio buscado: ${precio})`);
             }
           });
 
@@ -463,52 +512,49 @@ export default {
             if (medidaCoincide && precioCoincide) {
               kilosDisponibles -= salida.kilos;
               totalSalidas += salida.kilos;
-              console.log(`  ✅ Salida coincide: -${salida.kilos} kg (medida: ${salida.medida}, precio: ${salida.precio || 'sin precio'})`);
-            } else if (salida.proveedor === proveedor && salida.medida === medidaBase) {
-              console.log(`  ❌ Salida NO coincide por precio: ${salida.kilos} kg (medida: ${salida.medida}, precio salida: ${salida.precio}, precio buscado: ${precio})`);
             }
           });
-
-          console.log(`  Subtotal hasta ${moment(sacadaFecha).format('DD/MM/YYYY')}: ${kilosDisponibles.toFixed(1)} kg`);
         }
       });
-
-      console.log(`\n📊 RESUMEN FINAL:`);
-      console.log(`  Total entradas: ${totalEntradas.toFixed(1)} kg`);
-      console.log(`  Total salidas: ${totalSalidas.toFixed(1)} kg`);
-      console.log(`  Kilos disponibles: ${kilosDisponibles.toFixed(1)} kg`);
 
       return Number(kilosDisponibles.toFixed(1));
     },
     async removeEntrada(index) {
+      const entradaEliminada = this.entradas[index];
       this.entradas.splice(index, 1);
+      
+      // Si el proveedor eliminado es el mismo que el de salida, actualizar medidas disponibles
+      if (this.newSalida.proveedor === entradaEliminada.proveedor && this.newSalida.tipo === 'proveedor') {
+        this.medidasConPrecio = await this.getMedidasConPrecio(entradaEliminada.proveedor);
+      }
+      
       await this.updateKilosDisponibles();
     },
     async removeSalida(index) {
+      const salidaEliminada = this.salidas[index];
       this.salidas.splice(index, 1);
+      
+      // Si el proveedor eliminado es el mismo que el seleccionado, actualizar medidas disponibles
+      if (this.newSalida.proveedor === salidaEliminada.proveedor && this.newSalida.tipo === 'proveedor') {
+        this.medidasConPrecio = await this.getMedidasConPrecio(salidaEliminada.proveedor);
+      }
+      
       await this.updateKilosDisponibles();
     },
     formatNumber(value) {
       return value.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
     },
     async loadSacada(id) {
-      console.log("Cargando sacada con ID:", id);
       const docRef = doc(db, 'sacadas', id);
       const docSnap = await getDoc(docRef);
       if (docSnap.exists()) {
-        console.log("Documento encontrado:", docSnap.data());
         const data = docSnap.data();
         this.currentDate = moment(data.fecha.toDate());
-        console.log("Fecha cargada:", this.currentDate);
         this.entradas = data.entradas || [];
-        console.log("Entradas cargadas:", this.entradas);
         this.salidas = data.salidas || [];
-        console.log("Salidas cargadas:", this.salidas);
         this.sacadaId = id;
         this.isEditing = true;
         await this.updateKilosDisponibles();
-      } else {
-        console.log("No se encontró el documento con ID:", id);
       }
     },
     async saveReport() {
@@ -562,7 +608,7 @@ export default {
         const precioNormalizado = precio !== null && precio !== undefined ? precio : null;
         const medidaKey = precioNormalizado !== null ? `${medida} ($${precioNormalizado})` : medida;
         
-        console.log(`[DEBUG] actualizarBalance - medida: ${medida}, precio original: ${precio}, precio normalizado: ${precioNormalizado}, medidaKey: ${medidaKey}`);
+
         
         if (!medidasDisponibles.has(medidaKey)) {
           medidasDisponibles.set(medidaKey, {
@@ -576,6 +622,7 @@ export default {
         }
         
         const datos = medidasDisponibles.get(medidaKey);
+        const kilosAntes = datos.kilos;
         datos.kilos += esEntrada ? kilos : -kilos;
         
         // Rastrear la fecha de la primera entrada con este precio (solo si tiene precio)
@@ -584,36 +631,40 @@ export default {
         }
       };
 
-      // Procesar todas las sacadas anteriores hasta la fecha actual
+      // Procesar todas las sacadas anteriores hasta el día ANTERIOR al actual (NO incluir el día actual)
+      const inicioDiaActual = this.currentDate.clone().startOf('day');
+      
       sacadasOrdenadas.forEach(sacada => {
         const sacadaFecha = sacada.fecha instanceof Date ? sacada.fecha : sacada.fecha.toDate();
+        const momentSacada = moment(sacadaFecha);
         
-        if (moment(sacadaFecha).isSameOrBefore(fechaActual)) {
+        // Solo procesar sacadas ANTERIORES al día actual (no el día actual)
+        if (momentSacada.isBefore(inicioDiaActual)) {
+          
           sacada.entradas.forEach(entrada => {
             if (entrada.proveedor === proveedor) {
-              console.log(`[DEBUG] Procesando entrada: ${entrada.medida}, precio: ${entrada.precio} (tipo: ${typeof entrada.precio})`);
               actualizarBalance(entrada.medida, entrada.precio, entrada.kilos, sacadaFecha, true);
             }
           });
 
           sacada.salidas.forEach(salida => {
             if (salida.proveedor === proveedor) {
-              console.log(`[DEBUG] Procesando salida: ${salida.medida}, precio: ${salida.precio} (tipo: ${typeof salida.precio})`);
               actualizarBalance(salida.medida, salida.precio, salida.kilos, sacadaFecha, false);
             }
           });
         }
       });
 
-      // Procesar entradas y salidas del día actual
-      this.entradas.forEach(entrada => {
+      // Procesar entradas y salidas del día actual SOLO desde arrays locales
+      
+      this.entradas.forEach((entrada, index) => {
         if (entrada.proveedor === proveedor) {
           const fechaActual = this.currentDate.toDate();
           actualizarBalance(entrada.medida, entrada.precio, entrada.kilos, fechaActual, true);
         }
       });
 
-      this.salidas.forEach(salida => {
+      this.salidas.forEach((salida, index) => {
         if (salida.proveedor === proveedor) {
           const fechaActual = this.currentDate.toDate();
           actualizarBalance(salida.medida, salida.precio, salida.kilos, fechaActual, false);
@@ -647,7 +698,6 @@ export default {
       const medidasConPrecio = [];
       for (const [_, datos] of medidasDisponibles) {
         if (datos.kilos > 0) {
-          console.log(`[DEBUG] Construyendo nombre para medida: ${datos.medida}, precio: ${datos.precio}, kilos: ${datos.kilos}`);
           
           let nombreDisplay = datos.nombre;
           
@@ -664,8 +714,6 @@ export default {
             nombreDisplay = `${datos.medida} - (Sin precio)`;
           }
           
-          console.log(`[DEBUG] Nombre final construido: ${nombreDisplay}`);
-
           medidasConPrecio.push({
             id: datos.nombre,
             nombre: nombreDisplay,
@@ -705,10 +753,7 @@ export default {
     await this.loadProveedores();
     await this.loadMedidas();
     if (this.$route.params.id) {
-      console.log("ID de la ruta encontrado:", this.$route.params.id);
       await this.loadSacada(this.$route.params.id);
-    } else {
-      console.log("No se encontró ID en la ruta");
     }
     this.isLoaded = true;
   },
@@ -805,6 +850,28 @@ button:hover {
 
 button:active {
   transform: scale(0.98);
+}
+
+.clear-button {
+  background-color: #dc3545;
+  margin-left: 10px;
+  padding: 8px 12px;
+  font-size: 12px;
+}
+
+.clear-button:hover {
+  background-color: #c82333;
+}
+
+.refresh-button {
+  background-color: #17a2b8;
+  margin-left: 10px;
+  padding: 8px 12px;
+  font-size: 12px;
+}
+
+.refresh-button:hover {
+  background-color: #138496;
 }
 
 .list {
@@ -930,6 +997,12 @@ button:active {
     width: 100%;
   }
 
+  .clear-button,
+  .refresh-button {
+    margin-left: 0;
+    margin-top: 5px;
+  }
+
   .medidas-summary {
     font-size: 14px;
   }
@@ -989,5 +1062,7 @@ button:disabled:hover {
   font-weight: bold !important;
 }
 </style>
+
+
 
 
