@@ -686,7 +686,10 @@ async function generarContenidoClientes(embarque, clientesDisponibles, clientesJ
     productos.forEach(producto => {
       if (producto.precio) {
         const kilos = totalKilos(producto, nombreCliente, aplicarReglaOtilioCliente);
-        totalDineroCliente += kilos * Number(producto.precio);
+        // Usar exactamente los mismos kilos que se muestran en la tabla
+        const kilosMostrados = nombreCliente.toLowerCase().includes('ozuna') ? 
+          Number(kilos.toFixed(1)) : Math.round(kilos);
+        totalDineroCliente += kilosMostrados * Number(producto.precio);
       }
     });
 
@@ -695,7 +698,9 @@ async function generarContenidoClientes(embarque, clientesDisponibles, clientesJ
       procesarCrudosDeFormaSegura(embarque.clienteCrudos, clienteId, clientesDisponibles, (item) => {
         if (item.precio) {
           const kilos = parseFloat(calcularKilosCrudos(item, nombreCliente));
-          totalDineroCliente += kilos * Number(item.precio);
+          // Usar exactamente los mismos kilos que se muestran en la tabla (redondeados)
+          const kilosMostrados = Math.round(kilos);
+          totalDineroCliente += kilosMostrados * Number(item.precio);
         }
       });
     }
@@ -1009,6 +1014,10 @@ function generarTablaProductos(productos, estiloCliente, nombreCliente, aplicarR
     
     // Verificar que tenga kilos > 0
     if (kilos > 0) {
+      // Calcular los kilos que se mostrarán en la tabla (exactamente como aparecen)
+      const kilosMostrados = nombreCliente.toLowerCase().includes('ozuna') ? 
+        Number(kilos.toFixed(1)) : Math.round(kilos);
+      
       const row = [
         // Mostrar un decimal para Ozuna
         nombreCliente.toLowerCase().includes('ozuna') ? `${kilos.toFixed(1)} kg` : `${Math.round(kilos)} kg`,
@@ -1026,8 +1035,8 @@ function generarTablaProductos(productos, estiloCliente, nombreCliente, aplicarR
           ? { text: `$${Number(producto.precio).toLocaleString('en-US')}`, style: 'precio' } 
           : '');
         
-        // Agregar columna de total (kilos × precio)
-        const total = producto.precio ? kilos * Number(producto.precio) : 0;
+        // Agregar columna de total (usar kilos mostrados × precio)
+        const total = producto.precio ? kilosMostrados * Number(producto.precio) : 0;
         // Sumar al gran total
         granTotal += total;
         
@@ -1222,8 +1231,11 @@ function generarTablaCrudos(crudos, estiloCliente) {
     const kilosTexto = calcularKilosCrudos(item, nombreCliente);
     const kilos = parseFloat(kilosTexto);
     
+    // Calcular los kilos que se mostrarán en la tabla (exactamente como aparecen)
+    const kilosMostrados = Math.round(kilos);
+    
     const row = [
-      `${Math.round(kilos)} kg`,
+      `${kilosMostrados} kg`,
       {
         text: item.talla.replace(/\s*c\/\s*c$/i, ' c/c'),
         style: 'default',
@@ -1238,7 +1250,7 @@ function generarTablaCrudos(crudos, estiloCliente) {
       
       // Agregar total para Elizabeth y Catarro
       if (esClienteElizabeth || esClienteCatarro) {
-        const total = item.precio ? kilos * Number(item.precio) : 0;
+        const total = item.precio ? kilosMostrados * Number(item.precio) : 0;
         granTotal += total;
         
         row.push(item.precio 
@@ -2095,7 +2107,10 @@ async function generarContenidoClientesSinPrecios(embarque, clientesDisponibles,
     productos.forEach(producto => {
       if (producto.precio) {
         const kilos = totalKilos(producto, nombreCliente, aplicarReglaOtilioCliente);
-        totalDineroCliente += kilos * Number(producto.precio);
+        // Usar exactamente los mismos kilos que se muestran en la tabla
+        const kilosMostrados = nombreCliente.toLowerCase().includes('ozuna') ? 
+          Number(kilos.toFixed(1)) : Math.round(kilos);
+        totalDineroCliente += kilosMostrados * Number(producto.precio);
       }
     });
 
@@ -2104,7 +2119,9 @@ async function generarContenidoClientesSinPrecios(embarque, clientesDisponibles,
       procesarCrudosDeFormaSegura(embarque.clienteCrudos, clienteId, clientesDisponibles, (item) => {
         if (item.precio) {
           const kilos = parseFloat(calcularKilosCrudos(item, nombreCliente));
-          totalDineroCliente += kilos * Number(item.precio);
+          // Usar exactamente los mismos kilos que se muestran en la tabla (redondeados)
+          const kilosMostrados = Math.round(kilos);
+          totalDineroCliente += kilosMostrados * Number(item.precio);
         }
       });
     }
