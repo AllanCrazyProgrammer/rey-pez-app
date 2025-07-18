@@ -76,6 +76,7 @@
           :crudos="clienteCrudos[clienteId] || []"
           :clientes-juntar-medidas="clientesJuntarMedidas" 
           :clientes-regla-otilio="clientesReglaOtilio"
+          :clientes-incluir-precios="clientesIncluirPrecios"
           :nombre-cliente="obtenerNombreCliente(clienteId)"
           :cliente-activo="clienteActivo" 
           :embarque-bloqueado="embarqueBloqueado" 
@@ -87,6 +88,7 @@
           @update:crudos="actualizarCrudosCliente(clienteId, $event)" 
           @juntarMedidas-change="handleJuntarMedidasChange"
           @reglaOtilio-change="handleReglaOtilioChange"
+          @incluirPrecios-change="handleIncluirPreciosChange"
           @eliminar-cliente="eliminarCliente" 
           @eliminar-producto="eliminarProducto" 
           @eliminar-crudo="eliminarCrudo"
@@ -222,6 +224,7 @@ export default {
       usuariosActivos: [],
       clientesJuntarMedidas: {},
       clientesReglaOtilio: {},
+      clientesIncluirPrecios: {},
       clientesPredefinidos: CLIENTES_PREDEFINIDOS, // Usar constantes importadas
       clientesPersonalizados: [],
       ultimoIdPersonalizado: 0,
@@ -842,6 +845,17 @@ export default {
             });
           }
 
+          // Cargar el estado de incluir precios
+          if (data.clientesIncluirPrecios) {
+            this.clientesIncluirPrecios = data.clientesIncluirPrecios;
+          } else {
+            // Si no existe, inicializar con valores por defecto
+            this.clientesIncluirPrecios = {};
+            data.clientes.forEach(cliente => {
+              this.$set(this.clientesIncluirPrecios, cliente.id, false);
+            });
+          }
+
           let fecha;
           if (data.fecha && typeof data.fecha.toDate === 'function') {
             fecha = data.fecha.toDate();
@@ -1039,6 +1053,7 @@ export default {
             };
             this.clientesJuntarMedidas = {};
             this.clientesReglaOtilio = {};
+            this.clientesIncluirPrecios = {};
             this.embarqueId = null;
             this.modoEdicion = false;
             this.guardadoAutomaticoActivo = false;
@@ -1065,6 +1080,7 @@ export default {
         this.clienteCrudos = {};
         this.clientesJuntarMedidas = {};
         this.clientesReglaOtilio = {};
+        this.clientesIncluirPrecios = {};
         this.embarqueId = null;
         this.modoEdicion = false;
         this.guardadoAutomaticoActivo = false;
@@ -1156,6 +1172,7 @@ export default {
         };
         this.clientesJuntarMedidas = {};
         this.clientesReglaOtilio = {};
+        this.clientesIncluirPrecios = {};
         // Inicializar regla de Otilio activada por defecto para clientes predefinidos
         this.clientesPredefinidos.forEach(cliente => {
             const esOtilio = cliente.nombre && cliente.nombre.toLowerCase().includes('otilio');
@@ -1188,7 +1205,8 @@ export default {
             const embarqueData = {
               ...JSON.parse(JSON.stringify(this.prepararDatosEmbarque())),
               clientesJuntarMedidas: { ...this.clientesJuntarMedidas },
-              clientesReglaOtilio: { ...this.clientesReglaOtilio }
+              clientesReglaOtilio: { ...this.clientesReglaOtilio },
+              clientesIncluirPrecios: { ...this.clientesIncluirPrecios }
             };
 
             const db = getFirestore();
@@ -1342,6 +1360,7 @@ export default {
         clientes: [],
         clientesJuntarMedidas: this.clientesJuntarMedidas,
         clientesReglaOtilio: this.clientesReglaOtilio,
+        clientesIncluirPrecios: this.clientesIncluirPrecios,
         embarqueBloqueado: this.embarqueBloqueado
       };
 
@@ -1624,6 +1643,16 @@ export default {
     handleReglaOtilioChange(clienteId, checked) {
       // Actualizar el estado local
       this.$set(this.clientesReglaOtilio, clienteId, checked);
+
+      // Guardar inmediatamente si estamos en modo edición
+      if (this.modoEdicion && this.embarqueId) {
+        this.guardarCambiosEnTiempoReal();
+      }
+    },
+
+    handleIncluirPreciosChange(clienteId, checked) {
+      // Actualizar el estado local
+      this.$set(this.clientesIncluirPrecios, clienteId, checked);
 
       // Guardar inmediatamente si estamos en modo edición
       if (this.modoEdicion && this.embarqueId) {

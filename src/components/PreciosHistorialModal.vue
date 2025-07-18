@@ -538,6 +538,27 @@ export default {
       }
       
       this.showModal = true;
+    },
+
+    // Método para obtener el precio actual de un producto específico para un cliente
+    obtenerPrecioProductoCliente(nombreProducto, clienteId = 'catarro') {
+      // Buscar precio específico para el cliente
+      const precioEspecifico = this.preciosActuales.find(precio => 
+        precio.producto.toLowerCase() === nombreProducto.toLowerCase() && 
+        precio.clienteId === clienteId
+      );
+      
+      if (precioEspecifico) {
+        return precioEspecifico.precio;
+      }
+      
+      // Si no hay precio específico, buscar precio general
+      const precioGeneral = this.preciosActuales.find(precio => 
+        precio.producto.toLowerCase() === nombreProducto.toLowerCase() && 
+        !precio.clienteId
+      );
+      
+      return precioGeneral ? precioGeneral.precio : null;
     }
   },
   watch: {

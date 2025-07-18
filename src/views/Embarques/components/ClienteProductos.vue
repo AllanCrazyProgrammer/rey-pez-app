@@ -32,6 +32,14 @@
                     <label :for="'regla-otilio-' + clienteId" @click.stop>Sumar 1 kg por cada 100 kg</label>
                 </div>
                 
+                <!-- Checkbox para incluir precios en PDF (específico para Catarro) -->
+                <div v-if="esClienteCatarro" class="incluir-precios-checkbox">
+                    <input type="checkbox" :id="'incluir-precios-' + clienteId"
+                        v-model="clientesIncluirPrecios[clienteId]" @change="handleIncluirPreciosChange" @click.stop
+                        :disabled="embarqueBloqueado">
+                    <label :for="'incluir-precios-' + clienteId" @click.stop">Incluir precios en PDF</label>
+                </div>
+                
                 <button type="button" @click.stop="$emit('generar-pdf', 'cliente', clienteId)"
                     class="btn btn-primary btn-sm generar-pdf-cliente" title="Generar Nota de Venta PDF (incluye página sin precios)"
                     :disabled="isGeneratingPdf">
@@ -140,6 +148,10 @@ export default {
             type: Object,
             default: () => ({})
         },
+        clientesIncluirPrecios: {
+            type: Object,
+            default: () => ({})
+        },
         nombreCliente: {
             type: String,
             required: true
@@ -175,6 +187,7 @@ export default {
         'update:crudos',
         'juntarMedidas-change',
         'reglaOtilio-change',
+        'incluirPrecios-change',
         'eliminar-cliente',
         'eliminar-producto',
         'eliminar-crudo',
@@ -369,6 +382,10 @@ export default {
             this.$emit('reglaOtilio-change', this.clienteId, event.target.checked);
         },
 
+        handleIncluirPreciosChange(event) {
+            this.$emit('incluirPrecios-change', this.clienteId, event.target.checked);
+        },
+
         crearCuentaJoselito() {
             this.$emit('crear-cuenta-joselito', this.clienteId, this.productos, this.crudos);
         },
@@ -470,6 +487,13 @@ export default {
 }
 
 .regla-otilio-checkbox {
+    display: flex;
+    align-items: center;
+    margin-right: 10px;
+    font-size: 0.9rem;
+}
+
+.incluir-precios-checkbox {
     display: flex;
     align-items: center;
     margin-right: 10px;

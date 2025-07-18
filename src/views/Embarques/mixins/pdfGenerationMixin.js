@@ -72,7 +72,8 @@ export default {
         embarqueCliente,
         this.clientesDisponibles,
         this.clientesJuntarMedidas,
-        this.clientesReglaOtilio
+        this.clientesReglaOtilio,
+        this.clientesIncluirPrecios
       );
     },
 
@@ -99,7 +100,8 @@ export default {
         embarqueCliente,
         this.clientesDisponibles,
         this.clientesJuntarMedidas,
-        this.clientesReglaOtilio
+        this.clientesReglaOtilio,
+        this.clientesIncluirPrecios
       );
     },
 
