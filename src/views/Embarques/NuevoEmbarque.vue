@@ -77,6 +77,7 @@
           :clientes-juntar-medidas="clientesJuntarMedidas" 
           :clientes-regla-otilio="clientesReglaOtilio"
           :clientes-incluir-precios="clientesIncluirPrecios"
+          :clientes-sumar-kg-catarro="clientesSumarKgCatarro"
           :nombre-cliente="obtenerNombreCliente(clienteId)"
           :cliente-activo="clienteActivo" 
           :embarque-bloqueado="embarqueBloqueado" 
@@ -89,6 +90,7 @@
           @juntarMedidas-change="handleJuntarMedidasChange"
           @reglaOtilio-change="handleReglaOtilioChange"
           @incluirPrecios-change="handleIncluirPreciosChange"
+          @sumarKgCatarro-change="handleSumarKgCatarroChange"
           @eliminar-cliente="eliminarCliente" 
           @eliminar-producto="eliminarProducto" 
           @eliminar-crudo="eliminarCrudo"
@@ -225,6 +227,7 @@ export default {
       clientesJuntarMedidas: {},
       clientesReglaOtilio: {},
       clientesIncluirPrecios: {},
+      clientesSumarKgCatarro: {},
       clientesPredefinidos: CLIENTES_PREDEFINIDOS, // Usar constantes importadas
       clientesPersonalizados: [],
       ultimoIdPersonalizado: 0,
@@ -856,6 +859,19 @@ export default {
             });
           }
 
+          // Cargar el estado de sumar kg para Catarro
+          if (data.clientesSumarKgCatarro) {
+            this.clientesSumarKgCatarro = data.clientesSumarKgCatarro;
+          } else {
+            // Si no existe, inicializar con valores por defecto (activado para Catarro)
+            this.clientesSumarKgCatarro = {};
+            data.clientes.forEach(cliente => {
+              // Activar por defecto para clientes de Catarro
+              const esCatarro = cliente.nombre && cliente.nombre.toLowerCase().includes('catarro');
+              this.$set(this.clientesSumarKgCatarro, cliente.id, esCatarro);
+            });
+          }
+
           let fecha;
           if (data.fecha && typeof data.fecha.toDate === 'function') {
             fecha = data.fecha.toDate();
@@ -1361,6 +1377,7 @@ export default {
         clientesJuntarMedidas: this.clientesJuntarMedidas,
         clientesReglaOtilio: this.clientesReglaOtilio,
         clientesIncluirPrecios: this.clientesIncluirPrecios,
+        clientesSumarKgCatarro: this.clientesSumarKgCatarro,
         embarqueBloqueado: this.embarqueBloqueado
       };
 
@@ -1653,6 +1670,28 @@ export default {
     handleIncluirPreciosChange(clienteId, checked) {
       // Actualizar el estado local
       this.$set(this.clientesIncluirPrecios, clienteId, checked);
+
+      // Guardar inmediatamente si estamos en modo edición
+      if (this.modoEdicion && this.embarqueId) {
+        this.guardarCambiosEnTiempoReal();
+      }
+    },
+
+    handleSumarKgCatarroChange(clienteId, checked) {
+      console.log('[DEBUG] Handle Sumar Kg Catarro Change:', {
+        clienteId,
+        checked,
+        estadoAnterior: this.clientesSumarKgCatarro[clienteId],
+        estadoCompleto: { ...this.clientesSumarKgCatarro }
+      });
+      
+      // Actualizar el estado local
+      this.$set(this.clientesSumarKgCatarro, clienteId, checked);
+
+      console.log('[DEBUG] Estado después del cambio:', {
+        nuevoEstado: this.clientesSumarKgCatarro[clienteId],
+        estadoCompleto: { ...this.clientesSumarKgCatarro }
+      });
 
       // Guardar inmediatamente si estamos en modo edición
       if (this.modoEdicion && this.embarqueId) {

@@ -40,6 +40,14 @@
                     <label :for="'incluir-precios-' + clienteId" @click.stop">Incluir precios en PDF</label>
                 </div>
                 
+                <!-- Checkbox para sumar 1 kg (específico para Catarro) -->
+                <div v-if="esClienteCatarro" class="sumar-kg-catarro-checkbox">
+                    <input type="checkbox" :id="'sumar-kg-catarro-' + clienteId"
+                        v-model="clientesSumarKgCatarro[clienteId]" @change="handleSumarKgCatarroChange" @click.stop
+                        :disabled="embarqueBloqueado">
+                    <label :for="'sumar-kg-catarro-' + clienteId" @click.stop">Sumar 1 kg</label>
+                </div>
+                
                 <button type="button" @click.stop="$emit('generar-pdf', 'cliente', clienteId)"
                     class="btn btn-primary btn-sm generar-pdf-cliente" title="Generar Nota de Venta PDF (incluye página sin precios)"
                     :disabled="isGeneratingPdf">
@@ -152,6 +160,10 @@ export default {
             type: Object,
             default: () => ({})
         },
+        clientesSumarKgCatarro: {
+            type: Object,
+            default: () => ({})
+        },
         nombreCliente: {
             type: String,
             required: true
@@ -188,6 +200,7 @@ export default {
         'juntarMedidas-change',
         'reglaOtilio-change',
         'incluirPrecios-change',
+        'sumarKgCatarro-change',
         'eliminar-cliente',
         'eliminar-producto',
         'eliminar-crudo',
@@ -386,6 +399,15 @@ export default {
             this.$emit('incluirPrecios-change', this.clienteId, event.target.checked);
         },
 
+        handleSumarKgCatarroChange(event) {
+            console.log('[DEBUG] Checkbox Sumar Kg Catarro cambiado:', {
+                clienteId: this.clienteId,
+                checked: event.target.checked,
+                nombreCliente: this.nombreCliente
+            });
+            this.$emit('sumarKgCatarro-change', this.clienteId, event.target.checked);
+        },
+
         crearCuentaJoselito() {
             this.$emit('crear-cuenta-joselito', this.clienteId, this.productos, this.crudos);
         },
@@ -494,6 +516,13 @@ export default {
 }
 
 .incluir-precios-checkbox {
+    display: flex;
+    align-items: center;
+    margin-right: 10px;
+    font-size: 0.9rem;
+}
+
+.sumar-kg-catarro-checkbox {
     display: flex;
     align-items: center;
     margin-right: 10px;

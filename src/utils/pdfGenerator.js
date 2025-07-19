@@ -78,7 +78,7 @@ async function obtenerPrecioProductoCatarro(nombreProducto) {
   }
 }
 
-export async function generarNotaVentaPDF(embarque, clientesDisponibles, clientesJuntarMedidas, clientesReglaOtilio = {}, clientesIncluirPrecios = {}) {
+export async function generarNotaVentaPDF(embarque, clientesDisponibles, clientesJuntarMedidas, clientesReglaOtilio = {}, clientesIncluirPrecios = {}, clientesSumarKgCatarro = {}) {
   try {
     // Validación más robusta de los datos de entrada
     if (!embarque || !embarque.productos || !Array.isArray(embarque.productos)) {
@@ -132,7 +132,7 @@ export async function generarNotaVentaPDF(embarque, clientesDisponibles, cliente
         ]
       },
       { text: '\n' },
-              ...(await generarContenidoClientes(embarque, clientesDisponibles, clientesJuntarMedidas, clientesReglaOtilio, clientesIncluirPrecios)),
+              ...(await generarContenidoClientes(embarque, clientesDisponibles, clientesJuntarMedidas, clientesReglaOtilio, clientesIncluirPrecios, clientesSumarKgCatarro)),
       // Agregar la nueva sección de rendimientos
       ...generarSeccionRendimientos({
         ...embarque,
@@ -179,7 +179,7 @@ export async function generarNotaVentaPDF(embarque, clientesDisponibles, cliente
         ]
       },
       { text: '\n' },
-              ...(await generarContenidoClientesSinPrecios(embarque, clientesDisponibles, clientesJuntarMedidas, clientesReglaOtilio, clientesIncluirPrecios)),
+              ...(await generarContenidoClientesSinPrecios(embarque, clientesDisponibles, clientesJuntarMedidas, clientesReglaOtilio, clientesIncluirPrecios, clientesSumarKgCatarro)),
       // Agregar la nueva sección de rendimientos
       ...generarSeccionRendimientos({
         ...embarque,
@@ -423,7 +423,7 @@ function contarTotalProductos(embarque) {
   return contador;
 }
 
-async function generarContenidoClientes(embarque, clientesDisponibles, clientesJuntarMedidas, clientesReglaOtilio = {}, clientesIncluirPrecios = {}) {
+async function generarContenidoClientes(embarque, clientesDisponibles, clientesJuntarMedidas, clientesReglaOtilio = {}, clientesIncluirPrecios = {}, clientesSumarKgCatarro = {}) {
   const contenido = [];
   let totalTarasLimpio = 0;
   let totalTarasCrudos = 0;
@@ -477,11 +477,27 @@ async function generarContenidoClientes(embarque, clientesDisponibles, clientesJ
     
     // Verificar si este cliente específico tiene activada la opción de incluir precios
     const incluirPreciosCliente = clientesIncluirPrecios && clientesIncluirPrecios[clienteId];
-    const esCatarro = nombreCliente.toLowerCase().includes('catarro');
     
-    // Filtrar productos que tengan al menos 1 kilo real
+    // Verificar si este cliente específico tiene activada la opción de sumar kg para Catarro
+    const esCatarro = nombreCliente.toLowerCase().includes('catarro');
+    const sumarKgCatarroCliente = clientesSumarKgCatarro && clientesSumarKgCatarro.hasOwnProperty(clienteId) 
+      ? clientesSumarKgCatarro[clienteId] 
+      : esCatarro; // Por defecto true para Catarro, false para otros
+    
+    if (esCatarro) {
+      console.log('[DEBUG] Configuración para cliente Catarro:', {
+        clienteId,
+        nombreCliente,
+        esCatarro,
+        clientesSumarKgCatarro,
+        tienePropiedad: clientesSumarKgCatarro && clientesSumarKgCatarro.hasOwnProperty(clienteId),
+        valorDirecto: clientesSumarKgCatarro ? clientesSumarKgCatarro[clienteId] : 'N/A',
+        sumarKgCatarroCliente
+      });
+    }
+    
     const productosConKilos = productos.filter(producto => {
-      const kilos = totalKilos(producto, nombreCliente, aplicarReglaOtilioCliente);
+      const kilos = totalKilos(producto, nombreCliente, aplicarReglaOtilioCliente, sumarKgCatarroCliente);
       return kilos > 0;
     });
     
@@ -560,7 +576,7 @@ async function generarContenidoClientes(embarque, clientesDisponibles, clientesJ
       // Verificar nuevamente si después de agrupar hay productos válidos con kilos
       // (puede ocurrir que al combinar queden solo productos con 0 kilos)
       const hayProductosValidos = productosAgrupados.some(producto => {
-        const kilos = totalKilos(producto, nombreCliente, aplicarReglaOtilioCliente);
+        const kilos = totalKilos(producto, nombreCliente, aplicarReglaOtilioCliente, sumarKgCatarroCliente);
         return kilos > 0;
       });
       
@@ -588,7 +604,7 @@ async function generarContenidoClientes(embarque, clientesDisponibles, clientesJ
             style: ['subheader', estiloCliente],
             margin: [0, 5, 0, 5]
           },
-          generarTablaProductos(productosAgrupados, estiloCliente, nombreCliente, aplicarReglaOtilioCliente),
+          generarTablaProductos(productosAgrupados, estiloCliente, nombreCliente, aplicarReglaOtilioCliente, sumarKgCatarroCliente),
           { text: '\n' }
         );
 
@@ -685,7 +701,7 @@ async function generarContenidoClientes(embarque, clientesDisponibles, clientesJ
     // Sumar totales de productos limpios de este cliente
     productos.forEach(producto => {
       if (producto.precio) {
-        const kilos = totalKilos(producto, nombreCliente, aplicarReglaOtilioCliente);
+        const kilos = totalKilos(producto, nombreCliente, aplicarReglaOtilioCliente, sumarKgCatarroCliente);
         // Usar exactamente los mismos kilos que se muestran en la tabla
         const kilosMostrados = nombreCliente.toLowerCase().includes('ozuna') ? 
           Number(kilos.toFixed(1)) : Math.round(kilos);
@@ -942,10 +958,10 @@ function agruparProductos(productos) {
   });
 }
 
-function generarTablaProductos(productos, estiloCliente, nombreCliente, aplicarReglaOtilio = true) {
+function generarTablaProductos(productos, estiloCliente, nombreCliente, aplicarReglaOtilio = true, sumarKgCatarro = true) {
   // Filtrar productos que tengan kilos reales
   const productosConKilos = productos.filter(producto => {
-    const kilos = totalKilos(producto, nombreCliente, aplicarReglaOtilio);
+    const kilos = totalKilos(producto, nombreCliente, aplicarReglaOtilio, sumarKgCatarro);
     return kilos > 0;
   });
   
@@ -1010,7 +1026,7 @@ function generarTablaProductos(productos, estiloCliente, nombreCliente, aplicarR
     let tarasTexto = `${tarasTotales} ${combinarTarasBolsas(producto.reporteTaras, producto.reporteBolsas)}`;
 
     // Calcular kilos para este producto
-    const kilos = totalKilos(producto, nombreCliente, aplicarReglaOtilio);
+    const kilos = totalKilos(producto, nombreCliente, aplicarReglaOtilio, sumarKgCatarro);
     
     // Verificar que tenga kilos > 0
     if (kilos > 0) {
@@ -1428,7 +1444,7 @@ function totalTaras(producto) {
   return tarasNormales + tarasExtra;
 }
 
-function totalKilos(producto, nombreCliente, aplicarReglaOtilio = true) {
+function totalKilos(producto, nombreCliente, aplicarReglaOtilio = true, sumarKgCatarro = true) {
   const sumaKilos = (producto.kilos || []).reduce((sum, kilo) => sum + (kilo || 0), 0);
   
   // Calcular el descuento de taras
@@ -1455,8 +1471,21 @@ function totalKilos(producto, nombreCliente, aplicarReglaOtilio = true) {
   if (!producto.noSumarKilos && 
       (tipoProducto.toLowerCase().includes('s/h2o') || 
        tipoProducto.toLowerCase().includes('s/h20'))) {
+    // Solo sumar 1 kg a Catarro si el parámetro sumarKgCatarro es true
     if (clienteNombreLower.includes('catarro')) {
-      resultado += 1;
+      console.log('[DEBUG] Cliente Catarro detectado:', {
+        nombreCliente,
+        sumarKgCatarro,
+        resultadoAntes: resultado,
+        tipoProducto: producto.tipo,
+        medida: producto.medida
+      });
+      if (sumarKgCatarro) {
+        resultado += 1;
+        console.log('[DEBUG] Se sumó 1 kg. Resultado después:', resultado);
+      } else {
+        console.log('[DEBUG] NO se sumó 1 kg porque sumarKgCatarro es false');
+      }
     }
     // Para cliente Otilio: sumar 1 kilo por cada 100 kilos en productos s/h2o (solo si aplicarReglaOtilio es true)
     if (aplicarReglaOtilio && 
@@ -1883,7 +1912,7 @@ export async function generarNotaVentaSinPreciosPDF(embarque, clientesDisponible
   }
 }
 
-async function generarContenidoClientesSinPrecios(embarque, clientesDisponibles, clientesJuntarMedidas, clientesReglaOtilio = {}, clientesIncluirPrecios = {}) {
+async function generarContenidoClientesSinPrecios(embarque, clientesDisponibles, clientesJuntarMedidas, clientesReglaOtilio = {}, clientesIncluirPrecios = {}, clientesSumarKgCatarro = {}) {
   const contenido = [];
   let totalTarasLimpio = 0;
   let totalTarasCrudos = 0;
@@ -1935,9 +1964,27 @@ async function generarContenidoClientesSinPrecios(embarque, clientesDisponibles,
     // Verificar si este cliente específico tiene activada la regla de Otilio
     const aplicarReglaOtilioCliente = clientesReglaOtilio && clientesReglaOtilio[clienteId];
     
+    // Verificar si este cliente específico tiene activada la opción de sumar kg para Catarro
+    const esCatarro = nombreCliente.toLowerCase().includes('catarro');
+    const sumarKgCatarroCliente = clientesSumarKgCatarro && clientesSumarKgCatarro.hasOwnProperty(clienteId) 
+      ? clientesSumarKgCatarro[clienteId] 
+      : esCatarro; // Por defecto true para Catarro, false para otros
+    
+    if (esCatarro) {
+      console.log('[DEBUG] Configuración para cliente Catarro:', {
+        clienteId,
+        nombreCliente,
+        esCatarro,
+        clientesSumarKgCatarro,
+        tienePropiedad: clientesSumarKgCatarro && clientesSumarKgCatarro.hasOwnProperty(clienteId),
+        valorDirecto: clientesSumarKgCatarro ? clientesSumarKgCatarro[clienteId] : 'N/A',
+        sumarKgCatarroCliente
+      });
+    }
+    
     // Filtrar productos que tengan al menos 1 kilo real
     const productosConKilos = productos.filter(producto => {
-      const kilos = totalKilos(producto, nombreCliente, aplicarReglaOtilioCliente);
+      const kilos = totalKilos(producto, nombreCliente, aplicarReglaOtilioCliente, sumarKgCatarroCliente);
       return kilos > 0;
     });
     
@@ -2016,7 +2063,7 @@ async function generarContenidoClientesSinPrecios(embarque, clientesDisponibles,
       // Verificar nuevamente si después de agrupar hay productos válidos con kilos
       // (puede ocurrir que al combinar queden solo productos con 0 kilos)
       const hayProductosValidos = productosAgrupados.some(producto => {
-        const kilos = totalKilos(producto, nombreCliente, aplicarReglaOtilioCliente);
+        const kilos = totalKilos(producto, nombreCliente, aplicarReglaOtilioCliente, sumarKgCatarroCliente);
         return kilos > 0;
       });
       
@@ -2028,7 +2075,7 @@ async function generarContenidoClientesSinPrecios(embarque, clientesDisponibles,
             style: ['subheader', estiloCliente],
             margin: [0, 5, 0, 5]
           },
-          generarTablaProductosSinPrecios(productosAgrupados, estiloCliente, nombreCliente, aplicarReglaOtilioCliente),
+          generarTablaProductosSinPrecios(productosAgrupados, estiloCliente, nombreCliente, aplicarReglaOtilioCliente, sumarKgCatarroCliente),
           { text: '\n' }
         );
 
@@ -2106,7 +2153,7 @@ async function generarContenidoClientesSinPrecios(embarque, clientesDisponibles,
     // Sumar totales de productos limpios de este cliente
     productos.forEach(producto => {
       if (producto.precio) {
-        const kilos = totalKilos(producto, nombreCliente, aplicarReglaOtilioCliente);
+        const kilos = totalKilos(producto, nombreCliente, aplicarReglaOtilioCliente, sumarKgCatarroCliente);
         // Usar exactamente los mismos kilos que se muestran en la tabla
         const kilosMostrados = nombreCliente.toLowerCase().includes('ozuna') ? 
           Number(kilos.toFixed(1)) : Math.round(kilos);
@@ -2140,10 +2187,10 @@ async function generarContenidoClientesSinPrecios(embarque, clientesDisponibles,
   return contenido;
 }
 
-function generarTablaProductosSinPrecios(productos, estiloCliente, nombreCliente, aplicarReglaOtilio = true) {
+function generarTablaProductosSinPrecios(productos, estiloCliente, nombreCliente, aplicarReglaOtilio = true, sumarKgCatarro = true) {
   // Filtrar productos que tengan kilos reales
   const productosConKilos = productos.filter(producto => {
-    const kilos = totalKilos(producto, nombreCliente, aplicarReglaOtilio);
+    const kilos = totalKilos(producto, nombreCliente, aplicarReglaOtilio, sumarKgCatarro);
     return kilos > 0;
   });
   
@@ -2194,7 +2241,7 @@ function generarTablaProductosSinPrecios(productos, estiloCliente, nombreCliente
     let tarasTexto = `${tarasTotales} ${combinarTarasBolsas(producto.reporteTaras, producto.reporteBolsas)}`;
 
     // Calcular kilos para este producto
-    const kilos = totalKilos(producto, nombreCliente, aplicarReglaOtilio);
+    const kilos = totalKilos(producto, nombreCliente, aplicarReglaOtilio, sumarKgCatarro);
     
     // Verificar que tenga kilos > 0
     if (kilos > 0) {
