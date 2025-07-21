@@ -33,11 +33,11 @@
                 </div>
                 
                 <!-- Checkbox para incluir precios en PDF (específico para Catarro) -->
-                <div v-if="esClienteCatarro" class="incluir-precios-checkbox">
+                <div class="incluir-precios-checkbox">
                     <input type="checkbox" :id="'incluir-precios-' + clienteId"
                         v-model="clientesIncluirPrecios[clienteId]" @change="handleIncluirPreciosChange" @click.stop
                         :disabled="embarqueBloqueado">
-                    <label :for="'incluir-precios-' + clienteId" @click.stop">Incluir precios en PDF</label>
+                    <label :for="'incluir-precios-' + clienteId" @click.stop>Incluir precios en PDF</label>
                 </div>
                 
                 <!-- Checkbox para sumar 1 kg (específico para Catarro) -->
@@ -97,12 +97,14 @@
             <!-- Lista de productos -->
             <ProductoItem v-for="(producto, index) in productos" :key="index" :producto="producto"
                 :embarque-bloqueado="embarqueBloqueado" :medidas-usadas="medidasUsadas" :nombre-cliente="nombreCliente"
+                :precios-actuales="preciosActuales"
                 @update:producto="actualizarProducto" @eliminar-producto="$emit('eliminar-producto', producto)"
                 @mostrar-modal-precio="$emit('mostrar-modal-precio', $event)"
                 @mostrar-modal-hilos="$emit('mostrar-modal-hilos', $event)"
                 @mostrar-modal-nota="$emit('mostrar-modal-nota', $event)"
                 @mostrar-modal-nombre-alternativo="$emit('mostrar-modal-nombre-alternativo', $event)"
-                @mostrar-modal-alt="$emit('mostrar-modal-alt', $event)" @seleccionar-medida="seleccionarMedida" />
+                @mostrar-modal-alt="$emit('mostrar-modal-alt', $event)" @seleccionar-medida="seleccionarMedida"
+                @activar-incluir-precios-catarro="activarIncluirPreciosCatarro" />
 
             <!-- Lista de crudos -->
             <CrudoItem v-for="(crudo, index) in crudos" :key="'crudo-' + index" :crudo="crudo"
@@ -191,6 +193,10 @@ export default {
         isCreatingAccount: {
             type: Boolean,
             default: false
+        },
+        preciosActuales: {
+            type: Object,
+            default: () => ({})
         }
     },
 
@@ -422,6 +428,12 @@ export default {
 
         crearCuentaOtilio() {
             this.$emit('crear-cuenta-otilio', this.clienteId, this.productos, this.crudos);
+        },
+
+        activarIncluirPreciosCatarro() {
+            if (this.esClienteCatarro && !this.clientesIncluirPrecios[this.clienteId]) {
+                this.$set(this.clientesIncluirPrecios, this.clienteId, true);
+            }
         }
     }
 }

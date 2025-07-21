@@ -85,6 +85,7 @@
           :is-generating-pdf="isGeneratingPdf" 
           :pdf-type="pdfType" 
           :is-creating-account="isCreatingAccount"
+          :precios-actuales="preciosActuales"
           @update:productos="actualizarProductosCliente(clienteId, $event)"
           @update:crudos="actualizarCrudosCliente(clienteId, $event)" 
           @juntarMedidas-change="handleJuntarMedidasChange"
@@ -160,7 +161,7 @@
 </template>
 
 <script>
-import { getFirestore, collection, addDoc, doc, getDoc, updateDoc, onSnapshot, serverTimestamp, getDocs, setDoc, deleteDoc } from 'firebase/firestore';
+import { getFirestore, collection, addDoc, doc, getDoc, updateDoc, onSnapshot, serverTimestamp, getDocs, setDoc, deleteDoc, query, orderBy } from 'firebase/firestore';
 import { debounce } from 'lodash';
 import { ref, onValue, onDisconnect, set } from 'firebase/database'
 import { rtdb } from '@/firebase'
@@ -295,6 +296,7 @@ export default {
       _guardandoInicial: false, // Bandera para el guardado inicial automático
       _inicializandoEmbarque: false, // Bandera para evitar watchers durante la inicialización
       debouncedSave: null, // Para debounce del guardado automático
+      preciosActuales: [],
     };
   },
   
@@ -2500,6 +2502,17 @@ export default {
     agregarCliente(id) {
       // ... existing code ...
     },
+    async cargarPreciosActuales() {
+      try {
+        const db = getFirestore();
+        const preciosRef = collection(db, 'precios');
+        const q = query(preciosRef, orderBy('fecha', 'desc'));
+        const preciosSnapshot = await getDocs(q);
+        this.preciosActuales = preciosSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      } catch (error) {
+        console.error('Error al cargar precios:', error);
+      }
+    },
   },
 
   watch: {
@@ -2572,6 +2585,7 @@ export default {
       this.guardadoAutomaticoActivo = true;
       // Escuchar reconexión para sincronizar cambios con Firestore
       window.addEventListener('online', this.syncOffline);
+      await this.cargarPreciosActuales();
       return;
     }
     const embarqueId = this.$route.params.id;
@@ -2582,107 +2596,7 @@ export default {
     this.cargarClientesPersonalizados();
     await this.iniciarPresenciaUsuario();
     this.escucharUsuariosActivos();
-  },
-
-  mounted() {
-    console.log('[LOG] Hook "mounted" de NuevoEmbarque.');
-    // --- INICIO: Lógica simplificada --- 
-    const embarqueId = this.$route.params.id;
-
-    if (embarqueId === 'nuevo') {
-        console.log('[LOG] Montando componente para un NUEVO embarque.');
-        this.resetearEmbarque();
-    } else if (embarqueId) {
-        console.log(`[LOG] Montando componente para cargar embarque existente: ${embarqueId}`);
-        this.cargarEmbarque(embarqueId);
-    } else {
-        // Caso inesperado (sin ID y no es 'nuevo') - redirigir o mostrar error?
-        console.error('[LOG] ID de embarque no encontrado en la ruta. Redirigiendo a nuevo.');
-        this.$router.replace({ name: 'NuevoEmbarque', params: { id: 'nuevo' } });
-        return; // Detener ejecución adicional
-    }
-    
-    // Guardar esta ruta y su ID para futuras recargas (esto puede seguir siendo útil)
-    localStorage.setItem('ultimaRuta', window.location.pathname);
-    if (embarqueId && embarqueId !== 'nuevo') {
-      localStorage.setItem('ultimoEmbarqueId', embarqueId);
-    } else {
-      // Si es nuevo, limpiar el ID guardado para evitar confusiones en futuras recargas
-      localStorage.removeItem('ultimoEmbarqueId');
-    }
-    // --- FIN: Lógica simplificada ---
-
-    /* Código anterior eliminado:
-    // Detectar si es una recarga de página
-    const esRecarga = this.detectarRecarga(); // Ahora debería funcionar
-    
-    // Si hay un ID de embarque en los parámetros, cargar ese embarque
-    const embarqueId = this.$route.params.id;
-    
-    // Si estamos recargando la página pero ya teníamos un ID de embarque en la URL
-    if (embarqueId && embarqueId !== 'nuevo') {
-      // Cargar el embarque existente
-      this.cargarEmbarque(embarqueId);
-    } else {
-      // Verificar si hay un ID guardado en localStorage (para casos de recarga)
-      const ultimoEmbarqueId = localStorage.getItem('ultimoEmbarqueId');
-      const ultimaRuta = localStorage.getItem('ultimaRuta');
-      
-      // Si venimos de recargar la página mientras editábamos un embarque específico
-      if (esRecarga && ultimoEmbarqueId && ultimaRuta && ultimaRuta.includes('nuevo-embarque')) {
-        console.log(`Detectada recarga de página, restaurando embarque ${ultimoEmbarqueId}`);
-        // Redirigir a la ruta correcta con el ID adecuado
-        this.$router.replace({ name: 'NuevoEmbarque', params: { id: ultimoEmbarqueId } });
-        return; // Detener la ejecución, ya que la redirección cargará nuevamente el componente
-      } else if (embarqueId === 'nuevo') {
-        // Si específicamente se solicita un nuevo embarque, reiniciar
-        this.resetearEmbarque();
-      } else {
-        // Comportamiento predeterminado: crear un nuevo embarque
-        this.resetearEmbarque();
-      }
-    }
-    
-    // Guardar esta ruta y su ID para futuras recargas
-    localStorage.setItem('ultimaRuta', window.location.pathname);
-    if (embarqueId && embarqueId !== 'nuevo') {
-      localStorage.setItem('ultimoEmbarqueId', embarqueId);
-    }
-    */
-    
-    // Cargar los clientes personalizados
-    this.cargarClientesPersonalizados();
-    
-    // Iniciar presencia después de cargar todo
-    // Ajuste: Verificar si hay usuario antes de llamar a iniciarPresencia
-    if (this.authStore.isLoggedIn && this.authStore.user) {
-        // La llamada a iniciarPresenciaUsuario y escucharUsuariosActivos ya se hace en created
-        // this.iniciarPresenciaUsuario(); // Probablemente redundante aquí si ya está en created
-        // this.escucharUsuariosActivos(); // Probablemente redundante aquí si ya está en created
-        // Asegurémonos de que iniciarPresencia() se llame si es necesario
-        if (this.embarqueId) { // Quizás solo iniciar si ya hay un embarque cargado/creado?
-             // this.iniciarPresencia(); // Revisar qué hace exactamente iniciarPresencia()
-        }
-    } else {
-        console.log('Usuario no autenticado en mounted, no se inicia presencia.');
-    }
-    
-    // Configurar el escuchador para el evento beforeunload
-    window.addEventListener('beforeunload', this.handleBeforeUnload); // Ahora debería funcionar
-
-    // Agregar este evento para actualizar los crudos cuando se modifiquen los inputs
-    this.$nextTick(() => {
-      const crudosInputs = document.querySelectorAll('.crudo input, .crudo select');
-      crudosInputs.forEach(input => {
-        input.addEventListener('input', this.actualizarCrudos);
-      });
-    });
-
-    // Al final del mounted, después de cargar el embarque
-    this.$nextTick(() => {
-      // Validar y reparar posibles IDs duplicados
-      this.validarYRepararIDsProductos();
-    });
+    await this.cargarPreciosActuales();
   },
 
   beforeDestroy() {

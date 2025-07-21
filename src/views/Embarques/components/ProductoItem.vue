@@ -203,6 +203,10 @@ export default {
         nombreCliente: {
             type: String,
             default: ''
+        },
+        preciosActuales: {
+            type: Object,
+            default: () => ({})
         }
     },
 
@@ -222,7 +226,8 @@ export default {
         'mostrar-modal-nombre-alternativo',
         'mostrar-modal-alt',
         'actualizar-medidas-usadas',
-        'seleccionar-medida'
+        'seleccionar-medida',
+        'activar-incluir-precios-catarro'
     ],
 
     computed: {
@@ -315,6 +320,34 @@ export default {
         }
     },
 
+    mounted() {
+        if (this.nombreCliente.trim().toLowerCase().includes('catarro')) {
+            this.asignarPrecioAutomatico();
+            this.$emit('activar-incluir-precios-catarro');
+        }
+    },
+    watch: {
+        'producto.medida': function() {
+            if (this.nombreCliente.trim().toLowerCase().includes('catarro')) {
+                this.asignarPrecioAutomatico();
+            }
+        },
+        nombreCliente: function() {
+            if (this.nombreCliente.trim().toLowerCase().includes('catarro')) {
+                this.asignarPrecioAutomatico();
+                this.$emit('activar-incluir-precios-catarro');
+            }
+        },
+        preciosActuales: {
+            handler() {
+                if (this.nombreCliente.trim().toLowerCase().includes('catarro')) {
+                    this.asignarPrecioAutomatico();
+                }
+            },
+            deep: true
+        }
+    },
+
     methods: {
         // Método para actualizar el componente padre
         actualizarProducto() {
@@ -390,6 +423,40 @@ export default {
                 .join(' ');
         },
 
+        // Método para asignar el precio automáticamente según la medida y el cliente
+        asignarPrecioAutomatico() {
+            if (!this.producto.medida) return;
+            const nombreProducto = this.producto.medida.trim().toLowerCase();
+            const nombreCliente = this.nombreCliente.trim().toLowerCase();
+            let precio = null;
+            // Buscar primero por cliente específico
+            if (this.preciosActuales && Array.isArray(this.preciosActuales)) {
+                // Si preciosActuales es array (fallback)
+                precio = this.preciosActuales.find(p =>
+                    (p.producto || '').trim().toLowerCase() === nombreProducto &&
+                    (p.clienteId || '').trim().toLowerCase() === nombreCliente
+                );
+                if (!precio) {
+                    precio = this.preciosActuales.find(p =>
+                        (p.producto || '').trim().toLowerCase() === nombreProducto &&
+                        (!p.clienteId || (p.clienteId + '').trim() === '')
+                    );
+                }
+            } else if (this.preciosActuales && typeof this.preciosActuales === 'object') {
+                // Si preciosActuales es objeto (por producto)
+                const lista = this.preciosActuales[nombreProducto];
+                if (Array.isArray(lista)) {
+                    // Buscar precio específico para el cliente
+                    precio = lista.find(p => (p.clienteId || '').trim().toLowerCase() === nombreCliente);
+                    if (!precio) {
+                        // Buscar precio general
+                        precio = lista.find(p => !p.clienteId || (p.clienteId + '').trim() === '');
+                    }
+                }
+            }
+            this.producto.precio = precio ? precio.precio : null;
+        },
+
         // Métodos para el manejo de la medida
         onMedidaInput(event) {
             const valor = event.target.value.toLowerCase();
@@ -405,6 +472,7 @@ export default {
             }
 
             this.producto.isEditing = true;
+            this.asignarPrecioAutomatico();
             this.actualizarProducto();
         },
 
@@ -430,7 +498,7 @@ export default {
             if (this.producto.tipo === 'c/h20' && !this.producto.camaronNeto) {
                 this.producto.camaronNeto = 0.65;
             }
-
+            this.asignarPrecioAutomatico();
             this.actualizarProducto();
         },
 

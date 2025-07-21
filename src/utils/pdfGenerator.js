@@ -604,7 +604,7 @@ async function generarContenidoClientes(embarque, clientesDisponibles, clientesJ
             style: ['subheader', estiloCliente],
             margin: [0, 5, 0, 5]
           },
-          generarTablaProductos(productosAgrupados, estiloCliente, nombreCliente, aplicarReglaOtilioCliente, sumarKgCatarroCliente),
+          generarTablaProductos(productosAgrupados, estiloCliente, nombreCliente, aplicarReglaOtilioCliente, sumarKgCatarroCliente, incluirPreciosCliente),
           { text: '\n' }
         );
 
@@ -958,7 +958,7 @@ function agruparProductos(productos) {
   });
 }
 
-function generarTablaProductos(productos, estiloCliente, nombreCliente, aplicarReglaOtilio = true, sumarKgCatarro = true) {
+function generarTablaProductos(productos, estiloCliente, nombreCliente, aplicarReglaOtilio = true, sumarKgCatarro = true, incluirPreciosCliente = true) {
   // Filtrar productos que tengan kilos reales
   const productosConKilos = productos.filter(producto => {
     const kilos = totalKilos(producto, nombreCliente, aplicarReglaOtilio, sumarKgCatarro);
@@ -1000,8 +1000,8 @@ function generarTablaProductos(productos, estiloCliente, nombreCliente, aplicarR
     { text: 'Taras', style: 'tableHeader' }
   ];
 
-  // Agregar columnas de Precio y Total para clientes Elizabeth y Catarro si hay precios
-  if ((esClienteElizabeth || esClienteCatarro) && hayPrecios) {
+  // Agregar columnas de Precio y Total para clientes Elizabeth y Catarro si hay precios y si incluirPreciosCliente es true
+  if ((esClienteElizabeth || esClienteCatarro) && hayPrecios && incluirPreciosCliente) {
     headerRow.push({ text: 'Precio', style: 'tableHeader' });
     headerRow.push({ text: 'Total', style: 'tableHeader' });
   }
@@ -1045,7 +1045,7 @@ function generarTablaProductos(productos, estiloCliente, nombreCliente, aplicarR
       ];
 
       // Agregar columnas de Precio y Total para clientes Elizabeth y Catarro
-      if ((esClienteElizabeth || esClienteCatarro) && hayPrecios) {
+      if ((esClienteElizabeth || esClienteCatarro) && hayPrecios && incluirPreciosCliente) {
         // Agregar columna de precio
         row.push(producto.precio 
           ? { text: `$${Number(producto.precio).toLocaleString('en-US')}`, style: 'precio' } 
@@ -1076,7 +1076,7 @@ function generarTablaProductos(productos, estiloCliente, nombreCliente, aplicarR
   });
 
   // Agregar fila con el gran total para clientes Elizabeth y Catarro con precios
-  if ((esClienteElizabeth || esClienteCatarro) && hayPrecios && granTotal > 0) {
+  if ((esClienteElizabeth || esClienteCatarro) && hayPrecios && granTotal > 0 && incluirPreciosCliente) {
     // Crear una fila completa para el gran total
     const numColumnas = headerRow.length; 
     const filaGranTotal = [
@@ -1129,7 +1129,7 @@ function generarTablaProductos(productos, estiloCliente, nombreCliente, aplicarR
 
   // Calcular los anchos según el número de columnas
   let widths;
-  if ((esClienteElizabeth || esClienteCatarro) && hayPrecios) {
+  if ((esClienteElizabeth || esClienteCatarro) && hayPrecios && incluirPreciosCliente) {
     // Columnas base + Precio + Total
     const numColumnas = 5 + (hayHilos ? 1 : 0) + (hayNotas ? 1 : 0);
     
@@ -1143,7 +1143,7 @@ function generarTablaProductos(productos, estiloCliente, nombreCliente, aplicarR
       widths = ['15%', '25%', '20%', '20%', '20%'];
     }
   } else {
-    // Mantener los anchos originales si no hay precios
+    // Mantener los anchos originales si no hay precios o no se deben mostrar
     if (hayHilos && hayNotas) {
       widths = ['15%', '25%', '25%', '15%', '20%'];
     } else if (hayHilos) {
