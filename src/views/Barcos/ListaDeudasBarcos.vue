@@ -58,10 +58,10 @@
       </h3>
       <div class="filtros-container">
         <select v-model="filtroEstado" class="filtro-select">
-          <option value="">Todos los estados</option>
-          <option value="pendiente">Pendiente</option>
-          <option value="pagado">Pagado</option>
-          <option value="parcial">Pago Parcial</option>
+          <option value="">Con saldo pendiente</option>
+          <option value="pendiente">Solo Pendientes</option>
+          <option value="parcial">Solo Pago Parcial</option>
+          <option value="pagado">Solo Pagadas</option>
         </select>
         
         <select v-model="filtroProveedor" class="filtro-select">
@@ -565,7 +565,7 @@ export default {
       barcoSeleccionado: '',
       deudas: [],
       proveedores: [],
-      filtroEstado: 'pendiente',
+      filtroEstado: '', // Por defecto mostrar pendientes y parciales
       filtroProveedor: '',
       filtroFechaInicio: '',
       filtroFechaFin: '',
@@ -597,9 +597,16 @@ export default {
     },
     deudasFiltradas() {
       return this.deudas.filter(deuda => {
-        // Filtro por estado
-        if (this.filtroEstado && deuda.estado !== this.filtroEstado) {
-          return false;
+        // Filtro por estado - Si no hay filtro específico, mostrar pendientes y parciales
+        if (this.filtroEstado) {
+          if (deuda.estado !== this.filtroEstado) {
+            return false;
+          }
+        } else {
+          // Por defecto mostrar deudas con saldo pendiente (pendiente y parcial)
+          if (deuda.estado === 'pagado') {
+            return false;
+          }
         }
         
         // Filtro por proveedor
@@ -880,7 +887,8 @@ export default {
         // Actualizar la deuda
         const nuevoTotalAbonado = this.deudaSeleccionada.totalAbonado + this.nuevoAbono.monto;
         const nuevoSaldoPendiente = this.deudaSeleccionada.totalDeuda - nuevoTotalAbonado;
-        const nuevoEstado = nuevoSaldoPendiente === 0 ? 'pagado' : 'parcial';
+        // Usar <= 0 para manejar problemas de precisión decimal y mantener lógica consistente
+        const nuevoEstado = nuevoSaldoPendiente <= 0 ? 'pagado' : (nuevoTotalAbonado > 0 ? 'parcial' : 'pendiente');
         
         await updateDoc(doc(db, 'deudasBarcos', this.deudaSeleccionada.id), {
           totalAbonado: nuevoTotalAbonado,
