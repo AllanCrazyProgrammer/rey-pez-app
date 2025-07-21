@@ -653,7 +653,7 @@ async function generarContenidoClientes(embarque, clientesDisponibles, clientesJ
             style: ['subheader', estiloCliente],
             margin: [0, 5, 0, 5]
           },
-          generarTablaCrudos(crudosConPrecios, estiloCliente),
+          generarTablaCrudos(crudosConPrecios, estiloCliente, incluirPreciosCliente),
           { text: '\n' }
         );
 
@@ -701,11 +701,28 @@ async function generarContenidoClientes(embarque, clientesDisponibles, clientesJ
     // Sumar totales de productos limpios de este cliente
     productos.forEach(producto => {
       if (producto.precio) {
-        const kilos = totalKilos(producto, nombreCliente, aplicarReglaOtilioCliente, sumarKgCatarroCliente);
-        // Usar exactamente los mismos kilos que se muestran en la tabla
-        const kilosMostrados = nombreCliente.toLowerCase().includes('ozuna') ? 
-          Number(kilos.toFixed(1)) : Math.round(kilos);
-        totalDineroCliente += kilosMostrados * Number(producto.precio);
+        let totalProducto = 0;
+        if (producto.tipo === 'c/h20') {
+          // Para productos c/h2o: calcular kilos reales usando taras × bolsas × valor_neto
+          let kilosReales = 0;
+          const reporteTaras = producto.reporteTaras || [];
+          const reporteBolsas = producto.reporteBolsas || [];
+          const valorNeto = producto.camaronNeto || 0.65;
+          
+          for (let i = 0; i < reporteTaras.length; i++) {
+            const taras = parseInt(reporteTaras[i]) || 0;
+            const bolsas = parseInt(reporteBolsas[i]) || 0;
+            kilosReales += taras * bolsas * valorNeto;
+          }
+          totalProducto = kilosReales * Number(producto.precio);
+        } else {
+          const kilos = totalKilos(producto, nombreCliente, aplicarReglaOtilioCliente, sumarKgCatarroCliente);
+          // Usar exactamente los mismos kilos que se muestran en la tabla
+          const kilosMostrados = nombreCliente.toLowerCase().includes('ozuna') ? 
+            Number(kilos.toFixed(1)) : Math.round(kilos);
+          totalProducto = kilosMostrados * Number(producto.precio);
+        }
+        totalDineroCliente += totalProducto;
       }
     });
 
@@ -987,11 +1004,8 @@ function generarTablaProductos(productos, estiloCliente, nombreCliente, aplicarR
   // Verificar si algún producto tiene notas o hilos
   const hayNotas = productosConKilos.some(producto => producto.nota && producto.nota.trim() !== '');
   const hayHilos = productosConKilos.some(producto => producto.hilos);
-  // Verificar si es el cliente Elizabeth o Catarro
-  const esClienteElizabeth = nombreCliente.toLowerCase().includes('elizabeth');
-  const esClienteCatarro = nombreCliente.toLowerCase().includes('catarro');
-  // Verificar si hay productos con precio (relevante para Elizabeth y Catarro)
-  const hayPrecios = (esClienteElizabeth || esClienteCatarro) && productosConKilos.some(producto => producto.precio && producto.precio.toString().trim() !== '');
+  // Verificar si hay productos con precio y si se deben incluir precios para este cliente
+  const hayPrecios = incluirPreciosCliente && productosConKilos.some(producto => producto.precio && producto.precio.toString().trim() !== '');
 
   // Definir las columnas del header
   const headerRow = [
@@ -1000,8 +1014,8 @@ function generarTablaProductos(productos, estiloCliente, nombreCliente, aplicarR
     { text: 'Taras', style: 'tableHeader' }
   ];
 
-  // Agregar columnas de Precio y Total para clientes Elizabeth y Catarro si hay precios y si incluirPreciosCliente es true
-  if ((esClienteElizabeth || esClienteCatarro) && hayPrecios && incluirPreciosCliente) {
+  // Agregar columnas de Precio y Total si hay precios y si incluirPreciosCliente es true
+  if (hayPrecios) {
     headerRow.push({ text: 'Precio', style: 'tableHeader' });
     headerRow.push({ text: 'Total', style: 'tableHeader' });
   }
@@ -1037,22 +1051,42 @@ function generarTablaProductos(productos, estiloCliente, nombreCliente, aplicarR
       const row = [
         // Mostrar un decimal para Ozuna
         nombreCliente.toLowerCase().includes('ozuna') ? `${kilos.toFixed(1)} kg` : `${Math.round(kilos)} kg`,
-        // Para clientes Elizabeth y Catarro, mostramos solo el nombre del producto sin precio (el precio irá en otra columna)
-        (esClienteElizabeth || esClienteCatarro) && hayPrecios 
+        // Si hay precios, mostramos solo el nombre del producto sin precio (el precio irá en otra columna)
+        hayPrecios 
           ? (producto.nombreAlternativoPDF || producto.medida || '') + (producto.tipo === 'c/h20' ? ' c/h2o' : (producto.tipo === 's/h20' ? ' s/h2o' : (producto.tipo === 'otro' ? ` ${producto.tipoPersonalizado || ''}` : ` ${producto.tipo || ''}`)))
           : formatearProducto(producto),
         tarasTexto
       ];
 
-      // Agregar columnas de Precio y Total para clientes Elizabeth y Catarro
-      if ((esClienteElizabeth || esClienteCatarro) && hayPrecios && incluirPreciosCliente) {
+      // Agregar columnas de Precio y Total si hay precios
+      if (hayPrecios) {
         // Agregar columna de precio
         row.push(producto.precio 
           ? { text: `$${Number(producto.precio).toLocaleString('en-US')}`, style: 'precio' } 
           : '');
         
-        // Agregar columna de total (usar kilos mostrados × precio)
-        const total = producto.precio ? kilosMostrados * Number(producto.precio) : 0;
+        // Calcular el total correctamente según el tipo de producto
+        let total = 0;
+        if (producto.precio) {
+          if (producto.tipo === 'c/h20') {
+            // Para productos c/h2o: calcular kilos reales usando taras × bolsas × valor_neto
+            let kilosReales = 0;
+            const reporteTaras = producto.reporteTaras || [];
+            const reporteBolsas = producto.reporteBolsas || [];
+            const valorNeto = producto.camaronNeto || 0.65;
+            
+            for (let i = 0; i < reporteTaras.length; i++) {
+              const taras = parseInt(reporteTaras[i]) || 0;
+              const bolsas = parseInt(reporteBolsas[i]) || 0;
+              kilosReales += taras * bolsas * valorNeto;
+            }
+            total = kilosReales * Number(producto.precio);
+          } else {
+            // Para otros productos, usar los kilos mostrados
+            total = kilosMostrados * Number(producto.precio);
+          }
+        }
+        
         // Sumar al gran total
         granTotal += total;
         
@@ -1075,8 +1109,8 @@ function generarTablaProductos(productos, estiloCliente, nombreCliente, aplicarR
     }
   });
 
-  // Agregar fila con el gran total para clientes Elizabeth y Catarro con precios
-  if ((esClienteElizabeth || esClienteCatarro) && hayPrecios && granTotal > 0 && incluirPreciosCliente) {
+  // Agregar fila con el gran total si hay precios
+  if (hayPrecios && granTotal > 0) {
     // Crear una fila completa para el gran total
     const numColumnas = headerRow.length; 
     const filaGranTotal = [
@@ -1129,7 +1163,7 @@ function generarTablaProductos(productos, estiloCliente, nombreCliente, aplicarR
 
   // Calcular los anchos según el número de columnas
   let widths;
-  if ((esClienteElizabeth || esClienteCatarro) && hayPrecios && incluirPreciosCliente) {
+  if (hayPrecios) {
     // Columnas base + Precio + Total
     const numColumnas = 5 + (hayHilos ? 1 : 0) + (hayNotas ? 1 : 0);
     
@@ -1170,12 +1204,9 @@ function generarTablaProductos(productos, estiloCliente, nombreCliente, aplicarR
   };
 }
 
-function generarTablaCrudos(crudos, estiloCliente) {
+function generarTablaCrudos(crudos, estiloCliente, incluirPreciosCliente = false) {
   // Obtener el nombre del cliente a partir del estilo
   const nombreCliente = obtenerNombreClienteDesdeEstilo(estiloCliente);
-  // Comprobar si es cliente Elizabeth o Catarro
-  const esClienteElizabeth = nombreCliente.toLowerCase().includes('elizabeth');
-  const esClienteCatarro = nombreCliente.toLowerCase().includes('catarro');
   
   // Crear una estructura temporal para almacenar los items filtrados
   const itemsFiltrados = [];
@@ -1205,7 +1236,7 @@ function generarTablaCrudos(crudos, estiloCliente) {
         
         if (kilos > 0) {
           itemsFiltrados.push(item);
-          if (item.precio && item.precio.toString().trim() !== '') {
+          if (incluirPreciosCliente && item.precio && item.precio.toString().trim() !== '') {
             hayPrecios = true;
           }
         }
@@ -1231,10 +1262,7 @@ function generarTablaCrudos(crudos, estiloCliente) {
   // Agregar columna de precio solo si hay precios
   if (hayPrecios) {
     headerRow.push({ text: 'Precio', style: 'tableHeader' });
-    // Agregar columna de total para Elizabeth y Catarro si hay precios
-    if (esClienteElizabeth || esClienteCatarro) {
-      headerRow.push({ text: 'Total', style: 'tableHeader' });
-    }
+    headerRow.push({ text: 'Total', style: 'tableHeader' });
   }
 
   const body = [headerRow];
@@ -1264,22 +1292,20 @@ function generarTablaCrudos(crudos, estiloCliente) {
     if (hayPrecios) {
       row.push(item.precio ? { text: `$${Number(item.precio).toLocaleString('en-US')}`, style: 'precio' } : '');
       
-      // Agregar total para Elizabeth y Catarro
-      if (esClienteElizabeth || esClienteCatarro) {
-        const total = item.precio ? kilosMostrados * Number(item.precio) : 0;
-        granTotal += total;
-        
-        row.push(item.precio 
-          ? { text: `$${Math.round(total).toLocaleString('en-US')}`, style: 'totalPrecio' } 
-          : '');
-      }
+      // Agregar total si hay precios
+      const total = item.precio ? kilosMostrados * Number(item.precio) : 0;
+      granTotal += total;
+      
+      row.push(item.precio 
+        ? { text: `$${Math.round(total).toLocaleString('en-US')}`, style: 'totalPrecio' } 
+        : '');
     }
 
     body.push(row);
   });
   
-  // Agregar fila con el gran total para clientes Elizabeth y Catarro con precios
-  if ((esClienteElizabeth || esClienteCatarro) && hayPrecios && granTotal > 0) {
+  // Agregar fila con el gran total si hay precios
+  if (hayPrecios && granTotal > 0) {
     const numColumnas = headerRow.length;
     const filaGranTotal = [
       {
@@ -1313,11 +1339,7 @@ function generarTablaCrudos(crudos, estiloCliente) {
   // Definir los anchos de columna según si hay precios o no
   let widths;
   if (hayPrecios) {
-    if (esClienteElizabeth || esClienteCatarro) {
-      widths = ['20%', '25%', '20%', '15%', '20%']; // Con columna de precio y total
-    } else {
-      widths = ['25%', '30%', '25%', '20%']; // Con columna de precio pero sin total
-    }
+    widths = ['20%', '25%', '20%', '15%', '20%']; // Con columna de precio y total
   } else {
     widths = ['30%', '40%', '30%']; // Sin columna de precio
   }
@@ -1367,32 +1389,22 @@ function obtenerEstiloCliente(nombreCliente) {
 
 function formatearProducto(producto) {
   let medida = (producto.nombreAlternativoPDF || producto.medida || '').trim();
-  let precioStr = producto.precio ? ` $${Number(producto.precio).toLocaleString('en-US')}` : '';
   
   // Si es c/h20, agregar el indicador pero mantener el nombre original
   if (producto.tipo === 'c/h20') {
-    return [
-      { text: `${medida} c/h2o`, style: 'tipoConAgua' },
-      { text: precioStr, style: 'precio' }
-    ].filter(item => item.text);
+    return { text: `${medida} c/h2o`, style: 'tipoConAgua' };
   }
   
   // Si es s/h20, agregar el indicador pero mantener el nombre original
   if (producto.tipo === 's/h20') {
-    return [
-      { text: `${medida} s/h2o`, style: 'default' },
-      { text: precioStr, style: 'precio' }
-    ].filter(item => item.text);
+    return { text: `${medida} s/h2o`, style: 'default' };
   }
   
   // Para otros tipos, mostrar el nombre exacto con el tipo si existe
   let tipoProducto = producto.tipo === 'otro' ? producto.tipoPersonalizado : producto.tipo;
   let textoFinal = tipoProducto ? `${medida} ${tipoProducto}` : medida;
   
-  return [
-    { text: textoFinal, style: 'default' },
-    { text: precioStr, style: 'precio' }
-  ].filter(item => item.text);
+  return { text: textoFinal, style: 'default' };
 }
 
 function calcularTarasTotales(item) {
@@ -2105,7 +2117,7 @@ async function generarContenidoClientesSinPrecios(embarque, clientesDisponibles,
             style: ['subheader', estiloCliente],
             margin: [0, 5, 0, 5]
           },
-          generarTablaCrudosSinPrecios(embarque.clienteCrudos[clienteId], estiloCliente),
+          generarTablaCrudos(embarque.clienteCrudos[clienteId], estiloCliente, false),
           { text: '\n' }
         );
 
@@ -2153,11 +2165,28 @@ async function generarContenidoClientesSinPrecios(embarque, clientesDisponibles,
     // Sumar totales de productos limpios de este cliente
     productos.forEach(producto => {
       if (producto.precio) {
-        const kilos = totalKilos(producto, nombreCliente, aplicarReglaOtilioCliente, sumarKgCatarroCliente);
-        // Usar exactamente los mismos kilos que se muestran en la tabla
-        const kilosMostrados = nombreCliente.toLowerCase().includes('ozuna') ? 
-          Number(kilos.toFixed(1)) : Math.round(kilos);
-        totalDineroCliente += kilosMostrados * Number(producto.precio);
+        let totalProducto = 0;
+        if (producto.tipo === 'c/h20') {
+          // Para productos c/h2o: calcular kilos reales usando taras × bolsas × valor_neto
+          let kilosReales = 0;
+          const reporteTaras = producto.reporteTaras || [];
+          const reporteBolsas = producto.reporteBolsas || [];
+          const valorNeto = producto.camaronNeto || 0.65;
+          
+          for (let i = 0; i < reporteTaras.length; i++) {
+            const taras = parseInt(reporteTaras[i]) || 0;
+            const bolsas = parseInt(reporteBolsas[i]) || 0;
+            kilosReales += taras * bolsas * valorNeto;
+          }
+          totalProducto = kilosReales * Number(producto.precio);
+        } else {
+          const kilos = totalKilos(producto, nombreCliente, aplicarReglaOtilioCliente, sumarKgCatarroCliente);
+          // Usar exactamente los mismos kilos que se muestran en la tabla
+          const kilosMostrados = nombreCliente.toLowerCase().includes('ozuna') ? 
+            Number(kilos.toFixed(1)) : Math.round(kilos);
+          totalProducto = kilosMostrados * Number(producto.precio);
+        }
+        totalDineroCliente += totalProducto;
       }
     });
 
