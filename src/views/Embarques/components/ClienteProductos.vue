@@ -40,6 +40,14 @@
                     <label :for="'incluir-precios-' + clienteId" @click.stop>Incluir precios en PDF</label>
                 </div>
                 
+                <!-- Checkbox para hacer cálculos en PDF (solo si incluir precios está activado) -->
+                <div v-if="clientesIncluirPrecios[clienteId]" class="cuenta-en-pdf-checkbox">
+                    <input type="checkbox" :id="'cuenta-en-pdf-' + clienteId"
+                        v-model="clientesCuentaEnPdf[clienteId]" @change="handleCuentaEnPdfChange" @click.stop
+                        :disabled="embarqueBloqueado">
+                    <label :for="'cuenta-en-pdf-' + clienteId" @click.stop>Cuenta en PDF</label>
+                </div>
+                
                 <!-- Checkbox para sumar 1 kg (específico para Catarro) -->
                 <div v-if="esClienteCatarro" class="sumar-kg-catarro-checkbox">
                     <input type="checkbox" :id="'sumar-kg-catarro-' + clienteId"
@@ -159,6 +167,10 @@ export default {
             default: () => ({})
         },
         clientesIncluirPrecios: {
+            type: Object,
+            default: () => ({})
+        },
+        clientesCuentaEnPdf: {
             type: Object,
             default: () => ({})
         },
@@ -405,6 +417,10 @@ export default {
             this.$emit('incluirPrecios-change', this.clienteId, event.target.checked);
         },
 
+        handleCuentaEnPdfChange(event) {
+            this.$emit('cuentaEnPdf-change', this.clienteId, event.target.checked);
+        },
+
         handleSumarKgCatarroChange(event) {
             console.log('[DEBUG] Checkbox Sumar Kg Catarro cambiado:', {
                 clienteId: this.clienteId,
@@ -528,6 +544,13 @@ export default {
 }
 
 .incluir-precios-checkbox {
+    display: flex;
+    align-items: center;
+    margin-right: 10px;
+    font-size: 0.9rem;
+}
+
+.cuenta-en-pdf-checkbox {
     display: flex;
     align-items: center;
     margin-right: 10px;

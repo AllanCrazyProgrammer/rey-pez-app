@@ -78,7 +78,7 @@ async function obtenerPrecioProductoCatarro(nombreProducto) {
   }
 }
 
-export async function generarNotaVentaPDF(embarque, clientesDisponibles, clientesJuntarMedidas, clientesReglaOtilio = {}, clientesIncluirPrecios = {}, clientesSumarKgCatarro = {}) {
+export async function generarNotaVentaPDF(embarque, clientesDisponibles, clientesJuntarMedidas, clientesReglaOtilio = {}, clientesIncluirPrecios = {}, clientesSumarKgCatarro = {}, clientesCuentaEnPdf = {}) {
   try {
     // Validación más robusta de los datos de entrada
     if (!embarque || !embarque.productos || !Array.isArray(embarque.productos)) {
@@ -132,7 +132,7 @@ export async function generarNotaVentaPDF(embarque, clientesDisponibles, cliente
         ]
       },
       { text: '\n' },
-              ...(await generarContenidoClientes(embarque, clientesDisponibles, clientesJuntarMedidas, clientesReglaOtilio, clientesIncluirPrecios, clientesSumarKgCatarro)),
+              ...(await generarContenidoClientes(embarque, clientesDisponibles, clientesJuntarMedidas, clientesReglaOtilio, clientesIncluirPrecios, clientesSumarKgCatarro, clientesCuentaEnPdf)),
       // Agregar la nueva sección de rendimientos
       ...generarSeccionRendimientos({
         ...embarque,
@@ -179,13 +179,7 @@ export async function generarNotaVentaPDF(embarque, clientesDisponibles, cliente
         ]
       },
       { text: '\n' },
-              ...(await generarContenidoClientesSinPrecios(embarque, clientesDisponibles, clientesJuntarMedidas, clientesReglaOtilio, clientesIncluirPrecios, clientesSumarKgCatarro)),
-      // Agregar la nueva sección de rendimientos
-      ...generarSeccionRendimientos({
-        ...embarque,
-        // Asegurarnos de que los kilos crudos estén disponibles
-        kilosCrudos: embarque.kilosCrudos || {}
-      }, clientesDisponibles),
+              ...(await generarContenidoClientesSinPrecios(embarque, clientesDisponibles, clientesJuntarMedidas, clientesReglaOtilio, clientesIncluirPrecios, clientesSumarKgCatarro, clientesCuentaEnPdf)),
     ];
 
     const docDefinition = {
@@ -278,6 +272,12 @@ export async function generarNotaVentaPDF(embarque, clientesDisponibles, cliente
         },
         tipoConAgua: {
           color: '#2980b9',  // Color azul
+          bold: true
+        },
+        precioInline: {
+          color: '#FFFFFF',  // Fuente blanca
+          background: '#FF0000',  // Fondo rojo
+          padding: [2, 2, 2, 2],
           bold: true
         },
         nota: {
@@ -423,7 +423,7 @@ function contarTotalProductos(embarque) {
   return contador;
 }
 
-async function generarContenidoClientes(embarque, clientesDisponibles, clientesJuntarMedidas, clientesReglaOtilio = {}, clientesIncluirPrecios = {}, clientesSumarKgCatarro = {}) {
+async function generarContenidoClientes(embarque, clientesDisponibles, clientesJuntarMedidas, clientesReglaOtilio = {}, clientesIncluirPrecios = {}, clientesSumarKgCatarro = {}, clientesCuentaEnPdf = {}) {
   const contenido = [];
   let totalTarasLimpio = 0;
   let totalTarasCrudos = 0;
@@ -477,6 +477,9 @@ async function generarContenidoClientes(embarque, clientesDisponibles, clientesJ
     
     // Verificar si este cliente específico tiene activada la opción de incluir precios
     const incluirPreciosCliente = clientesIncluirPrecios && clientesIncluirPrecios[clienteId];
+    
+    // Verificar si este cliente específico tiene activada la opción de cuenta en PDF
+    const cuentaEnPdfCliente = clientesCuentaEnPdf && clientesCuentaEnPdf[clienteId];
     
     // Verificar si este cliente específico tiene activada la opción de sumar kg para Catarro
     const esCatarro = nombreCliente.toLowerCase().includes('catarro');
@@ -604,7 +607,7 @@ async function generarContenidoClientes(embarque, clientesDisponibles, clientesJ
             style: ['subheader', estiloCliente],
             margin: [0, 5, 0, 5]
           },
-          generarTablaProductos(productosAgrupados, estiloCliente, nombreCliente, aplicarReglaOtilioCliente, sumarKgCatarroCliente, incluirPreciosCliente),
+          generarTablaProductos(productosAgrupados, estiloCliente, nombreCliente, aplicarReglaOtilioCliente, sumarKgCatarroCliente, incluirPreciosCliente, cuentaEnPdfCliente),
           { text: '\n' }
         );
 
@@ -975,7 +978,7 @@ function agruparProductos(productos) {
   });
 }
 
-function generarTablaProductos(productos, estiloCliente, nombreCliente, aplicarReglaOtilio = true, sumarKgCatarro = true, incluirPreciosCliente = true) {
+function generarTablaProductos(productos, estiloCliente, nombreCliente, aplicarReglaOtilio = true, sumarKgCatarro = true, incluirPreciosCliente = true, cuentaEnPdfCliente = false) {
   // Filtrar productos que tengan kilos reales
   const productosConKilos = productos.filter(producto => {
     const kilos = totalKilos(producto, nombreCliente, aplicarReglaOtilio, sumarKgCatarro);
@@ -1006,6 +1009,8 @@ function generarTablaProductos(productos, estiloCliente, nombreCliente, aplicarR
   const hayHilos = productosConKilos.some(producto => producto.hilos);
   // Verificar si hay productos con precio y si se deben incluir precios para este cliente
   const hayPrecios = incluirPreciosCliente && productosConKilos.some(producto => producto.precio && producto.precio.toString().trim() !== '');
+  // Solo mostrar columnas separadas de precio y total si está activado "cuenta en PDF"
+  const mostrarColumnasPrecio = hayPrecios && cuentaEnPdfCliente;
 
   // Definir las columnas del header
   const headerRow = [
@@ -1014,8 +1019,8 @@ function generarTablaProductos(productos, estiloCliente, nombreCliente, aplicarR
     { text: 'Taras', style: 'tableHeader' }
   ];
 
-  // Agregar columnas de Precio y Total si hay precios y si incluirPreciosCliente es true
-  if (hayPrecios) {
+  // Agregar columnas de Precio y Total solo si hay precios y está activado "cuenta en PDF"
+  if (mostrarColumnasPrecio) {
     headerRow.push({ text: 'Precio', style: 'tableHeader' });
     headerRow.push({ text: 'Total', style: 'tableHeader' });
   }
@@ -1051,15 +1056,43 @@ function generarTablaProductos(productos, estiloCliente, nombreCliente, aplicarR
       const row = [
         // Mostrar un decimal para Ozuna
         nombreCliente.toLowerCase().includes('ozuna') ? `${kilos.toFixed(1)} kg` : `${Math.round(kilos)} kg`,
-        // Si hay precios, mostramos solo el nombre del producto sin precio (el precio irá en otra columna)
+        // Construir el texto del producto según los casos
         hayPrecios 
-          ? (producto.nombreAlternativoPDF || producto.medida || '') + (producto.tipo === 'c/h20' ? ' c/h2o' : (producto.tipo === 's/h20' ? ' s/h2o' : (producto.tipo === 'otro' ? ` ${producto.tipoPersonalizado || ''}` : ` ${producto.tipo || ''}`)))
-          : formatearProducto(producto),
+          ? (mostrarColumnasPrecio 
+              // Si hay columnas de precio separadas, mostrar solo el nombre del producto
+              ? {
+                  text: (producto.nombreAlternativoPDF || producto.medida || '') + (producto.tipo === 'c/h20' ? ' c/h2o' : (producto.tipo === 's/h20' ? ' s/h2o' : (producto.tipo === 'otro' ? ` ${producto.tipoPersonalizado || ''}` : ` ${producto.tipo || ''}`))),
+                  ...(producto.tipo === 'c/h20' ? { style: 'tipoConAgua' } : {})
+                }
+              // Si no hay columnas separadas, crear texto con estilos separados para medida y precio
+              : (producto.precio 
+                ? {
+                    text: [
+                      { 
+                        text: (producto.nombreAlternativoPDF || producto.medida || '') + (producto.tipo === 'c/h20' ? ' c/h2o' : (producto.tipo === 's/h20' ? ' s/h2o' : (producto.tipo === 'otro' ? ` ${producto.tipoPersonalizado || ''}` : ` ${producto.tipo || ''}`))) + ' - ',
+                        ...(producto.tipo === 'c/h20' ? { style: 'tipoConAgua' } : {})
+                      },
+                      { 
+                        text: `$${Number(producto.precio).toLocaleString('en-US')}`,
+                        style: 'precioInline'
+                      }
+                    ]
+                  }
+                : {
+                    text: (producto.nombreAlternativoPDF || producto.medida || '') + (producto.tipo === 'c/h20' ? ' c/h2o' : (producto.tipo === 's/h20' ? ' s/h2o' : (producto.tipo === 'otro' ? ` ${producto.tipoPersonalizado || ''}` : ` ${producto.tipo || ''}`))),
+                    ...(producto.tipo === 'c/h20' ? { style: 'tipoConAgua' } : {})
+                  }
+              )
+            )
+          : {
+              text: formatearProducto(producto),
+              ...(producto.tipo === 'c/h20' ? { style: 'tipoConAgua' } : {})
+            },
         tarasTexto
       ];
 
-      // Agregar columnas de Precio y Total si hay precios
-      if (hayPrecios) {
+      // Agregar columnas de Precio y Total solo si está activado "cuenta en PDF"
+      if (mostrarColumnasPrecio) {
         // Agregar columna de precio
         row.push(producto.precio 
           ? { text: `$${Number(producto.precio).toLocaleString('en-US')}`, style: 'precio' } 
@@ -1109,8 +1142,8 @@ function generarTablaProductos(productos, estiloCliente, nombreCliente, aplicarR
     }
   });
 
-  // Agregar fila con el gran total si hay precios
-  if (hayPrecios && granTotal > 0) {
+  // Agregar fila con el gran total solo si está activado "cuenta en PDF"
+  if (mostrarColumnasPrecio && granTotal > 0) {
     // Crear una fila completa para el gran total
     const numColumnas = headerRow.length; 
     const filaGranTotal = [
@@ -1163,7 +1196,7 @@ function generarTablaProductos(productos, estiloCliente, nombreCliente, aplicarR
 
   // Calcular los anchos según el número de columnas
   let widths;
-  if (hayPrecios) {
+  if (mostrarColumnasPrecio) {
     // Columnas base + Precio + Total
     const numColumnas = 5 + (hayHilos ? 1 : 0) + (hayNotas ? 1 : 0);
     
@@ -1282,7 +1315,8 @@ function generarTablaCrudos(crudos, estiloCliente, incluirPreciosCliente = false
       `${kilosMostrados} kg`,
       {
         text: item.talla.replace(/\s*c\/\s*c$/i, ' c/c'),
-        style: 'default',
+        // Aplicar estilo azul si la talla contiene "c/c" (que indica "con cascaron")
+        ...(item.talla && item.talla.toLowerCase().includes('c/c') ? { style: 'tipoConAgua' } : { style: 'default' }),
         noWrap: true
       },
       calcularTarasTotales(item)
@@ -1749,12 +1783,6 @@ export async function generarNotaVentaSinPreciosPDF(embarque, clientesDisponible
         },
         { text: '\n' },
         ...(await generarContenidoClientesSinPrecios(embarque, clientesDisponibles, clientesJuntarMedidas, clientesReglaOtilio, clientesIncluirPrecios)),
-        // Agregar la nueva sección de rendimientos
-        ...generarSeccionRendimientos({
-          ...embarque,
-          // Asegurarnos de que los kilos crudos estén disponibles
-          kilosCrudos: embarque.kilosCrudos || {}
-        }, clientesDisponibles),
       ],
       styles: {
         notaVentaHeader: {
@@ -1818,6 +1846,12 @@ export async function generarNotaVentaSinPreciosPDF(embarque, clientesDisponible
         },
         tipoConAgua: {
           color: '#2980b9',  // Color azul
+          bold: true
+        },
+        precioInline: {
+          color: '#FFFFFF',  // Fuente blanca
+          background: '#FF0000',  // Fondo rojo
+          padding: [2, 2, 2, 2],
           bold: true
         },
         nota: {
@@ -1924,7 +1958,7 @@ export async function generarNotaVentaSinPreciosPDF(embarque, clientesDisponible
   }
 }
 
-async function generarContenidoClientesSinPrecios(embarque, clientesDisponibles, clientesJuntarMedidas, clientesReglaOtilio = {}, clientesIncluirPrecios = {}, clientesSumarKgCatarro = {}) {
+async function generarContenidoClientesSinPrecios(embarque, clientesDisponibles, clientesJuntarMedidas, clientesReglaOtilio = {}, clientesIncluirPrecios = {}, clientesSumarKgCatarro = {}, clientesCuentaEnPdf = {}) {
   const contenido = [];
   let totalTarasLimpio = 0;
   let totalTarasCrudos = 0;
@@ -1975,6 +2009,12 @@ async function generarContenidoClientesSinPrecios(embarque, clientesDisponibles,
     
     // Verificar si este cliente específico tiene activada la regla de Otilio
     const aplicarReglaOtilioCliente = clientesReglaOtilio && clientesReglaOtilio[clienteId];
+    
+    // Verificar si este cliente específico tiene activada la opción de incluir precios
+    const incluirPreciosCliente = clientesIncluirPrecios && clientesIncluirPrecios[clienteId];
+    
+    // Verificar si este cliente específico tiene activada la opción de cuenta en PDF
+    const cuentaEnPdfCliente = clientesCuentaEnPdf && clientesCuentaEnPdf[clienteId];
     
     // Verificar si este cliente específico tiene activada la opción de sumar kg para Catarro
     const esCatarro = nombreCliente.toLowerCase().includes('catarro');
@@ -2087,7 +2127,7 @@ async function generarContenidoClientesSinPrecios(embarque, clientesDisponibles,
             style: ['subheader', estiloCliente],
             margin: [0, 5, 0, 5]
           },
-          generarTablaProductosSinPrecios(productosAgrupados, estiloCliente, nombreCliente, aplicarReglaOtilioCliente, sumarKgCatarroCliente),
+          generarTablaProductosSinPrecios(productosAgrupados, estiloCliente, nombreCliente, aplicarReglaOtilioCliente, sumarKgCatarroCliente, incluirPreciosCliente, cuentaEnPdfCliente),
           { text: '\n' }
         );
 
@@ -2216,7 +2256,7 @@ async function generarContenidoClientesSinPrecios(embarque, clientesDisponibles,
   return contenido;
 }
 
-function generarTablaProductosSinPrecios(productos, estiloCliente, nombreCliente, aplicarReglaOtilio = true, sumarKgCatarro = true) {
+function generarTablaProductosSinPrecios(productos, estiloCliente, nombreCliente, aplicarReglaOtilio = true, sumarKgCatarro = true, incluirPreciosCliente = false, cuentaEnPdfCliente = false) {
   // Filtrar productos que tengan kilos reales
   const productosConKilos = productos.filter(producto => {
     const kilos = totalKilos(producto, nombreCliente, aplicarReglaOtilio, sumarKgCatarro);
@@ -2277,8 +2317,38 @@ function generarTablaProductosSinPrecios(productos, estiloCliente, nombreCliente
       const row = [
         // Eliminar decimales para los kilos (redondeando al entero más cercano)
         `${Math.round(kilos)} kg`,
-        // Formatear el nombre del producto sin precios
-        formatearProductoSinPrecio(producto),
+        // Formatear el nombre del producto según configuración de precios
+        incluirPreciosCliente 
+          ? (cuentaEnPdfCliente 
+              // Si está activado "cuenta en PDF", mostrar solo el nombre (sin precio)
+              ? {
+                  text: formatearProductoSinPrecio(producto),
+                  ...(producto.tipo === 'c/h20' ? { style: 'tipoConAgua' } : {})
+                }
+              // Si solo está activado "incluir precios", crear texto con estilos separados para medida y precio
+              : (producto.precio 
+                ? {
+                    text: [
+                      { 
+                        text: formatearProductoSinPrecio(producto) + ' - ',
+                        ...(producto.tipo === 'c/h20' ? { style: 'tipoConAgua' } : {})
+                      },
+                      { 
+                        text: `$${Number(producto.precio).toLocaleString('en-US')}`,
+                        style: 'precioInline'
+                      }
+                    ]
+                  }
+                : {
+                    text: formatearProductoSinPrecio(producto),
+                    ...(producto.tipo === 'c/h20' ? { style: 'tipoConAgua' } : {})
+                  }
+              )
+            )
+          : {
+              text: formatearProductoSinPrecio(producto),
+              ...(producto.tipo === 'c/h20' ? { style: 'tipoConAgua' } : {})
+            },
         tarasTexto
       ];
 
@@ -2399,7 +2469,8 @@ function generarTablaCrudosSinPrecios(crudos, estiloCliente) {
           `${Math.round(kilos)} kg`,
           {
             text: item.talla.replace(/\s*c\/\s*c$/i, ' c/c'),
-            style: 'default',
+            // Aplicar estilo azul si la talla contiene "c/c" (que indica "con cascaron")
+            ...(item.talla && item.talla.toLowerCase().includes('c/c') ? { style: 'tipoConAgua' } : { style: 'default' }),
             noWrap: true
           },
           calcularTarasTotales(item)

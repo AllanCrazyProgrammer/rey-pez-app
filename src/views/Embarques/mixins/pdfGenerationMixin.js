@@ -74,7 +74,8 @@ export default {
         this.clientesJuntarMedidas,
         this.clientesReglaOtilio,
         this.clientesIncluirPrecios,
-        this.clientesSumarKgCatarro
+        this.clientesSumarKgCatarro,
+        this.clientesCuentaEnPdf
       );
     },
 
@@ -103,7 +104,8 @@ export default {
         this.clientesJuntarMedidas,
         this.clientesReglaOtilio,
         this.clientesIncluirPrecios,
-        this.clientesSumarKgCatarro
+        this.clientesSumarKgCatarro,
+        this.clientesCuentaEnPdf
       );
     },
 

@@ -77,6 +77,7 @@
           :clientes-juntar-medidas="clientesJuntarMedidas" 
           :clientes-regla-otilio="clientesReglaOtilio"
           :clientes-incluir-precios="clientesIncluirPrecios"
+          :clientes-cuenta-en-pdf="clientesCuentaEnPdf"
           :clientes-sumar-kg-catarro="clientesSumarKgCatarro"
           :nombre-cliente="obtenerNombreCliente(clienteId)"
           :cliente-activo="clienteActivo" 
@@ -91,6 +92,7 @@
           @juntarMedidas-change="handleJuntarMedidasChange"
           @reglaOtilio-change="handleReglaOtilioChange"
           @incluirPrecios-change="handleIncluirPreciosChange"
+          @cuentaEnPdf-change="handleCuentaEnPdfChange"
           @sumarKgCatarro-change="handleSumarKgCatarroChange"
           @eliminar-cliente="eliminarCliente" 
           @eliminar-producto="eliminarProducto" 
@@ -228,6 +230,7 @@ export default {
       clientesJuntarMedidas: {},
       clientesReglaOtilio: {},
       clientesIncluirPrecios: {},
+      clientesCuentaEnPdf: {},
       clientesSumarKgCatarro: {},
       clientesPredefinidos: CLIENTES_PREDEFINIDOS, // Usar constantes importadas
       clientesPersonalizados: [],
@@ -861,6 +864,17 @@ export default {
             });
           }
 
+          // Cargar el estado de cuenta en PDF
+          if (data.clientesCuentaEnPdf) {
+            this.clientesCuentaEnPdf = data.clientesCuentaEnPdf;
+          } else {
+            // Si no existe, inicializar con valores por defecto
+            this.clientesCuentaEnPdf = {};
+            data.clientes.forEach(cliente => {
+              this.$set(this.clientesCuentaEnPdf, cliente.id, false);
+            });
+          }
+
           // Cargar el estado de sumar kg para Catarro
           if (data.clientesSumarKgCatarro) {
             this.clientesSumarKgCatarro = data.clientesSumarKgCatarro;
@@ -1124,6 +1138,31 @@ export default {
             const esOtilio = cliente.nombre && cliente.nombre.toLowerCase().includes('otilio');
             this.$set(this.clientesReglaOtilio, cliente.id.toString(), esOtilio);
         });
+
+        // 4.2. Inicializar el estado de sumar kg para Catarro (desactivado por defecto)
+        this.clientesPredefinidos.forEach(cliente => {
+            const esCatarro = cliente.nombre && cliente.nombre.toLowerCase().includes('catarro');
+            // Inicializar como false por defecto, para que el usuario tenga que activarlo explícitamente
+            this.$set(this.clientesSumarKgCatarro, cliente.id.toString(), false);
+        });
+
+        // 4.3. Inicializar el estado de incluir precios (desactivado por defecto)
+        this.clientesPredefinidos.forEach(cliente => {
+            // Inicializar como false por defecto, para que el usuario tenga que activarlo explícitamente
+            this.$set(this.clientesIncluirPrecios, cliente.id.toString(), false);
+        });
+
+        // 4.3.1. Inicializar el estado de cuenta en PDF (desactivado por defecto)
+        this.clientesPredefinidos.forEach(cliente => {
+            // Inicializar como false por defecto, para que el usuario tenga que activarlo explícitamente
+            this.$set(this.clientesCuentaEnPdf, cliente.id.toString(), false);
+        });
+
+        // 4.4. Inicializar el estado de juntar medidas (desactivado por defecto)
+        this.clientesPredefinidos.forEach(cliente => {
+            // Inicializar como false por defecto, para que el usuario tenga que activarlo explícitamente
+            this.$set(this.clientesJuntarMedidas, cliente.id.toString(), false);
+        });
         
         // 5. Establecer el primer cliente como activo
         if (this.clientesPredefinidos.length > 0) {
@@ -1224,7 +1263,8 @@ export default {
               ...JSON.parse(JSON.stringify(this.prepararDatosEmbarque())),
               clientesJuntarMedidas: { ...this.clientesJuntarMedidas },
               clientesReglaOtilio: { ...this.clientesReglaOtilio },
-              clientesIncluirPrecios: { ...this.clientesIncluirPrecios }
+              clientesIncluirPrecios: { ...this.clientesIncluirPrecios },
+              clientesCuentaEnPdf: { ...this.clientesCuentaEnPdf }
             };
 
             const db = getFirestore();
@@ -1379,6 +1419,7 @@ export default {
         clientesJuntarMedidas: this.clientesJuntarMedidas,
         clientesReglaOtilio: this.clientesReglaOtilio,
         clientesIncluirPrecios: this.clientesIncluirPrecios,
+        clientesCuentaEnPdf: this.clientesCuentaEnPdf,
         clientesSumarKgCatarro: this.clientesSumarKgCatarro,
         embarqueBloqueado: this.embarqueBloqueado
       };
@@ -1672,6 +1713,21 @@ export default {
     handleIncluirPreciosChange(clienteId, checked) {
       // Actualizar el estado local
       this.$set(this.clientesIncluirPrecios, clienteId, checked);
+
+      // Si se desactiva incluir precios, también desactivar cuenta en PDF
+      if (!checked && this.clientesCuentaEnPdf[clienteId]) {
+        this.$set(this.clientesCuentaEnPdf, clienteId, false);
+      }
+
+      // Guardar inmediatamente si estamos en modo edición
+      if (this.modoEdicion && this.embarqueId) {
+        this.guardarCambiosEnTiempoReal();
+      }
+    },
+
+    handleCuentaEnPdfChange(clienteId, checked) {
+      // Actualizar el estado local
+      this.$set(this.clientesCuentaEnPdf, clienteId, checked);
 
       // Guardar inmediatamente si estamos en modo edición
       if (this.modoEdicion && this.embarqueId) {
