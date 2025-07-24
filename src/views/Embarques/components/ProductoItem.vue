@@ -56,17 +56,46 @@
         </h2>
         <div class="producto-header">
             <div class="medida-input-container">
-                <input type="text" v-model="producto.medida" class="medida-input" placeholder="Medida"
-                    @input="onMedidaInput" @blur="onMedidaBlur" :disabled="embarqueBloqueado">
+                <input 
+                    type="text" 
+                    v-model="producto.medida" 
+                    class="medida-input" 
+                    placeholder="Medida"
+                    @input="onMedidaInput" 
+                    @blur="onMedidaBlur" 
+                    @focus="onMedidaFocus"
+                    :disabled="embarqueBloqueado"
+                    autocomplete="off"
+                >
                 <button @click="abrirModalAlt" class="btn-alt" :class="{ 'tiene-alt': producto.textoAlternativo }"
                     :disabled="embarqueBloqueado">
                     Alt
                 </button>
-                <!-- Sugerencias de medidas -->
-                <div v-if="editandoMedida && sugerenciasMedidas.length > 0" class="sugerencias-container">
-                    <div v-for="medida in sugerenciasMedidas" :key="medida" class="sugerencia-item"
-                        @mousedown="seleccionarMedida(medida)">
-                        {{ medida }}
+                <!-- Sugerencias de medidas personalizadas y dropdown -->
+                <div v-if="mostrarSugerencias && (sugerenciasMedidas.length > 0 || medidasConfiguracion.length > 0)" class="sugerencias-container">
+                    <!-- Medidas configuradas que coinciden -->
+                    <div v-if="medidasConfiguradas.length > 0" class="sugerencias-seccion">
+                        <div class="sugerencias-titulo">Medidas configuradas:</div>
+                        <div v-for="medida in medidasConfiguradas" :key="'config-' + medida" class="sugerencia-item config-medida"
+                            @mousedown="seleccionarMedida(medida)">
+                            <i class="fas fa-star"></i> {{ medida }}
+                        </div>
+                    </div>
+                    <!-- Medidas usadas anteriormente -->
+                    <div v-if="sugerenciasMedidas.length > 0" class="sugerencias-seccion">
+                        <div class="sugerencias-titulo">Medidas usadas anteriormente:</div>
+                        <div v-for="medida in sugerenciasMedidas" :key="'hist-' + medida" class="sugerencia-item hist-medida"
+                            @mousedown="seleccionarMedida(medida)">
+                            <i class="fas fa-history"></i> {{ medida }}
+                        </div>
+                    </div>
+                    <!-- Todas las medidas configuradas cuando el campo está vacío -->
+                    <div v-if="!producto.medida && medidasConfiguracion.length > 0" class="sugerencias-seccion">
+                        <div class="sugerencias-titulo">Todas las medidas disponibles:</div>
+                        <div v-for="medida in medidasConfiguracion" :key="'all-' + medida" class="sugerencia-item all-medida"
+                            @mousedown="seleccionarMedida(medida)">
+                            {{ medida }}
+                        </div>
                     </div>
                 </div>
             </div>
@@ -200,6 +229,10 @@ export default {
             type: Array,
             default: () => []
         },
+        medidasConfiguracion: {
+            type: Array,
+            default: () => []
+        },
         nombreCliente: {
             type: String,
             default: ''
@@ -212,7 +245,7 @@ export default {
 
     data() {
         return {
-            editandoMedida: false,
+            mostrarSugerencias: false,
             sugerenciasMedidas: []
         };
     },
@@ -234,6 +267,16 @@ export default {
         // Detectar si el cliente es Ozuna
         isClienteOzuna() {
             return this.nombreCliente.toLowerCase() === 'ozuna';
+        },
+
+        // Medidas configuradas que coinciden con la búsqueda actual
+        medidasConfiguradas() {
+            if (!this.producto.medida) return [];
+            const valor = this.producto.medida.toLowerCase();
+            return this.medidasConfiguracion.filter(m =>
+                m.toLowerCase().includes(valor) &&
+                m.toLowerCase() !== valor
+            );
         },
 
         // Detectar si es un cliente agregado (no predefinido)
@@ -460,12 +503,14 @@ export default {
         // Métodos para el manejo de la medida
         onMedidaInput(event) {
             const valor = event.target.value.toLowerCase();
-            this.editandoMedida = true;
+            this.mostrarSugerencias = true;
 
             if (valor) {
+                // Filtrar medidas usadas que coincidan (excluyendo medidas configuradas para evitar duplicados)
                 this.sugerenciasMedidas = this.medidasUsadas.filter(m =>
                     m.toLowerCase().includes(valor) &&
-                    m.toLowerCase() !== valor
+                    m.toLowerCase() !== valor &&
+                    !this.medidasConfiguracion.some(mc => mc.toLowerCase() === m.toLowerCase())
                 );
             } else {
                 this.sugerenciasMedidas = [];
@@ -479,15 +524,25 @@ export default {
         onMedidaBlur() {
             // Dar un pequeño delay antes de ocultar las sugerencias para permitir clicks
             setTimeout(() => {
-                this.editandoMedida = false;
+                this.mostrarSugerencias = false;
             }, 200);
 
             this.actualizarProducto();
         },
 
+        onMedidaFocus() {
+            this.mostrarSugerencias = true;
+            // Si el campo está vacío, no filtrar las sugerencias para mostrar todas las opciones
+            if (!this.producto.medida) {
+                this.sugerenciasMedidas = [];
+            }
+        },
+
         seleccionarMedida(medida) {
             this.producto.medida = medida;
-            this.editandoMedida = false;
+            this.mostrarSugerencias = false;
+            this.asignarPrecioAutomatico();
+            this.actualizarProducto();
             this.$emit('seleccionar-medida', this.producto, medida);
         },
 
@@ -661,7 +716,7 @@ export default {
 .sugerencias-container {
     position: absolute;
     width: 100%;
-    max-height: 150px;
+    max-height: 250px;
     overflow-y: auto;
     background: white;
     border: 1px solid #ddd;
@@ -671,13 +726,62 @@ export default {
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
 
+.sugerencias-seccion {
+    border-bottom: 1px solid #eee;
+}
+
+.sugerencias-seccion:last-child {
+    border-bottom: none;
+}
+
+.sugerencias-titulo {
+    padding: 6px 12px;
+    background-color: #f8f9fa;
+    font-size: 12px;
+    font-weight: bold;
+    color: #6c757d;
+    border-bottom: 1px solid #eee;
+}
+
 .sugerencia-item {
     padding: 8px 12px;
     cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
 .sugerencia-item:hover {
     background-color: #f0f0f0;
+}
+
+.config-medida {
+    color: #007bff;
+}
+
+.config-medida:hover {
+    background-color: #e7f3ff;
+}
+
+.hist-medida {
+    color: #6c757d;
+}
+
+.hist-medida:hover {
+    background-color: #f5f5f5;
+}
+
+.all-medida {
+    color: #333;
+}
+
+.all-medida:hover {
+    background-color: #f0f0f0;
+}
+
+.sugerencia-item i {
+    font-size: 12px;
+    width: 12px;
 }
 
 .tipo-select {

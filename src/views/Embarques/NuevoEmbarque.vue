@@ -27,7 +27,8 @@
         @update:cargaCon="embarque.cargaCon = $event" 
         @generar-taras="generarPDF('taras')"
         @generar-resumen="mostrarEscalaResumen = true"
-        @verificar-fecha="verificarFechaExistente" 
+        @verificar-fecha="verificarFechaExistente"
+        @abrir-configuracion-medidas="abrirModalConfiguracionMedidas"
       />
 
       <!-- Slider de escala para el resumen PDF -->
@@ -83,6 +84,7 @@
           :cliente-activo="clienteActivo" 
           :embarque-bloqueado="embarqueBloqueado" 
           :medidas-usadas="medidasUsadas"
+          :medidas-configuracion="medidasConfiguracion"
           :is-generating-pdf="isGeneratingPdf" 
           :pdf-type="pdfType" 
           :is-creating-account="isCreatingAccount"
@@ -159,6 +161,14 @@
       @cerrar="cerrarModalAlt" 
       @guardar="guardarAlt"
     />
+
+    <ConfiguracionMedidasModal
+      :mostrar="mostrarModalConfiguracionMedidas"
+      :medidas-configuracion="medidasConfiguracion"
+      :medidas-usadas="medidasUsadas"
+      @cerrar="cerrarModalConfiguracionMedidas"
+      @guardar="guardarConfiguracionMedidas"
+    />
   </div>
 </template>
 
@@ -190,6 +200,7 @@ import PrecioModal from './components/modals/PrecioModal.vue';
 import HilosModal from './components/modals/HilosModal.vue';
 import NotaModal from './components/modals/NotaModal.vue';
 import AltModal from './components/modals/AltModal.vue';
+import ConfiguracionMedidasModal from './components/modals/ConfiguracionMedidasModal.vue';
 
 // Lazy loaded components
 const Rendimientos = defineAsyncComponent(() => import('./Rendimientos.vue'))
@@ -216,7 +227,8 @@ export default {
     PrecioModal,
     HilosModal,
     NotaModal,
-    AltModal
+    AltModal,
+    ConfiguracionMedidasModal
   },
   
   setup() {
@@ -264,6 +276,9 @@ export default {
       mostrarModalNuevoCliente: false,
       nuevoClienteNombre: '',
       nuevoClienteColor: '#007bff',
+      
+      mostrarModalConfiguracionMedidas: false,
+      medidasConfiguracion: [],
       
       mostrarModalNombreAlternativo: false,
       nombreAlternativoTemp: '',
@@ -1961,6 +1976,44 @@ export default {
       this.cerrarModalAlt();
     },
 
+    // Métodos para configuración de medidas
+    abrirModalConfiguracionMedidas() {
+      this.mostrarModalConfiguracionMedidas = true;
+    },
+
+    cerrarModalConfiguracionMedidas() {
+      this.mostrarModalConfiguracionMedidas = false;
+    },
+
+    guardarConfiguracionMedidas(medidas) {
+      this.medidasConfiguracion = medidas;
+      this.guardarMedidasConfiguracion();
+      this.cerrarModalConfiguracionMedidas();
+    },
+
+    cargarMedidasConfiguracion() {
+      const medidasGuardadas = localStorage.getItem('medidasConfiguracion');
+      if (medidasGuardadas) {
+        try {
+          this.medidasConfiguracion = JSON.parse(medidasGuardadas);
+        } catch (error) {
+          console.error('Error al cargar medidas de configuración:', error);
+          this.medidasConfiguracion = [];
+        }
+      } else {
+        // Medidas por defecto si no hay configuración guardada
+        this.medidasConfiguracion = [
+          '16/20', '21/25', '26/30', '31/35', '36/40', '41/50', '51/60', '61/70', '71/90', '91/110',
+          'U-10', 'U-12', 'U-15', 'U-20', 'U-24', 'U-30',
+          'Colita', 'Entero'
+        ];
+      }
+    },
+
+    guardarMedidasConfiguracion() {
+      localStorage.setItem('medidasConfiguracion', JSON.stringify(this.medidasConfiguracion));
+    },
+
     // Métodos de manipulación de clientes
     seleccionarCliente(clienteId) {
       // Verificar si hay algún modal abierto
@@ -2629,6 +2682,9 @@ export default {
 
   async created() {
     console.log('[LOG] Hook "created" de NuevoEmbarque.');
+    // Cargar configuración de medidas
+    this.cargarMedidasConfiguracion();
+    
     // Si estamos offline y hay datos guardados, cargar desde localStorage
     const localEmbarque = localStorage.getItem('embarque');
     if (!navigator.onLine && localEmbarque) {

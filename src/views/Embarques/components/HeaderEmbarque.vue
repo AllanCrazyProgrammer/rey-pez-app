@@ -10,6 +10,9 @@
         <i :class="['fas', embarqueBloqueado ? 'fa-lock' : 'fa-lock-open']"></i>
         {{ embarqueBloqueado ? 'Desbloquear' : 'Bloquear' }} Embarque
       </button>
+      <button @click="abrirConfiguracionMedidas" class="btn-configuracion-medidas">
+        <i class="fas fa-cog"></i> Configurar Medidas
+      </button>
     </div>
 
     <div class="botones-accion">
@@ -139,6 +142,9 @@ export default {
     },
     cerrarModalPedido() {
       this.mostrarModalPedido = false;
+    },
+    abrirConfiguracionMedidas() {
+      this.$emit('abrir-configuracion-medidas');
     }
   }
 };
@@ -188,6 +194,22 @@ h1 {
 
 .btn-bloqueo.bloqueado {
   background-color: #dc3545;
+}
+
+.btn-configuracion-medidas {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 8px 15px;
+  background-color: #007bff;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.btn-configuracion-medidas:hover {
+  background-color: #0056b3;
 }
 
 .header {

@@ -104,7 +104,7 @@
         <div class="productos-container">
             <!-- Lista de productos -->
             <ProductoItem v-for="(producto, index) in productos" :key="index" :producto="producto"
-                :embarque-bloqueado="embarqueBloqueado" :medidas-usadas="medidasUsadas" :nombre-cliente="nombreCliente"
+                :embarque-bloqueado="embarqueBloqueado" :medidas-usadas="medidasUsadas" :medidas-configuracion="medidasConfiguracion" :nombre-cliente="nombreCliente"
                 :precios-actuales="preciosActuales"
                 @update:producto="actualizarProducto" @eliminar-producto="$emit('eliminar-producto', producto)"
                 @mostrar-modal-precio="$emit('mostrar-modal-precio', $event)"
@@ -191,6 +191,10 @@ export default {
             default: false
         },
         medidasUsadas: {
+            type: Array,
+            default: () => []
+        },
+        medidasConfiguracion: {
             type: Array,
             default: () => []
         },
