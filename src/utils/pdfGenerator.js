@@ -141,6 +141,21 @@ export async function generarNotaVentaPDF(embarque, clientesDisponibles, cliente
       }, clientesDisponibles),
     ];
     
+    // Determinar si se deben mostrar precios en la segunda página
+    // Solo mostrar precios en la segunda página si están incluidas las cuentas en PDF
+    const mostrarPreciosSegundaPagina = {};
+    const mostrarCuentasSegundaPagina = {};
+    
+    // Iterar sobre cada cliente para determinar si debe mostrar precios en la segunda página
+    Object.keys(clientesIncluirPrecios || {}).forEach(clienteId => {
+      const incluirPrecios = clientesIncluirPrecios[clienteId];
+      const cuentaEnPdf = clientesCuentaEnPdf[clienteId];
+      
+      // Solo mostrar precios en la segunda página si incluirPrecios es true Y cuentaEnPdf es true
+      mostrarPreciosSegundaPagina[clienteId] = incluirPrecios && cuentaEnPdf;
+      mostrarCuentasSegundaPagina[clienteId] = cuentaEnPdf;
+    });
+
     // Ahora generamos el contenido sin precios (segunda página)
     const contenidoSinPrecios = [
       {
@@ -179,7 +194,7 @@ export async function generarNotaVentaPDF(embarque, clientesDisponibles, cliente
         ]
       },
       { text: '\n' },
-              ...(await generarContenidoClientesSinPrecios(embarque, clientesDisponibles, clientesJuntarMedidas, clientesReglaOtilio, clientesIncluirPrecios, clientesSumarKgCatarro, clientesCuentaEnPdf)),
+              ...(await generarContenidoClientesSinPrecios(embarque, clientesDisponibles, clientesJuntarMedidas, clientesReglaOtilio, mostrarPreciosSegundaPagina, clientesSumarKgCatarro, mostrarCuentasSegundaPagina)),
     ];
 
     const docDefinition = {
