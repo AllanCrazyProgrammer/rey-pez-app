@@ -57,6 +57,15 @@
         <span>Nueva Deuda</span>
       </router-link>
       
+      <router-link 
+        to="/barcos/resumen-mensual" 
+        class="btn-action btn-reporte"
+        aria-label="Ver reporte mensual de barcos"
+      >
+        <i class="icon">📊</i>
+        <span>Reporte Mensual</span>
+      </router-link>
+      
       <button 
         @click="openProveedoresModal" 
         class="btn-action btn-config"
@@ -201,6 +210,9 @@
         </div>
       </div>
     </div>
+    
+    <!-- Botón flotante para reportes -->
+    <BotonReporteMensual />
   </div>
 </template>
 
@@ -208,11 +220,13 @@
 import { db } from '@/firebase';
 import { collection, addDoc, getDocs, deleteDoc, doc, query, orderBy } from 'firebase/firestore';
 import BackButton from '@/components/BackButton.vue';
+import BotonReporteMensual from '@/components/Barcos/BotonReporteMensual.vue';
 
 export default {
   name: 'BarcosMenu',
   components: {
-    BackButton
+    BackButton,
+    BotonReporteMensual
   },
   data() {
     return {
@@ -441,6 +455,10 @@ export default {
 
 .btn-nueva {
   background: linear-gradient(135deg, #e17055 0%, #fab1a0 100%);
+}
+
+.btn-reporte {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
 }
 
 .btn-config {

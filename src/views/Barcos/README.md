@@ -122,7 +122,58 @@ Este módulo permite administrar las deudas y gastos de los barcos "El Galileo" 
 - ✅ **Validaciones completas**: Evita errores de datos
 - ✅ **Gestión completa**: Desde creación hasta pago total
 
+### 4. **ResumenMensualBarcos.vue** ⭐ **NUEVO**
+- **Navegación temporal**: Botones anterior/siguiente y selector rápido de mes
+- **Resumen general**: Métricas consolidadas (total gastado, deudas, saldo pendiente, proveedores activos)
+- **Análisis por barco**: Desglose individual con distribución por proveedor
+- **Gráficos visuales**: Barras de distribución de gastos por proveedor
+- **Exportación**: Opciones para PDF, Excel y compartir
+- **Sin datos**: Mensaje amigable cuando no hay actividad en el mes
+
+### 5. **BotonReporteMensual.vue** ⭐ **COMPONENTE FLOTANTE**
+- **Acceso rápido**: Botón flotante disponible en todas las vistas de barcos
+- **Menú desplegable**: Opciones para reporte mensual, reporte rápido y exportación
+- **Modal de configuración**: Para reportes personalizados con filtros de período
+- **Responsive**: Se adapta a móviles y tablets
+- **Auto-ocultación**: Se oculta al hacer scroll para no interferir
+
+## 📊 Sistema de Reportes Mensuales
+
+### Funcionalidades:
+- ✅ **Navegación entre meses** con botones intuitivos
+- ✅ **Selector rápido** para ir a cualquier mes de los últimos 12 meses
+- ✅ **Métricas generales** del mes seleccionado
+- ✅ **Desglose por barco** con información detallada
+- ✅ **Análisis por proveedor** con totales y gráficos
+- ✅ **Botón "Mes Actual"** para acceso rápido
+- ✅ **Prevención de navegación futura** (no se puede ir a meses futuros)
+- ✅ **Loading states** durante la carga de datos
+- ✅ **Mensaje de no datos** cuando no hay actividad
+
+### Acceso al Reporte:
+1. **Desde menú principal**: Botón "Reporte Mensual" 📊
+2. **Botón flotante**: Disponible en cualquier vista de barcos
+3. **Reporte rápido**: Configuración personalizada de períodos
+
+### Datos Mostrados:
+- **Resumen General**:
+  - Total gastado en el mes
+  - Cantidad de deudas registradas
+  - Saldo pendiente total
+  - Número de proveedores activos
+
+- **Por Barco**:
+  - Totales y pendientes individuales
+  - Lista de proveedores con montos
+  - Gráfico de distribución visual
+  - Cantidad de deudas por proveedor
+
 ## Navegación
 - **Menú principal** → Barcos → Seleccionar barco → Opciones disponibles
-- **Rutas**: `/barcos`, `/barcos/deudas/nueva`, `/barcos/deudas/lista`
-- **Integración**: Completamente integrado en la aplicación principal 
+- **Rutas**: 
+  - `/barcos` - Menú principal
+  - `/barcos/deudas/nueva` - Nueva deuda
+  - `/barcos/deudas/lista` - Lista de deudas
+  - `/barcos/resumen-mensual` ⭐ **NUEVO** - Reportes mensuales
+- **Integración**: Completamente integrado en la aplicación principal
+- **Botón flotante**: Acceso desde cualquier vista de barcos 

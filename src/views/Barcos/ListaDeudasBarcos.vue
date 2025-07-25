@@ -547,6 +547,9 @@
         </div>
       </div>
     </div>
+    
+    <!-- Botón flotante para reportes -->
+    <BotonReporteMensual />
   </div>
 </template>
 
@@ -554,11 +557,13 @@
 import { db } from '@/firebase';
 import { collection, query, where, getDocs, doc, updateDoc, deleteDoc, addDoc, orderBy } from 'firebase/firestore';
 import BackButton from '@/components/BackButton.vue';
+import BotonReporteMensual from '@/components/Barcos/BotonReporteMensual.vue';
 
 export default {
   name: 'ListaDeudasBarcos',
   components: {
-    BackButton
+    BackButton,
+    BotonReporteMensual
   },
   data() {
     return {
