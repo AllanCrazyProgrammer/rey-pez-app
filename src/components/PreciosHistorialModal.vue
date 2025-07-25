@@ -191,6 +191,72 @@
             </div>
           </div>
         </div>
+
+        <!-- Modal de confirmación para precios específicos existentes -->
+        <div v-if="showConfirmacionModal" class="confirmacion-modal-overlay">
+          <div class="confirmacion-modal-content">
+            <div class="confirmacion-header">
+              <h3>⚠️ Precios Específicos Existentes</h3>
+              <button @click="cancelarConfirmacion" class="close-btn">&times;</button>
+            </div>
+            
+            <div class="confirmacion-body">
+              <p class="confirmacion-mensaje">
+                Ya existen precios específicos para <strong>{{ nuevoPrecioTemporal?.producto }}</strong> para los siguientes clientes:
+              </p>
+              
+              <div class="clientes-afectados">
+                <div 
+                  v-for="precioEspecifico in preciosEspecificosAfectados" 
+                  :key="precioEspecifico.clienteId" 
+                  class="cliente-afectado">
+                  <div class="cliente-info">
+                    <span 
+                      class="cliente-tag"
+                      :style="{ backgroundColor: obtenerColorCliente(precioEspecifico.clienteId) }">
+                      {{ obtenerNombreCliente(precioEspecifico.clienteId) }}
+                    </span>
+                    <div class="precio-info">
+                      <span class="precio-actual">Precio actual: ${{ formatNumber(precioEspecifico.precio) }}</span>
+                      <span class="precio-nuevo">Precio nuevo: ${{ formatNumber(nuevoPrecioTemporal?.precio) }}</span>
+                    </div>
+                  </div>
+                  
+                  <div class="decision-opciones">
+                    <label class="decision-label">¿Qué deseas hacer?</label>
+                    <div class="radio-group">
+                      <label class="radio-option">
+                        <input 
+                          type="radio" 
+                          :name="`decision_${precioEspecifico.clienteId}`"
+                          value="mantener"
+                          v-model="decisionesClientes[precioEspecifico.clienteId]">
+                        <span class="radio-text mantener">Mantener precio específico actual</span>
+                      </label>
+                      <label class="radio-option">
+                        <input 
+                          type="radio" 
+                          :name="`decision_${precioEspecifico.clienteId}`"
+                          value="sobreescribir"
+                          v-model="decisionesClientes[precioEspecifico.clienteId]">
+                        <span class="radio-text sobreescribir">Sobreescribir con precio general</span>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <div class="confirmacion-footer">
+              <button @click="cancelarConfirmacion" class="btn-cancelar">
+                Cancelar
+              </button>
+              <button @click="confirmarAgregarPrecio" class="btn-confirmar" :disabled="!todasDecisionesTomadas">
+                Confirmar y Agregar Precio
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -212,9 +278,13 @@ export default {
     return {
       showModal: false,
       showHistorialModal: false,
+      showConfirmacionModal: false,
       preciosActuales: [],
       historialPrecios: [],
       productoSeleccionado: null,
+      preciosEspecificosAfectados: [],
+      nuevoPrecioTemporal: null,
+      decisionesClientes: {},
       // Nuevas variables para paginación
       paginaActual: 1,
       itemsPorPagina: 10,
@@ -321,6 +391,13 @@ export default {
       });
 
       return preciosAgrupados;
+    },
+    todasDecisionesTomadas() {
+      return this.preciosEspecificosAfectados.every(precio => 
+        this.decisionesClientes[precio.clienteId] && 
+        (this.decisionesClientes[precio.clienteId] === 'mantener' || 
+         this.decisionesClientes[precio.clienteId] === 'sobreescribir')
+      );
     }
   },
   methods: {
@@ -448,14 +525,42 @@ export default {
         return;
       }
 
+      // Si es un precio general (no específico), verificar si existen precios específicos
+      if (!this.newPrice.esClienteEspecifico) {
+        const preciosEspecificosExistentes = this.preciosActuales.filter(precio => 
+          precio.producto.toLowerCase() === this.newPrice.producto.toLowerCase() && 
+          precio.clienteId
+        );
+
+        if (preciosEspecificosExistentes.length > 0) {
+          // Mostrar modal de confirmación
+          this.preciosEspecificosAfectados = preciosEspecificosExistentes;
+          this.nuevoPrecioTemporal = { ...this.newPrice };
+          this.decisionesClientes = {};
+          
+          // Inicializar decisiones como 'mantener' por defecto
+          preciosEspecificosExistentes.forEach(precio => {
+            this.decisionesClientes[precio.clienteId] = 'mantener';
+          });
+          
+          this.showConfirmacionModal = true;
+          return;
+        }
+      }
+
+      // Si no hay conflictos o es un precio específico, proceder normalmente
+      await this.guardarPrecio(this.newPrice);
+    },
+
+    async guardarPrecio(precioData, procesarDecisiones = false) {
       try {
         // Ajustar la fecha para compensar la zona horaria
-        const fecha = new Date(this.newPrice.fecha);
+        const fecha = new Date(precioData.fecha);
         fecha.setDate(fecha.getDate() + 1);
         const fechaAjustada = fecha.toISOString().split('T')[0];
 
         // Determinar la categoría basada en el nombre del producto
-        const nombreProducto = this.newPrice.producto.toLowerCase();
+        const nombreProducto = precioData.producto.toLowerCase();
         let categoria = 'Otros';
         if (nombreProducto.includes('s/c') || nombreProducto.match(/\d+\/\d+/)) {
           categoria = 'Camarón S/C';
@@ -464,18 +569,31 @@ export default {
         }
 
         const nuevoPrecio = {
-          producto: this.newPrice.producto,
-          precio: this.newPrice.precio,
+          producto: precioData.producto,
+          precio: precioData.precio,
           fecha: fechaAjustada,
           categoria: categoria
         };
 
         // Agregar clienteId solo si es un precio específico
-        if (this.newPrice.esClienteEspecifico && this.newPrice.clienteId) {
-          nuevoPrecio.clienteId = this.newPrice.clienteId;
+        if (precioData.esClienteEspecifico && precioData.clienteId) {
+          nuevoPrecio.clienteId = precioData.clienteId;
         }
 
         await addDoc(collection(db, 'precios'), nuevoPrecio);
+
+        // Si estamos procesando decisiones, manejar los precios específicos según las decisiones
+        if (procesarDecisiones && this.preciosEspecificosAfectados.length > 0) {
+          for (const precioEspecifico of this.preciosEspecificosAfectados) {
+            const decision = this.decisionesClientes[precioEspecifico.clienteId];
+            
+            if (decision === 'sobreescribir') {
+              // Eliminar el precio específico existente
+              await deleteDoc(doc(db, 'precios', precioEspecifico.id));
+            }
+            // Si la decisión es 'mantener', no hacemos nada
+          }
+        }
 
         // Limpiar el formulario
         this.newPrice = {
@@ -493,6 +611,27 @@ export default {
         console.error('Error al agregar precio:', error);
         alert('Error al guardar el precio');
       }
+    },
+
+    async confirmarAgregarPrecio() {
+      if (!this.todasDecisionesTomadas) {
+        alert('Por favor tome una decisión para todos los clientes afectados');
+        return;
+      }
+
+      await this.guardarPrecio(this.nuevoPrecioTemporal, true);
+      this.cerrarConfirmacionModal();
+    },
+
+    cancelarConfirmacion() {
+      this.cerrarConfirmacionModal();
+    },
+
+    cerrarConfirmacionModal() {
+      this.showConfirmacionModal = false;
+      this.preciosEspecificosAfectados = [];
+      this.nuevoPrecioTemporal = null;
+      this.decisionesClientes = {};
     },
     async eliminarPrecio(precio) {
       if (confirm('¿Estás seguro de que deseas eliminar este precio?')) {
@@ -1022,6 +1161,63 @@ export default {
   .historial-content td {
     padding: 8px 4px;
   }
+  
+  .confirmacion-modal-content {
+    width: 95%;
+    padding: 20px;
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+  
+  .cliente-afectado {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 15px 0;
+    gap: 10px;
+  }
+  
+  .cliente-info {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    width: 100%;
+  }
+  
+  .cliente-tag {
+    min-width: auto;
+    padding: 6px 12px;
+    font-size: 0.8em;
+  }
+  
+  .precio-info {
+    font-size: 0.85em;
+    gap: 3px;
+  }
+  
+  .decision-opciones {
+    width: 100%;
+    margin-top: 10px;
+    padding-top: 10px;
+  }
+  
+  .radio-group {
+    gap: 12px;
+  }
+  
+  .radio-option {
+    font-size: 0.85em;
+    gap: 8px;
+  }
+  
+  .confirmacion-footer {
+    flex-direction: column;
+    gap: 10px;
+  }
+  
+  .btn-cancelar, .btn-confirmar {
+    width: 100%;
+    padding: 12px 20px;
+  }
 }
 
 .categoria-section {
@@ -1041,5 +1237,186 @@ export default {
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   gap: 20px;
   margin-bottom: 20px;
+}
+
+.confirmacion-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1002;
+}
+
+.confirmacion-modal-content {
+  background-color: white;
+  padding: 25px;
+  border-radius: 10px;
+  width: 90%;
+  max-width: 500px;
+  text-align: center;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+}
+
+.confirmacion-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  color: #333;
+}
+
+.confirmacion-body {
+  margin-bottom: 25px;
+  text-align: left;
+  padding: 0 10px;
+}
+
+.confirmacion-mensaje {
+  font-size: 1.1em;
+  color: #555;
+  margin-bottom: 15px;
+}
+
+.clientes-afectados {
+  border: 1px solid #eee;
+  border-radius: 8px;
+  padding: 15px;
+  background-color: #f9f9f9;
+}
+
+.cliente-afectado {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px dashed #eee;
+}
+
+.cliente-afectado:last-child {
+  border-bottom: none;
+}
+
+.cliente-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-grow: 1;
+}
+
+.cliente-tag {
+  font-size: 0.9em;
+  font-weight: bold;
+  color: white;
+  padding: 4px 10px;
+  border-radius: 15px;
+  display: inline-block;
+  min-width: 120px;
+  text-align: center;
+}
+
+.precio-info {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+  font-size: 0.9em;
+  color: #666;
+}
+
+.precio-actual, .precio-nuevo {
+  font-weight: 500;
+  color: #333;
+}
+
+.decision-opciones {
+  margin-top: 15px;
+  padding-top: 15px;
+  border-top: 1px solid #eee;
+}
+
+.decision-label {
+  font-size: 0.9em;
+  color: #555;
+  margin-bottom: 8px;
+  display: block;
+}
+
+.radio-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.radio-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  font-size: 0.9em;
+  color: #333;
+}
+
+.radio-option input[type="radio"] {
+  transform: scale(1.1);
+  accent-color: #4CAF50;
+}
+
+.radio-text {
+  font-weight: 500;
+}
+
+.radio-text.mantener {
+  color: #4CAF50;
+}
+
+.radio-text.sobreescribir {
+  color: #f44336;
+}
+
+.confirmacion-footer {
+  display: flex;
+  justify-content: space-around;
+  gap: 15px;
+  margin-top: 20px;
+}
+
+.btn-cancelar, .btn-confirmar {
+  padding: 10px 25px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 1em;
+  font-weight: bold;
+  transition: background-color 0.3s, transform 0.2s;
+}
+
+.btn-cancelar {
+  background-color: #e0e0e0;
+  color: #333;
+}
+
+.btn-cancelar:hover {
+  background-color: #d0d0d0;
+}
+
+.btn-confirmar {
+  background-color: #4CAF50;
+  color: white;
+}
+
+.btn-confirmar:hover {
+  background-color: #45a049;
+  transform: translateY(-2px);
+}
+
+.btn-confirmar:disabled {
+  background-color: #a5d6a7;
+  cursor: not-allowed;
+  transform: none;
 }
 </style> 
