@@ -29,6 +29,7 @@
         @generar-resumen="mostrarEscalaResumen = true"
         @verificar-fecha="verificarFechaExistente"
         @abrir-configuracion-medidas="abrirModalConfiguracionMedidas"
+        @precio-agregado="onPrecioAgregado"
       />
 
       <!-- Slider de escala para el resumen PDF -->
@@ -170,6 +171,8 @@
       @cerrar="cerrarModalConfiguracionMedidas"
       @guardar="guardarConfiguracionMedidas"
     />
+
+
   </div>
 </template>
 
@@ -187,6 +190,12 @@ import calculosMixin from './mixins/calculosMixin';
 import ClienteProductos from './components/ClienteProductos.vue';
 import { v4 as uuidv4 } from 'uuid'; // Importar uuid para IDs únicos
 
+// Utilidad para validar UUIDs
+const esUUIDValido = (id) => {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  return typeof id === 'string' && uuidRegex.test(id);
+};
+
 // Importar constantes y utilidades
 import { 
   CLIENTES_PREDEFINIDOS, 
@@ -203,8 +212,15 @@ import NotaModal from './components/modals/NotaModal.vue';
 import AltModal from './components/modals/AltModal.vue';
 import ConfiguracionMedidasModal from './components/modals/ConfiguracionMedidasModal.vue';
 
+
 // Lazy loaded components
 const Rendimientos = defineAsyncComponent(() => import('./Rendimientos.vue'))
+
+// Importar utilidades de fecha y precios
+import { 
+  normalizarFechaISO, 
+  obtenerFechaActualISO 
+} from '@/utils/dateUtils';
 
 // Después de las imports existentes, agregar:
 import EmbarqueCuentasService from '@/utils/services/EmbarqueCuentasService';
@@ -567,43 +583,216 @@ export default {
     },
 
     eliminarProducto(producto) {
-      console.log(`Intentando eliminar producto con ID: ${producto.id}, Medida: ${producto.medida}, Cliente: ${this.obtenerNombreCliente(producto.clienteId)}`);
+      console.log(`[ELIMINAR-PRODUCTO] Intentando eliminar: ID: ${producto.id}, Medida: ${producto.medida}, Cliente: ${this.obtenerNombreCliente(producto.clienteId)}`);
       
-      const index = this.embarque.productos.findIndex(p => p.id === producto.id); 
+      // Primer intento: buscar por ID exacto
+      let index = this.embarque.productos.findIndex(p => p.id === producto.id);
       
       if (index > -1) {
-        // Log antes de eliminar para verificar qué se va a borrar
-        console.log(`Encontrado en índice ${index}. Producto en this.embarque.productos[${index}]:`, JSON.stringify(this.embarque.productos[index]));
+        console.log(`[ELIMINAR-PRODUCTO] ✅ Encontrado por ID en índice ${index}`);
+        this._eliminarProductoPorIndice(index, 'ID exacto');
+        return;
+      }
+      
+      console.warn(`[ELIMINAR-PRODUCTO] ⚠️  Producto NO encontrado por ID: ${producto.id}`);
+      
+      // Segundo intento: buscar por medida, cliente y propiedades similares
+      const candidatos = this.embarque.productos.filter((p, idx) => {
+        const coincideMedida = p.medida === producto.medida;
+        const coincideCliente = p.clienteId === producto.clienteId;
+        const coincideTipo = p.tipo === producto.tipo;
         
-        // Asegurarse de que el producto encontrado coincide razonablemente con el que se quiere eliminar (opcional, como sanity check)
-        if (this.embarque.productos[index].medida === producto.medida && this.embarque.productos[index].clienteId === producto.clienteId) {
-          console.log("Confirmado: El producto encontrado coincide con el producto a eliminar.");
-        } else {
-          console.warn("Advertencia: El producto encontrado por ID tiene medida o clienteId diferente al esperado.", 
-                       "Esperado:", producto, 
-                       "Encontrado:", this.embarque.productos[index]);
-          // Considera si deberías detener la eliminación aquí si hay discrepancia
+        return coincideMedida && coincideCliente && coincideTipo;
+      });
+      
+      console.log(`[ELIMINAR-PRODUCTO] 🔍 Encontrados ${candidatos.length} candidatos por medida/cliente/tipo`);
+      
+      if (candidatos.length === 1) {
+        // Solo un candidato, es muy probable que sea el correcto
+        const candidato = candidatos[0];
+        index = this.embarque.productos.findIndex(p => p === candidato);
+        
+        console.log(`[ELIMINAR-PRODUCTO] 🎯 Candidato único encontrado en índice ${index}:`, {
+          id: candidato.id,
+          medida: candidato.medida,
+          tipo: candidato.tipo
+        });
+        
+        this._eliminarProductoPorIndice(index, 'candidato único');
+        return;
+      }
+      
+      if (candidatos.length > 1) {
+        console.warn(`[ELIMINAR-PRODUCTO] ⚠️  Múltiples candidatos encontrados (${candidatos.length}). No es seguro eliminar automáticamente.`);
+        console.log('[ELIMINAR-PRODUCTO] Candidatos:', candidatos.map(c => ({ id: c.id, medida: c.medida })));
+        
+        // Mostrar alerta al usuario
+        alert(`No se pudo eliminar el producto automáticamente.\n\nSe encontraron ${candidatos.length} productos similares.\nPor favor, recarga la página e intenta de nuevo.`);
+        return;
+      }
+      
+      // No se encontró nada
+      console.error(`[ELIMINAR-PRODUCTO] ❌ No se encontró ningún producto que coincida con:`, {
+        id: producto.id,
+        medida: producto.medida,
+        clienteId: producto.clienteId,
+        tipo: producto.tipo
+      });
+      
+      console.log(`[ELIMINAR-PRODUCTO] 📊 Total productos en embarque: ${this.embarque.productos.length}`);
+      
+      // Mostrar algunos productos existentes para debugging
+      if (this.embarque.productos.length > 0) {
+        console.log('[ELIMINAR-PRODUCTO] Primeros 3 productos en embarque:', 
+          this.embarque.productos.slice(0, 3).map(p => ({ id: p.id, medida: p.medida, clienteId: p.clienteId }))
+        );
+      }
+      
+      alert('Error: No se pudo encontrar el producto para eliminar.\nEsto puede indicar un problema de sincronización.\n\nPor favor, recarga la página.');
+    },
+    
+    _eliminarProductoPorIndice(index, metodo) {
+      const producto = this.embarque.productos[index];
+      
+      console.log(`[ELIMINAR-PRODUCTO] 🗑️  Eliminando producto (${metodo}):`, {
+        indice: index,
+        id: producto.id,
+        medida: producto.medida,
+        clienteId: producto.clienteId
+      });
+      
+      // Eliminar el producto del array
+      this.embarque.productos.splice(index, 1);
+      
+      console.log(`[ELIMINAR-PRODUCTO] ✅ Producto eliminado exitosamente. Productos restantes: ${this.embarque.productos.length}`);
+
+      // Guardar cambios si es necesario
+      if (this.embarqueId) {
+        this.guardarCambiosEnTiempoReal();
+      }
+      
+      // Actualizar las medidas usadas después de eliminar
+      this.actualizarMedidasUsadas();
+    },
+
+    // Función de debugging para verificar integridad de productos
+    verificarIntegridadProductos() {
+      console.log('\n🔍 === VERIFICACIÓN DE INTEGRIDAD DE PRODUCTOS ===');
+      console.log(`📊 Total productos en embarque: ${this.embarque.productos.length}`);
+      
+      // Verificar IDs únicos
+      const ids = this.embarque.productos.map(p => p.id);
+      const idsUnicos = [...new Set(ids)];
+      
+      if (ids.length !== idsUnicos.length) {
+        console.error(`❌ IDs duplicados detectados! Total: ${ids.length}, Únicos: ${idsUnicos.length}`);
+        
+        // Encontrar duplicados
+        const duplicados = ids.filter((id, index) => ids.indexOf(id) !== index);
+        console.log('🔍 IDs duplicados:', duplicados);
+      } else {
+        console.log(`✅ Todos los IDs son únicos`);
+      }
+      
+      // Verificar formato de IDs (debe ser UUID válido)
+      const idsInvalidos = this.embarque.productos.filter(p => {
+        return !p.id || !esUUIDValido(p.id);
+      });
+      
+      if (idsInvalidos.length > 0) {
+        console.error(`❌ ${idsInvalidos.length} productos con IDs inválidos:`, idsInvalidos);
+      } else {
+        console.log(`✅ Todos los IDs tienen formato válido`);
+      }
+      
+      // Verificar campos requeridos
+      const productosIncompletos = this.embarque.productos.filter(p => {
+        return !p.medida || !p.clienteId;
+      });
+      
+      if (productosIncompletos.length > 0) {
+        console.error(`❌ ${productosIncompletos.length} productos incompletos:`, productosIncompletos);
+      } else {
+        console.log(`✅ Todos los productos tienen campos requeridos`);
+      }
+      
+      // Mostrar resumen por cliente
+      const productosPortCliente = {};
+      this.embarque.productos.forEach(p => {
+        const cliente = p.clienteId || 'Sin cliente';
+        if (!productosPortCliente[cliente]) {
+          productosPortCliente[cliente] = [];
         }
-
-        // Eliminar el producto del array
-        this.embarque.productos.splice(index, 1);
-        console.log(`Producto con ID ${producto.id} eliminado del array embarque.productos.`);
-
-        // Guardar cambios si es necesario (después de la eliminación)
+        productosPortCliente[cliente].push(p.medida);
+      });
+      
+      console.log('📋 Productos por cliente:', productosPortCliente);
+      console.log('✅ Verificación de integridad completada\n');
+      
+      const tieneProblemas = ids.length !== idsUnicos.length || idsInvalidos.length > 0 || productosIncompletos.length > 0;
+      
+      if (tieneProblemas) {
+        console.log('\n💡 Para solucionar problemas automáticamente, ejecuta en consola: this.repararIDsProductos()');
+      }
+      
+      return {
+        total: this.embarque.productos.length,
+        idsUnicos: idsUnicos.length,
+        tieneProblemas: tieneProblemas
+      };
+    },
+    
+    // Función para reparar IDs corruptos o duplicados
+    repararIDsProductos() {
+      console.log('\n🔧 === REPARANDO IDs DE PRODUCTOS ===');
+      
+      const idsOriginales = this.embarque.productos.map(p => p.id);
+      const idsGenerados = new Set();
+      let productosReparados = 0;
+      
+      this.embarque.productos.forEach(producto => {
+        const idOriginal = producto.id;
+        let necesitaReparacion = false;
+        
+        // Verificar si el ID es inválido o duplicado
+        if (!idOriginal || !esUUIDValido(idOriginal)) {
+          necesitaReparacion = true;
+          console.log(`🔧 ID inválido detectado: ${idOriginal}`);
+        } else if (idsGenerados.has(idOriginal)) {
+          necesitaReparacion = true;
+          console.log(`🔧 ID duplicado detectado: ${idOriginal}`);
+        }
+        
+        if (necesitaReparacion) {
+          const nuevoId = uuidv4();
+          producto.id = nuevoId;
+          productosReparados++;
+          
+          console.log(`✅ ID reparado: ${idOriginal} → ${nuevoId} (${producto.medida})`);
+        }
+        
+        idsGenerados.add(producto.id);
+      });
+      
+      if (productosReparados > 0) {
+        console.log(`\n🎉 Reparación completada: ${productosReparados} productos reparados`);
+        
+        // Guardar cambios
         if (this.embarqueId) {
           this.guardarCambiosEnTiempoReal();
+          console.log('💾 Cambios guardados automáticamente');
         }
         
-        // Actualizar las medidas usadas después de eliminar
-        this.actualizarMedidasUsadas();
+        // Verificar integridad después de la reparación
+        console.log('\n🔍 Verificando integridad después de la reparación...');
+        setTimeout(() => {
+          this.verificarIntegridadProductos();
+        }, 500);
       } else {
-        console.warn('Intento de eliminar un producto NO ENCONTRADO en this.embarque.productos por ID:', producto);
-        // Podrías intentar buscar de otra forma como diagnóstico, pero no para eliminar:
-        const potentialMatches = this.embarque.productos.filter(p => p.clienteId === producto.clienteId && p.medida === producto.medida);
-        if (potentialMatches.length > 0) {
-          console.warn(`Se encontraron ${potentialMatches.length} productos con la misma medida y cliente, pero diferente ID.`);
-        }
+        console.log('✅ No se necesitaron reparaciones');
       }
+      
+      return productosReparados;
     },
 
     async agregarClienteProducto() {
@@ -2614,16 +2803,101 @@ export default {
     },
     async cargarPreciosActuales() {
       try {
+        console.log('[NUEVO-EMBARQUE] 🔄 Iniciando carga de precios actuales...');
+        
         const db = getFirestore();
         const preciosRef = collection(db, 'precios');
-        const q = query(preciosRef, orderBy('fecha', 'desc'));
-        const preciosSnapshot = await getDocs(q);
-        this.preciosActuales = preciosSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        
+        // Primero intentar cargar sin ordenamiento para verificar si hay datos
+        console.log('[NUEVO-EMBARQUE] 📊 Consultando colección precios...');
+        const preciosSnapshotSimple = await getDocs(preciosRef);
+        console.log(`[NUEVO-EMBARQUE] 📋 Documentos encontrados en colección precios: ${preciosSnapshotSimple.size}`);
+        
+        if (preciosSnapshotSimple.size === 0) {
+          console.warn('[NUEVO-EMBARQUE] ⚠️  La colección "precios" está vacía. Verificar si los precios se están guardando correctamente.');
+          this.preciosActuales = [];
+          return;
+        }
+        
+        // Si hay datos, proceder con query ordenado
+        console.log('[NUEVO-EMBARQUE] 🔄 Aplicando ordenamiento por fecha y timestamp...');
+        
+        // Intentar query con timestamp primero
+        let preciosSnapshot;
+        try {
+          const q = query(
+            preciosRef, 
+            orderBy('fecha', 'desc'), 
+            orderBy('timestamp', 'desc')
+          );
+          preciosSnapshot = await getDocs(q);
+          console.log('[NUEVO-EMBARQUE] ✅ Query con timestamp exitoso');
+        } catch (orderError) {
+          console.warn('[NUEVO-EMBARQUE] ⚠️  Error en query con timestamp, usando solo fecha:', orderError);
+          // Fallback a solo ordenar por fecha
+          const qFallback = query(preciosRef, orderBy('fecha', 'desc'));
+          preciosSnapshot = await getDocs(qFallback);
+        }
+        
+        // Procesar y normalizar los precios cargados
+        this.preciosActuales = preciosSnapshot.docs.map(doc => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            ...data,
+            // Asegurar que todos los precios tengan timestamp (para compatibilidad con precios viejos)
+            timestamp: data.timestamp || 0,
+            // Normalizar la fecha usando las nuevas utilidades
+            fecha: normalizarFechaISO(data.fecha)
+          };
+        });
+        
+        console.log(`[NUEVO-EMBARQUE] ✅ Precios cargados: ${this.preciosActuales.length} registros`);
+        
+        // Debug: Mostrar algunos precios de ejemplo
+        if (this.preciosActuales.length > 0) {
+          console.log('[NUEVO-EMBARQUE] 📋 Ejemplos de precios cargados:', this.preciosActuales.slice(0, 3));
+        }
+        
+        // Log de diagnóstico para fechas
+        const fechasUnicas = [...new Set(this.preciosActuales.map(p => p.fecha))];
+        console.log(`[NUEVO-EMBARQUE] Fechas de precios disponibles: ${fechasUnicas.length} fechas únicas`, fechasUnicas);
+        
+        // Verificar precios para fecha específica de hoy
+        const fechaHoy = normalizarFechaISO(new Date());
+        const preciosHoy = this.preciosActuales.filter(p => p.fecha === fechaHoy);
+        console.log(`[NUEVO-EMBARQUE] Precios disponibles para fecha actual (${fechaHoy}): ${preciosHoy.length}`);
+        
+        // Verificar si hay precios sin timestamp
+        const sinTimestamp = this.preciosActuales.filter(p => !p.timestamp || p.timestamp === 0);
+        if (sinTimestamp.length > 0) {
+          console.warn(`[NUEVO-EMBARQUE] ⚠️  ${sinTimestamp.length} precios sin timestamp (pueden causar problemas de ordenamiento)`);
+        }
+        
+        // Debug: Verificar si hay precios para "Golfo"
+        const preciosGolfo = this.preciosActuales.filter(p => 
+          p.producto && p.producto.toLowerCase().includes('golfo')
+        );
+        console.log(`[NUEVO-EMBARQUE] Precios encontrados para "Golfo": ${preciosGolfo.length}`, preciosGolfo);
         
       } catch (error) {
-        console.error('Error al cargar precios:', error);
+        console.error('[NUEVO-EMBARQUE] Error al cargar precios:', error);
+        // En caso de error, asegurar que tenemos un array vacío
+        this.preciosActuales = [];
       }
     },
+
+    async onPrecioAgregado(nuevoPrecio) {
+      console.log('[NUEVO-EMBARQUE] Precio agregado detectado:', nuevoPrecio);
+      console.log(`[NUEVO-EMBARQUE] Recargando precios después de agregar: ${nuevoPrecio.producto} - $${nuevoPrecio.precio}`);
+      
+      // Recargar precios actuales para que ProductoItem.vue tenga los datos más recientes
+      await this.cargarPreciosActuales();
+      
+      console.log(`[NUEVO-EMBARQUE] ✅ Precios recargados automáticamente después de agregar precio`);
+    },
+
+
   },
 
   watch: {

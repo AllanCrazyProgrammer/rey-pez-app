@@ -1,5 +1,10 @@
 import { getFirestore, collection, addDoc, doc, getDoc, query, where, getDocs, orderBy } from 'firebase/firestore';
-import { formatDate } from '../dateUtils';
+import { 
+  formatDate, 
+  normalizarFechaISO, 
+  obtenerFechaActualISO, 
+  esFechaValida 
+} from '../dateUtils';
 
 /**
  * Servicio para gestionar la creación y actualización de cuentas de clientes a partir de embarques
@@ -231,13 +236,11 @@ const obtenerPreciosVenta = async (clienteId, fechaEmbarque) => {
   try {
     const db = getFirestore();
     const preciosRef = collection(db, 'precios');
-    const q = query(preciosRef, orderBy('fecha', 'desc'));
+    const q = query(preciosRef, orderBy('fecha', 'desc'), orderBy('timestamp', 'desc'));
     const snapshot = await getDocs(q);
     
-    // Convertir fechaEmbarque a objeto Date para comparación
-    const fechaLimite = fechaEmbarque ? new Date(fechaEmbarque) : new Date();
-    // Asegurar que la fecha límite está en formato YYYY-MM-DD
-    const fechaLimiteISO = fechaLimite.toISOString().split('T')[0];
+    // Normalizar la fecha del embarque usando las nuevas utilidades
+    const fechaLimiteISO = fechaEmbarque ? normalizarFechaISO(fechaEmbarque) : obtenerFechaActualISO();
     
     // Mapa para almacenar los precios más recientes por medida
     const preciosPorMedida = new Map();
@@ -249,11 +252,10 @@ const obtenerPreciosVenta = async (clienteId, fechaEmbarque) => {
     
     snapshot.docs.forEach(doc => {
       const precio = doc.data();
-      const fechaPrecio = new Date(precio.fecha);
-      const fechaPrecioISO = fechaPrecio.toISOString().split('T')[0];
+      const fechaPrecioISO = normalizarFechaISO(precio.fecha);
       
       // Solo considerar precios con fecha anterior o igual a la fecha del embarque
-      if (fechaPrecioISO <= fechaLimiteISO) {
+      if (esFechaValida(fechaPrecioISO, fechaLimiteISO)) {
         const productoOriginal = precio.producto;
         const medidaNormalizada = normalizarMedida(precio.producto);
         
@@ -280,10 +282,10 @@ const obtenerPreciosVenta = async (clienteId, fechaEmbarque) => {
     });
     
     // Imprimir registros para diagnóstico
-    console.log(`=== Normalización de medidas para precios (fecha embarque: ${fechaLimiteISO}) ===`);
-    console.log('Medidas específicas para', clienteId, ':', Array.from(preciosEspecificos.entries()));
-    console.log('Medidas generales:', Array.from(preciosPorMedida.entries()));
-    console.log('Detalles de normalización:', registroNormalizaciones);
+    console.log(`[EMBARQUE-CUENTAS] === Normalización de medidas para precios (fecha embarque: ${fechaLimiteISO}) ===`);
+    console.log(`[EMBARQUE-CUENTAS] Medidas específicas para ${clienteId}:`, Array.from(preciosEspecificos.entries()));
+    console.log(`[EMBARQUE-CUENTAS] Medidas generales:`, Array.from(preciosPorMedida.entries()));
+    console.log(`[EMBARQUE-CUENTAS] Detalles de normalización (${registroNormalizaciones.length} registros):`, registroNormalizaciones);
     
     // Combinar ambos mapas, dando prioridad a los precios específicos
     const preciosFinales = new Map([...preciosPorMedida, ...preciosEspecificos]);

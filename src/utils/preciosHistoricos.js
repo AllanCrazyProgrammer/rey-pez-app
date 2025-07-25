@@ -1,6 +1,11 @@
 /**
  * Funciones utilitarias para manejar precios históricos
  */
+import { 
+  normalizarFechaISO, 
+  obtenerFechaActualISO, 
+  esFechaValida 
+} from './dateUtils';
 
 /**
  * Normaliza una medida para comparación
@@ -29,23 +34,22 @@ export const normalizarMedida = (medida) => {
  */
 export const obtenerPreciosParaFecha = (preciosActuales, fechaEmbarque, clienteId = null) => {
   if (!Array.isArray(preciosActuales)) {
-    console.warn('[DEBUG] preciosActuales no es un array válido');
+    console.warn('[PRECIOS] preciosActuales no es un array válido');
     return new Map();
   }
   
   // Si no hay fecha del embarque, usar la fecha actual como fallback
   if (!fechaEmbarque) {
-    console.warn('[DEBUG] No hay fecha del embarque, usando fecha actual como fallback');
-    fechaEmbarque = new Date().toISOString().split('T')[0];
+    console.warn('[PRECIOS] No hay fecha del embarque, usando fecha actual como fallback');
+    fechaEmbarque = obtenerFechaActualISO();
   }
 
-  // Convertir fechaEmbarque a objeto Date para comparación
-  const fechaLimite = new Date(fechaEmbarque);
-  const fechaLimiteISO = fechaLimite.toISOString().split('T')[0];
+  // Normalizar la fecha del embarque
+  const fechaLimiteISO = normalizarFechaISO(fechaEmbarque);
   
-  console.log(`[DEBUG] Filtrando precios para fecha embarque: ${fechaLimiteISO}, cliente: ${clienteId || 'general'}`);
-  console.log(`[DEBUG] Incluirá precios hasta la fecha del embarque (inclusive) para capturar modificaciones del mismo día`);
-  console.log(`[DEBUG] Total de precios a evaluar: ${preciosActuales.length}`);
+  console.log(`[PRECIOS] Filtrando precios para fecha embarque: ${fechaLimiteISO}, cliente: ${clienteId || 'general'}`);
+  console.log(`[PRECIOS] Incluirá precios hasta la fecha del embarque (inclusive) para capturar modificaciones del mismo día`);
+  console.log(`[PRECIOS] Total de precios a evaluar: ${preciosActuales.length}`);
   
   // Mapa para almacenar los precios más recientes por medida
   const preciosPorMedida = new Map();
@@ -54,11 +58,12 @@ export const obtenerPreciosParaFecha = (preciosActuales, fechaEmbarque, clienteI
   
   // Ordenar precios por fecha y luego por timestamp para garantizar orden correcto
   const preciosOrdenados = [...preciosActuales].sort((a, b) => {
-    const fechaA = new Date(a.fecha).getTime();
-    const fechaB = new Date(b.fecha).getTime();
+    // Normalizar fechas para comparación
+    const fechaA = normalizarFechaISO(a.fecha);
+    const fechaB = normalizarFechaISO(b.fecha);
     
     if (fechaA !== fechaB) {
-      return fechaA - fechaB; // Más antiguos primero
+      return fechaA < fechaB ? -1 : 1; // Más antiguos primero
     }
     
     // Si misma fecha, ordenar por timestamp (más recientes al final)
@@ -67,16 +72,22 @@ export const obtenerPreciosParaFecha = (preciosActuales, fechaEmbarque, clienteI
     return timestampA - timestampB;
   });
   
+  console.log(`[PRECIOS] Precios ordenados por fecha y timestamp:`, preciosOrdenados.map(p => ({
+    producto: p.producto,
+    fecha: p.fecha,
+    precio: p.precio,
+    timestamp: p.timestamp,
+    clienteId: p.clienteId
+  })));
+  
   // Filtrar y organizar precios (ahora usando el array ordenado)
   preciosOrdenados.forEach(precio => {
     if (!precio.fecha || !precio.producto) return;
     
-    const fechaPrecio = new Date(precio.fecha);
-    const fechaPrecioISO = fechaPrecio.toISOString().split('T')[0];
+    const fechaPrecioISO = normalizarFechaISO(precio.fecha);
     
-    // Considerar precios con fecha anterior o igual a la fecha del embarque
-    // Esto incluye modificaciones hechas el mismo día del embarque
-    if (fechaPrecioISO <= fechaLimiteISO) {
+    // Usar la nueva utilidad para validar fechas
+    if (esFechaValida(fechaPrecioISO, fechaLimiteISO)) {
       const medidaNormalizada = normalizarMedida(precio.producto);
       
               // Si es un precio específico para este cliente, tiene prioridad
@@ -91,9 +102,9 @@ export const obtenerPreciosParaFecha = (preciosActuales, fechaEmbarque, clienteI
             
             const esActualizacionMismoDia = precioExistente && fechaPrecioISO === precioExistente.fecha;
             if (esActualizacionMismoDia) {
-              console.log(`[DEBUG] Actualizando precio específico ${clienteId} para ${medidaNormalizada} - MISMO DÍA: $${precioExistente.precio} → $${precio.precio} (fecha: ${fechaPrecioISO})`);
+              console.log(`[PRECIOS] Actualizando precio específico ${clienteId} para ${medidaNormalizada} - MISMO DÍA: $${precioExistente.precio} → $${precio.precio} (fecha: ${fechaPrecioISO}, timestamp: ${precio.timestamp})`);
             } else {
-              console.log(`[DEBUG] Estableciendo precio específico ${clienteId} para ${medidaNormalizada}: $${precio.precio} (fecha: ${fechaPrecioISO})`);
+              console.log(`[PRECIOS] Estableciendo precio específico ${clienteId} para ${medidaNormalizada}: $${precio.precio} (fecha: ${fechaPrecioISO}, timestamp: ${precio.timestamp})`);
             }
             
             preciosEspecificos.set(medidaNormalizada, {
@@ -113,9 +124,9 @@ export const obtenerPreciosParaFecha = (preciosActuales, fechaEmbarque, clienteI
             
             const esActualizacionMismoDia = precioExistente && fechaPrecioISO === precioExistente.fecha;
             if (esActualizacionMismoDia) {
-              console.log(`[DEBUG] Actualizando precio general para ${medidaNormalizada} - MISMO DÍA: $${precioExistente.precio} → $${precio.precio} (fecha: ${fechaPrecioISO})`);
+              console.log(`[PRECIOS] Actualizando precio general para ${medidaNormalizada} - MISMO DÍA: $${precioExistente.precio} → $${precio.precio} (fecha: ${fechaPrecioISO}, timestamp: ${precio.timestamp})`);
             } else {
-              console.log(`[DEBUG] Estableciendo precio general para ${medidaNormalizada}: $${precio.precio} (fecha: ${fechaPrecioISO})`);
+              console.log(`[PRECIOS] Estableciendo precio general para ${medidaNormalizada}: $${precio.precio} (fecha: ${fechaPrecioISO}, timestamp: ${precio.timestamp})`);
             }
             
             preciosPorMedida.set(medidaNormalizada, {
@@ -142,7 +153,8 @@ export const obtenerPreciosParaFecha = (preciosActuales, fechaEmbarque, clienteI
     preciosFinales.set(medida, precio.precio);
   }
   
-  console.log(`[DEBUG] Precios filtrados para ${fechaLimiteISO}:`, Array.from(preciosFinales.entries()));
+  console.log(`[PRECIOS] ✅ Precios filtrados para ${fechaLimiteISO}:`, Array.from(preciosFinales.entries()));
+  console.log(`[PRECIOS] Total de medidas con precios: ${preciosFinales.size}`);
   
   return preciosFinales;
 };

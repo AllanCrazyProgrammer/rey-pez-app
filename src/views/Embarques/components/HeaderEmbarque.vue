@@ -31,7 +31,9 @@
         :class="{ 'disabled': isGeneratingPdf }">
         <i class="fas fa-chart-line"></i> Rendimientos
       </router-link>
-      <precios-historial-modal :clienteActual="clienteEmbarque">
+      <precios-historial-modal 
+        :clienteActual="clienteEmbarque"
+        @precio-agregado="onPrecioAgregado">
       </precios-historial-modal>
     </div>
 
@@ -145,6 +147,11 @@ export default {
     },
     abrirConfiguracionMedidas() {
       this.$emit('abrir-configuracion-medidas');
+    },
+    onPrecioAgregado(nuevoPrecio) {
+      console.log('[HEADER-EMBARQUE] Precio agregado:', nuevoPrecio);
+      // Reenviar el evento hacia arriba para que NuevoEmbarque.vue recargue sus precios
+      this.$emit('precio-agregado', nuevoPrecio);
     }
   }
 };

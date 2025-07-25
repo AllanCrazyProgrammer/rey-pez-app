@@ -265,6 +265,13 @@
 <script>
 import { db } from '@/firebase';
 import { collection, addDoc, query, where, getDocs, orderBy, deleteDoc, doc } from 'firebase/firestore';
+import { 
+  obtenerFechaActualISO, 
+  normalizarFechaISO, 
+  obtenerTimestamp, 
+  formatearFechaParaMostrar,
+  esFechaValida 
+} from '@/utils/dateUtils';
 
 export default {
   name: 'PreciosHistorialModal',
@@ -299,7 +306,7 @@ export default {
       newPrice: {
         producto: '',
         precio: null,
-        fecha: new Date().toISOString().split('T')[0],
+        fecha: obtenerFechaActualISO(),
         categoria: 'Otros',
         esClienteEspecifico: false,
         clienteId: ''
@@ -308,7 +315,7 @@ export default {
   },
   computed: {
     currentDate() {
-      return new Date().toISOString().split('T')[0];
+      return obtenerFechaActualISO();
     },
     // Computed property para paginación
     totalPaginas() {
@@ -408,9 +415,7 @@ export default {
       }) || '0.00';
     },
     formatDate(date) {
-      if (!date) return '';
-      const options = { year: 'numeric', month: 'long', day: 'numeric' };
-      return new Date(date).toLocaleDateString('es-ES', options);
+      return formatearFechaParaMostrar(date);
     },
     calcularCambio(precioActual, precioAnterior) {
       const diferencia = precioActual - precioAnterior;
@@ -554,8 +559,11 @@ export default {
 
     async guardarPrecio(precioData, procesarDecisiones = false) {
       try {
-        // Usar la fecha exacta sin ajustes de zona horaria
-        const fechaAjustada = precioData.fecha;
+        // Normalizar fecha para evitar problemas de zona horaria
+        const fechaNormalizada = normalizarFechaISO(precioData.fecha);
+        const timestamp = obtenerTimestamp();
+
+        console.log(`[PRECIOS] Guardando precio - Fecha original: ${precioData.fecha}, Fecha normalizada: ${fechaNormalizada}, Timestamp: ${timestamp}`);
 
         // Determinar la categoría basada en el nombre del producto
         const nombreProducto = precioData.producto.toLowerCase();
@@ -567,16 +575,24 @@ export default {
         }
 
         const nuevoPrecio = {
-          producto: precioData.producto,
-          precio: precioData.precio,
-          fecha: fechaAjustada,
-          categoria: categoria
+          producto: precioData.producto.trim(),
+          precio: parseFloat(precioData.precio),
+          fecha: fechaNormalizada,
+          categoria: categoria,
+          timestamp: timestamp,
+          fechaCreacion: obtenerFechaActualISO(),
+          horaCreacion: new Date().toLocaleTimeString('es-ES')
         };
 
         // Agregar clienteId solo si es un precio específico
         if (precioData.esClienteEspecifico && precioData.clienteId) {
           nuevoPrecio.clienteId = precioData.clienteId;
+          console.log(`[PRECIOS] Precio específico para cliente: ${precioData.clienteId}`);
+        } else {
+          console.log(`[PRECIOS] Precio general (sin cliente específico)`);
         }
+
+        console.log(`[PRECIOS] Datos finales a guardar:`, nuevoPrecio);
 
         await addDoc(collection(db, 'precios'), nuevoPrecio);
 
@@ -597,14 +613,25 @@ export default {
         this.newPrice = {
           producto: '',
           precio: null,
-          fecha: new Date().toISOString().split('T')[0],
+          fecha: obtenerFechaActualISO(),
           categoria: 'Otros',
           esClienteEspecifico: false,
           clienteId: ''
         };
 
+        console.log(`[PRECIOS] Precio guardado exitosamente y formulario limpiado`);
+
         // Recargar precios actuales
         await this.cargarPreciosActuales();
+        
+        // Emitir evento para que el componente padre también recargue sus precios
+        this.$emit('precio-agregado', {
+          producto: precioData.producto,
+          precio: precioData.precio,
+          fecha: fechaNormalizada,
+          clienteId: precioData.clienteId,
+          timestamp: timestamp
+        });
       } catch (error) {
         console.error('Error al agregar precio:', error);
         alert('Error al guardar el precio');

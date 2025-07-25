@@ -215,6 +215,7 @@
 
 <script>
 import { obtenerPrecioParaMedida, normalizarMedida } from '@/utils/preciosHistoricos';
+import { normalizarFechaISO, obtenerFechaActualISO } from '@/utils/dateUtils';
 
 export default {
     name: 'ProductoItem',
@@ -481,10 +482,9 @@ export default {
         // Método para asignar el precio automáticamente según la medida y el cliente
         asignarPrecioAutomatico() {
             if (!this.producto.medida) {
+                console.log(`[PRODUCTO-ITEM] No hay medida definida para asignar precio automático`);
                 return;
             }
-
-
 
             const nombreCliente = this.nombreCliente.trim().toLowerCase();
             
@@ -498,8 +498,18 @@ export default {
             
             const clienteId = clienteIdMap[nombreCliente] || null;
             
-            // Usar la función utilitaria para obtener precio histórico
-            const fechaParaPrecios = this.fechaEmbarque || new Date().toISOString().split('T')[0];
+            // Usar las nuevas utilidades para normalizar fecha
+            const fechaParaPrecios = this.fechaEmbarque ? normalizarFechaISO(this.fechaEmbarque) : obtenerFechaActualISO();
+            
+            console.log(`[PRODUCTO-ITEM] Buscando precio automático para:`, {
+                medida: this.producto.medida,
+                cliente: nombreCliente,
+                clienteId: clienteId,
+                fechaEmbarque: this.fechaEmbarque,
+                fechaNormalizada: fechaParaPrecios,
+                totalPreciosDisponibles: this.preciosActuales.length
+            });
+            
             const precioHistorico = obtenerPrecioParaMedida(
                 this.preciosActuales, 
                 this.producto.medida, 
@@ -510,14 +520,19 @@ export default {
             if (precioHistorico) {
                 this.producto.precio = precioHistorico;
                 
+                console.log(`[PRODUCTO-ITEM] ✅ Precio asignado automáticamente: $${precioHistorico} para ${this.producto.medida} (${nombreCliente})`);
+                
                 // Emitir evento para notificar que se asignó precio automáticamente
                 this.$emit('precio-asignado-automaticamente', {
                     medida: this.producto.medida,
                     cliente: nombreCliente,
                     precio: precioHistorico,
-                    fecha: this.fechaEmbarque || 'actual',
-                    esMismoDiaActual: this.fechaEmbarque === new Date().toISOString().split('T')[0]
+                    fecha: fechaParaPrecios,
+                    esMismoDiaActual: fechaParaPrecios === obtenerFechaActualISO(),
+                    clienteId: clienteId
                 });
+            } else {
+                console.log(`[PRODUCTO-ITEM] ⚠️  No se encontró precio automático para ${this.producto.medida} (${nombreCliente}) en fecha ${fechaParaPrecios}`);
             }
         },
 
