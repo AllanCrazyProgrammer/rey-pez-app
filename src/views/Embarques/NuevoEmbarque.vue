@@ -2067,8 +2067,12 @@ export default {
       if (this.itemSeleccionado) {
         if (precio !== null) {
           this.$set(this.itemSeleccionado, 'precio', precio);
+          // El usuario asignó un precio manualmente, permitir futuras asignaciones automáticas
+          this.$set(this.itemSeleccionado, 'precioBorradoManualmente', false);
         } else {
           this.$delete(this.itemSeleccionado, 'precio');
+          // El usuario borró el precio manualmente, marcar para evitar asignaciones automáticas
+          this.$set(this.itemSeleccionado, 'precioBorradoManualmente', true);
         }
         
         const guardadoActivo = this.guardadoAutomaticoActivo;

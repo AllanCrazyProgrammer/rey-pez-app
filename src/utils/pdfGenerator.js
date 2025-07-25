@@ -602,7 +602,8 @@ async function generarContenidoClientes(embarque, clientesDisponibles, clientesJ
         // Si tiene activado incluir precios, obtener precios de Firestore
         if (incluirPreciosCliente) {
           const promesasPrecios = productosAgrupados.map(async (producto) => {
-            if (!producto.precio) {
+            // Solo asignar precio automático si no lo tiene Y no fue borrado manualmente
+            if (!producto.precio && !producto.precioBorradoManualmente) {
               const nombreProducto = producto.nombreAlternativoPDF || producto.medida;
               const precio = await obtenerPrecioProductoCatarro(nombreProducto);
               if (precio) {
@@ -651,7 +652,8 @@ async function generarContenidoClientes(embarque, clientesDisponibles, clientesJ
         if (incluirPreciosCliente) {
           const promesasPrecios = crudosConPrecios.map(async (crudo) => {
             const itemsConPrecios = await Promise.all(crudo.items.map(async (item) => {
-              if (!item.precio && item.talla) {
+              // Solo asignar precio automático si no lo tiene Y no fue borrado manualmente
+              if (!item.precio && !item.precioBorradoManualmente && item.talla) {
                 // Buscar precio basado en la talla del crudo
                 const precio = await obtenerPrecioProductoCatarro(item.talla);
                 if (precio) {

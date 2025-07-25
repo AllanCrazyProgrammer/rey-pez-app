@@ -486,6 +486,12 @@ export default {
                 return;
             }
 
+            // Si el precio fue borrado manualmente por el usuario, no asignar automáticamente
+            if (this.producto.precioBorradoManualmente) {
+                console.log(`[PRODUCTO-ITEM] Precio fue borrado manualmente, no asignar automáticamente para ${this.producto.medida}`);
+                return;
+            }
+
             const nombreCliente = this.nombreCliente.trim().toLowerCase();
             
             // Mapear nombres de cliente a IDs
@@ -553,6 +559,13 @@ export default {
             }
 
             this.producto.isEditing = true;
+            
+            // Resetear la bandera de precio borrado manualmente cuando se cambia la medida
+            // para permitir asignación automática para la nueva medida
+            if (this.producto.precioBorradoManualmente) {
+                this.producto.precioBorradoManualmente = false;
+            }
+            
             this.asignarPrecioAutomatico();
             this.actualizarProducto();
         },
@@ -577,6 +590,12 @@ export default {
         seleccionarMedida(medida) {
             this.producto.medida = medida;
             this.mostrarSugerencias = false;
+            
+            // Resetear la bandera de precio borrado manualmente cuando se selecciona una nueva medida
+            if (this.producto.precioBorradoManualmente) {
+                this.producto.precioBorradoManualmente = false;
+            }
+            
             this.asignarPrecioAutomatico();
             this.actualizarProducto();
             this.$emit('seleccionar-medida', this.producto, medida);
@@ -589,6 +608,13 @@ export default {
             if (this.producto.tipo === 'c/h20' && !this.producto.camaronNeto) {
                 this.producto.camaronNeto = 0.65;
             }
+            
+            // Resetear la bandera de precio borrado manualmente cuando se cambia el tipo
+            // ya que esto podría afectar el precio del producto
+            if (this.producto.precioBorradoManualmente) {
+                this.producto.precioBorradoManualmente = false;
+            }
+            
             this.asignarPrecioAutomatico();
             this.actualizarProducto();
         },
