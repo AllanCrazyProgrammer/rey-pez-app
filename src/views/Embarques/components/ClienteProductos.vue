@@ -105,7 +105,7 @@
             <!-- Lista de productos -->
             <ProductoItem v-for="(producto, index) in productos" :key="index" :producto="producto"
                 :embarque-bloqueado="embarqueBloqueado" :medidas-usadas="medidasUsadas" :medidas-configuracion="medidasConfiguracion" :nombre-cliente="nombreCliente"
-                :precios-actuales="preciosActuales"
+                :precios-actuales="preciosActuales" :fecha-embarque="fechaEmbarque"
                 @update:producto="actualizarProducto" @eliminar-producto="$emit('eliminar-producto', producto)"
                 @mostrar-modal-precio="$emit('mostrar-modal-precio', $event)"
                 @mostrar-modal-hilos="$emit('mostrar-modal-hilos', $event)"
@@ -211,8 +211,12 @@ export default {
             default: false
         },
         preciosActuales: {
-            type: Object,
-            default: () => ({})
+            type: Array,
+            default: () => []
+        },
+        fechaEmbarque: {
+            type: String,
+            default: ''
         }
     },
 

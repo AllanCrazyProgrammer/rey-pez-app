@@ -89,6 +89,7 @@
           :pdf-type="pdfType" 
           :is-creating-account="isCreatingAccount"
           :precios-actuales="preciosActuales"
+          :fecha-embarque="embarque.fecha"
           @update:productos="actualizarProductosCliente(clienteId, $event)"
           @update:crudos="actualizarCrudosCliente(clienteId, $event)" 
           @juntarMedidas-change="handleJuntarMedidasChange"
@@ -2618,6 +2619,7 @@ export default {
         const q = query(preciosRef, orderBy('fecha', 'desc'));
         const preciosSnapshot = await getDocs(q);
         this.preciosActuales = preciosSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        
       } catch (error) {
         console.error('Error al cargar precios:', error);
       }

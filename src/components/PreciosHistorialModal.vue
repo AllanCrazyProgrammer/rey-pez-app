@@ -554,10 +554,8 @@ export default {
 
     async guardarPrecio(precioData, procesarDecisiones = false) {
       try {
-        // Ajustar la fecha para compensar la zona horaria
-        const fecha = new Date(precioData.fecha);
-        fecha.setDate(fecha.getDate() + 1);
-        const fechaAjustada = fecha.toISOString().split('T')[0];
+        // Usar la fecha exacta sin ajustes de zona horaria
+        const fechaAjustada = precioData.fecha;
 
         // Determinar la categoría basada en el nombre del producto
         const nombreProducto = precioData.producto.toLowerCase();

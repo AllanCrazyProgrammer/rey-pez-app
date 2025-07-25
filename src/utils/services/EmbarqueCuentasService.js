@@ -721,6 +721,9 @@ const prepararDatosCuentaCatarro = async (embarqueData) => {
   // Obtener los precios de venta más recientes según la fecha del embarque
   const preciosVenta = await obtenerPreciosVenta('catarro', fecha);
   
+  console.log(`[DEBUG] Creando cuenta de Catarro para fecha: ${fecha}`);
+  console.log(`[DEBUG] Precios de venta cargados para fecha ${fecha}:`, Array.from(preciosVenta.entries()));
+  
   // Preparar los items de la cuenta
   const items = [];
   const itemsVenta = [];
@@ -762,8 +765,17 @@ const prepararDatosCuentaCatarro = async (embarqueData) => {
         
         // Obtener el costo y el precio de venta
         const costo = producto.precio || producto.costo || 0;
-        // Buscar el precio de venta en el mapa de precios o usar precio manual
-        const precioVenta = producto.precio || preciosVenta.get(medidaNormalizada) || 0;
+        // Buscar el precio de venta histórico según la fecha del embarque, con fallback al precio del producto
+        const precioVenta = preciosVenta.get(medidaNormalizada) || producto.precio || 0;
+        
+        // Log para diagnóstico
+        if (preciosVenta.get(medidaNormalizada)) {
+          console.log(`[DEBUG] Usando precio histórico para ${medida}: $${precioVenta}`);
+        } else if (producto.precio) {
+          console.log(`[DEBUG] Usando precio del producto para ${medida}: $${precioVenta} (no hay precio histórico)`);
+        } else {
+          console.log(`[DEBUG] No hay precio definido para ${medida}, usando $0`);
+        }
         
         // Calcular kilos para costos y ventas
         const kilosCosto = calcularKilosCrudos(medida, kilos, true);
@@ -831,9 +843,9 @@ const prepararDatosCuentaCatarro = async (embarqueData) => {
             const medida = item.talla || 'Crudo';
             const medidaNormalizada = normalizarMedida(medida);
             
-            // Obtener costo y precio de venta (primero buscar precio manual)
+            // Obtener costo y precio de venta (priorizar precios históricos de la fecha del embarque)
             const costo = item.precio || 0;
-            const precioVenta = item.precio || preciosVenta.get(medidaNormalizada) || 0;
+            const precioVenta = preciosVenta.get(medidaNormalizada) || item.precio || 0;
             
             // Calcular kilos para ventas (ajustar 19 a 20)
             let kilosTarasVenta = 0;
@@ -962,13 +974,13 @@ const prepararDatosCuentaOzuna = async (embarqueData) => {
         let costo = 0;
         
         if (producto.esVenta) {
-          // Si es venta, buscar precio en la base de datos o considerar precio manual
+          // Si es venta, buscar precio histórico de la fecha del embarque, con fallback al precio manual
           const medidaNormalizada = normalizarMedida(medida);
-          // Primero usar precio manual si existe
+          // Priorizar precio histórico de la fecha del embarque
           const precioEncontrado = preciosVenta.get(medidaNormalizada);
           
-          // Usar precio encontrado o precio manual
-          costo = parseFloat(producto.precio) || precioEncontrado || 0;
+          // Usar precio histórico o precio manual como fallback
+          costo = precioEncontrado || parseFloat(producto.precio) || 0;
         } else {
           // Si es maquila, usar valor por defecto de 20
           costo = 20;
@@ -1055,12 +1067,12 @@ const prepararDatosCuentaOzuna = async (embarqueData) => {
             const medida = item.medida || item.talla || 'Crudo';
             
             // Para crudos de Ozuna, siempre considerar como venta sin importar el estado del checkbox
-            // Buscar precio en la base de datos o usar precio manual si existe
+            // Priorizar precios históricos de la fecha del embarque
             const medidaNormalizada = normalizarMedida(medida);
             const precioEncontrado = preciosVenta.get(medidaNormalizada);
             
-            // Usar precio encontrado o precio manual
-            const costo = parseFloat(item.precio) || precioEncontrado || 0;
+            // Usar precio histórico o precio manual como fallback
+            const costo = precioEncontrado || parseFloat(item.precio) || 0;
             
             // Solo agregar el item si tiene kilos
             if (kilos > 0) {
@@ -1154,9 +1166,9 @@ const prepararDatosCuentaOtilio = async (embarqueData) => {
         // Determinar el costo para la tabla de costos
         const costo = 20; // Para Otilio, usamos un costo base fijo de 20 para maquila
         
-        // Buscar el precio de venta: primero usar precio manual, luego buscar en los precios históricos
-        const precioVenta = parseFloat(producto.precio) || 
-                           preciosVenta.get(medidaNormalizada) || 0;
+        // Buscar el precio de venta: priorizar precios históricos de la fecha del embarque
+        const precioVenta = preciosVenta.get(medidaNormalizada) || 
+                           parseFloat(producto.precio) || 0;
         
         // Calcular kilos para costos y ventas
         const kilosCosto = calcularKilosCrudos(medida, kilos, true);
@@ -1258,9 +1270,9 @@ const prepararDatosCuentaOtilio = async (embarqueData) => {
             // Para crudos, usar costo base fijo de 20
             const costo = 20;
             
-            // Buscar precio en la base de datos o usar precio manual
-            const precioVenta = parseFloat(item.precio) || 
-                               preciosVenta.get(medidaNormalizada) || 0;
+            // Priorizar precios históricos de la fecha del embarque, con fallback al precio manual
+            const precioVenta = preciosVenta.get(medidaNormalizada) || 
+                               parseFloat(item.precio) || 0;
             
             // Solo agregar el item si tiene kilos
             if (kilosCosto > 0) {

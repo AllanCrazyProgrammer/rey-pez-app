@@ -214,6 +214,8 @@
 
 
 <script>
+import { obtenerPrecioParaMedida, normalizarMedida } from '@/utils/preciosHistoricos';
+
 export default {
     name: 'ProductoItem',
     props: {
@@ -238,8 +240,12 @@ export default {
             default: ''
         },
         preciosActuales: {
-            type: Object,
-            default: () => ({})
+            type: Array,
+            default: () => []
+        },
+        fechaEmbarque: {
+            type: String,
+            default: ''
         }
     },
 
@@ -260,7 +266,8 @@ export default {
         'mostrar-modal-alt',
         'actualizar-medidas-usadas',
         'seleccionar-medida',
-        'activar-incluir-precios-catarro'
+        'activar-incluir-precios-catarro',
+        'precio-asignado-automaticamente'
     ],
 
     computed: {
@@ -364,30 +371,35 @@ export default {
     },
 
     mounted() {
+        // Asignar precio automático para todos los clientes
+        this.asignarPrecioAutomatico();
+        
         if (this.nombreCliente.trim().toLowerCase().includes('catarro')) {
-            this.asignarPrecioAutomatico();
             this.$emit('activar-incluir-precios-catarro');
         }
     },
     watch: {
         'producto.medida': function() {
-            if (this.nombreCliente.trim().toLowerCase().includes('catarro')) {
-                this.asignarPrecioAutomatico();
-            }
+            this.asignarPrecioAutomatico();
         },
         nombreCliente: function() {
+            this.asignarPrecioAutomatico();
             if (this.nombreCliente.trim().toLowerCase().includes('catarro')) {
-                this.asignarPrecioAutomatico();
                 this.$emit('activar-incluir-precios-catarro');
             }
         },
         preciosActuales: {
             handler() {
-                if (this.nombreCliente.trim().toLowerCase().includes('catarro')) {
-                    this.asignarPrecioAutomatico();
-                }
+                this.asignarPrecioAutomatico();
             },
             deep: true
+        },
+        fechaEmbarque: {
+            handler(newVal) {
+                if (newVal) {
+                    this.asignarPrecioAutomatico();
+                }
+            }
         }
     },
 
@@ -468,36 +480,45 @@ export default {
 
         // Método para asignar el precio automáticamente según la medida y el cliente
         asignarPrecioAutomatico() {
-            if (!this.producto.medida) return;
-            const nombreProducto = this.producto.medida.trim().toLowerCase();
-            const nombreCliente = this.nombreCliente.trim().toLowerCase();
-            let precio = null;
-            // Buscar primero por cliente específico
-            if (this.preciosActuales && Array.isArray(this.preciosActuales)) {
-                // Si preciosActuales es array (fallback)
-                precio = this.preciosActuales.find(p =>
-                    (p.producto || '').trim().toLowerCase() === nombreProducto &&
-                    (p.clienteId || '').trim().toLowerCase() === nombreCliente
-                );
-                if (!precio) {
-                    precio = this.preciosActuales.find(p =>
-                        (p.producto || '').trim().toLowerCase() === nombreProducto &&
-                        (!p.clienteId || (p.clienteId + '').trim() === '')
-                    );
-                }
-            } else if (this.preciosActuales && typeof this.preciosActuales === 'object') {
-                // Si preciosActuales es objeto (por producto)
-                const lista = this.preciosActuales[nombreProducto];
-                if (Array.isArray(lista)) {
-                    // Buscar precio específico para el cliente
-                    precio = lista.find(p => (p.clienteId || '').trim().toLowerCase() === nombreCliente);
-                    if (!precio) {
-                        // Buscar precio general
-                        precio = lista.find(p => !p.clienteId || (p.clienteId + '').trim() === '');
-                    }
-                }
+            if (!this.producto.medida) {
+                return;
             }
-            this.producto.precio = precio ? precio.precio : null;
+
+
+
+            const nombreCliente = this.nombreCliente.trim().toLowerCase();
+            
+            // Mapear nombres de cliente a IDs
+            const clienteIdMap = {
+                'catarro': 'catarro',
+                'joselito': 'joselito', 
+                'otilio': 'otilio',
+                'ozuna': 'ozuna'
+            };
+            
+            const clienteId = clienteIdMap[nombreCliente] || null;
+            
+            // Usar la función utilitaria para obtener precio histórico
+            const fechaParaPrecios = this.fechaEmbarque || new Date().toISOString().split('T')[0];
+            const precioHistorico = obtenerPrecioParaMedida(
+                this.preciosActuales, 
+                this.producto.medida, 
+                fechaParaPrecios, 
+                clienteId
+            );
+            
+            if (precioHistorico) {
+                this.producto.precio = precioHistorico;
+                
+                // Emitir evento para notificar que se asignó precio automáticamente
+                this.$emit('precio-asignado-automaticamente', {
+                    medida: this.producto.medida,
+                    cliente: nombreCliente,
+                    precio: precioHistorico,
+                    fecha: this.fechaEmbarque || 'actual',
+                    esMismoDiaActual: this.fechaEmbarque === new Date().toISOString().split('T')[0]
+                });
+            }
         },
 
         // Métodos para el manejo de la medida
