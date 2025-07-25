@@ -22,14 +22,14 @@
       </h3>
       <div class="barcos-buttons">
         <button 
-          :class="['barco-btn', { active: barcoSeleccionado === 'galileo' }]"
+          :class="['barco-btn', 'barco-galileo', { active: barcoSeleccionado === 'galileo' }]"
           @click="seleccionarBarco('galileo')"
         >
           <i class="barco-icon">🚢</i>
           <span>El Galileo</span>
         </button>
         <button 
-          :class="['barco-btn', { active: barcoSeleccionado === 'maria-guadalupe' }]"
+          :class="['barco-btn', 'barco-maria-guadalupe', { active: barcoSeleccionado === 'maria-guadalupe' }]"
           @click="seleccionarBarco('maria-guadalupe')"
         >
           <i class="barco-icon">🛥️</i>
@@ -41,7 +41,7 @@
     <div class="menu-options" v-if="barcoSeleccionado">
       <router-link 
         :to="`/barcos/deudas/lista?barco=${barcoSeleccionado}`" 
-        class="btn-action btn-lista"
+        :class="['btn-action', 'btn-lista', `barco-theme-${barcoSeleccionado}`]"
         aria-label="Ver lista de deudas del barco"
       >
         <i class="icon">📋</i>
@@ -50,7 +50,7 @@
       
       <router-link 
         :to="`/barcos/deudas/nueva?barco=${barcoSeleccionado}`" 
-        class="btn-action btn-nueva"
+        :class="['btn-action', 'btn-nueva', `barco-theme-${barcoSeleccionado}`]"
         aria-label="Crear nueva deuda para el barco"
       >
         <i class="icon">➕</i>
@@ -59,7 +59,7 @@
       
       <router-link 
         to="/barcos/resumen-mensual" 
-        class="btn-action btn-reporte"
+        :class="['btn-action', 'btn-reporte', `barco-theme-${barcoSeleccionado}`]"
         aria-label="Ver reporte mensual de barcos"
       >
         <i class="icon">📊</i>
@@ -68,7 +68,7 @@
       
       <button 
         @click="openProveedoresModal" 
-        class="btn-action btn-config"
+        :class="['btn-action', 'btn-config', `barco-theme-${barcoSeleccionado}`]"
         aria-label="Configurar proveedores de barcos"
       >
         <i class="icon">⚙️</i>
@@ -247,6 +247,29 @@ export default {
       ]
     };
   },
+  computed: {
+    // Colores dinámicos según el barco seleccionado
+    colorPrimario() {
+      return this.barcoSeleccionado === 'maria-guadalupe' 
+        ? '#27ae60'  // Verde para María Guadalupe
+        : '#3498db';  // Azul para Galileo
+    },
+    colorSecundario() {
+      return this.barcoSeleccionado === 'maria-guadalupe' 
+        ? '#2ecc71'  // Verde claro para María Guadalupe
+        : '#2980b9';  // Azul oscuro para Galileo
+    },
+    colorHover() {
+      return this.barcoSeleccionado === 'maria-guadalupe' 
+        ? 'rgba(39, 174, 96, 0.2)'  // Verde con transparencia
+        : 'rgba(52, 152, 219, 0.2)';  // Azul con transparencia
+    },
+    gradientePrimario() {
+      return this.barcoSeleccionado === 'maria-guadalupe' 
+        ? 'linear-gradient(135deg, #27ae60 0%, #2ecc71 100%)'
+        : 'linear-gradient(135deg, #3498db 0%, #2980b9 100%)';
+    }
+  },
   mounted() {
     this.loadProveedores();
   },
@@ -344,6 +367,7 @@ export default {
   padding: 40px;
   margin-bottom: 30px;
   box-shadow: 0 10px 30px rgba(52, 152, 219, 0.3);
+  transition: all 0.3s ease;
 }
 
 .header-content {
@@ -415,6 +439,30 @@ export default {
   box-shadow: 0 4px 12px rgba(52, 152, 219, 0.2);
 }
 
+/* Estilos específicos para Galileo */
+.barco-galileo:hover {
+  border-color: #3498db !important;
+  box-shadow: 0 4px 12px rgba(52, 152, 219, 0.2) !important;
+}
+
+.barco-galileo.active {
+  background: linear-gradient(135deg, #3498db 0%, #2980b9 100%) !important;
+  color: white;
+  border-color: #3498db !important;
+}
+
+/* Estilos específicos para María Guadalupe */
+.barco-maria-guadalupe:hover {
+  border-color: #27ae60 !important;
+  box-shadow: 0 4px 12px rgba(39, 174, 96, 0.2) !important;
+}
+
+.barco-maria-guadalupe.active {
+  background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%) !important;
+  color: white;
+  border-color: #27ae60 !important;
+}
+
 .barco-btn.active {
   background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
   color: white;
@@ -472,6 +520,39 @@ export default {
 
 .btn-action .icon {
   font-size: 2.5em;
+}
+
+/* Temas de colores para los botones según el barco */
+.barco-theme-galileo.btn-lista {
+  background: linear-gradient(135deg, #3498db 0%, #5dade2 100%) !important;
+}
+
+.barco-theme-galileo.btn-nueva {
+  background: linear-gradient(135deg, #2980b9 0%, #3498db 100%) !important;
+}
+
+.barco-theme-galileo.btn-reporte {
+  background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%) !important;
+}
+
+.barco-theme-galileo.btn-config {
+  background: linear-gradient(135deg, #8e44ad 0%, #9b59b6 100%) !important;
+}
+
+.barco-theme-maria-guadalupe.btn-lista {
+  background: linear-gradient(135deg, #27ae60 0%, #58d68d 100%) !important;
+}
+
+.barco-theme-maria-guadalupe.btn-nueva {
+  background: linear-gradient(135deg, #229954 0%, #27ae60 100%) !important;
+}
+
+.barco-theme-maria-guadalupe.btn-reporte {
+  background: linear-gradient(135deg, #1e8449 0%, #239b56 100%) !important;
+}
+
+.barco-theme-maria-guadalupe.btn-config {
+  background: linear-gradient(135deg, #148f77 0%, #17a2b8 100%) !important;
 }
 
 /* Modal Styles */

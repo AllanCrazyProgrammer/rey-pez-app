@@ -5,7 +5,7 @@
     </div>
     
     <!-- Header -->
-    <div class="header-section">
+    <div class="header-section" :style="{ background: gradientePrimario }">
       <div class="header-content">
         <h1 class="main-title">
           <i class="icon-chart">📊</i>
@@ -99,8 +99,8 @@
 
     <!-- Resumen por Barco -->
     <div v-if="!loading" class="barcos-resumen-container">
-      <div v-for="barco in barcosConDatos" :key="barco.id" class="barco-resumen-card">
-        <div class="barco-header">
+      <div v-for="barco in barcosConDatos" :key="barco.id" class="barco-resumen-card" :style="{ borderTopColor: getBarcoColors(barco.id).primary }">
+        <div class="barco-header" :style="{ background: getBarcoColors(barco.id).gradient }">
           <div class="barco-info">
             <i class="barco-icon">{{ barco.id === 'galileo' ? '🚢' : '🛥️' }}</i>
             <div class="barco-details">
@@ -228,7 +228,6 @@ export default {
       loading: true,
       mesActual: new Date().getMonth(),
       añoActual: new Date().getFullYear(),
-      mesSeleccionadoRapido: '',
       deudas: [],
       proveedores: [],
       resumenGeneral: {
@@ -237,16 +236,46 @@ export default {
         saldoPendiente: 0,
         proveedoresActivos: 0
       },
-      barcosConDatos: [],
-      nombresMeses: [
+      mesesDelAño: [
         'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
         'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
-      ]
+      ],
+      mesSeleccionadoRapido: ''
     };
   },
   computed: {
+    // Colores dinámicos (por ahora generales, se pueden personalizar por barco específico)
+    colorPrimario() {
+      return '#3498db';  // Azul por defecto
+    },
+    colorSecundario() {
+      return '#2980b9';  // Azul oscuro por defecto
+    },
+    gradientePrimario() {
+      return 'linear-gradient(135deg, #3498db 0%, #2980b9 100%)';
+    },
+    // Función para obtener colores específicos por barco
+    getBarcoColors() {
+      return (barcoId) => {
+        if (barcoId === 'maria-guadalupe') {
+          return {
+            primary: '#27ae60',
+            secondary: '#2ecc71',
+            gradient: 'linear-gradient(135deg, #27ae60 0%, #2ecc71 100%)',
+            shadowColor: 'rgba(39, 174, 96, 0.3)'
+          };
+        } else {
+          return {
+            primary: '#3498db',
+            secondary: '#2980b9', 
+            gradient: 'linear-gradient(135deg, #3498db 0%, #2980b9 100%)',
+            shadowColor: 'rgba(52, 152, 219, 0.3)'
+          };
+        }
+      };
+    },
     mesActualFormatted() {
-      return this.nombresMeses[this.mesActual];
+      return this.mesesDelAño[this.mesActual];
     },
     esMesFuturo() {
       const ahora = new Date();
@@ -765,6 +794,7 @@ export default {
   padding: 40px;
   margin-bottom: 30px;
   box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+  transition: all 0.3s ease;
 }
 
 .header-content {
@@ -955,17 +985,23 @@ export default {
 .barco-resumen-card {
   background: white;
   border-radius: 15px;
-  padding: 30px;
+  padding: 0;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  border-top: 5px solid #667eea;
+  overflow: hidden;
+  transition: all 0.3s ease;
 }
 
 .barco-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 30px;
-  padding-bottom: 20px;
-  border-bottom: 2px solid #f1f2f6;
+  margin-bottom: 0;
+  padding: 30px;
+  border-bottom: none;
+  color: white;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  transition: all 0.3s ease;
 }
 
 .barco-info {
@@ -1018,6 +1054,7 @@ export default {
 /* Desglose por Proveedor */
 .proveedores-desglose {
   margin-bottom: 30px;
+  padding: 30px;
 }
 
 .desglose-title {

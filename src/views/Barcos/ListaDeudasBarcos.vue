@@ -5,7 +5,7 @@
     </div>
     
     <!-- Header -->
-    <div class="header-section">
+    <div class="header-section" :style="{ background: gradientePrimario }">
       <div class="header-content">
         <h1 class="main-title">
           <i class="icon-list">📋</i>
@@ -17,7 +17,7 @@
 
     <!-- Barco Info y Resumen -->
     <div class="resumen-cards">
-      <div class="resumen-card barco-card">
+      <div class="resumen-card barco-card" :style="{ background: gradientePrimario }">
         <i class="card-icon">{{ barcoSeleccionado === 'galileo' ? '🚢' : '🛥️' }}</i>
         <div class="card-content">
           <h3>{{ nombreBarco }}</h3>
@@ -570,33 +570,39 @@ export default {
       barcoSeleccionado: '',
       deudas: [],
       proveedores: [],
-      filtroEstado: '', // Por defecto mostrar pendientes y parciales
+      loading: true,
+      detalleDeudaVisible: false,
+      deudaSeleccionada: null,
+      modalAbonoVisible: false,
+      abonoModalTitle: '',
+      abonoModalSaldoActual: 0,
+      abonoModalSaldoPendiente: 0,
+      montoAbono: 0,
+      filtroEstado: '',
       filtroProveedor: '',
       filtroFechaInicio: '',
       filtroFechaFin: '',
-      showModalAbono: false,
-      showModalHistorial: false,
-      showModalAbonoGeneral: false,
-      showModalHistorialCompleto: false,
-      deudaSeleccionada: null,
-      nuevoAbono: {
-        monto: null,
-        descripcion: '',
-        fecha: new Date().toISOString().split('T')[0]
-      },
-      abonoGeneral: {
-        monto: null,
-        descripcion: '',
-        fecha: new Date().toISOString().split('T')[0],
-        proveedorId: ''
-      },
-      historialAbonos: [],
-      historialCompleto: [],
-      filtroHistorialTipo: '',
-      filtroHistorialProveedor: ''
+      modalAbonoGeneralVisible: false,
+      abonos: []
     };
   },
   computed: {
+    // Colores dinámicos según el barco seleccionado
+    colorPrimario() {
+      return this.barcoSeleccionado === 'maria-guadalupe' 
+        ? '#27ae60'  // Verde para María Guadalupe
+        : '#3498db';  // Azul para Galileo
+    },
+    colorSecundario() {
+      return this.barcoSeleccionado === 'maria-guadalupe' 
+        ? '#2ecc71'  // Verde claro para María Guadalupe
+        : '#2980b9';  // Azul oscuro para Galileo
+    },
+    gradientePrimario() {
+      return this.barcoSeleccionado === 'maria-guadalupe' 
+        ? 'linear-gradient(135deg, #27ae60 0%, #2ecc71 100%)'
+        : 'linear-gradient(135deg, #3498db 0%, #2980b9 100%)';
+    },
     nombreBarco() {
       return this.barcoSeleccionado === 'galileo' ? 'El Galileo' : 'María Guadalupe';
     },
@@ -1308,6 +1314,7 @@ export default {
   padding: 40px;
   margin-bottom: 30px;
   box-shadow: 0 10px 30px rgba(52, 152, 219, 0.3);
+  transition: all 0.3s ease;
 }
 
 .header-content {
@@ -2219,6 +2226,16 @@ export default {
   font-size: 1.1em;
   font-weight: 600;
   color: #2c3e50;
+}
+
+/* Estilos de color por barco */
+.barco-card {
+  color: white !important;
+}
+
+.barco-card .card-content h3,
+.barco-card .card-content p {
+  color: white !important;
 }
 
 /* Responsive */

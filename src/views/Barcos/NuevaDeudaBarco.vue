@@ -5,7 +5,7 @@
     </div>
     
     <!-- Header moderno -->
-    <div class="header-section">
+    <div class="header-section" :style="{ background: gradientePrimario }">
       <div class="header-content">
         <h1 class="main-title">
           <i class="icon-new">➕</i>
@@ -16,7 +16,7 @@
     </div>
 
     <!-- Información del barco -->
-    <div class="barco-info-card">
+    <div class="barco-info-card" :style="{ background: gradientePrimario }">
       <div class="barco-display">
         <i class="barco-icon">{{ barcoSeleccionado === 'galileo' ? '🚢' : '🛥️' }}</i>
         <div class="barco-details">
@@ -271,6 +271,22 @@ export default {
     };
   },
   computed: {
+    // Colores dinámicos según el barco seleccionado
+    colorPrimario() {
+      return this.barcoSeleccionado === 'maria-guadalupe' 
+        ? '#27ae60'  // Verde para María Guadalupe
+        : '#3498db';  // Azul para Galileo
+    },
+    colorSecundario() {
+      return this.barcoSeleccionado === 'maria-guadalupe' 
+        ? '#2ecc71'  // Verde claro para María Guadalupe
+        : '#2980b9';  // Azul oscuro para Galileo
+    },
+    gradientePrimario() {
+      return this.barcoSeleccionado === 'maria-guadalupe' 
+        ? 'linear-gradient(135deg, #27ae60 0%, #2ecc71 100%)'
+        : 'linear-gradient(135deg, #3498db 0%, #2980b9 100%)';
+    },
     nombreBarco() {
       return this.barcoSeleccionado === 'galileo' ? 'El Galileo' : 'María Guadalupe';
     },
@@ -485,6 +501,7 @@ export default {
   padding: 40px;
   margin-bottom: 30px;
   box-shadow: 0 10px 30px rgba(52, 152, 219, 0.3);
+  transition: all 0.3s ease;
 }
 
 .header-content {
@@ -514,6 +531,8 @@ export default {
   padding: 25px;
   margin-bottom: 30px;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
+  color: white;
 }
 
 .barco-display {
@@ -528,13 +547,13 @@ export default {
 
 .barco-details h3 {
   margin: 0;
-  color: #2c3e50;
+  color: white;
   font-size: 1.5em;
 }
 
 .barco-details p {
   margin: 5px 0 0 0;
-  color: #7f8c8d;
+  color: rgba(255, 255, 255, 0.8);
 }
 
 /* Fecha Card */
