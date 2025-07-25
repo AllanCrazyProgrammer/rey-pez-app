@@ -34,8 +34,8 @@
             @click="exportarDatos" 
             class="fab-option"
           >
-            <i class="option-icon">💾</i>
-            <span class="option-text">Exportar Datos</span>
+            <i class="option-icon">📄</i>
+            <span class="option-text">Exportar PDF</span>
           </button>
         </div>
       </transition>
@@ -199,20 +199,14 @@ export default {
       this.cerrarMenu();
       
       try {
-        // Aquí iría la lógica para exportar datos
-        console.log('Exportando datos de barcos...');
-        
-        // Simular exportación
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        // Por ahora mostrar mensaje
-        alert('Funcionalidad de exportación en desarrollo');
+        // Navegar directamente al reporte mensual para usar la función de PDF
+        this.$router.push('/barcos/resumen-mensual');
         
         this.$emit('datos-exportados');
         
       } catch (error) {
-        console.error('Error al exportar datos:', error);
-        alert('Error al exportar los datos');
+        console.error('Error al navegar al reporte:', error);
+        alert('Error al acceder al reporte');
       }
     }
   }

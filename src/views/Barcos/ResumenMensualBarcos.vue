@@ -190,11 +190,6 @@
         Exportar PDF
       </button>
       
-      <button @click="exportarExcel" class="btn-exportar excel">
-        <i class="icon">📊</i>
-        Exportar Excel
-      </button>
-      
       <button @click="compartirReporte" class="btn-exportar compartir">
         <i class="icon">📤</i>
         Compartir
@@ -220,6 +215,8 @@
 import { db } from '@/firebase';
 import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
 import BackButton from '@/components/BackButton.vue';
+import jsPDF from 'jspdf';
+import 'jspdf-autotable';
 
 export default {
   name: 'ResumenMensualBarcos',
@@ -493,14 +490,238 @@ export default {
     },
     
     async exportarPDF() {
-      // TODO: Implementar exportación a PDF
-      alert('Funcionalidad de exportación a PDF en desarrollo');
+      try {
+        const doc = new jsPDF();
+        
+        // Configuración de fuentes y colores
+        const primaryColor = [102, 126, 234]; // #667eea
+        const textColor = [44, 62, 80]; // #2c3e50
+        const grayColor = [127, 140, 141]; // #7f8c8d
+        
+        let yPosition = 20;
+        
+        // ===== HEADER =====
+        doc.setFontSize(20);
+        doc.setTextColor(...primaryColor);
+        doc.text('REPORTE MENSUAL DE BARCOS', 20, yPosition);
+        
+        yPosition += 10;
+        doc.setFontSize(14);
+        doc.setTextColor(...grayColor);
+        doc.text(`${this.mesActualFormatted} ${this.añoActual}`, 20, yPosition);
+        
+        // Fecha de generación
+        doc.setFontSize(10);
+        const fechaGeneracion = new Date().toLocaleDateString('es-MX', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        });
+        doc.text(`Generado el: ${fechaGeneracion}`, 150, yPosition);
+        
+        yPosition += 20;
+        
+        // ===== RESUMEN GENERAL =====
+        doc.setFontSize(14);
+        doc.setTextColor(...textColor);
+        doc.text('RESUMEN GENERAL', 20, yPosition);
+        
+        yPosition += 10;
+        
+        // Tabla de resumen general
+        const datosResumenGeneral = [
+          ['Total Gastado', `$${this.formatNumber(this.resumenGeneral.totalGastado)}`],
+          ['Deudas Registradas', this.resumenGeneral.totalDeudas.toString()],
+          ['Saldo Pendiente', `$${this.formatNumber(this.resumenGeneral.saldoPendiente)}`],
+          ['Proveedores Activos', this.resumenGeneral.proveedoresActivos.toString()]
+        ];
+        
+        doc.autoTable({
+          startY: yPosition,
+          head: [['Concepto', 'Valor']],
+          body: datosResumenGeneral,
+          theme: 'grid',
+          headStyles: {
+            fillColor: primaryColor,
+            textColor: [255, 255, 255],
+            fontSize: 11,
+            fontStyle: 'bold'
+          },
+          bodyStyles: {
+            fontSize: 10,
+            textColor: textColor
+          },
+          columnStyles: {
+            0: { cellWidth: 80 },
+            1: { cellWidth: 50, halign: 'right', fontStyle: 'bold' }
+          },
+          margin: { left: 20, right: 20 }
+        });
+        
+        yPosition = doc.lastAutoTable.finalY + 15;
+        
+        // ===== ANÁLISIS POR BARCO =====
+        if (this.barcosConDatos.length > 0) {
+          doc.setFontSize(14);
+          doc.setTextColor(...textColor);
+          doc.text('ANALISIS POR BARCO', 20, yPosition);
+          
+          yPosition += 10;
+          
+          // Preparar datos para la tabla por barcos
+          const datosBarcos = [];
+          
+          this.barcosConDatos.forEach((barco, barcoIndex) => {
+            // Fila principal del barco (solo nombre)
+            const nombreBarco = barco.id === 'galileo' ? 'El Galileo' : 'Maria Guadalupe';
+            datosBarcos.push([
+              `${nombreBarco}`,
+              '',
+              '',
+              ''
+            ]);
+            
+            // Proveedores del barco (máximo 5 principales para más detalle)
+            const proveedoresPrincipales = barco.proveedores.slice(0, 5);
+            proveedoresPrincipales.forEach(proveedor => {
+              datosBarcos.push([
+                `   > ${proveedor.nombre}`,
+                proveedor.cantidadDeudas.toString(),
+                `$${this.formatNumber(proveedor.total)}`,
+                `$${this.formatNumber(proveedor.pendiente)}`
+              ]);
+            });
+            
+            // Si hay más proveedores, agregar línea de "otros"
+            if (barco.proveedores.length > 5) {
+              const otrosProveedores = barco.proveedores.slice(5);
+              const totalOtros = otrosProveedores.reduce((sum, p) => sum + p.total, 0);
+              const pendienteOtros = otrosProveedores.reduce((sum, p) => sum + p.pendiente, 0);
+              const deudasOtros = otrosProveedores.reduce((sum, p) => sum + p.cantidadDeudas, 0);
+              
+              datosBarcos.push([
+                `   > Otros (${otrosProveedores.length})`,
+                deudasOtros.toString(),
+                `$${this.formatNumber(totalOtros)}`,
+                `$${this.formatNumber(pendienteOtros)}`
+              ]);
+            }
+            
+            // TOTAL POR BARCO
+            datosBarcos.push([
+              `--- TOTAL ${nombreBarco.toUpperCase()} ---`,
+              barco.resumen.deudas.toString(),
+              `$${this.formatNumber(barco.resumen.total)}`,
+              `$${this.formatNumber(barco.resumen.pendiente)}`
+            ]);
+            
+            // Línea separadora si no es el último barco
+            if (barcoIndex < this.barcosConDatos.length - 1) {
+              datosBarcos.push([
+                '',
+                '',
+                '',
+                ''
+              ]);
+            }
+          });
+          
+          // Agregar total general al final
+          if (this.barcosConDatos.length > 1) {
+            datosBarcos.push([
+              '',
+              '',
+              '',
+              ''
+            ]);
+            datosBarcos.push([
+              '=== TOTAL GENERAL ===',
+              this.resumenGeneral.totalDeudas.toString(),
+              `$${this.formatNumber(this.resumenGeneral.totalGastado)}`,
+              `$${this.formatNumber(this.resumenGeneral.saldoPendiente)}`
+            ]);
+          }
+          
+          doc.autoTable({
+            startY: yPosition,
+            head: [['Barco / Proveedor', 'Deudas', 'Total', 'Pendiente']],
+            body: datosBarcos,
+            theme: 'striped',
+            headStyles: {
+              fillColor: [52, 152, 219], // Azul para barcos
+              textColor: [255, 255, 255],
+              fontSize: 11,
+              fontStyle: 'bold'
+            },
+            bodyStyles: {
+              fontSize: 9,
+              textColor: textColor
+            },
+            columnStyles: {
+              0: { cellWidth: 70 },
+              1: { cellWidth: 25, halign: 'center' },
+              2: { cellWidth: 40, halign: 'right' },
+              3: { cellWidth: 40, halign: 'right' }
+            },
+            margin: { left: 20, right: 20 },
+            didParseCell: function(data) {
+              // Destacar el total general
+              if (data.cell.raw && data.cell.raw.includes('=== TOTAL GENERAL ===')) {
+                data.cell.styles.fontStyle = 'bold';
+                data.cell.styles.fillColor = [102, 126, 234]; // Morado principal
+                data.cell.styles.textColor = [255, 255, 255]; // Texto blanco
+                data.cell.styles.fontSize = 11;
+              }
+              // Destacar las filas de totales por barco
+              else if (data.cell.raw && data.cell.raw.includes('--- TOTAL')) {
+                data.cell.styles.fontStyle = 'bold';
+                data.cell.styles.fillColor = [52, 152, 219]; // Azul
+                data.cell.styles.textColor = [255, 255, 255]; // Texto blanco
+                data.cell.styles.fontSize = 10;
+              }
+              // Destacar las filas principales de barcos (solo nombres)
+              else if (data.cell.raw && 
+                  (data.cell.raw.includes('El Galileo') || data.cell.raw.includes('Maria Guadalupe')) &&
+                  !data.cell.raw.includes('>') && !data.cell.raw.includes('---') && !data.cell.raw.includes('===')) {
+                data.cell.styles.fontStyle = 'bold';
+                data.cell.styles.fillColor = [236, 240, 241]; // Gris claro
+                data.cell.styles.fontSize = 11;
+              }
+              // Estilo para proveedores
+              else if (data.cell.raw && data.cell.raw.includes('>')) {
+                data.cell.styles.fontSize = 9;
+                data.cell.styles.textColor = [52, 73, 94]; // Gris oscuro
+              }
+            }
+          });
+          
+          yPosition = doc.lastAutoTable.finalY + 10;
+        }
+        
+        // ===== PIE DE PÁGINA =====
+        if (yPosition < 250) { // Si hay espacio
+          doc.setFontSize(8);
+          doc.setTextColor(...grayColor);
+          doc.text('Sistema de Gestión Rey Pez - Reporte generado automáticamente', 20, 280);
+          doc.text(`Total de páginas: 1`, 150, 280);
+        }
+        
+        // ===== GUARDAR PDF =====
+        const nombreArchivo = `Reporte_Barcos_${this.mesActualFormatted}_${this.añoActual}.pdf`;
+        doc.save(nombreArchivo);
+        
+        // Mostrar mensaje de éxito
+        alert(`✅ Reporte PDF generado exitosamente: ${nombreArchivo}`);
+        
+      } catch (error) {
+        console.error('Error al generar PDF:', error);
+        alert('❌ Error al generar el reporte PDF. Por favor, inténtalo de nuevo.');
+      }
     },
     
-    async exportarExcel() {
-      // TODO: Implementar exportación a Excel
-      alert('Funcionalidad de exportación a Excel en desarrollo');
-    },
+
     
     async compartirReporte() {
       if (navigator.share) {
@@ -936,9 +1157,7 @@ export default {
   background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
 }
 
-.btn-exportar.excel {
-  background: linear-gradient(135deg, #27ae60 0%, #229954 100%);
-}
+
 
 .btn-exportar.compartir {
   background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
