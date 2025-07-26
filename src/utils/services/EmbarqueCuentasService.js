@@ -1068,26 +1068,31 @@ const prepararDatosCuentaOzuna = async (embarqueData) => {
             const kilos = kilosTotales;
             const medida = item.medida || item.talla || 'Crudo';
             
-            // Para crudos de Ozuna, siempre considerar como venta sin importar el estado del checkbox
-            // Priorizar precios históricos de la fecha del embarque
-            const medidaNormalizada = normalizarMedida(medida);
-            const precioEncontrado = preciosVenta.get(medidaNormalizada);
+            // Para crudos de Ozuna, aplicar la misma lógica que productos normales
+            // Si no es venta (maquila), usar precio fijo de 20, si es venta buscar precios históricos
+            let costo = 20; // Por defecto maquila
             
-            // Usar precio histórico o precio manual como fallback
-            const costo = precioEncontrado || parseFloat(item.precio) || 0;
-            
-            // Solo agregar el item si tiene kilos
-            if (kilos > 0) {
-              items.push({
-                kilos,
-                medida,
-                costo,
-                total: kilos * costo,
-                esVenta: true, // Siempre es venta para crudos en Ozuna
-                editando: false,
-                campoEditando: null
-              });
+            // Verificar si el item tiene la propiedad esVenta marcada como true
+            if (item.esVenta) {
+              const medidaNormalizada = normalizarMedida(medida);
+              const precioEncontrado = preciosVenta.get(medidaNormalizada);
+              
+              // Usar precio histórico o precio manual como fallback para ventas
+              costo = precioEncontrado || parseFloat(item.precio) || 20;
             }
+            
+                          // Solo agregar el item si tiene kilos
+              if (kilos > 0) {
+                items.push({
+                  kilos,
+                  medida,
+                  costo,
+                  total: kilos * costo,
+                  esVenta: item.esVenta || false, // Respetar el estado real de venta/maquila
+                  editando: false,
+                  campoEditando: null
+                });
+              }
           }
         });
       }

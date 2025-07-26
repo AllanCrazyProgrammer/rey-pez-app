@@ -2,37 +2,59 @@
   <div>
     <!-- Botón para abrir el modal -->
     <button @click="abrirModal" class="precio-historial-btn">
-      {{ clienteActual ? `Precios de Venta - ${obtenerNombreCliente(clienteActual)}` : 'Precios de Venta' }}
+      <i class="nav-icon">💰</i>
+      <span>{{ clienteActual ? `Precios de Venta - ${obtenerNombreCliente(clienteActual)}` : 'Precios de Venta' }}</span>
     </button>
 
     <!-- Modal -->
-    <div v-if="showModal" class="modal-overlay">
+    <div v-if="showModal" class="modal-overlay" @click.self="showModal = false">
       <div class="modal-content">
         <div class="modal-header">
-          <h2>{{ clienteActual ? `Precios de Venta - ${obtenerNombreCliente(clienteActual)}` : 'Precios de Venta' }}</h2>
-          <button @click="showModal = false" class="close-btn">&times;</button>
+          <h2>
+            <i class="header-icon">📊</i>
+            {{ clienteActual ? `Precios de Venta - ${obtenerNombreCliente(clienteActual)}` : 'Precios de Venta' }}
+          </h2>
+          <button @click="showModal = false" class="close-btn">
+            <i class="close-icon">✕</i>
+          </button>
         </div>
 
         <!-- Formulario para agregar nuevo precio  -->
         <div class="add-price-form">
-          <h3>Agregar Nuevo Precio</h3>
+          <div class="form-header">
+            <h3>
+              <i class="form-icon">➕</i>
+              Agregar Nuevo Precio
+            </h3>
+          </div>
           <div class="form-group">
-            <input v-model="newPrice.producto" type="text" placeholder="Producto/Medida" list="productos">
-            <datalist id="productos">
-              <option v-for="producto in preciosActuales" :key="producto.id" :value="producto.producto"></option>
-            </datalist>
-            <input v-model.number="newPrice.precio" type="number" placeholder="Precio">
-            <input v-model="newPrice.fecha" type="date">
+            <div class="input-wrapper">
+              <input v-model="newPrice.producto" type="text" placeholder="Producto/Medida" list="productos" class="form-input">
+              <datalist id="productos">
+                <option v-for="producto in preciosActuales" :key="producto.id" :value="producto.producto"></option>
+              </datalist>
+            </div>
+            
+            <div class="input-wrapper">
+              <input v-model.number="newPrice.precio" type="number" placeholder="Precio" class="form-input">
+            </div>
+            
+            <div class="input-wrapper">
+              <input v-model="newPrice.fecha" type="date" class="form-input">
+            </div>
             
             <!-- Nuevo campo para seleccionar cliente específico -->
-            <div class="cliente-especifico">
-              <input type="checkbox" id="clienteEspecifico" v-model="newPrice.esClienteEspecifico">
-              <label for="clienteEspecifico">Precio para cliente específico</label>
+            <div class="cliente-especifico-wrapper">
+              <label class="checkbox-wrapper">
+                <input type="checkbox" id="clienteEspecifico" v-model="newPrice.esClienteEspecifico">
+                <span class="checkmark"></span>
+                <span class="checkbox-label">Precio para cliente específico</span>
+              </label>
             </div>
             
             <!-- Selector de cliente que aparece solo cuando se marca la casilla -->
             <div v-if="newPrice.esClienteEspecifico" class="cliente-selector">
-              <label>Seleccionar cliente:</label>
+              <label class="selector-label">Seleccionar cliente:</label>
               <div class="cliente-botones">
                 <button 
                   v-for="cliente in clientes" 
@@ -40,24 +62,31 @@
                   @click="seleccionarCliente(cliente.id)"
                   class="cliente-btn"
                   :class="{'cliente-seleccionado': newPrice.clienteId === cliente.id}"
-                  :style="{ backgroundColor: cliente.color }">
+                  :style="{ '--cliente-color': cliente.color }">
                   {{ cliente.nombre }}
                 </button>
               </div>
             </div>
             
-            <button @click="agregarPrecio" class="add-btn">Agregar</button>
+            <button @click="agregarPrecio" class="add-btn">
+              <i class="btn-icon">💾</i>
+              <span>Agregar Precio</span>
+            </button>
           </div>
         </div>
 
         <!-- Filtro para mostrar precios específicos por cliente -->
         <div class="filter-section">
-          <label>Filtrar por cliente:</label>
+          <div class="filter-header">
+            <i class="filter-icon">🔍</i>
+            <label>Filtrar por cliente:</label>
+          </div>
           <div class="cliente-filtro-botones">
             <button 
               @click="filtroCliente = ''" 
               class="cliente-filtro-btn"
               :class="{'cliente-filtro-seleccionado': filtroCliente === ''}">
+              <i class="filter-all-icon">🌐</i>
               Todos
             </button>
             <button 
@@ -66,7 +95,7 @@
               @click="filtroCliente = cliente.id"
               class="cliente-filtro-btn"
               :class="{'cliente-filtro-seleccionado': filtroCliente === cliente.id}"
-              :style="{ backgroundColor: cliente.color }">
+              :style="{ '--cliente-color': cliente.color }">
               {{ cliente.nombre }}
             </button>
           </div>
@@ -74,130 +103,170 @@
 
         <!-- Lista de productos y precios actuales -->
         <div class="current-prices">
-          <h3>Precios Actuales</h3>
+          <div class="prices-header">
+            <h3>
+              <i class="prices-icon">💼</i>
+              Precios Actuales
+            </h3>
+          </div>
           <div v-for="categoria in categorias" :key="categoria" class="categoria-section">
-            <h4 class="categoria-title">{{ categoria }}</h4>
+            <h4 class="categoria-title">
+              <i class="categoria-icon">📂</i>
+              {{ categoria }}
+            </h4>
             <div class="products-grid">
               <div 
                 v-for="producto in filtrarPreciosPorCliente(preciosOrdenados[categoria])" 
                 :key="producto.id" 
                 class="product-card" 
                 :class="{'precio-especifico': producto.clienteId}"
-                :style="producto.clienteId ? { borderColor: obtenerColorCliente(producto.clienteId), backgroundColor: obtenerColorClienteConOpacidad(producto.clienteId) } : {}">
-                <h4>{{ producto.producto }}</h4>
-                <p class="price">${{ formatNumber(producto.precio) }}</p>
-                <p class="date">Desde: {{ formatDate(producto.fecha) }}</p>
-                <p v-if="producto.clienteId" class="cliente-especifico-tag" :style="{ backgroundColor: obtenerColorCliente(producto.clienteId) }">
-                  Cliente: {{ obtenerNombreCliente(producto.clienteId) }}
-                </p>
-                <p class="historial-count">
-                  {{ producto.historial.length }} precio{{ producto.historial.length !== 1 ? 's' : '' }} registrado{{ producto.historial.length !== 1 ? 's' : '' }}
-                </p>
-                <button @click="mostrarHistorial(producto)" class="history-btn">
-                  Ver Historial
-                </button>
+                :style="producto.clienteId ? { '--border-color': obtenerColorCliente(producto.clienteId), '--bg-color': obtenerColorClienteConOpacidad(producto.clienteId) } : {}">
+                <div class="product-header">
+                  <h4 class="product-name">{{ producto.producto }}</h4>
+                  <div class="product-actions">
+                    <button @click="mostrarHistorial(producto)" class="history-btn" title="Ver historial">
+                      <i class="history-icon">📈</i>
+                    </button>
+                  </div>
+                </div>
+                <div class="product-info">
+                  <p class="price">${{ formatNumber(producto.precio) }}</p>
+                  <p class="date">
+                    <i class="date-icon">📅</i>
+                    Desde: {{ formatDate(producto.fecha) }}
+                  </p>
+                  <p v-if="producto.clienteId" class="cliente-especifico-tag" :style="{ '--tag-color': obtenerColorCliente(producto.clienteId) }">
+                    <i class="client-icon">👤</i>
+                    Cliente: {{ obtenerNombreCliente(producto.clienteId) }}
+                  </p>
+                  <p class="historial-count">
+                    <i class="count-icon">📊</i>
+                    {{ producto.historial.length }} precio{{ producto.historial.length !== 1 ? 's' : '' }} registrado{{ producto.historial.length !== 1 ? 's' : '' }}
+                  </p>
+                </div>
               </div>
             </div>
           </div>
         </div>
 
         <!-- Modal de historial -->
-        <div v-if="showHistorialModal" class="historial-modal">
-          <div class="historial-content">
-            <div class="historial-header">
-              <h3>Historial de Precios - {{ productoSeleccionado?.producto }}</h3>
-              <button @click="showHistorialModal = false" class="close-btn">&times;</button>
-            </div>
-            <table>
-              <thead>
-                <tr>
-                  <th>Fecha</th>
-                  <th>Precio</th>
-                  <th>Cliente</th>
-                  <th>Cambio</th>
-                  <th>Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="(precio, index) in historialPaginado" :key="index">
-                  <td>{{ formatDate(precio.fecha) }}</td>
-                  <td>${{ formatNumber(precio.precio) }}</td>
-                  <td>
-                    <span 
-                      v-if="precio.clienteId" 
-                      class="cliente-especifico-tag"
-                      :style="{ backgroundColor: obtenerColorCliente(precio.clienteId) }">
-                      {{ obtenerNombreCliente(precio.clienteId) }}
-                    </span>
-                    <span v-else>General</span>
-                  </td>
-                  <td>
-                    <span v-if="calcularIndiceGlobal(index) < historialPrecios.length - 1" 
-                          :class="{'precio-subio': precio.precio < historialPrecios[calcularIndiceGlobal(index) + 1].precio,
-                                 'precio-bajo': precio.precio > historialPrecios[calcularIndiceGlobal(index) + 1].precio}">
-                      {{ calcularCambio(precio.precio, historialPrecios[calcularIndiceGlobal(index) + 1].precio) }}
-                    </span>
-                  </td>
-                  <td class="actions-cell">
-                    <button @click="eliminarPrecio(precio)" class="delete-btn" title="Eliminar precio">
-                      <span class="delete-icon">&times;</span>
-                    </button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-            
-            <!-- Información de paginación -->
-            <div v-if="historialPrecios.length > 0" class="pagination-info">
-              <span>Mostrando {{ infoPaginacion.inicio }}-{{ infoPaginacion.fin }} de {{ infoPaginacion.total }} registros</span>
-              <div class="items-per-page">
-                <label>Registros por página:</label>
-                <select v-model="itemsPorPagina" @change="paginaActual = 1">
-                  <option :value="5">5</option>
-                  <option :value="10">10</option>
-                  <option :value="20">20</option>
-                  <option :value="50">50</option>
-                </select>
-              </div>
-            </div>
-            
-            <!-- Controles de paginación -->
-            <div v-if="totalPaginas > 1" class="pagination-controls">
-              <button @click="paginaActual = 1" :disabled="paginaActual === 1" class="pagination-btn">
-                «
-              </button>
-              <button @click="paginaActual--" :disabled="paginaActual === 1" class="pagination-btn">
-                ‹
-              </button>
-              
-              <!-- Números de página -->
-              <div class="pagination-numbers">
-                <button 
-                  v-for="numero in numerosVisibles" 
-                  :key="numero"
-                  @click="paginaActual = numero"
-                  :class="{'pagination-btn': true, 'active': numero === paginaActual}"
-                  class="pagination-number">
-                  {{ numero }}
+        <div v-if="showHistorialModal" class="historial-modal-overlay" @click.self="showHistorialModal = false">
+          <div class="historial-modal">
+            <div class="historial-content">
+              <div class="historial-header">
+                <h3>
+                  <i class="historial-icon">📈</i>
+                  Historial de Precios - {{ productoSeleccionado?.producto }}
+                </h3>
+                <button @click="showHistorialModal = false" class="close-btn">
+                  <i class="close-icon">✕</i>
                 </button>
               </div>
+              <div class="table-wrapper">
+                <table class="historial-table">
+                  <thead>
+                    <tr>
+                      <th><i class="table-icon">📅</i> Fecha</th>
+                      <th><i class="table-icon">💰</i> Precio</th>
+                      <th><i class="table-icon">👤</i> Cliente</th>
+                      <th><i class="table-icon">📊</i> Cambio</th>
+                      <th><i class="table-icon">⚙️</i> Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="(precio, index) in historialPaginado" :key="index" class="historial-row">
+                      <td class="date-cell">{{ formatDate(precio.fecha) }}</td>
+                      <td class="price-cell">${{ formatNumber(precio.precio) }}</td>
+                      <td class="client-cell">
+                        <span 
+                          v-if="precio.clienteId" 
+                          class="cliente-especifico-tag"
+                          :style="{ '--tag-color': obtenerColorCliente(precio.clienteId) }">
+                          <i class="client-icon">👤</i>
+                          {{ obtenerNombreCliente(precio.clienteId) }}
+                        </span>
+                        <span v-else class="general-tag">
+                          <i class="general-icon">🌐</i>
+                          General
+                        </span>
+                      </td>
+                      <td class="change-cell">
+                        <span v-if="calcularIndiceGlobal(index) < historialPrecios.length - 1" 
+                              :class="{'precio-subio': precio.precio < historialPrecios[calcularIndiceGlobal(index) + 1].precio,
+                                     'precio-bajo': precio.precio > historialPrecios[calcularIndiceGlobal(index) + 1].precio}"
+                              class="change-indicator">
+                          {{ calcularCambio(precio.precio, historialPrecios[calcularIndiceGlobal(index) + 1].precio) }}
+                        </span>
+                      </td>
+                      <td class="actions-cell">
+                        <button @click="eliminarPrecio(precio)" class="delete-btn" title="Eliminar precio">
+                          <i class="delete-icon">🗑️</i>
+                        </button>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
               
-              <button @click="paginaActual++" :disabled="paginaActual === totalPaginas" class="pagination-btn">
-                ›
-              </button>
-              <button @click="paginaActual = totalPaginas" :disabled="paginaActual === totalPaginas" class="pagination-btn">
-                »
-              </button>
+              <!-- Información de paginación -->
+              <div v-if="historialPrecios.length > 0" class="pagination-info">
+                <span class="pagination-text">
+                  <i class="info-icon">ℹ️</i>
+                  Mostrando {{ infoPaginacion.inicio }}-{{ infoPaginacion.fin }} de {{ infoPaginacion.total }} registros
+                </span>
+                <div class="items-per-page">
+                  <label>Registros por página:</label>
+                  <select v-model="itemsPorPagina" @change="paginaActual = 1" class="pagination-select">
+                    <option :value="5">5</option>
+                    <option :value="10">10</option>
+                    <option :value="20">20</option>
+                    <option :value="50">50</option>
+                  </select>
+                </div>
+              </div>
+              
+              <!-- Controles de paginación -->
+              <div v-if="totalPaginas > 1" class="pagination-controls">
+                <button @click="paginaActual = 1" :disabled="paginaActual === 1" class="pagination-btn">
+                  <i class="pagination-icon">⏮️</i>
+                </button>
+                <button @click="paginaActual--" :disabled="paginaActual === 1" class="pagination-btn">
+                  <i class="pagination-icon">◀️</i>
+                </button>
+                
+                <!-- Números de página -->
+                <div class="pagination-numbers">
+                  <button 
+                    v-for="numero in numerosVisibles" 
+                    :key="numero"
+                    @click="paginaActual = numero"
+                    :class="{'pagination-number': true, 'active': numero === paginaActual}">
+                    {{ numero }}
+                  </button>
+                </div>
+                
+                <button @click="paginaActual++" :disabled="paginaActual === totalPaginas" class="pagination-btn">
+                  <i class="pagination-icon">▶️</i>
+                </button>
+                <button @click="paginaActual = totalPaginas" :disabled="paginaActual === totalPaginas" class="pagination-btn">
+                  <i class="pagination-icon">⏭️</i>
+                </button>
+              </div>
             </div>
           </div>
         </div>
 
         <!-- Modal de confirmación para precios específicos existentes -->
-        <div v-if="showConfirmacionModal" class="confirmacion-modal-overlay">
+        <div v-if="showConfirmacionModal" class="confirmacion-modal-overlay" @click.self="cancelarConfirmacion">
           <div class="confirmacion-modal-content">
             <div class="confirmacion-header">
-              <h3>⚠️ Precios Específicos Existentes</h3>
-              <button @click="cancelarConfirmacion" class="close-btn">&times;</button>
+              <h3>
+                <i class="warning-icon">⚠️</i>
+                Precios Específicos Existentes
+              </h3>
+              <button @click="cancelarConfirmacion" class="close-btn">
+                <i class="close-icon">✕</i>
+              </button>
             </div>
             
             <div class="confirmacion-body">
@@ -213,12 +282,19 @@
                   <div class="cliente-info">
                     <span 
                       class="cliente-tag"
-                      :style="{ backgroundColor: obtenerColorCliente(precioEspecifico.clienteId) }">
+                      :style="{ '--tag-color': obtenerColorCliente(precioEspecifico.clienteId) }">
+                      <i class="client-icon">👤</i>
                       {{ obtenerNombreCliente(precioEspecifico.clienteId) }}
                     </span>
                     <div class="precio-info">
-                      <span class="precio-actual">Precio actual: ${{ formatNumber(precioEspecifico.precio) }}</span>
-                      <span class="precio-nuevo">Precio nuevo: ${{ formatNumber(nuevoPrecioTemporal?.precio) }}</span>
+                      <span class="precio-actual">
+                        <i class="price-icon">💰</i>
+                        Precio actual: ${{ formatNumber(precioEspecifico.precio) }}
+                      </span>
+                      <span class="precio-nuevo">
+                        <i class="new-price-icon">🆕</i>
+                        Precio nuevo: ${{ formatNumber(nuevoPrecioTemporal?.precio) }}
+                      </span>
                     </div>
                   </div>
                   
@@ -231,7 +307,11 @@
                           :name="`decision_${precioEspecifico.clienteId}`"
                           value="mantener"
                           v-model="decisionesClientes[precioEspecifico.clienteId]">
-                        <span class="radio-text mantener">Mantener precio específico actual</span>
+                        <span class="radio-custom"></span>
+                        <span class="radio-text mantener">
+                          <i class="keep-icon">🔒</i>
+                          Mantener precio específico actual
+                        </span>
                       </label>
                       <label class="radio-option">
                         <input 
@@ -239,7 +319,11 @@
                           :name="`decision_${precioEspecifico.clienteId}`"
                           value="sobreescribir"
                           v-model="decisionesClientes[precioEspecifico.clienteId]">
-                        <span class="radio-text sobreescribir">Sobreescribir con precio general</span>
+                        <span class="radio-custom"></span>
+                        <span class="radio-text sobreescribir">
+                          <i class="overwrite-icon">🔄</i>
+                          Sobreescribir con precio general
+                        </span>
                       </label>
                     </div>
                   </div>
@@ -249,15 +333,23 @@
             
             <div class="confirmacion-footer">
               <button @click="cancelarConfirmacion" class="btn-cancelar">
-                Cancelar
+                <i class="cancel-icon">❌</i>
+                <span>Cancelar</span>
               </button>
               <button @click="confirmarAgregarPrecio" class="btn-confirmar" :disabled="!todasDecisionesTomadas">
-                Confirmar y Agregar Precio
+                <i class="confirm-icon">✅</i>
+                <span>Confirmar y Agregar</span>
               </button>
             </div>
           </div>
         </div>
       </div>
+      
+      <!-- Botón flotante de cerrar siempre visible -->
+      <button @click="showModal = false" class="floating-close-btn" title="Cerrar modal">
+        <i class="floating-close-icon">❌</i>
+        <span class="floating-close-text">Cerrar</span>
+      </button>
     </div>
   </div>
 </template>
@@ -759,6 +851,9 @@ export default {
   cursor: pointer;
   font-size: 16px;
   transition: background-color 0.3s;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .precio-historial-btn:hover {
@@ -786,6 +881,10 @@ export default {
   max-width: 800px;
   max-height: 90vh;
   overflow-y: auto;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.7));
 }
 
 .modal-header {
@@ -793,6 +892,8 @@ export default {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 20px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid #eee;
 }
 
 .close-btn {
@@ -801,10 +902,41 @@ export default {
   font-size: 24px;
   cursor: pointer;
   color: #666;
+  transition: color 0.3s;
+}
+
+.close-btn:hover {
+  color: #333;
+}
+
+.header-icon {
+  font-size: 1.5em;
+  margin-right: 10px;
 }
 
 .add-price-form {
   margin-bottom: 30px;
+}
+
+.form-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 15px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #eee;
+}
+
+.form-header h3 {
+  margin: 0;
+  color: #333;
+  font-size: 1.1em;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.form-icon {
+  font-size: 1.2em;
 }
 
 .form-group {
@@ -814,79 +946,252 @@ export default {
   margin-top: 10px;
 }
 
-.form-group input {
-  padding: 8px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
+.form-group .input-wrapper {
   flex: 1;
+  min-width: 200px;
 }
 
-.cliente-especifico {
+.form-group .form-input {
+  padding: 10px 15px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-size: 1em;
+  transition: border-color 0.3s, box-shadow 0.3s;
+  background-color: #f9f9f9;
+  color: #333;
+}
+
+.form-group .form-input:focus {
+  border-color: #4CAF50;
+  box-shadow: 0 0 10px rgba(76, 175, 80, 0.2);
+  outline: none;
+}
+
+.cliente-especifico-wrapper {
   display: flex;
   align-items: center;
   gap: 5px;
   margin: 10px 0;
   width: 100%;
+  padding: 10px 0;
+  border-bottom: 1px solid #eee;
+}
+
+.checkbox-wrapper {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  font-size: 0.9em;
+  color: #555;
+  position: relative;
+}
+
+.checkbox-wrapper .checkmark {
+  height: 20px;
+  width: 20px;
+  background-color: #eee;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  margin-right: 8px;
+  position: relative;
+  transition: background-color 0.3s;
+}
+
+.checkbox-wrapper input[type="checkbox"] {
+  position: absolute;
+  opacity: 0;
+  cursor: pointer;
+  height: 0;
+  width: 0;
+}
+
+.checkbox-wrapper .checkmark:after {
+  content: "";
+  position: absolute;
+  display: none;
+  left: 6px;
+  top: 2px;
+  width: 5px;
+  height: 10px;
+  border: solid white;
+  border-width: 0 3px 3px 0;
+  transform: rotate(45deg);
+}
+
+.checkbox-wrapper input:checked ~ .checkmark {
+  background-color: #4CAF50;
+  border-color: #4CAF50;
+}
+
+.checkbox-wrapper input:checked ~ .checkmark:after {
+  display: block;
+}
+
+.checkbox-label {
+  font-weight: 500;
 }
 
 .cliente-selector {
   width: 100%;
   margin: 10px 0;
+  padding: 10px 0;
+  border-bottom: 1px solid #eee;
 }
 
-.cliente-botones, .cliente-filtro-botones {
+.selector-label {
+  font-size: 0.9em;
+  color: #555;
+  margin-bottom: 8px;
+  display: block;
+}
+
+.cliente-botones {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
-  margin-top: 5px;
 }
 
-.cliente-btn, .cliente-filtro-btn {
-  padding: 8px 15px;
+.cliente-btn {
+  padding: 10px 16px;
   border: none;
   border-radius: 20px;
   cursor: pointer;
   color: white;
-  font-weight: bold;
+  font-weight: 600;
   transition: all 0.3s ease;
   flex: 1;
-  min-width: 80px;
+  min-width: 100px;
   text-align: center;
+  font-size: 0.9em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+  background-color: var(--cliente-color, #2196F3);
 }
 
-.cliente-btn:hover, .cliente-filtro-btn:hover {
+.cliente-btn:hover {
   transform: translateY(-2px);
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
 }
 
-.cliente-seleccionado, .cliente-filtro-seleccionado {
+.cliente-seleccionado {
   transform: scale(1.05);
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
 }
 
-.cliente-filtro-btn:first-child {
-  background-color: #607D8B;
+.cliente-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.cliente-seleccionado {
+  transform: scale(1.05);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
 }
 
 .filter-section {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 20px;
+  margin-bottom: 30px;
+  padding: 20px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(248, 249, 250, 0.9));
+  border-radius: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
 }
 
-.filter-label {
+.filter-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #333;
+  font-size: 1em;
+  margin-bottom: 15px;
+  font-weight: 600;
+}
+
+.filter-icon {
+  font-size: 1.2em;
+  color: #2196F3;
+}
+
+.cliente-filtro-botones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.cliente-filtro-btn {
+  padding: 10px 16px;
+  border: none;
+  border-radius: 20px;
+  cursor: pointer;
+  color: white;
+  font-weight: 600;
+  transition: all 0.3s ease;
+  flex: 1;
+  min-width: 100px;
+  text-align: center;
   font-size: 0.9em;
-  color: #666;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+  background-color: var(--cliente-color, #607D8B);
+}
+
+.cliente-filtro-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.cliente-filtro-seleccionado {
+  transform: scale(1.05);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+  background: linear-gradient(135deg, var(--cliente-color, #607D8B), rgba(0, 0, 0, 0.1));
+}
+
+.cliente-filtro-btn:first-child {
+  background: linear-gradient(135deg, #607D8B, #455A64);
+}
+
+.filter-all-icon {
+  font-size: 1em;
 }
 
 .add-btn {
-  background-color: #4CAF50;
+  background: linear-gradient(135deg, #4CAF50, #388E3C);
   color: white;
   border: none;
-  padding: 8px 15px;
-  border-radius: 4px;
+  padding: 10px 20px;
+  border-radius: 8px;
   cursor: pointer;
+  font-size: 1em;
+  font-weight: bold;
+  transition: background-color 0.3s, transform 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  box-shadow: 0 4px 10px rgba(76, 175, 80, 0.3);
+}
+
+.add-btn:hover {
+  background: linear-gradient(135deg, #388E3C, #2E7D32);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 15px rgba(76, 175, 80, 0.4);
+}
+
+.add-btn:disabled {
+  background: #a5d6a7;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.btn-icon {
+  font-size: 1.1em;
 }
 
 .products-grid {
@@ -903,32 +1208,81 @@ export default {
   text-align: center;
   position: relative;
   border: 2px solid;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.product-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.15);
 }
 
 .precio-especifico {
   border: 2px solid;
 }
 
-.cliente-especifico-tag {
-  font-size: 0.8em;
-  background-color: #2196F3;
-  color: white;
-  padding: 2px 6px;
-  border-radius: 10px;
-  display: inline-block;
-  margin: 5px 0;
+.product-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px dashed #eee;
 }
 
-.product-card h4 {
-  margin: 0 0 10px 0;
+.product-name {
+  margin: 0;
   color: #333;
+  font-size: 1.1em;
+  flex-grow: 1;
+  text-align: left;
+  padding-right: 10px;
+}
+
+.product-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.history-btn {
+  background-color: #2196F3;
+  color: white;
+  border: none;
+  padding: 5px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9em;
+  transition: background-color 0.3s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  box-shadow: 0 2px 6px rgba(33, 150, 243, 0.2);
+}
+
+.history-btn:hover {
+  background-color: #1976D2;
+  box-shadow: 0 3px 10px rgba(33, 150, 243, 0.3);
+}
+
+.history-icon {
+  font-size: 1em;
+}
+
+.product-info {
+  text-align: left;
+  padding-top: 10px;
+  border-top: 1px dashed #eee;
 }
 
 .price {
   font-size: 1.2em;
   font-weight: bold;
   color: #4CAF50;
-  margin: 10px 0;
+  margin: 5px 0;
 }
 
 .date {
@@ -937,56 +1291,161 @@ export default {
   margin: 5px 0;
 }
 
-.history-btn {
-  background-color: #2196F3;
+.cliente-especifico-tag {
+  font-size: 0.8em;
+  background-color: var(--tag-color, #2196F3);
   color: white;
-  border: none;
-  padding: 5px 10px;
-  border-radius: 4px;
-  cursor: pointer;
-  width: 100%;
-  margin-top: 10px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 5px 0;
+  font-weight: 500;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+.client-icon {
+  font-size: 0.9em;
+}
+
+.date-icon, .count-icon {
+  font-size: 0.9em;
+  margin-right: 4px;
+  color: #666;
+}
+
+.historial-count {
+  font-size: 0.8em;
+  color: #666;
+  margin: 5px 0;
+  font-style: italic;
+}
+
+.historial-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.6);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1001;
+  backdrop-filter: blur(5px);
 }
 
 .historial-modal {
-  position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  background-color: white;
-  padding: 20px;
-  border-radius: 8px;
-  width: 80%;
-  max-width: 600px;
-  z-index: 1001;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(248, 249, 250, 0.95));
+  border-radius: 16px;
+  width: 90%;
+  max-width: 800px;
+  max-height: 90vh;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(20px);
+  overflow: hidden;
 }
 
 .historial-content {
-  background-color: white;
-  padding: 20px;
-  border-radius: 8px;
+  padding: 25px;
+  overflow-y: auto;
+  max-height: 85vh;
 }
 
-.historial-content table {
-  width: 100%;
-  border-collapse: collapse;
+.producto-card {
+  border-color: var(--border-color, transparent);
+  background-color: var(--bg-color, #f5f5f5);
+}
+
+.cliente-tag {
+  background-color: var(--tag-color, #2196F3);
+  color: white;
+  padding: 6px 12px;
+  border-radius: 15px;
+  font-size: 0.85em;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+.table-wrapper {
+  overflow-x: auto;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
   margin: 20px 0;
 }
 
-.historial-content th,
-.historial-content td {
-  padding: 12px;
-  border: 1px solid #ddd;
+.historial-table {
+  width: 100%;
+  border-collapse: collapse;
+  background-color: white;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.historial-table th,
+.historial-table td {
+  padding: 15px 12px;
+  border-bottom: 1px solid #eee;
   text-align: left;
 }
 
-.historial-content th {
-  background-color: #f5f5f5;
-  font-weight: bold;
+.historial-table th {
+  background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+  font-weight: 600;
+  color: #495057;
+  font-size: 0.9em;
+  border-bottom: 2px solid #dee2e6;
 }
 
-.historial-content tr:hover {
-  background-color: #f9f9f9;
+.historial-row:hover {
+  background: linear-gradient(135deg, rgba(76, 175, 80, 0.05), rgba(33, 150, 243, 0.05));
+  transform: scale(1.001);
+  transition: all 0.2s ease;
+}
+
+.table-icon {
+  margin-right: 5px;
+  font-size: 0.9em;
+}
+
+.date-cell, .price-cell, .client-cell, .change-cell {
+  font-size: 0.9em;
+  color: #495057;
+}
+
+.price-cell {
+  font-weight: 600;
+  color: #28a745;
+}
+
+.client-cell {
+  text-align: center;
+}
+
+.change-cell {
+  text-align: center;
+  font-weight: 600;
+}
+
+.general-tag {
+  background: linear-gradient(135deg, #6c757d, #495057);
+  color: white;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 0.8em;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.general-icon {
+  font-size: 0.9em;
 }
 
 .historial-header {
@@ -994,6 +1453,13 @@ export default {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 20px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid #eee;
+}
+
+.historial-icon {
+  font-size: 1.2em;
+  margin-right: 10px;
 }
 
 .historial-count {
@@ -1013,6 +1479,11 @@ export default {
   font-weight: bold;
 }
 
+.change-indicator {
+  font-size: 0.9em;
+  font-weight: bold;
+}
+
 .actions-cell {
   width: 50px;
   text-align: center;
@@ -1029,14 +1500,17 @@ export default {
   display: flex;
   align-items: center;
   justify-content: center;
+  box-shadow: 0 2px 6px rgba(244, 67, 54, 0.2);
 }
 
 .delete-btn:hover {
   color: #d32f2f;
+  box-shadow: 0 3px 10px rgba(244, 67, 54, 0.3);
 }
 
 .delete-icon {
   font-weight: bold;
+  font-size: 1.1em;
 }
 
 .pagination-info {
@@ -1049,6 +1523,20 @@ export default {
   border-radius: 5px;
   font-size: 0.9em;
   color: #666;
+  border: 1px solid #eee;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.pagination-text {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.9em;
+  color: #555;
+}
+
+.info-icon {
+  font-size: 0.9em;
 }
 
 .items-per-page {
@@ -1059,13 +1547,25 @@ export default {
 
 .items-per-page label {
   font-weight: 500;
+  font-size: 0.9em;
+  color: #555;
 }
 
 .items-per-page select {
-  padding: 4px 8px;
+  padding: 6px 12px;
   border: 1px solid #ddd;
-  border-radius: 4px;
-  background-color: white;
+  border-radius: 6px;
+  background-color: #f9f9f9;
+  color: #333;
+  font-size: 0.9em;
+  cursor: pointer;
+  transition: border-color 0.3s;
+}
+
+.items-per-page select:focus {
+  border-color: #4CAF50;
+  box-shadow: 0 0 10px rgba(76, 175, 80, 0.2);
+  outline: none;
 }
 
 .pagination-controls {
@@ -1078,6 +1578,7 @@ export default {
   background-color: #f8f9fa;
   border-radius: 8px;
   border: 1px solid #e9ecef;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
 }
 
 .pagination-numbers {
@@ -1097,19 +1598,10 @@ export default {
   transition: all 0.2s ease;
   min-width: 40px;
   text-align: center;
-}
-
-.pagination-number {
-  background-color: #fff;
-  color: #007bff;
-  border: 1px solid #dee2e6;
-  padding: 8px 12px;
-  border-radius: 4px;
-  cursor: pointer;
-  font-weight: 500;
-  transition: all 0.2s ease;
-  min-width: 40px;
-  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 6px rgba(0, 123, 255, 0.2);
 }
 
 .pagination-btn:hover:not(:disabled),
@@ -1131,22 +1623,91 @@ export default {
   border-color: #007bff;
 }
 
-@media (max-width: 600px) {
+.pagination-icon {
+  font-size: 1em;
+}
+
+/* Responsive Design Mejorado */
+@media (max-width: 768px) {
+  .modal-content {
+    width: 95%;
+    padding: 20px;
+    margin: 10px;
+    max-height: 95vh;
+    overflow-y: auto;
+  }
+  
   .form-group {
     flex-direction: column;
+    gap: 15px;
+  }
+  
+  .form-group .input-wrapper {
+    min-width: 100%;
   }
   
   .products-grid {
     grid-template-columns: 1fr;
-  }
-  
-  .modal-content {
-    width: 95%;
-    padding: 15px;
+    gap: 15px;
   }
   
   .historial-modal {
     width: 95%;
+    margin: 10px;
+    max-height: 95vh;
+  }
+  
+  .cliente-botones, .cliente-filtro-botones {
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .cliente-btn, .cliente-filtro-btn {
+    min-width: 100%;
+    padding: 12px 16px;
+  }
+  
+  .filter-section {
+    padding: 15px;
+  }
+  
+  .categoria-section {
+    padding: 10px;
+  }
+  
+  .floating-close-btn {
+    bottom: 20px;
+    right: 20px;
+    padding: 10px 16px;
+    font-size: 0.85em;
+    min-width: 90px;
+  }
+  
+  .floating-close-text {
+    display: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .precio-historial-btn {
+    font-size: 14px;
+    padding: 8px 16px;
+  }
+  
+  .modal-header h2 {
+    font-size: 1.2em;
+  }
+  
+  .form-header h3 {
+    font-size: 1em;
+  }
+  
+  .prices-header h3 {
+    font-size: 1.1em;
+  }
+  
+  .categoria-title {
+    font-size: 1em;
   }
   
   .pagination-info {
@@ -1243,25 +1804,78 @@ export default {
     width: 100%;
     padding: 12px 20px;
   }
+  
+  .floating-close-btn {
+    bottom: 15px;
+    right: 15px;
+    padding: 12px;
+    min-width: 55px;
+    border-radius: 50%;
+    font-size: 0.8em;
+  }
+  
+  .floating-close-text {
+    display: none;
+  }
+  
+  .floating-close-icon {
+    font-size: 1.3em;
+  }
 }
 
 .categoria-section {
   margin-bottom: 30px;
+  padding: 15px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.8), rgba(248, 249, 250, 0.8));
+  border-radius: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
 }
 
 .categoria-title {
   color: #333;
   font-size: 1.2em;
   margin-bottom: 15px;
-  padding-bottom: 5px;
-  border-bottom: 2px solid #4CAF50;
+  padding: 10px 0;
+  border-bottom: 3px solid #4CAF50;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: linear-gradient(90deg, rgba(76, 175, 80, 0.1), transparent);
+  padding-left: 15px;
+  border-radius: 8px;
+}
+
+.categoria-icon {
+  font-size: 1.3em;
+  color: #4CAF50;
 }
 
 .products-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
   gap: 20px;
+  margin-top: 20px;
+}
+
+.prices-header {
   margin-bottom: 20px;
+  padding: 15px 0;
+  border-bottom: 2px solid #eee;
+}
+
+.prices-header h3 {
+  margin: 0;
+  color: #333;
+  font-size: 1.3em;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.prices-icon {
+  font-size: 1.4em;
+  color: #4CAF50;
 }
 
 .confirmacion-modal-overlay {
@@ -1285,6 +1899,9 @@ export default {
   max-width: 500px;
   text-align: center;
   box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.7));
 }
 
 .confirmacion-header {
@@ -1293,6 +1910,13 @@ export default {
   align-items: center;
   margin-bottom: 20px;
   color: #333;
+  padding-bottom: 15px;
+  border-bottom: 1px solid #eee;
+}
+
+.warning-icon {
+  font-size: 1.2em;
+  margin-right: 10px;
 }
 
 .confirmacion-body {
@@ -1312,6 +1936,7 @@ export default {
   border-radius: 8px;
   padding: 15px;
   background-color: #f9f9f9;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
 }
 
 .cliente-afectado {
@@ -1342,6 +1967,8 @@ export default {
   display: inline-block;
   min-width: 120px;
   text-align: center;
+  background-color: #2196F3;
+  box-shadow: 0 2px 6px rgba(33, 150, 243, 0.2);
 }
 
 .precio-info {
@@ -1391,6 +2018,31 @@ export default {
   accent-color: #4CAF50;
 }
 
+.radio-custom {
+  height: 20px;
+  width: 20px;
+  border: 2px solid #ccc;
+  border-radius: 50%;
+  position: relative;
+  margin-right: 8px;
+}
+
+.radio-option input:checked ~ .radio-custom {
+  border-color: #4CAF50;
+}
+
+.radio-option input:checked ~ .radio-custom:after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background-color: #4CAF50;
+}
+
 .radio-text {
   font-weight: 500;
 }
@@ -1403,11 +2055,20 @@ export default {
   color: #f44336;
 }
 
+.decision-label {
+  font-size: 0.9em;
+  color: #555;
+  margin-bottom: 8px;
+  display: block;
+}
+
 .confirmacion-footer {
   display: flex;
   justify-content: space-around;
   gap: 15px;
   margin-top: 20px;
+  padding-top: 15px;
+  border-top: 1px solid #eee;
 }
 
 .btn-cancelar, .btn-confirmar {
@@ -1418,6 +2079,11 @@ export default {
   font-size: 1em;
   font-weight: bold;
   transition: background-color 0.3s, transform 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
 }
 
 .btn-cancelar {
@@ -1430,18 +2096,90 @@ export default {
 }
 
 .btn-confirmar {
-  background-color: #4CAF50;
+  background: linear-gradient(135deg, #4CAF50, #388E3C);
   color: white;
+  box-shadow: 0 4px 10px rgba(76, 175, 80, 0.3);
 }
 
 .btn-confirmar:hover {
-  background-color: #45a049;
+  background: linear-gradient(135deg, #388E3C, #2E7D32);
   transform: translateY(-2px);
+  box-shadow: 0 6px 15px rgba(76, 175, 80, 0.4);
 }
 
 .btn-confirmar:disabled {
-  background-color: #a5d6a7;
+  background: #a5d6a7;
   cursor: not-allowed;
   transform: none;
+  box-shadow: none;
+}
+
+.cancel-icon, .confirm-icon {
+  font-size: 1.1em;
+}
+
+.overwrite-icon {
+  font-size: 1.1em;
+  color: #f44336;
+}
+
+.keep-icon {
+  font-size: 1.1em;
+  color: #4CAF50;
+}
+
+/* Botón Flotante de Cerrar */
+.floating-close-btn {
+  position: fixed;
+  bottom: 30px;
+  right: 30px;
+  background: linear-gradient(135deg, #dc3545, #c82333);
+  color: white;
+  border: none;
+  padding: 12px 20px;
+  border-radius: 50px;
+  cursor: pointer;
+  font-size: 0.9em;
+  font-weight: 600;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  box-shadow: 0 6px 20px rgba(220, 53, 69, 0.4);
+  z-index: 9999;
+  backdrop-filter: blur(10px);
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  min-width: 100px;
+  pointer-events: auto;
+}
+
+.floating-close-btn:hover {
+  background: linear-gradient(135deg, #c82333, #bd2130);
+  transform: translateY(-3px) scale(1.05);
+  box-shadow: 0 8px 25px rgba(220, 53, 69, 0.5);
+}
+
+.floating-close-btn:active {
+  transform: translateY(-1px) scale(1.02);
+  box-shadow: 0 4px 15px rgba(220, 53, 69, 0.4);
+}
+
+.floating-close-icon {
+  font-size: 1em;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3));
+}
+
+.floating-close-text {
+  font-weight: 600;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+/* Asegurar que el botón flotante esté siempre visible */
+.modal-overlay .floating-close-btn {
+  position: fixed !important;
+  z-index: 99999 !important;
+  visibility: visible !important;
+  opacity: 1 !important;
 }
 </style> 

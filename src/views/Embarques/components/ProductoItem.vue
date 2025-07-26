@@ -9,7 +9,7 @@
         <!-- Checkbox de venta para Ozuna -->
         <div v-if="isClienteOzuna" class="venta-checkbox-container">
             <input type="checkbox" v-model="producto.esVenta" class="form-check-input venta-checkbox"
-                :id="'ventaCheck-' + producto.id" :disabled="embarqueBloqueado">
+                :id="'ventaCheck-' + producto.id" :disabled="embarqueBloqueado" @change="actualizarProducto">
             <label :for="'ventaCheck-' + producto.id">Venta</label>
         </div>
 
@@ -401,6 +401,19 @@ export default {
                     this.asignarPrecioAutomatico();
                 }
             }
+        },
+        'producto.esVenta': {
+            handler() {
+                // Cuando cambie el estado de venta, recalcular precio automáticamente
+                // Especialmente importante para Ozuna (maquila vs venta)
+                if (this.isClienteOzuna) {
+                    // Resetear la bandera de precio borrado manualmente para permitir reasignación
+                    if (this.producto.precioBorradoManualmente) {
+                        this.producto.precioBorradoManualmente = false;
+                    }
+                    this.asignarPrecioAutomatico();
+                }
+            }
         }
     },
 
@@ -494,7 +507,24 @@ export default {
 
             const nombreCliente = this.nombreCliente.trim().toLowerCase();
             
-            // Mapear nombres de cliente a IDs
+            // Lógica especial para Ozuna: si no es venta (maquila), precio siempre 20
+            if (nombreCliente === 'ozuna' && !this.producto.esVenta) {
+                this.producto.precio = 20;
+                console.log(`[PRODUCTO-ITEM] ✅ Precio de maquila asignado para Ozuna: $20 para ${this.producto.medida}`);
+                
+                // Emitir evento para notificar que se asignó precio automáticamente
+                this.$emit('precio-asignado-automaticamente', {
+                    medida: this.producto.medida,
+                    cliente: nombreCliente,
+                    precio: 20,
+                    fecha: this.fechaEmbarque || obtenerFechaActualISO(),
+                    esMaquila: true,
+                    clienteId: 'ozuna'
+                });
+                return;
+            }
+            
+            // Para el resto de casos (incluyendo Ozuna con venta marcada), buscar precios históricos
             const clienteIdMap = {
                 'catarro': 'catarro',
                 'joselito': 'joselito', 
@@ -513,7 +543,8 @@ export default {
                 clienteId: clienteId,
                 fechaEmbarque: this.fechaEmbarque,
                 fechaNormalizada: fechaParaPrecios,
-                totalPreciosDisponibles: this.preciosActuales.length
+                totalPreciosDisponibles: this.preciosActuales.length,
+                esVenta: this.producto.esVenta
             });
             
             const precioHistorico = obtenerPrecioParaMedida(
