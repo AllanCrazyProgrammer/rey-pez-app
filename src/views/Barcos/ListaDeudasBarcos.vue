@@ -583,7 +583,29 @@ export default {
       filtroFechaInicio: '',
       filtroFechaFin: '',
       modalAbonoGeneralVisible: false,
-      abonos: []
+      abonos: [],
+      // Propiedades para modales
+      showModalAbono: false,
+      showModalHistorial: false,
+      showModalAbonoGeneral: false,
+      showModalHistorialCompleto: false,
+      // Propiedades para abonos
+      nuevoAbono: {
+        monto: null,
+        descripcion: '',
+        fecha: ''
+      },
+      abonoGeneral: {
+        monto: null,
+        descripcion: '',
+        fecha: '',
+        proveedorId: ''
+      },
+      // Propiedades para historial
+      historialAbonos: [],
+      historialCompleto: [],
+      filtroHistorialTipo: '',
+      filtroHistorialProveedor: ''
     };
   },
   computed: {
