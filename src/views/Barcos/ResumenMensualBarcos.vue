@@ -292,7 +292,7 @@ export default {
         const fecha = new Date(ahora.getFullYear(), ahora.getMonth() - i);
         opciones.push({
           value: `${fecha.getFullYear()}-${fecha.getMonth()}`,
-          label: `${this.nombresMeses[fecha.getMonth()]} ${fecha.getFullYear()}`
+          label: `${this.mesesDelAño[fecha.getMonth()]} ${fecha.getFullYear()}`
         });
       }
       
