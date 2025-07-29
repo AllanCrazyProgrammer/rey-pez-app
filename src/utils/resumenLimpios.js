@@ -358,7 +358,7 @@ function generarTextoMedida(producto, clienteId = null) {
   }
 
   if (producto.clienteId === '3' && producto.noSumarKilos) {
-    texto += ' sellada';
+    texto += ' kileado';
   }
 
   if (producto.tipo === 'otro') {
