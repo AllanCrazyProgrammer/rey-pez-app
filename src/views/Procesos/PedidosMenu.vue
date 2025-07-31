@@ -289,7 +289,7 @@ export default {
           }
         });
       } else {
-        // Para pedidos limpios
+        // Para pedidos limpios - ir directamente a la vista previa
         this.$router.push({
           name: 'PedidoLimpioImpresion',
           params: {
@@ -302,7 +302,8 @@ export default {
             clientesTemporales: pedido.clientesTemporales || {},
             rendimientosGuardados: pedido.rendimientos || {},
             divisoresGuardados: pedido.divisores || {},
-            completadosGuardados: pedido.completados || {}
+            completadosGuardados: pedido.completados || {},
+            kilosRefrigeradosGuardados: pedido.kilosRefrigerados || {}
           }
         });
       }

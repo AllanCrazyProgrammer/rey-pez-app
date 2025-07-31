@@ -511,9 +511,11 @@
       :rendimientosGuardados="rendimientosGuardados"
       :divisoresGuardados="divisoresGuardados"
       :completadosGuardados="completadosGuardados"
+      :kilosRefrigeradosGuardados="kilosRefrigeradosGuardados"
       @actualizar-rendimientos="actualizarRendimientos"
       @actualizar-divisores="actualizarDivisores"
       @actualizar-completados="actualizarCompletados"
+      @actualizar-kilos-refrigerados="actualizarKilosRefrigerados"
       @volver="mostrarImpresion = false"
     />
 
@@ -573,7 +575,8 @@ export default {
       itemSeleccionadoNotas: null,
       rendimientosGuardados: {},
       divisoresGuardados: {},
-      completadosGuardados: {}
+      completadosGuardados: {},
+      kilosRefrigeradosGuardados: {}
     }
   },
   async created() {
@@ -852,6 +855,7 @@ export default {
           this.rendimientosGuardados = data.rendimientos || {};
           this.divisoresGuardados = data.divisores || {};
           this.completadosGuardados = data.completados || {};
+          this.kilosRefrigeradosGuardados = data.kilosRefrigerados || {};
         }
       } catch (error) {
         console.error('Error al cargar el pedido:', error);
@@ -883,6 +887,7 @@ export default {
           rendimientos: this.rendimientosGuardados,
           divisores: this.divisoresGuardados,
           completados: this.completadosGuardados,
+          kilosRefrigerados: this.kilosRefrigeradosGuardados,
           createdAt: Timestamp.now()
         };
 
@@ -911,6 +916,7 @@ export default {
           clientesTemporales: this.clientesTemporales,
           rendimientos: this.rendimientosGuardados,
           divisores: this.divisoresGuardados,
+          kilosRefrigerados: this.kilosRefrigeradosGuardados,
           tipo: 'limpio',
           createdAt: this.editando ? Timestamp.fromDate(new Date(this.fecha)) : Timestamp.now()
         }
@@ -1088,24 +1094,78 @@ export default {
     },
     actualizarRendimientos(nuevosRendimientos) {
       this.rendimientosGuardados = { ...nuevosRendimientos };
-      // Si estamos editando, guardamos los cambios inmediatamente
+      // Guardar en Firebase inmediatamente
       if (this.editando && this.pedidoId) {
+        // Si estamos editando, actualizar el documento existente
         updateDoc(doc(db, 'pedidos', this.pedidoId), {
           rendimientos: this.rendimientosGuardados
         }).catch(error => {
           console.error('Error al actualizar rendimientos:', error);
         });
+      } else {
+        // Si es un pedido nuevo, crear un nuevo documento
+        const pedidoData = {
+          fecha: this.fecha,
+          tipo: 'limpio',
+          otilio: this.pedidoOtilio,
+          catarro: this.pedidoCatarro,
+          joselito: this.pedidoJoselito,
+          ozuna: this.pedidoOzuna,
+          clientesTemporales: this.clientesTemporales,
+          rendimientos: this.rendimientosGuardados,
+          divisores: this.divisoresGuardados,
+          completados: this.completadosGuardados,
+          kilosRefrigerados: this.kilosRefrigeradosGuardados,
+          createdAt: Timestamp.now()
+        };
+        
+        addDoc(collection(db, 'pedidos'), pedidoData)
+          .then(docRef => {
+            // Actualizar el estado local para reflejar que ahora estamos editando
+            this.editando = true;
+            this.pedidoId = docRef.id;
+          })
+          .catch(error => {
+            console.error('Error al crear nuevo pedido con rendimientos:', error);
+          });
       }
     },
     actualizarDivisores(nuevosDivisores) {
       this.divisoresGuardados = { ...nuevosDivisores };
-      // Si estamos editando, guardamos los cambios inmediatamente
+      // Guardar en Firebase inmediatamente
       if (this.editando && this.pedidoId) {
+        // Si estamos editando, actualizar el documento existente
         updateDoc(doc(db, 'pedidos', this.pedidoId), {
           divisores: this.divisoresGuardados
         }).catch(error => {
           console.error('Error al actualizar divisores:', error);
         });
+      } else {
+        // Si es un pedido nuevo, crear un nuevo documento
+        const pedidoData = {
+          fecha: this.fecha,
+          tipo: 'limpio',
+          otilio: this.pedidoOtilio,
+          catarro: this.pedidoCatarro,
+          joselito: this.pedidoJoselito,
+          ozuna: this.pedidoOzuna,
+          clientesTemporales: this.clientesTemporales,
+          rendimientos: this.rendimientosGuardados,
+          divisores: this.divisoresGuardados,
+          completados: this.completadosGuardados,
+          kilosRefrigerados: this.kilosRefrigeradosGuardados,
+          createdAt: Timestamp.now()
+        };
+        
+        addDoc(collection(db, 'pedidos'), pedidoData)
+          .then(docRef => {
+            // Actualizar el estado local para reflejar que ahora estamos editando
+            this.editando = true;
+            this.pedidoId = docRef.id;
+          })
+          .catch(error => {
+            console.error('Error al crear nuevo pedido con divisores:', error);
+          });
       }
     },
     actualizarCompletados(completados) {
@@ -1131,6 +1191,7 @@ export default {
           rendimientos: this.rendimientosGuardados,
           divisores: this.divisoresGuardados,
           completados: completados,
+          kilosRefrigerados: this.kilosRefrigeradosGuardados,
           createdAt: Timestamp.now()
         };
         
@@ -1145,6 +1206,44 @@ export default {
           });
       }
     },
+    actualizarKilosRefrigerados(nuevosKilosRefrigerados) {
+      this.kilosRefrigeradosGuardados = { ...nuevosKilosRefrigerados };
+      // Guardar en Firebase inmediatamente
+      if (this.editando && this.pedidoId) {
+        // Si estamos editando, actualizar el documento existente
+        updateDoc(doc(db, 'pedidos', this.pedidoId), {
+          kilosRefrigerados: this.kilosRefrigeradosGuardados
+        }).catch(error => {
+          console.error('Error al actualizar kilos refrigerados:', error);
+        });
+      } else {
+        // Si es un pedido nuevo, crear un nuevo documento
+        const pedidoData = {
+          fecha: this.fecha,
+          tipo: 'limpio',
+          otilio: this.pedidoOtilio,
+          catarro: this.pedidoCatarro,
+          joselito: this.pedidoJoselito,
+          ozuna: this.pedidoOzuna,
+          clientesTemporales: this.clientesTemporales,
+          rendimientos: this.rendimientosGuardados,
+          divisores: this.divisoresGuardados,
+          completados: this.completadosGuardados,
+          kilosRefrigerados: this.kilosRefrigeradosGuardados,
+          createdAt: Timestamp.now()
+        };
+        
+        addDoc(collection(db, 'pedidos'), pedidoData)
+          .then(docRef => {
+            // Actualizar el estado local para reflejar que ahora estamos editando
+            this.editando = true;
+            this.pedidoId = docRef.id;
+          })
+          .catch(error => {
+            console.error('Error al crear nuevo pedido con kilos refrigerados:', error);
+          });
+      }
+    }
   },
   watch: {
     'pedidoOtilio': {

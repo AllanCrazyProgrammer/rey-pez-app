@@ -37,7 +37,7 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="(item, index) in pedidoOtilio" :key="'otilio-'+index">
+            <tr v-for="(item, index) in (pedidoOtilio || [])" :key="'otilio-'+index">
               <td><input type="checkbox" v-model="item.completado" @change="actualizarCompletado('otilio', index, item.completado)" class="pedido-checkbox"></td>
               <td>{{ item.kilos }}<i v-if="item.esTara">T</i></td>
               <td>
@@ -59,9 +59,9 @@
       <!-- Vista previa de otros clientes -->
       <div class="preview-page">
         <!-- Joselito -->
-        <div class="cliente-seccion" :class="{ compacto: pedidoJoselito.length >= 5 }">
-          <h4 class="cliente-header joselito-header" :class="{ compacto: pedidoJoselito.length >= 5 }">Joselito</h4>
-          <table class="preview-table" :class="{ compacto: pedidoJoselito.length >= 5 }">
+        <div class="cliente-seccion" :class="{ compacto: pedidoJoselito && pedidoJoselito.length >= 5 }">
+          <h4 class="cliente-header joselito-header" :class="{ compacto: pedidoJoselito && pedidoJoselito.length >= 5 }">Joselito</h4>
+          <table class="preview-table" :class="{ compacto: pedidoJoselito && pedidoJoselito.length >= 5 }">
             <thead>
               <tr>
                 <th>✓</th>
@@ -71,7 +71,7 @@
               </tr>
             </thead>
             <tbody>
-              <tr v-for="(item, index) in pedidoJoselito" :key="'joselito-'+index">
+              <tr v-for="(item, index) in (pedidoJoselito || [])" :key="'joselito-'+index">
                 <td><input type="checkbox" v-model="item.completado" @change="actualizarCompletado('joselito', index, item.completado)" class="pedido-checkbox"></td>
                 <td>{{ item.kilos }}<i v-if="item.esTara">T</i></td>
                 <td>
@@ -103,7 +103,7 @@
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="(item, index) in pedidoCatarro" :key="'catarro-'+index">
+                <tr v-for="(item, index) in (pedidoCatarro || [])" :key="'catarro-'+index">
                   <td><input type="checkbox" v-model="item.completado" @change="actualizarCompletado('catarro', index, item.completado)" class="pedido-checkbox"></td>
                   <td>{{ item.kilos }}<i v-if="item.esTara">T</i></td>
                   <td>
@@ -127,7 +127,7 @@
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="(item, index) in pedidoOzuna" :key="'ozuna-'+index">
+                <tr v-for="(item, index) in (pedidoOzuna || [])" :key="'ozuna-'+index">
                   <td><input type="checkbox" v-model="item.completado" @change="actualizarCompletado('ozuna', index, item.completado)" class="pedido-checkbox"></td>
                   <td>{{ item.kilos }}<i v-if="item.esTara">T</i></td>
                   <td>
@@ -142,7 +142,7 @@
       </div>
 
       <!-- Clientes Temporales -->
-      <div v-if="Object.keys(clientesTemporales).length > 0" class="preview-page">
+      <div v-if="clientesTemporales && Object.keys(clientesTemporales).length > 0" class="preview-page">
         <div v-for="(cliente, id) in clientesTemporales" :key="id" class="cliente-seccion temporal">
           <h3 class="cliente-header temporal-header">{{ cliente.nombre }}</h3>
           <table class="preview-table">
@@ -155,7 +155,7 @@
               </tr>
             </thead>
             <tbody>
-              <tr v-for="(item, index) in cliente.pedidos" :key="'temp-'+id+'-'+index">
+              <tr v-for="(item, index) in (cliente.pedidos || [])" :key="'temp-'+id+'-'+index">
                 <td><input type="checkbox" v-model="item.completado" class="pedido-checkbox"></td>
                 <td>{{ item.kilos }}<i v-if="item.esTara">T</i></td>
                 <td>
@@ -191,7 +191,25 @@
           <tbody>
             <tr v-for="(medida, index) in calcularTotalesPorMedida()" :key="index">
               <td data-label="Medida">{{ medida.medida }}</td>
-              <td data-label="Total Kilos">{{ medida.total }} kg</td>
+              <td data-label="Total Kilos" class="total-kilos-cell">
+                <div class="kilos-container">
+                  <span 
+                    class="total-kilos-clickeable" 
+                    @click="abrirModalKilosRefrigerados(medida)"
+                    :title="'Click para agregar kilos refrigerados'"
+                  >
+                    {{ medida.total }} kg
+                  </span>
+                  <div v-if="kilosRefrigerados[medida.medida]" class="kilos-info">
+                    <span class="kilos-refrigerados">
+                      🧊 {{ kilosRefrigerados[medida.medida] }} kg
+                    </span>
+                    <span class="kilos-faltantes" :class="{ 'suficientes': obtenerKilosFaltantes(medida) <= 0 }">
+                      Faltan: {{ Math.max(0, obtenerKilosFaltantes(medida)) }} kg
+                    </span>
+                  </div>
+                </div>
+              </td>
               <td data-label="Rendimientos">
                 <div class="rendimientos-column">
                   <input 
@@ -231,11 +249,11 @@
               </td>
               <td data-label="Cajas">
                 <template v-if="rendimientos[medida.medida]">
-                  <span v-if="esMedidaGranja(medida.medida) && divisores[medida.medida]" class="cajas-result">
-                    {{ Math.round((medida.total * rendimientos[medida.medida]) / divisores[medida.medida]) }}
+                  <span v-if="esMedidaGranja(medida.medida) && divisores[medida.medida]" class="cajas-result" :class="{ 'cajas-faltantes': kilosRefrigerados[medida.medida] > 0 }">
+                    {{ Math.round((obtenerKilosFaltantes(medida) * rendimientos[medida.medida]) / divisores[medida.medida]) }}
                   </span>
-                  <span v-else class="cajas-result">
-                    {{ Math.round(medida.total * rendimientos[medida.medida]) }} kg
+                  <span v-else class="cajas-result" :class="{ 'cajas-faltantes': kilosRefrigerados[medida.medida] > 0 }">
+                    {{ Math.round(obtenerKilosFaltantes(medida) * rendimientos[medida.medida]) }} kg
                   </span>
                 </template>
               </td>
@@ -251,11 +269,24 @@
         </table>
       </div>
     </div>
+
+    <!-- Modal de Kilos Refrigerados -->
+    <KilosRefrigeradosModal
+      :mostrar="modalKilosVisible"
+      :medida="medidaSeleccionada"
+      :total-kilos="totalKilosSeleccionados"
+      :kilos-refrigerados-iniciales="kilosRefrigerados[medidaSeleccionada] || 0"
+      @cerrar="cerrarModalKilosRefrigerados"
+      @guardar="guardarKilosRefrigerados"
+    />
   </div>
 </template>
 
 <script>
 import pdfMake from 'pdfmake/build/pdfmake'
+import KilosRefrigeradosModal from '@/components/KilosRefrigeradosModal.vue'
+import { db } from '@/firebase'
+import { doc, updateDoc, Timestamp } from 'firebase/firestore'
 
 const fonts = {
   Roboto: {
@@ -270,6 +301,9 @@ pdfMake.fonts = fonts
 
 export default {
   name: 'PedidoLimpioImpresion',
+  components: {
+    KilosRefrigeradosModal
+  },
   props: {
     fecha: {
       type: String,
@@ -310,6 +344,10 @@ export default {
     completadosGuardados: {
       type: Object,
       default: () => ({})
+    },
+    kilosRefrigeradosGuardados: {
+      type: Object,
+      default: () => ({})
     }
   },
   data() {
@@ -317,7 +355,13 @@ export default {
       rendimientos: this.rendimientosGuardados || {},
       divisores: this.divisoresGuardados || {},
       contentScale: 1,
-      completados: this.completadosGuardados || {}
+      completados: this.completadosGuardados || {},
+      kilosRefrigerados: this.kilosRefrigeradosGuardados || {},
+      modalKilosVisible: false,
+      medidaSeleccionada: '',
+      totalKilosSeleccionados: 0,
+      editando: false,
+      pedidoId: null
     }
   },
   created() {
@@ -331,6 +375,13 @@ export default {
     this.rendimientos = { ...this.rendimientosGuardados };
     this.divisores = { ...this.divisoresGuardados };
     this.completados = { ...this.completadosGuardados };
+    this.kilosRefrigerados = { ...this.kilosRefrigeradosGuardados };
+    
+    // Si tenemos ID, activar modo edición para permitir guardado automático
+    if (this.id) {
+      this.editando = true;
+      this.pedidoId = this.id;
+    }
     
     // Aplicar estados guardados a los pedidos
     this.aplicarEstadosCompletado();
@@ -348,39 +399,57 @@ export default {
     },
     aplicarEstadosCompletado() {
       // Aplicar estados a Otilio
-      this.pedidoOtilio.forEach((item, index) => {
-        if (this.completados.otilio[index] !== undefined) {
-          this.$set(item, 'completado', this.completados.otilio[index]);
-        }
-      });
+      if (this.pedidoOtilio && Array.isArray(this.pedidoOtilio)) {
+        this.pedidoOtilio.forEach((item, index) => {
+          if (this.completados.otilio && this.completados.otilio[index] !== undefined) {
+            this.$set(item, 'completado', this.completados.otilio[index]);
+          }
+        });
+      }
        
-      // Aplicar estados a Catarroo
-      this.pedidoCatarro.forEach((item, index) => {
-        if (this.completados.catarro[index] !== undefined) {
-          this.$set(item, 'completado', this.completados.catarro[index]);
-        }
-      });
+      // Aplicar estados a Catarro
+      if (this.pedidoCatarro && Array.isArray(this.pedidoCatarro)) {
+        this.pedidoCatarro.forEach((item, index) => {
+          if (this.completados.catarro && this.completados.catarro[index] !== undefined) {
+            this.$set(item, 'completado', this.completados.catarro[index]);
+          }
+        });
+      }
       
       // Aplicar estados a Joselito
-      this.pedidoJoselito.forEach((item, index) => {
-        if (this.completados.joselito[index] !== undefined) {
-          this.$set(item, 'completado', this.completados.joselito[index]);
-        }
-      });
+      if (this.pedidoJoselito && Array.isArray(this.pedidoJoselito)) {
+        this.pedidoJoselito.forEach((item, index) => {
+          if (this.completados.joselito && this.completados.joselito[index] !== undefined) {
+            this.$set(item, 'completado', this.completados.joselito[index]);
+          }
+        });
+      }
       
       // Aplicar estados a Ozuna
-      this.pedidoOzuna.forEach((item, index) => {
-        if (this.completados.ozuna[index] !== undefined) {
-          this.$set(item, 'completado', this.completados.ozuna[index]);
-        }
-      });
+      if (this.pedidoOzuna && Array.isArray(this.pedidoOzuna)) {
+        this.pedidoOzuna.forEach((item, index) => {
+          if (this.completados.ozuna && this.completados.ozuna[index] !== undefined) {
+            this.$set(item, 'completado', this.completados.ozuna[index]);
+          }
+        });
+      }
     },
     actualizarCompletado(cliente, index, valor) {
       if (!this.completados[cliente]) {
         this.$set(this.completados, cliente, {});
       }
       this.$set(this.completados[cliente], index, valor);
-      // Emitir el evento inmediatamente para guardar en Firebase
+      
+      // Si estamos en modo edición, guardar directamente en Firebase
+      if (this.editando && this.pedidoId) {
+        updateDoc(doc(db, 'pedidos', this.pedidoId), {
+          completados: this.completados
+        }).catch(error => {
+          console.error('Error al actualizar estados completados:', error);
+        });
+      }
+      
+      // También emitir el evento para compatibilidad
       this.$emit('actualizar-completados', this.completados);
     },
     obtenerDiaSemana(fecha) {
@@ -461,7 +530,7 @@ export default {
     },
     generarPDF() {
       const diaSemana = this.obtenerDiaSemana(this.fecha);
-      const necesitaCompacto = this.pedidoJoselito.length >= 5;
+      const necesitaCompacto = this.pedidoJoselito && this.pedidoJoselito.length >= 5;
       const espaciadoReducido = necesitaCompacto ? 0.5 : 30;
       const fontSizeJoselito = necesitaCompacto ? 22 : 26;
       const fontSizeInferior = necesitaCompacto ? 24 : 36;
@@ -576,7 +645,7 @@ export default {
           { text: '', pageBreak: 'after' },
 
           // Tercera página - Clientes Temporales
-          ...(Object.keys(this.clientesTemporales).length > 0 ? [
+          ...(this.clientesTemporales && Object.keys(this.clientesTemporales).length > 0 ? [
             ...Object.entries(this.clientesTemporales).map(([clienteId, cliente]) => [
               {
                 text: cliente.nombre.toUpperCase(),
@@ -727,6 +796,7 @@ export default {
       const medidasMap = new Map();
       
       const procesarPedido = (pedido, esPedidoOzuna = false) => {
+        if (!pedido || !Array.isArray(pedido)) return;
         pedido.forEach(item => {
           if (!item.medida) return;
           
@@ -783,11 +853,13 @@ export default {
       procesarPedido(this.pedidoOzuna, true); // Indicamos que es pedido de Ozuna
       
       // Procesar clientes temporales
-      Object.values(this.clientesTemporales).forEach(cliente => {
-        if (cliente.pedidos && Array.isArray(cliente.pedidos)) {
-          procesarPedido(cliente.pedidos);
-        }
-      });
+      if (this.clientesTemporales && typeof this.clientesTemporales === 'object') {
+        Object.values(this.clientesTemporales).forEach(cliente => {
+          if (cliente && cliente.pedidos && Array.isArray(cliente.pedidos)) {
+            procesarPedido(cliente.pedidos);
+          }
+        });
+      }
 
       // Convertir el mapa a un array ordenado
       return Array.from(medidasMap.values())
@@ -812,7 +884,17 @@ export default {
       if (isNaN(valor)) {
         this.rendimientos[medida.medida] = '';
       }
-      // Emitir el evento para guardar los rendimientos
+      
+      // Si estamos en modo edición, guardar directamente en Firebase
+      if (this.editando && this.pedidoId) {
+        updateDoc(doc(db, 'pedidos', this.pedidoId), {
+          rendimientos: this.rendimientos
+        }).catch(error => {
+          console.error('Error al actualizar rendimientos:', error);
+        });
+      }
+      
+      // También emitir el evento para compatibilidad
       this.$emit('actualizar-rendimientos', this.rendimientos);
     },
     toggleDivisor(medida, valor) {
@@ -823,7 +905,17 @@ export default {
         // Si no, establecemos el nuevo valor
         this.$set(this.divisores, medida.medida, valor);
       }
-      // Emitir el evento para guardar los divisores
+      
+      // Si estamos en modo edición, guardar directamente en Firebase
+      if (this.editando && this.pedidoId) {
+        updateDoc(doc(db, 'pedidos', this.pedidoId), {
+          divisores: this.divisores
+        }).catch(error => {
+          console.error('Error al actualizar divisores:', error);
+        });
+      }
+      
+      // También emitir el evento para compatibilidad
       this.$emit('actualizar-divisores', this.divisores);
     },
     esMedidaGranja(medida) {
@@ -834,6 +926,35 @@ export default {
       const totales = this.calcularTotalesPorMedida();
       const sumaTotal = totales.reduce((sum, medida) => sum + medida.total, 0);
       return sumaTotal.toLocaleString(); // Formateamos con comas para mejor legibilidad
+    },
+    abrirModalKilosRefrigerados(medida) {
+      this.medidaSeleccionada = medida.medida;
+      this.totalKilosSeleccionados = medida.total;
+      this.modalKilosVisible = true;
+    },
+    cerrarModalKilosRefrigerados() {
+      this.modalKilosVisible = false;
+      this.medidaSeleccionada = '';
+      this.totalKilosSeleccionados = 0;
+    },
+    guardarKilosRefrigerados(datos) {
+      this.$set(this.kilosRefrigerados, datos.medida, datos.kilosRefrigerados);
+      
+      // Si estamos en modo edición, guardar directamente en Firebase
+      if (this.editando && this.pedidoId) {
+        updateDoc(doc(db, 'pedidos', this.pedidoId), {
+          kilosRefrigerados: this.kilosRefrigerados
+        }).catch(error => {
+          console.error('Error al actualizar kilos refrigerados:', error);
+        });
+      }
+      
+      // También emitir el evento para compatibilidad
+      this.$emit('actualizar-kilos-refrigerados', this.kilosRefrigerados);
+    },
+    obtenerKilosFaltantes(medida) {
+      const refrigerados = this.kilosRefrigerados[medida.medida] || 0;
+      return Math.max(0, medida.total - refrigerados);
     }
   },
   watch: {
@@ -842,60 +963,78 @@ export default {
       handler(newVal) {
         this.rendimientos = { ...newVal };
       },
-      deep: true
+      deep: true,
+      immediate: true
     },
     divisoresGuardados: {
       handler(newVal) {
         this.divisores = { ...newVal };
       },
-      deep: true
+      deep: true,
+      immediate: true
     },
     completadosGuardados: {
       handler(newVal) {
         this.completados = { ...newVal };
         this.aplicarEstadosCompletado();
       },
-      deep: true
+      deep: true,
+      immediate: true
+    },
+    kilosRefrigeradosGuardados: {
+      handler(newVal) {
+        this.kilosRefrigerados = { ...newVal };
+      },
+      deep: true,
+      immediate: true
     },
     // Observar cambios en los pedidos para actualizar los estados completados
     pedidoOtilio: {
       deep: true,
       handler(newVal) {
-        newVal.forEach((item, index) => {
-          if (item.completado !== undefined) {
-            this.actualizarCompletado('otilio', index, item.completado);
-          }
-        });
+        if (newVal && Array.isArray(newVal)) {
+          newVal.forEach((item, index) => {
+            if (item && item.completado !== undefined) {
+              this.actualizarCompletado('otilio', index, item.completado);
+            }
+          });
+        }
       }
     },
     pedidoJoselito: {
       deep: true,
       handler(newVal) {
-        newVal.forEach((item, index) => {
-          if (item.completado !== undefined) {
-            this.actualizarCompletado('joselito', index, item.completado);
-          }
-        });
+        if (newVal && Array.isArray(newVal)) {
+          newVal.forEach((item, index) => {
+            if (item && item.completado !== undefined) {
+              this.actualizarCompletado('joselito', index, item.completado);
+            }
+          });
+        }
       }
     },
     pedidoCatarro: {
       deep: true,
       handler(newVal) {
-        newVal.forEach((item, index) => {
-          if (item.completado !== undefined) {
-            this.actualizarCompletado('catarro', index, item.completado);
-          }
-        });
+        if (newVal && Array.isArray(newVal)) {
+          newVal.forEach((item, index) => {
+            if (item && item.completado !== undefined) {
+              this.actualizarCompletado('catarro', index, item.completado);
+            }
+          });
+        }
       }
     },
     pedidoOzuna: {
       deep: true,
       handler(newVal) {
-        newVal.forEach((item, index) => {
-          if (item.completado !== undefined) {
-            this.actualizarCompletado('ozuna', index, item.completado);
-          }
-        });
+        if (newVal && Array.isArray(newVal)) {
+          newVal.forEach((item, index) => {
+            if (item && item.completado !== undefined) {
+              this.actualizarCompletado('ozuna', index, item.completado);
+            }
+          });
+        }
       }
     }
   }
@@ -1443,6 +1582,46 @@ h4.cliente-header.ozuna-header {
   color: #4CAF50;
 }
 
+.cajas-result.cajas-faltantes {
+  position: relative;
+  background: linear-gradient(135deg, #ff9800 0%, #ff5722 100%);
+  color: white;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-weight: 600;
+  box-shadow: 0 2px 4px rgba(255, 152, 0, 0.3);
+}
+
+.cajas-result.cajas-faltantes::before {
+  content: '📦 ';
+  font-size: 0.8em;
+}
+
+/* Tooltip para explicar que se calculó con kilos faltantes */
+.cajas-result.cajas-faltantes::after {
+  content: 'Calculado con kilos faltantes (restando refrigerados)';
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 6px 8px;
+  border-radius: 4px;
+  font-size: 0.7em;
+  font-weight: normal;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+  z-index: 1000;
+  margin-bottom: 5px;
+}
+
+.cajas-result.cajas-faltantes:hover::after {
+  opacity: 1;
+}
+
 /* Ajustes responsivos */
 @media (max-width: 375px) {
   .resumen-medidas {
@@ -1540,6 +1719,15 @@ h4.cliente-header.ozuna-header {
     text-align: left;
     font-size: 14px;
   }
+  
+  .cajas-result.cajas-faltantes {
+    padding: 2px 4px;
+    font-size: 12px;
+  }
+  
+  .cajas-result.cajas-faltantes::after {
+    display: none; /* Ocultar tooltip en móviles */
+  }
 }
 
 /* Ajustes para impresión */
@@ -1547,6 +1735,22 @@ h4.cliente-header.ozuna-header {
   .rendimiento-box {
     border: none;
     background: none;
+  }
+  
+  .cajas-result.cajas-faltantes {
+    background: none !important;
+    color: #000 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+  }
+  
+  .cajas-result.cajas-faltantes::before {
+    display: none;
+  }
+  
+  .cajas-result.cajas-faltantes::after {
+    display: none !important;
   }
 }
 
@@ -1694,6 +1898,137 @@ h4.cliente-header.ozuna-header {
     background-color: #f8f9fa !important;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
+  }
+}
+
+/* Estilos para kilos refrigerados */
+.total-kilos-cell {
+  padding: 8px !important;
+}
+
+.kilos-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+}
+
+.total-kilos-clickeable {
+  font-weight: bold;
+  color: #2c3e50;
+  cursor: pointer;
+  padding: 6px 12px;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  border: 2px solid transparent;
+  min-width: 80px;
+  text-align: center;
+  display: inline-block;
+}
+
+.total-kilos-clickeable:hover {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+  border-color: #667eea;
+}
+
+.total-kilos-clickeable:active {
+  transform: translateY(0);
+}
+
+.kilos-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 0.85em;
+  width: 100%;
+  align-items: center;
+}
+
+.kilos-refrigerados {
+  background: linear-gradient(135deg, #17a2b8 0%, #20c997 100%);
+  color: white;
+  padding: 3px 8px;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 0.8em;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  box-shadow: 0 2px 4px rgba(23, 162, 184, 0.3);
+}
+
+.kilos-faltantes {
+  background: linear-gradient(135deg, #dc3545 0%, #e74c3c 100%);
+  color: white;
+  padding: 2px 6px;
+  border-radius: 10px;
+  font-weight: 500;
+  font-size: 0.75em;
+  box-shadow: 0 2px 4px rgba(220, 53, 69, 0.3);
+}
+
+.kilos-faltantes.suficientes {
+  background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+  box-shadow: 0 2px 4px rgba(40, 167, 69, 0.3);
+}
+
+.kilos-faltantes.suficientes::before {
+  content: '✓ ';
+}
+
+/* Responsive para kilos refrigerados */
+@media (max-width: 375px) {
+  .kilos-container {
+    gap: 4px;
+  }
+  
+  .total-kilos-clickeable {
+    padding: 4px 8px;
+    font-size: 0.9em;
+    min-width: 60px;
+  }
+  
+  .kilos-info {
+    font-size: 0.75em;
+  }
+  
+  .kilos-refrigerados {
+    font-size: 0.7em;
+    padding: 2px 6px;
+  }
+  
+  .kilos-faltantes {
+    font-size: 0.65em;
+    padding: 1px 4px;
+  }
+}
+
+/* Ocultar kilos refrigerados en impresión */
+@media print {
+  .kilos-info {
+    display: none;
+  }
+  
+  .total-kilos-clickeable {
+    background: none !important;
+    color: #000 !important;
+    border: none !important;
+    box-shadow: none !important;
+    transform: none !important;
+    cursor: default;
+    padding: 0;
+  }
+  
+  .total-kilos-clickeable:hover {
+    background: none !important;
+    color: #000 !important;
+    transform: none !important;
+    box-shadow: none !important;
   }
 }
 </style> 
