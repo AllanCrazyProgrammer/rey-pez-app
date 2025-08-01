@@ -3,7 +3,7 @@
         'reporte-completo': coincideTarasYBolsas,
         'reporte-incompleto': !coincideTarasYBolsas && tieneAlgunReporte,
         'taras-reportadas': coincideTaras,
-        'taras-no-reportadas': totalTaras > 0 && !coincideTaras,
+        'taras-no-reportadas': (totalTaras > 0 && !coincideTaras) || (totalTaras === 0 && totalTarasReportadas === 0),
         'medida-vacia': !producto.medida
     }">
         <!-- Checkbox de venta para Ozuna -->
@@ -344,7 +344,7 @@ export default {
             const totalTarasRegistradas = this.totalTaras;
             const totalTarasReportadas = this.totalTarasReportadas;
 
-            // Si no hay taras registradas ni reportadas, retornar false
+            // Si no hay taras registradas ni reportadas, considerarlo como incompleto (sin borde verde)
             if (totalTarasRegistradas === 0 && totalTarasReportadas === 0) {
                 return false;
             }
