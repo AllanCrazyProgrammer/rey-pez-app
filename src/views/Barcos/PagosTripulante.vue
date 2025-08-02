@@ -455,7 +455,13 @@ export default {
     },
 
     formatearFecha(fecha) {
-      return new Date(fecha).toLocaleDateString('es-ES', {
+      // Evitar problemas de zona horaria creando la fecha con los componentes locales
+      if (!fecha) return '';
+      
+      const [year, month, day] = fecha.split('-');
+      const date = new Date(year, month - 1, day); // month - 1 porque Date usa meses base 0
+      
+      return date.toLocaleDateString('es-ES', {
         year: 'numeric',
         month: 'short',
         day: 'numeric'

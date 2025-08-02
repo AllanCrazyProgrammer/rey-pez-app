@@ -1,7 +1,7 @@
 <template>
   <div class="barcos-menu">
     <div class="back-button-container">
-      <BackButton to="/" />
+      <BackButton to="/procesos" />
     </div>
     
     <div class="header-section">
@@ -12,6 +12,61 @@
         </h1>
         <p class="subtitle">Administra las deudas y gastos de El Galileo y María Guadalupe</p>
       </div>
+    </div>
+
+    <!-- Menu de opciones -->
+    <div class="menu-options" :class="{ disabled: !barcoSeleccionado }">
+      <div v-if="!barcoSeleccionado" class="selection-hint">
+        <i class="hint-icon">👇</i>
+        <p>Selecciona un barco para activar las opciones</p>
+      </div>
+      <router-link 
+        :to="barcoSeleccionado ? `/barcos/deudas/lista?barco=${barcoSeleccionado}` : '#'" 
+        :class="['btn-action', 'btn-lista', barcoSeleccionado ? `barco-theme-${barcoSeleccionado}` : '']"
+        :aria-label="barcoSeleccionado ? 'Ver lista de deudas del barco' : 'Selecciona un barco primero'"
+        @click="!barcoSeleccionado && $event.preventDefault()"
+      >
+        <i class="icon">📋</i>
+        <span>Lista de Deudas</span>
+      </router-link>
+      
+      <router-link 
+        :to="barcoSeleccionado ? `/barcos/deudas/nueva?barco=${barcoSeleccionado}` : '#'" 
+        :class="['btn-action', 'btn-nueva', barcoSeleccionado ? `barco-theme-${barcoSeleccionado}` : '']"
+        :aria-label="barcoSeleccionado ? 'Crear nueva deuda para el barco' : 'Selecciona un barco primero'"
+        @click="!barcoSeleccionado && $event.preventDefault()"
+      >
+        <i class="icon">➕</i>
+        <span>Nueva Deuda</span>
+      </router-link>
+      
+      <router-link 
+        to="/barcos/resumen-mensual" 
+        :class="['btn-action', 'btn-reporte', barcoSeleccionado ? `barco-theme-${barcoSeleccionado}` : '']"
+        aria-label="Ver reporte mensual de barcos"
+      >
+        <i class="icon">📊</i>
+        <span>Reporte Mensual</span>
+      </router-link>
+      
+      <router-link 
+        :to="barcoSeleccionado ? `/barcos/tripulantes?barco=${barcoSeleccionado}` : '#'" 
+        :class="['btn-action', 'btn-tripulantes', barcoSeleccionado ? `barco-theme-${barcoSeleccionado}` : '']"
+        :aria-label="barcoSeleccionado ? 'Gestionar tripulantes del barco' : 'Selecciona un barco primero'"
+        @click="!barcoSeleccionado && $event.preventDefault()"
+      >
+        <i class="icon">👥</i>
+        <span>Gestión de Tripulantes</span>
+      </router-link>
+      
+      <button 
+        @click="barcoSeleccionado ? openProveedoresModal() : null" 
+        :class="['btn-action', 'btn-config', barcoSeleccionado ? `barco-theme-${barcoSeleccionado}` : '']"
+        :aria-label="barcoSeleccionado ? 'Configurar proveedores de barcos' : 'Selecciona un barco primero'"
+      >
+        <i class="icon">⚙️</i>
+        <span>Configurar Proveedores</span>
+      </button>
     </div>
 
     <!-- Selector de barco -->
@@ -36,53 +91,6 @@
           <span>María Guadalupe</span>
         </button>
       </div>
-    </div>
-    
-    <div class="menu-options" v-if="barcoSeleccionado">
-      <router-link 
-        :to="`/barcos/deudas/lista?barco=${barcoSeleccionado}`" 
-        :class="['btn-action', 'btn-lista', `barco-theme-${barcoSeleccionado}`]"
-        aria-label="Ver lista de deudas del barco"
-      >
-        <i class="icon">📋</i>
-        <span>Lista de Deudas</span>
-      </router-link>
-      
-      <router-link 
-        :to="`/barcos/deudas/nueva?barco=${barcoSeleccionado}`" 
-        :class="['btn-action', 'btn-nueva', `barco-theme-${barcoSeleccionado}`]"
-        aria-label="Crear nueva deuda para el barco"
-      >
-        <i class="icon">➕</i>
-        <span>Nueva Deuda</span>
-      </router-link>
-      
-      <router-link 
-        to="/barcos/resumen-mensual" 
-        :class="['btn-action', 'btn-reporte', `barco-theme-${barcoSeleccionado}`]"
-        aria-label="Ver reporte mensual de barcos"
-      >
-        <i class="icon">📊</i>
-        <span>Reporte Mensual</span>
-      </router-link>
-      
-      <router-link 
-        :to="`/barcos/tripulantes?barco=${barcoSeleccionado}`" 
-        :class="['btn-action', 'btn-tripulantes', `barco-theme-${barcoSeleccionado}`]"
-        aria-label="Gestionar tripulantes del barco"
-      >
-        <i class="icon">👥</i>
-        <span>Gestión de Tripulantes</span>
-      </router-link>
-      
-      <button 
-        @click="openProveedoresModal" 
-        :class="['btn-action', 'btn-config', `barco-theme-${barcoSeleccionado}`]"
-        aria-label="Configurar proveedores de barcos"
-      >
-        <i class="icon">⚙️</i>
-        <span>Configurar Proveedores</span>
-      </button>
     </div>
 
     <!-- Modal para configurar proveedores -->
@@ -358,8 +366,8 @@ export default {
 
 <style scoped>
 .barcos-menu {
-  padding: 20px;
-  max-width: 1200px;
+  padding: 15px;
+  max-width: 1400px;
   margin: 0 auto;
   min-height: 100vh;
   background-color: #f5f7fa;
@@ -372,10 +380,10 @@ export default {
 /* Header Section */
 .header-section {
   background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
-  border-radius: 20px;
-  padding: 40px;
-  margin-bottom: 30px;
-  box-shadow: 0 10px 30px rgba(52, 152, 219, 0.3);
+  border-radius: 15px;
+  padding: 25px;
+  margin-bottom: 20px;
+  box-shadow: 0 6px 20px rgba(52, 152, 219, 0.3);
   transition: all 0.3s ease;
 }
 
@@ -385,12 +393,12 @@ export default {
 }
 
 .main-title {
-  font-size: 2.5em;
-  margin: 0 0 10px 0;
+  font-size: 2em;
+  margin: 0 0 8px 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 15px;
+  gap: 12px;
 }
 
 .icon-boat {
@@ -398,7 +406,7 @@ export default {
 }
 
 .subtitle {
-  font-size: 1.2em;
+  font-size: 1em;
   opacity: 0.9;
   margin: 0;
 }
@@ -406,39 +414,39 @@ export default {
 /* Barco Selector */
 .barco-selector-card {
   background: white;
-  border-radius: 15px;
-  padding: 30px;
-  margin-bottom: 30px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 25px;
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.1);
 }
 
 .section-title {
-  font-size: 1.3em;
-  margin-bottom: 20px;
+  font-size: 1.1em;
+  margin-bottom: 15px;
   color: #2c3e50;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 
 .barcos-buttons {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 20px;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 15px;
 }
 
 .barco-btn {
-  padding: 20px;
+  padding: 15px;
   border: 2px solid #e0e0e0;
-  border-radius: 15px;
+  border-radius: 12px;
   background: white;
   cursor: pointer;
   transition: all 0.3s ease;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
-  font-size: 1.1em;
+  gap: 8px;
+  font-size: 1em;
   color: #34495e;
 }
 
@@ -479,31 +487,121 @@ export default {
 }
 
 .barco-icon {
-  font-size: 2em;
+  font-size: 1.5em;
 }
 
 /* Menu Options */
 .menu-options {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 20px;
-  margin-bottom: 30px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 15px;
+  margin-bottom: 25px;
+}
+
+.menu-options.disabled .btn-action {
+  opacity: 0.6;
+  cursor: not-allowed;
+  pointer-events: none;
+  transform: none !important;
+}
+
+.menu-options.disabled .btn-action:not(.btn-reporte) {
+  background: linear-gradient(135deg, #bdc3c7 0%, #95a5a6 100%) !important;
+}
+
+.menu-options.disabled .btn-action:hover {
+  transform: none !important;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1) !important;
+}
+
+.selection-hint {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 15px;
+  background: rgba(52, 152, 219, 0.1);
+  border-radius: 8px;
+  border: 2px dashed #3498db;
+  margin-bottom: 8px;
+}
+
+.selection-hint .hint-icon {
+  font-size: 1.5em;
+  margin-bottom: 8px;
+  display: block;
+}
+
+.selection-hint p {
+  margin: 0;
+  color: #3498db;
+  font-weight: 600;
+  font-size: 0.9em;
+}
+
+/* Responsive optimization for larger screens */
+@media (min-width: 1200px) {
+  .menu-options {
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 12px;
+  }
+  
+  .btn-action {
+    padding: 12px;
+    font-size: 0.85em;
+  }
+  
+  .btn-action .icon {
+    font-size: 1.6em;
+  }
+}
+
+@media (min-width: 1400px) {
+  .menu-options {
+    grid-template-columns: repeat(6, 1fr);
+    max-width: none;
+  }
+  
+  .barcos-buttons {
+    grid-template-columns: repeat(2, 1fr);
+    max-width: 600px;
+    margin: 0 auto;
+  }
+}
+
+/* Mobile optimization */
+@media (max-width: 768px) {
+  .barcos-menu {
+    padding: 10px;
+  }
+  
+  .menu-options {
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 10px;
+  }
+  
+  .btn-action {
+    padding: 12px;
+    font-size: 0.8em;
+  }
+  
+  .btn-action .icon {
+    font-size: 1.5em;
+  }
 }
 
 .btn-action {
-  padding: 25px;
-  border-radius: 15px;
+  padding: 15px;
+  border-radius: 12px;
   text-decoration: none;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 15px;
+  gap: 8px;
   transition: all 0.3s ease;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.1);
   color: white;
   border: none;
   cursor: pointer;
-  font-size: 1.1em;
+  font-size: 0.9em;
 }
 
 .btn-lista {
@@ -532,7 +630,7 @@ export default {
 }
 
 .btn-action .icon {
-  font-size: 2.5em;
+  font-size: 1.8em;
 }
 
 /* Temas de colores para los botones según el barco */

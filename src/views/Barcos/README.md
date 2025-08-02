@@ -189,6 +189,7 @@ Este módulo permite administrar las deudas y gastos de los barcos "El Galileo" 
 - **Filtros temporales**: Por mes actual, mes pasado, últimos 3 meses
 - **Saldo pendiente**: Cálculo automático de préstamos menos abonos
 - **Validaciones**: Control de montos, fechas y conceptos para evitar errores
+- **Fechas corregidas**: Solución a problemas de zona horaria para mostrar fechas correctas
 
 ## 📊 Sistema de Reportes Mensuales
 
