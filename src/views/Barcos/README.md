@@ -39,6 +39,7 @@ Este módulo permite administrar las deudas y gastos de los barcos "El Galileo" 
   - Lista de Deudas
   - Nueva Deuda
   - **Deuda Rápida** (nuevo)
+  - **Gestión de Tripulantes** ⭐ **NUEVO**
   - Configurar Proveedores
 - Modal de gestión de proveedores con tipos de servicio
 
@@ -99,6 +100,28 @@ Este módulo permite administrar las deudas y gastos de los barcos "El Galileo" 
    - **tipo: string** ('general' o 'deuda' - nuevo)
    - createdAt: timestamp
 
+4. **tripulantesBarcos** ⭐ **NUEVA COLECCIÓN**
+   - nombre: string (requerido)
+   - puesto: string (requerido - Capitán, Motorista, Marinero, Cocinero, Pescador, Otro)
+   - estado: string ('activo' o 'inactivo') - por defecto 'activo'
+   - barco: string ('galileo' o 'maria-guadalupe')
+   - nombreBarco: string
+   - totalPagado: number (calculado automáticamente)
+   - totalPrestado: number (calculado automáticamente)
+   - balance: number (calculado automáticamente)
+   - createdAt/updatedAt: timestamp
+
+5. **pagosTripulantes** ⭐ **NUEVA COLECCIÓN**
+   - tripulanteId: string
+   - tripulanteNombre: string
+   - barco: string
+   - nombreBarco: string
+   - tipo: string ('prestamo' o 'pago') - 'prestamo' es el principal
+   - monto: number
+   - fecha: string
+   - concepto: string (texto libre)
+   - createdAt/updatedAt: timestamp
+
 ## Flujo de Uso
 
 ### Crear Nueva Deuda:
@@ -114,13 +137,22 @@ Este módulo permite administrar las deudas y gastos de los barcos "El Galileo" 
 2. **Abono general**: Desde lista de deudas → botón "Abono General"
 3. **Ver historial**: Botón "Historial Completo" con filtros
 
+### Gestionar Tripulantes: ⭐ **NUEVO**
+1. **Agregar tripulante**: Desde menú → "Gestión de Tripulantes" → "Nuevo Tripulante" (solo nombre y puesto)
+2. **Registrar préstamos**: Desde lista de tripulantes → botón "🏦" → formulario de préstamos/abonos
+3. **Ver historial**: Dentro del modal de préstamos, historial completo con filtros
+4. **Editar información**: Botón "✏️" para modificar nombre y puesto del tripulante
+5. **Cambiar estado**: Botón de activar/desactivar tripulante
+
 ### Características Destacadas:
-- ✅ **Cálculos automáticos**: Cantidad × Precio = Total
+- ✅ **Cálculos automáticos**: Cantidad × Precio = Total (deudas), Saldos automáticos (tripulantes)
 - ✅ **Persistencia correcta**: Datos guardados con nueva estructura
 - ✅ **Compatibilidad**: Maneja datos antiguos y nuevos
 - ✅ **Interfaz moderna**: Diseño responsivo y intuitivo
 - ✅ **Validaciones completas**: Evita errores de datos
 - ✅ **Gestión completa**: Desde creación hasta pago total
+- ✅ **Gestión de tripulación**: Control completo de tripulantes y sus préstamos por barco ⭐ **NUEVO**
+- ✅ **Sistema de préstamos**: Registro detallado de préstamos y abonos ⭐ **NUEVO**
 
 ### 4. **ResumenMensualBarcos.vue** ⭐ **NUEVO**
 - **Navegación temporal**: Botones anterior/siguiente y selector rápido de mes
@@ -136,6 +168,27 @@ Este módulo permite administrar las deudas y gastos de los barcos "El Galileo" 
 - **Modal de configuración**: Para reportes personalizados con filtros de período
 - **Responsive**: Se adapta a móviles y tablets
 - **Auto-ocultación**: Se oculta al hacer scroll para no interferir
+
+### 6. **GestionTripulantes.vue** ⭐ **NUEVO - GESTIÓN DE TRIPULACIÓN**
+- **Administración completa**: Lista y gestión de tripulantes por barco independiente
+- **Registro simplificado**: Solo requiere nombre y puesto/función
+- **Estados**: Control de tripulantes activos/inactivos
+- **Balance financiero**: Seguimiento de préstamos y abonos por tripulante
+- **Resumen consolidado**: Métricas generales de la tripulación y préstamos
+- **Filtros avanzados**: Por estado del tripulante
+- **Interfaz responsiva**: Adaptada para móviles y tablets
+
+### 7. **PagosTripulante.vue** ⭐ **NUEVO - SISTEMA DE PRÉSTAMOS**
+- **Enfoque en préstamos**: Sistema principal para registrar préstamos dados a tripulantes
+- **Conceptos libres**: Campo de texto libre para que el usuario escriba el concepto específico
+  - **Placeholders dinámicos**: Sugerencias según el tipo (préstamo/abono)
+  - **Flexibilidad total**: Sin limitaciones de opciones predefinidas
+- **Formulario simplificado**: Solo monto, fecha y concepto (sin descripción adicional)
+- **Historial completo**: Registro cronológico de todas las transacciones
+- **Edición en línea**: Modificar y eliminar transacciones existentes
+- **Filtros temporales**: Por mes actual, mes pasado, últimos 3 meses
+- **Saldo pendiente**: Cálculo automático de préstamos menos abonos
+- **Validaciones**: Control de montos, fechas y conceptos para evitar errores
 
 ## 📊 Sistema de Reportes Mensuales
 
@@ -174,6 +227,7 @@ Este módulo permite administrar las deudas y gastos de los barcos "El Galileo" 
   - `/barcos` - Menú principal
   - `/barcos/deudas/nueva` - Nueva deuda
   - `/barcos/deudas/lista` - Lista de deudas
-  - `/barcos/resumen-mensual` ⭐ **NUEVO** - Reportes mensuales
+  - `/barcos/resumen-mensual` ⭐ **ACTUALIZADO** - Reportes mensuales
+  - `/barcos/tripulantes` ⭐ **NUEVO** - Gestión de tripulantes
 - **Integración**: Completamente integrado en la aplicación principal
 - **Botón flotante**: Acceso desde cualquier vista de barcos 

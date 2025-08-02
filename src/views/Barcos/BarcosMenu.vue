@@ -66,6 +66,15 @@
         <span>Reporte Mensual</span>
       </router-link>
       
+      <router-link 
+        :to="`/barcos/tripulantes?barco=${barcoSeleccionado}`" 
+        :class="['btn-action', 'btn-tripulantes', `barco-theme-${barcoSeleccionado}`]"
+        aria-label="Gestionar tripulantes del barco"
+      >
+        <i class="icon">👥</i>
+        <span>Gestión de Tripulantes</span>
+      </router-link>
+      
       <button 
         @click="openProveedoresModal" 
         :class="['btn-action', 'btn-config', `barco-theme-${barcoSeleccionado}`]"
@@ -513,6 +522,10 @@ export default {
   background: linear-gradient(135deg, #a29bfe 0%, #6c5ce7 100%);
 }
 
+.btn-tripulantes {
+  background: linear-gradient(135deg, #fd79a8 0%, #fdcb6e 100%);
+}
+
 .btn-action:hover {
   transform: translateY(-3px);
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
@@ -539,6 +552,10 @@ export default {
   background: linear-gradient(135deg, #8e44ad 0%, #9b59b6 100%) !important;
 }
 
+.barco-theme-galileo.btn-tripulantes {
+  background: linear-gradient(135deg, #5dade2 0%, #85c1e9 100%) !important;
+}
+
 .barco-theme-maria-guadalupe.btn-lista {
   background: linear-gradient(135deg, #27ae60 0%, #58d68d 100%) !important;
 }
@@ -553,6 +570,10 @@ export default {
 
 .barco-theme-maria-guadalupe.btn-config {
   background: linear-gradient(135deg, #148f77 0%, #17a2b8 100%) !important;
+}
+
+.barco-theme-maria-guadalupe.btn-tripulantes {
+  background: linear-gradient(135deg, #58d68d 0%, #85c1e9 100%) !important;
 }
 
 /* Modal Styles */

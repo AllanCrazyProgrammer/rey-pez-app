@@ -53,6 +53,7 @@ import BarcosMenu from '@/views/Barcos/BarcosMenu.vue'
 import NuevaDeudaBarco from '@/views/Barcos/NuevaDeudaBarco.vue'
 import ListaDeudasBarcos from '@/views/Barcos/ListaDeudasBarcos.vue'
 import ResumenMensualBarcos from '@/views/Barcos/ResumenMensualBarcos.vue'
+import GestionTripulantes from '@/views/Barcos/GestionTripulantes.vue'
 
 Vue.use(Router);
 
@@ -394,6 +395,11 @@ const routes = [
     path: '/barcos/resumen-mensual',
     name: 'ResumenMensualBarcos',
     component: ResumenMensualBarcos
+  },
+  {
+    path: '/barcos/tripulantes',
+    name: 'GestionTripulantes',
+    component: GestionTripulantes
   }
 ];
 
