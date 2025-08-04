@@ -26,9 +26,18 @@
               <span class="value refrigerados">{{ kilosRefrigerados }} kg</span>
             </div>
             <div class="total-item resultado">
-              <span class="label">Faltan por Conseguir:</span>
-              <span class="value faltantes" :class="{ 'negativo': kilosFaltantes < 0 }">
-                {{ kilosFaltantes }} kg
+              <span class="label">
+                <template v-if="kilosFaltantes > 0">Faltan por Conseguir:</template>
+                <template v-else-if="kilosFaltantes < 0">Sobra disponible:</template>
+                <template v-else>Cantidad exacta:</template>
+              </span>
+              <span class="value faltantes" :class="{ 'negativo': kilosFaltantes < 0, 'sobra': kilosFaltantes < 0 }">
+                <template v-if="kilosFaltantes >= 0">
+                  {{ kilosFaltantes }} kg
+                </template>
+                <template v-else>
+                  {{ Math.abs(kilosFaltantes) }} kg
+                </template>
               </span>
             </div>
           </div>
@@ -303,8 +312,9 @@ export default {
   color: #007bff;
 }
 
-.faltantes.negativo {
-  color: #dc3545;
+.faltantes.negativo,
+.faltantes.sobra {
+  color: #28a745;
 }
 
 .input-group {

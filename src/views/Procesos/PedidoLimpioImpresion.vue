@@ -204,8 +204,19 @@
                     <span class="kilos-refrigerados">
                       🧊 {{ kilosRefrigerados[medida.medida] }} kg
                     </span>
-                    <span class="kilos-faltantes" :class="{ 'suficientes': obtenerKilosFaltantes(medida) <= 0 }">
-                      Faltan: {{ Math.max(0, obtenerKilosFaltantes(medida)) }} kg
+                    <span class="kilos-faltantes" :class="{ 
+                      'suficientes': obtenerKilosFaltantes(medida) <= 0,
+                      'sobra': obtenerKilosFaltantes(medida) < 0 
+                    }">
+                      <template v-if="obtenerKilosFaltantes(medida) > 0">
+                        Faltan: {{ obtenerKilosFaltantes(medida) }} kg
+                      </template>
+                      <template v-else-if="obtenerKilosFaltantes(medida) < 0">
+                        Sobra: {{ Math.abs(obtenerKilosFaltantes(medida)) }} kg
+                      </template>
+                      <template v-else>
+                        Exactos: 0 kg
+                      </template>
                     </span>
                   </div>
                 </div>
@@ -250,10 +261,10 @@
               <td data-label="Cajas">
                 <template v-if="rendimientos[medida.medida]">
                   <span v-if="esMedidaGranja(medida.medida) && divisores[medida.medida]" class="cajas-result" :class="{ 'cajas-faltantes': kilosRefrigerados[medida.medida] > 0 }">
-                    {{ Math.round((obtenerKilosFaltantes(medida) * rendimientos[medida.medida]) / divisores[medida.medida]) }}
+                    {{ Math.round((Math.max(0, obtenerKilosFaltantes(medida)) * rendimientos[medida.medida]) / divisores[medida.medida]) }}
                   </span>
                   <span v-else class="cajas-result" :class="{ 'cajas-faltantes': kilosRefrigerados[medida.medida] > 0 }">
-                    {{ Math.round(obtenerKilosFaltantes(medida) * rendimientos[medida.medida]) }} kg
+                    {{ Math.round(Math.max(0, obtenerKilosFaltantes(medida)) * rendimientos[medida.medida]) }} kg
                   </span>
                 </template>
               </td>
@@ -954,7 +965,7 @@ export default {
     },
     obtenerKilosFaltantes(medida) {
       const refrigerados = this.kilosRefrigerados[medida.medida] || 0;
-      return Math.max(0, medida.total - refrigerados);
+      return medida.total - refrigerados;
     }
   },
   watch: {
@@ -1980,6 +1991,13 @@ h4.cliente-header.ozuna-header {
 .kilos-faltantes.suficientes::before {
   content: '✓ ';
 }
+
+.kilos-faltantes.sobra {
+  background: linear-gradient(135deg, #17a2b8 0%, #20c997 100%);
+  box-shadow: 0 2px 4px rgba(23, 162, 184, 0.3);
+}
+
+
 
 /* Responsive para kilos refrigerados */
 @media (max-width: 375px) {
