@@ -21,29 +21,24 @@
         <label for="filtroEstado">Estado:</label>
         <select id="filtroEstado" v-model="filtroEstado">
           <option value="">Todos</option>
-          <option value="activo">Activo</option>
-          <option value="pagado">Pagado</option>
+          <option value="activo">Con Deuda</option>
+          <option value="pagado">Sin Deuda</option>
         </select>
-      </div>
-      
-      <div class="filtro-fecha">
-        <label>Fecha:</label>
-        <div class="fecha-inputs">
-          <input type="date" v-model="filtroFechaDesde" placeholder="Desde">
-          <span>a</span>
-          <input type="date" v-model="filtroFechaHasta" placeholder="Hasta">
-        </div>
       </div>
     </div>
     
     <div class="resumen-container">
       <div class="resumen-card activos">
-        <h3>Préstamos Activos</h3>
-        <p>{{ prestamosActivos }}</p>
+        <h3>Trabajadores con Deuda</h3>
+        <p>{{ cuentasConDeuda }}</p>
       </div>
       <div class="resumen-card pendiente">
-        <h3>Saldo Pendiente</h3>
-        <p>${{ formatNumber(totalPendiente) }}</p>
+        <h3>Total Pendiente</h3>
+        <p>${{ formatNumber(totalPendienteGeneral) }}</p>
+      </div>
+      <div class="resumen-card total-prestado">
+        <h3>Total Prestado</h3>
+        <p>${{ formatNumber(totalPrestadoGeneral) }}</p>
       </div>
     </div>
     
@@ -58,53 +53,62 @@
     
     <div v-if="cargando" class="loading-spinner">
       <div class="spinner"></div>
-      <p>Cargando préstamos...</p>
+      <p>Cargando cuentas...</p>
     </div>
     
-    <div v-else-if="prestamos.length === 0" class="no-data">
-      <p>No hay préstamos registrados.</p>
+    <div v-else-if="cuentasTrabajadores.length === 0" class="no-data">
+      <p>No hay cuentas registradas.</p>
       <button @click="mostrarModalNuevoPrestamo" class="btn-nuevo-prestamo">
         Crear Nuevo Préstamo
       </button>
     </div>
     
-    <div v-else class="tabla-container">
-      <table class="tabla-prestamos">
-        <thead>
-          <tr>
-            <th>Fecha</th>
-            <th>Trabajador</th>
-            <th>Monto Inicial</th>
-            <th>Saldo Pendiente</th>
-            <th>Estado</th>
-            <th>Acciones</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="prestamo in prestamosFiltrados" :key="prestamo.id" :class="{ 'prestamo-pagado': prestamo.estado === 'pagado' }">
-            <td>{{ formatearFecha(prestamo.fecha) }}</td>
-            <td>{{ prestamo.trabajadorNombre }}</td>
-            <td>${{ formatNumber(prestamo.montoInicial) }}</td>
-            <td>${{ formatNumber(prestamo.saldoPendiente) }}</td>
-            <td>
-              <span :class="'estado-badge ' + prestamo.estado">
-                {{ prestamo.estado === 'activo' ? 'Activo' : 'Pagado' }}
-              </span>
-            </td>
-            <td class="acciones">
-              <button @click="verDetalle(prestamo)" class="btn-detalle" title="Ver detalles">
-                <i class="fas fa-eye"></i>
-              </button>
-              <button @click="agregarAbono(prestamo)" class="btn-abono" :disabled="prestamo.estado === 'pagado'" title="Agregar abono">
-                <i class="fas fa-money-bill"></i>
-              </button>
-              <button @click="eliminarPrestamo(prestamo)" class="btn-eliminar" title="Eliminar préstamo">
-                <i class="fas fa-trash-alt"></i>
-              </button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+    <div v-else class="cuentas-container">
+      <div 
+        v-for="cuenta in cuentasFiltradas" 
+        :key="cuenta.trabajadorId" 
+        class="cuenta-card"
+        :class="{ 'sin-deuda': cuenta.saldoPendiente <= 0 }"
+      >
+        <div class="cuenta-header">
+          <div class="cuenta-info">
+            <h3 class="trabajador-nombre">{{ cuenta.trabajadorNombre }}</h3>
+            <div class="cuenta-stats">
+              <div class="stat">
+                <span class="label">Total Prestado:</span>
+                <span class="value prestado">${{ formatNumber(cuenta.totalPrestado) }}</span>
+              </div>
+              <div class="stat">
+                <span class="label">Total Abonado:</span>
+                <span class="value abonado">${{ formatNumber(cuenta.totalAbonado) }}</span>
+              </div>
+              <div class="stat saldo">
+                <span class="label">Saldo Pendiente:</span>
+                <span class="value" :class="cuenta.saldoPendiente <= 0 ? 'pagado' : 'pendiente'">
+                  ${{ formatNumber(cuenta.saldoPendiente) }}
+                </span>
+              </div>
+            </div>
+          </div>
+          <div class="cuenta-acciones">
+            <button @click="verHistorial(cuenta)" class="btn-historial" title="Ver historial completo">
+              <i class="fas fa-history"></i>
+              Historial
+            </button>
+            <button @click="agregarAbonoCuenta(cuenta)" class="btn-abono" :disabled="cuenta.saldoPendiente <= 0" title="Agregar abono">
+              <i class="fas fa-money-bill"></i>
+              Abonar
+            </button>
+          </div>
+        </div>
+        
+        <div class="cuenta-resumen">
+          <div class="progress-bar">
+            <div class="progress-fill" :style="{ width: cuenta.porcentajePagado + '%' }"></div>
+          </div>
+          <span class="progress-text">{{ cuenta.porcentajePagado }}% pagado</span>
+        </div>
+      </div>
     </div>
     
     <!-- Modales similares a PrestamosDespicadoras pero adaptados para trabajadores -->
@@ -307,6 +311,108 @@
         </div>
       </div>
     </div>
+    
+    <!-- Modal Historial Completo -->
+    <div v-if="showHistorialModal" class="modal-overlay" @click="closeModalOnOverlay">
+      <div class="modal-content modal-large" @click.stop>
+        <div class="modal-header">
+          <h2>Historial Completo - {{ cuentaSeleccionada?.trabajadorNombre }}</h2>
+          <button @click="showHistorialModal = false" class="close-button">×</button>
+        </div>
+        <div class="modal-body">
+          <div class="cuenta-resumen-modal">
+            <div class="resumen-stats">
+              <div class="stat-card prestado">
+                <h4>Total Prestado</h4>
+                <p>${{ formatNumber(cuentaSeleccionada?.totalPrestado) }}</p>
+              </div>
+              <div class="stat-card abonado">
+                <h4>Total Abonado</h4>
+                <p>${{ formatNumber(cuentaSeleccionada?.totalAbonado) }}</p>
+              </div>
+              <div class="stat-card pendiente">
+                <h4>Saldo Pendiente</h4>
+                <p>${{ formatNumber(cuentaSeleccionada?.saldoPendiente) }}</p>
+              </div>
+            </div>
+            
+            <div class="progress-section">
+              <div class="progress-bar-large">
+                <div class="progress-fill-large" :style="{ width: cuentaSeleccionada?.porcentajePagado + '%' }"></div>
+              </div>
+              <span class="progress-text-large">{{ cuentaSeleccionada?.porcentajePagado }}% pagado</span>
+            </div>
+          </div>
+          
+          <h3>Historial de Movimientos</h3>
+          <div v-if="historialCompleto.length === 0" class="no-historial">
+            <p>No hay movimientos registrados.</p>
+          </div>
+          <div v-else class="historial-container">
+            <div 
+              v-for="(movimiento, index) in historialCompleto" 
+              :key="index" 
+              class="movimiento-item"
+              :class="movimiento.tipo"
+            >
+              <div class="movimiento-icon">
+                <i :class="movimiento.tipo === 'prestamo' ? 'fas fa-arrow-up' : 'fas fa-arrow-down'"></i>
+              </div>
+              <div class="movimiento-info">
+                <div class="movimiento-header">
+                  <span class="movimiento-tipo">
+                    {{ movimiento.tipo === 'prestamo' ? 'Préstamo Otorgado' : 'Abono Recibido' }}
+                  </span>
+                  <span class="movimiento-fecha">{{ formatearFecha(movimiento.fecha) }}</span>
+                </div>
+                <div class="movimiento-descripcion">{{ movimiento.descripcion }}</div>
+                <div class="movimiento-monto" :class="movimiento.tipo">
+                  {{ movimiento.tipo === 'prestamo' ? '+' : '-' }}${{ formatNumber(movimiento.monto) }}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Modal Agregar Abono (Actualizado) -->
+    <div v-if="showAbonoModal" class="modal-overlay" @click="closeModalOnOverlay">
+      <div class="modal-content" @click.stop>
+        <div class="modal-header">
+          <h2>Agregar Abono</h2>
+          <button @click="showAbonoModal = false" class="close-button">×</button>
+        </div>
+        <div class="modal-body">
+          <div class="prestamo-info">
+            <p><strong>Trabajador:</strong> {{ cuentaSeleccionada?.trabajadorNombre }}</p>
+            <p><strong>Saldo Pendiente:</strong> ${{ formatNumber(cuentaSeleccionada?.saldoPendiente) }}</p>
+          </div>
+          
+          <form @submit.prevent="guardarAbono" class="form-abono">
+            <div class="form-group">
+              <label for="fechaAbono">Fecha:</label>
+              <input id="fechaAbono" type="date" v-model="nuevoAbono.fecha" required>
+            </div>
+            <div class="form-group">
+              <label for="descripcionAbono">Descripción:</label>
+              <input id="descripcionAbono" type="text" v-model="nuevoAbono.descripcion" required placeholder="Ej: Descuento de nómina, Pago efectivo, etc.">
+            </div>
+            <div class="form-group">
+              <label for="montoAbono">Monto:</label>
+              <input id="montoAbono" type="number" v-model.number="nuevoAbono.monto" required min="1" :max="cuentaSeleccionada?.saldoPendiente" step="0.01">
+            </div>
+            
+            <div class="form-actions">
+              <button type="button" @click="showAbonoModal = false" class="btn-cancelar">Cancelar</button>
+              <button type="submit" class="btn-guardar" :disabled="guardando">
+                {{ guardando ? 'Guardando...' : 'Guardar Abono' }}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -324,22 +430,21 @@ export default {
     return {
       prestamos: [],
       trabajadores: [],
-      abonos: [],
+      cuentasTrabajadores: [],
+      historialCompleto: [],
       cargando: true,
       guardando: false,
       
       // Filtros
       filtroTrabajador: '',
       filtroEstado: '',
-      filtroFechaDesde: '',
-      filtroFechaHasta: '',
       
       // Modales
       showModalNuevoPrestamo: false,
       showModalNuevoTrabajador: false,
-      showDetalleModal: false,
+      showHistorialModal: false,
       showAbonoModal: false,
-      prestamoSeleccionado: null,
+      cuentaSeleccionada: null,
       
       // Formularios
       nuevoPrestamo: {
@@ -364,41 +469,42 @@ export default {
   },
   
   computed: {
-    prestamosFiltrados() {
-      return this.prestamos.filter(prestamo => {
-        if (this.filtroTrabajador && prestamo.trabajadorId !== this.filtroTrabajador) {
+    cuentasFiltradas() {
+      return this.cuentasTrabajadores.filter(cuenta => {
+        if (this.filtroTrabajador && cuenta.trabajadorId !== this.filtroTrabajador) {
           return false;
         }
-        if (this.filtroEstado && prestamo.estado !== this.filtroEstado) {
+        if (this.filtroEstado === 'activo' && cuenta.saldoPendiente <= 0) {
           return false;
         }
-        if (this.filtroFechaDesde && prestamo.fecha < this.filtroFechaDesde) {
-          return false;
-        }
-        if (this.filtroFechaHasta && prestamo.fecha > this.filtroFechaHasta) {
+        if (this.filtroEstado === 'pagado' && cuenta.saldoPendiente > 0) {
           return false;
         }
         return true;
       });
     },
     
-    prestamosActivos() {
-      return this.prestamosFiltrados.filter(p => p.estado === 'activo').length;
+    cuentasConDeuda() {
+      return this.cuentasFiltradas.filter(c => c.saldoPendiente > 0).length;
     },
     
-    totalPendiente() {
-      return this.prestamosFiltrados.reduce((sum, prestamo) => sum + prestamo.saldoPendiente, 0);
+    totalPendienteGeneral() {
+      return this.cuentasFiltradas.reduce((sum, cuenta) => sum + cuenta.saldoPendiente, 0);
     },
     
-    totalAbonos() {
-      return this.abonos.reduce((sum, abono) => sum + abono.monto, 0);
+    totalPrestadoGeneral() {
+      return this.cuentasFiltradas.reduce((sum, cuenta) => sum + cuenta.totalPrestado, 0);
     }
   },
   
   methods: {
     obtenerFechaActual() {
       const fecha = new Date();
-      return fecha.toISOString().split('T')[0];
+      // Ajustar por zona horaria para obtener la fecha local correcta
+      const year = fecha.getFullYear();
+      const month = String(fecha.getMonth() + 1).padStart(2, '0');
+      const day = String(fecha.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
     },
     
     formatNumber(number) {
@@ -423,11 +529,59 @@ export default {
           id: doc.id,
           ...doc.data()
         }));
+        
+        await this.agruparCuentasPorTrabajador();
       } catch (error) {
         console.error("Error al cargar préstamos: ", error);
       } finally {
         this.cargando = false;
       }
+    },
+    
+    async agruparCuentasPorTrabajador() {
+      const cuentasMap = new Map();
+      
+      // Agrupar préstamos por trabajador
+      for (const prestamo of this.prestamos) {
+        if (!cuentasMap.has(prestamo.trabajadorId)) {
+          cuentasMap.set(prestamo.trabajadorId, {
+            trabajadorId: prestamo.trabajadorId,
+            trabajadorNombre: prestamo.trabajadorNombre,
+            totalPrestado: 0,
+            totalAbonado: 0,
+            saldoPendiente: 0,
+            prestamos: [],
+            abonos: []
+          });
+        }
+        
+        const cuenta = cuentasMap.get(prestamo.trabajadorId);
+        cuenta.totalPrestado += prestamo.montoInicial;
+        cuenta.prestamos.push(prestamo);
+        
+        // Cargar abonos para este préstamo
+        try {
+          const abonosSnapshot = await getDocs(
+            collection(db, 'prestamosTrabajadores', prestamo.id, 'abonos')
+          );
+          
+          abonosSnapshot.forEach(doc => {
+            const abono = { id: doc.id, prestamoId: prestamo.id, ...doc.data() };
+            cuenta.abonos.push(abono);
+            cuenta.totalAbonado += abono.monto;
+          });
+        } catch (error) {
+          console.error(`Error al cargar abonos para préstamo ${prestamo.id}:`, error);
+        }
+      }
+      
+      // Calcular saldo pendiente y porcentaje pagado
+      this.cuentasTrabajadores = Array.from(cuentasMap.values()).map(cuenta => {
+        cuenta.saldoPendiente = cuenta.totalPrestado - cuenta.totalAbonado;
+        cuenta.porcentajePagado = cuenta.totalPrestado > 0 ? 
+          Math.round((cuenta.totalAbonado / cuenta.totalPrestado) * 100) : 0;
+        return cuenta;
+      });
     },
     
     async cargarTrabajadores() {
@@ -521,6 +675,55 @@ export default {
       }
     },
     
+    async verHistorial(cuenta) {
+      this.cuentaSeleccionada = cuenta;
+      
+      // Combinar préstamos y abonos en un solo historial ordenado por fecha
+      const historial = [];
+      
+      // Agregar préstamos
+      cuenta.prestamos.forEach(prestamo => {
+        historial.push({
+          tipo: 'prestamo',
+          fecha: prestamo.fecha,
+          fechaCreacion: prestamo.fechaCreacion,
+          descripcion: prestamo.descripcion || 'Préstamo otorgado',
+          monto: prestamo.montoInicial,
+          id: prestamo.id
+        });
+      });
+      
+      // Agregar abonos
+      cuenta.abonos.forEach(abono => {
+        historial.push({
+          tipo: 'abono',
+          fecha: abono.fecha,
+          fechaCreacion: abono.fechaCreacion,
+          descripcion: abono.descripcion,
+          monto: abono.monto,
+          id: abono.id,
+          prestamoId: abono.prestamoId
+        });
+      });
+      
+      // Ordenar por fecha de creación (más reciente primero)
+      this.historialCompleto = historial.sort((a, b) => {
+        return new Date(b.fechaCreacion) - new Date(a.fechaCreacion);
+      });
+      
+      this.showHistorialModal = true;
+    },
+    
+    agregarAbonoCuenta(cuenta) {
+      this.cuentaSeleccionada = cuenta;
+      this.nuevoAbono = {
+        fecha: this.obtenerFechaActual(),
+        descripcion: '',
+        monto: null
+      };
+      this.showAbonoModal = true;
+    },
+    
     async verDetalle(prestamo) {
       this.prestamoSeleccionado = prestamo;
       this.abonos = [];
@@ -565,7 +768,7 @@ export default {
         return;
       }
       
-      if (this.nuevoAbono.monto > this.prestamoSeleccionado.saldoPendiente) {
+      if (this.nuevoAbono.monto > this.cuentaSeleccionada.saldoPendiente) {
         alert('El monto del abono no puede ser mayor al saldo pendiente');
         return;
       }
@@ -573,36 +776,24 @@ export default {
       try {
         this.guardando = true;
         
-        await addDoc(collection(db, 'prestamosTrabajadores', this.prestamoSeleccionado.id, 'abonos'), {
+        // Buscar el préstamo más reciente de la cuenta para asociar el abono
+        const prestamoMasReciente = this.cuentaSeleccionada.prestamos
+          .sort((a, b) => new Date(b.fechaCreacion) - new Date(a.fechaCreacion))[0];
+        
+        if (!prestamoMasReciente) {
+          alert('Error: No se encontró un préstamo para asociar el abono');
+          return;
+        }
+        
+        await addDoc(collection(db, 'prestamosTrabajadores', prestamoMasReciente.id, 'abonos'), {
           descripcion: this.nuevoAbono.descripcion,
           monto: this.nuevoAbono.monto,
           fecha: this.nuevoAbono.fecha,
           fechaCreacion: new Date()
         });
         
-        const nuevoSaldoPendiente = this.prestamoSeleccionado.saldoPendiente - this.nuevoAbono.monto;
-        const nuevoEstado = nuevoSaldoPendiente <= 0 ? 'pagado' : 'activo';
-        
-        await updateDoc(doc(db, 'prestamosTrabajadores', this.prestamoSeleccionado.id), {
-          saldoPendiente: nuevoSaldoPendiente,
-          estado: nuevoEstado
-        });
-        
-        this.prestamos = this.prestamos.map(p => {
-          if (p.id === this.prestamoSeleccionado.id) {
-            return {
-              ...p,
-              saldoPendiente: nuevoSaldoPendiente,
-              estado: nuevoEstado
-            };
-          }
-          return p;
-        });
-        
-        this.prestamoSeleccionado.saldoPendiente = nuevoSaldoPendiente;
-        this.prestamoSeleccionado.estado = nuevoEstado;
-        
         this.showAbonoModal = false;
+        await this.cargarPrestamos(); // Recargar todo para actualizar las cuentas
         alert('Abono registrado correctamente');
       } catch (error) {
         console.error("Error al guardar abono: ", error);
@@ -687,7 +878,7 @@ export default {
       if (event.target === event.currentTarget) {
         this.showModalNuevoPrestamo = false;
         this.showModalNuevoTrabajador = false;
-        this.showDetalleModal = false;
+        this.showHistorialModal = false;
         this.showAbonoModal = false;
       }
     }
@@ -800,6 +991,368 @@ h1 {
 
 .resumen-card.pendiente p {
   color: #f39c12;
+}
+
+.resumen-card.total-prestado {
+  border-left: 5px solid #9b59b6;
+}
+
+.resumen-card.total-prestado p {
+  color: #9b59b6;
+}
+
+/* Cuentas Container */
+.cuentas-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.cuenta-card {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+  border-left: 5px solid #2ecc71;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.cuenta-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+}
+
+.cuenta-card.sin-deuda {
+  border-left-color: #95a5a6;
+  opacity: 0.8;
+}
+
+.cuenta-header {
+  padding: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 15px;
+}
+
+.cuenta-info {
+  flex: 1;
+  min-width: 300px;
+}
+
+.trabajador-nombre {
+  color: #2c3e50;
+  margin: 0 0 15px 0;
+  font-size: 1.4em;
+  font-weight: 600;
+}
+
+.cuenta-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 15px;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.stat .label {
+  color: #7f8c8d;
+  font-size: 0.9em;
+  font-weight: 500;
+}
+
+.stat .value {
+  font-size: 1.2em;
+  font-weight: bold;
+}
+
+.stat .value.prestado {
+  color: #2ecc71;
+}
+
+.stat .value.abonado {
+  color: #27ae60;
+}
+
+.stat .value.pendiente {
+  color: #f39c12;
+}
+
+.stat .value.pagado {
+  color: #95a5a6;
+}
+
+.stat.saldo {
+  background: #f8f9fa;
+  padding: 10px;
+  border-radius: 8px;
+  border: 2px solid #ecf0f1;
+}
+
+.cuenta-acciones {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 120px;
+}
+
+.btn-historial, .btn-abono {
+  padding: 10px 15px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9em;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: center;
+  transition: all 0.3s ease;
+}
+
+.btn-historial {
+  background: #3498db;
+  color: white;
+}
+
+.btn-historial:hover {
+  background: #2980b9;
+}
+
+.btn-abono {
+  background: #9b59b6;
+  color: white;
+}
+
+.btn-abono:hover {
+  background: #8e44ad;
+}
+
+.btn-abono:disabled {
+  background: #95a5a6;
+  cursor: not-allowed;
+}
+
+.cuenta-resumen {
+  padding: 15px 20px;
+  background: #f8f9fa;
+  border-top: 1px solid #ecf0f1;
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.progress-bar {
+  flex: 1;
+  height: 8px;
+  background: #ecf0f1;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #2ecc71, #27ae60);
+  border-radius: 4px;
+  transition: width 0.5s ease;
+}
+
+.progress-text {
+  color: #7f8c8d;
+  font-size: 0.9em;
+  font-weight: 500;
+  min-width: 80px;
+  text-align: right;
+}
+
+/* Modal de Historial */
+.cuenta-resumen-modal {
+  margin-bottom: 30px;
+}
+
+.resumen-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.stat-card {
+  background: #f8f9fa;
+  padding: 20px;
+  border-radius: 10px;
+  text-align: center;
+  border-left: 4px solid;
+}
+
+.stat-card.prestado {
+  border-left-color: #2ecc71;
+}
+
+.stat-card.abonado {
+  border-left-color: #27ae60;
+}
+
+.stat-card.pendiente {
+  border-left-color: #f39c12;
+}
+
+.stat-card h4 {
+  margin: 0 0 10px 0;
+  color: #2c3e50;
+  font-size: 1em;
+}
+
+.stat-card p {
+  margin: 0;
+  font-size: 1.6em;
+  font-weight: bold;
+}
+
+.stat-card.prestado p {
+  color: #2ecc71;
+}
+
+.stat-card.abonado p {
+  color: #27ae60;
+}
+
+.stat-card.pendiente p {
+  color: #f39c12;
+}
+
+.progress-section {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.progress-bar-large {
+  flex: 1;
+  height: 12px;
+  background: #ecf0f1;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.progress-fill-large {
+  height: 100%;
+  background: linear-gradient(90deg, #2ecc71, #27ae60);
+  border-radius: 6px;
+  transition: width 0.5s ease;
+}
+
+.progress-text-large {
+  color: #2c3e50;
+  font-size: 1.1em;
+  font-weight: 600;
+  min-width: 100px;
+  text-align: right;
+}
+
+/* Historial de Movimientos */
+.historial-container {
+  max-height: 400px;
+  overflow-y: auto;
+  border: 1px solid #ecf0f1;
+  border-radius: 8px;
+}
+
+.movimiento-item {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  padding: 15px;
+  border-bottom: 1px solid #ecf0f1;
+  transition: background-color 0.3s;
+}
+
+.movimiento-item:hover {
+  background: #f8f9fa;
+}
+
+.movimiento-item:last-child {
+  border-bottom: none;
+}
+
+.movimiento-item.prestamo {
+  border-left: 4px solid #2ecc71;
+}
+
+.movimiento-item.abono {
+  border-left: 4px solid #27ae60;
+}
+
+.movimiento-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 1.2em;
+}
+
+.movimiento-item.prestamo .movimiento-icon {
+  background: #2ecc71;
+}
+
+.movimiento-item.abono .movimiento-icon {
+  background: #27ae60;
+}
+
+.movimiento-info {
+  flex: 1;
+}
+
+.movimiento-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 5px;
+}
+
+.movimiento-tipo {
+  font-weight: 600;
+  color: #2c3e50;
+}
+
+.movimiento-fecha {
+  color: #7f8c8d;
+  font-size: 0.9em;
+}
+
+.movimiento-descripcion {
+  color: #7f8c8d;
+  font-size: 0.9em;
+  margin-bottom: 5px;
+}
+
+.movimiento-monto {
+  font-size: 1.2em;
+  font-weight: bold;
+}
+
+.movimiento-monto.prestamo {
+  color: #2ecc71;
+}
+
+.movimiento-monto.abono {
+  color: #27ae60;
+}
+
+.no-historial {
+  text-align: center;
+  padding: 40px;
+  color: #7f8c8d;
+  background: #f8f9fa;
+  border-radius: 8px;
 }
 
 .acciones-container {
@@ -1193,12 +1746,51 @@ h1 {
     justify-content: center;
   }
   
-  .tabla-prestamos {
-    font-size: 0.9em;
+  .cuenta-header {
+    flex-direction: column;
+    gap: 15px;
   }
   
-  .acciones {
+  .cuenta-info {
+    min-width: auto;
+    width: 100%;
+  }
+  
+  .cuenta-stats {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  
+  .cuenta-acciones {
+    flex-direction: row;
+    min-width: auto;
+    width: 100%;
+  }
+  
+  .resumen-stats {
+    grid-template-columns: 1fr;
+  }
+  
+  .progress-section {
     flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+  
+  .progress-text-large {
+    text-align: left;
+    min-width: auto;
+  }
+  
+  .movimiento-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  
+  .movimiento-header {
+    flex-direction: column;
+    align-items: flex-start;
     gap: 5px;
   }
   
