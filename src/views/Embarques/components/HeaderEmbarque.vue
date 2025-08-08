@@ -1,13 +1,7 @@
 <!-- HeaderEmbarque.vue -->
 <template>
   <div class="header-embarque">
-    <div class="titulo-con-indicador">
-      <h1>{{ modoEdicion ? 'Embarque' : 'Nuevo Embarque' }}</h1>
-      <div v-if="modoEdicion" class="badge-usuarios" :title="tooltipUsuarios">
-        <span class="punto"></span>
-        <span class="texto">{{ usuariosEditando.length }} editando</span>
-      </div>
-    </div>
+    <h1>{{ modoEdicion ? 'Embarque' : 'Nuevo Embarque' }}</h1>
     <div class="botones">
       <button @click="volverAEmbarquesMenu" class="btn-volver">
         <i class="fas fa-arrow-left"></i> Volver a Menu
@@ -109,10 +103,6 @@ export default {
       type: String,
       default: ''
     },
-    usuariosEditando: {
-      type: Array,
-      default: () => []
-    },
     clienteEmbarque: {
       type: String,
       default: ''
@@ -124,13 +114,6 @@ export default {
       cargaConLocal: this.embarque.cargaCon,
       mostrarModalPedido: false
     };
-  },
-  computed: {
-    tooltipUsuarios() {
-      if (!this.usuariosEditando || this.usuariosEditando.length === 0) return 'Sin usuarios editando';
-      const nombres = this.usuariosEditando.map(u => u.username || 'Desconocido').join(', ');
-      return `${this.usuariosEditando.length} editando: ${nombres}`;
-    }
   },
   watch: {
     'embarque.fecha'(newVal) {
@@ -179,40 +162,6 @@ export default {
   margin-bottom: 20px;
   text-align: center;
   width: 100%;
-}
-
-h1 {
-  margin-bottom: 15px;
-}
-
-.titulo-con-indicador {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.badge-usuarios {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 10px;
-  background: #eef6ff;
-  color: #0b69ff;
-  border: 1px solid #cfe2ff;
-  border-radius: 999px;
-  font-size: 12px;
-}
-
-.badge-usuarios .punto {
-  width: 8px;
-  height: 8px;
-  background: #2ecc71;
-  border-radius: 50%;
-  box-shadow: 0 0 0 2px rgba(46, 204, 113, 0.2);
-}
-
-.badge-usuarios .texto {
-  white-space: nowrap;
 }
 
 h1 {
