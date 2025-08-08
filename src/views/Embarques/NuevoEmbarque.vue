@@ -21,6 +21,7 @@
         :is-generating-pdf="isGeneratingPdf" 
         :pdf-type="pdfType" 
         :embarque-id="embarqueId"
+        :usuarios-editando="usuariosEditandoLista"
         @volver="volverAEmbarquesMenu" 
         @toggle-bloqueo="toggleBloqueo" 
         @update:fecha="embarque.fecha = $event"
@@ -83,7 +84,7 @@
           :clientes-sumar-kg-catarro="clientesSumarKgCatarro"
           :nombre-cliente="obtenerNombreCliente(clienteId)"
           :cliente-activo="clienteActivo" 
-          :embarque-bloqueado="embarqueBloqueado" 
+          :embarque-bloqueado="embarqueBloqueado || estaClienteBloqueado(clienteId)" 
           :medidas-usadas="medidasUsadas"
           :medidas-configuracion="medidasConfiguracion"
           :is-generating-pdf="isGeneratingPdf" 
@@ -177,9 +178,9 @@
 </template>
 
 <script>
-import { getFirestore, collection, addDoc, doc, getDoc, updateDoc, onSnapshot, serverTimestamp, getDocs, setDoc, deleteDoc, query, orderBy } from 'firebase/firestore';
+import { getFirestore, collection, addDoc, doc, getDoc, updateDoc, onSnapshot, serverTimestamp, getDocs, setDoc, deleteDoc, query, orderBy, runTransaction } from 'firebase/firestore';
 import { debounce } from 'lodash';
-import { ref, onValue, onDisconnect, set } from 'firebase/database'
+import { ref, onValue, onDisconnect, set, remove } from 'firebase/database'
 import { rtdb } from '@/firebase'
 import { useAuthStore } from '@/stores/auth'
 import { ref as vueRef, onMounted, onUnmounted, defineAsyncComponent } from 'vue'
@@ -256,6 +257,8 @@ export default {
   data() {
     return {
       usuariosActivos: [],
+      usuariosEditandoLista: [],
+      locksPorCliente: {},
       clientesJuntarMedidas: {},
       clientesReglaOtilio: {},
       clientesIncluirPrecios: {},
@@ -332,6 +335,7 @@ export default {
       _inicializandoEmbarque: false, // Bandera para evitar watchers durante la inicialización
       debouncedSave: null, // Para debounce del guardado automático
       preciosActuales: [],
+      _locksInitialized: false,
     };
   },
   
@@ -355,6 +359,14 @@ export default {
       });
 
       return [...clientesPredefinidosUnicos, ...clientesPersonalizadosUnicos, { id: 'otro', nombre: 'Otro', key: 'otro' }];
+    },
+    estaClienteBloqueado() {
+      return (clienteId) => {
+        const lock = this.locksPorCliente?.[clienteId];
+        if (!lock) return false;
+        // Bloqueado por otro usuario
+        return lock.userId && lock.userId !== this.authStore.userId;
+      }
     },
     
     productosPorCliente() {
@@ -401,6 +413,8 @@ export default {
         return total + (parseFloat(crudo.kilos) || 0);
       }, 0);
     },
+
+    
 
     // Calcula el total de taras de crudo para el cliente activo
     totalTarasCrudoActivo() {
@@ -496,15 +510,79 @@ export default {
         });
       }
     },
+
+    async guardarClienteEnFirestore(clienteId) {
+      if (!this.embarqueId) return;
+      const ok = await this.asegurarLockCliente(clienteId);
+      if (!ok) return;
+
+      const db = getFirestore();
+      const embarqueRef = doc(db, 'embarques', this.embarqueId);
+
+      const construirClienteLocal = () => {
+        const productosCliente = this.embarque.productos
+          .filter(p => (p?.clienteId + '') === (clienteId + ''))
+          .map(producto => ({
+            ...producto,
+            restarTaras: producto.restarTaras || false,
+            noSumarKilos: producto.noSumarKilos || false
+          }));
+        const clientesPredefinidosMap = new Map(this.clientesPredefinidos.map(c => [c.id + '', c]));
+        const nombreCliente = (clientesPredefinidosMap.get(clienteId + '')?.nombre) || this.obtenerNombreCliente(clienteId);
+        return {
+          id: clienteId,
+          nombre: nombreCliente,
+          productos: productosCliente,
+          crudos: this.clienteCrudos[clienteId] || []
+        };
+      };
+
+      try {
+        await runTransaction(db, async (transaction) => {
+          const snap = await transaction.get(embarqueRef);
+          if (!snap.exists()) throw new Error('Embarque no existe');
+          const data = snap.data() || {};
+          const remotos = Array.isArray(data.clientes) ? data.clientes : [];
+          const clienteNuevo = construirClienteLocal();
+          let reemplazado = false;
+          const combinados = remotos.map(c => {
+            if (c && (c.id + '') === (clienteId + '')) {
+              reemplazado = true;
+              return clienteNuevo;
+            }
+            return c;
+          });
+          if (!reemplazado) combinados.push(clienteNuevo);
+
+          transaction.update(embarqueRef, {
+            clientes: combinados,
+            clientesJuntarMedidas: { ...this.clientesJuntarMedidas },
+            clientesReglaOtilio: { ...this.clientesReglaOtilio },
+            clientesIncluirPrecios: { ...this.clientesIncluirPrecios },
+            clientesCuentaEnPdf: { ...this.clientesCuentaEnPdf },
+            clientesSumarKgCatarro: { ...this.clientesSumarKgCatarro },
+            embarqueBloqueado: this.embarqueBloqueado,
+            ultimaEdicion: {
+              userId: this.authStore.userId,
+              username: this.authStore.user?.username,
+              timestamp: serverTimestamp()
+            }
+          });
+        });
+        console.log(`Cliente ${clienteId} guardado con transacción`);
+      } catch (e) {
+        console.error('Error guardando cliente con transacción:', e);
+      }
+    },
     // Métodos de gestión de productos y clientes
     actualizarProductosCliente(clienteId, productos) {
       // Actualizar los productos del cliente en el embarque
       this.embarque.productos = this.embarque.productos.filter(p => p.clienteId !== clienteId);
       this.embarque.productos = [...this.embarque.productos, ...productos];
 
-      // Guardar cambios si es necesario
+      // Guardar SOLO ese cliente para evitar conflictos
       if (this.guardadoAutomaticoActivo && this.embarqueId) {
-        this.guardarCambiosEnTiempoReal();
+        this.guardarClienteEnFirestore(clienteId);
       }
     },
 
@@ -512,9 +590,9 @@ export default {
       // Actualizar los crudos del cliente
       this.$set(this.clienteCrudos, clienteId, crudos);
 
-      // Guardar cambios si es necesario
+      // Guardar SOLO ese cliente para evitar conflictos
       if (this.guardadoAutomaticoActivo && this.embarqueId) {
-        this.guardarCambiosEnTiempoReal();
+        this.guardarClienteEnFirestore(clienteId);
       }
     },
 
@@ -564,7 +642,7 @@ export default {
       }
 
       if (this.embarqueId) {
-        this.guardarCambiosEnTiempoReal();
+        this.guardarClienteEnFirestore(clienteId);
       }
 
       this.actualizarMedidasUsadas();
@@ -666,9 +744,9 @@ export default {
       
       console.log(`[ELIMINAR-PRODUCTO] ✅ Producto eliminado exitosamente. Productos restantes: ${this.embarque.productos.length}`);
 
-      // Guardar cambios si es necesario
-      if (this.embarqueId) {
-        this.guardarCambiosEnTiempoReal();
+      // Guardar SOLO el cliente afectado para evitar reaparición por snapshot
+      if (this.embarqueId && producto?.clienteId != null) {
+        this.guardarClienteEnFirestore(producto.clienteId);
       }
       
       // Actualizar las medidas usadas después de eliminar
@@ -1119,19 +1197,34 @@ export default {
               key: `personalizado_${cliente.id}`
             }));
 
+          // Mezclar productos por cliente respetando edición local / locks propios
+          const productosNuevos = [];
+          (data.clientes || []).forEach(cliente => {
+            const clienteIdStr = cliente.id.toString();
+            const tengoLock = this.locksPorCliente?.[clienteIdStr]?.userId === this.authStore.userId;
+            const editandoLocal = this.embarque.productos?.some(p => p.clienteId?.toString() === clienteIdStr && p.isEditing);
+
+            if (tengoLock || editandoLocal) {
+              // Mantener productos locales para no sobreescribir lo que escribe el usuario
+              const locales = (this.embarque.productos || []).filter(p => p.clienteId?.toString() === clienteIdStr);
+              productosNuevos.push(...locales);
+            } else {
+              const clienteInfo = clientesPredefinidosMap.get(clienteIdStr) || cliente;
+              productosNuevos.push(
+                ...((cliente.productos || []).map(producto => ({
+                  ...producto,
+                  clienteId: cliente.id,
+                  nombreCliente: clienteInfo.nombre,
+                  restarTaras: producto.restarTaras || false,
+                })))
+              );
+            }
+          });
+
           this.embarque = {
             fecha: fecha.toISOString().split('T')[0],
-            cargaCon: data.cargaCon || '', // Cargamos el valor de cargaCon
-            productos: data.clientes.flatMap(cliente => {
-              const clienteInfo = clientesPredefinidosMap.get(cliente.id.toString()) || cliente;
-              return cliente.productos.map(producto => ({
-                ...producto,
-                clienteId: cliente.id,
-                nombreCliente: clienteInfo.nombre,
-                restarTaras: producto.restarTaras || false,
-              }));
-            }),
-            // Agregar los kilos crudos
+            cargaCon: data.cargaCon || '',
+            productos: productosNuevos,
             kilosCrudos: data.kilosCrudos || {}
           };
 
@@ -1175,6 +1268,10 @@ export default {
           this.embarqueId = id;
           this.modoEdicion = true;
           this.guardadoAutomaticoActivo = true;
+          if (!this._locksInitialized) {
+            this._locksInitialized = true;
+            this.iniciarListenerLocks();
+          }
           
           // Desactivar bandera después de cargar completamente
           this.$nextTick(() => {
@@ -1194,6 +1291,65 @@ export default {
         // Desactivar bandera en caso de error también
         this._inicializandoEmbarque = false;
       });
+    },
+
+    iniciarListenerLocks() {
+      if (!this.embarqueId) return;
+      const locksRef = ref(rtdb, `locks/${this.embarqueId}`);
+      onValue(locksRef, (snapshot) => {
+        const val = snapshot.val() || {};
+        this.locksPorCliente = val;
+        // Actualizar lista de usuarios editando
+        const porUsuario = new Map();
+        Object.values(val).forEach((info) => {
+          if (info && info.userId) porUsuario.set(info.userId, { userId: info.userId, username: info.username });
+        });
+        this.usuariosEditandoLista = Array.from(porUsuario.values());
+      });
+    },
+
+    async asegurarLockCliente(clienteId) {
+      const userId = this.authStore.userId;
+      const username = this.authStore.user?.username || 'anónimo';
+      const current = this.locksPorCliente?.[clienteId];
+      if (!current || current.userId === userId) {
+        try {
+          const lockRef = ref(rtdb, `locks/${this.embarqueId}/${clienteId}`);
+          await set(lockRef, {
+            userId,
+            username,
+            timestamp: Date.now()
+          });
+          await onDisconnect(lockRef).remove();
+          return true;
+        } catch (e) {
+          console.error('No se pudo adquirir lock del cliente', clienteId, e);
+          return false;
+        }
+      }
+      alert(`El cliente está siendo editado por ${current.username}. Intenta más tarde.`);
+      return false;
+    },
+
+    async liberarLockCliente(clienteId) {
+      try {
+        const lockRef = ref(rtdb, `locks/${this.embarqueId}/${clienteId}`);
+        await remove(lockRef);
+      } catch (_) {}
+    },
+
+    async liberarTodosMisLocks() {
+      if (!this.embarqueId) return;
+      const userId = this.authStore.userId;
+      const entries = Object.entries(this.locksPorCliente || {});
+      for (const [clienteId, info] of entries) {
+        if (info && info.userId === userId) {
+          try {
+            const lockRef = ref(rtdb, `locks/${this.embarqueId}/${clienteId}`);
+            await remove(lockRef);
+          } catch (_) {}
+        }
+      }
     },
 
     async resetearEmbarque() {
@@ -1463,18 +1619,22 @@ export default {
       if (!this.debouncedSave) {
         this.debouncedSave = debounce(async () => {
           try {
-            // Crear una copia profunda de los datos antes de guardar
-            const embarqueData = {
-              ...JSON.parse(JSON.stringify(this.prepararDatosEmbarque())),
+            const db = getFirestore();
+            await updateDoc(doc(db, "embarques", this.embarqueId), {
+              fecha: new Date(this.embarque.fecha),
+              cargaCon: this.embarque.cargaCon,
               clientesJuntarMedidas: { ...this.clientesJuntarMedidas },
               clientesReglaOtilio: { ...this.clientesReglaOtilio },
               clientesIncluirPrecios: { ...this.clientesIncluirPrecios },
-              clientesCuentaEnPdf: { ...this.clientesCuentaEnPdf }
-            };
-
-            const db = getFirestore();
-
-            await updateDoc(doc(db, "embarques", this.embarqueId), embarqueData);
+              clientesCuentaEnPdf: { ...this.clientesCuentaEnPdf },
+              clientesSumarKgCatarro: { ...this.clientesSumarKgCatarro },
+              embarqueBloqueado: this.embarqueBloqueado,
+              ultimaEdicion: {
+                userId: this.authStore.userId,
+                username: this.authStore.user?.username,
+                timestamp: serverTimestamp()
+              }
+            });
             console.log('Cambios guardados automáticamente:', new Date().toLocaleString());
             this.$emit('guardado-automatico');
           } catch (error) {
@@ -1483,7 +1643,11 @@ export default {
         }, 1000); // Esperar 1 segundo entre guardados
       }
 
-      this.debouncedSave();
+      // No disparar el autosave si hay algún producto en edición activa
+      const hayEdicionActiva = Array.isArray(this.embarque.productos) && this.embarque.productos.some(p => p.isEditing);
+      if (!hayEdicionActiva) {
+        this.debouncedSave();
+      }
     },
 
     async guardarEmbarque() {
@@ -2992,6 +3156,8 @@ export default {
   },
 
   beforeDestroy() {
+    // Liberar locks tomados por mí
+    this.liberarTodosMisLocks();
     // Cancelar la suscripción a los cambios en tiempo real
     if (this.unsubscribe) {
       this.unsubscribe();

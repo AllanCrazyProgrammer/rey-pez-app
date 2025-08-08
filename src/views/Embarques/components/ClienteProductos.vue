@@ -128,7 +128,7 @@
         <div class="botones-agregar">
             <button type="button" @click="$emit('agregar-producto', clienteId)"
                 class="btn btn-primary btn-sm agregar-producto" :disabled="embarqueBloqueado">Agregar Producto</button>
-            <button type="button" @click="$emit('agregar-crudo', clienteId)" class="btn btn-info btn-sm agregar-crudo" s
+            <button type="button" @click="$emit('agregar-crudo', clienteId)" class="btn btn-info btn-sm agregar-crudo"
                 :disabled="embarqueBloqueado">Agregar Crudos</button>
         </div>
     </div>
