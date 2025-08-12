@@ -32,14 +32,14 @@
         No hay registros de cuentas que coincidan con el filtro.
       </div>
       <ul v-else>
-        <li v-for="cuenta in cuentasFiltradas" :key="cuenta.id" class="cuenta-item" :class="{ 'tiene-observacion': cuenta.tieneObservacion }">
+        <li v-for="cuenta in cuentasFiltradas" :key="cuenta.id" class="cuenta-item" :class="{ 'tiene-observacion': cuenta.tieneObservacion || (cuenta.observacion && cuenta.observacion.trim().length) }">
           <div class="cuenta-content">
             <span class="cuenta-date">{{ formatDate(cuenta.fecha) }}</span>
             <p class="cuenta-summary">
               <span>Saldo Hoy: ${{ formatNumber(cuenta.saldoHoy) }}</span>
               <span>Total Acumulado: ${{ formatNumber(cuenta.totalNota) }}</span>
             </p>
-            <div v-if="cuenta.tieneObservacion" class="observacion-container">
+            <div v-if="cuenta.tieneObservacion || (cuenta.observacion && cuenta.observacion.trim().length)" class="observacion-container">
               <p class="observacion-texto">{{ cuenta.observacion }}</p>
               <button class="delete-observacion-btn" @click="borrarObservacion(cuenta.id)" title="Borrar observación">×</button>
             </div>
