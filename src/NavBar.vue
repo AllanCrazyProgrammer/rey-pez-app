@@ -157,7 +157,7 @@ export default {
     },
     handleResize() {
       // Close mobile menu on resize to larger screen
-      if (window.innerWidth > 768 && this.mobileMenuOpen) {
+      if (window.innerWidth > 1024 && this.mobileMenuOpen) {
         this.closeMobileMenu();
       }
     }
@@ -377,6 +377,75 @@ export default {
   display: none;
 }
 
+/* Tablet (iPad) y móviles grandes: usar menú lateral igual que en móvil */
+@media (max-width: 1024px) {
+  .navbar-modern {
+    padding: 12px 22px;
+    padding-top: calc(12px + env(safe-area-inset-top));
+  }
+
+  .brand-title {
+    font-size: 1.6rem;
+  }
+
+  .logo-image {
+    width: 44px;
+    height: 44px;
+  }
+
+  .mobile-toggle { display: flex; }
+
+  .nav-menu {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100vh; /* fallback */
+    height: 100dvh;
+    height: 100svh;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    backdrop-filter: blur(20px);
+    transform: translateX(-100%);
+    transition: transform 0.3s ease;
+    padding-top: calc(90px + env(safe-area-inset-top));
+    padding-right: 34px;
+    padding-left: 34px;
+    padding-bottom: max(28px, calc(28px + env(safe-area-inset-bottom)));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    z-index: 999;
+  }
+
+  .nav-menu.mobile-open { transform: translateX(0); }
+
+  .nav-items {
+    flex-direction: column;
+    gap: 14px;
+    width: 100%;
+  }
+
+  .nav-link {
+    width: 100%;
+    padding: 16px 18px;
+    font-size: 1.08rem;
+    justify-content: flex-start;
+  }
+
+  .mobile-overlay {
+    display: block;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100vh; /* fallback */
+    height: 100dvh;
+    height: 100svh;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 998;
+  }
+}
+
 /* Responsive design */
 @media (max-width: 768px) {
   .navbar-modern {
@@ -402,12 +471,23 @@ export default {
     top: 0;
     left: 0;
     width: 100%;
-    height: 100vh;
+    /* Altura responsiva que considera barras del navegador en móviles */
+    height: 100vh;           /* Fallback */
+    height: 100dvh;          /* Navegadores modernos */
+    height: 100svh;          /* iOS/Android dinámico */
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     backdrop-filter: blur(20px);
     transform: translateX(-100%);
     transition: transform 0.3s ease;
-    padding: 100px 30px 30px;
+    /* Respetar notch y barras del sistema */
+    padding-top: calc(80px + env(safe-area-inset-top));
+    padding-right: 30px;
+    padding-left: 30px;
+    padding-bottom: max(24px, calc(24px + env(safe-area-inset-bottom)));
+    /* Scroll interno para que no se tapen elementos inferiores */
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
     z-index: 999;
   }
 
@@ -417,14 +497,14 @@ export default {
 
   .nav-items {
     flex-direction: column;
-    gap: 15px;
+    gap: 12px;
     width: 100%;
   }
 
   .nav-link {
     width: 100%;
-    padding: 15px 20px;
-    font-size: 1.1rem;
+    padding: 14px 16px;
+    font-size: 1.05rem;
     justify-content: flex-start;
   }
 
@@ -434,9 +514,41 @@ export default {
     top: 0;
     left: 0;
     width: 100%;
-    height: 100vh;
+    height: 100vh;  /* Fallback */
+    height: 100dvh;
+    height: 100svh;
     background: rgba(0, 0, 0, 0.5);
     z-index: 998;
+  }
+}
+
+/* Ajustes extra para dispositivos con poca altura (ej. Galaxy Fold cerrado) */
+@media (max-height: 700px) {
+  .nav-menu {
+    padding-top: calc(64px + env(safe-area-inset-top));
+    padding-bottom: max(16px, calc(16px + env(safe-area-inset-bottom)));
+  }
+  .nav-items {
+    gap: 10px;
+  }
+  .nav-link {
+    padding: 12px 14px;
+    font-size: 0.98rem;
+  }
+  .nav-icon {
+    font-size: 1.05rem;
+  }
+}
+
+/* Scrollbar discreto en el menú móvil */
+@media (max-width: 768px) {
+  .nav-menu::-webkit-scrollbar { width: 6px; }
+  .nav-menu::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.35);
+    border-radius: 3px;
+  }
+  .nav-menu::-webkit-scrollbar-track {
+    background: transparent;
   }
 }
 

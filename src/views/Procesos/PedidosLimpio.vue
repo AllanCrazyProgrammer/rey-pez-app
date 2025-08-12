@@ -503,6 +503,7 @@
     <PedidoLimpioImpresion
       v-else
       :fecha="fecha"
+      :id="pedidoId"
       :pedidoOtilio="pedidoOtilio"
       :pedidoCatarro="pedidoCatarro"
       :pedidoJoselito="pedidoJoselito"
@@ -924,7 +925,9 @@ export default {
         if (this.editando && this.pedidoId) {
           await updateDoc(doc(db, 'pedidos', this.pedidoId), pedidoData);
         } else {
-          await addDoc(collection(db, 'pedidos'), pedidoData);
+          const docRef = await addDoc(collection(db, 'pedidos'), pedidoData);
+          this.pedidoId = docRef.id;
+          this.editando = true;
         }
         this.mostrarImpresion = true;
       } catch (error) {

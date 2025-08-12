@@ -400,9 +400,29 @@ export default {
   methods: {
     volverAEditar() {
       if (this.id) {
-        this.$router.push({
+        const target = {
           path: '/procesos/pedidos/limpio',
           query: { edit: 'true', id: this.id, fecha: this.fecha }
+        };
+
+        // Si ya estamos en el mismo destino (vista de edición) dentro del mismo componente,
+        // solo emitimos el evento para volver sin hacer navegación redundante
+        const isSameRoute =
+          this.$route.path === target.path &&
+          this.$route.query.edit === target.query.edit &&
+          this.$route.query.id === target.query.id &&
+          this.$route.query.fecha === target.query.fecha;
+
+        if (isSameRoute || this.$route.name === 'PedidosLimpio') {
+          this.$emit('volver');
+          return;
+        }
+
+        this.$router.push(target).catch((err) => {
+          // Ignorar navegación duplicada y solo emitir volver
+          if (err && err.name === 'NavigationDuplicated') {
+            this.$emit('volver');
+          }
         });
       } else {
         this.$router.push('/procesos/pedidos');
@@ -1072,6 +1092,7 @@ export default {
 .scale-slider {
   flex: 1;
   -webkit-appearance: none;
+  appearance: none;
   height: 8px;
   background: #ddd;
   border-radius: 4px;
