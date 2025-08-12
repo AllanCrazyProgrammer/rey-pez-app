@@ -177,7 +177,7 @@
 </template>
 
 <script>
-import { getFirestore, collection, addDoc, doc, getDoc, updateDoc, onSnapshot, serverTimestamp, getDocs, setDoc, deleteDoc, query, orderBy } from 'firebase/firestore';
+import { getFirestore, collection, addDoc, doc, getDoc, updateDoc, onSnapshot, serverTimestamp, getDocs, setDoc, deleteDoc, query, orderBy, runTransaction } from 'firebase/firestore';
 import { debounce } from 'lodash';
 import { ref, onValue, onDisconnect, set } from 'firebase/database'
 import { rtdb } from '@/firebase'
@@ -332,6 +332,10 @@ export default {
       _inicializandoEmbarque: false, // Bandera para evitar watchers durante la inicialización
       debouncedSave: null, // Para debounce del guardado automático
       preciosActuales: [],
+      _aplicandoRemoto: false,
+      clientesModificados: {},
+      fechaModificada: false,
+      cargaConModificada: false,
     };
   },
   
@@ -506,6 +510,8 @@ export default {
       if (this.guardadoAutomaticoActivo && this.embarqueId) {
         this.guardarCambiosEnTiempoReal();
       }
+      // Marcar cliente como modificado para merge transaccional
+      this.$set(this.clientesModificados, clienteId, true);
     },
 
     actualizarCrudosCliente(clienteId, crudos) {
@@ -516,6 +522,8 @@ export default {
       if (this.guardadoAutomaticoActivo && this.embarqueId) {
         this.guardarCambiosEnTiempoReal();
       }
+      // Marcar cliente como modificado para merge transaccional
+      this.$set(this.clientesModificados, clienteId, true);
     },
 
     agregarProducto(clienteId) {
@@ -1030,6 +1038,7 @@ export default {
       this.unsubscribe = onSnapshot(embarqueRef, (doc) => {
         if (doc.exists()) {
           const data = doc.data();
+          this._aplicandoRemoto = true;
 
           // Cargar el estado de bloqueo
           this.embarqueBloqueado = data.embarqueBloqueado || false;
@@ -1179,6 +1188,7 @@ export default {
           // Desactivar bandera después de cargar completamente
           this.$nextTick(() => {
             this._inicializandoEmbarque = false;
+            this._aplicandoRemoto = false;
           });
         } else {
           // Si el embarque no existe, limpiar localStorage y reiniciar estado
@@ -1463,18 +1473,54 @@ export default {
       if (!this.debouncedSave) {
         this.debouncedSave = debounce(async () => {
           try {
-            // Crear una copia profunda de los datos antes de guardar
-            const embarqueData = {
-              ...JSON.parse(JSON.stringify(this.prepararDatosEmbarque())),
-              clientesJuntarMedidas: { ...this.clientesJuntarMedidas },
-              clientesReglaOtilio: { ...this.clientesReglaOtilio },
-              clientesIncluirPrecios: { ...this.clientesIncluirPrecios },
-              clientesCuentaEnPdf: { ...this.clientesCuentaEnPdf }
-            };
-
+            // Guardado incremental por campos para reducir colisiones
             const db = getFirestore();
+            const embarqueRef = doc(db, "embarques", this.embarqueId);
+            await runTransaction(db, async (transaction) => {
+              const snap = await transaction.get(embarqueRef);
+              if (!snap.exists()) return;
 
-            await updateDoc(doc(db, "embarques", this.embarqueId), embarqueData);
+              const serverData = snap.data();
+
+              // Merge no destructivo por cliente si hay marca de modificación; respetar otros clientes del servidor
+              const serverClientesMap = new Map((serverData.clientes || []).map(c => [String(c.id), c]));
+              const mergedClientes = new Map(serverClientesMap);
+
+              Object.entries(this.productosPorCliente).forEach(([clienteId, productos]) => {
+                if (!this.clientesModificados[clienteId]) return;
+                mergedClientes.set(String(clienteId), {
+                  id: clienteId,
+                  nombre: this.obtenerNombreCliente(clienteId),
+                  productos: JSON.parse(JSON.stringify(productos)).map(p => ({
+                    ...p,
+                    restarTaras: p.restarTaras || false,
+                    noSumarKilos: p.noSumarKilos || false
+                  })),
+                  crudos: this.clienteCrudos[clienteId] ? JSON.parse(JSON.stringify(this.clienteCrudos[clienteId])) : []
+                });
+              });
+
+              const updatePayload = {
+                fecha: new Date(this.embarque.fecha),
+                cargaCon: this.embarque.cargaCon,
+                clientesJuntarMedidas: { ...this.clientesJuntarMedidas },
+                clientesReglaOtilio: { ...this.clientesReglaOtilio },
+                clientesIncluirPrecios: { ...this.clientesIncluirPrecios },
+                clientesCuentaEnPdf: { ...this.clientesCuentaEnPdf },
+                clientesSumarKgCatarro: { ...this.clientesSumarKgCatarro },
+                clientes: Array.from(mergedClientes.values()),
+                ultimaEdicion: {
+                  userId: this.authStore.userId,
+                  username: this.authStore.user?.username,
+                  timestamp: serverTimestamp()
+                }
+              };
+
+              transaction.update(embarqueRef, updatePayload);
+            });
+
+            // limpiar marcas de modificación tras un guardado exitoso
+            this.clientesModificados = {};
             console.log('Cambios guardados automáticamente:', new Date().toLocaleString());
             this.$emit('guardado-automatico');
           } catch (error) {
@@ -1518,7 +1564,20 @@ export default {
 
       try {
         if (this.modoEdicion) {
-          await updateDoc(doc(db, "embarques", this.embarqueId), embarqueData);
+          const embarqueRef = doc(db, "embarques", this.embarqueId);
+          await runTransaction(db, async (transaction) => {
+            const snap = await transaction.get(embarqueRef);
+            if (!snap.exists()) return;
+            // merge server y local de forma conservadora: siempre escribimos campos conocidos
+            transaction.update(embarqueRef, {
+              ...embarqueData,
+              ultimaEdicion: {
+                userId: this.authStore.userId,
+                username: this.authStore.user?.username,
+                timestamp: serverTimestamp()
+              }
+            });
+          });
           alert('Embarque actualizado exitosamente.');
           this._guardandoEmbarque = false;
         } else {
@@ -2914,6 +2973,11 @@ export default {
         
         // Evitar guardado excesivo durante la inicialización
         if (this._inicializandoEmbarque) {
+          return;
+        }
+
+        // Si estamos aplicando cambios remotos, no dispare guardado inmediato
+        if (this._aplicandoRemoto) {
           return;
         }
         

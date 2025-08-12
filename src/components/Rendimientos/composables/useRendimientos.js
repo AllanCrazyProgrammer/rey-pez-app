@@ -1,5 +1,5 @@
 import { reactive, computed } from 'vue';
-import { getFirestore, doc, getDoc, updateDoc } from 'firebase/firestore';
+import { getFirestore, doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { debounce } from 'lodash';
 
 export function useRendimientos(embarqueId) {
@@ -278,7 +278,12 @@ export function useRendimientos(embarqueId) {
       const embarqueRef = doc(db, 'embarques', embarqueId);
       
       await updateDoc(embarqueRef, {
-        kilosCrudos: state.kilosCrudos
+        kilosCrudos: state.kilosCrudos,
+        ultimaEdicion: {
+          userId: state.authStore?.userId,
+          username: state.authStore?.user?.username,
+          timestamp: serverTimestamp()
+        }
       });
       
       console.log('Rendimientos guardados:', state.kilosCrudos);

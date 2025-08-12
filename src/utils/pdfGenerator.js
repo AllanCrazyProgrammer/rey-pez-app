@@ -1550,17 +1550,22 @@ function totalKilos(producto, nombreCliente, aplicarReglaOtilio = true, sumarKgC
         console.log('[DEBUG] NO se sumó 1 kg porque sumarKgCatarro es false');
       }
     }
-    // Para cliente Otilio: sumar 1 kilo por cada 100 kilos en productos s/h2o (solo si aplicarReglaOtilio es true)
+    // Para cliente Otilio: sumar 0.5 kg por cada 100 kg en productos s/h2o (solo si aplicarReglaOtilio es true)
     if (aplicarReglaOtilio && 
         (clienteNombreLower.includes('otilio') || 
          (producto.nombreCliente && producto.nombreCliente.toLowerCase().includes('otilio')))) {
-      const kilosAdicionales = Math.floor(resultado / 100);
+      const kilosAdicionales = Math.floor(resultado / 100) * 0.5;
       resultado += kilosAdicionales;
     }
   }
   
-  // Retornamos un número redondeado a entero para cliente Elizabeth y Otilio, o con un decimal para Ozuna
-  if (clienteNombreLower.includes('elizabeth') || clienteNombreLower.includes('otilio')) {
+  // Retorno por cliente: Otilio con regla especial de .5, Elizabeth con redondeo normal, Ozuna con 1 decimal, otros con 1 decimal
+  if (clienteNombreLower.includes('otilio')) {
+    const entero = Math.floor(resultado);
+    const fraccion = resultado - entero;
+    const esMitad = Math.abs(fraccion - 0.5) < 1e-9;
+    return esMitad ? entero : Math.round(resultado);
+  } else if (clienteNombreLower.includes('elizabeth')) {
     return Math.round(resultado);
   } else if (clienteNombreLower.includes('ozuna')) {
     return Number(resultado.toFixed(1));

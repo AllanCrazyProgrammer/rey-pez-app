@@ -24,12 +24,12 @@
                     <label :for="'juntar-medidas-' + clienteId" @click.stop>Juntar medidas</label>
                 </div>
                 
-                <!-- Checkbox para regla de Otilio (sumar 1 kilo por cada 100 kilos) -->
+                <!-- Checkbox para regla de Otilio (sumar 0.5 kg por cada 100 kg) -->
                 <div v-if="esClienteOtilio" class="regla-otilio-checkbox">
                     <input type="checkbox" :id="'regla-otilio-' + clienteId"
                         v-model="clientesReglaOtilio[clienteId]" @change="handleReglaOtilioChange" @click.stop
                         :disabled="embarqueBloqueado">
-                    <label :for="'regla-otilio-' + clienteId" @click.stop>Sumar 1 kg por cada 100 kg</label>
+                    <label :for="'regla-otilio-' + clienteId" @click.stop>Sumar 0.5 kg por cada 100 kg</label>
                 </div>
                 
                 <!-- Checkbox para incluir precios en PDF (específico para Catarro) -->
