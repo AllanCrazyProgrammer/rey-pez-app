@@ -140,7 +140,7 @@ export default {
 
     const cargarStash = async () => {
       try {
-        const q = query(collection(db, `stash_${props.cliente}`))
+        const q = query(collection(db, `stash_${props.cliente}`), orderBy('fecha', 'desc'))
         const querySnapshot = await getDocs(q)
         stashItems.value = querySnapshot.docs.map(doc => ({
           id: doc.id,
@@ -296,6 +296,8 @@ export default {
           descripcion: newStash.value.descripcion,
           cantidad: Number(newStash.value.cantidad)
         })
+        // Mantener orden más reciente -> más antiguo
+        stashItems.value.sort((a, b) => b.fecha.localeCompare(a.fecha))
 
         // Limpiar el formulario
         newStash.value = {

@@ -370,6 +370,11 @@
                   {{ movimiento.tipo === 'prestamo' ? '+' : '-' }}${{ formatNumber(movimiento.monto) }}
                 </div>
               </div>
+              <div class="movimiento-actions">
+                <button @click="eliminarMovimiento(movimiento)" class="btn-eliminar-sm" title="Eliminar">
+                  <i class="fas fa-trash-alt"></i>
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -418,7 +423,7 @@
 
 <script>
 import { db } from '@/firebase';
-import { collection, addDoc, getDocs, query, where, orderBy, doc, updateDoc, deleteDoc, writeBatch } from 'firebase/firestore';
+import { collection, addDoc, getDocs, getDoc, query, where, orderBy, doc, updateDoc, deleteDoc, writeBatch } from 'firebase/firestore';
 import BackButton from '@/components/BackButton.vue';
 
 export default {
@@ -867,6 +872,49 @@ export default {
         alert('Error al eliminar abono: ' + error.message);
       } finally {
         this.guardando = false;
+      }
+    },
+    
+    async eliminarMovimiento(movimiento) {
+      try {
+        if (movimiento.tipo === 'abono') {
+          if (!confirm('¿Eliminar este abono? Esta acción no se puede deshacer.')) return;
+          await deleteDoc(doc(db, 'prestamosTrabajadores', movimiento.prestamoId, 'abonos', movimiento.id));
+          const prestamoRef = doc(db, 'prestamosTrabajadores', movimiento.prestamoId);
+          const prestamoSnap = await getDoc(prestamoRef);
+          if (prestamoSnap.exists()) {
+            const prestamoData = prestamoSnap.data();
+            const abonosSnapshot = await getDocs(collection(db, 'prestamosTrabajadores', movimiento.prestamoId, 'abonos'));
+            let totalAbonos = 0;
+            abonosSnapshot.forEach(a => { totalAbonos += a.data().monto || 0; });
+            const nuevoSaldoPendiente = (prestamoData.montoInicial || 0) - totalAbonos;
+            await updateDoc(prestamoRef, {
+              saldoPendiente: nuevoSaldoPendiente,
+              estado: nuevoSaldoPendiente <= 0 ? 'pagado' : 'activo'
+            });
+          }
+        } else if (movimiento.tipo === 'prestamo') {
+          if (!confirm('¿Eliminar este préstamo y todos sus abonos? Esta acción no se puede deshacer.')) return;
+          const abonosSnapshot = await getDocs(collection(db, 'prestamosTrabajadores', movimiento.id, 'abonos'));
+          const batch = writeBatch(db);
+          abonosSnapshot.forEach((a) => {
+            batch.delete(doc(db, 'prestamosTrabajadores', movimiento.id, 'abonos', a.id));
+          });
+          await batch.commit();
+          await deleteDoc(doc(db, 'prestamosTrabajadores', movimiento.id));
+        }
+        await this.cargarPrestamos();
+        if (this.cuentaSeleccionada) {
+          const cuentaActualizada = this.cuentasTrabajadores.find(c => c.trabajadorId === this.cuentaSeleccionada.trabajadorId);
+          if (cuentaActualizada) {
+            this.verHistorial(cuentaActualizada);
+          } else {
+            this.showHistorialModal = false;
+          }
+        }
+      } catch (error) {
+        console.error('Error al eliminar movimiento: ', error);
+        alert('Error al eliminar: ' + error.message);
       }
     },
     
@@ -1344,7 +1392,7 @@ h1 {
 }
 
 .movimiento-monto.abono {
-  color: #27ae60;
+  color: #e74c3c;
 }
 
 .no-historial {
