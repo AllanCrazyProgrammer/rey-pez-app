@@ -2,7 +2,7 @@
   <div class="catarro-cuentas-menu-container">
     <h1>Menú de Cuentas Catarro</h1>
     
-    <div class="actions-container">
+    <div class="actions-container actions-sticky">
       <router-link to="/cuentas-mexico" class="action-button back-btn">
         Cuentas México
       </router-link>
@@ -25,7 +25,7 @@
       </select>
     </div>
 
-    <div class="cuentas-list">
+    <div class="cuentas-list card">
       <h2>Registros de Cuentas</h2>
       <div v-if="isLoading" class="loading">Cargando registros...</div>
       <div v-else-if="cuentasFiltradas.length === 0" class="no-records">
@@ -303,6 +303,15 @@ h1, h2 {
   margin-bottom: 20px;
 }
 
+.actions-sticky {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: linear-gradient(180deg, rgba(255,255,255,1) 70%, rgba(255,255,255,0));
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+
 .action-button {
   background-color: #d32f2f;
   color: white;
@@ -326,6 +335,13 @@ h1, h2 {
 
 .back-btn:hover {
   background-color: #5a6268;
+}
+
+.card {
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  padding: 16px;
 }
 
 .cuentas-list {

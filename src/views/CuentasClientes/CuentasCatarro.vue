@@ -23,7 +23,7 @@
       </div>
     </div>
   
-    <div class="input-section">
+    <div class="input-section card">
       <h2>Ingresar Datos</h2>
       <div class="input-row">
         <input v-model.number="newItem.kilos" type="number" placeholder="Kilos" inputmode="decimal" pattern="[0-9]*" class="responsive-input">
@@ -34,7 +34,8 @@
       </div>
     </div>
   
-    <table class="tabla-principal">
+    <div class="table-card table-responsive">
+      <table class="tabla-principal">
       <thead>
         <tr>
           <th>Kilos</th>
@@ -92,13 +93,15 @@
           <td></td>
         </tr>
       </tfoot>
-    </table>
+      </table>
+    </div>
   
     <h2>Precios de Venta</h2>
     <div class="add-product-button">
       <button @click="showAddProductModal = true">Agregar Producto</button>
     </div>
-    <table class="tabla-venta">
+    <div class="table-card table-responsive">
+      <table class="tabla-venta">
       <thead>
         <tr>
           <th>Kilos</th>
@@ -146,7 +149,8 @@
           <td class="desktop-only"><strong>${{ formatNumber(gananciaTotal) }}</strong></td>
         </tr>
       </tfoot>
-    </table>
+      </table>
+    </div>
   
     <div class="ganancia-del-dia">
       <h3>Ganancia del Día</h3>
@@ -156,7 +160,7 @@
     </div>
   
     <h2>Saldo pendiente</h2>
-    <div class="saldo-pendiente">
+    <div class="saldo-pendiente card">
       <div class="input-row">
         <span>Saldo Acumulado Anterior: ${{ formatNumber(saldoAcumuladoAnterior) }}</span>
       </div>
@@ -169,7 +173,7 @@
     </div>
   
     <h2>Abonos</h2>
-    <div class="abonos">
+    <div class="abonos card">
       <div class="input-row" v-for="(abono, index) in abonos" :key="index">
         <input v-model="abono.descripcion" type="text" placeholder="Descripción" class="responsive-input">
         <input v-model.number="abono.monto" type="number" placeholder="Monto" class="responsive-input">
@@ -211,7 +215,7 @@
       </button>
       <button @click="imprimirTablas" class="print-button">Imprimir</button>
     </div>
-    <!- Modal para acciones móviles -->
+    <!-- Modal para acciones móviles -->
     <div v-if="showMobileActions" class="mobile-actions-modal">
       <button @click="editItem(selectedItemIndex)" class="edit-btn">Editar</button>
       <button @click="removeItem(selectedItemIndex)" class="delete-btn">Eliminar</button>
@@ -1391,6 +1395,13 @@ export default {
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); /* Sombra suave */
 }
 
+.card {
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  padding: 16px;
+}
+
 .back-button-container {
   display: flex;
   gap: 15px;
@@ -1398,6 +1409,15 @@ export default {
   flex-wrap: wrap;
   justify-content: flex-start;
   align-items: center;
+}
+
+.back-button-container {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: linear-gradient(180deg, rgba(249,249,249,1) 65%, rgba(249,249,249,0));
+  padding-top: 10px;
+  padding-bottom: 10px;
 }
 
 .back-button-container a,
@@ -1557,6 +1577,9 @@ th, td {
 th {
   background-color: #4CAF50;
   color: white;
+  position: sticky;
+  top: 0;
+  z-index: 1;
 }
 
 tr:nth-child(even) {
@@ -1577,6 +1600,20 @@ tr:hover {
 .tabla-venta th,
 .tabla-venta td {
   width: auto;
+}
+
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border-radius: 10px;
+}
+
+.table-card {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.08);
+  margin-bottom: 20px;
 }
 
 .tabla-principal th:first-child,
@@ -1624,6 +1661,14 @@ tr:hover {
   gap: 20px;
   margin-top: 20px;
   flex-wrap: wrap;
+}
+
+.button-container {
+  position: sticky;
+  bottom: 0;
+  z-index: 9;
+  background: linear-gradient(0deg, rgba(249,249,249,1) 65%, rgba(249,249,249,0));
+  padding-top: 8px;
 }
 
 .save-button,
@@ -1701,6 +1746,16 @@ tr:hover {
   width: 90%;
   max-width: 500px;
   animation: fadeIn 0.3s ease;
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
 }
 
 @keyframes fadeIn {
@@ -1853,5 +1908,13 @@ tr:hover {
   display: flex;
   justify-content: center;
   margin: 15px 0;
+}
+
+.mobile-only { display: none; }
+.desktop-only { display: table-cell; }
+
+@media (max-width: 600px) {
+  .desktop-only { display: none !important; }
+  .mobile-only { display: table-row; }
 }
 </style>
