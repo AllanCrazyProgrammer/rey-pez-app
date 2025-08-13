@@ -173,6 +173,8 @@
     />
 
 
+    <!-- Indicador de estado del guardado -->
+    <SaveStatusIndicator />
   </div>
 </template>
 
@@ -182,6 +184,8 @@ import { debounce } from 'lodash';
 import { ref, onValue, onDisconnect, set } from 'firebase/database'
 import { rtdb } from '@/firebase'
 import { useAuthStore } from '@/stores/auth'
+import { getSaveManager } from '@/services/SaveManager'
+import SaveStatusIndicator from '@/components/SaveStatusIndicator.vue'
 import { ref as vueRef, onMounted, onUnmounted, defineAsyncComponent } from 'vue'
 import Sidebar from '@/components/Sidebar.vue'
 import HeaderEmbarque from '../Embarques/components/HeaderEmbarque.vue'
@@ -245,7 +249,8 @@ export default {
     HilosModal,
     NotaModal,
     AltModal,
-    ConfiguracionMedidasModal
+    ConfiguracionMedidasModal,
+    SaveStatusIndicator
   },
   
   setup() {
@@ -330,12 +335,18 @@ export default {
       escalaResumen: 100,
       _guardandoInicial: false, // Bandera para el guardado inicial automático
       _inicializandoEmbarque: false, // Bandera para evitar watchers durante la inicialización
-      debouncedSave: null, // Para debounce del guardado automático
+      debouncedSave: null, // Para debounce del guardado automático (DEPRECATED - se mantiene por compatibilidad)
+      saveManager: null, // Nuevo sistema de gestión de guardado
       preciosActuales: [],
       _aplicandoRemoto: false,
       clientesModificados: {},
       fechaModificada: false,
       cargaConModificada: false,
+      productosEliminadosLocalmente: new Set(), // Set para rastrear productos eliminados localmente
+      // Control de backoff para auto-guardado cuando hay errores de cuota
+      autoSaveBackoffMs: 0,
+      autoSaveDisabledUntil: 0,
+      lastAutoSaveQuotaAlert: false,
     };
   },
   
@@ -472,6 +483,23 @@ export default {
   },
   
   methods: {
+    // Método para mostrar errores al usuario
+    mostrarError(mensaje) {
+      // Usar el sistema de notificaciones si está disponible
+      if (this.$toast) {
+        this.$toast.error(mensaje, { duration: 5000 });
+      } else {
+        // Fallback a console.error y alert opcional
+        console.error('[ERROR]', mensaje);
+        // Solo mostrar alert para errores críticos
+        if (mensaje.includes('recarga la página') || mensaje.includes('No se pudieron guardar')) {
+          setTimeout(() => {
+            alert(mensaje);
+          }, 100);
+        }
+      }
+    },
+    
     async triggerGuardadoInicial() {
       console.log('[LOG] Se activó triggerGuardadoInicial.');
       // Solo proceder si es un nuevo embarque sin ID
@@ -502,28 +530,51 @@ export default {
     },
     // Métodos de gestión de productos y clientes
     actualizarProductosCliente(clienteId, productos) {
+      // Filtrar productos que no han sido eliminados localmente
+      let productosAActualizar = productos;
+      if (this.productosEliminadosLocalmente && this.productosEliminadosLocalmente.size > 0) {
+        productosAActualizar = productos.filter(p => 
+          !this.productosEliminadosLocalmente.has(p.id)
+        );
+        
+        // Si algún producto fue filtrado, loguearlo
+        if (productosAActualizar.length !== productos.length) {
+          console.log('[actualizarProductosCliente] Filtrando productos eliminados localmente');
+        }
+      }
+      
       // Actualizar los productos del cliente en el embarque
       this.embarque.productos = this.embarque.productos.filter(p => p.clienteId !== clienteId);
-      this.embarque.productos = [...this.embarque.productos, ...productos];
+      this.embarque.productos = [...this.embarque.productos, ...productosAActualizar];
 
-      // Guardar cambios si es necesario
-      if (this.guardadoAutomaticoActivo && this.embarqueId) {
-        this.guardarCambiosEnTiempoReal();
+      // Solo marcar como modificado si hay productos con medida y tipo
+      const tieneProductosCompletos = productosAActualizar.some(p => 
+        p.medida && p.medida.trim() !== '' && 
+        p.tipo && p.tipo.trim() !== ''
+      );
+      
+      if (tieneProductosCompletos) {
+        // Marcar cliente como modificado para merge transaccional
+        this.$set(this.clientesModificados, clienteId, true);
+        
+        // Guardar cambios si es necesario
+        if (this.guardadoAutomaticoActivo && this.embarqueId) {
+          this.guardarCambiosEnTiempoReal();
+        }
       }
-      // Marcar cliente como modificado para merge transaccional
-      this.$set(this.clientesModificados, clienteId, true);
     },
 
     actualizarCrudosCliente(clienteId, crudos) {
       // Actualizar los crudos del cliente
       this.$set(this.clienteCrudos, clienteId, crudos);
 
+      // Marcar cliente como modificado para merge transaccional (crudos siempre se guardan)
+      this.$set(this.clientesModificados, clienteId, true);
+      
       // Guardar cambios si es necesario
       if (this.guardadoAutomaticoActivo && this.embarqueId) {
         this.guardarCambiosEnTiempoReal();
       }
-      // Marcar cliente como modificado para merge transaccional
-      this.$set(this.clientesModificados, clienteId, true);
     },
 
     agregarProducto(clienteId) {
@@ -561,6 +612,13 @@ export default {
       
       // Establecer el nombre del cliente basado en el id
       nuevoProducto.nombreCliente = this.obtenerNombreCliente(clienteId);
+      
+      // Si este producto fue eliminado anteriormente, removerlo de la lista de eliminados
+      // (aunque es poco probable con nuevos IDs únicos, es buena práctica)
+      if (this.productosEliminadosLocalmente && this.productosEliminadosLocalmente.has(nuevoProducto.id)) {
+        console.log('[AGREGAR-PRODUCTO] Removiendo producto de la lista de eliminados:', nuevoProducto.id);
+        this.productosEliminadosLocalmente.delete(nuevoProducto.id);
+      }
 
       // Agregar directamente al embarque.productos
       this.embarque.productos.push(nuevoProducto);
@@ -592,6 +650,15 @@ export default {
 
     eliminarProducto(producto) {
       console.log(`[ELIMINAR-PRODUCTO] Intentando eliminar: ID: ${producto.id}, Medida: ${producto.medida}, Cliente: ${this.obtenerNombreCliente(producto.clienteId)}`);
+      
+      // Marcar el producto como eliminado localmente para evitar que se restaure
+      if (!this.productosEliminadosLocalmente) {
+        this.productosEliminadosLocalmente = new Set();
+      }
+      this.productosEliminadosLocalmente.add(producto.id);
+      
+      // Marcar el cliente como modificado inmediatamente
+      this.$set(this.clientesModificados, producto.clienteId, true);
       
       // Primer intento: buscar por ID exacto
       let index = this.embarque.productos.findIndex(p => p.id === producto.id);
@@ -1025,8 +1092,19 @@ export default {
       if (id === 'nuevo') {
         console.log('[LOG] Limpiando ultimoEmbarqueId de localStorage para un nuevo embarque.');
         localStorage.removeItem('ultimoEmbarqueId');
+        // Limpiar lista de productos eliminados para nuevo embarque
+        if (this.productosEliminadosLocalmente && this.productosEliminadosLocalmente.size > 0) {
+          console.log('[cargarEmbarque] Limpiando lista de productos eliminados localmente');
+          this.productosEliminadosLocalmente.clear();
+        }
         this.resetearEmbarque();
         return;
+      }
+      
+      // Limpiar la lista de productos eliminados localmente al cargar un embarque diferente
+      if (this.productosEliminadosLocalmente && this.productosEliminadosLocalmente.size > 0) {
+        console.log('[cargarEmbarque] Limpiando lista de productos eliminados localmente');
+        this.productosEliminadosLocalmente.clear();
       }
 
       // Activar bandera para evitar watchers durante la carga
@@ -1128,18 +1206,30 @@ export default {
               key: `personalizado_${cliente.id}`
             }));
 
+          // Reconstruir productos, pero excluir los eliminados localmente
+          const productosDesdeServidor = data.clientes.flatMap(cliente => {
+            const clienteInfo = clientesPredefinidosMap.get(cliente.id.toString()) || cliente;
+            return cliente.productos.map(producto => ({
+              ...producto,
+              clienteId: cliente.id,
+              nombreCliente: clienteInfo.nombre,
+              restarTaras: producto.restarTaras || false,
+            }));
+          });
+          
+          // Filtrar productos que han sido eliminados localmente
+          let productosFiltrados = productosDesdeServidor;
+          if (this.productosEliminadosLocalmente && this.productosEliminadosLocalmente.size > 0) {
+            console.log('[onSnapshot] Filtrando productos eliminados localmente:', this.productosEliminadosLocalmente);
+            productosFiltrados = productosDesdeServidor.filter(p => 
+              !this.productosEliminadosLocalmente.has(p.id)
+            );
+          }
+          
           this.embarque = {
             fecha: fecha.toISOString().split('T')[0],
             cargaCon: data.cargaCon || '', // Cargamos el valor de cargaCon
-            productos: data.clientes.flatMap(cliente => {
-              const clienteInfo = clientesPredefinidosMap.get(cliente.id.toString()) || cliente;
-              return cliente.productos.map(producto => ({
-                ...producto,
-                clienteId: cliente.id,
-                nombreCliente: clienteInfo.nombre,
-                restarTaras: producto.restarTaras || false,
-              }));
-            }),
+            productos: productosFiltrados,
             // Agregar los kilos crudos
             kilosCrudos: data.kilosCrudos || {}
           };
@@ -1469,10 +1559,39 @@ export default {
           this.mostrarModalNota || this.mostrarModalAlt || 
           this.mostrarModalNombreAlternativo || this.mostrarModalNuevoCliente) return;
 
-      // Usar debounce para evitar guardados excesivos
-      if (!this.debouncedSave) {
-        this.debouncedSave = debounce(async () => {
+      // Verificar si el SaveManager está inicializado
+      if (!this.saveManager) {
+        console.warn('[guardarCambiosEnTiempoReal] SaveManager no inicializado');
+        return;
+      }
+
+      // Crear una función de guardado que será ejecutada por el SaveManager
+      const operacionGuardado = async () => {
           try {
+            const hayClientesModificados = Object.keys(this.clientesModificados || {}).length > 0;
+            const hayBasicosModificados = !!(this.fechaModificada || this.cargaConModificada);
+            if (!hayClientesModificados && !hayBasicosModificados) {
+              return;
+            }
+
+            // Solo incluir clientes con productos que tengan medida Y tipo (evitar productos vacíos)
+            const clientesConProductosCompletos = {};
+            Object.keys(this.clientesModificados || {}).forEach(clienteId => {
+              const productos = this.productosPorCliente[clienteId] || [];
+              const productosCompletos = productos.filter(p => 
+                p.medida && p.medida.trim() !== '' && 
+                p.tipo && p.tipo.trim() !== ''
+              );
+              if (productosCompletos.length > 0) {
+                clientesConProductosCompletos[clienteId] = true;
+              }
+            });
+
+            // Si no hay clientes con productos completos ni cambios básicos, no guardar
+            if (Object.keys(clientesConProductosCompletos).length === 0 && !hayBasicosModificados) {
+              console.log('[AUTO-SAVE] No hay productos completos ni cambios básicos para guardar');
+              return;
+            }
             // Guardado incremental por campos para reducir colisiones
             const db = getFirestore();
             const embarqueRef = doc(db, "embarques", this.embarqueId);
@@ -1488,10 +1607,20 @@ export default {
 
               Object.entries(this.productosPorCliente).forEach(([clienteId, productos]) => {
                 if (!this.clientesModificados[clienteId]) return;
+                
+                // Filtrar solo productos completos (con medida y tipo) para el guardado
+                const productosCompletos = productos.filter(p => 
+                  p.medida && p.medida.trim() !== '' && 
+                  p.tipo && p.tipo.trim() !== ''
+                );
+                
+                // Si no hay productos completos, mantener los existentes del servidor
+                const productosParaGuardar = productosCompletos.length > 0 ? productosCompletos : productos;
+                
                 mergedClientes.set(String(clienteId), {
                   id: clienteId,
                   nombre: this.obtenerNombreCliente(clienteId),
-                  productos: JSON.parse(JSON.stringify(productos)).map(p => ({
+                  productos: JSON.parse(JSON.stringify(productosParaGuardar)).map(p => ({
                     ...p,
                     restarTaras: p.restarTaras || false,
                     noSumarKilos: p.noSumarKilos || false
@@ -1521,15 +1650,57 @@ export default {
 
             // limpiar marcas de modificación tras un guardado exitoso
             this.clientesModificados = {};
+            this.fechaModificada = false;
+            this.cargaConModificada = false;
+            // Limpiar lista de productos eliminados localmente después del guardado exitoso
+            if (this.productosEliminadosLocalmente) {
+              console.log('[guardarCambiosEnTiempoReal] Limpiando lista de productos eliminados localmente');
+              this.productosEliminadosLocalmente.clear();
+            }
+            // Reiniciar backoff si veníamos de errores
+            this.autoSaveBackoffMs = 0;
+            this.autoSaveDisabledUntil = 0;
             console.log('Cambios guardados automáticamente:', new Date().toLocaleString());
             this.$emit('guardado-automatico');
           } catch (error) {
             console.error("Error al guardar automáticamente:", error);
+            const mensaje = (error && (error.message || error.code || '')) || '';
+            const esCuota = /quota/i.test(mensaje) || /resource[-_ ]?exhausted/i.test(mensaje);
+            if (esCuota) {
+              // Aplicar backoff exponencial para no saturar
+              this.autoSaveBackoffMs = Math.min(this.autoSaveBackoffMs > 0 ? this.autoSaveBackoffMs * 2 : 5000, 60000);
+              this.autoSaveDisabledUntil = Date.now() + this.autoSaveBackoffMs;
+              if (!this.lastAutoSaveQuotaAlert) {
+                this.lastAutoSaveQuotaAlert = true;
+                try {
+                  alert('Se alcanzó la cuota de Firebase. Se pausará el auto-guardado temporalmente y se reintentará automáticamente. Tus cambios locales están guardados.');
+                } catch (_) {}
+                // Volver a permitir mostrar alerta después de un tiempo
+                setTimeout(() => { this.lastAutoSaveQuotaAlert = false; }, 60000);
+              }
+              // Programar reintento automático después del backoff incluso si no hay nuevas ediciones
+              setTimeout(() => {
+                this.guardarCambiosEnTiempoReal();
+              }, this.autoSaveBackoffMs + 200);
+            }
           }
-        }, 1000); // Esperar 1 segundo entre guardados
-      }
-
-      this.debouncedSave();
+      };
+      
+      // Programar el guardado usando el SaveManager
+      // El SaveManager manejará automáticamente el rate limiting, reintentos y backoff
+      const priority = this.fechaModificada || this.cargaConModificada ? 'high' : 'normal';
+      
+      this.saveManager.scheduleSave(
+        `embarque-${this.embarqueId}`, // Clave única para esta operación
+        operacionGuardado,
+        {
+          priority: priority,
+          merge: true, // Fusionar con operaciones pendientes del mismo embarque
+          immediate: false // No ejecutar inmediatamente, usar el sistema de cola
+        }
+      ).catch(error => {
+        console.error('[guardarCambiosEnTiempoReal] Error al programar guardado:', error);
+      });
     },
 
     async guardarEmbarque() {
@@ -2985,8 +3156,16 @@ export default {
         this.undoStack.push(JSON.stringify(nuevoValor));
         this.redoStack = [];
 
-        // Llamar al método de guardado automático con debounce
-        this.guardarCambiosEnTiempoReal();
+        // Solo disparar auto-guardado si hay productos con medida y tipo (evitar productos vacíos)
+        const hayProductosCompletos = (nuevoValor.productos || []).some(p => 
+          p.medida && p.medida.trim() !== '' && 
+          p.tipo && p.tipo.trim() !== ''
+        );
+        
+        if (hayProductosCompletos || nuevoValor.fecha || nuevoValor.cargaCon) {
+          // Llamar al método de guardado automático con debounce
+          this.guardarCambiosEnTiempoReal();
+        }
       },
       deep: true
     },
@@ -3011,6 +3190,9 @@ export default {
         console.log(`[LOG] Watcher de fecha disparado. Nuevo valor: ${newVal}, Valor antiguo: ${oldVal}`);
         if (!this.embarqueId) {
           this.triggerGuardadoInicial();
+        } else {
+          this.fechaModificada = true;
+          this.guardarCambiosEnTiempoReal();
         }
       }
     },
@@ -3019,6 +3201,9 @@ export default {
         console.log(`[LOG] Watcher de cargaCon disparado. Nuevo valor: ${newVal}, Valor antiguo: ${oldVal}`);
         if (!this.embarqueId) {
           this.triggerGuardadoInicial();
+        } else {
+          this.cargaConModificada = true;
+          this.guardarCambiosEnTiempoReal();
         }
       }
     }
@@ -3026,6 +3211,22 @@ export default {
 
   async created() {
     console.log('[LOG] Hook "created" de NuevoEmbarque.');
+    
+    // Inicializar el SaveManager
+    this.saveManager = getSaveManager();
+    
+    // Configurar listeners del SaveManager para logging y notificaciones
+    this.saveManager.addListener('quota-error', (data) => {
+      console.warn('[SaveManager] Error de cuota detectado:', data);
+      const minutos = Math.ceil(data.resetIn / 60000);
+      this.mostrarError(`Se ha alcanzado el límite de operaciones. Los cambios se guardarán automáticamente en ${minutos} minuto(s).`);
+    });
+    
+    this.saveManager.addListener('save-failed', (data) => {
+      console.error('[SaveManager] Fallo al guardar después de múltiples intentos:', data);
+      this.mostrarError('No se pudieron guardar algunos cambios. Por favor, recarga la página e intenta de nuevo.');
+    });
+    
     // Cargar configuración de medidas
     this.cargarMedidasConfiguracion();
     
@@ -3061,9 +3262,17 @@ export default {
       this.unsubscribe();
     }
 
-    // Limpiar debounce del guardado automático
+    // Limpiar debounce del guardado automático (DEPRECATED)
     if (this.debouncedSave && this.debouncedSave.cancel) {
       this.debouncedSave.cancel();
+    }
+    
+    // Limpiar el SaveManager
+    if (this.saveManager) {
+      // Cancelar todas las operaciones pendientes antes de destruir
+      this.saveManager.cancelAll();
+      // No necesitamos llamar a destroy() ya que usamos un singleton
+      this.saveManager = null;
     }
 
     // Remover los event listeners cuando el componente se destruye
