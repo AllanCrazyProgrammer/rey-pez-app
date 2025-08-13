@@ -554,29 +554,16 @@ export default {
             totalPrestado: 0,
             totalAbonado: 0,
             saldoPendiente: 0,
-            prestamos: [],
-            abonos: []
+            prestamos: []
           });
         }
         
         const cuenta = cuentasMap.get(prestamo.despicadoraId);
         cuenta.totalPrestado += prestamo.montoInicial;
         cuenta.prestamos.push(prestamo);
-        
-        // Cargar abonos para este préstamo
-        try {
-          const abonosSnapshot = await getDocs(
-            collection(db, 'prestamosDespicadoras', prestamo.id, 'abonos')
-          );
-          
-          abonosSnapshot.forEach(doc => {
-            const abono = { id: doc.id, prestamoId: prestamo.id, ...doc.data() };
-            cuenta.abonos.push(abono);
-            cuenta.totalAbonado += abono.monto;
-          });
-        } catch (error) {
-          console.error(`Error al cargar abonos para préstamo ${prestamo.id}:`, error);
-        }
+        const saldoPrestamo = prestamo.saldoPendiente || 0;
+        const abonadoPrestamo = (prestamo.montoInicial || 0) - saldoPrestamo;
+        cuenta.totalAbonado += abonadoPrestamo;
       }
       
       // Calcular saldo pendiente y porcentaje pagado
@@ -681,10 +668,7 @@ export default {
     
     async verHistorial(cuenta) {
       this.cuentaSeleccionada = cuenta;
-      
-      // Combinar préstamos y abonos en un solo historial ordenado por fecha
       const historial = [];
-      
       // Agregar préstamos
       cuenta.prestamos.forEach(prestamo => {
         historial.push({
@@ -696,25 +680,29 @@ export default {
           id: prestamo.id
         });
       });
-      
-      // Agregar abonos
-      cuenta.abonos.forEach(abono => {
-        historial.push({
-          tipo: 'abono',
-          fecha: abono.fecha,
-          fechaCreacion: abono.fechaCreacion,
-          descripcion: abono.descripcion,
-          monto: abono.monto,
-          id: abono.id,
-          prestamoId: abono.prestamoId
+      // Cargar abonos on-demand para los préstamos de la cuenta
+      try {
+        const abonosPorPrestamo = await Promise.all(
+          cuenta.prestamos.map(async (prestamo) => {
+            const snap = await getDocs(collection(db, 'prestamosDespicadoras', prestamo.id, 'abonos'));
+            return snap.docs.map(d => ({ id: d.id, prestamoId: prestamo.id, ...d.data() }));
+          })
+        );
+        abonosPorPrestamo.flat().forEach(abono => {
+          historial.push({
+            tipo: 'abono',
+            fecha: abono.fecha,
+            fechaCreacion: abono.fechaCreacion,
+            descripcion: abono.descripcion,
+            monto: abono.monto,
+            id: abono.id,
+            prestamoId: abono.prestamoId
+          });
         });
-      });
-      
-      // Ordenar por fecha de creación (más reciente primero)
-      this.historialCompleto = historial.sort((a, b) => {
-        return new Date(b.fechaCreacion) - new Date(a.fechaCreacion);
-      });
-      
+      } catch (error) {
+        console.error('Error al cargar abonos para historial: ', error);
+      }
+      this.historialCompleto = historial.sort((a, b) => new Date(b.fechaCreacion) - new Date(a.fechaCreacion));
       this.showHistorialModal = true;
     },
     
