@@ -147,7 +147,10 @@
                 <div v-for="(tara, taraIndex) in producto.taras" :key="taraIndex" class="input-group">
                     <input v-model.number="producto.taras[taraIndex]" type="tel" class="form-control tara-input"
                         placeholder="Tara" :size="String(producto.taras[taraIndex] || '').length || 1"
-                        @focus="$event.target.select()" :disabled="embarqueBloqueado">
+                        @focus="onTaraFocus(taraIndex, $event)" 
+                        @blur="onTaraBlur(taraIndex)"
+                        :disabled="embarqueBloqueado"
+                        @input="onTaraInput(taraIndex)">
                     <button type="button" @click="eliminarTara(taraIndex)" class="btn btn-danger btn-sm"
                         :disabled="embarqueBloqueado">-</button>
                 </div>
@@ -173,7 +176,10 @@
                 <div v-for="(kilo, kiloIndex) in producto.kilos" :key="kiloIndex" class="input-group">
                     <input v-model.number="producto.kilos[kiloIndex]" type="tel" class="form-control kilo-input"
                         placeholder="Kilos" :size="String(producto.kilos[kiloIndex] || '').length || 1"
-                        @focus="$event.target.select()" :disabled="embarqueBloqueado" @input="actualizarProducto">
+                        @focus="onKiloFocus(kiloIndex, $event)" 
+                        @blur="onKiloBlur(kiloIndex)"
+                        :disabled="embarqueBloqueado" 
+                        @input="onKiloInput(kiloIndex)">
                 </div>
                 <div style="height: 38px"></div>
                 <div class="total">Total: {{ totalKilos }}</div>
@@ -421,6 +427,49 @@ export default {
         // Método para actualizar el componente padre
         actualizarProducto() {
             this.$emit('update:producto', this.producto);
+        },
+
+        // Métodos para manejar edición de kilos
+        onKiloFocus(kiloIndex, event) {
+            event.target.select();
+            this.$emit('marcar-campo-edicion', { 
+                productoId: this.producto.id, 
+                campo: `kilos-${kiloIndex}` 
+            });
+        },
+
+        onKiloBlur(kiloIndex) {
+            this.$emit('desmarcar-campo-edicion', { 
+                productoId: this.producto.id, 
+                campo: `kilos-${kiloIndex}` 
+            });
+            this.actualizarProducto();
+        },
+
+        onKiloInput(kiloIndex) {
+            // No llamar actualizarProducto inmediatamente para evitar guardado frecuente
+            // Solo actualizar cuando el usuario termine de escribir (onBlur)
+        },
+
+        // Métodos para manejar edición de taras
+        onTaraFocus(taraIndex, event) {
+            event.target.select();
+            this.$emit('marcar-campo-edicion', { 
+                productoId: this.producto.id, 
+                campo: `taras-${taraIndex}` 
+            });
+        },
+
+        onTaraBlur(taraIndex) {
+            this.$emit('desmarcar-campo-edicion', { 
+                productoId: this.producto.id, 
+                campo: `taras-${taraIndex}` 
+            });
+            this.actualizarProducto();
+        },
+
+        onTaraInput(taraIndex) {
+            // No llamar actualizarProducto inmediatamente
         },
 
         // Método para manejar el clic en el nombre para abrir el modal

@@ -98,6 +98,8 @@
           @incluirPrecios-change="handleIncluirPreciosChange"
           @cuentaEnPdf-change="handleCuentaEnPdfChange"
           @sumarKgCatarro-change="handleSumarKgCatarroChange"
+          @marcar-campo-edicion="marcarCampoEnEdicion"
+          @desmarcar-campo-edicion="desmarcarCampoEnEdicion"
           @eliminar-cliente="eliminarCliente" 
           @eliminar-producto="eliminarProducto" 
           @eliminar-crudo="eliminarCrudo"
@@ -345,6 +347,7 @@ export default {
       productosEliminadosLocalmente: new Set(), // Set para rastrear productos eliminados localmente
       productosNuevosPendientes: new Map(), // Map para rastrear productos nuevos pendientes de sincronización
       agregandoProducto: false, // Bandera para indicar cuando estamos agregando un producto
+      camposEnEdicion: new Set(), // Set para rastrear qué campos están siendo editados activamente
       // Control de backoff para auto-guardado cuando hay errores de cuota
       autoSaveBackoffMs: 0,
       autoSaveDisabledUntil: 0,
@@ -511,6 +514,95 @@ export default {
         // Fallback a console.log
         console.log('[INFO]', mensaje);
       }
+    },
+
+    // Métodos para manejar campos en edición
+    marcarCampoEnEdicion(productoId, campo) {
+      const clave = `${productoId}-${campo}`;
+      this.camposEnEdicion.add(clave);
+      console.log('[EDICION] Campo marcado como en edición:', clave);
+    },
+
+    desmarcarCampoEnEdicion(productoId, campo) {
+      const clave = `${productoId}-${campo}`;
+      this.camposEnEdicion.delete(clave);
+      console.log('[EDICION] Campo desmarcado de edición:', clave);
+    },
+
+    esCampoEnEdicion(productoId, campo) {
+      const clave = `${productoId}-${campo}`;
+      return this.camposEnEdicion.has(clave);
+    },
+
+    // Método para hacer merge de productos preservando campos en edición
+    mergeProductosConCamposEnEdicion(productosServidor, productosFiltrados) {
+      const productosLocales = this.embarque.productos || [];
+      const productosFinales = [];
+
+      // Primero, agregar productos del servidor, pero preservando campos en edición
+      productosFiltrados.forEach(productoServidor => {
+        const productoLocal = productosLocales.find(p => p.id === productoServidor.id);
+        
+        if (!productoLocal) {
+          // Producto no existe localmente, usar el del servidor
+          productosFinales.push(productoServidor);
+          return;
+        }
+
+        // Hacer merge del producto preservando campos en edición
+        const productoMergeado = { ...productoServidor };
+
+        // Verificar si hay campos de kilos en edición
+        if (productoLocal.kilos && Array.isArray(productoLocal.kilos)) {
+          productoLocal.kilos.forEach((kilo, index) => {
+            if (this.esCampoEnEdicion(productoServidor.id, `kilos-${index}`)) {
+              console.log(`[MERGE] Preservando kilo en edición: ${productoServidor.id}-kilos-${index}`);
+              if (!productoMergeado.kilos) productoMergeado.kilos = [];
+              productoMergeado.kilos[index] = kilo;
+            }
+          });
+        }
+
+        // Verificar si hay campos de taras en edición
+        if (productoLocal.taras && Array.isArray(productoLocal.taras)) {
+          productoLocal.taras.forEach((tara, index) => {
+            if (this.esCampoEnEdicion(productoServidor.id, `taras-${index}`)) {
+              console.log(`[MERGE] Preservando tara en edición: ${productoServidor.id}-taras-${index}`);
+              if (!productoMergeado.taras) productoMergeado.taras = [];
+              productoMergeado.taras[index] = tara;
+            }
+          });
+        }
+
+        productosFinales.push(productoMergeado);
+      });
+
+      // Preservar productos nuevos pendientes de sincronización
+      const productosNuevosAPreservar = [];
+      if (this.productosNuevosPendientes && this.productosNuevosPendientes.size > 0) {
+        this.productosNuevosPendientes.forEach((producto, id) => {
+          const existeEnServidor = productosServidor.some(p => p.id === id);
+          if (!existeEnServidor) {
+            productosNuevosAPreservar.push(producto);
+          } else {
+            this.productosNuevosPendientes.delete(id);
+          }
+        });
+      }
+
+      // También preservar productos locales con UUID no sincronizados
+      productosLocales.forEach(productoLocal => {
+        if (esUUIDValido(productoLocal.id) && 
+            !productosServidor.some(p => p.id === productoLocal.id) &&
+            !productosNuevosAPreservar.some(p => p.id === productoLocal.id)) {
+          productosNuevosAPreservar.push(productoLocal);
+          if (!this.productosNuevosPendientes.has(productoLocal.id)) {
+            this.productosNuevosPendientes.set(productoLocal.id, { ...productoLocal });
+          }
+        }
+      });
+
+      return [...productosFinales, ...productosNuevosAPreservar];
     },
     
     async triggerGuardadoInicial() {
@@ -1137,6 +1229,10 @@ export default {
           console.log('[cargarEmbarque] Limpiando lista de productos nuevos pendientes');
           this.productosNuevosPendientes.clear();
         }
+        if (this.camposEnEdicion && this.camposEnEdicion.size > 0) {
+          console.log('[cargarEmbarque] Limpiando campos en edición');
+          this.camposEnEdicion.clear();
+        }
         this.resetearEmbarque();
         return;
       }
@@ -1150,6 +1246,10 @@ export default {
       if (this.productosNuevosPendientes && this.productosNuevosPendientes.size > 0) {
         console.log('[cargarEmbarque] Limpiando lista de productos nuevos pendientes');
         this.productosNuevosPendientes.clear();
+      }
+      if (this.camposEnEdicion && this.camposEnEdicion.size > 0) {
+        console.log('[cargarEmbarque] Limpiando campos en edición');
+        this.camposEnEdicion.clear();
       }
 
       // Activar bandera para evitar watchers durante la carga
@@ -1278,6 +1378,10 @@ export default {
             console.log('[onSnapshot] Agregando producto en proceso, preservando productos locales');
             // Mantener los productos locales actuales sin cambios
             productosFinales = this.embarque.productos || [];
+          } else if (this.camposEnEdicion && this.camposEnEdicion.size > 0) {
+            console.log('[onSnapshot] Hay campos en edición, mergear cuidadosamente');
+            // Hacer merge inteligente preservando campos en edición
+            productosFinales = this.mergeProductosConCamposEnEdicion(productosDesdeServidor, productosFiltrados);
           } else {
             // Preservar productos nuevos pendientes de sincronización
             const productosNuevosAPreservar = [];
@@ -1755,6 +1859,7 @@ export default {
               console.log('[guardarCambiosEnTiempoReal] Limpiando lista de productos nuevos pendientes');
               this.productosNuevosPendientes.clear();
             }
+            // Los campos en edición NO se limpian aquí porque el usuario podría seguir escribiendo
             // Reiniciar backoff si veníamos de errores
             this.autoSaveBackoffMs = 0;
             this.autoSaveDisabledUntil = 0;

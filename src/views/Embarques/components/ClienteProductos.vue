@@ -112,7 +112,9 @@
                 @mostrar-modal-nota="$emit('mostrar-modal-nota', $event)"
                 @mostrar-modal-nombre-alternativo="$emit('mostrar-modal-nombre-alternativo', $event)"
                 @mostrar-modal-alt="$emit('mostrar-modal-alt', $event)" @seleccionar-medida="seleccionarMedida"
-                @activar-incluir-precios-catarro="activarIncluirPreciosCatarro" />
+                @activar-incluir-precios-catarro="activarIncluirPreciosCatarro"
+                @marcar-campo-edicion="$emit('marcar-campo-edicion', $event.productoId, $event.campo)"
+                @desmarcar-campo-edicion="$emit('desmarcar-campo-edicion', $event.productoId, $event.campo)" />
 
             <!-- Lista de crudos -->
             <CrudoItem v-for="(crudo, index) in crudos" :key="'crudo-' + index" :crudo="crudo"
