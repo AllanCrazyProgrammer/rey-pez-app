@@ -28,19 +28,28 @@ El componente `SaveStatusIndicator` proporciona retroalimentación visual en tie
 - **Alertas de error**: Notifica problemas de guardado
 - **Indicador de cuota**: Informa cuando se alcanza el límite de operaciones
 
-## Configuración Actual
+## Configuración Actual (Optimizada para Guardado Rápido)
 
 ```javascript
 {
-  minDebounceTime: 10000,    // 10 segundos mínimo entre guardados
-  maxDebounceTime: 60000,    // 1 minuto máximo de espera
-  baseBackoffTime: 5000,     // 5 segundos de backoff inicial
-  maxBackoffTime: 300000,    // 5 minutos de backoff máximo
+  minDebounceTime: 2000,     // 2 segundos mínimo entre guardados - REDUCIDO para mayor rapidez
+  maxDebounceTime: 30000,    // 30 segundos máximo de espera - REDUCIDO
+  baseBackoffTime: 3000,     // 3 segundos de backoff inicial - REDUCIDO
+  maxBackoffTime: 120000,    // 2 minutos de backoff máximo - REDUCIDO
   maxRetries: 5,             // Máximo 5 reintentos
   batchSize: 5,              // 5 operaciones por lote
-  quotaResetTime: 60000      // 1 minuto para reset de cuota
+  quotaResetTime: 45000      // 45 segundos para reset de cuota - REDUCIDO
 }
 ```
+
+### Guardado Forzado al Cambiar de Ruta
+
+El sistema ahora incluye guardado automático cuando:
+- El usuario navega a otra página (como Rendimientos)
+- Se cierra la pestaña o ventana del navegador
+- Se cambia de ruta dentro de la aplicación
+
+Método disponible: `saveManager.forceProcessAll()` - Procesa todas las operaciones pendientes inmediatamente.
 
 ## Uso en NuevoEmbarque.vue
 

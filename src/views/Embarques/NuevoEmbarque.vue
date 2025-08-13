@@ -343,6 +343,8 @@ export default {
       fechaModificada: false,
       cargaConModificada: false,
       productosEliminadosLocalmente: new Set(), // Set para rastrear productos eliminados localmente
+      productosNuevosPendientes: new Map(), // Map para rastrear productos nuevos pendientes de sincronización
+      agregandoProducto: false, // Bandera para indicar cuando estamos agregando un producto
       // Control de backoff para auto-guardado cuando hay errores de cuota
       autoSaveBackoffMs: 0,
       autoSaveDisabledUntil: 0,
@@ -500,6 +502,17 @@ export default {
       }
     },
     
+    // Método para mostrar mensajes informativos al usuario
+    mostrarMensaje(mensaje) {
+      // Usar el sistema de notificaciones si está disponible
+      if (this.$toast) {
+        this.$toast.info(mensaje, { duration: 3000 });
+      } else {
+        // Fallback a console.log
+        console.log('[INFO]', mensaje);
+      }
+    },
+    
     async triggerGuardadoInicial() {
       console.log('[LOG] Se activó triggerGuardadoInicial.');
       // Solo proceder si es un nuevo embarque sin ID
@@ -578,6 +591,9 @@ export default {
     },
 
     agregarProducto(clienteId) {
+      // Activar bandera de agregando producto
+      this.agregandoProducto = true;
+      
       // --- INICIO: Verificación anti-duplicados ---
       const existeProductoNuevoVacio = this.embarque.productos.some(p => 
           p.clienteId === clienteId && 
@@ -601,6 +617,7 @@ export default {
                  inputExistente.focus();
              }
           });
+          this.agregandoProducto = false; // Desactivar bandera
           return; // Detener la ejecución para no agregar duplicado
       }
       // --- FIN: Verificación anti-duplicados ---
@@ -620,8 +637,21 @@ export default {
         this.productosEliminadosLocalmente.delete(nuevoProducto.id);
       }
 
+      // Marcar el producto como nuevo pendiente de sincronización ANTES de agregarlo
+      if (!this.productosNuevosPendientes) {
+        this.productosNuevosPendientes = new Map();
+      }
+      
+      // Clonar el producto para evitar referencias mutables
+      const productoParaPendientes = { ...nuevoProducto };
+      this.productosNuevosPendientes.set(nuevoProducto.id, productoParaPendientes);
+      console.log('[AGREGAR-PRODUCTO] Producto marcado como nuevo pendiente:', nuevoProducto.id);
+
       // Agregar directamente al embarque.productos
       this.embarque.productos.push(nuevoProducto);
+      
+      // Forzar actualización de la vista para asegurar que el producto sea visible
+      this.$forceUpdate();
 
       // NO crear crudos automáticamente - el usuario los agrega manualmente cuando los necesite
 
@@ -645,6 +675,11 @@ export default {
         if (nuevoInput) {
           nuevoInput.focus();
         }
+        
+        // Desactivar bandera después de agregar el producto completamente
+        setTimeout(() => {
+          this.agregandoProducto = false;
+        }, 200);
       });
     },
 
@@ -1097,6 +1132,11 @@ export default {
           console.log('[cargarEmbarque] Limpiando lista de productos eliminados localmente');
           this.productosEliminadosLocalmente.clear();
         }
+        // Limpiar lista de productos nuevos pendientes para nuevo embarque
+        if (this.productosNuevosPendientes && this.productosNuevosPendientes.size > 0) {
+          console.log('[cargarEmbarque] Limpiando lista de productos nuevos pendientes');
+          this.productosNuevosPendientes.clear();
+        }
         this.resetearEmbarque();
         return;
       }
@@ -1105,6 +1145,11 @@ export default {
       if (this.productosEliminadosLocalmente && this.productosEliminadosLocalmente.size > 0) {
         console.log('[cargarEmbarque] Limpiando lista de productos eliminados localmente');
         this.productosEliminadosLocalmente.clear();
+      }
+      // Limpiar lista de productos nuevos pendientes al cargar un embarque diferente
+      if (this.productosNuevosPendientes && this.productosNuevosPendientes.size > 0) {
+        console.log('[cargarEmbarque] Limpiando lista de productos nuevos pendientes');
+        this.productosNuevosPendientes.clear();
       }
 
       // Activar bandera para evitar watchers durante la carga
@@ -1226,10 +1271,58 @@ export default {
             );
           }
           
+          // Determinar qué productos usar basado en si estamos agregando uno nuevo
+          let productosFinales;
+          
+          if (this.agregandoProducto) {
+            console.log('[onSnapshot] Agregando producto en proceso, preservando productos locales');
+            // Mantener los productos locales actuales sin cambios
+            productosFinales = this.embarque.productos || [];
+          } else {
+            // Preservar productos nuevos pendientes de sincronización
+            const productosNuevosAPreservar = [];
+            if (this.productosNuevosPendientes && this.productosNuevosPendientes.size > 0) {
+              console.log('[onSnapshot] Preservando productos nuevos pendientes:', this.productosNuevosPendientes.size);
+              
+              // Verificar qué productos nuevos ya están en el servidor
+              this.productosNuevosPendientes.forEach((producto, id) => {
+                const existeEnServidor = productosDesdeServidor.some(p => p.id === id);
+                if (!existeEnServidor) {
+                  // El producto aún no está en el servidor, preservarlo
+                  productosNuevosAPreservar.push(producto);
+                  console.log('[onSnapshot] Preservando producto nuevo:', id);
+                } else {
+                  // El producto ya está sincronizado, removerlo de pendientes
+                  this.productosNuevosPendientes.delete(id);
+                  console.log('[onSnapshot] Producto sincronizado, removiendo de pendientes:', id);
+                }
+              });
+            }
+            
+            // También preservar productos locales que no tienen ID de servidor válido
+            const productosLocalesActuales = this.embarque.productos || [];
+            productosLocalesActuales.forEach(productoLocal => {
+              // Si es un producto con UUID (nuevo) y no está en el servidor ni en pendientes
+              if (esUUIDValido(productoLocal.id) && 
+                  !productosDesdeServidor.some(p => p.id === productoLocal.id) &&
+                  !productosNuevosAPreservar.some(p => p.id === productoLocal.id)) {
+                console.log('[onSnapshot] Preservando producto local no sincronizado:', productoLocal.id);
+                productosNuevosAPreservar.push(productoLocal);
+                // Agregarlo también a pendientes si no está
+                if (!this.productosNuevosPendientes.has(productoLocal.id)) {
+                  this.productosNuevosPendientes.set(productoLocal.id, { ...productoLocal });
+                }
+              }
+            });
+            
+            // Combinar productos del servidor (filtrados) con productos nuevos pendientes
+            productosFinales = [...productosFiltrados, ...productosNuevosAPreservar];
+          }
+          
           this.embarque = {
             fecha: fecha.toISOString().split('T')[0],
             cargaCon: data.cargaCon || '', // Cargamos el valor de cargaCon
-            productos: productosFiltrados,
+            productos: productosFinales,
             // Agregar los kilos crudos
             kilosCrudos: data.kilosCrudos || {}
           };
@@ -1656,6 +1749,11 @@ export default {
             if (this.productosEliminadosLocalmente) {
               console.log('[guardarCambiosEnTiempoReal] Limpiando lista de productos eliminados localmente');
               this.productosEliminadosLocalmente.clear();
+            }
+            // Limpiar lista de productos nuevos pendientes después del guardado exitoso
+            if (this.productosNuevosPendientes) {
+              console.log('[guardarCambiosEnTiempoReal] Limpiando lista de productos nuevos pendientes');
+              this.productosNuevosPendientes.clear();
             }
             // Reiniciar backoff si veníamos de errores
             this.autoSaveBackoffMs = 0;
@@ -3007,6 +3105,20 @@ export default {
         localStorage.setItem('ultimoEmbarqueId', this.embarqueId);
         localStorage.setItem('ultimaRuta', window.location.pathname);
       }
+      
+      // Intentar forzar guardado si hay cambios pendientes
+      if (this.saveManager && this.guardadoAutomaticoActivo) {
+        const status = this.saveManager.getStatus();
+        if (status.pendingOperations > 0) {
+          // Intentar guardar de forma síncrona (navegadores modernos pueden ignorar esto)
+          this.saveManager.forceProcessAll();
+          
+          // Mostrar mensaje de confirmación al usuario
+          event.preventDefault();
+          event.returnValue = 'Hay cambios pendientes de guardar. ¿Estás seguro de que quieres salir?';
+          return event.returnValue;
+        }
+      }
     },
     // --- FIN: Mover estas funciones dentro de methods ---
 
@@ -3227,6 +3339,9 @@ export default {
       this.mostrarError('No se pudieron guardar algunos cambios. Por favor, recarga la página e intenta de nuevo.');
     });
     
+    // Registrar el listener para cuando se cierra la pestaña/ventana
+    window.addEventListener('beforeunload', this.handleBeforeUnload);
+    
     // Cargar configuración de medidas
     this.cargarMedidasConfiguracion();
     
@@ -3256,7 +3371,56 @@ export default {
     await this.cargarPreciosActuales();
   },
 
+  async beforeRouteLeave(to, from, next) {
+    // Guardar cambios pendientes antes de cambiar de ruta
+    if (this.saveManager && this.embarqueId && this.guardadoAutomaticoActivo) {
+      const status = this.saveManager.getStatus();
+      if (status.pendingOperations > 0) {
+        console.log('[NuevoEmbarque] Guardando cambios pendientes antes de cambiar de ruta...');
+        
+        try {
+          // Mostrar mensaje al usuario
+          this.mostrarMensaje('Guardando cambios antes de salir...');
+          
+          // Forzar el guardado de todas las operaciones pendientes
+          await this.saveManager.forceProcessAll();
+          
+          console.log('[NuevoEmbarque] Cambios guardados exitosamente');
+          next();
+        } catch (error) {
+          console.error('[NuevoEmbarque] Error al guardar cambios:', error);
+          
+          // Preguntar al usuario si quiere salir sin guardar
+          const confirmacion = confirm('Hay cambios pendientes de guardar. ¿Deseas salir sin guardar?');
+          if (confirmacion) {
+            next();
+          } else {
+            next(false); // Cancelar la navegación
+          }
+        }
+      } else {
+        // No hay operaciones pendientes, continuar
+        next();
+      }
+    } else {
+      next();
+    }
+  },
+
   beforeDestroy() {
+    // Intentar forzar guardado de cambios pendientes antes de destruir
+    if (this.saveManager && this.embarqueId && this.guardadoAutomaticoActivo) {
+      const status = this.saveManager.getStatus();
+      if (status.pendingOperations > 0) {
+        console.log('[NuevoEmbarque] Forzando guardado antes de destruir componente');
+        
+        // Intentar guardar pero no bloquear la destrucción
+        this.saveManager.forceProcessAll().catch(error => {
+          console.error('[NuevoEmbarque] Error al forzar guardado en destrucción:', error);
+        });
+      }
+    }
+    
     // Cancelar la suscripción a los cambios en tiempo real
     if (this.unsubscribe) {
       this.unsubscribe();
@@ -3269,9 +3433,7 @@ export default {
     
     // Limpiar el SaveManager
     if (this.saveManager) {
-      // Cancelar todas las operaciones pendientes antes de destruir
-      this.saveManager.cancelAll();
-      // No necesitamos llamar a destroy() ya que usamos un singleton
+      // Ya intentamos guardar arriba, ahora solo limpiamos
       this.saveManager = null;
     }
 

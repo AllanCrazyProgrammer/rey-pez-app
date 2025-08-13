@@ -7,15 +7,15 @@ import { debounce } from 'lodash';
 
 class SaveManager {
   constructor() {
-    // Configuración de rate limiting
+    // Configuración de rate limiting - Optimizada para guardado más rápido
     this.config = {
-      minDebounceTime: 10000,      // Tiempo mínimo entre guardados (10 segundos)
-      maxDebounceTime: 60000,      // Tiempo máximo de espera (1 minuto)
-      baseBackoffTime: 5000,       // Tiempo base de backoff (5 segundos)
-      maxBackoffTime: 300000,      // Tiempo máximo de backoff (5 minutos)
+      minDebounceTime: 2000,       // Tiempo mínimo entre guardados (2 segundos) - REDUCIDO
+      maxDebounceTime: 30000,      // Tiempo máximo de espera (30 segundos) - REDUCIDO
+      baseBackoffTime: 3000,       // Tiempo base de backoff (3 segundos) - REDUCIDO
+      maxBackoffTime: 120000,      // Tiempo máximo de backoff (2 minutos) - REDUCIDO
       maxRetries: 5,               // Máximo número de reintentos
       batchSize: 5,                // Número máximo de operaciones por lote
-      quotaResetTime: 60000,       // Tiempo para resetear la cuota (1 minuto)
+      quotaResetTime: 45000,       // Tiempo para resetear la cuota (45 segundos) - REDUCIDO
     };
 
     // Estado interno
@@ -56,7 +56,8 @@ class SaveManager {
     const {
       priority = 'normal', // 'high', 'normal', 'low'
       merge = true,        // Si debe fusionarse con operaciones existentes
-      immediate = false    // Si debe intentar ejecutarse inmediatamente
+      immediate = false,   // Si debe intentar ejecutarse inmediatamente
+      force = false        // Si debe forzar el guardado ignorando debounce
     } = options;
 
     // Si la cuota está agotada y no es alta prioridad, rechazar
@@ -79,8 +80,13 @@ class SaveManager {
     // Notificar a los listeners
     this.notifyListeners('operation-scheduled', { key, priority });
 
-    // Si es inmediato y no estamos procesando, intentar ejecutar ahora
-    if (immediate && !this.isProcessing && !this.quotaExhausted) {
+    // Si es forzado o inmediato y no estamos procesando, intentar ejecutar ahora
+    if ((force || immediate) && !this.isProcessing && !this.quotaExhausted) {
+      // Si es forzado, cancelar el debounce actual y procesar todo
+      if (force) {
+        this.debouncedProcess.cancel();
+        return this.processPendingOperations();
+      }
       return this.processSingleOperation(key);
     }
 
@@ -408,6 +414,38 @@ class SaveManager {
         }
       });
     }
+  }
+
+  /**
+   * Fuerza el procesamiento inmediato de todas las operaciones pendientes
+   * Útil cuando el usuario está por cambiar de ruta o cerrar la página
+   */
+  async forceProcessAll() {
+    console.log('[SaveManager] Forzando procesamiento de todas las operaciones pendientes');
+    
+    // Cancelar el debounce actual
+    if (this.debouncedProcess) {
+      this.debouncedProcess.cancel();
+    }
+    
+    // Si hay operaciones pendientes, procesarlas inmediatamente
+    if (this.pendingOperations.size > 0) {
+      this.notifyListeners('force-save-start', { 
+        count: this.pendingOperations.size 
+      });
+      
+      try {
+        await this.processPendingOperations();
+        console.log('[SaveManager] Todas las operaciones forzadas completadas');
+        this.notifyListeners('force-save-complete', {});
+      } catch (error) {
+        console.error('[SaveManager] Error durante guardado forzado:', error);
+        this.notifyListeners('force-save-error', { error });
+        throw error;
+      }
+    }
+    
+    return Promise.resolve();
   }
 
   /**

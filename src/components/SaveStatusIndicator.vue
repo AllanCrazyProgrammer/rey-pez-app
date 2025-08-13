@@ -168,7 +168,10 @@ export default {
         ['quota-error', this.onQuotaError],
         ['quota-reset', this.onQuotaReset],
         ['batch-start', this.onBatchStart],
-        ['batch-complete', this.onBatchComplete]
+        ['batch-complete', this.onBatchComplete],
+        ['force-save-start', this.onForceSaveStart],
+        ['force-save-complete', this.onForceSaveComplete],
+        ['force-save-error', this.onForceSaveError]
       ];
       
       events.forEach(([event, handler]) => {
@@ -292,6 +295,35 @@ export default {
       } else {
         this.showStatus('success', '¡Todos los cambios guardados!', null, true, 3000);
       }
+    },
+    
+    onForceSaveStart(data) {
+      this.showStatus(
+        'saving', 
+        'Guardando cambios antes de salir...', 
+        `${data.count || 0} operación(es) pendientes`,
+        false
+      );
+    },
+    
+    onForceSaveComplete() {
+      this.showStatus(
+        'success', 
+        '¡Cambios guardados exitosamente!', 
+        'Puedes continuar navegando',
+        true,
+        2000
+      );
+    },
+    
+    onForceSaveError(data) {
+      this.showStatus(
+        'error', 
+        'Error al guardar cambios', 
+        'Algunos cambios podrían no haberse guardado',
+        true,
+        5000
+      );
     },
     
     showStatus(status, message, details = null, autoHide = false, hideDelay = 5000) {
