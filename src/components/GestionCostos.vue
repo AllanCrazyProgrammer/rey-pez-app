@@ -267,22 +267,27 @@ export default {
   },
 
   async created() {
+    console.log('[GestionCostos] Componente creado, iniciando carga...');
     await this.cargarEmbarque();
     await this.iniciarEscuchaPreciosGlobales();
     // Aplicar debounce al método guardarCostoExtra
     this.guardarCostoExtraDebounced = debounce(this.guardarCostoExtra, 500);
+    console.log('[GestionCostos] Inicialización completa');
   },
 
   methods: {
     async cargarEmbarque() {
       try {
+        console.log('[GestionCostos] Cargando embarque...');
         const db = getFirestore();
         const embarqueId = this.$route.params.id;
+        console.log('[GestionCostos] ID del embarque:', embarqueId);
         const embarqueRef = doc(db, 'embarques', embarqueId);
         const embarqueDoc = await getDoc(embarqueRef);
         
         if (embarqueDoc.exists()) {
           this.embarqueData = embarqueDoc.data();
+          console.log('[GestionCostos] Embarque cargado:', this.embarqueData);
           
           // Si el embarque no tiene fecha, establecer la fecha actual
           if (!this.embarqueData.fecha) {
@@ -461,27 +466,51 @@ export default {
         const db = getFirestore();
         const historialRef = collection(db, 'historial_costos');
         
+        console.log('[GestionCostos] Iniciando escucha de precios globales...');
+        
         this.unsubscribePreciosGlobales = onSnapshot(historialRef, (snapshot) => {
+          console.log('[GestionCostos] Snapshot recibido, documentos:', snapshot.size);
           const historialCompleto = [];
           
           // Recopilar todo el historial
           snapshot.forEach(doc => {
             const data = doc.data();
+            console.log('[GestionCostos] Documento encontrado:', doc.id, data);
             historialCompleto.push({
               ...data,
               id: doc.id
             });
           });
           
-          // Ordenar por fecha descendente
+          // Helper para convertir fecha (string | Date | Timestamp) → Date
+          const toDate = (value) => {
+            try {
+              if (!value) return null;
+              // Firestore Timestamp
+              if (value.toDate && typeof value.toDate === 'function') return value.toDate();
+              if (value.seconds) return new Date(value.seconds * 1000);
+              // String ISO o yyyy-mm-dd
+              if (typeof value === 'string') return new Date(value);
+              // Date nativo
+              if (value instanceof Date) return value;
+              return new Date(value);
+            } catch {
+              return null;
+            }
+          };
+
+          // Ordenar por fecha descendente usando conversión robusta
           historialCompleto.sort((a, b) => {
-            const fechaA = new Date(a.fecha);
-            const fechaB = new Date(b.fecha);
+            const fechaA = toDate(a.fecha) || toDate(a.timestamp) || new Date(0);
+            const fechaB = toDate(b.fecha) || toDate(b.timestamp) || new Date(0);
             return fechaB - fechaA;
           });
           
-          // Obtener la fecha del embarque
-          const fechaEmbarque = this.embarqueData?.fecha || new Date().toISOString().split('T')[0];
+          // Obtener la fecha del embarque (soporta string | Date | Timestamp)
+          const fechaEmbarqueRaw = this.embarqueData?.fecha || new Date();
+          const fechaEmb = toDate(fechaEmbarqueRaw) || new Date();
+          // Normalizar a 12:00 para evitar desfases horarios
+          fechaEmb.setHours(12, 0, 0, 0);
           
           // Obtener solo los costos válidos para la fecha del embarque
           const costosActuales = {};
@@ -490,9 +519,10 @@ export default {
           historialCompleto.forEach(entrada => {
             if (!medidasProcesadas.has(entrada.medida)) {
               // Verificar si la fecha del costo es válida para el embarque
-              const fechaCosto = new Date(entrada.fecha);
-              const fechaEmb = new Date(fechaEmbarque);
-              
+              const fechaCosto = toDate(entrada.fecha) || toDate(entrada.timestamp) || new Date(0);
+              // Normalizar igual que fechaEmb
+              fechaCosto.setHours(12, 0, 0, 0);
+
               if (fechaCosto <= fechaEmb && !entrada.eliminado && !entrada.medidaEliminada) {
                 costosActuales[entrada.medida] = {
                   costoBase: entrada.costoBase,
@@ -507,6 +537,8 @@ export default {
           
           // Actualizar costos registrados
           this.costosRegistrados = { ...costosActuales };
+          console.log('[GestionCostos] Costos registrados actualizados:', this.costosRegistrados);
+          console.log('[GestionCostos] Número de medidas registradas:', Object.keys(this.costosRegistrados).length);
           
           // Aplicar costos de medidas registradas si ya tenemos datos del embarque
           if (this.embarqueData) {
@@ -519,6 +551,8 @@ export default {
         console.error('Error al iniciar escucha de historial:', error);
       }
     },
+
+    // Métodos de diagnóstico eliminados
 
     abrirModalNuevoCosto() {
       this.mostrarModalNuevaMedida = true;
@@ -850,6 +884,7 @@ export default {
       if (!medidaEmbarque) return null;
       
       console.log(`🔍 Buscando costo para: "${medidaEmbarque}"`);
+      console.log(`📋 Costos registrados disponibles:`, Object.keys(this.costosRegistrados));
       
       // 1. Buscar coincidencia exacta primero
       if (this.costosRegistrados[medidaEmbarque]) {
@@ -1690,7 +1725,6 @@ export default {
 .btn-crear-medidas:hover {
   background-color: #27ae60;
 }
-
 .btn-sincronizar i, .btn-crear-medidas i {
   margin-right: 0;
 }

@@ -652,13 +652,12 @@ export default {
       this.embarque.productos = this.embarque.productos.filter(p => p.clienteId !== clienteId);
       this.embarque.productos = [...this.embarque.productos, ...productosAActualizar];
 
-      // Solo marcar como modificado si hay productos con medida y tipo
-      const tieneProductosCompletos = productosAActualizar.some(p => 
-        p.medida && p.medida.trim() !== '' && 
-        p.tipo && p.tipo.trim() !== ''
+      // Marcar como modificado si hay productos con medida válida (tipo opcional)
+      const tieneProductosConMedida = productosAActualizar.some(p => 
+        p.medida && p.medida.trim() !== ''
       );
       
-      if (tieneProductosCompletos) {
+      if (tieneProductosConMedida) {
         // Marcar cliente como modificado para merge transaccional
         this.$set(this.clientesModificados, clienteId, true);
         
@@ -1771,15 +1770,14 @@ export default {
               return;
             }
 
-            // Solo incluir clientes con productos que tengan medida Y tipo (evitar productos vacíos)
+            // Solo incluir clientes con productos que tengan medida válida (tipo opcional)
             const clientesConProductosCompletos = {};
             Object.keys(this.clientesModificados || {}).forEach(clienteId => {
               const productos = this.productosPorCliente[clienteId] || [];
-              const productosCompletos = productos.filter(p => 
-                p.medida && p.medida.trim() !== '' && 
-                p.tipo && p.tipo.trim() !== ''
+              const productosConMedida = productos.filter(p => 
+                p.medida && p.medida.trim() !== ''
               );
-              if (productosCompletos.length > 0) {
+              if (productosConMedida.length > 0) {
                 clientesConProductosCompletos[clienteId] = true;
               }
             });
@@ -1805,14 +1803,13 @@ export default {
               Object.entries(this.productosPorCliente).forEach(([clienteId, productos]) => {
                 if (!this.clientesModificados[clienteId]) return;
                 
-                // Filtrar solo productos completos (con medida y tipo) para el guardado
-                const productosCompletos = productos.filter(p => 
-                  p.medida && p.medida.trim() !== '' && 
-                  p.tipo && p.tipo.trim() !== ''
+                // Filtrar solo productos con medida válida para el guardado (tipo opcional)
+                const productosConMedida = productos.filter(p => 
+                  p.medida && p.medida.trim() !== ''
                 );
                 
-                // Si no hay productos completos, mantener los existentes del servidor
-                const productosParaGuardar = productosCompletos.length > 0 ? productosCompletos : productos;
+                // Si no hay productos con medida, mantener los existentes del servidor
+                const productosParaGuardar = productosConMedida.length > 0 ? productosConMedida : productos;
                 
                 mergedClientes.set(String(clienteId), {
                   id: clienteId,
@@ -2794,9 +2791,8 @@ export default {
         this.productoEditandoId = null;
       }, 200);
 
-      // Solo quitar la marca de edición si tiene tanto medida como tipo
-      // Permitir espacios en la validación
-      if (producto.medida && producto.medida.length > 0 && producto.tipo) {
+      // Quitar la marca de edición si tiene medida válida (tipo opcional)
+      if (producto.medida && producto.medida.length > 0) {
         producto.isEditing = false;
         producto.isNew = false;
       }
@@ -3373,13 +3369,12 @@ export default {
         this.undoStack.push(JSON.stringify(nuevoValor));
         this.redoStack = [];
 
-        // Solo disparar auto-guardado si hay productos con medida y tipo (evitar productos vacíos)
-        const hayProductosCompletos = (nuevoValor.productos || []).some(p => 
-          p.medida && p.medida.trim() !== '' && 
-          p.tipo && p.tipo.trim() !== ''
+        // Disparar auto-guardado si hay productos con medida válida (tipo opcional)
+        const hayProductosConMedida = (nuevoValor.productos || []).some(p => 
+          p.medida && p.medida.trim() !== ''
         );
         
-        if (hayProductosCompletos || nuevoValor.fecha || nuevoValor.cargaCon) {
+        if (hayProductosConMedida || nuevoValor.fecha || nuevoValor.cargaCon) {
           // Llamar al método de guardado automático con debounce
           this.guardarCambiosEnTiempoReal();
         }
