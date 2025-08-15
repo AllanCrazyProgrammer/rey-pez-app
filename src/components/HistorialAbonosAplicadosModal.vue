@@ -20,29 +20,33 @@
           </tr>
         </thead>
         <tbody>
-          <template v-for="h in historial">
-            <tr v-if="!(h.aplicaciones && h.aplicaciones.length)" :key="`single-${h.id}`">
-              <td>{{ formatearFecha(h.fechaCuenta) }}</td>
-              <td>{{ h.descripcion }}</td>
-              <td>${{ formatNumber(h.monto) }}</td>
-              <td>{{ formatearFechaHora(h.fechaAplicacion) }}</td>
-              <td>
-                <button class="btn-danger" @click="eliminarAbono(h)">Borrar</button>
-              </td>
-            </tr>
-            <tr v-else v-for="ap in h.aplicaciones" :key="ap.abonoId">
-              <td>{{ formatearFecha(ap.fechaCuenta || h.fechaOriginal) }}</td>
-              <td>{{ h.descripcion }}</td>
-              <td>${{ formatNumber(ap.montoAplicado) }}</td>
-              <td>{{ formatearFechaHora(h.fechaAplicacion) }}</td>
-              <td>
-                <button class="btn-danger" @click="eliminarAbonoAplicado(h, ap)">Borrar</button>
-              </td>
-            </tr>
-          </template>
+          <tr v-for="(h, index) in historial" :key="`row-${index}-${h.id}`">
+            <td v-if="h.esFila">{{ formatearFecha(h.aplicacionIndividual.fechaCuenta || h.fechaOriginal) }}</td>
+            <td v-else>{{ formatearFecha(h.fechaCuenta) }}</td>
+            
+            <td>{{ h.descripcion }}</td>
+            
+            <td v-if="h.esFila">${{ formatNumber(h.aplicacionIndividual.montoAplicado) }}</td>
+            <td v-else>${{ formatNumber(h.monto) }}</td>
+            
+            <td>{{ formatearFechaHora(h.fechaAplicacion) }}</td>
+            
+            <td v-if="h.esFila">
+              <button class="btn-danger" @click="eliminarAbonoAplicado(h, h.aplicacionIndividual)">Borrar</button>
+            </td>
+            <td v-else>
+              <button class="btn-danger" @click="eliminarAbono(h)">Borrar</button>
+            </td>
+          </tr>
         </tbody>
       </table>
       <div v-else class="no-items">No hay abonos aplicados</div>
+
+      <div class="pagination">
+        <button class="btn" :disabled="!hasPrevPage || isLoading" @click="prevPage">Anterior</button>
+        <span class="page-info">Página {{ currentPage }}</span>
+        <button class="btn" :disabled="!hasNextPage || isLoading" @click="nextPage">Siguiente</button>
+      </div>
 
       <div class="modal-footer">
         <button class="btn" @click="$emit('cerrar')">Cerrar</button>
@@ -52,9 +56,9 @@
 </template>
 
 <script>
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { db } from '@/firebase'
-import { collection, query, where, getDocs, deleteDoc, doc, updateDoc } from 'firebase/firestore'
+import { collection, query, where, getDocs, deleteDoc, doc, updateDoc, orderBy, limit, startAfter, endBefore, limitToLast } from 'firebase/firestore'
 
 export default {
   name: 'HistorialAbonosAplicadosModal',
@@ -66,27 +70,149 @@ export default {
     const isLoading = ref(false)
     const filtroFechaInicio = ref('')
     const filtroFechaFin = ref('')
+    const pageSize = ref(8)
+    const currentPage = ref(1)
+    const hasNextPage = ref(false)
+    const hasPrevPage = computed(() => currentPage.value > 1)
 
     const getCuentasCollectionName = () => {
       const capitalized = props.cliente.charAt(0).toUpperCase() + props.cliente.slice(1)
       return `cuentas${capitalized}`
     }
 
+    const buildBaseQuery = () => {
+      const col = collection(db, `abonosAplicados_${props.cliente}`)
+      
+      // Filtro por rango de aplicación
+      if (filtroFechaInicio.value && filtroFechaFin.value) {
+        const inicioIso = `${filtroFechaInicio.value}T00:00:00.000Z`
+        const finIso = `${filtroFechaFin.value}T23:59:59.999Z`
+        return query(col, where('fechaAplicacion', '>=', inicioIso), where('fechaAplicacion', '<=', finIso), orderBy('fechaAplicacion', 'desc'))
+      }
+      
+      return query(col, orderBy('fechaAplicacion', 'desc'))
+    }
+
     const cargarHistorial = async () => {
       try {
         isLoading.value = true
+        
+        // Cargar TODOS los datos sin límite para hacer ordenamiento local
         const col = collection(db, `abonosAplicados_${props.cliente}`)
         let qRef = query(col)
-
-        // Filtros de fecha opcionales (por fechaCuenta)
+        
+        // Aplicar filtros si están presentes
         if (filtroFechaInicio.value && filtroFechaFin.value) {
-          qRef = query(col, where('fechaCuenta', '>=', filtroFechaInicio.value), where('fechaCuenta', '<=', filtroFechaFin.value))
+          const inicioIso = `${filtroFechaInicio.value}T00:00:00.000Z`
+          const finIso = `${filtroFechaFin.value}T23:59:59.999Z`
+          qRef = query(col, where('fechaAplicacion', '>=', inicioIso), where('fechaAplicacion', '<=', finIso))
         }
+        
         const snap = await getDocs(qRef)
-        historial.value = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+        let todosDatos = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+        
+        // Expandir registros con múltiples aplicaciones en filas individuales
+        let filasExpandidas = []
+        for (const registro of todosDatos) {
+          if (registro.aplicaciones && registro.aplicaciones.length > 0) {
+            // Cada aplicación es una fila
+            for (const ap of registro.aplicaciones) {
+              filasExpandidas.push({
+                ...registro,
+                aplicacionIndividual: ap,
+                fechaOrden: registro.fechaAplicacion,
+                esFila: true
+              })
+            }
+          } else {
+            // Registro sin aplicaciones múltiples
+            filasExpandidas.push({
+              ...registro,
+              fechaOrden: registro.fechaAplicacion,
+              esFila: false
+            })
+          }
+        }
+        
+        // Debug: Ver qué datos tenemos antes de ordenar
+        console.log('Datos antes de ordenar:', filasExpandidas.map(f => ({
+          fecha: f.fechaOrden,
+          desc: f.descripcion,
+          monto: f.esFila ? f.aplicacionIndividual?.montoAplicado : f.monto
+        })))
+        
+        // Ordenamiento local FORZADO por fechaAplicacion descendente
+        filasExpandidas.sort((a, b) => {
+          const fechaA = new Date(a.fechaOrden || '1970-01-01')
+          const fechaB = new Date(b.fechaOrden || '1970-01-01')
+          return fechaB.getTime() - fechaA.getTime()
+        })
+        
+        // Debug: Ver qué datos tenemos después de ordenar
+        console.log('Datos después de ordenar:', filasExpandidas.map(f => ({
+          fecha: f.fechaOrden,
+          desc: f.descripcion,
+          monto: f.esFila ? f.aplicacionIndividual?.montoAplicado : f.monto
+        })))
+        
+        // Resetear a página 1 al cargar
+        currentPage.value = 1
+        
+        // Tomar solo las primeras 8 FILAS (paginación manual)
+        const inicio = (currentPage.value - 1) * pageSize.value
+        const fin = inicio + pageSize.value
+        historial.value = filasExpandidas.slice(inicio, fin)
+        
+        // Configurar paginación
+        hasNextPage.value = fin < filasExpandidas.length
+        
+        console.log('Total FILAS:', filasExpandidas.length)
+        console.log('Mostrando filas:', inicio + 1, 'al', Math.min(fin, filasExpandidas.length))
+        console.log('Primera fila fecha:', historial.value[0]?.fechaOrden)
+        console.log('Última fila fecha:', historial.value[historial.value.length - 1]?.fechaOrden)
+        
+        // Guardar todos los datos expandidos para paginación
+        window._historialCompleto = filasExpandidas
+        
+      } catch (error) {
+        console.error('Error cargando historial:', error)
       } finally {
         isLoading.value = false
       }
+    }
+
+    const nextPage = () => {
+      if (!hasNextPage.value) return
+      
+      currentPage.value += 1
+      
+      // Usar los datos expandidos ya cargados
+      const filasExpandidas = window._historialCompleto || []
+      const inicio = (currentPage.value - 1) * pageSize.value
+      const fin = inicio + pageSize.value
+      
+      historial.value = filasExpandidas.slice(inicio, fin)
+      hasNextPage.value = fin < filasExpandidas.length
+      
+      console.log('Página siguiente:', currentPage.value)
+      console.log('Mostrando filas:', inicio + 1, 'al', Math.min(fin, filasExpandidas.length))
+    }
+
+    const prevPage = () => {
+      if (currentPage.value <= 1) return
+      
+      currentPage.value -= 1
+      
+      // Usar los datos expandidos ya cargados
+      const filasExpandidas = window._historialCompleto || []
+      const inicio = (currentPage.value - 1) * pageSize.value
+      const fin = inicio + pageSize.value
+      
+      historial.value = filasExpandidas.slice(inicio, fin)
+      hasNextPage.value = fin < filasExpandidas.length
+      
+      console.log('Página anterior:', currentPage.value)
+      console.log('Mostrando filas:', inicio + 1, 'al', Math.min(fin, filasExpandidas.length))
     }
 
     const eliminarAbono = async (h) => {
@@ -154,7 +280,7 @@ export default {
 
     cargarHistorial()
 
-    return { historial, isLoading, filtroFechaInicio, filtroFechaFin, cargarHistorial, eliminarAbono, eliminarAbonoAplicado, formatearFecha, formatearFechaHora, formatNumber }
+    return { historial, isLoading, filtroFechaInicio, filtroFechaFin, cargarHistorial, eliminarAbono, eliminarAbonoAplicado, formatearFecha, formatearFechaHora, formatNumber, nextPage, prevPage, hasNextPage, hasPrevPage, currentPage }
   }
 }
 </script>
@@ -185,6 +311,8 @@ th, td { padding: 10px; border-bottom: 1px solid #eee; text-align: left; }
 th { background: #f7f7f7; }
 .no-items { text-align: center; padding: 16px; color: #666; }
 .modal-footer { display: flex; justify-content: flex-end; margin-top: 12px; }
+.pagination { display: flex; gap: 10px; align-items: center; justify-content: center; margin-top: 12px; flex-wrap: wrap; }
+.page-info { color: #444; font-weight: 600; }
 @media (max-width: 600px) {
   .btn, .btn-danger { padding: 8px; }
   th, td { padding: 8px; }
