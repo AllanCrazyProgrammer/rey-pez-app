@@ -1178,6 +1178,10 @@ const prepararDatosCuentaOtilio = async (embarqueData) => {
   // Preparar los items de venta (tabla de precios)
   const itemsVenta = [];
   
+  // Contadores para calcular fletes
+  let totalTarasLimpio = 0;
+  let totalTarasCrudo = 0;
+  
   // Procesar productos normales
   if (Array.isArray(productos)) {
     productos.forEach(producto => {
@@ -1199,10 +1203,17 @@ const prepararDatosCuentaOtilio = async (embarqueData) => {
 
           // Multiplicar por el valor neto (0.65 por defecto)
           kilos = sumaTotalKilos * (producto.camaronNeto || 0.65);
+          
+          // Sumar las taras para el cálculo del flete (productos c/h20)
+          totalTarasLimpio += reporteTaras.reduce((sum, tara) => sum + (parseInt(tara) || 0), 0);
         } else {
           // Para otros productos, calcular con taras y descuentos
           const sumaKilos = producto.kilos?.reduce((sum, k) => sum + (parseFloat(k) || 0), 0) || 0;
           const sumaTarasNormales = producto.taras?.reduce((sum, tara) => sum + (parseInt(tara) || 0), 0) || 0;
+          const sumaTarasExtra = producto.tarasExtra?.reduce((sum, tara) => sum + (parseInt(tara) || 0), 0) || 0;
+          
+          // Sumar las taras para el cálculo del flete (productos limpios)
+          totalTarasLimpio += sumaTarasNormales + sumaTarasExtra;
           // No incluimos las taras extra en el descuento, solo las taras normales
           const descuentoTaras = producto.restarTaras ? sumaTarasNormales * 3 : 0;
           kilos = Number((sumaKilos - descuentoTaras).toFixed(1));
@@ -1272,6 +1283,8 @@ const prepararDatosCuentaOtilio = async (embarqueData) => {
                 }
                 
                 kilosTotales += cantidad * medida;
+                // Sumar cantidad de taras de crudo para flete
+                totalTarasCrudo += cantidad;
               } else {
                 // Formato original si no coincide con el patrón
                 const partes = item.taras.split('-').map(Number);
@@ -1280,6 +1293,13 @@ const prepararDatosCuentaOtilio = async (embarqueData) => {
                   // Si el segundo valor es 19, sustituirlo por 20
                   if (valorPorTara === 19) valorPorTara = 20;
                   kilosTotales += (partes[0] || 0) * valorPorTara;
+                  // Sumar cantidad de taras según la primera parte
+                  totalTarasCrudo += (partes[0] || 0);
+                } else {
+                  // Si no hay formato claro, asumir 1 tara si hay valor
+                  if (parseInt(item.taras)) {
+                    totalTarasCrudo += 1;
+                  }
                 }
               }
             }
@@ -1298,6 +1318,8 @@ const prepararDatosCuentaOtilio = async (embarqueData) => {
                 }
                 
                 kilosTotales += cantidadSobrante * medidaSobrante;
+                // Sumar cantidad de taras del sobrante para flete
+                totalTarasCrudo += cantidadSobrante;
               } else {
                 // Formato original si no coincide con el patrón
                 const partes = item.sobrante.split('-').map(Number);
@@ -1306,6 +1328,8 @@ const prepararDatosCuentaOtilio = async (embarqueData) => {
                   // Si el segundo valor es 19, sustituirlo por 20
                   if (valorSobrante === 19) valorSobrante = 20;
                   kilosTotales += (partes[0] || 0) * valorSobrante;
+                  // Sumar cantidad de taras según la primera parte
+                  totalTarasCrudo += (partes[0] || 0);
                 }
               }
             }
@@ -1360,16 +1384,33 @@ const prepararDatosCuentaOtilio = async (embarqueData) => {
   // Obtener saldo acumulado anterior
   const saldoAcumuladoAnterior = await obtenerSaldoAcumuladoAnterior('cuentasOtilio', fecha);
   
+  // Calcular el flete automáticamente
+  const fleteTotal = (totalTarasLimpio * 70) + (totalTarasCrudo * 60);
+  
+  // Crear el array de cobros con el flete calculado
+  const cobros = [];
+  if (fleteTotal > 0) {
+    cobros.push({
+      descripcion: 'Flete',
+      monto: fleteTotal
+    });
+    
+    console.log(`[DEBUG] Flete (Otilio) calculado automáticamente:`);
+    console.log(`  - Taras de limpio: ${totalTarasLimpio} × $70 = $${totalTarasLimpio * 70}`);
+    console.log(`  - Taras de crudo: ${totalTarasCrudo} × $60 = $${totalTarasCrudo * 60}`);
+    console.log(`  - Total flete: $${fleteTotal}`);
+  }
+  
   return {
     fecha,
     items,
     itemsVenta,
     saldoAcumuladoAnterior,
-    cobros: [],
+    cobros,
     abonos: [],
     totalGeneral,
     totalGeneralVenta,
-    nuevoSaldoAcumulado: saldoAcumuladoAnterior + totalGeneralVenta,
+    nuevoSaldoAcumulado: saldoAcumuladoAnterior + totalGeneralVenta - fleteTotal,
     estadoPagado: false,
     tieneObservacion: false,
     observacion: '',
