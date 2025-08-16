@@ -730,6 +730,10 @@ const prepararDatosCuentaCatarro = async (embarqueData) => {
   const items = [];
   const itemsVenta = [];
   
+  // Contadores para calcular fletes
+  let totalTarasLimpio = 0;
+  let totalTarasCrudo = 0;
+  
   // Procesar productos normales
   if (Array.isArray(productos)) {
     productos.forEach(producto => {
@@ -751,10 +755,18 @@ const prepararDatosCuentaCatarro = async (embarqueData) => {
 
           // Multiplicar por el valor neto (0.65 por defecto)
           kilos = sumaTotalKilos * (producto.camaronNeto || 0.65);
+          
+          // Sumar las taras para el cálculo del flete (productos c/h20)
+          totalTarasLimpio += reporteTaras.reduce((sum, tara) => sum + (parseInt(tara) || 0), 0);
         } else {
           // Para otros productos, calcular con taras y descuentos
           const sumaKilos = producto.kilos?.reduce((sum, k) => sum + (parseFloat(k) || 0), 0) || 0;
           const sumaTarasNormales = producto.taras?.reduce((sum, tara) => sum + (parseInt(tara) || 0), 0) || 0;
+          const sumaTarasExtra = producto.tarasExtra?.reduce((sum, tara) => sum + (parseInt(tara) || 0), 0) || 0;
+          
+          // Sumar las taras para el cálculo del flete (productos limpios)
+          totalTarasLimpio += sumaTarasNormales + sumaTarasExtra;
+          
           // No incluimos las taras extra en el descuento, solo las taras normales
           const descuentoTaras = producto.restarTaras ? sumaTarasNormales * 3 : 0;
           kilos = Number((sumaKilos - descuentoTaras).toFixed(1));
@@ -822,8 +834,13 @@ const prepararDatosCuentaCatarro = async (embarqueData) => {
               if (formatoGuion) {
                 const cantidad = parseInt(formatoGuion[1]) || 0;
                 kilosTaras = cantidad * 20; // SIEMPRE multiplicar por 20
+                
+                // Sumar la cantidad de taras de crudo para el cálculo del flete
+                totalTarasCrudo += cantidad;
               } else {
                 kilosTaras = parseInt(item.taras) || 0;
+                // Si es un número simple, sumarlo también
+                totalTarasCrudo += 1; // Asumimos que es 1 tara si no tiene formato
               }
             }
             
@@ -831,6 +848,13 @@ const prepararDatosCuentaCatarro = async (embarqueData) => {
             let kilosSobrante = 0;
             if (item.sobrante && item.mostrarSobrante) {
               kilosSobrante = extraerValorSobrante(item.sobrante);
+              
+              // Si hay sobrante, también contar las taras del sobrante
+              const formatoSobrante = /^(\d+)-(\d+(?:\.\d+)?)$/.exec(item.sobrante);
+              if (formatoSobrante) {
+                const cantidadSobrante = parseInt(formatoSobrante[1]) || 0;
+                totalTarasCrudo += cantidadSobrante;
+              }
             }
             
             // Para el caso específico "Med c/c" con taras "10-19" y sobrante "1-10",
@@ -906,16 +930,33 @@ const prepararDatosCuentaCatarro = async (embarqueData) => {
   // Obtener saldo acumulado anterior
   const saldoAcumuladoAnterior = await obtenerSaldoAcumuladoAnterior('cuentasCatarro', fecha);
   
+  // Calcular el flete automáticamente
+  const fleteTotal = (totalTarasLimpio * 70) + (totalTarasCrudo * 60);
+  
+  // Crear el array de cobros con el flete calculado
+  const cobros = [];
+  if (fleteTotal > 0) {
+    cobros.push({
+      descripcion: 'Flete',
+      monto: fleteTotal
+    });
+    
+    console.log(`[DEBUG] Flete calculado automáticamente:`);
+    console.log(`  - Taras de limpio: ${totalTarasLimpio} × $70 = $${totalTarasLimpio * 70}`);
+    console.log(`  - Taras de crudo: ${totalTarasCrudo} × $60 = $${totalTarasCrudo * 60}`);
+    console.log(`  - Total flete: $${fleteTotal}`);
+  }
+  
   return {
     fecha,
     items,
     itemsVenta,
     saldoAcumuladoAnterior,
-    cobros: [],
+    cobros,
     abonos: [],
     totalGeneral,
     totalGeneralVenta,
-    nuevoSaldoAcumulado: saldoAcumuladoAnterior + totalGeneralVenta,
+    nuevoSaldoAcumulado: saldoAcumuladoAnterior + totalGeneralVenta - fleteTotal, // Ajustar el saldo con el flete
     estadoPagado: false,
     tieneObservacion: false,
     observacion: '',
