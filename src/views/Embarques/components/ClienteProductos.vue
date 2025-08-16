@@ -119,6 +119,7 @@
             <!-- Lista de crudos -->
             <CrudoItem v-for="(crudo, index) in crudos" :key="'crudo-' + index" :crudo="crudo"
                 :embarque-bloqueado="embarqueBloqueado" :cliente-id="clienteId" :crudo-index="index"
+                :precios-actuales="preciosActuales" :fecha-embarque="fechaEmbarque" :nombre-cliente="nombreCliente"
                 @update:crudo="actualizarCrudo(index, $event)"
                 @eliminar-crudo="$emit('eliminar-crudo', $event, clienteId)"
                 @eliminar-crudo-item="$emit('eliminar-crudo-item', clienteId, ...$event)"

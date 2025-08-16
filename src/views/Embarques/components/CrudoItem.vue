@@ -66,6 +66,8 @@
 </template>
 
 <script>
+import { obtenerPrecioParaMedida } from '@/utils/preciosHistoricos';
+import { normalizarFechaISO, obtenerFechaActualISO } from '@/utils/dateUtils';
 
 export default {
     name: 'CrudoItem',
@@ -85,6 +87,18 @@ export default {
         crudoIndex: {
             type: Number,
             required: true
+        },
+        preciosActuales: {
+            type: Array,
+            default: () => []
+        },
+        fechaEmbarque: {
+            type: String,
+            default: ''
+        },
+        nombreCliente: {
+            type: String,
+            default: ''
         }
     },
 
@@ -116,8 +130,21 @@ export default {
                         }
                     });
                 }
+                // Reintentar asignación de precios cuando cambie el objeto crudo
+                this.asignarPrecioAutomaticoCrudo();
             },
             immediate: true
+        },
+        preciosActuales: {
+            handler() {
+                this.asignarPrecioAutomaticoCrudo();
+            },
+            deep: true
+        },
+        fechaEmbarque(newVal) {
+            if (newVal) {
+                this.asignarPrecioAutomaticoCrudo();
+            }
         }
     },
 
@@ -157,10 +184,13 @@ export default {
         },
 
         onTallaCrudoChange(item) {
-            // Asegurarse de que el item tenga todas las propiedades necesarias
-            if (!item.medida) {
-                item.medida = item.talla;
+            // Sincronizar medida con la talla seleccionada siempre
+            item.medida = item.talla;
+            // Permitir nueva asignación automática si se cambió la talla
+            if (item.precioBorradoManualmente) {
+                this.$set(item, 'precioBorradoManualmente', false);
             }
+            this.asignarPrecioAutomaticoCrudo(item);
             this.actualizarCrudo();
         },
 
@@ -212,6 +242,34 @@ export default {
                 
                 // Actualizar el componente padre
                 this.actualizarCrudo();
+            }
+        },
+
+        asignarPrecioAutomaticoCrudo(itemRef = null) {
+            const nombre = (this.nombreCliente || '').trim().toLowerCase();
+            const clienteIdMap = { catarro: 'catarro', joselito: 'joselito', otilio: 'otilio', ozuna: 'ozuna' };
+            const clienteId = clienteIdMap[nombre] || null;
+            const fechaParaPrecios = this.fechaEmbarque ? normalizarFechaISO(this.fechaEmbarque) : obtenerFechaActualISO();
+
+            const aplicar = (item) => {
+                if (!item) return;
+                const medida = item.medida || item.talla || '';
+                if (!medida) return;
+                if (item.precioBorradoManualmente) return;
+
+                const precio = obtenerPrecioParaMedida(this.preciosActuales, medida, fechaParaPrecios, clienteId);
+                if (precio !== null && precio !== undefined) {
+                    this.$set(item, 'precio', precio);
+                } else if (item.precio !== null && item.precio !== undefined) {
+                    // Limpiar precio si no existe para la nueva talla para evitar valores obsoletos
+                    this.$set(item, 'precio', null);
+                }
+            };
+
+            if (itemRef) {
+                aplicar(itemRef);
+            } else if (this.crudoData && Array.isArray(this.crudoData.items)) {
+                this.crudoData.items.forEach(aplicar);
             }
         }
     }
