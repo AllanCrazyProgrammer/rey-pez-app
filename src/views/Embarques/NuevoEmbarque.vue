@@ -1770,23 +1770,8 @@ export default {
               return;
             }
 
-            // Solo incluir clientes con productos que tengan medida válida (tipo opcional)
-            const clientesConProductosCompletos = {};
-            Object.keys(this.clientesModificados || {}).forEach(clienteId => {
-              const productos = this.productosPorCliente[clienteId] || [];
-              const productosConMedida = productos.filter(p => 
-                p.medida && p.medida.trim() !== ''
-              );
-              if (productosConMedida.length > 0) {
-                clientesConProductosCompletos[clienteId] = true;
-              }
-            });
-
-            // Si no hay clientes con productos completos ni cambios básicos, no guardar
-            if (Object.keys(clientesConProductosCompletos).length === 0 && !hayBasicosModificados) {
-              console.log('[AUTO-SAVE] No hay productos completos ni cambios básicos para guardar');
-              return;
-            }
+            // Nota: ya no abortamos si no hay productos "completos";
+            // si un cliente quedó sin productos (eliminación), debemos persistir [] en el servidor.
             // Guardado incremental por campos para reducir colisiones
             const db = getFirestore();
             const embarqueRef = doc(db, "embarques", this.embarqueId);
@@ -1800,17 +1785,18 @@ export default {
               const serverClientesMap = new Map((serverData.clientes || []).map(c => [String(c.id), c]));
               const mergedClientes = new Map(serverClientesMap);
 
-              Object.entries(this.productosPorCliente).forEach(([clienteId, productos]) => {
-                if (!this.clientesModificados[clienteId]) return;
-                
+              // Iterar sobre los clientes marcados como modificados, incluso si hoy no tienen productos (para poder guardar []).
+              Object.keys(this.clientesModificados || {}).forEach(clienteId => {
+                const productos = this.productosPorCliente[clienteId] || [];
+
                 // Filtrar solo productos con medida válida para el guardado (tipo opcional)
                 const productosConMedida = productos.filter(p => 
                   p.medida && p.medida.trim() !== ''
                 );
-                
-                // Si no hay productos con medida, mantener los existentes del servidor
+
+                // Si no hay productos con medida, guardar lo que haya (incluyendo [] si quedó vacío)
                 const productosParaGuardar = productosConMedida.length > 0 ? productosConMedida : productos;
-                
+
                 mergedClientes.set(String(clienteId), {
                   id: clienteId,
                   nombre: this.obtenerNombreCliente(clienteId),
