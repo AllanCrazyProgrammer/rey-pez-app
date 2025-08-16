@@ -14,6 +14,7 @@
       </router-link>
       <PreciosHistorialModal />
       <StashModal cliente="catarro" />
+      <StashModalV2 cliente="catarro" />
     </div>
 
     <div class="filter-container">
@@ -76,13 +77,15 @@ import { collection, query, orderBy, deleteDoc, doc, onSnapshot, where, updateDo
 import BackButton from '@/components/BackButton.vue';
 import PreciosHistorialModal from '@/components/PreciosHistorialModal.vue';
 import StashModal from '@/components/StashModal.vue';
+import StashModalV2 from '@/components/StashModalV2.vue';
 
 export default {
   name: 'CatarroCuentasMenu',
   components: {
     BackButton,
     PreciosHistorialModal,
-    StashModal
+    StashModal,
+    StashModalV2
   },
   data() {
     return {
