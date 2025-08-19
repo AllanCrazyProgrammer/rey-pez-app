@@ -562,18 +562,38 @@ export default {
         const cuenta = cuentasMap.get(prestamo.trabajadorId);
         cuenta.totalPrestado += prestamo.montoInicial;
         cuenta.prestamos.push(prestamo);
-        const saldoPrestamo = prestamo.saldoPendiente || 0;
-        const abonadoPrestamo = (prestamo.montoInicial || 0) - saldoPrestamo;
-        cuenta.totalAbonado += abonadoPrestamo;
       }
       
-      // Calcular saldo pendiente y porcentaje pagado
-      this.cuentasTrabajadores = Array.from(cuentasMap.values()).map(cuenta => {
+      // Calcular total abonado real cargando abonos desde la base de datos
+      for (const [trabajadorId, cuenta] of cuentasMap) {
+        let totalAbonadoCuenta = 0;
+        
+        for (const prestamo of cuenta.prestamos) {
+          try {
+            const abonosSnapshot = await getDocs(collection(db, 'prestamosTrabajadores', prestamo.id, 'abonos'));
+            let totalAbonosPrestamo = 0;
+            
+            abonosSnapshot.forEach(doc => {
+              const abono = doc.data();
+              totalAbonosPrestamo += abono.monto || 0;
+            });
+            
+            totalAbonadoCuenta += totalAbonosPrestamo;
+            
+            // Actualizar el saldoPendiente del préstamo en memoria
+            prestamo.saldoPendienteReal = prestamo.montoInicial - totalAbonosPrestamo;
+          } catch (error) {
+            console.error(`Error al cargar abonos para préstamo ${prestamo.id}:`, error);
+          }
+        }
+        
+        cuenta.totalAbonado = totalAbonadoCuenta;
         cuenta.saldoPendiente = cuenta.totalPrestado - cuenta.totalAbonado;
         cuenta.porcentajePagado = cuenta.totalPrestado > 0 ? 
           Math.round((cuenta.totalAbonado / cuenta.totalPrestado) * 100) : 0;
-        return cuenta;
-      });
+      }
+      
+      this.cuentasTrabajadores = Array.from(cuentasMap.values());
     },
     
     async cargarTrabajadores() {
@@ -781,6 +801,19 @@ export default {
           monto: this.nuevoAbono.monto,
           fecha: this.nuevoAbono.fecha,
           fechaCreacion: new Date()
+        });
+        
+        // Recalcular y actualizar el saldo pendiente del préstamo
+        const abonosSnapshot = await getDocs(collection(db, 'prestamosTrabajadores', prestamoMasReciente.id, 'abonos'));
+        let totalAbonos = 0;
+        abonosSnapshot.forEach(doc => {
+          totalAbonos += doc.data().monto || 0;
+        });
+        
+        const nuevoSaldoPendiente = prestamoMasReciente.montoInicial - totalAbonos;
+        await updateDoc(doc(db, 'prestamosTrabajadores', prestamoMasReciente.id), {
+          saldoPendiente: nuevoSaldoPendiente,
+          estado: nuevoSaldoPendiente <= 0 ? 'pagado' : 'activo'
         });
         
         this.showAbonoModal = false;

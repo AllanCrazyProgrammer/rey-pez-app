@@ -22,6 +22,7 @@
                         <option value="Jumbo c/c">Jumbo c/c</option>
                         <option value="Linea">Linea</option>
                         <option value="Lag gde c/c">Lag gde c/c</option>
+                        <option value="Acamaya">Acamaya</option>
                         <option value="Rechazo">Rechazo</option>
                     </select>
                     <span v-if="item.precio" class="precio-tag">${{ item.precio }}</span>
