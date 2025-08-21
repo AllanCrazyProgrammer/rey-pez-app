@@ -177,6 +177,13 @@
 
     <!-- Indicador de estado del guardado -->
     <SaveStatusIndicator />
+    
+    <!-- Notificación de error de autenticación -->
+    <AuthErrorNotification 
+      :show="showAuthError"
+      :message="authErrorMessage"
+      @hide="showAuthError = false"
+    />
   </div>
 </template>
 
@@ -188,6 +195,8 @@ import { rtdb } from '@/firebase'
 import { useAuthStore } from '@/stores/auth'
 import { getSaveManager } from '@/services/SaveManager'
 import SaveStatusIndicator from '@/components/SaveStatusIndicator.vue'
+import AuthErrorNotification from '@/components/AuthErrorNotification.vue'
+import authDiagnostic from '@/utils/authDiagnostic.js'
 import { ref as vueRef, onMounted, onUnmounted, defineAsyncComponent } from 'vue'
 import Sidebar from '@/components/Sidebar.vue'
 import HeaderEmbarque from '../Embarques/components/HeaderEmbarque.vue'
@@ -252,7 +261,8 @@ export default {
     NotaModal,
     AltModal,
     ConfiguracionMedidasModal,
-    SaveStatusIndicator
+    SaveStatusIndicator,
+    AuthErrorNotification
   },
   
   setup() {
@@ -330,6 +340,10 @@ export default {
       // Estados para generación de PDF
       isGeneratingPdf: false,
       pdfType: null,
+      
+      // Variables para manejo de errores de autenticación
+      showAuthError: false,
+      authErrorMessage: 'Su sesión ha expirado o hay un problema con su autenticación.',
       isCreatingAccount: false,
       _creandoEmbarque: false,
       _guardandoEmbarque: false,
@@ -488,6 +502,12 @@ export default {
   },
   
   methods: {
+    // Método para mostrar errores de autenticación
+    mostrarErrorAutenticacion(mensaje = null) {
+      this.authErrorMessage = mensaje || 'Su sesión ha expirado o hay un problema con su autenticación.';
+      this.showAuthError = true;
+    },
+
     // Método para mostrar errores al usuario
     mostrarError(mensaje) {
       // Usar el sistema de notificaciones si está disponible
@@ -1809,6 +1829,15 @@ export default {
                 });
               });
 
+              // Validar que el usuario esté autenticado
+              try {
+                this.authStore.ensureAuthenticated();
+              } catch (error) {
+                console.error('[guardarCambiosEnTiempoReal] Error de autenticación:', error.message);
+                this.mostrarErrorAutenticacion(error.message);
+                return;
+              }
+
               const updatePayload = {
                 fecha: new Date(this.embarque.fecha),
                 cargaCon: this.embarque.cargaCon,
@@ -1820,7 +1849,7 @@ export default {
                 clientes: Array.from(mergedClientes.values()),
                 ultimaEdicion: {
                   userId: this.authStore.userId,
-                  username: this.authStore.user?.username,
+                  username: this.authStore.user?.username || 'Usuario desconocido',
                   timestamp: serverTimestamp()
                 }
               };
@@ -1851,6 +1880,18 @@ export default {
           } catch (error) {
             console.error("Error al guardar automáticamente:", error);
             const mensaje = (error && (error.message || error.code || '')) || '';
+            
+            // Detectar errores de autenticación
+            const esErrorAuth = /Usuario no autenticado/i.test(mensaje) || 
+                               /Unsupported field value: undefined.*userId/i.test(mensaje) ||
+                               /invalid.*data.*userId/i.test(mensaje);
+            
+            if (esErrorAuth) {
+              console.error('[guardarCambiosEnTiempoReal] Error de autenticación detectado');
+              this.mostrarErrorAutenticacion('Error de autenticación al guardar. Verifique su sesión.');
+              return;
+            }
+            
             const esCuota = /quota/i.test(mensaje) || /resource[-_ ]?exhausted/i.test(mensaje);
             if (esCuota) {
               // Aplicar backoff exponencial para no saturar
@@ -1925,12 +1966,21 @@ export default {
           await runTransaction(db, async (transaction) => {
             const snap = await transaction.get(embarqueRef);
             if (!snap.exists()) return;
+            // Validar que el usuario esté autenticado
+            try {
+              this.authStore.ensureAuthenticated();
+            } catch (error) {
+              console.error('[guardarEmbarque] Error de autenticación:', error.message);
+              this.mostrarErrorAutenticacion(error.message);
+              return;
+            }
+
             // merge server y local de forma conservadora: siempre escribimos campos conocidos
             transaction.update(embarqueRef, {
               ...embarqueData,
               ultimaEdicion: {
                 userId: this.authStore.userId,
-                username: this.authStore.user?.username,
+                username: this.authStore.user?.username || 'Usuario desconocido',
                 timestamp: serverTimestamp()
               }
             });
@@ -1987,12 +2037,21 @@ export default {
           });
           
           try {
+            // Validar que el usuario esté autenticado antes de crear
+            try {
+              this.authStore.ensureAuthenticated();
+            } catch (error) {
+              console.error('[guardarEmbarque] Error de autenticación:', error.message);
+              this.mostrarErrorAutenticacion(error.message);
+              return;
+            }
+
             // Si no existe un embarque con la misma fecha, proceder a crear uno nuevo
             const docRef = await addDoc(collection(db, "embarques"), {
               ...embarqueData,
               ultimaEdicion: {
                 userId: this.authStore.userId,
-                username: this.authStore.user.username,
+                username: this.authStore.user?.username || 'Usuario desconocido',
                 timestamp: serverTimestamp()
               }
             });
@@ -2002,7 +2061,7 @@ export default {
             await set(cambiosRef, {
               tipo: 'guardar',
               userId: this.authStore.userId,
-              username: this.authStore.user.username,
+              username: this.authStore.user?.username || 'Usuario desconocido',
               timestamp: serverTimestamp()
             });
 
@@ -3409,6 +3468,26 @@ export default {
 
   async created() {
     console.log('[LOG] Hook "created" de NuevoEmbarque.');
+    
+    // Verificar autenticación al inicializar el componente
+    try {
+      this.authStore.checkAuth();
+      if (!this.authStore.isAuthenticated) {
+        console.warn('[NuevoEmbarque] Usuario no autenticado al inicializar, redirigiendo al login');
+        this.$router.push('/login');
+        return;
+      }
+      console.log('[NuevoEmbarque] Usuario autenticado correctamente:', this.authStore.user?.username);
+    } catch (error) {
+      console.error('[NuevoEmbarque] Error de autenticación al inicializar:', error);
+      this.mostrarErrorAutenticacion('Error de autenticación al cargar la página. Por favor, inicie sesión nuevamente.');
+      return;
+    }
+    
+    // Activar monitoreo de errores de autenticación en modo desarrollo
+    if (process.env.NODE_ENV === 'development') {
+      authDiagnostic.enableAuthErrorMonitoring();
+    }
     
     // Inicializar el SaveManager
     this.saveManager = getSaveManager();

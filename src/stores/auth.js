@@ -50,22 +50,46 @@ export const useAuthStore = defineStore('auth', {
       localStorage.removeItem('user')
     },
 
+    // Método para verificar y asegurar autenticación válida
+    ensureAuthenticated() {
+      if (!this.isAuthenticated || !this.userId || !this.user) {
+        console.warn('Usuario no autenticado, intentando verificar autenticación...')
+        this.checkAuth()
+        
+        if (!this.isAuthenticated || !this.userId || !this.user) {
+          throw new Error('Usuario no autenticado. Por favor, vuelva a iniciar sesión.')
+        }
+      }
+      return true
+    },
+
     checkAuth() {
       try {
         const userData = localStorage.getItem('user')
         if (userData) {
           const parsedUser = JSON.parse(userData)
-          this.user = { username: parsedUser.username }
-          this.userId = parsedUser.userId
-          this.isAuthenticated = true
           
-          // Reiniciar seguimiento de presencia
-          if (this.userId) {
+          // Validar que los datos necesarios existan
+          if (parsedUser.username && parsedUser.userId) {
+            this.user = { username: parsedUser.username }
+            this.userId = parsedUser.userId
+            this.isAuthenticated = true
+            
+            // Reiniciar seguimiento de presencia
             handleUserPresence(this.userId, parsedUser.username)
+            
+            console.log('Autenticación verificada correctamente para:', parsedUser.username)
+          } else {
+            console.warn('Datos de usuario incompletos en localStorage')
+            this.logout()
           }
+        } else {
+          console.log('No hay datos de usuario en localStorage')
+          this.logout()
         }
       } catch (error) {
         console.error('Error al verificar autenticación:', error)
+        console.error('Datos corruptos en localStorage, limpiando...')
         this.logout()
       }
     }
