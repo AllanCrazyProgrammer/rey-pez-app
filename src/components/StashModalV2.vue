@@ -233,8 +233,11 @@
               <div v-if="registro.items && registro.items.length > 0" class="items-aplicados">
                 <p class="items-titulo">Abonos incluidos:</p>
                 <div v-for="(item, idx) in registro.items" :key="idx" class="item-aplicado">
-                  <span>{{ item.descripcion }}</span>
-                  <span>${{ formatNumber(item.monto) }}</span>
+                  <div class="item-info-detalle">
+                    <span class="item-fecha">{{ formatearFecha(item.fecha) }}</span>
+                    <span class="item-descripcion">{{ item.descripcion }}</span>
+                  </div>
+                  <span class="item-monto">${{ formatNumber(item.monto) }}</span>
                 </div>
               </div>
             </div>
@@ -1178,20 +1181,46 @@ h4 {
 .item-aplicado {
   display: flex;
   justify-content: space-between;
-  padding: 6px 8px;
+  align-items: center;
+  padding: 8px;
   background: white;
-  border-radius: 4px;
-  margin-bottom: 4px;
+  border-radius: 6px;
+  margin-bottom: 6px;
+  border: 1px solid #f0f0f0;
+  transition: all 0.2s ease;
+}
+
+.item-aplicado:hover {
+  border-color: #e0e0e0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.item-info-detalle {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+}
+
+.item-fecha {
+  font-size: 11px;
+  color: #888;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.item-descripcion {
   font-size: 13px;
+  color: #555;
+  font-weight: 500;
 }
 
-.item-aplicado span:first-child {
-  color: #666;
-}
-
-.item-aplicado span:last-child {
-  font-weight: 600;
+.item-monto {
+  font-weight: 700;
   color: #2e7d32;
+  font-size: 14px;
+  white-space: nowrap;
 }
 
 @media (max-width: 600px) {
@@ -1227,6 +1256,22 @@ h4 {
   
   .historial-fecha {
     min-width: 60px;
+  }
+  
+  .item-info-detalle {
+    gap: 1px;
+  }
+  
+  .item-fecha {
+    font-size: 10px;
+  }
+  
+  .item-descripcion {
+    font-size: 12px;
+  }
+  
+  .item-monto {
+    font-size: 13px;
   }
 }
 
