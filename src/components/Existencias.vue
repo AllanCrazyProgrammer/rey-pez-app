@@ -730,21 +730,21 @@ export default {
           .salidas-dia-siguiente {
             margin-top: 20px;
             padding: 15px;
-            background-color: #fff8dc;
-            border: 2px solid #ffa500;
+            background-color: #f8f9fa;
+            border: 2px solid #6c757d;
             border-radius: 8px;
           }
           .salidas-dia-siguiente h2 {
-            color: #d2691e;
+            color: #495057;
             font-size: 18pt;
             margin: 0 0 10px 0;
             text-align: center;
-            border-bottom: 2px solid #ffa500;
+            border-bottom: 2px solid #6c757d;
             padding-bottom: 5px;
           }
           .salidas-grid {
             display: grid;
-            grid-template-columns: repeat(2, 1fr);
+            grid-template-columns: 1fr 1fr;
             gap: 15px;
             margin-bottom: 10px;
           }
@@ -755,10 +755,10 @@ export default {
             border: 1px solid #ddd;
           }
           .salidas-proveedores h3, .salidas-maquilas h3 {
-            color: #d2691e;
+            color: #495057;
             font-size: 16pt;
             margin: 0 0 8px 0;
-            border-bottom: 1px solid #ffa500;
+            border-bottom: 1px solid #6c757d;
             padding-bottom: 3px;
           }
           .salidas-table {
@@ -772,23 +772,27 @@ export default {
             text-align: left;
           }
           .salidas-table th {
-            background-color: #ffa500;
+            background-color: #6c757d;
             color: white;
             font-weight: bold;
+          }
+          .salidas-table th.kilos-cell {
+            color: white;
           }
           .salidas-table tr:nth-child(even) {
             background-color: #fafafa;
           }
+
           .total-salidas-siguiente {
             text-align: center;
             margin-top: 10px;
             padding: 8px;
             background-color: #fff;
-            border: 1px solid #ffa500;
+            border: 1px solid #6c757d;
             border-radius: 5px;
           }
           .total-salidas-siguiente h3 {
-            color: #d2691e;
+            color: #495057;
             font-size: 16pt;
             margin: 0;
           }
@@ -811,12 +815,12 @@ export default {
               break-before: avoid;
             }
             .salidas-dia-siguiente {
-              background-color: #fff8dc !important;
-              border: 2px solid #ffa500 !important;
+              background-color: #f8f9fa !important;
+              border: 2px solid #6c757d !important;
             }
             .salidas-grid {
               display: grid;
-              grid-template-columns: repeat(2, 1fr);
+              grid-template-columns: 1fr 1fr;
               gap: 15px;
             }
           }
@@ -1302,24 +1306,24 @@ h1 {
 .salidas-dia-siguiente {
   margin-top: 30px;
   padding: 20px;
-  background-color: #fff8dc;
-  border: 2px solid #ffa500;
+  background-color: #f8f9fa;
+  border: 2px solid #6c757d;
   border-radius: 10px;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
 
 .salidas-dia-siguiente h2 {
-  color: #d2691e;
+  color: #495057;
   text-align: center;
   margin: 0 0 20px 0;
   font-size: 24px;
-  border-bottom: 2px solid #ffa500;
+  border-bottom: 2px solid #6c757d;
   padding-bottom: 10px;
 }
 
 .salidas-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+  grid-template-columns: 1fr 1fr;
   gap: 20px;
   margin-bottom: 20px;
 }
@@ -1333,10 +1337,10 @@ h1 {
 }
 
 .salidas-proveedores h3, .salidas-maquilas h3 {
-  color: #d2691e;
+  color: #495057;
   margin: 0 0 15px 0;
   font-size: 18px;
-  border-bottom: 2px solid #ffa500;
+  border-bottom: 2px solid #6c757d;
   padding-bottom: 8px;
 }
 
@@ -1355,9 +1359,13 @@ h1 {
 }
 
 .salidas-table th {
-  background-color: #ffa500;
+  background-color: #6c757d;
   color: white;
   font-weight: bold;
+}
+
+.salidas-table th.kilos-cell {
+  color: white;
 }
 
 .salidas-table tr:nth-child(even) {
@@ -1385,13 +1393,13 @@ h1 {
   margin-top: 20px;
   padding: 15px;
   background-color: white;
-  border: 2px solid #ffa500;
+  border: 2px solid #6c757d;
   border-radius: 8px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .total-salidas-siguiente h3 {
-  color: #d2691e;
+  color: #495057;
   margin: 0;
   font-size: 22px;
   font-weight: bold;
@@ -1436,8 +1444,8 @@ h1 {
     page-break-before: avoid;
   }
   .salidas-dia-siguiente {
-    background-color: #fff8dc !important;
-    border: 2px solid #ffa500 !important;
+    background-color: #f8f9fa !important;
+    border: 2px solid #6c757d !important;
   }
 }
 </style>
