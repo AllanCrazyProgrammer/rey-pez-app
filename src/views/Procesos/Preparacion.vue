@@ -167,116 +167,22 @@
     </div>
 
     <!-- Modal para nuevo día -->
-    <b-modal v-model="showModal" title="Nuevo Día de Preparación" size="lg" @ok="crearNuevoDia" @show="inicializarNuevoDia">
+    <b-modal v-model="showModal" title="Nuevo Día de Preparación" size="md" @ok="crearNuevoDia" @show="inicializarNuevoDia">
       <div class="modal-content">
-        <b-form-group label="Fecha:">
-          <b-form-input
-            type="date"
-            v-model="nuevoDia.fecha"
-            required
-          ></b-form-input>
-        </b-form-group>
-        
-        <div class="tabla-medidas-container">
-          <table class="tabla-medidas">
-            <thead>
-              <tr>
-                <th>Medida</th>
-                <th>Proveedor</th>
-                <th>Tinas/Baños</th>
-                <th>Cajas</th>
-                <th>Cal</th>
-                <th>Sal</th>
-                <th>%</th>
-                <th>Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="(medida, index) in nuevoDia.medidas" :key="index">
-                <td>
-                  <select 
-                    v-model="medida.medida" 
-                    class="form-control medida-select"
-                    required
-                  >
-                    <option value="">Seleccionar medida</option>
-                    <option v-for="m in medidasDisponibles" :key="m" :value="m">
-                      {{ m }}
-                    </option>
-                  </select>
-                </td>
-                <td>
-                  <select 
-                    v-model="medida.proveedor" 
-                    class="form-control proveedor-select"
-                  >
-                    <option value="">Sin proveedor</option>
-                    <option v-for="p in proveedoresDisponibles" :key="p" :value="p">
-                      {{ p }}
-                    </option>
-                  </select>
-                </td>
-                <td>
-                  <select 
-                    v-model="medida.tinas" 
-                    class="form-control"
-                  >
-                    <option value="">Seleccionar</option>
-                    <option value="Tina">Tina</option>
-                    <option value="Baño">Baño</option>
-                  </select>
-                </td>
-                <td>
-                  <input 
-                    type="number" 
-                    v-model="medida.cajas" 
-                    placeholder=""
-                    @change="guardarCambios(diaSeleccionado)"
-                    class="form-control"
-                  >
-                </td>
-                <td>
-                  <select 
-                    v-model="medida.cal" 
-                    class="form-control"
-                  >
-                    <option value="">Seleccionar</option>
-                    <option v-for="c in calDisponible" :key="c" :value="c">{{ c }}</option>
-                  </select>
-                </td>
-                <td>
-                  <select 
-                    v-model="medida.sal" 
-                    class="form-control"
-                  >
-                    <option value="">Seleccionar</option>
-                    <option v-for="s in salDisponible" :key="s" :value="s">{{ s }}</option>
-                  </select>
-                </td>
-                <td>
-                  <input 
-                    type="text" 
-                    v-model="medida.porcentaje" 
-                    placeholder=""
-                    class="form-control porcentaje-input"
-                  >
-                </td>
-                <td>
-                  <button 
-                    @click="eliminarMedida(index)" 
-                    class="btn-delete"
-                    v-if="nuevoDia.medidas.length > 1"
-                  >
-                    <i class="fas fa-trash"></i>
-                  </button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+        <div class="fecha-container">
+          <b-form-group label="Fecha del día de preparación:">
+            <b-form-input
+              type="date"
+              v-model="nuevoDia.fecha"
+              required
+              class="fecha-input"
+            ></b-form-input>
+          </b-form-group>
           
-          <button @click="agregarMedida" class="btn-agregar">
-            <i class="fas fa-plus"></i> Agregar Medida
-          </button>
+          <div class="info-mensaje">
+            <i class="fas fa-info-circle"></i>
+            <span>Podrás agregar las medidas después de crear el día</span>
+          </div>
         </div>
       </div>
     </b-modal>
@@ -349,24 +255,14 @@ export default {
         day: 'numeric'
       })
     },
-    inicializarNuevoDia() {
+        inicializarNuevoDia() {
       const hoy = new Date()
       const offset = hoy.getTimezoneOffset()
       hoy.setMinutes(hoy.getMinutes() - offset)
       
       this.nuevoDia = {
         fecha: hoy.toISOString().split('T')[0],
-        medidas: [{
-                  medida: '',
-        proveedor: '',
-        diaNoche: '',
-        tinas: '',
-        cajas: '',
-        cal: '',
-        sal: '',
-        porcentaje: '',
-        editando: false
-        }]
+        medidas: []
       }
     },
     mostrarModalNuevoDia() {
@@ -397,17 +293,23 @@ export default {
         
         const docRef = await addDoc(collection(db, 'preparacion'), {
           fecha: this.nuevoDia.fecha,
-          medidas: this.nuevoDia.medidas,
+          medidas: [],
           createdAt: new Date(),
           timestamp: fechaLocal.getTime()
         })
 
-        this.dias.push({
+        const nuevoDiaCreado = {
           id: docRef.id,
           fecha: this.nuevoDia.fecha,
-          medidas: this.nuevoDia.medidas,
+          medidas: [],
           timestamp: fechaLocal.getTime()
-        })
+        }
+
+        this.dias.push(nuevoDiaCreado)
+        
+        // Seleccionar el día recién creado automáticamente
+        this.diaSeleccionado = nuevoDiaCreado
+        this.diasListOpen = false
 
         this.showModal = false
         console.log('Día creado exitosamente')
@@ -799,6 +701,41 @@ th, td {
   transform: translateY(-10px);
 }
 
+/* Estilos para el modal simplificado */
+.fecha-container {
+  padding: 20px 0;
+}
+
+.fecha-input {
+  font-size: 1.1rem;
+  padding: 12px;
+  border: 2px solid #e0e6ed;
+  border-radius: 8px;
+  transition: border-color 0.3s ease;
+}
+
+.fecha-input:focus {
+  border-color: #3498db;
+  box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+}
+
+.info-mensaje {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 15px;
+  background: #e8f4fc;
+  border-radius: 8px;
+  margin-top: 20px;
+  color: #2980b9;
+  font-size: 0.95rem;
+}
+
+.info-mensaje i {
+  font-size: 1.2rem;
+  color: #3498db;
+}
+
 @media (max-width: 768px) {
   .header-left {
     flex-direction: column;
@@ -830,6 +767,15 @@ th, td {
   .btn-nuevo {
     width: 100%;
     justify-content: center;
+  }
+
+  .fecha-container {
+    padding: 10px 0;
+  }
+
+  .info-mensaje {
+    font-size: 0.9rem;
+    padding: 12px;
   }
 }
 </style> 
