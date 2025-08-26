@@ -75,13 +75,71 @@
       <div class="total-general">
         <h2>Kilos Totales: {{ formatNumber(totalGeneral) }}</h2>
       </div>
+
+      <!-- Sección de salidas para el día siguiente -->
+      <div class="salidas-dia-siguiente" v-if="salidasDiaSiguiente.length > 0">
+        <h2>Apartado para Mañana ({{ fechaDiaSiguiente }})</h2>
+        <div class="salidas-grid">
+          <div class="salidas-proveedores" v-if="salidasProveedoresDiaSiguiente.length > 0">
+            <h3>Clientes</h3>
+            <table class="salidas-table">
+              <thead>
+                <tr>
+                  <th>Proveedor</th>
+                  <th>Medida</th>
+                  <th v-if="tienePrecio">Precio</th>
+                  <th class="kilos-cell">Kilos</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="salida in salidasProveedoresDiaSiguiente" :key="`${salida.proveedor}-${salida.medida}-${salida.precio || 'sin-precio'}`">
+                  <td>{{ salida.proveedor }}</td>
+                  <td>{{ salida.medida }}</td>
+                  <td v-if="tienePrecio" class="precio-cell">{{ salida.precio ? `$${salida.precio}` : '-' }}</td>
+                  <td class="kilos-cell">{{ formatNumber(salida.kilos) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          
+          <div class="salidas-maquilas" v-if="salidasMaquilasDiaSiguiente.length > 0">
+            <h3>Maquilas</h3>
+            <table class="salidas-table">
+              <thead>
+                <tr>
+                  <th>Maquila</th>
+                  <th>Medida</th>
+                  <th v-if="tienePrecio">Precio</th>
+                  <th class="kilos-cell">Kilos</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="salida in salidasMaquilasDiaSiguiente" :key="`${salida.proveedor}-${salida.medida}-${salida.precio || 'sin-precio'}`">
+                  <td>{{ salida.proveedor }}</td>
+                  <td>{{ salida.medida }}</td>
+                  <td v-if="tienePrecio" class="precio-cell">{{ salida.precio ? `$${salida.precio}` : '-' }}</td>
+                  <td class="kilos-cell">{{ formatNumber(salida.kilos) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        
+        <div class="total-salidas-siguiente">
+          <h3>Total Apartado: {{ formatNumber(totalSalidasDiaSiguiente) }} kg</h3>
+        </div>
+      </div>
+
+      <div class="total-general">
+        <h2>Kilos Totales: {{ formatNumber(totalGeneral) }}</h2>
+      </div>
     </div>
   </div>
 </template>
 <script>
 import { ref, computed, onMounted, onUnmounted, watchEffect } from 'vue';
 import { db } from '@/firebase';
-import { collection, getDocs, onSnapshot, query, orderBy } from 'firebase/firestore';
+import { collection, getDocs, onSnapshot, query, orderBy, where } from 'firebase/firestore';
 import moment from 'moment';
 
 export default {
@@ -91,6 +149,7 @@ export default {
     const search = ref('');
     const tienePrecio = ref(false);
     const deudas = ref([]);
+    const salidasDiaSiguiente = ref([]);
 
     // Función para implementar FIFO: encuentra la entrada más antigua para una salida
     const procesarSalidaFIFO = (entradas, salida) => {
@@ -217,6 +276,68 @@ export default {
         }));
       } catch (error) {
         console.error("Error al cargar deudas: ", error);
+      }
+    };
+
+    const loadSalidasDiaSiguiente = async () => {
+      try {
+        const hoy = moment();
+        const diaSiguiente = hoy.clone().add(1, 'day');
+        const inicioDiaSiguiente = diaSiguiente.startOf('day').toDate();
+        const finDiaSiguiente = diaSiguiente.endOf('day').toDate();
+
+        const sacadasSnapshot = await getDocs(
+          query(
+            collection(db, 'sacadas'),
+            where('fecha', '>=', inicioDiaSiguiente),
+            where('fecha', '<=', finDiaSiguiente)
+          )
+        );
+
+        const salidasFuturas = [];
+        sacadasSnapshot.docs.forEach(doc => {
+          const sacada = doc.data();
+          if (sacada.salidas && sacada.salidas.length > 0) {
+            sacada.salidas.forEach(salida => {
+              salidasFuturas.push({
+                ...salida,
+                fecha: sacada.fecha.toDate()
+              });
+            });
+          }
+        });
+
+        // Agrupar por proveedor y medida
+        const salidasAgrupadas = salidasFuturas.reduce((acc, salida) => {
+          const key = `${salida.proveedor}-${salida.medida}${salida.precio ? `-$${salida.precio}` : ''}`;
+          if (!acc[key]) {
+            acc[key] = {
+              proveedor: salida.proveedor,
+              medida: salida.medida,
+              precio: salida.precio,
+              kilos: 0,
+              tipo: salida.tipo || 'proveedor'
+            };
+          }
+          acc[key].kilos += salida.kilos;
+          return acc;
+        }, {});
+
+        salidasDiaSiguiente.value = Object.values(salidasAgrupadas)
+          .filter(item => item.kilos > 0)
+          .sort((a, b) => {
+            // Ordenar por tipo (proveedor primero), luego por proveedor, luego por medida
+            if (a.tipo !== b.tipo) {
+              return a.tipo === 'proveedor' ? -1 : 1;
+            }
+            if (a.proveedor !== b.proveedor) {
+              return a.proveedor.localeCompare(b.proveedor);
+            }
+            return a.medida.localeCompare(b.medida);
+          });
+
+      } catch (error) {
+        console.error("Error al cargar salidas del día siguiente: ", error);
       }
     };
 
@@ -408,6 +529,22 @@ export default {
       return valorTotal.value - saldoPendienteDeudas.value;
     });
 
+    const fechaDiaSiguiente = computed(() => {
+      return moment().add(1, 'day').format('DD/MM/YYYY');
+    });
+
+    const salidasProveedoresDiaSiguiente = computed(() => {
+      return salidasDiaSiguiente.value.filter(salida => salida.tipo === 'proveedor');
+    });
+
+    const salidasMaquilasDiaSiguiente = computed(() => {
+      return salidasDiaSiguiente.value.filter(salida => salida.tipo === 'maquila');
+    });
+
+    const totalSalidasDiaSiguiente = computed(() => {
+      return salidasDiaSiguiente.value.reduce((total, salida) => total + salida.kilos, 0);
+    });
+
     const formatNumber = (value) => {
       return Math.round(value).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
     };
@@ -590,6 +727,71 @@ export default {
             color: #d35400;
             font-weight: bold;
           }
+          .salidas-dia-siguiente {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #fff8dc;
+            border: 2px solid #ffa500;
+            border-radius: 8px;
+          }
+          .salidas-dia-siguiente h2 {
+            color: #d2691e;
+            font-size: 18pt;
+            margin: 0 0 10px 0;
+            text-align: center;
+            border-bottom: 2px solid #ffa500;
+            padding-bottom: 5px;
+          }
+          .salidas-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            margin-bottom: 10px;
+          }
+          .salidas-proveedores, .salidas-maquilas {
+            background-color: white;
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid #ddd;
+          }
+          .salidas-proveedores h3, .salidas-maquilas h3 {
+            color: #d2691e;
+            font-size: 16pt;
+            margin: 0 0 8px 0;
+            border-bottom: 1px solid #ffa500;
+            padding-bottom: 3px;
+          }
+          .salidas-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14pt;
+          }
+          .salidas-table th, .salidas-table td {
+            border: 1px solid #ddd;
+            padding: 5px 8px;
+            text-align: left;
+          }
+          .salidas-table th {
+            background-color: #ffa500;
+            color: white;
+            font-weight: bold;
+          }
+          .salidas-table tr:nth-child(even) {
+            background-color: #fafafa;
+          }
+          .total-salidas-siguiente {
+            text-align: center;
+            margin-top: 10px;
+            padding: 8px;
+            background-color: #fff;
+            border: 1px solid #ffa500;
+            border-radius: 5px;
+          }
+          .total-salidas-siguiente h3 {
+            color: #d2691e;
+            font-size: 16pt;
+            margin: 0;
+          }
           @media print {
             .medida-card {
               box-shadow: none;
@@ -604,9 +806,18 @@ export default {
             table {
               page-break-inside: avoid;
             }
-            .valor-total, .total-general {
+            .valor-total, .total-general, .salidas-dia-siguiente {
               page-break-before: avoid;
               break-before: avoid;
+            }
+            .salidas-dia-siguiente {
+              background-color: #fff8dc !important;
+              border: 2px solid #ffa500 !important;
+            }
+            .salidas-grid {
+              display: grid;
+              grid-template-columns: repeat(2, 1fr);
+              gap: 15px;
             }
           }
         </style>
@@ -637,6 +848,70 @@ export default {
         </div>
       `;
 
+      // Generar HTML para salidas del día siguiente
+      const salidasDiaSiguienteHtml = salidasDiaSiguiente.value.length > 0 ? `
+        <div class="salidas-dia-siguiente">
+          <h2>Apartado para Mañana (${fechaDiaSiguiente.value})</h2>
+          <div class="salidas-grid">
+            ${salidasProveedoresDiaSiguiente.value.length > 0 ? `
+              <div class="salidas-proveedores">
+                <h3>Clientes</h3>
+                <table class="salidas-table">
+                  <thead>
+                    <tr>
+                      <th>Proveedor</th>
+                      <th>Medida</th>
+                      ${tienePrecio.value ? '<th>Precio</th>' : ''}
+                      <th class="kilos-cell">Kilos</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${salidasProveedoresDiaSiguiente.value.map(salida => `
+                      <tr>
+                        <td>${salida.proveedor}</td>
+                        <td>${salida.medida}</td>
+                        ${tienePrecio.value ? `<td class="precio-cell">${salida.precio ? '$' + salida.precio : '-'}</td>` : ''}
+                        <td class="kilos-cell">${formatNumber(salida.kilos)}</td>
+                      </tr>
+                    `).join('')}
+                  </tbody>
+                </table>
+              </div>
+            ` : ''}
+            
+            ${salidasMaquilasDiaSiguiente.value.length > 0 ? `
+              <div class="salidas-maquilas">
+                <h3>Maquilas</h3>
+                <table class="salidas-table">
+                  <thead>
+                    <tr>
+                      <th>Maquila</th>
+                      <th>Medida</th>
+                      ${tienePrecio.value ? '<th>Precio</th>' : ''}
+                      <th class="kilos-cell">Kilos</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${salidasMaquilasDiaSiguiente.value.map(salida => `
+                      <tr>
+                        <td>${salida.proveedor}</td>
+                        <td>${salida.medida}</td>
+                        ${tienePrecio.value ? `<td class="precio-cell">${salida.precio ? '$' + salida.precio : '-'}</td>` : ''}
+                        <td class="kilos-cell">${formatNumber(salida.kilos)}</td>
+                      </tr>
+                    `).join('')}
+                  </tbody>
+                </table>
+              </div>
+            ` : ''}
+          </div>
+          
+          <div class="total-salidas-siguiente">
+            <h3>Total Apartado: ${formatNumber(totalSalidasDiaSiguiente.value)} kg</h3>
+          </div>
+        </div>
+      ` : '';
+
       const htmlCompleto = `
         <!DOCTYPE html>
         <html>
@@ -654,6 +929,7 @@ export default {
           ${valorTotalHtml}
           ${saldoPendienteHtml}
           ${valorLibreHtml}
+          ${salidasDiaSiguienteHtml}
           ${kilosTotalesHtml}
         </body>
         </html>
@@ -676,8 +952,11 @@ export default {
     onMounted(() => {
       loadExistencias();
       loadDeudas();
+      loadSalidasDiaSiguiente();
+      
       unsubscribe = onSnapshot(collection(db, 'sacadas'), () => {
         loadExistencias();
+        loadSalidasDiaSiguiente();
       });
       
       // También escuchar cambios en deudas
@@ -714,7 +993,12 @@ export default {
       valorLibre,
       tienePrecio,
       formatNumber,
-      imprimirReporte
+      imprimirReporte,
+      salidasDiaSiguiente,
+      fechaDiaSiguiente,
+      salidasProveedoresDiaSiguiente,
+      salidasMaquilasDiaSiguiente,
+      totalSalidasDiaSiguiente
     };
   }
 };
@@ -1014,6 +1298,130 @@ h1 {
   font-size: 14px;
 }
 
+/* Estilos para la sección de salidas del día siguiente */
+.salidas-dia-siguiente {
+  margin-top: 30px;
+  padding: 20px;
+  background-color: #fff8dc;
+  border: 2px solid #ffa500;
+  border-radius: 10px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.salidas-dia-siguiente h2 {
+  color: #d2691e;
+  text-align: center;
+  margin: 0 0 20px 0;
+  font-size: 24px;
+  border-bottom: 2px solid #ffa500;
+  padding-bottom: 10px;
+}
+
+.salidas-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.salidas-proveedores, .salidas-maquilas {
+  background-color: white;
+  padding: 15px;
+  border-radius: 8px;
+  border: 1px solid #ddd;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.salidas-proveedores h3, .salidas-maquilas h3 {
+  color: #d2691e;
+  margin: 0 0 15px 0;
+  font-size: 18px;
+  border-bottom: 2px solid #ffa500;
+  padding-bottom: 8px;
+}
+
+.salidas-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 10px;
+}
+
+.salidas-table th,
+.salidas-table td {
+  padding: 10px;
+  text-align: left;
+  border-bottom: 1px solid #ddd;
+  font-size: 14px;
+}
+
+.salidas-table th {
+  background-color: #ffa500;
+  color: white;
+  font-weight: bold;
+}
+
+.salidas-table tr:nth-child(even) {
+  background-color: #f9f9f9;
+}
+
+.salidas-table tr:hover {
+  background-color: #f5f5f5;
+}
+
+.salidas-table .kilos-cell {
+  text-align: right;
+  font-weight: bold;
+  color: #2c3e50;
+}
+
+.salidas-table .precio-cell {
+  text-align: center;
+  color: #27ae60;
+  font-weight: bold;
+}
+
+.total-salidas-siguiente {
+  text-align: center;
+  margin-top: 20px;
+  padding: 15px;
+  background-color: white;
+  border: 2px solid #ffa500;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.total-salidas-siguiente h3 {
+  color: #d2691e;
+  margin: 0;
+  font-size: 22px;
+  font-weight: bold;
+}
+
+@media (max-width: 768px) {
+  .salidas-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .salidas-dia-siguiente {
+    margin: 20px 10px;
+    padding: 15px;
+  }
+  
+  .salidas-dia-siguiente h2 {
+    font-size: 20px;
+  }
+  
+  .salidas-table th,
+  .salidas-table td {
+    padding: 8px 6px;
+    font-size: 13px;
+  }
+  
+  .total-salidas-siguiente h3 {
+    font-size: 18px;
+  }
+}
+
 @media print {
   .medida-card {
     break-inside: avoid;
@@ -1022,9 +1430,14 @@ h1 {
   .valor-total,
   .saldo-pendiente-deudas,
   .valor-libre,
-  .total-general {
+  .total-general,
+  .salidas-dia-siguiente {
     break-before: avoid;
     page-break-before: avoid;
+  }
+  .salidas-dia-siguiente {
+    background-color: #fff8dc !important;
+    border: 2px solid #ffa500 !important;
   }
 }
 </style>
