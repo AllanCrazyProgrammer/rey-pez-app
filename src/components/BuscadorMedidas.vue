@@ -32,6 +32,15 @@
           </div>
 
           <div class="filtro-grupo">
+            <label>Día/Noche:</label>
+            <select v-model="filtros.diaNoche" @change="buscarMedidas" class="form-control">
+              <option value="">Todos</option>
+              <option value="Día">Día</option>
+              <option value="Noche">Noche</option>
+            </select>
+          </div>
+
+          <div class="filtro-grupo">
             <label>Cajas:</label>
             <input 
               type="number" 
@@ -130,6 +139,7 @@ export default {
       filtros: {
         medida: '',
         proveedor: '',
+        diaNoche: '',
         cajas: ''
       },
       resultados: [],
@@ -219,6 +229,11 @@ export default {
 
           // Filtrar por proveedor
           if (this.filtros.proveedor && medida.proveedor !== this.filtros.proveedor) {
+            coincide = false
+          }
+
+          // Filtrar por día/noche
+          if (this.filtros.diaNoche && medida.diaNoche !== this.filtros.diaNoche) {
             coincide = false
           }
 
