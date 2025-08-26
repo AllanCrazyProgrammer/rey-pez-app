@@ -1,5 +1,8 @@
 <template>
   <div class="preparacion-container">
+    <!-- Componente de búsqueda de medidas -->
+    <BuscadorMedidas />
+
     <div class="header">
       <div class="header-left">
         <h1>Preparación</h1>
@@ -24,6 +27,7 @@
         </div>
       </div>
       <div class="header-actions">
+        <GestionProveedores @proveedores-actualizados="cargarProveedores" />
         <button @click="mostrarModalNuevoDia" class="btn-nuevo">
           <i class="fas fa-plus"></i> Nuevo Día
         </button>
@@ -44,6 +48,7 @@
           <tr>
             <th>Medida</th>
             <th>Proveedor</th>
+            <th>Día/Noche</th>
             <th>Tinas/Baños</th>
             <th>Cajas/Kg</th>
             <th>Cal</th>
@@ -76,6 +81,17 @@
                 <option v-for="p in proveedoresDisponibles" :key="p" :value="p">
                   {{ p }}
                 </option>
+              </select>
+            </td>
+            <td>
+              <select 
+                v-model="medida.diaNoche" 
+                class="form-control"
+                @change="guardarCambios(diaSeleccionado)"
+              >
+                <option value="">Seleccionar</option>
+                <option value="Día">Día</option>
+                <option value="Noche">Noche</option>
               </select>
             </td>
             <td>
@@ -269,9 +285,15 @@
 
 <script>
 import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, getDocs, query, orderBy } from 'firebase/firestore'
+import BuscadorMedidas from '@/components/BuscadorMedidas.vue'
+import GestionProveedores from '@/components/GestionProveedores.vue'
 
 export default {
   name: 'Preparacion',
+  components: {
+    BuscadorMedidas,
+    GestionProveedores
+  },
   data() {
     return {
       dias: [],
@@ -295,13 +317,7 @@ export default {
         '21/25',
         'Salmureado',
       ],
-      proveedoresDisponibles: [
-       "Ahumada",
-       "Selecta",
-       "Tirado",
-       "Ozuna",
-       "Mx",
-      ],
+      proveedoresDisponibles: [],
       calDisponible: [
         "1/8",
         "1/4",
@@ -341,14 +357,15 @@ export default {
       this.nuevoDia = {
         fecha: hoy.toISOString().split('T')[0],
         medidas: [{
-          medida: '',
-          proveedor: '',
-          tinas: '',
-          cajas: '',
-          cal: '',
-          sal: '',
-          porcentaje: '',
-          editando: false
+                  medida: '',
+        proveedor: '',
+        diaNoche: '',
+        tinas: '',
+        cajas: '',
+        cal: '',
+        sal: '',
+        porcentaje: '',
+        editando: false
         }]
       }
     },
@@ -359,6 +376,7 @@ export default {
       this.nuevoDia.medidas.push({
         medida: '',
         proveedor: '',
+        diaNoche: '',
         tinas: '',
         cajas: '',
         cal: '',
@@ -457,6 +475,7 @@ export default {
       const nuevaMedida = {
         medida: '',
         proveedor: '',
+        diaNoche: '',
         tinas: '',
         cajas: '',
         cal: '',
@@ -473,10 +492,55 @@ export default {
     seleccionarDia(dia) {
       this.diaSeleccionado = dia
       this.diasListOpen = false
+    },
+    async cargarProveedores() {
+      try {
+        const db = getFirestore()
+        const q = query(collection(db, 'proveedores'), orderBy('nombre'))
+        const querySnapshot = await getDocs(q)
+        
+        this.proveedoresDisponibles = querySnapshot.docs.map(doc => doc.data().nombre)
+        console.log('Proveedores cargados:', this.proveedoresDisponibles.length)
+      } catch (error) {
+        console.error('Error al cargar proveedores:', error)
+        // Fallback a proveedores por defecto si hay error
+        this.proveedoresDisponibles = ['Ahumada', 'Selecta', 'Tirado', 'Ozuna', 'Mx']
+      }
+    },
+    async migrarProveedoresExistentes() {
+      try {
+        const proveedoresPorDefecto = ['Ahumada', 'Selecta', 'Tirado', 'Ozuna', 'Mx']
+        const db = getFirestore()
+        
+        // Verificar si ya existen proveedores en la base de datos
+        const existingSnapshot = await getDocs(collection(db, 'proveedores'))
+        
+        if (existingSnapshot.empty) {
+          console.log('Migrando proveedores por defecto...')
+          
+          const promesas = proveedoresPorDefecto.map(nombre => 
+            addDoc(collection(db, 'proveedores'), {
+              nombre,
+              createdAt: new Date(),
+              updatedAt: new Date()
+            })
+          )
+          
+          await Promise.all(promesas)
+          console.log('Proveedores migrados exitosamente')
+        }
+      } catch (error) {
+        console.error('Error al migrar proveedores:', error)
+      }
     }
   },
   async mounted() {
-    await this.cargarDias()
+    await Promise.all([
+      this.cargarDias(),
+      this.cargarProveedores(),
+      this.migrarProveedoresExistentes()
+    ])
+    
     // Si hay un día en la URL, seleccionarlo
     if (this.$route.query.fecha) {
       const diaEncontrado = this.dias.find(d => d.fecha === this.$route.query.fecha)
@@ -497,6 +561,13 @@ export default {
   max-width: 1200px;
   margin: 0 auto;
   padding: 15px;
+}
+
+/* Separador visual entre el buscador y la sección principal */
+.preparacion-container .header {
+  border-top: 2px solid #e9ecef;
+  padding-top: 20px;
+  margin-top: 20px;
 }
 
 .header {
@@ -522,6 +593,7 @@ export default {
 .header-actions {
   display: flex;
   gap: 10px;
+  flex-wrap: wrap;
 }
 
 .btn-nuevo {
@@ -747,6 +819,7 @@ th, td {
   .header-actions {
     width: 100%;
     flex-direction: column;
+    gap: 10px;
   }
 
   .btn-eliminar-dia {
@@ -756,6 +829,7 @@ th, td {
 
   .btn-nuevo {
     width: 100%;
+    justify-content: center;
   }
 }
 </style> 
