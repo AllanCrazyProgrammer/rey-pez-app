@@ -44,8 +44,13 @@ export const generarTablaRendimientos = (datosRendimientos, nombresMedidasPerson
     return acc;
   }, {});
 
-  // Siempre mostrar la columna de costos si está habilitada
-  const mostrarColumnaCosto = embarqueData.mostrarColumnaCosto;
+  // Verificar si todos los costos son 0 para decidir si mostrar la columna
+  const todosCostosEsCero = Object.values(datosAgrupados).every(dato => 
+    !dato.costoFinal || Number(dato.costoFinal) === 0
+  );
+  
+  // Solo mostrar la columna de costos si está habilitada Y hay al menos un costo mayor a 0
+  const mostrarColumnaCosto = embarqueData.mostrarColumnaCosto && !todosCostosEsCero;
 
   const body = [
     [
