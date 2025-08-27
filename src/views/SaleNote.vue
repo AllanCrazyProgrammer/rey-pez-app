@@ -87,8 +87,18 @@
               </tr>
             </tbody>
           </table>
+          <div class="flete-section">
+            <div class="form-row">
+              <div>
+                <label for="flete">Flete ($):</label>
+                <input type="number" id="flete" v-model.number="flete" step="0.01" min="0" />
+              </div>
+            </div>
+          </div>
           <div class="total-general">
-            <h3>Total General: ${{ formatNumber(grandTotal) }}</h3>
+            <h3>Subtotal: ${{ formatNumber(grandTotal) }}</h3>
+            <h3 v-if="flete > 0">Flete: -${{ formatNumber(flete) }}</h3>
+            <h3 class="total-final">Total General: ${{ formatNumber(totalFinal) }}</h3>
           </div>
         </div>
    
@@ -198,6 +208,7 @@ export default {
         fecha: today.toISOString().substr(0, 10)
       },
       abonos: [],
+      flete: 0,
       isPaid: false,
       creationDate: today.toISOString().substr(0, 10),
       noteId: null,
@@ -210,11 +221,14 @@ export default {
     grandTotal() {
       return this.products.reduce((sum, product) => sum + product.total, 0);
     },
+    totalFinal() {
+      return this.grandTotal - (this.flete || 0);
+    },
     totalAbonado() {
       return this.abonos.reduce((sum, abono) => sum + Number(abono.monto), 0);
     },
     saldoRestante() {
-      return this.grandTotal - this.totalAbonado;
+      return this.totalFinal - this.totalAbonado;
     },
     formattedFolio() {
       return `F-${this.folio.toString().padStart(4, '0')}`;
@@ -253,6 +267,7 @@ export default {
           currentDate: this.currentDate,
           products: this.products,
           abonos: this.abonos,
+          flete: this.flete,
           isPaid: this.isPaid,
           creationDate: this.creationDate
         };
@@ -321,6 +336,7 @@ export default {
           this.currentDate = noteData.currentDate;
           this.products = noteData.products;
           this.abonos = noteData.abonos;
+          this.flete = noteData.flete || 0;
           this.isPaid = noteData.isPaid;
           this.creationDate = noteData.creationDate;
         } else {
@@ -533,8 +549,33 @@ th {
   background-color: #f8f8f8;
 }
 
+.flete-section {
+  margin-top: 1em;
+  padding: 1em;
+  background-color: #f8f9fa;
+  border-radius: 10px;
+  border: 1px solid #dee2e6;
+}
+
 .total-general {
   margin-top: 1em;
+  padding: 1em;
+  background-color: #e8f4fd;
+  border-radius: 10px;
+  border: 2px solid #3760b0;
+}
+
+.total-general h3 {
+  margin: 0.5em 0;
+}
+
+.total-final {
+  color: #3760b0;
+  font-size: 1.2em;
+  font-weight: bold;
+  border-top: 2px solid #3760b0;
+  padding-top: 0.5em;
+  margin-top: 0.5em;
 }
 
 .abonos-container {

@@ -171,7 +171,9 @@ export default {
       for (let note of clientNotes) {
         if (remainingAbono <= 0) break;
 
-        const noteTotal = note.products.reduce((sum, product) => sum + (product.kilos * product.pricePerKilo), 0);
+        const subtotal = note.products.reduce((sum, product) => sum + (product.kilos * product.pricePerKilo), 0);
+        const flete = note.flete || 0;
+        const noteTotal = subtotal - flete;
         const notePaid = note.abonos.reduce((sum, abono) => sum + abono.monto, 0);
         const noteRemaining = noteTotal - notePaid;
 
@@ -313,7 +315,11 @@ export default {
       const debtByClient = {};
       for (const [client, notes] of Object.entries(this.notesByClient)) {
         debtByClient[client] = notes.reduce((total, note) => {
-          const noteDebt = note.products.reduce((sum, product) => sum + (product.kilos * product.pricePerKilo), 0) - note.abonos.reduce((sum, abono) => sum + abono.monto, 0);
+          const subtotal = note.products.reduce((sum, product) => sum + (product.kilos * product.pricePerKilo), 0);
+          const flete = note.flete || 0;
+          const totalFinal = subtotal - flete;
+          const totalAbonado = note.abonos.reduce((sum, abono) => sum + abono.monto, 0);
+          const noteDebt = totalFinal - totalAbonado;
           return total + (note.isPaid ? 0 : noteDebt);
         }, 0);
       }
