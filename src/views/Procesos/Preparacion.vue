@@ -27,6 +27,13 @@
         </div>
       </div>
       <div class="header-actions">
+        <button 
+          v-if="embarqueId" 
+          @click="volverAEmbarque" 
+          class="btn-volver-embarque"
+        >
+          <i class="fas fa-arrow-left"></i> Volver al Embarque
+        </button>
         <GestionProveedores @proveedores-actualizados="cargarProveedores" />
         <button @click="mostrarModalNuevoDia" class="btn-nuevo">
           <i class="fas fa-plus"></i> Nuevo Día
@@ -210,6 +217,7 @@ export default {
       },
       diasListOpen: false,
       diaSeleccionado: null,
+      embarqueId: null,
       medidasDisponibles: [
         'Golfo',
         'Piojo',
@@ -246,6 +254,46 @@ export default {
     }
   },
   methods: {
+    // Nuevo método para manejar la selección de día
+    aplicarSeleccionDia() {
+      console.log('Aplicando selección de día...')
+      console.log('Query fecha:', this.$route.query.fecha)
+      console.log('Días cargados:', this.dias.length)
+      console.log('Días disponibles:', this.dias.map(d => ({ id: d.id, fecha: d.fecha })))
+      
+      // Si hay un día en la URL, seleccionarlo
+      if (this.$route.query.fecha) {
+        let fechaBuscada = this.$route.query.fecha
+        
+        // Convertir Timestamp a string si es necesario
+        if (typeof fechaBuscada === 'object' && fechaBuscada.seconds) {
+          // Es un Timestamp de Firebase
+          const fechaDate = new Date(fechaBuscada.seconds * 1000)
+          fechaBuscada = fechaDate.toISOString().split('T')[0]
+          console.log('Fecha convertida de Timestamp:', fechaBuscada)
+        }
+        
+        console.log('Buscando día con fecha:', fechaBuscada)
+        console.log('Tipo de fecha buscada:', typeof fechaBuscada)
+        
+        const diaEncontrado = this.dias.find(d => d.fecha === fechaBuscada)
+        console.log('Día encontrado:', diaEncontrado)
+        
+        if (diaEncontrado) {
+          this.diaSeleccionado = diaEncontrado
+          console.log('Día seleccionado automáticamente:', diaEncontrado.fecha)
+        } else {
+          console.log('No se encontró día para la fecha:', fechaBuscada)
+          console.log('Fechas disponibles:', this.dias.map(d => d.fecha))
+          // Opcionalmente, mostrar mensaje o crear día automáticamente
+        }
+      } else if (this.dias.length > 0) {
+        // Si no hay día en la URL, seleccionar el más reciente
+        this.diaSeleccionado = this.diasOrdenados[0]
+        console.log('Seleccionado día más reciente:', this.diaSeleccionado.fecha)
+      }
+    },
+    
     formatearFecha(fecha) {
       // Ajustamos la fecha para que use la zona horaria local
       const [year, month, day] = fecha.split('-')
@@ -256,7 +304,7 @@ export default {
         day: 'numeric'
       })
     },
-        inicializarNuevoDia() {
+    inicializarNuevoDia() {
       const hoy = new Date()
       const offset = hoy.getTimezoneOffset()
       hoy.setMinutes(hoy.getMinutes() - offset)
@@ -369,7 +417,8 @@ export default {
             medidas: data.medidas.map(m => ({...m, editando: false}))
           }
         })
-        console.log('Días cargados exitosamente')
+        console.log('Días cargados exitosamente:', this.dias.length)
+        console.log('Fechas de días cargados:', this.dias.map(d => d.fecha))
       } catch (error) {
         console.error('Error al cargar días:', error)
       }
@@ -395,6 +444,15 @@ export default {
     seleccionarDia(dia) {
       this.diaSeleccionado = dia
       this.diasListOpen = false
+    },
+
+    volverAEmbarque() {
+      if (this.embarqueId) {
+        this.$router.push({
+          name: 'EditarEmbarque',
+          params: { id: this.embarqueId }
+        });
+      }
     },
     async cargarProveedores() {
       try {
@@ -438,24 +496,35 @@ export default {
     }
   },
   async mounted() {
+    // Capturar embarqueId si viene desde un embarque
+    if (this.$route.query.embarqueId) {
+      this.embarqueId = this.$route.query.embarqueId
+      console.log('Viniendo desde embarque:', this.embarqueId)
+    }
+
     await Promise.all([
       this.cargarDias(),
       this.cargarProveedores(),
       this.migrarProveedoresExistentes()
     ])
     
-    // Si hay un día en la URL, seleccionarlo
-    if (this.$route.query.fecha) {
-      const diaEncontrado = this.dias.find(d => d.fecha === this.$route.query.fecha)
-      if (diaEncontrado) {
-        this.diaSeleccionado = diaEncontrado
+    // Aplicar selección de día después de cargar todos los datos
+    this.aplicarSeleccionDia()
+  },
+
+  watch: {
+    '$route.query.fecha'(nuevaFecha, fechaAnterior) {
+      console.log('Detectado cambio en query.fecha:', { nuevaFecha, fechaAnterior })
+      if (nuevaFecha !== fechaAnterior && this.dias.length > 0) {
+        this.aplicarSeleccionDia()
       }
-    } else if (this.dias.length > 0) {
-      // Si no hay día en la URL, seleccionar el más reciente
-      this.diaSeleccionado = this.diasOrdenados[0]
+    },
+    '$route.query.embarqueId'(nuevoEmbarqueId) {
+      this.embarqueId = nuevoEmbarqueId
+      console.log('Embarque ID actualizado:', nuevoEmbarqueId)
     }
   }
-}
+};
 </script>
 
 <style scoped>
@@ -497,6 +566,25 @@ export default {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
+}
+
+.btn-volver-embarque {
+  background: linear-gradient(135deg, #27ae60, #2ecc71);
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 5px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.3s ease;
+  white-space: nowrap;
+}
+
+.btn-volver-embarque:hover {
+  background: linear-gradient(135deg, #2ecc71, #27ae60);
+  transform: translateY(-2px);
 }
 
 .btn-nuevo {
@@ -758,6 +846,11 @@ th, td {
     width: 100%;
     flex-direction: column;
     gap: 10px;
+  }
+
+  .btn-volver-embarque {
+    width: 100%;
+    justify-content: center;
   }
 
   .btn-eliminar-dia {

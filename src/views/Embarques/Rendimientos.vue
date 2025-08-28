@@ -11,6 +11,9 @@
       <button @click="irAGestionCostos" class="btn-costos">
         <i class="fas fa-dollar-sign"></i> Gestión de Costos
       </button>
+      <button @click="irAPreparacion" class="btn-preparacion">
+        <i class="fas fa-tasks"></i> Ir a Preparación
+      </button>
       <button @click="abrirModalConfiguracion" class="btn-configuracion">
         <i class="fas fa-cog"></i> Configurar Pesos
       </button>
@@ -1892,6 +1895,37 @@ export default {
       });
     },
 
+    irAPreparacion() {
+      if (this.embarqueData && this.embarqueData.fecha) {
+        // Convertir la fecha a string si es un Timestamp
+        let fechaString = this.embarqueData.fecha;
+        
+        if (typeof fechaString === 'object' && fechaString.seconds) {
+          // Es un Timestamp de Firebase, convertir a string
+          const fechaDate = new Date(fechaString.seconds * 1000);
+          fechaString = fechaDate.toISOString().split('T')[0];
+          console.log('Fecha convertida de Timestamp:', fechaString);
+        } else if (typeof fechaString === 'string') {
+          // Ya es string, usar tal como está
+          console.log('Fecha ya es string:', fechaString);
+        }
+        
+        // Navegar a Preparación con la fecha del embarque y el ID del embarque como query parameters
+        this.$router.push({
+          name: 'Preparacion',
+          query: { 
+            fecha: fechaString,
+            embarqueId: this.$route.params.id
+          }
+        });
+        console.log('Navegando a Preparación con fecha:', fechaString);
+      } else {
+        // Si no hay fecha del embarque, ir sin parámetros
+        this.$router.push({ name: 'Preparacion' });
+        console.log('Navegando a Preparación sin fecha específica');
+      }
+    },
+
 
 
     formatearPrecio(precio) {
@@ -2542,6 +2576,30 @@ input {
   margin-right: 10px;
 }
 
+.btn-preparacion {
+  display: inline-flex;
+  align-items: center;
+  padding: 10px 20px;
+  background-color: #3498db;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+  margin-left: auto;
+  margin-right: 10px;
+}
+
+.btn-preparacion:hover {
+  background-color: #2980b9;
+}
+
+.btn-preparacion i {
+  margin-right: 10px;
+}
+
 .btn-configuracion {
   display: inline-flex;
   align-items: center;
@@ -2914,6 +2972,11 @@ input {
   .header-container {
     flex-wrap: wrap;
     gap: 10px;
+  }
+
+  .btn-preparacion {
+    margin-left: 0;
+    margin-right: 0;
   }
 
   .btn-configuracion {
