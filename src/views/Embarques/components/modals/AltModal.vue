@@ -4,7 +4,12 @@
         <div class="form-group">
             <label for="altInput">Nombre alternativo:</label>
             <input type="text" id="altInput" v-model="altLocal" class="form-control"
-                placeholder="Ingrese el nombre alternativo para PDF" @keyup.enter="guardarAlt" ref="altInput">
+                placeholder="Ingrese el nombre alternativo para PDF" 
+                @keyup.enter="guardarAlt" 
+                @input="onInputUsuario"
+                @keydown="onInputUsuario"
+                @focus="onInputUsuario"
+                ref="altInput">
             <small class="form-text text-muted">
                 Este nombre solo se mostrará en el PDF de resumen de embarque.
             </small>
@@ -32,25 +37,75 @@ export default {
     },
     data() {
         return {
-            altLocal: ''
+            altLocal: '',
+            usuarioEditando: false,
+            timeoutEdicion: null
         };
     },
     watch: {
         mostrar(newVal) {
             if (newVal) {
+                // Resetear estado de edición cuando se abre el modal
+                this.usuarioEditando = false;
+                if (this.timeoutEdicion) {
+                    clearTimeout(this.timeoutEdicion);
+                    this.timeoutEdicion = null;
+                }
+                
                 this.altLocal = this.alt;
                 this.$nextTick(() => {
                     this.$refs.altInput?.focus();
                 });
+            } else {
+                // Limpiar estado cuando se cierra el modal
+                this.usuarioEditando = false;
+                if (this.timeoutEdicion) {
+                    clearTimeout(this.timeoutEdicion);
+                    this.timeoutEdicion = null;
+                }
             }
         },
         alt(newVal) {
-            this.altLocal = newVal;
+            // Solo actualizar si el modal está visible y el usuario NO está editando activamente
+            if (this.mostrar && !this.usuarioEditando) {
+                this.altLocal = newVal;
+            }
         }
     },
     methods: {
         guardarAlt() {
+            // Limpiar timeout si existe
+            if (this.timeoutEdicion) {
+                clearTimeout(this.timeoutEdicion);
+                this.timeoutEdicion = null;
+            }
+            // Marcar que el usuario ya no está editando
+            this.usuarioEditando = false;
             this.$emit('guardar', this.altLocal.trim());
+        },
+
+        onInputUsuario() {
+            // Marcar que el usuario está editando activamente
+            this.usuarioEditando = true;
+            
+            // Limpiar timeout anterior si existe
+            if (this.timeoutEdicion) {
+                clearTimeout(this.timeoutEdicion);
+            }
+            
+            // Establecer un timeout para marcar que el usuario dejó de editar
+            // después de 2 segundos de inactividad
+            this.timeoutEdicion = setTimeout(() => {
+                this.usuarioEditando = false;
+                this.timeoutEdicion = null;
+            }, 2000);
+        }
+    },
+
+    beforeDestroy() {
+        // Limpiar timeout al destruir el componente
+        if (this.timeoutEdicion) {
+            clearTimeout(this.timeoutEdicion);
         }
     }
 }
