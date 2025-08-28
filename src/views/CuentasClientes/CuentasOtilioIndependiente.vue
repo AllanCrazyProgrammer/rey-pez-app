@@ -6,7 +6,7 @@
     <div class="back-button-container">
       <BackButton to="/cuentas-otilio-independiente" />
       <PreciosHistorialModal clienteActual="otilioIndependiente" />
-      <StashModal cliente="otilioIndependiente" />
+      <StashModalV2 cliente="otilioIndependiente" />
     </div>
     <h1>Cuentas Independientes Otilio</h1>
     
@@ -318,7 +318,7 @@ import {
 } from 'firebase/firestore';
 import BackButton from '@/components/BackButton.vue';
 import PreciosHistorialModal from '@/components/PreciosHistorialModal.vue';
-import StashModal from '@/components/StashModal.vue';
+import StashModalV2 from '@/components/StashModalV2.vue';
 import PreciosClienteButton from '@/components/PreciosClienteButton.vue';
 
 export default {
@@ -326,7 +326,7 @@ export default {
   components: {
     BackButton,
     PreciosHistorialModal,
-    StashModal,
+    StashModalV2,
     PreciosClienteButton
   },
   data() {

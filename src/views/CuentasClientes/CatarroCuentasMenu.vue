@@ -13,7 +13,6 @@
         Ventas y Ganancias
       </router-link>
       <PreciosHistorialModal />
-      <StashModal cliente="catarro" />
       <StashModalV2 cliente="catarro" />
     </div>
 
@@ -76,7 +75,6 @@ import { db } from '@/firebase';
 import { collection, query, orderBy, deleteDoc, doc, onSnapshot, where, updateDoc } from 'firebase/firestore';
 import BackButton from '@/components/BackButton.vue';
 import PreciosHistorialModal from '@/components/PreciosHistorialModal.vue';
-import StashModal from '@/components/StashModal.vue';
 import StashModalV2 from '@/components/StashModalV2.vue';
 
 export default {
@@ -84,7 +82,6 @@ export default {
   components: {
     BackButton,
     PreciosHistorialModal,
-    StashModal,
     StashModalV2
   },
   data() {

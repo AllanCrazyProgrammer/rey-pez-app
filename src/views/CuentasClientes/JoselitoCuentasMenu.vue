@@ -16,7 +16,7 @@
         Abonos
       </button>
       <PreciosHistorialModal clienteActual="joselito" />
-      <StashModal cliente="joselito" />
+      <StashModalV2 cliente="joselito" />
     </div>
 
     <!-- Modal de Abonos -->
@@ -134,14 +134,14 @@ import { db } from '@/firebase';
 import { collection, query, orderBy, deleteDoc, doc, onSnapshot, updateDoc, getDocs } from 'firebase/firestore';
 import BackButton from '@/components/BackButton.vue';
 import PreciosHistorialModal from '@/components/PreciosHistorialModal.vue';
-import StashModal from '@/components/StashModal.vue';
+import StashModalV2 from '@/components/StashModalV2.vue';
 
 export default {
   name: 'JoselitoCuentasMenu',
   components: {
     BackButton,
     PreciosHistorialModal,
-    StashModal
+    StashModalV2
   },
   data() {
     return {

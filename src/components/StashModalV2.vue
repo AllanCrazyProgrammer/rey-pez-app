@@ -1,7 +1,7 @@
 <template>
   <div>
     <button @click="showModal = true" class="stash-button">
-      Stash v2
+      Stash
     </button>
 
     <!-- Modal Principal -->
