@@ -4,7 +4,6 @@ export const CLIENTE_COLORS = {
   CATARRO: "#e74c3c",
   OTILIO: "#f1c40f",
   OZUNA: "#2ecc71",
-  ELIZABETH: "#9b59b6",
   DEFAULT: "#95a5a6",
 };
 
@@ -27,7 +26,6 @@ export const CLIENTES_PREDEFINIDOS = [
   },
   { id: 3, nombre: "Otilio", color: CLIENTE_COLORS.OTILIO, textColor: "black" },
   { id: 4, nombre: "Ozuna", color: CLIENTE_COLORS.OZUNA, textColor: "white" },
-  { id: 5, nombre: "Elizabeth", color: CLIENTE_COLORS.ELIZABETH, textColor: "white" },
 ];
 
 // Estructura para un nuevo producto

@@ -396,6 +396,29 @@ export default {
       
       const productosPorCliente = {};
 
+      // Primero, asegurar que todos los clientes base aparezcan (aunque no tengan productos)
+      this.clientesPredefinidos.forEach(cliente => {
+        const clienteId = cliente.id.toString();
+        productosPorCliente[clienteId] = [];
+        
+        // Asegurar que el cliente base tenga inicializado su contenedor de crudos
+        if (!this.clienteCrudos[clienteId]) {
+          this.$set(this.clienteCrudos, clienteId, []);
+        }
+      });
+
+      // También incluir clientes personalizados del embarque actual (aunque no tengan productos)
+      this.clientesPersonalizados.forEach(cliente => {
+        const clienteId = cliente.id.toString();
+        productosPorCliente[clienteId] = [];
+        
+        // Asegurar que el cliente tenga inicializado su contenedor de crudos
+        if (!this.clienteCrudos[clienteId]) {
+          this.$set(this.clienteCrudos, clienteId, []);
+        }
+      });
+
+      // Luego, distribuir los productos existentes por cliente
       this.embarque.productos.forEach(producto => {
         const clienteId = producto.clienteId;
         if (!productosPorCliente[clienteId]) {
@@ -1196,25 +1219,120 @@ export default {
       }
     },
 
-    eliminarCliente(clienteId) {
-      // Filtrar los productos para eliminar los del cliente seleccionado
+    async eliminarCliente(clienteId) {
+      const nombreCliente = this.obtenerNombreCliente(clienteId);
+      console.log(`[eliminarCliente] Eliminando cliente: ${nombreCliente} (ID: ${clienteId})`);
+      
+      // 1. Filtrar los productos para eliminar los del cliente seleccionado
+      const productosAnteriores = this.embarque.productos.length;
       this.embarque.productos = this.embarque.productos.filter(p => p.clienteId !== clienteId);
+      const productosEliminados = productosAnteriores - this.embarque.productos.length;
+      console.log(`[eliminarCliente] ${productosEliminados} productos eliminados del cliente ${nombreCliente}`);
 
-      // Actualizar el estado para reflejar los cambios
+      // 2. Si es un cliente personalizado, eliminarlo de la lista de clientes personalizados
+      const clientePersonalizadoIndex = this.clientesPersonalizados.findIndex(c => c.id.toString() === clienteId.toString());
+      if (clientePersonalizadoIndex > -1) {
+        this.clientesPersonalizados.splice(clientePersonalizadoIndex, 1);
+        console.log(`[eliminarCliente] Cliente personalizado ${nombreCliente} eliminado de la lista`);
+      }
+
+      // 3. Limpiar configuraciones específicas del cliente
+      if (this.clienteCrudos[clienteId]) {
+        delete this.clienteCrudos[clienteId];
+      }
+      if (this.clientesJuntarMedidas[clienteId]) {
+        delete this.clientesJuntarMedidas[clienteId];
+      }
+      if (this.clientesReglaOtilio[clienteId]) {
+        delete this.clientesReglaOtilio[clienteId];
+      }
+      if (this.clientesIncluirPrecios[clienteId]) {
+        delete this.clientesIncluirPrecios[clienteId];
+      }
+      if (this.clientesCuentaEnPdf[clienteId]) {
+        delete this.clientesCuentaEnPdf[clienteId];
+      }
+      if (this.clientesSumarKgCatarro[clienteId]) {
+        delete this.clientesSumarKgCatarro[clienteId];
+      }
+
+      // 4. Si el cliente activo era el que se eliminó, desactivarlo
+      if (this.clienteActivo === clienteId) {
+        this.clienteActivo = null;
+      }
+
+      // 5. Marcar el cliente como modificado para asegurar que se guarde
+      this.$set(this.clientesModificados, clienteId, true);
+
+      // 6. Actualizar localStorage y usar solo el guardado principal para evitar conflictos
+      localStorage.setItem('clientesPersonalizados', JSON.stringify(this.clientesPersonalizados));
+      
+      // Usar solo el guardado principal para evitar múltiples operaciones simultáneas
+      this.guardarCambiosEnTiempoReal();
+
+      // 7. Actualizar el estado para reflejar los cambios
       this.$forceUpdate();
 
-      // Opcional: Agregar un mensaje a la lista de cambios
-      this.cambios.push(`Cliente ${this.obtenerNombreCliente(clienteId)} eliminado`);
+      // 8. Limpiar la marca de modificación después de un breve delay
+      setTimeout(() => {
+        if (this.clientesModificados[clienteId]) {
+          delete this.clientesModificados[clienteId];
+        }
+      }, 1000);
+
+      // 9. Agregar un mensaje a la lista de cambios
+      this.cambios.push(`Cliente ${nombreCliente} eliminado completamente`);
+      
+      console.log(`[eliminarCliente] Cliente ${nombreCliente} eliminado exitosamente`);
     },
 
     obtenerNombreCliente(clienteId) {
+      // Validar que clienteId no sea null/undefined
+      if (!clienteId) {
+        return 'Cliente Desconocido';
+      }
+
       const clienteEnLista = this.clientesDisponibles.find(c => c.id.toString() === clienteId.toString());
-      if (clienteEnLista) {
+      if (clienteEnLista && clienteEnLista.nombre) {
         return clienteEnLista.nombre;
       }
+      
       // Buscar en los productos por si el cliente ya no está en la lista
       const productoConCliente = this.embarque.productos.find(p => p.clienteId.toString() === clienteId.toString());
-      return productoConCliente ? productoConCliente.nombreCliente : 'Cliente Desconocido';
+      if (productoConCliente && productoConCliente.nombreCliente) {
+        return productoConCliente.nombreCliente;
+      }
+      
+      // Buscar en clientes personalizados
+      const clientePersonalizado = this.clientesPersonalizados.find(c => c.id.toString() === clienteId.toString());
+      if (clientePersonalizado && clientePersonalizado.nombre) {
+        return clientePersonalizado.nombre;
+      }
+      
+      return 'Cliente Desconocido';
+    },
+
+    obtenerClientesConProductos() {
+      // Crear un mapa de clientes con sus productos
+      const clientesConProductos = {};
+      
+      this.embarque.productos.forEach(producto => {
+        const clienteId = producto.clienteId;
+        if (!clientesConProductos[clienteId]) {
+          clientesConProductos[clienteId] = {
+            id: clienteId,
+            nombre: this.obtenerNombreCliente(clienteId),
+            productos: []
+          };
+        }
+        clientesConProductos[clienteId].productos.push(producto);
+      });
+
+      // Convertir a array y agregar crudos si existen
+      return Object.values(clientesConProductos).map(cliente => ({
+        ...cliente,
+        crudos: this.clienteCrudos[cliente.id] || []
+      }));
     },
 
     editarNombreCliente(clienteId) {
@@ -1273,6 +1391,9 @@ export default {
 
       // Activar bandera para evitar watchers durante la carga
       this._inicializandoEmbarque = true;
+
+      // Limpiar conexiones existentes antes de crear nuevas
+      this.limpiarConexionesFirestore();
 
       const db = getFirestore();
       const embarqueRef = doc(db, "embarques", id);
@@ -1369,8 +1490,8 @@ export default {
           // Crear un Map con los clientes predefinidos (convertir IDs a string para comparación)
           const clientesPredefinidosMap = new Map(this.clientesPredefinidos.map(c => [c.id.toString(), c]));
 
-          // Filtrar y mapear clientes
-          this.clientesPersonalizados = data.clientes
+          // Filtrar y mapear clientes personalizados del servidor
+          const personalizadosServidor = (data.clientes || [])
             .filter(cliente => !clientesPredefinidosMap.has(cliente.id.toString()))
             .map(cliente => ({
               id: cliente.id,
@@ -1379,6 +1500,18 @@ export default {
               personalizado: true,
               key: `personalizado_${cliente.id}`
             }));
+
+          // Fusionar con los ya existentes en memoria para no "perder" los recién añadidos localmente
+          const mapaPorId = new Map();
+          // Primero los locales (para priorizar cambios locales como nombre temporal)
+          (this.clientesPersonalizados || []).forEach(c => {
+            mapaPorId.set(String(c.id), { ...c });
+          });
+          // Luego los del servidor (sobre-escriben si existe el mismo id)
+          personalizadosServidor.forEach(c => {
+            mapaPorId.set(String(c.id), { ...c });
+          });
+          this.clientesPersonalizados = Array.from(mapaPorId.values());
 
           // Reconstruir productos, pero excluir los eliminados localmente
           const productosDesdeServidor = data.clientes.flatMap(cliente => {
@@ -1460,31 +1593,8 @@ export default {
             kilosCrudos: data.kilosCrudos || {}
           };
 
-          // Verificar que cada cliente tenga al menos un producto
-          const clientesIds = data.clientes.map(cliente => cliente.id.toString());
-          clientesIds.forEach(clienteId => {
-            // Verificar si existe al menos un producto para este cliente
-            const existeProducto = this.embarque.productos.some(p => p.clienteId.toString() === clienteId);
-            
-            // Si no existe ningún producto para este cliente, crear uno
-            if (!existeProducto) {
-              const nuevoProducto = crearNuevoProducto(clienteId);
-              
-              // Buscar cliente info
-              const clienteInfo = clientesPredefinidosMap.get(clienteId) || 
-                                  data.clientes.find(c => c.id.toString() === clienteId);
-              
-              // Establecer datos básicos
-              nuevoProducto.nombreCliente = clienteInfo ? clienteInfo.nombre : 'Cliente Desconocido';
-              
-              // Establecer tipo por defecto según el cliente
-              this.setTipoDefaultParaCliente(nuevoProducto);
-              
-              // Agregar al embarque
-              this.embarque.productos.push(nuevoProducto);
-              console.log(`Se ha creado un producto para el cliente ${nuevoProducto.nombreCliente} que no tenía ninguno.`);
-            }
-          });
+          // No crear productos automáticamente para clientes sin productos.
+          // Esto evitaba eliminaciones correctas y generaba "Cliente Desconocido".
 
           // Cargar los crudos
           this.clienteCrudos = {};
@@ -1517,8 +1627,58 @@ export default {
         }
       }, (error) => {
         console.error("Error al escuchar cambios del embarque:", error);
+        
+        // Manejo específico de errores de conexión
+        if (error.code === 'unavailable' || error.message.includes('network') || error.message.includes('NETWORK')) {
+          console.warn('[onSnapshot] Error de red detectado, reintentando conexión en 5 segundos...');
+          
+          // Reintentar la conexión después de un delay
+          setTimeout(() => {
+            if (this.embarqueId && !this.unsubscribe) {
+              console.log('[onSnapshot] Reintentando conexión...');
+              this.cargarEmbarque(this.embarqueId);
+            }
+          }, 5000);
+        } else if (error.code === 'permission-denied') {
+          console.error('[onSnapshot] Error de permisos:', error);
+          alert('Error de permisos. Por favor, verifique su acceso.');
+        } else {
+          console.error('[onSnapshot] Error desconocido:', error);
+        }
+        
         // Desactivar bandera en caso de error también
         this._inicializandoEmbarque = false;
+        this._aplicandoRemoto = false;
+      });
+    },
+
+    limpiarConexionesFirestore() {
+      // Limpiar conexión existente si existe
+      if (this.unsubscribe) {
+        console.log('[limpiarConexiones] Cerrando conexión onSnapshot existente');
+        try {
+          this.unsubscribe();
+        } catch (error) {
+          console.warn('[limpiarConexiones] Error al cerrar conexión:', error);
+        }
+        this.unsubscribe = null;
+      }
+    },
+
+    configurarReconexionAutomatica() {
+      // Detectar cuando la conexión vuelve online
+      window.addEventListener('online', () => {
+        console.log('[Reconexión] Conexión restaurada, reestableciendo listeners...');
+        if (this.embarqueId && !this.unsubscribe) {
+          setTimeout(() => {
+            this.cargarEmbarque(this.embarqueId);
+          }, 1000);
+        }
+      });
+
+      // Detectar cuando se pierde la conexión
+      window.addEventListener('offline', () => {
+        console.warn('[Conexión] Conexión perdida, modo offline activado');
       });
     },
 
@@ -2453,47 +2613,60 @@ export default {
     // Modal Nuevo Cliente
     async agregarNuevoCliente(cliente) {
       if (!cliente || !cliente.nombre) return;
-      
+
+      const nombreNormalizado = String(cliente.nombre).trim();
+      if (!nombreNormalizado) return;
+
+      // Evitar duplicados por nombre (case-insensitive) dentro del embarque actual
+      const nombresExistentes = new Set([...this.clientesPredefinidos, ...this.clientesPersonalizados]
+        .map(c => String(c.nombre).toLowerCase()))
+      let nombreFinal = nombreNormalizado;
+      if (nombresExistentes.has(nombreFinal.toLowerCase())) {
+        // Si ya existe, generar un nombre único amigable: "Nombre (2)", "Nombre (3)", ...
+        let contador = 2;
+        while (nombresExistentes.has(`${nombreNormalizado} (${contador})`.toLowerCase())) {
+          contador++;
+        }
+        nombreFinal = `${nombreNormalizado} (${contador})`;
+      }
+
+      // Crear ID único para el cliente (UUID) para ser único en el día
       const nuevoCliente = {
-        id: Date.now().toString(),
-        nombre: cliente.nombre,
+        id: uuidv4(),
+        nombre: nombreFinal,
         color: cliente.color || this.nuevoClienteColor,
         editable: true,
         personalizado: true,
         key: `personalizado_${Date.now()}`
       };
 
-      // Agregar a la lista de clientes personalizados
+      // Registrar en lista de personalizados del día
       this.clientesPersonalizados.push(nuevoCliente);
 
-      // Crear un producto para este cliente
-      const nuevoProducto = crearNuevoProducto(nuevoCliente.id);
+      // Usar el flujo estándar para agregar productos (preserva locales y evita que onSnapshot los borre)
+      this.agregarProducto(nuevoCliente.id);
+      // Asegurar nombre visible en el bloque recién creado
+      const ultimo = this.embarque.productos[this.embarque.productos.length - 1];
+      if (ultimo && ultimo.clienteId === nuevoCliente.id) {
+        this.$set(ultimo, 'nombreCliente', nombreFinal);
+      }
 
-      // Agregar el producto al embarque
-      this.embarque.productos.push(nuevoProducto);
-
-      // NO crear crudos automáticamente - el usuario los agrega manualmente cuando los necesite
+      // Inicializar contenedor de crudos del cliente
       if (!this.clienteCrudos[nuevoCliente.id]) {
         this.$set(this.clienteCrudos, nuevoCliente.id, []);
       }
 
-      // Inicializar regla de Otilio si es un cliente de Otilio
-      const esOtilio = nuevoCliente.nombre && nuevoCliente.nombre.toLowerCase().includes('otilio');
+      // Reglas por nombre
+      const esOtilio = nombreFinal.toLowerCase().includes('otilio');
       this.$set(this.clientesReglaOtilio, nuevoCliente.id, esOtilio);
 
-      // Guardar los cambios inmediatamente con alta prioridad
-      try {
-        await this.guardarClientesPersonalizados();
-        console.log('[agregarNuevoCliente] Cliente personalizado guardado exitosamente');
-      } catch (error) {
-        console.error('[agregarNuevoCliente] Error al guardar cliente personalizado:', error);
-        // Continuar con el flujo normal, los datos están en localStorage como respaldo
-      }
-      
+      // Persistir cambios mínimos (clientes personalizados) sin bloquear
+      // Solo guardar en localStorage para evitar conflictos con el guardado principal
+      localStorage.setItem('clientesPersonalizados', JSON.stringify(this.clientesPersonalizados));
+
+      // Guardado general (productos/clientes)
       this.guardarCambiosEnTiempoReal();
       this.mostrarModalNuevoCliente = false;
-
-      // Seleccionar automáticamente el cliente recién creado
       this.seleccionarCliente(nuevoCliente.id);
     },
 
@@ -2886,7 +3059,8 @@ export default {
       localStorage.setItem('clientesPersonalizados', JSON.stringify(this.clientesPersonalizados));
       
       // Si hay un embarqueId, también guardar en Firebase inmediatamente
-      if (this.embarqueId && this.clientesPersonalizados.length > 0) {
+      // (incluir el caso cuando la lista está vacía para persistir la eliminación)
+      if (this.embarqueId) {
         try {
           console.log('[guardarClientesPersonalizados] Guardando clientes personalizados en Firebase:', this.clientesPersonalizados);
           
@@ -3554,6 +3728,20 @@ export default {
     }
   },
 
+  beforeUnmount() {
+    console.log('[beforeUnmount] Limpiando conexiones y listeners...');
+    
+    // Limpiar conexiones de Firestore
+    this.limpiarConexionesFirestore();
+    
+    // Limpiar listeners de red
+    window.removeEventListener('online', this.configurarReconexionAutomatica);
+    window.removeEventListener('offline', this.configurarReconexionAutomatica);
+    
+    // Limpiar listener de beforeunload
+    window.removeEventListener('beforeunload', this.handleBeforeUnload);
+  },
+
   async created() {
     console.log('[LOG] Hook "created" de NuevoEmbarque.');
     
@@ -3579,6 +3767,9 @@ export default {
     
     // Inicializar el SaveManager
     this.saveManager = getSaveManager();
+    
+    // Configurar reconexión automática para errores de red
+    this.configurarReconexionAutomatica();
     
     // Configurar listeners del SaveManager para logging y notificaciones
     this.saveManager.addListener('quota-error', (data) => {

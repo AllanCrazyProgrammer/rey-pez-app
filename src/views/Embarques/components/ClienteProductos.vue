@@ -3,7 +3,7 @@
         <div class="cliente-header sticky-header" :data-cliente="nombreCliente">
             <div class="cliente-info">
                 <h3>
-                    {{ nombreCliente }}
+                    {{ nombreCliente || 'Cliente Desconocido' }}
                     <button @click.stop="$emit('generar-pdf', 'cliente', clienteId)" class="btn-pdf-mini"
                         title="Vista previa PDF">
                         <i class="fas fa-eye"></i>
@@ -183,7 +183,8 @@ export default {
         },
         nombreCliente: {
             type: String,
-            required: true
+            required: true,
+            default: 'Cliente Desconocido'
         },
         clienteActivo: {
             type: [String, Number, null],
@@ -254,22 +255,22 @@ export default {
     computed: {
         // Verificar si el cliente es Joselito
         esClienteJoselito() {
-            return this.nombreCliente.toLowerCase().includes('joselito');
+            return this.nombreCliente && this.nombreCliente.toLowerCase().includes('joselito');
         },
 
         // Verificar si el cliente es Catarro
         esClienteCatarro() {
-            return this.nombreCliente.toLowerCase().includes('catarro');
+            return this.nombreCliente && this.nombreCliente.toLowerCase().includes('catarro');
         },
 
         // Verificar si el cliente es Ozuna
         esClienteOzuna() {
-            return this.nombreCliente.toLowerCase().includes('ozuna');
+            return this.nombreCliente && this.nombreCliente.toLowerCase().includes('ozuna');
         },
 
         // Verificar si el cliente es Otilio
         esClienteOtilio() {
-            return this.nombreCliente.toLowerCase().includes('otilio');
+            return this.nombreCliente && this.nombreCliente.toLowerCase().includes('otilio');
         },
 
         // Calcular totales de limpio
