@@ -1284,6 +1284,16 @@ export default {
 
           // Cargar el estado de bloqueo
           this.embarqueBloqueado = data.embarqueBloqueado || false;
+          
+          // Cargar clientes personalizados desde Firebase si existen
+          if (data.clientesPersonalizados && Array.isArray(data.clientesPersonalizados)) {
+            this.clientesPersonalizados = data.clientesPersonalizados;
+            console.log('[cargarEmbarque] Clientes personalizados cargados desde Firebase:', this.clientesPersonalizados);
+            // Sincronizar con localStorage
+            localStorage.setItem('clientesPersonalizados', JSON.stringify(this.clientesPersonalizados));
+          } else {
+            console.log('[cargarEmbarque] No se encontraron clientes personalizados en Firebase, usando localStorage como respaldo');
+          }
 
           // Cargar el estado de juntar medidas
           if (data.clientesJuntarMedidas) {
@@ -1846,6 +1856,7 @@ export default {
                 clientesIncluirPrecios: { ...this.clientesIncluirPrecios },
                 clientesCuentaEnPdf: { ...this.clientesCuentaEnPdf },
                 clientesSumarKgCatarro: { ...this.clientesSumarKgCatarro },
+                clientesPersonalizados: [...this.clientesPersonalizados], // Incluir clientes personalizados
                 clientes: Array.from(mergedClientes.values()),
                 ultimaEdicion: {
                   userId: this.authStore.userId,
@@ -2101,6 +2112,7 @@ export default {
         clientesIncluirPrecios: this.clientesIncluirPrecios,
         clientesCuentaEnPdf: this.clientesCuentaEnPdf,
         clientesSumarKgCatarro: this.clientesSumarKgCatarro,
+        clientesPersonalizados: this.clientesPersonalizados, // Incluir clientes personalizados
         embarqueBloqueado: this.embarqueBloqueado
       };
 
@@ -2439,7 +2451,7 @@ export default {
 
     // Métodos para modales
     // Modal Nuevo Cliente
-    agregarNuevoCliente(cliente) {
+    async agregarNuevoCliente(cliente) {
       if (!cliente || !cliente.nombre) return;
       
       const nuevoCliente = {
@@ -2469,8 +2481,15 @@ export default {
       const esOtilio = nuevoCliente.nombre && nuevoCliente.nombre.toLowerCase().includes('otilio');
       this.$set(this.clientesReglaOtilio, nuevoCliente.id, esOtilio);
 
-      // Guardar los cambios
-      this.guardarClientesPersonalizados();
+      // Guardar los cambios inmediatamente con alta prioridad
+      try {
+        await this.guardarClientesPersonalizados();
+        console.log('[agregarNuevoCliente] Cliente personalizado guardado exitosamente');
+      } catch (error) {
+        console.error('[agregarNuevoCliente] Error al guardar cliente personalizado:', error);
+        // Continuar con el flujo normal, los datos están en localStorage como respaldo
+      }
+      
       this.guardarCambiosEnTiempoReal();
       this.mostrarModalNuevoCliente = false;
 
@@ -2862,16 +2881,85 @@ export default {
     },
 
     // Métodos para la persistencia de clientes
-    guardarClientesPersonalizados() {
+    async guardarClientesPersonalizados() {
+      // Guardar en localStorage para respaldo local
       localStorage.setItem('clientesPersonalizados', JSON.stringify(this.clientesPersonalizados));
+      
+      // Si hay un embarqueId, también guardar en Firebase inmediatamente
+      if (this.embarqueId && this.clientesPersonalizados.length > 0) {
+        try {
+          console.log('[guardarClientesPersonalizados] Guardando clientes personalizados en Firebase:', this.clientesPersonalizados);
+          
+          // Crear una operación de guardado específica para clientes personalizados
+          const operacionGuardadoClientes = async () => {
+            const db = getFirestore();
+            const embarqueRef = doc(db, 'embarques', this.embarqueId);
+            
+            await updateDoc(embarqueRef, {
+              clientesPersonalizados: this.clientesPersonalizados,
+              ultimaActualizacionClientes: serverTimestamp()
+            });
+            
+            console.log('[guardarClientesPersonalizados] Clientes personalizados guardados exitosamente en Firebase');
+          };
+          
+          // Usar el SaveManager para guardar con alta prioridad
+          if (this.saveManager) {
+            await this.saveManager.scheduleSave(
+              `clientes-personalizados-${this.embarqueId}`,
+              operacionGuardadoClientes,
+              {
+                priority: 'high', // Alta prioridad para asegurar que se guarde
+                merge: false,     // No fusionar, es una operación independiente
+                immediate: true   // Ejecutar inmediatamente
+              }
+            );
+          } else {
+            // Fallback si no hay SaveManager
+            await operacionGuardadoClientes();
+          }
+        } catch (error) {
+          console.error('[guardarClientesPersonalizados] Error al guardar clientes personalizados en Firebase:', error);
+          // No mostrar alert para no interrumpir el flujo del usuario
+          // Los datos siguen en localStorage como respaldo
+        }
+      }
     },
 
-    cargarClientesPersonalizados() {
+    async cargarClientesPersonalizados() {
+      // Primero intentar cargar desde Firebase si hay un embarqueId
+      if (this.embarqueId) {
+        try {
+          const db = getFirestore();
+          const embarqueRef = doc(db, 'embarques', this.embarqueId);
+          const embarqueDoc = await getDoc(embarqueRef);
+          
+          if (embarqueDoc.exists()) {
+            const data = embarqueDoc.data();
+            if (data.clientesPersonalizados && Array.isArray(data.clientesPersonalizados)) {
+              console.log('[cargarClientesPersonalizados] Cargando clientes personalizados desde Firebase:', data.clientesPersonalizados);
+              this.clientesPersonalizados = data.clientesPersonalizados;
+              
+              // Sincronizar con localStorage
+              localStorage.setItem('clientesPersonalizados', JSON.stringify(this.clientesPersonalizados));
+              return; // Salir early si se cargó desde Firebase
+            }
+          }
+        } catch (error) {
+          console.error('[cargarClientesPersonalizados] Error al cargar desde Firebase, intentando localStorage:', error);
+        }
+      }
+      
+      // Fallback a localStorage si no se pudo cargar desde Firebase
       const clientesGuardados = localStorage.getItem('clientesPersonalizados');
       if (clientesGuardados) {
-        // Solo cargar la lista de clientes personalizados disponibles
-        // pero no agregarlos automáticamente al embarque
-        this.clientesPersonalizados = JSON.parse(clientesGuardados);
+        try {
+          this.clientesPersonalizados = JSON.parse(clientesGuardados);
+          console.log('[cargarClientesPersonalizados] Clientes cargados desde localStorage:', this.clientesPersonalizados);
+        } catch (error) {
+          console.error('[cargarClientesPersonalizados] Error al parsear clientes desde localStorage:', error);
+          this.clientesPersonalizados = [];
+        }
       }
     },
 
@@ -3518,7 +3606,7 @@ export default {
       if (localCrudos) this.clienteCrudos = JSON.parse(localCrudos);
       this.undoStack.push(JSON.stringify(this.embarque));
       this.actualizarMedidasUsadas();
-      this.cargarClientesPersonalizados();
+      await this.cargarClientesPersonalizados();
       this.guardadoAutomaticoActivo = true;
       // Escuchar reconexión para sincronizar cambios con Firestore
       window.addEventListener('online', this.syncOffline);
@@ -3530,7 +3618,7 @@ export default {
     await this.cargarEmbarque(embarqueId);
     this.undoStack.push(JSON.stringify(this.embarque));
     this.actualizarMedidasUsadas();
-    this.cargarClientesPersonalizados();
+    await this.cargarClientesPersonalizados();
     await this.iniciarPresenciaUsuario();
     this.escucharUsuariosActivos();
     await this.cargarPreciosActuales();
