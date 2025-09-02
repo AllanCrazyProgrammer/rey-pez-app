@@ -33,6 +33,17 @@
               <datalist id="productos">
                 <option v-for="producto in preciosActuales" :key="producto.id" :value="producto.producto"></option>
               </datalist>
+              <!-- Mostrar precio actual si existe -->
+              <div v-if="precioActualMostrar" class="precio-actual-indicator">
+                <i class="precio-icon">💰</i>
+                <span class="precio-texto">Precio actual: </span>
+                <span class="precio-valor">${{ formatNumber(precioActualMostrar.precio) }}</span>
+                <span v-if="precioActualMostrar.clienteId" class="precio-cliente">
+                  ({{ obtenerNombreCliente(precioActualMostrar.clienteId) }})
+                </span>
+                <span v-else class="precio-general">(General)</span>
+                <span class="precio-fecha">desde {{ formatDate(precioActualMostrar.fecha) }}</span>
+              </div>
             </div>
             
             <div class="input-wrapper">
@@ -402,7 +413,9 @@ export default {
         categoria: 'Otros',
         esClienteEspecifico: false,
         clienteId: ''
-      }
+      },
+      precioActualMostrar: null,
+      buscarPrecioTimeout: null
     };
   },
   computed: {
@@ -815,6 +828,54 @@ export default {
       );
       
       return precioGeneral ? precioGeneral.precio : null;
+    },
+
+    // Método para buscar y mostrar el precio actual de la medida ingresada
+    buscarPrecioActual(nombreProducto) {
+      if (!nombreProducto || nombreProducto.trim() === '') {
+        this.precioActualMostrar = null;
+        return;
+      }
+
+      const nombreLimpio = nombreProducto.trim().toLowerCase();
+      
+      // Si es un precio específico para cliente, buscar primero el precio específico
+      if (this.newPrice.esClienteEspecifico && this.newPrice.clienteId) {
+        const precioEspecifico = this.preciosActuales.find(precio => 
+          precio.producto.toLowerCase() === nombreLimpio && 
+          precio.clienteId === this.newPrice.clienteId
+        );
+        
+        if (precioEspecifico) {
+          this.precioActualMostrar = precioEspecifico;
+          return;
+        }
+      }
+      
+      // Buscar precio general
+      const precioGeneral = this.preciosActuales.find(precio => 
+        precio.producto.toLowerCase() === nombreLimpio && 
+        !precio.clienteId
+      );
+      
+      if (precioGeneral) {
+        this.precioActualMostrar = precioGeneral;
+        return;
+      }
+      
+      // Si no se encuentra precio exacto, buscar coincidencias parciales
+      const coincidenciaParcial = this.preciosActuales.find(precio => 
+        precio.producto.toLowerCase().includes(nombreLimpio) || 
+        nombreLimpio.includes(precio.producto.toLowerCase())
+      );
+      
+      if (coincidenciaParcial) {
+        this.precioActualMostrar = coincidenciaParcial;
+        return;
+      }
+      
+      // No se encontró precio
+      this.precioActualMostrar = null;
     }
   },
   watch: {
@@ -833,10 +894,47 @@ export default {
           }
         }
       }
+    },
+
+    // Observar cambios en el nombre del producto para mostrar precio actual
+    'newPrice.producto': {
+      handler(nuevoProducto) {
+        // Usar debounce para evitar múltiples búsquedas mientras se escribe
+        clearTimeout(this.buscarPrecioTimeout);
+        this.buscarPrecioTimeout = setTimeout(() => {
+          this.buscarPrecioActual(nuevoProducto);
+        }, 500); // Esperar 500ms después de que el usuario deje de escribir
+      }
+    },
+
+    // Observar cambios en la configuración de cliente específico
+    'newPrice.esClienteEspecifico': {
+      handler() {
+        // Actualizar precio mostrado cuando cambie la configuración
+        if (this.newPrice.producto) {
+          this.buscarPrecioActual(this.newPrice.producto);
+        }
+      }
+    },
+
+    // Observar cambios en el cliente seleccionado
+    'newPrice.clienteId': {
+      handler() {
+        // Actualizar precio mostrado cuando cambie el cliente
+        if (this.newPrice.producto) {
+          this.buscarPrecioActual(this.newPrice.producto);
+        }
+      }
     }
   },
   mounted() {
     this.cargarPreciosActuales();
+  },
+  beforeDestroy() {
+    // Limpiar timeout para evitar memory leaks
+    if (this.buscarPrecioTimeout) {
+      clearTimeout(this.buscarPrecioTimeout);
+    }
   }
 };
 </script>
@@ -2181,5 +2279,120 @@ export default {
   z-index: 99999 !important;
   visibility: visible !important;
   opacity: 1 !important;
+}
+
+/* Estilos para el indicador de precio actual */
+.precio-actual-indicator {
+  margin-top: 8px;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, rgba(76, 175, 80, 0.1), rgba(76, 175, 80, 0.05));
+  border: 2px solid #4CAF50;
+  border-radius: 12px;
+  font-size: 0.9em;
+  color: #2E7D32;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  box-shadow: 0 2px 8px rgba(76, 175, 80, 0.2);
+  backdrop-filter: blur(5px);
+  border-left: 4px solid #4CAF50;
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.precio-actual-indicator .precio-icon {
+  font-size: 1.1em;
+  color: #4CAF50;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.1));
+}
+
+.precio-actual-indicator .precio-texto {
+  font-weight: 600;
+  color: #1B5E20;
+}
+
+.precio-actual-indicator .precio-valor {
+  font-weight: 700;
+  font-size: 1.1em;
+  color: #2E7D32;
+  background: rgba(76, 175, 80, 0.2);
+  padding: 2px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(76, 175, 80, 0.3);
+}
+
+.precio-actual-indicator .precio-cliente {
+  font-weight: 600;
+  color: #1565C0;
+  background: rgba(33, 150, 243, 0.1);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.85em;
+}
+
+.precio-actual-indicator .precio-general {
+  font-weight: 600;
+  color: #424242;
+  background: rgba(96, 125, 139, 0.1);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.85em;
+}
+
+.precio-actual-indicator .precio-fecha {
+  font-size: 0.8em;
+  color: #616161;
+  font-style: italic;
+  margin-left: auto;
+}
+
+/* Responsive para el indicador de precio */
+@media (max-width: 768px) {
+  .precio-actual-indicator {
+    padding: 10px 12px;
+    font-size: 0.85em;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+  
+  .precio-actual-indicator .precio-fecha {
+    margin-left: 0;
+    margin-top: 4px;
+  }
+  
+  .precio-actual-indicator .precio-valor {
+    font-size: 1em;
+  }
+}
+
+@media (max-width: 480px) {
+  .precio-actual-indicator {
+    padding: 8px 10px;
+    font-size: 0.8em;
+    border-radius: 8px;
+  }
+  
+  .precio-actual-indicator .precio-valor {
+    font-size: 0.95em;
+    padding: 1px 6px;
+  }
+  
+  .precio-actual-indicator .precio-cliente,
+  .precio-actual-indicator .precio-general {
+    font-size: 0.8em;
+    padding: 1px 4px;
+  }
 }
 </style> 
