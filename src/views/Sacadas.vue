@@ -977,7 +977,107 @@ button:active {
   background-color: #f5f5f5;
 }
 
-@media (max-width: 768px) {
+/* Estilos específicos para Galaxy Fold (ancho plegado ~375px, desplegado ~667px) */
+@media (min-width: 375px) and (max-width: 667px) {
+  .sacadas-container {
+    padding: 15px;
+    max-width: 100%;
+  }
+
+  .sacadas-content {
+    display: flex;
+    flex-direction: row;
+    gap: 10px;
+    justify-content: space-between;
+  }
+
+  .entradas-section, .salidas-section {
+    flex: 1;
+    min-width: 0;
+    margin-bottom: 0;
+  }
+
+  .input-group {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .input-group select,
+  .input-group input {
+    width: 100%;
+    padding: 8px;
+    font-size: 12px;
+    min-width: auto;
+  }
+
+  .input-group button {
+    width: 100%;
+    padding: 8px;
+    font-size: 12px;
+  }
+
+  .clear-button,
+  .refresh-button {
+    margin-left: 0;
+    margin-top: 5px;
+    padding: 6px 10px;
+    font-size: 11px;
+  }
+
+  .list li {
+    padding: 8px;
+    font-size: 12px;
+    margin-bottom: 8px;
+  }
+
+  .total {
+    font-size: 14px;
+    margin-top: 10px;
+  }
+
+  .kilos-disponibles {
+    font-size: 1em;
+    padding: 8px;
+    margin-bottom: 10px;
+  }
+
+  .medidas-summary {
+    font-size: 11px;
+  }
+  
+  .medidas-summary th,
+  .medidas-summary td {
+    padding: 4px;
+  }
+
+  .date-header {
+    font-size: 1.3em;
+    margin-bottom: 15px;
+  }
+
+  h3 {
+    font-size: 1.1em;
+    margin-bottom: 10px;
+  }
+
+  .summary h4 {
+    font-size: 1em;
+    margin-top: 15px;
+  }
+
+  .summary {
+    padding: 15px;
+    margin-top: 20px;
+  }
+
+  .save-button {
+    padding: 10px;
+    font-size: 1em;
+  }
+}
+
+/* Para pantallas más pequeñas que el Galaxy Fold plegado */
+@media (max-width: 374px) {
   .sacadas-content {
     flex-direction: column;
   }
@@ -1010,6 +1110,32 @@ button:active {
   .medidas-summary th,
   .medidas-summary td {
     padding: 6px;
+  }
+}
+
+/* Para pantallas más grandes que el Galaxy Fold desplegado */
+@media (min-width: 668px) and (max-width: 768px) {
+  .sacadas-content {
+    display: flex;
+    flex-direction: row;
+    gap: 15px;
+  }
+
+  .entradas-section, .salidas-section {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .input-group {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .input-group select,
+  .input-group input {
+    flex: 1;
+    min-width: 100px;
+    font-size: 13px;
   }
 }
 
