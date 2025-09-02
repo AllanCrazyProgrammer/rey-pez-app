@@ -27,7 +27,12 @@
             <tbody>
               <template v-if="proveedor === 'Ozuna' || proveedor === 'Joselito'">
                 <tr v-for="(datos, medidaKey) in datos" :key="medidaKey" v-if="datos.kilos > 0">
-                  <td>{{ datos.medida }}</td>
+                  <td>
+                    {{ datos.medida }}
+                    <span class="fecha-entrada" v-if="datos.fechaEntrada">
+                      ({{ formatFecha(datos.fechaEntrada) }})
+                    </span>
+                  </td>
                   <td v-if="tienePrecio" class="precio-cell">{{ datos.precio ? `$${datos.precio}` : '-' }}</td>
                   <td class="kilos-cell">{{ formatNumber(datos.kilos) }}</td>
                 </tr>
@@ -41,7 +46,12 @@
               </template>
               <template v-else>
                 <tr v-for="medida in datos" :key="`${medida.medida}-${medida.proveedor}-${medida.precio || 'sin-precio'}`" v-if="medida.kilos > 0">
-                  <td>{{ medida.medida }}</td>
+                  <td>
+                    {{ medida.medida }}
+                    <span class="fecha-entrada" v-if="medida.fechaEntrada">
+                      ({{ formatFecha(medida.fechaEntrada) }})
+                    </span>
+                  </td>
                   <td>{{ medida.proveedor }}</td>
                   <td v-if="tienePrecio" class="precio-cell">{{ medida.precio ? `$${medida.precio}` : '-' }}</td>
                   <td class="kilos-cell">{{ formatNumber(medida.kilos) }}</td>
@@ -205,8 +215,14 @@ export default {
             newExistencias[entrada.proveedor][medidaKey] = {
               kilos: 0,
               medida: entrada.medida,
-              precio: precio
+              precio: precio,
+              fechaEntrada: sacadaFecha // Capturar la fecha de la primera entrada
             };
+          } else {
+            // Si ya existe, mantener la fecha más antigua
+            if (sacadaFecha < newExistencias[entrada.proveedor][medidaKey].fechaEntrada) {
+              newExistencias[entrada.proveedor][medidaKey].fechaEntrada = sacadaFecha;
+            }
           }
 
           newExistencias[entrada.proveedor][medidaKey].kilos += entrada.kilos;
@@ -397,15 +413,19 @@ export default {
           );
           
           if (existingIndex >= 0) {
-            // Si existe, sumar los kilos
+            // Si existe, sumar los kilos y mantener la fecha más antigua
             medidasAgrupadas[medidaBase][existingIndex].kilos += datos.kilos;
+            if (datos.fechaEntrada < medidasAgrupadas[medidaBase][existingIndex].fechaEntrada) {
+              medidasAgrupadas[medidaBase][existingIndex].fechaEntrada = datos.fechaEntrada;
+            }
           } else {
             // Si no existe, agregar nueva entrada
             medidasAgrupadas[medidaBase].push({
               proveedor,
               medida: datos.medida,
               precio: datos.precio,
-              kilos: datos.kilos
+              kilos: datos.kilos,
+              fechaEntrada: datos.fechaEntrada
             });
           }
         });
@@ -432,7 +452,13 @@ export default {
                 item.medida.toLowerCase().includes(searchLower)
               ))) {
             resultado[medidaBase] = itemsFiltrados.sort((a, b) => {
-              // Ordenar por proveedor, luego por precio (null al final)
+              // Ordenar por fecha de entrada (más antiguas primero)
+              if (a.fechaEntrada && b.fechaEntrada) {
+                const fechaA = a.fechaEntrada instanceof Date ? a.fechaEntrada : a.fechaEntrada.toDate();
+                const fechaB = b.fechaEntrada instanceof Date ? b.fechaEntrada : b.fechaEntrada.toDate();
+                return fechaA - fechaB;
+              }
+              // Si no hay fechas, ordenar por proveedor, luego por precio
               if (a.proveedor !== b.proveedor) {
                 return a.proveedor.localeCompare(b.proveedor);
               }
@@ -447,16 +473,23 @@ export default {
       // Después agregar las maquilas
       Object.entries(maquilas).forEach(([proveedor, medidas]) => {
         if (!searchLower || proveedor.toLowerCase().includes(searchLower)) {
-          // Filtrar medidas con 0 kilos
+          // Filtrar medidas con 0 kilos y ordenar por fecha
           const medidasFiltradas = Object.entries(medidas)
             .filter(([_, datos]) => datos.kilos > 1)
-            .sort(([medidaA], [medidaB]) => {
+            .sort(([medidaA, datosA], [medidaB, datosB]) => {
+              // Ordenar por fecha de entrada (más antiguas primero)
+              if (datosA.fechaEntrada && datosB.fechaEntrada) {
+                const fechaA = datosA.fechaEntrada instanceof Date ? datosA.fechaEntrada : datosA.fechaEntrada.toDate();
+                const fechaB = datosB.fechaEntrada instanceof Date ? datosB.fechaEntrada : datosB.fechaEntrada.toDate();
+                return fechaA - fechaB;
+              }
+              // Si no hay fechas, ordenar por número de medida
               const numA = parseInt(medidaA.split('/')[0]);
               const numB = parseInt(medidaB.split('/')[0]);
               return numA - numB;
             })
-            .reduce((acc, [medida, kilos]) => {
-              acc[medida] = kilos;
+            .reduce((acc, [medida, datos]) => {
+              acc[medida] = datos;
               return acc;
             }, {});
             
@@ -549,6 +582,12 @@ export default {
       return Math.round(value).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
     };
 
+    const formatFecha = (fecha) => {
+      if (!fecha) return '';
+      const fechaObj = fecha instanceof Date ? fecha : fecha.toDate();
+      return moment(fechaObj).format('DD/MM');
+    };
+
     const imprimirReporte = () => {
       const fechaActual = new Date().toLocaleDateString('es-ES', {
         year: 'numeric',
@@ -617,6 +656,13 @@ export default {
             text-align: center;
             color: #27ae60;
             font-weight: bold;
+          }
+          .fecha-entrada {
+            color: #6c757d;
+            font-size: 11pt;
+            font-weight: normal;
+            opacity: 0.7;
+            margin-left: 3px;
           }
           @media print {
             .existencias-grid {
@@ -873,7 +919,10 @@ export default {
                     ${salidasProveedoresDiaSiguiente.value.map(salida => `
                       <tr>
                         <td>${salida.proveedor}</td>
-                        <td>${salida.medida}</td>
+                        <td>
+                          ${salida.medida}
+                          ${salida.fechaEntrada ? `<span class="fecha-entrada">(${formatFecha(salida.fechaEntrada)})</span>` : ''}
+                        </td>
                         ${tienePrecio.value ? `<td class="precio-cell">${salida.precio ? '$' + salida.precio : '-'}</td>` : ''}
                         <td class="kilos-cell">${formatNumber(salida.kilos)}</td>
                       </tr>
@@ -899,7 +948,10 @@ export default {
                     ${salidasMaquilasDiaSiguiente.value.map(salida => `
                       <tr>
                         <td>${salida.proveedor}</td>
-                        <td>${salida.medida}</td>
+                        <td>
+                          ${salida.medida}
+                          ${salida.fechaEntrada ? `<span class="fecha-entrada">(${formatFecha(salida.fechaEntrada)})</span>` : ''}
+                        </td>
                         ${tienePrecio.value ? `<td class="precio-cell">${salida.precio ? '$' + salida.precio : '-'}</td>` : ''}
                         <td class="kilos-cell">${formatNumber(salida.kilos)}</td>
                       </tr>
@@ -997,6 +1049,7 @@ export default {
       valorLibre,
       tienePrecio,
       formatNumber,
+      formatFecha,
       imprimirReporte,
       salidasDiaSiguiente,
       fechaDiaSiguiente,
@@ -1300,6 +1353,14 @@ h1 {
   color: #27ae60;
   font-weight: bold;
   font-size: 14px;
+}
+
+.fecha-entrada {
+  color: #6c757d;
+  font-size: 11px;
+  font-weight: normal;
+  opacity: 0.7;
+  margin-left: 5px;
 }
 
 /* Estilos para la sección de salidas del día siguiente */

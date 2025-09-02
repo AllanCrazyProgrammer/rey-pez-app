@@ -406,13 +406,17 @@ export default {
       pesoTaraVenta: 20, // Peso por defecto para cálculo de ventas
       mostrarModalConfiguracion: false,
       analizarMaquilaGanancia: {},
-      precioMaquila: {}
+      precioMaquila: {},
+      costosCalculados: {}, // Cache de costos calculados para cada medida
+      costosGlobalesCache: null // Cache de costos globales
     }
   },
 
   async created() {
     await this.cargarEmbarque();
     await this.cargarPreciosVenta();
+    // Precargar costos para todas las medidas
+    await this.precargarCostos();
     // Aplicar debounce después de definir el método
     this.guardarCambiosEnTiempoReal = debounce(this.guardarCambiosEnTiempoReal, 300);
   },
@@ -422,13 +426,41 @@ export default {
     console.log('Recargando datos de rendimientos...');
     await this.cargarEmbarque();
     await this.cargarPreciosVenta();
+    // Precargar costos después de recargar datos
+    await this.precargarCostos();
     // Forzar recálculo de ganancias después de recargar precios
-    this.$nextTick(() => {
-      this.calcularGanancias();
+    this.$nextTick(async () => {
+      await this.calcularGanancias();
     });
   },
 
       methods: {
+    // Método auxiliar para normalizar fechas y manejar diferentes formatos
+    normalizarFecha(fecha) {
+      if (!fecha) return null;
+      
+      try {
+        // Si es un Timestamp de Firebase
+        if (typeof fecha === 'object' && fecha.seconds) {
+          return new Date(fecha.seconds * 1000);
+        }
+        
+        // Si es un string o número
+        const fechaObj = new Date(fecha);
+        
+        // Verificar si la fecha es válida
+        if (isNaN(fechaObj.getTime())) {
+          console.error('Fecha inválida:', fecha);
+          return null;
+        }
+        
+        return fechaObj;
+      } catch (error) {
+        console.error('Error al normalizar fecha:', fecha, error);
+        return null;
+      }
+    },
+
     obtenerNombreCliente(clienteId) {
       if (!this.embarqueData || !this.embarqueData.clientes) return '';
       const cliente = this.embarqueData.clientes.find(c => c.id.toString() === clienteId.toString());
@@ -615,7 +647,9 @@ export default {
           
           // Calcular ganancias después de cargar embarque
           if (Object.keys(this.preciosVenta).length > 0) {
-            this.calcularGanancias();
+          this.$nextTick(async () => {
+            await this.calcularGanancias();
+          });
           }
         } else {
           console.error('No se encontró el embarque');
@@ -657,7 +691,9 @@ export default {
         
         // Calcular ganancias después de cargar precios
         if (this.embarqueData) {
-          this.calcularGanancias();
+          this.$nextTick(async () => {
+            await this.calcularGanancias();
+          });
         }
         
       } catch (error) {
@@ -735,8 +771,15 @@ export default {
         console.log(`[${medida}] Precio encontrado como: ${medidaEncontrada}`);
       }
       
+      // Validar y normalizar la fecha del embarque
+      const fechaEmbarqueNormalizada = this.normalizarFecha(fechaEmbarque);
+      if (!fechaEmbarqueNormalizada) {
+        console.warn(`[${medida}] Fecha de embarque inválida:`, fechaEmbarque);
+        return null;
+      }
+      
       // Crear fecha del embarque solo con año-mes-día (sin hora)
-      const fechaEmbarqueStr = new Date(fechaEmbarque).toISOString().split('T')[0];
+      const fechaEmbarqueStr = fechaEmbarqueNormalizada.toISOString().split('T')[0];
       const fechaEmbarqueObj = new Date(fechaEmbarqueStr);
       const fechaHoy = new Date().toISOString().split('T')[0];
       const fechaHoyObj = new Date(fechaHoy);
@@ -780,7 +823,10 @@ export default {
         // Primero buscar precio específico para el cliente si se proporciona
         if (clienteId) {
           for (const precio of preciosProducto) {
-            const fechaPrecioStr = new Date(precio.fecha).toISOString().split('T')[0];
+            const fechaPrecioNormalizada = this.normalizarFecha(precio.fecha);
+            if (!fechaPrecioNormalizada) continue;
+            
+            const fechaPrecioStr = fechaPrecioNormalizada.toISOString().split('T')[0];
             if (fechaPrecioStr <= fechaEmbarqueStr && precio.clienteId === clienteId) {
               return precio;
             }
@@ -789,7 +835,10 @@ export default {
         
         // Si no hay precio específico, buscar precio general
         for (const precio of preciosProducto) {
-          const fechaPrecioStr = new Date(precio.fecha).toISOString().split('T')[0];
+          const fechaPrecioNormalizada = this.normalizarFecha(precio.fecha);
+          if (!fechaPrecioNormalizada) continue;
+          
+          const fechaPrecioStr = fechaPrecioNormalizada.toISOString().split('T')[0];
           if (fechaPrecioStr <= fechaEmbarqueStr && !precio.clienteId) {
             return precio;
           }
@@ -805,9 +854,253 @@ export default {
       return preciosProducto[preciosProducto.length - 1];
     },
 
-    calcularCostoFinal(medida) {
+    // Función auxiliar para encontrar costos con búsqueda inteligente
+    async encontrarCostoParaMedida(medida) {
       const costosEmbarque = this.embarqueData?.costosPorMedida || {};
-      const costo = Number(costosEmbarque[medida]) || 0;
+      
+      console.log(`🔍 Buscando costo para: "${medida}"`);
+      console.log(`📋 Costos en embarque:`, Object.keys(costosEmbarque));
+      
+      // 1. Buscar coincidencia exacta en costos del embarque primero
+      let costoEncontrado = Number(costosEmbarque[medida]);
+      if (costoEncontrado && costoEncontrado > 0) {
+        console.log(`✅ Coincidencia exacta en embarque: ${medida} = $${costoEncontrado}`);
+        return { medidaEncontrada: medida, costo: costoEncontrado };
+      }
+      
+      // 2. Buscar insensible a mayúsculas/minúsculas en embarque
+      const medidaLower = medida.toLowerCase().trim();
+      for (const [claveMedida, costoValue] of Object.entries(costosEmbarque)) {
+        if (claveMedida.toLowerCase().trim() === medidaLower) {
+          const costo = Number(costoValue);
+          if (costo > 0) {
+            console.log(`✅ Coincidencia exacta (case insensitive) en embarque: ${claveMedida} = $${costo}`);
+            return { medidaEncontrada: claveMedida, costo: costo };
+          }
+        }
+      }
+      
+      // 3. Si no se encuentra en el embarque, buscar en medidas registradas globales
+      console.log(`🌐 Buscando en medidas registradas globales...`);
+      const costosGlobales = await this.obtenerCostosRegistradosGlobales();
+      
+      // Buscar coincidencia exacta en medidas registradas
+      if (costosGlobales[medida]) {
+        console.log(`✅ Coincidencia exacta en medidas registradas: ${medida} = $${costosGlobales[medida].costoBase}`);
+        return { medidaEncontrada: medida, costo: costosGlobales[medida].costoBase };
+      }
+      
+      // Buscar insensible a mayúsculas/minúsculas en medidas registradas
+      for (const [claveMedida, costoInfo] of Object.entries(costosGlobales)) {
+        if (claveMedida.toLowerCase().trim() === medidaLower) {
+          console.log(`✅ Coincidencia exacta (case insensitive) en medidas registradas: ${claveMedida} = $${costoInfo.costoBase}`);
+          return { medidaEncontrada: claveMedida, costo: costoInfo.costoBase };
+        }
+      }
+      
+      // 4. SOLO como último recurso: Normalizar quitando sufijos comunes y buscar
+      const medidaNormalizada = medida.toLowerCase().trim()
+        .replace(' maquila ozuna', '')
+        .replace(/\s+(vayon|ahumada|sin\s+cal|cal|c\/c|crudo|limpio|tirado).*$/g, '')
+        .trim();
+      
+      console.log(`🔍 Medida normalizada: "${medidaNormalizada}"`);
+      
+      // Buscar normalizada en embarque
+      for (const [claveMedida, costoValue] of Object.entries(costosEmbarque)) {
+        const claveNormalizada = claveMedida.toLowerCase().trim()
+          .replace(' maquila ozuna', '')
+          .replace(/\s+(vayon|ahumada|sin\s+cal|cal|c\/c|crudo|limpio|tirado).*$/g, '')
+          .trim();
+        
+        if (claveNormalizada === medidaNormalizada) {
+          const costo = Number(costoValue);
+          if (costo > 0) {
+            console.log(`⚠️ [${medida}] Usando costo normalizado del embarque: ${claveMedida} ($${costo})`);
+            return { medidaEncontrada: claveMedida, costo: costo };
+          }
+        }
+      }
+      
+      // Buscar normalizada en medidas registradas
+      for (const [claveMedida, costoInfo] of Object.entries(costosGlobales)) {
+        const claveNormalizada = claveMedida.toLowerCase().trim()
+          .replace(' maquila ozuna', '')
+          .replace(/\s+(vayon|ahumada|sin\s+cal|cal|c\/c|crudo|limpio|tirado).*$/g, '')
+          .trim();
+        
+        if (claveNormalizada === medidaNormalizada) {
+          console.log(`⚠️ [${medida}] Usando costo normalizado de medidas registradas: ${claveMedida} ($${costoInfo.costoBase})`);
+          return { medidaEncontrada: claveMedida, costo: costoInfo.costoBase };
+        }
+      }
+      
+      console.log(`❌ No se encontró costo para: "${medida}"`);
+      return null; // No se encontró
+    },
+
+    // Función para obtener costos registrados globales
+    async obtenerCostosRegistradosGlobales() {
+      try {
+        const db = getFirestore();
+        const historialRef = collection(db, 'historial_costos');
+        const historialSnapshot = await getDocs(historialRef);
+        
+        const historialCompleto = [];
+        historialSnapshot.forEach(doc => {
+          const data = doc.data();
+          historialCompleto.push({
+            ...data,
+            id: doc.id
+          });
+        });
+        
+        // Helper para convertir fecha
+        const toDate = (value) => {
+          try {
+            if (!value) return null;
+            if (value.toDate && typeof value.toDate === 'function') return value.toDate();
+            if (value.seconds) return new Date(value.seconds * 1000);
+            if (typeof value === 'string') return new Date(value);
+            if (value instanceof Date) return value;
+            return new Date(value);
+          } catch {
+            return null;
+          }
+        };
+
+        // Ordenar por fecha descendente
+        historialCompleto.sort((a, b) => {
+          const fechaA = toDate(a.fecha) || toDate(a.timestamp) || new Date(0);
+          const fechaB = toDate(b.fecha) || toDate(b.timestamp) || new Date(0);
+          return fechaB - fechaA;
+        });
+        
+        // Obtener fecha del embarque
+        const fechaEmbarqueNormalizada = this.normalizarFecha(this.embarqueData?.fecha);
+        const fechaEmb = fechaEmbarqueNormalizada || new Date();
+        fechaEmb.setHours(12, 0, 0, 0);
+        
+        // Obtener solo los costos válidos para la fecha del embarque
+        const costosActuales = {};
+        const medidasProcesadas = new Set();
+        
+        historialCompleto.forEach(entrada => {
+          if (!medidasProcesadas.has(entrada.medida)) {
+            const fechaCosto = toDate(entrada.fecha) || toDate(entrada.timestamp) || new Date(0);
+            fechaCosto.setHours(12, 0, 0, 0);
+
+            if (fechaCosto <= fechaEmb && !entrada.eliminado && !entrada.medidaEliminada) {
+              costosActuales[entrada.medida] = {
+                costoBase: entrada.costoBase,
+                fecha: entrada.fecha,
+                timestamp: entrada.timestamp,
+                id: entrada.id
+              };
+              medidasProcesadas.add(entrada.medida);
+            }
+          }
+        });
+        
+        return costosActuales;
+      } catch (error) {
+        console.error('Error al obtener costos registrados globales:', error);
+        return {};
+      }
+    },
+
+    // Método para precargar todos los costos
+    async precargarCostos() {
+      if (!this.medidasUnicas || this.medidasUnicas.length === 0) return;
+      
+      console.log('🔄 Precargando costos para todas las medidas...');
+      
+      // Obtener costos globales una sola vez
+      if (!this.costosGlobalesCache) {
+        this.costosGlobalesCache = await this.obtenerCostosRegistradosGlobales();
+      }
+      
+      // Precargar costos para cada medida
+      const promesasCostos = this.medidasUnicas.map(async (medida) => {
+        try {
+          const costoCalculado = await this.calcularCostoFinal(medida);
+          this.$set(this.costosCalculados, medida, costoCalculado);
+        } catch (error) {
+          console.error(`Error al calcular costo para ${medida}:`, error);
+          this.$set(this.costosCalculados, medida, 0);
+        }
+      });
+      
+      await Promise.all(promesasCostos);
+      console.log('✅ Costos precargados:', this.costosCalculados);
+    },
+
+    // Versión síncrona de calcularCostoFinal que usa el cache
+    calcularCostoFinalSync(medida) {
+      // Si está en cache, usar ese valor
+      if (this.costosCalculados[medida] !== undefined) {
+        return this.costosCalculados[medida];
+      }
+      
+      // Si no está en cache, intentar calcularlo de forma síncrona usando los costos disponibles
+      const costosEmbarque = this.embarqueData?.costosPorMedida || {};
+      let costo = Number(costosEmbarque[medida]) || 0;
+      
+      // Si no hay costo en el embarque, buscar en el cache de costos globales
+      if (costo === 0 && this.costosGlobalesCache) {
+        // Buscar coincidencia exacta en costos globales
+        if (this.costosGlobalesCache[medida]) {
+          costo = this.costosGlobalesCache[medida].costoBase;
+          console.log(`💰 [${medida}] Usando costo global del cache: $${costo}`);
+        } else {
+          // Buscar insensible a mayúsculas
+          const medidaLower = medida.toLowerCase().trim();
+          for (const [claveMedida, costoInfo] of Object.entries(this.costosGlobalesCache)) {
+            if (claveMedida.toLowerCase().trim() === medidaLower) {
+              costo = costoInfo.costoBase;
+              console.log(`💰 [${medida}] Usando costo global (case insensitive): ${claveMedida} = $${costo}`);
+              break;
+            }
+          }
+        }
+      }
+      
+      const rendimientoOriginal = this.getRendimiento(medida);
+      const rendimiento = Math.round(rendimientoOriginal * 100) / 100;
+      const costoExtra = Number(this.embarqueData?.costoExtra) || 18;
+      const aplicarExtra = this.aplicarCostoExtra[medida] || false;
+      
+      let resultado;
+      if (aplicarExtra) {
+        resultado = Math.round((costo * rendimiento) + costoExtra);
+      } else {
+        resultado = Math.round(costo * rendimiento);
+      }
+      
+      // Guardar en cache para futuras llamadas
+      this.$set(this.costosCalculados, medida, resultado);
+      
+      return resultado;
+    },
+
+    async calcularCostoFinal(medida) {
+      // Usar búsqueda inteligente de costos
+      const resultadoBusqueda = await this.encontrarCostoParaMedida(medida);
+      let costo = 0;
+      let medidaUsada = medida;
+      
+      if (resultadoBusqueda) {
+        costo = resultadoBusqueda.costo;
+        medidaUsada = resultadoBusqueda.medidaEncontrada;
+        
+        // Log informativo si se usó una medida diferente
+        if (medidaUsada !== medida) {
+          console.log(`💰 [${medida}] Usando costo de: ${medidaUsada} ($${costo})`);
+        }
+      } else {
+        console.warn(`⚠️ [${medida}] No se encontró costo para esta medida`);
+      }
+      
       const rendimientoOriginal = this.getRendimiento(medida);
       // Usar rendimiento redondeado a 2 decimales (igual que se muestra en la UI)
       const rendimiento = Math.round(rendimientoOriginal * 100) / 100;
@@ -823,17 +1116,22 @@ export default {
       }
     },
 
-    calcularGanancias() {
+    async calcularGanancias() {
       if (!this.embarqueData) return;
       
-      const fechaEmbarque = this.embarqueData.fecha || new Date().toISOString().split('T')[0];
+      // Normalizar la fecha del embarque
+      const fechaEmbarqueNormalizada = this.normalizarFecha(this.embarqueData.fecha);
+      const fechaEmbarque = fechaEmbarqueNormalizada ? 
+        fechaEmbarqueNormalizada.toISOString().split('T')[0] : 
+        new Date().toISOString().split('T')[0];
+      
       const ganancias = {};
       
-      this.medidasUnicas.forEach(medida => {
+      for (const medida of this.medidasUnicas) {
         // Solo calcular ganancias si el análisis está activado para esta medida
-        if (!this.analizarGanancia[medida]) return;
+        if (!this.analizarGanancia[medida]) continue;
         
-        const costoFinal = this.calcularCostoFinal(medida);
+        const costoFinal = await this.calcularCostoFinal(medida);
         
         // Obtener el costo base original (sin cálculos adicionales)
         const costosEmbarque = this.embarqueData?.costosPorMedida || {};
@@ -845,10 +1143,10 @@ export default {
         // Calcular precio promedio ponderado y ganancias reales
         const resultadoCalculo = this.calcularPrecioYGanancias(medida, fechaEmbarque, clientesConMedida, costoFinal, costoBase);
         
-        if (!resultadoCalculo) return; // Si no hay precios, saltar esta medida
+        if (!resultadoCalculo) continue; // Si no hay precios, saltar esta medida
         
         ganancias[medida] = resultadoCalculo;
-      });
+      }
       
       this.gananciasCalculadas = ganancias;
       
@@ -865,7 +1163,7 @@ export default {
       
       // Obtener precio general más reciente
       const precioGeneral = this.obtenerPrecioVentaParaFecha(medida, fechaEmbarque, null);
-      const fechaGeneral = precioGeneral ? new Date(precioGeneral.fecha) : null;
+      const fechaGeneral = precioGeneral ? this.normalizarFecha(precioGeneral.fecha) : null;
       
       // Calcular ganancias por cada cliente
       clientesConMedida.forEach(({ cliente, totalEmbarcado }) => {
@@ -879,9 +1177,9 @@ export default {
         let esEspecifico = false;
         
         if (precioEspecifico && precioEspecifico.clienteId) {
-          const fechaEspecifico = new Date(precioEspecifico.fecha);
+          const fechaEspecifico = this.normalizarFecha(precioEspecifico.fecha);
           // Solo usar específico si es más reciente que el general (o si no hay general)
-          if (!fechaGeneral || fechaEspecifico > fechaGeneral) {
+          if (fechaEspecifico && (!fechaGeneral || fechaEspecifico > fechaGeneral)) {
             precioAUsar = precioEspecifico;
             esEspecifico = true;
           }
@@ -950,8 +1248,8 @@ export default {
         clienteEspecifico: null,
         clientesConEspecifico: clientesConEspecifico.map(c => c.cliente),
         fechaMasReciente: gananciasPorCliente.reduce((fecha, g) => {
-          const fechaActual = new Date(g.fechaPrecio);
-          return !fecha || fechaActual > fecha ? fechaActual : fecha;
+          const fechaActual = this.normalizarFecha(g.fechaPrecio);
+          return !fecha || (fechaActual && fechaActual > fecha) ? fechaActual : fecha;
         }, null)
       };
       
@@ -1734,8 +2032,8 @@ export default {
 
           const rendimiento = this.getRendimiento(medida);
 
-          // Calcular costo final para el PDF usando el método que considera Ozuna Maquila
-          const costoFinal = this.calcularCostoFinal(medida);
+          // Usar la versión síncrona que usa el cache
+          const costoFinal = this.calcularCostoFinalSync(medida);
 
           return {
             medida: medida,
@@ -1945,7 +2243,10 @@ export default {
 
     formatearFecha(fechaString) {
       if (!fechaString) return '';
-      const fecha = new Date(fechaString);
+      
+      const fecha = this.normalizarFecha(fechaString);
+      if (!fecha) return '';
+      
       return fecha.toLocaleDateString('es-ES', { 
         year: 'numeric', 
         month: 'short', 
@@ -1956,7 +2257,10 @@ export default {
     mostrarIndicadorPrecioReciente(medida) {
       if (!this.embarqueData || !this.embarqueData.fecha) return false;
       
-      const fechaEmbarqueStr = new Date(this.embarqueData.fecha).toISOString().split('T')[0];
+      const fechaEmbarqueNormalizada = this.normalizarFecha(this.embarqueData.fecha);
+      if (!fechaEmbarqueNormalizada) return false;
+      
+      const fechaEmbarqueStr = fechaEmbarqueNormalizada.toISOString().split('T')[0];
       const fechaHoy = new Date().toISOString().split('T')[0];
       const fechaEmbarqueObj = new Date(fechaEmbarqueStr);
       const fechaHoyObj = new Date(fechaHoy);
@@ -2031,8 +2335,8 @@ export default {
       handler() {
         this.guardarCambiosEnTiempoReal();
         // Recalcular ganancias cuando cambien los kilos crudos
-        this.$nextTick(() => {
-          this.calcularGanancias();
+        this.$nextTick(async () => {
+          await this.calcularGanancias();
         });
       },
       deep: true
@@ -2040,8 +2344,8 @@ export default {
     analizarGanancia: {
       handler() {
         // Recalcular ganancias cuando se active/desactive el análisis
-        this.$nextTick(() => {
-          this.calcularGanancias();
+        this.$nextTick(async () => {
+          await this.calcularGanancias();
         });
       },
       deep: true
