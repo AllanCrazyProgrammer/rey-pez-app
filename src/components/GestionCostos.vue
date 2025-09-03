@@ -1854,7 +1854,89 @@ export default {
 }
 
 
-@media (max-width: 768px) {
+/* Responsive Design Mejorado - 2 Columnas */
+@media (min-width: 1200px) {
+  .costos-grid, .medidas-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (min-width: 992px) and (max-width: 1199px) {
+  .costos-grid, .medidas-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (min-width: 768px) and (max-width: 991px) {
+  .costos-grid, .medidas-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 15px;
+  }
+  
+  .costo-card, .medida-card {
+    padding: 16px;
+  }
+  
+  .costo-header h4, .medida-header h4 {
+    font-size: 1em;
+  }
+  
+  .btn-editar-costo, .btn-editar-costo-embarque {
+    padding: 6px 12px;
+    font-size: 0.85em;
+  }
+  
+  .costo-display {
+    padding: 8px 12px;
+  }
+  
+  .checkbox-container {
+    font-size: 0.9em;
+  }
+}
+
+@media (min-width: 576px) and (max-width: 767px) {
+  .costos-grid, .medidas-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+  
+  .costo-card, .medida-card {
+    padding: 14px;
+  }
+  
+  .costo-header h4, .medida-header h4 {
+    font-size: 0.95em;
+  }
+  
+  .btn-editar-costo, .btn-editar-costo-embarque {
+    padding: 5px 10px;
+    font-size: 0.8em;
+  }
+  
+  .costo-display {
+    padding: 6px 10px;
+    margin-bottom: 6px;
+  }
+  
+  .costo-amount {
+    font-size: 1em;
+  }
+  
+  .checkbox-container {
+    font-size: 0.85em;
+  }
+  
+  .medida-actions {
+    gap: 6px;
+  }
+  
+  .input-costo-extra {
+    width: 75px;
+  }
+}
+
+@media (max-width: 575px) {
   .costos-grid, .medidas-grid {
     grid-template-columns: 1fr;
   }
