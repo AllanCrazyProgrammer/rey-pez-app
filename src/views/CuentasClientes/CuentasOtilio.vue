@@ -391,7 +391,12 @@
         showSaveMessage: false,
         saveMessageTimer: null,
         saveMessage: '',
-        isSavingVerificacion: false
+        isSavingVerificacion: false,
+        // Nuevas variables para control de concurrencia
+        isCreatingAccount: false,
+        isLoadingAccount: false,
+        pendingOperations: new Set(),
+        operationCounter: 0
       }
     },
     computed: {
@@ -476,10 +481,29 @@
           maximumFractionDigits: 2 
         });
       },
-      async loadExistingCuenta(id) {
+            async loadExistingCuenta(id) {
+        // Evitar cargas concurrentes
+        if (this.isLoadingAccount) {
+          console.log('Ya hay una carga de cuenta en proceso');
+          return;
+        }
+
+        const operationId = `load-${++this.operationCounter}`;
+        
         try {
+          this.isLoadingAccount = true;
+          this.pendingOperations.add(operationId);
+          console.log('Cargando cuenta existente:', id, operationId);
+          
+          // Pausar el guardado automático durante la carga
+          this.pauseAutoSave();
+          
           const cuentaRef = doc(db, 'cuentasOtilio', id);
-          const cuentaDoc = await getDoc(cuentaRef);
+          const cuentaDoc = await this.executeWithTimeout(
+            () => getDoc(cuentaRef),
+            8000,
+            'Timeout al cargar cuenta'
+          );
           
           if (cuentaDoc.exists()) {
             const data = cuentaDoc.data();
@@ -491,7 +515,7 @@
               costo: Number(item.costo) || 0,
               total: Number(item.total) || 0
             }));
-  
+
             // Cargar los itemsVenta con el estado de verificación
             this.itemsVenta = (data.itemsVenta || []).map(item => ({
               kilosVenta: Number(item.kilosVenta) || 0,
@@ -501,7 +525,7 @@
               ganancia: Number(item.ganancia) || 0,
               verificado: Boolean(item.verificado || false)
             }));
-  
+
             // Cargar el resto de datos
             this.saldoAcumuladoAnterior = Number(data.saldoAcumuladoAnterior) || 0;
             this.cobros = (data.cobros || []).map(cobro => ({
@@ -518,12 +542,21 @@
             this.showObservacionModal = false; // Asegurar que el modal esté cerrado
             this.tieneObservacion = data.tieneObservacion || false;
             this.observacion = data.observacion || '';
+            
+            console.log('Cuenta cargada exitosamente:', id);
           } else {
             throw new Error("No se encontró la cuenta especificada");
           }
         } catch (error) {
           console.error("Error al cargar la cuenta existente:", error);
           throw error;
+        } finally {
+          this.isLoadingAccount = false;
+          this.pendingOperations.delete(operationId);
+          // Reanudar el guardado automático después de un delay
+          setTimeout(() => {
+            this.resumeAutoSave();
+          }, 1000);
         }
       },
   
@@ -619,9 +652,23 @@
         }
       },
   
-      async crearNuevaCuenta() {
+            async crearNuevaCuenta() {
+        // Evitar múltiples creaciones concurrentes
+        if (this.isCreatingAccount) {
+          console.log('Ya hay una creación de cuenta en proceso');
+          return null;
+        }
+
+        const operationId = `create-${++this.operationCounter}`;
+        
         try {
-          console.log('Iniciando creación de nueva cuenta...');
+          this.isCreatingAccount = true;
+          this.pendingOperations.add(operationId);
+          console.log('Iniciando creación de nueva cuenta...', operationId);
+          
+          // Pausar el guardado automático durante la creación
+          this.pauseAutoSave();
+          
           this.isGuardando = true;
           this.lastSaveMessage = 'Creando nueva cuenta...';
           this.showSaveMessage = true;
@@ -635,7 +682,7 @@
           
           const querySnapshot = await getDocs(q);
           console.log('Query snapshot obtenido:', querySnapshot.size, 'documentos encontrados');
-  
+
           if (!querySnapshot.empty) {
             this.isGuardando = false;
             this.lastSaveMessage = 'Ya existe una nota para esta fecha';
@@ -645,16 +692,15 @@
             }, 3000);
             return null;
           }
-  
+
           // Obtener el saldo acumulado anterior
           console.log('Obteniendo saldo acumulado anterior...');
-          // Verificar si ya tenemos el saldo cargado
           if (this.saldoAcumuladoAnterior === 0 || this.saldoAcumuladoAnterior === null) {
             this.lastSaveMessage = 'Cargando saldo acumulado anterior...';
             this.saldoAcumuladoAnterior = await this.obtenerSaldoAcumuladoAnterior();
           }
           console.log('Saldo anterior obtenido:', this.saldoAcumuladoAnterior);
-  
+
           // Preparar los datos iniciales
           const notaData = {
             fecha: this.fechaSeleccionada,
@@ -671,62 +717,63 @@
             observacion: String(this.observacion || ''),
             ultimaActualizacion: new Date().toISOString()
           };
-  
+
           console.log('Datos preparados para crear nueva cuenta:', notaData);
           this.lastSaveMessage = 'Guardando nueva cuenta...';
-  
-          try {
-            // Intentar crear el documento en Firestore
-            console.log('Intentando crear documento en Firestore...');
-            const docRef = await addDoc(cuentasRef, notaData);
-            console.log('Documento creado exitosamente con ID:', docRef.id);
-  
-            // Verificar que el documento se creó correctamente
-            const docCheck = await getDoc(docRef);
-            if (!docCheck.exists()) {
-              throw new Error('El documento no se creó correctamente');
-            }
-            console.log('Documento verificado y existe en Firestore');
-  
-            // Actualizar la URL y forzar la recarga del componente
-            console.log('Actualizando URL...');
-            this.lastSaveMessage = 'Cuenta creada exitosamente';
-            
-            setTimeout(() => {
-              this.showSaveMessage = false;
-              this.isGuardando = false;
-            }, 2000);
-            
-            await this.$router.push({
-              name: 'CuentasOtilio',
-              params: { id: docRef.id },
-              query: { edit: 'true' }
-            });
-  
-            // Cargar los datos de la nueva cuenta
-            console.log('Cargando datos de la nueva cuenta...');
-            await this.loadExistingCuenta(docRef.id);
-  
-            return docRef.id;
-          } catch (firestoreError) {
-            console.error('Error específico de Firestore:', firestoreError);
-            this.isGuardando = false;
-            this.lastSaveMessage = `Error: ${firestoreError.message}`;
-            this.showSaveMessage = true;
-            setTimeout(() => {
-              this.showSaveMessage = false;
-            }, 3000);
-            throw new Error(`Error al crear el documento en Firestore: ${firestoreError.message}`);
+
+          // Intentar crear el documento en Firestore con timeout
+          console.log('Intentando crear documento en Firestore...');
+          const docRef = await this.executeWithTimeout(
+            () => addDoc(cuentasRef, notaData),
+            10000,
+            'Timeout al crear documento'
+          );
+          console.log('Documento creado exitosamente con ID:', docRef.id);
+
+          // Verificar que el documento se creó correctamente
+          const docCheck = await this.executeWithTimeout(
+            () => getDoc(docRef),
+            5000,
+            'Timeout al verificar documento'
+          );
+          
+          if (!docCheck.exists()) {
+            throw new Error('El documento no se creó correctamente');
           }
+          console.log('Documento verificado y existe en Firestore');
+
+          this.lastSaveMessage = 'Cuenta creada exitosamente';
+          
+          // Esperar antes de continuar para evitar conflictos
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
+          // Actualizar la URL sin recargar inmediatamente
+          console.log('Actualizando URL...');
+          await this.$router.push({
+            name: 'CuentasOtilio',
+            params: { id: docRef.id },
+            query: { edit: 'true' }
+          });
+
+          // Reanudar el guardado automático
+          this.resumeAutoSave();
+
+          return docRef.id;
         } catch (error) {
           console.error('Error detallado al crear nueva cuenta:', error);
-          this.isGuardando = false;
           this.lastSaveMessage = `Error: ${error.message}`;
           this.showSaveMessage = true;
           setTimeout(() => {
             this.showSaveMessage = false;
           }, 3000);
           throw error;
+        } finally {
+          this.isCreatingAccount = false;
+          this.isGuardando = false;
+          this.pendingOperations.delete(operationId);
+          setTimeout(() => {
+            this.showSaveMessage = false;
+          }, 2000);
         }
       },
   
@@ -1351,23 +1398,68 @@
         }
       },
       handleDataChange() {
+        // No activar guardado automático si hay operaciones en curso
+        if (this.isCreatingAccount || this.isLoadingAccount || this.pendingOperations.size > 0) {
+          return;
+        }
+        
         if (this.$route.params.id && this.$route.query.edit === 'true') {
           if (this.autoSaveTimer) {
             clearTimeout(this.autoSaveTimer);
           }
           this.autoSaveTimer = setTimeout(async () => {
             await this.queueSave();
-          }, 2000); // Delay de 2 segundos
+          }, 3000); // Aumentar delay para reducir operaciones concurrentes
         }
       },
+
+      // Métodos auxiliares para control de concurrencia
+      pauseAutoSave() {
+        if (this.autoSaveTimer) {
+          clearTimeout(this.autoSaveTimer);
+          this.autoSaveTimer = null;
+        }
+        console.log('Guardado automático pausado');
+      },
+
+      resumeAutoSave() {
+        console.log('Guardado automático reanudado');
+        // El guardado automático se reanudará automáticamente con el próximo cambio de datos
+      },
+
+      async executeWithTimeout(operation, timeoutMs, errorMessage) {
+        return new Promise(async (resolve, reject) => {
+          const timeout = setTimeout(() => {
+            reject(new Error(errorMessage || 'Operación excedió el tiempo límite'));
+          }, timeoutMs);
+
+          try {
+            const result = await operation();
+            clearTimeout(timeout);
+            resolve(result);
+          } catch (error) {
+            clearTimeout(timeout);
+            reject(error);
+          }
+        });
+      },
+
+      // Verificar si hay operaciones pendientes antes de ejecutar nuevas operaciones
+      canExecuteOperation() {
+        return !this.isCreatingAccount && !this.isLoadingAccount && this.pendingOperations.size === 0;
+      },
       async queueSave() {
+        // No encolar si hay operaciones críticas en curso
+        if (!this.canExecuteOperation()) {
+          console.log('Operaciones críticas en curso, saltando guardado automático');
+          return;
+        }
+
         // Agregar operación a la cola con timestamp
         this.saveQueue.push({
           timestamp: Date.now(),
           operation: async () => {
             if (!this.$route.params.id) {
-              // No intentar crear una nueva cuenta automáticamente
-              // Solo mostrar un mensaje en la consola
               console.log('No hay ID de cuenta, no se realizará guardado automático');
               return;
             } else {
@@ -1384,10 +1476,22 @@
       async processSaveQueue() {
         if (this.isSaving || this.saveQueue.length === 0) return;
 
+        // Verificar si podemos ejecutar operaciones
+        if (!this.canExecuteOperation()) {
+          console.log('No se puede procesar la cola de guardado, operaciones críticas en curso');
+          return;
+        }
+
         this.isSaving = true;
 
         try {
           while (this.saveQueue.length > 0) {
+            // Verificar nuevamente si podemos continuar
+            if (!this.canExecuteOperation()) {
+              console.log('Deteniendo procesamiento de cola, operación crítica iniciada');
+              break;
+            }
+
             // Verificar el tiempo desde el último guardado
             const now = Date.now();
             if (this.lastSaveTime && now - this.lastSaveTime < this.saveMinInterval) {
@@ -1398,28 +1502,38 @@
             }
 
             const nextSave = this.saveQueue[0];
-            await this.retryOperation(nextSave.operation);
+            await this.retryOperation(nextSave.operation, 2); // Reducir reintentos
             this.lastSaveTime = Date.now();
             this.saveQueue.shift();
           }
         } catch (error) {
           console.error('Error procesando cola de guardado:', error);
           if (error.code === 'resource-exhausted') {
-            // Esperar 10 segundos antes de reintentar si se excedió la cuota
-            await new Promise(resolve => setTimeout(resolve, 10000));
-            // Reintentar el procesamiento
-            await this.processSaveQueue();
+            // Limpiar la cola para evitar acumulación
+            this.saveQueue = [];
+            console.log('Cola de guardado limpiada debido a límite de recursos');
           }
         } finally {
           this.isSaving = false;
         }
       },
       async autoSaveNota() {
+        const operationId = `autosave-${++this.operationCounter}`;
+        
         try {
+          this.pendingOperations.add(operationId);
+          console.log('Iniciando auto-guardado:', operationId);
+          
           const id = this.$route.params.id;
           if (!id) return;
+
+          // Verificar que no hay operaciones críticas en curso
+          if (this.isCreatingAccount || this.isLoadingAccount) {
+            console.log('Saltando auto-guardado, operación crítica en curso');
+            return;
+          }
           
-          // Preparar los datos para guardar
+          // Preparar los datos para guardar con validación
           const notaData = {
             fecha: this.fechaSeleccionada,
             items: this.items.map(item => ({
@@ -1433,7 +1547,8 @@
               medida: String(item.medida || ''),
               precioVenta: Number(item.precioVenta) || 0,
               totalVenta: Number(item.kilosVenta * item.precioVenta) || 0,
-              ganancia: Number(item.ganancia) || 0
+              ganancia: Number(item.ganancia) || 0,
+              verificado: Boolean(item.verificado)
             })),
             saldoAcumuladoAnterior: Number(this.saldoAcumuladoAnterior) || 0,
             cobros: this.cobros.map(cobro => ({
@@ -1458,34 +1573,45 @@
             ultimaActualizacion: new Date().toISOString()
           };
 
-          await updateDoc(doc(db, 'cuentasOtilio', id), notaData);
+          // Ejecutar la actualización con timeout
+          await this.executeWithTimeout(
+            () => updateDoc(doc(db, 'cuentasOtilio', id), notaData),
+            8000,
+            'Timeout en auto-guardado'
+          );
           
           // Mostrar mensaje de confirmación
           this.lastSaveMessage = `Guardado automático: ${new Date().toLocaleTimeString()}`;
           this.showSaveMessage = true;
           
-          // Ocultar el mensaje después de 3 segundos
+          // Ocultar el mensaje después de 2 segundos
           if (this.saveMessageTimer) {
             clearTimeout(this.saveMessageTimer);
           }
           this.saveMessageTimer = setTimeout(() => {
             this.showSaveMessage = false;
-          }, 3000);
+          }, 2000);
           
-          console.log('Cuenta auto-guardada exitosamente:', new Date().toLocaleTimeString());
+          console.log('Cuenta auto-guardada exitosamente:', operationId, new Date().toLocaleTimeString());
         } catch (error) {
-          console.error('Error en auto-guardado:', error);
+          console.error('Error en auto-guardado:', operationId, error);
           
-          // Mejorar los mensajes de error para el usuario
+          // Manejo específico de errores de Firestore
+          let errorMessage = 'Error al guardar automáticamente';
+          
           if (error.code === 'resource-exhausted') {
-            this.lastSaveMessage = 'Límite de operaciones excedido. Reintentando...';
-            throw error; // Dejar que el sistema de cola maneje el reintento
+            errorMessage = 'Límite de operaciones excedido';
+            // Limpiar cola para evitar más errores
+            this.saveQueue = [];
           } else if (error.code === 'unavailable' || error.code === 'network-request-failed') {
-            this.lastSaveMessage = 'Error de conexión al guardar automáticamente';
-          } else {
-            this.lastSaveMessage = 'Error al guardar automáticamente';
+            errorMessage = 'Error de conexión';
+          } else if (error.code === 'permission-denied') {
+            errorMessage = 'Sin permisos para guardar';
+          } else if (error.message && error.message.includes('Timeout')) {
+            errorMessage = 'Timeout al guardar';
           }
           
+          this.lastSaveMessage = errorMessage;
           this.showSaveMessage = true;
           
           if (this.saveMessageTimer) {
@@ -1496,6 +1622,8 @@
           }, 3000);
           
           throw error;
+        } finally {
+          this.pendingOperations.delete(operationId);
         }
       },
       async retryOperation(operation, maxRetries = 3) {
@@ -1632,90 +1760,147 @@
         }
       },
     },
-    created() {
+    async created() {
+      console.log('Componente CuentasOtilio creado');
+      
       const id = this.$route.params.id;
       const isEditing = this.$route.query.edit === 'true';
       const isNewRoute = this.$route.path === '/cuentas-otilio/nueva';
       
-      if (id && isEditing) {
-        this.loadExistingCuenta(id);
-      } else if (isNewRoute) {
-        // Si estamos en la ruta de nueva cuenta, crear automáticamente
-        this.$nextTick(async () => {
-          try {
-            // Limpiar datos primero
-            this.limpiarDatos();
-            
-            // Esperar a que se cargue el saldo acumulado anterior
-            await this.loadSaldoAcumuladoAnterior();
-            
-            // Esperar un momento para asegurar que los datos estén actualizados
-            setTimeout(async () => {
-              // Crear nueva cuenta automáticamente
-              const docId = await this.crearNuevaCuenta();
-              if (docId) {
-                console.log('Nueva cuenta creada automáticamente con ID:', docId);
-              }
-            }, 800); // Aumentamos el tiempo de espera para asegurar que el saldo se cargue
-          } catch (error) {
-            console.error('Error al crear nueva cuenta automáticamente:', error);
+      try {
+        if (id && isEditing) {
+          console.log('Cargando cuenta existente:', id);
+          await this.loadExistingCuenta(id);
+        } else if (isNewRoute) {
+          console.log('Iniciando flujo de nueva cuenta');
+          // Limpiar datos primero
+          this.limpiarDatos();
+          
+          // Esperar a que se cargue el saldo acumulado anterior
+          await this.loadSaldoAcumuladoAnterior();
+          
+          // Esperar un momento antes de crear la cuenta para evitar conflictos
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          
+          // Crear nueva cuenta automáticamente
+          const docId = await this.crearNuevaCuenta();
+          if (docId) {
+            console.log('Nueva cuenta creada automáticamente con ID:', docId);
           }
-        });
-      } else {
-        // Si no estamos editando, cargar el saldo acumulado anterior
-        this.limpiarDatos();
+        } else {
+          console.log('Iniciando con datos limpios');
+          // Si no estamos editando, cargar el saldo acumulado anterior
+          this.limpiarDatos();
+        }
+      } catch (error) {
+        console.error('Error en created():', error);
+        // Mostrar error al usuario
+        this.lastSaveMessage = `Error al inicializar: ${error.message}`;
+        this.showSaveMessage = true;
+        setTimeout(() => {
+          this.showSaveMessage = false;
+        }, 5000);
       }
     },
     watch: {
-      '$route'(to, from) {
+      async '$route'(to, from) {
+        console.log('Cambio de ruta detectado:', from.path, '->', to.path);
+        
+        // Pausar guardado automático durante el cambio de ruta
+        this.pauseAutoSave();
+        
         const id = to.params.id;
         const isEditing = to.query.edit === 'true';
         
-        if (id && isEditing) {
-          this.loadExistingCuenta(id);
-        } else {
-          // Limpiar los datos si no estamos editando
-          this.limpiarDatos();
+        try {
+          if (id && isEditing) {
+            await this.loadExistingCuenta(id);
+          } else {
+            // Limpiar los datos si no estamos editando
+            this.limpiarDatos();
+          }
+        } catch (error) {
+          console.error('Error en cambio de ruta:', error);
         }
       },
       items: {
-        handler: 'handleDataChange',
+        handler(newVal, oldVal) {
+          // Solo activar si no estamos cargando o creando cuenta
+          if (!this.isCreatingAccount && !this.isLoadingAccount) {
+            this.handleDataChange();
+          }
+        },
         deep: true
       },
       itemsVenta: {
-        handler: 'handleDataChange',
+        handler(newVal, oldVal) {
+          if (!this.isCreatingAccount && !this.isLoadingAccount) {
+            this.handleDataChange();
+          }
+        },
         deep: true
       },
       cobros: {
-        handler: 'handleDataChange',
+        handler(newVal, oldVal) {
+          if (!this.isCreatingAccount && !this.isLoadingAccount) {
+            this.handleDataChange();
+          }
+        },
         deep: true
       },
       abonos: {
-        handler: 'handleDataChange',
+        handler(newVal, oldVal) {
+          if (!this.isCreatingAccount && !this.isLoadingAccount) {
+            this.handleDataChange();
+          }
+        },
         deep: true
       },
       fechaSeleccionada: {
-        handler: 'handleDataChange'
+        handler(newVal, oldVal) {
+          if (!this.isCreatingAccount && !this.isLoadingAccount) {
+            this.handleDataChange();
+          }
+        }
       },
       saldoAcumuladoAnterior: {
-        handler: 'handleDataChange'
+        handler(newVal, oldVal) {
+          if (!this.isCreatingAccount && !this.isLoadingAccount) {
+            this.handleDataChange();
+          }
+        }
       },
-      'newItem.kilos': 'handleDataChange',
-      'newItem.medida': 'handleDataChange',
-      'newItem.costo': 'handleDataChange',
-      observacion: 'handleDataChange'
+      observacion: {
+        handler(newVal, oldVal) {
+          if (!this.isCreatingAccount && !this.isLoadingAccount) {
+            this.handleDataChange();
+          }
+        }
+      }
     },
     beforeUnmount() {
+      console.log('Desmontando componente CuentasOtilio');
+      
+      // Limpiar todos los timers
       if (this.autoSaveTimer) {
         clearTimeout(this.autoSaveTimer);
+        this.autoSaveTimer = null;
       }
       if (this.saveMessageTimer) {
         clearTimeout(this.saveMessageTimer);
+        this.saveMessageTimer = null;
       }
-      // Intentar procesar cualquier guardado pendiente
-      if (this.saveQueue.length > 0) {
-        this.processSaveQueue();
-      }
+      
+      // Cancelar operaciones pendientes
+      this.isCreatingAccount = false;
+      this.isLoadingAccount = false;
+      this.pendingOperations.clear();
+      
+      // Limpiar cola de guardado para evitar operaciones huérfanas
+      this.saveQueue = [];
+      this.isSaving = false;
+      
+      console.log('Componente CuentasOtilio desmontado correctamente');
     }
   };
   </script>
