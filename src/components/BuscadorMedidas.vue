@@ -53,6 +53,15 @@
             >
           </div>
 
+          <div class="filtro-grupo">
+            <label>Ordenar por:</label>
+            <select v-model="filtros.ordenamiento" @change="aplicarOrdenamiento" class="form-control">
+              <option value="fecha">Fecha (más reciente)</option>
+              <option value="mejor-rendimiento">Mejor rendimiento</option>
+              <option value="peor-rendimiento">Peor rendimiento</option>
+            </select>
+          </div>
+
         </div>
 
         <div class="estadisticas" v-if="resultados.length > 0">
@@ -140,7 +149,8 @@ export default {
         medida: '',
         proveedor: '',
         diaNoche: '',
-        cajas: ''
+        cajas: '',
+        ordenamiento: 'fecha'
       },
       resultados: [],
       todasLasPreparaciones: []
@@ -168,7 +178,27 @@ export default {
       return Array.from(proveedores).sort()
     },
     resultadosOrdenados() {
-      return [...this.resultados].sort((a, b) => new Date(b.fecha) - new Date(a.fecha))
+      const resultados = [...this.resultados]
+      
+      switch (this.filtros.ordenamiento) {
+        case 'mejor-rendimiento':
+          return resultados.sort((a, b) => {
+            const rendA = parseFloat(a.rendimiento?.toString().replace('%', '') || 0)
+            const rendB = parseFloat(b.rendimiento?.toString().replace('%', '') || 0)
+            return rendA - rendB // Menor valor = mejor rendimiento (menos pérdida)
+          })
+        
+        case 'peor-rendimiento':
+          return resultados.sort((a, b) => {
+            const rendA = parseFloat(a.rendimiento?.toString().replace('%', '') || 0)
+            const rendB = parseFloat(b.rendimiento?.toString().replace('%', '') || 0)
+            return rendB - rendA // Mayor valor = peor rendimiento (más pérdida)
+          })
+        
+        case 'fecha':
+        default:
+          return resultados.sort((a, b) => new Date(b.fecha) - new Date(a.fecha))
+      }
     },
     totalPreparaciones() {
       return this.resultados.length
@@ -249,7 +279,8 @@ export default {
 
 
 
-          if (coincide && medida.medida) {
+          // Solo incluir registros que tengan medida Y rendimiento
+          if (coincide && medida.medida && medida.porcentaje && medida.porcentaje.toString().trim() !== '') {
             this.resultados.push({
               id: preparacion.id,
               medidaIndex,
@@ -282,6 +313,11 @@ export default {
       if (valor >= 80) return 'rendimiento-alto'
       if (valor >= 60) return 'rendimiento-medio'
       return 'rendimiento-bajo'
+    },
+    aplicarOrdenamiento() {
+      // Este método se ejecuta automáticamente cuando cambia el ordenamiento
+      // ya que resultadosOrdenados es un computed que reacciona a filtros.ordenamiento
+      console.log('Aplicando ordenamiento:', this.filtros.ordenamiento)
     },
     exportarResultados() {
       if (this.resultados.length === 0) return
