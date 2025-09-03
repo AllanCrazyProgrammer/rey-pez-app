@@ -28,6 +28,7 @@ export const generarTablaGanancias = (gananciasCalculadas, nombresMedidasPersona
     const totalEmbarcado = ganancia.totalEmbarcado || 0;
     const precioVenta = ganancia.precioVenta || 0;
     const costoBase = ganancia.costoBase || 0;
+    const costoFinal = ganancia.costoFinal || 0;
     
     return [
       nombreMedida,
@@ -40,6 +41,13 @@ export const generarTablaGanancias = (gananciasCalculadas, nombresMedidasPersona
             alignment: 'center',
             margin: [0, 0, 0, 2],
             color: '#e74c3c'
+          },
+          {
+            text: `Costo Final: $${formatearPrecio(costoFinal)}`,
+            fontSize: 14,
+            alignment: 'center',
+            margin: [0, 0, 0, 2],
+            color: '#f39c12'
           },
           {
             text: `Venta: $${formatearPrecio(precioVenta)}`,

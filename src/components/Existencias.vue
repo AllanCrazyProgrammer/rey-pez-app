@@ -13,60 +13,97 @@
       </div>
 
       <div class="existencias-grid">
-        <div v-for="(datos, proveedor) in filteredExistencias" :key="proveedor" class="medida-card" :class="{ 'maquila-card': proveedor === 'Ozuna' || proveedor === 'Joselito' }">
-          <h2>{{ proveedor }}{{ (proveedor === 'Ozuna' || proveedor === 'Joselito') ? ' (Maquila)' : '' }}</h2>
-          <table class="medida-table">
-            <thead>
-              <tr>
-                <th>Medida</th>
-                <th v-if="proveedor !== 'Ozuna' && proveedor !== 'Joselito'">Proveedor</th>
-                <th v-if="tienePrecio">Precio</th>
-                <th class="kilos-cell">Kilos</th>
-              </tr>
-            </thead>
-            <tbody>
-              <template v-if="proveedor === 'Ozuna' || proveedor === 'Joselito'">
-                <tr v-for="(datos, medidaKey) in datos" :key="medidaKey" v-if="datos.kilos > 0">
+        <div v-for="(datos, medidaKey) in filteredExistencias" :key="medidaKey" class="medida-card" :class="{ 'maquila-card': medidaKey === 'Ozuna' || medidaKey === 'Joselito' }">
+          <!-- Para maquilas (Ozuna y Joselito) -->
+          <template v-if="medidaKey === 'Ozuna' || medidaKey === 'Joselito'">
+            <h2>
+              {{ medidaKey }} (Maquila)
+              <span v-if="tienePrecio && datos.precioPromedio" class="precio-promedio">
+                - Promedio: ${{ Math.round(datos.precioPromedio) }}
+              </span>
+            </h2>
+            <table class="medida-table">
+              <thead>
+                <tr>
+                  <th>Medida</th>
+                  <th v-if="tienePrecio">Precio</th>
+                  <th class="kilos-cell">Kilos</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="(item, itemKey) in datos.items" :key="itemKey" v-if="item.kilos > 0">
                   <td>
-                    {{ datos.medida }}
-                    <span class="fecha-entrada" v-if="datos.fechaEntrada">
-                      ({{ formatFecha(datos.fechaEntrada) }})
+                    {{ item.medida }}
+                    <span class="fecha-entrada" v-if="item.fechaEntrada">
+                      ({{ formatFecha(item.fechaEntrada) }})
                     </span>
                   </td>
-                  <td v-if="tienePrecio" class="precio-cell">{{ datos.precio ? `$${datos.precio}` : '-' }}</td>
-                  <td class="kilos-cell">{{ formatNumber(datos.kilos) }}</td>
+                  <td v-if="tienePrecio" class="precio-cell">{{ item.precio ? `$${item.precio}` : '-' }}</td>
+                  <td class="kilos-cell">{{ formatNumber(item.kilos) }}</td>
                 </tr>
                 <tr class="total-row">
-                  <td><strong>Total {{ proveedor }}</strong></td>
+                  <td><strong>Total {{ medidaKey }}</strong></td>
                   <td v-if="tienePrecio"></td>
                   <td class="kilos-cell">
-                    <strong>{{ formatNumber(Object.values(datos).reduce((sum, item) => sum + item.kilos, 0)) }}</strong>
+                    <strong>{{ formatNumber(Object.values(datos.items).reduce((sum, item) => sum + item.kilos, 0)) }}</strong>
                   </td>
                 </tr>
-              </template>
-              <template v-else>
-                <tr v-for="medida in datos" :key="`${medida.medida}-${medida.proveedor}-${medida.precio || 'sin-precio'}`" v-if="medida.kilos > 0">
-                  <td>
-                    {{ medida.medida }}
-                    <span class="fecha-entrada" v-if="medida.fechaEntrada">
-                      ({{ formatFecha(medida.fechaEntrada) }})
-                    </span>
-                  </td>
-                  <td>{{ medida.proveedor }}</td>
-                  <td v-if="tienePrecio" class="precio-cell">{{ medida.precio ? `$${medida.precio}` : '-' }}</td>
-                  <td class="kilos-cell">{{ formatNumber(medida.kilos) }}</td>
-                </tr>
-                <tr class="total-row">
-                  <td><strong>Total {{ proveedor }}</strong></td>
-                  <td></td>
-                  <td v-if="tienePrecio"></td>
-                  <td class="kilos-cell">
-                    <strong>{{ formatNumber(datos.reduce((sum, item) => sum + item.kilos, 0)) }}</strong>
-                  </td>
-                </tr>
-              </template>
-            </tbody>
-          </table>
+              </tbody>
+            </table>
+          </template>
+          
+          <!-- Para medidas normales con proveedores -->
+          <template v-else>
+            <h2>
+              {{ medidaKey }}
+              <span v-if="tienePrecio && datos.precioPromedioGeneral" class="precio-promedio">
+                - Promedio General: ${{ Math.round(datos.precioPromedioGeneral) }}
+              </span>
+            </h2>
+            
+            <!-- Mostrar cada proveedor por separado -->
+            <div v-for="(proveedorData, proveedor) in datos.proveedores" :key="proveedor" class="proveedor-section">
+              <h3 class="proveedor-header">
+                {{ proveedor }}
+                <span v-if="tienePrecio && proveedorData.precioPromedio" class="precio-promedio-proveedor">
+                  - Promedio: ${{ Math.round(proveedorData.precioPromedio) }}
+                </span>
+              </h3>
+              <table class="medida-table">
+                <thead>
+                  <tr>
+                    <th>Medida</th>
+                    <th v-if="tienePrecio">Precio</th>
+                    <th class="kilos-cell">Kilos</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="medida in proveedorData.items" :key="`${medida.medida}-${medida.proveedor}-${medida.precio || 'sin-precio'}`" v-if="medida.kilos > 0">
+                    <td>
+                      {{ medida.medida }}
+                      <span class="fecha-entrada" v-if="medida.fechaEntrada">
+                        ({{ formatFecha(medida.fechaEntrada) }})
+                      </span>
+                    </td>
+                    <td v-if="tienePrecio" class="precio-cell">{{ medida.precio ? `$${medida.precio}` : '-' }}</td>
+                    <td class="kilos-cell">{{ formatNumber(medida.kilos) }}</td>
+                  </tr>
+                  <tr class="subtotal-row">
+                    <td><strong>Total {{ proveedor }}</strong></td>
+                    <td v-if="tienePrecio"></td>
+                    <td class="kilos-cell">
+                      <strong>{{ formatNumber(proveedorData.items.reduce((sum, item) => sum + item.kilos, 0)) }}</strong>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            
+            <!-- Total general de la medida -->
+            <div class="total-medida">
+              <strong>Total {{ medidaKey }}: {{ formatNumber(Object.values(datos.proveedores).reduce((total, prov) => total + prov.items.reduce((sum, item) => sum + item.kilos, 0), 0)) }} kg</strong>
+            </div>
+          </template>
         </div>
       </div>
 
@@ -357,6 +394,30 @@ export default {
       }
     };
 
+    // Función para calcular precio promedio ponderado
+    const calcularPrecioPromedio = (items) => {
+      if (!Array.isArray(items)) return null;
+      
+      const itemsConPrecio = items.filter(item => item.precio && item.precio > 0);
+      if (itemsConPrecio.length === 0) return null;
+      
+      const totalValor = itemsConPrecio.reduce((sum, item) => sum + (item.precio * item.kilos), 0);
+      const totalKilos = itemsConPrecio.reduce((sum, item) => sum + item.kilos, 0);
+      
+      return totalKilos > 0 ? totalValor / totalKilos : null;
+    };
+
+    // Función para calcular precio promedio para maquilas
+    const calcularPrecioPromedioMaquila = (medidas) => {
+      const itemsConPrecio = Object.values(medidas).filter(item => item.precio && item.precio > 0);
+      if (itemsConPrecio.length === 0) return null;
+      
+      const totalValor = itemsConPrecio.reduce((sum, item) => sum + (item.precio * item.kilos), 0);
+      const totalKilos = itemsConPrecio.reduce((sum, item) => sum + item.kilos, 0);
+      
+      return totalKilos > 0 ? totalValor / totalKilos : null;
+    };
+
     const filteredExistencias = computed(() => {
       const searchLower = search.value.toLowerCase();
       
@@ -392,7 +453,7 @@ export default {
         }
       }
 
-      // Agrupar por medida base para otros proveedores
+      // Agrupar por medida base y luego por proveedor
       const medidasAgrupadas = {};
       Object.entries(otrosProveedores).forEach(([proveedor, medidas]) => {
         Object.entries(medidas).forEach(([medidaKey, datos]) => {
@@ -402,25 +463,26 @@ export default {
           // Extraer solo los números de la medida (ej: "41/50" de "41/50 chuy" o "41/50 1ra Nacional")
           const medidaBase = datos.medida.split(' ')[0];
           if (!medidasAgrupadas[medidaBase]) {
-            medidasAgrupadas[medidaBase] = [];
+            medidasAgrupadas[medidaBase] = {};
+          }
+          if (!medidasAgrupadas[medidaBase][proveedor]) {
+            medidasAgrupadas[medidaBase][proveedor] = [];
           }
           
-          // Buscar si ya existe una entrada para este proveedor, medida completa y precio
-          const existingIndex = medidasAgrupadas[medidaBase].findIndex(
-            item => item.proveedor === proveedor && 
-                   item.medida === datos.medida && 
-                   item.precio === datos.precio
+          // Buscar si ya existe una entrada para esta medida completa y precio del mismo proveedor
+          const existingIndex = medidasAgrupadas[medidaBase][proveedor].findIndex(
+            item => item.medida === datos.medida && item.precio === datos.precio
           );
           
           if (existingIndex >= 0) {
             // Si existe, sumar los kilos y mantener la fecha más antigua
-            medidasAgrupadas[medidaBase][existingIndex].kilos += datos.kilos;
-            if (datos.fechaEntrada < medidasAgrupadas[medidaBase][existingIndex].fechaEntrada) {
-              medidasAgrupadas[medidaBase][existingIndex].fechaEntrada = datos.fechaEntrada;
+            medidasAgrupadas[medidaBase][proveedor][existingIndex].kilos += datos.kilos;
+            if (datos.fechaEntrada < medidasAgrupadas[medidaBase][proveedor][existingIndex].fechaEntrada) {
+              medidasAgrupadas[medidaBase][proveedor][existingIndex].fechaEntrada = datos.fechaEntrada;
             }
           } else {
             // Si no existe, agregar nueva entrada
-            medidasAgrupadas[medidaBase].push({
+            medidasAgrupadas[medidaBase][proveedor].push({
               proveedor,
               medida: datos.medida,
               precio: datos.precio,
@@ -441,32 +503,58 @@ export default {
           const numB = parseInt(medidaB.split('/')[0]);
           return numA - numB;
         })
-        .forEach(([medidaBase, items]) => {
-          // Filtrar items con 0 kilos
-          const itemsFiltrados = items.filter(item => item.kilos > 1);
+        .forEach(([medidaBase, proveedores]) => {
+          // Verificar si hay datos válidos para esta medida
+          const tieneProveedoresValidos = Object.values(proveedores).some(items => 
+            items.some(item => item.kilos > 1)
+          );
           
-          if (itemsFiltrados.length > 0 && (!searchLower || 
+          if (tieneProveedoresValidos && (!searchLower || 
               medidaBase.toLowerCase().includes(searchLower) ||
-              itemsFiltrados.some(item => 
-                item.proveedor.toLowerCase().includes(searchLower) || 
-                item.medida.toLowerCase().includes(searchLower)
+              Object.entries(proveedores).some(([proveedor, items]) => 
+                proveedor.toLowerCase().includes(searchLower) || 
+                items.some(item => item.medida.toLowerCase().includes(searchLower))
               ))) {
-            resultado[medidaBase] = itemsFiltrados.sort((a, b) => {
-              // Ordenar por fecha de entrada (más antiguas primero)
-              if (a.fechaEntrada && b.fechaEntrada) {
-                const fechaA = a.fechaEntrada instanceof Date ? a.fechaEntrada : a.fechaEntrada.toDate();
-                const fechaB = b.fechaEntrada instanceof Date ? b.fechaEntrada : b.fechaEntrada.toDate();
-                return fechaA - fechaB;
+            
+            // Procesar cada proveedor dentro de la medida
+            const proveedoresProcesados = {};
+            Object.entries(proveedores).forEach(([proveedor, items]) => {
+              const itemsFiltrados = items.filter(item => item.kilos > 1);
+              
+              if (itemsFiltrados.length > 0) {
+                const itemsOrdenados = itemsFiltrados.sort((a, b) => {
+                  // Ordenar por fecha de entrada (más antiguas primero)
+                  if (a.fechaEntrada && b.fechaEntrada) {
+                    const fechaA = a.fechaEntrada instanceof Date ? a.fechaEntrada : a.fechaEntrada.toDate();
+                    const fechaB = b.fechaEntrada instanceof Date ? b.fechaEntrada : b.fechaEntrada.toDate();
+                    return fechaA - fechaB;
+                  }
+                  // Si no hay fechas, ordenar por precio
+                  if (a.precio === null && b.precio === null) return 0;
+                  if (a.precio === null) return 1;
+                  if (b.precio === null) return -1;
+                  return a.precio - b.precio;
+                });
+
+                proveedoresProcesados[proveedor] = {
+                  items: itemsOrdenados,
+                  precioPromedio: calcularPrecioPromedio(itemsOrdenados)
+                };
               }
-              // Si no hay fechas, ordenar por proveedor, luego por precio
-              if (a.proveedor !== b.proveedor) {
-                return a.proveedor.localeCompare(b.proveedor);
-              }
-              if (a.precio === null && b.precio === null) return 0;
-              if (a.precio === null) return 1;
-              if (b.precio === null) return -1;
-              return a.precio - b.precio;
             });
+
+            // Solo agregar la medida si tiene proveedores válidos
+            if (Object.keys(proveedoresProcesados).length > 0) {
+              resultado[medidaBase] = {
+                proveedores: proveedoresProcesados,
+                // Calcular precio promedio general de la medida
+                precioPromedioGeneral: (() => {
+                  const todosLosItems = Object.values(proveedoresProcesados)
+                    .flatMap(p => p.items);
+                  return calcularPrecioPromedio(todosLosItems);
+                })()
+              };
+            }
           }
         });
 
@@ -494,7 +582,12 @@ export default {
             }, {});
             
           if (Object.keys(medidasFiltradas).length > 0) {
-            resultado[proveedor] = medidasFiltradas;
+            // Calcular precio promedio para la maquila
+            const precioPromedio = calcularPrecioPromedioMaquila(medidasFiltradas);
+            resultado[proveedor] = {
+              items: medidasFiltradas,
+              precioPromedio: precioPromedio
+            };
           }
         }
       });
@@ -518,34 +611,38 @@ export default {
     });
 
     const totalGeneral = computed(() => {
-      return Object.entries(filteredExistencias.value).reduce((total, [proveedor, datos]) => {
-        if (proveedor === 'Ozuna' || proveedor === 'Joselito') {
-          // Para maquilas, los datos son un objeto directo de medida -> datos
-          return total + Object.values(datos).reduce((sum, item) => sum + item.kilos, 0);
+      return Object.entries(filteredExistencias.value).reduce((total, [key, datos]) => {
+        if (key === 'Ozuna' || key === 'Joselito') {
+          // Para maquilas, los datos tienen la estructura { items: {...}, precioPromedio: ... }
+          return total + Object.values(datos.items).reduce((sum, item) => sum + item.kilos, 0);
         } else {
-          // Para medidas agrupadas, los datos son un array de objetos
-          return total + datos.reduce((sum, item) => sum + item.kilos, 0);
+          // Para medidas agrupadas, los datos tienen la estructura { proveedores: {...}, precioPromedioGeneral: ... }
+          return total + Object.values(datos.proveedores).reduce((medidaTotal, proveedorData) => {
+            return medidaTotal + proveedorData.items.reduce((sum, item) => sum + item.kilos, 0);
+          }, 0);
         }
       }, 0);
     });
 
     const valorTotal = computed(() => {
-      return Object.entries(filteredExistencias.value).reduce((total, [proveedor, datos]) => {
-        if (proveedor === 'Ozuna' || proveedor === 'Joselito') {
-          // Para maquilas, los datos son un objeto directo de medida -> datos
-          return total + Object.values(datos).reduce((sum, item) => {
+      return Object.entries(filteredExistencias.value).reduce((total, [key, datos]) => {
+        if (key === 'Ozuna' || key === 'Joselito') {
+          // Para maquilas, los datos tienen la estructura { items: {...}, precioPromedio: ... }
+          return total + Object.values(datos.items).reduce((sum, item) => {
             if (item.precio && item.precio > 0) {
               return sum + (item.kilos * item.precio);
             }
             return sum;
           }, 0);
         } else {
-          // Para medidas agrupadas, los datos son un array de objetos
-          return total + datos.reduce((sum, item) => {
-            if (item.precio && item.precio > 0) {
-              return sum + (item.kilos * item.precio);
-            }
-            return sum;
+          // Para medidas agrupadas, los datos tienen la estructura { proveedores: {...}, precioPromedioGeneral: ... }
+          return total + Object.values(datos.proveedores).reduce((medidaTotal, proveedorData) => {
+            return medidaTotal + proveedorData.items.reduce((sum, item) => {
+              if (item.precio && item.precio > 0) {
+                return sum + (item.kilos * item.precio);
+              }
+              return sum;
+            }, 0);
           }, 0);
         }
       }, 0);
@@ -663,6 +760,50 @@ export default {
             font-weight: normal;
             opacity: 0.7;
             margin-left: 3px;
+          }
+          .precio-promedio {
+            color: #27ae60;
+            font-size: 14pt;
+            font-weight: normal;
+            margin-left: 10px;
+            opacity: 0.9;
+          }
+          .precio-promedio-proveedor {
+            color: #27ae60;
+            font-size: 12pt;
+            font-weight: normal;
+            margin-left: 8px;
+            opacity: 0.8;
+          }
+          .proveedor-section {
+            margin-bottom: 12px;
+            border-left: 3px solid #3498db;
+            padding-left: 8px;
+          }
+          .proveedor-header {
+            color: #2c3e50;
+            font-size: 16pt;
+            margin: 8px 0 6px 0;
+            border-bottom: 1px solid #bdc3c7;
+            padding-bottom: 3px;
+          }
+          .subtotal-row {
+            background-color: #ecf0f1 !important;
+            border-top: 1px solid #3498db;
+          }
+          .subtotal-row td {
+            font-weight: bold;
+            color: #2c3e50;
+          }
+          .total-medida {
+            margin-top: 8px;
+            padding: 6px;
+            background-color: #3498db;
+            color: white;
+            text-align: center;
+            border-radius: 3px;
+            font-size: 14pt;
+            font-weight: bold;
           }
           @media print {
             .existencias-grid {
@@ -981,7 +1122,102 @@ export default {
             <h1>Reporte de Existencias</h1>
             <div class="fecha-reporte">Fecha: ${fechaActual}</div>
           </div>
-          ${document.querySelector('.existencias-grid').outerHTML}
+          <div class="existencias-grid">
+            ${Object.entries(filteredExistencias.value).map(([medidaKey, datos]) => {
+              if (medidaKey === 'Ozuna' || medidaKey === 'Joselito') {
+                // Para maquilas
+                return `
+                  <div class="medida-card maquila-card">
+                    <h2>
+                      ${medidaKey} (Maquila)
+                      ${tienePrecio.value && datos.precioPromedio ? `<span class="precio-promedio">- Promedio: $${Math.round(datos.precioPromedio)}</span>` : ''}
+                    </h2>
+                    <table class="medida-table">
+                      <thead>
+                        <tr>
+                          <th>Medida</th>
+                          ${tienePrecio.value ? '<th>Precio</th>' : ''}
+                          <th class="kilos-cell">Kilos</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        ${Object.entries(datos.items).map(([itemKey, item]) => 
+                          item.kilos > 0 ? `
+                            <tr>
+                              <td>
+                                ${item.medida}
+                                ${item.fechaEntrada ? `<span class="fecha-entrada">(${formatFecha(item.fechaEntrada)})</span>` : ''}
+                              </td>
+                              ${tienePrecio.value ? `<td class="precio-cell">${item.precio ? '$' + item.precio : '-'}</td>` : ''}
+                              <td class="kilos-cell">${formatNumber(item.kilos)}</td>
+                            </tr>
+                          ` : ''
+                        ).join('')}
+                        <tr class="total-row">
+                          <td><strong>Total ${medidaKey}</strong></td>
+                          ${tienePrecio.value ? '<td></td>' : ''}
+                          <td class="kilos-cell">
+                            <strong>${formatNumber(Object.values(datos.items).reduce((sum, item) => sum + item.kilos, 0))}</strong>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                `;
+              } else {
+                // Para medidas normales con proveedores
+                return `
+                  <div class="medida-card">
+                    <h2>
+                      ${medidaKey}
+                      ${tienePrecio.value && datos.precioPromedioGeneral ? `<span class="precio-promedio">- Promedio General: $${Math.round(datos.precioPromedioGeneral)}</span>` : ''}
+                    </h2>
+                    ${Object.entries(datos.proveedores).map(([proveedor, proveedorData]) => `
+                      <div class="proveedor-section">
+                        <h3 class="proveedor-header">
+                          ${proveedor}
+                          ${tienePrecio.value && proveedorData.precioPromedio ? `<span class="precio-promedio-proveedor">- Promedio: $${Math.round(proveedorData.precioPromedio)}</span>` : ''}
+                        </h3>
+                        <table class="medida-table">
+                          <thead>
+                            <tr>
+                              <th>Medida</th>
+                              ${tienePrecio.value ? '<th>Precio</th>' : ''}
+                              <th class="kilos-cell">Kilos</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            ${proveedorData.items.map(medida => 
+                              medida.kilos > 0 ? `
+                                <tr>
+                                  <td>
+                                    ${medida.medida}
+                                    ${medida.fechaEntrada ? `<span class="fecha-entrada">(${formatFecha(medida.fechaEntrada)})</span>` : ''}
+                                  </td>
+                                  ${tienePrecio.value ? `<td class="precio-cell">${medida.precio ? '$' + medida.precio : '-'}</td>` : ''}
+                                  <td class="kilos-cell">${formatNumber(medida.kilos)}</td>
+                                </tr>
+                              ` : ''
+                            ).join('')}
+                            <tr class="subtotal-row">
+                              <td><strong>Total ${proveedor}</strong></td>
+                              ${tienePrecio.value ? '<td></td>' : ''}
+                              <td class="kilos-cell">
+                                <strong>${formatNumber(proveedorData.items.reduce((sum, item) => sum + item.kilos, 0))}</strong>
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                    `).join('')}
+                    <div class="total-medida">
+                      <strong>Total ${medidaKey}: ${formatNumber(Object.values(datos.proveedores).reduce((total, prov) => total + prov.items.reduce((sum, item) => sum + item.kilos, 0), 0))} kg</strong>
+                    </div>
+                  </div>
+                `;
+              }
+            }).join('')}
+          </div>
           ${valorTotalHtml}
           ${saldoPendienteHtml}
           ${valorLibreHtml}
@@ -1361,6 +1597,80 @@ h1 {
   font-weight: normal;
   opacity: 0.7;
   margin-left: 5px;
+}
+
+.precio-promedio {
+  color: #27ae60;
+  font-size: 16px;
+  font-weight: normal;
+  margin-left: 10px;
+  opacity: 0.9;
+}
+
+.precio-promedio-proveedor {
+  color: #27ae60;
+  font-size: 14px;
+  font-weight: normal;
+  margin-left: 10px;
+  opacity: 0.8;
+}
+
+.proveedor-section {
+  margin-bottom: 15px;
+  border-left: 3px solid #3498db;
+  padding-left: 10px;
+}
+
+.proveedor-header {
+  color: #2c3e50;
+  font-size: 18px;
+  margin: 10px 0 8px 0;
+  border-bottom: 1px solid #bdc3c7;
+  padding-bottom: 5px;
+}
+
+.subtotal-row {
+  background-color: #ecf0f1 !important;
+  border-top: 1px solid #3498db;
+}
+
+.subtotal-row td {
+  font-weight: bold;
+  color: #2c3e50;
+}
+
+.total-medida {
+  margin-top: 10px;
+  padding: 8px;
+  background-color: #3498db;
+  color: white;
+  text-align: center;
+  border-radius: 5px;
+  font-size: 16px;
+}
+
+@media (max-width: 768px) {
+  .precio-promedio {
+    display: block;
+    font-size: 14px;
+    margin-left: 0;
+    margin-top: 5px;
+  }
+  
+  .precio-promedio-proveedor {
+    display: block;
+    font-size: 12px;
+    margin-left: 0;
+    margin-top: 3px;
+  }
+  
+  .proveedor-header {
+    font-size: 16px;
+  }
+  
+  .total-medida {
+    font-size: 14px;
+  }
 }
 
 /* Estilos para la sección de salidas del día siguiente */
