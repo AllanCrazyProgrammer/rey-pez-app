@@ -15,8 +15,15 @@
       <button @click="showAbonosModal = true" class="action-button abonos-btn">
         Abonos
       </button>
+      <button @click="showObservacionesModal = true" class="action-button observaciones-btn">
+        Ver Observaciones
+      </button>
       <PreciosHistorialModal clienteActual="otilio" />
       <StashModalV2 cliente="otilio" />
+      <ObservacionesModal 
+        :isVisible="showObservacionesModal" 
+        @cerrar="showObservacionesModal = false" 
+      />
     </div>
 
     <!-- Modal de Abonos -->
@@ -133,13 +140,15 @@ import { collection, query, orderBy, deleteDoc, doc, onSnapshot, updateDoc, getD
 import BackButton from '@/components/BackButton.vue';
 import PreciosHistorialModal from '@/components/PreciosHistorialModal.vue';
 import StashModalV2 from '@/components/StashModalV2.vue';
+import ObservacionesModal from '@/components/ObservacionesModal.vue';
 
 export default {
   name: 'OtilioCuentasMenu',
   components: {
     BackButton,
     PreciosHistorialModal,
-    StashModalV2
+    StashModalV2,
+    ObservacionesModal
   },
   data() {
     return {
@@ -153,7 +162,8 @@ export default {
       fechaFin: '',
       totalAbonosPeriodo: null,
       showObservacionModal: false,
-      observacionActual: ''
+      observacionActual: '',
+      showObservacionesModal: false
     };
   },
   methods: {
@@ -435,6 +445,15 @@ h1, h2 {
 
 .abonos-btn:hover {
   background-color: #218838;
+}
+
+.observaciones-btn {
+  background-color: #ff0000;
+  color: white;
+}
+
+.observaciones-btn:hover {
+  background-color: #cc0000;
 }
 
 .cuentas-list {
