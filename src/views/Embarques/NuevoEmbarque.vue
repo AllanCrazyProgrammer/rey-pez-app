@@ -1939,11 +1939,11 @@ export default {
       });
     },
 
-    async guardarCambiosEnTiempoReal() {
-      if (!this.guardadoAutomaticoActivo || !this.embarqueId || 
+    async guardarCambiosEnTiempoReal(forzar = false) {
+      if (!forzar && (!this.guardadoAutomaticoActivo || !this.embarqueId || 
           this.mostrarModalPrecio || this.mostrarModalHilos || 
           this.mostrarModalNota || this.mostrarModalAlt || 
-          this.mostrarModalNombreAlternativo || this.mostrarModalNuevoCliente) return;
+          this.mostrarModalNombreAlternativo || this.mostrarModalNuevoCliente)) return;
 
       // Verificar si el SaveManager está inicializado
       if (!this.saveManager) {
@@ -2678,10 +2678,6 @@ export default {
 
     guardarNombreAlternativo(nuevoNombre) {
       if (this.productoSeleccionado) {
-        // Desactivar temporalmente el guardado automático
-        const guardadoActivo = this.guardadoAutomaticoActivo;
-        this.guardadoAutomaticoActivo = false;
-
         if (nuevoNombre) {
           // Usar Vue.set para asegurar reactividad
           this.$set(this.productoSeleccionado, 'nombreAlternativoPDF', nuevoNombre);
@@ -2703,16 +2699,21 @@ export default {
           this.$forceUpdate();
         }
 
-        // Esperar a que Vue actualice el DOM
+        // Marcar el cliente como modificado para que se incluya en el guardado
+        if (this.productoSeleccionado.clienteId) {
+          this.$set(this.clientesModificados, this.productoSeleccionado.clienteId, true);
+          console.log(`[guardarNombreAlternativo] Cliente ${this.productoSeleccionado.clienteId} marcado como modificado por cambio en nombre PDF`);
+        }
+
+        // Cerrar el modal primero para evitar que el guardado se bloquee
+        this.mostrarModalNombreAlternativo = false;
+
+        // Esperar a que Vue actualice el DOM y el modal esté completamente cerrado
         this.$nextTick(() => {
-          // Reactivar el guardado automático
-          this.guardadoAutomaticoActivo = guardadoActivo;
-
-          // Forzar un guardado inmediato
-          this.guardarCambiosEnTiempoReal();
-
-          // Cerrar el modal
-          this.mostrarModalNombreAlternativo = false;
+          // Usar setTimeout para asegurar que el modal esté completamente cerrado
+          setTimeout(() => {
+            this.guardarCambiosEnTiempoReal(true); // Forzar guardado
+          }, 100);
         });
       } else {
         this.mostrarModalNombreAlternativo = false;
@@ -2742,15 +2743,25 @@ export default {
           this.$set(this.itemSeleccionado, 'precioBorradoManualmente', true);
         }
         
-        const guardadoActivo = this.guardadoAutomaticoActivo;
-        this.guardadoAutomaticoActivo = false;
+        // Marcar el cliente como modificado para que se incluya en el guardado
+        if (this.itemSeleccionado.clienteId) {
+          this.$set(this.clientesModificados, this.itemSeleccionado.clienteId, true);
+          console.log(`[guardarPrecio] Cliente ${this.itemSeleccionado.clienteId} marcado como modificado por cambio en precio`);
+        }
 
+        // Cerrar modal primero para evitar que el guardado se bloquee
+        this.cerrarModalPrecio();
+
+        // Forzar guardado inmediato después de cerrar el modal
         this.$nextTick(() => {
-          this.guardadoAutomaticoActivo = guardadoActivo;
-          this.guardarCambiosEnTiempoReal();
+          // Usar setTimeout para asegurar que el modal esté completamente cerrado
+          setTimeout(() => {
+            this.guardarCambiosEnTiempoReal(true); // Forzar guardado
+          }, 100);
         });
+      } else {
+        this.cerrarModalPrecio();
       }
-      this.cerrarModalPrecio();
     },
 
     // Modal de Hilos
@@ -2773,15 +2784,25 @@ export default {
           this.$set(this.itemSeleccionado, 'hilos', hilos);
         }
 
-        const guardadoActivo = this.guardadoAutomaticoActivo;
-        this.guardadoAutomaticoActivo = false;
+        // Marcar el cliente como modificado para que se incluya en el guardado
+        if (this.itemSeleccionado.clienteId) {
+          this.$set(this.clientesModificados, this.itemSeleccionado.clienteId, true);
+          console.log(`[guardarHilos] Cliente ${this.itemSeleccionado.clienteId} marcado como modificado por cambio en hilos`);
+        }
 
+        // Cerrar modal primero para evitar que el guardado se bloquee
+        this.cerrarModalHilos();
+
+        // Forzar guardado inmediato después de cerrar el modal
         this.$nextTick(() => {
-          this.guardadoAutomaticoActivo = guardadoActivo;
-          this.guardarCambiosEnTiempoReal();
+          // Usar setTimeout para asegurar que el modal esté completamente cerrado
+          setTimeout(() => {
+            this.guardarCambiosEnTiempoReal(true); // Forzar guardado
+          }, 100);
         });
+      } else {
+        this.cerrarModalHilos();
       }
-      this.cerrarModalHilos();
     },
 
     // Modal de Nota
@@ -2803,15 +2824,25 @@ export default {
           this.$delete(this.itemSeleccionado, 'nota');
         }
 
-        const guardadoActivo = this.guardadoAutomaticoActivo;
-        this.guardadoAutomaticoActivo = false;
+        // Marcar el cliente como modificado para que se incluya en el guardado
+        if (this.itemSeleccionado.clienteId) {
+          this.$set(this.clientesModificados, this.itemSeleccionado.clienteId, true);
+          console.log(`[guardarNota] Cliente ${this.itemSeleccionado.clienteId} marcado como modificado por cambio en nota`);
+        }
 
+        // Cerrar modal primero para evitar que el guardado se bloquee
+        this.cerrarModalNota();
+
+        // Forzar guardado inmediato después de cerrar el modal
         this.$nextTick(() => {
-          this.guardadoAutomaticoActivo = guardadoActivo;
-          this.guardarCambiosEnTiempoReal();
+          // Usar setTimeout para asegurar que el modal esté completamente cerrado
+          setTimeout(() => {
+            this.guardarCambiosEnTiempoReal(true); // Forzar guardado
+          }, 100);
         });
+      } else {
+        this.cerrarModalNota();
       }
-      this.cerrarModalNota();
     },
 
     // Modal Alt
@@ -2832,9 +2863,26 @@ export default {
         } else {
           this.$delete(this.itemSeleccionado, 'textoAlternativo');
         }
-        this.guardarCambiosEnTiempoReal();
+
+        // Marcar el cliente como modificado para que se incluya en el guardado
+        if (this.itemSeleccionado.clienteId) {
+          this.$set(this.clientesModificados, this.itemSeleccionado.clienteId, true);
+          console.log(`[guardarAlt] Cliente ${this.itemSeleccionado.clienteId} marcado como modificado por cambio en texto alternativo`);
+        }
+
+        // Cerrar modal primero para evitar que el guardado se bloquee
+        this.cerrarModalAlt();
+
+        // Forzar guardado inmediato después de cerrar el modal
+        this.$nextTick(() => {
+          // Usar setTimeout para asegurar que el modal esté completamente cerrado
+          setTimeout(() => {
+            this.guardarCambiosEnTiempoReal(true); // Forzar guardado
+          }, 100);
+        });
+      } else {
+        this.cerrarModalAlt();
       }
-      this.cerrarModalAlt();
     },
 
     // Métodos para configuración de medidas
