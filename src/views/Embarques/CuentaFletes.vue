@@ -749,125 +749,205 @@ export default {
 
 <style scoped>
 .cuenta-fletes {
-  padding: 20px;
-  max-width: 1200px;
+  padding: 15px;
+  max-width: 100%;
   margin: 0 auto;
+  min-height: 100vh;
 }
 
 .header-section {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 20px;
   margin-bottom: 20px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 20px;
+  border-radius: 12px;
+  color: white;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.1);
 }
 
 .header-section h2 {
   margin: 0;
+  font-size: 1.8rem;
+  font-weight: 600;
 }
 
 .btn-volver {
-  padding: 8px 16px;
-  font-size: 14px;
-  background-color: #2196F3;
+  padding: 12px 24px;
+  font-size: 16px;
+  background-color: rgba(255,255,255,0.2);
   color: white;
-  border: none;
-  border-radius: 4px;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-radius: 8px;
   cursor: pointer;
-  transition: background-color 0.3s;
+  transition: all 0.3s;
+  backdrop-filter: blur(10px);
 }
 
 .btn-volver:hover {
-  background-color: #1976D2;
+  background-color: rgba(255,255,255,0.3);
+  border-color: rgba(255,255,255,0.5);
+  transform: translateY(-2px);
 }
 
 .chofer-selector {
   display: flex;
   justify-content: center;
-  gap: 20px;
-  margin-bottom: 30px;
+  gap: 15px;
+  margin-bottom: 25px;
+  padding: 20px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.05);
 }
 
 .btn-chofer {
-  padding: 10px 20px;
+  padding: 15px 30px;
   font-size: 16px;
-  border: 2px solid #2196F3;
+  font-weight: 600;
+  border: 2px solid #667eea;
   background-color: white;
-  color: #2196F3;
+  color: #667eea;
   cursor: pointer;
-  border-radius: 5px;
+  border-radius: 8px;
   transition: all 0.3s;
+  min-width: 120px;
 }
 
 .btn-chofer.active {
-  background-color: #2196F3;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.3);
 }
 
-/* Estilos para desktop */
+.btn-chofer:hover:not(.active) {
+  background-color: #f8f9ff;
+  transform: translateY(-1px);
+}
+
+/* Siempre mostrar formato de tabla */
 .tabla-desktop {
-  display: block;
+  display: block !important;
 }
 
 .tabla-mobile {
-  display: none;
+  display: none !important;
 }
 
 .tabla-container {
   overflow-x: auto;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+  margin-bottom: 25px;
+  /* Asegurar scroll horizontal suave */
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: #667eea #f1f3f4;
+}
+
+.tabla-container::-webkit-scrollbar {
+  height: 8px;
+}
+
+.tabla-container::-webkit-scrollbar-track {
+  background: #f1f3f4;
+  border-radius: 4px;
+}
+
+.tabla-container::-webkit-scrollbar-thumb {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 4px;
+}
+
+.tabla-container::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%);
 }
 
 .tabla-fletes {
   width: 100%;
   border-collapse: collapse;
-  margin-bottom: 30px;
+  font-size: 14px;
 }
 
 .tabla-fletes th,
 .tabla-fletes td {
-  padding: 12px;
+  padding: 16px 12px;
   text-align: left;
-  border-bottom: 1px solid #ddd;
+  border-bottom: 1px solid #e8eaed;
+  vertical-align: middle;
 }
 
 .tabla-fletes th {
-  background-color: #f8f9fa;
-  font-weight: bold;
+  background: linear-gradient(135deg, #f8f9ff 0%, #e8eaff 100%);
+  font-weight: 600;
+  color: #5f6368;
+  position: sticky;
+  top: 0;
+  z-index: 10;
 }
 
-/* Estilos para móvil */
+.tabla-fletes tbody tr {
+  transition: all 0.2s;
+}
+
+.tabla-fletes tbody tr:hover {
+  background-color: #f8f9ff;
+  transform: scale(1.01);
+}
+
+/* Estilos para móvil optimizados */
 .flete-card {
   background: white;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  border-radius: 12px;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.08);
   margin-bottom: 16px;
-  padding: 16px;
+  padding: 20px;
+  transition: all 0.3s;
+}
+
+.flete-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 25px rgba(0,0,0,0.12);
 }
 
 .flete-card.pagado {
-  border-left: 4px solid #4CAF50;
+  border-left: 6px solid #4CAF50;
+  background: linear-gradient(135deg, #ffffff 0%, #f1f8e9 100%);
+}
+
+.flete-card.abono {
+  border-left: 6px solid #2196F3;
+  background: linear-gradient(135deg, #ffffff 0%, #e3f2fd 100%);
 }
 
 .flete-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 2px solid #e8eaed;
 }
 
 .fecha {
-  font-weight: bold;
-  font-size: 1.1em;
+  font-weight: 700;
+  font-size: 1.2em;
+  color: #1a73e8;
 }
 
 .flete-body {
-  margin-bottom: 16px;
+  margin-bottom: 20px;
 }
 
 .flete-row {
   display: flex;
   justify-content: space-between;
-  padding: 8px 0;
-  border-bottom: 1px solid #eee;
+  padding: 12px 0;
+  border-bottom: 1px solid #f0f0f0;
 }
 
 .flete-row:last-child {
@@ -875,327 +955,532 @@ export default {
 }
 
 .label {
-  color: #666;
-  font-size: 0.9em;
+  color: #5f6368;
+  font-size: 0.95em;
+  font-weight: 500;
 }
 
 .value {
-  font-weight: bold;
+  font-weight: 700;
+  color: #202124;
 }
 
 .flete-footer {
   display: flex;
   justify-content: flex-end;
+  gap: 10px;
 }
 
 .estado {
-  padding: 4px 8px;
-  border-radius: 4px;
+  padding: 8px 16px;
+  border-radius: 20px;
   font-size: 14px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .estado.pagado {
-  background-color: #4CAF50;
+  background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
   color: white;
 }
 
 .estado.pendiente {
-  background-color: #f44336;
+  background: linear-gradient(135deg, #f44336 0%, #d32f2f 100%);
+  color: white;
+}
+
+.estado.abono {
+  background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%);
   color: white;
 }
 
 .btn-pago {
-  padding: 8px 16px;
+  padding: 12px 20px;
   border: none;
-  border-radius: 4px;
+  border-radius: 8px;
   cursor: pointer;
   font-size: 14px;
-  transition: background-color 0.3s;
-  width: 100%;
+  font-weight: 600;
+  transition: all 0.3s;
+  min-width: 140px;
 }
 
 .btn-marcar-pagado {
-  background-color: #4CAF50;
+  background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
   color: white;
+}
+
+.btn-marcar-pagado:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(76, 175, 80, 0.3);
 }
 
 .btn-marcar-pendiente {
-  background-color: #f44336;
+  background: linear-gradient(135deg, #f44336 0%, #d32f2f 100%);
   color: white;
 }
 
-/* Estilos del resumen */
+.btn-marcar-pendiente:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(244, 67, 54, 0.3);
+}
+
+/* Estilos del resumen optimizados */
 .resumen {
-  background-color: #f8f9fa;
-  padding: 20px;
-  border-radius: 8px;
+  background: linear-gradient(135deg, #ffffff 0%, #f8f9ff 100%);
+  padding: 30px;
+  border-radius: 16px;
   margin-top: 30px;
+  box-shadow: 0 8px 25px rgba(0,0,0,0.08);
 }
 
 .resumen h3 {
   margin-top: 0;
-  margin-bottom: 20px;
-  color: #333;
+  margin-bottom: 25px;
+  color: #202124;
   text-align: center;
+  font-size: 1.8rem;
+  font-weight: 700;
 }
 
 .resumen-detalles {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 20px;
 }
 
 .resumen-card {
   background: white;
-  padding: 16px;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  padding: 24px;
+  border-radius: 12px;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.05);
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
+  transition: all 0.3s;
+}
+
+.resumen-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 25px rgba(0,0,0,0.1);
 }
 
 .resumen-label {
-  color: #666;
-  font-size: 0.9em;
+  color: #5f6368;
+  font-size: 0.95em;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .resumen-value {
-  font-size: 1.2em;
-  font-weight: bold;
-  color: #333;
+  font-size: 1.4em;
+  font-weight: 700;
+  color: #1a73e8;
 }
 
-/* Media queries para responsividad */
-@media (max-width: 768px) {
+/* Media queries optimizados para Galaxy Fold - Siempre tabla */
+@media (max-width: 820px) and (orientation: portrait) {
+  /* Modo plegado - mantener tabla pero optimizada */
   .cuenta-fletes {
     padding: 10px;
   }
 
+  /* Forzar que siempre se muestre la tabla */
   .tabla-desktop {
-    display: none;
+    display: block !important;
   }
 
   .tabla-mobile {
-    display: block;
+    display: none !important;
+  }
+
+  /* Hacer la tabla más compacta en móvil */
+  .tabla-fletes {
+    font-size: 12px;
+  }
+
+  .tabla-fletes th,
+  .tabla-fletes td {
+    padding: 8px 4px;
+    font-size: 12px;
+  }
+
+  /* Ajustar ancho de columnas para móvil */
+  .tabla-fletes th:nth-child(1), /* Fecha */
+  .tabla-fletes td:nth-child(1) {
+    min-width: 80px;
+  }
+
+  .tabla-fletes th:nth-child(2), /* Tipo */
+  .tabla-fletes td:nth-child(2) {
+    min-width: 50px;
+  }
+
+  .tabla-fletes th:nth-child(3), /* Limpio */
+  .tabla-fletes td:nth-child(3) {
+    min-width: 40px;
+  }
+
+  .tabla-fletes th:nth-child(4), /* Crudo */
+  .tabla-fletes td:nth-child(4) {
+    min-width: 40px;
+  }
+
+  .tabla-fletes th:nth-child(5), /* Total Taras */
+  .tabla-fletes td:nth-child(5) {
+    min-width: 50px;
+  }
+
+  .tabla-fletes th:nth-child(6), /* Monto */
+  .tabla-fletes td:nth-child(6) {
+    min-width: 80px;
+  }
+
+  .tabla-fletes th:nth-child(7), /* Deuda */
+  .tabla-fletes td:nth-child(7) {
+    min-width: 80px;
+  }
+
+  .tabla-fletes th:nth-child(8), /* Estado */
+  .tabla-fletes td:nth-child(8) {
+    min-width: 70px;
+  }
+
+  .tabla-fletes th:nth-child(9), /* Acciones */
+  .tabla-fletes td:nth-child(9) {
+    min-width: 100px;
+  }
+
+  /* Botones más pequeños en móvil */
+  .btn-pago {
+    padding: 6px 8px;
+    font-size: 11px;
+    min-width: 90px;
+  }
+
+  .btn-eliminar-abono {
+    padding: 6px 8px;
+    font-size: 11px;
+  }
+
+  .estado {
+    padding: 4px 6px;
+    font-size: 10px;
   }
 
   .chofer-selector {
     flex-direction: column;
-    gap: 10px;
+    gap: 12px;
   }
 
   .btn-chofer, .btn-imprimir {
     width: 100%;
-  }
-
-  .resumen {
-    padding: 15px;
-  }
-
-  .resumen-detalles {
-    grid-template-columns: 1fr;
-  }
-
-  .resumen-card {
-    text-align: center;
+    padding: 16px;
   }
 
   .header-section {
     flex-direction: column;
-    align-items: flex-start;
-    gap: 10px;
+    align-items: stretch;
+    text-align: center;
+    gap: 15px;
+  }
+
+  .header-section h2 {
+    font-size: 1.5rem;
   }
 
   .btn-volver {
     width: 100%;
+    padding: 16px;
+  }
+}
+
+@media (min-width: 821px) and (max-width: 1200px) {
+  /* Modo desplegado - aprovecha el ancho */
+  .cuenta-fletes {
+    padding: 20px;
+  }
+
+  .tabla-fletes {
+    font-size: 15px;
+  }
+
+  .tabla-fletes th,
+  .tabla-fletes td {
+    padding: 18px 14px;
+  }
+
+  .resumen-detalles {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (min-width: 1201px) {
+  /* Pantallas grandes */
+  .cuenta-fletes {
+    max-width: 1400px;
+    padding: 25px;
+  }
+
+  .tabla-fletes {
+    font-size: 16px;
+  }
+
+  .tabla-fletes th,
+  .tabla-fletes td {
+    padding: 20px 16px;
+  }
+
+  .resumen-detalles {
+    grid-template-columns: repeat(4, 1fr);
   }
 }
 
 @media (max-width: 480px) {
-  .flete-header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 8px;
+  /* Asegurar que la tabla siga siendo visible en pantallas muy pequeñas */
+  .tabla-desktop {
+    display: block !important;
   }
 
-  .estado {
-    align-self: flex-end;
+  .tabla-mobile {
+    display: none !important;
+  }
+
+  /* Tabla aún más compacta para pantallas muy pequeñas */
+  .tabla-fletes {
+    font-size: 10px;
+  }
+
+  .tabla-fletes th,
+  .tabla-fletes td {
+    padding: 6px 2px;
+    font-size: 10px;
   }
 
   .btn-pago {
-    padding: 12px;
-    font-size: 16px;
+    padding: 4px 6px;
+    font-size: 9px;
+    min-width: 70px;
+  }
+
+  .btn-eliminar-abono {
+    padding: 4px 6px;
+    font-size: 9px;
+  }
+
+  .estado {
+    padding: 2px 4px;
+    font-size: 8px;
+  }
+
+  .header-section {
+    padding: 15px;
+  }
+
+  .header-section h2 {
+    font-size: 1.3rem;
   }
 }
 
 .btn-imprimir {
-  padding: 10px 20px;
+  padding: 15px 30px;
   font-size: 16px;
-  background-color: #FF9800;
+  font-weight: 600;
+  background: linear-gradient(135deg, #FF9800 0%, #F57C00 100%);
   color: white;
   border: none;
-  border-radius: 5px;
+  border-radius: 8px;
   cursor: pointer;
-  transition: background-color 0.3s;
+  transition: all 0.3s;
+  min-width: 200px;
 }
 
 .btn-imprimir:hover {
-  background-color: #F57C00;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(255, 152, 0, 0.3);
 }
 
 .abonos-section {
-  background-color: #fff;
-  padding: 20px;
-  border-radius: 8px;
-  margin-bottom: 30px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  background: linear-gradient(135deg, #ffffff 0%, #f8f9ff 100%);
+  padding: 25px;
+  border-radius: 16px;
+  margin-bottom: 25px;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.08);
 }
 
 .abono-inputs {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr 1fr 2fr auto;
   gap: 20px;
-  align-items: flex-end;
+  align-items: end;
 }
 
 .input-group {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  flex: 1;
+  gap: 10px;
 }
 
 .input-group label {
   font-size: 14px;
-  color: #666;
+  font-weight: 600;
+  color: #5f6368;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .input-abono,
 .input-fecha,
 .input-descripcion {
-  padding: 8px 12px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
+  padding: 12px 16px;
+  border: 2px solid #e8eaed;
+  border-radius: 8px;
   font-size: 16px;
-  width: 100%;
+  transition: all 0.3s;
+  background: white;
 }
 
-.input-descripcion {
-  min-width: 200px;
+.input-abono:focus,
+.input-fecha:focus,
+.input-descripcion:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
 }
 
 .btn-agregar-abono {
-  padding: 10px 20px;
-  background-color: #4CAF50;
+  padding: 12px 24px;
+  background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
   color: white;
   border: none;
-  border-radius: 4px;
+  border-radius: 8px;
   cursor: pointer;
-  transition: background-color 0.3s;
-  height: 40px;
+  transition: all 0.3s;
+  font-weight: 600;
+  height: 48px;
 }
 
-.btn-agregar-abono:hover {
-  background-color: #45a049;
+.btn-agregar-abono:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(76, 175, 80, 0.3);
 }
 
 .btn-agregar-abono:disabled {
-  background-color: #cccccc;
+  background: linear-gradient(135deg, #cccccc 0%, #999999 100%);
   cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
 }
 
 .fila-abono {
-  background-color: #e8f5e9;
+  background: linear-gradient(135deg, #e8f5e9 0%, #f1f8e9 100%);
 }
 
 .btn-eliminar-abono {
-  padding: 6px 12px;
-  background-color: #f44336;
+  padding: 10px 16px;
+  background: linear-gradient(135deg, #f44336 0%, #d32f2f 100%);
   color: white;
   border: none;
-  border-radius: 4px;
+  border-radius: 6px;
   cursor: pointer;
-  transition: background-color 0.3s;
+  transition: all 0.3s;
+  font-weight: 600;
 }
 
 .btn-eliminar-abono:hover {
-  background-color: #d32f2f;
-}
-
-.estado.abono {
-  background-color: #4CAF50;
-  color: white;
-}
-
-.flete-card.abono {
-  border-left: 4px solid #4CAF50;
-  background-color: #e8f5e9;
-}
-
-@media (max-width: 768px) {
-  .abono-inputs {
-    flex-direction: column;
-    gap: 15px;
-  }
-
-  .input-group {
-    width: 100%;
-  }
-
-  .input-descripcion {
-    min-width: unset;
-  }
-
-  .btn-agregar-abono {
-    width: 100%;
-  }
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(244, 67, 54, 0.3);
 }
 
 .cliente-section {
-  margin-bottom: 15px;
-  padding: 10px;
-  background-color: #f9f9f9;
-  border-radius: 6px;
+  margin-bottom: 20px;
+  padding: 20px;
+  background: linear-gradient(135deg, #f9f9f9 0%, #ffffff 100%);
+  border-radius: 12px;
+  border: 1px solid #e8eaed;
 }
 
 .cliente-title {
-  margin: 0 0 10px 0;
-  padding-bottom: 5px;
-  border-bottom: 1px solid #ddd;
-  font-size: 1em;
-  color: #333;
+  margin: 0 0 15px 0;
+  padding-bottom: 10px;
+  border-bottom: 2px solid #e8eaed;
+  font-size: 1.1em;
+  font-weight: 700;
+  color: #202124;
 }
 
 .total-row {
-  font-weight: bold;
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 2px solid #ddd;
+  font-weight: 700;
+  margin-top: 15px;
+  padding-top: 15px;
+  border-top: 2px solid #e8eaed;
+  background: linear-gradient(135deg, #f8f9ff 0%, #ffffff 100%);
+  border-radius: 8px;
+  padding: 15px;
 }
 
 .resumen-cliente, .resumen-totales {
   margin-bottom: 25px;
-  padding: 15px;
-  background-color: white;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  padding: 25px;
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.08);
 }
 
 .resumen-cliente h4, .resumen-totales h4 {
   margin-top: 0;
-  margin-bottom: 15px;
-  color: #333;
+  margin-bottom: 20px;
+  color: #202124;
   text-align: center;
-  padding-bottom: 8px;
-  border-bottom: 1px solid #ddd;
+  padding-bottom: 12px;
+  border-bottom: 2px solid #e8eaed;
+  font-size: 1.4rem;
+  font-weight: 700;
 }
 
 .resumen-totales {
-  background-color: #f8f9fa;
+  background: linear-gradient(135deg, #ffffff 0%, #f8f9ff 100%);
 }
 
 .saldo-pendiente {
-  border-left: 4px solid #f44336;
+  border-left: 6px solid #f44336;
+  background: linear-gradient(135deg, #ffffff 0%, #ffebee 100%);
+}
+
+.saldo-pendiente .resumen-value {
+  color: #f44336;
+  font-size: 1.6em;
+}
+
+/* Media queries específicos para Galaxy Fold */
+@media (max-width: 820px) and (orientation: portrait) {
+  .abono-inputs {
+    grid-template-columns: 1fr;
+    gap: 15px;
+  }
+
+  .btn-agregar-abono {
+    width: 100%;
+    height: 52px;
+  }
+
+  .btn-imprimir {
+    width: 100%;
+  }
+}
+
+@media (min-width: 821px) and (max-width: 1200px) {
+  .abono-inputs {
+    grid-template-columns: 1fr 1fr 1fr auto;
+  }
+}
+
+@media (min-width: 1201px) {
+  .abono-inputs {
+    grid-template-columns: 200px 200px 1fr auto;
+  }
 }
 
 @media (max-width: 992px) {
@@ -1210,7 +1495,7 @@ export default {
   .resumen-detalles {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 20px;
+    gap: 25px;
   }
   
   .resumen-totales {
