@@ -48,8 +48,10 @@
       </div>
     </div>
 
-    <!-- Tabla de medidas (solo se muestra si hay un día seleccionado) -->
-    <div v-if="diaSeleccionado" class="tabla-container">
+    <!-- Layout principal con tabla de medidas y tabla de rendimientos -->
+    <div v-if="diaSeleccionado" class="preparacion-layout">
+      <!-- Tabla de medidas del día seleccionado -->
+      <div class="tabla-container">
       <table>
         <thead>
           <tr>
@@ -163,9 +165,61 @@
         </tbody>
       </table>
       
-      <button @click="agregarMedidaExistente(diaSeleccionado)" class="btn-agregar">
-        <i class="fas fa-plus"></i> Agregar Medida
-      </button>
+        <button @click="agregarMedidaExistente(diaSeleccionado)" class="btn-agregar">
+          <i class="fas fa-plus"></i> Agregar Medida
+        </button>
+      </div>
+      
+      <!-- Tabla de rendimientos del lado derecho -->
+      <div v-if="embarqueId" class="tabla-rendimientos-container">
+        <div class="tabla-rendimientos-header">
+          <h3>📊 Rendimientos del Embarque</h3>
+          <p class="fecha-embarque">{{ formatearFecha(embarqueData?.fecha) }}</p>
+        </div>
+        
+        <div v-if="!embarqueData" class="loading-rendimientos">
+          <p>Cargando datos del embarque...</p>
+        </div>
+        
+        <div v-else-if="rendimientosEmbarque.length === 0" class="sin-rendimientos">
+          <p>No hay datos de rendimientos disponibles</p>
+        </div>
+        
+        <div v-else class="tabla-rendimientos-wrapper">
+          <table class="tabla-rendimientos">
+            <thead>
+              <tr>
+                <th>Medida</th>
+                <th>Rendimiento</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(rendimiento, index) in rendimientosEmbarque" 
+                  :key="index">
+                <td class="medida-nombre">
+                  {{ rendimiento.medida }}
+                </td>
+                <td class="rendimiento-valor" 
+                    :class="{ 'rendimiento-alto': rendimiento.rendimiento > 1 }">
+                  {{ rendimiento.rendimiento.toFixed(2) }}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        
+        <!-- Estadísticas simplificadas -->
+        <div v-if="rendimientosEmbarque.length > 0" class="estadisticas-rendimientos">
+          <div class="estadistica-item">
+            <span class="estadistica-label">Total Medidas:</span>
+            <span class="estadistica-valor">{{ rendimientosEmbarque.length }}</span>
+          </div>
+          <div class="estadistica-item estadistica-destacada">
+            <span class="estadistica-label">Rendimiento Promedio:</span>
+            <span class="estadistica-valor">{{ calcularRendimientoPromedio().toFixed(2) }}</span>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Mensaje cuando no hay día seleccionado -->
@@ -197,7 +251,7 @@
 </template>
 
 <script>
-import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, getDocs, query, orderBy } from 'firebase/firestore'
+import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, getDocs, getDoc, query, orderBy } from 'firebase/firestore'
 import BuscadorMedidas from '@/components/BuscadorMedidas.vue'
 import GestionProveedores from '@/components/GestionProveedores.vue'
 
@@ -218,6 +272,8 @@ export default {
       diasListOpen: false,
       diaSeleccionado: null,
       embarqueId: null,
+      embarqueData: null,
+      rendimientosEmbarque: [],
       medidasDisponibles: [
         'Golfo',
         'Piojo',
@@ -295,14 +351,53 @@ export default {
     },
     
     formatearFecha(fecha) {
-      // Ajustamos la fecha para que use la zona horaria local
-      const [year, month, day] = fecha.split('-')
-      return new Date(year, month - 1, day).toLocaleDateString('es-ES', {
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-      })
+      if (!fecha) return '';
+      
+      try {
+        let fechaObj;
+        
+        // Si es un Timestamp de Firebase
+        if (typeof fecha === 'object' && fecha.seconds) {
+          fechaObj = new Date(fecha.seconds * 1000);
+        }
+        // Si es un string en formato YYYY-MM-DD
+        else if (typeof fecha === 'string' && fecha.includes('-')) {
+          const [year, month, day] = fecha.split('-');
+          fechaObj = new Date(year, month - 1, day);
+        }
+        // Si ya es un objeto Date
+        else if (fecha instanceof Date) {
+          fechaObj = fecha;
+        }
+        // Si es un timestamp numérico
+        else if (typeof fecha === 'number') {
+          fechaObj = new Date(fecha);
+        }
+        // Si es un string pero no en formato esperado, intentar parsearlo
+        else if (typeof fecha === 'string') {
+          fechaObj = new Date(fecha);
+        }
+        else {
+          console.error('Formato de fecha no reconocido:', fecha);
+          return '';
+        }
+        
+        // Verificar si la fecha es válida
+        if (isNaN(fechaObj.getTime())) {
+          console.error('Fecha inválida:', fecha);
+          return '';
+        }
+        
+        return fechaObj.toLocaleDateString('es-ES', {
+          weekday: 'long',
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric'
+        });
+      } catch (error) {
+        console.error('Error al formatear fecha:', fecha, error);
+        return '';
+      }
     },
     inicializarNuevoDia() {
       const hoy = new Date()
@@ -493,6 +588,235 @@ export default {
       } catch (error) {
         console.error('Error al migrar proveedores:', error)
       }
+    },
+
+    // Métodos para manejar datos de rendimientos del embarque
+    async cargarEmbarque() {
+      if (!this.embarqueId) return;
+      
+      try {
+        const db = getFirestore();
+        const embarqueRef = doc(db, 'embarques', this.embarqueId);
+        const embarqueDoc = await getDoc(embarqueRef);
+        
+        if (embarqueDoc.exists()) {
+          this.embarqueData = embarqueDoc.data();
+          console.log('Datos del embarque cargados:', this.embarqueData);
+          console.log('Kilos crudos disponibles:', this.embarqueData.kilosCrudos);
+          console.log('Número de clientes:', this.embarqueData.clientes?.length || 0);
+          this.calcularRendimientos();
+        } else {
+          console.error('No se encontró el embarque');
+        }
+      } catch (error) {
+        console.error('Error al cargar el embarque:', error);
+      }
+    },
+
+    calcularRendimientos() {
+      if (!this.embarqueData || !this.embarqueData.clientes) {
+        this.rendimientosEmbarque = [];
+        return;
+      }
+
+      // Usar la misma lógica que el componente de Rendimientos para obtener medidas únicas
+      const medidasUnicas = this.obtenerMedidasUnicas();
+      
+      // Calcular rendimientos para cada medida
+      this.rendimientosEmbarque = medidasUnicas.map(medida => {
+        const totalEmbarcado = this.obtenerTotalEmbarcado(medida);
+        const kilosCrudos = this.obtenerKilosCrudos(medida);
+        const rendimiento = totalEmbarcado > 0 ? kilosCrudos / totalEmbarcado : 0;
+
+        return {
+          medida: medida,
+          totalEmbarcado: totalEmbarcado,
+          kilosCrudos: kilosCrudos,
+          rendimiento: rendimiento
+        };
+      }).filter(r => r.totalEmbarcado > 0); // Solo mostrar medidas con datos
+
+      console.log('Rendimientos calculados:', this.rendimientosEmbarque);
+      
+      // Debug detallado para cada medida
+      this.rendimientosEmbarque.forEach(item => {
+        console.log(`Medida: ${item.medida}`);
+        console.log(`- Total Embarcado: ${item.totalEmbarcado}`);
+        console.log(`- Kilos Crudos: ${item.kilosCrudos}`);
+        console.log(`- Rendimiento: ${item.rendimiento.toFixed(2)}`);
+        console.log('---');
+      });
+    },
+
+    // Método para obtener medidas únicas (copiado del componente de Rendimientos)
+    obtenerMedidasUnicas() {
+      if (!this.embarqueData || !this.embarqueData.clientes) return [];
+      
+      const medidasMap = new Map();
+      const mixMedidas = new Map();
+      
+      this.embarqueData.clientes.forEach(cliente => {
+        cliente.productos.forEach(producto => {
+          if (producto.medida) {
+            const medidaNormalizada = producto.medida.toLowerCase().trim();
+            let nombreMedida = producto.medida;
+            
+            // Solo añadir "Maquila Ozuna" si es de Ozuna y NO es una venta
+            if (cliente.nombre === 'Ozuna' && !producto.esVenta) {
+              nombreMedida = `${producto.medida} Maquila Ozuna`;
+            }
+
+            if (medidaNormalizada.endsWith('mix')) {
+              const baseSize = medidaNormalizada.split(' ')[0];
+              mixMedidas.set(baseSize, nombreMedida);
+            } else if (!medidasMap.has(nombreMedida)) {
+              medidasMap.set(nombreMedida, nombreMedida);
+            }
+          }
+        });
+      });
+
+      const mixKeys = Array.from(mixMedidas.keys()).sort();
+      if (mixKeys.length >= 2) {
+        for (let i = 0; i < mixKeys.length; i += 2) {
+          if (i + 1 < mixKeys.length) {
+            const combinedName = `${mixKeys[i]}-${mixKeys[i+1]} mix`;
+            medidasMap.set(combinedName, combinedName);
+          }
+        }
+      }
+      
+      return Array.from(medidasMap.values());
+    },
+
+    // Método para obtener total embarcado (copiado del componente de Rendimientos)
+    obtenerTotalEmbarcado(medida) {
+      if (!this.embarqueData || !this.embarqueData.clientes) return 0;
+      
+      if (medida.includes('-') && medida.endsWith('mix')) {
+        const [medida1, medida2] = medida.split('-').map(m => m.trim());
+        const total1 = this.calcularTotalParaMedidaEspecifica(medida1 + ' mix');
+        const total2 = this.calcularTotalParaMedidaEspecifica(medida2.replace(' mix', '') + ' mix');
+        return total1 + total2;
+      }
+      
+      return this.calcularTotalParaMedidaEspecifica(medida);
+    },
+
+
+    calcularTotalParaMedidaEspecifica(medida) {
+      const esOzuna = medida.includes('Maquila Ozuna');
+      const medidaBase = medida.replace(' Maquila Ozuna', '').toLowerCase().trim();
+      
+      return this.embarqueData.clientes.reduce((total, cliente) => {
+        return total + cliente.productos
+          .filter(p => {
+            if (!p.medida) return false;
+            
+            // Si la medida original es de Ozuna
+            if (esOzuna) {
+              // Solo incluir si el producto es de cliente Ozuna y NO es una venta
+              return p.medida.toLowerCase().trim() === medidaBase && 
+                     cliente.nombre === 'Ozuna' && 
+                     !p.esVenta;
+            } else {
+              // Solo incluir si el producto coincide con la medida y NO es de Ozuna o es de Ozuna pero es VENTA
+              return p.medida.toLowerCase().trim() === medidaBase && 
+                     (cliente.nombre !== 'Ozuna' || p.esVenta);
+            }
+          })
+          .reduce((subtotal, producto) => {
+            // Excluir productos refrigerados del cálculo
+            if (producto.refrigerar) {
+              return subtotal;
+            }
+            
+            if (producto.tipo === 'c/h20') {
+              const totalBolsas = this.calcularTotalBolsas(producto);
+              const valorNeto = parseFloat(producto.camaronNeto) || 0.65;
+              return subtotal + (totalBolsas * valorNeto);
+            } else {
+              const sumaKilos = producto.kilos.reduce((sum, kilo) => sum + (Number(kilo) || 0), 0);
+              const sumaTaras = this.calcularTotalTaras(producto);
+              const descuentoTaras = producto.restarTaras ? sumaTaras * 3 : 0;
+              return subtotal + (sumaKilos - descuentoTaras);
+            }
+          }, 0);
+      }, 0);
+    },
+
+    obtenerKilosCrudos(medida) {
+      // Los kilos crudos se obtienen del embarque si están guardados
+      if (!this.embarqueData.kilosCrudos) return 0;
+      
+      if (this.esMedidaMix(medida)) {
+        const kilosCrudos = this.embarqueData.kilosCrudos[medida];
+        if (kilosCrudos && typeof kilosCrudos === 'object') {
+          return Number(kilosCrudos.medida1 || 0) + Number(kilosCrudos.medida2 || 0);
+        }
+        return 0;
+      } else {
+        return Number(this.embarqueData.kilosCrudos[medida] || 0);
+      }
+    },
+
+    // Método para verificar si es una medida mix
+    esMedidaMix(medida) {
+      return medida.toLowerCase().includes('mix');
+    },
+
+    calcularTotalBolsas(producto) {
+      const reporteTaras = producto.reporteTaras || [];
+      const reporteBolsas = producto.reporteBolsas || [];
+      let sumaTotalKilos = 0;
+
+      for (let i = 0; i < reporteTaras.length; i++) {
+        const taras = parseInt(reporteTaras[i]) || 0;
+        const bolsa = parseInt(reporteBolsas[i]) || 0;
+        sumaTotalKilos += taras * bolsa;
+      }
+
+      return sumaTotalKilos;
+    },
+
+    calcularTotalTaras(producto) {
+      const tarasNormales = (producto.taras || []).reduce((sum, tara) => sum + (Number(tara) || 0), 0);
+      const tarasExtra = (producto.tarasExtra || []).reduce((sum, tara) => sum + (Number(tara) || 0), 0);
+      return tarasNormales + tarasExtra;
+    },
+
+    // Calcular rendimiento promedio de todas las medidas
+    calcularRendimientoPromedio() {
+      if (!this.rendimientosEmbarque || this.rendimientosEmbarque.length === 0) return 0;
+      
+      let sumaRendimientos = 0;
+      let medidasConRendimiento = 0;
+      
+      this.rendimientosEmbarque.forEach(item => {
+        if (item.rendimiento > 0) {
+          sumaRendimientos += item.rendimiento;
+          medidasConRendimiento++;
+        }
+      });
+      
+      return medidasConRendimiento > 0 ? sumaRendimientos / medidasConRendimiento : 0;
+    },
+
+    // Calcular total embarcado general de todas las medidas
+    calcularTotalEmbarcadoGeneral() {
+      if (!this.rendimientosEmbarque || this.rendimientosEmbarque.length === 0) return 0;
+      
+      return this.rendimientosEmbarque.reduce((total, item) => {
+        return total + item.totalEmbarcado;
+      }, 0);
+    },
+
+    formatearNumero(numero) {
+      if (!numero) return '0';
+      // Redondear hacia abajo para eliminar decimales
+      const numeroSinDecimales = Math.floor(numero);
+      // Formatear manualmente con comas para asegurar compatibilidad
+      return numeroSinDecimales.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
     }
   },
   async mounted() {
@@ -505,7 +829,8 @@ export default {
     await Promise.all([
       this.cargarDias(),
       this.cargarProveedores(),
-      this.migrarProveedoresExistentes()
+      this.migrarProveedoresExistentes(),
+      this.cargarEmbarque() // Cargar datos del embarque si existe embarqueId
     ])
     
     // Aplicar selección de día después de cargar todos los datos
@@ -539,6 +864,14 @@ export default {
 .preparacion-container .header {
   border-top: 2px solid #e9ecef;
   padding-top: 20px;
+  margin-top: 20px;
+}
+
+/* Layout principal para preparación con tabla de rendimientos */
+.preparacion-layout {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 25px;
   margin-top: 20px;
 }
 
@@ -820,12 +1153,222 @@ th, td {
   font-size: 0.95rem;
 }
 
-.info-mensaje i {
-  font-size: 1.2rem;
-  color: #3498db;
+  .info-mensaje i {
+    font-size: 1.2rem;
+    color: #3498db;
+  }
+
+/* Estilos para la tabla de rendimientos */
+.tabla-rendimientos-container {
+  background-color: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 12px;
+  padding: 20px;
+  height: fit-content;
+  position: sticky;
+  top: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  max-width: 320px;
+}
+
+.tabla-rendimientos-header {
+  margin-bottom: 20px;
+  text-align: center;
+  border-bottom: 2px solid #e9ecef;
+  padding-bottom: 15px;
+}
+
+.tabla-rendimientos-header h3 {
+  margin: 0 0 8px 0;
+  color: #2c3e50;
+  font-size: 1.3em;
+  font-weight: bold;
+}
+
+.fecha-embarque {
+  margin: 0;
+  color: #6c757d;
+  font-size: 0.95em;
+  font-weight: 500;
+}
+
+.loading-rendimientos,
+.sin-rendimientos {
+  padding: 20px;
+  text-align: center;
+  color: #6c757d;
+  font-style: italic;
+}
+
+.sin-rendimientos {
+  background-color: #fff3cd;
+  border: 1px solid #ffeeba;
+  border-radius: 8px;
+  color: #856404;
+}
+
+.tabla-rendimientos-wrapper {
+  margin-bottom: 20px;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.tabla-rendimientos {
+  width: 100%;
+  min-width: 280px;
+  border-collapse: collapse;
+  background-color: white;
+  font-size: 0.9em;
+  table-layout: fixed;
+}
+
+.tabla-rendimientos th {
+  background-color: #495057;
+  color: white;
+  padding: 14px 12px;
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.9em;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.tabla-rendimientos th:first-child {
+  width: 60%;
+}
+
+.tabla-rendimientos th:last-child {
+  width: 40%;
+  text-align: center;
+}
+
+.tabla-rendimientos td {
+  padding: 12px 12px;
+  border-bottom: 1px solid #e9ecef;
+  vertical-align: middle;
+}
+
+.tabla-rendimientos tbody tr:hover {
+  background-color: #f8f9fa;
+}
+
+.tabla-rendimientos tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.tabla-rendimientos .medida-nombre {
+  font-weight: 500;
+  color: #2c3e50;
+  word-wrap: break-word;
+  font-size: 0.9em;
+  line-height: 1.3;
+  width: 60%;
+  min-width: 120px;
+}
+
+.tabla-rendimientos .rendimiento-valor {
+  font-weight: bold;
+  text-align: center;
+  font-size: 1.2em;
+  color: #6c757d;
+  font-family: 'Courier New', monospace;
+  width: 40%;
+  min-width: 80px;
+}
+
+.tabla-rendimientos .rendimiento-valor.rendimiento-alto {
+  color: #28a745;
+  background-color: #d4edda;
+  border-radius: 6px;
+  padding: 4px 8px;
+}
+
+
+/* Estadísticas de rendimientos */
+.estadisticas-rendimientos {
+  background-color: white;
+  border-radius: 8px;
+  padding: 15px;
+  border: 1px solid #e9ecef;
+}
+
+.estadisticas-rendimientos .estadistica-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid #f1f3f4;
+}
+
+.estadisticas-rendimientos .estadistica-item.estadistica-destacada {
+  border-bottom: none;
+  font-weight: bold;
+  background-color: #e8f4f8;
+  margin: 8px -15px -15px -15px;
+  padding: 12px 15px;
+  border-radius: 0 0 8px 8px;
+}
+
+.estadisticas-rendimientos .estadistica-item:last-child:not(.estadistica-destacada) {
+  border-bottom: none;
+}
+
+.estadisticas-rendimientos .estadistica-label {
+  font-size: 0.9em;
+  color: #6c757d;
+  font-weight: 500;
+}
+
+.estadisticas-rendimientos .estadistica-valor {
+  font-weight: bold;
+  color: #2c3e50;
+  font-size: 1em;
 }
 
 @media (max-width: 768px) {
+  .preparacion-layout {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+  
+  .tabla-rendimientos-container {
+    position: static;
+    order: -1; /* Mostrar la tabla primero en móviles */
+    margin-bottom: 20px;
+  }
+  
+  .tabla-rendimientos-header h3 {
+    font-size: 1.1em;
+  }
+  
+  .tabla-rendimientos th,
+  .tabla-rendimientos td {
+    padding: 10px 8px;
+    font-size: 0.85em;
+  }
+  
+  .tabla-rendimientos .medida-nombre {
+    font-size: 0.8em;
+  }
+  
+  .tabla-rendimientos .rendimiento-valor {
+    font-size: 1em;
+  }
+  
+  .estadisticas-rendimientos {
+    padding: 12px;
+  }
+  
+  .estadisticas-rendimientos .estadistica-item {
+    padding: 6px 0;
+  }
+  
+  .estadisticas-rendimientos .estadistica-label,
+  .estadisticas-rendimientos .estadistica-valor {
+    font-size: 0.85em;
+  }
+
   .header-left {
     flex-direction: column;
     align-items: stretch;

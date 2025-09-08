@@ -27,8 +27,8 @@
     </div>
     
     <div v-else class="rendimientos-grid">
-      <div v-for="(medida, index) in medidasUnicas" :key="index" class="rendimiento-card">
-        <div class="medida-info">
+        <div v-for="(medida, index) in medidasUnicas" :key="index" class="rendimiento-card">
+          <div class="medida-info">
           <div class="medida-header">
             <span class="medida-label editable-label" @click="editarNombreMedida(medida)">
               {{ obtenerNombreMedidaPersonalizado(medida) }}
@@ -2326,6 +2326,7 @@ export default {
       const precioMaquila = Number(this.precioMaquila[medida]) || 0;
       return totalEmbarcado * precioMaquila;
     },
+
 
 
   },
