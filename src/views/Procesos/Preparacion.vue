@@ -171,7 +171,7 @@
       </div>
       
       <!-- Tabla de rendimientos del lado derecho -->
-      <div v-if="embarqueId" class="tabla-rendimientos-container">
+      <div v-if="embarqueData" class="tabla-rendimientos-container">
         <div class="tabla-rendimientos-header">
           <h3>📊 Rendimientos del Embarque</h3>
           <p class="fecha-embarque">{{ formatearFecha(embarqueData?.fecha) }}</p>
@@ -311,7 +311,7 @@ export default {
   },
   methods: {
     // Nuevo método para manejar la selección de día
-    aplicarSeleccionDia() {
+    async aplicarSeleccionDia() {
       console.log('Aplicando selección de día...')
       console.log('Query fecha:', this.$route.query.fecha)
       console.log('Días cargados:', this.dias.length)
@@ -338,6 +338,8 @@ export default {
         if (diaEncontrado) {
           this.diaSeleccionado = diaEncontrado
           console.log('Día seleccionado automáticamente:', diaEncontrado.fecha)
+          // Buscar embarque para esta fecha
+          await this.buscarEmbarquePorFecha(diaEncontrado.fecha)
         } else {
           console.log('No se encontró día para la fecha:', fechaBuscada)
           console.log('Fechas disponibles:', this.dias.map(d => d.fecha))
@@ -347,6 +349,8 @@ export default {
         // Si no hay día en la URL, seleccionar el más reciente
         this.diaSeleccionado = this.diasOrdenados[0]
         console.log('Seleccionado día más reciente:', this.diaSeleccionado.fecha)
+        // Buscar embarque para esta fecha
+        await this.buscarEmbarquePorFecha(this.diaSeleccionado.fecha)
       }
     },
     
@@ -536,9 +540,12 @@ export default {
     toggleDiasList() {
       this.diasListOpen = !this.diasListOpen
     },
-    seleccionarDia(dia) {
+    async seleccionarDia(dia) {
       this.diaSeleccionado = dia
       this.diasListOpen = false
+      
+      // Buscar embarque para esta fecha
+      await this.buscarEmbarquePorFecha(dia.fecha)
     },
 
     volverAEmbarque() {
@@ -613,6 +620,55 @@ export default {
       }
     },
 
+    async buscarEmbarquePorFecha(fecha) {
+      if (!fecha) return;
+      
+      try {
+        const db = getFirestore();
+        const embarquesRef = collection(db, 'embarques');
+        const q = query(embarquesRef, orderBy('fecha', 'desc'));
+        const querySnapshot = await getDocs(q);
+        
+        let embarqueEncontrado = null;
+        
+        querySnapshot.forEach(doc => {
+          const data = doc.data();
+          let fechaEmbarque = '';
+          
+          // Normalizar fecha del embarque
+          if (typeof data.fecha === 'object' && data.fecha.seconds) {
+            const fechaDate = new Date(data.fecha.seconds * 1000);
+            fechaEmbarque = fechaDate.toISOString().split('T')[0];
+          } else if (typeof data.fecha === 'string') {
+            fechaEmbarque = data.fecha;
+          }
+          
+          // Comparar fechas
+          if (fechaEmbarque === fecha && !embarqueEncontrado) {
+            embarqueEncontrado = {
+              id: doc.id,
+              ...data
+            };
+          }
+        });
+        
+        if (embarqueEncontrado) {
+          console.log('Embarque encontrado para la fecha:', fecha, embarqueEncontrado.id);
+          this.embarqueId = embarqueEncontrado.id;
+          this.embarqueData = embarqueEncontrado;
+          this.calcularRendimientos();
+        } else {
+          console.log('No se encontró embarque para la fecha:', fecha);
+          // Limpiar datos si no hay embarque
+          this.embarqueId = null;
+          this.embarqueData = null;
+          this.rendimientosEmbarque = [];
+        }
+      } catch (error) {
+        console.error('Error al buscar embarque por fecha:', error);
+      }
+    },
+
     calcularRendimientos() {
       if (!this.embarqueData || !this.embarqueData.clientes) {
         this.rendimientosEmbarque = [];
@@ -623,7 +679,7 @@ export default {
       const medidasUnicas = this.obtenerMedidasUnicas();
       
       // Calcular rendimientos para cada medida
-      this.rendimientosEmbarque = medidasUnicas.map(medida => {
+      const todosLosRendimientos = medidasUnicas.map(medida => {
         const totalEmbarcado = this.obtenerTotalEmbarcado(medida);
         const kilosCrudos = this.obtenerKilosCrudos(medida);
         const rendimiento = totalEmbarcado > 0 ? kilosCrudos / totalEmbarcado : 0;
@@ -634,7 +690,16 @@ export default {
           kilosCrudos: kilosCrudos,
           rendimiento: rendimiento
         };
-      }).filter(r => r.totalEmbarcado > 0); // Solo mostrar medidas con datos
+      });
+
+      // Filtrar solo medidas con datos y rendimiento > 0
+      this.rendimientosEmbarque = todosLosRendimientos.filter(r => r.totalEmbarcado > 0 && r.rendimiento > 0);
+      
+      // Debug: mostrar medidas filtradas
+      const medidasFiltradas = todosLosRendimientos.filter(r => r.totalEmbarcado === 0 || r.rendimiento === 0);
+      if (medidasFiltradas.length > 0) {
+        console.log('Medidas filtradas (sin rendimiento):', medidasFiltradas.map(m => m.medida));
+      }
 
       console.log('Rendimientos calculados:', this.rendimientosEmbarque);
       
@@ -834,7 +899,7 @@ export default {
     ])
     
     // Aplicar selección de día después de cargar todos los datos
-    this.aplicarSeleccionDia()
+    await this.aplicarSeleccionDia()
   },
 
   watch: {
