@@ -312,10 +312,10 @@ export default {
   methods: {
     // Nuevo método para manejar la selección de día
     async aplicarSeleccionDia() {
-      console.log('Aplicando selección de día...')
-      console.log('Query fecha:', this.$route.query.fecha)
-      console.log('Días cargados:', this.dias.length)
-      console.log('Días disponibles:', this.dias.map(d => ({ id: d.id, fecha: d.fecha })))
+      console.log('🔄 Aplicando selección de día...')
+      console.log('📋 Query fecha:', this.$route.query.fecha)
+      console.log('📋 Días cargados:', this.dias.length)
+      console.log('📋 Días disponibles:', this.dias.map(d => ({ id: d.id, fecha: d.fecha })))
       
       // Si hay un día en la URL, seleccionarlo
       if (this.$route.query.fecha) {
@@ -326,29 +326,43 @@ export default {
           // Es un Timestamp de Firebase
           const fechaDate = new Date(fechaBuscada.seconds * 1000)
           fechaBuscada = fechaDate.toISOString().split('T')[0]
-          console.log('Fecha convertida de Timestamp:', fechaBuscada)
+          console.log('📅 Fecha convertida de Timestamp:', fechaBuscada)
         }
         
-        console.log('Buscando día con fecha:', fechaBuscada)
-        console.log('Tipo de fecha buscada:', typeof fechaBuscada)
+        console.log('🔍 Buscando día con fecha:', fechaBuscada)
+        console.log('🔍 Tipo de fecha buscada:', typeof fechaBuscada)
         
-        const diaEncontrado = this.dias.find(d => d.fecha === fechaBuscada)
-        console.log('Día encontrado:', diaEncontrado)
+        // Buscar día con fecha exacta
+        let diaEncontrado = this.dias.find(d => d.fecha === fechaBuscada)
+        
+        // Si no se encuentra con fecha exacta, intentar comparación normalizada
+        if (!diaEncontrado) {
+          console.log('⚠️ No se encontró coincidencia exacta, intentando comparación normalizada...')
+          diaEncontrado = this.dias.find(d => {
+            // Normalizar ambas fechas para comparación
+            const fechaDia = typeof d.fecha === 'string' ? d.fecha : 
+                            (d.fecha && d.fecha.seconds ? new Date(d.fecha.seconds * 1000).toISOString().split('T')[0] : '');
+            console.log(`📅 Comparando: "${fechaDia}" === "${fechaBuscada}"`);
+            return fechaDia === fechaBuscada;
+          });
+        }
+        
+        console.log('📋 Día encontrado:', diaEncontrado)
         
         if (diaEncontrado) {
           this.diaSeleccionado = diaEncontrado
-          console.log('Día seleccionado automáticamente:', diaEncontrado.fecha)
+          console.log('✅ Día seleccionado automáticamente:', diaEncontrado.fecha)
           // Buscar embarque para esta fecha
-          await this.buscarEmbarquePorFecha(diaEncontrado.fecha)
+          await this.buscarEmbarquePorFecha(fechaBuscada)
         } else {
-          console.log('No se encontró día para la fecha:', fechaBuscada)
-          console.log('Fechas disponibles:', this.dias.map(d => d.fecha))
+          console.log('❌ No se encontró día para la fecha:', fechaBuscada)
+          console.log('📋 Fechas disponibles:', this.dias.map(d => d.fecha))
           // Opcionalmente, mostrar mensaje o crear día automáticamente
         }
       } else if (this.dias.length > 0) {
         // Si no hay día en la URL, seleccionar el más reciente
         this.diaSeleccionado = this.diasOrdenados[0]
-        console.log('Seleccionado día más reciente:', this.diaSeleccionado.fecha)
+        console.log('✅ Seleccionado día más reciente:', this.diaSeleccionado.fecha)
         // Buscar embarque para esta fecha
         await this.buscarEmbarquePorFecha(this.diaSeleccionado.fecha)
       }
@@ -631,6 +645,8 @@ export default {
         
         let embarqueEncontrado = null;
         
+        console.log('🔍 Buscando embarque para fecha:', fecha);
+        
         querySnapshot.forEach(doc => {
           const data = doc.data();
           let fechaEmbarque = '';
@@ -643,12 +659,15 @@ export default {
             fechaEmbarque = data.fecha;
           }
           
+          console.log(`📅 Embarque ${doc.id}: fecha normalizada = "${fechaEmbarque}", fecha buscada = "${fecha}"`);
+          
           // Comparar fechas
           if (fechaEmbarque === fecha && !embarqueEncontrado) {
             embarqueEncontrado = {
               id: doc.id,
               ...data
             };
+            console.log('✅ Embarque encontrado:', doc.id);
           }
         });
         
@@ -658,7 +677,7 @@ export default {
           this.embarqueData = embarqueEncontrado;
           this.calcularRendimientos();
         } else {
-          console.log('No se encontró embarque para la fecha:', fecha);
+          console.log('❌ No se encontró embarque para la fecha:', fecha);
           // Limpiar datos si no hay embarque
           this.embarqueId = null;
           this.embarqueData = null;
