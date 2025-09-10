@@ -23,6 +23,9 @@
       <button @click="volverAEditar" class="btn-volver">
         Editar Pedido
       </button>
+      <button @click="irASacadaDelDia" class="btn-sacada">
+        Ir a Sacada del día
+      </button>
     </div>
     <div id="pdfPreview" class="pdf-preview">
       <div class="preview-page">
@@ -297,7 +300,7 @@
 import pdfMake from 'pdfmake/build/pdfmake'
 import KilosRefrigeradosModal from '@/components/KilosRefrigeradosModal.vue'
 import { db } from '@/firebase'
-import { doc, updateDoc, Timestamp } from 'firebase/firestore'
+import { doc, updateDoc, Timestamp, collection, getDocs, query, where } from 'firebase/firestore'
 
 const fonts = {
   Roboto: {
@@ -398,6 +401,33 @@ export default {
     this.aplicarEstadosCompletado();
   },
   methods: {
+    async irASacadaDelDia() {
+      try {
+        // Buscar si existe una sacada para la fecha del pedido
+        const inicio = new Date(this.fecha + 'T00:00:00')
+        const fin = new Date(this.fecha + 'T23:59:59.999')
+        const q = query(
+          collection(db, 'sacadas'),
+          where('fecha', '>=', inicio),
+          where('fecha', '<=', fin)
+        )
+        const snap = await getDocs(q)
+        const queryParams = { pedidoFecha: this.fecha }
+        if (this.id) queryParams.pedidoId = this.id
+        queryParams.pedidoTipo = 'limpio'
+
+        if (!snap.empty) {
+          const sacadaId = snap.docs[0].id
+          this.$router.push({ name: 'DetalleSacada', params: { id: sacadaId }, query: queryParams })
+        } else {
+          // No existe: ir a nueva sacada con fecha preseleccionada
+          this.$router.push({ name: 'NuevaSacada', query: { ...queryParams, fecha: this.fecha } })
+        }
+      } catch (err) {
+        console.error('Error al navegar a la sacada del día:', err)
+        this.$router.push('/sacadas')
+      }
+    },
     volverAEditar() {
       if (this.id) {
         const target = {
@@ -1144,7 +1174,8 @@ export default {
 
 .btn-generar,
 .btn-menu,
-.btn-volver {
+.btn-volver,
+.btn-sacada {
   padding: 10px 20px;
   border: none;
   border-radius: 4px;
@@ -1181,6 +1212,16 @@ export default {
 
 .btn-volver:hover {
   background-color: #2980b9;
+}
+
+.btn-sacada {
+  background: linear-gradient(135deg, #8e44ad 0%, #6c5ce7 100%);
+  color: #fff;
+  box-shadow: 0 4px 10px rgba(108, 92, 231, 0.25);
+}
+
+.btn-sacada:hover {
+  background: linear-gradient(135deg, #7d3cb2 0%, #5b4bd6 100%);
 }
 
 .icon {

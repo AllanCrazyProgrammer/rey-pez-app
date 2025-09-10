@@ -2,6 +2,7 @@
   <div class="sacadas-container" v-if="isLoaded">
     <div class="back-button-container">
       <BackButton to="/sacadas" />
+      <button v-if="tienePedidoOrigen" @click="regresarAlPedido" class="btn-regresar-pedido">Regresar al Pedido</button>
     </div>
     <h2 class="date-header">{{ formattedDate }}</h2>
     <div class="date-selector">
@@ -175,6 +176,9 @@ export default {
     };
   },
   computed: {
+    tienePedidoOrigen() {
+      return !!(this.$route.query && (this.$route.query.pedidoFecha || this.$route.query.pedidoId))
+    },
     formattedDate() {
       return this.currentDate.format('DD/MM/YYYY');
     },
@@ -299,6 +303,20 @@ export default {
     }
   },
   methods: {
+    regresarAlPedido() {
+      const tipo = this.$route.query.pedidoTipo || 'limpio'
+      const fecha = this.$route.query.pedidoFecha
+      const id = this.$route.query.pedidoId
+      if (tipo === 'limpio') {
+        const query = id ? { edit: 'true', id, fecha } : { fecha }
+        this.$router.push({ path: '/procesos/pedidos/limpio', query })
+      } else if (tipo === 'crudo') {
+        const query = id ? { edit: 'true', id, fecha } : { fecha }
+        this.$router.push({ path: '/procesos/pedidos/crudo', query })
+      } else {
+        this.$router.push('/procesos/pedidos')
+      }
+    },
     async loadProveedores() {
       const querySnapshot = await getDocs(collection(db, 'proveedores'));
       this.proveedores = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -750,6 +768,11 @@ export default {
     },
   },
   async created() {
+    // Si viene fecha desde el pedido, usarla como seleccionada
+    if (this.$route.query && this.$route.query.fecha) {
+      this.selectedDate = this.$route.query.fecha
+      this.updateCurrentDate()
+    }
     await this.loadProveedores();
     await this.loadMedidas();
     if (this.$route.params.id) {
