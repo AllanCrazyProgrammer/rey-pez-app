@@ -435,6 +435,15 @@ export default {
   },
 
       methods: {
+    // Helper para obtener YYYY-MM-DD en horario local (evita desfase UTC)
+    toLocalYMD(fecha) {
+      if (!fecha) return '';
+      const d = fecha instanceof Date ? fecha : new Date(fecha);
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    },
     // Método auxiliar para normalizar fechas y manejar diferentes formatos
     normalizarFecha(fecha) {
       if (!fecha) return null;
@@ -779,9 +788,9 @@ export default {
       }
       
       // Crear fecha del embarque solo con año-mes-día (sin hora)
-      const fechaEmbarqueStr = fechaEmbarqueNormalizada.toISOString().split('T')[0];
+      const fechaEmbarqueStr = this.toLocalYMD(fechaEmbarqueNormalizada);
       const fechaEmbarqueObj = new Date(fechaEmbarqueStr);
-      const fechaHoy = new Date().toISOString().split('T')[0];
+      const fechaHoy = this.toLocalYMD(new Date());
       const fechaHoyObj = new Date(fechaHoy);
       const diasDiferencia = Math.floor((fechaHoyObj - fechaEmbarqueObj) / (1000 * 60 * 60 * 24));
       
@@ -826,7 +835,7 @@ export default {
             const fechaPrecioNormalizada = this.normalizarFecha(precio.fecha);
             if (!fechaPrecioNormalizada) continue;
             
-            const fechaPrecioStr = fechaPrecioNormalizada.toISOString().split('T')[0];
+            const fechaPrecioStr = this.toLocalYMD(fechaPrecioNormalizada);
             if (fechaPrecioStr <= fechaEmbarqueStr && precio.clienteId === clienteId) {
               return precio;
             }
@@ -838,7 +847,7 @@ export default {
           const fechaPrecioNormalizada = this.normalizarFecha(precio.fecha);
           if (!fechaPrecioNormalizada) continue;
           
-          const fechaPrecioStr = fechaPrecioNormalizada.toISOString().split('T')[0];
+          const fechaPrecioStr = this.toLocalYMD(fechaPrecioNormalizada);
           if (fechaPrecioStr <= fechaEmbarqueStr && !precio.clienteId) {
             return precio;
           }
@@ -1122,8 +1131,8 @@ export default {
       // Normalizar la fecha del embarque
       const fechaEmbarqueNormalizada = this.normalizarFecha(this.embarqueData.fecha);
       const fechaEmbarque = fechaEmbarqueNormalizada ? 
-        fechaEmbarqueNormalizada.toISOString().split('T')[0] : 
-        new Date().toISOString().split('T')[0];
+        this.toLocalYMD(fechaEmbarqueNormalizada) : 
+        this.toLocalYMD(new Date());
       
       const ganancias = {};
       
@@ -1267,7 +1276,7 @@ export default {
         gananciaUnitaria: Math.round(precioPromedioPonderado - costoFinal),
         gananciaTotal: gananciaTotalSumada,
         totalEmbarcado: Math.round(totalEmbarcadoGeneral),
-        fechaPrecio: infoMostrar.fechaMasReciente?.toISOString().split('T')[0],
+        fechaPrecio: infoMostrar.fechaMasReciente ? this.toLocalYMD(infoMostrar.fechaMasReciente) : undefined,
         esPromedio: infoMostrar.esPromedio,
         esEspecifico: infoMostrar.esEspecifico,
         clienteEspecifico: infoMostrar.clienteEspecifico,
@@ -1319,7 +1328,7 @@ export default {
     calcularGananciasCrudos() {
       if (!this.embarqueData) return;
       
-      const fechaEmbarque = this.embarqueData.fecha || new Date().toISOString().split('T')[0];
+      const fechaEmbarque = this.toLocalYMD(this.normalizarFecha(this.embarqueData.fecha) || new Date());
       const ganancias = {};
       const tallasCrudos = this.obtenerTallasCrudosUnicas();
       
@@ -1440,7 +1449,7 @@ export default {
         gananciaTotal: Math.round(totalGanancias),
         hayPreciosIndividuales: hayPreciosIndividuales,
         detallesPorCliente: detallesPorCliente,
-        fechaCalculo: new Date().toISOString().split('T')[0]
+        fechaCalculo: this.toLocalYMD(new Date())
       };
       
       // Ganancia calculada exitosamente
@@ -2201,7 +2210,7 @@ export default {
         if (typeof fechaString === 'object' && fechaString.seconds) {
           // Es un Timestamp de Firebase, convertir a string
           const fechaDate = new Date(fechaString.seconds * 1000);
-          fechaString = fechaDate.toISOString().split('T')[0];
+          fechaString = this.toLocalYMD(fechaDate);
           console.log('Fecha convertida de Timestamp:', fechaString);
         } else if (typeof fechaString === 'string') {
           // Ya es string, usar tal como está
@@ -2260,8 +2269,8 @@ export default {
       const fechaEmbarqueNormalizada = this.normalizarFecha(this.embarqueData.fecha);
       if (!fechaEmbarqueNormalizada) return false;
       
-      const fechaEmbarqueStr = fechaEmbarqueNormalizada.toISOString().split('T')[0];
-      const fechaHoy = new Date().toISOString().split('T')[0];
+      const fechaEmbarqueStr = this.toLocalYMD(fechaEmbarqueNormalizada);
+      const fechaHoy = this.toLocalYMD(new Date());
       const fechaEmbarqueObj = new Date(fechaEmbarqueStr);
       const fechaHoyObj = new Date(fechaHoy);
       const diasDiferencia = Math.floor((fechaHoyObj - fechaEmbarqueObj) / (1000 * 60 * 60 * 24));
