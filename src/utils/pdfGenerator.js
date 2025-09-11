@@ -1596,7 +1596,14 @@ function obtenerNombreCliente(clienteId, clientesDisponibles) {
   const cliente = clientesDisponibles.find(c => c.id.toString() === clienteId.toString());
   if (!cliente) return 'Cliente Desconocido';
   // Preferir el nombre para notas si existe
-  return cliente.nombreNotas || cliente.nombre;
+  const nombre = cliente.nombreNotas || cliente.nombre;
+
+  // Caso especial: Lorena debe mostrarse como "Lorena-D22" en el PDF
+  if (typeof nombre === 'string' && nombre.toLowerCase().includes('lorena')) {
+    return 'Lorena-D22';
+  }
+
+  return nombre;
 }
 
 function obtenerTipoProducto(producto) {
