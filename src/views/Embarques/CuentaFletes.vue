@@ -81,6 +81,7 @@
               <th>Fecha</th>
               <th>Tipo</th>
               <th colspan="2">Joselito</th>
+              <th colspan="2">Verónica</th>
               <th>Total Taras</th>
               <th>Monto del Día</th>
               <th>Deuda Acumulada</th>
@@ -90,6 +91,8 @@
             <tr>
               <th></th>
               <th></th>
+              <th>Limpio</th>
+              <th>Crudo</th>
               <th>Limpio</th>
               <th>Crudo</th>
               <th></th>
@@ -109,7 +112,9 @@
                 <td>{{ item.tipo === 'abono' ? 'Abono' : 'Flete' }}</td>
                 <td>{{ item.tipo === 'abono' ? '-' : item.tarasLimpioJoselito }}</td>
                 <td>{{ item.tipo === 'abono' ? '-' : item.tarasCrudoJoselito }}</td>
-                <td>{{ item.tipo === 'abono' ? '-' : (item.tarasLimpioJoselito + item.tarasCrudoJoselito) }}</td>
+                <td>{{ item.tipo === 'abono' ? '-' : (item.tarasLimpioVeronica || 0) }}</td>
+                <td>{{ item.tipo === 'abono' ? '-' : (item.tarasCrudoVeronica || 0) }}</td>
+                <td>{{ item.tipo === 'abono' ? '-' : ((item.tarasLimpioJoselito + item.tarasCrudoJoselito) + ((item.tarasLimpioVeronica || 0) + (item.tarasCrudoVeronica || 0))) }}</td>
                 <td>{{ item.tipo === 'abono' ? 
                   formatearMonto(-item.monto) : 
                   formatearMonto(calcularMontoDia(item)) }}</td>
@@ -170,9 +175,20 @@
                   <span class="label">Taras Crudo:</span>
                   <span class="value">{{ item.tarasCrudoJoselito }}</span>
                 </div>
+              </div>
+              <div class="cliente-section">
+                <h4 class="cliente-title">Verónica</h4>
                 <div class="flete-row">
+                  <span class="label">Taras Limpio:</span>
+                  <span class="value">{{ item.tarasLimpioVeronica || 0 }}</span>
+                </div>
+                <div class="flete-row">
+                  <span class="label">Taras Crudo:</span>
+                  <span class="value">{{ item.tarasCrudoVeronica || 0 }}</span>
+                </div>
+                <div class="flete-row total-row">
                   <span class="label">Total Taras:</span>
-                  <span class="value">{{ item.tarasLimpioJoselito + item.tarasCrudoJoselito }}</span>
+                  <span class="value">{{ (item.tarasLimpioJoselito + item.tarasCrudoJoselito) + ((item.tarasLimpioVeronica || 0) + (item.tarasCrudoVeronica || 0)) }}</span>
                 </div>
               </div>
             </template>
@@ -223,6 +239,24 @@
             <div class="resumen-card">
               <span class="resumen-label">Total:</span>
               <span class="resumen-value">{{ totalTarasLimpioJoselito + totalTarasCrudoJoselito }}</span>
+            </div>
+          </div>
+        </div>
+        
+        <div class="resumen-cliente">
+          <h4>Cliente Verónica</h4>
+          <div class="resumen-grid">
+            <div class="resumen-card">
+              <span class="resumen-label">Taras Limpio:</span>
+              <span class="resumen-value">{{ totalTarasLimpioVeronica }}</span>
+            </div>
+            <div class="resumen-card">
+              <span class="resumen-label">Taras Crudo:</span>
+              <span class="resumen-value">{{ totalTarasCrudoVeronica }}</span>
+            </div>
+            <div class="resumen-card">
+              <span class="resumen-label">Total:</span>
+              <span class="resumen-value">{{ totalTarasLimpioVeronica + totalTarasCrudoVeronica }}</span>
             </div>
           </div>
         </div>
@@ -295,6 +329,12 @@ export default {
     totalTarasCrudoJoselito() {
       return this.fletesFiltrados.reduce((total, flete) => total + flete.tarasCrudoJoselito, 0);
     },
+    totalTarasLimpioVeronica() {
+      return this.fletesFiltrados.reduce((total, flete) => total + (flete.tarasLimpioVeronica || 0), 0);
+    },
+    totalTarasCrudoVeronica() {
+      return this.fletesFiltrados.reduce((total, flete) => total + (flete.tarasCrudoVeronica || 0), 0);
+    },
     deudaTotal() {
       return this.fletesFiltrados.reduce((total, flete) => 
         total + this.calcularMontoDia(flete), 0
@@ -326,13 +366,19 @@ export default {
             const data = doc.data();
             let fecha = data.fecha.toDate ? data.fecha.toDate() : new Date(data.fecha);
             
-            // Buscar cliente Joselito
+            // Buscar clientes Joselito y Verónica (normalizando acentos y mayúsculas)
+            const normalize = (s) => (s || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
             const clienteJoselito = data.clientes?.find(cliente => 
-              cliente.id === '1' || cliente.id === 1 || cliente.nombre === 'Joselito'
+              cliente.id === '1' || cliente.id === 1 || normalize(cliente.nombre) === 'joselito'
+            );
+            const clienteVeronica = data.clientes?.find(cliente => 
+              cliente.id === '2' || cliente.id === 2 || normalize(cliente.nombre) === 'veronica'
             );
             
             let tarasLimpioJoselito = 0;
             let tarasCrudoJoselito = 0;
+            let tarasLimpioVeronica = 0;
+            let tarasCrudoVeronica = 0;
 
             // Calcular taras de Joselito
             if (clienteJoselito) {
@@ -373,13 +419,54 @@ export default {
               }
             }
 
-            // Solo guardar fletes que tengan datos de Joselito
-            if (clienteJoselito) {
+            // Calcular taras de Verónica
+            if (clienteVeronica) {
+              // Calcular taras de limpio Verónica
+              if (clienteVeronica.productos && Array.isArray(clienteVeronica.productos)) {
+                tarasLimpioVeronica = clienteVeronica.productos.reduce((total, producto) => {
+                  let tarasProducto = 0;
+                  if (Array.isArray(producto.taras)) {
+                    tarasProducto += producto.taras.reduce((sum, tara) => 
+                      sum + (parseInt(tara) || 0), 0);
+                  }
+                  if (Array.isArray(producto.tarasExtra)) {
+                    tarasProducto += producto.tarasExtra.reduce((sum, tara) => 
+                      sum + (parseInt(tara) || 0), 0);
+                  }
+                  return total + tarasProducto;
+                }, 0);
+              }
+
+              // Calcular taras de crudo Verónica
+              if (clienteVeronica.crudos && Array.isArray(clienteVeronica.crudos)) {
+                tarasCrudoVeronica = clienteVeronica.crudos.reduce((total, crudo) => {
+                  if (!Array.isArray(crudo.items)) return total;
+                  
+                  return total + crudo.items.reduce((itemTotal, item) => {
+                    let tarasItem = 0;
+                    if (item.taras) {
+                      const [cantidad] = item.taras.split('-');
+                      tarasItem += parseInt(cantidad) || 0;
+                    }
+                    if (item.sobrante) {
+                      const [cantidadSobrante] = item.sobrante.split('-');
+                      tarasItem += parseInt(cantidadSobrante) || 0;
+                    }
+                    return itemTotal + tarasItem;
+                  }, 0);
+                }, 0);
+              }
+            }
+
+            // Guardar fletes que tengan datos de al menos uno de los clientes
+            if (clienteJoselito || clienteVeronica) {
               return {
                 id: doc.id,
                 fecha,
                 tarasLimpioJoselito,
                 tarasCrudoJoselito,
+                tarasLimpioVeronica,
+                tarasCrudoVeronica,
                 cargaCon: data.cargaCon || 'No especificado',
                 pagado: data.fletePagado || false
               };
@@ -423,8 +510,14 @@ export default {
       }).format(monto);
     },
     calcularMontoDia(flete) {
-      return (flete.tarasLimpioJoselito * this.costoTaraLimpio) + 
-             (flete.tarasCrudoJoselito * this.costoTaraCrudo);
+      const limpioJos = flete.tarasLimpioJoselito || 0;
+      const crudoJos = flete.tarasCrudoJoselito || 0;
+      const limpioVer = flete.tarasLimpioVeronica || 0;
+      const crudoVer = flete.tarasCrudoVeronica || 0;
+      return (limpioJos * this.costoTaraLimpio) +
+             (crudoJos * this.costoTaraCrudo) +
+             (limpioVer * this.costoTaraLimpio) +
+             (crudoVer * this.costoTaraCrudo);
     },
     calcularDeudaAcumulada(index) {
       const itemsCronologicos = [...this.itemsOrdenados]
@@ -535,11 +628,14 @@ export default {
               <tr>
                 <th>Fecha</th>
                 <th colspan="2">Joselito</th>
+                <th colspan="2">Verónica</th>
                 <th>Total Taras</th>
                 <th>Monto</th>
               </tr>
               <tr>
                 <th></th>
+                <th>Limpio</th>
+                <th>Crudo</th>
                 <th>Limpio</th>
                 <th>Crudo</th>
                 <th></th>
@@ -552,7 +648,9 @@ export default {
                   <td>${this.formatearFecha(flete.fecha)}</td>
                   <td>${flete.tarasLimpioJoselito}</td>
                   <td>${flete.tarasCrudoJoselito}</td>
-                  <td>${flete.tarasLimpioJoselito + flete.tarasCrudoJoselito}</td>
+                  <td>${flete.tarasLimpioVeronica || 0}</td>
+                  <td>${flete.tarasCrudoVeronica || 0}</td>
+                  <td>${(flete.tarasLimpioJoselito + flete.tarasCrudoJoselito) + ((flete.tarasLimpioVeronica || 0) + (flete.tarasCrudoVeronica || 0))}</td>
                   <td>${this.formatearMonto(this.calcularMontoDia(flete))}</td>
                 </tr>
               `).join('')}
@@ -560,8 +658,10 @@ export default {
                 <td><strong>TOTAL</strong></td>
                 <td><strong>${this.fletesPendientes.reduce((sum, f) => sum + f.tarasLimpioJoselito, 0)}</strong></td>
                 <td><strong>${this.fletesPendientes.reduce((sum, f) => sum + f.tarasCrudoJoselito, 0)}</strong></td>
+                <td><strong>${this.fletesPendientes.reduce((sum, f) => sum + (f.tarasLimpioVeronica || 0), 0)}</strong></td>
+                <td><strong>${this.fletesPendientes.reduce((sum, f) => sum + (f.tarasCrudoVeronica || 0), 0)}</strong></td>
                 <td><strong>${this.fletesPendientes.reduce((sum, f) => 
-                  sum + f.tarasLimpioJoselito + f.tarasCrudoJoselito, 0)}</strong></td>
+                  sum + (f.tarasLimpioJoselito + f.tarasCrudoJoselito) + ((f.tarasLimpioVeronica || 0) + (f.tarasCrudoVeronica || 0)), 0)}</strong></td>
                 <td><strong>${this.formatearMonto(
                   this.fletesPendientes.reduce((sum, f) => sum + this.calcularMontoDia(f), 0)
                 )}</strong></td>
@@ -609,13 +709,20 @@ export default {
                   <p><strong>Total Taras Joselito:</strong> ${this.fletesPendientes.reduce((sum, f) => 
                     sum + f.tarasLimpioJoselito + f.tarasCrudoJoselito, 0)}</p>
                 </div>
+                <div class="cliente-column">
+                  <h4>Cliente Verónica</h4>
+                  <p><strong>Taras Limpio:</strong> ${this.fletesPendientes.reduce((sum, f) => sum + (f.tarasLimpioVeronica || 0), 0)}</p>
+                  <p><strong>Taras Crudo:</strong> ${this.fletesPendientes.reduce((sum, f) => sum + (f.tarasCrudoVeronica || 0), 0)}</p>
+                  <p><strong>Total Taras Verónica:</strong> ${this.fletesPendientes.reduce((sum, f) => 
+                    sum + ((f.tarasLimpioVeronica || 0) + (f.tarasCrudoVeronica || 0)), 0)}</p>
+                </div>
               </div>
               
               <h4>Totales Generales</h4>
               <p><strong>Total Taras Limpio:</strong> ${this.fletesPendientes.reduce((sum, f) => 
-                sum + f.tarasLimpioJoselito, 0)}</p>
+                sum + f.tarasLimpioJoselito + (f.tarasLimpioVeronica || 0), 0)}</p>
               <p><strong>Total Taras Crudo:</strong> ${this.fletesPendientes.reduce((sum, f) => 
-                sum + f.tarasCrudoJoselito, 0)}</p>
+                sum + f.tarasCrudoJoselito + (f.tarasCrudoVeronica || 0), 0)}</p>
               <p><strong>Monto Total Fletes:</strong> ${this.formatearMonto(
                 this.fletesPendientes.reduce((sum, f) => sum + this.calcularMontoDia(f), 0)
               )}</p>
