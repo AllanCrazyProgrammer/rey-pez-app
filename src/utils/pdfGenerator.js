@@ -23,6 +23,10 @@ if (typeof window !== 'undefined' && window.pdfMake) {
   pdfMake = window.pdfMake;
 }
 
+// URLs de logos
+const LOGO_DEFAULT_URL = 'https://res.cloudinary.com/hwkcovsmr/image/upload/v1620946647/samples/REY_PEZ_LOGO_nsotww.png';
+const LOGO_VERONICA_URL = 'https://res.cloudinary.com/hwkcovsmr/image/upload/w_1000,c_fill,ar_1:1,g_auto,r_max,bo_5px_solid_red,f_png,b_transparent/v1757615801/allan_logo_ra8ruv.jpg';
+
 // Función para obtener el precio actual de un producto para un cliente específico
 async function obtenerPrecioProductoCatarro(nombreProducto) {
   try {
@@ -92,7 +96,27 @@ export async function generarNotaVentaPDF(embarque, clientesDisponibles, cliente
       clientesDisponibles = [];
     }
 
-    const logoBase64 = await loadImageAsBase64('https://res.cloudinary.com/hwkcovsmr/image/upload/v1620946647/samples/REY_PEZ_LOGO_nsotww.png');
+    
+
+    // Determinar si la nota es exclusivamente para Veronica (Lorena en PDF)
+    const getNombreClienteLocal = (id) => {
+      const c = (clientesDisponibles || []).find(cl => cl.id.toString() === id.toString());
+      if (!c) return '';
+      return (c.nombreNotas || c.nombre || '').toString();
+    };
+    const idsUnicos = Array.from(new Set(((embarque && embarque.productos) || []).map(p => String(p.clienteId)).filter(Boolean)));
+    let esNotaVeronica = false;
+    if (idsUnicos.length === 1) {
+      const nombre = getNombreClienteLocal(idsUnicos[0]).toLowerCase();
+      esNotaVeronica = nombre.includes('veronica') || nombre.includes('lorena');
+    }
+
+    const footerTextoDefault = ' 2025 Rey Pez - Tampico, Tamps.';
+    const footerTextoVeronica = 'Allan Estuardo Reyes Garcia.  C.P 8920.  Tampico, Tamps.';
+    const footerTexto = esNotaVeronica ? footerTextoVeronica : footerTextoDefault;
+    const logoBase64 = await loadImageAsBase64(
+      esNotaVeronica ? LOGO_VERONICA_URL : LOGO_DEFAULT_URL
+    );
     
     // Primero generamos el contenido con precios
     const contenidoConPrecios = [
@@ -208,10 +232,11 @@ export async function generarNotaVentaPDF(embarque, clientesDisponibles, cliente
       ],
       styles: {
         notaVentaHeader: {
-          color: '#3760b0',
-          fontSize: 30,
+          color: 'black',
+          fontSize: 40,
           bold: true,
           italics: true,
+          characterSpacing: 1,
         },
         header: {
           fontSize: 30,
@@ -312,7 +337,7 @@ export async function generarNotaVentaPDF(embarque, clientesDisponibles, cliente
       footer: function(currentPage, pageCount) {
         return {
           columns: [
-            { text: ' 2025 Rey Pez - Tampico, Tamps.', alignment: 'center', margin: [0, 10, 0, 0] },
+            { text: footerTexto, alignment: 'center', margin: [0, 10, 0, 0] },
           ],
           margin: [40, 0, 40, 0],
           fontSize: 20,
@@ -387,7 +412,7 @@ export async function generarNotaVentaPDF(embarque, clientesDisponibles, cliente
           footer: function(currentPage, pageCount) {
             return {
               columns: [
-                { text: ' 2025 Rey Pez - Tampico, Tamps.', alignment: 'center', margin: [0, 10, 0, 0] },
+                { text: footerTexto, alignment: 'center', margin: [0, 10, 0, 0] },
               ],
               margin: [40, 0, 40, 0],
               fontSize: nivelReduccion === 'moderado' ? 16 : 14, // Reducir también el footer
@@ -1859,7 +1884,26 @@ export async function generarNotaVentaSinPreciosPDF(embarque, clientesDisponible
       cargaCon: embarque.cargaCon
     });
 
-    const logoBase64 = await loadImageAsBase64('https://res.cloudinary.com/hwkcovsmr/image/upload/v1620946647/samples/REY_PEZ_LOGO_nsotww.png');
+    
+
+    // Determinar si esta nota sin precios es exclusivamente para Veronica
+    const getNombreClienteLocal = (id) => {
+      const c = (clientesDisponibles || []).find(cl => cl.id.toString() === id.toString());
+      if (!c) return '';
+      return (c.nombreNotas || c.nombre || '').toString();
+    };
+    const idsUnicos = Array.from(new Set(((embarque && embarque.productos) || []).map(p => String(p.clienteId)).filter(Boolean)));
+    let esNotaVeronica = false;
+    if (idsUnicos.length === 1) {
+      const nombre = getNombreClienteLocal(idsUnicos[0]).toLowerCase();
+      esNotaVeronica = nombre.includes('veronica') || nombre.includes('lorena');
+    }
+    const footerTextoDefault = ' 2025 Rey Pez - Tampico, Tamps.';
+    const footerTextoVeronica = 'Allan Estuardo Reyes Garcia.  C.P 8920.  Tampico, Tamps.';
+    const footerTexto = esNotaVeronica ? footerTextoVeronica : footerTextoDefault;
+    const logoBase64 = await loadImageAsBase64(
+      esNotaVeronica ? LOGO_VERONICA_URL : LOGO_DEFAULT_URL
+    );
     
     const docDefinition = {
       content: [
@@ -1983,7 +2027,7 @@ export async function generarNotaVentaSinPreciosPDF(embarque, clientesDisponible
       footer: function(currentPage, pageCount) {
         return {
           columns: [
-            { text: ' 2025 Rey Pez - Tampico, Tamps.', alignment: 'center', margin: [0, 10, 0, 0] },
+            { text: footerTexto, alignment: 'center', margin: [0, 10, 0, 0] },
           ],
           margin: [40, 0, 40, 0],
           fontSize: 20,
@@ -2051,7 +2095,7 @@ export async function generarNotaVentaSinPreciosPDF(embarque, clientesDisponible
           footer: function(currentPage, pageCount) {
             return {
               columns: [
-                { text: ' 2025 Rey Pez - Tampico, Tamps.', alignment: 'center', margin: [0, 10, 0, 0] },
+                { text: footerTexto, alignment: 'center', margin: [0, 10, 0, 0] },
               ],
               margin: [40, 0, 40, 0],
               fontSize: nivelReduccion === 'moderado' ? 16 : 14, // Reducir también el footer
