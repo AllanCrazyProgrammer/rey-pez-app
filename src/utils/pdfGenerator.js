@@ -255,6 +255,11 @@ export async function generarNotaVentaPDF(embarque, clientesDisponibles, cliente
           background: '#9b59b6',
           padding: [2, 2, 2, 2]
         },
+        clienteLorena: {
+          color: '#FFFFFF',
+          background: '#9b59b6',
+          padding: [2, 2, 2, 2]
+        },
         clienteOtro: {
           color: '#000000',
           background: '#808080',
@@ -1053,6 +1058,8 @@ function generarTablaProductos(productos, estiloCliente, nombreCliente, aplicarR
   
   // Variable para calcular el gran total
   let granTotal = 0;
+  // Acumulador de taras para calcular flete en clientes especiales
+  let totalTarasParaFlete = 0;
 
   productosConKilos.forEach(producto => {
     const tarasNormales = (producto.taras || []).reduce((sum, tara) => sum + (tara || 0), 0);
@@ -1060,6 +1067,7 @@ function generarTablaProductos(productos, estiloCliente, nombreCliente, aplicarR
     
     const tarasTotales = tarasNormales + tarasExtra;
     let tarasTexto = `${tarasTotales} ${combinarTarasBolsas(producto.reporteTaras, producto.reporteBolsas)}`;
+    // Contabilizar taras para flete solo cuando el producto tiene kilos válidos y se mostrará en la tabla
 
     // Calcular kilos para este producto
     const kilos = totalKilos(producto, nombreCliente, aplicarReglaOtilio, sumarKgCatarro);
@@ -1139,6 +1147,8 @@ function generarTablaProductos(productos, estiloCliente, nombreCliente, aplicarR
         
         // Sumar al gran total
         granTotal += total;
+        // Sumar taras para flete en clientes especiales (Lorena/Catarro)
+        totalTarasParaFlete += tarasTotales;
         
         row.push(producto.precio 
           ? { text: `$${Math.round(total).toLocaleString('en-US')}`, style: 'totalPrecio' } 
@@ -1165,7 +1175,7 @@ function generarTablaProductos(productos, estiloCliente, nombreCliente, aplicarR
     const numColumnas = headerRow.length; 
     const filaGranTotal = [
       {
-        text: 'GRAN TOTAL:',
+        text: 'TOTAL:',
         bold: true,
         alignment: 'right',
         color: '#9b59b6',
@@ -1190,6 +1200,45 @@ function generarTablaProductos(productos, estiloCliente, nombreCliente, aplicarR
     });
     
     body.push(filaGranTotal);
+
+    // Agregar fila de Flete y Total para clientes especiales (Lorena/Catarro)
+    const nombreLower = (nombreCliente || '').toLowerCase();
+    const esClienteEspecial = nombreLower.includes('catarro');
+    if (esClienteEspecial) {
+      const fleteTarifa = 70; // limpio
+      const flete = Math.round((totalTarasParaFlete || 0) * fleteTarifa);
+      const totalConFlete = Math.max(0, Math.round(granTotal) - flete);
+
+      // Fila Flete
+      const filaFlete = [
+        {
+          text: 'FLETE:',
+          bold: true,
+          alignment: 'right',
+          color: '#9b59b6',
+          border: [true, true, true, true],
+          colSpan: numColumnas - 1
+        }
+      ];
+      for (let i = 1; i < numColumnas - 1; i++) filaFlete.push({});
+      filaFlete.push({ text: `$${flete.toLocaleString('en-US')}`, style: 'totalPrecio' });
+      body.push(filaFlete);
+
+      // Fila Total final
+      const filaTotal = [
+        {
+          text: 'GRAN TOTAL:',
+          bold: true,
+          alignment: 'right',
+          color: '#9b59b6',
+          border: [true, true, true, true],
+          colSpan: numColumnas - 1
+        }
+      ];
+      for (let i = 1; i < numColumnas - 1; i++) filaTotal.push({});
+      filaTotal.push({ text: `$${totalConFlete.toLocaleString('en-US')}`, style: 'granTotal' });
+      body.push(filaTotal);
+    }
   }
 
   // Si no hay filas con productos, mostrar mensaje
@@ -1319,6 +1368,8 @@ function generarTablaCrudos(crudos, estiloCliente, incluirPreciosCliente = false
   
   // Variable para calcular el gran total
   let granTotal = 0;
+  // Acumulador de taras para flete de crudos
+  let totalTarasParaFlete = 0;
 
   // Agregar las filas de datos
   itemsFiltrados.forEach(item => {
@@ -1350,6 +1401,9 @@ function generarTablaCrudos(crudos, estiloCliente, incluirPreciosCliente = false
       row.push(item.precio 
         ? { text: `$${Math.round(total).toLocaleString('en-US')}`, style: 'totalPrecio' } 
         : '');
+
+      // Sumar taras para flete (cantidad de taras + sobrante) cuando hay precios
+      totalTarasParaFlete += calcularTarasTotales(item);
     }
 
     body.push(row);
@@ -1360,7 +1414,7 @@ function generarTablaCrudos(crudos, estiloCliente, incluirPreciosCliente = false
     const numColumnas = headerRow.length;
     const filaGranTotal = [
       {
-        text: 'GRAN TOTAL:',
+        text: 'TOTAL:',
         bold: true,
         alignment: 'right',
         color: '#9b59b6',
@@ -1385,6 +1439,43 @@ function generarTablaCrudos(crudos, estiloCliente, incluirPreciosCliente = false
     });
     
     body.push(filaGranTotal);
+
+    // Agregar Flete y Total solo para clientes especiales (Lorena/Catarro)
+    const nombreLower = (nombreCliente || '').toLowerCase();
+    const esClienteEspecial = nombreLower.includes('catarro');
+    if (esClienteEspecial) {
+      const fleteTarifa = 60; // crudo
+      const flete = Math.round((totalTarasParaFlete || 0) * fleteTarifa);
+      const totalConFlete = Math.max(0, Math.round(granTotal) - flete);
+
+      const filaFlete = [
+        {
+          text: 'FLETE:',
+          bold: true,
+          alignment: 'right',
+          color: '#9b59b6',
+          border: [true, true, true, true],
+          colSpan: numColumnas - 1
+        }
+      ];
+      for (let i = 1; i < numColumnas - 1; i++) filaFlete.push({});
+      filaFlete.push({ text: `$${flete.toLocaleString('en-US')}`, style: 'totalPrecio' });
+      body.push(filaFlete);
+
+      const filaTotal = [
+        {
+          text: 'GRAN TOTAL:',
+          bold: true,
+          alignment: 'right',
+          color: '#9b59b6',
+          border: [true, true, true, true],
+          colSpan: numColumnas - 1
+        }
+      ];
+      for (let i = 1; i < numColumnas - 1; i++) filaTotal.push({});
+      filaTotal.push({ text: `$${totalConFlete.toLocaleString('en-US')}`, style: 'granTotal' });
+      body.push(filaTotal);
+    }
   }
 
   // Definir los anchos de columna según si hay precios o no
@@ -1435,6 +1526,7 @@ function obtenerEstiloCliente(nombreCliente) {
   if (nombreLowerCase.includes('otilio')) return 'clienteOtilio';
   if (nombreLowerCase.includes('ozuna')) return 'clienteOzuna';
   if (nombreLowerCase.includes('elizabeth')) return 'clienteElizabeth';
+  if (nombreLowerCase.includes('lorena')) return 'clienteLorena';
   return 'clienteOtro';
 }
 
@@ -1477,7 +1569,9 @@ function obtenerNombreCliente(clienteId, clientesDisponibles) {
     return 'Cliente Desconocido';
   }
   const cliente = clientesDisponibles.find(c => c.id.toString() === clienteId.toString());
-  return cliente ? cliente.nombre : 'Cliente Desconocido';
+  if (!cliente) return 'Cliente Desconocido';
+  // Preferir el nombre para notas si existe
+  return cliente.nombreNotas || cliente.nombre;
 }
 
 function obtenerTipoProducto(producto) {
@@ -1738,6 +1832,7 @@ function obtenerNombreClienteDesdeEstilo(estiloCliente) {
     case 'clienteOtilio': return 'otilio';
     case 'clienteOzuna': return 'ozuna';
     case 'clienteElizabeth': return 'elizabeth';
+    case 'clienteLorena': return 'lorena';
     default: return 'otro';
   }
 }

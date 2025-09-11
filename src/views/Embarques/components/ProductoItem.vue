@@ -295,7 +295,7 @@ export default {
 
         // Detectar si es un cliente agregado (no predefinido)
         esClienteAgregado() {
-            const clientesPredefinidos = ['joselito', 'catarro', 'ozuna', 'otilio', 'elizabeth'];
+            const clientesPredefinidos = ['joselito', 'catarro', 'ozuna', 'otilio', 'elizabeth', 'veronica', 'lorena'];
             return !clientesPredefinidos.includes(this.nombreCliente.toLowerCase());
         },
 

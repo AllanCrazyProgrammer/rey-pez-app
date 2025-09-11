@@ -673,6 +673,17 @@ button:disabled {
     border-left: 10px solid #7e3a99;
 }
 
+/* Veronica / Lorena (morado) */
+.cliente-header[data-cliente="Veronica"] {
+    background-color: rgba(155, 89, 182, 0.1);
+    border-left: 10px solid #9b59b6;
+}
+
+.cliente-header[data-cliente="Lorena"] {
+    background-color: rgba(155, 89, 182, 0.1);
+    border-left: 10px solid #9b59b6;
+}
+
 /* Responsive adjustments */
 @media (max-width: 768px) {
     .cliente-header {
