@@ -1,11 +1,28 @@
 // Agregar esta función al inicio del archivo, antes de generarResumenLimpios
-function getClienteColor(clienteId) {
+function getClienteColor(clienteId, clientesPersonalizados = []) {
+  // Primero verificar si es un cliente personalizado para detectar Verónica/Lorena
+  if (Array.isArray(clientesPersonalizados) && clientesPersonalizados.length > 0) {
+    const clienteEncontrado = clientesPersonalizados.find(cliente => 
+      cliente.id?.toString() === clienteId.toString() || 
+      cliente.clienteId?.toString() === clienteId.toString()
+    );
+
+    if (clienteEncontrado) {
+      const nombre = (clienteEncontrado.nombre || clienteEncontrado.nombreCliente || '').toLowerCase();
+      if (nombre.includes('veronica') || nombre.includes('lorena')) {
+        return '#e67e22'; // Naranja para Verónica/Lorena
+      }
+    }
+  }
+
   // Colores predefinidos para cada cliente
   const colores = {
     '1': '#3498db', // Joselito (azul)
     '2': '#e74c3c', // Catarro (rojo)
     '3': '#f1c40f', // Otilio (amarillo)
-    '4': '#2ecc71'  // Ozuna (verde)
+    '4': '#2ecc71', // Ozuna (verde)
+    'veronica': '#e67e22', // Verónica (naranja)
+    'lorena': '#e67e22'    // Lorena (naranja)
   };
   return colores[clienteId] || '#95a5a6'; // Color gris por defecto
 }
@@ -69,7 +86,7 @@ export function generarResumenLimpios(productosPorCliente, clienteColors, escala
                         w: rectWidth * 0.8,
                         h: rectHeight,
                         r: 8,
-                        color: getClienteColor(clienteId)
+                        color: getClienteColor(clienteId, clientesPersonalizados)
                       }
                     ]
                   },
@@ -85,7 +102,7 @@ export function generarResumenLimpios(productosPorCliente, clienteColors, escala
                 text: `${tarasCliente}T|${formatearKilos(kilosCliente)}Kg`,
                 style: 'total',
                 alignment: 'right',
-                color: getClienteColor(clienteId),
+                color: getClienteColor(clienteId, clientesPersonalizados),
                 fontSize: 11 * factorEscala
               }
             ],
@@ -191,7 +208,7 @@ export function generarResumenLimpios(productosPorCliente, clienteColors, escala
                   w: rectWidth,
                   h: rectHeight,
                   r: 8,
-                  color: getClienteColor(clienteId)
+                  color: getClienteColor(clienteId, clientesPersonalizados)
                 }
               ]
             },
@@ -207,7 +224,7 @@ export function generarResumenLimpios(productosPorCliente, clienteColors, escala
           text: `Total: ${tarasCliente}T | ${formatearKilos(kilosCliente)}Kg`,
           style: 'total',
           alignment: 'right',
-          color: getClienteColor(clienteId),
+          color: getClienteColor(clienteId, clientesPersonalizados),
           fontSize: fontSize * factorEscala
         }
       ],
@@ -310,7 +327,12 @@ function obtenerNombreCliente(clienteId, clientesPersonalizados = []) {
     );
 
     if (clienteEncontrado) {
-      return clienteEncontrado.nombre || clienteEncontrado.nombreCliente;
+      const nombre = clienteEncontrado.nombre || clienteEncontrado.nombreCliente;
+      // Caso especial: Lorena debe mostrarse como "Lorena-D22" en el resumen
+      if (typeof nombre === 'string' && nombre.toLowerCase().includes('lorena')) {
+        return 'Lorena-D22';
+      }
+      return nombre;
     }
   }
 
