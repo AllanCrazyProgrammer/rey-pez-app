@@ -990,9 +990,9 @@ export default {
 }
 
 .btn-nota.tiene-nota {
-    background: #9b59b6;
+    background: #e67e22;
     color: white;
-    border-color: #8e44ad;
+    border-color: #d35400;
 }
 
 .kg-radio {

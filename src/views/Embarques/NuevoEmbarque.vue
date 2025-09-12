@@ -4038,8 +4038,8 @@ export default {
 }
 
 .cliente-header[data-cliente="Canelo"] {
-  background-color: rgba(155, 89, 182, 0.1);
-  border-left: 4px solid #9b59b6;
+  background-color: rgba(230, 126, 34, 0.1);
+  border-left: 4px solid #e67e22;
 }
 
 .cliente-header[data-cliente="Otro"] {

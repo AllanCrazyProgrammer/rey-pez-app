@@ -4,7 +4,7 @@ export const CLIENTE_COLORS = {
   CATARRO: "#e74c3c",
   OTILIO: "#f1c40f",
   OZUNA: "#2ecc71",
-  VERONICA: "#9b59b6",
+  VERONICA: "#e67e22",
   DEFAULT: "#95a5a6",
 };
 

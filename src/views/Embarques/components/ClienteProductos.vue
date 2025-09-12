@@ -673,15 +673,15 @@ button:disabled {
     border-left: 10px solid #7e3a99;
 }
 
-/* Veronica / Lorena (morado) */
+/* Veronica / Lorena (naranja) */
 .cliente-header[data-cliente="Veronica"] {
-    background-color: rgba(155, 89, 182, 0.1);
-    border-left: 10px solid #9b59b6;
+    background-color: rgba(230, 126, 34, 0.1);
+    border-left: 10px solid #e67e22;
 }
 
 .cliente-header[data-cliente="Lorena"] {
-    background-color: rgba(155, 89, 182, 0.1);
-    border-left: 10px solid #9b59b6;
+    background-color: rgba(230, 126, 34, 0.1);
+    border-left: 10px solid #e67e22;
 }
 
 /* Responsive adjustments */

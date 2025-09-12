@@ -118,6 +118,14 @@ export async function generarNotaVentaPDF(embarque, clientesDisponibles, cliente
       esNotaVeronica ? LOGO_VERONICA_URL : LOGO_DEFAULT_URL
     );
     
+    // Colores de marca (naranja para Verónica/Lorena, morado por defecto)
+    const COLOR_MORADO = '#9b59b6';
+    const COLOR_MORADO_OSCURO = '#8e44ad';
+    const COLOR_NARANJA = '#e67e22';
+    const COLOR_NARANJA_OSCURO = '#d35400';
+    const colorMarca = esNotaVeronica ? COLOR_NARANJA : COLOR_MORADO;
+    const colorMarcaOscuro = esNotaVeronica ? COLOR_NARANJA_OSCURO : COLOR_MORADO_OSCURO;
+    
     // Primero generamos el contenido con precios
     const contenidoConPrecios = [
       {
@@ -282,7 +290,7 @@ export async function generarNotaVentaPDF(embarque, clientesDisponibles, cliente
         },
         clienteLorena: {
           color: '#FFFFFF',
-          background: '#9b59b6',
+          background: '#e67e22',
           padding: [2, 2, 2, 2]
         },
         clienteOtro: {
@@ -303,14 +311,28 @@ export async function generarNotaVentaPDF(embarque, clientesDisponibles, cliente
         },
         totalPrecio: {
           color: '#FFFFFF',
-          background: '#9b59b6',
+          background: colorMarca,
+          padding: [2, 2, 2, 2],
+          bold: true,
+          fontSize: 21
+        },
+        totalPrecioVeronica: {
+          color: '#FFFFFF',
+          background: COLOR_NARANJA,
           padding: [2, 2, 2, 2],
           bold: true,
           fontSize: 21
         },
         granTotal: {
           color: '#FFFFFF',
-          background: '#8e44ad', // Un poco más oscuro que el morado normal
+          background: colorMarcaOscuro, // Un poco más oscuro que el color de marca
+          padding: [4, 4, 4, 4],
+          bold: true,
+          fontSize: 24
+        },
+        granTotalVeronica: {
+          color: '#FFFFFF',
+          background: COLOR_NARANJA_OSCURO,
           padding: [4, 4, 4, 4],
           bold: true,
           fontSize: 24
@@ -1085,6 +1107,10 @@ function generarTablaProductos(productos, estiloCliente, nombreCliente, aplicarR
   let granTotal = 0;
   // Acumulador de taras para calcular flete en clientes especiales
   let totalTarasParaFlete = 0;
+  // Color de marca para textos de total/flete por cliente (naranja para Lorena/Verónica)
+  const colorMarcaTexto = (nombreCliente || '').toLowerCase().includes('lorena') || (nombreCliente || '').toLowerCase().includes('veronica')
+    ? '#e67e22'
+    : '#9b59b6';
 
   productosConKilos.forEach(producto => {
     const tarasNormales = (producto.taras || []).reduce((sum, tara) => sum + (tara || 0), 0);
@@ -1203,7 +1229,7 @@ function generarTablaProductos(productos, estiloCliente, nombreCliente, aplicarR
         text: 'TOTAL:',
         bold: true,
         alignment: 'right',
-        color: '#9b59b6',
+        color: colorMarcaTexto,
         border: [true, true, true, true],
         colSpan: numColumnas - 1
       }
@@ -1219,7 +1245,7 @@ function generarTablaProductos(productos, estiloCliente, nombreCliente, aplicarR
       text: `$${Math.round(granTotal).toLocaleString('en-US')}`,
       bold: true,
       fontSize: 24,
-      color: '#9b59b6',
+      color: colorMarcaTexto,
       border: [true, true, true, true],
       alignment: 'center'
     });
@@ -1240,7 +1266,7 @@ function generarTablaProductos(productos, estiloCliente, nombreCliente, aplicarR
           text: 'FLETE:',
           bold: true,
           alignment: 'right',
-          color: '#9b59b6',
+          color: colorMarcaTexto,
           border: [true, true, true, true],
           colSpan: numColumnas - 1
         }
@@ -1255,7 +1281,7 @@ function generarTablaProductos(productos, estiloCliente, nombreCliente, aplicarR
           text: 'GRAN TOTAL:',
           bold: true,
           alignment: 'right',
-          color: '#9b59b6',
+          color: colorMarcaTexto,
           border: [true, true, true, true],
           colSpan: numColumnas - 1
         }
@@ -1395,6 +1421,10 @@ function generarTablaCrudos(crudos, estiloCliente, incluirPreciosCliente = false
   let granTotal = 0;
   // Acumulador de taras para flete de crudos
   let totalTarasParaFlete = 0;
+  // Color de marca para textos de total/flete por cliente (naranja para Lorena/Verónica)
+  const colorMarcaTexto = (nombreCliente || '').toLowerCase().includes('lorena') || (nombreCliente || '').toLowerCase().includes('veronica')
+    ? '#e67e22'
+    : '#9b59b6';
 
   // Agregar las filas de datos
   itemsFiltrados.forEach(item => {
@@ -1442,7 +1472,7 @@ function generarTablaCrudos(crudos, estiloCliente, incluirPreciosCliente = false
         text: 'TOTAL:',
         bold: true,
         alignment: 'right',
-        color: '#9b59b6',
+        color: colorMarcaTexto,
         border: [true, true, true, true],
         colSpan: numColumnas - 1
       }
@@ -1458,7 +1488,7 @@ function generarTablaCrudos(crudos, estiloCliente, incluirPreciosCliente = false
       text: `$${Math.round(granTotal).toLocaleString('en-US')}`,
       bold: true,
       fontSize: 24,
-      color: '#9b59b6',
+      color: colorMarcaTexto,
       border: [true, true, true, true],
       alignment: 'center'
     });
@@ -1478,7 +1508,7 @@ function generarTablaCrudos(crudos, estiloCliente, incluirPreciosCliente = false
           text: 'FLETE:',
           bold: true,
           alignment: 'right',
-          color: '#9b59b6',
+          color: colorMarcaTexto,
           border: [true, true, true, true],
           colSpan: numColumnas - 1
         }
@@ -1492,7 +1522,7 @@ function generarTablaCrudos(crudos, estiloCliente, incluirPreciosCliente = false
           text: 'GRAN TOTAL:',
           bold: true,
           alignment: 'right',
-          color: '#9b59b6',
+          color: colorMarcaTexto,
           border: [true, true, true, true],
           colSpan: numColumnas - 1
         }
@@ -1749,6 +1779,7 @@ function obtenerColorBorde(estiloCliente) {
     clienteOtilio: '#FFD700',
     clienteOzuna: '#008000',
     clienteElizabeth: '#9b59b6',
+    clienteLorena: '#e67e22',
     clienteOtro: '#808080'
   };
   return colores[estiloCliente] || '#000000';
