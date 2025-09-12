@@ -61,12 +61,21 @@
 
         <!-- Clientes Temporales -->
         <div v-for="(cliente, id) in clientesTemporales" :key="id" class="tab-wrapper">
-          <button 
-            @click="clienteActivo = cliente.id"
-            :class="['tab-button temporal', { 'active': clienteActivo === cliente.id }]"
-          >
-            {{ cliente.nombre }}
-          </button>
+          <div class="tab-cliente-container">
+            <button 
+              @click="clienteActivo = cliente.id"
+              :class="['tab-button temporal', { 'active': clienteActivo === cliente.id }]"
+            >
+              {{ cliente.nombre }}
+            </button>
+            <button 
+              @click="confirmarEliminarCliente(cliente.id, cliente.nombre)"
+              class="btn-eliminar-cliente"
+              title="Eliminar cliente"
+            >
+              <i class="fas fa-times"></i>
+            </button>
+          </div>
           <div class="tab-totales">
             <div>Taras: {{ calcularTotalesTemporales(cliente.id).tarasTotal }} T</div>
             <div>Kilos: {{ calcularTotalesTemporales(cliente.id).kilosTotal }} kg</div>
@@ -1093,6 +1102,22 @@ export default {
         if (this.clienteActivo === clienteId) {
           this.clienteActivo = 'otilio';
         }
+      }
+    },
+    confirmarEliminarCliente(clienteId, nombreCliente) {
+      if (confirm(`¿Estás seguro de que deseas eliminar el cliente "${nombreCliente}" y todos sus pedidos?`)) {
+        this.eliminarClienteTemporal(clienteId);
+      }
+    },
+    eliminarClienteTemporal(clienteId) {
+      if (!this.clientesTemporales[clienteId]) return;
+      
+      // Eliminar el cliente temporal completamente
+      this.$delete(this.clientesTemporales, clienteId);
+      
+      // Si el cliente eliminado era el activo, cambiar a Otilio
+      if (this.clienteActivo === clienteId) {
+        this.clienteActivo = 'otilio';
       }
     },
     actualizarRendimientos(nuevosRendimientos) {
@@ -2366,6 +2391,72 @@ select option.text-blue {
   .maquila-checkbox input[type="checkbox"] {
     width: 16px;
     height: 16px;
+  }
+}
+
+/* Estilos para el contenedor de cliente temporal */
+.tab-cliente-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.btn-eliminar-cliente {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  width: 20px;
+  height: 20px;
+  background-color: #e74c3c;
+  color: white;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+  z-index: 10;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.btn-eliminar-cliente:hover {
+  background-color: #c0392b;
+  transform: scale(1.1);
+}
+
+.btn-eliminar-cliente i {
+  font-size: 10px;
+}
+
+/* Ajustes responsivos para el botón eliminar cliente */
+@media (max-width: 768px) {
+  .btn-eliminar-cliente {
+    width: 18px;
+    height: 18px;
+    top: -6px;
+    right: -6px;
+    font-size: 10px;
+  }
+  
+  .btn-eliminar-cliente i {
+    font-size: 8px;
+  }
+}
+
+@media (max-width: 375px) {
+  .btn-eliminar-cliente {
+    width: 16px;
+    height: 16px;
+    top: -4px;
+    right: -4px;
+    font-size: 8px;
+  }
+  
+  .btn-eliminar-cliente i {
+    font-size: 7px;
   }
 }
 </style> 
