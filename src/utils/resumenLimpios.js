@@ -1,3 +1,26 @@
+// Función para identificar si un cliente es Verónica/Lorena
+function esClienteVeronica(clienteId, clientesPersonalizados = []) {
+  // Verificar si es el ID 5 (Verónica predefinida)
+  if (clienteId === '5') {
+    return true;
+  }
+  
+  // Verificar si es un cliente personalizado con nombre Verónica o Lorena
+  if (Array.isArray(clientesPersonalizados) && clientesPersonalizados.length > 0) {
+    const clienteEncontrado = clientesPersonalizados.find(cliente => 
+      cliente.id?.toString() === clienteId.toString() || 
+      cliente.clienteId?.toString() === clienteId.toString()
+    );
+
+    if (clienteEncontrado) {
+      const nombre = (clienteEncontrado.nombre || clienteEncontrado.nombreCliente || '').toLowerCase();
+      return nombre.includes('veronica') || nombre.includes('lorena');
+    }
+  }
+  
+  return false;
+}
+
 // Agregar esta función al inicio del archivo, antes de generarResumenLimpios
 function getClienteColor(clienteId, clientesPersonalizados = []) {
   // Primero verificar si es un cliente personalizado para detectar Verónica/Lorena
@@ -47,8 +70,10 @@ export function generarResumenLimpios(productosPorCliente, clienteColors, escala
   Object.entries(productosPorCliente).forEach(([clienteId, productos]) => {
     const kilosCliente = calcularTotalKilos(productos);
     if (kilosCliente > 0) {
-      // Verificar si es un cliente predefinido (1-4) o personalizado
-      if (["1", "2", "3", "4"].includes(clienteId)) {
+      // Verificar si es un cliente predefinido (1-4) o Verónica/Lorena (que debe tratarse como predefinido)
+      const esVeronica = esClienteVeronica(clienteId, clientesPersonalizados);
+      
+      if (["1", "2", "3", "4"].includes(clienteId) || esVeronica) {
         clientesPredefinidos.push([clienteId, productos]);
       } else {
         clientesExtra.push([clienteId, productos]);
@@ -341,7 +366,8 @@ function obtenerNombreCliente(clienteId, clientesPersonalizados = []) {
     '1': 'Joselito',
     '2': 'Catarro',
     '3': 'Otilio',
-    '4': 'Ozuna'
+    '4': 'Ozuna',
+    '5': 'Lorena-D22'  // Verónica se muestra como Lorena-D22
   };
 
   return nombres[clienteIdStr] || `Cliente ${clienteIdStr}`;
