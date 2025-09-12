@@ -95,6 +95,14 @@
                     <i v-else class="fas fa-plus-circle"></i> Crear Cuenta
                 </button>
 
+                <!-- Botón para crear cuenta de Veronica -->
+                <button v-if="esClienteVeronica" type="button" @click.stop="crearCuentaVeronica"
+                    class="btn btn-success btn-sm crear-cuenta-veronica" title="Crear Cuenta para Veronica"
+                    :disabled="isCreatingAccount">
+                    <span v-if="isCreatingAccount" class="loader-inline"></span>
+                    <i v-else class="fas fa-plus-circle"></i> Crear Cuenta
+                </button>
+
                 <button type="button" @click.stop="$emit('eliminar-cliente', clienteId)"
                     class="btn btn-danger btn-sm eliminar-cliente" :disabled="embarqueBloqueado">Eliminar
                     Cliente</button>
@@ -271,6 +279,11 @@ export default {
         // Verificar si el cliente es Otilio
         esClienteOtilio() {
             return this.nombreCliente && this.nombreCliente.toLowerCase().includes('otilio');
+        },
+
+        // Verificar si el cliente es Veronica
+        esClienteVeronica() {
+            return this.nombreCliente && (this.nombreCliente.toLowerCase().includes('veronica') || this.nombreCliente.toLowerCase().includes('lorena'));
         },
 
         // Calcular totales de limpio
@@ -456,6 +469,10 @@ export default {
 
         crearCuentaOtilio() {
             this.$emit('crear-cuenta-otilio', this.clienteId, this.productos, this.crudos);
+        },
+
+        crearCuentaVeronica() {
+            this.$emit('crear-cuenta-veronica', this.clienteId, this.productos, this.crudos);
         },
 
         activarIncluirPreciosCatarro() {
@@ -645,6 +662,18 @@ export default {
 button:disabled {
     opacity: 0.7;
     cursor: not-allowed;
+}
+
+/* Estilos específicos para botones de crear cuenta */
+.crear-cuenta-veronica {
+    background-color: #ff8c00 !important;
+    border-color: #ff8c00 !important;
+    color: #fff !important;
+}
+
+.crear-cuenta-veronica:hover {
+    background-color: #e07600 !important;
+    border-color: #e07600 !important;
 }
 
 /* Estilos específicos para cada cliente */

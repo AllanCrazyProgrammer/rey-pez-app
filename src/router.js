@@ -21,6 +21,9 @@ import CuentasJoselito from '@/views/CuentasClientes/CuentasJoselito.vue'
 import EmbarquesMenu from '@/views/Embarques/EmbarquesMenu.vue'; // Asegúrate de que esta ruta de importación sea correcta
 import VentasYGananciasCatarro from '@/views/CuentasClientes/VentasYGananciasCatarro.vue'; // Asegúrate de crear este componente
 import VentasYGananciasJoselito from '@/views/CuentasClientes/VentasYGananciasJoselito.vue';
+import VeronicaCuentasMenu from '@/views/CuentasClientes/VeronicaCuentasMenu.vue'
+import CuentasVeronica from '@/views/CuentasClientes/CuentasVeronica.vue'
+import VentasYGananciasVeronica from '@/views/CuentasClientes/VentasYGananciasVeronica.vue';
 import ListaEmbarques from '@/views/Embarques/ListaEmbarques.vue';
 import NuevoEmbarque from '@/views/Embarques/NuevoEmbarque.vue';
 import Rendimientos from '@/views/Embarques/Rendimientos.vue';
@@ -220,6 +223,31 @@ const routes = [
     path: "/ventas-ganancias-joselito",
     name: 'VentasYGananciasJoselito',
     component: VentasYGananciasJoselito
+  },
+  {
+    path: '/cuentas-veronica',
+    name: 'veronica-cuentas-menu',
+    component: VeronicaCuentasMenu
+  },
+  {
+    path: '/cuentas-veronica/nueva',
+    name: 'nueva-cuenta-veronica',
+    component: CuentasVeronica
+  },
+  {
+    path: '/cuentas-veronica/:id',
+    name: 'ver-cuenta-veronica',
+    component: CuentasVeronica
+  },
+  {
+    path: '/cuentas-veronica/:id?',
+    name: 'CuentasVeronica',
+    component: CuentasVeronica
+  },
+  {
+    path: "/ventas-ganancias-veronica",
+    name: 'VentasYGananciasVeronica',
+    component: VentasYGananciasVeronica
   },
   
   {

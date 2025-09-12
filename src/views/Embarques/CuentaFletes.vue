@@ -81,7 +81,7 @@
               <th>Fecha</th>
               <th>Tipo</th>
               <th colspan="2">Joselito</th>
-              <th colspan="2">Verónica</th>
+              <th colspan="2">Lorena</th>
               <th>Total Taras</th>
               <th>Monto del Día</th>
               <th>Deuda Acumulada</th>
@@ -177,7 +177,7 @@
                 </div>
               </div>
               <div class="cliente-section">
-                <h4 class="cliente-title">Verónica</h4>
+                <h4 class="cliente-title">Lorena</h4>
                 <div class="flete-row">
                   <span class="label">Taras Limpio:</span>
                   <span class="value">{{ item.tarasLimpioVeronica || 0 }}</span>
@@ -244,7 +244,7 @@
         </div>
         
         <div class="resumen-cliente">
-          <h4>Cliente Verónica</h4>
+          <h4>Cliente Lorena</h4>
           <div class="resumen-grid">
             <div class="resumen-card">
               <span class="resumen-label">Taras Limpio:</span>
@@ -366,22 +366,36 @@ export default {
             const data = doc.data();
             let fecha = data.fecha.toDate ? data.fecha.toDate() : new Date(data.fecha);
             
-            // Buscar clientes Joselito y Verónica (normalizando acentos y mayúsculas)
-            const normalize = (s) => (s || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-            const clienteJoselito = data.clientes?.find(cliente => 
-              cliente.id === '1' || cliente.id === 1 || normalize(cliente.nombre) === 'joselito'
-            );
-            const clienteVeronica = data.clientes?.find(cliente => 
-              cliente.id === '2' || cliente.id === 2 || normalize(cliente.nombre) === 'veronica'
-            );
+            // Buscar clientes Joselito y Verónica con identificación precisa
+            const normalize = (s) => (s || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+            
+            // Identificación precisa de Joselito (ID: 1)
+            const clienteJoselito = data.clientes?.find(cliente => {
+              const id = cliente.id?.toString();
+              const nombre = normalize(cliente.nombre || '');
+              return id === '1' || nombre === 'joselito';
+            });
+            
+            // Identificación precisa de Verónica (ID: 5, también puede aparecer como 'Lorena' en notas)
+            const clienteVeronica = data.clientes?.find(cliente => {
+              const id = cliente.id?.toString();
+              const nombre = normalize(cliente.nombre || '');
+              const nombreNotas = normalize(cliente.nombreNotas || '');
+              return id === '5' || nombre === 'veronica' || nombre === 'lorena' || nombreNotas === 'lorena';
+            });
             
             let tarasLimpioJoselito = 0;
             let tarasCrudoJoselito = 0;
             let tarasLimpioVeronica = 0;
             let tarasCrudoVeronica = 0;
 
-            // Calcular taras de Joselito
+            // Calcular taras de Joselito (ID: 1) - Se incluirán junto con las de Verónica
             if (clienteJoselito) {
+              console.log('Cliente Joselito encontrado:', {
+                id: clienteJoselito.id,
+                nombre: clienteJoselito.nombre
+              });
+              
               // Calcular taras de limpio Joselito
               if (clienteJoselito.productos && Array.isArray(clienteJoselito.productos)) {
                 tarasLimpioJoselito = clienteJoselito.productos.reduce((total, producto) => {
@@ -417,10 +431,22 @@ export default {
                   }, 0);
                 }, 0);
               }
+              
+              console.log('Taras calculadas para Joselito:', {
+                limpio: tarasLimpioJoselito,
+                crudo: tarasCrudoJoselito,
+                total: tarasLimpioJoselito + tarasCrudoJoselito
+              });
             }
 
-            // Calcular taras de Verónica
+            // Calcular taras de Verónica (ID: 5) - Se incluirán junto con las de Joselito
             if (clienteVeronica) {
+              console.log('Cliente Verónica encontrado:', {
+                id: clienteVeronica.id,
+                nombre: clienteVeronica.nombre,
+                nombreNotas: clienteVeronica.nombreNotas
+              });
+              
               // Calcular taras de limpio Verónica
               if (clienteVeronica.productos && Array.isArray(clienteVeronica.productos)) {
                 tarasLimpioVeronica = clienteVeronica.productos.reduce((total, producto) => {
@@ -456,7 +482,45 @@ export default {
                   }, 0);
                 }, 0);
               }
+              
+              console.log('Taras calculadas para Verónica:', {
+                limpio: tarasLimpioVeronica,
+                crudo: tarasCrudoVeronica,
+                total: tarasLimpioVeronica + tarasCrudoVeronica
+              });
             }
+
+            // Validación: Verificar que solo se procesen Joselito (ID: 1) y Verónica (ID: 5)
+            const clientesPermitidos = ['1', '5'];
+            const clientesNoPermitidos = (data.clientes || []).filter(cliente => {
+              const id = cliente.id?.toString();
+              return !clientesPermitidos.includes(id);
+            });
+            
+            if (clientesNoPermitidos.length > 0) {
+              console.warn('Embarque con clientes adicionales detectado. Solo se procesarán Joselito y Verónica:', {
+                embarqueId: doc.id,
+                clientesNoPermitidos: clientesNoPermitidos.map(c => ({ id: c.id, nombre: c.nombre })),
+                clientesPermitidos: (data.clientes || []).filter(c => clientesPermitidos.includes(c.id?.toString()))
+              });
+            }
+
+            // Log resumen de ambos clientes procesados
+            console.log('Resumen de taras procesadas:', {
+              embarqueId: doc.id,
+              fecha: fecha.toLocaleDateString(),
+              joselito: {
+                limpio: tarasLimpioJoselito,
+                crudo: tarasCrudoJoselito,
+                total: tarasLimpioJoselito + tarasCrudoJoselito
+              },
+              veronica: {
+                limpio: tarasLimpioVeronica,
+                crudo: tarasCrudoVeronica,
+                total: tarasLimpioVeronica + tarasCrudoVeronica
+              },
+              totalGeneral: (tarasLimpioJoselito + tarasCrudoJoselito) + (tarasLimpioVeronica + tarasCrudoVeronica)
+            });
 
             // Guardar fletes que tengan datos de al menos uno de los clientes
             if (clienteJoselito || clienteVeronica) {
@@ -628,7 +692,7 @@ export default {
               <tr>
                 <th>Fecha</th>
                 <th colspan="2">Joselito</th>
-                <th colspan="2">Verónica</th>
+                <th colspan="2">Lorena</th>
                 <th>Total Taras</th>
                 <th>Monto</th>
               </tr>
@@ -710,10 +774,10 @@ export default {
                     sum + f.tarasLimpioJoselito + f.tarasCrudoJoselito, 0)}</p>
                 </div>
                 <div class="cliente-column">
-                  <h4>Cliente Verónica</h4>
+                  <h4>Cliente Lorena</h4>
                   <p><strong>Taras Limpio:</strong> ${this.fletesPendientes.reduce((sum, f) => sum + (f.tarasLimpioVeronica || 0), 0)}</p>
                   <p><strong>Taras Crudo:</strong> ${this.fletesPendientes.reduce((sum, f) => sum + (f.tarasCrudoVeronica || 0), 0)}</p>
-                  <p><strong>Total Taras Verónica:</strong> ${this.fletesPendientes.reduce((sum, f) => 
+                  <p><strong>Total Taras Lorena:</strong> ${this.fletesPendientes.reduce((sum, f) => 
                     sum + ((f.tarasLimpioVeronica || 0) + (f.tarasCrudoVeronica || 0)), 0)}</p>
                 </div>
               </div>

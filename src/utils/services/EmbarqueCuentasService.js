@@ -1570,9 +1570,233 @@ export const crearCuentaOtilio = async (embarqueData, router) => {
   }
 };
 
+/**
+ * Prepara los datos necesarios para crear una cuenta de Veronica desde un embarque
+ * @param {Object} embarqueData - Datos del embarque
+ * @returns {Object} - Datos formateados para crear la cuenta
+ */
+const prepararDatosCuentaVeronica = async (embarqueData) => {
+  const { fecha, productos, clienteCrudos } = embarqueData;
+  
+  // Obtener los crudos del cliente Veronica (su ID es '5')
+  const crudosVeronica = clienteCrudos ? (clienteCrudos['5'] || []) : [];
+  
+  // Obtener los precios de venta más recientes según la fecha del embarque
+  const preciosVenta = await obtenerPreciosVenta('veronica', fecha);
+  
+  console.log(`[DEBUG] Creando cuenta de Veronica para fecha: ${fecha}`);
+  console.log(`[DEBUG] Precios de venta cargados para fecha ${fecha}:`, Array.from(preciosVenta.entries()));
+  
+  // Preparar los items de la cuenta
+  const items = [];
+  const itemsVenta = [];
+  
+  // Contadores para calcular fletes
+  let totalTarasLimpio = 0;
+  let totalTarasCrudo = 0;
+  
+  // Procesar productos normales
+  if (Array.isArray(productos)) {
+    productos.forEach(producto => {
+      if (producto && Array.isArray(producto.items)) {
+        producto.items.forEach(item => {
+          if (item && item.kilos > 0) {
+            const medidaNormalizada = normalizarMedida(item.medida);
+            
+            // Obtener costo y precio de venta
+            const costo = item.costo || 0;
+            const precioVenta = preciosVenta.get(medidaNormalizada) || item.precioVenta || 0;
+            
+            // Agregar a items (tabla de costos)
+            items.push({
+              kilos: item.kilos,
+              medida: item.medida,
+              costo: costo,
+              total: item.kilos * costo
+            });
+            
+            // Agregar a itemsVenta (tabla de precios)
+            const totalVenta = item.kilos * precioVenta;
+            const ganancia = totalVenta - (item.kilos * costo);
+            
+            itemsVenta.push({
+              kilosVenta: item.kilos,
+              medida: item.medida,
+              precioVenta: precioVenta,
+              totalVenta: totalVenta,
+              ganancia: ganancia
+            });
+            
+            // Contar taras para flete (solo productos limpios)
+            totalTarasLimpio += item.kilos;
+          }
+        });
+      }
+    });
+  }
+  
+  // Procesar crudos de Veronica
+  if (Array.isArray(crudosVeronica)) {
+    crudosVeronica.forEach(crudo => {
+      if (crudo && Array.isArray(crudo.items)) {
+        crudo.items.forEach(item => {
+          if (item) {
+            // Calcular kilos para costos
+            let kilosTaras = 0;
+            if (item.taras) {
+              const formatoGuion = /^(\d+)-(\d+(?:\.\d+)?)$/.exec(item.taras);
+              if (formatoGuion) {
+                const cantidad = parseInt(formatoGuion[1]) || 0;
+                const kilosPorTara = parseFloat(formatoGuion[2]) || 0;
+                kilosTaras = cantidad * kilosPorTara;
+              } else {
+                kilosTaras = parseInt(item.taras) || 0;
+              }
+            }
+            
+            let kilosSobrante = 0;
+            if (item.sobrante && item.mostrarSobrante) {
+              kilosSobrante = extraerValorSobrante(item.sobrante);
+            }
+            
+            const kilosCosto = kilosTaras + kilosSobrante;
+            const medida = item.talla || 'Crudo';
+            const medidaNormalizada = normalizarMedida(medida);
+            
+            // Obtener costo y precio de venta
+            const costo = item.precio || 0;
+            const precioVenta = preciosVenta.get(medidaNormalizada) || item.precio || 0;
+            
+            // Calcular kilos para ventas (ajustar 19 a 20)
+            let kilosTarasVenta = 0;
+            if (item.taras) {
+              const formatoGuion = /^(\d+)-(\d+(?:\.\d+)?)$/.exec(item.taras);
+              if (formatoGuion) {
+                const cantidad = parseInt(formatoGuion[1]) || 0;
+                kilosTarasVenta = cantidad * 20; // SIEMPRE multiplicar por 20
+              } else {
+                kilosTarasVenta = parseInt(item.taras) || 0;
+              }
+            }
+            
+            let kilosSobranteVenta = 0;
+            if (item.sobrante && item.mostrarSobrante) {
+              kilosSobranteVenta = extraerValorSobrante(item.sobrante);
+            }
+            
+            const kilosVenta = kilosTarasVenta + kilosSobranteVenta;
+            
+            // Solo agregar el item si tiene kilos
+            if (kilosCosto > 0) {
+              // Agregar a items (tabla de costos)
+              items.push({
+                kilos: kilosCosto,
+                medida: medida,
+                costo: costo,
+                total: kilosCosto * costo
+              });
+              
+              // Agregar a itemsVenta (tabla de precios)
+              const totalVenta = kilosVenta * precioVenta;
+              const ganancia = totalVenta - (kilosCosto * costo);
+              
+              itemsVenta.push({
+                kilosVenta: kilosVenta,
+                medida: medida,
+                precioVenta: precioVenta,
+                totalVenta: totalVenta,
+                ganancia: ganancia
+              });
+              
+              // Contar taras para flete (productos crudos)
+              totalTarasCrudo += kilosTaras;
+            }
+          }
+        });
+      }
+    });
+  }
+  
+  // Calcular totales
+  const totalGeneral = items.reduce((sum, item) => sum + item.total, 0);
+  const totalGeneralVenta = itemsVenta.reduce((sum, item) => sum + item.totalVenta, 0);
+  
+  // Obtener saldo acumulado anterior
+  const saldoAcumuladoAnterior = await obtenerSaldoAcumuladoAnterior('cuentasVeronica', fecha);
+  
+  // Calcular flete
+  const cobros = [];
+  const totalTaras = totalTarasLimpio + totalTarasCrudo;
+  if (totalTaras > 0) {
+    const fleteTotal = totalTaras * 2; // $2 por tara
+    cobros.push({
+      descripcion: 'Flete',
+      monto: fleteTotal
+    });
+    console.log(`  - Total taras limpios: ${totalTarasLimpio}`);
+    console.log(`  - Total taras crudos: ${totalTarasCrudo}`);
+    console.log(`  - Total flete: $${fleteTotal}`);
+  }
+  
+  return {
+    fecha,
+    items,
+    itemsVenta,
+    saldoAcumuladoAnterior,
+    cobros,
+    abonos: [],
+    totalGeneral,
+    totalGeneralVenta,
+    nuevoSaldoAcumulado: saldoAcumuladoAnterior + totalGeneralVenta - (cobros.length > 0 ? cobros[0].monto : 0),
+    estadoPagado: false,
+    tieneObservacion: false,
+    observacion: '',
+    ultimaActualizacion: new Date().toISOString()
+  };
+};
+
+/**
+ * Crea una cuenta de cliente Veronica a partir de los datos de un embarque
+ * @param {Object} embarqueData - Datos del embarque
+ * @param {Object} router - Router de Vue para navegar después de crear la cuenta
+ * @returns {Promise<string>} - El ID de la cuenta creada
+ */
+export const crearCuentaVeronica = async (embarqueData, router) => {
+  try {
+    console.log('Iniciando creación de cuenta Veronica desde embarque');
+    
+    // Verificar si ya existe una cuenta para esta fecha
+    const existeCuenta = await existeCuentaParaFecha('cuentasVeronica', embarqueData.fecha);
+    if (existeCuenta) {
+      throw new Error('Ya existe una cuenta de Veronica registrada para esta fecha.');
+    }
+    
+    // Preparar los datos para la cuenta
+    const datosCuenta = await prepararDatosCuentaVeronica(embarqueData);
+    
+    // Crear la cuenta en Firestore
+    const db = getFirestore();
+    const docRef = await addDoc(collection(db, 'cuentasVeronica'), datosCuenta);
+    
+    console.log('Cuenta de Veronica creada con ID:', docRef.id);
+    
+    // Abrir la cuenta en una nueva pestaña en lugar de navegar directamente
+    if (router) {
+      const rutaCompleta = `${window.location.origin}/cuentas-veronica/${docRef.id}?edit=true`;
+      window.open(rutaCompleta, '_blank');
+    }
+    
+    return docRef.id;
+  } catch (error) {
+    console.error('Error al crear cuenta de Veronica:', error);
+    throw error;
+  }
+};
+
 export default {
   crearCuentaJoselito,
   crearCuentaCatarro,
   crearCuentaOzuna,
-  crearCuentaOtilio
+  crearCuentaOtilio,
+  crearCuentaVeronica
 }; 

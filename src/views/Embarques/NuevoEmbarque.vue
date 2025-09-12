@@ -119,6 +119,7 @@
           @crear-cuenta-catarro="crearCuentaCatarro" 
           @crear-cuenta-ozuna="crearCuentaOzuna"
           @crear-cuenta-otilio="crearCuentaOtilio"
+          @crear-cuenta-veronica="crearCuentaVeronica"
         />
       </form>
     </div>
@@ -3338,6 +3339,11 @@ export default {
       return clienteInfo && clienteInfo.nombre.toLowerCase().includes('catarro');
     },
 
+    esClienteVeronica(clienteId) {
+      const clienteInfo = this.clientesDisponibles.find(c => c.id.toString() === clienteId.toString());
+      return clienteInfo && (clienteInfo.nombre.toLowerCase().includes('veronica') || clienteInfo.nombre.toLowerCase().includes('lorena'));
+    },
+
     obtenerEmbarqueCliente(clienteId) {
       const clienteProductos = this.productosPorCliente[clienteId];
       const clienteCrudos = this.clienteCrudos[clienteId];
@@ -3494,6 +3500,30 @@ export default {
       } catch (error) {
         console.error('Error al crear cuenta para Otilio:', error);
         alert(`Error al crear cuenta para Otilio: ${error.message}`);
+      } finally {
+        this.isCreatingAccount = false;
+      }
+    },
+
+    // Método para crear cuenta de Veronica
+    async crearCuentaVeronica(clienteId, clienteProductos, clienteCrudos) {
+      try {
+        this.isCreatingAccount = true;
+        
+        // Asegurar que el ID de cliente sea '5' para Veronica
+        const veronicaClienteId = '5';
+        
+        const embarqueCliente = { 
+          ...this.embarque,
+          productos: clienteProductos,
+          clienteCrudos: { [veronicaClienteId]: clienteCrudos }
+        };
+        
+        await EmbarqueCuentasService.crearCuentaVeronica(embarqueCliente, this.$router);
+        alert('Cuenta de Veronica creada exitosamente y abierta en una nueva pestaña.');
+      } catch (error) {
+        console.error('Error al crear cuenta para Veronica:', error);
+        alert(`Error al crear cuenta para Veronica: ${error.message}`);
       } finally {
         this.isCreatingAccount = false;
       }

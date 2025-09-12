@@ -41,6 +41,11 @@
               <h2>Otilio</h2>
             </div>
           </router-link>
+          <router-link to="/cuentas-veronica" class="boton-cuenta">
+            <div class="card veronica">
+              <h2>Veronica</h2>
+            </div>
+          </router-link>
           <!-- Agrega más botones aquí si es necesario -->
         </div>
       </div>
@@ -242,6 +247,22 @@ h1 {
 
 .card.otilio h2 {
   color: #000;
+}
+
+.card.veronica {
+  background-color: #ff8c00;
+  color: #fff;
+  transition: all 0.3s ease;
+}
+
+.card.veronica:hover {
+  background-color: #e07600;
+  transform: translateY(-5px);
+  box-shadow: 0 5px 15px rgba(255, 140, 0, 0.3);
+}
+
+.card.veronica h2 {
+  color: #fff;
 }
 
 .precios-container {
