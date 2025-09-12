@@ -403,7 +403,8 @@ export default {
         { id: 'joselito', nombre: 'Joselito', color: '#2196F3' },
         { id: 'catarro', nombre: 'Catarro', color: '#d32f2f' },
         { id: 'otilio', nombre: 'Otilio', color: '#FFD700' },
-        { id: 'ozuna', nombre: 'Ozuna', color: '#07711e' }
+        { id: 'ozuna', nombre: 'Ozuna', color: '#07711e' },
+        { id: 'veronica', nombre: 'Verónica', color: '#e67e22' }
       ],
       filtroCliente: '',
       newPrice: {

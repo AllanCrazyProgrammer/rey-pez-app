@@ -74,6 +74,7 @@
               <option value="catarro">Catarro</option>
               <option value="joselito">Joselito</option>
               <option value="otilio">Otilio</option>
+              <option value="veronica">Verónica</option>
             </select>
           </div>
           
@@ -308,6 +309,52 @@
                 </button>
               </div>
             </div>
+            
+            <div class="cliente-card cliente-card-veronica">
+              <div class="cliente-header cliente-veronica">
+                <h4>Verónica</h4>
+                <div class="cliente-total" v-if="clientesAgrupados.veronica && clientesAgrupados.veronica.length > 0">
+                  Total: ${{ formatearNumero(calcularTotalCliente('veronica')) }}
+                </div>
+                <div class="cliente-total sin-datos" v-else>Sin transacciones</div>
+              </div>
+              <div class="cliente-resumen" v-if="clientesAgrupados.veronica && clientesAgrupados.veronica.length > 0">
+                <div class="resumen-item tipo-deposito">
+                  <span>Depósitos:</span>
+                  <span>${{ formatearNumero(calcularTotalPorTipo('veronica', 'deposito')) }}</span>
+                </div>
+                <div class="resumen-item tipo-transferencia">
+                  <span>Transferencias:</span>
+                  <span>${{ formatearNumero(calcularTotalPorTipo('veronica', 'transferencia')) }}</span>
+                </div>
+              </div>
+              <div class="cliente-contador" v-if="clientesAgrupados.veronica && clientesAgrupados.veronica.length > 0">
+                {{ clientesAgrupados.veronica.length }} transacción(es)
+              </div>
+              <div class="cliente-transacciones" v-if="clientesAgrupados.veronica && clientesAgrupados.veronica.length > 0">
+                <div 
+                  v-for="(transaccion, index) in clientesAgrupados.veronica" 
+                  :key="'veronica-'+index" 
+                  class="transaccion-mini"
+                  :class="'tipo-' + transaccion.tipo"
+                >
+                  <div class="transaccion-mini-header">
+                    <span>{{ obtenerTipoTexto(transaccion.tipo) }}</span>
+                    <span>${{ formatearNumero(transaccion.monto) }}</span>
+                  </div>
+                  <div class="transaccion-mini-hora">{{ formatearHora(transaccion.timestamp) }}</div>
+                  <div class="transaccion-mini-acciones">
+                    <button @click="editarTransaccion(obtenerIndiceTransaccion(transaccion))" class="btn-mini">Editar</button>
+                    <button @click="eliminarTransaccion(obtenerIndiceTransaccion(transaccion))" class="btn-mini btn-mini-eliminar">Eliminar</button>
+                  </div>
+                </div>
+              </div>
+              <div class="cliente-vacio" v-else>
+                <button @click="nuevaTransaccion.cliente = 'veronica'; mostrarFormulario = true" class="btn-agregar-mini cliente-veronica">
+                  + Agregar transacción para Verónica
+                </button>
+              </div>
+            </div>
           </div>
           
           <div class="cambiar-vista">
@@ -461,6 +508,7 @@ export default {
         joselito: [],
         catarro: [],
         ozuna: [],
+        veronica: [],
         mexico: []
       };
       
@@ -535,7 +583,8 @@ export default {
         ozuna: 'Ozuna',
         catarro: 'Catarro',
         joselito: 'Joselito',
-        otilio: 'Otilio'
+        otilio: 'Otilio',
+        veronica: 'Verónica'
       };
       return clientes[cliente] || cliente;
     },
@@ -1109,6 +1158,10 @@ label {
   border-left: 4px solid #27ae60;
 }
 
+.cliente-card-veronica {
+  border-left: 4px solid #e67e22;
+}
+
 .cliente-header {
   display: flex;
   justify-content: space-between;
@@ -1256,6 +1309,10 @@ label {
 
 .btn-agregar-mini.cliente-ozuna {
   background-color: #27ae60;
+}
+
+.btn-agregar-mini.cliente-veronica {
+  background-color: #e67e22;
 }
 
 .btn-agregar-mini:hover {
@@ -1416,6 +1473,10 @@ label {
 
 .cliente-vacio button.btn-agregar-mini.cliente-ozuna {
   background-color: #27ae60;
+}
+
+.cliente-vacio button.btn-agregar-mini.cliente-veronica {
+  background-color: #e67e22;
 }
 
 @media (max-width: 768px) {

@@ -3510,6 +3510,10 @@ export default {
       try {
         this.isCreatingAccount = true;
         
+        console.log('[DEBUG] crearCuentaVeronica - clienteId recibido:', clienteId);
+        console.log('[DEBUG] crearCuentaVeronica - clienteProductos recibidos:', clienteProductos);
+        console.log('[DEBUG] crearCuentaVeronica - clienteCrudos recibidos:', clienteCrudos);
+        
         // Asegurar que el ID de cliente sea '5' para Veronica
         const veronicaClienteId = '5';
         
@@ -3518,6 +3522,8 @@ export default {
           productos: clienteProductos,
           clienteCrudos: { [veronicaClienteId]: clienteCrudos }
         };
+        
+        console.log('[DEBUG] crearCuentaVeronica - embarqueCliente final:', embarqueCliente);
         
         await EmbarqueCuentasService.crearCuentaVeronica(embarqueCliente, this.$router);
         alert('Cuenta de Veronica creada exitosamente y abierta en una nueva pestaña.');

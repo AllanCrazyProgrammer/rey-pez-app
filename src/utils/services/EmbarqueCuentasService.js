@@ -1578,8 +1578,14 @@ export const crearCuentaOtilio = async (embarqueData, router) => {
 const prepararDatosCuentaVeronica = async (embarqueData) => {
   const { fecha, productos, clienteCrudos } = embarqueData;
   
+  console.log(`[DEBUG] Datos de embarque recibidos:`, embarqueData);
+  console.log(`[DEBUG] Productos recibidos:`, productos);
+  console.log(`[DEBUG] ClienteCrudos recibidos:`, clienteCrudos);
+  
   // Obtener los crudos del cliente Veronica (su ID es '5')
   const crudosVeronica = clienteCrudos ? (clienteCrudos['5'] || []) : [];
+  
+  console.log(`[DEBUG] Crudos de Veronica encontrados:`, crudosVeronica);
   
   // Obtener los precios de venta más recientes según la fecha del embarque
   const preciosVenta = await obtenerPreciosVenta('veronica', fecha);
@@ -1596,50 +1602,94 @@ const prepararDatosCuentaVeronica = async (embarqueData) => {
   let totalTarasCrudo = 0;
   
   // Procesar productos normales
+  console.log(`[DEBUG] Procesando productos normales. Es array:`, Array.isArray(productos));
   if (Array.isArray(productos)) {
-    productos.forEach(producto => {
-      if (producto && Array.isArray(producto.items)) {
-        producto.items.forEach(item => {
-          if (item && item.kilos > 0) {
-            const medidaNormalizada = normalizarMedida(item.medida);
-            
-            // Obtener costo y precio de venta
-            const costo = item.costo || 0;
-            const precioVenta = preciosVenta.get(medidaNormalizada) || item.precioVenta || 0;
-            
-            // Agregar a items (tabla de costos)
-            items.push({
-              kilos: item.kilos,
-              medida: item.medida,
-              costo: costo,
-              total: item.kilos * costo
-            });
-            
-            // Agregar a itemsVenta (tabla de precios)
-            const totalVenta = item.kilos * precioVenta;
-            const ganancia = totalVenta - (item.kilos * costo);
-            
-            itemsVenta.push({
-              kilosVenta: item.kilos,
-              medida: item.medida,
-              precioVenta: precioVenta,
-              totalVenta: totalVenta,
-              ganancia: ganancia
-            });
-            
-            // Contar taras para flete (solo productos limpios)
-            totalTarasLimpio += item.kilos;
+    console.log(`[DEBUG] Cantidad de productos a procesar:`, productos.length);
+    productos.forEach((producto, index) => {
+      console.log(`[DEBUG] Procesando producto ${index}:`, producto);
+      if (producto) {
+        // Calcular kilos dependiendo del tipo de producto (similar a Catarro)
+        let kilos = 0;
+        
+        if (producto.tipo === 'c/h20') {
+          // Para productos c/h20, calcular con el valor neto
+          const reporteTaras = producto.reporteTaras || [];
+          const reporteBolsas = producto.reporteBolsas || [];
+          let sumaTotalKilos = 0;
+
+          for (let i = 0; i < reporteTaras.length; i++) {
+            const taras = parseInt(reporteTaras[i]) || 0;
+            const bolsa = parseInt(reporteBolsas[i]) || 0;
+            sumaTotalKilos += taras * bolsa;
           }
-        });
+
+          // Multiplicar por el valor neto (0.65 por defecto)
+          kilos = sumaTotalKilos * (producto.camaronNeto || 0.65);
+          
+          // Contar taras para referencia (no se usa para cálculo automático en Veronica)
+          const tarasC20 = reporteTaras.reduce((sum, tara) => sum + (parseInt(tara) || 0), 0);
+          totalTarasLimpio += tarasC20;
+        } else {
+          // Para otros productos, calcular con taras y descuentos
+          const sumaKilos = producto.kilos?.reduce((sum, k) => sum + (parseFloat(k) || 0), 0) || 0;
+          const sumaTarasNormales = producto.taras?.reduce((sum, tara) => sum + (parseInt(tara) || 0), 0) || 0;
+          const sumaTarasExtra = producto.tarasExtra?.reduce((sum, tara) => sum + (parseInt(tara) || 0), 0) || 0;
+          
+          // Contar taras para referencia (no se usa para cálculo automático en Veronica)
+          const tarasNormalesYExtra = sumaTarasNormales + sumaTarasExtra;
+          totalTarasLimpio += tarasNormalesYExtra;
+          
+          // No incluimos las taras extra en el descuento, solo las taras normales
+          const descuentoTaras = producto.restarTaras ? sumaTarasNormales * 3 : 0;
+          kilos = Number((sumaKilos - descuentoTaras).toFixed(1));
+        }
+        
+        // Usar nombreAlternativoPDF como medida si está disponible
+        let medida = producto.nombreAlternativoPDF || producto.medida || '';
+        const medidaNormalizada = normalizarMedida(medida);
+        
+        // Obtener el costo y el precio de venta
+        const costo = producto.precio || producto.costo || 0;
+        const precioVenta = preciosVenta.get(medidaNormalizada) || producto.precio || 0;
+        
+        console.log(`[DEBUG] Producto procesado: ${medida}, kilos: ${kilos}, costo: ${costo}, precio: ${precioVenta}`);
+        
+        // Solo agregar el item si tiene kilos
+        if (kilos > 0) {
+          // Agregar a items (tabla de costos)
+          items.push({
+            kilos: kilos,
+            medida: medida,
+            costo: costo,
+            total: kilos * costo
+          });
+          
+          // Agregar a itemsVenta (tabla de precios)
+          const totalVenta = kilos * precioVenta;
+          const ganancia = totalVenta - (kilos * costo);
+          
+          itemsVenta.push({
+            kilosVenta: kilos,
+            medida: medida,
+            precioVenta: precioVenta,
+            totalVenta: totalVenta,
+            ganancia: ganancia
+          });
+        }
       }
     });
   }
   
   // Procesar crudos de Veronica
+  console.log(`[DEBUG] Procesando crudos de Veronica. Es array:`, Array.isArray(crudosVeronica));
+  console.log(`[DEBUG] Cantidad de crudos a procesar:`, crudosVeronica.length);
   if (Array.isArray(crudosVeronica)) {
-    crudosVeronica.forEach(crudo => {
+    crudosVeronica.forEach((crudo, crudoIndex) => {
+      console.log(`[DEBUG] Procesando crudo ${crudoIndex}:`, crudo);
       if (crudo && Array.isArray(crudo.items)) {
-        crudo.items.forEach(item => {
+        console.log(`[DEBUG] Crudo ${crudoIndex} tiene ${crudo.items.length} items`);
+        crudo.items.forEach((item, itemIndex) => {
+          console.log(`[DEBUG] Procesando item de crudo ${itemIndex}:`, item);
           if (item) {
             // Calcular kilos para costos
             let kilosTaras = 0;
@@ -1688,6 +1738,8 @@ const prepararDatosCuentaVeronica = async (embarqueData) => {
             
             // Solo agregar el item si tiene kilos
             if (kilosCosto > 0) {
+              console.log(`[DEBUG] Agregando item de crudo: ${medida}, kilosCosto: ${kilosCosto}, kilosVenta: ${kilosVenta}, costo: ${costo}, precio: ${precioVenta}`);
+              
               // Agregar a items (tabla de costos)
               items.push({
                 kilos: kilosCosto,
@@ -1708,8 +1760,18 @@ const prepararDatosCuentaVeronica = async (embarqueData) => {
                 ganancia: ganancia
               });
               
-              // Contar taras para flete (productos crudos)
-              totalTarasCrudo += kilosTaras;
+              // Contar taras para referencia (no se usa para cálculo automático en Veronica)
+              if (item.taras) {
+                const formatoGuion = /^(\d+)-(\d+(?:\.\d+)?)$/.exec(item.taras);
+                if (formatoGuion) {
+                  const cantidad = parseInt(formatoGuion[1]) || 0;
+                  totalTarasCrudo += cantidad;
+                } else {
+                  totalTarasCrudo += 1;
+                }
+              }
+            } else {
+              console.log(`[DEBUG] Item de crudo omitido (kilos <= 0): ${medida}, kilosCosto: ${kilosCosto}`);
             }
           }
         });
@@ -1724,21 +1786,20 @@ const prepararDatosCuentaVeronica = async (embarqueData) => {
   // Obtener saldo acumulado anterior
   const saldoAcumuladoAnterior = await obtenerSaldoAcumuladoAnterior('cuentasVeronica', fecha);
   
-  // Calcular flete
+  // Para Verónica, no calcular flete automáticamente - se maneja manualmente
   const cobros = [];
-  const totalTaras = totalTarasLimpio + totalTarasCrudo;
-  if (totalTaras > 0) {
-    const fleteTotal = totalTaras * 2; // $2 por tara
-    cobros.push({
-      descripcion: 'Flete',
-      monto: fleteTotal
-    });
-    console.log(`  - Total taras limpios: ${totalTarasLimpio}`);
-    console.log(`  - Total taras crudos: ${totalTarasCrudo}`);
-    console.log(`  - Total flete: $${fleteTotal}`);
-  }
   
-  return {
+  console.log(`[DEBUG] Flete para Veronica: No se calcula automáticamente`);
+  console.log(`  - Total taras limpios: ${totalTarasLimpio}`);
+  console.log(`  - Total taras crudos: ${totalTarasCrudo}`);
+  console.log(`  - El flete se debe agregar manualmente si es necesario`);
+  
+  console.log(`[DEBUG] Items finales generados:`, items);
+  console.log(`[DEBUG] ItemsVenta finales generados:`, itemsVenta);
+  console.log(`[DEBUG] Total general: ${totalGeneral}`);
+  console.log(`[DEBUG] Total general venta: ${totalGeneralVenta}`);
+  
+  const resultado = {
     fecha,
     items,
     itemsVenta,
@@ -1747,12 +1808,16 @@ const prepararDatosCuentaVeronica = async (embarqueData) => {
     abonos: [],
     totalGeneral,
     totalGeneralVenta,
-    nuevoSaldoAcumulado: saldoAcumuladoAnterior + totalGeneralVenta - (cobros.length > 0 ? cobros[0].monto : 0),
+    nuevoSaldoAcumulado: saldoAcumuladoAnterior + totalGeneralVenta,
     estadoPagado: false,
     tieneObservacion: false,
     observacion: '',
     ultimaActualizacion: new Date().toISOString()
   };
+  
+  console.log(`[DEBUG] Datos finales de cuenta de Veronica:`, resultado);
+  
+  return resultado;
 };
 
 /**
@@ -1764,6 +1829,7 @@ const prepararDatosCuentaVeronica = async (embarqueData) => {
 export const crearCuentaVeronica = async (embarqueData, router) => {
   try {
     console.log('Iniciando creación de cuenta Veronica desde embarque');
+    console.log('Datos de embarque recibidos en crearCuentaVeronica:', embarqueData);
     
     // Verificar si ya existe una cuenta para esta fecha
     const existeCuenta = await existeCuentaParaFecha('cuentasVeronica', embarqueData.fecha);
@@ -1772,7 +1838,9 @@ export const crearCuentaVeronica = async (embarqueData, router) => {
     }
     
     // Preparar los datos para la cuenta
+    console.log('Llamando a prepararDatosCuentaVeronica...');
     const datosCuenta = await prepararDatosCuentaVeronica(embarqueData);
+    console.log('Datos de cuenta preparados:', datosCuenta);
     
     // Crear la cuenta en Firestore
     const db = getFirestore();
