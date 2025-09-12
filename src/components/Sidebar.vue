@@ -10,7 +10,7 @@
       <!-- Mostrar clientes predefinidos -->
       <button 
         v-for="cliente in clientesPredefinidos" 
-        :key="cliente.id"
+        :key="'predefinido-' + cliente.id"
         type="button" 
         @click="seleccionarCliente(cliente.id.toString())" 
         class="btn-nota-cliente"
@@ -24,7 +24,7 @@
       
       <button 
         v-for="cliente in clientesPersonalizadosEmbarque" 
-        :key="cliente.id"
+        :key="'personalizado-' + cliente.id"
         type="button" 
         @click="seleccionarCliente(cliente.id.toString())" 
         class="btn-nota-cliente cliente-personalizado"
