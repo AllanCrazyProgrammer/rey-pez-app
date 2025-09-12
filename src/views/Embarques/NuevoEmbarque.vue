@@ -2679,42 +2679,32 @@ export default {
 
     guardarNombreAlternativo(nuevoNombre) {
       if (this.productoSeleccionado) {
+        // Guardar referencia al clienteId antes de modificar
+        const clienteId = this.productoSeleccionado.clienteId;
+        
+        // Solo actualizar el producto seleccionado (la referencia ya apunta al producto en el array)
         if (nuevoNombre) {
-          // Usar Vue.set para asegurar reactividad
           this.$set(this.productoSeleccionado, 'nombreAlternativoPDF', nuevoNombre);
         } else {
           this.$delete(this.productoSeleccionado, 'nombreAlternativoPDF');
         }
 
-        // En lugar de crear una copia completa del producto, actualizamos directamente
-        // la propiedad en el array original
-        const index = this.embarque.productos.findIndex(p => p.id === this.productoSeleccionado.id);
-        if (index !== -1) {
-          if (nuevoNombre) {
-            this.$set(this.embarque.productos[index], 'nombreAlternativoPDF', nuevoNombre);
-          } else {
-            this.$delete(this.embarque.productos[index], 'nombreAlternativoPDF');
-          }
-          
-          // Forzar la actualización del componente sin crear duplicados
-          this.$forceUpdate();
-        }
-
         // Marcar el cliente como modificado para que se incluya en el guardado
-        if (this.productoSeleccionado.clienteId) {
-          this.$set(this.clientesModificados, this.productoSeleccionado.clienteId, true);
-          console.log(`[guardarNombreAlternativo] Cliente ${this.productoSeleccionado.clienteId} marcado como modificado por cambio en nombre PDF`);
+        if (clienteId) {
+          this.$set(this.clientesModificados, clienteId, true);
+          console.log(`[guardarNombreAlternativo] Cliente ${clienteId} marcado como modificado por cambio en nombre PDF`);
         }
 
-        // Cerrar el modal primero para evitar que el guardado se bloquee
-        this.mostrarModalNombreAlternativo = false;
+        // Forzar la actualización del componente
+        this.$forceUpdate();
 
-        // Esperar a que Vue actualice el DOM y el modal esté completamente cerrado
+        // Cerrar modal después de actualizar los datos
+        this.mostrarModalNombreAlternativo = false;
+        this.productoSeleccionado = null;
+
+        // Guardar cambios inmediatamente
         this.$nextTick(() => {
-          // Usar setTimeout para asegurar que el modal esté completamente cerrado
-          setTimeout(() => {
-            this.guardarCambiosEnTiempoReal(true); // Forzar guardado
-          }, 100);
+          this.guardarCambiosEnTiempoReal(true); // Forzar guardado inmediato
         });
       } else {
         this.mostrarModalNombreAlternativo = false;
@@ -2734,6 +2724,9 @@ export default {
 
     guardarPrecio(precio) {
       if (this.itemSeleccionado) {
+        // Guardar referencia al clienteId antes de cerrar el modal
+        const clienteId = this.itemSeleccionado.clienteId;
+        
         if (precio !== null) {
           this.$set(this.itemSeleccionado, 'precio', precio);
           // El usuario asignó un precio manualmente, permitir futuras asignaciones automáticas
@@ -2745,20 +2738,20 @@ export default {
         }
         
         // Marcar el cliente como modificado para que se incluya en el guardado
-        if (this.itemSeleccionado.clienteId) {
-          this.$set(this.clientesModificados, this.itemSeleccionado.clienteId, true);
-          console.log(`[guardarPrecio] Cliente ${this.itemSeleccionado.clienteId} marcado como modificado por cambio en precio`);
+        if (clienteId) {
+          this.$set(this.clientesModificados, clienteId, true);
+          console.log(`[guardarPrecio] Cliente ${clienteId} marcado como modificado por cambio en precio`);
         }
 
-        // Cerrar modal primero para evitar que el guardado se bloquee
+        // Forzar actualización de la vista antes de cerrar el modal
+        this.$forceUpdate();
+        
+        // Cerrar modal después de actualizar los datos
         this.cerrarModalPrecio();
 
-        // Forzar guardado inmediato después de cerrar el modal
+        // Guardar cambios inmediatamente, forzando el guardado aunque el modal acaba de cerrarse
         this.$nextTick(() => {
-          // Usar setTimeout para asegurar que el modal esté completamente cerrado
-          setTimeout(() => {
-            this.guardarCambiosEnTiempoReal(true); // Forzar guardado
-          }, 100);
+          this.guardarCambiosEnTiempoReal(true); // Forzar guardado inmediato
         });
       } else {
         this.cerrarModalPrecio();
@@ -2778,6 +2771,9 @@ export default {
 
     guardarHilos(hilos) {
       if (this.itemSeleccionado) {
+        // Guardar referencia al clienteId antes de cerrar el modal
+        const clienteId = this.itemSeleccionado.clienteId;
+        
         // Si hilos está vacío, eliminamos la propiedad hilos del item
         if (!hilos) {
           this.$delete(this.itemSeleccionado, 'hilos');
@@ -2786,20 +2782,20 @@ export default {
         }
 
         // Marcar el cliente como modificado para que se incluya en el guardado
-        if (this.itemSeleccionado.clienteId) {
-          this.$set(this.clientesModificados, this.itemSeleccionado.clienteId, true);
-          console.log(`[guardarHilos] Cliente ${this.itemSeleccionado.clienteId} marcado como modificado por cambio en hilos`);
+        if (clienteId) {
+          this.$set(this.clientesModificados, clienteId, true);
+          console.log(`[guardarHilos] Cliente ${clienteId} marcado como modificado por cambio en hilos`);
         }
 
-        // Cerrar modal primero para evitar que el guardado se bloquee
+        // Forzar actualización de la vista antes de cerrar el modal
+        this.$forceUpdate();
+        
+        // Cerrar modal después de actualizar los datos
         this.cerrarModalHilos();
 
-        // Forzar guardado inmediato después de cerrar el modal
+        // Guardar cambios inmediatamente
         this.$nextTick(() => {
-          // Usar setTimeout para asegurar que el modal esté completamente cerrado
-          setTimeout(() => {
-            this.guardarCambiosEnTiempoReal(true); // Forzar guardado
-          }, 100);
+          this.guardarCambiosEnTiempoReal(true); // Forzar guardado inmediato
         });
       } else {
         this.cerrarModalHilos();
@@ -2819,6 +2815,9 @@ export default {
 
     guardarNota(nota) {
       if (this.itemSeleccionado) {
+        // Guardar referencia al clienteId antes de cerrar el modal
+        const clienteId = this.itemSeleccionado.clienteId;
+        
         if (nota) {
           this.$set(this.itemSeleccionado, 'nota', nota);
         } else {
@@ -2826,20 +2825,20 @@ export default {
         }
 
         // Marcar el cliente como modificado para que se incluya en el guardado
-        if (this.itemSeleccionado.clienteId) {
-          this.$set(this.clientesModificados, this.itemSeleccionado.clienteId, true);
-          console.log(`[guardarNota] Cliente ${this.itemSeleccionado.clienteId} marcado como modificado por cambio en nota`);
+        if (clienteId) {
+          this.$set(this.clientesModificados, clienteId, true);
+          console.log(`[guardarNota] Cliente ${clienteId} marcado como modificado por cambio en nota`);
         }
 
-        // Cerrar modal primero para evitar que el guardado se bloquee
+        // Forzar actualización de la vista antes de cerrar el modal
+        this.$forceUpdate();
+        
+        // Cerrar modal después de actualizar los datos
         this.cerrarModalNota();
 
-        // Forzar guardado inmediato después de cerrar el modal
+        // Guardar cambios inmediatamente
         this.$nextTick(() => {
-          // Usar setTimeout para asegurar que el modal esté completamente cerrado
-          setTimeout(() => {
-            this.guardarCambiosEnTiempoReal(true); // Forzar guardado
-          }, 100);
+          this.guardarCambiosEnTiempoReal(true); // Forzar guardado inmediato
         });
       } else {
         this.cerrarModalNota();
@@ -2859,6 +2858,9 @@ export default {
 
     guardarAlt(alt) {
       if (this.itemSeleccionado) {
+        // Guardar referencia al clienteId antes de cerrar el modal
+        const clienteId = this.itemSeleccionado.clienteId;
+        
         if (alt) {
           this.$set(this.itemSeleccionado, 'textoAlternativo', alt);
         } else {
@@ -2866,20 +2868,20 @@ export default {
         }
 
         // Marcar el cliente como modificado para que se incluya en el guardado
-        if (this.itemSeleccionado.clienteId) {
-          this.$set(this.clientesModificados, this.itemSeleccionado.clienteId, true);
-          console.log(`[guardarAlt] Cliente ${this.itemSeleccionado.clienteId} marcado como modificado por cambio en texto alternativo`);
+        if (clienteId) {
+          this.$set(this.clientesModificados, clienteId, true);
+          console.log(`[guardarAlt] Cliente ${clienteId} marcado como modificado por cambio en texto alternativo`);
         }
 
-        // Cerrar modal primero para evitar que el guardado se bloquee
+        // Forzar actualización de la vista antes de cerrar el modal
+        this.$forceUpdate();
+        
+        // Cerrar modal después de actualizar los datos
         this.cerrarModalAlt();
 
-        // Forzar guardado inmediato después de cerrar el modal
+        // Guardar cambios inmediatamente
         this.$nextTick(() => {
-          // Usar setTimeout para asegurar que el modal esté completamente cerrado
-          setTimeout(() => {
-            this.guardarCambiosEnTiempoReal(true); // Forzar guardado
-          }, 100);
+          this.guardarCambiosEnTiempoReal(true); // Forzar guardado inmediato
         });
       } else {
         this.cerrarModalAlt();
