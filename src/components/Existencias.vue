@@ -19,7 +19,7 @@
             <h2>
               {{ medidaKey }} (Maquila)
               <span v-if="tienePrecio && datos.precioPromedio" class="precio-promedio">
-                - Promedio: ${{ Math.round(datos.precioPromedio) }}
+                - Promedio: ${{ datos.precioPromedio.toFixed(2) }}
               </span>
             </h2>
             <table class="medida-table">
@@ -56,8 +56,11 @@
           <template v-else>
             <h2>
               {{ medidaKey }}
+              <div v-if="medidaKey === '51/60' && promedioCombinado516141" class="promedio-combinado">
+                Promedio 51,61 y 41 (Selecta): ${{ promedioCombinado516141.toFixed(2) }}
+              </div>
               <span v-if="tienePrecio && datos.precioPromedioGeneral" class="precio-promedio">
-                - Promedio General: ${{ Math.round(datos.precioPromedioGeneral) }}
+                - Promedio General: ${{ datos.precioPromedioGeneral.toFixed(2) }}
               </span>
             </h2>
             
@@ -66,7 +69,7 @@
               <h3 class="proveedor-header">
                 {{ proveedor }}
                 <span v-if="tienePrecio && proveedorData.precioPromedio" class="precio-promedio-proveedor">
-                  - Promedio: ${{ Math.round(proveedorData.precioPromedio) }}
+                  - Promedio: ${{ proveedorData.precioPromedio.toFixed(2) }}
                 </span>
               </h3>
               <table class="medida-table">
@@ -101,9 +104,21 @@
             
             <!-- Total general de la medida -->
             <div class="total-medida">
-              <strong>Total {{ medidaKey }}: {{ formatNumber(Object.values(datos.proveedores).reduce((total, prov) => total + prov.items.reduce((sum, item) => sum + item.kilos, 0), 0)) }} kg</strong>
+              <div class="total-medida-kilos">
+                <strong>Total {{ medidaKey }}: {{ formatNumber(Object.values(datos.proveedores).reduce((total, prov) => total + prov.items.reduce((sum, item) => sum + item.kilos, 0), 0)) }} kg</strong>
+              </div>
+              <div v-if="tienePrecio && Object.values(datos.proveedores).some(prov => prov.items.some(item => item.precio))" class="total-medida-valor">
+                <strong>Valor Total: ${{ formatNumber(Object.values(datos.proveedores).reduce((total, prov) => 
+                  total + prov.items.reduce((sum, item) => item.precio ? sum + (item.precio * item.kilos) : sum, 0), 0)) }}</strong>
+              </div>
             </div>
           </template>
+          
+          <!-- Valor total para maquilas -->
+          <div v-if="(medidaKey === 'Ozuna' || medidaKey === 'Joselito') && tienePrecio && Object.values(datos.items).some(item => item.precio)" class="total-maquila-valor">
+            <strong>Valor Total: ${{ formatNumber(Object.values(datos.items).reduce((sum, item) => 
+              item.precio ? sum + (item.precio * item.kilos) : sum, 0)) }}</strong>
+          </div>
         </div>
       </div>
 
@@ -417,6 +432,31 @@ export default {
       
       return totalKilos > 0 ? totalValor / totalKilos : null;
     };
+
+    // Calcular promedio combinado de medidas 51/60, 61/70 y 41/50 SOLO para proveedor Selecta
+    const promedioCombinado516141 = computed(() => {
+      if (!tienePrecio.value) return null;
+      
+      const medidasObjetivo = ['51/60', '61/70', '41/50'];
+      let totalValor = 0;
+      let totalKilos = 0;
+      
+      // Recorrer todas las existencias para calcular promedio combinado SOLO de Selecta
+      Object.entries(existencias.value).forEach(([proveedor, medidas]) => {
+        if (proveedor === 'Selecta') {
+          Object.entries(medidas).forEach(([medidaKey, datos]) => {
+            // Obtener medida base
+            const medidaBase = datos.medida.split(' ')[0];
+            if (medidasObjetivo.includes(medidaBase) && datos.kilos > 0 && datos.precio && datos.precio > 0) {
+              totalValor += datos.precio * datos.kilos;
+              totalKilos += datos.kilos;
+            }
+          });
+        }
+      });
+      
+      return totalKilos > 0 ? totalValor / totalKilos : null;
+    });
 
     const filteredExistencias = computed(() => {
       const searchLower = search.value.toLowerCase();
@@ -797,13 +837,12 @@ export default {
           }
           .total-medida {
             margin-top: 8px;
-            padding: 6px;
+            padding: 8px;
             background-color: #3498db;
             color: white;
             text-align: center;
             border-radius: 3px;
             font-size: 14pt;
-            font-weight: bold;
           }
           @media print {
             .existencias-grid {
@@ -1130,7 +1169,7 @@ export default {
                   <div class="medida-card maquila-card">
                     <h2>
                       ${medidaKey} (Maquila)
-                      ${tienePrecio.value && datos.precioPromedio ? `<span class="precio-promedio">- Promedio: $${Math.round(datos.precioPromedio)}</span>` : ''}
+                      ${tienePrecio.value && datos.precioPromedio ? `<span class="precio-promedio">- Promedio: $${datos.precioPromedio.toFixed(2)}</span>` : ''}
                     </h2>
                     <table class="medida-table">
                       <thead>
@@ -1162,6 +1201,12 @@ export default {
                         </tr>
                       </tbody>
                     </table>
+                    ${(medidaKey === 'Ozuna' || medidaKey === 'Joselito') && tienePrecio.value && Object.values(datos.items).some(item => item.precio) ? `
+                      <div style="margin-top: 8px; padding: 8px; background-color: #f39c12; color: white; text-align: center; border-radius: 5px; font-size: 16px;">
+                        <strong>Valor Total: $${formatNumber(Object.values(datos.items).reduce((sum, item) => 
+                          item.precio ? sum + (item.precio * item.kilos) : sum, 0))}</strong>
+                      </div>
+                    ` : ''}
                   </div>
                 `;
               } else {
@@ -1170,13 +1215,18 @@ export default {
                   <div class="medida-card">
                     <h2>
                       ${medidaKey}
-                      ${tienePrecio.value && datos.precioPromedioGeneral ? `<span class="precio-promedio">- Promedio General: $${Math.round(datos.precioPromedioGeneral)}</span>` : ''}
+                      ${medidaKey === '51/60' && promedioCombinado516141.value ? `
+                        <div style="display: block; color: #e74c3c; font-size: 12pt; font-weight: bold; margin: 3px 0; background-color: rgba(231, 76, 60, 0.1); padding: 2px 6px; border-radius: 3px; display: inline-block;">
+                          Promedio 51,61 y 41 (Selecta): $${promedioCombinado516141.value.toFixed(2)}
+                        </div>
+                      ` : ''}
+                      ${tienePrecio.value && datos.precioPromedioGeneral ? `<span class="precio-promedio">- Promedio General: $${datos.precioPromedioGeneral.toFixed(2)}</span>` : ''}
                     </h2>
                     ${Object.entries(datos.proveedores).map(([proveedor, proveedorData]) => `
                       <div class="proveedor-section">
                         <h3 class="proveedor-header">
                           ${proveedor}
-                          ${tienePrecio.value && proveedorData.precioPromedio ? `<span class="precio-promedio-proveedor">- Promedio: $${Math.round(proveedorData.precioPromedio)}</span>` : ''}
+                          ${tienePrecio.value && proveedorData.precioPromedio ? `<span class="precio-promedio-proveedor">- Promedio: $${proveedorData.precioPromedio.toFixed(2)}</span>` : ''}
                         </h3>
                         <table class="medida-table">
                           <thead>
@@ -1210,8 +1260,16 @@ export default {
                         </table>
                       </div>
                     `).join('')}
-                    <div class="total-medida">
-                      <strong>Total ${medidaKey}: ${formatNumber(Object.values(datos.proveedores).reduce((total, prov) => total + prov.items.reduce((sum, item) => sum + item.kilos, 0), 0))} kg</strong>
+                    <div class="total-medida" style="padding: 10px;">
+                      <div style="font-size: 16px; margin-bottom: 5px;">
+                        <strong>Total ${medidaKey}: ${formatNumber(Object.values(datos.proveedores).reduce((total, prov) => total + prov.items.reduce((sum, item) => sum + item.kilos, 0), 0))} kg</strong>
+                      </div>
+                      ${tienePrecio.value && Object.values(datos.proveedores).some(prov => prov.items.some(item => item.precio)) ? `
+                        <div style="font-size: 16px; color: #fff; background-color: rgba(0, 0, 0, 0.15); padding: 5px 10px; border-radius: 4px; display: inline-block;">
+                          <strong>Valor Total: $${formatNumber(Object.values(datos.proveedores).reduce((total, prov) => 
+                            total + prov.items.reduce((sum, item) => item.precio ? sum + (item.precio * item.kilos) : sum, 0), 0))}</strong>
+                        </div>
+                      ` : ''}
                     </div>
                   </div>
                 `;
@@ -1291,7 +1349,8 @@ export default {
       fechaDiaSiguiente,
       salidasProveedoresDiaSiguiente,
       salidasMaquilasDiaSiguiente,
-      totalSalidasDiaSiguiente
+      totalSalidasDiaSiguiente,
+      promedioCombinado516141
     };
   }
 };
@@ -1599,6 +1658,18 @@ h1 {
   margin-left: 5px;
 }
 
+.promedio-combinado {
+  display: block;
+  color: #e74c3c;
+  font-size: 14px;
+  font-weight: bold;
+  margin: 5px 0;
+  background-color: rgba(231, 76, 60, 0.1);
+  padding: 3px 8px;
+  border-radius: 4px;
+  display: inline-block;
+}
+
 .precio-promedio {
   color: #27ae60;
   font-size: 16px;
@@ -1641,8 +1712,31 @@ h1 {
 
 .total-medida {
   margin-top: 10px;
-  padding: 8px;
+  padding: 10px;
   background-color: #3498db;
+  color: white;
+  text-align: center;
+  border-radius: 5px;
+}
+
+.total-medida-kilos {
+  font-size: 16px;
+  margin-bottom: 5px;
+}
+
+.total-medida-valor {
+  font-size: 16px;
+  color: #fff;
+  background-color: rgba(0, 0, 0, 0.15);
+  padding: 5px 10px;
+  border-radius: 4px;
+  display: inline-block;
+}
+
+.total-maquila-valor {
+  margin-top: 8px;
+  padding: 8px;
+  background-color: #f39c12;
   color: white;
   text-align: center;
   border-radius: 5px;
@@ -1669,7 +1763,31 @@ h1 {
   }
   
   .total-medida {
+    padding: 8px;
+  }
+  
+  .total-medida-kilos {
     font-size: 14px;
+    margin-bottom: 4px;
+  }
+  
+  .total-medida-valor {
+    font-size: 14px;
+    padding: 4px 8px;
+  }
+  
+  .total-maquila-valor {
+    font-size: 14px;
+    padding: 6px;
+    margin-top: 6px;
+  }
+  
+  .total-medida-valor {
+    font-size: 16px;
+  }
+  
+  .total-maquila-valor {
+    font-size: 16px;
   }
 }
 
