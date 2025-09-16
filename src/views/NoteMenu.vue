@@ -21,7 +21,10 @@
       <div v-for="(notes, client) in filteredNotesByClient" :key="client">
         <details>
           <summary>
-            {{ client }} - Debe: {{ totalDebtByClient[client] | currency }} 
+            {{ client }} - Debe: {{ totalDebtByClient[client] | currency }}
+            <span v-if="clientBalances[client] > 0" class="balance-favor">
+              Saldo a favor: {{ clientBalances[client] | currency }}
+            </span>
             <span class="note-count">({{ notes.length }})</span>
           </summary>
           <ul>
@@ -94,7 +97,7 @@
 
 <script>
 import { db } from '@/firebase';
-import { collection, getDocs, doc, updateDoc, getDoc, deleteDoc } from "firebase/firestore";
+import { collection, getDocs, doc, updateDoc, getDoc, deleteDoc, setDoc } from "firebase/firestore";
 
 export default {
   name: 'NoteMenu',
@@ -112,6 +115,7 @@ export default {
       selectedAbonoNote: null,
       currentPage: 1,
       abonosPerPage: 7,
+      clientBalances: {}, // Para almacenar saldos a favor por cliente
     };
   },
   methods: {
@@ -137,8 +141,31 @@ export default {
         for (let client in this.notesByClient) {
           this.notesByClient[client].sort((a, b) => new Date(b.currentDate) - new Date(a.currentDate));
         }
+        
+        // Cargar saldos a favor de clientes
+        await this.fetchClientBalances();
       } catch (error) {
         console.error('Error fetching notes: ', error);
+      }
+    },
+    async fetchClientBalances() {
+      try {
+        const querySnapshot = await getDocs(collection(db, 'clientBalances'));
+        this.clientBalances = {};
+        querySnapshot.docs.forEach(doc => {
+          this.clientBalances[doc.id] = doc.data().balance || 0;
+        });
+      } catch (error) {
+        console.error('Error fetching client balances: ', error);
+      }
+    },
+    async updateClientBalance(clientName, newBalance) {
+      try {
+        const balanceRef = doc(db, 'clientBalances', clientName);
+        await setDoc(balanceRef, { balance: newBalance }, { merge: true });
+        this.clientBalances[clientName] = newBalance;
+      } catch (error) {
+        console.error('Error updating client balance: ', error);
       }
     },
     goToEditNote(noteId) {
@@ -190,6 +217,7 @@ export default {
       }
 
       try {
+        // Actualizar las notas en Firebase
         for (let note of notesToUpdate) {
           const noteRef = doc(db, 'notes', note.id);
           await updateDoc(noteRef, {
@@ -197,7 +225,18 @@ export default {
             isPaid: note.isPaid
           });
         }
-        alert('Abono aplicado con éxito');
+
+        // Si queda dinero después de pagar todas las notas, guardarlo como saldo a favor
+        if (remainingAbono > 0) {
+          const currentBalance = this.clientBalances[this.selectedClient] || 0;
+          const newBalance = currentBalance + remainingAbono;
+          await this.updateClientBalance(this.selectedClient, newBalance);
+          
+          alert(`Abono aplicado con éxito. Saldo a favor: $${remainingAbono.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
+        } else {
+          alert('Abono aplicado con éxito');
+        }
+        
         this.closeModal();
         await this.fetchNotes();
       } catch (error) {
@@ -446,6 +485,17 @@ summary:hover {
 
 .note-count:hover {
   transform: scale(1.2);
+}
+
+.balance-favor {
+  background-color: #28a745;
+  color: white;
+  border-radius: 15px;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: bold;
+  margin: 0 10px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 ul {

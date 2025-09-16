@@ -17,6 +17,9 @@
               {{ client.name }}
             </option>
           </select>
+          <div v-if="clientBalance > 0" class="client-balance-indicator">
+            <span class="balance-text">Saldo a favor: ${{ formatNumber(clientBalance) }}</span>
+          </div>
         </div>
         <div>
           <label for="date">Fecha:</label>
@@ -125,12 +128,18 @@
                 <tr>
                   <th>Monto</th>
                   <th>Fecha</th>
+                  <th class="action-column-abonos">Acciones</th>
                 </tr>
               </thead>
               <tbody>
                 <tr v-for="(abono, index) in abonos" :key="index">
                   <td>${{ formatNumber(abono.monto) }}</td>
                   <td>{{ formatDate(abono.fecha) }}</td>
+                  <td class="action-column-abonos">
+                    <button @click="confirmDeleteAbono(index)" class="delete-abono-button">
+                      <span>🗑️</span>
+                    </button>
+                  </td>
                 </tr>
               </tbody>
             </table>
@@ -163,6 +172,18 @@
     <button @click="removeProduct(selectedProductIndex)">Borrar</button>
     <button v-if="editIndex !== -1" @click="confirmEdit">Confirmar Edición</button>
     <button @click="cancelMobileActions">Cancelar</button>
+    </div>
+
+    <!-- Modal para confirmar eliminación de abono -->
+    <div v-if="showDeleteAbonoModal" class="modal">
+      <div class="modal-content">
+        <h2>Confirmar Eliminación</h2>
+        <p>¿Estás seguro de que quieres eliminar este abono?</p>
+        <div class="modal-buttons">
+          <button @click="deleteAbono" class="confirm-delete-button">Confirmar</button>
+          <button @click="closeDeleteAbonoModal" class="cancel-button">Cancelar</button>
+        </div>
+      </div>
     </div>
   </div>
   </div>
@@ -215,6 +236,9 @@ export default {
       longPressTimer: null,
       showMobileActions: false,
       selectedProductIndex: null,
+      clientBalance: 0, // Saldo a favor del cliente
+      showDeleteAbonoModal: false,
+      selectedAbonoIndex: null,
     };
   },
   computed: {
@@ -240,6 +264,11 @@ export default {
   watch: {
     saldoRestante(newVal) {
       this.isPaid = newVal <= 0;
+    },
+    async client(newClient) {
+      if (newClient) {
+        await this.fetchClientBalance(newClient);
+      }
     }
   },
   methods: {
@@ -288,6 +317,12 @@ export default {
       this.newProduct.total = this.newProduct.kilos * this.newProduct.pricePerKilo;
       this.products.push({ ...this.newProduct });
       this.resetForm();
+      
+      // Aplicar saldo a favor automáticamente después de agregar el primer producto
+      if (this.products.length === 1 && this.client) {
+        await this.fetchClientBalance(this.client);
+        await this.applyClientBalanceAsAbono();
+      }
     },
     resetForm() {
       this.newProduct = {
@@ -323,6 +358,40 @@ export default {
         this.clients = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       } catch (error) {
         console.error('Error fetching clients: ', error);
+      }
+    },
+    async fetchClientBalance(clientName) {
+      if (!clientName) return;
+      try {
+        const balanceRef = doc(db, 'clientBalances', clientName);
+        const balanceDoc = await getDoc(balanceRef);
+        this.clientBalance = balanceDoc.exists() ? balanceDoc.data().balance || 0 : 0;
+      } catch (error) {
+        console.error('Error fetching client balance: ', error);
+        this.clientBalance = 0;
+      }
+    },
+    async updateClientBalance(clientName, newBalance) {
+      try {
+        const balanceRef = doc(db, 'clientBalances', clientName);
+        await setDoc(balanceRef, { balance: newBalance }, { merge: true });
+        this.clientBalance = newBalance;
+      } catch (error) {
+        console.error('Error updating client balance: ', error);
+      }
+    },
+    async applyClientBalanceAsAbono() {
+      if (this.clientBalance > 0 && this.products.length > 0) {
+        const today = new Date();
+        this.abonos.push({
+          monto: this.clientBalance,
+          fecha: today.toISOString().substr(0, 10)
+        });
+        
+        // Actualizar el saldo del cliente a 0
+        await this.updateClientBalance(this.client, 0);
+        
+        alert(`Se aplicó automáticamente el saldo a favor de $${this.clientBalance.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} como abono.`);
       }
     },
     async fetchNoteData() {
@@ -416,12 +485,30 @@ export default {
       this.selectedProductIndex = null;
       this.editIndex = -1;
     },
+    confirmDeleteAbono(index) {
+      this.selectedAbonoIndex = index;
+      this.showDeleteAbonoModal = true;
+    },
+    closeDeleteAbonoModal() {
+      this.showDeleteAbonoModal = false;
+      this.selectedAbonoIndex = null;
+    },
+    deleteAbono() {
+      if (this.selectedAbonoIndex !== null) {
+        this.abonos.splice(this.selectedAbonoIndex, 1);
+        this.closeDeleteAbonoModal();
+        alert('Abono eliminado exitosamente');
+      }
+    },
   },
   async mounted() {
-    this.fetchClients();
+    await this.fetchClients();
     if (this.$route.params.noteId) {
       this.noteId = this.$route.params.noteId;
       await this.fetchNoteData();
+      if (this.client) {
+        await this.fetchClientBalance(this.client);
+      }
     }
   }
 };
@@ -775,9 +862,35 @@ th {
     text-align: center;
   }
 
+  .action-column-abonos {
+    display: table-cell;
+    width: 60px;
+  }
+
+  .delete-abono-button {
+    padding: 6px 10px;
+    font-size: 14px;
+  }
+
   .add-abono-button {
     width: 100%;
     margin-top: 1em;
+  }
+
+  .modal-content {
+    width: 95%;
+    padding: 20px;
+  }
+
+  .modal-buttons {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .confirm-delete-button,
+  .cancel-button {
+    width: 100%;
+    padding: 15px;
   }
 
   .action-buttons {
@@ -799,5 +912,114 @@ th {
 
 .sale-note-title {
   margin-top: 10px;
+}
+
+.client-balance-indicator {
+  margin-top: 8px;
+  padding: 8px 12px;
+  background-color: #d4edda;
+  border: 1px solid #c3e6cb;
+  border-radius: 10px;
+  text-align: center;
+}
+
+.balance-text {
+  color: #155724;
+  font-weight: bold;
+  font-size: 14px;
+}
+
+.delete-abono-button {
+  background-color: #dc3545;
+  color: white;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 16px;
+  transition: background-color 0.3s;
+}
+
+.delete-abono-button:hover {
+  background-color: #c82333;
+}
+
+.action-column-abonos {
+  width: 80px;
+  text-align: center;
+}
+
+.modal {
+  position: fixed;
+  z-index: 1000;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  background-color: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-content {
+  background-color: #fefefe;
+  padding: 30px;
+  border: 1px solid #888;
+  border-radius: 15px;
+  width: 90%;
+  max-width: 400px;
+  text-align: center;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+}
+
+.modal-content h2 {
+  color: #3760b0;
+  margin-bottom: 20px;
+}
+
+.modal-content p {
+  margin-bottom: 25px;
+  font-size: 16px;
+  color: #333;
+}
+
+.modal-buttons {
+  display: flex;
+  justify-content: space-around;
+  gap: 15px;
+}
+
+.confirm-delete-button {
+  background-color: #dc3545;
+  color: white;
+  border: none;
+  padding: 12px 25px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: bold;
+  transition: background-color 0.3s;
+}
+
+.confirm-delete-button:hover {
+  background-color: #c82333;
+}
+
+.cancel-button {
+  background-color: #6c757d;
+  color: white;
+  border: none;
+  padding: 12px 25px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: bold;
+  transition: background-color 0.3s;
+}
+
+.cancel-button:hover {
+  background-color: #5a6268;
 }
 </style>

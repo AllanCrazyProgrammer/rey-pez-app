@@ -8,12 +8,7 @@
         <Calcular cantidad="$1" :datos="datos" @dataArray="procesarDatos" />
       </b-col>
       <b-col cols="12" class="mb-3">
-        <b-button 
-          @click="imprimirCuentas" 
-          variant="primary" 
-          block
-          :disabled="!tieneDatos"
-        >
+        <b-button @click="imprimirCuentas" variant="primary" block :disabled="!tieneDatos">
           Imprimir sección
         </b-button>
       </b-col>
@@ -21,17 +16,13 @@
         <div ref="seccionImpresion" class="seccion-impresion">
           <h1>Cuentas</h1>
           <p class="fecha-impresion">{{ fechaFormateada }}</p>
-                     <div class="lista-cuentas">
-             <div 
-               v-for="(cantidad, denominacion) in billetes" 
-               :key="denominacion" 
-               class="cuenta-item"
-               v-show="cantidad > 0"
-             >
-               <span class="denominacion">${{ denominacion }}</span>
-               <span class="cantidad">{{ cantidad }}</span>
-             </div>
-           </div>
+          <div class="lista-cuentas">
+            <div v-for="(cantidad, denominacion) in billetes" :key="denominacion" class="cuenta-item"
+              v-show="cantidad > 0">
+              <span class="denominacion">${{ denominacion }}</span>
+              <span class="cantidad">{{ cantidad }}</span>
+            </div>
+          </div>
           <div class="total-general">
             <strong>Total: ${{ totalGeneral.toLocaleString() }}</strong>
           </div>
@@ -88,14 +79,14 @@ export default {
     promedioPorLinea() {
       // Calcular el promedio basado en los datos procesados
       if (!this.datos || this.datos.trim().length === 0) return 0;
-      
+
       const lineasValidas = this.datos.split('\n')
         .map(linea => linea.trim())
         .filter(linea => linea.length > 0 && !isNaN(parseFloat(linea.replace(/[$,\s]/g, ''))))
         .map(linea => parseFloat(linea.replace(/[$,\s]/g, '')));
-      
+
       if (lineasValidas.length === 0) return 0;
-      
+
       const total = lineasValidas.reduce((suma, valor) => suma + valor, 0);
       return total / lineasValidas.length;
     }
@@ -190,7 +181,7 @@ export default {
            }
         </style>
       `;
-      
+
       const ventanaImpresion = window.open('', '_blank');
       if (!ventanaImpresion) {
         console.error('No se pudo abrir la ventana de impresión');
@@ -212,10 +203,10 @@ export default {
           </body>
         </html>
       `);
-      
+
       ventanaImpresion.document.close();
       ventanaImpresion.focus();
-      
+
       // Esperar a que se cargue antes de imprimir
       setTimeout(() => {
         ventanaImpresion.print();
@@ -227,15 +218,15 @@ export default {
     procesarDatos({ data, isTwo }) {
       // Resetear contadores
       this.reiniciarBilletes();
-      
+
       if (!data || !Array.isArray(data)) {
         return;
       }
 
-      const denominaciones = isTwo 
-        ? [500, 200, 100, 50, 20, 10, 5, 2, 1] 
+      const denominaciones = isTwo
+        ? [500, 200, 100, 50, 20, 10, 5, 2, 1]
         : [500, 200, 100, 50, 20, 10, 5, 1, 2];
-      
+
       data.forEach(cantidad => {
         const montoRestante = this.calcularBilletes(cantidad, denominaciones);
         if (montoRestante > 0) {
@@ -246,7 +237,7 @@ export default {
     calcularBilletes(cantidad, denominaciones) {
       let montoRestante = parseInt(cantidad) || 0;
       if (montoRestante <= 0) return 0;
-      
+
       denominaciones.forEach(denominacion => {
         const cantidadBilletes = Math.floor(montoRestante / denominacion);
         if (cantidadBilletes > 0) {
@@ -254,7 +245,7 @@ export default {
           montoRestante -= cantidadBilletes * denominacion;
         }
       });
-      
+
       return montoRestante;
     },
     reiniciarBilletes() {
@@ -359,7 +350,7 @@ h1 {
     border: none;
     background-color: white;
   }
-  
+
   .seccion-impresion {
     border: none;
     box-shadow: none;
@@ -388,11 +379,11 @@ h1 {
   .cantidad {
     margin-bottom: 3px;
   }
-  
+
   .denominacion {
     font-size: 20px;
   }
-  
+
   .cantidad {
     font-size: 20px;
   }
@@ -412,15 +403,15 @@ h1 {
   h1 {
     font-size: 1.3em;
   }
-  
+
   .denominacion {
     font-size: 18px;
   }
-  
+
   .cantidad {
     font-size: 18px;
   }
-  
+
   .promedio-general {
     font-size: 12px;
     margin-top: 8px;
