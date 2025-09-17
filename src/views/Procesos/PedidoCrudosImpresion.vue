@@ -99,12 +99,13 @@ export default {
         'catarro': '#e74c3c',
         'otilio': '#f1c40f',
         'ozuna': '#2ecc71',
-        'elizabeth': '#9b59b6'
+        'veronica': '#ff8c00'
       }
       return colores[cliente.toLowerCase()] || '#000000'
     },
     obtenerColorTextoCliente(cliente) {
-      return cliente.toLowerCase() === 'otilio' ? '#000000' : '#FFFFFF'
+      const clientesTextoNegro = ['otilio', 'veronica'];
+      return clientesTextoNegro.includes(cliente.toLowerCase()) ? '#000000' : '#FFFFFF'
     },
     obtenerDiaSemana(fecha) {
       const dias = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];

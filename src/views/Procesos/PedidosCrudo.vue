@@ -125,7 +125,7 @@ export default {
   data() {
     return {
       fecha: new Date().toISOString().split('T')[0],
-      clientes: ['8a', 'Catarro', 'Otilio', 'Ozuna', 'Elizabeth'],
+      clientes: ['8a', 'Catarro', 'Otilio', 'Ozuna', 'Veronica'],
       columnasBase: ['Med', 'Med-Esp', 'Med-gde', 'Gde', 'Extra'],
       columnasAdicionales: [],
       nuevaColumna: '',
@@ -529,8 +529,8 @@ input[type="number"] {
   color: white;
 }
 
-.cliente-elizabeth {
-  background-color: #9b59b6;
+.cliente-veronica {
+  background-color: #ff8c00;
   color: white;
 }
 
@@ -559,9 +559,9 @@ input.cliente-ozuna {
   color: black;
 }
 
-input.cliente-elizabeth {
-  background-color: #f5eef8;
-  border-color: #9b59b6;
+input.cliente-veronica {
+  background-color: #fff4e6;
+  border-color: #ff8c00;
   color: black;
 }
 
@@ -586,9 +586,9 @@ input.cliente-ozuna:focus {
   box-shadow: 0 0 0 2px rgba(46, 204, 113, 0.3);
 }
 
-input.cliente-elizabeth:focus {
+input.cliente-veronica:focus {
   outline: none;
-  box-shadow: 0 0 0 2px rgba(155, 89, 182, 0.3);
+  box-shadow: 0 0 0 2px rgba(255, 140, 0, 0.3);
 }
 
 .kilos-info {
