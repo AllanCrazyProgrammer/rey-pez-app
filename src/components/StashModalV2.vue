@@ -63,6 +63,31 @@
         <!-- Lista del Stash -->
         <div class="seccion-stash">
           <h4>Abonos en Stash ({{ stashItems.length }})</h4>
+          
+          <!-- Información de distribución en cascada -->
+          <div v-if="stashItems.length > 0 && distribucionAbonos.distribucion.length > 0" class="distribucion-cascada-info">
+            <div class="info-header">
+              <span class="icono">💧</span>
+              <span class="texto">Distribución en Cascada (${{ formatNumber(totalStash) }}):</span>
+            </div>
+            
+            <div class="distribucion-lista">
+              <div v-for="(item, index) in distribucionAbonos.distribucion" :key="index" class="distribucion-item">
+                <div class="distribucion-cuenta">
+                  <span class="fecha">{{ item.cuenta.fechaFormateada }}</span>
+                  <span class="monto">${{ formatNumber(item.montoAAplicar) }}</span>
+                </div>
+                <div class="distribucion-detalle">
+                  Saldo: ${{ formatNumber(item.saldoAntes) }} → ${{ formatNumber(item.saldoDespues) }}
+                </div>
+              </div>
+            </div>
+            
+            <div v-if="distribucionAbonos.sobrante > 0" class="sobrante-info">
+              ⚠️ Sobrante sin aplicar: ${{ formatNumber(distribucionAbonos.sobrante) }}
+            </div>
+          </div>
+          
           <div v-if="stashItems.length === 0" class="empty-state">
             No hay abonos en el stash
           </div>
@@ -152,8 +177,23 @@
           >
             {{ isAplicando ? 'Aplicando...' : 'Aplicar Abonos al Saldo' }}
           </button>
+          
+          <!-- Botón para aplicar en cascada -->
+          <button 
+            v-if="stashItems.length > 0 && distribucionAbonos.distribucion.length > 0" 
+            @click="aplicarACuentaMasAntigua" 
+            class="btn-auto-aplicar"
+            :disabled="isAplicando"
+            :title="`Aplicar $${formatNumber(totalStash)} en cascada a ${distribucionAbonos.distribucion.length} cuenta(s)`"
+          >
+            {{ isAplicando ? 'Aplicando...' : '💧 Aplicar en Cascada' }}
+            <span v-if="distribucionAbonos.distribucion.length > 1" class="cascada-count">
+              ({{ distribucionAbonos.distribucion.length }} cuentas)
+            </span>
+          </button>
+          
           <button @click="verHistorial = true" class="btn-secondary">
-            Ver Historial
+            Historial de Abonos
           </button>
           <button @click="cerrarModal" class="btn-secondary">
             Cerrar
@@ -206,80 +246,31 @@
     <!-- Modal de Historial -->
     <div v-if="verHistorial" class="modal">
       <div class="modal-content">
-        <h3>Historial de Aplicaciones</h3>
+        <h3>Historial de Abonos</h3>
         
-        <div v-if="historialAplicaciones.length === 0" class="empty-state">
-          No hay aplicaciones registradas
+        <div v-if="todosLosAbonos.length === 0" class="empty-state">
+          No hay abonos registrados
         </div>
         
-        <div v-else class="historial-list">
-          <div v-for="registro in historialAplicaciones" :key="registro.id" class="historial-item">
-            <div class="historial-main">
-              <div class="historial-left">
-                <div class="historial-fecha">
-                  <span class="fecha-dia">{{ formatearFechaDia(registro.fechaAplicacion) }}</span>
-                  <span class="fecha-hora">{{ formatearHora(registro.fechaAplicacion) }}</span>
+        <div v-else class="abonos-list">
+          <div v-for="abono in todosLosAbonos" :key="abono.uniqueId" class="abono-item">
+            <div class="abono-main">
+              <div class="abono-left">
+                <div class="abono-fecha">
+                  <span class="fecha-cuenta">{{ abono.fechaCuentaFormateada }}</span>
+                  <span class="fecha-aplicacion">{{ formatearFechaHora(abono.fechaAplicacion) }}</span>
                 </div>
-                <div class="historial-monto-wrapper">
-                  <span class="historial-monto">${{ formatNumber(registro.montoTotal) }}</span>
-                  <span class="historial-estado" :class="{ exitoso: registro.exitoso, error: !registro.exitoso }">
-                    {{ registro.exitoso ? '✓' : '✗' }}
-                  </span>
-                </div>
+                <div class="abono-descripcion">{{ abono.descripcion }}</div>
               </div>
-              <div class="historial-right">
+              <div class="abono-right">
+                <div class="abono-monto">${{ formatNumber(abono.monto) }}</div>
                 <button 
-                  @click="verDetalleHistorial(registro)"
-                  class="btn-detalle"
-                  title="Ver detalles"
+                  @click="eliminarAbonoIndividual(abono)" 
+                  class="btn-eliminar-abono"
+                  title="Eliminar abono"
                 >
-                  <span class="desktop-text">Detalles</span>
-                  <span class="mobile-text">👁️</span>
+                  🗑️
                 </button>
-                <button 
-                  @click="eliminarDelHistorial(registro)" 
-                  class="btn-eliminar-hist"
-                  title="Borrar y revertir"
-                >
-                  <span class="desktop-text">Borrar</span>
-                  <span class="mobile-text">🗑️</span>
-                </button>
-              </div>
-            </div>
-            
-            <!-- Detalles expandibles -->
-            <div v-if="registro.mostrarDetalle" class="historial-detalle-expandido">
-              <div class="detalle-grid">
-                <div class="detalle-item">
-                  <span class="detalle-label">Modo aplicación:</span>
-                  <span class="detalle-valor">{{ registro.modo === 'individual' ? 'Individual por fecha' : 'Consolidado' }}</span>
-                </div>
-                <div class="detalle-item">
-                  <span class="detalle-label">Items aplicados:</span>
-                  <span class="detalle-valor">{{ registro.items.length }} {{ registro.items.length === 1 ? 'abono' : 'abonos' }}</span>
-                </div>
-                <div class="detalle-item">
-                  <span class="detalle-label">Saldo anterior:</span>
-                  <span class="detalle-valor">${{ formatNumber(registro.saldoAnterior || 0) }}</span>
-                </div>
-                <div class="detalle-item">
-                  <span class="detalle-label">Saldo después:</span>
-                  <span class="detalle-valor">${{ formatNumber(registro.saldoNuevo || 0) }}</span>
-                </div>
-              </div>
-              
-              <div v-if="registro.items && registro.items.length > 0" class="items-aplicados">
-                <p class="items-titulo">Abonos incluidos:</p>
-                <div v-for="(item, idx) in registro.items" :key="idx" class="item-aplicado">
-                  <div class="item-info-detalle">
-                    <span class="item-fecha">{{ formatearFecha(item.fecha) }}</span>
-                    <span class="item-descripcion">{{ item.descripcion }}</span>
-                    <span v-if="item.fechaAplicacion" class="item-fecha-aplicacion">
-                      → {{ formatearFecha(item.fechaAplicacion) }}
-                    </span>
-                  </div>
-                  <span class="item-monto">${{ formatNumber(item.monto) }}</span>
-                </div>
               </div>
             </div>
           </div>
@@ -322,6 +313,7 @@ export default {
     const historialAplicaciones = ref([])
     const cuentasDisponibles = ref([])
     const fechasAplicacion = ref({}) // { itemId: cuentaId }
+    const todosLosAbonos = ref([]) // Lista de todos los abonos aplicados
     
     // Formularios
     const nuevoAbono = ref({
@@ -345,6 +337,50 @@ export default {
     
     const todasFechasSeleccionadas = computed(() => {
       return stashItems.value.every(item => fechasAplicacion.value[item.id] && fechasAplicacion.value[item.id] !== '')
+    })
+    
+    const cuentaMasAntiguaNoPagada = computed(() => {
+      if (cuentasDisponibles.value.length === 0) return null
+      // Ordenar por fecha ascendente para obtener la más antigua
+      const cuentasOrdenadas = [...cuentasDisponibles.value].sort((a, b) => new Date(a.fecha) - new Date(b.fecha))
+      return cuentasOrdenadas[0] || null
+    })
+    
+    const cuentasOrdenadasPorFecha = computed(() => {
+      return [...cuentasDisponibles.value].sort((a, b) => new Date(a.fecha) - new Date(b.fecha))
+    })
+    
+    const distribucionAbonos = computed(() => {
+      if (stashItems.value.length === 0 || cuentasOrdenadasPorFecha.value.length === 0) {
+        return { distribucion: [], totalAplicado: 0, sobrante: 0 }
+      }
+      
+      const totalStashValue = totalStash.value
+      let montoRestante = totalStashValue
+      const distribucion = []
+      
+      for (const cuenta of cuentasOrdenadasPorFecha.value) {
+        if (montoRestante <= 0) break
+        
+        const saldoCuenta = cuenta.nuevoSaldoAcumulado
+        const montoAAplicar = Math.min(montoRestante, saldoCuenta)
+        
+        if (montoAAplicar > 0) {
+          distribucion.push({
+            cuenta,
+            montoAAplicar,
+            saldoAntes: saldoCuenta,
+            saldoDespues: saldoCuenta - montoAAplicar
+          })
+          montoRestante -= montoAAplicar
+        }
+      }
+      
+      return {
+        distribucion,
+        totalAplicado: totalStashValue - montoRestante,
+        sobrante: montoRestante
+      }
     })
     
     // Métodos
@@ -495,21 +531,76 @@ export default {
       }
     }
     
+    const cargarTodosLosAbonos = async () => {
+      try {
+        const collectionName = `cuentas${props.cliente.charAt(0).toUpperCase() + props.cliente.slice(1)}`
+        const q = query(
+          collection(db, collectionName),
+          orderBy('fecha', 'desc'),
+          limit(50) // Cargar las últimas 50 cuentas para buscar abonos
+        )
+        const snapshot = await getDocs(q)
+        
+        const abonos = []
+        
+        snapshot.docs.forEach(doc => {
+          const cuentaData = doc.data()
+          const cuentaId = doc.id
+          const fechaCuenta = cuentaData.fecha
+          const fechaCuentaFormateada = formatearFecha(fechaCuenta)
+          
+          if (cuentaData.abonos && cuentaData.abonos.length > 0) {
+            cuentaData.abonos.forEach((abono, index) => {
+              abonos.push({
+                uniqueId: `${cuentaId}_${index}_${abono.id || Date.now()}`,
+                cuentaId,
+                fechaCuenta,
+                fechaCuentaFormateada,
+                fechaAplicacion: abono.fecha || abono.fechaAplicacion || new Date().toISOString(),
+                descripcion: abono.descripcion || 'Sin descripción',
+                monto: abono.monto || 0,
+                abonoId: abono.id,
+                abonoIndex: index,
+                esAplicacionIndividual: abono.esAplicacionIndividual || false
+              })
+            })
+          }
+        })
+        
+        // Ordenar por fecha de aplicación más reciente
+        todosLosAbonos.value = abonos.sort((a, b) => 
+          new Date(b.fechaAplicacion) - new Date(a.fechaAplicacion)
+        )
+        
+      } catch (error) {
+        console.error('Error cargando todos los abonos:', error)
+      }
+    }
+    
     const cargarCuentasDisponibles = async () => {
       try {
         const collectionName = `cuentas${props.cliente.charAt(0).toUpperCase() + props.cliente.slice(1)}`
         const q = query(
           collection(db, collectionName),
           orderBy('fecha', 'desc'),
-          limit(30) // Últimas 30 cuentas
+          limit(50) // Aumentar límite para tener más opciones antes del filtro
         )
         const snapshot = await getDocs(q)
-        cuentasDisponibles.value = snapshot.docs.map(doc => ({
-          id: doc.id,
-          fecha: doc.data().fecha,
-          totalGeneralVenta: doc.data().totalGeneralVenta || 0,
-          fechaFormateada: formatearFecha(doc.data().fecha)
-        })).sort((a, b) => new Date(b.fecha) - new Date(a.fecha))
+        // Filtrar solo las cuentas que NO están pagadas
+        cuentasDisponibles.value = snapshot.docs
+          .map(doc => ({
+            id: doc.id,
+            fecha: doc.data().fecha,
+            totalGeneralVenta: doc.data().totalGeneralVenta || 0,
+            fechaFormateada: formatearFecha(doc.data().fecha),
+            estadoPagado: doc.data().estadoPagado,
+            nuevoSaldoAcumulado: doc.data().nuevoSaldoAcumulado || 0
+          }))
+          .filter(cuenta => {
+            // Filtrar cuentas que NO estén pagadas
+            return !cuenta.estadoPagado && cuenta.nuevoSaldoAcumulado > 0
+          })
+          .sort((a, b) => new Date(b.fecha) - new Date(a.fecha))
       } catch (error) {
         console.error('Error cargando cuentas disponibles:', error)
       }
@@ -574,6 +665,192 @@ export default {
         return
       }
       mostrarConfirmacion.value = true
+    }
+    
+    const aplicarACuentaMasAntigua = async () => {
+      if (!cuentaMasAntiguaNoPagada.value) {
+        alert('No hay cuentas pendientes de pago disponibles.')
+        return
+      }
+      
+      if (stashItems.value.length === 0) {
+        alert('No hay abonos en el stash para aplicar.')
+        return
+      }
+      
+      const distribucion = distribucionAbonos.value
+      
+      // Crear mensaje de confirmación detallado
+      let mensajeConfirmacion = `Se aplicarán $${formatNumber(totalStash.value)} del stash de la siguiente manera:\n\n`
+      
+      distribucion.distribucion.forEach((item, index) => {
+        mensajeConfirmacion += `${index + 1}. ${item.cuenta.fechaFormateada}: $${formatNumber(item.montoAAplicar)}\n`
+        mensajeConfirmacion += `   Saldo antes: $${formatNumber(item.saldoAntes)}\n`
+        mensajeConfirmacion += `   Saldo después: $${formatNumber(item.saldoDespues)}\n\n`
+      })
+      
+      if (distribucion.sobrante > 0) {
+        mensajeConfirmacion += `⚠️ Sobrante sin aplicar: $${formatNumber(distribucion.sobrante)}\n`
+        mensajeConfirmacion += `(No hay más cuentas pendientes)\n\n`
+      }
+      
+      mensajeConfirmacion += '¿Continuar con la aplicación?'
+      
+      const confirmacion = confirm(mensajeConfirmacion)
+      if (!confirmacion) return
+      
+      try {
+        await aplicarAbonosEnCascada()
+        
+        let mensajeExito = `Abonos aplicados exitosamente:\n`
+        distribucion.distribucion.forEach((item, index) => {
+          mensajeExito += `• ${item.cuenta.fechaFormateada}: $${formatNumber(item.montoAAplicar)}\n`
+        })
+        
+        if (distribucion.sobrante > 0) {
+          mensajeExito += `\n⚠️ Sobrante: $${formatNumber(distribucion.sobrante)}`
+        }
+        
+        alert(mensajeExito)
+      } catch (error) {
+        console.error('Error aplicando abonos en cascada:', error)
+        alert('Error al aplicar los abonos. Por favor, intente nuevamente.')
+      }
+    }
+    
+    const aplicarAbonosEnCascada = async () => {
+      if (isAplicando.value) return
+      
+      isAplicando.value = true
+      
+      try {
+        const collectionName = `cuentas${props.cliente.charAt(0).toUpperCase() + props.cliente.slice(1)}`
+        const distribucion = distribucionAbonos.value
+        const abonosAplicados = []
+        
+        // Crear abonos proporcionales basados en la distribución
+        let montoTotalStash = totalStash.value
+        
+        for (const itemDistribucion of distribucion.distribucion) {
+          const { cuenta, montoAAplicar } = itemDistribucion
+          
+          if (montoAAplicar <= 0) continue
+          
+          // Calcular qué porcentaje del stash total va a esta cuenta
+          const porcentajeParaCuenta = montoAAplicar / montoTotalStash
+          
+          // Distribuir cada stash item proporcionalmente
+          const abonosParaCuenta = []
+          let montoAcumuladoParaCuenta = 0
+          
+          stashItems.value.forEach((stashItem, index) => {
+            let montoDelItem = stashItem.monto * porcentajeParaCuenta
+            
+            // En el último item de la distribución, ajustar cualquier diferencia por redondeo
+            if (index === stashItems.value.length - 1) {
+              montoDelItem = montoAAplicar - montoAcumuladoParaCuenta
+            }
+            
+            if (montoDelItem > 0) {
+              abonosParaCuenta.push({
+                descripcion: `${stashItem.descripcion} (Cascada)`,
+                monto: montoDelItem
+              })
+              montoAcumuladoParaCuenta += montoDelItem
+            }
+          })
+          
+          // Aplicar los abonos a esta cuenta específica
+          if (abonosParaCuenta.length > 0) {
+            await aplicarAbonosACuenta(cuenta.id, abonosParaCuenta, collectionName)
+            
+            abonosAplicados.push({
+              cuentaId: cuenta.id,
+              fecha: cuenta.fecha,
+              abonos: abonosParaCuenta,
+              totalAplicado: montoAAplicar
+            })
+          }
+        }
+        
+        // Registrar en el historial
+        await registrarEnHistorial(abonosAplicados, 'cascada')
+        
+        // Limpiar el stash
+        await limpiarStash()
+        
+        // Recargar datos
+        await Promise.all([
+          cargarStash(),
+          cargarSaldoActual(),
+          cargarCuentasDisponibles()
+        ])
+        
+      } catch (error) {
+        console.error('Error en aplicación en cascada:', error)
+        throw error
+      } finally {
+        isAplicando.value = false
+      }
+    }
+    
+    const aplicarAbonosACuenta = async (cuentaId, abonos, collectionName) => {
+      const cuentaRef = doc(db, collectionName, cuentaId)
+      const cuentaDoc = await getDoc(cuentaRef)
+      
+      if (!cuentaDoc.exists()) {
+        throw new Error(`Cuenta ${cuentaId} no encontrada`)
+      }
+      
+      const cuentaData = cuentaDoc.data()
+      const abonosExistentes = cuentaData.abonos || []
+      const nuevosAbonos = [...abonosExistentes, ...abonos]
+      
+      // Calcular nuevo saldo
+      const totalAbonos = nuevosAbonos.reduce((sum, abono) => sum + (abono.monto || 0), 0)
+      const totalCobros = (cuentaData.cobros || []).reduce((sum, cobro) => sum + (cobro.monto || 0), 0)
+      const totalDia = (cuentaData.totalGeneralVenta || 0) - totalCobros - totalAbonos
+      const nuevoSaldoAcumulado = (cuentaData.saldoAcumuladoAnterior || 0) + totalDia
+      
+      await updateDoc(cuentaRef, {
+        abonos: nuevosAbonos,
+        nuevoSaldoAcumulado: Math.max(0, nuevoSaldoAcumulado),
+        estadoPagado: nuevoSaldoAcumulado <= 0,
+        ultimaActualizacion: new Date().toISOString()
+      })
+    }
+    
+    const registrarEnHistorial = async (abonosAplicados, tipo = 'cascada') => {
+      try {
+        await addDoc(collection(db, `historial_aplicaciones_${props.cliente}`), {
+          tipo,
+          fecha: new Date().toISOString(),
+          abonosAplicados,
+          totalAplicado: abonosAplicados.reduce((sum, item) => sum + item.totalAplicado, 0),
+          cuentasAfectadas: abonosAplicados.length,
+          descripcion: `Aplicación en ${tipo} a ${abonosAplicados.length} cuenta(s)`
+        })
+      } catch (error) {
+        console.error('Error registrando en historial:', error)
+      }
+    }
+    
+    const limpiarStash = async () => {
+      try {
+        // Eliminar todos los items del stash
+        await Promise.all(
+          stashItems.value.map(item => 
+            deleteDoc(doc(db, `stash_${props.cliente}`, item.id))
+          )
+        )
+        
+        // Limpiar el estado local
+        stashItems.value = []
+        fechasAplicacion.value = {}
+      } catch (error) {
+        console.error('Error limpiando stash:', error)
+        throw error
+      }
     }
     
     const aplicarAbonosIndividuales = async () => {
@@ -756,6 +1033,83 @@ export default {
       }
     }
     
+    const eliminarAbonoIndividual = async (abono) => {
+      const confirmacion = confirm(
+        `¿Eliminar este abono?\n\n` +
+        `Cuenta: ${abono.fechaCuentaFormateada}\n` +
+        `Descripción: ${abono.descripcion}\n` +
+        `Monto: $${formatNumber(abono.monto)}\n\n` +
+        `Esta acción actualizará el saldo de la cuenta.`
+      )
+      
+      if (!confirmacion) return
+      
+      try {
+        const collectionName = `cuentas${props.cliente.charAt(0).toUpperCase() + props.cliente.slice(1)}`
+        const cuentaRef = doc(db, collectionName, abono.cuentaId)
+        const cuentaDoc = await getDoc(cuentaRef)
+        
+        if (!cuentaDoc.exists()) {
+          alert('Error: No se encontró la cuenta.')
+          return
+        }
+        
+        const cuentaData = cuentaDoc.data()
+        let nuevosAbonos = [...(cuentaData.abonos || [])]
+        
+        // Eliminar el abono específico
+        if (abono.abonoId) {
+          // Si tiene ID específico, eliminar por ID
+          nuevosAbonos = nuevosAbonos.filter(a => a.id !== abono.abonoId)
+        } else {
+          // Si no tiene ID, eliminar por índice
+          nuevosAbonos.splice(abono.abonoIndex, 1)
+        }
+        
+        // Recalcular saldo
+        const totalAbonos = nuevosAbonos.reduce((sum, a) => sum + (a.monto || 0), 0)
+        const totalCobros = (cuentaData.cobros || []).reduce((sum, c) => sum + (c.monto || 0), 0)
+        const totalDia = (cuentaData.totalGeneralVenta || 0) - totalCobros - totalAbonos
+        const nuevoSaldoAcumulado = (cuentaData.saldoAcumuladoAnterior || 0) + totalDia
+        
+        // Actualizar la cuenta
+        await updateDoc(cuentaRef, {
+          abonos: nuevosAbonos,
+          nuevoSaldoAcumulado: Math.max(0, nuevoSaldoAcumulado),
+          estadoPagado: nuevoSaldoAcumulado <= 0,
+          ultimaActualizacion: new Date().toISOString()
+        })
+        
+        // Registrar la eliminación en el historial
+        await addDoc(collection(db, `historial_aplicaciones_${props.cliente}`), {
+          fechaAplicacion: new Date().toISOString(),
+          modo: 'eliminacion_abono',
+          abonoEliminado: {
+            descripcion: abono.descripcion,
+            monto: abono.monto,
+            fechaCuenta: abono.fechaCuenta,
+            fechaCuentaFormateada: abono.fechaCuentaFormateada
+          },
+          cuentaAfectada: abono.cuentaId,
+          nuevoSaldo: nuevoSaldoAcumulado,
+          exitoso: true
+        })
+        
+        // Recargar datos
+        await Promise.all([
+          cargarTodosLosAbonos(),
+          cargarSaldoActual(),
+          cargarCuentasDisponibles()
+        ])
+        
+        alert(`✅ Abono eliminado exitosamente\n\nSe eliminó: $${formatNumber(abono.monto)}\nDe la cuenta: ${abono.fechaCuentaFormateada}`)
+        
+      } catch (error) {
+        console.error('Error eliminando abono:', error)
+        alert('Error al eliminar el abono: ' + error.message)
+      }
+    }
+    
     const cerrarModal = () => {
       showModal.value = false
       mostrarConfirmacion.value = false
@@ -768,7 +1122,9 @@ export default {
       cargarSaldoActual()
       cargarHistorial()
       cargarCuentasDisponibles()
+      cargarTodosLosAbonos()
     })
+    
     
     return {
       // Estados
@@ -785,12 +1141,16 @@ export default {
       cuentasDisponibles,
       fechasAplicacion,
       nuevoAbono,
+      todosLosAbonos,
       
       // Computed
       clienteNombre,
       totalStash,
       saldoResultante,
       todasFechasSeleccionadas,
+      cuentaMasAntiguaNoPagada,
+      cuentasOrdenadasPorFecha,
+      distribucionAbonos,
       
       // Métodos
       formatNumber,
@@ -807,8 +1167,11 @@ export default {
       agregarAlStash,
       eliminarDelStash,
       validarYMostrarConfirmacion,
+      aplicarACuentaMasAntigua,
       aplicarAbonosIndividuales,
       eliminarDelHistorial,
+      eliminarAbonoIndividual,
+      cargarTodosLosAbonos,
       cerrarModal
     }
   }
@@ -1000,6 +1363,274 @@ h4 {
 .btn-aplicar:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.btn-auto-aplicar {
+  background: linear-gradient(135deg, #FF9800 0%, #F57C00 100%);
+  color: white;
+  padding: 12px 24px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: 600;
+  transition: all 0.3s ease;
+  min-width: 220px;
+  box-shadow: 0 4px 6px rgba(255, 152, 0, 0.3);
+}
+
+.btn-auto-aplicar:hover:not(:disabled) {
+  background: linear-gradient(135deg, #F57C00 0%, #E65100 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 12px rgba(255, 152, 0, 0.4);
+}
+
+.btn-auto-aplicar:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: 0 4px 6px rgba(255, 152, 0, 0.2);
+}
+
+.cuenta-mas-antigua-info {
+  background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%);
+  border: 2px solid #FF9800;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 15px;
+  box-shadow: 0 2px 4px rgba(255, 152, 0, 0.1);
+}
+
+.cuenta-mas-antigua-info .info-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.cuenta-mas-antigua-info .icono {
+  font-size: 18px;
+  color: #FF9800;
+}
+
+.cuenta-mas-antigua-info .texto {
+  font-weight: 600;
+  color: #E65100;
+  font-size: 14px;
+}
+
+.cuenta-mas-antigua-info .info-detalle {
+  color: #BF360C;
+  font-size: 14px;
+  padding-left: 26px;
+}
+
+.distribucion-cascada-info {
+  background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+  border: 2px solid #2196F3;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 15px;
+  box-shadow: 0 2px 4px rgba(33, 150, 243, 0.1);
+}
+
+.distribucion-cascada-info .info-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.distribucion-cascada-info .icono {
+  font-size: 18px;
+  color: #2196F3;
+}
+
+.distribucion-cascada-info .texto {
+  font-weight: 600;
+  color: #1565C0;
+  font-size: 14px;
+}
+
+.distribucion-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.distribucion-item {
+  background: rgba(255, 255, 255, 0.7);
+  border-radius: 6px;
+  padding: 8px;
+  border-left: 3px solid #2196F3;
+}
+
+.distribucion-cuenta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 600;
+  color: #1565C0;
+  margin-bottom: 4px;
+}
+
+.distribucion-cuenta .fecha {
+  font-size: 14px;
+}
+
+.distribucion-cuenta .monto {
+  font-size: 14px;
+  color: #2E7D32;
+}
+
+.distribucion-detalle {
+  font-size: 12px;
+  color: #666;
+  font-style: italic;
+}
+
+.sobrante-info {
+  background: rgba(255, 193, 7, 0.2);
+  border: 1px solid #FFC107;
+  border-radius: 4px;
+  padding: 8px;
+  margin-top: 8px;
+  color: #F57F17;
+  font-weight: 600;
+  font-size: 12px;
+  text-align: center;
+}
+
+.cascada-count {
+  font-size: 12px;
+  opacity: 0.8;
+  font-weight: normal;
+}
+
+/* Pestañas del historial */
+.historial-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 20px;
+  border-bottom: 2px solid #f0f0f0;
+}
+
+.tab-button {
+  background: none;
+  border: none;
+  padding: 12px 20px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  color: #666;
+  border-bottom: 2px solid transparent;
+  transition: all 0.3s ease;
+}
+
+.tab-button:hover {
+  background: rgba(33, 150, 243, 0.1);
+  color: #2196F3;
+}
+
+.tab-button.active {
+  color: #2196F3;
+  border-bottom-color: #2196F3;
+  background: rgba(33, 150, 243, 0.05);
+}
+
+/* Lista de abonos individuales */
+.abonos-list {
+  max-height: 400px;
+  overflow-y: auto;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 8px;
+}
+
+.abono-item {
+  background: #f8f9fa;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 8px;
+  border-left: 4px solid #2196F3;
+  transition: all 0.3s ease;
+}
+
+.abono-item:hover {
+  background: #e3f2fd;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.abono-main {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.abono-left {
+  flex: 1;
+  min-width: 0;
+}
+
+.abono-fecha {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 8px;
+}
+
+.fecha-cuenta {
+  font-weight: 600;
+  color: #1565C0;
+  font-size: 14px;
+}
+
+.fecha-aplicacion {
+  font-size: 12px;
+  color: #666;
+  font-style: italic;
+}
+
+.abono-descripcion {
+  color: #333;
+  font-size: 14px;
+  word-wrap: break-word;
+  line-height: 1.4;
+}
+
+.abono-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.abono-monto {
+  font-weight: 600;
+  color: #2E7D32;
+  font-size: 16px;
+}
+
+.btn-eliminar-abono {
+  background: #f44336;
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-eliminar-abono:hover {
+  background: #d32f2f;
+  transform: scale(1.1);
 }
 
 /* Listas del Stash con selección de fechas */
@@ -1561,6 +2192,69 @@ h4 {
   .btn-detalle,
   .btn-eliminar-hist {
     padding: 8px;
+  }
+  
+  .btn-auto-aplicar {
+    min-width: auto;
+    font-size: 14px;
+    padding: 10px 16px;
+  }
+  
+  .cuenta-mas-antigua-info .info-detalle {
+    padding-left: 0;
+    margin-top: 5px;
+  }
+  
+  .distribucion-cascada-info {
+    padding: 10px;
+  }
+  
+  .distribucion-cuenta {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+  
+  .distribucion-cuenta .fecha,
+  .distribucion-cuenta .monto {
+    font-size: 13px;
+  }
+  
+  .cascada-count {
+    display: block;
+    margin-top: 2px;
+  }
+  
+  .historial-tabs {
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .tab-button {
+    padding: 10px 16px;
+    font-size: 14px;
+  }
+  
+  .abono-main {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  
+  .abono-right {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+  
+  .abono-monto {
+    font-size: 15px;
+  }
+  
+  .btn-eliminar-abono {
+    width: 28px;
+    height: 28px;
+    font-size: 12px;
     min-width: 40px;
   }
   
