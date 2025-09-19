@@ -1592,6 +1592,236 @@ const prepararDatosCuentaVeronica = async (embarqueData) => {
   
   console.log(`[DEBUG] Creando cuenta de Veronica para fecha: ${fecha}`);
   console.log(`[DEBUG] Precios de venta cargados para fecha ${fecha}:`, Array.from(preciosVenta.entries()));
+
+  const costosPorMedida = embarqueData?.costosPorMedida || {};
+
+  const extraerCostoNumerico = (valor) => {
+    if (valor === null || valor === undefined) return null;
+    if (typeof valor === 'number') {
+      return Number.isFinite(valor) ? Number(valor) : null;
+    }
+    if (typeof valor === 'string') {
+      const numero = Number(valor);
+      return Number.isNaN(numero) ? null : numero;
+    }
+    if (typeof valor === 'object') {
+      if (valor.costoBase !== undefined && valor.costoBase !== null && valor.costoBase !== '') {
+        const numero = Number(valor.costoBase);
+        return Number.isNaN(numero) ? null : numero;
+      }
+      if (valor.costo !== undefined && valor.costo !== null && valor.costo !== '') {
+        const numero = Number(valor.costo);
+        return Number.isNaN(numero) ? null : numero;
+      }
+    }
+    return null;
+  };
+
+  const obtenerNumeroValido = (...valores) => {
+    for (const valor of valores) {
+      if (valor === null || valor === undefined || valor === '') continue;
+      const numero = Number(valor);
+      if (!Number.isNaN(numero)) {
+        return numero;
+      }
+    }
+    return 0;
+  };
+
+  const generarClavesBusqueda = (medidaOriginal, medidaNormalizada) => {
+    const claves = new Set();
+    if (medidaOriginal) {
+      claves.add(medidaOriginal);
+      claves.add(medidaOriginal.replace(/-/g, '/'));
+    }
+    if (medidaNormalizada) {
+      claves.add(medidaNormalizada);
+    }
+    const normalizada = medidaOriginal ? normalizarMedida(medidaOriginal) : '';
+    if (normalizada) {
+      claves.add(normalizada);
+    }
+    return Array.from(claves).filter(Boolean);
+  };
+
+  const buscarValorEnMapa = (mapa, medidaOriginal, medidaNormalizada) => {
+    if (!mapa) return { valor: null, clave: null };
+
+    const claves = generarClavesBusqueda(medidaOriginal, medidaNormalizada);
+    for (const clave of claves) {
+      if (mapa instanceof Map) {
+        if (mapa.has(clave)) {
+          return { valor: mapa.get(clave), clave };
+        }
+      } else if (Object.prototype.hasOwnProperty.call(mapa, clave)) {
+        return { valor: mapa[clave], clave };
+      }
+    }
+
+    const medidaNormalizadaLower = normalizarMedida(medidaOriginal);
+    const entradas = mapa instanceof Map ? Array.from(mapa.entries()) : Object.entries(mapa || {});
+    for (const [clave, valor] of entradas) {
+      if (normalizarMedida(clave) === medidaNormalizadaLower) {
+        return { valor, clave };
+      }
+    }
+
+    return { valor: null, clave: null };
+  };
+
+  const productosTotales = Array.isArray(embarqueData?.productosTotales)
+    ? embarqueData.productosTotales
+    : (Array.isArray(productos) ? productos : []);
+
+  const clienteCrudosTotales = embarqueData?.clienteCrudosTotales || clienteCrudos || {};
+
+  const totalEmbarcadoPorMedida = new Map();
+  const registrarTotalEmbarcado = (medida, kilos) => {
+    if (!medida || !kilos || kilos <= 0) return;
+    const medidaNormalizada = normalizarMedida(medida);
+    if (!medidaNormalizada) return;
+    const existente = totalEmbarcadoPorMedida.get(medidaNormalizada);
+    if (existente) {
+      existente.kilos += kilos;
+    } else {
+      totalEmbarcadoPorMedida.set(medidaNormalizada, {
+        kilos,
+        medidaOriginal: medida
+      });
+    }
+  };
+
+  if (Array.isArray(productosTotales)) {
+    productosTotales.forEach(productoTotal => {
+      if (!productoTotal) return;
+
+      let kilos = 0;
+      if (productoTotal.tipo === 'c/h20') {
+        const reporteTaras = productoTotal.reporteTaras || [];
+        const reporteBolsas = productoTotal.reporteBolsas || [];
+        let sumaTotalKilos = 0;
+        for (let i = 0; i < reporteTaras.length; i++) {
+          const taras = parseInt(reporteTaras[i]) || 0;
+          const bolsa = parseInt(reporteBolsas[i]) || 0;
+          sumaTotalKilos += taras * bolsa;
+        }
+        kilos = sumaTotalKilos * (productoTotal.camaronNeto || 0.65);
+      } else {
+        const sumaKilos = productoTotal.kilos?.reduce((sum, k) => sum + (parseFloat(k) || 0), 0) || 0;
+        const sumaTarasNormales = productoTotal.taras?.reduce((sum, tara) => sum + (parseInt(tara) || 0), 0) || 0;
+        const descuentoTaras = productoTotal.restarTaras ? sumaTarasNormales * 3 : 0;
+        kilos = Number((sumaKilos - descuentoTaras).toFixed(1));
+      }
+
+      if (kilos > 0) {
+        const medidaGlobal = productoTotal.nombreAlternativoPDF || productoTotal.medida || '';
+        registrarTotalEmbarcado(medidaGlobal, kilos);
+      }
+    });
+  }
+
+  if (clienteCrudosTotales && typeof clienteCrudosTotales === 'object') {
+    Object.values(clienteCrudosTotales).forEach(crudosArray => {
+      if (!Array.isArray(crudosArray)) return;
+      crudosArray.forEach(crudo => {
+        if (!crudo || !Array.isArray(crudo.items)) return;
+        crudo.items.forEach(item => {
+          if (!item) return;
+          let kilosTaras = 0;
+          if (item.taras) {
+            const formatoGuion = /^(\d+)-(\d+(?:\.\d+)?)$/.exec(item.taras);
+            if (formatoGuion) {
+              const cantidad = parseInt(formatoGuion[1]) || 0;
+              const kilosPorTara = parseFloat(formatoGuion[2]) || 0;
+              kilosTaras = cantidad * kilosPorTara;
+            } else {
+              kilosTaras = parseFloat(item.taras) || 0;
+            }
+          }
+
+          let kilosSobrante = 0;
+          if (item.sobrante && item.mostrarSobrante) {
+            kilosSobrante = extraerValorSobrante(item.sobrante);
+          }
+
+          const kilosCosto = kilosTaras + kilosSobrante;
+          if (kilosCosto > 0) {
+            const medidaCrudo = item.talla || 'Crudo';
+            registrarTotalEmbarcado(medidaCrudo, kilosCosto);
+          }
+        });
+      });
+    });
+  }
+
+  const obtenerKilosCrudosParaMedida = (medidaOriginal, medidaNormalizada) => {
+    const mapaKilosCrudos = embarqueData?.kilosCrudos;
+    if (!mapaKilosCrudos || typeof mapaKilosCrudos !== 'object') return null;
+    const { valor } = buscarValorEnMapa(mapaKilosCrudos, medidaOriginal, medidaNormalizada);
+    if (valor === null || valor === undefined) return null;
+    if (typeof valor === 'number' || typeof valor === 'string') {
+      const numero = Number(valor);
+      return Number.isNaN(numero) ? null : numero;
+    }
+    if (typeof valor === 'object') {
+      let suma = 0;
+      Object.values(valor).forEach(v => {
+        const numero = Number(v);
+        if (!Number.isNaN(numero)) {
+          suma += numero;
+        }
+      });
+      return suma > 0 ? suma : null;
+    }
+    return null;
+  };
+
+  const mapaAplicarExtra = embarqueData?.aplicarCostoExtra || {};
+  const costoExtraValor = Number(embarqueData?.costoExtra ?? 18);
+
+  const calcularCostoParaMedida = (medidaOriginal, medidaNormalizada, totalEmbarcadoFallback = 0) => {
+    const { valor } = buscarValorEnMapa(costosPorMedida, medidaOriginal, medidaNormalizada);
+    const costoBase = extraerCostoNumerico(valor);
+    if (costoBase === null) {
+      return { costoFinal: null, costoBase: null };
+    }
+
+    const totalRegistro = totalEmbarcadoPorMedida.get(medidaNormalizada);
+    const totalEnMapa = totalRegistro?.kilos || 0;
+    const totalEmbarcado = totalEmbarcadoFallback > 0
+      ? Math.max(totalEnMapa, totalEmbarcadoFallback)
+      : totalEnMapa;
+    const kilosCrudos = obtenerKilosCrudosParaMedida(medidaOriginal, medidaNormalizada);
+
+    if (!kilosCrudos || !totalEmbarcado) {
+      return { costoFinal: null, costoBase };
+    }
+
+    const rendimientoOriginal = kilosCrudos / totalEmbarcado;
+    if (!Number.isFinite(rendimientoOriginal) || rendimientoOriginal <= 0) {
+      return { costoFinal: null, costoBase };
+    }
+
+    const rendimiento = Math.round(rendimientoOriginal * 100) / 100;
+    const { valor: banderaExtra } = buscarValorEnMapa(mapaAplicarExtra, medidaOriginal, medidaNormalizada);
+    const aplicarExtra = Boolean(banderaExtra);
+    const costoFinal = Math.round((costoBase * rendimiento) + (aplicarExtra ? costoExtraValor : 0));
+
+    console.log(`[DEBUG] Costo calculado para ${medidaOriginal}: base=${costoBase}, totalEmbarcado=${totalEmbarcado}, kilosCrudos=${kilosCrudos}, rendimiento=${rendimiento}, extra=${aplicarExtra ? costoExtraValor : 0}, final=${costoFinal}`);
+
+    return { costoFinal, costoBase };
+  };
+  
+  const mapaTotalInicializado = totalEmbarcadoPorMedida.size > 0;
+  const fallbackTotales = new Map();
+  const acumularTotalFallback = (medida, medidaNormalizada, kilos) => {
+    if (!mapaTotalInicializado) {
+      const acumulado = (fallbackTotales.get(medidaNormalizada) || 0) + (kilos || 0);
+      fallbackTotales.set(medidaNormalizada, acumulado);
+      return acumulado;
+    }
+    return 0;
+  };
   
   // Preparar los items de la cuenta
   const items = [];
@@ -1648,14 +1878,22 @@ const prepararDatosCuentaVeronica = async (embarqueData) => {
         let medida = producto.nombreAlternativoPDF || producto.medida || '';
         const medidaNormalizada = normalizarMedida(medida);
         
-        // Obtener el costo y el precio de venta
-        const costo = producto.precio || producto.costo || 0;
+        const totalFallback = acumularTotalFallback(medida, medidaNormalizada, kilos);
+        const { costoFinal, costoBase } = calcularCostoParaMedida(medida, medidaNormalizada, totalFallback);
+        const costo = Number(
+          costoFinal !== null
+            ? costoFinal
+            : (costoBase !== null ? costoBase : obtenerNumeroValido(producto.precio, producto.costo))
+        ) || 0;
         const precioVenta = preciosVenta.get(medidaNormalizada) || producto.precio || 0;
         
         console.log(`[DEBUG] Producto procesado: ${medida}, kilos: ${kilos}, costo: ${costo}, precio: ${precioVenta}`);
         
         // Solo agregar el item si tiene kilos
         if (kilos > 0) {
+          if (!mapaTotalInicializado) {
+            registrarTotalEmbarcado(medida, kilos);
+          }
           // Agregar a items (tabla de costos)
           items.push({
             kilos: kilos,
@@ -1713,8 +1951,13 @@ const prepararDatosCuentaVeronica = async (embarqueData) => {
             const medida = item.talla || 'Crudo';
             const medidaNormalizada = normalizarMedida(medida);
             
-            // Obtener costo y precio de venta
-            const costo = item.precio || 0;
+            const totalFallback = acumularTotalFallback(medida, medidaNormalizada, kilosCosto);
+            const { costoFinal, costoBase } = calcularCostoParaMedida(medida, medidaNormalizada, totalFallback);
+            const costo = Number(
+              costoFinal !== null
+                ? costoFinal
+                : (costoBase !== null ? costoBase : obtenerNumeroValido(item.precio))
+            ) || 0;
             const precioVenta = preciosVenta.get(medidaNormalizada) || item.precio || 0;
             
             // Calcular kilos para ventas (ajustar 19 a 20)
@@ -1738,6 +1981,9 @@ const prepararDatosCuentaVeronica = async (embarqueData) => {
             
             // Solo agregar el item si tiene kilos
             if (kilosCosto > 0) {
+              if (!mapaTotalInicializado) {
+                registrarTotalEmbarcado(medida, kilosCosto);
+              }
               console.log(`[DEBUG] Agregando item de crudo: ${medida}, kilosCosto: ${kilosCosto}, kilosVenta: ${kilosVenta}, costo: ${costo}, precio: ${precioVenta}`);
               
               // Agregar a items (tabla de costos)

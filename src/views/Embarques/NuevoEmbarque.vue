@@ -282,6 +282,9 @@ export default {
       clientesPredefinidos: CLIENTES_PREDEFINIDOS, // Usar constantes importadas
       clientesPersonalizados: [],
       ultimoIdPersonalizado: 0,
+      costosPorMedida: {},
+      aplicarCostoExtra: {},
+      costoExtra: 18,
       embarque: {
         fecha: null,
         cargaCon: '',
@@ -1594,6 +1597,10 @@ export default {
             kilosCrudos: data.kilosCrudos || {}
           };
 
+          this.costosPorMedida = { ...(data.costosPorMedida || {}) };
+          this.aplicarCostoExtra = { ...(data.aplicarCostoExtra || {}) };
+          this.costoExtra = data.costoExtra !== undefined ? data.costoExtra : 18;
+
           // No crear productos automáticamente para clientes sin productos.
           // Esto evitaba eliminaciones correctas y generaba "Cliente Desconocido".
 
@@ -1704,6 +1711,10 @@ export default {
       this._inicializandoEmbarque = true;
       // Establecer una fecha por defecto (fecha actual)
       const fechaActual = new Date().toISOString().split('T')[0];
+
+      this.costosPorMedida = {};
+      this.aplicarCostoExtra = {};
+      this.costoExtra = 18;
       
       try {
         const db = getFirestore();
@@ -3297,7 +3308,12 @@ export default {
         const embarqueCliente = { 
           ...this.embarque,
           productos: clienteProductos,
-          clienteCrudos: { [joselitoClienteId]: clienteCrudos }
+          clienteCrudos: { [joselitoClienteId]: clienteCrudos },
+          productosTotales: this.embarque.productos,
+          clienteCrudosTotales: this.clienteCrudos,
+          costosPorMedida: { ...this.costosPorMedida },
+          aplicarCostoExtra: { ...this.aplicarCostoExtra },
+          costoExtra: this.costoExtra
         };
         await EmbarqueCuentasService.crearCuentaJoselito(embarqueCliente, this.$router);
       } catch (error) {
@@ -3318,7 +3334,12 @@ export default {
         const embarqueCliente = { 
           ...this.embarque,
           productos: clienteProductos,
-          clienteCrudos: { [catarroClienteId]: clienteCrudos }
+          clienteCrudos: { [catarroClienteId]: clienteCrudos },
+          productosTotales: this.embarque.productos,
+          clienteCrudosTotales: this.clienteCrudos,
+          costosPorMedida: { ...this.costosPorMedida },
+          aplicarCostoExtra: { ...this.aplicarCostoExtra },
+          costoExtra: this.costoExtra
         };
         
         await EmbarqueCuentasService.crearCuentaCatarro(embarqueCliente, this.$router);
@@ -3470,7 +3491,12 @@ export default {
         const embarqueCliente = { 
           ...this.embarque,
           productos: clienteProductos,
-          clienteCrudos: { [ozunaClienteId]: clienteCrudos }
+          clienteCrudos: { [ozunaClienteId]: clienteCrudos },
+          productosTotales: this.embarque.productos,
+          clienteCrudosTotales: this.clienteCrudos,
+          costosPorMedida: { ...this.costosPorMedida },
+          aplicarCostoExtra: { ...this.aplicarCostoExtra },
+          costoExtra: this.costoExtra
         };
         
         await EmbarqueCuentasService.crearCuentaOzuna(embarqueCliente, this.$router);
@@ -3494,7 +3520,12 @@ export default {
         const embarqueCliente = { 
           ...this.embarque,
           productos: clienteProductos,
-          clienteCrudos: { [otilioClienteId]: clienteCrudos }
+          clienteCrudos: { [otilioClienteId]: clienteCrudos },
+          productosTotales: this.embarque.productos,
+          clienteCrudosTotales: this.clienteCrudos,
+          costosPorMedida: { ...this.costosPorMedida },
+          aplicarCostoExtra: { ...this.aplicarCostoExtra },
+          costoExtra: this.costoExtra
         };
         
         await EmbarqueCuentasService.crearCuentaOtilio(embarqueCliente, this.$router);
@@ -3522,7 +3553,12 @@ export default {
         const embarqueCliente = { 
           ...this.embarque,
           productos: clienteProductos,
-          clienteCrudos: { [veronicaClienteId]: clienteCrudos }
+          clienteCrudos: { [veronicaClienteId]: clienteCrudos },
+          productosTotales: this.embarque.productos,
+          clienteCrudosTotales: this.clienteCrudos,
+          costosPorMedida: { ...this.costosPorMedida },
+          aplicarCostoExtra: { ...this.aplicarCostoExtra },
+          costoExtra: this.costoExtra
         };
         
         console.log('[DEBUG] crearCuentaVeronica - embarqueCliente final:', embarqueCliente);
