@@ -3456,30 +3456,6 @@ export default {
       }
     },
 
-    // Método para crear cuenta de Catarro
-    async crearCuentaCatarro(clienteId, clienteProductos, clienteCrudos) {
-      try {
-        this.isCreatingAccount = true;
-        
-        // Asegurar que el ID de cliente sea '2' para Catarro
-        const catarroClienteId = '2';
-        
-        const embarqueCliente = { 
-          ...this.embarque,
-          productos: clienteProductos,
-          clienteCrudos: { [catarroClienteId]: clienteCrudos }
-        };
-        
-        await EmbarqueCuentasService.crearCuentaCatarro(embarqueCliente, this.$router);
-        alert('Cuenta de Catarro creada exitosamente y abierta en una nueva pestaña.');
-      } catch (error) {
-        console.error('Error al crear cuenta para Catarro:', error);
-        alert(`Error al crear cuenta para Catarro: ${error.message}`);
-      } finally {
-        this.isCreatingAccount = false;
-      }
-    },
-
     // Método para crear cuenta de Ozuna
     async crearCuentaOzuna(clienteId, clienteProductos, clienteCrudos) {
       try {
