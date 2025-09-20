@@ -240,6 +240,7 @@ import {
 
 // Después de las imports existentes, agregar:
 import EmbarqueCuentasService from '@/utils/services/EmbarqueCuentasService';
+import EmbarquesOfflineService from '@/services/EmbarquesOfflineService';
 
 export default {
   mixins: [
@@ -550,6 +551,10 @@ export default {
           }, 100);
         }
       }
+
+      this.guardarSnapshotOffline({ pendingSync: !navigator.onLine }).catch(error => {
+        console.warn('[mostrarError] No se pudo registrar snapshot offline del error:', error);
+      });
     },
     
     // Método para mostrar mensajes informativos al usuario
@@ -1118,25 +1123,62 @@ export default {
       try {
         // Si no existe embarqueId, crear nuevo embarque
         if (!this.embarqueId) {
-          console.log('[LOG] No hay embarqueId, se procede a crear un nuevo documento en Firestore.');
+          console.log('[LOG] No hay embarqueId, se procede a crear un nuevo embarque.');
+          const fechaSeleccionada = new Date(this.embarque.fecha);
+          const fechaISO = fechaSeleccionada.toISOString().split('T')[0];
+          const embarqueData = this.prepararDatosEmbarque();
+
+          if (!navigator.onLine) {
+            try {
+              await EmbarquesOfflineService.init();
+              const registrosLocales = await EmbarquesOfflineService.getAll();
+              const existeOffline = registrosLocales.some(registro => {
+                if (!registro || !registro.fecha) {
+                  return false;
+                }
+                try {
+                  const registroISO = new Date(registro.fecha).toISOString().split('T')[0];
+                  return registroISO === fechaISO && registro.id !== this.embarqueId;
+                } catch (_) {
+                  return false;
+                }
+              });
+
+              if (existeOffline) {
+                alert('Ya existe un embarque guardado offline para la fecha seleccionada. Por favor, seleccione otra fecha.');
+                this._creandoEmbarque = false;
+                return null;
+              }
+
+              this.embarqueId = uuidv4();
+              console.log(`[LOG] Creando embarque offline con ID: ${this.embarqueId}`);
+              this.modoEdicion = true;
+              this.guardadoAutomaticoActivo = true;
+
+              await this.guardarSnapshotOffline({ pendingSync: true, docData: embarqueData, syncState: 'pending-create' });
+
+              this.agregarProducto(clienteId);
+              this.clienteActivo = clienteId;
+
+              this._creandoEmbarque = false;
+              return this.embarqueId;
+            } catch (error) {
+              console.error('[guardarEmbarqueInicial] Error al crear embarque offline:', error);
+              this._creandoEmbarque = false;
+              alert('No se pudo crear el embarque en modo offline. Intente nuevamente.');
+              return null;
+            }
+          }
+
           const db = getFirestore();
           try {
-            // Verificar primero si ya existe un embarque con la misma fecha
-            const fechaSeleccionada = new Date(this.embarque.fecha);
-            
-            // Convertir a formato ISO para comparación (solo el año, mes y día)
-            const fechaISO = fechaSeleccionada.toISOString().split('T')[0];
-            
-            // Obtener todos los embarques
-            const embarquesRef = collection(db, "embarques");
+            const embarquesRef = collection(db, 'embarques');
             const snapshot = await getDocs(embarquesRef);
-            
-            // Buscar si ya existe un embarque con esta fecha
+
             const embarquesConMismaFecha = snapshot.docs.filter(doc => {
               const data = doc.data();
               let fechaEmbarque;
-              
-              // Manejar diferentes formatos de fecha
+
               if (data.fecha && typeof data.fecha.toDate === 'function') {
                 fechaEmbarque = data.fecha.toDate();
               } else if (data.fecha instanceof Date) {
@@ -1146,61 +1188,48 @@ export default {
               } else {
                 return false;
               }
-              
-              // Convertir a formato ISO para comparar solo año, mes y día
+
               const fechaEmbarqueISO = fechaEmbarque.toISOString().split('T')[0];
-              
-              // Comparar las fechas en formato ISO
               return fechaEmbarqueISO === fechaISO && doc.id !== this.embarqueId;
             });
-            
+
             if (embarquesConMismaFecha.length > 0) {
               alert('Ya existe un embarque para la fecha seleccionada. Por favor, seleccione otra fecha.');
               this._creandoEmbarque = false;
               console.log('[LOG] Creación cancelada: Ya existe un embarque en la fecha seleccionada.');
               return null;
             }
-            
-            // Crear una "reserva" para esta fecha para evitar condiciones de carrera
-            // Esta es una operación atómica que impedirá que otros procesos creen embarques con la misma fecha
-            const reservaRef = doc(db, "reservas_fechas", fechaISO);
+
+            const reservaRef = doc(db, 'reservas_fechas', fechaISO);
             await setDoc(reservaRef, {
               fecha: fechaISO,
               timestamp: serverTimestamp(),
               usuario: this.authStore.userId || 'anónimo',
-              expiración: new Date(Date.now() + 60000) // Expira en 1 minuto
+              expiración: new Date(Date.now() + 60000)
             });
-            
-            // Si no existe un embarque con la misma fecha, proceder a crear uno nuevo
-            const embarqueData = this.prepararDatosEmbarque();
-            console.log('[LOG] Datos preparados para el nuevo embarque:', JSON.parse(JSON.stringify(embarqueData)));
-            const docRef = await addDoc(collection(db, "embarques"), embarqueData);
 
-            // Eliminar la reserva una vez creado el embarque
+            console.log('[LOG] Datos preparados para el nuevo embarque:', JSON.parse(JSON.stringify(embarqueData)));
+            const docRef = await addDoc(collection(db, 'embarques'), embarqueData);
+
             try {
               await deleteDoc(reservaRef);
             } catch (error) {
-              console.error("Error al eliminar la reserva de fecha:", error);
-              // No es crítico si falla esto, la reserva expirará automáticamente
+              console.error('Error al eliminar la reserva de fecha:', error);
             }
 
-            // Guardar el ID y activar modo edición
             this.embarqueId = docRef.id;
             console.log(`[LOG] Embarque creado con éxito. Nuevo ID: ${this.embarqueId}`);
             this.modoEdicion = true;
             this.guardadoAutomaticoActivo = true;
 
-            // Luego agregar el producto
+            await this.guardarSnapshotOffline({ pendingSync: false, docData: embarqueData, syncState: 'synced' });
+
             this.agregarProducto(clienteId);
-            
-            // NO crear crudos automáticamente - el usuario los agrega manualmente cuando los necesite
-            
-            // Activar este cliente
             this.clienteActivo = clienteId;
 
             this._creandoEmbarque = false;
             console.log('[LOG] Proceso guardarEmbarqueInicial finalizado. Estado de _creandoEmbarque:', this._creandoEmbarque);
-            return this.embarqueId; // Retornar el ID para encadenar operaciones
+            return this.embarqueId;
           } catch (error) {
             this._creandoEmbarque = false;
             console.error('[LOG] Error catastrófico dentro de guardarEmbarqueInicial:', error);
@@ -1398,6 +1427,19 @@ export default {
 
       // Limpiar conexiones existentes antes de crear nuevas
       this.limpiarConexionesFirestore();
+
+      if (!navigator.onLine) {
+        const cargadoOffline = await this.cargarEmbarqueOffline(id);
+        if (!cargadoOffline) {
+          console.warn('[cargarEmbarque] No se encontró información offline para el embarque solicitado:', id);
+          alert('No se encontró información local para este embarque. Conéctate a internet para recuperarlo.');
+          this.resetearEmbarque();
+          this.modoEdicion = false;
+          this.guardadoAutomaticoActivo = false;
+        }
+        this._inicializandoEmbarque = false;
+        return;
+      }
 
       const db = getFirestore();
       const embarqueRef = doc(db, "embarques", id);
@@ -1618,6 +1660,7 @@ export default {
           this.embarqueId = id;
           this.modoEdicion = true;
           this.guardadoAutomaticoActivo = true;
+          this.guardarSnapshotOffline({ pendingSync: false, docData: data, syncState: 'synced' });
           
           // Desactivar bandera después de cargar completamente
           this.$nextTick(() => {
@@ -1951,11 +1994,274 @@ export default {
       });
     },
 
+    buildOfflineSnapshot(docDataOverride = null) {
+      if (!this.embarqueId) {
+        return null;
+      }
+
+      const safeClone = (value, fallback) => {
+        if (value === undefined || value === null) {
+          return fallback;
+        }
+        try {
+          return JSON.parse(JSON.stringify(value));
+        } catch (error) {
+          console.warn('[buildOfflineSnapshot] Error al clonar valor, devolviendo fallback:', error);
+          return fallback;
+        }
+      };
+
+      const docData = docDataOverride || this.prepararDatosEmbarque();
+
+      return {
+        id: this.embarqueId,
+        fecha: docData?.fecha || this.embarque.fecha || null,
+        cargaCon: docData?.cargaCon || this.embarque.cargaCon || '',
+        embarqueBloqueado: this.embarqueBloqueado || false,
+        productos: safeClone(this.embarque.productos || [], []),
+        clienteCrudos: safeClone(this.clienteCrudos || {}, {}),
+        clientesJuntarMedidas: safeClone(this.clientesJuntarMedidas || {}, {}),
+        clientesReglaOtilio: safeClone(this.clientesReglaOtilio || {}, {}),
+        clientesIncluirPrecios: safeClone(this.clientesIncluirPrecios || {}, {}),
+        clientesCuentaEnPdf: safeClone(this.clientesCuentaEnPdf || {}, {}),
+        clientesSumarKgCatarro: safeClone(this.clientesSumarKgCatarro || {}, {}),
+        clientesPersonalizados: safeClone(this.clientesPersonalizados || [], []),
+        costosPorMedida: safeClone(this.costosPorMedida || {}, {}),
+        aplicarCostoExtra: safeClone(this.aplicarCostoExtra || {}, {}),
+        costoExtra: this.costoExtra,
+        medidasConfiguracion: safeClone(this.medidasConfiguracion || [], []),
+        preciosActuales: safeClone(this.preciosActuales || [], []),
+        clientes: safeClone(docData?.clientes || [], []),
+        docData: safeClone(docData || {}, {}),
+      };
+    },
+
+    async guardarSnapshotOffline(options = {}) {
+      if (!this.embarqueId || this._inicializandoEmbarque) {
+        return;
+      }
+
+      try {
+        await EmbarquesOfflineService.init();
+        const snapshot = this.buildOfflineSnapshot(options.docData);
+        if (!snapshot) {
+          return;
+        }
+        const pendingSync = options.pendingSync !== undefined ? options.pendingSync : !navigator.onLine;
+        await EmbarquesOfflineService.save(snapshot, {
+          pendingSync,
+          syncState: options.syncState,
+          lastSyncError: options.lastSyncError,
+        });
+      } catch (error) {
+        console.error('[guardarSnapshotOffline] Error al guardar snapshot offline:', error);
+      }
+    },
+
+    async cargarEmbarqueOffline(id) {
+      try {
+        await EmbarquesOfflineService.init();
+        const record = await EmbarquesOfflineService.getById(id);
+        if (!record) {
+          return false;
+        }
+        this.aplicarSnapshotOffline(record);
+        return true;
+      } catch (error) {
+        console.error('[cargarEmbarqueOffline] No se pudo cargar el embarque offline:', error);
+        return false;
+      }
+    },
+
+    aplicarSnapshotOffline(record) {
+      if (!record || !record.id) {
+        return;
+      }
+
+      const safeClone = (value, fallback) => {
+        if (value === undefined || value === null) {
+          return fallback;
+        }
+        try {
+          return JSON.parse(JSON.stringify(value));
+        } catch (error) {
+          console.warn('[aplicarSnapshotOffline] Error al clonar valor, usando fallback:', error);
+          return fallback;
+        }
+      };
+
+      this._inicializandoEmbarque = true;
+
+      this.embarqueId = record.id;
+      this.modoEdicion = true;
+      this.guardadoAutomaticoActivo = true;
+      this.embarqueBloqueado = Boolean(record.embarqueBloqueado);
+
+      this.embarque = {
+        fecha: record.fecha || null,
+        cargaCon: record.cargaCon || '',
+        productos: safeClone(record.productos || [], []),
+      };
+
+      this.clienteCrudos = safeClone(record.clienteCrudos || {}, {});
+      this.clientesJuntarMedidas = safeClone(record.clientesJuntarMedidas || {}, {});
+      this.clientesReglaOtilio = safeClone(record.clientesReglaOtilio || {}, {});
+      this.clientesIncluirPrecios = safeClone(record.clientesIncluirPrecios || {}, {});
+      this.clientesCuentaEnPdf = safeClone(record.clientesCuentaEnPdf || {}, {});
+      this.clientesSumarKgCatarro = safeClone(record.clientesSumarKgCatarro || {}, {});
+      this.clientesPersonalizados = safeClone(record.clientesPersonalizados || [], []);
+      this.costosPorMedida = safeClone(record.costosPorMedida || {}, {});
+      this.aplicarCostoExtra = safeClone(record.aplicarCostoExtra || {}, {});
+      this.costoExtra = record.costoExtra !== undefined ? record.costoExtra : this.costoExtra;
+      this.medidasConfiguracion = safeClone(record.medidasConfiguracion || [], []);
+      this.preciosActuales = safeClone(record.preciosActuales || [], []);
+
+      try {
+        localStorage.setItem('clientesPersonalizados', JSON.stringify(this.clientesPersonalizados));
+      } catch (error) {
+        console.warn('[aplicarSnapshotOffline] No se pudo sincronizar clientes personalizados con localStorage:', error);
+      }
+
+      this.productosEliminadosLocalmente = new Set();
+      this.productosNuevosPendientes = new Map();
+      this.camposEnEdicion = new Set();
+
+      this._inicializandoEmbarque = false;
+
+      this.actualizarMedidasUsadas();
+      this.undoStack = [JSON.stringify(this.embarque)];
+      this.redoStack = [];
+      this.clienteActivo = this.embarque.productos.length > 0 ? this.embarque.productos[0].clienteId : null;
+    },
+
+    normalizarDocDataParaFirestore(docData, record = {}) {
+      const dataCruda = docData ? JSON.parse(JSON.stringify(docData)) : this.prepararDatosEmbarque();
+
+      const parseFecha = (valor) => {
+        if (!valor) {
+          return new Date();
+        }
+        if (valor instanceof Date) {
+          return valor;
+        }
+        if (typeof valor === 'string') {
+          const parsed = new Date(valor);
+          if (!Number.isNaN(parsed.getTime())) {
+            return parsed;
+          }
+        }
+        if (typeof valor === 'object' && valor !== null) {
+          if (typeof valor.seconds === 'number') {
+            return new Date(valor.seconds * 1000);
+          }
+          if (typeof valor._seconds === 'number') {
+            return new Date(valor._seconds * 1000);
+          }
+        }
+        try {
+          return new Date(valor);
+        } catch (error) {
+          console.warn('[normalizarDocDataParaFirestore] No se pudo parsear la fecha, usando fecha actual.', error);
+          return new Date();
+        }
+      };
+
+      const data = {
+        cargaCon: dataCruda.cargaCon || '',
+        clientes: Array.isArray(dataCruda.clientes) ? dataCruda.clientes : [],
+        clientesJuntarMedidas: dataCruda.clientesJuntarMedidas || {},
+        clientesReglaOtilio: dataCruda.clientesReglaOtilio || {},
+        clientesIncluirPrecios: dataCruda.clientesIncluirPrecios || {},
+        clientesCuentaEnPdf: dataCruda.clientesCuentaEnPdf || {},
+        clientesSumarKgCatarro: dataCruda.clientesSumarKgCatarro || {},
+        clientesPersonalizados: Array.isArray(dataCruda.clientesPersonalizados) ? dataCruda.clientesPersonalizados : [],
+        embarqueBloqueado: record.embarqueBloqueado ?? dataCruda.embarqueBloqueado ?? false,
+        costosPorMedida: dataCruda.costosPorMedida || {},
+        aplicarCostoExtra: dataCruda.aplicarCostoExtra || {},
+        costoExtra: typeof dataCruda.costoExtra === 'number' ? dataCruda.costoExtra : (this.costoExtra || 18),
+        medidasConfiguracion: Array.isArray(dataCruda.medidasConfiguracion) ? dataCruda.medidasConfiguracion : [],
+        preciosActuales: Array.isArray(dataCruda.preciosActuales) ? dataCruda.preciosActuales : [],
+        fecha: parseFecha(dataCruda.fecha || record.fecha || this.embarque.fecha),
+      };
+
+      data.clientes = data.clientes.map(cliente => ({
+        ...cliente,
+        productos: Array.isArray(cliente.productos) ? cliente.productos.map(producto => ({
+          ...producto,
+          restarTaras: producto.restarTaras || false,
+          noSumarKilos: producto.noSumarKilos || false,
+        })) : [],
+        crudos: Array.isArray(cliente.crudos) ? cliente.crudos : [],
+      }));
+
+      return data;
+    },
+
+    async sincronizarRegistroOffline(record) {
+      if (!record || !record.id) {
+        return;
+      }
+
+      try {
+        const db = getFirestore();
+        const embarqueRef = doc(db, 'embarques', record.id);
+        const docData = record.docData || (record.id === this.embarqueId ? this.prepararDatosEmbarque() : null);
+        const payload = this.normalizarDocDataParaFirestore(docData, record);
+
+        const metadataUltimaEdicion = {
+          userId: this.authStore.userId,
+          username: this.authStore.user?.username || 'Usuario desconocido',
+          timestamp: serverTimestamp()
+        };
+
+        const snapshot = await getDoc(embarqueRef);
+
+        if (record.deleted) {
+          if (snapshot.exists()) {
+            await deleteDoc(embarqueRef);
+          }
+          await EmbarquesOfflineService.hardDelete(record.id);
+          return;
+        }
+
+        const dataParaFirestore = {
+          ...payload,
+          ultimaEdicion: metadataUltimaEdicion
+        };
+
+        if (snapshot.exists()) {
+          await setDoc(embarqueRef, dataParaFirestore, { merge: false });
+        } else {
+          await setDoc(embarqueRef, dataParaFirestore);
+        }
+
+        await EmbarquesOfflineService.markSynced(record.id);
+
+        if (record.id === this.embarqueId) {
+          this.guardadoAutomaticoActivo = true;
+          this.modoEdicion = true;
+        }
+      } catch (error) {
+        console.error('[sincronizarRegistroOffline] Error al sincronizar embarque offline:', error);
+        try {
+          await EmbarquesOfflineService.markSyncError(record.id, error.message || error);
+        } catch (markError) {
+          console.warn('[sincronizarRegistroOffline] No se pudo marcar el error de sincronización:', markError);
+        }
+      }
+    },
+
     async guardarCambiosEnTiempoReal(forzar = false) {
       if (!forzar && (!this.guardadoAutomaticoActivo || !this.embarqueId || 
           this.mostrarModalPrecio || this.mostrarModalHilos || 
           this.mostrarModalNota || this.mostrarModalAlt || 
           this.mostrarModalNombreAlternativo || this.mostrarModalNuevoCliente)) return;
+
+      await this.guardarSnapshotOffline({ pendingSync: !navigator.onLine });
+
+      if (!navigator.onLine) {
+        return;
+      }
 
       // Verificar si el SaveManager está inicializado
       if (!this.saveManager) {
@@ -2140,6 +2446,20 @@ export default {
       
       this._guardandoEmbarque = true;
 
+      if (!this.embarqueId) {
+        this.embarqueId = uuidv4();
+        this.modoEdicion = true;
+        this.guardadoAutomaticoActivo = true;
+      }
+
+      await this.guardarSnapshotOffline({ pendingSync: !navigator.onLine });
+
+      if (!navigator.onLine) {
+        this._guardandoEmbarque = false;
+        this.mostrarMensaje('Embarque guardado de forma offline. Se sincronizará automáticamente cuando recuperes la conexión.');
+        return;
+      }
+
       const embarqueData = this.prepararDatosEmbarque();
       const db = getFirestore();
 
@@ -2168,6 +2488,7 @@ export default {
               }
             });
           });
+          await this.guardarSnapshotOffline({ pendingSync: false, docData: embarqueData, syncState: 'synced' });
           alert('Embarque actualizado exitosamente.');
           this._guardandoEmbarque = false;
         } else {
@@ -2251,6 +2572,7 @@ export default {
             this.embarqueId = docRef.id;
             alert('Embarque creado exitosamente y guardado en la base de datos.');
             this.modoEdicion = true;
+            await this.guardarSnapshotOffline({ pendingSync: false, docData: embarqueData, syncState: 'synced' });
           } finally {
             // Eliminar la reserva una vez creado el embarque o en caso de error
             try {
@@ -3549,13 +3871,23 @@ export default {
       }
     },
 
-    // Sincronizar cambios pendientes al reconectarr
-    syncOffline() {
-      if (this.embarqueId) {
-        this.guardarCambiosEnTiempoReal();
-      } else {
-        // Si aún no existe en Firestore, crearlo
-        this.guardarEmbarque().catch(error => console.error('Error al sincronizar embarque offline:', error));
+    // Sincronizar cambios pendientes al reconectar
+    async syncOffline() {
+      try {
+        await EmbarquesOfflineService.init();
+        const pendientes = await EmbarquesOfflineService.getPendingSync();
+
+        if (Array.isArray(pendientes) && pendientes.length > 0) {
+          for (const record of pendientes) {
+            await this.sincronizarRegistroOffline(record);
+          }
+        }
+
+        if (this.embarqueId) {
+          this.guardarCambiosEnTiempoReal();
+        }
+      } catch (error) {
+        console.error('[syncOffline] Error general al sincronizar embarques offline:', error);
       }
     },
 
@@ -3886,24 +4218,56 @@ export default {
     
     // Cargar configuración de medidas
     this.cargarMedidasConfiguracion();
-    
-    // Si estamos offline y hay datos guardados, cargar desde localStorage
-    const localEmbarque = localStorage.getItem('embarque');
-    if (!navigator.onLine && localEmbarque) {
-      this.embarque = JSON.parse(localEmbarque);
-      const localCrudos = localStorage.getItem('clienteCrudos');
-      if (localCrudos) this.clienteCrudos = JSON.parse(localCrudos);
-      this.undoStack.push(JSON.stringify(this.embarque));
-      this.actualizarMedidasUsadas();
-      await this.cargarClientesPersonalizados();
-      this.guardadoAutomaticoActivo = true;
-      // Escuchar reconexión para sincronizar cambios con Firestore
-      window.addEventListener('online', this.syncOffline);
-      await this.cargarPreciosActuales();
-      return;
+
+    await EmbarquesOfflineService.init();
+    window.addEventListener('online', this.syncOffline);
+
+    if (navigator.onLine) {
+      await this.syncOffline();
     }
+
     const embarqueId = this.$route.params.id;
     console.log(`[LOG] ID de embarque en "created": ${embarqueId}`);
+
+    if (!navigator.onLine) {
+      let cargadoOffline = false;
+
+      if (embarqueId && embarqueId !== 'nuevo') {
+        cargadoOffline = await this.cargarEmbarqueOffline(embarqueId);
+      } else {
+        const registrosLocales = await EmbarquesOfflineService.getAll();
+        if (registrosLocales.length > 0) {
+          this.aplicarSnapshotOffline(registrosLocales[0]);
+          cargadoOffline = true;
+        }
+      }
+
+      if (!cargadoOffline) {
+        const localEmbarque = localStorage.getItem('embarque');
+        if (localEmbarque) {
+          try {
+            this.embarque = JSON.parse(localEmbarque);
+            const localCrudos = localStorage.getItem('clienteCrudos');
+            if (localCrudos) this.clienteCrudos = JSON.parse(localCrudos);
+            cargadoOffline = true;
+          } catch (error) {
+            console.warn('[NuevoEmbarque] Error al restaurar embarque desde localStorage:', error);
+          }
+        }
+      }
+
+      if (cargadoOffline) {
+        this.undoStack.push(JSON.stringify(this.embarque));
+        this.actualizarMedidasUsadas();
+        await this.cargarClientesPersonalizados();
+        this.guardadoAutomaticoActivo = true;
+        await this.cargarPreciosActuales();
+        return;
+      }
+
+      console.warn('[NuevoEmbarque] No se encontraron datos offline para el embarque solicitado.');
+    }
+
     await this.cargarEmbarque(embarqueId);
     this.undoStack.push(JSON.stringify(this.embarque));
     this.actualizarMedidasUsadas();
