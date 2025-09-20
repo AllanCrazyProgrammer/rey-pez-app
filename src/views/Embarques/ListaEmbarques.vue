@@ -152,9 +152,11 @@
 </template>
 
 <script>
-import { getFirestore, collection, getDocs, doc, deleteDoc } from 'firebase/firestore';
+import { getFirestore, collection, getDocs, doc, deleteDoc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import BackupService from './BackupService.js';
 import NotificacionRespaldo from './NotificacionRespaldo.vue';
+import EmbarquesOfflineService from '@/services/EmbarquesOfflineService';
+import { useAuthStore } from '@/stores/auth';
 
 export default {
   name: 'ListaEmbarques',
@@ -174,22 +176,237 @@ export default {
     };
   },
   methods: {
+    safeClone(value, fallback = null) {
+      if (value === undefined || value === null) {
+        return fallback;
+      }
+      try {
+        return JSON.parse(JSON.stringify(value));
+      } catch (error) {
+        console.warn('[ListaEmbarques] Error al clonar valor, usando fallback:', error);
+        return fallback;
+      }
+    },
+
+    mapOfflineRecordToLista(record) {
+      if (!record) return null;
+      let fecha;
+      try {
+        fecha = record.fecha ? new Date(record.fecha) : null;
+      } catch (error) {
+        fecha = null;
+      }
+
+      return {
+        id: record.id,
+        fecha: fecha || new Date(),
+        embarqueBloqueado: Boolean(record.embarqueBloqueado),
+        clientes: record.clientes || [],
+        cargaCon: record.cargaCon || 'No especificado',
+        pendingSync: Boolean(record.pendingSync),
+      };
+    },
+
+    construirSnapshotOfflineDesdeRemoto(docId, data, fecha) {
+      const clientes = Array.isArray(data.clientes) ? data.clientes : [];
+      const productos = clientes.flatMap(cliente => {
+        const productosCliente = Array.isArray(cliente.productos) ? cliente.productos : [];
+        return productosCliente.map(producto => ({
+          ...producto,
+          clienteId: cliente.id,
+          nombreCliente: cliente.nombre,
+        }));
+      });
+
+      const clienteCrudos = {};
+      clientes.forEach(cliente => {
+        clienteCrudos[cliente.id] = Array.isArray(cliente.crudos) ? cliente.crudos : [];
+      });
+
+      const docData = {
+        ...this.safeClone(data, {}),
+        fecha: fecha ? fecha.toISOString() : null,
+      };
+
+      return {
+        id: docId,
+        fecha: fecha ? fecha.toISOString() : null,
+        cargaCon: data.cargaCon || '',
+        embarqueBloqueado: data.embarqueBloqueado || false,
+        clientesPersonalizados: data.clientesPersonalizados || [],
+        clientesJuntarMedidas: data.clientesJuntarMedidas || {},
+        clientesReglaOtilio: data.clientesReglaOtilio || {},
+        clientesIncluirPrecios: data.clientesIncluirPrecios || {},
+        clientesCuentaEnPdf: data.clientesCuentaEnPdf || {},
+        clientesSumarKgCatarro: data.clientesSumarKgCatarro || {},
+        clientes: clientes,
+        productos,
+        clienteCrudos,
+        costosPorMedida: data.costosPorMedida || {},
+        aplicarCostoExtra: data.aplicarCostoExtra || {},
+        costoExtra: data.costoExtra !== undefined ? data.costoExtra : 18,
+        medidasConfiguracion: data.medidasConfiguracion || [],
+        preciosActuales: [],
+        docData,
+      };
+    },
+
+    normalizarDocDataParaFirestore(record) {
+      const source = record && record.docData ? JSON.parse(JSON.stringify(record.docData)) : {};
+
+      const parseFecha = (valor) => {
+        if (!valor) return new Date();
+        if (valor instanceof Date) return valor;
+        if (typeof valor === 'string') {
+          const parsed = new Date(valor);
+          if (!Number.isNaN(parsed.getTime())) {
+            return parsed;
+          }
+        }
+        if (typeof valor === 'object') {
+          const seconds = valor?.seconds ?? valor?._seconds;
+          if (typeof seconds === 'number') {
+            return new Date(seconds * 1000);
+          }
+        }
+        try {
+          return new Date(valor);
+        } catch (error) {
+          console.warn('[ListaEmbarques] No se pudo parsear la fecha, usando fecha actual.', error);
+          return new Date();
+        }
+      };
+
+      const pick = (key, fallback) => {
+        if (source[key] !== undefined) return source[key];
+        if (record && record[key] !== undefined) return record[key];
+        return fallback;
+      };
+
+      const payload = {
+        fecha: parseFecha(pick('fecha', null)),
+        cargaCon: pick('cargaCon', ''),
+        clientes: Array.isArray(pick('clientes', [])) ? pick('clientes', []).map(cliente => ({
+          ...cliente,
+          productos: Array.isArray(cliente.productos) ? cliente.productos.map(producto => ({
+            ...producto,
+            restarTaras: producto.restarTaras || false,
+            noSumarKilos: producto.noSumarKilos || false,
+          })) : [],
+          crudos: Array.isArray(cliente.crudos) ? cliente.crudos : [],
+        })) : [],
+        clientesJuntarMedidas: pick('clientesJuntarMedidas', {}),
+        clientesReglaOtilio: pick('clientesReglaOtilio', {}),
+        clientesIncluirPrecios: pick('clientesIncluirPrecios', {}),
+        clientesCuentaEnPdf: pick('clientesCuentaEnPdf', {}),
+        clientesSumarKgCatarro: pick('clientesSumarKgCatarro', {}),
+        clientesPersonalizados: Array.isArray(pick('clientesPersonalizados', [])) ? pick('clientesPersonalizados', []) : [],
+        costosPorMedida: pick('costosPorMedida', {}),
+        aplicarCostoExtra: pick('aplicarCostoExtra', {}),
+        costoExtra: typeof pick('costoExtra', undefined) === 'number' ? pick('costoExtra', undefined) : 18,
+        medidasConfiguracion: Array.isArray(pick('medidasConfiguracion', [])) ? pick('medidasConfiguracion', []) : [],
+        preciosActuales: Array.isArray(pick('preciosActuales', [])) ? pick('preciosActuales', []) : [],
+        embarqueBloqueado: Boolean(pick('embarqueBloqueado', false)),
+      };
+
+      return payload;
+    },
+
+    async sincronizarPendientesOffline() {
+      try {
+        const pendientes = await EmbarquesOfflineService.getPendingSync();
+        if (!Array.isArray(pendientes) || pendientes.length === 0) {
+          return;
+        }
+
+        const authStore = useAuthStore();
+        const db = getFirestore();
+
+        for (const record of pendientes) {
+          try {
+            const embarqueRef = doc(db, 'embarques', record.id);
+            const snapshot = await getDoc(embarqueRef);
+
+            if (record.deleted) {
+              if (snapshot.exists()) {
+                await deleteDoc(embarqueRef);
+              }
+              await EmbarquesOfflineService.hardDelete(record.id);
+              continue;
+            }
+
+            const payload = this.normalizarDocDataParaFirestore(record);
+            const dataParaFirestore = {
+              ...payload,
+              ultimaEdicion: {
+                userId: authStore?.userId || 'offline-user',
+                username: authStore?.user?.username || 'Modo offline',
+                timestamp: serverTimestamp()
+              }
+            };
+
+            if (snapshot.exists()) {
+              await setDoc(embarqueRef, dataParaFirestore, { merge: false });
+            } else {
+              await setDoc(embarqueRef, dataParaFirestore);
+            }
+
+            await EmbarquesOfflineService.markSynced(record.id);
+          } catch (error) {
+            console.error('[ListaEmbarques] Error al sincronizar registro offline:', error);
+            try {
+              await EmbarquesOfflineService.markSyncError(record.id, error.message || error);
+            } catch (markError) {
+              console.warn('[ListaEmbarques] No se pudo marcar el error de sincronización:', markError);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('[ListaEmbarques] Error general al sincronizar registros offline:', error);
+      }
+    },
+
     async cargarEmbarques() {
       try {
         this.cargando = true;
         this.error = null;
+
+        await EmbarquesOfflineService.init();
+
+        // Mostrar resultados offline inmediatamente si existen
+        try {
+          const registrosOffline = await EmbarquesOfflineService.getAll();
+          if (Array.isArray(registrosOffline) && registrosOffline.length > 0) {
+            this.embarques = registrosOffline
+              .map(this.mapOfflineRecordToLista)
+              .filter(Boolean)
+              .sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+          } else {
+            this.embarques = [];
+          }
+        } catch (offlineError) {
+          console.warn('[ListaEmbarques] No se pudieron leer datos offline:', offlineError);
+        }
+
+        if (navigator.onLine) {
+          await this.sincronizarPendientesOffline();
+        } else {
+          if (this.embarques.length === 0) {
+            this.error = 'Sin conexión y sin datos locales de embarques.';
+          }
+          return;
+        }
+
         const db = getFirestore();
         const embarquesRef = collection(db, 'embarques');
         const snapshot = await getDocs(embarquesRef);
-        
-        // Agrupar embarques por fecha para detectar duplicados
+
         const embarquesPorFecha = {};
-        
-        snapshot.docs.forEach(doc => {
-          const data = doc.data();
+
+        snapshot.docs.forEach(docSnap => {
+          const data = docSnap.data();
           let fechaEmbarque;
-          
-          // Manejar diferentes formatos de fecha
+
           if (data.fecha && typeof data.fecha.toDate === 'function') {
             fechaEmbarque = data.fecha.toDate();
           } else if (data.fecha instanceof Date) {
@@ -197,96 +414,83 @@ export default {
           } else if (typeof data.fecha === 'string') {
             fechaEmbarque = new Date(data.fecha);
           } else {
-            // Si no se puede determinar la fecha, usar el ID como clave
-            embarquesPorFecha[doc.id] = [{ id: doc.id, data: data }];
+            embarquesPorFecha[docSnap.id] = [{ id: docSnap.id, data, fecha: null }];
             return;
           }
-          
+
           const fechaISO = fechaEmbarque.toISOString().split('T')[0];
-          
           if (!embarquesPorFecha[fechaISO]) {
             embarquesPorFecha[fechaISO] = [];
           }
-          
+
           embarquesPorFecha[fechaISO].push({
-            id: doc.id,
-            data: data,
-            fecha: fechaEmbarque
+            id: docSnap.id,
+            data,
+            fecha: fechaEmbarque,
           });
         });
-        
-        // Eliminar embarques duplicados CON RESPALDO AUTOMÁTICO
+
         const embarquesParaEliminar = [];
-        
-        // NUEVO ALGORITMO INTELIGENTE CON RESPALDOS AUTOMÁTICOS
+
         for (const fecha in embarquesPorFecha) {
           if (embarquesPorFecha[fecha].length > 1) {
             console.log(`[DUPLICADOS] Encontrados ${embarquesPorFecha[fecha].length} embarques para ${fecha}`);
-            
-            // Ordenar por el más completo (más clientes o productos)
+
             embarquesPorFecha[fecha].sort((a, b) => {
-              const productosA = a.data.clientes ? a.data.clientes.reduce((sum, cliente) => 
+              const productosA = a.data.clientes ? a.data.clientes.reduce((sum, cliente) =>
                 sum + (cliente.productos ? cliente.productos.length : 0), 0) : 0;
-              
-              const productosB = b.data.clientes ? b.data.clientes.reduce((sum, cliente) => 
+
+              const productosB = b.data.clientes ? b.data.clientes.reduce((sum, cliente) =>
                 sum + (cliente.productos ? cliente.productos.length : 0), 0) : 0;
-              
-              // Considerar también si tiene datos de crudos
-              const crudosA = a.data.clientes ? a.data.clientes.reduce((sum, cliente) => 
+
+              const crudosA = a.data.clientes ? a.data.clientes.reduce((sum, cliente) =>
                 sum + (cliente.crudos ? cliente.crudos.length : 0), 0) : 0;
-              
-              const crudosB = b.data.clientes ? b.data.clientes.reduce((sum, cliente) => 
+
+              const crudosB = b.data.clientes ? b.data.clientes.reduce((sum, cliente) =>
                 sum + (cliente.crudos ? cliente.crudos.length : 0), 0) : 0;
-              
-              // Calcular "puntaje de completitud"
-              const puntajeA = productosA + (crudosA * 2); // Los crudos pesan más
+
+              const puntajeA = productosA + (crudosA * 2);
               const puntajeB = productosB + (crudosB * 2);
-              
-              return puntajeB - puntajeA; // Ordenar de mayor a menor completitud
+
+              return puntajeB - puntajeA;
             });
-            
-            // Solo marcar para eliminación si el primero tiene claramente más datos
+
             const principal = embarquesPorFecha[fecha][0];
             const puntajePrincipal = this.calcularPuntajeCompletitud(principal.data);
-            
+
             for (let i = 1; i < embarquesPorFecha[fecha].length; i++) {
               const candidato = embarquesPorFecha[fecha][i];
               const puntajeCandidato = this.calcularPuntajeCompletitud(candidato.data);
-              
-              // Solo eliminar si hay una diferencia significativa
+
               if (puntajePrincipal > puntajeCandidato || puntajeCandidato === 0) {
                 embarquesParaEliminar.push({
                   id: candidato.id,
                   data: candidato.data,
                   razon: `duplicado_inferior_${fecha}`,
                   puntajePrincipal,
-                  puntajeCandidato
+                  puntajeCandidato,
                 });
               }
             }
           }
         }
-        
-        // Crear respaldos antes de eliminar
+
         if (embarquesParaEliminar.length > 0) {
           console.log(`[RESPALDOS] Creando respaldos para ${embarquesParaEliminar.length} embarques antes de eliminar`);
-          
+
           for (const embarqueAEliminar of embarquesParaEliminar) {
             try {
-              // CREAR RESPALDO AUTOMÁTICO antes de eliminar
               await BackupService.crearRespaldoEmergencia(
-                embarqueAEliminar.id, 
-                embarqueAEliminar.razon
+                embarqueAEliminar.id,
+                embarqueAEliminar.razon,
               );
               console.log(`[RESPALDO] Respaldo creado para embarque ${embarqueAEliminar.id}`);
             } catch (error) {
               console.error(`[RESPALDO] Error al crear respaldo para ${embarqueAEliminar.id}:`, error);
-              // NO eliminar si no se pudo crear el respaldo
               continue;
             }
           }
-          
-          // Solo AHORA eliminar los embarques (después de respaldar)
+
           for (const embarqueAEliminar of embarquesParaEliminar) {
             try {
               await deleteDoc(doc(db, 'embarques', embarqueAEliminar.id));
@@ -295,33 +499,42 @@ export default {
               console.error(`[ELIMINACIÓN] Error al eliminar embarque ${embarqueAEliminar.id}:`, error);
             }
           }
-          
-          // Después de eliminar, volver a cargar los embarques
+
           if (embarquesParaEliminar.length > 0) {
             console.log(`[LIMPIEZA] Recargando lista después de eliminar ${embarquesParaEliminar.length} duplicados`);
             return this.cargarEmbarques();
           }
         }
-        
-        // Procesar los embarques (uno por fecha)
+
         const embarquesFiltrados = [];
-        
+
         for (const fecha in embarquesPorFecha) {
-          const embarque = embarquesPorFecha[fecha][0]; // Tomar el primer embarque (el más completo)
-          
+          const embarque = embarquesPorFecha[fecha][0];
+          const fechaObj = embarque.fecha instanceof Date ? embarque.fecha : (embarque.fecha ? new Date(embarque.fecha) : new Date());
+
           embarquesFiltrados.push({
             id: embarque.id,
-            fecha: embarque.fecha,
+            fecha: fechaObj,
             embarqueBloqueado: embarque.data.embarqueBloqueado || false,
             clientes: embarque.data.clientes || [],
-            cargaCon: embarque.data.cargaCon || 'No especificado'
+            cargaCon: embarque.data.cargaCon || 'No especificado',
           });
+
+          const snapshotOffline = this.construirSnapshotOfflineDesdeRemoto(embarque.id, embarque.data, fechaObj);
+          await EmbarquesOfflineService.save(snapshotOffline, { pendingSync: false, syncState: 'synced' });
         }
-        
+
         this.embarques = embarquesFiltrados.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
       } catch (error) {
         console.error('Error al cargar embarques:', error);
-        this.error = 'Error al cargar los embarques. Por favor, intenta nuevamente.';
+        if (this.embarques.length === 0) {
+          this.error = 'Error al cargar los embarques. Por favor, intenta nuevamente.';
+        } else {
+          this.mostrarNotificacion = true;
+          this.tipoNotificacion = 'warning';
+          this.tituloNotificacion = 'Modo offline';
+          this.mensajeNotificacion = 'Mostrando embarques guardados localmente.';
+        }
       } finally {
         this.cargando = false;
       }
@@ -512,6 +725,19 @@ export default {
       if (confirm('¿Estás seguro de que quieres eliminar este embarque?\n\nSe creará un respaldo automático antes de eliminarlo.')) {
         try {
           console.log(`[ELIMINACIÓN MANUAL] Iniciando eliminación con respaldo para embarque ${embarqueId}`);
+
+          await EmbarquesOfflineService.init();
+
+          if (!navigator.onLine) {
+            await EmbarquesOfflineService.markDeleted(embarqueId, { pendingSync: true, syncState: 'pending-delete' });
+            this.embarques = this.embarques.filter(e => e.id !== embarqueId);
+            this.mostrarNotificacionRespaldo(
+              'warning',
+              '🗑️ Eliminación en modo offline',
+              'El embarque se marcará para eliminarse definitivamente cuando recuperes la conexión.'
+            );
+            return;
+          }
           
           // PASO 1: Crear respaldo automático ANTES de eliminar
           try {
@@ -541,6 +767,7 @@ export default {
           // PASO 2: Solo ahora eliminar el embarque (ya respaldado)
           const db = getFirestore();
           await deleteDoc(doc(db, 'embarques', embarqueId));
+          await EmbarquesOfflineService.hardDelete(embarqueId);
           
           console.log(`[ELIMINACIÓN MANUAL] Embarque ${embarqueId} eliminado exitosamente`);
           

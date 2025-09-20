@@ -377,9 +377,10 @@
 </template>
 
 <script>
-import { getFirestore, doc, getDoc, updateDoc, collection, getDocs, query, where, orderBy } from 'firebase/firestore';
+import { getFirestore, doc, getDoc, updateDoc, collection, getDocs, query, orderBy } from 'firebase/firestore';
 import { debounce } from 'lodash';
 import { generarPDFRendimientos } from '@/utils/RendimientosPdf';
+import EmbarquesOfflineService from '@/services/EmbarquesOfflineService';
 
 export default {
   name: 'Rendimientos',
@@ -413,28 +414,208 @@ export default {
   },
 
   async created() {
+    this.guardarCambiosEnTiempoReal = debounce(this.guardarCambiosEnTiempoReal, 300);
+
+    await EmbarquesOfflineService.init();
+    window.addEventListener('online', this.syncOfflineRendimientos);
+
+    const embarqueId = this.$route.params.id;
+    let registroOffline = null;
+    try {
+      registroOffline = await EmbarquesOfflineService.getById(embarqueId);
+    } catch (error) {
+      console.warn('[Rendimientos] No se pudo obtener el registro offline:', error);
+    }
+
+    if (registroOffline?.preciosVentaCache && Object.keys(this.preciosVenta).length === 0) {
+      this.preciosVenta = this.deepClone(registroOffline.preciosVentaCache);
+    }
+
+    if (navigator.onLine) {
+      await this.syncOfflineRendimientos();
+    }
+
+    if (!navigator.onLine && registroOffline) {
+      this.aplicarDatosOffline(registroOffline);
+      await this.precargarCostos();
+      this.$nextTick(() => {
+        this.calcularGanancias();
+        this.calcularGananciasCrudos();
+      });
+      return;
+    }
+
     await this.cargarEmbarque();
     await this.cargarPreciosVenta();
-    // Precargar costos para todas las medidas
     await this.precargarCostos();
-    // Aplicar debounce después de definir el método
-    this.guardarCambiosEnTiempoReal = debounce(this.guardarCambiosEnTiempoReal, 300);
   },
 
   // Recargar datos cuando se vuelve a este componente
   async activated() {
     console.log('Recargando datos de rendimientos...');
+    if (navigator.onLine) {
+      await this.syncOfflineRendimientos();
+    }
+    const embarqueId = this.$route.params.id;
+    const registroOffline = await EmbarquesOfflineService.getById(embarqueId).catch(() => null);
+
+    if (!navigator.onLine && registroOffline) {
+      this.aplicarDatosOffline(registroOffline);
+      await this.precargarCostos();
+      this.$nextTick(() => {
+        this.calcularGanancias();
+        this.calcularGananciasCrudos();
+      });
+      return;
+    }
+
     await this.cargarEmbarque();
     await this.cargarPreciosVenta();
-    // Precargar costos después de recargar datos
     await this.precargarCostos();
-    // Forzar recálculo de ganancias después de recargar precios
-    this.$nextTick(async () => {
-      await this.calcularGanancias();
+    this.$nextTick(() => {
+      this.calcularGanancias();
+      this.calcularGananciasCrudos();
     });
   },
 
       methods: {
+    deepClone(value) {
+      if (value === undefined || value === null) return value;
+      try {
+        return JSON.parse(JSON.stringify(value));
+      } catch (error) {
+        console.warn('[Rendimientos] No se pudo clonar profundamente un valor, devolviendo referencia original.', error);
+        return value;
+      }
+    },
+    crearPayloadRendimientos() {
+      return {
+        kilosCrudos: this.deepClone(this.kilosCrudos),
+        medidaOculta: { ...this.medidaOculta },
+        analizarGanancia: { ...this.analizarGanancia },
+        analizarGananciaCrudos: { ...this.analizarGananciaCrudos },
+        analizarMaquilaGanancia: { ...this.analizarMaquilaGanancia },
+        precioMaquila: { ...this.precioMaquila },
+        pesoTaraCosto: Number(this.pesoTaraCosto) || 0,
+        pesoTaraVenta: Number(this.pesoTaraVenta) || 0,
+        nombresMedidasPersonalizados: { ...this.nombresMedidasPersonalizados },
+        notaRendimientos: this.embarqueData?.notaRendimientos || ''
+      };
+    },
+    async actualizarOfflineRendimientos(pending, payload = {}, options = {}) {
+      const includeInDocData = options.includeInDocData !== false;
+      const embarqueId = this.$route.params.id;
+      await EmbarquesOfflineService.mergeSave(embarqueId, existing => {
+        const base = existing ? { ...existing } : {};
+        const clonedPayload = this.deepClone(payload) || {};
+        let docData = existing && existing.docData ? { ...existing.docData } : undefined;
+
+        if (includeInDocData) {
+          docData = docData || {};
+          Object.assign(docData, clonedPayload);
+        }
+
+        const record = {
+          ...base,
+          id: embarqueId,
+          ...clonedPayload
+        };
+
+        if (docData !== undefined) {
+          record.docData = docData;
+        }
+
+        return {
+          record,
+          options: {
+            pendingSync: pending,
+            syncState: pending ? 'pending' : 'synced'
+          }
+        };
+      });
+    },
+    async persistirCamposRendimientos(payload, opts = {}) {
+      if (!payload || Object.keys(payload).length === 0) {
+        return;
+      }
+      const clonedPayload = this.deepClone(payload);
+      await this.actualizarOfflineRendimientos(!navigator.onLine, clonedPayload, opts);
+      if (!navigator.onLine) {
+        return;
+      }
+      try {
+        const db = getFirestore();
+        const embarqueRef = doc(db, 'embarques', this.$route.params.id);
+        await updateDoc(embarqueRef, clonedPayload);
+        await this.actualizarOfflineRendimientos(false, clonedPayload, opts);
+      } catch (error) {
+        console.error('[Rendimientos] Error al guardar cambios en Firestore:', error);
+      }
+    },
+    aplicarDatosOffline(record) {
+      const docData = record?.docData ? this.deepClone(record.docData) : {};
+      const clientes = docData.clientes || record?.clientes || [];
+      this.embarqueData = {
+        ...docData,
+        clientes
+      };
+      this.nombresMedidasPersonalizados = this.deepClone(docData.nombresMedidasPersonalizados || record?.nombresMedidasPersonalizados || {});
+      this.medidaOculta = this.deepClone(record?.medidaOculta || docData.medidaOculta || {});
+      this.analizarGanancia = this.deepClone(record?.analizarGanancia || docData.analizarGanancia || {});
+      this.analizarGananciaCrudos = this.deepClone(record?.analizarGananciaCrudos || docData.analizarGananciaCrudos || {});
+      this.analizarMaquilaGanancia = this.deepClone(record?.analizarMaquilaGanancia || docData.analizarMaquilaGanancia || {});
+      this.precioMaquila = this.deepClone(record?.precioMaquila || docData.precioMaquila || {});
+      this.pesoTaraCosto = record?.pesoTaraCosto ?? docData.pesoTaraCosto ?? this.pesoTaraCosto;
+      this.pesoTaraVenta = record?.pesoTaraVenta ?? docData.pesoTaraVenta ?? this.pesoTaraVenta;
+      this.kilosCrudos = this.deepClone(record?.kilosCrudos || docData.kilosCrudos || {});
+      if (docData.notaRendimientos) {
+        this.embarqueData.notaRendimientos = docData.notaRendimientos;
+      }
+      this.preciosVenta = this.deepClone(record?.preciosVentaCache || this.preciosVenta || {});
+      this.obtenerMedidasUnicas();
+      this.guardadoAutomaticoActivo = true;
+    },
+    async syncOfflineRendimientos() {
+      if (!navigator.onLine) {
+        return;
+      }
+      try {
+        const embarqueId = this.$route.params.id;
+        const record = await EmbarquesOfflineService.getById(embarqueId);
+        if (!record || !record.pendingSync) {
+          return;
+        }
+
+        const payloadKeys = [
+          'kilosCrudos',
+          'medidaOculta',
+          'analizarGanancia',
+          'analizarGananciaCrudos',
+          'analizarMaquilaGanancia',
+          'precioMaquila',
+          'pesoTaraCosto',
+          'pesoTaraVenta',
+          'nombresMedidasPersonalizados',
+          'notaRendimientos'
+        ];
+        const payload = {};
+        payloadKeys.forEach(key => {
+          if (record[key] !== undefined) {
+            payload[key] = record[key];
+          } else if (record.docData && record.docData[key] !== undefined) {
+            payload[key] = record.docData[key];
+          }
+        });
+
+        if (Object.keys(payload).length === 0) {
+          return;
+        }
+
+        await this.persistirCamposRendimientos(payload);
+      } catch (error) {
+        console.error('[Rendimientos] Error al sincronizar datos offline:', error);
+      }
+    },
     // Helper para obtener YYYY-MM-DD en horario local (evita desfase UTC)
     toLocalYMD(fecha) {
       if (!fecha) return '';
@@ -615,6 +796,15 @@ export default {
         const db = getFirestore();
         const embarqueId = this.$route.params.id;
         const embarqueRef = doc(db, 'embarques', embarqueId);
+
+        if (!navigator.onLine) {
+          const registroOffline = await EmbarquesOfflineService.getById(embarqueId).catch(() => null);
+          if (registroOffline) {
+            this.aplicarDatosOffline(registroOffline);
+            return;
+          }
+        }
+
         const embarqueDoc = await getDoc(embarqueRef);
         
         if (embarqueDoc.exists()) {
@@ -651,8 +841,25 @@ export default {
           });
           
           this.guardadoAutomaticoActivo = true;
-          
 
+          await EmbarquesOfflineService.mergeSave(embarqueId, existing => {
+            const record = {
+              ...(existing || {}),
+              id: embarqueId,
+              docData: this.deepClone(this.embarqueData)
+            };
+            return {
+              record,
+              options: {
+                pendingSync: existing?.pendingSync ?? false,
+                syncState: existing?.pendingSync ? existing.syncState : 'synced'
+              }
+            };
+          });
+
+          await this.actualizarOfflineRendimientos(false, this.crearPayloadRendimientos());
+
+          
           
           // Calcular ganancias después de cargar embarque
           if (Object.keys(this.preciosVenta).length > 0) {
@@ -670,6 +877,16 @@ export default {
 
     async cargarPreciosVenta() {
       try {
+        if (!navigator.onLine) {
+          if (Object.keys(this.preciosVenta).length === 0) {
+            const registroOffline = await EmbarquesOfflineService.getById(this.$route.params.id).catch(() => null);
+          if (registroOffline?.preciosVentaCache) {
+            this.preciosVenta = this.deepClone(registroOffline.preciosVentaCache);
+          }
+          }
+          return;
+        }
+
         const db = getFirestore();
         const preciosRef = collection(db, 'precios');
         const q = query(preciosRef, orderBy('fecha', 'desc'));
@@ -697,7 +914,9 @@ export default {
         });
         
         this.preciosVenta = preciosOrganizados;
-        
+
+        await this.actualizarOfflineRendimientos(false, { preciosVentaCache: preciosOrganizados }, { includeInDocData: false });
+
         // Calcular ganancias después de cargar precios
         if (this.embarqueData) {
           this.$nextTick(async () => {
@@ -1575,24 +1794,18 @@ export default {
 
     // Método auxiliar para guardar estado de análisis de crudos
     async guardarEstadoAnalisisCrudos() {
-      try {
-        const db = getFirestore();
-        const embarqueId = this.$route.params.id;
-        const embarqueRef = doc(db, 'embarques', embarqueId);
-        
-        await updateDoc(embarqueRef, {
-          analizarGananciaCrudos: this.analizarGananciaCrudos
-        });
-        
-        console.log('Estado de análisis de ganancia de crudos guardado correctamente');
-      } catch (error) {
-        console.error('Error al guardar estado de análisis de crudos:', error);
-      }
+      await this.persistirCamposRendimientos({
+        analizarGananciaCrudos: this.deepClone(this.analizarGananciaCrudos)
+      });
     },
 
     // Inicializar costos por medida automáticamente
     async inicializarCostosPorMedida() {
       try {
+        if (!navigator.onLine) {
+          console.warn('No se puede inicializar costos por medida sin conexión a internet.');
+          return;
+        }
         const db = getFirestore();
         
         // Cargar costos registrados desde el historial
@@ -1668,23 +1881,18 @@ export default {
         
         // Guardar cambios en Firebase si hubo actualizaciones
         if (costosActualizados) {
-          // Actualizar los datos locales
           if (!this.embarqueData.costosPorMedida) {
             this.embarqueData.costosPorMedida = {};
           }
           Object.assign(this.embarqueData.costosPorMedida, costosEmbarque);
-          
-          // Guardar en Firebase
-          const embarqueId = this.$route.params.id;
-          const embarqueRef = doc(db, 'embarques', embarqueId);
-          
-          await updateDoc(embarqueRef, {
-            costosPorMedida: costosEmbarque
+
+          await this.persistirCamposRendimientos({
+            costosPorMedida: this.deepClone(this.embarqueData.costosPorMedida)
           });
-          
+
           console.log('✅ Costos inicializados y guardados automáticamente');
         }
-        
+
       } catch (error) {
         console.error('Error al inicializar costos por medida:', error);
       }
@@ -1759,23 +1967,30 @@ export default {
 
     async guardarCambiosEnTiempoReal() {
       if (!this.guardadoAutomaticoActivo) return;
+      const payload = this.crearPayloadRendimientos();
+      await this.actualizarOfflineRendimientos(!navigator.onLine, payload);
+
+      if (!navigator.onLine) {
+        return;
+      }
 
       try {
         const db = getFirestore();
-        const embarqueId = this.$route.params.id;
-        const embarqueRef = doc(db, 'embarques', embarqueId);
-        
+        const embarqueRef = doc(db, 'embarques', this.$route.params.id);
         await updateDoc(embarqueRef, {
-          kilosCrudos: this.kilosCrudos,
-          medidaOculta: this.medidaOculta,
-          analizarGanancia: this.analizarGanancia,
-          analizarGananciaCrudos: this.analizarGananciaCrudos, // Guardar analizarGananciaCrudos
-
-          analizarMaquilaGanancia: this.analizarMaquilaGanancia,
-          precioMaquila: this.precioMaquila
+          kilosCrudos: payload.kilosCrudos,
+          medidaOculta: payload.medidaOculta,
+          analizarGanancia: payload.analizarGanancia,
+          analizarGananciaCrudos: payload.analizarGananciaCrudos,
+          analizarMaquilaGanancia: payload.analizarMaquilaGanancia,
+          precioMaquila: payload.precioMaquila,
+          pesoTaraCosto: payload.pesoTaraCosto,
+          pesoTaraVenta: payload.pesoTaraVenta,
+          nombresMedidasPersonalizados: payload.nombresMedidasPersonalizados,
+          notaRendimientos: payload.notaRendimientos
         });
-        
-        console.log('Rendimientos guardados:', this.kilosCrudos);
+        await this.actualizarOfflineRendimientos(false, payload);
+        console.log('Rendimientos guardados (online).');
       } catch (error) {
         console.error('Error al guardar los rendimientos:', error);
       }
@@ -2112,20 +2327,10 @@ export default {
       
       if (nuevoNombre !== null && nuevoNombre.trim() !== '') {
         this.$set(this.nombresMedidasPersonalizados, medida, nuevoNombre.trim());
-        
-        try {
-          const db = getFirestore();
-          const embarqueId = this.$route.params.id;
-          const embarqueRef = doc(db, 'embarques', embarqueId);
-          
-          await updateDoc(embarqueRef, {
-            nombresMedidasPersonalizados: this.nombresMedidasPersonalizados
-          });
-          
-          console.log('Nombre de medida actualizado correctamente');
-        } catch (error) {
-          console.error('Error al guardar el nuevo nombre:', error);
-        }
+        await this.persistirCamposRendimientos({
+          nombresMedidasPersonalizados: { ...this.nombresMedidasPersonalizados }
+        });
+        console.log('Nombre de medida actualizado correctamente');
       }
     },
 
@@ -2135,22 +2340,13 @@ export default {
     },
 
     async guardarNota() {
-      try {
-        const db = getFirestore();
-        const embarqueId = this.$route.params.id;
-        const embarqueRef = doc(db, 'embarques', embarqueId);
-        
-        await updateDoc(embarqueRef, {
-          notaRendimientos: this.nota
-        });
-        
-        this.embarqueData.notaRendimientos = this.nota;
-        
-        this.cerrarModal();
-        console.log('Nota guardada correctamente');
-      } catch (error) {
-        console.error('Error al guardar la nota:', error);
+      await this.persistirCamposRendimientos({ notaRendimientos: this.nota });
+      if (!this.embarqueData) {
+        this.embarqueData = {};
       }
+      this.embarqueData.notaRendimientos = this.nota;
+      this.cerrarModal();
+      console.log('Nota guardada correctamente');
     },
 
     cerrarModal() {
@@ -2159,38 +2355,20 @@ export default {
     },
 
     async guardarEstadoOculto() {
-      try {
-        const db = getFirestore();
-        const embarqueId = this.$route.params.id;
-        const embarqueRef = doc(db, 'embarques', embarqueId);
-        
-        await updateDoc(embarqueRef, {
-          medidaOculta: this.medidaOculta
-        });
-        
-        console.log('Estado de ocultación guardado correctamente');
-      } catch (error) {
-        console.error('Error al guardar estado de ocultación:', error);
-      }
+      await this.persistirCamposRendimientos({
+        medidaOculta: { ...this.medidaOculta }
+      });
+      console.log('Estado de ocultación guardado correctamente');
     },
 
     async guardarEstadoAnalisis() {
-      try {
-        const db = getFirestore();
-        const embarqueId = this.$route.params.id;
-        const embarqueRef = doc(db, 'embarques', embarqueId);
-        
-        await updateDoc(embarqueRef, {
-          analizarGanancia: this.analizarGanancia,
-          analizarGananciaCrudos: this.analizarGananciaCrudos, // Guardar analizarGananciaCrudos
-          analizarMaquilaGanancia: this.analizarMaquilaGanancia,
-          precioMaquila: this.precioMaquila
-        });
-        
-        console.log('Estado de análisis de ganancia guardado correctamente');
-      } catch (error) {
-        console.error('Error al guardar estado de análisis de ganancia:', error);
-      }
+      await this.persistirCamposRendimientos({
+        analizarGanancia: { ...this.analizarGanancia },
+        analizarGananciaCrudos: { ...this.analizarGananciaCrudos },
+        analizarMaquilaGanancia: { ...this.analizarMaquilaGanancia },
+        precioMaquila: { ...this.precioMaquila }
+      });
+      console.log('Estado de análisis de ganancia guardado correctamente');
     },
 
 
@@ -2291,26 +2469,16 @@ export default {
     },
 
     async guardarConfiguracion() {
-      try {
-        const db = getFirestore();
-        const embarqueId = this.$route.params.id;
-        const embarqueRef = doc(db, 'embarques', embarqueId);
-        
-        await updateDoc(embarqueRef, {
-          pesoTaraCosto: Number(this.pesoTaraCosto),
-          pesoTaraVenta: Number(this.pesoTaraVenta)
-        });
-        
-        console.log('Configuración de pesos guardada correctamente');
-        this.cerrarModalConfiguracion();
-        
-        // Recalcular ganancias después de cambiar los pesos
-        this.calcularGanancias();
-        
-      } catch (error) {
-        console.error('Error al guardar configuración de pesos:', error);
-        alert('Error al guardar la configuración. Intente nuevamente.');
-      }
+      const payload = {
+        pesoTaraCosto: Number(this.pesoTaraCosto) || 0,
+        pesoTaraVenta: Number(this.pesoTaraVenta) || 0
+      };
+
+      await this.persistirCamposRendimientos(payload);
+
+      console.log('Configuración de pesos guardada correctamente');
+      this.cerrarModalConfiguracion();
+      this.calcularGanancias();
     },
 
     // Determinar si se debe mostrar el detalle por cliente
@@ -2429,6 +2597,7 @@ export default {
     if (this.guardarCambiosEnTiempoReal.cancel) {
       this.guardarCambiosEnTiempoReal.cancel();
     }
+    window.removeEventListener('online', this.syncOfflineRendimientos);
   }
 }
 </script>
@@ -3299,4 +3468,3 @@ input {
   }
 }
 </style>
-
