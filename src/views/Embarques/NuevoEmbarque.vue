@@ -135,7 +135,7 @@
       :mostrar="mostrarModalNombreAlternativo" 
       :nombre-original="productoSeleccionado?.medida || ''" 
       :nombre-alternativo="productoSeleccionado?.nombreAlternativoPDF || ''" 
-      @cerrar="mostrarModalNombreAlternativo = false" 
+      @cerrar="cerrarModalNombreAlternativo" 
       @guardar="guardarNombreAlternativo"
     />
 
@@ -367,6 +367,8 @@ export default {
       productosNuevosPendientes: new Map(), // Map para rastrear productos nuevos pendientes de sincronización
       agregandoProducto: false, // Bandera para indicar cuando estamos agregando un producto
       camposEnEdicion: new Set(), // Set para rastrear qué campos están siendo editados activamente
+      productoNombreAlternativoEnEdicionId: null,
+      nombreAlternativoPendienteSync: new Map(),
       // Control de backoff para auto-guardado cuando hay errores de cuota
       autoSaveBackoffMs: 0,
       autoSaveDisabledUntil: 0,
@@ -397,7 +399,6 @@ export default {
     },
     
     productosPorCliente() {
-      console.log("Calculando productosPorCliente. Contenido de embarque.productos:", this.embarque.productos);
       
       const productosPorCliente = {};
 
@@ -561,24 +562,21 @@ export default {
     mostrarMensaje(mensaje) {
       // Usar el sistema de notificaciones si está disponible
       if (this.$toast) {
-        this.$toast.info(mensaje, { duration: 3000 });
-      } else {
-        // Fallback a console.log
-        console.log('[INFO]', mensaje);
-      }
+      this.$toast.info(mensaje, { duration: 3000 });
+    } else {
+      // Fallback omitido para depuración limpia
+    }
     },
 
     // Métodos para manejar campos en edición
     marcarCampoEnEdicion(productoId, campo) {
       const clave = `${productoId}-${campo}`;
       this.camposEnEdicion.add(clave);
-      console.log('[EDICION] Campo marcado como en edición:', clave);
     },
 
     desmarcarCampoEnEdicion(productoId, campo) {
       const clave = `${productoId}-${campo}`;
       this.camposEnEdicion.delete(clave);
-      console.log('[EDICION] Campo desmarcado de edición:', clave);
     },
 
     esCampoEnEdicion(productoId, campo) {
@@ -603,6 +601,7 @@ export default {
 
         // Hacer merge del producto preservando campos en edición
         const productoMergeado = { ...productoServidor };
+        
 
         // Verificar si hay campos de kilos en edición
         if (productoLocal.kilos && Array.isArray(productoLocal.kilos)) {
@@ -626,6 +625,34 @@ export default {
           });
         }
 
+        if (this.esCampoEnEdicion(productoServidor.id, 'nombreAlternativoPDF')) {
+          if (Object.prototype.hasOwnProperty.call(productoLocal, 'nombreAlternativoPDF')) {
+            productoMergeado.nombreAlternativoPDF = productoLocal.nombreAlternativoPDF;
+          } else {
+            delete productoMergeado.nombreAlternativoPDF;
+          }
+        } else if (Object.prototype.hasOwnProperty.call(productoLocal, 'nombreAlternativoPDF')) {
+          // Fallback: si hay un valor local presente y difiere del servidor, preferir el local
+          if (productoLocal.nombreAlternativoPDF !== productoServidor.nombreAlternativoPDF) {
+            productoMergeado.nombreAlternativoPDF = productoLocal.nombreAlternativoPDF;
+          }
+        }
+
+        if (this.nombreAlternativoPendienteSync.has(productoServidor.id)) {
+          const valorPendiente = this.nombreAlternativoPendienteSync.get(productoServidor.id);
+          if (valorPendiente) {
+            productoMergeado.nombreAlternativoPDF = valorPendiente;
+          } else {
+            delete productoMergeado.nombreAlternativoPDF;
+          }
+
+          const valorServidor = productoServidor.nombreAlternativoPDF || null;
+          if ((valorPendiente || null) === valorServidor) {
+            this.nombreAlternativoPendienteSync.delete(productoServidor.id);
+          }
+        }
+
+        
         productosFinales.push(productoMergeado);
       });
 
@@ -658,19 +685,16 @@ export default {
     },
     
     async triggerGuardadoInicial() {
-      console.log('[LOG] Se activó triggerGuardadoInicial.');
       // Solo proceder si es un nuevo embarque sin ID
       if (this.embarqueId) {
-        console.log(`[LOG] El embarque ya tiene ID (${this.embarqueId}), no se procede con el guardado inicial.`);
         return;
       }
 
       // Verificar que ambos campos estén llenos
       if (this.embarque.fecha && this.embarque.cargaCon) {
-        console.log("[LOG] Fecha y CargaCon listos, iniciando guardado inicial...");
         await this.guardarEmbarqueInicial();
       } else {
-        console.log(`[LOG] Faltan datos para guardado inicial. Fecha: ${this.embarque.fecha}, Carga con: ${this.embarque.cargaCon}`);
+        
       }
     },
     seleccionarMedida(medida) {
@@ -1118,12 +1142,10 @@ export default {
       }
       
       this._creandoEmbarque = true;
-      console.log('[LOG] Iniciando guardarEmbarqueInicial. Estado de _creandoEmbarque:', this._creandoEmbarque);
       
       try {
         // Si no existe embarqueId, crear nuevo embarque
         if (!this.embarqueId) {
-          console.log('[LOG] No hay embarqueId, se procede a crear un nuevo embarque.');
           const fechaSeleccionada = new Date(this.embarque.fecha);
           const fechaISO = fechaSeleccionada.toISOString().split('T')[0];
           const embarqueData = this.prepararDatosEmbarque();
@@ -1151,7 +1173,6 @@ export default {
               }
 
               this.embarqueId = uuidv4();
-              console.log(`[LOG] Creando embarque offline con ID: ${this.embarqueId}`);
               this.modoEdicion = true;
               this.guardadoAutomaticoActivo = true;
 
@@ -1196,7 +1217,6 @@ export default {
             if (embarquesConMismaFecha.length > 0) {
               alert('Ya existe un embarque para la fecha seleccionada. Por favor, seleccione otra fecha.');
               this._creandoEmbarque = false;
-              console.log('[LOG] Creación cancelada: Ya existe un embarque en la fecha seleccionada.');
               return null;
             }
 
@@ -1208,7 +1228,6 @@ export default {
               expiración: new Date(Date.now() + 60000)
             });
 
-            console.log('[LOG] Datos preparados para el nuevo embarque:', JSON.parse(JSON.stringify(embarqueData)));
             const docRef = await addDoc(collection(db, 'embarques'), embarqueData);
 
             try {
@@ -1218,7 +1237,6 @@ export default {
             }
 
             this.embarqueId = docRef.id;
-            console.log(`[LOG] Embarque creado con éxito. Nuevo ID: ${this.embarqueId}`);
             this.modoEdicion = true;
             this.guardadoAutomaticoActivo = true;
 
@@ -1228,7 +1246,6 @@ export default {
             this.clienteActivo = clienteId;
 
             this._creandoEmbarque = false;
-            console.log('[LOG] Proceso guardarEmbarqueInicial finalizado. Estado de _creandoEmbarque:', this._creandoEmbarque);
             return this.embarqueId;
           } catch (error) {
             this._creandoEmbarque = false;
@@ -1238,7 +1255,6 @@ export default {
           }
         } else {
           // Si ya hay embarqueId, no hacer nada y solo agregarlo
-          console.log(`[LOG] Ya existe un embarqueId (${this.embarqueId}), no se crea uno nuevo. Se procederá a agregar el cliente.`);
           this.agregarProducto(clienteId);
           this.clienteActivo = clienteId;
           this._creandoEmbarque = false;
@@ -1387,20 +1403,16 @@ export default {
     // Métodos de carga y guardado
     async cargarEmbarque(id) {
       if (id === 'nuevo') {
-        console.log('[LOG] Limpiando ultimoEmbarqueId de localStorage para un nuevo embarque.');
         localStorage.removeItem('ultimoEmbarqueId');
         // Limpiar lista de productos eliminados para nuevo embarque
         if (this.productosEliminadosLocalmente && this.productosEliminadosLocalmente.size > 0) {
-          console.log('[cargarEmbarque] Limpiando lista de productos eliminados localmente');
           this.productosEliminadosLocalmente.clear();
         }
         // Limpiar lista de productos nuevos pendientes para nuevo embarque
         if (this.productosNuevosPendientes && this.productosNuevosPendientes.size > 0) {
-          console.log('[cargarEmbarque] Limpiando lista de productos nuevos pendientes');
           this.productosNuevosPendientes.clear();
         }
         if (this.camposEnEdicion && this.camposEnEdicion.size > 0) {
-          console.log('[cargarEmbarque] Limpiando campos en edición');
           this.camposEnEdicion.clear();
         }
         this.resetearEmbarque();
@@ -1409,12 +1421,10 @@ export default {
       
       // Limpiar la lista de productos eliminados localmente al cargar un embarque diferente
       if (this.productosEliminadosLocalmente && this.productosEliminadosLocalmente.size > 0) {
-        console.log('[cargarEmbarque] Limpiando lista de productos eliminados localmente');
         this.productosEliminadosLocalmente.clear();
       }
       // Limpiar lista de productos nuevos pendientes al cargar un embarque diferente
       if (this.productosNuevosPendientes && this.productosNuevosPendientes.size > 0) {
-        console.log('[cargarEmbarque] Limpiando lista de productos nuevos pendientes');
         this.productosNuevosPendientes.clear();
       }
       if (this.camposEnEdicion && this.camposEnEdicion.size > 0) {
@@ -1744,11 +1754,9 @@ export default {
                             
       // No reiniciar si hay un modal abierto
       if (modalAbierto) {
-        console.log('[LOG] resetearEmbarque detenido, hay un modal abierto.');
         return;
       }
       
-      console.log('[LOG] Iniciando reseteo de embarque.');
       
       // Activar bandera para evitar watchers durante la inicialización
       this._inicializandoEmbarque = true;
@@ -1800,7 +1808,6 @@ export default {
         
         // Inicializar el embarque con la fecha actual o encontrar la siguiente fecha disponible
         let fechaEmbarque = fechaActual;
-        console.log(`[LOG] Fecha actual para nuevo embarque: ${fechaEmbarque}`);
         
         if (embarquesConMismaFecha.length > 0) {
           // Si ya existe un embarque con la fecha actual, buscar la próxima fecha disponible
@@ -1816,13 +1823,12 @@ export default {
             if (!embarquesPorFecha[fechaTentativaISO] || embarquesPorFecha[fechaTentativaISO].length === 0) {
               fechaDisponible = true;
               fechaEmbarque = fechaTentativaISO;
-              console.log(`[LOG] Fecha actual ocupada. Nueva fecha encontrada: ${fechaEmbarque}`);
             }
           }
           
           if (!fechaDisponible) {
             // Si no se encontró una fecha disponible, mostrar mensaje y usar la fecha actual de todos modos
-            console.warn('[LOG] No se encontró una fecha disponible en los próximos 7 días');
+            
             // No crear automáticamente un embarque, dejar que el usuario seleccione otra fecha
             this.embarque = {
               fecha: fechaActual, // Usar la fecha actual pero no crear automáticamente
@@ -1838,7 +1844,7 @@ export default {
             this.embarqueBloqueado = false;
             this.clientesPersonalizados = [];
             
-            console.log('[LOG] No se creará embarque automáticamente por falta de fecha disponible.');
+            
             // Informar al usuario si no se trata de una recarga
             if (!esRecargaPagina) {
               alert(`Ya existe un embarque para hoy y los próximos días. Por favor, seleccione manually una fecha diferente.`);
@@ -1918,11 +1924,9 @@ export default {
         // 6. Intentar guardar este estado inicial en Firebase (si la fecha es válida)
         if (this.embarque.fecha) {
             this._guardandoInicial = true; // <- Establecer bandera ANTES del async
-            console.log('[LOG] Estado local reseteado. Se intentará un guardado inicial en segundo plano.');
             this.$nextTick(async () => {
                 try {
                     // Doble verificación de fecha antes de guardar
-                    console.log('[LOG] Verificando fecha antes del guardado automático inicial...');
                     const verificacionRef = collection(db, "embarques");
                     const verificacionSnapshot = await getDocs(verificacionRef);
                     const existeEmbarqueConFecha = verificacionSnapshot.docs.some(doc => {
@@ -1942,25 +1946,21 @@ export default {
                     });
 
                     if (existeEmbarqueConFecha) {
-                        console.warn('[LOG] Se detectó un embarque con la misma fecha durante la inicialización, no se guardará automáticamente.');
                         // No mostramos alerta aquí, el usuario puede cambiar la fecha y guardar manually
                         this._guardandoInicial = false;
                         return; // Salir sin guardar si la fecha ya existe
                     }
                     
-                    console.log('[LOG] Fecha disponible. Procediendo con el guardado automático inicial.');
                     const embarqueData = this.prepararDatosEmbarque();
                     const docRef = await addDoc(collection(db, "embarques"), embarqueData);
                     this.embarqueId = docRef.id;
                     this.modoEdicion = true;
                     this.guardadoAutomaticoActivo = true;
                     localStorage.setItem('ultimoEmbarqueId', this.embarqueId);
-                    console.log(`[LOG] Guardado inicial automático exitoso. ID: ${this.embarqueId}`);
                 } catch (error) {
                     console.error('Error en el guardado inicial automático:', error);
                 } finally {
                     this._guardandoInicial = false; // <- Limpiar bandera
-                    console.log('[LOG] Bandera _guardandoInicial reseteada a false.');
                 }
             });
         } 
@@ -2296,6 +2296,14 @@ export default {
               // Iterar sobre los clientes marcados como modificados, incluso si hoy no tienen productos (para poder guardar []).
               Object.keys(this.clientesModificados || {}).forEach(clienteId => {
                 const productos = this.productosPorCliente[clienteId] || [];
+                console.log('[guardarCambiosEnTiempoReal] Preparando productos para guardar', {
+                  clienteId,
+                  productos: productos.map(p => ({
+                    id: p.id,
+                    medida: p.medida,
+                    nombreAlternativoPDF: p.nombreAlternativoPDF
+                  }))
+                });
 
                 // Filtrar solo productos con medida válida para el guardado (tipo opcional)
                 const productosConMedida = productos.filter(p => 
@@ -2595,7 +2603,6 @@ export default {
     },
 
     prepararDatosEmbarque() {
-      console.log("Preparando datos del embarque:", this.embarque);
       
       const embarqueData = {
         fecha: new Date(this.embarque.fecha),
@@ -2674,7 +2681,7 @@ export default {
         embarqueData.clientes.push(clienteData);
       });
 
-      console.log("Datos del embarque preparados:", embarqueData);
+      
       return embarqueData;
     },
 
@@ -3007,40 +3014,62 @@ export default {
     // Modal de Nombre Alternativo
     abrirModalNombreAlternativo(producto) {
       this.productoSeleccionado = producto;
+      this.productoNombreAlternativoEnEdicionId = producto?.id || null;
+      if (this.productoNombreAlternativoEnEdicionId) {
+        this.marcarCampoEnEdicion(this.productoNombreAlternativoEnEdicionId, 'nombreAlternativoPDF');
+      }
       this.mostrarModalNombreAlternativo = true;
     },
 
-    guardarNombreAlternativo(nuevoNombre) {
-      if (this.productoSeleccionado) {
-        // Guardar referencia al clienteId antes de modificar
-        const clienteId = this.productoSeleccionado.clienteId;
-        
-        // Solo actualizar el producto seleccionado (la referencia ya apunta al producto en el array)
-        if (nuevoNombre) {
-          this.$set(this.productoSeleccionado, 'nombreAlternativoPDF', nuevoNombre);
-        } else {
-          this.$delete(this.productoSeleccionado, 'nombreAlternativoPDF');
-        }
+    cerrarModalNombreAlternativo() {
+      if (this.productoNombreAlternativoEnEdicionId) {
+        this.desmarcarCampoEnEdicion(this.productoNombreAlternativoEnEdicionId, 'nombreAlternativoPDF');
+        this.nombreAlternativoPendienteSync.delete(this.productoNombreAlternativoEnEdicionId);
+        this.productoNombreAlternativoEnEdicionId = null;
+      }
+      this.mostrarModalNombreAlternativo = false;
+      this.productoSeleccionado = null;
+    },
 
-        // Marcar el cliente como modificado para que se incluya en el guardado
-        if (clienteId) {
-          this.$set(this.clientesModificados, clienteId, true);
-          console.log(`[guardarNombreAlternativo] Cliente ${clienteId} marcado como modificado por cambio en nombre PDF`);
-        }
+    async guardarNombreAlternativo(nuevoNombre) {
+      const productoActual = this.productoSeleccionado;
+      if (!productoActual) {
+        this.cerrarModalNombreAlternativo();
+        return;
+      }
 
-        // Forzar la actualización del componente
-        this.$forceUpdate();
+      const clienteId = productoActual.clienteId;
+      const nombreAnterior = Object.prototype.hasOwnProperty.call(productoActual, 'nombreAlternativoPDF')
+        ? productoActual.nombreAlternativoPDF
+        : productoActual.medida;
 
-        // Cerrar modal después de actualizar los datos
-        this.mostrarModalNombreAlternativo = false;
-        this.productoSeleccionado = null;
+      
 
-        // Guardar cambios inmediatamente
-        this.$nextTick(() => {
-          this.guardarCambiosEnTiempoReal(true); // Forzar guardado inmediato
-        });
+      if (nuevoNombre) {
+        this.$set(productoActual, 'nombreAlternativoPDF', nuevoNombre);
       } else {
-        this.mostrarModalNombreAlternativo = false;
+        this.$delete(productoActual, 'nombreAlternativoPDF');
+      }
+
+      this.nombreAlternativoPendienteSync.set(productoActual.id, nuevoNombre || null);
+
+      if (clienteId) {
+        this.$set(this.clientesModificados, clienteId, true);
+      }
+
+      this.$forceUpdate();
+
+      this.mostrarModalNombreAlternativo = false;
+
+      try {
+        await this.$nextTick();
+        await this.guardarCambiosEnTiempoReal(true);
+      } finally {
+        if (this.productoNombreAlternativoEnEdicionId) {
+          this.desmarcarCampoEnEdicion(this.productoNombreAlternativoEnEdicionId, 'nombreAlternativoPDF');
+          this.productoNombreAlternativoEnEdicionId = null;
+        }
+        this.productoSeleccionado = null;
       }
     },
 
@@ -3524,12 +3553,10 @@ export default {
     // Métodos relacionados con la interfaz de usuarios
     async escucharUsuariosActivos() {
       try {
-        console.log('Iniciando escucha de usuarios activos');
         const statusRef = ref(rtdb, 'status');
 
         // Primero, asegurarse de que el usuario actual esté marcado como activo
         if (this.authStore.isLoggedIn && this.authStore.user) {
-          console.log('Usuario autenticado:', this.authStore.user.username);
           const userStatusRef = ref(rtdb, `status/${this.authStore.userId}`);
 
           try {
@@ -3538,7 +3565,7 @@ export default {
               status: 'online',
               lastSeen: new Date().toISOString()
             });
-            console.log('Estado del usuario actualizado correctamente');
+            
           } catch (error) {
             console.error('Error al actualizar estado del usuario:', error);
           }
@@ -3987,15 +4014,14 @@ export default {
     },
     async cargarPreciosActuales() {
       try {
-        console.log('[NUEVO-EMBARQUE] 🔄 Iniciando carga de precios actuales...');
+        
         
         const db = getFirestore();
         const preciosRef = collection(db, 'precios');
         
         // Primero intentar cargar sin ordenamiento para verificar si hay datos
-        console.log('[NUEVO-EMBARQUE] 📊 Consultando colección precios...');
         const preciosSnapshotSimple = await getDocs(preciosRef);
-        console.log(`[NUEVO-EMBARQUE] 📋 Documentos encontrados en colección precios: ${preciosSnapshotSimple.size}`);
+        
         
         if (preciosSnapshotSimple.size === 0) {
           console.warn('[NUEVO-EMBARQUE] ⚠️  La colección "precios" está vacía. Verificar si los precios se están guardando correctamente.');
@@ -4004,7 +4030,7 @@ export default {
         }
         
         // Si hay datos, proceder con query ordenado
-        console.log('[NUEVO-EMBARQUE] 🔄 Aplicando ordenamiento por fecha y timestamp...');
+        
         
         // Intentar query con timestamp primero
         let preciosSnapshot;
@@ -4015,7 +4041,7 @@ export default {
             orderBy('timestamp', 'desc')
           );
           preciosSnapshot = await getDocs(q);
-          console.log('[NUEVO-EMBARQUE] ✅ Query con timestamp exitoso');
+          
         } catch (orderError) {
           console.warn('[NUEVO-EMBARQUE] ⚠️  Error en query con timestamp, usando solo fecha:', orderError);
           // Fallback a solo ordenar por fecha
@@ -4036,21 +4062,19 @@ export default {
           };
         });
         
-        console.log(`[NUEVO-EMBARQUE] ✅ Precios cargados: ${this.preciosActuales.length} registros`);
+        
         
         // Debug: Mostrar algunos precios de ejemplo
         if (this.preciosActuales.length > 0) {
-          console.log('[NUEVO-EMBARQUE] 📋 Ejemplos de precios cargados:', this.preciosActuales.slice(0, 3));
         }
         
         // Log de diagnóstico para fechas
         const fechasUnicas = [...new Set(this.preciosActuales.map(p => p.fecha))];
-        console.log(`[NUEVO-EMBARQUE] Fechas de precios disponibles: ${fechasUnicas.length} fechas únicas`, fechasUnicas);
+        
         
         // Verificar precios para fecha específica de hoy
         const fechaHoy = normalizarFechaISO(new Date());
         const preciosHoy = this.preciosActuales.filter(p => p.fecha === fechaHoy);
-        console.log(`[NUEVO-EMBARQUE] Precios disponibles para fecha actual (${fechaHoy}): ${preciosHoy.length}`);
         
         // Verificar si hay precios sin timestamp
         const sinTimestamp = this.preciosActuales.filter(p => !p.timestamp || p.timestamp === 0);
@@ -4062,7 +4086,6 @@ export default {
         const preciosGolfo = this.preciosActuales.filter(p => 
           p.producto && p.producto.toLowerCase().includes('golfo')
         );
-        console.log(`[NUEVO-EMBARQUE] Precios encontrados para "Golfo": ${preciosGolfo.length}`, preciosGolfo);
         
       } catch (error) {
         console.error('[NUEVO-EMBARQUE] Error al cargar precios:', error);
@@ -4072,13 +4095,11 @@ export default {
     },
 
     async onPrecioAgregado(nuevoPrecio) {
-      console.log('[NUEVO-EMBARQUE] Precio agregado detectado:', nuevoPrecio);
-      console.log(`[NUEVO-EMBARQUE] Recargando precios después de agregar: ${nuevoPrecio.producto} - $${nuevoPrecio.precio}`);
       
       // Recargar precios actuales para que ProductoItem.vue tenga los datos más recientes
       await this.cargarPreciosActuales();
       
-      console.log(`[NUEVO-EMBARQUE] ✅ Precios recargados automáticamente después de agregar precio`);
+      
     },
 
 
@@ -4136,7 +4157,6 @@ export default {
     },
     'embarque.fecha': {
       handler(newVal, oldVal) {
-        console.log(`[LOG] Watcher de fecha disparado. Nuevo valor: ${newVal}, Valor antiguo: ${oldVal}`);
         if (!this.embarqueId) {
           this.triggerGuardadoInicial();
         } else {
@@ -4147,7 +4167,6 @@ export default {
     },
     'embarque.cargaCon': {
       handler(newVal, oldVal) {
-        console.log(`[LOG] Watcher de cargaCon disparado. Nuevo valor: ${newVal}, Valor antiguo: ${oldVal}`);
         if (!this.embarqueId) {
           this.triggerGuardadoInicial();
         } else {
@@ -4173,7 +4192,6 @@ export default {
   },
 
   async created() {
-    console.log('[LOG] Hook "created" de NuevoEmbarque.');
     
     // Verificar autenticación al inicializar el componente
     try {
@@ -4183,7 +4201,7 @@ export default {
         this.$router.push('/login');
         return;
       }
-      console.log('[NuevoEmbarque] Usuario autenticado correctamente:', this.authStore.user?.username);
+      
     } catch (error) {
       console.error('[NuevoEmbarque] Error de autenticación al inicializar:', error);
       this.mostrarErrorAutenticacion('Error de autenticación al cargar la página. Por favor, inicie sesión nuevamente.');
@@ -4227,7 +4245,6 @@ export default {
     }
 
     const embarqueId = this.$route.params.id;
-    console.log(`[LOG] ID de embarque en "created": ${embarqueId}`);
 
     if (!navigator.onLine) {
       let cargadoOffline = false;

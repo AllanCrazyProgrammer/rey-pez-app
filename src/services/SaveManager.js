@@ -67,14 +67,28 @@ class SaveManager {
       return Promise.reject(new Error('Cuota de Firestore agotada temporalmente'));
     }
 
-    // Agregar o actualizar la operación pendiente
+    const now = Date.now();
+    const priorityOrder = { high: 0, normal: 1, low: 2 };
+
     if (!merge || !this.pendingOperations.has(key)) {
       this.pendingOperations.set(key, {
         operation,
         priority,
-        timestamp: Date.now(),
+        timestamp: now,
         retries: 0
       });
+    } else {
+      const pending = this.pendingOperations.get(key);
+      pending.operation = operation;
+      pending.timestamp = now;
+      pending.retries = 0;
+
+      // Si la nueva operación tiene mayor prioridad, actualizarla
+      const currentPriority = priorityOrder[pending.priority] ?? priorityOrder.normal;
+      const incomingPriority = priorityOrder[priority] ?? priorityOrder.normal;
+      if (incomingPriority < currentPriority) {
+        pending.priority = priority;
+      }
     }
 
     // Notificar a los listeners

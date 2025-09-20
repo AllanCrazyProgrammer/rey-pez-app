@@ -333,9 +333,11 @@ export default {
 
         // Total de bolsas reportadas
         totalBolsasReportadas() {
+            const bolsas = Array.isArray(this.producto.reporteBolsas) ? this.producto.reporteBolsas : [];
+
             return (this.producto.reporteTaras || []).reduce((total, tara, index) => {
-                const taraNum = parseInt(tara) || 0;
-                const bolsaNum = parseInt(this.producto.reporteBolsas[index]) || 0;
+                const taraNum = parseInt(tara, 10) || 0;
+                const bolsaNum = parseInt(bolsas[index], 10) || 0;
                 return total + (taraNum * bolsaNum);
             }, 0);
         },
@@ -544,13 +546,11 @@ export default {
         // Método para asignar el precio automáticamente según la medida y el cliente
         asignarPrecioAutomatico() {
             if (!this.producto.medida) {
-                console.log(`[PRODUCTO-ITEM] No hay medida definida para asignar precio automático`);
                 return;
             }
 
             // Si el precio fue borrado manualmente por el usuario, no asignar automáticamente
             if (this.producto.precioBorradoManualmente) {
-                console.log(`[PRODUCTO-ITEM] Precio fue borrado manualmente, no asignar automáticamente para ${this.producto.medida}`);
                 return;
             }
 
@@ -559,7 +559,6 @@ export default {
             // Lógica especial para Ozuna: si no es venta (maquila), precio siempre 20
             if (nombreCliente === 'ozuna' && !this.producto.esVenta) {
                 this.producto.precio = 20;
-                console.log(`[PRODUCTO-ITEM] ✅ Precio de maquila asignado para Ozuna: $20 para ${this.producto.medida}`);
                 
                 // Emitir evento para notificar que se asignó precio automáticamente
                 this.$emit('precio-asignado-automaticamente', {
@@ -586,15 +585,7 @@ export default {
             // Usar las nuevas utilidades para normalizar fecha
             const fechaParaPrecios = this.fechaEmbarque ? normalizarFechaISO(this.fechaEmbarque) : obtenerFechaActualISO();
             
-            console.log(`[PRODUCTO-ITEM] Buscando precio automático para:`, {
-                medida: this.producto.medida,
-                cliente: nombreCliente,
-                clienteId: clienteId,
-                fechaEmbarque: this.fechaEmbarque,
-                fechaNormalizada: fechaParaPrecios,
-                totalPreciosDisponibles: this.preciosActuales.length,
-                esVenta: this.producto.esVenta
-            });
+            
             
             const precioHistorico = obtenerPrecioParaMedida(
                 this.preciosActuales, 
@@ -606,7 +597,6 @@ export default {
             if (precioHistorico) {
                 this.producto.precio = precioHistorico;
                 
-                console.log(`[PRODUCTO-ITEM] ✅ Precio asignado automáticamente: $${precioHistorico} para ${this.producto.medida} (${nombreCliente})`);
                 
                 // Emitir evento para notificar que se asignó precio automáticamente
                 this.$emit('precio-asignado-automaticamente', {
@@ -618,7 +608,6 @@ export default {
                     clienteId: clienteId
                 });
             } else {
-                console.log(`[PRODUCTO-ITEM] ⚠️  No se encontró precio automático para ${this.producto.medida} (${nombreCliente}) en fecha ${fechaParaPrecios}`);
             }
         },
 

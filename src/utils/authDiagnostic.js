@@ -126,7 +126,7 @@ export const authDiagnostic = {
   clearAuthData() {
     try {
       localStorage.removeItem('user');
-      console.log('Datos de autenticación limpiados del localStorage');
+      
       return true;
     } catch (error) {
       console.error('Error al limpiar datos de autenticación:', error);
@@ -142,7 +142,7 @@ export const authDiagnostic = {
       const { useAuthStore } = await import('@/stores/auth');
       const authStore = useAuthStore();
       authStore.checkAuth();
-      console.log('Intento de restauración de autenticación completado');
+      
       return authStore.isAuthenticated;
     } catch (error) {
       console.error('Error al restaurar autenticación:', error);
@@ -154,23 +154,18 @@ export const authDiagnostic = {
    * Ejecuta diagnóstico completo y muestra resultados en consola
    */
   async runFullDiagnostic() {
-    console.group('🔍 Diagnóstico de Autenticación');
+    
     
     const results = this.checkAuthState();
     
-    console.log('📊 Resultados del diagnóstico:');
-    console.table(results);
+    
     
     if (results.recommendations.length > 0) {
-      console.log('💡 Recomendaciones:');
-      results.recommendations.forEach((rec, index) => {
-        console.log(`${index + 1}. [${rec.type.toUpperCase()}] ${rec.message}`);
-      });
+      
     } else {
-      console.log('✅ No se encontraron problemas de autenticación');
+      
     }
     
-    console.groupEnd();
     
     return results;
   },
@@ -193,7 +188,7 @@ export const authDiagnostic = {
       originalConsoleError.apply(console, args);
     };
     
-    console.log('🔧 Monitoreo de errores de autenticación activado');
+    
   }
 };
 

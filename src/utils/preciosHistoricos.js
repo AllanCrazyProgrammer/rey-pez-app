@@ -47,9 +47,7 @@ export const obtenerPreciosParaFecha = (preciosActuales, fechaEmbarque, clienteI
   // Normalizar la fecha del embarque
   const fechaLimiteISO = normalizarFechaISO(fechaEmbarque);
   
-  console.log(`[PRECIOS] Filtrando precios para fecha embarque: ${fechaLimiteISO}, cliente: ${clienteId || 'general'}`);
-  console.log(`[PRECIOS] Incluirá precios hasta la fecha del embarque (inclusive) para capturar modificaciones del mismo día`);
-  console.log(`[PRECIOS] Total de precios a evaluar: ${preciosActuales.length}`);
+  
   
   // Mapa para almacenar los precios más recientes por medida
   const preciosPorMedida = new Map();
@@ -72,13 +70,7 @@ export const obtenerPreciosParaFecha = (preciosActuales, fechaEmbarque, clienteI
     return timestampA - timestampB;
   });
   
-  console.log(`[PRECIOS] Precios ordenados por fecha y timestamp:`, preciosOrdenados.map(p => ({
-    producto: p.producto,
-    fecha: p.fecha,
-    precio: p.precio,
-    timestamp: p.timestamp,
-    clienteId: p.clienteId
-  })));
+  
   
   // Filtrar y organizar precios (ahora usando el array ordenado)
   preciosOrdenados.forEach(precio => {
@@ -102,9 +94,7 @@ export const obtenerPreciosParaFecha = (preciosActuales, fechaEmbarque, clienteI
             
             const esActualizacionMismoDia = precioExistente && fechaPrecioISO === precioExistente.fecha;
             if (esActualizacionMismoDia) {
-              console.log(`[PRECIOS] Actualizando precio específico ${clienteId} para ${medidaNormalizada} - MISMO DÍA: $${precioExistente.precio} → $${precio.precio} (fecha: ${fechaPrecioISO}, timestamp: ${precio.timestamp})`);
             } else {
-              console.log(`[PRECIOS] Estableciendo precio específico ${clienteId} para ${medidaNormalizada}: $${precio.precio} (fecha: ${fechaPrecioISO}, timestamp: ${precio.timestamp})`);
             }
             
             preciosEspecificos.set(medidaNormalizada, {
@@ -124,9 +114,6 @@ export const obtenerPreciosParaFecha = (preciosActuales, fechaEmbarque, clienteI
             
             const esActualizacionMismoDia = precioExistente && fechaPrecioISO === precioExistente.fecha;
             if (esActualizacionMismoDia) {
-              console.log(`[PRECIOS] Actualizando precio general para ${medidaNormalizada} - MISMO DÍA: $${precioExistente.precio} → $${precio.precio} (fecha: ${fechaPrecioISO}, timestamp: ${precio.timestamp})`);
-            } else {
-              console.log(`[PRECIOS] Estableciendo precio general para ${medidaNormalizada}: $${precio.precio} (fecha: ${fechaPrecioISO}, timestamp: ${precio.timestamp})`);
             }
             
             preciosPorMedida.set(medidaNormalizada, {
@@ -153,8 +140,7 @@ export const obtenerPreciosParaFecha = (preciosActuales, fechaEmbarque, clienteI
     preciosFinales.set(medida, precio.precio);
   }
   
-  console.log(`[PRECIOS] ✅ Precios filtrados para ${fechaLimiteISO}:`, Array.from(preciosFinales.entries()));
-  console.log(`[PRECIOS] Total de medidas con precios: ${preciosFinales.size}`);
+  
   
   return preciosFinales;
 };

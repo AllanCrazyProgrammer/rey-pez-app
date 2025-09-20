@@ -77,8 +77,6 @@ export const useAuthStore = defineStore('auth', {
             
             // Reiniciar seguimiento de presencia
             handleUserPresence(this.userId, parsedUser.username)
-            
-            console.log('Autenticación verificada correctamente para:', parsedUser.username)
           } else {
             console.warn('Datos de usuario incompletos en localStorage')
             this.logout()

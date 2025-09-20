@@ -8,7 +8,6 @@ if (typeof pdfFonts === 'object' && pdfFonts.hasOwnProperty('default')) {
 } else if (typeof pdfFonts === 'object' && pdfFonts.pdfMake && pdfFonts.pdfMake.vfs) {
   pdfMake.vfs = pdfFonts.pdfMake.vfs;
 } else {
-  console.error('No se pudo inicializar vfs para pdfMake');
 }
 
 pdfMake.fonts = {
