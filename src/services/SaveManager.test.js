@@ -125,12 +125,44 @@ export function testMultipleOperations() {
   }, 30000);
 }
 
+// Función para verificar que una operación existente se sobrescribe correctamente
+export function testOverwriteOperation() {
+  console.log('=== Probando sobrescritura de operaciones programadas ===');
+
+  const manager = getSaveManager();
+  let resultado = 'pendiente';
+
+  manager.scheduleSave('overwrite-test', async () => {
+    console.log('  Ejecutando primera versión (debería ser reemplazada)');
+    resultado = 'primera';
+  }, {
+    merge: true,
+    immediate: false
+  });
+
+  setTimeout(() => {
+    manager.scheduleSave('overwrite-test', async () => {
+      console.log('  Ejecutando segunda versión (esperada)');
+      resultado = 'segunda';
+    }, {
+      merge: true,
+      immediate: true
+    }).catch(error => console.error('  ❌ Error al reprogramar operación:', error));
+  }, 100);
+
+  setTimeout(() => {
+    console.log('📌 Resultado final esperado "segunda":', resultado);
+  }, 4000);
+}
+
 // Exportar para uso global en consola
 if (typeof window !== 'undefined') {
   window.testSaveManager = testSaveManager;
   window.testMultipleOperations = testMultipleOperations;
+  window.testOverwriteOperation = testOverwriteOperation;
   
   console.log('🧪 Funciones de prueba disponibles:');
   console.log('  - testSaveManager(): Prueba básica del SaveManager');
   console.log('  - testMultipleOperations(): Prueba con múltiples operaciones');
+  console.log('  - testOverwriteOperation(): Verifica sobrescritura de operaciones con la misma llave');
 }

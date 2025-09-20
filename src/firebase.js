@@ -30,12 +30,10 @@ const rtdb = getDatabase(app);
 // Función para manejar la presencia de usuarios
 const handleUserPresence = async (userId, username) => {
   if (!userId || !username) {
-    console.log('Se requiere userId y username para manejar la presencia');
     return;
   }
 
   try {
-    console.log('Configurando presencia para:', username);
     const userStatusRef = ref(rtdb, `status/${userId}`);
     
     // Configurar limpieza al desconectar
@@ -48,7 +46,7 @@ const handleUserPresence = async (userId, username) => {
       lastSeen: new Date().toISOString()
     });
     
-    console.log('Presencia configurada exitosamente');
+    
   } catch (error) {
     console.error('Error al configurar presencia:', error);
   }

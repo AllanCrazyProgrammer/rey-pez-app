@@ -3,25 +3,75 @@
 import pdfMake from 'pdfmake/build/pdfmake';
 import * as pdfFonts from 'pdfmake/build/vfs_fonts';
 import { db } from '@/firebase';
-import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
+import { collection, query, where, getDocs } from 'firebase/firestore';
+
+let activePdfMake = pdfMake;
+
+const resolveVfs = () => {
+  if (!pdfFonts || typeof pdfFonts !== 'object') {
+    return null;
+  }
+  if (pdfFonts.default && typeof pdfFonts.default === 'object') {
+    return pdfFonts.default;
+  }
+  return pdfFonts;
+};
+
+const applyVfsToInstance = (instance) => {
+  if (!instance) {
+    return;
+  }
+  const vfs = resolveVfs();
+  if (vfs) {
+    instance.vfs = vfs;
+  }
+};
 
 // Manejar inicialización de pdfMake de manera más robusta
 try {
-  // Intentar usar la versión importada
-  if (pdfFonts.default) {
-    pdfMake.vfs = pdfFonts.default;
-  } else if (typeof pdfFonts === 'object') {
-    pdfMake.vfs = pdfFonts;
-  }
+  applyVfsToInstance(activePdfMake);
 } catch (error) {
   console.warn('Error al inicializar pdfMake local:', error);
 }
 
 // Verificar disponibilidad global como fallback
 if (typeof window !== 'undefined' && window.pdfMake) {
-  console.log('Usando pdfMake global (CDN)');
-  pdfMake = window.pdfMake;
+  activePdfMake = window.pdfMake;
+  try {
+    applyVfsToInstance(activePdfMake);
+  } catch (error) {
+    console.warn('Error al inicializar pdfMake global:', error);
+  }
 }
+
+const textDecoder = typeof TextDecoder !== 'undefined' ? new TextDecoder() : null;
+
+const decodePdfBuffer = (buffer) => {
+  if (!buffer) {
+    return '';
+  }
+  if (typeof buffer === 'string') {
+    return buffer;
+  }
+  if (textDecoder) {
+    try {
+      return textDecoder.decode(buffer);
+    } catch (error) {
+      console.warn('No se pudo decodificar el buffer del PDF:', error);
+      return '';
+    }
+  }
+  return '';
+};
+
+const contarPaginasDesdeBuffer = (buffer) => {
+  const contenido = decodePdfBuffer(buffer);
+  if (!contenido) {
+    return 1;
+  }
+  const coincidencias = contenido.match(/\/Page\b/g);
+  return coincidencias ? coincidencias.length : 1;
+};
 
 // URLs de logos
 const LOGO_DEFAULT_URL = 'https://res.cloudinary.com/hwkcovsmr/image/upload/v1620946647/samples/REY_PEZ_LOGO_nsotww.png';
@@ -369,11 +419,8 @@ export async function generarNotaVentaPDF(embarque, clientesDisponibles, cliente
     };
 
     // Crear el documento PDF y verificar número de páginas
-    pdfMake.createPdf(docDefinition).getBuffer((buffer) => {
-      // Crear un Uint8Array del buffer para contar las páginas
-      const pdfData = new Uint8Array(buffer);
-      // Contar ocurrencias de "/Page" para estimar número de páginas
-      const numPages = buffer.toString().match(/\/Page\W/g).length;
+    activePdfMake.createPdf(docDefinition).getBuffer((buffer) => {
+      const numPages = contarPaginasDesdeBuffer(buffer);
       
       // Contamos el total de productos para ambas páginas
       const totalProductos = contarTotalProductos(embarque);
@@ -444,11 +491,11 @@ export async function generarNotaVentaPDF(embarque, clientesDisponibles, cliente
         };
         
         // Crear y descargar el PDF con los ajustes
-        pdfMake.createPdf(docDefinitionAjustado).download('nota-venta.pdf');
+        activePdfMake.createPdf(docDefinitionAjustado).download('nota-venta.pdf');
         console.log(`PDF generado con nivel de reducción: ${nivelReduccion}`);
       } else {
         // Si son pocos productos, descargar el original
-        pdfMake.createPdf(docDefinition).download('nota-venta.pdf');
+        activePdfMake.createPdf(docDefinition).download('nota-venta.pdf');
         console.log('PDF generado sin reducción de escala');
       }
     });
@@ -2075,11 +2122,8 @@ export async function generarNotaVentaSinPreciosPDF(embarque, clientesDisponible
     };
 
     // Crear el documento PDF y verificar número de páginas
-    pdfMake.createPdf(docDefinition).getBuffer((buffer) => {
-      // Crear un Uint8Array del buffer para contar las páginas
-      const pdfData = new Uint8Array(buffer);
-      // Contar ocurrencias de "/Page" para estimar número de páginas
-      const numPages = buffer.toString().match(/\/Page\W/g).length;
+    activePdfMake.createPdf(docDefinition).getBuffer((buffer) => {
+      const numPages = contarPaginasDesdeBuffer(buffer);
       
       // Contamos el total de productos
       const totalProductos = contarTotalProductos(embarque);
@@ -2143,11 +2187,11 @@ export async function generarNotaVentaSinPreciosPDF(embarque, clientesDisponible
         };
         
         // Crear y descargar el PDF con los ajustes
-        pdfMake.createPdf(docDefinitionAjustado).download('nota-embarque.pdf');
+        activePdfMake.createPdf(docDefinitionAjustado).download('nota-embarque.pdf');
         console.log(`PDF sin precios generado con nivel de reducción: ${nivelReduccion}`);
       } else {
         // Si es una sola página y menos de 8 productos, descargar el original
-        pdfMake.createPdf(docDefinition).download('nota-embarque.pdf');
+        activePdfMake.createPdf(docDefinition).download('nota-embarque.pdf');
         console.log('PDF sin precios generado sin reducción de escala');
       }
     });

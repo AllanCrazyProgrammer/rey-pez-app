@@ -442,7 +442,6 @@ router.beforeEach((to, from, next) => {
   try {
     // MODO DESARROLLO: Comentar/descomentar las siguientes líneas para bypassing temporal
     if (process.env.NODE_ENV === 'development') {
-      console.log('Modo desarrollo - Bypassing auth guard');
       next();
       return;
     }
@@ -457,36 +456,30 @@ router.beforeEach((to, from, next) => {
         isAuthenticated = user && user.username;
       } catch (e) {
         // Si hay error al parsear, limpiar localStorage corrupto
-        console.log('Limpiando localStorage corrupto');
+        
         localStorage.removeItem('user');
         isAuthenticated = false;
       }
     }
 
     // Logging para depuración
-    console.log('Navigation Guard:', {
-      to: to.path,
-      from: from.path,
-      isAuthenticated,
-      userString: userString ? 'exists' : 'null',
-      userParsed: userString ? JSON.parse(userString) : null
-    });
+    
 
     // Si la ruta es login y el usuario está autenticado, redirigir al home
     if (to.path === '/login' && isAuthenticated) {
-      console.log('Redirigiendo a home porque ya está autenticado');
+      
       next('/');
       return;
     }
 
     // Si la ruta no es login y el usuario no está autenticado, redirigir a login
     if (to.path !== '/login' && !isAuthenticated) {
-      console.log('Redirigiendo a login porque no está autenticado');
+      
       next('/login');
       return;
     }
 
-    console.log('Permitiendo navegación normal');
+    
     next();
   } catch (error) {
     console.error('Error en navigation guard:', error);

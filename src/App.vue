@@ -24,12 +24,7 @@ export default {
     const authStore = useAuthStore();
     authStore.checkAuth();
     
-    // Debug: mostrar estado de autenticación
-    console.log('App inicializada - Estado de auth:', {
-      isAuthenticated: authStore.isAuthenticated,
-      user: authStore.user,
-      localStorage: localStorage.getItem('user') ? 'exists' : 'null'
-    });
+    
   }
 };
 </script>
