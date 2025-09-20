@@ -333,9 +333,11 @@ export default {
 
         // Total de bolsas reportadas
         totalBolsasReportadas() {
+            const bolsas = Array.isArray(this.producto.reporteBolsas) ? this.producto.reporteBolsas : [];
+
             return (this.producto.reporteTaras || []).reduce((total, tara, index) => {
-                const taraNum = parseInt(tara) || 0;
-                const bolsaNum = parseInt(this.producto.reporteBolsas[index]) || 0;
+                const taraNum = parseInt(tara, 10) || 0;
+                const bolsaNum = parseInt(bolsas[index], 10) || 0;
                 return total + (taraNum * bolsaNum);
             }, 0);
         },
