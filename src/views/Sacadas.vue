@@ -413,11 +413,59 @@ export default {
       }
     },
     async addSalida() {
+      // VALIDACIÓN PREVIA: Verificar si el precio seleccionado no es el más antiguo
       if (this.isSalidaValid && this.newSalida.kilos <= this.kilosDisponibles) {
-        // Extraer precio y medida base del formato del dropdown
+        // Extraer información de la medida seleccionada
+        let medidaParaParsear = this.newSalida.medida;
+        let esPrecioMasAntiguo = false;
         let precio = null;
         let medidaBase = this.newSalida.medida;
-        let medidaParaParsear = this.newSalida.medida;
+        
+        // Verificar si tiene el emoji de más antiguo
+        if (medidaParaParsear.startsWith('🕐 ')) {
+          esPrecioMasAntiguo = true;
+          medidaParaParsear = medidaParaParsear.substring(2).trim();
+        }
+        
+        // Si contiene " ($" es una medida con precio
+        if (medidaParaParsear.includes(' ($')) {
+          const precioMatch = medidaParaParsear.match(/\(\$(\d+(?:\.\d+)?)\)/);
+          if (precioMatch) {
+            precio = Number(precioMatch[1]);
+            medidaBase = medidaParaParsear.split(' ($')[0];
+          }
+        } else if (medidaParaParsear.includes(' - (')) {
+          // Si contiene " - (" es una medida sin precio o con fecha
+          medidaBase = medidaParaParsear.split(' - (')[0];
+          precio = null;
+        }
+
+        // VALIDACIÓN: Mostrar alerta si no es el precio más antiguo
+        if (!esPrecioMasAntiguo && this.newSalida.tipo === 'proveedor' && precio !== null) {
+          // Buscar si existe una medida más antigua con el mismo nombre base
+          const medidaMasAntigua = this.medidasConPrecio.find(m => 
+            m.nombreOriginal.split(' ($')[0] === medidaBase && m.esElMasAntiguo
+          );
+          
+          if (medidaMasAntigua) {
+            const confirmar = confirm(
+              `⚠️ ADVERTENCIA: Estás registrando una salida con precio que NO es el más antiguo.\n\n` +
+              `Medida seleccionada: ${medidaBase} ($${precio})\n` +
+              `Existe una más antigua disponible: ${medidaMasAntigua.nombre.replace('🕐 ', '').split(' - (')[0]}\n\n` +
+              `Se recomienda usar primero el precio más antiguo para un mejor control de inventario FIFO.\n\n` +
+              `¿Deseas continuar registrando esta salida?`
+            );
+            
+            if (!confirmar) {
+              return; // Cancelar la operación
+            }
+          }
+        }
+
+        // PROCEDER CON EL REGISTRO: Extraer precio y medida base del formato del dropdown
+        precio = null;
+        medidaBase = this.newSalida.medida;
+        medidaParaParsear = this.newSalida.medida;
         
         // Primero, quitar el emoji si existe
         if (medidaParaParsear.startsWith('🕐 ')) {
