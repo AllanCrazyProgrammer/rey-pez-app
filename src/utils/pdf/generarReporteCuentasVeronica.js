@@ -42,7 +42,7 @@ export const generarReporteCuentasVeronica = async ({ fechaInicio, fechaFin, reg
       { text: 'Fecha', style: 'tableHeader', alignment: 'center' },
       { text: 'Saldo del día', style: 'tableHeader', alignment: 'right' },
       { text: 'Abonos', style: 'tableHeader', alignment: 'right' },
-      { text: 'Total día', style: 'tableHeader', alignment: 'right' },
+      { text: 'Resta', style: 'tableHeader', alignment: 'right' },
       { text: 'Saldo acumulado', style: 'tableHeader', alignment: 'right' }
     ]
   ];
