@@ -16,6 +16,11 @@
       <StashModalV2 cliente="veronica" />
     </div>
 
+    <div class="reporte-cuentas-card card">
+      <h2>Generar reporte PDF</h2>
+      <ReporteCuentasVeronicaButton />
+    </div>
+
     <div class="filter-container">
       <label for="filter-select">Filtrar por estado:</label>
       <select id="filter-select" v-model="filtroEstado">
@@ -76,13 +81,15 @@ import { collection, query, orderBy, deleteDoc, doc, onSnapshot, where, updateDo
 import BackButton from '@/components/BackButton.vue';
 import PreciosHistorialModal from '@/components/PreciosHistorialModal.vue';
 import StashModalV2 from '@/components/StashModalV2.vue';
+import ReporteCuentasVeronicaButton from '@/components/Cuentas/ReporteCuentasVeronicaButton.vue';
 
 export default {
   name: 'VeronicaCuentasMenu',
   components: {
     BackButton,
     PreciosHistorialModal,
-    StashModalV2
+    StashModalV2,
+    ReporteCuentasVeronicaButton
   },
   data() {
     return {
@@ -342,6 +349,16 @@ h1, h2 {
   border-radius: 10px;
   box-shadow: 0 2px 8px rgba(0,0,0,0.08);
   padding: 16px;
+}
+
+.reporte-cuentas-card {
+  margin-bottom: 20px;
+}
+
+.reporte-cuentas-card h2 {
+  margin: 0 0 8px;
+  font-size: 1.2em;
+  color: #ff8c00;
 }
 
 .cuentas-list {
