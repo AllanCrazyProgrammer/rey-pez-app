@@ -167,6 +167,7 @@ export default {
       proveedores: [],
       medidas: [],
       medidasConPrecio: [],
+      medidasMaquilaDisponibles: [],
       newEntrada: { tipo: 'proveedor', proveedor: '', medida: '', kilos: null, precio: null },
       newSalida: { tipo: 'proveedor', proveedor: '', medida: '', kilos: null },
       isEditing: false,
@@ -201,8 +202,10 @@ export default {
     },
     filteredMedidasSalida() {
       if (this.newSalida.tipo === 'maquila') {
-        const maquila = this.proveedores.find(p => p.nombre === this.newSalida.proveedor);
-        return maquila ? this.medidas.filter(m => m.tipo === 'maquila' && m.maquilaId === maquila.id).sort((a, b) => a.nombre.localeCompare(b.nombre)) : [];
+        if (!this.newSalida.proveedor) {
+          return [];
+        }
+        return this.medidasMaquilaDisponibles;
       } else {
         const proveedor = this.proveedores.find(p => p.nombre === this.newSalida.proveedor);
         if (!proveedor) return [];
@@ -347,11 +350,13 @@ export default {
       this.newSalida.medida = '';
       this.kilosDisponibles = null;
       this.medidasConPrecio = [];
+      this.medidasMaquilaDisponibles = [];
     },
     limpiarSeleccionSalida() {
       this.newSalida = { tipo: 'proveedor', proveedor: '', medida: '', kilos: null };
       this.kilosDisponibles = null;
       this.medidasConPrecio = [];
+      this.medidasMaquilaDisponibles = [];
     },
     async refrescarMedidasDespuesSalida(proveedor) {
       // Forzar recálculo completo
@@ -396,19 +401,71 @@ export default {
         };
         
         // Si el proveedor de entrada es el mismo que el de salida, actualizar medidas disponibles para salidas
-        if (this.newSalida.proveedor === proveedorEntrada && this.newSalida.tipo === 'proveedor') {
-          this.medidasConPrecio = await this.getMedidasConPrecio(proveedorEntrada);
+        if (this.newSalida.proveedor === proveedorEntrada) {
+          if (this.newSalida.tipo === 'proveedor') {
+            this.medidasConPrecio = await this.getMedidasConPrecio(proveedorEntrada);
+          } else if (this.newSalida.tipo === 'maquila') {
+            this.medidasMaquilaDisponibles = await this.getMedidasDisponiblesMaquila(proveedorEntrada);
+          }
         }
         
         await this.updateKilosDisponibles();
       }
     },
     async addSalida() {
+      // VALIDACIÓN PREVIA: Verificar si el precio seleccionado no es el más antiguo
       if (this.isSalidaValid && this.newSalida.kilos <= this.kilosDisponibles) {
-        // Extraer precio y medida base del formato del dropdown
+        // Extraer información de la medida seleccionada
+        let medidaParaParsear = this.newSalida.medida;
+        let esPrecioMasAntiguo = false;
         let precio = null;
         let medidaBase = this.newSalida.medida;
-        let medidaParaParsear = this.newSalida.medida;
+        
+        // Verificar si tiene el emoji de más antiguo
+        if (medidaParaParsear.startsWith('🕐 ')) {
+          esPrecioMasAntiguo = true;
+          medidaParaParsear = medidaParaParsear.substring(2).trim();
+        }
+        
+        // Si contiene " ($" es una medida con precio
+        if (medidaParaParsear.includes(' ($')) {
+          const precioMatch = medidaParaParsear.match(/\(\$(\d+(?:\.\d+)?)\)/);
+          if (precioMatch) {
+            precio = Number(precioMatch[1]);
+            medidaBase = medidaParaParsear.split(' ($')[0];
+          }
+        } else if (medidaParaParsear.includes(' - (')) {
+          // Si contiene " - (" es una medida sin precio o con fecha
+          medidaBase = medidaParaParsear.split(' - (')[0];
+          precio = null;
+        }
+
+        // VALIDACIÓN: Mostrar alerta si no es el precio más antiguo
+        if (!esPrecioMasAntiguo && this.newSalida.tipo === 'proveedor' && precio !== null) {
+          // Buscar si existe una medida más antigua con el mismo nombre base
+          const medidaMasAntigua = this.medidasConPrecio.find(m => 
+            m.nombreOriginal.split(' ($')[0] === medidaBase && m.esElMasAntiguo
+          );
+          
+          if (medidaMasAntigua) {
+            const confirmar = confirm(
+              `⚠️ ADVERTENCIA: Estás registrando una salida con precio que NO es el más antiguo.\n\n` +
+              `Medida seleccionada: ${medidaBase} ($${precio})\n` +
+              `Existe una más antigua disponible: ${medidaMasAntigua.nombre.replace('🕐 ', '').split(' - (')[0]}\n\n` +
+              `Se recomienda usar primero el precio más antiguo para un mejor control de inventario FIFO.\n\n` +
+              `¿Deseas continuar registrando esta salida?`
+            );
+            
+            if (!confirmar) {
+              return; // Cancelar la operación
+            }
+          }
+        }
+
+        // PROCEDER CON EL REGISTRO: Extraer precio y medida base del formato del dropdown
+        precio = null;
+        medidaBase = this.newSalida.medida;
+        medidaParaParsear = this.newSalida.medida;
         
         // Primero, quitar el emoji si existe
         if (medidaParaParsear.startsWith('🕐 ')) {
@@ -449,13 +506,17 @@ export default {
         };
         
         // Actualizar las medidas disponibles después de la salida
-        if (tipoAnterior === 'proveedor' && proveedorAnterior) {
-          await this.refrescarMedidasDespuesSalida(proveedorAnterior);
-          
+        if (proveedorAnterior) {
+          if (tipoAnterior === 'proveedor') {
+            await this.refrescarMedidasDespuesSalida(proveedorAnterior);
+          } else if (tipoAnterior === 'maquila') {
+            this.medidasMaquilaDisponibles = await this.getMedidasDisponiblesMaquila(proveedorAnterior);
+          }
+
           // Resetear los kilos disponibles para forzar recálculo
           this.kilosDisponibles = null;
         }
-        
+
         await this.updateKilosDisponibles();
       } else if (this.newSalida.kilos > this.kilosDisponibles) {
         alert(`No hay suficientes kilos disponibles. Kilos disponibles: ${this.kilosDisponibles.toFixed(1)} kg`);
@@ -542,8 +603,12 @@ export default {
       this.entradas.splice(index, 1);
       
       // Si el proveedor eliminado es el mismo que el de salida, actualizar medidas disponibles
-      if (this.newSalida.proveedor === entradaEliminada.proveedor && this.newSalida.tipo === 'proveedor') {
-        this.medidasConPrecio = await this.getMedidasConPrecio(entradaEliminada.proveedor);
+      if (this.newSalida.proveedor === entradaEliminada.proveedor) {
+        if (this.newSalida.tipo === 'proveedor') {
+          this.medidasConPrecio = await this.getMedidasConPrecio(entradaEliminada.proveedor);
+        } else if (this.newSalida.tipo === 'maquila') {
+          this.medidasMaquilaDisponibles = await this.getMedidasDisponiblesMaquila(entradaEliminada.proveedor);
+        }
       }
       
       await this.updateKilosDisponibles();
@@ -553,8 +618,12 @@ export default {
       this.salidas.splice(index, 1);
       
       // Si el proveedor eliminado es el mismo que el seleccionado, actualizar medidas disponibles
-      if (this.newSalida.proveedor === salidaEliminada.proveedor && this.newSalida.tipo === 'proveedor') {
-        this.medidasConPrecio = await this.getMedidasConPrecio(salidaEliminada.proveedor);
+      if (this.newSalida.proveedor === salidaEliminada.proveedor) {
+        if (this.newSalida.tipo === 'proveedor') {
+          this.medidasConPrecio = await this.getMedidasConPrecio(salidaEliminada.proveedor);
+        } else if (this.newSalida.tipo === 'maquila') {
+          this.medidasMaquilaDisponibles = await this.getMedidasDisponiblesMaquila(salidaEliminada.proveedor);
+        }
       }
       
       await this.updateKilosDisponibles();
@@ -766,6 +835,82 @@ export default {
         return 0;
       });
     },
+    async getMedidasDisponiblesMaquila(maquilaNombre) {
+      const maquila = this.proveedores.find(
+        proveedor => proveedor.nombre === maquilaNombre && proveedor.tipo === 'maquila'
+      );
+
+      if (!maquila) {
+        return [];
+      }
+
+      const medidasMaquila = this.medidas.filter(
+        medida => medida.tipo === 'maquila' && medida.maquilaId === maquila.id
+      );
+
+      if (!medidasMaquila.length) {
+        return [];
+      }
+
+      const existenciasPorMedida = new Map();
+      const acumularKilos = (medidaNombre, kilosDelta) => {
+        if (!medidaNombre) return;
+        const kilosActuales = existenciasPorMedida.get(medidaNombre) || 0;
+        existenciasPorMedida.set(medidaNombre, kilosActuales + (Number(kilosDelta) || 0));
+      };
+
+      const sacadasRef = collection(db, 'sacadas');
+      const querySnapshot = await getDocs(sacadasRef);
+      const sacadasOrdenadas = querySnapshot.docs
+        .map(docSnapshot => ({ id: docSnapshot.id, ...docSnapshot.data() }))
+        .sort((a, b) => a.fecha.toDate() - b.fecha.toDate());
+
+      const inicioDiaActual = this.currentDate.clone().startOf('day');
+
+      sacadasOrdenadas.forEach(sacada => {
+        const fechaSacada = sacada.fecha instanceof Date ? sacada.fecha : sacada.fecha.toDate();
+        const momentoSacada = moment(fechaSacada);
+
+        if (!momentoSacada.isBefore(inicioDiaActual)) {
+          return;
+        }
+
+        (sacada.entradas || []).forEach(entrada => {
+          if (entrada.tipo === 'maquila' && entrada.proveedor === maquilaNombre) {
+            acumularKilos(entrada.medida, entrada.kilos);
+          }
+        });
+
+        (sacada.salidas || []).forEach(salida => {
+          if (salida.tipo === 'maquila' && salida.proveedor === maquilaNombre) {
+            acumularKilos(salida.medida, -(salida.kilos || 0));
+          }
+        });
+      });
+
+      this.entradas.forEach(entrada => {
+        if (entrada.tipo === 'maquila' && entrada.proveedor === maquilaNombre) {
+          acumularKilos(entrada.medida, entrada.kilos);
+        }
+      });
+
+      this.salidas.forEach(salida => {
+        if (salida.tipo === 'maquila' && salida.proveedor === maquilaNombre) {
+          acumularKilos(salida.medida, -(salida.kilos || 0));
+        }
+      });
+
+      return medidasMaquila
+        .map(medida => {
+          const kilos = Number(existenciasPorMedida.get(medida.nombre) || 0);
+          return {
+            ...medida,
+            kilos: Number(kilos.toFixed(1))
+          };
+        })
+        .filter(medida => medida.kilos > 0)
+        .sort((a, b) => a.nombre.localeCompare(b.nombre));
+    },
   },
   async created() {
     // Si viene fecha desde el pedido, usarla como seleccionada
@@ -781,15 +926,27 @@ export default {
     this.isLoaded = true;
   },
   watch: {
-    'newSalida.proveedor': 'updateKilosDisponibles',
     'newSalida.medida': 'updateKilosDisponibles',
     'newSalida.kilos': 'updateKilosDisponibles',
     async 'newSalida.proveedor'(newProveedor) {
       this.updateKilosDisponibles();
-      if (newProveedor && this.newSalida.tipo === 'proveedor') {
+      const tipoActual = this.newSalida.tipo;
+
+      if (!newProveedor) {
+        this.medidasConPrecio = [];
+        this.medidasMaquilaDisponibles = [];
+        return;
+      }
+
+      if (tipoActual === 'proveedor') {
+        this.medidasMaquilaDisponibles = [];
         this.medidasConPrecio = await this.getMedidasConPrecio(newProveedor);
+      } else if (tipoActual === 'maquila') {
+        this.medidasConPrecio = [];
+        this.medidasMaquilaDisponibles = await this.getMedidasDisponiblesMaquila(newProveedor);
       } else {
         this.medidasConPrecio = [];
+        this.medidasMaquilaDisponibles = [];
       }
     }
   }
@@ -1211,7 +1368,3 @@ button:disabled:hover {
   font-weight: bold !important;
 }
 </style>
-
-
-
-

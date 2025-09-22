@@ -772,7 +772,7 @@ async function generarContenidoClientes(embarque, clientesDisponibles, clientesJ
             style: ['subheader', estiloCliente],
             margin: [0, 5, 0, 5]
           },
-          generarTablaCrudos(crudosConPrecios, estiloCliente, incluirPreciosCliente),
+          generarTablaCrudos(crudosConPrecios, estiloCliente, incluirPreciosCliente, cuentaEnPdfCliente),
           { text: '\n' }
         );
 
@@ -1401,7 +1401,7 @@ function generarTablaProductos(productos, estiloCliente, nombreCliente, aplicarR
   };
 }
 
-function generarTablaCrudos(crudos, estiloCliente, incluirPreciosCliente = false) {
+function generarTablaCrudos(crudos, estiloCliente, incluirPreciosCliente = false, cuentaEnPdfCliente = false) {
   // Obtener el nombre del cliente a partir del estilo
   const nombreCliente = obtenerNombreClienteDesdeEstilo(estiloCliente);
   
@@ -1449,6 +1449,10 @@ function generarTablaCrudos(crudos, estiloCliente, incluirPreciosCliente = false
     return generarTablaVacia(estiloCliente);
   }
 
+  // Definir qué columnas adicionales se mostrarán
+  const mostrarColumnaPrecio = hayPrecios;
+  const mostrarColumnaTotal = hayPrecios && cuentaEnPdfCliente;
+
   // Definir las columnas del header según si hay precios o no
   const headerRow = [
     { text: 'Cantidad', style: 'tableHeader' },
@@ -1456,9 +1460,13 @@ function generarTablaCrudos(crudos, estiloCliente, incluirPreciosCliente = false
     { text: 'Taras', style: 'tableHeader' }
   ];
 
-  // Agregar columna de precio solo si hay precios
-  if (hayPrecios) {
+  // Agregar columna de precio si corresponde
+  if (mostrarColumnaPrecio) {
     headerRow.push({ text: 'Precio', style: 'tableHeader' });
+  }
+
+  // Agregar columna de total solo si está activada la cuenta en PDF
+  if (mostrarColumnaTotal) {
     headerRow.push({ text: 'Total', style: 'tableHeader' });
   }
 
@@ -1493,15 +1501,17 @@ function generarTablaCrudos(crudos, estiloCliente, incluirPreciosCliente = false
     ];
 
     // Agregar precio formateado solo si la columna existe
-    if (hayPrecios) {
+    if (mostrarColumnaPrecio) {
       row.push(item.precio ? { text: `$${Number(item.precio).toLocaleString('en-US')}`, style: 'precio' } : '');
-      
-      // Agregar total si hay precios
+    }
+
+    if (mostrarColumnaTotal) {
+      // Agregar total si hay precios y está habilitada la cuenta en PDF
       const total = item.precio ? kilosMostrados * Number(item.precio) : 0;
       granTotal += total;
-      
-      row.push(item.precio 
-        ? { text: `$${Math.round(total).toLocaleString('en-US')}`, style: 'totalPrecio' } 
+
+      row.push(item.precio
+        ? { text: `$${Math.round(total).toLocaleString('en-US')}`, style: 'totalPrecio' }
         : '');
 
       // Sumar taras para flete (cantidad de taras + sobrante) cuando hay precios
@@ -1512,7 +1522,7 @@ function generarTablaCrudos(crudos, estiloCliente, incluirPreciosCliente = false
   });
   
   // Agregar fila con el gran total si hay precios
-  if (hayPrecios && granTotal > 0) {
+  if (mostrarColumnaTotal && granTotal > 0) {
     const numColumnas = headerRow.length;
     const filaGranTotal = [
       {
@@ -1582,8 +1592,10 @@ function generarTablaCrudos(crudos, estiloCliente, incluirPreciosCliente = false
 
   // Definir los anchos de columna según si hay precios o no
   let widths;
-  if (hayPrecios) {
+  if (mostrarColumnaPrecio && mostrarColumnaTotal) {
     widths = ['20%', '25%', '20%', '15%', '20%']; // Con columna de precio y total
+  } else if (mostrarColumnaPrecio) {
+    widths = ['25%', '35%', '20%', '20%']; // Solo columna de precio
   } else {
     widths = ['30%', '40%', '30%']; // Sin columna de precio
   }
