@@ -53,6 +53,10 @@
             <div>Taras: {{ calculosJoselito.tarasTotal }} T</div>
             <div>Kilos: {{ calculosJoselito.kilosTotal }} kg</div>
           </div>
+          <div class="tab-totales" v-if="cliente.id === 'lorena'">
+            <div>Taras: {{ calculosLorena.tarasTotal }} T</div>
+            <div>Kilos: {{ calculosLorena.kilosTotal }} kg</div>
+          </div>
           <div class="tab-totales" v-if="cliente.id === 'ozuna'">
             <div>Taras: {{ calculosOzuna.tarasTotal }} T</div>
             <div>Kilos: {{ calculosOzuna.kilosTotal }} kg</div>
@@ -104,6 +108,7 @@
               'bg-otilio': clienteActivo === 'otilio',
               'bg-catarro': clienteActivo === 'catarro',
               'bg-joselito': clienteActivo === 'joselito',
+              'bg-lorena': clienteActivo === 'lorena',
               'bg-ozuna': clienteActivo === 'ozuna',
               'bg-temporal': isClienteTemporal(clienteActivo)
             }"
@@ -178,6 +183,7 @@
               'bg-otilio': clienteActivo === 'otilio',
               'bg-catarro': clienteActivo === 'catarro',
               'bg-joselito': clienteActivo === 'joselito',
+              'bg-lorena': clienteActivo === 'lorena',
               'bg-ozuna': clienteActivo === 'ozuna',
               'bg-temporal': isClienteTemporal(clienteActivo)
             }"
@@ -252,6 +258,7 @@
               'bg-otilio': clienteActivo === 'otilio',
               'bg-catarro': clienteActivo === 'catarro',
               'bg-joselito': clienteActivo === 'joselito',
+              'bg-lorena': clienteActivo === 'lorena',
               'bg-ozuna': clienteActivo === 'ozuna',
               'bg-temporal': isClienteTemporal(clienteActivo)
             }"
@@ -319,6 +326,87 @@
           </div>
         </div>
 
+        <!-- Lorena -->
+        <div v-show="clienteActivo === 'lorena'" class="cliente-seccion">
+          <button 
+            @click="agregarFilaLorena" 
+            class="btn-agregar"
+            :class="{
+              'bg-otilio': clienteActivo === 'otilio',
+              'bg-catarro': clienteActivo === 'catarro',
+              'bg-joselito': clienteActivo === 'joselito',
+              'bg-lorena': clienteActivo === 'lorena',
+              'bg-ozuna': clienteActivo === 'ozuna',
+              'bg-temporal': isClienteTemporal(clienteActivo)
+            }"
+          >
+            + Agregar Fila
+          </button>
+          
+          <div class="pedido-grid">
+            <div v-for="(item, index) in pedidoLorena" :key="index" class="pedido-item">
+              <div class="input-row">
+                <div class="input-group-compact kilos">
+                  <div class="label-container">
+                    <label>Kilos:</label>
+                    <div class="tara-checkbox">
+                      <input type="checkbox" v-model="item.esTara" :id="'tara' + index">
+                      <label :for="'tara' + index">T</label>
+                    </div>
+                  </div>
+                  <input type="number" v-model="item.kilos" class="input-field">
+                </div>
+
+                <div class="input-group-compact medida">
+                  <div class="label-container">
+                    <label>Medida:</label>
+                    <button 
+                      class="btn-proveedor"
+                      @click="abrirModalProveedor(item)"
+                      :class="{ 'active': item.esProveedor }"
+                      :title="item.proveedor || 'Agregar proveedor'"
+                    >
+                      P
+                    </button>
+                  </div>
+                  <select v-model="item.medida" class="input-field">
+                    <option value="">Seleccionar</option>
+                    <option v-for="medida in medidasOrdenadas" :key="medida.id" :value="medida.nombre">
+                      {{ medida.nombre }}
+                    </option>
+                  </select>
+                </div>
+
+                <div class="input-group-compact tipo">
+                  <div class="label-container">
+                    <label>Tipo:</label>
+                    <select v-model="item.nota" class="input-field-notas">
+                      <option value="">Notas</option>
+                      <option value="Sellado">Sellado</option>
+                      <option value="Kileado">Kileado</option>
+                    </select>
+                  </div>
+                  <select 
+                    v-model="item.tipo" 
+                    class="input-field" 
+                    :class="{ 'text-blue': item.tipo === 'C/H20' || item.tipo === '1.35 y .15' || item.tipo === '1.5 y .3' }"
+                  >
+                    <option value="">Seleccionar</option>
+                    <option value="S/H20">S/H20</option>
+                    <option value="C/H20" class="text-blue">C/H20</option>
+                    <option value="1.35 y .15" class="text-blue">1.35 y .15</option>
+                    <option value="1.5 y .3" class="text-blue">1.5 y .3</option>
+                  </select>
+                </div>
+
+                <button @click="eliminarPedidoLorena(index)" class="btn-eliminar" v-if="pedidoLorena.length > 1">
+                  <i class="fas fa-trash"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- Ozuna -->
         <div v-show="clienteActivo === 'ozuna'" class="cliente-seccion">
           <button 
@@ -328,6 +416,7 @@
               'bg-otilio': clienteActivo === 'otilio',
               'bg-catarro': clienteActivo === 'catarro',
               'bg-joselito': clienteActivo === 'joselito',
+              'bg-lorena': clienteActivo === 'lorena',
               'bg-ozuna': clienteActivo === 'ozuna',
               'bg-temporal': isClienteTemporal(clienteActivo)
             }"
@@ -516,6 +605,7 @@
       :pedidoOtilio="pedidoOtilio"
       :pedidoCatarro="pedidoCatarro"
       :pedidoJoselito="pedidoJoselito"
+      :pedidoLorena="pedidoLorena"
       :pedidoOzuna="pedidoOzuna"
       :clientesTemporales="clientesTemporales"
       :rendimientosGuardados="rendimientosGuardados"
@@ -567,6 +657,7 @@ export default {
       pedidoCatarro: [{ kilos: null, medida: '', tipo: 'S/H20', esTara: false, esProveedor: false, proveedor: '' }],
       pedidoJoselito: [{ kilos: null, medida: '', tipo: '', esTara: false, esProveedor: false, proveedor: '' }],
       pedidoOzuna: [{ kilos: null, medida: '', tipo: 'S/H20', esTara: false, esProveedor: false, proveedor: '', esMaquila: true }],
+      pedidoLorena: [{ kilos: null, medida: '', tipo: '', esTara: false, esProveedor: false, proveedor: '' }],
       clientesTemporales: {},
       mostrarModalNuevoCliente: false,
       mostrarImpresion: false,
@@ -580,6 +671,7 @@ export default {
         { id: 'otilio', nombre: 'Otilio' },
         { id: 'catarro', nombre: 'Catarro' },
         { id: 'joselito', nombre: 'Joselito' },
+        { id: 'lorena', nombre: 'Lorena' },
         { id: 'ozuna', nombre: 'Ozuna' }
       ],
       itemSeleccionadoNotas: null,
@@ -767,6 +859,58 @@ export default {
         kilosTotal: kilosTotal.toString()
       };
     },
+    // Cálculos para Lorena
+    calculosLorena() {
+      let tarasDirectas = 0;
+      let kilosSinH2O = 0;
+      let kilosConH2O = 0;
+      let kilosTaras = 0;
+      let kilos135 = 0;
+      let kilosTaras135 = 0;
+      let kilos15y3 = 0;
+      let kilosTaras15y3 = 0;
+
+      this.pedidoLorena.forEach(item => {
+        if (item.kilos) {
+          if (item.esTara) {
+            tarasDirectas += Number(item.kilos);
+            if (item.tipo === 'C/H20') {
+              kilosConH2O += Number(item.kilos) * 30 * 0.65;
+            } else if (item.tipo === '1.35 y .15') {
+              kilosTaras135 += Number(item.kilos) * 30;
+            } else if (item.tipo === '1.5 y .3') {
+              kilosTaras15y3 += Number(item.kilos) * 30;
+            } else {
+              kilosTaras += Number(item.kilos) * 30;
+            }
+          } else if (item.tipo === 'S/H20') {
+            kilosSinH2O += Number(item.kilos);
+          } else if (item.tipo === 'C/H20') {
+            kilosConH2O += Number(item.kilos);
+          } else if (item.tipo === '1.35 y .15') {
+            kilos135 += Number(item.kilos) * 1.35;
+          } else if (item.tipo === '1.5 y .3') {
+            kilos15y3 += Number(item.kilos) * 1.5;
+          }
+        }
+      });
+
+      const tarasPorKilos = kilosSinH2O / 25;
+      const tarasPor135 = kilos135 / (1.35 * 25);
+      const tarasPor15y3 = kilos15y3 / (1.5 * 25);
+      const tarasTotal = Math.round(tarasDirectas + tarasPorKilos + tarasPor135 + tarasPor15y3);
+      const totalKilosSinH2O = kilosSinH2O + kilosTaras + kilosTaras135 + kilosTaras15y3;
+      const kilosTotal = Math.round(totalKilosSinH2O + kilosConH2O + kilos135 + kilos15y3);
+
+      return {
+        tarasDirectas: tarasDirectas.toFixed(2),
+        tarasPorKilos: tarasPorKilos.toFixed(2),
+        tarasTotal: tarasTotal.toString(),
+        kilosSinH2O: Math.round(totalKilosSinH2O).toString(),
+        kilosConH2O: kilosConH2O.toFixed(2),
+        kilosTotal: kilosTotal.toString()
+      };
+    },
     // Cálculos para Ozuna
     calculosOzuna() {
       let tarasDirectas = 0;
@@ -814,6 +958,7 @@ export default {
         Number(this.calculosOtilio.tarasTotal) +
         Number(this.calculosCatarro.tarasTotal) +
         Number(this.calculosJoselito.tarasTotal) +
+        Number(this.calculosLorena.tarasTotal) +
         Number(this.calculosOzuna.tarasTotal)
       );
 
@@ -821,6 +966,7 @@ export default {
         Number(this.calculosOtilio.kilosTotal) +
         Number(this.calculosCatarro.kilosTotal) +
         Number(this.calculosJoselito.kilosTotal) +
+        Number(this.calculosLorena.kilosTotal) +
         Number(this.calculosOzuna.kilosTotal)
       );
 
@@ -861,6 +1007,7 @@ export default {
           this.pedidoCatarro = data.catarro || [];
           this.pedidoJoselito = data.joselito || [];
           this.pedidoOzuna = data.ozuna || [];
+          this.pedidoLorena = data.lorena || [];
           this.clientesTemporales = data.clientesTemporales || {};
           this.rendimientosGuardados = data.rendimientos || {};
           this.divisoresGuardados = data.divisores || {};
@@ -884,6 +1031,9 @@ export default {
     agregarFilaOzuna() {
       this.pedidoOzuna.unshift({ kilos: null, medida: '', tipo: 'S/H20', esTara: false, esProveedor: false, proveedor: '', esMaquila: true })
     },
+    agregarFilaLorena() {
+      this.pedidoLorena.unshift({ kilos: null, medida: '', tipo: '', esTara: false, esProveedor: false, proveedor: '' })
+    },
     async guardarPedido() {
       try {
         const pedidoData = {
@@ -893,6 +1043,7 @@ export default {
           catarro: this.pedidoCatarro,
           joselito: this.pedidoJoselito,
           ozuna: this.pedidoOzuna,
+          lorena: this.pedidoLorena,
           clientesTemporales: this.clientesTemporales,
           rendimientos: this.rendimientosGuardados,
           divisores: this.divisoresGuardados,
@@ -923,6 +1074,7 @@ export default {
           catarro: this.pedidoCatarro,
           joselito: this.pedidoJoselito,
           ozuna: this.pedidoOzuna,
+          lorena: this.pedidoLorena,
           clientesTemporales: this.clientesTemporales,
           rendimientos: this.rendimientosGuardados,
           divisores: this.divisoresGuardados,
@@ -968,6 +1120,12 @@ export default {
       this.pedidoOzuna.splice(index, 1)
       if (this.pedidoOzuna.length === 0) {
         this.agregarFilaOzuna()
+      }
+    },
+    eliminarPedidoLorena(index) {
+      this.pedidoLorena.splice(index, 1)
+      if (this.pedidoLorena.length === 0) {
+        this.agregarFilaLorena()
       }
     },
     abrirModalProveedor(item) {
@@ -1020,7 +1178,7 @@ export default {
       return [...pedidosIncompletos, ...pedidosCompletos];
     },
     isClienteTemporal(clienteId) {
-      return !['otilio', 'catarro', 'joselito', 'ozuna'].includes(clienteId);
+      return !['otilio', 'catarro', 'joselito', 'lorena', 'ozuna'].includes(clienteId);
     },
     calcularTotalesTemporales(clienteId) {
       if (!this.clientesTemporales[clienteId]?.pedidos) return { tarasTotal: '0', kilosTotal: '0' };
@@ -1139,6 +1297,7 @@ export default {
           catarro: this.pedidoCatarro,
           joselito: this.pedidoJoselito,
           ozuna: this.pedidoOzuna,
+          lorena: this.pedidoLorena,
           clientesTemporales: this.clientesTemporales,
           rendimientos: this.rendimientosGuardados,
           divisores: this.divisoresGuardados,
@@ -1177,6 +1336,7 @@ export default {
           catarro: this.pedidoCatarro,
           joselito: this.pedidoJoselito,
           ozuna: this.pedidoOzuna,
+          lorena: this.pedidoLorena,
           clientesTemporales: this.clientesTemporales,
           rendimientos: this.rendimientosGuardados,
           divisores: this.divisoresGuardados,
@@ -1215,6 +1375,7 @@ export default {
           catarro: this.pedidoCatarro,
           joselito: this.pedidoJoselito,
           ozuna: this.pedidoOzuna,
+          lorena: this.pedidoLorena,
           clientesTemporales: this.clientesTemporales,
           rendimientos: this.rendimientosGuardados,
           divisores: this.divisoresGuardados,
@@ -1313,6 +1474,20 @@ export default {
           if (JSON.stringify(ordenados) !== JSON.stringify(newVal)) {
             this.$nextTick(() => {
               this.pedidoJoselito = ordenados;
+            });
+          }
+        }
+      }
+    },
+    'pedidoLorena': {
+      deep: true,
+      handler(newVal) {
+        const needsSort = newVal.some(item => item.medida && item.tipo);
+        if (needsSort) {
+          const ordenados = this.ordenarPedidosPorMedida(newVal);
+          if (JSON.stringify(ordenados) !== JSON.stringify(newVal)) {
+            this.$nextTick(() => {
+              this.pedidoLorena = ordenados;
             });
           }
         }
@@ -1504,6 +1679,25 @@ export default {
   color: white;
   transform: translateY(-4px);
   box-shadow: 0 8px 16px rgba(52, 152, 219, 0.5);
+}
+
+.tab-button[data-cliente="lorena"] {
+  background-color: rgba(230, 126, 34, 0.3);
+  color: #2c3e50;
+  transition: all 0.3s ease;
+}
+
+.tab-button[data-cliente="lorena"]:hover {
+  background-color: rgba(230, 126, 34, 0.6);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.tab-button[data-cliente="lorena"].active {
+  background-color: #e67e22;
+  color: white;
+  transform: translateY(-4px);
+  box-shadow: 0 8px 16px rgba(230, 126, 34, 0.5);
 }
 
 .tab-button[data-cliente="ozuna"] {
@@ -2352,6 +2546,9 @@ select option.text-blue {
 }
 .bg-joselito {
   background-color: #3498db !important;
+}
+.bg-lorena {
+  background-color: #e67e22 !important;
 }
 .bg-ozuna {
   background-color: #27ae60 !important;

@@ -192,6 +192,9 @@ export default {
       if (pedido.ozuna) {
         totalKilos += this.calcularKilosCliente(pedido.ozuna);
       }
+      if (pedido.lorena) {
+        totalKilos += this.calcularKilosCliente(pedido.lorena);
+      }
       
       return totalKilos;
     },
@@ -210,6 +213,9 @@ export default {
       }
       if (pedido.ozuna) {
         totalTaras += this.calcularTarasCliente(pedido.ozuna);
+      }
+      if (pedido.lorena) {
+        totalTaras += this.calcularTarasCliente(pedido.lorena);
       }
       
       return totalTaras;
@@ -299,6 +305,7 @@ export default {
             pedidoCatarro: pedido.catarro || [],
             pedidoJoselito: pedido.joselito || [],
             pedidoOzuna: pedido.ozuna || [],
+            pedidoLorena: pedido.lorena || [],
             clientesTemporales: pedido.clientesTemporales || {},
             rendimientosGuardados: pedido.rendimientos || {},
             divisoresGuardados: pedido.divisores || {},

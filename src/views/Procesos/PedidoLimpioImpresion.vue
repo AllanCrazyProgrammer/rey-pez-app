@@ -93,6 +93,38 @@
           </table>
         </div>
 
+        <!-- Lorena -->
+        <div class="cliente-seccion" :class="{ compacto: pedidoLorena && pedidoLorena.length >= 5 }">
+          <h4 class="cliente-header lorena-header" :class="{ compacto: pedidoLorena && pedidoLorena.length >= 5 }">Lorena</h4>
+          <table class="preview-table" :class="{ compacto: pedidoLorena && pedidoLorena.length >= 5 }">
+            <thead>
+              <tr>
+                <th>✓</th>
+                <th>Kilos/Taras</th>
+                <th>Medida</th>
+                <th>Tipo</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(item, index) in (pedidoLorena || [])" :key="'lorena-'+index">
+                <td><input type="checkbox" v-model="item.completado" @change="actualizarCompletado('lorena', index, item.completado)" class="pedido-checkbox"></td>
+                <td>{{ item.kilos }}<i v-if="item.esTara">T</i></td>
+                <td>
+                  {{ item.medida }}
+                  <span v-if="item.proveedor" class="proveedor-tag">{{ item.proveedor }}</span>
+                </td>
+                <td :class="{ 
+                  'text-blue': item.tipo === 'C/H20', 
+                  'text-blue compact': item.tipo === '1.35 y .15' || item.tipo === '1.5 y .3'
+                }">
+                  {{ item.tipo }}
+                  <span v-if="item.nota" class="nota-tag">{{ item.nota }}</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
         <div class="bottom-section">
           <!-- Catarro -->
           <div class="bottom-cliente">
@@ -339,6 +371,10 @@ export default {
       type: Array,
       required: true
     },
+    pedidoLorena: {
+      type: Array,
+      required: true
+    },
     pedidoOzuna: {
       type: Array,
       required: true
@@ -383,6 +419,7 @@ export default {
     if (!this.completados.otilio) this.completados.otilio = {};
     if (!this.completados.catarro) this.completados.catarro = {};
     if (!this.completados.joselito) this.completados.joselito = {};
+    if (!this.completados.lorena) this.completados.lorena = {};
     if (!this.completados.ozuna) this.completados.ozuna = {};
     
     // Inicializar los estados desde las props
@@ -390,6 +427,11 @@ export default {
     this.divisores = { ...this.divisoresGuardados };
     this.completados = { ...this.completadosGuardados };
     this.kilosRefrigerados = { ...this.kilosRefrigeradosGuardados };
+    if (!this.completados.otilio) this.$set(this.completados, 'otilio', {});
+    if (!this.completados.catarro) this.$set(this.completados, 'catarro', {});
+    if (!this.completados.joselito) this.$set(this.completados, 'joselito', {});
+    if (!this.completados.lorena) this.$set(this.completados, 'lorena', {});
+    if (!this.completados.ozuna) this.$set(this.completados, 'ozuna', {});
     
     // Si tenemos ID, activar modo edición para permitir guardado automático
     if (this.id) {
@@ -401,6 +443,25 @@ export default {
     this.aplicarEstadosCompletado();
   },
   methods: {
+    itemTieneDatos(item) {
+      if (!item) return false;
+      const kilos = Number(item.kilos);
+      const tieneKilos = item.kilos !== null && item.kilos !== '' && !Number.isNaN(kilos) && kilos !== 0;
+      return tieneKilos;
+    },
+    obtenerItemsConDatos(items) {
+      if (!Array.isArray(items)) return [];
+      return items.filter(item => this.itemTieneDatos(item));
+    },
+    clienteTieneDatos(items) {
+      return this.obtenerItemsConDatos(items).length > 0;
+    },
+    obtenerClientesTemporalesConDatos() {
+      if (!this.clientesTemporales || typeof this.clientesTemporales !== 'object') return [];
+      return Object.entries(this.clientesTemporales)
+        .filter(([_, cliente]) => this.clienteTieneDatos(cliente?.pedidos))
+        .map(([id, cliente]) => ({ id, ...cliente }));
+    },
     async irASacadaDelDia() {
       try {
         // Buscar si existe una sacada para la fecha del pedido
@@ -485,8 +546,17 @@ export default {
           }
         });
       }
-      
-      // Aplicar estados a Ozuna
+    
+    // Aplicar estados a Lorena
+    if (this.pedidoLorena && Array.isArray(this.pedidoLorena)) {
+      this.pedidoLorena.forEach((item, index) => {
+        if (this.completados.lorena && this.completados.lorena[index] !== undefined) {
+          this.$set(item, 'completado', this.completados.lorena[index]);
+        }
+      });
+    }
+    
+    // Aplicar estados a Ozuna
       if (this.pedidoOzuna && Array.isArray(this.pedidoOzuna)) {
         this.pedidoOzuna.forEach((item, index) => {
           if (this.completados.ozuna && this.completados.ozuna[index] !== undefined) {
@@ -519,12 +589,13 @@ export default {
       return dias[date.getDay()];
     },
     generarTablaCliente(items, fontSize = 16) {
-      if (!items || items.length === 0) return null;
+      const itemsConDatos = this.obtenerItemsConDatos(items);
+      if (itemsConDatos.length === 0) return null;
 
-      const reducirEspacio = items.length > 7;
+      const reducirEspacio = itemsConDatos.length > 7;
       const paddingValue = reducirEspacio ? 2 : 16;
 
-      const body = items.map(item => [
+      const body = itemsConDatos.map(item => [
         { 
           text: item.kilos ? (item.esTara ? [
             { text: item.kilos.toString(), fontSize: fontSize * 2 },
@@ -590,12 +661,20 @@ export default {
       };
     },
     generarPDF() {
-      const diaSemana = this.obtenerDiaSemana(this.fecha);
-      const necesitaCompacto = this.pedidoJoselito && this.pedidoJoselito.length >= 5;
+      const tieneOtilio = this.clienteTieneDatos(this.pedidoOtilio);
+      const tieneJoselito = this.clienteTieneDatos(this.pedidoJoselito);
+      const tieneLorena = this.clienteTieneDatos(this.pedidoLorena);
+      const tieneCatarro = this.clienteTieneDatos(this.pedidoCatarro);
+      const tieneOzuna = this.clienteTieneDatos(this.pedidoOzuna);
+      const clientesTemporalesConDatos = this.obtenerClientesTemporalesConDatos();
+
+      const necesitaCompacto =
+        (tieneJoselito && this.obtenerItemsConDatos(this.pedidoJoselito).length >= 5) ||
+        (tieneLorena && this.obtenerItemsConDatos(this.pedidoLorena).length >= 5);
       const espaciadoReducido = necesitaCompacto ? 0.5 : 30;
       const fontSizeJoselito = necesitaCompacto ? 22 : 26;
       const fontSizeInferior = necesitaCompacto ? 24 : 36;
-      
+
       const escala = this.contentScale;
       const fontSizeBase = {
         otilio: 48 * escala,
@@ -605,12 +684,10 @@ export default {
         tablaJoselito: fontSizeJoselito * escala
       };
       
-      const docDefinition = {
-        pageSize: 'letter',
-        pageOrientation: 'portrait',
-        pageMargins: [10, 10, 10, 10],
-        content: [
-          // Primera página - Otilio
+      const content = [];
+
+      if (tieneOtilio) {
+        const seccionOtilio = [
           {
             columns: [
               {
@@ -631,11 +708,20 @@ export default {
             ],
             margin: [0, 0, 0, 10 * escala]
           },
-          this.generarTablaCliente(this.pedidoOtilio, fontSizeBase.tabla),
-          { text: '', pageBreak: 'after' },
+          this.generarTablaCliente(this.pedidoOtilio, fontSizeBase.tabla)
+        ];
+        content.push(...seccionOtilio);
 
-          // Segunda página
-          // Joselito
+        const hayMasContenido = tieneJoselito || tieneLorena || tieneCatarro || tieneOzuna || clientesTemporalesConDatos.length > 0;
+        if (hayMasContenido) {
+          content.push({ text: '', pageBreak: 'after' });
+        }
+      }
+
+      const seccionesCentrales = [];
+
+      if (tieneJoselito) {
+        seccionesCentrales.push(
           {
             text: 'JOSELITO',
             style: 'clienteHeader',
@@ -644,82 +730,117 @@ export default {
             background: '#2196F3'
           },
           this.generarTablaCliente(this.pedidoJoselito, fontSizeBase.tablaJoselito),
-          { text: '', margin: [0, espaciadoReducido, 0, 0] },
-          { canvas: [{ 
-            type: 'line', 
-            x1: 0, 
-            y1: 0, 
-            x2: 592, 
-            y2: 0, 
-            lineWidth: necesitaCompacto ? 0.3 : 2 
-          }] },
-          { text: '', margin: [0, espaciadoReducido, 0, 0] },
+          { text: '', margin: [0, espaciadoReducido, 0, 0] }
+        );
+      }
 
-          // Sección inferior
+      if (tieneLorena) {
+        seccionesCentrales.push(
           {
-            columns: [
-              // Catarro
-              {
-                stack: [
-                  {
-                    text: 'CATARRO',
-                    style: 'clienteHeader',
-                    fontSize: fontSizeBase.inferior,
-                    margin: [0, 0, 0, necesitaCompacto ? 1 : 0],
-                    background: '#FF5252'
-                  },
-                  this.generarTablaClienteReducido(this.pedidoCatarro, fontSizeBase.tablaJoselito)
-                ],
-                width: '47%'
-              },
-              // Línea vertical
-              {
-                stack: [
-                  { canvas: [{ 
-                    type: 'line', 
-                    x1: 10,
-                    y1: 0, 
-                    x2: 10, 
-                    y2: necesitaCompacto ? 30 : 150,
-                    lineWidth: necesitaCompacto ? 0.3 : 1.5 
-                  }] }
-                ],
-                width: '6%',
-                margin: [0, necesitaCompacto ? 2 : 20, 0, 0]
-              },
-              // Ozuna
-              {
-                stack: [
-                  {
-                    text: 'OZUNA',
-                    style: 'clienteHeader',
-                    fontSize: fontSizeBase.inferior,
-                    margin: [0, 0, 0, necesitaCompacto ? 1 : 0],
-                    background: '#4CAF50'
-                  },
-                  this.generarTablaClienteReducido(this.pedidoOzuna, fontSizeBase.tablaJoselito)
-                ],
-                width: '47%'
-              }
-            ]
+            text: 'LORENA',
+            style: 'clienteHeader',
+            fontSize: fontSizeBase.inferior,
+            margin: [0, 0, 0, necesitaCompacto ? 1 : 0],
+            background: '#e67e22'
           },
-          { text: '', pageBreak: 'after' },
+          this.generarTablaCliente(this.pedidoLorena, fontSizeBase.tablaJoselito),
+          { text: '', margin: [0, espaciadoReducido, 0, 0] }
+        );
+      }
 
-          // Tercera página - Clientes Temporales
-          ...(this.clientesTemporales && Object.keys(this.clientesTemporales).length > 0 ? [
-            ...Object.entries(this.clientesTemporales).map(([clienteId, cliente]) => [
-              {
-                text: cliente.nombre.toUpperCase(),
-                style: 'clienteHeader',
-                fontSize: 36,
-                margin: [0, 0, 0, 10],
-                background: '#95a5a6'
-              },
-              this.generarTablaCliente(cliente.pedidos, 22),
-              { text: '', margin: [0, 20, 0, 20] }
-            ]).flat()
-          ] : [])
-        ],
+      const columnasInferiores = [];
+      if (tieneCatarro) {
+        columnasInferiores.push({
+          stack: [
+            {
+              text: 'CATARRO',
+              style: 'clienteHeader',
+              fontSize: fontSizeBase.inferior,
+              margin: [0, 0, 0, necesitaCompacto ? 1 : 0],
+              background: '#FF5252'
+            },
+            this.generarTablaClienteReducido(this.pedidoCatarro, fontSizeBase.tablaJoselito)
+          ],
+          width: tieneCatarro && tieneOzuna ? '47%' : '*'
+        });
+      }
+
+      if (tieneCatarro && tieneOzuna) {
+        columnasInferiores.push({
+          stack: [{
+            canvas: [{
+              type: 'line',
+              x1: 10,
+              y1: 0,
+              x2: 10,
+              y2: necesitaCompacto ? 30 : 150,
+              lineWidth: necesitaCompacto ? 0.3 : 1.5
+            }]
+          }],
+          width: '6%',
+          margin: [0, necesitaCompacto ? 2 : 20, 0, 0]
+        });
+      }
+
+      if (tieneOzuna) {
+        columnasInferiores.push({
+          stack: [
+            {
+              text: 'OZUNA',
+              style: 'clienteHeader',
+              fontSize: fontSizeBase.inferior,
+              margin: [0, 0, 0, necesitaCompacto ? 1 : 0],
+              background: '#4CAF50'
+            },
+            this.generarTablaClienteReducido(this.pedidoOzuna, fontSizeBase.tablaJoselito)
+          ],
+          width: tieneCatarro && tieneOzuna ? '47%' : '*'
+        });
+      }
+
+      if (columnasInferiores.length > 0) {
+        seccionesCentrales.push({ columns: columnasInferiores });
+      }
+
+      if (seccionesCentrales.length > 0) {
+        content.push(...seccionesCentrales);
+        if (clientesTemporalesConDatos.length > 0) {
+          content.push({ text: '', pageBreak: 'after' });
+        }
+      }
+
+      if (clientesTemporalesConDatos.length > 0) {
+        clientesTemporalesConDatos.forEach(cliente => {
+          const tabla = this.generarTablaCliente(cliente.pedidos, 22);
+          if (!tabla) return;
+          content.push(
+            {
+              text: cliente.nombre.toUpperCase(),
+              style: 'clienteHeader',
+              fontSize: 36,
+              margin: [0, 0, 0, 10],
+              background: '#95a5a6'
+            },
+            tabla,
+            { text: '', margin: [0, 20, 0, 20] }
+          );
+        });
+      }
+
+      if (content.length === 0) {
+        content.push({
+          text: 'No hay productos para generar el PDF.',
+          alignment: 'center',
+          margin: [0, 40, 0, 0],
+          fontSize: 18
+        });
+      }
+
+      const docDefinition = {
+        pageSize: 'letter',
+        pageOrientation: 'portrait',
+        pageMargins: [10, 10, 10, 10],
+        content,
         styles: {
           header: {
             alignment: 'center',
@@ -745,9 +866,10 @@ export default {
       pdfMake.createPdf(docDefinition).download('Ped-limpio-' + this.fecha + '.pdf');
     },
     generarTablaClienteReducido(items, fontSize = 16) {
-      if (!items || items.length === 0) return null;
+      const itemsConDatos = this.obtenerItemsConDatos(items);
+      if (itemsConDatos.length === 0) return null;
 
-      const body = items.map(item => [
+      const body = itemsConDatos.map(item => [
         { 
           text: item.kilos ? (item.esTara ? [
             { text: item.kilos.toString(), fontSize: fontSize * 2 },
@@ -911,6 +1033,7 @@ export default {
       procesarPedido(this.pedidoOtilio);
       procesarPedido(this.pedidoCatarro);
       procesarPedido(this.pedidoJoselito);
+      procesarPedido(this.pedidoLorena);
       procesarPedido(this.pedidoOzuna, true); // Indicamos que es pedido de Ozuna
       
       // Procesar clientes temporales
@@ -1400,6 +1523,10 @@ h4.cliente-header.catarro-header {
 
 h4.cliente-header.joselito-header {
   background-color: #2196F3; /* Azul */
+}
+
+h4.cliente-header.lorena-header {
+  background-color: #e67e22; /* Naranja */
 }
 
 h4.cliente-header.ozuna-header {
