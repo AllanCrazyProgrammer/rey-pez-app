@@ -158,7 +158,7 @@
                   <span class="label">Costo Final:</span>
                   <div class="costo-final-container">
                     <span class="valor costo-final">${{ formatearPrecio(gananciasCalculadas[medida].costoFinal) }}</span>
-                    <span v-if="aplicarCostoExtra[medida]" class="costo-extra-indicator">
+                    <span v-if="debeAplicarCostoExtra(medida)" class="costo-extra-indicator">
                       (+ ${{ embarqueData?.costoExtra || 18 }} extra)
                     </span>
                   </div>
@@ -1296,7 +1296,7 @@ export default {
       const rendimientoOriginal = this.getRendimiento(medida);
       const rendimiento = Math.round(rendimientoOriginal * 100) / 100;
       const costoExtra = Number(this.embarqueData?.costoExtra) || 18;
-      const aplicarExtra = this.aplicarCostoExtra[medida] || false;
+      const aplicarExtra = this.debeAplicarCostoExtra(medida);
       
       let resultado;
       if (aplicarExtra) {
@@ -1335,7 +1335,7 @@ export default {
       const costoExtra = Number(this.embarqueData?.costoExtra) || 18;
       
       // Verificar si está marcado para aplicar costo extra
-      const aplicarExtra = this.aplicarCostoExtra[medida] || false;
+      const aplicarExtra = this.debeAplicarCostoExtra(medida);
       
       if (aplicarExtra) {
         return Math.round((costo * rendimiento) + costoExtra);
@@ -1360,6 +1360,7 @@ export default {
         if (!this.analizarGanancia[medida]) continue;
         
         const costoFinal = await this.calcularCostoFinal(medida);
+        this.$set(this.costosCalculados, medida, costoFinal);
         
         // Obtener el costo base original (sin cálculos adicionales)
         const costosEmbarque = this.embarqueData?.costosPorMedida || {};
@@ -2205,6 +2206,27 @@ export default {
       return medida.toLowerCase().includes('mix');
     },
 
+    debeAplicarCostoExtra(medida) {
+      if (!medida) return false;
+
+      if (!this.aplicarCostoExtra) {
+        this.$set(this, 'aplicarCostoExtra', {});
+      }
+
+      if (Object.prototype.hasOwnProperty.call(this.aplicarCostoExtra, medida)) {
+        return Boolean(this.aplicarCostoExtra[medida]);
+      }
+
+      const medidaNormalizada = (medida || '').trim();
+      const esMaquilaOzuna = /maquila\s+ozuna/i.test(medidaNormalizada);
+      const esNumerica = /^(\d+\/\d+)/.test(medidaNormalizada) || /^(\d+)\s/.test(medidaNormalizada) || /^\d+$/.test(medidaNormalizada);
+
+      const aplicarPorDefecto = esNumerica && !esMaquilaOzuna;
+      this.$set(this.aplicarCostoExtra, medida, aplicarPorDefecto);
+
+      return aplicarPorDefecto;
+    },
+
     obtenerEtiqueta(medida, campo) {
       if (!this.kilosCrudos[medida]) return campo === 'medida1' ? 
         'Kilos en crudo (Medida 1)' : 'Kilos en crudo (Medida 2)';
@@ -2255,16 +2277,18 @@ export default {
           }
 
           const rendimiento = this.getRendimiento(medida);
+          const incluyeCostoFinal = !!this.analizarGanancia[medida];
 
-          // Usar la versión síncrona que usa el cache
-          const costoFinal = this.calcularCostoFinalSync(medida);
+          // Usar la versión síncrona que usa el cache cuando aplica
+          const costoFinal = incluyeCostoFinal ? this.calcularCostoFinalSync(medida) : null;
 
           return {
             medida: medida,
             kilosCrudos: kilosCrudos,
             totalEmbarcado: this.obtenerTotalEmbarcado(medida),
             rendimiento: rendimiento,
-            costoFinal: costoFinal
+            costoFinal: costoFinal,
+            incluyeCostoFinal
           };
         });
 
