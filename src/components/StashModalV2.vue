@@ -258,7 +258,44 @@
               <div class="abono-left">
                 <div class="abono-fecha">
                   <span class="fecha-cuenta">{{ abono.fechaCuentaFormateada }}</span>
-                  <span class="fecha-aplicacion">{{ formatearFechaHora(abono.fechaAplicacion) }}</span>
+                  <div class="historial-fecha-aplicacion">
+                    <template v-if="abono.editandoFecha">
+                      <label class="editar-fecha-label">
+                        Fecha de registro
+                        <input
+                          type="datetime-local"
+                          v-model="abono.fechaEditable"
+                          class="input-fecha-registro"
+                        >
+                      </label>
+                      <div class="acciones-edicion-fecha">
+                        <button
+                          class="btn-guardar-fecha"
+                          :disabled="abono.guardandoFecha || !abono.fechaEditable"
+                          @click.stop="guardarFechaHistorial(abono)"
+                        >
+                          {{ abono.guardandoFecha ? 'Guardando...' : 'Guardar' }}
+                        </button>
+                        <button
+                          class="btn-cancelar-fecha"
+                          :disabled="abono.guardandoFecha"
+                          @click.stop="cancelarEdicionFechaHistorial(abono)"
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                    </template>
+                    <template v-else>
+                      <span>{{ formatearFechaHora(abono.fechaAplicacion) }}</span>
+                      <button
+                        class="btn-editar-fecha"
+                        title="Editar fecha de registro"
+                        @click.stop="iniciarEdicionFechaHistorial(abono)"
+                      >
+                        Editar
+                      </button>
+                    </template>
+                  </div>
                 </div>
                 <div class="abono-descripcion">{{ abono.descripcion }}</div>
               </div>
@@ -412,7 +449,20 @@ export default {
     
     const formatearFechaHora = (fecha) => {
       if (!fecha) return ''
-      return new Date(fecha).toLocaleString('es-ES')
+      const dateObj = new Date(fecha)
+      if (
+        dateObj.getHours() === 0 &&
+        dateObj.getMinutes() === 0 &&
+        dateObj.getSeconds() === 0
+      ) {
+        return dateObj.toLocaleDateString('es-ES', {
+          day: 'numeric',
+          month: 'short',
+          year: 'numeric'
+        })
+      }
+
+      return dateObj.toLocaleString('es-ES')
     }
     
     const formatearFechaDia = (fecha) => {
@@ -446,6 +496,40 @@ export default {
         hour: '2-digit',
         minute: '2-digit'
       })
+    }
+
+    const normalizarFechaSeleccionada = (fecha) => {
+      if (!fecha) {
+        return new Date().toISOString()
+      }
+
+      if (fecha.includes('T')) {
+        return fecha
+      }
+
+      const [year, month, day] = fecha.split('-').map(Number)
+      if (!year || !month || !day) {
+        return new Date().toISOString()
+      }
+
+      const pad = (value) => String(value).padStart(2, '0')
+      return `${year}-${pad(month)}-${pad(day)}T00:00:00`
+    }
+
+    const formatearFechaHoraEditable = (fecha) => {
+      if (!fecha) return ''
+      const dateObj = new Date(fecha)
+      if (Number.isNaN(dateObj.getTime())) {
+        return ''
+      }
+
+      const pad = (value) => String(value).padStart(2, '0')
+      const year = dateObj.getFullYear()
+      const month = pad(dateObj.getMonth() + 1)
+      const day = pad(dateObj.getDate())
+      const hours = pad(dateObj.getHours())
+      const minutes = pad(dateObj.getMinutes())
+      return `${year}-${month}-${day}T${hours}:${minutes}`
     }
     
     const verDetalleHistorial = (registro) => {
@@ -564,6 +648,7 @@ export default {
                 fechaCuenta,
                 fechaCuentaFormateada,
                 fechaAplicacion: abono.fecha || abono.fechaAplicacion || new Date().toISOString(),
+                fechaOriginal: abono.fecha || null,
                 descripcion: abono.descripcion || 'Sin descripción',
                 monto: abono.monto || 0,
                 abonoId: abono.id,
@@ -575,10 +660,18 @@ export default {
         })
         
         // Ordenar por fecha de aplicación más reciente
-        todosLosAbonos.value = abonos.sort((a, b) => 
+        const ordenados = abonos.sort((a, b) => 
           new Date(b.fechaAplicacion) - new Date(a.fechaAplicacion)
         )
-        
+
+        todosLosAbonos.value = ordenados.map(item => ({
+          ...item,
+          fechaAplicacion: item.fechaAplicacion,
+          fechaEditable: formatearFechaHoraEditable(item.fechaAplicacion),
+          editandoFecha: false,
+          guardandoFecha: false
+        }))
+
       } catch (error) {
         console.error('Error cargando todos los abonos:', error)
       }
@@ -620,11 +713,12 @@ export default {
       }
       
       try {
+        const fechaNormalizada = normalizarFechaSeleccionada(nuevoAbono.value.fecha)
         const docRef = await addDoc(collection(db, `stash_${props.cliente}`), {
           fecha: nuevoAbono.value.fecha,
           descripcion: nuevoAbono.value.descripcion,
           monto: Number(nuevoAbono.value.monto),
-          fechaCreacion: new Date().toISOString()
+          fechaCreacion: fechaNormalizada
         })
         
         const nuevoItem = {
@@ -800,7 +894,9 @@ export default {
             if (montoDelItem > 0.01) { // Evitar montos muy pequeños por redondeo
               abonosParaCuenta.push({
                 descripcion: `${stashItem.descripcion} (Cascada)`,
-                monto: Math.round(montoDelItem * 100) / 100 // Redondear a 2 decimales
+                monto: Math.round(montoDelItem * 100) / 100, // Redondear a 2 decimales
+                fecha: normalizarFechaSeleccionada(stashItem.fecha),
+                fechaOriginalStash: stashItem.fecha
               })
               montoAcumuladoParaCuenta += Math.round(montoDelItem * 100) / 100
             }
@@ -958,7 +1054,7 @@ export default {
               id: abonoId,
               descripcion: `${item.descripcion} (Aplicación Individual)`,
               monto: item.monto,
-              fecha: new Date().toISOString(),
+              fecha: normalizarFechaSeleccionada(item.fecha),
               fechaOriginalStash: item.fecha,
               esAplicacionIndividual: true
             }
@@ -1173,7 +1269,98 @@ export default {
         alert('Error al eliminar el abono: ' + error.message)
       }
     }
-    
+
+    const iniciarEdicionFechaHistorial = (abono) => {
+      abono.editandoFecha = true
+      abono.guardandoFecha = false
+      abono.fechaEditable = formatearFechaHoraEditable(abono.fechaAplicacion)
+    }
+
+    const cancelarEdicionFechaHistorial = (abono) => {
+      abono.editandoFecha = false
+      abono.guardandoFecha = false
+      abono.fechaEditable = formatearFechaHoraEditable(abono.fechaAplicacion)
+    }
+
+    const guardarFechaHistorial = async (abono) => {
+      if (!abono || !abono.cuentaId) {
+        alert('No se pudo identificar la cuenta del abono.')
+        return
+      }
+
+      if (!abono.fechaEditable) {
+        alert('Selecciona una fecha y hora válidas.')
+        return
+      }
+
+      const fechaValidacion = new Date(abono.fechaEditable)
+      if (Number.isNaN(fechaValidacion.getTime())) {
+        alert('La fecha ingresada no es válida.')
+        return
+      }
+
+      if (abono.guardandoFecha) return
+
+      abono.guardandoFecha = true
+
+      try {
+        const fechaNormalizada = normalizarFechaSeleccionada(abono.fechaEditable)
+        const collectionName = `cuentas${props.cliente.charAt(0).toUpperCase() + props.cliente.slice(1)}`
+        const cuentaRef = doc(db, collectionName, abono.cuentaId)
+        const cuentaDoc = await getDoc(cuentaRef)
+
+        if (!cuentaDoc.exists()) {
+          throw new Error('No se encontró la cuenta asociada al abono.')
+        }
+
+        const cuentaData = cuentaDoc.data()
+        const abonosCuenta = [...(cuentaData.abonos || [])]
+
+        let indiceAbono = -1
+        if (abono.abonoId) {
+          indiceAbono = abonosCuenta.findIndex(item => item.id === abono.abonoId)
+        }
+
+        if (indiceAbono === -1) {
+          indiceAbono = abono.abonoIndex ?? -1
+        }
+
+        if (indiceAbono < 0 || !abonosCuenta[indiceAbono]) {
+          throw new Error('No se pudo localizar el abono dentro de la cuenta.')
+        }
+
+        const abonoActualizado = {
+          ...abonosCuenta[indiceAbono],
+          fecha: fechaNormalizada,
+          fechaAplicacion: fechaNormalizada
+        }
+
+        abonosCuenta.splice(indiceAbono, 1, abonoActualizado)
+
+        await updateDoc(cuentaRef, {
+          abonos: abonosCuenta,
+          ultimaActualizacion: new Date().toISOString()
+        })
+
+        abono.fechaAplicacion = fechaNormalizada
+        abono.fechaOriginal = fechaNormalizada
+        abono.fechaEditable = formatearFechaHoraEditable(fechaNormalizada)
+        abono.editandoFecha = false
+
+        // Reordenar historial para reflejar la nueva fecha
+        todosLosAbonos.value = [...todosLosAbonos.value]
+          .map(item => item.uniqueId === abono.uniqueId ? { ...item, ...abono } : item)
+          .sort((a, b) => new Date(b.fechaAplicacion) - new Date(a.fechaAplicacion))
+
+        alert('Fecha de registro actualizada.')
+      } catch (error) {
+        console.error('Error al actualizar la fecha del abono:', error)
+        alert('No fue posible actualizar la fecha. Intenta nuevamente.')
+      } finally {
+        abono.guardandoFecha = false
+      }
+    }
+
     const cerrarModal = () => {
       showModal.value = false
       mostrarConfirmacion.value = false
@@ -1235,6 +1422,9 @@ export default {
       aplicarAbonosIndividuales,
       eliminarDelHistorial,
       eliminarAbonoIndividual,
+      iniciarEdicionFechaHistorial,
+      cancelarEdicionFechaHistorial,
+      guardarFechaHistorial,
       cargarTodosLosAbonos,
       cerrarModal
     }
@@ -1654,6 +1844,102 @@ h4 {
   font-size: 12px;
   color: #666;
   font-style: italic;
+}
+
+.historial-fecha-aplicacion {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #666;
+  font-style: italic;
+}
+
+.historial-fecha-aplicacion span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-editar-fecha {
+  padding: 4px 10px;
+  border: 1px solid #b0bec5;
+  border-radius: 14px;
+  background: #eceff1;
+  color: #455a64;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-editar-fecha:hover {
+  background: #dfe6eb;
+  border-color: #78909c;
+}
+
+.editar-fecha-label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 11px;
+  color: #607d8b;
+}
+
+.input-fecha-registro {
+  padding: 6px 10px;
+  border: 1px solid #cfd8dc;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.input-fecha-registro:focus {
+  outline: none;
+  border-color: #5c6bc0;
+  box-shadow: 0 0 0 2px rgba(92, 107, 192, 0.15);
+}
+
+.acciones-edicion-fecha {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.btn-guardar-fecha,
+.btn-cancelar-fecha {
+  padding: 5px 12px;
+  border: none;
+  border-radius: 14px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-guardar-fecha {
+  background: linear-gradient(135deg, #43a047, #2e7d32);
+  color: white;
+  box-shadow: 0 2px 6px rgba(46, 125, 50, 0.3);
+}
+
+.btn-guardar-fecha:disabled {
+  background: #a5d6a7;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.btn-guardar-fecha:not(:disabled):hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(46, 125, 50, 0.35);
+}
+
+.btn-cancelar-fecha {
+  background: #eceff1;
+  color: #546e7a;
+}
+
+.btn-cancelar-fecha:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 8px rgba(84, 110, 122, 0.25);
 }
 
 .abono-descripcion {

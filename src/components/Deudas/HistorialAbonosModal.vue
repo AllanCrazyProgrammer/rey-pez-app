@@ -72,59 +72,130 @@
         </div>
 
         <!-- Lista de abonos -->
-        <div v-else-if="abonosFiltrados.length > 0" class="abonos-container">
+        <div v-else-if="abonosAgrupados.length > 0" class="abonos-container">
           <div class="paginacion-info">
-            <p>Mostrando {{ (paginaActual - 1) * abonosPorPagina + 1 }} - {{ Math.min(paginaActual * abonosPorPagina, abonosFiltrados.length) }} de {{ abonosFiltrados.length }} abonos</p>
+            <p>
+              Mostrando
+              <span v-if="rangoPaginacion.inicio > 0">
+                {{ rangoPaginacion.inicio }} - {{ rangoPaginacion.fin }}
+              </span>
+              <span v-else>0</span>
+              de {{ abonosAgrupados.length }} movimientos
+            </p>
           </div>
 
           <div class="abonos-list">
-            <div 
-              v-for="(abono, index) in abonosPaginados" 
-              :key="`${abono.deudaId}-${abono.id}`"
+            <div
+              v-for="grupo in abonosPaginados"
+              :key="grupo.id"
               class="abono-item"
-              :class="{ 'abono-general': abono.esAbonoGeneral }"
+              :class="{
+                'abono-general': grupo.esAbonoGeneral,
+                'abono-expandido': esDesgloseVisible(grupo.id)
+              }"
             >
-              <div class="abono-header">
-                <div class="abono-fecha">
-                  <i class="fas fa-calendar-alt"></i>
-                  {{ formatearFecha(abono.fecha) }}
+              <div class="abono-header" @click="toggleDesglose(grupo.id)">
+                <div class="abono-header-info">
+                  <div class="abono-fecha">
+                    <i class="fas fa-calendar-alt"></i>
+                    {{ formatearFecha(grupo.fecha) }}
+                  </div>
+                  <div class="abono-descripcion-resumen">
+                    <i class="fas fa-comment-alt"></i>
+                    {{ grupo.descripcion || 'Sin descripción' }}
+                  </div>
                 </div>
-                <div class="abono-monto">
-                  ${{ formatNumber(abono.monto) }}
-                </div>
-                <div class="abono-tipo">
-                  <span :class="abono.esAbonoGeneral ? 'tipo-general' : 'tipo-individual'">
-                    {{ abono.esAbonoGeneral ? 'General' : 'Individual' }}
-                  </span>
-                </div>
-                <div class="abono-acciones">
-                  <button 
-                    @click="confirmarEliminarAbono(abono)" 
-                    class="btn-eliminar-abono"
-                    title="Eliminar abono"
+                
+                <div class="abono-header-actions">
+                  <div class="abono-monto">
+                    ${{ formatNumber(grupo.montoTotal) }}
+                  </div>
+                  <div class="abono-tipo">
+                    <span :class="grupo.esAbonoGeneral ? 'tipo-general' : 'tipo-individual'">
+                      {{ grupo.esAbonoGeneral ? 'General' : 'Individual' }}
+                    </span>
+                  </div>
+                  <button
+                    class="btn-toggle-desglose"
+                    type="button"
+                    @click.stop="toggleDesglose(grupo.id)"
+                    :aria-expanded="esDesgloseVisible(grupo.id)"
                   >
-                    <i class="fas fa-trash-alt"></i>
+                    <i :class="['fas', esDesgloseVisible(grupo.id) ? 'fa-chevron-up' : 'fa-chevron-down']"></i>
                   </button>
                 </div>
               </div>
-              
-              <div class="abono-body">
-                <div class="abono-descripcion">
-                  <i class="fas fa-comment-alt"></i>
-                  {{ abono.descripcion }}
+
+              <transition name="fade">
+                <div v-if="esDesgloseVisible(grupo.id)" class="abono-desglose">
+                  <div class="abono-desglose-resumen">
+                    <span>{{ grupo.items.length }} {{ grupo.items.length === 1 ? 'movimiento' : 'movimientos' }}</span>
+                    <span>Registrado: {{ formatearFechaHora(grupo.ultimaCreacion) }}</span>
+                  </div>
+
+                  <div
+                    v-for="detalle in grupo.items"
+                    :key="`${detalle.deudaId}-${detalle.id}`"
+                    class="abono-detalle-item"
+                  >
+                      <div class="detalle-izquierda">
+                        <div class="detalle-descripcion">{{ detalle.descripcion || 'Sin descripción' }}</div>
+                        <div class="detalle-deuda">
+                          <span>Deuda del {{ formatearFecha(detalle.deudaFecha) }}</span>
+                          <span>Total deuda: ${{ formatNumber(detalle.deudaTotal) }}</span>
+                        </div>
+                        <div class="detalle-registrado">
+                          <template v-if="detalle.editandoFecha">
+                            <label class="editar-fecha-label">
+                              Nueva fecha de registro:
+                              <input
+                                type="datetime-local"
+                                v-model="detalle.fechaCreacionEditable"
+                                class="input-fecha-registro"
+                              >
+                            </label>
+                            <div class="acciones-edicion-fecha">
+                              <button
+                                class="btn-guardar-fecha"
+                                :disabled="detalle.guardandoFecha || !detalle.fechaCreacionEditable"
+                                @click.stop="guardarFechaRegistro(detalle)"
+                              >
+                                {{ detalle.guardandoFecha ? 'Guardando...' : 'Guardar' }}
+                              </button>
+                              <button
+                                class="btn-cancelar-fecha"
+                                :disabled="detalle.guardandoFecha"
+                                @click.stop="cancelarEdicionFecha(detalle)"
+                              >
+                                Cancelar
+                              </button>
+                            </div>
+                          </template>
+                          <template v-else>
+                            <span>Registrado: {{ formatearFechaHora(detalle.fechaCreacion) }}</span>
+                            <button
+                              class="btn-editar-fecha"
+                              title="Editar fecha de registro"
+                              @click.stop="iniciarEdicionFecha(detalle)"
+                            >
+                              <i class="fas fa-edit"></i>
+                            </button>
+                          </template>
+                        </div>
+                      </div>
+                      <div class="detalle-derecha">
+                        <span class="detalle-monto">${{ formatNumber(detalle.monto) }}</span>
+                        <button
+                          @click.stop="confirmarEliminarAbono(detalle)"
+                          class="btn-eliminar-abono"
+                          title="Eliminar abono"
+                        >
+                          <i class="fas fa-trash-alt"></i>
+                        </button>
+                      </div>
+                    </div>
                 </div>
-                
-                <div class="abono-deuda-info">
-                  <span class="deuda-fecha">Deuda del {{ formatearFecha(abono.deudaFecha) }}</span>
-                  <span class="deuda-total">Total deuda: ${{ formatNumber(abono.deudaTotal) }}</span>
-                </div>
-              </div>
-              
-              <div class="abono-footer">
-                <div class="fecha-creacion">
-                  Registrado: {{ formatearFechaHora(abono.fechaCreacion) }}
-                </div>
-              </div>
+              </transition>
             </div>
           </div>
 
@@ -199,6 +270,7 @@ export default {
       cargando: false,
       abonos: [],
       abonosFiltrados: [],
+      desglosesVisibles: {},
       
       // Paginación
       paginaActual: 1,
@@ -213,14 +285,114 @@ export default {
     };
   },
   computed: {
+    abonosAgrupados() {
+      const gruposMapa = new Map();
+
+      for (const abono of this.abonosFiltrados) {
+        const esGeneral = Boolean(abono.esAbonoGeneral);
+        const fechaClave = abono.fecha || this.obtenerFechaDesdeTimestamp(abono.fechaCreacion);
+        const baseDescripcion = esGeneral
+          ? this.normalizarDescripcionGeneral(abono.descripcion)
+          : (abono.descripcion || 'Abono');
+        const loteTimestamp = this.parseTimestamp(abono.fechaCreacion);
+        const loteId = loteTimestamp ? Math.floor(loteTimestamp.getTime() / 60000) : 'sin-lote';
+        const clave = esGeneral
+          ? `${fechaClave || 'sin-fecha'}||${baseDescripcion || 'general'}||${loteId}`
+          : `${abono.deudaId}-${abono.id}`;
+
+        if (!gruposMapa.has(clave)) {
+          gruposMapa.set(clave, {
+            id: clave,
+            esAbonoGeneral: esGeneral,
+            fecha: fechaClave,
+            fechaDate: this.parseFecha(fechaClave, abono.fechaCreacion),
+            descripcion: baseDescripcion || (esGeneral ? 'Abono general' : 'Abono'),
+            items: [],
+            montoTotal: 0,
+            ultimaCreacion: this.parseTimestamp(abono.fechaCreacion)
+          });
+        }
+
+        const grupo = gruposMapa.get(clave);
+        grupo.items.push(abono);
+        grupo.montoTotal += Number(abono.monto) || 0;
+
+        const fechaItem = this.parseFecha(abono.fecha, abono.fechaCreacion);
+        if (fechaItem && (!grupo.fechaDate || fechaItem > grupo.fechaDate)) {
+          grupo.fechaDate = fechaItem;
+          grupo.fecha = abono.fecha || grupo.fecha;
+        }
+
+        const creado = this.parseTimestamp(abono.fechaCreacion);
+        if (creado && (!grupo.ultimaCreacion || creado > grupo.ultimaCreacion)) {
+          grupo.ultimaCreacion = creado;
+        }
+
+        if (!grupo.descripcion) {
+          grupo.descripcion = baseDescripcion || (esGeneral ? 'Abono general' : 'Abono');
+        }
+      }
+
+      const grupos = Array.from(gruposMapa.values());
+
+      grupos.forEach(grupo => {
+        grupo.items.sort((a, b) => {
+          const fechaA = this.parseFecha(a.fecha, a.fechaCreacion);
+          const fechaB = this.parseFecha(b.fecha, b.fechaCreacion);
+
+          if (fechaA && fechaB && fechaA.getTime() !== fechaB.getTime()) {
+            return fechaB - fechaA;
+          }
+
+          if (!fechaA && fechaB) return 1;
+          if (fechaA && !fechaB) return -1;
+
+          const creacionA = this.parseTimestamp(a.fechaCreacion);
+          const creacionB = this.parseTimestamp(b.fechaCreacion);
+
+          if (creacionA && creacionB && creacionA.getTime() !== creacionB.getTime()) {
+            return creacionB - creacionA;
+          }
+
+          return (Number(b.monto) || 0) - (Number(a.monto) || 0);
+        });
+      });
+
+      grupos.sort((a, b) => {
+        if (a.fechaDate && b.fechaDate && a.fechaDate.getTime() !== b.fechaDate.getTime()) {
+          return b.fechaDate - a.fechaDate;
+        }
+
+        if (!a.fechaDate && b.fechaDate) return 1;
+        if (a.fechaDate && !b.fechaDate) return -1;
+
+        if (a.ultimaCreacion && b.ultimaCreacion && a.ultimaCreacion.getTime() !== b.ultimaCreacion.getTime()) {
+          return b.ultimaCreacion - a.ultimaCreacion;
+        }
+
+        return 0;
+      });
+
+      return grupos;
+    },
     totalPaginas() {
-      return Math.ceil(this.abonosFiltrados.length / this.abonosPorPagina);
+      return Math.ceil(this.abonosAgrupados.length / this.abonosPorPagina);
     },
     
     abonosPaginados() {
       const inicio = (this.paginaActual - 1) * this.abonosPorPagina;
       const fin = inicio + this.abonosPorPagina;
-      return this.abonosFiltrados.slice(inicio, fin);
+      return this.abonosAgrupados.slice(inicio, fin);
+    },
+
+    rangoPaginacion() {
+      if (!this.abonosAgrupados.length) {
+        return { inicio: 0, fin: 0 };
+      }
+
+      const inicio = (this.paginaActual - 1) * this.abonosPorPagina + 1;
+      const fin = Math.min(this.paginaActual * this.abonosPorPagina, this.abonosAgrupados.length);
+      return { inicio, fin };
     },
     
     paginasVisibles() {
@@ -245,7 +417,7 @@ export default {
     },
     
     estadisticas() {
-      const totalAbonos = this.abonosFiltrados.reduce((sum, abono) => sum + abono.monto, 0);
+      const totalAbonos = this.abonosFiltrados.reduce((sum, abono) => sum + (Number(abono.monto) || 0), 0);
       const cantidadAbonos = this.abonosFiltrados.length;
       const promedioAbono = cantidadAbonos > 0 ? totalAbonos / cantidadAbonos : 0;
       
@@ -262,6 +434,15 @@ export default {
         this.$emit('cerrar');
       }
     },
+
+    toggleDesglose(grupoId) {
+      const estadoActual = this.desglosesVisibles[grupoId] || false;
+      this.$set(this.desglosesVisibles, grupoId, !estadoActual);
+    },
+
+    esDesgloseVisible(grupoId) {
+      return Boolean(this.desglosesVisibles[grupoId]);
+    },
     
     cambiarPagina(pagina) {
       if (pagina >= 1 && pagina <= this.totalPaginas) {
@@ -269,6 +450,29 @@ export default {
       }
     },
     
+    ordenarAbonosPorFecha(lista) {
+      return lista.slice().sort((a, b) => {
+        const fechaA = this.parseFecha(a.fecha, a.fechaCreacion);
+        const fechaB = this.parseFecha(b.fecha, b.fechaCreacion);
+
+        if (fechaA && fechaB && fechaA.getTime() !== fechaB.getTime()) {
+          return fechaB - fechaA;
+        }
+
+        if (!fechaA && fechaB) return 1;
+        if (fechaA && !fechaB) return -1;
+
+        const creacionA = this.parseTimestamp(a.fechaCreacion);
+        const creacionB = this.parseTimestamp(b.fechaCreacion);
+
+        if (creacionA && creacionB && creacionA.getTime() !== creacionB.getTime()) {
+          return creacionB - creacionA;
+        }
+
+        return (Number(b.monto) || 0) - (Number(a.monto) || 0);
+      });
+    },
+
     async cargarHistorialAbonos() {
       if (!this.proveedor?.id) return;
       
@@ -301,22 +505,21 @@ export default {
             deudaId: deuda.id,
             deudaFecha: deuda.fecha,
             deudaTotal: deuda.total,
+            editandoFecha: false,
+            guardandoFecha: false,
+            fechaCreacionEditable: '',
             ...doc.data()
           }));
           
           this.abonos.push(...abonosDeuda);
         }
         
-        // Ordenar todos los abonos por fecha de creación (más recientes primero)
-        this.abonos.sort((a, b) => {
-          const fechaA = a.fechaCreacion?.toDate?.() || new Date(a.fechaCreacion);
-          const fechaB = b.fechaCreacion?.toDate?.() || new Date(b.fechaCreacion);
-          return fechaB - fechaA;
-        });
+        // Ordenar todos los abonos priorizando la fecha del movimiento
+        this.abonos = this.ordenarAbonosPorFecha(this.abonos);
         
         // Aplicar filtros iniciales
         this.aplicarFiltros();
-        
+
       } catch (error) {
         console.error('Error al cargar historial de abonos:', error);
         alert('Error al cargar el historial de abonos');
@@ -326,7 +529,7 @@ export default {
     },
     
     aplicarFiltros() {
-      this.abonosFiltrados = this.abonos.filter(abono => {
+      const filtrados = this.abonos.filter(abono => {
         // Filtro por fecha desde
         if (this.filtros.fechaDesde && abono.fecha < this.filtros.fechaDesde) {
           return false;
@@ -350,6 +553,8 @@ export default {
         return true;
       });
       
+      this.abonosFiltrados = this.ordenarAbonosPorFecha(filtrados);
+      this.desglosesVisibles = {};
       // Resetear paginación
       this.paginaActual = 1;
     },
@@ -361,6 +566,44 @@ export default {
         tipo: ''
       };
       this.aplicarFiltros();
+    },
+
+    parseFecha(fechaString, fallbackTimestamp) {
+      if (fechaString) {
+        const fecha = new Date(`${fechaString}T00:00:00`);
+        if (!Number.isNaN(fecha.getTime())) {
+          return fecha;
+        }
+      }
+
+      return this.parseTimestamp(fallbackTimestamp);
+    },
+
+    parseTimestamp(valor) {
+      if (!valor) return null;
+
+      if (typeof valor.toDate === 'function') {
+        const fecha = valor.toDate();
+        return Number.isNaN(fecha?.getTime()) ? null : fecha;
+      }
+
+      const fecha = new Date(valor);
+      return Number.isNaN(fecha.getTime()) ? null : fecha;
+    },
+
+    obtenerFechaDesdeTimestamp(timestamp) {
+      const fecha = this.parseTimestamp(timestamp);
+      if (!fecha) return '';
+
+      const year = fecha.getFullYear();
+      const month = String(fecha.getMonth() + 1).padStart(2, '0');
+      const day = String(fecha.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    },
+
+    normalizarDescripcionGeneral(descripcion = '') {
+      if (!descripcion) return '';
+      return descripcion.replace(/\s*\(Abono General(?:[^)]*)?\)\s*$/i, '').trim();
     },
     
     formatNumber(number) {
@@ -390,6 +633,19 @@ export default {
         minute: '2-digit'
       };
       return fecha.toLocaleDateString('es-ES', opciones);
+    },
+
+    formatearFechaHoraEditable(timestamp) {
+      const fecha = this.parseTimestamp(timestamp);
+      if (!fecha) return '';
+
+      const pad = valor => String(valor).padStart(2, '0');
+      const year = fecha.getFullYear();
+      const month = pad(fecha.getMonth() + 1);
+      const day = pad(fecha.getDate());
+      const hours = pad(fecha.getHours());
+      const minutes = pad(fecha.getMinutes());
+      return `${year}-${month}-${day}T${hours}:${minutes}`;
     },
     
     confirmarEliminarAbono(abono) {
@@ -500,6 +756,52 @@ export default {
       } catch (error) {
         console.error('Error al eliminar el abono:', error);
         alert('Error al eliminar el abono. Por favor, intente de nuevo.');
+      }
+    },
+
+    iniciarEdicionFecha(detalle) {
+      this.$set(detalle, 'editandoFecha', true);
+      this.$set(detalle, 'guardandoFecha', false);
+      this.$set(detalle, 'fechaCreacionEditable', this.formatearFechaHoraEditable(detalle.fechaCreacion));
+    },
+
+    cancelarEdicionFecha(detalle) {
+      this.$set(detalle, 'editandoFecha', false);
+      this.$set(detalle, 'guardandoFecha', false);
+      this.$set(detalle, 'fechaCreacionEditable', '');
+    },
+
+    async guardarFechaRegistro(detalle) {
+      if (!detalle.fechaCreacionEditable) {
+        alert('Selecciona una fecha y hora válidas.');
+        return;
+      }
+
+      const nuevaFecha = new Date(detalle.fechaCreacionEditable);
+      if (Number.isNaN(nuevaFecha.getTime())) {
+        alert('La fecha ingresada no es válida.');
+        return;
+      }
+
+      this.$set(detalle, 'guardandoFecha', true);
+
+      try {
+        const abonoRef = doc(db, 'deudas', detalle.deudaId, 'abonos', detalle.id);
+        await updateDoc(abonoRef, { fechaCreacion: nuevaFecha });
+
+        this.$set(detalle, 'fechaCreacion', nuevaFecha);
+        this.$set(detalle, 'fechaCreacionEditable', this.formatearFechaHoraEditable(nuevaFecha));
+        this.$set(detalle, 'editandoFecha', false);
+
+        this.abonos = this.ordenarAbonosPorFecha(this.abonos);
+        this.abonosFiltrados = this.ordenarAbonosPorFecha(this.abonosFiltrados);
+
+        alert('Fecha de registro actualizada.');
+      } catch (error) {
+        console.error('Error al actualizar la fecha del abono:', error);
+        alert('No fue posible actualizar la fecha. Intenta de nuevo.');
+      } finally {
+        this.$set(detalle, 'guardandoFecha', false);
       }
     }
   },
@@ -727,6 +1029,22 @@ export default {
   padding: 15px 20px;
   background: linear-gradient(135deg, #f8f9fa, #e9ecef);
   border-bottom: 1px solid #e9ecef;
+  gap: 15px;
+  cursor: pointer;
+}
+
+.abono-header-info {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.abono-descripcion-resumen {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #34495e;
+  font-size: 0.95em;
 }
 
 .abono-fecha {
@@ -735,6 +1053,12 @@ export default {
   gap: 8px;
   font-weight: 500;
   color: #2c3e50;
+}
+
+.abono-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 15px;
 }
 
 .abono-monto {
@@ -746,6 +1070,186 @@ export default {
 .abono-tipo {
   display: flex;
   align-items: center;
+}
+
+.btn-toggle-desglose {
+  background: white;
+  border: 1px solid #d5d8dc;
+  color: #7f8c8d;
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.btn-toggle-desglose:hover {
+  border-color: #9b59b6;
+  color: #9b59b6;
+}
+
+.abono-expandido {
+  border-color: #9b59b6;
+  box-shadow: 0 6px 14px rgba(155, 89, 182, 0.18);
+}
+
+.abono-desglose {
+  padding: 18px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  background: #fbfbfd;
+}
+
+.abono-desglose-resumen {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.9em;
+  color: #7f8c8d;
+}
+
+.abono-detalle-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 0;
+  border-top: 1px solid #e9ecef;
+}
+
+.abono-detalle-item:first-of-type {
+  border-top: none;
+}
+
+.detalle-izquierda {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: #2c3e50;
+}
+
+.detalle-deuda {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 0.9em;
+  color: #7f8c8d;
+}
+
+.detalle-registrado {
+  font-size: 0.85em;
+  color: #95a5a6;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.detalle-registrado > span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-editar-fecha {
+  background: none;
+  border: none;
+  color: #7f8c8d;
+  cursor: pointer;
+  font-size: 1em;
+  transition: color 0.2s ease;
+}
+
+.btn-editar-fecha:hover {
+  color: #9b59b6;
+}
+
+.editar-fecha-label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: #7f8c8d;
+}
+
+.input-fecha-registro {
+  padding: 6px 10px;
+  border: 1px solid #ccd1d9;
+  border-radius: 6px;
+  font-size: 0.9em;
+}
+
+.input-fecha-registro:focus {
+  outline: none;
+  border-color: #9b59b6;
+  box-shadow: 0 0 0 2px rgba(155, 89, 182, 0.15);
+}
+
+.acciones-edicion-fecha {
+  display: flex;
+  gap: 10px;
+}
+
+.btn-guardar-fecha,
+.btn-cancelar-fecha {
+  padding: 6px 12px;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.85em;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.btn-guardar-fecha {
+  background: linear-gradient(135deg, #27ae60, #219150);
+  color: white;
+  box-shadow: 0 2px 6px rgba(39, 174, 96, 0.3);
+}
+
+.btn-guardar-fecha:disabled {
+  background: #b8e1c6;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.btn-guardar-fecha:not(:disabled):hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(39, 174, 96, 0.35);
+}
+
+.btn-cancelar-fecha {
+  background: #ecf0f1;
+  color: #7f8c8d;
+}
+
+.btn-cancelar-fecha:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 8px rgba(127, 140, 141, 0.25);
+}
+
+.detalle-derecha {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 140px;
+}
+
+.detalle-monto {
+  font-size: 1.1em;
+  font-weight: 600;
+  color: #27ae60;
+}
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
 }
 
 .tipo-general {
