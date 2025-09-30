@@ -265,20 +265,18 @@ export default {
 
           if (!newExistencias[entrada.proveedor][medidaKey]) {
             newExistencias[entrada.proveedor][medidaKey] = {
-              kilos: 0,
               medida: entrada.medida,
               precio: precio,
-              fechaEntrada: sacadaFecha // Capturar la fecha de la entrada más reciente
+              lotes: []
             };
-          } else {
-            // Si ya existe, conservar la fecha más reciente
-            const fechaRegistrada = newExistencias[entrada.proveedor][medidaKey].fechaEntrada;
-            if (!fechaRegistrada || sacadaFecha > fechaRegistrada) {
-              newExistencias[entrada.proveedor][medidaKey].fechaEntrada = sacadaFecha;
-            }
           }
 
-          newExistencias[entrada.proveedor][medidaKey].kilos += entrada.kilos;
+          const registro = newExistencias[entrada.proveedor][medidaKey];
+          registro.lotes.push({
+            kilos: entrada.kilos,
+            fechaEntrada: sacadaFecha
+          });
+          registro.kilos = (registro.kilos || 0) + entrada.kilos;
         });
 
         // Procesar salidas - respetando la selección exacta del usuario
@@ -301,13 +299,39 @@ export default {
 
           if (!newExistencias[salida.proveedor][medidaKey]) {
             newExistencias[salida.proveedor][medidaKey] = {
-              kilos: 0,
               medida: salida.medida,
-              precio: precio
+              precio: precio,
+              lotes: []
             };
           }
 
-          newExistencias[salida.proveedor][medidaKey].kilos -= salida.kilos;
+          const registroSalida = newExistencias[salida.proveedor][medidaKey];
+          let kilosPendientes = salida.kilos;
+
+          // Restar siguiendo FIFO para reflejar consumo desde las entradas más antiguas
+          for (let i = 0; i < registroSalida.lotes.length && kilosPendientes > 0; i += 1) {
+            const lote = registroSalida.lotes[i];
+            if (lote.kilos >= kilosPendientes) {
+              lote.kilos -= kilosPendientes;
+              kilosPendientes = 0;
+            } else {
+              kilosPendientes -= lote.kilos;
+              lote.kilos = 0;
+            }
+          }
+
+          // Eliminar lotes agotados y actualizar el total restante
+          registroSalida.lotes = registroSalida.lotes.filter(lote => lote.kilos > 0);
+          registroSalida.kilos = registroSalida.lotes.reduce((sum, lote) => sum + lote.kilos, 0);
+
+          if (kilosPendientes > 0) {
+            console.warn('[Existencias] Salida sin suficientes lotes registrados', {
+              proveedor: salida.proveedor,
+              medida: salida.medida,
+              precio,
+              kilosPendientes
+            });
+          }
         });
       });
 
@@ -315,15 +339,19 @@ export default {
 
       // Filtrar proveedores y medidas con 0 kilos o menos
       Object.keys(newExistencias).forEach(proveedor => {
-        if (proveedor === 'Selecta' && newExistencias[proveedor]['51/60 1ra Nacional']) {
-          console.log('[DEBUG] Resultado final Selecta 51/60 1ra Nacional:', 
-            newExistencias[proveedor]['51/60 1ra Nacional'].kilos);
-        }
-        newExistencias[proveedor] = Object.fromEntries(
-          Object.entries(newExistencias[proveedor])
-            .filter(([_, datos]) => datos.kilos > 0)
-        );
-        // Si no quedan medidas para el proveedor, eliminar el proveedor
+        Object.entries(newExistencias[proveedor]).forEach(([key, datos]) => {
+          if (!datos.lotes) {
+            datos.lotes = [];
+          }
+
+          datos.lotes = datos.lotes.filter(lote => lote.kilos > 0);
+          datos.kilos = datos.lotes.reduce((sum, lote) => sum + lote.kilos, 0);
+
+          if (datos.kilos <= 0) {
+            delete newExistencias[proveedor][key];
+          }
+        });
+
         if (Object.keys(newExistencias[proveedor]).length === 0) {
           delete newExistencias[proveedor];
         }
@@ -474,34 +502,65 @@ export default {
       });
 
       // Procesar las maquilas después
-      if (existencias.value['Ozuna']) {
-        // Filtrar medidas con 0 kilos
-        const medidasFiltradas = Object.fromEntries(
-          Object.entries(existencias.value['Ozuna']).filter(([_, datos]) => datos.kilos > 1)
-        );
-        if (Object.keys(medidasFiltradas).length > 0) {
-          maquilas['Ozuna'] = medidasFiltradas;
+      const procesarMaquila = (nombre) => {
+        if (!existencias.value[nombre]) return;
+
+        const medidasProcesadas = Object.entries(existencias.value[nombre])
+          .flatMap(([medidaKey, datos]) => {
+            const lotes = Array.isArray(datos.lotes) && datos.lotes.length > 0
+              ? datos.lotes
+              : [{ kilos: datos.kilos || 0, fechaEntrada: datos.fechaEntrada }];
+
+            return lotes
+              .filter(lote => lote.kilos > 1)
+              .map((lote, index) => {
+                const key = `${medidaKey}__${index}`;
+                return [key, {
+                  medida: datos.medida,
+                  precio: datos.precio,
+                  kilos: lote.kilos,
+                  fechaEntrada: lote.fechaEntrada
+                }];
+              });
+          })
+          .sort(([_, datosA], [__, datosB]) => {
+            if (datosA.fechaEntrada && datosB.fechaEntrada) {
+              const fechaA = datosA.fechaEntrada instanceof Date ? datosA.fechaEntrada : datosA.fechaEntrada.toDate();
+              const fechaB = datosB.fechaEntrada instanceof Date ? datosB.fechaEntrada : datosB.fechaEntrada.toDate();
+              return fechaA - fechaB;
+            }
+            const numA = parseInt(datosA.medida.split('/')[0]);
+            const numB = parseInt(datosB.medida.split('/')[0]);
+            return numA - numB;
+          })
+          .reduce((acc, [key, datos]) => {
+            acc[key] = datos;
+            return acc;
+          }, {});
+
+        if (Object.keys(medidasProcesadas).length > 0) {
+          maquilas[nombre] = medidasProcesadas;
         }
-      }
-      
-      if (existencias.value['Joselito']) {
-        // Filtrar medidas con 0 kilos
-        const medidasFiltradas = Object.fromEntries(
-          Object.entries(existencias.value['Joselito']).filter(([_, datos]) => datos.kilos > 1)
-        );
-        if (Object.keys(medidasFiltradas).length > 0) {
-          maquilas['Joselito'] = medidasFiltradas;
-        }
-      }
+      };
+
+      procesarMaquila('Ozuna');
+      procesarMaquila('Joselito');
 
       // Agrupar por medida base y luego por proveedor
       const medidasAgrupadas = {};
       Object.entries(otrosProveedores).forEach(([proveedor, medidas]) => {
         Object.entries(medidas).forEach(([medidaKey, datos]) => {
-          // Solo procesar medidas con kilos > 0
-          if (datos.kilos <= 1) return;
-          
-          // Extraer solo los números de la medida (ej: "41/50" de "41/50 chuy" o "41/50 1ra Nacional")
+          const lotes = Array.isArray(datos.lotes) && datos.lotes.length > 0
+            ? datos.lotes
+            : [{ kilos: datos.kilos || 0, fechaEntrada: datos.fechaEntrada }];
+
+          const lotesActivos = lotes.filter(lote => lote.kilos > 1);
+          // Si no hay lotes activos, o no tiene precio y no es maquila, omitir
+          const esMaquila = proveedor === 'Ozuna' || proveedor === 'Joselito';
+          if (lotesActivos.length === 0 || (!esMaquila && (datos.precio === null || datos.precio === undefined))) {
+            return;
+          }
+
           const medidaBase = datos.medida.split(' ')[0];
           if (!medidasAgrupadas[medidaBase]) {
             medidasAgrupadas[medidaBase] = {};
@@ -509,29 +568,16 @@ export default {
           if (!medidasAgrupadas[medidaBase][proveedor]) {
             medidasAgrupadas[medidaBase][proveedor] = [];
           }
-          
-          // Buscar si ya existe una entrada para esta medida completa y precio del mismo proveedor
-          const existingIndex = medidasAgrupadas[medidaBase][proveedor].findIndex(
-            item => item.medida === datos.medida && item.precio === datos.precio
-          );
-          
-          if (existingIndex >= 0) {
-            // Si existe, sumar los kilos y mantener la fecha más reciente
-            const itemExistente = medidasAgrupadas[medidaBase][proveedor][existingIndex];
-            itemExistente.kilos += datos.kilos;
-            if (!itemExistente.fechaEntrada || (datos.fechaEntrada && datos.fechaEntrada > itemExistente.fechaEntrada)) {
-              itemExistente.fechaEntrada = datos.fechaEntrada;
-            }
-          } else {
-            // Si no existe, agregar nueva entrada
+
+          lotesActivos.forEach(lote => {
             medidasAgrupadas[medidaBase][proveedor].push({
               proveedor,
               medida: datos.medida,
               precio: datos.precio,
-              kilos: datos.kilos,
-              fechaEntrada: datos.fechaEntrada
+              kilos: lote.kilos,
+              fechaEntrada: lote.fechaEntrada
             });
-          }
+          });
         });
       });
 
@@ -562,8 +608,9 @@ export default {
             const proveedoresProcesados = {};
             Object.entries(proveedores).forEach(([proveedor, items]) => {
               const itemsFiltrados = items.filter(item => item.kilos > 1);
-              
-              if (itemsFiltrados.length > 0) {
+              const tienePrecio = itemsFiltrados.some(item => item.precio !== null && item.precio !== undefined);
+
+              if (itemsFiltrados.length > 0 && tienePrecio) {
                 const itemsOrdenados = itemsFiltrados.sort((a, b) => {
                   // Ordenar por fecha de entrada (más antiguas primero)
                   if (a.fechaEntrada && b.fechaEntrada) {
@@ -604,30 +651,11 @@ export default {
       Object.entries(maquilas).forEach(([proveedor, medidas]) => {
         if (!searchLower || proveedor.toLowerCase().includes(searchLower)) {
           // Filtrar medidas con 0 kilos y ordenar por fecha
-          const medidasFiltradas = Object.entries(medidas)
-            .filter(([_, datos]) => datos.kilos > 1)
-            .sort(([medidaA, datosA], [medidaB, datosB]) => {
-              // Ordenar por fecha de entrada (más antiguas primero)
-              if (datosA.fechaEntrada && datosB.fechaEntrada) {
-                const fechaA = datosA.fechaEntrada instanceof Date ? datosA.fechaEntrada : datosA.fechaEntrada.toDate();
-                const fechaB = datosB.fechaEntrada instanceof Date ? datosB.fechaEntrada : datosB.fechaEntrada.toDate();
-                return fechaA - fechaB;
-              }
-              // Si no hay fechas, ordenar por número de medida
-              const numA = parseInt(medidaA.split('/')[0]);
-              const numB = parseInt(medidaB.split('/')[0]);
-              return numA - numB;
-            })
-            .reduce((acc, [medida, datos]) => {
-              acc[medida] = datos;
-              return acc;
-            }, {});
-            
-          if (Object.keys(medidasFiltradas).length > 0) {
+          if (Object.keys(medidas).length > 0) {
             // Calcular precio promedio para la maquila
-            const precioPromedio = calcularPrecioPromedioMaquila(medidasFiltradas);
+            const precioPromedio = calcularPrecioPromedioMaquila(medidas);
             resultado[proveedor] = {
-              items: medidasFiltradas,
+              items: medidas,
               precioPromedio: precioPromedio
             };
           }
