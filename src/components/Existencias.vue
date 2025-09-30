@@ -268,11 +268,12 @@ export default {
               kilos: 0,
               medida: entrada.medida,
               precio: precio,
-              fechaEntrada: sacadaFecha // Capturar la fecha de la primera entrada
+              fechaEntrada: sacadaFecha // Capturar la fecha de la entrada más reciente
             };
           } else {
-            // Si ya existe, mantener la fecha más antigua
-            if (sacadaFecha < newExistencias[entrada.proveedor][medidaKey].fechaEntrada) {
+            // Si ya existe, conservar la fecha más reciente
+            const fechaRegistrada = newExistencias[entrada.proveedor][medidaKey].fechaEntrada;
+            if (!fechaRegistrada || sacadaFecha > fechaRegistrada) {
               newExistencias[entrada.proveedor][medidaKey].fechaEntrada = sacadaFecha;
             }
           }
@@ -515,10 +516,11 @@ export default {
           );
           
           if (existingIndex >= 0) {
-            // Si existe, sumar los kilos y mantener la fecha más antigua
-            medidasAgrupadas[medidaBase][proveedor][existingIndex].kilos += datos.kilos;
-            if (datos.fechaEntrada < medidasAgrupadas[medidaBase][proveedor][existingIndex].fechaEntrada) {
-              medidasAgrupadas[medidaBase][proveedor][existingIndex].fechaEntrada = datos.fechaEntrada;
+            // Si existe, sumar los kilos y mantener la fecha más reciente
+            const itemExistente = medidasAgrupadas[medidaBase][proveedor][existingIndex];
+            itemExistente.kilos += datos.kilos;
+            if (!itemExistente.fechaEntrada || (datos.fechaEntrada && datos.fechaEntrada > itemExistente.fechaEntrada)) {
+              itemExistente.fechaEntrada = datos.fechaEntrada;
             }
           } else {
             // Si no existe, agregar nueva entrada
