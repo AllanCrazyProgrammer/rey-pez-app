@@ -252,64 +252,112 @@
           No hay abonos registrados
         </div>
         
-        <div v-else class="abonos-list">
-          <div v-for="abono in todosLosAbonos" :key="abono.uniqueId" class="abono-item">
-            <div class="abono-main">
-              <div class="abono-left">
-                <div class="abono-fecha">
-                  <span class="fecha-cuenta">{{ abono.fechaCuentaFormateada }}</span>
-                  <div class="historial-fecha-aplicacion">
-                    <template v-if="abono.editandoFecha">
-                      <label class="editar-fecha-label">
-                        Fecha de registro
-                        <input
-                          type="datetime-local"
-                          v-model="abono.fechaEditable"
-                          class="input-fecha-registro"
-                        >
-                      </label>
-                      <div class="acciones-edicion-fecha">
-                        <button
-                          class="btn-guardar-fecha"
-                          :disabled="abono.guardandoFecha || !abono.fechaEditable"
-                          @click.stop="guardarFechaHistorial(abono)"
-                        >
-                          {{ abono.guardandoFecha ? 'Guardando...' : 'Guardar' }}
-                        </button>
-                        <button
-                          class="btn-cancelar-fecha"
-                          :disabled="abono.guardandoFecha"
-                          @click.stop="cancelarEdicionFechaHistorial(abono)"
-                        >
-                          Cancelar
-                        </button>
-                      </div>
-                    </template>
-                    <template v-else>
-                      <span>{{ formatearFechaHora(abono.fechaAplicacion) }}</span>
-                      <button
-                        class="btn-editar-fecha"
-                        title="Editar fecha de registro"
-                        @click.stop="iniciarEdicionFechaHistorial(abono)"
-                      >
-                        Editar
-                      </button>
-                    </template>
+        <div v-else class="historial-grupos">
+          <div
+            v-for="grupo in historialPorFecha"
+            :key="grupo.id"
+            class="historial-grupo"
+            :class="{ 'grupo-expandido': esGrupoExpandido(grupo.id) }"
+          >
+            <div class="grupo-header" @click="toggleGrupoHistorial(grupo.id)">
+              <div class="grupo-fecha">
+                <span class="grupo-fecha-texto">{{ grupo.fechaLabel }}</span>
+                <span class="grupo-meta">{{ grupo.abonos.length }} {{ grupo.abonos.length === 1 ? 'abono' : 'abonos' }}</span>
+              </div>
+              <div class="grupo-total">${{ formatNumber(grupo.totalMonto) }}</div>
+              <button class="grupo-toggle" type="button" :aria-expanded="esGrupoExpandido(grupo.id)">
+                <i :class="['fas', esGrupoExpandido(grupo.id) ? 'fa-chevron-up' : 'fa-chevron-down']"></i>
+              </button>
+            </div>
+            <transition name="fade">
+              <div v-if="esGrupoExpandido(grupo.id)" class="grupo-detalle">
+                <div v-if="grupo.cuentas.length" class="grupo-resumen">
+                  <div
+                    v-for="cuenta in grupo.cuentas"
+                    :key="cuenta.id"
+                    class="grupo-resumen-item"
+                  >
+                    <div class="resumen-cuenta-info">
+                      <span class="resumen-cuenta-fecha">{{ cuenta.fechaCuentaFormateada }}</span>
+                      <span class="resumen-cuenta-saldo" v-if="cuenta.saldoAntes !== null">
+                        Saldo antes: ${{ formatNumber(cuenta.saldoAntes) }}
+                      </span>
+                      <span class="resumen-cuenta-saldo" v-if="cuenta.saldoDespues !== null">
+                        Saldo después: ${{ formatNumber(cuenta.saldoDespues) }}
+                      </span>
+                    </div>
+                    <div class="resumen-cuenta-monto">
+                      ${{ formatNumber(cuenta.total) }}
+                    </div>
                   </div>
                 </div>
-                <div class="abono-descripcion">{{ abono.descripcion }}</div>
+                <div class="grupo-abonos">
+                  <div
+                    v-for="abono in grupo.abonos"
+                    :key="abono.uniqueId"
+                    class="abono-item"
+                  >
+                    <div class="abono-main">
+                      <div class="abono-left">
+                        <div class="abono-fecha">
+                          <span class="fecha-cuenta">{{ abono.fechaCuentaFormateada }}</span>
+                          <div class="historial-fecha-aplicacion">
+                            <template v-if="abono.editandoFecha">
+                              <label class="editar-fecha-label">
+                                Fecha de registro
+                                <input
+                                  type="datetime-local"
+                                  v-model="abono.fechaEditable"
+                                  class="input-fecha-registro"
+                                >
+                              </label>
+                              <div class="acciones-edicion-fecha">
+                                <button
+                                  class="btn-guardar-fecha"
+                                  :disabled="abono.guardandoFecha || !abono.fechaEditable"
+                                  @click.stop="guardarFechaHistorial(abono)"
+                                >
+                                  {{ abono.guardandoFecha ? 'Guardando...' : 'Guardar' }}
+                                </button>
+                                <button
+                                  class="btn-cancelar-fecha"
+                                  :disabled="abono.guardandoFecha"
+                                  @click.stop="cancelarEdicionFechaHistorial(abono)"
+                                >
+                                  Cancelar
+                                </button>
+                              </div>
+                            </template>
+                            <template v-else>
+                              <span>{{ formatearFechaHora(abono.fechaAplicacion) }}</span>
+                              <button
+                                class="btn-editar-fecha"
+                                title="Editar fecha de registro"
+                                @click.stop="iniciarEdicionFechaHistorial(abono)"
+                              >
+                                Editar
+                              </button>
+                            </template>
+                          </div>
+                        </div>
+                        <div class="abono-descripcion">{{ abono.descripcion }}</div>
+                        <div v-if="abono.origenDescripcion" class="abono-origen">{{ abono.origenDescripcion }}</div>
+                      </div>
+                      <div class="abono-right">
+                        <div class="abono-monto">${{ formatNumber(abono.monto) }}</div>
+                        <button 
+                          @click.stop="eliminarAbonoIndividual(abono)" 
+                          class="btn-eliminar-abono"
+                          title="Eliminar abono"
+                        >
+                          🗑️
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
-              <div class="abono-right">
-                <div class="abono-monto">${{ formatNumber(abono.monto) }}</div>
-                <button 
-                  @click="eliminarAbonoIndividual(abono)" 
-                  class="btn-eliminar-abono"
-                  title="Eliminar abono"
-                >
-                  🗑️
-                </button>
-              </div>
-            </div>
+            </transition>
           </div>
         </div>
         
@@ -426,6 +474,63 @@ export default {
         sobrante: Math.round(montoRestante * 100) / 100
       }
     })
+
+    const historialPorFecha = computed(() => {
+      const gruposMap = new Map()
+
+      todosLosAbonos.value.forEach(abono => {
+        const fechaClave = obtenerClaveFecha(abono.fechaAplicacion || abono.fechaOriginal || abono.fechaCuenta)
+        if (!fechaClave) return
+
+        if (!gruposMap.has(fechaClave)) {
+          gruposMap.set(fechaClave, {
+            id: fechaClave,
+            fechaISO: fechaClave,
+            totalMonto: 0,
+            abonos: [],
+            cuentas: new Map()
+          })
+        }
+
+        const grupo = gruposMap.get(fechaClave)
+        const monto = Number(abono.monto) || 0
+        grupo.totalMonto += monto
+        grupo.abonos.push(abono)
+
+        const cuentaKey = abono.cuentaId || `sin-cuenta-${abono.uniqueId}`
+        if (!grupo.cuentas.has(cuentaKey)) {
+          grupo.cuentas.set(cuentaKey, {
+            id: cuentaKey,
+            cuentaId: abono.cuentaId,
+            fechaCuentaFormateada: abono.fechaCuentaFormateada,
+            total: 0,
+            saldoAntes: abono.cuentaSaldoAnterior ?? null,
+            saldoDespues: abono.cuentaSaldoDespues ?? null
+          })
+        }
+
+        const resumenCuenta = grupo.cuentas.get(cuentaKey)
+        resumenCuenta.total += monto
+
+        if (resumenCuenta.saldoAntes === null && abono.cuentaSaldoAnterior !== undefined) {
+          resumenCuenta.saldoAntes = abono.cuentaSaldoAnterior ?? null
+        }
+        if (resumenCuenta.saldoDespues === null && abono.cuentaSaldoDespues !== undefined) {
+          resumenCuenta.saldoDespues = abono.cuentaSaldoDespues ?? null
+        }
+      })
+
+      const grupos = Array.from(gruposMap.values()).map(grupo => ({
+        id: grupo.id,
+        fechaISO: grupo.fechaISO,
+        fechaLabel: formatearFechaHistorialCabecera(grupo.fechaISO),
+        totalMonto: grupo.totalMonto,
+        cuentas: Array.from(grupo.cuentas.values()),
+        abonos: grupo.abonos.sort((a, b) => new Date(b.fechaAplicacion) - new Date(a.fechaAplicacion))
+      }))
+
+      return grupos.sort((a, b) => new Date(b.fechaISO) - new Date(a.fechaISO))
+    })
     
     // Métodos
     const formatNumber = (value) => {
@@ -458,13 +563,28 @@ export default {
         return dateObj.toLocaleDateString('es-ES', {
           day: 'numeric',
           month: 'short',
-          year: 'numeric'
+          year: 'numeric',
+          timeZone: 'UTC'
         })
       }
 
       return dateObj.toLocaleString('es-ES')
     }
-    
+
+    const formatearFechaHistorialCabecera = (fecha) => {
+      if (!fecha) return ''
+      const dateObj = new Date(fecha)
+      if (Number.isNaN(dateObj.getTime())) {
+        return ''
+      }
+      return dateObj.toLocaleDateString('es-ES', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+        timeZone: 'UTC'
+      })
+    }
+
     const formatearFechaDia = (fecha) => {
       if (!fecha) return ''
       const dt = new Date(fecha)
@@ -472,8 +592,8 @@ export default {
       const ayer = new Date(hoy)
       ayer.setDate(ayer.getDate() - 1)
       
-      // Comparar solo fecha sin hora
-      const fechaDt = new Date(dt.getFullYear(), dt.getMonth(), dt.getDate())
+      // Comparar solo fecha sin hora usando UTC para evitar desfase
+      const fechaDt = new Date(dt.getUTCFullYear(), dt.getUTCMonth(), dt.getUTCDate())
       const fechaHoy = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate())
       const fechaAyer = new Date(ayer.getFullYear(), ayer.getMonth(), ayer.getDate())
       
@@ -485,7 +605,8 @@ export default {
         return dt.toLocaleDateString('es-ES', {
           day: 'numeric',
           month: 'short',
-          year: dt.getFullYear() !== hoy.getFullYear() ? 'numeric' : undefined
+          year: dt.getUTCFullYear() !== hoy.getFullYear() ? 'numeric' : undefined,
+          timeZone: 'UTC'
         })
       }
     }
@@ -514,6 +635,17 @@ export default {
 
       const pad = (value) => String(value).padStart(2, '0')
       return `${year}-${pad(month)}-${pad(day)}T00:00:00`
+    }
+
+    const obtenerClaveFecha = (fecha) => {
+      if (!fecha) return ''
+      const dateObj = new Date(fecha)
+      if (Number.isNaN(dateObj.getTime())) return ''
+      const pad = (value) => String(value).padStart(2, '0')
+      const year = dateObj.getUTCFullYear()
+      const month = pad(dateObj.getUTCMonth() + 1)
+      const day = pad(dateObj.getUTCDate())
+      return `${year}-${month}-${day}`
     }
 
     const formatearFechaHoraEditable = (fecha) => {
@@ -649,11 +781,17 @@ export default {
                 fechaCuentaFormateada,
                 fechaAplicacion: abono.fecha || abono.fechaAplicacion || new Date().toISOString(),
                 fechaOriginal: abono.fecha || null,
+                cuentaTotal: cuentaData.totalGeneralVenta || 0,
+                cuentaSaldoAnterior: typeof cuentaData.saldoAcumuladoAnterior === 'number' ? cuentaData.saldoAcumuladoAnterior : null,
+                cuentaSaldoDespues: typeof cuentaData.nuevoSaldoAcumulado === 'number' ? cuentaData.nuevoSaldoAcumulado : null,
                 descripcion: abono.descripcion || 'Sin descripción',
                 monto: abono.monto || 0,
                 abonoId: abono.id,
                 abonoIndex: index,
-                esAplicacionIndividual: abono.esAplicacionIndividual || false
+                esAplicacionIndividual: abono.esAplicacionIndividual || false,
+                origenDescripcion: abono.fechaOriginalStash
+                  ? `Stash (${formatearFecha(abono.fechaOriginalStash)})`
+                  : (abono.esAplicacionIndividual ? 'Aplicación individual' : 'Aplicación en cascada')
               })
             })
           }
@@ -671,6 +809,8 @@ export default {
           editandoFecha: false,
           guardandoFecha: false
         }))
+
+        historialGruposExpandidos.value = {}
 
       } catch (error) {
         console.error('Error cargando todos los abonos:', error)
@@ -1270,6 +1410,8 @@ export default {
       }
     }
 
+    const historialGruposExpandidos = ref({})
+
     const iniciarEdicionFechaHistorial = (abono) => {
       abono.editandoFecha = true
       abono.guardandoFecha = false
@@ -1361,6 +1503,16 @@ export default {
       }
     }
 
+    const toggleGrupoHistorial = (grupoId) => {
+      const actual = !!historialGruposExpandidos.value[grupoId]
+      historialGruposExpandidos.value = {
+        ...historialGruposExpandidos.value,
+        [grupoId]: !actual
+      }
+    }
+
+    const esGrupoExpandido = (grupoId) => !!historialGruposExpandidos.value[grupoId]
+
     const cerrarModal = () => {
       showModal.value = false
       mostrarConfirmacion.value = false
@@ -1402,11 +1554,13 @@ export default {
       cuentaMasAntiguaNoPagada,
       cuentasOrdenadasPorFecha,
       distribucionAbonos,
+      historialPorFecha,
       
       // Métodos
       formatNumber,
       formatearFecha,
       formatearFechaHora,
+      formatearFechaHistorialCabecera,
       formatearFechaDia,
       formatearHora,
       verDetalleHistorial,
@@ -1425,6 +1579,8 @@ export default {
       iniciarEdicionFechaHistorial,
       cancelarEdicionFechaHistorial,
       guardarFechaHistorial,
+      toggleGrupoHistorial,
+      esGrupoExpandido,
       cargarTodosLosAbonos,
       cerrarModal
     }
@@ -1940,6 +2096,139 @@ h4 {
 .btn-cancelar-fecha:hover {
   transform: translateY(-1px);
   box-shadow: 0 3px 8px rgba(84, 110, 122, 0.25);
+}
+
+.historial-grupos {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.historial-grupo {
+  border: 1px solid #e1e5ee;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #fff;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.historial-grupo.grupo-expandido {
+  border-color: #5c6bc0;
+  box-shadow: 0 6px 18px rgba(92, 107, 192, 0.18);
+}
+
+.grupo-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  background: linear-gradient(135deg, #f4f7fb, #eceff5);
+  cursor: pointer;
+  gap: 12px;
+}
+
+.grupo-fecha {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.grupo-fecha-texto {
+  font-weight: 700;
+  color: #1e3c72;
+  font-size: 15px;
+}
+
+.grupo-meta {
+  font-size: 12px;
+  color: #607d8b;
+}
+
+.grupo-total {
+  font-weight: 700;
+  color: #2e7d32;
+  font-size: 16px;
+}
+
+.grupo-toggle {
+  border: none;
+  background: #fff;
+  color: #5c6bc0;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(92, 107, 192, 0.25);
+  transition: transform 0.2s ease;
+}
+
+.grupo-toggle:hover {
+  transform: translateY(-2px);
+}
+
+.grupo-detalle {
+  padding: 16px 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.grupo-resumen {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.grupo-resumen-item {
+  background: #f1f4fb;
+  border: 1px solid #d8deed;
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.resumen-cuenta-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: #455a64;
+  font-size: 12px;
+}
+
+.resumen-cuenta-fecha {
+  font-weight: 600;
+  color: #1e3c72;
+  font-size: 13px;
+}
+
+.resumen-cuenta-saldo {
+  font-size: 11px;
+}
+
+.resumen-cuenta-monto {
+  font-weight: 700;
+  color: #2e7d32;
+  font-size: 15px;
+}
+
+.grupo-abonos {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.abono-origen {
+  font-size: 11px;
+  color: #78909c;
+  background: #eceff1;
+  padding: 4px 8px;
+  border-radius: 12px;
+  width: fit-content;
 }
 
 .abono-descripcion {
@@ -2495,7 +2784,24 @@ h4 {
     align-items: stretch;
     gap: 8px;
   }
-  
+
+  .grupo-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .grupo-total {
+    font-size: 14px;
+  }
+
+  .grupo-resumen {
+    grid-template-columns: 1fr;
+  }
+
+  .grupo-toggle {
+    align-self: flex-end;
+  }
+
   .fecha-aplicacion {
     flex-direction: column;
     align-items: stretch;
