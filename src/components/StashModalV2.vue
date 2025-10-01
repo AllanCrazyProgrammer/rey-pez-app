@@ -246,19 +246,29 @@
     <!-- Modal de Historial -->
     <div v-if="verHistorial" class="modal">
       <div class="modal-content">
-        <h3>Historial de Abonos</h3>
+        <div class="modal-header">
+          <h3>Historial de Abonos</h3>
+          <button @click="verHistorial = false" class="btn-close-modal" title="Cerrar">
+            ✕
+          </button>
+        </div>
         
         <div v-if="todosLosAbonos.length === 0" class="empty-state">
           No hay abonos registrados
         </div>
         
-        <div v-else class="historial-grupos">
-          <div
-            v-for="grupo in historialPorFecha"
-            :key="grupo.id"
-            class="historial-grupo"
-            :class="{ 'grupo-expandido': esGrupoExpandido(grupo.id) }"
-          >
+        <div v-else>
+          <div class="historial-info">
+            <p>Mostrando {{ ((paginaActual - 1) * 7) + 1 }}-{{ Math.min(paginaActual * 7, historialPorFecha.length) }} de {{ historialPorFecha.length }} registros</p>
+          </div>
+          
+          <div class="historial-grupos">
+            <div
+              v-for="grupo in historialPaginado"
+              :key="grupo.id"
+              class="historial-grupo"
+              :class="{ 'grupo-expandido': esGrupoExpandido(grupo.id) }"
+            >
             <div class="grupo-header" @click="toggleGrupoHistorial(grupo.id)">
               <div class="grupo-fecha">
                 <span class="grupo-fecha-texto">{{ grupo.fechaLabel }}</span>
@@ -361,6 +371,37 @@
           </div>
         </div>
         
+        <!-- Controles de Paginación -->
+        <div v-if="totalPaginas > 1" class="paginacion">
+          <button 
+            @click="paginaAnterior" 
+            :disabled="paginaActual === 1"
+            class="btn-paginacion"
+          >
+            ← Anterior
+          </button>
+          
+          <div class="paginas-numeros">
+            <button
+              v-for="pagina in totalPaginas"
+              :key="pagina"
+              @click="cambiarPagina(pagina)"
+              :class="['btn-numero-pagina', { 'activa': pagina === paginaActual }]"
+            >
+              {{ pagina }}
+            </button>
+          </div>
+          
+          <button 
+            @click="paginaSiguiente" 
+            :disabled="paginaActual === totalPaginas"
+            class="btn-paginacion"
+          >
+            Siguiente →
+          </button>
+        </div>
+        </div>
+        
         <div class="modal-actions">
           <button @click="verHistorial = false" class="btn-secondary">
             Cerrar
@@ -391,6 +432,8 @@ export default {
     const verHistorial = ref(false)
     const isAplicando = ref(false)
     const mostrarSeleccionFechas = ref(false)
+    const paginaActual = ref(1)
+    const elementosPorPagina = 7
     
     // Datos
     const stashItems = ref([])
@@ -530,6 +573,16 @@ export default {
       }))
 
       return grupos.sort((a, b) => new Date(b.fechaISO) - new Date(a.fechaISO))
+    })
+
+    const totalPaginas = computed(() => {
+      return Math.ceil(historialPorFecha.value.length / elementosPorPagina)
+    })
+
+    const historialPaginado = computed(() => {
+      const inicio = (paginaActual.value - 1) * elementosPorPagina
+      const fin = inicio + elementosPorPagina
+      return historialPorFecha.value.slice(inicio, fin)
     })
     
     // Métodos
@@ -1513,10 +1566,29 @@ export default {
 
     const esGrupoExpandido = (grupoId) => !!historialGruposExpandidos.value[grupoId]
 
+    const cambiarPagina = (numeroPagina) => {
+      if (numeroPagina >= 1 && numeroPagina <= totalPaginas.value) {
+        paginaActual.value = numeroPagina
+      }
+    }
+
+    const paginaAnterior = () => {
+      if (paginaActual.value > 1) {
+        paginaActual.value--
+      }
+    }
+
+    const paginaSiguiente = () => {
+      if (paginaActual.value < totalPaginas.value) {
+        paginaActual.value++
+      }
+    }
+
     const cerrarModal = () => {
       showModal.value = false
       mostrarConfirmacion.value = false
       verHistorial.value = false
+      paginaActual.value = 1 // Resetear paginación al cerrar
     }
     
     // Cargar datos al abrir
@@ -1555,6 +1627,9 @@ export default {
       cuentasOrdenadasPorFecha,
       distribucionAbonos,
       historialPorFecha,
+      historialPaginado,
+      totalPaginas,
+      paginaActual,
       
       // Métodos
       formatNumber,
@@ -1582,7 +1657,10 @@ export default {
       toggleGrupoHistorial,
       esGrupoExpandido,
       cargarTodosLosAbonos,
-      cerrarModal
+      cerrarModal,
+      cambiarPagina,
+      paginaAnterior,
+      paginaSiguiente
     }
   }
 }
@@ -1619,6 +1697,8 @@ export default {
   align-items: center;
   z-index: 1000;
   animation: fadeIn 0.3s ease;
+  padding-top: 80px;
+  padding-bottom: 20px;
 }
 
 .modal-content {
@@ -1636,10 +1716,43 @@ export default {
   max-width: 600px;
 }
 
+/* Header del modal con botón de cerrar */
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 12px;
+  border-bottom: 2px solid #f0f0f0;
+}
+
 h3 {
-  margin: 0 0 20px 0;
+  margin: 0;
   color: #333;
   font-size: 24px;
+}
+
+.btn-close-modal {
+  background: #f5f5f5;
+  border: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  font-size: 24px;
+  color: #666;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  line-height: 1;
+}
+
+.btn-close-modal:hover {
+  background: #e0e0e0;
+  color: #333;
+  transform: rotate(90deg);
 }
 
 h4 {
@@ -2746,6 +2859,94 @@ h4 {
   white-space: nowrap;
 }
 
+/* Información del historial */
+.historial-info {
+  background: #f8f9fa;
+  border-radius: 6px;
+  padding: 10px 16px;
+  margin-bottom: 16px;
+  text-align: center;
+}
+
+.historial-info p {
+  margin: 0;
+  color: #666;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+/* Paginación */
+.paginacion {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 2px solid #f0f0f0;
+  flex-wrap: wrap;
+}
+
+.btn-paginacion {
+  background: #667eea;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 14px;
+  transition: all 0.3s ease;
+  min-width: 100px;
+}
+
+.btn-paginacion:hover:not(:disabled) {
+  background: #5a67d8;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(102, 126, 234, 0.3);
+}
+
+.btn-paginacion:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.paginas-numeros {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.btn-numero-pagina {
+  background: white;
+  color: #667eea;
+  border: 2px solid #667eea;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 14px;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-numero-pagina:hover {
+  background: #f0f4ff;
+  transform: scale(1.1);
+}
+
+.btn-numero-pagina.activa {
+  background: #667eea;
+  color: white;
+  transform: scale(1.15);
+  box-shadow: 0 4px 8px rgba(102, 126, 234, 0.4);
+}
+
 /* Estados vacíos */
 .empty-state {
   text-align: center;
@@ -2916,6 +3117,43 @@ h4 {
   
   .detalle-grid {
     grid-template-columns: 1fr;
+  }
+
+  .modal-header {
+    flex-direction: row;
+    align-items: center;
+    padding-bottom: 8px;
+  }
+
+  .modal-header h3 {
+    font-size: 20px;
+  }
+
+  .btn-close-modal {
+    width: 32px;
+    height: 32px;
+    font-size: 20px;
+  }
+
+  .paginacion {
+    gap: 8px;
+    padding-top: 12px;
+  }
+
+  .btn-paginacion {
+    font-size: 12px;
+    padding: 8px 12px;
+    min-width: 80px;
+  }
+
+  .btn-numero-pagina {
+    width: 36px;
+    height: 36px;
+    font-size: 13px;
+  }
+
+  .historial-info p {
+    font-size: 13px;
   }
 }
 </style>
