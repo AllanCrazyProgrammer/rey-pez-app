@@ -1086,7 +1086,7 @@ export default {
             
             if (montoDelItem > 0.01) { // Evitar montos muy pequeños por redondeo
               abonosParaCuenta.push({
-                descripcion: `${stashItem.descripcion} (Cascada)`,
+                descripcion: stashItem.descripcion,
                 monto: Math.round(montoDelItem * 100) / 100, // Redondear a 2 decimales
                 fecha: normalizarFechaSeleccionada(stashItem.fecha),
                 fechaOriginalStash: stashItem.fecha
