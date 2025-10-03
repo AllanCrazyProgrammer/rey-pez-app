@@ -47,7 +47,7 @@ export const generarReporteCuentasVeronica = async ({ fechaInicio, fechaFin, reg
     ]
   ];
 
-  const detallesAbonos = [];
+  const abonosPorDescripcion = {}; // Agrupar abonos por descripción
   const resumenTotales = {
     saldoDia: 0,
     cobros: 0,
@@ -93,13 +93,25 @@ export const generarReporteCuentasVeronica = async ({ fechaInicio, fechaFin, reg
     resumenTotales.abonos += totalAbonos;
     resumenTotales.totalDia += totalDia;
 
+    // Agrupar abonos por descripción
     if (abonos.length) {
-      detallesAbonos.push({
-        fecha: registro.fecha,
-        abonos: abonos.map((abono) => ({
-          descripcion: abono.descripcion || 'Sin descripción',
-          monto: Number(abono.monto) || 0
-        }))
+      abonos.forEach((abono) => {
+        const descripcion = abono.descripcion || 'Sin descripción';
+        const monto = Number(abono.monto) || 0;
+        
+        if (!abonosPorDescripcion[descripcion]) {
+          abonosPorDescripcion[descripcion] = {
+            descripcion,
+            montoTotal: 0,
+            fechasAplicadas: []
+          };
+        }
+        
+        abonosPorDescripcion[descripcion].montoTotal += monto;
+        abonosPorDescripcion[descripcion].fechasAplicadas.push({
+          fecha: registro.fecha,
+          monto
+        });
       });
     }
   });
@@ -118,31 +130,35 @@ export const generarReporteCuentasVeronica = async ({ fechaInicio, fechaFin, reg
   const docDefinition = {
     ...configuracionDocumento,
     defaultStyle: {
-      fontSize: 11,
+      fontSize: 13,
       color: '#2c3e50'
     },
     styles: {
       ...estilosPdf,
       tituloPrincipal: {
-        fontSize: 22,
+        fontSize: 26,
         bold: true,
         color: '#d35400',
-        margin: [0, 0, 0, 4]
+        margin: [0, 0, 0, 6]
       },
       subTitulo: {
-        fontSize: 12,
+        fontSize: 14,
         color: '#7f8c8d',
-        margin: [0, 0, 0, 12]
+        margin: [0, 0, 0, 14]
       },
       resumenItem: {
-        fontSize: 12,
+        fontSize: 14,
         margin: [0, 2, 0, 2]
       },
       saldoAcumuladoActual: {
-        fontSize: 13,
+        fontSize: 16,
         bold: true,
         color: '#d35400',
         margin: [0, 12, 0, 0]
+      },
+      tableHeader: {
+        fontSize: 14,
+        bold: true
       }
     },
     content: [
@@ -172,30 +188,52 @@ export const generarReporteCuentasVeronica = async ({ fechaInicio, fechaFin, reg
       {
         text: `Saldo acumulado al día de hoy (${formatearFecha(new Date())}): ${formatCurrency(saldoAcumulado)}`,
         style: 'saldoAcumuladoActual',
-        margin: [0, 14, 0, 0]
+        fontSize: 16,
+        margin: [0, 16, 0, 0]
       }
     ]
   };
 
-  if (detallesAbonos.length) {
+  // Convertir el objeto de abonos agrupados en un array y ordenarlo
+  const abonosAgrupados = Object.values(abonosPorDescripcion);
+  
+  if (abonosAgrupados.length) {
     docDefinition.content.push({ text: '\n' });
     docDefinition.content.push({
-      text: 'Detalle de abonos por día',
+      text: 'Detalle de abonos',
       style: 'tituloPrincipal',
-      fontSize: 16,
-      margin: [0, 10, 0, 6]
+      fontSize: 20,
+      margin: [0, 14, 0, 10]
     });
 
-    detallesAbonos.forEach((detalle) => {
+    abonosAgrupados.forEach((abonoAgrupado) => {
+      // Título con la descripción del abono
       docDefinition.content.push({
-        text: formatearFecha(detalle.fecha),
+        text: abonoAgrupado.descripcion,
         bold: true,
-        margin: [0, 4, 0, 2]
+        fontSize: 15,
+        color: '#d35400',
+        margin: [0, 8, 0, 4]
       });
 
+      // Mostrar las fechas donde se aplicó este abono
+      const fechasTexto = abonoAgrupado.fechasAplicadas.map(
+        (item) => `  • ${formatearFecha(item.fecha)}: ${formatCurrency(item.monto)}`
+      );
+
       docDefinition.content.push({
-        ul: detalle.abonos.map((abono) => `${abono.descripcion}: ${formatCurrency(abono.monto)}`),
-        margin: [0, 0, 0, 4]
+        text: fechasTexto.join('\n'),
+        margin: [0, 0, 0, 4],
+        fontSize: 13
+      });
+
+      // Agregar el total de este abono
+      docDefinition.content.push({
+        text: `Total efectuado: ${formatCurrency(abonoAgrupado.montoTotal)}`,
+        bold: true,
+        color: '#d35400',
+        margin: [0, 4, 0, 12],
+        fontSize: 14
       });
     });
   }
