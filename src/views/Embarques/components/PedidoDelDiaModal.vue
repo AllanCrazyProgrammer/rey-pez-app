@@ -159,6 +159,27 @@
                     </div>
                   </div>
                   
+                  <!-- Lorena -->
+                  <div v-if="pedido.lorena && pedido.lorena.length > 0" class="cliente-limpio lorena">
+                    <strong>Lorena:</strong>
+                    <div v-for="(item, index) in pedido.lorena" :key="index" class="item-limpio-container" v-if="item.kilos">
+                      <label class="item-checkbox-container">
+                        <input 
+                          type="checkbox" 
+                          :checked="getItemCompletadoState(pedido.id, 'limpio', 'lorena', index)"
+                          @change="toggleItemCompletado(pedido.id, 'limpio', 'lorena', index, $event.target.checked)"
+                        >
+                        <span class="item-checkmark"></span>
+                      </label>
+                      <span class="item-limpio" :class="{ 'completado': getItemCompletadoState(pedido.id, 'limpio', 'lorena', index) }">
+                        {{ item.kilos }}{{ item.esTara ? ' T' : ' kg' }} - {{ item.medida || 'Sin medida' }} - 
+                        <span class="tipo-producto" :class="{ 'no-sh20': item.tipo && item.tipo !== 'S/H20' }">
+                          {{ item.tipo || 'Sin tipo' }}
+                        </span>
+                      </span>
+                    </div>
+                  </div>
+                  
                   <!-- Clientes temporales -->
                   <div v-for="(cliente, id) in pedido.clientesTemporales" :key="id" v-if="cliente.pedidos && cliente.pedidos.length > 0" class="cliente-limpio temporal">
                     <strong>{{ cliente.nombre }}:</strong>
@@ -306,6 +327,16 @@ export default {
           });
         }
         
+        // Lorena
+        if (data.lorena) {
+          data.lorena.forEach((item, index) => {
+            const itemKey = `limpio-lorena-${index}`;
+            if (data.itemsCompletados && data.itemsCompletados[itemKey]) {
+              this.$set(this.itemsCompletados[pedidoId], itemKey, data.itemsCompletados[itemKey]);
+            }
+          });
+        }
+        
         // Clientes temporales
         if (data.clientesTemporales) {
           for (const clienteId in data.clientesTemporales) {
@@ -387,6 +418,9 @@ export default {
         if (pedido.ozuna) {
           totalKilos += this.calcularKilosCliente(pedido.ozuna);
         }
+        if (pedido.lorena) {
+          totalKilos += this.calcularKilosCliente(pedido.lorena);
+        }
         
         if (pedido.clientesTemporales) {
           for (const clienteId in pedido.clientesTemporales) {
@@ -418,6 +452,9 @@ export default {
         }
         if (pedido.ozuna) {
           totalTaras += this.calcularTarasCliente(pedido.ozuna);
+        }
+        if (pedido.lorena) {
+          totalTaras += this.calcularTarasCliente(pedido.lorena);
         }
         
         if (pedido.clientesTemporales) {
@@ -1096,6 +1133,11 @@ export default {
 .cliente-limpio.ozuna strong {
   background: linear-gradient(135deg, #d1fae5 0%, #34d399 100%);
   color: #064e3b;
+}
+
+.cliente-limpio.lorena strong {
+  background: linear-gradient(135deg, #fed7aa 0%, #fb923c 100%);
+  color: #7c2d12;
 }
 
 .cliente-limpio.temporal strong {
