@@ -47,8 +47,10 @@
         </p>
         <ul class="list">
           <li v-for="(salida, index) in salidas" :key="'salida-' + index">
-            {{ salida.tipo === 'maquila' ? 'Maquila' : 'Proveedor' }}: {{ salida.proveedor }} - {{ salida.medida }}{{ salida.precio ? ` ($${salida.precio})` : '' }}: {{ formatNumber(salida.kilos) }} kg
-            <button @click="removeSalida(index)" class="delete-btn">&times;</button>
+            <span>{{ salida.tipo === 'maquila' ? 'Maquila' : 'Proveedor' }}: {{ salida.proveedor }} - {{ salida.medida }}{{ salida.precio ? ` ($${salida.precio})` : '' }}: {{ formatNumber(salida.kilos) }} kg</span>
+            <div class="action-buttons">
+              <button @click="removeSalida(index)" class="delete-btn">&times;</button>
+            </div>
           </li>
         </ul>
         <p class="total">Total Salidas: {{ formatNumber(totalSalidas) }} kg</p>
@@ -95,8 +97,11 @@
         </div>
         <ul class="list">
           <li v-for="(entrada, index) in entradas" :key="'entrada-' + index">
-            {{ entrada.tipo === 'maquila' ? 'Maquila' : 'Proveedor' }}: {{ entrada.proveedor }} - {{ entrada.medida }}{{ entrada.precio ? ` ($${entrada.precio})` : '' }}: {{ formatNumber(entrada.kilos) }} kg
-            <button @click="removeEntrada(index)" class="delete-btn">&times;</button>
+            <span>{{ entrada.tipo === 'maquila' ? 'Maquila' : 'Proveedor' }}: {{ entrada.proveedor }} - {{ entrada.medida }}{{ entrada.precio ? ` ($${entrada.precio})` : '' }}: {{ formatNumber(entrada.kilos) }} kg</span>
+            <div class="action-buttons">
+              <button @click="editarEntrada(index)" class="edit-btn" title="Editar">✏️</button>
+              <button @click="removeEntrada(index)" class="delete-btn">&times;</button>
+            </div>
           </li>
         </ul>
         <p class="total">Total Entradas: {{ formatNumber(totalEntradas) }} kg</p>
@@ -144,6 +149,46 @@
     </div>
     
     <button @click="saveReport" class="save-button">{{ isEditing ? 'Actualizar' : 'Guardar' }} Informe del Día</button>
+    
+    <!-- Modal de Edición de Entrada -->
+    <div v-if="editandoEntrada" class="modal-overlay" @click.self="cancelarEdicionEntrada">
+      <div class="modal-content">
+        <h3>Editar Entrada</h3>
+        <div v-if="entradaEditIndex !== null" class="modal-info">
+          <p><strong>Proveedor:</strong> {{ entradas[entradaEditIndex].proveedor }}</p>
+          <p><strong>Medida:</strong> {{ entradas[entradaEditIndex].medida }}</p>
+        </div>
+        <div class="modal-form">
+          <label>
+            Kilos:
+            <input 
+              v-model.number="entradaEditData.kilos" 
+              type="number" 
+              inputmode="decimal" 
+              step="0.1" 
+              pattern="[0-9]*" 
+              placeholder="Kilos" 
+              required 
+            />
+          </label>
+          <label>
+            Precio (opcional):
+            <input 
+              v-model.number="entradaEditData.precio" 
+              type="number" 
+              inputmode="decimal" 
+              step="0.01" 
+              pattern="[0-9]*" 
+              placeholder="Precio" 
+            />
+          </label>
+        </div>
+        <div class="modal-actions">
+          <button @click="guardarEdicionEntrada" class="btn-guardar">Guardar</button>
+          <button @click="cancelarEdicionEntrada" class="btn-cancelar">Cancelar</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -173,7 +218,10 @@ export default {
       isEditing: false,
       sacadaId: null,
       isLoaded: false,
-      kilosDisponibles: null
+      kilosDisponibles: null,
+      editandoEntrada: false,
+      entradaEditIndex: null,
+      entradaEditData: { kilos: null, precio: null }
     };
   },
   computed: {
@@ -597,6 +645,42 @@ export default {
       });
 
       return Number(kilosDisponibles.toFixed(1));
+    },
+    editarEntrada(index) {
+      this.entradaEditIndex = index;
+      const entrada = this.entradas[index];
+      this.entradaEditData = {
+        kilos: entrada.kilos,
+        precio: entrada.precio
+      };
+      this.editandoEntrada = true;
+    },
+    cancelarEdicionEntrada() {
+      this.editandoEntrada = false;
+      this.entradaEditIndex = null;
+      this.entradaEditData = { kilos: null, precio: null };
+    },
+    async guardarEdicionEntrada() {
+      if (this.entradaEditIndex !== null && this.entradaEditData.kilos && this.entradaEditData.kilos > 0) {
+        const entrada = this.entradas[this.entradaEditIndex];
+        const proveedorEntrada = entrada.proveedor;
+        
+        // Actualizar la entrada
+        entrada.kilos = Number(this.entradaEditData.kilos.toFixed(1));
+        entrada.precio = this.entradaEditData.precio ? Number(this.entradaEditData.precio.toFixed(2)) : null;
+        
+        // Si el proveedor es el mismo que el de salida, actualizar medidas disponibles
+        if (this.newSalida.proveedor === proveedorEntrada) {
+          if (this.newSalida.tipo === 'proveedor') {
+            this.medidasConPrecio = await this.getMedidasConPrecio(proveedorEntrada);
+          } else if (this.newSalida.tipo === 'maquila') {
+            this.medidasMaquilaDisponibles = await this.getMedidasDisponiblesMaquila(proveedorEntrada);
+          }
+        }
+        
+        await this.updateKilosDisponibles();
+        this.cancelarEdicionEntrada();
+      }
     },
     async removeEntrada(index) {
       const entradaEliminada = this.entradas[index];
@@ -1071,6 +1155,27 @@ button:active {
   font-size: 14px;
 }
 
+.action-buttons {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+}
+
+.edit-btn {
+  background-color: transparent;
+  color: #ffa500;
+  border: none;
+  font-size: 1.1em;
+  cursor: pointer;
+  padding: 0 5px;
+  transition: color 0.3s, transform 0.2s;
+}
+
+.edit-btn:hover {
+  color: #ff8c00;
+  transform: scale(1.1);
+}
+
 .delete-btn {
   background-color: transparent;
   color: #ff4136;
@@ -1366,5 +1471,133 @@ button:disabled:hover {
   background-color: #fff3cd !important;
   color: #856404 !important;
   font-weight: bold !important;
+}
+
+/* Estilos para el modal de edición */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background-color: white;
+  padding: 30px;
+  border-radius: 15px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  max-width: 500px;
+  width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.modal-content h3 {
+  color: #3760b0;
+  margin-bottom: 20px;
+  border-bottom: 2px solid #3760b0;
+  padding-bottom: 10px;
+}
+
+.modal-info {
+  background-color: #f0f4ff;
+  padding: 15px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+}
+
+.modal-info p {
+  margin: 5px 0;
+  color: #3760b0;
+}
+
+.modal-form {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  margin-bottom: 20px;
+}
+
+.modal-form label {
+  display: flex;
+  flex-direction: column;
+  font-weight: bold;
+  color: #3760b0;
+  gap: 5px;
+}
+
+.modal-form input {
+  padding: 10px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 14px;
+  transition: border-color 0.3s;
+}
+
+.modal-form input:focus {
+  outline: none;
+  border-color: #3760b0;
+  box-shadow: 0 0 5px rgba(55, 96, 176, 0.3);
+}
+
+.modal-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.btn-guardar {
+  background-color: #28a745;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.3s, transform 0.1s;
+  font-size: 14px;
+  font-weight: bold;
+}
+
+.btn-guardar:hover {
+  background-color: #218838;
+}
+
+.btn-cancelar {
+  background-color: #dc3545;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.3s, transform 0.1s;
+  font-size: 14px;
+  font-weight: bold;
+}
+
+.btn-cancelar:hover {
+  background-color: #c82333;
+}
+
+/* Responsive para modal */
+@media (max-width: 600px) {
+  .modal-content {
+    padding: 20px;
+    width: 95%;
+  }
+
+  .modal-actions {
+    flex-direction: column;
+  }
+
+  .btn-guardar,
+  .btn-cancelar {
+    width: 100%;
+  }
 }
 </style>
