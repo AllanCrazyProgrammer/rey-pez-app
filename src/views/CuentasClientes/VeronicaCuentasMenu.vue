@@ -2,36 +2,93 @@
   <div class="veronica-cuentas-menu-container">
     <h1>Menú de Cuentas Veronica</h1>
     
-    <div class="actions-container actions-sticky">
-      <router-link to="/cuentas-mexico" class="action-button back-btn">
-        Cuentas México
+    <!-- Navegación Principal -->
+    <div class="nav-principal actions-sticky">
+      <router-link to="/cuentas-mexico" class="btn-nav btn-back">
+        <i class="fas fa-arrow-left"></i>
+        <span>Cuentas México</span>
       </router-link>
-      <router-link to="/cuentas-veronica/nueva" class="action-button new-cuenta-btn">
-        Nueva Cuenta
+      <router-link to="/cuentas-veronica/nueva" class="btn-nav btn-nueva-cuenta">
+        <i class="fas fa-plus-circle"></i>
+        <span>Nueva Cuenta</span>
       </router-link>
-      <router-link to="/ventas-ganancias-veronica" class="action-button ventas-ganancias-btn">
-        Ventas y Ganancias
-      </router-link>
-      <PreciosHistorialModal />
-      <StashModalV2 cliente="veronica" />
     </div>
 
-    <div class="reporte-cuentas-card card">
-      <h2>Generar reporte PDF</h2>
-      <ReporteCuentasVeronicaButton />
+    <!-- Sección de Reportes y Herramientas -->
+    <div class="herramientas-grid">
+      <div class="herramienta-card card">
+        <div class="card-icon ventas-icon">
+          <i class="fas fa-chart-line"></i>
+        </div>
+        <h3>Ventas y Ganancias</h3>
+        <p>Consulta el resumen completo de ventas y ganancias</p>
+        <router-link to="/ventas-ganancias-veronica" class="btn-herramienta btn-ventas">
+          Ver Reporte
+        </router-link>
+      </div>
+
+      <div class="herramienta-card card">
+        <div class="card-icon pdf-icon">
+          <i class="fas fa-file-pdf"></i>
+        </div>
+        <h3>Reporte PDF</h3>
+        <p>Genera un reporte en PDF de las cuentas</p>
+        <div class="btn-container-card">
+          <ReporteCuentasVeronicaButton />
+        </div>
+      </div>
+
+      <div class="herramienta-card card">
+        <div class="card-icon resumen-icon">
+          <i class="fas fa-chart-bar"></i>
+        </div>
+        <h3>Resumen por Producto</h3>
+        <p>Ventas de camarón limpio y crudo por medida</p>
+        <div class="btn-container-card">
+          <ResumenVentasVeronicaModal />
+        </div>
+      </div>
+
+      <div class="herramienta-card card">
+        <div class="card-icon precios-icon">
+          <i class="fas fa-dollar-sign"></i>
+        </div>
+        <h3>Precios de Venta</h3>
+        <p>Consulta el historial de precios</p>
+        <div class="btn-container-card">
+          <PreciosHistorialModal />
+        </div>
+      </div>
+
+      <div class="herramienta-card card">
+        <div class="card-icon stash-icon">
+          <i class="fas fa-box"></i>
+        </div>
+        <h3>Stash</h3>
+        <p>Gestiona el inventario y stock</p>
+        <div class="btn-container-card">
+          <StashModalV2 cliente="veronica" />
+        </div>
+      </div>
     </div>
 
-    <div class="filter-container">
-      <label for="filter-select">Filtrar por estado:</label>
-      <select id="filter-select" v-model="filtroEstado">
-        <option value="todas">Todas</option>
-        <option value="pagadas">Pagadas</option>
-        <option value="no-pagadas">No Pagadas</option>
-      </select>
-    </div>
+    <!-- Sección de Registros -->
+    <div class="registros-wrapper">
+      <div class="registros-section">
+        <div class="registros-header">
+          <h2><i class="fas fa-file-invoice"></i> Registros de Cuentas</h2>
+          <div class="filter-container">
+            <label for="filter-select">Filtrar:</label>
+            <select id="filter-select" v-model="filtroEstado">
+              <option value="todas">Todas</option>
+              <option value="pagadas">Pagadas</option>
+              <option value="no-pagadas">No Pagadas</option>
+            </select>
+          </div>
+        </div>
+      </div>
 
-    <div class="cuentas-list card">
-      <h2>Registros de Cuentas</h2>
+      <div class="cuentas-list card">
       <div v-if="isLoading" class="loading">Cargando registros...</div>
       <div v-else-if="cuentasFiltradas.length === 0" class="no-records">
         No hay registros de cuentas que coincidan con el filtro.
@@ -65,6 +122,7 @@
           </div>
         </li>
       </ul>
+      </div>
     </div>
 
     <template v-if="showSaveMessage && lastSaveMessage">
@@ -82,6 +140,7 @@ import BackButton from '@/components/BackButton.vue';
 import PreciosHistorialModal from '@/components/PreciosHistorialModal.vue';
 import StashModalV2 from '@/components/StashModalV2.vue';
 import ReporteCuentasVeronicaButton from '@/components/Cuentas/ReporteCuentasVeronicaButton.vue';
+import ResumenVentasVeronicaModal from '@/components/Cuentas/ResumenVentasVeronicaModal.vue';
 
 export default {
   name: 'VeronicaCuentasMenu',
@@ -89,7 +148,8 @@ export default {
     BackButton,
     PreciosHistorialModal,
     StashModalV2,
-    ReporteCuentasVeronicaButton
+    ReporteCuentasVeronicaButton,
+    ResumenVentasVeronicaModal
   },
   data() {
     return {
@@ -190,9 +250,16 @@ export default {
 
           // Realizar todas las actualizaciones en paralelo
           if (actualizaciones.length > 0) {
-            await Promise.all(actualizaciones.map(({ id, updates }) => 
-              updateDoc(doc(db, 'cuentasVeronica', id), updates)
-            ));
+            await Promise.allSettled(actualizaciones.map(async ({ id, updates }) => {
+              try {
+                await updateDoc(doc(db, 'cuentasVeronica', id), updates);
+              } catch (error) {
+                // Ignorar silenciosamente los errores de documentos que no existen
+                if (error.code !== 'not-found') {
+                  console.warn('Error al actualizar documento:', id, error);
+                }
+              }
+            }));
           }
 
           // Actualizar el estado local con las cuentas ordenadas por fecha descendente
@@ -290,7 +357,7 @@ export default {
 
 <style scoped>
 .veronica-cuentas-menu-container {
-  max-width: 800px;
+  max-width: 1400px;
   width: 95%;
   margin: 0 auto;
   padding: 20px;
@@ -299,15 +366,24 @@ export default {
   flex-direction: column;
 }
 
-h1, h2 {
+h1 {
+  color: #ff8c00;
+  text-align: center;
+  margin-bottom: 25px;
+  font-size: 2em;
+}
+
+h2 {
   color: #ff8c00;
   text-align: center;
 }
 
-.actions-container {
+/* Navegación Principal */
+.nav-principal {
   display: flex;
-  justify-content: space-between;
-  margin-bottom: 20px;
+  gap: 15px;
+  margin-bottom: 30px;
+  flex-wrap: wrap;
 }
 
 .actions-sticky {
@@ -316,32 +392,145 @@ h1, h2 {
   z-index: 10;
   background: linear-gradient(180deg, rgba(255,255,255,1) 70%, rgba(255,255,255,0));
   padding-top: 8px;
-  padding-bottom: 8px;
+  padding-bottom: 15px;
 }
 
-.action-button {
-  background-color: #ff8c00;
-  color: white;
-  border: none;
-  padding: 10px 20px;
-  border-radius: 4px;
-  cursor: pointer;
+.btn-nav {
+  flex: 1;
+  min-width: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 15px 25px;
+  border-radius: 10px;
   text-decoration: none;
-  display: inline-block;
   font-size: 16px;
-  transition: background-color 0.3s ease;
+  font-weight: 600;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
 }
 
-.action-button:hover {
-  background-color: #e07600;
+.btn-nav i {
+  font-size: 20px;
 }
 
-.back-btn {
-  background-color: #6c757d;
+.btn-back {
+  background: linear-gradient(135deg, #6c757d, #5a6268);
+  color: white;
 }
 
-.back-btn:hover {
-  background-color: #5a6268;
+.btn-back:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(108, 117, 125, 0.3);
+}
+
+.btn-nueva-cuenta {
+  background: linear-gradient(135deg, #ff8c00, #ff6f00);
+  color: white;
+}
+
+.btn-nueva-cuenta:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(255, 140, 0, 0.3);
+}
+
+/* Grid de Herramientas */
+.herramientas-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 15px;
+  margin-bottom: 30px;
+}
+
+.herramienta-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 20px 15px;
+  transition: all 0.3s ease;
+  border: 2px solid transparent;
+}
+
+.herramienta-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+  border-color: #ff8c00;
+}
+
+.card-icon {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 12px;
+  font-size: 28px;
+  color: white;
+}
+
+.ventas-icon {
+  background: linear-gradient(135deg, #4CAF50, #45a049);
+}
+
+.pdf-icon {
+  background: linear-gradient(135deg, #f44336, #d32f2f);
+}
+
+.resumen-icon {
+  background: linear-gradient(135deg, #2196F3, #1976D2);
+}
+
+.precios-icon {
+  background: linear-gradient(135deg, #4CAF50, #2e7d32);
+}
+
+.stash-icon {
+  background: linear-gradient(135deg, #9c27b0, #7b1fa2);
+}
+
+.herramienta-card h3 {
+  color: #333;
+  font-size: 1em;
+  margin: 0 0 8px 0;
+  font-weight: 600;
+}
+
+.herramienta-card p {
+  color: #666;
+  font-size: 0.8em;
+  margin: 0 0 15px 0;
+  line-height: 1.4;
+}
+
+.btn-herramienta {
+  width: 100%;
+  padding: 10px 15px;
+  border-radius: 8px;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 0.9em;
+  transition: all 0.3s ease;
+  border: none;
+  cursor: pointer;
+}
+
+.btn-ventas {
+  background: linear-gradient(135deg, #4CAF50, #45a049);
+  color: white;
+}
+
+.btn-ventas:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
+}
+
+.btn-container-card {
+  width: 100%;
+  display: flex;
+  justify-content: center;
 }
 
 .card {
@@ -351,15 +540,6 @@ h1, h2 {
   padding: 16px;
 }
 
-.reporte-cuentas-card {
-  margin-bottom: 20px;
-}
-
-.reporte-cuentas-card h2 {
-  margin: 0 0 8px;
-  font-size: 1.2em;
-  color: #ff8c00;
-}
 
 .cuentas-list {
   background-color: #fff8f0;
@@ -454,14 +634,64 @@ h1, h2 {
     width: 100%;
   }
 
-  .actions-container {
-    flex-direction: column;
-    gap: 10px;
+  h1 {
+    font-size: 1.5em;
   }
 
-  .action-button {
+  .nav-principal {
+    flex-direction: column;
+  }
+
+  .btn-nav {
     width: 100%;
-    text-align: center;
+    min-width: auto;
+  }
+
+  .herramientas-grid {
+    grid-template-columns: 1fr;
+    gap: 15px;
+  }
+
+  .herramienta-card {
+    padding: 20px 15px;
+  }
+
+  .card-icon {
+    width: 60px;
+    height: 60px;
+    font-size: 28px;
+  }
+
+  .herramienta-card h3 {
+    font-size: 1.1em;
+  }
+
+  .herramienta-card p {
+    font-size: 0.85em;
+  }
+
+  .registros-wrapper {
+    max-width: 100%;
+    padding: 0 5px;
+  }
+
+  .registros-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .registros-header h2 {
+    font-size: 1.3em;
+  }
+
+  .filter-container {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .filter-container select {
+    flex: 1;
+    min-width: 0;
   }
 
   .cuenta-item {
@@ -493,15 +723,93 @@ h1, h2 {
   }
 }
 
-.filter-container {
+@media (min-width: 769px) and (max-width: 1024px) {
+  .herramientas-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (min-width: 1025px) and (max-width: 1300px) {
+  .herramientas-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+@media (min-width: 1301px) {
+  .herramientas-grid {
+    grid-template-columns: repeat(5, 1fr);
+  }
+}
+
+/* Sección de Registros */
+.registros-wrapper {
+  max-width: 900px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.registros-section {
   margin-bottom: 20px;
-  text-align: right;
+}
+
+.registros-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+  flex-wrap: wrap;
+  gap: 15px;
+}
+
+.registros-header h2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  font-size: 1.5em;
+}
+
+.registros-header h2 i {
+  color: #ff8c00;
+}
+
+.filter-container {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.filter-container label {
+  font-weight: 600;
+  color: #666;
+  font-size: 14px;
 }
 
 .filter-container select {
-  padding: 5px;
-  border-radius: 4px;
-  border: 1px solid #ccc;
+  padding: 8px 35px 8px 12px;
+  border-radius: 8px;
+  border: 2px solid #ff8c00;
+  background-color: white;
+  font-size: 14px;
+  font-weight: 500;
+  color: #333;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23ff8c00' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+}
+
+.filter-container select:hover {
+  border-color: #e07600;
+  box-shadow: 0 2px 8px rgba(255, 140, 0, 0.2);
+}
+
+.filter-container select:focus {
+  outline: none;
+  border-color: #e07600;
+  box-shadow: 0 0 0 3px rgba(255, 140, 0, 0.1);
 }
 
 .estado-cuenta {
