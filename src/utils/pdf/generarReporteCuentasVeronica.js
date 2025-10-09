@@ -206,35 +206,58 @@ export const generarReporteCuentasVeronica = async ({ fechaInicio, fechaFin, reg
       margin: [0, 14, 0, 10]
     });
 
-    abonosAgrupados.forEach((abonoAgrupado) => {
-      // Título con la descripción del abono
-      docDefinition.content.push({
-        text: abonoAgrupado.descripcion,
-        bold: true,
-        fontSize: 15,
-        color: '#d35400',
-        margin: [0, 8, 0, 4]
-      });
+    // Dividir los abonos en dos columnas
+    const mitad = Math.ceil(abonosAgrupados.length / 2);
+    const columnIzquierda = abonosAgrupados.slice(0, mitad);
+    const columnDerecha = abonosAgrupados.slice(mitad);
 
-      // Mostrar las fechas donde se aplicó este abono
+    // Función para generar el contenido de cada abono
+    const generarContenidoAbono = (abonoAgrupado) => {
       const fechasTexto = abonoAgrupado.fechasAplicadas.map(
         (item) => `  • ${formatearFecha(item.fecha)}: ${formatCurrency(item.monto)}`
-      );
+      ).join('\n');
 
-      docDefinition.content.push({
-        text: fechasTexto.join('\n'),
-        margin: [0, 0, 0, 4],
-        fontSize: 13
-      });
+      return {
+        stack: [
+          {
+            text: abonoAgrupado.descripcion,
+            bold: true,
+            fontSize: 14,
+            color: '#d35400',
+            margin: [0, 0, 0, 4]
+          },
+          {
+            text: fechasTexto,
+            margin: [0, 0, 0, 4],
+            fontSize: 12
+          },
+          {
+            text: `Total efectuado: ${formatCurrency(abonoAgrupado.montoTotal)}`,
+            bold: true,
+            color: '#d35400',
+            margin: [0, 0, 0, 12],
+            fontSize: 13
+          }
+        ]
+      };
+    };
 
-      // Agregar el total de este abono
-      docDefinition.content.push({
-        text: `Total efectuado: ${formatCurrency(abonoAgrupado.montoTotal)}`,
-        bold: true,
-        color: '#d35400',
-        margin: [0, 4, 0, 12],
-        fontSize: 14
-      });
+    // Crear estructura de dos columnas
+    docDefinition.content.push({
+      columns: [
+        {
+          width: '48%',
+          stack: columnIzquierda.map(generarContenidoAbono)
+        },
+        {
+          width: '4%',
+          text: ''
+        },
+        {
+          width: '48%',
+          stack: columnDerecha.map(generarContenidoAbono)
+        }
+      ]
     });
   }
 
