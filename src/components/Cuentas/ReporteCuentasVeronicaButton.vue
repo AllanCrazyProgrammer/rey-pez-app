@@ -1,14 +1,14 @@
 <template>
   <div class="reporte-cuentas-veronica">
-    <div class="inputs-fechas-container">
-      <div class="fecha-input-group">
-        <label>Desde</label>
+    <div class="inputs-fechas">
+      <label>
+        Desde
         <input type="date" v-model="fechaInicio" />
-      </div>
-      <div class="fecha-input-group">
-        <label>Hasta</label>
+      </label>
+      <label>
+        Hasta
         <input type="date" v-model="fechaFin" />
-      </div>
+      </label>
     </div>
     <button
       class="btn-generar"
@@ -119,94 +119,60 @@ export default {
 .reporte-cuentas-veronica {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  align-items: stretch;
-  width: 100%;
+  gap: 8px;
+  align-items: flex-start;
 }
 
-.inputs-fechas-container {
+.inputs-fechas {
   display: flex;
-  gap: 15px;
-  align-items: flex-end;
-  flex-wrap: nowrap;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
-.fecha-input-group {
+.inputs-fechas label {
   display: flex;
   flex-direction: column;
-  gap: 5px;
-  flex: 0 0 130px;
-  max-width: 100px;
-}
-
-.fecha-input-group label {
   font-size: 14px;
-  font-weight: 600;
   color: #555;
 }
 
-.fecha-input-group input[type="date"] {
-  padding: 8px 10px;
-  border: 2px solid #ddd;
-  border-radius: 6px;
-  font-size: 11px;
-  transition: border-color 0.3s ease;
-  width: 100%;
-}
-
-.fecha-input-group input[type="date"]:focus {
-  outline: none;
-  border-color: #ff8c00;
+.inputs-fechas input[type="date"] {
+  margin-top: 4px;
+  padding: 6px 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 14px;
 }
 
 .btn-generar {
   background-color: #ff8c00;
   color: #fff;
   border: none;
-  padding: 10px 20px;
-  border-radius: 6px;
-  font-size: 15px;
-  font-weight: 600;
+  padding: 8px 16px;
+  border-radius: 4px;
+  font-size: 14px;
   cursor: pointer;
-  transition: all 0.3s ease;
-  align-self: flex-start;
+  transition: background-color 0.2s ease;
 }
 
 .btn-generar:disabled {
   background-color: #f3b774;
   cursor: not-allowed;
-  opacity: 0.7;
 }
 
 .btn-generar:not(:disabled):hover {
   background-color: #e07900;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(255, 140, 0, 0.3);
 }
 
 .mensaje-error {
   color: #e74c3c;
   font-size: 13px;
-  margin-top: 0;
-  padding: 8px;
-  background-color: #ffe5e5;
-  border-radius: 4px;
+  margin-top: 4px;
 }
 
 .detalle-registros {
   font-size: 13px;
-  color: #4CAF50;
-  font-weight: 500;
-  margin-top: 0;
-}
-
-@media (max-width: 600px) {
-  .inputs-fechas-container {
-    flex-wrap: wrap;
-  }
-  
-  .fecha-input-group {
-    flex: 1 1 100%;
-  }
+  color: #444;
+  margin-top: 2px;
 }
 </style>

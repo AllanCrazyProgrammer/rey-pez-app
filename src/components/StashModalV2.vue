@@ -1,420 +1,415 @@
 <template>
-  <div>
-    <button type="button" @click="abrirModal" class="stash-button">
+  <span>
+    <button v-if="renderTrigger" type="button" @click="abrirModal" class="stash-button">
       Stash
     </button>
 
-    <!-- Modal Principal -->
-    <Teleport to="body">
-      <div v-if="showModal" class="modal">
-        <div class="modal-content">
-        <h3>Sistema de Abonos - {{ clienteNombre }}</h3>
-        
-        <!-- Resumen del Estado Actual -->
-        <div class="estado-actual">
-          <h4>Estado Actual</h4>
-          <div class="estado-cards">
-            <div class="card-estado">
-              <span class="label">Saldo Actual</span>
-              <span class="value" :class="{ negativo: saldoActual > 0, positivo: saldoActual <= 0 }">
-                ${{ formatNumber(saldoActual) }}
-              </span>
-            </div>
-            <div class="card-estado">
-              <span class="label">Total en Stash</span>
-              <span class="value verde">${{ formatNumber(totalStash) }}</span>
-            </div>
-            <div class="card-estado">
-              <span class="label">Estado</span>
-              <span class="value" :class="{ pagado: saldoActual <= 0, pendiente: saldoActual > 0 }">
-                {{ saldoActual <= 0 ? 'PAGADO' : 'PENDIENTE' }}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Formulario para Agregar al Stash -->
-        <div class="seccion-agregar">
-          <h4>Agregar Nuevo Abono al Stash</h4>
-          <div class="form-row">
-            <input 
-              type="date" 
-              v-model="nuevoAbono.fecha" 
-              class="input-field"
-            >
-            <input 
-              type="text" 
-              v-model="nuevoAbono.descripcion" 
-              placeholder="Descripción (ej: SPEI, Efectivo, etc.)"
-              class="input-field"
-            >
-            <input 
-              type="number" 
-              v-model.number="nuevoAbono.monto" 
-              placeholder="Monto"
-              class="input-field"
-              step="0.01"
-            >
-            <button @click="agregarAlStash" class="btn-primary">
-              Agregar
-            </button>
-          </div>
-        </div>
-
-        <!-- Lista del Stash -->
-        <div class="seccion-stash">
-          <h4>Abonos en Stash ({{ stashItems.length }})</h4>
+    <!-- Modal Principal a nivel de página -->
+    <div v-if="showModal" class="modal-overlay" @click.self="cerrarModal">
+        <div class="modal-content" @click.stop>
+          <h3>Sistema de Abonos - {{ clienteNombre }}</h3>
           
-          <!-- Información de distribución en cascada -->
-          <div v-if="stashItems.length > 0 && distribucionAbonos.distribucion.length > 0" class="distribucion-cascada-info">
-            <div class="info-header">
-              <span class="icono">💧</span>
-              <span class="texto">Distribución en Cascada (${{ formatNumber(totalStash) }}):</span>
-            </div>
-            
-            <div class="distribucion-lista">
-              <div v-for="(item, index) in distribucionAbonos.distribucion" :key="index" class="distribucion-item">
-                <div class="distribucion-cuenta">
-                  <span class="fecha">{{ item.cuenta.fechaFormateada }}</span>
-                  <span class="monto">${{ formatNumber(item.montoAAplicar) }}</span>
-                </div>
-                <div class="distribucion-detalle">
-                  Saldo: ${{ formatNumber(item.saldoAntes) }} → ${{ formatNumber(item.saldoDespues) }}
-                </div>
+          <!-- Resumen del Estado Actual -->
+          <div class="estado-actual">
+            <h4>Estado Actual</h4>
+            <div class="estado-cards">
+              <div class="card-estado">
+                <span class="label">Saldo Actual</span>
+                <span class="value" :class="{ negativo: saldoActual > 0, positivo: saldoActual <= 0 }">
+                  ${{ formatNumber(saldoActual) }}
+                </span>
               </div>
-            </div>
-            
-            <div v-if="distribucionAbonos.sobrante > 0" class="sobrante-info">
-              ⚠️ Sobrante sin aplicar: ${{ formatNumber(distribucionAbonos.sobrante) }}
-            </div>
-          </div>
-          
-          <div v-if="stashItems.length === 0" class="empty-state">
-            No hay abonos en el stash
-          </div>
-          <div v-else class="stash-list">
-            <div v-for="item in stashItems" :key="item.id" class="stash-item">
-              <div class="item-info">
-                <span class="fecha">{{ formatearFecha(item.fecha) }}</span>
-                <span class="descripcion">{{ item.descripcion }}</span>
-                <span class="monto">${{ formatNumber(item.monto) }}</span>
+              <div class="card-estado">
+                <span class="label">Total en Stash</span>
+                <span class="value verde">${{ formatNumber(totalStash) }}</span>
               </div>
-              <div class="item-actions">
-                <div class="fecha-aplicacion">
-                  <label class="fecha-label">Aplicar a:</label>
-                  <select 
-                    v-model="fechasAplicacion[item.id]" 
-                    class="select-fecha"
-                    @change="onFechaAplicacionChange(item.id)"
-                  >
-                    <option value="">Seleccionar fecha...</option>
-                    <option 
-                      v-for="cuenta in cuentasDisponibles" 
-                      :key="cuenta.id" 
-                      :value="cuenta.id"
-                    >
-                      {{ cuenta.fechaFormateada }} - ${{ formatNumber(cuenta.totalGeneralVenta) }}
-                    </option>
-                  </select>
-                </div>
-                <button @click="eliminarDelStash(item.id)" class="btn-danger-small">
-                  ✕
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Vista Previa de Aplicación -->
-        <div v-if="stashItems.length > 0 && saldoActual > 0" class="seccion-preview">
-          <h4>Vista Previa de Aplicación</h4>
-          <div class="preview-info">
-            <p>Aplicaciones programadas:</p>
-            <div class="aplicaciones-preview">
-              <div v-for="item in stashItems" :key="item.id" class="aplicacion-item">
-                <div class="aplicacion-info">
-                  <span class="aplicacion-descripcion">{{ item.descripcion }}</span>
-                  <span class="aplicacion-monto">${{ formatNumber(item.monto) }}</span>
-                </div>
-                <div class="aplicacion-fecha">
-                  <span v-if="fechasAplicacion[item.id] && fechasAplicacion[item.id] !== ''" class="fecha-seleccionada">
-                    → {{ obtenerFechaCuenta(fechasAplicacion[item.id]) }}
-                  </span>
-                  <span v-else class="fecha-pendiente">
-                    ⚠️ Sin fecha seleccionada
-                  </span>
-                </div>
-              </div>
-            </div>
-            <div class="preview-calc">
-              <div class="calc-row">
-                <span>Saldo Actual:</span>
-                <span>${{ formatNumber(saldoActual) }}</span>
-              </div>
-              <div class="calc-row">
-                <span>Total Abonos:</span>
-                <span class="verde">-${{ formatNumber(totalStash) }}</span>
-              </div>
-              <div class="calc-row resultado">
-                <span>Resultado:</span>
-                <span :class="{ positivo: saldoResultante <= 0, negativo: saldoResultante > 0 }">
-                  ${{ formatNumber(saldoResultante) }}
+              <div class="card-estado">
+                <span class="label">Estado</span>
+                <span class="value" :class="{ pagado: saldoActual <= 0, pendiente: saldoActual > 0 }">
+                  {{ saldoActual <= 0 ? 'PAGADO' : 'PENDIENTE' }}
                 </span>
               </div>
             </div>
-            <div v-if="saldoResultante < 0" class="warning-box">
-              ⚠️ Habrá un sobrante de ${{ formatNumber(Math.abs(saldoResultante)) }}
-            </div>
-          </div>
-        </div>
-
-        <!-- Botones de Acción -->
-        <div class="modal-actions">
-          <button 
-            v-if="stashItems.length > 0 && saldoActual > 0" 
-            @click="validarYMostrarConfirmacion" 
-            class="btn-aplicar"
-            :disabled="isAplicando || !todasFechasSeleccionadas"
-          >
-            {{ isAplicando ? 'Aplicando...' : 'Aplicar Abonos al Saldo' }}
-          </button>
-          
-          <!-- Botón para aplicar en cascada -->
-          <button 
-            v-if="stashItems.length > 0 && distribucionAbonos.distribucion.length > 0" 
-            @click="aplicarACuentaMasAntigua" 
-            class="btn-auto-aplicar"
-            :disabled="isAplicando"
-            :title="`Aplicar $${formatNumber(totalStash)} en cascada a ${distribucionAbonos.distribucion.length} cuenta(s)`"
-          >
-            {{ isAplicando ? 'Aplicando...' : '💧 Aplicar en Cascada' }}
-            <span v-if="distribucionAbonos.distribucion.length > 1" class="cascada-count">
-              ({{ distribucionAbonos.distribucion.length }} cuentas)
-            </span>
-          </button>
-          
-          <button @click="verHistorial = true" class="btn-secondary">
-            Historial de Abonos
-          </button>
-          <button @click="cerrarModal" class="btn-secondary">
-            Cerrar
-          </button>
-        </div>
-      </div>
-    </Teleport>
-
-    <!-- Modal de Confirmación -->
-    <Teleport to="body">
-      <div v-if="mostrarConfirmacion" class="modal">
-        <div class="modal-content confirmacion">
-          <h3>⚠️ Confirmación de Aplicación</h3>
-          
-          <div class="confirmacion-detalle">
-            <p><strong>Está a punto de aplicar los siguientes abonos:</strong></p>
-            
-            <div class="lista-confirmacion">
-              <div v-for="item in stashItems" :key="item.id" class="item-confirmacion">
-                <div class="confirmacion-item-info">
-                  <span>{{ formatearFecha(item.fecha) }} - {{ item.descripcion }}</span>
-                  <span class="confirmacion-fecha-aplicacion">
-                    → Aplicar a: {{ obtenerFechaCuenta(fechasAplicacion[item.id]) }}
-                  </span>
-                </div>
-                <span>${{ formatNumber(item.monto) }}</span>
-              </div>
-            </div>
-            
-            <div class="resumen-confirmacion">
-              <p><strong>Resumen:</strong></p>
-              <ul>
-                <li>Se aplicará un total de: <strong>${{ formatNumber(totalStash) }}</strong></li>
-                <li>A {{ Object.keys(fechasAplicacion).length }} {{ Object.keys(fechasAplicacion).length === 1 ? 'cuenta' : 'cuentas' }} diferentes</li>
-                <li>Resultado estimado del saldo: <strong :class="{ positivo: saldoResultante <= 0 }">${{ formatNumber(saldoResultante) }}</strong></li>
-              </ul>
-            </div>
           </div>
 
-          <div class="confirmacion-actions">
-            <button @click="aplicarAbonosIndividuales" class="btn-danger">
-              Confirmar y Aplicar
-            </button>
-            <button @click="mostrarConfirmacion = false" class="btn-secondary">
-              Cancelar
-            </button>
-          </div>
-        </div>
-      </div>
-    </Teleport>
-
-    <!-- Modal de Historial -->
-    <Teleport to="body">
-      <div v-if="verHistorial" class="modal">
-        <div class="modal-content">
-        <div class="modal-header">
-          <h3>Historial de Abonos</h3>
-          <button @click="verHistorial = false" class="btn-close-modal" title="Cerrar">
-            ✕
-          </button>
-        </div>
-        
-        <div v-if="todosLosAbonos.length === 0" class="empty-state">
-          No hay abonos registrados
-        </div>
-        
-        <div v-else>
-          <div class="historial-info">
-            <p>Mostrando {{ ((paginaActual - 1) * 7) + 1 }}-{{ Math.min(paginaActual * 7, historialPorFecha.length) }} de {{ historialPorFecha.length }} registros</p>
-          </div>
-          
-          <div class="historial-grupos">
-            <div
-              v-for="grupo in historialPaginado"
-              :key="grupo.id"
-              class="historial-grupo"
-              :class="{ 'grupo-expandido': esGrupoExpandido(grupo.id) }"
-            >
-            <div class="grupo-header" @click="toggleGrupoHistorial(grupo.id)">
-              <div class="grupo-fecha">
-                <span class="grupo-fecha-texto">{{ grupo.fechaLabel }}</span>
-                <span class="grupo-meta">{{ grupo.abonos.length }} {{ grupo.abonos.length === 1 ? 'abono' : 'abonos' }}</span>
-              </div>
-              <div class="grupo-total">${{ formatNumber(grupo.totalMonto) }}</div>
-              <button class="grupo-toggle" type="button" :aria-expanded="esGrupoExpandido(grupo.id)">
-                <i :class="['fas', esGrupoExpandido(grupo.id) ? 'fa-chevron-up' : 'fa-chevron-down']"></i>
+          <!-- Formulario para Agregar al Stash -->
+          <div class="seccion-agregar">
+            <h4>Agregar Nuevo Abono al Stash</h4>
+            <div class="form-row">
+              <input 
+                type="date" 
+                v-model="nuevoAbono.fecha" 
+                class="input-field"
+              >
+              <input 
+                type="text" 
+                v-model="nuevoAbono.descripcion" 
+                placeholder="Descripción (ej: SPEI, Efectivo, etc.)"
+                class="input-field"
+              >
+              <input 
+                type="number" 
+                v-model.number="nuevoAbono.monto" 
+                placeholder="Monto"
+                class="input-field"
+                step="0.01"
+              >
+              <button @click="agregarAlStash" class="btn-primary">
+                Agregar
               </button>
             </div>
-            <transition name="fade">
-              <div v-if="esGrupoExpandido(grupo.id)" class="grupo-detalle">
-                <div v-if="grupo.cuentas.length" class="grupo-resumen">
-                  <div
-                    v-for="cuenta in grupo.cuentas"
-                    :key="cuenta.id"
-                    class="grupo-resumen-item"
-                  >
-                    <div class="resumen-cuenta-info">
-                      <span class="resumen-cuenta-fecha">{{ cuenta.fechaCuentaFormateada }}</span>
-                      <span class="resumen-cuenta-saldo" v-if="cuenta.saldoAntes !== null">
-                        Saldo antes: ${{ formatNumber(cuenta.saldoAntes) }}
-                      </span>
-                      <span class="resumen-cuenta-saldo" v-if="cuenta.saldoDespues !== null">
-                        Saldo después: ${{ formatNumber(cuenta.saldoDespues) }}
-                      </span>
-                    </div>
-                    <div class="resumen-cuenta-monto">
-                      ${{ formatNumber(cuenta.total) }}
-                    </div>
+          </div>
+
+          <!-- Lista del Stash -->
+          <div class="seccion-stash">
+            <h4>Abonos en Stash ({{ stashItems.length }})</h4>
+            
+            <!-- Información de distribución en cascada -->
+            <div v-if="stashItems.length > 0 && distribucionAbonos.distribucion.length > 0" class="distribucion-cascada-info">
+              <div class="info-header">
+                <span class="icono">💧</span>
+                <span class="texto">Distribución en Cascada (${{ formatNumber(totalStash) }}):</span>
+              </div>
+              
+              <div class="distribucion-lista">
+                <div v-for="(item, index) in distribucionAbonos.distribucion" :key="index" class="distribucion-item">
+                  <div class="distribucion-cuenta">
+                    <span class="fecha">{{ item.cuenta.fechaFormateada }}</span>
+                    <span class="monto">${{ formatNumber(item.montoAAplicar) }}</span>
                   </div>
-                </div>
-                <div class="grupo-abonos">
-                  <div
-                    v-for="abono in grupo.abonos"
-                    :key="abono.uniqueId"
-                    class="abono-item"
-                  >
-                    <div class="abono-main">
-                      <div class="abono-left">
-                        <div class="abono-fecha">
-                          <span class="fecha-cuenta">{{ abono.fechaCuentaFormateada }}</span>
-                          <div class="historial-fecha-aplicacion">
-                            <template v-if="abono.editandoFecha">
-                              <label class="editar-fecha-label">
-                                Fecha de registro
-                                <input
-                                  type="datetime-local"
-                                  v-model="abono.fechaEditable"
-                                  class="input-fecha-registro"
-                                >
-                              </label>
-                              <div class="acciones-edicion-fecha">
-                                <button
-                                  class="btn-guardar-fecha"
-                                  :disabled="abono.guardandoFecha || !abono.fechaEditable"
-                                  @click.stop="guardarFechaHistorial(abono)"
-                                >
-                                  {{ abono.guardandoFecha ? 'Guardando...' : 'Guardar' }}
-                                </button>
-                                <button
-                                  class="btn-cancelar-fecha"
-                                  :disabled="abono.guardandoFecha"
-                                  @click.stop="cancelarEdicionFechaHistorial(abono)"
-                                >
-                                  Cancelar
-                                </button>
-                              </div>
-                            </template>
-                            <template v-else>
-                              <span>{{ formatearFechaHora(abono.fechaAplicacion) }}</span>
-                              <button
-                                class="btn-editar-fecha"
-                                title="Editar fecha de registro"
-                                @click.stop="iniciarEdicionFechaHistorial(abono)"
-                              >
-                                Editar
-                              </button>
-                            </template>
-                          </div>
-                        </div>
-                        <div class="abono-descripcion">{{ abono.descripcion }}</div>
-                        <div v-if="abono.origenDescripcion" class="abono-origen">{{ abono.origenDescripcion }}</div>
-                      </div>
-                      <div class="abono-right">
-                        <div class="abono-monto">${{ formatNumber(abono.monto) }}</div>
-                        <button 
-                          @click.stop="eliminarAbonoIndividual(abono)" 
-                          class="btn-eliminar-abono"
-                          title="Eliminar abono"
-                        >
-                          🗑️
-                        </button>
-                      </div>
-                    </div>
+                  <div class="distribucion-detalle">
+                    Saldo: ${{ formatNumber(item.saldoAntes) }} → ${{ formatNumber(item.saldoDespues) }}
                   </div>
                 </div>
               </div>
-            </transition>
+              
+              <div v-if="distribucionAbonos.sobrante > 0" class="sobrante-info">
+                ⚠️ Sobrante sin aplicar: ${{ formatNumber(distribucionAbonos.sobrante) }}
+              </div>
+            </div>
+            
+            <div v-if="stashItems.length === 0" class="empty-state">
+              No hay abonos en el stash
+            </div>
+            <div v-else class="stash-list">
+              <div v-for="item in stashItems" :key="item.id" class="stash-item">
+                <div class="item-info">
+                  <span class="fecha">{{ formatearFecha(item.fecha) }}</span>
+                  <span class="descripcion">{{ item.descripcion }}</span>
+                  <span class="monto">${{ formatNumber(item.monto) }}</span>
+                </div>
+                <div class="item-actions">
+                  <div class="fecha-aplicacion">
+                    <label class="fecha-label">Aplicar a:</label>
+                    <select 
+                      v-model="fechasAplicacion[item.id]" 
+                      class="select-fecha"
+                      @change="onFechaAplicacionChange(item.id)"
+                    >
+                      <option value="">Seleccionar fecha...</option>
+                      <option 
+                        v-for="cuenta in cuentasDisponibles" 
+                        :key="cuenta.id" 
+                        :value="cuenta.id"
+                      >
+                        {{ cuenta.fechaFormateada }} - ${{ formatNumber(cuenta.totalGeneralVenta) }}
+                      </option>
+                    </select>
+                  </div>
+                  <button @click="eliminarDelStash(item.id)" class="btn-danger-small">
+                    ✕
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Vista Previa de Aplicación -->
+          <div v-if="stashItems.length > 0 && saldoActual > 0" class="seccion-preview">
+            <h4>Vista Previa de Aplicación</h4>
+            <div class="preview-info">
+              <p>Aplicaciones programadas:</p>
+              <div class="aplicaciones-preview">
+                <div v-for="item in stashItems" :key="item.id" class="aplicacion-item">
+                  <div class="aplicacion-info">
+                    <span class="aplicacion-descripcion">{{ item.descripcion }}</span>
+                    <span class="aplicacion-monto">${{ formatNumber(item.monto) }}</span>
+                  </div>
+                  <div class="aplicacion-fecha">
+                    <span v-if="fechasAplicacion[item.id] && fechasAplicacion[item.id] !== ''" class="fecha-seleccionada">
+                      → {{ obtenerFechaCuenta(fechasAplicacion[item.id]) }}
+                    </span>
+                    <span v-else class="fecha-pendiente">
+                      ⚠️ Sin fecha seleccionada
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <div class="preview-calc">
+                <div class="calc-row">
+                  <span>Saldo Actual:</span>
+                  <span>${{ formatNumber(saldoActual) }}</span>
+                </div>
+                <div class="calc-row">
+                  <span>Total Abonos:</span>
+                  <span class="verde">-${{ formatNumber(totalStash) }}</span>
+                </div>
+                <div class="calc-row resultado">
+                  <span>Resultado:</span>
+                  <span :class="{ positivo: saldoResultante <= 0, negativo: saldoResultante > 0 }">
+                    ${{ formatNumber(saldoResultante) }}
+                  </span>
+                </div>
+              </div>
+              <div v-if="saldoResultante < 0" class="warning-box">
+                ⚠️ Habrá un sobrante de ${{ formatNumber(Math.abs(saldoResultante)) }}
+              </div>
+            </div>
+          </div>
+
+          <!-- Botones de Acción -->
+          <div class="modal-actions">
+            <button 
+              v-if="stashItems.length > 0 && saldoActual > 0" 
+              @click="validarYMostrarConfirmacion" 
+              class="btn-aplicar"
+              :disabled="isAplicando || !todasFechasSeleccionadas"
+            >
+              {{ isAplicando ? 'Aplicando...' : 'Aplicar Abonos al Saldo' }}
+            </button>
+            
+            <!-- Botón para aplicar en cascada -->
+            <button 
+              v-if="stashItems.length > 0 && distribucionAbonos.distribucion.length > 0" 
+              @click="aplicarACuentaMasAntigua" 
+              class="btn-auto-aplicar"
+              :disabled="isAplicando"
+              :title="`Aplicar $${formatNumber(totalStash)} en cascada a ${distribucionAbonos.distribucion.length} cuenta(s)`"
+            >
+              {{ isAplicando ? 'Aplicando...' : '💧 Aplicar en Cascada' }}
+              <span v-if="distribucionAbonos.distribucion.length > 1" class="cascada-count">
+                ({{ distribucionAbonos.distribucion.length }} cuentas)
+              </span>
+            </button>
+            
+            <button @click="verHistorial = true" class="btn-secondary">
+              Historial de Abonos
+            </button>
+            <button @click="cerrarModal" class="btn-secondary">
+              Cerrar
+            </button>
           </div>
         </div>
-        
-        <!-- Controles de Paginación -->
-        <div v-if="totalPaginas > 1" class="paginacion">
-          <button 
-            @click="paginaAnterior" 
-            :disabled="paginaActual === 1"
-            class="btn-paginacion"
-          >
-            ← Anterior
-          </button>
-          
-          <div class="paginas-numeros">
-            <button
-              v-for="pagina in totalPaginas"
-              :key="pagina"
-              @click="cambiarPagina(pagina)"
-              :class="['btn-numero-pagina', { 'activa': pagina === paginaActual }]"
-            >
-              {{ pagina }}
+      </div>
+
+    <!-- Modal de Confirmación a nivel de página -->
+    <div v-if="mostrarConfirmacion" class="modal-overlay" @click.self="mostrarConfirmacion = false">
+        <div class="modal-content confirmacion" @click.stop>
+            <h3>⚠️ Confirmación de Aplicación</h3>
+            
+            <div class="confirmacion-detalle">
+              <p><strong>Está a punto de aplicar los siguientes abonos:</strong></p>
+              
+              <div class="lista-confirmacion">
+                <div v-for="item in stashItems" :key="item.id" class="item-confirmacion">
+                  <div class="confirmacion-item-info">
+                    <span>{{ formatearFecha(item.fecha) }} - {{ item.descripcion }}</span>
+                    <span class="confirmacion-fecha-aplicacion">
+                      → Aplicar a: {{ obtenerFechaCuenta(fechasAplicacion[item.id]) }}
+                    </span>
+                  </div>
+                  <span>${{ formatNumber(item.monto) }}</span>
+                </div>
+              </div>
+              
+              <div class="resumen-confirmacion">
+                <p><strong>Resumen:</strong></p>
+                <ul>
+                  <li>Se aplicará un total de: <strong>${{ formatNumber(totalStash) }}</strong></li>
+                  <li>A {{ Object.keys(fechasAplicacion).length }} {{ Object.keys(fechasAplicacion).length === 1 ? 'cuenta' : 'cuentas' }} diferentes</li>
+                  <li>Resultado estimado del saldo: <strong :class="{ positivo: saldoResultante <= 0 }">${{ formatNumber(saldoResultante) }}</strong></li>
+                </ul>
+              </div>
+            </div>
+
+            <div class="confirmacion-actions">
+              <button @click="aplicarAbonosIndividuales" class="btn-danger">
+                Confirmar y Aplicar
+              </button>
+              <button @click="mostrarConfirmacion = false" class="btn-secondary">
+                Cancelar
+              </button>
+            </div>
+        </div>
+      </div>
+
+    <!-- Modal de Historial a nivel de página -->
+    <div v-if="verHistorial" class="modal-overlay" @click.self="verHistorial = false">
+        <div class="modal-content" @click.stop>
+          <div class="modal-header">
+            <h3>Historial de Abonos</h3>
+            <button @click="verHistorial = false" class="btn-close-modal" title="Cerrar">
+              ✕
             </button>
           </div>
           
-          <button 
-            @click="paginaSiguiente" 
-            :disabled="paginaActual === totalPaginas"
-            class="btn-paginacion"
-          >
-            Siguiente →
-          </button>
-        </div>
-        </div>
-        
-        <div class="modal-actions">
-          <button @click="verHistorial = false" class="btn-secondary">
-            Cerrar
-          </button>
+          <div v-if="todosLosAbonos.length === 0" class="empty-state">
+            No hay abonos registrados
+          </div>
+          
+          <div v-else>
+            <div class="historial-info">
+              <p>Mostrando {{ ((paginaActual - 1) * 7) + 1 }}-{{ Math.min(paginaActual * 7, historialPorFecha.length) }} de {{ historialPorFecha.length }} registros</p>
+            </div>
+            
+            <div class="historial-grupos">
+              <div
+                v-for="grupo in historialPaginado"
+                :key="grupo.id"
+                class="historial-grupo"
+                :class="{ 'grupo-expandido': esGrupoExpandido(grupo.id) }"
+              >
+              <div class="grupo-header" @click="toggleGrupoHistorial(grupo.id)">
+                <div class="grupo-fecha">
+                  <span class="grupo-fecha-texto">{{ grupo.fechaLabel }}</span>
+                  <span class="grupo-meta">{{ grupo.abonos.length }} {{ grupo.abonos.length === 1 ? 'abono' : 'abonos' }}</span>
+                </div>
+                <div class="grupo-total">${{ formatNumber(grupo.totalMonto) }}</div>
+                <button class="grupo-toggle" type="button" :aria-expanded="esGrupoExpandido(grupo.id)">
+                  <i :class="['fas', esGrupoExpandido(grupo.id) ? 'fa-chevron-up' : 'fa-chevron-down']"></i>
+                </button>
+              </div>
+              <transition name="fade">
+                <div v-if="esGrupoExpandido(grupo.id)" class="grupo-detalle">
+                  <div v-if="grupo.cuentas.length" class="grupo-resumen">
+                    <div
+                      v-for="cuenta in grupo.cuentas"
+                      :key="cuenta.id"
+                      class="grupo-resumen-item"
+                    >
+                      <div class="resumen-cuenta-info">
+                        <span class="resumen-cuenta-fecha">{{ cuenta.fechaCuentaFormateada }}</span>
+                        <span class="resumen-cuenta-saldo" v-if="cuenta.saldoAntes !== null">
+                          Saldo antes: ${{ formatNumber(cuenta.saldoAntes) }}
+                        </span>
+                        <span class="resumen-cuenta-saldo" v-if="cuenta.saldoDespues !== null">
+                          Saldo después: ${{ formatNumber(cuenta.saldoDespues) }}
+                        </span>
+                      </div>
+                      <div class="resumen-cuenta-monto">
+                        ${{ formatNumber(cuenta.total) }}
+                      </div>
+                    </div>
+                  </div>
+                  <div class="grupo-abonos">
+                    <div
+                      v-for="abono in grupo.abonos"
+                      :key="abono.uniqueId"
+                      class="abono-item"
+                    >
+                      <div class="abono-main">
+                        <div class="abono-left">
+                          <div class="abono-fecha">
+                            <span class="fecha-cuenta">{{ abono.fechaCuentaFormateada }}</span>
+                            <div class="historial-fecha-aplicacion">
+                              <template v-if="abono.editandoFecha">
+                                <label class="editar-fecha-label">
+                                  Fecha de registro
+                                  <input
+                                    type="datetime-local"
+                                    v-model="abono.fechaEditable"
+                                    class="input-fecha-registro"
+                                  >
+                                </label>
+                                <div class="acciones-edicion-fecha">
+                                  <button
+                                    class="btn-guardar-fecha"
+                                    :disabled="abono.guardandoFecha || !abono.fechaEditable"
+                                    @click.stop="guardarFechaHistorial(abono)"
+                                  >
+                                    {{ abono.guardandoFecha ? 'Guardando...' : 'Guardar' }}
+                                  </button>
+                                  <button
+                                    class="btn-cancelar-fecha"
+                                    :disabled="abono.guardandoFecha"
+                                    @click.stop="cancelarEdicionFechaHistorial(abono)"
+                                  >
+                                    Cancelar
+                                  </button>
+                                </div>
+                              </template>
+                              <template v-else>
+                                <span>{{ formatearFechaHora(abono.fechaAplicacion) }}</span>
+                                <button
+                                  class="btn-editar-fecha"
+                                  title="Editar fecha de registro"
+                                  @click.stop="iniciarEdicionFechaHistorial(abono)"
+                                >
+                                  Editar
+                                </button>
+                              </template>
+                            </div>
+                          </div>
+                          <div class="abono-descripcion">{{ abono.descripcion }}</div>
+                          <div v-if="abono.origenDescripcion" class="abono-origen">{{ abono.origenDescripcion }}</div>
+                        </div>
+                        <div class="abono-right">
+                          <div class="abono-monto">${{ formatNumber(abono.monto) }}</div>
+                          <button 
+                            @click.stop="eliminarAbonoIndividual(abono)" 
+                            class="btn-eliminar-abono"
+                            title="Eliminar abono"
+                          >
+                            🗑️
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </transition>
+            </div>
+          </div>
+          
+          <!-- Controles de Paginación -->
+          <div v-if="totalPaginas > 1" class="paginacion">
+            <button 
+              @click="paginaAnterior" 
+              :disabled="paginaActual === 1"
+              class="btn-paginacion"
+            >
+              ← Anterior
+            </button>
+            
+            <div class="paginas-numeros">
+              <button
+                v-for="pagina in totalPaginas"
+                :key="pagina"
+                @click="cambiarPagina(pagina)"
+                :class="['btn-numero-pagina', { 'activa': pagina === paginaActual }]"
+              >
+                {{ pagina }}
+              </button>
+            </div>
+            
+            <button 
+              @click="paginaSiguiente" 
+              :disabled="paginaActual === totalPaginas"
+              class="btn-paginacion"
+            >
+              Siguiente →
+            </button>
+          </div>
+          </div>
+          
+          <div class="modal-actions">
+            <button @click="verHistorial = false" class="btn-secondary">
+              Cerrar
+            </button>
         </div>
         </div>
       </div>
-    </Teleport>
-  </div>
+  </span>
 </template>
 
 <script>
@@ -428,6 +423,10 @@ export default {
     cliente: {
       type: String,
       required: true
+    },
+    renderTrigger: {
+      type: Boolean,
+      default: true
     }
   },
   setup(props) {
@@ -1590,7 +1589,17 @@ export default {
     }
 
     const abrirModal = async () => {
-      showModal.value = true
+      showModal.value = true;
+      // Bloquear scroll del fondo mientras el modal está abierto
+      try {
+        const body = document && document.body
+        if (body) {
+          body.dataset.prevOverflow = body.style.overflow || ''
+          body.style.overflow = 'hidden'
+        }
+      } catch (e) {
+        // no-op en entornos sin document
+      }
       try {
         await Promise.all([
           cargarStash(),
@@ -1609,6 +1618,16 @@ export default {
       mostrarConfirmacion.value = false
       verHistorial.value = false
       paginaActual.value = 1 // Resetear paginación al cerrar
+      // Restaurar scroll del fondo
+      try {
+        const body = document && document.body
+        if (body) {
+          body.style.overflow = body.dataset.prevOverflow || ''
+          delete body.dataset.prevOverflow
+        }
+      } catch (e) {
+        // no-op en entornos sin document
+      }
     }
     
     // Cargar datos al abrir
@@ -1699,6 +1718,7 @@ export default {
   font-weight: 600;
   transition: transform 0.2s, box-shadow 0.2s;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  width: 100%;
 }
 
 .stash-button:hover {
@@ -1706,20 +1726,20 @@ export default {
   box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
 }
 
-.modal {
+.modal-overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
+  inset: 0;
   background: rgba(0, 0, 0, 0.6);
   display: flex;
   justify-content: center;
   align-items: center;
-  z-index: 1000;
+  z-index: 10000;
   animation: fadeIn 0.3s ease;
-  padding-top: 80px;
-  padding-bottom: 20px;
+  padding: 20px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  box-sizing: border-box;
+  overscroll-behavior: contain;
 }
 
 .modal-content {
@@ -1728,9 +1748,11 @@ export default {
   padding: 24px;
   width: 90%;
   max-width: 800px;
-  max-height: 85vh;
+  max-height: 90vh;
   overflow-y: auto;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  margin: auto;
+  position: relative;
 }
 
 .modal-content.confirmacion {
