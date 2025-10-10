@@ -1,12 +1,13 @@
 <template>
   <div>
-    <button @click="showModal = true" class="stash-button">
+    <button type="button" @click="abrirModal" class="stash-button">
       Stash
     </button>
 
     <!-- Modal Principal -->
-    <div v-if="showModal" class="modal">
-      <div class="modal-content">
+    <Teleport to="body">
+      <div v-if="showModal" class="modal">
+        <div class="modal-content">
         <h3>Sistema de Abonos - {{ clienteNombre }}</h3>
         
         <!-- Resumen del Estado Actual -->
@@ -200,52 +201,55 @@
           </button>
         </div>
       </div>
-    </div>
+    </Teleport>
 
     <!-- Modal de Confirmación -->
-    <div v-if="mostrarConfirmacion" class="modal">
-      <div class="modal-content confirmacion">
-        <h3>⚠️ Confirmación de Aplicación</h3>
-        
-        <div class="confirmacion-detalle">
-          <p><strong>Está a punto de aplicar los siguientes abonos:</strong></p>
+    <Teleport to="body">
+      <div v-if="mostrarConfirmacion" class="modal">
+        <div class="modal-content confirmacion">
+          <h3>⚠️ Confirmación de Aplicación</h3>
           
-          <div class="lista-confirmacion">
-            <div v-for="item in stashItems" :key="item.id" class="item-confirmacion">
-              <div class="confirmacion-item-info">
-                <span>{{ formatearFecha(item.fecha) }} - {{ item.descripcion }}</span>
-                <span class="confirmacion-fecha-aplicacion">
-                  → Aplicar a: {{ obtenerFechaCuenta(fechasAplicacion[item.id]) }}
-                </span>
+          <div class="confirmacion-detalle">
+            <p><strong>Está a punto de aplicar los siguientes abonos:</strong></p>
+            
+            <div class="lista-confirmacion">
+              <div v-for="item in stashItems" :key="item.id" class="item-confirmacion">
+                <div class="confirmacion-item-info">
+                  <span>{{ formatearFecha(item.fecha) }} - {{ item.descripcion }}</span>
+                  <span class="confirmacion-fecha-aplicacion">
+                    → Aplicar a: {{ obtenerFechaCuenta(fechasAplicacion[item.id]) }}
+                  </span>
+                </div>
+                <span>${{ formatNumber(item.monto) }}</span>
               </div>
-              <span>${{ formatNumber(item.monto) }}</span>
+            </div>
+            
+            <div class="resumen-confirmacion">
+              <p><strong>Resumen:</strong></p>
+              <ul>
+                <li>Se aplicará un total de: <strong>${{ formatNumber(totalStash) }}</strong></li>
+                <li>A {{ Object.keys(fechasAplicacion).length }} {{ Object.keys(fechasAplicacion).length === 1 ? 'cuenta' : 'cuentas' }} diferentes</li>
+                <li>Resultado estimado del saldo: <strong :class="{ positivo: saldoResultante <= 0 }">${{ formatNumber(saldoResultante) }}</strong></li>
+              </ul>
             </div>
           </div>
-          
-          <div class="resumen-confirmacion">
-            <p><strong>Resumen:</strong></p>
-            <ul>
-              <li>Se aplicará un total de: <strong>${{ formatNumber(totalStash) }}</strong></li>
-              <li>A {{ Object.keys(fechasAplicacion).length }} {{ Object.keys(fechasAplicacion).length === 1 ? 'cuenta' : 'cuentas' }} diferentes</li>
-              <li>Resultado estimado del saldo: <strong :class="{ positivo: saldoResultante <= 0 }">${{ formatNumber(saldoResultante) }}</strong></li>
-            </ul>
+
+          <div class="confirmacion-actions">
+            <button @click="aplicarAbonosIndividuales" class="btn-danger">
+              Confirmar y Aplicar
+            </button>
+            <button @click="mostrarConfirmacion = false" class="btn-secondary">
+              Cancelar
+            </button>
           </div>
         </div>
-
-        <div class="confirmacion-actions">
-          <button @click="aplicarAbonosIndividuales" class="btn-danger">
-            Confirmar y Aplicar
-          </button>
-          <button @click="mostrarConfirmacion = false" class="btn-secondary">
-            Cancelar
-          </button>
-        </div>
       </div>
-    </div>
+    </Teleport>
 
     <!-- Modal de Historial -->
-    <div v-if="verHistorial" class="modal">
-      <div class="modal-content">
+    <Teleport to="body">
+      <div v-if="verHistorial" class="modal">
+        <div class="modal-content">
         <div class="modal-header">
           <h3>Historial de Abonos</h3>
           <button @click="verHistorial = false" class="btn-close-modal" title="Cerrar">
@@ -407,8 +411,9 @@
             Cerrar
           </button>
         </div>
+        </div>
       </div>
-    </div>
+    </Teleport>
   </div>
 </template>
 
@@ -1584,6 +1589,21 @@ export default {
       }
     }
 
+    const abrirModal = async () => {
+      showModal.value = true
+      try {
+        await Promise.all([
+          cargarStash(),
+          cargarSaldoActual(),
+          cargarCuentasDisponibles(),
+          cargarTodosLosAbonos(),
+          cargarHistorial()
+        ])
+      } catch (error) {
+        console.error('Error al preparar el modal de stash:', error)
+      }
+    }
+
     const cerrarModal = () => {
       showModal.value = false
       mostrarConfirmacion.value = false
@@ -1657,6 +1677,7 @@ export default {
       toggleGrupoHistorial,
       esGrupoExpandido,
       cargarTodosLosAbonos,
+      abrirModal,
       cerrarModal,
       cambiarPagina,
       paginaAnterior,
