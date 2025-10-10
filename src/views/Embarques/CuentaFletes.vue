@@ -364,6 +364,13 @@ export default {
         const fletesData = embarquesSnapshot.docs
           .map(doc => {
             const data = doc.data();
+            
+            // Filtrar embarques marcados como "No enviado a México"
+            if (data.noEnviadoMexico === true) {
+              console.log(`[FLETE FILTRADO] Embarque ${doc.id} marcado como NO enviado a México - Se excluye de la cuenta`);
+              return null;
+            }
+            
             let fecha = data.fecha.toDate ? data.fecha.toDate() : new Date(data.fecha);
             
             // Buscar clientes Joselito y Verónica con identificación precisa

@@ -49,7 +49,11 @@
               </div>
             </div>
             <div class="status-section">
-              <span v-if="embarque.embarqueBloqueado" class="status-badge blocked">
+              <span v-if="embarque.noEnviadoMexico" class="status-badge no-mexico">
+                <i class="icon-mexico">🚫</i>
+                No enviado
+              </span>
+              <span v-else-if="embarque.embarqueBloqueado" class="status-badge blocked">
                 <i class="icon-lock">🔒</i>
                 Bloqueado
               </span>
@@ -106,6 +110,15 @@
 
           <!-- Acciones -->
           <div class="card-actions">
+            <button 
+              @click="toggleNoEnviadoMexico(embarque.id, embarque.noEnviadoMexico)"
+              class="btn-action btn-mexico"
+              :class="{ 'btn-mexico-active': embarque.noEnviadoMexico }"
+              :title="embarque.noEnviadoMexico ? 'Marcar como enviado a México' : 'Marcar como NO enviado a México'"
+            >
+              <i class="icon">{{ embarque.noEnviadoMexico ? '🚫' : '✅' }}</i>
+              {{ embarque.noEnviadoMexico ? 'No enviado' : 'Enviado' }}
+            </button>
             <button 
               @click="editarEmbarque(embarque.id)" 
               class="btn-action btn-edit"
@@ -201,6 +214,7 @@ export default {
         id: record.id,
         fecha: fecha || new Date(),
         embarqueBloqueado: Boolean(record.embarqueBloqueado),
+        noEnviadoMexico: Boolean(record.noEnviadoMexico),
         clientes: record.clientes || [],
         cargaCon: record.cargaCon || 'No especificado',
         pendingSync: Boolean(record.pendingSync),
@@ -233,6 +247,7 @@ export default {
         fecha: fecha ? fecha.toISOString() : null,
         cargaCon: data.cargaCon || '',
         embarqueBloqueado: data.embarqueBloqueado || false,
+        noEnviadoMexico: data.noEnviadoMexico || false,
         clientesPersonalizados: data.clientesPersonalizados || [],
         clientesJuntarMedidas: data.clientesJuntarMedidas || {},
         clientesReglaOtilio: data.clientesReglaOtilio || {},
@@ -307,6 +322,7 @@ export default {
         medidasConfiguracion: Array.isArray(pick('medidasConfiguracion', [])) ? pick('medidasConfiguracion', []) : [],
         preciosActuales: Array.isArray(pick('preciosActuales', [])) ? pick('preciosActuales', []) : [],
         embarqueBloqueado: Boolean(pick('embarqueBloqueado', false)),
+        noEnviadoMexico: Boolean(pick('noEnviadoMexico', false)),
       };
 
       return payload;
@@ -516,6 +532,7 @@ export default {
             id: embarque.id,
             fecha: fechaObj,
             embarqueBloqueado: embarque.data.embarqueBloqueado || false,
+            noEnviadoMexico: embarque.data.noEnviadoMexico || false,
             clientes: embarque.data.clientes || [],
             cargaCon: embarque.data.cargaCon || 'No especificado',
           });
@@ -710,6 +727,93 @@ export default {
 
     regresarAMenu() {
       this.$router.push({ name: 'EmbarquesMenu' });
+    },
+
+    async toggleNoEnviadoMexico(embarqueId, estadoActual) {
+      try {
+        const nuevoEstado = !estadoActual;
+        const mensaje = nuevoEstado 
+          ? '¿Marcar este embarque como NO enviado a México?\n\nEsto significa que NO se contará en la suma de fletes.'
+          : '¿Marcar este embarque como enviado a México?\n\nEsto significa que SÍ se contará en la suma de fletes.';
+        
+        if (confirm(mensaje)) {
+          await EmbarquesOfflineService.init();
+          
+          // Actualizar el estado local primero para respuesta inmediata
+          const embarque = this.embarques.find(e => e.id === embarqueId);
+          if (embarque) {
+            embarque.noEnviadoMexico = nuevoEstado;
+          }
+          
+          if (!navigator.onLine) {
+            // En modo offline, guardar en IndexedDB
+            const record = await EmbarquesOfflineService.get(embarqueId);
+            if (record) {
+              record.noEnviadoMexico = nuevoEstado;
+              if (record.docData) {
+                record.docData.noEnviadoMexico = nuevoEstado;
+              }
+              await EmbarquesOfflineService.save(record, { pendingSync: true, syncState: 'pending' });
+            }
+            
+            this.mostrarNotificacionRespaldo(
+              'warning',
+              '📡 Cambio guardado offline',
+              'El cambio se sincronizará automáticamente cuando recuperes la conexión.'
+            );
+          } else {
+            // En modo online, actualizar directamente en Firebase
+            const db = getFirestore();
+            const authStore = useAuthStore();
+            const embarqueRef = doc(db, 'embarques', embarqueId);
+            const embarqueDoc = await getDoc(embarqueRef);
+            
+            if (embarqueDoc.exists()) {
+              const dataActual = embarqueDoc.data();
+              const dataActualizada = {
+                ...dataActual,
+                noEnviadoMexico: nuevoEstado,
+                ultimaEdicion: {
+                  userId: authStore?.userId || 'unknown',
+                  username: authStore?.user?.username || 'Usuario',
+                  timestamp: serverTimestamp()
+                }
+              };
+              
+              await setDoc(embarqueRef, dataActualizada, { merge: false });
+              
+              // Actualizar en IndexedDB también
+              const snapshotOffline = this.construirSnapshotOfflineDesdeRemoto(
+                embarqueId, 
+                dataActualizada, 
+                embarqueDoc.data().fecha?.toDate ? embarqueDoc.data().fecha.toDate() : new Date(embarqueDoc.data().fecha)
+              );
+              await EmbarquesOfflineService.save(snapshotOffline, { pendingSync: false, syncState: 'synced' });
+              
+              this.mostrarNotificacionRespaldo(
+                'success',
+                '✅ Estado actualizado',
+                nuevoEstado 
+                  ? 'El embarque NO se contará para los fletes de México.'
+                  : 'El embarque SÍ se contará para los fletes de México.'
+              );
+            }
+          }
+        }
+      } catch (error) {
+        console.error('[toggleNoEnviadoMexico] Error:', error);
+        this.mostrarNotificacionRespaldo(
+          'error',
+          '❌ Error',
+          'No se pudo actualizar el estado del embarque.'
+        );
+        
+        // Revertir el cambio local en caso de error
+        const embarque = this.embarques.find(e => e.id === embarqueId);
+        if (embarque) {
+          embarque.noEnviadoMexico = estadoActual;
+        }
+      }
     },
     
     async eliminarEmbarque(embarqueId) {
@@ -1115,6 +1219,11 @@ export default {
   color: white;
 }
 
+.status-badge.no-mexico {
+  background: linear-gradient(45deg, #ff9800, #f57c00);
+  color: white;
+}
+
 /* Contenido principal */
 .card-content {
   margin-bottom: 20px;
@@ -1238,6 +1347,28 @@ export default {
   box-shadow: 0 6px 20px rgba(255, 107, 107, 0.4);
 }
 
+.btn-mexico {
+  background: linear-gradient(45deg, #9e9e9e, #757575);
+  color: white;
+  box-shadow: 0 4px 15px rgba(158, 158, 158, 0.3);
+  flex: 1;
+  white-space: nowrap;
+}
+
+.btn-mexico:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(158, 158, 158, 0.4);
+}
+
+.btn-mexico-active {
+  background: linear-gradient(45deg, #ff9800, #f57c00) !important;
+  box-shadow: 0 4px 15px rgba(255, 152, 0, 0.4) !important;
+}
+
+.btn-mexico-active:hover {
+  box-shadow: 0 6px 20px rgba(255, 152, 0, 0.5) !important;
+}
+
 .btn-disabled {
   background: #cccccc !important;
   cursor: not-allowed !important;
@@ -1338,6 +1469,7 @@ export default {
 
   .btn-action {
     width: 100%;
+    flex: auto;
   }
 }
 
