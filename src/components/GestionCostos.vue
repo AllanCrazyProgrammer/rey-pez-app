@@ -156,6 +156,7 @@
       :esNuevo="false"
       :costoAnterior="costoEditando.costoAnterior"
       :fechaUltimaActualizacion="costoEditando.fechaUltimaActualizacion"
+      :fecha="costoEditando.fecha"
       @cerrar="cerrarModalEditarCosto"
       @guardar="guardarCostoEditado"
     />
@@ -233,6 +234,7 @@ export default {
       embarqueData: null,
       medidasEmbarque: [],
       costosRegistrados: {},
+      costosRegistradosPorFecha: {},
       costosEmbarque: {},
       medidaSeleccionada: {},
       medidaOculta: {}, // Para el sistema de ocultación en PDF
@@ -255,7 +257,8 @@ export default {
         medida: '',
         costo: 0,
         costoAnterior: null,
-        fechaUltimaActualizacion: ''
+        fechaUltimaActualizacion: '',
+        fecha: ''
       },
       costoEmbarqueEditando: {
         medida: '',
@@ -511,34 +514,58 @@ export default {
           const fechaEmb = toDate(fechaEmbarqueRaw) || new Date();
           // Normalizar a 12:00 para evitar desfases horarios
           fechaEmb.setHours(12, 0, 0, 0);
-          
-          // Obtener solo los costos válidos para la fecha del embarque
-          const costosActuales = {};
-          const medidasProcesadas = new Set();
+          // Obtener costos por medida:
+          // - costosGlobales: último costo registrado sin importar la fecha del embarque
+          // - costosValidosParaEmbarque: último costo con fecha <= fecha del embarque
+          const costosGlobales = {};
+          const costosValidosParaEmbarque = {};
+          const medidasGlobalesProcesadas = new Set();
+          const medidasEmbarqueProcesadas = new Set();
           
           historialCompleto.forEach(entrada => {
-            if (!medidasProcesadas.has(entrada.medida)) {
-              // Verificar si la fecha del costo es válida para el embarque
-              const fechaCosto = toDate(entrada.fecha) || toDate(entrada.timestamp) || new Date(0);
-              // Normalizar igual que fechaEmb
-              fechaCosto.setHours(12, 0, 0, 0);
+            if (entrada.eliminado || entrada.medidaEliminada) return;
 
-              if (fechaCosto <= fechaEmb && !entrada.eliminado && !entrada.medidaEliminada) {
-                costosActuales[entrada.medida] = {
-                  costoBase: entrada.costoBase,
-                  fecha: entrada.fecha,
-                  timestamp: entrada.timestamp,
-                  id: entrada.id
-                };
-                medidasProcesadas.add(entrada.medida);
-              }
+            const fechaCosto = toDate(entrada.fecha) || toDate(entrada.timestamp) || new Date(0);
+            fechaCosto.setHours(12, 0, 0, 0);
+
+            if (!medidasGlobalesProcesadas.has(entrada.medida)) {
+              costosGlobales[entrada.medida] = {
+                costoBase: entrada.costoBase,
+                fecha: entrada.fecha,
+                timestamp: entrada.timestamp,
+                id: entrada.id
+              };
+              medidasGlobalesProcesadas.add(entrada.medida);
+            }
+
+            if (!medidasEmbarqueProcesadas.has(entrada.medida) && fechaCosto <= fechaEmb) {
+              costosValidosParaEmbarque[entrada.medida] = {
+                costoBase: entrada.costoBase,
+                fecha: entrada.fecha,
+                timestamp: entrada.timestamp,
+                id: entrada.id
+              };
+              medidasEmbarqueProcesadas.add(entrada.medida);
             }
           });
-          
-          // Actualizar costos registrados
-          this.costosRegistrados = { ...costosActuales };
-          console.log('[GestionCostos] Costos registrados actualizados:', this.costosRegistrados);
-          console.log('[GestionCostos] Número de medidas registradas:', Object.keys(this.costosRegistrados).length);
+
+          const actualizarMapaReactivo = (mapaLocal, mapaFuente) => {
+            Object.keys(mapaLocal).forEach(medida => {
+              if (!mapaFuente[medida]) {
+                this.$delete(mapaLocal, medida);
+              }
+            });
+
+            Object.keys(mapaFuente).forEach(medida => {
+              this.$set(mapaLocal, medida, mapaFuente[medida]);
+            });
+          };
+
+          actualizarMapaReactivo(this.costosRegistrados, costosGlobales);
+          actualizarMapaReactivo(this.costosRegistradosPorFecha, costosValidosParaEmbarque);
+
+          console.log('[GestionCostos] Costos globales actualizados:', this.costosRegistrados);
+          console.log('[GestionCostos] Costos válidos para el embarque:', this.costosRegistradosPorFecha);
           
           // Aplicar costos de medidas registradas si ya tenemos datos del embarque
           if (this.embarqueData) {
@@ -609,7 +636,8 @@ export default {
         medida: medida,
         costo: costoInfo.costoBase,
         costoAnterior: costoInfo.costoBase,
-        fechaUltimaActualizacion: this.formatearFecha(costoInfo.fecha)
+        fechaUltimaActualizacion: this.formatearFecha(costoInfo.fecha),
+        fecha: this.obtenerFechaParaInput(costoInfo.fecha)
       };
       this.mostrarModalEditarCosto = true;
     },
@@ -620,7 +648,8 @@ export default {
         medida: '',
         costo: 0,
         costoAnterior: null,
-        fechaUltimaActualizacion: ''
+        fechaUltimaActualizacion: '',
+        fecha: ''
       };
     },
 
@@ -628,6 +657,11 @@ export default {
       try {
         const db = getFirestore();
         const medida = this.costoEditando.medida;
+
+        if (!data.fecha) {
+          alert('Por favor selecciona una fecha válida');
+          return;
+        }
         
         const fecha = new Date(data.fecha);
         fecha.setHours(12, 0, 0, 0); // Establecer la hora a 12:00 PM
@@ -655,6 +689,7 @@ export default {
           
           // Eliminar inmediatamente de la interfaz local
           this.$delete(this.costosRegistrados, medida);
+          this.$delete(this.costosRegistradosPorFecha, medida);
           
           // Eliminar TODO el historial de esta medida
           const historialRef = collection(db, 'historial_costos');
@@ -880,84 +915,98 @@ export default {
     },
 
     // Función auxiliar para encontrar el costo correspondiente a una medida
-    encontrarCostoParaMedida(medidaEmbarque) {
+    encontrarCostoParaMedida(medidaEmbarque, opciones = {}) {
       if (!medidaEmbarque) return null;
-      
-      console.log(`🔍 Buscando costo para: "${medidaEmbarque}"`);
-      console.log(`📋 Costos registrados disponibles:`, Object.keys(this.costosRegistrados));
-      
-      // 1. Buscar coincidencia exacta primero
-      if (this.costosRegistrados[medidaEmbarque]) {
-        console.log(`✓ Coincidencia exacta encontrada: "${medidaEmbarque}"`);
-        return {
-          medidaEncontrada: medidaEmbarque,
-          costo: this.costosRegistrados[medidaEmbarque].costoBase
-        };
+
+      const { incluirCostosFuturos = false } = opciones;
+
+      const mapasDisponibles = [
+        { etiqueta: 'válidos para embarque', mapa: this.costosRegistradosPorFecha }
+      ];
+
+      if (incluirCostosFuturos) {
+        mapasDisponibles.push({ etiqueta: 'globales', mapa: this.costosRegistrados });
       }
-      
-      // 2. Si la medida contiene "Maquila Ozuna", buscar sin ese sufijo
-      if (medidaEmbarque.includes('Maquila Ozuna')) {
-        const medidaBase = medidaEmbarque.replace(' Maquila Ozuna', '').trim();
-        console.log(`🔍 Buscando medida base sin "Maquila Ozuna": "${medidaBase}"`);
-        if (this.costosRegistrados[medidaBase]) {
-          console.log(`✓ Encontrado costo para medida base: "${medidaBase}"`);
+
+      const buscarEnMapa = ({ etiqueta, mapa }) => {
+        if (!mapa || Object.keys(mapa).length === 0) return null;
+
+        console.log(`🔍 Buscando costo (${etiqueta}) para: "${medidaEmbarque}"`);
+        console.log(`📋 Medidas disponibles (${etiqueta}):`, Object.keys(mapa));
+
+        if (mapa[medidaEmbarque]) {
+          console.log(`✓ Coincidencia exacta encontrada (${etiqueta}): "${medidaEmbarque}"`);
           return {
-            medidaEncontrada: medidaBase,
-            costo: this.costosRegistrados[medidaBase].costoBase
+            medidaEncontrada: medidaEmbarque,
+            costo: mapa[medidaEmbarque].costoBase
           };
         }
-      }
-      
-      // 3. Normalizar la medida del embarque y buscar variaciones
-      const medidaEmbarqueNormalizada = this.normalizarMedida(medidaEmbarque);
-      console.log(`🔍 Medida normalizada: "${medidaEmbarqueNormalizada}"`);
-      
-      // Buscar todas las medidas registradas con una lógica más permisiva
-      for (const [medidaRegistrada, costoInfo] of Object.entries(this.costosRegistrados)) {
-        const medidaRegistradaNormalizada = this.normalizarMedida(medidaRegistrada);
-        
-        // Coincidencia exacta normalizada
-        if (medidaEmbarqueNormalizada === medidaRegistradaNormalizada) {
-          console.log(`✓ Coincidencia normalizada encontrada: "${medidaRegistrada}"`);
-          return {
-            medidaEncontrada: medidaRegistrada,
-            costo: costoInfo.costoBase
-          };
+
+        if (medidaEmbarque.includes('Maquila Ozuna')) {
+          const medidaBase = medidaEmbarque.replace(' Maquila Ozuna', '').trim();
+          console.log(`🔍 Buscando medida base sin "Maquila Ozuna": "${medidaBase}"`);
+          if (mapa[medidaBase]) {
+            console.log(`✓ Encontrado costo para medida base (${etiqueta}): "${medidaBase}"`);
+            return {
+              medidaEncontrada: medidaBase,
+              costo: mapa[medidaBase].costoBase
+            };
+          }
+        }
+
+        const medidaEmbarqueNormalizada = this.normalizarMedida(medidaEmbarque);
+        console.log(`🔍 Medida normalizada (${etiqueta}): "${medidaEmbarqueNormalizada}"`);
+
+        for (const [medidaRegistrada, costoInfo] of Object.entries(mapa)) {
+          const medidaRegistradaNormalizada = this.normalizarMedida(medidaRegistrada);
+          if (medidaEmbarqueNormalizada === medidaRegistradaNormalizada) {
+            console.log(`✓ Coincidencia normalizada encontrada (${etiqueta}): "${medidaRegistrada}"`);
+            return {
+              medidaEncontrada: medidaRegistrada,
+              costo: costoInfo.costoBase
+            };
+          }
+        }
+
+        const medidaBaseSinSufijos = medidaEmbarqueNormalizada
+          .replace(/\s+maquila\s+ozuna/g, '')
+          .replace(/\s+c\/c/g, '')
+          .trim();
+
+        console.log(`🔍 Buscando coincidencias parciales (${etiqueta}) para: "${medidaBaseSinSufijos}"`);
+
+        for (const [medidaRegistrada, costoInfo] of Object.entries(mapa)) {
+          const medidaRegistradaNormalizada = this.normalizarMedida(medidaRegistrada);
+
+          if (medidaBaseSinSufijos.includes(medidaRegistradaNormalizada) && medidaRegistradaNormalizada.length > 2) {
+            console.log(`✓ Coincidencia parcial encontrada (${etiqueta}, registrada contenida en embarque): "${medidaRegistrada}"`);
+            return {
+              medidaEncontrada: medidaRegistrada,
+              costo: costoInfo.costoBase
+            };
+          }
+
+          if (medidaRegistradaNormalizada.includes(medidaBaseSinSufijos) && medidaBaseSinSufijos.length > 2) {
+            console.log(`✓ Coincidencia parcial encontrada (${etiqueta}, embarque contenido en registrada): "${medidaRegistrada}"`);
+            return {
+              medidaEncontrada: medidaRegistrada,
+              costo: costoInfo.costoBase
+            };
+          }
+        }
+
+        return null;
+      };
+
+      for (const mapa of mapasDisponibles) {
+        const resultado = buscarEnMapa(mapa);
+        if (resultado) {
+          return resultado;
         }
       }
-      
-      // 4. Buscar coincidencias parciales más flexibles
-      const medidaBaseSinSufijos = medidaEmbarqueNormalizada
-        .replace(/\s+maquila\s+ozuna/g, '')
-        .replace(/\s+c\/c/g, '')
-        .trim();
-      
-      console.log(`🔍 Buscando coincidencias parciales para: "${medidaBaseSinSufijos}"`);
-      
-      for (const [medidaRegistrada, costoInfo] of Object.entries(this.costosRegistrados)) {
-        const medidaRegistradaNormalizada = this.normalizarMedida(medidaRegistrada);
-        
-        // Si la medida registrada está contenida en la medida del embarque
-        if (medidaBaseSinSufijos.includes(medidaRegistradaNormalizada) && medidaRegistradaNormalizada.length > 2) {
-          console.log(`✓ Coincidencia parcial encontrada (registrada contenida en embarque): "${medidaRegistrada}"`);
-          return {
-            medidaEncontrada: medidaRegistrada,
-            costo: costoInfo.costoBase
-          };
-        }
-        
-        // Si la medida del embarque está contenida en la medida registrada
-        if (medidaRegistradaNormalizada.includes(medidaBaseSinSufijos) && medidaBaseSinSufijos.length > 2) {
-          console.log(`✓ Coincidencia parcial encontrada (embarque contenido en registrada): "${medidaRegistrada}"`);
-          return {
-            medidaEncontrada: medidaRegistrada,
-            costo: costoInfo.costoBase
-          };
-        }
-      }
-      
+
       console.log(`✗ No se encontró coincidencia para: "${medidaEmbarque}"`);
-      return null; // No se encontró coincidencia
+      return null;
     },
 
     // Función para sugerir crear medidas faltantes
@@ -1025,7 +1074,7 @@ export default {
       
       // Debug: mostrar qué medidas están disponibles
       console.log('Medidas del embarque:', this.medidasEmbarque);
-      console.log('Costos registrados disponibles:', Object.keys(this.costosRegistrados));
+      console.log('Costos válidos para embarque disponibles:', Object.keys(this.costosRegistradosPorFecha));
       
       this.medidasEmbarque.forEach(medida => {
         const costoEncontrado = this.encontrarCostoParaMedida(medida);
@@ -1161,6 +1210,44 @@ export default {
       }
     },
 
+    obtenerFechaParaInput(fecha) {
+      try {
+        if (!fecha) {
+          return new Date().toISOString().split('T')[0];
+        }
+
+        if (typeof fecha === 'string') {
+          if (/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
+            return fecha;
+          }
+
+          if (/^\d{2}\/\d{2}\/\d{4}$/.test(fecha)) {
+            const [day, month, year] = fecha.split('/');
+            return `${year}-${month}-${day}`;
+          }
+
+          const date = new Date(fecha);
+          if (!isNaN(date.getTime())) {
+            return date.toISOString().split('T')[0];
+          }
+        }
+
+        let fechaDate = fecha;
+        if (fecha.toDate && typeof fecha.toDate === 'function') {
+          fechaDate = fecha.toDate();
+        } else if (fecha.seconds) {
+          fechaDate = new Date(fecha.seconds * 1000);
+        }
+
+        if (fechaDate instanceof Date && !isNaN(fechaDate.getTime())) {
+          return fechaDate.toISOString().split('T')[0];
+        }
+      } catch (error) {
+        console.error('Error al convertir fecha para input:', error);
+      }
+
+      return new Date().toISOString().split('T')[0];
+    },
 
     formatearFecha(fecha) {
       if (!fecha) return 'N/A';
