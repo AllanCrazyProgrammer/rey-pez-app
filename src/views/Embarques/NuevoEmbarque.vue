@@ -30,6 +30,8 @@
         @verificar-fecha="verificarFechaExistente"
         @abrir-configuracion-medidas="abrirModalConfiguracionMedidas"
         @precio-agregado="onPrecioAgregado"
+        @generar-esqueleto="aplicarEsqueletoDesdePedido"
+        @esqueleto-error="onEsqueletoError"
       />
 
       <!-- Slider de escala para el resumen PDF -->
@@ -566,6 +568,136 @@ export default {
     } else {
       // Fallback omitido para depuración limpia
     }
+    },
+    onEsqueletoError(mensaje) {
+      if (mensaje) {
+        this.mostrarError(mensaje);
+      }
+    },
+    productoTieneContenido(producto) {
+      if (!producto) {
+        return false;
+      }
+
+      const tieneMedida = producto.medida && producto.medida.toString().trim() !== '';
+      const tieneKilos = Array.isArray(producto.kilos) && producto.kilos.some(kilo => Number(kilo) > 0);
+      const tieneTaras = Array.isArray(producto.taras) && producto.taras.some(tara => Number(tara) > 0);
+      const tieneTarasExtra = Array.isArray(producto.tarasExtra) && producto.tarasExtra.some(tara => Number(tara) > 0);
+      const tieneReportes = (
+        Array.isArray(producto.reporteTaras) && producto.reporteTaras.some(tara => Number(tara) > 0)
+      ) || (
+        Array.isArray(producto.reporteBolsas) && producto.reporteBolsas.some(bolsa => Number(bolsa) > 0)
+      );
+
+      return tieneMedida || tieneKilos || tieneTaras || tieneTarasExtra || tieneReportes;
+    },
+    aplicarEsqueletoDesdePedido(esqueletoPorCliente) {
+      if (!esqueletoPorCliente || typeof esqueletoPorCliente !== 'object') {
+        console.warn('[aplicarEsqueletoDesdePedido] Datos de esqueleto inválidos:', esqueletoPorCliente);
+        return;
+      }
+
+      const clientesIds = Object.keys(esqueletoPorCliente).filter(clienteId => {
+        return Array.isArray(esqueletoPorCliente[clienteId]);
+      });
+
+      if (clientesIds.length === 0) {
+        this.mostrarMensaje('No se encontraron medidas del pedido limpio para generar el esqueleto.');
+        return;
+      }
+
+      const clientesConDefiniciones = clientesIds.filter(clienteId => esqueletoPorCliente[clienteId].length > 0);
+
+      if (clientesConDefiniciones.length === 0) {
+        this.mostrarMensaje('El pedido limpio no tiene medidas registradas para los clientes predeterminados.');
+        return;
+      }
+
+      const clientesConDatosExistentes = this.embarque.productos.filter(producto => {
+        return clientesConDefiniciones.includes(producto.clienteId.toString()) && this.productoTieneContenido(producto);
+      });
+
+      if (clientesConDatosExistentes.length > 0) {
+        const continuar = confirm('Se reemplazarán los productos existentes de los clientes predeterminados por el pedido limpio. ¿Deseas continuar?');
+        if (!continuar) {
+          return;
+        }
+      }
+
+      if (!this.productosEliminadosLocalmente) {
+        this.productosEliminadosLocalmente = new Set();
+      }
+
+      const clientesReemplazados = new Set(clientesConDefiniciones.map(id => id.toString()));
+
+      // Marcar clientes como modificados y registrar productos eliminados
+      this.embarque.productos.forEach(producto => {
+        const clienteId = producto.clienteId.toString();
+        if (clientesReemplazados.has(clienteId)) {
+          this.productosEliminadosLocalmente.add(producto.id);
+          this.$set(this.clientesModificados, clienteId, true);
+        }
+      });
+
+      // Eliminar productos actuales de los clientes objetivo
+      this.embarque.productos = this.embarque.productos.filter(producto => {
+        return !clientesReemplazados.has(producto.clienteId.toString());
+      });
+
+      if (!this.productosNuevosPendientes) {
+        this.productosNuevosPendientes = new Map();
+      }
+
+      const nuevosProductos = [];
+
+      clientesConDefiniciones.forEach(clienteId => {
+        const definiciones = esqueletoPorCliente[clienteId] || [];
+        const nombreCliente = this.obtenerNombreCliente(clienteId);
+
+        definiciones.forEach(definicion => {
+          const nuevoProducto = crearNuevoProducto(clienteId.toString());
+          nuevoProducto.nombreCliente = nombreCliente;
+          nuevoProducto.medida = (definicion.medida || '').toString().trim();
+
+          if (definicion.tipo === 'c/h20' || definicion.tipo === 's/h20') {
+            nuevoProducto.tipo = definicion.tipo;
+          } else if (definicion.tipo === 'otro') {
+            nuevoProducto.tipo = 'otro';
+            nuevoProducto.tipoPersonalizado = (definicion.tipoPersonalizado || '').toString();
+          } else if (definicion.tipo) {
+            nuevoProducto.tipo = definicion.tipo;
+          } else {
+            this.setTipoDefaultParaCliente(nuevoProducto);
+          }
+
+          this.productosNuevosPendientes.set(nuevoProducto.id, { ...nuevoProducto });
+          nuevosProductos.push(nuevoProducto);
+        });
+      });
+
+      if (nuevosProductos.length === 0) {
+        this.mostrarMensaje('No se crearon productos nuevos porque las medidas del pedido están vacías.');
+        return;
+      }
+
+      this.embarque.productos.push(...nuevosProductos);
+
+      if (!this.guardadoAutomaticoActivo && this.embarqueId) {
+        this.guardadoAutomaticoActivo = true;
+      }
+
+      this.actualizarMedidasUsadas();
+      this.$forceUpdate();
+
+      if (this.embarqueId) {
+        this.guardarCambiosEnTiempoReal();
+      }
+
+      this.mostrarMensaje('Esqueleto del embarque generado a partir del pedido limpio.');
+
+      if (clientesConDefiniciones.length > 0) {
+        this.clienteActivo = clientesConDefiniciones[0];
+      }
     },
 
     // Métodos para manejar campos en edición

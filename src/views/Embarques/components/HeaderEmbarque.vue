@@ -19,6 +19,12 @@
       <button @click="verPedidoDelDia" class="btn btn-success" title="Ver pedido del día de hoy">
         <i class="fas fa-clipboard-list"></i> Pedido del Día
       </button>
+      <GenerarEsqueletoEmbarqueButton
+        :fecha-embarque="fechaLocal"
+        :embarque-bloqueado="embarqueBloqueado"
+        @esqueleto-generado="onEsqueletoGenerado"
+        @error="onEsqueletoError"
+      />
       <button @click="$emit('generar-taras')" class="btn btn-info" :disabled="isGeneratingPdf">
         <span v-if="isGeneratingPdf && pdfType === 'taras'" class="loader-inline"></span>
         <i v-else class="fas fa-file-pdf"></i> PDF Taras
@@ -68,12 +74,14 @@
 <script>
 import PreciosHistorialModal from '@/components/PreciosHistorialModal.vue';
 import PedidoDelDiaModal from './PedidoDelDiaModal.vue';
+import GenerarEsqueletoEmbarqueButton from './GenerarEsqueletoEmbarqueButton.vue';
 
 export default {
   name: 'HeaderEmbarque',
   components: {
     PreciosHistorialModal,
-    PedidoDelDiaModal
+    PedidoDelDiaModal,
+    GenerarEsqueletoEmbarqueButton
   },
   props: {
     modoEdicion: {
@@ -152,6 +160,12 @@ export default {
       console.log('[HEADER-EMBARQUE] Precio agregado:', nuevoPrecio);
       // Reenviar el evento hacia arriba para que NuevoEmbarque.vue recargue sus precios
       this.$emit('precio-agregado', nuevoPrecio);
+    },
+    onEsqueletoGenerado(datos) {
+      this.$emit('generar-esqueleto', datos);
+    },
+    onEsqueletoError(mensaje) {
+      this.$emit('esqueleto-error', mensaje);
     }
   }
 };
