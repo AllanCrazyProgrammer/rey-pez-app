@@ -555,9 +555,8 @@ export default {
             : [{ kilos: datos.kilos || 0, fechaEntrada: datos.fechaEntrada }];
 
           const lotesActivos = lotes.filter(lote => lote.kilos > 1);
-          // Si no hay lotes activos, o no tiene precio y no es maquila, omitir
-          const esMaquila = proveedor === 'Ozuna' || proveedor === 'Joselito';
-          if (lotesActivos.length === 0 || (!esMaquila && (datos.precio === null || datos.precio === undefined))) {
+          // Si no hay lotes activos, omitir
+          if (lotesActivos.length === 0) {
             return;
           }
 
@@ -608,9 +607,8 @@ export default {
             const proveedoresProcesados = {};
             Object.entries(proveedores).forEach(([proveedor, items]) => {
               const itemsFiltrados = items.filter(item => item.kilos > 1);
-              const tienePrecio = itemsFiltrados.some(item => item.precio !== null && item.precio !== undefined);
 
-              if (itemsFiltrados.length > 0 && tienePrecio) {
+              if (itemsFiltrados.length > 0) {
                 const itemsOrdenados = itemsFiltrados.sort((a, b) => {
                   // Ordenar por fecha de entrada (más antiguas primero)
                   if (a.fechaEntrada && b.fechaEntrada) {
