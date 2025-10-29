@@ -4,6 +4,10 @@
             <div class="cliente-info">
                 <h3>
                     {{ nombreCliente || 'Cliente Desconocido' }}
+                    <button @click.stop="$emit('ver-pedido-cliente')" class="btn-pedido-mini"
+                        title="Ver pedidos del cliente">
+                        <i class="fas fa-clipboard-list"></i>
+                    </button>
                     <button @click.stop="$emit('generar-pdf', 'cliente', clienteId)" class="btn-pdf-mini"
                         title="Vista previa PDF">
                         <i class="fas fa-eye"></i>
@@ -257,7 +261,8 @@ export default {
         'crear-cuenta-joselito',
         'crear-cuenta-catarro',
         'crear-cuenta-ozuna',
-        'crear-cuenta-otilio'
+        'crear-cuenta-otilio',
+        'ver-pedido-cliente'
     ],
 
     computed: {
@@ -528,7 +533,8 @@ export default {
     font-size: 1.3rem;
 }
 
-.btn-pdf-mini {
+.btn-pdf-mini,
+.btn-pedido-mini {
     background: none;
     border: none;
     color: #6c757d;
@@ -536,11 +542,17 @@ export default {
     cursor: pointer;
     padding: 3px 6px;
     border-radius: 3px;
+    transition: all 0.3s ease;
 }
 
 .btn-pdf-mini:hover {
     color: #3498db;
     background-color: rgba(52, 152, 219, 0.1);
+}
+
+.btn-pedido-mini:hover {
+    color: #28a745;
+    background-color: rgba(40, 167, 69, 0.1);
 }
 
 .cliente-totales {

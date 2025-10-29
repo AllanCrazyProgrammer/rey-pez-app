@@ -122,6 +122,7 @@
           @crear-cuenta-ozuna="crearCuentaOzuna"
           @crear-cuenta-otilio="crearCuentaOtilio"
           @crear-cuenta-veronica="crearCuentaVeronica"
+          @ver-pedido-cliente="abrirModalPedidoCliente(clienteId)"
         />
       </form>
     </div>
@@ -177,6 +178,12 @@
       @guardar="guardarConfiguracionMedidas"
     />
 
+    <PedidoClienteModal
+      :mostrar="mostrarModalPedidoCliente"
+      :fecha-embarque="embarque.fecha"
+      :nombre-cliente="clienteSeleccionadoPedido"
+      @cerrar="cerrarModalPedidoCliente"
+    />
 
     <!-- Indicador de estado del guardado -->
     <SaveStatusIndicator />
@@ -229,6 +236,7 @@ import HilosModal from './components/modals/HilosModal.vue';
 import NotaModal from './components/modals/NotaModal.vue';
 import AltModal from './components/modals/AltModal.vue';
 import ConfiguracionMedidasModal from './components/modals/ConfiguracionMedidasModal.vue';
+import PedidoClienteModal from './components/modals/PedidoClienteModal.vue';
 
 
 // Lazy loaded components
@@ -265,6 +273,7 @@ export default {
     NotaModal,
     AltModal,
     ConfiguracionMedidasModal,
+    PedidoClienteModal,
     SaveStatusIndicator,
     AuthErrorNotification
   },
@@ -337,6 +346,9 @@ export default {
       
       mostrarModalAlt: false,
       altTemp: '',
+      
+      mostrarModalPedidoCliente: false,
+      clienteSeleccionadoPedido: null,
       
       // Otros estados
       clientesOffsets: {},
@@ -2629,7 +2641,8 @@ export default {
             });
           });
           await this.guardarSnapshotOffline({ pendingSync: false, docData: embarqueData, syncState: 'synced' });
-          alert('Embarque actualizado exitosamente.');
+          // Usar toast en lugar de alert para no interrumpir al usuario
+          this.mostrarMensaje('Embarque actualizado exitosamente.');
           this._guardandoEmbarque = false;
         } else {
           // Verificar primero si ya existe un embarque con la misma fecha
@@ -2710,7 +2723,7 @@ export default {
             });
 
             this.embarqueId = docRef.id;
-            alert('Embarque creado exitosamente y guardado en la base de datos.');
+            this.mostrarMensaje('Embarque creado exitosamente y guardado en la base de datos.');
             this.modoEdicion = true;
             await this.guardarSnapshotOffline({ pendingSync: false, docData: embarqueData, syncState: 'synced' });
           } finally {
@@ -2726,7 +2739,8 @@ export default {
           }
         }
         this.guardadoAutomaticoActivo = true;
-        this.$router.push('/lista-embarques');
+        // No redirigir automáticamente - el usuario puede seguir trabajando en el embarque
+        // this.$router.push('/lista-embarques');
       } catch (error) {
         this._guardandoEmbarque = false;
         console.error("Error al guardar el embarque: ", error);
@@ -3395,6 +3409,18 @@ export default {
       this.medidasConfiguracion = medidas;
       this.guardarMedidasConfiguracion();
       this.cerrarModalConfiguracionMedidas();
+    },
+
+    // Métodos para modal de pedido del cliente
+    abrirModalPedidoCliente(clienteId) {
+      const nombreCliente = this.obtenerNombreCliente(clienteId);
+      this.clienteSeleccionadoPedido = nombreCliente;
+      this.mostrarModalPedidoCliente = true;
+    },
+
+    cerrarModalPedidoCliente() {
+      this.mostrarModalPedidoCliente = false;
+      this.clienteSeleccionadoPedido = null;
     },
 
     cargarMedidasConfiguracion() {
