@@ -226,7 +226,7 @@ export default {
     },
     fechaEmbarque: {
       type: String,
-      required: true
+      default: ''
     }
   },
   data() {
@@ -245,6 +245,11 @@ export default {
   },
   methods: {
     async cargarPedidosDelDia() {
+      // No cargar si no hay fecha de embarque
+      if (!this.fechaEmbarque || this.fechaEmbarque.trim() === '') {
+        return;
+      }
+      
       this.cargandoPedidos = true;
       try {
         const db = getFirestore();

@@ -552,7 +552,7 @@ export default {
 .search-input-group {
   display: flex;
   gap: 15px;
-  align-items: end;
+  align-items: flex-end;
   flex-wrap: wrap;
 }
 

@@ -122,7 +122,7 @@ export default {
     },
     fechaEmbarque: {
       type: String,
-      required: true
+      default: ''
     },
     nombreCliente: {
       type: String,

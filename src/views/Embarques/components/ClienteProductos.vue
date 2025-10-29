@@ -8,10 +8,6 @@
                         title="Ver pedidos del cliente">
                         <i class="fas fa-clipboard-list"></i>
                     </button>
-                    <button @click.stop="$emit('generar-pdf', 'cliente', clienteId)" class="btn-pdf-mini"
-                        title="Vista previa PDF">
-                        <i class="fas fa-eye"></i>
-                    </button>
                 </h3>
                 <div class="cliente-totales">
                     <span>Limpio: {{ calcularTotalLimpioCliente }}T / {{ formatearKilos(calcularKilosLimpioCliente)

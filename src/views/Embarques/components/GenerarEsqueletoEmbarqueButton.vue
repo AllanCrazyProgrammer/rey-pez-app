@@ -29,7 +29,7 @@ export default {
   props: {
     fechaEmbarque: {
       type: String,
-      required: true
+      default: ''
     },
     embarqueBloqueado: {
       type: Boolean,
