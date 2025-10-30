@@ -456,7 +456,16 @@ export default {
           console.log("Datos de la cuenta cargados:", data);
 
           this.$nextTick(() => {
-            this.items = data.items || [];
+            // Cargar items y redondear los kilos, recalcular totales
+            this.items = (data.items || []).map(item => {
+              const kilosRedondeados = this.redondearKilos(item.kilos);
+              return {
+                ...item,
+                kilos: kilosRedondeados,
+                total: kilosRedondeados * (item.costo || 0)
+              };
+            });
+            
             this.saldoAcumuladoAnterior = data.saldoAcumuladoAnterior || 0;
             this.cobros = data.cobros || [];
             this.abonos = data.abonos || [];
@@ -467,16 +476,30 @@ export default {
             this.tieneObservacion = data.tieneObservacion || false;
             this.observacion = data.observacion || '';
             
-            // Cargar los itemsVenta con los precios de venta guardados
-            this.itemsVenta = data.itemsVenta || this.items.map(item => ({
+            // Cargar los itemsVenta con los precios de venta guardados y redondear kilos
+            this.itemsVenta = (data.itemsVenta || this.items.map(item => ({
               ...item,
               precioVenta: item.precioVenta || 0,
               totalVenta: (item.precioVenta || 0) * item.kilos,
               kilosVenta: item.kilos
-            }));
+            }))).map((item, index) => {
+              const kilosRedondeados = this.redondearKilos(item.kilosVenta);
+              const totalVenta = kilosRedondeados * (item.precioVenta || 0);
+              const itemCosto = this.items[index];
+              const totalCosto = itemCosto ? itemCosto.total : 0;
+              return {
+                ...item,
+                kilosVenta: kilosRedondeados,
+                totalVenta: totalVenta,
+                ganancia: totalVenta - totalCosto
+              };
+            });
             
             // Asegurarse de que los totales se calculen correctamente
             this.actualizarItemsVenta();
+            
+            // Forzar actualización de la vista
+            this.$forceUpdate();
             
             console.log("Estado actualizado con $nextTick:", {
               items: this.items,
@@ -588,20 +611,32 @@ export default {
       }
 
       try {
-        const total = this.newItem.kilos * this.newItem.costo;
+        // Normalizar la medida (41-50 -> 41/50 para tallas, no para crudos)
+        const medidaNormalizada = this.newItem.medida.includes('-') && 
+                                   !this.newItem.medida.toLowerCase().includes('crudo')
+          ? this.newItem.medida.replace(/-/g, '/')
+          : this.newItem.medida;
+        
+        // Redondear los kilos
+        const kilosRedondeados = this.redondearKilos(this.newItem.kilos);
+        
+        const total = kilosRedondeados * this.newItem.costo;
         this.items.push({
-          kilos: this.newItem.kilos,
-          medida: this.newItem.medida,
+          kilos: kilosRedondeados,
+          medida: medidaNormalizada,
           costo: this.newItem.costo,
           total
         });
+        
+        // Actualizar el estado local del input también
+        this.newItem.kilos = kilosRedondeados;
 
         // Verificar si necesitamos ajustar los kilos para la tabla de venta
-        let kilosVenta = this.newItem.kilos;
+        let kilosVenta = kilosRedondeados;
         
         // Usar la función calcularKilosCrudos para ajustar de 19 a 20 kg si es necesario
-        const kilosAjustados = this.calcularKilosCrudos(this.newItem.medida, this.newItem.kilos, false);
-        if (kilosAjustados !== this.newItem.kilos) {
+        const kilosAjustados = this.calcularKilosCrudos(medidaNormalizada, kilosRedondeados, false);
+        if (kilosAjustados !== kilosRedondeados) {
           kilosVenta = kilosAjustados;
         }
 
@@ -610,7 +645,7 @@ export default {
         const ganancia = totalVenta - total;
         this.itemsVenta.push({
           kilosVenta: kilosVenta,
-          medida: this.newItem.medida,
+          medida: medidaNormalizada,
           precioVenta: this.newItem.precioVenta,
           totalVenta,
           ganancia
@@ -643,20 +678,41 @@ export default {
     },
     async crearNuevaCuenta() {
       try {
-        // Verificar si ya existe una nota para esta fecha
-        const cuentasRef = collection(db, 'cuentasCatarro');
-        const q = query(cuentasRef, where('fecha', '==', this.fechaSeleccionada));
-        const querySnapshot = await getDocs(q);
+        // Verificar si estamos en modo edición
+        const id = this.$route.params.id;
+        const isEditing = this.$route.query.edit === 'true';
+        
+        // Solo verificar duplicados si NO estamos en modo edición
+        if (!id || !isEditing) {
+          const cuentasRef = collection(db, 'cuentasCatarro');
+          const q = query(cuentasRef, where('fecha', '==', this.fechaSeleccionada));
+          const querySnapshot = await getDocs(q);
 
-        if (!querySnapshot.empty) {
-          throw new Error('Ya existe una nota registrada para esta fecha.');
+          if (!querySnapshot.empty) {
+            throw new Error('Ya existe una nota registrada para esta fecha.');
+          }
         }
 
-        // Preparar solo los datos esenciales inicialmente
+        // Preparar solo los datos esenciales inicialmente con kilos redondeados
         const notaData = {
           fecha: this.fechaSeleccionada,
-          items: this.items,
-          itemsVenta: this.itemsVenta,
+          items: this.items.map(item => {
+            const kilosRedondeados = this.redondearKilos(item.kilos);
+            return {
+              ...item,
+              kilos: kilosRedondeados,
+              total: kilosRedondeados * (item.costo || 0)
+            };
+          }),
+          itemsVenta: this.itemsVenta.map(item => {
+            const kilosRedondeados = this.redondearKilos(item.kilosVenta);
+            const totalVenta = kilosRedondeados * (item.precioVenta || 0);
+            return {
+              ...item,
+              kilosVenta: kilosRedondeados,
+              totalVenta: totalVenta
+            };
+          }),
           saldoAcumuladoAnterior: await this.obtenerSaldoAcumuladoAnterior(),
           cobros: [],
           abonos: [],
@@ -679,11 +735,31 @@ export default {
 
         return docRef.id;
       } catch (error) {
-        if (error.message === 'Ya existe una nota registrada para esta fecha.') {
-          alert(error.message);
-        } else {
+        // Solo mostrar alerta si es un error real de duplicado en creación nueva
+        const id = this.$route.params.id;
+        const isEditing = this.$route.query.edit === 'true';
+        
+        if (error.message === 'Ya existe una nota registrada para esta fecha.' && (!id || !isEditing)) {
+          // Solo mostrar alerta si NO estamos en modo edición
+          if (this.lastSaveMessage !== error.message || !this.showSaveMessage) {
+            this.lastSaveMessage = error.message;
+            this.showSaveMessage = true;
+            if (this.saveMessageTimer) clearTimeout(this.saveMessageTimer);
+            this.saveMessageTimer = setTimeout(() => {
+              this.showSaveMessage = false;
+            }, 3000);
+          }
+        } else if (!isEditing) {
+          // Solo mostrar errores si no estamos editando
           console.error('Error al crear nueva cuenta:', error);
-          alert('Error al crear la cuenta. Por favor, intente nuevamente.');
+          if (this.lastSaveMessage !== 'Error al crear la cuenta' || !this.showSaveMessage) {
+            this.lastSaveMessage = 'Error al crear la cuenta. Por favor, intente nuevamente.';
+            this.showSaveMessage = true;
+            if (this.saveMessageTimer) clearTimeout(this.saveMessageTimer);
+            this.saveMessageTimer = setTimeout(() => {
+              this.showSaveMessage = false;
+            }, 3000);
+          }
         }
         throw error;
       }
@@ -739,7 +815,14 @@ export default {
         
         const notaData = {
           fecha: this.fechaSeleccionada,
-          items: this.items,
+          items: this.items.map(item => {
+            const kilosRedondeados = this.redondearKilos(item.kilos);
+            return {
+              ...item,
+              kilos: kilosRedondeados,
+              total: kilosRedondeados * (item.costo || 0)
+            };
+          }),
           saldoAcumuladoAnterior: saldoAcumuladoActualizado,
           cobros: this.cobros,
           abonos: this.abonos,
@@ -748,7 +831,15 @@ export default {
           nuevoSaldoAcumulado: estaPagada ? 0 : nuevoSaldoAcumulado,
           gananciaDelDia: this.gananciaDelDia,
           estadoPagado: estaPagada,
-          itemsVenta: this.itemsVenta,
+          itemsVenta: this.itemsVenta.map(item => {
+            const kilosRedondeados = this.redondearKilos(item.kilosVenta);
+            const totalVenta = kilosRedondeados * (item.precioVenta || 0);
+            return {
+              ...item,
+              kilosVenta: kilosRedondeados,
+              totalVenta: totalVenta
+            };
+          }),
           tieneObservacion: this.tieneObservacion,
           observacion: this.observacion,
           ultimaActualizacion: new Date().toISOString()
@@ -772,15 +863,26 @@ export default {
               this.showSaveMessage = false;
             }, 3000);
           }
-          this.$router.push('/cuentas-catarro');
+          
+          // Dar un pequeño delay antes de navegar para que el mensaje se vea
+          setTimeout(() => {
+            this.$router.push('/cuentas-catarro');
+          }, 500);
         } else {
-          // Verificar si ya existe una nota para esta fecha
+          // Verificar si ya existe una nota para esta fecha (solo al crear nueva)
           const cuentasRef = collection(db, 'cuentasCatarro');
           const q = query(cuentasRef, where('fecha', '==', this.fechaSeleccionada));
           const querySnapshot = await getDocs(q);
 
           if (!querySnapshot.empty) {
-            alert('Ya existe una nota registrada para esta fecha. No se puede crear una nueva.');
+            if (this.lastSaveMessage !== 'Ya existe una nota registrada para esta fecha' || !this.showSaveMessage) {
+              this.lastSaveMessage = 'Ya existe una nota registrada para esta fecha. No se puede crear una nueva.';
+              this.showSaveMessage = true;
+              if (this.saveMessageTimer) clearTimeout(this.saveMessageTimer);
+              this.saveMessageTimer = setTimeout(() => {
+                this.showSaveMessage = false;
+              }, 3000);
+            }
             return;
           } else {
             // Crear nueva nota
@@ -797,7 +899,11 @@ export default {
                 this.showSaveMessage = false;
               }, 3000);
             }
-            this.$router.push('/cuentas-catarro');
+            
+            // Dar un pequeño delay antes de navegar para que el mensaje se vea
+            setTimeout(() => {
+              this.$router.push('/cuentas-catarro');
+            }, 500);
           }
         }
       } catch (error) {
@@ -837,6 +943,15 @@ export default {
     },
     saveEditedItem() {
       if (this.editingItem.kilos && this.editingItem.medida && this.editingItem.costo) {
+        // Normalizar la medida antes de guardar
+        const medidaNormalizada = this.editingItem.medida.includes('-') && 
+                                   !this.editingItem.medida.toLowerCase().includes('crudo')
+          ? this.editingItem.medida.replace(/-/g, '/')
+          : this.editingItem.medida;
+        
+        // Redondear los kilos
+        this.editingItem.kilos = this.redondearKilos(this.editingItem.kilos);
+        this.editingItem.medida = medidaNormalizada;
         this.editingItem.total = this.editingItem.kilos * this.editingItem.costo;
         this.items[this.editingIndex] = { ...this.editingItem };
         this.actualizarItemsVenta();
@@ -998,8 +1113,15 @@ export default {
         const totalCosto = itemCosto ? itemCosto.total : 0;
         const ganancia = totalVenta - totalCosto;
         
+        // Normalizar la medida para asegurar consistencia (41-50 -> 41/50)
+        const medidaNormalizada = itemVenta.medida.includes('-') && 
+                                   !itemVenta.medida.toLowerCase().includes('crudo')
+          ? itemVenta.medida.replace(/-/g, '/')
+          : itemVenta.medida;
+        
         return {
           ...itemVenta,
+          medida: medidaNormalizada,
           totalVenta,
           ganancia
         };
@@ -1044,13 +1166,16 @@ export default {
           const item = this.itemsVenta[index];
           const itemCosto = this.items[index];
           
+          // Redondear los kilos primero
+          const kilosRedondeados = this.redondearKilos(parseFloat(item.kilosVenta) || 0);
+          
           // Verificar si necesitamos ajustar los kilos para la tabla de venta
           if (itemCosto) {
             // Usar la función calcularKilosCrudos para ajustar de 19 a 20 kg si es necesario
-            const kilosAjustados = this.calcularKilosCrudos(item.medida, parseFloat(item.kilosVenta) || itemCosto.kilos, false);
+            const kilosAjustados = this.calcularKilosCrudos(item.medida, kilosRedondeados, false);
             item.kilosVenta = kilosAjustados;
           } else {
-            item.kilosVenta = parseFloat(item.kilosVenta) || 0;
+            item.kilosVenta = kilosRedondeados;
           }
           
           this.calcularTotalVenta(index);
@@ -1084,10 +1209,27 @@ export default {
       if (index !== null && field !== null) {
         try {
           const item = this.items[index];
-          if (field === 'kilos' || field === 'costo') {
-            item[field] = parseFloat(item[field]) || 0;
+          if (field === 'kilos') {
+            item.kilos = this.redondearKilos(parseFloat(item.kilos) || 0);
+          } else if (field === 'costo') {
+            item.costo = parseFloat(item.costo) || 0;
+          } else if (field === 'medida') {
+            // Normalizar la medida cuando se edita
+            const medidaNormalizada = item.medida.includes('-') && 
+                                       !item.medida.toLowerCase().includes('crudo')
+              ? item.medida.replace(/-/g, '/')
+              : item.medida;
+            item.medida = medidaNormalizada;
           }
           item.total = item.kilos * item.costo;
+          
+          // Actualizar también el itemVenta correspondiente
+          if (this.itemsVenta[index]) {
+            const kilosVentaRedondeados = this.redondearKilos(this.itemsVenta[index].kilosVenta);
+            this.itemsVenta[index].kilosVenta = kilosVentaRedondeados;
+            this.itemsVenta[index].totalVenta = kilosVentaRedondeados * (this.itemsVenta[index].precioVenta || 0);
+          }
+          
           this.actualizarItemsVenta();
           
           // Encolar el guardado después de la edición
@@ -1117,13 +1259,22 @@ export default {
       }
 
       if (this.newProduct.kilosVenta && this.newProduct.medida && this.newProduct.precioVenta) {
+        // Normalizar la medida (41-50 -> 41/50 para tallas, no para crudos)
+        const medidaNormalizada = this.newProduct.medida.includes('-') && 
+                                   !this.newProduct.medida.toLowerCase().includes('crudo')
+          ? this.newProduct.medida.replace(/-/g, '/')
+          : this.newProduct.medida;
+        
+        // Redondear los kilos primero
+        const kilosRedondeados = this.redondearKilos(this.newProduct.kilosVenta);
+        
         // Verificar si necesitamos ajustar los kilos para la tabla de venta
-        const kilosAjustados = this.calcularKilosCrudos(this.newProduct.medida, this.newProduct.kilosVenta, false);
+        const kilosAjustados = this.calcularKilosCrudos(medidaNormalizada, kilosRedondeados, false);
         
         const totalVenta = kilosAjustados * this.newProduct.precioVenta;
         this.itemsVenta.push({
           kilosVenta: kilosAjustados,
-          medida: this.newProduct.medida,
+          medida: medidaNormalizada,
           precioVenta: this.newProduct.precioVenta,
           totalVenta,
           ganancia: totalVenta // La ganancia será igual al total de venta ya que no tiene costo asociado
@@ -1148,11 +1299,15 @@ export default {
       }
     },
     async queueSave() {
+      // Verificar si estamos en modo edición
+      const id = this.$route.params.id;
+      const isEditing = this.$route.query.edit === 'true';
+      
       // Agregar operación a la cola con timestamp
       this.saveQueue.push({
         timestamp: Date.now(),
         operation: async () => {
-          if (!this.$route.params.id) {
+          if (!id || !isEditing) {
             await this.crearNuevaCuenta();
           } else {
             await this.autoSaveNota();
@@ -1202,21 +1357,28 @@ export default {
       if (!this.$route.params.id) return;
 
       try {
-        // Preparar datos completos para guardar
+        // Preparar datos completos para guardar con kilos redondeados
         const notaData = {
-          items: this.items.map(item => ({
-            kilos: item.kilos,
-            medida: item.medida,
-            costo: item.costo,
-            total: item.total
-          })),
-          itemsVenta: this.itemsVenta.map(item => ({
-            kilosVenta: item.kilosVenta,
-            medida: item.medida,
-            precioVenta: item.precioVenta,
-            totalVenta: item.totalVenta,
-            ganancia: item.ganancia
-          })),
+          items: this.items.map(item => {
+            const kilosRedondeados = this.redondearKilos(item.kilos);
+            return {
+              kilos: kilosRedondeados,
+              medida: item.medida,
+              costo: item.costo,
+              total: kilosRedondeados * (item.costo || 0)
+            };
+          }),
+          itemsVenta: this.itemsVenta.map(item => {
+            const kilosRedondeados = this.redondearKilos(item.kilosVenta);
+            const totalVenta = kilosRedondeados * (item.precioVenta || 0);
+            return {
+              kilosVenta: kilosRedondeados,
+              medida: item.medida,
+              precioVenta: item.precioVenta,
+              totalVenta: totalVenta,
+              ganancia: item.ganancia
+            };
+          }),
           totalGeneral: this.totalGeneral,
           totalGeneralVenta: this.totalGeneralVenta,
           nuevoSaldoAcumulado: this.nuevoSaldoAcumulado,
@@ -1303,70 +1465,92 @@ export default {
         }
       }
     },
+    // Método para normalizar medidas (convertir guiones a slashes en tallas)
+    normalizarMedida(medida) {
+      if (!medida) return '';
+      return medida.toString()
+        .toLowerCase()
+        .replace(/\s+/g, '')
+        .replace(/[\[\]()]/g, '')
+        .replace(/-/g, '/')
+        .trim();
+    },
+    
+    // Método para redondear kilos
+    redondearKilos(kilos) {
+      if (kilos === null || kilos === undefined) return 0;
+      return Math.round(kilos);
+    },
+    
     // Método para calcular los kilos de crudos
     calcularKilosCrudos(medida, kilosOriginales, esParaCostos = false) {
       // Verificar si es un crudo y tiene el formato adecuado
       const medidaLower = medida.toLowerCase().trim();
       
-      // Verificar si tiene formato de números separados por guión (ej: "5-19")
-      const formatoGuion = /^(\d+)-(\d+)$/.exec(medidaLower);
-      if (formatoGuion) {
-        const cajas = parseInt(formatoGuion[1]) || 0;
-        const kilosPorCaja = parseInt(formatoGuion[2]) || 0;
-        
-        // Si el segundo número es 19, sustituirlo por 20 solo si NO es para la tabla de costos
-        const kiloPorCaja = (kilosPorCaja === 19 && !esParaCostos) ? 20 : kilosPorCaja;
-        
-        // Calcular kilos totales: cajas * kiloPorCaja
-        const kilosCalculados = cajas * kiloPorCaja;
-        
-        // Mostrar mensaje informativo solo si se sustituyó 19 por 20 y no es para costos
-        if (kilosPorCaja === 19 && !esParaCostos && kilosCalculados !== kilosOriginales) {
-          this.lastSaveMessage = `Cálculo de crudos: ${cajas} cajas * 20kg = ${kilosCalculados}kg (formato ${medidaLower})`;
-          this.showSaveMessage = true;
-          
-          // Ocultar el mensaje después de 3 segundos
-          if (this.saveMessageTimer) {
-            clearTimeout(this.saveMessageTimer);
-          }
-          this.saveMessageTimer = setTimeout(() => {
-            this.showSaveMessage = false;
-          }, 3000);
-        } else if (kilosPorCaja === 19 && esParaCostos) {
-          // Mensaje para la tabla de costos
-          console.log(`Cálculo de crudos para tabla de costos: ${cajas} cajas * 19kg = ${kilosCalculados}kg (formato ${medidaLower})`);
-        }
-        
-        return kilosCalculados;
-      }
-      
       // Verificar si es un crudo
       const esCrudo = medidaLower.includes('crudo');
       
-      // Verificar formato con asterisco y posible suma (ej: "6*19+5")
-      if (esCrudo && /^\d+\*\d+(\+\d+)?$/.test(medidaLower)) {
-        // Extraer los números del formato
-        const partes = medidaLower.split(/[\*\+]/);
-        if (partes.length >= 2) {
-          const cajas = parseInt(partes[0]) || 0;
-          const kilosPorCaja = parseInt(partes[1]) || 0;
+      // Solo aplicar cálculos automáticos si la medida incluye la palabra "crudo"
+      // Esto evita que tallas como "41-50" o "41/50" sean interpretadas como cálculos
+      if (esCrudo) {
+        // Verificar si tiene formato de números separados por guión (ej: "5-19")
+        const formatoGuion = /^(\d+)-(\d+)$/.exec(medidaLower);
+        if (formatoGuion) {
+          const cajas = parseInt(formatoGuion[1]) || 0;
+          const kilosPorCaja = parseInt(formatoGuion[2]) || 0;
           
           // Si el segundo número es 19, sustituirlo por 20 solo si NO es para la tabla de costos
           const kiloPorCaja = (kilosPorCaja === 19 && !esParaCostos) ? 20 : kilosPorCaja;
           
           // Calcular kilos totales: cajas * kiloPorCaja
-          let kilosCalculados = cajas * kiloPorCaja;
+          const kilosCalculados = cajas * kiloPorCaja;
           
-          // Sumar el tercer número si existe (formato "6*19+5")
-          if (partes.length > 2) {
-            kilosCalculados += parseInt(partes[2]) || 0;
+          // Mostrar mensaje informativo solo si se sustituyó 19 por 20 y no es para costos
+          if (kilosPorCaja === 19 && !esParaCostos && kilosCalculados !== kilosOriginales) {
+            this.lastSaveMessage = `Cálculo de crudos: ${cajas} cajas * 20kg = ${kilosCalculados}kg (formato ${medidaLower})`;
+            this.showSaveMessage = true;
+            
+            // Ocultar el mensaje después de 3 segundos
+            if (this.saveMessageTimer) {
+              clearTimeout(this.saveMessageTimer);
+            }
+            this.saveMessageTimer = setTimeout(() => {
+              this.showSaveMessage = false;
+            }, 3000);
+          } else if (kilosPorCaja === 19 && esParaCostos) {
+            // Mensaje para la tabla de costos
+            console.log(`Cálculo de crudos para tabla de costos: ${cajas} cajas * 19kg = ${kilosCalculados}kg (formato ${medidaLower})`);
           }
           
           return kilosCalculados;
         }
+        
+        // Verificar formato con asterisco y posible suma (ej: "6*19+5")
+        if (/^\d+\*\d+(\+\d+)?$/.test(medidaLower)) {
+          // Extraer los números del formato
+          const partes = medidaLower.split(/[\*\+]/);
+          if (partes.length >= 2) {
+            const cajas = parseInt(partes[0]) || 0;
+            const kilosPorCaja = parseInt(partes[1]) || 0;
+            
+            // Si el segundo número es 19, sustituirlo por 20 solo si NO es para la tabla de costos
+            const kiloPorCaja = (kilosPorCaja === 19 && !esParaCostos) ? 20 : kilosPorCaja;
+            
+            // Calcular kilos totales: cajas * kiloPorCaja
+            let kilosCalculados = cajas * kiloPorCaja;
+            
+            // Sumar el tercer número si existe (formato "6*19+5")
+            if (partes.length > 2) {
+              kilosCalculados += parseInt(partes[2]) || 0;
+            }
+            
+            return kilosCalculados;
+          }
+        }
       }
       
-      // Si no coincide con ningún formato especial, devolver los kilos originales
+      // Si no es un crudo o no coincide con formatos especiales, devolver los kilos originales
+      // Esto permite que medidas como "41-50" o "41/50" no sean alteradas
       return kilosOriginales;
     },
   },
