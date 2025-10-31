@@ -619,7 +619,23 @@ export default {
     // Helper para obtener YYYY-MM-DD en horario local (evita desfase UTC)
     toLocalYMD(fecha) {
       if (!fecha) return '';
-      const d = fecha instanceof Date ? fecha : new Date(fecha);
+      let d;
+      
+      // Si es un Timestamp de Firebase, convertir correctamente
+      if (typeof fecha === 'object' && fecha.seconds) {
+        // Crear fecha desde el timestamp en milisegundos
+        d = new Date(fecha.seconds * 1000);
+      } else if (fecha instanceof Date) {
+        d = fecha;
+      } else if (typeof fecha === 'string' && fecha.includes('-')) {
+        // Si ya es un string YYYY-MM-DD, parsearlo como fecha local
+        const [y, m, day] = fecha.split('-');
+        d = new Date(y, m - 1, day);
+      } else {
+        d = new Date(fecha);
+      }
+      
+      // Usar zona horaria local para mantener la fecha correcta
       const y = d.getFullYear();
       const m = String(d.getMonth() + 1).padStart(2, '0');
       const day = String(d.getDate()).padStart(2, '0');
@@ -2406,17 +2422,34 @@ export default {
 
     irAPreparacion() {
       if (this.embarqueData && this.embarqueData.fecha) {
-        // Convertir la fecha a string si es un Timestamp
+        // Convertir la fecha a string YYYY-MM-DD
         let fechaString = this.embarqueData.fecha;
         
-        if (typeof fechaString === 'object' && fechaString.seconds) {
-          // Es un Timestamp de Firebase, convertir a string
+        // Si ya es un string en formato correcto, usarlo directamente
+        if (typeof fechaString === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(fechaString)) {
+          console.log('Fecha ya está en formato YYYY-MM-DD:', fechaString);
+        } else if (typeof fechaString === 'object' && fechaString.seconds) {
+          // Es un Timestamp de Firebase, convertir a string usando UTC para evitar desfases
           const fechaDate = new Date(fechaString.seconds * 1000);
-          fechaString = this.toLocalYMD(fechaDate);
-          console.log('Fecha convertida de Timestamp:', fechaString);
+          const y = fechaDate.getUTCFullYear();
+          const m = String(fechaDate.getUTCMonth() + 1).padStart(2, '0');
+          const d = String(fechaDate.getUTCDate()).padStart(2, '0');
+          fechaString = `${y}-${m}-${d}`;
+          console.log('Fecha convertida de Timestamp usando UTC:', fechaString);
+        } else if (fechaString instanceof Date) {
+          // Es un objeto Date, convertir usando la zona horaria local
+          const y = fechaString.getFullYear();
+          const m = String(fechaString.getMonth() + 1).padStart(2, '0');
+          const d = String(fechaString.getDate()).padStart(2, '0');
+          fechaString = `${y}-${m}-${d}`;
+          console.log('Fecha convertida de Date:', fechaString);
         } else if (typeof fechaString === 'string') {
-          // Ya es string, usar tal como está
-          console.log('Fecha ya es string:', fechaString);
+          // Es string pero puede estar en otro formato (ISO, etc.)
+          if (fechaString.includes('T')) {
+            // Si es ISO string, extraer solo la parte de la fecha
+            fechaString = fechaString.split('T')[0];
+          }
+          console.log('Fecha procesada desde string:', fechaString);
         }
         
         // Navegar a Preparación con la fecha del embarque y el ID del embarque como query parameters

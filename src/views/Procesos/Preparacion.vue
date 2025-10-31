@@ -55,8 +55,8 @@
       <table>
         <thead>
           <tr>
-            <th>Medida</th>
-            <th>Proveedor</th>
+            <th class="sticky-col-1">Medida</th>
+            <th class="sticky-col-2">Proveedor</th>
             <th>Día/Noche</th>
             <th>Tinas/Baños</th>
             <th>Cajas/Kg</th>
@@ -68,7 +68,7 @@
         </thead>
         <tbody>
           <tr v-for="(medida, index) in diaSeleccionado.medidas" :key="index">
-            <td>
+            <td class="sticky-col-1">
               <select 
                 v-model="medida.medida" 
                 class="form-control medida-select"
@@ -80,7 +80,7 @@
                 </option>
               </select>
             </td>
-            <td>
+            <td class="sticky-col-2">
               <select 
                 v-model="medida.proveedor" 
                 class="form-control proveedor-select"
@@ -321,14 +321,14 @@ export default {
       if (this.$route.query.fecha) {
         let fechaBuscada = this.$route.query.fecha
         
-        // Convertir Timestamp a string (formato local YYYY-MM-DD) si es necesario
+        // Convertir Timestamp a string (formato YYYY-MM-DD usando UTC) si es necesario
         if (typeof fechaBuscada === 'object' && fechaBuscada.seconds) {
           const fechaDate = new Date(fechaBuscada.seconds * 1000)
-          const y = fechaDate.getFullYear()
-          const m = String(fechaDate.getMonth() + 1).padStart(2, '0')
-          const d = String(fechaDate.getDate()).padStart(2, '0')
+          const y = fechaDate.getUTCFullYear()
+          const m = String(fechaDate.getUTCMonth() + 1).padStart(2, '0')
+          const d = String(fechaDate.getUTCDate()).padStart(2, '0')
           fechaBuscada = `${y}-${m}-${d}`
-          console.log('Fecha convertida de Timestamp (local):', fechaBuscada)
+          console.log('Fecha convertida de Timestamp (UTC):', fechaBuscada)
         }
         
         console.log('Buscando día con fecha:', fechaBuscada)
@@ -345,7 +345,8 @@ export default {
         } else {
           console.log('No se encontró día para la fecha:', fechaBuscada)
           console.log('Fechas disponibles:', this.dias.map(d => d.fecha))
-          // Opcionalmente, mostrar mensaje o crear día automáticamente
+          // Crear automáticamente el día si viene desde un embarque
+          await this.crearDiaAutomaticamente(fechaBuscada)
         }
       } else if (this.dias.length > 0) {
         // Si no hay día en la URL, seleccionar el más reciente
@@ -353,6 +354,42 @@ export default {
         console.log('Seleccionado día más reciente:', this.diaSeleccionado.fecha)
         // Buscar embarque para esta fecha
         await this.buscarEmbarquePorFecha(this.diaSeleccionado.fecha)
+      }
+    },
+    
+    // Método para crear automáticamente un día cuando se navega desde un embarque
+    async crearDiaAutomaticamente(fecha) {
+      try {
+        console.log('Creando día automáticamente para la fecha:', fecha)
+        const db = getFirestore()
+        
+        const [year, month, day] = fecha.split('-')
+        const fechaLocal = new Date(year, month - 1, parseInt(day))
+        
+        const docRef = await addDoc(collection(db, 'preparacion'), {
+          fecha: fecha,
+          medidas: [],
+          createdAt: new Date(),
+          timestamp: fechaLocal.getTime()
+        })
+
+        const nuevoDiaCreado = {
+          id: docRef.id,
+          fecha: fecha,
+          medidas: [],
+          timestamp: fechaLocal.getTime()
+        }
+
+        this.dias.push(nuevoDiaCreado)
+        
+        // Seleccionar el día recién creado automáticamente
+        this.diaSeleccionado = nuevoDiaCreado
+        console.log('Día creado y seleccionado automáticamente:', fecha)
+        
+        // Buscar embarque para esta fecha
+        await this.buscarEmbarquePorFecha(fecha)
+      } catch (error) {
+        console.error('Error al crear día automáticamente:', error)
       }
     },
     
@@ -606,19 +643,21 @@ export default {
       try {
         const db = getFirestore();
         const embarqueRef = doc(db, 'embarques', this.embarqueId);
+        // Forzar lectura desde el servidor para obtener datos más actualizados
         const embarqueDoc = await getDoc(embarqueRef);
         
         if (embarqueDoc.exists()) {
           this.embarqueData = embarqueDoc.data();
-          console.log('Datos del embarque cargados:', this.embarqueData);
+          console.log('✅ Datos del embarque cargados desde Firebase:', this.embarqueId);
           console.log('Kilos crudos disponibles:', this.embarqueData.kilosCrudos);
           console.log('Número de clientes:', this.embarqueData.clientes?.length || 0);
+          console.log('Fecha del embarque:', this.embarqueData.fecha);
           this.calcularRendimientos();
         } else {
-          console.error('No se encontró el embarque');
+          console.error('❌ No se encontró el embarque');
         }
       } catch (error) {
-        console.error('Error al cargar el embarque:', error);
+        console.error('❌ Error al cargar el embarque:', error);
       }
     },
 
@@ -637,15 +676,21 @@ export default {
           const data = doc.data();
           let fechaEmbarque = '';
           
-          // Normalizar fecha del embarque
+          // Normalizar fecha del embarque usando UTC para evitar desfases de zona horaria
           if (typeof data.fecha === 'object' && data.fecha.seconds) {
             const fechaDate = new Date(data.fecha.seconds * 1000);
-            const y = fechaDate.getFullYear();
-            const m = String(fechaDate.getMonth() + 1).padStart(2, '0');
-            const d = String(fechaDate.getDate()).padStart(2, '0');
+            const y = fechaDate.getUTCFullYear();
+            const m = String(fechaDate.getUTCMonth() + 1).padStart(2, '0');
+            const d = String(fechaDate.getUTCDate()).padStart(2, '0');
             fechaEmbarque = `${y}-${m}-${d}`;
           } else if (typeof data.fecha === 'string') {
             fechaEmbarque = data.fecha;
+          } else if (data.fecha instanceof Date) {
+            // Si es un objeto Date directamente
+            const y = data.fecha.getUTCFullYear();
+            const m = String(data.fecha.getUTCMonth() + 1).padStart(2, '0');
+            const d = String(data.fecha.getUTCDate()).padStart(2, '0');
+            fechaEmbarque = `${y}-${m}-${d}`;
           }
           
           // Comparar fechas
@@ -680,14 +725,33 @@ export default {
         return;
       }
 
-      // Usar la misma lógica que el componente de Rendimientos para obtener medidas únicas
+      // USAR DIRECTAMENTE LOS DATOS DE RENDIMIENTOS.VUE
+      // En lugar de recalcular, obtener los datos que ya están guardados en Firebase
       const medidasUnicas = this.obtenerMedidasUnicas();
+      const kilosCrudosGuardados = this.embarqueData.kilosCrudos || {};
       
-      // Calcular rendimientos para cada medida
+      console.log('📊 [Preparacion] Usando datos de rendimientos guardados en Firebase');
+      
+      // Crear array de rendimientos usando los mismos datos que Rendimientos.vue
       const todosLosRendimientos = medidasUnicas.map(medida => {
+        // Obtener kilos crudos guardados (mismo que en Rendimientos.vue)
+        let kilosCrudos = 0;
+        if (this.esMedidaMix(medida)) {
+          const kilosCrudosObj = kilosCrudosGuardados[medida];
+          if (kilosCrudosObj && typeof kilosCrudosObj === 'object') {
+            kilosCrudos = Number(kilosCrudosObj.medida1 || 0) + Number(kilosCrudosObj.medida2 || 0);
+          }
+        } else {
+          kilosCrudos = Number(kilosCrudosGuardados[medida] || 0);
+        }
+
+        // Calcular total embarcado usando el MISMO método que Rendimientos.vue
         const totalEmbarcado = this.obtenerTotalEmbarcado(medida);
-        const kilosCrudos = this.obtenerKilosCrudos(medida);
+        
+        // Calcular rendimiento (mismo cálculo que Rendimientos.vue)
         const rendimiento = totalEmbarcado > 0 ? kilosCrudos / totalEmbarcado : 0;
+
+        console.log(`📊 ${medida}: ${kilosCrudos} kg crudos / ${totalEmbarcado} kg embarcado = ${rendimiento.toFixed(2)}`);
 
         return {
           medida: medida,
@@ -697,25 +761,12 @@ export default {
         };
       });
 
-      // Filtrar solo medidas con datos y rendimiento > 0
-      this.rendimientosEmbarque = todosLosRendimientos.filter(r => r.totalEmbarcado > 0 && r.rendimiento > 0);
+      // Filtrar solo medidas con datos
+      this.rendimientosEmbarque = todosLosRendimientos.filter(r => 
+        r.kilosCrudos > 0 && r.totalEmbarcado > 0 && r.rendimiento > 0
+      );
       
-      // Debug: mostrar medidas filtradas
-      const medidasFiltradas = todosLosRendimientos.filter(r => r.totalEmbarcado === 0 || r.rendimiento === 0);
-      if (medidasFiltradas.length > 0) {
-        console.log('Medidas filtradas (sin rendimiento):', medidasFiltradas.map(m => m.medida));
-      }
-
-      console.log('Rendimientos calculados:', this.rendimientosEmbarque);
-      
-      // Debug detallado para cada medida
-      this.rendimientosEmbarque.forEach(item => {
-        console.log(`Medida: ${item.medida}`);
-        console.log(`- Total Embarcado: ${item.totalEmbarcado}`);
-        console.log(`- Kilos Crudos: ${item.kilosCrudos}`);
-        console.log(`- Rendimiento: ${item.rendimiento.toFixed(2)}`);
-        console.log('---');
-      });
+      console.log(`✅ ${this.rendimientosEmbarque.length} rendimientos cargados correctamente`);
     },
 
     // Método para obtener medidas únicas (copiado del componente de Rendimientos)
@@ -778,7 +829,10 @@ export default {
       const esOzuna = medida.includes('Maquila Ozuna');
       const medidaBase = medida.replace(' Maquila Ozuna', '').toLowerCase().trim();
       
-      return this.embarqueData.clientes.reduce((total, cliente) => {
+      console.log(`🔄 [NUEVO CÓDIGO v2] Calculando total para: ${medida}`);
+      let detalleProductos = [];
+      
+      const total = this.embarqueData.clientes.reduce((total, cliente) => {
         return total + cliente.productos
           .filter(p => {
             if (!p.medida) return false;
@@ -796,23 +850,37 @@ export default {
             }
           })
           .reduce((subtotal, producto) => {
-            // Excluir productos refrigerados del cálculo
-            if (producto.refrigerar) {
-              return subtotal;
-            }
-            
+            // INCLUIR productos refrigerados en el cálculo (igual que en Rendimientos.vue)
+            let kilosProducto = 0;
             if (producto.tipo === 'c/h20') {
               const totalBolsas = this.calcularTotalBolsas(producto);
               const valorNeto = parseFloat(producto.camaronNeto) || 0.65;
-              return subtotal + (totalBolsas * valorNeto);
+              kilosProducto = totalBolsas * valorNeto;
             } else {
               const sumaKilos = producto.kilos.reduce((sum, kilo) => sum + (Number(kilo) || 0), 0);
               const sumaTaras = this.calcularTotalTaras(producto);
               const descuentoTaras = producto.restarTaras ? sumaTaras * 3 : 0;
-              return subtotal + (sumaKilos - descuentoTaras);
+              kilosProducto = sumaKilos - descuentoTaras;
             }
+            
+            detalleProductos.push({
+              cliente: cliente.nombre,
+              medida: producto.medida,
+              kilos: kilosProducto,
+              refrigerado: producto.refrigerar || false
+            });
+            
+            return subtotal + kilosProducto;
           }, 0);
       }, 0);
+      
+      // Log detallado para debug
+      if (medida === '51/60 tirado') {
+        console.log(`[Preparacion] Detalle para ${medida}:`, detalleProductos);
+        console.log(`[Preparacion] Total calculado: ${total}`);
+      }
+      
+      return total;
     },
 
     obtenerKilosCrudos(medida) {
@@ -890,6 +958,7 @@ export default {
     }
   },
   async mounted() {
+    console.log('🚀 PREPARACION.VUE - VERSIÓN ACTUALIZADA (CON REFRIGERADOS) 🚀');
     // Capturar embarqueId si viene desde un embarque
     if (this.$route.query.embarqueId) {
       this.embarqueId = this.$route.query.embarqueId
@@ -914,9 +983,13 @@ export default {
         this.aplicarSeleccionDia()
       }
     },
-    '$route.query.embarqueId'(nuevoEmbarqueId) {
+    async '$route.query.embarqueId'(nuevoEmbarqueId) {
       this.embarqueId = nuevoEmbarqueId
       console.log('Embarque ID actualizado:', nuevoEmbarqueId)
+      // Recargar datos del embarque cuando cambia el ID
+      if (nuevoEmbarqueId) {
+        await this.cargarEmbarque()
+      }
     }
   }
 };
@@ -1120,6 +1193,87 @@ th, td {
   border-bottom: 1px solid #ddd;
 }
 
+/* Estilos para columnas sticky horizontales - SIN ESPACIO ENTRE ELLAS */
+th.sticky-col-1,
+td.sticky-col-1 {
+  position: sticky;
+  left: 0;
+  z-index: 30;
+  width: 150px;
+  min-width: 150px;
+  max-width: 150px;
+  padding: 10px 0 10px 10px !important; /* Sin padding derecho */
+  border-right: none;
+  box-shadow: none;
+}
+
+th.sticky-col-1 {
+  top: 0;
+  background-color: #f8f9fa !important;
+}
+
+td.sticky-col-1 {
+  background-color: #fff !important;
+  z-index: 20;
+}
+
+th.sticky-col-2,
+td.sticky-col-2 {
+  position: sticky;
+  left: 150px; /* Exactamente el ancho de la primera columna */
+  z-index: 30;
+  width: 150px;
+  min-width: 150px;
+  max-width: 150px;
+  padding: 10px 10px 10px 0 !important; /* Sin padding izquierdo */
+  border-right: 2px solid #dee2e6;
+  box-shadow: 3px 0 8px rgba(0, 0, 0, 0.15);
+}
+
+th.sticky-col-2 {
+  top: 0;
+  background-color: #f8f9fa !important;
+}
+
+td.sticky-col-2 {
+  background-color: #fff !important;
+  z-index: 20;
+}
+
+/* Ajustar los selects dentro de las columnas sticky para que ocupen todo el espacio */
+td.sticky-col-1 .medida-select,
+td.sticky-col-2 .proveedor-select {
+  width: 100%;
+  max-width: 100%;
+  min-width: 100%;
+}
+
+/* Asegurar que los inputs dentro de las columnas sticky también tengan fondo */
+td.sticky-col-1 .form-control,
+td.sticky-col-2 .form-control {
+  background-color: transparent;
+}
+
+/* En hover, mantener el fondo opaco */
+tbody tr:hover td.sticky-col-1 {
+  background-color: #f5f5f5 !important;
+}
+
+tbody tr:hover td.sticky-col-2 {
+  background-color: #f5f5f5 !important;
+}
+
+/* Asegurar que las filas pares/impares no afecten las columnas sticky */
+tbody tr:nth-child(even) td.sticky-col-1,
+tbody tr:nth-child(even) td.sticky-col-2 {
+  background-color: #fff !important;
+}
+
+tbody tr:nth-child(odd) td.sticky-col-1,
+tbody tr:nth-child(odd) td.sticky-col-2 {
+  background-color: #fff !important;
+}
+
 .form-control {
   width: 100%;
   min-width: 80px;
@@ -1130,9 +1284,16 @@ th, td {
   font-size: 14px;
 }
 
-.medida-select, .proveedor-select {
+.medida-select {
   min-width: 120px;
   max-width: 200px;
+  width: 100%;
+}
+
+.proveedor-select {
+  min-width: 120px;
+  max-width: 200px;
+  width: 100%;
 }
 
 .porcentaje-input {

@@ -2282,32 +2282,62 @@ export default {
       const dataCruda = docData ? JSON.parse(JSON.stringify(docData)) : this.prepararDatosEmbarque();
 
       const parseFecha = (valor) => {
+        // Mantener como string YYYY-MM-DD para evitar problemas de zona horaria
         if (!valor) {
-          return new Date();
+          const hoy = new Date();
+          const y = hoy.getFullYear();
+          const m = String(hoy.getMonth() + 1).padStart(2, '0');
+          const d = String(hoy.getDate()).padStart(2, '0');
+          return `${y}-${m}-${d}`;
         }
-        if (valor instanceof Date) {
+        // Si ya es string en formato YYYY-MM-DD, retornarlo directamente
+        if (typeof valor === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(valor)) {
           return valor;
         }
-        if (typeof valor === 'string') {
-          const parsed = new Date(valor);
-          if (!Number.isNaN(parsed.getTime())) {
-            return parsed;
-          }
+        // Si es un Date object, convertir a string YYYY-MM-DD
+        if (valor instanceof Date) {
+          const y = valor.getFullYear();
+          const m = String(valor.getMonth() + 1).padStart(2, '0');
+          const d = String(valor.getDate()).padStart(2, '0');
+          return `${y}-${m}-${d}`;
         }
+        // Si es un Timestamp de Firebase, convertir a string YYYY-MM-DD
         if (typeof valor === 'object' && valor !== null) {
           if (typeof valor.seconds === 'number') {
-            return new Date(valor.seconds * 1000);
+            const fecha = new Date(valor.seconds * 1000);
+            const y = fecha.getUTCFullYear();
+            const m = String(fecha.getUTCMonth() + 1).padStart(2, '0');
+            const d = String(fecha.getUTCDate()).padStart(2, '0');
+            return `${y}-${m}-${d}`;
           }
           if (typeof valor._seconds === 'number') {
-            return new Date(valor._seconds * 1000);
+            const fecha = new Date(valor._seconds * 1000);
+            const y = fecha.getUTCFullYear();
+            const m = String(fecha.getUTCMonth() + 1).padStart(2, '0');
+            const d = String(fecha.getUTCDate()).padStart(2, '0');
+            return `${y}-${m}-${d}`;
           }
         }
-        try {
-          return new Date(valor);
-        } catch (error) {
-          console.warn('[normalizarDocDataParaFirestore] No se pudo parsear la fecha, usando fecha actual.', error);
-          return new Date();
+        // Como fallback, intentar parsear como string
+        if (typeof valor === 'string') {
+          try {
+            const parsed = new Date(valor);
+            if (!Number.isNaN(parsed.getTime())) {
+              const y = parsed.getFullYear();
+              const m = String(parsed.getMonth() + 1).padStart(2, '0');
+              const d = String(parsed.getDate()).padStart(2, '0');
+              return `${y}-${m}-${d}`;
+            }
+          } catch (error) {
+            console.warn('[normalizarDocDataParaFirestore] No se pudo parsear la fecha:', valor, error);
+          }
         }
+        // Si todo falla, usar fecha actual
+        const hoy = new Date();
+        const y = hoy.getFullYear();
+        const m = String(hoy.getMonth() + 1).padStart(2, '0');
+        const d = String(hoy.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
       };
 
       const data = {
@@ -2751,7 +2781,7 @@ export default {
     prepararDatosEmbarque() {
       
       const embarqueData = {
-        fecha: new Date(this.embarque.fecha),
+        fecha: this.embarque.fecha, // Guardar como string YYYY-MM-DD para evitar problemas de zona horaria
         cargaCon: this.embarque.cargaCon,
         clientes: [],
         clientesJuntarMedidas: this.clientesJuntarMedidas,
