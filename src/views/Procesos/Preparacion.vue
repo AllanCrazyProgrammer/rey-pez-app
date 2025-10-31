@@ -69,7 +69,18 @@
         <tbody>
           <tr v-for="(medida, index) in diaSeleccionado.medidas" :key="index">
             <td class="sticky-col-1">
+              <!-- Input de texto para medidas generadas desde rendimientos -->
+              <input 
+                v-if="medida.desdeRendimiento"
+                type="text" 
+                v-model="medida.medida" 
+                class="form-control medida-input-rendimiento"
+                @change="guardarCambios(diaSeleccionado)"
+                placeholder="Medida desde rendimiento"
+              >
+              <!-- Select normal para medidas manuales -->
               <select 
+                v-else
                 v-model="medida.medida" 
                 class="form-control medida-select"
                 @change="guardarCambios(diaSeleccionado)"
@@ -165,9 +176,18 @@
         </tbody>
       </table>
       
-        <button @click="agregarMedidaExistente(diaSeleccionado)" class="btn-agregar">
-          <i class="fas fa-plus"></i> Agregar Medida
-        </button>
+        <div class="botones-container">
+          <button @click="agregarMedidaExistente(diaSeleccionado)" class="btn-agregar">
+            <i class="fas fa-plus"></i> Agregar Medida
+          </button>
+          <button 
+            v-if="embarqueData && rendimientosEmbarque.length > 0" 
+            @click="generarMedidasDesdeRendimientos(diaSeleccionado)" 
+            class="btn-generar-rendimientos"
+          >
+            <i class="fas fa-magic"></i> Generar desde Rendimientos
+          </button>
+        </div>
       </div>
       
       <!-- Tabla de rendimientos del lado derecho -->
@@ -570,11 +590,48 @@ export default {
         cajas: '',
         cal: '',
         sal: '',
-        porcentaje: ''
+        porcentaje: '',
+        desdeRendimiento: false
       }
       
       dia.medidas.push(nuevaMedida)
       await this.guardarCambios(dia)
+    },
+
+    async generarMedidasDesdeRendimientos(dia) {
+      if (!this.rendimientosEmbarque || this.rendimientosEmbarque.length === 0) {
+        this.$bvToast.toast('No hay rendimientos disponibles para generar medidas', {
+          title: 'Información',
+          variant: 'warning',
+          solid: true
+        })
+        return
+      }
+
+      // Generar una medida por cada rendimiento encontrado
+      const nuevasMedidas = this.rendimientosEmbarque.map(rendimiento => {
+        return {
+          medida: rendimiento.medida, // El nombre de la medida tal cual está en rendimientos
+          proveedor: '',
+          diaNoche: '',
+          tinas: '',
+          cajas: '',
+          cal: '',
+          sal: '',
+          porcentaje: rendimiento.rendimiento.toFixed(2), // Copiar el rendimiento al campo porcentaje
+          desdeRendimiento: true // Marca especial para indicar que viene de rendimientos
+        }
+      })
+
+      // Agregar todas las medidas generadas
+      dia.medidas.push(...nuevasMedidas)
+      await this.guardarCambios(dia)
+
+      this.$bvToast.toast(`Se generaron ${nuevasMedidas.length} medidas desde los rendimientos del embarque`, {
+        title: 'Medidas Generadas',
+        variant: 'success',
+        solid: true
+      })
     },
     toggleDiasList() {
       this.diasListOpen = !this.diasListOpen
@@ -780,18 +837,22 @@ export default {
         cliente.productos.forEach(producto => {
           if (producto.medida) {
             const medidaNormalizada = producto.medida.toLowerCase().trim();
-            let nombreMedida = producto.medida;
+            let nombreMedida = producto.medida.trim();
             
             // Solo añadir "Maquila Ozuna" si es de Ozuna y NO es una venta
             if (cliente.nombre === 'Ozuna' && !producto.esVenta) {
-              nombreMedida = `${producto.medida} Maquila Ozuna`;
+              nombreMedida = `${producto.medida.trim()} Maquila Ozuna`;
             }
 
             if (medidaNormalizada.endsWith('mix')) {
               const baseSize = medidaNormalizada.split(' ')[0];
               mixMedidas.set(baseSize, nombreMedida);
-            } else if (!medidasMap.has(nombreMedida)) {
-              medidasMap.set(nombreMedida, nombreMedida);
+            } else {
+              // Usar medidaNormalizada como clave para evitar duplicados
+              // pero almacenar el nombreMedida original para mostrar
+              if (!medidasMap.has(medidaNormalizada)) {
+                medidasMap.set(medidaNormalizada, nombreMedida);
+              }
             }
           }
         });
@@ -802,7 +863,10 @@ export default {
         for (let i = 0; i < mixKeys.length; i += 2) {
           if (i + 1 < mixKeys.length) {
             const combinedName = `${mixKeys[i]}-${mixKeys[i+1]} mix`;
-            medidasMap.set(combinedName, combinedName);
+            const combinedNameNormalizado = combinedName.toLowerCase();
+            if (!medidasMap.has(combinedNameNormalizado)) {
+              medidasMap.set(combinedNameNormalizado, combinedName);
+            }
           }
         }
       }
@@ -1318,6 +1382,13 @@ tbody tr:nth-child(odd) td.sticky-col-2 {
   height: 32px;
 }
 
+.botones-container {
+  display: flex;
+  gap: 10px;
+  margin-top: 15px;
+  flex-wrap: wrap;
+}
+
 .btn-agregar {
   background-color: #27ae60;
   color: white;
@@ -1328,9 +1399,41 @@ tbody tr:nth-child(odd) td.sticky-col-2 {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-top: 15px;
   font-size: 14px;
   white-space: nowrap;
+  transition: all 0.3s ease;
+}
+
+.btn-agregar:hover {
+  background-color: #229954;
+  transform: translateY(-2px);
+}
+
+.btn-generar-rendimientos {
+  background: linear-gradient(135deg, #9b59b6, #8e44ad);
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 5px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  white-space: nowrap;
+  transition: all 0.3s ease;
+}
+
+.btn-generar-rendimientos:hover {
+  background: linear-gradient(135deg, #8e44ad, #9b59b6);
+  transform: translateY(-2px);
+}
+
+.medida-input-rendimiento {
+  background-color: #f3e5f5 !important;
+  border: 2px solid #9b59b6 !important;
+  font-weight: 600;
+  color: #6a1b9a;
 }
 
 .no-dia-seleccionado {
@@ -1633,6 +1736,17 @@ tbody tr:nth-child(odd) td.sticky-col-2 {
   }
 
   .btn-nuevo {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .botones-container {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .btn-agregar,
+  .btn-generar-rendimientos {
     width: 100%;
     justify-content: center;
   }

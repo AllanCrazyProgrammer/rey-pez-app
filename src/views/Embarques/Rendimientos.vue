@@ -2023,18 +2023,22 @@ export default {
         cliente.productos.forEach(producto => {
           if (producto.medida) {
             const medidaNormalizada = producto.medida.toLowerCase().trim();
-            let nombreMedida = producto.medida;
+            let nombreMedida = producto.medida.trim();
             
             // Solo añadir "Maquila Ozuna" si es de Ozuna y NO es una venta
             if (cliente.nombre === 'Ozuna' && !producto.esVenta) {
-              nombreMedida = `${producto.medida} Maquila Ozuna`;
+              nombreMedida = `${producto.medida.trim()} Maquila Ozuna`;
             }
 
             if (medidaNormalizada.endsWith('mix')) {
               const baseSize = medidaNormalizada.split(' ')[0];
               mixMedidas.set(baseSize, nombreMedida);
-            } else if (!medidasMap.has(nombreMedida)) {
-              medidasMap.set(nombreMedida, nombreMedida);
+            } else {
+              // Usar medidaNormalizada como clave para evitar duplicados
+              // pero almacenar el nombreMedida original para mostrar
+              if (!medidasMap.has(medidaNormalizada)) {
+                medidasMap.set(medidaNormalizada, nombreMedida);
+              }
             }
           }
         });
@@ -2045,7 +2049,11 @@ export default {
         for (let i = 0; i < mixKeys.length; i += 2) {
           if (i + 1 < mixKeys.length) {
             const combinedName = `${mixKeys[i]}-${mixKeys[i+1]} mix`;
-            medidasMap.set(combinedName, combinedName);
+            const combinedNameNormalizado = combinedName.toLowerCase();
+            
+            if (!medidasMap.has(combinedNameNormalizado)) {
+              medidasMap.set(combinedNameNormalizado, combinedName);
+            }
             
             if (!this.kilosCrudos[combinedName]) {
               this.$set(this.kilosCrudos, combinedName, {

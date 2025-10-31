@@ -158,24 +158,38 @@ export default {
   },
   computed: {
     medidasUnicas() {
-      const medidas = new Set()
+      const medidas = new Map() // Usar Map para mantener el primer valor encontrado
       this.todasLasPreparaciones.forEach(prep => {
         prep.medidas.forEach(m => {
-          if (m.medida) medidas.add(m.medida)
-        })
-      })
-      return Array.from(medidas).sort()
-    },
-    proveedoresUnicos() {
-      const proveedores = new Set()
-      this.todasLasPreparaciones.forEach(prep => {
-        prep.medidas.forEach(m => {
-          if (m.proveedor && m.proveedor.trim() !== '') {
-            proveedores.add(m.proveedor)
+          if (m.medida) {
+            // Normalizar la medida para comparación (trim y lowercase)
+            const medidaNormalizada = m.medida.trim().toLowerCase()
+            // Solo agregar si no existe ya (mantener la primera versión encontrada)
+            if (!medidas.has(medidaNormalizada)) {
+              medidas.set(medidaNormalizada, m.medida.trim())
+            }
           }
         })
       })
-      return Array.from(proveedores).sort()
+      // Retornar solo los valores únicos, ordenados
+      return Array.from(new Set(medidas.values())).sort()
+    },
+    proveedoresUnicos() {
+      const proveedores = new Map() // Usar Map para agrupar duplicados
+      this.todasLasPreparaciones.forEach(prep => {
+        prep.medidas.forEach(m => {
+          if (m.proveedor && m.proveedor.trim() !== '') {
+            // Normalizar el proveedor para comparación
+            const proveedorNormalizado = m.proveedor.trim().toLowerCase()
+            // Solo agregar si no existe ya
+            if (!proveedores.has(proveedorNormalizado)) {
+              proveedores.set(proveedorNormalizado, m.proveedor.trim())
+            }
+          }
+        })
+      })
+      // Retornar solo los valores únicos, ordenados
+      return Array.from(new Set(proveedores.values())).sort()
     },
     resultadosOrdenados() {
       const resultados = [...this.resultados]
