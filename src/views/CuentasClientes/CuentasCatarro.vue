@@ -456,13 +456,13 @@ export default {
           console.log("Datos de la cuenta cargados:", data);
 
           this.$nextTick(() => {
-            // Cargar items y redondear los kilos, recalcular totales
+            // Cargar items sin redondear, para mantener los decimales tal como fueron guardados
             this.items = (data.items || []).map(item => {
-              const kilosRedondeados = this.redondearKilos(item.kilos);
+              const kilos = parseFloat(item.kilos) || 0;
               return {
                 ...item,
-                kilos: kilosRedondeados,
-                total: kilosRedondeados * (item.costo || 0)
+                kilos: kilos,
+                total: kilos * (item.costo || 0)
               };
             });
             
@@ -476,20 +476,20 @@ export default {
             this.tieneObservacion = data.tieneObservacion || false;
             this.observacion = data.observacion || '';
             
-            // Cargar los itemsVenta con los precios de venta guardados y redondear kilos
+            // Cargar los itemsVenta con los precios de venta guardados sin redondear kilos
             this.itemsVenta = (data.itemsVenta || this.items.map(item => ({
               ...item,
               precioVenta: item.precioVenta || 0,
               totalVenta: (item.precioVenta || 0) * item.kilos,
               kilosVenta: item.kilos
             }))).map((item, index) => {
-              const kilosRedondeados = this.redondearKilos(item.kilosVenta);
-              const totalVenta = kilosRedondeados * (item.precioVenta || 0);
+              const kilos = parseFloat(item.kilosVenta) || 0;
+              const totalVenta = kilos * (item.precioVenta || 0);
               const itemCosto = this.items[index];
               const totalCosto = itemCosto ? itemCosto.total : 0;
               return {
                 ...item,
-                kilosVenta: kilosRedondeados,
+                kilosVenta: kilos,
                 totalVenta: totalVenta,
                 ganancia: totalVenta - totalCosto
               };
@@ -617,26 +617,23 @@ export default {
           ? this.newItem.medida.replace(/-/g, '/')
           : this.newItem.medida;
         
-        // Redondear los kilos
-        const kilosRedondeados = this.redondearKilos(this.newItem.kilos);
+        // NO redondear los kilos cuando el usuario agrega manualmente
+        const kilos = parseFloat(this.newItem.kilos);
         
-        const total = kilosRedondeados * this.newItem.costo;
+        const total = kilos * this.newItem.costo;
         this.items.push({
-          kilos: kilosRedondeados,
+          kilos: kilos,
           medida: medidaNormalizada,
           costo: this.newItem.costo,
           total
         });
-        
-        // Actualizar el estado local del input también
-        this.newItem.kilos = kilosRedondeados;
 
         // Verificar si necesitamos ajustar los kilos para la tabla de venta
-        let kilosVenta = kilosRedondeados;
+        let kilosVenta = kilos;
         
         // Usar la función calcularKilosCrudos para ajustar de 19 a 20 kg si es necesario
-        const kilosAjustados = this.calcularKilosCrudos(medidaNormalizada, kilosRedondeados, false);
-        if (kilosAjustados !== kilosRedondeados) {
+        const kilosAjustados = this.calcularKilosCrudos(medidaNormalizada, kilos, false);
+        if (kilosAjustados !== kilos) {
           kilosVenta = kilosAjustados;
         }
 
@@ -693,23 +690,23 @@ export default {
           }
         }
 
-        // Preparar solo los datos esenciales inicialmente con kilos redondeados
+        // Preparar solo los datos esenciales inicialmente sin redondear (el usuario los ingresó manualmente)
         const notaData = {
           fecha: this.fechaSeleccionada,
           items: this.items.map(item => {
-            const kilosRedondeados = this.redondearKilos(item.kilos);
+            const kilos = parseFloat(item.kilos) || 0;
             return {
               ...item,
-              kilos: kilosRedondeados,
-              total: kilosRedondeados * (item.costo || 0)
+              kilos: kilos,
+              total: kilos * (item.costo || 0)
             };
           }),
           itemsVenta: this.itemsVenta.map(item => {
-            const kilosRedondeados = this.redondearKilos(item.kilosVenta);
-            const totalVenta = kilosRedondeados * (item.precioVenta || 0);
+            const kilos = parseFloat(item.kilosVenta) || 0;
+            const totalVenta = kilos * (item.precioVenta || 0);
             return {
               ...item,
-              kilosVenta: kilosRedondeados,
+              kilosVenta: kilos,
               totalVenta: totalVenta
             };
           }),
@@ -816,11 +813,11 @@ export default {
         const notaData = {
           fecha: this.fechaSeleccionada,
           items: this.items.map(item => {
-            const kilosRedondeados = this.redondearKilos(item.kilos);
+            const kilos = parseFloat(item.kilos) || 0;
             return {
               ...item,
-              kilos: kilosRedondeados,
-              total: kilosRedondeados * (item.costo || 0)
+              kilos: kilos,
+              total: kilos * (item.costo || 0)
             };
           }),
           saldoAcumuladoAnterior: saldoAcumuladoActualizado,
@@ -832,11 +829,11 @@ export default {
           gananciaDelDia: this.gananciaDelDia,
           estadoPagado: estaPagada,
           itemsVenta: this.itemsVenta.map(item => {
-            const kilosRedondeados = this.redondearKilos(item.kilosVenta);
-            const totalVenta = kilosRedondeados * (item.precioVenta || 0);
+            const kilos = parseFloat(item.kilosVenta) || 0;
+            const totalVenta = kilos * (item.precioVenta || 0);
             return {
               ...item,
-              kilosVenta: kilosRedondeados,
+              kilosVenta: kilos,
               totalVenta: totalVenta
             };
           }),
@@ -949,8 +946,8 @@ export default {
           ? this.editingItem.medida.replace(/-/g, '/')
           : this.editingItem.medida;
         
-        // Redondear los kilos
-        this.editingItem.kilos = this.redondearKilos(this.editingItem.kilos);
+        // NO redondear los kilos cuando el usuario edita manualmente
+        this.editingItem.kilos = parseFloat(this.editingItem.kilos);
         this.editingItem.medida = medidaNormalizada;
         this.editingItem.total = this.editingItem.kilos * this.editingItem.costo;
         this.items[this.editingIndex] = { ...this.editingItem };
@@ -1166,16 +1163,16 @@ export default {
           const item = this.itemsVenta[index];
           const itemCosto = this.items[index];
           
-          // Redondear los kilos primero
-          const kilosRedondeados = this.redondearKilos(parseFloat(item.kilosVenta) || 0);
+          // NO redondear los kilos cuando el usuario edita manualmente
+          const kilos = parseFloat(item.kilosVenta) || 0;
           
           // Verificar si necesitamos ajustar los kilos para la tabla de venta
           if (itemCosto) {
             // Usar la función calcularKilosCrudos para ajustar de 19 a 20 kg si es necesario
-            const kilosAjustados = this.calcularKilosCrudos(item.medida, kilosRedondeados, false);
+            const kilosAjustados = this.calcularKilosCrudos(item.medida, kilos, false);
             item.kilosVenta = kilosAjustados;
           } else {
-            item.kilosVenta = kilosRedondeados;
+            item.kilosVenta = kilos;
           }
           
           this.calcularTotalVenta(index);
@@ -1210,7 +1207,8 @@ export default {
         try {
           const item = this.items[index];
           if (field === 'kilos') {
-            item.kilos = this.redondearKilos(parseFloat(item.kilos) || 0);
+            // NO redondear los kilos cuando el usuario edita manualmente
+            item.kilos = parseFloat(item.kilos) || 0;
           } else if (field === 'costo') {
             item.costo = parseFloat(item.costo) || 0;
           } else if (field === 'medida') {
@@ -1223,11 +1221,11 @@ export default {
           }
           item.total = item.kilos * item.costo;
           
-          // Actualizar también el itemVenta correspondiente
+          // Actualizar también el itemVenta correspondiente sin redondear
           if (this.itemsVenta[index]) {
-            const kilosVentaRedondeados = this.redondearKilos(this.itemsVenta[index].kilosVenta);
-            this.itemsVenta[index].kilosVenta = kilosVentaRedondeados;
-            this.itemsVenta[index].totalVenta = kilosVentaRedondeados * (this.itemsVenta[index].precioVenta || 0);
+            const kilosVenta = parseFloat(this.itemsVenta[index].kilosVenta) || 0;
+            this.itemsVenta[index].kilosVenta = kilosVenta;
+            this.itemsVenta[index].totalVenta = kilosVenta * (this.itemsVenta[index].precioVenta || 0);
           }
           
           this.actualizarItemsVenta();
@@ -1265,11 +1263,11 @@ export default {
           ? this.newProduct.medida.replace(/-/g, '/')
           : this.newProduct.medida;
         
-        // Redondear los kilos primero
-        const kilosRedondeados = this.redondearKilos(this.newProduct.kilosVenta);
+        // NO redondear los kilos cuando el usuario agrega manualmente
+        const kilos = parseFloat(this.newProduct.kilosVenta);
         
         // Verificar si necesitamos ajustar los kilos para la tabla de venta
-        const kilosAjustados = this.calcularKilosCrudos(medidaNormalizada, kilosRedondeados, false);
+        const kilosAjustados = this.calcularKilosCrudos(medidaNormalizada, kilos, false);
         
         const totalVenta = kilosAjustados * this.newProduct.precioVenta;
         this.itemsVenta.push({
@@ -1357,22 +1355,22 @@ export default {
       if (!this.$route.params.id) return;
 
       try {
-        // Preparar datos completos para guardar con kilos redondeados
+        // Preparar datos completos para guardar sin redondear (el usuario los editó manualmente)
         const notaData = {
           items: this.items.map(item => {
-            const kilosRedondeados = this.redondearKilos(item.kilos);
+            const kilos = parseFloat(item.kilos) || 0;
             return {
-              kilos: kilosRedondeados,
+              kilos: kilos,
               medida: item.medida,
               costo: item.costo,
-              total: kilosRedondeados * (item.costo || 0)
+              total: kilos * (item.costo || 0)
             };
           }),
           itemsVenta: this.itemsVenta.map(item => {
-            const kilosRedondeados = this.redondearKilos(item.kilosVenta);
-            const totalVenta = kilosRedondeados * (item.precioVenta || 0);
+            const kilos = parseFloat(item.kilosVenta) || 0;
+            const totalVenta = kilos * (item.precioVenta || 0);
             return {
-              kilosVenta: kilosRedondeados,
+              kilosVenta: kilos,
               medida: item.medida,
               precioVenta: item.precioVenta,
               totalVenta: totalVenta,

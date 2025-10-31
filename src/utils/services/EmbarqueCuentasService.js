@@ -797,21 +797,25 @@ const prepararDatosCuentaCatarro = async (embarqueData) => {
         
         // Solo agregar el item si tiene kilos
         if (kilos > 0) {
+          // REDONDEAR los kilos cuando se crea automáticamente desde el botón "Crear Cuenta"
+          const kilosCostoRedondeados = Math.round(kilosCosto);
+          const kilosVentaRedondeados = Math.round(kilosVenta);
+          
           // Item para costos
           items.push({
-            kilos: kilosCosto,
+            kilos: kilosCostoRedondeados,
             medida,
             costo,
-            total: kilosCosto * costo
+            total: kilosCostoRedondeados * costo
           });
           
           // Item para ventas
           itemsVenta.push({
-            kilosVenta: kilosVenta,
+            kilosVenta: kilosVentaRedondeados,
             medida,
             precioVenta,
-            totalVenta: kilosVenta * precioVenta,
-            ganancia: kilosVenta * precioVenta - kilosCosto * costo
+            totalVenta: kilosVentaRedondeados * precioVenta,
+            ganancia: kilosVentaRedondeados * precioVenta - kilosCostoRedondeados * costo
           });
         }
       }
@@ -898,22 +902,26 @@ const prepararDatosCuentaCatarro = async (embarqueData) => {
             
             // Solo agregar el item si tiene kilos
             if (kilosCosto > 0) {
+              // REDONDEAR los kilos cuando se crea automáticamente desde el botón "Crear Cuenta"
+              const kilosCostoRedondeados = Math.round(kilosCosto);
+              const kilosVentaRedondeados = Math.round(kilosVenta);
+              
               // Item para costos
               items.push({
-                kilos: kilosCosto,
+                kilos: kilosCostoRedondeados,
                 medida,
                 costo,
-                total: kilosCosto * costo,
+                total: kilosCostoRedondeados * costo,
                 esCrudo: true
               });
               
               // Item para ventas
               itemsVenta.push({
-                kilosVenta: kilosVenta,
+                kilosVenta: kilosVentaRedondeados,
                 medida,
                 precioVenta,
-                totalVenta: kilosVenta * precioVenta,
-                ganancia: kilosVenta * precioVenta - kilosCosto * costo,
+                totalVenta: kilosVentaRedondeados * precioVenta,
+                ganancia: kilosVentaRedondeados * precioVenta - kilosCostoRedondeados * costo,
                 esCrudo: true
               });
             }
