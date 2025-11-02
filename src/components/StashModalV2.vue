@@ -447,9 +447,18 @@ export default {
     const fechasAplicacion = ref({}) // { itemId: cuentaId }
     const todosLosAbonos = ref([]) // Lista de todos los abonos aplicados
     
+    // Función para obtener fecha actual en zona horaria local
+    const obtenerFechaLocal = () => {
+      const fecha = new Date()
+      const year = fecha.getFullYear()
+      const month = String(fecha.getMonth() + 1).padStart(2, '0')
+      const day = String(fecha.getDate()).padStart(2, '0')
+      return `${year}-${month}-${day}`
+    }
+    
     // Formularios
     const nuevoAbono = ref({
-      fecha: new Date().toISOString().split('T')[0],
+      fecha: obtenerFechaLocal(),
       descripcion: '',
       monto: null
     })
@@ -932,7 +941,7 @@ export default {
         
         // Limpiar formulario
         nuevoAbono.value = {
-          fecha: new Date().toISOString().split('T')[0],
+          fecha: obtenerFechaLocal(),
           descripcion: '',
           monto: null
         }
@@ -1027,16 +1036,23 @@ export default {
         
         // Obtener cuentas ordenadas por fecha (más antigua primero)
         const cuentasOrdenadas = [...cuentasOrdenadasPorFecha.value]
-        let montoRestante = totalStash.value
+        
+        // Crear una cola de abonos pendientes (copiar el stash)
+        const abonosPendientes = stashItems.value.map(item => ({
+          ...item,
+          montoRestante: item.monto
+        }))
         
         console.log('Iniciando aplicación en cascada:', {
           totalStash: totalStash.value,
-          cuentasDisponibles: cuentasOrdenadas.length
+          cuentasDisponibles: cuentasOrdenadas.length,
+          abonosPendientes: abonosPendientes.length
         })
         
-        // Aplicar abonos secuencialmente cuenta por cuenta
+        // Procesar cada cuenta secuencialmente
         for (const cuenta of cuentasOrdenadas) {
-          if (montoRestante <= 0) break
+          // Si ya no hay abonos pendientes, terminar
+          if (abonosPendientes.length === 0) break
           
           // Obtener el saldo actual de la cuenta desde la base de datos
           const cuentaRef = doc(db, collectionName, cuenta.id)
@@ -1053,13 +1069,12 @@ export default {
           const totalAbonos = (cuentaData.abonos || []).reduce((sum, abono) => sum + (abono.monto || 0), 0)
           const totalCobros = (cuentaData.cobros || []).reduce((sum, cobro) => sum + (cobro.monto || 0), 0)
           const totalDia = (cuentaData.totalGeneralVenta || 0) - totalCobros - totalAbonos
-          const saldoActualCuenta = (cuentaData.saldoAcumuladoAnterior || 0) + totalDia
+          let saldoActualCuenta = (cuentaData.saldoAcumuladoAnterior || 0) + totalDia
           
           console.log(`Procesando cuenta ${cuenta.id}:`, {
             fechaCuenta: cuenta.fecha,
-            saldoOriginal: cuenta.nuevoSaldoAcumulado,
-            saldoActual: saldoActualCuenta,
-            montoRestante: montoRestante
+            saldoInicial: saldoActualCuenta,
+            abonosPendientes: abonosPendientes.length
           })
           
           // Si la cuenta ya está pagada (saldo <= 0), saltar
@@ -1068,43 +1083,55 @@ export default {
             continue
           }
           
-          // Calcular cuánto aplicar a esta cuenta (mínimo entre lo que queda y el saldo de la cuenta)
-          const montoAAplicar = Math.min(montoRestante, saldoActualCuenta)
-          
-          if (montoAAplicar <= 0) continue
-          
-          // Crear abonos proporcionales para esta cuenta específica
+          // Aplicar abonos completos secuencialmente hasta que la cuenta esté pagada o se acaben los abonos
           const abonosParaCuenta = []
-          let montoAcumuladoParaCuenta = 0
+          let totalAplicadoCuenta = 0
           
-          // Distribuir proporcionalmente entre los items del stash
-          const porcentajeParaCuenta = montoAAplicar / totalStash.value
-          
-          stashItems.value.forEach((stashItem, index) => {
-            let montoDelItem = stashItem.monto * porcentajeParaCuenta
+          let i = 0
+          while (i < abonosPendientes.length && saldoActualCuenta > 0) {
+            const abonoActual = abonosPendientes[i]
             
-            // En el último item del stash, ajustar cualquier diferencia por redondeo
-            if (index === stashItems.value.length - 1) {
-              montoDelItem = montoAAplicar - montoAcumuladoParaCuenta
-            }
+            // Determinar cuánto aplicar de este abono
+            const montoAAplicar = Math.min(abonoActual.montoRestante, saldoActualCuenta)
             
-            if (montoDelItem > 0.01) { // Evitar montos muy pequeños por redondeo
+            if (montoAAplicar > 0.01) {
+              // Crear el abono para esta cuenta
               abonosParaCuenta.push({
-                descripcion: stashItem.descripcion,
-                monto: Math.round(montoDelItem * 100) / 100, // Redondear a 2 decimales
-                fecha: normalizarFechaSeleccionada(stashItem.fecha),
-                fechaOriginalStash: stashItem.fecha
+                descripcion: abonoActual.descripcion,
+                monto: Math.round(montoAAplicar * 100) / 100,
+                fecha: normalizarFechaSeleccionada(abonoActual.fecha),
+                fechaOriginalStash: abonoActual.fecha
               })
-              montoAcumuladoParaCuenta += Math.round(montoDelItem * 100) / 100
+              
+              totalAplicadoCuenta += Math.round(montoAAplicar * 100) / 100
+              saldoActualCuenta -= Math.round(montoAAplicar * 100) / 100
+              abonoActual.montoRestante -= Math.round(montoAAplicar * 100) / 100
+              
+              console.log(`  Aplicando ${montoAAplicar} de abono "${abonoActual.descripcion}"`, {
+                montoRestanteAbono: abonoActual.montoRestante,
+                saldoRestanteCuenta: saldoActualCuenta
+              })
             }
-          })
+            
+            // Si este abono se agotó completamente, eliminarlo de la cola
+            if (abonoActual.montoRestante <= 0.01) {
+              abonosPendientes.splice(i, 1)
+              // No incrementar i porque el siguiente abono ahora está en la misma posición
+            } else {
+              // Si el abono aún tiene saldo, pasar al siguiente (la cuenta se pagó)
+              i++
+            }
+          }
           
           // Aplicar los abonos a esta cuenta específica
           if (abonosParaCuenta.length > 0) {
+            const saldoAntes = (cuentaData.saldoAcumuladoAnterior || 0) + totalDia
+            const saldoDespues = saldoAntes - totalAplicadoCuenta
+            
             console.log(`Aplicando ${abonosParaCuenta.length} abonos a cuenta ${cuenta.id}:`, {
-              totalAplicado: montoAcumuladoParaCuenta,
-              saldoAntes: saldoActualCuenta,
-              saldoDespues: saldoActualCuenta - montoAcumuladoParaCuenta
+              totalAplicado: totalAplicadoCuenta,
+              saldoAntes: saldoAntes,
+              saldoDespues: saldoDespues
             })
             
             await aplicarAbonosACuenta(cuenta.id, abonosParaCuenta, collectionName)
@@ -1113,20 +1140,19 @@ export default {
               cuentaId: cuenta.id,
               fecha: cuenta.fecha,
               abonos: abonosParaCuenta,
-              totalAplicado: montoAcumuladoParaCuenta,
-              saldoAntes: saldoActualCuenta,
-              saldoDespues: saldoActualCuenta - montoAcumuladoParaCuenta
+              totalAplicado: totalAplicadoCuenta,
+              saldoAntes: saldoAntes,
+              saldoDespues: Math.max(0, saldoDespues)
             })
-            
-            // Reducir el monto restante
-            montoRestante -= montoAcumuladoParaCuenta
-            console.log(`Monto restante después de aplicar: ${montoRestante}`)
           }
         }
         
+        const totalAplicado = abonosAplicados.reduce((sum, item) => sum + item.totalAplicado, 0)
+        const sobrante = abonosPendientes.reduce((sum, abono) => sum + abono.montoRestante, 0)
+        
         console.log('Aplicación en cascada completada:', {
-          totalAplicado: totalStash.value - montoRestante,
-          sobrante: montoRestante,
+          totalAplicado: totalAplicado,
+          sobrante: sobrante,
           cuentasAfectadas: abonosAplicados.length
         })
         

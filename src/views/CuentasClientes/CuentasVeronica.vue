@@ -548,7 +548,7 @@ export default {
 
         // Usar Promise.all para actualizar las cuentas en paralelo
         await Promise.all(cuentasParaActualizar.map(async (cuenta) => {
-          const totalDia = cuenta.totalGeneralVenta +
+          const totalDia = cuenta.totalGeneralVenta -
             (cuenta.cobros || []).reduce((sum, cobro) => sum + (parseFloat(cobro.monto) || 0), 0) -
             (cuenta.abonos || []).reduce((sum, abono) => sum + (parseFloat(abono.monto) || 0), 0);
 
