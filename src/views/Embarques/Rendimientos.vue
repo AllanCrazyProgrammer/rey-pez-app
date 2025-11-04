@@ -804,6 +804,7 @@ export default {
       if (nombre.includes('catarro')) return 'catarro';
       if (nombre.includes('otilio')) return 'otilio';
       if (nombre.includes('ozuna')) return 'ozuna';
+      if (nombre.includes('veronica') || nombre.includes('lorena')) return 'veronica';
       return null; // Cliente no reconocido
     },
 

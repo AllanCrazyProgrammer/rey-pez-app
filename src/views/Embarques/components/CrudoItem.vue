@@ -249,7 +249,14 @@ export default {
 
         asignarPrecioAutomaticoCrudo(itemRef = null) {
             const nombre = (this.nombreCliente || '').trim().toLowerCase();
-            const clienteIdMap = { catarro: 'catarro', joselito: 'joselito', otilio: 'otilio', ozuna: 'ozuna' };
+            const clienteIdMap = { 
+                catarro: 'catarro', 
+                joselito: 'joselito', 
+                otilio: 'otilio', 
+                ozuna: 'ozuna',
+                veronica: 'veronica',
+                lorena: 'veronica'  // Lorena es la misma que Verónica
+            };
             const clienteId = clienteIdMap[nombre] || null;
             const fechaParaPrecios = this.fechaEmbarque ? normalizarFechaISO(this.fechaEmbarque) : obtenerFechaActualISO();
 

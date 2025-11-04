@@ -849,6 +849,8 @@ export default {
         
         if (precioEspecifico) {
           this.precioActualMostrar = precioEspecifico;
+          // Pre-llenar automáticamente el campo de precio
+          this.newPrice.precio = precioEspecifico.precio;
           return;
         }
       }
@@ -861,6 +863,8 @@ export default {
       
       if (precioGeneral) {
         this.precioActualMostrar = precioGeneral;
+        // Pre-llenar automáticamente el campo de precio
+        this.newPrice.precio = precioGeneral.precio;
         return;
       }
       
@@ -872,6 +876,8 @@ export default {
       
       if (coincidenciaParcial) {
         this.precioActualMostrar = coincidenciaParcial;
+        // Pre-llenar automáticamente el campo de precio
+        this.newPrice.precio = coincidenciaParcial.precio;
         return;
       }
       

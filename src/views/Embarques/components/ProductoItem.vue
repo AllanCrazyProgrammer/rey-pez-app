@@ -577,7 +577,9 @@ export default {
                 'catarro': 'catarro',
                 'joselito': 'joselito', 
                 'otilio': 'otilio',
-                'ozuna': 'ozuna'
+                'ozuna': 'ozuna',
+                'veronica': 'veronica',
+                'lorena': 'veronica'  // Lorena es la misma que Verónica
             };
             
             const clienteId = clienteIdMap[nombreCliente] || null;
