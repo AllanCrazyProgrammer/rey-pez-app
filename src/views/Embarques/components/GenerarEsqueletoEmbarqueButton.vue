@@ -3,7 +3,7 @@
     class="btn btn-outline-primary btn-esqueleto"
     :disabled="isDisabled || loading"
     @click="handleClick"
-    title="Generar el esqueleto del embarque desde el pedido limpio"
+    title="Generar el esqueleto del embarque desde los pedidos limpios y crudos"
   >
     <span v-if="loading" class="loader-inline"></span>
     <template v-else>
@@ -22,6 +22,30 @@ const LIMPIO_CLIENTES_MAP = {
   otilio: '3',
   ozuna: '4',
   lorena: '5'
+};
+
+const CRUDO_CLIENTES_MAP = {
+  '8a': '1',
+  'catarro': '2',
+  'otilio': '3',
+  'ozuna': '4',
+  'veronica': '5'
+};
+
+// Mapeo de medidas del pedido de crudos al formato del embarque
+const MEDIDAS_CRUDOS_MAP = {
+  'chico': 'Chico c/c',
+  'med': 'Med c/c',
+  'med-esp': 'Med-Esp c/c',
+  'med-gde': 'Med-Gde c/c',
+  'gde': 'Gde c/c',
+  'gde c/ extra': 'Gde c/ Extra c/c',
+  'extra': 'Extra c/c',
+  'jumbo': 'Jumbo c/c',
+  'linea': 'Linea',
+  'lag gde': 'Lag gde c/c',
+  'acamaya': 'Acamaya',
+  'rechazo': 'Rechazo'
 };
 
 export default {
@@ -55,18 +79,23 @@ export default {
 
       this.loading = true;
       try {
-        const pedidosLimpios = await this.obtenerPedidosLimpios();
+        const [pedidosLimpios, pedidosCrudos] = await Promise.all([
+          this.obtenerPedidosLimpios(),
+          this.obtenerPedidosCrudos()
+        ]);
 
-        if (pedidosLimpios.length === 0) {
-          this.emitirError('No se encontraron pedidos limpios para la fecha seleccionada.');
+        if (pedidosLimpios.length === 0 && pedidosCrudos.length === 0) {
+          this.emitirError('No se encontraron pedidos (limpios o crudos) para la fecha seleccionada.');
           return;
         }
 
         const esqueletoPorCliente = this.construirEsqueletoPorCliente(pedidosLimpios);
+        this.agregarCrudosAlEsqueleto(esqueletoPorCliente, pedidosCrudos);
+        
         const tieneDatos = Object.values(esqueletoPorCliente).some(listado => listado.length > 0);
 
         if (!tieneDatos) {
-          this.emitirError('El pedido limpio no contiene medidas para los clientes predeterminados.');
+          this.emitirError('Los pedidos no contienen medidas para los clientes predeterminados.');
           return;
         }
 
@@ -87,6 +116,16 @@ export default {
       return snapshot.docs
         .map(doc => doc.data())
         .filter(pedido => (pedido.tipo || '').toLowerCase() === 'limpio');
+    },
+    async obtenerPedidosCrudos() {
+      const db = getFirestore();
+      const pedidosRef = collection(db, 'pedidos');
+      const q = query(pedidosRef, where('fecha', '==', this.fechaEmbarque));
+      const snapshot = await getDocs(q);
+
+      return snapshot.docs
+        .map(doc => doc.data())
+        .filter(pedido => (pedido.tipo || '').toLowerCase() === 'crudo');
     },
     construirEsqueletoPorCliente(pedidos) {
       const acumuladoPorCliente = {};
@@ -133,6 +172,59 @@ export default {
 
       return esqueletoPorCliente;
     },
+    agregarCrudosAlEsqueleto(esqueletoPorCliente, pedidosCrudos) {
+      pedidosCrudos.forEach(pedido => {
+        if (!pedido.pedidos) {
+          return;
+        }
+
+        // Iterar sobre cada cliente en el pedido de crudos
+        Object.entries(pedido.pedidos).forEach(([nombreCliente, medidasCliente]) => {
+          // Normalizar el nombre del cliente para buscar en el mapa
+          const clienteKey = nombreCliente.toLowerCase();
+          const clienteId = CRUDO_CLIENTES_MAP[clienteKey];
+          
+          if (!clienteId) {
+            return; // Cliente no mapeado, ignorar
+          }
+
+          // Inicializar el array del cliente si no existe
+          if (!esqueletoPorCliente[clienteId]) {
+            esqueletoPorCliente[clienteId] = [];
+          }
+
+          // Iterar sobre cada medida del cliente
+          Object.entries(medidasCliente).forEach(([medida, cantidad]) => {
+            // Solo agregar si hay cantidad (ignorar valores vacíos, 0, etc)
+            if (!cantidad || parseFloat(cantidad) === 0) {
+              return;
+            }
+
+            // Normalizar el nombre de la medida usando el mapa
+            const medidaLowerCase = medida.toLowerCase().trim();
+            const medidaNormalizada = MEDIDAS_CRUDOS_MAP[medidaLowerCase] || medida;
+            
+            // Crear clave única para crudo: usar "crudo" como tipo
+            const claveCrudo = `${medidaNormalizada}__crudo__`;
+
+            // Verificar si ya existe esta medida como crudo
+            const yaExiste = esqueletoPorCliente[clienteId].some(item => {
+              const claveExistente = `${item.medida}__${item.tipo || ''}__${item.tipoPersonalizado || ''}`;
+              return claveExistente === claveCrudo;
+            });
+
+            // Solo agregar si no existe
+            if (!yaExiste) {
+              esqueletoPorCliente[clienteId].push({
+                medida: medidaNormalizada,
+                tipo: 'crudo',
+                tipoPersonalizado: ''
+              });
+            }
+          });
+        });
+      });
+    },
     normalizarTipo(tipo) {
       const tipoTexto = (tipo || '').toString().trim();
       const valor = tipoTexto.toLowerCase();
@@ -142,6 +234,9 @@ export default {
       }
       if (valor === 'c/h20' || valor === 'c/h2o') {
         return { tipo: 'c/h20' };
+      }
+      if (valor === 'crudo') {
+        return { tipo: 'crudo' };
       }
       if (!valor) {
         return { tipo: '' };
