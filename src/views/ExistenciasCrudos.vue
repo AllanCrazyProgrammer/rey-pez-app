@@ -29,6 +29,7 @@
               <tr>
                 <th>Medida</th>
                 <th>Kilos</th>
+                <th>Taras</th>
                 <th>Precio</th>
                 <th>Valor</th>
               </tr>
@@ -37,6 +38,7 @@
               <tr v-for="producto in productos" :key="producto.clave" v-if="producto.kilos > 0">
                 <td>{{ producto.nombre }}</td>
                 <td class="kilos-cell">{{ formatNumber(producto.kilos) }}</td>
+                <td class="taras-cell">{{ (producto.kilos / 19).toFixed(1) }}</td>
                 <td class="precio-cell">${{ formatearPrecio(producto.ultimoPrecio) }}</td>
                 <td class="valor-cell">${{ formatearValor(producto.valor) }}</td>
               </tr>
@@ -472,9 +474,12 @@ export default {
           tr:nth-child(even) {
             background-color: #f8f9fa;
           }
-          .kilos-cell, .precio-cell, .valor-cell {
+          .kilos-cell, .taras-cell, .precio-cell, .valor-cell {
             text-align: right;
             font-weight: bold;
+          }
+          .taras-cell {
+            color: #3760b0;
           }
           .precio-cell {
             color: #2c3e50;
@@ -538,6 +543,7 @@ export default {
                 <tr>
                   <th>Medida</th>
                   <th>Kilos</th>
+                  <th>Taras</th>
                   <th>Precio</th>
                   <th>Valor</th>
                 </tr>
@@ -550,6 +556,7 @@ export default {
             <tr>
               <td>${producto.nombre}</td>
               <td class="kilos-cell">${this.formatNumber(producto.kilos)}</td>
+              <td class="taras-cell">${(producto.kilos / 19).toFixed(1)}</td>
               <td class="precio-cell">$${this.formatearPrecio(producto.ultimoPrecio)}</td>
               <td class="valor-cell">$${this.formatearValor(producto.valor)}</td>
             </tr>
@@ -703,10 +710,15 @@ h1, h2, h3 {
 }
 
 .kilos-cell,
+.taras-cell,
 .precio-cell,
 .valor-cell {
   text-align: right;
   font-weight: bold;
+}
+
+.taras-cell {
+  color: #3760b0;
 }
 
 .precio-cell {
