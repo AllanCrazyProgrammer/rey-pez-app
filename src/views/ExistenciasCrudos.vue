@@ -30,8 +30,8 @@
                 <th>Medida</th>
                 <th>Kilos</th>
                 <th>Taras</th>
-                <th>Precio</th>
-                <th>Valor</th>
+                <th v-if="tienePreciosValidos(productos)">Precio</th>
+                <th v-if="tienePreciosValidos(productos)">Valor</th>
               </tr>
             </thead>
             <tbody>
@@ -39,20 +39,20 @@
                 <td>{{ producto.nombre }}</td>
                 <td class="kilos-cell">{{ formatNumber(producto.kilos) }}</td>
                 <td class="taras-cell">{{ (producto.kilos / 19).toFixed(1) }}</td>
-                <td class="precio-cell">${{ formatearPrecio(producto.ultimoPrecio) }}</td>
-                <td class="valor-cell">${{ formatearValor(producto.valor) }}</td>
+                <td v-if="tienePreciosValidos(productos)" class="precio-cell">${{ formatearPrecio(producto.ultimoPrecio) }}</td>
+                <td v-if="tienePreciosValidos(productos)" class="valor-cell">${{ formatearValor(producto.valor) }}</td>
               </tr>
             </tbody>
           </table>
           <div class="total-proveedor">
             <div><strong>Total {{ proveedor }}: {{ formatNumber(calcularTotalProveedor(productos)) }} kg</strong></div>
-            <div><strong>Valor Total: ${{ formatearValor(calcularTotalValorProveedor(productos)) }}</strong></div>
+            <div v-if="tienePreciosValidos(productos)"><strong>Valor Total: ${{ formatearValor(calcularTotalValorProveedor(productos)) }}</strong></div>
           </div>
         </div>
       </div>
       <div class="total-general">
         <h3>Total General: {{ formatNumber(totalGeneral) }} kg</h3>
-        <h3>Valor Total General: ${{ formatearValor(valorTotalGeneral) }}</h3>
+        <h3 v-if="tieneAlgunPrecioValido">Valor Total General: ${{ formatearValor(valorTotalGeneral) }}</h3>
       </div>
     </div>
 
@@ -142,6 +142,12 @@ export default {
       return Object.values(this.existenciasPorProveedor)
         .flat()
         .reduce((total, producto) => total + producto.valor, 0);
+    },
+
+    tieneAlgunPrecioValido() {
+      return Object.values(this.existenciasPorProveedor).some(productos => 
+        productos.some(producto => producto.ultimoPrecio > 0 || producto.valor > 0)
+      );
     }
   },
   methods: {
@@ -353,6 +359,10 @@ export default {
       return productos.reduce((total, producto) => total + producto.valor, 0);
     },
 
+    tienePreciosValidos(productos) {
+      return productos.some(producto => producto.ultimoPrecio > 0 || producto.valor > 0);
+    },
+
     editRegistro(id) {
       this.$router.push(`/existencias-crudos/${id}`);
     },
@@ -535,6 +545,8 @@ export default {
 
       Object.keys(this.existenciasPorProveedor).forEach(proveedor => {
         const productos = this.existenciasPorProveedor[proveedor];
+        const mostrarPrecios = this.tienePreciosValidos(productos);
+        
         contenidoHTML += `
           <div class="proveedor-card">
             <h2>${proveedor}</h2>
@@ -544,8 +556,8 @@ export default {
                   <th>Medida</th>
                   <th>Kilos</th>
                   <th>Taras</th>
-                  <th>Precio</th>
-                  <th>Valor</th>
+                  ${mostrarPrecios ? '<th>Precio</th>' : ''}
+                  ${mostrarPrecios ? '<th>Valor</th>' : ''}
                 </tr>
               </thead>
               <tbody>
@@ -557,8 +569,8 @@ export default {
               <td>${producto.nombre}</td>
               <td class="kilos-cell">${this.formatNumber(producto.kilos)}</td>
               <td class="taras-cell">${(producto.kilos / 19).toFixed(1)}</td>
-              <td class="precio-cell">$${this.formatearPrecio(producto.ultimoPrecio)}</td>
-              <td class="valor-cell">$${this.formatearValor(producto.valor)}</td>
+              ${mostrarPrecios ? `<td class="precio-cell">$${this.formatearPrecio(producto.ultimoPrecio)}</td>` : ''}
+              ${mostrarPrecios ? `<td class="valor-cell">$${this.formatearValor(producto.valor)}</td>` : ''}
             </tr>
           `;
         });
@@ -568,17 +580,21 @@ export default {
             </table>
             <div class="total-proveedor">
               <div>Total ${proveedor}: ${this.formatNumber(this.calcularTotalProveedor(productos))} kg</div>
-              <div>Valor Total: $${this.formatearValor(this.calcularTotalValorProveedor(productos))}</div>
+              ${mostrarPrecios ? `<div>Valor Total: $${this.formatearValor(this.calcularTotalValorProveedor(productos))}</div>` : ''}
             </div>
           </div>
         `;
       });
 
+      const mostrarValorTotal = Object.values(this.existenciasPorProveedor).some(productos => 
+        this.tienePreciosValidos(productos)
+      );
+
       contenidoHTML += `
         </div>
         <div class="total-general">
           <h2>Total General: ${this.formatNumber(this.totalGeneral)} kg</h2>
-          <h2>Valor Total General: $${this.formatearValor(this.valorTotalGeneral)}</h2>
+          ${mostrarValorTotal ? `<h2>Valor Total General: $${this.formatearValor(this.valorTotalGeneral)}</h2>` : ''}
         </div>
       `;
 
