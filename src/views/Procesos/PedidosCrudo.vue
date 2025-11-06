@@ -46,10 +46,11 @@
             <td v-for="columna in columnas" :key="columna">
               <input 
                 type="number" 
-                v-model="pedidos[cliente][columna.toLowerCase()]" 
+                v-model.number="pedidos[cliente][columna.toLowerCase()]" 
                 class="numero-input"
                 :class="'cliente-' + cliente.toLowerCase()"
-                placeholder="">
+                placeholder=""
+                @input="handleInputChange(cliente, columna, $event)">
             </td>
           </tr>
           <tr class="fila-totales">
@@ -101,9 +102,6 @@
       </table>
     </div> -->
 
-    <!-- Componente de Canvas para dibujo y notas -->
-    <canvas-dibujo ref="canvasDibujo"></canvas-dibujo>
-
     <div class="buttons-container">
       <button @click="guardarPedido" class="btn-guardar">Guardar Pedido</button>
       <button @click="imprimirPedido" class="btn-imprimir">Imprimir</button>
@@ -115,13 +113,9 @@
 <script>
 import { db } from '@/firebase'
 import { collection, addDoc, Timestamp, doc, getDoc, updateDoc } from 'firebase/firestore'
-import CanvasDibujo from '@/components/CanvasDibujo.vue'
 
 export default {
   name: 'PedidosCrudo',
-  components: {
-    CanvasDibujo
-  },
   data() {
     return {
       fecha: new Date().toISOString().split('T')[0],
@@ -132,8 +126,7 @@ export default {
       pedidos: {},
       barcosPorPedido: {},
       isEditing: false,
-      pedidoId: null,
-      dibujoCanvas: null
+      pedidoId: null
     }
   },
   computed: {
@@ -183,23 +176,37 @@ export default {
     normalizarNombreColumna(columna) {
       return columna.toLowerCase();
     },
-    agregarColumna() {
-      if (!this.nuevaColumna.trim()) return
+    handleInputChange(cliente, columna, event) {
+      const value = event.target.value;
+      const columnaNormalizada = columna.toLowerCase();
       
+      // Si el campo está vacío, establecer como string vacío en lugar de 0
+      if (value === '' || value === null || value === undefined) {
+        this.$set(this.pedidos[cliente], columnaNormalizada, '');
+      }
+    },
+    agregarColumna() {
+      if (!this.nuevaColumna.trim()) {
+        alert('Por favor ingresa un nombre para la columna')
+        return
+      }
+
       const nombreColumna = this.nuevaColumna.trim()
       if (this.columnas.includes(nombreColumna)) {
         alert('Esta columna ya existe')
         return
       }
 
+      // Agregar columna a las adicionales
       this.columnasAdicionales.push(nombreColumna)
-      
+
+      // Inicializar la propiedad en cada cliente usando $set para reactividad
       const nombreProp = this.normalizarNombreColumna(nombreColumna)
       this.clientes.forEach(cliente => {
-        if (!this.pedidos[cliente]) {
-          this.pedidos[cliente] = {}
-        }
-        this.$set(this.pedidos[cliente], nombreProp, null)
+        // Usar $set para asegurar reactividad en Vue 2, inicializar con string vacío
+        this.$set(this.pedidos[cliente], nombreProp, '')
+        // También inicializar en barcosPorPedido si es necesario
+        this.$set(this.barcosPorPedido[cliente], nombreProp, '')
       })
 
       this.nuevaColumna = ''
@@ -223,26 +230,48 @@ export default {
     },
     async guardarPedido() {
       try {
-        // Obtener datos del canvas si existe
-        let dibujoData = null;
-        if (this.$refs.canvasDibujo && this.$refs.canvasDibujo.canvas) {
-          // Convertir el objeto canvas a una cadena de texto (string)
-          // Firestore no admite arrays anidados que pueden estar en el objeto JSON
-          const canvasJSON = this.$refs.canvasDibujo.canvas.toJSON();
-          dibujoData = JSON.stringify(canvasJSON);
-          console.log('Canvas guardado como string');
+        // Validar que haya al menos un pedido ingresado
+        let tienePedidos = false;
+        for (const cliente in this.pedidos) {
+          for (const columna in this.pedidos[cliente]) {
+            const valor = this.pedidos[cliente][columna];
+            if (valor && !isNaN(valor) && parseFloat(valor) > 0) {
+              tienePedidos = true;
+              break;
+            }
+          }
+          if (tienePedidos) break;
+        }
+
+        if (!tienePedidos) {
+          alert('Por favor ingresa al menos un pedido antes de guardar');
+          return;
+        }
+
+        // Limpiar datos de pedidos - convertir valores null/undefined/string vacío a 0
+        const pedidosLimpios = {};
+        for (const cliente in this.pedidos) {
+          pedidosLimpios[cliente] = {};
+          for (const columna in this.pedidos[cliente]) {
+            const valor = this.pedidos[cliente][columna];
+            // Convertir null, undefined, string vacío o NaN a 0
+            pedidosLimpios[cliente][columna] = (valor && !isNaN(valor)) ? parseFloat(valor) : 0;
+          }
         }
         
         const pedidoData = {
           fecha: this.fecha,
-          pedidos: this.pedidos,
+          pedidos: pedidosLimpios,
           barcosPorPedido: this.barcosPorPedido,
           columnas: this.columnas,
+          columnasAdicionales: this.columnasAdicionales, // Guardar columnas adicionales por separado
           tipo: 'crudo',
-          kilos: this.kilosCrudo,
-          createdAt: Timestamp.now(),
-          dibujoCanvas: dibujoData // Ahora es una cadena de texto
+          kilos: Math.floor(this.kilosCrudo),
+          taras: Math.floor(this.tarasCrudo),
+          createdAt: Timestamp.now()
         }
+
+        console.log('Guardando pedido:', pedidoData);
         
         if (this.isEditing && this.pedidoId) {
           // Actualizar pedido existente
@@ -258,7 +287,7 @@ export default {
         this.$router.push('/procesos/pedidos')
       } catch (error) {
         console.error('Error al guardar el pedido:', error)
-        alert('Error al guardar el pedido. Por favor intente nuevamente.')
+        alert(`Error al guardar el pedido: ${error.message}. Por favor intente nuevamente.`)
       }
     },
     async cargarPedido(id) {
@@ -268,24 +297,48 @@ export default {
         
         if (pedidoDoc.exists()) {
           const data = pedidoDoc.data()
-          this.fecha = data.fecha
-          this.pedidos = data.pedidos
-          this.barcosPorPedido = data.barcosPorPedido || this.initializeBarcosPorPedido()
-          this.columnasAdicionales = data.columnas.filter(col => !this.columnasBase.includes(col))
+          console.log('Cargando pedido:', data);
           
-          // Guardar los datos del dibujo para cargarlos cuando el componente esté listo
-          if (data.dibujoCanvas) {
-            console.log('Dibujo encontrado en el pedido, preparando para cargar');
-            this.dibujoCanvas = data.dibujoCanvas;
-            
-            // Intentar cargar el dibujo después de que el DOM se actualice
-            this.$nextTick(() => {
-              console.log('DOM actualizado, intentando cargar el dibujo');
-              this.cargarDibujoEnCanvas();
-            });
-          } else {
-            console.log('No hay dibujo guardado en este pedido');
-          }
+          this.fecha = data.fecha
+          
+          // Cargar columnas adicionales primero
+          this.columnasAdicionales = data.columnasAdicionales || 
+                                      data.columnas?.filter(col => !this.columnasBase.includes(col)) || 
+                                      []
+          
+               // Reinicializar pedidos con todas las columnas (base + adicionales)
+               this.clientes.forEach(cliente => {
+                 const pedidosCliente = {};
+
+                 // Inicializar columnas base con string vacío
+                 this.columnasBase.forEach(columna => {
+                   const columnaNormalizada = this.normalizarNombreColumna(columna);
+                   pedidosCliente[columnaNormalizada] = '';
+                 });
+
+                 // Inicializar columnas adicionales con string vacío
+                 this.columnasAdicionales.forEach(columna => {
+                   const columnaNormalizada = this.normalizarNombreColumna(columna);
+                   pedidosCliente[columnaNormalizada] = '';
+                 });
+
+                 this.$set(this.pedidos, cliente, pedidosCliente);
+               });
+
+               // Cargar los valores guardados
+               if (data.pedidos) {
+                 for (const cliente in data.pedidos) {
+                   if (this.pedidos[cliente]) {
+                     for (const columna in data.pedidos[cliente]) {
+                       const valor = data.pedidos[cliente][columna];
+                       // Solo establecer si el valor es un número válido mayor a 0
+                       this.$set(this.pedidos[cliente], columna, (valor && valor > 0) ? valor : '');
+                     }
+                   }
+                 }
+               }
+          
+          this.barcosPorPedido = data.barcosPorPedido || this.initializeBarcosPorPedido()
         } else {
           alert('El pedido no existe')
           this.$router.push('/procesos/pedidos')
@@ -304,48 +357,46 @@ export default {
       return barcos
     },
     imprimirPedido() {
+      // Filtrar clientes que tienen al menos un pedido (valor > 0)
+      const pedidosConDatos = {};
+      
+      for (const cliente in this.pedidos) {
+        let tieneValores = false;
+        
+        // Revisar si el cliente tiene al menos un valor mayor a 0
+        for (const columna in this.pedidos[cliente]) {
+          const valor = this.pedidos[cliente][columna];
+          if (valor && !isNaN(valor) && parseFloat(valor) > 0) {
+            tieneValores = true;
+            break;
+          }
+        }
+        
+        // Solo incluir el cliente si tiene valores
+        if (tieneValores) {
+          pedidosConDatos[cliente] = this.pedidos[cliente];
+        }
+      }
+      
       this.$router.push({
         name: 'PedidoCrudosImpresion',
         params: {
           fecha: this.fecha,
-          pedidos: this.pedidos,
+          pedidos: pedidosConDatos,
           columnas: this.columnas
         }
       })
-    },
-    // Método para cargar el dibujo en el canvas cuando esté listo
-    cargarDibujoEnCanvas() {
-      try {
-        // Verificar que el componente canvas esté disponible
-        if (this.$refs.canvasDibujo && this.$refs.canvasDibujo.canvas && this.dibujoCanvas) {
-          // Convertir la cadena de texto de vuelta a un objeto JSON
-          const canvasJSON = JSON.parse(this.dibujoCanvas);
-          
-          this.$refs.canvasDibujo.canvas.loadFromJSON(canvasJSON, () => {
-            this.$refs.canvasDibujo.canvas.renderAll();
-            console.log('Dibujo cargado correctamente en el canvas');
-          });
-        } else {
-          // Si el canvas no está listo, intentar nuevamente después de un breve retraso
-          setTimeout(() => {
-            this.cargarDibujoEnCanvas();
-          }, 500);
-        }
-      } catch (error) {
-        console.error('Error al cargar el dibujo en el canvas:', error);
-      }
     }
   },
   created() {
-    // Inicializar pedidos
+    // Inicializar pedidos con todas las propiedades base usando string vacío
     this.clientes.forEach(cliente => {
-      this.$set(this.pedidos, cliente, {});
+      const pedidosCliente = {};
       this.columnasBase.forEach(columna => {
         const columnaNormalizada = this.normalizarNombreColumna(columna);
-        if (!this.pedidos[cliente][columnaNormalizada]) {
-          this.$set(this.pedidos[cliente], columnaNormalizada, null);
-        }
+        pedidosCliente[columnaNormalizada] = ''; // String vacío en lugar de null
       });
+      this.$set(this.pedidos, cliente, pedidosCliente);
     });
 
     // Inicializar barcosPorPedido
