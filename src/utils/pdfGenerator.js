@@ -567,15 +567,17 @@ async function generarContenidoClientes(embarque, clientesDisponibles, clientesJ
     return acc;
   }, {});
 
-  // Determinar si hay algún cliente Elizabeth o Catarro con precios
-  let hayClienteConPrecios = false;
+  // Determinar si hay algún cliente Elizabeth o Catarro con precios Y con cuenta en PDF activada
+  let hayClienteConCuentaEnPdf = false;
   let totalDineroGeneral = 0;
   
   Object.entries(productosPorCliente).forEach(([clienteId]) => {
     const nombreCliente = obtenerNombreCliente(clienteId, clientesDisponibles);
     const incluirPreciosCliente = clientesIncluirPrecios && clientesIncluirPrecios[clienteId];
-    if ((nombreCliente.toLowerCase().includes('elizabeth') || nombreCliente.toLowerCase().includes('catarro')) && incluirPreciosCliente) {
-      hayClienteConPrecios = true;
+    const cuentaEnPdfCliente = clientesCuentaEnPdf && clientesCuentaEnPdf[clienteId];
+    // Solo mostrar total de cuenta si ambos checkboxes están activados
+    if ((nombreCliente.toLowerCase().includes('elizabeth') || nombreCliente.toLowerCase().includes('catarro')) && incluirPreciosCliente && cuentaEnPdfCliente) {
+      hayClienteConCuentaEnPdf = true;
     }
   });
 
@@ -814,57 +816,89 @@ async function generarContenidoClientes(embarque, clientesDisponibles, clientesJ
       );
     }
 
-    // Calcular el total de dinero para este cliente específico
-    let totalDineroCliente = 0;
-    
-    // Sumar totales de productos limpios de este cliente
-    productos.forEach(producto => {
-      if (producto.precio) {
-        let totalProducto = 0;
-        if (producto.tipo === 'c/h20') {
-          // Para productos c/h2o: calcular kilos reales usando taras × bolsas × valor_neto
-          let kilosReales = 0;
-          const reporteTaras = producto.reporteTaras || [];
-          const reporteBolsas = producto.reporteBolsas || [];
-          const valorNeto = producto.camaronNeto || 0.65;
-          
-          for (let i = 0; i < reporteTaras.length; i++) {
-            const taras = parseInt(reporteTaras[i]) || 0;
-            const bolsas = parseInt(reporteBolsas[i]) || 0;
-            kilosReales += taras * bolsas * valorNeto;
+    // Calcular el total de dinero para este cliente específico (solo si incluye precios y cuenta en PDF)
+    if (incluirPreciosCliente && cuentaEnPdfCliente) {
+      let totalDineroLimpiosCliente = 0;
+      let totalTarasLimpiosCliente = 0;
+      
+      // Sumar totales de productos limpios de este cliente
+      productos.forEach(producto => {
+        if (producto.precio) {
+          let totalProducto = 0;
+          if (producto.tipo === 'c/h20') {
+            // Para productos c/h2o: calcular kilos reales usando taras × bolsas × valor_neto
+            let kilosReales = 0;
+            const reporteTaras = producto.reporteTaras || [];
+            const reporteBolsas = producto.reporteBolsas || [];
+            const valorNeto = producto.camaronNeto || 0.65;
+            
+            for (let i = 0; i < reporteTaras.length; i++) {
+              const taras = parseInt(reporteTaras[i]) || 0;
+              const bolsas = parseInt(reporteBolsas[i]) || 0;
+              kilosReales += taras * bolsas * valorNeto;
+            }
+            totalProducto = kilosReales * Number(producto.precio);
+          } else {
+            const kilos = totalKilos(producto, nombreCliente, aplicarReglaOtilioCliente, sumarKgCatarroCliente);
+            // Usar exactamente los mismos kilos que se muestran en la tabla
+            const kilosMostrados = nombreCliente.toLowerCase().includes('ozuna') ? 
+              Number(kilos.toFixed(1)) : Math.round(kilos);
+            totalProducto = kilosMostrados * Number(producto.precio);
           }
-          totalProducto = kilosReales * Number(producto.precio);
-        } else {
-          const kilos = totalKilos(producto, nombreCliente, aplicarReglaOtilioCliente, sumarKgCatarroCliente);
-          // Usar exactamente los mismos kilos que se muestran en la tabla
-          const kilosMostrados = nombreCliente.toLowerCase().includes('ozuna') ? 
-            Number(kilos.toFixed(1)) : Math.round(kilos);
-          totalProducto = kilosMostrados * Number(producto.precio);
-        }
-        totalDineroCliente += totalProducto;
-      }
-    });
-
-    // Sumar totales de crudos de este cliente
-    if (embarque.clienteCrudos && embarque.clienteCrudos[clienteId]) {
-      procesarCrudosDeFormaSegura(embarque.clienteCrudos, clienteId, clientesDisponibles, (item) => {
-        if (item.precio) {
-          const kilos = parseFloat(calcularKilosCrudos(item, nombreCliente));
-          // Usar exactamente los mismos kilos que se muestran en la tabla (redondeados)
-          const kilosMostrados = Math.round(kilos);
-          totalDineroCliente += kilosMostrados * Number(item.precio);
+          totalDineroLimpiosCliente += totalProducto;
+          
+          // Acumular taras para calcular flete de limpios
+          const tarasNormales = (producto.taras || []).reduce((sum, tara) => sum + (tara || 0), 0);
+          const tarasExtra = (producto.tarasExtra || []).reduce((sum, tara) => sum + (tara || 0), 0);
+          totalTarasLimpiosCliente += tarasNormales + tarasExtra;
         }
       });
+
+      // Calcular y restar flete de limpios para clientes especiales
+      const nombreLower = nombreCliente.toLowerCase();
+      const esClienteEspecial = nombreLower.includes('catarro');
+      let totalDineroLimpiosConFlete = totalDineroLimpiosCliente;
+      if (esClienteEspecial && totalDineroLimpiosCliente > 0) {
+        const fleteTarifaLimpio = 70;
+        const fleteLimpios = Math.round(totalTarasLimpiosCliente * fleteTarifaLimpio);
+        totalDineroLimpiosConFlete = Math.max(0, Math.round(totalDineroLimpiosCliente) - fleteLimpios);
+      }
+
+      // Sumar totales de crudos de este cliente
+      let totalDineroCrudosCliente = 0;
+      let totalTarasCrudosCliente = 0;
+      
+      if (embarque.clienteCrudos && embarque.clienteCrudos[clienteId]) {
+        procesarCrudosDeFormaSegura(embarque.clienteCrudos, clienteId, clientesDisponibles, (item) => {
+          if (item.precio) {
+            const kilos = parseFloat(calcularKilosCrudos(item, nombreCliente));
+            // Usar exactamente los mismos kilos que se muestran en la tabla (redondeados)
+            const kilosMostrados = Math.round(kilos);
+            totalDineroCrudosCliente += kilosMostrados * Number(item.precio);
+            
+            // Acumular taras para calcular flete de crudos
+            totalTarasCrudosCliente += calcularTarasTotales(item);
+          }
+        });
+      }
+      
+      // Calcular y restar flete de crudos para clientes especiales
+      let totalDineroCrudosConFlete = totalDineroCrudosCliente;
+      if (esClienteEspecial && totalDineroCrudosCliente > 0) {
+        const fleteTarifaCrudo = 60;
+        const fleteCrudos = Math.round(totalTarasCrudosCliente * fleteTarifaCrudo);
+        totalDineroCrudosConFlete = Math.max(0, Math.round(totalDineroCrudosCliente) - fleteCrudos);
+      }
+      
+      // Acumular en el total general el GRAN TOTAL (después de restar los fletes)
+      totalDineroGeneral += totalDineroLimpiosConFlete + totalDineroCrudosConFlete;
     }
-    
-    // Acumular en el total general
-    totalDineroGeneral += totalDineroCliente;
   }
 
   // Agregar total general de taras y dinero al final
   if (totalTarasLimpio + totalTarasCrudos > 0) {
     contenido.push(
-      ...generarTotalGeneral(totalTarasLimpio, totalTarasCrudos, totalDineroGeneral, hayClienteConPrecios)
+      ...generarTotalGeneral(totalTarasLimpio, totalTarasCrudos, totalDineroGeneral, hayClienteConCuentaEnPdf)
     );
   }
 
@@ -1125,8 +1159,10 @@ function generarTablaProductos(productos, estiloCliente, nombreCliente, aplicarR
   const hayHilos = productosConKilos.some(producto => producto.hilos);
   // Verificar si hay productos con precio y si se deben incluir precios para este cliente
   const hayPrecios = incluirPreciosCliente && productosConKilos.some(producto => producto.precio && producto.precio.toString().trim() !== '');
-  // Solo mostrar columnas separadas de precio y total si está activado "cuenta en PDF"
-  const mostrarColumnasPrecio = hayPrecios && cuentaEnPdfCliente;
+  // Mostrar columna de precio si está activado "incluir precios"
+  const mostrarColumnaPrecio = hayPrecios;
+  // Mostrar columna de total solo si está activado "incluir precios" Y "cuenta en PDF"
+  const mostrarColumnaTotal = hayPrecios && cuentaEnPdfCliente;
 
   // Definir las columnas del header
   const headerRow = [
@@ -1135,9 +1171,13 @@ function generarTablaProductos(productos, estiloCliente, nombreCliente, aplicarR
     { text: 'Taras', style: 'tableHeader' }
   ];
 
-  // Agregar columnas de Precio y Total solo si hay precios y está activado "cuenta en PDF"
-  if (mostrarColumnasPrecio) {
+  // Agregar columna de Precio si está activado "incluir precios"
+  if (mostrarColumnaPrecio) {
     headerRow.push({ text: 'Precio', style: 'tableHeader' });
+  }
+  
+  // Agregar columna de Total solo si está activado "incluir precios" Y "cuenta en PDF"
+  if (mostrarColumnaTotal) {
     headerRow.push({ text: 'Total', style: 'tableHeader' });
   }
 
@@ -1181,13 +1221,13 @@ function generarTablaProductos(productos, estiloCliente, nombreCliente, aplicarR
         nombreCliente.toLowerCase().includes('ozuna') ? `${kilos.toFixed(1)} kg` : `${Math.round(kilos)} kg`,
         // Construir el texto del producto según los casos
         hayPrecios 
-          ? (mostrarColumnasPrecio 
-              // Si hay columnas de precio separadas, mostrar solo el nombre del producto
+          ? (mostrarColumnaPrecio 
+              // Si hay columna de precio separada, mostrar solo el nombre del producto
               ? {
                   text: (producto.nombreAlternativoPDF || producto.medida || '') + (producto.tipo === 'c/h20' ? ' c/h2o' : (producto.tipo === 's/h20' ? ' s/h2o' : (producto.tipo === 'otro' ? ` ${producto.tipoPersonalizado || ''}` : ` ${producto.tipo || ''}`))),
                   ...(producto.tipo === 'c/h20' ? { style: 'tipoConAgua' } : {})
                 }
-              // Si no hay columnas separadas, crear texto con estilos separados para medida y precio
+              // Si no hay columna separada, crear texto con estilos separados para medida y precio
               : (producto.precio 
                 ? {
                     text: [
@@ -1214,13 +1254,15 @@ function generarTablaProductos(productos, estiloCliente, nombreCliente, aplicarR
         tarasTexto
       ];
 
-      // Agregar columnas de Precio y Total solo si está activado "cuenta en PDF"
-      if (mostrarColumnasPrecio) {
-        // Agregar columna de precio
+      // Agregar columna de precio si está activado "incluir precios"
+      if (mostrarColumnaPrecio) {
         row.push(producto.precio 
           ? { text: `$${Number(producto.precio).toLocaleString('en-US')}`, style: 'precio' } 
           : '');
-        
+      }
+      
+      // Agregar columna de Total solo si está activado "incluir precios" Y "cuenta en PDF"
+      if (mostrarColumnaTotal) {
         // Calcular el total correctamente según el tipo de producto
         let total = 0;
         if (producto.precio) {
@@ -1248,8 +1290,19 @@ function generarTablaProductos(productos, estiloCliente, nombreCliente, aplicarR
         // Sumar taras para flete en clientes especiales (Lorena/Catarro)
         totalTarasParaFlete += tarasTotales;
         
+        // Ajustar tamaño de fuente si el total tiene 6 cifras o más
+        const totalRedondeadoProducto = Math.round(total);
+        const fontSizeTotalProducto = totalRedondeadoProducto >= 100000 ? 16 : 21;
+        
         row.push(producto.precio 
-          ? { text: `$${Math.round(total).toLocaleString('en-US')}`, style: 'totalPrecio' } 
+          ? { 
+              text: `$${totalRedondeadoProducto.toLocaleString('en-US')}`, 
+              color: '#FFFFFF',
+              background: '#9b59b6',
+              padding: [2, 2, 2, 2],
+              bold: true,
+              fontSize: fontSizeTotalProducto
+            } 
           : '');
       }
 
@@ -1268,7 +1321,7 @@ function generarTablaProductos(productos, estiloCliente, nombreCliente, aplicarR
   });
 
   // Agregar fila con el gran total solo si está activado "cuenta en PDF"
-  if (mostrarColumnasPrecio && granTotal > 0) {
+  if (mostrarColumnaTotal && granTotal > 0) {
     // Crear una fila completa para el gran total
     const numColumnas = headerRow.length; 
     const filaGranTotal = [
@@ -1287,11 +1340,14 @@ function generarTablaProductos(productos, estiloCliente, nombreCliente, aplicarR
       filaGranTotal.push({});
     }
     
-    // Agregar el valor del gran total
+    // Agregar el valor del gran total con tamaño de fuente ajustado según el monto
+    const totalRedondeado = Math.round(granTotal);
+    const fontSizeTotal = totalRedondeado >= 100000 ? 18 : 24; // Fuente más pequeña si tiene 6 cifras o más
+    
     filaGranTotal.push({ 
-      text: `$${Math.round(granTotal).toLocaleString('en-US')}`,
+      text: `$${totalRedondeado.toLocaleString('en-US')}`,
       bold: true,
-      fontSize: 24,
+      fontSize: fontSizeTotal,
       color: colorMarcaTexto,
       border: [true, true, true, true],
       alignment: 'center'
@@ -1322,7 +1378,9 @@ function generarTablaProductos(productos, estiloCliente, nombreCliente, aplicarR
       filaFlete.push({ text: `$${flete.toLocaleString('en-US')}`, style: 'totalPrecio' });
       body.push(filaFlete);
 
-      // Fila Total final
+      // Fila Total final con tamaño de fuente ajustado según el monto
+      const fontSizeGranTotal = totalConFlete >= 100000 ? 18 : 24; // Fuente más pequeña si tiene 6 cifras o más
+      
       const filaTotal = [
         {
           text: 'GRAN TOTAL:',
@@ -1334,7 +1392,16 @@ function generarTablaProductos(productos, estiloCliente, nombreCliente, aplicarR
         }
       ];
       for (let i = 1; i < numColumnas - 1; i++) filaTotal.push({});
-      filaTotal.push({ text: `$${totalConFlete.toLocaleString('en-US')}`, style: 'granTotal' });
+      filaTotal.push({ 
+        text: `$${totalConFlete.toLocaleString('en-US')}`, 
+        bold: true,
+        fontSize: fontSizeGranTotal,
+        color: '#FFFFFF',
+        background: colorMarcaTexto,
+        padding: [4, 4, 4, 4],
+        border: [true, true, true, true],
+        alignment: 'center'
+      });
       body.push(filaTotal);
     }
   }
@@ -1360,10 +1427,8 @@ function generarTablaProductos(productos, estiloCliente, nombreCliente, aplicarR
 
   // Calcular los anchos según el número de columnas
   let widths;
-  if (mostrarColumnasPrecio) {
-    // Columnas base + Precio + Total
-    const numColumnas = 5 + (hayHilos ? 1 : 0) + (hayNotas ? 1 : 0);
-    
+  if (mostrarColumnaPrecio && mostrarColumnaTotal) {
+    // Columnas base + Precio + Total (ambas columnas)
     if (hayHilos && hayNotas) {
       widths = ['10%', '20%', '20%', '15%', '15%', '10%', '10%'];
     } else if (hayHilos) {
@@ -1373,8 +1438,19 @@ function generarTablaProductos(productos, estiloCliente, nombreCliente, aplicarR
     } else {
       widths = ['15%', '25%', '20%', '20%', '20%'];
     }
+  } else if (mostrarColumnaPrecio) {
+    // Solo columna de Precio (sin Total)
+    if (hayHilos && hayNotas) {
+      widths = ['12%', '22%', '22%', '18%', '13%', '13%'];
+    } else if (hayHilos) {
+      widths = ['15%', '25%', '25%', '20%', '15%'];
+    } else if (hayNotas) {
+      widths = ['15%', '25%', '25%', '20%', '15%'];
+    } else {
+      widths = ['20%', '30%', '25%', '25%'];
+    }
   } else {
-    // Mantener los anchos originales si no hay precios o no se deben mostrar
+    // Sin columnas de precio ni total
     if (hayHilos && hayNotas) {
       widths = ['15%', '25%', '25%', '15%', '20%'];
     } else if (hayHilos) {
@@ -1510,8 +1586,19 @@ function generarTablaCrudos(crudos, estiloCliente, incluirPreciosCliente = false
       const total = item.precio ? kilosMostrados * Number(item.precio) : 0;
       granTotal += total;
 
+      // Ajustar tamaño de fuente si el total tiene 6 cifras o más
+      const totalRedondeadoItem = Math.round(total);
+      const fontSizeTotalItem = totalRedondeadoItem >= 100000 ? 16 : 21;
+
       row.push(item.precio
-        ? { text: `$${Math.round(total).toLocaleString('en-US')}`, style: 'totalPrecio' }
+        ? { 
+            text: `$${totalRedondeadoItem.toLocaleString('en-US')}`, 
+            color: '#FFFFFF',
+            background: '#9b59b6',
+            padding: [2, 2, 2, 2],
+            bold: true,
+            fontSize: fontSizeTotalItem
+          }
         : '');
 
       // Sumar taras para flete (cantidad de taras + sobrante) cuando hay precios
@@ -1540,11 +1627,14 @@ function generarTablaCrudos(crudos, estiloCliente, incluirPreciosCliente = false
       filaGranTotal.push({});
     }
     
-    // Agregar el valor del gran total
+    // Agregar el valor del gran total con tamaño de fuente ajustado según el monto
+    const totalRedondeadoCrudos = Math.round(granTotal);
+    const fontSizeTotalCrudos = totalRedondeadoCrudos >= 100000 ? 18 : 24; // Fuente más pequeña si tiene 6 cifras o más
+    
     filaGranTotal.push({ 
-      text: `$${Math.round(granTotal).toLocaleString('en-US')}`,
+      text: `$${totalRedondeadoCrudos.toLocaleString('en-US')}`,
       bold: true,
-      fontSize: 24,
+      fontSize: fontSizeTotalCrudos,
       color: colorMarcaTexto,
       border: [true, true, true, true],
       alignment: 'center'
@@ -1574,6 +1664,9 @@ function generarTablaCrudos(crudos, estiloCliente, incluirPreciosCliente = false
       filaFlete.push({ text: `$${flete.toLocaleString('en-US')}`, style: 'totalPrecio' });
       body.push(filaFlete);
 
+      // Fila Total final con tamaño de fuente ajustado según el monto
+      const fontSizeGranTotalCrudos = totalConFlete >= 100000 ? 18 : 24; // Fuente más pequeña si tiene 6 cifras o más
+      
       const filaTotal = [
         {
           text: 'GRAN TOTAL:',
@@ -1585,7 +1678,16 @@ function generarTablaCrudos(crudos, estiloCliente, incluirPreciosCliente = false
         }
       ];
       for (let i = 1; i < numColumnas - 1; i++) filaTotal.push({});
-      filaTotal.push({ text: `$${totalConFlete.toLocaleString('en-US')}`, style: 'granTotal' });
+      filaTotal.push({ 
+        text: `$${totalConFlete.toLocaleString('en-US')}`, 
+        bold: true,
+        fontSize: fontSizeGranTotalCrudos,
+        color: '#FFFFFF',
+        background: colorMarcaTexto,
+        padding: [4, 4, 4, 4],
+        border: [true, true, true, true],
+        alignment: 'center'
+      });
       body.push(filaTotal);
     }
   }
@@ -2243,15 +2345,17 @@ async function generarContenidoClientesSinPrecios(embarque, clientesDisponibles,
     return acc;
   }, {});
 
-  // Determinar si hay algún cliente Elizabeth o Catarro con precios
-  let hayClienteConPrecios = false;
+  // Determinar si hay algún cliente Elizabeth o Catarro con precios Y con cuenta en PDF activada
+  let hayClienteConCuentaEnPdf = false;
   let totalDineroGeneral = 0;
   
   Object.entries(productosPorCliente).forEach(([clienteId]) => {
     const nombreCliente = obtenerNombreCliente(clienteId, clientesDisponibles);
     const incluirPreciosCliente = clientesIncluirPrecios && clientesIncluirPrecios[clienteId];
-    if ((nombreCliente.toLowerCase().includes('elizabeth') || nombreCliente.toLowerCase().includes('catarro')) && incluirPreciosCliente) {
-      hayClienteConPrecios = true;
+    const cuentaEnPdfCliente = clientesCuentaEnPdf && clientesCuentaEnPdf[clienteId];
+    // Solo mostrar total de cuenta si ambos checkboxes están activados
+    if ((nombreCliente.toLowerCase().includes('elizabeth') || nombreCliente.toLowerCase().includes('catarro')) && incluirPreciosCliente && cuentaEnPdfCliente) {
+      hayClienteConCuentaEnPdf = true;
     }
   });
 
