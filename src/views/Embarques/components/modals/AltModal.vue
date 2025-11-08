@@ -9,10 +9,15 @@
                 @input="onInputUsuario"
                 @keydown="onInputUsuario"
                 @focus="onInputUsuario"
-                ref="altInput">
+                ref="altInput"
+                :disabled="guardando">
             <small class="form-text text-muted">
                 Este nombre solo se mostrará en el PDF de resumen de embarque.
             </small>
+            <div v-if="guardando" class="guardando-indicador">
+                <div class="spinner"></div>
+                <span>Guardando...</span>
+            </div>
         </div>
     </BaseModal>
 </template>
@@ -33,6 +38,10 @@ export default {
         alt: {
             type: String,
             default: ''
+        },
+        guardando: {
+            type: Boolean,
+            default: false
         }
     },
     data() {
@@ -130,9 +139,41 @@ export default {
     border: 1px solid #ccc;
 }
 
+.form-control:disabled {
+    background-color: #f5f5f5;
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
 .form-text.text-muted {
     font-size: 0.85rem;
     color: #6c757d;
     margin-top: 5px;
+}
+
+.guardando-indicador {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 10px;
+    padding: 10px;
+    background-color: #e3f2fd;
+    border-radius: 5px;
+    color: #1976d2;
+    font-weight: 500;
+}
+
+.spinner {
+    border: 3px solid #f3f3f3;
+    border-top: 3px solid #1976d2;
+    border-radius: 50%;
+    width: 20px;
+    height: 20px;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
 }
 </style>
