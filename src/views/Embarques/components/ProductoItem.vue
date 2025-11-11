@@ -3,7 +3,8 @@
         'reporte-completo': coincideTarasYBolsas,
         'reporte-incompleto': !coincideTarasYBolsas && tieneAlgunReporte,
         'taras-reportadas': coincideTaras,
-        'taras-no-reportadas': (totalTaras > 0 && !coincideTaras) || (totalTaras === 0 && totalTarasReportadas === 0),
+        'taras-no-reportadas': totalTaras > 0 && !coincideTaras,
+        'producto-en-cero': totalTaras === 0 && totalTarasReportadas === 0,
         'medida-vacia': !producto.medida
     }">
         <!-- Checkbox de venta para Ozuna -->
@@ -757,6 +758,10 @@ export default {
 
 .producto.taras-no-reportadas {
     border: 2px solid #3498db;
+}
+
+.producto.producto-en-cero {
+    border: 2px solid #e74c3c;
 }
 
 .producto.medida-vacia {
