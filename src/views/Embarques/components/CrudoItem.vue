@@ -24,6 +24,7 @@
                         <option value="Linea">Linea</option>
                         <option value="Lag gde c/c">Lag gde c/c</option>
                         <option value="Acamaya">Acamaya</option>
+                        <option value="Cam s/c">Cam s/c</option>
                         <option value="Rechazo">Rechazo</option>
                     </select>
                     <span v-if="item.precio" class="precio-tag">${{ item.precio }}</span>
