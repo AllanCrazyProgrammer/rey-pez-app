@@ -757,7 +757,7 @@ export default {
 }
 
 .producto.taras-no-reportadas {
-    border: 2px solid #3498db;
+    border: 2px solid #9b59b6;
 }
 
 .producto.producto-en-cero {
