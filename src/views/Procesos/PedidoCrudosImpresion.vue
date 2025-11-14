@@ -79,17 +79,19 @@ export default {
   methods: {
     obtenerClientesConDatos() {
       return Object.keys(this.pedidos).filter(cliente => {
-        return Object.values(this.pedidos[cliente]).some(valor => 
-          valor !== null && valor !== ''
-        )
+        return Object.values(this.pedidos[cliente]).some(valor => {
+          const numero = parseFloat(valor)
+          return valor !== null && valor !== '' && !isNaN(numero) && numero > 0
+        })
       })
     },
     obtenerColumnasConDatos() {
       return this.columnas.filter(columna => {
         const nombreProp = columna.toLowerCase()
         return this.obtenerClientesConDatos().some(cliente => {
-          return this.pedidos[cliente][nombreProp] !== null && 
-                 this.pedidos[cliente][nombreProp] !== ''
+          const valor = this.pedidos[cliente][nombreProp]
+          const numero = parseFloat(valor)
+          return valor !== null && valor !== '' && !isNaN(numero) && numero > 0
         })
       })
     },

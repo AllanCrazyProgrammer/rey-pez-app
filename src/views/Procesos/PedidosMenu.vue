@@ -286,11 +286,31 @@ export default {
     },
     imprimirPedido(pedido) {
       if (pedido.tipo === 'crudo') {
+        // Replicar la misma lógica de filtrado que en la vista de crudos
+        // para que la vista previa sea idéntica al botón de imprimir interno
+        const pedidosConDatos = {};
+
+        for (const cliente in pedido.pedidos) {
+          let tieneValores = false;
+
+          for (const columna in pedido.pedidos[cliente]) {
+            const valor = pedido.pedidos[cliente][columna];
+            if (valor && !isNaN(valor) && parseFloat(valor) > 0) {
+              tieneValores = true;
+              break;
+            }
+          }
+
+          if (tieneValores) {
+            pedidosConDatos[cliente] = pedido.pedidos[cliente];
+          }
+        }
+
         this.$router.push({
           name: 'PedidoCrudosImpresion',
           params: {
             fecha: pedido.fecha,
-            pedidos: pedido.pedidos,
+            pedidos: pedidosConDatos,
             columnas: pedido.columnas
           }
         });
