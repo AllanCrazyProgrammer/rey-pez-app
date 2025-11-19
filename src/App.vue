@@ -23,8 +23,14 @@ export default {
     // Inicializar el store de autenticación al cargar la aplicación
     const authStore = useAuthStore();
     authStore.checkAuth();
-    
-    
+  },
+  mounted() {
+    // Prevenir el cambio de valor al hacer scroll en inputs de tipo número globalmente
+    document.addEventListener('wheel', (event) => {
+      if (document.activeElement.type === 'number') {
+        document.activeElement.blur();
+      }
+    });
   }
 };
 </script>
