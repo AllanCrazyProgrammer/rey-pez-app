@@ -147,13 +147,16 @@ export default {
       // Prevent body scroll when menu is open
       if (this.mobileMenuOpen) {
         document.body.style.overflow = 'hidden';
+        document.body.classList.add('mobile-menu-open');
       } else {
         document.body.style.overflow = '';
+        document.body.classList.remove('mobile-menu-open');
       }
     },
     closeMobileMenu() {
       this.mobileMenuOpen = false;
       document.body.style.overflow = '';
+      document.body.classList.remove('mobile-menu-open');
     },
     handleResize() {
       // Close mobile menu on resize to larger screen
@@ -169,6 +172,7 @@ export default {
     window.removeEventListener('resize', this.handleResize);
     // Ensure body scroll is restored
     document.body.style.overflow = '';
+    document.body.classList.remove('mobile-menu-open');
   }
 };
 </script>

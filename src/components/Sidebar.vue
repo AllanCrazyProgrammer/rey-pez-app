@@ -799,4 +799,12 @@ export default {
 .sidebar-clientes::-webkit-scrollbar-thumb:hover {
   background: linear-gradient(180deg, rgba(52, 152, 219, 0.7), rgba(46, 204, 113, 0.7));
 }
+</style>
+
+<style>
+/* Estilo global para ocultar sidebar cuando el menú móvil está abierto */
+body.mobile-menu-open .sidebar-clientes {
+  display: none !important;
+  z-index: 0;
+}
 </style> 
