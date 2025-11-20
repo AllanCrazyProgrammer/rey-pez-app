@@ -19,6 +19,9 @@
     <div class="reporte-cuentas-card card">
       <h2>Generar reporte PDF</h2>
       <ReporteCuentasVeronicaButton />
+      <button @click="generarReporteSemanal" class="action-button reporte-semanal-btn" style="margin-top: 10px; width: 100%;">
+        📊 Reporte Semanal
+      </button>
     </div>
 
     <div class="resumen-ventas-card card">
@@ -77,17 +80,70 @@
         {{ lastSaveMessage }}
       </div>
     </template>
+
+    <!-- Modal Reporte Semanal -->
+    <div v-if="showReporteSemanalModal" class="modal-overlay" @click.self="showReporteSemanalModal = false">
+      <div class="modal-content">
+        <h2>Reporte Semanal</h2>
+        
+        <div style="text-align: center; margin-bottom: 15px;">
+          <label style="display: block; margin-bottom: 5px; color: #666;">Seleccionar Semana (por fecha):</label>
+          <DatePicker 
+            v-model="selectedReportDate" 
+            value-type="date" 
+            format="DD/MM/YYYY" 
+            placeholder="Selecciona una fecha"
+            @change="calcularReportePorFecha"
+            :clearable="false"
+          />
+        </div>
+
+        <p style="text-align: center; color: #ff8c00; font-weight: bold; margin-bottom: 20px;">
+          {{ reporteSemanalData.startDate }} - {{ reporteSemanalData.endDate }}
+        </p>
+        
+        <div class="reporte-details" style="margin: 20px 0;">
+          <div style="display: flex; justify-content: space-between; margin-bottom: 10px; padding-bottom: 5px; border-bottom: 1px solid #eee;">
+            <span style="font-weight: bold;">Enviado en Venta:</span>
+            <span style="color: #2c3e50;">${{ formatNumber(reporteSemanalData.totalVenta) }}</span>
+          </div>
+          
+          <div style="display: flex; justify-content: space-between; margin-bottom: 10px; padding-bottom: 5px; border-bottom: 1px solid #eee;">
+            <span style="font-weight: bold;">Total Abonado:</span>
+            <span style="color: #4CAF50;">${{ formatNumber(reporteSemanalData.totalAbonado) }}</span>
+          </div>
+          
+          <div style="display: flex; justify-content: space-between; margin-top: 15px; font-size: 1.1em;">
+            <span style="font-weight: bold;">Faltante (Deuda):</span>
+            <span style="color: #f44336; font-weight: bold;">${{ formatNumber(reporteSemanalData.faltante) }}</span>
+          </div>
+        </div>
+
+        <div class="modal-buttons" style="justify-content: center; flex-direction: column; gap: 10px;">
+          <ReporteSemanalPDFButton 
+            :reporte-data="reporteSemanalData" 
+            :detalle-ventas="detalleVentasSemanal"
+            :detalle-abonos="detalleAbonosSemanal"
+          />
+          <button @click="showReporteSemanalModal = false" class="btn-cerrar">Cerrar</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script>
 import { db } from '@/firebase';
-import { collection, query, orderBy, deleteDoc, doc, onSnapshot, where, updateDoc } from 'firebase/firestore';
+import { collection, query, orderBy, deleteDoc, doc, onSnapshot, where, updateDoc, getDocs, limit } from 'firebase/firestore';
 import BackButton from '@/components/BackButton.vue';
 import PreciosHistorialModal from '@/components/PreciosHistorialModal.vue';
 import StashModalV2 from '@/components/StashModalV2.vue';
 import ReporteCuentasVeronicaButton from '@/components/Cuentas/ReporteCuentasVeronicaButton.vue';
 import ResumenVentasVeronicaModal from '@/components/Cuentas/ResumenVentasVeronicaModal.vue';
+import ReporteSemanalPDFButton from '@/components/Cuentas/ReporteSemanalPDFButton.vue';
+import moment from 'moment';
+import DatePicker from 'vue2-datepicker';
+import 'vue2-datepicker/index.css';
 
 export default {
   name: 'VeronicaCuentasMenu',
@@ -96,7 +152,9 @@ export default {
     PreciosHistorialModal,
     StashModalV2,
     ReporteCuentasVeronicaButton,
-    ResumenVentasVeronicaModal
+    ResumenVentasVeronicaModal,
+    DatePicker,
+    ReporteSemanalPDFButton
   },
   data() {
     return {
@@ -106,7 +164,18 @@ export default {
       unsubscribe: null,
       lastSaveMessage: '',
       showSaveMessage: false,
-      saveMessageTimer: null
+      saveMessageTimer: null,
+      showReporteSemanalModal: false,
+      selectedReportDate: null,
+      reporteSemanalData: {
+        totalVenta: 0,
+        totalAbonado: 0,
+        faltante: 0,
+        startDate: '',
+        endDate: ''
+      },
+      detalleVentasSemanal: [],
+      detalleAbonosSemanal: []
     };
   },
   computed: {
@@ -225,6 +294,116 @@ export default {
     },
     formatNumber(value) {
       return value.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    },
+    generarReporteSemanal() {
+      this.selectedReportDate = new Date();
+      this.calcularReportePorFecha(this.selectedReportDate);
+      this.showReporteSemanalModal = true;
+    },
+    async calcularReportePorFecha(date) {
+      if (!date) return;
+      
+      const fechaObj = moment(date);
+      const startOfWeek = fechaObj.clone().startOf('isoWeek');
+      const endOfWeek = fechaObj.clone().endOf('isoWeek');
+
+      // 1. Ventas: Suma de saldoHoy (totalGeneralVenta) de las notas creadas en esta semana
+      const ventasSemana = this.cuentas.filter(c => {
+        const fecha = moment(c.fecha);
+        return fecha.isBetween(startOfWeek, endOfWeek, 'day', '[]');
+      });
+
+      const totalVenta = ventasSemana.reduce((sum, c) => sum + (c.saldoHoy || 0), 0);
+      
+      // Preparar detalle de ventas para el PDF
+      this.detalleVentasSemanal = ventasSemana.map(c => ({
+        fecha: moment(c.fecha).format('DD/MM/YYYY'),
+        monto: c.saldoHoy || 0
+      })).sort((a, b) => moment(a.fecha, 'DD/MM/YYYY').valueOf() - moment(b.fecha, 'DD/MM/YYYY').valueOf());
+      
+      // 2. Abonos: Buscar EXACTAMENTE como StashModalV2 - desde las cuentas
+      let totalAbonado = 0;
+      const abonosDetalle = [];
+      
+      try {
+        // Cargar las últimas 50 cuentas (igual que StashModalV2 cargarTodosLosAbonos)
+        const collectionName = 'cuentasVeronica';
+        const q = query(
+          collection(db, collectionName),
+          orderBy('fecha', 'desc'),
+          limit(50)
+        );
+        const snapshot = await getDocs(q);
+        
+        // Iterar cada cuenta y buscar sus abonos
+        snapshot.docs.forEach(doc => {
+          const cuentaData = doc.data();
+          
+          // Si la cuenta tiene abonos, revisarlos
+          if (cuentaData.abonos && cuentaData.abonos.length > 0) {
+            cuentaData.abonos.forEach((abono) => {
+              // La fecha del abono es cuando se registró el dinero
+              // Puede estar en: abono.fecha, abono.fechaAplicacion, o abono.fechaOriginalStash
+              const fechaAbonoStr = abono.fechaOriginalStash || abono.fecha || abono.fechaAplicacion;
+              
+              if (fechaAbonoStr) {
+                const fechaAbono = moment(fechaAbonoStr);
+                if (fechaAbono.isValid() && fechaAbono.isBetween(startOfWeek, endOfWeek, 'day', '[]')) {
+                  const montoAbono = parseFloat(abono.monto) || 0;
+                  totalAbonado += montoAbono;
+                  
+                  // Agregar al detalle
+                  abonosDetalle.push({
+                    fecha: fechaAbono.format('DD/MM/YYYY'),
+                    descripcion: abono.descripcion || 'Abono aplicado',
+                    monto: montoAbono
+                  });
+                }
+              }
+            });
+          }
+        });
+
+        // También revisar el stash (dinero que aún no se ha aplicado pero que ya entró)
+        const stashRef = collection(db, 'stash_veronica');
+        const stashSnapshot = await getDocs(stashRef);
+        
+        stashSnapshot.forEach(doc => {
+          const data = doc.data();
+          if (data.fecha) {
+            const fechaAbono = moment(data.fecha);
+            if (fechaAbono.isBetween(startOfWeek, endOfWeek, 'day', '[]')) {
+              const montoAbono = parseFloat(data.monto) || 0;
+              totalAbonado += montoAbono;
+              
+              // Agregar al detalle
+              abonosDetalle.push({
+                fecha: fechaAbono.format('DD/MM/YYYY'),
+                descripcion: data.descripcion || 'Abono en stash',
+                monto: montoAbono
+              });
+            }
+          }
+        });
+
+        // Ordenar abonos por fecha
+        this.detalleAbonosSemanal = abonosDetalle.sort((a, b) => 
+          moment(a.fecha, 'DD/MM/YYYY').valueOf() - moment(b.fecha, 'DD/MM/YYYY').valueOf()
+        );
+
+      } catch (error) {
+        console.error("Error calculando abonos:", error);
+      }
+
+      const faltante = totalVenta - totalAbonado;
+
+      this.reporteSemanalData = {
+        totalVenta,
+        totalAbonado,
+        faltante,
+        startDate: startOfWeek.format('DD/MM/YYYY'),
+        endDate: endOfWeek.format('DD/MM/YYYY')
+      };
     },
     editarCuenta(id) {
       this.$router.push(`/cuentas-veronica/${id}?edit=true`);
