@@ -2995,18 +2995,6 @@ function generarTotalGeneral(totalTarasLimpio, totalTarasCrudos, totalDinero, ha
     });
   }
 
-  // Agregar el gran total de la cuenta (suma de limpio + crudos) debajo del total de taras
-  if (totalDinero > 0) {
-    contenido.push({
-      text: `Gran Total de la Cuenta: $${Math.round(totalDinero).toLocaleString('en-US')}`,
-      style: ['subheader', 'granTotal'],
-      alignment: 'center',
-      margin: [0, 5, 0, 10],
-      bold: true,
-      fontSize: 18
-    });
-  }
-
   return contenido;
 }
 
