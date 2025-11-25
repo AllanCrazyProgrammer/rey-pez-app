@@ -2025,20 +2025,23 @@ export default {
           if (producto.medida) {
             const medidaNormalizada = producto.medida.toLowerCase().trim();
             let nombreMedida = producto.medida.trim();
+            let claveUnica = medidaNormalizada;
             
             // Solo añadir "Maquila Ozuna" si es de Ozuna y NO es una venta
             if (cliente.nombre === 'Ozuna' && !producto.esVenta) {
               nombreMedida = `${producto.medida.trim()} Maquila Ozuna`;
+              // Crear una clave única para maquila para evitar sobrescribir ventas
+              claveUnica = `${medidaNormalizada}_maquila_ozuna`;
             }
 
             if (medidaNormalizada.endsWith('mix')) {
               const baseSize = medidaNormalizada.split(' ')[0];
               mixMedidas.set(baseSize, nombreMedida);
             } else {
-              // Usar medidaNormalizada como clave para evitar duplicados
-              // pero almacenar el nombreMedida original para mostrar
-              if (!medidasMap.has(medidaNormalizada)) {
-                medidasMap.set(medidaNormalizada, nombreMedida);
+              // Usar claveUnica para permitir que existan tanto venta como maquila
+              // de la misma medida sin sobrescribirse
+              if (!medidasMap.has(claveUnica)) {
+                medidasMap.set(claveUnica, nombreMedida);
               }
             }
           }
