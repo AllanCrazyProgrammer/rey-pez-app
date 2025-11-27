@@ -416,7 +416,25 @@ export default {
         clienteId: ''
       },
       precioActualMostrar: null,
-      buscarPrecioTimeout: null
+      buscarPrecioTimeout: null,
+      // Mapeo de nombres duplicados a nombres normalizados
+      // El nombre estándar es con guión y mayúsculas: "Med-Esp c/c" y "Med-Gde c/c"
+      nombresNormalizados: {
+        // Variantes de Med-Esp c/c
+        'Med Esp c/c': 'Med-Esp c/c',
+        'med esp c/c': 'Med-Esp c/c',
+        'Med esp c/c': 'Med-Esp c/c',
+        'MED ESP c/c': 'Med-Esp c/c',
+        'MED-ESP c/c': 'Med-Esp c/c',
+        'Med-esp c/c': 'Med-Esp c/c',
+        // Variantes de Med-Gde c/c
+        'Med Gde c/c': 'Med-Gde c/c',
+        'med gde c/c': 'Med-Gde c/c',
+        'Med gde c/c': 'Med-Gde c/c',
+        'Med-gde c/c': 'Med-Gde c/c', // Variante con g minúscula
+        'MED GDE c/c': 'Med-Gde c/c',
+        'MED-GDE c/c': 'Med-Gde c/c'
+      }
     };
   },
   computed: {
@@ -514,6 +532,26 @@ export default {
     }
   },
   methods: {
+    // Normaliza el nombre del producto para unificar duplicados
+    normalizarNombreProducto(nombre) {
+      if (!nombre) return nombre;
+      const nombreTrim = nombre.trim();
+      
+      // Buscar coincidencia exacta en el mapeo
+      if (this.nombresNormalizados[nombreTrim]) {
+        return this.nombresNormalizados[nombreTrim];
+      }
+      
+      // Buscar coincidencia ignorando mayúsculas/minúsculas
+      const nombreLower = nombreTrim.toLowerCase();
+      for (const [variante, normalizado] of Object.entries(this.nombresNormalizados)) {
+        if (variante.toLowerCase() === nombreLower) {
+          return normalizado;
+        }
+      }
+      
+      return nombreTrim;
+    },
     formatNumber(value) {
       return value?.toLocaleString('es-ES', { 
         minimumFractionDigits: 2, 
@@ -539,40 +577,64 @@ export default {
         const preciosSnapshot = await getDocs(q);
         
         // Crear un mapa para organizar los precios por producto y cliente
+        // Ahora normalizamos los nombres para unificar productos duplicados
         const preciosMap = new Map();
         
         preciosSnapshot.docs.forEach(doc => {
           const precio = { id: doc.id, ...doc.data() };
-          // Clave única para cada combinación de producto y cliente
+          
+          // Normalizar el nombre del producto para unificar duplicados
+          const productoNormalizado = this.normalizarNombreProducto(precio.producto);
+          
+          // Clave única para cada combinación de producto normalizado y cliente
           const clave = precio.clienteId 
-            ? `${precio.producto}-${precio.clienteId}` 
-            : precio.producto;
+            ? `${productoNormalizado}-${precio.clienteId}` 
+            : productoNormalizado;
             
           if (!preciosMap.has(clave)) {
             preciosMap.set(clave, {
-              producto: precio.producto,
+              producto: productoNormalizado, // Usar el nombre normalizado
+              productoOriginal: precio.producto, // Guardar el original por referencia
               precioActual: precio.precio,
               fechaActual: precio.fecha,
               clienteId: precio.clienteId || null,
               historial: []
             });
+          } else {
+            // Si ya existe, verificar si este registro es más reciente
+            const existente = preciosMap.get(clave);
+            if (new Date(precio.fecha) > new Date(existente.fechaActual)) {
+              existente.precioActual = precio.precio;
+              existente.fechaActual = precio.fecha;
+            }
           }
+          
+          // Agregar al historial con el nombre normalizado
           preciosMap.get(clave).historial.push({
             id: doc.id,
             fecha: precio.fecha,
             precio: precio.precio,
-            clienteId: precio.clienteId || null
+            clienteId: precio.clienteId || null,
+            productoOriginal: precio.producto // Mantener referencia al nombre original
           });
+        });
+        
+        // Ordenar el historial de cada producto por fecha descendente
+        preciosMap.forEach((item) => {
+          item.historial.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
         });
         
         this.preciosActuales = Array.from(preciosMap.values()).map(item => ({
           id: item.historial[0].id,
-          producto: item.producto,
+          producto: item.producto, // Nombre normalizado
           precio: item.precioActual,
           fecha: item.fechaActual,
           clienteId: item.clienteId,
           historial: item.historial
         }));
+        
+        console.log('[PRECIOS] Productos cargados con nombres normalizados:', 
+          this.preciosActuales.map(p => p.producto));
       } catch (error) {
         console.error('Error al cargar precios:', error);
       }
@@ -669,10 +731,13 @@ export default {
         const fechaNormalizada = normalizarFechaISO(precioData.fecha);
         const timestamp = obtenerTimestamp();
 
-        console.log(`[PRECIOS] Guardando precio - Fecha original: ${precioData.fecha}, Fecha normalizada: ${fechaNormalizada}, Timestamp: ${timestamp}`);
+        // Normalizar el nombre del producto para evitar duplicados
+        const productoNormalizado = this.normalizarNombreProducto(precioData.producto);
+
+        console.log(`[PRECIOS] Guardando precio - Producto original: "${precioData.producto}", Producto normalizado: "${productoNormalizado}", Fecha: ${fechaNormalizada}, Timestamp: ${timestamp}`);
 
         // Determinar la categoría basada en el nombre del producto
-        const nombreProducto = precioData.producto.toLowerCase();
+        const nombreProducto = productoNormalizado.toLowerCase();
         let categoria = 'Otros';
         if (nombreProducto.includes('s/c') || nombreProducto.match(/\d+\/\d+/)) {
           categoria = 'Camarón S/C';
@@ -681,7 +746,7 @@ export default {
         }
 
         const nuevoPrecio = {
-          producto: precioData.producto.trim(),
+          producto: productoNormalizado, // Usar el nombre normalizado
           precio: parseFloat(precioData.precio),
           fecha: fechaNormalizada,
           categoria: categoria,
@@ -732,7 +797,7 @@ export default {
         
         // Emitir evento para que el componente padre también recargue sus precios
         this.$emit('precio-agregado', {
-          producto: precioData.producto,
+          producto: productoNormalizado, // Usar el nombre normalizado
           precio: precioData.precio,
           fecha: fechaNormalizada,
           clienteId: precioData.clienteId,
