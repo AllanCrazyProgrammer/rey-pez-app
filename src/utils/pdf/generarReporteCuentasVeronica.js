@@ -96,7 +96,11 @@ export const generarReporteCuentasVeronica = async ({ fechaInicio, fechaFin, reg
     // Agrupar abonos por descripción
     if (abonos.length) {
       abonos.forEach((abono) => {
-        const descripcion = abono.descripcion || 'Sin descripción';
+        // Limpiar el texto "(Aplicación Individual)" de la descripción
+        let descripcion = abono.descripcion || 'Sin descripción';
+        descripcion = descripcion.replace(/\s*\(Aplicación Individual\)\s*/gi, '').trim();
+        if (!descripcion) descripcion = 'Sin descripción';
+        
         const monto = Number(abono.monto) || 0;
         
         if (!abonosPorDescripcion[descripcion]) {
