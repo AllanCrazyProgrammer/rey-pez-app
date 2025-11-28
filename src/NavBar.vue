@@ -1,20 +1,32 @@
 <template>
-  <div>
+  <div class="predator-nav-wrapper">
     <div class="safe-area-top"></div>
+    
+    <!-- Scanlines overlay -->
+    <div class="predator-scanlines"></div>
 
-    <nav class="navbar-modern" role="navigation" aria-label="Navegación principal">
+    <nav class="navbar-predator" role="navigation" aria-label="Navegación principal">
+      <!-- Thermal vision grid effect -->
+      <div class="thermal-grid"></div>
+      
+      <!-- HUD Corner brackets -->
+      <div class="hud-corner hud-tl"></div>
+      <div class="hud-corner hud-tr"></div>
+      <div class="hud-corner hud-bl"></div>
+      <div class="hud-corner hud-br"></div>
+      
       <!-- Brand Section -->
       <div class="navbar-brand-section">
         <router-link to="/" class="brand-link" aria-label="Ir al inicio - Rey Pez">
-          <div class="logo-container">
-            <img
-              src="https://res.cloudinary.com/hwkcovsmr/image/upload/v1620946647/samples/REY_PEZ_LOGO_nsotww.png"
-              alt="Logo de Rey Pez"
-              class="logo-image"
-              loading="lazy"
-            >
+          <div class="targeting-reticle">
+            <span class="reticle-ring"></span>
+            <span class="reticle-dot"></span>
           </div>
-          <h1 class="brand-title">Rey Pez</h1>
+          <div class="brand-info">
+            <span class="alien-symbols">◬◭◮◯</span>
+            <h1 class="brand-title">REY_PEZ</h1>
+            <span class="system-status">▸ SISTEMA ACTIVO</span>
+          </div>
         </router-link>
       </div>
 
@@ -26,9 +38,13 @@
         aria-controls="mobile-navigation"
         aria-label="Abrir menú de navegación"
       >
-        <span class="hamburger-line" :class="{ 'active': mobileMenuOpen }"></span>
-        <span class="hamburger-line" :class="{ 'active': mobileMenuOpen }"></span>
-        <span class="hamburger-line" :class="{ 'active': mobileMenuOpen }"></span>
+        <span class="toggle-bracket">[</span>
+        <span class="hamburger-lines" :class="{ 'active': mobileMenuOpen }">
+          <span class="h-line"></span>
+          <span class="h-line"></span>
+          <span class="h-line"></span>
+        </span>
+        <span class="toggle-bracket">]</span>
       </button>
 
       <!-- Navigation Menu -->
@@ -44,8 +60,11 @@
             @click="closeMobileMenu"
             aria-label="Ir a la página de inicio"
           >
-            <i class="nav-icon">🏠</i>
-            <span class="nav-text">Home</span>
+            <span class="link-bracket">⟨</span>
+            <span class="link-index">01</span>
+            <span class="nav-text">HOME</span>
+            <span class="link-bracket">⟩</span>
+            <span class="thermal-indicator"></span>
           </router-link>
           
           <router-link 
@@ -54,8 +73,11 @@
             @click="closeMobileMenu"
             aria-label="Gestionar notas"
           >
-            <i class="nav-icon">📝</i>
-            <span class="nav-text">Notas</span>
+            <span class="link-bracket">⟨</span>
+            <span class="link-index">02</span>
+            <span class="nav-text">NOTAS</span>
+            <span class="link-bracket">⟩</span>
+            <span class="thermal-indicator"></span>
           </router-link>
           
           <router-link 
@@ -64,8 +86,11 @@
             @click="closeMobileMenu"
             aria-label="Ver entradas y salidas"
           >
-            <i class="nav-icon">📦</i>
-            <span class="nav-text">Entradas/Salidas</span>
+            <span class="link-bracket">⟨</span>
+            <span class="link-index">03</span>
+            <span class="nav-text">E/S</span>
+            <span class="link-bracket">⟩</span>
+            <span class="thermal-indicator"></span>
           </router-link>
           
           <router-link 
@@ -74,8 +99,11 @@
             @click="closeMobileMenu"
             aria-label="Ver existencias"
           >
-            <i class="nav-icon">📊</i>
-            <span class="nav-text">Existencias</span>
+            <span class="link-bracket">⟨</span>
+            <span class="link-index">04</span>
+            <span class="nav-text">EXIST</span>
+            <span class="link-bracket">⟩</span>
+            <span class="thermal-indicator"></span>
           </router-link>
           
           <router-link 
@@ -84,8 +112,11 @@
             @click="closeMobileMenu"
             aria-label="Ver existencias de productos crudos"
           >
-            <i class="nav-icon">🦐</i>
-            <span class="nav-text">Existencias Crudos</span>
+            <span class="link-bracket">⟨</span>
+            <span class="link-index">05</span>
+            <span class="nav-text">CRUDOS</span>
+            <span class="link-bracket">⟩</span>
+            <span class="thermal-indicator"></span>
           </router-link>
           
           <router-link 
@@ -94,8 +125,11 @@
             @click="closeMobileMenu"
             aria-label="Ver cuentas de México"
           >
-            <i class="nav-icon">🇲🇽</i>
-            <span class="nav-text">Cuentas México</span>
+            <span class="link-bracket">⟨</span>
+            <span class="link-index">06</span>
+            <span class="nav-text">CUENTAS</span>
+            <span class="link-bracket">⟩</span>
+            <span class="thermal-indicator"></span>
           </router-link>
           
           <router-link 
@@ -104,8 +138,11 @@
             @click="closeMobileMenu"
             aria-label="Gestionar embarques"
           >
-            <i class="nav-icon">🚢</i>
-            <span class="nav-text">Embarques</span>
+            <span class="link-bracket">⟨</span>
+            <span class="link-index">07</span>
+            <span class="nav-text">EMBARQUES</span>
+            <span class="link-bracket">⟩</span>
+            <span class="thermal-indicator"></span>
           </router-link>
           
           <router-link 
@@ -114,11 +151,18 @@
             @click="closeMobileMenu"
             aria-label="Ver procesos"
           >
-            <i class="nav-icon">⚙️</i>
-            <span class="nav-text">Procesos</span>
+            <span class="link-bracket">⟨</span>
+            <span class="link-index">08</span>
+            <span class="nav-text">PROCESOS</span>
+            <span class="link-bracket">⟩</span>
+            <span class="thermal-indicator"></span>
           </router-link>
-          
-
+        </div>
+        
+        <!-- HUD Data display in mobile -->
+        <div class="hud-data-mobile">
+          <span class="hud-coord">LAT: 24.0277°N</span>
+          <span class="hud-coord">LON: 110.3128°W</span>
         </div>
       </div>
 
@@ -178,25 +222,113 @@ export default {
 </script>
 
 <style scoped>
-/* Safe area para dispositivos móviles */
-.safe-area-top {
-  height: env(safe-area-inset-top);
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap');
+
+/* ═══════════════════════════════════════════
+   PREDATOR VISION - THERMAL HUD NAVBAR
+   ═══════════════════════════════════════════ */
+
+.predator-nav-wrapper {
+  --thermal-red: #ff2a2a;
+  --thermal-orange: #ff6b00;
+  --thermal-yellow: #ffcc00;
+  --thermal-hot: #ff4444;
+  --thermal-warm: #ff8800;
+  --predator-bg: #0a0505;
+  --predator-dark: #120808;
+  --hud-glow: rgba(255, 100, 0, 0.6);
+  --scanline-opacity: 0.04;
+  position: relative;
 }
 
-/* Navbar principal moderna */
-.navbar-modern {
+/* Safe area */
+.safe-area-top {
+  height: env(safe-area-inset-top);
+  background: var(--predator-bg);
+}
+
+/* Scanlines overlay - CRT effect */
+.predator-scanlines {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 9999;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0, 0, 0, var(--scanline-opacity)),
+    rgba(0, 0, 0, var(--scanline-opacity)) 1px,
+    transparent 1px,
+    transparent 2px
+  );
+}
+
+/* Main Navbar */
+.navbar-predator {
   position: relative;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  backdrop-filter: blur(20px);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
-  padding: 15px 30px;
+  background: linear-gradient(180deg, var(--predator-bg) 0%, var(--predator-dark) 100%);
+  border-bottom: 2px solid var(--thermal-orange);
+  padding: 12px 25px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  box-shadow: 
+    0 0 30px rgba(255, 107, 0, 0.3),
+    inset 0 -5px 20px rgba(255, 68, 68, 0.1);
   z-index: 1000;
-  padding-top: calc(15px + env(safe-area-inset-top));
+  padding-top: calc(12px + env(safe-area-inset-top));
+  overflow: hidden;
+  font-family: 'Orbitron', 'Share Tech Mono', monospace;
+}
+
+/* Thermal grid background */
+.thermal-grid {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image: 
+    linear-gradient(rgba(255, 68, 68, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 68, 68, 0.03) 1px, transparent 1px);
+  background-size: 20px 20px;
+  pointer-events: none;
+}
+
+/* HUD Corner brackets */
+.hud-corner {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  border-color: var(--thermal-orange);
+  border-style: solid;
+  opacity: 0.8;
+}
+
+.hud-tl {
+  top: 8px;
+  left: 8px;
+  border-width: 2px 0 0 2px;
+}
+
+.hud-tr {
+  top: 8px;
+  right: 8px;
+  border-width: 2px 2px 0 0;
+}
+
+.hud-bl {
+  bottom: 8px;
+  left: 8px;
+  border-width: 0 0 2px 2px;
+}
+
+.hud-br {
+  bottom: 8px;
+  right: 8px;
+  border-width: 0 2px 2px 0;
 }
 
 /* Brand section */
@@ -210,96 +342,183 @@ export default {
   display: flex;
   align-items: center;
   text-decoration: none;
+  gap: 15px;
+  padding: 8px 15px;
+  border: 1px solid var(--thermal-orange);
+  background: rgba(255, 68, 68, 0.1);
   transition: all 0.3s ease;
-  padding: 8px 12px;
-  border-radius: 15px;
-  background: rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(10px);
+  position: relative;
+}
+
+.brand-link::before {
+  content: '◄';
+  position: absolute;
+  left: -20px;
+  color: var(--thermal-yellow);
+  font-size: 0.8rem;
+  opacity: 0;
+  transition: all 0.3s ease;
+}
+
+.brand-link:hover::before {
+  opacity: 1;
+  left: -15px;
 }
 
 .brand-link:hover {
-  transform: translateY(-2px);
-  background: rgba(255, 255, 255, 0.2);
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+  background: rgba(255, 107, 0, 0.2);
+  box-shadow: 0 0 20px var(--hud-glow);
   text-decoration: none;
 }
 
-.logo-container {
-  margin-right: 15px;
+/* Targeting reticle */
+.targeting-reticle {
+  position: relative;
+  width: 45px;
+  height: 45px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.logo-image {
-  width: 50px;
-  height: 50px;
+.reticle-ring {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border: 2px solid var(--thermal-orange);
   border-radius: 50%;
-  border: 3px solid rgba(255, 255, 255, 0.3);
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
-  transition: all 0.3s ease;
-  background-color: white;
-  padding: 2px;
+  animation: reticle-pulse 2s ease-in-out infinite;
 }
 
-.brand-link:hover .logo-image {
-  transform: scale(1.05);
-  border-color: rgba(255, 255, 255, 0.5);
+.reticle-ring::before,
+.reticle-ring::after {
+  content: '';
+  position: absolute;
+  background: var(--thermal-orange);
+}
+
+.reticle-ring::before {
+  width: 100%;
+  height: 2px;
+  top: 50%;
+  left: 0;
+  transform: translateY(-50%);
+}
+
+.reticle-ring::after {
+  width: 2px;
+  height: 100%;
+  left: 50%;
+  top: 0;
+  transform: translateX(-50%);
+}
+
+.reticle-dot {
+  width: 8px;
+  height: 8px;
+  background: var(--thermal-red);
+  border-radius: 50%;
+  box-shadow: 0 0 10px var(--thermal-red);
+  animation: dot-blink 1s ease-in-out infinite;
+}
+
+@keyframes reticle-pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.1); opacity: 0.7; }
+}
+
+@keyframes dot-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* Brand info */
+.brand-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.alien-symbols {
+  font-size: 0.7rem;
+  color: var(--thermal-yellow);
+  letter-spacing: 3px;
+  opacity: 0.7;
 }
 
 .brand-title {
-  color: white;
-  font-size: 1.8rem;
-  font-family: 'Sail', cursive;
-  font-weight: 700;
+  color: var(--thermal-orange);
+  font-family: 'Orbitron', sans-serif;
+  font-size: 1.5rem;
+  font-weight: 900;
   margin: 0;
-  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
-  background: linear-gradient(45deg, #fff, #f0f0f0);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  text-shadow: 
+    0 0 10px var(--thermal-orange),
+    0 0 20px rgba(255, 107, 0, 0.5);
+  letter-spacing: 3px;
 }
 
-/* Mobile toggle button */
+.system-status {
+  font-size: 0.65rem;
+  color: var(--thermal-yellow);
+  font-family: 'Share Tech Mono', monospace;
+  animation: status-flicker 3s ease-in-out infinite;
+}
+
+@keyframes status-flicker {
+  0%, 90%, 100% { opacity: 1; }
+  95% { opacity: 0.5; }
+}
+
+/* Mobile toggle */
 .mobile-toggle {
   display: none;
-  flex-direction: column;
-  background: rgba(255, 255, 255, 0.15);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 10px;
-  padding: 8px;
+  align-items: center;
+  background: transparent;
+  border: 1px solid var(--thermal-orange);
+  padding: 8px 12px;
   cursor: pointer;
   transition: all 0.3s ease;
   z-index: 1001;
+  gap: 5px;
 }
 
 .mobile-toggle:hover {
-  background: rgba(255, 255, 255, 0.25);
-  transform: translateY(-1px);
+  background: rgba(255, 107, 0, 0.2);
+  box-shadow: 0 0 15px var(--hud-glow);
 }
 
-.mobile-toggle:focus {
-  outline: 2px solid rgba(255, 255, 255, 0.5);
-  outline-offset: 2px;
+.toggle-bracket {
+  color: var(--thermal-yellow);
+  font-family: 'Orbitron', sans-serif;
+  font-size: 1.2rem;
 }
 
-.hamburger-line {
-  width: 25px;
-  height: 3px;
-  background: white;
-  margin: 2px 0;
+.hamburger-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
   transition: all 0.3s ease;
-  border-radius: 2px;
 }
 
-.hamburger-line.active:nth-child(1) {
-  transform: translateY(7px) rotate(45deg);
+.h-line {
+  width: 20px;
+  height: 2px;
+  background: var(--thermal-orange);
+  transition: all 0.3s ease;
+  box-shadow: 0 0 5px var(--thermal-orange);
 }
 
-.hamburger-line.active:nth-child(2) {
+.hamburger-lines.active .h-line:nth-child(1) {
+  transform: translateY(6px) rotate(45deg);
+}
+
+.hamburger-lines.active .h-line:nth-child(2) {
   opacity: 0;
 }
 
-.hamburger-line.active:nth-child(3) {
-  transform: translateY(-7px) rotate(-45deg);
+.hamburger-lines.active .h-line:nth-child(3) {
+  transform: translateY(-6px) rotate(-45deg);
 }
 
 /* Navigation menu */
@@ -310,7 +529,7 @@ export default {
 
 .nav-items {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   align-items: center;
 }
 
@@ -318,62 +537,97 @@ export default {
 .nav-link {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 12px 18px;
+  gap: 6px;
+  padding: 10px 14px;
   text-decoration: none;
-  color: white;
+  color: var(--thermal-orange);
+  font-family: 'Orbitron', sans-serif;
   font-weight: 600;
-  font-size: 0.95rem;
-  border-radius: 12px;
-  transition: all 0.3s ease;
-  background: rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 0.8rem;
+  border: 1px solid transparent;
+  transition: all 0.2s ease;
   position: relative;
-  overflow: hidden;
+  letter-spacing: 1px;
+  background: transparent;
 }
 
-.nav-link::before {
+.nav-link::after {
   content: '';
   position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
-  transition: left 0.5s ease;
+  bottom: 0;
+  left: 50%;
+  width: 0;
+  height: 2px;
+  background: var(--thermal-red);
+  transition: all 0.3s ease;
+  transform: translateX(-50%);
+  box-shadow: 0 0 10px var(--thermal-red);
 }
 
-.nav-link:hover::before {
-  left: 100%;
+.nav-link:hover::after {
+  width: 80%;
 }
 
 .nav-link:hover {
-  transform: translateY(-2px);
-  background: rgba(255, 255, 255, 0.2);
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+  color: var(--thermal-yellow);
+  text-shadow: 0 0 10px var(--thermal-yellow);
   text-decoration: none;
-  color: white;
-}
-
-.nav-link:focus {
-  outline: 2px solid rgba(255, 255, 255, 0.5);
-  outline-offset: 2px;
+  border-color: var(--thermal-orange);
+  background: rgba(255, 68, 68, 0.1);
 }
 
 .nav-link.router-link-active {
-  background: linear-gradient(45deg, rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0.2));
-  border-color: rgba(255, 255, 255, 0.3);
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+  color: var(--thermal-yellow);
+  border-color: var(--thermal-yellow);
+  background: rgba(255, 204, 0, 0.1);
+  box-shadow: 0 0 15px rgba(255, 204, 0, 0.3);
 }
 
-.nav-icon {
-  font-size: 1.2rem;
-  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+.nav-link.router-link-active::after {
+  width: 100%;
+  background: var(--thermal-yellow);
 }
 
-.nav-text {
-  white-space: nowrap;
+.link-bracket {
+  color: var(--thermal-red);
+  font-size: 0.9rem;
+  opacity: 0.6;
+}
+
+.link-index {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.7rem;
+  color: var(--thermal-yellow);
+  opacity: 0.5;
+}
+
+.thermal-indicator {
+  position: absolute;
+  right: 5px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 4px;
+  height: 4px;
+  background: var(--thermal-red);
+  border-radius: 50%;
+  opacity: 0;
+  transition: all 0.3s ease;
+}
+
+.nav-link:hover .thermal-indicator {
+  opacity: 1;
+  box-shadow: 0 0 8px var(--thermal-red);
+}
+
+.nav-link.router-link-active .thermal-indicator {
+  opacity: 1;
+  background: var(--thermal-yellow);
+  box-shadow: 0 0 8px var(--thermal-yellow);
+}
+
+/* HUD Data mobile */
+.hud-data-mobile {
+  display: none;
 }
 
 /* Mobile overlay */
@@ -381,89 +635,14 @@ export default {
   display: none;
 }
 
-/* Tablet (iPad) y móviles grandes: usar menú lateral igual que en móvil */
+/* ═══════════════════════════════════════════
+   RESPONSIVE - TABLET & MOBILE
+   ═══════════════════════════════════════════ */
+
 @media (max-width: 1024px) {
-  .navbar-modern {
-    padding: 12px 22px;
-    padding-top: calc(12px + env(safe-area-inset-top));
-  }
-
-  .brand-title {
-    font-size: 1.6rem;
-  }
-
-  .logo-image {
-    width: 44px;
-    height: 44px;
-  }
-
-  .mobile-toggle { display: flex; }
-
-  .nav-menu {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100vh; /* fallback */
-    height: 100dvh;
-    height: 100svh;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    backdrop-filter: blur(20px);
-    transform: translateX(-100%);
-    transition: transform 0.3s ease;
-    padding-top: calc(90px + env(safe-area-inset-top));
-    padding-right: 34px;
-    padding-left: 34px;
-    padding-bottom: max(28px, calc(28px + env(safe-area-inset-bottom)));
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    -webkit-overflow-scrolling: touch;
-    z-index: 999;
-  }
-
-  .nav-menu.mobile-open { transform: translateX(0); }
-
-  .nav-items {
-    flex-direction: column;
-    gap: 14px;
-    width: 100%;
-  }
-
-  .nav-link {
-    width: 100%;
-    padding: 16px 18px;
-    font-size: 1.08rem;
-    justify-content: flex-start;
-  }
-
-  .mobile-overlay {
-    display: block;
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100vh; /* fallback */
-    height: 100dvh;
-    height: 100svh;
-    background: rgba(0, 0, 0, 0.5);
-    z-index: 998;
-  }
-}
-
-/* Responsive design */
-@media (max-width: 768px) {
-  .navbar-modern {
+  .navbar-predator {
     padding: 10px 20px;
     padding-top: calc(10px + env(safe-area-inset-top));
-  }
-
-  .brand-title {
-    font-size: 1.4rem;
-  }
-
-  .logo-image {
-    width: 40px;
-    height: 40px;
   }
 
   .mobile-toggle {
@@ -475,24 +654,33 @@ export default {
     top: 0;
     left: 0;
     width: 100%;
-    /* Altura responsiva que considera barras del navegador en móviles */
-    height: 100vh;           /* Fallback */
-    height: 100dvh;          /* Navegadores modernos */
-    height: 100svh;          /* iOS/Android dinámico */
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    backdrop-filter: blur(20px);
+    height: 100vh;
+    height: 100dvh;
+    background: linear-gradient(180deg, var(--predator-bg) 0%, #1a0a0a 100%);
     transform: translateX(-100%);
     transition: transform 0.3s ease;
-    /* Respetar notch y barras del sistema */
-    padding-top: calc(80px + env(safe-area-inset-top));
+    padding-top: calc(100px + env(safe-area-inset-top));
     padding-right: 30px;
     padding-left: 30px;
-    padding-bottom: max(24px, calc(24px + env(safe-area-inset-bottom)));
-    /* Scroll interno para que no se tapen elementos inferiores */
+    padding-bottom: 30px;
     overflow-y: auto;
-    overscroll-behavior: contain;
-    -webkit-overflow-scrolling: touch;
     z-index: 999;
+    flex-direction: column;
+    justify-content: flex-start;
+    border-right: 2px solid var(--thermal-orange);
+    box-shadow: 5px 0 30px var(--hud-glow);
+  }
+
+  .nav-menu::before {
+    content: '◢ NAVIGATION MATRIX ◣';
+    position: absolute;
+    top: calc(60px + env(safe-area-inset-top));
+    left: 30px;
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.8rem;
+    color: var(--thermal-yellow);
+    letter-spacing: 2px;
+    text-shadow: 0 0 10px var(--thermal-yellow);
   }
 
   .nav-menu.mobile-open {
@@ -501,15 +689,33 @@ export default {
 
   .nav-items {
     flex-direction: column;
-    gap: 12px;
+    gap: 10px;
     width: 100%;
   }
 
   .nav-link {
     width: 100%;
-    padding: 14px 16px;
-    font-size: 1.05rem;
+    padding: 15px 20px;
+    font-size: 1rem;
     justify-content: flex-start;
+    border: 1px solid var(--thermal-orange);
+    background: rgba(255, 68, 68, 0.05);
+  }
+
+  .hud-data-mobile {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    margin-top: auto;
+    padding-top: 30px;
+    border-top: 1px solid var(--thermal-orange);
+    opacity: 0.6;
+  }
+
+  .hud-coord {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.8rem;
+    color: var(--thermal-yellow);
   }
 
   .mobile-overlay {
@@ -518,130 +724,97 @@ export default {
     top: 0;
     left: 0;
     width: 100%;
-    height: 100vh;  /* Fallback */
+    height: 100vh;
     height: 100dvh;
-    height: 100svh;
-    background: rgba(0, 0, 0, 0.5);
+    background: rgba(0, 0, 0, 0.7);
     z-index: 998;
   }
 }
 
-/* Ajustes extra para dispositivos con poca altura (ej. Galaxy Fold cerrado) */
-@media (max-height: 700px) {
-  .nav-menu {
-    padding-top: calc(64px + env(safe-area-inset-top));
-    padding-bottom: max(16px, calc(16px + env(safe-area-inset-bottom)));
-  }
-  .nav-items {
-    gap: 10px;
-  }
-  .nav-link {
-    padding: 12px 14px;
-    font-size: 0.98rem;
-  }
-  .nav-icon {
-    font-size: 1.05rem;
-  }
-}
-
-/* Scrollbar discreto en el menú móvil */
 @media (max-width: 768px) {
-  .nav-menu::-webkit-scrollbar { width: 6px; }
-  .nav-menu::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.35);
-    border-radius: 3px;
+  .brand-title {
+    font-size: 1.3rem;
   }
-  .nav-menu::-webkit-scrollbar-track {
-    background: transparent;
+
+  .targeting-reticle {
+    width: 38px;
+    height: 38px;
+  }
+
+  .alien-symbols {
+    display: none;
+  }
+
+  .hud-corner {
+    width: 15px;
+    height: 15px;
   }
 }
 
 @media (max-width: 480px) {
-  .navbar-modern {
+  .navbar-predator {
     padding: 8px 15px;
     padding-top: calc(8px + env(safe-area-inset-top));
   }
 
   .brand-title {
-    font-size: 1.2rem;
+    font-size: 1.1rem;
+    letter-spacing: 2px;
   }
 
   .brand-link {
     padding: 6px 10px;
+    gap: 10px;
   }
 
-  .nav-menu {
-    padding: 80px 20px 20px;
+  .targeting-reticle {
+    width: 32px;
+    height: 32px;
+  }
+
+  .system-status {
+    font-size: 0.55rem;
   }
 
   .nav-link {
-    padding: 12px 16px;
-    font-size: 1rem;
+    padding: 12px 15px;
+    font-size: 0.9rem;
+  }
+
+  .link-index {
+    display: none;
   }
 }
 
-/* Fallback para navegadores que no soportan env() */
-@supports not (padding: env(safe-area-inset-top)) {
-  .safe-area-top {
-    height: 20px;
-  }
-  
-  .navbar-modern {
-    padding-top: 35px;
-  }
-  
-  @media (max-width: 768px) {
-    .navbar-modern {
-      padding-top: 30px;
-    }
-  }
-  
-  @media (max-width: 480px) {
-    .navbar-modern {
-      padding-top: 28px;
-    }
-  }
+/* Animations */
+.navbar-predator {
+  animation: hud-boot 0.8s ease-out;
 }
 
-/* Animaciones suaves para carga */
-.navbar-modern {
-  animation: slideDown 0.5s ease-out;
-}
-
-@keyframes slideDown {
-  from {
-    transform: translateY(-100%);
+@keyframes hud-boot {
+  0% {
     opacity: 0;
+    transform: translateY(-20px);
   }
-  to {
-    transform: translateY(0);
+  50% {
+    opacity: 0.5;
+  }
+  100% {
     opacity: 1;
+    transform: translateY(0);
   }
 }
 
-/* Mejoras de accesibilidad */
+/* Reduced motion */
 @media (prefers-reduced-motion: reduce) {
+  .navbar-predator,
   .nav-link,
   .brand-link,
-  .mobile-toggle,
-  .navbar-modern,
-  .nav-menu {
-    transition: none;
-  }
-  
-  .navbar-modern {
+  .reticle-ring,
+  .reticle-dot,
+  .system-status {
     animation: none;
-  }
-}
-
-/* High contrast mode support */
-@media (prefers-contrast: high) {
-  .nav-link {
-    border: 2px solid white;
-  }
-  
-  .nav-link:focus {
-    outline: 3px solid yellow;
+    transition: none;
   }
 }
 </style>

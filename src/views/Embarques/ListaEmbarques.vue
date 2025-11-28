@@ -1,110 +1,115 @@
 <template>
   <div class="lista-embarques">
-    <!-- Header principal -->
-    <div class="header-section">
-      <div class="header-content">
-        <h1 class="main-title">
-          <i class="icon-ship">🚢</i>
-          Lista de Embarques
-        </h1>
-        <p class="subtitle">Gestiona todos tus embarques de manera eficiente</p>
+    <!-- Terminal Window -->
+    <div class="terminal-window">
+      <div class="terminal-header">
+        <span class="terminal-dots">
+          <span class="dot red"></span>
+          <span class="dot yellow"></span>
+          <span class="dot green"></span>
+        </span>
+        <span class="terminal-title">DATABASE_EMBARQUES.db — bash</span>
       </div>
-      <div class="header-actions">
-        <button @click="cargarEmbarques" class="btn-refresh" title="Actualizar lista">
-          <i class="icon">🔄</i>
-          Actualizar
-        </button>
+      
+      <!-- Header principal -->
+      <div class="header-section">
+        <div class="header-content">
+          <pre class="ascii-title">
+╔══════════════════════════════════════╗
+║     LISTA DE EMBARQUES               ║
+║     ═══════════════════              ║
+╚══════════════════════════════════════╝</pre>
+          <p class="subtitle"><span class="prompt">$</span> SELECT * FROM embarques ORDER BY fecha DESC;</p>
+        </div>
+        <div class="header-actions">
+          <button @click="cargarEmbarques" class="btn-refresh" title="Actualizar lista">
+            <span class="btn-icon">↻</span>
+            REFRESH
+          </button>
+        </div>
       </div>
     </div>
 
     <!-- Estados de carga -->
     <div v-if="cargando" class="loading-state">
-      <div class="loading-spinner"></div>
-      <p>Cargando embarques...</p>
+      <div class="loading-terminal">
+        <span class="loading-text">[████████░░░░░░░░] 50%</span>
+        <p class="loading-message">Cargando registros desde base de datos...</p>
+      </div>
     </div>
 
     <div v-else-if="error" class="error-state">
-      <i class="icon-error">⚠️</i>
-      <h3>Error al cargar</h3>
-      <p>{{ error }}</p>
-      <button @click="cargarEmbarques" class="btn-retry">Reintentar</button>
+      <pre class="error-ascii">
+╔═══════════════════════════════════════╗
+║  ██████╗ ERROR ██████╗                ║
+║  ██╔═══╝       ╚═══██║                ║
+║  ██████╗ FATAL ██████║                ║
+╚═══════════════════════════════════════╝</pre>
+      <p class="error-message">[ERR] {{ error }}</p>
+      <button @click="cargarEmbarques" class="btn-retry">
+        <span class="btn-icon">↻</span> RETRY_CONNECTION
+      </button>
     </div>
 
     <!-- Lista de embarques -->
     <div v-else class="embarques-container">
       <div v-if="embarques.length > 0" class="embarques-grid">
         <div 
-          v-for="embarque in embarques" 
+          v-for="(embarque, index) in embarques" 
           :key="embarque.id" 
           class="embarque-card"
-          :class="{ 'card-blocked': embarque.embarqueBloqueado }"
+          :class="{ 'card-blocked': embarque.embarqueBloqueado, 'card-no-mexico': embarque.noEnviadoMexico }"
         >
           <!-- Header de la card -->
           <div class="card-header">
+            <div class="record-id">[REC_{{ String(index + 1).padStart(3, '0') }}]</div>
             <div class="fecha-section">
-              <i class="icon-calendar">📅</i>
-              <div class="fecha-info">
-                <span class="fecha-label">Fecha</span>
-                <span class="fecha-value">{{ formatearFecha(embarque.fecha) }}</span>
-              </div>
+              <span class="fecha-label">DATE:</span>
+              <span class="fecha-value">{{ formatearFecha(embarque.fecha) }}</span>
             </div>
             <div class="status-section">
-              <span v-if="embarque.noEnviadoMexico" class="status-badge no-mexico">
-                <i class="icon-mexico">🚫</i>
-                No enviado
+              <span v-if="embarque.noEnviadoMexico" class="status-badge status-warning">
+                <span class="status-icon">⊘</span> NO_ENVIADO
               </span>
-              <span v-else-if="embarque.embarqueBloqueado" class="status-badge blocked">
-                <i class="icon-lock">🔒</i>
-                Bloqueado
+              <span v-else-if="embarque.embarqueBloqueado" class="status-badge status-locked">
+                <span class="status-icon">◉</span> LOCKED
               </span>
-              <span v-else class="status-badge active">
-                <i class="icon-check">✅</i>
-                Activo
+              <span v-else class="status-badge status-active">
+                <span class="status-icon">●</span> ACTIVE
               </span>
             </div>
           </div>
 
           <!-- Contenido principal -->
           <div class="card-content">
+            <div class="data-separator">────────────────────────────────</div>
+            
             <!-- Estadísticas -->
             <div class="stats-grid">
               <div class="stat-item">
-                <i class="icon-clean">🥤</i>
-                <div class="stat-info">
-                  <span class="stat-label">Kilos Limpios</span>
-                  <span class="stat-value">{{ calcularKilosLimpios(embarque) }} kg</span>
-                </div>
+                <span class="stat-label">KG_LIMPIOS:</span>
+                <span class="stat-value">{{ calcularKilosLimpios(embarque) }}</span>
               </div>
               <div class="stat-item">
-                <i class="icon-raw">🦐</i>
-                <div class="stat-info">
-                  <span class="stat-label">Kilos Crudos</span>
-                  <span class="stat-value">{{ calcularKilosCrudos(embarque) }} kg</span>
-                </div>
+                <span class="stat-label">KG_CRUDOS:</span>
+                <span class="stat-value">{{ calcularKilosCrudos(embarque) }}</span>
+              </div>
+              <div class="stat-item stat-highlight">
+                <span class="stat-label">TOTAL_KG:</span>
+                <span class="stat-value">{{ (Number(calcularKilosLimpios(embarque)) + Number(calcularKilosCrudos(embarque))).toFixed(1) }}</span>
               </div>
               <div class="stat-item">
-                <i class="icon-total">⚖️</i>
-                <div class="stat-info">
-                  <span class="stat-label">Total Kilos</span>
-                  <span class="stat-value total">{{ (Number(calcularKilosLimpios(embarque)) + Number(calcularKilosCrudos(embarque))).toFixed(1) }} kg</span>
-                </div>
-              </div>
-              <div class="stat-item">
-                <i class="icon-taras">📦</i>
-                <div class="stat-info">
-                  <span class="stat-label">Total Taras</span>
-                  <span class="stat-value">{{ calcularTotalTaras(embarque) }}</span>
-                </div>
+                <span class="stat-label">TARAS:</span>
+                <span class="stat-value">{{ calcularTotalTaras(embarque) }}</span>
               </div>
             </div>
 
+            <div class="data-separator">────────────────────────────────</div>
+
             <!-- Información adicional -->
             <div class="additional-info">
-              <div class="info-item">
-                <i class="icon-truck">🚚</i>
-                <span class="info-label">Carga con:</span>
-                <span class="info-value">{{ embarque.cargaCon || 'No especificado' }}</span>
-              </div>
+              <span class="info-label">CARGA_CON:</span>
+              <span class="info-value">"{{ embarque.cargaCon || 'NULL' }}"</span>
             </div>
           </div>
 
@@ -116,16 +121,14 @@
               :class="{ 'btn-mexico-active': embarque.noEnviadoMexico }"
               :title="embarque.noEnviadoMexico ? 'Marcar como enviado a México' : 'Marcar como NO enviado a México'"
             >
-              <i class="icon">{{ embarque.noEnviadoMexico ? '🚫' : '✅' }}</i>
-              {{ embarque.noEnviadoMexico ? 'No enviado' : 'Enviado' }}
+              {{ embarque.noEnviadoMexico ? '[ ] MX' : '[✓] MX' }}
             </button>
             <button 
               @click="editarEmbarque(embarque.id)" 
               class="btn-action btn-edit"
               title="Editar embarque"
             >
-              <i class="icon">✏️</i>
-              Editar
+              [EDIT]
             </button>
             <button 
               @click="eliminarEmbarque(embarque.id)" 
@@ -134,8 +137,7 @@
               :disabled="embarque.embarqueBloqueado"
               :title="embarque.embarqueBloqueado ? 'Este embarque está bloqueado' : 'Eliminar embarque'"
             >
-              <i class="icon">🗑️</i>
-              Eliminar
+              [DEL]
             </button>
           </div>
         </div>
@@ -143,12 +145,18 @@
 
       <!-- Estado vacío -->
       <div v-else class="empty-state">
-        <div class="empty-icon">📋</div>
-        <h3>No hay embarques registrados</h3>
-        <p>Comienza creando tu primer embarque</p>
+        <pre class="empty-ascii">
+╔═════════════════════════════════════════╗
+║                                         ║
+║      NO RECORDS FOUND IN DATABASE       ║
+║                                         ║
+║      > Query returned 0 results         ║
+║      > Table: embarques                 ║
+║                                         ║
+╚═════════════════════════════════════════╝</pre>
+        <p class="empty-message">[INFO] Comienza creando tu primer registro</p>
         <button @click="$router.push({ name: 'NuevoEmbarque', params: { id: 'nuevo' } })" class="btn-create">
-          <i class="icon">➕</i>
-          Crear Embarque
+          <span class="btn-icon">+</span> INSERT_NEW_RECORD
         </button>
       </div>
     </div>
@@ -969,11 +977,70 @@ export default {
 </script>
 
 <style scoped>
+@import url('https://fonts.googleapis.com/css2?family=VT323&family=Share+Tech+Mono&display=swap');
+
+/* Variables de colores Matrix/Terminal */
+.lista-embarques {
+  --matrix-green: #00ff41;
+  --matrix-green-dark: #008f11;
+  --matrix-green-glow: #00ff4180;
+  --matrix-green-dim: #00ff4130;
+  --terminal-bg: #0a0a0a;
+  --terminal-border: #00ff4140;
+  --amber: #ffb000;
+  --amber-glow: #ffb00080;
+  --red-alert: #ff0040;
+  --cyan: #00d4ff;
+}
+
 .lista-embarques {
   min-height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: var(--terminal-bg);
   padding: 20px;
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  font-family: 'VT323', 'Share Tech Mono', monospace;
+  color: var(--matrix-green);
+}
+
+/* Terminal Window */
+.terminal-window {
+  background: rgba(0, 20, 0, 0.95);
+  border: 2px solid var(--matrix-green);
+  margin-bottom: 25px;
+  box-shadow: 
+    0 0 30px var(--matrix-green-glow),
+    inset 0 0 60px rgba(0, 255, 65, 0.03);
+}
+
+.terminal-header {
+  background: linear-gradient(90deg, #001a00 0%, #002200 100%);
+  padding: 10px 15px;
+  border-bottom: 1px solid var(--matrix-green);
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.terminal-dots {
+  display: flex;
+  gap: 8px;
+}
+
+.dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+}
+
+.dot.red { background: #ff5f56; box-shadow: 0 0 8px #ff5f56; }
+.dot.yellow { background: #ffbd2e; box-shadow: 0 0 8px #ffbd2e; }
+.dot.green { background: var(--matrix-green); box-shadow: 0 0 8px var(--matrix-green); }
+
+.terminal-title {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.95rem;
+  color: var(--matrix-green);
+  text-shadow: 0 0 10px var(--matrix-green);
+  letter-spacing: 2px;
 }
 
 /* Header Section */
@@ -981,45 +1048,36 @@ export default {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 30px;
-  background: rgba(255, 255, 255, 0.15);
-  backdrop-filter: blur(10px);
-  border-radius: 20px;
-  padding: 25px 30px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  padding: 25px;
+  flex-wrap: wrap;
+  gap: 20px;
 }
 
 .header-content {
   flex: 1;
 }
 
-.main-title {
-  margin: 0;
-  font-size: 2.5rem;
-  font-weight: 700;
-  color: white;
-  display: flex;
-  align-items: center;
-  gap: 15px;
-  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
-}
-
-.icon-ship {
-  font-size: 2.2rem;
-  animation: float 3s ease-in-out infinite;
-}
-
-@keyframes float {
-  0%, 100% { transform: translateY(0px); }
-  50% { transform: translateY(-10px); }
+.ascii-title {
+  color: var(--matrix-green);
+  font-family: 'VT323', monospace;
+  font-size: 1rem;
+  line-height: 1.3;
+  margin: 0 0 15px 0;
+  text-shadow: 0 0 10px var(--matrix-green-glow);
+  white-space: pre;
 }
 
 .subtitle {
-  margin: 8px 0 0 0;
+  font-family: 'Share Tech Mono', monospace;
   font-size: 1.1rem;
-  color: rgba(255, 255, 255, 0.8);
-  font-weight: 300;
+  margin: 0;
+  color: var(--amber);
+  text-shadow: 0 0 10px var(--amber-glow);
+}
+
+.prompt {
+  color: var(--matrix-green);
+  margin-right: 8px;
 }
 
 .header-actions {
@@ -1028,23 +1086,29 @@ export default {
 }
 
 .btn-refresh {
-  background: linear-gradient(45deg, #4CAF50, #45a049);
-  color: white;
-  border: none;
-  padding: 12px 20px;
-  border-radius: 15px;
+  background: transparent;
+  color: var(--matrix-green);
+  border: 2px solid var(--matrix-green);
+  padding: 12px 24px;
+  font-family: 'VT323', monospace;
+  font-size: 1.2rem;
   cursor: pointer;
-  font-weight: 600;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   transition: all 0.3s ease;
-  box-shadow: 0 4px 15px rgba(76, 175, 80, 0.3);
+  text-transform: uppercase;
+  letter-spacing: 2px;
 }
 
 .btn-refresh:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(76, 175, 80, 0.4);
+  background: var(--matrix-green);
+  color: var(--terminal-bg);
+  box-shadow: 0 0 20px var(--matrix-green-glow);
+}
+
+.btn-icon {
+  font-size: 1.3rem;
 }
 
 /* Estados de carga y error */
@@ -1054,26 +1118,34 @@ export default {
   align-items: center;
   justify-content: center;
   padding: 60px 20px;
-  background: rgba(255, 255, 255, 0.15);
-  backdrop-filter: blur(10px);
-  border-radius: 20px;
-  color: white;
+  background: rgba(0, 20, 0, 0.8);
+  border: 2px solid var(--matrix-green);
   text-align: center;
 }
 
-.loading-spinner {
-  width: 50px;
-  height: 50px;
-  border: 4px solid rgba(255, 255, 255, 0.3);
-  border-left: 4px solid white;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-  margin-bottom: 20px;
+.loading-terminal {
+  text-align: center;
 }
 
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+.loading-text {
+  font-family: 'VT323', monospace;
+  font-size: 1.8rem;
+  color: var(--matrix-green);
+  text-shadow: 0 0 15px var(--matrix-green);
+  animation: loading-pulse 1s ease-in-out infinite;
+  display: block;
+  margin-bottom: 15px;
+}
+
+@keyframes loading-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.loading-message {
+  font-size: 1.1rem;
+  color: var(--amber);
+  margin: 0;
 }
 
 .error-state {
@@ -1081,34 +1153,46 @@ export default {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 60px 20px;
-  background: rgba(255, 255, 255, 0.15);
-  backdrop-filter: blur(10px);
-  border-radius: 20px;
-  color: white;
+  padding: 40px 20px;
+  background: rgba(40, 0, 0, 0.9);
+  border: 2px solid var(--red-alert);
   text-align: center;
+  box-shadow: 0 0 30px rgba(255, 0, 64, 0.3);
 }
 
-.icon-error {
-  font-size: 4rem;
-  margin-bottom: 20px;
+.error-ascii {
+  color: var(--red-alert);
+  font-family: 'VT323', monospace;
+  font-size: 0.9rem;
+  margin: 0 0 20px 0;
+  text-shadow: 0 0 10px var(--red-alert);
+  white-space: pre;
+}
+
+.error-message {
+  color: var(--red-alert);
+  font-size: 1.2rem;
+  margin: 0 0 20px 0;
 }
 
 .btn-retry {
-  background: linear-gradient(45deg, #ff6b6b, #ee5a52);
-  color: white;
-  border: none;
+  background: transparent;
+  color: var(--red-alert);
+  border: 2px solid var(--red-alert);
   padding: 12px 24px;
-  border-radius: 15px;
+  font-family: 'VT323', monospace;
+  font-size: 1.2rem;
   cursor: pointer;
-  font-weight: 600;
-  margin-top: 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
   transition: all 0.3s ease;
 }
 
 .btn-retry:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(255, 107, 107, 0.4);
+  background: var(--red-alert);
+  color: var(--terminal-bg);
+  box-shadow: 0 0 20px rgba(255, 0, 64, 0.5);
 }
 
 /* Container principal */
@@ -1119,19 +1203,15 @@ export default {
 
 .embarques-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
-  gap: 25px;
-  padding: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+  gap: 20px;
 }
 
 /* Cards de embarques */
 .embarque-card {
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(10px);
-  border-radius: 20px;
-  padding: 25px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(0, 20, 0, 0.9);
+  border: 1px solid var(--matrix-green);
+  padding: 0;
   transition: all 0.3s ease;
   position: relative;
   overflow: hidden;
@@ -1143,18 +1223,34 @@ export default {
   top: 0;
   left: 0;
   right: 0;
-  height: 4px;
-  background: linear-gradient(90deg, #667eea, #764ba2);
+  height: 3px;
+  background: var(--matrix-green);
+  box-shadow: 0 0 10px var(--matrix-green);
 }
 
 .embarque-card:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 15px 40px rgba(0, 0, 0, 0.15);
+  box-shadow: 
+    0 0 30px var(--matrix-green-glow),
+    inset 0 0 30px rgba(0, 255, 65, 0.05);
+  border-color: var(--matrix-green);
 }
 
 .card-blocked {
-  background: rgba(255, 235, 235, 0.95);
-  border-left: 5px solid #ff6b6b;
+  border-color: var(--red-alert);
+}
+
+.card-blocked::before {
+  background: var(--red-alert);
+  box-shadow: 0 0 10px var(--red-alert);
+}
+
+.card-no-mexico {
+  border-color: var(--amber);
+}
+
+.card-no-mexico::before {
+  background: var(--amber);
+  box-shadow: 0 0 10px var(--amber);
 }
 
 /* Header de la card */
@@ -1162,36 +1258,37 @@ export default {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
-  padding-bottom: 15px;
-  border-bottom: 2px solid rgba(0, 0, 0, 0.05);
+  padding: 15px 20px;
+  background: rgba(0, 40, 0, 0.5);
+  border-bottom: 1px solid var(--matrix-green-dim);
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.record-id {
+  font-family: 'VT323', monospace;
+  font-size: 1rem;
+  color: var(--cyan);
+  text-shadow: 0 0 10px var(--cyan);
 }
 
 .fecha-section {
   display: flex;
   align-items: center;
-  gap: 12px;
-}
-
-.icon-calendar {
-  font-size: 1.5rem;
-}
-
-.fecha-info {
-  display: flex;
-  flex-direction: column;
+  gap: 8px;
 }
 
 .fecha-label {
-  font-size: 0.85rem;
-  color: #666;
-  font-weight: 500;
+  font-size: 1rem;
+  color: var(--matrix-green);
+  opacity: 0.7;
 }
 
 .fecha-value {
   font-size: 1.2rem;
-  font-weight: 700;
-  color: #333;
+  font-weight: 400;
+  color: var(--matrix-green);
+  text-shadow: 0 0 8px var(--matrix-green-glow);
 }
 
 .status-section {
@@ -1200,184 +1297,201 @@ export default {
 }
 
 .status-badge {
-  padding: 8px 15px;
-  border-radius: 25px;
-  font-size: 0.85rem;
-  font-weight: 600;
+  padding: 5px 12px;
+  font-family: 'VT323', monospace;
+  font-size: 1rem;
   display: flex;
   align-items: center;
   gap: 6px;
+  letter-spacing: 1px;
 }
 
-.status-badge.active {
-  background: linear-gradient(45deg, #4CAF50, #45a049);
-  color: white;
+.status-active {
+  color: var(--matrix-green);
+  border: 1px solid var(--matrix-green);
+  text-shadow: 0 0 8px var(--matrix-green);
 }
 
-.status-badge.blocked {
-  background: linear-gradient(45deg, #ff6b6b, #ee5a52);
-  color: white;
+.status-active .status-icon {
+  animation: pulse-dot 1s ease-in-out infinite;
 }
 
-.status-badge.no-mexico {
-  background: linear-gradient(45deg, #ff9800, #f57c00);
-  color: white;
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.status-locked {
+  color: var(--red-alert);
+  border: 1px solid var(--red-alert);
+  text-shadow: 0 0 8px var(--red-alert);
+}
+
+.status-warning {
+  color: var(--amber);
+  border: 1px solid var(--amber);
+  text-shadow: 0 0 8px var(--amber);
 }
 
 /* Contenido principal */
 .card-content {
-  margin-bottom: 20px;
+  padding: 15px 20px;
+}
+
+.data-separator {
+  color: var(--matrix-green);
+  opacity: 0.4;
+  font-size: 1.1rem;
+  margin: 12px 0;
+  text-align: center;
+  letter-spacing: 2px;
 }
 
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 15px;
-  margin-bottom: 20px;
+  gap: 8px;
+  margin: 15px 0;
 }
 
 .stat-item {
   display: flex;
+  justify-content: space-between;
   align-items: center;
-  gap: 12px;
-  padding: 15px;
-  background: linear-gradient(135deg, #f8f9ff, #e8ecff);
-  border-radius: 15px;
-  border: 1px solid rgba(102, 126, 234, 0.1);
-  transition: all 0.3s ease;
+  padding: 14px 16px;
+  background: rgba(0, 255, 65, 0.05);
+  border-left: 3px solid var(--matrix-green-dim);
+  transition: all 0.2s ease;
 }
 
 .stat-item:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 5px 15px rgba(102, 126, 234, 0.1);
+  background: rgba(0, 255, 65, 0.1);
+  border-left-color: var(--matrix-green);
 }
 
-.stat-item i {
-  font-size: 1.5rem;
+.stat-highlight {
+  background: rgba(0, 255, 65, 0.1);
+  border-left-color: var(--matrix-green);
 }
 
-.stat-info {
-  display: flex;
-  flex-direction: column;
+.stat-highlight .stat-value {
+  color: var(--matrix-green);
+  text-shadow: 0 0 15px var(--matrix-green);
+  font-size: 2rem;
 }
 
 .stat-label {
-  font-size: 0.8rem;
-  color: #666;
-  font-weight: 500;
+  font-size: 1.3rem;
+  color: var(--matrix-green);
+  opacity: 0.8;
+  letter-spacing: 1px;
 }
 
 .stat-value {
-  font-size: 1.1rem;
-  font-weight: 700;
-  color: #333;
-}
-
-.stat-value.total {
-  color: #667eea;
-  font-size: 1.2rem;
+  font-size: 1.6rem;
+  color: var(--matrix-green);
+  text-shadow: 0 0 8px var(--matrix-green-glow);
+  font-weight: 400;
 }
 
 .additional-info {
-  padding: 15px;
-  background: rgba(102, 126, 234, 0.05);
-  border-radius: 15px;
-  border: 1px solid rgba(102, 126, 234, 0.1);
-}
-
-.info-item {
+  padding: 16px;
+  background: rgba(0, 255, 65, 0.03);
+  border: 1px dashed var(--matrix-green-dim);
   display: flex;
-  align-items: center;
-  gap: 10px;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 1.4rem;
 }
 
 .info-label {
-  font-weight: 600;
-  color: #666;
+  color: var(--amber);
+  font-size: 1.3rem;
 }
 
 .info-value {
-  color: #333;
-  font-weight: 500;
+  color: var(--matrix-green);
+  opacity: 0.9;
+  font-size: 1.4rem;
 }
 
 /* Acciones */
 .card-actions {
   display: flex;
-  gap: 12px;
-  justify-content: flex-end;
-  padding-top: 15px;
-  border-top: 2px solid rgba(0, 0, 0, 0.05);
+  gap: 8px;
+  padding: 15px 20px;
+  background: rgba(0, 30, 0, 0.5);
+  border-top: 1px solid var(--matrix-green-dim);
 }
 
 .btn-action {
-  padding: 10px 18px;
-  border: none;
-  border-radius: 12px;
+  flex: 1;
+  padding: 10px 15px;
+  background: transparent;
+  border: 1px solid var(--matrix-green);
+  color: var(--matrix-green);
+  font-family: 'VT323', monospace;
+  font-size: 1.1rem;
   cursor: pointer;
-  font-weight: 600;
-  font-size: 0.9rem;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  transition: all 0.3s ease;
-  min-width: 100px;
-  justify-content: center;
+  transition: all 0.2s ease;
+  text-align: center;
+}
+
+.btn-action:hover {
+  background: var(--matrix-green);
+  color: var(--terminal-bg);
+  box-shadow: 0 0 15px var(--matrix-green-glow);
 }
 
 .btn-edit {
-  background: linear-gradient(45deg, #667eea, #764ba2);
-  color: white;
-  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+  border-color: var(--cyan);
+  color: var(--cyan);
 }
 
 .btn-edit:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+  background: var(--cyan);
+  color: var(--terminal-bg);
+  box-shadow: 0 0 15px rgba(0, 212, 255, 0.5);
 }
 
 .btn-delete {
-  background: linear-gradient(45deg, #ff6b6b, #ee5a52);
-  color: white;
-  box-shadow: 0 4px 15px rgba(255, 107, 107, 0.3);
+  border-color: var(--red-alert);
+  color: var(--red-alert);
 }
 
 .btn-delete:hover:not(.btn-disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(255, 107, 107, 0.4);
+  background: var(--red-alert);
+  color: var(--terminal-bg);
+  box-shadow: 0 0 15px rgba(255, 0, 64, 0.5);
 }
 
 .btn-mexico {
-  background: linear-gradient(45deg, #9e9e9e, #757575);
-  color: white;
-  box-shadow: 0 4px 15px rgba(158, 158, 158, 0.3);
-  flex: 1;
-  white-space: nowrap;
-}
-
-.btn-mexico:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(158, 158, 158, 0.4);
+  border-color: var(--matrix-green);
+  color: var(--matrix-green);
 }
 
 .btn-mexico-active {
-  background: linear-gradient(45deg, #ff9800, #f57c00) !important;
-  box-shadow: 0 4px 15px rgba(255, 152, 0, 0.4) !important;
+  border-color: var(--amber) !important;
+  color: var(--amber) !important;
 }
 
 .btn-mexico-active:hover {
-  box-shadow: 0 6px 20px rgba(255, 152, 0, 0.5) !important;
+  background: var(--amber) !important;
+  color: var(--terminal-bg) !important;
+  box-shadow: 0 0 15px var(--amber-glow) !important;
 }
 
 .btn-disabled {
-  background: #cccccc !important;
+  border-color: #333 !important;
+  color: #444 !important;
   cursor: not-allowed !important;
-  opacity: 0.6;
-  box-shadow: none !important;
+  opacity: 0.5;
 }
 
 .btn-disabled:hover {
-  transform: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: #444 !important;
 }
 
 /* Estado vacío */
@@ -1386,51 +1500,47 @@ export default {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 80px 20px;
-  background: rgba(255, 255, 255, 0.15);
-  backdrop-filter: blur(10px);
-  border-radius: 20px;
-  color: white;
+  padding: 60px 20px;
+  background: rgba(0, 20, 0, 0.8);
+  border: 2px solid var(--matrix-green);
   text-align: center;
 }
 
-.empty-icon {
-  font-size: 5rem;
-  margin-bottom: 25px;
+.empty-ascii {
+  color: var(--matrix-green);
+  font-family: 'VT323', monospace;
+  font-size: 0.9rem;
+  margin: 0 0 20px 0;
+  text-shadow: 0 0 10px var(--matrix-green-glow);
+  white-space: pre;
   opacity: 0.8;
 }
 
-.empty-state h3 {
-  font-size: 1.8rem;
-  margin-bottom: 10px;
-  font-weight: 600;
-}
-
-.empty-state p {
-  font-size: 1.1rem;
-  margin-bottom: 30px;
-  opacity: 0.8;
+.empty-message {
+  font-size: 1.2rem;
+  color: var(--amber);
+  margin: 0 0 25px 0;
 }
 
 .btn-create {
-  background: linear-gradient(45deg, #4CAF50, #45a049);
-  color: white;
-  border: none;
+  background: transparent;
+  color: var(--matrix-green);
+  border: 2px solid var(--matrix-green);
   padding: 15px 30px;
-  border-radius: 15px;
+  font-family: 'VT323', monospace;
+  font-size: 1.3rem;
   cursor: pointer;
-  font-weight: 600;
-  font-size: 1.1rem;
   display: flex;
   align-items: center;
   gap: 10px;
   transition: all 0.3s ease;
-  box-shadow: 0 4px 15px rgba(76, 175, 80, 0.3);
+  letter-spacing: 2px;
 }
 
 .btn-create:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(76, 175, 80, 0.4);
+  background: var(--matrix-green);
+  color: var(--terminal-bg);
+  box-shadow: 0 0 25px var(--matrix-green-glow);
 }
 
 /* Responsive */
@@ -1441,51 +1551,96 @@ export default {
 
   .header-section {
     flex-direction: column;
-    gap: 20px;
     text-align: center;
+    padding: 20px 15px;
   }
 
-  .main-title {
-    font-size: 2rem;
+  .ascii-title {
+    font-size: 0.75rem;
+    transform: scale(0.9);
   }
 
   .embarques-grid {
     grid-template-columns: 1fr;
-    gap: 20px;
-  }
-
-  .embarque-card {
-    padding: 20px;
+    gap: 15px;
   }
 
   .stats-grid {
     grid-template-columns: 1fr;
-    gap: 12px;
+    gap: 6px;
   }
 
   .card-actions {
     flex-direction: column;
-  }
-
-  .btn-action {
-    width: 100%;
-    flex: auto;
-  }
-}
-
-@media (max-width: 480px) {
-  .embarque-card {
-    padding: 15px;
-  }
-
-  .main-title {
-    font-size: 1.5rem;
+    gap: 8px;
   }
 
   .card-header {
     flex-direction: column;
-    gap: 15px;
     text-align: center;
+    gap: 10px;
+  }
+}
+
+@media (max-width: 480px) {
+  .lista-embarques {
+    padding: 10px;
+  }
+
+  .terminal-header {
+    padding: 8px 12px;
+  }
+
+  .terminal-title {
+    font-size: 0.8rem;
+    letter-spacing: 1px;
+  }
+
+  .ascii-title {
+    font-size: 0.6rem;
+    transform: scale(0.85);
+  }
+
+  .subtitle {
+    font-size: 0.95rem;
+  }
+
+  .btn-refresh {
+    padding: 10px 18px;
+    font-size: 1rem;
+  }
+
+  .card-content {
+    padding: 12px 15px;
+  }
+
+  .card-actions {
+    padding: 12px 15px;
+  }
+
+  .btn-action {
+    padding: 8px 12px;
+    font-size: 1rem;
+  }
+
+  .stat-item {
+    padding: 12px 14px;
+  }
+
+  .stat-label {
+    font-size: 1.1rem;
+  }
+  
+  .stat-value {
+    font-size: 1.3rem;
+  }
+
+  .stat-highlight .stat-value {
+    font-size: 1.5rem;
+  }
+
+  .info-label, .info-value {
+    font-size: 1.1rem;
   }
 }
 </style>

@@ -1,5 +1,10 @@
 <template>
   <div class="cuentas-container">
+    <div class="terminal-header">
+      <span class="header-icon">◈</span>
+      <span class="header-text">BILL_CALCULATOR</span>
+    </div>
+    
     <b-row>
       <b-col cols="12" md="6" class="mb-3">
         <Calcular cantidad="$2" :datos="datos" @dataArray="procesarDatos" />
@@ -8,26 +13,38 @@
         <Calcular cantidad="$1" :datos="datos" @dataArray="procesarDatos" />
       </b-col>
       <b-col cols="12" class="mb-3">
-        <b-button @click="imprimirCuentas" variant="primary" block :disabled="!tieneDatos">
-          Imprimir sección
-        </b-button>
+        <button @click="imprimirCuentas" class="btn-imprimir" :disabled="!tieneDatos">
+          <span class="btn-bracket">[</span>
+          <span class="btn-icon">⎙</span>
+          <span class="btn-text">PRINT_REPORT</span>
+          <span class="btn-bracket">]</span>
+        </button>
       </b-col>
       <b-col cols="12" class="mb-3">
         <div ref="seccionImpresion" class="seccion-impresion">
-          <h1>Cuentas</h1>
-          <p class="fecha-impresion">{{ fechaFormateada }}</p>
+          <div class="seccion-title">
+            <span class="title-bracket">╔═</span>
+            <span class="title-text">CUENTAS</span>
+            <span class="title-bracket">═╗</span>
+          </div>
+          <p class="fecha-impresion">
+            <span class="fecha-label">DATE:</span> {{ fechaFormateada }}
+          </p>
           <div class="lista-cuentas">
             <div v-for="(cantidad, denominacion) in billetes" :key="denominacion" class="cuenta-item"
               v-show="cantidad > 0">
               <span class="denominacion">${{ denominacion }}</span>
+              <span class="separador">────</span>
               <span class="cantidad">{{ cantidad }}</span>
             </div>
           </div>
           <div class="total-general">
-            <strong>Total: ${{ totalGeneral.toLocaleString() }}</strong>
+            <span class="total-label">TOTAL:</span>
+            <span class="total-value">${{ totalGeneral.toLocaleString() }}</span>
           </div>
           <div v-if="totalGeneral > 0" class="promedio-general">
-            <small>Promedio: ${{ Math.round(promedioPorLinea).toLocaleString() }}</small>
+            <span class="promedio-label">AVG:</span>
+            <span class="promedio-value">${{ Math.round(promedioPorLinea).toLocaleString() }}</span>
           </div>
         </div>
       </b-col>
@@ -258,45 +275,139 @@ export default {
 </script>
 
 <style scoped>
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=VT323&family=Share+Tech+Mono&display=swap');
+
+/* Variables */
 .cuentas-container {
-  max-width: 800px;
-  margin: 0 auto;
-  padding: 20px;
-  border: 1px solid #ddd;
-  border-radius: 12px;
-  background-color: #f8f9fa;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  --matrix-green: #00ff41;
+  --matrix-green-glow: #00ff4180;
+  --thermal-orange: #ff6b00;
+  --thermal-yellow: #ffcc00;
+  --cyan: #00d4ff;
+  --bg-dark: #0a0808;
 }
 
-h1 {
-  text-align: center;
-  color: #2c3e50;
+.cuentas-container {
+  background: rgba(0, 20, 0, 0.8);
+  border: 1px solid var(--matrix-green);
+  padding: 20px;
+  box-shadow: 0 0 20px var(--matrix-green-glow);
+}
+
+.terminal-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   margin-bottom: 20px;
-  font-size: 2em;
-  font-weight: 600;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--matrix-green);
+}
+
+.header-icon {
+  color: var(--matrix-green);
+  font-size: 1.2rem;
+  text-shadow: 0 0 10px var(--matrix-green);
+}
+
+.header-text {
+  font-family: 'Orbitron', sans-serif;
+  color: var(--matrix-green);
+  font-size: 1.1rem;
+  letter-spacing: 3px;
+  text-shadow: 0 0 10px var(--matrix-green-glow);
+}
+
+/* Botón imprimir */
+.btn-imprimir {
+  width: 100%;
+  background: transparent;
+  border: 2px solid var(--cyan);
+  color: var(--cyan);
+  font-family: 'VT323', monospace;
+  font-size: 1.2rem;
+  padding: 12px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.btn-imprimir:hover:not(:disabled) {
+  background: var(--cyan);
+  color: var(--bg-dark);
+  box-shadow: 0 0 20px rgba(0, 212, 255, 0.5);
+}
+
+.btn-imprimir:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  border-color: #444;
+  color: #444;
+}
+
+.btn-bracket {
+  color: var(--thermal-yellow);
+}
+
+/* Sección de impresión */
+.seccion-impresion {
+  background: rgba(0, 30, 0, 0.6);
+  padding: 20px;
+  border: 1px dashed var(--matrix-green);
+  margin-top: 15px;
+}
+
+.seccion-title {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 15px;
+  margin-bottom: 15px;
+}
+
+.title-bracket {
+  color: var(--thermal-orange);
+  font-family: 'VT323', monospace;
+  font-size: 1.5rem;
+}
+
+.title-text {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 1.8rem;
+  color: var(--matrix-green);
+  text-shadow: 0 0 15px var(--matrix-green);
+  letter-spacing: 5px;
 }
 
 .fecha-impresion {
   text-align: center;
-  color: #6c757d;
-  font-style: italic;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.95rem;
   margin-bottom: 20px;
-  font-size: 14px;
+  color: var(--thermal-yellow);
 }
 
+.fecha-label {
+  color: var(--thermal-orange);
+  margin-right: 5px;
+}
+
+/* Lista de cuentas */
 .lista-cuentas {
-  background-color: white;
-  border-radius: 8px;
-  padding: 20px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  background: rgba(0, 40, 0, 0.4);
+  border: 1px solid var(--matrix-green);
+  padding: 15px;
+  margin-bottom: 15px;
 }
 
 .cuenta-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 8px 0;
-  border-bottom: 1px solid #e9ecef;
+  padding: 10px 5px;
+  border-bottom: 1px solid rgba(0, 255, 65, 0.2);
 }
 
 .cuenta-item:last-child {
@@ -304,117 +415,165 @@ h1 {
 }
 
 .denominacion {
-  font-weight: 600;
-  color: #495057;
-  font-size: 22px;
+  font-family: 'VT323', monospace;
+  font-size: 1.6rem;
+  color: var(--thermal-orange);
+  text-shadow: 0 0 8px rgba(255, 107, 0, 0.5);
+}
+
+.separador {
+  flex: 1;
+  text-align: center;
+  color: var(--matrix-green);
+  opacity: 0.3;
+  font-size: 0.8rem;
+  margin: 0 10px;
 }
 
 .cantidad {
-  color: #007bff;
-  font-weight: 600;
-  font-size: 22px;
+  font-family: 'VT323', monospace;
+  font-size: 1.6rem;
+  color: var(--matrix-green);
+  text-shadow: 0 0 10px var(--matrix-green);
   text-align: right;
+  min-width: 60px;
 }
 
+/* Total */
 .total-general {
-  text-align: center;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   padding: 15px;
-  background-color: #e9ecef;
-  border-radius: 8px;
-  margin-top: 20px;
-  font-size: 18px;
-  font-weight: 600;
-  color: #495057;
+  background: rgba(0, 255, 65, 0.1);
+  border: 2px solid var(--matrix-green);
+}
+
+.total-label {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 1rem;
+  color: var(--thermal-orange);
+  letter-spacing: 2px;
+}
+
+.total-value {
+  font-family: 'VT323', monospace;
+  font-size: 2rem;
+  color: var(--matrix-green);
+  text-shadow: 
+    0 0 10px var(--matrix-green),
+    0 0 20px var(--matrix-green-glow);
 }
 
 .promedio-general {
-  text-align: center;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
   padding: 10px;
-  color: #6c757d;
-  font-size: 14px;
   margin-top: 10px;
 }
 
-.seccion-impresion {
-  background-color: white;
-  padding: 20px;
-  border-radius: 8px;
-  border: 1px solid #dee2e6;
-  margin-top: 20px;
+.promedio-label {
+  font-family: 'Share Tech Mono', monospace;
+  color: var(--thermal-yellow);
+  opacity: 0.8;
 }
 
-/* Estilos para impresión */
-@media print {
-  .cuentas-container {
-    box-shadow: none;
-    border: none;
-    background-color: white;
-  }
-
-  .seccion-impresion {
-    border: none;
-    box-shadow: none;
-    background-color: white;
-  }
+.promedio-value {
+  font-family: 'VT323', monospace;
+  font-size: 1.2rem;
+  color: var(--thermal-yellow);
+  text-shadow: 0 0 8px var(--thermal-yellow);
 }
 
-/* Responsive Design */
+/* Responsive */
 @media (max-width: 768px) {
   .cuentas-container {
     padding: 15px;
-    margin: 10px;
   }
 
-  h1 {
-    font-size: 1.5em;
-  }
-
-  .cuenta-item {
-    flex-direction: column;
-    text-align: center;
-    padding: 8px;
+  .title-text {
+    font-size: 1.4rem;
+    letter-spacing: 3px;
   }
 
   .denominacion,
   .cantidad {
-    margin-bottom: 3px;
+    font-size: 1.4rem;
   }
 
-  .denominacion {
-    font-size: 20px;
+  .total-general {
+    flex-direction: column;
+    text-align: center;
+    gap: 10px;
   }
 
-  .cantidad {
-    font-size: 20px;
+  .total-value {
+    font-size: 1.8rem;
+  }
+
+  .promedio-general {
+    justify-content: center;
   }
 }
 
 @media (max-width: 576px) {
   .cuentas-container {
     padding: 10px;
-    margin: 5px;
-    border-radius: 8px;
+  }
+
+  .header-text {
+    font-size: 0.9rem;
+    letter-spacing: 1px;
+  }
+
+  .title-text {
+    font-size: 1.2rem;
+  }
+
+  .denominacion,
+  .cantidad {
+    font-size: 1.2rem;
+  }
+
+  .separador {
+    display: none;
+  }
+
+  .cuenta-item {
+    padding: 8px 5px;
+  }
+
+  .btn-imprimir {
+    font-size: 1rem;
+    padding: 10px 15px;
+  }
+}
+
+/* Print styles */
+@media print {
+  .cuentas-container {
+    background: white;
+    border: 1px solid #000;
+    box-shadow: none;
   }
 
   .seccion-impresion {
-    padding: 15px;
+    background: white;
+    border: 1px solid #000;
   }
 
-  h1 {
-    font-size: 1.3em;
+  .title-text,
+  .denominacion,
+  .cantidad,
+  .total-value {
+    color: #000 !important;
+    text-shadow: none !important;
   }
 
-  .denominacion {
-    font-size: 18px;
-  }
-
-  .cantidad {
-    font-size: 18px;
-  }
-
-  .promedio-general {
-    font-size: 12px;
-    margin-top: 8px;
+  .btn-imprimir {
+    display: none;
   }
 }
 </style>
