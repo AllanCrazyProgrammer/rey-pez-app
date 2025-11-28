@@ -127,7 +127,7 @@
           >
             <span class="link-bracket">⟨</span>
             <span class="link-index">06</span>
-            <span class="nav-text">MEXICO</span>
+            <span class="nav-text">CUENTAS</span>
             <span class="link-bracket">⟩</span>
             <span class="thermal-indicator"></span>
           </router-link>
