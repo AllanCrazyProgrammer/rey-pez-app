@@ -56,6 +56,14 @@
               </td>
             </tr>
           </tbody>
+          <tfoot>
+            <tr class="total-cliente-row">
+              <td></td>
+              <td class="total-kilos-cliente">{{ calcularTotalKilosCliente(pedidoOtilio) }} kg</td>
+              <td></td>
+              <td></td>
+            </tr>
+          </tfoot>
         </table>
       </div>
 
@@ -90,6 +98,14 @@
                 </td>
               </tr>
             </tbody>
+            <tfoot>
+              <tr class="total-cliente-row">
+                <td></td>
+                <td class="total-kilos-cliente">{{ calcularTotalKilosCliente(pedidoJoselito) }} kg</td>
+                <td></td>
+                <td></td>
+              </tr>
+            </tfoot>
           </table>
         </div>
 
@@ -122,6 +138,14 @@
                 </td>
               </tr>
             </tbody>
+            <tfoot>
+              <tr class="total-cliente-row">
+                <td></td>
+                <td class="total-kilos-cliente">{{ calcularTotalKilosCliente(pedidoLorena) }} kg</td>
+                <td></td>
+                <td></td>
+              </tr>
+            </tfoot>
           </table>
         </div>
 
@@ -147,6 +171,13 @@
                   </td>
                 </tr>
               </tbody>
+              <tfoot>
+                <tr class="total-cliente-row">
+                  <td></td>
+                  <td class="total-kilos-cliente">{{ calcularTotalKilosCliente(pedidoCatarro) }} kg</td>
+                  <td></td>
+                </tr>
+              </tfoot>
             </table>
           </div>
 
@@ -171,6 +202,13 @@
                   </td>
                 </tr>
               </tbody>
+              <tfoot>
+                <tr class="total-cliente-row">
+                  <td></td>
+                  <td class="total-kilos-cliente">{{ calcularTotalKilosCliente(pedidoOzuna, true) }} kg</td>
+                  <td></td>
+                </tr>
+              </tfoot>
             </table>
           </div>
         </div>
@@ -206,6 +244,14 @@
                 </td>
               </tr>
             </tbody>
+            <tfoot>
+              <tr class="total-cliente-row">
+                <td></td>
+                <td class="total-kilos-cliente">{{ calcularTotalKilosCliente(cliente.pedidos) }} kg</td>
+                <td></td>
+                <td></td>
+              </tr>
+            </tfoot>
           </table>
         </div>
       </div>
@@ -1139,6 +1185,43 @@ export default {
     obtenerKilosFaltantes(medida) {
       const refrigerados = this.kilosRefrigerados[medida.medida] || 0;
       return medida.total - refrigerados;
+    },
+    calcularTotalKilosCliente(pedido, esOzuna = false) {
+      if (!pedido || !Array.isArray(pedido)) return 0;
+      
+      let total = 0;
+      pedido.forEach(item => {
+        const kilos = Number(item.kilos) || 0;
+        if (kilos === 0) return;
+        
+        if (item.esTara) {
+          // Procesar taras
+          if (item.tipo === 'C/H20') {
+            total += kilos * 30 * 0.65;
+          } else if (item.tipo === '1.35 y .15') {
+            total += kilos * 30;
+          } else if (item.tipo === '1.5 y .3') {
+            total += kilos * 30;
+          } else {
+            total += kilos * 30;
+          }
+        } else {
+          // Procesar kilos directos
+          if (item.tipo === 'C/H20') {
+            total += kilos * 0.65;
+          } else if (item.tipo === '1.35 y .15') {
+            total += kilos * 1.35;
+          } else if (item.tipo === '1.5 y .3') {
+            total += kilos * 1.5;
+          } else if (esOzuna && item.tipo === '.7 y .3') {
+            total += kilos * 0.7;
+          } else {
+            total += kilos;
+          }
+        }
+      });
+      
+      return Math.round(total);
     }
   },
   watch: {
@@ -2080,6 +2163,39 @@ h4.cliente-header.ozuna-header {
   
   .pedido-checkbox:checked::after {
     font-size: 12px;
+  }
+}
+
+/* Estilos para el total de kilos por cliente */
+.total-cliente-row {
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+}
+
+.total-cliente-row td {
+  border-top: 2px solid #34495e !important;
+  padding: 8px !important;
+}
+
+.total-kilos-cliente {
+  font-weight: bold;
+  font-size: 1.3em;
+  color: #2c3e50;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+@media print {
+  .total-kilos-cliente {
+    -webkit-text-fill-color: #2c3e50;
+    background: none;
+  }
+}
+
+@media (max-width: 375px) {
+  .total-kilos-cliente {
+    font-size: 1.1em;
   }
 }
 
