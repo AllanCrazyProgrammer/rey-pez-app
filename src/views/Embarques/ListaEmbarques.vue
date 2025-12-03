@@ -1276,19 +1276,44 @@ export default {
   display: flex;
   align-items: center;
   gap: 8px;
+  background: rgba(255, 176, 0, 0.1);
+  padding: 6px 14px;
+  border: 1px solid var(--amber);
+  border-radius: 2px;
 }
 
 .fecha-label {
-  font-size: 1rem;
-  color: var(--matrix-green);
-  opacity: 0.7;
+  font-size: 1.1rem;
+  color: var(--amber);
+  opacity: 0.9;
+  text-transform: uppercase;
+  letter-spacing: 1px;
 }
 
 .fecha-value {
-  font-size: 1.2rem;
-  font-weight: 400;
-  color: var(--matrix-green);
-  text-shadow: 0 0 8px var(--matrix-green-glow);
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: #ffcc00;
+  text-shadow: 
+    0 0 10px var(--amber),
+    0 0 20px var(--amber-glow),
+    0 0 30px rgba(255, 176, 0, 0.3);
+  letter-spacing: 2px;
+  animation: fecha-glow 2s ease-in-out infinite alternate;
+}
+
+@keyframes fecha-glow {
+  from {
+    text-shadow: 
+      0 0 10px var(--amber),
+      0 0 20px var(--amber-glow);
+  }
+  to {
+    text-shadow: 
+      0 0 15px var(--amber),
+      0 0 30px var(--amber-glow),
+      0 0 40px rgba(255, 176, 0, 0.4);
+  }
 }
 
 .status-section {
@@ -1544,7 +1569,104 @@ export default {
 }
 
 /* Responsive */
-@media (max-width: 768px) {
+/* Galaxy Z Fold abierto y tablets pequeñas (500px - 900px) - 2 columnas */
+@media (min-width: 500px) and (max-width: 900px) {
+  .lista-embarques {
+    padding: 12px;
+  }
+
+  .header-section {
+    padding: 15px;
+    gap: 15px;
+  }
+
+  .ascii-title {
+    font-size: 0.85rem;
+  }
+
+  .subtitle {
+    font-size: 1rem;
+  }
+
+  .embarques-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6px;
+  }
+
+  .embarque-card {
+    font-size: 0.9rem;
+  }
+
+  .stat-item {
+    padding: 10px 12px;
+  }
+
+  .stat-label {
+    font-size: 1.1rem;
+  }
+
+  .stat-value {
+    font-size: 1.3rem;
+  }
+
+  .stat-highlight .stat-value {
+    font-size: 1.5rem;
+  }
+
+  .card-header {
+    padding: 10px 15px;
+  }
+
+  .fecha-section {
+    padding: 4px 10px;
+  }
+
+  .fecha-value {
+    font-size: 1.4rem;
+  }
+
+  .fecha-label {
+    font-size: 0.9rem;
+  }
+
+  .card-content {
+    padding: 10px 15px;
+  }
+
+  .card-actions {
+    padding: 10px 15px;
+    flex-wrap: wrap;
+  }
+
+  .btn-action {
+    flex: 1 1 auto;
+    min-width: 60px;
+    padding: 8px 10px;
+    font-size: 1rem;
+  }
+
+  .additional-info {
+    font-size: 1.2rem;
+    padding: 12px;
+  }
+
+  .info-label, .info-value {
+    font-size: 1.1rem;
+  }
+
+  .data-separator {
+    font-size: 0.9rem;
+    margin: 8px 0;
+  }
+}
+
+/* Tablets y pantallas más pequeñas (hasta 768px pero no Z Fold) */
+@media (max-width: 499px) {
   .lista-embarques {
     padding: 15px;
   }
@@ -1580,6 +1702,15 @@ export default {
     text-align: center;
     gap: 10px;
   }
+
+  .fecha-section {
+    padding: 6px 16px;
+    justify-content: center;
+  }
+
+  .fecha-value {
+    font-size: 1.6rem;
+  }
 }
 
 @media (max-width: 480px) {
@@ -1608,6 +1739,19 @@ export default {
   .btn-refresh {
     padding: 10px 18px;
     font-size: 1rem;
+  }
+
+  .fecha-section {
+    padding: 5px 12px;
+  }
+
+  .fecha-value {
+    font-size: 1.5rem;
+    letter-spacing: 1px;
+  }
+
+  .fecha-label {
+    font-size: 0.9rem;
   }
 
   .card-content {
