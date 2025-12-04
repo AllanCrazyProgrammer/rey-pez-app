@@ -330,7 +330,7 @@
                       :checked="divisores[medida.medida] === 20"
                       @click="toggleDivisor(medida, 20)"
                     >
-                    20
+                    <span>20</span>
                   </label>
                   <label>
                     <input 
@@ -339,7 +339,7 @@
                       :checked="divisores[medida.medida] === 22"
                       @click="toggleDivisor(medida, 22)"
                     >
-                    22
+                    <span>22</span>
                   </label>
                 </div>
               </td>
@@ -1910,25 +1910,41 @@ h4.cliente-header.ozuna-header {
 .checkbox-group {
   display: flex;
   justify-content: center;
-  gap: 12px;
+  gap: 16px;
   margin: 0 auto;
   width: fit-content;
+  padding: 4px 8px;
 }
 
 .checkbox-group label {
   display: flex;
   align-items: center;
-  gap: 4px;
-  font-size: 14px;
+  gap: 6px;
+  font-size: 15px;
+  font-weight: 600;
   cursor: pointer;
   user-select: none;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: background-color 0.2s ease;
+}
+
+.checkbox-group label:hover {
+  background-color: #f0f0f0;
 }
 
 .checkbox-group input[type="radio"] {
-  width: 14px;
-  height: 14px;
+  width: 18px;
+  height: 18px;
   cursor: pointer;
   margin: 0;
+  accent-color: #667eea;
+  flex-shrink: 0;
+}
+
+.checkbox-group input[type="radio"]:checked + span {
+  color: #667eea;
+  font-weight: bold;
 }
 
 .cajas-result {
@@ -2123,6 +2139,22 @@ h4.cliente-header.ozuna-header {
   
   .cajas-result.cajas-faltantes::after {
     display: none; /* Ocultar tooltip en móviles */
+  }
+  
+  .checkbox-group {
+    gap: 12px;
+    padding: 4px;
+  }
+  
+  .checkbox-group label {
+    gap: 5px;
+    font-size: 14px;
+    padding: 3px 6px;
+  }
+  
+  .checkbox-group input[type="radio"] {
+    width: 16px;
+    height: 16px;
   }
 }
 
