@@ -274,17 +274,21 @@
               <td data-label="Medida">{{ medida.medida }}</td>
               <td data-label="Total Kilos" class="total-kilos-cell">
                 <div class="kilos-container">
-                  <span 
-                    class="total-kilos-clickeable" 
-                    @click="abrirModalKilosRefrigerados(medida)"
-                    :title="'Click para agregar kilos refrigerados'"
-                  >
-                    {{ medida.total }} kg
-                  </span>
-                  <div v-if="kilosRefrigerados[medida.medida]" class="kilos-info">
+                  <div class="kilos-column">
+                    <span 
+                      class="total-kilos-clickeable" 
+                      @click="abrirModalKilosRefrigerados(medida)"
+                      :title="'Click para agregar kilos refrigerados'"
+                    >
+                      {{ medida.total }} kg
+                    </span>
+                  </div>
+                  <div v-if="kilosRefrigerados[medida.medida]" class="kilos-column kilos-refrigerados-column">
                     <span class="kilos-refrigerados">
                       🧊 {{ kilosRefrigerados[medida.medida] }} kg
                     </span>
+                  </div>
+                  <div v-if="kilosRefrigerados[medida.medida]" class="kilos-column kilos-faltantes-column">
                     <span class="kilos-faltantes" :class="{ 
                       'suficientes': obtenerKilosFaltantes(medida) <= 0,
                       'sobra': obtenerKilosFaltantes(medida) < 0 
@@ -1953,6 +1957,20 @@ h4.cliente-header.ozuna-header {
     display: flex;
     align-items: center;
   }
+  
+  /* Mantener layout horizontal para kilos en responsive */
+  .resumen-table td.total-kilos-cell {
+    padding-left: 8px !important;
+    padding-right: 8px !important;
+    display: flex !important;
+    justify-content: center !important;
+  }
+  
+  .resumen-table td.total-kilos-cell .kilos-container {
+    flex-direction: row !important;
+    justify-content: center !important;
+    flex-wrap: wrap !important;
+  }
 
   .resumen-table td::before {
     content: attr(data-label);
@@ -1963,6 +1981,11 @@ h4.cliente-header.ozuna-header {
     font-weight: bold;
     text-align: right;
     color: #666;
+  }
+  
+  /* Ocultar etiqueta "Total Kilos" para evitar empalmamiento */
+  .resumen-table td.total-kilos-cell::before {
+    display: none !important;
   }
 
   .rendimientos-column {
@@ -2219,15 +2242,28 @@ h4.cliente-header.ozuna-header {
 
 /* Estilos para kilos refrigerados */
 .total-kilos-cell {
-  padding: 8px !important;
+  padding: 12px !important;
+  min-width: 200px;
 }
 
 .kilos-container {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  width: 100%;
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  gap: 16px !important;
+  width: 100% !important;
+  flex-wrap: wrap !important;
+  padding: 4px 0 !important;
+}
+
+.kilos-column {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  min-width: fit-content !important;
+  white-space: nowrap;
+  margin: 0 4px;
 }
 
 .total-kilos-clickeable {
@@ -2256,36 +2292,34 @@ h4.cliente-header.ozuna-header {
   transform: translateY(0);
 }
 
-.kilos-info {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  font-size: 0.85em;
-  width: 100%;
-  align-items: center;
+.kilos-refrigerados-column,
+.kilos-faltantes-column {
+  font-size: 0.95em;
 }
 
 .kilos-refrigerados {
   background: linear-gradient(135deg, #17a2b8 0%, #20c997 100%);
   color: white;
-  padding: 3px 8px;
+  padding: 6px 12px;
   border-radius: 12px;
   font-weight: 600;
-  font-size: 0.8em;
+  font-size: 0.9em;
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   box-shadow: 0 2px 4px rgba(23, 162, 184, 0.3);
+  white-space: nowrap;
 }
 
 .kilos-faltantes {
   background: linear-gradient(135deg, #dc3545 0%, #e74c3c 100%);
   color: white;
-  padding: 2px 6px;
+  padding: 5px 10px;
   border-radius: 10px;
-  font-weight: 500;
-  font-size: 0.75em;
+  font-weight: 600;
+  font-size: 0.85em;
   box-shadow: 0 2px 4px rgba(220, 53, 69, 0.3);
+  white-space: nowrap;
 }
 
 .kilos-faltantes.suficientes {
@@ -2304,37 +2338,61 @@ h4.cliente-header.ozuna-header {
 
 
 
-/* Responsive para kilos refrigerados */
+/* Responsive para kilos refrigerados - Solo en pantallas muy pequeñas */
+@media (max-width: 320px) {
+  .kilos-container {
+    flex-direction: column !important;
+    align-items: flex-end !important;
+    gap: 4px !important;
+  }
+  
+  .kilos-column {
+    justify-content: flex-end !important;
+    width: 100% !important;
+  }
+}
+
 @media (max-width: 375px) {
   .kilos-container {
-    gap: 4px;
+    gap: 8px !important;
+  }
+  
+  .kilos-column {
+    margin: 0 2px;
   }
   
   .total-kilos-clickeable {
-    padding: 4px 8px;
-    font-size: 0.9em;
-    min-width: 60px;
+    padding: 5px 10px;
+    font-size: 0.85em;
+    min-width: 70px;
   }
   
-  .kilos-info {
-    font-size: 0.75em;
+  .kilos-refrigerados-column,
+  .kilos-faltantes-column {
+    font-size: 0.85em;
   }
   
   .kilos-refrigerados {
-    font-size: 0.7em;
-    padding: 2px 6px;
+    font-size: 0.8em;
+    padding: 4px 8px;
+    gap: 4px;
   }
   
   .kilos-faltantes {
-    font-size: 0.65em;
-    padding: 1px 4px;
+    font-size: 0.75em;
+    padding: 3px 6px;
   }
 }
 
 /* Ocultar kilos refrigerados en impresión */
 @media print {
-  .kilos-info {
+  .kilos-refrigerados-column,
+  .kilos-faltantes-column {
     display: none;
+  }
+  
+  .kilos-container {
+    justify-content: flex-start;
   }
   
   .total-kilos-clickeable {
