@@ -1314,9 +1314,30 @@ export default {
 
 <style scoped>
 .impresion-container {
-  max-width: 1200px;
+  max-width: 100%;
+  width: 100%;
   margin: 0 auto;
-  padding: 20px;
+  padding: 15px;
+  box-sizing: border-box;
+  overflow-x: hidden;
+}
+
+/* Asegurar que todos los elementos internos se ajusten */
+.impresion-container * {
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.impresion-container table {
+  width: 100% !important;
+  table-layout: auto;
+}
+
+.impresion-container h2,
+.impresion-container h3,
+.impresion-container h4 {
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
 
 .scale-control {
@@ -1633,8 +1654,61 @@ h4.cliente-header.ozuna-header {
   }
 }
 
+/* Responsive para tablets y móviles */
+@media (max-width: 768px) {
+  .impresion-container {
+    padding: 10px;
+  }
+  
+  .scale-control {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  
+  .buttons-container {
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .btn-generar,
+  .btn-menu,
+  .btn-editar,
+  .btn-sacada {
+    width: 100%;
+    padding: 10px;
+    font-size: 14px;
+  }
+  
+  .total-kilos-cell {
+    min-width: auto !important;
+  }
+  
+  .preview-table th,
+  .preview-table td {
+    padding: 6px 4px;
+    font-size: 0.9em;
+  }
+}
+
 /* Estilos para dispositivos móviles pequeños */
 @media (max-width: 375px) {
+  .impresion-container {
+    padding: 8px;
+  }
+  
+  h2, h3, h4 {
+    font-size: 16px !important;
+    margin: 10px 0;
+  }
+  
+  .preview-table th,
+  .preview-table td {
+    padding: 4px 2px;
+    font-size: 0.75em;
+    word-break: break-word;
+  }
+  
   .bottom-section {
     flex-direction: column;
     gap: 20px;
@@ -1858,11 +1932,13 @@ h4.cliente-header.ozuna-header {
 }
 
 .cajas-result {
-  display: block;
+  display: inline-block;
   text-align: center;
   font-size: 16px;
   font-weight: bold;
   color: #2196F3;
+  min-width: 40px;
+  line-height: 1.4;
 }
 
 .cajas-result:not([data-granja]) {
@@ -1873,15 +1949,22 @@ h4.cliente-header.ozuna-header {
   position: relative;
   background: linear-gradient(135deg, #ff9800 0%, #ff5722 100%);
   color: white;
-  padding: 4px 8px;
+  padding: 6px 12px;
   border-radius: 6px;
   font-weight: 600;
   box-shadow: 0 2px 4px rgba(255, 152, 0, 0.3);
+  min-width: 60px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  white-space: nowrap;
 }
 
 .cajas-result.cajas-faltantes::before {
-  content: '📦 ';
-  font-size: 0.8em;
+  content: '📦';
+  font-size: 0.9em;
+  flex-shrink: 0;
 }
 
 /* Tooltip para explicar que se calculó con kilos faltantes */
@@ -2022,13 +2105,20 @@ h4.cliente-header.ozuna-header {
 
   .cajas-result {
     padding-left: 0;
-    text-align: left;
+    text-align: center;
     font-size: 14px;
+    min-width: 35px;
   }
   
   .cajas-result.cajas-faltantes {
-    padding: 2px 4px;
-    font-size: 12px;
+    padding: 4px 8px;
+    font-size: 13px;
+    min-width: 50px;
+    gap: 3px;
+  }
+  
+  .cajas-result.cajas-faltantes::before {
+    font-size: 0.85em;
   }
   
   .cajas-result.cajas-faltantes::after {
