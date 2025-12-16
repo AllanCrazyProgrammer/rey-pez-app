@@ -931,6 +931,13 @@ export default {
         { 
           stack: [
             { text: item.medida || '', fontSize: fontSize * 2 },
+            (item.tipo && item.tipo !== 'S/H20') ? { 
+              text: item.tipo, 
+              fontSize: fontSize * 1.5,
+              color: '#0000FF',
+              bold: true,
+              margin: [0, 2, 0, 2]
+            } : '',
             item.proveedor ? { 
               text: item.proveedor, 
               fontSize: fontSize * 1.1,
