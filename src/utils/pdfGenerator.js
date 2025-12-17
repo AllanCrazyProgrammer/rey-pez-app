@@ -841,7 +841,9 @@ async function generarContenidoClientes(embarque, clientesDisponibles, clientesJ
           } else {
             const kilos = totalKilos(producto, nombreCliente, aplicarReglaOtilioCliente, sumarKgCatarroCliente);
             // Usar exactamente los mismos kilos que se muestran en la tabla
-            const kilosMostrados = nombreCliente.toLowerCase().includes('ozuna') ? 
+            const esLorena = nombreCliente.toLowerCase().includes('lorena') || nombreCliente.toLowerCase().includes('veronica');
+            const mostrarDecimales = nombreCliente.toLowerCase().includes('ozuna') || esLorena;
+            const kilosMostrados = mostrarDecimales ? 
               Number(kilos.toFixed(1)) : Math.round(kilos);
             totalProducto = kilosMostrados * Number(producto.precio);
           }
@@ -873,7 +875,8 @@ async function generarContenidoClientes(embarque, clientesDisponibles, clientesJ
           if (item.precio) {
             const kilos = parseFloat(calcularKilosCrudos(item, nombreCliente));
             // Usar exactamente los mismos kilos que se muestran en la tabla (redondeados)
-            const kilosMostrados = Math.round(kilos);
+            const esLorena = nombreCliente.toLowerCase().includes('lorena') || nombreCliente.toLowerCase().includes('veronica');
+            const kilosMostrados = esLorena ? Number(kilos.toFixed(1)) : Math.round(kilos);
             totalDineroCrudosCliente += kilosMostrados * Number(item.precio);
             
             // Acumular taras para calcular flete de crudos
@@ -1213,12 +1216,15 @@ function generarTablaProductos(productos, estiloCliente, nombreCliente, aplicarR
     // Verificar que tenga kilos > 0
     if (kilos > 0) {
       // Calcular los kilos que se mostrarán en la tabla (exactamente como aparecen)
-      const kilosMostrados = nombreCliente.toLowerCase().includes('ozuna') ? 
+      const esLorena = nombreCliente.toLowerCase().includes('lorena') || nombreCliente.toLowerCase().includes('veronica');
+      const mostrarDecimales = nombreCliente.toLowerCase().includes('ozuna') || esLorena;
+
+      const kilosMostrados = mostrarDecimales ? 
         Number(kilos.toFixed(1)) : Math.round(kilos);
       
       const row = [
-        // Mostrar un decimal para Ozuna
-        nombreCliente.toLowerCase().includes('ozuna') ? `${kilos.toFixed(1)} kg` : `${Math.round(kilos)} kg`,
+        // Mostrar un decimal para Ozuna y Lorena
+        mostrarDecimales ? `${kilos.toFixed(1)} kg` : `${Math.round(kilos)} kg`,
         // Construir el texto del producto según los casos
         hayPrecios 
           ? (mostrarColumnaPrecio 
@@ -1563,10 +1569,11 @@ function generarTablaCrudos(crudos, estiloCliente, incluirPreciosCliente = false
     const kilos = parseFloat(kilosTexto);
     
     // Calcular los kilos que se mostrarán en la tabla (exactamente como aparecen)
-    const kilosMostrados = Math.round(kilos);
+    const esLorena = nombreCliente.toLowerCase().includes('lorena') || nombreCliente.toLowerCase().includes('veronica');
+    const kilosMostrados = esLorena ? Number(kilos.toFixed(1)) : Math.round(kilos);
     
     const row = [
-      `${kilosMostrados} kg`,
+      esLorena ? `${kilos.toFixed(1)} kg` : `${kilosMostrados} kg`,
       {
         text: item.talla.replace(/\s*c\/\s*c$/i, ' c/c'),
         // Aplicar estilo azul si la talla contiene "c/c" (que indica "con cascaron")
@@ -2581,7 +2588,9 @@ async function generarContenidoClientesSinPrecios(embarque, clientesDisponibles,
         } else {
           const kilos = totalKilos(producto, nombreCliente, aplicarReglaOtilioCliente, sumarKgCatarroCliente);
           // Usar exactamente los mismos kilos que se muestran en la tabla
-          const kilosMostrados = nombreCliente.toLowerCase().includes('ozuna') ? 
+          const esLorena = nombreCliente.toLowerCase().includes('lorena') || nombreCliente.toLowerCase().includes('veronica');
+          const mostrarDecimales = nombreCliente.toLowerCase().includes('ozuna') || esLorena;
+          const kilosMostrados = mostrarDecimales ? 
             Number(kilos.toFixed(1)) : Math.round(kilos);
           totalProducto = kilosMostrados * Number(producto.precio);
         }
@@ -2673,9 +2682,12 @@ function generarTablaProductosSinPrecios(productos, estiloCliente, nombreCliente
     
     // Verificar que tenga kilos > 0
     if (kilos > 0) {
+      const esLorena = nombreCliente.toLowerCase().includes('lorena') || nombreCliente.toLowerCase().includes('veronica');
+      const mostrarDecimales = nombreCliente.toLowerCase().includes('ozuna') || esLorena;
+
       const row = [
-        // Eliminar decimales para los kilos (redondeando al entero más cercano)
-        `${Math.round(kilos)} kg`,
+        // Mostrar decimales para Ozuna y Lorena
+        mostrarDecimales ? `${kilos.toFixed(1)} kg` : `${Math.round(kilos)} kg`,
         // Formatear el nombre del producto según configuración de precios
         incluirPreciosCliente 
           ? (cuentaEnPdfCliente 
@@ -2823,9 +2835,12 @@ function generarTablaCrudosSinPrecios(crudos, estiloCliente) {
       
       // Solo procesar items con kilos > 0
       if (kilos > 0) {
+        const esLorena = nombreCliente.toLowerCase().includes('lorena') || nombreCliente.toLowerCase().includes('veronica');
+        const kilosMostrados = esLorena ? kilos.toFixed(1) : Math.round(kilos);
+        
         const row = [
-          // Eliminar decimales para los kilos (redondeando al entero más cercano)
-          `${Math.round(kilos)} kg`,
+          // Mostrar decimales para Lorena
+          `${kilosMostrados} kg`,
           {
             text: item.talla.replace(/\s*c\/\s*c$/i, ' c/c'),
             // Aplicar estilo azul si la talla contiene "c/c" (que indica "con cascaron")
