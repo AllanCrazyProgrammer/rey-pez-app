@@ -436,7 +436,7 @@ export default {
     }
 
     if (!navigator.onLine && registroOffline) {
-      this.aplicarDatosOffline(registroOffline);
+      await this.cargarEmbarquesRelacionadosOffline(embarqueId, registroOffline);
       await this.precargarCostos();
       this.$nextTick(() => {
         this.calcularGanancias();
@@ -460,7 +460,7 @@ export default {
     const registroOffline = await EmbarquesOfflineService.getById(embarqueId).catch(() => null);
 
     if (!navigator.onLine && registroOffline) {
-      this.aplicarDatosOffline(registroOffline);
+      await this.cargarEmbarquesRelacionadosOffline(embarqueId, registroOffline);
       await this.precargarCostos();
       this.$nextTick(() => {
         this.calcularGanancias();
@@ -555,25 +555,170 @@ export default {
     aplicarDatosOffline(record) {
       const docData = record?.docData ? this.deepClone(record.docData) : {};
       const clientes = docData.clientes || record?.clientes || [];
-      this.embarqueData = {
+      const embarqueData = {
         ...docData,
         clientes
       };
-      this.nombresMedidasPersonalizados = this.deepClone(docData.nombresMedidasPersonalizados || record?.nombresMedidasPersonalizados || {});
-      this.medidaOculta = this.deepClone(record?.medidaOculta || docData.medidaOculta || {});
-      this.analizarGanancia = this.deepClone(record?.analizarGanancia || docData.analizarGanancia || {});
-      this.analizarGananciaCrudos = this.deepClone(record?.analizarGananciaCrudos || docData.analizarGananciaCrudos || {});
-      this.analizarMaquilaGanancia = this.deepClone(record?.analizarMaquilaGanancia || docData.analizarMaquilaGanancia || {});
-      this.precioMaquila = this.deepClone(record?.precioMaquila || docData.precioMaquila || {});
-      this.pesoTaraCosto = record?.pesoTaraCosto ?? docData.pesoTaraCosto ?? this.pesoTaraCosto;
-      this.pesoTaraVenta = record?.pesoTaraVenta ?? docData.pesoTaraVenta ?? this.pesoTaraVenta;
-      this.kilosCrudos = this.deepClone(record?.kilosCrudos || docData.kilosCrudos || {});
-      if (docData.notaRendimientos) {
-        this.embarqueData.notaRendimientos = docData.notaRendimientos;
-      }
+      this.aplicarEmbarqueCargado(embarqueData);
       this.preciosVenta = this.deepClone(record?.preciosVentaCache || this.preciosVenta || {});
+    },
+    aplicarEmbarqueCargado(embarqueData) {
+      this.embarqueData = embarqueData;
+      this.nombresMedidasPersonalizados = this.deepClone(this.embarqueData.nombresMedidasPersonalizados || {});
       this.obtenerMedidasUnicas();
+      this.medidaOculta = this.embarqueData.medidaOculta || {};
+      this.analizarGanancia = this.embarqueData.analizarGanancia || {};
+      this.analizarGananciaCrudos = this.embarqueData.analizarGananciaCrudos || {};
+      this.aplicarCostoExtra = this.embarqueData.aplicarCostoExtra || {};
+      this.analizarMaquilaGanancia = this.embarqueData.analizarMaquilaGanancia || {};
+      this.precioMaquila = this.embarqueData.precioMaquila || {};
+      this.pesoTaraCosto = this.embarqueData.pesoTaraCosto || 19;
+      this.pesoTaraVenta = this.embarqueData.pesoTaraVenta || 20;
+
+      const kilosCrudosGuardados = this.embarqueData.kilosCrudos || {};
+      this.kilosCrudos = { ...kilosCrudosGuardados };
+
+      this.medidasUnicas.forEach(medida => {
+        if (!this.kilosCrudos[medida]) {
+          if (this.esMedidaMix(medida)) {
+            this.$set(this.kilosCrudos, medida, {
+              medida1: 0,
+              medida2: 0,
+              etiqueta1: 'Kilos en crudo (Medida 1)',
+              etiqueta2: 'Kilos en crudo (Medida 2)'
+            });
+          } else {
+            this.$set(this.kilosCrudos, medida, 0);
+          }
+        }
+      });
+
       this.guardadoAutomaticoActivo = true;
+    },
+    obtenerFechaISODesdeValor(valor) {
+      const fechaNormalizada = this.normalizarFecha(valor);
+      return fechaNormalizada ? this.toLocalYMD(fechaNormalizada) : null;
+    },
+    combinarKilosCrudos(destino, origen) {
+      if (!origen) return;
+      Object.entries(origen).forEach(([medida, valor]) => {
+        const existente = destino[medida];
+        if (valor && typeof valor === 'object' && !Array.isArray(valor)) {
+          const base = existente && typeof existente === 'object' ? { ...existente } : {
+            medida1: 0,
+            medida2: 0,
+            etiqueta1: valor.etiqueta1 || 'Kilos en crudo (Medida 1)',
+            etiqueta2: valor.etiqueta2 || 'Kilos en crudo (Medida 2)'
+          };
+          base.medida1 = Number(base.medida1 || 0) + Number(valor.medida1 || 0);
+          base.medida2 = Number(base.medida2 || 0) + Number(valor.medida2 || 0);
+          base.etiqueta1 = base.etiqueta1 || valor.etiqueta1;
+          base.etiqueta2 = base.etiqueta2 || valor.etiqueta2;
+          destino[medida] = base;
+        } else {
+          const suma = Number(existente || 0) + Number(valor || 0);
+          destino[medida] = suma;
+        }
+      });
+    },
+    combinarEmbarquesPorFecha(embarques, embarqueIdPrincipal) {
+      if (!Array.isArray(embarques) || embarques.length === 0) {
+        return null;
+      }
+
+      const principal = embarques.find(item => item.id === embarqueIdPrincipal) || embarques[0];
+      const combinado = this.deepClone(principal.data || {});
+      combinado.clientes = Array.isArray(combinado.clientes) ? combinado.clientes : [];
+      combinado.kilosCrudos = this.deepClone(combinado.kilosCrudos || {});
+
+      const mergeConfig = (campo, valor) => {
+        if (valor === undefined || valor === null) {
+          return;
+        }
+        if (typeof valor === 'object' && !Array.isArray(valor)) {
+          combinado[campo] = combinado[campo] || {};
+          Object.entries(valor).forEach(([clave, contenido]) => {
+            if (combinado[campo][clave] === undefined) {
+              combinado[campo][clave] = contenido;
+            }
+          });
+          return;
+        }
+        if (combinado[campo] === undefined) {
+          combinado[campo] = valor;
+        }
+      };
+
+      embarques.forEach(item => {
+        if (!item || !item.data || item.id === principal.id) {
+          return;
+        }
+        const data = item.data;
+        const clientes = Array.isArray(data.clientes) ? data.clientes : [];
+        clientes.forEach(cliente => {
+          const clienteId = cliente.id?.toString();
+          const existente = combinado.clientes.find(c => c.id?.toString() === clienteId);
+          if (existente) {
+            const productos = Array.isArray(cliente.productos) ? cliente.productos : [];
+            const crudos = Array.isArray(cliente.crudos) ? cliente.crudos : [];
+            existente.productos = [...(existente.productos || []), ...productos];
+            existente.crudos = [...(existente.crudos || []), ...crudos];
+          } else {
+            combinado.clientes.push(this.deepClone(cliente));
+          }
+        });
+
+        this.combinarKilosCrudos(combinado.kilosCrudos, data.kilosCrudos || {});
+        mergeConfig('nombresMedidasPersonalizados', data.nombresMedidasPersonalizados);
+        mergeConfig('medidaOculta', data.medidaOculta);
+        mergeConfig('analizarGanancia', data.analizarGanancia);
+        mergeConfig('analizarGananciaCrudos', data.analizarGananciaCrudos);
+        mergeConfig('analizarMaquilaGanancia', data.analizarMaquilaGanancia);
+        mergeConfig('precioMaquila', data.precioMaquila);
+        mergeConfig('aplicarCostoExtra', data.aplicarCostoExtra);
+      });
+
+      return combinado;
+    },
+    async cargarEmbarquesRelacionadosOffline(embarqueId, registroOffline = null) {
+      try {
+        await EmbarquesOfflineService.init();
+        const registros = await EmbarquesOfflineService.getAll();
+        const baseRecord = registroOffline || registros.find(r => r.id === embarqueId);
+
+        if (!baseRecord) {
+          return;
+        }
+
+        const fechaBase = baseRecord.docData?.fecha || baseRecord.fecha;
+        const fechaISO = this.obtenerFechaISODesdeValor(fechaBase);
+
+        const relacionados = registros.filter(r => {
+          const fechaRegistro = r.docData?.fecha || r.fecha;
+          return this.obtenerFechaISODesdeValor(fechaRegistro) === fechaISO;
+        });
+
+        const embarques = relacionados.map(record => ({
+          id: record.id,
+          data: record.docData || record
+        }));
+
+        const combinado = this.combinarEmbarquesPorFecha(embarques, embarqueId);
+        if (!combinado) {
+          this.aplicarDatosOffline(baseRecord);
+          return;
+        }
+
+        this.aplicarEmbarqueCargado(combinado);
+        if (baseRecord?.preciosVentaCache && Object.keys(this.preciosVenta).length === 0) {
+          this.preciosVenta = this.deepClone(baseRecord.preciosVentaCache);
+        }
+      } catch (error) {
+        console.error('[Rendimientos] Error al cargar embarques offline relacionados:', error);
+        if (registroOffline) {
+          this.aplicarDatosOffline(registroOffline);
+        }
+      }
     },
     async syncOfflineRendimientos() {
       if (!navigator.onLine) {
@@ -817,7 +962,7 @@ export default {
         if (!navigator.onLine) {
           const registroOffline = await EmbarquesOfflineService.getById(embarqueId).catch(() => null);
           if (registroOffline) {
-            this.aplicarDatosOffline(registroOffline);
+            await this.cargarEmbarquesRelacionadosOffline(embarqueId, registroOffline);
             return;
           }
         }
@@ -825,45 +970,35 @@ export default {
         const embarqueDoc = await getDoc(embarqueRef);
         
         if (embarqueDoc.exists()) {
-          this.embarqueData = embarqueDoc.data();
-          this.nombresMedidasPersonalizados = this.embarqueData.nombresMedidasPersonalizados || {};
-          this.obtenerMedidasUnicas();
-          this.medidaOculta = this.embarqueData.medidaOculta || {};
-          this.analizarGanancia = this.embarqueData.analizarGanancia || {};
-          this.analizarGananciaCrudos = this.embarqueData.analizarGananciaCrudos || {}; // Cargar analizarGananciaCrudos
-          this.aplicarCostoExtra = this.embarqueData.aplicarCostoExtra || {}; // Cargar configuración de costo extra
-          this.analizarMaquilaGanancia = this.embarqueData.analizarMaquilaGanancia || {};
-          this.precioMaquila = this.embarqueData.precioMaquila || {};
-          
-          // Cargar configuración de pesos
-          this.pesoTaraCosto = this.embarqueData.pesoTaraCosto || 19;
-          this.pesoTaraVenta = this.embarqueData.pesoTaraVenta || 20;
-          
-          const kilosCrudosGuardados = this.embarqueData.kilosCrudos || {};
-          this.kilosCrudos = { ...kilosCrudosGuardados };
-          
-          this.medidasUnicas.forEach(medida => {
-            if (!this.kilosCrudos[medida]) {
-              if (this.esMedidaMix(medida)) {
-                this.$set(this.kilosCrudos, medida, {
-                  medida1: 0,
-                  medida2: 0,
-                  etiqueta1: 'Kilos en crudo (Medida 1)',
-                  etiqueta2: 'Kilos en crudo (Medida 2)'
-                });
-              } else {
-                this.$set(this.kilosCrudos, medida, 0);
+          const embarqueBase = embarqueDoc.data();
+          const fechaISO = this.obtenerFechaISODesdeValor(embarqueBase.fecha);
+          const embarquesRelacionados = [{ id: embarqueId, data: embarqueBase }];
+
+          try {
+            const embarquesRef = collection(db, 'embarques');
+            const snapshot = await getDocs(embarquesRef);
+
+            snapshot.docs.forEach(docSnap => {
+              if (docSnap.id === embarqueId) {
+                return;
               }
-            }
-          });
-          
-          this.guardadoAutomaticoActivo = true;
+              const data = docSnap.data();
+              if (this.obtenerFechaISODesdeValor(data.fecha) === fechaISO) {
+                embarquesRelacionados.push({ id: docSnap.id, data });
+              }
+            });
+          } catch (error) {
+            console.warn('[Rendimientos] No se pudieron cargar embarques relacionados:', error);
+          }
+
+          const combinado = this.combinarEmbarquesPorFecha(embarquesRelacionados, embarqueId);
+          this.aplicarEmbarqueCargado(combinado || embarqueBase);
 
           await EmbarquesOfflineService.mergeSave(embarqueId, existing => {
             const record = {
               ...(existing || {}),
               id: embarqueId,
-              docData: this.deepClone(this.embarqueData)
+              docData: this.deepClone(embarqueBase)
             };
             return {
               record,

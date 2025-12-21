@@ -304,6 +304,7 @@ export default {
       embarque: {
         fecha: null,
         cargaCon: '',
+        camionNumero: 1,
         productos: [],
         crudos: []
       },
@@ -1313,6 +1314,57 @@ export default {
       this.nuevoClienteId = '';
     },
 
+    async obtenerCamionNumeroParaFecha(fechaISO) {
+      if (!fechaISO) {
+        return 1;
+      }
+
+      try {
+        if (!navigator.onLine) {
+          await EmbarquesOfflineService.init();
+          const registrosLocales = await EmbarquesOfflineService.getAll();
+          const totalLocales = registrosLocales.filter(registro => {
+            if (!registro || !registro.fecha) {
+              return false;
+            }
+            try {
+              const registroISO = new Date(registro.fecha).toISOString().split('T')[0];
+              return registroISO === fechaISO;
+            } catch (_) {
+              return false;
+            }
+          }).length;
+          return totalLocales + 1;
+        }
+
+        const db = getFirestore();
+        const embarquesRef = collection(db, 'embarques');
+        const snapshot = await getDocs(embarquesRef);
+        const totalRemotos = snapshot.docs.filter(doc => {
+          const data = doc.data();
+          let fechaEmbarque;
+
+          if (data.fecha && typeof data.fecha.toDate === 'function') {
+            fechaEmbarque = data.fecha.toDate();
+          } else if (data.fecha instanceof Date) {
+            fechaEmbarque = data.fecha;
+          } else if (typeof data.fecha === 'string') {
+            fechaEmbarque = new Date(data.fecha);
+          } else {
+            return false;
+          }
+
+          const fechaEmbarqueISO = fechaEmbarque.toISOString().split('T')[0];
+          return fechaEmbarqueISO === fechaISO;
+        }).length;
+
+        return totalRemotos + 1;
+      } catch (error) {
+        console.warn('[obtenerCamionNumeroParaFecha] Error al calcular camión, usando 1:', error);
+        return 1;
+      }
+    },
+
     async guardarEmbarqueInicial(clienteId) {
       // Verificar si hay algún modal abierto
       const modalAbierto = this.mostrarModalPrecio || 
@@ -1350,29 +1402,12 @@ export default {
         if (!this.embarqueId) {
           const fechaSeleccionada = new Date(this.embarque.fecha);
           const fechaISO = fechaSeleccionada.toISOString().split('T')[0];
+          this.embarque.camionNumero = await this.obtenerCamionNumeroParaFecha(fechaISO);
           const embarqueData = this.prepararDatosEmbarque();
 
           if (!navigator.onLine) {
             try {
               await EmbarquesOfflineService.init();
-              const registrosLocales = await EmbarquesOfflineService.getAll();
-              const existeOffline = registrosLocales.some(registro => {
-                if (!registro || !registro.fecha) {
-                  return false;
-                }
-                try {
-                  const registroISO = new Date(registro.fecha).toISOString().split('T')[0];
-                  return registroISO === fechaISO && registro.id !== this.embarqueId;
-                } catch (_) {
-                  return false;
-                }
-              });
-
-              if (existeOffline) {
-                alert('Ya existe un embarque guardado offline para la fecha seleccionada. Por favor, seleccione otra fecha.');
-                this._creandoEmbarque = false;
-                return null;
-              }
 
               this.embarqueId = uuidv4();
               this.modoEdicion = true;
@@ -1395,33 +1430,6 @@ export default {
 
           const db = getFirestore();
           try {
-            const embarquesRef = collection(db, 'embarques');
-            const snapshot = await getDocs(embarquesRef);
-
-            const embarquesConMismaFecha = snapshot.docs.filter(doc => {
-              const data = doc.data();
-              let fechaEmbarque;
-
-              if (data.fecha && typeof data.fecha.toDate === 'function') {
-                fechaEmbarque = data.fecha.toDate();
-              } else if (data.fecha instanceof Date) {
-                fechaEmbarque = data.fecha;
-              } else if (typeof data.fecha === 'string') {
-                fechaEmbarque = new Date(data.fecha);
-              } else {
-                return false;
-              }
-
-              const fechaEmbarqueISO = fechaEmbarque.toISOString().split('T')[0];
-              return fechaEmbarqueISO === fechaISO && doc.id !== this.embarqueId;
-            });
-
-            if (embarquesConMismaFecha.length > 0) {
-              alert('Ya existe un embarque para la fecha seleccionada. Por favor, seleccione otra fecha.');
-              this._creandoEmbarque = false;
-              return null;
-            }
-
             const reservaRef = doc(db, 'reservas_fechas', fechaISO);
             await setDoc(reservaRef, {
               fecha: fechaISO,
@@ -1846,6 +1854,7 @@ export default {
           this.embarque = {
             fecha: fecha.toISOString().split('T')[0],
             cargaCon: data.cargaCon || '', // Cargamos el valor de cargaCon
+            camionNumero: data.camionNumero || 1,
             productos: productosFinales,
             // Agregar los kilos crudos
             kilosCrudos: data.kilosCrudos || {}
@@ -1971,95 +1980,14 @@ export default {
       
       try {
         const db = getFirestore();
-        const embarquesRef = collection(db, "embarques");
-        const snapshot = await getDocs(embarquesRef);
-        
-        // Primero verificar si hay duplicados y eliminarlos
-        // Agrupar embarques por fecha para detectar duplicados
-        const embarquesPorFecha = {};
-        snapshot.docs.forEach(doc => {
-          const data = doc.data();
-          let fechaEmbarque;
-          
-          // Manejar diferentes formatos de fecha
-          if (data.fecha && typeof data.fecha.toDate === 'function') {
-            fechaEmbarque = data.fecha.toDate();
-          } else if (data.fecha instanceof Date) {
-            fechaEmbarque = data.fecha;
-          } else if (typeof data.fecha === 'string') {
-            fechaEmbarque = new Date(data.fecha);
-          } else {
-            return;
-          }
-          
-          const fechaISO = fechaEmbarque.toISOString().split('T')[0];
-          
-          if (!embarquesPorFecha[fechaISO]) {
-            embarquesPorFecha[fechaISO] = [];
-          }
-          
-          embarquesPorFecha[fechaISO].push({
-            id: doc.id,
-            fecha: fechaISO,
-            data: doc.data()
-          });
-        });
-        
-        // Verificar si ya existe un embarque con la fecha actual
-        const embarquesConMismaFecha = embarquesPorFecha[fechaActual] || [];
-        
-        // Inicializar el embarque con la fecha actual o encontrar la siguiente fecha disponible
-        let fechaEmbarque = fechaActual;
-        
-        if (embarquesConMismaFecha.length > 0) {
-          // Si ya existe un embarque con la fecha actual, buscar la próxima fecha disponible
-          let fechaTentativa = new Date(fechaActual);
-          let fechaDisponible = false;
-          
-          // Probar con las siguientes 7 fechas
-          for (let i = 1; i <= 7 && !fechaDisponible; i++) {
-            fechaTentativa.setDate(fechaTentativa.getDate() + 1);
-            const fechaTentativaISO = fechaTentativa.toISOString().split('T')[0];
-            
-            // Verificar si esta fecha tentativa ya está ocupada
-            if (!embarquesPorFecha[fechaTentativaISO] || embarquesPorFecha[fechaTentativaISO].length === 0) {
-              fechaDisponible = true;
-              fechaEmbarque = fechaTentativaISO;
-            }
-          }
-          
-          if (!fechaDisponible) {
-            // Si no se encontró una fecha disponible, mostrar mensaje y usar la fecha actual de todos modos
-            
-            // No crear automáticamente un embarque, dejar que el usuario seleccione otra fecha
-            this.embarque = {
-              fecha: fechaActual, // Usar la fecha actual pero no crear automáticamente
-              cargaCon: '',
-              productos: [],
-            };
-            this.clientesJuntarMedidas = {};
-            this.clientesReglaOtilio = {};
-            this.clientesIncluirPrecios = {};
-            this.embarqueId = null;
-            this.modoEdicion = false;
-            this.guardadoAutomaticoActivo = false;
-            this.embarqueBloqueado = false;
-            this.clientesPersonalizados = [];
-            
-            
-            // Informar al usuario si no se trata de una recarga
-            if (!esRecargaPagina) {
-              alert(`Ya existe un embarque para hoy y los próximos días. Por favor, seleccione manually una fecha diferente.`);
-            }
-            return;
-          }
-        }
+        const fechaEmbarque = fechaActual;
         
         // --- INICIO: Refactorización creación inicial ---
         // 1. Inicializar el embarque con la fecha disponible y arrays vacíos
         this.embarque = {
           fecha: fechaEmbarque,
           cargaCon: '',
+          camionNumero: 1,
           productos: [], // Empezar vacío
           crudos: []
         };
@@ -2128,31 +2056,7 @@ export default {
             this._guardandoInicial = true; // <- Establecer bandera ANTES del async
             this.$nextTick(async () => {
                 try {
-                    // Doble verificación de fecha antes de guardar
-                    const verificacionRef = collection(db, "embarques");
-                    const verificacionSnapshot = await getDocs(verificacionRef);
-                    const existeEmbarqueConFecha = verificacionSnapshot.docs.some(doc => {
-                        const data = doc.data();
-                        let fechaDoc;
-                        if (data.fecha && typeof data.fecha.toDate === 'function') {
-                            fechaDoc = data.fecha.toDate();
-                        } else if (data.fecha instanceof Date) {
-                            fechaDoc = data.fecha;
-                        } else if (typeof data.fecha === 'string') {
-                            fechaDoc = new Date(data.fecha);
-                        } else {
-                            return false;
-                        }
-                        const fechaDocISO = fechaDoc.toISOString().split('T')[0];
-                        return fechaDocISO === this.embarque.fecha;
-                    });
-
-                    if (existeEmbarqueConFecha) {
-                        // No mostramos alerta aquí, el usuario puede cambiar la fecha y guardar manually
-                        this._guardandoInicial = false;
-                        return; // Salir sin guardar si la fecha ya existe
-                    }
-                    
+                    this.embarque.camionNumero = await this.obtenerCamionNumeroParaFecha(this.embarque.fecha);
                     const embarqueData = this.prepararDatosEmbarque();
                     const docRef = await addDoc(collection(db, "embarques"), embarqueData);
                     this.embarqueId = docRef.id;
@@ -2173,6 +2077,7 @@ export default {
         this.embarque = {
           fecha: fechaActual,
           cargaCon: '',
+          camionNumero: 1,
           productos: [],
         };
         this.clientesJuntarMedidas = {};
@@ -2219,6 +2124,7 @@ export default {
         id: this.embarqueId,
         fecha: docData?.fecha || this.embarque.fecha || null,
         cargaCon: docData?.cargaCon || this.embarque.cargaCon || '',
+        camionNumero: docData?.camionNumero || this.embarque.camionNumero || 1,
         embarqueBloqueado: this.embarqueBloqueado || false,
         productos: safeClone(this.embarque.productos || [], []),
         clienteCrudos: safeClone(this.clienteCrudos || {}, {}),
@@ -2302,6 +2208,7 @@ export default {
       this.embarque = {
         fecha: record.fecha || null,
         cargaCon: record.cargaCon || '',
+        camionNumero: record.camionNumero || record.docData?.camionNumero || 1,
         productos: safeClone(record.productos || [], []),
       };
 
@@ -2400,6 +2307,7 @@ export default {
 
       const data = {
         cargaCon: dataCruda.cargaCon || '',
+        camionNumero: dataCruda.camionNumero || record.camionNumero || 1,
         clientes: Array.isArray(dataCruda.clientes) ? dataCruda.clientes : [],
         clientesJuntarMedidas: dataCruda.clientesJuntarMedidas || {},
         clientesReglaOtilio: dataCruda.clientesReglaOtilio || {},
@@ -2698,6 +2606,11 @@ export default {
       
       this._guardandoEmbarque = true;
 
+      if (!this.modoEdicion) {
+        const fechaISO = new Date(this.embarque.fecha).toISOString().split('T')[0];
+        this.embarque.camionNumero = await this.obtenerCamionNumeroParaFecha(fechaISO);
+      }
+
       if (!this.embarqueId) {
         this.embarqueId = uuidv4();
         this.modoEdicion = true;
@@ -2745,44 +2658,10 @@ export default {
           this.mostrarMensaje('Embarque actualizado exitosamente.');
           this._guardandoEmbarque = false;
         } else {
-          // Verificar primero si ya existe un embarque con la misma fecha
           const fechaSeleccionada = new Date(this.embarque.fecha);
           
           // Convertir a formato ISO para comparación (solo el año, mes y día)
           const fechaISO = fechaSeleccionada.toISOString().split('T')[0];
-          
-          // Obtener todos los embarques
-          const embarquesRef = collection(db, "embarques");
-          const snapshot = await getDocs(embarquesRef);
-          
-          // Buscar si ya existe un embarque con esta fecha
-          const embarquesConMismaFecha = snapshot.docs.filter(doc => {
-            const data = doc.data();
-            let fechaEmbarque;
-            
-            // Manejar diferentes formatos de fecha
-            if (data.fecha && typeof data.fecha.toDate === 'function') {
-              fechaEmbarque = data.fecha.toDate();
-            } else if (data.fecha instanceof Date) {
-              fechaEmbarque = data.fecha;
-            } else if (typeof data.fecha === 'string') {
-              fechaEmbarque = new Date(data.fecha);
-            } else {
-              return false;
-            }
-            
-            // Convertir a formato ISO para comparar solo año, mes y día
-            const fechaEmbarqueISO = fechaEmbarque.toISOString().split('T')[0];
-            
-            // Comparar las fechas en formato ISO
-            return fechaEmbarqueISO === fechaISO;
-          });
-          
-          if (embarquesConMismaFecha.length > 0) {
-            alert('Ya existe un embarque para la fecha seleccionada. Por favor, seleccione otra fecha.');
-            this._guardandoEmbarque = false;
-            return;
-          }
           
           // Crear una "reserva" para esta fecha para evitar condiciones de carrera
           const reservaRef = doc(db, "reservas_fechas", fechaISO);
@@ -2853,6 +2732,7 @@ export default {
       const embarqueData = {
         fecha: this.embarque.fecha, // Guardar como string YYYY-MM-DD para evitar problemas de zona horaria
         cargaCon: this.embarque.cargaCon,
+        camionNumero: this.embarque.camionNumero || 1,
         clientes: [],
         clientesJuntarMedidas: this.clientesJuntarMedidas,
         clientesReglaOtilio: this.clientesReglaOtilio,
@@ -4073,49 +3953,7 @@ export default {
       }
 
       try {
-        const db = getFirestore();
-        
-        // Convertir la nueva fecha para consistencia en la comparación
-        const fechaSeleccionada = new Date(nuevaFecha);
-        const fechaISO = fechaSeleccionada.toISOString().split('T')[0];
-        
-        // Obtener todos los embarques
-        const embarquesRef = collection(db, "embarques");
-        const snapshot = await getDocs(embarquesRef);
-        
-        // Buscar si ya existe un embarque con esta fecha
-        const embarquesConMismaFecha = snapshot.docs.filter(doc => {
-          // No incluir el embarque actual en la comparación
-          if (this.embarqueId && doc.id === this.embarqueId) {
-            return false;
-          }
-          
-          const data = doc.data();
-          let fechaEmbarque;
-          
-          // Manejar diferentes formatos de fecha
-          if (data.fecha && typeof data.fecha.toDate === 'function') {
-            fechaEmbarque = data.fecha.toDate();
-          } else if (data.fecha instanceof Date) {
-            fechaEmbarque = data.fecha;
-          } else if (typeof data.fecha === 'string') {
-            fechaEmbarque = new Date(data.fecha);
-          } else {
-            return false;
-          }
-          
-          // Convertir a formato ISO para comparar solo año, mes y día
-          const fechaEmbarqueISO = fechaEmbarque.toISOString().split('T')[0];
-          
-          // Comparar las fechas en formato ISO
-          return fechaEmbarqueISO === fechaISO;
-        });
-        
-        if (embarquesConMismaFecha.length > 0) {
-          alert('Ya existe un embarque para la fecha seleccionada. Por favor, seleccione otra fecha.');
-          return;
-        }
-        
+        const fechaISO = new Date(nuevaFecha).toISOString().split('T')[0];
         // Guardar el ID del embarque actual antes de cambiar la fecha
         // Esto es crucial para recargas de página
         if (this.embarqueId) {
@@ -4124,6 +3962,7 @@ export default {
         
         // Si no existe un embarque con la misma fecha, actualizar la fecha
         this.embarque.fecha = nuevaFecha;
+        this.embarque.camionNumero = await this.obtenerCamionNumeroParaFecha(fechaISO);
         
         // Si estamos en modo edición, guardar los cambios inmediatamente
         if (this.modoEdicion && this.embarqueId) {

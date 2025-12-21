@@ -66,6 +66,9 @@
             <div class="fecha-section">
               <span class="fecha-label">DATE:</span>
               <span class="fecha-value">{{ formatearFecha(embarque.fecha) }}</span>
+              <span v-if="embarque.camionNumero && embarque.camionNumero > 1" class="camion-badge">
+                (Camion {{ embarque.camionNumero }})
+              </span>
             </div>
             <div class="status-section">
               <span v-if="embarque.noEnviadoMexico" class="status-badge status-warning">
@@ -225,8 +228,37 @@ export default {
         noEnviadoMexico: Boolean(record.noEnviadoMexico),
         clientes: record.clientes || [],
         cargaCon: record.cargaCon || 'No especificado',
+        camionNumero: record.camionNumero || record.docData?.camionNumero || 1,
         pendingSync: Boolean(record.pendingSync),
       };
+    },
+
+    asignarCamionNumero(embarques) {
+      const contadorPorFecha = {};
+
+      return embarques.map((embarque) => {
+        let fechaObj = embarque.fecha;
+        if (fechaObj && !(fechaObj instanceof Date)) {
+          const parsed = new Date(fechaObj);
+          fechaObj = Number.isNaN(parsed.getTime()) ? null : parsed;
+        }
+
+        const fechaISO = fechaObj ? fechaObj.toISOString().split('T')[0] : null;
+        const camionExistente = embarque.camionNumero;
+        const camionNumero = camionExistente || (fechaISO
+          ? (contadorPorFecha[fechaISO] = (contadorPorFecha[fechaISO] || 0) + 1)
+          : 1);
+
+        if (fechaISO) {
+          const actual = contadorPorFecha[fechaISO] || 0;
+          contadorPorFecha[fechaISO] = Math.max(actual, camionNumero);
+        }
+
+        return {
+          ...embarque,
+          camionNumero
+        };
+      });
     },
 
     construirSnapshotOfflineDesdeRemoto(docId, data, fecha) {
@@ -254,6 +286,7 @@ export default {
         id: docId,
         fecha: fecha ? fecha.toISOString() : null,
         cargaCon: data.cargaCon || '',
+        camionNumero: data.camionNumero || 1,
         embarqueBloqueado: data.embarqueBloqueado || false,
         noEnviadoMexico: data.noEnviadoMexico || false,
         clientesPersonalizados: data.clientesPersonalizados || [],
@@ -309,6 +342,7 @@ export default {
       const payload = {
         fecha: parseFecha(pick('fecha', null)),
         cargaCon: pick('cargaCon', ''),
+        camionNumero: pick('camionNumero', 1),
         clientes: Array.isArray(pick('clientes', [])) ? pick('clientes', []).map(cliente => ({
           ...cliente,
           productos: Array.isArray(cliente.productos) ? cliente.productos.map(producto => ({
@@ -401,10 +435,11 @@ export default {
         try {
           const registrosOffline = await EmbarquesOfflineService.getAll();
           if (Array.isArray(registrosOffline) && registrosOffline.length > 0) {
-            this.embarques = registrosOffline
+            const embarquesOrdenados = registrosOffline
               .map(this.mapOfflineRecordToLista)
               .filter(Boolean)
               .sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+            this.embarques = this.asignarCamionNumero(embarquesOrdenados);
           } else {
             this.embarques = [];
           }
@@ -425,131 +460,56 @@ export default {
         const embarquesRef = collection(db, 'embarques');
         const snapshot = await getDocs(embarquesRef);
 
-        const embarquesPorFecha = {};
-
-        snapshot.docs.forEach(docSnap => {
+        const embarquesProcesados = snapshot.docs.map(docSnap => {
           const data = docSnap.data();
-          let fechaEmbarque;
+          let fechaEmbarque = null;
 
           if (data.fecha && typeof data.fecha.toDate === 'function') {
             fechaEmbarque = data.fecha.toDate();
           } else if (data.fecha instanceof Date) {
             fechaEmbarque = data.fecha;
           } else if (typeof data.fecha === 'string') {
-            fechaEmbarque = new Date(data.fecha);
-          } else {
-            embarquesPorFecha[docSnap.id] = [{ id: docSnap.id, data, fecha: null }];
-            return;
+            const parsed = new Date(data.fecha);
+            fechaEmbarque = Number.isNaN(parsed.getTime()) ? null : parsed;
           }
 
-          const fechaISO = fechaEmbarque.toISOString().split('T')[0];
-          if (!embarquesPorFecha[fechaISO]) {
-            embarquesPorFecha[fechaISO] = [];
-          }
+          const fechaISO = fechaEmbarque ? fechaEmbarque.toISOString().split('T')[0] : null;
 
-          embarquesPorFecha[fechaISO].push({
+          return {
             id: docSnap.id,
-            data,
             fecha: fechaEmbarque,
-          });
+            fechaISO,
+            data
+          };
         });
 
-        const embarquesParaEliminar = [];
-
-        for (const fecha in embarquesPorFecha) {
-          if (embarquesPorFecha[fecha].length > 1) {
-            console.log(`[DUPLICADOS] Encontrados ${embarquesPorFecha[fecha].length} embarques para ${fecha}`);
-
-            embarquesPorFecha[fecha].sort((a, b) => {
-              const productosA = a.data.clientes ? a.data.clientes.reduce((sum, cliente) =>
-                sum + (cliente.productos ? cliente.productos.length : 0), 0) : 0;
-
-              const productosB = b.data.clientes ? b.data.clientes.reduce((sum, cliente) =>
-                sum + (cliente.productos ? cliente.productos.length : 0), 0) : 0;
-
-              const crudosA = a.data.clientes ? a.data.clientes.reduce((sum, cliente) =>
-                sum + (cliente.crudos ? cliente.crudos.length : 0), 0) : 0;
-
-              const crudosB = b.data.clientes ? b.data.clientes.reduce((sum, cliente) =>
-                sum + (cliente.crudos ? cliente.crudos.length : 0), 0) : 0;
-
-              const puntajeA = productosA + (crudosA * 2);
-              const puntajeB = productosB + (crudosB * 2);
-
-              return puntajeB - puntajeA;
-            });
-
-            const principal = embarquesPorFecha[fecha][0];
-            const puntajePrincipal = this.calcularPuntajeCompletitud(principal.data);
-
-            for (let i = 1; i < embarquesPorFecha[fecha].length; i++) {
-              const candidato = embarquesPorFecha[fecha][i];
-              const puntajeCandidato = this.calcularPuntajeCompletitud(candidato.data);
-
-              if (puntajePrincipal > puntajeCandidato || puntajeCandidato === 0) {
-                embarquesParaEliminar.push({
-                  id: candidato.id,
-                  data: candidato.data,
-                  razon: `duplicado_inferior_${fecha}`,
-                  puntajePrincipal,
-                  puntajeCandidato,
-                });
-              }
-            }
-          }
-        }
-
-        if (embarquesParaEliminar.length > 0) {
-          console.log(`[RESPALDOS] Creando respaldos para ${embarquesParaEliminar.length} embarques antes de eliminar`);
-
-          for (const embarqueAEliminar of embarquesParaEliminar) {
-            try {
-              await BackupService.crearRespaldoEmergencia(
-                embarqueAEliminar.id,
-                embarqueAEliminar.razon,
-              );
-              console.log(`[RESPALDO] Respaldo creado para embarque ${embarqueAEliminar.id}`);
-            } catch (error) {
-              console.error(`[RESPALDO] Error al crear respaldo para ${embarqueAEliminar.id}:`, error);
-              continue;
-            }
-          }
-
-          for (const embarqueAEliminar of embarquesParaEliminar) {
-            try {
-              await deleteDoc(doc(db, 'embarques', embarqueAEliminar.id));
-              console.log(`[ELIMINACIÓN] Embarque ${embarqueAEliminar.id} eliminado (respaldado)`);
-            } catch (error) {
-              console.error(`[ELIMINACIÓN] Error al eliminar embarque ${embarqueAEliminar.id}:`, error);
-            }
-          }
-
-          if (embarquesParaEliminar.length > 0) {
-            console.log(`[LIMPIEZA] Recargando lista después de eliminar ${embarquesParaEliminar.length} duplicados`);
-            return this.cargarEmbarques();
-          }
-        }
+        const embarquesOrdenados = embarquesProcesados.sort((a, b) => {
+          if (!a.fecha && !b.fecha) return 0;
+          if (!a.fecha) return 1;
+          if (!b.fecha) return -1;
+          return new Date(b.fecha) - new Date(a.fecha);
+        });
 
         const embarquesFiltrados = [];
 
-        for (const fecha in embarquesPorFecha) {
-          const embarque = embarquesPorFecha[fecha][0];
+        for (const embarque of embarquesOrdenados) {
           const fechaObj = embarque.fecha instanceof Date ? embarque.fecha : (embarque.fecha ? new Date(embarque.fecha) : new Date());
+          const snapshotOffline = this.construirSnapshotOfflineDesdeRemoto(embarque.id, embarque.data, fechaObj);
+          await EmbarquesOfflineService.save(snapshotOffline, { pendingSync: false, syncState: 'synced' });
 
           embarquesFiltrados.push({
             id: embarque.id,
             fecha: fechaObj,
+            fechaISO: embarque.fechaISO,
             embarqueBloqueado: embarque.data.embarqueBloqueado || false,
             noEnviadoMexico: embarque.data.noEnviadoMexico || false,
             clientes: embarque.data.clientes || [],
             cargaCon: embarque.data.cargaCon || 'No especificado',
+            camionNumero: embarque.data.camionNumero || 1,
           });
-
-          const snapshotOffline = this.construirSnapshotOfflineDesdeRemoto(embarque.id, embarque.data, fechaObj);
-          await EmbarquesOfflineService.save(snapshotOffline, { pendingSync: false, syncState: 'synced' });
         }
 
-        this.embarques = embarquesFiltrados.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+        this.embarques = this.asignarCamionNumero(embarquesFiltrados);
       } catch (error) {
         console.error('Error al cargar embarques:', error);
         if (this.embarques.length === 0) {
@@ -1300,6 +1260,16 @@ export default {
     0 0 30px rgba(255, 176, 0, 0.3);
   letter-spacing: 2px;
   animation: fecha-glow 2s ease-in-out infinite alternate;
+}
+
+.camion-badge {
+  font-size: 1rem;
+  color: var(--matrix-green);
+  background: rgba(0, 255, 0, 0.08);
+  border: 1px solid var(--matrix-green-dim);
+  padding: 2px 6px;
+  border-radius: 2px;
+  letter-spacing: 1px;
 }
 
 @keyframes fecha-glow {
