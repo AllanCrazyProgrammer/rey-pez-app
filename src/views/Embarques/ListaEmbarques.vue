@@ -385,7 +385,7 @@ export default {
             const embarqueRef = doc(db, 'embarques', record.id);
             const snapshot = await getDoc(embarqueRef);
 
-            if (record.deleted) {
+            if (record.deleted && record.deletedByUser) {
               if (snapshot.exists()) {
                 await deleteDoc(embarqueRef);
               }

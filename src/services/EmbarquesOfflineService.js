@@ -82,7 +82,8 @@ class EmbarquesOfflineService {
       pendingSync: options.pendingSync ?? false,
       syncState: options.syncState || (options.pendingSync ? 'pending' : 'synced'),
       lastSyncError: options.lastSyncError || null,
-      deleted: options.deleted || false,
+      deleted: options.deleted ?? Boolean(embarque.deleted),
+      deletedByUser: options.deletedByUser ?? Boolean(embarque.deletedByUser),
     };
   }
 
@@ -184,6 +185,7 @@ class EmbarquesOfflineService {
     const record = {
       ...existing,
       deleted: true,
+      deletedByUser: true,
       pendingSync: options.pendingSync ?? true,
       syncState: options.syncState || 'pending-delete',
       updatedAt: Date.now(),

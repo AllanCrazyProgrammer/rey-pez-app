@@ -2356,7 +2356,7 @@ export default {
 
         const snapshot = await getDoc(embarqueRef);
 
-        if (record.deleted) {
+        if (record.deleted && record.deletedByUser) {
           if (snapshot.exists()) {
             await deleteDoc(embarqueRef);
           }
