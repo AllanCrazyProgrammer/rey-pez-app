@@ -2463,6 +2463,7 @@ export default {
       this.$emit('guardado-automatico');
       return Promise.resolve();
     },
+    },
 
     async guardarEmbarque() {
       if (!this.embarque.fecha) {
@@ -4028,6 +4029,7 @@ export default {
     },
 
     async onPrecioAgregado(nuevoPrecio) {
+      // Recargar precios actuales para que ProductoItem.vue tenga los datos más recientes
       await this.cargarPreciosActuales();
     }
   },
