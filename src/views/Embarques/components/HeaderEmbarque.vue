@@ -44,10 +44,15 @@
         <span v-if="isGeneratingPdf && pdfType === 'resumen'" class="loader-inline"></span>
         <i v-else class="fas fa-file-pdf"></i> Resumen Embarque
       </button>
-      <router-link v-if="embarqueId && embarqueId !== ''" :to="{ name: 'Rendimientos', params: { id: embarqueId } }" class="btn btn-warning"
-        :class="{ 'disabled': isGeneratingPdf }">
+      <button 
+        v-if="embarqueId && embarqueId !== ''" 
+        class="btn btn-warning"
+        :class="{ 'disabled': isGeneratingPdf }"
+        :disabled="isGeneratingPdf"
+        @click="$emit('abrir-rendimientos')"
+      >
         <i class="fas fa-chart-line"></i> Rendimientos
-      </router-link>
+      </button>
       <precios-historial-modal 
         :clienteActual="clienteEmbarque"
         @precio-agregado="onPrecioAgregado">
