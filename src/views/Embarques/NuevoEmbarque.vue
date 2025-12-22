@@ -35,6 +35,7 @@
         @precio-agregado="onPrecioAgregado"
         @generar-esqueleto="aplicarEsqueletoDesdePedido"
         @esqueleto-error="onEsqueletoError"
+        @abrir-rendimientos="irARendimientos"
       />
 
       <!-- Slider de escala para el resumen PDF -->
@@ -3606,6 +3607,32 @@ export default {
     volverAEmbarquesMenu() {
       // Navegar de vuelta al menú de embarques
       this.$router.push({ name: 'EmbarquesMenu' });
+    },
+
+    // Guardar antes de abrir la vista de rendimientos
+    async irARendimientos() {
+      try {
+        // Asegurar que el embarque tenga ID
+        if (!this.embarqueId) {
+          const nuevoId = await this.guardarEmbarqueInicial();
+          if (!nuevoId) {
+            alert('Primero guarda el embarque antes de ver los rendimientos.');
+            return;
+          }
+          this.embarqueId = nuevoId;
+        }
+
+        // Guardar cambios pendientes localmente y sincronizar
+        await this.guardarCambiosEnTiempoReal(true, { immediate: true });
+        if (this.hasPendingChanges) {
+          await this.sincronizarConNube();
+        }
+
+        this.$router.push({ name: 'Rendimientos', params: { id: this.embarqueId } });
+      } catch (error) {
+        console.error('[Rendimientos] Error al guardar antes de navegar:', error);
+        alert('No se pudo guardar el embarque antes de abrir Rendimientos. Intenta de nuevo.');
+      }
     },
 
     // Métodos para calcular valores totales
