@@ -46,6 +46,18 @@ export const formatearFecha = (fecha) => {
   else if (fecha instanceof Date) {
     fechaObj = fecha;
   }
+  // Si es un objeto tipo Timestamp serializado
+  else if (typeof fecha === 'object') {
+    if (typeof fecha.seconds === 'number') {
+      fechaObj = new Date(fecha.seconds * 1000);
+    } else if (typeof fecha._seconds === 'number') {
+      fechaObj = new Date(fecha._seconds * 1000);
+    }
+  }
+
+  if (!fechaObj) {
+    return 'Sin fecha';
+  }
   
   // Verificar si la fecha es válida
   if (isNaN(fechaObj.getTime())) {

@@ -621,6 +621,30 @@ export default {
         }
       });
     },
+    fusionarKilosCrudosSiVacio(destino, origen) {
+      if (!origen) return;
+      Object.entries(origen).forEach(([medida, valor]) => {
+        const existente = destino[medida];
+        if (valor && typeof valor === 'object' && !Array.isArray(valor)) {
+          const base = existente && typeof existente === 'object' ? { ...existente } : null;
+          if (base && (Number(base.medida1 || 0) > 0 || Number(base.medida2 || 0) > 0)) {
+            return;
+          }
+          destino[medida] = {
+            medida1: Number(valor.medida1 || 0),
+            medida2: Number(valor.medida2 || 0),
+            etiqueta1: valor.etiqueta1 || 'Kilos en crudo (Medida 1)',
+            etiqueta2: valor.etiqueta2 || 'Kilos en crudo (Medida 2)'
+          };
+          return;
+        }
+
+        if (Number(existente || 0) > 0) {
+          return;
+        }
+        destino[medida] = Number(valor || 0);
+      });
+    },
     combinarEmbarquesPorFecha(embarques, embarqueIdPrincipal) {
       if (!Array.isArray(embarques) || embarques.length === 0) {
         return null;
@@ -668,7 +692,6 @@ export default {
           }
         });
 
-        this.combinarKilosCrudos(combinado.kilosCrudos, data.kilosCrudos || {});
         mergeConfig('nombresMedidasPersonalizados', data.nombresMedidasPersonalizados);
         mergeConfig('medidaOculta', data.medidaOculta);
         mergeConfig('analizarGanancia', data.analizarGanancia);

@@ -361,7 +361,7 @@ export default {
         const embarquesRef = collection(db, 'embarques');
         const embarquesSnapshot = await getDocs(embarquesRef);
         
-        const fletesData = embarquesSnapshot.docs
+        const fletesBase = embarquesSnapshot.docs
           .map(doc => {
             const data = doc.data();
             
@@ -544,10 +544,51 @@ export default {
             }
             return null;
           })
-          .filter(flete => flete !== null)
+          .filter(flete => flete !== null);
+
+        const obtenerFechaISO = (fecha) => {
+          if (!fecha) return '';
+          const fechaObj = fecha instanceof Date ? fecha : new Date(fecha);
+          if (Number.isNaN(fechaObj.getTime())) return '';
+          return fechaObj.toISOString().split('T')[0];
+        };
+
+        const fletesAgrupados = new Map();
+        fletesBase.forEach(flete => {
+          const fechaISO = obtenerFechaISO(flete.fecha);
+          const cargaCon = flete.cargaCon || 'No especificado';
+          const key = `${fechaISO}__${cargaCon}`;
+          const existente = fletesAgrupados.get(key);
+
+          if (!existente) {
+            fletesAgrupados.set(key, {
+              id: key,
+              ids: [flete.id],
+              fecha: flete.fecha,
+              tarasLimpioJoselito: flete.tarasLimpioJoselito,
+              tarasCrudoJoselito: flete.tarasCrudoJoselito,
+              tarasLimpioVeronica: flete.tarasLimpioVeronica,
+              tarasCrudoVeronica: flete.tarasCrudoVeronica,
+              cargaCon,
+              pagado: flete.pagado
+            });
+            return;
+          }
+
+          existente.ids.push(flete.id);
+          existente.tarasLimpioJoselito += flete.tarasLimpioJoselito;
+          existente.tarasCrudoJoselito += flete.tarasCrudoJoselito;
+          existente.tarasLimpioVeronica += flete.tarasLimpioVeronica;
+          existente.tarasCrudoVeronica += flete.tarasCrudoVeronica;
+          existente.pagado = existente.pagado && flete.pagado;
+        });
+
+        this.fletes = Array.from(fletesAgrupados.values())
+          .map(flete => ({
+            ...flete,
+            id: flete.ids.length === 1 ? flete.ids[0] : flete.id
+          }))
           .sort((a, b) => b.fecha - a.fecha);
-        
-        this.fletes = fletesData;
 
         // Cargar abonos
         const abonosRef = collection(db, 'abonos');
@@ -610,17 +651,18 @@ export default {
     async togglePago(flete) {
       try {
         const db = getFirestore();
-        const embarqueRef = doc(db, 'embarques', flete.id);
-        
-        // Actualizar en Firestore
-        await updateDoc(embarqueRef, {
-          fletePagado: !flete.pagado
-        });
+        const ids = Array.isArray(flete.ids) && flete.ids.length > 0 ? flete.ids : [flete.id];
+        const nuevoEstado = !flete.pagado;
+
+        await Promise.all(ids.map(id => {
+          const embarqueRef = doc(db, 'embarques', id);
+          return updateDoc(embarqueRef, { fletePagado: nuevoEstado });
+        }));
         
         // Actualizar el estado local
         const fleteLocal = this.fletes.find(f => f.id === flete.id);
         if (fleteLocal) {
-          fleteLocal.pagado = !fleteLocal.pagado;
+          fleteLocal.pagado = nuevoEstado;
         }
       } catch (error) {
         console.error('Error al actualizar el estado de pago:', error);
