@@ -16,6 +16,17 @@
     </div>
 
     <div class="botones-accion">
+      <button 
+        v-if="hasPendingChanges || isSyncing"
+        @click="$emit('sync-manual')" 
+        class="btn" 
+        :class="isSyncing ? 'btn-secondary' : 'btn-primary'"
+        :disabled="isSyncing"
+        title="Guardar cambios en la nube"
+      >
+        <i class="fas" :class="isSyncing ? 'fa-spinner fa-spin' : 'fa-cloud-upload-alt'"></i>
+        {{ isSyncing ? 'Subiendo...' : 'Subir Cambios' }}
+      </button>
       <button @click="verPedidoDelDia" class="btn btn-success" title="Ver pedido del día de hoy">
         <i class="fas fa-clipboard-list"></i> Pedido del Día
       </button>
@@ -114,6 +125,14 @@ export default {
     clienteEmbarque: {
       type: String,
       default: ''
+    },
+    hasPendingChanges: {
+      type: Boolean,
+      default: false
+    },
+    isSyncing: {
+      type: Boolean,
+      default: false
     }
   },
   data() {
