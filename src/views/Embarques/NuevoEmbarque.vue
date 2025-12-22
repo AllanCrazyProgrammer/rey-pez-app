@@ -1889,13 +1889,21 @@ export default {
             this._aplicandoRemoto = false;
           });
         } else {
-          // Si el embarque no existe, limpiar localStorage y reiniciar estado
-          localStorage.removeItem('embarque');
-          localStorage.removeItem('ultimoEmbarqueId');
-          localStorage.removeItem('ultimaRuta');
-          // Opcional : localStorage.removeItem('clientesPersonalizados');
-          alert('El embarque no existe o está corrupto. Se reiniciará el formulario para evitar errores.');
-          this.resetearEmbarque();
+          this.cargarEmbarqueOffline(id).then((cargadoOffline) => {
+            if (cargadoOffline) {
+              this._inicializandoEmbarque = false;
+              this._aplicandoRemoto = false;
+              return;
+            }
+
+            // Si el embarque no existe, limpiar localStorage y reiniciar estado
+            localStorage.removeItem('embarque');
+            localStorage.removeItem('ultimoEmbarqueId');
+            localStorage.removeItem('ultimaRuta');
+            // Opcional : localStorage.removeItem('clientesPersonalizados');
+            alert('El embarque no existe o está corrupto. Se reiniciará el formulario para evitar errores.');
+            this.resetearEmbarque();
+          });
         }
       }, (error) => {
         console.error("Error al escuchar cambios del embarque:", error);
