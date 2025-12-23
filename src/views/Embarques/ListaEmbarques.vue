@@ -509,7 +509,22 @@ export default {
           });
         }
 
-        this.embarques = this.asignarCamionNumero(embarquesFiltrados);
+        // Mezclar los embarques remotos con los que siguen pendientes en offline
+        // para evitar que desaparezcan mientras no se han sincronizado.
+        const pendientesOffline = await EmbarquesOfflineService.getAll();
+        const listaPendientes = pendientesOffline
+          .map(this.mapOfflineRecordToLista)
+          .filter(Boolean);
+
+        const mergedMap = new Map();
+        // Priorizar datos offline (incluyen pendingSync) pero permitir que los remotos los reemplacen
+        listaPendientes.forEach(emb => mergedMap.set(emb.id, emb));
+        embarquesFiltrados.forEach(emb => mergedMap.set(emb.id, emb));
+
+        const embarquesCombinados = Array.from(mergedMap.values())
+          .sort((a, b) => new Date(b.fecha || 0) - new Date(a.fecha || 0));
+
+        this.embarques = this.asignarCamionNumero(embarquesCombinados);
       } catch (error) {
         console.error('Error al cargar embarques:', error);
         if (this.embarques.length === 0) {
