@@ -2,10 +2,14 @@
   "name": "rey-pez",
   "version": "0.1.0",
   "private": true,
+  "main": "electron/main.js",
   "scripts": {
     "start": "vue-cli-service serve",
+    "build:web": "vue-cli-service build",
     "build": "vue-cli-service build && npx cap sync",
-    "lint": "vue-cli-service lint"
+    "lint": "vue-cli-service lint",
+    "electron:dev": "concurrently \"npm run start\" \"wait-on http://localhost:8080 && electron electron/main.js\"",
+    "electron:build": "VUE_APP_TARGET=electron npm run build:web && electron-builder"
   },
   "dependencies": {
     "-": "^0.0.1",
@@ -49,9 +53,31 @@
     "@babel/plugin-transform-optional-chaining": "^7.25.9",
     "@vue/cli-plugin-babel": "~4.5.0",
     "@vue/cli-service": "~4.5.0",
-    "vue-template-compiler": "^2.6.11"
+    "concurrently": "^9.2.1",
+    "electron": "^39.2.7",
+    "electron-builder": "^26.0.12",
+    "vue-template-compiler": "^2.6.11",
+    "wait-on": "^9.0.3"
   },
   "engines": {
     "node": "20.15.0"
+  },
+  "build": {
+    "appId": "com.reypez.desktop",
+    "productName": "ReyPez",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "mac": {
+      "category": "public.app-category.productivity"
+    },
+    "win": {
+      "target": "nsis"
+    }
   }
 }
