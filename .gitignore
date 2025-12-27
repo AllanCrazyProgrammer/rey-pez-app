@@ -22,3 +22,12 @@ pnpm-debug.log*
 *.sln
 *.sw?
 node_modules
+
+# Build artifacts (Electron / installers)
+release/
+dist/
+out/
+*.dmg
+*.zip
+*.blockmap
+*.asar

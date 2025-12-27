@@ -1,3 +1,5 @@
+const isElectron = process.env.VUE_APP_TARGET === 'electron';
+
 module.exports = {
   // Configuración del servidor de desarrollo
   devServer: {
@@ -26,7 +28,7 @@ module.exports = {
     // Forzar publicPath
     public: 'localhost:8080'
   },
-  publicPath: '/',
+  publicPath: isElectron ? './' : '/',
   // Transpilación para soporte de navegadores
   transpileDependencies: [],
   // Configuración para producción
