@@ -550,26 +550,49 @@ export default {
                 return;
             }
 
-            // Si el precio fue borrado manualmente por el usuario, no asignar automáticamente
-            if (this.producto.precioBorradoManualmente) {
-                return;
-            }
-
             const nombreCliente = this.nombreCliente.trim().toLowerCase();
             
             // Lógica especial para Ozuna: si no es venta (maquila), precio siempre 20
+            // Nota: aquí NO respetamos `precioBorradoManualmente` porque en maquila queremos:
+            // - Default: 20
+            // - Si el usuario editó el precio, conservarlo (persistido en `precioMaquila`)
             if (nombreCliente === 'ozuna' && !this.producto.esVenta) {
-                this.producto.precio = 20;
+                // Si existe precio de maquila personalizado, usarlo
+                if (this.producto.precioMaquila !== null && this.producto.precioMaquila !== undefined && this.producto.precioMaquila !== '') {
+                    const pm = Number(this.producto.precioMaquila);
+                    if (!Number.isNaN(pm) && pm > 0) {
+                        this.producto.precio = pm;
+                    } else {
+                        this.producto.precio = 20;
+                    }
+                } else if (this.producto.precio !== null && this.producto.precio !== undefined && this.producto.precio !== '') {
+                    // Compatibilidad: si venía un precio guardado en maquila pero aún no existía `precioMaquila`,
+                    // migrarlo para evitar que se pierda al reabrir.
+                    const p = Number(this.producto.precio);
+                    if (!Number.isNaN(p) && p > 0) {
+                        this.producto.precio = p;
+                        this.$set(this.producto, 'precioMaquila', p);
+                    } else {
+                        this.producto.precio = 20;
+                    }
+                } else {
+                    this.producto.precio = 20;
+                }
                 
                 // Emitir evento para notificar que se asignó precio automáticamente
                 this.$emit('precio-asignado-automaticamente', {
                     medida: this.producto.medida,
                     cliente: nombreCliente,
-                    precio: 20,
+                    precio: this.producto.precio,
                     fecha: this.fechaEmbarque || obtenerFechaActualISO(),
                     esMaquila: true,
                     clienteId: 'ozuna'
                 });
+                return;
+            }
+
+            // Si el precio fue borrado manualmente por el usuario, no asignar automáticamente
+            if (this.producto.precioBorradoManualmente) {
                 return;
             }
             

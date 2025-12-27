@@ -2986,15 +2986,35 @@ export default {
         try {
           // Guardar referencia al clienteId antes de cerrar el modal
           const clienteId = this.itemSeleccionado.clienteId;
+          const nombreClienteModal = (
+            this.obtenerNombreCliente(clienteId) ||
+            this.itemSeleccionado.nombreCliente ||
+            ''
+          ).toString().trim().toLowerCase();
+
+          // Regla especial: Ozuna en maquila (Venta desmarcado) debe conservar el precio editado.
+          // Guardamos el valor en `precioMaquila` para que sea persistente y no se re-escriba a 20 al reabrir.
+          const esOzunaMaquila = nombreClienteModal === 'ozuna' && !this.itemSeleccionado.esVenta;
           
           if (precio !== null) {
             this.$set(this.itemSeleccionado, 'precio', precio);
             // El usuario asignó un precio manualmente, permitir futuras asignaciones automáticas
             this.$set(this.itemSeleccionado, 'precioBorradoManualmente', false);
+
+            if (esOzunaMaquila) {
+              this.$set(this.itemSeleccionado, 'precioMaquila', precio);
+            }
           } else {
-            this.$delete(this.itemSeleccionado, 'precio');
-            // El usuario borró el precio manualmente, marcar para evitar asignaciones automáticas
-            this.$set(this.itemSeleccionado, 'precioBorradoManualmente', true);
+            if (esOzunaMaquila) {
+              // Para Ozuna en maquila, "borrar" = volver al default (20)
+              this.$delete(this.itemSeleccionado, 'precioMaquila');
+              this.$set(this.itemSeleccionado, 'precio', 20);
+              this.$set(this.itemSeleccionado, 'precioBorradoManualmente', false);
+            } else {
+              this.$delete(this.itemSeleccionado, 'precio');
+              // El usuario borró el precio manualmente, marcar para evitar asignaciones automáticas
+              this.$set(this.itemSeleccionado, 'precioBorradoManualmente', true);
+            }
           }
           
           // Marcar el cliente como modificado para que se incluya en el guardado
