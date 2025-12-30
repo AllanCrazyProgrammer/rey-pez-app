@@ -2252,6 +2252,7 @@ export default {
         fecha: record.fecha || null,
         cargaCon: record.cargaCon || '',
         camionNumero: record.camionNumero || record.docData?.camionNumero || 1,
+        kilosCrudos: safeClone(record.kilosCrudos || record.docData?.kilosCrudos || {}, {}),
         productos: safeClone(record.productos || [], []),
       };
 
@@ -2351,6 +2352,7 @@ export default {
       const data = {
         cargaCon: dataCruda.cargaCon || '',
         camionNumero: dataCruda.camionNumero || record.camionNumero || 1,
+        kilosCrudos: dataCruda.kilosCrudos || record.kilosCrudos || {},
         clientes: Array.isArray(dataCruda.clientes) ? dataCruda.clientes : [],
         clientesJuntarMedidas: dataCruda.clientesJuntarMedidas || {},
         clientesReglaOtilio: dataCruda.clientesReglaOtilio || {},
@@ -2364,6 +2366,15 @@ export default {
         costoExtra: typeof dataCruda.costoExtra === 'number' ? dataCruda.costoExtra : (this.costoExtra || 18),
         medidasConfiguracion: Array.isArray(dataCruda.medidasConfiguracion) ? dataCruda.medidasConfiguracion : [],
         preciosActuales: Array.isArray(dataCruda.preciosActuales) ? dataCruda.preciosActuales : [],
+        medidaOculta: dataCruda.medidaOculta || record.medidaOculta || {},
+        analizarGanancia: dataCruda.analizarGanancia || record.analizarGanancia || {},
+        analizarGananciaCrudos: dataCruda.analizarGananciaCrudos || record.analizarGananciaCrudos || {},
+        analizarMaquilaGanancia: dataCruda.analizarMaquilaGanancia || record.analizarMaquilaGanancia || {},
+        precioMaquila: dataCruda.precioMaquila || record.precioMaquila || {},
+        pesoTaraCosto: typeof dataCruda.pesoTaraCosto === 'number' ? dataCruda.pesoTaraCosto : (record.pesoTaraCosto ?? 19),
+        pesoTaraVenta: typeof dataCruda.pesoTaraVenta === 'number' ? dataCruda.pesoTaraVenta : (record.pesoTaraVenta ?? 20),
+        nombresMedidasPersonalizados: dataCruda.nombresMedidasPersonalizados || record.nombresMedidasPersonalizados || {},
+        notaRendimientos: dataCruda.notaRendimientos || record.notaRendimientos || '',
         fecha: parseFecha(dataCruda.fecha || record.fecha || this.embarque.fecha),
       };
 
@@ -2501,6 +2512,7 @@ export default {
         fecha: this.embarque.fecha, // Guardar como string YYYY-MM-DD para evitar problemas de zona horaria
         cargaCon: this.embarque.cargaCon,
         camionNumero: this.embarque.camionNumero || 1,
+        kilosCrudos: this.embarque.kilosCrudos || {},
         clientes: [],
         clientesJuntarMedidas: this.clientesJuntarMedidas,
         clientesReglaOtilio: this.clientesReglaOtilio,
