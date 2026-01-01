@@ -31,7 +31,14 @@
             @click="seleccionarDia(dia)"
           >
             <span class="numero-dia">{{ dia.numero }}</span>
-            <div v-if="tieneRegistros(dia.fecha)" class="indicador-registros"></div>
+            <div v-if="tieneRegistros(dia.fecha)" class="indicadores-clientes">
+              <div 
+                v-for="cliente in obtenerClientesConTransacciones(dia.fecha)" 
+                :key="cliente" 
+                class="indicador-cliente"
+                :class="'indicador-' + cliente"
+              ></div>
+            </div>
           </div>
         </div>
       </div>
@@ -123,16 +130,16 @@
         </div>
         
         <div v-if="!mostrarFormulario && !mostrarVistaLista" class="transacciones-agrupadas">
-          <div class="fila-clientes">
-            <div class="cliente-card cliente-card-otilio">
+          <div class="clientes-con-transacciones">
+            <!-- Otilio -->
+            <div v-if="clientesAgrupados.otilio && clientesAgrupados.otilio.length > 0" class="cliente-card cliente-card-otilio">
               <div class="cliente-header cliente-otilio">
                 <h4>Otilio</h4>
-                <div class="cliente-total" v-if="clientesAgrupados.otilio && clientesAgrupados.otilio.length > 0">
+                <div class="cliente-total">
                   Total: ${{ formatearNumero(calcularTotalCliente('otilio')) }}
                 </div>
-                <div class="cliente-total sin-datos" v-else>Sin transacciones</div>
               </div>
-              <div class="cliente-resumen" v-if="clientesAgrupados.otilio && clientesAgrupados.otilio.length > 0">
+              <div class="cliente-resumen">
                 <div class="resumen-item tipo-deposito">
                   <span>Depósitos:</span>
                   <span>${{ formatearNumero(calcularTotalPorTipo('otilio', 'deposito')) }}</span>
@@ -142,10 +149,10 @@
                   <span>${{ formatearNumero(calcularTotalPorTipo('otilio', 'transferencia')) }}</span>
                 </div>
               </div>
-              <div class="cliente-contador" v-if="clientesAgrupados.otilio && clientesAgrupados.otilio.length > 0">
+              <div class="cliente-contador">
                 {{ clientesAgrupados.otilio.length }} transacción(es)
               </div>
-              <div class="cliente-transacciones" v-if="clientesAgrupados.otilio && clientesAgrupados.otilio.length > 0">
+              <div class="cliente-transacciones">
                 <div 
                   v-for="(transaccion, index) in clientesAgrupados.otilio" 
                   :key="'otilio-'+index" 
@@ -163,22 +170,17 @@
                   </div>
                 </div>
               </div>
-              <div class="cliente-vacio" v-else>
-                <button @click="nuevaTransaccion.cliente = 'otilio'; mostrarFormulario = true" class="btn-agregar-mini cliente-otilio">
-                  + Agregar transacción para Otilio
-                </button>
-              </div>
             </div>
             
-            <div class="cliente-card cliente-card-joselito">
+            <!-- Joselito -->
+            <div v-if="clientesAgrupados.joselito && clientesAgrupados.joselito.length > 0" class="cliente-card cliente-card-joselito">
               <div class="cliente-header cliente-joselito">
                 <h4>Joselito</h4>
-                <div class="cliente-total" v-if="clientesAgrupados.joselito && clientesAgrupados.joselito.length > 0">
+                <div class="cliente-total">
                   Total: ${{ formatearNumero(calcularTotalCliente('joselito')) }}
                 </div>
-                <div class="cliente-total sin-datos" v-else>Sin transacciones</div>
               </div>
-              <div class="cliente-resumen" v-if="clientesAgrupados.joselito && clientesAgrupados.joselito.length > 0">
+              <div class="cliente-resumen">
                 <div class="resumen-item tipo-deposito">
                   <span>Depósitos:</span>
                   <span>${{ formatearNumero(calcularTotalPorTipo('joselito', 'deposito')) }}</span>
@@ -188,10 +190,10 @@
                   <span>${{ formatearNumero(calcularTotalPorTipo('joselito', 'transferencia')) }}</span>
                 </div>
               </div>
-              <div class="cliente-contador" v-if="clientesAgrupados.joselito && clientesAgrupados.joselito.length > 0">
+              <div class="cliente-contador">
                 {{ clientesAgrupados.joselito.length }} transacción(es)
               </div>
-              <div class="cliente-transacciones" v-if="clientesAgrupados.joselito && clientesAgrupados.joselito.length > 0">
+              <div class="cliente-transacciones">
                 <div 
                   v-for="(transaccion, index) in clientesAgrupados.joselito" 
                   :key="'joselito-'+index" 
@@ -209,24 +211,17 @@
                   </div>
                 </div>
               </div>
-              <div class="cliente-vacio" v-else>
-                <button @click="nuevaTransaccion.cliente = 'joselito'; mostrarFormulario = true" class="btn-agregar-mini cliente-joselito">
-                  + Agregar transacción para Joselito
-                </button>
-              </div>
             </div>
-          </div>
-          
-          <div class="fila-clientes">
-            <div class="cliente-card cliente-card-catarro">
+            
+            <!-- Catarro -->
+            <div v-if="clientesAgrupados.catarro && clientesAgrupados.catarro.length > 0" class="cliente-card cliente-card-catarro">
               <div class="cliente-header cliente-catarro">
                 <h4>Catarro</h4>
-                <div class="cliente-total" v-if="clientesAgrupados.catarro && clientesAgrupados.catarro.length > 0">
+                <div class="cliente-total">
                   Total: ${{ formatearNumero(calcularTotalCliente('catarro')) }}
                 </div>
-                <div class="cliente-total sin-datos" v-else>Sin transacciones</div>
               </div>
-              <div class="cliente-resumen" v-if="clientesAgrupados.catarro && clientesAgrupados.catarro.length > 0">
+              <div class="cliente-resumen">
                 <div class="resumen-item tipo-deposito">
                   <span>Depósitos:</span>
                   <span>${{ formatearNumero(calcularTotalPorTipo('catarro', 'deposito')) }}</span>
@@ -236,10 +231,10 @@
                   <span>${{ formatearNumero(calcularTotalPorTipo('catarro', 'transferencia')) }}</span>
                 </div>
               </div>
-              <div class="cliente-contador" v-if="clientesAgrupados.catarro && clientesAgrupados.catarro.length > 0">
+              <div class="cliente-contador">
                 {{ clientesAgrupados.catarro.length }} transacción(es)
               </div>
-              <div class="cliente-transacciones" v-if="clientesAgrupados.catarro && clientesAgrupados.catarro.length > 0">
+              <div class="cliente-transacciones">
                 <div 
                   v-for="(transaccion, index) in clientesAgrupados.catarro" 
                   :key="'catarro-'+index" 
@@ -257,22 +252,17 @@
                   </div>
                 </div>
               </div>
-              <div class="cliente-vacio" v-else>
-                <button @click="nuevaTransaccion.cliente = 'catarro'; mostrarFormulario = true" class="btn-agregar-mini cliente-catarro">
-                  + Agregar transacción para Catarro
-                </button>
-              </div>
             </div>
             
-            <div class="cliente-card cliente-card-ozuna">
+            <!-- Ozuna -->
+            <div v-if="clientesAgrupados.ozuna && clientesAgrupados.ozuna.length > 0" class="cliente-card cliente-card-ozuna">
               <div class="cliente-header cliente-ozuna">
                 <h4>Ozuna</h4>
-                <div class="cliente-total" v-if="clientesAgrupados.ozuna && clientesAgrupados.ozuna.length > 0">
+                <div class="cliente-total">
                   Total: ${{ formatearNumero(calcularTotalCliente('ozuna')) }}
                 </div>
-                <div class="cliente-total sin-datos" v-else>Sin transacciones</div>
               </div>
-              <div class="cliente-resumen" v-if="clientesAgrupados.ozuna && clientesAgrupados.ozuna.length > 0">
+              <div class="cliente-resumen">
                 <div class="resumen-item tipo-deposito">
                   <span>Depósitos:</span>
                   <span>${{ formatearNumero(calcularTotalPorTipo('ozuna', 'deposito')) }}</span>
@@ -282,10 +272,10 @@
                   <span>${{ formatearNumero(calcularTotalPorTipo('ozuna', 'transferencia')) }}</span>
                 </div>
               </div>
-              <div class="cliente-contador" v-if="clientesAgrupados.ozuna && clientesAgrupados.ozuna.length > 0">
+              <div class="cliente-contador">
                 {{ clientesAgrupados.ozuna.length }} transacción(es)
               </div>
-              <div class="cliente-transacciones" v-if="clientesAgrupados.ozuna && clientesAgrupados.ozuna.length > 0">
+              <div class="cliente-transacciones">
                 <div 
                   v-for="(transaccion, index) in clientesAgrupados.ozuna" 
                   :key="'ozuna-'+index" 
@@ -303,22 +293,17 @@
                   </div>
                 </div>
               </div>
-              <div class="cliente-vacio" v-else>
-                <button @click="nuevaTransaccion.cliente = 'ozuna'; mostrarFormulario = true" class="btn-agregar-mini cliente-ozuna">
-                  + Agregar transacción para Ozuna
-                </button>
-              </div>
             </div>
             
-            <div class="cliente-card cliente-card-veronica">
+            <!-- Verónica -->
+            <div v-if="clientesAgrupados.veronica && clientesAgrupados.veronica.length > 0" class="cliente-card cliente-card-veronica">
               <div class="cliente-header cliente-veronica">
                 <h4>Verónica</h4>
-                <div class="cliente-total" v-if="clientesAgrupados.veronica && clientesAgrupados.veronica.length > 0">
+                <div class="cliente-total">
                   Total: ${{ formatearNumero(calcularTotalCliente('veronica')) }}
                 </div>
-                <div class="cliente-total sin-datos" v-else>Sin transacciones</div>
               </div>
-              <div class="cliente-resumen" v-if="clientesAgrupados.veronica && clientesAgrupados.veronica.length > 0">
+              <div class="cliente-resumen">
                 <div class="resumen-item tipo-deposito">
                   <span>Depósitos:</span>
                   <span>${{ formatearNumero(calcularTotalPorTipo('veronica', 'deposito')) }}</span>
@@ -328,31 +313,35 @@
                   <span>${{ formatearNumero(calcularTotalPorTipo('veronica', 'transferencia')) }}</span>
                 </div>
               </div>
-              <div class="cliente-contador" v-if="clientesAgrupados.veronica && clientesAgrupados.veronica.length > 0">
+              <div class="cliente-contador">
                 {{ clientesAgrupados.veronica.length }} transacción(es)
               </div>
-              <div class="cliente-transacciones" v-if="clientesAgrupados.veronica && clientesAgrupados.veronica.length > 0">
+              <div class="cliente-transacciones">
                 <div 
                   v-for="(transaccion, index) in clientesAgrupados.veronica" 
                   :key="'veronica-'+index" 
                   class="transaccion-mini"
-                  :class="'tipo-' + transaccion.tipo"
+                  :class="['tipo-' + transaccion.tipo, { 'es-stash': transaccion.esStash }]"
                 >
                   <div class="transaccion-mini-header">
-                    <span>{{ obtenerTipoTexto(transaccion.tipo) }}</span>
+                    <span>
+                      <template v-if="transaccion.esStash">
+                        {{ transaccion.descripcion }}
+                        <span class="badge-stash">📦</span>
+                      </template>
+                      <template v-else>
+                        {{ obtenerTipoTexto(transaccion.tipo) }}
+                      </template>
+                    </span>
                     <span>${{ formatearNumero(transaccion.monto) }}</span>
                   </div>
                   <div class="transaccion-mini-hora">{{ formatearHora(transaccion.timestamp) }}</div>
                   <div class="transaccion-mini-acciones">
-                    <button @click="editarTransaccion(obtenerIndiceTransaccion(transaccion))" class="btn-mini">Editar</button>
-                    <button @click="eliminarTransaccion(obtenerIndiceTransaccion(transaccion))" class="btn-mini btn-mini-eliminar">Eliminar</button>
+                    <button v-if="!transaccion.esStash" @click="editarTransaccion(obtenerIndiceTransaccion(transaccion))" class="btn-mini">Editar</button>
+                    <button v-if="!transaccion.esStash" @click="eliminarTransaccion(obtenerIndiceTransaccion(transaccion))" class="btn-mini btn-mini-eliminar">Eliminar</button>
+                    <span v-if="transaccion.esStash" class="texto-info-stash">Ver en Stash</span>
                   </div>
                 </div>
-              </div>
-              <div class="cliente-vacio" v-else>
-                <button @click="nuevaTransaccion.cliente = 'veronica'; mostrarFormulario = true" class="btn-agregar-mini cliente-veronica">
-                  + Agregar transacción para Verónica
-                </button>
               </div>
             </div>
           </div>
@@ -369,18 +358,27 @@
             v-for="(transaccion, index) in transaccionesDia" 
             :key="index" 
             class="transaccion-item"
-            :class="'tipo-' + transaccion.tipo"
+            :class="['tipo-' + transaccion.tipo, { 'es-stash': transaccion.esStash }]"
           >
             <div class="transaccion-header">
-              <div class="transaccion-tipo">{{ obtenerTipoTexto(transaccion.tipo) }}</div>
+              <div class="transaccion-tipo">
+                <template v-if="transaccion.esStash">
+                  {{ transaccion.descripcion }}
+                  <span class="badge-stash">📦</span>
+                </template>
+                <template v-else>
+                  {{ obtenerTipoTexto(transaccion.tipo) }}
+                </template>
+              </div>
               <div class="transaccion-monto">${{ formatearNumero(transaccion.monto) }}</div>
             </div>
             <div class="transaccion-cliente">Cliente: {{ obtenerClienteTexto(transaccion.cliente) }}</div>
-            <div class="transaccion-descripcion">{{ transaccion.descripcion }}</div>
+            <div v-if="!transaccion.esStash" class="transaccion-descripcion">{{ transaccion.descripcion }}</div>
             <div class="transaccion-hora">{{ formatearHora(transaccion.timestamp) }}</div>
             <div class="transaccion-acciones">
-              <button @click="editarTransaccion(index)" class="btn-editar">Editar</button>
-              <button @click="eliminarTransaccion(index)" class="btn-eliminar">Eliminar</button>
+              <button v-if="!transaccion.esStash" @click="editarTransaccion(index)" class="btn-editar">Editar</button>
+              <button v-if="!transaccion.esStash" @click="eliminarTransaccion(index)" class="btn-eliminar">Eliminar</button>
+              <span v-if="transaccion.esStash" class="texto-info-stash">Esta transacción proviene del Stash y debe gestionarse desde allí</span>
             </div>
           </div>
           
@@ -397,7 +395,7 @@
 
 <script>
 import { db } from '../firebase';
-import { collection, addDoc, query, where, getDocs, doc, deleteDoc, updateDoc } from 'firebase/firestore';
+import { collection, addDoc, query, where, getDocs, doc, deleteDoc, updateDoc, orderBy, limit } from 'firebase/firestore';
 
 export default {
   name: 'TransaccionesAgendaModal',
@@ -484,10 +482,18 @@ export default {
     },
     transaccionesDia() {
       if (!this.diaSeleccionado) return [];
-      
-      return this.transacciones.filter(t => 
-        this.esMismaFecha(new Date(t.timestamp), this.diaSeleccionado.fecha)
-      );
+
+      const diaISO = this.toISODateLocal(this.diaSeleccionado.fecha);
+
+      return this.transacciones.filter(t => {
+        // Preferir el campo 'fecha' (YYYY-MM-DD) para evitar desfases por zona horaria
+        if (t.fecha) {
+          const fechaT = typeof t.fecha === 'string' ? t.fecha : this.toISODateLocal(this.parseFechaSeguro(t.fecha));
+          return fechaT === diaISO;
+        }
+        const ts = this.parseFechaSeguro(t.timestamp);
+        return ts ? this.toISODateLocal(ts) === diaISO : false;
+      });
     },
     formatoFechaCompleta() {
       if (!this.diaSeleccionado) return '';
@@ -522,6 +528,59 @@ export default {
     }
   },
   methods: {
+    // --- Helpers de fecha (evitan desfases UTC y parseos ambiguos) ---
+    toISODateLocal(date) {
+      if (!(date instanceof Date)) return '';
+      const y = date.getFullYear();
+      const m = String(date.getMonth() + 1).padStart(2, '0');
+      const d = String(date.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    },
+    parseFechaSeguro(valor) {
+      if (!valor) return null;
+
+      // Firestore Timestamp
+      if (typeof valor === 'object' && typeof valor.toDate === 'function') {
+        const d = valor.toDate();
+        return d instanceof Date && !isNaN(d) ? d : null;
+      }
+
+      if (valor instanceof Date) {
+        return !isNaN(valor) ? valor : null;
+      }
+
+      // Epoch
+      if (typeof valor === 'number') {
+        const d = new Date(valor);
+        return !isNaN(d) ? d : null;
+      }
+
+      if (typeof valor !== 'string') return null;
+
+      const s = valor.trim();
+
+      // YYYY-MM-DD (interpretarlo como fecha LOCAL para evitar UTC midnight shift)
+      const mIso = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      if (mIso) {
+        const y = Number(mIso[1]);
+        const mo = Number(mIso[2]);
+        const da = Number(mIso[3]);
+        return new Date(y, mo - 1, da, 12, 0, 0); // mediodía local reduce edge cases
+      }
+
+      // DD/MM/YYYY (muy común en MX)
+      const mLatam = s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+      if (mLatam) {
+        const da = Number(mLatam[1]);
+        const mo = Number(mLatam[2]);
+        const y = Number(mLatam[3]);
+        return new Date(y, mo - 1, da, 12, 0, 0);
+      }
+
+      // ISO con hora (YYYY-MM-DDTHH:mm...)
+      const d = new Date(s);
+      return !isNaN(d) ? d : null;
+    },
     cambiarMes(delta) {
       let nuevoMes = this.mesActual + delta;
       
@@ -551,9 +610,38 @@ export default {
       return this.esMismaFecha(fecha, this.diaSeleccionado.fecha);
     },
     tieneRegistros(fecha) {
-      return this.transacciones.some(t => 
-        this.esMismaFecha(new Date(t.timestamp), fecha)
-      );
+      const diaISO = this.toISODateLocal(fecha);
+      return this.transacciones.some(t => {
+        if (t.fecha) {
+          const fechaT = typeof t.fecha === 'string' ? t.fecha : this.toISODateLocal(this.parseFechaSeguro(t.fecha));
+          return fechaT === diaISO;
+        }
+        const ts = this.parseFechaSeguro(t.timestamp);
+        return ts ? this.toISODateLocal(ts) === diaISO : false;
+      });
+    },
+    obtenerClientesConTransacciones(fecha) {
+      const diaISO = this.toISODateLocal(fecha);
+      const clientesSet = new Set();
+      
+      this.transacciones.forEach(t => {
+        let coincide = false;
+        if (t.fecha) {
+          const fechaT = typeof t.fecha === 'string' ? t.fecha : this.toISODateLocal(this.parseFechaSeguro(t.fecha));
+          coincide = fechaT === diaISO;
+        } else {
+          const ts = this.parseFechaSeguro(t.timestamp);
+          coincide = ts ? this.toISODateLocal(ts) === diaISO : false;
+        }
+        
+        if (coincide && t.cliente) {
+          clientesSet.add(t.cliente);
+        }
+      });
+      
+      // Ordenar clientes en un orden específico para consistencia visual
+      const ordenClientes = ['otilio', 'joselito', 'catarro', 'ozuna', 'veronica', 'mexico'];
+      return ordenClientes.filter(c => clientesSet.has(c));
     },
     formatearNumero(num) {
       return num.toLocaleString('es-MX', {
@@ -634,6 +722,13 @@ export default {
     },
     editarTransaccion(index) {
       const transaccion = this.transaccionesDia[index];
+      
+      // No permitir editar transacciones del stash desde aquí
+      if (transaccion.esStash) {
+        alert('Las transacciones del Stash deben editarse desde el modal de Stash.');
+        return;
+      }
+      
       this.nuevaTransaccion = {
         tipo: transaccion.tipo,
         monto: transaccion.monto,
@@ -645,9 +740,17 @@ export default {
       this.mostrarFormulario = true;
     },
     async eliminarTransaccion(index) {
+      const transaccion = this.transaccionesDia[index];
+      
+      // No permitir eliminar transacciones del stash desde aquí
+      if (transaccion.esStash) {
+        alert('Las transacciones del Stash deben eliminarse desde el modal de Stash.');
+        return;
+      }
+      
       if (confirm('¿Estás seguro de que deseas eliminar esta transacción?')) {
         try {
-          const transaccionId = this.transaccionesDia[index].id;
+          const transaccionId = transaccion.id;
           await deleteDoc(doc(db, 'transacciones', transaccionId));
           
           // Actualizar el arreglo local
@@ -664,9 +767,11 @@ export default {
         const primerDiaMes = new Date(this.anioActual, this.mesActual, 1);
         const ultimoDiaMes = new Date(this.anioActual, this.mesActual + 1, 0);
         
-        const primerDiaStr = primerDiaMes.toISOString().split('T')[0];
-        const ultimoDiaStr = ultimoDiaMes.toISOString().split('T')[0];
+        // Importante: no usar toISOString() (UTC) porque puede mover el día
+        const primerDiaStr = this.toISODateLocal(primerDiaMes);
+        const ultimoDiaStr = this.toISODateLocal(ultimoDiaMes);
         
+        // Cargar transacciones regulares
         const q = query(
           collection(db, 'transacciones'),
           where('fecha', '>=', primerDiaStr),
@@ -682,8 +787,99 @@ export default {
             ...doc.data()
           });
         });
+        
+        // Cargar transacciones del stash y su historial para Verónica
+        if (this.cliente === 'veronica' || this.cliente === 'mexico') {
+          await this.cargarTransaccionesStashVeronica(primerDiaStr, ultimoDiaStr);
+          await this.cargarTransaccionesHistorialStashVeronica(primerDiaStr, ultimoDiaStr);
+        }
       } catch (error) {
         console.error('Error al cargar las transacciones:', error);
+      }
+    },
+    async cargarTransaccionesStashVeronica(primerDiaStr, ultimoDiaStr) {
+      try {
+        const qStash = query(
+          collection(db, 'stash_veronica'),
+          where('fecha', '>=', primerDiaStr),
+          where('fecha', '<=', ultimoDiaStr)
+        );
+        
+        const stashSnapshot = await getDocs(qStash);
+        
+        stashSnapshot.forEach((doc) => {
+          const stashData = doc.data();
+          const fechaBase = stashData.fechaCreacion || stashData.fecha || new Date().toISOString();
+          const fechaDate = this.parseFechaSeguro(fechaBase);
+          const fechaISO = fechaDate ? this.toISODateLocal(fechaDate) : stashData.fecha;
+          // Convertir los datos del stash al formato de transacciones
+          this.transacciones.push({
+            id: `stash_${doc.id}`,
+            cliente: 'veronica',
+            tipo: 'deposito', // Por defecto, consideramos los stash como depósitos
+            monto: stashData.monto || 0,
+            descripcion: `Stash: ${stashData.descripcion || 'Sin descripción'}`,
+            timestamp: fechaDate ? fechaDate.toISOString() : fechaBase,
+            fecha: fechaISO || stashData.fecha,
+            esStash: true // Marcador para identificar que viene del stash
+          });
+        });
+      } catch (error) {
+        console.error('Error al cargar transacciones del stash de Verónica:', error);
+      }
+    },
+    async cargarTransaccionesHistorialStashVeronica(primerDiaStr, ultimoDiaStr) {
+      // Los abonos aplicados del stash se guardan en cuentasVeronica dentro del array "abonos" de cada cuenta.
+      // Usamos la fecha original del stash (fechaOriginalStash) para ubicarlos en el calendario.
+      try {
+        const qCuentas = query(
+          collection(db, 'cuentasVeronica'),
+          orderBy('fecha', 'desc'),
+          limit(100)
+        );
+        
+        const snapshot = await getDocs(qCuentas);
+        
+        snapshot.forEach((docSnap) => {
+          const cuentaData = docSnap.data();
+          const cuentaId = docSnap.id;
+          const abonos = cuentaData.abonos || [];
+          
+          abonos.forEach((abono, idx) => {
+            // Prioridad de fecha: fechaOriginalStash > fecha > fechaAplicacion
+            // fechaOriginalStash es la fecha REAL en que se registró el abono en el stash
+            const fechaBase = abono.fechaOriginalStash || abono.fecha || abono.fechaAplicacion;
+            if (!fechaBase) return;
+            
+            const fechaDate = this.parseFechaSeguro(fechaBase);
+            if (!fechaDate) return;
+            
+            const fechaISO = this.toISODateLocal(fechaDate);
+            
+            // Filtrar por rango del mes
+            if (fechaISO < primerDiaStr || fechaISO > ultimoDiaStr) return;
+            
+            // Evitar duplicados - verificar que no existe ya esta transacción
+            const idTransaccion = `abono_${cuentaId}_${idx}`;
+            const yaExiste = this.transacciones.some(t => t.id === idTransaccion);
+            if (yaExiste) return;
+            
+            this.transacciones.push({
+              id: idTransaccion,
+              cliente: 'veronica',
+              tipo: 'deposito',
+              monto: abono.monto || 0,
+              descripcion: abono.descripcion || 'Abono aplicado',
+              timestamp: fechaDate.toISOString(),
+              fecha: fechaISO,
+              esStash: true,
+              origenHistorial: true,
+              cuentaId: cuentaId
+            });
+          });
+        });
+      } catch (error) {
+        console.error('Error al cargar abonos de cuentas Verónica:', error);
       }
     },
     calcularTotalCliente(cliente) {
@@ -906,6 +1102,51 @@ export default {
   background-color: #3760b0;
 }
 
+.indicadores-clientes {
+  position: absolute;
+  bottom: 3px;
+  display: flex;
+  gap: 2px;
+  justify-content: center;
+  flex-wrap: wrap;
+  max-width: 90%;
+}
+
+.indicador-cliente {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.indicador-otilio {
+  background-color: #FFD700;
+}
+
+.indicador-joselito {
+  background-color: #3498db;
+}
+
+.indicador-catarro {
+  background-color: #e74c3c;
+}
+
+.indicador-ozuna {
+  background-color: #27ae60;
+}
+
+.indicador-veronica {
+  background-color: #e67e22;
+}
+
+.indicador-mexico {
+  background-color: #3760b0;
+}
+
+.seleccionado .indicador-cliente {
+  box-shadow: 0 0 0 1px white;
+}
+
 .transacciones-container {
   flex: 1;
   padding: 15px;
@@ -1058,6 +1299,11 @@ label {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
+.transaccion-item.es-stash {
+  background-color: #fff8e1;
+  border-left-color: #ff9800;
+}
+
 .tipo-deposito {
   border-left-color: #27ae60;
 }
@@ -1118,6 +1364,13 @@ label {
   display: flex;
   flex-direction: column;
   gap: 20px;
+}
+
+.clientes-con-transacciones {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 15px;
+  width: 100%;
 }
 
 .fila-clientes {
@@ -1430,6 +1683,17 @@ label {
   color: #27ae60;
 }
 
+.cliente-veronica {
+  border-bottom: 2px solid #e67e22;
+  background-color: rgba(230, 126, 34, 0.1);
+  padding: 8px;
+  border-radius: 6px 6px 0 0;
+}
+
+.cliente-veronica h4 {
+  color: #e67e22;
+}
+
 .transaccion-cliente {
   font-weight: bold;
   margin-bottom: 5px;
@@ -1453,6 +1717,14 @@ label {
 
 .transaccion-cliente.cliente-otilio {
   color: #f39c12;
+  background-color: transparent;
+  border: none;
+  padding: 0;
+  border-radius: 0;
+}
+
+.transaccion-cliente.cliente-veronica {
+  color: #e67e22;
   background-color: transparent;
   border: none;
   padding: 0;
@@ -1512,6 +1784,10 @@ label {
   
   .fila-clientes {
     flex-direction: column;
+  }
+  
+  .clientes-con-transacciones {
+    grid-template-columns: 1fr;
   }
   
   .cliente-card {
@@ -1608,6 +1884,29 @@ label {
   background-color: #2c4d8e;
 }
 
+/* Estilos para transacciones del stash */
+.transaccion-mini.es-stash {
+  background-color: #fff8e1;
+  border-left-color: #ff9800;
+}
+
+.badge-stash {
+  display: inline-block;
+  background-color: #ff9800;
+  color: white;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 0.75em;
+  margin-left: 5px;
+  font-weight: bold;
+}
+
+.texto-info-stash {
+  font-size: 0.75em;
+  color: #ff9800;
+  font-style: italic;
+}
+
 .transaccion-cliente.cliente-ozuna {
   color: #27ae60;
   background-color: transparent;
@@ -1666,6 +1965,10 @@ label {
 
 .cliente-card-ozuna .cliente-total {
   color: #27ae60;
+}
+
+.cliente-card-veronica .cliente-total {
+  color: #e67e22;
 }
 
 /* Mejoras para las transacciones mini */
