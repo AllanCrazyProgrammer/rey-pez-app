@@ -3005,7 +3005,7 @@ export default {
           ).toString().trim().toLowerCase();
 
           // Regla especial: Ozuna en maquila (Venta desmarcado) debe conservar el precio editado.
-          // Guardamos el valor en `precioMaquila` para que sea persistente y no se re-escriba a 20 al reabrir.
+          // Guardamos el valor en `precioMaquila` para que sea persistente y no se re-escriba a 21 al reabrir.
           const esOzunaMaquila = nombreClienteModal === 'ozuna' && !this.itemSeleccionado.esVenta;
           
           if (precio !== null) {
@@ -3018,9 +3018,9 @@ export default {
             }
           } else {
             if (esOzunaMaquila) {
-              // Para Ozuna en maquila, "borrar" = volver al default (20)
+              // Para Ozuna en maquila, "borrar" = volver al default (21)
               this.$delete(this.itemSeleccionado, 'precioMaquila');
-              this.$set(this.itemSeleccionado, 'precio', 20);
+              this.$set(this.itemSeleccionado, 'precio', 21);
               this.$set(this.itemSeleccionado, 'precioBorradoManualmente', false);
             } else {
               this.$delete(this.itemSeleccionado, 'precio');
