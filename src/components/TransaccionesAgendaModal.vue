@@ -6,6 +6,7 @@
         <button @click="$emit('cerrar')" class="btn-cerrar">×</button>
       </div>
       
+      <div class="modal-body">
       <div class="calendario-container">
         <div class="selector-fecha">
           <button @click="cambiarMes(-1)" class="btn-nav">&lt;</button>
@@ -43,7 +44,8 @@
         </div>
       </div>
       
-      <div class="transacciones-container" v-if="diaSeleccionado">
+      <div class="transacciones-container">
+        <div v-if="diaSeleccionado">
         <div class="dia-seleccionado-header">
           <h4>{{ formatoFechaCompleta }}</h4>
           <button @click="mostrarFormulario = true" class="btn-agregar">+ Agregar transacción</button>
@@ -53,14 +55,6 @@
           <div class="resumen-dia-item">
             <span>Total del día:</span>
             <span>${{ formatearNumero(calcularTotalDia()) }}</span>
-          </div>
-          <div class="resumen-dia-item">
-            <span>Depósitos:</span>
-            <span class="color-deposito">${{ formatearNumero(calcularTotalDiaPorTipo('deposito')) }}</span>
-          </div>
-          <div class="resumen-dia-item">
-            <span>Transferencias:</span>
-            <span class="color-transferencia">${{ formatearNumero(calcularTotalDiaPorTipo('transferencia')) }}</span>
           </div>
           <div class="resumen-dia-item">
             <span>Transacciones:</span>
@@ -133,26 +127,23 @@
           <div class="clientes-con-transacciones">
             <!-- Otilio -->
             <div v-if="clientesAgrupados.otilio && clientesAgrupados.otilio.length > 0" class="cliente-card cliente-card-otilio">
-              <div class="cliente-header cliente-otilio">
+              <button
+                type="button"
+                class="cliente-header cliente-otilio"
+                :aria-expanded="esAcordeonClienteAbierto('otilio') ? 'true' : 'false'"
+                @click="toggleAcordeonCliente('otilio')"
+              >
                 <h4>Otilio</h4>
                 <div class="cliente-total">
                   Total: ${{ formatearNumero(calcularTotalCliente('otilio')) }}
                 </div>
-              </div>
-              <div class="cliente-resumen">
-                <div class="resumen-item tipo-deposito">
-                  <span>Depósitos:</span>
-                  <span>${{ formatearNumero(calcularTotalPorTipo('otilio', 'deposito')) }}</span>
+                <span class="cliente-header-chevron" aria-hidden="true">▾</span>
+              </button>
+              <div v-show="esAcordeonClienteAbierto('otilio')">
+                <div class="cliente-contador">
+                  {{ clientesAgrupados.otilio.length }} transacción(es)
                 </div>
-                <div class="resumen-item tipo-transferencia">
-                  <span>Transferencias:</span>
-                  <span>${{ formatearNumero(calcularTotalPorTipo('otilio', 'transferencia')) }}</span>
-                </div>
-              </div>
-              <div class="cliente-contador">
-                {{ clientesAgrupados.otilio.length }} transacción(es)
-              </div>
-              <div class="cliente-transacciones">
+                <div class="cliente-transacciones">
                 <div 
                   v-for="(transaccion, index) in clientesAgrupados.otilio" 
                   :key="'otilio-'+index" 
@@ -170,30 +161,28 @@
                   </div>
                 </div>
               </div>
+              </div>
             </div>
             
             <!-- Joselito -->
             <div v-if="clientesAgrupados.joselito && clientesAgrupados.joselito.length > 0" class="cliente-card cliente-card-joselito">
-              <div class="cliente-header cliente-joselito">
+              <button
+                type="button"
+                class="cliente-header cliente-joselito"
+                :aria-expanded="esAcordeonClienteAbierto('joselito') ? 'true' : 'false'"
+                @click="toggleAcordeonCliente('joselito')"
+              >
                 <h4>Joselito</h4>
                 <div class="cliente-total">
                   Total: ${{ formatearNumero(calcularTotalCliente('joselito')) }}
                 </div>
-              </div>
-              <div class="cliente-resumen">
-                <div class="resumen-item tipo-deposito">
-                  <span>Depósitos:</span>
-                  <span>${{ formatearNumero(calcularTotalPorTipo('joselito', 'deposito')) }}</span>
+                <span class="cliente-header-chevron" aria-hidden="true">▾</span>
+              </button>
+              <div v-show="esAcordeonClienteAbierto('joselito')">
+                <div class="cliente-contador">
+                  {{ clientesAgrupados.joselito.length }} transacción(es)
                 </div>
-                <div class="resumen-item tipo-transferencia">
-                  <span>Transferencias:</span>
-                  <span>${{ formatearNumero(calcularTotalPorTipo('joselito', 'transferencia')) }}</span>
-                </div>
-              </div>
-              <div class="cliente-contador">
-                {{ clientesAgrupados.joselito.length }} transacción(es)
-              </div>
-              <div class="cliente-transacciones">
+                <div class="cliente-transacciones">
                 <div 
                   v-for="(transaccion, index) in clientesAgrupados.joselito" 
                   :key="'joselito-'+index" 
@@ -211,30 +200,28 @@
                   </div>
                 </div>
               </div>
+              </div>
             </div>
             
             <!-- Catarro -->
             <div v-if="clientesAgrupados.catarro && clientesAgrupados.catarro.length > 0" class="cliente-card cliente-card-catarro">
-              <div class="cliente-header cliente-catarro">
+              <button
+                type="button"
+                class="cliente-header cliente-catarro"
+                :aria-expanded="esAcordeonClienteAbierto('catarro') ? 'true' : 'false'"
+                @click="toggleAcordeonCliente('catarro')"
+              >
                 <h4>Catarro</h4>
                 <div class="cliente-total">
                   Total: ${{ formatearNumero(calcularTotalCliente('catarro')) }}
                 </div>
-              </div>
-              <div class="cliente-resumen">
-                <div class="resumen-item tipo-deposito">
-                  <span>Depósitos:</span>
-                  <span>${{ formatearNumero(calcularTotalPorTipo('catarro', 'deposito')) }}</span>
+                <span class="cliente-header-chevron" aria-hidden="true">▾</span>
+              </button>
+              <div v-show="esAcordeonClienteAbierto('catarro')">
+                <div class="cliente-contador">
+                  {{ clientesAgrupados.catarro.length }} transacción(es)
                 </div>
-                <div class="resumen-item tipo-transferencia">
-                  <span>Transferencias:</span>
-                  <span>${{ formatearNumero(calcularTotalPorTipo('catarro', 'transferencia')) }}</span>
-                </div>
-              </div>
-              <div class="cliente-contador">
-                {{ clientesAgrupados.catarro.length }} transacción(es)
-              </div>
-              <div class="cliente-transacciones">
+                <div class="cliente-transacciones">
                 <div 
                   v-for="(transaccion, index) in clientesAgrupados.catarro" 
                   :key="'catarro-'+index" 
@@ -252,30 +239,28 @@
                   </div>
                 </div>
               </div>
+              </div>
             </div>
             
             <!-- Ozuna -->
             <div v-if="clientesAgrupados.ozuna && clientesAgrupados.ozuna.length > 0" class="cliente-card cliente-card-ozuna">
-              <div class="cliente-header cliente-ozuna">
+              <button
+                type="button"
+                class="cliente-header cliente-ozuna"
+                :aria-expanded="esAcordeonClienteAbierto('ozuna') ? 'true' : 'false'"
+                @click="toggleAcordeonCliente('ozuna')"
+              >
                 <h4>Ozuna</h4>
                 <div class="cliente-total">
                   Total: ${{ formatearNumero(calcularTotalCliente('ozuna')) }}
                 </div>
-              </div>
-              <div class="cliente-resumen">
-                <div class="resumen-item tipo-deposito">
-                  <span>Depósitos:</span>
-                  <span>${{ formatearNumero(calcularTotalPorTipo('ozuna', 'deposito')) }}</span>
+                <span class="cliente-header-chevron" aria-hidden="true">▾</span>
+              </button>
+              <div v-show="esAcordeonClienteAbierto('ozuna')">
+                <div class="cliente-contador">
+                  {{ clientesAgrupados.ozuna.length }} transacción(es)
                 </div>
-                <div class="resumen-item tipo-transferencia">
-                  <span>Transferencias:</span>
-                  <span>${{ formatearNumero(calcularTotalPorTipo('ozuna', 'transferencia')) }}</span>
-                </div>
-              </div>
-              <div class="cliente-contador">
-                {{ clientesAgrupados.ozuna.length }} transacción(es)
-              </div>
-              <div class="cliente-transacciones">
+                <div class="cliente-transacciones">
                 <div 
                   v-for="(transaccion, index) in clientesAgrupados.ozuna" 
                   :key="'ozuna-'+index" 
@@ -293,30 +278,28 @@
                   </div>
                 </div>
               </div>
+              </div>
             </div>
             
             <!-- Verónica -->
             <div v-if="clientesAgrupados.veronica && clientesAgrupados.veronica.length > 0" class="cliente-card cliente-card-veronica">
-              <div class="cliente-header cliente-veronica">
+              <button
+                type="button"
+                class="cliente-header cliente-veronica"
+                :aria-expanded="esAcordeonClienteAbierto('veronica') ? 'true' : 'false'"
+                @click="toggleAcordeonCliente('veronica')"
+              >
                 <h4>Verónica</h4>
                 <div class="cliente-total">
                   Total: ${{ formatearNumero(calcularTotalCliente('veronica')) }}
                 </div>
-              </div>
-              <div class="cliente-resumen">
-                <div class="resumen-item tipo-deposito">
-                  <span>Depósitos:</span>
-                  <span>${{ formatearNumero(calcularTotalPorTipo('veronica', 'deposito')) }}</span>
+                <span class="cliente-header-chevron" aria-hidden="true">▾</span>
+              </button>
+              <div v-show="esAcordeonClienteAbierto('veronica')">
+                <div class="cliente-contador">
+                  {{ clientesAgrupados.veronica.length }} transacción(es)
                 </div>
-                <div class="resumen-item tipo-transferencia">
-                  <span>Transferencias:</span>
-                  <span>${{ formatearNumero(calcularTotalPorTipo('veronica', 'transferencia')) }}</span>
-                </div>
-              </div>
-              <div class="cliente-contador">
-                {{ clientesAgrupados.veronica.length }} transacción(es)
-              </div>
-              <div class="cliente-transacciones">
+                <div class="cliente-transacciones">
                 <div 
                   v-for="(transaccion, index) in clientesAgrupados.veronica" 
                   :key="'veronica-'+index" 
@@ -343,14 +326,10 @@
                   </div>
                 </div>
               </div>
+              </div>
             </div>
           </div>
           
-          <div class="cambiar-vista">
-            <button @click="mostrarVistaLista = !mostrarVistaLista" class="btn-cambiar-vista">
-              Ver lista completa
-            </button>
-          </div>
         </div>
         
         <div v-if="transaccionesDia.length > 0 && mostrarVistaLista && !mostrarFormulario" class="lista-transacciones">
@@ -382,12 +361,12 @@
             </div>
           </div>
           
-          <div class="cambiar-vista">
-            <button @click="mostrarVistaLista = !mostrarVistaLista" class="btn-cambiar-vista">
-              Ver agrupado por cliente
-            </button>
-          </div>
         </div>
+        </div>
+        <div v-else class="sin-transacciones">
+          Selecciona un día para ver las transacciones.
+        </div>
+      </div>
       </div>
     </div>
   </div>
@@ -418,6 +397,7 @@ export default {
       diaSeleccionado: null,
       mostrarFormulario: false,
       mostrarVistaLista: false,
+      clienteAcordeonAbierto: null,
       transacciones: [],
       nuevaTransaccion: {
         tipo: 'deposito',
@@ -528,6 +508,12 @@ export default {
     }
   },
   methods: {
+    toggleAcordeonCliente(clienteKey) {
+      this.clienteAcordeonAbierto = this.clienteAcordeonAbierto === clienteKey ? null : clienteKey;
+    },
+    esAcordeonClienteAbierto(clienteKey) {
+      return this.clienteAcordeonAbierto === clienteKey;
+    },
     // --- Helpers de fecha (evitan desfases UTC y parseos ambiguos) ---
     toISODateLocal(date) {
       if (!(date instanceof Date)) return '';
@@ -958,13 +944,21 @@ export default {
 .modal-agenda {
   background-color: white;
   border-radius: 10px;
-  width: 90%;
-  max-width: 900px;
-  max-height: 90vh;
+  width: 96vw;
+  max-width: 1400px;
+  height: 94vh;
+  max-height: 94vh;
   display: flex;
   flex-direction: column;
   overflow: hidden;
   box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+}
+
+.modal-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .modal-header {
@@ -1003,7 +997,10 @@ export default {
 
 .calendario-container {
   padding: 15px;
-  border-bottom: 1px solid #ddd;
+  border-right: 1px solid #ddd;
+  flex: 1 1 50%;
+  overflow-y: auto;
+  min-width: 360px;
 }
 
 .selector-fecha {
@@ -1148,10 +1145,10 @@ export default {
 }
 
 .transacciones-container {
-  flex: 1;
+  flex: 1 1 50%;
+  min-width: 0;
   padding: 15px;
   overflow-y: auto;
-  max-height: 400px;
 }
 
 .dia-seleccionado-header {
@@ -1424,6 +1421,33 @@ label {
   border-bottom: 1px solid #ddd;
 }
 
+.cliente-header {
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+
+.cliente-header:focus-visible {
+  outline: 2px solid rgba(55, 96, 176, 0.45);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+
+.cliente-header-chevron {
+  margin-left: 10px;
+  font-size: 1.1em;
+  line-height: 1;
+  opacity: 0.75;
+  transition: transform 0.2s ease;
+}
+
+.cliente-header[aria-expanded="true"] .cliente-header-chevron {
+  transform: rotate(180deg);
+}
+
 .cliente-header h4 {
   margin: 0;
   color: #3760b0;
@@ -1433,40 +1457,6 @@ label {
 .cliente-total {
   font-weight: bold;
   color: #27ae60;
-}
-
-.cliente-resumen {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 10px;
-  padding: 5px 0;
-  border-bottom: 1px dashed #ddd;
-}
-
-.resumen-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 5px 10px;
-  background-color: white;
-  border-radius: 4px;
-  font-size: 0.85em;
-  transition: all 0.2s ease;
-}
-
-.resumen-item:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.1);
-}
-
-.resumen-item.tipo-deposito span:last-child {
-  color: #27ae60;
-  font-weight: bold;
-}
-
-.resumen-item.tipo-transferencia span:last-child {
-  color: #3498db;
-  font-weight: bold;
 }
 
 .cliente-transacciones {
@@ -1622,14 +1612,6 @@ label {
   font-size: 1.1em;
 }
 
-.resumen-dia-item span.color-deposito {
-  color: #27ae60;
-}
-
-.resumen-dia-item span.color-transferencia {
-  color: #3498db;
-}
-
 .cliente-header {
   display: flex;
   justify-content: space-between;
@@ -1756,6 +1738,17 @@ label {
     width: 95%;
     max-height: 95vh;
   }
+
+  .modal-body {
+    flex-direction: column;
+  }
+  
+  .calendario-container {
+    flex: 0 0 auto;
+    min-width: 0;
+    border-right: none;
+    border-bottom: 1px solid #ddd;
+  }
   
   .dia-celda {
     height: 35px;
@@ -1792,16 +1785,6 @@ label {
   
   .cliente-card {
     margin-bottom: 10px;
-  }
-  
-  .cliente-resumen {
-    flex-wrap: wrap;
-    gap: 5px;
-  }
-  
-  .resumen-item {
-    flex: 1;
-    min-width: 100px;
   }
   
   .resumen-dia {
@@ -1862,26 +1845,6 @@ label {
 
 .btn-mini-eliminar {
   background-color: #e74c3c;
-}
-
-.cambiar-vista {
-  display: flex;
-  justify-content: center;
-  margin-top: 15px;
-}
-
-.btn-cambiar-vista {
-  background-color: #3760b0;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  padding: 8px 15px;
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-.btn-cambiar-vista:hover {
-  background-color: #2c4d8e;
 }
 
 /* Estilos para transacciones del stash */
