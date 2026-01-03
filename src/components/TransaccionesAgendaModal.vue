@@ -160,16 +160,24 @@
                   v-for="(transaccion, index) in clientesAgrupados.otilio" 
                   :key="'otilio-'+index" 
                   class="transaccion-mini"
-                  :class="'tipo-' + transaccion.tipo"
+                  :class="['tipo-' + transaccion.tipo, { 'es-stash': transaccion.esStash }]"
                 >
                   <div class="transaccion-mini-header">
-                    <span>{{ obtenerTipoTexto(transaccion.tipo) }}</span>
+                    <span>
+                      <template v-if="transaccion.esStash">
+                        {{ transaccion.descripcion }}
+                        <span class="badge-stash">📦</span>
+                      </template>
+                      <template v-else>
+                        {{ obtenerTipoTexto(transaccion.tipo) }}
+                      </template>
+                    </span>
                     <span>${{ formatearNumero(transaccion.monto) }}</span>
                   </div>
                   <div class="transaccion-mini-hora">{{ formatearHora(transaccion.timestamp) }}</div>
                   <div class="transaccion-mini-acciones">
                     <label
-                      v-if="transaccion.tipo === 'efectivo' && !transaccion.esStash"
+                      v-if="transaccion.tipo === 'efectivo'"
                       class="entregado-toggle"
                     >
                       <input
@@ -179,8 +187,9 @@
                       />
                       Entregado
                     </label>
-                    <button @click="editarTransaccion(obtenerIndiceTransaccion(transaccion))" class="btn-mini">Editar</button>
-                    <button @click="eliminarTransaccion(obtenerIndiceTransaccion(transaccion))" class="btn-mini btn-mini-eliminar">Eliminar</button>
+                    <button v-if="!transaccion.esStash" @click="editarTransaccion(obtenerIndiceTransaccion(transaccion))" class="btn-mini">Editar</button>
+                    <button v-if="!transaccion.esStash" @click="eliminarTransaccion(obtenerIndiceTransaccion(transaccion))" class="btn-mini btn-mini-eliminar">Eliminar</button>
+                    <span v-if="transaccion.esStash" class="texto-info-stash">Ver en Stash</span>
                   </div>
                 </div>
               </div>
@@ -219,16 +228,24 @@
                   v-for="(transaccion, index) in clientesAgrupados.joselito" 
                   :key="'joselito-'+index" 
                   class="transaccion-mini"
-                  :class="'tipo-' + transaccion.tipo"
+                  :class="['tipo-' + transaccion.tipo, { 'es-stash': transaccion.esStash }]"
                 >
                   <div class="transaccion-mini-header">
-                    <span>{{ obtenerTipoTexto(transaccion.tipo) }}</span>
+                    <span>
+                      <template v-if="transaccion.esStash">
+                        {{ transaccion.descripcion }}
+                        <span class="badge-stash">📦</span>
+                      </template>
+                      <template v-else>
+                        {{ obtenerTipoTexto(transaccion.tipo) }}
+                      </template>
+                    </span>
                     <span>${{ formatearNumero(transaccion.monto) }}</span>
                   </div>
                   <div class="transaccion-mini-hora">{{ formatearHora(transaccion.timestamp) }}</div>
                   <div class="transaccion-mini-acciones">
                     <label
-                      v-if="transaccion.tipo === 'efectivo' && !transaccion.esStash"
+                      v-if="transaccion.tipo === 'efectivo'"
                       class="entregado-toggle"
                     >
                       <input
@@ -238,8 +255,9 @@
                       />
                       Entregado
                     </label>
-                    <button @click="editarTransaccion(obtenerIndiceTransaccion(transaccion))" class="btn-mini">Editar</button>
-                    <button @click="eliminarTransaccion(obtenerIndiceTransaccion(transaccion))" class="btn-mini btn-mini-eliminar">Eliminar</button>
+                    <button v-if="!transaccion.esStash" @click="editarTransaccion(obtenerIndiceTransaccion(transaccion))" class="btn-mini">Editar</button>
+                    <button v-if="!transaccion.esStash" @click="eliminarTransaccion(obtenerIndiceTransaccion(transaccion))" class="btn-mini btn-mini-eliminar">Eliminar</button>
+                    <span v-if="transaccion.esStash" class="texto-info-stash">Ver en Stash</span>
                   </div>
                 </div>
               </div>
@@ -278,16 +296,24 @@
                   v-for="(transaccion, index) in clientesAgrupados.catarro" 
                   :key="'catarro-'+index" 
                   class="transaccion-mini"
-                  :class="'tipo-' + transaccion.tipo"
+                  :class="['tipo-' + transaccion.tipo, { 'es-stash': transaccion.esStash }]"
                 >
                   <div class="transaccion-mini-header">
-                    <span>{{ obtenerTipoTexto(transaccion.tipo) }}</span>
+                    <span>
+                      <template v-if="transaccion.esStash">
+                        {{ transaccion.descripcion }}
+                        <span class="badge-stash">📦</span>
+                      </template>
+                      <template v-else>
+                        {{ obtenerTipoTexto(transaccion.tipo) }}
+                      </template>
+                    </span>
                     <span>${{ formatearNumero(transaccion.monto) }}</span>
                   </div>
                   <div class="transaccion-mini-hora">{{ formatearHora(transaccion.timestamp) }}</div>
                   <div class="transaccion-mini-acciones">
                     <label
-                      v-if="transaccion.tipo === 'efectivo' && !transaccion.esStash"
+                      v-if="transaccion.tipo === 'efectivo'"
                       class="entregado-toggle"
                     >
                       <input
@@ -297,8 +323,9 @@
                       />
                       Entregado
                     </label>
-                    <button @click="editarTransaccion(obtenerIndiceTransaccion(transaccion))" class="btn-mini">Editar</button>
-                    <button @click="eliminarTransaccion(obtenerIndiceTransaccion(transaccion))" class="btn-mini btn-mini-eliminar">Eliminar</button>
+                    <button v-if="!transaccion.esStash" @click="editarTransaccion(obtenerIndiceTransaccion(transaccion))" class="btn-mini">Editar</button>
+                    <button v-if="!transaccion.esStash" @click="eliminarTransaccion(obtenerIndiceTransaccion(transaccion))" class="btn-mini btn-mini-eliminar">Eliminar</button>
+                    <span v-if="transaccion.esStash" class="texto-info-stash">Ver en Stash</span>
                   </div>
                 </div>
               </div>
@@ -337,16 +364,24 @@
                   v-for="(transaccion, index) in clientesAgrupados.ozuna" 
                   :key="'ozuna-'+index" 
                   class="transaccion-mini"
-                  :class="'tipo-' + transaccion.tipo"
+                  :class="['tipo-' + transaccion.tipo, { 'es-stash': transaccion.esStash }]"
                 >
                   <div class="transaccion-mini-header">
-                    <span>{{ obtenerTipoTexto(transaccion.tipo) }}</span>
+                    <span>
+                      <template v-if="transaccion.esStash">
+                        {{ transaccion.descripcion }}
+                        <span class="badge-stash">📦</span>
+                      </template>
+                      <template v-else>
+                        {{ obtenerTipoTexto(transaccion.tipo) }}
+                      </template>
+                    </span>
                     <span>${{ formatearNumero(transaccion.monto) }}</span>
                   </div>
                   <div class="transaccion-mini-hora">{{ formatearHora(transaccion.timestamp) }}</div>
                   <div class="transaccion-mini-acciones">
                     <label
-                      v-if="transaccion.tipo === 'efectivo' && !transaccion.esStash"
+                      v-if="transaccion.tipo === 'efectivo'"
                       class="entregado-toggle"
                     >
                       <input
@@ -356,8 +391,9 @@
                       />
                       Entregado
                     </label>
-                    <button @click="editarTransaccion(obtenerIndiceTransaccion(transaccion))" class="btn-mini">Editar</button>
-                    <button @click="eliminarTransaccion(obtenerIndiceTransaccion(transaccion))" class="btn-mini btn-mini-eliminar">Eliminar</button>
+                    <button v-if="!transaccion.esStash" @click="editarTransaccion(obtenerIndiceTransaccion(transaccion))" class="btn-mini">Editar</button>
+                    <button v-if="!transaccion.esStash" @click="eliminarTransaccion(obtenerIndiceTransaccion(transaccion))" class="btn-mini btn-mini-eliminar">Eliminar</button>
+                    <span v-if="transaccion.esStash" class="texto-info-stash">Ver en Stash</span>
                   </div>
                 </div>
               </div>
@@ -413,7 +449,7 @@
                   <div class="transaccion-mini-hora">{{ formatearHora(transaccion.timestamp) }}</div>
                   <div class="transaccion-mini-acciones">
                     <label
-                      v-if="transaccion.tipo === 'efectivo' && !transaccion.esStash"
+                      v-if="transaccion.tipo === 'efectivo'"
                       class="entregado-toggle"
                     >
                       <input
@@ -459,7 +495,7 @@
             <div class="transaccion-hora">{{ formatearHora(transaccion.timestamp) }}</div>
             <div class="transaccion-acciones">
               <label
-                v-if="transaccion.tipo === 'efectivo' && !transaccion.esStash"
+                v-if="transaccion.tipo === 'efectivo'"
                 class="entregado-toggle"
               >
                 <input
@@ -592,7 +628,7 @@ export default {
     montoEfectivoDia() {
       if (!this.diaSeleccionado) return 0;
       return this.transaccionesDia
-        .filter(t => t.tipo === 'efectivo' && !t.esStash)
+        .filter(t => t.tipo === 'efectivo')
         .reduce((total, t) => total + (parseFloat(t.monto) || 0), 0);
     },
     montoCuentasDia() {
@@ -648,7 +684,7 @@ export default {
     },
     contarEfectivoPendiente(clienteKey) {
       const lista = this.clientesAgrupados?.[clienteKey] || [];
-      return lista.filter(t => t.tipo === 'efectivo' && !t.esStash && !t.efectivoEntregado).length;
+      return lista.filter(t => t.tipo === 'efectivo' && !t.efectivoEntregado).length;
     },
     tieneEfectivoPendiente(clienteKey) {
       return this.contarEfectivoPendiente(clienteKey) > 0;
@@ -918,47 +954,70 @@ export default {
           });
         });
         
-        // Cargar transacciones del stash y su historial para Verónica
+        // Cargar transacciones del stash (stash_<cliente>) para que se vean en la agenda del día
+        // y guardar índice de entregas por si se requiere en el historial.
+        this._stashEntregadoIndex = await this.cargarTransaccionesStashPorClientes(primerDiaStr, ultimoDiaStr);
+
+        // Mantener historial de abonos aplicados del stash solo para Verónica/México (compatibilidad)
         if (this.cliente === 'veronica' || this.cliente === 'mexico') {
-          await this.cargarTransaccionesStashVeronica(primerDiaStr, ultimoDiaStr);
-          await this.cargarTransaccionesHistorialStashVeronica(primerDiaStr, ultimoDiaStr);
+          await this.cargarTransaccionesHistorialStashVeronica(primerDiaStr, ultimoDiaStr, this._stashEntregadoIndex);
         }
       } catch (error) {
         console.error('Error al cargar las transacciones:', error);
       }
     },
-    async cargarTransaccionesStashVeronica(primerDiaStr, ultimoDiaStr) {
+    async cargarTransaccionesStashPorClientes(primerDiaStr, ultimoDiaStr) {
+      const clientes = ['otilio', 'joselito', 'catarro', 'ozuna', 'veronica', 'mexico'];
+      const results = await Promise.all(
+        clientes.map(clienteKey => this.cargarTransaccionesStashCliente(clienteKey, primerDiaStr, ultimoDiaStr))
+      );
+      return results.reduce((acc, item) => Object.assign(acc, item || {}), {});
+    },
+    async cargarTransaccionesStashCliente(clienteKey, primerDiaStr, ultimoDiaStr) {
       try {
+        const entregadoIndex = {};
         const qStash = query(
-          collection(db, 'stash_veronica'),
+          collection(db, `stash_${clienteKey}`),
           where('fecha', '>=', primerDiaStr),
           where('fecha', '<=', ultimoDiaStr)
         );
-        
+
         const stashSnapshot = await getDocs(qStash);
-        
+
         stashSnapshot.forEach((doc) => {
-          const stashData = doc.data();
+          const stashData = doc.data() || {};
           const fechaBase = stashData.fechaCreacion || stashData.fecha || new Date().toISOString();
           const fechaDate = this.parseFechaSeguro(fechaBase);
           const fechaISO = fechaDate ? this.toISODateLocal(fechaDate) : stashData.fecha;
-          // Convertir los datos del stash al formato de transacciones
+          const esEfectivo = !!stashData.esEfectivo;
+          const stashDocId = doc.id;
+
           this.transacciones.push({
-            id: `stash_${doc.id}`,
-            cliente: 'veronica',
-            tipo: 'deposito', // Por defecto, consideramos los stash como depósitos
+            id: `stash_${clienteKey}_${doc.id}`,
+            cliente: clienteKey,
+            tipo: esEfectivo ? 'efectivo' : 'deposito',
             monto: stashData.monto || 0,
             descripcion: `Stash: ${stashData.descripcion || 'Sin descripción'}`,
             timestamp: fechaDate ? fechaDate.toISOString() : fechaBase,
             fecha: fechaISO || stashData.fecha,
-            esStash: true // Marcador para identificar que viene del stash
+            esStash: true,
+            stashEsEfectivo: esEfectivo,
+            stashDocId,
+            efectivoEntregado: !!stashData.efectivoEntregado
           });
+
+          entregadoIndex[`${clienteKey}:${stashDocId}`] = {
+            efectivoEntregado: !!stashData.efectivoEntregado
+          };
         });
+
+        return entregadoIndex;
       } catch (error) {
-        console.error('Error al cargar transacciones del stash de Verónica:', error);
+        console.error(`Error al cargar transacciones del stash de ${clienteKey}:`, error);
+        return {};
       }
     },
-    async cargarTransaccionesHistorialStashVeronica(primerDiaStr, ultimoDiaStr) {
+    async cargarTransaccionesHistorialStashVeronica(primerDiaStr, ultimoDiaStr, stashEntregadoIndex = {}) {
       // Los abonos aplicados del stash se guardan en cuentasVeronica dentro del array "abonos" de cada cuenta.
       // Usamos la fecha original del stash (fechaOriginalStash) para ubicarlos en el calendario.
       try {
@@ -970,6 +1029,13 @@ export default {
         
         const snapshot = await getDocs(qCuentas);
         
+        const grupos = new Map();
+
+        const limpiarDescripcion = (descripcion) => {
+          if (!descripcion) return 'Abono aplicado';
+          return String(descripcion).replace(/\s*\(Aplicación Individual\)\s*$/i, '').trim();
+        };
+
         snapshot.forEach((docSnap) => {
           const cuentaData = docSnap.data();
           const cuentaId = docSnap.id;
@@ -988,24 +1054,58 @@ export default {
             
             // Filtrar por rango del mes
             if (fechaISO < primerDiaStr || fechaISO > ultimoDiaStr) return;
-            
-            // Evitar duplicados - verificar que no existe ya esta transacción
-            const idTransaccion = `abono_${cuentaId}_${idx}`;
-            const yaExiste = this.transacciones.some(t => t.id === idTransaccion);
-            if (yaExiste) return;
-            
-            this.transacciones.push({
-              id: idTransaccion,
-              cliente: 'veronica',
-              tipo: 'deposito',
-              monto: abono.monto || 0,
-              descripcion: abono.descripcion || 'Abono aplicado',
-              timestamp: fechaDate.toISOString(),
-              fecha: fechaISO,
-              esStash: true,
-              origenHistorial: true,
-              cuentaId: cuentaId
-            });
+
+            const stashItemId = abono.stashItemId || null;
+            const tipo = abono.esEfectivo ? 'efectivo' : 'deposito';
+            const descripcionLimpia = limpiarDescripcion(abono.descripcion || 'Abono aplicado');
+            const groupKey = stashItemId
+              ? `stashItem:${stashItemId}`
+              : `fallback:${fechaISO}:${tipo}:${descripcionLimpia}`;
+
+            if (!grupos.has(groupKey)) {
+              const entregado = stashItemId
+                ? (stashEntregadoIndex?.[`veronica:${stashItemId}`]?.efectivoEntregado ?? false)
+                : false;
+
+              grupos.set(groupKey, {
+                id: stashItemId ? `stash_hist_veronica_${stashItemId}` : `stash_hist_veronica_${fechaISO}_${idx}`,
+                cliente: 'veronica',
+                tipo,
+                monto: 0,
+                descripcion: descripcionLimpia,
+                timestamp: fechaDate.toISOString(),
+                fecha: fechaISO,
+                esStash: true,
+                origenHistorial: true,
+                stashDocId: stashItemId || null,
+                efectivoEntregado: !!entregado,
+                cuentaIds: new Set()
+              });
+            }
+
+            const grupo = grupos.get(groupKey);
+            grupo.monto += (parseFloat(abono.monto) || 0);
+            grupo.cuentaIds.add(cuentaId);
+          });
+        });
+
+        // Emitir transacciones agrupadas (una por stashItemId / fallback)
+        grupos.forEach((t) => {
+          // Evitar duplicados por id
+          if (this.transacciones.some(x => x.id === t.id)) return;
+          this.transacciones.push({
+            id: t.id,
+            cliente: t.cliente,
+            tipo: t.tipo,
+            monto: t.monto,
+            descripcion: t.descripcion,
+            timestamp: t.timestamp,
+            fecha: t.fecha,
+            esStash: true,
+            origenHistorial: true,
+            stashDocId: t.stashDocId,
+            efectivoEntregado: t.efectivoEntregado,
+            cuentaIds: Array.from(t.cuentaIds)
           });
         });
       } catch (error) {
@@ -1034,12 +1134,16 @@ export default {
     async actualizarEfectivoEntregado(transaccion, entregado) {
       if (!transaccion || !transaccion.id) return;
 
-      // No permitir cambios en transacciones del stash desde aquí
-      if (transaccion.esStash) return;
-
       try {
-        const transaccionRef = doc(db, 'transacciones', transaccion.id);
-        await updateDoc(transaccionRef, { efectivoEntregado: !!entregado });
+        if (transaccion.esStash) {
+          // Persistir en stash_<cliente>
+          if (!transaccion.cliente || !transaccion.stashDocId) return;
+          const stashRef = doc(db, `stash_${transaccion.cliente}`, transaccion.stashDocId);
+          await updateDoc(stashRef, { efectivoEntregado: !!entregado });
+        } else {
+          const transaccionRef = doc(db, 'transacciones', transaccion.id);
+          await updateDoc(transaccionRef, { efectivoEntregado: !!entregado });
+        }
 
         // Actualizar estado local
         this.transacciones = this.transacciones.map(t =>
