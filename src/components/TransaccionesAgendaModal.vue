@@ -58,7 +58,11 @@
           </div>
           <div class="resumen-dia-item">
             <span>Transacciones:</span>
-            <span>{{ transaccionesDia.length }}</span>
+            <span class="resumen-dia-metric">
+              <span class="resumen-dia-num">{{ transaccionesDia.length }}</span>
+              <span class="resumen-dia-extra">Efectivo: ${{ formatearNumero(montoEfectivoDia) }}</span>
+              <span class="resumen-dia-extra">Cuentas: ${{ formatearNumero(montoCuentasDia) }}</span>
+            </span>
           </div>
         </div>
         
@@ -70,7 +74,6 @@
           <div class="form-group">
             <label for="cliente">Cliente:</label>
             <select id="cliente" v-model="nuevaTransaccion.cliente" class="input-field">
-              <option value="mexico">México</option>
               <option value="ozuna">Ozuna</option>
               <option value="catarro">Catarro</option>
               <option value="joselito">Joselito</option>
@@ -133,7 +136,16 @@
                 :aria-expanded="esAcordeonClienteAbierto('otilio') ? 'true' : 'false'"
                 @click="toggleAcordeonCliente('otilio')"
               >
-                <h4>Otilio</h4>
+                <div class="cliente-titulo">
+                  <h4>Otilio</h4>
+                  <span
+                    v-if="tieneEfectivoPendiente('otilio')"
+                    class="badge-efectivo-pendiente"
+                    :title="`Efectivo pendiente: ${contarEfectivoPendiente('otilio')}`"
+                  >
+                    {{ contarEfectivoPendiente('otilio') }}
+                  </span>
+                </div>
                 <div class="cliente-total">
                   Total: ${{ formatearNumero(calcularTotalCliente('otilio')) }}
                 </div>
@@ -156,6 +168,17 @@
                   </div>
                   <div class="transaccion-mini-hora">{{ formatearHora(transaccion.timestamp) }}</div>
                   <div class="transaccion-mini-acciones">
+                    <label
+                      v-if="transaccion.tipo === 'efectivo' && !transaccion.esStash"
+                      class="entregado-toggle"
+                    >
+                      <input
+                        type="checkbox"
+                        :checked="!!transaccion.efectivoEntregado"
+                        @change="actualizarEfectivoEntregado(transaccion, $event.target.checked)"
+                      />
+                      Entregado
+                    </label>
                     <button @click="editarTransaccion(obtenerIndiceTransaccion(transaccion))" class="btn-mini">Editar</button>
                     <button @click="eliminarTransaccion(obtenerIndiceTransaccion(transaccion))" class="btn-mini btn-mini-eliminar">Eliminar</button>
                   </div>
@@ -172,7 +195,16 @@
                 :aria-expanded="esAcordeonClienteAbierto('joselito') ? 'true' : 'false'"
                 @click="toggleAcordeonCliente('joselito')"
               >
-                <h4>Joselito</h4>
+                <div class="cliente-titulo">
+                  <h4>Joselito</h4>
+                  <span
+                    v-if="tieneEfectivoPendiente('joselito')"
+                    class="badge-efectivo-pendiente"
+                    :title="`Efectivo pendiente: ${contarEfectivoPendiente('joselito')}`"
+                  >
+                    {{ contarEfectivoPendiente('joselito') }}
+                  </span>
+                </div>
                 <div class="cliente-total">
                   Total: ${{ formatearNumero(calcularTotalCliente('joselito')) }}
                 </div>
@@ -195,6 +227,17 @@
                   </div>
                   <div class="transaccion-mini-hora">{{ formatearHora(transaccion.timestamp) }}</div>
                   <div class="transaccion-mini-acciones">
+                    <label
+                      v-if="transaccion.tipo === 'efectivo' && !transaccion.esStash"
+                      class="entregado-toggle"
+                    >
+                      <input
+                        type="checkbox"
+                        :checked="!!transaccion.efectivoEntregado"
+                        @change="actualizarEfectivoEntregado(transaccion, $event.target.checked)"
+                      />
+                      Entregado
+                    </label>
                     <button @click="editarTransaccion(obtenerIndiceTransaccion(transaccion))" class="btn-mini">Editar</button>
                     <button @click="eliminarTransaccion(obtenerIndiceTransaccion(transaccion))" class="btn-mini btn-mini-eliminar">Eliminar</button>
                   </div>
@@ -211,7 +254,16 @@
                 :aria-expanded="esAcordeonClienteAbierto('catarro') ? 'true' : 'false'"
                 @click="toggleAcordeonCliente('catarro')"
               >
-                <h4>Catarro</h4>
+                <div class="cliente-titulo">
+                  <h4>Catarro</h4>
+                  <span
+                    v-if="tieneEfectivoPendiente('catarro')"
+                    class="badge-efectivo-pendiente"
+                    :title="`Efectivo pendiente: ${contarEfectivoPendiente('catarro')}`"
+                  >
+                    {{ contarEfectivoPendiente('catarro') }}
+                  </span>
+                </div>
                 <div class="cliente-total">
                   Total: ${{ formatearNumero(calcularTotalCliente('catarro')) }}
                 </div>
@@ -234,6 +286,17 @@
                   </div>
                   <div class="transaccion-mini-hora">{{ formatearHora(transaccion.timestamp) }}</div>
                   <div class="transaccion-mini-acciones">
+                    <label
+                      v-if="transaccion.tipo === 'efectivo' && !transaccion.esStash"
+                      class="entregado-toggle"
+                    >
+                      <input
+                        type="checkbox"
+                        :checked="!!transaccion.efectivoEntregado"
+                        @change="actualizarEfectivoEntregado(transaccion, $event.target.checked)"
+                      />
+                      Entregado
+                    </label>
                     <button @click="editarTransaccion(obtenerIndiceTransaccion(transaccion))" class="btn-mini">Editar</button>
                     <button @click="eliminarTransaccion(obtenerIndiceTransaccion(transaccion))" class="btn-mini btn-mini-eliminar">Eliminar</button>
                   </div>
@@ -250,7 +313,16 @@
                 :aria-expanded="esAcordeonClienteAbierto('ozuna') ? 'true' : 'false'"
                 @click="toggleAcordeonCliente('ozuna')"
               >
-                <h4>Ozuna</h4>
+                <div class="cliente-titulo">
+                  <h4>Ozuna</h4>
+                  <span
+                    v-if="tieneEfectivoPendiente('ozuna')"
+                    class="badge-efectivo-pendiente"
+                    :title="`Efectivo pendiente: ${contarEfectivoPendiente('ozuna')}`"
+                  >
+                    {{ contarEfectivoPendiente('ozuna') }}
+                  </span>
+                </div>
                 <div class="cliente-total">
                   Total: ${{ formatearNumero(calcularTotalCliente('ozuna')) }}
                 </div>
@@ -273,6 +345,17 @@
                   </div>
                   <div class="transaccion-mini-hora">{{ formatearHora(transaccion.timestamp) }}</div>
                   <div class="transaccion-mini-acciones">
+                    <label
+                      v-if="transaccion.tipo === 'efectivo' && !transaccion.esStash"
+                      class="entregado-toggle"
+                    >
+                      <input
+                        type="checkbox"
+                        :checked="!!transaccion.efectivoEntregado"
+                        @change="actualizarEfectivoEntregado(transaccion, $event.target.checked)"
+                      />
+                      Entregado
+                    </label>
                     <button @click="editarTransaccion(obtenerIndiceTransaccion(transaccion))" class="btn-mini">Editar</button>
                     <button @click="eliminarTransaccion(obtenerIndiceTransaccion(transaccion))" class="btn-mini btn-mini-eliminar">Eliminar</button>
                   </div>
@@ -289,7 +372,16 @@
                 :aria-expanded="esAcordeonClienteAbierto('veronica') ? 'true' : 'false'"
                 @click="toggleAcordeonCliente('veronica')"
               >
-                <h4>Verónica</h4>
+                <div class="cliente-titulo">
+                  <h4>Verónica</h4>
+                  <span
+                    v-if="tieneEfectivoPendiente('veronica')"
+                    class="badge-efectivo-pendiente"
+                    :title="`Efectivo pendiente: ${contarEfectivoPendiente('veronica')}`"
+                  >
+                    {{ contarEfectivoPendiente('veronica') }}
+                  </span>
+                </div>
                 <div class="cliente-total">
                   Total: ${{ formatearNumero(calcularTotalCliente('veronica')) }}
                 </div>
@@ -320,6 +412,17 @@
                   </div>
                   <div class="transaccion-mini-hora">{{ formatearHora(transaccion.timestamp) }}</div>
                   <div class="transaccion-mini-acciones">
+                    <label
+                      v-if="transaccion.tipo === 'efectivo' && !transaccion.esStash"
+                      class="entregado-toggle"
+                    >
+                      <input
+                        type="checkbox"
+                        :checked="!!transaccion.efectivoEntregado"
+                        @change="actualizarEfectivoEntregado(transaccion, $event.target.checked)"
+                      />
+                      Entregado
+                    </label>
                     <button v-if="!transaccion.esStash" @click="editarTransaccion(obtenerIndiceTransaccion(transaccion))" class="btn-mini">Editar</button>
                     <button v-if="!transaccion.esStash" @click="eliminarTransaccion(obtenerIndiceTransaccion(transaccion))" class="btn-mini btn-mini-eliminar">Eliminar</button>
                     <span v-if="transaccion.esStash" class="texto-info-stash">Ver en Stash</span>
@@ -355,6 +458,17 @@
             <div v-if="!transaccion.esStash" class="transaccion-descripcion">{{ transaccion.descripcion }}</div>
             <div class="transaccion-hora">{{ formatearHora(transaccion.timestamp) }}</div>
             <div class="transaccion-acciones">
+              <label
+                v-if="transaccion.tipo === 'efectivo' && !transaccion.esStash"
+                class="entregado-toggle"
+              >
+                <input
+                  type="checkbox"
+                  :checked="!!transaccion.efectivoEntregado"
+                  @change="actualizarEfectivoEntregado(transaccion, $event.target.checked)"
+                />
+                Entregado
+              </label>
               <button v-if="!transaccion.esStash" @click="editarTransaccion(index)" class="btn-editar">Editar</button>
               <button v-if="!transaccion.esStash" @click="eliminarTransaccion(index)" class="btn-eliminar">Eliminar</button>
               <span v-if="transaccion.esStash" class="texto-info-stash">Esta transacción proviene del Stash y debe gestionarse desde allí</span>
@@ -397,7 +511,7 @@ export default {
       diaSeleccionado: null,
       mostrarFormulario: false,
       mostrarVistaLista: false,
-      clienteAcordeonAbierto: null,
+      clientesAcordeonAbiertos: [],
       transacciones: [],
       nuevaTransaccion: {
         tipo: 'deposito',
@@ -475,6 +589,18 @@ export default {
         return ts ? this.toISODateLocal(ts) === diaISO : false;
       });
     },
+    montoEfectivoDia() {
+      if (!this.diaSeleccionado) return 0;
+      return this.transaccionesDia
+        .filter(t => t.tipo === 'efectivo' && !t.esStash)
+        .reduce((total, t) => total + (parseFloat(t.monto) || 0), 0);
+    },
+    montoCuentasDia() {
+      if (!this.diaSeleccionado) return 0;
+      // Cuentas = total del día - efectivo
+      const totalDia = this.transaccionesDia.reduce((total, t) => total + (parseFloat(t.monto) || 0), 0);
+      return Math.max(0, totalDia - this.montoEfectivoDia);
+    },
     formatoFechaCompleta() {
       if (!this.diaSeleccionado) return '';
       
@@ -509,10 +635,23 @@ export default {
   },
   methods: {
     toggleAcordeonCliente(clienteKey) {
-      this.clienteAcordeonAbierto = this.clienteAcordeonAbierto === clienteKey ? null : clienteKey;
+      const abiertos = new Set(this.clientesAcordeonAbiertos);
+      if (abiertos.has(clienteKey)) {
+        abiertos.delete(clienteKey);
+      } else {
+        abiertos.add(clienteKey);
+      }
+      this.clientesAcordeonAbiertos = Array.from(abiertos);
     },
     esAcordeonClienteAbierto(clienteKey) {
-      return this.clienteAcordeonAbierto === clienteKey;
+      return this.clientesAcordeonAbiertos.includes(clienteKey);
+    },
+    contarEfectivoPendiente(clienteKey) {
+      const lista = this.clientesAgrupados?.[clienteKey] || [];
+      return lista.filter(t => t.tipo === 'efectivo' && !t.esStash && !t.efectivoEntregado).length;
+    },
+    tieneEfectivoPendiente(clienteKey) {
+      return this.contarEfectivoPendiente(clienteKey) > 0;
     },
     // --- Helpers de fecha (evitan desfases UTC y parseos ambiguos) ---
     toISODateLocal(date) {
@@ -631,8 +770,8 @@ export default {
     },
     formatearNumero(num) {
       return num.toLocaleString('es-MX', {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0
       });
     },
     formatearHora(timestamp) {
@@ -677,11 +816,16 @@ export default {
       if (!this.esFormularioValido) return;
       
       try {
+        const transaccionActual = this.editandoIndex >= 0 ? this.transaccionesDia[this.editandoIndex] : null;
         const transaccionData = {
           ...this.nuevaTransaccion,
           monto: parseFloat(this.nuevaTransaccion.monto),
           timestamp: this.nuevaTransaccion.timestamp || new Date().toISOString(),
-          fecha: this.diaSeleccionado.fecha.toISOString().split('T')[0]
+          fecha: this.diaSeleccionado.fecha.toISOString().split('T')[0],
+          // Solo aplica para tipo efectivo (se usa para marcar si ya fue entregado)
+          efectivoEntregado: this.nuevaTransaccion.tipo === 'efectivo'
+            ? (transaccionActual?.efectivoEntregado ?? false)
+            : false
         };
         
         if (this.editandoIndex >= 0) {
@@ -886,6 +1030,25 @@ export default {
     },
     obtenerIndiceTransaccion(transaccion) {
       return this.transaccionesDia.findIndex(t => t.id === transaccion.id);
+    },
+    async actualizarEfectivoEntregado(transaccion, entregado) {
+      if (!transaccion || !transaccion.id) return;
+
+      // No permitir cambios en transacciones del stash desde aquí
+      if (transaccion.esStash) return;
+
+      try {
+        const transaccionRef = doc(db, 'transacciones', transaccion.id);
+        await updateDoc(transaccionRef, { efectivoEntregado: !!entregado });
+
+        // Actualizar estado local
+        this.transacciones = this.transacciones.map(t =>
+          t.id === transaccion.id ? { ...t, efectivoEntregado: !!entregado } : t
+        );
+      } catch (error) {
+        console.error('Error al actualizar el estado de entrega:', error);
+        alert('No se pudo actualizar el estado de entrega. Intenta de nuevo.');
+      }
     },
     calcularTotalDia() {
       return this.transaccionesDia.reduce((total, transaccion) => {
@@ -1448,6 +1611,28 @@ label {
   transform: rotate(180deg);
 }
 
+.cliente-titulo {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.badge-efectivo-pendiente {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background-color: #e74c3c;
+  color: white;
+  font-size: 0.75em;
+  font-weight: 700;
+  line-height: 1;
+}
+
 .cliente-header h4 {
   margin: 0;
   color: #3760b0;
@@ -1606,10 +1791,40 @@ label {
   color: #555;
 }
 
-.resumen-dia-item span:last-child {
+.resumen-dia-item > span:last-child {
   font-weight: bold;
   color: #3760b0;
   font-size: 1.1em;
+}
+
+.resumen-dia-metric {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+  font-weight: 400;
+}
+
+.resumen-dia-item > .resumen-dia-metric {
+  font-weight: 400;
+}
+
+.resumen-dia-num {
+  font-weight: 800;
+  color: #3760b0;
+  font-size: 1.1em;
+}
+
+.resumen-dia-extra {
+  font-size: 0.8em;
+  font-weight: 600;
+  color: #2c3e50;
+  background: rgba(55, 96, 176, 0.08);
+  border: 1px solid rgba(55, 96, 176, 0.18);
+  padding: 2px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
 }
 
 .cliente-header {
@@ -1826,6 +2041,26 @@ label {
   display: flex;
   justify-content: flex-end;
   gap: 5px;
+}
+
+.entregado-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8em;
+  color: #2c3e50;
+  background: rgba(7, 113, 30, 0.08);
+  border: 1px solid rgba(7, 113, 30, 0.22);
+  padding: 3px 8px;
+  border-radius: 999px;
+  margin-right: 6px;
+  user-select: none;
+}
+
+.entregado-toggle input {
+  width: 14px;
+  height: 14px;
+  accent-color: #07711e;
 }
 
 .btn-mini {
