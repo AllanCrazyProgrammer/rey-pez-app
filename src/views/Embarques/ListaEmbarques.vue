@@ -26,6 +26,10 @@
             <span class="btn-icon">↻</span>
             REFRESH
           </button>
+          <button @click="abrirModalGenerarPdfCliente" class="btn-pdf" title="Generar Nota PDF por fecha/cliente">
+            <span class="btn-icon">🗎</span>
+            Generar nota
+          </button>
         </div>
       </div>
     </div>
@@ -172,6 +176,23 @@
       :mensaje="mensajeNotificacion"
       @close="cerrarNotificacion"
     />
+
+    <GenerarPdfClienteModal
+      :mostrar="mostrarModalGenerarPdfCliente"
+      :fecha="modalGenerarPdf.fecha"
+      :embarques="modalGenerarPdf.embarques"
+      :embarque-id="modalGenerarPdf.embarqueId"
+      :cliente-id="modalGenerarPdf.clienteId"
+      :clientes="modalGenerarPdf.clientes"
+      :cargando="modalGenerarPdf.cargando"
+      :error="modalGenerarPdf.error"
+      @cerrar="cerrarModalGenerarPdfCliente"
+      @update:fecha="onCambioFechaModalPdf"
+      @update:embarque-id="onSeleccionEmbarqueModal"
+      @update:cliente-id="modalGenerarPdf.clienteId = $event"
+      @buscar="cargarEmbarquesModalPdf"
+      @confirmar="generarPdfDesdeModal"
+    />
   </div>
 </template>
 
@@ -181,11 +202,15 @@ import BackupService from './BackupService.js';
 import NotificacionRespaldo from './NotificacionRespaldo.vue';
 import EmbarquesOfflineService from '@/services/EmbarquesOfflineService';
 import { useAuthStore } from '@/stores/auth';
+import GenerarPdfClienteModal from './components/modals/GenerarPdfClienteModal.vue';
+import { normalizarFechaISO, obtenerFechaActualISO } from '@/utils/dateUtils';
+import { generarNotaVentaPDF } from '@/utils/pdfGenerator';
 
 export default {
   name: 'ListaEmbarques',
   components: {
-    NotificacionRespaldo
+    NotificacionRespaldo,
+    GenerarPdfClienteModal
   },
   data() {
     return {
@@ -196,7 +221,18 @@ export default {
       mostrarNotificacion: false,
       tipoNotificacion: 'success',
       tituloNotificacion: '',
-      mensajeNotificacion: ''
+      mensajeNotificacion: '',
+      // Modal generar PDF
+      mostrarModalGenerarPdfCliente: false,
+      modalGenerarPdf: {
+        fecha: '',
+        embarques: [],
+        embarqueId: '',
+        clienteId: '',
+        clientes: [],
+        cargando: false,
+        error: ''
+      }
     };
   },
   methods: {
@@ -952,6 +988,265 @@ export default {
 
     cerrarNotificacion() {
       this.mostrarNotificacion = false;
+    },
+
+    // --- Generar PDF por fecha/cliente ---
+    abrirModalGenerarPdfCliente() {
+      this.modalGenerarPdf.error = '';
+      this.modalGenerarPdf.fecha = obtenerFechaActualISO();
+      this.modalGenerarPdf.embarqueId = '';
+      this.modalGenerarPdf.clienteId = '';
+      this.modalGenerarPdf.clientes = [];
+      this.modalGenerarPdf.embarques = [];
+      this.mostrarModalGenerarPdfCliente = true;
+      this.cargarEmbarquesModalPdf();
+    },
+
+    async cargarEmbarquesModalPdf() {
+      if (!this.modalGenerarPdf.fecha) {
+        this.modalGenerarPdf.error = 'Selecciona una fecha para buscar embarques.';
+        return;
+      }
+
+      this.modalGenerarPdf.cargando = true;
+      this.modalGenerarPdf.error = '';
+
+      try {
+        const embarques = await this.buscarEmbarquesPorFecha(this.modalGenerarPdf.fecha);
+        this.modalGenerarPdf.embarques = embarques;
+
+        if (embarques.length > 0) {
+          this.modalGenerarPdf.embarqueId = embarques[0].id;
+          this.actualizarClientesModal();
+        } else {
+          this.modalGenerarPdf.embarqueId = '';
+          this.modalGenerarPdf.clientes = [];
+          this.modalGenerarPdf.clienteId = '';
+          this.modalGenerarPdf.error = 'No se encontraron embarques para esa fecha.';
+        }
+      } catch (error) {
+        console.error('[Modal PDF] Error al cargar embarques:', error);
+        this.modalGenerarPdf.error = 'No se pudieron cargar los embarques. Intenta de nuevo.';
+      } finally {
+        this.modalGenerarPdf.cargando = false;
+      }
+    },
+
+    async buscarEmbarquesPorFecha(fecha) {
+      const fechaISO = this.normalizarFechaUTC(fecha);
+      const coincidencias = new Map();
+
+      try {
+        await EmbarquesOfflineService.init();
+        const registrosOffline = await EmbarquesOfflineService.getAll();
+        registrosOffline.forEach(registro => {
+          if (this.normalizarFechaUTC(registro.fecha) === fechaISO) {
+            coincidencias.set(registro.id, this.normalizarEmbarqueParaModal(registro));
+          }
+        });
+      } catch (error) {
+        console.warn('[Modal PDF] No se pudo leer embarques offline:', error);
+      }
+
+      if (coincidencias.size === 0) {
+        const db = getFirestore();
+        const embarquesRef = collection(db, 'embarques');
+        const snapshot = await getDocs(embarquesRef);
+        snapshot.forEach(docSnap => {
+          const data = docSnap.data();
+          const fechaDoc = data.fecha && typeof data.fecha.toDate === 'function'
+            ? data.fecha.toDate()
+            : data.fecha;
+
+          if (this.normalizarFechaUTC(fechaDoc) === fechaISO) {
+            coincidencias.set(docSnap.id, this.normalizarEmbarqueParaModal({ id: docSnap.id, ...data }));
+          }
+        });
+      }
+
+      return Array.from(coincidencias.values())
+        .sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+    },
+
+    normalizarEmbarqueParaModal(registro) {
+      const fechaFuente = registro.fechaISO || (registro.fecha && registro.fecha.seconds
+        ? new Date(registro.fecha.seconds * 1000)
+        : registro.fecha);
+
+      return {
+        id: registro.id,
+        fecha: this.normalizarFechaUTC(fechaFuente),
+        cargaCon: registro.cargaCon || registro.docData?.cargaCon || '',
+        camionNumero: registro.camionNumero || registro.docData?.camionNumero || 1,
+        clientes: registro.clientes || registro.docData?.clientes || [],
+        clientesJuntarMedidas: registro.clientesJuntarMedidas || registro.docData?.clientesJuntarMedidas || {},
+        clientesReglaOtilio: registro.clientesReglaOtilio || registro.docData?.clientesReglaOtilio || {},
+        clientesIncluirPrecios: registro.clientesIncluirPrecios || registro.docData?.clientesIncluirPrecios || {},
+        clientesSumarKgCatarro: registro.clientesSumarKgCatarro || registro.docData?.clientesSumarKgCatarro || {},
+        clientesCuentaEnPdf: registro.clientesCuentaEnPdf || registro.docData?.clientesCuentaEnPdf || {},
+        productos: registro.productos || registro.docData?.productos || [],
+        clienteCrudos: registro.clienteCrudos || registro.crudos || registro.docData?.clienteCrudos || {},
+        kilosCrudos: registro.kilosCrudos || registro.docData?.kilosCrudos || {},
+      };
+    },
+
+    actualizarClientesModal() {
+      const embarqueSeleccionado = this.modalGenerarPdf.embarques.find(
+        e => e.id === this.modalGenerarPdf.embarqueId
+      );
+
+      if (!embarqueSeleccionado) {
+        this.modalGenerarPdf.clientes = [];
+        this.modalGenerarPdf.clienteId = '';
+        return;
+      }
+
+      let clientes = [];
+
+      if (Array.isArray(embarqueSeleccionado.clientes) && embarqueSeleccionado.clientes.length) {
+        clientes = embarqueSeleccionado.clientes
+          .map(cliente => ({
+            id: cliente.id?.toString(),
+            nombre: cliente.nombre || cliente.nombreNotas || this.obtenerNombreCliente(cliente.id)
+          }))
+          .filter(c => c.id);
+      } else if (Array.isArray(embarqueSeleccionado.productos)) {
+        const mapa = new Map();
+        embarqueSeleccionado.productos.forEach(producto => {
+          const id = (producto.clienteId || producto.cliente || producto.idCliente || '').toString();
+          if (!id || mapa.has(id)) return;
+          mapa.set(id, {
+            id,
+            nombre: producto.nombreCliente || this.obtenerNombreCliente(id)
+          });
+        });
+        clientes = Array.from(mapa.values());
+      }
+
+      this.modalGenerarPdf.clientes = clientes;
+
+      if (clientes.length > 0) {
+        this.modalGenerarPdf.clienteId = clientes[0].id;
+      } else {
+        this.modalGenerarPdf.clienteId = '';
+      }
+    },
+
+    onCambioFechaModalPdf(fecha) {
+      this.modalGenerarPdf.fecha = fecha;
+      this.cargarEmbarquesModalPdf();
+    },
+
+    onSeleccionEmbarqueModal(embarqueId) {
+      this.modalGenerarPdf.embarqueId = embarqueId;
+      this.actualizarClientesModal();
+    },
+
+    cerrarModalGenerarPdfCliente() {
+      this.mostrarModalGenerarPdfCliente = false;
+      this.modalGenerarPdf = {
+        fecha: '',
+        embarques: [],
+        embarqueId: '',
+        clienteId: '',
+        clientes: [],
+        cargando: false,
+        error: ''
+      };
+    },
+
+    async generarPdfDesdeModal() {
+      if (!this.modalGenerarPdf.embarqueId || !this.modalGenerarPdf.clienteId) {
+        this.modalGenerarPdf.error = 'Selecciona un embarque y un cliente para continuar.';
+        return;
+      }
+
+      const clienteId = this.modalGenerarPdf.clienteId.toString();
+      const embarqueSeleccionado = this.modalGenerarPdf.embarques.find(
+        e => e.id === this.modalGenerarPdf.embarqueId
+      );
+
+      if (!embarqueSeleccionado) {
+        this.modalGenerarPdf.error = 'No se encontró el embarque seleccionado.';
+        return;
+      }
+
+      const clienteGuardado = Array.isArray(embarqueSeleccionado.clientes)
+        ? embarqueSeleccionado.clientes.find(c => c.id?.toString() === clienteId)
+        : null;
+
+      const productosCliente = clienteGuardado?.productos
+        || (embarqueSeleccionado.productos || []).filter(
+          producto => (producto.clienteId || '').toString() === clienteId
+        );
+
+      if (!productosCliente || productosCliente.length === 0) {
+        this.modalGenerarPdf.error = 'El embarque seleccionado no tiene productos para ese cliente.';
+        return;
+      }
+
+      const crudosCliente = clienteGuardado?.crudos
+        || embarqueSeleccionado.clienteCrudos?.[clienteId]
+        || embarqueSeleccionado.crudos?.[clienteId]
+        || [];
+
+      const embarqueCliente = {
+        fecha: embarqueSeleccionado.fecha,
+        cargaCon: embarqueSeleccionado.cargaCon,
+        productos: productosCliente,
+        clienteCrudos: { [clienteId]: crudosCliente },
+        kilosCrudos: embarqueSeleccionado.kilosCrudos || {}
+      };
+
+      const clientesLista = (Array.isArray(embarqueSeleccionado.clientes) && embarqueSeleccionado.clientes.length)
+        ? embarqueSeleccionado.clientes.map(c => ({
+            id: c.id,
+            nombre: c.nombre || c.nombreNotas || this.obtenerNombreCliente(c.id),
+            nombreNotas: c.nombreNotas
+          }))
+        : [];
+
+      this.modalGenerarPdf.error = '';
+      try {
+        await generarNotaVentaPDF(
+          embarqueCliente,
+          clientesLista,
+          embarqueSeleccionado.clientesJuntarMedidas || {},
+          embarqueSeleccionado.clientesReglaOtilio || {},
+          embarqueSeleccionado.clientesIncluirPrecios || {},
+          embarqueSeleccionado.clientesSumarKgCatarro || {},
+          embarqueSeleccionado.clientesCuentaEnPdf || {}
+        );
+        this.cerrarModalGenerarPdfCliente();
+      } catch (error) {
+        console.error('[Modal PDF] Error al generar PDF:', error);
+        this.modalGenerarPdf.error = 'No se pudo generar el PDF. Intenta de nuevo.';
+      }
+    },
+
+    normalizarFechaUTC(fecha) {
+      if (!fecha) return obtenerFechaActualISO();
+      if (typeof fecha === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
+        return fecha;
+      }
+      try {
+        const dateObj = fecha instanceof Date ? fecha : new Date(fecha);
+        if (Number.isNaN(dateObj.getTime())) {
+          return obtenerFechaActualISO();
+        }
+        return dateObj.toISOString().slice(0, 10);
+      } catch (error) {
+        console.warn('[Modal PDF] Fecha inválida recibida:', fecha, error);
+        return obtenerFechaActualISO();
+      }
+    },
+
+    obtenerNombreCliente(id) {
+      if (!id) return 'Cliente';
+      const cliente = this.embarques
+        .flatMap(e => e.clientes || [])
+        .find(c => c.id?.toString() === id.toString());
+      return cliente?.nombre || cliente?.nombreNotas || 'Cliente';
     }
   },
 

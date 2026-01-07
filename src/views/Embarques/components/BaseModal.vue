@@ -12,7 +12,13 @@
             </div>
             <div class="modal-footer">
                 <button @click.stop="cerrar" class="btn btn-secondary">Cancelar</button>
-                <button @click.stop="confirmar" class="btn btn-primary">{{ textoBotonConfirmar }}</button>
+                <button 
+                    @click.stop="confirmar" 
+                    class="btn btn-primary" 
+                    :disabled="deshabilitarConfirmar"
+                >
+                    {{ textoBotonConfirmar }}
+                </button>
             </div>
         </div>
     </div>
@@ -33,6 +39,10 @@ export default {
         textoBotonConfirmar: {
             type: String,
             default: 'Guardar'
+        },
+        deshabilitarConfirmar: {
+            type: Boolean,
+            default: false
         }
     },
     methods: {
@@ -53,7 +63,7 @@ export default {
     left: 0;
     right: 0;
     bottom: 0;
-    background-color: rgba(0, 0, 0, 0.5);
+    background-color: rgba(0, 0, 0, 0.65);
     display: flex;
     justify-content: center;
     align-items: center;
@@ -61,56 +71,85 @@ export default {
 }
 
 .modal-contenido {
-    background-color: white;
-    padding: 20px;
-    border-radius: 8px;
-    width: 300px;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    background: radial-gradient(circle at 20% 20%, rgba(0, 255, 65, 0.12), rgba(0, 255, 65, 0)) ,
+                linear-gradient(135deg, #041c0a 0%, #0a2c15 50%, #021408 100%);
+    border: 1px solid rgba(0, 255, 65, 0.35);
+    box-shadow:
+        0 12px 30px rgba(0, 0, 0, 0.25),
+        0 0 25px rgba(0, 255, 65, 0.25),
+        inset 0 0 20px rgba(0, 255, 65, 0.08);
+    padding: 26px;
+    border-radius: 12px;
+    width: min(720px, 95vw);
     position: relative;
     z-index: 1001;
+    font-size: 1.12rem;
+    line-height: 1.7;
+    color: #e8ffe6;
 }
 
 .modal-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 15px;
+    margin-bottom: 20px;
+    gap: 12px;
 }
 
 .modal-header h3 {
     margin: 0;
+    font-size: 28px;
+    font-weight: 800;
+    letter-spacing: 1px;
+    color: #00ff41;
+    text-shadow: 0 0 10px rgba(0, 255, 65, 0.5);
 }
 
 .btn-cerrar-modal {
     background: none;
     border: none;
-    font-size: 18px;
+    font-size: 28px;
     cursor: pointer;
-    color: #6c757d;
+    color: #7cf7a8;
+    transition: color 0.2s ease;
 }
 
 .modal-footer {
     display: flex;
     justify-content: flex-end;
-    gap: 10px;
-    margin-top: 20px;
+    gap: 12px;
+    margin-top: 22px;
 }
 
 .btn {
     cursor: pointer;
-    transition: background-color 0.3s;
+    transition: background-color 0.3s, transform 0.1s ease;
     border: none;
-    padding: 8px 16px;
-    border-radius: 5px;
+    padding: 10px 18px;
+    border-radius: 6px;
+    font-size: 1.08rem;
+    font-weight: 600;
 }
 
 .btn-primary {
-    background-color: #007bff;
-    color: #fff;
+    background: linear-gradient(135deg, #00c853, #00e676);
+    color: #00220f;
+    box-shadow: 0 0 14px rgba(0, 255, 65, 0.35);
+}
+
+.btn:hover {
+    transform: translateY(-1px);
+}
+
+.btn:disabled,
+.btn[disabled] {
+    opacity: 0.65;
+    cursor: not-allowed;
 }
 
 .btn-secondary {
-    background-color: #6c757d;
-    color: #fff;
+    background: #2c3532;
+    color: #e8ffe6;
+    border: 1px solid rgba(0, 255, 65, 0.2);
 }
 </style>
