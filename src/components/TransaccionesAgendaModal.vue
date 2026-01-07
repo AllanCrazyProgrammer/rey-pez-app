@@ -958,10 +958,16 @@ export default {
         // y guardar índice de entregas por si se requiere en el historial.
         this._stashEntregadoIndex = await this.cargarTransaccionesStashPorClientes(primerDiaStr, ultimoDiaStr);
 
-        // Mantener historial de abonos aplicados del stash solo para Verónica/México (compatibilidad)
-        if (this.cliente === 'veronica' || this.cliente === 'mexico') {
-          await this.cargarTransaccionesHistorialStashVeronica(primerDiaStr, ultimoDiaStr, this._stashEntregadoIndex);
+        // Mantener historial de abonos aplicados del stash (Verónica + Joselito + compatibilidad México)
+        const clientesHistorial = ['veronica', 'joselito'];
+        if (this.cliente === 'mexico') {
+          clientesHistorial.push('mexico');
         }
+        await Promise.all(
+          clientesHistorial.map((clienteKey) =>
+            this.cargarTransaccionesHistorialStashCliente(clienteKey, primerDiaStr, ultimoDiaStr, this._stashEntregadoIndex)
+          )
+        );
       } catch (error) {
         console.error('Error al cargar las transacciones:', error);
       }
@@ -1017,15 +1023,12 @@ export default {
         return {};
       }
     },
-    async cargarTransaccionesHistorialStashVeronica(primerDiaStr, ultimoDiaStr, stashEntregadoIndex = {}) {
-      // Los abonos aplicados del stash se guardan en cuentasVeronica dentro del array "abonos" de cada cuenta.
+    async cargarTransaccionesHistorialStashCliente(clienteKey, primerDiaStr, ultimoDiaStr, stashEntregadoIndex = {}) {
+      // Los abonos aplicados del stash se guardan en cuentas<Cliente> dentro del array "abonos" de cada cuenta.
       // Usamos la fecha original del stash (fechaOriginalStash) para ubicarlos en el calendario.
       try {
-        const qCuentas = query(
-          collection(db, 'cuentasVeronica'),
-          orderBy('fecha', 'desc'),
-          limit(100)
-        );
+        const collectionName = `cuentas${clienteKey.charAt(0).toUpperCase()}${clienteKey.slice(1)}`;
+        const qCuentas = query(collection(db, collectionName), orderBy('fecha', 'desc'), limit(100));
         
         const snapshot = await getDocs(qCuentas);
         
@@ -1064,12 +1067,12 @@ export default {
 
             if (!grupos.has(groupKey)) {
               const entregado = stashItemId
-                ? (stashEntregadoIndex?.[`veronica:${stashItemId}`]?.efectivoEntregado ?? false)
+                ? (stashEntregadoIndex?.[`${clienteKey}:${stashItemId}`]?.efectivoEntregado ?? false)
                 : false;
 
               grupos.set(groupKey, {
-                id: stashItemId ? `stash_hist_veronica_${stashItemId}` : `stash_hist_veronica_${fechaISO}_${idx}`,
-                cliente: 'veronica',
+                id: stashItemId ? `stash_hist_${clienteKey}_${stashItemId}` : `stash_hist_${clienteKey}_${fechaISO}_${idx}`,
+                cliente: clienteKey,
                 tipo,
                 monto: 0,
                 descripcion: descripcionLimpia,
