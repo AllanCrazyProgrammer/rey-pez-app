@@ -32,6 +32,10 @@ export default {
       type: Number,
       default: 0
     },
+    montoCheque: {
+      type: Number,
+      default: 0
+    },
     montoCuentas: {
       type: Number,
       default: 0
@@ -48,6 +52,9 @@ export default {
   computed: {
     tieneDatos() {
       return (this.transacciones || []).length > 0;
+    },
+    hayCheques() {
+      return (this.montoCheque || 0) > 0;
     },
     nombreArchivo() {
       const fecha = this.fechaIso || (this.transacciones?.[0]?.fecha) || 'dia';
@@ -76,26 +83,39 @@ export default {
 
       doc.setFontSize(12);
       doc.setTextColor(55, 96, 176);
-      doc.text(
-        `Efectivo: $${this.formatearNumero(this.montoEfectivo)}   |   Cuentas: $${this.formatearNumero(this.montoCuentas)}`,
-        40,
-        inicioY + 75
-      );
+      const balanceLine = this.hayCheques
+        ? `Efectivo: $${this.formatearNumero(this.montoEfectivo)}   |   Cheques: $${this.formatearNumero(this.montoCheque)}   |   Cuentas: $${this.formatearNumero(this.montoCuentas)}`
+        : `Efectivo: $${this.formatearNumero(this.montoEfectivo)}   |   Cuentas: $${this.formatearNumero(this.montoCuentas)}`;
+      doc.text(balanceLine, 40, inicioY + 75);
 
       const resumenClientes = this.buildResumenClientes();
       const startY = inicioY + 95;
 
       if (resumenClientes.length) {
+        const columns = [
+          { header: 'Cliente', dataKey: 'clienteLabel' },
+          { header: 'Efectivo', dataKey: 'efectivo' }
+        ];
+        if (this.hayCheques) {
+          columns.push({ header: 'Cheques', dataKey: 'cheques' });
+        }
+        columns.push({ header: 'Transf/Dep', dataKey: 'cuentas' });
+        columns.push({ header: 'Total', dataKey: 'total' });
+
+        const columnStyles = {
+          efectivo: { halign: 'right' },
+          cuentas: { halign: 'right' },
+          total: { halign: 'right' }
+        };
+        if (this.hayCheques) {
+          columnStyles.cheques = { halign: 'right' };
+        }
+
         autoTable(doc, {
           startY,
-          head: [['Cliente', 'Efectivo', 'Transf/Dep', 'Total']],
+          head: [columns.map(col => col.header)],
           body: resumenClientes,
-          columns: [
-            { header: 'Cliente', dataKey: 'clienteLabel' },
-            { header: 'Efectivo', dataKey: 'efectivo' },
-            { header: 'Transf/Dep', dataKey: 'cuentas' },
-            { header: 'Total', dataKey: 'total' }
-          ],
+          columns,
           styles: {
             fontSize: 13,
             cellPadding: 8,
@@ -109,11 +129,7 @@ export default {
             lineWidth: 0.6,
             lineColor: [160, 160, 160]
           },
-          columnStyles: {
-            efectivo: { halign: 'right' },
-            cuentas: { halign: 'right' },
-            total: { halign: 'right' }
-          },
+          columnStyles,
           didParseCell: (data) => {
             if (data.section === 'body') {
               const color = data.row.raw?.color || [51, 51, 51];
@@ -167,13 +183,17 @@ export default {
           const efectivo = lista
             .filter(t => t.tipo === 'efectivo')
             .reduce((acc, t) => acc + (parseFloat(t.monto) || 0), 0);
-          const cuentas = Math.max(0, total - efectivo);
+          const cheques = lista
+            .filter(t => t.tipo === 'cheque')
+            .reduce((acc, t) => acc + (parseFloat(t.monto) || 0), 0);
+          const cuentas = Math.max(0, total - efectivo - cheques);
 
           return {
             clienteKey: cliente,
             clienteLabel: mapaNombres[cliente] || cliente,
             total: `$${this.formatearNumero(total)}`,
             efectivo: `$${this.formatearNumero(efectivo)}`,
+            cheques: this.hayCheques ? `$${this.formatearNumero(cheques)}` : '',
             cuentas: `$${this.formatearNumero(cuentas)}`,
             color: mapaColores[cliente] || [51, 51, 51]
           };
@@ -185,6 +205,7 @@ export default {
         clienteLabel: 'Total',
         total: `$${this.formatearNumero(this.totalDia)}`,
         efectivo: `$${this.formatearNumero(this.montoEfectivo)}`,
+        cheques: this.hayCheques ? `$${this.formatearNumero(this.montoCheque)}` : '',
         cuentas: `$${this.formatearNumero(this.montoCuentas)}`,
         color: [0, 0, 0]
       });
@@ -211,6 +232,7 @@ export default {
         deposito: 'Depósito',
         transferencia: 'Transferencia',
         efectivo: 'Efectivo',
+        cheque: 'Cheque',
         otro: 'Otro'
       };
       return tipos[tipo] || 'Otro';

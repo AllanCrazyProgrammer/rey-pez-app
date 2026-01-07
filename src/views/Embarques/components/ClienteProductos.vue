@@ -62,16 +62,6 @@
                     <span v-if="isGeneratingPdf && pdfType === 'cliente-' + clienteId" class="loader-inline"></span>
                     <i v-else class="fas fa-file-pdf"></i> Generar Nota PDF
                 </button>
-                <button
-                    type="button"
-                    @click.stop="$emit('abrir-modal-pdf-fecha', clienteId)"
-                    class="btn btn-outline-primary btn-sm abrir-modal-pdf"
-                    title="Generar nota PDF seleccionando fecha y cliente de un embarque guardado"
-                    :disabled="isGeneratingPdf"
-                >
-                    <i class="fas fa-calendar-alt"></i>
-                </button>
-
                 <!-- Botón para crear cuenta de Joselito -->
                 <button v-if="esClienteJoselito" type="button" @click.stop="crearCuentaJoselito"
                     class="btn btn-success btn-sm crear-cuenta-joselito" title="Crear Cuenta para Joselito"

@@ -127,7 +127,6 @@
           @crear-cuenta-otilio="crearCuentaOtilio"
           @crear-cuenta-veronica="crearCuentaVeronica"
           @ver-pedido-cliente="abrirModalPedidoCliente(clienteId)"
-          @abrir-modal-pdf-fecha="abrirModalGenerarPdfPorFecha(clienteId)"
         />
       </form>
     </div>
@@ -185,23 +184,6 @@
       :medidas-usadas="medidasUsadas"
       @cerrar="cerrarModalConfiguracionMedidas"
       @guardar="guardarConfiguracionMedidas"
-    />
-
-    <GenerarPdfClienteModal
-      :mostrar="mostrarModalGenerarPdfCliente"
-      :fecha="modalGenerarPdf.fecha"
-      :embarques="modalGenerarPdf.embarques"
-      :embarque-id="modalGenerarPdf.embarqueId"
-      :cliente-id="modalGenerarPdf.clienteId"
-      :clientes="modalGenerarPdf.clientes"
-      :cargando="modalGenerarPdf.cargando"
-      :error="modalGenerarPdf.error"
-      @cerrar="cerrarModalGenerarPdfCliente"
-      @update:fecha="onCambioFechaModalPdf"
-      @update:embarque-id="onSeleccionEmbarqueModal"
-      @update:cliente-id="modalGenerarPdf.clienteId = $event"
-      @buscar="cargarEmbarquesModalPdf"
-      @confirmar="generarPdfDesdeModal"
     />
 
     <PedidoClienteModal
@@ -263,7 +245,6 @@ import NotaModal from './components/modals/NotaModal.vue';
 import AltModal from './components/modals/AltModal.vue';
 import ConfiguracionMedidasModal from './components/modals/ConfiguracionMedidasModal.vue';
 import PedidoClienteModal from './components/modals/PedidoClienteModal.vue';
-import GenerarPdfClienteModal from './components/modals/GenerarPdfClienteModal.vue';
 
 
 // Lazy loaded components
@@ -292,7 +273,7 @@ export default {
     Rendimientos,
     Sidebar,
     HeaderEmbarque,
-    ClienteProductos,
+        ClienteProductos,
     // Registrar los componentes modales
     NuevoClienteModal,
     NombreAlternativoModal,
@@ -302,7 +283,6 @@ export default {
     AltModal,
     ConfiguracionMedidasModal,
     PedidoClienteModal,
-    GenerarPdfClienteModal,
     SaveStatusIndicator,
     AuthErrorNotification
   },
@@ -3278,20 +3258,6 @@ export default {
       } else {
         this.cerrarModalAlt();
       }
-    },
-
-    // Modal para generar PDF por fecha/cliente
-    abrirModalGenerarPdfPorFecha(clienteId) {
-      this.modalGenerarPdf.error = '';
-      this.modalGenerarPdf.fecha = this.embarque.fecha
-        ? normalizarFechaISO(this.embarque.fecha)
-        : obtenerFechaActualISO();
-      this.modalGenerarPdf.embarqueId = '';
-      this.modalGenerarPdf.clienteId = clienteId ? clienteId.toString() : '';
-      this.modalGenerarPdf.clientes = [];
-      this.modalGenerarPdf.embarques = [];
-      this.mostrarModalGenerarPdfCliente = true;
-      this.cargarEmbarquesModalPdf(clienteId);
     },
 
     async cargarEmbarquesModalPdf(preselectedClientId = null) {

@@ -552,9 +552,9 @@ export default {
 
             const nombreCliente = this.nombreCliente.trim().toLowerCase();
             
-            // Lógica especial para Ozuna: si no es venta (maquila), precio siempre 20
+            // Lógica especial para Ozuna: si no es venta (maquila), precio siempre 21
             // Nota: aquí NO respetamos `precioBorradoManualmente` porque en maquila queremos:
-            // - Default: 20
+            // - Default: 21
             // - Si el usuario editó el precio, conservarlo (persistido en `precioMaquila`)
             if (nombreCliente === 'ozuna' && !this.producto.esVenta) {
                 // Si existe precio de maquila personalizado, usarlo
@@ -563,20 +563,12 @@ export default {
                     if (!Number.isNaN(pm) && pm > 0) {
                         this.producto.precio = pm;
                     } else {
-                        this.producto.precio = 20;
-                    }
-                } else if (this.producto.precio !== null && this.producto.precio !== undefined && this.producto.precio !== '') {
-                    // Compatibilidad: si venía un precio guardado en maquila pero aún no existía `precioMaquila`,
-                    // migrarlo para evitar que se pierda al reabrir.
-                    const p = Number(this.producto.precio);
-                    if (!Number.isNaN(p) && p > 0) {
-                        this.producto.precio = p;
-                        this.$set(this.producto, 'precioMaquila', p);
-                    } else {
-                        this.producto.precio = 20;
+                        this.producto.precio = 21;
                     }
                 } else {
-                    this.producto.precio = 20;
+                    // Default duro a 21 para maquila Ozuna; migrar valores previos (20) al nuevo default
+                    this.producto.precio = 21;
+                    this.$set(this.producto, 'precioMaquila', 21);
                 }
                 
                 // Emitir evento para notificar que se asignó precio automáticamente

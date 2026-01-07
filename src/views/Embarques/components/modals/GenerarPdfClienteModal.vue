@@ -249,12 +249,12 @@ export default {
 
 .alerta-error {
   margin-top: 12px;
-  padding: 10px 12px;
+  padding: 10px 0;
   background: rgba(255, 107, 107, 0.08);
   color: #ff8a8a;
   border: 1px solid rgba(255, 107, 107, 0.35);
   border-radius: 10px;
-  font-size: 1.02rem;
+  font-size: 20px;
 }
 
 @media (max-width: 600px) {
