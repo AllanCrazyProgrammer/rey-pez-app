@@ -48,7 +48,19 @@
         <div v-if="diaSeleccionado">
         <div class="dia-seleccionado-header">
           <h4>{{ formatoFechaCompleta }}</h4>
-          <button @click="mostrarFormulario = true" class="btn-agregar">+ Agregar transacción</button>
+          <div class="acciones-dia">
+            <PdfResumenDiaButton
+              v-if="transaccionesDia.length > 0"
+              :fecha-legible="formatoFechaCompleta"
+              :fecha-iso="diaSeleccionado ? toISODateLocal(diaSeleccionado.fecha) : ''"
+              :total-dia="calcularTotalDia()"
+              :monto-efectivo="montoEfectivoDia"
+              :monto-cuentas="montoCuentasDia"
+              :transacciones="transaccionesDia"
+              :clientes-agrupados="clientesAgrupados"
+            />
+            <button @click="mostrarFormulario = true" class="btn-agregar">+ Agregar transacción</button>
+          </div>
         </div>
         
         <div v-if="transaccionesDia.length > 0 && !mostrarFormulario" class="resumen-dia">
@@ -525,9 +537,13 @@
 <script>
 import { db } from '../firebase';
 import { collection, addDoc, query, where, getDocs, doc, deleteDoc, updateDoc, orderBy, limit } from 'firebase/firestore';
+import PdfResumenDiaButton from './PdfResumenDiaButton.vue';
 
 export default {
   name: 'TransaccionesAgendaModal',
+  components: {
+    PdfResumenDiaButton
+  },
   props: {
     mostrar: {
       type: Boolean,
@@ -1428,6 +1444,14 @@ export default {
   margin-bottom: 15px;
 }
 
+.acciones-dia {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
 .dia-seleccionado-header h4 {
   margin: 0;
   font-size: 1.2em;
@@ -2084,6 +2108,16 @@ label {
     flex-direction: column;
     align-items: flex-start;
     gap: 10px;
+  }
+
+  .acciones-dia {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .acciones-dia .btn-agregar {
+    width: 100%;
+    text-align: center;
   }
   
   .transaccion-acciones {
