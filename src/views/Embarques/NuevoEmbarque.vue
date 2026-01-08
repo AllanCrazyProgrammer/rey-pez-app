@@ -255,6 +255,7 @@ import {
   normalizarFechaISO, 
   obtenerFechaActualISO 
 } from '@/utils/dateUtils';
+import { generarNotaVentaPDF } from '@/utils/pdfGenerator';
 
 // Después de las imports existentes, agregar:
 import EmbarqueCuentasService from '@/utils/services/EmbarqueCuentasService';
@@ -272,7 +273,7 @@ export default {
     Rendimientos,
     Sidebar,
     HeaderEmbarque,
-    ClienteProductos,
+        ClienteProductos,
     // Registrar los componentes modales
     NuevoClienteModal,
     NombreAlternativoModal,
@@ -355,6 +356,17 @@ export default {
       
       mostrarModalAlt: false,
       altTemp: '',
+      
+      mostrarModalGenerarPdfCliente: false,
+      modalGenerarPdf: {
+        fecha: '',
+        embarques: [],
+        embarqueId: '',
+        clienteId: '',
+        clientes: [],
+        cargando: false,
+        error: ''
+      },
       
       mostrarModalPedidoCliente: false,
       clienteSeleccionadoPedido: null,
@@ -3010,7 +3022,7 @@ export default {
           ).toString().trim().toLowerCase();
 
           // Regla especial: Ozuna en maquila (Venta desmarcado) debe conservar el precio editado.
-          // Guardamos el valor en `precioMaquila` para que sea persistente y no se re-escriba a 20 al reabrir.
+          // Guardamos el valor en `precioMaquila` para que sea persistente y no se re-escriba a 21 al reabrir.
           const esOzunaMaquila = nombreClienteModal === 'ozuna' && !this.itemSeleccionado.esVenta;
           
           if (precio !== null) {
@@ -3023,9 +3035,9 @@ export default {
             }
           } else {
             if (esOzunaMaquila) {
-              // Para Ozuna en maquila, "borrar" = volver al default (20)
+              // Para Ozuna en maquila, "borrar" = volver al default (21)
               this.$delete(this.itemSeleccionado, 'precioMaquila');
-              this.$set(this.itemSeleccionado, 'precio', 20);
+              this.$set(this.itemSeleccionado, 'precio', 21);
               this.$set(this.itemSeleccionado, 'precioBorradoManualmente', false);
             } else {
               this.$delete(this.itemSeleccionado, 'precio');
@@ -3250,6 +3262,242 @@ export default {
         }
       } else {
         this.cerrarModalAlt();
+      }
+    },
+
+    async cargarEmbarquesModalPdf(preselectedClientId = null) {
+      if (!this.modalGenerarPdf.fecha) {
+        this.modalGenerarPdf.error = 'Selecciona una fecha para buscar embarques.';
+        return;
+      }
+
+      this.modalGenerarPdf.cargando = true;
+      this.modalGenerarPdf.error = '';
+
+      try {
+        const embarques = await this.buscarEmbarquesPorFecha(this.modalGenerarPdf.fecha);
+        this.modalGenerarPdf.embarques = embarques;
+
+        if (embarques.length > 0) {
+          this.modalGenerarPdf.embarqueId = embarques[0].id;
+          this.actualizarClientesModal(preselectedClientId);
+        } else {
+          this.modalGenerarPdf.embarqueId = '';
+          this.modalGenerarPdf.clientes = [];
+          this.modalGenerarPdf.clienteId = '';
+          this.modalGenerarPdf.error = 'No se encontraron embarques para esa fecha.';
+        }
+      } catch (error) {
+        console.error('[Modal PDF] Error al cargar embarques:', error);
+        this.modalGenerarPdf.error = 'No se pudieron cargar los embarques. Intenta de nuevo.';
+      } finally {
+        this.modalGenerarPdf.cargando = false;
+      }
+    },
+
+    async buscarEmbarquesPorFecha(fecha) {
+      const fechaISO = normalizarFechaISO(fecha);
+      const coincidencias = new Map();
+
+      try {
+        await EmbarquesOfflineService.init();
+        const registrosOffline = await EmbarquesOfflineService.getAll();
+        registrosOffline.forEach(registro => {
+          if (normalizarFechaISO(registro.fecha) === fechaISO) {
+            coincidencias.set(registro.id, this.normalizarEmbarqueParaModal(registro));
+          }
+        });
+      } catch (error) {
+        console.warn('[Modal PDF] No se pudo leer embarques offline:', error);
+      }
+
+      if (coincidencias.size === 0) {
+        try {
+          const db = getFirestore();
+          const embarquesRef = collection(db, 'embarques');
+          const snapshot = await getDocs(embarquesRef);
+          snapshot.forEach(docSnap => {
+            const data = docSnap.data();
+            const fechaDoc = data.fecha && typeof data.fecha.toDate === 'function'
+              ? data.fecha.toDate()
+              : data.fecha;
+
+            if (normalizarFechaISO(fechaDoc) === fechaISO) {
+              coincidencias.set(docSnap.id, this.normalizarEmbarqueParaModal({ id: docSnap.id, ...data }));
+            }
+          });
+        } catch (error) {
+          console.error('[Modal PDF] Error al consultar embarques remotos:', error);
+          throw error;
+        }
+      }
+
+      return Array.from(coincidencias.values())
+        .sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+    },
+
+    normalizarEmbarqueParaModal(registro) {
+      const fechaFuente = registro.fecha && registro.fecha.seconds
+        ? new Date(registro.fecha.seconds * 1000)
+        : registro.fecha || registro.fechaISO;
+
+      return {
+        id: registro.id,
+        fecha: normalizarFechaISO(fechaFuente),
+        cargaCon: registro.cargaCon || registro.docData?.cargaCon || '',
+        camionNumero: registro.camionNumero || registro.docData?.camionNumero || 1,
+        clientes: registro.clientes || registro.docData?.clientes || [],
+        clientesJuntarMedidas: registro.clientesJuntarMedidas || registro.docData?.clientesJuntarMedidas || {},
+        clientesReglaOtilio: registro.clientesReglaOtilio || registro.docData?.clientesReglaOtilio || {},
+        clientesIncluirPrecios: registro.clientesIncluirPrecios || registro.docData?.clientesIncluirPrecios || {},
+        clientesSumarKgCatarro: registro.clientesSumarKgCatarro || registro.docData?.clientesSumarKgCatarro || {},
+        clientesCuentaEnPdf: registro.clientesCuentaEnPdf || registro.docData?.clientesCuentaEnPdf || {},
+        productos: registro.productos || registro.docData?.productos || [],
+        clienteCrudos: registro.clienteCrudos || registro.crudos || registro.docData?.clienteCrudos || {},
+        kilosCrudos: registro.kilosCrudos || registro.docData?.kilosCrudos || {},
+      };
+    },
+
+    actualizarClientesModal(preselectedClientId = null) {
+      const embarqueSeleccionado = this.modalGenerarPdf.embarques.find(
+        e => e.id === this.modalGenerarPdf.embarqueId
+      );
+
+      if (!embarqueSeleccionado) {
+        this.modalGenerarPdf.clientes = [];
+        this.modalGenerarPdf.clienteId = '';
+        return;
+      }
+
+      let clientes = [];
+
+      if (Array.isArray(embarqueSeleccionado.clientes) && embarqueSeleccionado.clientes.length) {
+        clientes = embarqueSeleccionado.clientes
+          .map(cliente => ({
+            id: cliente.id?.toString(),
+            nombre: cliente.nombre || cliente.nombreNotas || this.obtenerNombreCliente(cliente.id)
+          }))
+          .filter(c => c.id);
+      } else if (Array.isArray(embarqueSeleccionado.productos)) {
+        const mapa = new Map();
+        embarqueSeleccionado.productos.forEach(producto => {
+          const id = (producto.clienteId || producto.cliente || producto.idCliente || '').toString();
+          if (!id || mapa.has(id)) return;
+          mapa.set(id, {
+            id,
+            nombre: producto.nombreCliente || this.obtenerNombreCliente(id)
+          });
+        });
+        clientes = Array.from(mapa.values());
+      }
+
+      this.modalGenerarPdf.clientes = clientes;
+
+      if (clientes.length > 0) {
+        const candidato = preselectedClientId && clientes.some(c => c.id === preselectedClientId.toString())
+          ? preselectedClientId.toString()
+          : clientes[0].id;
+        this.modalGenerarPdf.clienteId = candidato;
+      } else {
+        this.modalGenerarPdf.clienteId = '';
+      }
+    },
+
+    onCambioFechaModalPdf(fecha) {
+      this.modalGenerarPdf.fecha = fecha;
+      this.cargarEmbarquesModalPdf(this.modalGenerarPdf.clienteId || null);
+    },
+
+    onSeleccionEmbarqueModal(embarqueId) {
+      this.modalGenerarPdf.embarqueId = embarqueId;
+      this.actualizarClientesModal(this.modalGenerarPdf.clienteId || null);
+    },
+
+    cerrarModalGenerarPdfCliente() {
+      this.mostrarModalGenerarPdfCliente = false;
+      this.modalGenerarPdf = {
+        fecha: '',
+        embarques: [],
+        embarqueId: '',
+        clienteId: '',
+        clientes: [],
+        cargando: false,
+        error: ''
+      };
+    },
+
+    async generarPdfDesdeModal() {
+      if (!this.modalGenerarPdf.embarqueId || !this.modalGenerarPdf.clienteId) {
+        this.modalGenerarPdf.error = 'Selecciona un embarque y un cliente para continuar.';
+        return;
+      }
+
+      const clienteId = this.modalGenerarPdf.clienteId.toString();
+      const embarqueSeleccionado = this.modalGenerarPdf.embarques.find(
+        e => e.id === this.modalGenerarPdf.embarqueId
+      );
+
+      if (!embarqueSeleccionado) {
+        this.modalGenerarPdf.error = 'No se encontró el embarque seleccionado.';
+        return;
+      }
+
+      const clienteGuardado = Array.isArray(embarqueSeleccionado.clientes)
+        ? embarqueSeleccionado.clientes.find(c => c.id?.toString() === clienteId)
+        : null;
+
+      const productosCliente = clienteGuardado?.productos
+        || (embarqueSeleccionado.productos || []).filter(
+          producto => (producto.clienteId || '').toString() === clienteId
+        );
+
+      if (!productosCliente || productosCliente.length === 0) {
+        this.modalGenerarPdf.error = 'El embarque seleccionado no tiene productos para ese cliente.';
+        return;
+      }
+
+      const crudosCliente = clienteGuardado?.crudos
+        || embarqueSeleccionado.clienteCrudos?.[clienteId]
+        || embarqueSeleccionado.crudos?.[clienteId]
+        || [];
+
+      const embarqueCliente = {
+        fecha: embarqueSeleccionado.fecha,
+        cargaCon: embarqueSeleccionado.cargaCon,
+        productos: productosCliente,
+        clienteCrudos: { [clienteId]: crudosCliente },
+        kilosCrudos: embarqueSeleccionado.kilosCrudos || {}
+      };
+
+      const clientesLista = (Array.isArray(embarqueSeleccionado.clientes) && embarqueSeleccionado.clientes.length)
+        ? embarqueSeleccionado.clientes.map(c => ({
+            id: c.id,
+            nombre: c.nombre || c.nombreNotas || this.obtenerNombreCliente(c.id),
+            nombreNotas: c.nombreNotas
+          }))
+        : this.clientesDisponibles;
+
+      this.isGeneratingPdf = true;
+      this.pdfType = `cliente-${clienteId}-historico`;
+      this.modalGenerarPdf.error = '';
+
+      try {
+        await generarNotaVentaPDF(
+          embarqueCliente,
+          clientesLista,
+          embarqueSeleccionado.clientesJuntarMedidas || {},
+          embarqueSeleccionado.clientesReglaOtilio || {},
+          embarqueSeleccionado.clientesIncluirPrecios || {},
+          embarqueSeleccionado.clientesSumarKgCatarro || {},
+          embarqueSeleccionado.clientesCuentaEnPdf || {}
+        );
+        this.cerrarModalGenerarPdfCliente();
+      } catch (error) {
+        console.error('[Modal PDF] Error al generar PDF:', error);
+        this.modalGenerarPdf.error = 'No se pudo generar el PDF. Inténtalo de nuevo.';
+      } finally {
+        this.isGeneratingPdf = false;
+        this.pdfType = null;
       }
     },
 

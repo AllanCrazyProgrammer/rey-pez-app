@@ -54,6 +54,16 @@
                 class="input-field"
                 step="0.01"
               >
+              <div class="checkbox-field">
+                <label class="checkbox-label">
+                  <input
+                    type="checkbox"
+                    v-model="nuevoAbono.esEfectivo"
+                    class="checkbox-input"
+                  >
+                  Efectivo
+                </label>
+              </div>
               <button @click="agregarAlStash" class="btn-primary">
                 Agregar
               </button>
@@ -96,6 +106,7 @@
                 <div class="item-info">
                   <span class="fecha">{{ formatearFecha(item.fecha) }}</span>
                   <span class="descripcion">{{ item.descripcion }}</span>
+                  <span v-if="item.esEfectivo" class="badge-efectivo">Efectivo</span>
                   <span class="monto">${{ formatNumber(item.monto) }}</span>
                 </div>
                 <div class="item-actions">
@@ -460,7 +471,8 @@ export default {
     const nuevoAbono = ref({
       fecha: obtenerFechaLocal(),
       descripcion: '',
-      monto: null
+      monto: null,
+      esEfectivo: false
     })
     
     // Computed
@@ -756,10 +768,14 @@ export default {
           orderBy('fecha', 'desc')
         )
         const snapshot = await getDocs(q)
-        stashItems.value = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }))
+        stashItems.value = snapshot.docs.map(doc => {
+          const data = doc.data() || {}
+          return {
+            id: doc.id,
+            ...data,
+            esEfectivo: !!data.esEfectivo
+          }
+        })
         
         // Inicializar fechasAplicacion para nuevos items
         stashItems.value.forEach(item => {
@@ -924,14 +940,16 @@ export default {
           fecha: nuevoAbono.value.fecha,
           descripcion: nuevoAbono.value.descripcion,
           monto: Number(nuevoAbono.value.monto),
-          fechaCreacion: fechaNormalizada
+          fechaCreacion: fechaNormalizada,
+          esEfectivo: !!nuevoAbono.value.esEfectivo
         })
         
         const nuevoItem = {
           id: docRef.id,
           fecha: nuevoAbono.value.fecha,
           descripcion: nuevoAbono.value.descripcion,
-          monto: Number(nuevoAbono.value.monto)
+          monto: Number(nuevoAbono.value.monto),
+          esEfectivo: !!nuevoAbono.value.esEfectivo
         }
         
         stashItems.value.unshift(nuevoItem)
@@ -943,7 +961,8 @@ export default {
         nuevoAbono.value = {
           fecha: obtenerFechaLocal(),
           descripcion: '',
-          monto: null
+          monto: null,
+          esEfectivo: false
         }
         
         alert('Abono agregado al stash')
@@ -1100,7 +1119,9 @@ export default {
                 descripcion: abonoActual.descripcion,
                 monto: Math.round(montoAAplicar * 100) / 100,
                 fecha: normalizarFechaSeleccionada(abonoActual.fecha),
-                fechaOriginalStash: abonoActual.fecha
+                fechaOriginalStash: abonoActual.fecha,
+                esEfectivo: !!abonoActual.esEfectivo,
+                stashItemId: abonoActual.id
               })
               
               totalAplicadoCuenta += Math.round(montoAAplicar * 100) / 100
@@ -1279,7 +1300,9 @@ export default {
               monto: item.monto,
               fecha: normalizarFechaSeleccionada(item.fecha),
               fechaOriginalStash: item.fecha,
-              esAplicacionIndividual: true
+              esAplicacionIndividual: true,
+              esEfectivo: !!item.esEfectivo,
+              stashItemId: item.id
             }
             
             nuevosAbonos.push(abonoIndividual)
@@ -1880,6 +1903,43 @@ h4 {
   gap: 10px;
   margin-bottom: 12px;
   flex-wrap: wrap;
+}
+
+.checkbox-field {
+  display: flex;
+  align-items: center;
+  min-width: 140px;
+}
+
+.checkbox-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  background: #f8f9fa;
+  color: #333;
+  font-size: 14px;
+  user-select: none;
+}
+
+.checkbox-input {
+  width: 16px;
+  height: 16px;
+}
+
+.badge-efectivo {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(76, 175, 80, 0.12);
+  border: 1px solid rgba(76, 175, 80, 0.35);
+  color: #2e7d32;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
 }
 
 .input-field {

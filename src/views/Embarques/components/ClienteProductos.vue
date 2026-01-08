@@ -62,7 +62,6 @@
                     <span v-if="isGeneratingPdf && pdfType === 'cliente-' + clienteId" class="loader-inline"></span>
                     <i v-else class="fas fa-file-pdf"></i> Generar Nota PDF
                 </button>
-
                 <!-- Botón para crear cuenta de Joselito -->
                 <button v-if="esClienteJoselito" type="button" @click.stop="crearCuentaJoselito"
                     class="btn btn-success btn-sm crear-cuenta-joselito" title="Crear Cuenta para Joselito"
@@ -258,7 +257,8 @@ export default {
         'crear-cuenta-catarro',
         'crear-cuenta-ozuna',
         'crear-cuenta-otilio',
-        'ver-pedido-cliente'
+        'ver-pedido-cliente',
+        'abrir-modal-pdf-fecha'
     ],
 
     computed: {
@@ -612,6 +612,14 @@ export default {
     gap: 5px;
 }
 
+.abrir-modal-pdf {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 38px;
+    padding: 4px 8px;
+}
+
 .loader-inline {
     display: inline-block;
     width: 12px;
@@ -670,6 +678,13 @@ export default {
 button:disabled {
     opacity: 0.7;
     cursor: not-allowed;
+}
+
+@media (max-width: 768px) {
+    .abrir-modal-pdf {
+        flex: 1 1 40px;
+        min-width: auto;
+    }
 }
 
 /* Estilos específicos para botones de crear cuenta */

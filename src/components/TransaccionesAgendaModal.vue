@@ -6,6 +6,7 @@
         <button @click="$emit('cerrar')" class="btn-cerrar">×</button>
       </div>
       
+      <div class="modal-body">
       <div class="calendario-container">
         <div class="selector-fecha">
           <button @click="cambiarMes(-1)" class="btn-nav">&lt;</button>
@@ -41,12 +42,36 @@
             </div>
           </div>
         </div>
+
+        <ChequesPendientesAccordion
+          v-if="chequesPendientes.length"
+          :cheques="chequesPendientes"
+          :formatear-fecha-corta="formatearFechaCorta"
+          :obtener-fecha-transaccion="obtenerFechaTransaccion"
+          :obtener-cliente-texto="obtenerClienteTexto"
+          :formatear-numero="formatearNumero"
+          @toggle-cobrado="actualizarChequeCobrado"
+        />
       </div>
       
-      <div class="transacciones-container" v-if="diaSeleccionado">
+      <div class="transacciones-container">
+        <div v-if="diaSeleccionado">
         <div class="dia-seleccionado-header">
           <h4>{{ formatoFechaCompleta }}</h4>
-          <button @click="mostrarFormulario = true" class="btn-agregar">+ Agregar transacción</button>
+          <div class="acciones-dia">
+            <PdfResumenDiaButton
+              v-if="transaccionesDia.length > 0"
+              :fecha-legible="formatoFechaCompleta"
+              :fecha-iso="diaSeleccionado ? toISODateLocal(diaSeleccionado.fecha) : ''"
+              :total-dia="calcularTotalDia()"
+              :monto-efectivo="montoEfectivoDia"
+              :monto-cheque="montoChequeDia"
+              :monto-cuentas="montoCuentasDia"
+              :transacciones="transaccionesDia"
+              :clientes-agrupados="clientesAgrupados"
+            />
+            <button @click="mostrarFormulario = true" class="btn-agregar">+ Agregar transacción</button>
+          </div>
         </div>
         
         <div v-if="transaccionesDia.length > 0 && !mostrarFormulario" class="resumen-dia">
@@ -55,16 +80,18 @@
             <span>${{ formatearNumero(calcularTotalDia()) }}</span>
           </div>
           <div class="resumen-dia-item">
-            <span>Depósitos:</span>
-            <span class="color-deposito">${{ formatearNumero(calcularTotalDiaPorTipo('deposito')) }}</span>
-          </div>
-          <div class="resumen-dia-item">
-            <span>Transferencias:</span>
-            <span class="color-transferencia">${{ formatearNumero(calcularTotalDiaPorTipo('transferencia')) }}</span>
-          </div>
-          <div class="resumen-dia-item">
             <span>Transacciones:</span>
-            <span>{{ transaccionesDia.length }}</span>
+            <span class="resumen-dia-metric">
+              <span class="resumen-dia-num">{{ transaccionesDia.length }}</span>
+              <span class="resumen-dia-extra">Efectivo: ${{ formatearNumero(montoEfectivoDia) }}</span>
+              <span 
+                v-if="montoChequeDia > 0" 
+                class="resumen-dia-extra"
+              >
+                Cheques: ${{ formatearNumero(montoChequeDia) }}
+              </span>
+              <span class="resumen-dia-extra">Cuentas: ${{ formatearNumero(montoCuentasDia) }}</span>
+            </span>
           </div>
         </div>
         
@@ -76,7 +103,6 @@
           <div class="form-group">
             <label for="cliente">Cliente:</label>
             <select id="cliente" v-model="nuevaTransaccion.cliente" class="input-field">
-              <option value="mexico">México</option>
               <option value="ozuna">Ozuna</option>
               <option value="catarro">Catarro</option>
               <option value="joselito">Joselito</option>
@@ -91,6 +117,7 @@
               <option value="deposito">Depósito</option>
               <option value="transferencia">Transferencia</option>
               <option value="efectivo">Efectivo</option>
+              <option value="cheque">Cheque</option>
               <option value="otro">Otro</option>
             </select>
           </div>
@@ -133,190 +160,350 @@
           <div class="clientes-con-transacciones">
             <!-- Otilio -->
             <div v-if="clientesAgrupados.otilio && clientesAgrupados.otilio.length > 0" class="cliente-card cliente-card-otilio">
-              <div class="cliente-header cliente-otilio">
-                <h4>Otilio</h4>
+              <button
+                type="button"
+                class="cliente-header cliente-otilio"
+                :aria-expanded="esAcordeonClienteAbierto('otilio') ? 'true' : 'false'"
+                @click="toggleAcordeonCliente('otilio')"
+              >
+                <div class="cliente-titulo">
+                  <h4>Otilio</h4>
+                  <span
+                    v-if="tieneEfectivoPendiente('otilio')"
+                    class="badge-efectivo-pendiente"
+                    :title="`Efectivo pendiente: ${contarEfectivoPendiente('otilio')}`"
+                  >
+                    {{ contarEfectivoPendiente('otilio') }}
+                  </span>
+                  <span
+                    v-if="tieneChequePendiente('otilio')"
+                    class="badge-cheque-pendiente"
+                    :title="`Cheques pendientes: ${contarChequePendiente('otilio')}`"
+                  >
+                    {{ contarChequePendiente('otilio') }}
+                  </span>
+                </div>
                 <div class="cliente-total">
                   Total: ${{ formatearNumero(calcularTotalCliente('otilio')) }}
                 </div>
-              </div>
-              <div class="cliente-resumen">
-                <div class="resumen-item tipo-deposito">
-                  <span>Depósitos:</span>
-                  <span>${{ formatearNumero(calcularTotalPorTipo('otilio', 'deposito')) }}</span>
+                <span class="cliente-header-chevron" aria-hidden="true">▾</span>
+              </button>
+              <div v-show="esAcordeonClienteAbierto('otilio')">
+                <div class="cliente-contador">
+                  {{ clientesAgrupados.otilio.length }} transacción(es)
                 </div>
-                <div class="resumen-item tipo-transferencia">
-                  <span>Transferencias:</span>
-                  <span>${{ formatearNumero(calcularTotalPorTipo('otilio', 'transferencia')) }}</span>
-                </div>
-              </div>
-              <div class="cliente-contador">
-                {{ clientesAgrupados.otilio.length }} transacción(es)
-              </div>
-              <div class="cliente-transacciones">
+                <div class="cliente-transacciones">
                 <div 
                   v-for="(transaccion, index) in clientesAgrupados.otilio" 
                   :key="'otilio-'+index" 
                   class="transaccion-mini"
-                  :class="'tipo-' + transaccion.tipo"
+                  :class="['tipo-' + transaccion.tipo, { 'es-stash': transaccion.esStash }]"
                 >
                   <div class="transaccion-mini-header">
-                    <span>{{ obtenerTipoTexto(transaccion.tipo) }}</span>
+                    <span>
+                      <template v-if="transaccion.esStash">
+                        {{ transaccion.descripcion }}
+                        <span class="badge-stash">📦</span>
+                      </template>
+                      <template v-else>
+                        {{ obtenerTipoTexto(transaccion.tipo) }}
+                      </template>
+                    </span>
                     <span>${{ formatearNumero(transaccion.monto) }}</span>
                   </div>
                   <div class="transaccion-mini-hora">{{ formatearHora(transaccion.timestamp) }}</div>
                   <div class="transaccion-mini-acciones">
-                    <button @click="editarTransaccion(obtenerIndiceTransaccion(transaccion))" class="btn-mini">Editar</button>
-                    <button @click="eliminarTransaccion(obtenerIndiceTransaccion(transaccion))" class="btn-mini btn-mini-eliminar">Eliminar</button>
+                    <label
+                      v-if="transaccion.tipo === 'efectivo'"
+                      class="entregado-toggle"
+                    >
+                      <input
+                        type="checkbox"
+                        :checked="!!transaccion.efectivoEntregado"
+                        @change="actualizarEfectivoEntregado(transaccion, $event.target.checked)"
+                      />
+                      Entregado
+                    </label>
+                    <label
+                      v-if="transaccion.tipo === 'cheque'"
+                      class="cheque-cobrado-toggle"
+                    >
+                      <input
+                        type="checkbox"
+                        :checked="!!transaccion.chequeCobrado"
+                        @change="actualizarChequeCobrado(transaccion, $event.target.checked)"
+                      />
+                      Cobrado
+                    </label>
+                    <button v-if="!transaccion.esStash" @click="editarTransaccion(obtenerIndiceTransaccion(transaccion))" class="btn-mini">Editar</button>
+                    <button v-if="!transaccion.esStash" @click="eliminarTransaccion(obtenerIndiceTransaccion(transaccion))" class="btn-mini btn-mini-eliminar">Eliminar</button>
+                    <span v-if="transaccion.esStash" class="texto-info-stash">Ver en Stash</span>
                   </div>
                 </div>
+              </div>
               </div>
             </div>
             
             <!-- Joselito -->
             <div v-if="clientesAgrupados.joselito && clientesAgrupados.joselito.length > 0" class="cliente-card cliente-card-joselito">
-              <div class="cliente-header cliente-joselito">
-                <h4>Joselito</h4>
+              <button
+                type="button"
+                class="cliente-header cliente-joselito"
+                :aria-expanded="esAcordeonClienteAbierto('joselito') ? 'true' : 'false'"
+                @click="toggleAcordeonCliente('joselito')"
+              >
+                <div class="cliente-titulo">
+                  <h4>Joselito</h4>
+                  <span
+                    v-if="tieneEfectivoPendiente('joselito')"
+                    class="badge-efectivo-pendiente"
+                    :title="`Efectivo pendiente: ${contarEfectivoPendiente('joselito')}`"
+                  >
+                    {{ contarEfectivoPendiente('joselito') }}
+                  </span>
+                  <span
+                    v-if="tieneChequePendiente('joselito')"
+                    class="badge-cheque-pendiente"
+                    :title="`Cheques pendientes: ${contarChequePendiente('joselito')}`"
+                  >
+                    {{ contarChequePendiente('joselito') }}
+                  </span>
+                </div>
                 <div class="cliente-total">
                   Total: ${{ formatearNumero(calcularTotalCliente('joselito')) }}
                 </div>
-              </div>
-              <div class="cliente-resumen">
-                <div class="resumen-item tipo-deposito">
-                  <span>Depósitos:</span>
-                  <span>${{ formatearNumero(calcularTotalPorTipo('joselito', 'deposito')) }}</span>
+                <span class="cliente-header-chevron" aria-hidden="true">▾</span>
+              </button>
+              <div v-show="esAcordeonClienteAbierto('joselito')">
+                <div class="cliente-contador">
+                  {{ clientesAgrupados.joselito.length }} transacción(es)
                 </div>
-                <div class="resumen-item tipo-transferencia">
-                  <span>Transferencias:</span>
-                  <span>${{ formatearNumero(calcularTotalPorTipo('joselito', 'transferencia')) }}</span>
-                </div>
-              </div>
-              <div class="cliente-contador">
-                {{ clientesAgrupados.joselito.length }} transacción(es)
-              </div>
-              <div class="cliente-transacciones">
+                <div class="cliente-transacciones">
                 <div 
                   v-for="(transaccion, index) in clientesAgrupados.joselito" 
                   :key="'joselito-'+index" 
                   class="transaccion-mini"
-                  :class="'tipo-' + transaccion.tipo"
+                  :class="['tipo-' + transaccion.tipo, { 'es-stash': transaccion.esStash }]"
                 >
                   <div class="transaccion-mini-header">
-                    <span>{{ obtenerTipoTexto(transaccion.tipo) }}</span>
+                    <span>
+                      <template v-if="transaccion.esStash">
+                        {{ transaccion.descripcion }}
+                        <span class="badge-stash">📦</span>
+                      </template>
+                      <template v-else>
+                        {{ obtenerTipoTexto(transaccion.tipo) }}
+                      </template>
+                    </span>
                     <span>${{ formatearNumero(transaccion.monto) }}</span>
                   </div>
                   <div class="transaccion-mini-hora">{{ formatearHora(transaccion.timestamp) }}</div>
                   <div class="transaccion-mini-acciones">
-                    <button @click="editarTransaccion(obtenerIndiceTransaccion(transaccion))" class="btn-mini">Editar</button>
-                    <button @click="eliminarTransaccion(obtenerIndiceTransaccion(transaccion))" class="btn-mini btn-mini-eliminar">Eliminar</button>
+                    <label
+                      v-if="transaccion.tipo === 'efectivo'"
+                      class="entregado-toggle"
+                    >
+                      <input
+                        type="checkbox"
+                        :checked="!!transaccion.efectivoEntregado"
+                        @change="actualizarEfectivoEntregado(transaccion, $event.target.checked)"
+                      />
+                      Entregado
+                    </label>
+                    <button v-if="!transaccion.esStash" @click="editarTransaccion(obtenerIndiceTransaccion(transaccion))" class="btn-mini">Editar</button>
+                    <button v-if="!transaccion.esStash" @click="eliminarTransaccion(obtenerIndiceTransaccion(transaccion))" class="btn-mini btn-mini-eliminar">Eliminar</button>
+                    <span v-if="transaccion.esStash" class="texto-info-stash">Ver en Stash</span>
                   </div>
                 </div>
+              </div>
               </div>
             </div>
             
             <!-- Catarro -->
             <div v-if="clientesAgrupados.catarro && clientesAgrupados.catarro.length > 0" class="cliente-card cliente-card-catarro">
-              <div class="cliente-header cliente-catarro">
-                <h4>Catarro</h4>
+              <button
+                type="button"
+                class="cliente-header cliente-catarro"
+                :aria-expanded="esAcordeonClienteAbierto('catarro') ? 'true' : 'false'"
+                @click="toggleAcordeonCliente('catarro')"
+              >
+                <div class="cliente-titulo">
+                  <h4>Catarro</h4>
+                  <span
+                    v-if="tieneEfectivoPendiente('catarro')"
+                    class="badge-efectivo-pendiente"
+                    :title="`Efectivo pendiente: ${contarEfectivoPendiente('catarro')}`"
+                  >
+                    {{ contarEfectivoPendiente('catarro') }}
+                  </span>
+                  <span
+                    v-if="tieneChequePendiente('catarro')"
+                    class="badge-cheque-pendiente"
+                    :title="`Cheques pendientes: ${contarChequePendiente('catarro')}`"
+                  >
+                    {{ contarChequePendiente('catarro') }}
+                  </span>
+                </div>
                 <div class="cliente-total">
                   Total: ${{ formatearNumero(calcularTotalCliente('catarro')) }}
                 </div>
-              </div>
-              <div class="cliente-resumen">
-                <div class="resumen-item tipo-deposito">
-                  <span>Depósitos:</span>
-                  <span>${{ formatearNumero(calcularTotalPorTipo('catarro', 'deposito')) }}</span>
+                <span class="cliente-header-chevron" aria-hidden="true">▾</span>
+              </button>
+              <div v-show="esAcordeonClienteAbierto('catarro')">
+                <div class="cliente-contador">
+                  {{ clientesAgrupados.catarro.length }} transacción(es)
                 </div>
-                <div class="resumen-item tipo-transferencia">
-                  <span>Transferencias:</span>
-                  <span>${{ formatearNumero(calcularTotalPorTipo('catarro', 'transferencia')) }}</span>
-                </div>
-              </div>
-              <div class="cliente-contador">
-                {{ clientesAgrupados.catarro.length }} transacción(es)
-              </div>
-              <div class="cliente-transacciones">
+                <div class="cliente-transacciones">
                 <div 
                   v-for="(transaccion, index) in clientesAgrupados.catarro" 
                   :key="'catarro-'+index" 
                   class="transaccion-mini"
-                  :class="'tipo-' + transaccion.tipo"
+                  :class="['tipo-' + transaccion.tipo, { 'es-stash': transaccion.esStash }]"
                 >
                   <div class="transaccion-mini-header">
-                    <span>{{ obtenerTipoTexto(transaccion.tipo) }}</span>
+                    <span>
+                      <template v-if="transaccion.esStash">
+                        {{ transaccion.descripcion }}
+                        <span class="badge-stash">📦</span>
+                      </template>
+                      <template v-else>
+                        {{ obtenerTipoTexto(transaccion.tipo) }}
+                      </template>
+                    </span>
                     <span>${{ formatearNumero(transaccion.monto) }}</span>
                   </div>
                   <div class="transaccion-mini-hora">{{ formatearHora(transaccion.timestamp) }}</div>
                   <div class="transaccion-mini-acciones">
-                    <button @click="editarTransaccion(obtenerIndiceTransaccion(transaccion))" class="btn-mini">Editar</button>
-                    <button @click="eliminarTransaccion(obtenerIndiceTransaccion(transaccion))" class="btn-mini btn-mini-eliminar">Eliminar</button>
+                    <label
+                      v-if="transaccion.tipo === 'efectivo'"
+                      class="entregado-toggle"
+                    >
+                      <input
+                        type="checkbox"
+                        :checked="!!transaccion.efectivoEntregado"
+                        @change="actualizarEfectivoEntregado(transaccion, $event.target.checked)"
+                      />
+                      Entregado
+                    </label>
+                    <button v-if="!transaccion.esStash" @click="editarTransaccion(obtenerIndiceTransaccion(transaccion))" class="btn-mini">Editar</button>
+                    <button v-if="!transaccion.esStash" @click="eliminarTransaccion(obtenerIndiceTransaccion(transaccion))" class="btn-mini btn-mini-eliminar">Eliminar</button>
+                    <span v-if="transaccion.esStash" class="texto-info-stash">Ver en Stash</span>
                   </div>
                 </div>
+              </div>
               </div>
             </div>
             
             <!-- Ozuna -->
             <div v-if="clientesAgrupados.ozuna && clientesAgrupados.ozuna.length > 0" class="cliente-card cliente-card-ozuna">
-              <div class="cliente-header cliente-ozuna">
-                <h4>Ozuna</h4>
+              <button
+                type="button"
+                class="cliente-header cliente-ozuna"
+                :aria-expanded="esAcordeonClienteAbierto('ozuna') ? 'true' : 'false'"
+                @click="toggleAcordeonCliente('ozuna')"
+              >
+                <div class="cliente-titulo">
+                  <h4>Ozuna</h4>
+                  <span
+                    v-if="tieneEfectivoPendiente('ozuna')"
+                    class="badge-efectivo-pendiente"
+                    :title="`Efectivo pendiente: ${contarEfectivoPendiente('ozuna')}`"
+                  >
+                    {{ contarEfectivoPendiente('ozuna') }}
+                  </span>
+                  <span
+                    v-if="tieneChequePendiente('ozuna')"
+                    class="badge-cheque-pendiente"
+                    :title="`Cheques pendientes: ${contarChequePendiente('ozuna')}`"
+                  >
+                    {{ contarChequePendiente('ozuna') }}
+                  </span>
+                </div>
                 <div class="cliente-total">
                   Total: ${{ formatearNumero(calcularTotalCliente('ozuna')) }}
                 </div>
-              </div>
-              <div class="cliente-resumen">
-                <div class="resumen-item tipo-deposito">
-                  <span>Depósitos:</span>
-                  <span>${{ formatearNumero(calcularTotalPorTipo('ozuna', 'deposito')) }}</span>
+                <span class="cliente-header-chevron" aria-hidden="true">▾</span>
+              </button>
+              <div v-show="esAcordeonClienteAbierto('ozuna')">
+                <div class="cliente-contador">
+                  {{ clientesAgrupados.ozuna.length }} transacción(es)
                 </div>
-                <div class="resumen-item tipo-transferencia">
-                  <span>Transferencias:</span>
-                  <span>${{ formatearNumero(calcularTotalPorTipo('ozuna', 'transferencia')) }}</span>
-                </div>
-              </div>
-              <div class="cliente-contador">
-                {{ clientesAgrupados.ozuna.length }} transacción(es)
-              </div>
-              <div class="cliente-transacciones">
+                <div class="cliente-transacciones">
                 <div 
                   v-for="(transaccion, index) in clientesAgrupados.ozuna" 
                   :key="'ozuna-'+index" 
                   class="transaccion-mini"
-                  :class="'tipo-' + transaccion.tipo"
+                  :class="['tipo-' + transaccion.tipo, { 'es-stash': transaccion.esStash }]"
                 >
                   <div class="transaccion-mini-header">
-                    <span>{{ obtenerTipoTexto(transaccion.tipo) }}</span>
+                    <span>
+                      <template v-if="transaccion.esStash">
+                        {{ transaccion.descripcion }}
+                        <span class="badge-stash">📦</span>
+                      </template>
+                      <template v-else>
+                        {{ obtenerTipoTexto(transaccion.tipo) }}
+                      </template>
+                    </span>
                     <span>${{ formatearNumero(transaccion.monto) }}</span>
                   </div>
                   <div class="transaccion-mini-hora">{{ formatearHora(transaccion.timestamp) }}</div>
                   <div class="transaccion-mini-acciones">
-                    <button @click="editarTransaccion(obtenerIndiceTransaccion(transaccion))" class="btn-mini">Editar</button>
-                    <button @click="eliminarTransaccion(obtenerIndiceTransaccion(transaccion))" class="btn-mini btn-mini-eliminar">Eliminar</button>
+                    <label
+                      v-if="transaccion.tipo === 'efectivo'"
+                      class="entregado-toggle"
+                    >
+                      <input
+                        type="checkbox"
+                        :checked="!!transaccion.efectivoEntregado"
+                        @change="actualizarEfectivoEntregado(transaccion, $event.target.checked)"
+                      />
+                      Entregado
+                    </label>
+                    <button v-if="!transaccion.esStash" @click="editarTransaccion(obtenerIndiceTransaccion(transaccion))" class="btn-mini">Editar</button>
+                    <button v-if="!transaccion.esStash" @click="eliminarTransaccion(obtenerIndiceTransaccion(transaccion))" class="btn-mini btn-mini-eliminar">Eliminar</button>
+                    <span v-if="transaccion.esStash" class="texto-info-stash">Ver en Stash</span>
                   </div>
                 </div>
+              </div>
               </div>
             </div>
             
             <!-- Verónica -->
             <div v-if="clientesAgrupados.veronica && clientesAgrupados.veronica.length > 0" class="cliente-card cliente-card-veronica">
-              <div class="cliente-header cliente-veronica">
-                <h4>Verónica</h4>
+              <button
+                type="button"
+                class="cliente-header cliente-veronica"
+                :aria-expanded="esAcordeonClienteAbierto('veronica') ? 'true' : 'false'"
+                @click="toggleAcordeonCliente('veronica')"
+              >
+                <div class="cliente-titulo">
+                  <h4>Verónica</h4>
+                  <span
+                    v-if="tieneEfectivoPendiente('veronica')"
+                    class="badge-efectivo-pendiente"
+                    :title="`Efectivo pendiente: ${contarEfectivoPendiente('veronica')}`"
+                  >
+                    {{ contarEfectivoPendiente('veronica') }}
+                  </span>
+                  <span
+                    v-if="tieneChequePendiente('veronica')"
+                    class="badge-cheque-pendiente"
+                    :title="`Cheques pendientes: ${contarChequePendiente('veronica')}`"
+                  >
+                    {{ contarChequePendiente('veronica') }}
+                  </span>
+                </div>
                 <div class="cliente-total">
                   Total: ${{ formatearNumero(calcularTotalCliente('veronica')) }}
                 </div>
-              </div>
-              <div class="cliente-resumen">
-                <div class="resumen-item tipo-deposito">
-                  <span>Depósitos:</span>
-                  <span>${{ formatearNumero(calcularTotalPorTipo('veronica', 'deposito')) }}</span>
+                <span class="cliente-header-chevron" aria-hidden="true">▾</span>
+              </button>
+              <div v-show="esAcordeonClienteAbierto('veronica')">
+                <div class="cliente-contador">
+                  {{ clientesAgrupados.veronica.length }} transacción(es)
                 </div>
-                <div class="resumen-item tipo-transferencia">
-                  <span>Transferencias:</span>
-                  <span>${{ formatearNumero(calcularTotalPorTipo('veronica', 'transferencia')) }}</span>
-                </div>
-              </div>
-              <div class="cliente-contador">
-                {{ clientesAgrupados.veronica.length }} transacción(es)
-              </div>
-              <div class="cliente-transacciones">
+                <div class="cliente-transacciones">
                 <div 
                   v-for="(transaccion, index) in clientesAgrupados.veronica" 
                   :key="'veronica-'+index" 
@@ -337,20 +524,27 @@
                   </div>
                   <div class="transaccion-mini-hora">{{ formatearHora(transaccion.timestamp) }}</div>
                   <div class="transaccion-mini-acciones">
+                    <label
+                      v-if="transaccion.tipo === 'efectivo'"
+                      class="entregado-toggle"
+                    >
+                      <input
+                        type="checkbox"
+                        :checked="!!transaccion.efectivoEntregado"
+                        @change="actualizarEfectivoEntregado(transaccion, $event.target.checked)"
+                      />
+                      Entregado
+                    </label>
                     <button v-if="!transaccion.esStash" @click="editarTransaccion(obtenerIndiceTransaccion(transaccion))" class="btn-mini">Editar</button>
                     <button v-if="!transaccion.esStash" @click="eliminarTransaccion(obtenerIndiceTransaccion(transaccion))" class="btn-mini btn-mini-eliminar">Eliminar</button>
                     <span v-if="transaccion.esStash" class="texto-info-stash">Ver en Stash</span>
                   </div>
                 </div>
               </div>
+              </div>
             </div>
           </div>
           
-          <div class="cambiar-vista">
-            <button @click="mostrarVistaLista = !mostrarVistaLista" class="btn-cambiar-vista">
-              Ver lista completa
-            </button>
-          </div>
         </div>
         
         <div v-if="transaccionesDia.length > 0 && mostrarVistaLista && !mostrarFormulario" class="lista-transacciones">
@@ -376,18 +570,40 @@
             <div v-if="!transaccion.esStash" class="transaccion-descripcion">{{ transaccion.descripcion }}</div>
             <div class="transaccion-hora">{{ formatearHora(transaccion.timestamp) }}</div>
             <div class="transaccion-acciones">
+              <label
+                v-if="transaccion.tipo === 'efectivo'"
+                class="entregado-toggle"
+              >
+                <input
+                  type="checkbox"
+                  :checked="!!transaccion.efectivoEntregado"
+                  @change="actualizarEfectivoEntregado(transaccion, $event.target.checked)"
+                />
+                Entregado
+              </label>
+              <label
+                v-if="transaccion.tipo === 'cheque'"
+                class="cheque-cobrado-toggle"
+              >
+                <input
+                  type="checkbox"
+                  :checked="!!transaccion.chequeCobrado"
+                  @change="actualizarChequeCobrado(transaccion, $event.target.checked)"
+                />
+                Cobrado
+              </label>
               <button v-if="!transaccion.esStash" @click="editarTransaccion(index)" class="btn-editar">Editar</button>
               <button v-if="!transaccion.esStash" @click="eliminarTransaccion(index)" class="btn-eliminar">Eliminar</button>
               <span v-if="transaccion.esStash" class="texto-info-stash">Esta transacción proviene del Stash y debe gestionarse desde allí</span>
             </div>
           </div>
           
-          <div class="cambiar-vista">
-            <button @click="mostrarVistaLista = !mostrarVistaLista" class="btn-cambiar-vista">
-              Ver agrupado por cliente
-            </button>
-          </div>
         </div>
+        </div>
+        <div v-else class="sin-transacciones">
+          Selecciona un día para ver las transacciones.
+        </div>
+      </div>
       </div>
     </div>
   </div>
@@ -396,9 +612,15 @@
 <script>
 import { db } from '../firebase';
 import { collection, addDoc, query, where, getDocs, doc, deleteDoc, updateDoc, orderBy, limit } from 'firebase/firestore';
+import PdfResumenDiaButton from './PdfResumenDiaButton.vue';
+import ChequesPendientesAccordion from './ChequesPendientesAccordion.vue';
 
 export default {
   name: 'TransaccionesAgendaModal',
+  components: {
+    PdfResumenDiaButton,
+    ChequesPendientesAccordion
+  },
   props: {
     mostrar: {
       type: Boolean,
@@ -418,6 +640,7 @@ export default {
       diaSeleccionado: null,
       mostrarFormulario: false,
       mostrarVistaLista: false,
+      clientesAcordeonAbiertos: [],
       transacciones: [],
       nuevaTransaccion: {
         tipo: 'deposito',
@@ -495,6 +718,31 @@ export default {
         return ts ? this.toISODateLocal(ts) === diaISO : false;
       });
     },
+    chequesPendientes() {
+      return (this.transacciones || [])
+        .filter(t => t.tipo === 'cheque' && !t.chequeCobrado);
+    },
+    montoEfectivoDia() {
+      if (!this.diaSeleccionado) return 0;
+      return this.transaccionesDia
+        .filter(t => t.tipo === 'efectivo')
+        .reduce((total, t) => total + (parseFloat(t.monto) || 0), 0);
+    },
+    montoChequeDia() {
+      if (!this.diaSeleccionado) return 0;
+      return this.transaccionesDia
+        .filter(t => t.tipo === 'cheque')
+        .reduce((total, t) => total + (parseFloat(t.monto) || 0), 0);
+    },
+    montoCuentasDia() {
+      if (!this.diaSeleccionado) return 0;
+      // Cuentas = total del día - efectivo - cheques
+      const totalDia = this.transaccionesDia.reduce((total, t) => total + (parseFloat(t.monto) || 0), 0);
+      return Math.max(0, totalDia - this.montoEfectivoDia - this.montoChequeDia);
+    },
+    hayChequesDia() {
+      return this.montoChequeDia > 0;
+    },
     formatoFechaCompleta() {
       if (!this.diaSeleccionado) return '';
       
@@ -528,6 +776,32 @@ export default {
     }
   },
   methods: {
+    toggleAcordeonCliente(clienteKey) {
+      const abiertos = new Set(this.clientesAcordeonAbiertos);
+      if (abiertos.has(clienteKey)) {
+        abiertos.delete(clienteKey);
+      } else {
+        abiertos.add(clienteKey);
+      }
+      this.clientesAcordeonAbiertos = Array.from(abiertos);
+    },
+    esAcordeonClienteAbierto(clienteKey) {
+      return this.clientesAcordeonAbiertos.includes(clienteKey);
+    },
+    contarEfectivoPendiente(clienteKey) {
+      const lista = this.clientesAgrupados?.[clienteKey] || [];
+      return lista.filter(t => t.tipo === 'efectivo' && !t.efectivoEntregado).length;
+    },
+    tieneEfectivoPendiente(clienteKey) {
+      return this.contarEfectivoPendiente(clienteKey) > 0;
+    },
+    contarChequePendiente(clienteKey) {
+      const lista = this.clientesAgrupados?.[clienteKey] || [];
+      return lista.filter(t => t.tipo === 'cheque' && !t.chequeCobrado).length;
+    },
+    tieneChequePendiente(clienteKey) {
+      return this.contarChequePendiente(clienteKey) > 0;
+    },
     // --- Helpers de fecha (evitan desfases UTC y parseos ambiguos) ---
     toISODateLocal(date) {
       if (!(date instanceof Date)) return '';
@@ -605,6 +879,20 @@ export default {
              fecha1.getMonth() === fecha2.getMonth() &&
              fecha1.getFullYear() === fecha2.getFullYear();
     },
+    obtenerFechaTransaccion(transaccion) {
+      if (transaccion?.fecha) {
+        return this.parseFechaSeguro(transaccion.fecha);
+      }
+      return this.parseFechaSeguro(transaccion.timestamp);
+    },
+    formatearFechaCorta(fecha) {
+      if (!(fecha instanceof Date) || isNaN(fecha)) return '';
+      return fecha.toLocaleDateString('es-MX', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric'
+      });
+    },
     esDiaSeleccionado(fecha) {
       if (!this.diaSeleccionado) return false;
       return this.esMismaFecha(fecha, this.diaSeleccionado.fecha);
@@ -645,8 +933,8 @@ export default {
     },
     formatearNumero(num) {
       return num.toLocaleString('es-MX', {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0
       });
     },
     formatearHora(timestamp) {
@@ -661,6 +949,7 @@ export default {
         deposito: 'Depósito',
         transferencia: 'Transferencia',
         efectivo: 'Efectivo',
+        cheque: 'Cheque',
         otro: 'Otro'
       };
       return tipos[tipo] || 'Otro';
@@ -691,11 +980,19 @@ export default {
       if (!this.esFormularioValido) return;
       
       try {
+        const transaccionActual = this.editandoIndex >= 0 ? this.transaccionesDia[this.editandoIndex] : null;
         const transaccionData = {
           ...this.nuevaTransaccion,
           monto: parseFloat(this.nuevaTransaccion.monto),
           timestamp: this.nuevaTransaccion.timestamp || new Date().toISOString(),
-          fecha: this.diaSeleccionado.fecha.toISOString().split('T')[0]
+          fecha: this.diaSeleccionado.fecha.toISOString().split('T')[0],
+          // Solo aplica para tipo efectivo (se usa para marcar si ya fue entregado)
+          efectivoEntregado: this.nuevaTransaccion.tipo === 'efectivo'
+            ? (transaccionActual?.efectivoEntregado ?? false)
+              : false,
+            chequeCobrado: this.nuevaTransaccion.tipo === 'cheque'
+              ? (transaccionActual?.chequeCobrado ?? false)
+              : false
         };
         
         if (this.editandoIndex >= 0) {
@@ -788,58 +1085,91 @@ export default {
           });
         });
         
-        // Cargar transacciones del stash y su historial para Verónica
-        if (this.cliente === 'veronica' || this.cliente === 'mexico') {
-          await this.cargarTransaccionesStashVeronica(primerDiaStr, ultimoDiaStr);
-          await this.cargarTransaccionesHistorialStashVeronica(primerDiaStr, ultimoDiaStr);
+        // Cargar transacciones del stash (stash_<cliente>) para que se vean en la agenda del día
+        // y guardar índice de entregas por si se requiere en el historial.
+        this._stashEntregadoIndex = await this.cargarTransaccionesStashPorClientes(primerDiaStr, ultimoDiaStr);
+
+        // Mantener historial de abonos aplicados del stash (Verónica + Joselito + compatibilidad México)
+        const clientesHistorial = ['veronica', 'joselito'];
+        if (this.cliente === 'mexico') {
+          clientesHistorial.push('mexico');
         }
+        await Promise.all(
+          clientesHistorial.map((clienteKey) =>
+            this.cargarTransaccionesHistorialStashCliente(clienteKey, primerDiaStr, ultimoDiaStr, this._stashEntregadoIndex)
+          )
+        );
       } catch (error) {
         console.error('Error al cargar las transacciones:', error);
       }
     },
-    async cargarTransaccionesStashVeronica(primerDiaStr, ultimoDiaStr) {
+    async cargarTransaccionesStashPorClientes(primerDiaStr, ultimoDiaStr) {
+      const clientes = ['otilio', 'joselito', 'catarro', 'ozuna', 'veronica', 'mexico'];
+      const results = await Promise.all(
+        clientes.map(clienteKey => this.cargarTransaccionesStashCliente(clienteKey, primerDiaStr, ultimoDiaStr))
+      );
+      return results.reduce((acc, item) => Object.assign(acc, item || {}), {});
+    },
+    async cargarTransaccionesStashCliente(clienteKey, primerDiaStr, ultimoDiaStr) {
       try {
+        const entregadoIndex = {};
         const qStash = query(
-          collection(db, 'stash_veronica'),
+          collection(db, `stash_${clienteKey}`),
           where('fecha', '>=', primerDiaStr),
           where('fecha', '<=', ultimoDiaStr)
         );
-        
+
         const stashSnapshot = await getDocs(qStash);
-        
+
         stashSnapshot.forEach((doc) => {
-          const stashData = doc.data();
+          const stashData = doc.data() || {};
           const fechaBase = stashData.fechaCreacion || stashData.fecha || new Date().toISOString();
           const fechaDate = this.parseFechaSeguro(fechaBase);
           const fechaISO = fechaDate ? this.toISODateLocal(fechaDate) : stashData.fecha;
-          // Convertir los datos del stash al formato de transacciones
+          const esEfectivo = !!stashData.esEfectivo;
+          const stashDocId = doc.id;
+
           this.transacciones.push({
-            id: `stash_${doc.id}`,
-            cliente: 'veronica',
-            tipo: 'deposito', // Por defecto, consideramos los stash como depósitos
+            id: `stash_${clienteKey}_${doc.id}`,
+            cliente: clienteKey,
+            tipo: esEfectivo ? 'efectivo' : 'deposito',
             monto: stashData.monto || 0,
             descripcion: `Stash: ${stashData.descripcion || 'Sin descripción'}`,
             timestamp: fechaDate ? fechaDate.toISOString() : fechaBase,
             fecha: fechaISO || stashData.fecha,
-            esStash: true // Marcador para identificar que viene del stash
+            esStash: true,
+            stashEsEfectivo: esEfectivo,
+            stashDocId,
+            efectivoEntregado: !!stashData.efectivoEntregado
           });
+
+          entregadoIndex[`${clienteKey}:${stashDocId}`] = {
+            efectivoEntregado: !!stashData.efectivoEntregado
+          };
         });
+
+        return entregadoIndex;
       } catch (error) {
-        console.error('Error al cargar transacciones del stash de Verónica:', error);
+        console.error(`Error al cargar transacciones del stash de ${clienteKey}:`, error);
+        return {};
       }
     },
-    async cargarTransaccionesHistorialStashVeronica(primerDiaStr, ultimoDiaStr) {
-      // Los abonos aplicados del stash se guardan en cuentasVeronica dentro del array "abonos" de cada cuenta.
+    async cargarTransaccionesHistorialStashCliente(clienteKey, primerDiaStr, ultimoDiaStr, stashEntregadoIndex = {}) {
+      // Los abonos aplicados del stash se guardan en cuentas<Cliente> dentro del array "abonos" de cada cuenta.
       // Usamos la fecha original del stash (fechaOriginalStash) para ubicarlos en el calendario.
       try {
-        const qCuentas = query(
-          collection(db, 'cuentasVeronica'),
-          orderBy('fecha', 'desc'),
-          limit(100)
-        );
+        const collectionName = `cuentas${clienteKey.charAt(0).toUpperCase()}${clienteKey.slice(1)}`;
+        const qCuentas = query(collection(db, collectionName), orderBy('fecha', 'desc'), limit(100));
         
         const snapshot = await getDocs(qCuentas);
         
+        const grupos = new Map();
+
+        const limpiarDescripcion = (descripcion) => {
+          if (!descripcion) return 'Abono aplicado';
+          return String(descripcion).replace(/\s*\(Aplicación Individual\)\s*$/i, '').trim();
+        };
+
         snapshot.forEach((docSnap) => {
           const cuentaData = docSnap.data();
           const cuentaId = docSnap.id;
@@ -858,24 +1188,58 @@ export default {
             
             // Filtrar por rango del mes
             if (fechaISO < primerDiaStr || fechaISO > ultimoDiaStr) return;
-            
-            // Evitar duplicados - verificar que no existe ya esta transacción
-            const idTransaccion = `abono_${cuentaId}_${idx}`;
-            const yaExiste = this.transacciones.some(t => t.id === idTransaccion);
-            if (yaExiste) return;
-            
-            this.transacciones.push({
-              id: idTransaccion,
-              cliente: 'veronica',
-              tipo: 'deposito',
-              monto: abono.monto || 0,
-              descripcion: abono.descripcion || 'Abono aplicado',
-              timestamp: fechaDate.toISOString(),
-              fecha: fechaISO,
-              esStash: true,
-              origenHistorial: true,
-              cuentaId: cuentaId
-            });
+
+            const stashItemId = abono.stashItemId || null;
+            const tipo = abono.esEfectivo ? 'efectivo' : 'deposito';
+            const descripcionLimpia = limpiarDescripcion(abono.descripcion || 'Abono aplicado');
+            const groupKey = stashItemId
+              ? `stashItem:${stashItemId}`
+              : `fallback:${fechaISO}:${tipo}:${descripcionLimpia}`;
+
+            if (!grupos.has(groupKey)) {
+              const entregado = stashItemId
+                ? (stashEntregadoIndex?.[`${clienteKey}:${stashItemId}`]?.efectivoEntregado ?? false)
+                : false;
+
+              grupos.set(groupKey, {
+                id: stashItemId ? `stash_hist_${clienteKey}_${stashItemId}` : `stash_hist_${clienteKey}_${fechaISO}_${idx}`,
+                cliente: clienteKey,
+                tipo,
+                monto: 0,
+                descripcion: descripcionLimpia,
+                timestamp: fechaDate.toISOString(),
+                fecha: fechaISO,
+                esStash: true,
+                origenHistorial: true,
+                stashDocId: stashItemId || null,
+                efectivoEntregado: !!entregado,
+                cuentaIds: new Set()
+              });
+            }
+
+            const grupo = grupos.get(groupKey);
+            grupo.monto += (parseFloat(abono.monto) || 0);
+            grupo.cuentaIds.add(cuentaId);
+          });
+        });
+
+        // Emitir transacciones agrupadas (una por stashItemId / fallback)
+        grupos.forEach((t) => {
+          // Evitar duplicados por id
+          if (this.transacciones.some(x => x.id === t.id)) return;
+          this.transacciones.push({
+            id: t.id,
+            cliente: t.cliente,
+            tipo: t.tipo,
+            monto: t.monto,
+            descripcion: t.descripcion,
+            timestamp: t.timestamp,
+            fecha: t.fecha,
+            esStash: true,
+            origenHistorial: true,
+            stashDocId: t.stashDocId,
+            efectivoEntregado: t.efectivoEntregado,
+            cuentaIds: Array.from(t.cuentaIds)
           });
         });
       } catch (error) {
@@ -900,6 +1264,50 @@ export default {
     },
     obtenerIndiceTransaccion(transaccion) {
       return this.transaccionesDia.findIndex(t => t.id === transaccion.id);
+    },
+    async actualizarEfectivoEntregado(transaccion, entregado) {
+      if (!transaccion || !transaccion.id) return;
+
+      try {
+        if (transaccion.esStash) {
+          // Persistir en stash_<cliente>
+          if (!transaccion.cliente || !transaccion.stashDocId) return;
+          const stashRef = doc(db, `stash_${transaccion.cliente}`, transaccion.stashDocId);
+          await updateDoc(stashRef, { efectivoEntregado: !!entregado });
+        } else {
+          const transaccionRef = doc(db, 'transacciones', transaccion.id);
+          await updateDoc(transaccionRef, { efectivoEntregado: !!entregado });
+        }
+
+        // Actualizar estado local
+        this.transacciones = this.transacciones.map(t =>
+          t.id === transaccion.id ? { ...t, efectivoEntregado: !!entregado } : t
+        );
+      } catch (error) {
+        console.error('Error al actualizar el estado de entrega:', error);
+        alert('No se pudo actualizar el estado de entrega. Intenta de nuevo.');
+      }
+    },
+    async actualizarChequeCobrado(transaccion, cobrado) {
+      if (!transaccion || !transaccion.id) return;
+
+      try {
+        if (transaccion.esStash) {
+          if (!transaccion.cliente || !transaccion.stashDocId) return;
+          const stashRef = doc(db, `stash_${transaccion.cliente}`, transaccion.stashDocId);
+          await updateDoc(stashRef, { chequeCobrado: !!cobrado });
+        } else {
+          const transaccionRef = doc(db, 'transacciones', transaccion.id);
+          await updateDoc(transaccionRef, { chequeCobrado: !!cobrado });
+        }
+
+        this.transacciones = this.transacciones.map(t =>
+          t.id === transaccion.id ? { ...t, chequeCobrado: !!cobrado } : t
+        );
+      } catch (error) {
+        console.error('Error al actualizar estado de cobro:', error);
+        alert('No se pudo actualizar el estado de cobro. Intenta de nuevo.');
+      }
     },
     calcularTotalDia() {
       return this.transaccionesDia.reduce((total, transaccion) => {
@@ -958,13 +1366,21 @@ export default {
 .modal-agenda {
   background-color: white;
   border-radius: 10px;
-  width: 90%;
-  max-width: 900px;
-  max-height: 90vh;
+  width: 96vw;
+  max-width: 1400px;
+  height: 94vh;
+  max-height: 94vh;
   display: flex;
   flex-direction: column;
   overflow: hidden;
   box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+}
+
+.modal-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .modal-header {
@@ -1003,7 +1419,10 @@ export default {
 
 .calendario-container {
   padding: 15px;
-  border-bottom: 1px solid #ddd;
+  border-right: 1px solid #ddd;
+  flex: 1 1 50%;
+  overflow-y: auto;
+  min-width: 360px;
 }
 
 .selector-fecha {
@@ -1054,6 +1473,76 @@ export default {
   grid-template-columns: repeat(7, 1fr);
   grid-template-rows: repeat(6, 1fr);
   gap: 5px;
+}
+
+.cheques-pendientes {
+  background: #fff;
+  border: 1px solid #e0d5f0;
+  border-radius: 10px;
+  padding: 10px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cheques-pendientes-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.cheques-pendientes h4 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.badge-cheques {
+  background: #9b59b6;
+  color: #fff;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+
+.cheque-pendiente {
+  border: 1px solid #ede7f6;
+  border-radius: 8px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: linear-gradient(90deg, #faf7ff, #f5f1ff);
+}
+
+.cheque-pendiente-info {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.cheque-pendiente-fecha {
+  font-size: 0.9rem;
+  color: #555;
+}
+
+.cheque-pendiente-cliente {
+  color: #7c3dbb;
+  font-weight: 600;
+  margin-left: 6px;
+}
+
+.cheque-pendiente-monto {
+  font-weight: 700;
+  color: #7c3dbb;
+}
+
+.cheque-pendiente-descripcion {
+  color: #555;
+  font-size: 0.9rem;
 }
 
 .dia-celda {
@@ -1148,10 +1637,10 @@ export default {
 }
 
 .transacciones-container {
-  flex: 1;
+  flex: 1 1 50%;
+  min-width: 0;
   padding: 15px;
   overflow-y: auto;
-  max-height: 400px;
 }
 
 .dia-seleccionado-header {
@@ -1159,6 +1648,14 @@ export default {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 15px;
+}
+
+.acciones-dia {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
 }
 
 .dia-seleccionado-header h4 {
@@ -1308,6 +1805,10 @@ label {
   border-left-color: #27ae60;
 }
 
+.tipo-cheque {
+  border-left-color: #9b59b6;
+}
+
 .tipo-transferencia {
   border-left-color: #3498db;
 }
@@ -1424,6 +1925,70 @@ label {
   border-bottom: 1px solid #ddd;
 }
 
+.cliente-header {
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+
+.cliente-header:focus-visible {
+  outline: 2px solid rgba(55, 96, 176, 0.45);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+
+.cliente-header-chevron {
+  margin-left: 10px;
+  font-size: 1.1em;
+  line-height: 1;
+  opacity: 0.75;
+  transition: transform 0.2s ease;
+}
+
+.cliente-header[aria-expanded="true"] .cliente-header-chevron {
+  transform: rotate(180deg);
+}
+
+.cliente-titulo {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.badge-efectivo-pendiente {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background-color: #e74c3c;
+  color: white;
+  font-size: 0.75em;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.badge-cheque-pendiente {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background-color: #9b59b6;
+  color: white;
+  font-size: 0.75em;
+  font-weight: 700;
+  line-height: 1;
+}
+
 .cliente-header h4 {
   margin: 0;
   color: #3760b0;
@@ -1433,40 +1998,6 @@ label {
 .cliente-total {
   font-weight: bold;
   color: #27ae60;
-}
-
-.cliente-resumen {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 10px;
-  padding: 5px 0;
-  border-bottom: 1px dashed #ddd;
-}
-
-.resumen-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 5px 10px;
-  background-color: white;
-  border-radius: 4px;
-  font-size: 0.85em;
-  transition: all 0.2s ease;
-}
-
-.resumen-item:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.1);
-}
-
-.resumen-item.tipo-deposito span:last-child {
-  color: #27ae60;
-  font-weight: bold;
-}
-
-.resumen-item.tipo-transferencia span:last-child {
-  color: #3498db;
-  font-weight: bold;
 }
 
 .cliente-transacciones {
@@ -1509,6 +2040,10 @@ label {
 
 .transaccion-mini.tipo-deposito .transaccion-mini-header span:last-child {
   color: #27ae60;
+}
+
+.transaccion-mini.tipo-cheque .transaccion-mini-header span:last-child {
+  color: #9b59b6;
 }
 
 .transaccion-mini.tipo-transferencia .transaccion-mini-header span:last-child {
@@ -1616,18 +2151,40 @@ label {
   color: #555;
 }
 
-.resumen-dia-item span:last-child {
+.resumen-dia-item > span:last-child {
   font-weight: bold;
   color: #3760b0;
   font-size: 1.1em;
 }
 
-.resumen-dia-item span.color-deposito {
-  color: #27ae60;
+.resumen-dia-metric {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+  font-weight: 400;
 }
 
-.resumen-dia-item span.color-transferencia {
-  color: #3498db;
+.resumen-dia-item > .resumen-dia-metric {
+  font-weight: 400;
+}
+
+.resumen-dia-num {
+  font-weight: 800;
+  color: #3760b0;
+  font-size: 1.1em;
+}
+
+.resumen-dia-extra {
+  font-size: 0.8em;
+  font-weight: 600;
+  color: #2c3e50;
+  background: rgba(55, 96, 176, 0.08);
+  border: 1px solid rgba(55, 96, 176, 0.18);
+  padding: 2px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
 }
 
 .cliente-header {
@@ -1756,6 +2313,17 @@ label {
     width: 95%;
     max-height: 95vh;
   }
+
+  .modal-body {
+    flex-direction: column;
+  }
+  
+  .calendario-container {
+    flex: 0 0 auto;
+    min-width: 0;
+    border-right: none;
+    border-bottom: 1px solid #ddd;
+  }
   
   .dia-celda {
     height: 35px;
@@ -1769,6 +2337,16 @@ label {
     flex-direction: column;
     align-items: flex-start;
     gap: 10px;
+  }
+
+  .acciones-dia {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .acciones-dia .btn-agregar {
+    width: 100%;
+    text-align: center;
   }
   
   .transaccion-acciones {
@@ -1794,16 +2372,6 @@ label {
     margin-bottom: 10px;
   }
   
-  .cliente-resumen {
-    flex-wrap: wrap;
-    gap: 5px;
-  }
-  
-  .resumen-item {
-    flex: 1;
-    min-width: 100px;
-  }
-  
   .resumen-dia {
     flex-direction: column;
     padding: 10px;
@@ -1819,6 +2387,10 @@ label {
 /* Colores para las transacciones según tipo */
 .transaccion-mini.tipo-deposito {
   border-left-color: #27ae60;
+}
+
+.transaccion-mini.tipo-cheque {
+  border-left-color: #9b59b6;
 }
 
 .transaccion-mini.tipo-transferencia {
@@ -1845,6 +2417,46 @@ label {
   gap: 5px;
 }
 
+.entregado-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8em;
+  color: #2c3e50;
+  background: rgba(7, 113, 30, 0.08);
+  border: 1px solid rgba(7, 113, 30, 0.22);
+  padding: 3px 8px;
+  border-radius: 999px;
+  margin-right: 6px;
+  user-select: none;
+}
+
+.entregado-toggle input {
+  width: 14px;
+  height: 14px;
+  accent-color: #07711e;
+}
+
+.cheque-cobrado-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8em;
+  color: #5e2a9a;
+  background: rgba(155, 89, 182, 0.08);
+  border: 1px solid rgba(155, 89, 182, 0.22);
+  padding: 3px 8px;
+  border-radius: 999px;
+  margin-right: 6px;
+  user-select: none;
+}
+
+.cheque-cobrado-toggle input {
+  width: 14px;
+  height: 14px;
+  accent-color: #9b59b6;
+}
+
 .btn-mini {
   padding: 3px 6px;
   font-size: 0.8em;
@@ -1862,26 +2474,6 @@ label {
 
 .btn-mini-eliminar {
   background-color: #e74c3c;
-}
-
-.cambiar-vista {
-  display: flex;
-  justify-content: center;
-  margin-top: 15px;
-}
-
-.btn-cambiar-vista {
-  background-color: #3760b0;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  padding: 8px 15px;
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-.btn-cambiar-vista:hover {
-  background-color: #2c4d8e;
 }
 
 /* Estilos para transacciones del stash */
@@ -1997,6 +2589,10 @@ label {
 
 .transaccion-mini.tipo-deposito .transaccion-mini-header span:last-child {
   color: #27ae60;
+}
+
+.transaccion-mini.tipo-cheque .transaccion-mini-header span:last-child {
+  color: #9b59b6;
 }
 
 .transaccion-mini.tipo-transferencia .transaccion-mini-header span:last-child {

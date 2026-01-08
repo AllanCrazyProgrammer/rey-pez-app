@@ -1,10 +1,11 @@
 <template>
   <div class="embarques-menu">
     <!-- Efecto de scanlines CRT -->
-    <div class="crt-overlay"></div>
-    <div class="crt-flicker"></div>
-    
-    <div class="terminal-container">
+  <div class="crt-overlay"></div>
+  <div class="crt-flicker"></div>
+  
+  <div class="terminal-container">
+    <div class="menu-layout">
       <div class="header-section">
         <div class="terminal-header">
           <span class="terminal-dots">
@@ -57,13 +58,14 @@ _____|____|____|______
           <span class="btn-text">RECUPERAR_DATOS</span>
         </button>
       </div>
-      
-      <div class="matrix-rain" aria-hidden="true">
-        <span v-for="n in 20" :key="n" class="rain-column" :style="{ '--delay': n * 0.3 + 's', '--left': (n * 5) + '%' }">
-          {{ randomChars }}
-        </span>
-      </div>
     </div>
+    
+    <div class="matrix-rain" aria-hidden="true">
+      <span v-for="n in 20" :key="n" class="rain-column" :style="{ '--delay': n * 0.3 + 's', '--left': (n * 5) + '%' }">
+        {{ randomChars }}
+      </span>
+    </div>
+  </div>
     
     <ListaEmbarques />
   </div>
@@ -170,8 +172,16 @@ export default {
 .terminal-container {
   position: relative;
   z-index: 1;
-  max-width: 900px;
+  max-width: 1200px;
+  width: 100%;
   margin: 0 auto;
+}
+
+.menu-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 25px;
+  margin-bottom: 30px;
 }
 
 /* Header estilo ventana de terminal */
@@ -179,7 +189,7 @@ export default {
   background: rgba(0, 20, 0, 0.9);
   border: 2px solid var(--matrix-green);
   border-radius: 0;
-  margin-bottom: 30px;
+  margin-bottom: 0;
   box-shadow: 
     0 0 20px var(--matrix-green-glow),
     inset 0 0 60px rgba(0, 255, 65, 0.05);
@@ -336,7 +346,7 @@ export default {
   display: flex;
   flex-direction: column;
   gap: 15px;
-  margin-bottom: 30px;
+  margin-bottom: 0;
   background: rgba(0, 20, 0, 0.8);
   border: 2px solid var(--matrix-green);
   padding: 25px;
@@ -503,6 +513,19 @@ export default {
 @keyframes rain-fall {
   0% { transform: translateY(0); }
   100% { transform: translateY(250vh); }
+}
+
+@media (min-width: 1024px) {
+  .menu-layout {
+    flex-direction: row;
+    align-items: stretch;
+  }
+
+  .header-section,
+  .menu-options {
+    flex: 1 1 50%;
+    height: 100%;
+  }
 }
 
 /* Responsive */
