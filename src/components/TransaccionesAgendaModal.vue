@@ -43,36 +43,15 @@
           </div>
         </div>
 
-        <div v-if="chequesPendientes.length" class="cheques-pendientes">
-          <div class="cheques-pendientes-header">
-            <h4>Cheques pendientes por cobrar</h4>
-            <span class="badge-cheques">{{ chequesPendientes.length }}</span>
-          </div>
-          <div 
-            v-for="cheque in chequesPendientes" 
-            :key="cheque.id"
-            class="cheque-pendiente"
-          >
-            <div class="cheque-pendiente-info">
-              <div class="cheque-pendiente-fecha">
-                {{ formatearFechaCorta(obtenerFechaTransaccion(cheque)) }}
-                <span class="cheque-pendiente-cliente">· {{ obtenerClienteTexto(cheque.cliente) }}</span>
-              </div>
-              <div class="cheque-pendiente-monto">${{ formatearNumero(cheque.monto) }}</div>
-            </div>
-            <div class="cheque-pendiente-descripcion" v-if="cheque.descripcion">
-              {{ cheque.descripcion }}
-            </div>
-            <label class="cheque-cobrado-toggle">
-              <input
-                type="checkbox"
-                :checked="!!cheque.chequeCobrado"
-                @change="actualizarChequeCobrado(cheque, $event.target.checked)"
-              />
-              Cobrado
-            </label>
-          </div>
-        </div>
+        <ChequesPendientesAccordion
+          v-if="chequesPendientes.length"
+          :cheques="chequesPendientes"
+          :formatear-fecha-corta="formatearFechaCorta"
+          :obtener-fecha-transaccion="obtenerFechaTransaccion"
+          :obtener-cliente-texto="obtenerClienteTexto"
+          :formatear-numero="formatearNumero"
+          @toggle-cobrado="actualizarChequeCobrado"
+        />
       </div>
       
       <div class="transacciones-container">
@@ -634,11 +613,13 @@
 import { db } from '../firebase';
 import { collection, addDoc, query, where, getDocs, doc, deleteDoc, updateDoc, orderBy, limit } from 'firebase/firestore';
 import PdfResumenDiaButton from './PdfResumenDiaButton.vue';
+import ChequesPendientesAccordion from './ChequesPendientesAccordion.vue';
 
 export default {
   name: 'TransaccionesAgendaModal',
   components: {
-    PdfResumenDiaButton
+    PdfResumenDiaButton,
+    ChequesPendientesAccordion
   },
   props: {
     mostrar: {
