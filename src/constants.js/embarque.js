@@ -44,6 +44,7 @@ export function crearNuevoProducto(clienteId) {
     medida: "",
     tipo: "",
     tipoPersonalizado: "",
+    nota: "", // Campo para sellado/kileado
     taras: [],
     kilos: [],
     reporteTaras: [],

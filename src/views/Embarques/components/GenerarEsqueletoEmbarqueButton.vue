@@ -152,13 +152,17 @@ export default {
             }
 
             const tipoNormalizado = this.normalizarTipo(item.tipo);
-            const clave = `${medida}__${tipoNormalizado.tipo || ''}__${tipoNormalizado.tipoPersonalizado || ''}`;
+            // Obtener la nota (sellado/kileado) del item
+            const nota = (item.nota || '').toString().trim();
+            // Incluir la nota en la clave única para diferenciar medidas con diferente nota
+            const clave = `${medida}__${tipoNormalizado.tipo || ''}__${tipoNormalizado.tipoPersonalizado || ''}__${nota}`;
 
             if (!acumuladoPorCliente[clienteId].has(clave)) {
               acumuladoPorCliente[clienteId].set(clave, {
                 medida,
                 tipo: tipoNormalizado.tipo,
-                tipoPersonalizado: tipoNormalizado.tipoPersonalizado || ''
+                tipoPersonalizado: tipoNormalizado.tipoPersonalizado || '',
+                nota // Incluir la nota en el esqueleto
               });
             }
           });

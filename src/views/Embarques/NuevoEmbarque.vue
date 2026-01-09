@@ -736,6 +736,11 @@ export default {
               this.setTipoDefaultParaCliente(nuevoProducto);
             }
 
+            // Asignar la nota (sellado/kileado) desde el pedido limpio
+            if (definicion.nota) {
+              nuevoProducto.nota = definicion.nota;
+            }
+
             this.productosNuevosPendientes.set(nuevoProducto.id, { ...nuevoProducto });
             nuevosProductos.push(nuevoProducto);
           }
