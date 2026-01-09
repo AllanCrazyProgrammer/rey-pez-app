@@ -10,9 +10,13 @@
       
       <div class="filters">
         <input v-model="search" placeholder="Buscar por proveedor o medida" class="search-input" />
+        <label class="cuarto-toggle">
+          <input type="checkbox" v-model="filtroCuarto" />
+          <span>Agrupar por cuarto frío (incluye "Sin cuarto designado")</span>
+        </label>
       </div>
 
-      <div class="existencias-grid">
+      <div class="existencias-grid" v-if="!filtroCuarto">
         <div v-for="(datos, medidaKey) in filteredExistencias" :key="medidaKey" class="medida-card" :class="{ 'maquila-card': medidaKey === 'Ozuna' || medidaKey === 'Joselito' }">
           <!-- Para maquilas (Ozuna y Joselito) -->
           <template v-if="medidaKey === 'Ozuna' || medidaKey === 'Joselito'">
@@ -27,6 +31,7 @@
                 <tr>
                   <th>Medida</th>
                   <th v-if="tienePrecio">Precio</th>
+                  <th v-if="tieneCuarto(datos.items)">Cuarto</th>
                   <th class="kilos-cell">Kilos</th>
                 </tr>
               </thead>
@@ -39,6 +44,7 @@
                     </span>
                   </td>
                   <td v-if="tienePrecio" class="precio-cell">{{ item.precio ? `$${item.precio}` : '-' }}</td>
+                    <td v-if="tieneCuarto(datos.items)" class="cuarto-cell">{{ item.cuartoFrio || '-' }}</td>
                   <td class="kilos-cell">{{ formatNumber(item.kilos) }}</td>
                 </tr>
                 <tr class="total-row">
@@ -77,6 +83,7 @@
                   <tr>
                     <th>Medida</th>
                     <th v-if="tienePrecio">Precio</th>
+                    <th v-if="tieneCuarto(proveedorData.items)">Cuarto</th>
                     <th class="kilos-cell">Kilos</th>
                   </tr>
                 </thead>
@@ -89,6 +96,7 @@
                       </span>
                     </td>
                     <td v-if="tienePrecio" class="precio-cell">{{ medida.precio ? `$${medida.precio}` : '-' }}</td>
+                    <td v-if="tieneCuarto(proveedorData.items)" class="cuarto-cell">{{ medida.cuartoFrio || '-' }}</td>
                     <td class="kilos-cell">{{ formatNumber(medida.kilos) }}</td>
                   </tr>
                   <tr class="subtotal-row">
@@ -119,6 +127,39 @@
             <strong>Valor Total: ${{ formatNumber(Object.values(datos.items).reduce((sum, item) => 
               item.precio ? sum + (item.precio * item.kilos) : sum, 0)) }}</strong>
           </div>
+        </div>
+      </div>
+
+      <div class="existencias-grid" v-else>
+        <div v-for="(items, cuartoKey) in filteredExistenciasPorCuarto" :key="cuartoKey" class="medida-card">
+          <h2>{{ cuartoKey }}</h2>
+          <table class="medida-table">
+            <thead>
+              <tr>
+                <th>Proveedor</th>
+                <th>Medida</th>
+                <th v-if="tienePrecio">Precio</th>
+                <th class="kilos-cell">Kilos</th>
+                <th>Fecha</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(item, idx) in items" :key="`${cuartoKey}-${idx}-${item.medida}-${item.proveedor}`">
+                <td>{{ item.proveedor }}</td>
+                <td>{{ item.medida }}</td>
+                <td v-if="tienePrecio" class="precio-cell">{{ item.precio ? `$${item.precio}` : '-' }}</td>
+                <td class="kilos-cell">{{ formatNumber(item.kilos) }}</td>
+                <td class="fecha-entrada">{{ item.fechaEntrada ? formatFecha(item.fechaEntrada) : '' }}</td>
+              </tr>
+              <tr class="total-row">
+                <td :colspan="tienePrecio ? 3 : 2"><strong>Total {{ cuartoKey }}</strong></td>
+                <td class="kilos-cell">
+                  <strong>{{ formatNumber(items.reduce((sum, item) => sum + item.kilos, 0)) }}</strong>
+                </td>
+                <td></td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
 
@@ -210,6 +251,7 @@ export default {
     const existencias = ref({});
     const search = ref('');
     const tienePrecio = ref(false);
+    const filtroCuarto = ref(false);
     const deudas = ref([]);
     const salidasDiaSiguiente = ref([]);
 
@@ -218,6 +260,8 @@ export default {
       // Esta función ya no se necesita - respetamos la selección manual del usuario
       return 0;
     };
+
+    const normalizeCuarto = (c) => (c && c.trim()) ? c.trim() : 'Sin cuarto designado';
 
     const loadExistencias = async () => {
       const sacadasSnapshot = await getDocs(collection(db, 'sacadas'));
@@ -259,9 +303,12 @@ export default {
             newExistencias[entrada.proveedor] = {};
           }
 
-          // Crear clave única que incluye precio si existe
           const precio = usarPrecio ? entrada.precio : null;
-          const medidaKey = precio !== null ? `${entrada.medida}_$${precio}` : entrada.medida;
+          const cuarto = normalizeCuarto(entrada.cuartoFrio);
+          // Crear clave única que incluye precio y cuarto
+          const medidaKey = precio !== null
+            ? `${entrada.medida}_$${precio}__${cuarto}`
+            : `${entrada.medida}__${cuarto}`;
 
           if (!newExistencias[entrada.proveedor][medidaKey]) {
             newExistencias[entrada.proveedor][medidaKey] = {
@@ -274,7 +321,8 @@ export default {
           const registro = newExistencias[entrada.proveedor][medidaKey];
           registro.lotes.push({
             kilos: entrada.kilos,
-            fechaEntrada: sacadaFecha
+            fechaEntrada: sacadaFecha,
+            cuartoFrio: cuarto
           });
           registro.kilos = (registro.kilos || 0) + entrada.kilos;
         });
@@ -293,9 +341,12 @@ export default {
             newExistencias[salida.proveedor] = {};
           }
 
-          // Crear la misma clave que usó el usuario al seleccionar
           const precio = usarPrecio ? salida.precio : null;
-          const medidaKey = precio !== null ? `${salida.medida}_$${precio}` : salida.medida;
+          const cuarto = normalizeCuarto(salida.cuartoFrio);
+          // Crear la misma clave que usó el usuario al seleccionar (con cuarto)
+          const medidaKey = precio !== null
+            ? `${salida.medida}_$${precio}__${cuarto}`
+            : `${salida.medida}__${cuarto}`;
 
           if (!newExistencias[salida.proveedor][medidaKey]) {
             newExistencias[salida.proveedor][medidaKey] = {
@@ -519,7 +570,8 @@ export default {
                   medida: datos.medida,
                   precio: datos.precio,
                   kilos: lote.kilos,
-                  fechaEntrada: lote.fechaEntrada
+                  fechaEntrada: lote.fechaEntrada,
+                  cuartoFrio: lote.cuartoFrio || null
                 }];
               });
           })
@@ -574,7 +626,8 @@ export default {
               medida: datos.medida,
               precio: datos.precio,
               kilos: lote.kilos,
-              fechaEntrada: lote.fechaEntrada
+              fechaEntrada: lote.fechaEntrada,
+              cuartoFrio: lote.cuartoFrio || null
             });
           });
         });
@@ -661,6 +714,54 @@ export default {
       });
 
       return resultado;
+    });
+
+    const filteredExistenciasPorCuarto = computed(() => {
+      const resultado = {};
+      const searchLower = search.value.toLowerCase();
+
+      Object.entries(existencias.value).forEach(([proveedor, medidas]) => {
+        Object.entries(medidas).forEach(([_, datos]) => {
+          const lotes = Array.isArray(datos.lotes) && datos.lotes.length > 0
+            ? datos.lotes
+            : [{ kilos: datos.kilos || 0, fechaEntrada: datos.fechaEntrada, cuartoFrio: datos.cuartoFrio }];
+
+          lotes
+            .filter(lote => lote.kilos > 1)
+            .forEach(lote => {
+              const key = lote.cuartoFrio || 'Sin cuarto designado';
+              const coincideBusqueda = !searchLower ||
+                proveedor.toLowerCase().includes(searchLower) ||
+                datos.medida.toLowerCase().includes(searchLower) ||
+                key.toLowerCase().includes(searchLower);
+
+              if (!coincideBusqueda) return;
+
+              if (!resultado[key]) resultado[key] = [];
+
+              resultado[key].push({
+                proveedor,
+                medida: datos.medida,
+                precio: datos.precio,
+                kilos: lote.kilos,
+                fechaEntrada: lote.fechaEntrada,
+                cuartoFrio: key
+              });
+            });
+        });
+      });
+
+      const ordenado = {};
+      Object.keys(resultado)
+        .sort()
+        .forEach(cuarto => {
+          ordenado[cuarto] = resultado[cuarto].sort((a, b) => {
+            if (a.proveedor !== b.proveedor) return a.proveedor.localeCompare(b.proveedor);
+            return a.medida.localeCompare(b.medida);
+          });
+        });
+
+      return ordenado;
     });
 
     const maxKilos = computed(() => {
@@ -751,6 +852,12 @@ export default {
       if (!fecha) return '';
       const fechaObj = fecha instanceof Date ? fecha : fecha.toDate();
       return moment(fechaObj).format('DD/MM');
+    };
+
+    const tieneCuarto = (items) => {
+      if (!items) return false;
+      const lista = Array.isArray(items) ? items : Object.values(items);
+      return lista.some(item => !!item.cuartoFrio);
     };
 
     const imprimirReporte = () => {
@@ -1363,7 +1470,9 @@ export default {
     return {
       existencias,
       filteredExistencias,
+      filteredExistenciasPorCuarto,
       search,
+      filtroCuarto,
       maxKilos,
       totalGeneral,
       valorTotal,
@@ -1378,7 +1487,8 @@ export default {
       salidasProveedoresDiaSiguiente,
       salidasMaquilasDiaSiguiente,
       totalSalidasDiaSiguiente,
-      promedioCombinado516141
+      promedioCombinado516141,
+      tieneCuarto
     };
   }
 };
@@ -1441,6 +1551,19 @@ h1 {
   border: 2px solid #3498db;
   border-radius: 5px;
   font-size: 16px;
+}
+
+.cuarto-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  color: #2c3e50;
+  font-size: 14px;
+}
+
+.cuarto-toggle input {
+  accent-color: #3498db;
 }
 
 .existencias-grid {
@@ -1676,6 +1799,12 @@ h1 {
   color: #27ae60;
   font-weight: bold;
   font-size: 14px;
+}
+
+.cuarto-cell {
+  text-align: center;
+  font-weight: 600;
+  color: #2c3e50;
 }
 
 .fecha-entrada {

@@ -29,6 +29,12 @@
               {{ medida.nombre }}
             </option>
           </select>
+          <select v-model="newSalida.cuartoFrio">
+            <option value="Todos los cuartos">Cuarto frío (opcional)</option>
+            <option v-for="cuarto in cuartosDisponiblesSalida" :key="cuarto" :value="cuarto">
+              {{ cuarto }}
+            </option>
+          </select>
           <input 
             v-model.number="newSalida.kilos" 
             type="number" 
@@ -47,7 +53,10 @@
         </p>
         <ul class="list">
           <li v-for="(salida, index) in salidas" :key="'salida-' + index">
-            <span>{{ salida.tipo === 'maquila' ? 'Maquila' : 'Proveedor' }}: {{ salida.proveedor }} - {{ salida.medida }}{{ salida.precio ? ` ($${salida.precio})` : '' }}: {{ formatNumber(salida.kilos) }} kg</span>
+            <span>
+              {{ salida.tipo === 'maquila' ? 'Maquila' : 'Proveedor' }}: {{ salida.proveedor }} - {{ salida.medida }}{{ salida.precio ? ` ($${salida.precio})` : '' }}: {{ formatNumber(salida.kilos) }} kg
+              <template v-if="salida.cuartoFrio"> - Cuarto: {{ salida.cuartoFrio }}</template>
+            </span>
             <div class="action-buttons">
               <button @click="removeSalida(index)" class="delete-btn">&times;</button>
             </div>
@@ -76,6 +85,14 @@
               {{ medida.nombre }}
             </option>
           </select>
+          <select v-model="newEntrada.cuartoFrio">
+            <option value="">Cuarto frío (opcional)</option>
+            <option value="Cuarto 1">Cuarto 1</option>
+            <option value="Cuarto 2">Cuarto 2</option>
+            <option value="Cuarto 3">Cuarto 3</option>
+            <option value="Cuarto 4">Cuarto 4</option>
+            <option value="Cuarto 5">Cuarto 5</option>
+          </select>
           <input 
             v-model.number="newEntrada.kilos" 
             type="number" 
@@ -97,7 +114,10 @@
         </div>
         <ul class="list">
           <li v-for="(entrada, index) in entradas" :key="'entrada-' + index">
-            <span>{{ entrada.tipo === 'maquila' ? 'Maquila' : 'Proveedor' }}: {{ entrada.proveedor }} - {{ entrada.medida }}{{ entrada.precio ? ` ($${entrada.precio})` : '' }}: {{ formatNumber(entrada.kilos) }} kg</span>
+            <span>
+              {{ entrada.tipo === 'maquila' ? 'Maquila' : 'Proveedor' }}: {{ entrada.proveedor }} - {{ entrada.medida }}{{ entrada.precio ? ` ($${entrada.precio})` : '' }}: {{ formatNumber(entrada.kilos) }} kg
+              <template v-if="entrada.cuartoFrio"> - Cuarto: {{ entrada.cuartoFrio }}</template>
+            </span>
             <div class="action-buttons">
               <button @click="editarEntrada(index)" class="edit-btn" title="Editar">✏️</button>
               <button @click="removeEntrada(index)" class="delete-btn">&times;</button>
@@ -182,6 +202,17 @@
               placeholder="Precio" 
             />
           </label>
+          <label>
+            Cuarto frío (opcional):
+            <select v-model="entradaEditData.cuartoFrio">
+              <option value="">Sin cuarto</option>
+              <option value="Cuarto 1">Cuarto 1</option>
+              <option value="Cuarto 2">Cuarto 2</option>
+              <option value="Cuarto 3">Cuarto 3</option>
+              <option value="Cuarto 4">Cuarto 4</option>
+              <option value="Cuarto 5">Cuarto 5</option>
+            </select>
+          </label>
         </div>
         <div class="modal-actions">
           <button @click="guardarEdicionEntrada" class="btn-guardar">Guardar</button>
@@ -213,15 +244,15 @@ export default {
       medidas: [],
       medidasConPrecio: [],
       medidasMaquilaDisponibles: [],
-      newEntrada: { tipo: 'proveedor', proveedor: '', medida: '', kilos: null, precio: null },
-      newSalida: { tipo: 'proveedor', proveedor: '', medida: '', kilos: null },
+      newEntrada: { tipo: 'proveedor', proveedor: '', medida: '', kilos: null, precio: null, cuartoFrio: '' },
+      newSalida: { tipo: 'proveedor', proveedor: '', medida: '', kilos: null, cuartoFrio: '' },
       isEditing: false,
       sacadaId: null,
       isLoaded: false,
       kilosDisponibles: null,
       editandoEntrada: false,
       entradaEditIndex: null,
-      entradaEditData: { kilos: null, precio: null }
+      entradaEditData: { kilos: null, precio: null, cuartoFrio: '' }
     };
   },
   computed: {
@@ -248,6 +279,31 @@ export default {
           : this.medidas.filter(m => m.tipo === 'general');
       }
     },
+    cuartosDisponiblesSalida() {
+      const medidaSeleccionada = (this.filteredMedidasSalida || []).find(
+        op => op.nombre === this.newSalida.medida
+      );
+      const lista = ['Todos los cuartos'];
+
+      if (!medidaSeleccionada || !medidaSeleccionada.cuartos) {
+        lista.push('Sin cuarto designado');
+        return lista;
+      }
+
+      medidaSeleccionada.cuartos
+        .map(c => this.normalizeCuarto(c.nombre))
+        .forEach(cuarto => {
+          if (!lista.includes(cuarto)) {
+            lista.push(cuarto);
+          }
+        });
+
+      if (lista.length === 1) {
+        lista.push('Sin cuarto designado');
+      }
+
+      return lista;
+    },
     filteredMedidasSalida() {
       if (this.newSalida.tipo === 'maquila') {
         if (!this.newSalida.proveedor) {
@@ -261,7 +317,11 @@ export default {
         // Solo usar las medidas con precio que tienen existencias
         return this.medidasConPrecio.sort((a, b) => {
           const getMedidaBase = (nombre) => nombre.split(' ')[0];
-          return getMedidaBase(a.nombre).localeCompare(getMedidaBase(b.nombre));
+          const baseCmp = getMedidaBase(a.nombre).localeCompare(getMedidaBase(b.nombre));
+          if (baseCmp !== 0) return baseCmp;
+          const cuartoA = a.cuartoFrio || '';
+          const cuartoB = b.cuartoFrio || '';
+          return cuartoA.localeCompare(cuartoB);
         });
       }
     },
@@ -401,7 +461,7 @@ export default {
       this.medidasMaquilaDisponibles = [];
     },
     limpiarSeleccionSalida() {
-      this.newSalida = { tipo: 'proveedor', proveedor: '', medida: '', kilos: null };
+      this.newSalida = { tipo: 'proveedor', proveedor: '', medida: '', kilos: null, cuartoFrio: '' };
       this.kilosDisponibles = null;
       this.medidasConPrecio = [];
       this.medidasMaquilaDisponibles = [];
@@ -412,6 +472,7 @@ export default {
       await this.$nextTick();
       
       this.medidasConPrecio = await this.getMedidasConPrecio(proveedor);
+      this.newSalida.cuartoFrio = '';
       
       return this.medidasConPrecio;
     },
@@ -421,22 +482,71 @@ export default {
         
         // También actualizar kilos disponibles si hay una medida seleccionada
         if (this.newSalida.medida) {
+          this.setCuartoPorDefecto();
           await this.updateKilosDisponibles();
         }
       }
+    },
+    resetCuartoSalida() {
+      this.newSalida.cuartoFrio = '';
+    },
+    setCuartoPorDefecto() {
+      const cuartos = this.cuartosDisponiblesSalida;
+      if (cuartos.length) {
+        this.newSalida.cuartoFrio = cuartos[0];
+      } else {
+        this.newSalida.cuartoFrio = '';
+      }
+    },
+    normalizeCuarto(cuarto) {
+      return cuarto && cuarto.trim() ? cuarto.trim() : 'Sin cuarto designado';
+    },
+    parseSalidaMedida(display) {
+      if (!display) {
+        return { medidaBase: '', precio: null, cuartoFrio: this.normalizeCuarto('') };
+      }
+      let texto = display.trim();
+      if (texto.startsWith('🕐 ')) {
+        texto = texto.substring(2).trim();
+      }
+
+      let cuartoFrio = null;
+      if (texto.includes(' - Cuarto: ')) {
+        const partes = texto.split(' - Cuarto: ');
+        texto = partes[0].trim();
+        cuartoFrio = partes[1] ? partes[1].trim() : null;
+      }
+
+      let medidaBase = texto;
+      let precio = null;
+
+      if (texto.includes(' ($')) {
+        const precioMatch = texto.match(/\(\$(\d+(?:\.\d+)?)\)/);
+        if (precioMatch) {
+          precio = Number(precioMatch[1]);
+          medidaBase = texto.split(' ($')[0];
+        }
+      } else if (texto.includes(' - (')) {
+        medidaBase = texto.split(' - (')[0];
+        precio = null;
+      }
+
+      return { medidaBase, precio, cuartoFrio: this.normalizeCuarto(cuartoFrio) };
     },
     async addEntrada() {
       if (this.newEntrada.tipo && this.newEntrada.proveedor && this.newEntrada.medida && this.newEntrada.kilos) {
         // Guardar datos antes de resetear
         const proveedorEntrada = this.newEntrada.proveedor;
         const tipoEntrada = this.newEntrada.tipo;
+        const cuartoFrioEntrada = this.newEntrada.cuartoFrio;
 
         this.entradas.push({
           tipo: this.newEntrada.tipo,
           proveedor: this.newEntrada.proveedor,
           medida: this.newEntrada.medida,
           kilos: Number(this.newEntrada.kilos.toFixed(1)),
-          precio: this.newEntrada.precio ? Number(this.newEntrada.precio.toFixed(2)) : null
+          precio: this.newEntrada.precio ? Number(this.newEntrada.precio.toFixed(2)) : null,
+          cuartoFrio: cuartoFrioEntrada || ''
         });
         
         // Resetear pero mantener proveedor y tipo para facilitar más entradas
@@ -445,7 +555,8 @@ export default {
           proveedor: proveedorEntrada, 
           medida: '', 
           kilos: null, 
-          precio: null 
+          precio: null,
+          cuartoFrio: cuartoFrioEntrada || '' 
         };
         
         // Si el proveedor de entrada es el mismo que el de salida, actualizar medidas disponibles para salidas
@@ -464,29 +575,12 @@ export default {
       // VALIDACIÓN PREVIA: Verificar si el precio seleccionado no es el más antiguo
       if (this.isSalidaValid && this.newSalida.kilos <= this.kilosDisponibles) {
         // Extraer información de la medida seleccionada
-        let medidaParaParsear = this.newSalida.medida;
+        const { medidaBase, precio, cuartoFrio } = this.parseSalidaMedida(this.newSalida.medida);
+        const cuartoSeleccionado = this.normalizeCuarto(this.newSalida.cuartoFrio || cuartoFrio);
         let esPrecioMasAntiguo = false;
-        let precio = null;
-        let medidaBase = this.newSalida.medida;
         
-        // Verificar si tiene el emoji de más antiguo
-        if (medidaParaParsear.startsWith('🕐 ')) {
-          esPrecioMasAntiguo = true;
-          medidaParaParsear = medidaParaParsear.substring(2).trim();
-        }
-        
-        // Si contiene " ($" es una medida con precio
-        if (medidaParaParsear.includes(' ($')) {
-          const precioMatch = medidaParaParsear.match(/\(\$(\d+(?:\.\d+)?)\)/);
-          if (precioMatch) {
-            precio = Number(precioMatch[1]);
-            medidaBase = medidaParaParsear.split(' ($')[0];
-          }
-        } else if (medidaParaParsear.includes(' - (')) {
-          // Si contiene " - (" es una medida sin precio o con fecha
-          medidaBase = medidaParaParsear.split(' - (')[0];
-          precio = null;
-        }
+        // Verificar si la cadena original traía el emoji de más antiguo
+        esPrecioMasAntiguo = this.newSalida.medida.startsWith('🕐 ');
 
         // VALIDACIÓN: Mostrar alerta si no es el precio más antiguo
         if (!esPrecioMasAntiguo && this.newSalida.tipo === 'proveedor' && precio !== null) {
@@ -510,29 +604,6 @@ export default {
           }
         }
 
-        // PROCEDER CON EL REGISTRO: Extraer precio y medida base del formato del dropdown
-        precio = null;
-        medidaBase = this.newSalida.medida;
-        medidaParaParsear = this.newSalida.medida;
-        
-        // Primero, quitar el emoji si existe
-        if (medidaParaParsear.startsWith('🕐 ')) {
-          medidaParaParsear = medidaParaParsear.substring(2).trim();
-        }
-        
-        // Si contiene " ($" es una medida con precio
-        if (medidaParaParsear.includes(' ($')) {
-          const precioMatch = medidaParaParsear.match(/\(\$(\d+(?:\.\d+)?)\)/);
-          if (precioMatch) {
-            precio = Number(precioMatch[1]);
-            medidaBase = medidaParaParsear.split(' ($')[0];
-          }
-        } else if (medidaParaParsear.includes(' - (')) {
-          // Si contiene " - (" es una medida sin precio o con fecha
-          medidaBase = medidaParaParsear.split(' - (')[0];
-          precio = null;
-        }
-
         // Guardar el proveedor antes de resetear
         const proveedorAnterior = this.newSalida.proveedor;
         const tipoAnterior = this.newSalida.tipo;
@@ -542,7 +613,8 @@ export default {
           proveedor: this.newSalida.proveedor,
           medida: medidaBase,
           precio: precio,
-          kilos: Number(this.newSalida.kilos.toFixed(1))
+          kilos: Number(this.newSalida.kilos.toFixed(1)),
+          cuartoFrio: cuartoSeleccionado
         });
         
         // Resetear pero mantener proveedor y tipo para facilitar más salidas
@@ -550,7 +622,8 @@ export default {
           tipo: tipoAnterior, 
           proveedor: proveedorAnterior, 
           medida: '', 
-          kilos: null 
+          kilos: null,
+          cuartoFrio: ''
         };
         
         // Actualizar las medidas disponibles después de la salida
@@ -572,37 +645,24 @@ export default {
     },
     async updateKilosDisponibles() {
       if (this.newSalida.proveedor && this.newSalida.medida) {
-        this.kilosDisponibles = await this.getKilosDisponibles(this.newSalida.proveedor, this.newSalida.medida);
+        this.kilosDisponibles = await this.getKilosDisponibles(
+          this.newSalida.proveedor,
+          this.newSalida.medida,
+          this.newSalida.cuartoFrio
+        );
       } else {
         this.kilosDisponibles = null;
       }
     },
-    async getKilosDisponibles(proveedor, medida) {
+    async getKilosDisponibles(proveedor, medidaDisplay, cuartoSeleccionado = '') {
       let kilosDisponibles = 0;
       let totalEntradas = 0;
       let totalSalidas = 0;
 
-      // Extraer precio correctamente del formato de display
-      let precio = null;
-      let medidaBase = medida;
-      
-      // Primero, quitar el emoji si existe
-      if (medida.startsWith('🕐 ')) {
-        medida = medida.substring(2).trim();
-      }
-      
-      // Si la medida contiene " ($" significa que tiene precio
-      if (medida.includes(' ($')) {
-        const precioMatch = medida.match(/\(\$(\d+(?:\.\d+)?)\)/);
-        if (precioMatch) {
-          precio = Number(precioMatch[1]);
-          medidaBase = medida.split(' ($')[0];
-        }
-      } else if (medida.includes(' - (')) {
-        // Si contiene " - (" pero no " ($", es una fecha o "Sin precio"
-        medidaBase = medida.split(' - (')[0];
-        precio = null;
-      }
+      const todosLosCuartosLabel = 'Todos los cuartos';
+      const { medidaBase, precio, cuartoFrio } = this.parseSalidaMedida(medidaDisplay);
+      const cuartoParsed = this.normalizeCuarto(cuartoSeleccionado || cuartoFrio);
+      const sumarTodosLosCuartos = !cuartoSeleccionado || cuartoSeleccionado === todosLosCuartosLabel;
 
       const sacadasRef = collection(db, 'sacadas');
       const querySnapshot = await getDocs(sacadasRef);
@@ -617,26 +677,32 @@ export default {
         
         if (moment(sacadaFecha).isSameOrBefore(fechaActual)) {
           sacada.entradas.forEach(entrada => {
-            // Comparar medida y precio correctamente
+            // Comparar medida, precio y cuarto correctamente
             const medidaCoincide = entrada.proveedor === proveedor && entrada.medida === medidaBase;
             const precioCoincide = precio === null ? 
               (entrada.precio === null || entrada.precio === undefined) : 
               entrada.precio === precio;
+            const cuartoCoincide = sumarTodosLosCuartos
+              ? true
+              : this.normalizeCuarto(entrada.cuartoFrio) === cuartoParsed;
               
-            if (medidaCoincide && precioCoincide) {
+            if (medidaCoincide && precioCoincide && cuartoCoincide) {
               kilosDisponibles += entrada.kilos;
               totalEntradas += entrada.kilos;
             }
           });
 
           sacada.salidas.forEach(salida => {
-            // Comparar medida y precio correctamente
+            // Comparar medida, precio y cuarto correctamente
             const medidaCoincide = salida.proveedor === proveedor && salida.medida === medidaBase;
             const precioCoincide = precio === null ? 
               (salida.precio === null || salida.precio === undefined) : 
               salida.precio === precio;
+            const cuartoCoincide = sumarTodosLosCuartos
+              ? true
+              : this.normalizeCuarto(salida.cuartoFrio) === cuartoParsed;
               
-            if (medidaCoincide && precioCoincide) {
+            if (medidaCoincide && precioCoincide && cuartoCoincide) {
               kilosDisponibles -= salida.kilos;
               totalSalidas += salida.kilos;
             }
@@ -651,14 +717,15 @@ export default {
       const entrada = this.entradas[index];
       this.entradaEditData = {
         kilos: entrada.kilos,
-        precio: entrada.precio
+        precio: entrada.precio,
+        cuartoFrio: entrada.cuartoFrio || ''
       };
       this.editandoEntrada = true;
     },
     cancelarEdicionEntrada() {
       this.editandoEntrada = false;
       this.entradaEditIndex = null;
-      this.entradaEditData = { kilos: null, precio: null };
+      this.entradaEditData = { kilos: null, precio: null, cuartoFrio: '' };
     },
     async guardarEdicionEntrada() {
       if (this.entradaEditIndex !== null && this.entradaEditData.kilos && this.entradaEditData.kilos > 0) {
@@ -668,6 +735,7 @@ export default {
         // Actualizar la entrada
         entrada.kilos = Number(this.entradaEditData.kilos.toFixed(1));
         entrada.precio = this.entradaEditData.precio ? Number(this.entradaEditData.precio.toFixed(2)) : null;
+        entrada.cuartoFrio = this.entradaEditData.cuartoFrio || '';
         
         // Si el proveedor es el mismo que el de salida, actualizar medidas disponibles
         if (this.newSalida.proveedor === proveedorEntrada) {
@@ -764,7 +832,8 @@ export default {
     },
     async getMedidasConPrecio(proveedor) {
       const medidasDisponibles = new Map();
-      let fechaActual = this.currentDate.clone().endOf('day');
+      const fechaActual = this.currentDate.clone().endOf('day');
+      const normalizeCuarto = this.normalizeCuarto;
 
       // Obtenemos las sacadas anteriores
       const sacadasRef = collection(db, 'sacadas');
@@ -773,30 +842,30 @@ export default {
         .map(doc => ({ id: doc.id, ...doc.data() }))
         .sort((a, b) => a.fecha.toDate() - b.fecha.toDate());
 
-      // Función para actualizar el balance de una medida y rastrear fechas
-      const actualizarBalance = (medida, precio, kilos, fecha, esEntrada = true) => {
-        // Normalizar precio: undefined se convierte en null
+      // Función para actualizar el balance de una medida y rastrear fechas (cuartos incluidos)
+      const actualizarBalance = (medida, precio, kilos, fecha, esEntrada = true, cuartoFrio = '') => {
         const precioNormalizado = precio !== null && precio !== undefined ? precio : null;
         const medidaKey = precioNormalizado !== null ? `${medida} ($${precioNormalizado})` : medida;
-        
+        const cuartoNormalizado = normalizeCuarto(cuartoFrio);
 
-        
         if (!medidasDisponibles.has(medidaKey)) {
           medidasDisponibles.set(medidaKey, {
-            medida: medida,
+            medida,
             precio: precioNormalizado,
             kilos: 0,
-            nombre: medidaKey, // Este ya está construido correctamente con precioNormalizado
+            nombre: medidaKey,
             primeraFecha: null,
-            esElMasAntiguo: false
+            esElMasAntiguo: false,
+            cuartos: new Map()
           });
         }
-        
+
         const datos = medidasDisponibles.get(medidaKey);
-        const kilosAntes = datos.kilos;
         datos.kilos += esEntrada ? kilos : -kilos;
-        
-        // Rastrear la fecha de la primera entrada con este precio (solo si tiene precio)
+
+        const kilosCuarto = datos.cuartos.get(cuartoNormalizado) || 0;
+        datos.cuartos.set(cuartoNormalizado, kilosCuarto + (esEntrada ? kilos : -kilos));
+
         if (esEntrada && precioNormalizado !== null && (datos.primeraFecha === null || fecha < datos.primeraFecha)) {
           datos.primeraFecha = fecha;
         }
@@ -809,36 +878,34 @@ export default {
         const sacadaFecha = sacada.fecha instanceof Date ? sacada.fecha : sacada.fecha.toDate();
         const momentSacada = moment(sacadaFecha);
         
-        // Solo procesar sacadas ANTERIORES al día actual (no el día actual)
         if (momentSacada.isBefore(inicioDiaActual)) {
           
           sacada.entradas.forEach(entrada => {
             if (entrada.proveedor === proveedor) {
-              actualizarBalance(entrada.medida, entrada.precio, entrada.kilos, sacadaFecha, true);
+              actualizarBalance(entrada.medida, entrada.precio, entrada.kilos, sacadaFecha, true, entrada.cuartoFrio || '');
             }
           });
 
           sacada.salidas.forEach(salida => {
             if (salida.proveedor === proveedor) {
-              actualizarBalance(salida.medida, salida.precio, salida.kilos, sacadaFecha, false);
+              actualizarBalance(salida.medida, salida.precio, salida.kilos, sacadaFecha, false, salida.cuartoFrio || '');
             }
           });
         }
       });
 
       // Procesar entradas y salidas del día actual SOLO desde arrays locales
-      
-      this.entradas.forEach((entrada, index) => {
+      this.entradas.forEach((entrada) => {
         if (entrada.proveedor === proveedor) {
-          const fechaActual = this.currentDate.toDate();
-          actualizarBalance(entrada.medida, entrada.precio, entrada.kilos, fechaActual, true);
+          const fechaHoy = this.currentDate.toDate();
+          actualizarBalance(entrada.medida, entrada.precio, entrada.kilos, fechaHoy, true, entrada.cuartoFrio || '');
         }
       });
 
-      this.salidas.forEach((salida, index) => {
+      this.salidas.forEach((salida) => {
         if (salida.proveedor === proveedor) {
-          const fechaActual = this.currentDate.toDate();
-          actualizarBalance(salida.medida, salida.precio, salida.kilos, fechaActual, false);
+          const fechaHoy = this.currentDate.toDate();
+          actualizarBalance(salida.medida, salida.precio, salida.kilos, fechaHoy, false, salida.cuartoFrio || '');
         }
       });
 
@@ -857,7 +924,6 @@ export default {
       // Marcar cuál es el más antiguo para cada medida base (solo para medidas con precio)
       for (const [_, grupoMedidas] of medidasPorBase) {
         if (grupoMedidas.length > 1) {
-          // Encontrar el más antiguo
           const masAntiguo = grupoMedidas.reduce((min, actual) => 
             actual.primeraFecha < min.primeraFecha ? actual : min
           );
@@ -881,7 +947,6 @@ export default {
               nombreDisplay = `${datos.medida} ($${datos.precio}) - (${fechaStr})`;
             }
           } else if (datos.precio === null) {
-            // Indicar claramente que no tiene precio
             nombreDisplay = `${datos.medida} - (Sin precio)`;
           }
           
@@ -893,7 +958,10 @@ export default {
             precio: datos.precio,
             kilos: datos.kilos,
             primeraFecha: datos.primeraFecha,
-            esElMasAntiguo: datos.esElMasAntiguo || false
+            esElMasAntiguo: datos.esElMasAntiguo || false,
+            cuartos: Array.from(datos.cuartos.entries())
+              .filter(([, k]) => k > 0)
+              .map(([c, k]) => ({ nombre: c, kilos: Number(k.toFixed(1)) }))
           });
         }
       }
@@ -907,11 +975,9 @@ export default {
           return medidaBaseA.localeCompare(medidaBaseB);
         }
         
-        // Si es la misma medida base, priorizar las sin precio primero
         if (a.precio === null && b.precio !== null) return -1;
         if (a.precio !== null && b.precio === null) return 1;
         
-        // Si ambas tienen precio, ordenar por fecha (más antiguo primero)
         if (a.primeraFecha && b.primeraFecha) {
           return a.primeraFecha - b.primeraFecha;
         }
@@ -936,11 +1002,16 @@ export default {
         return [];
       }
 
-      const existenciasPorMedida = new Map();
-      const acumularKilos = (medidaNombre, kilosDelta) => {
+      const existenciasPorMedida = new Map(); // medida -> { cuartos: Map }
+      const acumularKilos = (medidaNombre, kilosDelta, cuartoFrio = '') => {
         if (!medidaNombre) return;
-        const kilosActuales = existenciasPorMedida.get(medidaNombre) || 0;
-        existenciasPorMedida.set(medidaNombre, kilosActuales + (Number(kilosDelta) || 0));
+        if (!existenciasPorMedida.has(medidaNombre)) {
+          existenciasPorMedida.set(medidaNombre, { cuartos: new Map() });
+        }
+        const data = existenciasPorMedida.get(medidaNombre);
+        const cuarto = this.normalizeCuarto(cuartoFrio);
+        const kilosActuales = data.cuartos.get(cuarto) || 0;
+        data.cuartos.set(cuarto, kilosActuales + (Number(kilosDelta) || 0));
       };
 
       const sacadasRef = collection(db, 'sacadas');
@@ -961,39 +1032,53 @@ export default {
 
         (sacada.entradas || []).forEach(entrada => {
           if (entrada.tipo === 'maquila' && entrada.proveedor === maquilaNombre) {
-            acumularKilos(entrada.medida, entrada.kilos);
+            acumularKilos(entrada.medida, entrada.kilos, entrada.cuartoFrio);
           }
         });
 
         (sacada.salidas || []).forEach(salida => {
           if (salida.tipo === 'maquila' && salida.proveedor === maquilaNombre) {
-            acumularKilos(salida.medida, -(salida.kilos || 0));
+            acumularKilos(salida.medida, -(salida.kilos || 0), salida.cuartoFrio);
           }
         });
       });
 
       this.entradas.forEach(entrada => {
         if (entrada.tipo === 'maquila' && entrada.proveedor === maquilaNombre) {
-          acumularKilos(entrada.medida, entrada.kilos);
+          acumularKilos(entrada.medida, entrada.kilos, entrada.cuartoFrio);
         }
       });
 
       this.salidas.forEach(salida => {
         if (salida.tipo === 'maquila' && salida.proveedor === maquilaNombre) {
-          acumularKilos(salida.medida, -(salida.kilos || 0));
+          acumularKilos(salida.medida, -(salida.kilos || 0), salida.cuartoFrio);
         }
       });
 
-      return medidasMaquila
-        .map(medida => {
-          const kilos = Number(existenciasPorMedida.get(medida.nombre) || 0);
-          return {
+      const resultado = [];
+      medidasMaquila.forEach(medida => {
+        const registro = existenciasPorMedida.get(medida.nombre);
+        if (!registro) return;
+
+        const cuartos = Array.from(registro.cuartos.entries())
+          .filter(([, k]) => k > 0)
+          .map(([nombreCuarto, k]) => ({
+            nombre: nombreCuarto,
+            kilos: Number(Number(k).toFixed(1))
+          }));
+
+        const kilosTotales = cuartos.reduce((sum, c) => sum + c.kilos, 0);
+        if (kilosTotales > 0) {
+          resultado.push({
             ...medida,
-            kilos: Number(kilos.toFixed(1))
-          };
-        })
-        .filter(medida => medida.kilos > 0)
-        .sort((a, b) => a.nombre.localeCompare(b.nombre));
+            id: medida.id || medida.nombre,
+            cuartos,
+            kilos: kilosTotales
+          });
+        }
+      });
+
+      return resultado.sort((a, b) => a.nombre.localeCompare(b.nombre));
     },
   },
   async created() {
@@ -1010,9 +1095,15 @@ export default {
     this.isLoaded = true;
   },
   watch: {
-    'newSalida.medida': 'updateKilosDisponibles',
+    'newSalida.medida': function () {
+      this.resetCuartoSalida();
+      this.setCuartoPorDefecto();
+      this.updateKilosDisponibles();
+    },
     'newSalida.kilos': 'updateKilosDisponibles',
+    'newSalida.cuartoFrio': 'updateKilosDisponibles',
     async 'newSalida.proveedor'(newProveedor) {
+      this.resetCuartoSalida();
       this.updateKilosDisponibles();
       const tipoActual = this.newSalida.tipo;
 
