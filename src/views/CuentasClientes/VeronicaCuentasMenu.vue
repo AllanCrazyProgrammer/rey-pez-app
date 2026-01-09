@@ -45,12 +45,21 @@
         No hay registros de cuentas que coincidan con el filtro.
       </div>
       <ul v-else>
-        <li v-for="cuenta in cuentasFiltradas" :key="cuenta.id" class="cuenta-item" :class="{ 'tiene-observacion': cuenta.tieneObservacion || (cuenta.observacion && cuenta.observacion.trim().length) }">
+        <li
+          v-for="cuenta in cuentasFiltradas"
+          :key="cuenta.id"
+          class="cuenta-item"
+          :class="{
+            'tiene-observacion': cuenta.tieneObservacion || (cuenta.observacion && cuenta.observacion.trim().length),
+            'cuenta-sin-nota': cuenta.missingNota
+          }"
+        >
           <div class="cuenta-content">
             <span class="cuenta-date">{{ formatDate(cuenta.fecha) }}</span>
             <p class="cuenta-summary">
-              <span>Saldo Hoy: ${{ formatNumber(cuenta.saldoHoy) }}</span>
-              <span>Total Acumulado: ${{ formatNumber(cuenta.totalNota) }}</span>
+              <span v-if="!cuenta.missingNota">Saldo Hoy: ${{ formatNumber(cuenta.saldoHoy) }}</span>
+              <span v-else class="texto-sin-nota">Sin nota registrada</span>
+              <span v-if="!cuenta.missingNota">Total Acumulado: ${{ formatNumber(cuenta.totalNota) }}</span>
             </p>
             <div v-if="cuenta.tieneObservacion || (cuenta.observacion && cuenta.observacion.trim().length)" class="observacion-container">
               <p class="observacion-texto">{{ cuenta.observacion }}</p>
@@ -63,13 +72,18 @@
                 <span class="abono-descripcion">{{ abono.descripcion || 'Sin descripción' }}</span>
               </p>
             </div>
-            <span :class="['estado-cuenta', cuenta.estadoPagado ? 'pagado' : 'no-pagado']">
+            <span
+              v-if="!cuenta.missingNota"
+              :class="['estado-cuenta', cuenta.estadoPagado ? 'pagado' : 'no-pagado']"
+            >
               {{ cuenta.estadoPagado ? 'Pagado' : 'No Pagado' }}
             </span>
+            <span v-else class="estado-cuenta estado-sin-nota">Sin nota</span>
           </div>
           <div class="cuenta-actions">
-            <button @click="editarCuenta(cuenta.id)" class="edit-btn">Editar</button>  
-            <button @click="borrarCuenta(cuenta.id)" class="delete-btn">Borrar</button>
+            <button v-if="!cuenta.missingNota" @click="editarCuenta(cuenta.id)" class="edit-btn">Editar</button>  
+            <button v-if="!cuenta.missingNota" @click="borrarCuenta(cuenta.id)" class="delete-btn">Borrar</button>
+            <span v-else class="nota-pendiente-hint">Crear nota</span>
           </div>
         </li>
       </ul>
@@ -191,6 +205,30 @@ export default {
     }
   },
   methods: {
+    normalizarFechaValor(valor) {
+      if (!valor) return null;
+      try {
+        // Si ya viene como string YYYY-MM-DD, regresarlo
+        if (typeof valor === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(valor)) return valor;
+        // Si es Timestamp de Firestore
+        if (valor.seconds) {
+          const d = new Date(valor.seconds * 1000);
+          return d.toISOString().split('T')[0];
+        }
+        // Si es Date
+        if (valor instanceof Date) {
+          return valor.toISOString().split('T')[0];
+        }
+        // Fallback: intentar parsear
+        const d = new Date(valor);
+        if (!Number.isNaN(d.getTime())) {
+          return d.toISOString().split('T')[0];
+        }
+      } catch (_) {
+        return null;
+      }
+      return null;
+    },
     async loadCuentas() {
       try {
         this.isLoading = true;
@@ -201,6 +239,7 @@ export default {
         this.unsubscribe = onSnapshot(q, async (querySnapshot) => {
           const cuentasActualizadas = querySnapshot.docs.map((doc) => {
             const data = doc.data();
+            const fechaNormalizada = this.normalizarFechaValor(data.fecha);
             const totalCobros = (data.cobros || []).reduce((sum, cobro) => 
               sum + (parseFloat(cobro.monto) || 0), 0);
             const totalAbonos = (data.abonos || []).reduce((sum, abono) => 
@@ -209,7 +248,7 @@ export default {
 
             return {
               id: doc.id,
-              fecha: data.fecha,
+              fecha: fechaNormalizada || data.fecha,
               saldoHoy: data.totalGeneralVenta || 0,
               totalCobros,
               totalAbonos,
@@ -264,6 +303,52 @@ export default {
             }
           }
 
+          // Buscar embarques de Verónica que no tengan nota
+          const fechasConNota = new Set(cuentasOrdenadas.map(c => this.normalizarFechaValor(c.fecha)));
+          const embarquesRef = collection(db, 'embarques');
+          const embarquesSnapshot = await getDocs(query(embarquesRef, orderBy('fecha', 'desc'), limit(200)));
+          
+          const faltantes = [];
+          embarquesSnapshot.forEach(docSnap => {
+            const data = docSnap.data() || {};
+            const fechaEmbarque = this.normalizarFechaValor(data.fecha);
+            if (!fechaEmbarque || fechasConNota.has(fechaEmbarque)) return;
+
+            const clientes = data.clientes || [];
+            const productosRaiz = data.productos || [];
+
+            const tieneVeronica = clientes.some(cliente => {
+              const clienteId = (cliente.id ?? cliente.clienteId ?? '').toString();
+              const nombreCliente = (cliente.nombre || '').toLowerCase();
+              const esVeronica = clienteId === '5' || nombreCliente.includes('veronica') || nombreCliente.includes('lorena');
+              const tieneProductos = Array.isArray(cliente.productos) && cliente.productos.some(p => p && (p.medida || (Array.isArray(p.kilos) && p.kilos.some(k => Number(k) > 0))));
+              const tieneCrudos = Array.isArray(cliente.crudos) && cliente.crudos.length > 0;
+              return esVeronica && (tieneProductos || tieneCrudos);
+            }) || productosRaiz.some(producto => {
+              const clienteId = (producto.clienteId ?? producto.cliente ?? '').toString();
+              const tieneContenido = producto && (producto.medida || (Array.isArray(producto.kilos) && producto.kilos.some(k => Number(k) > 0)));
+              return clienteId === '5' && tieneContenido;
+            });
+
+            if (tieneVeronica) {
+              faltantes.push({
+                id: `missing-${fechaEmbarque}`,
+                fecha: fechaEmbarque,
+                saldoHoy: 0,
+                totalCobros: 0,
+                totalAbonos: 0,
+                totalNota: 0,
+                estadoPagado: false,
+                nuevoSaldoAcumulado: 0,
+                saldoAcumuladoAnterior: 0,
+                abonos: [],
+                tieneObservacion: false,
+                observacion: '',
+                missingNota: true
+              });
+            }
+          });
+
           // Realizar todas las actualizaciones en paralelo
           if (actualizaciones.length > 0) {
             await Promise.all(actualizaciones.map(({ id, updates }) => 
@@ -271,8 +356,9 @@ export default {
             ));
           }
 
-          // Actualizar el estado local con las cuentas ordenadas por fecha descendente
-          this.cuentas = cuentasOrdenadas.reverse(); // Revertir para mostrar las más recientes primero
+          // Unir cuentas existentes con faltantes y ordenar desc
+          const consolidadas = [...cuentasOrdenadas, ...faltantes].sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+          this.cuentas = consolidadas;
           this.isLoading = false;
         });
 
@@ -582,6 +668,11 @@ h1, h2 {
   border-left: 4px solid #ff8c00;
 }
 
+.cuenta-item.cuenta-sin-nota {
+  background: #f2f2f2;
+  border-left-color: #bdbdbd;
+}
+
 .cuenta-item:hover {
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
 }
@@ -716,6 +807,22 @@ h1, h2 {
 .no-pagado {
   background-color: #f44336;
   color: white;
+}
+
+.estado-sin-nota {
+  background-color: #bdbdbd;
+  color: white;
+}
+
+.texto-sin-nota {
+  color: #666;
+  font-weight: 600;
+}
+
+.nota-pendiente-hint {
+  color: #777;
+  font-weight: 600;
+  align-self: center;
 }
 
 .ventas-ganancias-btn {

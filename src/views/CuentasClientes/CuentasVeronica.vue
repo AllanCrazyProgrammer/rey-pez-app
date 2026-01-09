@@ -14,13 +14,25 @@
       <PreciosClienteButton clienteId="veronica" />
     </div>
     
-    <div class="fecha-actual">
+    <div class="fecha-actual" :class="{ 'bloque-sin-nota': faltaNotaVeronica }">
       <div class="fecha-input">
-        <input type="date" v-model="fechaSeleccionada">
+        <input 
+          type="date" 
+          v-model="fechaSeleccionada" 
+          :class="{ 'fecha-sin-nota': faltaNotaVeronica }"
+          :title="faltaNotaVeronica ? 'Hay embarque registrado sin nota para esta fecha' : ''"
+        >
       </div>
-      <div class="fecha-display">
+      <div 
+        class="fecha-display" 
+        :class="{ 'fecha-sin-nota': faltaNotaVeronica }"
+        :title="faltaNotaVeronica ? 'Hay embarque registrado sin nota para esta fecha' : ''"
+      >
         {{ fechaFormateada }}
       </div>
+      <p v-if="faltaNotaVeronica" class="alerta-sin-nota">
+        Existe un embarque de Verónica sin nota para este día.
+      </p>
     </div>
   
     <div class="input-section card">
@@ -358,6 +370,7 @@ export default {
       lastSaveMessage: '',
       showSaveMessage: false,
       saveMessageTimer: null,
+      faltaNotaVeronica: false,
     }
   },
   computed: {
@@ -403,8 +416,12 @@ export default {
   },
   watch: {
     fechaSeleccionada: {
-      handler: 'loadSaldoAcumuladoAnterior',
-      immediate: true
+      immediate: true,
+      handler: async function() {
+        await this.loadSaldoAcumuladoAnterior();
+        await this.verificarNotaFaltante();
+        this.handleDataChange();
+      }
     },
     items: {
       handler: 'handleDataChange',
@@ -421,9 +438,6 @@ export default {
     abonos: {
       handler: 'handleDataChange',
       deep: true
-    },
-    fechaSeleccionada: {
-      handler: 'handleDataChange'
     },
     saldoAcumuladoAnterior: {
       handler: 'handleDataChange'
@@ -444,8 +458,62 @@ export default {
       console.log("Cargando saldo acumulado anterior para nueva cuenta");
       await this.loadSaldoAcumuladoAnterior();
     }
+    await this.verificarNotaFaltante();
   },
   methods: {
+    async verificarNotaFaltante() {
+      try {
+        // Primero validar si ya existe una nota registrada para la fecha seleccionada
+        const cuentasRef = collection(db, 'cuentasVeronica');
+        const notaExistente = await getDocs(
+          query(cuentasRef, where('fecha', '==', this.fechaSeleccionada), limit(1))
+        );
+
+        if (!notaExistente.empty) {
+          this.faltaNotaVeronica = false;
+          return;
+        }
+
+        // Buscar embarques del mismo día que incluyan productos o crudos de Veronica
+        const embarquesRef = collection(db, 'embarques');
+        const embarquesSnapshot = await getDocs(
+          query(embarquesRef, where('fecha', '==', this.fechaSeleccionada))
+        );
+
+        let existeEmbarqueVeronica = false;
+
+        for (const docSnap of embarquesSnapshot.docs) {
+          const data = docSnap.data() || {};
+          const clientes = data.clientes || [];
+          const productosRaiz = data.productos || [];
+
+          const clienteConDatos = clientes.some(cliente => {
+            const clienteId = (cliente.id ?? cliente.clienteId ?? '').toString();
+            const nombreCliente = (cliente.nombre || '').toLowerCase();
+            const esVeronica = clienteId === '5' || nombreCliente.includes('veronica') || nombreCliente.includes('lorena');
+            const tieneProductos = Array.isArray(cliente.productos) && cliente.productos.some(p => p && (p.medida || (Array.isArray(p.kilos) && p.kilos.some(k => Number(k) > 0))));
+            const tieneCrudos = Array.isArray(cliente.crudos) && cliente.crudos.length > 0;
+            return esVeronica && (tieneProductos || tieneCrudos);
+          });
+
+          const productoSueltos = productosRaiz.some(producto => {
+            const clienteId = (producto.clienteId ?? producto.cliente ?? '').toString();
+            const tieneContenido = producto && (producto.medida || (Array.isArray(producto.kilos) && producto.kilos.some(k => Number(k) > 0)));
+            return clienteId === '5' && tieneContenido;
+          });
+
+          if (clienteConDatos || productoSueltos) {
+            existeEmbarqueVeronica = true;
+            break;
+          }
+        }
+
+        this.faltaNotaVeronica = existeEmbarqueVeronica;
+      } catch (error) {
+        console.error('Error al verificar nota faltante de Veronica:', error);
+        this.faltaNotaVeronica = false;
+      }
+    },
     async loadExistingCuenta(id) {
       try {
         console.log("Cargando cuenta con ID:", id);
@@ -1492,6 +1560,26 @@ h1, h2, h3 {
 .fecha-display {
   font-weight: bold;
   color: #ff8c00;
+}
+
+.fecha-sin-nota {
+  background-color: #e0e0e0;
+  color: #555;
+  border-color: #bdbdbd;
+}
+
+.alerta-sin-nota {
+  margin-top: 8px;
+  font-size: 13px;
+  color: #555;
+  background: #f1f1f1;
+  padding: 8px 10px;
+  border-radius: 6px;
+}
+
+.bloque-sin-nota {
+  border-left: 4px solid #bdbdbd;
+  padding-left: 10px;
 }
 
 /* Estilos de entrada */
