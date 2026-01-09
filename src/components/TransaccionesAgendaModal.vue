@@ -611,7 +611,7 @@
 
 <script>
 import { db } from '../firebase';
-import { collection, addDoc, query, where, getDocs, doc, deleteDoc, updateDoc, orderBy, limit } from 'firebase/firestore';
+import { collection, addDoc, query, where, getDocs, doc, deleteDoc, updateDoc, orderBy, limit, getDoc } from 'firebase/firestore';
 import PdfResumenDiaButton from './PdfResumenDiaButton.vue';
 import ChequesPendientesAccordion from './ChequesPendientesAccordion.vue';
 
@@ -1192,14 +1192,19 @@ export default {
             const stashItemId = abono.stashItemId || null;
             const tipo = abono.esEfectivo ? 'efectivo' : 'deposito';
             const descripcionLimpia = limpiarDescripcion(abono.descripcion || 'Abono aplicado');
+            const entregadoAbono = !!abono.efectivoEntregado;
             const groupKey = stashItemId
               ? `stashItem:${stashItemId}`
               : `fallback:${fechaISO}:${tipo}:${descripcionLimpia}`;
 
             if (!grupos.has(groupKey)) {
               const entregado = stashItemId
-                ? (stashEntregadoIndex?.[`${clienteKey}:${stashItemId}`]?.efectivoEntregado ?? false)
-                : false;
+                ? (
+                    // Prioriza el flag guardado en el abono; si no, usa el índice del stash.
+                    entregadoAbono ||
+                    (stashEntregadoIndex?.[`${clienteKey}:${stashItemId}`]?.efectivoEntregado ?? false)
+                  )
+                : entregadoAbono;
 
               grupos.set(groupKey, {
                 id: stashItemId ? `stash_hist_${clienteKey}_${stashItemId}` : `stash_hist_${clienteKey}_${fechaISO}_${idx}`,
@@ -1265,15 +1270,74 @@ export default {
     obtenerIndiceTransaccion(transaccion) {
       return this.transaccionesDia.findIndex(t => t.id === transaccion.id);
     },
+    async actualizarEntregaEnAbonosCuenta(transaccion, entregado) {
+      // Permite marcar como entregado un abono ya aplicado (origenHistorial) cuando
+      // el documento original del stash ya no existe porque fue eliminado al aplicar.
+      if (!transaccion?.cuentaIds?.length || !transaccion?.cliente) return false;
+
+      const collectionName = `cuentas${transaccion.cliente.charAt(0).toUpperCase()}${transaccion.cliente.slice(1)}`;
+      let huboActualizacion = false;
+
+      await Promise.all(
+        transaccion.cuentaIds.map(async (cuentaId) => {
+          const cuentaRef = doc(db, collectionName, cuentaId);
+          const cuentaDoc = await getDoc(cuentaRef);
+          if (!cuentaDoc.exists()) return;
+
+          const cuentaData = cuentaDoc.data() || {};
+          const abonos = cuentaData.abonos || [];
+
+          let actualizado = false;
+          const nuevosAbonos = abonos.map((abono) => {
+            const coincideStash = abono.stashItemId && abono.stashItemId === transaccion.stashDocId;
+            const coincideId = abono.id && abono.id === transaccion.stashDocId;
+            if (coincideStash || coincideId) {
+              actualizado = true;
+              return {
+                ...abono,
+                efectivoEntregado: !!entregado,
+              };
+            }
+            return abono;
+          });
+
+          if (!actualizado) return;
+
+          await updateDoc(cuentaRef, {
+            abonos: nuevosAbonos,
+            ultimaActualizacion: new Date().toISOString(),
+          });
+          huboActualizacion = true;
+        })
+      );
+
+      return huboActualizacion;
+    },
     async actualizarEfectivoEntregado(transaccion, entregado) {
       if (!transaccion || !transaccion.id) return;
 
       try {
         if (transaccion.esStash) {
-          // Persistir en stash_<cliente>
-          if (!transaccion.cliente || !transaccion.stashDocId) return;
-          const stashRef = doc(db, `stash_${transaccion.cliente}`, transaccion.stashDocId);
-          await updateDoc(stashRef, { efectivoEntregado: !!entregado });
+          let actualizado = false;
+
+          // Si proviene del historial (el doc del stash ya no existe), actualizar los abonos en las cuentas destino.
+          if (transaccion.origenHistorial && transaccion.cuentaIds?.length) {
+            actualizado = await this.actualizarEntregaEnAbonosCuenta(transaccion, entregado);
+          }
+
+          // Si no se pudo actualizar en las cuentas (ej. aún está en stash), intenta sobre el doc del stash.
+          if (!actualizado) {
+            if (!transaccion.cliente || !transaccion.stashDocId) {
+              throw new Error('Faltan datos para actualizar el estado de entrega.');
+            }
+            const stashRef = doc(db, `stash_${transaccion.cliente}`, transaccion.stashDocId);
+            await updateDoc(stashRef, { efectivoEntregado: !!entregado });
+            actualizado = true;
+          }
+
+          if (!actualizado) {
+            throw new Error('No se encontró un abono para actualizar.');
+          }
         } else {
           const transaccionRef = doc(db, 'transacciones', transaccion.id);
           await updateDoc(transaccionRef, { efectivoEntregado: !!entregado });

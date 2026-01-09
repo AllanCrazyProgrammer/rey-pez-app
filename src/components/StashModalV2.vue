@@ -362,6 +362,9 @@
                             </div>
                           </div>
                           <div class="abono-descripcion">{{ abono.descripcion }}</div>
+                          <div class="abono-aplicacion">
+                            Aplicado a: {{ abono.fechaCuentaFormateada || 'Sin nota' }}
+                          </div>
                           <div v-if="abono.origenDescripcion" class="abono-origen">{{ abono.origenDescripcion }}</div>
                         </div>
                         <div class="abono-right">
@@ -619,10 +622,23 @@ export default {
       })
     }
     
+    const esFechaSoloDia = (valor) => /^\d{4}-\d{2}-\d{2}$/.test(String(valor || '').trim())
+
+    const parseFechaLocalSeguro = (valor) => {
+      if (!valor) return null
+      const str = String(valor).trim()
+      if (esFechaSoloDia(str)) {
+        const [y, m, d] = str.split('-').map(Number)
+        return new Date(y, m - 1, d, 0, 0, 0, 0)
+      }
+      const dt = new Date(str)
+      return Number.isNaN(dt.getTime()) ? null : dt
+    }
+
     const formatearFecha = (fecha) => {
       if (!fecha) return ''
-      const [year, month, day] = fecha.split('-')
-      const dt = new Date(year, month - 1, day)
+      const dt = parseFechaLocalSeguro(fecha)
+      if (!dt) return ''
       return dt.toLocaleDateString('es-ES', {
         day: 'numeric',
         month: 'short',
@@ -632,17 +648,18 @@ export default {
     
     const formatearFechaHora = (fecha) => {
       if (!fecha) return ''
-      const dateObj = new Date(fecha)
-      if (
+      const dateObj = parseFechaLocalSeguro(fecha)
+      if (!dateObj) return ''
+      const esFechaPlano =
         dateObj.getHours() === 0 &&
         dateObj.getMinutes() === 0 &&
         dateObj.getSeconds() === 0
-      ) {
+
+      if (esFechaPlano) {
         return dateObj.toLocaleDateString('es-ES', {
           day: 'numeric',
           month: 'short',
-          year: 'numeric',
-          timeZone: 'UTC'
+          year: 'numeric'
         })
       }
 
@@ -717,8 +734,8 @@ export default {
 
     const obtenerClaveFecha = (fecha) => {
       if (!fecha) return ''
-      const dateObj = new Date(fecha)
-      if (Number.isNaN(dateObj.getTime())) return ''
+      const dateObj = parseFechaLocalSeguro(fecha)
+      if (!dateObj) return ''
       const pad = (value) => String(value).padStart(2, '0')
       const year = dateObj.getUTCFullYear()
       const month = pad(dateObj.getUTCMonth() + 1)
@@ -856,13 +873,23 @@ export default {
           
           if (cuentaData.abonos && cuentaData.abonos.length > 0) {
             cuentaData.abonos.forEach((abono, index) => {
+              const fechaBase =
+                abono.fechaOriginalStash ||
+                abono.fecha ||
+                abono.fechaAplicacion ||
+                fechaCuenta ||
+                new Date().toISOString()
+
+              const fechaAplicacion = normalizarFechaSeleccionada(fechaBase)
+
               abonos.push({
                 uniqueId: `${cuentaId}_${index}_${abono.id || Date.now()}`,
                 cuentaId,
                 fechaCuenta,
                 fechaCuentaFormateada,
-                fechaAplicacion: abono.fecha || abono.fechaAplicacion || new Date().toISOString(),
-                fechaOriginal: abono.fecha || null,
+                fechaAplicacion,
+                fechaOriginal: fechaBase,
+                fechaOriginalStash: abono.fechaOriginalStash || null,
                 cuentaTotal: cuentaData.totalGeneralVenta || 0,
                 cuentaSaldoAnterior: typeof cuentaData.saldoAcumuladoAnterior === 'number' ? cuentaData.saldoAcumuladoAnterior : null,
                 cuentaSaldoDespues: typeof cuentaData.nuevoSaldoAcumulado === 'number' ? cuentaData.nuevoSaldoAcumulado : null,
@@ -2478,6 +2505,12 @@ h4 {
   font-size: 14px;
   word-wrap: break-word;
   line-height: 1.4;
+}
+.abono-aplicacion {
+  font-size: 12px;
+  color: #2e7d32;
+  margin: 4px 0;
+  font-weight: 600;
 }
 
 .abono-right {
