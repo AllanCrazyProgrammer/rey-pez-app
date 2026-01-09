@@ -66,6 +66,14 @@
                 step="0.01" 
                 placeholder="Precio (opcional)" 
               />
+            <select v-model="newEntrada.cuartoFrio">
+              <option value="">Cuarto frío (opcional)</option>
+              <option value="Cuarto 1">Cuarto 1</option>
+              <option value="Cuarto 2">Cuarto 2</option>
+              <option value="Cuarto 3">Cuarto 3</option>
+              <option value="Cuarto 4">Cuarto 4</option>
+              <option value="Cuarto 5">Cuarto 5</option>
+            </select>
               <button @click="addEntrada" :disabled="!isEntradaValida">Agregar Entrada</button>
             </div>
             
@@ -88,8 +96,12 @@
               <span v-if="entrada.precio" class="precio-info"> (${{ formatearPrecio(entrada.precio) }})</span>
               : {{ formatNumber(entrada.kilos) }} kg
               <span v-if="entrada.precio" class="total-info"> - Total: ${{ formatearPrecio(entrada.kilos * entrada.precio) }}</span>
+              <span v-if="entrada.cuartoFrio" class="total-info"> - Cuarto: {{ entrada.cuartoFrio }}</span>
             </div>
-            <button @click="removeEntrada(index)" class="delete-btn">&times;</button>
+            <div class="entry-actions">
+              <button @click="editarEntrada(index)" class="edit-btn" title="Editar">✏️</button>
+              <button @click="removeEntrada(index)" class="delete-btn">&times;</button>
+            </div>
           </li>
         </ul>
         <p class="total">Total Entradas: {{ formatNumber(totalEntradas) }} kg</p>
@@ -140,6 +152,16 @@
                 placeholder="Kilos" 
                 required 
               />
+              <select v-model="newSalida.cuartoFrio">
+                <option value="Todos los cuartos">Todos los cuartos</option>
+                <option 
+                  v-for="cuarto in cuartosDisponiblesSalida" 
+                  :key="cuarto" 
+                  :value="cuarto"
+                >
+                  {{ cuarto }}
+                </option>
+              </select>
               <button @click="addSalida" :disabled="!isSalidaValida">Agregar Salida</button>
             </div>
             <p class="disponibles-info">
@@ -152,6 +174,7 @@
           <li v-for="(salida, index) in salidas" :key="'salida-' + index">
             <div class="item-info">
               <strong>{{ salida.proveedor }}</strong> - {{ salida.producto }}: {{ formatNumber(salida.kilos) }} kg
+              <span v-if="salida.cuartoFrio" class="total-info"> - Cuarto: {{ salida.cuartoFrio }}</span>
             </div>
             <button @click="removeSalida(index)" class="delete-btn">&times;</button>
           </li>
@@ -168,6 +191,44 @@
     </div>
     
     <button @click="saveReport" class="save-button">{{ isEditing ? 'Actualizar' : 'Guardar' }} Registro</button>
+
+    <!-- Modal edición entrada -->
+    <div v-if="editandoEntrada" class="modal-overlay" @click.self="cancelarEdicionEntrada">
+      <div class="modal-content">
+        <h3>Editar Entrada</h3>
+        <div v-if="entradaEditIndex !== null" class="modal-info">
+          <p><strong>Proveedor:</strong> {{ entradas[entradaEditIndex].proveedor }}</p>
+          <p><strong>Producto:</strong> {{ entradas[entradaEditIndex].producto }}</p>
+        </div>
+        <div class="modal-form">
+          <label>
+            Kilos:
+            <input 
+              v-model.number="entradaEditData.kilos"
+              type="number"
+              inputmode="decimal"
+              step="0.1"
+              placeholder="Kilos"
+            />
+          </label>
+          <label>
+            Cuarto frío (opcional):
+            <select v-model="entradaEditData.cuartoFrio">
+              <option value="Sin cuarto designado">Sin cuarto designado</option>
+              <option value="Cuarto 1">Cuarto 1</option>
+              <option value="Cuarto 2">Cuarto 2</option>
+              <option value="Cuarto 3">Cuarto 3</option>
+              <option value="Cuarto 4">Cuarto 4</option>
+              <option value="Cuarto 5">Cuarto 5</option>
+            </select>
+          </label>
+        </div>
+        <div class="modal-actions">
+          <button @click="guardarEdicionEntrada" class="btn-guardar">Guardar</button>
+          <button @click="cancelarEdicionEntrada" class="btn-cancelar">Cancelar</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -194,12 +255,14 @@ export default {
         proveedor: '', 
         producto: '', 
         kilos: null, 
-        precio: null 
+        precio: null,
+        cuartoFrio: ''
       },
       newSalida: { 
         proveedor: '', 
         producto: '', 
-        kilos: null
+        kilos: null,
+        cuartoFrio: 'Todos los cuartos'
       },
       nuevoProveedorEntrada: '',
       customProducto: '',
@@ -207,7 +270,10 @@ export default {
       registroId: null,
       isLoaded: false,
       productosDisponibles: [],
-      kilosDisponiblesSeleccionados: 0
+      kilosDisponiblesSeleccionados: 0,
+      editandoEntrada: false,
+      entradaEditIndex: null,
+      entradaEditData: { kilos: null, cuartoFrio: '' }
     };
   },
   computed: {
@@ -255,6 +321,13 @@ export default {
         producto.proveedor === this.newSalida.proveedor && producto.kilosDisponibles > 0
       );
     },
+    cuartosDisponiblesSalida() {
+      const productoSel = this.productosDelProveedorSeleccionado.find(
+        p => p.nombre === this.newSalida.producto
+      );
+      if (!productoSel || !productoSel.cuartos) return [];
+      return ['Todos los cuartos', ...productoSel.cuartos.map(c => c.nombre)];
+    },
     medidasDelProveedorEntrada() {
       if (!this.newEntrada.proveedor || this.newEntrada.proveedor === '__nuevo__') {
         return [];
@@ -295,6 +368,7 @@ export default {
       try {
         const registrosSnapshot = await getDocs(collection(db, 'existenciasCrudos'));
         const disponibilidades = {};
+        const normalizeCuarto = (c) => (c && c.trim()) ? c.trim() : 'Sin cuarto designado';
 
         const registrosOrdenados = registrosSnapshot.docs
           .map(doc => ({ id: doc.id, ...doc.data() }))
@@ -319,17 +393,19 @@ export default {
             if (registro.entradas) {
               registro.entradas.forEach(entrada => {
                 const key = `${entrada.proveedor}|${entrada.producto}`;
+                const cuarto = normalizeCuarto(entrada.cuartoFrio);
                 if (!disponibilidades[key]) {
                   disponibilidades[key] = {
                     proveedor: entrada.proveedor,
                     nombre: entrada.producto,
-                    kilosDisponibles: 0,
-                    ultimoPrecio: 0
+                    ultimoPrecio: 0,
+                    cuartos: {}
                   };
                 }
-                disponibilidades[key].kilosDisponibles += entrada.kilos;
+                const prod = disponibilidades[key];
+                prod.cuartos[cuarto] = (prod.cuartos[cuarto] || 0) + entrada.kilos;
                 if (entrada.precio) {
-                  disponibilidades[key].ultimoPrecio = entrada.precio;
+                  prod.ultimoPrecio = entrada.precio;
                 }
               });
             }
@@ -337,17 +413,19 @@ export default {
             if (registro.salidas) {
               registro.salidas.forEach(salida => {
                 const key = `${salida.proveedor}|${salida.producto}`;
+                const cuarto = normalizeCuarto(salida.cuartoFrio);
                 if (!disponibilidades[key]) {
                   disponibilidades[key] = {
                     proveedor: salida.proveedor,
                     nombre: salida.producto,
-                    kilosDisponibles: 0,
-                    ultimoPrecio: 0
+                    ultimoPrecio: 0,
+                    cuartos: {}
                   };
                 }
-                disponibilidades[key].kilosDisponibles -= salida.kilos;
+                const prod = disponibilidades[key];
+                prod.cuartos[cuarto] = (prod.cuartos[cuarto] || 0) - salida.kilos;
                 if (salida.precio) {
-                  disponibilidades[key].ultimoPrecio = salida.precio;
+                  prod.ultimoPrecio = salida.precio;
                 }
               });
             }
@@ -356,29 +434,50 @@ export default {
 
         this.entradas.forEach(entrada => {
           const key = `${entrada.proveedor}|${entrada.producto}`;
+          const cuarto = normalizeCuarto(entrada.cuartoFrio);
           if (!disponibilidades[key]) {
             disponibilidades[key] = {
               proveedor: entrada.proveedor,
               nombre: entrada.producto,
-              kilosDisponibles: 0,
-              ultimoPrecio: entrada.precio || 0
+              ultimoPrecio: entrada.precio || 0,
+              cuartos: {}
             };
           }
-          disponibilidades[key].kilosDisponibles += entrada.kilos;
+          const prod = disponibilidades[key];
+          prod.cuartos[cuarto] = (prod.cuartos[cuarto] || 0) + entrada.kilos;
           if (entrada.precio) {
-            disponibilidades[key].ultimoPrecio = entrada.precio;
+            prod.ultimoPrecio = entrada.precio;
           }
         });
 
         this.salidas.forEach(salida => {
           const key = `${salida.proveedor}|${salida.producto}`;
-          if (disponibilidades[key]) {
-            disponibilidades[key].kilosDisponibles -= salida.kilos;
-          }
+          const cuarto = normalizeCuarto(salida.cuartoFrio);
+          if (!disponibilidades[key]) return;
+          const prod = disponibilidades[key];
+          prod.cuartos[cuarto] = (prod.cuartos[cuarto] || 0) - salida.kilos;
         });
 
         this.productosDisponibles = Object.values(disponibilidades)
+          .map(prod => {
+            const cuartosArr = Object.entries(prod.cuartos || {})
+              .filter(([, k]) => k > 0)
+              .map(([nombre, kilos]) => ({
+                nombre,
+                kilos: Number(Number(kilos).toFixed(1))
+              }));
+            const total = cuartosArr.reduce((sum, c) => sum + c.kilos, 0);
+            return {
+              ...prod,
+              cuartos: cuartosArr,
+              kilosDisponibles: total
+            };
+          })
           .filter(producto => producto.kilosDisponibles > 0);
+
+        if (this.newSalida.producto) {
+          this.actualizarKilosDisponiblesSeleccionados();
+        }
 
       } catch (error) {
         console.error('Error al cargar productos disponibles:', error);
@@ -392,17 +491,36 @@ export default {
       this.newEntrada.precio = null;
       this.nuevoProveedorEntrada = '';
       this.customProducto = '';
+      this.newEntrada.cuartoFrio = '';
     },
 
     resetProductoSalida() {
       this.newSalida.producto = '';
       this.newSalida.kilos = null;
+      this.newSalida.cuartoFrio = 'Todos los cuartos';
       this.kilosDisponiblesSeleccionados = 0;
     },
 
     seleccionarProductoSalida(producto) {
       this.newSalida.producto = producto.nombre;
-      this.kilosDisponiblesSeleccionados = producto.kilosDisponibles;
+      this.newSalida.cuartoFrio = 'Todos los cuartos';
+      this.actualizarKilosDisponiblesSeleccionados(producto);
+    },
+    actualizarKilosDisponiblesSeleccionados(productoRef = null) {
+      const producto = productoRef || this.productosDelProveedorSeleccionado.find(p => p.nombre === this.newSalida.producto);
+      if (!producto) {
+        this.kilosDisponiblesSeleccionados = 0;
+        return;
+      }
+      if (this.newSalida.cuartoFrio === 'Todos los cuartos') {
+        this.kilosDisponiblesSeleccionados = producto.kilosDisponibles;
+      } else {
+        const cuarto = producto.cuartos.find(c => c.nombre === this.newSalida.cuartoFrio);
+        this.kilosDisponiblesSeleccionados = cuarto ? cuarto.kilos : 0;
+      }
+    },
+    normalizeCuarto(cuarto) {
+      return cuarto && cuarto.trim() ? cuarto.trim() : 'Sin cuarto designado';
     },
 
     async addEntrada() {
@@ -429,7 +547,8 @@ export default {
         proveedor: proveedorNombre,
         producto: productoNombre,
         kilos: Number(this.newEntrada.kilos.toFixed(1)),
-        precio: precioReferencia ? Number(precioReferencia.toFixed(2)) : null
+        precio: precioReferencia ? Number(precioReferencia.toFixed(2)) : null,
+        cuartoFrio: this.normalizeCuarto(this.newEntrada.cuartoFrio)
       });
 
       // Agregar nuevo proveedor a la colección si es necesario
@@ -479,13 +598,41 @@ export default {
       await this.loadProductosDisponibles();
     },
 
+    editarEntrada(index) {
+      this.entradaEditIndex = index;
+      const entrada = this.entradas[index];
+      this.entradaEditData = {
+        kilos: entrada.kilos,
+        cuartoFrio: this.normalizeCuarto(entrada.cuartoFrio)
+      };
+      this.editandoEntrada = true;
+    },
+    cancelarEdicionEntrada() {
+      this.editandoEntrada = false;
+      this.entradaEditIndex = null;
+      this.entradaEditData = { kilos: null, cuartoFrio: '' };
+    },
+    async guardarEdicionEntrada() {
+      if (this.entradaEditIndex === null) return;
+      const nuevaCantidad = Number(this.entradaEditData.kilos);
+      if (!nuevaCantidad || nuevaCantidad <= 0) return;
+
+      const entrada = this.entradas[this.entradaEditIndex];
+      entrada.kilos = Number(nuevaCantidad.toFixed(1));
+      entrada.cuartoFrio = this.normalizeCuarto(this.entradaEditData.cuartoFrio);
+
+      this.cancelarEdicionEntrada();
+      await this.loadProductosDisponibles();
+    },
+
     addSalida() {
       if (!this.isSalidaValida) return;
 
       this.salidas.push({
         proveedor: this.newSalida.proveedor,
         producto: this.newSalida.producto,
-        kilos: Number(this.newSalida.kilos.toFixed(1))
+        kilos: Number(this.newSalida.kilos.toFixed(1)),
+        cuartoFrio: this.newSalida.cuartoFrio
       });
 
       this.resetProductoSalida();
@@ -518,8 +665,15 @@ export default {
         const data = docSnap.data();
         this.currentDate = moment(data.fecha.toDate());
         this.selectedDate = this.currentDate.format('YYYY-MM-DD');
-        this.entradas = data.entradas || [];
-        this.salidas = data.salidas || [];
+        const normalizeCuarto = this.normalizeCuarto;
+        this.entradas = (data.entradas || []).map(e => ({
+          ...e,
+          cuartoFrio: normalizeCuarto(e.cuartoFrio)
+        }));
+        this.salidas = (data.salidas || []).map(s => ({
+          ...s,
+          cuartoFrio: normalizeCuarto(s.cuartoFrio)
+        }));
         this.registroId = id;
         this.isEditing = true;
         await this.loadProductosDisponibles();
@@ -570,6 +724,12 @@ export default {
     updateCurrentDate() {
       this.currentDate = moment(this.selectedDate);
       this.loadProductosDisponibles();
+    }
+  },
+
+  watch: {
+    'newSalida.cuartoFrio'() {
+      this.actualizarKilosDisponiblesSeleccionados();
     }
   },
 
@@ -799,6 +959,105 @@ h3 {
 .delete-btn:hover {
   background-color: #f44336;
   color: white;
+}
+
+.entry-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.edit-btn {
+  background-color: transparent;
+  color: #ffa500;
+  border: none;
+  font-size: 1.1em;
+  cursor: pointer;
+  padding: 0 5px;
+  transition: color 0.3s, transform 0.2s;
+}
+
+.edit-btn:hover {
+  color: #ff8c00;
+  transform: scale(1.05);
+}
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background-color: white;
+  padding: 24px;
+  border-radius: 10px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  max-width: 500px;
+  width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.modal-info p {
+  margin: 4px 0;
+  color: #3760b0;
+}
+
+.modal-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 16px 0;
+}
+
+.modal-form label {
+  display: flex;
+  flex-direction: column;
+  font-weight: bold;
+  color: #3760b0;
+  gap: 6px;
+}
+
+.modal-form input,
+.modal-form select {
+  padding: 10px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.btn-guardar {
+  background-color: #28a745;
+  color: white;
+  border: none;
+  padding: 10px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.btn-cancelar {
+  background-color: #f44336;
+  color: white;
+  border: none;
+  padding: 10px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: bold;
 }
 
 .total {

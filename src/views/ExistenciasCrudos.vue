@@ -21,13 +21,29 @@
       <div v-else-if="Object.keys(existenciasPorProveedor).length === 0" class="no-existencias">
         No hay existencias registradas.
       </div>
-      <div v-else class="existencias-grid">
-        <div v-for="(productos, proveedor) in existenciasPorProveedor" :key="proveedor" class="proveedor-card">
+      <div class="filters-cuarto" v-else>
+        <label>
+          Filtrar por cuarto:
+          <select v-model="filtroCuarto">
+            <option value="Todos los cuartos">Todos los cuartos</option>
+            <option value="Sin cuarto designado">Sin cuarto designado</option>
+            <option value="Cuarto 1">Cuarto 1</option>
+            <option value="Cuarto 2">Cuarto 2</option>
+            <option value="Cuarto 3">Cuarto 3</option>
+            <option value="Cuarto 4">Cuarto 4</option>
+            <option value="Cuarto 5">Cuarto 5</option>
+          </select>
+        </label>
+      </div>
+
+      <div v-if="!isLoadingExistencias && Object.keys(existenciasFiltradasPorCuarto).length > 0" class="existencias-grid">
+        <div v-for="(productos, proveedor) in existenciasFiltradasPorCuarto" :key="proveedor" class="proveedor-card">
           <h3>{{ proveedor }}</h3>
           <table class="productos-table">
             <thead>
               <tr>
                 <th>Medida</th>
+                <th>Cuarto</th>
                 <th>Kilos</th>
                 <th>Taras</th>
                 <th v-if="tienePreciosValidos(productos)">Precio</th>
@@ -37,6 +53,7 @@
             <tbody>
               <tr v-for="producto in productos" :key="producto.clave" v-if="producto.kilos > 0">
                 <td>{{ producto.nombre }}</td>
+                <td>{{ producto.cuarto }}</td>
                 <td class="kilos-cell">{{ formatNumber(producto.kilos) }}</td>
                 <td class="taras-cell">{{ (producto.kilos / 19).toFixed(1) }}</td>
                 <td v-if="tienePreciosValidos(productos)" class="precio-cell">${{ formatearPrecio(producto.ultimoPrecio) }}</td>
@@ -120,7 +137,8 @@ export default {
       isLoadingExistencias: true,
       currentPage: 1,
       itemsPerPage: 10,
-      showGestionModal: false
+      showGestionModal: false,
+      filtroCuarto: 'Todos los cuartos'
     };
   },
   computed: {
@@ -133,13 +151,13 @@ export default {
       return Math.ceil(this.registros.length / this.itemsPerPage);
     },
     totalGeneral() {
-      return Object.values(this.existenciasPorProveedor)
+      return Object.values(this.existenciasFiltradasPorCuarto)
         .flat()
         .reduce((total, producto) => total + producto.kilos, 0);
     },
 
     valorTotalGeneral() {
-      return Object.values(this.existenciasPorProveedor)
+      return Object.values(this.existenciasFiltradasPorCuarto)
         .flat()
         .reduce((total, producto) => total + producto.valor, 0);
     },
@@ -148,6 +166,17 @@ export default {
       return Object.values(this.existenciasPorProveedor).some(productos => 
         productos.some(producto => producto.ultimoPrecio > 0 || producto.valor > 0)
       );
+    },
+    existenciasFiltradasPorCuarto() {
+      if (this.filtroCuarto === 'Todos los cuartos') {
+        return this.existenciasPorProveedor;
+      }
+      const filtradas = {};
+      Object.entries(this.existenciasPorProveedor).forEach(([prov, productos]) => {
+        const lista = productos.filter(p => p.cuarto === this.filtroCuarto);
+        if (lista.length) filtradas[prov] = lista;
+      });
+      return filtradas;
     }
   },
   methods: {
@@ -189,6 +218,7 @@ export default {
         this.isLoadingExistencias = true;
         const registrosSnapshot = await getDocs(collection(db, 'existenciasCrudos'));
         const existencias = {};
+        const normalizeCuarto = (c) => (c && c.trim()) ? c.trim() : 'Sin cuarto designado';
 
         // Procesar todos los registros para calcular existencias actuales
         const registrosOrdenados = registrosSnapshot.docs
@@ -209,7 +239,8 @@ export default {
               
               // Crear clave única usando producto + precio (si existe)
               const precioKey = entrada.precio ? entrada.precio.toString() : 'sin_precio';
-              const claveProducto = `${entrada.producto}_${precioKey}`;
+              const cuarto = normalizeCuarto(entrada.cuartoFrio);
+              const claveProducto = `${entrada.producto}_${precioKey}_${cuarto}`;
               
               if (!existencias[entrada.proveedor][claveProducto]) {
                 existencias[entrada.proveedor][claveProducto] = {
@@ -217,7 +248,8 @@ export default {
                   kilos: 0,
                   ultimoPrecio: entrada.precio || 0,
                   proveedor: entrada.proveedor,
-                  producto: entrada.producto
+                  producto: entrada.producto,
+                  cuarto: cuarto
                 };
               }
               existencias[entrada.proveedor][claveProducto].kilos += entrada.kilos;
@@ -237,9 +269,11 @@ export default {
               // Para las salidas, necesitamos encontrar de qué precio específico se está sacando
               // Por ahora, usaremos el enfoque FIFO (First In, First Out) para determinar el precio
               const productosConMismoNombre = Object.keys(existencias[salida.proveedor])
-                .filter(key => existencias[salida.proveedor][key].producto === salida.producto)
+                .filter(key => {
+                  const prod = existencias[salida.proveedor][key];
+                  return prod.producto === salida.producto && prod.cuarto === normalizeCuarto(salida.cuartoFrio);
+                })
                 .sort((a, b) => {
-                  // Ordenar por precio (los más baratos primero - FIFO)
                   const precioA = existencias[salida.proveedor][a].ultimoPrecio;
                   const precioB = existencias[salida.proveedor][b].ultimoPrecio;
                   return precioA - precioB;
@@ -272,7 +306,7 @@ export default {
             .filter(producto => producto.kilos > 0)
             .map(producto => ({
               ...producto,
-              clave: `${producto.producto}_${producto.ultimoPrecio}`,
+              clave: `${producto.producto}_${producto.ultimoPrecio}_${producto.cuarto}`,
               valor: producto.kilos * producto.ultimoPrecio
             }));
           
@@ -679,9 +713,22 @@ h1, h2, h3 {
 
 .existencias-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 15px;
   margin-bottom: 20px;
+}
+
+.filters-cuarto {
+  margin-bottom: 15px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.filters-cuarto select {
+  padding: 8px;
+  border-radius: 6px;
+  border: 1px solid #ccc;
 }
 
 .proveedor-card {
