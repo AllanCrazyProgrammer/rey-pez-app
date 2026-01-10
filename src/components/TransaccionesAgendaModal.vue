@@ -211,7 +211,16 @@
                     </span>
                     <span>${{ formatearNumero(transaccion.monto) }}</span>
                   </div>
-                  <div class="transaccion-mini-hora">{{ formatearHora(transaccion.timestamp) }}</div>
+                <div class="transaccion-mini-meta">
+                  <span class="transaccion-mini-hora">{{ formatearHora(transaccion.timestamp) }}</span>
+                  <span
+                    v-if="transaccion.descripcion"
+                    class="transaccion-mini-observacion"
+                    :title="transaccion.descripcion"
+                  >
+                    Obs: {{ transaccion.descripcion }}
+                  </span>
+                </div>
                   <div class="transaccion-mini-acciones">
                     <label
                       v-if="transaccion.tipo === 'efectivo'"
@@ -297,7 +306,16 @@
                     </span>
                     <span>${{ formatearNumero(transaccion.monto) }}</span>
                   </div>
-                  <div class="transaccion-mini-hora">{{ formatearHora(transaccion.timestamp) }}</div>
+                  <div class="transaccion-mini-meta">
+                    <span class="transaccion-mini-hora">{{ formatearHora(transaccion.timestamp) }}</span>
+                    <span
+                      v-if="transaccion.descripcion"
+                      class="transaccion-mini-observacion"
+                      :title="transaccion.descripcion"
+                    >
+                      Obs: {{ transaccion.descripcion }}
+                    </span>
+                  </div>
                   <div class="transaccion-mini-acciones">
                     <label
                       v-if="transaccion.tipo === 'efectivo'"
@@ -372,7 +390,16 @@
                     </span>
                     <span>${{ formatearNumero(transaccion.monto) }}</span>
                   </div>
-                  <div class="transaccion-mini-hora">{{ formatearHora(transaccion.timestamp) }}</div>
+                  <div class="transaccion-mini-meta">
+                    <span class="transaccion-mini-hora">{{ formatearHora(transaccion.timestamp) }}</span>
+                    <span
+                      v-if="transaccion.descripcion"
+                      class="transaccion-mini-observacion"
+                      :title="transaccion.descripcion"
+                    >
+                      Obs: {{ transaccion.descripcion }}
+                    </span>
+                  </div>
                   <div class="transaccion-mini-acciones">
                     <label
                       v-if="transaccion.tipo === 'efectivo'"
@@ -447,7 +474,16 @@
                     </span>
                     <span>${{ formatearNumero(transaccion.monto) }}</span>
                   </div>
-                  <div class="transaccion-mini-hora">{{ formatearHora(transaccion.timestamp) }}</div>
+                  <div class="transaccion-mini-meta">
+                    <span class="transaccion-mini-hora">{{ formatearHora(transaccion.timestamp) }}</span>
+                    <span
+                      v-if="transaccion.descripcion"
+                      class="transaccion-mini-observacion"
+                      :title="transaccion.descripcion"
+                    >
+                      Obs: {{ transaccion.descripcion }}
+                    </span>
+                  </div>
                   <div class="transaccion-mini-acciones">
                     <label
                       v-if="transaccion.tipo === 'efectivo'"
@@ -522,7 +558,16 @@
                     </span>
                     <span>${{ formatearNumero(transaccion.monto) }}</span>
                   </div>
-                  <div class="transaccion-mini-hora">{{ formatearHora(transaccion.timestamp) }}</div>
+                  <div class="transaccion-mini-meta">
+                    <span class="transaccion-mini-hora">{{ formatearHora(transaccion.timestamp) }}</span>
+                    <span
+                      v-if="transaccion.descripcion"
+                      class="transaccion-mini-observacion"
+                      :title="transaccion.descripcion"
+                    >
+                      Obs: {{ transaccion.descripcion }}
+                    </span>
+                  </div>
                   <div class="transaccion-mini-acciones">
                     <label
                       v-if="transaccion.tipo === 'efectivo'"
@@ -567,8 +612,16 @@
               <div class="transaccion-monto">${{ formatearNumero(transaccion.monto) }}</div>
             </div>
             <div class="transaccion-cliente">Cliente: {{ obtenerClienteTexto(transaccion.cliente) }}</div>
-            <div v-if="!transaccion.esStash" class="transaccion-descripcion">{{ transaccion.descripcion }}</div>
-            <div class="transaccion-hora">{{ formatearHora(transaccion.timestamp) }}</div>
+            <div class="transaccion-meta">
+              <span class="transaccion-hora">{{ formatearHora(transaccion.timestamp) }}</span>
+              <span
+                v-if="transaccion.descripcion"
+                class="transaccion-observacion"
+                :title="transaccion.descripcion"
+              >
+                Obs: {{ transaccion.descripcion }}
+              </span>
+            </div>
             <div class="transaccion-acciones">
               <label
                 v-if="transaccion.tipo === 'efectivo'"
@@ -1907,16 +1960,26 @@ label {
   margin-bottom: 5px;
 }
 
-.transaccion-descripcion {
-  color: #555;
-  margin-bottom: 10px;
-  font-size: 0.95em;
-}
-
 .transaccion-hora {
   font-size: 0.85em;
   color: #777;
+}
+
+.transaccion-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
   margin-bottom: 10px;
+}
+
+.transaccion-observacion {
+  font-size: 0.9em;
+  color: #4a4a4a;
+  background: rgba(243, 156, 18, 0.12);
+  border: 1px solid rgba(243, 156, 18, 0.35);
+  padding: 3px 10px;
+  border-radius: 12px;
 }
 
 .transaccion-acciones {
@@ -2472,7 +2535,23 @@ label {
 .transaccion-mini-hora {
   font-size: 0.8em;
   color: #777;
-  margin-bottom: 5px;
+}
+
+.transaccion-mini-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+
+.transaccion-mini-observacion {
+  font-size: 0.8em;
+  color: #4a4a4a;
+  background: rgba(243, 156, 18, 0.12);
+  border: 1px solid rgba(243, 156, 18, 0.35);
+  padding: 2px 8px;
+  border-radius: 999px;
 }
 
 .transaccion-mini-acciones {
