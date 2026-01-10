@@ -83,7 +83,15 @@
           <div class="cuenta-actions">
             <button v-if="!cuenta.missingNota" @click="editarCuenta(cuenta.id)" class="edit-btn">Editar</button>  
             <button v-if="!cuenta.missingNota" @click="borrarCuenta(cuenta.id)" class="delete-btn">Borrar</button>
-            <span v-else class="nota-pendiente-hint">Crear nota</span>
+            <button
+              v-else
+              class="nota-pendiente-hint"
+              type="button"
+              :disabled="creatingFecha === normalizarFechaValor(cuenta.fecha)"
+              @click="crearNota(cuenta.fecha)"
+            >
+              {{ creatingFecha === normalizarFechaValor(cuenta.fecha) ? 'Creando...' : 'Crear nota' }}
+            </button>
           </div>
         </li>
       </ul>
@@ -149,6 +157,7 @@
 <script>
 import { db } from '@/firebase';
 import { collection, query, orderBy, deleteDoc, doc, onSnapshot, where, updateDoc, getDocs, limit } from 'firebase/firestore';
+import EmbarqueCuentasService from '@/utils/services/EmbarqueCuentasService';
 import BackButton from '@/components/BackButton.vue';
 import PreciosHistorialModal from '@/components/PreciosHistorialModal.vue';
 import StashModalV2 from '@/components/StashModalV2.vue';
@@ -189,7 +198,8 @@ export default {
         endDate: ''
       },
       detalleVentasSemanal: [],
-      detalleAbonosSemanal: []
+      detalleAbonosSemanal: [],
+      creatingFecha: null
     };
   },
   computed: {
@@ -493,6 +503,68 @@ export default {
     },
     editarCuenta(id) {
       this.$router.push(`/cuentas-veronica/${id}?edit=true`);
+    },
+    async crearNota(fecha) {
+      const fechaNormalizada = this.normalizarFechaValor(fecha) || new Date().toISOString().split('T')[0];
+      if (this.creatingFecha === fechaNormalizada) return;
+
+      this.creatingFecha = fechaNormalizada;
+      try {
+        const embarquesRef = collection(db, 'embarques');
+        const embarquesSnapshot = await getDocs(query(embarquesRef, orderBy('fecha', 'desc'), limit(300)));
+        const embarqueDoc = embarquesSnapshot.docs.find(docSnap => {
+          const data = docSnap.data() || {};
+          return this.normalizarFechaValor(data.fecha) === fechaNormalizada;
+        });
+
+        if (!embarqueDoc) {
+          alert('No se encontró un embarque para esta fecha. Crea la nota manualmente.');
+          return;
+        }
+
+        const data = embarqueDoc.data() || {};
+        const clientes = data.clientes || [];
+        const clienteVeronica = clientes.find(cliente => {
+          const clienteId = (cliente.id ?? cliente.clienteId ?? '').toString();
+          const nombreCliente = (cliente.nombre || '').toLowerCase();
+          const esVeronica = clienteId === '5' || nombreCliente.includes('veronica') || nombreCliente.includes('lorena');
+          const tieneProductos = Array.isArray(cliente.productos) && cliente.productos.some(p => p && (p.medida || (Array.isArray(p.kilos) && p.kilos.some(k => Number(k) > 0))));
+          const tieneCrudos = Array.isArray(cliente.crudos) && cliente.crudos.length > 0;
+          return esVeronica && (tieneProductos || tieneCrudos);
+        });
+
+        const productosVeronica = clienteVeronica?.productos || [];
+        const crudosVeronica = clienteVeronica?.crudos || [];
+
+        const clienteCrudosTotales = data.clienteCrudos || data.clientesCrudos || {};
+        const embarqueCliente = {
+          ...data,
+          fecha: fechaNormalizada,
+          productos: productosVeronica,
+          clienteCrudos: { '5': crudosVeronica },
+          productosTotales: data.productos || [],
+          clienteCrudosTotales: Object.keys(clienteCrudosTotales).length ? clienteCrudosTotales : { '5': crudosVeronica },
+          costosPorMedida: data.costosPorMedida || {},
+          aplicarCostoExtra: data.aplicarCostoExtra || {},
+          costoExtra: data.costoExtra
+        };
+
+        await EmbarqueCuentasService.crearCuentaVeronica(embarqueCliente, this.$router);
+
+        if (this.lastSaveMessage !== 'Cuenta creada desde embarque y abierta en nueva pestaña' || !this.showSaveMessage) {
+          this.lastSaveMessage = 'Cuenta creada desde embarque y abierta en nueva pestaña';
+          this.showSaveMessage = true;
+          if (this.saveMessageTimer) clearTimeout(this.saveMessageTimer);
+          this.saveMessageTimer = setTimeout(() => {
+            this.showSaveMessage = false;
+          }, 3000);
+        }
+      } catch (error) {
+        console.error('Error al crear la nota desde embarque:', error);
+        alert(`No se pudo crear la nota desde el embarque: ${error.message || error}`);
+      } finally {
+        this.creatingFecha = null;
+      }
     },
     async borrarCuenta(id) {
       if (confirm('¿Estás seguro de que quieres borrar este registro de cuenta?')) {
@@ -820,9 +892,46 @@ h1, h2 {
 }
 
 .nota-pendiente-hint {
-  color: #777;
-  font-weight: 600;
+  color: #ff8c00;
+  font-weight: 700;
   align-self: center;
+  background: #fff2e6;
+  border: 1px dashed #ffb366;
+  border-radius: 8px;
+  padding: 8px 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 140px;
+  text-align: center;
+}
+
+.nota-pendiente-hint[disabled] {
+  opacity: 0.7;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.nota-pendiente-hint:hover,
+.nota-pendiente-hint:focus {
+  background: #ffe0c2;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.12);
+  transform: translateY(-1px);
+}
+
+.nota-pendiente-hint:active {
+  transform: translateY(0);
+}
+
+.nota-pendiente-hint:focus {
+  outline: 2px solid #ff8c00;
+  outline-offset: 2px;
+}
+
+@media (max-width: 768px) {
+  .nota-pendiente-hint {
+    width: 100%;
+  }
 }
 
 .ventas-ganancias-btn {

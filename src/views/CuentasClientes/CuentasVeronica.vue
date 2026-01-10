@@ -335,7 +335,7 @@ export default {
       saldoAcumuladoAnterior: 0,
       cobros: [],
       abonos: [],
-      fechaSeleccionada: this.obtenerFechaActual(),
+      fechaSeleccionada: this.normalizarFechaDesdeRuta(this.$route?.query?.fecha) || this.obtenerFechaActual(),
       showMobileActions: false,
       selectedItemIndex: null,
       presionTimer: null,
@@ -785,6 +785,13 @@ export default {
       return fecha.getFullYear() + '-' + 
              String(fecha.getMonth() + 1).padStart(2, '0') + '-' + 
              String(fecha.getDate()).padStart(2, '0');
+    },
+    normalizarFechaDesdeRuta(valor) {
+      if (!valor) return null;
+      if (typeof valor === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(valor)) return valor;
+      const fecha = new Date(valor);
+      if (Number.isNaN(fecha.getTime())) return null;
+      return fecha.toISOString().split('T')[0];
     },
     async guardarNota() {
       try {
