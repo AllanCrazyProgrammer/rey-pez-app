@@ -570,13 +570,15 @@ async function generarContenidoClientes(embarque, clientesDisponibles, clientesJ
   // Determinar si hay algún cliente Elizabeth o Catarro con precios Y con cuenta en PDF activada
   let hayClienteConCuentaEnPdf = false;
   let totalDineroGeneral = 0;
+  let totalDineroLimpiosGeneral = 0;
+  let totalDineroCrudosGeneral = 0;
   
   Object.entries(productosPorCliente).forEach(([clienteId]) => {
     const nombreCliente = obtenerNombreCliente(clienteId, clientesDisponibles);
     const incluirPreciosCliente = clientesIncluirPrecios && clientesIncluirPrecios[clienteId];
     const cuentaEnPdfCliente = clientesCuentaEnPdf && clientesCuentaEnPdf[clienteId];
-    // Solo mostrar total de cuenta si ambos checkboxes están activados
-    if ((nombreCliente.toLowerCase().includes('elizabeth') || nombreCliente.toLowerCase().includes('catarro')) && incluirPreciosCliente && cuentaEnPdfCliente) {
+    // Mostrar total de cuenta si el cliente tiene precios y la cuenta en PDF activada
+    if (incluirPreciosCliente && cuentaEnPdfCliente) {
       hayClienteConCuentaEnPdf = true;
     }
   });
@@ -894,6 +896,8 @@ async function generarContenidoClientes(embarque, clientesDisponibles, clientesJ
       }
       
       // Acumular en el total general el GRAN TOTAL (después de restar los fletes)
+      totalDineroLimpiosGeneral += totalDineroLimpiosConFlete;
+      totalDineroCrudosGeneral += totalDineroCrudosConFlete;
       totalDineroGeneral += totalDineroLimpiosConFlete + totalDineroCrudosConFlete;
     }
   }
@@ -901,7 +905,14 @@ async function generarContenidoClientes(embarque, clientesDisponibles, clientesJ
   // Agregar total general de taras y dinero al final
   if (totalTarasLimpio + totalTarasCrudos > 0) {
     contenido.push(
-      ...generarTotalGeneral(totalTarasLimpio, totalTarasCrudos, totalDineroGeneral, hayClienteConCuentaEnPdf)
+      ...generarTotalGeneral(
+        totalTarasLimpio,
+        totalTarasCrudos,
+        totalDineroGeneral,
+        hayClienteConCuentaEnPdf,
+        totalDineroLimpiosGeneral,
+        totalDineroCrudosGeneral
+      )
     );
   }
 
@@ -2987,26 +2998,42 @@ function verificarKilosCrudos(clienteCrudos, clienteId, nombreCliente) {
   return hayKilos;
 }
 
-function generarTotalGeneral(totalTarasLimpio, totalTarasCrudos, totalDinero, hayClienteConPrecios) {
+function generarTotalGeneral(totalTarasLimpio, totalTarasCrudos, totalDinero, hayClienteConPrecios, totalDineroLimpios = 0, totalDineroCrudos = 0) {
   const contenido = [];
-
-  // Agregar "Total de Cuenta" si hay clientes con precios y hay dinero
-  if (hayClienteConPrecios && totalDinero > 0) {
+  const hayTaras = totalTarasLimpio + totalTarasCrudos > 0;
+  if (hayTaras) {
     contenido.push({
-      text: `Total de Cuenta: $${Math.round(totalDinero).toLocaleString('en-US')}`,
-      style: ['subheader', 'granTotal'],
-      alignment: 'center',
-      margin: [0, 10, 0, 5]
-    });
-  }
-
-  // Agregar el total de taras si hay taras
-  if (totalTarasLimpio + totalTarasCrudos > 0) {
-    contenido.push({
-      text: `Total general de taras: ${totalTarasLimpio + totalTarasCrudos}`,
-      style: 'subheader',
-      alignment: 'center',
-      margin: [0, 5, 0, 5]
+      columns: [
+        {
+          text: `Total general de taras: ${totalTarasLimpio + totalTarasCrudos}`,
+          style: 'subheader',
+          alignment: 'left',
+          margin: [0, 5, 0, 5]
+        },
+        {
+          stack: [
+            {
+              text: `Total limpios: $${Math.round(totalDineroLimpios).toLocaleString('en-US')}`,
+              style: 'subheader',
+              alignment: 'right',
+              margin: [0, 0, 0, 2]
+            },
+            {
+              text: `Total crudos: $${Math.round(totalDineroCrudos).toLocaleString('en-US')}`,
+              style: 'subheader',
+              alignment: 'right',
+              margin: [0, 0, 0, 2]
+            },
+            {
+              text: `Total de Cuenta: $${Math.round(totalDinero).toLocaleString('en-US')}`,
+              style: ['subheader', 'granTotal'],
+              alignment: 'right',
+              margin: [0, 2, 0, 5]
+            }
+          ],
+          width: 'auto'
+        }
+      ]
     });
   }
 
