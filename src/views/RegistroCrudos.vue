@@ -214,7 +214,7 @@
           <label>
             Cuarto frío (opcional):
             <select v-model="entradaEditData.cuartoFrio">
-              <option value="Sin cuarto designado">Sin cuarto designado</option>
+              <option value="s/c">s/c</option>
               <option value="Cuarto 1">Cuarto 1</option>
               <option value="Cuarto 2">Cuarto 2</option>
               <option value="Cuarto 3">Cuarto 3</option>
@@ -368,7 +368,10 @@ export default {
       try {
         const registrosSnapshot = await getDocs(collection(db, 'existenciasCrudos'));
         const disponibilidades = {};
-        const normalizeCuarto = (c) => (c && c.trim()) ? c.trim() : 'Sin cuarto designado';
+        const normalizeCuarto = (c) => {
+          const valor = (c && c.trim()) ? c.trim() : 's/c';
+          return valor.toLowerCase() === 'sin cuarto designado' ? 's/c' : valor;
+        };
 
         const registrosOrdenados = registrosSnapshot.docs
           .map(doc => ({ id: doc.id, ...doc.data() }))
@@ -520,7 +523,8 @@ export default {
       }
     },
     normalizeCuarto(cuarto) {
-      return cuarto && cuarto.trim() ? cuarto.trim() : 'Sin cuarto designado';
+      const valor = cuarto && cuarto.trim() ? cuarto.trim() : 's/c';
+      return valor.toLowerCase() === 'sin cuarto designado' ? 's/c' : valor;
     },
 
     async addEntrada() {

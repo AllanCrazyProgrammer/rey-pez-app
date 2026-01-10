@@ -707,44 +707,6 @@ export default {
         return;
       }
 
-      const clientesConDatosExistentes = this.embarque.productos.filter(producto => {
-        return clientesConDefiniciones.includes(producto.clienteId.toString()) && this.productoTieneContenido(producto);
-      });
-
-      if (clientesConDatosExistentes.length > 0) {
-        const continuar = confirm('Se reemplazarán los productos y crudos existentes de los clientes predeterminados por los pedidos. ¿Deseas continuar?');
-        if (!continuar) {
-          return;
-        }
-      }
-
-      if (!this.productosEliminadosLocalmente) {
-        this.productosEliminadosLocalmente = new Set();
-      }
-
-      const clientesReemplazados = new Set(clientesConDefiniciones.map(id => id.toString()));
-
-      // Marcar clientes como modificados y registrar productos eliminados
-      this.embarque.productos.forEach(producto => {
-        const clienteId = producto.clienteId.toString();
-        if (clientesReemplazados.has(clienteId)) {
-          this.productosEliminadosLocalmente.add(producto.id);
-          this.$set(this.clientesModificados, clienteId, true);
-        }
-      });
-
-      // Eliminar productos actuales de los clientes objetivo
-      this.embarque.productos = this.embarque.productos.filter(producto => {
-        return !clientesReemplazados.has(producto.clienteId.toString());
-      });
-
-      // Eliminar crudos actuales de los clientes objetivo
-      clientesReemplazados.forEach(clienteId => {
-        if (this.clienteCrudos[clienteId]) {
-          this.$set(this.clienteCrudos, clienteId, []);
-        }
-      });
-
       if (!this.productosNuevosPendientes) {
         this.productosNuevosPendientes = new Map();
       }
@@ -752,22 +714,49 @@ export default {
       const nuevosProductos = [];
       const nuevosCrudosPorCliente = {};
 
+      // Ayudantes para evitar duplicados respetando tipo y nota
+      const construirClaveProducto = (entrada = {}) => {
+        const medida = (entrada.medida || '').toString().trim().toLowerCase();
+        const tipo = (entrada.tipo || '').toString().trim().toLowerCase();
+        const tipoPersonalizado = (entrada.tipoPersonalizado || '').toString().trim().toLowerCase();
+        const nota = (entrada.nota || '').toString().trim().toLowerCase();
+        if (!medida) return '';
+        return `${medida}__${tipo}__${tipoPersonalizado}__${nota}`;
+      };
+
+      const construirClaveCrudo = (entrada = {}) => {
+        const medida = (entrada.medida || entrada.talla || '').toString().trim().toLowerCase();
+        if (!medida) return '';
+        return medida;
+      };
+
       clientesConDefiniciones.forEach(clienteId => {
         const definiciones = esqueletoPorCliente[clienteId] || [];
         const nombreCliente = this.obtenerNombreCliente(clienteId);
+        const clienteIdStr = clienteId.toString();
+
+        const productosExistentes = (this.embarque.productos || []).filter(producto => producto.clienteId?.toString() === clienteIdStr);
+        const clavesProductos = new Set(productosExistentes.map(construirClaveProducto).filter(Boolean));
+
+        const crudosCliente = this.clienteCrudos[clienteIdStr] || [];
+        const clavesCrudos = new Set(
+          crudosCliente.flatMap(crudo => (crudo.items || []).map(item => construirClaveCrudo(item)).filter(Boolean))
+        );
 
         definiciones.forEach(definicion => {
           // Si es un crudo, agregarlo a clienteCrudos en lugar de productos
           if (definicion.tipo === 'crudo') {
-            if (!nuevosCrudosPorCliente[clienteId]) {
-              // Inicializar con un array que contiene un objeto crudo con un array de items vacío
-              nuevosCrudosPorCliente[clienteId] = [{
-                items: []
-              }];
+            const claveCrudo = construirClaveCrudo(definicion);
+            if (!claveCrudo || clavesCrudos.has(claveCrudo)) {
+              return;
             }
-            
-            // Agregar un nuevo item al array de items del primer (y único) objeto crudo
-            nuevosCrudosPorCliente[clienteId][0].items.push({
+            clavesCrudos.add(claveCrudo);
+
+            if (!nuevosCrudosPorCliente[clienteIdStr]) {
+              nuevosCrudosPorCliente[clienteIdStr] = [];
+            }
+
+            nuevosCrudosPorCliente[clienteIdStr].push({
               talla: definicion.medida || '',
               medida: definicion.medida || '',
               barco: '',
@@ -777,8 +766,14 @@ export default {
               precio: null
             });
           } else {
+            const claveProducto = construirClaveProducto(definicion);
+            if (!claveProducto || clavesProductos.has(claveProducto)) {
+              return;
+            }
+            clavesProductos.add(claveProducto);
+
             // Es un producto limpio, agregarlo como siempre
-            const nuevoProducto = crearNuevoProducto(clienteId.toString());
+            const nuevoProducto = crearNuevoProducto(clienteIdStr);
             nuevoProducto.nombreCliente = nombreCliente;
             nuevoProducto.medida = (definicion.medida || '').toString().trim();
 
@@ -804,8 +799,12 @@ export default {
         });
       });
 
-      if (nuevosProductos.length === 0 && Object.keys(nuevosCrudosPorCliente).length === 0) {
-        this.mostrarMensaje('No se crearon productos o crudos nuevos porque las medidas del pedido están vacías.');
+      const totalCrudosNuevos = Object.values(nuevosCrudosPorCliente).reduce((sum, crudosArray) => {
+        return sum + crudosArray.reduce((itemSum, crudo) => itemSum + (crudo ? 1 : 0), 0);
+      }, 0);
+
+      if (nuevosProductos.length === 0 && totalCrudosNuevos === 0) {
+        this.mostrarMensaje('No se agregaron medidas nuevas porque ya estaban registradas.');
         return;
       }
 
@@ -819,7 +818,22 @@ export default {
         if (!this.clienteCrudos[clienteId]) {
           this.$set(this.clienteCrudos, clienteId, []);
         }
-        this.clienteCrudos[clienteId].push(...crudos);
+        if (this.clienteCrudos[clienteId].length === 0) {
+          this.clienteCrudos[clienteId].push({ items: [] });
+        }
+        if (!Array.isArray(this.clienteCrudos[clienteId][0].items)) {
+          this.$set(this.clienteCrudos[clienteId][0], 'items', []);
+        }
+        this.clienteCrudos[clienteId][0].items.push(...crudos);
+        this.$set(this.clientesModificados, clienteId, true);
+      });
+
+      // Marcar clientes con nuevos productos como modificados
+      nuevosProductos.forEach(producto => {
+        const clienteId = producto.clienteId?.toString();
+        if (clienteId) {
+          this.$set(this.clientesModificados, clienteId, true);
+        }
       });
 
       if (!this.guardadoAutomaticoActivo && this.embarqueId) {
@@ -837,12 +851,8 @@ export default {
       if (nuevosProductos.length > 0) {
         mensaje.push(`${nuevosProductos.length} producto(s) limpio(s)`);
       }
-      if (Object.keys(nuevosCrudosPorCliente).length > 0) {
-        // Contar el total de items dentro de todos los objetos crudo
-        const totalItemsCrudos = Object.values(nuevosCrudosPorCliente).reduce((sum, crudosArray) => {
-          return sum + crudosArray.reduce((itemSum, crudo) => itemSum + (crudo.items ? crudo.items.length : 0), 0);
-        }, 0);
-        mensaje.push(`${totalItemsCrudos} medida(s) de crudo(s)`);
+      if (totalCrudosNuevos > 0) {
+        mensaje.push(`${totalCrudosNuevos} medida(s) de crudo(s)`);
       }
       this.mostrarMensaje(`Esqueleto generado: ${mensaje.join(' y ')}.`);
 

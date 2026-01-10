@@ -12,7 +12,7 @@
         <input v-model="search" placeholder="Buscar por proveedor o medida" class="search-input" />
         <label class="cuarto-toggle">
           <input type="checkbox" v-model="filtroCuarto" />
-          <span>Agrupar por cuarto frío (incluye "Sin cuarto designado")</span>
+          <span>Agrupar por cuarto frío (incluye "s/c")</span>
         </label>
       </div>
 
@@ -261,7 +261,10 @@ export default {
       return 0;
     };
 
-    const normalizeCuarto = (c) => (c && c.trim()) ? c.trim() : 'Sin cuarto designado';
+    const normalizeCuarto = (c) => {
+      const valor = (c && c.trim()) ? c.trim() : 's/c';
+      return valor.toLowerCase() === 'sin cuarto designado' ? 's/c' : valor;
+    };
 
     const loadExistencias = async () => {
       const sacadasSnapshot = await getDocs(collection(db, 'sacadas'));
@@ -729,7 +732,7 @@ export default {
           lotes
             .filter(lote => lote.kilos > 1)
             .forEach(lote => {
-              const key = lote.cuartoFrio || 'Sin cuarto designado';
+              const key = normalizeCuarto(lote.cuartoFrio);
               const coincideBusqueda = !searchLower ||
                 proveedor.toLowerCase().includes(searchLower) ||
                 datos.medida.toLowerCase().includes(searchLower) ||

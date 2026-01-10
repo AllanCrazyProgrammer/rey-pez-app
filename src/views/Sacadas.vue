@@ -286,7 +286,7 @@ export default {
       const lista = ['Todos los cuartos'];
 
       if (!medidaSeleccionada || !medidaSeleccionada.cuartos) {
-        lista.push('Sin cuarto designado');
+        lista.push('s/c');
         return lista;
       }
 
@@ -299,7 +299,7 @@ export default {
         });
 
       if (lista.length === 1) {
-        lista.push('Sin cuarto designado');
+        lista.push('s/c');
       }
 
       return lista;
@@ -499,7 +499,8 @@ export default {
       }
     },
     normalizeCuarto(cuarto) {
-      return cuarto && cuarto.trim() ? cuarto.trim() : 'Sin cuarto designado';
+      const valor = cuarto && cuarto.trim() ? cuarto.trim() : 's/c';
+      return valor.toLowerCase() === 'sin cuarto designado' ? 's/c' : valor;
     },
     parseSalidaMedida(display) {
       if (!display) {

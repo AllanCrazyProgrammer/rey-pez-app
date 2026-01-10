@@ -26,7 +26,7 @@
           Filtrar por cuarto:
           <select v-model="filtroCuarto">
             <option value="Todos los cuartos">Todos los cuartos</option>
-            <option value="Sin cuarto designado">Sin cuarto designado</option>
+            <option value="s/c">s/c</option>
             <option value="Cuarto 1">Cuarto 1</option>
             <option value="Cuarto 2">Cuarto 2</option>
             <option value="Cuarto 3">Cuarto 3</option>
@@ -218,7 +218,10 @@ export default {
         this.isLoadingExistencias = true;
         const registrosSnapshot = await getDocs(collection(db, 'existenciasCrudos'));
         const existencias = {};
-        const normalizeCuarto = (c) => (c && c.trim()) ? c.trim() : 'Sin cuarto designado';
+        const normalizeCuarto = (c) => {
+          const valor = (c && c.trim()) ? c.trim() : 's/c';
+          return valor.toLowerCase() === 'sin cuarto designado' ? 's/c' : valor;
+        };
 
         // Procesar todos los registros para calcular existencias actuales
         const registrosOrdenados = registrosSnapshot.docs
