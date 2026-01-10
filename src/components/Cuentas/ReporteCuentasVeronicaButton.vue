@@ -20,6 +20,7 @@
     <p v-if="totalRegistros > 0" class="detalle-registros">
       Incluye {{ totalRegistros }} registro{{ totalRegistros === 1 ? '' : 's' }}.
     </p>
+  <p v-if="warningMessage" class="mensaje-warning">{{ warningMessage }}</p>
     <p v-if="errorMessage" class="mensaje-error">{{ errorMessage }}</p>
   </div>
 </template>
@@ -37,7 +38,8 @@ export default {
       fechaFin: '',
       isGenerating: false,
       errorMessage: '',
-      totalRegistros: 0
+    warningMessage: '',
+    totalRegistros: 0
     };
   },
   computed: {
@@ -53,6 +55,66 @@ export default {
     this.establecerFechasIniciales();
   },
   methods: {
+    normalizarFechaValor(valor) {
+      if (!valor) return null;
+      try {
+        if (typeof valor === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(valor)) return valor;
+        if (valor.seconds) {
+          const d = new Date(valor.seconds * 1000);
+          return d.toISOString().split('T')[0];
+        }
+        if (valor instanceof Date) {
+          return valor.toISOString().split('T')[0];
+        }
+        const d = new Date(valor);
+        if (!Number.isNaN(d.getTime())) {
+          return d.toISOString().split('T')[0];
+        }
+      } catch (_) {
+        return null;
+      }
+      return null;
+    },
+    async obtenerFechasConEmbarqueVeronica() {
+      const embarquesRef = collection(db, 'embarques');
+      const embarquesQuery = query(
+        embarquesRef,
+        orderBy('fecha', 'asc'),
+        where('fecha', '>=', this.fechaInicio),
+        where('fecha', '<=', this.fechaFin)
+      );
+
+      const snapshot = await getDocs(embarquesQuery);
+      const fechas = new Set();
+
+      snapshot.docs.forEach((docSnap) => {
+        const data = docSnap.data() || {};
+        const fechaEmbarque = this.normalizarFechaValor(data.fecha);
+        if (!fechaEmbarque) return;
+
+        const clientes = data.clientes || [];
+        const productosRaiz = data.productos || [];
+
+        const tieneVeronica = clientes.some((cliente) => {
+          const clienteId = (cliente.id ?? cliente.clienteId ?? '').toString();
+          const nombreCliente = (cliente.nombre || '').toLowerCase();
+          const esVeronica = clienteId === '5' || nombreCliente.includes('veronica') || nombreCliente.includes('lorena');
+          const tieneProductos = Array.isArray(cliente.productos) && cliente.productos.some((p) => p && (p.medida || (Array.isArray(p.kilos) && p.kilos.some((k) => Number(k) > 0))));
+          const tieneCrudos = Array.isArray(cliente.crudos) && cliente.crudos.length > 0;
+          return esVeronica && (tieneProductos || tieneCrudos);
+        }) || productosRaiz.some((producto) => {
+          const clienteId = (producto.clienteId ?? producto.cliente ?? '').toString();
+          const tieneContenido = producto && (producto.medida || (Array.isArray(producto.kilos) && producto.kilos.some((k) => Number(k) > 0)));
+          return clienteId === '5' && tieneContenido;
+        });
+
+        if (tieneVeronica) {
+          fechas.add(fechaEmbarque);
+        }
+      });
+
+      return fechas;
+    },
     establecerFechasIniciales() {
       const hoy = new Date();
       const haceUnaSemana = new Date();
@@ -75,6 +137,7 @@ export default {
 
       this.isGenerating = true;
       this.errorMessage = '';
+      this.warningMessage = '';
       this.totalRegistros = 0;
 
       try {
@@ -98,6 +161,20 @@ export default {
         }
 
         this.totalRegistros = registros.length;
+
+        // Validar si hay embarques de Verónica sin nota en el rango seleccionado
+        const fechasCuentas = new Set(registros.map((r) => this.normalizarFechaValor(r.fecha)).filter(Boolean));
+        const fechasEmbarques = await this.obtenerFechasConEmbarqueVeronica();
+        const faltantes = [...fechasEmbarques].filter((fecha) => !fechasCuentas.has(fecha));
+
+        if (faltantes.length) {
+          const preview = faltantes.slice(0, 3).join(', ');
+          const extra = faltantes.length > 3 ? ` y ${faltantes.length - 3} más` : '';
+          this.warningMessage = `Hay ${faltantes.length} día(s) con embarque sin nota: ${preview}${extra}. Completa las notas antes de generar el PDF.`;
+          alert(this.warningMessage);
+          this.isGenerating = false;
+          return;
+        }
 
         await generarReporteCuentasVeronica({
           fechaInicio: this.fechaInicio,
@@ -174,5 +251,11 @@ export default {
   font-size: 13px;
   color: #444;
   margin-top: 2px;
+}
+.mensaje-warning {
+  color: #d35400;
+  font-size: 13px;
+  margin-top: 4px;
+  line-height: 1.4;
 }
 </style>
