@@ -75,6 +75,18 @@
             <option value="Caminante">Caminante</option>
           </select>
         </div>
+        <div class="acciones-multi-nota">
+          <button
+            class="btn btn-multi-notas"
+            type="button"
+            :disabled="isSyncing"
+            @click="$emit('abrir-multi-notas')"
+            title="Generar varias notas PDF a la vez"
+          >
+            <i class="fas fa-clone"></i>
+            Notas PDF múltiples
+          </button>
+        </div>
       </div>
     </div>
 
@@ -268,7 +280,7 @@ h1 {
   margin-bottom: 15px;
   justify-content: center;
   align-items: center;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
 }
 
 .fecha-selector,
@@ -329,6 +341,34 @@ label {
   color: #212529;
 }
 
+.btn-multi-notas {
+  background-color: #563d7c;
+  color: #fff;
+  border: none;
+  padding: 10px 14px;
+  border-radius: 6px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 4px 10px rgba(86, 61, 124, 0.25);
+}
+
+.btn-multi-notas:hover {
+  background-color: #452c65;
+}
+
+.btn-multi-notas:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.acciones-multi-nota {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .btn-success {
   background-color: #28a745;
   color: white;
@@ -369,6 +409,11 @@ label {
   .fecha-selector,
   .carga-selector {
     flex-direction: column;
+    width: 100%;
+  }
+
+  .acciones-multi-nota,
+  .btn-multi-notas {
     width: 100%;
   }
 

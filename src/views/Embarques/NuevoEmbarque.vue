@@ -36,6 +36,7 @@
         @generar-esqueleto="aplicarEsqueletoDesdePedido"
         @esqueleto-error="onEsqueletoError"
         @abrir-rendimientos="irARendimientos"
+        @abrir-multi-notas="abrirModalNotasMultiple"
       />
 
       <!-- Slider de escala para el resumen PDF -->
@@ -193,6 +194,18 @@
       @cerrar="cerrarModalPedidoCliente"
     />
 
+    <NotasPdfMultipleModal
+      :mostrar="mostrarModalNotasMultiple"
+      :clientes="clientesConMedidasRegistradas"
+      :seleccionados="modalNotasMultiple.seleccionados"
+      :opciones="modalNotasMultiple.opciones"
+      :cargando="isGeneratingPdf"
+      @cerrar="cerrarModalNotasMultiple"
+      @update:seleccionados="actualizarSeleccionNotasMultiple"
+      @update:opciones="actualizarOpcionesNotasMultiple"
+      @confirmar="generarNotasPdfMultiples"
+    />
+
     <!-- Indicador de estado del guardado -->
     <SaveStatusIndicator />
     
@@ -245,6 +258,7 @@ import NotaModal from './components/modals/NotaModal.vue';
 import AltModal from './components/modals/AltModal.vue';
 import ConfiguracionMedidasModal from './components/modals/ConfiguracionMedidasModal.vue';
 import PedidoClienteModal from './components/modals/PedidoClienteModal.vue';
+import NotasPdfMultipleModal from './components/modals/NotasPdfMultipleModal.vue';
 
 
 // Lazy loaded components
@@ -283,6 +297,7 @@ export default {
     AltModal,
     ConfiguracionMedidasModal,
     PedidoClienteModal,
+    NotasPdfMultipleModal,
     SaveStatusIndicator,
     AuthErrorNotification
   },
@@ -367,6 +382,11 @@ export default {
         cargando: false,
         error: ''
       },
+      mostrarModalNotasMultiple: false,
+      modalNotasMultiple: {
+        seleccionados: [],
+        opciones: {}
+      },
       
       mostrarModalPedidoCliente: false,
       clienteSeleccionadoPedido: null,
@@ -435,6 +455,43 @@ export default {
       });
 
       return [...clientesPredefinidosUnicos, ...clientesPersonalizadosUnicos, { id: 'otro', nombre: 'Otro', key: 'otro' }];
+    },
+    clientesConMedidasRegistradas() {
+      const resultado = [];
+
+      Object.entries(this.productosPorCliente || {}).forEach(([clienteId, productos]) => {
+        const medidas = [];
+
+        (productos || []).forEach((producto) => {
+          if (producto?.medida && producto.medida.trim()) {
+            medidas.push(producto.medida.trim());
+          }
+          if (producto?.talla && producto.talla.trim()) {
+            medidas.push(producto.talla.trim());
+          }
+        });
+
+        const crudosCliente = this.clienteCrudos?.[clienteId] || [];
+        crudosCliente.forEach((crudo) => {
+          (crudo?.items || []).forEach((item) => {
+            if (item?.talla && item.talla.trim()) {
+              medidas.push(item.talla.trim());
+            }
+          });
+        });
+
+        const medidasUnicas = [...new Set(medidas.filter(Boolean))];
+
+        if (medidasUnicas.length) {
+          resultado.push({
+            id: clienteId.toString(),
+            nombre: this.obtenerNombreCliente(clienteId),
+            medidas: medidasUnicas
+          });
+        }
+      });
+
+      return resultado;
     },
     
     productosPorCliente() {
@@ -3495,6 +3552,73 @@ export default {
       } catch (error) {
         console.error('[Modal PDF] Error al generar PDF:', error);
         this.modalGenerarPdf.error = 'No se pudo generar el PDF. Inténtalo de nuevo.';
+      } finally {
+        this.isGeneratingPdf = false;
+        this.pdfType = null;
+      }
+    },
+    abrirModalNotasMultiple() {
+      const clientes = this.clientesConMedidasRegistradas;
+      this.modalNotasMultiple = {
+        seleccionados: clientes.map((cliente) => cliente.id),
+        opciones: {}
+      };
+
+      clientes.forEach((cliente) => {
+        const incluirPrecios = this.clientesIncluirPrecios?.[cliente.id] ?? false;
+        const cuentaEnPdf = this.clientesCuentaEnPdf?.[cliente.id] ?? false;
+        this.$set(this.modalNotasMultiple.opciones, cliente.id, {
+          incluirPrecios: !!incluirPrecios,
+          cuentaEnPdf: !!(incluirPrecios && cuentaEnPdf),
+        });
+      });
+
+      this.mostrarModalNotasMultiple = true;
+    },
+
+    cerrarModalNotasMultiple() {
+      this.mostrarModalNotasMultiple = false;
+    },
+
+    actualizarSeleccionNotasMultiple(seleccion) {
+      this.modalNotasMultiple.seleccionados = Array.isArray(seleccion) ? seleccion : [];
+    },
+
+    actualizarOpcionesNotasMultiple(opciones) {
+      this.modalNotasMultiple.opciones = opciones || {};
+    },
+
+    async generarNotasPdfMultiples() {
+      const seleccionados = (this.modalNotasMultiple.seleccionados || []).filter((id) =>
+        this.clientesConMedidasRegistradas.some(
+          (cliente) => cliente.id.toString() === id.toString()
+        )
+      );
+
+      if (!seleccionados.length) {
+        alert('Selecciona al menos un cliente con medidas para generar las notas.');
+        return;
+      }
+
+      this.isGeneratingPdf = true;
+      this.pdfType = 'multi-notas';
+
+      try {
+        for (const clienteId of seleccionados) {
+          const opciones = this.modalNotasMultiple.opciones?.[clienteId] || {};
+          const incluirPrecios = !!opciones.incluirPrecios;
+          const cuentaEnPdf = incluirPrecios ? !!opciones.cuentaEnPdf : false;
+
+          this.$set(this.clientesIncluirPrecios, clienteId, incluirPrecios);
+          this.$set(this.clientesCuentaEnPdf, clienteId, cuentaEnPdf);
+
+          await this.generarPDFCliente(clienteId);
+        }
+
+        this.cerrarModalNotasMultiple();
+      } catch (error) {
+        console.error('[Notas PDF múltiples] Error:', error);
+        alert('No se pudieron generar todas las notas PDF. Intenta nuevamente.');
       } finally {
         this.isGeneratingPdf = false;
         this.pdfType = null;
