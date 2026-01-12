@@ -848,6 +848,7 @@ export default {
         const precioNormalizado = precio !== null && precio !== undefined ? precio : null;
         const medidaKey = precioNormalizado !== null ? `${medida} ($${precioNormalizado})` : medida;
         const cuartoNormalizado = normalizeCuarto(cuartoFrio);
+        const fechaObj = fecha instanceof Date ? fecha : (fecha?.toDate ? fecha.toDate() : new Date(fecha));
 
         if (!medidasDisponibles.has(medidaKey)) {
           medidasDisponibles.set(medidaKey, {
@@ -857,19 +858,61 @@ export default {
             nombre: medidaKey,
             primeraFecha: null,
             esElMasAntiguo: false,
-            cuartos: new Map()
+            cuartos: new Map(),
+            lotes: []
           });
         }
 
         const datos = medidasDisponibles.get(medidaKey);
-        datos.kilos += esEntrada ? kilos : -kilos;
-
-        const kilosCuarto = datos.cuartos.get(cuartoNormalizado) || 0;
-        datos.cuartos.set(cuartoNormalizado, kilosCuarto + (esEntrada ? kilos : -kilos));
-
-        if (esEntrada && precioNormalizado !== null && (datos.primeraFecha === null || fecha < datos.primeraFecha)) {
-          datos.primeraFecha = fecha;
+        if (!Array.isArray(datos.lotes)) {
+          datos.lotes = [];
         }
+
+        let kilosAplicados = kilos;
+
+        if (esEntrada) {
+          // Registrar la entrada como un lote nuevo y mantener orden cronológico
+          datos.lotes.push({
+            kilos,
+            fecha: fechaObj,
+            cuartoFrio: cuartoNormalizado
+          });
+          datos.lotes.sort((a, b) => a.fecha - b.fecha);
+        } else {
+          // Consumir desde el lote más antiguo (FIFO)
+          let kilosPendientes = kilos;
+          datos.lotes.sort((a, b) => a.fecha - b.fecha);
+
+          for (let i = 0; i < datos.lotes.length && kilosPendientes > 0; i += 1) {
+            const lote = datos.lotes[i];
+            if (lote.kilos >= kilosPendientes) {
+              lote.kilos -= kilosPendientes;
+              kilosPendientes = 0;
+            } else {
+              kilosPendientes -= lote.kilos;
+              lote.kilos = 0;
+            }
+          }
+
+          kilosAplicados = kilos - kilosPendientes;
+          datos.lotes = datos.lotes.filter(lote => lote.kilos > 0);
+
+          if (kilosPendientes > 0) {
+            console.warn('[Sacadas] Salida sin suficientes lotes registrados', {
+              medida,
+              precio: precioNormalizado,
+              kilosPendientes
+            });
+          }
+        }
+
+        // Ajustar los kilos por cuarto solo con lo realmente aplicado
+        const kilosCuarto = datos.cuartos.get(cuartoNormalizado) || 0;
+        datos.cuartos.set(cuartoNormalizado, kilosCuarto + (esEntrada ? kilosAplicados : -kilosAplicados));
+
+        // Recalcular totales y fecha más antigua disponible
+        datos.kilos = datos.lotes.reduce((sum, lote) => sum + lote.kilos, 0);
+        datos.primeraFecha = datos.lotes.length > 0 ? datos.lotes[0].fecha : null;
       };
 
       // Procesar todas las sacadas anteriores hasta el día ANTERIOR al actual (NO incluir el día actual)
