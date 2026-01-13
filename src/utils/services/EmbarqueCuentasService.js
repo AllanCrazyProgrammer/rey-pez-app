@@ -651,8 +651,8 @@ const prepararItemsVentaJoselito = (productos, clienteCrudos = {}, preciosVenta 
       existente.precioVenta = item.precioVenta; // último precio
       existente.totalVenta = existente.kilosVenta * existente.precioVenta;
     } else {
-      // Usar la medida normalizada como nombre final
-      itemsVentaConsolidados.set(medidaNorm, { ...item, medida: medidaNorm });
+      // Conservar la medida original para mostrarla tal cual (con espacios)
+      itemsVentaConsolidados.set(medidaNorm, { ...item });
     }
   }
   // Calcular ganancias comparando con los items de costo
@@ -772,8 +772,10 @@ const prepararDatosCuentaCatarro = async (embarqueData) => {
           kilos = Number((sumaKilos - descuentoTaras).toFixed(1));
         }
         
-        // Usar nombreAlternativoPDF como medida si está disponible
-        let medida = producto.nombreAlternativoPDF || producto.medida || '';
+        // Usar nombreAlternativoPDF como medida si está disponible, respetando
+        // espacios originales si vienen en medidaOriginal.
+        const medidaBase = producto.medidaOriginal || producto.medida || '';
+        let medida = producto.nombreAlternativoPDF || medidaBase;
         
         const medidaNormalizada = normalizarMedida(medida);
         
@@ -1882,8 +1884,10 @@ const prepararDatosCuentaVeronica = async (embarqueData) => {
           kilos = Number((sumaKilos - descuentoTaras).toFixed(1));
         }
         
-        // Usar nombreAlternativoPDF como medida si está disponible
-        let medida = producto.nombreAlternativoPDF || producto.medida || '';
+        // Usar nombreAlternativoPDF como medida si está disponible, respetando
+        // espacios originales si vienen en medidaOriginal.
+        const medidaBase = producto.medidaOriginal || producto.medida || '';
+        let medida = producto.nombreAlternativoPDF || medidaBase;
         const medidaNormalizada = normalizarMedida(medida);
         
         const totalFallback = acumularTotalFallback(medida, medidaNormalizada, kilos);

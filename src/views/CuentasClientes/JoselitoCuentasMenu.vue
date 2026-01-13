@@ -84,12 +84,16 @@
         <li v-for="cuenta in cuentas" 
             :key="cuenta.id" 
             class="cuenta-item"
-            :class="{ 'tiene-observacion': cuenta.tieneObservacion }">
+            :class="{ 
+              'tiene-observacion': cuenta.tieneObservacion,
+              'cuenta-sin-nota': cuenta.missingNota
+            }">
           <div class="cuenta-content">
             <span class="cuenta-date">{{ formatDate(cuenta.fecha) }}</span>
             <p class="cuenta-summary">
-              <span>Saldo Hoy: ${{ formatNumber(cuenta.saldoHoy) }}</span>
-              <span>Total Acumulado: ${{ formatNumber(cuenta.totalNota) }}</span>
+              <span v-if="!cuenta.missingNota">Saldo Hoy: ${{ formatNumber(cuenta.saldoHoy) }}</span>
+              <span v-else class="texto-sin-nota">Sin nota registrada</span>
+              <span v-if="!cuenta.missingNota">Total Acumulado: ${{ formatNumber(cuenta.totalNota) }}</span>
             </p>
             <div v-if="cuenta.tieneObservacion" class="observacion-badge" @click="mostrarObservacion(cuenta)">
               Ver observación
@@ -103,8 +107,17 @@
             </div>
           </div>
           <div class="cuenta-actions">
-            <button @click="editarCuenta(cuenta.id)" class="edit-btn">Editar</button>  
-            <button @click="borrarCuenta(cuenta.id)" class="delete-btn">Borrar</button>
+            <button v-if="!cuenta.missingNota" @click="editarCuenta(cuenta.id)" class="edit-btn">Editar</button>  
+            <button v-if="!cuenta.missingNota" @click="borrarCuenta(cuenta.id)" class="delete-btn">Borrar</button>
+            <button
+              v-else
+              class="nota-pendiente-hint"
+              type="button"
+              :disabled="creatingFecha === normalizarFechaValor(cuenta.fecha)"
+              @click="crearNota(cuenta.fecha)"
+            >
+              {{ creatingFecha === normalizarFechaValor(cuenta.fecha) ? 'Creando...' : 'Crear nota' }}
+            </button>
           </div>
         </li>
       </ul>
@@ -131,7 +144,8 @@
 
 <script>
 import { db } from '@/firebase';
-import { collection, query, orderBy, deleteDoc, doc, onSnapshot, updateDoc, getDocs } from 'firebase/firestore';
+import { collection, query, orderBy, deleteDoc, doc, onSnapshot, updateDoc, getDocs, where, limit } from 'firebase/firestore';
+import EmbarqueCuentasService from '@/utils/services/EmbarqueCuentasService';
 import BackButton from '@/components/BackButton.vue';
 import PreciosHistorialModal from '@/components/PreciosHistorialModal.vue';
 import StashModalV2 from '@/components/StashModalV2.vue';
@@ -158,10 +172,31 @@ export default {
       observacionActual: '',
       lastSaveMessage: '',
       showSaveMessage: false,
-      saveMessageTimer: null
+      saveMessageTimer: null,
+      creatingFecha: null
     };
   },
   methods: {
+    normalizarFechaValor(valor) {
+      if (!valor) return null;
+      try {
+        if (typeof valor === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(valor)) return valor;
+        if (valor.seconds) {
+          const d = new Date(valor.seconds * 1000);
+          return d.toISOString().split('T')[0];
+        }
+        if (valor instanceof Date) {
+          return valor.toISOString().split('T')[0];
+        }
+        const d = new Date(valor);
+        if (!Number.isNaN(d.getTime())) {
+          return d.toISOString().split('T')[0];
+        }
+      } catch (_) {
+        return null;
+      }
+      return null;
+    },
     async loadCuentas() {
       try {
         this.isLoading = true;
@@ -172,6 +207,7 @@ export default {
         this.unsubscribe = onSnapshot(q, async (querySnapshot) => {
           const cuentasActualizadas = querySnapshot.docs.map((doc) => {
             const data = doc.data();
+            const fechaNormalizada = this.normalizarFechaValor(data.fecha);
             const totalCobros = (data.cobros || []).reduce((sum, cobro) => 
               sum + (parseFloat(cobro.monto) || 0), 0);
             const totalAbonos = (data.abonos || []).reduce((sum, abono) => 
@@ -179,7 +215,7 @@ export default {
 
             return {
               id: doc.id,
-              fecha: data.fecha,
+              fecha: fechaNormalizada || data.fecha,
               saldoHoy: data.totalGeneralVenta || 0,
               totalCobros,
               totalAbonos,
@@ -234,7 +270,53 @@ export default {
             ));
           }
 
-          this.cuentas = cuentasOrdenadas.reverse();
+          // Buscar embarques de Joselito que no tengan nota
+          const fechasConNota = new Set(cuentasOrdenadas.map(c => this.normalizarFechaValor(c.fecha)));
+          const embarquesRef = collection(db, 'embarques');
+          const embarquesSnapshot = await getDocs(query(embarquesRef, orderBy('fecha', 'desc'), limit(200)));
+
+          const faltantes = [];
+          embarquesSnapshot.forEach(docSnap => {
+            const data = docSnap.data() || {};
+            const fechaEmbarque = this.normalizarFechaValor(data.fecha);
+            if (!fechaEmbarque || fechasConNota.has(fechaEmbarque)) return;
+
+            const clientes = data.clientes || [];
+            const productosRaiz = data.productos || [];
+
+            const tieneJoselito = clientes.some(cliente => {
+              const clienteId = (cliente.id ?? cliente.clienteId ?? '').toString();
+              const nombreCliente = (cliente.nombre || '').toLowerCase();
+              const esJoselito = clienteId === '1' || nombreCliente.includes('joselito');
+              const tieneProductos = Array.isArray(cliente.productos) && cliente.productos.some(p => p && (p.medida || (Array.isArray(p.kilos) && p.kilos.some(k => Number(k) > 0))));
+              const tieneCrudos = Array.isArray(cliente.crudos) && cliente.crudos.length > 0;
+              return esJoselito && (tieneProductos || tieneCrudos);
+            }) || productosRaiz.some(producto => {
+              const clienteId = (producto.clienteId ?? producto.cliente ?? '').toString();
+              const tieneContenido = producto && (producto.medida || (Array.isArray(producto.kilos) && producto.kilos.some(k => Number(k) > 0)));
+              return clienteId === '1' && tieneContenido;
+            });
+
+            if (tieneJoselito) {
+              faltantes.push({
+                id: `missing-${fechaEmbarque}`,
+                fecha: fechaEmbarque,
+                saldoHoy: 0,
+                totalCobros: 0,
+                totalAbonos: 0,
+                totalNota: 0,
+                nuevoSaldoAcumulado: 0,
+                saldoAcumuladoAnterior: 0,
+                abonos: [],
+                tieneObservacion: false,
+                observacion: '',
+                missingNota: true
+              });
+            }
+          });
+
+          const consolidadas = [...cuentasOrdenadas, ...faltantes].sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+          this.cuentas = consolidadas;
           this.isLoading = false;
         });
 
@@ -259,6 +341,88 @@ export default {
     },
     editarCuenta(id) {
       this.$router.push(`/cuentas-joselito/${id}?edit=true`);
+    },
+    mapProductosConNombreAlternativo(productos = []) {
+      return (productos || []).map(prod => {
+        // Respetar exactamente los espacios definidos en el nombre alternativo
+        // sin recortes ni trims.
+        const nombreAlt = prod.nombreAlternativoPDF
+          ?? prod.nombreAlternativo
+          ?? prod.medidaMostrar
+          ?? prod.displayMedida
+          ?? null;
+        const medidaFinal = (nombreAlt !== undefined && nombreAlt !== null)
+          ? nombreAlt
+          : prod.medida;
+        return {
+          ...prod,
+          medida: medidaFinal,
+          medidaOriginal: medidaFinal
+        };
+      });
+    },
+    async crearNota(fecha) {
+      const fechaNormalizada = this.normalizarFechaValor(fecha) || new Date().toISOString().split('T')[0];
+      if (this.creatingFecha === fechaNormalizada) return;
+
+      this.creatingFecha = fechaNormalizada;
+      try {
+        const embarquesRef = collection(db, 'embarques');
+        // Consulta amplia para evitar problemas de tipo (Timestamp vs string)
+        const embarquesSnapshot = await getDocs(query(embarquesRef, orderBy('fecha', 'desc'), limit(300)));
+        const embarqueDoc = embarquesSnapshot.docs.find(docSnap => {
+          const data = docSnap.data() || {};
+          return this.normalizarFechaValor(data.fecha) === fechaNormalizada;
+        });
+
+        if (!embarqueDoc) {
+          alert('No se encontró un embarque para esta fecha. Crea la nota manualmente.');
+          return;
+        }
+
+        const data = embarqueDoc.data() || {};
+        const clientes = data.clientes || [];
+        const clienteJoselito = clientes.find(cliente => {
+          const clienteId = (cliente.id ?? cliente.clienteId ?? '').toString();
+          const nombreCliente = (cliente.nombre || '').toLowerCase();
+          const esJoselito = clienteId === '1' || nombreCliente.includes('joselito');
+          const tieneProductos = Array.isArray(cliente.productos) && cliente.productos.some(p => p && (p.medida || (Array.isArray(p.kilos) && p.kilos.some(k => Number(k) > 0))));
+          const tieneCrudos = Array.isArray(cliente.crudos) && cliente.crudos.length > 0;
+          return esJoselito && (tieneProductos || tieneCrudos);
+        });
+
+        const productosJoselito = this.mapProductosConNombreAlternativo(clienteJoselito?.productos || []);
+        const crudosJoselito = clienteJoselito?.crudos || [];
+
+        const clienteCrudosTotales = data.clienteCrudos || data.clientesCrudos || {};
+        const embarqueCliente = {
+          ...data,
+          fecha: fechaNormalizada,
+          productos: productosJoselito,
+          clienteCrudos: { '1': crudosJoselito },
+          productosTotales: data.productos || [],
+          clienteCrudosTotales: Object.keys(clienteCrudosTotales).length ? clienteCrudosTotales : { '1': crudosJoselito },
+          costosPorMedida: data.costosPorMedida || {},
+          aplicarCostoExtra: data.aplicarCostoExtra || {},
+          costoExtra: data.costoExtra
+        };
+
+        await EmbarqueCuentasService.crearCuentaJoselito(embarqueCliente, this.$router);
+
+        if (this.lastSaveMessage !== 'Cuenta creada desde embarque y abierta en nueva pestaña' || !this.showSaveMessage) {
+          this.lastSaveMessage = 'Cuenta creada desde embarque y abierta en nueva pestaña';
+          this.showSaveMessage = true;
+          if (this.saveMessageTimer) clearTimeout(this.saveMessageTimer);
+          this.saveMessageTimer = setTimeout(() => {
+            this.showSaveMessage = false;
+          }, 3000);
+        }
+      } catch (error) {
+        console.error('Error al crear la nota desde embarque:', error);
+        alert(`No se pudo crear la nota desde el embarque: ${error.message || error}`);
+      } finally {
+        this.creatingFecha = null;
+      }
     },
     async borrarCuenta(id) {
       if (confirm('¿Estás seguro de que quieres borrar este registro de cuenta?')) {
@@ -475,6 +639,11 @@ h1, h2 {
   transition: box-shadow 0.3s ease;
 }
 
+.cuenta-item.cuenta-sin-nota {
+  background: #f2f2f2;
+  border-left: 4px solid #bdbdbd;
+}
+
 .cuenta-item:hover {
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
 }
@@ -535,6 +704,54 @@ h1, h2 {
 
 .delete-btn:hover {
   background-color: #d32f2f;
+}
+
+.texto-sin-nota {
+  color: #666;
+  font-weight: 600;
+}
+
+.nota-pendiente-hint {
+  color: #2196F3;
+  font-weight: 700;
+  align-self: center;
+  background: #e6f3ff;
+  border: 1px dashed #64b5f6;
+  border-radius: 8px;
+  padding: 8px 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 140px;
+  text-align: center;
+}
+
+.nota-pendiente-hint[disabled] {
+  opacity: 0.7;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.nota-pendiente-hint:hover,
+.nota-pendiente-hint:focus {
+  background: #d6eaff;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.12);
+  transform: translateY(-1px);
+}
+
+.nota-pendiente-hint:active {
+  transform: translateY(0);
+}
+
+.nota-pendiente-hint:focus {
+  outline: 2px solid #2196F3;
+  outline-offset: 2px;
+}
+
+@media (max-width: 768px) {
+  .nota-pendiente-hint {
+    width: 100%;
+  }
 }
 
 @media (max-width: 768px) {

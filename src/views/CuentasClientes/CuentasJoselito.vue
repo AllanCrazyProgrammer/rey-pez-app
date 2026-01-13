@@ -32,7 +32,17 @@
       </div>
     </div>
   
-    <table class="tabla-principal">
+    <div class="tabla-principal-toggle">
+      <button
+        class="toggle-tabla-btn"
+        @click="toggleTablaPrincipal"
+        :aria-expanded="mostrarTablaPrincipal"
+      >
+        {{ mostrarTablaPrincipal ? 'Ocultar tabla' : 'Mostrar tabla' }}
+      </button>
+    </div>
+
+    <table v-show="mostrarTablaPrincipal" class="tabla-principal">
       <thead>
         <tr>
           <th>Kilos</th>
@@ -332,6 +342,7 @@ export default {
   data() {
     return {
       items: [],
+      mostrarTablaPrincipal: false,
       newItem: {
         kilos: null,
         medida: '',
@@ -426,6 +437,9 @@ export default {
       return fecha.getFullYear() + '-' + 
              String(fecha.getMonth() + 1).padStart(2, '0') + '-' + 
              String(fecha.getDate()).padStart(2, '0');
+    },
+    toggleTablaPrincipal() {
+      this.mostrarTablaPrincipal = !this.mostrarTablaPrincipal;
     },
     formatNumber(value) {
       if (value === null || value === undefined) {
@@ -1908,6 +1922,18 @@ Precio: $${this.formatNumber(precioVenta)}`;
   margin-bottom: 20px;
 }
 
+.tabla-principal-toggle {
+  display: flex;
+  justify-content: flex-start;
+  margin: 10px 0 5px;
+}
+
+.toggle-tabla-btn {
+  width: 100%;
+  max-width: 320px;
+  background-color: #1769aa;
+}
+
 .input-row {
   display: flex;
   gap: 10px;
@@ -2079,6 +2105,14 @@ tr:hover {
   .button-container {
     flex-direction: row;
     gap: 10px;
+  }
+
+  .tabla-principal-toggle {
+    justify-content: center;
+  }
+
+  .toggle-tabla-btn {
+    max-width: none;
   }
 
   .save-button,
