@@ -902,18 +902,25 @@ async function generarContenidoClientes(embarque, clientesDisponibles, clientesJ
     }
   }
 
-  // Agregar total general de taras y dinero al final
+  // Agregar total general de taras y dinero al final.
+  // Solo mostrar el desglose monetario si al menos un cliente tiene "Cuenta en PDF" activado.
   if (totalTarasLimpio + totalTarasCrudos > 0) {
-    contenido.push(
-      ...generarTotalGeneral(
-        totalTarasLimpio,
-        totalTarasCrudos,
-        totalDineroGeneral,
-        hayClienteConCuentaEnPdf,
-        totalDineroLimpiosGeneral,
-        totalDineroCrudosGeneral
-      )
-    );
+    if (hayClienteConCuentaEnPdf) {
+      contenido.push(
+        ...generarTotalGeneral(
+          totalTarasLimpio,
+          totalTarasCrudos,
+          totalDineroGeneral,
+          hayClienteConCuentaEnPdf,
+          totalDineroLimpiosGeneral,
+          totalDineroCrudosGeneral
+        )
+      );
+    } else {
+      contenido.push(
+        ...generarTotalGeneralSinPrecios(totalTarasLimpio, totalTarasCrudos)
+      );
+    }
   }
 
   return contenido;
@@ -3001,41 +3008,49 @@ function verificarKilosCrudos(clienteCrudos, clienteId, nombreCliente) {
 function generarTotalGeneral(totalTarasLimpio, totalTarasCrudos, totalDinero, hayClienteConPrecios, totalDineroLimpios = 0, totalDineroCrudos = 0) {
   const contenido = [];
   const hayTaras = totalTarasLimpio + totalTarasCrudos > 0;
-  if (hayTaras) {
-    contenido.push({
-      columns: [
-        {
-          text: `Total general de taras: ${totalTarasLimpio + totalTarasCrudos}`,
-          style: 'subheader',
-          alignment: 'left',
-          margin: [0, 5, 0, 5]
-        },
-        {
-          stack: [
-            {
-              text: `Total limpios: $${Math.round(totalDineroLimpios).toLocaleString('en-US')}`,
-              style: 'subheader',
-              alignment: 'right',
-              margin: [0, 0, 0, 2]
-            },
-            {
-              text: `Total crudos: $${Math.round(totalDineroCrudos).toLocaleString('en-US')}`,
-              style: 'subheader',
-              alignment: 'right',
-              margin: [0, 0, 0, 2]
-            },
-            {
-              text: `Total de Cuenta: $${Math.round(totalDinero).toLocaleString('en-US')}`,
-              style: ['subheader', 'granTotal'],
-              alignment: 'right',
-              margin: [0, 2, 0, 5]
-            }
-          ],
-          width: 'auto'
-        }
-      ]
-    });
+
+  if (!hayTaras) {
+    return contenido;
   }
+
+  // Si no hay clientes con "Cuenta en PDF", no mostramos el desglose monetario.
+  if (!hayClienteConPrecios) {
+    return generarTotalGeneralSinPrecios(totalTarasLimpio, totalTarasCrudos);
+  }
+
+  contenido.push({
+    columns: [
+      {
+        text: `Total general de taras: ${totalTarasLimpio + totalTarasCrudos}`,
+        style: 'subheader',
+        alignment: 'left',
+        margin: [0, 5, 0, 5]
+      },
+      {
+        stack: [
+          {
+            text: `Total limpios: $${Math.round(totalDineroLimpios).toLocaleString('en-US')}`,
+            style: 'subheader',
+            alignment: 'right',
+            margin: [0, 0, 0, 2]
+          },
+          {
+            text: `Total crudos: $${Math.round(totalDineroCrudos).toLocaleString('en-US')}`,
+            style: 'subheader',
+            alignment: 'right',
+            margin: [0, 0, 0, 2]
+          },
+          {
+            text: `Total de Cuenta: $${Math.round(totalDinero).toLocaleString('en-US')}`,
+            style: ['subheader', 'granTotal'],
+            alignment: 'right',
+            margin: [0, 2, 0, 5]
+          }
+        ],
+        width: 'auto'
+      }
+    ]
+  });
 
   return contenido;
 }
