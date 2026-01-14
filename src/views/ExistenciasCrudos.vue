@@ -53,7 +53,16 @@
             <tbody>
               <tr v-for="producto in productos" :key="producto.clave" v-if="producto.kilos > 0">
                 <td>{{ producto.nombre }}</td>
-                <td>{{ producto.cuarto }}</td>
+                <td>
+                  <button 
+                    class="cuarto-button"
+                    @click="abrirModalCambioCuarto(producto)"
+                    aria-label="Editar cuarto"
+                    title="Editar cuarto"
+                  >
+                    {{ producto.cuarto }}
+                  </button>
+                </td>
                 <td class="kilos-cell">{{ formatNumber(producto.kilos) }}</td>
                 <td class="taras-cell">{{ (producto.kilos / 19).toFixed(1) }}</td>
                 <td v-if="tienePreciosValidos(productos)" class="precio-cell">${{ formatearPrecio(producto.ultimoPrecio) }}</td>
@@ -67,6 +76,43 @@
           </div>
         </div>
       </div>
+    <div 
+      v-if="modalCambioCuarto.abierto" 
+      class="modal-overlay" 
+      @click.self="cerrarModalCambioCuarto"
+    >
+      <div class="modal-content modal-cambio-cuarto">
+        <div class="modal-header">
+          <h3>Cambiar cuarto</h3>
+          <button class="close-button" @click="cerrarModalCambioCuarto">&times;</button>
+        </div>
+        <div class="modal-body">
+          <p><strong>Proveedor:</strong> {{ modalCambioCuarto.producto?.proveedor }}</p>
+          <p><strong>Producto:</strong> {{ modalCambioCuarto.producto?.nombre }}</p>
+          <label class="cuarto-label">
+            Nuevo cuarto:
+            <select v-model="modalCambioCuarto.nuevoCuarto">
+              <option v-for="cuarto in cuartosDisponibles" :key="cuarto" :value="cuarto">
+                {{ cuarto }}
+              </option>
+            </select>
+          </label>
+          <p class="modal-helper">
+            Registraremos un traslado (salida + entrada) por el total disponible
+            para mover el producto al cuarto seleccionado.
+          </p>
+          <p v-if="modalCambioCuarto.error" class="modal-error">{{ modalCambioCuarto.error }}</p>
+        </div>
+        <div class="modal-actions">
+          <button class="secondary-button" @click="cerrarModalCambioCuarto" :disabled="modalCambioCuarto.cargando">
+            Cancelar
+          </button>
+          <button class="action-button" @click="confirmarCambioCuarto" :disabled="modalCambioCuarto.cargando">
+            {{ modalCambioCuarto.cargando ? 'Guardando...' : 'Guardar' }}
+          </button>
+        </div>
+      </div>
+    </div>
       <div class="total-general">
         <h3>Total General: {{ formatNumber(totalGeneral) }} kg</h3>
         <h3 v-if="tieneAlgunPrecioValido">Valor Total General: ${{ formatearValor(valorTotalGeneral) }}</h3>
@@ -120,7 +166,7 @@
 <script>
 import { formatDate } from '@/utils/dateUtils';
 import { db } from '@/firebase';
-import { collection, getDocs, query, orderBy, deleteDoc, doc } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, deleteDoc, doc, addDoc } from 'firebase/firestore';
 import moment from 'moment';
 import GestionProveedoresCrudos from '@/components/GestionProveedoresCrudos.vue';
 
@@ -138,7 +184,15 @@ export default {
       currentPage: 1,
       itemsPerPage: 10,
       showGestionModal: false,
-      filtroCuarto: 'Todos los cuartos'
+      filtroCuarto: 'Todos los cuartos',
+      cuartosDisponibles: ['s/c', 'Cuarto 1', 'Cuarto 2', 'Cuarto 3', 'Cuarto 4', 'Cuarto 5'],
+      modalCambioCuarto: {
+        abierto: false,
+        producto: null,
+        nuevoCuarto: 's/c',
+        cargando: false,
+        error: ''
+      }
     };
   },
   computed: {
@@ -180,6 +234,91 @@ export default {
     }
   },
   methods: {
+    normalizeCuarto(cuarto) {
+      const valor = (cuarto && cuarto.trim()) ? cuarto.trim() : 's/c';
+      return valor.toLowerCase() === 'sin cuarto designado' ? 's/c' : valor;
+    },
+
+    abrirModalCambioCuarto(producto) {
+      this.modalCambioCuarto = {
+        abierto: true,
+        producto,
+        nuevoCuarto: producto.cuarto || 's/c',
+        cargando: false,
+        error: ''
+      };
+    },
+
+    cerrarModalCambioCuarto() {
+      this.modalCambioCuarto = {
+        abierto: false,
+        producto: null,
+        nuevoCuarto: 's/c',
+        cargando: false,
+        error: ''
+      };
+    },
+
+    async confirmarCambioCuarto() {
+      if (!this.modalCambioCuarto.producto) return;
+      const producto = this.modalCambioCuarto.producto;
+      const nuevoCuartoNormalizado = this.normalizeCuarto(this.modalCambioCuarto.nuevoCuarto);
+
+      if (nuevoCuartoNormalizado === this.normalizeCuarto(producto.cuarto)) {
+        this.modalCambioCuarto.error = 'El producto ya está en ese cuarto.';
+        return;
+      }
+
+      this.modalCambioCuarto.cargando = true;
+      this.modalCambioCuarto.error = '';
+      try {
+        await this.registrarMovimientoCambioCuarto(producto, nuevoCuartoNormalizado);
+        await this.loadExistencias();
+        this.cerrarModalCambioCuarto();
+        alert('Cuarto actualizado con éxito');
+      } catch (error) {
+        console.error('Error al cambiar de cuarto:', error);
+        this.modalCambioCuarto.error = 'No se pudo guardar el cambio. Intenta de nuevo.';
+      } finally {
+        this.modalCambioCuarto.cargando = false;
+      }
+    },
+
+    async registrarMovimientoCambioCuarto(producto, nuevoCuarto) {
+      const kilos = producto.kilos || 0;
+      if (kilos <= 0) {
+        throw new Error('No hay kilos disponibles para mover');
+      }
+
+      const fechaMovimiento = new Date();
+      const nombreProducto = producto.producto || producto.nombre;
+      const proveedor = producto.proveedor;
+      const cuartoOrigen = this.normalizeCuarto(producto.cuarto);
+
+      const entrada = {
+        proveedor,
+        producto: nombreProducto,
+        kilos,
+        precio: producto.ultimoPrecio || 0,
+        cuartoFrio: nuevoCuarto
+      };
+
+      const salida = {
+        proveedor,
+        producto: nombreProducto,
+        kilos,
+        cuartoFrio: cuartoOrigen
+      };
+
+      await addDoc(collection(db, 'existenciasCrudos'), {
+        fecha: fechaMovimiento,
+        entradas: [entrada],
+        salidas: [salida],
+        totalEntradas: kilos,
+        totalSalidas: kilos
+      });
+    },
+
     async loadRegistros() {
       try {
         this.isLoadingRegistros = true;
@@ -764,6 +903,24 @@ h1, h2, h3 {
   text-align: left;
 }
 
+.cuarto-button {
+  background: transparent;
+  border: 1px solid transparent;
+  color: #1f2a44;
+  font-weight: 600;
+  font-size: 14px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.2s, color 0.2s, border-color 0.2s;
+}
+
+.cuarto-button:hover {
+  background-color: #3760b0;
+  color: #fff;
+  border-color: #3760b0;
+}
+
 .productos-table th {
   background-color: #3760b0;
   color: white;
@@ -982,6 +1139,45 @@ h1, h2, h3 {
 
 .modal-body {
   padding: 20px;
+}
+
+.modal-cambio-cuarto select {
+  width: 100%;
+  margin-top: 8px;
+}
+
+.modal-helper {
+  margin-top: 12px;
+  color: #555;
+  font-size: 14px;
+}
+
+.modal-error {
+  color: #d32f2f;
+  margin-top: 8px;
+  font-weight: bold;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 16px 20px 20px 20px;
+}
+
+.secondary-button {
+  background-color: #f0f4f8;
+  color: #3760b0;
+  border: 1px solid #3760b0;
+  padding: 10px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.secondary-button:disabled,
+.action-button:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
 }
 
 @media (max-width: 1200px) {
