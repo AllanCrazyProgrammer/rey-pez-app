@@ -18,23 +18,33 @@
         No hay registros de cuentas.
       </div>
       <ul v-else>
-        <li v-for="cuenta in cuentas" :key="cuenta.id" class="cuenta-item">
+        <li v-for="cuenta in cuentas" :key="cuenta.id" class="cuenta-item" :class="{ 'cuenta-sin-nota': cuenta.missingNota }">
           <div class="cuenta-content">
             <span class="cuenta-date">{{ formatDate(cuenta.fecha) }}</span>
             <p class="cuenta-summary">
-              <span>Saldo Hoy: ${{ formatNumber(cuenta.saldoHoy) }}</span>
-              <span>Total Acumulado: ${{ formatNumber(cuenta.totalNota) }}</span>
-              <span v-if="cuenta.totalAbonos > 0" class="abono-indicator">
+              <span v-if="!cuenta.missingNota">Saldo Hoy: ${{ formatNumber(cuenta.saldoHoy) }}</span>
+              <span v-else class="texto-sin-nota">Sin nota registrada</span>
+              <span v-if="!cuenta.missingNota">Total Acumulado: ${{ formatNumber(cuenta.totalNota) }}</span>
+              <span v-if="!cuenta.missingNota && cuenta.totalAbonos > 0" class="abono-indicator">
                 Abono: ${{ formatNumber(cuenta.totalAbonos) }}
               </span>
-              <span v-if="cuenta.totalCobros > 0" class="cobro-indicator">
+              <span v-if="!cuenta.missingNota && cuenta.totalCobros > 0" class="cobro-indicator">
                 Cobro: ${{ formatNumber(cuenta.totalCobros) }}
               </span>
             </p>
           </div>
           <div class="cuenta-actions">
-            <button @click="editarCuenta(cuenta.id)" class="edit-btn">Editar</button>  
-            <button @click="borrarCuenta(cuenta.id)" class="delete-btn">Borrar</button>
+            <button v-if="!cuenta.missingNota" @click="editarCuenta(cuenta.id)" class="edit-btn">Editar</button>  
+            <button v-if="!cuenta.missingNota" @click="borrarCuenta(cuenta.id)" class="delete-btn">Borrar</button>
+            <button
+              v-else
+              class="nota-pendiente-hint"
+              type="button"
+              :disabled="creatingFecha === normalizarFechaValor(cuenta.fecha)"
+              @click="crearNota(cuenta.fecha)"
+            >
+              {{ creatingFecha === normalizarFechaValor(cuenta.fecha) ? 'Creando...' : 'Crear nota' }}
+            </button>
           </div>
         </li>
       </ul>
@@ -44,36 +54,116 @@
 
 <script>
 import { db } from '@/firebase';
-import { collection, getDocs, query, orderBy, deleteDoc, doc } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, deleteDoc, doc, limit } from 'firebase/firestore';
+import EmbarqueCuentasService from '@/utils/services/EmbarqueCuentasService';
 
 export default {
   name: 'OzunaCuentasMenu',
   data() {
     return {
       cuentas: [],
-      isLoading: true
+      isLoading: true,
+      creatingFecha: null
     };
   },
   methods: {
+    normalizarFechaValor(valor) {
+      if (!valor) return null;
+      try {
+        if (typeof valor === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(valor)) return valor;
+        if (valor.seconds) {
+          const d = new Date(valor.seconds * 1000);
+          return d.toISOString().split('T')[0];
+        }
+        if (valor instanceof Date) {
+          return valor.toISOString().split('T')[0];
+        }
+        const d = new Date(valor);
+        if (!Number.isNaN(d.getTime())) {
+          return d.toISOString().split('T')[0];
+        }
+      } catch (_) {
+        return null;
+      }
+      return null;
+    },
+    mapProductosConNombreAlternativo(productos = []) {
+      return (productos || []).map(prod => {
+        const nombreAlt = prod.nombreAlternativoPDF
+          ?? prod.nombreAlternativo
+          ?? prod.medidaMostrar
+          ?? prod.displayMedida
+          ?? null;
+        const medidaFinal = (nombreAlt !== undefined && nombreAlt !== null)
+          ? nombreAlt
+          : prod.medida;
+        return {
+          ...prod,
+          medida: medidaFinal,
+          medidaOriginal: medidaFinal
+        };
+      });
+    },
     async loadCuentas() {
       try {
         this.isLoading = true;
         const cuentasRef = collection(db, 'cuentasOzuna');
         const q = query(cuentasRef, orderBy('fecha', 'desc'));
         const querySnapshot = await getDocs(q);
-        this.cuentas = querySnapshot.docs.map((doc) => {
+        const cuentasActualizadas = querySnapshot.docs.map((doc) => {
           const data = doc.data();
           const totalAbonos = (data.abonos || []).reduce((sum, abono) => sum + (abono.monto || 0), 0);
           const totalCobros = (data.cobros || []).reduce((sum, cobro) => sum + (cobro.monto || 0), 0);
           return {
             id: doc.id,
-            fecha: data.fecha,
+            fecha: this.normalizarFechaValor(data.fecha) || data.fecha,
             saldoHoy: data.totalGeneral || 0,
             totalNota: data.totalSaldo || 0,
             totalAbonos: totalAbonos,
             totalCobros: totalCobros
           };
         });
+
+        const fechasConNota = new Set(cuentasActualizadas.map(c => this.normalizarFechaValor(c.fecha)));
+        const embarquesRef = collection(db, 'embarques');
+        const embarquesSnapshot = await getDocs(query(embarquesRef, orderBy('fecha', 'desc'), limit(200)));
+
+        const faltantes = [];
+        embarquesSnapshot.forEach(docSnap => {
+          const data = docSnap.data() || {};
+          const fechaEmbarque = this.normalizarFechaValor(data.fecha);
+          if (!fechaEmbarque || fechasConNota.has(fechaEmbarque)) return;
+
+          const clientes = data.clientes || [];
+          const productosRaiz = data.productos || [];
+
+          const tieneOzuna = clientes.some(cliente => {
+            const clienteId = (cliente.id ?? cliente.clienteId ?? '').toString();
+            const nombreCliente = (cliente.nombre || '').toLowerCase();
+            const esOzuna = clienteId === '4' || nombreCliente.includes('ozuna');
+            const tieneProductos = Array.isArray(cliente.productos) && cliente.productos.some(p => p && (p.medida || (Array.isArray(p.kilos) && p.kilos.some(k => Number(k) > 0))));
+            const tieneCrudos = Array.isArray(cliente.crudos) && cliente.crudos.length > 0;
+            return esOzuna && (tieneProductos || tieneCrudos);
+          }) || productosRaiz.some(producto => {
+            const clienteId = (producto.clienteId ?? producto.cliente ?? '').toString();
+            const tieneContenido = producto && (producto.medida || (Array.isArray(producto.kilos) && producto.kilos.some(k => Number(k) > 0)));
+            return clienteId === '4' && tieneContenido;
+          });
+
+          if (tieneOzuna) {
+            faltantes.push({
+              id: `missing-${fechaEmbarque}`,
+              fecha: fechaEmbarque,
+              saldoHoy: 0,
+              totalNota: 0,
+              totalAbonos: 0,
+              totalCobros: 0,
+              missingNota: true
+            });
+          }
+        });
+
+        this.cuentas = [...cuentasActualizadas, ...faltantes].sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
         console.log("Cuentas cargadas:", this.cuentas);
       } catch (error) {
         console.error("Error al cargar cuentas: ", error);
@@ -96,6 +186,59 @@ export default {
     },
     editarCuenta(id) {
       this.$router.push(`/cuentas-ozuna/${id}?edit=true`);
+    },
+    async crearNota(fecha) {
+      const fechaNormalizada = this.normalizarFechaValor(fecha) || new Date().toISOString().split('T')[0];
+      if (this.creatingFecha === fechaNormalizada) return;
+
+      this.creatingFecha = fechaNormalizada;
+      try {
+        const embarquesRef = collection(db, 'embarques');
+        const embarquesSnapshot = await getDocs(query(embarquesRef, orderBy('fecha', 'desc'), limit(300)));
+        const embarqueDoc = embarquesSnapshot.docs.find(docSnap => {
+          const data = docSnap.data() || {};
+          return this.normalizarFechaValor(data.fecha) === fechaNormalizada;
+        });
+
+        if (!embarqueDoc) {
+          alert('No se encontró un embarque para esta fecha. Crea la nota manualmente.');
+          return;
+        }
+
+        const data = embarqueDoc.data() || {};
+        const clientes = data.clientes || [];
+        const clienteOzuna = clientes.find(cliente => {
+          const clienteId = (cliente.id ?? cliente.clienteId ?? '').toString();
+          const nombreCliente = (cliente.nombre || '').toLowerCase();
+          const esOzuna = clienteId === '4' || nombreCliente.includes('ozuna');
+          const tieneProductos = Array.isArray(cliente.productos) && cliente.productos.some(p => p && (p.medida || (Array.isArray(p.kilos) && p.kilos.some(k => Number(k) > 0))));
+          const tieneCrudos = Array.isArray(cliente.crudos) && cliente.crudos.length > 0;
+          return esOzuna && (tieneProductos || tieneCrudos);
+        });
+
+        const productosOzuna = this.mapProductosConNombreAlternativo(clienteOzuna?.productos || []);
+        const crudosOzuna = clienteOzuna?.crudos || [];
+
+        const clienteCrudosTotales = data.clienteCrudos || data.clientesCrudos || {};
+        const embarqueCliente = {
+          ...data,
+          fecha: fechaNormalizada,
+          productos: productosOzuna,
+          clienteCrudos: { '4': crudosOzuna },
+          productosTotales: data.productos || [],
+          clienteCrudosTotales: Object.keys(clienteCrudosTotales).length ? clienteCrudosTotales : { '4': crudosOzuna },
+          costosPorMedida: data.costosPorMedida || {},
+          aplicarCostoExtra: data.aplicarCostoExtra || {},
+          costoExtra: data.costoExtra
+        };
+
+        await EmbarqueCuentasService.crearCuentaOzuna(embarqueCliente, this.$router);
+      } catch (error) {
+        console.error('Error al crear la nota desde embarque:', error);
+        alert(`No se pudo crear la nota desde el embarque: ${error.message || error}`);
+      } finally {
+        this.creatingFecha = null;
+      }
     },
     async borrarCuenta(id) {
       if (confirm('¿Estás seguro de que quieres borrar este registro de cuenta?')) {
@@ -188,6 +331,11 @@ h1, h2 {
   transition: box-shadow 0.3s ease;
 }
 
+.cuenta-item.cuenta-sin-nota {
+  background: #f2f2f2;
+  border-left: 4px solid #bdbdbd;
+}
+
 .cuenta-item:hover {
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
 }
@@ -248,6 +396,54 @@ h1, h2 {
 
 .delete-btn:hover {
   background-color: #d32f2f;
+}
+
+.texto-sin-nota {
+  color: #666;
+  font-weight: 600;
+}
+
+.nota-pendiente-hint {
+  color: #07711e;
+  font-weight: 700;
+  align-self: center;
+  background: #e9f6ee;
+  border: 1px dashed #6bbf86;
+  border-radius: 8px;
+  padding: 8px 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 140px;
+  text-align: center;
+}
+
+.nota-pendiente-hint[disabled] {
+  opacity: 0.7;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.nota-pendiente-hint:hover,
+.nota-pendiente-hint:focus {
+  background: #d7efe1;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.12);
+  transform: translateY(-1px);
+}
+
+.nota-pendiente-hint:active {
+  transform: translateY(0);
+}
+
+.nota-pendiente-hint:focus {
+  outline: 2px solid #07711e;
+  outline-offset: 2px;
+}
+
+@media (max-width: 768px) {
+  .nota-pendiente-hint {
+    width: 100%;
+  }
 }
 
 .abono-indicator {

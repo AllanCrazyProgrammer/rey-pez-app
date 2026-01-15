@@ -42,7 +42,7 @@
             <input v-else v-model.number="item.kilos" type="number" @blur="finalizarEdicion(index)">
           </td>
           <td @click="editarItem(index, 'medida')">
-            <span v-if="!item.editando || item.campoEditando !== 'medida'">{{ item.medida }}</span>
+            <span v-if="!item.editando || item.campoEditando !== 'medida'">{{ getMedidaDisplay(item) }}</span>
             <input v-else v-model="item.medida" type="text" @blur="finalizarEdicion(index)">
           </td>
           <td @click="editarItem(index, 'costo')">
@@ -312,6 +312,10 @@ export default {
     formatNumber(value) {
       return value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     },
+    getMedidaDisplay(item) {
+      if (!item) return '';
+      return item.medidaOriginal ?? item.medida ?? '';
+    },
     addItem() {
       if (this.newItem.kilos && this.newItem.medida && this.newItem.costo) {
         const total = this.newItem.kilos * this.newItem.costo;
@@ -447,7 +451,7 @@ export default {
                 ${this.items.map(item => `
                   <tr>
                     <td>${this.formatNumber(item.kilos)}</td>
-                    <td>${item.medida}</td>
+                    <td>${this.getMedidaDisplay(item)}</td>
                     <td>$${this.formatNumber(item.costo)}</td>
                     <td>$${this.formatNumber(item.total)}</td>
                   </tr>

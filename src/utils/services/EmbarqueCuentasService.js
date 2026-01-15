@@ -1021,7 +1021,7 @@ const prepararDatosCuentaOzuna = async (embarqueData) => {
           kilos = Number((sumaKilos - descuentoTaras).toFixed(1));
         }
         
-        const medida = producto.medida || '';
+        const medida = producto.medidaOriginal || producto.nombreAlternativoPDF || producto.medida || '';
         
         // Determinar el costo según si es venta o maquila
         let costo = 0;
@@ -1035,8 +1035,9 @@ const prepararDatosCuentaOzuna = async (embarqueData) => {
           // Usar precio histórico o precio manual como fallback
           costo = precioEncontrado || parseFloat(producto.precio) || 0;
         } else {
-          // Si es maquila, usar valor por defecto de 20
-          costo = 20;
+          // Si es maquila, usar el precio del embarque (DOM) si existe
+          const precioMaquila = parseFloat(producto.precioMaquila ?? producto.precio);
+          costo = Number.isFinite(precioMaquila) ? precioMaquila : 20;
         }
         
         // Solo agregar el item si tiene kilos
@@ -1047,6 +1048,7 @@ const prepararDatosCuentaOzuna = async (embarqueData) => {
             costo,
             total: kilos * costo,
             esVenta: producto.esVenta || false,
+            medidaOriginal: medida,
             editando: false,
             campoEditando: null
           });
