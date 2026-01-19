@@ -15,16 +15,16 @@
                         <select v-model="item.talla" class="form-control talla-select" @change="onTallaCrudoChange(item)"
                             :disabled="embarqueBloqueado">
                             <option value="">Elige talla</option>
-                            <option value="Chico c/c">Chico c/c</option>
                             <option value="Med c/c">Med c/c</option>
                             <option value="Med-Esp c/c">Med-Esp c/c</option>
+                            <option value="Lag gde c/c">Lag gde c/c</option>
                             <option value="Med-Gde c/c">Med-Gde c/c</option>
                             <option value="Gde c/c">Gde c/c</option>
-                            <option value="Gde c/ Extra">Gde c/ Extra c/c</option>
                             <option value="Extra c/c">Extra c/c</option>
+                            <option value="Chico c/c">Chico c/c</option>
+                            <option value="Gde c/ Extra">Gde c/ Extra c/c</option>
                             <option value="Jumbo c/c">Jumbo c/c</option>
                             <option value="Linea">Linea</option>
-                            <option value="Lag gde c/c">Lag gde c/c</option>
                             <option value="Acamaya">Acamaya</option>
                             <option value="Cam s/c">Cam s/c</option>
                             <option value="Rechazo">Rechazo</option>

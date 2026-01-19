@@ -48,6 +48,15 @@ const MEDIDAS_CRUDOS_MAP = {
   'rechazo': 'Rechazo'
 };
 
+const MEDIDAS_CRUDOS_ORDEN = [
+  'Med c/c',
+  'Med-Esp c/c',
+  'Lag gde c/c',
+  'Med-Gde c/c',
+  'Gde c/c',
+  'Extra c/c'
+];
+
 export default {
   name: 'GenerarEsqueletoEmbarqueButton',
   props: {
@@ -201,6 +210,9 @@ export default {
       return esqueletoPorCliente;
     },
     agregarCrudosAlEsqueleto(esqueletoPorCliente, pedidosCrudos) {
+      const ordenMedidas = new Map(
+        MEDIDAS_CRUDOS_ORDEN.map((medida, index) => [medida.toLowerCase(), index])
+      );
       const normalizarCantidad = (valor) => {
         if (valor === null || valor === undefined || valor === '') {
           return 0;
@@ -264,6 +276,30 @@ export default {
             }
           });
         });
+      });
+
+      Object.keys(esqueletoPorCliente).forEach(clienteId => {
+        const items = Array.isArray(esqueletoPorCliente[clienteId])
+          ? esqueletoPorCliente[clienteId]
+          : [];
+        const crudos = items.filter(item => item?.tipo === 'crudo');
+        if (crudos.length === 0) {
+          return;
+        }
+
+        const ordenados = [...crudos].sort((a, b) => {
+          const keyA = (a.medida || '').toString().trim().toLowerCase();
+          const keyB = (b.medida || '').toString().trim().toLowerCase();
+          const indexA = ordenMedidas.has(keyA) ? ordenMedidas.get(keyA) : Number.MAX_SAFE_INTEGER;
+          const indexB = ordenMedidas.has(keyB) ? ordenMedidas.get(keyB) : Number.MAX_SAFE_INTEGER;
+          if (indexA !== indexB) {
+            return indexA - indexB;
+          }
+          return keyA.localeCompare(keyB);
+        });
+
+        const noCrudos = items.filter(item => item?.tipo !== 'crudo');
+        esqueletoPorCliente[clienteId] = [...noCrudos, ...ordenados];
       });
     },
     normalizarTipo(tipo) {

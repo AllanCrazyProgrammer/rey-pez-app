@@ -685,6 +685,37 @@ export default {
 
       return tieneMedida || tieneKilos || tieneTaras || tieneTarasExtra || tieneReportes;
     },
+    limpiarProductosSinMedida() {
+      if (!Array.isArray(this.embarque.productos) || this.embarque.productos.length === 0) {
+        return;
+      }
+
+      const removibles = this.embarque.productos.filter(producto => {
+        const medida = (producto?.medida || '').toString().trim();
+        if (medida) {
+          return false;
+        }
+        return !this.productoTieneContenido(producto);
+      });
+
+      if (removibles.length === 0) {
+        return;
+      }
+
+      if (!this.productosEliminadosLocalmente) {
+        this.productosEliminadosLocalmente = new Set();
+      }
+
+      removibles.forEach(producto => {
+        if (producto?.id !== undefined && producto?.id !== null) {
+          this.productosEliminadosLocalmente.add(producto.id);
+        }
+      });
+
+      this.embarque.productos = this.embarque.productos.filter(
+        producto => !removibles.includes(producto)
+      );
+    },
     aplicarEsqueletoDesdePedido(esqueletoPorCliente) {
       if (!esqueletoPorCliente || typeof esqueletoPorCliente !== 'object') {
         console.warn('[aplicarEsqueletoDesdePedido] Datos de esqueleto inválidos:', esqueletoPorCliente);
@@ -706,6 +737,9 @@ export default {
         this.mostrarMensaje('Los pedidos no tienen medidas registradas para los clientes predeterminados.');
         return;
       }
+
+      // Limpiar productos vacíos "Sin Medida - Sin Tipo" antes de agregar el esqueleto
+      this.limpiarProductosSinMedida();
 
       if (!this.productosNuevosPendientes) {
         this.productosNuevosPendientes = new Map();
