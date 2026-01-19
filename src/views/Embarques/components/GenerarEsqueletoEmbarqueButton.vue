@@ -201,6 +201,15 @@ export default {
       return esqueletoPorCliente;
     },
     agregarCrudosAlEsqueleto(esqueletoPorCliente, pedidosCrudos) {
+      const normalizarCantidad = (valor) => {
+        if (valor === null || valor === undefined || valor === '') {
+          return 0;
+        }
+        const limpio = typeof valor === 'string' ? valor.replace(',', '.') : valor;
+        const numero = Number(limpio);
+        return Number.isNaN(numero) ? 0 : numero;
+      };
+
       pedidosCrudos.forEach(pedido => {
         if (!pedido.pedidos) {
           return;
@@ -224,7 +233,8 @@ export default {
           // Iterar sobre cada medida del cliente
           Object.entries(medidasCliente).forEach(([medida, cantidad]) => {
             // Solo agregar si hay cantidad (ignorar valores vacíos, 0, etc)
-            if (!cantidad || parseFloat(cantidad) === 0) {
+            const cantidadNormalizada = normalizarCantidad(cantidad);
+            if (!cantidad || cantidadNormalizada === 0) {
               return;
             }
 
@@ -246,7 +256,10 @@ export default {
               esqueletoPorCliente[clienteId].push({
                 medida: medidaNormalizada,
                 tipo: 'crudo',
-                tipoPersonalizado: ''
+                tipoPersonalizado: '',
+                pedidoReferencia: {
+                  taras: cantidadNormalizada
+                }
               });
             }
           });

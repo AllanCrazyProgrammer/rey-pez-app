@@ -763,7 +763,12 @@ export default {
               taras: null,
               sobrante: null,
               mostrarSobrante: false,
-              precio: null
+              precio: null,
+              pedidoReferencia: definicion.pedidoReferencia
+                ? {
+                    taras: definicion.pedidoReferencia.taras || 0
+                  }
+                : null
             });
           } else {
             const claveProducto = construirClaveProducto(definicion);

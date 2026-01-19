@@ -71,6 +71,7 @@ export function crearNuevoCrudoItem() {
     taras: null,
     sobrante: null,
     mostrarSobrante: false,
+    pedidoReferencia: null,
   };
 }
 

@@ -10,23 +10,26 @@
                         :disabled="embarqueBloqueado">
                         $
                     </button>
-                    <select v-model="item.talla" class="form-control talla-select" @change="onTallaCrudoChange(item)"
-                        :disabled="embarqueBloqueado">
-                        <option value="">Elige talla</option>
-                        <option value="Chico c/c">Chico c/c</option>
-                        <option value="Med c/c">Med c/c</option>
-                        <option value="Med-Esp c/c">Med-Esp c/c</option>
-                        <option value="Med-Gde c/c">Med-Gde c/c</option>
-                        <option value="Gde c/c">Gde c/c</option>
-                        <option value="Gde c/ Extra">Gde c/ Extra c/c</option>
-                        <option value="Extra c/c">Extra c/c</option>
-                        <option value="Jumbo c/c">Jumbo c/c</option>
-                        <option value="Linea">Linea</option>
-                        <option value="Lag gde c/c">Lag gde c/c</option>
-                        <option value="Acamaya">Acamaya</option>
-                        <option value="Cam s/c">Cam s/c</option>
-                        <option value="Rechazo">Rechazo</option>
-                    </select>
+                    <div class="talla-referencia">
+                        <PedidoReferencia :pedido-referencia="item.pedidoReferencia" />
+                        <select v-model="item.talla" class="form-control talla-select" @change="onTallaCrudoChange(item)"
+                            :disabled="embarqueBloqueado">
+                            <option value="">Elige talla</option>
+                            <option value="Chico c/c">Chico c/c</option>
+                            <option value="Med c/c">Med c/c</option>
+                            <option value="Med-Esp c/c">Med-Esp c/c</option>
+                            <option value="Med-Gde c/c">Med-Gde c/c</option>
+                            <option value="Gde c/c">Gde c/c</option>
+                            <option value="Gde c/ Extra">Gde c/ Extra c/c</option>
+                            <option value="Extra c/c">Extra c/c</option>
+                            <option value="Jumbo c/c">Jumbo c/c</option>
+                            <option value="Linea">Linea</option>
+                            <option value="Lag gde c/c">Lag gde c/c</option>
+                            <option value="Acamaya">Acamaya</option>
+                            <option value="Cam s/c">Cam s/c</option>
+                            <option value="Rechazo">Rechazo</option>
+                        </select>
+                    </div>
                     <span v-if="item.precio" class="precio-tag">${{ item.precio }}</span>
 
                     <!-- Checkbox de venta para Ozuna -->
@@ -69,11 +72,15 @@
 </template>
 
 <script>
+import PedidoReferencia from './PedidoReferencia.vue';
 import { obtenerPrecioParaMedida } from '@/utils/preciosHistoricos';
 import { normalizarFechaISO, obtenerFechaActualISO } from '@/utils/dateUtils';
 
 export default {
     name: 'CrudoItem',
+    components: {
+        PedidoReferencia
+    },
     props: {
         crudo: {
             type: Object,
@@ -210,7 +217,8 @@ export default {
                 sobrante: '',
                 precio: null,
                 mostrarSobrante: false,
-                esVenta: this.isClienteOzuna // Auto-establecer esVenta a true para Ozuna
+                esVenta: this.isClienteOzuna, // Auto-establecer esVenta a true para Ozuna
+                pedidoReferencia: null
             };
             
             this.crudoData.items.push(nuevoItem);
@@ -398,6 +406,14 @@ export default {
     display: flex;
     align-items: center;
     gap: 10px;
+}
+
+.talla-referencia {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    gap: 4px;
+    min-width: 0;
 }
 
 .btn-precio {
