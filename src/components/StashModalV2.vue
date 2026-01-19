@@ -550,7 +550,9 @@ export default {
       const gruposMap = new Map()
 
       todosLosAbonos.value.forEach(abono => {
-        const fechaClave = obtenerClaveFecha(abono.fechaAplicacion || abono.fechaOriginal || abono.fechaCuenta)
+        const fechaClave = obtenerClaveFecha(
+          abono.fechaOriginalStash || abono.fecha || abono.fechaAplicacion || abono.fechaCuenta
+        )
         if (!fechaClave) return
 
         if (!gruposMap.has(fechaClave)) {
