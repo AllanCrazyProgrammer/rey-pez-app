@@ -36,23 +36,26 @@
                     </div>
                 </div>
             </div>
-            <span class="medida-texto" @click="handleNombreAlternativoClick" :class="{
-                'disabled': embarqueBloqueado,
-                'tiene-nombre-alternativo': producto.nombreAlternativoPDF
-            }">
-                <template v-if="producto.tipo === 'c/h20'">
-                    {{ producto.nombreAlternativoPDF || producto.medida || 'Sin Medida' }}
-                    <span class="ch20-text">c/h20</span>
-                    <span v-if="producto.nombreAlternativoPDF" class="pdf-badge"
-                        title="Nombre personalizado para PDF">PDF</span>
-                </template>
-                <template v-else>
-                    {{ producto.nombreAlternativoPDF || producto.medida || 'Sin Medida' }}
-                    - {{ obtenerTipoProducto }}
-                    <span v-if="producto.nombreAlternativoPDF" class="pdf-badge"
-                        title="Nombre personalizado para PDF">PDF</span>
-                </template>
-            </span>
+            <div class="medida-texto-container">
+                <span class="medida-texto" @click="handleNombreAlternativoClick" :class="{
+                    'disabled': embarqueBloqueado,
+                    'tiene-nombre-alternativo': producto.nombreAlternativoPDF
+                }">
+                    <template v-if="producto.tipo === 'c/h20'">
+                        {{ producto.nombreAlternativoPDF || producto.medida || 'Sin Medida' }}
+                        <span class="ch20-text">c/h20</span>
+                        <span v-if="producto.nombreAlternativoPDF" class="pdf-badge"
+                            title="Nombre personalizado para PDF">PDF</span>
+                    </template>
+                    <template v-else>
+                        {{ producto.nombreAlternativoPDF || producto.medida || 'Sin Medida' }}
+                        - {{ obtenerTipoProducto }}
+                        <span v-if="producto.nombreAlternativoPDF" class="pdf-badge"
+                            title="Nombre personalizado para PDF">PDF</span>
+                    </template>
+                </span>
+                <PedidoReferencia :pedido-referencia="producto.pedidoReferencia" />
+            </div>
             <span v-if="producto.precio" class="precio-tag">${{ producto.precio }}</span>
         </h2>
         <div class="producto-header">
@@ -221,11 +224,15 @@
 
 
 <script>
+import PedidoReferencia from './PedidoReferencia.vue';
 import { obtenerPrecioParaMedida, normalizarMedida } from '@/utils/preciosHistoricos';
 import { normalizarFechaISO, obtenerFechaActualISO } from '@/utils/dateUtils';
 
 export default {
     name: 'ProductoItem',
+    components: {
+        PedidoReferencia
+    },
     props: {
         producto: {
             type: Object,
@@ -792,8 +799,15 @@ export default {
     border-bottom: 1px solid #eee;
 }
 
-.medida-texto {
+.medida-texto-container {
+    display: flex;
+    flex-direction: column;
     flex-grow: 1;
+    gap: 2px;
+    min-width: 0;
+}
+
+.medida-texto {
     font-size: 1.3rem;
     font-weight: 600;
     cursor: pointer;

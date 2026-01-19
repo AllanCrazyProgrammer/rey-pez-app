@@ -776,6 +776,12 @@ export default {
             const nuevoProducto = crearNuevoProducto(clienteIdStr);
             nuevoProducto.nombreCliente = nombreCliente;
             nuevoProducto.medida = (definicion.medida || '').toString().trim();
+            if (definicion.pedidoReferencia) {
+              nuevoProducto.pedidoReferencia = {
+                kilos: definicion.pedidoReferencia.kilos || 0,
+                taras: definicion.pedidoReferencia.taras || 0
+              };
+            }
 
             if (definicion.tipo === 'c/h20' || definicion.tipo === 's/h20') {
               nuevoProducto.tipo = definicion.tipo;

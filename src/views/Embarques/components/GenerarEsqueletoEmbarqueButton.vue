@@ -129,6 +129,14 @@ export default {
     },
     construirEsqueletoPorCliente(pedidos) {
       const acumuladoPorCliente = {};
+      const normalizarCantidad = (valor) => {
+        if (valor === null || valor === undefined || valor === '') {
+          return 0;
+        }
+        const limpio = typeof valor === 'string' ? valor.replace(',', '.') : valor;
+        const numero = Number(limpio);
+        return Number.isNaN(numero) ? 0 : numero;
+      };
 
       pedidos.forEach(pedido => {
         Object.entries(LIMPIO_CLIENTES_MAP).forEach(([clavePedido, clienteId]) => {
@@ -162,8 +170,24 @@ export default {
                 medida,
                 tipo: tipoNormalizado.tipo,
                 tipoPersonalizado: tipoNormalizado.tipoPersonalizado || '',
-                nota // Incluir la nota en el esqueleto
+                nota, // Incluir la nota en el esqueleto
+                pedidoReferencia: {
+                  kilos: 0,
+                  taras: 0
+                }
               });
+            }
+
+            const referencia = acumuladoPorCliente[clienteId].get(clave)?.pedidoReferencia;
+            if (referencia) {
+              const cantidad = normalizarCantidad(item.kilos);
+              if (cantidad > 0) {
+                if (item.esTara) {
+                  referencia.taras += cantidad;
+                } else {
+                  referencia.kilos += cantidad;
+                }
+              }
             }
           });
         });

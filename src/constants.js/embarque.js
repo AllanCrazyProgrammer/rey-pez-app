@@ -59,6 +59,7 @@ export function crearNuevoProducto(clienteId) {
     isNew: true,
     noSumarKilos: false,
     refrigerar: false,
+    pedidoReferencia: null,
   };
 }
 
