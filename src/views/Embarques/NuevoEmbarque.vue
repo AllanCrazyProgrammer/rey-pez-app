@@ -93,6 +93,7 @@
           :embarque-bloqueado="embarqueBloqueado" 
           :medidas-usadas="medidasUsadas"
           :medidas-configuracion="medidasConfiguracion"
+        :pedido-referencia-por-cliente="pedidoReferenciaPorCliente"
           :is-generating-pdf="isGeneratingPdf" 
           :pdf-type="pdfType" 
           :is-creating-account="isCreatingAccount"
@@ -219,7 +220,7 @@
 </template>
 
 <script>
-import { getFirestore, collection, addDoc, doc, getDoc, updateDoc, onSnapshot, serverTimestamp, getDocs, setDoc, deleteDoc, query, orderBy, runTransaction } from 'firebase/firestore';
+import { getFirestore, collection, addDoc, doc, getDoc, updateDoc, onSnapshot, serverTimestamp, getDocs, setDoc, deleteDoc, query, where, orderBy, runTransaction } from 'firebase/firestore';
 import { debounce } from 'lodash';
 import { ref, onValue, onDisconnect, set } from 'firebase/database'
 import { rtdb } from '@/firebase'
@@ -354,6 +355,9 @@ export default {
       
       mostrarModalConfiguracionMedidas: false,
       medidasConfiguracion: [],
+      pedidoReferenciaPorCliente: {},
+      pedidoReferenciaFecha: '',
+      pedidoReferenciaCargando: false,
       
       mostrarModalNombreAlternativo: false,
       nombreAlternativoTemp: '',
@@ -666,6 +670,199 @@ export default {
     onEsqueletoError(mensaje) {
       if (mensaje) {
         this.mostrarError(mensaje);
+      }
+    },
+    normalizarTexto(texto) {
+      return (texto || '').toString().trim().toLowerCase();
+    },
+    normalizarCantidadPedido(valor) {
+      if (valor === null || valor === undefined || valor === '') {
+        return 0;
+      }
+      const limpio = typeof valor === 'string' ? valor.replace(',', '.') : valor;
+      const numero = Number(limpio);
+      return Number.isNaN(numero) ? 0 : numero;
+    },
+    normalizarTipoPedido(tipo) {
+      const tipoTexto = (tipo || '').toString().trim();
+      const valor = tipoTexto.toLowerCase();
+
+      if (valor === 's/h20' || valor === 's/h2o') {
+        return { tipo: 's/h20', tipoPersonalizado: '' };
+      }
+      if (valor === 'c/h20' || valor === 'c/h2o') {
+        return { tipo: 'c/h20', tipoPersonalizado: '' };
+      }
+      if (!valor) {
+        return { tipo: '', tipoPersonalizado: '' };
+      }
+      return {
+        tipo: 'otro',
+        tipoPersonalizado: tipoTexto
+      };
+    },
+    resolverClienteIdPedido(nombreCliente) {
+      const normalizado = this.normalizarTexto(nombreCliente);
+      const mapaPredefinidos = {
+        joselito: '1',
+        '8a': '1',
+        catarro: '2',
+        otilio: '3',
+        ozuna: '4',
+        veronica: '5',
+        lorena: '5'
+      };
+
+      if (mapaPredefinidos[normalizado]) {
+        return mapaPredefinidos[normalizado];
+      }
+
+      const clientePersonalizado = (this.clientesPersonalizados || []).find(cliente => {
+        return this.normalizarTexto(cliente?.nombre) === normalizado;
+      });
+
+      return clientePersonalizado ? clientePersonalizado.id.toString() : null;
+    },
+    construirIndicePedidoReferencia(pedidos = []) {
+      const referencias = {};
+      const clientesLimpios = ['joselito', 'catarro', 'otilio', 'ozuna', 'lorena', 'veronica'];
+
+      const asegurarCliente = (clienteId) => {
+        if (!referencias[clienteId]) {
+          referencias[clienteId] = {
+            porClave: {},
+            porMedida: {}
+          };
+        }
+        return referencias[clienteId];
+      };
+
+      const agregarReferencia = (clienteId, medida, tipoData, cantidad, esTara) => {
+        const medidaNormalizada = this.normalizarTexto(medida);
+        if (!medidaNormalizada || !clienteId) {
+          return;
+        }
+
+        const tipoNormalizado = this.normalizarTexto(tipoData?.tipo);
+        const tipoPersonalizado = this.normalizarTexto(tipoData?.tipoPersonalizado);
+        const clave = `${medidaNormalizada}__${tipoNormalizado}__${tipoPersonalizado}`;
+
+        const referenciaCliente = asegurarCliente(clienteId);
+        const referenciaClave = referenciaCliente.porClave[clave] || { kilos: 0, taras: 0 };
+        const referenciaMedida = referenciaCliente.porMedida[medidaNormalizada] || { kilos: 0, taras: 0 };
+
+        if (esTara) {
+          referenciaClave.taras += cantidad;
+          referenciaMedida.taras += cantidad;
+        } else {
+          referenciaClave.kilos += cantidad;
+          referenciaMedida.kilos += cantidad;
+        }
+
+        referenciaCliente.porClave[clave] = referenciaClave;
+        referenciaCliente.porMedida[medidaNormalizada] = referenciaMedida;
+      };
+
+      pedidos
+        .filter(pedido => this.normalizarTexto(pedido?.tipo) === 'limpio')
+        .forEach(pedido => {
+          clientesLimpios.forEach(claveCliente => {
+            const itemsCliente = Array.isArray(pedido?.[claveCliente]) ? pedido[claveCliente] : [];
+            if (itemsCliente.length === 0) {
+              return;
+            }
+
+            const clienteId = this.resolverClienteIdPedido(claveCliente);
+            if (!clienteId) {
+              return;
+            }
+
+            itemsCliente.forEach(item => {
+              if (!item) {
+                return;
+              }
+
+              const medida = (item.medida || '').toString().trim();
+              if (!medida) {
+                return;
+              }
+
+              const cantidad = this.normalizarCantidadPedido(item.kilos);
+              if (cantidad <= 0) {
+                return;
+              }
+
+              const tipoData = this.normalizarTipoPedido(item.tipo);
+              agregarReferencia(clienteId, medida, tipoData, cantidad, item.esTara);
+            });
+          });
+
+          if (pedido?.clientesTemporales && typeof pedido.clientesTemporales === 'object') {
+            Object.values(pedido.clientesTemporales).forEach(cliente => {
+              if (!cliente || !cliente.nombre || !Array.isArray(cliente.pedidos)) {
+                return;
+              }
+
+              const clienteId = this.resolverClienteIdPedido(cliente.nombre);
+              if (!clienteId) {
+                return;
+              }
+
+              cliente.pedidos.forEach(item => {
+                if (!item) {
+                  return;
+                }
+
+                const medida = (item.medida || '').toString().trim();
+                if (!medida) {
+                  return;
+                }
+
+                const cantidad = this.normalizarCantidadPedido(item.kilos);
+                if (cantidad <= 0) {
+                  return;
+                }
+
+                const tipoData = this.normalizarTipoPedido(item.tipo);
+                agregarReferencia(clienteId, medida, tipoData, cantidad, item.esTara);
+              });
+            });
+          }
+        });
+
+      return referencias;
+    },
+    async cargarPedidoReferenciaDelDia(fecha = this.embarque.fecha) {
+      const fechaConsulta = (fecha || '').toString().trim();
+      if (!fechaConsulta || !navigator.onLine) {
+        this.pedidoReferenciaPorCliente = {};
+        this.pedidoReferenciaFecha = fechaConsulta;
+        return;
+      }
+
+      if (this.pedidoReferenciaCargando) {
+        return;
+      }
+
+      if (this.pedidoReferenciaFecha === fechaConsulta && Object.keys(this.pedidoReferenciaPorCliente).length > 0) {
+        return;
+      }
+
+      this.pedidoReferenciaCargando = true;
+      try {
+        const db = getFirestore();
+        const pedidosRef = collection(db, 'pedidos');
+        const q = query(pedidosRef, where('fecha', '==', fechaConsulta));
+        const snapshot = await getDocs(q);
+        const pedidos = snapshot.docs.map(doc => doc.data());
+
+        this.pedidoReferenciaPorCliente = this.construirIndicePedidoReferencia(pedidos);
+        this.pedidoReferenciaFecha = fechaConsulta;
+      } catch (error) {
+        console.error('[NuevoEmbarque] Error al cargar pedidos para referencia:', error);
+        this.pedidoReferenciaPorCliente = {};
+      } finally {
+        this.pedidoReferenciaCargando = false;
       }
     },
     productoTieneContenido(producto) {
@@ -4575,6 +4772,7 @@ export default {
     },
     'embarque.fecha': {
       handler(newVal, oldVal) {
+        this.cargarPedidoReferenciaDelDia(newVal);
         if (!this.embarqueId) {
           this.triggerGuardadoInicial();
         } else {
@@ -4695,6 +4893,7 @@ export default {
         this.undoStack.push(JSON.stringify(this.embarque));
         this.actualizarMedidasUsadas();
         await this.cargarClientesPersonalizados();
+        await this.cargarPedidoReferenciaDelDia();
         this.guardadoAutomaticoActivo = true;
         await this.cargarPreciosActuales();
         return;
@@ -4707,6 +4906,7 @@ export default {
     this.undoStack.push(JSON.stringify(this.embarque));
     this.actualizarMedidasUsadas();
     await this.cargarClientesPersonalizados();
+    await this.cargarPedidoReferenciaDelDia();
     await this.iniciarPresenciaUsuario();
     this.escucharUsuariosActivos();
     await this.cargarPreciosActuales();

@@ -112,6 +112,7 @@
             <!-- Lista de productos -->
             <ProductoItem v-for="(producto, index) in productos" :key="index" :producto="producto"
                 :embarque-bloqueado="embarqueBloqueado" :medidas-usadas="medidasUsadas" :medidas-configuracion="medidasConfiguracion" :nombre-cliente="nombreCliente"
+                :pedido-referencia-cliente="pedidoReferenciaPorCliente[clienteId] || null"
                 :precios-actuales="preciosActuales" :fecha-embarque="fechaEmbarque"
                 @update:producto="actualizarProducto" @eliminar-producto="$emit('eliminar-producto', producto)"
                 @mostrar-modal-precio="$emit('mostrar-modal-precio', $event)"
@@ -208,6 +209,10 @@ export default {
         medidasConfiguracion: {
             type: Array,
             default: () => []
+        },
+        pedidoReferenciaPorCliente: {
+            type: Object,
+            default: () => ({})
         },
         isGeneratingPdf: {
             type: Boolean,

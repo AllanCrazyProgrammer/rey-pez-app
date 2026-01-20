@@ -250,6 +250,10 @@ export default {
             type: Array,
             default: () => []
         },
+        pedidoReferenciaCliente: {
+            type: Object,
+            default: null
+        },
         nombreCliente: {
             type: String,
             default: ''
@@ -390,6 +394,7 @@ export default {
     mounted() {
         // Asignar precio automático para todos los clientes
         this.asignarPrecioAutomatico();
+        this.actualizarPedidoReferencia();
         
         if (this.nombreCliente.trim().toLowerCase().includes('catarro')) {
             this.$emit('activar-incluir-precios-catarro');
@@ -398,6 +403,13 @@ export default {
     watch: {
         'producto.medida': function() {
             this.asignarPrecioAutomatico();
+            this.actualizarPedidoReferencia();
+        },
+        'producto.tipo': function() {
+            this.actualizarPedidoReferencia();
+        },
+        'producto.tipoPersonalizado': function() {
+            this.actualizarPedidoReferencia();
         },
         nombreCliente: function() {
             this.asignarPrecioAutomatico();
@@ -418,6 +430,12 @@ export default {
                 }
             }
         },
+        pedidoReferenciaCliente: {
+            handler() {
+                this.actualizarPedidoReferencia();
+            },
+            deep: true
+        },
         'producto.esVenta': {
             handler() {
                 // Cuando cambie el estado de venta, recalcular precio automáticamente
@@ -437,6 +455,54 @@ export default {
         // Método para actualizar el componente padre
         actualizarProducto() {
             this.$emit('update:producto', this.producto);
+        },
+        normalizarMedidaParaReferencia(valor) {
+            const texto = (valor || '').toString();
+            let medida = texto.toLowerCase();
+            let tipoDetectado = '';
+
+            if (medida.includes('s/h20') || medida.includes('s/h2o')) {
+                tipoDetectado = 's/h20';
+                medida = medida.replace(/s\/h2o|s\/h20/gi, ' ');
+            }
+            if (medida.includes('c/h20') || medida.includes('c/h2o')) {
+                tipoDetectado = 'c/h20';
+                medida = medida.replace(/c\/h2o|c\/h20/gi, ' ');
+            }
+
+            medida = medida.replace(/\s+/g, ' ').trim();
+            return { medida, tipoDetectado };
+        },
+        actualizarPedidoReferencia() {
+            const referenciaCliente = this.pedidoReferenciaCliente;
+            if (!referenciaCliente || !this.producto) {
+                this.producto.pedidoReferencia = null;
+                return;
+            }
+
+            const { medida, tipoDetectado } = this.normalizarMedidaParaReferencia(this.producto.medida);
+            if (!medida) {
+                this.producto.pedidoReferencia = null;
+                return;
+            }
+
+            const tipoBase = (this.producto.tipo || tipoDetectado || '').toString().trim().toLowerCase();
+            const tipoPersonalizado = (this.producto.tipoPersonalizado || '').toString().trim().toLowerCase();
+
+            let referencia = null;
+            if (tipoBase) {
+                const tipoPersonalizadoKey = tipoBase === 'otro' ? tipoPersonalizado : '';
+                const clave = `${medida}__${tipoBase}__${tipoPersonalizadoKey}`;
+                referencia = referenciaCliente.porClave?.[clave] || null;
+            }
+
+            if (!referencia && !tipoBase) {
+                referencia = referenciaCliente.porMedida?.[medida] || null;
+            }
+
+            this.producto.pedidoReferencia = referencia
+                ? { kilos: referencia.kilos || 0, taras: referencia.taras || 0 }
+                : null;
         },
 
         // Métodos para manejar edición de kilos
@@ -661,6 +727,7 @@ export default {
             }
             
             this.asignarPrecioAutomatico();
+            this.actualizarPedidoReferencia();
             this.actualizarProducto();
         },
 
@@ -691,6 +758,7 @@ export default {
             }
             
             this.asignarPrecioAutomatico();
+            this.actualizarPedidoReferencia();
             this.actualizarProducto();
             this.$emit('seleccionar-medida', this.producto, medida);
         },
@@ -710,6 +778,7 @@ export default {
             }
             
             this.asignarPrecioAutomatico();
+            this.actualizarPedidoReferencia();
             this.actualizarProducto();
         },
 
