@@ -40,6 +40,12 @@
               {{ calcularTotalColumna(columna) }}
             </td>
           </tr>
+          <tr class="fila-kilos">
+            <td><strong>Kilos</strong></td>
+            <td v-for="columna in obtenerColumnasConDatos()" :key="columna + '-kilos'">
+              {{ calcularKilosColumna(columna) }}
+            </td>
+          </tr>
         </tbody>
       </table>
     </div>
@@ -121,6 +127,10 @@ export default {
         const valor = parseFloat(this.pedidos[cliente][col]) || 0;
         return sum + valor;
       }, 0);
+    },
+    calcularKilosColumna(columna) {
+      const totalTaras = this.calcularTotalColumna(columna);
+      return totalTaras * 19;
     },
     generarPDF() {
       const clientesConDatos = this.obtenerClientesConDatos()
@@ -320,6 +330,13 @@ export default {
   color: white;
   font-weight: bold;
   border: 2px solid #2c3e50 !important;
+}
+
+.fila-kilos td {
+  background-color: #e8f5e9;
+  color: #1b5e20;
+  font-weight: bold;
+  border: 2px solid #c8e6c9 !important;
 }
 
 @media print {
