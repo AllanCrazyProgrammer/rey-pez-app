@@ -54,7 +54,11 @@
                             title="Nombre personalizado para PDF">PDF</span>
                     </template>
                 </span>
-                <PedidoReferencia :pedido-referencia="producto.pedidoReferencia" />
+                <PedidoReferencia
+                    :pedido-referencia="producto.pedidoReferencia"
+                    :total-kilos="totalKilos"
+                    :total-taras="totalTaras"
+                />
             </div>
             <span v-if="producto.precio" class="precio-tag">${{ producto.precio }}</span>
         </h2>

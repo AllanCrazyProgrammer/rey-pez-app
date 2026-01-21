@@ -1,7 +1,7 @@
 <template>
   <div v-if="tieneReferencia" class="pedido-referencia">
     <span class="pedido-label">Pedido:</span>
-    <span class="pedido-valor">{{ textoReferencia }}</span>
+    <span class="pedido-valor" :class="claseCumplimiento">{{ textoReferencia }}</span>
   </div>
 </template>
 
@@ -12,6 +12,14 @@ export default {
     pedidoReferencia: {
       type: Object,
       default: () => ({})
+    },
+    totalKilos: {
+      type: Number,
+      default: 0
+    },
+    totalTaras: {
+      type: Number,
+      default: 0
     }
   },
   computed: {
@@ -23,6 +31,15 @@ export default {
     },
     tieneReferencia() {
       return this.kilos > 0 || this.taras > 0;
+    },
+    claseCumplimiento() {
+      if (this.kilos === 0 && this.taras === 0) {
+        return 'neutro';
+      }
+      if (this.kilos > 0) {
+        return this.totalKilos >= this.kilos ? 'cumple' : 'falta';
+      }
+      return this.totalTaras >= this.taras ? 'cumple' : 'falta';
     },
     textoReferencia() {
       if (this.kilos > 0 && this.taras > 0) {
@@ -71,5 +88,17 @@ export default {
 
 .pedido-valor {
   font-weight: 500;
+}
+
+.pedido-valor.cumple {
+  color: #00a651;
+}
+
+.pedido-valor.falta {
+  color: #e10600;
+}
+
+.pedido-valor.neutro {
+  color: inherit;
 }
 </style>
