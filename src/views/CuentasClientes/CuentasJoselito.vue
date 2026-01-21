@@ -130,7 +130,18 @@
               ref="kilosInput"
             >
           </td>
-          <td>{{ item.medida }}</td>
+          <td @click.stop="editVentaMedida(index)">
+            {{ editingVentaMedidaIndex === index ? '' : item.medida }}
+            <input
+              v-if="editingVentaMedidaIndex === index"
+              v-model="item.medida"
+              type="text"
+              class="venta-medida-input"
+              @blur="finishEditingVentaMedida"
+              @keyup.enter="finishEditingVentaMedida"
+              ref="ventaMedidaInput"
+            >
+          </td>
           <td>
             <input 
               :value="item.precioVenta"
@@ -362,6 +373,7 @@ export default {
       editingIndex: null,
       estadoPagado: false,
       editingKilosIndex: null,
+      editingVentaMedidaIndex: null,
       longPressTimer: null,
       editingField: {
         index: null,
@@ -851,6 +863,7 @@ export default {
 
     async guardarNota() {
       try {
+        this.finalizarEdicionesActivas();
         // Validar datos antes de guardar
         if (!this.fechaSeleccionada) {
           throw new Error('La fecha es requerida');
@@ -1374,6 +1387,39 @@ Precio: $${this.formatNumber(precioVenta)}`;
       this.editingKilosIndex = null;
     },
 
+    editVentaMedida(index) {
+      this.editingVentaMedidaIndex = index;
+      this.$nextTick(() => {
+        if (this.$refs.ventaMedidaInput) {
+          this.$refs.ventaMedidaInput[0]?.focus();
+        }
+      });
+    },
+
+    finishEditingVentaMedida() {
+      if (this.editingVentaMedidaIndex !== null) {
+        const index = this.editingVentaMedidaIndex;
+        const itemVenta = this.itemsVenta[index];
+        if (itemVenta && this.items[index]) {
+          this.items[index].medida = itemVenta.medida;
+        }
+        this.actualizarTotalKilos(index);
+      }
+      this.editingVentaMedidaIndex = null;
+    },
+
+    finalizarEdicionesActivas() {
+      if (this.editingField.index !== null && this.editingField.field !== null) {
+        this.finishEditing();
+      }
+      if (this.editingKilosIndex !== null) {
+        this.finishEditingKilos();
+      }
+      if (this.editingVentaMedidaIndex !== null) {
+        this.finishEditingVentaMedida();
+      }
+    },
+
     actualizarTotalKilos(index) {
       if (index !== null && this.itemsVenta[index]) {
         const item = this.itemsVenta[index];
@@ -1488,6 +1534,7 @@ Precio: $${this.formatNumber(precioVenta)}`;
 
     async guardarCuenta() {
       try {
+        this.finalizarEdicionesActivas();
         const id = this.$route.params.id;
         const isEditing = this.$route.query.edit === 'true';
 
@@ -1807,6 +1854,17 @@ Precio: $${this.formatNumber(precioVenta)}`;
       // Si no tiene el formato esperado, devolver los kilos originales
       return kilosOriginales;
     },
+  },
+  async beforeRouteLeave(to, from, next) {
+    try {
+      this.finalizarEdicionesActivas();
+      if (this.$route.params.id && this.$route.query.edit === 'true') {
+        await this.autoSaveNota();
+      }
+    } catch (error) {
+      console.error('Error al guardar antes de salir:', error);
+    }
+    next();
   },
   created() {
     const id = this.$route.params.id;
@@ -2283,6 +2341,15 @@ tr:hover {
 .tabla-venta .precio-venta-input {
   font-size: 18px;
   font-weight: 500;
+}
+
+.venta-medida-input {
+  width: 100%;
+  min-width: 80px;
+  padding: 5px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 16px;
 }
 
 .tabla-venta th {
