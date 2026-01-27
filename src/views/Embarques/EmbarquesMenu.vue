@@ -52,6 +52,11 @@ _____|____|____|______
           <span class="btn-icon">$</span>
           <span class="btn-text">CUENTA_FLETES</span>
         </button>
+        <button @click="abrirSalidasRendimientos" class="btn-action btn-salidas-rendimientos">
+          <span class="btn-prefix">[3]</span>
+          <span class="btn-icon">&gt;</span>
+          <span class="btn-text">SALIDAS_RENDIMIENTOS</span>
+        </button>
         <button @click="recuperacionEmergencia" class="btn-action btn-emergencia">
           <span class="btn-prefix">[!]</span>
           <span class="btn-icon">⚠</span>
@@ -68,19 +73,26 @@ _____|____|____|______
   </div>
     
     <ListaEmbarques />
+    <SalidasRendimientosModal
+      :mostrar="mostrarSalidasRendimientos"
+      @cerrar="mostrarSalidasRendimientos = false"
+    />
   </div>
 </template>
 
 <script>
 import ListaEmbarques from './ListaEmbarques.vue'
+import SalidasRendimientosModal from './components/SalidasRendimientosModal.vue'
 
 export default {
   name: 'EmbarquesMenu',
   components: {
-    ListaEmbarques
+    ListaEmbarques,
+    SalidasRendimientosModal
   },
   data() {
     return {
+      mostrarSalidasRendimientos: false
     }
   },
   computed: {
@@ -99,6 +111,9 @@ export default {
     },
     verCuentaFletes() {
       this.$router.push({ name: 'CuentaFletes' });
+    },
+    abrirSalidasRendimientos() {
+      this.mostrarSalidasRendimientos = true;
     },
     recuperacionEmergencia() {
       this.$router.push('/embarques/recuperacion-emergencia');
@@ -470,6 +485,24 @@ export default {
 
 .btn-emergencia .btn-prefix {
   color: var(--red-alert);
+}
+
+/* Boton salidas rendimientos */
+.btn-salidas-rendimientos {
+  border-color: #4bd3ff;
+  color: #4bd3ff;
+}
+
+.btn-salidas-rendimientos:hover {
+  color: var(--terminal-bg);
+}
+
+.btn-salidas-rendimientos:hover::before {
+  background: #4bd3ff;
+}
+
+.btn-salidas-rendimientos .btn-prefix {
+  color: #4bd3ff;
 }
 
 @keyframes emergency-pulse {
