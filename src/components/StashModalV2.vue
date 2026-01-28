@@ -959,10 +959,17 @@ export default {
       }
     }
     
+    const formatearFechaDescripcion = (fechaISO) => {
+      if (!fechaISO) return ''
+      const [year, month, day] = fechaISO.split('-')
+      return `${day}/${month}/${year}`
+    }
+
     const construirDescripcionAutomatica = () => {
-      const fecha = nuevoAbono.value.fecha || obtenerFechaLocal()
+      const fechaISO = nuevoAbono.value.fecha || obtenerFechaLocal()
+      const fechaFormateada = formatearFechaDescripcion(fechaISO)
       const metodo = (nuevoAbono.value.metodo || '').trim()
-      return metodo ? `${fecha} - ${metodo}` : `${fecha}`
+      return metodo ? `${fechaFormateada} - ${metodo}` : `${fechaFormateada}`
     }
 
     const actualizarDescripcionAutomatica = () => {
