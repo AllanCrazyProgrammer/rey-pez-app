@@ -1013,21 +1013,36 @@ export default {
 
 <style scoped>
 .precio-historial-btn {
-  background-color: #4CAF50;
-  color: white;
-  border: none;
-  padding: 10px 20px;
-  border-radius: 4px;
+  --terminal-bg: #0a0a0a;
+  --amber: #ffb000;
+  --amber-glow: #ffb00080;
+  background: rgba(0, 20, 0, 0.9);
+  color: var(--amber);
+  border: 2px solid var(--amber);
+  padding: 12px 22px;
+  border-radius: 0;
   cursor: pointer;
-  font-size: 16px;
-  transition: background-color 0.3s;
-  display: flex;
+  font-size: 1.1rem;
+  transition: all 0.2s ease;
+  display: inline-flex;
   align-items: center;
   gap: 8px;
+  font-family: 'Inter', 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  box-shadow: 0 0 15px var(--amber-glow);
 }
 
 .precio-historial-btn:hover {
-  background-color: #45a049;
+  background: var(--amber);
+  color: var(--terminal-bg);
+  box-shadow: 0 0 20px var(--amber-glow);
+  transform: translateY(-2px);
+}
+
+.precio-historial-btn:focus {
+  outline: 2px solid rgba(255, 255, 255, 0.6);
+  outline-offset: 2px;
 }
 
 .modal-overlay {
@@ -1055,6 +1070,8 @@ export default {
   backdrop-filter: blur(10px);
   border: 1px solid rgba(255, 255, 255, 0.2);
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.7));
+  font-size: 1.1rem;
+  font-family: 'Inter', 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
 }
 
 .modal-header {
@@ -1064,6 +1081,10 @@ export default {
   margin-bottom: 20px;
   padding-bottom: 15px;
   border-bottom: 1px solid #eee;
+}
+
+.modal-header h2 {
+  color: #2c3e50;
 }
 
 .close-btn {
@@ -1080,7 +1101,7 @@ export default {
 }
 
 .header-icon {
-  font-size: 1.5em;
+  font-size: 1.6em;
   margin-right: 10px;
 }
 
@@ -1099,14 +1120,14 @@ export default {
 .form-header h3 {
   margin: 0;
   color: #333;
-  font-size: 1.1em;
+  font-size: 1.25em;
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
 .form-icon {
-  font-size: 1.2em;
+  font-size: 1.3em;
 }
 
 .form-group {
@@ -1122,10 +1143,10 @@ export default {
 }
 
 .form-group .form-input {
-  padding: 10px 15px;
+  padding: 12px 16px;
   border: 1px solid #ddd;
   border-radius: 8px;
-  font-size: 1em;
+  font-size: 1.05em;
   transition: border-color 0.3s, box-shadow 0.3s;
   background-color: #f9f9f9;
   color: #333;
@@ -1151,7 +1172,7 @@ export default {
   display: flex;
   align-items: center;
   cursor: pointer;
-  font-size: 0.9em;
+  font-size: 1em;
   color: #555;
   position: relative;
 }
@@ -1209,7 +1230,7 @@ export default {
 }
 
 .selector-label {
-  font-size: 0.9em;
+  font-size: 1em;
   color: #555;
   margin-bottom: 8px;
   display: block;
@@ -1222,7 +1243,7 @@ export default {
 }
 
 .cliente-btn {
-  padding: 10px 16px;
+  padding: 12px 18px;
   border: none;
   border-radius: 20px;
   cursor: pointer;
@@ -1232,7 +1253,7 @@ export default {
   flex: 1;
   min-width: 100px;
   text-align: center;
-  font-size: 0.9em;
+  font-size: 1em;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1275,13 +1296,13 @@ export default {
   align-items: center;
   gap: 8px;
   color: #333;
-  font-size: 1em;
+  font-size: 1.1em;
   margin-bottom: 15px;
   font-weight: 600;
 }
 
 .filter-icon {
-  font-size: 1.2em;
+  font-size: 1.3em;
   color: #2196F3;
 }
 
@@ -1292,7 +1313,7 @@ export default {
 }
 
 .cliente-filtro-btn {
-  padding: 10px 16px;
+  padding: 12px 18px;
   border: none;
   border-radius: 20px;
   cursor: pointer;
@@ -1302,7 +1323,7 @@ export default {
   flex: 1;
   min-width: 100px;
   text-align: center;
-  font-size: 0.9em;
+  font-size: 1em;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1334,10 +1355,10 @@ export default {
   background: linear-gradient(135deg, #4CAF50, #388E3C);
   color: white;
   border: none;
-  padding: 10px 20px;
+  padding: 12px 22px;
   border-radius: 8px;
   cursor: pointer;
-  font-size: 1em;
+  font-size: 1.05em;
   font-weight: bold;
   transition: background-color 0.3s, transform 0.2s;
   display: flex;
@@ -1361,7 +1382,7 @@ export default {
 }
 
 .btn-icon {
-  font-size: 1.1em;
+  font-size: 1.2em;
 }
 
 .products-grid {
@@ -1406,7 +1427,7 @@ export default {
 .product-name {
   margin: 0;
   color: #333;
-  font-size: 1.1em;
+  font-size: 1.2em;
   flex-grow: 1;
   text-align: left;
   padding-right: 10px;
@@ -1421,10 +1442,10 @@ export default {
   background-color: #2196F3;
   color: white;
   border: none;
-  padding: 5px 10px;
+  padding: 7px 12px;
   border-radius: 6px;
   cursor: pointer;
-  font-size: 0.9em;
+  font-size: 1em;
   transition: background-color 0.3s;
   display: flex;
   align-items: center;
@@ -1449,20 +1470,20 @@ export default {
 }
 
 .price {
-  font-size: 1.2em;
+  font-size: 1.35em;
   font-weight: bold;
   color: #4CAF50;
   margin: 5px 0;
 }
 
 .date {
-  font-size: 0.9em;
+  font-size: 1em;
   color: #666;
   margin: 5px 0;
 }
 
 .cliente-especifico-tag {
-  font-size: 0.8em;
+  font-size: 0.9em;
   background-color: var(--tag-color, #2196F3);
   color: white;
   padding: 4px 10px;
@@ -1486,7 +1507,7 @@ export default {
 }
 
 .historial-count {
-  font-size: 0.8em;
+  font-size: 0.9em;
   color: #666;
   margin: 5px 0;
   font-style: italic;
@@ -1559,7 +1580,7 @@ export default {
 
 .historial-table th,
 .historial-table td {
-  padding: 15px 12px;
+  padding: 16px 14px;
   border-bottom: 1px solid #eee;
   text-align: left;
 }
@@ -1568,7 +1589,7 @@ export default {
   background: linear-gradient(135deg, #f8f9fa, #e9ecef);
   font-weight: 600;
   color: #495057;
-  font-size: 0.9em;
+  font-size: 1em;
   border-bottom: 2px solid #dee2e6;
 }
 
@@ -1584,7 +1605,7 @@ export default {
 }
 
 .date-cell, .price-cell, .client-cell, .change-cell {
-  font-size: 0.9em;
+  font-size: 1em;
   color: #495057;
 }
 
@@ -1607,7 +1628,7 @@ export default {
   color: white;
   padding: 4px 10px;
   border-radius: 12px;
-  font-size: 0.8em;
+  font-size: 0.9em;
   font-weight: 500;
   display: inline-flex;
   align-items: center;
@@ -1628,7 +1649,7 @@ export default {
 }
 
 .historial-icon {
-  font-size: 1.2em;
+  font-size: 1.3em;
   margin-right: 10px;
 }
 
@@ -1650,7 +1671,7 @@ export default {
 }
 
 .change-indicator {
-  font-size: 0.9em;
+  font-size: 1em;
   font-weight: bold;
 }
 
@@ -1665,7 +1686,7 @@ export default {
   color: #f44336;
   cursor: pointer;
   padding: 5px;
-  font-size: 18px;
+  font-size: 20px;
   transition: color 0.3s;
   display: flex;
   align-items: center;
@@ -1691,7 +1712,7 @@ export default {
   padding: 10px;
   background-color: #f8f9fa;
   border-radius: 5px;
-  font-size: 0.9em;
+  font-size: 1em;
   color: #666;
   border: 1px solid #eee;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
@@ -1701,7 +1722,7 @@ export default {
   display: flex;
   align-items: center;
   gap: 5px;
-  font-size: 0.9em;
+  font-size: 1em;
   color: #555;
 }
 
@@ -1717,17 +1738,17 @@ export default {
 
 .items-per-page label {
   font-weight: 500;
-  font-size: 0.9em;
+  font-size: 1em;
   color: #555;
 }
 
 .items-per-page select {
-  padding: 6px 12px;
+  padding: 8px 12px;
   border: 1px solid #ddd;
   border-radius: 6px;
   background-color: #f9f9f9;
   color: #333;
-  font-size: 0.9em;
+  font-size: 1em;
   cursor: pointer;
   transition: border-color 0.3s;
 }
@@ -1761,7 +1782,7 @@ export default {
   background-color: #fff;
   color: #007bff;
   border: 1px solid #dee2e6;
-  padding: 8px 12px;
+  padding: 10px 14px;
   border-radius: 4px;
   cursor: pointer;
   font-weight: 500;
@@ -1772,6 +1793,7 @@ export default {
   align-items: center;
   justify-content: center;
   box-shadow: 0 2px 6px rgba(0, 123, 255, 0.2);
+  font-size: 1em;
 }
 
 .pagination-btn:hover:not(:disabled),
@@ -1859,9 +1881,8 @@ export default {
 }
 
 @media (max-width: 480px) {
-  .precio-historial-btn {
-    font-size: 14px;
-    padding: 8px 16px;
+  .modal-content {
+    font-size: 1rem;
   }
   
   .modal-header h2 {
@@ -2338,6 +2359,7 @@ export default {
 .floating-close-icon {
   font-size: 1em;
   filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3));
+  color: #ffffff;
 }
 
 .floating-close-text {
