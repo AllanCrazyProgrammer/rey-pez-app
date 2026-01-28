@@ -1,23 +1,42 @@
 <template>
   <div class="procesos-menu">
-    <div class="header-section">
-      <div class="header-content">
-        <h1 class="main-title">
-          <i class="icon-process">⚙️</i>
-          Menú de Procesos
-        </h1>
-        <p class="subtitle">Gestiona todos los procesos de tu negocio de manera eficiente</p>
+    <div class="terminal-window">
+      <div class="terminal-header">
+        <span class="terminal-dots">
+          <span class="dot red"></span>
+          <span class="dot yellow"></span>
+          <span class="dot green"></span>
+        </span>
+        <span class="terminal-title">PROCESOS_SYSTEM.db — bash</span>
+      </div>
+
+      <div class="header-section">
+        <div class="header-content">
+          <pre class="ascii-title">
+╔══════════════════════════════════════╗
+║        MENU DE PROCESOS              ║
+║        ════════════════              ║
+╚══════════════════════════════════════╝</pre>
+          <h1 class="main-title">
+            <span class="prompt">&gt;</span>
+            <span class="title-text">PROCESOS_MENU</span>
+            <span class="cursor-blink">_</span>
+          </h1>
+          <p class="subtitle"><span class="prompt">$</span> Gestiona todos los procesos de tu negocio</p>
+        </div>
       </div>
     </div>
-    
+
     <div class="menu-options">
+      <div class="menu-label">&gt;&gt; SELECCIONA UNA OPCIÓN:</div>
       <router-link 
         to="/procesos/pedidos" 
         class="btn-action btn-pedidos"
         aria-label="Gestionar pedidos"
       >
-        <i class="icon">📝</i>
-        <span>Pedidos</span>
+        <span class="btn-prefix">[1]</span>
+        <span class="icon">📝</span>
+        <span class="btn-text">PEDIDOS</span>
       </router-link>
       
       <router-link 
@@ -25,8 +44,9 @@
         class="btn-action btn-preparacion"
         aria-label="Gestionar preparación"
       >
-        <i class="icon">👨‍🍳</i>
-        <span>Preparación</span>
+        <span class="btn-prefix">[2]</span>
+        <span class="icon">👨‍🍳</span>
+        <span class="btn-text">PREPARACION</span>
       </router-link>
       
       <router-link 
@@ -34,8 +54,9 @@
         class="btn-action btn-bitacoras"
         aria-label="Ver bitácoras de mantenimiento"
       >
-        <i class="icon">📋</i>
-        <span>Bitácoras</span>
+        <span class="btn-prefix">[3]</span>
+        <span class="icon">📋</span>
+        <span class="btn-text">BITACORAS</span>
       </router-link>
       
       <router-link 
@@ -43,8 +64,9 @@
         class="btn-action btn-deudas"
         aria-label="Gestionar deudas"
       >
-        <i class="icon">💰</i>
-        <span>Deudas</span>
+        <span class="btn-prefix">[4]</span>
+        <span class="icon">💰</span>
+        <span class="btn-text">DEUDAS</span>
       </router-link>
       
       <router-link 
@@ -52,8 +74,9 @@
         class="btn-action btn-barcos"
         aria-label="Gestionar deudas de barcos"
       >
-        <i class="icon">⛵</i>
-        <span>Barcos</span>
+        <span class="btn-prefix">[5]</span>
+        <span class="icon">⛵</span>
+        <span class="btn-text">BARCOS</span>
       </router-link>
       
       <router-link 
@@ -61,8 +84,9 @@
         class="btn-action btn-prestamos"
         aria-label="Gestionar préstamos"
       >
-        <i class="icon">🏦</i>
-        <span>Préstamos</span>
+        <span class="btn-prefix">[6]</span>
+        <span class="icon">🏦</span>
+        <span class="btn-text">PRESTAMOS</span>
       </router-link>
     </div>
   </div>
@@ -75,169 +99,277 @@ export default {
 </script>
 
 <style scoped>
+@import url('https://fonts.googleapis.com/css2?family=VT323&family=Share+Tech+Mono&display=swap');
+
+.procesos-menu {
+  --matrix-green: #00ff41;
+  --matrix-green-dark: #008f11;
+  --matrix-green-glow: #00ff4180;
+  --matrix-green-dim: #00ff4130;
+  --terminal-bg: #0a0a0a;
+  --terminal-border: #00ff4140;
+  --amber: #ffb000;
+  --amber-glow: #ffb00080;
+  --cyan: #00d4ff;
+}
+
 .procesos-menu {
   min-height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  padding: 30px;
-  color: white;
+  background: var(--terminal-bg);
+  padding: 20px;
+  color: var(--matrix-green);
+  font-family: 'VT323', 'Share Tech Mono', monospace;
+}
+
+.terminal-window {
+  background: rgba(0, 20, 0, 0.95);
+  border: 2px solid var(--matrix-green);
+  margin-bottom: 25px;
+  box-shadow: 
+    0 0 30px var(--matrix-green-glow),
+    inset 0 0 60px rgba(0, 255, 65, 0.03);
+}
+
+.terminal-header {
+  background: linear-gradient(90deg, #001a00 0%, #002200 100%);
+  padding: 10px 15px;
+  border-bottom: 1px solid var(--matrix-green);
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.terminal-dots {
+  display: flex;
+  gap: 8px;
+}
+
+.dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+}
+
+.dot.red { background: #ff5f56; box-shadow: 0 0 8px #ff5f56; }
+.dot.yellow { background: #ffbd2e; box-shadow: 0 0 8px #ffbd2e; }
+.dot.green { background: var(--matrix-green); box-shadow: 0 0 8px var(--matrix-green); }
+
+.terminal-title {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.95rem;
+  color: var(--matrix-green);
+  text-shadow: 0 0 10px var(--matrix-green);
+  letter-spacing: 2px;
 }
 
 /* Header moderno */
 .header-section {
-  text-align: center;
-  margin-bottom: 40px;
-  background: rgba(255, 255, 255, 0.15);
-  border-radius: 20px;
-  padding: 30px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 25px;
+  flex-wrap: wrap;
+  gap: 20px;
 }
 
 .header-content {
-  width: 100%;
+  flex: 1;
+}
+
+.ascii-title {
+  color: var(--matrix-green);
+  font-family: 'VT323', monospace;
+  font-size: 1rem;
+  line-height: 1.3;
+  margin: 0 0 15px 0;
+  text-shadow: 0 0 10px var(--matrix-green-glow);
+  white-space: pre;
 }
 
 .main-title {
-  font-size: 3rem;
-  font-weight: 700;
-  margin: 0 0 15px 0;
+  font-family: 'VT323', monospace;
+  font-size: 2.6rem;
+  font-weight: 400;
+  margin: 0 0 10px 0;
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 15px;
-  color: white;
-  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+  gap: 8px;
+  color: var(--matrix-green);
+  text-shadow: 0 0 10px var(--matrix-green);
 }
 
-.icon-process {
-  font-size: 3.5rem;
+.prompt {
+  color: var(--amber);
+  text-shadow: 0 0 10px var(--amber);
+}
+
+.title-text {
+  letter-spacing: 2px;
+}
+
+.cursor-blink {
+  animation: blink 1s step-end infinite;
+  color: var(--matrix-green);
+}
+
+@keyframes blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
 }
 
 .subtitle {
-  font-size: 1.2rem;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 1.1rem;
   margin: 0;
-  opacity: 0.9;
-  font-weight: 300;
+  color: var(--amber);
+  text-shadow: 0 0 10px var(--amber-glow);
 }
 
 /* Opciones del menú */
 .menu-options {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 25px;
-  margin-bottom: 40px;
   max-width: 1200px;
-  margin-left: auto;
-  margin-right: auto;
-  justify-content: center;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 15px;
+  background: rgba(0, 20, 0, 0.8);
+  border: 2px solid var(--matrix-green);
+  padding: 25px;
+  box-shadow: 0 0 20px var(--matrix-green-glow);
+}
+
+.menu-label {
+  grid-column: 1 / -1;
+  font-family: 'VT323', monospace;
+  font-size: 1.3rem;
+  color: var(--amber);
+  text-shadow: 0 0 10px var(--amber-glow);
+  letter-spacing: 2px;
 }
 
 /* Botones modernos */
 .btn-action {
-  padding: 20px 30px;
-  border: none;
-  border-radius: 15px;
+  padding: 14px 16px;
+  border: 1px solid var(--matrix-green);
+  border-radius: 0;
   cursor: pointer;
-  font-weight: 600;
+  font-weight: 400;
   font-size: 1.2rem;
   display: flex;
   align-items: center;
-  gap: 15px;
-  transition: all 0.3s ease;
-  width: 280px;
-  height: 70px;
+  gap: 10px;
+  transition: all 0.2s ease;
   justify-content: flex-start;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
   text-decoration: none;
-  color: white;
-  margin: 10px;
+  color: var(--matrix-green);
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  background: transparent;
 }
 
 .btn-action:hover {
-  transform: translateY(-3px);
+  transform: translateY(-2px);
   text-decoration: none;
-  color: white;
+  color: var(--terminal-bg);
+  background: var(--matrix-green);
+  box-shadow: 0 0 15px var(--matrix-green-glow);
 }
 
 .btn-action:focus {
-  outline: 2px solid rgba(255, 255, 255, 0.5);
+  outline: 2px solid var(--amber);
   outline-offset: 2px;
 }
 
-/* Estilos específicos para cada botón */
-.btn-pedidos {
-  background: linear-gradient(45deg, #FF6B6B, #EE5A52);
-}
-
-.btn-pedidos:hover {
-  box-shadow: 0 12px 35px rgba(255, 107, 107, 0.4);
-  background: linear-gradient(45deg, #EE5A52, #E74C3C);
-}
-
-.btn-preparacion {
-  background: linear-gradient(45deg, #4ECDC4, #44A08D);
-}
-
-.btn-preparacion:hover {
-  box-shadow: 0 12px 35px rgba(78, 205, 196, 0.4);
-  background: linear-gradient(45deg, #44A08D, #3A9188);
-}
-
-.btn-bitacoras {
-  background: linear-gradient(45deg, #45B7D1, #3498DB);
-}
-
-.btn-bitacoras:hover {
-  box-shadow: 0 12px 35px rgba(69, 183, 209, 0.4);
-  background: linear-gradient(45deg, #3498DB, #2980B9);
-}
-
-.btn-deudas {
-  background: linear-gradient(45deg, #F39C12, #E67E22);
-}
-
-.btn-deudas:hover {
-  box-shadow: 0 12px 35px rgba(243, 156, 18, 0.4);
-  background: linear-gradient(45deg, #E67E22, #D35400);
-}
-
-.btn-barcos {
-  background: linear-gradient(45deg, #1ABC9C, #16A085);
-}
-
-.btn-barcos:hover {
-  box-shadow: 0 12px 35px rgba(26, 188, 156, 0.4);
-  background: linear-gradient(45deg, #16A085, #138D75);
-}
-
-.btn-prestamos {
-  background: linear-gradient(45deg, #9B59B6, #8E44AD);
-}
-
-.btn-prestamos:hover {
-  box-shadow: 0 12px 35px rgba(155, 89, 182, 0.4);
-  background: linear-gradient(45deg, #8E44AD, #732D91);
+.btn-prefix {
+  color: inherit;
+  min-width: 32px;
 }
 
 .icon {
-  font-size: 1.5rem;
+  font-size: 1.4rem;
+  color: inherit;
+}
+
+.btn-text {
+  flex: 1;
+  text-align: left;
+}
+
+/* Colores por opción */
+.btn-pedidos {
+  border-color: #4bd3ff;
+  color: #4bd3ff;
+}
+
+.btn-pedidos:hover {
+  background: #4bd3ff;
+  box-shadow: 0 0 15px rgba(75, 211, 255, 0.5);
+}
+
+.btn-preparacion {
+  border-color: #00ff41;
+  color: #00ff41;
+}
+
+.btn-preparacion:hover {
+  background: #00ff41;
+  box-shadow: 0 0 15px rgba(0, 255, 65, 0.5);
+}
+
+.btn-bitacoras {
+  border-color: #ffb000;
+  color: #ffb000;
+}
+
+.btn-bitacoras:hover {
+  background: #ffb000;
+  box-shadow: 0 0 15px rgba(255, 176, 0, 0.5);
+}
+
+.btn-deudas {
+  border-color: #ff6b6b;
+  color: #ff6b6b;
+}
+
+.btn-deudas:hover {
+  background: #ff6b6b;
+  box-shadow: 0 0 15px rgba(255, 107, 107, 0.5);
+}
+
+.btn-barcos {
+  border-color: #7f8cff;
+  color: #7f8cff;
+}
+
+.btn-barcos:hover {
+  background: #7f8cff;
+  box-shadow: 0 0 15px rgba(127, 140, 255, 0.5);
+}
+
+.btn-prestamos {
+  border-color: #00cec9;
+  color: #00cec9;
+}
+
+.btn-prestamos:hover {
+  background: #00cec9;
+  box-shadow: 0 0 15px rgba(0, 206, 201, 0.5);
 }
 
 /* Responsive */
 @media (max-width: 768px) {
   .procesos-menu {
-    padding: 20px;
+    padding: 15px;
   }
 
   .header-section {
     padding: 20px;
-    margin-bottom: 30px;
+    flex-direction: column;
+    text-align: center;
   }
 
   .main-title {
-    font-size: 2.2rem;
+    font-size: 2rem;
   }
 
   .subtitle {
@@ -245,22 +377,35 @@ export default {
   }
 
   .menu-options {
-    flex-direction: column;
-    align-items: center;
-    gap: 20px;
+    padding: 20px 15px;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
   }
 
   .btn-action {
-    width: 100%;
-    max-width: 350px;
-    justify-content: center;
-    margin: 5px 0;
+    padding: 12px 14px;
+    font-size: 1rem;
+    letter-spacing: 1px;
   }
 }
 
 @media (max-width: 480px) {
   .procesos-menu {
-    padding: 15px;
+    padding: 10px;
+  }
+
+  .terminal-header {
+    padding: 8px 12px;
+  }
+
+  .terminal-title {
+    font-size: 0.8rem;
+    letter-spacing: 1px;
+  }
+
+  .ascii-title {
+    font-size: 0.7rem;
+    transform: scale(0.9);
   }
 
   .header-section {
@@ -268,19 +413,36 @@ export default {
   }
 
   .main-title {
-    font-size: 1.8rem;
+    font-size: 1.6rem;
     flex-direction: column;
-    gap: 10px;
-  }
-
-  .icon-process {
-    font-size: 2.5rem;
+    gap: 8px;
   }
 
   .btn-action {
-    padding: 15px 20px;
-    font-size: 1rem;
-    height: auto;
+    padding: 10px 12px;
+    font-size: 0.95rem;
+  }
+
+  .menu-options {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (min-width: 1400px) {
+  .menu-options {
+    grid-template-columns: repeat(3, minmax(260px, 1fr));
+    gap: 20px;
+    padding: 35px;
+  }
+
+  .btn-action {
+    padding: 18px 22px;
+    font-size: 1.35rem;
+    letter-spacing: 3px;
+  }
+
+  .icon {
+    font-size: 1.8rem;
   }
 }
 </style> 
