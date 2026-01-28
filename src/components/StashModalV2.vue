@@ -41,6 +41,15 @@
                 v-model="nuevoAbono.fecha" 
                 class="input-field"
               >
+              <select
+                v-model="nuevoAbono.metodo"
+                class="input-field"
+                aria-label="Método de abono"
+              >
+                <option v-for="opcion in metodosPago" :key="opcion" :value="opcion">
+                  {{ opcion }}
+                </option>
+              </select>
               <input 
                 type="text" 
                 v-model="nuevoAbono.descripcion" 
@@ -54,16 +63,6 @@
                 class="input-field"
                 step="0.01"
               >
-              <div class="checkbox-field">
-                <label class="checkbox-label">
-                  <input
-                    type="checkbox"
-                    v-model="nuevoAbono.esEfectivo"
-                    class="checkbox-input"
-                  >
-                  Efectivo
-                </label>
-              </div>
               <button @click="agregarAlStash" class="btn-primary">
                 Agregar
               </button>
@@ -427,7 +426,7 @@
 </template>
 
 <script>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { collection, addDoc, deleteDoc, doc, getDocs, getDoc, query, orderBy, limit, where, updateDoc } from 'firebase/firestore'
 import { db } from '@/firebase'
 
@@ -471,8 +470,11 @@ export default {
     }
     
     // Formularios
+    const metodosPago = ['Transferencia', 'Deposito', 'Efectivo']
+
     const nuevoAbono = ref({
       fecha: obtenerFechaLocal(),
+      metodo: metodosPago[0],
       descripcion: '',
       monto: null,
       esEfectivo: false
@@ -957,6 +959,17 @@ export default {
       }
     }
     
+    const construirDescripcionAutomatica = () => {
+      const fecha = nuevoAbono.value.fecha || obtenerFechaLocal()
+      const metodo = (nuevoAbono.value.metodo || '').trim()
+      return metodo ? `${fecha} - ${metodo}` : `${fecha}`
+    }
+
+    const actualizarDescripcionAutomatica = () => {
+      nuevoAbono.value.descripcion = construirDescripcionAutomatica()
+      nuevoAbono.value.esEfectivo = nuevoAbono.value.metodo === 'Efectivo'
+    }
+
     const agregarAlStash = async () => {
       if (!nuevoAbono.value.fecha || !nuevoAbono.value.descripcion || !nuevoAbono.value.monto) {
         alert('Por favor complete todos los campos')
@@ -970,7 +983,8 @@ export default {
           descripcion: nuevoAbono.value.descripcion,
           monto: Number(nuevoAbono.value.monto),
           fechaCreacion: fechaNormalizada,
-          esEfectivo: !!nuevoAbono.value.esEfectivo
+          esEfectivo: !!nuevoAbono.value.esEfectivo,
+          metodo: nuevoAbono.value.metodo || ''
         })
         
         const nuevoItem = {
@@ -978,7 +992,8 @@ export default {
           fecha: nuevoAbono.value.fecha,
           descripcion: nuevoAbono.value.descripcion,
           monto: Number(nuevoAbono.value.monto),
-          esEfectivo: !!nuevoAbono.value.esEfectivo
+          esEfectivo: !!nuevoAbono.value.esEfectivo,
+          metodo: nuevoAbono.value.metodo || ''
         }
         
         stashItems.value.unshift(nuevoItem)
@@ -989,10 +1004,13 @@ export default {
         // Limpiar formulario
         nuevoAbono.value = {
           fecha: obtenerFechaLocal(),
+          metodo: metodosPago[0],
           descripcion: '',
           monto: null,
           esEfectivo: false
         }
+
+        actualizarDescripcionAutomatica()
         
         alert('Abono agregado al stash')
       } catch (error) {
@@ -1716,6 +1734,14 @@ export default {
       cargarCuentasDisponibles()
       cargarTodosLosAbonos()
     })
+
+    watch(
+      () => [nuevoAbono.value.fecha, nuevoAbono.value.metodo],
+      () => {
+        actualizarDescripcionAutomatica()
+      },
+      { immediate: true }
+    )
     
     
     return {
@@ -1734,6 +1760,7 @@ export default {
       fechasAplicacion,
       nuevoAbono,
       todosLosAbonos,
+      metodosPago,
       
       // Computed
       clienteNombre,
@@ -1761,6 +1788,8 @@ export default {
       cargarStash,
       cargarSaldoActual,
       cargarCuentasDisponibles,
+      construirDescripcionAutomatica,
+      actualizarDescripcionAutomatica,
       agregarAlStash,
       eliminarDelStash,
       validarYMostrarConfirmacion,
