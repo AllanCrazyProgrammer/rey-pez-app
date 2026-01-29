@@ -66,17 +66,13 @@
     </div>
   
     <div class="table-card table-responsive">
+      <div class="table-toggle">
+        <button class="toggle-table-btn" @click="mostrarTablaPrincipal = !mostrarTablaPrincipal">
+          {{ mostrarTablaPrincipal ? 'Ocultar tabla' : 'Mostrar tabla' }}
+        </button>
+      </div>
       <table class="tabla-principal">
-      <thead>
-        <tr>
-          <th>Kilos</th>
-          <th>Medida</th>
-          <th>Costo</th>
-          <th>Total</th>
-          <th class="desktop-only">Acciones</th>
-        </tr>
-      </thead>
-      <tbody>
+      <tbody v-if="mostrarTablaPrincipal">
         <tr v-for="(item, index) in items" :key="index">
           <td @click="editField(index, 'kilos')" @touchstart="startLongPress(index, 'kilos')" @touchend="endLongPress">
             {{ editingField.index === index && editingField.field === 'kilos' ? '' : formatNumber(item.kilos) }}
@@ -120,13 +116,20 @@
           </td>
         </tr>
       </tbody>
-      <tfoot>
+      <tfoot v-if="mostrarTablaPrincipal">
         <tr class="total">
           <td colspan="3" class="text-right"><strong>Total General Costo:</strong></td>
           <td><strong>${{ formatNumber(totalGeneral) }}</strong></td>
           <td></td>
         </tr>
       </tfoot>
+      <tbody v-else>
+        <tr>
+          <td colspan="5" class="tabla-oculta-mensaje">
+            Tabla oculta. Presiona "Mostrar tabla" para verla.
+          </td>
+        </tr>
+      </tbody>
       </table>
     </div>
   
@@ -326,6 +329,18 @@
     <div v-if="showSaveMessage && lastSaveMessage && lastSaveMessage !== 'Guardado automáticamente'" class="auto-save-message">
       {{ lastSaveMessage }}
     </div>
+
+    <!-- Modal de alerta por precio de venta vacío -->
+    <div v-if="showPrecioVentaVacioModal" class="modal-overlay">
+      <div class="modal-content modal-alert">
+        <h3>Precio de venta vacío</h3>
+        <p>Hay un precio de venta vacío. Completa el campo antes de guardar o salir.</p>
+        <div class="modal-buttons">
+          <button @click="confirmarPrecioVentaVacio(false)" class="btn-cancelar">Revisar</button>
+          <button @click="confirmarPrecioVentaVacio(true)" class="btn-guardar">Continuar</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -395,6 +410,11 @@ export default {
       saveMessageTimer: null,
       faltaNotaVeronica: false,
       notaBloqueada: true,
+      mostrarTablaPrincipal: false,
+      showPrecioVentaVacioModal: false,
+      accionPendiente: null,
+      rutaPendiente: null,
+      permitirNavegacion: false,
     }
   },
   computed: {
@@ -485,6 +505,41 @@ export default {
     await this.verificarNotaFaltante();
   },
   methods: {
+    tienePrecioVentaVacio() {
+      return this.itemsVenta.some(item => {
+        const valor = item?.precioVenta;
+        if (valor === null || valor === undefined || valor === '') return true;
+        return Number.isNaN(Number(valor));
+      });
+    },
+    solicitarConfirmacionPrecioVenta(accion, ruta = null) {
+      this.accionPendiente = accion;
+      this.rutaPendiente = ruta;
+      this.showPrecioVentaVacioModal = true;
+    },
+    confirmarPrecioVentaVacio(continuar) {
+      this.showPrecioVentaVacioModal = false;
+      if (!continuar) {
+        this.accionPendiente = null;
+        this.rutaPendiente = null;
+        return;
+      }
+      if (this.accionPendiente === 'guardar') {
+        this.accionPendiente = null;
+        this.guardarNotaConfirmada();
+        return;
+      }
+      if (this.accionPendiente === 'salir' && this.rutaPendiente) {
+        this.permitirNavegacion = true;
+        const destino = this.rutaPendiente;
+        this.accionPendiente = null;
+        this.rutaPendiente = null;
+        this.$router.push(destino);
+        return;
+      }
+      this.accionPendiente = null;
+      this.rutaPendiente = null;
+    },
     async verificarNotaFaltante() {
       try {
         // Primero validar si ya existe una nota registrada para la fecha seleccionada
@@ -758,7 +813,16 @@ export default {
         const querySnapshot = await getDocs(q);
 
         if (!querySnapshot.empty) {
-          throw new Error('Ya existe una nota registrada para esta fecha.');
+          const existente = querySnapshot.docs[0];
+          const existenteId = existente.id;
+          if (!this.$route.params.id) {
+            this.$router.replace({
+              name: this.$route.name,
+              params: { id: existenteId },
+              query: { edit: 'true' }
+            });
+          }
+          return existenteId;
         }
 
         // Preparar solo los datos esenciales inicialmente
@@ -789,12 +853,8 @@ export default {
 
         return docRef.id;
       } catch (error) {
-        if (error.message === 'Ya existe una nota registrada para esta fecha.') {
-          alert(error.message);
-        } else {
-          console.error('Error al crear nueva cuenta:', error);
-          alert('Error al crear la cuenta. Por favor, intente nuevamente.');
-        }
+        console.error('Error al crear nueva cuenta:', error);
+        alert('Error al crear la cuenta. Por favor, intente nuevamente.');
         throw error;
       }
     },
@@ -839,6 +899,13 @@ export default {
       return fecha.toISOString().split('T')[0];
     },
     async guardarNota() {
+      if (this.tienePrecioVentaVacio()) {
+        this.solicitarConfirmacionPrecioVenta('guardar');
+        return;
+      }
+      await this.guardarNotaConfirmada();
+    },
+    async guardarNotaConfirmada() {
       try {
         // Deshabilitar el botón de guardar mientras se procesa
         this.isGuardando = true;
@@ -1532,6 +1599,19 @@ export default {
       // Si no coincide con ningún formato especial, devolver los kilos originales
       return kilosOriginales;
     },
+  },
+  beforeRouteLeave(to, from, next) {
+    if (this.permitirNavegacion) {
+      this.permitirNavegacion = false;
+      next();
+      return;
+    }
+    if (this.tienePrecioVentaVacio()) {
+      this.solicitarConfirmacionPrecioVenta('salir', to);
+      next(false);
+      return;
+    }
+    next();
   },
   beforeUnmount() {
     if (this.autoSaveTimer) {

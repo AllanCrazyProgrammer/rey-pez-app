@@ -66,6 +66,9 @@
                 {{ cuenta.notaBloqueada ? 'Bloqueada' : 'Desbloqueada' }}
               </span>
             </div>
+            <span v-if="!cuenta.missingNota && cuenta.tienePrecioVentaVacio" class="precio-venta-vacio">
+              Atención: precio de venta vacío
+            </span>
             <div v-if="cuenta.tieneObservacion || (cuenta.observacion && cuenta.observacion.trim().length)" class="observacion-container">
               <p class="observacion-texto">{{ cuenta.observacion }}</p>
               <button class="delete-observacion-btn" @click="borrarObservacion(cuenta.id)" title="Borrar observación">×</button>
@@ -75,6 +78,9 @@
                 <span class="abono-label">Abono:</span>
                 <span class="abono-monto">${{ formatNumber(abono.monto) }}</span>
                 <span class="abono-descripcion">{{ abono.descripcion || 'Sin descripción' }}</span>
+              </p>
+              <p v-if="cuenta.abonos.length > 1" class="abono-total">
+                Total abonos: ${{ formatNumber(cuenta.totalAbonos) }}
               </p>
             </div>
             <span
@@ -220,6 +226,13 @@ export default {
     }
   },
   methods: {
+    tienePrecioVentaVacio(itemsVenta = []) {
+      return itemsVenta.some(item => {
+        const valor = item?.precioVenta;
+        if (valor === null || valor === undefined || valor === '') return true;
+        return Number.isNaN(Number(valor));
+      });
+    },
     normalizarFechaValor(valor) {
       if (!valor) return null;
       try {
@@ -277,7 +290,8 @@ export default {
               abonos: data.abonos || [],
               notaBloqueada: data.notaBloqueada !== undefined ? data.notaBloqueada : true,
               tieneObservacion: data.tieneObservacion || false,
-              observacion: data.observacion || ''
+              observacion: data.observacion || '',
+              tienePrecioVentaVacio: this.tienePrecioVentaVacio(data.itemsVenta || [])
             };
           });
 
@@ -969,6 +983,15 @@ h1, h2 {
   color: #ff8c00;
 }
 
+.abono-total {
+  margin: 8px 0 0;
+  padding-top: 6px;
+  border-top: 1px dashed #ffcc80;
+  font-weight: 700;
+  color: #d67a00;
+  font-size: 0.95em;
+}
+
 .abono-label {
   font-weight: bold;
 }
@@ -1009,6 +1032,21 @@ h1, h2 {
 
 .lock-status {
   margin-top: 8px;
+}
+
+.precio-venta-vacio {
+  display: inline-block;
+  margin-top: 8px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: #ffeb3b;
+  color: #3f2f00;
+  font-weight: 700;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  border: 2px solid #f1c40f;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
 }
 
 .lock-badge {
