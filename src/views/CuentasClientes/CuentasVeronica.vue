@@ -21,6 +21,7 @@
           v-model="fechaSeleccionada" 
           :class="{ 'fecha-sin-nota': faltaNotaVeronica }"
           :title="faltaNotaVeronica ? 'Hay embarque registrado sin nota para esta fecha' : ''"
+          :disabled="notaBloqueada"
         >
       </div>
       <div 
@@ -34,15 +35,33 @@
         Existe un embarque de Verónica sin nota para este día.
       </p>
     </div>
+
+    <div class="nota-lock card">
+      <div class="nota-lock-info">
+        <span class="nota-lock-label">Edición de nota:</span>
+        <span :class="['nota-lock-status', notaBloqueada ? 'bloqueada' : 'desbloqueada']">
+          {{ notaBloqueada ? 'Bloqueada' : 'Desbloqueada' }}
+        </span>
+      </div>
+      <button
+        class="nota-lock-btn"
+        @click="toggleBloqueoNota"
+      >
+        {{ notaBloqueada ? 'Desbloquear edición' : 'Bloquear edición' }}
+      </button>
+      <p class="nota-lock-help">
+        El bloqueo impide cambios en kilos, medidas, costos y fletes. Los abonos siguen editables.
+      </p>
+    </div>
   
     <div class="input-section card">
       <h2>Ingresar Datos</h2>
       <div class="input-row">
-        <input v-model.number="newItem.kilos" type="number" placeholder="Kilos" inputmode="decimal" pattern="[0-9]*" class="responsive-input">
-        <input v-model="newItem.medida" type="text" placeholder="Medida" class="responsive-input">
-        <input v-model.number="newItem.costo" type="number" placeholder="Costo" inputmode="decimal" pattern="[0-9]*" class="responsive-input">
-        <input v-model.number="newItem.precioVenta" type="number" placeholder="Precio Venta" inputmode="decimal" pattern="[0-9]*" class="responsive-input">
-        <button @click="addItem">Agregar</button>
+        <input v-model.number="newItem.kilos" type="number" placeholder="Kilos" inputmode="decimal" pattern="[0-9]*" class="responsive-input" :disabled="notaBloqueada">
+        <input v-model="newItem.medida" type="text" placeholder="Medida" class="responsive-input" :disabled="notaBloqueada">
+        <input v-model.number="newItem.costo" type="number" placeholder="Costo" inputmode="decimal" pattern="[0-9]*" class="responsive-input" :disabled="notaBloqueada">
+        <input v-model.number="newItem.precioVenta" type="number" placeholder="Precio Venta" inputmode="decimal" pattern="[0-9]*" class="responsive-input" :disabled="notaBloqueada">
+        <button @click="addItem" :disabled="notaBloqueada">Agregar</button>
       </div>
     </div>
   
@@ -68,6 +87,7 @@
               @blur="finishEditing"
               @keyup.enter="finishEditing"
               ref="editInput"
+              :disabled="notaBloqueada"
             >
           </td>
           <td @click="editField(index, 'medida')" @touchstart="startLongPress(index, 'medida')" @touchend="endLongPress">
@@ -79,6 +99,7 @@
               @blur="finishEditing"
               @keyup.enter="finishEditing"
               ref="editInput"
+              :disabled="notaBloqueada"
             >
           </td>
           <td @click="editField(index, 'costo')" @touchstart="startLongPress(index, 'costo')" @touchend="endLongPress">
@@ -90,11 +111,12 @@
               @blur="finishEditing"
               @keyup.enter="finishEditing"
               ref="editInput"
+              :disabled="notaBloqueada"
             >
           </td>
           <td>${{ formatNumber(item.total) }}</td>
           <td class="action-column desktop-only">
-            <button @click="removeItem(index)" class="delete-btn">Eliminar</button>
+            <button @click="removeItem(index)" class="delete-btn" :disabled="notaBloqueada">Eliminar</button>
           </td>
         </tr>
       </tbody>
@@ -110,7 +132,7 @@
   
     <h2>Precios de Venta</h2>
     <div class="add-product-button">
-      <button @click="showAddProductModal = true">Agregar Producto</button>
+      <button @click="showAddProductModal = true" :disabled="notaBloqueada">Agregar Producto</button>
     </div>
     <div class="table-card table-responsive">
       <table class="tabla-venta">
@@ -134,11 +156,12 @@
               @blur="finishEditingKilos"
               @keyup.enter="finishEditingKilos"
               ref="kilosInput"
+              :disabled="notaBloqueada"
             >
           </td>
           <td>{{ item.medida }}</td>
           <td>
-            <input v-model.number="item.precioVenta" type="number" @input="calcularTotalVenta(index)" class="precio-venta-input" inputmode="decimal" pattern="[0-9]*">
+            <input v-model.number="item.precioVenta" type="number" @input="calcularTotalVenta(index)" class="precio-venta-input" inputmode="decimal" pattern="[0-9]*" :disabled="notaBloqueada">
           </td>
           <td>${{ formatNumber(item.totalVenta) }}</td>
           <td :class="{ 'desktop-only': true, 'ganancia-positiva': item.ganancia > 0, 'ganancia-negativa': item.ganancia < 0 }">
@@ -177,11 +200,11 @@
         <span>Saldo Acumulado Anterior: ${{ formatNumber(saldoAcumuladoAnterior) }}</span>
       </div>
       <div class="input-row" v-for="(cobro, index) in cobros" :key="index">
-        <input v-model="cobro.descripcion" type="text" placeholder="Flete" class="responsive-input">
-        <input v-model="cobro.monto" type="number" placeholder="Monto" class="responsive-input">
-        <button @click="removeCobro(index)" class="delete-btn">Eliminar</button>
+        <input v-model="cobro.descripcion" type="text" placeholder="Flete" class="responsive-input" :disabled="notaBloqueada">
+        <input v-model="cobro.monto" type="number" placeholder="Monto" class="responsive-input" :disabled="notaBloqueada">
+        <button @click="removeCobro(index)" class="delete-btn" :disabled="notaBloqueada">Eliminar</button>
       </div>
-      <button @click="addCobro" class="add-btn">Agregar Flete</button>
+      <button @click="addCobro" class="add-btn" :disabled="notaBloqueada">Agregar Flete</button>
     </div>
   
     <h2>Abonos</h2>
@@ -229,8 +252,8 @@
     </div>
     <!-- Modal para acciones móviles -->
     <div v-if="showMobileActions" class="mobile-actions-modal">
-      <button @click="editItem(selectedItemIndex)" class="edit-btn">Editar</button>
-      <button @click="removeItem(selectedItemIndex)" class="delete-btn">Eliminar</button>
+      <button @click="editItem(selectedItemIndex)" class="edit-btn" :disabled="notaBloqueada">Editar</button>
+      <button @click="removeItem(selectedItemIndex)" class="delete-btn" :disabled="notaBloqueada">Eliminar</button>
       <button @click="cancelMobileActions">Cancelar</button>
     </div>
 
@@ -371,6 +394,7 @@ export default {
       showSaveMessage: false,
       saveMessageTimer: null,
       faltaNotaVeronica: false,
+      notaBloqueada: true,
     }
   },
   computed: {
@@ -529,6 +553,7 @@ export default {
             this.cobros = data.cobros || [];
             this.abonos = data.abonos || [];
             this.fechaSeleccionada = data.fecha || this.obtenerFechaActual();
+            this.notaBloqueada = data.notaBloqueada !== undefined ? data.notaBloqueada : true;
             
             // Cargar observaciones sin abrir el modal
             this.showObservacionModal = false; // Asegurar que el modal esté cerrado
@@ -554,7 +579,8 @@ export default {
               fechaSeleccionada: this.fechaSeleccionada,
               itemsVenta: this.itemsVenta,
               tieneObservacion: this.tieneObservacion,
-              observacion: this.observacion
+              observacion: this.observacion,
+              notaBloqueada: this.notaBloqueada
             });
           });
         } else {
@@ -649,6 +675,15 @@ export default {
       });
     },
     async addItem() {
+      if (this.notaBloqueada) {
+        this.lastSaveMessage = 'Desbloquea la nota para editar kilos o medidas';
+        this.showSaveMessage = true;
+        if (this.saveMessageTimer) clearTimeout(this.saveMessageTimer);
+        this.saveMessageTimer = setTimeout(() => {
+          this.showSaveMessage = false;
+        }, 3000);
+        return;
+      }
       if (!this.newItem.kilos || !this.newItem.medida || !this.newItem.costo || !this.newItem.precioVenta) {
         if (this.lastSaveMessage !== 'Por favor complete todos los campos' || !this.showSaveMessage) {
           this.lastSaveMessage = 'Por favor complete todos los campos';
@@ -740,6 +775,7 @@ export default {
           estadoPagado: false,
           tieneObservacion: this.tieneObservacion,
           observacion: this.observacion,
+          notaBloqueada: this.notaBloqueada,
         };
 
         const docRef = await addDoc(collection(db, 'cuentasVeronica'), notaData);
@@ -764,6 +800,7 @@ export default {
     },
     async removeItem(index) {
       try {
+        if (this.notaBloqueada) return;
         this.items.splice(index, 1);
         this.itemsVenta.splice(index, 1);
         this.showMobileActions = false;
@@ -775,9 +812,11 @@ export default {
       }
     },
     addCobro() {
+      if (this.notaBloqueada) return;
       this.cobros.push({descripcion: 'Flete', monto: 0});
     },
     removeCobro(index) {
+      if (this.notaBloqueada) return;
       this.cobros.splice(index, 1);
     },
     addAbono() {
@@ -832,6 +871,7 @@ export default {
           itemsVenta: this.itemsVenta,
           tieneObservacion: this.tieneObservacion,
           observacion: this.observacion,
+          notaBloqueada: this.notaBloqueada,
           ultimaActualizacion: new Date().toISOString()
         };
 
@@ -912,11 +952,13 @@ export default {
       this.selectedItemIndex = null;
     },
     editItem(index) {
+      if (this.notaBloqueada) return;
       this.editingIndex = index;
       this.editingItem = { ...this.items[index] };
       this.showEditModal = true;
     },
     saveEditedItem() {
+      if (this.notaBloqueada) return;
       if (this.editingItem.kilos && this.editingItem.medida && this.editingItem.costo) {
         this.editingItem.total = this.editingItem.kilos * this.editingItem.costo;
         this.items[this.editingIndex] = { ...this.editingItem };
@@ -1114,6 +1156,7 @@ export default {
       this.itemsVenta.splice(index, 1);
     },
     editKilos(index) {
+      if (this.notaBloqueada) return;
       this.editingKilosIndex = index;
       this.$nextTick(() => {
         if (this.$refs.kilosInput && this.$refs.kilosInput[0]) {
@@ -1122,6 +1165,7 @@ export default {
       });
     },
     finishEditingKilos() {
+      if (this.notaBloqueada) return;
       const index = this.editingKilosIndex;
       if (index !== null) {
         try {
@@ -1148,6 +1192,7 @@ export default {
       this.editingKilosIndex = null;
     },
     startLongPress(index, field) {
+      if (this.notaBloqueada) return;
       this.longPressTimer = setTimeout(() => {
         this.editField(index, field);
       }, 500); // 500ms para activar la edición
@@ -1156,6 +1201,7 @@ export default {
       clearTimeout(this.longPressTimer);
     },
     editField(index, field) {
+      if (this.notaBloqueada) return;
       this.editingField = { index, field };
       this.$nextTick(() => {
         if (this.$refs.editInput && this.$refs.editInput[0]) {
@@ -1164,6 +1210,7 @@ export default {
       });
     },
     finishEditing() {
+      if (this.notaBloqueada) return;
       const { index, field } = this.editingField;
       if (index !== null && field !== null) {
         try {
@@ -1188,6 +1235,15 @@ export default {
       }
     },
     addNewProduct() {
+      if (this.notaBloqueada) {
+        this.lastSaveMessage = 'Desbloquea la nota para agregar medidas';
+        this.showSaveMessage = true;
+        if (this.saveMessageTimer) clearTimeout(this.saveMessageTimer);
+        this.saveMessageTimer = setTimeout(() => {
+          this.showSaveMessage = false;
+        }, 3000);
+        return;
+      }
       if (!(this.newProduct.kilosVenta && this.newProduct.medida && this.newProduct.precioVenta)) {
         if (this.lastSaveMessage !== 'Por favor complete todos los campos' || !this.showSaveMessage) {
           this.lastSaveMessage = 'Por favor complete todos los campos';
@@ -1310,6 +1366,7 @@ export default {
           estadoPagado: saldoFinal <= 0,
           tieneObservacion: this.tieneObservacion,
           observacion: this.observacion,
+          notaBloqueada: this.notaBloqueada,
           ultimaActualizacion: new Date().toISOString()
         };
 
@@ -1338,6 +1395,27 @@ export default {
     },
     guardarCuenta() {
       this.guardarNota();
+    },
+    async toggleBloqueoNota() {
+      if (!this.$route.params.id) {
+        this.notaBloqueada = !this.notaBloqueada;
+        return;
+      }
+      const nuevoEstado = !this.notaBloqueada;
+      const mensaje = nuevoEstado
+        ? '¿Desbloquear la nota para editar kilos y medidas?'
+        : '¿Bloquear la nota para evitar cambios en kilos y medidas?';
+      if (!confirm(mensaje)) return;
+      try {
+        await updateDoc(doc(db, 'cuentasVeronica', this.$route.params.id), {
+          notaBloqueada: nuevoEstado,
+          ultimaActualizacion: new Date().toISOString()
+        });
+        this.notaBloqueada = nuevoEstado;
+      } catch (error) {
+        console.error('Error al actualizar el bloqueo de la nota:', error);
+        alert('No se pudo actualizar el bloqueo. Intenta nuevamente.');
+      }
     },
     agregarObservacion() {
       this.showObservacionModal = true;
@@ -1490,6 +1568,62 @@ h1, h2, h3 {
   box-shadow: 0 2px 8px rgba(0,0,0,0.08);
   padding: 16px;
   border-left: 4px solid #ff8c00;
+}
+
+.nota-lock {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.nota-lock-info {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.nota-lock-label {
+  font-weight: 600;
+  color: #555;
+}
+
+.nota-lock-status {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  border: 1px solid transparent;
+}
+
+.nota-lock-status.bloqueada {
+  color: #b71c1c;
+  background: #ffebee;
+  border-color: #ef9a9a;
+}
+
+.nota-lock-status.desbloqueada {
+  color: #1b5e20;
+  background: #e8f5e9;
+  border-color: #a5d6a7;
+}
+
+.nota-lock-btn {
+  background-color: #6c757d;
+}
+
+.nota-lock-btn:hover {
+  background-color: #5a6268;
+}
+
+.nota-lock-help {
+  margin: 0;
+  font-size: 13px;
+  color: #666;
 }
 
 .back-button-container {

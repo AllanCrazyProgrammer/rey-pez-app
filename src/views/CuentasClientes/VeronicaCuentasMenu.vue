@@ -61,6 +61,11 @@
               <span v-else class="texto-sin-nota">Sin nota registrada</span>
               <span v-if="!cuenta.missingNota">Total Acumulado: ${{ formatNumber(cuenta.totalNota) }}</span>
             </p>
+            <div v-if="!cuenta.missingNota" class="lock-status">
+              <span :class="['lock-badge', cuenta.notaBloqueada ? 'lock-on' : 'lock-off']">
+                {{ cuenta.notaBloqueada ? 'Bloqueada' : 'Desbloqueada' }}
+              </span>
+            </div>
             <div v-if="cuenta.tieneObservacion || (cuenta.observacion && cuenta.observacion.trim().length)" class="observacion-container">
               <p class="observacion-texto">{{ cuenta.observacion }}</p>
               <button class="delete-observacion-btn" @click="borrarObservacion(cuenta.id)" title="Borrar observación">×</button>
@@ -270,6 +275,7 @@ export default {
               nuevoSaldoAcumulado: data.nuevoSaldoAcumulado || 0,
               saldoAcumuladoAnterior: data.saldoAcumuladoAnterior || 0,
               abonos: data.abonos || [],
+              notaBloqueada: data.notaBloqueada !== undefined ? data.notaBloqueada : true,
               tieneObservacion: data.tieneObservacion || false,
               observacion: data.observacion || ''
             };
@@ -999,6 +1005,31 @@ h1, h2 {
   display: flex;
   align-items: flex-start;
   gap: 10px;
+}
+
+.lock-status {
+  margin-top: 8px;
+}
+
+.lock-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  border: 1px solid transparent;
+}
+
+.lock-on {
+  color: #b71c1c;
+  background: #ffebee;
+  border-color: #ef9a9a;
+}
+
+.lock-off {
+  color: #1b5e20;
+  background: #e8f5e9;
+  border-color: #a5d6a7;
 }
 
 .observacion-texto {
