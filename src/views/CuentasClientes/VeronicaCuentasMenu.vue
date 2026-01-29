@@ -255,6 +255,9 @@ export default {
             const totalAbonos = (data.abonos || []).reduce((sum, abono) => 
               sum + (parseFloat(abono.monto) || 0), 0);
             const totalDiaActual = (data.totalGeneralVenta || 0) - totalCobros - totalAbonos;
+            const saldoPersistido = typeof data.nuevoSaldoAcumulado === 'number'
+              ? data.nuevoSaldoAcumulado
+              : null;
 
             return {
               id: doc.id,
@@ -263,7 +266,7 @@ export default {
               totalCobros,
               totalAbonos,
               totalNota: data.nuevoSaldoAcumulado || 0,
-              estadoPagado: totalDiaActual === 0,
+              estadoPagado: saldoPersistido !== null ? saldoPersistido <= 0 : totalDiaActual <= 0,
               nuevoSaldoAcumulado: data.nuevoSaldoAcumulado || 0,
               saldoAcumuladoAnterior: data.saldoAcumuladoAnterior || 0,
               abonos: data.abonos || [],
@@ -286,26 +289,30 @@ export default {
             const totalDia = cuenta.saldoHoy - cuenta.totalCobros - cuenta.totalAbonos;
             saldoAcumulado += totalDia;
 
-            const saldoAnterior = i === 0 ? 0 : cuentasOrdenadas[i-1].nuevoSaldoAcumulado;
+            const saldoAnterior = i === 0 ? 0 : (saldoAcumulado - totalDia);
+            const estadoPagado = saldoAcumulado <= 0;
+            const saldoNormalizado = estadoPagado ? 0 : saldoAcumulado;
             
             // Solo actualizar si los valores han cambiado
             if (cuenta.saldoAcumuladoAnterior !== saldoAnterior || 
-                cuenta.nuevoSaldoAcumulado !== saldoAcumulado) {
+                cuenta.nuevoSaldoAcumulado !== saldoNormalizado || 
+                cuenta.estadoPagado !== estadoPagado) {
               
               actualizaciones.push({
                 id: cuenta.id,
                 updates: {
                   saldoAcumuladoAnterior: saldoAnterior,
-                  nuevoSaldoAcumulado: saldoAcumulado,
-                  estadoPagado: totalDia === 0
+                  nuevoSaldoAcumulado: saldoNormalizado,
+                  estadoPagado: estadoPagado
                 }
               });
             }
 
             // Actualizar el objeto local
-            cuenta.totalNota = saldoAcumulado;
+            cuenta.totalNota = saldoNormalizado;
             cuenta.saldoAcumuladoAnterior = saldoAnterior;
-            cuenta.estadoPagado = totalDia === 0;
+            cuenta.estadoPagado = estadoPagado;
+            cuenta.nuevoSaldoAcumulado = saldoNormalizado;
 
             // Reiniciar saldo si la cuenta está pagada
             if (saldoAcumulado <= 0) {

@@ -122,7 +122,7 @@
                         :key="cuenta.id" 
                         :value="cuenta.id"
                       >
-                        {{ cuenta.fechaFormateada }} - ${{ formatNumber(cuenta.totalGeneralVenta) }}
+                        {{ cuenta.fechaFormateada }} - ${{ formatNumber(cuenta.saldoPendiente) }}
                       </option>
                     </select>
                   </div>
@@ -521,8 +521,8 @@ export default {
       for (const cuenta of cuentasOrdenadasPorFecha.value) {
         if (montoRestante <= 0) break
         
-        // Usar el saldo actual de la cuenta
-        const saldoCuenta = cuenta.nuevoSaldoAcumulado
+        // Usar el saldo pendiente de la cuenta (nota)
+        const saldoCuenta = cuenta.saldoPendiente
         
         // Solo procesar cuentas que tengan saldo pendiente
         if (saldoCuenta <= 0) continue
@@ -941,17 +941,25 @@ export default {
         const snapshot = await getDocs(q)
         // Filtrar solo las cuentas que NO están pagadas
         cuentasDisponibles.value = snapshot.docs
-          .map(doc => ({
-            id: doc.id,
-            fecha: doc.data().fecha,
-            totalGeneralVenta: doc.data().totalGeneralVenta || 0,
-            fechaFormateada: formatearFecha(doc.data().fecha),
-            estadoPagado: doc.data().estadoPagado,
-            nuevoSaldoAcumulado: doc.data().nuevoSaldoAcumulado || 0
-          }))
+          .map(doc => {
+            const data = doc.data() || {}
+            const totalGeneralVenta = data.totalGeneralVenta || 0
+            const totalCobros = (data.cobros || []).reduce((sum, cobro) => sum + (parseFloat(cobro.monto) || 0), 0)
+            const totalAbonos = (data.abonos || []).reduce((sum, abono) => sum + (parseFloat(abono.monto) || 0), 0)
+            const saldoPendiente = totalGeneralVenta - totalCobros - totalAbonos
+            return {
+              id: doc.id,
+              fecha: data.fecha,
+              totalGeneralVenta,
+              fechaFormateada: formatearFecha(data.fecha),
+              estadoPagado: data.estadoPagado,
+              nuevoSaldoAcumulado: data.nuevoSaldoAcumulado || 0,
+              saldoPendiente
+            }
+          })
           .filter(cuenta => {
-            // Filtrar cuentas que NO estén pagadas
-            return !cuenta.estadoPagado && cuenta.nuevoSaldoAcumulado > 0
+            // Filtrar cuentas que NO estén pagadas y tengan saldo pendiente en la nota
+            return !cuenta.estadoPagado && cuenta.saldoPendiente > 0
           })
           .sort((a, b) => new Date(b.fecha) - new Date(a.fecha))
       } catch (error) {
@@ -1138,11 +1146,11 @@ export default {
           
           const cuentaData = cuentaDoc.data()
           
-          // Recalcular el saldo actual de esta cuenta
+          // Recalcular el saldo pendiente de esta nota
           const totalAbonos = (cuentaData.abonos || []).reduce((sum, abono) => sum + (abono.monto || 0), 0)
           const totalCobros = (cuentaData.cobros || []).reduce((sum, cobro) => sum + (cobro.monto || 0), 0)
           const totalDia = (cuentaData.totalGeneralVenta || 0) - totalCobros - totalAbonos
-          let saldoActualCuenta = (cuentaData.saldoAcumuladoAnterior || 0) + totalDia
+          let saldoActualCuenta = totalDia
           
           console.log(`Procesando cuenta ${cuenta.id}:`, {
             fechaCuenta: cuenta.fecha,

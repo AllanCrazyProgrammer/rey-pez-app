@@ -401,7 +401,7 @@ export default {
       return this.totalGeneralVenta - this.abonos.reduce((sum, abono) => sum + (abono.monto || 0), 0);
     },
     estadoCuenta() {
-      return this.totalSaldo <= 0 || this.totalDiaActual === 0 ? 'Pagado' : 'No Pagado';
+      return this.nuevoSaldoAcumulado <= 0 ? 'Pagado' : 'No Pagado';
     },
     gananciaTotal() {
       return this.itemsVenta.reduce((sum, item) => sum + (item.ganancia || 0), 0);
@@ -621,11 +621,17 @@ export default {
             (cuenta.abonos || []).reduce((sum, abono) => sum + (parseFloat(abono.monto) || 0), 0);
 
           saldoAcumulado = saldoAcumulado + totalDia;
+          const estadoPagado = saldoAcumulado <= 0;
+          const saldoNormalizado = estadoPagado ? 0 : saldoAcumulado;
           
+          if (saldoAcumulado <= 0) {
+            saldoAcumulado = 0;
+          }
+
           return updateDoc(doc(db, 'cuentasVeronica', cuenta.id), {
             saldoAcumuladoAnterior: cuenta.id === this.$route.params.id ? this.saldoAcumuladoAnterior : saldoAcumulado - totalDia,
-            nuevoSaldoAcumulado: saldoAcumulado,
-            estadoPagado: saldoAcumulado <= 0
+            nuevoSaldoAcumulado: saldoNormalizado,
+            estadoPagado: estadoPagado
           });
         }));
       } catch (error) {
@@ -1281,6 +1287,7 @@ export default {
 
       try {
         // Preparar datos completos para guardar
+        const saldoFinal = this.nuevoSaldoAcumulado <= 0 ? 0 : this.nuevoSaldoAcumulado;
         const notaData = {
           items: this.items.map(item => ({
             kilos: item.kilos,
@@ -1297,10 +1304,10 @@ export default {
           })),
           totalGeneral: this.totalGeneral,
           totalGeneralVenta: this.totalGeneralVenta,
-          nuevoSaldoAcumulado: this.nuevoSaldoAcumulado,
+          nuevoSaldoAcumulado: saldoFinal,
           cobros: this.cobros,
           abonos: this.abonos,
-          estadoPagado: this.estadoCuenta === 'Pagado',
+          estadoPagado: saldoFinal <= 0,
           tieneObservacion: this.tieneObservacion,
           observacion: this.observacion,
           ultimaActualizacion: new Date().toISOString()
