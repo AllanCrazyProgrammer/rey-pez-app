@@ -162,6 +162,7 @@
                   <th>✓</th>
                   <th>Kilos/Taras</th>
                   <th>Medida</th>
+                  <th>Tipo</th>
                 </tr>
               </thead>
               <tbody>
@@ -172,12 +173,20 @@
                     {{ item.medida }}
                     <span v-if="item.proveedor" class="proveedor-tag">{{ item.proveedor }}</span>
                   </td>
+                  <td :class="{ 
+                    'text-blue': item.tipo === 'C/H20' || item.tipo === '.7 y .3', 
+                    'text-blue compact': item.tipo === '1.35 y .15' || item.tipo === '1.5 y .3'
+                  }">
+                    {{ item.tipo }}
+                    <span v-if="item.nota" class="nota-tag">{{ item.nota }}</span>
+                  </td>
                 </tr>
               </tbody>
               <tfoot>
                 <tr class="total-cliente-row">
                   <td></td>
                   <td class="total-kilos-cliente">{{ calcularTotalKilosCliente(pedidoCatarro) }} kg</td>
+                  <td></td>
                   <td></td>
                 </tr>
               </tfoot>
@@ -193,6 +202,7 @@
                   <th>✓</th>
                   <th>Kilos/Taras</th>
                   <th>Medida</th>
+                  <th>Tipo</th>
                 </tr>
               </thead>
               <tbody>
@@ -203,12 +213,20 @@
                     {{ item.medida }}
                     <span v-if="item.proveedor" class="proveedor-tag">{{ item.proveedor }}</span>
                   </td>
+                  <td :class="{ 
+                    'text-blue': item.tipo === 'C/H20' || item.tipo === '.7 y .3', 
+                    'text-blue compact': item.tipo === '1.35 y .15' || item.tipo === '1.5 y .3'
+                  }">
+                    {{ item.tipo }}
+                    <span v-if="item.nota" class="nota-tag">{{ item.nota }}</span>
+                  </td>
                 </tr>
               </tbody>
               <tfoot>
                 <tr class="total-cliente-row">
                   <td></td>
                   <td class="total-kilos-cliente">{{ calcularTotalKilosCliente(pedidoOzuna, true) }} kg</td>
+                  <td></td>
                   <td></td>
                 </tr>
               </tfoot>
