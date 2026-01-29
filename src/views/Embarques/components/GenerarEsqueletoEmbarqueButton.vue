@@ -171,14 +171,18 @@ export default {
             const tipoNormalizado = this.normalizarTipo(item.tipo);
             // Obtener la nota (sellado/kileado) del item
             const nota = (item.nota || '').toString().trim();
+            const esVenta = clienteId === '4' ? !item.esMaquila : null;
+            const ventaKey = clienteId === '4' ? (esVenta ? 'venta' : 'maquila') : '';
             // Incluir la nota en la clave única para diferenciar medidas con diferente nota
-            const clave = `${medida}__${tipoNormalizado.tipo || ''}__${tipoNormalizado.tipoPersonalizado || ''}__${nota}`;
+            const clave = `${medida}__${tipoNormalizado.tipo || ''}__${tipoNormalizado.tipoPersonalizado || ''}__${tipoNormalizado.camaronNeto || ''}__${ventaKey}__${nota}`;
 
             if (!acumuladoPorCliente[clienteId].has(clave)) {
               acumuladoPorCliente[clienteId].set(clave, {
                 medida,
                 tipo: tipoNormalizado.tipo,
                 tipoPersonalizado: tipoNormalizado.tipoPersonalizado || '',
+                camaronNeto: tipoNormalizado.camaronNeto,
+                esVenta,
                 nota, // Incluir la nota en el esqueleto
                 pedidoReferencia: {
                   kilos: 0,
@@ -306,6 +310,9 @@ export default {
       const tipoTexto = (tipo || '').toString().trim();
       const valor = tipoTexto.toLowerCase();
 
+      if (valor === '.7 y .3' || valor === '0.7 y 0.3') {
+        return { tipo: 'c/h20', camaronNeto: 0.7 };
+      }
       if (valor === 's/h20' || valor === 's/h2o') {
         return { tipo: 's/h20' };
       }

@@ -951,8 +951,12 @@ export default {
         const tipo = (entrada.tipo || '').toString().trim().toLowerCase();
         const tipoPersonalizado = (entrada.tipoPersonalizado || '').toString().trim().toLowerCase();
         const nota = (entrada.nota || '').toString().trim().toLowerCase();
+        const esOzuna = (entrada.clienteId || '').toString() === '4';
+        const ventaKey = esOzuna && typeof entrada.esVenta === 'boolean'
+          ? (entrada.esVenta ? 'venta' : 'maquila')
+          : '';
         if (!medida) return '';
-        return `${medida}__${tipo}__${tipoPersonalizado}__${nota}`;
+        return `${medida}__${tipo}__${tipoPersonalizado}__${ventaKey}__${nota}`;
       };
 
       const construirClaveCrudo = (entrada = {}) => {
@@ -1033,6 +1037,12 @@ export default {
             // Asignar la nota (sellado/kileado) desde el pedido limpio
             if (definicion.nota) {
               nuevoProducto.nota = definicion.nota;
+            }
+            if (definicion.tipo === 'c/h20' && definicion.camaronNeto) {
+              nuevoProducto.camaronNeto = definicion.camaronNeto;
+            }
+            if (typeof definicion.esVenta === 'boolean') {
+              nuevoProducto.esVenta = definicion.esVenta;
             }
 
             this.productosNuevosPendientes.set(nuevoProducto.id, { ...nuevoProducto });
