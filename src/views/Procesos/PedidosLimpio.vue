@@ -685,11 +685,14 @@ export default {
     await this.cargarMedidas();
     
     // Verificar si estamos editando un pedido existente
-    const { edit, id, fecha } = this.$route.query;
+    const { edit, id, fecha, preview } = this.$route.query;
     if (edit === 'true' && id) {
       this.editando = true;
       this.pedidoId = id;
       await this.cargarPedido(id);
+      if (preview === 'true') {
+        this.mostrarImpresion = true;
+      }
     } else if (fecha) {
       this.fecha = fecha;
     }

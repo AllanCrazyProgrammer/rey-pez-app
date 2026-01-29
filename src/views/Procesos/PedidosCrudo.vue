@@ -103,6 +103,13 @@
     </div> -->
 
     <div class="buttons-container">
+      <button
+        v-if="mostrarBotonRegresar"
+        @click="regresarAImpresionLimpio"
+        class="btn-regresar"
+      >
+        Regresar a Limpio
+      </button>
       <button @click="guardarPedido" class="btn-guardar">Guardar Pedido</button>
       <button @click="imprimirPedido" class="btn-imprimir">Imprimir</button>
       <button @click="$router.push('/procesos/pedidos')" class="btn-cancelar">Cancelar</button>
@@ -139,6 +146,9 @@ export default {
       maxDate.setMonth(maxDate.getMonth() + 3)
       return maxDate.toISOString().split('T')[0]
     },
+    mostrarBotonRegresar() {
+      return this.$route.query.origen === 'limpio'
+    },
     columnas() {
       return [...this.columnasBase, ...this.columnasAdicionales]
     },
@@ -173,6 +183,27 @@ export default {
     }
   },
   methods: {
+    regresarAImpresionLimpio() {
+      const { limpioId, limpioFecha } = this.$route.query
+      if (limpioId) {
+        this.$router.push({
+          path: '/procesos/pedidos/limpio',
+          query: { edit: 'true', id: limpioId, fecha: limpioFecha || this.fecha, preview: 'true' }
+        })
+        return
+      }
+
+      if (window.history.length > 1) {
+        this.$router.back()
+      } else if (limpioFecha) {
+        this.$router.push({
+          path: '/procesos/pedidos/limpio',
+          query: { fecha: limpioFecha }
+        })
+      } else {
+        this.$router.push('/procesos/pedidos')
+      }
+    },
     normalizarNombreColumna(columna) {
       return columna.toLowerCase();
     },
@@ -405,11 +436,13 @@ export default {
     });
 
     // Verificar si estamos en modo edición
-    const { edit, id } = this.$route.query;
+    const { edit, id, fecha } = this.$route.query;
     if (edit === 'true' && id) {
       this.isEditing = true;
       this.pedidoId = id;
       this.cargarPedido(id);
+    } else if (fecha) {
+      this.fecha = fecha;
     }
   }
 }
@@ -523,7 +556,8 @@ input[type="number"] {
 }
 
 .btn-guardar,
-.btn-cancelar {
+.btn-cancelar,
+.btn-regresar {
   padding: 12px 24px;
   border: none;
   border-radius: 4px;
@@ -548,6 +582,15 @@ input[type="number"] {
 
 .btn-cancelar:hover {
   background-color: #7f8c8d;
+}
+
+.btn-regresar {
+  background: linear-gradient(135deg, #16a085 0%, #1abc9c 100%);
+  color: #fff;
+}
+
+.btn-regresar:hover {
+  background: linear-gradient(135deg, #138d75 0%, #17a589 100%);
 }
 
 .btn-imprimir {
@@ -758,7 +801,8 @@ input.cliente-veronica:focus {
   
   .btn-guardar,
   .btn-cancelar,
-  .btn-imprimir {
+  .btn-imprimir,
+  .btn-regresar {
     width: 100%;
     margin-bottom: 10px;
   }

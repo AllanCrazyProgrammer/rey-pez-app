@@ -26,6 +26,9 @@
       <button @click="irASacadaDelDia" class="btn-sacada">
         Ir a Sacada del día
       </button>
+      <button @click="irAPedidoCrudosDelDia" class="btn-crudos">
+        Ir a Pedido de Crudos
+      </button>
     </div>
     <div id="pdfPreview" class="pdf-preview">
       <div class="preview-page">
@@ -537,6 +540,43 @@ export default {
       } catch (err) {
         console.error('Error al navegar a la sacada del día:', err)
         this.$router.push('/sacadas')
+      }
+    },
+    async irAPedidoCrudosDelDia() {
+      try {
+        const q = query(
+          collection(db, 'pedidos'),
+          where('tipo', '==', 'crudo'),
+          where('fecha', '==', this.fecha)
+        )
+        const snap = await getDocs(q)
+        if (!snap.empty) {
+          const pedidoId = snap.docs[0].id
+          this.$router.push({
+            path: '/procesos/pedidos/crudo',
+            query: {
+              edit: 'true',
+              id: pedidoId,
+              fecha: this.fecha,
+              origen: 'limpio',
+              limpioId: this.id || '',
+              limpioFecha: this.fecha
+            }
+          })
+        } else {
+          this.$router.push({
+            path: '/procesos/pedidos/crudo',
+            query: {
+              fecha: this.fecha,
+              origen: 'limpio',
+              limpioId: this.id || '',
+              limpioFecha: this.fecha
+            }
+          })
+        }
+      } catch (err) {
+        console.error('Error al navegar al pedido de crudos del día:', err)
+        this.$router.push('/procesos/pedidos/crudo')
       }
     },
     volverAEditar() {
@@ -1413,7 +1453,8 @@ export default {
 .btn-generar,
 .btn-menu,
 .btn-volver,
-.btn-sacada {
+.btn-sacada,
+.btn-crudos {
   padding: 10px 20px;
   border: none;
   border-radius: 4px;
@@ -1460,6 +1501,16 @@ export default {
 
 .btn-sacada:hover {
   background: linear-gradient(135deg, #7d3cb2 0%, #5b4bd6 100%);
+}
+
+.btn-crudos {
+  background: linear-gradient(135deg, #16a085 0%, #1abc9c 100%);
+  color: #fff;
+  box-shadow: 0 4px 10px rgba(22, 160, 133, 0.25);
+}
+
+.btn-crudos:hover {
+  background: linear-gradient(135deg, #138d75 0%, #17a589 100%);
 }
 
 .icon {
@@ -1681,7 +1732,8 @@ h4.cliente-header.ozuna-header {
   .btn-generar,
   .btn-menu,
   .btn-editar,
-  .btn-sacada {
+  .btn-sacada,
+  .btn-crudos {
     width: 100%;
     padding: 10px;
     font-size: 14px;
