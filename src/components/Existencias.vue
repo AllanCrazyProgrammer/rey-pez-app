@@ -60,14 +60,20 @@
           
           <!-- Para medidas normales con proveedores -->
           <template v-else>
-            <h2>
-              {{ medidaKey }}
-              <div v-if="medidaKey === '51/60' && promedioCombinado516141" class="promedio-combinado">
-                Promedio 51,61 y 41 (Selecta): ${{ promedioCombinado516141.toFixed(2) }}
-              </div>
-              <span v-if="tienePrecio && datos.precioPromedioGeneral" class="precio-promedio">
-                - Promedio General: ${{ datos.precioPromedioGeneral.toFixed(2) }}
+            <h2 class="medida-header">
+              <span class="medida-title">
+                {{ medidaKey }}
+                <div v-if="medidaKey === '51/60' && promedioCombinado516141" class="promedio-combinado">
+                  Promedio 51,61 y 41 (Selecta): ${{ promedioCombinado516141.toFixed(2) }}
+                </div>
+                <span v-if="tienePrecio && datos.precioPromedioGeneral" class="precio-promedio">
+                  - Promedio General: ${{ datos.precioPromedioGeneral.toFixed(2) }}
+                </span>
               </span>
+              <label class="agrupar-toggle">
+                <input type="checkbox" v-model="agruparMedidasIguales" />
+                <span>Agrupar iguales</span>
+              </label>
             </h2>
             
             <!-- Mostrar cada proveedor por separado -->
@@ -252,6 +258,7 @@ export default {
     const search = ref('');
     const tienePrecio = ref(false);
     const filtroCuarto = ref(false);
+    const agruparMedidasIguales = ref(false);
     const deudas = ref([]);
     const salidasDiaSiguiente = ref([]);
 
@@ -541,6 +548,76 @@ export default {
       return totalKilos > 0 ? totalValor / totalKilos : null;
     });
 
+    const toDateValue = (value) => {
+      if (!value) return null;
+      if (value instanceof Date) return value;
+      if (value.toDate) return value.toDate();
+      return null;
+    };
+
+    const ordenarItems = (items) => {
+      return [...items].sort((a, b) => {
+        // Ordenar por fecha de entrada (más antiguas primero)
+        const fechaA = toDateValue(a.fechaEntrada);
+        const fechaB = toDateValue(b.fechaEntrada);
+        if (fechaA && fechaB) {
+          return fechaA - fechaB;
+        }
+        // Si no hay fechas, ordenar por precio
+        if (a.precio === null && b.precio === null) return 0;
+        if (a.precio === null) return 1;
+        if (b.precio === null) return -1;
+        return a.precio - b.precio;
+      });
+    };
+
+    const agruparItemsPorMedidaYPrecio = (items) => {
+      const agrupados = {};
+
+      items.forEach(item => {
+        const precioKey = item.precio !== null && item.precio !== undefined ? item.precio : 'sin-precio';
+        const key = `${item.medida}__${precioKey}`;
+        const fechaItem = toDateValue(item.fechaEntrada);
+
+        if (!agrupados[key]) {
+          agrupados[key] = {
+            ...item,
+            kilos: 0,
+            _fechaMin: fechaItem,
+            _fechaMax: fechaItem,
+            _cuartos: new Set(item.cuartoFrio ? [item.cuartoFrio] : [])
+          };
+        }
+
+        agrupados[key].kilos += item.kilos;
+
+        if (fechaItem) {
+          if (!agrupados[key]._fechaMin || fechaItem < agrupados[key]._fechaMin) {
+            agrupados[key]._fechaMin = fechaItem;
+          }
+          if (!agrupados[key]._fechaMax || fechaItem > agrupados[key]._fechaMax) {
+            agrupados[key]._fechaMax = fechaItem;
+          }
+        }
+
+        if (item.cuartoFrio) {
+          agrupados[key]._cuartos.add(item.cuartoFrio);
+        }
+      });
+
+      return Object.values(agrupados).map(item => {
+        const { _fechaMin, _fechaMax, _cuartos, ...rest } = item;
+        const cuartos = Array.from(_cuartos).filter(Boolean);
+        const cuartoUnico = cuartos.length === 1 ? cuartos[0] : (cuartos.length > 1 ? 'varios' : null);
+
+        return {
+          ...rest,
+          fechaEntrada: _fechaMin || rest.fechaEntrada || null,
+          cuartoFrio: cuartoUnico
+        };
+      });
+    };
+
     const filteredExistencias = computed(() => {
       const searchLower = search.value.toLowerCase();
       
@@ -665,22 +742,13 @@ export default {
               const itemsFiltrados = items.filter(item => item.kilos > 1);
 
               if (itemsFiltrados.length > 0) {
-                const itemsOrdenados = itemsFiltrados.sort((a, b) => {
-                  // Ordenar por fecha de entrada (más antiguas primero)
-                  if (a.fechaEntrada && b.fechaEntrada) {
-                    const fechaA = a.fechaEntrada instanceof Date ? a.fechaEntrada : a.fechaEntrada.toDate();
-                    const fechaB = b.fechaEntrada instanceof Date ? b.fechaEntrada : b.fechaEntrada.toDate();
-                    return fechaA - fechaB;
-                  }
-                  // Si no hay fechas, ordenar por precio
-                  if (a.precio === null && b.precio === null) return 0;
-                  if (a.precio === null) return 1;
-                  if (b.precio === null) return -1;
-                  return a.precio - b.precio;
-                });
+                const itemsOrdenados = ordenarItems(itemsFiltrados);
+                const itemsProcesados = agruparMedidasIguales.value
+                  ? ordenarItems(agruparItemsPorMedidaYPrecio(itemsOrdenados))
+                  : itemsOrdenados;
 
                 proveedoresProcesados[proveedor] = {
-                  items: itemsOrdenados,
+                  items: itemsProcesados,
                   precioPromedio: calcularPrecioPromedio(itemsOrdenados)
                 };
               }
@@ -1491,7 +1559,8 @@ export default {
       salidasMaquilasDiaSiguiente,
       totalSalidasDiaSiguiente,
       promedioCombinado516141,
-      tieneCuarto
+      tieneCuarto,
+      agruparMedidasIguales
     };
   }
 };
@@ -1726,6 +1795,34 @@ h1 {
   margin-bottom: 15px;
 }
 
+.medida-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.medida-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.agrupar-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #2c3e50;
+  margin-left: auto;
+}
+
+.agrupar-toggle input {
+  accent-color: #3498db;
+}
+
 .proveedores-container {
   display: flex;
   flex-direction: column;
@@ -1948,6 +2045,14 @@ h1 {
   
   .total-maquila-valor {
     font-size: 16px;
+  }
+
+  .medida-header {
+    align-items: flex-start;
+  }
+
+  .agrupar-toggle {
+    margin-left: 0;
   }
 }
 
