@@ -103,7 +103,7 @@
             </tr>
           </thead>
           <tbody>
-            <template v-for="(item, index) in itemsOrdenados">
+            <template v-for="item in itemsOrdenados">
               <tr 
                 :key="item.id"
                 :class="{ 'fila-abono': item.tipo === 'abono' }"
@@ -118,7 +118,7 @@
                 <td>{{ item.tipo === 'abono' ? 
                   formatearMonto(-item.monto) : 
                   formatearMonto(calcularMontoDia(item)) }}</td>
-                <td>{{ formatearMonto(calcularDeudaAcumulada(index)) }}</td>
+                <td>{{ formatearMonto(deudaAcumuladaPorId[item.id] || 0) }}</td>
                 <td>
                   <span v-if="item.tipo === 'flete'" :class="['estado', item.pagado ? 'pagado' : 'pendiente']">
                     {{ item.pagado ? 'Pagado' : 'Pendiente' }}
@@ -147,7 +147,7 @@
 
       <!-- Vista móvil actualizada -->
       <div class="tabla-mobile">
-        <div v-for="(item, index) in itemsOrdenados" 
+        <div v-for="item in itemsOrdenados" 
              :key="item.id" 
              class="flete-card"
              :class="{ 'pagado': item.pagado, 'abono': item.tipo === 'abono' }">
@@ -200,7 +200,7 @@
             </div>
             <div class="flete-row">
               <span class="label">Deuda Acumulada:</span>
-              <span class="value">{{ formatearMonto(calcularDeudaAcumulada(index)) }}</span>
+              <span class="value">{{ formatearMonto(deudaAcumuladaPorId[item.id] || 0) }}</span>
             </div>
           </div>
           <div class="flete-footer">
@@ -322,6 +322,25 @@ export default {
         ...this.abonosFiltrados.map(a => ({ ...a, tipo: 'abono' }))
       ];
       return items.sort((a, b) => b.fecha - a.fecha);
+    },
+    deudaAcumuladaPorId() {
+      const itemsCronologicos = [...this.itemsOrdenados]
+        .sort((a, b) => a.fecha - b.fecha);
+
+      const acumulados = {};
+      let total = 0;
+
+      itemsCronologicos.forEach((item) => {
+        if (item.tipo === 'abono') {
+          total -= item.monto;
+        } else {
+          const montoDia = this.calcularMontoDia(item);
+          total += (item.pagado ? 0 : montoDia);
+        }
+        acumulados[item.id] = total;
+      });
+
+      return acumulados;
     },
     totalTarasLimpioJoselito() {
       return this.fletesFiltrados.reduce((total, flete) => total + flete.tarasLimpioJoselito, 0);
@@ -630,23 +649,6 @@ export default {
              (crudoJos * this.costoTaraCrudo) +
              (limpioVer * this.costoTaraLimpio) +
              (crudoVer * this.costoTaraCrudo);
-    },
-    calcularDeudaAcumulada(index) {
-      const itemsCronologicos = [...this.itemsOrdenados]
-        .sort((a, b) => a.fecha - b.fecha);
-      
-      const itemActual = this.itemsOrdenados[index];
-      
-      return itemsCronologicos
-        .filter(item => item.fecha <= itemActual.fecha)
-        .reduce((total, item) => {
-          if (item.tipo === 'abono') {
-            return total - item.monto;
-          } else {
-            const montoDia = this.calcularMontoDia(item);
-            return total + (item.pagado ? 0 : montoDia);
-          }
-        }, 0);
     },
     async togglePago(flete) {
       try {
