@@ -55,6 +55,14 @@ export const normalizarFechaISO = (fecha) => {
   if (typeof fecha === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
     return fecha;
   }
+
+  // Si es un string ISO con tiempo, extraer la parte de fecha sin TZ
+  if (typeof fecha === 'string') {
+    const match = fecha.match(/^(\d{4}-\d{2}-\d{2})/);
+    if (match) {
+      return match[1];
+    }
+  }
   
   // Convertir Date object o string a YYYY-MM-DD
   const fechaObj = new Date(fecha);
@@ -63,9 +71,10 @@ export const normalizarFechaISO = (fecha) => {
     return obtenerFechaActualISO();
   }
   
-  const año = fechaObj.getFullYear();
-  const mes = String(fechaObj.getMonth() + 1).padStart(2, '0');
-  const dia = String(fechaObj.getDate()).padStart(2, '0');
+  // Usar métodos UTC para evitar problemas de zona horaria
+  const año = fechaObj.getUTCFullYear();
+  const mes = String(fechaObj.getUTCMonth() + 1).padStart(2, '0');
+  const dia = String(fechaObj.getUTCDate()).padStart(2, '0');
   return `${año}-${mes}-${dia}`;
 };
 

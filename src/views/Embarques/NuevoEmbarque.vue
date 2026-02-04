@@ -1670,7 +1670,7 @@ export default {
               return false;
             }
             try {
-              const registroISO = new Date(registro.fecha).toISOString().split('T')[0];
+              const registroISO = normalizarFechaISO(registro.fecha);
               return registroISO === fechaISO;
             } catch (_) {
               return false;
@@ -1685,18 +1685,18 @@ export default {
         const totalRemotos = snapshot.docs.filter(doc => {
           const data = doc.data();
           let fechaEmbarque;
-
+          
           if (data.fecha && typeof data.fecha.toDate === 'function') {
             fechaEmbarque = data.fecha.toDate();
           } else if (data.fecha instanceof Date) {
             fechaEmbarque = data.fecha;
           } else if (typeof data.fecha === 'string') {
-            fechaEmbarque = new Date(data.fecha);
+            fechaEmbarque = data.fecha;
           } else {
             return false;
           }
 
-          const fechaEmbarqueISO = fechaEmbarque.toISOString().split('T')[0];
+          const fechaEmbarqueISO = normalizarFechaISO(fechaEmbarque);
           return fechaEmbarqueISO === fechaISO;
         }).length;
 
@@ -1742,8 +1742,7 @@ export default {
       try {
         // Si no existe embarqueId, crear nuevo embarque
         if (!this.embarqueId) {
-          const fechaSeleccionada = new Date(this.embarque.fecha);
-          const fechaISO = fechaSeleccionada.toISOString().split('T')[0];
+          const fechaISO = normalizarFechaISO(this.embarque.fecha);
           this.embarque.camionNumero = await this.obtenerCamionNumeroParaFecha(fechaISO);
           const embarqueData = this.prepararDatosEmbarque();
 
@@ -2036,6 +2035,10 @@ export default {
         if (doc.exists()) {
           const data = doc.data();
           this._aplicandoRemoto = true;
+          
+          console.log('[DEBUG-FECHA] Cargando embarque ID:', id);
+          console.log('[DEBUG-FECHA] Fecha cruda de Firebase:', data.fecha);
+          console.log('[DEBUG-FECHA] Tipo de fecha:', typeof data.fecha, data.fecha?.constructor?.name);
 
           // Cargar el estado de bloqueo
           this.embarqueBloqueado = data.embarqueBloqueado || false;
@@ -2112,14 +2115,20 @@ export default {
           let fecha;
           if (data.fecha && typeof data.fecha.toDate === 'function') {
             fecha = data.fecha.toDate();
+            console.log('[DEBUG-FECHA] Fecha convertida de Timestamp:', fecha);
           } else if (data.fecha instanceof Date) {
             fecha = data.fecha;
+            console.log('[DEBUG-FECHA] Fecha es Date object:', fecha);
           } else if (typeof data.fecha === 'string') {
-            fecha = new Date(data.fecha);
+            fecha = data.fecha;
+            console.log('[DEBUG-FECHA] Fecha es string:', fecha);
           } else {
             console.warn('Formato de fecha no reconocido, usando la fecha actual');
             fecha = new Date();
           }
+          
+          const fechaNormalizada = normalizarFechaISO(fecha);
+          console.log('[DEBUG-FECHA] Fecha normalizada final:', fechaNormalizada);
 
           // Crear un Map con los clientes predefinidos (convertir IDs a string para comparación)
           const clientesPredefinidosMap = new Map(this.clientesPredefinidos.map(c => [c.id.toString(), c]));
@@ -2220,13 +2229,16 @@ export default {
           }
           
           this.embarque = {
-            fecha: fecha.toISOString().split('T')[0],
+            fecha: fechaNormalizada,
             cargaCon: data.cargaCon || '', // Cargamos el valor de cargaCon
             camionNumero: data.camionNumero || 1,
             productos: productosFinales,
             // Agregar los kilos crudos
             kilosCrudos: data.kilosCrudos || {}
           };
+          
+          console.log('[DEBUG-FECHA] Embarque asignado con fecha:', this.embarque.fecha);
+          console.log('[DEBUG-FECHA] Total productos cargados:', productosFinales.length);
 
           this.costosPorMedida = { ...(data.costosPorMedida || {}) };
           this.aplicarCostoExtra = { ...(data.aplicarCostoExtra || {}) };
@@ -2249,13 +2261,13 @@ export default {
           this.embarqueId = id;
           this.modoEdicion = true;
           this.guardadoAutomaticoActivo = true;
-          this.guardarSnapshotOffline({ pendingSync: false, docData: data, syncState: 'synced' });
           
-          // Desactivar bandera después de cargar completamente
-          this.$nextTick(() => {
-            this._inicializandoEmbarque = false;
-            this._aplicandoRemoto = false;
-          });
+          // Desactivar banderas INMEDIATAMENTE antes de guardar snapshot
+          // para evitar que watchers disparen guardado durante la carga
+          this._inicializandoEmbarque = false;
+          this._aplicandoRemoto = false;
+          
+          this.guardarSnapshotOffline({ pendingSync: false, docData: data, syncState: 'synced' });
         } else {
           this.cargarEmbarqueOffline(id).then((cargadoOffline) => {
             if (cargadoOffline) {
@@ -2348,7 +2360,7 @@ export default {
       // Activar bandera para evitar watchers durante la inicialización
       this._inicializandoEmbarque = true;
       // Establecer una fecha por defecto (fecha actual)
-      const fechaActual = new Date().toISOString().split('T')[0];
+      const fechaActual = obtenerFechaActualISO();
 
       this.costosPorMedida = {};
       this.aplicarCostoExtra = {};
@@ -2547,8 +2559,12 @@ export default {
         await EmbarquesOfflineService.init();
         const record = await EmbarquesOfflineService.getById(id);
         if (!record) {
+          console.log('[DEBUG-OFFLINE] No se encontró registro offline para ID:', id);
           return false;
         }
+        console.log('[DEBUG-OFFLINE] Registro offline encontrado para ID:', id);
+        console.log('[DEBUG-OFFLINE] Fecha en registro offline:', record.fecha);
+        console.log('[DEBUG-OFFLINE] Total productos en offline:', record.productos?.length || 0);
         this.aplicarSnapshotOffline(record);
         return true;
       } catch (error) {
@@ -2584,13 +2600,24 @@ export default {
       // Restaurar estado de cambios pendientes
       this.hasPendingChanges = Boolean(record.pendingSync);
 
+      const fechaRecord = record.fecha || record.docData?.fecha || null;
+      const fechaNormalizada = fechaRecord ? normalizarFechaISO(fechaRecord) : null;
+      
+      console.log('[DEBUG-APLICAR-OFFLINE] ID del registro:', record.id);
+      console.log('[DEBUG-APLICAR-OFFLINE] Fecha original del record:', fechaRecord);
+      console.log('[DEBUG-APLICAR-OFFLINE] Fecha normalizada:', fechaNormalizada);
+      console.log('[DEBUG-APLICAR-OFFLINE] Total productos a cargar:', record.productos?.length || 0);
+
       this.embarque = {
-        fecha: record.fecha || null,
+        fecha: fechaNormalizada,
         cargaCon: record.cargaCon || '',
         camionNumero: record.camionNumero || record.docData?.camionNumero || 1,
         kilosCrudos: safeClone(record.kilosCrudos || record.docData?.kilosCrudos || {}, {}),
         productos: safeClone(record.productos || [], []),
       };
+      
+      console.log('[DEBUG-APLICAR-OFFLINE] Embarque.fecha asignado:', this.embarque.fecha);
+      console.log('[DEBUG-APLICAR-OFFLINE] Embarque.productos.length:', this.embarque.productos.length);
 
       this.clienteCrudos = safeClone(record.clienteCrudos || {}, {});
       this.clientesJuntarMedidas = safeClone(record.clientesJuntarMedidas || {}, {});
@@ -2615,12 +2642,15 @@ export default {
       this.productosNuevosPendientes = new Map();
       this.camposEnEdicion = new Set();
 
+      // Desactivar bandera INMEDIATAMENTE para evitar guardados automáticos
       this._inicializandoEmbarque = false;
 
       this.actualizarMedidasUsadas();
       this.undoStack = [JSON.stringify(this.embarque)];
       this.redoStack = [];
       this.clienteActivo = this.embarque.productos.length > 0 ? this.embarque.productos[0].clienteId : null;
+      
+      console.log('[DEBUG-APLICAR-OFFLINE] Carga offline completada, bandera desactivada');
     },
 
     normalizarDocDataParaFirestore(docData, record = {}) {
@@ -2630,20 +2660,27 @@ export default {
         // Mantener como string YYYY-MM-DD para evitar problemas de zona horaria
         if (!valor) {
           const hoy = new Date();
-          const y = hoy.getFullYear();
-          const m = String(hoy.getMonth() + 1).padStart(2, '0');
-          const d = String(hoy.getDate()).padStart(2, '0');
+          const y = hoy.getUTCFullYear();
+          const m = String(hoy.getUTCMonth() + 1).padStart(2, '0');
+          const d = String(hoy.getUTCDate()).padStart(2, '0');
           return `${y}-${m}-${d}`;
         }
         // Si ya es string en formato YYYY-MM-DD, retornarlo directamente
         if (typeof valor === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(valor)) {
           return valor;
         }
-        // Si es un Date object, convertir a string YYYY-MM-DD
+        // Si es un string ISO con tiempo, extraer solo la parte de fecha
+        if (typeof valor === 'string') {
+          const match = valor.match(/^(\d{4}-\d{2}-\d{2})/);
+          if (match) {
+            return match[1];
+          }
+        }
+        // Si es un Date object, convertir a string YYYY-MM-DD usando UTC
         if (valor instanceof Date) {
-          const y = valor.getFullYear();
-          const m = String(valor.getMonth() + 1).padStart(2, '0');
-          const d = String(valor.getDate()).padStart(2, '0');
+          const y = valor.getUTCFullYear();
+          const m = String(valor.getUTCMonth() + 1).padStart(2, '0');
+          const d = String(valor.getUTCDate()).padStart(2, '0');
           return `${y}-${m}-${d}`;
         }
         // Si es un Timestamp de Firebase, convertir a string YYYY-MM-DD
@@ -2663,25 +2700,25 @@ export default {
             return `${y}-${m}-${d}`;
           }
         }
-        // Como fallback, intentar parsear como string
+        // Como fallback, intentar parsear como string y usar UTC
         if (typeof valor === 'string') {
           try {
             const parsed = new Date(valor);
             if (!Number.isNaN(parsed.getTime())) {
-              const y = parsed.getFullYear();
-              const m = String(parsed.getMonth() + 1).padStart(2, '0');
-              const d = String(parsed.getDate()).padStart(2, '0');
+              const y = parsed.getUTCFullYear();
+              const m = String(parsed.getUTCMonth() + 1).padStart(2, '0');
+              const d = String(parsed.getUTCDate()).padStart(2, '0');
               return `${y}-${m}-${d}`;
             }
           } catch (error) {
             console.warn('[normalizarDocDataParaFirestore] No se pudo parsear la fecha:', valor, error);
           }
         }
-        // Si todo falla, usar fecha actual
+        // Si todo falla, usar fecha actual con UTC
         const hoy = new Date();
-        const y = hoy.getFullYear();
-        const m = String(hoy.getMonth() + 1).padStart(2, '0');
-        const d = String(hoy.getDate()).padStart(2, '0');
+        const y = hoy.getUTCFullYear();
+        const m = String(hoy.getUTCMonth() + 1).padStart(2, '0');
+        const d = String(hoy.getUTCDate()).padStart(2, '0');
         return `${y}-${m}-${d}`;
       };
 
@@ -4418,7 +4455,7 @@ export default {
       }
 
       try {
-        const fechaISO = new Date(nuevaFecha).toISOString().split('T')[0];
+        const fechaISO = normalizarFechaISO(nuevaFecha);
         // Guardar el ID del embarque actual antes de cambiar la fecha
         // Esto es crucial para recargas de página
         if (this.embarqueId) {
@@ -4782,6 +4819,11 @@ export default {
     },
     'embarque.fecha': {
       handler(newVal, oldVal) {
+        // Ignorar cambios durante la inicialización del embarque
+        if (this._inicializandoEmbarque || this._aplicandoRemoto) {
+          return;
+        }
+        
         this.cargarPedidoReferenciaDelDia(newVal);
         if (!this.embarqueId) {
           this.triggerGuardadoInicial();

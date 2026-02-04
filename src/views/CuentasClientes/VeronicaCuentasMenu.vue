@@ -178,6 +178,7 @@ import ReporteSemanalPDFButton from '@/components/Cuentas/ReporteSemanalPDFButto
 import moment from 'moment';
 import DatePicker from 'vue2-datepicker';
 import 'vue2-datepicker/index.css';
+import { normalizarFechaISO } from '@/utils/dateUtils';
 
 export default {
   name: 'VeronicaCuentasMenu',
@@ -236,26 +237,27 @@ export default {
     normalizarFechaValor(valor) {
       if (!valor) return null;
       try {
-        // Si ya viene como string YYYY-MM-DD, regresarlo
+        const formatearUTC = (fechaObj) => {
+          if (!(fechaObj instanceof Date) || Number.isNaN(fechaObj.getTime())) return null;
+          const año = fechaObj.getUTCFullYear();
+          const mes = String(fechaObj.getUTCMonth() + 1).padStart(2, '0');
+          const dia = String(fechaObj.getUTCDate()).padStart(2, '0');
+          return `${año}-${mes}-${dia}`;
+        };
         if (typeof valor === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(valor)) return valor;
-        // Si es Timestamp de Firestore
-        if (valor.seconds) {
-          const d = new Date(valor.seconds * 1000);
-          return d.toISOString().split('T')[0];
+        if (typeof valor === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(valor)) {
+          return valor.slice(0, 10);
         }
-        // Si es Date
+        if (valor?.seconds) {
+          return formatearUTC(new Date(valor.seconds * 1000));
+        }
         if (valor instanceof Date) {
-          return valor.toISOString().split('T')[0];
+          return formatearUTC(valor);
         }
-        // Fallback: intentar parsear
-        const d = new Date(valor);
-        if (!Number.isNaN(d.getTime())) {
-          return d.toISOString().split('T')[0];
-        }
+        return formatearUTC(new Date(valor));
       } catch (_) {
         return null;
       }
-      return null;
     },
     async loadCuentas() {
       try {
@@ -532,7 +534,11 @@ export default {
       this.$router.push(`/cuentas-veronica/${id}?edit=true`);
     },
     async crearNota(fecha) {
-      const fechaNormalizada = this.normalizarFechaValor(fecha) || new Date().toISOString().split('T')[0];
+      const fechaNormalizada = this.normalizarFechaValor(fecha);
+      if (!fechaNormalizada) {
+        alert('La fecha de la nota no es válida. Actualiza la lista y vuelve a intentar.');
+        return;
+      }
       if (this.creatingFecha === fechaNormalizada) return;
 
       this.creatingFecha = fechaNormalizada;

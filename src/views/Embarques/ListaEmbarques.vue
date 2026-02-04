@@ -250,16 +250,13 @@ export default {
 
     mapOfflineRecordToLista(record) {
       if (!record) return null;
-      let fecha;
-      try {
-        fecha = record.fecha ? new Date(record.fecha) : null;
-      } catch (error) {
-        fecha = null;
-      }
+      
+      // Normalizar la fecha directamente sin convertir a Date
+      const fechaNormalizada = record.fecha ? normalizarFechaISO(record.fecha) : obtenerFechaActualISO();
 
       return {
         id: record.id,
-        fecha: fecha || new Date(),
+        fecha: fechaNormalizada,
         embarqueBloqueado: Boolean(record.embarqueBloqueado),
         noEnviadoMexico: Boolean(record.noEnviadoMexico),
         clientes: record.clientes || [],
@@ -279,7 +276,7 @@ export default {
           fechaObj = Number.isNaN(parsed.getTime()) ? null : parsed;
         }
 
-        const fechaISO = fechaObj ? fechaObj.toISOString().split('T')[0] : null;
+        const fechaISO = fechaObj ? this.normalizarFechaUTC(fechaObj) : null;
         const camionExistente = embarque.camionNumero;
         const camionNumero = camionExistente || (fechaISO
           ? (contadorPorFecha[fechaISO] = (contadorPorFecha[fechaISO] || 0) + 1)
@@ -312,15 +309,18 @@ export default {
       clientes.forEach(cliente => {
         clienteCrudos[cliente.id] = Array.isArray(cliente.crudos) ? cliente.crudos : [];
       });
+      
+      // Normalizar la fecha para evitar problemas de zona horaria
+      const fechaNormalizada = fecha ? normalizarFechaISO(fecha) : null;
 
       const docData = {
         ...this.safeClone(data, {}),
-        fecha: fecha ? fecha.toISOString() : null,
+        fecha: fechaNormalizada,
       };
 
       return {
         id: docId,
-        fecha: fecha ? fecha.toISOString() : null,
+        fecha: fechaNormalizada,
         cargaCon: data.cargaCon || '',
         camionNumero: data.camionNumero || 1,
         embarqueBloqueado: data.embarqueBloqueado || false,
@@ -519,7 +519,7 @@ export default {
             fechaEmbarque = Number.isNaN(parsed.getTime()) ? null : parsed;
           }
 
-          const fechaISO = fechaEmbarque ? fechaEmbarque.toISOString().split('T')[0] : null;
+          const fechaISO = fechaEmbarque ? this.normalizarFechaUTC(fechaEmbarque) : null;
 
           return {
             id: docSnap.id,
@@ -542,11 +542,14 @@ export default {
           const fechaObj = embarque.fecha instanceof Date ? embarque.fecha : (embarque.fecha ? new Date(embarque.fecha) : new Date());
           const snapshotOffline = this.construirSnapshotOfflineDesdeRemoto(embarque.id, embarque.data, fechaObj);
           await EmbarquesOfflineService.save(snapshotOffline, { pendingSync: false, syncState: 'synced' });
+          
+          // Normalizar la fecha para la lista
+          const fechaNormalizada = normalizarFechaISO(fechaObj);
 
           embarquesFiltrados.push({
             id: embarque.id,
-            fecha: fechaObj,
-            fechaISO: embarque.fechaISO,
+            fecha: fechaNormalizada,
+            fechaISO: fechaNormalizada,
             embarqueBloqueado: embarque.data.embarqueBloqueado || false,
             noEnviadoMexico: embarque.data.noEnviadoMexico || false,
             clientes: embarque.data.clientes || [],
@@ -751,6 +754,10 @@ export default {
     },
 
     editarEmbarque(embarqueId) {
+      const embarque = this.embarques.find(e => e.id === embarqueId);
+      console.log('[DEBUG-LISTA] Editando embarque con ID:', embarqueId);
+      console.log('[DEBUG-LISTA] Fecha del embarque en la lista:', embarque?.fecha);
+      console.log('[DEBUG-LISTA] Fecha formateada mostrada:', this.formatearFecha(embarque?.fecha));
       this.$router.push({ name: 'NuevoEmbarque', params: { id: embarqueId } });
     },
 
@@ -1234,7 +1241,10 @@ export default {
         if (Number.isNaN(dateObj.getTime())) {
           return obtenerFechaActualISO();
         }
-        return dateObj.toISOString().slice(0, 10);
+        const year = dateObj.getFullYear();
+        const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+        const day = String(dateObj.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
       } catch (error) {
         console.warn('[Modal PDF] Fecha inválida recibida:', fecha, error);
         return obtenerFechaActualISO();

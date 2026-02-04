@@ -1589,6 +1589,7 @@ export const crearCuentaOtilio = async (embarqueData, router) => {
  */
 const prepararDatosCuentaVeronica = async (embarqueData) => {
   const { fecha, productos, clienteCrudos } = embarqueData;
+  const fechaNormalizada = normalizarFechaISO(fecha);
   
   console.log(`[DEBUG] Datos de embarque recibidos:`, embarqueData);
   console.log(`[DEBUG] Productos recibidos:`, productos);
@@ -1600,10 +1601,10 @@ const prepararDatosCuentaVeronica = async (embarqueData) => {
   console.log(`[DEBUG] Crudos de Veronica encontrados:`, crudosVeronica);
   
   // Obtener los precios de venta más recientes según la fecha del embarque
-  const preciosVenta = await obtenerPreciosVenta('veronica', fecha);
+  const preciosVenta = await obtenerPreciosVenta('veronica', fechaNormalizada);
   
-  console.log(`[DEBUG] Creando cuenta de Veronica para fecha: ${fecha}`);
-  console.log(`[DEBUG] Precios de venta cargados para fecha ${fecha}:`, Array.from(preciosVenta.entries()));
+  console.log(`[DEBUG] Creando cuenta de Veronica para fecha: ${fechaNormalizada}`);
+  console.log(`[DEBUG] Precios de venta cargados para fecha ${fechaNormalizada}:`, Array.from(preciosVenta.entries()));
 
   const costosPorMedida = embarqueData?.costosPorMedida || {};
 
@@ -2060,7 +2061,7 @@ const prepararDatosCuentaVeronica = async (embarqueData) => {
   console.log(`[DEBUG] Total general venta: ${totalGeneralVenta}`);
   
   const resultado = {
-    fecha,
+    fecha: fechaNormalizada,
     items,
     itemsVenta,
     saldoAcumuladoAnterior,
@@ -2092,7 +2093,8 @@ export const crearCuentaVeronica = async (embarqueData, router) => {
     console.log('Datos de embarque recibidos en crearCuentaVeronica:', embarqueData);
     
     // Verificar si ya existe una cuenta para esta fecha
-    const existeCuenta = await existeCuentaParaFecha('cuentasVeronica', embarqueData.fecha);
+    const fechaNormalizada = normalizarFechaISO(embarqueData?.fecha);
+    const existeCuenta = await existeCuentaParaFecha('cuentasVeronica', fechaNormalizada);
     if (existeCuenta) {
       throw new Error('Ya existe una cuenta de Veronica registrada para esta fecha.');
     }
