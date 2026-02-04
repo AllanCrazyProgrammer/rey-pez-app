@@ -1,6 +1,13 @@
 // src/firebase.js
 import { initializeApp } from "firebase/app";
-import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from "firebase/firestore";
+import {
+  getFirestore,
+  initializeFirestore,
+  memoryLocalCache,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+  persistentSingleTabManager
+} from "firebase/firestore";
 import { getDatabase, ref, onDisconnect, serverTimestamp, set } from "firebase/database";
 
 // Tu configuración de Firebase
@@ -17,12 +24,40 @@ const firebaseConfig = {
 // Inicializar Firebase
 const app = initializeApp(firebaseConfig);
 
-// Inicializar Firestore con persistencia de caché
-const db = initializeFirestore(app, {
-  localCache: persistentLocalCache({
-    tabManager: persistentMultipleTabManager(),
-  })
-});
+// Inicializar Firestore con fallback de caché para entornos restringidos
+const initFirestore = () => {
+  try {
+    return initializeFirestore(app, {
+      localCache: persistentLocalCache({
+        tabManager: persistentMultipleTabManager(),
+      })
+    });
+  } catch (error) {
+    console.warn('[firebase] No se pudo habilitar caché multi-tab, intentando modo single-tab.', error);
+  }
+
+  try {
+    return initializeFirestore(app, {
+      localCache: persistentLocalCache({
+        tabManager: persistentSingleTabManager(),
+      })
+    });
+  } catch (error) {
+    console.warn('[firebase] No se pudo habilitar caché persistente, usando caché en memoria.', error);
+  }
+
+  try {
+    return initializeFirestore(app, {
+      localCache: memoryLocalCache()
+    });
+  } catch (error) {
+    console.warn('[firebase] Falló la inicialización con caché en memoria, usando getFirestore.', error);
+  }
+
+  return getFirestore(app);
+};
+
+const db = initFirestore();
 
 // Inicializar Realtime Database
 const rtdb = getDatabase(app);
