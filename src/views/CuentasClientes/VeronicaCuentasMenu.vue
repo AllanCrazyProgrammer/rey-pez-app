@@ -306,6 +306,7 @@ export default {
           const actualizaciones = [];
 
           // Procesar cada cuenta y preparar las actualizaciones
+          // IMPORTANTE: No modificar notas bloqueadas para preservar la integridad de las cuentas anteriores
           for (let i = 0; i < cuentasOrdenadas.length; i++) {
             const cuenta = cuentasOrdenadas[i];
             const totalDia = cuenta.saldoHoy - cuenta.totalCobros - cuenta.totalAbonos;
@@ -315,26 +316,35 @@ export default {
             const estadoPagado = saldoAcumulado <= 0;
             const saldoNormalizado = estadoPagado ? 0 : saldoAcumulado;
             
-            // Solo actualizar si los valores han cambiado
-            if (cuenta.saldoAcumuladoAnterior !== saldoAnterior || 
-                cuenta.nuevoSaldoAcumulado !== saldoNormalizado || 
-                cuenta.estadoPagado !== estadoPagado) {
-              
-              actualizaciones.push({
-                id: cuenta.id,
-                updates: {
-                  saldoAcumuladoAnterior: saldoAnterior,
-                  nuevoSaldoAcumulado: saldoNormalizado,
-                  estadoPagado: estadoPagado
-                }
-              });
-            }
+            // Si la nota está bloqueada, usar los valores persistidos y NO actualizar en Firebase
+            if (cuenta.notaBloqueada) {
+              // Respetar los valores guardados de la nota bloqueada
+              // Solo actualizar el objeto local para visualización, sin modificar Firebase
+              cuenta.totalNota = cuenta.nuevoSaldoAcumulado;
+              // Ajustar el saldo acumulado para las siguientes cuentas basado en el valor persistido
+              saldoAcumulado = cuenta.nuevoSaldoAcumulado;
+            } else {
+              // Solo actualizar si los valores han cambiado Y la nota NO está bloqueada
+              if (cuenta.saldoAcumuladoAnterior !== saldoAnterior || 
+                  cuenta.nuevoSaldoAcumulado !== saldoNormalizado || 
+                  cuenta.estadoPagado !== estadoPagado) {
+                
+                actualizaciones.push({
+                  id: cuenta.id,
+                  updates: {
+                    saldoAcumuladoAnterior: saldoAnterior,
+                    nuevoSaldoAcumulado: saldoNormalizado,
+                    estadoPagado: estadoPagado
+                  }
+                });
+              }
 
-            // Actualizar el objeto local
-            cuenta.totalNota = saldoNormalizado;
-            cuenta.saldoAcumuladoAnterior = saldoAnterior;
-            cuenta.estadoPagado = estadoPagado;
-            cuenta.nuevoSaldoAcumulado = saldoNormalizado;
+              // Actualizar el objeto local
+              cuenta.totalNota = saldoNormalizado;
+              cuenta.saldoAcumuladoAnterior = saldoAnterior;
+              cuenta.estadoPagado = estadoPagado;
+              cuenta.nuevoSaldoAcumulado = saldoNormalizado;
+            }
 
             // Reiniciar saldo si la cuenta está pagada
             if (saldoAcumulado <= 0) {

@@ -688,18 +688,28 @@ export default {
         );
 
         const querySnapshot = await getDocs(q);
-        const cuentasParaActualizar = querySnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
+        const cuentasParaActualizar = querySnapshot.docs.map(docSnap => ({
+          id: docSnap.id,
+          ...docSnap.data()
         }));
 
         let saldoAcumulado = this.nuevoSaldoAcumulado;
 
-        // Usar Promise.all para actualizar las cuentas en paralelo
-        await Promise.all(cuentasParaActualizar.map(async (cuenta) => {
+        // Filtrar cuentas bloqueadas para no modificarlas y actualizar las demás
+        // IMPORTANTE: No modificar notas bloqueadas para preservar la integridad de las cuentas
+        const actualizaciones = [];
+        
+        for (const cuenta of cuentasParaActualizar) {
           const totalDia = cuenta.totalGeneralVenta -
             (cuenta.cobros || []).reduce((sum, cobro) => sum + (parseFloat(cobro.monto) || 0), 0) -
             (cuenta.abonos || []).reduce((sum, abono) => sum + (parseFloat(abono.monto) || 0), 0);
+
+          // Si la nota está bloqueada, usar su saldo persistido y no actualizar
+          if (cuenta.notaBloqueada && cuenta.id !== this.$route.params.id) {
+            // Usar el saldo guardado de la nota bloqueada para continuar el cálculo
+            saldoAcumulado = cuenta.nuevoSaldoAcumulado || 0;
+            continue;
+          }
 
           saldoAcumulado = saldoAcumulado + totalDia;
           const estadoPagado = saldoAcumulado <= 0;
@@ -709,12 +719,19 @@ export default {
             saldoAcumulado = 0;
           }
 
-          return updateDoc(doc(db, 'cuentasVeronica', cuenta.id), {
-            saldoAcumuladoAnterior: cuenta.id === this.$route.params.id ? this.saldoAcumuladoAnterior : saldoAcumulado - totalDia,
-            nuevoSaldoAcumulado: saldoNormalizado,
-            estadoPagado: estadoPagado
-          });
-        }));
+          actualizaciones.push(
+            updateDoc(doc(db, 'cuentasVeronica', cuenta.id), {
+              saldoAcumuladoAnterior: cuenta.id === this.$route.params.id ? this.saldoAcumuladoAnterior : saldoAcumulado - totalDia,
+              nuevoSaldoAcumulado: saldoNormalizado,
+              estadoPagado: estadoPagado
+            })
+          );
+        }
+
+        // Ejecutar solo las actualizaciones de notas no bloqueadas
+        if (actualizaciones.length > 0) {
+          await Promise.all(actualizaciones);
+        }
       } catch (error) {
         console.error('Error al actualizar cuentas posteriores:', error);
         throw error;
