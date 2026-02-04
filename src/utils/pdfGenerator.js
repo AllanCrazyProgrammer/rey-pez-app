@@ -586,6 +586,7 @@ async function generarContenidoClientes(embarque, clientesDisponibles, clientesJ
   for (const [clienteId, productos] of Object.entries(productosPorCliente)) {
     const nombreCliente = obtenerNombreCliente(clienteId, clientesDisponibles);
     const estiloCliente = obtenerEstiloCliente(nombreCliente);
+    let productosAgrupadosParaTotales = [];
     
     // Verificar si este cliente específico tiene activada la opción de juntar medidas
     const debeJuntarMedidas = clientesJuntarMedidas && clientesJuntarMedidas[clienteId];
@@ -719,6 +720,9 @@ async function generarContenidoClientes(embarque, clientesDisponibles, clientesJ
           productosAgrupados = await Promise.all(promesasPrecios);
         }
         
+        // Guardar para calcular totales con la misma agrupación de la tabla
+        productosAgrupadosParaTotales = productosAgrupados;
+
         // Mostrar sección de limpios solo si hay productos con kilos válidos
         contenido.push(
           { 
@@ -823,8 +827,11 @@ async function generarContenidoClientes(embarque, clientesDisponibles, clientesJ
       let totalDineroLimpiosCliente = 0;
       let totalTarasLimpiosCliente = 0;
       
-      // Sumar totales de productos limpios de este cliente
-      productos.forEach(producto => {
+      // Sumar totales de productos limpios usando la misma base que la tabla
+      const productosParaTotales = (productosAgrupadosParaTotales && productosAgrupadosParaTotales.length > 0)
+        ? productosAgrupadosParaTotales
+        : productos;
+      productosParaTotales.forEach(producto => {
         if (producto.precio) {
           let totalProducto = 0;
           if (producto.tipo === 'c/h20') {
@@ -3018,6 +3025,8 @@ function generarTotalGeneral(totalTarasLimpio, totalTarasCrudos, totalDinero, ha
     return generarTotalGeneralSinPrecios(totalTarasLimpio, totalTarasCrudos);
   }
 
+  const totalDineroCuenta = Math.round(totalDineroLimpios) + Math.round(totalDineroCrudos);
+
   contenido.push({
     columns: [
       {
@@ -3041,7 +3050,7 @@ function generarTotalGeneral(totalTarasLimpio, totalTarasCrudos, totalDinero, ha
             margin: [0, 0, 0, 2]
           },
           {
-            text: `Total de Cuenta: $${Math.round(totalDinero).toLocaleString('en-US')}`,
+            text: `Total de Cuenta: $${totalDineroCuenta.toLocaleString('en-US')}`,
             style: ['subheader', 'granTotal'],
             alignment: 'right',
             margin: [0, 2, 0, 5]
