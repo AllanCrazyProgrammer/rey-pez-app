@@ -149,11 +149,13 @@ export default {
           where('fecha', '<=', this.fechaFin)
         );
 
+        console.log('[REPORTE-PDF] Obteniendo registros para PDF (solo lectura)');
         const snapshot = await getDocs(cuentasQuery);
         const registros = snapshot.docs.map((doc) => ({
           id: doc.id,
           ...doc.data()
         }));
+        console.log(`[REPORTE-PDF] ${registros.length} registros obtenidos para PDF`);
 
         if (!registros.length) {
           this.errorMessage = 'No hay registros de cuentas en el rango seleccionado.';

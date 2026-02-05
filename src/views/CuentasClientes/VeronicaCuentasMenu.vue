@@ -211,7 +211,9 @@ export default {
       },
       detalleVentasSemanal: [],
       detalleAbonosSemanal: [],
-      creatingFecha: null
+      creatingFecha: null,
+      updateDebounceTimer: null,
+      lastUpdateTimestamp: 0
     };
   },
   computed: {
@@ -324,10 +326,19 @@ export default {
               // Ajustar el saldo acumulado para las siguientes cuentas basado en el valor persistido
               saldoAcumulado = cuenta.nuevoSaldoAcumulado;
             } else {
-              // Solo actualizar si los valores han cambiado Y la nota NO está bloqueada
-              if (cuenta.saldoAcumuladoAnterior !== saldoAnterior || 
-                  cuenta.nuevoSaldoAcumulado !== saldoNormalizado || 
-                  cuenta.estadoPagado !== estadoPagado) {
+              // Solo actualizar si los valores han cambiado SIGNIFICATIVAMENTE Y la nota NO está bloqueada
+              // Tolerancia de 0.01 para evitar actualizaciones por diferencias de redondeo
+              const TOLERANCIA = 0.01;
+              const cambioSaldoAnterior = Math.abs((cuenta.saldoAcumuladoAnterior || 0) - saldoAnterior) > TOLERANCIA;
+              const cambioSaldoNuevo = Math.abs((cuenta.nuevoSaldoAcumulado || 0) - saldoNormalizado) > TOLERANCIA;
+              const cambioEstado = cuenta.estadoPagado !== estadoPagado;
+              
+              if (cambioSaldoAnterior || cambioSaldoNuevo || cambioEstado) {
+                console.log(`[VERONICA-CUENTAS] Cambio detectado en nota ${cuenta.id} (${cuenta.fecha}):`, {
+                  saldoAnterior: { anterior: cuenta.saldoAcumuladoAnterior, nuevo: saldoAnterior, cambio: cambioSaldoAnterior },
+                  saldoNuevo: { anterior: cuenta.nuevoSaldoAcumulado, nuevo: saldoNormalizado, cambio: cambioSaldoNuevo },
+                  estadoPagado: { anterior: cuenta.estadoPagado, nuevo: estadoPagado, cambio: cambioEstado }
+                });
                 
                 actualizaciones.push({
                   id: cuenta.id,
@@ -398,11 +409,37 @@ export default {
             }
           });
 
-          // Realizar todas las actualizaciones en paralelo
-          if (actualizaciones.length > 0) {
-            await Promise.all(actualizaciones.map(({ id, updates }) => 
-              updateDoc(doc(db, 'cuentasVeronica', id), updates)
-            ));
+          // PROTECCIÓN: Solo actualizar si hay cambios significativos y ha pasado suficiente tiempo
+          // para evitar actualizaciones innecesarias durante operaciones de solo lectura (como generación de PDFs)
+          const ahora = Date.now();
+          const tiempoTranscurrido = ahora - this.lastUpdateTimestamp;
+          const TIEMPO_MINIMO_ENTRE_ACTUALIZACIONES = 2000; // 2 segundos
+          
+          if (actualizaciones.length > 0 && tiempoTranscurrido > TIEMPO_MINIMO_ENTRE_ACTUALIZACIONES) {
+            // Cancelar cualquier actualización pendiente
+            if (this.updateDebounceTimer) {
+              clearTimeout(this.updateDebounceTimer);
+            }
+            
+            // Esperar un momento para asegurar que no hay otras operaciones en curso
+            this.updateDebounceTimer = setTimeout(async () => {
+              try {
+                console.log(`[VERONICA-CUENTAS] Actualizando ${actualizaciones.length} nota(s) no bloqueada(s)`);
+                
+                // Realizar las actualizaciones
+                await Promise.all(actualizaciones.map(async ({ id, updates }) => {
+                  console.log(`[VERONICA-CUENTAS] Actualizando nota ${id}:`, updates);
+                  return updateDoc(doc(db, 'cuentasVeronica', id), updates);
+                }));
+                
+                this.lastUpdateTimestamp = Date.now();
+                console.log('[VERONICA-CUENTAS] Actualizaciones completadas');
+              } catch (error) {
+                console.error('[VERONICA-CUENTAS] Error al actualizar notas:', error);
+              }
+            }, 500); // Esperar 500ms antes de actualizar para agrupar cambios
+          } else if (actualizaciones.length > 0) {
+            console.log(`[VERONICA-CUENTAS] Actualizaciones omitidas (muy reciente: ${tiempoTranscurrido}ms < ${TIEMPO_MINIMO_ENTRE_ACTUALIZACIONES}ms)`);
           }
 
           // Unir cuentas existentes con faltantes y ordenar desc
@@ -670,6 +707,10 @@ export default {
     // Limpiar el listener cuando el componente se desmonte
     if (this.unsubscribe) {
       this.unsubscribe();
+    }
+    // Limpiar el timer de debounce
+    if (this.updateDebounceTimer) {
+      clearTimeout(this.updateDebounceTimer);
     }
   }
 };
