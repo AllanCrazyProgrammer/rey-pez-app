@@ -104,6 +104,9 @@
                 <span class="abono-monto">${{ formatNumber(abono.monto) }}</span>
                 <span class="abono-descripcion">{{ abono.descripcion || 'Sin descripción' }}</span>
               </p>
+              <p v-if="cuenta.abonos.length > 1" class="abonos-total">
+                Total de abonos: ${{ formatNumber(cuenta.totalAbonos || 0) }}
+              </p>
             </div>
           </div>
           <div class="cuenta-actions">
@@ -842,6 +845,12 @@ h1, h2 {
 .abono-descripcion {
   color: #666;
   font-style: italic;
+}
+
+.abonos-total {
+  margin: 8px 0 0 0;
+  color: #2e7d32;
+  font-weight: 700;
 }
 
 @media (max-width: 768px) {
