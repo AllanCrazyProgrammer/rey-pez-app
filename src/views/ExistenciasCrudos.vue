@@ -52,7 +52,15 @@
             </thead>
             <tbody>
               <tr v-for="producto in productos" :key="producto.clave" v-if="producto.kilos > 0">
-                <td>{{ producto.nombre }}</td>
+                <td>
+                  <button
+                    class="medida-button"
+                    @click="abrirModalHistorialProducto(producto)"
+                    :title="`Ver historial de ${producto.nombre}`"
+                  >
+                    {{ producto.nombre }}
+                  </button>
+                </td>
                 <td>
                   <button 
                     class="cuarto-button"
@@ -116,6 +124,49 @@
       <div class="total-general">
         <h3>Total General: {{ formatNumber(totalGeneral) }} kg</h3>
         <h3 v-if="tieneAlgunPrecioValido">Valor Total General: ${{ formatearValor(valorTotalGeneral) }}</h3>
+      </div>
+    </div>
+    <div v-if="modalHistorial.abierto" class="modal-overlay" @click.self="cerrarModalHistorial">
+      <div class="modal-content modal-historial-producto">
+        <div class="modal-header">
+          <h3>Historial de Movimientos</h3>
+          <button class="close-button" @click="cerrarModalHistorial">&times;</button>
+        </div>
+        <div class="modal-body">
+          <p><strong>Proveedor:</strong> {{ modalHistorial.producto?.proveedor }}</p>
+          <p><strong>Producto:</strong> {{ modalHistorial.producto?.nombre }}</p>
+          <p><strong>Existencia actual:</strong> {{ formatNumber(modalHistorial.producto?.kilos || 0) }} kg</p>
+          <div v-if="modalHistorial.movimientos.length === 0" class="no-records">
+            No hay entradas o salidas registradas para este producto.
+          </div>
+          <table v-if="modalHistorial.movimientos.length > 0" class="historial-table">
+            <thead>
+              <tr>
+                <th>Fecha</th>
+                <th>Tipo</th>
+                <th>Kilos</th>
+                <th>Cuarto</th>
+                <th>Precio</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="movimiento in modalHistorial.movimientos" :key="movimiento.key">
+                <td>{{ formatDateTime(movimiento.fecha) }}</td>
+                <td :class="movimiento.tipo === 'Entrada' ? 'movimiento-entrada' : 'movimiento-salida'">
+                  {{ movimiento.tipo }}
+                </td>
+                <td class="kilos-cell">{{ formatNumber(movimiento.kilos) }}</td>
+                <td>{{ movimiento.cuarto }}</td>
+                <td>{{ movimiento.precio > 0 ? `$${formatearPrecio(movimiento.precio)}` : '-' }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="modal-actions">
+          <button class="secondary-button" @click="cerrarModalHistorial">
+            Cerrar
+          </button>
+        </div>
       </div>
     </div>
 
@@ -192,6 +243,11 @@ export default {
         nuevoCuarto: 's/c',
         cargando: false,
         error: ''
+      },
+      modalHistorial: {
+        abierto: false,
+        producto: null,
+        movimientos: []
       }
     };
   },
@@ -257,6 +313,66 @@ export default {
         cargando: false,
         error: ''
       };
+    },
+
+    async abrirModalHistorialProducto(producto) {
+      if (!this.registros.length && !this.isLoadingRegistros) {
+        await this.loadRegistros();
+      }
+
+      this.modalHistorial = {
+        abierto: true,
+        producto,
+        movimientos: this.obtenerMovimientosProducto(producto.proveedor, producto.producto || producto.nombre)
+      };
+    },
+
+    cerrarModalHistorial() {
+      this.modalHistorial = {
+        abierto: false,
+        producto: null,
+        movimientos: []
+      };
+    },
+
+    obtenerMovimientosProducto(proveedorObjetivo, productoObjetivo) {
+      const movimientos = [];
+
+      this.registros.forEach(registro => {
+        const fechaRegistro = registro.fecha;
+
+        if (Array.isArray(registro.entradas)) {
+          registro.entradas.forEach((entrada, idx) => {
+            if (entrada.proveedor === proveedorObjetivo && entrada.producto === productoObjetivo) {
+              movimientos.push({
+                key: `${registro.id}-entrada-${idx}`,
+                fecha: fechaRegistro,
+                tipo: 'Entrada',
+                kilos: entrada.kilos || 0,
+                cuarto: this.normalizeCuarto(entrada.cuartoFrio),
+                precio: entrada.precio || 0
+              });
+            }
+          });
+        }
+
+        if (Array.isArray(registro.salidas)) {
+          registro.salidas.forEach((salida, idx) => {
+            if (salida.proveedor === proveedorObjetivo && salida.producto === productoObjetivo) {
+              movimientos.push({
+                key: `${registro.id}-salida-${idx}`,
+                fecha: fechaRegistro,
+                tipo: 'Salida',
+                kilos: salida.kilos || 0,
+                cuarto: this.normalizeCuarto(salida.cuartoFrio),
+                precio: 0
+              });
+            }
+          });
+        }
+      });
+
+      return movimientos.sort((a, b) => b.fecha - a.fecha);
     },
 
     async confirmarCambioCuarto() {
@@ -513,6 +629,10 @@ export default {
 
     formatDate(date) {
       return moment(date).format('DD [de] MMMM [de] YYYY');
+    },
+
+    formatDateTime(date) {
+      return moment(date).format('DD/MM/YYYY HH:mm');
     },
 
     formatNumber(value) {
@@ -921,6 +1041,21 @@ h1, h2, h3 {
   border-color: #3760b0;
 }
 
+.medida-button {
+  background: none;
+  border: none;
+  padding: 0;
+  color: #1f2a44;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.medida-button:hover {
+  color: #3760b0;
+  text-decoration: underline;
+}
+
 .productos-table th {
   background-color: #3760b0;
   color: white;
@@ -1144,6 +1279,38 @@ h1, h2, h3 {
 .modal-cambio-cuarto select {
   width: 100%;
   margin-top: 8px;
+}
+
+.modal-historial-producto {
+  max-width: 900px;
+}
+
+.historial-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 12px;
+}
+
+.historial-table th,
+.historial-table td {
+  border: 1px solid #ddd;
+  padding: 8px;
+  text-align: left;
+}
+
+.historial-table th {
+  background-color: #3760b0;
+  color: #fff;
+}
+
+.movimiento-entrada {
+  color: #2e7d32;
+  font-weight: 700;
+}
+
+.movimiento-salida {
+  color: #c62828;
+  font-weight: 700;
 }
 
 .modal-helper {
