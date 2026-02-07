@@ -1038,7 +1038,8 @@ export default {
           ...this.nuevaTransaccion,
           monto: parseFloat(this.nuevaTransaccion.monto),
           timestamp: this.nuevaTransaccion.timestamp || new Date().toISOString(),
-          fecha: this.diaSeleccionado.fecha.toISOString().split('T')[0],
+          // Guardar siempre fecha local (YYYY-MM-DD) para evitar brincos por UTC.
+          fecha: this.toISODateLocal(this.diaSeleccionado.fecha),
           // Solo aplica para tipo efectivo (se usa para marcar si ya fue entregado)
           efectivoEntregado: this.nuevaTransaccion.tipo === 'efectivo'
             ? (transaccionActual?.efectivoEntregado ?? false)
