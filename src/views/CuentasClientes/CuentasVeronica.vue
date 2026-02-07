@@ -396,11 +396,15 @@ export default {
         precioVenta: null
       },
       autoSaveTimer: null,
+      autoSaveDelay: 900,
       lastSavedData: null,
-      saveQueue: [],
       isSaving: false,
       lastSaveTime: null,
-      saveMinInterval: 5000, // Aumentar a 5 segundos mínimo entre guardados
+      saveMinInterval: 1200,
+      pendingSaveRequested: false,
+      saveInFlightPromise: null,
+      creatingCuentaPromise: null,
+      isInitializing: true,
       tieneObservacion: false,
       showObservacionModal: false,
       observacion: '',
@@ -460,10 +464,12 @@ export default {
   },
   watch: {
     fechaSeleccionada: {
-      immediate: true,
-      handler: async function() {
-        await this.loadSaldoAcumuladoAnterior();
-        await this.verificarNotaFaltante();
+      async handler(newFecha, oldFecha) {
+        if (!newFecha || newFecha === oldFecha || this.isInitializing) return;
+        await Promise.all([
+          this.loadSaldoAcumuladoAnterior(),
+          this.verificarNotaFaltante()
+        ]);
         this.handleDataChange();
       }
     },
@@ -486,23 +492,30 @@ export default {
     saldoAcumuladoAnterior: {
       handler: 'handleDataChange'
     },
-    'newItem.kilos': 'handleDataChange',
-    'newItem.medida': 'handleDataChange',
-    'newItem.costo': 'handleDataChange',
     observacion: 'handleDataChange'
   },
   async mounted() {
-    console.log("Mounted ejecutado", this.$route.params, this.$route.query);
-    const id = this.$route.params.id;
-    const isEditing = this.$route.query.edit === 'true';
-    if (id && isEditing) {
-      console.log("Iniciando carga de cuenta existente");
-      await this.loadExistingCuenta(id);
-    } else {
-      console.log("Cargando saldo acumulado anterior para nueva cuenta");
-      await this.loadSaldoAcumuladoAnterior();
+    try {
+      const id = this.$route.params.id;
+      const isEditing = this.$route.query.edit === 'true';
+
+      if (id && isEditing) {
+        await this.loadExistingCuenta(id);
+      } else {
+        await this.loadSaldoAcumuladoAnterior();
+      }
+
+      await this.verificarNotaFaltante();
+
+      if (id && isEditing) {
+        this.lastSavedData = this.buildNotaSignature(
+          this.buildNotaData({ incluirFecha: true })
+        );
+        this.lastSaveTime = Date.now();
+      }
+    } finally {
+      this.isInitializing = false;
     }
-    await this.verificarNotaFaltante();
   },
   methods: {
     tienePrecioVentaVacio() {
@@ -511,6 +524,116 @@ export default {
         if (valor === null || valor === undefined || valor === '') return true;
         return Number.isNaN(Number(valor));
       });
+    },
+    isEditingCuenta() {
+      return Boolean(this.$route.params.id && this.$route.query.edit === 'true');
+    },
+    buildNotaData({ saldoAcumuladoAnterior = this.saldoAcumuladoAnterior, incluirFecha = false } = {}) {
+      const totalCobros = this.cobros.reduce((sum, cobro) => sum + (parseFloat(cobro.monto) || 0), 0);
+      const totalAbonos = this.abonos.reduce((sum, abono) => sum + (parseFloat(abono.monto) || 0), 0);
+      const saldoBase = parseFloat(saldoAcumuladoAnterior) || 0;
+      const totalVenta = this.totalGeneralVenta || 0;
+      const totalDia = totalVenta - totalCobros - totalAbonos;
+      const saldoCalculado = saldoBase + totalDia;
+      const estadoPagado = saldoCalculado <= 0;
+
+      const notaData = {
+        items: this.items.map(item => ({
+          kilos: parseFloat(item.kilos) || 0,
+          medida: item.medida || '',
+          costo: parseFloat(item.costo) || 0,
+          total: parseFloat(item.total) || 0
+        })),
+        itemsVenta: this.itemsVenta.map(item => ({
+          kilosVenta: parseFloat(item.kilosVenta) || 0,
+          medida: item.medida || '',
+          precioVenta: item.precioVenta === '' || item.precioVenta === null || item.precioVenta === undefined
+            ? null
+            : parseFloat(item.precioVenta) || 0,
+          totalVenta: parseFloat(item.totalVenta) || 0,
+          ganancia: parseFloat(item.ganancia) || 0
+        })),
+        saldoAcumuladoAnterior: saldoBase,
+        cobros: this.cobros.map(cobro => ({
+          descripcion: cobro.descripcion || '',
+          monto: parseFloat(cobro.monto) || 0
+        })),
+        abonos: this.abonos.map(abono => ({
+          descripcion: abono.descripcion || '',
+          monto: parseFloat(abono.monto) || 0
+        })),
+        totalGeneral: this.totalGeneral || 0,
+        totalGeneralVenta: totalVenta,
+        nuevoSaldoAcumulado: estadoPagado ? 0 : saldoCalculado,
+        gananciaDelDia: this.gananciaDelDia || 0,
+        estadoPagado,
+        tieneObservacion: this.tieneObservacion,
+        observacion: this.observacion || '',
+        notaBloqueada: this.notaBloqueada,
+        ultimaActualizacion: new Date().toISOString()
+      };
+
+      if (incluirFecha) {
+        notaData.fecha = this.fechaSeleccionada;
+      }
+
+      return notaData;
+    },
+    buildNotaSignature(notaData) {
+      if (!notaData || typeof notaData !== 'object') return '';
+      const { ultimaActualizacion, ...persistedData } = notaData;
+      return JSON.stringify(persistedData);
+    },
+    scheduleAutoSave(delay = this.autoSaveDelay) {
+      if (this.isInitializing || !this.isEditingCuenta()) return;
+
+      this.pendingSaveRequested = true;
+
+      if (this.autoSaveTimer) {
+        clearTimeout(this.autoSaveTimer);
+      }
+
+      this.autoSaveTimer = setTimeout(() => {
+        this.flushAutoSave();
+      }, delay);
+    },
+    async flushAutoSave() {
+      if (!this.pendingSaveRequested || !this.isEditingCuenta()) return;
+      if (this.isSaving) return;
+
+      const now = Date.now();
+      const tiempoTranscurrido = this.lastSaveTime ? now - this.lastSaveTime : Number.POSITIVE_INFINITY;
+      if (tiempoTranscurrido < this.saveMinInterval) {
+        const espera = this.saveMinInterval - tiempoTranscurrido;
+        this.scheduleAutoSave(Math.max(espera, 250));
+        return;
+      }
+
+      const notaData = this.buildNotaData();
+      const signature = this.buildNotaSignature(notaData);
+      if (signature && signature === this.lastSavedData) {
+        this.pendingSaveRequested = false;
+        return;
+      }
+
+      this.pendingSaveRequested = false;
+      this.isSaving = true;
+
+      try {
+        this.saveInFlightPromise = this.retryOperation(() =>
+          this.autoSaveNota(notaData, signature)
+        );
+        await this.saveInFlightPromise;
+      } catch (_) {
+        this.pendingSaveRequested = true;
+      } finally {
+        this.saveInFlightPromise = null;
+        this.isSaving = false;
+
+        if (this.pendingSaveRequested) {
+          this.scheduleAutoSave(800);
+        }
+      }
     },
     solicitarConfirmacionPrecioVenta(accion, ruta = null) {
       this.accionPendiente = accion;
@@ -595,49 +718,26 @@ export default {
     },
     async loadExistingCuenta(id) {
       try {
-        console.log("Cargando cuenta con ID:", id);
         const cuentaRef = doc(db, 'cuentasVeronica', id);
         const cuentaDoc = await getDoc(cuentaRef);
         if (cuentaDoc.exists()) {
           const data = cuentaDoc.data();
-          console.log("Datos de la cuenta cargados:", data);
-
-          this.$nextTick(() => {
-            this.items = data.items || [];
-            this.saldoAcumuladoAnterior = data.saldoAcumuladoAnterior || 0;
-            this.cobros = data.cobros || [];
-            this.abonos = data.abonos || [];
-            this.fechaSeleccionada = data.fecha || this.obtenerFechaActual();
-            this.notaBloqueada = data.notaBloqueada !== undefined ? data.notaBloqueada : true;
-            
-            // Cargar observaciones sin abrir el modal
-            this.showObservacionModal = false; // Asegurar que el modal esté cerrado
-            this.tieneObservacion = data.tieneObservacion || false;
-            this.observacion = data.observacion || '';
-            
-            // Cargar los itemsVenta con los precios de venta guardados
-            this.itemsVenta = data.itemsVenta || this.items.map(item => ({
-              ...item,
-              precioVenta: item.precioVenta || 0,
-              totalVenta: (item.precioVenta || 0) * item.kilos,
-              kilosVenta: item.kilos
-            }));
-            
-            // Asegurarse de que los totales se calculen correctamente
-            this.actualizarItemsVenta();
-            
-            console.log("Estado actualizado con $nextTick:", {
-              items: this.items,
-              saldoAcumuladoAnterior: this.saldoAcumuladoAnterior,
-              cobros: this.cobros,
-              abonos: this.abonos,
-              fechaSeleccionada: this.fechaSeleccionada,
-              itemsVenta: this.itemsVenta,
-              tieneObservacion: this.tieneObservacion,
-              observacion: this.observacion,
-              notaBloqueada: this.notaBloqueada
-            });
-          });
+          this.items = data.items || [];
+          this.saldoAcumuladoAnterior = data.saldoAcumuladoAnterior || 0;
+          this.cobros = data.cobros || [];
+          this.abonos = data.abonos || [];
+          this.fechaSeleccionada = data.fecha || this.obtenerFechaActual();
+          this.notaBloqueada = data.notaBloqueada !== undefined ? data.notaBloqueada : true;
+          this.showObservacionModal = false;
+          this.tieneObservacion = data.tieneObservacion || false;
+          this.observacion = data.observacion || '';
+          this.itemsVenta = data.itemsVenta || this.items.map(item => ({
+            ...item,
+            precioVenta: item.precioVenta || 0,
+            totalVenta: (item.precioVenta || 0) * item.kilos,
+            kilosVenta: item.kilos
+          }));
+          this.actualizarItemsVenta();
         } else {
           console.error("No se encontró la cuenta con el ID proporcionado");
         }
@@ -924,51 +1024,40 @@ export default {
     },
     async guardarNotaConfirmada() {
       try {
-        // Deshabilitar el botón de guardar mientras se procesa
         this.isGuardando = true;
 
-        // Calcular el total del día actual
-        const totalDia = this.totalGeneralVenta - 
-          this.cobros.reduce((sum, cobro) => sum + (parseFloat(cobro.monto) || 0), 0) - 
-          this.abonos.reduce((sum, abono) => sum + (parseFloat(abono.monto) || 0), 0);
+        if (this.autoSaveTimer) {
+          clearTimeout(this.autoSaveTimer);
+          this.autoSaveTimer = null;
+        }
+        this.pendingSaveRequested = false;
 
-        // Obtener el saldo acumulado anterior más actualizado
+        if (this.saveInFlightPromise) {
+          try {
+            await this.saveInFlightPromise;
+          } catch (_) {
+            // Si falla el auto-save previo, continuamos con el guardado manual.
+          }
+        }
+
         const saldoAcumuladoActualizado = await this.obtenerSaldoAcumuladoAnterior();
-        
-        // Calcular el nuevo saldo acumulado
-        const nuevoSaldoAcumulado = saldoAcumuladoActualizado + totalDia;
-        
-        // Verificar si la nota está pagada
-        const estaPagada = nuevoSaldoAcumulado <= 0;
-        
-        const notaData = {
-          fecha: this.fechaSeleccionada,
-          items: this.items,
+        const notaData = this.buildNotaData({
           saldoAcumuladoAnterior: saldoAcumuladoActualizado,
-          cobros: this.cobros,
-          abonos: this.abonos,
-          totalGeneral: this.totalGeneral,
-          totalGeneralVenta: this.totalGeneralVenta,
-          nuevoSaldoAcumulado: estaPagada ? 0 : nuevoSaldoAcumulado,
-          gananciaDelDia: this.gananciaDelDia,
-          estadoPagado: estaPagada,
-          itemsVenta: this.itemsVenta,
-          tieneObservacion: this.tieneObservacion,
-          observacion: this.observacion,
-          notaBloqueada: this.notaBloqueada,
-          ultimaActualizacion: new Date().toISOString()
-        };
+          incluirFecha: true
+        });
+        const notaSignature = this.buildNotaSignature(notaData);
 
         const id = this.$route.params.id;
         const isEditing = this.$route.query.edit === 'true';
 
         if (id && isEditing) {
-          // Actualizar nota existente
           await updateDoc(doc(db, 'cuentasVeronica', id), notaData);
-          
-          // Actualizar saldos de cuentas posteriores en segundo plano
+
           this.actualizarCuentasPosteriores(this.fechaSeleccionada).catch(console.error);
-          
+
+          this.lastSavedData = notaSignature;
+          this.lastSaveTime = Date.now();
+
           if (this.lastSaveMessage !== 'Cuenta guardada exitosamente' || !this.showSaveMessage) {
             this.lastSaveMessage = 'Cuenta guardada exitosamente';
             this.showSaveMessage = true;
@@ -979,7 +1068,6 @@ export default {
           }
           this.$router.push('/cuentas-veronica');
         } else {
-          // Verificar si ya existe una nota para esta fecha
           const cuentasRef = collection(db, 'cuentasVeronica');
           const q = query(cuentasRef, where('fecha', '==', this.fechaSeleccionada));
           const querySnapshot = await getDocs(q);
@@ -988,12 +1076,13 @@ export default {
             alert('Ya existe una nota registrada para esta fecha. No se puede crear una nueva.');
             return;
           } else {
-            // Crear nueva nota
             await addDoc(collection(db, 'cuentasVeronica'), notaData);
-            
-            // Actualizar saldos de cuentas posteriores en segundo plano
+
             this.actualizarCuentasPosteriores(this.fechaSeleccionada).catch(console.error);
-            
+
+            this.lastSavedData = notaSignature;
+            this.lastSaveTime = Date.now();
+
             if (this.lastSaveMessage !== 'Cuenta guardada exitosamente' || !this.showSaveMessage) {
               this.lastSaveMessage = 'Cuenta guardada exitosamente';
               this.showSaveMessage = true;
@@ -1362,109 +1451,37 @@ export default {
       }
     },
     handleDataChange() {
-      if (this.$route.params.id && this.$route.query.edit === 'true') {
-        if (this.autoSaveTimer) {
-          clearTimeout(this.autoSaveTimer);
-        }
-        this.autoSaveTimer = setTimeout(async () => {
-          await this.queueSave();
-        }, 2000); // Aumentar el delay a 2 segundos
-      }
+      if (this.isInitializing || !this.isEditingCuenta()) return;
+      this.scheduleAutoSave();
     },
-    async queueSave() {
-      // Agregar operación a la cola con timestamp
-      this.saveQueue.push({
-        timestamp: Date.now(),
-        operation: async () => {
-          if (!this.$route.params.id) {
-            await this.crearNuevaCuenta();
-          } else {
-            await this.autoSaveNota();
-          }
+    async queueSave({ immediate = true } = {}) {
+      if (!this.$route.params.id) {
+        if (!this.creatingCuentaPromise) {
+          this.creatingCuentaPromise = this.crearNuevaCuenta().finally(() => {
+            this.creatingCuentaPromise = null;
+          });
         }
-      });
 
-      // Procesar la cola si no hay guardado en proceso
-      if (!this.isSaving) {
-        await this.processSaveQueue();
+        await this.creatingCuentaPromise;
+        return;
       }
+
+      this.scheduleAutoSave(immediate ? 250 : this.autoSaveDelay);
     },
-    async processSaveQueue() {
-      if (this.isSaving || this.saveQueue.length === 0) return;
-
-      this.isSaving = true;
-
-      try {
-        while (this.saveQueue.length > 0) {
-          // Verificar el tiempo desde el último guardado
-          const now = Date.now();
-          if (this.lastSaveTime && now - this.lastSaveTime < this.saveMinInterval) {
-            // Esperar antes de intentar el siguiente guardado
-            await new Promise(resolve => 
-              setTimeout(resolve, this.saveMinInterval - (now - this.lastSaveTime))
-            );
-          }
-
-          const nextSave = this.saveQueue[0];
-          await this.retryOperation(nextSave.operation);
-          this.lastSaveTime = Date.now();
-          this.saveQueue.shift();
-        }
-      } catch (error) {
-        console.error('Error procesando cola de guardado:', error);
-        if (error.code === 'resource-exhausted') {
-          // Esperar 10 segundos antes de reintentar si se excedió la cuota
-          await new Promise(resolve => setTimeout(resolve, 10000));
-          // Reintentar el procesamiento
-          await this.processSaveQueue();
-        }
-      } finally {
-        this.isSaving = false;
-      }
-    },
-    async autoSaveNota() {
+    async autoSaveNota(notaData = this.buildNotaData(), signature = this.buildNotaSignature(notaData)) {
       if (!this.$route.params.id) return;
 
       try {
-        // Preparar datos completos para guardar
-        const saldoFinal = this.nuevoSaldoAcumulado <= 0 ? 0 : this.nuevoSaldoAcumulado;
-        const notaData = {
-          items: this.items.map(item => ({
-            kilos: item.kilos,
-            medida: item.medida,
-            costo: item.costo,
-            total: item.total
-          })),
-          itemsVenta: this.itemsVenta.map(item => ({
-            kilosVenta: item.kilosVenta,
-            medida: item.medida,
-            precioVenta: item.precioVenta,
-            totalVenta: item.totalVenta,
-            ganancia: item.ganancia
-          })),
-          totalGeneral: this.totalGeneral,
-          totalGeneralVenta: this.totalGeneralVenta,
-          nuevoSaldoAcumulado: saldoFinal,
-          cobros: this.cobros,
-          abonos: this.abonos,
-          estadoPagado: saldoFinal <= 0,
-          tieneObservacion: this.tieneObservacion,
-          observacion: this.observacion,
-          notaBloqueada: this.notaBloqueada,
-          ultimaActualizacion: new Date().toISOString()
-        };
-
-        // Guardar en Firestore
         const docRef = doc(db, 'cuentasVeronica', this.$route.params.id);
         await updateDoc(docRef, notaData);
 
-        // Mostrar mensaje solo si no es guardado automático frecuente
+        this.lastSavedData = signature;
+        this.lastSaveTime = Date.now();
         this.lastSaveMessage = '';
         this.showSaveMessage = false;
-        // Puedes dejar visible el indicador de "Guardando..." brevemente si quieres feedback visual
       } catch (error) {
         if (error.code === 'resource-exhausted') {
-          throw error; // Dejar que el sistema de cola maneje el reintento
+          throw error;
         }
         this.lastSaveMessage = 'Error en auto-guardado';
         this.showSaveMessage = true;
@@ -1634,9 +1651,11 @@ export default {
     if (this.autoSaveTimer) {
       clearTimeout(this.autoSaveTimer);
     }
-    // Intentar procesar cualquier guardado pendiente
-    if (this.saveQueue.length > 0) {
-      this.processSaveQueue();
+    if (this.saveMessageTimer) {
+      clearTimeout(this.saveMessageTimer);
+    }
+    if (this.pendingSaveRequested && this.$route.params.id && !this.isSaving) {
+      this.flushAutoSave();
     }
   }
 }

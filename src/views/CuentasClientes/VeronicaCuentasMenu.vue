@@ -167,7 +167,7 @@
 
 <script>
 import { db } from '@/firebase';
-import { collection, query, orderBy, deleteDoc, doc, onSnapshot, where, updateDoc, getDocs, limit } from 'firebase/firestore';
+import { collection, query, orderBy, deleteDoc, doc, onSnapshot, updateDoc, getDocs, limit, writeBatch } from 'firebase/firestore';
 import EmbarqueCuentasService from '@/utils/services/EmbarqueCuentasService';
 import BackButton from '@/components/BackButton.vue';
 import PreciosHistorialModal from '@/components/PreciosHistorialModal.vue';
@@ -178,7 +178,6 @@ import ReporteSemanalPDFButton from '@/components/Cuentas/ReporteSemanalPDFButto
 import moment from 'moment';
 import DatePicker from 'vue2-datepicker';
 import 'vue2-datepicker/index.css';
-import { normalizarFechaISO } from '@/utils/dateUtils';
 
 export default {
   name: 'VeronicaCuentasMenu',
@@ -213,7 +212,13 @@ export default {
       detalleAbonosSemanal: [],
       creatingFecha: null,
       updateDebounceTimer: null,
-      lastUpdateTimestamp: 0
+      lastUpdateTimestamp: 0,
+      isApplyingUpdates: false,
+      queuedUpdates: null,
+      embarquesVeronicaFechas: [],
+      embarquesCacheTimestamp: 0,
+      embarquesCacheTTL: 30000,
+      embarquesFetchPromise: null
     };
   },
   computed: {
@@ -261,13 +266,124 @@ export default {
         return null;
       }
     },
+    tieneContenidoProducto(producto = {}) {
+      return Boolean(
+        producto &&
+        (producto.medida || (
+          Array.isArray(producto.kilos) &&
+          producto.kilos.some(k => Number(k) > 0)
+        ))
+      );
+    },
+    esClienteVeronica(cliente = {}) {
+      const clienteId = (cliente.id ?? cliente.clienteId ?? '').toString();
+      const nombreCliente = (cliente.nombre || '').toLowerCase();
+      return clienteId === '5' || nombreCliente.includes('veronica') || nombreCliente.includes('lorena');
+    },
+    clienteVeronicaConDatos(cliente = {}) {
+      if (!this.esClienteVeronica(cliente)) return false;
+      const tieneProductos = Array.isArray(cliente.productos) &&
+        cliente.productos.some(producto => this.tieneContenidoProducto(producto));
+      const tieneCrudos = Array.isArray(cliente.crudos) && cliente.crudos.length > 0;
+      return tieneProductos || tieneCrudos;
+    },
+    productoRaizVeronicaConDatos(producto = {}) {
+      const clienteId = (producto.clienteId ?? producto.cliente ?? '').toString();
+      if (clienteId !== '5') return false;
+      return this.tieneContenidoProducto(producto);
+    },
+    async obtenerFechasEmbarquesVeronica(force = false) {
+      const ahora = Date.now();
+      const cacheVigente = !force &&
+        this.embarquesCacheTimestamp > 0 &&
+        (ahora - this.embarquesCacheTimestamp) < this.embarquesCacheTTL;
+
+      if (cacheVigente) {
+        return this.embarquesVeronicaFechas;
+      }
+
+      if (this.embarquesFetchPromise) {
+        return this.embarquesFetchPromise;
+      }
+
+      this.embarquesFetchPromise = (async () => {
+        const embarquesRef = collection(db, 'embarques');
+        const embarquesSnapshot = await getDocs(
+          query(embarquesRef, orderBy('fecha', 'desc'), limit(200))
+        );
+
+        const fechas = [];
+        embarquesSnapshot.forEach(docSnap => {
+          const data = docSnap.data() || {};
+          const fechaEmbarque = this.normalizarFechaValor(data.fecha);
+          if (!fechaEmbarque) return;
+
+          const clientes = data.clientes || [];
+          const productosRaiz = data.productos || [];
+          const tieneVeronica =
+            clientes.some(cliente => this.clienteVeronicaConDatos(cliente)) ||
+            productosRaiz.some(producto => this.productoRaizVeronicaConDatos(producto));
+
+          if (tieneVeronica) {
+            fechas.push(fechaEmbarque);
+          }
+        });
+
+        this.embarquesVeronicaFechas = Array.from(new Set(fechas));
+        this.embarquesCacheTimestamp = Date.now();
+        return this.embarquesVeronicaFechas;
+      })();
+
+      try {
+        return await this.embarquesFetchPromise;
+      } finally {
+        this.embarquesFetchPromise = null;
+      }
+    },
+    async aplicarActualizacionesCuentas(actualizaciones = []) {
+      if (!actualizaciones.length) return;
+
+      if (this.isApplyingUpdates) {
+        this.queuedUpdates = actualizaciones;
+        return;
+      }
+
+      this.isApplyingUpdates = true;
+
+      try {
+        const TAMANO_LOTE = 400;
+        for (let i = 0; i < actualizaciones.length; i += TAMANO_LOTE) {
+          const bloque = actualizaciones.slice(i, i + TAMANO_LOTE);
+          const batch = writeBatch(db);
+
+          bloque.forEach(({ id, updates }) => {
+            batch.update(doc(db, 'cuentasVeronica', id), updates);
+          });
+
+          await batch.commit();
+        }
+
+        this.lastUpdateTimestamp = Date.now();
+      } catch (error) {
+        console.error('[VERONICA-CUENTAS] Error al actualizar notas:', error);
+      } finally {
+        this.isApplyingUpdates = false;
+
+        if (this.queuedUpdates && this.queuedUpdates.length > 0) {
+          const actualizacionesPendientes = this.queuedUpdates;
+          this.queuedUpdates = null;
+          this.aplicarActualizacionesCuentas(actualizacionesPendientes);
+        }
+      }
+    },
     async loadCuentas() {
       try {
         this.isLoading = true;
         const cuentasRef = collection(db, 'cuentasVeronica');
         const q = query(cuentasRef, orderBy('fecha', 'asc'));
-        
-        // Usar onSnapshot para actualizaciones en tiempo real
+
+        this.obtenerFechasEmbarquesVeronica().catch(() => {});
+
         this.unsubscribe = onSnapshot(q, async (querySnapshot) => {
           const cuentasActualizadas = querySnapshot.docs.map((doc) => {
             const data = doc.data();
@@ -306,9 +422,8 @@ export default {
 
           let saldoAcumulado = 0;
           const actualizaciones = [];
+          const TOLERANCIA = 0.01;
 
-          // Procesar cada cuenta y preparar las actualizaciones
-          // IMPORTANTE: No modificar notas bloqueadas para preservar la integridad de las cuentas anteriores
           for (let i = 0; i < cuentasOrdenadas.length; i++) {
             const cuenta = cuentasOrdenadas[i];
             const totalDia = cuenta.saldoHoy - cuenta.totalCobros - cuenta.totalAbonos;
@@ -318,28 +433,15 @@ export default {
             const estadoPagado = saldoAcumulado <= 0;
             const saldoNormalizado = estadoPagado ? 0 : saldoAcumulado;
             
-            // Si la nota está bloqueada, usar los valores persistidos y NO actualizar en Firebase
             if (cuenta.notaBloqueada) {
-              // Respetar los valores guardados de la nota bloqueada
-              // Solo actualizar el objeto local para visualización, sin modificar Firebase
               cuenta.totalNota = cuenta.nuevoSaldoAcumulado;
-              // Ajustar el saldo acumulado para las siguientes cuentas basado en el valor persistido
               saldoAcumulado = cuenta.nuevoSaldoAcumulado;
             } else {
-              // Solo actualizar si los valores han cambiado SIGNIFICATIVAMENTE Y la nota NO está bloqueada
-              // Tolerancia de 0.01 para evitar actualizaciones por diferencias de redondeo
-              const TOLERANCIA = 0.01;
               const cambioSaldoAnterior = Math.abs((cuenta.saldoAcumuladoAnterior || 0) - saldoAnterior) > TOLERANCIA;
               const cambioSaldoNuevo = Math.abs((cuenta.nuevoSaldoAcumulado || 0) - saldoNormalizado) > TOLERANCIA;
               const cambioEstado = cuenta.estadoPagado !== estadoPagado;
               
               if (cambioSaldoAnterior || cambioSaldoNuevo || cambioEstado) {
-                console.log(`[VERONICA-CUENTAS] Cambio detectado en nota ${cuenta.id} (${cuenta.fecha}):`, {
-                  saldoAnterior: { anterior: cuenta.saldoAcumuladoAnterior, nuevo: saldoAnterior, cambio: cambioSaldoAnterior },
-                  saldoNuevo: { anterior: cuenta.nuevoSaldoAcumulado, nuevo: saldoNormalizado, cambio: cambioSaldoNuevo },
-                  estadoPagado: { anterior: cuenta.estadoPagado, nuevo: estadoPagado, cambio: cambioEstado }
-                });
-                
                 actualizaciones.push({
                   id: cuenta.id,
                   updates: {
@@ -350,99 +452,56 @@ export default {
                 });
               }
 
-              // Actualizar el objeto local
               cuenta.totalNota = saldoNormalizado;
               cuenta.saldoAcumuladoAnterior = saldoAnterior;
               cuenta.estadoPagado = estadoPagado;
               cuenta.nuevoSaldoAcumulado = saldoNormalizado;
             }
 
-            // Reiniciar saldo si la cuenta está pagada
             if (saldoAcumulado <= 0) {
               saldoAcumulado = 0;
             }
           }
 
-          // Buscar embarques de Verónica que no tengan nota
           const fechasConNota = new Set(cuentasOrdenadas.map(c => this.normalizarFechaValor(c.fecha)));
-          const embarquesRef = collection(db, 'embarques');
-          const embarquesSnapshot = await getDocs(query(embarquesRef, orderBy('fecha', 'desc'), limit(200)));
-          
-          const faltantes = [];
-          embarquesSnapshot.forEach(docSnap => {
-            const data = docSnap.data() || {};
-            const fechaEmbarque = this.normalizarFechaValor(data.fecha);
-            if (!fechaEmbarque || fechasConNota.has(fechaEmbarque)) return;
+          const fechasEmbarquesVeronica = await this.obtenerFechasEmbarquesVeronica().catch(() => []);
+          const faltantes = fechasEmbarquesVeronica
+            .filter(fechaEmbarque => fechaEmbarque && !fechasConNota.has(fechaEmbarque))
+            .map(fechaEmbarque => ({
+              id: `missing-${fechaEmbarque}`,
+              fecha: fechaEmbarque,
+              saldoHoy: 0,
+              totalCobros: 0,
+              totalAbonos: 0,
+              totalNota: 0,
+              estadoPagado: false,
+              nuevoSaldoAcumulado: 0,
+              saldoAcumuladoAnterior: 0,
+              abonos: [],
+              tieneObservacion: false,
+              observacion: '',
+              missingNota: true
+            }));
 
-            const clientes = data.clientes || [];
-            const productosRaiz = data.productos || [];
-
-            const tieneVeronica = clientes.some(cliente => {
-              const clienteId = (cliente.id ?? cliente.clienteId ?? '').toString();
-              const nombreCliente = (cliente.nombre || '').toLowerCase();
-              const esVeronica = clienteId === '5' || nombreCliente.includes('veronica') || nombreCliente.includes('lorena');
-              const tieneProductos = Array.isArray(cliente.productos) && cliente.productos.some(p => p && (p.medida || (Array.isArray(p.kilos) && p.kilos.some(k => Number(k) > 0))));
-              const tieneCrudos = Array.isArray(cliente.crudos) && cliente.crudos.length > 0;
-              return esVeronica && (tieneProductos || tieneCrudos);
-            }) || productosRaiz.some(producto => {
-              const clienteId = (producto.clienteId ?? producto.cliente ?? '').toString();
-              const tieneContenido = producto && (producto.medida || (Array.isArray(producto.kilos) && producto.kilos.some(k => Number(k) > 0)));
-              return clienteId === '5' && tieneContenido;
-            });
-
-            if (tieneVeronica) {
-              faltantes.push({
-                id: `missing-${fechaEmbarque}`,
-                fecha: fechaEmbarque,
-                saldoHoy: 0,
-                totalCobros: 0,
-                totalAbonos: 0,
-                totalNota: 0,
-                estadoPagado: false,
-                nuevoSaldoAcumulado: 0,
-                saldoAcumuladoAnterior: 0,
-                abonos: [],
-                tieneObservacion: false,
-                observacion: '',
-                missingNota: true
-              });
-            }
-          });
-
-          // PROTECCIÓN: Solo actualizar si hay cambios significativos y ha pasado suficiente tiempo
-          // para evitar actualizaciones innecesarias durante operaciones de solo lectura (como generación de PDFs)
-          const ahora = Date.now();
-          const tiempoTranscurrido = ahora - this.lastUpdateTimestamp;
-          const TIEMPO_MINIMO_ENTRE_ACTUALIZACIONES = 2000; // 2 segundos
-          
-          if (actualizaciones.length > 0 && tiempoTranscurrido > TIEMPO_MINIMO_ENTRE_ACTUALIZACIONES) {
-            // Cancelar cualquier actualización pendiente
+          if (actualizaciones.length > 0) {
             if (this.updateDebounceTimer) {
               clearTimeout(this.updateDebounceTimer);
             }
-            
-            // Esperar un momento para asegurar que no hay otras operaciones en curso
-            this.updateDebounceTimer = setTimeout(async () => {
-              try {
-                console.log(`[VERONICA-CUENTAS] Actualizando ${actualizaciones.length} nota(s) no bloqueada(s)`);
-                
-                // Realizar las actualizaciones
-                await Promise.all(actualizaciones.map(async ({ id, updates }) => {
-                  console.log(`[VERONICA-CUENTAS] Actualizando nota ${id}:`, updates);
-                  return updateDoc(doc(db, 'cuentasVeronica', id), updates);
-                }));
-                
-                this.lastUpdateTimestamp = Date.now();
-                console.log('[VERONICA-CUENTAS] Actualizaciones completadas');
-              } catch (error) {
-                console.error('[VERONICA-CUENTAS] Error al actualizar notas:', error);
-              }
-            }, 500); // Esperar 500ms antes de actualizar para agrupar cambios
-          } else if (actualizaciones.length > 0) {
-            console.log(`[VERONICA-CUENTAS] Actualizaciones omitidas (muy reciente: ${tiempoTranscurrido}ms < ${TIEMPO_MINIMO_ENTRE_ACTUALIZACIONES}ms)`);
+
+            const ahora = Date.now();
+            const tiempoTranscurrido = ahora - this.lastUpdateTimestamp;
+            const TIEMPO_MINIMO_ENTRE_ACTUALIZACIONES = 1200;
+            const espera = Math.max(300, TIEMPO_MINIMO_ENTRE_ACTUALIZACIONES - tiempoTranscurrido);
+            const actualizacionesClonadas = actualizaciones.map(({ id, updates }) => ({
+              id,
+              updates: { ...updates }
+            }));
+
+            this.updateDebounceTimer = setTimeout(() => {
+              this.aplicarActualizacionesCuentas(actualizacionesClonadas);
+            }, espera);
           }
 
-          // Unir cuentas existentes con faltantes y ordenar desc
           const consolidadas = [...cuentasOrdenadas, ...faltantes].sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
           this.cuentas = consolidadas;
           this.isLoading = false;
@@ -604,14 +663,7 @@ export default {
 
         const data = embarqueDoc.data() || {};
         const clientes = data.clientes || [];
-        const clienteVeronica = clientes.find(cliente => {
-          const clienteId = (cliente.id ?? cliente.clienteId ?? '').toString();
-          const nombreCliente = (cliente.nombre || '').toLowerCase();
-          const esVeronica = clienteId === '5' || nombreCliente.includes('veronica') || nombreCliente.includes('lorena');
-          const tieneProductos = Array.isArray(cliente.productos) && cliente.productos.some(p => p && (p.medida || (Array.isArray(p.kilos) && p.kilos.some(k => Number(k) > 0))));
-          const tieneCrudos = Array.isArray(cliente.crudos) && cliente.crudos.length > 0;
-          return esVeronica && (tieneProductos || tieneCrudos);
-        });
+        const clienteVeronica = clientes.find(cliente => this.clienteVeronicaConDatos(cliente));
 
         const productosVeronica = clienteVeronica?.productos || [];
         const crudosVeronica = clienteVeronica?.crudos || [];
@@ -704,13 +756,14 @@ export default {
     this.loadCuentas();
   },
   beforeUnmount() {
-    // Limpiar el listener cuando el componente se desmonte
     if (this.unsubscribe) {
       this.unsubscribe();
     }
-    // Limpiar el timer de debounce
     if (this.updateDebounceTimer) {
       clearTimeout(this.updateDebounceTimer);
+    }
+    if (this.saveMessageTimer) {
+      clearTimeout(this.saveMessageTimer);
     }
   }
 };
