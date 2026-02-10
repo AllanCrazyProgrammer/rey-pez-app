@@ -92,6 +92,7 @@
             <option value="Cuarto 3">Cuarto 3</option>
             <option value="Cuarto 4">Cuarto 4</option>
             <option value="Cuarto 5">Cuarto 5</option>
+            <option value="Aaron">Aaron</option>
           </select>
           <input 
             v-model.number="newEntrada.kilos" 
@@ -211,6 +212,7 @@
               <option value="Cuarto 3">Cuarto 3</option>
               <option value="Cuarto 4">Cuarto 4</option>
               <option value="Cuarto 5">Cuarto 5</option>
+              <option value="Aaron">Aaron</option>
             </select>
           </label>
         </div>
