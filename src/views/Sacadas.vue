@@ -30,7 +30,7 @@
             </option>
           </select>
           <select v-model="newSalida.cuartoFrio">
-            <option value="Todos los cuartos">Cuarto frío (opcional)</option>
+            <option value="No especificado">Cuarto frío (opcional)</option>
             <option v-for="cuarto in cuartosDisponiblesSalida" :key="cuarto" :value="cuarto">
               {{ cuarto }}
             </option>
@@ -285,10 +285,9 @@ export default {
       const medidaSeleccionada = (this.filteredMedidasSalida || []).find(
         op => op.nombre === this.newSalida.medida
       );
-      const lista = ['Todos los cuartos'];
+      const lista = [];
 
       if (!medidaSeleccionada || !medidaSeleccionada.cuartos) {
-        lista.push('s/c');
         return lista;
       }
 
@@ -299,10 +298,6 @@ export default {
             lista.push(cuarto);
           }
         });
-
-      if (lista.length === 1) {
-        lista.push('s/c');
-      }
 
       return lista;
     },
@@ -662,10 +657,10 @@ export default {
       let totalEntradas = 0;
       let totalSalidas = 0;
 
-      const todosLosCuartosLabel = 'Todos los cuartos';
+      const noEspecificadoLabel = 'No especificado';
       const { medidaBase, precio, cuartoFrio } = this.parseSalidaMedida(medidaDisplay);
       const cuartoParsed = this.normalizeCuarto(cuartoSeleccionado || cuartoFrio);
-      const sumarTodosLosCuartos = !cuartoSeleccionado || cuartoSeleccionado === todosLosCuartosLabel;
+      const sumarTodosLosCuartos = !cuartoSeleccionado || cuartoSeleccionado === noEspecificadoLabel;
 
       const sacadasRef = collection(db, 'sacadas');
       const querySnapshot = await getDocs(sacadasRef);
