@@ -427,36 +427,30 @@ export default {
           for (let i = 0; i < cuentasOrdenadas.length; i++) {
             const cuenta = cuentasOrdenadas[i];
             const totalDia = cuenta.saldoHoy - cuenta.totalCobros - cuenta.totalAbonos;
+            const saldoAnterior = i === 0 ? 0 : saldoAcumulado;
             saldoAcumulado += totalDia;
-
-            const saldoAnterior = i === 0 ? 0 : (saldoAcumulado - totalDia);
             const estadoPagado = saldoAcumulado <= 0;
             const saldoNormalizado = estadoPagado ? 0 : saldoAcumulado;
-            
-            if (cuenta.notaBloqueada) {
-              cuenta.totalNota = cuenta.nuevoSaldoAcumulado;
-              saldoAcumulado = cuenta.nuevoSaldoAcumulado;
-            } else {
-              const cambioSaldoAnterior = Math.abs((cuenta.saldoAcumuladoAnterior || 0) - saldoAnterior) > TOLERANCIA;
-              const cambioSaldoNuevo = Math.abs((cuenta.nuevoSaldoAcumulado || 0) - saldoNormalizado) > TOLERANCIA;
-              const cambioEstado = cuenta.estadoPagado !== estadoPagado;
-              
-              if (cambioSaldoAnterior || cambioSaldoNuevo || cambioEstado) {
-                actualizaciones.push({
-                  id: cuenta.id,
-                  updates: {
-                    saldoAcumuladoAnterior: saldoAnterior,
-                    nuevoSaldoAcumulado: saldoNormalizado,
-                    estadoPagado: estadoPagado
-                  }
-                });
-              }
 
-              cuenta.totalNota = saldoNormalizado;
-              cuenta.saldoAcumuladoAnterior = saldoAnterior;
-              cuenta.estadoPagado = estadoPagado;
-              cuenta.nuevoSaldoAcumulado = saldoNormalizado;
+            const cambioSaldoAnterior = Math.abs((cuenta.saldoAcumuladoAnterior || 0) - saldoAnterior) > TOLERANCIA;
+            const cambioSaldoNuevo = Math.abs((cuenta.nuevoSaldoAcumulado || 0) - saldoNormalizado) > TOLERANCIA;
+            const cambioEstado = cuenta.estadoPagado !== estadoPagado;
+            
+            if (cambioSaldoAnterior || cambioSaldoNuevo || cambioEstado) {
+              actualizaciones.push({
+                id: cuenta.id,
+                updates: {
+                  saldoAcumuladoAnterior: saldoAnterior,
+                  nuevoSaldoAcumulado: saldoNormalizado,
+                  estadoPagado: estadoPagado
+                }
+              });
             }
+
+            cuenta.totalNota = saldoNormalizado;
+            cuenta.saldoAcumuladoAnterior = saldoAnterior;
+            cuenta.estadoPagado = estadoPagado;
+            cuenta.nuevoSaldoAcumulado = saldoNormalizado;
 
             if (saldoAcumulado <= 0) {
               saldoAcumulado = 0;

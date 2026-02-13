@@ -11,6 +11,14 @@ const formatCurrency = (value) => {
   });
 };
 
+const formatCurrencyNoDecimals = (value) => {
+  const numericValue = Number(value) || 0;
+  return '$' + numericValue.toLocaleString('es-MX', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0
+  });
+};
+
 const sumArray = (items = []) => items.reduce((total, item) => total + (Number(item.monto) || 0), 0);
 
 export const generarReporteCuentasVeronica = async ({ fechaInicio, fechaFin, registros = [] }) => {
@@ -42,8 +50,7 @@ export const generarReporteCuentasVeronica = async ({ fechaInicio, fechaFin, reg
       { text: 'Fecha', style: 'tableHeader', alignment: 'center' },
       { text: 'Saldo del día', style: 'tableHeader', alignment: 'right' },
       { text: 'Abonos', style: 'tableHeader', alignment: 'right' },
-      { text: 'Resta', style: 'tableHeader', alignment: 'right' },
-      { text: 'Saldo acumulado', style: 'tableHeader', alignment: 'right' }
+      { text: 'Resta', style: 'tableHeader', alignment: 'right' }
     ]
   ];
 
@@ -84,8 +91,7 @@ export const generarReporteCuentasVeronica = async ({ fechaInicio, fechaFin, reg
       { text: formatearFecha(registro.fecha), alignment: 'center' },
       { text: formatCurrency(saldoDelDia), alignment: 'right' },
       { text: formatCurrency(totalAbonos), alignment: 'right' },
-      { text: formatCurrency(totalDia), alignment: 'right' },
-      { text: formatCurrency(saldoFinal), alignment: 'right' }
+      { text: formatCurrency(totalDia), alignment: 'right' }
     ]);
 
     resumenTotales.saldoDia += saldoDelDia;
@@ -124,8 +130,7 @@ export const generarReporteCuentasVeronica = async ({ fechaInicio, fechaFin, reg
     { text: 'Totales del período', alignment: 'right', bold: true, fillColor: '#fdebd0' },
     { text: formatCurrency(resumenTotales.saldoDia), alignment: 'right', bold: true, fillColor: '#fdebd0' },
     { text: formatCurrency(resumenTotales.abonos), alignment: 'right', bold: true, fillColor: '#fdebd0' },
-    { text: formatCurrency(resumenTotales.totalDia), alignment: 'right', bold: true, fillColor: '#fdebd0' },
-    { text: formatCurrency(saldoAcumulado), alignment: 'right', bold: true, fillColor: '#fdebd0' }
+    { text: formatCurrency(resumenTotales.totalDia), alignment: 'right', bold: true, fillColor: '#fdebd0' }
   ]);
 
   const fechaInicioTexto = fechaInicio ? formatearFecha(fechaInicio) : formatearFecha(registrosOrdenados[0].fecha);
@@ -184,16 +189,20 @@ export const generarReporteCuentasVeronica = async ({ fechaInicio, fechaFin, reg
       {
         table: {
           headerRows: 1,
-          widths: ['auto', '*', 'auto', 'auto', 'auto'],
+          widths: ['auto', '*', 'auto', 'auto'],
           body: tablaBody
         },
         layout: layoutTablaConTotal
       },
       {
-        text: `Saldo acumulado al día de hoy (${formatearFecha(new Date())}): ${formatCurrency(saldoAcumulado)}`,
+        text: `SALDO ACUMULADO AL DIA DE HOY (${formatearFecha(new Date())}): ${formatCurrencyNoDecimals(saldoAcumulado)}`,
         style: 'saldoAcumuladoActual',
-        fontSize: 16,
-        margin: [0, 16, 0, 0]
+        bold: true,
+        color: '#b84300',
+        alignment: 'center',
+        fontSize: 22,
+        margin: [0, 18, 0, 0],
+        background: '#fdebd0'
       }
     ]
   };
