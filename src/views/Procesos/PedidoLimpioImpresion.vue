@@ -8,7 +8,7 @@
         v-model="contentScale" 
         min="0.5" 
         max="2" 
-        step="0.1"
+        step="0.01"
         class="scale-slider"
       >
       <span class="scale-value">{{ (contentScale * 100).toFixed(0) }}%</span>
