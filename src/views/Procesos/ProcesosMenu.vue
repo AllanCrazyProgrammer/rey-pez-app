@@ -88,6 +88,16 @@
         <span class="icon">🏦</span>
         <span class="btn-text">PRESTAMOS</span>
       </router-link>
+
+      <router-link 
+        to="/noteMenu" 
+        class="btn-action btn-notas"
+        aria-label="Gestionar notas"
+      >
+        <span class="btn-prefix">[7]</span>
+        <span class="icon">📓</span>
+        <span class="btn-text">NOTAS</span>
+      </router-link>
     </div>
   </div>
 </template>
@@ -354,6 +364,16 @@ export default {
 .btn-prestamos:hover {
   background: #00cec9;
   box-shadow: 0 0 15px rgba(0, 206, 201, 0.5);
+}
+
+.btn-notas {
+  border-color: #e17055;
+  color: #e17055;
+}
+
+.btn-notas:hover {
+  background: #e17055;
+  box-shadow: 0 0 15px rgba(225, 112, 85, 0.5);
 }
 
 /* Responsive */

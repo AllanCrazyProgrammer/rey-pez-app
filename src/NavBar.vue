@@ -53,7 +53,121 @@
         :class="{ 'mobile-open': mobileMenuOpen }"
         id="mobile-navigation"
       >
-        <div class="nav-items">
+        <div class="desktop-nav-items">
+          <router-link 
+            to="/" 
+            class="nav-link" 
+            @click="closeMobileMenu"
+            aria-label="Ir a la página de inicio"
+          >
+            <span class="link-bracket">⟨</span>
+            <span class="link-index">01</span>
+            <span class="nav-text">HOME</span>
+            <span class="link-bracket">⟩</span>
+            <span class="thermal-indicator"></span>
+          </router-link>
+
+          <router-link 
+            to="/procesos/pedidos" 
+            class="nav-link nav-link-priority"
+            @click="closeMobileMenu"
+            aria-label="Acceso rapido a pedidos"
+          >
+            <span class="link-bracket">⟨</span>
+            <span class="link-index">02</span>
+            <span class="nav-text">PEDIDOS</span>
+            <span class="link-bracket">⟩</span>
+            <span class="thermal-indicator"></span>
+          </router-link>
+
+          <router-link 
+            to="/cuentas-mexico" 
+            class="nav-link"
+            @click="closeMobileMenu"
+            aria-label="Ver cuentas de México"
+          >
+            <span class="link-bracket">⟨</span>
+            <span class="link-index">03</span>
+            <span class="nav-text">CUENTAS</span>
+            <span class="link-bracket">⟩</span>
+            <span class="thermal-indicator"></span>
+          </router-link>
+
+          <router-link 
+            to="/sacadas" 
+            class="nav-link"
+            @click="closeMobileMenu"
+            aria-label="Ver entradas y salidas"
+          >
+            <span class="link-bracket">⟨</span>
+            <span class="link-index">04</span>
+            <span class="nav-text">E/S</span>
+            <span class="link-bracket">⟩</span>
+            <span class="thermal-indicator"></span>
+          </router-link>
+
+          <details class="desktop-more-menu desktop-exist-menu">
+            <summary class="nav-link nav-link-more" aria-label="Ver existencias">
+              <span class="link-bracket">⟨</span>
+              <span class="link-index">05</span>
+              <span class="nav-text">EXIST</span>
+              <span class="link-bracket">⟩</span>
+            </summary>
+            <div class="desktop-more-panel">
+              <router-link 
+                to="/existencias" 
+                class="nav-link"
+                @click="closeMobileMenu"
+                aria-label="Ver existencias de limpios"
+              >
+                <span class="link-bracket">⟨</span>
+                <span class="nav-text">LIMPIOS</span>
+                <span class="link-bracket">⟩</span>
+                <span class="thermal-indicator"></span>
+              </router-link>
+              <router-link 
+                to="/existencias-crudos" 
+                class="nav-link"
+                @click="closeMobileMenu"
+                aria-label="Ver existencias de crudos"
+              >
+                <span class="link-bracket">⟨</span>
+                <span class="nav-text">CRUDOS</span>
+                <span class="link-bracket">⟩</span>
+                <span class="thermal-indicator"></span>
+              </router-link>
+            </div>
+          </details>
+
+          <router-link 
+            to="/embarques-menu" 
+            class="nav-link"
+            @click="closeMobileMenu"
+            aria-label="Gestionar embarques"
+          >
+            <span class="link-bracket">⟨</span>
+            <span class="link-index">06</span>
+            <span class="nav-text">EMBARQUES</span>
+            <span class="link-bracket">⟩</span>
+            <span class="thermal-indicator"></span>
+          </router-link>
+
+          <router-link 
+            to="/procesos" 
+            class="nav-link"
+            @click="closeMobileMenu"
+            aria-label="Ver procesos"
+          >
+            <span class="link-bracket">⟨</span>
+            <span class="link-index">07</span>
+            <span class="nav-text">PROCESOS</span>
+            <span class="link-bracket">⟩</span>
+            <span class="thermal-indicator"></span>
+          </router-link>
+
+        </div>
+
+        <div class="mobile-nav-items">
           <router-link 
             to="/" 
             class="nav-link" 
@@ -68,14 +182,14 @@
           </router-link>
           
           <router-link 
-            to="/noteMenu" 
-            class="nav-link"
+            to="/procesos/pedidos" 
+            class="nav-link nav-link-priority"
             @click="closeMobileMenu"
-            aria-label="Gestionar notas"
+            aria-label="Acceso rapido a pedidos"
           >
             <span class="link-bracket">⟨</span>
             <span class="link-index">02</span>
-            <span class="nav-text">NOTAS</span>
+            <span class="nav-text">PEDIDOS</span>
             <span class="link-bracket">⟩</span>
             <span class="thermal-indicator"></span>
           </router-link>
@@ -279,7 +393,7 @@ export default {
     inset 0 -5px 20px rgba(255, 68, 68, 0.1);
   z-index: 1000;
   padding-top: calc(12px + env(safe-area-inset-top));
-  overflow: hidden;
+  overflow: visible;
   font-family: 'Orbitron', 'Share Tech Mono', monospace;
 }
 
@@ -525,12 +639,21 @@ export default {
 .nav-menu {
   display: flex;
   align-items: center;
+  flex: 1;
+  min-width: 0;
+  justify-content: flex-end;
 }
 
-.nav-items {
+.desktop-nav-items,
+.mobile-nav-items {
   display: flex;
   gap: 6px;
   align-items: center;
+  min-width: 0;
+}
+
+.mobile-nav-items {
+  display: none;
 }
 
 /* Navigation links */
@@ -549,6 +672,7 @@ export default {
   position: relative;
   letter-spacing: 1px;
   background: transparent;
+  white-space: nowrap;
 }
 
 .nav-link::after {
@@ -625,6 +749,58 @@ export default {
   box-shadow: 0 0 8px var(--thermal-yellow);
 }
 
+.desktop-more-menu {
+  position: relative;
+}
+
+.desktop-more-menu > summary {
+  list-style: none;
+  cursor: pointer;
+}
+
+.desktop-more-menu > summary::-webkit-details-marker {
+  display: none;
+}
+
+.nav-link-more {
+  user-select: none;
+}
+
+.desktop-more-panel {
+  display: none;
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 210px;
+  padding: 8px;
+  border: 1px solid var(--thermal-orange);
+  background: linear-gradient(180deg, var(--predator-bg) 0%, #1a0a0a 100%);
+  box-shadow: 0 0 20px rgba(255, 107, 0, 0.4);
+  z-index: 1200;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.desktop-more-menu[open] .desktop-more-panel {
+  display: flex;
+}
+
+.desktop-more-panel .nav-link {
+  width: 100%;
+  justify-content: flex-start;
+  border: 1px solid var(--thermal-orange);
+  background: rgba(255, 68, 68, 0.05);
+}
+
+.nav-link-priority {
+  border-color: var(--thermal-orange);
+  background: rgba(255, 107, 0, 0.12);
+}
+
+.nav-link-priority .nav-text {
+  font-weight: 700;
+}
+
 /* HUD Data mobile */
 .hud-data-mobile {
   display: none;
@@ -633,6 +809,36 @@ export default {
 /* Mobile overlay */
 .mobile-overlay {
   display: none;
+}
+
+@media (max-width: 1400px) {
+  .desktop-nav-items {
+    gap: 2px;
+  }
+
+  .nav-link {
+    padding: 8px 9px;
+    font-size: 0.7rem;
+    gap: 4px;
+  }
+
+  .link-index {
+    display: none;
+  }
+
+  .brand-link {
+    gap: 10px;
+    padding: 6px 10px;
+  }
+
+  .brand-title {
+    font-size: 1.2rem;
+    letter-spacing: 2px;
+  }
+
+  .system-status {
+    font-size: 0.55rem;
+  }
 }
 
 /* ═══════════════════════════════════════════
@@ -687,7 +893,12 @@ export default {
     transform: translateX(0);
   }
 
-  .nav-items {
+  .desktop-nav-items {
+    display: none;
+  }
+
+  .mobile-nav-items {
+    display: flex;
     flex-direction: column;
     gap: 10px;
     width: 100%;
