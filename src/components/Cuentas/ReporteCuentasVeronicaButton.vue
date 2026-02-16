@@ -172,10 +172,14 @@ export default {
         if (faltantes.length) {
           const preview = faltantes.slice(0, 3).join(', ');
           const extra = faltantes.length > 3 ? ` y ${faltantes.length - 3} más` : '';
-          this.warningMessage = `Hay ${faltantes.length} día(s) con embarque sin nota: ${preview}${extra}. Completa las notas antes de generar el PDF.`;
-          alert(this.warningMessage);
-          this.isGenerating = false;
-          return;
+          this.warningMessage = `Hay ${faltantes.length} día(s) con embarque sin nota: ${preview}${extra}.`;
+          const continuar = confirm(
+            `${this.warningMessage}\n\n¿Deseas continuar y generar el PDF de todas formas?`
+          );
+          if (!continuar) {
+            this.isGenerating = false;
+            return;
+          }
         }
 
         await generarReporteCuentasVeronica({
