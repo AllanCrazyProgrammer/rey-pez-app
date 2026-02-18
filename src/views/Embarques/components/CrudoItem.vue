@@ -11,7 +11,10 @@
                         $
                     </button>
                     <div class="talla-referencia">
-                        <PedidoReferencia :pedido-referencia="item.pedidoReferencia" />
+                        <PedidoReferencia
+                            :pedido-referencia="pedidoReferenciaCrudos && item.talla ? (pedidoReferenciaCrudos[item.talla] || item.pedidoReferencia) : item.pedidoReferencia"
+                            :total-taras="totalTarasPorTalla[item.talla] || 0"
+                        />
                         <select v-model="item.talla" class="form-control talla-select" @change="onTallaCrudoChange(item)"
                             :disabled="embarqueBloqueado">
                             <option value="">Elige talla</option>
@@ -109,6 +112,10 @@ export default {
         nombreCliente: {
             type: String,
             default: ''
+        },
+        pedidoReferenciaCrudos: {
+            type: Object,
+            default: null
         }
     },
 
@@ -175,6 +182,19 @@ export default {
             return this.clienteId === '4' || this.clienteId === 4 || 
                    (this.$parent && this.$parent.nombreCliente && 
                     this.$parent.nombreCliente.toLowerCase().includes('ozuna'));
+        },
+
+        // Suma de taras (+ sobrante) por talla para todos los items del crudo
+        totalTarasPorTalla() {
+            const mapa = {};
+            (this.crudoData.items || []).forEach(item => {
+                const talla = (item.talla || item.medida || '').toString().trim();
+                if (!talla) return;
+                const taras = this.extraerNumero(item.taras);
+                const sobrante = this.extraerNumero(item.sobrante);
+                mapa[talla] = (mapa[talla] || 0) + taras + sobrante;
+            });
+            return mapa;
         }
     },
 

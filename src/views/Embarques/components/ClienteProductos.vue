@@ -113,6 +113,7 @@
             <ProductoItem v-for="(producto, index) in productos" :key="index" :producto="producto"
                 :embarque-bloqueado="embarqueBloqueado" :medidas-usadas="medidasUsadas" :medidas-configuracion="medidasConfiguracion" :nombre-cliente="nombreCliente"
                 :pedido-referencia-cliente="pedidoReferenciaPorCliente[clienteId] || null"
+                :totales-agrupados-por-clave="totalesAgrupadosPorClave"
                 :precios-actuales="preciosActuales" :fecha-embarque="fechaEmbarque"
                 @update:producto="actualizarProducto" @eliminar-producto="$emit('eliminar-producto', producto)"
                 @mostrar-modal-precio="$emit('mostrar-modal-precio', $event)"
@@ -128,6 +129,7 @@
             <CrudoItem v-for="(crudo, index) in crudos" :key="'crudo-' + index" :crudo="crudo"
                 :embarque-bloqueado="embarqueBloqueado" :cliente-id="clienteId" :crudo-index="index"
                 :precios-actuales="preciosActuales" :fecha-embarque="fechaEmbarque" :nombre-cliente="nombreCliente"
+                :pedido-referencia-crudos="pedidoReferenciaCrudosPorCliente[clienteId] || null"
                 @update:crudo="actualizarCrudo(index, $event)"
                 @eliminar-crudo="$emit('eliminar-crudo', $event, clienteId)"
                 @eliminar-crudo-item="$emit('eliminar-crudo-item', clienteId, ...$event)"
@@ -211,6 +213,10 @@ export default {
             default: () => []
         },
         pedidoReferenciaPorCliente: {
+            type: Object,
+            default: () => ({})
+        },
+        pedidoReferenciaCrudosPorCliente: {
             type: Object,
             default: () => ({})
         },
@@ -353,6 +359,56 @@ export default {
                     return itemTotal + this.calcularKilosCrudos(item);
                 }, 0);
             }, 0);
+        },
+
+        totalesAgrupadosPorClave() {
+            const mapa = {};
+
+            const normalizarMedida = (valor) => {
+                const texto = (valor || '').toString();
+                let medida = texto.toLowerCase();
+                let tipoDetectado = '';
+                if (medida.includes('s/h20') || medida.includes('s/h2o')) {
+                    tipoDetectado = 's/h20';
+                    medida = medida.replace(/s\/h2o|s\/h20/gi, ' ');
+                }
+                if (medida.includes('c/h20') || medida.includes('c/h2o')) {
+                    tipoDetectado = 'c/h20';
+                    medida = medida.replace(/c\/h2o|c\/h20/gi, ' ');
+                }
+                medida = medida.replace(/\s+/g, ' ').trim();
+                return { medida, tipoDetectado };
+            };
+
+            this.productos.forEach(producto => {
+                if (!producto || (!producto.medida && !producto.nombreAlternativoPDF)) return;
+
+                // Usar nombreAlternativoPDF como medida efectiva para agrupar con el producto del pedido
+                const medidaEfectiva = producto.nombreAlternativoPDF || producto.medida;
+                const { medida, tipoDetectado } = normalizarMedida(medidaEfectiva);
+                if (!medida) return;
+
+                const tipoBase = (producto.tipo || tipoDetectado || '').toString().trim().toLowerCase();
+                const tipoPersonalizado = (producto.tipoPersonalizado || '').toString().trim().toLowerCase();
+                const tipoPersonalizadoKey = tipoBase === 'otro' ? tipoPersonalizado : '';
+                const clave = `${medida}__${tipoBase}__${tipoPersonalizadoKey}`;
+
+                const tarasNormales = (producto.taras || []).reduce((sum, tara) => sum + (tara || 0), 0);
+                const tarasExtra = (producto.tarasExtra || []).reduce((sum, tara) => sum + (tara || 0), 0);
+                const totalTaras = tarasNormales + tarasExtra;
+
+                const sumaKilos = (producto.kilos || []).reduce((sum, kilo) => sum + (kilo || 0), 0);
+                const descuentoTaras = producto.restarTaras ? tarasNormales * 3 : 0;
+                const totalKilos = Number((sumaKilos - descuentoTaras).toFixed(1));
+
+                if (!mapa[clave]) {
+                    mapa[clave] = { totalKilos: 0, totalTaras: 0 };
+                }
+                mapa[clave].totalKilos = Number((mapa[clave].totalKilos + totalKilos).toFixed(1));
+                mapa[clave].totalTaras += totalTaras;
+            });
+
+            return mapa;
         }
     },
 

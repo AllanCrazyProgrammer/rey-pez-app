@@ -56,8 +56,8 @@
                 </span>
                 <PedidoReferencia
                     :pedido-referencia="producto.pedidoReferencia"
-                    :total-kilos="totalKilos"
-                    :total-taras="totalTaras"
+                    :total-kilos="totalesCompartidos.totalKilos"
+                    :total-taras="totalesCompartidos.totalTaras"
                 />
             </div>
             <span v-if="producto.precio" class="precio-tag">${{ producto.precio }}</span>
@@ -269,6 +269,10 @@ export default {
         fechaEmbarque: {
             type: String,
             default: ''
+        },
+        totalesAgrupadosPorClave: {
+            type: Object,
+            default: () => ({})
         }
     },
 
@@ -338,6 +342,24 @@ export default {
                 return this.producto.tipoPersonalizado || 'Otro';
             }
             return this.producto.tipo || 'Sin Tipo';
+        },
+
+        claveReferenciaProducto() {
+            // Usar nombreAlternativoPDF como medida efectiva para agrupar con el producto del pedido
+            const medidaEfectiva = this.producto.nombreAlternativoPDF || this.producto.medida;
+            const { medida, tipoDetectado } = this.normalizarMedidaParaReferencia(medidaEfectiva);
+            if (!medida) return null;
+            const tipoBase = (this.producto.tipo || tipoDetectado || '').toString().trim().toLowerCase();
+            const tipoPersonalizado = (this.producto.tipoPersonalizado || '').toString().trim().toLowerCase();
+            const tipoPersonalizadoKey = tipoBase === 'otro' ? tipoPersonalizado : '';
+            return `${medida}__${tipoBase}__${tipoPersonalizadoKey}`;
+        },
+
+        totalesCompartidos() {
+            if (!this.claveReferenciaProducto || !this.totalesAgrupadosPorClave[this.claveReferenciaProducto]) {
+                return { totalKilos: this.totalKilos, totalTaras: this.totalTaras };
+            }
+            return this.totalesAgrupadosPorClave[this.claveReferenciaProducto];
         },
 
         // Total de taras reportadas
@@ -484,24 +506,34 @@ export default {
                 return;
             }
 
-            const { medida, tipoDetectado } = this.normalizarMedidaParaReferencia(this.producto.medida);
-            if (!medida) {
-                this.producto.pedidoReferencia = null;
-                return;
-            }
-
-            const tipoBase = (this.producto.tipo || tipoDetectado || '').toString().trim().toLowerCase();
             const tipoPersonalizado = (this.producto.tipoPersonalizado || '').toString().trim().toLowerCase();
 
-            let referencia = null;
-            if (tipoBase) {
-                const tipoPersonalizadoKey = tipoBase === 'otro' ? tipoPersonalizado : '';
-                const clave = `${medida}__${tipoBase}__${tipoPersonalizadoKey}`;
-                referencia = referenciaCliente.porClave?.[clave] || null;
-            }
+            const buscarReferenciaPorMedida = (medidaTexto) => {
+                const { medida, tipoDetectado } = this.normalizarMedidaParaReferencia(medidaTexto);
+                if (!medida) return null;
 
-            if (!referencia && !tipoBase) {
-                referencia = referenciaCliente.porMedida?.[medida] || null;
+                const tipoBase = (this.producto.tipo || tipoDetectado || '').toString().trim().toLowerCase();
+
+                let ref = null;
+                if (tipoBase) {
+                    const tipoPersonalizadoKey = tipoBase === 'otro' ? tipoPersonalizado : '';
+                    const clave = `${medida}__${tipoBase}__${tipoPersonalizadoKey}`;
+                    ref = referenciaCliente.porClave?.[clave] || null;
+                }
+
+                if (!ref && !tipoBase) {
+                    ref = referenciaCliente.porMedida?.[medida] || null;
+                }
+
+                return ref;
+            };
+
+            // Intentar con la medida real del producto
+            let referencia = buscarReferenciaPorMedida(this.producto.medida);
+
+            // Si no se encontró y tiene nombreAlternativoPDF, intentar con el nombre alternativo
+            if (!referencia && this.producto.nombreAlternativoPDF) {
+                referencia = buscarReferenciaPorMedida(this.producto.nombreAlternativoPDF);
             }
 
             this.producto.pedidoReferencia = referencia

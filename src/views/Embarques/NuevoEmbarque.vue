@@ -94,6 +94,7 @@
           :medidas-usadas="medidasUsadas"
           :medidas-configuracion="medidasConfiguracion"
         :pedido-referencia-por-cliente="pedidoReferenciaPorCliente"
+          :pedido-referencia-crudos-por-cliente="pedidoReferenciaCrudosPorCliente"
           :is-generating-pdf="isGeneratingPdf" 
           :pdf-type="pdfType" 
           :is-creating-account="isCreatingAccount"
@@ -356,6 +357,7 @@ export default {
       mostrarModalConfiguracionMedidas: false,
       medidasConfiguracion: [],
       pedidoReferenciaPorCliente: {},
+      pedidoReferenciaCrudosPorCliente: {},
       pedidoReferenciaFecha: '',
       pedidoReferenciaCargando: false,
       
@@ -832,10 +834,70 @@ export default {
 
       return referencias;
     },
+    construirIndicePedidoReferenciaCrudos(pedidos = []) {
+      const crudoClientesMap = {
+        '8a': '1',
+        'joselito': '1',
+        'catarro': '2',
+        'otilio': '3',
+        'ozuna': '4',
+        'veronica': '5',
+        'lorena': '5'
+      };
+      const medidasCrudosMap = {
+        'chico': 'Chico c/c',
+        'med': 'Med c/c',
+        'med-esp': 'Med-Esp c/c',
+        'med-gde': 'Med-Gde c/c',
+        'gde': 'Gde c/c',
+        'gde c/ extra': 'Gde c/ Extra c/c',
+        'extra': 'Extra c/c',
+        'jumbo': 'Jumbo c/c',
+        'linea': 'Linea',
+        'lag gde': 'Lag gde c/c',
+        'acamaya': 'Acamaya',
+        'rechazo': 'Rechazo',
+        'cam s/c': 'Cam s/c'
+      };
+
+      const referencias = {};
+
+      pedidos
+        .filter(pedido => this.normalizarTexto(pedido?.tipo) === 'crudo')
+        .forEach(pedido => {
+          if (!pedido.pedidos || typeof pedido.pedidos !== 'object') return;
+
+          Object.entries(pedido.pedidos).forEach(([nombreCliente, medidasCliente]) => {
+            const clienteKey = this.normalizarTexto(nombreCliente);
+            const clienteId = crudoClientesMap[clienteKey];
+            if (!clienteId || !medidasCliente || typeof medidasCliente !== 'object') return;
+
+            if (!referencias[clienteId]) {
+              referencias[clienteId] = {};
+            }
+
+            Object.entries(medidasCliente).forEach(([medida, cantidad]) => {
+              const cantidadNum = this.normalizarCantidadPedido(cantidad);
+              if (cantidadNum <= 0) return;
+
+              const medidaKey = medida.toString().trim().toLowerCase();
+              const tallaNormalizada = medidasCrudosMap[medidaKey] || medida.toString().trim();
+
+              if (!referencias[clienteId][tallaNormalizada]) {
+                referencias[clienteId][tallaNormalizada] = { taras: 0 };
+              }
+              referencias[clienteId][tallaNormalizada].taras += cantidadNum;
+            });
+          });
+        });
+
+      return referencias;
+    },
     async cargarPedidoReferenciaDelDia(fecha = this.embarque.fecha) {
       const fechaConsulta = (fecha || '').toString().trim();
       if (!fechaConsulta || !navigator.onLine) {
         this.pedidoReferenciaPorCliente = {};
+        this.pedidoReferenciaCrudosPorCliente = {};
         this.pedidoReferenciaFecha = fechaConsulta;
         return;
       }
@@ -857,10 +919,12 @@ export default {
         const pedidos = snapshot.docs.map(doc => doc.data());
 
         this.pedidoReferenciaPorCliente = this.construirIndicePedidoReferencia(pedidos);
+        this.pedidoReferenciaCrudosPorCliente = this.construirIndicePedidoReferenciaCrudos(pedidos);
         this.pedidoReferenciaFecha = fechaConsulta;
       } catch (error) {
         console.error('[NuevoEmbarque] Error al cargar pedidos para referencia:', error);
         this.pedidoReferenciaPorCliente = {};
+        this.pedidoReferenciaCrudosPorCliente = {};
       } finally {
         this.pedidoReferenciaCargando = false;
       }
@@ -4634,26 +4698,33 @@ export default {
       return false;
     },
 
-    // También añadimos el método handleBeforeUnload si no existe
+    // Manejo del cierre/recarga de pestaña del navegador
     handleBeforeUnload(event) {
       // Guardar el ID del embarque actual antes de recargar
       if (this.embarqueId) {
         localStorage.setItem('ultimoEmbarqueId', this.embarqueId);
         localStorage.setItem('ultimaRuta', window.location.pathname);
       }
-      
-      // Intentar forzar guardado si hay cambios pendientes
-      if (this.saveManager && this.guardadoAutomaticoActivo) {
-        const status = this.saveManager.getStatus();
-        if (status.pendingOperations > 0) {
-          // Intentar guardar de forma síncrona (navegadores modernos pueden ignorar esto)
-          this.saveManager.forceProcessAll();
-          
-          // Mostrar mensaje de confirmación al usuario
-          event.preventDefault();
-          event.returnValue = 'Hay cambios pendientes de guardar. ¿Estás seguro de que quieres salir?';
-          return event.returnValue;
-        }
+
+      const haySaveManagerPendiente = this.saveManager && this.guardadoAutomaticoActivo
+        && this.saveManager.getStatus().pendingOperations > 0;
+
+      // Intentar forzar guardado local si hay operaciones pendientes
+      if (haySaveManagerPendiente) {
+        this.saveManager.forceProcessAll();
+      }
+
+      // Intentar subir a la nube con sendBeacon (best-effort, no bloquea)
+      if (this.hasPendingChanges && this.embarqueId && navigator.onLine) {
+        // Disparar sincronización sin bloquear (puede no completarse si el usuario cierra rápido)
+        this.sincronizarConNube().catch(() => {});
+      }
+
+      // Solo mostrar diálogo de confirmación si hay cambios sin guardar
+      if (haySaveManagerPendiente || this.hasPendingChanges) {
+        event.preventDefault();
+        event.returnValue = 'Hay cambios pendientes de guardar. ¿Estás seguro de que quieres salir?';
+        return event.returnValue;
       }
     },
     // --- FIN: Mover estas funciones dentro de methods ---
@@ -4965,51 +5036,64 @@ export default {
   },
 
   async beforeRouteLeave(to, from, next) {
-    // Guardar cambios pendientes antes de cambiar de ruta
+    // 1. Procesar operaciones pendientes en el SaveManager (guardado local)
     if (this.saveManager && this.embarqueId && this.guardadoAutomaticoActivo) {
       const status = this.saveManager.getStatus();
       if (status.pendingOperations > 0) {
         console.log('[NuevoEmbarque] Guardando cambios pendientes antes de cambiar de ruta...');
-        
         try {
-          // Mostrar mensaje al usuario
           this.mostrarMensaje('Guardando cambios antes de salir...');
-          
-          // Forzar el guardado de todas las operaciones pendientes
           await this.saveManager.forceProcessAll();
-          
-          console.log('[NuevoEmbarque] Cambios guardados exitosamente');
-          next();
+          console.log('[NuevoEmbarque] Cambios locales guardados exitosamente');
         } catch (error) {
-          console.error('[NuevoEmbarque] Error al guardar cambios:', error);
-          
-          // Preguntar al usuario si quiere salir sin guardar
+          console.error('[NuevoEmbarque] Error al guardar cambios locales:', error);
           const confirmacion = confirm('Hay cambios pendientes de guardar. ¿Deseas salir sin guardar?');
-          if (confirmacion) {
-            next();
-          } else {
-            next(false); // Cancelar la navegación
+          if (!confirmacion) {
+            next(false);
+            return;
           }
         }
-      } else {
-        // No hay operaciones pendientes, continuar
-        next();
       }
-    } else {
-      next();
     }
+
+    // 2. Subir cambios a la nube automáticamente si hay pendientes
+    if (this.hasPendingChanges && this.embarqueId) {
+      if (navigator.onLine) {
+        console.log('[NuevoEmbarque] Subiendo cambios a la nube antes de salir...');
+        try {
+          await this.sincronizarConNube();
+          console.log('[NuevoEmbarque] Cambios subidos a la nube exitosamente');
+        } catch (error) {
+          console.error('[NuevoEmbarque] Error al subir cambios a la nube al salir:', error);
+          // No bloqueamos la navegación si falla la subida a la nube
+        }
+      } else {
+        console.warn('[NuevoEmbarque] Sin conexión al salir: los cambios quedan pendientes de sincronización.');
+      }
+    }
+
+    next();
   },
 
   beforeDestroy() {
-    // Intentar forzar guardado de cambios pendientes antes de destruir
-    if (this.saveManager && this.embarqueId && this.guardadoAutomaticoActivo) {
-      const status = this.saveManager.getStatus();
-      if (status.pendingOperations > 0) {
-        console.log('[NuevoEmbarque] Forzando guardado antes de destruir componente');
-        
-        // Intentar guardar pero no bloquear la destrucción
-        this.saveManager.forceProcessAll().catch(error => {
-          console.error('[NuevoEmbarque] Error al forzar guardado en destrucción:', error);
+    // Intentar forzar guardado local y subida a la nube antes de destruir
+    if (this.embarqueId) {
+      // Guardar en saveManager si hay operaciones pendientes
+      if (this.saveManager && this.guardadoAutomaticoActivo) {
+        const status = this.saveManager.getStatus();
+        if (status.pendingOperations > 0) {
+          console.log('[NuevoEmbarque] Forzando guardado local antes de destruir componente');
+          this.saveManager.forceProcessAll().catch(error => {
+            console.error('[NuevoEmbarque] Error al forzar guardado local en destrucción:', error);
+          });
+        }
+      }
+
+      // Subir a la nube si hay cambios pendientes y hay conexión
+      if (this.hasPendingChanges && navigator.onLine) {
+        console.log('[NuevoEmbarque] Subiendo cambios a la nube antes de destruir componente');
+        this.sincronizarConNube().catch(error => {
+          console.error('[NuevoEmbarque] Error al subir a la nube en destrucción:', error);
         });
       }
     }
