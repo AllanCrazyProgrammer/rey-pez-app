@@ -209,6 +209,8 @@
 <script>
 import { getFirestore, collection, getDocs, query, where, orderBy } from 'firebase/firestore';
 import BackupService from './BackupService.js';
+import EmbarquesOfflineService from '@/services/EmbarquesOfflineService';
+import { normalizarFechaISO, formatearFechaParaMostrar } from '@/utils/dateUtils';
 
 export default {
   name: 'RecuperacionEmergencia',
@@ -229,6 +231,27 @@ export default {
     this.fechaBusqueda = '2025-07-17';
   },
   methods: {
+    obtenerFechaISODesdeValor(valorFecha) {
+      if (!valorFecha) return null;
+      if (typeof valorFecha === 'object' && typeof valorFecha.toDate === 'function') {
+        return normalizarFechaISO(valorFecha.toDate());
+      }
+      if (typeof valorFecha === 'object' && typeof valorFecha.seconds === 'number') {
+        return normalizarFechaISO(new Date(valorFecha.seconds * 1000));
+      }
+      if (typeof valorFecha === 'object' && typeof valorFecha._seconds === 'number') {
+        return normalizarFechaISO(new Date(valorFecha._seconds * 1000));
+      }
+      return normalizarFechaISO(valorFecha);
+    },
+
+    obtenerPuntajeRegistro(embarque) {
+      const productos = this.contarProductos(embarque);
+      const clientes = Array.isArray(embarque?.clientes) ? embarque.clientes.length : 0;
+      const tieneCarga = embarque?.cargaCon ? 1 : 0;
+      return (productos * 10) + clientes + tieneCarga;
+    },
+
     async buscarEmbarque() {
       if (!this.fechaBusqueda) {
         alert('Por favor selecciona una fecha');
@@ -239,46 +262,53 @@ export default {
       this.resultadosBusqueda = [];
 
       try {
+        const fechaISO = normalizarFechaISO(this.fechaBusqueda);
+        const candidatos = new Map();
+
+        const registrarCandidato = (registro) => {
+          if (!registro?.id) return;
+          const fechaRegistroISO = this.obtenerFechaISODesdeValor(registro.fecha);
+          if (fechaRegistroISO !== fechaISO) return;
+
+          const anterior = candidatos.get(registro.id);
+          if (!anterior || this.obtenerPuntajeRegistro(registro) > this.obtenerPuntajeRegistro(anterior)) {
+            candidatos.set(registro.id, registro);
+          }
+        };
+
         const db = getFirestore();
         const embarquesRef = collection(db, 'embarques');
         const snapshot = await getDocs(embarquesRef);
-        
-        const fechaBuscada = new Date(this.fechaBusqueda);
-        const fechaISO = fechaBuscada.toISOString().split('T')[0];
-        
-        const embarquesEncontrados = [];
-        
-        snapshot.docs.forEach(doc => {
-          const data = doc.data();
-          let fechaEmbarque;
-          
-          // Manejar diferentes formatos de fecha
-          if (data.fecha && typeof data.fecha.toDate === 'function') {
-            fechaEmbarque = data.fecha.toDate();
-          } else if (data.fecha instanceof Date) {
-            fechaEmbarque = data.fecha;
-          } else if (typeof data.fecha === 'string') {
-            fechaEmbarque = new Date(data.fecha);
-          } else {
-            return;
-          }
-          
-          const fechaEmbarqueISO = fechaEmbarque.toISOString().split('T')[0];
-          
-          if (fechaEmbarqueISO === fechaISO) {
-            embarquesEncontrados.push({
-              id: doc.id,
-              fecha: fechaEmbarque,
-              ...data
-            });
-          }
+        snapshot.docs.forEach(docSnap => {
+          const data = docSnap.data() || {};
+          registrarCandidato({
+            id: docSnap.id,
+            ...data,
+            fecha: data.fecha
+          });
         });
-        
-        this.resultadosBusqueda = embarquesEncontrados.sort((a, b) => 
-          this.contarProductos(b) - this.contarProductos(a)
-        );
-        
-        if (embarquesEncontrados.length === 0) {
+
+        try {
+          await EmbarquesOfflineService.init();
+          const registrosOffline = await EmbarquesOfflineService.getAll();
+          (registrosOffline || []).forEach(record => {
+            const docData = record.docData || {};
+            registrarCandidato({
+              id: record.id,
+              ...docData,
+              ...record,
+              clientes: record.clientes || docData.clientes || [],
+              fecha: record.fecha || docData.fecha
+            });
+          });
+        } catch (offlineError) {
+          console.warn('[Recuperacion] No se pudieron leer embarques offline:', offlineError);
+        }
+
+        this.resultadosBusqueda = Array.from(candidatos.values())
+          .sort((a, b) => this.obtenerPuntajeRegistro(b) - this.obtenerPuntajeRegistro(a));
+
+        if (this.resultadosBusqueda.length === 0) {
           alert(`No se encontraron embarques para la fecha ${this.fechaBusqueda}`);
         }
         
@@ -454,21 +484,10 @@ export default {
 
     formatearFecha(fecha) {
       if (!fecha) return 'Fecha no disponible';
-      
-      let fechaObj;
-      if (typeof fecha.toDate === 'function') {
-        fechaObj = fecha.toDate();
-      } else if (fecha instanceof Date) {
-        fechaObj = fecha;
-      } else {
-        fechaObj = new Date(fecha);
-      }
-      
-      return fechaObj.toLocaleDateString('es-ES', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric'
-      });
+
+      const fechaISO = this.obtenerFechaISODesdeValor(fecha);
+      if (!fechaISO) return 'Fecha no disponible';
+      return formatearFechaParaMostrar(fechaISO);
     },
 
     verEmbarque(embarqueId) {

@@ -219,6 +219,23 @@ export default {
         const productosOzuna = this.mapProductosConNombreAlternativo(clienteOzuna?.productos || []);
         const crudosOzuna = clienteOzuna?.crudos || [];
 
+        const tieneProductosConDatos = productosOzuna.some(producto => {
+          const sumaKilos = Array.isArray(producto?.kilos)
+            ? producto.kilos.reduce((sum, kilo) => sum + (Number(kilo) || 0), 0)
+            : (Number(producto?.kilos) || 0);
+          return Boolean((producto?.medida && String(producto.medida).trim()) || sumaKilos > 0);
+        });
+
+        const tieneCrudosConDatos = crudosOzuna.some(crudo => {
+          const items = Array.isArray(crudo?.items) ? crudo.items : [];
+          return items.length > 0;
+        });
+
+        if (!tieneProductosConDatos && !tieneCrudosConDatos) {
+          alert('No se detectaron productos o crudos de Ozuna para esta fecha. Verifica el embarque antes de crear la nota.');
+          return;
+        }
+
         const clienteCrudosTotales = data.clienteCrudos || data.clientesCrudos || {};
         const embarqueCliente = {
           ...data,

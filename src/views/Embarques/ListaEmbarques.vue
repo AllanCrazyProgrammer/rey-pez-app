@@ -416,6 +416,15 @@ export default {
       return payload;
     },
 
+    tieneContenidoOperativo(data) {
+      const clientes = Array.isArray(data?.clientes) ? data.clientes : [];
+      return clientes.some(cliente => {
+        const productos = Array.isArray(cliente?.productos) ? cliente.productos : [];
+        const crudos = Array.isArray(cliente?.crudos) ? cliente.crudos : [];
+        return productos.length > 0 || crudos.length > 0;
+      });
+    },
+
     async sincronizarPendientesOffline() {
       try {
         const pendientes = await EmbarquesOfflineService.getPendingSync();
@@ -440,6 +449,16 @@ export default {
             }
 
             const payload = this.normalizarDocDataParaFirestore(record);
+            const dataRemota = snapshot.exists() ? (snapshot.data() || {}) : null;
+
+            if (dataRemota && this.tieneContenidoOperativo(dataRemota) && !this.tieneContenidoOperativo(payload)) {
+              console.warn('[ListaEmbarques] Snapshot offline incompleto detectado, preservando datos remotos para evitar sobrescritura.');
+              payload.clientes = Array.isArray(dataRemota.clientes) ? dataRemota.clientes : [];
+              payload.kilosCrudos = dataRemota.kilosCrudos || payload.kilosCrudos || {};
+              payload.cargaCon = payload.cargaCon || dataRemota.cargaCon || '';
+              payload.camionNumero = payload.camionNumero || dataRemota.camionNumero || 1;
+            }
+
             const dataParaFirestore = {
               ...payload,
               ultimaEdicion: {
