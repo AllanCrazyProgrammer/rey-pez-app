@@ -183,7 +183,15 @@ export default {
     }
   },
   methods: {
-    regresarAImpresionLimpio() {
+    async regresarAImpresionLimpio() {
+      try {
+        await this.guardarPedidoParaRegreso()
+      } catch (error) {
+        console.error('Error al guardar antes de regresar a limpio:', error)
+        alert(`No se pudo guardar el pedido antes de regresar: ${error.message}`)
+        return
+      }
+
       const { limpioId, limpioFecha } = this.$route.query
       if (limpioId) {
         this.$router.push({
@@ -259,48 +267,64 @@ export default {
         return cantidad && cantidad > 0
       })
     },
+    tienePedidosIngresados() {
+      for (const cliente in this.pedidos) {
+        for (const columna in this.pedidos[cliente]) {
+          const valor = this.pedidos[cliente][columna]
+          if (valor && !isNaN(valor) && parseFloat(valor) > 0) {
+            return true
+          }
+        }
+      }
+      return false
+    },
+    construirPedidosLimpios() {
+      const pedidosLimpios = {}
+      for (const cliente in this.pedidos) {
+        pedidosLimpios[cliente] = {}
+        for (const columna in this.pedidos[cliente]) {
+          const valor = this.pedidos[cliente][columna]
+          pedidosLimpios[cliente][columna] = (valor && !isNaN(valor)) ? parseFloat(valor) : 0
+        }
+      }
+      return pedidosLimpios
+    },
+    construirPedidoData() {
+      return {
+        fecha: this.fecha,
+        pedidos: this.construirPedidosLimpios(),
+        barcosPorPedido: this.barcosPorPedido,
+        columnas: this.columnas,
+        columnasAdicionales: this.columnasAdicionales,
+        tipo: 'crudo',
+        kilos: Math.floor(this.kilosCrudo),
+        taras: Math.floor(this.tarasCrudo),
+        createdAt: Timestamp.now()
+      }
+    },
+    async guardarPedidoParaRegreso() {
+      if (!this.tienePedidosIngresados()) {
+        return
+      }
+
+      const pedidoData = this.construirPedidoData()
+      if (this.isEditing && this.pedidoId) {
+        const pedidoRef = doc(db, 'pedidos', this.pedidoId)
+        await updateDoc(pedidoRef, pedidoData)
+      } else {
+        const docRef = await addDoc(collection(db, 'pedidos'), pedidoData)
+        this.isEditing = true
+        this.pedidoId = docRef.id
+      }
+    },
     async guardarPedido() {
       try {
-        // Validar que haya al menos un pedido ingresado
-        let tienePedidos = false;
-        for (const cliente in this.pedidos) {
-          for (const columna in this.pedidos[cliente]) {
-            const valor = this.pedidos[cliente][columna];
-            if (valor && !isNaN(valor) && parseFloat(valor) > 0) {
-              tienePedidos = true;
-              break;
-            }
-          }
-          if (tienePedidos) break;
-        }
-
-        if (!tienePedidos) {
+        if (!this.tienePedidosIngresados()) {
           alert('Por favor ingresa al menos un pedido antes de guardar');
           return;
         }
 
-        // Limpiar datos de pedidos - convertir valores null/undefined/string vacío a 0
-        const pedidosLimpios = {};
-        for (const cliente in this.pedidos) {
-          pedidosLimpios[cliente] = {};
-          for (const columna in this.pedidos[cliente]) {
-            const valor = this.pedidos[cliente][columna];
-            // Convertir null, undefined, string vacío o NaN a 0
-            pedidosLimpios[cliente][columna] = (valor && !isNaN(valor)) ? parseFloat(valor) : 0;
-          }
-        }
-        
-        const pedidoData = {
-          fecha: this.fecha,
-          pedidos: pedidosLimpios,
-          barcosPorPedido: this.barcosPorPedido,
-          columnas: this.columnas,
-          columnasAdicionales: this.columnasAdicionales, // Guardar columnas adicionales por separado
-          tipo: 'crudo',
-          kilos: Math.floor(this.kilosCrudo),
-          taras: Math.floor(this.tarasCrudo),
-          createdAt: Timestamp.now()
-        }
+        const pedidoData = this.construirPedidoData()
 
         console.log('Guardando pedido:', pedidoData);
         
