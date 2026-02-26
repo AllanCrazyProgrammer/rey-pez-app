@@ -22,11 +22,23 @@
       </button>
     </div>
     
-    <div v-if="!embarqueData">
-      <p>Cargando datos del embarque...</p>
+    <div class="resumen-header-row">
+      <button
+        type="button"
+        class="resumen-tab-button"
+        :class="{ activo: activeVistaTab === 'sacada-hoy' }"
+        @click="activeVistaTab = activeVistaTab === 'sacada-hoy' ? 'rendimientos' : 'sacada-hoy'"
+      >
+        Resumen de sacadas
+      </button>
     </div>
-    
-    <div v-else class="rendimientos-grid">
+
+    <template v-if="activeVistaTab === 'rendimientos'">
+      <div v-if="!embarqueData">
+        <p>Cargando datos del embarque...</p>
+      </div>
+      
+      <div v-else class="rendimientos-grid">
         <div v-for="(medida, index) in medidasUnicas" :key="index" class="rendimiento-card">
           <div class="medida-info">
           <div class="medida-header">
@@ -221,105 +233,162 @@
       </div>
     </div>
 
-    <!-- Sección de Ganancias de Crudos -->
-    <div v-if="embarqueData && obtenerTallasCrudosUnicas().length > 0" class="crudos-ganancias-section">
-      <h2>💰 Ganancias de Crudos por Talla</h2>
-      
-      <div class="crudos-ganancias-grid">
-        <div v-for="talla in obtenerTallasCrudosUnicas()" :key="'crudo-' + talla" class="crudo-ganancia-card">
-          <div class="crudo-ganancia-header">
-            <h4>{{ talla }}</h4>
-            <div class="crudo-ganancia-controls">
-              <label class="checkbox-container">
-                <input 
-                  type="checkbox" 
-                  v-model="analizarGananciaCrudos[talla]"
-                  @change="guardarEstadoAnalisisCrudos"
-                >
-                <span class="checkmark"></span>
-                Analizar ganancia
-              </label>
-            </div>
-          </div>
-          
-          <!-- Información de ganancia -->
-          <div v-if="gananciasCalculadasCrudos[talla] && analizarGananciaCrudos[talla]" class="crudo-ganancia-info">
-            <div class="crudo-ganancia-detalles">
-              <div class="ganancia-item">
-                <span class="label">Total Kilos:</span>
-                <span class="valor">{{ formatearNumero(gananciasCalculadasCrudos[talla].totalKilos) }} kg</span>
-              </div>
-              <div class="ganancia-item">
-                <span class="label">Precio Promedio:</span>
-                <div class="precio-container">
-                  <span class="valor precio-venta">${{ formatearPrecio(gananciasCalculadasCrudos[talla].precioVenta) }}</span>
-                  <span v-if="gananciasCalculadasCrudos[talla].hayPreciosIndividuales" 
-                        class="precio-individual-badge"
-                        title="Incluye precios individuales">
-                    📝 Individual
-                  </span>
-                  <span v-else class="precio-sistema-badge" title="Precio del sistema">
-                    🌐 Sistema
-                  </span>
-                </div>
-              </div>
-              <div class="ganancia-item">
-                <span class="label">Costo Base:</span>
-                <span class="valor costo-base">${{ formatearPrecio(gananciasCalculadasCrudos[talla].costoBase) }}</span>
-              </div>
-              <div class="ganancia-item">
-                <span class="label">Ganancia/kg:</span>
-                <span class="valor ganancia-unitaria" 
-                      :class="{ 
-                        'ganancia-positiva': gananciasCalculadasCrudos[talla].gananciaUnitaria > 0,
-                        'ganancia-negativa': gananciasCalculadasCrudos[talla].gananciaUnitaria < 0
-                      }">
-                  ${{ formatearPrecio(gananciasCalculadasCrudos[talla].gananciaUnitaria) }}
-                </span>
-              </div>
-              <div class="ganancia-item ganancia-total-item">
-                <span class="label">Ganancia Total:</span>
-                <span class="valor ganancia-total"
-                      :class="{ 
-                        'ganancia-positiva': gananciasCalculadasCrudos[talla].gananciaTotal > 0,
-                        'ganancia-negativa': gananciasCalculadasCrudos[talla].gananciaTotal < 0
-                      }">
-                  ${{ formatearPrecio(gananciasCalculadasCrudos[talla].gananciaTotal) }}
-                </span>
-              </div>
-              
-              <!-- Detalles por cliente (solo si hay precios diferentes) -->
-              <div v-if="deberMostrarDetallePorCliente(talla)" class="detalles-clientes">
-                <h5>Detalle por Cliente:</h5>
-                <div v-for="detalle in gananciasCalculadasCrudos[talla].detallesPorCliente" :key="detalle.cliente" class="detalle-cliente">
-                  <span class="cliente-nombre">{{ detalle.cliente }}:</span>
-                  <span class="cliente-kilos">{{ formatearNumero(detalle.kilos) }}kg</span>
-                  <span class="cliente-precio">${{ formatearPrecio(detalle.precioVenta) }}</span>
-                  <span class="cliente-ganancia" :class="{ 
-                    'ganancia-positiva': detalle.gananciaTotal > 0,
-                    'ganancia-negativa': detalle.gananciaTotal < 0
-                  }">
-                    ${{ formatearPrecio(detalle.gananciaTotal) }}
-                  </span>
-                  <span class="fuente-precio" :title="'Fuente del precio: ' + detalle.fuentePrecio">
-                    {{ detalle.fuentePrecio === 'individual' ? '📝' : detalle.fuentePrecio === 'sistema-especifico' ? '📌' : '🌐' }}
-                  </span>
-                </div>
+      <!-- Sección de Ganancias de Crudos -->
+      <div v-if="embarqueData && obtenerTallasCrudosUnicas().length > 0" class="crudos-ganancias-section">
+        <h2>💰 Ganancias de Crudos por Talla</h2>
+        
+        <div class="crudos-ganancias-grid">
+          <div v-for="talla in obtenerTallasCrudosUnicas()" :key="'crudo-' + talla" class="crudo-ganancia-card">
+            <div class="crudo-ganancia-header">
+              <h4>{{ talla }}</h4>
+              <div class="crudo-ganancia-controls">
+                <label class="checkbox-container">
+                  <input 
+                    type="checkbox" 
+                    v-model="analizarGananciaCrudos[talla]"
+                    @change="guardarEstadoAnalisisCrudos"
+                  >
+                  <span class="checkmark"></span>
+                  Analizar ganancia
+                </label>
               </div>
             </div>
-          </div>
-          
-          <!-- Mensaje cuando no hay análisis activado -->
-          <div v-else-if="!analizarGananciaCrudos[talla]" class="sin-analisis-crudo">
-            <p class="aviso-sin-analisis">Activar análisis de ganancia para ver detalles</p>
-          </div>
-          
-          <!-- Mensaje cuando no hay datos -->
-          <div v-else class="sin-datos-crudo">
-            <p class="aviso-sin-datos">⚠️ No se encontraron datos de venta para esta talla</p>
+            
+            <!-- Información de ganancia -->
+            <div v-if="gananciasCalculadasCrudos[talla] && analizarGananciaCrudos[talla]" class="crudo-ganancia-info">
+              <div class="crudo-ganancia-detalles">
+                <div class="ganancia-item">
+                  <span class="label">Total Kilos:</span>
+                  <span class="valor">{{ formatearNumero(gananciasCalculadasCrudos[talla].totalKilos) }} kg</span>
+                </div>
+                <div class="ganancia-item">
+                  <span class="label">Precio Promedio:</span>
+                  <div class="precio-container">
+                    <span class="valor precio-venta">${{ formatearPrecio(gananciasCalculadasCrudos[talla].precioVenta) }}</span>
+                    <span v-if="gananciasCalculadasCrudos[talla].hayPreciosIndividuales" 
+                          class="precio-individual-badge"
+                          title="Incluye precios individuales">
+                      📝 Individual
+                    </span>
+                    <span v-else class="precio-sistema-badge" title="Precio del sistema">
+                      🌐 Sistema
+                    </span>
+                  </div>
+                </div>
+                <div class="ganancia-item">
+                  <span class="label">Costo Base:</span>
+                  <span class="valor costo-base">${{ formatearPrecio(gananciasCalculadasCrudos[talla].costoBase) }}</span>
+                </div>
+                <div class="ganancia-item">
+                  <span class="label">Ganancia/kg:</span>
+                  <span class="valor ganancia-unitaria" 
+                        :class="{ 
+                          'ganancia-positiva': gananciasCalculadasCrudos[talla].gananciaUnitaria > 0,
+                          'ganancia-negativa': gananciasCalculadasCrudos[talla].gananciaUnitaria < 0
+                        }">
+                    ${{ formatearPrecio(gananciasCalculadasCrudos[talla].gananciaUnitaria) }}
+                  </span>
+                </div>
+                <div class="ganancia-item ganancia-total-item">
+                  <span class="label">Ganancia Total:</span>
+                  <span class="valor ganancia-total"
+                        :class="{ 
+                          'ganancia-positiva': gananciasCalculadasCrudos[talla].gananciaTotal > 0,
+                          'ganancia-negativa': gananciasCalculadasCrudos[talla].gananciaTotal < 0
+                        }">
+                    ${{ formatearPrecio(gananciasCalculadasCrudos[talla].gananciaTotal) }}
+                  </span>
+                </div>
+                
+                <!-- Detalles por cliente (solo si hay precios diferentes) -->
+                <div v-if="deberMostrarDetallePorCliente(talla)" class="detalles-clientes">
+                  <h5>Detalle por Cliente:</h5>
+                  <div v-for="detalle in gananciasCalculadasCrudos[talla].detallesPorCliente" :key="detalle.cliente" class="detalle-cliente">
+                    <span class="cliente-nombre">{{ detalle.cliente }}:</span>
+                    <span class="cliente-kilos">{{ formatearNumero(detalle.kilos) }}kg</span>
+                    <span class="cliente-precio">${{ formatearPrecio(detalle.precioVenta) }}</span>
+                    <span class="cliente-ganancia" :class="{ 
+                      'ganancia-positiva': detalle.gananciaTotal > 0,
+                      'ganancia-negativa': detalle.gananciaTotal < 0
+                    }">
+                      ${{ formatearPrecio(detalle.gananciaTotal) }}
+                    </span>
+                    <span class="fuente-precio" :title="'Fuente del precio: ' + detalle.fuentePrecio">
+                      {{ detalle.fuentePrecio === 'individual' ? '📝' : detalle.fuentePrecio === 'sistema-especifico' ? '📌' : '🌐' }}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Mensaje cuando no hay análisis activado -->
+            <div v-else-if="!analizarGananciaCrudos[talla]" class="sin-analisis-crudo">
+              <p class="aviso-sin-analisis">Activar análisis de ganancia para ver detalles</p>
+            </div>
+            
+            <!-- Mensaje cuando no hay datos -->
+            <div v-else class="sin-datos-crudo">
+              <p class="aviso-sin-datos">⚠️ No se encontraron datos de venta para esta talla</p>
+            </div>
           </div>
         </div>
       </div>
+    </template>
+
+    <div v-else class="resumen-dia-panel">
+      <p v-if="resumenSacadaHoy.loading" class="resumen-dia-estado">
+        Cargando resumen del dia...
+      </p>
+      <p v-else-if="resumenSacadaHoy.error" class="resumen-dia-estado error">
+        {{ resumenSacadaHoy.error }}
+      </p>
+      <template v-else-if="resumenSacadaHoy.disponible">
+        <p class="resumen-dia-total">Total Entradas: {{ formatearKg(resumenSacadaHoy.totalEntradas) }} kg</p>
+        <p class="resumen-dia-total">Total Salidas: {{ formatearKg(resumenSacadaHoy.totalSalidas) }} kg</p>
+
+        <h4>Salidas clientes:</h4>
+        <table class="resumen-dia-table">
+          <thead>
+            <tr>
+              <th>Medida</th>
+              <th>Total (kg)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-if="!resumenSacadaHoy.salidasClientes.length">
+              <td colspan="2">Sin salidas de clientes registradas hoy.</td>
+            </tr>
+            <tr v-for="item in resumenSacadaHoy.salidasClientes" :key="item.key">
+              <td>{{ item.medida }} ({{ item.proveedor }})</td>
+              <td>{{ formatearKg(item.total) }}</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h4>Salidas maquilas:</h4>
+        <table class="resumen-dia-table">
+          <thead>
+            <tr>
+              <th>Maquila</th>
+              <th>Medida</th>
+              <th>Total (kg)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-if="!resumenSacadaHoy.salidasMaquilas.length">
+              <td colspan="3">Sin salidas de maquila registradas hoy.</td>
+            </tr>
+            <tr v-for="fila in resumenSacadaHoy.salidasMaquilas" :key="fila.key">
+              <td>{{ fila.maquila }}</td>
+              <td>{{ fila.medida }}</td>
+              <td>{{ formatearKg(fila.total) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </template>
+      <p v-else class="resumen-dia-estado">
+        No hay sacadas registradas para el dia de hoy.
+      </p>
     </div>
 
     <div v-if="mostrarModal" class="modal-overlay">
@@ -377,7 +446,7 @@
 </template>
 
 <script>
-import { getFirestore, doc, getDoc, updateDoc, collection, getDocs, query, orderBy } from 'firebase/firestore';
+import { getFirestore, doc, getDoc, updateDoc, collection, getDocs, query, where, orderBy } from 'firebase/firestore';
 import { debounce } from 'lodash';
 import { generarPDFRendimientos } from '@/utils/RendimientosPdf';
 import EmbarquesOfflineService from '@/services/EmbarquesOfflineService';
@@ -409,7 +478,17 @@ export default {
       analizarMaquilaGanancia: {},
       precioMaquila: {},
       costosCalculados: {}, // Cache de costos calculados para cada medida
-      costosGlobalesCache: null // Cache de costos globales
+      costosGlobalesCache: null, // Cache de costos globales
+      activeVistaTab: 'rendimientos',
+      resumenSacadaHoy: {
+        loading: false,
+        disponible: false,
+        totalEntradas: 0,
+        totalSalidas: 0,
+        salidasClientes: [],
+        salidasMaquilas: [],
+        error: ''
+      }
     }
   },
 
@@ -448,6 +527,7 @@ export default {
     await this.cargarEmbarque();
     await this.cargarPreciosVenta();
     await this.precargarCostos();
+    await this.cargarResumenSacadasHoy();
   },
 
   // Recargar datos cuando se vuelve a este componente
@@ -472,6 +552,7 @@ export default {
     await this.cargarEmbarque();
     await this.cargarPreciosVenta();
     await this.precargarCostos();
+    await this.cargarResumenSacadasHoy();
     this.$nextTick(() => {
       this.calcularGanancias();
       this.calcularGananciasCrudos();
@@ -479,6 +560,101 @@ export default {
   },
 
       methods: {
+    formatearKg(value) {
+      return Number(value || 0).toLocaleString('en-US', {
+        minimumFractionDigits: 1,
+        maximumFractionDigits: 1
+      });
+    },
+    async cargarResumenSacadasHoy() {
+      this.resumenSacadaHoy.loading = true;
+      this.resumenSacadaHoy.error = '';
+      try {
+        const ahora = new Date();
+        const inicio = new Date(ahora);
+        inicio.setHours(0, 0, 0, 0);
+        const fin = new Date(ahora);
+        fin.setHours(23, 59, 59, 999);
+
+        const db = getFirestore();
+        const q = query(
+          collection(db, 'sacadas'),
+          where('fecha', '>=', inicio),
+          where('fecha', '<=', fin)
+        );
+        const snap = await getDocs(q);
+
+        if (snap.empty) {
+          this.resumenSacadaHoy = {
+            ...this.resumenSacadaHoy,
+            loading: false,
+            disponible: false,
+            totalEntradas: 0,
+            totalSalidas: 0,
+            salidasClientes: [],
+            salidasMaquilas: []
+          };
+          return;
+        }
+
+        let totalEntradas = 0;
+        let totalSalidas = 0;
+        const clientesMap = new Map();
+        const maquilasMap = new Map();
+
+        snap.docs.forEach((docSnapshot) => {
+          const data = docSnapshot.data() || {};
+          const entradas = Array.isArray(data.entradas) ? data.entradas : [];
+          const salidas = Array.isArray(data.salidas) ? data.salidas : [];
+
+          totalEntradas += Number(data.totalEntradas || entradas.reduce((acc, item) => acc + Number(item.kilos || 0), 0));
+          totalSalidas += Number(data.totalSalidas || salidas.reduce((acc, item) => acc + Number(item.kilos || 0), 0));
+
+          salidas
+            .filter((item) => item && item.tipo === 'proveedor')
+            .forEach((item) => {
+              const medida = item.medida || 'Sin medida';
+              const proveedor = item.proveedor || 'Sin proveedor';
+              const key = `${medida}-${proveedor}`;
+
+              if (!clientesMap.has(key)) {
+                clientesMap.set(key, { key, medida, proveedor, total: 0 });
+              }
+              clientesMap.get(key).total += Number(item.kilos || 0);
+            });
+
+          salidas
+            .filter((item) => item && item.tipo === 'maquila')
+            .forEach((item) => {
+              const maquila = item.proveedor || 'Sin maquila';
+              const medida = item.medida || 'Sin medida';
+              const key = `${maquila}-${medida}`;
+
+              if (!maquilasMap.has(key)) {
+                maquilasMap.set(key, { key, maquila, medida, total: 0 });
+              }
+              maquilasMap.get(key).total += Number(item.kilos || 0);
+            });
+        });
+
+        this.resumenSacadaHoy = {
+          ...this.resumenSacadaHoy,
+          loading: false,
+          disponible: true,
+          totalEntradas,
+          totalSalidas,
+          salidasClientes: Array.from(clientesMap.values()).sort((a, b) => a.medida.localeCompare(b.medida)),
+          salidasMaquilas: Array.from(maquilasMap.values()).sort((a, b) => a.maquila.localeCompare(b.maquila))
+        };
+      } catch (error) {
+        this.resumenSacadaHoy = {
+          ...this.resumenSacadaHoy,
+          loading: false,
+          disponible: false,
+          error: 'No se pudo cargar el resumen de sacadas del dia de hoy.'
+        };
+      }
+    },
     deepClone(value) {
       if (value === undefined || value === null) return value;
       try {
@@ -2892,6 +3068,83 @@ input {
   margin-bottom: 20px;
 }
 
+.resumen-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.resumen-header {
+  background-color: #343a40;
+  color: white;
+  padding: 10px 12px;
+  border-radius: 4px;
+  margin: 0;
+}
+
+.resumen-tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.resumen-tab-button {
+  border: 1px solid #343a40;
+  background: #fff;
+  color: #343a40;
+  border-radius: 20px;
+  padding: 8px 12px;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.resumen-tab-button.activo {
+  background: #343a40;
+  color: #fff;
+}
+
+.resumen-dia-panel {
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 12px;
+  background: #fff;
+}
+
+.resumen-dia-total {
+  margin: 6px 0;
+  font-weight: 600;
+}
+
+.resumen-dia-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 8px;
+  margin-bottom: 14px;
+}
+
+.resumen-dia-table th,
+.resumen-dia-table td {
+  border: 1px solid #ddd;
+  padding: 8px;
+  text-align: left;
+}
+
+.resumen-dia-table th {
+  background: #f2f2f2;
+}
+
+.resumen-dia-estado {
+  margin: 0;
+  color: #4b5563;
+}
+
+.resumen-dia-estado.error {
+  color: #b91c1c;
+}
+
 .btn-volver {
   display: inline-flex;
   align-items: center;
@@ -3615,6 +3868,19 @@ input {
 }
 
 @media (max-width: 768px) {
+  .resumen-header-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .resumen-tabs {
+    width: 100%;
+  }
+
+  .resumen-tab-button {
+    width: 100%;
+  }
+
   .controles-medida {
     flex-direction: column;
     gap: 10px;

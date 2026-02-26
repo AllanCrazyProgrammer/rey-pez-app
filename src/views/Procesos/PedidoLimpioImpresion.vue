@@ -279,8 +279,28 @@
 
       <!-- Sección de resumen por medida (solo en vista previa) -->
       <div class="resumen-medidas">
-        <h3 class="resumen-header">Resumen por Medida</h3>
-        <table class="resumen-table">
+        <div class="resumen-header-row">
+          <h3 class="resumen-header">Resumen por Medida</h3>
+          <div class="resumen-tabs" role="tablist" aria-label="Pestañas de resumen">
+            <button
+              type="button"
+              class="resumen-tab-button"
+              :class="{ activo: activeResumenTab === 'medida' }"
+              @click="activeResumenTab = 'medida'"
+            >
+              Por Medida
+            </button>
+            <button
+              type="button"
+              class="resumen-tab-button"
+              :class="{ activo: activeResumenTab === 'sacada-hoy' }"
+              @click="activeResumenTab = 'sacada-hoy'"
+            >
+              Resumen del Día (hoy)
+            </button>
+          </div>
+        </div>
+        <table v-if="activeResumenTab === 'medida'" class="resumen-table">
           <thead>
             <tr>
               <th>Medida</th>
@@ -384,6 +404,61 @@
             </tr>
           </tbody>
         </table>
+        <div v-else class="resumen-dia-panel">
+          <p v-if="resumenSacadaHoy.loading" class="resumen-dia-estado">
+            Cargando resumen del día...
+          </p>
+          <p v-else-if="resumenSacadaHoy.error" class="resumen-dia-estado error">
+            {{ resumenSacadaHoy.error }}
+          </p>
+          <template v-else-if="resumenSacadaHoy.disponible">
+            <p class="resumen-dia-total">Total Entradas: {{ formatDecimal(resumenSacadaHoy.totalEntradas) }} kg</p>
+            <p class="resumen-dia-total">Total Salidas: {{ formatDecimal(resumenSacadaHoy.totalSalidas) }} kg</p>
+
+            <h4>Salidas clientes:</h4>
+            <table class="resumen-dia-table">
+              <thead>
+                <tr>
+                  <th>Medida</th>
+                  <th>Total (kg)</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-if="!resumenSacadaHoy.salidasClientes.length">
+                  <td colspan="2">Sin salidas de clientes registradas hoy.</td>
+                </tr>
+                <tr v-for="item in resumenSacadaHoy.salidasClientes" :key="item.key">
+                  <td>{{ item.medida }} ({{ item.proveedor }})</td>
+                  <td>{{ formatDecimal(item.total) }}</td>
+                </tr>
+              </tbody>
+            </table>
+
+            <h4>Salidas maquilas:</h4>
+            <table class="resumen-dia-table">
+              <thead>
+                <tr>
+                  <th>Maquila</th>
+                  <th>Medida</th>
+                  <th>Total (kg)</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-if="!resumenSacadaHoy.salidasMaquilas.length">
+                  <td colspan="3">Sin salidas de maquila registradas hoy.</td>
+                </tr>
+                <tr v-for="fila in resumenSacadaHoy.salidasMaquilas" :key="fila.key">
+                  <td>{{ fila.maquila }}</td>
+                  <td>{{ fila.medida }}</td>
+                  <td>{{ formatDecimal(fila.total) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </template>
+          <p v-else class="resumen-dia-estado">
+            No hay sacadas registradas para el día de hoy.
+          </p>
+        </div>
       </div>
     </div>
 
@@ -482,7 +557,17 @@ export default {
       medidaSeleccionada: '',
       totalKilosSeleccionados: 0,
       editando: false,
-      pedidoId: null
+      pedidoId: null,
+      activeResumenTab: 'medida',
+      resumenSacadaHoy: {
+        loading: false,
+        disponible: false,
+        totalEntradas: 0,
+        totalSalidas: 0,
+        salidasClientes: [],
+        salidasMaquilas: [],
+        error: ''
+      }
     }
   },
   created() {
@@ -512,8 +597,105 @@ export default {
     
     // Aplicar estados guardados a los pedidos
     this.aplicarEstadosCompletado();
+    this.cargarResumenSacadaHoy();
   },
   methods: {
+    formatDecimal(value) {
+      return Number(value || 0).toLocaleString('en-US', {
+        minimumFractionDigits: 1,
+        maximumFractionDigits: 1
+      });
+    },
+    async cargarResumenSacadaHoy() {
+      this.resumenSacadaHoy.loading = true;
+      this.resumenSacadaHoy.error = '';
+
+      try {
+        const ahora = new Date();
+        const inicio = new Date(ahora);
+        inicio.setHours(0, 0, 0, 0);
+        const fin = new Date(ahora);
+        fin.setHours(23, 59, 59, 999);
+
+        const q = query(
+          collection(db, 'sacadas'),
+          where('fecha', '>=', inicio),
+          where('fecha', '<=', fin)
+        );
+
+        const snap = await getDocs(q);
+
+        if (snap.empty) {
+          this.resumenSacadaHoy = {
+            ...this.resumenSacadaHoy,
+            loading: false,
+            disponible: false,
+            totalEntradas: 0,
+            totalSalidas: 0,
+            salidasClientes: [],
+            salidasMaquilas: []
+          };
+          return;
+        }
+
+        let totalEntradas = 0;
+        let totalSalidas = 0;
+        const clientesMap = new Map();
+        const maquilasMap = new Map();
+
+        snap.docs.forEach((docSnapshot) => {
+          const data = docSnapshot.data() || {};
+          const entradas = Array.isArray(data.entradas) ? data.entradas : [];
+          const salidas = Array.isArray(data.salidas) ? data.salidas : [];
+
+          totalEntradas += Number(data.totalEntradas || entradas.reduce((acc, item) => acc + Number(item.kilos || 0), 0));
+          totalSalidas += Number(data.totalSalidas || salidas.reduce((acc, item) => acc + Number(item.kilos || 0), 0));
+
+          salidas
+            .filter((item) => item && item.tipo === 'proveedor')
+            .forEach((item) => {
+              const medida = item.medida || 'Sin medida';
+              const proveedor = item.proveedor || 'Sin proveedor';
+              const key = `${medida}-${proveedor}`;
+
+              if (!clientesMap.has(key)) {
+                clientesMap.set(key, { key, medida, proveedor, total: 0 });
+              }
+              clientesMap.get(key).total += Number(item.kilos || 0);
+            });
+
+          salidas
+            .filter((item) => item && item.tipo === 'maquila')
+            .forEach((item) => {
+              const maquila = item.proveedor || 'Sin maquila';
+              const medida = item.medida || 'Sin medida';
+              const key = `${maquila}-${medida}`;
+
+              if (!maquilasMap.has(key)) {
+                maquilasMap.set(key, { key, maquila, medida, total: 0 });
+              }
+              maquilasMap.get(key).total += Number(item.kilos || 0);
+            });
+        });
+
+        this.resumenSacadaHoy = {
+          ...this.resumenSacadaHoy,
+          loading: false,
+          disponible: true,
+          totalEntradas,
+          totalSalidas,
+          salidasClientes: Array.from(clientesMap.values()).sort((a, b) => a.medida.localeCompare(b.medida)),
+          salidasMaquilas: Array.from(maquilasMap.values()).sort((a, b) => a.maquila.localeCompare(b.maquila))
+        };
+      } catch (error) {
+        this.resumenSacadaHoy = {
+          ...this.resumenSacadaHoy,
+          loading: false,
+          disponible: false,
+          error: 'No se pudo cargar el resumen de sacadas del día de hoy.'
+        };
+      }
+    },
     itemTieneDatos(item) {
       if (!item) return false;
       const kilos = Number(item.kilos);
@@ -2264,7 +2446,76 @@ h4.cliente-header.ozuna-header {
   color: white;
   padding: 12px;
   border-radius: 4px;
+  margin-bottom: 0;
+}
+
+.resumen-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   margin-bottom: 15px;
+  flex-wrap: wrap;
+}
+
+.resumen-tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.resumen-tab-button {
+  border: 1px solid #343a40;
+  background: #fff;
+  color: #343a40;
+  border-radius: 20px;
+  padding: 8px 12px;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.resumen-tab-button.activo {
+  background: #343a40;
+  color: #fff;
+}
+
+.resumen-dia-panel {
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 12px;
+  background: #fff;
+}
+
+.resumen-dia-total {
+  margin: 6px 0;
+  font-weight: 600;
+}
+
+.resumen-dia-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 8px;
+  margin-bottom: 14px;
+}
+
+.resumen-dia-table th,
+.resumen-dia-table td {
+  border: 1px solid #ddd;
+  padding: 8px;
+  text-align: left;
+}
+
+.resumen-dia-table th {
+  background: #f2f2f2;
+}
+
+.resumen-dia-estado {
+  margin: 0;
+  color: #4b5563;
+}
+
+.resumen-dia-estado.error {
+  color: #b91c1c;
 }
 
 @media print {
@@ -2310,6 +2561,19 @@ h4.cliente-header.ozuna-header {
 
 /* Ajustes responsivos */
 @media (max-width: 375px) {
+  .resumen-header-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .resumen-tabs {
+    width: 100%;
+  }
+
+  .resumen-tab-button {
+    width: 100%;
+  }
+
   .preview-table td:first-child,
   .preview-table td:nth-child(2),
   .preview-table td:nth-child(3),
