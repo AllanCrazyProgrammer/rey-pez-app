@@ -303,7 +303,12 @@ export default {
       }
     },
     async guardarPedidoParaRegreso() {
-      if (!this.tienePedidosIngresados()) {
+      const hayPedidos = this.tienePedidosIngresados()
+      const puedeActualizarExistente = this.isEditing && this.pedidoId
+
+      // Si es un pedido nuevo y no hay datos, evitamos crear un documento vacío.
+      // Si ya existe, sí guardamos para persistir cambios (incluyendo limpiar cantidades).
+      if (!hayPedidos && !puedeActualizarExistente) {
         return
       }
 
