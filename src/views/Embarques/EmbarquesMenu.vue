@@ -47,10 +47,20 @@ _____|____|____|______
           <span class="btn-icon">+</span>
           <span class="btn-text">NUEVO_EMBARQUE</span>
         </button>
-        <button @click="verCuentaFletes" class="btn-action btn-cuenta-fletes">
+        <button
+          type="button"
+          class="btn-action btn-cuenta-fletes"
+          :disabled="isNavigatingCuentaFletes"
+          :aria-busy="isNavigatingCuentaFletes ? 'true' : 'false'"
+          :aria-label="isNavigatingCuentaFletes ? 'Abriendo cuenta de fletes' : 'Abrir cuenta de fletes'"
+          :title="isNavigatingCuentaFletes ? 'Abriendo cuenta de fletes...' : 'Abrir cuenta de fletes'"
+          @mouseenter="preloadCuentaFletes"
+          @focus="preloadCuentaFletes"
+          @click="verCuentaFletes"
+        >
           <span class="btn-prefix">[2]</span>
           <span class="btn-icon">$</span>
-          <span class="btn-text">CUENTA_FLETES</span>
+          <span class="btn-text">{{ isNavigatingCuentaFletes ? 'ABRIENDO_CUENTA_FLETES...' : 'CUENTA_FLETES' }}</span>
         </button>
         <button @click="abrirSalidasRendimientos" class="btn-action btn-salidas-rendimientos">
           <span class="btn-prefix">[3]</span>
@@ -92,7 +102,9 @@ export default {
   },
   data() {
     return {
-      mostrarSalidasRendimientos: false
+      mostrarSalidasRendimientos: false,
+      isNavigatingCuentaFletes: false,
+      cuentaFletesComponentPreloaded: false
     }
   },
   computed: {
@@ -109,8 +121,28 @@ export default {
     nuevoEmbarque() {
       this.$router.push({ name: 'NuevoEmbarque', params: { id: 'nuevo' } });
     },
-    verCuentaFletes() {
-      this.$router.push({ name: 'CuentaFletes' });
+    async preloadCuentaFletes() {
+      if (this.cuentaFletesComponentPreloaded) return;
+
+      try {
+        await import('./CuentaFletes.vue');
+        this.cuentaFletesComponentPreloaded = true;
+      } catch (error) {
+        // Fallback silencioso: la navegación seguirá funcionando por router.
+        console.error('No se pudo precargar CuentaFletes:', error);
+      }
+    },
+    async verCuentaFletes() {
+      if (this.isNavigatingCuentaFletes) return;
+
+      this.isNavigatingCuentaFletes = true;
+
+      try {
+        await this.preloadCuentaFletes();
+        await this.$router.push({ name: 'CuentaFletes' });
+      } finally {
+        this.isNavigatingCuentaFletes = false;
+      }
     },
     abrirSalidasRendimientos() {
       this.mostrarSalidasRendimientos = true;
@@ -394,6 +426,9 @@ export default {
   letter-spacing: 3px;
   position: relative;
   overflow: hidden;
+  width: 100%;
+  min-height: 62px;
+  touch-action: manipulation;
 }
 
 .btn-action::before {
@@ -418,6 +453,21 @@ export default {
 
 .btn-action:hover::before {
   width: 100%;
+}
+
+.btn-action:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 3px;
+}
+
+.btn-action:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.btn-action:disabled::before {
+  width: 0;
 }
 
 .btn-prefix {
@@ -465,6 +515,10 @@ export default {
 
 .btn-cuenta-fletes .btn-prefix {
   color: var(--matrix-green);
+}
+
+.btn-cuenta-fletes:disabled {
+  color: var(--amber);
 }
 
 /* Botón emergencia */
@@ -662,12 +716,31 @@ export default {
     gap: 10px;
   }
 
+  .btn-text {
+    overflow-wrap: anywhere;
+  }
+
   .btn-icon {
     font-size: 1.2rem;
   }
 
   .rain-column {
     font-size: 0.9rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .crt-flicker,
+  .ascii-ship,
+  .typing-text,
+  .cursor-blink,
+  .status-dot,
+  .btn-action,
+  .btn-action::before,
+  .btn-emergencia,
+  .rain-column {
+    animation: none !important;
+    transition: none !important;
   }
 }
 </style>

@@ -27,7 +27,6 @@ import VentasYGananciasVeronica from '@/views/CuentasClientes/VentasYGananciasVe
 import ListaEmbarques from '@/views/Embarques/ListaEmbarques.vue';
 import NuevoEmbarque from '@/views/Embarques/NuevoEmbarque.vue';
 import Rendimientos from '@/views/Embarques/Rendimientos.vue';
-import CuentaFletes from '@/views/Embarques/CuentaFletes.vue';
 import RecuperacionEmergencia from '@/views/Embarques/RecuperacionEmergencia.vue';
 import GestionCostos from '@/components/GestionCostos.vue';
 import Login from './views/Login.vue';
@@ -285,7 +284,7 @@ const routes = [
   {
     path: '/cuenta-fletes',
     name: 'CuentaFletes',
-    component: CuentaFletes
+    component: () => import('@/views/Embarques/CuentaFletes.vue')
   },
   {
     path: '/cuentas-otilio',

@@ -2,6 +2,7 @@
   <div class="cuenta-fletes">
     <div class="header-section">
       <button 
+        type="button"
         class="btn-volver"
         @click="volverMenu"
       >
@@ -13,22 +14,27 @@
     <!-- Selector de Chofer -->
     <div class="chofer-selector">
       <button 
+        type="button"
         :class="['btn-chofer', { active: choferSeleccionado === 'Caminante' }]"
         @click="choferSeleccionado = 'Caminante'"
       >
         Caminante
       </button>
       <button 
+        type="button"
         :class="['btn-chofer', { active: choferSeleccionado === 'Porro' }]"
         @click="choferSeleccionado = 'Porro'"
       >
         Porro
       </button>
       <button 
+        type="button"
         class="btn-imprimir"
         @click="generarPDF"
+        :disabled="imprimiendo || cargando"
+        :aria-busy="imprimiendo ? 'true' : 'false'"
       >
-        Imprimir Cuenta Pendiente
+        {{ imprimiendo ? 'Generando PDF...' : 'Imprimir Cuenta Pendiente' }}
       </button>
     </div>
 
@@ -37,25 +43,30 @@
       <h3>Registrar Abono</h3>
       <div class="abono-inputs">
         <div class="input-group">
-          <label>Monto del Abono:</label>
+          <label for="abono-monto">Monto del Abono:</label>
           <input 
+            id="abono-monto"
             type="number" 
             v-model="nuevoAbono.monto" 
             placeholder="Cantidad"
             class="input-abono"
+            min="1"
+            step="0.01"
           >
         </div>
         <div class="input-group">
-          <label>Fecha del Abono:</label>
+          <label for="abono-fecha">Fecha del Abono:</label>
           <input 
+            id="abono-fecha"
             type="date" 
             v-model="nuevoAbono.fecha"
             class="input-fecha"
           >
         </div>
         <div class="input-group">
-          <label>Descripción:</label>
+          <label for="abono-descripcion">Descripción:</label>
           <input 
+            id="abono-descripcion"
             type="text" 
             v-model="nuevoAbono.descripcion"
             placeholder="Descripción del abono"
@@ -63,17 +74,25 @@
           >
         </div>
         <button 
+          type="button"
           @click="agregarAbono" 
           class="btn-agregar-abono"
-          :disabled="!nuevoAbono.monto || !nuevoAbono.fecha"
+          :disabled="!puedeAgregarAbono || guardandoAbono"
+          :aria-busy="guardandoAbono ? 'true' : 'false'"
         >
-          Agregar Abono
+          {{ guardandoAbono ? 'Guardando...' : 'Agregar Abono' }}
         </button>
       </div>
     </div>
 
     <!-- Tabla de Fletes -->
     <div class="tabla-container">
+      <div v-if="cargando" class="estado-carga" role="status" aria-live="polite">
+        Cargando cuenta de fletes...
+      </div>
+      <div v-else-if="itemsOrdenados.length === 0" class="estado-carga" role="status" aria-live="polite">
+        No hay movimientos para este chofer.
+      </div>
       <div class="tabla-desktop">
         <table class="tabla-fletes">
           <thead>
@@ -114,7 +133,7 @@
                 <td>{{ item.tipo === 'abono' ? '-' : item.tarasCrudoJoselito }}</td>
                 <td>{{ item.tipo === 'abono' ? '-' : (item.tarasLimpioVeronica || 0) }}</td>
                 <td>{{ item.tipo === 'abono' ? '-' : (item.tarasCrudoVeronica || 0) }}</td>
-                <td>{{ item.tipo === 'abono' ? '-' : ((item.tarasLimpioJoselito + item.tarasCrudoJoselito) + ((item.tarasLimpioVeronica || 0) + (item.tarasCrudoVeronica || 0))) }}</td>
+                <td>{{ item.tipo === 'abono' ? '-' : obtenerTotalTaras(item) }}</td>
                 <td>{{ item.tipo === 'abono' ? 
                   formatearMonto(-item.monto) : 
                   formatearMonto(calcularMontoDia(item)) }}</td>
@@ -127,16 +146,22 @@
                 </td>
                 <td>
                   <button v-if="item.tipo === 'flete'"
+                    type="button"
                     :class="['btn-pago', item.pagado ? 'btn-marcar-pendiente' : 'btn-marcar-pagado']"
                     @click="togglePago(item)"
+                    :disabled="procesandoPagoPorId[item.id]"
+                    :aria-busy="procesandoPagoPorId[item.id] ? 'true' : 'false'"
                   >
-                    {{ item.pagado ? 'Marcar Pendiente' : 'Marcar Pagado' }}
+                    {{ procesandoPagoPorId[item.id] ? 'Guardando...' : (item.pagado ? 'Marcar Pendiente' : 'Marcar Pagado') }}
                   </button>
                   <button v-else
+                    type="button"
                     class="btn-eliminar-abono"
                     @click="eliminarAbono(item)"
+                    :disabled="eliminandoAbonoPorId[item.id]"
+                    :aria-busy="eliminandoAbonoPorId[item.id] ? 'true' : 'false'"
                   >
-                    Eliminar Abono
+                    {{ eliminandoAbonoPorId[item.id] ? 'Eliminando...' : 'Eliminar Abono' }}
                   </button>
                 </td>
               </tr>
@@ -205,16 +230,22 @@
           </div>
           <div class="flete-footer">
             <button v-if="item.tipo === 'flete'"
+              type="button"
               :class="['btn-pago', item.pagado ? 'btn-marcar-pendiente' : 'btn-marcar-pagado']"
               @click="togglePago(item)"
+              :disabled="procesandoPagoPorId[item.id]"
+              :aria-busy="procesandoPagoPorId[item.id] ? 'true' : 'false'"
             >
-              {{ item.pagado ? 'Marcar Pendiente' : 'Marcar Pagado' }}
+              {{ procesandoPagoPorId[item.id] ? 'Guardando...' : (item.pagado ? 'Marcar Pendiente' : 'Marcar Pagado') }}
             </button>
             <button v-else
+              type="button"
               class="btn-eliminar-abono"
               @click="eliminarAbono(item)"
+              :disabled="eliminandoAbonoPorId[item.id]"
+              :aria-busy="eliminandoAbonoPorId[item.id] ? 'true' : 'false'"
             >
-              Eliminar Abono
+              {{ eliminandoAbonoPorId[item.id] ? 'Eliminando...' : 'Eliminar Abono' }}
             </button>
           </div>
         </div>
@@ -298,6 +329,11 @@ export default {
       costoTaraCrudo: 60,
       cargando: false,
       imprimiendo: false,
+      guardandoAbono: false,
+      procesandoPagoPorId: {},
+      eliminandoAbonoPorId: {},
+      formatoMoneda: new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }),
+      formatoFecha: new Intl.DateTimeFormat('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' }),
       nuevoAbono: {
         monto: null,
         fecha: new Date().toISOString().split('T')[0],
@@ -369,6 +405,9 @@ export default {
     },
     fletesPendientes() {
       return this.fletesFiltrados.filter(flete => !flete.pagado);
+    },
+    puedeAgregarAbono() {
+      return Number(this.nuevoAbono.monto) > 0 && Boolean(this.nuevoAbono.fecha);
     }
   },
   methods: {
@@ -386,7 +425,6 @@ export default {
             
             // Filtrar embarques marcados como "No enviado a México"
             if (data.noEnviadoMexico === true) {
-              console.log(`[FLETE FILTRADO] Embarque ${doc.id} marcado como NO enviado a México - Se excluye de la cuenta`);
               return null;
             }
             
@@ -417,11 +455,6 @@ export default {
 
             // Calcular taras de Joselito (ID: 1) - Se incluirán junto con las de Verónica
             if (clienteJoselito) {
-              console.log('Cliente Joselito encontrado:', {
-                id: clienteJoselito.id,
-                nombre: clienteJoselito.nombre
-              });
-              
               // Calcular taras de limpio Joselito
               if (clienteJoselito.productos && Array.isArray(clienteJoselito.productos)) {
                 tarasLimpioJoselito = clienteJoselito.productos.reduce((total, producto) => {
@@ -458,21 +491,10 @@ export default {
                 }, 0);
               }
               
-              console.log('Taras calculadas para Joselito:', {
-                limpio: tarasLimpioJoselito,
-                crudo: tarasCrudoJoselito,
-                total: tarasLimpioJoselito + tarasCrudoJoselito
-              });
             }
 
             // Calcular taras de Verónica (ID: 5) - Se incluirán junto con las de Joselito
             if (clienteVeronica) {
-              console.log('Cliente Verónica encontrado:', {
-                id: clienteVeronica.id,
-                nombre: clienteVeronica.nombre,
-                nombreNotas: clienteVeronica.nombreNotas
-              });
-              
               // Calcular taras de limpio Verónica
               if (clienteVeronica.productos && Array.isArray(clienteVeronica.productos)) {
                 tarasLimpioVeronica = clienteVeronica.productos.reduce((total, producto) => {
@@ -509,11 +531,6 @@ export default {
                 }, 0);
               }
               
-              console.log('Taras calculadas para Verónica:', {
-                limpio: tarasLimpioVeronica,
-                crudo: tarasCrudoVeronica,
-                total: tarasLimpioVeronica + tarasCrudoVeronica
-              });
             }
 
             // Validación: Verificar que solo se procesen Joselito (ID: 1) y Verónica (ID: 5)
@@ -524,29 +541,8 @@ export default {
             });
             
             if (clientesNoPermitidos.length > 0) {
-              console.warn('Embarque con clientes adicionales detectado. Solo se procesarán Joselito y Verónica:', {
-                embarqueId: doc.id,
-                clientesNoPermitidos: clientesNoPermitidos.map(c => ({ id: c.id, nombre: c.nombre })),
-                clientesPermitidos: (data.clientes || []).filter(c => clientesPermitidos.includes(c.id?.toString()))
-              });
+              // Intencionalmente se ignoran clientes fuera del alcance de cuenta fletes.
             }
-
-            // Log resumen de ambos clientes procesados
-            console.log('Resumen de taras procesadas:', {
-              embarqueId: doc.id,
-              fecha: fecha.toLocaleDateString(),
-              joselito: {
-                limpio: tarasLimpioJoselito,
-                crudo: tarasCrudoJoselito,
-                total: tarasLimpioJoselito + tarasCrudoJoselito
-              },
-              veronica: {
-                limpio: tarasLimpioVeronica,
-                crudo: tarasCrudoVeronica,
-                total: tarasLimpioVeronica + tarasCrudoVeronica
-              },
-              totalGeneral: (tarasLimpioJoselito + tarasCrudoJoselito) + (tarasLimpioVeronica + tarasCrudoVeronica)
-            });
 
             // Guardar fletes que tengan datos de al menos uno de los clientes
             if (clienteJoselito || clienteVeronica) {
@@ -625,20 +621,31 @@ export default {
       }
     },
     formatearFecha(fecha) {
-      const fechaAjustada = new Date(fecha);
+      if (!fecha) return '--';
+
+      let fechaObj;
+      if (typeof fecha === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
+        const [year, month, day] = fecha.split('-').map(Number);
+        fechaObj = new Date(year, month - 1, day);
+      } else {
+        fechaObj = fecha instanceof Date ? fecha : new Date(fecha);
+      }
+
+      if (Number.isNaN(fechaObj.getTime())) return '--';
+      const fechaAjustada = new Date(fechaObj);
       fechaAjustada.setDate(fechaAjustada.getDate() + 1);
-      
-      return fechaAjustada.toLocaleDateString('es-ES', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric'
-      });
+      return this.formatoFecha.format(fechaAjustada);
     },
     formatearMonto(monto) {
-      return new Intl.NumberFormat('es-MX', {
-        style: 'currency',
-        currency: 'MXN'
-      }).format(monto);
+      const valor = Number(monto) || 0;
+      return this.formatoMoneda.format(valor);
+    },
+    obtenerTotalTaras(item) {
+      const limpioJos = item.tarasLimpioJoselito || 0;
+      const crudoJos = item.tarasCrudoJoselito || 0;
+      const limpioVer = item.tarasLimpioVeronica || 0;
+      const crudoVer = item.tarasCrudoVeronica || 0;
+      return limpioJos + crudoJos + limpioVer + crudoVer;
     },
     calcularMontoDia(flete) {
       const limpioJos = flete.tarasLimpioJoselito || 0;
@@ -651,6 +658,9 @@ export default {
              (crudoVer * this.costoTaraCrudo);
     },
     async togglePago(flete) {
+      if (this.procesandoPagoPorId[flete.id]) return;
+
+      this.$set(this.procesandoPagoPorId, flete.id, true);
       try {
         const db = getFirestore();
         const ids = Array.isArray(flete.ids) && flete.ids.length > 0 ? flete.ids : [flete.id];
@@ -669,14 +679,17 @@ export default {
       } catch (error) {
         console.error('Error al actualizar el estado de pago:', error);
         alert('Error al actualizar el estado de pago. Por favor, intente de nuevo.');
+      } finally {
+        this.$delete(this.procesandoPagoPorId, flete.id);
       }
     },
     async agregarAbono() {
-      if (!this.nuevoAbono.monto || !this.nuevoAbono.fecha) {
+      if (!this.puedeAgregarAbono || this.guardandoAbono) {
         alert('Por favor complete todos los campos del abono');
         return;
       }
 
+      this.guardandoAbono = true;
       try {
         const db = getFirestore();
         const abonosRef = collection(db, 'abonos');
@@ -685,7 +698,7 @@ export default {
           monto: Number(this.nuevoAbono.monto),
           fecha: new Date(this.nuevoAbono.fecha),
           chofer: this.choferSeleccionado,
-          descripcion: this.nuevoAbono.descripcion || 'Abono realizado',
+          descripcion: (this.nuevoAbono.descripcion || '').trim() || 'Abono realizado',
           createdAt: new Date()
         };
 
@@ -708,11 +721,15 @@ export default {
       } catch (error) {
         console.error('Error al agregar el abono:', error);
         alert('Error al registrar el abono');
+      } finally {
+        this.guardandoAbono = false;
       }
     },
     async eliminarAbono(abono) {
       if (!confirm('¿Está seguro de eliminar este abono?')) return;
+      if (this.eliminandoAbonoPorId[abono.id]) return;
 
+      this.$set(this.eliminandoAbonoPorId, abono.id, true);
       try {
         const db = getFirestore();
         await deleteDoc(doc(db, 'abonos', abono.id));
@@ -724,9 +741,12 @@ export default {
       } catch (error) {
         console.error('Error al eliminar el abono:', error);
         alert('Error al eliminar el abono');
+      } finally {
+        this.$delete(this.eliminandoAbonoPorId, abono.id);
       }
     },
     async generarPDF() {
+      if (this.imprimiendo) return;
       this.imprimiendo = true;
       
       // Crear el contenido HTML para el PDF
@@ -1228,6 +1248,23 @@ export default {
   min-width: 140px;
 }
 
+.btn-pago:disabled,
+.btn-eliminar-abono:disabled,
+.btn-imprimir:disabled,
+.btn-agregar-abono:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+.estado-carga {
+  padding: 20px;
+  text-align: center;
+  color: #5f6368;
+  font-weight: 600;
+}
+
 .btn-marcar-pagado {
   background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
   color: white;
@@ -1722,6 +1759,271 @@ export default {
   
   .resumen-totales {
     grid-column: 1 / -1;
+  }
+}
+
+/* ====== Overrides visuales estilo terminal (coherente con módulos actuales) ====== */
+.cuenta-fletes {
+  --matrix-green: #00ff41;
+  --matrix-green-dim: rgba(0, 255, 65, 0.25);
+  --matrix-green-glow: rgba(0, 255, 65, 0.45);
+  --terminal-bg: #0a0a0a;
+  --terminal-panel: rgba(0, 20, 0, 0.88);
+  --terminal-border: rgba(0, 255, 65, 0.35);
+  --amber: #ffb000;
+  --danger: #ff4d6d;
+  --info: #4bd3ff;
+
+  background: var(--terminal-bg);
+  color: var(--matrix-green);
+  font-family: 'VT323', 'Share Tech Mono', monospace;
+  position: relative;
+  z-index: 0;
+  width: 100vw;
+  max-width: 100vw !important;
+  margin-left: calc(50% - 50vw);
+  margin-right: calc(50% - 50vw);
+  box-sizing: border-box;
+  font-size: 26px;
+}
+
+.cuenta-fletes::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: var(--terminal-bg);
+  z-index: -1;
+  pointer-events: none;
+}
+
+.header-section,
+.chofer-selector,
+.abonos-section,
+.tabla-container,
+.resumen,
+.resumen-cliente,
+.resumen-totales {
+  background: var(--terminal-panel) !important;
+  border: 1px solid var(--terminal-border);
+  border-radius: 0;
+  box-shadow: 0 0 18px var(--matrix-green-dim), inset 0 0 45px rgba(0, 255, 65, 0.05);
+}
+
+.header-section h2,
+.resumen h3,
+.resumen-cliente h4,
+.resumen-totales h4,
+.cliente-title {
+  color: var(--matrix-green);
+  text-shadow: 0 0 10px var(--matrix-green-glow);
+  font-size: 1.3em;
+}
+
+.btn-volver,
+.btn-chofer,
+.btn-imprimir,
+.btn-agregar-abono,
+.btn-pago,
+.btn-eliminar-abono {
+  border-radius: 0;
+  border: 1px solid var(--matrix-green);
+  background: transparent;
+  color: var(--matrix-green);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-family: 'VT323', 'Share Tech Mono', monospace;
+  font-size: 1em;
+  padding: 14px 20px;
+}
+
+.btn-volver:hover,
+.btn-chofer:hover:not(.active),
+.btn-imprimir:hover,
+.btn-agregar-abono:hover:not(:disabled),
+.btn-pago:hover:not(:disabled),
+.btn-eliminar-abono:hover:not(:disabled) {
+  background: var(--matrix-green);
+  color: var(--terminal-bg);
+  transform: none;
+  box-shadow: 0 0 14px var(--matrix-green-glow);
+}
+
+.btn-chofer.active {
+  background: var(--matrix-green);
+  color: var(--terminal-bg);
+  box-shadow: 0 0 14px var(--matrix-green-glow);
+}
+
+.btn-imprimir {
+  border-color: var(--amber);
+  color: var(--amber);
+}
+
+.btn-imprimir:hover:not(:disabled) {
+  background: var(--amber);
+  box-shadow: 0 0 14px rgba(255, 176, 0, 0.45);
+}
+
+.btn-marcar-pendiente,
+.btn-eliminar-abono {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.btn-marcar-pendiente:hover:not(:disabled),
+.btn-eliminar-abono:hover:not(:disabled) {
+  background: var(--danger);
+  color: #0b0b0b;
+  box-shadow: 0 0 14px rgba(255, 77, 109, 0.45);
+}
+
+.btn-marcar-pagado {
+  border-color: var(--matrix-green);
+}
+
+.input-group label,
+.label,
+.resumen-label {
+  color: #91f8ac;
+  font-size: 0.92em;
+}
+
+.input-abono,
+.input-fecha,
+.input-descripcion {
+  border-radius: 0;
+  border: 1px solid var(--terminal-border);
+  background: rgba(0, 0, 0, 0.45);
+  color: var(--matrix-green);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.95em;
+}
+
+.input-abono::placeholder,
+.input-descripcion::placeholder {
+  color: rgba(145, 248, 172, 0.7);
+}
+
+.input-abono:focus,
+.input-fecha:focus,
+.input-descripcion:focus {
+  border-color: var(--matrix-green);
+  box-shadow: 0 0 0 2px rgba(0, 255, 65, 0.25);
+}
+
+.tabla-container {
+  scrollbar-color: var(--matrix-green) rgba(0, 0, 0, 0.45);
+}
+
+.tabla-container::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.tabla-container::-webkit-scrollbar-thumb {
+  background: var(--matrix-green);
+}
+
+.tabla-fletes th {
+  background: rgba(0, 0, 0, 0.65);
+  color: var(--amber);
+  border-bottom: 1px solid var(--terminal-border);
+  font-size: clamp(18px, 1.25vw, 26px) !important;
+}
+
+.tabla-fletes th,
+.tabla-fletes td {
+  border-bottom-color: rgba(0, 255, 65, 0.2);
+  font-size: clamp(17px, 1.1vw, 24px) !important;
+  line-height: 1.3;
+}
+
+.tabla-fletes {
+  font-size: clamp(17px, 1.1vw, 24px) !important;
+}
+
+.tabla-fletes tbody tr:hover {
+  background: rgba(0, 255, 65, 0.08);
+  transform: none;
+}
+
+.fila-abono {
+  background: rgba(75, 211, 255, 0.08) !important;
+}
+
+.estado {
+  border-radius: 0;
+  border: 1px solid transparent;
+  padding: 5px 10px;
+  font-size: clamp(14px, 0.95vw, 20px);
+}
+
+.estado.pagado {
+  background: rgba(0, 255, 65, 0.15);
+  color: var(--matrix-green);
+  border-color: var(--matrix-green);
+}
+
+.estado.pendiente {
+  background: rgba(255, 77, 109, 0.12);
+  color: #ff8da2;
+  border-color: var(--danger);
+}
+
+.estado.abono {
+  background: rgba(75, 211, 255, 0.12);
+  color: var(--info);
+  border-color: var(--info);
+}
+
+.resumen-card,
+.cliente-section,
+.total-row {
+  border-radius: 0;
+  border: 1px solid rgba(0, 255, 65, 0.2);
+  background: rgba(0, 0, 0, 0.38);
+}
+
+.resumen-value,
+.value,
+.fecha {
+  color: var(--matrix-green);
+  font-size: 1.05em;
+}
+
+.saldo-pendiente {
+  border-left-color: var(--danger);
+  background: rgba(255, 77, 109, 0.08);
+}
+
+.saldo-pendiente .resumen-value {
+  color: #ff8da2;
+}
+
+.estado-carga {
+  color: var(--amber);
+}
+
+@media (max-width: 768px) {
+  .cuenta-fletes {
+    font-size: 22px;
+  }
+
+  .tabla-fletes,
+  .tabla-fletes th,
+  .tabla-fletes td {
+    font-size: 18px !important;
+  }
+
+  .header-section h2 {
+    font-size: 1.25em;
+  }
+
+  .btn-volver,
+  .btn-chofer,
+  .btn-imprimir,
+  .btn-agregar-abono {
+    width: 100%;
+    min-height: 48px;
   }
 }
 </style> 
