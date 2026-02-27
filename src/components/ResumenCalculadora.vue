@@ -5,7 +5,7 @@
       <span>{{ displayValue }}</span>
     </div>
 
-    <div class="calculadora-grid">
+    <div class="calculadora-grid" @click="onButtonInteraction">
       <button type="button" class="btn-accion" @click="clearAll">AC</button>
       <button type="button" class="btn-accion" @click="deleteLast">⌫</button>
       <button type="button" class="btn-operador" @click="setOperator('/')">/</button>
@@ -40,7 +40,8 @@ export default {
       currentValue: '0',
       previousValue: null,
       operator: null,
-      resetCurrentOnNextInput: false
+      resetCurrentOnNextInput: false,
+      audioContext: null
     };
   },
   computed: {
@@ -60,7 +61,50 @@ export default {
       return `${this.previousValue} ${this.operatorSymbol} ${this.currentValue}`;
     }
   },
+  beforeDestroy() {
+    if (this.audioContext && typeof this.audioContext.close === 'function') {
+      this.audioContext.close().catch(() => {});
+    }
+  },
   methods: {
+    onButtonInteraction(event) {
+      const button = event.target.closest('button');
+      if (!button) return;
+      this.triggerButtonFeedback(button);
+      this.playTapSound();
+    },
+    triggerButtonFeedback(button) {
+      button.classList.remove('btn-feedback');
+      void button.offsetWidth;
+      button.classList.add('btn-feedback');
+      setTimeout(() => button.classList.remove('btn-feedback'), 140);
+    },
+    playTapSound() {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) return;
+
+      if (!this.audioContext) {
+        this.audioContext = new AudioCtx();
+      }
+      if (this.audioContext.state === 'suspended') {
+        this.audioContext.resume();
+      }
+
+      const oscillator = this.audioContext.createOscillator();
+      const gainNode = this.audioContext.createGain();
+      const now = this.audioContext.currentTime;
+
+      oscillator.type = 'sine';
+      oscillator.frequency.setValueAtTime(720, now);
+      gainNode.gain.setValueAtTime(0.0001, now);
+      gainNode.gain.exponentialRampToValueAtTime(0.08, now + 0.01);
+      gainNode.gain.exponentialRampToValueAtTime(0.0001, now + 0.08);
+
+      oscillator.connect(gainNode);
+      gainNode.connect(this.audioContext.destination);
+      oscillator.start(now);
+      oscillator.stop(now + 0.08);
+    },
     appendDigit(digit) {
       if (this.resetCurrentOnNextInput) {
         this.currentValue = digit;
@@ -175,6 +219,20 @@ button {
   background: #f3f4f6;
   font-size: 1rem;
   font-weight: 600;
+  transition: transform 0.12s ease, box-shadow 0.12s ease, filter 0.12s ease;
+}
+
+button:hover {
+  filter: brightness(0.98);
+}
+
+button:active {
+  transform: scale(0.96);
+}
+
+.btn-feedback {
+  transform: scale(0.95);
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.25);
 }
 
 .btn-operador {
