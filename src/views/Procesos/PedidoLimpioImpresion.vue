@@ -298,8 +298,20 @@
             >
               Resumen del Día (hoy)
             </button>
+            <button
+              type="button"
+              class="resumen-tab-button"
+              :class="{ activo: showCalculadoraResumen }"
+              @click="showCalculadoraResumen = !showCalculadoraResumen"
+            >
+              {{ showCalculadoraResumen ? 'Ocultar Calculadora' : 'Calculadora' }}
+            </button>
           </div>
         </div>
+        <ResumenCalculadora
+          v-if="showCalculadoraResumen"
+          class="resumen-calculadora-panel"
+        />
         <table v-if="activeResumenTab === 'medida'" class="resumen-table">
           <thead>
             <tr>
@@ -477,6 +489,7 @@
 <script>
 import pdfMake from 'pdfmake/build/pdfmake'
 import KilosRefrigeradosModal from '@/components/KilosRefrigeradosModal.vue'
+import ResumenCalculadora from '@/components/ResumenCalculadora.vue'
 import { db } from '@/firebase'
 import { doc, updateDoc, Timestamp, collection, getDocs, query, where } from 'firebase/firestore'
 
@@ -494,7 +507,8 @@ pdfMake.fonts = fonts
 export default {
   name: 'PedidoLimpioImpresion',
   components: {
-    KilosRefrigeradosModal
+    KilosRefrigeradosModal,
+    ResumenCalculadora
   },
   props: {
     fecha: {
@@ -556,6 +570,7 @@ export default {
       modalKilosVisible: false,
       medidaSeleccionada: '',
       totalKilosSeleccionados: 0,
+      showCalculadoraResumen: false,
       editando: false,
       pedidoId: null,
       activeResumenTab: 'medida',
@@ -2281,46 +2296,52 @@ h4.cliente-header.ozuna-header {
   }
 
   .resumen-table {
-    display: block;
     width: 100%;
+    min-width: 560px;
+    display: table;
+  }
+
+  .resumen-medidas {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
   }
 
   .resumen-table thead {
-    display: none;
+    display: table-header-group;
   }
 
-  .resumen-table tbody,
-  .resumen-table tr,
-  .resumen-table td {
-    display: block;
-    width: 100%;
+  .resumen-table tbody {
+    display: table-row-group;
   }
 
   .resumen-table tr {
-    margin-bottom: 15px;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    padding: 8px;
-    background: #fff;
+    display: table-row;
+    margin-bottom: 0;
+    border: none;
+    border-radius: 0;
+    padding: 0;
+    background: transparent;
+  }
+
+  .resumen-table tr {
+    width: auto;
   }
 
   .resumen-table td {
-    text-align: left;
+    display: table-cell;
+    text-align: center;
     padding: 4px 8px;
-    border: none;
-    position: relative;
-    padding-left: 45%;
-    min-height: 35px;
-    margin-bottom: 8px;
-    display: flex;
-    align-items: center;
+    border: 1px solid #ddd;
+    position: static;
+    min-height: 0;
+    margin-bottom: 0;
+    width: auto;
   }
   
   /* Mantener layout horizontal para kilos en responsive */
   .resumen-table td.total-kilos-cell {
-    padding-left: 8px !important;
-    padding-right: 8px !important;
-    display: flex !important;
+    padding: 4px 8px !important;
+    display: table-cell !important;
     justify-content: center !important;
   }
   
@@ -2331,19 +2352,12 @@ h4.cliente-header.ozuna-header {
   }
 
   .resumen-table td::before {
-    content: attr(data-label);
-    position: absolute;
-    left: 0;
-    width: 40%;
-    padding-right: 10px;
-    font-weight: bold;
-    text-align: right;
-    color: #666;
+    content: none;
   }
   
   /* Ocultar etiqueta "Total Kilos" para evitar empalmamiento */
   .resumen-table td.total-kilos-cell::before {
-    display: none !important;
+    content: none !important;
   }
 
   .rendimientos-column {
@@ -2477,6 +2491,10 @@ h4.cliente-header.ozuna-header {
 .resumen-tab-button.activo {
   background: #343a40;
   color: #fff;
+}
+
+.resumen-calculadora-panel {
+  margin-bottom: 14px;
 }
 
 .resumen-dia-panel {
