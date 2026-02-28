@@ -437,6 +437,9 @@ export default {
         'producto.tipoPersonalizado': function() {
             this.actualizarPedidoReferencia();
         },
+        'producto.nombreAlternativoPDF': function() {
+            this.actualizarPedidoReferencia();
+        },
         nombreCliente: function() {
             this.asignarPrecioAutomatico();
             if (this.nombreCliente.trim().toLowerCase().includes('catarro')) {
@@ -528,12 +531,15 @@ export default {
                 return ref;
             };
 
-            // Intentar con la medida real del producto
-            let referencia = buscarReferenciaPorMedida(this.producto.medida);
-
-            // Si no se encontró y tiene nombreAlternativoPDF, intentar con el nombre alternativo
-            if (!referencia && this.producto.nombreAlternativoPDF) {
+            // Usar nombreAlternativoPDF como medida efectiva cuando exista,
+            // para mantener consistente la referencia con lo mostrado en el encabezado.
+            let referencia = null;
+            if (this.producto.nombreAlternativoPDF) {
                 referencia = buscarReferenciaPorMedida(this.producto.nombreAlternativoPDF);
+            }
+
+            if (!referencia) {
+                referencia = buscarReferenciaPorMedida(this.producto.medida);
             }
 
             this.producto.pedidoReferencia = referencia
