@@ -2076,10 +2076,7 @@ export default {
         const cargadoOffline = await this.cargarEmbarqueOffline(id);
         if (!cargadoOffline) {
           console.warn('[cargarEmbarque] No se encontró información offline para el embarque solicitado:', id);
-          alert('No se encontró información local para este embarque. Conéctate a internet para recuperarlo.');
-          this.resetearEmbarque();
-          this.modoEdicion = false;
-          this.guardadoAutomaticoActivo = false;
+          alert('No se encontró información local para este embarque. Conéctate a internet para recuperarlo. Se conservará el estado actual para evitar pérdida de datos.');
         }
         this._inicializandoEmbarque = false;
         return;
@@ -2088,7 +2085,7 @@ export default {
       const db = getFirestore();
       const embarqueRef = doc(db, "embarques", id);
 
-      this.unsubscribe = onSnapshot(embarqueRef, (doc) => {
+      this.unsubscribe = onSnapshot(embarqueRef, async (doc) => {
         // Ignorar actualizaciones remotas si tenemos cambios locales pendientes
         // para evitar sobrescribir el trabajo en curso del usuario
         if (this.hasPendingChanges) {
@@ -2098,7 +2095,28 @@ export default {
 
         if (doc.exists()) {
           const data = doc.data();
+          data.clientes = Array.isArray(data.clientes) ? data.clientes : [];
           this._aplicandoRemoto = true;
+
+          // Protección crítica: si remoto viene vacío y local/offline tiene datos, no sobrescribir.
+          if (!this.tieneContenidoOperativo(data)) {
+            let hayContenidoOffline = false;
+            try {
+              const offlineRecord = await EmbarquesOfflineService.getById(id);
+              const offlineData = offlineRecord?.docData || offlineRecord || {};
+              hayContenidoOffline = this.tieneContenidoOperativo(offlineData);
+            } catch (error) {
+              console.warn('[onSnapshot] No se pudo validar snapshot offline para protección de contenido:', error);
+            }
+
+            const hayContenidoLocal = this.tieneContenidoOperativoActual();
+            if (hayContenidoLocal || hayContenidoOffline) {
+              console.warn('[onSnapshot] Snapshot remoto vacío ignorado para evitar sobrescritura de datos completos locales/offline.');
+              this._inicializandoEmbarque = false;
+              this._aplicandoRemoto = false;
+              return;
+            }
+          }
           
           console.log('[DEBUG-FECHA] Cargando embarque ID:', id);
           console.log('[DEBUG-FECHA] Fecha cruda de Firebase:', data.fecha);
@@ -2340,13 +2358,10 @@ export default {
               return;
             }
 
-            // Si el embarque no existe, limpiar localStorage y reiniciar estado
-            localStorage.removeItem('embarque');
-            localStorage.removeItem('ultimoEmbarqueId');
-            localStorage.removeItem('ultimaRuta');
-            // Opcional : localStorage.removeItem('clientesPersonalizados');
-            alert('El embarque no existe o está corrupto. Se reiniciará el formulario para evitar errores.');
-            this.resetearEmbarque();
+            // Protección crítica: no limpiar ni resetear automáticamente para evitar pérdida accidental.
+            alert('No se encontró el embarque en nube ni en cache local para ese ID. Se conservará el estado actual; verifica conexión y vuelve a intentar.');
+            this._inicializandoEmbarque = false;
+            this._aplicandoRemoto = false;
           });
         }
       }, (error) => {
@@ -2835,6 +2850,19 @@ export default {
         const crudos = Array.isArray(cliente?.crudos) ? cliente.crudos : [];
         return productos.length > 0 || crudos.length > 0;
       });
+    },
+
+    tieneContenidoOperativoActual() {
+      const productos = Array.isArray(this.embarque?.productos) ? this.embarque.productos : [];
+      if (productos.length > 0) {
+        return true;
+      }
+
+      const listasCrudos = this.clienteCrudos && typeof this.clienteCrudos === 'object'
+        ? Object.values(this.clienteCrudos)
+        : [];
+
+      return listasCrudos.some(lista => Array.isArray(lista) && lista.length > 0);
     },
 
     async sincronizarRegistroOffline(record) {
