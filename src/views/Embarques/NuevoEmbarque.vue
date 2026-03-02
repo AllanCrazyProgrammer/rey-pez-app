@@ -272,6 +272,7 @@ import {
   obtenerFechaActualISO 
 } from '@/utils/dateUtils';
 import { generarNotaVentaPDF } from '@/utils/pdfGenerator';
+import { embarqueTieneContenidoOperativoDoc, embarqueTieneContenidoOperativoEstado } from '@/utils/embarqueContenido';
 
 // Después de las imports existentes, agregar:
 import EmbarqueCuentasService from '@/utils/services/EmbarqueCuentasService';
@@ -2844,25 +2845,15 @@ export default {
     },
 
     tieneContenidoOperativo(data) {
-      const clientes = Array.isArray(data?.clientes) ? data.clientes : [];
-      return clientes.some(cliente => {
-        const productos = Array.isArray(cliente?.productos) ? cliente.productos : [];
-        const crudos = Array.isArray(cliente?.crudos) ? cliente.crudos : [];
-        return productos.length > 0 || crudos.length > 0;
-      });
+      return embarqueTieneContenidoOperativoDoc(data);
     },
 
     tieneContenidoOperativoActual() {
-      const productos = Array.isArray(this.embarque?.productos) ? this.embarque.productos : [];
-      if (productos.length > 0) {
-        return true;
-      }
-
-      const listasCrudos = this.clienteCrudos && typeof this.clienteCrudos === 'object'
-        ? Object.values(this.clienteCrudos)
-        : [];
-
-      return listasCrudos.some(lista => Array.isArray(lista) && lista.length > 0);
+      return embarqueTieneContenidoOperativoEstado({
+        cargaCon: this.embarque?.cargaCon,
+        productos: this.embarque?.productos,
+        clienteCrudos: this.clienteCrudos,
+      });
     },
 
     async sincronizarRegistroOffline(record) {
@@ -2997,6 +2988,11 @@ export default {
         camionNumero: this.embarque.camionNumero || 1,
         kilosCrudos: this.embarque.kilosCrudos || {},
         clientes: [],
+        borrador: !embarqueTieneContenidoOperativoEstado({
+          cargaCon: this.embarque?.cargaCon,
+          productos: this.embarque?.productos,
+          clienteCrudos: this.clienteCrudos,
+        }),
         clientesJuntarMedidas: this.clientesJuntarMedidas,
         clientesReglaOtilio: this.clientesReglaOtilio,
         clientesIncluirPrecios: this.clientesIncluirPrecios,

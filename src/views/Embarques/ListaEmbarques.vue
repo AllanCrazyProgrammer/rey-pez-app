@@ -205,6 +205,7 @@ import { useAuthStore } from '@/stores/auth';
 import GenerarPdfClienteModal from './components/modals/GenerarPdfClienteModal.vue';
 import { normalizarFechaISO, obtenerFechaActualISO } from '@/utils/dateUtils';
 import { generarNotaVentaPDF } from '@/utils/pdfGenerator';
+import { embarqueTieneContenidoOperativoDoc } from '@/utils/embarqueContenido';
 
 export default {
   name: 'ListaEmbarques',
@@ -417,12 +418,7 @@ export default {
     },
 
     tieneContenidoOperativo(data) {
-      const clientes = Array.isArray(data?.clientes) ? data.clientes : [];
-      return clientes.some(cliente => {
-        const productos = Array.isArray(cliente?.productos) ? cliente.productos : [];
-        const crudos = Array.isArray(cliente?.crudos) ? cliente.crudos : [];
-        return productos.length > 0 || crudos.length > 0;
-      });
+      return embarqueTieneContenidoOperativoDoc(data);
     },
 
     async sincronizarPendientesOffline() {
@@ -496,9 +492,11 @@ export default {
 
         await EmbarquesOfflineService.init();
 
+        let offlineById = new Map();
         // Mostrar resultados offline inmediatamente si existen
         try {
           const registrosOffline = await EmbarquesOfflineService.getAll();
+          offlineById = new Map((registrosOffline || []).map(r => [r.id, r]));
           if (Array.isArray(registrosOffline) && registrosOffline.length > 0) {
             const embarquesOrdenados = registrosOffline
               .map(this.mapOfflineRecordToLista)
@@ -560,10 +558,34 @@ export default {
         for (const embarque of embarquesOrdenados) {
           const fechaObj = embarque.fecha instanceof Date ? embarque.fecha : (embarque.fecha ? new Date(embarque.fecha) : new Date());
           const snapshotOffline = this.construirSnapshotOfflineDesdeRemoto(embarque.id, embarque.data, fechaObj);
+
+          // Protección crítica: si remoto viene vacío y offline tenía datos, NO sobrescribir.
+          const existingOffline = offlineById.get(embarque.id);
+          if (existingOffline) {
+            const offlineDoc = existingOffline.docData || existingOffline;
+            const remoteDoc = snapshotOffline.docData || snapshotOffline;
+            if (embarqueTieneContenidoOperativoDoc(offlineDoc) && !embarqueTieneContenidoOperativoDoc(remoteDoc)) {
+              console.warn('[ListaEmbarques] Remoto vacío detectado, preservando snapshot offline para evitar pérdida de datos.', embarque.id);
+              snapshotOffline.clientes = Array.isArray(existingOffline.clientes) ? existingOffline.clientes : snapshotOffline.clientes;
+              snapshotOffline.productos = Array.isArray(existingOffline.productos) ? existingOffline.productos : snapshotOffline.productos;
+              snapshotOffline.clienteCrudos = existingOffline.clienteCrudos || snapshotOffline.clienteCrudos;
+              snapshotOffline.kilosCrudos = existingOffline.kilosCrudos || snapshotOffline.kilosCrudos;
+              snapshotOffline.docData = existingOffline.docData || snapshotOffline.docData;
+            }
+          }
+
           await EmbarquesOfflineService.save(snapshotOffline, { pendingSync: false, syncState: 'synced' });
           
           // Normalizar la fecha para la lista
           const fechaNormalizada = normalizarFechaISO(fechaObj);
+          const remoteDocParaContenido = embarque.data || {};
+          const offlineDocParaContenido = existingOffline ? (existingOffline.docData || existingOffline) : null;
+          const usarOfflineParaLista = offlineDocParaContenido
+            ? (embarqueTieneContenidoOperativoDoc(offlineDocParaContenido) && !embarqueTieneContenidoOperativoDoc(remoteDocParaContenido))
+            : false;
+          const clientesParaLista = usarOfflineParaLista
+            ? (Array.isArray(existingOffline?.clientes) ? existingOffline.clientes : (existingOffline?.docData?.clientes || []))
+            : (embarque.data.clientes || []);
 
           embarquesFiltrados.push({
             id: embarque.id,
@@ -571,7 +593,7 @@ export default {
             fechaISO: fechaNormalizada,
             embarqueBloqueado: embarque.data.embarqueBloqueado || false,
             noEnviadoMexico: embarque.data.noEnviadoMexico || false,
-            clientes: embarque.data.clientes || [],
+            clientes: clientesParaLista,
             cargaCon: embarque.data.cargaCon || 'No especificado',
             camionNumero: embarque.data.camionNumero || 1,
           });
