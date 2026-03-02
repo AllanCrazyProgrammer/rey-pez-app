@@ -426,22 +426,40 @@
           <template v-else-if="resumenSacadaHoy.disponible">
             <p class="resumen-dia-total">Total Entradas: {{ formatDecimal(resumenSacadaHoy.totalEntradas) }} kg</p>
             <p class="resumen-dia-total">Total Salidas: {{ formatDecimal(resumenSacadaHoy.totalSalidas) }} kg</p>
-
+          
             <h4>Salidas clientes:</h4>
             <table class="resumen-dia-table">
               <thead>
                 <tr>
                   <th>Medida</th>
                   <th>Total (kg)</th>
+                  <th>Rendimientos</th>
+                  <th>Limpios (kg)</th>
                 </tr>
               </thead>
               <tbody>
                 <tr v-if="!resumenSacadaHoy.salidasClientes.length">
-                  <td colspan="2">Sin salidas de clientes registradas hoy.</td>
+                  <td colspan="4">Sin salidas de clientes registradas hoy.</td>
                 </tr>
                 <tr v-for="item in resumenSacadaHoy.salidasClientes" :key="item.key">
                   <td>{{ item.medida }} ({{ item.proveedor }})</td>
                   <td>{{ formatDecimal(item.total) }}</td>
+                  <td>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      v-model.number="rendimientosResumen[item.key]"
+                      placeholder="1.00"
+                      class="resumen-rendimiento-input"
+                    >
+                  </td>
+                  <td>
+                    <span v-if="Number(rendimientosResumen[item.key]) > 0">
+                      {{ formatDecimal(item.total / Number(rendimientosResumen[item.key])) }}
+                    </span>
+                    <span v-else>-</span>
+                  </td>
                 </tr>
               </tbody>
             </table>
@@ -453,16 +471,34 @@
                   <th>Maquila</th>
                   <th>Medida</th>
                   <th>Total (kg)</th>
+                  <th>Rendimientos</th>
+                  <th>Limpios (kg)</th>
                 </tr>
               </thead>
               <tbody>
                 <tr v-if="!resumenSacadaHoy.salidasMaquilas.length">
-                  <td colspan="3">Sin salidas de maquila registradas hoy.</td>
+                  <td colspan="5">Sin salidas de maquila registradas hoy.</td>
                 </tr>
                 <tr v-for="fila in resumenSacadaHoy.salidasMaquilas" :key="fila.key">
                   <td>{{ fila.maquila }}</td>
                   <td>{{ fila.medida }}</td>
                   <td>{{ formatDecimal(fila.total) }}</td>
+                  <td>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      v-model.number="rendimientosResumenMaquilas[fila.key]"
+                      placeholder="1.00"
+                      class="resumen-rendimiento-input"
+                    >
+                  </td>
+                  <td>
+                    <span v-if="Number(rendimientosResumenMaquilas[fila.key]) > 0">
+                      {{ formatDecimal(fila.total / Number(rendimientosResumenMaquilas[fila.key])) }}
+                    </span>
+                    <span v-else>-</span>
+                  </td>
                 </tr>
               </tbody>
             </table>
@@ -582,7 +618,9 @@ export default {
         salidasClientes: [],
         salidasMaquilas: [],
         error: ''
-      }
+      },
+      rendimientosResumen: {},
+      rendimientosResumenMaquilas: {}
     }
   },
   created() {
@@ -2534,6 +2572,32 @@ h4.cliente-header.ozuna-header {
 
 .resumen-dia-estado.error {
   color: #b91c1c;
+}
+
+/* Inputs de rendimiento en tabla de resumen del día */
+.resumen-rendimiento-input {
+  width: 80px;
+  min-width: 70px;
+  max-width: 100px;
+  padding: 4px 6px;
+  font-size: 0.9rem;
+  text-align: center;
+  border: 1px solid #4CAF50;
+  border-radius: 4px;
+  outline: none;
+}
+
+.resumen-rendimiento-input:focus {
+  border-color: #2e7d32;
+  box-shadow: 0 0 0 1px rgba(46, 125, 50, 0.25);
+}
+
+@media (max-width: 375px) {
+  .resumen-rendimiento-input {
+    width: 60px;
+    min-width: 55px;
+    font-size: 0.8rem;
+  }
 }
 
 @media print {
