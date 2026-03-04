@@ -140,12 +140,21 @@
           <tr>
             <th>Medida</th>
             <th>Total (kg)</th>
+            <th class="check-column">Ya se saco</th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="(item, key) in salidasProveedoresPorMedida" :key="key">
+          <tr v-for="item in salidasProveedoresPorMedida" :key="item.key">
             <td>{{ item.medida }} ({{ item.proveedor }})</td>
             <td>{{ formatNumber(item.total) }}</td>
+            <td class="check-column">
+              <input
+                type="checkbox"
+                :checked="isClienteSalidaCompletada(item.key)"
+                @change="toggleClienteSalida(item.key, $event.target.checked)"
+                aria-label="Marcar salida de cliente como sacada"
+              />
+            </td>
           </tr>
         </tbody>
       </table>
@@ -157,6 +166,7 @@
             <th>Maquila</th>
             <th>Medida</th>
             <th>Total (kg)</th>
+            <th class="check-column">Ya se saco</th>
           </tr>
         </thead>
         <tbody>
@@ -164,6 +174,14 @@
             <td>{{ fila.maquila }}</td>
             <td>{{ fila.medida }}</td>
             <td>{{ formatNumber(fila.total) }}</td>
+            <td class="check-column">
+              <input
+                type="checkbox"
+                :checked="isMaquilaSalidaCompletada(fila.key)"
+                @change="toggleMaquilaSalida(fila.key, $event.target.checked)"
+                aria-label="Marcar salida de maquila como sacada"
+              />
+            </td>
           </tr>
         </tbody>
       </table>
@@ -254,7 +272,9 @@ export default {
       kilosDisponibles: null,
       editandoEntrada: false,
       entradaEditIndex: null,
-      entradaEditData: { kilos: null, precio: null, cuartoFrio: '' }
+      entradaEditData: { kilos: null, precio: null, cuartoFrio: '' },
+      salidasClientesChecklist: {},
+      salidasMaquilasChecklist: {}
     };
   },
   computed: {
@@ -335,6 +355,7 @@ export default {
           const key = `${salida.medida}-${salida.proveedor}`;
           if (!acc[key]) {
             acc[key] = {
+              key,
               medida: salida.medida,
               proveedor: salida.proveedor,
               total: 0,
@@ -776,7 +797,37 @@ export default {
         }
       }
       
+      this.limpiarChecklistSalidas();
       await this.updateKilosDisponibles();
+    },
+    isClienteSalidaCompletada(key) {
+      return !!this.salidasClientesChecklist[key];
+    },
+    isMaquilaSalidaCompletada(key) {
+      return !!this.salidasMaquilasChecklist[key];
+    },
+    toggleClienteSalida(key, checked) {
+      this.salidasClientesChecklist = {
+        ...this.salidasClientesChecklist,
+        [key]: checked
+      };
+    },
+    toggleMaquilaSalida(key, checked) {
+      this.salidasMaquilasChecklist = {
+        ...this.salidasMaquilasChecklist,
+        [key]: checked
+      };
+    },
+    limpiarChecklistSalidas() {
+      const clienteKeys = new Set(this.salidasProveedoresPorMedida.map(item => item.key));
+      const maquilaKeys = new Set(this.salidasMaquilasFlat.map(item => item.key));
+
+      this.salidasClientesChecklist = Object.fromEntries(
+        Object.entries(this.salidasClientesChecklist).filter(([key]) => clienteKeys.has(key))
+      );
+      this.salidasMaquilasChecklist = Object.fromEntries(
+        Object.entries(this.salidasMaquilasChecklist).filter(([key]) => maquilaKeys.has(key))
+      );
     },
     formatNumber(value) {
       return value.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
@@ -789,8 +840,11 @@ export default {
         this.currentDate = moment(data.fecha.toDate());
         this.entradas = data.entradas || [];
         this.salidas = data.salidas || [];
+        this.salidasClientesChecklist = data.salidasClientesChecklist || {};
+        this.salidasMaquilasChecklist = data.salidasMaquilasChecklist || {};
         this.sacadaId = id;
         this.isEditing = true;
+        this.limpiarChecklistSalidas();
         await this.updateKilosDisponibles();
       }
     },
@@ -808,6 +862,8 @@ export default {
           fecha: this.currentDate.toDate(),
           entradas: this.entradas,
           salidas: this.salidas,
+          salidasClientesChecklist: this.salidasClientesChecklist,
+          salidasMaquilasChecklist: this.salidasMaquilasChecklist,
           totalEntradas: this.totalEntradas,
           totalSalidas: this.totalSalidas
         };
@@ -1136,6 +1192,12 @@ export default {
     this.isLoaded = true;
   },
   watch: {
+    salidas: {
+      deep: true,
+      handler() {
+        this.limpiarChecklistSalidas();
+      }
+    },
     'newSalida.medida': function () {
       this.resetCuartoSalida();
       this.setCuartoPorDefecto();
@@ -1381,6 +1443,18 @@ button:active {
   text-align: left;
 }
 
+.check-column {
+  width: 110px;
+  text-align: center !important;
+  white-space: nowrap;
+}
+
+.check-column input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+
 .medidas-summary th {
   background-color: #f2f2f2;
   font-weight: bold;
@@ -1465,6 +1539,10 @@ button:active {
   .medidas-summary th,
   .medidas-summary td {
     padding: 4px;
+  }
+
+  .check-column {
+    width: 90px;
   }
 
   .date-header {
