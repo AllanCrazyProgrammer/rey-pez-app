@@ -6,6 +6,9 @@
       <router-link to="/existencias-crudos/new" class="action-button new-entrada-btn">
         Nueva Entrada/Salida
       </router-link>
+      <button @click="abrirModalEntradasProveedor" class="action-button">
+        Entradas por Proveedor
+      </button>
       <button @click="showGestionarModal" class="action-button">
         Gestionar Proveedores y Medidas
       </button>
@@ -211,6 +214,13 @@
       @cerrar="closeGestionarModal"
       @actualizado="onProveedoresActualizados"
     />
+
+    <EntradasPorProveedorModal
+      :mostrar="showEntradasProveedorModal"
+      :proveedores="proveedoresRegistradosCrudos"
+      :registros="registros"
+      @cerrar="cerrarModalEntradasProveedor"
+    />
   </div>
 </template>
 
@@ -220,11 +230,13 @@ import { db } from '@/firebase';
 import { collection, getDocs, query, orderBy, deleteDoc, doc, addDoc } from 'firebase/firestore';
 import moment from 'moment';
 import GestionProveedoresCrudos from '@/components/GestionProveedoresCrudos.vue';
+import EntradasPorProveedorModal from '@/components/EntradasPorProveedorModal.vue';
 
 export default {
   name: 'ExistenciasCrudos',
   components: {
-    GestionProveedoresCrudos
+    GestionProveedoresCrudos,
+    EntradasPorProveedorModal
   },
   data() {
     return {
@@ -235,6 +247,8 @@ export default {
       currentPage: 1,
       itemsPerPage: 10,
       showGestionModal: false,
+      showEntradasProveedorModal: false,
+      proveedoresRegistradosCrudos: [],
       filtroCuarto: 'Todos los cuartos',
       cuartosDisponibles: ['s/c', 'Cuarto 1', 'Cuarto 2', 'Cuarto 3', 'Cuarto 4', 'Cuarto 5'],
       modalCambioCuarto: {
@@ -701,6 +715,27 @@ export default {
       this.showGestionModal = false;
     },
 
+    abrirModalEntradasProveedor() {
+      this.showEntradasProveedorModal = true;
+    },
+
+    cerrarModalEntradasProveedor() {
+      this.showEntradasProveedorModal = false;
+    },
+
+    async loadProveedoresRegistrados() {
+      try {
+        const querySnapshot = await getDocs(collection(db, 'proveedoresCrudos'));
+        this.proveedoresRegistradosCrudos = querySnapshot.docs
+          .map(docItem => docItem.data()?.nombre)
+          .filter(Boolean)
+          .sort((a, b) => a.localeCompare(b));
+      } catch (error) {
+        console.error('Error al cargar proveedores de crudos:', error);
+        this.proveedoresRegistradosCrudos = [];
+      }
+    },
+
     imprimirReporte() {
       const fechaActual = new Date().toLocaleDateString('es-ES', {
         year: 'numeric',
@@ -910,14 +945,18 @@ export default {
 
     async onProveedoresActualizados() {
       // Recargar existencias cuando se actualicen los proveedores
-      await this.loadExistencias();
+      await Promise.all([
+        this.loadExistencias(),
+        this.loadProveedoresRegistrados()
+      ]);
     }
   },
 
   async mounted() {
     await Promise.all([
       this.loadRegistros(),
-      this.loadExistencias()
+      this.loadExistencias(),
+      this.loadProveedoresRegistrados()
     ]);
   }
 };
@@ -941,6 +980,7 @@ h1, h2, h3 {
 .actions-container {
   display: flex;
   justify-content: space-between;
+  flex-wrap: wrap;
   margin-bottom: 30px;
   gap: 10px;
 }
