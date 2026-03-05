@@ -51,7 +51,7 @@
               </tr>
             </thead>
             <tbody>
-              <tr v-for="producto in productos" :key="producto.clave" v-if="producto.kilos > 0">
+              <tr v-for="producto in productos" :key="producto.clave" v-if="tieneKilosVisibles(producto.kilos)">
                 <td>
                   <button
                     class="medida-button"
@@ -561,7 +561,7 @@ export default {
         const existenciasFiltradas = {};
         Object.keys(existencias).forEach(proveedor => {
           const productos = Object.values(existencias[proveedor])
-            .filter(producto => producto.kilos > 0)
+            .filter(producto => this.tieneKilosVisibles(producto.kilos))
             .map(producto => ({
               ...producto,
               clave: `${producto.producto}_${producto.ultimoPrecio}_${producto.cuarto}`,
@@ -645,6 +645,10 @@ export default {
 
     formatearValor(valor) {
       return valor ? valor.toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) : '0';
+    },
+
+    tieneKilosVisibles(kilos) {
+      return Math.round(Number(kilos) || 0) > 0;
     },
 
     calcularTotalProveedor(productos) {
