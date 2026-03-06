@@ -1935,7 +1935,7 @@ function calcularKilosCrudos(item, clienteNombre) {
   if (item.taras) {
     const [cantidad] = String(item.taras).split('-').map(Number);
     const esLorena = nombreClienteNormalizado.includes('lorena') || nombreClienteNormalizado.includes('veronica');
-    const esGdeConCascaron = tallaNormalizada.includes('gde c/c');
+    const esGdeConCascaron = tallaNormalizada === 'gde c/c';
     const multiplicador = esLorena && esGdeConCascaron ? 19.5 : 20;
     kilosTotales += cantidad * multiplicador;
   }
