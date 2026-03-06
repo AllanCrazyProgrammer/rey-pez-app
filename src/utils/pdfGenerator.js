@@ -1925,12 +1925,18 @@ function totalKilos(producto, nombreCliente, aplicarReglaOtilio = true, sumarKgC
 
 function calcularKilosCrudos(item, clienteNombre) {
   let kilosTotales = 0;
+  const nombreClienteNormalizado = (clienteNombre || '').toLowerCase();
+  const tallaNormalizada = (item?.talla || '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
   
   // Procesar taras principales
   if (item.taras) {
-    const [cantidad, peso] = item.taras.split('-').map(Number);
-    // Usar multiplicador de 20 para todos los clientes
-    const multiplicador = 20;
+    const [cantidad] = String(item.taras).split('-').map(Number);
+    const esLorena = nombreClienteNormalizado.includes('lorena') || nombreClienteNormalizado.includes('veronica');
+    const esGdeConCascaron = tallaNormalizada.includes('gde c/c');
+    const multiplicador = esLorena && esGdeConCascaron ? 19.5 : 20;
     kilosTotales += cantidad * multiplicador;
   }
 
@@ -1941,7 +1947,7 @@ function calcularKilosCrudos(item, clienteNombre) {
   }
   
   // Para Elizabeth, redondeamos a entero (sin decimales)
-  if (clienteNombre && clienteNombre.toLowerCase().includes('elizabeth')) {
+  if (nombreClienteNormalizado.includes('elizabeth')) {
     return Math.round(kilosTotales).toString();
   }
   
