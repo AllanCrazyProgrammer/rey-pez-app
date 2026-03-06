@@ -160,6 +160,11 @@ const calcularKilosCrudos = (medida, kilosOriginales, esParaCostos = false) => {
   return kilosOriginales;
 };
 
+const obtenerMultiplicadorVentaCrudoVeronica = (talla) => {
+  const tallaNormalizada = normalizarMedida(talla || '');
+  return tallaNormalizada === 'gde c/c' ? 19.5 : 20;
+};
+
 /**
  * Obtiene el saldo acumulado anterior para el cliente especificado
  * @param {string} coleccion - Nombre de la colección (cuentasJoselito o cuentasCatarro)
@@ -1975,13 +1980,14 @@ const prepararDatosCuentaVeronica = async (embarqueData) => {
             ) || 0;
             const precioVenta = preciosVenta.get(medidaNormalizada) || item.precio || 0;
             
-            // Calcular kilos para ventas (ajustar 19 a 20)
+            // Calcular kilos para ventas. Veronica usa 19.5 solo en Gde c/c.
             let kilosTarasVenta = 0;
             if (item.taras) {
               const formatoGuion = /^(\d+)-(\d+(?:\.\d+)?)$/.exec(item.taras);
               if (formatoGuion) {
                 const cantidad = parseInt(formatoGuion[1]) || 0;
-                kilosTarasVenta = cantidad * 20; // SIEMPRE multiplicar por 20
+                const multiplicadorVenta = obtenerMultiplicadorVentaCrudoVeronica(item.talla);
+                kilosTarasVenta = cantidad * multiplicadorVenta;
               } else {
                 kilosTarasVenta = parseInt(item.taras) || 0;
               }
