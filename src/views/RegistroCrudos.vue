@@ -270,6 +270,7 @@ export default {
       registroId: null,
       isLoaded: false,
       productosDisponibles: [],
+      lotesDisponibles: [],
       kilosDisponiblesSeleccionados: 0,
       editandoEntrada: false,
       entradaEditIndex: null,
@@ -326,7 +327,7 @@ export default {
         p => p.nombre === this.newSalida.producto
       );
       if (!productoSel || !productoSel.cuartos) return [];
-      return ['Todos los cuartos', ...productoSel.cuartos.map(c => c.nombre)];
+      return productoSel.cuartos.map(c => c.nombre);
     },
     medidasDelProveedorEntrada() {
       if (!this.newEntrada.proveedor || this.newEntrada.proveedor === '__nuevo__') {
@@ -367,10 +368,73 @@ export default {
     async loadProductosDisponibles() {
       try {
         const registrosSnapshot = await getDocs(collection(db, 'existenciasCrudos'));
-        const disponibilidades = {};
-        const normalizeCuarto = (c) => {
-          const valor = (c && c.trim()) ? c.trim() : 's/c';
-          return valor.toLowerCase() === 'sin cuarto designado' ? 's/c' : valor;
+        const productosMeta = {};
+        const lotesDisponibles = [];
+        let ordenLote = 0;
+
+        const asegurarProducto = (proveedor, producto) => {
+          const key = `${proveedor}|${producto}`;
+          if (!productosMeta[key]) {
+            productosMeta[key] = {
+              proveedor,
+              nombre: producto,
+              ultimoPrecio: 0
+            };
+          }
+          return productosMeta[key];
+        };
+
+        const registrarEntrada = (entrada, fechaRegistro) => {
+          const proveedor = entrada.proveedor;
+          const producto = entrada.producto;
+          const kilos = Number(entrada.kilos || 0);
+
+          if (!proveedor || !producto || kilos <= 0) return;
+
+          const meta = asegurarProducto(proveedor, producto);
+          if (entrada.precio) {
+            meta.ultimoPrecio = entrada.precio;
+          }
+
+          lotesDisponibles.push({
+            key: `${proveedor}|${producto}`,
+            proveedor,
+            nombre: producto,
+            cuartoFrio: this.normalizeCuarto(entrada.cuartoFrio),
+            kilosDisponibles: Number(kilos.toFixed(1)),
+            fechaMs: fechaRegistro.getTime(),
+            orden: ordenLote++
+          });
+        };
+
+        const descontarSalida = (salida) => {
+          const proveedor = salida.proveedor;
+          const producto = salida.producto;
+          const kilosSalida = Number(salida.kilos || 0);
+
+          if (!proveedor || !producto || kilosSalida <= 0) return;
+
+          const meta = asegurarProducto(proveedor, producto);
+          if (salida.precio) {
+            meta.ultimoPrecio = salida.precio;
+          }
+
+          const usarTodosLosCuartos = salida.cuartoFrio === 'Todos los cuartos';
+          const cuartoSalida = usarTodosLosCuartos
+            ? 'Todos los cuartos'
+            : this.normalizeCuarto(salida.cuartoFrio);
+
+          let restante = Number(kilosSalida.toFixed(1));
+
+          for (const lote of lotesDisponibles) {
+            if (restante <= 0) break;
+            if (lote.key !== `${proveedor}|${producto}` || lote.kilosDisponibles <= 0) continue;
+            if (!usarTodosLosCuartos && lote.cuartoFrio !== cuartoSalida) continue;
+
+            const descuento = Math.min(restante, lote.kilosDisponibles);
+            lote.kilosDisponibles = Number((lote.kilosDisponibles - descuento).toFixed(1));
+            restante = Number((restante - descuento).toFixed(1));
+          }
         };
 
         const registrosOrdenados = registrosSnapshot.docs
@@ -394,82 +458,50 @@ export default {
           
           if (moment(registroFecha).isSameOrBefore(fechaLimite)) {
             if (registro.entradas) {
-              registro.entradas.forEach(entrada => {
-                const key = `${entrada.proveedor}|${entrada.producto}`;
-                const cuarto = normalizeCuarto(entrada.cuartoFrio);
-                if (!disponibilidades[key]) {
-                  disponibilidades[key] = {
-                    proveedor: entrada.proveedor,
-                    nombre: entrada.producto,
-                    ultimoPrecio: 0,
-                    cuartos: {}
-                  };
-                }
-                const prod = disponibilidades[key];
-                prod.cuartos[cuarto] = (prod.cuartos[cuarto] || 0) + entrada.kilos;
-                if (entrada.precio) {
-                  prod.ultimoPrecio = entrada.precio;
-                }
-              });
+              registro.entradas.forEach(entrada => registrarEntrada(entrada, registroFecha));
             }
 
             if (registro.salidas) {
-              registro.salidas.forEach(salida => {
-                const key = `${salida.proveedor}|${salida.producto}`;
-                const cuarto = normalizeCuarto(salida.cuartoFrio);
-                if (!disponibilidades[key]) {
-                  disponibilidades[key] = {
-                    proveedor: salida.proveedor,
-                    nombre: salida.producto,
-                    ultimoPrecio: 0,
-                    cuartos: {}
-                  };
-                }
-                const prod = disponibilidades[key];
-                prod.cuartos[cuarto] = (prod.cuartos[cuarto] || 0) - salida.kilos;
-                if (salida.precio) {
-                  prod.ultimoPrecio = salida.precio;
-                }
-              });
+              registro.salidas.forEach(salida => descontarSalida(salida));
             }
           }
         });
 
-        this.entradas.forEach(entrada => {
-          const key = `${entrada.proveedor}|${entrada.producto}`;
-          const cuarto = normalizeCuarto(entrada.cuartoFrio);
-          if (!disponibilidades[key]) {
-            disponibilidades[key] = {
-              proveedor: entrada.proveedor,
-              nombre: entrada.producto,
-              ultimoPrecio: entrada.precio || 0,
+        const fechaActual = this.currentDate.toDate();
+        this.entradas.forEach(entrada => registrarEntrada(entrada, fechaActual));
+        this.salidas.forEach(salida => descontarSalida(salida));
+
+        const productosAgrupados = {};
+        const lotesRestantes = lotesDisponibles.filter(lote => lote.kilosDisponibles > 0);
+
+        lotesRestantes.forEach(lote => {
+          if (!productosAgrupados[lote.key]) {
+            productosAgrupados[lote.key] = {
+              ...(productosMeta[lote.key] || {
+                proveedor: lote.proveedor,
+                nombre: lote.nombre,
+                ultimoPrecio: 0
+              }),
               cuartos: {}
             };
           }
-          const prod = disponibilidades[key];
-          prod.cuartos[cuarto] = (prod.cuartos[cuarto] || 0) + entrada.kilos;
-          if (entrada.precio) {
-            prod.ultimoPrecio = entrada.precio;
-          }
+
+          const producto = productosAgrupados[lote.key];
+          producto.cuartos[lote.cuartoFrio] = Number(
+            ((producto.cuartos[lote.cuartoFrio] || 0) + lote.kilosDisponibles).toFixed(1)
+          );
         });
 
-        this.salidas.forEach(salida => {
-          const key = `${salida.proveedor}|${salida.producto}`;
-          const cuarto = normalizeCuarto(salida.cuartoFrio);
-          if (!disponibilidades[key]) return;
-          const prod = disponibilidades[key];
-          prod.cuartos[cuarto] = (prod.cuartos[cuarto] || 0) - salida.kilos;
-        });
-
-        this.productosDisponibles = Object.values(disponibilidades)
+        this.lotesDisponibles = lotesRestantes;
+        this.productosDisponibles = Object.values(productosAgrupados)
           .map(prod => {
             const cuartosArr = Object.entries(prod.cuartos || {})
-              .filter(([, k]) => k > 0)
               .map(([nombre, kilos]) => ({
                 nombre,
                 kilos: Number(Number(kilos).toFixed(1))
-              }));
-            const total = cuartosArr.reduce((sum, c) => sum + c.kilos, 0);
+              }))
+              .filter(cuarto => cuarto.kilos > 0);
+            const total = Number(cuartosArr.reduce((sum, c) => sum + c.kilos, 0).toFixed(1));
             return {
               ...prod,
               cuartos: cuartosArr,
@@ -485,6 +517,7 @@ export default {
       } catch (error) {
         console.error('Error al cargar productos disponibles:', error);
         this.productosDisponibles = [];
+        this.lotesDisponibles = [];
       }
     },
 
@@ -525,6 +558,45 @@ export default {
     normalizeCuarto(cuarto) {
       const valor = cuarto && cuarto.trim() ? cuarto.trim() : 's/c';
       return valor.toLowerCase() === 'sin cuarto designado' ? 's/c' : valor;
+    },
+    generarSalidasPorAntiguedad() {
+      const kilosSolicitados = Number(this.newSalida.kilos || 0);
+      if (kilosSolicitados <= 0) return [];
+
+      let restante = Number(kilosSolicitados.toFixed(1));
+      const salidasGeneradas = [];
+      const lotesOrdenados = [...this.lotesDisponibles].sort((a, b) => {
+        if (a.fechaMs !== b.fechaMs) {
+          return a.fechaMs - b.fechaMs;
+        }
+        return a.orden - b.orden;
+      });
+
+      for (const lote of lotesOrdenados) {
+        if (restante <= 0) break;
+        if (lote.proveedor !== this.newSalida.proveedor) continue;
+        if (lote.nombre !== this.newSalida.producto) continue;
+        if (lote.kilosDisponibles <= 0) continue;
+
+        const kilosTomados = Number(Math.min(restante, lote.kilosDisponibles).toFixed(1));
+        if (kilosTomados <= 0) continue;
+
+        const ultimaSalida = salidasGeneradas[salidasGeneradas.length - 1];
+        if (ultimaSalida && ultimaSalida.cuartoFrio === lote.cuartoFrio) {
+          ultimaSalida.kilos = Number((ultimaSalida.kilos + kilosTomados).toFixed(1));
+        } else {
+          salidasGeneradas.push({
+            proveedor: this.newSalida.proveedor,
+            producto: this.newSalida.producto,
+            kilos: kilosTomados,
+            cuartoFrio: lote.cuartoFrio
+          });
+        }
+
+        restante = Number((restante - kilosTomados).toFixed(1));
+      }
+
+      return restante > 0 ? [] : salidasGeneradas;
     },
 
     async addEntrada() {
@@ -632,12 +704,22 @@ export default {
     addSalida() {
       if (!this.isSalidaValida) return;
 
-      this.salidas.push({
-        proveedor: this.newSalida.proveedor,
-        producto: this.newSalida.producto,
-        kilos: Number(this.newSalida.kilos.toFixed(1)),
-        cuartoFrio: this.newSalida.cuartoFrio
-      });
+      const salidaSeleccionaTodos = this.newSalida.cuartoFrio === 'Todos los cuartos';
+      const salidasParaAgregar = salidaSeleccionaTodos
+        ? this.generarSalidasPorAntiguedad()
+        : [{
+            proveedor: this.newSalida.proveedor,
+            producto: this.newSalida.producto,
+            kilos: Number(this.newSalida.kilos.toFixed(1)),
+            cuartoFrio: this.newSalida.cuartoFrio
+          }];
+
+      if (!salidasParaAgregar.length) {
+        alert('No fue posible asignar la salida a los cuartos disponibles más antiguos.');
+        return;
+      }
+
+      this.salidas.push(...salidasParaAgregar);
 
       this.resetProductoSalida();
       this.loadProductosDisponibles();

@@ -12,7 +12,6 @@
     "electron:build": "VUE_APP_TARGET=electron npm run build:web && electron-builder"
   },
   "dependencies": {
-    "-": "^0.0.1",
     "@capacitor/cli": "^6.1.2",
     "@capacitor/core": "^6.1.2",
     "@capacitor/ios": "^6.1.2",

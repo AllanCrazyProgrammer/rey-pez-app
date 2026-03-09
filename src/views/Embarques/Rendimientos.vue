@@ -337,7 +337,7 @@
 
     <div v-else class="resumen-dia-panel">
       <p v-if="resumenSacadaHoy.loading" class="resumen-dia-estado">
-        Cargando resumen del dia...
+        Cargando resumen de sacadas del embarque...
       </p>
       <p v-else-if="resumenSacadaHoy.error" class="resumen-dia-estado error">
         {{ resumenSacadaHoy.error }}
@@ -356,7 +356,7 @@
           </thead>
           <tbody>
             <tr v-if="!resumenSacadaHoy.salidasClientes.length">
-              <td colspan="2">Sin salidas de clientes registradas hoy.</td>
+              <td colspan="2">Sin salidas de clientes registradas para la fecha del embarque.</td>
             </tr>
             <tr v-for="item in resumenSacadaHoy.salidasClientes" :key="item.key">
               <td>{{ item.medida }} ({{ item.proveedor }})</td>
@@ -376,7 +376,7 @@
           </thead>
           <tbody>
             <tr v-if="!resumenSacadaHoy.salidasMaquilas.length">
-              <td colspan="3">Sin salidas de maquila registradas hoy.</td>
+              <td colspan="3">Sin salidas de maquila registradas para la fecha del embarque.</td>
             </tr>
             <tr v-for="fila in resumenSacadaHoy.salidasMaquilas" :key="fila.key">
               <td>{{ fila.maquila }}</td>
@@ -387,7 +387,7 @@
         </table>
       </template>
       <p v-else class="resumen-dia-estado">
-        No hay sacadas registradas para el dia de hoy.
+        No hay sacadas registradas para la fecha del embarque.
       </p>
     </div>
 
@@ -570,10 +570,26 @@ export default {
       this.resumenSacadaHoy.loading = true;
       this.resumenSacadaHoy.error = '';
       try {
-        const ahora = new Date();
-        const inicio = new Date(ahora);
+        const fechaEmbarqueISO = this.obtenerFechaISODesdeValor(this.embarqueData?.fecha);
+
+        if (!fechaEmbarqueISO) {
+          this.resumenSacadaHoy = {
+            ...this.resumenSacadaHoy,
+            loading: false,
+            disponible: false,
+            totalEntradas: 0,
+            totalSalidas: 0,
+            salidasClientes: [],
+            salidasMaquilas: [],
+            error: 'No se pudo determinar la fecha del embarque para cargar el resumen de sacadas.'
+          };
+          return;
+        }
+
+        const [year, month, day] = fechaEmbarqueISO.split('-').map(Number);
+        const inicio = new Date(year, month - 1, day);
         inicio.setHours(0, 0, 0, 0);
-        const fin = new Date(ahora);
+        const fin = new Date(year, month - 1, day);
         fin.setHours(23, 59, 59, 999);
 
         const db = getFirestore();
@@ -651,7 +667,7 @@ export default {
           ...this.resumenSacadaHoy,
           loading: false,
           disponible: false,
-          error: 'No se pudo cargar el resumen de sacadas del dia de hoy.'
+          error: 'No se pudo cargar el resumen de sacadas de la fecha del embarque.'
         };
       }
     },
@@ -993,6 +1009,13 @@ export default {
         // Si es un Timestamp de Firebase
         if (typeof fecha === 'object' && fecha.seconds) {
           return new Date(fecha.seconds * 1000);
+        }
+
+        // Si es un string YYYY-MM-DD, parsearlo como fecha local
+        // para evitar que JavaScript lo interprete en UTC y reste un dia.
+        if (typeof fecha === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
+          const [year, month, day] = fecha.split('-').map(Number);
+          return new Date(year, month - 1, day);
         }
         
         // Si es un string o número
