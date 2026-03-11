@@ -23,6 +23,15 @@
         
         <!-- Contenedor de botones de clientes -->
         <div class="botones-container">
+          <router-link to="/cuentas-allan" class="boton-cuenta boton-cuenta-especial">
+            <div class="card allan">
+              <div class="card-content">
+                <i class="fas fa-fish"></i>
+                <h2>Allan</h2>
+                <p>Entradas, ventas y ganancias</p>
+              </div>
+            </div>
+          </router-link>
           <router-link to="/cuentas-ozuna" class="boton-cuenta">
             <div class="card ozuna">
               <h2>Ozuna</h2>
@@ -104,6 +113,7 @@ export default {
   --client-joselito: #4fc3ff;
   --client-otilio: #ffd54f;
   --client-veronica: #ff8c00;
+  --client-allan: #b388ff;
   display: flex;
   flex-direction: column;
   min-height: 100vh;
@@ -216,6 +226,11 @@ h1 {
   min-width: 220px;
 }
 
+.boton-cuenta-especial {
+  flex-basis: 100%;
+  max-width: 720px;
+}
+
 .card {
   background: rgba(0, 20, 0, 0.85);
   border: 1px solid var(--matrix-green);
@@ -254,6 +269,12 @@ h1 {
   color: inherit;
 }
 
+.card-content p {
+  margin: 0;
+  font-size: 18px;
+  letter-spacing: 1px;
+}
+
 .card.ozuna {
   border-color: var(--client-ozuna);
   color: var(--client-ozuna);
@@ -282,6 +303,13 @@ h1 {
   border-color: var(--client-veronica);
   color: var(--client-veronica);
   box-shadow: 0 0 15px rgba(255, 140, 0, 0.25);
+}
+
+.card.allan {
+  border-color: var(--client-allan);
+  color: var(--client-allan);
+  box-shadow: 0 0 18px rgba(179, 136, 255, 0.3);
+  min-height: 140px;
 }
 
 .card.ozuna:hover {
@@ -314,6 +342,12 @@ h1 {
   box-shadow: 0 0 20px rgba(255, 140, 0, 0.5);
 }
 
+.card.allan:hover {
+  background: var(--client-allan);
+  color: var(--terminal-bg);
+  box-shadow: 0 0 22px rgba(179, 136, 255, 0.55);
+}
+
 .precios-container {
   width: 100%;
   max-width: 600px;
@@ -341,6 +375,10 @@ h1 {
 
   .card h2 {
     font-size: 18px;
+  }
+
+  .card-content p {
+    font-size: 16px;
   }
   
   .card-content i {

@@ -34,6 +34,7 @@ import OtilioCuentasMenu from '@/views/CuentasClientes/OtilioCuentasMenu.vue'
 import CuentasOtilio from '@/views/CuentasClientes/CuentasOtilio.vue'
 import OtilioIndependienteCuentasMenu from '@/views/CuentasClientes/OtilioIndependienteCuentasMenu.vue'
 import CuentasOtilioIndependiente from '@/views/CuentasClientes/CuentasOtilioIndependiente.vue'
+import CuentasAllanCamaron from '@/views/CuentasClientes/CuentasAllanCamaron.vue'
 import ProcesosMenu from '@/views/Procesos/ProcesosMenu.vue'
 import Preparacion from '@/views/Procesos/Preparacion.vue'
 import PedidosMenu from '@/views/Procesos/PedidosMenu.vue'
@@ -147,6 +148,11 @@ const routes = [
     path: '/cuentas-mexico',
     name: 'CuentasMexico',
     component: CuentasMexico
+  },
+  {
+    path: '/cuentas-allan',
+    name: 'CuentasAllanCamaron',
+    component: CuentasAllanCamaron
   },
   {
     path: '/cuentas-ozuna',
