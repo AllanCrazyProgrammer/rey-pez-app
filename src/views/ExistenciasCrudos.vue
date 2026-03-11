@@ -537,13 +537,16 @@ export default {
               if (!existencias[salida.proveedor]) {
                 existencias[salida.proveedor] = {};
               }
+              const cuartoSalida = normalizeCuarto(salida.cuartoFrio);
+              const usarTodosLosCuartos = cuartoSalida === 'Todos los cuartos';
               
-              // Para las salidas, necesitamos encontrar de qué precio específico se está sacando
-              // Por ahora, usaremos el enfoque FIFO (First In, First Out) para determinar el precio
+              // Cuando una salida aplica a todos los cuartos, debe descontarse del total combinado
+              // para no inflar la existencia visible en el resumen.
               const productosConMismoNombre = Object.keys(existencias[salida.proveedor])
                 .filter(key => {
                   const prod = existencias[salida.proveedor][key];
-                  return prod.producto === salida.producto && prod.cuarto === normalizeCuarto(salida.cuartoFrio);
+                  return prod.producto === salida.producto &&
+                    (usarTodosLosCuartos || prod.cuarto === cuartoSalida);
                 })
                 .sort((a, b) => {
                   const precioA = existencias[salida.proveedor][a].ultimoPrecio;
