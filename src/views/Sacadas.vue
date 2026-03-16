@@ -35,15 +35,29 @@
               {{ cuarto }}
             </option>
           </select>
-          <input 
-            v-model.number="newSalida.kilos" 
-            type="number" 
-            inputmode="decimal" 
-            step="0.1" 
-            pattern="[0-9]*" 
-            placeholder="Kilos" 
-            required 
-          />
+          <div class="cantidad-fields">
+            <input
+              :value="newSalida.kilos ?? ''"
+              type="number"
+              inputmode="decimal"
+              step="0.1"
+              min="0"
+              pattern="[0-9]*"
+              placeholder="Kilos"
+              required
+              @input="updateCantidadDesdeKilos('newSalida', $event.target.value)"
+            />
+            <input
+              :value="newSalida.cajas ?? ''"
+              type="number"
+              inputmode="decimal"
+              step="0.01"
+              min="0"
+              pattern="[0-9]*"
+              placeholder="Cajas (x20 kg)"
+              @input="updateCantidadDesdeCajas('newSalida', $event.target.value)"
+            />
+          </div>
           <button @click="addSalida" :disabled="!isSalidaValid || newSalida.kilos > kilosDisponibles">Agregar Salida</button>
           <button @click="limpiarSeleccionSalida" class="clear-button" v-if="newSalida.proveedor">🗑️ Limpiar</button>
           <button @click="refrescarMedidasManual" class="refresh-button" v-if="newSalida.proveedor && newSalida.tipo === 'proveedor'">🔄 Refrescar</button>
@@ -94,15 +108,29 @@
             <option value="Cuarto 5">Cuarto 5</option>
             <option value="Aaron">Aaron</option>
           </select>
-          <input 
-            v-model.number="newEntrada.kilos" 
-            type="number" 
-            inputmode="decimal" 
-            step="0.1" 
-            pattern="[0-9]*" 
-            placeholder="Kilos" 
-            required 
-          />
+          <div class="cantidad-fields">
+            <input
+              :value="newEntrada.kilos ?? ''"
+              type="number"
+              inputmode="decimal"
+              step="0.1"
+              min="0"
+              pattern="[0-9]*"
+              placeholder="Kilos"
+              required
+              @input="updateCantidadDesdeKilos('newEntrada', $event.target.value)"
+            />
+            <input
+              :value="newEntrada.cajas ?? ''"
+              type="number"
+              inputmode="decimal"
+              step="0.01"
+              min="0"
+              pattern="[0-9]*"
+              placeholder="Cajas (x20 kg)"
+              @input="updateCantidadDesdeCajas('newEntrada', $event.target.value)"
+            />
+          </div>
           <input 
             v-model.number="newEntrada.precio" 
             type="number" 
@@ -200,15 +228,29 @@
         <div class="modal-form">
           <label>
             Kilos:
-            <input 
-              v-model.number="entradaEditData.kilos" 
-              type="number" 
-              inputmode="decimal" 
-              step="0.1" 
-              pattern="[0-9]*" 
-              placeholder="Kilos" 
-              required 
-            />
+            <div class="cantidad-fields cantidad-fields-modal">
+              <input
+                :value="entradaEditData.kilos ?? ''"
+                type="number"
+                inputmode="decimal"
+                step="0.1"
+                min="0"
+                pattern="[0-9]*"
+                placeholder="Kilos"
+                required
+                @input="updateCantidadDesdeKilos('entradaEditData', $event.target.value)"
+              />
+              <input
+                :value="entradaEditData.cajas ?? ''"
+                type="number"
+                inputmode="decimal"
+                step="0.01"
+                min="0"
+                pattern="[0-9]*"
+                placeholder="Cajas (x20 kg)"
+                @input="updateCantidadDesdeCajas('entradaEditData', $event.target.value)"
+              />
+            </div>
           </label>
           <label>
             Precio (opcional):
@@ -264,15 +306,16 @@ export default {
       medidas: [],
       medidasConPrecio: [],
       medidasMaquilaDisponibles: [],
-      newEntrada: { tipo: 'proveedor', proveedor: '', medida: '', kilos: null, precio: null, cuartoFrio: '' },
-      newSalida: { tipo: 'proveedor', proveedor: '', medida: '', kilos: null, cuartoFrio: '' },
+      kilosPorCaja: 20,
+      newEntrada: { tipo: 'proveedor', proveedor: '', medida: '', kilos: null, cajas: null, precio: null, cuartoFrio: '' },
+      newSalida: { tipo: 'proveedor', proveedor: '', medida: '', kilos: null, cajas: null, cuartoFrio: '' },
       isEditing: false,
       sacadaId: null,
       isLoaded: false,
       kilosDisponibles: null,
       editandoEntrada: false,
       entradaEditIndex: null,
-      entradaEditData: { kilos: null, precio: null, cuartoFrio: '' },
+      entradaEditData: { kilos: null, cajas: null, precio: null, cuartoFrio: '' },
       salidasClientesChecklist: {},
       salidasMaquilasChecklist: {}
     };
@@ -479,10 +522,56 @@ export default {
       this.medidasMaquilaDisponibles = [];
     },
     limpiarSeleccionSalida() {
-      this.newSalida = { tipo: 'proveedor', proveedor: '', medida: '', kilos: null, cuartoFrio: '' };
+      this.newSalida = { tipo: 'proveedor', proveedor: '', medida: '', kilos: null, cajas: null, cuartoFrio: '' };
       this.kilosDisponibles = null;
       this.medidasConPrecio = [];
       this.medidasMaquilaDisponibles = [];
+    },
+    parseNumericInput(value) {
+      if (value === '' || value === null || typeof value === 'undefined') {
+        return null;
+      }
+
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : null;
+    },
+    normalizeKilos(value) {
+      const parsed = this.parseNumericInput(value);
+      return parsed === null ? null : Number(parsed.toFixed(1));
+    },
+    normalizeCajas(value) {
+      const parsed = this.parseNumericInput(value);
+      return parsed === null ? null : Number(parsed.toFixed(2));
+    },
+    getCajasDesdeKilos(kilos) {
+      return kilos === null ? null : Number((kilos / this.kilosPorCaja).toFixed(2));
+    },
+    getKilosDesdeCajas(cajas) {
+      return cajas === null ? null : Number((cajas * this.kilosPorCaja).toFixed(1));
+    },
+    updateCantidadDesdeKilos(targetName, value) {
+      const target = this[targetName];
+      const kilos = this.normalizeKilos(value);
+
+      target.kilos = kilos;
+      target.cajas = kilos === null ? null : this.getCajasDesdeKilos(kilos);
+    },
+    updateCantidadDesdeCajas(targetName, value) {
+      const target = this[targetName];
+      const cajas = this.normalizeCajas(value);
+
+      target.cajas = cajas;
+      target.kilos = cajas === null ? null : this.getKilosDesdeCajas(cajas);
+    },
+    normalizeRegistroCantidades(registro) {
+      const kilos = this.normalizeKilos(registro.kilos);
+      const cajas = this.normalizeCajas(registro.cajas);
+
+      return {
+        ...registro,
+        kilos,
+        cajas: cajas !== null ? cajas : this.getCajasDesdeKilos(kilos)
+      };
     },
     async refrescarMedidasDespuesSalida(proveedor) {
       // Forzar recálculo completo
@@ -554,6 +643,9 @@ export default {
     },
     async addEntrada() {
       if (this.newEntrada.tipo && this.newEntrada.proveedor && this.newEntrada.medida && this.newEntrada.kilos) {
+        const kilosEntrada = this.normalizeKilos(this.newEntrada.kilos);
+        const cajasEntrada = this.getCajasDesdeKilos(kilosEntrada);
+
         // Guardar datos antes de resetear
         const proveedorEntrada = this.newEntrada.proveedor;
         const tipoEntrada = this.newEntrada.tipo;
@@ -563,7 +655,8 @@ export default {
           tipo: this.newEntrada.tipo,
           proveedor: this.newEntrada.proveedor,
           medida: this.newEntrada.medida,
-          kilos: Number(this.newEntrada.kilos.toFixed(1)),
+          kilos: kilosEntrada,
+          cajas: cajasEntrada,
           precio: this.newEntrada.precio ? Number(this.newEntrada.precio.toFixed(2)) : null,
           cuartoFrio: cuartoFrioEntrada || ''
         });
@@ -574,6 +667,7 @@ export default {
           proveedor: proveedorEntrada, 
           medida: '', 
           kilos: null, 
+          cajas: null,
           precio: null,
           cuartoFrio: cuartoFrioEntrada || '' 
         };
@@ -626,13 +720,16 @@ export default {
         // Guardar el proveedor antes de resetear
         const proveedorAnterior = this.newSalida.proveedor;
         const tipoAnterior = this.newSalida.tipo;
+        const kilosSalida = this.normalizeKilos(this.newSalida.kilos);
+        const cajasSalida = this.getCajasDesdeKilos(kilosSalida);
 
         this.salidas.push({
           tipo: this.newSalida.tipo,
           proveedor: this.newSalida.proveedor,
           medida: medidaBase,
           precio: precio,
-          kilos: Number(this.newSalida.kilos.toFixed(1)),
+          kilos: kilosSalida,
+          cajas: cajasSalida,
           cuartoFrio: cuartoSeleccionado
         });
         
@@ -642,6 +739,7 @@ export default {
           proveedor: proveedorAnterior, 
           medida: '', 
           kilos: null,
+          cajas: null,
           cuartoFrio: ''
         };
         
@@ -736,6 +834,7 @@ export default {
       const entrada = this.entradas[index];
       this.entradaEditData = {
         kilos: entrada.kilos,
+        cajas: entrada.cajas ?? this.getCajasDesdeKilos(this.normalizeKilos(entrada.kilos)),
         precio: entrada.precio,
         cuartoFrio: entrada.cuartoFrio || ''
       };
@@ -744,15 +843,17 @@ export default {
     cancelarEdicionEntrada() {
       this.editandoEntrada = false;
       this.entradaEditIndex = null;
-      this.entradaEditData = { kilos: null, precio: null, cuartoFrio: '' };
+      this.entradaEditData = { kilos: null, cajas: null, precio: null, cuartoFrio: '' };
     },
     async guardarEdicionEntrada() {
       if (this.entradaEditIndex !== null && this.entradaEditData.kilos && this.entradaEditData.kilos > 0) {
         const entrada = this.entradas[this.entradaEditIndex];
         const proveedorEntrada = entrada.proveedor;
+        const kilosEntrada = this.normalizeKilos(this.entradaEditData.kilos);
         
         // Actualizar la entrada
-        entrada.kilos = Number(this.entradaEditData.kilos.toFixed(1));
+        entrada.kilos = kilosEntrada;
+        entrada.cajas = this.getCajasDesdeKilos(kilosEntrada);
         entrada.precio = this.entradaEditData.precio ? Number(this.entradaEditData.precio.toFixed(2)) : null;
         entrada.cuartoFrio = this.entradaEditData.cuartoFrio || '';
         
@@ -838,8 +939,8 @@ export default {
       if (docSnap.exists()) {
         const data = docSnap.data();
         this.currentDate = moment(data.fecha.toDate());
-        this.entradas = data.entradas || [];
-        this.salidas = data.salidas || [];
+        this.entradas = (data.entradas || []).map(entrada => this.normalizeRegistroCantidades(entrada));
+        this.salidas = (data.salidas || []).map(salida => this.normalizeRegistroCantidades(salida));
         this.salidasClientesChecklist = data.salidasClientesChecklist || {};
         this.salidasMaquilasChecklist = data.salidasMaquilasChecklist || {};
         this.sacadaId = id;
@@ -1280,6 +1381,22 @@ h3 {
   border: 1px solid #ccc;
   border-radius: 4px;
   font-size: 14px;
+}
+
+.cantidad-fields {
+  display: flex;
+  flex: 1 1 250px;
+  gap: 10px;
+  min-width: 250px;
+}
+
+.cantidad-fields input {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.cantidad-fields-modal {
+  width: 100%;
 }
 
 .input-group select {
