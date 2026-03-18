@@ -142,9 +142,9 @@
                       P
                     </button>
                   </div>
-                  <select v-model="item.medida" class="input-field">
+                  <select v-model="item.medida" class="input-field" @change="manejarCambioMedida(item, 'otilio')">
                     <option value="">Seleccionar</option>
-                    <option v-for="medida in medidasOrdenadas" :key="medida.id" :value="medida.nombre">
+                    <option v-for="medida in medidasDisponibles" :key="medida.id" :value="medida.nombre">
                       {{ medida.nombre }}
                     </option>
                   </select>
@@ -159,7 +159,14 @@
                       <option value="Kileado">Kileado</option>
                     </select>
                   </div>
-                  <select v-model="item.tipo" class="input-field" :class="{ 'text-blue': item.tipo === 'C/H20' }">
+                  <input
+                    v-if="esMedidaMacuil(item.medida)"
+                    v-model="item.tipo"
+                    type="text"
+                    class="input-field"
+                    placeholder="Escribir tipo"
+                  >
+                  <select v-else v-model="item.tipo" class="input-field" :class="{ 'text-blue': item.tipo === 'C/H20' }">
                     <option value="">Seleccionar</option>
                     <option value="S/H20">S/H20</option>
                     <option value="C/H20" class="text-blue">C/H20</option>
@@ -217,9 +224,9 @@
                       P
                     </button>
                   </div>
-                  <select v-model="item.medida" class="input-field">
+                  <select v-model="item.medida" class="input-field" @change="manejarCambioMedida(item, 'catarro')">
                     <option value="">Seleccionar</option>
-                    <option v-for="medida in medidasOrdenadas" :key="medida.id" :value="medida.nombre">
+                    <option v-for="medida in medidasDisponibles" :key="medida.id" :value="medida.nombre">
                       {{ medida.nombre }}
                     </option>
                   </select>
@@ -234,7 +241,14 @@
                       <option value="Kileado">Kileado</option>
                     </select>
                   </div>
-                  <select v-model="item.tipo" class="input-field" :class="{ 'text-blue': item.tipo === 'C/H20' }">
+                  <input
+                    v-if="esMedidaMacuil(item.medida)"
+                    v-model="item.tipo"
+                    type="text"
+                    class="input-field"
+                    placeholder="Escribir tipo"
+                  >
+                  <select v-else v-model="item.tipo" class="input-field" :class="{ 'text-blue': item.tipo === 'C/H20' }">
                     <option value="">Seleccionar</option>
                     <option value="S/H20">S/H20</option>
                     <option value="C/H20" class="text-blue">C/H20</option>
@@ -292,9 +306,9 @@
                       P
                     </button>
                   </div>
-                  <select v-model="item.medida" class="input-field">
+                  <select v-model="item.medida" class="input-field" @change="manejarCambioMedida(item, 'joselito')">
                     <option value="">Seleccionar</option>
-                    <option v-for="medida in medidasOrdenadas" :key="medida.id" :value="medida.nombre">
+                    <option v-for="medida in medidasDisponibles" :key="medida.id" :value="medida.nombre">
                       {{ medida.nombre }}
                     </option>
                   </select>
@@ -309,7 +323,14 @@
                       <option value="Kileado">Kileado</option>
                     </select>
                   </div>
-                  <select v-model="item.tipo" class="input-field" :class="{ 'text-blue': item.tipo === 'C/H20' || item.tipo === '1.35 y .15' || item.tipo === '1.5 y .3' }">
+                  <input
+                    v-if="esMedidaMacuil(item.medida)"
+                    v-model="item.tipo"
+                    type="text"
+                    class="input-field"
+                    placeholder="Escribir tipo"
+                  >
+                  <select v-else v-model="item.tipo" class="input-field" :class="{ 'text-blue': item.tipo === 'C/H20' || item.tipo === '1.35 y .15' || item.tipo === '1.5 y .3' }">
                     <option value="">Seleccionar</option>
                     <option value="S/H20">S/H20</option>
                     <option value="C/H20" class="text-blue">C/H20</option>
@@ -369,9 +390,9 @@
                       P
                     </button>
                   </div>
-                  <select v-model="item.medida" class="input-field">
+                  <select v-model="item.medida" class="input-field" @change="manejarCambioMedida(item, 'lorena')">
                     <option value="">Seleccionar</option>
-                    <option v-for="medida in medidasOrdenadas" :key="medida.id" :value="medida.nombre">
+                    <option v-for="medida in medidasDisponibles" :key="medida.id" :value="medida.nombre">
                       {{ medida.nombre }}
                     </option>
                   </select>
@@ -386,7 +407,15 @@
                       <option value="Kileado">Kileado</option>
                     </select>
                   </div>
+                  <input
+                    v-if="esMedidaMacuil(item.medida)"
+                    v-model="item.tipo"
+                    type="text"
+                    class="input-field"
+                    placeholder="Escribir tipo"
+                  >
                   <select 
+                    v-else
                     v-model="item.tipo" 
                     class="input-field" 
                     :class="{ 'text-blue': item.tipo === 'C/H20' || item.tipo === '1.35 y .15' || item.tipo === '1.5 y .3' }"
@@ -450,9 +479,9 @@
                       P
                     </button>
                   </div>
-                  <select v-model="item.medida" class="input-field">
+                  <select v-model="item.medida" class="input-field" @change="manejarCambioMedida(item, 'ozuna')">
                     <option value="">Seleccionar</option>
-                    <option v-for="medida in medidasOrdenadas" :key="medida.id" :value="medida.nombre">
+                    <option v-for="medida in medidasDisponibles" :key="medida.id" :value="medida.nombre">
                       {{ medida.nombre }}
                     </option>
                   </select>
@@ -467,7 +496,14 @@
                       <option value="Kileado">Kileado</option>
                     </select>
                   </div>
-                  <select v-model="item.tipo" class="input-field" :class="{ 'text-blue': item.tipo === 'C/H20' }">
+                  <input
+                    v-if="esMedidaMacuil(item.medida)"
+                    v-model="item.tipo"
+                    type="text"
+                    class="input-field"
+                    placeholder="Escribir tipo"
+                  >
+                  <select v-else v-model="item.tipo" class="input-field" :class="{ 'text-blue': item.tipo === 'C/H20' }">
                     <option value="">Seleccionar</option>
                     <option value="S/H20">S/H20</option>
                     <option value="C/H20" class="text-blue">C/H20</option>
@@ -541,9 +577,9 @@
                       P
                     </button>
                   </div>
-                  <select v-model="item.medida" class="input-field">
+                  <select v-model="item.medida" class="input-field" @change="manejarCambioMedida(item, 'temporal')">
                     <option value="">Seleccionar</option>
-                    <option v-for="medida in medidasOrdenadas" :key="medida.id" :value="medida.nombre">
+                    <option v-for="medida in medidasDisponibles" :key="medida.id" :value="medida.nombre">
                       {{ medida.nombre }}
                     </option>
                   </select>
@@ -558,7 +594,14 @@
                       <option value="Kileado">Kileado</option>
                     </select>
                   </div>
-                  <select v-model="item.tipo" class="input-field" :class="{ 'text-blue': item.tipo === 'C/H20' || item.tipo === '1.35 y .15' || item.tipo === '1.5 y .3' }">
+                  <input
+                    v-if="esMedidaMacuil(item.medida)"
+                    v-model="item.tipo"
+                    type="text"
+                    class="input-field"
+                    placeholder="Escribir tipo"
+                  >
+                  <select v-else v-model="item.tipo" class="input-field" :class="{ 'text-blue': item.tipo === 'C/H20' || item.tipo === '1.35 y .15' || item.tipo === '1.5 y .3' }">
                     <option value="">Seleccionar</option>
                     <option value="S/H20">S/H20</option>
                     <option value="C/H20" class="text-blue">C/H20</option>
@@ -641,6 +684,24 @@ import PedidoLimpioImpresion from './PedidoLimpioImpresion.vue'
 import MedidasModal from '@/components/MedidasModal.vue'
 import ProveedorModal from '@/components/ProveedorModal.vue'
 import NuevoClienteModal from '@/components/NuevoClienteModal.vue'
+
+const TIPOS_POR_CLIENTE = {
+  otilio: ['S/H20', 'C/H20'],
+  catarro: ['S/H20', 'C/H20'],
+  joselito: ['S/H20', 'C/H20', '1.35 y .15', '1.5 y .3'],
+  lorena: ['S/H20', 'C/H20', '1.35 y .15', '1.5 y .3'],
+  ozuna: ['S/H20', 'C/H20', '.7 y .3'],
+  temporal: ['S/H20', 'C/H20', '1.35 y .15', '1.5 y .3', '.9 y .1', '.9']
+}
+
+const TIPO_DEFAULT_POR_CLIENTE = {
+  otilio: '',
+  catarro: 'S/H20',
+  joselito: '',
+  lorena: '',
+  ozuna: 'S/H20',
+  temporal: ''
+}
 
 export default {
   name: 'PedidosLimpio',
@@ -733,6 +794,19 @@ export default {
 
       // Combinar ambas listas con especiales primero
       return [...medidasEspeciales, ...medidasGranja]
+    },
+    medidasDisponibles() {
+      const medidas = [...this.medidasOrdenadas]
+      const yaExisteMacuil = medidas.some(medida => this.esMedidaMacuil(medida?.nombre))
+
+      if (!yaExisteMacuil) {
+        medidas.push({
+          id: 'macuil-opcion',
+          nombre: 'macuil'
+        })
+      }
+
+      return medidas
     },
     // Cálculos para Otilio
     calculosOtilio() {
@@ -987,6 +1061,27 @@ export default {
     }
   },
   methods: {
+    esMedidaMacuil(medida) {
+      return (medida || '').toString().trim().toLowerCase() === 'macuil'
+    },
+    obtenerOpcionesTipo(clienteId) {
+      return TIPOS_POR_CLIENTE[clienteId] || TIPOS_POR_CLIENTE.temporal
+    },
+    manejarCambioMedida(item, clienteId) {
+      if (!item) return
+
+      if (this.esMedidaMacuil(item.medida)) {
+        item.tipo = ''
+        return
+      }
+
+      const opcionesDisponibles = this.obtenerOpcionesTipo(clienteId)
+      if (opcionesDisponibles.includes(item.tipo)) {
+        return
+      }
+
+      item.tipo = TIPO_DEFAULT_POR_CLIENTE[clienteId] ?? ''
+    },
     async cargarMedidas() {
       try {
         const querySnapshot = await getDocs(collection(db, 'medidas'));

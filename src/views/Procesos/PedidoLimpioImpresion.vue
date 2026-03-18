@@ -46,7 +46,7 @@
             <tr v-for="(item, index) in (pedidoOtilio || [])" :key="'otilio-'+index">
               <td><input type="checkbox" v-model="item.completado" @change="actualizarCompletado('otilio', index, item.completado)" class="pedido-checkbox"></td>
               <td>{{ item.kilos }}<i v-if="item.esTara">T</i></td>
-              <td>
+              <td :class="{ 'text-orange': esMedidaMacuil(item.medida) }">
                 {{ item.medida }}
                 <span v-if="item.proveedor" class="proveedor-tag">{{ item.proveedor }}</span>
               </td>
@@ -88,7 +88,7 @@
               <tr v-for="(item, index) in (pedidoJoselito || [])" :key="'joselito-'+index">
                 <td><input type="checkbox" v-model="item.completado" @change="actualizarCompletado('joselito', index, item.completado)" class="pedido-checkbox"></td>
                 <td>{{ item.kilos }}<i v-if="item.esTara">T</i></td>
-                <td>
+                <td :class="{ 'text-orange': esMedidaMacuil(item.medida) }">
                   {{ item.medida }}
                   <span v-if="item.proveedor" class="proveedor-tag">{{ item.proveedor }}</span>
                 </td>
@@ -128,7 +128,7 @@
               <tr v-for="(item, index) in (pedidoLorena || [])" :key="'lorena-'+index">
                 <td><input type="checkbox" v-model="item.completado" @change="actualizarCompletado('lorena', index, item.completado)" class="pedido-checkbox"></td>
                 <td>{{ item.kilos }}<i v-if="item.esTara">T</i></td>
-                <td>
+                <td :class="{ 'text-orange': esMedidaMacuil(item.medida) }">
                   {{ item.medida }}
                   <span v-if="item.proveedor" class="proveedor-tag">{{ item.proveedor }}</span>
                 </td>
@@ -169,7 +169,7 @@
                 <tr v-for="(item, index) in (pedidoCatarro || [])" :key="'catarro-'+index">
                   <td><input type="checkbox" v-model="item.completado" @change="actualizarCompletado('catarro', index, item.completado)" class="pedido-checkbox"></td>
                   <td>{{ item.kilos }}<i v-if="item.esTara">T</i></td>
-                  <td>
+                  <td :class="{ 'text-orange': esMedidaMacuil(item.medida) }">
                     {{ item.medida }}
                     <span v-if="item.proveedor" class="proveedor-tag">{{ item.proveedor }}</span>
                   </td>
@@ -209,7 +209,7 @@
                 <tr v-for="(item, index) in (pedidoOzuna || [])" :key="'ozuna-'+index">
                   <td><input type="checkbox" v-model="item.completado" @change="actualizarCompletado('ozuna', index, item.completado)" class="pedido-checkbox"></td>
                   <td>{{ item.kilos }}<i v-if="item.esTara">T</i></td>
-                  <td>
+                  <td :class="{ 'text-orange': esMedidaMacuil(item.medida) }">
                     {{ item.medida }}
                     <span v-if="item.proveedor" class="proveedor-tag">{{ item.proveedor }}</span>
                   </td>
@@ -252,7 +252,7 @@
               <tr v-for="(item, index) in (cliente.pedidos || [])" :key="'temp-'+id+'-'+index">
                 <td><input type="checkbox" v-model="item.completado" class="pedido-checkbox"></td>
                 <td>{{ item.kilos }}<i v-if="item.esTara">T</i></td>
-                <td>
+                <td :class="{ 'text-orange': esMedidaMacuil(item.medida) }">
                   {{ item.medida }}
                   <span v-if="item.proveedor" class="proveedor-tag">{{ item.proveedor }}</span>
                 </td>
@@ -759,8 +759,20 @@ export default {
       if (!Array.isArray(items)) return [];
       return items.filter(item => this.itemTieneDatos(item));
     },
+    obtenerItemsParaPDF(items) {
+      return this.obtenerItemsConDatos(items).filter(item => !this.esMedidaMacuil(item?.medida));
+    },
     clienteTieneDatos(items) {
       return this.obtenerItemsConDatos(items).length > 0;
+    },
+    clienteTieneDatosParaPDF(items) {
+      return this.obtenerItemsParaPDF(items).length > 0;
+    },
+    obtenerClientesTemporalesConDatosParaPDF() {
+      if (!this.clientesTemporales || typeof this.clientesTemporales !== 'object') return [];
+      return Object.entries(this.clientesTemporales)
+        .filter(([_, cliente]) => this.clienteTieneDatosParaPDF(cliente?.pedidos))
+        .map(([id, cliente]) => ({ id, ...cliente }));
     },
     obtenerClientesTemporalesConDatos() {
       if (!this.clientesTemporales || typeof this.clientesTemporales !== 'object') return [];
@@ -931,8 +943,14 @@ export default {
       const date = new Date(fecha);
       return dias[date.getDay()];
     },
+    esMedidaMacuil(medida) {
+      return (medida || '').toString().trim().toLowerCase() === 'macuil';
+    },
+    obtenerMedidaVisible(medida) {
+      return this.esMedidaMacuil(medida) ? '' : (medida || '');
+    },
     generarTablaCliente(items, fontSize = 16) {
-      const itemsConDatos = this.obtenerItemsConDatos(items);
+      const itemsConDatos = this.obtenerItemsParaPDF(items);
       if (itemsConDatos.length === 0) return null;
 
       const reducirEspacio = itemsConDatos.length > 7;
@@ -949,7 +967,7 @@ export default {
         },
         { 
           stack: [
-            { text: item.medida || '', fontSize: fontSize * 2 },
+            { text: this.obtenerMedidaVisible(item.medida), fontSize: fontSize * 2 },
             item.proveedor ? { 
               text: item.proveedor, 
               fontSize: fontSize * 1.1,
@@ -1004,16 +1022,16 @@ export default {
       };
     },
     generarPDF() {
-      const tieneOtilio = this.clienteTieneDatos(this.pedidoOtilio);
-      const tieneJoselito = this.clienteTieneDatos(this.pedidoJoselito);
-      const tieneLorena = this.clienteTieneDatos(this.pedidoLorena);
-      const tieneCatarro = this.clienteTieneDatos(this.pedidoCatarro);
-      const tieneOzuna = this.clienteTieneDatos(this.pedidoOzuna);
-      const clientesTemporalesConDatos = this.obtenerClientesTemporalesConDatos();
+      const tieneOtilio = this.clienteTieneDatosParaPDF(this.pedidoOtilio);
+      const tieneJoselito = this.clienteTieneDatosParaPDF(this.pedidoJoselito);
+      const tieneLorena = this.clienteTieneDatosParaPDF(this.pedidoLorena);
+      const tieneCatarro = this.clienteTieneDatosParaPDF(this.pedidoCatarro);
+      const tieneOzuna = this.clienteTieneDatosParaPDF(this.pedidoOzuna);
+      const clientesTemporalesConDatos = this.obtenerClientesTemporalesConDatosParaPDF();
 
       const necesitaCompacto =
-        (tieneJoselito && this.obtenerItemsConDatos(this.pedidoJoselito).length >= 5) ||
-        (tieneLorena && this.obtenerItemsConDatos(this.pedidoLorena).length >= 5);
+        (tieneJoselito && this.obtenerItemsParaPDF(this.pedidoJoselito).length >= 5) ||
+        (tieneLorena && this.obtenerItemsParaPDF(this.pedidoLorena).length >= 5);
       const espaciadoReducido = necesitaCompacto ? 0.5 : 30;
       const fontSizeJoselito = necesitaCompacto ? 22 : 26;
       const fontSizeInferior = necesitaCompacto ? 24 : 36;
@@ -1209,7 +1227,7 @@ export default {
       pdfMake.createPdf(docDefinition).download('Ped-limpio-' + this.fecha + '.pdf');
     },
     generarTablaClienteReducido(items, fontSize = 16) {
-      const itemsConDatos = this.obtenerItemsConDatos(items);
+      const itemsConDatos = this.obtenerItemsParaPDF(items);
       if (itemsConDatos.length === 0) return null;
 
       const body = itemsConDatos.map(item => [
@@ -1223,7 +1241,7 @@ export default {
         },
         { 
           stack: [
-            { text: item.medida || '', fontSize: fontSize * 2 },
+            { text: this.obtenerMedidaVisible(item.medida), fontSize: fontSize * 2 },
             (item.tipo && item.tipo !== 'S/H20') ? { 
               text: item.tipo, 
               fontSize: fontSize * 1.5,
@@ -2677,6 +2695,10 @@ h4.cliente-header.ozuna-header {
 .text-blue,
 .text-blue.compact {
   color: #0000FF;
+}
+
+.text-orange {
+  color: #e67e22;
 }
 
 /* Estilos para los checkboxes */
