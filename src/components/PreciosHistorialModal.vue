@@ -8,7 +8,7 @@
 
     <!-- Modal -->
     <div v-if="showModal" class="modal-overlay" @click.self="showModal = false">
-      <div class="modal-content">
+      <div ref="modalContent" class="modal-content">
         <div class="modal-header">
           <h2>
             <i class="header-icon">📊</i>
@@ -135,6 +135,9 @@
                 <div class="product-header">
                   <h4 class="product-name">{{ producto.producto }}</h4>
                   <div class="product-actions">
+                    <button @click="abrirEditorPrecio(producto)" class="edit-btn" title="Editar precio actual">
+                      <i class="edit-icon">✏️</i>
+                    </button>
                     <button @click="mostrarHistorial(producto)" class="history-btn" title="Ver historial">
                       <i class="history-icon">📈</i>
                     </button>
@@ -354,6 +357,16 @@
             </div>
           </div>
         </div>
+
+        <PrecioActualEditorModal
+          :visible="showEditarPrecioModal"
+          :precio="precioEnEdicion"
+          :clientes="clientes"
+          :guardando="guardandoEdicionPrecio"
+          :top-offset="editorModalTop"
+          @close="cerrarEditorPrecio"
+          @save="guardarEdicionPrecio"
+        />
       </div>
       
       <!-- Botón flotante de cerrar siempre visible -->
@@ -367,7 +380,7 @@
 
 <script>
 import { db } from '@/firebase';
-import { collection, addDoc, query, where, getDocs, orderBy, deleteDoc, doc } from 'firebase/firestore';
+import { collection, addDoc, query, where, getDocs, orderBy, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import { 
   obtenerFechaActualISO, 
   normalizarFechaISO, 
@@ -375,9 +388,22 @@ import {
   formatearFechaParaMostrar,
   esFechaValida 
 } from '@/utils/dateUtils';
+import PrecioActualEditorModal from '@/components/PrecioActualEditorModal.vue';
+
+const crearNuevoPrecio = () => ({
+  producto: '',
+  precio: null,
+  fecha: obtenerFechaActualISO(),
+  categoria: 'Otros',
+  esClienteEspecifico: false,
+  clienteId: ''
+});
 
 export default {
   name: 'PreciosHistorialModal',
+  components: {
+    PrecioActualEditorModal
+  },
   props: {
     clienteActual: {
       type: String,
@@ -389,9 +415,13 @@ export default {
       showModal: false,
       showHistorialModal: false,
       showConfirmacionModal: false,
+      showEditarPrecioModal: false,
+      editorModalTop: 24,
       preciosActuales: [],
       historialPrecios: [],
       productoSeleccionado: null,
+      precioEnEdicion: null,
+      guardandoEdicionPrecio: false,
       preciosEspecificosAfectados: [],
       nuevoPrecioTemporal: null,
       decisionesClientes: {},
@@ -407,14 +437,7 @@ export default {
         { id: 'veronica', nombre: 'Verónica', color: '#e67e22' }
       ],
       filtroCliente: '',
-      newPrice: {
-        producto: '',
-        precio: null,
-        fecha: obtenerFechaActualISO(),
-        categoria: 'Otros',
-        esClienteEspecifico: false,
-        clienteId: ''
-      },
+      newPrice: crearNuevoPrecio(),
       precioActualMostrar: null,
       buscarPrecioTimeout: null,
       // Mapeo de nombres duplicados a nombres normalizados
@@ -662,6 +685,97 @@ export default {
     seleccionarCliente(clienteId) {
       this.newPrice.clienteId = clienteId;
     },
+    crearFormularioNuevoPrecio() {
+      const formulario = crearNuevoPrecio();
+
+      if (this.clienteActual && this.clientes.some(c => c.id === this.clienteActual)) {
+        formulario.esClienteEspecifico = true;
+        formulario.clienteId = this.clienteActual;
+      }
+
+      return formulario;
+    },
+    abrirEditorPrecio(producto) {
+      const modalContent = this.$refs.modalContent;
+      this.editorModalTop = modalContent ? modalContent.scrollTop + 24 : 24;
+
+      this.precioEnEdicion = {
+        id: producto.id,
+        producto: producto.producto,
+        precio: producto.precio,
+        fecha: producto.fecha,
+        clienteId: producto.clienteId || ''
+      };
+      this.showEditarPrecioModal = true;
+    },
+    cerrarEditorPrecio() {
+      if (this.guardandoEdicionPrecio) {
+        return;
+      }
+
+      this.showEditarPrecioModal = false;
+      this.precioEnEdicion = null;
+    },
+    async guardarEdicionPrecio(precioEditado) {
+      if (!precioEditado?.id) {
+        alert('No se encontró el precio a editar');
+        return;
+      }
+
+      if (precioEditado.precio === null || precioEditado.precio === '' || Number(precioEditado.precio) < 0) {
+        alert('Por favor ingrese un precio válido');
+        return;
+      }
+
+      if (!precioEditado.fecha) {
+        alert('Por favor seleccione una fecha válida');
+        return;
+      }
+
+      try {
+        this.guardandoEdicionPrecio = true;
+
+        const fechaNormalizada = normalizarFechaISO(precioEditado.fecha);
+        const precioNormalizado = parseFloat(precioEditado.precio);
+
+        await updateDoc(doc(db, 'precios', precioEditado.id), {
+          precio: precioNormalizado,
+          fecha: fechaNormalizada,
+          ultimaActualizacion: obtenerFechaActualISO(),
+          horaActualizacion: new Date().toLocaleTimeString('es-ES')
+        });
+
+        await this.cargarPreciosActuales();
+
+        if (this.productoSeleccionado) {
+          const productoActualizado = this.preciosActuales.find(precio =>
+            precio.producto === this.productoSeleccionado.producto &&
+            (precio.clienteId || '') === (this.productoSeleccionado.clienteId || '')
+          );
+
+          if (productoActualizado) {
+            this.productoSeleccionado = productoActualizado;
+            this.historialPrecios = productoActualizado.historial;
+          }
+        }
+
+        this.$emit('precio-agregado', {
+          id: precioEditado.id,
+          producto: precioEditado.producto,
+          precio: precioNormalizado,
+          fecha: fechaNormalizada,
+          clienteId: precioEditado.clienteId || '',
+          editado: true
+        });
+
+        this.cerrarEditorPrecio();
+      } catch (error) {
+        console.error('Error al editar precio:', error);
+        alert('Error al guardar los cambios del precio');
+      } finally {
+        this.guardandoEdicionPrecio = false;
+      }
+    },
     filtrarPreciosPorCliente(productos) {
       if (!this.filtroCliente) {
         // Si no hay filtro ("Todos"), mostrar solo los precios generales
@@ -781,14 +895,7 @@ export default {
         }
 
         // Limpiar el formulario
-        this.newPrice = {
-          producto: '',
-          precio: null,
-          fecha: obtenerFechaActualISO(),
-          categoria: 'Otros',
-          esClienteEspecifico: false,
-          clienteId: ''
-        };
+        this.newPrice = this.crearFormularioNuevoPrecio();
 
         console.log(`[PRECIOS] Precio guardado exitosamente y formulario limpiado`);
 
@@ -1072,6 +1179,7 @@ export default {
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.7));
   font-size: 1.1rem;
   font-family: 'Inter', 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+  position: relative;
 }
 
 .modal-header {
@@ -1419,6 +1527,8 @@ export default {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
   margin-bottom: 10px;
   padding-bottom: 8px;
   border-bottom: 1px dashed #eee;
@@ -1436,8 +1546,10 @@ export default {
 .product-actions {
   display: flex;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
+.edit-btn,
 .history-btn {
   background-color: #2196F3;
   color: white;
@@ -1454,11 +1566,22 @@ export default {
   box-shadow: 0 2px 6px rgba(33, 150, 243, 0.2);
 }
 
+.edit-btn {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  box-shadow: 0 2px 6px rgba(217, 119, 6, 0.25);
+}
+
+.edit-btn:hover {
+  background: linear-gradient(135deg, #d97706, #b45309);
+  box-shadow: 0 3px 10px rgba(217, 119, 6, 0.35);
+}
+
 .history-btn:hover {
   background-color: #1976D2;
   box-shadow: 0 3px 10px rgba(33, 150, 243, 0.3);
 }
 
+.edit-icon,
 .history-icon {
   font-size: 1em;
 }
