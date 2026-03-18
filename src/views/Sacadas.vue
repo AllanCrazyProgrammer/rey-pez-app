@@ -1350,14 +1350,14 @@ export default {
 }
 
 .sacadas-content {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 20px;
+  align-items: start;
 }
 
 .salidas-section, .entradas-section {
-  flex: 1;
-  min-width: 0;  /* Esto ayuda a prevenir que el contenido se desborde */
+  min-width: 0;
 }
 
 h3 {
@@ -1371,6 +1371,7 @@ h3 {
   flex-wrap: wrap;
   gap: 10px;
   margin-bottom: 15px;
+  align-items: flex-start;
 }
 
 .input-group select,
@@ -1384,14 +1385,15 @@ h3 {
 }
 
 .cantidad-fields {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   flex: 1 1 250px;
   gap: 10px;
   min-width: 250px;
 }
 
 .cantidad-fields input {
-  flex: 1 1 0;
+  width: 100%;
   min-width: 0;
 }
 
@@ -1585,83 +1587,49 @@ button:active {
   background-color: #f5f5f5;
 }
 
-/* Estilos específicos para Galaxy Fold (ancho plegado ~375px, desplegado ~667px) */
-@media (min-width: 375px) and (max-width: 667px) {
+@media (max-width: 700px) {
   .sacadas-container {
-    padding: 15px;
+    padding: 16px;
     max-width: 100%;
   }
 
-  .sacadas-content {
-    display: flex;
-    flex-direction: row;
-    gap: 10px;
-    justify-content: space-between;
-  }
-
-  .entradas-section, .salidas-section {
-    flex: 1;
-    min-width: 0;
-    margin-bottom: 0;
-  }
-
-  .input-group {
-    flex-direction: column;
-    gap: 8px;
-  }
-
   .input-group select,
-  .input-group input {
+  .input-group > input,
+  .input-group > button,
+  .cantidad-fields {
+    flex: 1 1 100%;
+    min-width: 0;
     width: 100%;
-    padding: 8px;
-    font-size: 12px;
-    min-width: auto;
-  }
-
-  .input-group button {
-    width: 100%;
-    padding: 8px;
-    font-size: 12px;
   }
 
   .clear-button,
   .refresh-button {
     margin-left: 0;
-    margin-top: 5px;
-    padding: 6px 10px;
-    font-size: 11px;
   }
 
   .list li {
-    padding: 8px;
-    font-size: 12px;
-    margin-bottom: 8px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
   }
 
-  .total {
-    font-size: 14px;
-    margin-top: 10px;
+  .action-buttons {
+    width: 100%;
+    justify-content: flex-end;
   }
 
-  .kilos-disponibles {
-    font-size: 1em;
-    padding: 8px;
-    margin-bottom: 10px;
+  .summary {
+    overflow-x: auto;
   }
+}
 
-  .medidas-summary {
-    font-size: 11px;
+@media (max-width: 560px) {
+  .sacadas-content {
+    grid-template-columns: 1fr;
   }
-  
-  .medidas-summary th,
-  .medidas-summary td {
-    padding: 4px;
-  }
+}
 
-  .check-column {
-    width: 90px;
-  }
-
+@media (max-width: 600px) {
   .date-header {
     font-size: 1.3em;
     margin-bottom: 15px;
@@ -1669,85 +1637,34 @@ button:active {
 
   h3 {
     font-size: 1.1em;
-    margin-bottom: 10px;
-  }
-
-  .summary h4 {
-    font-size: 1em;
-    margin-top: 15px;
-  }
-
-  .summary {
-    padding: 15px;
-    margin-top: 20px;
-  }
-
-  .save-button {
-    padding: 10px;
-    font-size: 1em;
-  }
-}
-
-/* Para pantallas más pequeñas que el Galaxy Fold plegado */
-@media (max-width: 374px) {
-  .sacadas-content {
-    flex-direction: column;
-  }
-
-  .entradas-section, .salidas-section {
-    width: 100%;
-    margin-bottom: 30px;
   }
 
   .input-group {
-    flex-direction: column;
+    gap: 8px;
   }
 
   .input-group select,
   .input-group input,
   .input-group button {
-    width: 100%;
+    padding: 10px;
+    font-size: 13px;
   }
 
-  .clear-button,
-  .refresh-button {
-    margin-left: 0;
-    margin-top: 5px;
+  .cantidad-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .medidas-summary {
-    font-size: 14px;
+    font-size: 12px;
   }
-  
+
   .medidas-summary th,
   .medidas-summary td {
     padding: 6px;
   }
-}
 
-/* Para pantallas más grandes que el Galaxy Fold desplegado */
-@media (min-width: 668px) and (max-width: 768px) {
-  .sacadas-content {
-    display: flex;
-    flex-direction: row;
-    gap: 15px;
-  }
-
-  .entradas-section, .salidas-section {
-    flex: 1;
-    min-width: 0;
-  }
-
-  .input-group {
-    flex-wrap: wrap;
-    gap: 8px;
-  }
-
-  .input-group select,
-  .input-group input {
-    flex: 1;
-    min-width: 100px;
-    font-size: 13px;
+  .check-column {
+    width: 90px;
   }
 }
 
