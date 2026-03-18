@@ -36,6 +36,9 @@
             </div>
           </div>
           <div class="sacada-actions">
+            <button @click.stop="openListaMedidasModal(sacada)" class="measures-btn">
+              Medidas a sacar
+            </button>
             <button @click.stop="deleteSacada(sacada.id)" class="delete-btn">Borrar</button>
           </div>
         </li>
@@ -55,20 +58,30 @@
       :medidas="medidas"
       @close="closeHistorialModal"
     />
+
+    <ListaMedidasPedidoModal
+      :is-open="isListaMedidasModalOpen"
+      :is-saving="isSavingListaMedidas"
+      :sacada="selectedSacadaForMeasures"
+      :medidas="medidas"
+      @close="closeListaMedidasModal"
+      @save="saveListaMedidas"
+    />
   </div>
 </template>
 
 <script>
-import { formatDate, parseDate } from '@/utils/dateUtils';
 import { db } from '@/firebase';
-import { collection, getDocs, query, orderBy, deleteDoc, doc } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import moment from 'moment'; // Import Moment.js
 import HistorialProductoModal from '@/components/HistorialProductoModal.vue';
+import ListaMedidasPedidoModal from '@/components/ListaMedidasPedidoModal.vue';
 
 export default {
   name: 'SacadasMenu',
   components: {
-    HistorialProductoModal
+    HistorialProductoModal,
+    ListaMedidasPedidoModal
   },
   data() {
     return {
@@ -78,7 +91,10 @@ export default {
       itemsPerPage: 10,
       isHistorialModalOpen: false,
       proveedores: [],
-      medidas: []
+      medidas: [],
+      isListaMedidasModalOpen: false,
+      selectedSacadaForMeasures: null,
+      isSavingListaMedidas: false
     };
   },
   computed: {
@@ -114,8 +130,10 @@ export default {
             id: doc.id,
             ...data,
             fecha: fecha,
+            fechaTexto: this.formatDate(fecha),
             totalEntradas: data.totalEntradas || 0,
-            totalSalidas: data.totalSalidas || 0
+            totalSalidas: data.totalSalidas || 0,
+            listaMedidasPedido: Array.isArray(data.listaMedidasPedido) ? data.listaMedidasPedido : []
           };
         });
       } catch (error) {
@@ -177,6 +195,40 @@ export default {
     },
     closeHistorialModal() {
       this.isHistorialModalOpen = false;
+    },
+    openListaMedidasModal(sacada) {
+      this.selectedSacadaForMeasures = sacada;
+      this.isListaMedidasModalOpen = true;
+    },
+    closeListaMedidasModal() {
+      this.isListaMedidasModalOpen = false;
+      this.selectedSacadaForMeasures = null;
+    },
+    async saveListaMedidas(lista) {
+      if (!this.selectedSacadaForMeasures?.id) {
+        return;
+      }
+
+      this.isSavingListaMedidas = true;
+      try {
+        await updateDoc(doc(db, 'sacadas', this.selectedSacadaForMeasures.id), {
+          listaMedidasPedido: lista
+        });
+
+        this.sacadas = this.sacadas.map((sacada) => (
+          sacada.id === this.selectedSacadaForMeasures.id
+            ? { ...sacada, listaMedidasPedido: lista }
+            : sacada
+        ));
+
+        alert('Lista de medidas guardada con exito');
+        this.closeListaMedidasModal();
+      } catch (error) {
+        console.error('Error al guardar lista de medidas:', error);
+        alert('No se pudo guardar la lista de medidas');
+      } finally {
+        this.isSavingListaMedidas = false;
+      }
     }
   },
   async mounted() {
@@ -323,6 +375,21 @@ h1, h2 {
   background-color: #d32f2f;
 }
 
+.measures-btn {
+  background-color: #3760b0;
+  color: white;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9em;
+  margin-left: 10px;
+}
+
+.measures-btn:hover {
+  background-color: #2a4a87;
+}
+
 @media (max-width: 600px) {
   .actions-container {
     flex-direction: column;
@@ -377,6 +444,13 @@ h1, h2 {
   .delete-btn {
     padding: 6px 10px;
     font-size: 0.8em;
+  }
+
+  .measures-btn {
+    padding: 6px 10px;
+    font-size: 0.8em;
+    margin-left: 0;
+    margin-right: 8px;
   }
 }
 
