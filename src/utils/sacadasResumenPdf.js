@@ -62,15 +62,20 @@ const toSafeDate = (value) => {
 
 const buildDocDefinition = ({ fecha, grupos }) => {
   const pedidosPorFila = 2;
-  const totalCajas = grupos.reduce(
-    (sum, group) => sum + group.items.reduce((sub, item) => sub + Number(item.cajas || 0), 0),
-    0
-  );
+
+  const allItems = grupos.flatMap((g) => g.items || []);
+  const totalCajas = allItems.filter((i) => !i.esKilos).reduce((s, i) => s + Number(i.cajas || 0), 0);
+  const totalKilos = allItems.filter((i) => i.esKilos).reduce((s, i) => s + Number(i.cajas || 0), 0);
+
+  const resumenParts = [];
+  if (totalCajas > 0) resumenParts.push(`${totalCajas} cajas`);
+  if (totalKilos > 0) resumenParts.push(`${totalKilos} kg`);
+  const resumenTotal = resumenParts.length > 0 ? resumenParts.join('  ·  ') : '0';
 
   const content = [
     { text: 'Resumen de medidas a sacar', style: 'title' },
     { text: `Fecha: ${fecha || 'Sin fecha'}`, style: 'meta' },
-    { text: `Total de cajas: ${totalCajas}`, style: 'metaStrong', margin: [0, 0, 0, 10] }
+    { text: `Total: ${resumenTotal}`, style: 'metaStrong', margin: [0, 0, 0, 10] }
   ];
 
   const rows = [];
@@ -81,18 +86,23 @@ const buildDocDefinition = ({ fecha, grupos }) => {
   const body = rows.map((row, rowIndex) => {
     const cells = row.map((group, colIndex) => {
       const numeroPedido = rowIndex * pedidosPorFila + colIndex + 1;
-      const subtotal = (group.items || []).reduce((sum, item) => sum + Number(item.cajas || 0), 0);
+      const subtotalCajas = (group.items || []).filter((i) => !i.esKilos).reduce((sum, i) => sum + Number(i.cajas || 0), 0);
+      const subtotalKilos = (group.items || []).filter((i) => i.esKilos).reduce((sum, i) => sum + Number(i.cajas || 0), 0);
+      const subtotalParts = [];
+      if (subtotalCajas > 0) subtotalParts.push(`${subtotalCajas} cajas`);
+      if (subtotalKilos > 0) subtotalParts.push(`${subtotalKilos} kg`);
+      const subtotalTexto = subtotalParts.length > 0 ? subtotalParts.join('  ·  ') : '0';
 
       return {
         stack: [
           { text: `${group.ozuna ? '🟢 ' : ''}${numeroPedido}) ${group.medidaPedido || '-'}`, style: 'pedidoTitle' },
           ...(group.items && group.items.length > 0
             ? group.items.map((item) => ({
-                text: `${item.medida || '-'}: ${item.cajas || 0}`,
+                text: `${item.medida || '-'}: ${item.cajas || 0} ${item.esKilos ? 'kg' : 'cajas'}`,
                 style: 'pedidoItem'
               }))
             : [{ text: 'Sin medidas', style: 'pedidoEmpty' }]),
-          { text: `Total: ${subtotal} cajas`, style: 'pedidoSubtotal', margin: [0, 6, 0, 0] }
+          { text: `Total: ${subtotalTexto}`, style: 'pedidoSubtotal', margin: [0, 6, 0, 0] }
         ],
         fillColor: group.ozuna ? '#d1fae5' : null,
         margin: [8, 8, 8, 8]

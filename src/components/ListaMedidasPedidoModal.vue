@@ -55,21 +55,33 @@
               placeholder='Medida a sacar (ej. 67/90)'
               list="medidas-options"
             />
-            <input
-              v-model.number="item.cajas"
-              type="number"
-              min="0"
-              step="1"
-              class="number-input"
-              placeholder="Cajas"
-            />
+            <div class="cantidad-col">
+              <input
+                v-model.number="item.cajas"
+                type="number"
+                min="0"
+                :step="item.esKilos ? 0.1 : 1"
+                class="number-input"
+                :placeholder="item.esKilos ? 'Kilos' : 'Cajas'"
+              />
+              <label class="kilos-label" :title="item.esKilos ? 'Kilos' : 'Cajas'">
+                <input type="checkbox" v-model="item.esKilos" class="kilos-checkbox" />
+                <span class="kilos-text">{{ item.esKilos ? 'kg' : 'caj' }}</span>
+              </label>
+            </div>
             <button class="remove-item-btn" @click="removeItem(groupIndex, itemIndex)">X</button>
           </div>
 
           <button class="add-item-btn" @click="addItem(groupIndex)">+ Agregar medida</button>
 
           <div class="grupo-total">
-            Total: <strong>{{ grupo.items.reduce((s, i) => s + (Number(i.cajas) || 0), 0) }} cajas</strong>
+            <span v-if="grupo.items.some(i => !i.esKilos)">
+              Total cajas: <strong>{{ grupo.items.filter(i => !i.esKilos).reduce((s, i) => s + (Number(i.cajas) || 0), 0) }} cajas</strong>
+            </span>
+            <span v-if="grupo.items.some(i => !i.esKilos) && grupo.items.some(i => i.esKilos)" class="total-sep"> · </span>
+            <span v-if="grupo.items.some(i => i.esKilos)">
+              Total kilos: <strong>{{ grupo.items.filter(i => i.esKilos).reduce((s, i) => s + (Number(i.cajas) || 0), 0) }} kg</strong>
+            </span>
           </div>
         </div>
       </div>
@@ -144,7 +156,8 @@ export default {
       return {
         id: this.generateId(),
         medida: '',
-        cajas: null
+        cajas: null,
+        esKilos: false
       };
     },
     createEmptyGroup() {
@@ -174,7 +187,8 @@ export default {
           ? group.items.map((item) => ({
               id: this.generateId(),
               medida: item?.medida || '',
-              cajas: Number.isFinite(item?.cajas) ? item.cajas : null
+              cajas: Number.isFinite(item?.cajas) ? item.cajas : null,
+              esKilos: item?.esKilos || false
             }))
           : [this.createEmptyItem()]
       }));
@@ -206,7 +220,8 @@ export default {
           items: (group.items || [])
             .map((item) => ({
               medida: (item.medida || '').trim(),
-              cajas: Number(item.cajas)
+              cajas: Number(item.cajas),
+              esKilos: item.esKilos || false
             }))
             .filter((item) => item.medida && Number.isFinite(item.cajas) && item.cajas > 0)
         }))
@@ -383,12 +398,46 @@ export default {
 
 .item-row {
   display: grid;
-  grid-template-columns: 1fr 100px auto;
+  grid-template-columns: 1fr auto auto;
   gap: 8px;
   align-items: center;
   margin-bottom: 8px;
   border-radius: 6px;
   padding: 4px 6px;
+}
+
+.cantidad-col {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.cantidad-col .number-input {
+  width: 80px;
+}
+
+.kilos-label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  cursor: pointer;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.kilos-checkbox {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: #b45309;
+}
+
+.kilos-text {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #92400e;
+  line-height: 1;
 }
 
 .remove-item-btn {
