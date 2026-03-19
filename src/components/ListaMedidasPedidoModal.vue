@@ -15,24 +15,39 @@
       </div>
 
       <div class="groups-grid">
-        <div v-for="(grupo, groupIndex) in grupos" :key="grupo.id" class="grupo-card">
+        <div
+          v-for="(grupo, groupIndex) in grupos"
+          :key="grupo.id"
+          class="grupo-card"
+          :class="{ 'grupo-card--ozuna': grupo.ozuna }"
+        >
           <div class="grupo-header">
             <label class="field-label" :for="`pedido-${grupo.id}`">Medida del pedido</label>
             <button class="remove-btn" @click="removeGroup(groupIndex)">Eliminar</button>
           </div>
 
-          <input
-            :id="`pedido-${grupo.id}`"
-            v-model.trim="grupo.medidaPedido"
-            type="text"
-            class="text-input"
-            placeholder='Ej. 71/90'
-            list="medidas-options"
-          />
+          <div class="pedido-input-row">
+            <input
+              :id="`pedido-${grupo.id}`"
+              v-model.trim="grupo.medidaPedido"
+              type="text"
+              class="text-input"
+              placeholder='Ej. 71/90'
+              list="medidas-options"
+            />
+            <label class="ozuna-label" :title="grupo.ozuna ? 'Ozuna' : 'Marcar como Ozuna'">
+              <input type="checkbox" v-model="grupo.ozuna" class="ozuna-checkbox" />
+              <span class="ozuna-text">Ozuna</span>
+            </label>
+          </div>
 
           <div class="rows-title">Medidas que se van a sacar</div>
 
-          <div v-for="(item, itemIndex) in grupo.items" :key="item.id" class="item-row">
+          <div
+            v-for="(item, itemIndex) in grupo.items"
+            :key="item.id"
+            class="item-row"
+          >
             <input
               v-model.trim="item.medida"
               type="text"
@@ -52,6 +67,10 @@
           </div>
 
           <button class="add-item-btn" @click="addItem(groupIndex)">+ Agregar medida</button>
+
+          <div class="grupo-total">
+            Total: <strong>{{ grupo.items.reduce((s, i) => s + (Number(i.cajas) || 0), 0) }} cajas</strong>
+          </div>
         </div>
       </div>
 
@@ -132,6 +151,7 @@ export default {
       return {
         id: this.generateId(),
         medidaPedido: '',
+        ozuna: false,
         items: [this.createEmptyItem()]
       };
     },
@@ -149,6 +169,7 @@ export default {
       this.grupos = existing.map((group) => ({
         id: this.generateId(),
         medidaPedido: group?.medidaPedido || '',
+        ozuna: group?.ozuna || false,
         items: Array.isArray(group?.items) && group.items.length > 0
           ? group.items.map((item) => ({
               id: this.generateId(),
@@ -181,6 +202,7 @@ export default {
       return this.grupos
         .map((group) => ({
           medidaPedido: (group.medidaPedido || '').trim(),
+          ozuna: group.ozuna || false,
           items: (group.items || [])
             .map((item) => ({
               medida: (item.medida || '').trim(),
@@ -320,12 +342,53 @@ export default {
   box-sizing: border-box;
 }
 
+.grupo-card--ozuna {
+  background: #d1fae5;
+  border-color: #6ee7b7;
+}
+
+.pedido-input-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.pedido-input-row .text-input {
+  flex: 1;
+}
+
+.ozuna-label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  cursor: pointer;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.ozuna-checkbox {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: #059669;
+}
+
+.ozuna-text {
+  font-size: 0.72rem;
+  color: #065f46;
+  font-weight: 600;
+  line-height: 1;
+}
+
 .item-row {
   display: grid;
-  grid-template-columns: 1fr 110px auto;
+  grid-template-columns: 1fr 100px auto;
   gap: 8px;
   align-items: center;
   margin-bottom: 8px;
+  border-radius: 6px;
+  padding: 4px 6px;
 }
 
 .remove-item-btn {
@@ -333,6 +396,15 @@ export default {
   color: #fff;
   min-width: 42px;
   padding: 8px 10px;
+}
+
+.grupo-total {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid #dbe4f5;
+  text-align: right;
+  font-size: 0.95rem;
+  color: #3760b0;
 }
 
 .remove-btn,
@@ -409,9 +481,9 @@ export default {
   }
 
   .item-row {
-    grid-template-columns: 1fr;
-    gap: 6px;
-    margin-bottom: 10px;
+    grid-template-columns: 1fr 80px auto;
+    gap: 4px;
+    margin-bottom: 8px;
   }
 
   .modal-actions {

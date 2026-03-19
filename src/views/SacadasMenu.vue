@@ -33,6 +33,10 @@
                 <span class="sacada-label">Salidas:</span>
                 <span class="sacada-value">{{ formatNumber(sacada.totalSalidas) }} kg</span>
               </div>
+              <div v-if="sacada.listaMedidasPedido && sacada.listaMedidasPedido.length > 0" class="sacada-entry">
+                <span class="sacada-label">Cajas pedido:</span>
+                <span class="sacada-value sacada-cajas-total">{{ calcularTotalCajas(sacada.listaMedidasPedido) }}</span>
+              </div>
             </div>
           </div>
           <div class="sacada-actions">
@@ -196,6 +200,13 @@ export default {
     closeHistorialModal() {
       this.isHistorialModalOpen = false;
     },
+    calcularTotalCajas(listaMedidasPedido) {
+      if (!Array.isArray(listaMedidasPedido)) return 0;
+      return listaMedidasPedido.reduce(
+        (sum, group) => sum + (group.items || []).reduce((sub, item) => sub + Number(item.cajas || 0), 0),
+        0
+      );
+    },
     openListaMedidasModal(sacada) {
       this.selectedSacadaForMeasures = sacada;
       this.isListaMedidasModalOpen = true;
@@ -345,6 +356,11 @@ h1, h2 {
 
 .sacada-value {
   font-weight: bold;
+}
+
+.sacada-cajas-total {
+  color: #3760b0;
+  font-size: 1.05em;
 }
 
 @media (min-width: 600px) {

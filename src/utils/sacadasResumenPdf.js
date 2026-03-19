@@ -61,7 +61,7 @@ const toSafeDate = (value) => {
 };
 
 const buildDocDefinition = ({ fecha, grupos }) => {
-  const pedidosPorFila = 4;
+  const pedidosPorFila = 2;
   const totalCajas = grupos.reduce(
     (sum, group) => sum + group.items.reduce((sub, item) => sub + Number(item.cajas || 0), 0),
     0
@@ -81,23 +81,26 @@ const buildDocDefinition = ({ fecha, grupos }) => {
   const body = rows.map((row, rowIndex) => {
     const cells = row.map((group, colIndex) => {
       const numeroPedido = rowIndex * pedidosPorFila + colIndex + 1;
-      const items = (group.items || []).map((item) => (
-        `${item.medida || '-'}: ${item.cajas || 0}`
-      ));
+      const subtotal = (group.items || []).reduce((sum, item) => sum + Number(item.cajas || 0), 0);
 
       return {
         stack: [
-          { text: `${numeroPedido}) ${group.medidaPedido || '-'}`, style: 'pedidoTitle' },
-          ...(items.length > 0
-            ? items.map((linea) => ({ text: linea, style: 'pedidoItem' }))
-            : [{ text: 'Sin medidas', style: 'pedidoEmpty' }])
+          { text: `${group.ozuna ? '🟢 ' : ''}${numeroPedido}) ${group.medidaPedido || '-'}`, style: 'pedidoTitle' },
+          ...(group.items && group.items.length > 0
+            ? group.items.map((item) => ({
+                text: `${item.medida || '-'}: ${item.cajas || 0}`,
+                style: 'pedidoItem'
+              }))
+            : [{ text: 'Sin medidas', style: 'pedidoEmpty' }]),
+          { text: `Total: ${subtotal} cajas`, style: 'pedidoSubtotal', margin: [0, 6, 0, 0] }
         ],
-        margin: [4, 4, 4, 4]
+        fillColor: group.ozuna ? '#d1fae5' : null,
+        margin: [8, 8, 8, 8]
       };
     });
 
     while (cells.length < pedidosPorFila) {
-      cells.push({ text: '', margin: [4, 4, 4, 4] });
+      cells.push({ text: '', margin: [8, 8, 8, 8] });
     }
 
     return cells;
@@ -113,51 +116,55 @@ const buildDocDefinition = ({ fecha, grupos }) => {
     layout: {
       hLineColor: () => '#d8dbe2',
       vLineColor: () => '#d8dbe2',
-      paddingLeft: () => 2,
-      paddingRight: () => 2,
-      paddingTop: () => 2,
-      paddingBottom: () => 2
+      paddingLeft: () => 6,
+      paddingRight: () => 6,
+      paddingTop: () => 6,
+      paddingBottom: () => 6
     }
   });
 
   return {
     pageSize: 'A4',
-    pageOrientation: 'landscape',
-    pageMargins: [16, 18, 16, 16],
+    pageMargins: [20, 24, 20, 20],
     content,
     styles: {
       title: {
-        fontSize: 28,
+        fontSize: 32,
         bold: true,
         color: '#1f4f9c',
-        margin: [0, 0, 0, 6]
+        margin: [0, 0, 0, 8]
       },
       meta: {
-        fontSize: 17,
+        fontSize: 20,
         color: '#344054'
       },
       metaStrong: {
-        fontSize: 20,
+        fontSize: 24,
         bold: true,
         color: '#101828'
       },
       pedidoTitle: {
-        fontSize: 16,
+        fontSize: 22,
         bold: true,
         color: '#1d2939'
       },
       pedidoItem: {
-        fontSize: 14,
+        fontSize: 20,
         color: '#344054'
       },
       pedidoEmpty: {
-        fontSize: 14,
+        fontSize: 18,
         color: '#98a2b3',
         italics: true
+      },
+      pedidoSubtotal: {
+        fontSize: 20,
+        bold: true,
+        color: '#1f4f9c'
       }
     },
     defaultStyle: {
-      fontSize: 14
+      fontSize: 18
     }
   };
 };
