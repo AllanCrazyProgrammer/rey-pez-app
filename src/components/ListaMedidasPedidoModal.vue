@@ -398,7 +398,7 @@ export default {
   cursor: not-allowed;
 }
 
-@media (max-width: 760px) {
+@media (max-width: 519px) {
   .modal-content {
     padding: 16px;
     border-radius: 10px;
@@ -412,6 +412,32 @@ export default {
     grid-template-columns: 1fr;
     gap: 6px;
     margin-bottom: 10px;
+  }
+
+  .modal-actions {
+    flex-direction: column-reverse;
+  }
+
+  .secondary-btn,
+  .pdf-btn,
+  .primary-btn {
+    width: 100%;
+  }
+}
+
+@media (min-width: 520px) and (max-width: 760px) {
+  .modal-content {
+    padding: 12px;
+    border-radius: 10px;
+  }
+
+  .groups-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .item-row {
+    grid-template-columns: 1fr 72px auto;
+    gap: 6px;
   }
 
   .modal-actions {
