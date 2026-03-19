@@ -398,7 +398,7 @@ export default {
   cursor: not-allowed;
 }
 
-@media (max-width: 519px) {
+@media (max-width: 399px) {
   .modal-content {
     padding: 16px;
     border-radius: 10px;
@@ -425,7 +425,7 @@ export default {
   }
 }
 
-@media (min-width: 520px) and (max-width: 760px) {
+@media (min-width: 400px) and (max-width: 760px) {
   .modal-content {
     padding: 12px;
     border-radius: 10px;
