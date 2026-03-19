@@ -73,7 +73,7 @@ const buildDocDefinition = ({ fecha, grupos }) => {
   const resumenTotal = resumenParts.length > 0 ? resumenParts.join('  ·  ') : '0';
 
   const content = [
-    { text: 'Resumen de medidas a sacar', style: 'title' },
+    { text: 'De mañana para pasado', style: 'title' },
     { text: `Fecha: ${fecha || 'Sin fecha'}`, style: 'meta' },
     { text: `Total: ${resumenTotal}`, style: 'metaStrong', margin: [0, 0, 0, 10] }
   ];

@@ -63,6 +63,7 @@
       :is-open="isListaMedidasModalOpen"
       :is-saving="isSavingListaMedidas"
       :sacada="selectedSacadaForMeasures"
+      :on-save-lista="saveListaMedidas"
       :medidas="medidas"
       @close="closeListaMedidasModal"
       @save="saveListaMedidas"
@@ -211,10 +212,15 @@ export default {
       this.isListaMedidasModalOpen = false;
       this.selectedSacadaForMeasures = null;
     },
-    async saveListaMedidas(lista) {
+    async saveListaMedidas(lista, options = {}) {
       if (!this.selectedSacadaForMeasures?.id) {
-        return;
+        return false;
       }
+
+      const {
+        closeOnSuccess = true,
+        showSuccessAlert = true
+      } = options;
 
       this.isSavingListaMedidas = true;
       try {
@@ -228,11 +234,17 @@ export default {
             : sacada
         ));
 
-        alert('Lista de medidas guardada con exito');
-        this.closeListaMedidasModal();
+        if (showSuccessAlert) {
+          alert('Lista de medidas guardada con exito');
+        }
+        if (closeOnSuccess) {
+          this.closeListaMedidasModal();
+        }
+        return true;
       } catch (error) {
         console.error('Error al guardar lista de medidas:', error);
         alert('No se pudo guardar la lista de medidas');
+        return false;
       } finally {
         this.isSavingListaMedidas = false;
       }
