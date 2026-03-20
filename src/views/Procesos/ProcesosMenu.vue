@@ -98,6 +98,16 @@
         <span class="icon">📓</span>
         <span class="btn-text">NOTAS</span>
       </router-link>
+
+      <router-link
+        to="/procesos/taras"
+        class="btn-action btn-taras"
+        aria-label="Gestionar taras por proveedor"
+      >
+        <span class="btn-prefix">[8]</span>
+        <span class="icon">🧺</span>
+        <span class="btn-text">TARAS</span>
+      </router-link>
     </div>
   </div>
 </template>
@@ -374,6 +384,16 @@ export default {
 .btn-notas:hover {
   background: #e17055;
   box-shadow: 0 0 15px rgba(225, 112, 85, 0.5);
+}
+
+.btn-taras {
+  border-color: #6c5ce7;
+  color: #6c5ce7;
+}
+
+.btn-taras:hover {
+  background: #6c5ce7;
+  box-shadow: 0 0 15px rgba(108, 92, 231, 0.5);
 }
 
 /* Responsive */

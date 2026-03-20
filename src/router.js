@@ -50,6 +50,7 @@ import ListaDeudas from '@/views/Procesos/ListaDeudas.vue'
 import PrestamosMenu from '@/views/Procesos/PrestamosMenu.vue'
 import PrestamosDespicadoras from '@/views/Procesos/PrestamosDespicadoras.vue'
 import PrestamosTrabajadores from '@/views/Procesos/PrestamosTrabajadores.vue'
+import Taras from '@/views/Procesos/Taras.vue'
 import ExistenciasCrudos from '@/views/ExistenciasCrudos.vue'
 import RegistroCrudos from '@/views/RegistroCrudos.vue'
 import BarcosMenu from '@/views/Barcos/BarcosMenu.vue'
@@ -408,6 +409,11 @@ const routes = [
     path: '/procesos/prestamos/trabajadores',
     name: 'PrestamosTrabajadores',
     component: PrestamosTrabajadores
+  },
+  {
+    path: '/procesos/taras',
+    name: 'Taras',
+    component: Taras
   },
   {
     path: '/barcos',
