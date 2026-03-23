@@ -1701,140 +1701,291 @@ export default {
 
 .tab-totales {
   font-size: 14px;
-  color: #666;
+  color: #e8e0ff;
   text-align: center;
-  background-color: rgba(255, 255, 255, 0.9);
-  padding: 4px 8px;
-  border-radius: 4px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  background: linear-gradient(145deg, rgba(26, 12, 48, 0.92) 0%, rgba(45, 20, 72, 0.95) 50%, rgba(18, 36, 68, 0.92) 100%);
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(0, 255, 247, 0.45);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 0 0 1px rgba(255, 0, 180, 0.2),
+    0 0 18px rgba(0, 255, 247, 0.22),
+    0 0 32px rgba(255, 0, 200, 0.12);
+  text-shadow: 0 0 10px rgba(0, 255, 247, 0.25);
 }
 
 .tab-button {
   padding: 12px 25px;
   font-size: 23px;
-  border: none;
   border-radius: 6px;
-  background-color: #f0f0f0;
-  color: #666;
+  background: linear-gradient(180deg, #1a1030 0%, #0f0a1a 100%);
+  color: #f0f4ff;
   cursor: pointer;
   transition: all 0.3s ease;
   position: relative;
   overflow: hidden;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  border: 1px solid rgba(0, 255, 247, 0.5);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.15),
+    0 0 0 1px rgba(255, 0, 180, 0.22),
+    0 0 16px rgba(0, 255, 247, 0.2),
+    0 0 28px rgba(255, 0, 200, 0.12);
 }
 
-/* Estilos base para los botones con sus colores correspondientes y efectos hover */
+/* Mismos degradados por cliente + neón vaporwave (cian / magenta + halo del tono) */
 .tab-button[data-cliente="otilio"] {
-  background-color: rgba(241, 196, 15, 0.3);
-  color: #2c3e50;
+  background: linear-gradient(180deg, #fef9c3 0%, #fde047 55%, #facc15 100%);
+  color: #422006;
   transition: all 0.3s ease;
+  text-shadow:
+    0 0 14px rgba(250, 204, 21, 0.65),
+    1px 0 0 rgba(255, 0, 200, 0.12),
+    -1px 0 0 rgba(0, 255, 247, 0.15);
 }
 
 .tab-button[data-cliente="otilio"]:hover {
-  background-color: rgba(241, 196, 15, 0.6);
+  background: linear-gradient(180deg, #fef08a 0%, #facc15 50%, #eab308 100%);
+  color: #271306;
   transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.55),
+    0 0 0 1px rgba(255, 0, 180, 0.45),
+    0 0 18px rgba(0, 255, 247, 0.45),
+    0 0 32px rgba(250, 204, 21, 0.55),
+    0 0 48px rgba(255, 0, 200, 0.25);
 }
 
 .tab-button[data-cliente="otilio"].active {
-  background-color: #f1c40f;
+  background: linear-gradient(180deg, #fbbf24 0%, #f59e0b 45%, #d97706 100%);
+  color: #fffbeb;
   transform: translateY(-4px);
-  box-shadow: 0 8px 16px rgba(241, 196, 15, 0.5);
+  text-shadow:
+    0 0 12px rgba(255, 251, 235, 0.9),
+    0 0 24px rgba(250, 204, 21, 0.85),
+    2px 0 rgba(255, 0, 200, 0.35),
+    -2px 0 rgba(0, 255, 247, 0.35);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.4),
+    0 0 0 1px rgba(255, 0, 180, 0.55),
+    0 0 22px rgba(0, 255, 247, 0.5),
+    0 0 40px rgba(245, 158, 11, 0.65),
+    0 0 60px rgba(255, 0, 200, 0.3);
 }
 
 .tab-button[data-cliente="catarro"] {
-  background-color: rgba(231, 76, 60, 0.3);
-  color: #2c3e50;
+  background: linear-gradient(180deg, #ffe4e6 0%, #fda4af 55%, #fb7185 100%);
+  color: #4c0519;
   transition: all 0.3s ease;
+  text-shadow:
+    0 0 12px rgba(251, 113, 133, 0.55),
+    1px 0 0 rgba(255, 0, 200, 0.12),
+    -1px 0 0 rgba(0, 255, 247, 0.12);
 }
 
 .tab-button[data-cliente="catarro"]:hover {
-  background-color: rgba(231, 76, 60, 0.6);
+  background: linear-gradient(180deg, #fecdd3 0%, #fb7185 50%, #f43f5e 100%);
+  color: #35050f;
   transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.5),
+    0 0 0 1px rgba(255, 0, 180, 0.45),
+    0 0 18px rgba(0, 255, 247, 0.4),
+    0 0 34px rgba(244, 63, 94, 0.5),
+    0 0 48px rgba(255, 0, 200, 0.28);
 }
 
 .tab-button[data-cliente="catarro"].active {
-  background-color: #e74c3c;
-  color: white;
+  background: linear-gradient(180deg, #f87171 0%, #ef4444 45%, #dc2626 100%);
+  color: #ffffff;
   transform: translateY(-4px);
-  box-shadow: 0 8px 16px rgba(231, 76, 60, 0.5);
+  text-shadow:
+    0 0 14px rgba(255, 255, 255, 0.95),
+    0 0 28px rgba(239, 68, 68, 0.85),
+    2px 0 rgba(255, 0, 200, 0.45),
+    -2px 0 rgba(0, 255, 247, 0.4);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    0 0 0 1px rgba(255, 0, 180, 0.55),
+    0 0 22px rgba(0, 255, 247, 0.48),
+    0 0 42px rgba(239, 68, 68, 0.55),
+    0 0 64px rgba(255, 0, 200, 0.32);
 }
 
 .tab-button[data-cliente="joselito"] {
-  background-color: rgba(52, 152, 219, 0.3);
-  color: #2c3e50;
+  background: linear-gradient(180deg, #e0f2fe 0%, #7dd3fc 55%, #38bdf8 100%);
+  color: #082f49;
   transition: all 0.3s ease;
+  text-shadow:
+    0 0 12px rgba(56, 189, 248, 0.55),
+    1px 0 0 rgba(255, 0, 200, 0.1),
+    -1px 0 0 rgba(0, 255, 247, 0.2);
 }
 
 .tab-button[data-cliente="joselito"]:hover {
-  background-color: rgba(52, 152, 219, 0.6);
+  background: linear-gradient(180deg, #bae6fd 0%, #38bdf8 50%, #0ea5e9 100%);
+  color: #051c2c;
   transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.5),
+    0 0 0 1px rgba(255, 0, 180, 0.42),
+    0 0 20px rgba(0, 255, 247, 0.55),
+    0 0 36px rgba(14, 165, 233, 0.45),
+    0 0 50px rgba(255, 0, 200, 0.22);
 }
 
 .tab-button[data-cliente="joselito"].active {
-  background-color: #3498db;
-  color: white;
+  background: linear-gradient(180deg, #38bdf8 0%, #0ea5e9 45%, #0284c7 100%);
+  color: #f0f9ff;
   transform: translateY(-4px);
-  box-shadow: 0 8px 16px rgba(52, 152, 219, 0.5);
+  text-shadow:
+    0 0 14px rgba(240, 249, 255, 0.95),
+    0 0 26px rgba(14, 165, 233, 0.85),
+    2px 0 rgba(255, 0, 200, 0.4),
+    -2px 0 rgba(0, 255, 247, 0.5);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.38),
+    0 0 0 1px rgba(255, 0, 180, 0.52),
+    0 0 24px rgba(0, 255, 247, 0.55),
+    0 0 44px rgba(14, 165, 233, 0.55),
+    0 0 68px rgba(255, 0, 200, 0.28);
 }
 
 .tab-button[data-cliente="lorena"] {
-  background-color: rgba(230, 126, 34, 0.3);
-  color: #2c3e50;
+  background: linear-gradient(180deg, #ffedd5 0%, #fdba74 55%, #fb923c 100%);
+  color: #431407;
   transition: all 0.3s ease;
+  text-shadow:
+    0 0 12px rgba(251, 146, 60, 0.5),
+    1px 0 0 rgba(255, 0, 200, 0.12),
+    -1px 0 0 rgba(0, 255, 247, 0.12);
 }
 
 .tab-button[data-cliente="lorena"]:hover {
-  background-color: rgba(230, 126, 34, 0.6);
+  background: linear-gradient(180deg, #fed7aa 0%, #fb923c 50%, #f97316 100%);
+  color: #2a0c02;
   transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.48),
+    0 0 0 1px rgba(255, 0, 180, 0.42),
+    0 0 18px rgba(0, 255, 247, 0.38),
+    0 0 34px rgba(249, 115, 22, 0.48),
+    0 0 50px rgba(255, 0, 200, 0.25);
 }
 
 .tab-button[data-cliente="lorena"].active {
-  background-color: #e67e22;
-  color: white;
+  background: linear-gradient(180deg, #fb923c 0%, #ea580c 45%, #c2410c 100%);
+  color: #fff7ed;
   transform: translateY(-4px);
-  box-shadow: 0 8px 16px rgba(230, 126, 34, 0.5);
+  text-shadow:
+    0 0 14px rgba(255, 247, 237, 0.95),
+    0 0 28px rgba(234, 88, 12, 0.8),
+    2px 0 rgba(255, 0, 200, 0.38),
+    -2px 0 rgba(0, 255, 247, 0.35);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.32),
+    0 0 0 1px rgba(255, 0, 180, 0.52),
+    0 0 22px rgba(0, 255, 247, 0.45),
+    0 0 42px rgba(234, 88, 12, 0.52),
+    0 0 64px rgba(255, 0, 200, 0.28);
 }
 
 .tab-button[data-cliente="ozuna"] {
-  background-color: rgba(39, 174, 96, 0.3);
-  color: #2c3e50;
+  background: linear-gradient(180deg, #dcfce7 0%, #86efac 55%, #4ade80 100%);
+  color: #052e16;
   transition: all 0.3s ease;
+  text-shadow:
+    0 0 12px rgba(74, 222, 128, 0.5),
+    1px 0 0 rgba(255, 0, 200, 0.08),
+    -1px 0 0 rgba(0, 255, 247, 0.15);
 }
 
 .tab-button[data-cliente="ozuna"]:hover {
-  background-color: rgba(39, 174, 96, 0.6);
+  background: linear-gradient(180deg, #bbf7d0 0%, #4ade80 50%, #22c55e 100%);
+  color: #03190c;
   transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.48),
+    0 0 0 1px rgba(255, 0, 180, 0.4),
+    0 0 18px rgba(0, 255, 247, 0.42),
+    0 0 34px rgba(34, 197, 94, 0.48),
+    0 0 50px rgba(255, 0, 200, 0.22);
 }
 
 .tab-button[data-cliente="ozuna"].active {
-  background-color: #27ae60;
-  color: white;
+  background: linear-gradient(180deg, #4ade80 0%, #22c55e 45%, #15803d 100%);
+  color: #f0fdf4;
   transform: translateY(-4px);
-  box-shadow: 0 8px 16px rgba(39, 174, 96, 0.5);
+  text-shadow:
+    0 0 14px rgba(240, 253, 244, 0.95),
+    0 0 26px rgba(34, 197, 94, 0.82),
+    2px 0 rgba(255, 0, 200, 0.35),
+    -2px 0 rgba(0, 255, 247, 0.42);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.32),
+    0 0 0 1px rgba(255, 0, 180, 0.5),
+    0 0 22px rgba(0, 255, 247, 0.48),
+    0 0 42px rgba(34, 197, 94, 0.52),
+    0 0 64px rgba(255, 0, 200, 0.26);
 }
 
-/* Estilos para clientes temporales */
 .tab-button.temporal {
-  background-color: rgba(149, 165, 166, 0.3);
-  color: #2c3e50;
+  background: linear-gradient(180deg, #f1f5f9 0%, #cbd5e1 55%, #94a3b8 100%);
+  color: #0f172a;
   transition: all 0.3s ease;
+  text-shadow:
+    0 0 10px rgba(148, 163, 184, 0.45),
+    1px 0 0 rgba(255, 0, 200, 0.08),
+    -1px 0 0 rgba(0, 255, 247, 0.12);
 }
 
 .tab-button.temporal:hover {
-  background-color: rgba(149, 165, 166, 0.6);
+  background: linear-gradient(180deg, #e2e8f0 0%, #94a3b8 50%, #64748b 100%);
+  color: #020617;
   transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.42),
+    0 0 0 1px rgba(255, 0, 180, 0.38),
+    0 0 16px rgba(0, 255, 247, 0.35),
+    0 0 30px rgba(100, 116, 139, 0.42),
+    0 0 44px rgba(255, 0, 200, 0.18);
 }
 
 .tab-button.temporal.active {
-  background-color: #95a5a6;
-  color: white;
+  background: linear-gradient(180deg, #94a3b8 0%, #64748b 45%, #475569 100%);
+  color: #f8fafc;
   transform: translateY(-4px);
-  box-shadow: 0 8px 16px rgba(149, 165, 166, 0.5);
+  text-shadow:
+    0 0 12px rgba(248, 250, 252, 0.9),
+    0 0 22px rgba(148, 163, 184, 0.75),
+    2px 0 rgba(255, 0, 200, 0.35),
+    -2px 0 rgba(0, 255, 247, 0.32);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    0 0 0 1px rgba(255, 0, 180, 0.48),
+    0 0 20px rgba(0, 255, 247, 0.42),
+    0 0 40px rgba(71, 85, 105, 0.48),
+    0 0 58px rgba(255, 0, 200, 0.22);
+}
+
+.tab-button.nuevo-cliente {
+  background: linear-gradient(145deg, rgba(30, 18, 52, 0.95) 0%, rgba(20, 40, 72, 0.98) 100%);
+  color: #c4f5ff;
+  border: 1px solid rgba(0, 255, 247, 0.55);
+  text-shadow: 0 0 12px rgba(0, 255, 247, 0.45);
+}
+
+.tab-button.nuevo-cliente:hover {
+  background: linear-gradient(145deg, rgba(45, 28, 78, 0.98) 0%, rgba(32, 58, 98, 0.99) 100%);
+  color: #ffffff;
+  transform: translateY(-2px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    0 0 0 1px rgba(255, 0, 180, 0.45),
+    0 0 20px rgba(0, 255, 247, 0.5),
+    0 0 40px rgba(255, 0, 200, 0.28);
 }
 
 /* Ajustes responsivos */
