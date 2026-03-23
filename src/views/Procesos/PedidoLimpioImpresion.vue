@@ -45,7 +45,7 @@
           <tbody>
             <tr v-for="(item, index) in (pedidoOtilio || [])" :key="'otilio-'+index">
               <td><input type="checkbox" v-model="item.completado" @change="actualizarCompletado('otilio', index, item.completado)" class="pedido-checkbox"></td>
-              <td>{{ item.kilos }}<i v-if="item.esTara">T</i></td>
+              <td>{{ item.kilos }}<i v-if="item.esTara" class="tara-marca">T</i></td>
               <td :class="{ 'text-orange': esMedidaMacuil(item.medida) }">
                 {{ item.medida }}
                 <span v-if="item.proveedor" class="proveedor-tag">{{ item.proveedor }}</span>
@@ -87,7 +87,7 @@
             <tbody>
               <tr v-for="(item, index) in (pedidoJoselito || [])" :key="'joselito-'+index">
                 <td><input type="checkbox" v-model="item.completado" @change="actualizarCompletado('joselito', index, item.completado)" class="pedido-checkbox"></td>
-                <td>{{ item.kilos }}<i v-if="item.esTara">T</i></td>
+                <td>{{ item.kilos }}<i v-if="item.esTara" class="tara-marca">T</i></td>
                 <td :class="{ 'text-orange': esMedidaMacuil(item.medida) }">
                   {{ item.medida }}
                   <span v-if="item.proveedor" class="proveedor-tag">{{ item.proveedor }}</span>
@@ -127,7 +127,7 @@
             <tbody>
               <tr v-for="(item, index) in (pedidoLorena || [])" :key="'lorena-'+index">
                 <td><input type="checkbox" v-model="item.completado" @change="actualizarCompletado('lorena', index, item.completado)" class="pedido-checkbox"></td>
-                <td>{{ item.kilos }}<i v-if="item.esTara">T</i></td>
+                <td>{{ item.kilos }}<i v-if="item.esTara" class="tara-marca">T</i></td>
                 <td :class="{ 'text-orange': esMedidaMacuil(item.medida) }">
                   {{ item.medida }}
                   <span v-if="item.proveedor" class="proveedor-tag">{{ item.proveedor }}</span>
@@ -168,7 +168,7 @@
               <tbody>
                 <tr v-for="(item, index) in (pedidoCatarro || [])" :key="'catarro-'+index">
                   <td><input type="checkbox" v-model="item.completado" @change="actualizarCompletado('catarro', index, item.completado)" class="pedido-checkbox"></td>
-                  <td>{{ item.kilos }}<i v-if="item.esTara">T</i></td>
+                  <td>{{ item.kilos }}<i v-if="item.esTara" class="tara-marca">T</i></td>
                   <td :class="{ 'text-orange': esMedidaMacuil(item.medida) }">
                     {{ item.medida }}
                     <span v-if="item.proveedor" class="proveedor-tag">{{ item.proveedor }}</span>
@@ -208,7 +208,7 @@
               <tbody>
                 <tr v-for="(item, index) in (pedidoOzuna || [])" :key="'ozuna-'+index">
                   <td><input type="checkbox" v-model="item.completado" @change="actualizarCompletado('ozuna', index, item.completado)" class="pedido-checkbox"></td>
-                  <td>{{ item.kilos }}<i v-if="item.esTara">T</i></td>
+                  <td>{{ item.kilos }}<i v-if="item.esTara" class="tara-marca">T</i></td>
                   <td :class="{ 'text-orange': esMedidaMacuil(item.medida) }">
                     {{ item.medida }}
                     <span v-if="item.proveedor" class="proveedor-tag">{{ item.proveedor }}</span>
@@ -251,7 +251,7 @@
             <tbody>
               <tr v-for="(item, index) in (cliente.pedidos || [])" :key="'temp-'+id+'-'+index">
                 <td><input type="checkbox" v-model="item.completado" class="pedido-checkbox"></td>
-                <td>{{ item.kilos }}<i v-if="item.esTara">T</i></td>
+                <td>{{ item.kilos }}<i v-if="item.esTara" class="tara-marca">T</i></td>
                 <td :class="{ 'text-orange': esMedidaMacuil(item.medida) }">
                   {{ item.medida }}
                   <span v-if="item.proveedor" class="proveedor-tag">{{ item.proveedor }}</span>
@@ -1859,6 +1859,11 @@ export default {
   text-align: center;
 }
 
+/* Fondo opaco: sin esto el gradiente del layout se ve a través de las celdas */
+.preview-table tbody td {
+  background-color: #ffffff;
+}
+
 .preview-table.compacto th,
 .preview-table.compacto td {
   padding: 2px;
@@ -1890,6 +1895,12 @@ h4 {
   .pdf-preview {
     border: none;
     padding: 0;
+  }
+
+  .preview-table tbody td {
+    background-color: #ffffff !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
 
   .preview-page {
@@ -2204,6 +2215,15 @@ h4.cliente-header.ozuna-header {
   background-color: #f2f2f2;
   font-weight: bold;
   color: #333;
+}
+
+/* Fondo opaco (evita que el gradiente del layout se vea en el cuerpo de la tabla) */
+.resumen-table tbody td {
+  background-color: #ffffff;
+}
+
+.resumen-table tbody tr.total-row td {
+  background-color: #f8f9fa;
 }
 
 .rendimientos-column {
@@ -2642,6 +2662,16 @@ h4.cliente-header.ozuna-header {
   margin-left: 2px;
 }
 
+/* Sufijo T (tara) en columna Kilos/Taras — mismo fondo blanco que la celda */
+.preview-table .tara-marca {
+  color: #212529;
+  font-size: 0.7em;
+  font-style: italic;
+  vertical-align: super;
+  margin-left: 2px;
+  background-color: #ffffff;
+}
+
 .preview-table.compacto td:first-child,
 .preview-table.compacto td:nth-child(2),
 .preview-table.compacto td:nth-child(3),
@@ -2800,6 +2830,18 @@ h4.cliente-header.ozuna-header {
 }
 
 @media print {
+  .resumen-table tbody td {
+    background-color: #ffffff !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .resumen-table tbody tr.total-row td {
+    background-color: #f8f9fa !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
   .resumen-table tr.total-row {
     background-color: #f8f9fa !important;
     -webkit-print-color-adjust: exact;
