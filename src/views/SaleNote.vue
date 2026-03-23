@@ -27,6 +27,18 @@
         </div>
       </div>
       <div class="form-row">
+        <div class="full-width">
+          <label for="observaciones">Observaciones (opcional):</label>
+          <textarea
+            id="observaciones"
+            v-model.trim="observaciones"
+            rows="3"
+            maxlength="500"
+            placeholder="Ej. Entregar en la tarde, detalle especial del pedido..."
+          ></textarea>
+        </div>
+      </div>
+      <div class="form-row">
 
         <div>
           <label for="kilos">Kilos:</label>
@@ -49,6 +61,9 @@
         <div class="folio-date">
           <p><strong>Folio:</strong> {{ formattedFolio }}</p>
           <p><strong>Fecha de Creación:</strong> {{ formattedCreationDate }}</p>
+        </div>
+        <div v-if="observaciones" class="observaciones-resumen">
+          <p><strong>Observaciones:</strong> {{ observaciones }}</p>
         </div>
         <div v-if="products.length">
           <h3>Resumen</h3>
@@ -232,6 +247,7 @@ export default {
       flete: 0,
       isPaid: false,
       creationDate: today.toISOString().substr(0, 10),
+      observaciones: '',
       noteId: null,
       longPressTimer: null,
       showMobileActions: false,
@@ -294,6 +310,7 @@ export default {
           folio: this.folio,
           client: this.client,
           currentDate: this.currentDate,
+          observaciones: this.observaciones || '',
           products: this.products,
           abonos: this.abonos,
           flete: this.flete,
@@ -403,6 +420,7 @@ export default {
           this.folio = noteData.folio;
           this.client = noteData.client;
           this.currentDate = noteData.currentDate;
+          this.observaciones = noteData.observaciones || '';
           this.products = noteData.products;
           this.abonos = noteData.abonos;
           this.flete = noteData.flete || 0;
@@ -583,6 +601,28 @@ button:hover {
   box-sizing: border-box;
   border-radius: 5px;
   border: 1px solid #ccc;
+}
+
+.sale-note textarea {
+  width: 100%;
+  padding: 0.5em;
+  box-sizing: border-box;
+  border-radius: 5px;
+  border: 1px solid #ccc;
+  resize: vertical;
+  font-family: inherit;
+}
+
+.full-width {
+  width: 100%;
+}
+
+.observaciones-resumen {
+  margin-bottom: 1em;
+  padding: 0.75em;
+  border-left: 4px solid #3760b0;
+  background-color: #f5f8ff;
+  border-radius: 8px;
 }
 
 .sale-note .action-buttons {
@@ -1021,5 +1061,130 @@ th {
 
 .cancel-button:hover {
   background-color: #5a6268;
+}
+
+/* Tema vaporwave para toda la funcionalidad de nota */
+.sale-note {
+  background:
+    linear-gradient(145deg, rgba(23, 12, 47, 0.95), rgba(28, 16, 61, 0.94) 45%, rgba(17, 49, 99, 0.88)),
+    repeating-linear-gradient(
+      180deg,
+      rgba(255, 111, 212, 0.08) 0,
+      rgba(255, 111, 212, 0.08) 1px,
+      transparent 1px,
+      transparent 9px
+    );
+  border: 1px solid rgba(255, 111, 212, 0.4);
+  box-shadow:
+    0 0 0 1px rgba(62, 248, 255, 0.22) inset,
+    0 18px 40px rgba(2, 2, 20, 0.7);
+  color: #f7eeff;
+}
+
+.sale-note-title,
+.sale-note h3 {
+  color: #3ef8ff;
+  text-shadow: 0 0 10px rgba(62, 248, 255, 0.45);
+}
+
+.folio-date p,
+.sale-note label,
+.abonos-summary p,
+.modal-content p {
+  color: rgba(245, 236, 255, 0.9);
+}
+
+.sale-note input,
+.sale-note select,
+.sale-note textarea {
+  background: rgba(11, 14, 38, 0.88);
+  border: 1px solid rgba(62, 248, 255, 0.35);
+  color: #f7eeff;
+}
+
+.sale-note textarea::placeholder,
+.sale-note input::placeholder {
+  color: rgba(210, 198, 255, 0.7);
+}
+
+button,
+.add-abono-button,
+.confirm-delete-button,
+.cancel-button {
+  background: linear-gradient(135deg, #ff5fd9, #8b5cf6);
+  box-shadow: 0 0 18px rgba(168, 85, 247, 0.35);
+}
+
+button:hover,
+.add-abono-button:hover,
+.confirm-delete-button:hover,
+.cancel-button:hover {
+  background: linear-gradient(135deg, #ff79e0, #7c7cff);
+}
+
+.sale-note .delete-note-button,
+.delete-abono-button {
+  background: linear-gradient(135deg, #ff6f91, #ef4444);
+}
+
+table,
+table th,
+table td,
+.abonos-table th,
+.abonos-table td {
+  border-color: rgba(62, 248, 255, 0.24);
+}
+
+th,
+.abonos-table th {
+  background: rgba(255, 95, 217, 0.18);
+  color: #3ef8ff;
+}
+
+.flete-section,
+.total-general,
+.observaciones-resumen,
+.client-balance-indicator {
+  background: rgba(12, 18, 48, 0.74);
+  border: 1px solid rgba(62, 248, 255, 0.28);
+  color: #f7eeff;
+}
+
+.observaciones-resumen {
+  border-left-color: #ff5fd9;
+}
+
+.total-final {
+  color: #67f5ff;
+  border-top-color: rgba(62, 248, 255, 0.42);
+}
+
+.balance-text {
+  color: #34f5c5;
+}
+
+.abonos-container {
+  border-top-color: rgba(255, 95, 217, 0.26);
+}
+
+.mobile-actions-modal {
+  background: linear-gradient(160deg, rgba(20, 10, 42, 0.98), rgba(16, 31, 79, 0.95));
+  border-top: 1px solid rgba(62, 248, 255, 0.35);
+}
+
+.modal {
+  background-color: rgba(5, 4, 25, 0.74);
+}
+
+.modal-content {
+  background: linear-gradient(145deg, rgba(24, 12, 48, 0.98), rgba(18, 34, 74, 0.95));
+  border: 1px solid rgba(62, 248, 255, 0.35);
+  box-shadow: 0 0 0 1px rgba(255, 95, 217, 0.2) inset, 0 20px 40px rgba(2, 2, 20, 0.75);
+}
+
+@media (max-width: 768px) {
+  .sale-note {
+    padding: 14px;
+  }
 }
 </style>

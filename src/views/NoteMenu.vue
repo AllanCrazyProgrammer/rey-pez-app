@@ -1,61 +1,112 @@
 <template>
   <div class="notes-wrapper">
-    <div class="button-container">
-      <div class="button-wrapper">
-        <button @click="goToSaleNote">Nueva nota</button>
+    <header class="notes-header">
+      <div>
+        <h1>Notas por Cliente</h1>
+        <p class="notes-description">Administra adeudos, abonos e historial con un flujo más rápido.</p>
       </div>
-      <div class="button-wrapper">
-        <button @click="goToAddClient">Agregar Cliente</button>
+      <div class="header-actions">
+        <button type="button" class="btn btn-primary" @click="goToSaleNote">Nueva nota</button>
+        <button type="button" class="btn btn-secondary" @click="goToAddClient">Agregar cliente</button>
       </div>
-    </div>
+    </header>
 
-    <div class="notes-container">
-      <div class="filter-container">
-        <select v-model="paymentFilter">
-          <option value="all">Todas</option>
-          <option value="paid">Pagadas</option>
-          <option value="unpaid">No Pagadas</option>
-        </select>
+    <section class="notes-container">
+      <div class="controls-grid">
+        <label class="control-field">
+          <span>Filtrar por pago</span>
+          <select v-model="paymentFilter">
+            <option value="all">Todas</option>
+            <option value="paid">Pagadas</option>
+            <option value="unpaid">No pagadas</option>
+          </select>
+        </label>
+        <label class="control-field">
+          <span>Buscar cliente</span>
+          <input
+            v-model.trim="clientSearch"
+            type="text"
+            placeholder="Ej. Joel, Oscar..."
+          >
+        </label>
       </div>
-      <h2>Notas por Cliente</h2>
-      <div v-for="(notes, client) in filteredNotesByClient" :key="client">
+
+      <div class="quick-stats">
+        <p><strong>Clientes visibles:</strong> {{ clientEntries.length }}</p>
+        <p><strong>Deuda visible:</strong> {{ totalVisibleDebt | currency }}</p>
+      </div>
+
+      <p v-if="isLoading" class="status-msg">Cargando notas...</p>
+      <p v-else-if="clientEntries.length === 0" class="status-msg">
+        No hay resultados con los filtros actuales.
+      </p>
+
+      <article v-for="entry in clientEntries" :key="entry.client" class="client-card">
         <details>
           <summary>
-            {{ client }} - Debe: {{ totalDebtByClient[client] | currency }}
-            <span v-if="clientBalances[client] > 0" class="balance-favor">
-              Saldo a favor: {{ clientBalances[client] | currency }}
-            </span>
-            <span class="note-count">({{ notes.length }})</span>
+            <div class="summary-main">
+              <span class="client-name">{{ entry.client }}</span>
+              <span class="client-debt">Debe: {{ entry.debt | currency }}</span>
+              <span v-if="entry.balance > 0" class="balance-favor">
+                Saldo a favor: {{ entry.balance | currency }}
+              </span>
+            </div>
+            <span class="note-count">{{ entry.notes.length }} notas</span>
           </summary>
-          <ul>
-            <li v-for="note in notes" :key="note.id">
-              <button @click="goToEditNote(note.id)" tabindex="0">
+
+          <ul class="notes-list">
+            <li v-for="note in entry.notes" :key="note.id" class="note-row">
+              <button type="button" class="note-link" @click="goToEditNote(note.id)">
                 Nota {{ note.folio }} - {{ note.currentDate }}
               </button>
+              <span class="note-amount">Pendiente: {{ calculateNoteDebt(note) | currency }}</span>
             </li>
           </ul>
+
           <div class="client-actions">
-            <button @click="showAbonoModal(client)" class="abono-button">Realizar Abono</button>
-            <button @click="showAbonosHistory(client)" class="abonos-history-button">Ver Abonos</button>
+            <button type="button" class="btn btn-success" @click="showAbonoModal(entry.client)">
+              Realizar abono
+            </button>
+            <button type="button" class="btn btn-info" @click="showAbonosHistory(entry.client)">
+              Ver abonos
+            </button>
           </div>
         </details>
+      </article>
+    </section>
+
+    <div v-if="showModal" class="modal" @click.self="closeModal">
+      <div class="modal-content">
+        <h2>Realizar abono para {{ selectedClient }}</h2>
+        <p class="modal-help">El monto se aplica a las notas más antiguas primero.</p>
+        <div class="abono-preview">
+          <p><strong>Debe actualmente:</strong> {{ selectedClientDebt | currency }}</p>
+          <p><strong>Deberá después del abono:</strong> {{ projectedDebtAfterAbono | currency }}</p>
+          <p v-if="projectedFavorAfterAbono > 0" class="favor-msg">
+            <strong>Saldo a favor generado:</strong> {{ projectedFavorAfterAbono | currency }}
+          </p>
+        </div>
+        <input
+          v-model.number="abonoAmount"
+          type="number"
+          min="0.01"
+          step="0.01"
+          placeholder="Cantidad a abonar"
+        >
+        <div class="modal-actions">
+          <button type="button" class="btn btn-primary" :disabled="isProcessingAbono" @click="realizarAbono">
+            {{ isProcessingAbono ? 'Aplicando...' : 'Confirmar abono' }}
+          </button>
+          <button type="button" class="btn btn-muted" :disabled="isProcessingAbono" @click="closeModal">
+            Cancelar
+          </button>
+        </div>
       </div>
     </div>
 
-    <!-- Modal para realizar abono -->
-    <div v-if="showModal" class="modal">
-      <div class="modal-content">
-        <h2>Realizar Abono para {{ selectedClient }}</h2>
-        <input v-model.number="abonoAmount" type="number" placeholder="Cantidad a abonar">
-        <button @click="realizarAbono">Confirmar Abono</button>
-        <button @click="closeModal">Cancelar</button>
-      </div>
-    </div>
-
-    <!-- Modal para mostrar historial de abonos -->
-    <div v-if="showAbonosHistoryModal" class="modal">
-      <div class="modal-content">
-        <h2>Historial de Abonos para {{ selectedClient }}</h2>
+    <div v-if="showAbonosHistoryModal" class="modal" @click.self="closeAbonosHistoryModal">
+      <div class="modal-content modal-wide">
+        <h2>Historial de abonos de {{ selectedClient }}</h2>
         <table class="abonos-history-table">
           <thead>
             <tr>
@@ -65,31 +116,52 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="(abono, index) in paginatedAbonos" :key="index">
+            <tr v-if="clientAbonosHistory.length === 0">
+              <td colspan="3" class="empty-cell">Sin abonos registrados.</td>
+            </tr>
+            <tr v-for="abono in paginatedAbonos" :key="abono.uid">
               <td>{{ formatDate(abono.fecha) }}</td>
               <td>{{ abono.monto | currency }}</td>
               <td>
-                <button @click="openDeleteAbonoModal(abono.globalIndex)" class="delete-button">Borrar</button>
+                <button type="button" class="btn btn-danger btn-small" @click="openDeleteAbonoModal(abono)">
+                  Borrar
+                </button>
               </td>
             </tr>
           </tbody>
         </table>
         <div class="pagination">
-          <button @click="prevPage" :disabled="currentPage === 1">Anterior</button>
+          <button type="button" class="btn btn-muted btn-small" :disabled="currentPage === 1" @click="prevPage">
+            Anterior
+          </button>
           <span>Página {{ currentPage }} de {{ totalPages }}</span>
-          <button @click="nextPage" :disabled="currentPage === totalPages">Siguiente</button>
+          <button
+            type="button"
+            class="btn btn-muted btn-small"
+            :disabled="currentPage >= totalPages"
+            @click="nextPage"
+          >
+            Siguiente
+          </button>
         </div>
-        <button @click="closeAbonosHistoryModal">Cerrar</button>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-muted" @click="closeAbonosHistoryModal">Cerrar</button>
+        </div>
       </div>
     </div>
 
-    <!-- Modal para confirmar borrado de abono -->
-    <div v-if="showDeleteAbonoModal" class="modal">
+    <div v-if="showDeleteAbonoModal" class="modal" @click.self="closeDeleteAbonoModal">
       <div class="modal-content">
         <h2>Confirmar borrado de abono</h2>
-        <p>¿Estás seguro de que quieres borrar este abono?</p>
-        <button @click="deleteAbono">Confirmar</button>
-        <button @click="closeDeleteAbonoModal">Cancelar</button>
+        <p>¿Seguro que deseas borrar este abono?</p>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-danger" :disabled="isDeletingAbono" @click="deleteAbono">
+            {{ isDeletingAbono ? 'Borrando...' : 'Confirmar' }}
+          </button>
+          <button type="button" class="btn btn-muted" :disabled="isDeletingAbono" @click="closeDeleteAbonoModal">
+            Cancelar
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -97,7 +169,7 @@
 
 <script>
 import { db } from '@/firebase';
-import { collection, getDocs, doc, updateDoc, getDoc, deleteDoc, setDoc } from "firebase/firestore";
+import { collection, getDocs, doc, updateDoc, getDoc, setDoc } from 'firebase/firestore';
 
 export default {
   name: 'NoteMenu',
@@ -105,18 +177,102 @@ export default {
     return {
       notesByClient: {},
       paymentFilter: 'unpaid',
+      clientSearch: '',
       showModal: false,
       selectedClient: '',
-      abonoAmount: 0,
+      abonoAmount: null,
       showAbonosHistoryModal: false,
       clientAbonosHistory: [],
       showDeleteAbonoModal: false,
-      selectedAbonoIndex: null,
-      selectedAbonoNote: null,
+      selectedAbono: null,
       currentPage: 1,
       abonosPerPage: 7,
-      clientBalances: {}, // Para almacenar saldos a favor por cliente
+      clientBalances: {},
+      isLoading: false,
+      isProcessingAbono: false,
+      isDeletingAbono: false
     };
+  },
+  computed: {
+    filteredNotesByClient() {
+      const search = this.clientSearch.toLowerCase();
+      const filtered = {};
+
+      for (const [client, notes] of Object.entries(this.notesByClient)) {
+        const matchesSearch = !search || client.toLowerCase().includes(search);
+        if (!matchesSearch) {
+          continue;
+        }
+
+        const notesByFilter = notes.filter((note) => {
+          if (this.paymentFilter === 'all') {
+            return true;
+          }
+          return this.paymentFilter === 'paid' ? !!note.isPaid : !note.isPaid;
+        });
+
+        if (notesByFilter.length > 0) {
+          filtered[client] = notesByFilter;
+        }
+      }
+
+      return filtered;
+    },
+    totalDebtByClient() {
+      const debtByClient = {};
+
+      for (const [client, notes] of Object.entries(this.filteredNotesByClient)) {
+        debtByClient[client] = notes.reduce((total, note) => total + this.calculateNoteDebt(note), 0);
+      }
+
+      return debtByClient;
+    },
+    clientEntries() {
+      return Object.entries(this.filteredNotesByClient)
+        .map(([client, notes]) => ({
+          client,
+          notes,
+          debt: this.totalDebtByClient[client] || 0,
+          balance: this.clientBalances[client] || 0
+        }))
+        .sort((a, b) => b.debt - a.debt || a.client.localeCompare(b.client));
+    },
+    totalVisibleDebt() {
+      return this.clientEntries.reduce((sum, entry) => sum + entry.debt, 0);
+    },
+    normalizedAbonoAmount() {
+      const amount = Number(this.abonoAmount);
+      return amount > 0 ? amount : 0;
+    },
+    selectedClientDebt() {
+      const notes = this.notesByClient[this.selectedClient] || [];
+      return notes.reduce((total, note) => total + this.calculateNoteDebt(note), 0);
+    },
+    projectedDebtAfterAbono() {
+      const projected = this.selectedClientDebt - this.normalizedAbonoAmount;
+      return projected > 0 ? projected : 0;
+    },
+    projectedFavorAfterAbono() {
+      const favor = this.normalizedAbonoAmount - this.selectedClientDebt;
+      return favor > 0 ? favor : 0;
+    },
+    paginatedAbonos() {
+      const start = (this.currentPage - 1) * this.abonosPerPage;
+      const end = start + this.abonosPerPage;
+      return this.clientAbonosHistory.slice(start, end);
+    },
+    totalPages() {
+      const pages = Math.ceil(this.clientAbonosHistory.length / this.abonosPerPage);
+      return pages > 0 ? pages : 1;
+    }
+  },
+  filters: {
+    currency(value) {
+      if (!value) {
+        return '$0.00';
+      }
+      return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(value);
+    }
   },
   methods: {
     goToSaleNote() {
@@ -125,258 +281,260 @@ export default {
     goToAddClient() {
       this.$router.push({ name: 'AddClient' });
     },
+    goToEditNote(noteId) {
+      this.$router.push({ name: 'editar-nota', params: { noteId } });
+    },
+    calculateNoteTotal(note) {
+      const products = Array.isArray(note.products) ? note.products : [];
+      const subtotal = products.reduce(
+        (sum, product) => sum + (Number(product.kilos) || 0) * (Number(product.pricePerKilo) || 0),
+        0
+      );
+      const flete = Number(note.flete) || 0;
+      return subtotal - flete;
+    },
+    calculateNotePaid(note) {
+      const abonos = Array.isArray(note.abonos) ? note.abonos : [];
+      return abonos.reduce((sum, abono) => sum + (Number(abono.monto) || 0), 0);
+    },
+    calculateNoteDebt(note) {
+      const debt = this.calculateNoteTotal(note) - this.calculateNotePaid(note);
+      return debt > 0 ? debt : 0;
+    },
     async fetchNotes() {
+      this.isLoading = true;
       try {
         const querySnapshot = await getDocs(collection(db, 'notes'));
-        const notes = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const notes = querySnapshot.docs.map((entry) => {
+          const data = entry.data();
+          return {
+            id: entry.id,
+            ...data,
+            abonos: Array.isArray(data.abonos) ? data.abonos : []
+          };
+        });
 
         this.notesByClient = notes.reduce((acc, note) => {
-          if (!acc[note.client]) {
-            acc[note.client] = [];
+          const clientName = note.client || 'Sin cliente';
+          if (!acc[clientName]) {
+            acc[clientName] = [];
           }
-          acc[note.client].push(note);
+          acc[clientName].push(note);
           return acc;
         }, {});
 
-        for (let client in this.notesByClient) {
+        Object.keys(this.notesByClient).forEach((client) => {
           this.notesByClient[client].sort((a, b) => new Date(b.currentDate) - new Date(a.currentDate));
-        }
-        
-        // Cargar saldos a favor de clientes
+        });
+
         await this.fetchClientBalances();
       } catch (error) {
-        console.error('Error fetching notes: ', error);
+        console.error('Error fetching notes:', error);
+      } finally {
+        this.isLoading = false;
       }
     },
     async fetchClientBalances() {
       try {
         const querySnapshot = await getDocs(collection(db, 'clientBalances'));
-        this.clientBalances = {};
-        querySnapshot.docs.forEach(doc => {
-          this.clientBalances[doc.id] = doc.data().balance || 0;
+        const balances = {};
+        querySnapshot.docs.forEach((entry) => {
+          balances[entry.id] = Number(entry.data().balance) || 0;
         });
+        this.clientBalances = balances;
       } catch (error) {
-        console.error('Error fetching client balances: ', error);
+        console.error('Error fetching client balances:', error);
       }
     },
     async updateClientBalance(clientName, newBalance) {
       try {
         const balanceRef = doc(db, 'clientBalances', clientName);
         await setDoc(balanceRef, { balance: newBalance }, { merge: true });
-        this.clientBalances[clientName] = newBalance;
+        this.clientBalances = {
+          ...this.clientBalances,
+          [clientName]: newBalance
+        };
       } catch (error) {
-        console.error('Error updating client balance: ', error);
+        console.error('Error updating client balance:', error);
       }
-    },
-    goToEditNote(noteId) {
-      this.$router.push({ name: 'editar-nota', params: { noteId } });
     },
     showAbonoModal(client) {
       this.selectedClient = client;
-      this.abonoAmount = '';
+      this.abonoAmount = null;
       this.showModal = true;
     },
     closeModal() {
       this.showModal = false;
       this.selectedClient = '';
-      this.abonoAmount = 0;
+      this.abonoAmount = null;
     },
     async realizarAbono() {
-      if (this.abonoAmount <= 0) {
-        alert('Por favor ingrese una cantidad válida');
+      const amount = Number(this.abonoAmount);
+      if (!amount || amount <= 0) {
+        alert('Por favor ingresa una cantidad válida');
         return;
       }
 
-      let remainingAbono = this.abonoAmount;
+      const selectedNotes = this.notesByClient[this.selectedClient] || [];
+      if (selectedNotes.length === 0) {
+        alert('No hay notas para este cliente');
+        return;
+      }
+
+      this.isProcessingAbono = true;
+      let remainingAbono = amount;
+      const today = new Date().toISOString().split('T')[0];
       const notesToUpdate = [];
-      const today = new Date();
 
-      const clientNotes = [...this.notesByClient[this.selectedClient]]
+      const clientNotes = [...selectedNotes]
         .sort((a, b) => new Date(a.currentDate) - new Date(b.currentDate))
-        .filter(note => !note.isPaid);
+        .filter((note) => !note.isPaid);
 
-      for (let note of clientNotes) {
-        if (remainingAbono <= 0) break;
-
-        const subtotal = note.products.reduce((sum, product) => sum + (product.kilos * product.pricePerKilo), 0);
-        const flete = note.flete || 0;
-        const noteTotal = subtotal - flete;
-        const notePaid = note.abonos.reduce((sum, abono) => sum + abono.monto, 0);
-        const noteRemaining = noteTotal - notePaid;
-
-        if (noteRemaining > 0) {
-          const abonoToApply = Math.min(remainingAbono, noteRemaining);
-          note.abonos.push({
-            monto: abonoToApply,
-            fecha: today.toISOString().split('T')[0]
-          });
-          note.isPaid = (noteTotal <= notePaid + abonoToApply);
-          remainingAbono -= abonoToApply;
-          notesToUpdate.push(note);
+      for (const note of clientNotes) {
+        if (remainingAbono <= 0) {
+          break;
         }
+
+        const noteDebt = this.calculateNoteDebt(note);
+        if (noteDebt <= 0) {
+          continue;
+        }
+
+        const abonoToApply = Math.min(remainingAbono, noteDebt);
+        const updatedAbonos = [...(note.abonos || []), { monto: abonoToApply, fecha: today }];
+        const isPaid = this.calculateNoteTotal(note) <= this.calculateNotePaid({ ...note, abonos: updatedAbonos });
+
+        notesToUpdate.push({
+          id: note.id,
+          abonos: updatedAbonos,
+          isPaid
+        });
+        remainingAbono -= abonoToApply;
       }
 
       try {
-        // Actualizar las notas en Firebase
-        for (let note of notesToUpdate) {
-          const noteRef = doc(db, 'notes', note.id);
-          await updateDoc(noteRef, {
-            abonos: note.abonos,
-            isPaid: note.isPaid
-          });
-        }
+        await Promise.all(
+          notesToUpdate.map((note) =>
+            updateDoc(doc(db, 'notes', note.id), {
+              abonos: note.abonos,
+              isPaid: note.isPaid
+            })
+          )
+        );
 
-        // Si queda dinero después de pagar todas las notas, guardarlo como saldo a favor
         if (remainingAbono > 0) {
           const currentBalance = this.clientBalances[this.selectedClient] || 0;
           const newBalance = currentBalance + remainingAbono;
           await this.updateClientBalance(this.selectedClient, newBalance);
-          
-          alert(`Abono aplicado con éxito. Saldo a favor: $${remainingAbono.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
+
+          alert(
+            `Abono aplicado con éxito. Saldo a favor: ${new Intl.NumberFormat('es-MX', {
+              style: 'currency',
+              currency: 'MXN'
+            }).format(remainingAbono)}`
+          );
         } else {
           alert('Abono aplicado con éxito');
         }
-        
+
         this.closeModal();
         await this.fetchNotes();
       } catch (error) {
         console.error('Error al actualizar las notas:', error);
         alert('Hubo un error al aplicar el abono');
+      } finally {
+        this.isProcessingAbono = false;
       }
     },
     async showAbonosHistory(client) {
       this.selectedClient = client;
       this.clientAbonosHistory = [];
       this.currentPage = 1;
-      
-      const clientNotes = this.notesByClient[client];
-      
-      let globalIndex = 0;
-      for (let note of clientNotes) {
-        if (note.abonos && note.abonos.length > 0) {
-          note.abonos.forEach((abono, index) => {
-            this.clientAbonosHistory.push({
-              ...abono,
-              noteId: note.id,
-              abonoIndex: index,
-              globalIndex: globalIndex++
-            });
+
+      const clientNotes = this.notesByClient[client] || [];
+      clientNotes.forEach((note) => {
+        const abonos = Array.isArray(note.abonos) ? note.abonos : [];
+        abonos.forEach((abono, index) => {
+          this.clientAbonosHistory.push({
+            ...abono,
+            noteId: note.id,
+            abonoIndex: index,
+            uid: `${note.id}-${index}-${abono.fecha || 'sin-fecha'}-${abono.monto || 0}`
           });
-        }
-      }
-      
+        });
+      });
+
       this.clientAbonosHistory.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
-      
       this.showAbonosHistoryModal = true;
     },
     closeAbonosHistoryModal() {
       this.showAbonosHistoryModal = false;
       this.clientAbonosHistory = [];
+      this.currentPage = 1;
     },
     formatDate(dateString) {
-      const options = { year: 'numeric', month: 'long', day: 'numeric' };
-      return new Date(dateString).toLocaleDateString('es-ES', options);
+      if (!dateString) {
+        return 'Sin fecha';
+      }
+      return new Date(dateString).toLocaleDateString('es-ES', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
     },
     prevPage() {
       if (this.currentPage > 1) {
-        this.currentPage--;
+        this.currentPage -= 1;
       }
     },
     nextPage() {
       if (this.currentPage < this.totalPages) {
-        this.currentPage++;
+        this.currentPage += 1;
       }
     },
-    openDeleteAbonoModal(globalIndex) {
-      const abono = this.clientAbonosHistory[globalIndex];
-      this.selectedAbonoIndex = abono.abonoIndex;
-      this.selectedAbonoNote = abono.noteId;
+    openDeleteAbonoModal(abono) {
+      this.selectedAbono = abono;
       this.showDeleteAbonoModal = true;
-    },
-    async deleteAbono() {
-      if (this.selectedAbonoNote) {
-        try {
-          const noteRef = doc(db, 'notes', this.selectedAbonoNote);
-          const noteDoc = await getDoc(noteRef);
-          
-          if (noteDoc.exists()) {
-            const noteData = noteDoc.data();
-            const updatedAbonos = noteData.abonos.filter((_, index) => index !== this.selectedAbonoIndex);
-            
-            await updateDoc(noteRef, { abonos: updatedAbonos });
-            
-            // Actualizar el estado local
-            this.clientAbonosHistory = this.clientAbonosHistory.filter(abono => 
-              !(abono.noteId === this.selectedAbonoNote && abono.abonoIndex === this.selectedAbonoIndex)
-            );
-            
-            // Actualizar notesByClient
-            const clientNoteIndex = this.notesByClient[this.selectedClient].findIndex(note => note.id === this.selectedAbonoNote);
-            if (clientNoteIndex !== -1) {
-              this.notesByClient[this.selectedClient][clientNoteIndex].abonos = updatedAbonos;
-            }
-            
-            this.closeDeleteAbonoModal();
-            
-            // Ajustar la página actual si es necesario
-            this.currentPage = Math.min(this.currentPage, this.totalPages);
-            
-            alert('Abono eliminado con éxito');
-            await this.fetchNotes(); // Actualizar las notas después de eliminar el abono
-          }
-        } catch (error) {
-          console.error('Error al eliminar el abono:', error);
-          alert('Hubo un error al eliminar el abono');
-        }
-      }
     },
     closeDeleteAbonoModal() {
       this.showDeleteAbonoModal = false;
-      this.selectedAbonoIndex = null;
-      this.selectedAbonoNote = null;
+      this.selectedAbono = null;
     },
-  },
-  computed: {
-    filteredNotesByClient() {
-      const filtered = {};
-      for (const [client, notes] of Object.entries(this.notesByClient)) {
-        filtered[client] = notes.filter(note => 
-          this.paymentFilter === 'all' || 
-          (this.paymentFilter === 'paid' ? note.isPaid : !note.isPaid)
-        );
-        if (filtered[client].length === 0) {
-          delete filtered[client];
+    async deleteAbono() {
+      if (!this.selectedAbono || !this.selectedAbono.noteId) {
+        return;
+      }
+
+      this.isDeletingAbono = true;
+      try {
+        const noteRef = doc(db, 'notes', this.selectedAbono.noteId);
+        const noteDoc = await getDoc(noteRef);
+        if (!noteDoc.exists()) {
+          alert('No se encontró la nota del abono');
+          return;
         }
+
+        const noteData = noteDoc.data();
+        const currentAbonos = Array.isArray(noteData.abonos) ? noteData.abonos : [];
+        const updatedAbonos = currentAbonos.filter((_, index) => index !== this.selectedAbono.abonoIndex);
+        const isPaid = this.calculateNoteTotal(noteData) <= this.calculateNotePaid({ ...noteData, abonos: updatedAbonos });
+
+        await updateDoc(noteRef, {
+          abonos: updatedAbonos,
+          isPaid
+        });
+
+        this.closeDeleteAbonoModal();
+        await this.fetchNotes();
+        await this.showAbonosHistory(this.selectedClient);
+        this.currentPage = Math.min(this.currentPage, this.totalPages);
+        alert('Abono eliminado con éxito');
+      } catch (error) {
+        console.error('Error al eliminar el abono:', error);
+        alert('Hubo un error al eliminar el abono');
+      } finally {
+        this.isDeletingAbono = false;
       }
-      return filtered;
-    },
-    totalDebtByClient() {
-      const debtByClient = {};
-      for (const [client, notes] of Object.entries(this.notesByClient)) {
-        debtByClient[client] = notes.reduce((total, note) => {
-          const subtotal = note.products.reduce((sum, product) => sum + (product.kilos * product.pricePerKilo), 0);
-          const flete = note.flete || 0;
-          const totalFinal = subtotal - flete;
-          const totalAbonado = note.abonos.reduce((sum, abono) => sum + abono.monto, 0);
-          const noteDebt = totalFinal - totalAbonado;
-          return total + (note.isPaid ? 0 : noteDebt);
-        }, 0);
-      }
-      return debtByClient;
-    },
-    paginatedAbonos() {
-      const start = (this.currentPage - 1) * this.abonosPerPage;
-      const end = start + this.abonosPerPage;
-      return this.clientAbonosHistory.slice(start, end);
-    },
-    totalPages() {
-      return Math.ceil(this.clientAbonosHistory.length / this.abonosPerPage);
-    }
-  },
-  filters: {
-    currency(value) {
-      if (!value) return '$0.00';
-      return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(value);
     }
   },
   async mounted() {
@@ -387,307 +545,408 @@ export default {
 
 <style scoped>
 .notes-wrapper {
-  padding: 20px;
+  --vw-bg-1: #140a2a;
+  --vw-bg-2: #2a0e4a;
+  --vw-bg-3: #1a3a78;
+  --vw-neon-pink: #ff4fd8;
+  --vw-neon-cyan: #3ef8ff;
+  --vw-neon-purple: #a855f7;
+  --vw-text: #f5ecff;
+  --vw-soft: rgba(245, 236, 255, 0.78);
+  width: 100%;
+  max-width: 1050px;
+  margin: 0 auto;
+  padding: 16px;
+  color: var(--vw-text);
 }
 
-.button-container {
-  text-align: center;
-  margin-bottom: 20px;
+.notes-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 16px;
 }
 
-.button-wrapper {
-  display: inline-block;
-  margin-right: 10px;
+.notes-header h1 {
+  margin: 0;
+  font-size: 1.5rem;
+  color: var(--vw-neon-cyan);
+  text-shadow: 0 0 12px rgba(62, 248, 255, 0.55);
 }
 
-button {
-  background-color: #3760b0;
-  color: white;
-  border: none;
-  padding: 10px 20px;
-  border-radius: 20px;
-  cursor: pointer;
-  transition: background-color 0.3s;
+.notes-description {
+  margin: 6px 0 0;
+  color: var(--vw-soft);
 }
 
-button:hover {
-  background-color: #2a4a87;
-}
-
-.filter-container {
-  margin-bottom: 20px;
-}
-
-.filter-container select {
-  padding: 10px 20px;
-  border: 2px solid #ccc;
-  border-radius: 20px;
-  background-color: white;
-  transition: border-color 0.3s;
-}
-
-.filter-container select:focus {
-  border-color: #3760b0;
+.header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .notes-container {
-  max-width: 800px;
-  margin: 0 auto;
-  padding: 20px;
-  background-color: #e8f0fe;
-  border-radius: 20px;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  background:
+    linear-gradient(140deg, rgba(20, 10, 42, 0.9), rgba(42, 14, 74, 0.88) 55%, rgba(26, 58, 120, 0.86)),
+    repeating-linear-gradient(
+      180deg,
+      rgba(255, 79, 216, 0.08) 0,
+      rgba(255, 79, 216, 0.08) 1px,
+      transparent 1px,
+      transparent 8px
+    );
+  border-radius: 14px;
+  padding: 16px;
+  border: 1px solid rgba(168, 85, 247, 0.45);
+  box-shadow:
+    0 0 0 1px rgba(62, 248, 255, 0.2) inset,
+    0 16px 35px rgba(3, 2, 20, 0.65);
 }
 
-.notes-container h2 {
-  text-align: center;
-  color: #3760b0;
-  margin-bottom: 20px;
+.controls-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
 }
 
-details {
-  margin-bottom: 20px;
-  border: 2px solid #ccc;
-  border-radius: 20px;
-  padding: 10px;
-  background-color: white;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+.control-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.9rem;
+  color: var(--vw-soft);
 }
 
-summary {
-  font-weight: bold;
+.control-field select,
+.control-field input {
+  padding: 10px 12px;
+  border: 1px solid rgba(62, 248, 255, 0.35);
+  border-radius: 10px;
+  background: rgba(12, 16, 43, 0.85);
+  color: var(--vw-text);
+  font-size: 0.95rem;
+}
+
+.quick-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  margin-bottom: 12px;
+  color: var(--vw-neon-cyan);
+}
+
+.status-msg {
+  margin: 14px 0;
+  padding: 12px;
+  border-radius: 10px;
+  background: rgba(16, 18, 56, 0.78);
+  border: 1px solid rgba(255, 79, 216, 0.3);
+  color: var(--vw-soft);
+}
+
+.client-card {
+  margin-bottom: 12px;
+}
+
+.client-card details {
+  background: rgba(8, 13, 40, 0.72);
+  border: 1px solid rgba(255, 79, 216, 0.35);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 0 20px rgba(168, 85, 247, 0.12);
+}
+
+.client-card summary {
+  list-style: none;
   cursor: pointer;
   display: flex;
-  align-items: center;
   justify-content: space-between;
-  padding: 10px;
-  border-radius: 20px;
-  background: linear-gradient(135deg, #3760b0, #2a4a87);
-  color: white;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-  transition: background 0.3s;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 12px;
+  background: linear-gradient(135deg, rgba(255, 79, 216, 0.95), rgba(90, 54, 205, 0.95));
+  color: #fff7ff;
 }
 
-summary:hover {
-  background: linear-gradient(135deg, #2a4a87, #3760b0);
+.client-card summary::-webkit-details-marker {
+  display: none;
 }
 
-.note-count {
-  background-color: #ffc107;
-  color: #000;
-  border-radius: 50%;
-  padding: 10px 15px;
-  font-size: 14px;
-  font-weight: bold;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-  transition: transform 0.3s;
+.summary-main {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
-.note-count:hover {
-  transform: scale(1.2);
+.client-name {
+  font-weight: 700;
+}
+
+.client-debt {
+  font-weight: 600;
 }
 
 .balance-favor {
-  background-color: #28a745;
-  color: white;
-  border-radius: 15px;
-  padding: 8px 12px;
-  font-size: 12px;
-  font-weight: bold;
-  margin: 0 10px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  background: linear-gradient(135deg, #00d4ff, #38f7c8);
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 0.8rem;
+  white-space: nowrap;
+  color: #111827;
+  font-weight: 700;
 }
 
-ul {
-  list-style-type: none;
-  padding-left: 20px;
-  margin-top: 10px;
+.note-count {
+  background: linear-gradient(135deg, #ffe66d, #ff9f5a);
+  color: #28122d;
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-weight: 700;
+  white-space: nowrap;
 }
 
-li {
-  margin-bottom: 10px;
+.notes-list {
+  list-style: none;
+  margin: 0;
+  padding: 12px;
+  display: grid;
+  gap: 8px;
 }
 
-li button {
-  background-color: transparent;
+.note-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid rgba(62, 248, 255, 0.25);
+  background: rgba(14, 18, 52, 0.62);
+  border-radius: 10px;
+}
+
+.note-link {
   border: none;
-  color: #3760b0;
-  text-decoration: underline;
+  padding: 0;
+  color: var(--vw-neon-cyan);
   cursor: pointer;
-  font-weight: bold;
-  transition: color 0.3s, background-color 0.3s;
+  background: transparent;
+  text-align: left;
+  text-decoration: underline;
 }
 
-li button:hover {
-  color: white;
-  background-color: #2a4a87;
-  border-radius: 5px;
-  padding: 5px 10px;
+.note-amount {
+  font-size: 0.88rem;
+  color: var(--vw-soft);
+  white-space: nowrap;
 }
 
 .client-actions {
   display: flex;
-  justify-content: space-between;
-  margin-top: 10px;
+  gap: 10px;
+  padding: 12px;
+  border-top: 1px solid rgba(255, 79, 216, 0.22);
 }
 
-.abono-button,
-.abonos-history-button {
+.btn {
+  border: none;
+  border-radius: 999px;
+  padding: 10px 16px;
+  color: #ffffff;
+  cursor: pointer;
+  font-weight: 600;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease;
+  box-shadow: 0 0 16px rgba(168, 85, 247, 0.35);
+}
+
+.btn:hover {
+  opacity: 0.95;
+  transform: translateY(-1px);
+  box-shadow: 0 0 22px rgba(62, 248, 255, 0.4);
+}
+
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.btn-small {
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 0.85rem;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #ff4fd8, #8b5cf6);
+}
+
+.btn-secondary {
+  background: linear-gradient(135deg, #3ef8ff, #2563eb);
+  color: #0f172a;
+}
+
+.btn-success {
+  background: linear-gradient(135deg, #34f5c5, #2dd4bf);
+  color: #0f172a;
   flex: 1;
-  margin: 0 5px;
 }
 
-.abono-button {
-  background-color: #4CAF50;
+.btn-info {
+  background: linear-gradient(135deg, #60a5fa, #22d3ee);
+  color: #0f172a;
+  flex: 1;
 }
 
-.abono-button:hover {
-  background-color: #45a049;
+.btn-muted {
+  background: linear-gradient(135deg, #64748b, #475569);
 }
 
-.abonos-history-button {
-  background-color: #17a2b8;
-}
-
-.abonos-history-button:hover {
-  background-color: #138496;
+.btn-danger {
+  background: linear-gradient(135deg, #ff5f9e, #ef4444);
 }
 
 .modal {
   position: fixed;
-  z-index: 1;
-  left: 0;
-  top: 0;
-  width: 100%;
-  height: 100%;
-  overflow: auto;
-  background-color: rgba(0,0,0,0.4);
+  inset: 0;
+  background: rgba(8, 4, 28, 0.72);
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 14px;
+  z-index: 1100;
 }
 
 .modal-content {
-  background-color: #fefefe;
-  padding: 20px;
-  border: 1px solid #888;
-  width: 80%;
-  max-width: 500px;
-  border-radius: 20px;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  width: min(560px, 100%);
+  background: linear-gradient(145deg, rgba(24, 12, 48, 0.97), rgba(20, 34, 74, 0.95));
+  border: 1px solid rgba(62, 248, 255, 0.35);
+  border-radius: 14px;
+  padding: 16px;
+  color: var(--vw-text);
+  box-shadow:
+    0 0 0 1px rgba(255, 79, 216, 0.2) inset,
+    0 18px 35px rgba(3, 2, 20, 0.75);
+}
+
+.modal-wide {
+  width: min(760px, 100%);
+}
+
+.modal-help {
+  margin: 6px 0 10px;
+  color: var(--vw-soft);
+}
+
+.abono-preview {
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  border: 1px solid rgba(62, 248, 255, 0.3);
+  border-radius: 10px;
+  background: rgba(8, 13, 40, 0.7);
+}
+
+.abono-preview p {
+  margin: 4px 0;
+  color: var(--vw-soft);
+}
+
+.favor-msg {
+  color: #34f5c5;
 }
 
 .modal-content input {
   width: 100%;
-  padding: 10px;
-  margin: 10px 0;
-  border-radius: 5px;
-  border: 1px solid #ccc;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(62, 248, 255, 0.35);
+  background: rgba(10, 14, 38, 0.9);
+  color: var(--vw-text);
 }
 
-.modal-content button {
-  background-color: #3760b0;
-  color: white;
-  border: none;
-  padding: 10px 20px;
-  border-radius: 5px;
-  cursor: pointer;
-  transition: background-color 0.3s;
-  margin: 5px;
-}
-
-.modal-content button:hover {
-  background-color: #2a4a87;
+.modal-actions {
+  margin-top: 12px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .abonos-history-table {
   width: 100%;
   border-collapse: collapse;
-  margin-bottom: 20px;
+  margin-top: 12px;
 }
 
 .abonos-history-table th,
 .abonos-history-table td {
-  border: 1px solid #ddd;
+  border: 1px solid rgba(62, 248, 255, 0.22);
   padding: 8px;
   text-align: left;
 }
 
 .abonos-history-table th {
-  background-color: #f2f2f2;
-  font-weight: bold;
+  background: rgba(255, 79, 216, 0.18);
+  color: var(--vw-neon-cyan);
 }
 
-.delete-button {
-  background-color: #dc3545;
-  color: white;
-  border: none;
-  padding: 5px 10px;
-  border-radius: 5px;
-  cursor: pointer;
-}
-
-.delete-button:hover {
-  background-color: #c82333;
+.empty-cell {
+  text-align: center;
+  color: var(--vw-soft);
 }
 
 .pagination {
+  margin-top: 12px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-top: 20px;
-}
-
-.pagination button {
-  background-color: #3760b0;
-  color: white;
-  border: none;
-  padding: 5px 10px;
-  border-radius: 5px;
-  cursor: pointer;
-}
-
-.pagination button:disabled {
-  background-color: #cccccc;
-  cursor: not-allowed;
-}
-
-.pagination span {
-  font-weight: bold;
+  gap: 8px;
 }
 
 @media (max-width: 768px) {
-  .modal-content {
-    width: 95%;
-    padding: 15px;
+  .notes-wrapper {
+    padding: 12px;
+  }
+
+  .notes-header {
+    flex-direction: column;
+  }
+
+  .header-actions {
+    width: 100%;
+  }
+
+  .header-actions .btn {
+    flex: 1;
+  }
+
+  .controls-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .client-card summary {
+    flex-direction: column;
+  }
+
+  .note-row {
+    flex-direction: column;
+    align-items: flex-start;
   }
 
   .client-actions {
     flex-direction: column;
   }
 
-  .abono-button,
-  .abonos-history-button {
+  .modal-actions {
+    flex-direction: column-reverse;
+  }
+
+  .modal-actions .btn {
     width: 100%;
-    margin: 5px 0;
-  }
-
-  .abonos-history-table {
-    font-size: 14px;
-  }
-
-  .abonos-history-table th,
-  .abonos-history-table td {
-    padding: 6px;
   }
 
   .pagination {
     flex-direction: column;
-    align-items: center;
-  }
-
-  .pagination button {
-    margin: 5px 0;
+    align-items: stretch;
   }
 }
 </style>
