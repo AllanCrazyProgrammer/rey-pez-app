@@ -106,9 +106,10 @@
       </div>
     </form>
     <div v-if="products.length || abonos.length">
-      <div ref="printSection" class="print-section">
+      <div ref="printSection" class="print-section nota-venta-print-root">
         <div class="folio-date">
           <p><strong>Folio:</strong> {{ formattedFolio }}</p>
+          <p v-if="client"><strong>Cliente:</strong> {{ client }}</p>
           <p><strong>Fecha de Creación:</strong> {{ formattedCreationDate }}</p>
         </div>
         <div v-if="observaciones" class="observaciones-resumen">
@@ -135,7 +136,7 @@
                   <td><input type="text" v-model="editProduct.product" /></td>
                   <td><input type="number" v-model.number="editProduct.kilos" /></td>
                   <td><input type="number" v-model.number="editProduct.pricePerKilo" /></td>
-                  <td>${{ formatNumber(editProduct.kilos * editProduct.pricePerKilo) }}</td>
+                  <td>${{ formatResumenCurrency(editProduct.kilos * editProduct.pricePerKilo) }}</td>
                   <td class="action-column">
                     <button @click="confirmEdit"><span>&#10004;</span></button>
                     <button @click="cancelEdit"><span>&#10060;</span></button>
@@ -144,8 +145,8 @@
                 <template v-else>
                   <td>{{ product.product }}</td>
                   <td>{{ formatNumber(product.kilos) }}</td>
-                  <td>${{ formatNumber(product.pricePerKilo) }}</td>
-                  <td>${{ formatNumber(product.total) }}</td>
+                  <td>${{ formatResumenCurrency(product.pricePerKilo) }}</td>
+                  <td>${{ formatResumenCurrency(product.total) }}</td>
                   <td class="action-column">
                     <button @click="editProductDetails(index)">Editar</button>
                     <button @click="removeProduct(index)">Borrar</button>
@@ -154,18 +155,63 @@
               </tr>
             </tbody>
           </table>
-          <div class="flete-section">
-            <div class="form-row">
+          <div v-if="(Number(flete) || 0) > 0" class="flete-section">
+            <div class="form-row flete-edit-row">
               <div>
                 <label for="flete">Flete ($):</label>
                 <input type="number" id="flete" v-model.number="flete" step="0.01" min="0" />
               </div>
             </div>
+            <p class="flete-print-line">
+              <strong>Flete ($):</strong> {{ formatResumenCurrency(flete || 0) }}
+            </p>
           </div>
           <div class="total-general">
-            <h3>Subtotal: ${{ formatNumber(grandTotal) }}</h3>
-            <h3 v-if="flete > 0">Flete: -${{ formatNumber(flete) }}</h3>
-            <h3 class="total-final">Total General: ${{ formatNumber(totalFinal) }}</h3>
+            <div v-if="(Number(flete) || 0) <= 0" class="flete-inline-edit">
+              <label for="flete-zero">Flete ($):</label>
+              <input
+                id="flete-zero"
+                type="number"
+                v-model.number="flete"
+                step="0.01"
+                min="0"
+                placeholder="0"
+              />
+            </div>
+            <h3 v-if="flete > 0" class="total-line-sub">Flete: -${{ formatResumenCurrency(flete) }}</h3>
+            <h3 class="total-line-nota total-final">Total de esta nota: ${{ formatResumenCurrency(totalFinal) }}</h3>
+            <div
+              v-if="client && products.length"
+              class="resumen-saldos-acumulados resumen-saldos-en-total-general"
+              aria-label="Resumen de saldos acumulados"
+            >
+              <p class="resumen-saldos-titulo">Saldos con el cliente</p>
+              <div class="resumen-saldos-inner">
+                <div class="resumen-saldos-row resumen-saldos-row--anterior">
+                  <span class="resumen-saldos-label">Saldo acumulado anterior</span>
+                  <span class="resumen-saldos-value">${{ formatResumenCurrency(saldoAcumuladoAnteriores) }}</span>
+                </div>
+                <div class="resumen-saldos-row">
+                  <span class="resumen-saldos-label">Saldo hoy (esta nota)</span>
+                  <span class="resumen-saldos-value">${{ formatResumenCurrency(totalFinal) }}</span>
+                </div>
+                <div class="resumen-saldos-row resumen-saldos-row--bold">
+                  <span class="resumen-saldos-label">Total</span>
+                  <span class="resumen-saldos-value">${{ formatResumenCurrency(totalSaldoMasEstaNota) }}</span>
+                </div>
+                <div
+                  v-if="totalAbonado > 0"
+                  class="resumen-saldos-row resumen-saldos-row--abono"
+                >
+                  <span class="resumen-saldos-label">Abono</span>
+                  <span class="resumen-saldos-value">−${{ formatResumenCurrency(totalAbonado) }}</span>
+                </div>
+                <div class="resumen-saldos-row resumen-saldos-row--bold resumen-saldos-row--nuevo">
+                  <span class="resumen-saldos-label">Nuevo saldo acumulado</span>
+                  <span class="resumen-saldos-value resumen-saldos-value--destacado">${{ formatResumenCurrency(nuevoSaldoAcumulado) }}</span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
    
@@ -184,30 +230,6 @@
           </div>
         </div>
         <button type="submit" class="add-abono-button">Agregar Abono</button>        </form>
-        <div
-          v-if="client && products.length"
-          class="resumen-saldos-acumulados"
-          aria-label="Resumen de saldos acumulados"
-        >
-          <div class="resumen-saldos-inner">
-            <div class="resumen-saldos-row resumen-saldos-row--anterior">
-              <span class="resumen-saldos-label">Saldo Acumulado Anterior</span>
-              <span class="resumen-saldos-value">${{ formatResumenCurrency(saldoAcumuladoAnteriores) }}</span>
-            </div>
-            <div class="resumen-saldos-row">
-              <span class="resumen-saldos-label">Saldo Hoy</span>
-              <span class="resumen-saldos-value">${{ formatResumenCurrency(totalFinal) }}</span>
-            </div>
-            <div class="resumen-saldos-row resumen-saldos-row--bold">
-              <span class="resumen-saldos-label">Total</span>
-              <span class="resumen-saldos-value">${{ formatResumenCurrency(saldoRestante) }}</span>
-            </div>
-            <div class="resumen-saldos-row resumen-saldos-row--bold resumen-saldos-row--nuevo">
-              <span class="resumen-saldos-label">Nuevo Saldo Acumulado</span>
-              <span class="resumen-saldos-value">${{ formatResumenCurrency(nuevoSaldoAcumulado) }}</span>
-            </div>
-          </div>
-        </div>
         <div v-if="abonos.length">
           <h3>Abonos Realizados</h3>
           <div class="table-responsive">
@@ -221,7 +243,7 @@
               </thead>
               <tbody>
                 <tr v-for="(abono, index) in abonos" :key="index">
-                  <td>${{ formatNumber(abono.monto) }}</td>
+                  <td>${{ formatResumenCurrency(abono.monto) }}</td>
                   <td>{{ formatDate(abono.fecha) }}</td>
                   <td class="action-column-abonos">
                     <button @click="confirmDeleteAbono(index)" class="delete-abono-button">
@@ -234,7 +256,7 @@
           </div>
         </div>
         <div v-if="abonos.length" class="abonos-summary">
-          <p><strong>Total Abonado:</strong> ${{ formatNumber(totalAbonado) }}</p>
+          <p><strong>Total Abonado:</strong> ${{ formatResumenCurrency(totalAbonado) }}</p>
           <p class="estado-pago" :class="{ 'pagado': isPaid, 'no-pagado': !isPaid }">
             <strong>Estado:</strong> {{ isPaid ? 'Pagada' : 'No Pagada' }}
           </p>
@@ -244,7 +266,6 @@
 
       <div class="action-buttons">
         <div class="button-column">
-          <button @click="exportPDF">Exportar a PDF</button>
           <button @click="printSection">Imprimir</button>
         </div>
         <div class="button-column">
@@ -279,7 +300,6 @@
 import BackButton from '@/components/BackButton.vue';
 import DatePicker from 'vue2-datepicker';
 import 'vue2-datepicker/index.css';
-import html2pdf from 'html2pdf.js';
 import AddClient from '@/components/AddClient.vue';
 import PreciosNotaVentaModal from '@/components/PreciosNotaVentaModal.vue';
 import { db } from '@/firebase';
@@ -289,6 +309,7 @@ import 'moment/locale/es';
 import { cargarPreciosParaNotaVenta } from '@/utils/preciosVentaCatalogo';
 import { obtenerPrecioParaMedidaNotaVenta } from '@/utils/preciosHistoricos';
 import { obtenerFechaActualISO, normalizarFechaISO } from '@/utils/dateUtils';
+import { NOTA_VENTA_PDF_INLINE_CSS, getNotaVentaPrintMediaCss } from '@/utils/notaVentaPdfPrintStyles.js';
 
 export default {
   components: {
@@ -356,6 +377,10 @@ export default {
     },
     saldoRestante() {
       return this.totalFinal - this.totalAbonado;
+    },
+    /** Saldo anterior + total de esta nota (antes de descontar abonos de la nota actual). */
+    totalSaldoMasEstaNota() {
+      return this.saldoAcumuladoAnteriores + this.totalFinal;
     },
     /**
      * Deuda acumulada *hasta esta nota* en el tiempo: solo notas anteriores + pendiente de esta.
@@ -727,44 +752,82 @@ export default {
       const options = { year: 'numeric', month: 'long', day: 'numeric' };
       return new Date(date).toLocaleDateString('es-ES', options);
     },
-    exportPDF() {
-      const element = this.$refs.printSection;
-      const options = {
-        margin: 0.5,
-        filename: `Nota_de_Venta_${this.formattedFolio}_${new Date().toLocaleDateString()}.pdf`,
-        image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: { scale: 2 },
-        jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
-      };
-      const clonedElement = element.cloneNode(true);
-      const buttons = clonedElement.querySelectorAll('button');
-      buttons.forEach(button => button.style.display = 'none');
-      const actionColumns = clonedElement.querySelectorAll('td:nth-child(5), th:nth-child(5)');
-      actionColumns.forEach(column => column.style.display = 'none');
+    /**
+     * Estilos y limpieza del DOM para la ventana de impresión (no hereda bien el CSS con scope).
+     */
+    prepareNotaExportClone(clonedElement) {
+      const styleEl = document.createElement('style');
+      styleEl.setAttribute('type', 'text/css');
+      styleEl.textContent = NOTA_VENTA_PDF_INLINE_CSS;
+      clonedElement.insertBefore(styleEl, clonedElement.firstChild);
+
+      let fleteVal = '0';
+      const fleteInput =
+        clonedElement.querySelector('#flete') || clonedElement.querySelector('#flete-zero');
+      if (fleteInput) {
+        fleteVal = fleteInput.value != null && fleteInput.value !== '' ? String(fleteInput.value) : '0';
+      }
+      const fleteNum = parseFloat(fleteVal) || 0;
+      const fleteSection = clonedElement.querySelector('.flete-section');
+      if (fleteSection) {
+        if (fleteNum <= 0) {
+          fleteSection.remove();
+        } else {
+          fleteSection.innerHTML = `<div class="pdf-flete-line"><strong>Flete ($):</strong> <span>${fleteVal}</span></div>`;
+        }
+      }
+      const fleteInline = clonedElement.querySelector('.flete-inline-edit');
+      if (fleteInline) fleteInline.remove();
+
+      clonedElement.querySelectorAll('tbody input').forEach((inp) => {
+        const span = document.createElement('span');
+        span.textContent = inp.value;
+        inp.parentNode.replaceChild(span, inp);
+      });
+
+      clonedElement.querySelectorAll('button').forEach((b) => {
+        b.style.display = 'none';
+      });
+
+      clonedElement.querySelectorAll('td:nth-child(5), th:nth-child(5)').forEach((el) => {
+        el.style.display = 'none';
+      });
+
+      clonedElement.querySelectorAll('.abonos-table td:nth-child(3), .abonos-table th:nth-child(3)').forEach((el) => {
+        el.style.display = 'none';
+      });
+
       const abonosForm = clonedElement.querySelector('.abonos-section form');
       if (abonosForm) abonosForm.style.display = 'none';
       const abonosTitle = clonedElement.querySelector('.abonos-section h3:first-child');
       if (abonosTitle) abonosTitle.style.display = 'none';
-      html2pdf().from(clonedElement).set(options).save();
     },
     printSection() {
-      const printContent = this.$refs.printSection.cloneNode(true);
-      const buttons = printContent.querySelectorAll('button');
-      buttons.forEach(button => button.style.display = 'none');
-      const actionColumns = printContent.querySelectorAll('td:nth-child(5), th:nth-child(5)');
-      actionColumns.forEach(column => column.style.display = 'none');
-      const abonosForm = printContent.querySelector('.abonos-section form');
-      if (abonosForm) abonosForm.style.display = 'none';
-      const abonosTitle = printContent.querySelector('.abonos-section h3:first-child');
-      if (abonosTitle) abonosTitle.style.display = 'none';
+      const element = this.$refs.printSection;
+      if (!element) return;
+      const printContent = element.cloneNode(true);
+      this.prepareNotaExportClone(printContent);
 
-      const printWindow = window.open('', '', 'width=800,height=600');
-      printWindow.document.write('<html><head><title>Nota de Venta</title>');
-      printWindow.document.write('</head><body >');
-      printWindow.document.write(printContent.innerHTML);
+      const printWindow = window.open('', '', 'width=840,height=900');
+      printWindow.document.open();
+      printWindow.document.write('<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><title>Nota de Venta</title>');
+      printWindow.document.write(
+        '<meta name="viewport" content="width=device-width, initial-scale=1"></head><body style="margin:0;background:#fff">'
+      );
+      // innerHTML omitía el div con .nota-venta-print-root; sin él no aplica NOTA_VENTA_PDF_INLINE_CSS
+      printWindow.document.write(printContent.outerHTML);
       printWindow.document.write('</body></html>');
       printWindow.document.close();
-      printWindow.print();
+      printWindow.focus();
+      const doPrint = () => {
+        printWindow.focus();
+        printWindow.print();
+      };
+      if (printWindow.document.readyState === 'complete') {
+        setTimeout(doPrint, 200);
+      } else {
+        printWindow.onload = () => setTimeout(doPrint, 200);
+      }
     },
     startLongPress(index) {
       this.longPressTimer = setTimeout(() => {
@@ -808,6 +871,14 @@ export default {
     } else if (this.client) {
       await this.fetchSaldoAcumuladoAnteriores();
     }
+    const printStyle = document.createElement('style');
+    printStyle.id = 'nota-venta-print-media-styles';
+    printStyle.textContent = getNotaVentaPrintMediaCss();
+    document.head.appendChild(printStyle);
+  },
+  beforeDestroy() {
+    const el = document.getElementById('nota-venta-print-media-styles');
+    if (el) el.remove();
   }
 };
 </script><style scoped>
@@ -956,6 +1027,25 @@ th {
   background-color: #f8f8f8;
 }
 
+.flete-inline-edit {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem 0.75rem;
+  margin-bottom: 0.75rem;
+  padding: 0.5rem 0;
+}
+
+.flete-inline-edit label {
+  color: rgba(245, 236, 255, 0.95);
+  font-weight: 600;
+}
+
+.flete-inline-edit input {
+  max-width: 140px;
+}
+
 .flete-section {
   margin-top: 1em;
   padding: 1em;
@@ -976,13 +1066,56 @@ th {
   margin: 0.5em 0;
 }
 
+.total-line-sub {
+  font-size: 0.98rem;
+  font-weight: 600;
+  color: #2a4a87;
+}
+
+.total-line-nota {
+  color: #3760b0;
+  font-size: 1.35rem;
+  font-weight: 800;
+  text-align: center;
+  border-top: 2px solid #3760b0;
+  padding-top: 0.65em;
+  margin-top: 0.35em;
+}
+
 .total-final {
   color: #3760b0;
-  font-size: 1.2em;
-  font-weight: bold;
+  font-size: 1.35rem;
+  font-weight: 800;
+  text-align: center;
   border-top: 2px solid #3760b0;
-  padding-top: 0.5em;
-  margin-top: 0.5em;
+  padding-top: 0.65em;
+  margin-top: 0.35em;
+}
+
+.resumen-saldos-en-total-general {
+  margin-top: 1rem;
+  padding-top: 0.85rem;
+  border-top: 1px dashed rgba(55, 96, 176, 0.45);
+}
+
+.resumen-saldos-titulo {
+  margin: 0 0 0.65rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #3760b0;
+  text-align: center;
+}
+
+.total-general .resumen-saldos-inner {
+  border-style: dashed;
+  background: rgba(255, 255, 255, 0.35);
+}
+
+.resumen-saldos-value--destacado {
+  font-size: 1.2rem;
+  font-weight: 800;
 }
 
 .abonos-container {
@@ -1618,7 +1751,39 @@ th,
 
 .total-final {
   color: #67f5ff;
+  font-size: 1.45rem !important;
   border-top-color: rgba(62, 248, 255, 0.42);
+}
+
+.total-line-sub {
+  color: rgba(245, 236, 255, 0.88) !important;
+}
+
+.total-line-nota {
+  color: #67f5ff !important;
+  font-size: 1.45rem !important;
+  border-top-color: rgba(62, 248, 255, 0.42) !important;
+}
+
+.resumen-saldos-en-total-general {
+  border-top-color: rgba(62, 248, 255, 0.35) !important;
+}
+
+.resumen-saldos-titulo {
+  color: #3ef8ff;
+  text-shadow: 0 0 8px rgba(62, 248, 255, 0.35);
+}
+
+.total-general .resumen-saldos-inner {
+  background: rgba(6, 10, 28, 0.55);
+  border-style: solid;
+  border-color: rgba(62, 248, 255, 0.38);
+}
+
+.resumen-saldos-value--destacado {
+  font-size: 1.28rem;
+  color: #f7eeff !important;
+  text-shadow: 0 0 12px rgba(103, 245, 255, 0.45);
 }
 
 .balance-text {
@@ -1648,5 +1813,12 @@ th,
   .sale-note {
     padding: 14px;
   }
+}
+</style>
+
+<style>
+/* Pantalla: ocultar línea duplicada de flete (la versión impresa la muestra vía estilos inyectados) */
+.flete-print-line {
+  display: none;
 }
 </style>
