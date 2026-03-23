@@ -157,4 +157,85 @@ export const obtenerPrecioParaMedida = (preciosActuales, medida, fechaEmbarque, 
   const preciosParaFecha = obtenerPreciosParaFecha(preciosActuales, fechaEmbarque, clienteId);
   const medidaNormalizada = normalizarMedida(medida);
   return preciosParaFecha.get(medidaNormalizada) || null;
-}; 
+};
+
+/**
+ * Igual que obtenerPreciosParaFecha pero para la colección `preciosNotaVenta`:
+ * precios específicos usan el campo `clienteNombre` (texto del select de la nota).
+ */
+export const obtenerPreciosParaFechaNotaVenta = (preciosActuales, fechaEmbarque, clienteNombre = null) => {
+  if (!Array.isArray(preciosActuales)) {
+    return new Map();
+  }
+
+  const cliente = clienteNombre && String(clienteNombre).trim() ? String(clienteNombre).trim() : null;
+
+  if (!fechaEmbarque) {
+    fechaEmbarque = obtenerFechaActualISO();
+  }
+
+  const fechaLimiteISO = normalizarFechaISO(fechaEmbarque);
+  const preciosPorMedida = new Map();
+  const preciosEspecificos = new Map();
+
+  const preciosOrdenados = [...preciosActuales].sort((a, b) => {
+    const fechaA = normalizarFechaISO(a.fecha);
+    const fechaB = normalizarFechaISO(b.fecha);
+    if (fechaA !== fechaB) {
+      return fechaA < fechaB ? -1 : 1;
+    }
+    const timestampA = a.timestamp || 0;
+    const timestampB = b.timestamp || 0;
+    return timestampA - timestampB;
+  });
+
+  preciosOrdenados.forEach((precio) => {
+    if (!precio.fecha || !precio.producto) return;
+
+    const fechaPrecioISO = normalizarFechaISO(precio.fecha);
+    if (!esFechaValida(fechaPrecioISO, fechaLimiteISO)) return;
+
+    const medidaNormalizada = normalizarMedida(precio.producto);
+    const cn = precio.clienteNombre && String(precio.clienteNombre).trim();
+
+    if (cliente && cn === cliente) {
+      const precioExistente = preciosEspecificos.get(medidaNormalizada);
+      if (!precioExistente || fechaPrecioISO >= precioExistente.fecha) {
+        preciosEspecificos.set(medidaNormalizada, {
+          precio: precio.precio,
+          fecha: fechaPrecioISO,
+          timestamp: precio.timestamp || new Date().getTime()
+        });
+      }
+    } else if (!cn) {
+      const precioExistente = preciosPorMedida.get(medidaNormalizada);
+      if (!precioExistente || fechaPrecioISO >= precioExistente.fecha) {
+        preciosPorMedida.set(medidaNormalizada, {
+          precio: precio.precio,
+          fecha: fechaPrecioISO,
+          timestamp: precio.timestamp || new Date().getTime()
+        });
+      }
+    }
+  });
+
+  const preciosFinales = new Map();
+  for (const [medida, p] of preciosPorMedida) {
+    preciosFinales.set(medida, p.precio);
+  }
+  for (const [medida, p] of preciosEspecificos) {
+    preciosFinales.set(medida, p.precio);
+  }
+
+  return preciosFinales;
+};
+
+/**
+ * Precio sugerido para nota de venta (colección preciosNotaVenta).
+ * @param {string|null} clienteNombre - Mismo valor que el select "Cliente" de la nota.
+ */
+export const obtenerPrecioParaMedidaNotaVenta = (preciosActuales, medida, fechaEmbarque, clienteNombre = null) => {
+  const preciosParaFecha = obtenerPreciosParaFechaNotaVenta(preciosActuales, fechaEmbarque, clienteNombre);
+  const medidaNormalizada = normalizarMedida(medida);
+  return preciosParaFecha.get(medidaNormalizada) || null;
+};

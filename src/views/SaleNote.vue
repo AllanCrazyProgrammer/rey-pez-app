@@ -4,6 +4,28 @@
       <BackButton to="/NoteMenu" />
     </div>
     <h2 class="sale-note-title">Nota de Venta</h2>
+    <div class="precios-venta-toolbar">
+      <div class="precios-venta-toolbar-inner">
+        <PreciosNotaVentaModal
+          class="precios-modal-inline"
+          :clientes-lista="clients"
+          :cliente-nombre-nota="client"
+          @catalogo-actualizado="onPreciosCatalogoCambiado"
+        />
+        <button
+          type="button"
+          class="btn-refresh-catalogo"
+          :disabled="catalogoCargando"
+          @click="refreshPreciosCatalogo"
+        >
+          {{ catalogoCargando ? 'Actualizando…' : 'Actualizar catálogo' }}
+        </button>
+      </div>
+      <p v-if="catalogoError" class="catalogo-error" role="alert">{{ catalogoError }}</p>
+      <p class="catalogo-help">
+        El catálogo de precios de la nota es independiente del resto de la app: usa los clientes del selector de arriba. El desplegable de productos y el precio sugerido leen solo esa lista.
+      </p>
+    </div>
     <div class="folio-date">
       <p><strong>Folio:</strong> {{ formattedFolio }}</p>
       <p><strong>Fecha de Creación:</strong> {{ formattedCreationDate }}</p>
@@ -38,20 +60,47 @@
           ></textarea>
         </div>
       </div>
-      <div class="form-row">
+      <div class="form-row producto-precio-row">
+
+        <div class="producto-select-wrap">
+          <label for="catalogProduct">Producto:</label>
+          <select
+            id="catalogProduct"
+            v-model="selectedCatalogProduct"
+            class="catalog-select"
+            :disabled="catalogoCargando"
+          >
+            <option value="">{{ catalogoCargando ? 'Cargando catálogo…' : '— Seleccionar del catálogo —' }}</option>
+            <option v-for="p in productosCatalogo" :key="p" :value="p">{{ p }}</option>
+            <option value="__otro__">Otro (nombre manual)</option>
+          </select>
+        </div>
+        <div v-if="selectedCatalogProduct === '__otro__'" class="producto-manual-wrap">
+          <label for="productManual">Nombre del producto:</label>
+          <input
+            id="productManual"
+            type="text"
+            v-model="newProduct.product"
+            placeholder="Ej. medida o descripción"
+            autocomplete="off"
+          />
+        </div>
+        <div v-else-if="selectedCatalogProduct" class="producto-elegido-wrap">
+          <span class="producto-elegido-label">Seleccionado:</span>
+          <span class="producto-elegido-text">{{ newProduct.product }}</span>
+        </div>
 
         <div>
           <label for="kilos">Kilos:</label>
           <input type="number" step="0.01" v-model.number="newProduct.kilos" required >
         </div>
-        <div>
-          <label for="product">Producto:</label>
-          <input type="text" id="product" v-model="newProduct.product" required />
-        </div>
 
         <div>
           <label for="pricePerKilo">Precio por Kilo:</label>
-          <input type="number" id="pricePerKilo" v-model="newProduct.pricePerKilo" required />
+          <input type="number" id="pricePerKilo" v-model="newProduct.pricePerKilo" step="0.01" required />
+          <p v-if="precioSugeridoActivo" class="precio-sugerido-hint">
+            Sugerido según catálogo (general o cliente específico si aplica).
+          </p>
         </div>
         <button type="submit">Agregar Producto</button>
       </div>
@@ -209,14 +258,21 @@ import DatePicker from 'vue2-datepicker';
 import 'vue2-datepicker/index.css';
 import html2pdf from 'html2pdf.js';
 import AddClient from '@/components/AddClient.vue';
+import PreciosNotaVentaModal from '@/components/PreciosNotaVentaModal.vue';
 import { db } from '@/firebase';
 import { collection, addDoc, getDocs, setDoc, doc, getDoc, deleteDoc } from "firebase/firestore";
+import moment from 'moment';
+import 'moment/locale/es';
+import { cargarPreciosParaNotaVenta } from '@/utils/preciosVentaCatalogo';
+import { obtenerPrecioParaMedidaNotaVenta } from '@/utils/preciosHistoricos';
+import { obtenerFechaActualISO, normalizarFechaISO } from '@/utils/dateUtils';
 
 export default {
   components: {
     DatePicker,
     AddClient,
-    BackButton
+    BackButton,
+    PreciosNotaVentaModal
   },
   data() {
     const today = new Date();
@@ -255,6 +311,12 @@ export default {
       clientBalance: 0, // Saldo a favor del cliente
       showDeleteAbonoModal: false,
       selectedAbonoIndex: null,
+      preciosRaw: [],
+      productosCatalogo: [],
+      selectedCatalogProduct: '',
+      catalogoCargando: false,
+      catalogoError: null,
+      precioSugeridoActivo: false,
     };
   },
   computed: {
@@ -275,6 +337,18 @@ export default {
     },
     formattedCreationDate() {
       return this.formatDate(this.creationDate);
+    },
+    /** Fecha de la nota en ISO para cruzar con historial de precios */
+    fechaNotaISO() {
+      const d = this.currentDate;
+      if (!d) return obtenerFechaActualISO();
+      if (d instanceof Date && !isNaN(d.getTime())) {
+        return normalizarFechaISO(d);
+      }
+      if (typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d)) return d;
+      const parsed = moment(d, ['YYYY-MM-DD', 'DD MMMM YYYY', moment.ISO_8601], 'es', true);
+      if (parsed.isValid()) return parsed.format('YYYY-MM-DD');
+      return normalizarFechaISO(d);
     }
   },
   watch: {
@@ -284,6 +358,26 @@ export default {
     async client(newClient) {
       if (newClient) {
         await this.fetchClientBalance(newClient);
+      }
+      this.applySuggestedPrice();
+    },
+    fechaNotaISO() {
+      this.applySuggestedPrice();
+    },
+    selectedCatalogProduct(val, oldVal) {
+      if (val && val !== '__otro__') {
+        this.newProduct.product = val;
+        this.$nextTick(() => this.applySuggestedPrice());
+      }
+      if (val === '__otro__') {
+        this.newProduct.product = '';
+        this.newProduct.pricePerKilo = null;
+        this.precioSugeridoActivo = false;
+      }
+      if (!val && oldVal && oldVal !== '__otro__') {
+        this.newProduct.product = '';
+        this.newProduct.pricePerKilo = null;
+        this.precioSugeridoActivo = false;
       }
     }
   },
@@ -331,6 +425,22 @@ export default {
       }
     },
     async addProduct() {
+      if (!this.selectedCatalogProduct) {
+        alert('Seleccione un producto del catálogo u «Otro (nombre manual)».');
+        return;
+      }
+      if (this.selectedCatalogProduct === '__otro__') {
+        if (!this.newProduct.product || !String(this.newProduct.product).trim()) {
+          alert('Escriba el nombre del producto.');
+          return;
+        }
+      } else {
+        this.newProduct.product = this.selectedCatalogProduct;
+      }
+      if (this.newProduct.kilos == null || this.newProduct.pricePerKilo == null) {
+        alert('Complete kilos y precio por kilo.');
+        return;
+      }
       this.newProduct.total = this.newProduct.kilos * this.newProduct.pricePerKilo;
       this.products.push({ ...this.newProduct });
       this.resetForm();
@@ -342,12 +452,55 @@ export default {
       }
     },
     resetForm() {
+      this.selectedCatalogProduct = '';
+      this.precioSugeridoActivo = false;
       this.newProduct = {
         product: '',
         kilos: null,
         pricePerKilo: null,
         total: 0
       };
+    },
+    async refreshPreciosCatalogo() {
+      this.catalogoCargando = true;
+      this.catalogoError = null;
+      try {
+        const { raw, productosCatalogo } = await cargarPreciosParaNotaVenta();
+        this.preciosRaw = raw;
+        this.productosCatalogo = productosCatalogo;
+        this.$nextTick(() => this.applySuggestedPrice());
+      } catch (e) {
+        console.error('Error al cargar catálogo de precios:', e);
+        this.catalogoError = 'No se pudo cargar el catálogo. Revisa la conexión o vuelve a intentar.';
+        this.preciosRaw = [];
+        this.productosCatalogo = [];
+      } finally {
+        this.catalogoCargando = false;
+      }
+    },
+    onPreciosCatalogoCambiado() {
+      this.refreshPreciosCatalogo();
+      this.applySuggestedPrice();
+    },
+    applySuggestedPrice() {
+      const prod = this.newProduct.product;
+      if (!prod || this.selectedCatalogProduct === '__otro__' || !this.preciosRaw.length) {
+        this.precioSugeridoActivo = false;
+        return;
+      }
+      const nombreCliente = this.client && String(this.client).trim() ? String(this.client).trim() : null;
+      const precio = obtenerPrecioParaMedidaNotaVenta(
+        this.preciosRaw,
+        prod,
+        this.fechaNotaISO,
+        nombreCliente
+      );
+      if (precio != null && precio !== '' && !Number.isNaN(Number(precio))) {
+        this.newProduct.pricePerKilo = Number(precio);
+        this.precioSugeridoActivo = true;
+      } else {
+        this.precioSugeridoActivo = false;
+      }
     },
     removeProduct(index) {
       this.products.splice(index, 1);
@@ -521,6 +674,7 @@ export default {
   },
   async mounted() {
     await this.fetchClients();
+    await this.refreshPreciosCatalogo();
     if (this.$route.params.noteId) {
       this.noteId = this.$route.params.noteId;
       await this.fetchNoteData();
@@ -952,6 +1106,109 @@ th {
 
 .sale-note-title {
   margin-top: 10px;
+}
+
+.precios-venta-toolbar {
+  margin-bottom: 1.25rem;
+  padding: 1rem;
+  border-radius: 12px;
+  background: rgba(12, 18, 48, 0.55);
+  border: 1px solid rgba(62, 248, 255, 0.22);
+}
+
+.precios-venta-toolbar-inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 12px;
+}
+
+.precios-modal-inline {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+
+.precios-modal-inline >>> .btn-open {
+  width: 100%;
+  min-height: 48px;
+  justify-content: center;
+}
+
+.btn-refresh-catalogo {
+  flex: 0 0 auto;
+  align-self: center;
+  white-space: nowrap;
+}
+
+.catalogo-help {
+  margin: 0.75rem 0 0;
+  font-size: 0.88rem;
+  line-height: 1.45;
+  color: rgba(210, 198, 255, 0.88);
+}
+
+.catalogo-error {
+  margin: 0.5rem 0 0;
+  font-size: 0.9rem;
+  color: #ff8da1;
+}
+
+.producto-precio-row {
+  align-items: flex-end;
+}
+
+.producto-select-wrap,
+.producto-manual-wrap {
+  flex: 1 1 200px;
+  min-width: 160px;
+}
+
+.catalog-select {
+  width: 100%;
+}
+
+.producto-elegido-wrap {
+  flex: 1 1 180px;
+  min-width: 140px;
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  background: rgba(255, 95, 217, 0.12);
+  border: 1px solid rgba(62, 248, 255, 0.2);
+}
+
+.producto-elegido-label {
+  display: block;
+  font-size: 0.8rem;
+  color: rgba(210, 198, 255, 0.85);
+  margin-bottom: 4px;
+}
+
+.producto-elegido-text {
+  font-weight: 600;
+  color: #67f5ff;
+  word-break: break-word;
+}
+
+.precio-sugerido-hint {
+  margin: 6px 0 0;
+  font-size: 0.78rem;
+  color: rgba(52, 245, 197, 0.9);
+  line-height: 1.35;
+}
+
+@media (max-width: 768px) {
+  .precios-venta-toolbar-inner {
+    flex-direction: column;
+  }
+
+  .btn-refresh-catalogo {
+    width: 100%;
+  }
+
+  .producto-precio-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }
 
 .client-balance-indicator {

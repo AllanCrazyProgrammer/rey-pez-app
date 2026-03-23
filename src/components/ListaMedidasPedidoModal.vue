@@ -2,13 +2,8 @@
   <div v-if="isOpen" class="modal-overlay" @click.self="$emit('close')">
     <div class="modal-content">
       <div class="modal-header">
-        <h3>De mañana para pasado</h3>
-        <div class="header-actions">
-          <button class="config-btn" title="Configurar medidas disponibles" @click="isConfigModalOpen = true">
-            ⚙ Configurar medidas
-          </button>
-          <button class="close-btn" @click="$emit('close')">×</button>
-        </div>
+        <h3>Lista de medidas a sacar</h3>
+        <button class="close-btn" @click="$emit('close')">×</button>
       </div>
 
       <p class="modal-subtitle">
@@ -32,13 +27,13 @@
           </div>
 
           <div class="pedido-input-row">
-            <MultiColumnMeasureDropdown
-              :input-id="`pedido-${grupo.id}`"
-              :value="grupo.medidaPedido"
-              :options="activeOptions"
-              placeholder="Ej. 71/90"
-              class="flex-1"
-              @input="grupo.medidaPedido = $event"
+            <input
+              :id="`pedido-${grupo.id}`"
+              v-model.trim="grupo.medidaPedido"
+              type="text"
+              class="text-input"
+              placeholder='Ej. 71/90'
+              list="medidas-options"
             />
             <label class="ozuna-label" :title="grupo.ozuna ? 'Ozuna' : 'Marcar como Ozuna'">
               <input type="checkbox" v-model="grupo.ozuna" class="ozuna-checkbox" />
@@ -53,10 +48,12 @@
             :key="item.id"
             class="item-row"
           >
-            <MultiColumnMeasureDropdown
-              :value="item.medida"
-              placeholder="Medida a sacar (ej. 67/90)"
-              @input="item.medida = $event"
+            <input
+              v-model.trim="item.medida"
+              type="text"
+              class="text-input"
+              placeholder='Medida a sacar (ej. 67/90)'
+              list="medidas-options"
             />
             <div class="cantidad-col">
               <input
@@ -91,6 +88,10 @@
 
       <button class="add-group-btn" @click="addGroup">+ Agregar medida del pedido</button>
 
+      <datalist id="medidas-options">
+        <option v-for="medida in medidaOptions" :key="medida" :value="medida"></option>
+      </datalist>
+
       <div class="modal-actions">
         <button class="pdf-btn" :disabled="isGeneratingPdf" @click="generarPdfResumen">
           {{ isGeneratingPdf ? 'Generando PDF...' : 'PDF resumido' }}
@@ -101,30 +102,14 @@
         </button>
       </div>
     </div>
-
-    <MedidasDisponiblesConfigModal
-      :is-open="isConfigModalOpen"
-      :medidas-activas="medidasDisponibles"
-      :medidas-del-sistema="medidas"
-      @close="isConfigModalOpen = false"
-      @update="onUpdateMedidasDisponibles"
-    />
   </div>
 </template>
 
 <script>
 import { generarResumenMedidasSacadaPDF } from '@/utils/sacadasResumenPdf';
-import MultiColumnMeasureDropdown from '@/components/MultiColumnMeasureDropdown.vue';
-import MedidasDisponiblesConfigModal from '@/components/MedidasDisponiblesConfigModal.vue';
-
-const LS_KEY = 'reyPez_medidasDisponibles';
 
 export default {
   name: 'ListaMedidasPedidoModal',
-  components: {
-    MultiColumnMeasureDropdown,
-    MedidasDisponiblesConfigModal
-  },
   props: {
     isOpen: {
       type: Boolean,
@@ -138,10 +123,6 @@ export default {
       type: Object,
       default: null
     },
-    onSaveLista: {
-      type: Function,
-      default: null
-    },
     medidas: {
       type: Array,
       default: () => []
@@ -150,44 +131,27 @@ export default {
   data() {
     return {
       grupos: [],
-      isGeneratingPdf: false,
-      isConfigModalOpen: false,
-      medidasDisponibles: []
+      isGeneratingPdf: false
     };
   },
   computed: {
     fechaSacada() {
       return this.sacada?.fechaTexto || 'Sin fecha';
     },
-    activeOptions() {
-      return this.medidasDisponibles;
+    medidaOptions() {
+      return this.medidas
+        .map((medida) => medida?.nombre || medida?.medida || medida?.descripcion || '')
+        .filter(Boolean);
     }
   },
   watch: {
     isOpen(value) {
       if (value) {
-        this.loadMedidasDisponibles();
         this.loadFromSacada();
       }
     }
   },
   methods: {
-    loadMedidasDisponibles() {
-      try {
-        const raw = localStorage.getItem(LS_KEY);
-        this.medidasDisponibles = raw ? JSON.parse(raw) : [];
-      } catch {
-        this.medidasDisponibles = [];
-      }
-    },
-    onUpdateMedidasDisponibles(newList) {
-      this.medidasDisponibles = newList;
-      try {
-        localStorage.setItem(LS_KEY, JSON.stringify(newList));
-      } catch {
-        // localStorage no disponible
-      }
-    },
     createEmptyItem() {
       return {
         id: this.generateId(),
@@ -263,17 +227,9 @@ export default {
         }))
         .filter((group) => group.medidaPedido && group.items.length > 0);
     },
-    async persistLista(payload, options = {}) {
-      if (typeof this.onSaveLista === 'function') {
-        return this.onSaveLista(payload, options);
-      }
-
-      this.$emit('save', payload);
-      return true;
-    },
-    async save() {
+    save() {
       const payload = this.normalizeGroups();
-      await this.persistLista(payload);
+      this.$emit('save', payload);
     },
     async generarPdfResumen() {
       const payload = this.normalizeGroups();
@@ -285,16 +241,6 @@ export default {
 
       this.isGeneratingPdf = true;
       try {
-        const wasSaved = await this.persistLista(payload, {
-          closeOnSuccess: false,
-          showSuccessAlert: false
-        });
-
-        if (wasSaved === false) {
-          alert('No se pudo guardar la lista antes de generar el PDF');
-          return;
-        }
-
         await generarResumenMedidasSacadaPDF({
           fecha: this.fechaSacada,
           grupos: payload
@@ -342,28 +288,6 @@ export default {
 .modal-header h3 {
   margin: 0;
   color: #3760b0;
-}
-
-.header-actions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.config-btn {
-  background: #e0ebff;
-  color: #24457f;
-  border: none;
-  border-radius: 6px;
-  padding: 7px 12px;
-  font-size: 0.88rem;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: background 0.12s;
-}
-
-.config-btn:hover {
-  background: #c7d9ff;
 }
 
 .close-btn {
@@ -423,6 +347,16 @@ export default {
   font-weight: 600;
 }
 
+.text-input,
+.number-input {
+  width: 100%;
+  border: 1px solid #cfd7e6;
+  border-radius: 6px;
+  padding: 9px 10px;
+  font-size: 0.95rem;
+  box-sizing: border-box;
+}
+
 .grupo-card--ozuna {
   background: #d1fae5;
   border-color: #6ee7b7;
@@ -434,9 +368,8 @@ export default {
   align-items: center;
 }
 
-.flex-1 {
+.pedido-input-row .text-input {
   flex: 1;
-  min-width: 0;
 }
 
 .ozuna-label {
@@ -479,13 +412,8 @@ export default {
   gap: 4px;
 }
 
-.number-input {
+.cantidad-col .number-input {
   width: 80px;
-  border: 1px solid #cfd7e6;
-  border-radius: 6px;
-  padding: 9px 10px;
-  font-size: 0.95rem;
-  box-sizing: border-box;
 }
 
 .kilos-label {
@@ -510,6 +438,13 @@ export default {
   font-weight: 700;
   color: #92400e;
   line-height: 1;
+}
+
+.remove-item-btn {
+  background: #dc3545;
+  color: #fff;
+  min-width: 42px;
+  padding: 8px 10px;
 }
 
 .grupo-total {
@@ -539,13 +474,6 @@ export default {
 .remove-item-btn {
   background: #f8d7da;
   color: #8a1f2d;
-}
-
-.remove-item-btn {
-  background: #dc3545;
-  color: #fff;
-  min-width: 42px;
-  padding: 8px 10px;
 }
 
 .add-item-btn,
@@ -615,10 +543,6 @@ export default {
   .pdf-btn,
   .primary-btn {
     width: 100%;
-  }
-
-  .config-btn span {
-    display: none;
   }
 }
 

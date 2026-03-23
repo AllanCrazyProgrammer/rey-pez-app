@@ -941,7 +941,8 @@ export default {
         try {
           await deleteDoc(doc(db, 'precios', precio.id));
           await this.cargarPreciosActuales();
-          
+          this.$emit('precio-agregado', { eliminado: true });
+
           // Si el producto seleccionado aún existe, actualizar su historial
           if (this.productoSeleccionado) {
             const productoActualizado = this.preciosActuales.find(p => p.producto === this.productoSeleccionado.producto);
