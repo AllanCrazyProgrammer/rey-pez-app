@@ -184,6 +184,30 @@
           </div>
         </div>
         <button type="submit" class="add-abono-button">Agregar Abono</button>        </form>
+        <div
+          v-if="client && products.length"
+          class="resumen-saldos-acumulados"
+          aria-label="Resumen de saldos acumulados"
+        >
+          <div class="resumen-saldos-inner">
+            <div class="resumen-saldos-row resumen-saldos-row--anterior">
+              <span class="resumen-saldos-label">Saldo Acumulado Anterior</span>
+              <span class="resumen-saldos-value">${{ formatResumenCurrency(saldoAcumuladoAnteriores) }}</span>
+            </div>
+            <div class="resumen-saldos-row">
+              <span class="resumen-saldos-label">Saldo Hoy</span>
+              <span class="resumen-saldos-value">${{ formatResumenCurrency(totalFinal) }}</span>
+            </div>
+            <div class="resumen-saldos-row resumen-saldos-row--bold">
+              <span class="resumen-saldos-label">Total</span>
+              <span class="resumen-saldos-value">${{ formatResumenCurrency(saldoRestante) }}</span>
+            </div>
+            <div class="resumen-saldos-row resumen-saldos-row--bold resumen-saldos-row--nuevo">
+              <span class="resumen-saldos-label">Nuevo Saldo Acumulado</span>
+              <span class="resumen-saldos-value">${{ formatResumenCurrency(nuevoSaldoAcumulado) }}</span>
+            </div>
+          </div>
+        </div>
         <div v-if="abonos.length">
           <h3>Abonos Realizados</h3>
           <div class="table-responsive">
@@ -208,13 +232,12 @@
               </tbody>
             </table>
           </div>
-          <div class="abonos-summary">
-            <p><strong>Total Abonado:</strong> ${{ formatNumber(totalAbonado) }}</p>
-            <p><strong>Saldo Restante:</strong> ${{ formatNumber(saldoRestante) }}</p>
-            <p class="estado-pago" :class="{ 'pagado': isPaid, 'no-pagado': !isPaid }">
-              <strong>Estado:</strong> {{ isPaid ? 'Pagada' : 'No Pagada' }}
-            </p>
-          </div>
+        </div>
+        <div v-if="abonos.length" class="abonos-summary">
+          <p><strong>Total Abonado:</strong> ${{ formatNumber(totalAbonado) }}</p>
+          <p class="estado-pago" :class="{ 'pagado': isPaid, 'no-pagado': !isPaid }">
+            <strong>Estado:</strong> {{ isPaid ? 'Pagada' : 'No Pagada' }}
+          </p>
         </div>
       </div>
     </div>
@@ -260,7 +283,7 @@ import html2pdf from 'html2pdf.js';
 import AddClient from '@/components/AddClient.vue';
 import PreciosNotaVentaModal from '@/components/PreciosNotaVentaModal.vue';
 import { db } from '@/firebase';
-import { collection, addDoc, getDocs, setDoc, doc, getDoc, deleteDoc } from "firebase/firestore";
+import { collection, addDoc, getDocs, setDoc, doc, getDoc, deleteDoc } from 'firebase/firestore';
 import moment from 'moment';
 import 'moment/locale/es';
 import { cargarPreciosParaNotaVenta } from '@/utils/preciosVentaCatalogo';
@@ -317,6 +340,8 @@ export default {
       catalogoCargando: false,
       catalogoError: null,
       precioSugeridoActivo: false,
+      /** Suma de saldos restantes de notas del mismo cliente anteriores a esta (o de todas las guardadas si es nota nueva). */
+      saldoAcumuladoAnteriores: 0,
     };
   },
   computed: {
@@ -331,6 +356,14 @@ export default {
     },
     saldoRestante() {
       return this.totalFinal - this.totalAbonado;
+    },
+    /**
+     * Deuda acumulada *hasta esta nota* en el tiempo: solo notas anteriores + pendiente de esta.
+     * No incluye notas posteriores en la línea de tiempo (pueden existir pero no suman aquí).
+     */
+    nuevoSaldoAcumulado() {
+      const pendienteEsta = Math.max(0, this.saldoRestante);
+      return this.saldoAcumuladoAnteriores + pendienteEsta;
     },
     formattedFolio() {
       return `F-${this.folio.toString().padStart(4, '0')}`;
@@ -358,8 +391,17 @@ export default {
     async client(newClient) {
       if (newClient) {
         await this.fetchClientBalance(newClient);
+        await this.fetchSaldoAcumuladoAnteriores();
+      } else {
+        this.saldoAcumuladoAnteriores = 0;
       }
       this.applySuggestedPrice();
+    },
+    currentDate() {
+      if (this.client) this.fetchSaldoAcumuladoAnteriores();
+    },
+    folio() {
+      if (this.client) this.fetchSaldoAcumuladoAnteriores();
     },
     fechaNotaISO() {
       this.applySuggestedPrice();
@@ -585,6 +627,82 @@ export default {
       } catch (error) {
         console.error('Error fetching note: ', error);
       }
+      await this.fetchSaldoAcumuladoAnteriores();
+    },
+    /**
+     * Pendiente de notas del mismo cliente que van *antes en el tiempo* que la nota actual
+     * (fecha de nota → fecha de creación → folio → id), y que no están pagadas (!note.isPaid).
+     * No incluye notas posteriores (ej. una nota de marzo posterior a una de marzo anterior).
+     */
+    async fetchSaldoAcumuladoAnteriores() {
+      const clientName = this.client && String(this.client).trim();
+      if (!clientName) {
+        this.saldoAcumuladoAnteriores = 0;
+        return;
+      }
+      try {
+        const querySnapshot = await getDocs(collection(db, 'notes'));
+        const clientNotes = querySnapshot.docs
+          .map((entry) => {
+            const data = entry.data();
+            return {
+              id: entry.id,
+              ...data,
+              abonos: Array.isArray(data.abonos) ? data.abonos : [],
+              products: Array.isArray(data.products) ? data.products : []
+            };
+          })
+          .filter((n) => String(n.client || '').trim() === clientName);
+
+        const parseTime = (v) => {
+          if (v == null || v === '') return 0;
+          const t = new Date(v).getTime();
+          return Number.isNaN(t) ? 0 : t;
+        };
+        const compareNoteOrder = (a, b) => {
+          const td = parseTime(a.currentDate) - parseTime(b.currentDate);
+          if (td !== 0) return td;
+          const tc = parseTime(a.creationDate) - parseTime(b.creationDate);
+          if (tc !== 0) return tc;
+          const f = (Number(a.folio) || 0) - (Number(b.folio) || 0);
+          if (f !== 0) return f;
+          return String(a.id || '').localeCompare(String(b.id || ''));
+        };
+
+        const ref = {
+          currentDate: this.currentDate,
+          creationDate: this.creationDate,
+          folio: this.folio,
+          id: this.noteId || '\uffff'
+        };
+
+        const saldoRestanteNota = (note) => {
+          if (note.isPaid) {
+            return 0;
+          }
+          const products = Array.isArray(note.products) ? note.products : [];
+          const subtotal = products.reduce(
+            (sum, p) => sum + (Number(p.kilos) || 0) * (Number(p.pricePerKilo) || 0),
+            0
+          );
+          const flete = Number(note.flete) || 0;
+          const totalFinal = subtotal - flete;
+          const totalAbonado = note.abonos.reduce((s, a) => s + (Number(a.monto) || 0), 0);
+          const r = totalFinal - totalAbonado;
+          return r > 0 ? r : 0;
+        };
+
+        let sumOtros = 0;
+        for (const n of clientNotes) {
+          if (this.noteId && n.id === this.noteId) continue;
+          if (compareNoteOrder(n, ref) >= 0) continue;
+          sumOtros += saldoRestanteNota(n);
+        }
+        this.saldoAcumuladoAnteriores = sumOtros;
+      } catch (error) {
+        console.error('Error al calcular saldo acumulado anterior:', error);
+        this.saldoAcumuladoAnteriores = 0;
+      }
     },
     addAbono() {
       this.abonos.push({ ...this.newAbono });
@@ -598,6 +716,12 @@ export default {
     },
     formatNumber(value) {
       return value.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+    },
+    /** Formato tipo estado de cuenta (2 decimales, es-MX), para el bloque de saldos acumulados. */
+    formatResumenCurrency(value) {
+      const n = Number(value);
+      const safe = Number.isFinite(n) ? n : 0;
+      return safe.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     },
     formatDate(date) {
       const options = { year: 'numeric', month: 'long', day: 'numeric' };
@@ -681,6 +805,8 @@ export default {
       if (this.client) {
         await this.fetchClientBalance(this.client);
       }
+    } else if (this.client) {
+      await this.fetchSaldoAcumuladoAnteriores();
     }
   }
 };
@@ -892,6 +1018,83 @@ th {
 .abonos-summary {
   margin-top: 1em;
   font-size: 1.1em;
+}
+
+/* Resumen saldos (misma familia visual que flete / total-general) */
+.resumen-saldos-acumulados {
+  margin-top: 1.25rem;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.resumen-saldos-inner {
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid rgba(62, 248, 255, 0.28);
+  background: rgba(12, 18, 48, 0.74);
+  box-shadow: 0 0 0 1px rgba(62, 248, 255, 0.12) inset;
+}
+
+.resumen-saldos-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 1rem;
+  padding: 0.65rem 1rem;
+  font-size: 0.98rem;
+  color: rgba(245, 236, 255, 0.92);
+  border-bottom: 1px solid rgba(62, 248, 255, 0.12);
+}
+
+.resumen-saldos-row:last-child {
+  border-bottom: none;
+}
+
+.resumen-saldos-row--anterior {
+  background: rgba(255, 95, 217, 0.12);
+}
+
+.resumen-saldos-label {
+  font-weight: 400;
+  text-align: left;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.resumen-saldos-value {
+  font-weight: 400;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  flex: 0 0 auto;
+  min-width: 7.5rem;
+  color: #67f5ff;
+}
+
+.resumen-saldos-row--bold .resumen-saldos-label,
+.resumen-saldos-row--bold .resumen-saldos-value {
+  font-weight: 700;
+}
+
+.resumen-saldos-row--bold .resumen-saldos-value {
+  color: #f7eeff;
+}
+
+.resumen-saldos-row--nuevo {
+  background: rgba(11, 14, 38, 0.5);
+  border-top: 1px solid rgba(62, 248, 255, 0.2);
+}
+
+@media (max-width: 768px) {
+  .resumen-saldos-row {
+    padding: 0.55rem 0.75rem;
+    font-size: 0.92rem;
+  }
+
+  .resumen-saldos-value {
+    width: 100%;
+    text-align: right;
+  }
 }
 
 .estado-pago {
@@ -1347,6 +1550,7 @@ th {
 .folio-date p,
 .sale-note label,
 .abonos-summary p,
+.resumen-saldos-label,
 .modal-content p {
   color: rgba(245, 236, 255, 0.9);
 }
@@ -1401,7 +1605,8 @@ th,
 .flete-section,
 .total-general,
 .observaciones-resumen,
-.client-balance-indicator {
+.client-balance-indicator,
+.resumen-saldos-inner {
   background: rgba(12, 18, 48, 0.74);
   border: 1px solid rgba(62, 248, 255, 0.28);
   color: #f7eeff;
