@@ -55,13 +55,35 @@
           </summary>
 
           <ul class="notes-list">
-            <li v-for="note in entry.notes" :key="note.id" class="note-row">
+            <li v-for="note in notesPageSlice(entry)" :key="note.id" class="note-row">
               <button type="button" class="note-link" @click="goToEditNote(note.id)">
                 Nota {{ note.folio }} - {{ note.currentDate }}
               </button>
               <span class="note-amount">Pendiente: {{ calculateNoteDebt(note) | currency }}</span>
             </li>
           </ul>
+
+          <div v-if="notesTotalPages(entry) > 1" class="pagination notes-list-pagination">
+            <button
+              type="button"
+              class="btn btn-muted btn-small"
+              :disabled="notesCurrentPage(entry) <= 1"
+              @click="prevNotesPage(entry.client)"
+            >
+              Anterior
+            </button>
+            <span class="notes-page-label">
+              Página {{ notesCurrentPage(entry) }} de {{ notesTotalPages(entry) }}
+            </span>
+            <button
+              type="button"
+              class="btn btn-muted btn-small"
+              :disabled="notesCurrentPage(entry) >= notesTotalPages(entry)"
+              @click="nextNotesPage(entry.client)"
+            >
+              Siguiente
+            </button>
+          </div>
 
           <div class="client-actions">
             <button type="button" class="btn btn-success" @click="showAbonoModal(entry.client)">
@@ -176,8 +198,11 @@ export default {
   data() {
     return {
       notesByClient: {},
-      paymentFilter: 'unpaid',
+      paymentFilter: 'all',
       clientSearch: '',
+      /** Paginación de la lista de notas por cliente (nombre de cliente → página 1-based). */
+      notesListPage: {},
+      notesPerPage: 5,
       showModal: false,
       selectedClient: '',
       abonoAmount: null,
@@ -235,6 +260,7 @@ export default {
           debt: this.totalDebtByClient[client] || 0,
           balance: this.clientBalances[client] || 0
         }))
+        .filter((entry) => entry.debt > 0)
         .sort((a, b) => b.debt - a.debt || a.client.localeCompare(b.client));
     },
     totalVisibleDebt() {
@@ -266,6 +292,14 @@ export default {
       return pages > 0 ? pages : 1;
     }
   },
+  watch: {
+    paymentFilter() {
+      this.notesListPage = {};
+    },
+    clientSearch() {
+      this.notesListPage = {};
+    }
+  },
   filters: {
     currency(value) {
       if (!value) {
@@ -283,6 +317,33 @@ export default {
     },
     goToEditNote(noteId) {
       this.$router.push({ name: 'editar-nota', params: { noteId } });
+    },
+    notesTotalPages(entry) {
+      return Math.max(1, Math.ceil(entry.notes.length / this.notesPerPage));
+    },
+    notesCurrentPage(entry) {
+      const totalPages = this.notesTotalPages(entry);
+      let page = this.notesListPage[entry.client] || 1;
+      return Math.min(Math.max(1, page), totalPages);
+    },
+    notesPageSlice(entry) {
+      const perPage = this.notesPerPage;
+      const totalPages = this.notesTotalPages(entry);
+      let page = this.notesListPage[entry.client] || 1;
+      page = Math.min(Math.max(1, page), totalPages);
+      const start = (page - 1) * perPage;
+      return entry.notes.slice(start, start + perPage);
+    },
+    prevNotesPage(client) {
+      const p = this.notesListPage[client] || 1;
+      if (p > 1) this.$set(this.notesListPage, client, p - 1);
+    },
+    nextNotesPage(client) {
+      const entry = this.clientEntries.find((e) => e.client === client);
+      if (!entry) return;
+      const total = this.notesTotalPages(entry);
+      const p = this.notesListPage[client] || 1;
+      if (p < total) this.$set(this.notesListPage, client, p + 1);
     },
     calculateNoteTotal(note) {
       const products = Array.isArray(note.products) ? note.products : [];
@@ -742,6 +803,20 @@ export default {
   white-space: nowrap;
 }
 
+.notes-list-pagination {
+  padding: 0 12px 12px;
+  border-top: 1px solid rgba(62, 248, 255, 0.12);
+  margin-top: 0;
+}
+
+.notes-page-label {
+  font-size: 0.88rem;
+  color: var(--vw-soft);
+  text-align: center;
+  flex: 1;
+  min-width: 0;
+}
+
 .client-actions {
   display: flex;
   gap: 10px;
@@ -930,6 +1005,12 @@ export default {
   .note-row {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .notes-list-pagination {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
   }
 
   .client-actions {
