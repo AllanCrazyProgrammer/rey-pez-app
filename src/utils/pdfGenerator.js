@@ -175,68 +175,92 @@ export async function generarNotaVentaPDF(embarque, clientesDisponibles, cliente
     const COLOR_NARANJA_OSCURO = '#d35400';
     const colorMarca = esNotaVeronica ? COLOR_NARANJA : COLOR_MORADO;
     const colorMarcaOscuro = esNotaVeronica ? COLOR_NARANJA_OSCURO : COLOR_MORADO_OSCURO;
-    
-    // Primero generamos el contenido con precios
-    const contenidoConPrecios = [
-      {
-        columns: [
-          {
-            image: logoBase64,
-            width: 100,
-            alignment: 'left',
-            margin: [0, 0, 0, 10]
-          },
-          {
-            text: 'Nota de Venta',
-            style: 'notaVentaHeader',
-            alignment: 'center',
-            margin: [0, 20, 0, 0]
-          },
-          {
-            stack: [
-              {
-                text: `Fecha: ${new Date(embarque.fecha).toLocaleString('es-MX', { 
-                  timeZone: 'UTC',
-                  year: 'numeric',
-                  month: '2-digit',
-                  day: '2-digit'
-                })}`,
-                alignment: 'right',
-                margin: [0, 20, 0, 0]
-              },
-              {
-                text: `Carga con: ${embarque.cargaCon || 'No especificado'}`,
-                alignment: 'right',
-                margin: [0, 5, 0, 0]
-              }
-            ]
-          }
-        ]
-      },
-      { text: '\n' },
-              ...(await generarContenidoClientes(embarque, clientesDisponibles, clientesJuntarMedidas, clientesReglaOtilio, clientesIncluirPrecios, clientesSumarKgCatarro, clientesCuentaEnPdf)),
-      // Agregar la nueva sección de rendimientos
-      ...generarSeccionRendimientos({
-        ...embarque,
-        // Asegurarnos de que los kilos crudos estén disponibles
-        kilosCrudos: embarque.kilosCrudos || {}
-      }, clientesDisponibles),
-    ];
-    
-    // Determinar si se deben mostrar precios en la segunda página
-    // Solo mostrar precios en la segunda página si están incluidas las cuentas en PDF
+
+    const columnasEncabezadoNotaVenta = {
+      columns: [
+        {
+          image: logoBase64,
+          width: 100,
+          alignment: 'left',
+          margin: [0, 0, 0, 10]
+        },
+        {
+          text: 'Nota de Venta',
+          style: 'notaVentaHeader',
+          alignment: 'center',
+          margin: [0, 20, 0, 0]
+        },
+        {
+          stack: [
+            {
+              text: `Fecha: ${new Date(embarque.fecha).toLocaleString('es-MX', {
+                timeZone: 'UTC',
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit'
+              })}`,
+              alignment: 'right',
+              margin: [0, 20, 0, 0]
+            },
+            {
+              text: `Carga con: ${embarque.cargaCon || 'No especificado'}`,
+              alignment: 'right',
+              margin: [0, 5, 0, 0]
+            }
+          ]
+        }
+      ]
+    };
+
+    const embarqueRendimientos = {
+      ...embarque,
+      kilosCrudos: embarque.kilosCrudos || {}
+    };
+
+    // Determinar si se deben mostrar precios en la segunda página (resto de clientes)
     const mostrarPreciosSegundaPagina = {};
     const mostrarCuentasSegundaPagina = {};
-    
-    // Iterar sobre cada cliente para determinar si debe mostrar precios en la segunda página
-    Object.keys(clientesIncluirPrecios || {}).forEach(clienteId => {
+    Object.keys(clientesIncluirPrecios || {}).forEach((clienteId) => {
       const incluirPrecios = clientesIncluirPrecios[clienteId];
       const cuentaEnPdf = clientesCuentaEnPdf[clienteId];
-      
-      // Solo mostrar precios en la segunda página si incluirPrecios es true Y cuentaEnPdf es true
       mostrarPreciosSegundaPagina[clienteId] = incluirPrecios && cuentaEnPdf;
       mostrarCuentasSegundaPagina[clienteId] = cuentaEnPdf;
     });
+
+    // Lorena/Verónica: 1ª y 2ª sin precios; solo la última hoja lleva precios (y Gde c/c × 19.5 en crudos)
+    let contenidoPagina1;
+    if (esNotaVeronica) {
+      contenidoPagina1 = [
+        columnasEncabezadoNotaVenta,
+        { text: '\n' },
+        ...(await generarContenidoClientesSinPrecios(
+          embarque,
+          clientesDisponibles,
+          clientesJuntarMedidas,
+          clientesReglaOtilio,
+          {},
+          clientesSumarKgCatarro,
+          {},
+          20
+        ))
+        // Rendimientos solo en la última página (con precios) para no repetir bloques
+      ];
+    } else {
+      contenidoPagina1 = [
+        columnasEncabezadoNotaVenta,
+        { text: '\n' },
+        ...(await generarContenidoClientes(
+          embarque,
+          clientesDisponibles,
+          clientesJuntarMedidas,
+          clientesReglaOtilio,
+          clientesIncluirPrecios,
+          clientesSumarKgCatarro,
+          clientesCuentaEnPdf
+        )),
+        ...generarSeccionRendimientos(embarqueRendimientos, clientesDisponibles)
+      ];
+    }
 
     // Ahora generamos el contenido sin precios (segunda página)
     const contenidoSinPrecios = [
@@ -276,17 +300,82 @@ export async function generarNotaVentaPDF(embarque, clientesDisponibles, cliente
         ]
       },
       { text: '\n' },
-              ...(await generarContenidoClientesSinPrecios(embarque, clientesDisponibles, clientesJuntarMedidas, clientesReglaOtilio, mostrarPreciosSegundaPagina, clientesSumarKgCatarro, mostrarCuentasSegundaPagina)),
+              ...(await generarContenidoClientesSinPrecios(
+                embarque,
+                clientesDisponibles,
+                clientesJuntarMedidas,
+                clientesReglaOtilio,
+                esNotaVeronica ? {} : mostrarPreciosSegundaPagina,
+                clientesSumarKgCatarro,
+                esNotaVeronica ? {} : mostrarCuentasSegundaPagina,
+                20
+              )),
     ];
+
+    // Tercera página solo para nota exclusiva Lorena/Verónica: única hoja con precios (Gde c/c × 19.5 en crudos)
+    const contenidoTerceraLorenaVeronicaReferencia = esNotaVeronica
+      ? [
+          {
+            columns: [
+              {
+                image: logoBase64,
+                width: 100,
+                alignment: 'left',
+                margin: [0, 0, 0, 10]
+              },
+              {
+                text: 'Nota de Venta',
+                style: 'notaVentaHeader',
+                alignment: 'center',
+                margin: [0, 20, 0, 0]
+              },
+              {
+                stack: [
+                  {
+                    text: `Fecha: ${new Date(embarque.fecha).toLocaleString('es-MX', {
+                      timeZone: 'UTC',
+                      year: 'numeric',
+                      month: '2-digit',
+                      day: '2-digit'
+                    })}`,
+                    alignment: 'right',
+                    margin: [0, 20, 0, 0]
+                  },
+                  {
+                    text: `Carga con: ${embarque.cargaCon || 'No especificado'}`,
+                    alignment: 'right',
+                    margin: [0, 5, 0, 0]
+                  }
+                ]
+              }
+            ]
+          },
+          { text: '\n' },
+          ...(await generarContenidoClientes(
+            embarque,
+            clientesDisponibles,
+            clientesJuntarMedidas,
+            clientesReglaOtilio,
+            clientesIncluirPrecios,
+            clientesSumarKgCatarro,
+            clientesCuentaEnPdf,
+            19.5
+          )),
+          ...generarSeccionRendimientos(embarqueRendimientos, clientesDisponibles)
+        ]
+      : [];
 
     const docDefinition = {
       content: [
-        // Primera página con precios
-        ...contenidoConPrecios,
+        // Primera página: con precios (resto de clientes) o sin precios (Lorena/Verónica)
+        ...contenidoPagina1,
         // Salto de página
         { text: '', pageBreak: 'before' },
         // Segunda página sin precios
-        ...contenidoSinPrecios
+        ...contenidoSinPrecios,
+        ...(esNotaVeronica
+          ? [{ text: '', pageBreak: 'before' }, ...contenidoTerceraLorenaVeronicaReferencia]
+          : [])
       ],
       styles: {
         notaVentaHeader: {
@@ -537,7 +626,7 @@ function contarTotalProductos(embarque) {
   return contador;
 }
 
-async function generarContenidoClientes(embarque, clientesDisponibles, clientesJuntarMedidas, clientesReglaOtilio = {}, clientesIncluirPrecios = {}, clientesSumarKgCatarro = {}, clientesCuentaEnPdf = {}) {
+async function generarContenidoClientes(embarque, clientesDisponibles, clientesJuntarMedidas, clientesReglaOtilio = {}, clientesIncluirPrecios = {}, clientesSumarKgCatarro = {}, clientesCuentaEnPdf = {}, multiplicadorLorenaGdeCc = 20) {
   const contenido = [];
   let totalTarasLimpio = 0;
   let totalTarasCrudos = 0;
@@ -751,7 +840,7 @@ async function generarContenidoClientes(embarque, clientesDisponibles, clientesJ
     // Verificar si hay crudos para este cliente
     if (embarque.clienteCrudos && embarque.clienteCrudos[clienteId]) {
       // Verificar si hay crudos con kilos reales
-      const hayKilosCrudos = verificarKilosCrudos(embarque.clienteCrudos, clienteId, nombreCliente);
+      const hayKilosCrudos = verificarKilosCrudos(embarque.clienteCrudos, clienteId, nombreCliente, multiplicadorLorenaGdeCc);
       
       if (hayKilosCrudos) {
         // Si tiene activado incluir precios, obtener precios para los crudos
@@ -780,7 +869,7 @@ async function generarContenidoClientes(embarque, clientesDisponibles, clientesJ
             style: ['subheader', estiloCliente],
             margin: [0, 5, 0, 5]
           },
-          generarTablaCrudos(crudosConPrecios, estiloCliente, incluirPreciosCliente, cuentaEnPdfCliente),
+          generarTablaCrudos(crudosConPrecios, estiloCliente, incluirPreciosCliente, cuentaEnPdfCliente, multiplicadorLorenaGdeCc),
           { text: '\n' }
         );
 
@@ -805,7 +894,7 @@ async function generarContenidoClientes(embarque, clientesDisponibles, clientesJ
     const hayKilosCrudos = embarque.clienteCrudos && embarque.clienteCrudos[clienteId] && 
                           embarque.clienteCrudos[clienteId].some(crudo => 
                             crudo.items.some(item => {
-                              const kilosTexto = calcularKilosCrudos(item, nombreCliente);
+                              const kilosTexto = calcularKilosCrudos(item, nombreCliente, multiplicadorLorenaGdeCc);
                               const kilos = parseFloat(kilosTexto);
                               return kilos > 0;
                             })
@@ -882,7 +971,7 @@ async function generarContenidoClientes(embarque, clientesDisponibles, clientesJ
       if (embarque.clienteCrudos && embarque.clienteCrudos[clienteId]) {
         procesarCrudosDeFormaSegura(embarque.clienteCrudos, clienteId, clientesDisponibles, (item) => {
           if (item.precio) {
-            const kilos = parseFloat(calcularKilosCrudos(item, nombreCliente));
+            const kilos = parseFloat(calcularKilosCrudos(item, nombreCliente, multiplicadorLorenaGdeCc));
             // Usar exactamente los mismos kilos que se muestran en la tabla (redondeados)
             const esLorena = nombreCliente.toLowerCase().includes('lorena') || nombreCliente.toLowerCase().includes('veronica');
             const kilosMostrados = esLorena ? Number(kilos.toFixed(1)) : Math.round(kilos);
@@ -1508,7 +1597,7 @@ function generarTablaProductos(productos, estiloCliente, nombreCliente, aplicarR
   };
 }
 
-function generarTablaCrudos(crudos, estiloCliente, incluirPreciosCliente = false, cuentaEnPdfCliente = false) {
+function generarTablaCrudos(crudos, estiloCliente, incluirPreciosCliente = false, cuentaEnPdfCliente = false, multiplicadorLorenaGdeCc = 20) {
   // Obtener el nombre del cliente a partir del estilo
   const nombreCliente = obtenerNombreClienteDesdeEstilo(estiloCliente);
   
@@ -1535,7 +1624,7 @@ function generarTablaCrudos(crudos, estiloCliente, incluirPreciosCliente = false
           return;
         }
 
-        const kilosTexto = calcularKilosCrudos(item, nombreCliente);
+        const kilosTexto = calcularKilosCrudos(item, nombreCliente, multiplicadorLorenaGdeCc);
         const kilos = parseFloat(kilosTexto);
         
         if (kilos > 0) {
@@ -1590,7 +1679,7 @@ function generarTablaCrudos(crudos, estiloCliente, incluirPreciosCliente = false
 
   // Agregar las filas de datos
   itemsFiltrados.forEach(item => {
-    const kilosTexto = calcularKilosCrudos(item, nombreCliente);
+    const kilosTexto = calcularKilosCrudos(item, nombreCliente, multiplicadorLorenaGdeCc);
     const kilos = parseFloat(kilosTexto);
     
     // Calcular los kilos que se mostrarán en la tabla (exactamente como aparecen)
@@ -1774,7 +1863,7 @@ function obtenerEstiloCliente(nombreCliente) {
   if (nombreLowerCase.includes('otilio')) return 'clienteOtilio';
   if (nombreLowerCase.includes('ozuna')) return 'clienteOzuna';
   if (nombreLowerCase.includes('elizabeth')) return 'clienteElizabeth';
-  if (nombreLowerCase.includes('lorena')) return 'clienteLorena';
+  if (nombreLowerCase.includes('lorena') || nombreLowerCase.includes('veronica')) return 'clienteLorena';
   return 'clienteOtro';
 }
 
@@ -1923,7 +2012,7 @@ function totalKilos(producto, nombreCliente, aplicarReglaOtilio = true, sumarKgC
   }
 }
 
-function calcularKilosCrudos(item, clienteNombre) {
+function calcularKilosCrudos(item, clienteNombre, multiplicadorLorenaGdeCc = 20) {
   let kilosTotales = 0;
   const nombreClienteNormalizado = (clienteNombre || '').toLowerCase();
   const tallaNormalizada = (item?.talla || '')
@@ -1936,7 +2025,7 @@ function calcularKilosCrudos(item, clienteNombre) {
     const [cantidad] = String(item.taras).split('-').map(Number);
     const esLorena = nombreClienteNormalizado.includes('lorena') || nombreClienteNormalizado.includes('veronica');
     const esGdeConCascaron = tallaNormalizada === 'gde c/c';
-    const multiplicador = esLorena && esGdeConCascaron ? 19.5 : 20;
+    const multiplicador = esLorena && esGdeConCascaron ? multiplicadorLorenaGdeCc : 20;
     kilosTotales += cantidad * multiplicador;
   }
 
@@ -2353,7 +2442,7 @@ export async function generarNotaVentaSinPreciosPDF(embarque, clientesDisponible
   }
 }
 
-async function generarContenidoClientesSinPrecios(embarque, clientesDisponibles, clientesJuntarMedidas, clientesReglaOtilio = {}, clientesIncluirPrecios = {}, clientesSumarKgCatarro = {}, clientesCuentaEnPdf = {}) {
+async function generarContenidoClientesSinPrecios(embarque, clientesDisponibles, clientesJuntarMedidas, clientesReglaOtilio = {}, clientesIncluirPrecios = {}, clientesSumarKgCatarro = {}, clientesCuentaEnPdf = {}, multiplicadorLorenaGdeCc = 20) {
   const contenido = [];
   let totalTarasLimpio = 0;
   let totalTarasCrudos = 0;
@@ -2545,7 +2634,7 @@ async function generarContenidoClientesSinPrecios(embarque, clientesDisponibles,
     // Verificar si hay crudos para este cliente
     if (embarque.clienteCrudos && embarque.clienteCrudos[clienteId]) {
       // Verificar si hay crudos con kilos reales
-      const hayKilosCrudos = verificarKilosCrudos(embarque.clienteCrudos, clienteId, nombreCliente);
+      const hayKilosCrudos = verificarKilosCrudos(embarque.clienteCrudos, clienteId, nombreCliente, multiplicadorLorenaGdeCc);
       
       if (hayKilosCrudos) {
         contenido.push(
@@ -2554,7 +2643,7 @@ async function generarContenidoClientesSinPrecios(embarque, clientesDisponibles,
             style: ['subheader', estiloCliente],
             margin: [0, 5, 0, 5]
           },
-          generarTablaCrudos(embarque.clienteCrudos[clienteId], estiloCliente, false),
+          generarTablaCrudos(embarque.clienteCrudos[clienteId], estiloCliente, false, false, multiplicadorLorenaGdeCc),
           { text: '\n' }
         );
 
@@ -2579,7 +2668,7 @@ async function generarContenidoClientesSinPrecios(embarque, clientesDisponibles,
     const hayKilosCrudos = embarque.clienteCrudos && embarque.clienteCrudos[clienteId] && 
                           embarque.clienteCrudos[clienteId].some(crudo => 
                             crudo.items.some(item => {
-                              const kilosTexto = calcularKilosCrudos(item, nombreCliente);
+                              const kilosTexto = calcularKilosCrudos(item, nombreCliente, multiplicadorLorenaGdeCc);
                               const kilos = parseFloat(kilosTexto);
                               return kilos > 0;
                             })
@@ -2633,7 +2722,7 @@ async function generarContenidoClientesSinPrecios(embarque, clientesDisponibles,
     if (embarque.clienteCrudos && embarque.clienteCrudos[clienteId]) {
       procesarCrudosDeFormaSegura(embarque.clienteCrudos, clienteId, clientesDisponibles, (item) => {
         if (item.precio) {
-          const kilos = parseFloat(calcularKilosCrudos(item, nombreCliente));
+          const kilos = parseFloat(calcularKilosCrudos(item, nombreCliente, multiplicadorLorenaGdeCc));
           // Usar exactamente los mismos kilos que se muestran en la tabla (redondeados)
           const kilosMostrados = Math.round(kilos);
           totalDineroCliente += kilosMostrados * Number(item.precio);
@@ -2975,7 +3064,7 @@ function procesarCrudosDeFormaSegura(clienteCrudos, clienteId, clientesDisponibl
   }
 }
 
-function verificarKilosCrudos(clienteCrudos, clienteId, nombreCliente) {
+function verificarKilosCrudos(clienteCrudos, clienteId, nombreCliente, multiplicadorLorenaGdeCc = 20) {
   let hayKilos = false;
   
   if (!clienteCrudos || !clienteCrudos[clienteId]) {
@@ -3001,7 +3090,7 @@ function verificarKilosCrudos(clienteCrudos, clienteId, nombreCliente) {
           continue;
         }
 
-        const kilosTexto = calcularKilosCrudos(item, nombreCliente);
+        const kilosTexto = calcularKilosCrudos(item, nombreCliente, multiplicadorLorenaGdeCc);
         const kilos = parseFloat(kilosTexto);
         if (kilos > 0) {
           hayKilos = true;
