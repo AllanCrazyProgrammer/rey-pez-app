@@ -311,7 +311,7 @@ import { cargarPreciosParaNotaVenta } from '@/utils/preciosVentaCatalogo';
 import { obtenerPrecioParaMedidaNotaVenta } from '@/utils/preciosHistoricos';
 import { obtenerFechaActualISO, normalizarFechaISO, formatearFechaParaMostrar } from '@/utils/dateUtils';
 import { NOTA_VENTA_PDF_INLINE_CSS, getNotaVentaPrintMediaCss } from '@/utils/notaVentaPdfPrintStyles.js';
-import { compareNoteOrder, saldoRestanteNota } from '@/utils/notaVentaSaldosCliente';
+import { saldoAcumuladoAnteriorComoNuevoDeNotaPrevia } from '@/utils/notaVentaSaldosCliente';
 
 export default {
   components: {
@@ -363,7 +363,7 @@ export default {
       catalogoCargando: false,
       catalogoError: null,
       precioSugeridoActivo: false,
-      /** Suma de saldos restantes de notas del mismo cliente anteriores a esta (o de todas las guardadas si es nota nueva). */
+      /** Nuevo saldo acumulado de la nota inmediatamente anterior en el tiempo (mismo cliente). */
       saldoAcumuladoAnteriores: 0,
     };
   },
@@ -666,9 +666,8 @@ export default {
       await this.fetchSaldoAcumuladoAnteriores();
     },
     /**
-     * Pendiente de notas del mismo cliente que van *antes en el tiempo* que la nota actual
-     * (fecha de nota → fecha de creación → folio → id), y que no están pagadas (!note.isPaid).
-     * No incluye notas posteriores (ej. una nota de marzo posterior a una de marzo anterior).
+     * Igual que el "Nuevo saldo acumulado" mostrado en la nota previa (orden: fecha de nota →
+     * creación → folio → id), no la suma de pendientes de todas las notas anteriores.
      */
     async fetchSaldoAcumuladoAnteriores() {
       const clientName = this.client && String(this.client).trim();
@@ -697,13 +696,11 @@ export default {
           id: this.noteId || '\uffff'
         };
 
-        let sumOtros = 0;
-        for (const n of clientNotes) {
-          if (this.noteId && n.id === this.noteId) continue;
-          if (compareNoteOrder(n, ref) >= 0) continue;
-          sumOtros += saldoRestanteNota(n);
-        }
-        this.saldoAcumuladoAnteriores = sumOtros;
+        this.saldoAcumuladoAnteriores = saldoAcumuladoAnteriorComoNuevoDeNotaPrevia(
+          clientNotes,
+          ref,
+          this.noteId
+        );
       } catch (error) {
         console.error('Error al calcular saldo acumulado anterior:', error);
         this.saldoAcumuladoAnteriores = 0;
