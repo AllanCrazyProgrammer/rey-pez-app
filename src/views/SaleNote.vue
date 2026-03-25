@@ -263,6 +263,7 @@
         </div>
       </div>
     </div>
+    </div>
 
       <div class="action-buttons">
         <div class="button-column">
@@ -308,7 +309,7 @@ import moment from 'moment';
 import 'moment/locale/es';
 import { cargarPreciosParaNotaVenta } from '@/utils/preciosVentaCatalogo';
 import { obtenerPrecioParaMedidaNotaVenta } from '@/utils/preciosHistoricos';
-import { obtenerFechaActualISO, normalizarFechaISO } from '@/utils/dateUtils';
+import { obtenerFechaActualISO, normalizarFechaISO, formatearFechaParaMostrar } from '@/utils/dateUtils';
 import { NOTA_VENTA_PDF_INLINE_CSS, getNotaVentaPrintMediaCss } from '@/utils/notaVentaPdfPrintStyles.js';
 
 export default {
@@ -319,11 +320,11 @@ export default {
     PreciosNotaVentaModal
   },
   data() {
-    const today = new Date();
+    const fechaHoyLocal = obtenerFechaActualISO();
     return {
       folio: Math.floor(Math.random() * 10000),
       client: '',
-      currentDate: today.toISOString().substr(0, 10),
+      currentDate: fechaHoyLocal,
       newProduct: {
         product: '',
         kilos: null,
@@ -341,12 +342,12 @@ export default {
       editIndex: -1,
       newAbono: {
         monto: null,
-        fecha: today.toISOString().substr(0, 10)
+        fecha: fechaHoyLocal
       },
       abonos: [],
       flete: 0,
       isPaid: false,
-      creationDate: today.toISOString().substr(0, 10),
+      creationDate: fechaHoyLocal,
       observaciones: '',
       noteId: null,
       longPressTimer: null,
@@ -736,7 +737,7 @@ export default {
     resetAbonoForm() {
       this.newAbono = {
         monto: null,
-        fecha: new Date().toISOString().substr(0, 10)
+        fecha: obtenerFechaActualISO()
       };
     },
     formatNumber(value) {
@@ -749,8 +750,7 @@ export default {
       return safe.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     },
     formatDate(date) {
-      const options = { year: 'numeric', month: 'long', day: 'numeric' };
-      return new Date(date).toLocaleDateString('es-ES', options);
+      return formatearFechaParaMostrar(date);
     },
     /**
      * Estilos y limpieza del DOM para la ventana de impresión (no hereda bien el CSS con scope).
@@ -793,14 +793,8 @@ export default {
         el.style.display = 'none';
       });
 
-      clonedElement.querySelectorAll('.abonos-table td:nth-child(3), .abonos-table th:nth-child(3)').forEach((el) => {
-        el.style.display = 'none';
-      });
-
-      const abonosForm = clonedElement.querySelector('.abonos-section form');
-      if (abonosForm) abonosForm.style.display = 'none';
-      const abonosTitle = clonedElement.querySelector('.abonos-section h3:first-child');
-      if (abonosTitle) abonosTitle.style.display = 'none';
+      const abonosContainer = clonedElement.querySelector('.abonos-container');
+      if (abonosContainer) abonosContainer.remove();
     },
     printSection() {
       const element = this.$refs.printSection;

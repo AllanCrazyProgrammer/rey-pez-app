@@ -90,6 +90,8 @@ export const NOTA_VENTA_PDF_INLINE_CSS = `.nota-venta-print-root {
   border: 1px solid #000000;
   border-radius: 4px;
   box-shadow: none;
+  page-break-after: avoid;
+  break-after: avoid;
 }
 .nota-venta-print-root .total-general h3 {
   margin: 0.45em 0;
@@ -204,16 +206,37 @@ export const NOTA_VENTA_PDF_INLINE_CSS = `.nota-venta-print-root {
   border-top: 1px solid #000000;
   margin-top: 1.15rem;
   padding-top: 1rem;
+  page-break-inside: avoid;
+  break-inside: avoid;
 }
 .nota-venta-print-root .abonos-section h3 { color: #000000; }
+.nota-venta-print-root .abonos-section .table-responsive {
+  overflow: visible !important;
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+.nota-venta-print-root .abonos-table {
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
 .nota-venta-print-root .abonos-summary {
   text-align: center;
   margin-top: 0.9rem;
   font-size: 15pt;
   color: #000000;
+  page-break-inside: avoid;
+  break-inside: avoid;
+  page-break-before: avoid;
+  break-before: avoid;
 }
 .nota-venta-print-root .abonos-summary .pagado { color: #000000 !important; }
-.nota-venta-print-root .abonos-summary .no-pagado { color: #000000 !important; font-weight: 700; text-decoration: underline; }`;
+.nota-venta-print-root .abonos-summary .no-pagado { color: #000000 !important; font-weight: 700; text-decoration: underline; }
+@media print {
+  /* Tabla detallada de abonos: solo en pantalla; en impresión evita 2ª página y el resumen ya está en "Saldos con el cliente". */
+  .nota-venta-print-root .abonos-container {
+    display: none !important;
+  }
+}`;
 
 export function getNotaVentaPrintMediaCss() {
   return `@media print {
@@ -243,6 +266,9 @@ export function getNotaVentaPrintMediaCss() {
     max-width: 100% !important;
   }
   .nota-venta-print-root .abonos-section > h3:first-of-type {
+    display: none !important;
+  }
+  .nota-venta-print-root .abonos-container {
     display: none !important;
   }
   .nota-venta-print-root td:nth-child(5),
