@@ -77,7 +77,16 @@
 
           <div class="form-actions">
             <button class="btn-primary" type="submit" :disabled="guardando || !proveedorSeleccionadoId">
-              {{ guardando ? 'Guardando...' : 'Guardar movimiento' }}
+              {{ guardando ? 'Guardando...' : (movimientoEditandoId ? 'Guardar cambios' : 'Guardar movimiento') }}
+            </button>
+            <button
+              v-if="movimientoEditandoId"
+              class="btn-secundario"
+              type="button"
+              :disabled="guardando"
+              @click="cancelarEdicionMovimiento"
+            >
+              Cancelar edición
             </button>
             <button
               class="btn-pdf"
@@ -94,6 +103,7 @@
           :movimientos="movimientos"
           :saldo-taras-actual="saldoPendienteTaras"
           :saldo-tapas-actual="saldoPendienteTapas"
+          @editar="editarMovimiento"
           @eliminar="eliminarMovimiento"
         />
       </section>
@@ -153,7 +163,9 @@ export default {
         tipo: 'cargo',
         taras: null,
         tapas: 0
-      }
+      },
+      movimientoEditandoId: null,
+      movimientoEditandoValores: null
     };
   },
   computed: {
@@ -228,9 +240,11 @@ export default {
         });
     },
     async onCambiarProveedor() {
+      this.cancelarEdicionMovimiento();
       await this.cargarMovimientos();
     },
     async seleccionarProveedor(proveedorId) {
+      this.cancelarEdicionMovimiento();
       this.proveedorSeleccionadoId = proveedorId;
       await this.cargarMovimientos();
     },
@@ -277,6 +291,29 @@ export default {
         this.guardando = false;
       }
     },
+    editarMovimiento(movimiento) {
+      this.movimientoEditandoId = movimiento.id;
+      this.movimientoEditandoValores = {
+        taras: Number(movimiento.taras) || 0,
+        tapas: Number(movimiento.tapas) || 0
+      };
+      this.nuevoMovimiento = {
+        fecha: movimiento.fecha || this.obtenerFechaActual(),
+        tipo: movimiento.tipo === 'abono' ? 'abono' : 'cargo',
+        taras: Math.abs(Number(movimiento.taras) || 0),
+        tapas: Math.abs(Number(movimiento.tapas) || 0)
+      };
+    },
+    cancelarEdicionMovimiento() {
+      this.movimientoEditandoId = null;
+      this.movimientoEditandoValores = null;
+      this.nuevoMovimiento = {
+        fecha: this.obtenerFechaActual(),
+        tipo: 'cargo',
+        taras: null,
+        tapas: 0
+      };
+    },
     async guardarMovimiento() {
       if (!this.proveedorSeleccionadoId) {
         alert('Primero selecciona un proveedor.');
@@ -300,29 +337,59 @@ export default {
 
       try {
         this.guardando = true;
-        const movimientosRef = collection(db, 'tarasProveedores', this.proveedorSeleccionadoId, 'movimientos');
-        await addDoc(movimientosRef, {
-          fecha: this.nuevoMovimiento.fecha,
-          tipo: this.nuevoMovimiento.tipo,
-          taras: tarasFirmadas,
-          tapas: tapasFirmadas,
-          createdAt: new Date()
-        });
-
         const proveedorRef = doc(db, 'tarasProveedores', this.proveedorSeleccionadoId);
-        await updateDoc(proveedorRef, {
-          saldoTarasActual: this.saldoPendienteTaras + tarasFirmadas,
-          saldoTapasActual: this.saldoPendienteTapas + tapasFirmadas,
-          saldoActual: this.saldoPendienteTaras + tarasFirmadas,
-          updatedAt: new Date()
-        });
 
-        this.nuevoMovimiento = {
-          fecha: this.obtenerFechaActual(),
-          tipo: 'cargo',
-          taras: null,
-          tapas: 0
-        };
+        if (this.movimientoEditandoId && this.movimientoEditandoValores) {
+          const movRef = doc(
+            db,
+            'tarasProveedores',
+            this.proveedorSeleccionadoId,
+            'movimientos',
+            this.movimientoEditandoId
+          );
+          const deltaTaras = tarasFirmadas - this.movimientoEditandoValores.taras;
+          const deltaTapas = tapasFirmadas - this.movimientoEditandoValores.tapas;
+
+          await updateDoc(movRef, {
+            fecha: this.nuevoMovimiento.fecha,
+            tipo: this.nuevoMovimiento.tipo,
+            taras: tarasFirmadas,
+            tapas: tapasFirmadas,
+            updatedAt: new Date()
+          });
+
+          await updateDoc(proveedorRef, {
+            saldoTarasActual: this.saldoPendienteTaras + deltaTaras,
+            saldoTapasActual: this.saldoPendienteTapas + deltaTapas,
+            saldoActual: this.saldoPendienteTaras + deltaTaras,
+            updatedAt: new Date()
+          });
+
+          this.cancelarEdicionMovimiento();
+        } else {
+          const movimientosRef = collection(db, 'tarasProveedores', this.proveedorSeleccionadoId, 'movimientos');
+          await addDoc(movimientosRef, {
+            fecha: this.nuevoMovimiento.fecha,
+            tipo: this.nuevoMovimiento.tipo,
+            taras: tarasFirmadas,
+            tapas: tapasFirmadas,
+            createdAt: new Date()
+          });
+
+          await updateDoc(proveedorRef, {
+            saldoTarasActual: this.saldoPendienteTaras + tarasFirmadas,
+            saldoTapasActual: this.saldoPendienteTapas + tapasFirmadas,
+            saldoActual: this.saldoPendienteTaras + tarasFirmadas,
+            updatedAt: new Date()
+          });
+
+          this.nuevoMovimiento = {
+            fecha: this.obtenerFechaActual(),
+            tipo: 'cargo',
+            taras: null,
+            tapas: 0
+          };
+        }
 
         await this.cargarProveedores();
       } catch (error) {
@@ -519,6 +586,25 @@ h1 {
 
 .btn-primary:disabled {
   background: #94a3b8;
+  cursor: not-allowed;
+}
+
+.btn-secundario {
+  background: #fff;
+  border: 1px solid #d1d5db;
+  color: #374151;
+  border-radius: 8px;
+  padding: 9px 12px;
+  cursor: pointer;
+}
+
+.btn-secundario:hover:not(:disabled) {
+  background: #f9fafb;
+  border-color: #9ca3af;
+}
+
+.btn-secundario:disabled {
+  opacity: 0.6;
   cursor: not-allowed;
 }
 

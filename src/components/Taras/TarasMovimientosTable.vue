@@ -22,9 +22,26 @@
             {{ formatearCantidad(movimiento.tapas) }}
           </td>
           <td class="col-acciones">
-            <button class="btn-eliminar" @click="$emit('eliminar', movimiento)" aria-label="Eliminar movimiento" title="Eliminar movimiento">
-              ×
-            </button>
+            <div class="acciones-celda">
+              <button
+                type="button"
+                class="btn-editar"
+                @click="$emit('editar', movimiento)"
+                aria-label="Editar movimiento"
+                title="Editar movimiento"
+              >
+                ✎
+              </button>
+              <button
+                type="button"
+                class="btn-eliminar"
+                @click="$emit('eliminar', movimiento)"
+                aria-label="Eliminar movimiento"
+                title="Eliminar movimiento"
+              >
+                ×
+              </button>
+            </div>
           </td>
         </tr>
       </tbody>
@@ -101,11 +118,36 @@ export default {
 }
 
 .col-acciones {
-  width: 92px;
-  min-width: 98px;
-  max-width: 98px;
+  width: auto;
+  min-width: 112px;
+  max-width: 140px;
   padding-left: 6px !important;
   padding-right: 6px !important;
+}
+
+.acciones-celda {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.btn-editar {
+  background: #2563eb;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  cursor: pointer;
+  font-size: 0.95rem;
+  line-height: 1;
+}
+
+.btn-editar:hover {
+  background: #1d4ed8;
 }
 
 .tabla-taras th {
