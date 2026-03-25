@@ -233,10 +233,17 @@ export default {
           tapas: Number(item.data().tapas) || 0
         }))
         .sort((a, b) => {
-          if (a.fecha === b.fecha) {
-            return new Date(a.createdAt || 0) - new Date(b.createdAt || 0);
+          const porFecha = a.fecha.localeCompare(b.fecha);
+          if (porFecha !== 0) {
+            return porFecha;
           }
-          return a.fecha.localeCompare(b.fecha);
+          // Misma fecha: cargo (reciba) primero, abono después
+          const ordenTipo = (m) => (m.tipo === 'abono' ? 1 : 0);
+          const porTipo = ordenTipo(a) - ordenTipo(b);
+          if (porTipo !== 0) {
+            return porTipo;
+          }
+          return new Date(a.createdAt || 0) - new Date(b.createdAt || 0);
         });
     },
     async onCambiarProveedor() {
