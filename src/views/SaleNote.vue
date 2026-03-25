@@ -367,14 +367,23 @@ export default {
     };
   },
   computed: {
+    /** Incluye la fila en edición (editProduct) para que el total y el resumen reaccionen al instante. */
     grandTotal() {
-      return this.products.reduce((sum, product) => sum + product.total, 0);
+      return this.products.reduce((sum, product, index) => {
+        if (this.editIndex === index) {
+          const k = Number(this.editProduct.kilos) || 0;
+          const p = Number(this.editProduct.pricePerKilo) || 0;
+          return sum + k * p;
+        }
+        return sum + (Number(product.total) || 0);
+      }, 0);
     },
     totalFinal() {
       return this.grandTotal - (this.flete || 0);
     },
     totalAbonado() {
-      return this.abonos.reduce((sum, abono) => sum + Number(abono.monto), 0);
+      const list = Array.isArray(this.abonos) ? this.abonos : [];
+      return list.reduce((sum, abono) => sum + (Number(abono.monto) || 0), 0);
     },
     saldoRestante() {
       return this.totalFinal - this.totalAbonado;
@@ -384,12 +393,12 @@ export default {
       return this.saldoAcumuladoAnteriores + this.totalFinal;
     },
     /**
-     * Deuda acumulada *hasta esta nota* en el tiempo: solo notas anteriores + pendiente de esta.
-     * No incluye notas posteriores en la línea de tiempo (pueden existir pero no suman aquí).
+     * Deuda acumulada tras esta nota: mismo resultado que la fila Total − Abono
+     * (saldo anterior + total de esta nota − abonos registrados en esta nota).
      */
     nuevoSaldoAcumulado() {
-      const pendienteEsta = Math.max(0, this.saldoRestante);
-      return this.saldoAcumuladoAnteriores + pendienteEsta;
+      const neto = this.totalSaldoMasEstaNota - this.totalAbonado;
+      return Math.max(0, neto);
     },
     formattedFolio() {
       return `F-${this.folio.toString().padStart(4, '0')}`;
@@ -643,7 +652,7 @@ export default {
           this.currentDate = noteData.currentDate;
           this.observaciones = noteData.observaciones || '';
           this.products = noteData.products;
-          this.abonos = noteData.abonos;
+          this.abonos = Array.isArray(noteData.abonos) ? noteData.abonos : [];
           this.flete = noteData.flete || 0;
           this.isPaid = noteData.isPaid;
           this.creationDate = noteData.creationDate;
