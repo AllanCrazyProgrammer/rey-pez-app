@@ -191,7 +191,11 @@
 
 <script>
 import { db } from '@/firebase';
-import { collection, getDocs, doc, updateDoc, getDoc, setDoc } from 'firebase/firestore';
+import { collection, onSnapshot, doc, updateDoc, getDoc, setDoc } from 'firebase/firestore';
+import {
+  nuevoSaldoAcumuladoGlobalCliente,
+  saldoRestanteNota
+} from '@/utils/notaVentaSaldosCliente';
 
 export default {
   name: 'NoteMenu',
@@ -213,6 +217,9 @@ export default {
       currentPage: 1,
       abonosPerPage: 7,
       clientBalances: {},
+      /** Desuscripciones Firestore (tiempo real). */
+      unsubscribeNotes: null,
+      unsubscribeClientBalances: null,
       isLoading: false,
       isProcessingAbono: false,
       isDeletingAbono: false
@@ -243,13 +250,12 @@ export default {
 
       return filtered;
     },
+    /** Misma lógica que "Nuevo saldo acumulado" en SaleNote (última nota en el tiempo). */
     totalDebtByClient() {
       const debtByClient = {};
-
-      for (const [client, notes] of Object.entries(this.filteredNotesByClient)) {
-        debtByClient[client] = notes.reduce((total, note) => total + this.calculateNoteDebt(note), 0);
+      for (const [client, notes] of Object.entries(this.notesByClient)) {
+        debtByClient[client] = nuevoSaldoAcumuladoGlobalCliente(notes);
       }
-
       return debtByClient;
     },
     clientEntries() {
@@ -272,7 +278,7 @@ export default {
     },
     selectedClientDebt() {
       const notes = this.notesByClient[this.selectedClient] || [];
-      return notes.reduce((total, note) => total + this.calculateNoteDebt(note), 0);
+      return nuevoSaldoAcumuladoGlobalCliente(notes);
     },
     projectedDebtAfterAbono() {
       const projected = this.selectedClientDebt - this.normalizedAbonoAmount;
@@ -358,54 +364,70 @@ export default {
       const abonos = Array.isArray(note.abonos) ? note.abonos : [];
       return abonos.reduce((sum, abono) => sum + (Number(abono.monto) || 0), 0);
     },
+    /** Pendiente por nota, alineado con SaleNote (respeta isPaid). */
     calculateNoteDebt(note) {
-      const debt = this.calculateNoteTotal(note) - this.calculateNotePaid(note);
-      return debt > 0 ? debt : 0;
+      return saldoRestanteNota(note);
     },
-    async fetchNotes() {
+    applyNotesSnapshot(querySnapshot) {
+      const notes = querySnapshot.docs.map((entry) => {
+        const data = entry.data();
+        return {
+          id: entry.id,
+          ...data,
+          abonos: Array.isArray(data.abonos) ? data.abonos : [],
+          products: Array.isArray(data.products) ? data.products : []
+        };
+      });
+
+      this.notesByClient = notes.reduce((acc, note) => {
+        const clientName = note.client || 'Sin cliente';
+        if (!acc[clientName]) {
+          acc[clientName] = [];
+        }
+        acc[clientName].push(note);
+        return acc;
+      }, {});
+
+      Object.keys(this.notesByClient).forEach((client) => {
+        this.notesByClient[client].sort((a, b) => new Date(b.currentDate) - new Date(a.currentDate));
+      });
+    },
+    startNotesRealtime() {
+      if (this.unsubscribeNotes) {
+        this.unsubscribeNotes();
+        this.unsubscribeNotes = null;
+      }
       this.isLoading = true;
-      try {
-        const querySnapshot = await getDocs(collection(db, 'notes'));
-        const notes = querySnapshot.docs.map((entry) => {
-          const data = entry.data();
-          return {
-            id: entry.id,
-            ...data,
-            abonos: Array.isArray(data.abonos) ? data.abonos : []
-          };
-        });
-
-        this.notesByClient = notes.reduce((acc, note) => {
-          const clientName = note.client || 'Sin cliente';
-          if (!acc[clientName]) {
-            acc[clientName] = [];
-          }
-          acc[clientName].push(note);
-          return acc;
-        }, {});
-
-        Object.keys(this.notesByClient).forEach((client) => {
-          this.notesByClient[client].sort((a, b) => new Date(b.currentDate) - new Date(a.currentDate));
-        });
-
-        await this.fetchClientBalances();
-      } catch (error) {
-        console.error('Error fetching notes:', error);
-      } finally {
-        this.isLoading = false;
-      }
+      this.unsubscribeNotes = onSnapshot(
+        collection(db, 'notes'),
+        (snapshot) => {
+          this.applyNotesSnapshot(snapshot);
+          this.isLoading = false;
+        },
+        (error) => {
+          console.error('Error en notas (tiempo real):', error);
+          this.isLoading = false;
+        }
+      );
     },
-    async fetchClientBalances() {
-      try {
-        const querySnapshot = await getDocs(collection(db, 'clientBalances'));
-        const balances = {};
-        querySnapshot.docs.forEach((entry) => {
-          balances[entry.id] = Number(entry.data().balance) || 0;
-        });
-        this.clientBalances = balances;
-      } catch (error) {
-        console.error('Error fetching client balances:', error);
+    startClientBalancesRealtime() {
+      if (this.unsubscribeClientBalances) {
+        this.unsubscribeClientBalances();
+        this.unsubscribeClientBalances = null;
       }
+      this.unsubscribeClientBalances = onSnapshot(
+        collection(db, 'clientBalances'),
+        (snapshot) => {
+          const balances = {};
+          snapshot.docs.forEach((entry) => {
+            balances[entry.id] = Number(entry.data().balance) || 0;
+          });
+          this.clientBalances = balances;
+        },
+        (error) => {
+          console.error('Error en saldos a favor (tiempo real):', error);
+        }
+      );
     },
     async updateClientBalance(clientName, newBalance) {
       try {
@@ -499,7 +521,6 @@ export default {
         }
 
         this.closeModal();
-        await this.fetchNotes();
       } catch (error) {
         console.error('Error al actualizar las notas:', error);
         alert('Hubo un error al aplicar el abono');
@@ -585,8 +606,17 @@ export default {
           isPaid
         });
 
+        const clientName = noteData.client || 'Sin cliente';
+        const rows = this.notesByClient[clientName];
+        if (rows) {
+          const i = rows.findIndex((n) => n.id === this.selectedAbono.noteId);
+          if (i !== -1) {
+            this.$set(rows[i], 'abonos', updatedAbonos);
+            this.$set(rows[i], 'isPaid', isPaid);
+          }
+        }
+
         this.closeDeleteAbonoModal();
-        await this.fetchNotes();
         await this.showAbonosHistory(this.selectedClient);
         this.currentPage = Math.min(this.currentPage, this.totalPages);
         alert('Abono eliminado con éxito');
@@ -598,8 +628,19 @@ export default {
       }
     }
   },
-  async mounted() {
-    await this.fetchNotes();
+  mounted() {
+    this.startNotesRealtime();
+    this.startClientBalancesRealtime();
+  },
+  beforeDestroy() {
+    if (this.unsubscribeNotes) {
+      this.unsubscribeNotes();
+      this.unsubscribeNotes = null;
+    }
+    if (this.unsubscribeClientBalances) {
+      this.unsubscribeClientBalances();
+      this.unsubscribeClientBalances = null;
+    }
   }
 };
 </script>

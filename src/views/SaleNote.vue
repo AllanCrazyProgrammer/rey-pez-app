@@ -311,6 +311,7 @@ import { cargarPreciosParaNotaVenta } from '@/utils/preciosVentaCatalogo';
 import { obtenerPrecioParaMedidaNotaVenta } from '@/utils/preciosHistoricos';
 import { obtenerFechaActualISO, normalizarFechaISO, formatearFechaParaMostrar } from '@/utils/dateUtils';
 import { NOTA_VENTA_PDF_INLINE_CSS, getNotaVentaPrintMediaCss } from '@/utils/notaVentaPdfPrintStyles.js';
+import { compareNoteOrder, saldoRestanteNota } from '@/utils/notaVentaSaldosCliente';
 
 export default {
   components: {
@@ -689,42 +690,11 @@ export default {
           })
           .filter((n) => String(n.client || '').trim() === clientName);
 
-        const parseTime = (v) => {
-          if (v == null || v === '') return 0;
-          const t = new Date(v).getTime();
-          return Number.isNaN(t) ? 0 : t;
-        };
-        const compareNoteOrder = (a, b) => {
-          const td = parseTime(a.currentDate) - parseTime(b.currentDate);
-          if (td !== 0) return td;
-          const tc = parseTime(a.creationDate) - parseTime(b.creationDate);
-          if (tc !== 0) return tc;
-          const f = (Number(a.folio) || 0) - (Number(b.folio) || 0);
-          if (f !== 0) return f;
-          return String(a.id || '').localeCompare(String(b.id || ''));
-        };
-
         const ref = {
           currentDate: this.currentDate,
           creationDate: this.creationDate,
           folio: this.folio,
           id: this.noteId || '\uffff'
-        };
-
-        const saldoRestanteNota = (note) => {
-          if (note.isPaid) {
-            return 0;
-          }
-          const products = Array.isArray(note.products) ? note.products : [];
-          const subtotal = products.reduce(
-            (sum, p) => sum + (Number(p.kilos) || 0) * (Number(p.pricePerKilo) || 0),
-            0
-          );
-          const flete = Number(note.flete) || 0;
-          const totalFinal = subtotal - flete;
-          const totalAbonado = note.abonos.reduce((s, a) => s + (Number(a.monto) || 0), 0);
-          const r = totalFinal - totalAbonado;
-          return r > 0 ? r : 0;
         };
 
         let sumOtros = 0;
