@@ -10,6 +10,26 @@
         {{ fechaSacada }} - Define cuantas cajas sacar por medida.
       </p>
 
+      <div v-if="grupos.length > 0" class="totales-globales">
+        <div class="totales-globales-title">Resumen total</div>
+        <div class="totales-globales-body">
+          <template v-if="totalCajasGlobal > 0">
+            Total cajas: <strong>{{ totalCajasGlobal }} cajas</strong>
+            <span class="total-sep"> · </span>
+            Total kilos: <strong>{{ totalKilosDesdeCajasGlobal }} kg</strong>
+          </template>
+          <template v-if="totalCajasGlobal > 0 && totalKilosDirectosGlobal > 0">
+            <span class="total-sep"> · </span>
+          </template>
+          <template v-if="totalKilosDirectosGlobal > 0">
+            Kilos directos: <strong>{{ totalKilosDirectosGlobal }} kg</strong>
+          </template>
+          <span v-if="totalCajasGlobal === 0 && totalKilosDirectosGlobal === 0" class="totales-globales-vacio">
+            Agrega cantidades en las medidas.
+          </span>
+        </div>
+      </div>
+
       <div v-if="grupos.length === 0" class="empty-state">
         Aun no hay medidas agregadas.
       </div>
@@ -76,11 +96,13 @@
 
           <div class="grupo-total">
             <span v-if="grupo.items.some(i => !i.esKilos)">
-              Total cajas: <strong>{{ grupo.items.filter(i => !i.esKilos).reduce((s, i) => s + (Number(i.cajas) || 0), 0) }} cajas</strong>
+              Total cajas: <strong>{{ totalCajasGrupo(grupo) }} cajas</strong>
+              <span class="total-sep"> · </span>
+              Total kilos: <strong>{{ totalKilosDesdeCajas(grupo) }} kg</strong>
             </span>
             <span v-if="grupo.items.some(i => !i.esKilos) && grupo.items.some(i => i.esKilos)" class="total-sep"> · </span>
             <span v-if="grupo.items.some(i => i.esKilos)">
-              Total kilos: <strong>{{ grupo.items.filter(i => i.esKilos).reduce((s, i) => s + (Number(i.cajas) || 0), 0) }} kg</strong>
+              Kilos directos: <strong>{{ grupo.items.filter(i => i.esKilos).reduce((s, i) => s + (Number(i.cajas) || 0), 0) }} kg</strong>
             </span>
           </div>
         </div>
@@ -142,6 +164,22 @@ export default {
       return this.medidas
         .map((medida) => medida?.nombre || medida?.medida || medida?.descripcion || '')
         .filter(Boolean);
+    },
+    todosLosItems() {
+      return this.grupos.flatMap((g) => g.items || []);
+    },
+    totalCajasGlobal() {
+      return this.todosLosItems
+        .filter((i) => !i.esKilos)
+        .reduce((s, i) => s + (Number(i.cajas) || 0), 0);
+    },
+    totalKilosDirectosGlobal() {
+      return this.todosLosItems
+        .filter((i) => i.esKilos)
+        .reduce((s, i) => s + (Number(i.cajas) || 0), 0);
+    },
+    totalKilosDesdeCajasGlobal() {
+      return this.totalCajasGlobal * 20;
     }
   },
   watch: {
@@ -211,6 +249,14 @@ export default {
       if (group.items.length === 0) {
         group.items.push(this.createEmptyItem());
       }
+    },
+    totalCajasGrupo(grupo) {
+      return grupo.items
+        .filter((i) => !i.esKilos)
+        .reduce((s, i) => s + (Number(i.cajas) || 0), 0);
+    },
+    totalKilosDesdeCajas(grupo) {
+      return this.totalCajasGrupo(grupo) * 20;
     },
     normalizeGroups() {
       return this.grupos
@@ -300,9 +346,42 @@ export default {
 }
 
 .modal-subtitle {
-  margin: 8px 0 18px;
+  margin: 8px 0 12px;
   color: #666;
   font-size: 0.95rem;
+}
+
+.totales-globales {
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  background: linear-gradient(135deg, #eef4ff 0%, #e8f0fc 100%);
+  border: 1px solid #c7d7f0;
+  border-radius: 10px;
+  color: #1d3a66;
+}
+
+.totales-globales-title {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #1f4f9c;
+  margin-bottom: 6px;
+}
+
+.totales-globales-body {
+  font-size: 0.98rem;
+  line-height: 1.45;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 4px;
+}
+
+.totales-globales-vacio {
+  color: #64748b;
+  font-size: 0.92rem;
 }
 
 .empty-state {

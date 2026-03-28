@@ -60,16 +60,26 @@ const toSafeDate = (value) => {
     .toLowerCase();
 };
 
+const KILOS_POR_CAJA = 20;
+
 const buildDocDefinition = ({ fecha, grupos }) => {
   const pedidosPorFila = 2;
 
   const allItems = grupos.flatMap((g) => g.items || []);
   const totalCajas = allItems.filter((i) => !i.esKilos).reduce((s, i) => s + Number(i.cajas || 0), 0);
-  const totalKilos = allItems.filter((i) => i.esKilos).reduce((s, i) => s + Number(i.cajas || 0), 0);
+  const totalKilosDirectos = allItems.filter((i) => i.esKilos).reduce((s, i) => s + Number(i.cajas || 0), 0);
+  const totalKilosDesdeCajas = totalCajas * KILOS_POR_CAJA;
 
   const resumenParts = [];
-  if (totalCajas > 0) resumenParts.push(`${totalCajas} cajas`);
-  if (totalKilos > 0) resumenParts.push(`${totalKilos} kg`);
+  if (totalCajas > 0) {
+    resumenParts.push(`${totalCajas} cajas`);
+    resumenParts.push(`${totalKilosDesdeCajas} kg`);
+  }
+  if (totalKilosDirectos > 0) {
+    resumenParts.push(
+      totalCajas > 0 ? `${totalKilosDirectos} kg directos` : `${totalKilosDirectos} kg`
+    );
+  }
   const resumenTotal = resumenParts.length > 0 ? resumenParts.join('  ·  ') : '0';
 
   const content = [
@@ -87,10 +97,18 @@ const buildDocDefinition = ({ fecha, grupos }) => {
     const cells = row.map((group, colIndex) => {
       const numeroPedido = rowIndex * pedidosPorFila + colIndex + 1;
       const subtotalCajas = (group.items || []).filter((i) => !i.esKilos).reduce((sum, i) => sum + Number(i.cajas || 0), 0);
-      const subtotalKilos = (group.items || []).filter((i) => i.esKilos).reduce((sum, i) => sum + Number(i.cajas || 0), 0);
+      const subtotalKilosDirectos = (group.items || []).filter((i) => i.esKilos).reduce((sum, i) => sum + Number(i.cajas || 0), 0);
+      const subtotalKilosDesdeCajas = subtotalCajas * KILOS_POR_CAJA;
       const subtotalParts = [];
-      if (subtotalCajas > 0) subtotalParts.push(`${subtotalCajas} cajas`);
-      if (subtotalKilos > 0) subtotalParts.push(`${subtotalKilos} kg`);
+      if (subtotalCajas > 0) {
+        subtotalParts.push(`${subtotalCajas} cajas`);
+        subtotalParts.push(`${subtotalKilosDesdeCajas} kg`);
+      }
+      if (subtotalKilosDirectos > 0) {
+        subtotalParts.push(
+          subtotalCajas > 0 ? `${subtotalKilosDirectos} kg directos` : `${subtotalKilosDirectos} kg`
+        );
+      }
       const subtotalTexto = subtotalParts.length > 0 ? subtotalParts.join('  ·  ') : '0';
 
       return {
