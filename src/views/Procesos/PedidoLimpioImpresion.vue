@@ -281,30 +281,41 @@
       <div class="resumen-medidas">
         <div class="resumen-header-row">
           <h3 class="resumen-header">Resumen por Medida</h3>
-          <div class="resumen-tabs" role="tablist" aria-label="Pestañas de resumen">
+          <div class="resumen-header-actions">
+            <div class="resumen-tabs" role="tablist" aria-label="Pestañas de resumen">
+              <button
+                type="button"
+                class="resumen-tab-button"
+                :class="{ activo: activeResumenTab === 'medida' }"
+                @click="activeResumenTab = 'medida'"
+              >
+                Por Medida
+              </button>
+              <button
+                type="button"
+                class="resumen-tab-button"
+                :class="{ activo: activeResumenTab === 'sacada-hoy' }"
+                @click="activeResumenTab = 'sacada-hoy'"
+              >
+                Resumen del Día (hoy)
+              </button>
+              <button
+                type="button"
+                class="resumen-tab-button"
+                :class="{ activo: showCalculadoraResumen }"
+                @click="showCalculadoraResumen = !showCalculadoraResumen"
+              >
+                {{ showCalculadoraResumen ? 'Ocultar Calculadora' : 'Calculadora' }}
+              </button>
+            </div>
             <button
               type="button"
-              class="resumen-tab-button"
-              :class="{ activo: activeResumenTab === 'medida' }"
-              @click="activeResumenTab = 'medida'"
+              class="resumen-medidas-sacar-btn"
+              :disabled="cargandoSacadaParaModal"
+              :aria-busy="cargandoSacadaParaModal ? 'true' : 'false'"
+              @click="abrirModalMedidasSacadaPedido"
             >
-              Por Medida
-            </button>
-            <button
-              type="button"
-              class="resumen-tab-button"
-              :class="{ activo: activeResumenTab === 'sacada-hoy' }"
-              @click="activeResumenTab = 'sacada-hoy'"
-            >
-              Resumen del Día (hoy)
-            </button>
-            <button
-              type="button"
-              class="resumen-tab-button"
-              :class="{ activo: showCalculadoraResumen }"
-              @click="showCalculadoraResumen = !showCalculadoraResumen"
-            >
-              {{ showCalculadoraResumen ? 'Ocultar Calculadora' : 'Calculadora' }}
+              {{ cargandoSacadaParaModal ? 'Cargando…' : 'Medidas a sacar' }}
             </button>
           </div>
         </div>
@@ -519,12 +530,23 @@
       @cerrar="cerrarModalKilosRefrigerados"
       @guardar="guardarKilosRefrigerados"
     />
+
+    <ListaMedidasPedidoModal
+      :is-open="isListaMedidasModalOpen"
+      :is-saving="isSavingListaMedidas"
+      :sacada="selectedSacadaForMeasures"
+      :medidas="medidasCatalogo"
+      @close="closeListaMedidasModal"
+      @save="saveListaMedidas"
+    />
   </div>
 </template>
 
 <script>
 import pdfMake from 'pdfmake/build/pdfmake'
+import moment from 'moment'
 import KilosRefrigeradosModal from '@/components/KilosRefrigeradosModal.vue'
+import ListaMedidasPedidoModal from '@/components/ListaMedidasPedidoModal.vue'
 import ResumenCalculadora from '@/components/ResumenCalculadora.vue'
 import { db } from '@/firebase'
 import { doc, updateDoc, Timestamp, collection, getDocs, query, where } from 'firebase/firestore'
@@ -544,6 +566,7 @@ export default {
   name: 'PedidoLimpioImpresion',
   components: {
     KilosRefrigeradosModal,
+    ListaMedidasPedidoModal,
     ResumenCalculadora
   },
   props: {
@@ -620,7 +643,12 @@ export default {
         error: ''
       },
       rendimientosResumen: {},
-      rendimientosResumenMaquilas: {}
+      rendimientosResumenMaquilas: {},
+      isListaMedidasModalOpen: false,
+      selectedSacadaForMeasures: null,
+      isSavingListaMedidas: false,
+      medidasCatalogo: [],
+      cargandoSacadaParaModal: false
     }
   },
   created() {
@@ -651,8 +679,97 @@ export default {
     // Aplicar estados guardados a los pedidos
     this.aplicarEstadosCompletado();
     this.cargarResumenSacadaHoy();
+    this.cargarMedidasCatalogo();
   },
   methods: {
+    mapSacadaFromDoc(docSnapshot) {
+      const data = docSnapshot.data() || {};
+      let fecha;
+      if (data.fecha instanceof Date) {
+        fecha = moment(data.fecha).toDate();
+      } else if (data.fecha && typeof data.fecha.toDate === 'function') {
+        fecha = moment(data.fecha.toDate()).toDate();
+      } else {
+        fecha = moment(data.fecha).toDate();
+      }
+      fecha = moment(fecha).toDate();
+      return {
+        id: docSnapshot.id,
+        ...data,
+        fecha,
+        fechaTexto: moment(fecha).format('DD [de] MMMM [de] YYYY'),
+        totalEntradas: data.totalEntradas || 0,
+        totalSalidas: data.totalSalidas || 0,
+        listaMedidasPedido: Array.isArray(data.listaMedidasPedido) ? data.listaMedidasPedido : []
+      };
+    },
+    async cargarMedidasCatalogo() {
+      try {
+        const querySnapshot = await getDocs(collection(db, 'medidas'));
+        this.medidasCatalogo = querySnapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+      } catch (e) {
+        console.error('Error al cargar medidas:', e);
+      }
+    },
+    async abrirModalMedidasSacadaPedido() {
+      this.cargandoSacadaParaModal = true;
+      try {
+        const inicio = new Date(`${this.fecha}T00:00:00`);
+        const fin = new Date(`${this.fecha}T23:59:59.999`);
+        const q = query(
+          collection(db, 'sacadas'),
+          where('fecha', '>=', inicio),
+          where('fecha', '<=', fin)
+        );
+        const snap = await getDocs(q);
+        if (snap.empty) {
+          alert(
+            'No hay registro de sacada para la fecha de este pedido. Usa «Ir a Sacada del día» para crearla.'
+          );
+          return;
+        }
+        this.selectedSacadaForMeasures = this.mapSacadaFromDoc(snap.docs[0]);
+        this.isListaMedidasModalOpen = true;
+      } catch (err) {
+        console.error('Error al abrir medidas a sacar:', err);
+        alert('No se pudo cargar la sacada del día.');
+      } finally {
+        this.cargandoSacadaParaModal = false;
+      }
+    },
+    closeListaMedidasModal() {
+      this.isListaMedidasModalOpen = false;
+      this.selectedSacadaForMeasures = null;
+    },
+    async saveListaMedidas(lista, options = {}) {
+      if (!this.selectedSacadaForMeasures?.id) {
+        return false;
+      }
+      const { closeOnSuccess = true, showSuccessAlert = true } = options;
+      this.isSavingListaMedidas = true;
+      try {
+        await updateDoc(doc(db, 'sacadas', this.selectedSacadaForMeasures.id), {
+          listaMedidasPedido: lista
+        });
+        this.selectedSacadaForMeasures = {
+          ...this.selectedSacadaForMeasures,
+          listaMedidasPedido: lista
+        };
+        if (showSuccessAlert) {
+          alert('Lista de medidas guardada con éxito');
+        }
+        if (closeOnSuccess) {
+          this.closeListaMedidasModal();
+        }
+        return true;
+      } catch (error) {
+        console.error('Error al guardar lista de medidas:', error);
+        alert('No se pudo guardar la lista de medidas');
+        return false;
+      } finally {
+        this.isSavingListaMedidas = false;
+      }
+    },
     formatDecimal(value) {
       return Number(value || 0).toLocaleString('en-US', {
         minimumFractionDigits: 1,
@@ -2548,6 +2665,37 @@ h4.cliente-header.ozuna-header {
   flex-wrap: wrap;
 }
 
+.resumen-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.resumen-medidas-sacar-btn {
+  background-color: #3760b0;
+  color: #fff;
+  border: none;
+  padding: 8px 14px;
+  border-radius: 20px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.resumen-medidas-sacar-btn:hover:not(:disabled) {
+  background-color: #2a4a87;
+}
+
+.resumen-medidas-sacar-btn:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
 .resumen-tabs {
   display: flex;
   gap: 8px;
@@ -2696,12 +2844,23 @@ h4.cliente-header.ozuna-header {
     align-items: stretch;
   }
 
+  .resumen-header-actions {
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+  }
+
   .resumen-tabs {
     width: 100%;
   }
 
   .resumen-tab-button {
     width: 100%;
+  }
+
+  .resumen-medidas-sacar-btn {
+    width: 100%;
+    text-align: center;
   }
 
   .preview-table td:first-child,
