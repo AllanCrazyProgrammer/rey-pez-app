@@ -110,6 +110,20 @@ const buildDocDefinition = ({ fecha, grupos }) => {
         );
       }
       const subtotalTexto = subtotalParts.length > 0 ? subtotalParts.join('  ·  ') : '0';
+      const totalKgGrupo = subtotalKilosDesdeCajas + subtotalKilosDirectos;
+      const rendVal = Number(group.rendimiento);
+      const rendimientoLine =
+        Number.isFinite(rendVal) && rendVal > 0 && totalKgGrupo > 0
+          ? [
+              {
+                text: Math.round(totalKgGrupo / rendVal).toLocaleString('es-MX', {
+                  maximumFractionDigits: 0
+                }),
+                style: 'pedidoRendimiento',
+                margin: [0, 4, 0, 0]
+              }
+            ]
+          : [];
 
       return {
         stack: [
@@ -120,7 +134,8 @@ const buildDocDefinition = ({ fecha, grupos }) => {
                 style: 'pedidoItem'
               }))
             : [{ text: 'Sin medidas', style: 'pedidoEmpty' }]),
-          { text: `Total: ${subtotalTexto}`, style: 'pedidoSubtotal', margin: [0, 6, 0, 0] }
+          { text: `Total: ${subtotalTexto}`, style: 'pedidoSubtotal', margin: [0, 6, 0, 0] },
+          ...rendimientoLine
         ],
         fillColor: group.ozuna ? '#d1fae5' : null,
         margin: [8, 8, 8, 8]
@@ -189,6 +204,11 @@ const buildDocDefinition = ({ fecha, grupos }) => {
         fontSize: 20,
         bold: true,
         color: '#1f4f9c'
+      },
+      pedidoRendimiento: {
+        fontSize: 24,
+        bold: true,
+        color: '#1e3a8a'
       }
     },
     defaultStyle: {

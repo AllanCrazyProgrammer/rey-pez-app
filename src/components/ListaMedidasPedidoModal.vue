@@ -105,6 +105,25 @@
               Kilos directos: <strong>{{ grupo.items.filter(i => i.esKilos).reduce((s, i) => s + (Number(i.cajas) || 0), 0) }} kg</strong>
             </span>
           </div>
+
+          <div class="grupo-rendimiento">
+            <label class="rendimiento-label" :for="`rendimiento-${grupo.id}`">Rendimiento:</label>
+            <input
+              :id="`rendimiento-${grupo.id}`"
+              v-model.number="grupo.rendimiento"
+              type="number"
+              min="0"
+              step="0.01"
+              class="number-input rendimiento-input"
+              placeholder="ej. 1,20"
+            />
+            <span
+              v-if="textoResultadoRendimiento(grupo)"
+              class="rendimiento-resultado"
+            >
+              <strong class="rendimiento-resultado-valor">{{ textoResultadoRendimiento(grupo) }}</strong>
+            </span>
+          </div>
         </div>
       </div>
 
@@ -203,6 +222,7 @@ export default {
         id: this.generateId(),
         medidaPedido: '',
         ozuna: false,
+        rendimiento: null,
         items: [this.createEmptyItem()]
       };
     },
@@ -221,6 +241,7 @@ export default {
         id: this.generateId(),
         medidaPedido: group?.medidaPedido || '',
         ozuna: group?.ozuna || false,
+        rendimiento: Number.isFinite(group?.rendimiento) && group.rendimiento > 0 ? group.rendimiento : null,
         items: Array.isArray(group?.items) && group.items.length > 0
           ? group.items.map((item) => ({
               id: this.generateId(),
@@ -258,19 +279,45 @@ export default {
     totalKilosDesdeCajas(grupo) {
       return this.totalCajasGrupo(grupo) * 20;
     },
+    totalKilosGrupo(grupo) {
+      const desdeCajas = this.totalKilosDesdeCajas(grupo);
+      const directos = (grupo.items || [])
+        .filter((i) => i.esKilos)
+        .reduce((s, i) => s + (Number(i.cajas) || 0), 0);
+      return desdeCajas + directos;
+    },
+    valorRendimientoValido(grupo) {
+      const r = Number(grupo?.rendimiento);
+      return Number.isFinite(r) && r > 0;
+    },
+    textoResultadoRendimiento(grupo) {
+      if (!this.valorRendimientoValido(grupo)) return '';
+      const kg = this.totalKilosGrupo(grupo);
+      if (kg <= 0) return '';
+      const r = Number(grupo.rendimiento);
+      const resultado = Math.round(kg / r);
+      return resultado.toLocaleString('es-MX', { maximumFractionDigits: 0 });
+    },
     normalizeGroups() {
       return this.grupos
-        .map((group) => ({
-          medidaPedido: (group.medidaPedido || '').trim(),
-          ozuna: group.ozuna || false,
-          items: (group.items || [])
+        .map((group) => {
+          const base = {
+            medidaPedido: (group.medidaPedido || '').trim(),
+            ozuna: group.ozuna || false,
+            items: (group.items || [])
             .map((item) => ({
               medida: (item.medida || '').trim(),
               cajas: Number(item.cajas),
               esKilos: item.esKilos || false
             }))
             .filter((item) => item.medida && Number.isFinite(item.cajas) && item.cajas > 0)
-        }))
+          };
+          const rend = Number(group.rendimiento);
+          if (Number.isFinite(rend) && rend > 0) {
+            base.rendimiento = rend;
+          }
+          return base;
+        })
         .filter((group) => group.medidaPedido && group.items.length > 0);
     },
     save() {
@@ -524,6 +571,49 @@ export default {
   color: #fff;
   min-width: 42px;
   padding: 8px 10px;
+}
+
+.grupo-rendimiento {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px dashed #dbe4f5;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  font-size: 0.92rem;
+  color: #374151;
+}
+
+.rendimiento-label {
+  font-weight: 600;
+  color: #3760b0;
+  flex-shrink: 0;
+}
+
+.rendimiento-input {
+  width: min(120px, 100%);
+  flex: 0 1 120px;
+}
+
+.rendimiento-resultado {
+  flex: 1 1 180px;
+  min-width: 0;
+  text-align: right;
+  line-height: 1.35;
+}
+
+.rendimiento-resultado-valor {
+  display: inline-block;
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: #1e3a8a;
+  letter-spacing: -0.02em;
+  padding: 6px 14px;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%);
+  border: 1px solid #93c5fd;
+  box-shadow: 0 1px 2px rgba(30, 58, 138, 0.08);
 }
 
 .grupo-total {
