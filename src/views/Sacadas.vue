@@ -5,8 +5,13 @@
       <button v-if="tienePedidoOrigen" @click="regresarAlPedido" class="btn-regresar-pedido">Regresar al Pedido</button>
     </div>
     <h2 class="date-header">{{ formattedDate }}</h2>
-    <div class="date-selector">
-      <input type="date" v-model="selectedDate" @change="updateCurrentDate">
+    <div class="date-selector-row">
+      <div class="date-selector">
+        <input type="date" v-model="selectedDate" @change="updateCurrentDate">
+      </div>
+      <button type="button" class="measures-btn" @click="openListaMedidasModal">
+        Medidas a sacar
+      </button>
     </div>
     <div class="sacadas-content">
       <div class="salidas-section">
@@ -282,6 +287,16 @@
         </div>
       </div>
     </div>
+
+    <ListaMedidasPedidoModal
+      :is-open="isListaMedidasModalOpen"
+      :is-saving="isSavingListaMedidas"
+      :sacada="selectedSacadaForMeasures"
+      :on-save-lista="saveListaMedidas"
+      :medidas="medidas"
+      @close="closeListaMedidasModal"
+      @save="saveListaMedidas"
+    />
   </div>
 </template>
 
@@ -289,12 +304,14 @@
 import { db } from '@/firebase';
 import { collection, addDoc, getDocs, doc, getDoc, updateDoc, query, where } from 'firebase/firestore';
 import BackButton from '../components/BackButton.vue';
+import ListaMedidasPedidoModal from '@/components/ListaMedidasPedidoModal.vue';
 import moment from 'moment';
 
 export default {
   name: 'Sacadas',
   components: {
-    BackButton
+    BackButton,
+    ListaMedidasPedidoModal
   },
   data() {
     return {
@@ -317,7 +334,11 @@ export default {
       entradaEditIndex: null,
       entradaEditData: { kilos: null, cajas: null, precio: null, cuartoFrio: '' },
       salidasClientesChecklist: {},
-      salidasMaquilasChecklist: {}
+      salidasMaquilasChecklist: {},
+      listaMedidasPedido: [],
+      isListaMedidasModalOpen: false,
+      selectedSacadaForMeasures: null,
+      isSavingListaMedidas: false
     };
   },
   computed: {
@@ -475,6 +496,54 @@ export default {
     }
   },
   methods: {
+    openListaMedidasModal() {
+      this.selectedSacadaForMeasures = {
+        id: this.sacadaId,
+        fecha: this.currentDate.toDate(),
+        fechaTexto: moment(this.currentDate).format('DD [de] MMMM [de] YYYY'),
+        listaMedidasPedido: this.listaMedidasPedido
+      };
+      this.isListaMedidasModalOpen = true;
+    },
+    closeListaMedidasModal() {
+      this.isListaMedidasModalOpen = false;
+      this.selectedSacadaForMeasures = null;
+    },
+    async saveListaMedidas(lista, options = {}) {
+      const {
+        closeOnSuccess = true,
+        showSuccessAlert = true
+      } = options;
+
+      this.isSavingListaMedidas = true;
+      try {
+        this.listaMedidasPedido = lista;
+
+        if (this.sacadaId) {
+          await updateDoc(doc(db, 'sacadas', this.sacadaId), {
+            listaMedidasPedido: lista
+          });
+        }
+
+        if (showSuccessAlert) {
+          alert(
+            this.sacadaId
+              ? 'Lista de medidas guardada con exito'
+              : 'Lista guardada. Pulsa «Guardar informe del día» para persistirla en el registro.'
+          );
+        }
+        if (closeOnSuccess) {
+          this.closeListaMedidasModal();
+        }
+        return true;
+      } catch (error) {
+        console.error('Error al guardar lista de medidas:', error);
+        alert('No se pudo guardar la lista de medidas');
+        return false;
+      } finally {
+        this.isSavingListaMedidas = false;
+      }
+    },
     regresarAlPedido() {
       const tipo = this.$route.query.pedidoTipo || 'limpio'
       const fecha = this.$route.query.pedidoFecha
@@ -943,6 +1012,7 @@ export default {
         this.salidas = (data.salidas || []).map(salida => this.normalizeRegistroCantidades(salida));
         this.salidasClientesChecklist = data.salidasClientesChecklist || {};
         this.salidasMaquilasChecklist = data.salidasMaquilasChecklist || {};
+        this.listaMedidasPedido = Array.isArray(data.listaMedidasPedido) ? data.listaMedidasPedido : [];
         this.sacadaId = id;
         this.isEditing = true;
         this.limpiarChecklistSalidas();
@@ -966,7 +1036,8 @@ export default {
           salidasClientesChecklist: this.salidasClientesChecklist,
           salidasMaquilasChecklist: this.salidasMaquilasChecklist,
           totalEntradas: this.totalEntradas,
-          totalSalidas: this.totalSalidas
+          totalSalidas: this.totalSalidas,
+          listaMedidasPedido: this.listaMedidasPedido
         };
 
         if (this.isEditing) {
@@ -1630,6 +1701,17 @@ button:active {
 }
 
 @media (max-width: 600px) {
+  .date-selector-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .measures-btn {
+    max-width: 100%;
+    padding: 10px 12px;
+    font-size: 0.85em;
+  }
+
   .date-header {
     font-size: 1.3em;
     margin-bottom: 15px;
@@ -1668,9 +1750,19 @@ button:active {
   }
 }
 
+.date-selector-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
 .date-selector {
   text-align: center;
-  margin-bottom: 20px;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .date-selector input {
@@ -1678,6 +1770,26 @@ button:active {
   font-size: 16px;
   border: 1px solid #ccc;
   border-radius: 4px;
+  max-width: 100%;
+}
+
+.measures-btn {
+  background-color: #3760b0;
+  color: white;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9em;
+  flex-shrink: 0;
+  white-space: normal;
+  text-align: center;
+  line-height: 1.25;
+  max-width: min(100%, 200px);
+}
+
+.measures-btn:hover {
+  background-color: #2a4a87;
 }
 
 .kilos-disponibles {
