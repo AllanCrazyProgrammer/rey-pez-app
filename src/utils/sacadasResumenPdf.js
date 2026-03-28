@@ -82,10 +82,40 @@ const buildDocDefinition = ({ fecha, grupos }) => {
   }
   const resumenTotal = resumenParts.length > 0 ? resumenParts.join('  ·  ') : '0';
 
+  const totalKilosLimpios = grupos.reduce((acc, group) => {
+    const subtotalCajas = (group.items || [])
+      .filter((i) => !i.esKilos)
+      .reduce((sum, i) => sum + Number(i.cajas || 0), 0);
+    const subtotalKilosDirectos = (group.items || [])
+      .filter((i) => i.esKilos)
+      .reduce((sum, i) => sum + Number(i.cajas || 0), 0);
+    const totalKgGrupo = subtotalCajas * KILOS_POR_CAJA + subtotalKilosDirectos;
+    const rendVal = Number(group.rendimiento);
+    if (Number.isFinite(rendVal) && rendVal > 0 && totalKgGrupo > 0) {
+      return acc + Math.round(totalKgGrupo / rendVal);
+    }
+    return acc;
+  }, 0);
+
   const content = [
     { text: 'De mañana para pasado', style: 'title' },
     { text: `Fecha: ${fecha || 'Sin fecha'}`, style: 'meta' },
-    { text: `Total: ${resumenTotal}`, style: 'metaStrong', margin: [0, 0, 0, 10] }
+    {
+      text: `Total: ${resumenTotal}`,
+      style: 'metaStrong',
+      margin: [0, 0, 0, totalKilosLimpios > 0 ? 4 : 10]
+    },
+    ...(totalKilosLimpios > 0
+      ? [
+          {
+            text: `Total kilos limpios: ${totalKilosLimpios.toLocaleString('es-MX', {
+              maximumFractionDigits: 0
+            })} kg`,
+            style: 'metaLimpios',
+            margin: [0, 0, 0, 10]
+          }
+        ]
+      : [])
   ];
 
   const rows = [];
@@ -112,14 +142,18 @@ const buildDocDefinition = ({ fecha, grupos }) => {
       const subtotalTexto = subtotalParts.length > 0 ? subtotalParts.join('  ·  ') : '0';
       const totalKgGrupo = subtotalKilosDesdeCajas + subtotalKilosDirectos;
       const rendVal = Number(group.rendimiento);
-      const rendimientoLine =
+      const kilosLimpiosStr =
         Number.isFinite(rendVal) && rendVal > 0 && totalKgGrupo > 0
+          ? Math.round(totalKgGrupo / rendVal).toLocaleString('es-MX', {
+              maximumFractionDigits: 0
+            })
+          : '';
+      const rendimientoLine =
+        kilosLimpiosStr !== ''
           ? [
               {
-                text: Math.round(totalKgGrupo / rendVal).toLocaleString('es-MX', {
-                  maximumFractionDigits: 0
-                }),
-                style: 'pedidoRendimiento',
+                text: `${kilosLimpiosStr} Limpios`,
+                style: 'pedidoDestacadoLimpios',
                 margin: [0, 4, 0, 0]
               }
             ]
@@ -186,6 +220,11 @@ const buildDocDefinition = ({ fecha, grupos }) => {
         bold: true,
         color: '#101828'
       },
+      metaLimpios: {
+        fontSize: 24,
+        bold: true,
+        color: '#1f4f9c'
+      },
       pedidoTitle: {
         fontSize: 22,
         bold: true,
@@ -203,12 +242,12 @@ const buildDocDefinition = ({ fecha, grupos }) => {
       pedidoSubtotal: {
         fontSize: 20,
         bold: true,
-        color: '#1f4f9c'
+        color: '#101828'
       },
-      pedidoRendimiento: {
-        fontSize: 24,
+      pedidoDestacadoLimpios: {
+        fontSize: 20,
         bold: true,
-        color: '#1e3a8a'
+        color: '#1f4f9c'
       }
     },
     defaultStyle: {

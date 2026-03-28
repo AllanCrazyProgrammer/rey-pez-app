@@ -14,19 +14,25 @@
         <div class="totales-globales-title">Resumen total</div>
         <div class="totales-globales-body">
           <template v-if="totalCajasGlobal > 0">
-            Total cajas: <strong>{{ totalCajasGlobal }} cajas</strong>
+            Total cajas: <strong class="totales-globales-strong">{{ totalCajasGlobal }} cajas</strong>
             <span class="total-sep"> · </span>
-            Total kilos: <strong>{{ totalKilosDesdeCajasGlobal }} kg</strong>
+            Total kilos: <strong class="totales-globales-strong">{{ totalKilosDesdeCajasGlobal }} kg</strong>
           </template>
           <template v-if="totalCajasGlobal > 0 && totalKilosDirectosGlobal > 0">
             <span class="total-sep"> · </span>
           </template>
           <template v-if="totalKilosDirectosGlobal > 0">
-            Kilos directos: <strong>{{ totalKilosDirectosGlobal }} kg</strong>
+            Kilos directos: <strong class="totales-globales-strong">{{ totalKilosDirectosGlobal }} kg</strong>
           </template>
           <span v-if="totalCajasGlobal === 0 && totalKilosDirectosGlobal === 0" class="totales-globales-vacio">
             Agrega cantidades en las medidas.
           </span>
+        </div>
+        <div
+          v-if="totalKilosLimpiosGlobal > 0"
+          class="totales-globales-limpios"
+        >
+          Total kilos limpios: <strong>{{ totalKilosLimpiosGlobalFormatted }} kg</strong>
         </div>
       </div>
 
@@ -96,13 +102,13 @@
 
           <div class="grupo-total">
             <span v-if="grupo.items.some(i => !i.esKilos)">
-              Total cajas: <strong>{{ totalCajasGrupo(grupo) }} cajas</strong>
+              Total cajas: <strong class="grupo-total-strong">{{ totalCajasGrupo(grupo) }} cajas</strong>
               <span class="total-sep"> · </span>
-              Total kilos: <strong>{{ totalKilosDesdeCajas(grupo) }} kg</strong>
+              Total kilos: <strong class="grupo-total-strong">{{ totalKilosDesdeCajas(grupo) }} kg</strong>
             </span>
             <span v-if="grupo.items.some(i => !i.esKilos) && grupo.items.some(i => i.esKilos)" class="total-sep"> · </span>
             <span v-if="grupo.items.some(i => i.esKilos)">
-              Kilos directos: <strong>{{ grupo.items.filter(i => i.esKilos).reduce((s, i) => s + (Number(i.cajas) || 0), 0) }} kg</strong>
+              Kilos directos: <strong class="grupo-total-strong">{{ grupo.items.filter(i => i.esKilos).reduce((s, i) => s + (Number(i.cajas) || 0), 0) }} kg</strong>
             </span>
           </div>
 
@@ -119,9 +125,9 @@
             />
             <span
               v-if="textoResultadoRendimiento(grupo)"
-              class="rendimiento-resultado"
+              class="rendimiento-resultado texto-destacado-azul"
             >
-              <strong class="rendimiento-resultado-valor">{{ textoResultadoRendimiento(grupo) }}</strong>
+              <strong>{{ textoResultadoRendimiento(grupo) }} Limpios</strong>
             </span>
           </div>
         </div>
@@ -199,6 +205,17 @@ export default {
     },
     totalKilosDesdeCajasGlobal() {
       return this.totalCajasGlobal * 20;
+    },
+    totalKilosLimpiosGlobal() {
+      return this.grupos.reduce((sum, g) => {
+        if (!this.valorRendimientoValido(g)) return sum;
+        const kg = this.totalKilosGrupo(g);
+        if (kg <= 0) return sum;
+        return sum + Math.round(kg / Number(g.rendimiento));
+      }, 0);
+    },
+    totalKilosLimpiosGlobalFormatted() {
+      return this.totalKilosLimpiosGlobal.toLocaleString('es-MX', { maximumFractionDigits: 0 });
     }
   },
   watch: {
@@ -424,6 +441,27 @@ export default {
   flex-wrap: wrap;
   align-items: baseline;
   gap: 0 4px;
+  color: #344054;
+}
+
+.totales-globales-strong {
+  color: #101828;
+  font-weight: 700;
+}
+
+.totales-globales-limpios {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #c7d7f0;
+  font-size: 1.02rem;
+  font-weight: 700;
+  color: #1f4f9c;
+  line-height: 1.35;
+}
+
+.totales-globales-limpios strong {
+  font-weight: 700;
+  color: #1f4f9c;
 }
 
 .totales-globales-vacio {
@@ -578,42 +616,54 @@ export default {
   padding-top: 8px;
   border-top: 1px dashed #dbe4f5;
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
-  gap: 8px 12px;
+  gap: 6px 8px;
   font-size: 0.92rem;
   color: #374151;
+  min-width: 0;
 }
 
 .rendimiento-label {
-  font-weight: 600;
-  color: #3760b0;
+  font-weight: 700;
+  color: #101828;
+  font-size: 0.88rem;
   flex-shrink: 0;
 }
 
 .rendimiento-input {
-  width: min(120px, 100%);
-  flex: 0 1 120px;
+  width: 88px;
+  min-width: 0;
+  flex: 0 0 auto;
+  padding: 7px 8px;
+  font-size: 0.9rem;
 }
 
 .rendimiento-resultado {
-  flex: 1 1 180px;
+  flex: 0 0 auto;
   min-width: 0;
-  text-align: right;
-  line-height: 1.35;
+  line-height: 1.2;
 }
 
-.rendimiento-resultado-valor {
-  display: inline-block;
-  font-size: 1.35rem;
-  font-weight: 800;
-  color: #1e3a8a;
-  letter-spacing: -0.02em;
-  padding: 6px 14px;
-  border-radius: 10px;
-  background: linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%);
-  border: 1px solid #93c5fd;
-  box-shadow: 0 1px 2px rgba(30, 58, 138, 0.08);
+.texto-destacado-azul {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #1f4f9c;
+}
+
+.texto-destacado-azul strong {
+  font-weight: 700;
+  color: #1f4f9c;
+}
+
+@media (max-width: 380px) {
+  .grupo-rendimiento {
+    flex-wrap: wrap;
+  }
+
+  .rendimiento-input {
+    width: min(88px, 100%);
+  }
 }
 
 .grupo-total {
@@ -622,7 +672,12 @@ export default {
   border-top: 1px solid #dbe4f5;
   text-align: right;
   font-size: 0.95rem;
-  color: #3760b0;
+  color: #344054;
+}
+
+.grupo-total-strong {
+  color: #101828;
+  font-weight: 700;
 }
 
 .remove-btn,
