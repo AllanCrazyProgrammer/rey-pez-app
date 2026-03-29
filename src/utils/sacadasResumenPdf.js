@@ -62,7 +62,91 @@ const toSafeDate = (value) => {
 
 const KILOS_POR_CAJA = 20;
 
-const buildDocDefinition = ({ fecha, grupos }) => {
+/**
+ * Misma lógica que el modal ListaMedidasPedido (normalizeGroups) para datos de Firestore o UI.
+ */
+export const normalizarGruposListaMedidasParaPdf = (grupos) => {
+  if (!Array.isArray(grupos)) return [];
+  return grupos
+    .map((group) => {
+      const base = {
+        medidaPedido: (group.medidaPedido || '').trim(),
+        ozuna: group.ozuna || false,
+        items: (group.items || [])
+          .map((item) => ({
+            medida: (item.medida || '').trim(),
+            cajas: Number(item.cajas),
+            esKilos: item.esKilos || false
+          }))
+          .filter((item) => item.medida && Number.isFinite(item.cajas) && item.cajas > 0)
+      };
+      const rend = Number(group.rendimiento);
+      if (Number.isFinite(rend) && rend > 0) {
+        base.rendimiento = rend;
+      }
+      return base;
+    })
+    .filter((group) => group.medidaPedido && group.items.length > 0);
+};
+
+export const estilosResumenMedidasSacada = {
+  title: {
+    fontSize: 32,
+    bold: true,
+    color: '#1f4f9c',
+    margin: [0, 0, 0, 8]
+  },
+  meta: {
+    fontSize: 20,
+    color: '#344054'
+  },
+  metaStrong: {
+    fontSize: 24,
+    bold: true,
+    color: '#101828'
+  },
+  metaLimpios: {
+    fontSize: 24,
+    bold: true,
+    color: '#1f4f9c'
+  },
+  pedidoTitle: {
+    fontSize: 22,
+    bold: true,
+    color: '#1d2939'
+  },
+  pedidoItem: {
+    fontSize: 20,
+    color: '#344054'
+  },
+  pedidoEmpty: {
+    fontSize: 18,
+    color: '#98a2b3',
+    italics: true
+  },
+  pedidoSubtotal: {
+    fontSize: 20,
+    bold: true,
+    color: '#101828'
+  },
+  pedidoDestacadoLimpios: {
+    fontSize: 20,
+    bold: true,
+    color: '#1f4f9c'
+  }
+};
+
+/** Título por defecto al generar desde sacadas / modal "PDF resumido". */
+export const TITULO_RESUMEN_MEDIDAS_SACADA_DEFAULT = 'De mañana para pasado';
+
+/** Título cuando la misma plantilla va incrustada en el PDF de rendimientos. */
+export const TITULO_RESUMEN_MEDIDAS_DESDE_RENDIMIENTOS = 'Se saco para hoy:';
+
+/**
+ * Fragmentos de contenido pdfmake del "PDF resumido" (grupos ya normalizados).
+ * @param {string} [tituloPrincipal] — Por defecto {@link TITULO_RESUMEN_MEDIDAS_SACADA_DEFAULT}.
+ */
+export const buildResumenMedidasSacadaContent = ({ fecha, grupos, tituloPrincipal = TITULO_RESUMEN_MEDIDAS_SACADA_DEFAULT }) => {
   const pedidosPorFila = 2;
 
   const allItems = grupos.flatMap((g) => g.items || []);
@@ -98,7 +182,7 @@ const buildDocDefinition = ({ fecha, grupos }) => {
   }, 0);
 
   const content = [
-    { text: 'De mañana para pasado', style: 'title' },
+    { text: tituloPrincipal, style: 'title' },
     { text: `Fecha: ${fecha || 'Sin fecha'}`, style: 'meta' },
     {
       text: `Total: ${resumenTotal}`,
@@ -200,56 +284,16 @@ const buildDocDefinition = ({ fecha, grupos }) => {
     }
   });
 
+  return content;
+};
+
+const buildDocDefinition = ({ fecha, grupos }) => {
+  const normalized = normalizarGruposListaMedidasParaPdf(grupos);
   return {
     pageSize: 'A4',
     pageMargins: [20, 24, 20, 20],
-    content,
-    styles: {
-      title: {
-        fontSize: 32,
-        bold: true,
-        color: '#1f4f9c',
-        margin: [0, 0, 0, 8]
-      },
-      meta: {
-        fontSize: 20,
-        color: '#344054'
-      },
-      metaStrong: {
-        fontSize: 24,
-        bold: true,
-        color: '#101828'
-      },
-      metaLimpios: {
-        fontSize: 24,
-        bold: true,
-        color: '#1f4f9c'
-      },
-      pedidoTitle: {
-        fontSize: 22,
-        bold: true,
-        color: '#1d2939'
-      },
-      pedidoItem: {
-        fontSize: 20,
-        color: '#344054'
-      },
-      pedidoEmpty: {
-        fontSize: 18,
-        color: '#98a2b3',
-        italics: true
-      },
-      pedidoSubtotal: {
-        fontSize: 20,
-        bold: true,
-        color: '#101828'
-      },
-      pedidoDestacadoLimpios: {
-        fontSize: 20,
-        bold: true,
-        color: '#1f4f9c'
-      }
-    },
+    content: buildResumenMedidasSacadaContent({ fecha, grupos: normalized }),
+    styles: estilosResumenMedidasSacada,
     defaultStyle: {
       fontSize: 18
     }

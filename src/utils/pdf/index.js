@@ -4,6 +4,12 @@ import { generarTablaRendimientos } from './generators/rendimientos';
 import { generarTablaGanancias } from './generators/ganancias';
 import { generarTablaTarasCrudo } from './generators/tarasCrudo';
 import { generarResumenGananciasTotal } from './generators/resumen';
+import {
+  buildResumenMedidasSacadaContent,
+  estilosResumenMedidasSacada,
+  normalizarGruposListaMedidasParaPdf,
+  TITULO_RESUMEN_MEDIDAS_DESDE_RENDIMIENTOS
+} from '../sacadasResumenPdf';
 
 // Configurar pdfMake al importar
 configurarPdfMake();
@@ -16,12 +22,31 @@ export const generarPDFRendimientos = async (
   gananciasVisiblesCrudos = {}, 
   costosCrudos = {}, 
   configuracionPesos = {}, 
-  gananciasVisiblesMaquila = {}
+  gananciasVisiblesMaquila = {},
+  gruposListaMedidasDiaEmbarque = null
 ) => {
   try {
     const logoBase64 = await loadImageAsBase64('https://res.cloudinary.com/hwkcovsmr/image/upload/v1620946647/samples/REY_PEZ_LOGO_nsotww.png');
     
     const nombresMedidasPersonalizados = embarqueData?.nombresMedidasPersonalizados || {};
+
+    const gruposResumenSacada = Array.isArray(gruposListaMedidasDiaEmbarque)
+      ? normalizarGruposListaMedidasParaPdf(gruposListaMedidasDiaEmbarque)
+      : [];
+    const incluirPaginaResumenSacada = gruposResumenSacada.length > 0;
+    const fechaTextoEmbarque = formatearFecha(embarqueData?.fecha);
+
+    const contenidoTrasRendimientos = incluirPaginaResumenSacada
+      ? [
+          { text: '', pageBreak: 'after' },
+          ...buildResumenMedidasSacadaContent({
+            fecha: fechaTextoEmbarque,
+            grupos: gruposResumenSacada,
+            tituloPrincipal: TITULO_RESUMEN_MEDIDAS_DESDE_RENDIMIENTOS
+          }),
+          { text: '', pageBreak: 'after' }
+        ]
+      : [{ text: '', pageBreak: 'after' }];
 
     const docDefinition = {
       content: [
@@ -43,7 +68,7 @@ export const generarPDFRendimientos = async (
             {
               stack: [
                 {
-                  text: `Fecha: ${formatearFecha(embarqueData.fecha)}`,
+                  text: `Fecha: ${fechaTextoEmbarque}`,
                   alignment: 'right',
                   margin: [0, 10, 0, 0]
                 },
@@ -53,18 +78,15 @@ export const generarPDFRendimientos = async (
         },
         { text: '\n', height: 5 },
         generarTablaRendimientos(datosRendimientos, nombresMedidasPersonalizados, embarqueData),
-        
-        // SALTO DE PÁGINA
-        { text: '', pageBreak: 'after' },
-        
-        // SEGUNDA PÁGINA - RESÚMENES
+        ...contenidoTrasRendimientos,
+        // Página(s) de resúmenes (ganancias, taras)
         generarTablaGanancias(gananciasCalculadas, nombresMedidasPersonalizados, embarqueData, gananciasVisiblesMaquila),
         { text: '\n', height: 10 },
         generarTablaTarasCrudo(tarasCrudosPorMedida, gananciasVisiblesCrudos, costosCrudos, configuracionPesos),
         { text: '\n', height: 10 },
         generarResumenGananciasTotal(gananciasCalculadas, gananciasVisiblesMaquila, gananciasVisiblesCrudos)
       ],
-      styles: estilosPdf,
+      styles: { ...estilosPdf, ...estilosResumenMedidasSacada },
       ...configuracionDocumento
     };
 

@@ -23,14 +23,28 @@
     </div>
     
     <div class="resumen-header-row">
-      <button
-        type="button"
-        class="resumen-tab-button"
-        :class="{ activo: activeVistaTab === 'sacada-hoy' }"
-        @click="activeVistaTab = activeVistaTab === 'sacada-hoy' ? 'rendimientos' : 'sacada-hoy'"
-      >
-        Resumen de sacadas
-      </button>
+      <div class="resumen-tabs" role="tablist" aria-label="Vistas del embarque">
+        <button
+          type="button"
+          class="resumen-tab-button"
+          :class="{ activo: activeVistaTab === 'sacada-hoy' }"
+          role="tab"
+          :aria-selected="activeVistaTab === 'sacada-hoy'"
+          @click="toggleVistaResumenSacadas"
+        >
+          Resumen de sacadas
+        </button>
+        <button
+          type="button"
+          class="resumen-tab-button"
+          :class="{ activo: activeVistaTab === 'medidas-hoy' }"
+          role="tab"
+          :aria-selected="activeVistaTab === 'medidas-hoy'"
+          @click="toggleVistaMedidasHoy"
+        >
+          Medidas para hoy
+        </button>
+      </div>
     </div>
 
     <template v-if="activeVistaTab === 'rendimientos'">
@@ -335,7 +349,7 @@
       </div>
     </template>
 
-    <div v-else class="resumen-dia-panel">
+    <div v-else-if="activeVistaTab === 'sacada-hoy'" class="resumen-dia-panel">
       <p v-if="resumenSacadaHoy.loading" class="resumen-dia-estado">
         Cargando resumen de sacadas del embarque...
       </p>
@@ -389,6 +403,25 @@
       <p v-else class="resumen-dia-estado">
         No hay sacadas registradas para la fecha del embarque.
       </p>
+    </div>
+
+    <div v-else-if="activeVistaTab === 'medidas-hoy'" class="medidas-hoy-panel">
+      <h3 class="medidas-hoy-title">Medidas para hoy</h3>
+      <p v-if="embarqueData?.fecha" class="medidas-hoy-fecha">
+        Fecha embarque: {{ formatearFecha(embarqueData.fecha) }}
+      </p>
+      <p v-if="medidasParaHoyPanel.loading" class="resumen-dia-estado">
+        Cargando lista de medidas del día...
+      </p>
+      <p v-else-if="medidasParaHoyPanel.error" class="resumen-dia-estado error">
+        {{ medidasParaHoyPanel.error }}
+      </p>
+      <template v-else>
+        <p v-if="!medidasParaHoyPanel.grupos.length" class="resumen-dia-estado">
+          No hay lista de medidas guardada en sacadas para la fecha de este embarque.
+        </p>
+        <MedidasParaHoyCards v-else :grupos="medidasParaHoyPanel.grupos" />
+      </template>
     </div>
 
     <div v-if="mostrarModal" class="modal-overlay">
@@ -449,11 +482,15 @@
 import { getFirestore, doc, getDoc, updateDoc, collection, getDocs, query, where, orderBy } from 'firebase/firestore';
 import { debounce } from 'lodash';
 import { generarPDFRendimientos } from '@/utils/RendimientosPdf';
+import { normalizarGruposListaMedidasParaPdf } from '@/utils/sacadasResumenPdf';
+import MedidasParaHoyCards from '@/components/MedidasParaHoyCards.vue';
 import EmbarquesOfflineService from '@/services/EmbarquesOfflineService';
 
 export default {
   name: 'Rendimientos',
-  
+  components: {
+    MedidasParaHoyCards
+  },
   data() {
     return {
       kilosCrudos: {},
@@ -488,6 +525,11 @@ export default {
         salidasClientes: [],
         salidasMaquilas: [],
         error: ''
+      },
+      medidasParaHoyPanel: {
+        loading: false,
+        error: '',
+        grupos: []
       }
     }
   },
@@ -742,6 +784,74 @@ export default {
         await this.actualizarOfflineRendimientos(false, clonedPayload, opts);
       } catch (error) {
         console.error('[Rendimientos] Error al guardar cambios en Firestore:', error);
+      }
+    },
+    /**
+     * Lista de medidas a sacar (misma fuente que "PDF resumido" en sacadas) para la fecha del embarque.
+     */
+    async obtenerGruposListaMedidasPedidoDiaEmbarque() {
+      const fechaEmbarqueISO = this.obtenerFechaISODesdeValor(this.embarqueData?.fecha);
+      if (!fechaEmbarqueISO || !navigator.onLine) {
+        return null;
+      }
+      try {
+        const [year, month, day] = fechaEmbarqueISO.split('-').map(Number);
+        const inicio = new Date(year, month - 1, day);
+        inicio.setHours(0, 0, 0, 0);
+        const fin = new Date(year, month - 1, day);
+        fin.setHours(23, 59, 59, 999);
+
+        const db = getFirestore();
+        const q = query(
+          collection(db, 'sacadas'),
+          where('fecha', '>=', inicio),
+          where('fecha', '<=', fin)
+        );
+        const snap = await getDocs(q);
+
+        const gruposRaw = [];
+        snap.docs.forEach((docSnapshot) => {
+          const data = docSnapshot.data() || {};
+          const lista = Array.isArray(data.listaMedidasPedido) ? data.listaMedidasPedido : [];
+          lista.forEach((g) => gruposRaw.push(g));
+        });
+
+        return gruposRaw.length > 0 ? gruposRaw : null;
+      } catch (error) {
+        console.warn('[Rendimientos] No se pudo cargar lista de medidas del día del embarque:', error);
+        return null;
+      }
+    },
+    toggleVistaResumenSacadas() {
+      this.activeVistaTab = this.activeVistaTab === 'sacada-hoy' ? 'rendimientos' : 'sacada-hoy';
+    },
+    async toggleVistaMedidasHoy() {
+      if (this.activeVistaTab === 'medidas-hoy') {
+        this.activeVistaTab = 'rendimientos';
+        return;
+      }
+      this.activeVistaTab = 'medidas-hoy';
+      await this.cargarMedidasParaHoyPanel();
+    },
+    async cargarMedidasParaHoyPanel() {
+      this.medidasParaHoyPanel.loading = true;
+      this.medidasParaHoyPanel.error = '';
+      try {
+        if (!navigator.onLine) {
+          this.medidasParaHoyPanel.grupos = [];
+          this.medidasParaHoyPanel.error = 'Sin conexión: no se pueden cargar las medidas del día.';
+          return;
+        }
+        const raw = await this.obtenerGruposListaMedidasPedidoDiaEmbarque();
+        this.medidasParaHoyPanel.grupos = raw
+          ? normalizarGruposListaMedidasParaPdf(raw)
+          : [];
+      } catch (error) {
+        console.warn('[Rendimientos] cargarMedidasParaHoyPanel:', error);
+        this.medidasParaHoyPanel.error = 'No se pudieron cargar las medidas para hoy.';
+        this.medidasParaHoyPanel.grupos = [];
+      } finally {
+        this.medidasParaHoyPanel.loading = false;
       }
     },
     aplicarDatosOffline(record) {
@@ -2647,7 +2757,7 @@ export default {
       }
     },
 
-    generarPDF() {
+    async generarPDF() {
       const datosRendimientos = this.medidasUnicas
         .filter(medida => !this.medidaOculta[medida])
         .map(medida => {
@@ -2723,7 +2833,21 @@ export default {
         }
       });
 
-      generarPDFRendimientos(datosRendimientos, embarqueDataConNota, gananciasVisibles, tarasCrudosPorMedida, gananciasVisiblesCrudos, costosCrudos, configuracionPesos, gananciasVisiblesMaquila);
+      const gruposListaMedidasDiaEmbarque = navigator.onLine
+        ? await this.obtenerGruposListaMedidasPedidoDiaEmbarque()
+        : null;
+
+      await generarPDFRendimientos(
+        datosRendimientos,
+        embarqueDataConNota,
+        gananciasVisibles,
+        tarasCrudosPorMedida,
+        gananciasVisiblesCrudos,
+        costosCrudos,
+        configuracionPesos,
+        gananciasVisiblesMaquila,
+        gruposListaMedidasDiaEmbarque
+      );
     },
 
     obtenerNombreMedidaPersonalizado(medida) {
@@ -3112,21 +3236,37 @@ input {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+  flex: 1;
+  min-width: 0;
 }
 
 .resumen-tab-button {
-  border: 1px solid #343a40;
+  border: 1px solid #2d3748;
   background: #fff;
-  color: #343a40;
-  border-radius: 20px;
-  padding: 8px 12px;
-  font-size: 0.9rem;
+  color: #1a202c;
+  border-radius: 14px;
+  padding: 10px 14px;
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.35;
   cursor: pointer;
+  flex: 1 1 160px;
+  min-height: 44px;
+  text-align: center;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+  transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.resumen-tab-button:active {
+  transform: scale(0.99);
 }
 
 .resumen-tab-button.activo {
   background: #343a40;
   color: #fff;
+  border-color: #343a40;
+  box-shadow: 0 2px 6px rgba(52, 58, 64, 0.25);
 }
 
 .resumen-dia-panel {
@@ -3166,6 +3306,27 @@ input {
 
 .resumen-dia-estado.error {
   color: #b91c1c;
+}
+
+.medidas-hoy-panel {
+  border: 1px solid #c7d7f0;
+  border-radius: 10px;
+  padding: 14px 16px;
+  background: linear-gradient(180deg, #f8fbff 0%, #fff 100%);
+}
+
+.medidas-hoy-title {
+  margin: 0 0 6px;
+  font-size: 1.35rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: #1f4f9c;
+}
+
+.medidas-hoy-fecha {
+  margin: 0 0 14px;
+  color: #4b5563;
+  font-size: 1.05rem;
 }
 
 .btn-volver {
@@ -3898,10 +4059,30 @@ input {
 
   .resumen-tabs {
     width: 100%;
+    flex-direction: column;
+    gap: 10px;
   }
 
   .resumen-tab-button {
     width: 100%;
+    min-height: unset;
+    padding: 13px 18px;
+    font-size: 1.0625rem;
+    line-height: 1.3;
+    border-radius: 12px;
+    box-shadow: 0 2px 4px rgba(15, 23, 42, 0.08);
+  }
+
+  .medidas-hoy-panel {
+    padding: 16px 14px;
+  }
+
+  .medidas-hoy-title {
+    font-size: 1.5rem;
+  }
+
+  .medidas-hoy-fecha {
+    font-size: 1.08rem;
   }
 
   .controles-medida {

@@ -166,6 +166,31 @@
       <h3>Resumen del Día</h3>
       <p>Total Entradas: {{ formatNumber(totalEntradas) }} kg</p>
       <p>Total Salidas: {{ formatNumber(totalSalidas) }} kg</p>
+
+      <div class="summary-medidas-hoy-bar">
+        <button
+          type="button"
+          class="medidas-para-hoy-summary-btn"
+          :class="{ 'is-open': mostrarMedidasParaHoyResumen }"
+          :aria-expanded="mostrarMedidasParaHoyResumen"
+          aria-controls="sacadas-medidas-hoy-panel"
+          @click="mostrarMedidasParaHoyResumen = !mostrarMedidasParaHoyResumen"
+        >
+          Medidas para hoy
+        </button>
+      </div>
+      <div
+        v-show="mostrarMedidasParaHoyResumen"
+        id="sacadas-medidas-hoy-panel"
+        class="summary-medidas-hoy-panel"
+        role="region"
+        aria-label="Lista de medidas para hoy"
+      >
+        <MedidasParaHoyCards
+          :grupos="gruposMedidasParaHoyNormalizados"
+          empty-message="No hay lista de medidas para este día. Usa «Medidas a sacar» para registrarlas."
+        />
+      </div>
       
       <h4>Salidas clientes:</h4>
       <table class="medidas-summary">
@@ -305,13 +330,16 @@ import { db } from '@/firebase';
 import { collection, addDoc, getDocs, doc, getDoc, updateDoc, query, where } from 'firebase/firestore';
 import BackButton from '../components/BackButton.vue';
 import ListaMedidasPedidoModal from '@/components/ListaMedidasPedidoModal.vue';
+import MedidasParaHoyCards from '@/components/MedidasParaHoyCards.vue';
+import { normalizarGruposListaMedidasParaPdf } from '@/utils/sacadasResumenPdf';
 import moment from 'moment';
 
 export default {
   name: 'Sacadas',
   components: {
     BackButton,
-    ListaMedidasPedidoModal
+    ListaMedidasPedidoModal,
+    MedidasParaHoyCards
   },
   data() {
     return {
@@ -338,7 +366,8 @@ export default {
       listaMedidasPedido: [],
       isListaMedidasModalOpen: false,
       selectedSacadaForMeasures: null,
-      isSavingListaMedidas: false
+      isSavingListaMedidas: false,
+      mostrarMedidasParaHoyResumen: false
     };
   },
   computed: {
@@ -347,6 +376,9 @@ export default {
     },
     formattedDate() {
       return this.currentDate.format('DD/MM/YYYY');
+    },
+    gruposMedidasParaHoyNormalizados() {
+      return normalizarGruposListaMedidasParaPdf(this.listaMedidasPedido || []);
     },
     filteredProveedoresEntrada() {
       return this.proveedores.filter(p => p.tipo === this.newEntrada.tipo);
@@ -1603,6 +1635,50 @@ button:active {
 .summary p {
   margin: 10px 0;
   font-size: 16px;
+}
+
+.summary-medidas-hoy-bar {
+  margin: 16px 0 12px;
+}
+
+.medidas-para-hoy-summary-btn {
+  width: 100%;
+  max-width: 100%;
+  padding: 12px 16px;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: #1a202c;
+  background: #fff;
+  border: 2px solid #3760b0;
+  border-radius: 12px;
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(55, 96, 176, 0.12);
+  transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.medidas-para-hoy-summary-btn:hover {
+  background: #f0f5ff;
+}
+
+.medidas-para-hoy-summary-btn.is-open {
+  background: #3760b0;
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(55, 96, 176, 0.35);
+}
+
+.summary-medidas-hoy-panel {
+  margin-bottom: 20px;
+  padding: 14px;
+  background: linear-gradient(180deg, #f8fbff 0%, #fff 100%);
+  border: 1px solid #c7d7f0;
+  border-radius: 10px;
+}
+
+@media (min-width: 600px) {
+  .medidas-para-hoy-summary-btn {
+    width: auto;
+    min-width: 220px;
+  }
 }
 
 .save-button {
