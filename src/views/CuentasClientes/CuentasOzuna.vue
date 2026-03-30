@@ -417,13 +417,14 @@ export default {
                 border-collapse: collapse;
                 margin-bottom: 30px;
                 font-size: 20pt;
+                background-color: #fff;
               }
               th, td {
                 border: 1px solid #ddd;
                 padding: 10px;
                 text-align: left;
               }
-              th { background-color: #f2f2f2; font-weight: bold; }
+              th { background-color: #fff; font-weight: bold; }
               .total { font-weight: bold; }
               .total td:first-child { text-align: right; }
               @media print {
@@ -534,6 +535,10 @@ export default {
   font-family: Arial, sans-serif;
 }
 
+.cuentas-ozuna-container h2 {
+  color: #fff;
+}
+
 .back-button-container {
   margin-bottom: 20px;
 }
@@ -563,6 +568,7 @@ export default {
 .fecha-actual span {
   min-width: 200px;
   text-align: left;
+  color: #fff;
 }
 
 .input-section {
@@ -606,6 +612,7 @@ table {
   width: 100%;
   border-collapse: collapse;
   margin-bottom: 20px;
+  background-color: #fff;
 }
 
 th, td {
@@ -615,7 +622,7 @@ th, td {
 }
 
 th {
-  background-color: #f2f2f2;
+  background-color: #fff;
 }
 
 .total td {
@@ -624,6 +631,7 @@ th {
 
 .saldo-pendiente {
   margin-bottom: 20px;
+  color: #fff;
 }
 
 .add-btn {
@@ -632,6 +640,12 @@ th {
 
 .abonos {
   margin-bottom: 20px;
+  color: #fff;
+}
+
+.saldo-pendiente input,
+.abonos input {
+  color: #212121;
 }
 
 .button-container {
