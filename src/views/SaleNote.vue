@@ -28,7 +28,7 @@
     </div>
     <div class="folio-date">
       <p><strong>Folio:</strong> {{ formattedFolio }}</p>
-      <p><strong>Fecha de Creación:</strong> {{ formattedCreationDate }}</p>
+      <p><strong>Fecha de Creación:</strong> {{ formatDate(currentDate) }}</p>
     </div>
     <form @submit.prevent="addProduct">
       <div class="form-row">
@@ -110,7 +110,7 @@
         <div class="folio-date">
           <p><strong>Folio:</strong> {{ formattedFolio }}</p>
           <p v-if="client"><strong>Cliente:</strong> {{ client }}</p>
-          <p><strong>Fecha de Creación:</strong> {{ formattedCreationDate }}</p>
+          <p><strong>Fecha de Creación:</strong> {{ formatDate(currentDate) }}</p>
         </div>
         <div v-if="observaciones" class="observaciones-resumen">
           <p><strong>Observaciones:</strong> {{ observaciones }}</p>
@@ -403,9 +403,6 @@ export default {
     },
     formattedFolio() {
       return `F-${this.folio.toString().padStart(4, '0')}`;
-    },
-    formattedCreationDate() {
-      return this.formatDate(this.creationDate);
     },
     /** Fecha de la nota en ISO para cruzar con historial de precios */
     fechaNotaISO() {
