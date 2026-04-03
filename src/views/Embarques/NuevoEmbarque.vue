@@ -99,6 +99,7 @@
           :pdf-type="pdfType" 
           :is-creating-account="isCreatingAccount"
           :precios-actuales="preciosActuales"
+          :precio-maquila-ozuna-default="precioMaquilaOzunaDefault"
           :fecha-embarque="embarque.fecha"
           @update:productos="actualizarProductosCliente(clienteId, $event)"
           @update:crudos="actualizarCrudosCliente(clienteId, $event)" 
@@ -271,6 +272,7 @@ import {
   normalizarFechaISO, 
   obtenerFechaActualISO 
 } from '@/utils/dateUtils';
+import { obtenerPrecioMaquilaOzunaDefault } from '@/utils/preciosHistoricos';
 import { generarNotaVentaPDF } from '@/utils/pdfGenerator';
 import { embarqueTieneContenidoOperativoDoc, embarqueTieneContenidoOperativoEstado } from '@/utils/embarqueContenido';
 
@@ -462,6 +464,12 @@ export default {
       });
 
       return [...clientesPredefinidosUnicos, ...clientesPersonalizadosUnicos, { id: 'otro', nombre: 'Otro', key: 'otro' }];
+    },
+    precioMaquilaOzunaDefault() {
+      return obtenerPrecioMaquilaOzunaDefault(
+        this.preciosActuales || [],
+        this.embarque?.fecha ? normalizarFechaISO(this.embarque.fecha) : obtenerFechaActualISO()
+      );
     },
     clientesConMedidasRegistradas() {
       const resultado = [];
@@ -3497,9 +3505,9 @@ export default {
             }
           } else {
             if (esOzunaMaquila) {
-              // Para Ozuna en maquila, "borrar" = volver al default (21)
+              // Para Ozuna en maquila, "borrar" = volver al default (modal / fallback)
               this.$delete(this.itemSeleccionado, 'precioMaquila');
-              this.$set(this.itemSeleccionado, 'precio', 21);
+              this.$set(this.itemSeleccionado, 'precio', this.precioMaquilaOzunaDefault);
               this.$set(this.itemSeleccionado, 'precioBorradoManualmente', false);
             } else {
               this.$delete(this.itemSeleccionado, 'precio');

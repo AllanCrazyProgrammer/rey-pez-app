@@ -239,3 +239,38 @@ export const obtenerPrecioParaMedidaNotaVenta = (preciosActuales, medida, fechaE
   const medidaNormalizada = normalizarMedida(medida);
   return preciosParaFecha.get(medidaNormalizada) || null;
 };
+
+/** Nombre fijo del “producto” en la colección `precios` para el precio por kg de maquila de Ozuna. */
+export const PRODUCTO_PRECIO_MAQUILA_OZUNA = 'Precio maquila Ozuna';
+
+/** Si no hay registro en Firestore, se usa este valor (histórico en la app). */
+export const PRECIO_MAQUILA_OZUNA_FALLBACK = 21;
+
+/**
+ * Precio por kg por defecto para líneas Ozuna con maquila (Venta desmarcada).
+ * Usa la misma lógica de fechas que el resto de precios (incl. específico cliente ozuna).
+ */
+export const obtenerPrecioMaquilaOzunaDefault = (preciosActuales, fechaEmbarque) => {
+  if (!Array.isArray(preciosActuales) || preciosActuales.length === 0) {
+    return PRECIO_MAQUILA_OZUNA_FALLBACK;
+  }
+  const especifico = obtenerPrecioParaMedida(
+    preciosActuales,
+    PRODUCTO_PRECIO_MAQUILA_OZUNA,
+    fechaEmbarque,
+    'ozuna'
+  );
+  if (especifico != null && !Number.isNaN(Number(especifico))) {
+    return Number(especifico);
+  }
+  const general = obtenerPrecioParaMedida(
+    preciosActuales,
+    PRODUCTO_PRECIO_MAQUILA_OZUNA,
+    fechaEmbarque,
+    null
+  );
+  if (general != null && !Number.isNaN(Number(general))) {
+    return Number(general);
+  }
+  return PRECIO_MAQUILA_OZUNA_FALLBACK;
+};

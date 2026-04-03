@@ -114,7 +114,9 @@
                 :embarque-bloqueado="embarqueBloqueado" :medidas-usadas="medidasUsadas" :medidas-configuracion="medidasConfiguracion" :nombre-cliente="nombreCliente"
                 :pedido-referencia-cliente="pedidoReferenciaPorCliente[clienteId] || null"
                 :totales-agrupados-por-clave="totalesAgrupadosPorClave"
-                :precios-actuales="preciosActuales" :fecha-embarque="fechaEmbarque"
+                :precios-actuales="preciosActuales"
+                :precio-maquila-ozuna-default="precioMaquilaOzunaDefault"
+                :fecha-embarque="fechaEmbarque"
                 @update:producto="actualizarProducto" @eliminar-producto="$emit('eliminar-producto', producto)"
                 @mostrar-modal-precio="$emit('mostrar-modal-precio', $event)"
                 @mostrar-modal-hilos="$emit('mostrar-modal-hilos', $event)"
@@ -239,6 +241,10 @@ export default {
         fechaEmbarque: {
             type: String,
             default: ''
+        },
+        precioMaquilaOzunaDefault: {
+            type: Number,
+            default: 21
         }
     },
 

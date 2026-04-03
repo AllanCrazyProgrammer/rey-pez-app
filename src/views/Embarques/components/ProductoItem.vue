@@ -229,7 +229,11 @@
 
 <script>
 import PedidoReferencia from './PedidoReferencia.vue';
-import { obtenerPrecioParaMedida, normalizarMedida } from '@/utils/preciosHistoricos';
+import {
+    obtenerPrecioParaMedida,
+    normalizarMedida,
+    PRECIO_MAQUILA_OZUNA_FALLBACK
+} from '@/utils/preciosHistoricos';
 import { normalizarFechaISO, obtenerFechaActualISO } from '@/utils/dateUtils';
 
 export default {
@@ -269,6 +273,10 @@ export default {
         fechaEmbarque: {
             type: String,
             default: ''
+        },
+        precioMaquilaOzunaDefault: {
+            type: Number,
+            default: PRECIO_MAQUILA_OZUNA_FALLBACK
         },
         totalesAgrupadosPorClave: {
             type: Object,
@@ -451,6 +459,11 @@ export default {
                 this.asignarPrecioAutomatico();
             },
             deep: true
+        },
+        precioMaquilaOzunaDefault() {
+            if (this.isClienteOzuna) {
+                this.asignarPrecioAutomatico();
+            }
         },
         fechaEmbarque: {
             handler(newVal) {
@@ -667,23 +680,24 @@ export default {
 
             const nombreCliente = this.nombreCliente.trim().toLowerCase();
             
-            // Lógica especial para Ozuna: si no es venta (maquila), precio siempre 21
+            // Lógica especial para Ozuna: si no es venta (maquila), usar precio por defecto configurable (modal Precios)
             // Nota: aquí NO respetamos `precioBorradoManualmente` porque en maquila queremos:
-            // - Default: 21
+            // - Default: precioMaquilaOzunaDefault (Firestore "Precio maquila Ozuna" o fallback 21)
             // - Si el usuario editó el precio, conservarlo (persistido en `precioMaquila`)
             if (nombreCliente === 'ozuna' && !this.producto.esVenta) {
+                const def = this.precioMaquilaOzunaDefault;
                 // Si existe precio de maquila personalizado, usarlo
                 if (this.producto.precioMaquila !== null && this.producto.precioMaquila !== undefined && this.producto.precioMaquila !== '') {
                     const pm = Number(this.producto.precioMaquila);
                     if (!Number.isNaN(pm) && pm > 0) {
                         this.producto.precio = pm;
                     } else {
-                        this.producto.precio = 21;
+                        this.producto.precio = def;
                     }
                 } else {
-                    // Default duro a 21 para maquila Ozuna; migrar valores previos (20) al nuevo default
-                    this.producto.precio = 21;
-                    this.$set(this.producto, 'precioMaquila', 21);
+                    this.producto.precio = def;
+                    // No persistir precioMaquila aquí: si solo es el default global, las líneas
+                    // siguen al precio del modal cuando cambie (ver precioMaquila en edición manual).
                 }
                 
                 // Emitir evento para notificar que se asignó precio automáticamente

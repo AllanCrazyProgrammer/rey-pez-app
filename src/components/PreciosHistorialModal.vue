@@ -112,6 +112,53 @@
           </div>
         </div>
 
+        <!-- Precio por kg maquila Ozuna: fila compacta (detalle en title al pasar el ratón) -->
+        <div
+          class="maquila-ozuna-section"
+          aria-label="Precio maquila Ozuna"
+          title="Precio por kg por defecto para Ozuna cuando la línea es maquila (Venta desmarcada). Equivale al $ del encabezado del producto."
+        >
+          <div class="maquila-ozuna-row">
+            <span class="maquila-ozuna-title">Maquila Ozuna</span>
+            <span class="maquila-ozuna-now" aria-live="polite">
+              ${{ formatNumber(precioMaquilaOzunaVigente) }}
+              <span
+                v-if="!tieneRegistroMaquilaOzunaFirestore"
+                class="maquila-ozuna-hint"
+                :title="'Sin registro en base de datos; usando ' + precioMaquilaOzunaFallbackRef"
+                aria-hidden="true"
+              >·</span>
+            </span>
+            <input
+              id="maquilaOzunaPrecio"
+              v-model.number="maquilaOzunaForm.precio"
+              type="number"
+              step="0.01"
+              min="0"
+              class="maquila-ozuna-input-num"
+              aria-label="Precio en dólares por kilogramo"
+              placeholder="$/kg"
+            >
+            <input
+              id="maquilaOzunaFecha"
+              v-model="maquilaOzunaForm.fecha"
+              type="date"
+              class="maquila-ozuna-input-date"
+              aria-label="Vigente desde"
+            >
+            <button
+              type="button"
+              class="maquila-ozuna-guardar"
+              :disabled="guardandoMaquilaOzuna"
+              :title="guardandoMaquilaOzuna ? '' : 'Guardar precio maquila Ozuna'"
+              @click="guardarPrecioMaquilaOzuna"
+            >
+              <span v-if="guardandoMaquilaOzuna">…</span>
+              <span v-else>Guardar</span>
+            </button>
+          </div>
+        </div>
+
         <!-- Lista de productos y precios actuales -->
         <div class="current-prices">
           <div class="prices-header">
@@ -389,6 +436,11 @@ import {
   esFechaValida 
 } from '@/utils/dateUtils';
 import PrecioActualEditorModal from '@/components/PrecioActualEditorModal.vue';
+import {
+  PRODUCTO_PRECIO_MAQUILA_OZUNA,
+  obtenerPrecioMaquilaOzunaDefault,
+  PRECIO_MAQUILA_OZUNA_FALLBACK
+} from '@/utils/preciosHistoricos';
 
 const crearNuevoPrecio = () => ({
   producto: '',
@@ -412,6 +464,13 @@ export default {
   },
   data() {
     return {
+      precioMaquilaOzunaFallbackRef: PRECIO_MAQUILA_OZUNA_FALLBACK,
+      preciosFirestoreRaw: [],
+      guardandoMaquilaOzuna: false,
+      maquilaOzunaForm: {
+        precio: null,
+        fecha: obtenerFechaActualISO()
+      },
       showModal: false,
       showHistorialModal: false,
       showConfirmacionModal: false,
@@ -461,6 +520,16 @@ export default {
     };
   },
   computed: {
+    precioMaquilaOzunaVigente() {
+      return obtenerPrecioMaquilaOzunaDefault(this.preciosFirestoreRaw, obtenerFechaActualISO());
+    },
+    tieneRegistroMaquilaOzunaFirestore() {
+      return this.preciosFirestoreRaw.some(
+        (p) =>
+          p.producto === PRODUCTO_PRECIO_MAQUILA_OZUNA &&
+          (!p.clienteId || p.clienteId === 'ozuna')
+      );
+    },
     currentDate() {
       return obtenerFechaActualISO();
     },
@@ -510,8 +579,10 @@ export default {
         preciosAgrupados[categoria] = [];
       });
 
-      // Agrupar productos por categoría
-      this.preciosActuales.forEach(producto => {
+      // Agrupar productos por categoría (excluir el pseudo-producto de maquila Ozuna)
+      this.preciosActuales
+        .filter((producto) => producto.producto !== PRODUCTO_PRECIO_MAQUILA_OZUNA)
+        .forEach(producto => {
         const nombreProducto = producto.producto.toLowerCase();
         if (nombreProducto.includes('s/c') || nombreProducto.match(/\d+\/\d+/)) {
           preciosAgrupados['Camarón S/C'].push(producto);
@@ -598,6 +669,16 @@ export default {
         const preciosRef = collection(db, 'precios');
         const q = query(preciosRef, orderBy('fecha', 'desc'));
         const preciosSnapshot = await getDocs(q);
+
+        this.preciosFirestoreRaw = preciosSnapshot.docs.map((docSnap) => {
+          const data = docSnap.data();
+          return {
+            id: docSnap.id,
+            ...data,
+            fecha: data.fecha ? normalizarFechaISO(data.fecha) : data.fecha,
+            timestamp: data.timestamp || 0
+          };
+        });
         
         // Crear un mapa para organizar los precios por producto y cliente
         // Ahora normalizamos los nombres para unificar productos duplicados
@@ -658,8 +739,58 @@ export default {
         
         console.log('[PRECIOS] Productos cargados con nombres normalizados:', 
           this.preciosActuales.map(p => p.producto));
+        this.sincronizarFormMaquilaOzuna();
       } catch (error) {
         console.error('Error al cargar precios:', error);
+        this.preciosFirestoreRaw = [];
+      }
+    },
+    sincronizarFormMaquilaOzuna() {
+      const v = obtenerPrecioMaquilaOzunaDefault(this.preciosFirestoreRaw, obtenerFechaActualISO());
+      this.maquilaOzunaForm.precio = v;
+      this.maquilaOzunaForm.fecha = obtenerFechaActualISO();
+    },
+    async guardarPrecioMaquilaOzuna() {
+      if (
+        this.maquilaOzunaForm.precio === null ||
+        this.maquilaOzunaForm.precio === '' ||
+        Number(this.maquilaOzunaForm.precio) < 0
+      ) {
+        alert('Indique un precio válido');
+        return;
+      }
+      if (!this.maquilaOzunaForm.fecha) {
+        alert('Indique la fecha');
+        return;
+      }
+      this.guardandoMaquilaOzuna = true;
+      try {
+        const fechaNormalizada = normalizarFechaISO(this.maquilaOzunaForm.fecha);
+        const timestamp = obtenerTimestamp();
+        const nuevoPrecio = {
+          producto: PRODUCTO_PRECIO_MAQUILA_OZUNA,
+          precio: parseFloat(this.maquilaOzunaForm.precio),
+          fecha: fechaNormalizada,
+          categoria: 'Otros',
+          timestamp,
+          fechaCreacion: obtenerFechaActualISO(),
+          horaCreacion: new Date().toLocaleTimeString('es-ES'),
+          clienteId: 'ozuna'
+        };
+        await addDoc(collection(db, 'precios'), nuevoPrecio);
+        await this.cargarPreciosActuales();
+        this.$emit('precio-agregado', {
+          producto: PRODUCTO_PRECIO_MAQUILA_OZUNA,
+          precio: nuevoPrecio.precio,
+          fecha: fechaNormalizada,
+          clienteId: 'ozuna',
+          timestamp
+        });
+      } catch (error) {
+        console.error('Error al guardar precio maquila Ozuna:', error);
+        alert('Error al guardar el precio de maquila');
+      } finally {
+        this.guardandoMaquilaOzuna = false;
       }
     },
     obtenerNombreCliente(clienteId) {
@@ -981,6 +1112,7 @@ export default {
       }
       
       this.showModal = true;
+      this.$nextTick(() => this.sincronizarFormMaquilaOzuna());
     },
 
     // Método para obtener el precio actual de un producto específico para un cliente
@@ -1458,6 +1590,114 @@ export default {
 
 .filter-all-icon {
   font-size: 1em;
+}
+
+.maquila-ozuna-section {
+  margin-bottom: 16px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(248, 250, 248, 0.95);
+}
+
+.maquila-ozuna-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+}
+
+.maquila-ozuna-title {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #5a6b5f;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.maquila-ozuna-now {
+  font-size: 0.82rem;
+  color: #07711e;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.maquila-ozuna-hint {
+  cursor: help;
+  color: #9e9e9e;
+  font-weight: 400;
+  margin-left: 1px;
+}
+
+.maquila-ozuna-input-num,
+.maquila-ozuna-input-date {
+  border: 1px solid #cfd8dc;
+  border-radius: 6px;
+  background: #fff;
+  color: #333;
+}
+
+.maquila-ozuna-input-num:focus,
+.maquila-ozuna-input-date:focus {
+  border-color: #4caf50;
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.18);
+}
+
+.maquila-ozuna-input-num {
+  width: 5.5rem;
+  min-width: 0;
+  padding: 6px 8px;
+  font-size: 0.88rem;
+}
+
+.maquila-ozuna-input-date {
+  width: auto;
+  min-width: 8.5rem;
+  padding: 5px 6px;
+  font-size: 0.82rem;
+}
+
+.maquila-ozuna-guardar {
+  padding: 6px 12px;
+  border: 1px solid rgba(7, 113, 30, 0.45);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 600;
+  background: #fff;
+  color: #07711e;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.maquila-ozuna-guardar:hover:not(:disabled) {
+  background: rgba(7, 113, 30, 0.08);
+  border-color: rgba(7, 113, 30, 0.7);
+}
+
+.maquila-ozuna-guardar:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+@media (max-width: 520px) {
+  .maquila-ozuna-row {
+    gap: 6px;
+  }
+
+  .maquila-ozuna-input-num {
+    flex: 1 1 5rem;
+  }
+
+  .maquila-ozuna-input-date {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+
+  .maquila-ozuna-guardar {
+    flex: 1 1 auto;
+    min-width: 5rem;
+  }
 }
 
 .add-btn {
