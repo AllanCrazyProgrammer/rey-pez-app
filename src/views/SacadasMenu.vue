@@ -262,112 +262,164 @@ export default {
 
 <style scoped>
 .sacadas-menu-container {
-  max-width: 800px; /* Aumentamos aún más el ancho máximo */
-  width: 95%; /* Establecemos un ancho relativo */
+  --vw-bg-1: #140a2a;
+  --vw-bg-2: #2a0e4a;
+  --vw-bg-3: #1a3a78;
+  --vw-neon-pink: #ff4fd8;
+  --vw-neon-cyan: #3ef8ff;
+  --vw-neon-purple: #a855f7;
+  --vw-text: #f5ecff;
+  --vw-soft: rgba(245, 236, 255, 0.78);
+  width: 100%;
+  max-width: 850px;
   margin: 0 auto;
-  padding: 20px;
-  min-height: calc(100vh - 160px); /* Ajusta 160px según la altura de tu navbar + footer */
+  padding: 16px;
+  color: var(--vw-text);
+  min-height: calc(100vh - 160px);
   display: flex;
   flex-direction: column;
 }
 
-@media (max-width: 1400px) {
-  .sacadas-menu-container {
-    width: 95%; /* Mantenemos el ancho relativo para pantallas más pequeñas */
-  }
+h1 {
+  margin: 0 0 4px;
+  font-size: 1.5rem;
+  color: var(--vw-neon-cyan);
+  text-shadow: 0 0 12px rgba(62, 248, 255, 0.55);
 }
 
-h1, h2 {
-  color: #3760b0;
+h2 {
+  margin: 0 0 12px;
+  font-size: 1.15rem;
+  color: var(--vw-neon-purple);
+  text-shadow: 0 0 8px rgba(168, 85, 247, 0.45);
 }
 
 .actions-container {
   display: flex;
-  justify-content: space-between;
-  margin-bottom: 20px;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 16px;
 }
 
 .action-button {
-  background-color: #3760b0;
-  color: white;
   border: none;
-  padding: 10px 20px;
-  border-radius: 4px;
+  border-radius: 999px;
+  padding: 10px 18px;
+  color: #0f172a;
   cursor: pointer;
+  font-weight: 600;
   text-decoration: none;
   display: inline-block;
+  text-align: center;
+  background: linear-gradient(135deg, #3ef8ff, #2563eb);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease;
+  box-shadow: 0 0 16px rgba(62, 248, 255, 0.35);
 }
 
 .action-button:hover {
-  background-color: #2a4a87;
+  opacity: 0.95;
+  transform: translateY(-1px);
+  box-shadow: 0 0 22px rgba(62, 248, 255, 0.5);
+}
+
+.new-sacada-btn {
+  background: linear-gradient(135deg, #ff4fd8, #8b5cf6);
+  color: #ffffff;
+  box-shadow: 0 0 16px rgba(168, 85, 247, 0.35);
+}
+
+.new-sacada-btn:hover {
+  box-shadow: 0 0 22px rgba(255, 79, 216, 0.5);
 }
 
 .sacadas-list {
-  background-color: #f0f4f8;
-  border-radius: 8px;
-  padding: 20px;
+  background:
+    linear-gradient(140deg, rgba(20, 10, 42, 0.9), rgba(42, 14, 74, 0.88) 55%, rgba(26, 58, 120, 0.86)),
+    repeating-linear-gradient(
+      180deg,
+      rgba(255, 79, 216, 0.08) 0,
+      rgba(255, 79, 216, 0.08) 1px,
+      transparent 1px,
+      transparent 8px
+    );
+  border-radius: 14px;
+  padding: 16px;
   flex-grow: 1;
-  width: 100%; /* Aseguramos que ocupe todo el ancho disponible */
+  border: 1px solid rgba(168, 85, 247, 0.45);
+  box-shadow:
+    0 0 0 1px rgba(62, 248, 255, 0.2) inset,
+    0 16px 35px rgba(3, 2, 20, 0.65);
 }
 
 .loading, .no-records {
   text-align: center;
-  color: #666;
-  padding: 20px;
+  padding: 14px;
+  border-radius: 10px;
+  background: rgba(16, 18, 56, 0.78);
+  border: 1px solid rgba(255, 79, 216, 0.3);
+  color: var(--vw-soft);
 }
 
 .sacada-item {
-  background-color: white;
-  border-radius: 4px;
+  background: rgba(8, 13, 40, 0.72);
+  border: 1px solid rgba(62, 248, 255, 0.25);
+  border-radius: 12px;
   margin-bottom: 10px;
-  padding: 20px; /* Aumentamos el padding */
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  padding: 14px;
   display: flex;
   justify-content: space-between;
   align-items: center;
+  box-shadow: 0 0 20px rgba(168, 85, 247, 0.12);
+  transition: border-color 0.2s ease;
+}
+
+.sacada-item:hover {
+  border-color: rgba(62, 248, 255, 0.5);
 }
 
 .sacada-content {
   flex-grow: 1;
   cursor: pointer;
-  display: flex; /* Añadimos display flex */
-  justify-content: space-between; /* Distribuimos el contenido */
-  align-items: center; /* Alineamos verticalmente */
-  width: 100%; /* Aseguramos que ocupe todo el ancho disponible */
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
 }
 
 .sacada-date {
-  color: #3760b0;
-  font-weight: bold;
-  font-size: 1.1em;
+  color: var(--vw-neon-cyan);
+  font-weight: 700;
+  font-size: 1.05em;
 }
 
 .sacada-summary {
   display: flex;
   flex-direction: column;
-  gap: 5px;
-  margin-top: 10px;
+  gap: 4px;
+  margin-top: 8px;
   font-size: 0.9em;
-  color: #666;
+  color: var(--vw-soft);
 }
 
 .sacada-entry {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 8px;
 }
 
 .sacada-label {
-  font-weight: bold;
-  color: #3760b0;
+  font-weight: 600;
+  color: var(--vw-neon-purple);
 }
 
 .sacada-value {
-  font-weight: bold;
+  font-weight: 700;
+  color: var(--vw-text);
 }
 
 .sacada-cajas-total {
-  color: #3760b0;
+  color: var(--vw-neon-cyan);
   font-size: 1.05em;
 }
 
@@ -382,52 +434,64 @@ h1, h2 {
 .sacada-actions {
   display: flex;
   align-items: center;
+  gap: 8px;
 }
 
 .delete-btn {
-  background-color: #f44336;
-  color: white;
   border: none;
-  padding: 8px 12px; /* Aumentamos el padding */
-  border-radius: 4px;
+  border-radius: 999px;
+  padding: 8px 14px;
   cursor: pointer;
-  font-size: 0.9em;
-  margin-left: 10px; /* Añadimos un margen izquierdo para separarlo del contenido */
+  font-size: 0.85em;
+  font-weight: 600;
+  background: linear-gradient(135deg, #ff5f9e, #ef4444);
+  color: #ffffff;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease;
+  box-shadow: 0 0 12px rgba(239, 68, 68, 0.3);
 }
 
 .delete-btn:hover {
-  background-color: #d32f2f;
+  opacity: 0.95;
+  transform: translateY(-1px);
+  box-shadow: 0 0 18px rgba(255, 95, 158, 0.45);
 }
 
 .measures-btn {
-  background-color: #3760b0;
-  color: white;
   border: none;
-  padding: 8px 12px;
-  border-radius: 4px;
+  border-radius: 999px;
+  padding: 8px 14px;
   cursor: pointer;
-  font-size: 0.9em;
-  margin-left: 10px;
+  font-size: 0.85em;
+  font-weight: 600;
+  background: linear-gradient(135deg, #60a5fa, #22d3ee);
+  color: #0f172a;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease;
+  box-shadow: 0 0 12px rgba(34, 211, 238, 0.3);
 }
 
 .measures-btn:hover {
-  background-color: #2a4a87;
+  opacity: 0.95;
+  transform: translateY(-1px);
+  box-shadow: 0 0 18px rgba(96, 165, 250, 0.45);
 }
 
 @media (max-width: 600px) {
+  .sacadas-menu-container {
+    padding: 12px;
+  }
+
   .actions-container {
     flex-direction: column;
   }
 
   .action-button {
     width: 100%;
-    margin-bottom: 10px;
   }
 
   .sacada-item {
     flex-direction: column;
     align-items: stretch;
-    padding: 15px;
+    padding: 12px;
   }
 
   .sacada-content {
@@ -436,7 +500,7 @@ h1, h2 {
   }
 
   .sacada-date {
-    margin-bottom: 10px;
+    margin-bottom: 8px;
     font-size: 1em;
   }
 
@@ -444,7 +508,7 @@ h1, h2 {
     flex-direction: row;
     justify-content: space-between;
     width: 100%;
-    margin-top: 5px;
+    margin-top: 4px;
   }
 
   .sacada-entry {
@@ -452,55 +516,58 @@ h1, h2 {
     align-items: flex-start;
   }
 
-  .sacada-label {
-    font-size: 1em;
-  }
-
-  .sacada-value {
-    font-size: 1em;
-  }
-
   .sacada-actions {
-    margin-top: 15px;
+    margin-top: 12px;
     justify-content: flex-end;
-  }
-
-  .delete-btn {
-    padding: 6px 10px;
-    font-size: 0.8em;
-  }
-
-  .measures-btn {
-    padding: 6px 10px;
-    font-size: 0.8em;
-    margin-left: 0;
-    margin-right: 8px;
   }
 }
 
 .pagination {
   display: flex;
-  justify-content: center;
+  justify-content: space-between;
   align-items: center;
-  margin-top: 20px;
+  margin-top: 14px;
+  gap: 8px;
 }
 
 .pagination button {
-  background-color: #3760b0;
-  color: white;
   border: none;
-  padding: 8px 12px;
-  border-radius: 4px;
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 0.85rem;
+  font-weight: 600;
   cursor: pointer;
-  margin: 0 10px;
+  background: linear-gradient(135deg, #64748b, #475569);
+  color: #ffffff;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease;
+  box-shadow: 0 0 12px rgba(168, 85, 247, 0.2);
+}
+
+.pagination button:hover {
+  opacity: 0.95;
+  transform: translateY(-1px);
+  box-shadow: 0 0 18px rgba(62, 248, 255, 0.3);
 }
 
 .pagination button:disabled {
-  background-color: #ccc;
+  opacity: 0.55;
   cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
 }
 
 .pagination span {
-  font-weight: bold;
+  font-size: 0.88rem;
+  color: var(--vw-soft);
+  text-align: center;
+  flex: 1;
+}
+
+@media (max-width: 768px) {
+  .pagination {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
 }
 </style>
