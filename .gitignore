@@ -1,6 +1,10 @@
 .DS_Store
 node_modules
 
+# Secrets / credentials
+admin-key.json
+admin-key.json.json
+
 
 
 # local env files
