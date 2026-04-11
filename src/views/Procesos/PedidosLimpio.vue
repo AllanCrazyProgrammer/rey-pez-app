@@ -173,7 +173,7 @@
                   </select>
                 </div>
 
-                <button @click="eliminarPedidoOtilio(index)" class="btn-eliminar" v-if="pedidoOtilio.length > 1">
+                <button @click="eliminarPedidoOtilio(index)" class="btn-eliminar">
                   <i class="fas fa-trash"></i>
                 </button>
               </div>
@@ -255,7 +255,7 @@
                   </select>
                 </div>
 
-                <button @click="eliminarPedidoCatarro(index)" class="btn-eliminar" v-if="pedidoCatarro.length > 1">
+                <button @click="eliminarPedidoCatarro(index)" class="btn-eliminar">
                   <i class="fas fa-trash"></i>
                 </button>
               </div>
@@ -339,7 +339,7 @@
                   </select>
                 </div>
 
-                <button @click="eliminarPedidoJoselito(index)" class="btn-eliminar" v-if="pedidoJoselito.length > 1">
+                <button @click="eliminarPedidoJoselito(index)" class="btn-eliminar">
                   <i class="fas fa-trash"></i>
                 </button>
               </div>
@@ -428,7 +428,7 @@
                   </select>
                 </div>
 
-                <button @click="eliminarPedidoLorena(index)" class="btn-eliminar" v-if="pedidoLorena.length > 1">
+                <button @click="eliminarPedidoLorena(index)" class="btn-eliminar">
                   <i class="fas fa-trash"></i>
                 </button>
               </div>
@@ -524,7 +524,7 @@
                   </div>
                 </div>
 
-                <button @click="eliminarPedidoOzuna(index)" class="btn-eliminar" v-if="pedidoOzuna.length > 1">
+                <button @click="eliminarPedidoOzuna(index)" class="btn-eliminar">
                   <i class="fas fa-trash"></i>
                 </button>
               </div>
@@ -623,7 +623,7 @@
                   </select>
                 </div>
 
-                <button @click="eliminarPedidoTemporal(cliente.id, index)" class="btn-eliminar" v-if="cliente.pedidos.length > 1">
+                <button @click="eliminarPedidoTemporal(cliente.id, index)" class="btn-eliminar">
                   <i class="fas fa-trash"></i>
                 </button>
               </div>
@@ -714,11 +714,11 @@ export default {
   data() {
     return {
       fecha: new Date().toISOString().split('T')[0],
-      pedidoOtilio: [{ kilos: null, medida: '', tipo: '', esTara: true, esProveedor: false, proveedor: '' }],
-      pedidoCatarro: [{ kilos: null, medida: '', tipo: 'S/H20', esTara: false, esProveedor: false, proveedor: '' }],
-      pedidoJoselito: [{ kilos: null, medida: '', tipo: '', esTara: false, esProveedor: false, proveedor: '' }],
-      pedidoOzuna: [{ kilos: null, medida: '', tipo: 'S/H20', esTara: false, esProveedor: false, proveedor: '', esMaquila: true }],
-      pedidoLorena: [{ kilos: null, medida: '', tipo: '', esTara: false, esProveedor: false, proveedor: '' }],
+      pedidoOtilio: [],
+      pedidoCatarro: [],
+      pedidoJoselito: [],
+      pedidoOzuna: [],
+      pedidoLorena: [],
       clientesTemporales: {},
       mostrarModalNuevoCliente: false,
       mostrarImpresion: false,
@@ -1198,33 +1198,18 @@ export default {
     },
     eliminarPedidoOtilio(index) {
       this.pedidoOtilio.splice(index, 1)
-      if (this.pedidoOtilio.length === 0) {
-        this.agregarFilaOtilio()
-      }
     },
     eliminarPedidoCatarro(index) {
       this.pedidoCatarro.splice(index, 1)
-      if (this.pedidoCatarro.length === 0) {
-        this.agregarFilaCatarro()
-      }
     },
     eliminarPedidoJoselito(index) {
       this.pedidoJoselito.splice(index, 1)
-      if (this.pedidoJoselito.length === 0) {
-        this.agregarFilaJoselito()
-      }
     },
     eliminarPedidoOzuna(index) {
       this.pedidoOzuna.splice(index, 1)
-      if (this.pedidoOzuna.length === 0) {
-        this.agregarFilaOzuna()
-      }
     },
     eliminarPedidoLorena(index) {
       this.pedidoLorena.splice(index, 1)
-      if (this.pedidoLorena.length === 0) {
-        this.agregarFilaLorena()
-      }
     },
     abrirModalProveedor(item) {
       this.itemSeleccionado = item
@@ -1331,7 +1316,7 @@ export default {
       const clienteData = {
         id: nuevoCliente.id,
         nombre: nuevoCliente.nombre,
-        pedidos: [{ kilos: null, medida: '', tipo: '', esTara: false, esProveedor: false, proveedor: '' }]
+        pedidos: []
       };
       this.$set(this.clientesTemporales, nuevoCliente.id, clienteData);
       this.clienteActivo = nuevoCliente.id;
