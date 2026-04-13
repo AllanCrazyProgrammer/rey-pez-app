@@ -1100,11 +1100,13 @@ export default {
         .map(doc => ({ id: doc.id, ...doc.data() }))
         .sort((a, b) => a.fecha.toDate() - b.fecha.toDate());
 
-      // Función para actualizar el balance de una medida y rastrear fechas (cuartos incluidos)
+      // FIFO por medida+precio+cuarto (consistente con Existencias)
       const actualizarBalance = (medida, precio, kilos, fecha, esEntrada = true, cuartoFrio = '') => {
         const precioNormalizado = precio !== null && precio !== undefined ? precio : null;
-        const medidaKey = precioNormalizado !== null ? `${medida} ($${precioNormalizado})` : medida;
         const cuartoNormalizado = normalizeCuarto(cuartoFrio);
+        const medidaKey = precioNormalizado !== null 
+          ? `${medida}_$${precioNormalizado}__${cuartoNormalizado}`
+          : `${medida}__${cuartoNormalizado}`;
         const fechaObj = fecha instanceof Date ? fecha : (fecha?.toDate ? fecha.toDate() : new Date(fecha));
 
         if (!medidasDisponibles.has(medidaKey)) {
@@ -1112,10 +1114,8 @@ export default {
             medida,
             precio: precioNormalizado,
             kilos: 0,
-            nombre: medidaKey,
+            cuartoFrio: cuartoNormalizado,
             primeraFecha: null,
-            esElMasAntiguo: false,
-            cuartos: new Map(),
             lotes: []
           });
         }
@@ -1125,10 +1125,7 @@ export default {
           datos.lotes = [];
         }
 
-        let kilosAplicados = kilos;
-
         if (esEntrada) {
-          // Registrar la entrada como un lote nuevo y mantener orden cronológico
           datos.lotes.push({
             kilos,
             fecha: fechaObj,
@@ -1136,7 +1133,6 @@ export default {
           });
           datos.lotes.sort((a, b) => a.fecha - b.fecha);
         } else {
-          // Consumir desde el lote más antiguo (FIFO)
           let kilosPendientes = kilos;
           datos.lotes.sort((a, b) => a.fecha - b.fecha);
 
@@ -1151,23 +1147,18 @@ export default {
             }
           }
 
-          kilosAplicados = kilos - kilosPendientes;
           datos.lotes = datos.lotes.filter(lote => lote.kilos > 0);
 
           if (kilosPendientes > 0) {
             console.warn('[Sacadas] Salida sin suficientes lotes registrados', {
               medida,
               precio: precioNormalizado,
+              cuartoFrio: cuartoNormalizado,
               kilosPendientes
             });
           }
         }
 
-        // Ajustar los kilos por cuarto solo con lo realmente aplicado
-        const kilosCuarto = datos.cuartos.get(cuartoNormalizado) || 0;
-        datos.cuartos.set(cuartoNormalizado, kilosCuarto + (esEntrada ? kilosAplicados : -kilosAplicados));
-
-        // Recalcular totales y fecha más antigua disponible
         datos.kilos = datos.lotes.reduce((sum, lote) => sum + lote.kilos, 0);
         datos.primeraFecha = datos.lotes.length > 0 ? datos.lotes[0].fecha : null;
       };
@@ -1210,9 +1201,39 @@ export default {
         }
       });
 
+      // Agregar por medida+precio (consolidar cuartos) para el dropdown
+      const medidasAgregadas = new Map();
+      for (const [_, datos] of medidasDisponibles) {
+        if (datos.kilos <= 0) continue;
+
+        const displayKey = datos.precio !== null ? `${datos.medida} ($${datos.precio})` : datos.medida;
+
+        if (!medidasAgregadas.has(displayKey)) {
+          medidasAgregadas.set(displayKey, {
+            medida: datos.medida,
+            precio: datos.precio,
+            kilos: 0,
+            nombre: displayKey,
+            primeraFecha: null,
+            esElMasAntiguo: false,
+            cuartos: new Map()
+          });
+        }
+
+        const agregado = medidasAgregadas.get(displayKey);
+        agregado.kilos += datos.kilos;
+
+        const kilosCuarto = agregado.cuartos.get(datos.cuartoFrio) || 0;
+        agregado.cuartos.set(datos.cuartoFrio, kilosCuarto + datos.kilos);
+
+        if (datos.primeraFecha && (!agregado.primeraFecha || datos.primeraFecha < agregado.primeraFecha)) {
+          agregado.primeraFecha = datos.primeraFecha;
+        }
+      }
+
       // Encontrar cuál es el precio más antiguo para cada medida base (solo para medidas con precio)
       const medidasPorBase = new Map();
-      for (const [_, datos] of medidasDisponibles) {
+      for (const [_, datos] of medidasAgregadas) {
         if (datos.kilos > 0 && datos.precio !== null && datos.primeraFecha !== null) {
           const medidaBase = datos.medida;
           if (!medidasPorBase.has(medidaBase)) {
@@ -1232,14 +1253,13 @@ export default {
         }
       }
 
-      // Convertir TODAS las medidas con existencias positivas a opciones (con precio y sin precio)
+      // Convertir TODAS las medidas con existencias positivas a opciones
       const medidasConPrecio = [];
-      for (const [_, datos] of medidasDisponibles) {
+      for (const [_, datos] of medidasAgregadas) {
         if (datos.kilos > 0) {
           
           let nombreDisplay = datos.nombre;
           
-          // Agregar indicadores visuales solo para medidas con precio
           if (datos.precio !== null && datos.primeraFecha !== null) {
             const fechaStr = moment(datos.primeraFecha).format('DD/MM/YY');
             if (datos.esElMasAntiguo) {
