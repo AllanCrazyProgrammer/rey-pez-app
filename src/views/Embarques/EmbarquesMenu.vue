@@ -67,6 +67,11 @@ _____|____|____|______
           <span class="btn-icon">&gt;</span>
           <span class="btn-text">SALIDAS_RENDIMIENTOS</span>
         </button>
+        <button @click="abrirBuscarSalidas" class="btn-action btn-buscar-salidas">
+          <span class="btn-prefix">[4]</span>
+          <span class="btn-icon">🔍</span>
+          <span class="btn-text">BUSCAR_SALIDAS</span>
+        </button>
         <button @click="recuperacionEmergencia" class="btn-action btn-emergencia">
           <span class="btn-prefix">[!]</span>
           <span class="btn-icon">⚠</span>
@@ -87,22 +92,29 @@ _____|____|____|______
       :mostrar="mostrarSalidasRendimientos"
       @cerrar="mostrarSalidasRendimientos = false"
     />
+    <BuscarSalidasProductosModal
+      :mostrar="mostrarBuscarSalidas"
+      @cerrar="mostrarBuscarSalidas = false"
+    />
   </div>
 </template>
 
 <script>
 import ListaEmbarques from './ListaEmbarques.vue'
 import SalidasRendimientosModal from './components/SalidasRendimientosModal.vue'
+import BuscarSalidasProductosModal from './components/BuscarSalidasProductosModal.vue'
 
 export default {
   name: 'EmbarquesMenu',
   components: {
     ListaEmbarques,
-    SalidasRendimientosModal
+    SalidasRendimientosModal,
+    BuscarSalidasProductosModal
   },
   data() {
     return {
       mostrarSalidasRendimientos: false,
+      mostrarBuscarSalidas: false,
       isNavigatingCuentaFletes: false,
       cuentaFletesComponentPreloaded: false
     }
@@ -146,6 +158,9 @@ export default {
     },
     abrirSalidasRendimientos() {
       this.mostrarSalidasRendimientos = true;
+    },
+    abrirBuscarSalidas() {
+      this.mostrarBuscarSalidas = true;
     },
     recuperacionEmergencia() {
       this.$router.push('/embarques/recuperacion-emergencia');
@@ -557,6 +572,24 @@ export default {
 
 .btn-salidas-rendimientos .btn-prefix {
   color: #4bd3ff;
+}
+
+/* Boton buscar salidas */
+.btn-buscar-salidas {
+  border-color: #c084fc;
+  color: #c084fc;
+}
+
+.btn-buscar-salidas:hover {
+  color: var(--terminal-bg);
+}
+
+.btn-buscar-salidas:hover::before {
+  background: #c084fc;
+}
+
+.btn-buscar-salidas .btn-prefix {
+  color: #c084fc;
 }
 
 @keyframes emergency-pulse {
