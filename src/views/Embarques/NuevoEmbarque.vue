@@ -224,8 +224,6 @@
 <script>
 import { getFirestore, collection, addDoc, doc, getDoc, updateDoc, onSnapshot, serverTimestamp, getDocs, setDoc, deleteDoc, query, where, orderBy, runTransaction } from 'firebase/firestore';
 import { debounce } from 'lodash';
-import { ref, onValue, onDisconnect, set } from 'firebase/database'
-import { rtdb } from '@/firebase'
 import { useAuthStore } from '@/stores/auth'
 import { getSaveManager } from '@/services/SaveManager'
 import SaveStatusIndicator from '@/components/SaveStatusIndicator.vue'
@@ -236,6 +234,9 @@ import Sidebar from '@/components/Sidebar.vue'
 import HeaderEmbarque from '../Embarques/components/HeaderEmbarque.vue'
 import pdfGenerationMixin from './mixins/pdfGenerationMixin';
 import calculosMixin from './mixins/calculosMixin';
+import { embarqueUndoMixin } from './mixins/embarqueUndoMixin';
+import { embarquePresenciaMixin } from './mixins/embarquePresenciaMixin';
+import { embarqueCuentasMixin } from './mixins/embarqueCuentasMixin';
 import ClienteProductos from './components/ClienteProductos.vue';
 import { v4 as uuidv4 } from 'uuid'; // Importar uuid para IDs únicos
 
@@ -277,13 +278,15 @@ import { generarNotaVentaPDF } from '@/utils/pdfGenerator';
 import { embarqueTieneContenidoOperativoDoc, embarqueTieneContenidoOperativoEstado } from '@/utils/embarqueContenido';
 
 // Después de las imports existentes, agregar:
-import EmbarqueCuentasService from '@/utils/services/EmbarqueCuentasService';
 import EmbarquesOfflineService from '@/services/EmbarquesOfflineService';
 
 export default {
   mixins: [
     pdfGenerationMixin,
-    calculosMixin
+    calculosMixin,
+    embarqueUndoMixin,
+    embarquePresenciaMixin,
+    embarqueCuentasMixin,
   ],
 
   name: 'NuevoEmbarque',
@@ -314,7 +317,6 @@ export default {
   
   data() {
     return {
-      usuariosActivos: [],
       clientesJuntarMedidas: {},
       clientesReglaOtilio: {},
       clientesIncluirPrecios: {},
@@ -334,9 +336,6 @@ export default {
         crudos: []
       },
       nuevoClienteId: '',
-      undoStack: [],
-      redoStack: [],
-      isUndoRedo: false,
       cambios: [],
       producto: {
         reporteTaras: [],
@@ -413,7 +412,6 @@ export default {
       // Variables para manejo de errores de autenticación
       showAuthError: false,
       authErrorMessage: 'Su sesión ha expirado o hay un problema con su autenticación.',
-      isCreatingAccount: false,
       _creandoEmbarque: false,
       _guardandoEmbarque: false,
       mostrarEscalaResumen: false,
@@ -2734,8 +2732,7 @@ export default {
       this._inicializandoEmbarque = false;
 
       this.actualizarMedidasUsadas();
-      this.undoStack = [JSON.stringify(this.embarque)];
-      this.redoStack = [];
+      this.initUndo(this.embarque);
       this.clienteActivo = this.embarque.productos.length > 0 ? this.embarque.productos[0].clienteId : null;
       
       console.log('[DEBUG-APLICAR-OFFLINE] Carga offline completada, bandera desactivada');
@@ -3083,40 +3080,6 @@ export default {
       const clienteNombre = this.obtenerNombreCliente(producto.clienteId);
       if (clienteNombre === 'Catarro') {
         producto.tipo = 's/h20';
-      }
-    },
-
-    undo() {
-      if (this.undoStack.length > 1) { // Asegura que haya al menos un estado previo
-        // Obtener el estado actual y moverlo al redoStack
-        const estadoActual = this.undoStack.pop();
-        this.redoStack.push(estadoActual);
-        // Obtener el estado anterior del undoStack
-        const estadoAnterior = this.undoStack[this.undoStack.length - 1];
-        this.isUndoRedo = true; // Indicar que se está realizando una operación de Undo
-        this.embarque = JSON.parse(estadoAnterior);
-        console.log('Undo realizado. Estado actual restaurado.');
-
-        // Llamar al método de guardado automático
-        this.guardarCambiosEnTiempoReal();
-      } else {
-        console.log('No hay más acciones para deshacer.');
-      }
-    },
-
-    redo() {
-      if (this.redoStack.length > 0) {
-        // Obtener el último estado del redoStack
-        const estadoRehacer = this.redoStack.pop();
-        this.undoStack.push(estadoRehacer);
-        this.isUndoRedo = true; // Indicar que se está realizando una operación de Redo
-        this.embarque = JSON.parse(estadoRehacer);
-        console.log('Redo realizado. Estado actual restaurado.');
-
-        // Llamar al método de guardado automático
-        this.guardarCambiosEnTiempoReal();
-      } else {
-        console.log('No hay más acciones para rehacer.');
       }
     },
 
@@ -4351,81 +4314,6 @@ export default {
     },
 
     // Métodos relacionados con la interfaz de usuarios
-    async escucharUsuariosActivos() {
-      try {
-        const statusRef = ref(rtdb, 'status');
-
-        // Primero, asegurarse de que el usuario actual esté marcado como activo
-        if (this.authStore.isLoggedIn && this.authStore.user) {
-          const userStatusRef = ref(rtdb, `status/${this.authStore.userId}`);
-
-          try {
-            await set(userStatusRef, {
-              username: this.authStore.user.username,
-              status: 'online',
-              lastSeen: new Date().toISOString()
-            });
-            
-          } catch (error) {
-            console.error('Error al actualizar estado del usuario:', error);
-          }
-        } else {
-          console.log('Usuario no autenticado');
-        }
-
-        // Luego, escuchar cambios en los usuarios activos
-        this.unsubscribeUsuarios = onValue(statusRef, (snapshot) => {
-          const usuarios = [];
-          console.log('Recibiendo actualización de usuarios activos');
-
-          snapshot.forEach((childSnapshot) => {
-            const usuario = childSnapshot.val();
-            console.log('Usuario encontrado:', usuario);
-
-            // Solo agregar usuarios que tengan datos válidos
-            if (usuario && usuario.username) {
-              usuarios.push({
-                userId: childSnapshot.key,
-                username: usuario.username,
-                status: usuario.status || 'online',
-                lastSeen: usuario.lastSeen
-              });
-            }
-          });
-
-          console.log('Total usuarios activos:', usuarios.length);
-          this.usuariosActivos = usuarios;
-        }, (error) => {
-          console.error('Error al escuchar usuarios activos:', error);
-        });
-      } catch (error) {
-        console.error('Error al iniciar escucha de usuarios:', error);
-      }
-    },
-
-    async iniciarPresenciaUsuario() {
-      try {
-        if (!this.authStore.isLoggedIn || !this.authStore.user) {
-          console.log('Usuario no autenticado');
-          return;
-        }
-
-        const userStatusRef = ref(rtdb, `status/${this.authStore.userId}`);
-
-        // Configurar limpieza al desconectar
-        await onDisconnect(userStatusRef).remove();
-
-        // Establecer estado inicial
-        await set(userStatusRef, {
-          username: this.authStore.user.username,
-          status: 'online',
-          lastSeen: new Date().toISOString()
-        });
-      } catch (error) {
-        console.error('Error al iniciar presencia:', error.message, error.stack);
-      }
-    },
-
     volverAEmbarquesMenu() {
       // Navegar de vuelta al menú de embarques
       this.$router.push({ name: 'EmbarquesMenu' });
@@ -4475,86 +4363,6 @@ export default {
     },
 
     // Métodos para creación de cuentas
-    async crearCuentaJoselito(clienteId, clienteProductos, clienteCrudos) {
-      try {
-        this.isCreatingAccount = true;
-        // Asegurar que el ID de cliente sea '1' para Joselito
-        const joselitoClienteId = '1';
-        const embarqueCliente = { 
-          ...this.embarque,
-          productos: clienteProductos,
-          clienteCrudos: { [joselitoClienteId]: clienteCrudos },
-          productosTotales: this.embarque.productos,
-          clienteCrudosTotales: this.clienteCrudos,
-          costosPorMedida: { ...this.costosPorMedida },
-          aplicarCostoExtra: { ...this.aplicarCostoExtra },
-          costoExtra: this.costoExtra
-        };
-        await EmbarqueCuentasService.crearCuentaJoselito(embarqueCliente, this.$router);
-      } catch (error) {
-        console.error('Error al crear cuenta para Joselito:', error);
-        alert('Error al crear cuenta para Joselito');
-      } finally {
-        this.isCreatingAccount = false;
-      }
-    },
-
-    async crearCuentaCatarro(clienteId, clienteProductos, clienteCrudos) {
-      try {
-        this.isCreatingAccount = true;
-        
-        // Asegurar que el ID de cliente sea '2' para Catarro
-        const catarroClienteId = '2';
-        
-        const embarqueCliente = { 
-          ...this.embarque,
-          productos: clienteProductos,
-          clienteCrudos: { [catarroClienteId]: clienteCrudos },
-          productosTotales: this.embarque.productos,
-          clienteCrudosTotales: this.clienteCrudos,
-          costosPorMedida: { ...this.costosPorMedida },
-          aplicarCostoExtra: { ...this.aplicarCostoExtra },
-          costoExtra: this.costoExtra
-        };
-        
-        await EmbarqueCuentasService.crearCuentaCatarro(embarqueCliente, this.$router);
-        alert('Cuenta de Catarro creada exitosamente y abierta en una nueva pestaña.');
-      } catch (error) {
-        console.error('Error al crear cuenta para Catarro:', error);
-        alert(`Error al crear cuenta para Catarro: ${error.message}`);
-      } finally {
-        this.isCreatingAccount = false;
-      }
-    },
-
-    esClienteJoselito(clienteId) {
-      const clienteInfo = this.clientesDisponibles.find(c => c.id.toString() === clienteId.toString());
-      return clienteInfo && clienteInfo.nombre.toLowerCase().includes('joselito');
-    },
-
-    esClienteCatarro(clienteId) {
-      const clienteInfo = this.clientesDisponibles.find(c => c.id.toString() === clienteId.toString());
-      return clienteInfo && clienteInfo.nombre.toLowerCase().includes('catarro');
-    },
-
-    esClienteVeronica(clienteId) {
-      const clienteInfo = this.clientesDisponibles.find(c => c.id.toString() === clienteId.toString());
-      return clienteInfo && (clienteInfo.nombre.toLowerCase().includes('veronica') || clienteInfo.nombre.toLowerCase().includes('lorena'));
-    },
-
-    obtenerEmbarqueCliente(clienteId) {
-      const clienteProductos = this.productosPorCliente[clienteId];
-      const clienteCrudos = this.clienteCrudos[clienteId];
-
-      return {
-        fecha: this.embarque.fecha,
-        cargaCon: this.embarque.cargaCon,
-        productos: clienteProductos,
-        clienteCrudos: { [clienteId]: clienteCrudos },
-        kilosCrudos: this.embarque.kilosCrudos || {}
-      };
-    },
-
     async verificarFechaExistente(nuevaFecha) {
       // Si estamos en modo edición y el embarque está bloqueado, no permitir cambios
       if (this.embarqueBloqueado) {
@@ -4587,99 +4395,6 @@ export default {
       } catch (error) {
         console.error("Error al verificar fecha existente:", error);
         alert('Hubo un error al verificar la fecha. Por favor, intente nuevamente.');
-      }
-    },
-
-    // Método para crear cuenta de Ozuna
-    async crearCuentaOzuna(clienteId, clienteProductos, clienteCrudos) {
-      try {
-        this.isCreatingAccount = true;
-        
-        // Asegurar que el ID de cliente sea '4' para Ozuna
-        const ozunaClienteId = '4';
-        
-        const embarqueCliente = { 
-          ...this.embarque,
-          productos: clienteProductos,
-          clienteCrudos: { [ozunaClienteId]: clienteCrudos },
-          productosTotales: this.embarque.productos,
-          clienteCrudosTotales: this.clienteCrudos,
-          costosPorMedida: { ...this.costosPorMedida },
-          aplicarCostoExtra: { ...this.aplicarCostoExtra },
-          costoExtra: this.costoExtra
-        };
-        
-        await EmbarqueCuentasService.crearCuentaOzuna(embarqueCliente, this.$router);
-        alert('Cuenta de Ozuna creada exitosamente y abierta en una nueva pestaña.');
-      } catch (error) {
-        console.error('Error al crear cuenta para Ozuna:', error);
-        alert(`Error al crear cuenta para Ozuna: ${error.message}`);
-      } finally {
-        this.isCreatingAccount = false;
-      }
-    },
-
-    // Método para crear cuenta de Otilio
-    async crearCuentaOtilio(clienteId, clienteProductos, clienteCrudos) {
-      try {
-        this.isCreatingAccount = true;
-        
-        // Asegurar que el ID de cliente sea '3' para Otilio
-        const otilioClienteId = '3';
-        
-        const embarqueCliente = { 
-          ...this.embarque,
-          productos: clienteProductos,
-          clienteCrudos: { [otilioClienteId]: clienteCrudos },
-          productosTotales: this.embarque.productos,
-          clienteCrudosTotales: this.clienteCrudos,
-          costosPorMedida: { ...this.costosPorMedida },
-          aplicarCostoExtra: { ...this.aplicarCostoExtra },
-          costoExtra: this.costoExtra
-        };
-        
-        await EmbarqueCuentasService.crearCuentaOtilio(embarqueCliente, this.$router);
-        alert('Cuenta de Otilio creada exitosamente y abierta en una nueva pestaña.');
-      } catch (error) {
-        console.error('Error al crear cuenta para Otilio:', error);
-        alert(`Error al crear cuenta para Otilio: ${error.message}`);
-      } finally {
-        this.isCreatingAccount = false;
-      }
-    },
-
-    // Método para crear cuenta de Veronica
-    async crearCuentaVeronica(clienteId, clienteProductos, clienteCrudos) {
-      try {
-        this.isCreatingAccount = true;
-        
-        console.log('[DEBUG] crearCuentaVeronica - clienteId recibido:', clienteId);
-        console.log('[DEBUG] crearCuentaVeronica - clienteProductos recibidos:', clienteProductos);
-        console.log('[DEBUG] crearCuentaVeronica - clienteCrudos recibidos:', clienteCrudos);
-        
-        // Asegurar que el ID de cliente sea '5' para Veronica
-        const veronicaClienteId = '5';
-        
-        const embarqueCliente = { 
-          ...this.embarque,
-          productos: clienteProductos,
-          clienteCrudos: { [veronicaClienteId]: clienteCrudos },
-          productosTotales: this.embarque.productos,
-          clienteCrudosTotales: this.clienteCrudos,
-          costosPorMedida: { ...this.costosPorMedida },
-          aplicarCostoExtra: { ...this.aplicarCostoExtra },
-          costoExtra: this.costoExtra
-        };
-        
-        console.log('[DEBUG] crearCuentaVeronica - embarqueCliente final:', embarqueCliente);
-        
-        await EmbarqueCuentasService.crearCuentaVeronica(embarqueCliente, this.$router);
-        alert('Cuenta de Veronica creada exitosamente y abierta en una nueva pestaña.');
-      } catch (error) {
-        console.error('Error al crear cuenta para Veronica:', error);
-        alert(`Error al crear cuenta para Veronica: ${error.message}`);
-      } finally {
-        this.isCreatingAccount = false;
       }
     },
 
@@ -5063,7 +4778,7 @@ export default {
       }
 
       if (cargadoOffline) {
-        this.undoStack.push(JSON.stringify(this.embarque));
+        this.initUndo(this.embarque);
         this.actualizarMedidasUsadas();
         await this.cargarClientesPersonalizados();
         await this.cargarPedidoReferenciaDelDia();
@@ -5076,7 +4791,7 @@ export default {
     }
 
     await this.cargarEmbarque(embarqueId);
-    this.undoStack.push(JSON.stringify(this.embarque));
+    this.initUndo(this.embarque);
     this.actualizarMedidasUsadas();
     await this.cargarClientesPersonalizados();
     await this.cargarPedidoReferenciaDelDia();
@@ -5170,12 +4885,6 @@ export default {
       input.removeEventListener('input', this.actualizarCrudos);
     });
 
-    // Limpiar escucha cuando el componente se destruye
-    if (this.unsubscribeUsuarios) {
-      console.log('Limpiando escucha de usuarios activos');
-      this.unsubscribeUsuarios();
-    }
-    
     // Eliminar los escuchadores de recarga y reconexión
     window.removeEventListener('beforeunload', this.handleBeforeUnload);
     window.removeEventListener('online', this.syncOffline);

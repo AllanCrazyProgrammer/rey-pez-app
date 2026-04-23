@@ -15,14 +15,11 @@ import CuentasMexico from '@/views/CuentasMexico.vue'
 import OzunaCuentasMenu from '@/views/CuentasClientes/OzunaCuentasMenu.vue'
 import CuentasOzuna from '@/views/CuentasClientes/CuentasOzuna.vue'
 import CatarroCuentasMenu from '@/views/CuentasClientes/CatarroCuentasMenu.vue'
-import CuentasCatarro from '@/views/CuentasClientes/CuentasCatarro.vue'
 import JoselitoCuentasMenu from '@/views/CuentasClientes/JoselitoCuentasMenu.vue'
-import CuentasJoselito from '@/views/CuentasClientes/CuentasJoselito.vue'
 import EmbarquesMenu from '@/views/Embarques/EmbarquesMenu.vue'; // Asegúrate de que esta ruta de importación sea correcta
 import VentasYGananciasCatarro from '@/views/CuentasClientes/VentasYGananciasCatarro.vue'; // Asegúrate de crear este componente
 import VentasYGananciasJoselito from '@/views/CuentasClientes/VentasYGananciasJoselito.vue';
 import VeronicaCuentasMenu from '@/views/CuentasClientes/VeronicaCuentasMenu.vue'
-import CuentasVeronica from '@/views/CuentasClientes/CuentasVeronica.vue'
 import VentasYGananciasVeronica from '@/views/CuentasClientes/VentasYGananciasVeronica.vue';
 import ListaEmbarques from '@/views/Embarques/ListaEmbarques.vue';
 import NuevoEmbarque from '@/views/Embarques/NuevoEmbarque.vue';
@@ -31,9 +28,8 @@ import RecuperacionEmergencia from '@/views/Embarques/RecuperacionEmergencia.vue
 import GestionCostos from '@/components/GestionCostos.vue';
 import Login from './views/Login.vue';
 import OtilioCuentasMenu from '@/views/CuentasClientes/OtilioCuentasMenu.vue'
-import CuentasOtilio from '@/views/CuentasClientes/CuentasOtilio.vue'
 import OtilioIndependienteCuentasMenu from '@/views/CuentasClientes/OtilioIndependienteCuentasMenu.vue'
-import CuentasOtilioIndependiente from '@/views/CuentasClientes/CuentasOtilioIndependiente.vue'
+import CuentaCliente from '@/views/CuentasClientes/CuentaCliente.vue'
 import CuentasAllanCamaron from '@/views/CuentasClientes/CuentasAllanCamaron.vue'
 import ProcesosMenu from '@/views/Procesos/ProcesosMenu.vue'
 import Preparacion from '@/views/Procesos/Preparacion.vue'
@@ -183,17 +179,20 @@ const routes = [
   {
     path: '/cuentas-catarro/nueva',
     name: 'nueva-cuenta-catarro',
-    component: CuentasCatarro
+    component: CuentaCliente,
+    props: { clienteId: 'catarro' },
   },
   {
     path: '/cuentas-catarro/:id',
     name: 'ver-cuenta-catarro',
-    component: CuentasCatarro
+    component: CuentaCliente,
+    props: { clienteId: 'catarro' },
   },
   {
     path: '/cuentas-catarro/:id?',
     name: 'CuentasCatarro',
-    component: CuentasCatarro
+    component: CuentaCliente,
+    props: { clienteId: 'catarro' },
   },
   {
     path: '/cuentas-joselito',
@@ -203,17 +202,20 @@ const routes = [
   {
     path: '/cuentas-joselito/nueva',
     name: 'nueva-cuenta-joselito',
-    component: CuentasJoselito
+    component: CuentaCliente,
+    props: { clienteId: 'joselito' },
   },
   {
     path: '/cuentas-joselito/:id',
     name: 'ver-cuenta-joselito',
-    component: CuentasJoselito
+    component: CuentaCliente,
+    props: { clienteId: 'joselito' },
   },
   {
     path: '/cuentas-joselito/:id?',
     name: 'CuentasJoselito',
-    component: CuentasJoselito
+    component: CuentaCliente,
+    props: { clienteId: 'joselito' },
   },
   {
     path: '/embarques-menu',
@@ -238,17 +240,20 @@ const routes = [
   {
     path: '/cuentas-veronica/nueva',
     name: 'nueva-cuenta-veronica',
-    component: CuentasVeronica
+    component: CuentaCliente,
+    props: { clienteId: 'veronica' },
   },
   {
     path: '/cuentas-veronica/:id',
     name: 'ver-cuenta-veronica',
-    component: CuentasVeronica
+    component: CuentaCliente,
+    props: { clienteId: 'veronica' },
   },
   {
     path: '/cuentas-veronica/:id?',
     name: 'CuentasVeronica',
-    component: CuentasVeronica
+    component: CuentaCliente,
+    props: { clienteId: 'veronica' },
   },
   {
     path: "/ventas-ganancias-veronica",
@@ -301,17 +306,20 @@ const routes = [
   {
     path: '/cuentas-otilio/nueva',
     name: 'nueva-cuenta-otilio',
-    component: CuentasOtilio
+    component: CuentaCliente,
+    props: { clienteId: 'otilio' },
   },
   {
     path: '/cuentas-otilio/:id',
     name: 'ver-cuenta-otilio',
-    component: CuentasOtilio
+    component: CuentaCliente,
+    props: { clienteId: 'otilio' },
   },
   {
     path: '/cuentas-otilio/:id?',
     name: 'CuentasOtilio',
-    component: CuentasOtilio
+    component: CuentaCliente,
+    props: { clienteId: 'otilio' },
   },
   {
     path: '/cuentas-otilio-independiente',
@@ -321,17 +329,20 @@ const routes = [
   {
     path: '/cuentas-otilio-independiente/nueva',
     name: 'nueva-cuenta-otilio-independiente',
-    component: CuentasOtilioIndependiente
+    component: CuentaCliente,
+    props: { clienteId: 'otilioIndependiente' },
   },
   {
     path: '/cuentas-otilio-independiente/:id',
     name: 'ver-cuenta-otilio-independiente',
-    component: CuentasOtilioIndependiente
+    component: CuentaCliente,
+    props: { clienteId: 'otilioIndependiente' },
   },
   {
     path: '/cuentas-otilio-independiente/:id?',
     name: 'CuentasOtilioIndependiente',
-    component: CuentasOtilioIndependiente
+    component: CuentaCliente,
+    props: { clienteId: 'otilioIndependiente' },
   },
   {
     path: '/procesos',

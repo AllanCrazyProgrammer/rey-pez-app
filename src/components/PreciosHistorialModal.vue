@@ -441,6 +441,7 @@ import {
   obtenerPrecioMaquilaOzunaDefault,
   PRECIO_MAQUILA_OZUNA_FALLBACK
 } from '@/utils/preciosHistoricos';
+import { formatNumber, formatearFecha as formatDate } from '@/utils/formatters';
 
 const crearNuevoPrecio = () => ({
   producto: '',
@@ -626,6 +627,8 @@ export default {
     }
   },
   methods: {
+    formatNumber,
+    formatDate,
     // Normaliza el nombre del producto para unificar duplicados
     normalizarNombreProducto(nombre) {
       if (!nombre) return nombre;
@@ -645,15 +648,6 @@ export default {
       }
       
       return nombreTrim;
-    },
-    formatNumber(value) {
-      return value?.toLocaleString('es-ES', { 
-        minimumFractionDigits: 2, 
-        maximumFractionDigits: 2 
-      }) || '0.00';
-    },
-    formatDate(date) {
-      return formatearFechaParaMostrar(date);
     },
     calcularCambio(precioActual, precioAnterior) {
       const diferencia = precioActual - precioAnterior;

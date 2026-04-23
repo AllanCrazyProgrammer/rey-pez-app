@@ -35,3 +35,9 @@ out/
 *.zip
 *.blockmap
 *.asar
+
+# Editor backup files
+*.backup
+*.bak
+*_old.vue
+*_original.vue
