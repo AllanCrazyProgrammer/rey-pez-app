@@ -217,6 +217,7 @@ import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
 import BackButton from '@/components/BackButton.vue';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
+import { formatNumber } from '@/utils/formatters';
 
 export default {
   name: 'ResumenMensualBarcos',
@@ -310,6 +311,7 @@ export default {
     }
   },
   methods: {
+    formatNumber,
     async cargarProveedores() {
       try {
         const querySnapshot = await getDocs(collection(db, 'proveedoresBarcos'));
@@ -509,13 +511,6 @@ export default {
     
     calcularPorcentaje(valor, total) {
       return total > 0 ? Math.round((valor / total) * 100) : 0;
-    },
-    
-    formatNumber(num) {
-      return new Intl.NumberFormat('es-MX', { 
-        minimumFractionDigits: 2, 
-        maximumFractionDigits: 2 
-      }).format(num || 0);
     },
     
     async exportarPDF() {

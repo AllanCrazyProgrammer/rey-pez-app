@@ -118,6 +118,8 @@
 <script>
 import { db } from '@/firebase';
 import { collection, query, getDocs, where, orderBy } from 'firebase/firestore';
+import { formatNumber } from '@/utils/formatters';
+import { formatearFecha as formatDate } from '@/utils/formatters';
 
 export default {
   name: 'ResumenVentasVeronicaModal',
@@ -152,6 +154,7 @@ export default {
     }
   },
   methods: {
+    formatNumber,
     async abrirModal() {
       this.showModal = true;
       await this.cargarDatos();
@@ -273,13 +276,6 @@ export default {
       const palabrasClaveCrudo = ['crudo', 'c/c', 'cc', 'cabeza'];
       return palabrasClaveCrudo.some(palabra => medidaLower.includes(palabra)) ||
              /^\d+-\d+$/.test(medida); // Formato "5-19" típico de crudos
-    },
-    formatNumber(value) {
-      if (value === null || value === undefined) return '0';
-      return value.toLocaleString('en-US', {
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 0
-      });
     },
     imprimirResumen() {
       const contenidoImprimir = `
@@ -423,14 +419,6 @@ export default {
       ventanaImprimir.document.close();
       ventanaImprimir.print();
     },
-    formatDate(dateString) {
-      const fecha = new Date(dateString + 'T00:00:00');
-      return fecha.toLocaleDateString('es-ES', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-      });
-    }
   }
 };
 </script>

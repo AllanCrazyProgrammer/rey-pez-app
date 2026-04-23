@@ -130,6 +130,7 @@ import { collection, query, orderBy, deleteDoc, doc, onSnapshot, updateDoc, getD
 import BackButton from '@/components/BackButton.vue';
 import PreciosHistorialModal from '@/components/PreciosHistorialModal.vue';
 import StashModalV2 from '@/components/StashModalV2.vue';
+import { formatNumber, formatearFecha as formatDate } from '@/utils/formatters';
 
 export default {
   name: 'OtilioIndependienteCuentasMenu',
@@ -154,6 +155,8 @@ export default {
     };
   },
   methods: {
+    formatNumber,
+    formatDate,
     async loadCuentas() {
       try {
         this.isLoading = true;
@@ -233,18 +236,6 @@ export default {
         this.cuentas = [];
         this.isLoading = false;
       }
-    },
-    formatDate(date) {
-      const fechaLocal = new Date(date);
-      fechaLocal.setMinutes(fechaLocal.getMinutes() + fechaLocal.getTimezoneOffset());
-      return fechaLocal.toLocaleDateString('es-ES', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-      });
-    },
-    formatNumber(value) {
-      return value.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     },
     editarCuenta(id) {
       this.$router.push(`/cuentas-otilio-independiente/${id}?edit=true`);

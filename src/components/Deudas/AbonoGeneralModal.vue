@@ -120,6 +120,7 @@
 <script>
 import { db } from '@/firebase';
 import { collection, addDoc, updateDoc, doc, getDocs, query, where, orderBy } from 'firebase/firestore';
+import { formatNumber, formatearFecha } from '@/utils/formatters';
 
 export default {
   name: 'AbonoGeneralModal',
@@ -199,6 +200,7 @@ export default {
     }
   },
   methods: {
+    formatearFecha,
     obtenerFechaActual() {
       const fecha = new Date();
       // Usar la zona horaria local para evitar problemas de UTC
@@ -317,20 +319,6 @@ export default {
       }
     },
     
-    formatNumber(number) {
-      return number ? number.toLocaleString('es-MX', { 
-        minimumFractionDigits: 2, 
-        maximumFractionDigits: 2 
-      }) : '0.00';
-    },
-    
-    formatearFecha(fechaString) {
-      if (!fechaString) return '';
-      
-      const fecha = new Date(fechaString + 'T00:00:00');
-      const opciones = { day: 'numeric', month: 'short', year: 'numeric' };
-      return fecha.toLocaleDateString('es-ES', opciones);
-    }
   },
   
   watch: {

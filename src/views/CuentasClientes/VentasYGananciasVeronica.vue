@@ -38,6 +38,7 @@
 import { db } from '@/firebase';
 import { collection, query, orderBy, getDocs } from 'firebase/firestore';
 import Chart from 'chart.js/auto';
+import { formatNumber } from '@/utils/formatters';
 
 export default {
   name: 'VentasYGananciasVeronica',
@@ -59,6 +60,7 @@ export default {
     this.cargarDatos();
   },
   methods: {
+    formatNumber,
     async cargarDatos() {
       try {
         const cuentasRef = collection(db, 'cuentasVeronica');
@@ -199,15 +201,6 @@ export default {
             }
           }
         }
-      });
-    },
-    formatNumber(value) {
-      if (typeof value !== 'number') {
-        return '0.00';
-      }
-      return value.toLocaleString('es-ES', { 
-        minimumFractionDigits: 2, 
-        maximumFractionDigits: 2 
       });
     },
     volverAlMenu() {

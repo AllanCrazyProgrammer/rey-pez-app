@@ -59,6 +59,7 @@
 import { ref, computed } from 'vue'
 import { db } from '@/firebase'
 import { collection, query, where, getDocs, deleteDoc, doc, updateDoc, orderBy, limit, startAfter, endBefore, limitToLast } from 'firebase/firestore'
+import { formatNumber } from '@/utils/formatters';
 
 export default {
   name: 'HistorialAbonosAplicadosModal',
@@ -271,11 +272,6 @@ export default {
     const formatearFechaHora = (iso) => {
       const dt = new Date(iso)
       return dt.toLocaleString('es-ES')
-    }
-
-    const formatNumber = (value) => {
-      if (value === null || value === undefined) return '0.00'
-      return value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
     }
 
     cargarHistorial()

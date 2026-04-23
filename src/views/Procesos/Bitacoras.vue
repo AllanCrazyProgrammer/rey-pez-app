@@ -244,6 +244,7 @@ import {
   orderBy, 
   serverTimestamp 
 } from 'firebase/firestore';
+import { formatearFecha } from '@/utils/formatters';
 
 export default {
   name: 'Bitacoras',
@@ -288,6 +289,7 @@ export default {
     this.cargarBitacoras();
   },
   methods: {
+    formatearFecha,
     inicializarBitacora() {
       return {
         id: null,
@@ -338,11 +340,6 @@ export default {
       } finally {
         this.cargando = false;
       }
-    },
-    formatearFecha(fecha) {
-      if (!fecha) return '';
-      const opciones = { year: 'numeric', month: 'long', day: 'numeric' };
-      return new Date(fecha).toLocaleDateString('es-ES', opciones);
     },
     formatearNombreCuarto(cuartoId) {
       if (!cuartoId) return '';

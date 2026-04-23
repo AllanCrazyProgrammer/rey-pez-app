@@ -224,6 +224,7 @@
 import { db } from '@/firebase';
 import { collection, addDoc, getDocs, updateDoc, deleteDoc, doc } from 'firebase/firestore';
 import HistorialPreciosCrudos from '@/components/HistorialPreciosCrudos.vue';
+import { formatearFecha } from '@/utils/formatters';
 
 export default {
   name: 'GestionProveedoresCrudos',
@@ -280,6 +281,7 @@ export default {
     }
   },
   methods: {
+    formatearFecha,
     cerrarModal(event) {
       if (event.target === event.currentTarget) {
         this.$emit('cerrar');
@@ -615,12 +617,6 @@ export default {
 
     formatearPrecio(precio) {
       return precio ? precio.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00';
-    },
-
-    formatearFecha(fecha) {
-      if (!fecha) return '';
-      const date = fecha instanceof Date ? fecha : fecha.toDate();
-      return date.toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' });
     },
 
     // Métodos para historial de precios

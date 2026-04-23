@@ -485,6 +485,7 @@ import { generarPDFRendimientos } from '@/utils/RendimientosPdf';
 import { normalizarGruposListaMedidasParaPdf } from '@/utils/sacadasResumenPdf';
 import MedidasParaHoyCards from '@/components/MedidasParaHoyCards.vue';
 import EmbarquesOfflineService from '@/services/EmbarquesOfflineService';
+import { formatearFecha } from '@/utils/formatters';
 
 export default {
   name: 'Rendimientos',
@@ -602,6 +603,8 @@ export default {
   },
 
       methods: {
+
+        formatearFecha,
     formatearKg(value) {
       return Number(value || 0).toLocaleString('en-US', {
         minimumFractionDigits: 1,
@@ -2976,19 +2979,6 @@ export default {
       const numeroSinDecimales = Math.floor(numero);
       // Formatear manualmente con comas para asegurar compatibilidad
       return numeroSinDecimales.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-    },
-
-    formatearFecha(fechaString) {
-      if (!fechaString) return '';
-      
-      const fecha = this.normalizarFecha(fechaString);
-      if (!fecha) return '';
-      
-      return fecha.toLocaleDateString('es-ES', { 
-        year: 'numeric', 
-        month: 'short', 
-        day: 'numeric' 
-      });
     },
 
     mostrarIndicadorPrecioReciente(medida) {

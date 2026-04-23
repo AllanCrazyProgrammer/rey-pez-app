@@ -105,6 +105,8 @@
 import { db } from '@/firebase';
 import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 import moment from 'moment';
+import { formatNumber } from '@/utils/formatters';
+import { formatearFecha as formatDate } from '@/utils/formatters';
 
 export default {
   name: 'HistorialProductoModal',
@@ -176,6 +178,7 @@ export default {
     }
   },
   methods: {
+    formatNumber,
     resetSelections() {
       this.filtros.proveedor = '';
       this.filtros.medida = '';
@@ -253,12 +256,6 @@ export default {
         console.error('Error al buscar historial:', error);
         alert('Error al buscar el historial');
       }
-    },
-    formatDate(date) {
-      return moment(date).format('DD/MM/YYYY');
-    },
-    formatNumber(value) {
-      return value.toLocaleString('es-ES', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
     },
     async verificarEmbarques(historialTemp) {
       try {

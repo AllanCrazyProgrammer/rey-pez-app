@@ -8,6 +8,7 @@
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import moment from 'moment';
+import { formatNumber } from '@/utils/formatters';
 
 export default {
   name: 'ReporteSemanalPDFButton',
@@ -38,10 +39,7 @@ export default {
     };
   },
   methods: {
-    formatNumber(value) {
-      return value.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    },
-    
+    formatNumber,
     generarPDF() {
       this.generando = true;
       

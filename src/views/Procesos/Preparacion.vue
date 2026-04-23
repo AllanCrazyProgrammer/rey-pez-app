@@ -274,6 +274,7 @@
 import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, getDocs, getDoc, query, orderBy } from 'firebase/firestore'
 import BuscadorMedidas from '@/components/BuscadorMedidas.vue'
 import GestionProveedores from '@/components/GestionProveedores.vue'
+import { formatearFecha } from '@/utils/formatters';
 
 export default {
   name: 'Preparacion',
@@ -330,6 +331,7 @@ export default {
     }
   },
   methods: {
+    formatearFecha,
     // Nuevo método para manejar la selección de día
     async aplicarSeleccionDia() {
       console.log('Aplicando selección de día...')
@@ -413,55 +415,6 @@ export default {
       }
     },
     
-    formatearFecha(fecha) {
-      if (!fecha) return '';
-      
-      try {
-        let fechaObj;
-        
-        // Si es un Timestamp de Firebase
-        if (typeof fecha === 'object' && fecha.seconds) {
-          fechaObj = new Date(fecha.seconds * 1000);
-        }
-        // Si es un string en formato YYYY-MM-DD
-        else if (typeof fecha === 'string' && fecha.includes('-')) {
-          const [year, month, day] = fecha.split('-');
-          fechaObj = new Date(year, month - 1, day);
-        }
-        // Si ya es un objeto Date
-        else if (fecha instanceof Date) {
-          fechaObj = fecha;
-        }
-        // Si es un timestamp numérico
-        else if (typeof fecha === 'number') {
-          fechaObj = new Date(fecha);
-        }
-        // Si es un string pero no en formato esperado, intentar parsearlo
-        else if (typeof fecha === 'string') {
-          fechaObj = new Date(fecha);
-        }
-        else {
-          console.error('Formato de fecha no reconocido:', fecha);
-          return '';
-        }
-        
-        // Verificar si la fecha es válida
-        if (isNaN(fechaObj.getTime())) {
-          console.error('Fecha inválida:', fecha);
-          return '';
-        }
-        
-        return fechaObj.toLocaleDateString('es-ES', {
-          weekday: 'long',
-          year: 'numeric',
-          month: 'long',
-          day: 'numeric'
-        });
-      } catch (error) {
-        console.error('Error al formatear fecha:', fecha, error);
-        return '';
-      }
-    },
     inicializarNuevoDia() {
       const hoy = new Date()
       const offset = hoy.getTimezoneOffset()

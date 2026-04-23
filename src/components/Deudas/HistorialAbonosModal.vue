@@ -251,6 +251,7 @@
 <script>
 import { db } from '@/firebase';
 import { collection, getDocs, query, where, orderBy, deleteDoc, doc, updateDoc, getDoc } from 'firebase/firestore';
+import { formatNumber, formatearFecha } from '@/utils/formatters';
 
 export default {
   name: 'HistorialAbonosModal',
@@ -429,6 +430,8 @@ export default {
     }
   },
   methods: {
+    formatNumber,
+    formatearFecha,
     cerrarModal(event) {
       if (event.target === event.currentTarget) {
         this.$emit('cerrar');
@@ -604,21 +607,6 @@ export default {
     normalizarDescripcionGeneral(descripcion = '') {
       if (!descripcion) return '';
       return descripcion.replace(/\s*\(Abono General(?:[^)]*)?\)\s*$/i, '').trim();
-    },
-    
-    formatNumber(number) {
-      return number ? number.toLocaleString('es-MX', { 
-        minimumFractionDigits: 2, 
-        maximumFractionDigits: 2 
-      }) : '0.00';
-    },
-    
-    formatearFecha(fechaString) {
-      if (!fechaString) return '';
-      
-      const fecha = new Date(fechaString + 'T00:00:00');
-      const opciones = { day: 'numeric', month: 'short', year: 'numeric' };
-      return fecha.toLocaleDateString('es-ES', opciones);
     },
     
     formatearFechaHora(timestamp) {

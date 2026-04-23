@@ -158,6 +158,7 @@ import { collection, addDoc, getDocs, doc, setDoc } from 'firebase/firestore';
 import { useRouter } from 'vue-router';
 import BackButton from '@/components/BackButton.vue';
 import ProductoSelector from '@/components/Deudas/ProductoSelector.vue';
+import { formatNumber } from '@/utils/formatters';
 
 export default {
   name: 'NuevaDeuda',
@@ -192,6 +193,7 @@ export default {
     }
   },
   methods: {
+    formatNumber,
     obtenerFechaActual() {
       const fecha = new Date();
       // Usar la zona horaria local para evitar problemas de UTC
@@ -218,9 +220,6 @@ export default {
     getProveedorColor(proveedorId) {
       const proveedor = this.proveedores.find(p => p.id === proveedorId);
       return proveedor && proveedor.color ? proveedor.color : '#cccccc';
-    },
-    formatNumber(number) {
-      return number ? number.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00';
     },
     addItem(item) {
       this.items.push({

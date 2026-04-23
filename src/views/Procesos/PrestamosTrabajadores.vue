@@ -425,6 +425,7 @@
 import { db } from '@/firebase';
 import { collection, addDoc, getDocs, getDoc, query, where, orderBy, doc, updateDoc, deleteDoc, writeBatch } from 'firebase/firestore';
 import BackButton from '@/components/BackButton.vue';
+import { formatNumber } from '@/utils/formatters';
 
 export default {
   name: 'PrestamosTrabajadores',
@@ -503,6 +504,8 @@ export default {
   },
   
   methods: {
+  
+    formatNumber,
     obtenerFechaActual() {
       const fecha = new Date();
       // Ajustar por zona horaria para obtener la fecha local correcta
@@ -510,10 +513,6 @@ export default {
       const month = String(fecha.getMonth() + 1).padStart(2, '0');
       const day = String(fecha.getDate()).padStart(2, '0');
       return `${year}-${month}-${day}`;
-    },
-    
-    formatNumber(number) {
-      return number ? number.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00';
     },
     
     formatearFecha(fechaString) {

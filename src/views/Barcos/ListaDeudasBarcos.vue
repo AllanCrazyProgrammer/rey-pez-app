@@ -558,6 +558,7 @@ import { db } from '@/firebase';
 import { collection, query, where, getDocs, doc, updateDoc, deleteDoc, addDoc, orderBy } from 'firebase/firestore';
 import BackButton from '@/components/BackButton.vue';
 import BotonReporteMensual from '@/components/Barcos/BotonReporteMensual.vue';
+import { formatNumber, formatearFecha as formatDate } from '@/utils/formatters';
 
 export default {
   name: 'ListaDeudasBarcos',
@@ -800,6 +801,7 @@ export default {
     this.loadProveedores();
   },
   methods: {
+    formatDate,
     async loadDeudas() {
       try {
         // Consulta sin orderBy para evitar índice requerido
@@ -839,18 +841,6 @@ export default {
     getProveedorColor(proveedorId) {
       const proveedor = this.proveedores.find(p => p.id === proveedorId);
       return proveedor?.color || '#6c757d';
-    },
-    formatNumber(num) {
-      return new Intl.NumberFormat('es-MX', {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2
-      }).format(num || 0);
-    },
-    formatDate(dateString) {
-      if (!dateString) return '';
-      const fecha = new Date(dateString + 'T00:00:00');
-      const opciones = { year: 'numeric', month: 'long', day: 'numeric' };
-      return fecha.toLocaleDateString('es-ES', opciones);
     },
     getEstadoLabel(estado) {
       const labels = {

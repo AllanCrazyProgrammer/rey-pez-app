@@ -220,6 +220,7 @@ import { getFirestore, doc, getDoc, updateDoc, collection, onSnapshot, setDoc, a
 import { debounce } from 'lodash';
 import CostoModal from './CostoModal.vue';
 import MedidaModal from './MedidaModal.vue';
+import { formatearFecha } from '@/utils/formatters';
 
 export default {
   name: 'GestionCostos',
@@ -279,6 +280,7 @@ export default {
   },
 
   methods: {
+    formatearFecha,
     async cargarEmbarque() {
       try {
         console.log('[GestionCostos] Cargando embarque...');
@@ -1247,38 +1249,6 @@ export default {
       }
 
       return new Date().toISOString().split('T')[0];
-    },
-
-    formatearFecha(fecha) {
-      if (!fecha) return 'N/A';
-      
-      try {
-        // Si es una fecha string, usarla directamente
-        if (typeof fecha === 'string') {
-          const [year, month, day] = fecha.split('-');
-          return `${day}/${month}/${year}`;
-        }
-        
-        // Si es un timestamp de Firebase
-        if (fecha.toDate && typeof fecha.toDate === 'function') {
-          fecha = fecha.toDate();
-        } else if (fecha.seconds) {
-          fecha = new Date(fecha.seconds * 1000);
-        }
-        
-        // Si es un objeto Date
-        if (fecha instanceof Date) {
-          const day = fecha.getDate().toString().padStart(2, '0');
-          const month = (fecha.getMonth() + 1).toString().padStart(2, '0');
-          const year = fecha.getFullYear();
-          return `${day}/${month}/${year}`;
-        }
-        
-        return 'Fecha inválida';
-      } catch (error) {
-        console.error('Error al formatear fecha:', error);
-        return 'Error en fecha';
-      }
     },
 
     formatearFechaCompleta(fecha) {

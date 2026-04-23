@@ -138,6 +138,7 @@
 
 <script>
 import { getFirestore, collection, getDocs, query, orderBy } from 'firebase/firestore'
+import { formatearFecha } from '@/utils/formatters';
 
 export default {
   name: 'BuscadorMedidas',
@@ -230,6 +231,7 @@ export default {
     }
   },
   methods: {
+    formatearFecha,
     mostrarModal() {
       this.showModal = true
     },
@@ -310,15 +312,6 @@ export default {
             })
           }
         })
-      })
-    },
-    formatearFecha(fecha) {
-      const [year, month, day] = fecha.split('-')
-      return new Date(year, month - 1, day).toLocaleDateString('es-ES', {
-        weekday: 'short',
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric'
       })
     },
     getRendimientoClass(rendimiento) {

@@ -133,6 +133,7 @@ import { db } from '@/firebase';
 import { collection, addDoc, doc, getDoc, updateDoc, query, where, getDocs, orderBy } from 'firebase/firestore';
 import BackButton from '@/components/BackButton.vue';
 import PreciosClienteButton from '@/components/PreciosClienteButton.vue';
+import { formatNumber } from '@/utils/formatters';
 
 export default {
   name: 'CuentasOzuna',
@@ -210,6 +211,7 @@ export default {
     }
   },
   methods: {
+    formatNumber,
     triggerAutoSave() {
       if (this.autoSaveTimeout) {
         clearTimeout(this.autoSaveTimeout);
@@ -308,9 +310,6 @@ export default {
         console.error("Error al calcular el saldo acumulado anterior:", error);
         this.saldoAcumuladoAnterior = 0;
       }
-    },
-    formatNumber(value) {
-      return value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     },
     getMedidaDisplay(item) {
       if (!item) return '';

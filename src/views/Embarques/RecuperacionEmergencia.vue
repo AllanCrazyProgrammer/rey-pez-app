@@ -211,6 +211,7 @@ import { getFirestore, collection, getDocs, query, where, orderBy } from 'fireba
 import BackupService from './BackupService.js';
 import EmbarquesOfflineService from '@/services/EmbarquesOfflineService';
 import { normalizarFechaISO, formatearFechaParaMostrar } from '@/utils/dateUtils';
+import { formatearFecha } from '@/utils/formatters';
 
 export default {
   name: 'RecuperacionEmergencia',
@@ -231,6 +232,7 @@ export default {
     this.fechaBusqueda = '2025-07-17';
   },
   methods: {
+    formatearFecha,
     obtenerFechaISODesdeValor(valorFecha) {
       if (!valorFecha) return null;
       if (typeof valorFecha === 'object' && typeof valorFecha.toDate === 'function') {
@@ -480,14 +482,6 @@ export default {
       });
       
       return total.toFixed(1);
-    },
-
-    formatearFecha(fecha) {
-      if (!fecha) return 'Fecha no disponible';
-
-      const fechaISO = this.obtenerFechaISODesdeValor(fecha);
-      if (!fechaISO) return 'Fecha no disponible';
-      return formatearFechaParaMostrar(fechaISO);
     },
 
     verEmbarque(embarqueId) {

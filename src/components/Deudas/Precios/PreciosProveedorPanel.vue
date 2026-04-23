@@ -104,6 +104,7 @@
 import { db } from '@/firebase';
 import { collection, addDoc, getDocs, query, where, orderBy } from 'firebase/firestore';
 import HistorialProductoModal from './HistorialProductoModal.vue';
+import { formatearFecha } from '@/utils/formatters';
 
 export default {
   name: 'PreciosProveedorPanel',
@@ -136,6 +137,7 @@ export default {
     };
   },
   methods: {
+    formatearFecha,
     cerrarModal(event) {
       if (event.target === event.currentTarget) {
         this.$emit('cerrar');
@@ -263,14 +265,6 @@ export default {
     obtenerFechaActual() {
       const fecha = new Date();
       return fecha.toISOString().split('T')[0];
-    },
-
-    formatearFecha(fechaString) {
-      if (!fechaString) return '';
-      
-      const fecha = new Date(fechaString + 'T00:00:00');
-      const opciones = { day: 'numeric', month: 'short', year: 'numeric' };
-      return fecha.toLocaleDateString('es-ES', opciones);
     },
 
     formatearPrecio(precio) {

@@ -251,6 +251,7 @@
 <script>
 import { db } from '@/firebase';
 import { addDoc, collection, deleteDoc, doc, getDocs } from 'firebase/firestore';
+import { formatearFecha } from '@/utils/formatters';
 
 const ENTRADAS_COLLECTION = 'cuentasAllanCamaronEntradas';
 const VENTAS_COLLECTION = 'cuentasAllanCamaronVentas';
@@ -362,6 +363,7 @@ export default {
     this.cargarMovimientos();
   },
   methods: {
+    formatearFecha,
     getEmptyEntradaForm() {
       return createEmptyEntradaForm();
     },
@@ -587,14 +589,6 @@ export default {
         minimumFractionDigits: 0,
         maximumFractionDigits: 2
       }).format(Number(value) || 0);
-    },
-    formatearFecha(fecha) {
-      if (!fecha) {
-        return 'Sin fecha';
-      }
-
-      const [year, month, day] = fecha.split('-');
-      return `${day}/${month}/${year}`;
     },
     volverAMexico() {
       this.$router.push('/cuentas-mexico');

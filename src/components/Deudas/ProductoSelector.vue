@@ -86,6 +86,7 @@
 <script>
 import { db } from '@/firebase';
 import { collection, getDocs, query, where } from 'firebase/firestore';
+import { formatearFecha } from '@/utils/formatters';
 
 export default {
   name: 'ProductoSelector',
@@ -143,6 +144,7 @@ export default {
     }
   },
   methods: {
+    formatearFecha,
     async cargarProductosProveedor() {
       if (!this.proveedorId) {
         this.productosDisponibles = [];
@@ -293,13 +295,6 @@ export default {
       return precio ? precio.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00';
     },
 
-    formatearFecha(fechaString) {
-      if (!fechaString) return '';
-      
-      const fecha = new Date(fechaString + 'T00:00:00');
-      const opciones = { day: 'numeric', month: 'short', year: 'numeric' };
-      return fecha.toLocaleDateString('es-ES', opciones);
-    }
   },
 
   watch: {

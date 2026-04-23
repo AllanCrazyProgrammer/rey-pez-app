@@ -56,6 +56,7 @@
 import { db } from '@/firebase';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import BackButton from '@/components/BackButton.vue';
+import { formatNumber } from '@/utils/formatters';
 
 export default {
   name: 'PrestamosMenu',
@@ -69,10 +70,7 @@ export default {
     };
   },
   methods: {
-    formatNumber(number) {
-      return number ? number.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00';
-    },
-    
+    formatNumber,
     async cargarResumen() {
       try {
         // Cargar préstamos de despicadoras

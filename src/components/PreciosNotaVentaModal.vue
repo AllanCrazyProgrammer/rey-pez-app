@@ -168,13 +168,11 @@
 </template>
 
 <script>
-import { db } from '@/firebase';
-import { collection, addDoc } from 'firebase/firestore';
+import { preciosService } from '@/services/precios.service';
 import {
   cargarPreciosParaNotaVenta,
   normalizarNombreProductoPrecio,
   agruparPreciosNotaVentaDesdeDocs,
-  COLECCION_PRECIOS_NOTA_VENTA
 } from '@/utils/preciosVentaCatalogo';
 import {
   obtenerFechaActualISO,
@@ -405,7 +403,7 @@ export default {
           docData.clienteNombre = String(this.newPrice.clienteNombre).trim();
         }
 
-        await addDoc(collection(db, COLECCION_PRECIOS_NOTA_VENTA), docData);
+        await preciosService.addNotaVenta(docData);
 
         const nota = this.clienteNombreNota && String(this.clienteNombreNota).trim();
         const enLista = nota && this.clientesParaChips.some((c) => c.nombre === nota);

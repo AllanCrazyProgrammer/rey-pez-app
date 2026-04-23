@@ -317,6 +317,7 @@
 <script>
 import { getFirestore, collection, getDocs, doc, updateDoc, addDoc, deleteDoc } from 'firebase/firestore';
 import html2pdf from 'html2pdf.js';
+import { formatearFecha } from '@/utils/formatters';
 
 export default {
   name: 'CuentaFletes',
@@ -411,6 +412,7 @@ export default {
     }
   },
   methods: {
+    formatearFecha,
     async cargarFletes() {
       this.cargando = true;
       try {
@@ -619,22 +621,6 @@ export default {
       } finally {
         this.cargando = false;
       }
-    },
-    formatearFecha(fecha) {
-      if (!fecha) return '--';
-
-      let fechaObj;
-      if (typeof fecha === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
-        const [year, month, day] = fecha.split('-').map(Number);
-        fechaObj = new Date(year, month - 1, day);
-      } else {
-        fechaObj = fecha instanceof Date ? fecha : new Date(fecha);
-      }
-
-      if (Number.isNaN(fechaObj.getTime())) return '--';
-      const fechaAjustada = new Date(fechaObj);
-      fechaAjustada.setDate(fechaAjustada.getDate() + 1);
-      return this.formatoFecha.format(fechaAjustada);
     },
     formatearMonto(monto) {
       const valor = Number(monto) || 0;

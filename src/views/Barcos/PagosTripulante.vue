@@ -262,6 +262,7 @@
 <script>
 import { db } from '@/firebase';
 import { collection, addDoc, getDocs, updateDoc, deleteDoc, doc, query, where, orderBy } from 'firebase/firestore';
+import { formatearFecha } from '@/utils/formatters';
 
 export default {
   name: 'PagosTripulante',
@@ -351,6 +352,7 @@ export default {
     this.cargarTransacciones();
   },
   methods: {
+    formatearFecha,
     async cargarTransacciones() {
       try {
         // Consulta simple sin orderBy para evitar índices compuestos
@@ -452,20 +454,6 @@ export default {
           alert('Error al eliminar la transacción');
         }
       }
-    },
-
-    formatearFecha(fecha) {
-      // Evitar problemas de zona horaria creando la fecha con los componentes locales
-      if (!fecha) return '';
-      
-      const [year, month, day] = fecha.split('-');
-      const date = new Date(year, month - 1, day); // month - 1 porque Date usa meses base 0
-      
-      return date.toLocaleDateString('es-ES', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric'
-      });
     },
 
     closeModalOnOverlay(event) {

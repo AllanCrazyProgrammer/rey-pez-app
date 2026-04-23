@@ -247,6 +247,7 @@
 import { db } from '@/firebase';
 import { collection, addDoc, getDocs, query, where, orderBy } from 'firebase/firestore';
 import BackButton from '@/components/BackButton.vue';
+import { formatNumber } from '@/utils/formatters';
 
 export default {
   name: 'NuevaDeudaBarco',
@@ -314,6 +315,7 @@ export default {
     this.loadProveedores();
   },
   methods: {
+    formatNumber,
     async loadProveedores() {
       try {
         const q = query(collection(db, 'proveedoresBarcos'), orderBy('nombre'));
@@ -404,12 +406,6 @@ export default {
     },
     removeAbono(index) {
       this.abonos.splice(index, 1);
-    },
-    formatNumber(num) {
-      return new Intl.NumberFormat('es-MX', {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2
-      }).format(num || 0);
     },
     async guardarDeuda() {
       if (this.guardando) return;

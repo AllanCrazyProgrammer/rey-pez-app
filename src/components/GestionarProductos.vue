@@ -81,6 +81,7 @@ import { ref, onMounted, computed } from 'vue';
 import { db } from '@/firebase';
 import { collection, getDocs, doc, updateDoc, query, where, addDoc } from 'firebase/firestore';
 import BackButton from './BackButton.vue';
+import { formatNumber } from '@/utils/formatters';
 
 export default {
   name: 'GestionarProductos',
@@ -187,10 +188,6 @@ export default {
         console.error("Error al modificar producto: ", error);
         alert('Error al modificar la existencia del producto');
       }
-    };
-
-    const formatNumber = (value) => {
-      return value.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
     };
 
     const proveedoresFiltrados = computed(() => {

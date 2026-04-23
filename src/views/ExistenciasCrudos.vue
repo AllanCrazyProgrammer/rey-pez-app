@@ -225,12 +225,12 @@
 </template>
 
 <script>
-import { formatDate } from '@/utils/dateUtils';
 import { db } from '@/firebase';
 import { collection, getDocs, query, orderBy, deleteDoc, doc, addDoc } from 'firebase/firestore';
 import moment from 'moment';
 import GestionProveedoresCrudos from '@/components/GestionProveedoresCrudos.vue';
 import EntradasPorProveedorModal from '@/components/EntradasPorProveedorModal.vue';
+import { formatNumber, formatearFecha as formatDate } from '@/utils/formatters';
 
 export default {
   name: 'ExistenciasCrudos',
@@ -304,6 +304,7 @@ export default {
     }
   },
   methods: {
+    formatDate,
     normalizeCuarto(cuarto) {
       const valor = (cuarto && cuarto.trim()) ? cuarto.trim() : 's/c';
       return valor.toLowerCase() === 'sin cuarto designado' ? 's/c' : valor;
@@ -644,16 +645,8 @@ export default {
       }
     },
 
-    formatDate(date) {
-      return moment(date).format('DD [de] MMMM [de] YYYY');
-    },
-
     formatDateTime(date) {
       return moment(date).format('DD/MM/YYYY HH:mm');
-    },
-
-    formatNumber(value) {
-      return (value || 0).toLocaleString('es-ES', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
     },
 
     formatearPrecio(precio) {

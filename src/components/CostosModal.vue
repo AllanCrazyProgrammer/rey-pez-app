@@ -160,6 +160,8 @@
 <script>
 import { db } from '@/firebase';
 import { collection, addDoc, query, where, getDocs, orderBy, deleteDoc, doc, serverTimestamp, onSnapshot } from 'firebase/firestore';
+import { formatNumber } from '@/utils/formatters';
+import { formatearFecha as formatDate } from '@/utils/formatters';
 
 export default {
   name: 'CostosModal',
@@ -220,22 +222,7 @@ export default {
   },
 
   methods: {
-    formatNumber(value) {
-      if (value === null || value === undefined) return '0.00';
-      return Number(value).toLocaleString('es-ES', { 
-        minimumFractionDigits: 2, 
-        maximumFractionDigits: 2 
-      });
-    },
-
-    formatDate(date) {
-      if (!date) return '';
-      const [year, month, day] = date.split('-');
-      const fecha = new Date(year, month - 1, day);
-      const options = { year: 'numeric', month: 'long', day: 'numeric' };
-      return fecha.toLocaleDateString('es-ES', options);
-    },
-
+    formatNumber,
     calcularCambio(precioActual, precioAnterior) {
       const diferencia = precioActual - precioAnterior;
       const porcentaje = (diferencia / precioAnterior) * 100;

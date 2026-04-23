@@ -178,6 +178,7 @@ import ReporteSemanalPDFButton from '@/components/Cuentas/ReporteSemanalPDFButto
 import moment from 'moment';
 import DatePicker from 'vue2-datepicker';
 import 'vue2-datepicker/index.css';
+import { formatNumber, formatearFecha as formatDate } from '@/utils/formatters';
 
 export default {
   name: 'VeronicaCuentasMenu',
@@ -234,6 +235,8 @@ export default {
     }
   },
   methods: {
+    formatNumber,
+    formatDate,
     tienePrecioVentaVacio(itemsVenta = []) {
       return itemsVenta.some(item => {
         const valor = item?.precioVenta;
@@ -507,18 +510,6 @@ export default {
         this.cuentas = [];
         this.isLoading = false;
       }
-    },
-    formatDate(date) {
-      const fechaLocal = new Date(date);
-      fechaLocal.setMinutes(fechaLocal.getMinutes() + fechaLocal.getTimezoneOffset());
-      return fechaLocal.toLocaleDateString('es-ES', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-      });
-    },
-    formatNumber(value) {
-      return value.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     },
     generarReporteSemanal() {
       this.selectedReportDate = new Date();

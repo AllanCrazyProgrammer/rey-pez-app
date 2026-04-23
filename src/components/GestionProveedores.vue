@@ -119,6 +119,7 @@
 
 <script>
 import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, getDocs, query, orderBy } from 'firebase/firestore'
+import { formatearFecha } from '@/utils/formatters';
 
 export default {
   name: 'GestionProveedores',
@@ -146,6 +147,7 @@ export default {
     }
   },
   methods: {
+    formatearFecha,
     mostrarModal() {
       this.showModal = true
     },
@@ -316,15 +318,6 @@ export default {
         console.error('Error al eliminar proveedor:', error)
         this.mostrarMensaje('Error al eliminar proveedor', 'error')
       }
-    },
-    formatearFecha(fecha) {
-      if (!fecha) return ''
-      const date = fecha.toDate ? fecha.toDate() : new Date(fecha)
-      return date.toLocaleDateString('es-ES', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric'
-      })
     },
     mostrarMensaje(texto, tipo) {
       const iconos = {

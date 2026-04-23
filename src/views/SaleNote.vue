@@ -312,6 +312,7 @@ import { obtenerPrecioParaMedidaNotaVenta } from '@/utils/preciosHistoricos';
 import { obtenerFechaActualISO, normalizarFechaISO, formatearFechaParaMostrar } from '@/utils/dateUtils';
 import { NOTA_VENTA_PDF_INLINE_CSS, getNotaVentaPrintMediaCss } from '@/utils/notaVentaPdfPrintStyles.js';
 import { saldoAcumuladoAnteriorComoNuevoDeNotaPrevia } from '@/utils/notaVentaSaldosCliente';
+import { formatNumber } from '@/utils/formatters';
 
 export default {
   components: {
@@ -457,6 +458,7 @@ export default {
     }
   },
   methods: {
+    formatNumber,
     async deleteNote() {
       if (this.noteId) {
         if (confirm("¿Estás seguro de que quieres eliminar esta nota?")) {
@@ -712,9 +714,6 @@ export default {
         monto: null,
         fecha: obtenerFechaActualISO()
       };
-    },
-    formatNumber(value) {
-      return value.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
     },
     /** Formato tipo estado de cuenta (2 decimales, es-MX), para el bloque de saldos acumulados. */
     formatResumenCurrency(value) {

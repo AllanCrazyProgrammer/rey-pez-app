@@ -333,6 +333,7 @@ import ListaMedidasPedidoModal from '@/components/ListaMedidasPedidoModal.vue';
 import MedidasParaHoyCards from '@/components/MedidasParaHoyCards.vue';
 import { normalizarGruposListaMedidasParaPdf } from '@/utils/sacadasResumenPdf';
 import moment from 'moment';
+import { formatNumber } from '@/utils/formatters';
 
 export default {
   name: 'Sacadas',
@@ -528,6 +529,7 @@ export default {
     }
   },
   methods: {
+    formatNumber,
     openListaMedidasModal() {
       this.selectedSacadaForMeasures = {
         id: this.sacadaId,
@@ -1030,9 +1032,6 @@ export default {
       this.salidasMaquilasChecklist = Object.fromEntries(
         Object.entries(this.salidasMaquilasChecklist).filter(([key]) => maquilaKeys.has(key))
       );
-    },
-    formatNumber(value) {
-      return value.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
     },
     async loadSacada(id) {
       const docRef = doc(db, 'sacadas', id);

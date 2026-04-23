@@ -206,6 +206,7 @@ import GenerarPdfClienteModal from './components/modals/GenerarPdfClienteModal.v
 import { normalizarFechaISO, obtenerFechaActualISO } from '@/utils/dateUtils';
 import { generarNotaVentaPDF } from '@/utils/pdfGenerator';
 import { embarqueTieneContenidoOperativoDoc } from '@/utils/embarqueContenido';
+import { formatearFecha } from '@/utils/formatters';
 
 export default {
   name: 'ListaEmbarques',
@@ -237,6 +238,7 @@ export default {
     };
   },
   methods: {
+    formatearFecha,
     safeClone(value, fallback = null) {
       if (value === undefined || value === null) {
         return fallback;
@@ -768,30 +770,6 @@ export default {
       });
       
       return totalTaras;
-    },
-
-    formatearFecha(fecha) {
-      if (!fecha) return 'Fecha no disponible';
-      
-      let fechaObj;
-      if (fecha.toDate && typeof fecha.toDate === 'function') {
-        fechaObj = fecha.toDate();
-      } else if (fecha instanceof Date) {
-        fechaObj = fecha;
-      } else if (typeof fecha === 'string') {
-        fechaObj = new Date(fecha);
-      } else {
-        return 'Fecha inválida';
-      }
-      
-      // Ajustar para mostrar la fecha correcta (compensar diferencia horaria)
-      const fechaAjustada = new Date(fechaObj.getTime() + fechaObj.getTimezoneOffset() * 60000);
-      
-      return fechaAjustada.toLocaleDateString('es-ES', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric'
-      });
     },
 
     editarEmbarque(embarqueId) {

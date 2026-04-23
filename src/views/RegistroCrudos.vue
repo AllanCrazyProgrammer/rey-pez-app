@@ -237,6 +237,7 @@ import { db } from '@/firebase';
 import { collection, addDoc, getDocs, doc, getDoc, updateDoc, query, where } from 'firebase/firestore';
 import BackButton from '../components/BackButton.vue';
 import moment from 'moment';
+import { formatNumber } from '@/utils/formatters';
 
 export default {
   name: 'RegistroCrudos',
@@ -338,6 +339,7 @@ export default {
     }
   },
   methods: {
+    formatNumber,
     async loadProveedoresCrudos() {
       try {
         const querySnapshot = await getDocs(collection(db, 'proveedoresCrudos'));
@@ -733,10 +735,6 @@ export default {
     async removeSalida(index) {
       this.salidas.splice(index, 1);
       await this.loadProductosDisponibles();
-    },
-
-    formatNumber(value) {
-      return value.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
     },
 
     formatearPrecio(precio) {

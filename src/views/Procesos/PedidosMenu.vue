@@ -97,6 +97,7 @@
 <script>
 import { db } from '@/firebase'
 import { collection, query, orderBy, onSnapshot, deleteDoc, doc } from 'firebase/firestore'
+import { formatearFecha } from '@/utils/formatters';
 
 export default {
   name: 'PedidosMenu',
@@ -134,6 +135,7 @@ export default {
     }
   },
   methods: {
+    formatearFecha,
     formatearNumero(numero) {
       return numero.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
     },
@@ -149,11 +151,6 @@ export default {
     obtenerAno(fecha) {
       const date = new Date(fecha + 'T00:00:00')
       return date.getFullYear()
-    },
-    formatearFecha(fecha) {
-      const date = new Date(fecha)
-      date.setMinutes(date.getMinutes() + date.getTimezoneOffset())
-      return date.toLocaleDateString('es-ES')
     },
     capitalizarPrimeraLetra(texto) {
       return texto.charAt(0).toUpperCase() + texto.slice(1)

@@ -58,7 +58,7 @@
                 <td>{{ formatDateTime(entrada.fecha) }}</td>
                 <td>{{ entrada.proveedor }}</td>
                 <td>{{ entrada.producto }}</td>
-                <td class="numeric">{{ formatNumber(entrada.kilos) }}</td>
+                <td class="numeric">{{ formatNumber(entrada.kilos, 0) }}</td>
                 <td>{{ entrada.cuarto }}</td>
                 <td class="numeric">
                   {{ entrada.precio > 0 ? `$${formatPrice(entrada.precio)}` : '-' }}
@@ -78,6 +78,7 @@
 
 <script>
 import moment from 'moment';
+import { formatNumber } from '@/utils/formatters';
 
 export default {
   name: 'EntradasPorProveedorModal',
@@ -147,15 +148,13 @@ export default {
     }
   },
   methods: {
+    formatNumber,
     normalizeCuarto(cuarto) {
       const valor = (cuarto && cuarto.trim()) ? cuarto.trim() : 's/c';
       return valor.toLowerCase() === 'sin cuarto designado' ? 's/c' : valor;
     },
     formatDateTime(date) {
       return moment(date).format('DD/MM/YYYY HH:mm');
-    },
-    formatNumber(value) {
-      return (value || 0).toLocaleString('es-ES', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
     },
     formatPrice(value) {
       return (value || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });

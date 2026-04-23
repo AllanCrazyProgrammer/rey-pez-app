@@ -139,8 +139,8 @@
 </template>
 
 <script>
-import { db } from '@/firebase';
-import { collection, addDoc, updateDoc, deleteDoc, doc, getDocs, query, where } from 'firebase/firestore';
+import { preciosService } from '@/services/precios.service';
+import { formatearFecha } from '@/utils/formatters';
 
 export default {
   name: 'HistorialProductoModal',
@@ -186,6 +186,7 @@ export default {
     }
   },
   methods: {
+    formatearFecha,
     cerrarModal(event) {
       if (event.target === event.currentTarget) {
         this.$emit('cerrar');
@@ -218,7 +219,7 @@ export default {
         
         console.log('Guardando nuevo precio:', datosNuevoPrecio);
         
-        await addDoc(collection(db, 'historialPrecios'), datosNuevoPrecio);
+        await preciosService.addHistorial(datosNuevoPrecio);
         
         // Limpiar formulario
         this.nuevoPrecio = {
@@ -270,14 +271,6 @@ export default {
       const porcentaje = ((diferencia / precioAnterior.precio) * 100).toFixed(1);
       const simbolo = diferencia > 0 ? '+' : '';
       return `${simbolo}${porcentaje}%`;
-    },
-
-    formatearFecha(fechaString) {
-      if (!fechaString) return '';
-      
-      const fecha = new Date(fechaString + 'T00:00:00');
-      const opciones = { day: 'numeric', month: 'short', year: 'numeric' };
-      return fecha.toLocaleDateString('es-ES', opciones);
     },
 
     formatearPrecio(precio) {

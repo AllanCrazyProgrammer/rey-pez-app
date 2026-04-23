@@ -495,6 +495,7 @@ import PreciosProveedorPanel from '@/components/Deudas/Precios/PreciosProveedorP
 import ProductoSelector from '@/components/Deudas/ProductoSelector.vue';
 import AbonoGeneralModal from '@/components/Deudas/AbonoGeneralModal.vue';
 import HistorialAbonosModal from '@/components/Deudas/HistorialAbonosModal.vue';
+import { formatNumber, formatearFecha } from '@/utils/formatters';
 
 export default {
   name: 'ListaDeudas',
@@ -656,6 +657,8 @@ export default {
     }
   },
   methods: {
+    formatNumber,
+    formatearFecha,
     obtenerFechaActual() {
       const fecha = new Date();
       // Usar la zona horaria local para evitar problemas de UTC
@@ -698,16 +701,6 @@ export default {
       } catch (error) {
         console.error("Error al cargar proveedores: ", error);
       }
-    },
-    formatNumber(number) {
-      return number ? number.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00';
-    },
-    formatearFecha(fechaString) {
-      if (!fechaString) return '';
-      
-      const fecha = new Date(fechaString + 'T00:00:00');
-      const opciones = { year: 'numeric', month: 'long', day: 'numeric' };
-      return fecha.toLocaleDateString('es-ES', opciones);
     },
     closeModalOnOverlay(event) {
       if (event.target === event.currentTarget) {

@@ -196,6 +196,7 @@ import {
   nuevoSaldoAcumuladoGlobalCliente,
   saldoRestanteNota
 } from '@/utils/notaVentaSaldosCliente';
+import { formatearFecha as formatDate } from '@/utils/formatters';
 
 export default {
   name: 'NoteMenu',
@@ -315,6 +316,7 @@ export default {
     }
   },
   methods: {
+    formatDate,
     goToSaleNote() {
       this.$router.push({ name: 'SaleNote' });
     },
@@ -553,16 +555,6 @@ export default {
       this.showAbonosHistoryModal = false;
       this.clientAbonosHistory = [];
       this.currentPage = 1;
-    },
-    formatDate(dateString) {
-      if (!dateString) {
-        return 'Sin fecha';
-      }
-      return new Date(dateString).toLocaleDateString('es-ES', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-      });
     },
     prevPage() {
       if (this.currentPage > 1) {

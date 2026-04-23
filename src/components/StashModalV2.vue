@@ -429,6 +429,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { collection, addDoc, deleteDoc, doc, getDocs, getDoc, query, orderBy, limit, where, updateDoc } from 'firebase/firestore'
 import { db } from '@/firebase'
+import { formatearFecha, formatNumber } from '@/utils/formatters';
 
 export default {
   name: 'StashModalV2',
@@ -618,14 +619,6 @@ export default {
     })
     
     // Métodos
-    const formatNumber = (value) => {
-      if (value === null || value === undefined) return '0.00'
-      return Math.abs(value).toLocaleString('en-US', {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2
-      })
-    }
-    
     const esFechaSoloDia = (valor) => /^\d{4}-\d{2}-\d{2}$/.test(String(valor || '').trim())
 
     const parseFechaLocalSeguro = (valor) => {
@@ -639,17 +632,6 @@ export default {
       return Number.isNaN(dt.getTime()) ? null : dt
     }
 
-    const formatearFecha = (fecha) => {
-      if (!fecha) return ''
-      const dt = parseFechaLocalSeguro(fecha)
-      if (!dt) return ''
-      return dt.toLocaleDateString('es-ES', {
-        day: 'numeric',
-        month: 'short',
-        year: 'numeric'
-      })
-    }
-    
     const formatearFechaHora = (fecha) => {
       if (!fecha) return ''
       const dateObj = parseFechaLocalSeguro(fecha)

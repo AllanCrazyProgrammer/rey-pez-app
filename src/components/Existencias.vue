@@ -40,7 +40,7 @@
                   <td>
                     {{ item.medida }}
                     <span class="fecha-entrada" v-if="item.fechaEntrada">
-                      ({{ formatFecha(item.fechaEntrada) }})
+                      ({{ formatearFecha(item.fechaEntrada) }})
                     </span>
                   </td>
                   <td v-if="tienePrecio" class="precio-cell">{{ item.precio ? `$${item.precio}` : '-' }}</td>
@@ -98,7 +98,7 @@
                     <td>
                       {{ medida.medida }}
                       <span class="fecha-entrada" v-if="medida.fechaEntrada">
-                        ({{ formatFecha(medida.fechaEntrada) }})
+                        ({{ formatearFecha(medida.fechaEntrada) }})
                       </span>
                     </td>
                     <td v-if="tienePrecio" class="precio-cell">{{ medida.precio ? `$${medida.precio}` : '-' }}</td>
@@ -155,7 +155,7 @@
                 <td>{{ item.medida }}</td>
                 <td v-if="tienePrecio" class="precio-cell">{{ item.precio ? `$${item.precio}` : '-' }}</td>
                 <td class="kilos-cell">{{ formatNumber(item.kilos) }}</td>
-                <td class="fecha-entrada">{{ item.fechaEntrada ? formatFecha(item.fechaEntrada) : '' }}</td>
+                <td class="fecha-entrada">{{ item.fechaEntrada ? formatearFecha(item.fechaEntrada) : '' }}</td>
               </tr>
               <tr class="total-row">
                 <td :colspan="tienePrecio ? 3 : 2"><strong>Total {{ cuartoKey }}</strong></td>
@@ -250,6 +250,7 @@ import { ref, computed, onMounted, onUnmounted, watchEffect } from 'vue';
 import { db } from '@/firebase';
 import { collection, getDocs, onSnapshot, query, orderBy, where } from 'firebase/firestore';
 import moment from 'moment';
+import { formatearFecha, formatNumber } from '@/utils/formatters';
 
 export default {
   name: 'Existencias',
@@ -915,16 +916,6 @@ export default {
       return salidasDiaSiguiente.value.reduce((total, salida) => total + salida.kilos, 0);
     });
 
-    const formatNumber = (value) => {
-      return Math.round(value).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-    };
-
-    const formatFecha = (fecha) => {
-      if (!fecha) return '';
-      const fechaObj = fecha instanceof Date ? fecha : fecha.toDate();
-      return moment(fechaObj).format('DD/MM');
-    };
-
     const tieneCuarto = (items) => {
       if (!items) return false;
       const lista = Array.isArray(items) ? items : Object.values(items);
@@ -1307,7 +1298,7 @@ export default {
                         <td>${salida.proveedor}</td>
                         <td>
                           ${salida.medida}
-                          ${salida.fechaEntrada ? `<span class="fecha-entrada">(${formatFecha(salida.fechaEntrada)})</span>` : ''}
+                          ${salida.fechaEntrada ? `<span class="fecha-entrada">(${formatearFecha(salida.fechaEntrada)})</span>` : ''}
                         </td>
                         ${tienePrecio.value ? `<td class="precio-cell">${salida.precio ? '$' + salida.precio : '-'}</td>` : ''}
                         <td class="kilos-cell">${formatNumber(salida.kilos)}</td>
@@ -1336,7 +1327,7 @@ export default {
                         <td>${salida.proveedor}</td>
                         <td>
                           ${salida.medida}
-                          ${salida.fechaEntrada ? `<span class="fecha-entrada">(${formatFecha(salida.fechaEntrada)})</span>` : ''}
+                          ${salida.fechaEntrada ? `<span class="fecha-entrada">(${formatearFecha(salida.fechaEntrada)})</span>` : ''}
                         </td>
                         ${tienePrecio.value ? `<td class="precio-cell">${salida.precio ? '$' + salida.precio : '-'}</td>` : ''}
                         <td class="kilos-cell">${formatNumber(salida.kilos)}</td>
@@ -1391,7 +1382,7 @@ export default {
                             <tr>
                               <td>
                                 ${item.medida}
-                                ${item.fechaEntrada ? `<span class="fecha-entrada">(${formatFecha(item.fechaEntrada)})</span>` : ''}
+                                ${item.fechaEntrada ? `<span class="fecha-entrada">(${formatearFecha(item.fechaEntrada)})</span>` : ''}
                               </td>
                               ${tienePrecio.value ? `<td class="precio-cell">${item.precio ? '$' + item.precio : '-'}</td>` : ''}
                               <td class="kilos-cell">${formatNumber(item.kilos)}</td>
@@ -1448,7 +1439,7 @@ export default {
                                 <tr>
                                   <td>
                                     ${medida.medida}
-                                    ${medida.fechaEntrada ? `<span class="fecha-entrada">(${formatFecha(medida.fechaEntrada)})</span>` : ''}
+                                    ${medida.fechaEntrada ? `<span class="fecha-entrada">(${formatearFecha(medida.fechaEntrada)})</span>` : ''}
                                   </td>
                                   ${tienePrecio.value ? `<td class="precio-cell">${medida.precio ? '$' + medida.precio : '-'}</td>` : ''}
                                   <td class="kilos-cell">${formatNumber(medida.kilos)}</td>

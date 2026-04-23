@@ -139,6 +139,7 @@
 <script>
 import { db } from '@/firebase';
 import { collection, addDoc, updateDoc, deleteDoc, doc, getDocs, query, where } from 'firebase/firestore';
+import { formatearFecha } from '@/utils/formatters';
 
 export default {
   name: 'HistorialPreciosCrudos',
@@ -204,6 +205,7 @@ export default {
     }
   },
   methods: {
+    formatearFecha,
     cerrarModal(event) {
       if (event.target === event.currentTarget) {
         this.$emit('cerrar');
@@ -321,13 +323,6 @@ export default {
           alert('Error al eliminar precio');
         }
       }
-    },
-
-    formatearFecha(fechaString) {
-      if (!fechaString) return '';
-      const fecha = new Date(fechaString + 'T00:00:00');
-      const opciones = { day: 'numeric', month: 'short', year: 'numeric' };
-      return fecha.toLocaleDateString('es-ES', opciones);
     },
 
     formatearPrecio(precio) {

@@ -77,6 +77,7 @@ import { collection, getDocs, query, orderBy, deleteDoc, doc, updateDoc } from '
 import moment from 'moment'; // Import Moment.js
 import HistorialProductoModal from '@/components/HistorialProductoModal.vue';
 import ListaMedidasPedidoModal from '@/components/ListaMedidasPedidoModal.vue';
+import { formatNumber } from '@/utils/formatters';
 
 export default {
   name: 'SacadasMenu',
@@ -109,6 +110,7 @@ export default {
     }
   },
   methods: {
+    formatNumber,
     async loadSacadas() {
       try {
         this.isLoading = true;
@@ -146,9 +148,6 @@ export default {
     },
     formatDate(date) {
       return moment(date).format('DD [de] MMMM [de] YYYY');
-    },
-    formatNumber(value) {
-      return (value || 0).toLocaleString('es-ES', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
     },
     editSacada(id) {
       this.$router.push(`/sacadas/${id}`);

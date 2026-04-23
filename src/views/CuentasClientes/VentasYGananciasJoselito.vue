@@ -76,6 +76,7 @@
 import { db } from '@/firebase';
 import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
 import BackButton from '@/components/BackButton.vue';
+import { formatNumber, formatearFecha as formatDate } from '@/utils/formatters';
 
 export default {
   name: 'VentasYGananciasJoselito',
@@ -102,6 +103,8 @@ export default {
     }
   },
   methods: {
+    formatNumber,
+    formatDate,
     async buscarVentas() {
       if (!this.fechaInicial || !this.fechaFinal) {
         alert('Por favor seleccione ambas fechas');
@@ -136,19 +139,6 @@ export default {
       } finally {
         this.isLoading = false;
       }
-    },
-    formatNumber(value) {
-      return value.toLocaleString('es-ES', {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2
-      });
-    },
-    formatDate(date) {
-      return new Date(date).toLocaleDateString('es-ES', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-      });
     },
     imprimirReporte() {
       const contenido = `

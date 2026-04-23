@@ -55,16 +55,8 @@
 </template>
 
 <script>
-import { db } from '@/firebase';
-import { 
-  collection, 
-  updateDoc, 
-  doc, 
-  onSnapshot, 
-  query, 
-  orderBy,
-  where
-} from 'firebase/firestore';
+import { otilioCuentas } from '@/services/cuentas.service';
+import { formatNumber, formatearFecha } from '@/utils/formatters';
 
 export default {
   name: 'ObservacionesModal',
@@ -83,48 +75,43 @@ export default {
     };
   },
   methods: {
+    formatNumber,
+    formatearFecha,
     async cargarObservaciones() {
       try {
         this.isLoading = true;
-        const cuentasRef = collection(db, 'cuentasOtilio');
-        const q = query(cuentasRef, orderBy('fecha', 'desc'));
-        
-        this.unsubscribe = onSnapshot(q, (querySnapshot) => {
-          this.observaciones = querySnapshot.docs.map(doc => {
-            const data = doc.data();
-            return {
-              id: doc.id,
-              fecha: data.fecha,
-              observacion: data.observacion || '',
-              saldoHoy: data.totalGeneralVenta || 0,
-              totalNota: data.nuevoSaldoAcumulado || 0,
-              tieneObservacion: data.tieneObservacion || false
-            };
-          }).filter(obs => 
-            obs.tieneObservacion === true && 
-            obs.observacion.trim() !== ''
-          ); // Filtrar solo observaciones activas y no vacías
-          
-          this.isLoading = false;
-        });
-
+        this.unsubscribe = otilioCuentas.subscribe(
+          { orderBy: 'fecha', direction: 'desc' },
+          (querySnapshot) => {
+            this.observaciones = querySnapshot.docs.map(doc => {
+              const data = doc.data();
+              return {
+                id: doc.id,
+                fecha: data.fecha,
+                observacion: data.observacion || '',
+                saldoHoy: data.totalGeneralVenta || 0,
+                totalNota: data.nuevoSaldoAcumulado || 0,
+                tieneObservacion: data.tieneObservacion || false
+              };
+            }).filter(obs =>
+              obs.tieneObservacion === true &&
+              obs.observacion.trim() !== ''
+            );
+            this.isLoading = false;
+          }
+        );
       } catch (error) {
         console.error('Error al cargar observaciones:', error);
         this.isLoading = false;
       }
     },
-    
+
     async eliminarObservacion(cuentaId) {
       if (!confirm('¿Estás seguro de que quieres eliminar esta observación?')) {
         return;
       }
-      
       try {
-        const cuentaRef = doc(db, 'cuentasOtilio', cuentaId);
-        await updateDoc(cuentaRef, {
-          observacion: '',
-          tieneObservacion: false
-        });
+        await otilioCuentas.update(cuentaId, { observacion: '', tieneObservacion: false });
       } catch (error) {
         console.error('Error al eliminar observación:', error);
       }
@@ -134,24 +121,6 @@ export default {
       this.$emit('cerrar');
     },
     
-    formatearFecha(fecha) {
-      if (!fecha) return '';
-      const fechaObj = new Date(fecha);
-      // Ajustar para evitar problemas de zona horaria
-      fechaObj.setMinutes(fechaObj.getMinutes() + fechaObj.getTimezoneOffset());
-      return fechaObj.toLocaleDateString('es-ES', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-      });
-    },
-    
-    formatNumber(value) {
-      return value.toLocaleString('es-ES', { 
-        minimumFractionDigits: 2, 
-        maximumFractionDigits: 2 
-      });
-    }
   },
   watch: {
     isVisible(newValue) {

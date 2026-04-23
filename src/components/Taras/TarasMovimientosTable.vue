@@ -80,14 +80,6 @@ export default {
     }
   },
   methods: {
-    formatearFecha(fecha) {
-      if (!fecha) return '';
-      const date = new Date(`${fecha}T00:00:00`);
-      return date.toLocaleDateString('es-MX', {
-        day: '2-digit',
-        month: 'short'
-      }).replace('.', '').toLowerCase();
-    },
     formatearCantidad(valor) {
       const numero = Number(valor) || 0;
       const prefijo = numero > 0 ? '+' : '';

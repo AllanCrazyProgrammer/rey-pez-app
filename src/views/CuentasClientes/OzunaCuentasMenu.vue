@@ -56,6 +56,7 @@
 import { db } from '@/firebase';
 import { collection, getDocs, query, orderBy, deleteDoc, doc, limit } from 'firebase/firestore';
 import EmbarqueCuentasService from '@/utils/services/EmbarqueCuentasService';
+import { formatNumber, formatearFecha as formatDate } from '@/utils/formatters';
 
 export default {
   name: 'OzunaCuentasMenu',
@@ -67,6 +68,8 @@ export default {
     };
   },
   methods: {
+    formatNumber,
+    formatDate,
     normalizarFechaValor(valor) {
       if (!valor) return null;
       try {
@@ -171,18 +174,6 @@ export default {
       } finally {
         this.isLoading = false;
       }
-    },
-    formatDate(date) {
-      const fechaLocal = new Date(date);
-      fechaLocal.setMinutes(fechaLocal.getMinutes() + fechaLocal.getTimezoneOffset());
-      return fechaLocal.toLocaleDateString('es-ES', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-      });
-    },
-    formatNumber(value) {
-      return value.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     },
     editarCuenta(id) {
       this.$router.push(`/cuentas-ozuna/${id}?edit=true`);

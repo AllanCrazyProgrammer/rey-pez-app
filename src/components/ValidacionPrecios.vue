@@ -101,6 +101,7 @@
 import { obtenerPrecioParaMedida, obtenerPreciosParaFecha, normalizarMedida } from '@/utils/preciosHistoricos';
 import { normalizarFechaISO, formatearFechaParaMostrar, esFechaValida } from '@/utils/dateUtils';
 import { debugPreciosFirestore } from '@/utils/debugPrecios';
+import { formatearFecha } from '@/utils/formatters';
 
 export default {
   name: 'ValidacionPrecios',
@@ -227,10 +228,7 @@ export default {
     }
   },
   methods: {
-    formatearFecha(fecha) {
-      return formatearFechaParaMostrar(fecha);
-    },
-    
+    formatearFecha,
     obtenerNombreCliente(clienteId) {
       const cliente = this.clientes.find(c => c.id === clienteId);
       return cliente ? cliente.nombre : 'Desconocido';
