@@ -9,6 +9,16 @@
       <router-view />
     </div>
     <Footer />
+
+    <transition-group name="toast" tag="div" class="toast-container">
+      <div
+        v-for="n in notifications"
+        :key="n.id"
+        :class="['toast', `toast--${n.type}`]"
+      >
+        {{ n.message }}
+      </div>
+    </transition-group>
   </div>
 </template>
 
@@ -16,12 +26,18 @@
 import Navbar from "./NavBar.vue";
 import Footer from './Footer.vue';
 import { useAuthStore } from './stores/auth';
+import { useUIStore } from './stores/ui';
 
 export default {
   name: "app",
   components: {
     Navbar,
     Footer
+  },
+  computed: {
+    notifications() {
+      return useUIStore().notifications;
+    },
   },
   created() {
     // Inicializar el store de autenticación al cargar la aplicación
@@ -252,4 +268,36 @@ h1 {
   text-align: center;
   font-weight: normal;
 }
+
+.toast-container {
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  pointer-events: none;
+}
+
+.toast {
+  padding: 0.65rem 1.1rem;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #fff;
+  max-width: 320px;
+  word-break: break-word;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.toast--info    { background: rgba(62, 120, 255, 0.85); }
+.toast--success { background: rgba(34, 197, 94, 0.85); }
+.toast--warning { background: rgba(234, 179, 8, 0.85); color: #1a1a1a; }
+.toast--error   { background: rgba(239, 68, 68, 0.85); }
+
+.toast-enter-active, .toast-leave-active { transition: all 0.25s ease; }
+.toast-enter, .toast-leave-to            { opacity: 0; transform: translateX(20px); }
 </style>
