@@ -1260,7 +1260,7 @@ export default {
         this._stashEntregadoIndex = await this.cargarTransaccionesStashPorClientes(primerDiaStr, ultimoDiaStr);
 
         // Mantener historial de abonos aplicados del stash (Verónica + Joselito + compatibilidad México)
-        const clientesHistorial = ['veronica', 'joselito'];
+        const clientesHistorial = ['veronica', 'joselito', 'otilio'];
         if (this.cliente === 'mexico') {
           clientesHistorial.push('mexico');
         }
