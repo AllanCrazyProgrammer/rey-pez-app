@@ -20,7 +20,7 @@ const normalizarMedida = (medida) => {
   let medidaNormalizada = medida.toLowerCase().trim();
 
   // Eliminar palabras irrelevantes para consolidar
-  medidaNormalizada = medidaNormalizada.replace(/\b(ayer|hoy|nuevo|viejo|alt|pdf)\b/g, '');
+  medidaNormalizada = medidaNormalizada.replace(/\b(ayer|hoy|nuevo|viejo|alt|pdf|refri)\b/g, '');
   // Eliminar dobles espacios y espacios al inicio/final
   medidaNormalizada = medidaNormalizada.replace(/\s+/g, ' ').trim();
   
@@ -1124,7 +1124,7 @@ const prepararDatosCuentaOzuna = async (embarqueData) => {
             }
             
             const kilos = kilosTotales;
-            const medida = item.medida || item.talla || 'Crudo';
+            const medida = item.talla || item.medida || 'Crudo';
             
             // Para crudos de Ozuna, aplicar la misma lógica que productos normales
             // Si no es venta (maquila), usar precio fijo de 20, si es venta buscar precios históricos
@@ -1236,19 +1236,23 @@ const prepararDatosCuentaOtilio = async (embarqueData) => {
           kilos = Number((sumaKilos - descuentoTaras).toFixed(1));
         }
         
-        const medida = producto.medida || '';
+        const medidaBase = producto.medida || '';
+        const medida = producto.tipo === 'c/h20' ? `${medidaBase} c/h2o`.trim() : medidaBase;
+        const medidaSinSufijo = normalizarMedida(medidaBase);
         const medidaNormalizada = normalizarMedida(medida);
         
         // Determinar el costo para la tabla de costos
         const costo = 20; // Para Otilio, usamos un costo base fijo de 20 para maquila
         
         // Buscar el precio de venta: priorizar precios históricos de la fecha del embarque
+        // Para c/h2o, también buscar por la medida base sin el sufijo
         const precioVenta = preciosVenta.get(medidaNormalizada) || 
+                           preciosVenta.get(medidaSinSufijo) ||
                            parseFloat(producto.precio) || 0;
         
         // Calcular kilos para costos y ventas
-        const kilosCosto = calcularKilosCrudos(medida, kilos, true);
-        const kilosVenta = calcularKilosCrudos(medida, kilos, false);
+        const kilosCosto = calcularKilosCrudos(medidaBase, kilos, true);
+        const kilosVenta = calcularKilosCrudos(medidaBase, kilos, false);
         
         // Solo agregar el item si tiene kilos
         if (kilos > 0) {
@@ -1353,14 +1357,19 @@ const prepararDatosCuentaOtilio = async (embarqueData) => {
             
             const kilosCosto = kilosTotales;
             const kilosVenta = kilosTotales; // Mismos kilos para venta
-            const medida = item.medida || item.talla || 'Crudo';
+            const medida = item.talla || item.medida || 'Crudo';
             const medidaNormalizada = normalizarMedida(medida);
             
             // Para crudos, usar costo base fijo de 20
             const costo = 20;
             
             // Priorizar precios históricos de la fecha del embarque, con fallback al precio manual
-            const precioVenta = preciosVenta.get(medidaNormalizada) || 
+            // Intentar con talla y también con medida por si la normalización difiere
+            const precioDirecto = preciosVenta.get(medidaNormalizada);
+            const precioAlterno = !precioDirecto && item.medida && item.talla
+              ? preciosVenta.get(normalizarMedida(item.medida)) || preciosVenta.get(normalizarMedida(item.talla))
+              : null;
+            const precioVenta = precioDirecto || precioAlterno || 
                                parseFloat(item.precio) || 0;
             
             // Solo agregar el item si tiene kilos
@@ -1394,15 +1403,60 @@ const prepararDatosCuentaOtilio = async (embarqueData) => {
     });
   }
   
+  // Consolidar items con misma medida normalizada y mismo precio en una sola fila
+  const consolidarItemsCosto = (arr) => {
+    const mapa = new Map();
+    arr.forEach(item => {
+      const clave = normalizarMedida(item.medida);
+      if (mapa.has(clave)) {
+        const ex = mapa.get(clave);
+        ex.kilos += item.kilos;
+        ex.total = ex.kilos * ex.costo;
+        if (item.medida.length < ex.medida.length) ex.medida = item.medida;
+      } else {
+        mapa.set(clave, { ...item });
+      }
+    });
+    return Array.from(mapa.values());
+  };
+
+  const consolidarItemsVenta = (arr) => {
+    const mapa = new Map();
+    arr.forEach(item => {
+      const clave = normalizarMedida(item.medida);
+      if (mapa.has(clave)) {
+        const ex = mapa.get(clave);
+        ex.kilosVenta += item.kilosVenta;
+        ex.totalVenta = ex.kilosVenta * ex.precioVenta;
+        if (item.medida.length < ex.medida.length) ex.medida = item.medida;
+      } else {
+        mapa.set(clave, { ...item });
+      }
+    });
+    // Recalcular ganancias usando items de costo consolidados
+    return Array.from(mapa.values());
+  };
+
+  const itemsConsolidados = consolidarItemsCosto(items);
+  const itemsVentaConsolidados = consolidarItemsVenta(itemsVenta);
+
+  // Recalcular ganancias con los datos consolidados
+  itemsVentaConsolidados.forEach(iv => {
+    const ic = itemsConsolidados.find(c => normalizarMedida(c.medida) === normalizarMedida(iv.medida));
+    if (ic) {
+      iv.ganancia = iv.totalVenta - ic.total;
+    }
+  });
+
   // Calcular totales
-  const totalGeneral = items.reduce((sum, item) => sum + (item.total || 0), 0);
-  const totalGeneralVenta = itemsVenta.reduce((sum, item) => sum + (item.totalVenta || 0), 0);
+  const totalGeneral = itemsConsolidados.reduce((sum, item) => sum + (item.total || 0), 0);
+  const totalGeneralVenta = itemsVentaConsolidados.reduce((sum, item) => sum + (item.totalVenta || 0), 0);
   
   // Obtener saldo acumulado anterior
   const saldoAcumuladoAnterior = await obtenerSaldoAcumuladoAnterior('cuentasOtilio', fecha);
   
-  // Calcular el flete automáticamente
-  const fleteTotal = (totalTarasLimpio * 70) + (totalTarasCrudo * 60);
+  // Para Otilio, todas las taras se calculan a $70
+  const fleteTotal = (totalTarasLimpio + totalTarasCrudo) * 70;
   
   // Crear el array de cobros con el flete calculado
   const cobros = [];
@@ -1413,15 +1467,13 @@ const prepararDatosCuentaOtilio = async (embarqueData) => {
     });
     
     console.log(`[DEBUG] Flete (Otilio) calculado automáticamente:`);
-    console.log(`  - Taras de limpio: ${totalTarasLimpio} × $70 = $${totalTarasLimpio * 70}`);
-    console.log(`  - Taras de crudo: ${totalTarasCrudo} × $60 = $${totalTarasCrudo * 60}`);
-    console.log(`  - Total flete: $${fleteTotal}`);
+    console.log(`  - Taras totales: ${totalTarasLimpio + totalTarasCrudo} × $70 = $${fleteTotal}`);
   }
   
   return {
     fecha,
-    items,
-    itemsVenta,
+    items: itemsConsolidados,
+    itemsVenta: itemsVentaConsolidados,
     saldoAcumuladoAnterior,
     cobros,
     abonos: [],

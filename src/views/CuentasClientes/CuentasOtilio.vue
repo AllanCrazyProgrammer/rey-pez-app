@@ -15,13 +15,25 @@
         <PreciosClienteButton clienteId="otilio" />
       </div>
       
-      <div class="fecha-actual">
+      <div class="fecha-actual" :class="{ 'bloque-sin-nota': faltaNotaOtilio }">
         <div class="fecha-input">
-          <input type="date" v-model="fechaSeleccionada">
+          <input 
+            type="date" 
+            v-model="fechaSeleccionada" 
+            :class="{ 'fecha-sin-nota': faltaNotaOtilio }"
+            :title="faltaNotaOtilio ? 'Hay embarque registrado sin nota para esta fecha' : ''"
+          >
         </div>
-        <div class="fecha-display">
+        <div 
+          class="fecha-display" 
+          :class="{ 'fecha-sin-nota': faltaNotaOtilio }"
+          :title="faltaNotaOtilio ? 'Hay embarque registrado sin nota para esta fecha' : ''"
+        >
           {{ fechaFormateada }}
         </div>
+        <p v-if="faltaNotaOtilio" class="alerta-sin-nota">
+          Existe un embarque de Otilio sin nota para este día.
+        </p>
       </div>
     
       <div class="input-section">
@@ -333,6 +345,7 @@
   import PreciosHistorialModal from '@/components/PreciosHistorialModal.vue';
   import StashModalV2 from '@/components/StashModalV2.vue';
   import PreciosClienteButton from '@/components/PreciosClienteButton.vue';
+  import EmbarqueCuentasService from '@/utils/services/EmbarqueCuentasService';
   
   export default {
     name: 'CuentasOtilio',
@@ -392,6 +405,7 @@
         saveMessageTimer: null,
         saveMessage: '',
         isSavingVerificacion: false,
+        faltaNotaOtilio: false,
         // Nuevas variables para control de concurrencia
         isCreatingAccount: false,
         isLoadingAccount: false,
@@ -1095,8 +1109,189 @@
         }
       },
   
+      async verificarNotaFaltante() {
+        try {
+          const cuentasRef = collection(db, 'cuentasOtilio');
+          const notaExistente = await getDocs(
+            query(cuentasRef, where('fecha', '==', this.fechaSeleccionada), limit(1))
+          );
+
+          if (!notaExistente.empty) {
+            this.faltaNotaOtilio = false;
+            return;
+          }
+
+          const embarquesRef = collection(db, 'embarques');
+          const embarquesSnapshot = await getDocs(
+            query(embarquesRef, where('fecha', '==', this.fechaSeleccionada))
+          );
+
+          let existeEmbarqueOtilio = false;
+
+          for (const docSnap of embarquesSnapshot.docs) {
+            const data = docSnap.data() || {};
+            const clientes = data.clientes || [];
+            const productosRaiz = data.productos || [];
+
+            const clienteConDatos = clientes.some(cliente => {
+              const clienteId = (cliente.id ?? cliente.clienteId ?? '').toString();
+              const nombreCliente = (cliente.nombre || '').toLowerCase();
+              const esOtilio = clienteId === '3' || nombreCliente.includes('otilio');
+              const tieneProductos = Array.isArray(cliente.productos) && cliente.productos.some(p => p && (p.medida || (Array.isArray(p.kilos) && p.kilos.some(k => Number(k) > 0))));
+              const tieneCrudos = Array.isArray(cliente.crudos) && cliente.crudos.length > 0;
+              return esOtilio && (tieneProductos || tieneCrudos);
+            });
+
+            const productoSueltos = productosRaiz.some(producto => {
+              const clienteId = (producto.clienteId ?? producto.cliente ?? '').toString();
+              const tieneContenido = producto && (producto.medida || (Array.isArray(producto.kilos) && producto.kilos.some(k => Number(k) > 0)));
+              return clienteId === '3' && tieneContenido;
+            });
+
+            if (clienteConDatos || productoSueltos) {
+              existeEmbarqueOtilio = true;
+              break;
+            }
+          }
+
+          this.faltaNotaOtilio = existeEmbarqueOtilio;
+        } catch (error) {
+          console.error('Error al verificar nota faltante de Otilio:', error);
+          this.faltaNotaOtilio = false;
+        }
+      },
       imprimirTablas() {
-        window.print();
+        const contenidoImprimir = `
+          <html>
+            <head>
+              <title>Cuentas Otilio - ${this.fechaFormateada}</title>
+              <style>
+                body {
+                  font-family: Arial, sans-serif;
+                  font-size: 14pt;
+                  line-height: 1.4;
+                  max-width: 800px;
+                  margin: 0 auto;
+                  padding: 15px;
+                  text-align: center;
+                }
+                h1 { 
+                  font-size: 22pt; 
+                  margin-bottom: 15px; 
+                  color: #b8860b;
+                }
+                h2 { 
+                  font-size: 18pt; 
+                  margin-top: 20px; 
+                  margin-bottom: 10px; 
+                  color: #b8860b;
+                }
+                table {
+                  width: 100%;
+                  border-collapse: collapse;
+                  margin-bottom: 20px;
+                  font-size: 13pt;
+                }
+                th, td {
+                  border: 1px solid #ddd;
+                  padding: 8px 10px;
+                  text-align: left;
+                }
+                th { 
+                  background-color: #FFD700; 
+                  color: black;
+                  font-weight: bold;
+                  font-size: 13pt;
+                }
+                .total { 
+                  font-weight: bold; 
+                  font-size: 13pt;
+                }
+                .total td:first-child { 
+                  text-align: right; 
+                }
+                .highlight {
+                  background-color: #fff9e6;
+                  font-weight: bold;
+                }
+                @media print {
+                  body { font-size: 14pt; }
+                  h1 { font-size: 22pt; }
+                  h2 { font-size: 18pt; }
+                  table { font-size: 13pt; }
+                }
+              </style>
+            </head>
+            <body>
+              <h1>Cuentas Otilio - ${this.fechaFormateada}</h1>
+              
+              <h2>Precios de Venta</h2>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Kilos</th>
+                    <th>Medida</th>
+                    <th>Precio de Venta</th>
+                    <th>Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${this.itemsVenta.map(item => `
+                    <tr>
+                      <td>${this.formatNumber(item.kilosVenta)}</td>
+                      <td>${item.medida}</td>
+                      <td>$${this.formatNumber(item.precioVenta)}</td>
+                      <td>$${this.formatNumber(item.totalVenta)}</td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+                <tfoot>
+                  <tr class="total">
+                    <td colspan="3">Total Venta</td>
+                    <td>$${this.formatNumber(this.totalGeneralVenta)}</td>
+                  </tr>
+                </tfoot>
+              </table>
+
+              <h2>Resumen de saldo</h2>
+              <table>
+                <tr>
+                  <td>Saldo Acumulado Anterior</td>
+                  <td>$${this.formatNumber(this.saldoAcumuladoAnterior)}</td>
+                </tr>
+                <tr>
+                  <td>Saldo Hoy</td>
+                  <td>$${this.formatNumber(this.totalGeneralVenta)}</td>
+                </tr>
+                ${this.cobros.map(cobro => `
+                  <tr>
+                    <td>${cobro.descripcion}</td>
+                    <td>-$${this.formatNumber(cobro.monto)}</td>
+                  </tr>
+                `).join('')}
+                ${this.abonos.map(abono => `
+                  <tr>
+                    <td>${abono.descripcion} (Abono)</td>
+                    <td>-$${this.formatNumber(abono.monto)}</td>
+                  </tr>
+                `).join('')}
+                <tr class="total">
+                  <td>Total</td>
+                  <td>$${this.formatNumber(this.totalDiaActual)}</td>
+                </tr>
+                <tr class="highlight">
+                  <td>Nuevo Saldo Acumulado</td>
+                  <td>$${this.formatNumber(this.nuevoSaldoAcumulado)}</td>
+                </tr>
+              </table>
+            </body>
+          </html>
+        `;
+
+        const ventanaImprimir = window.open('', '_blank');
+        ventanaImprimir.document.write(contenidoImprimir);
+        ventanaImprimir.document.close();
+        ventanaImprimir.print();
       },
   
       addCobro() {
@@ -1773,28 +1968,24 @@
           await this.loadExistingCuenta(id);
         } else if (isNewRoute) {
           console.log('Iniciando flujo de nueva cuenta');
-          // Limpiar datos primero
           this.limpiarDatos();
           
-          // Esperar a que se cargue el saldo acumulado anterior
           await this.loadSaldoAcumuladoAnterior();
           
-          // Esperar un momento antes de crear la cuenta para evitar conflictos
           await new Promise(resolve => setTimeout(resolve, 1000));
           
-          // Crear nueva cuenta automáticamente
           const docId = await this.crearNuevaCuenta();
           if (docId) {
             console.log('Nueva cuenta creada automáticamente con ID:', docId);
           }
         } else {
           console.log('Iniciando con datos limpios');
-          // Si no estamos editando, cargar el saldo acumulado anterior
           this.limpiarDatos();
         }
+
+        await this.verificarNotaFaltante();
       } catch (error) {
         console.error('Error en created():', error);
-        // Mostrar error al usuario
         this.lastSaveMessage = `Error al inicializar: ${error.message}`;
         this.showSaveMessage = true;
         setTimeout(() => {
@@ -1857,8 +2048,9 @@
         deep: true
       },
       fechaSeleccionada: {
-        handler(newVal, oldVal) {
+        async handler(newVal, oldVal) {
           if (!this.isCreatingAccount && !this.isLoadingAccount) {
+            await this.verificarNotaFaltante();
             this.handleDataChange();
           }
         }
@@ -2554,5 +2746,25 @@
   .verificacion-checkbox:hover {
     transform: scale(1.1);
     transition: transform 0.2s ease;
+  }
+
+  .fecha-sin-nota {
+    background-color: #e0e0e0;
+    color: #555;
+    border-color: #bdbdbd;
+  }
+
+  .alerta-sin-nota {
+    margin-top: 8px;
+    font-size: 13px;
+    color: #555;
+    background: #f1f1f1;
+    padding: 8px 10px;
+    border-radius: 6px;
+  }
+
+  .bloque-sin-nota {
+    border-left: 4px solid #bdbdbd;
+    padding-left: 10px;
   }
   </style> 
