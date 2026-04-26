@@ -67,6 +67,8 @@
       :medidas="medidas"
       @close="closeListaMedidasModal"
       @save="saveListaMedidas"
+      @medida-created="loadMedidas"
+      @medida-deleted="loadMedidas"
     />
   </div>
 </template>

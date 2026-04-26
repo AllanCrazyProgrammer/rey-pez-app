@@ -538,6 +538,8 @@
       :medidas="medidasCatalogo"
       @close="closeListaMedidasModal"
       @save="saveListaMedidas"
+      @medida-created="cargarMedidasCatalogo"
+      @medida-deleted="cargarMedidasCatalogo"
     />
   </div>
 </template>

@@ -198,6 +198,7 @@
           <tr>
             <th>Medida</th>
             <th>Total (kg)</th>
+            <th>Total (cajas)</th>
             <th class="check-column">Ya se saco</th>
           </tr>
         </thead>
@@ -205,6 +206,7 @@
           <tr v-for="item in salidasProveedoresPorMedida" :key="item.key">
             <td>{{ item.medida }} ({{ item.proveedor }})</td>
             <td>{{ formatNumber(item.total) }}</td>
+            <td>{{ formatNumber(getCajasDesdeKilos(item.total)) }}</td>
             <td class="check-column">
               <input
                 type="checkbox"
@@ -224,6 +226,7 @@
             <th>Maquila</th>
             <th>Medida</th>
             <th>Total (kg)</th>
+            <th>Total (cajas)</th>
             <th class="check-column">Ya se saco</th>
           </tr>
         </thead>
@@ -232,6 +235,7 @@
             <td>{{ fila.maquila }}</td>
             <td>{{ fila.medida }}</td>
             <td>{{ formatNumber(fila.total) }}</td>
+            <td>{{ formatNumber(getCajasDesdeKilos(fila.total)) }}</td>
             <td class="check-column">
               <input
                 type="checkbox"
@@ -321,6 +325,8 @@
       :medidas="medidas"
       @close="closeListaMedidasModal"
       @save="saveListaMedidas"
+      @medida-created="loadMedidas"
+      @medida-deleted="loadMedidas"
     />
   </div>
 </template>
@@ -462,12 +468,13 @@ export default {
           return acc;
         }, {});
       
-      // Convertir a array y ordenar por medida
       return Object.values(salidas).sort((a, b) => {
-        // Extraer solo la parte de la medida sin el precio para ordenar
-        const medidaA = a.medida.split(' ($')[0];
-        const medidaB = b.medida.split(' ($')[0];
-        return medidaA.localeCompare(medidaB);
+        const medidaCmp = this.compareMedidasPorFamilia(
+          `${a.medida} ${a.proveedor}`,
+          `${b.medida} ${b.proveedor}`
+        );
+        if (medidaCmp !== 0) return medidaCmp;
+        return a.proveedor.localeCompare(b.proveedor);
       });
     },
     salidasMaquilasPorMedida() {
@@ -489,12 +496,7 @@ export default {
       for (const maquila in salidas) {
         const medidasOrdenadas = {};
         Object.keys(salidas[maquila])
-          .sort((a, b) => {
-            // Extraer solo la parte de la medida sin el precio para ordenar
-            const medidaA = a.split(' ($')[0];
-            const medidaB = b.split(' ($')[0];
-            return medidaA.localeCompare(medidaB);
-          })
+          .sort((a, b) => this.compareMedidasPorFamilia(a, b))
           .forEach(medida => {
             medidasOrdenadas[medida] = salidas[maquila][medida];
           });
@@ -528,6 +530,62 @@ export default {
     }
   },
   methods: {
+    normalizarMedidaParaOrden(medida) {
+      return String(medida || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/^🕐\s*/, '')
+        .replace(/\(\$\d+(?:\.\d+)?\)/g, '')
+        .split(' - Cuarto: ')[0]
+        .split(' - (')[0]
+        .replace(/(\d+)\s*(?:-|–|—|a)\s*(\d+)/gi, '$1/$2')
+        .replace(/\s*\/\s*/g, '/')
+        .trim()
+        .replace(/\s+/g, ' ')
+        .toLowerCase();
+    },
+    obtenerFamiliaMedida(medida) {
+      const texto = this.normalizarMedidaParaOrden(medida);
+      const familiasPrioritarias = [
+        'selecta',
+        'honduras',
+        'nacional',
+        'piojo',
+        'pelado',
+        'pacotilla'
+      ];
+      const familia = familiasPrioritarias.find((item) => texto.includes(item));
+
+      if (familia) return familia;
+
+      return texto
+        .replace(/^\d+(?:\.\d+)?\/\d+(?:\.\d+)?\s*/, '')
+        .trim();
+    },
+    obtenerRangoMedida(medida) {
+      const texto = this.normalizarMedidaParaOrden(medida);
+      const match = texto.match(/(\d+(?:\.\d+)?)\/(\d+(?:\.\d+)?)/);
+
+      if (!match) {
+        return [Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER];
+      }
+
+      return [Number(match[1]), Number(match[2])];
+    },
+    compareMedidasPorFamilia(medidaA, medidaB) {
+      const familiaA = this.obtenerFamiliaMedida(medidaA);
+      const familiaB = this.obtenerFamiliaMedida(medidaB);
+      const familiaCmp = familiaA.localeCompare(familiaB, 'es', { numeric: true });
+      if (familiaCmp !== 0) return familiaCmp;
+
+      const [inicioA, finA] = this.obtenerRangoMedida(medidaA);
+      const [inicioB, finB] = this.obtenerRangoMedida(medidaB);
+      if (inicioA !== inicioB) return inicioA - inicioB;
+      if (finA !== finB) return finA - finB;
+
+      return this.normalizarMedidaParaOrden(medidaA)
+        .localeCompare(this.normalizarMedidaParaOrden(medidaB), 'es', { numeric: true });
+    },
     openListaMedidasModal() {
       this.selectedSacadaForMeasures = {
         id: this.sacadaId,
@@ -1843,6 +1901,7 @@ button:active {
   .summary {
     overflow-x: auto;
   }
+
 }
 
 @media (max-width: 560px) {
