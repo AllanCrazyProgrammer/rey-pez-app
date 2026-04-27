@@ -588,6 +588,90 @@
               </div>
               </div>
             </div>
+
+            <!-- México -->
+            <div v-if="clientesAgrupados.mexico && clientesAgrupados.mexico.length > 0" class="cliente-card cliente-card-mexico">
+              <button
+                type="button"
+                class="cliente-header cliente-mexico"
+                :aria-expanded="esAcordeonClienteAbierto('mexico') ? 'true' : 'false'"
+                @click="toggleAcordeonCliente('mexico')"
+              >
+                <div class="cliente-titulo">
+                  <h4>México</h4>
+                  <span
+                    v-if="tieneEfectivoPendiente('mexico')"
+                    class="badge-efectivo-pendiente"
+                    :title="`Efectivo pendiente: ${contarEfectivoPendiente('mexico')}`"
+                  >
+                    {{ contarEfectivoPendiente('mexico') }}
+                  </span>
+                  <span
+                    v-if="tieneChequePendiente('mexico')"
+                    class="badge-cheque-pendiente"
+                    :title="`Cheques pendientes: ${contarChequePendiente('mexico')}`"
+                  >
+                    {{ contarChequePendiente('mexico') }}
+                  </span>
+                </div>
+                <div class="cliente-total">
+                  Total: ${{ formatearNumero(calcularTotalCliente('mexico')) }}
+                </div>
+                <span class="cliente-header-chevron" aria-hidden="true">▾</span>
+              </button>
+              <div v-show="esAcordeonClienteAbierto('mexico')">
+                <div class="cliente-contador">
+                  {{ clientesAgrupados.mexico.length }} transacción(es)
+                </div>
+                <div class="cliente-transacciones">
+                <div 
+                  v-for="(transaccion, index) in clientesAgrupados.mexico" 
+                  :key="'mexico-'+index" 
+                  class="transaccion-mini"
+                  :class="['tipo-' + transaccion.tipo, { 'es-stash': transaccion.esStash }]"
+                >
+                  <div class="transaccion-mini-header">
+                    <span>
+                      <template v-if="transaccion.esStash">
+                        {{ transaccion.descripcion }}
+                        <span class="badge-stash">📦</span>
+                      </template>
+                      <template v-else>
+                        {{ obtenerTipoTexto(transaccion.tipo) }}
+                      </template>
+                    </span>
+                    <span>${{ formatearNumero(transaccion.monto) }}</span>
+                  </div>
+                  <div class="transaccion-mini-meta">
+                    <span class="transaccion-mini-hora">{{ formatearHora(transaccion.timestamp) }}</span>
+                    <span
+                      v-if="transaccion.descripcion"
+                      class="transaccion-mini-observacion"
+                      :title="transaccion.descripcion"
+                    >
+                      Obs: {{ transaccion.descripcion }}
+                    </span>
+                  </div>
+                  <div class="transaccion-mini-acciones">
+                    <label
+                      v-if="transaccion.tipo === 'efectivo'"
+                      class="entregado-toggle"
+                    >
+                      <input
+                        type="checkbox"
+                        :checked="!!transaccion.efectivoEntregado"
+                        @change="actualizarEfectivoEntregado(transaccion, $event.target.checked)"
+                      />
+                      Entregado
+                    </label>
+                    <button v-if="!transaccion.esStash" @click="editarTransaccion(obtenerIndiceTransaccion(transaccion))" class="btn-mini">Editar</button>
+                    <button v-if="!transaccion.esStash" @click="eliminarTransaccion(obtenerIndiceTransaccion(transaccion))" class="btn-mini btn-mini-eliminar">Eliminar</button>
+                    <span v-if="transaccion.esStash" class="texto-info-stash">Ver en Stash</span>
+                  </div>
+                </div>
+              </div>
+              </div>
+            </div>
           </div>
           
         </div>
@@ -818,10 +902,15 @@ export default {
         veronica: [],
         mexico: []
       };
+      const clienteFallback = this.normalizarClienteKey(this.cliente);
       
       this.transaccionesDia.forEach(transaccion => {
-        if (transaccion.cliente && agrupados[transaccion.cliente]) {
-          agrupados[transaccion.cliente].push(transaccion);
+        const clienteNormalizado = this.normalizarClienteKey(transaccion.cliente) || clienteFallback;
+        if (clienteNormalizado && agrupados[clienteNormalizado]) {
+          agrupados[clienteNormalizado].push({
+            ...transaccion,
+            cliente: clienteNormalizado
+          });
         }
       });
       
@@ -829,6 +918,23 @@ export default {
     }
   },
   methods: {
+    normalizarClienteKey(clienteKey) {
+      if (typeof clienteKey !== 'string') return '';
+      const limpio = clienteKey
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .trim()
+        .toLowerCase();
+      const equivalencias = {
+        mexico: 'mexico',
+        ozuna: 'ozuna',
+        catarro: 'catarro',
+        joselito: 'joselito',
+        otilio: 'otilio',
+        veronica: 'veronica'
+      };
+      return equivalencias[limpio] || '';
+    },
     toggleAcordeonCliente(clienteKey) {
       const abiertos = new Set(this.clientesAcordeonAbiertos);
       if (abiertos.has(clienteKey)) {
@@ -964,6 +1070,7 @@ export default {
     obtenerClientesConTransacciones(fecha) {
       const diaISO = this.toISODateLocal(fecha);
       const clientesSet = new Set();
+      const clienteFallback = this.normalizarClienteKey(this.cliente);
       
       this.transacciones.forEach(t => {
         let coincide = false;
@@ -975,8 +1082,11 @@ export default {
           coincide = ts ? this.toISODateLocal(ts) === diaISO : false;
         }
         
-        if (coincide && t.cliente) {
-          clientesSet.add(t.cliente);
+        if (coincide) {
+          const clienteNormalizado = this.normalizarClienteKey(t.cliente) || clienteFallback;
+          if (clienteNormalizado) {
+            clientesSet.add(clienteNormalizado);
+          }
         }
       });
       
@@ -1008,6 +1118,7 @@ export default {
       return tipos[tipo] || 'Otro';
     },
     obtenerClienteTexto(cliente) {
+      const clienteNormalizado = this.normalizarClienteKey(cliente);
       const clientes = {
         mexico: 'México',
         ozuna: 'Ozuna',
@@ -1016,7 +1127,7 @@ export default {
         otilio: 'Otilio',
         veronica: 'Verónica'
       };
-      return clientes[cliente] || cliente;
+      return clientes[clienteNormalizado] || cliente || 'Sin cliente';
     },
     cancelarFormulario() {
       this.mostrarFormulario = false;
@@ -1034,8 +1145,10 @@ export default {
       
       try {
         const transaccionActual = this.editandoIndex >= 0 ? this.transaccionesDia[this.editandoIndex] : null;
+        const clienteNormalizado = this.normalizarClienteKey(this.nuevaTransaccion.cliente) || this.normalizarClienteKey(this.cliente);
         const transaccionData = {
           ...this.nuevaTransaccion,
+          cliente: clienteNormalizado,
           monto: parseFloat(this.nuevaTransaccion.monto),
           timestamp: this.nuevaTransaccion.timestamp || new Date().toISOString(),
           // Guardar siempre fecha local (YYYY-MM-DD) para evitar brincos por UTC.
@@ -1133,9 +1246,12 @@ export default {
         this.transacciones = [];
         
         querySnapshot.forEach((doc) => {
+          const data = doc.data() || {};
+          const clienteNormalizado = this.normalizarClienteKey(data.cliente) || this.normalizarClienteKey(this.cliente);
           this.transacciones.push({
             id: doc.id,
-            ...doc.data()
+            ...data,
+            cliente: clienteNormalizado || data.cliente || ''
           });
         });
         
@@ -1143,8 +1259,8 @@ export default {
         // y guardar índice de entregas por si se requiere en el historial.
         this._stashEntregadoIndex = await this.cargarTransaccionesStashPorClientes(primerDiaStr, ultimoDiaStr);
 
-        // Mantener historial de abonos aplicados del stash (Verónica + Joselito + compatibilidad México)
-        const clientesHistorial = ['veronica', 'joselito'];
+        // Mantener historial de abonos aplicados del stash para que sigan visibles después de aplicarlos.
+        const clientesHistorial = ['veronica', 'joselito', 'otilio', 'catarro'];
         if (this.cliente === 'mexico') {
           clientesHistorial.push('mexico');
         }
@@ -2044,6 +2160,10 @@ label {
   border-left: 4px solid #e67e22;
 }
 
+.cliente-card-mexico {
+  border-left: 4px solid #3760b0;
+}
+
 .cliente-header {
   display: flex;
   justify-content: space-between;
@@ -2379,6 +2499,17 @@ label {
   color: #e67e22;
 }
 
+.cliente-mexico {
+  border-bottom: 2px solid #3760b0;
+  background-color: rgba(55, 96, 176, 0.1);
+  padding: 8px;
+  border-radius: 6px 6px 0 0;
+}
+
+.cliente-mexico h4 {
+  color: #3760b0;
+}
+
 .transaccion-cliente {
   font-weight: bold;
   margin-bottom: 5px;
@@ -2705,6 +2836,10 @@ label {
 
 .cliente-card-veronica .cliente-total {
   color: #e67e22;
+}
+
+.cliente-card-mexico .cliente-total {
+  color: #3760b0;
 }
 
 /* Mejoras para las transacciones mini */

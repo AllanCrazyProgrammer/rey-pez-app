@@ -98,7 +98,7 @@
                         </div>
                     </div>
                     <!-- Todas las medidas configuradas cuando el campo está vacío -->
-                    <div v-if="!producto.medida && medidasConfiguracion.length > 0" class="sugerencias-seccion">
+                    <div v-if="mostrarTodasLasMedidasDisponibles" class="sugerencias-seccion">
                         <div class="sugerencias-titulo">Todas las medidas disponibles:</div>
                         <div v-for="medida in medidasConfiguracion" :key="'all-' + medida" class="sugerencia-item all-medida"
                             @mousedown="seleccionarMedida(medida)">
@@ -314,11 +314,16 @@ export default {
         // Medidas configuradas que coinciden con la búsqueda actual
         medidasConfiguradas() {
             if (!this.producto.medida) return [];
-            const valor = this.producto.medida.toLowerCase();
+            const valor = this.normalizarTextoBusqueda(this.producto.medida);
             return this.medidasConfiguracion.filter(m =>
-                m.toLowerCase().includes(valor) &&
-                m.toLowerCase() !== valor
+                this.medidaCoincideConBusqueda(m, valor) &&
+                this.normalizarTextoBusqueda(m) !== valor
             );
+        },
+
+        mostrarTodasLasMedidasDisponibles() {
+            return this.medidasConfiguracion.length > 0 &&
+                (!this.producto.medida || (this.medidasConfiguradas.length === 0 && this.sugerenciasMedidas.length === 0));
         },
 
         // Detectar si es un cliente agregado (no predefinido)
@@ -760,15 +765,15 @@ export default {
 
         // Métodos para el manejo de la medida
         onMedidaInput(event) {
-            const valor = event.target.value.toLowerCase();
+            const valor = this.normalizarTextoBusqueda(event.target.value);
             this.mostrarSugerencias = true;
 
             if (valor) {
                 // Filtrar medidas usadas que coincidan (excluyendo medidas configuradas para evitar duplicados)
                 this.sugerenciasMedidas = this.medidasUsadas.filter(m =>
-                    m.toLowerCase().includes(valor) &&
-                    m.toLowerCase() !== valor &&
-                    !this.medidasConfiguracion.some(mc => mc.toLowerCase() === m.toLowerCase())
+                    this.medidaCoincideConBusqueda(m, valor) &&
+                    this.normalizarTextoBusqueda(m) !== valor &&
+                    !this.medidasConfiguracion.some(mc => this.normalizarTextoBusqueda(mc) === this.normalizarTextoBusqueda(m))
                 );
             } else {
                 this.sugerenciasMedidas = [];
@@ -785,6 +790,22 @@ export default {
             this.asignarPrecioAutomatico();
             this.actualizarPedidoReferencia();
             this.actualizarProducto();
+        },
+
+        normalizarTextoBusqueda(valor) {
+            return (valor || '')
+                .toString()
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .toLowerCase()
+                .trim();
+        },
+
+        medidaCoincideConBusqueda(medida, busquedaNormalizada) {
+            const medidaNormalizada = this.normalizarTextoBusqueda(medida);
+            if (!busquedaNormalizada) return true;
+            return medidaNormalizada.includes(busquedaNormalizada) ||
+                busquedaNormalizada.includes(medidaNormalizada);
         },
 
         onMedidaBlur() {

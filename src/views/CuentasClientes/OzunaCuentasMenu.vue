@@ -18,7 +18,7 @@
         No hay registros de cuentas.
       </div>
       <ul v-else>
-        <li v-for="cuenta in cuentas" :key="cuenta.id" class="cuenta-item" :class="{ 'cuenta-sin-nota': cuenta.missingNota }">
+        <li v-for="cuenta in cuentasPaginadas" :key="cuenta.id" class="cuenta-item" :class="{ 'cuenta-sin-nota': cuenta.missingNota }">
           <div class="cuenta-content">
             <span class="cuenta-date">{{ formatDate(cuenta.fecha) }}</span>
             <p class="cuenta-summary">
@@ -48,6 +48,13 @@
           </div>
         </li>
       </ul>
+      <div v-if="totalPaginas > 1" class="pagination-controls">
+        <button @click="paginaActual = 1" :disabled="paginaActual === 1" class="pagination-btn">&laquo;</button>
+        <button @click="paginaActual--" :disabled="paginaActual === 1" class="pagination-btn">&lsaquo; Anterior</button>
+        <span class="pagination-info">{{ paginaActual }} / {{ totalPaginas }}</span>
+        <button @click="paginaActual++" :disabled="paginaActual === totalPaginas" class="pagination-btn">Siguiente &rsaquo;</button>
+        <button @click="paginaActual = totalPaginas" :disabled="paginaActual === totalPaginas" class="pagination-btn">&raquo;</button>
+      </div>
     </div>
   </div>
 </template>
@@ -64,8 +71,18 @@ export default {
     return {
       cuentas: [],
       isLoading: true,
-      creatingFecha: null
+      creatingFecha: null,
+      paginaActual: 1
     };
+  },
+  computed: {
+    totalPaginas() {
+      return Math.max(1, Math.ceil(this.cuentas.length / 10));
+    },
+    cuentasPaginadas() {
+      const inicio = (this.paginaActual - 1) * 10;
+      return this.cuentas.slice(inicio, inicio + 10);
+    }
   },
   methods: {
     formatNumber,
@@ -509,5 +526,50 @@ h1, h2 {
     font-size: 0.8em;
     flex-grow: 1;
   }
+  .pagination-controls {
+    gap: 6px;
+  }
+  .pagination-btn {
+    padding: 6px 10px;
+    font-size: 13px;
+  }
+}
+
+.pagination-controls {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  margin-top: 20px;
+  flex-wrap: wrap;
+}
+
+.pagination-btn {
+  background-color: #07711e;
+  color: white;
+  border: none;
+  padding: 8px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  transition: background-color 0.2s ease;
+}
+
+.pagination-btn:disabled {
+  background-color: #ccc;
+  cursor: not-allowed;
+}
+
+.pagination-btn:not(:disabled):hover {
+  background-color: #065d18;
+}
+
+.pagination-info {
+  font-weight: 700;
+  font-size: 15px;
+  color: #07711e;
+  min-width: 60px;
+  text-align: center;
 }
 </style>

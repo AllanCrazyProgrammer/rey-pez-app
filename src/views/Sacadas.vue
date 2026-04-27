@@ -198,6 +198,7 @@
           <tr>
             <th>Medida</th>
             <th>Total (kg)</th>
+            <th>Total (cajas)</th>
             <th class="check-column">Ya se saco</th>
           </tr>
         </thead>
@@ -205,6 +206,7 @@
           <tr v-for="item in salidasProveedoresPorMedida" :key="item.key">
             <td>{{ item.medida }} ({{ item.proveedor }})</td>
             <td>{{ formatNumber(item.total) }}</td>
+            <td>{{ formatNumber(getCajasDesdeKilos(item.total)) }}</td>
             <td class="check-column">
               <input
                 type="checkbox"
@@ -224,6 +226,7 @@
             <th>Maquila</th>
             <th>Medida</th>
             <th>Total (kg)</th>
+            <th>Total (cajas)</th>
             <th class="check-column">Ya se saco</th>
           </tr>
         </thead>
@@ -232,6 +235,7 @@
             <td>{{ fila.maquila }}</td>
             <td>{{ fila.medida }}</td>
             <td>{{ formatNumber(fila.total) }}</td>
+            <td>{{ formatNumber(getCajasDesdeKilos(fila.total)) }}</td>
             <td class="check-column">
               <input
                 type="checkbox"
@@ -321,6 +325,8 @@
       :medidas="medidas"
       @close="closeListaMedidasModal"
       @save="saveListaMedidas"
+      @medida-created="loadMedidas"
+      @medida-deleted="loadMedidas"
     />
   </div>
 </template>
@@ -463,12 +469,13 @@ export default {
           return acc;
         }, {});
       
-      // Convertir a array y ordenar por medida
       return Object.values(salidas).sort((a, b) => {
-        // Extraer solo la parte de la medida sin el precio para ordenar
-        const medidaA = a.medida.split(' ($')[0];
-        const medidaB = b.medida.split(' ($')[0];
-        return medidaA.localeCompare(medidaB);
+        const medidaCmp = this.compareMedidasPorFamilia(
+          `${a.medida} ${a.proveedor}`,
+          `${b.medida} ${b.proveedor}`
+        );
+        if (medidaCmp !== 0) return medidaCmp;
+        return a.proveedor.localeCompare(b.proveedor);
       });
     },
     salidasMaquilasPorMedida() {
@@ -490,12 +497,7 @@ export default {
       for (const maquila in salidas) {
         const medidasOrdenadas = {};
         Object.keys(salidas[maquila])
-          .sort((a, b) => {
-            // Extraer solo la parte de la medida sin el precio para ordenar
-            const medidaA = a.split(' ($')[0];
-            const medidaB = b.split(' ($')[0];
-            return medidaA.localeCompare(medidaB);
-          })
+          .sort((a, b) => this.compareMedidasPorFamilia(a, b))
           .forEach(medida => {
             medidasOrdenadas[medida] = salidas[maquila][medida];
           });
@@ -529,7 +531,66 @@ export default {
     }
   },
   methods: {
+
     formatNumber,
+
+    normalizarMedidaParaOrden(medida) {
+      return String(medida || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/^🕐\s*/, '')
+        .replace(/\(\$\d+(?:\.\d+)?\)/g, '')
+        .split(' - Cuarto: ')[0]
+        .split(' - (')[0]
+        .replace(/(\d+)\s*(?:-|–|—|a)\s*(\d+)/gi, '$1/$2')
+        .replace(/\s*\/\s*/g, '/')
+        .trim()
+        .replace(/\s+/g, ' ')
+        .toLowerCase();
+    },
+    obtenerFamiliaMedida(medida) {
+      const texto = this.normalizarMedidaParaOrden(medida);
+      const familiasPrioritarias = [
+        'selecta',
+        'honduras',
+        'nacional',
+        'piojo',
+        'pelado',
+        'pacotilla'
+      ];
+      const familia = familiasPrioritarias.find((item) => texto.includes(item));
+
+      if (familia) return familia;
+
+      return texto
+        .replace(/^\d+(?:\.\d+)?\/\d+(?:\.\d+)?\s*/, '')
+        .trim();
+    },
+    obtenerRangoMedida(medida) {
+      const texto = this.normalizarMedidaParaOrden(medida);
+      const match = texto.match(/(\d+(?:\.\d+)?)\/(\d+(?:\.\d+)?)/);
+
+      if (!match) {
+        return [Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER];
+      }
+
+      return [Number(match[1]), Number(match[2])];
+    },
+    compareMedidasPorFamilia(medidaA, medidaB) {
+      const familiaA = this.obtenerFamiliaMedida(medidaA);
+      const familiaB = this.obtenerFamiliaMedida(medidaB);
+      const familiaCmp = familiaA.localeCompare(familiaB, 'es', { numeric: true });
+      if (familiaCmp !== 0) return familiaCmp;
+
+      const [inicioA, finA] = this.obtenerRangoMedida(medidaA);
+      const [inicioB, finB] = this.obtenerRangoMedida(medidaB);
+      if (inicioA !== inicioB) return inicioA - inicioB;
+      if (finA !== finB) return finA - finB;
+
+      return this.normalizarMedidaParaOrden(medidaA)
+        .localeCompare(this.normalizarMedidaParaOrden(medidaB), 'es', { numeric: true });
+    },
+
     openListaMedidasModal() {
       this.selectedSacadaForMeasures = {
         id: this.sacadaId,
@@ -1099,11 +1160,13 @@ export default {
         .map(doc => ({ id: doc.id, ...doc.data() }))
         .sort((a, b) => a.fecha.toDate() - b.fecha.toDate());
 
-      // Función para actualizar el balance de una medida y rastrear fechas (cuartos incluidos)
+      // FIFO por medida+precio+cuarto (consistente con Existencias)
       const actualizarBalance = (medida, precio, kilos, fecha, esEntrada = true, cuartoFrio = '') => {
         const precioNormalizado = precio !== null && precio !== undefined ? precio : null;
-        const medidaKey = precioNormalizado !== null ? `${medida} ($${precioNormalizado})` : medida;
         const cuartoNormalizado = normalizeCuarto(cuartoFrio);
+        const medidaKey = precioNormalizado !== null 
+          ? `${medida}_$${precioNormalizado}__${cuartoNormalizado}`
+          : `${medida}__${cuartoNormalizado}`;
         const fechaObj = fecha instanceof Date ? fecha : (fecha?.toDate ? fecha.toDate() : new Date(fecha));
 
         if (!medidasDisponibles.has(medidaKey)) {
@@ -1111,10 +1174,8 @@ export default {
             medida,
             precio: precioNormalizado,
             kilos: 0,
-            nombre: medidaKey,
+            cuartoFrio: cuartoNormalizado,
             primeraFecha: null,
-            esElMasAntiguo: false,
-            cuartos: new Map(),
             lotes: []
           });
         }
@@ -1124,10 +1185,7 @@ export default {
           datos.lotes = [];
         }
 
-        let kilosAplicados = kilos;
-
         if (esEntrada) {
-          // Registrar la entrada como un lote nuevo y mantener orden cronológico
           datos.lotes.push({
             kilos,
             fecha: fechaObj,
@@ -1135,7 +1193,6 @@ export default {
           });
           datos.lotes.sort((a, b) => a.fecha - b.fecha);
         } else {
-          // Consumir desde el lote más antiguo (FIFO)
           let kilosPendientes = kilos;
           datos.lotes.sort((a, b) => a.fecha - b.fecha);
 
@@ -1150,23 +1207,18 @@ export default {
             }
           }
 
-          kilosAplicados = kilos - kilosPendientes;
           datos.lotes = datos.lotes.filter(lote => lote.kilos > 0);
 
           if (kilosPendientes > 0) {
             console.warn('[Sacadas] Salida sin suficientes lotes registrados', {
               medida,
               precio: precioNormalizado,
+              cuartoFrio: cuartoNormalizado,
               kilosPendientes
             });
           }
         }
 
-        // Ajustar los kilos por cuarto solo con lo realmente aplicado
-        const kilosCuarto = datos.cuartos.get(cuartoNormalizado) || 0;
-        datos.cuartos.set(cuartoNormalizado, kilosCuarto + (esEntrada ? kilosAplicados : -kilosAplicados));
-
-        // Recalcular totales y fecha más antigua disponible
         datos.kilos = datos.lotes.reduce((sum, lote) => sum + lote.kilos, 0);
         datos.primeraFecha = datos.lotes.length > 0 ? datos.lotes[0].fecha : null;
       };
@@ -1209,9 +1261,39 @@ export default {
         }
       });
 
+      // Agregar por medida+precio (consolidar cuartos) para el dropdown
+      const medidasAgregadas = new Map();
+      for (const [_, datos] of medidasDisponibles) {
+        if (datos.kilos <= 0) continue;
+
+        const displayKey = datos.precio !== null ? `${datos.medida} ($${datos.precio})` : datos.medida;
+
+        if (!medidasAgregadas.has(displayKey)) {
+          medidasAgregadas.set(displayKey, {
+            medida: datos.medida,
+            precio: datos.precio,
+            kilos: 0,
+            nombre: displayKey,
+            primeraFecha: null,
+            esElMasAntiguo: false,
+            cuartos: new Map()
+          });
+        }
+
+        const agregado = medidasAgregadas.get(displayKey);
+        agregado.kilos += datos.kilos;
+
+        const kilosCuarto = agregado.cuartos.get(datos.cuartoFrio) || 0;
+        agregado.cuartos.set(datos.cuartoFrio, kilosCuarto + datos.kilos);
+
+        if (datos.primeraFecha && (!agregado.primeraFecha || datos.primeraFecha < agregado.primeraFecha)) {
+          agregado.primeraFecha = datos.primeraFecha;
+        }
+      }
+
       // Encontrar cuál es el precio más antiguo para cada medida base (solo para medidas con precio)
       const medidasPorBase = new Map();
-      for (const [_, datos] of medidasDisponibles) {
+      for (const [_, datos] of medidasAgregadas) {
         if (datos.kilos > 0 && datos.precio !== null && datos.primeraFecha !== null) {
           const medidaBase = datos.medida;
           if (!medidasPorBase.has(medidaBase)) {
@@ -1231,14 +1313,13 @@ export default {
         }
       }
 
-      // Convertir TODAS las medidas con existencias positivas a opciones (con precio y sin precio)
+      // Convertir TODAS las medidas con existencias positivas a opciones
       const medidasConPrecio = [];
-      for (const [_, datos] of medidasDisponibles) {
+      for (const [_, datos] of medidasAgregadas) {
         if (datos.kilos > 0) {
           
           let nombreDisplay = datos.nombre;
           
-          // Agregar indicadores visuales solo para medidas con precio
           if (datos.precio !== null && datos.primeraFecha !== null) {
             const fechaStr = moment(datos.primeraFecha).format('DD/MM/YY');
             if (datos.esElMasAntiguo) {
@@ -1822,6 +1903,7 @@ button:active {
   .summary {
     overflow-x: auto;
   }
+
 }
 
 @media (max-width: 560px) {
