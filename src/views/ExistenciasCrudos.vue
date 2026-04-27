@@ -305,6 +305,7 @@ export default {
   },
   methods: {
     formatDate,
+    formatNumber,
     normalizeCuarto(cuarto) {
       const valor = (cuarto && cuarto.trim()) ? cuarto.trim() : 's/c';
       return valor.toLowerCase() === 'sin cuarto designado' ? 's/c' : valor;
@@ -616,7 +617,7 @@ export default {
           
           historialPorProducto[clave].push({
             precio: historial.precio,
-            fecha: historial.fecha instanceof Date ? historial.fecha : historial.fecha.toDate()
+            fecha: historial.fecha instanceof Date ? historial.fecha : (historial.fecha && typeof historial.fecha.toDate === 'function' ? historial.fecha.toDate() : new Date(historial.fecha || 0))
           });
         });
 

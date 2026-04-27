@@ -16,6 +16,10 @@
         </label>
       </div>
 
+      <div v-if="!filtroCuarto && Object.keys(filteredExistencias).length === 0" class="existencias-vacio">
+        <p>Sin existencias disponibles. Las salidas registradas pueden haber consumido todo el inventario.</p>
+      </div>
+
       <div class="existencias-grid" v-if="!filtroCuarto">
         <div v-for="(datos, medidaKey) in filteredExistencias" :key="medidaKey" class="medida-card" :class="{ 'maquila-card': medidaKey === 'Ozuna' || medidaKey === 'Joselito' }">
           <!-- Para maquilas (Ozuna y Joselito) -->
@@ -283,17 +287,21 @@ export default {
       let totalSelecta5160 = 0;
 
       // Ordenar las sacadas por fecha
+      const parseFechaSacada = (fecha) => {
+        if (!fecha) return new Date(0);
+        if (fecha instanceof Date) return fecha;
+        if (typeof fecha.toDate === 'function') return fecha.toDate();
+        const d = new Date(fecha);
+        return isNaN(d.getTime()) ? new Date(0) : d;
+      };
+
       const sacadasOrdenadas = sacadasSnapshot.docs
         .map(doc => ({ id: doc.id, ...doc.data() }))
-        .sort((a, b) => {
-          const fechaA = a.fecha instanceof Date ? a.fecha : a.fecha.toDate();
-          const fechaB = b.fecha instanceof Date ? b.fecha : b.fecha.toDate();
-          return fechaA - fechaB;
-        });
+        .sort((a, b) => parseFechaSacada(a.fecha) - parseFechaSacada(b.fecha));
 
       // Procesar entradas y salidas directamente - sin FIFO
       sacadasOrdenadas.forEach(sacada => {
-        const sacadaFecha = sacada.fecha instanceof Date ? sacada.fecha : sacada.fecha.toDate();
+        const sacadaFecha = parseFechaSacada(sacada.fecha);
         const momentFecha = moment(sacadaFecha);
 
         // Procesar entradas
@@ -1542,7 +1550,7 @@ export default {
       valorLibre,
       tienePrecio,
       formatNumber,
-      formatFecha,
+      formatearFecha,
       imprimirReporte,
       salidasDiaSiguiente,
       fechaDiaSiguiente,
@@ -1558,6 +1566,17 @@ export default {
 </script>
 
 <style scoped>
+.existencias-vacio {
+  padding: 32px;
+  text-align: center;
+  color: #666;
+  background: #fff3cd;
+  border: 1px solid #ffc107;
+  border-radius: 8px;
+  margin: 20px 0;
+  font-size: 1rem;
+}
+
 .existencias-page {
   min-height: 100vh;
   background-color: #f8f9fa;

@@ -58,15 +58,15 @@
     <!-- Lista de embarques -->
     <div v-else class="embarques-container">
       <div v-if="embarques.length > 0" class="embarques-grid">
-        <div 
-          v-for="(embarque, index) in embarques" 
-          :key="embarque.id" 
+        <div
+          v-for="(embarque, index) in embarquesPaginados"
+          :key="embarque.id"
           class="embarque-card"
           :class="{ 'card-blocked': embarque.embarqueBloqueado, 'card-no-mexico': embarque.noEnviadoMexico }"
         >
           <!-- Header de la card -->
           <div class="card-header">
-            <div class="record-id">[REC_{{ String(index + 1).padStart(3, '0') }}]</div>
+            <div class="record-id">[REC_{{ String((paginaActual - 1) * porPagina + index + 1).padStart(3, '0') }}]</div>
             <div class="fecha-section">
               <span class="fecha-label">DATE:</span>
               <span class="fecha-value">{{ formatearFecha(embarque.fecha) }}</span>
@@ -150,6 +150,59 @@
         </div>
       </div>
 
+      <!-- Paginación -->
+      <div v-if="totalPaginas > 1" class="paginacion">
+        <button
+          class="pag-btn"
+          :disabled="paginaActual === 1"
+          @click="paginaActual = 1"
+          title="Primera página"
+        >|&lt;</button>
+        <button
+          class="pag-btn"
+          :disabled="paginaActual === 1"
+          @click="paginaActual--"
+          title="Anterior"
+        >&lt;</button>
+
+        <button
+          v-if="paginasVisibles[0] > 1"
+          class="pag-btn pag-ellipsis"
+          disabled
+        >...</button>
+
+        <button
+          v-for="p in paginasVisibles"
+          :key="p"
+          class="pag-btn"
+          :class="{ 'pag-activa': p === paginaActual }"
+          @click="paginaActual = p"
+        >{{ p }}</button>
+
+        <button
+          v-if="paginasVisibles[paginasVisibles.length - 1] < totalPaginas"
+          class="pag-btn pag-ellipsis"
+          disabled
+        >...</button>
+
+        <button
+          class="pag-btn"
+          :disabled="paginaActual === totalPaginas"
+          @click="paginaActual++"
+          title="Siguiente"
+        >&gt;</button>
+        <button
+          class="pag-btn"
+          :disabled="paginaActual === totalPaginas"
+          @click="paginaActual = totalPaginas"
+          title="Última página"
+        >&gt;|</button>
+
+        <span class="pag-info">
+          [ {{ (paginaActual - 1) * porPagina + 1 }}–{{ Math.min(paginaActual * porPagina, embarques.length) }} / {{ embarques.length }} ]
+        </span>
+      </div>
+
       <!-- Estado vacío -->
       <div v-else class="empty-state">
         <pre class="empty-ascii">
@@ -197,7 +250,7 @@
 </template>
 
 <script>
-import { getFirestore, collection, getDocs, doc, deleteDoc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { getFirestore, collection, getDocs, doc, deleteDoc, getDoc, setDoc, serverTimestamp, query, orderBy, limit } from 'firebase/firestore';
 import BackupService from './BackupService.js';
 import NotificacionRespaldo from './NotificacionRespaldo.vue';
 import EmbarquesOfflineService from '@/services/EmbarquesOfflineService';
@@ -217,6 +270,8 @@ export default {
   data() {
     return {
       embarques: [],
+      paginaActual: 1,
+      porPagina: 20,
       cargando: true,
       error: null,
       // Notificaciones de respaldo
@@ -236,6 +291,25 @@ export default {
         error: ''
       }
     };
+  },
+  computed: {
+    totalPaginas() {
+      return Math.max(1, Math.ceil(this.embarques.length / this.porPagina));
+    },
+    embarquesPaginados() {
+      const inicio = (this.paginaActual - 1) * this.porPagina;
+      return this.embarques.slice(inicio, inicio + this.porPagina);
+    },
+    paginasVisibles() {
+      const total = this.totalPaginas;
+      const actual = this.paginaActual;
+      const paginas = [];
+      const rango = 2;
+      for (let i = Math.max(1, actual - rango); i <= Math.min(total, actual + rango); i++) {
+        paginas.push(i);
+      }
+      return paginas;
+    },
   },
   methods: {
     formatearFecha,
@@ -495,7 +569,6 @@ export default {
         await EmbarquesOfflineService.init();
 
         let offlineById = new Map();
-        // Mostrar resultados offline inmediatamente si existen
         try {
           const registrosOffline = await EmbarquesOfflineService.getAll();
           offlineById = new Map((registrosOffline || []).map(r => [r.id, r]));
@@ -512,18 +585,26 @@ export default {
           console.warn('[ListaEmbarques] No se pudieron leer datos offline:', offlineError);
         }
 
-        if (navigator.onLine) {
-          await this.sincronizarPendientesOffline();
-        } else {
+        // Mostrar datos offline de inmediato — quitar spinner sin esperar red
+        this.paginaActual = 1;
+        this.cargando = false;
+
+        if (!navigator.onLine) {
           if (this.embarques.length === 0) {
             this.error = 'Sin conexión y sin datos locales de embarques.';
           }
           return;
         }
 
+        // Sincronizar pendientes en background sin bloquear la UI
+        this.sincronizarPendientesOffline().catch(e =>
+          console.warn('[ListaEmbarques] Error en sincronización background:', e)
+        );
+
         const db = getFirestore();
         const embarquesRef = collection(db, 'embarques');
-        const snapshot = await getDocs(embarquesRef);
+        const q = query(embarquesRef, orderBy('fecha', 'desc'), limit(100));
+        const snapshot = await getDocs(q);
 
         const embarquesProcesados = snapshot.docs.map(docSnap => {
           const data = docSnap.data();
@@ -538,26 +619,16 @@ export default {
             fechaEmbarque = Number.isNaN(parsed.getTime()) ? null : parsed;
           }
 
-          const fechaISO = fechaEmbarque ? this.normalizarFechaUTC(fechaEmbarque) : null;
-
           return {
             id: docSnap.id,
             fecha: fechaEmbarque,
-            fechaISO,
+            fechaISO: fechaEmbarque ? this.normalizarFechaUTC(fechaEmbarque) : null,
             data
           };
         });
 
-        const embarquesOrdenados = embarquesProcesados.sort((a, b) => {
-          if (!a.fecha && !b.fecha) return 0;
-          if (!a.fecha) return 1;
-          if (!b.fecha) return -1;
-          return new Date(b.fecha) - new Date(a.fecha);
-        });
-
-        const embarquesFiltrados = [];
-
-        for (const embarque of embarquesOrdenados) {
+        // Procesar y guardar en IndexedDB en paralelo
+        const embarquesFiltrados = await Promise.all(embarquesProcesados.map(async (embarque) => {
           const fechaObj = embarque.fecha instanceof Date ? embarque.fecha : (embarque.fecha ? new Date(embarque.fecha) : new Date());
           const snapshotOffline = this.construirSnapshotOfflineDesdeRemoto(embarque.id, embarque.data, fechaObj);
 
@@ -567,7 +638,7 @@ export default {
             const offlineDoc = existingOffline.docData || existingOffline;
             const remoteDoc = snapshotOffline.docData || snapshotOffline;
             if (embarqueTieneContenidoOperativoDoc(offlineDoc) && !embarqueTieneContenidoOperativoDoc(remoteDoc)) {
-              console.warn('[ListaEmbarques] Remoto vacío detectado, preservando snapshot offline para evitar pérdida de datos.', embarque.id);
+              console.warn('[ListaEmbarques] Remoto vacío detectado, preservando snapshot offline.', embarque.id);
               snapshotOffline.clientes = Array.isArray(existingOffline.clientes) ? existingOffline.clientes : snapshotOffline.clientes;
               snapshotOffline.productos = Array.isArray(existingOffline.productos) ? existingOffline.productos : snapshotOffline.productos;
               snapshotOffline.clienteCrudos = existingOffline.clienteCrudos || snapshotOffline.clienteCrudos;
@@ -577,8 +648,7 @@ export default {
           }
 
           await EmbarquesOfflineService.save(snapshotOffline, { pendingSync: false, syncState: 'synced' });
-          
-          // Normalizar la fecha para la lista
+
           const fechaNormalizada = normalizarFechaISO(fechaObj);
           const remoteDocParaContenido = embarque.data || {};
           const offlineDocParaContenido = existingOffline ? (existingOffline.docData || existingOffline) : null;
@@ -589,7 +659,7 @@ export default {
             ? (Array.isArray(existingOffline?.clientes) ? existingOffline.clientes : (existingOffline?.docData?.clientes || []))
             : (embarque.data.clientes || []);
 
-          embarquesFiltrados.push({
+          return {
             id: embarque.id,
             fecha: fechaNormalizada,
             fechaISO: fechaNormalizada,
@@ -598,25 +668,19 @@ export default {
             clientes: clientesParaLista,
             cargaCon: embarque.data.cargaCon || 'No especificado',
             camionNumero: embarque.data.camionNumero || 1,
-          });
-        }
+          };
+        }));
 
-        // Mezclar los embarques remotos con los que siguen pendientes en offline
-        // para evitar que desaparezcan mientras no se han sincronizado.
+        // Mezclar con pendientes offline para no perder registros no sincronizados
         const pendientesOffline = await EmbarquesOfflineService.getAll();
-        const listaPendientes = pendientesOffline
-          .map(this.mapOfflineRecordToLista)
-          .filter(Boolean);
-
         const mergedMap = new Map();
-        // Priorizar datos offline (incluyen pendingSync) pero permitir que los remotos los reemplacen
-        listaPendientes.forEach(emb => mergedMap.set(emb.id, emb));
+        pendientesOffline.map(this.mapOfflineRecordToLista).filter(Boolean)
+          .forEach(emb => mergedMap.set(emb.id, emb));
         embarquesFiltrados.forEach(emb => mergedMap.set(emb.id, emb));
 
-        const embarquesCombinados = Array.from(mergedMap.values())
-          .sort((a, b) => new Date(b.fecha || 0) - new Date(a.fecha || 0));
-
-        this.embarques = this.asignarCamionNumero(embarquesCombinados);
+        this.embarques = this.asignarCamionNumero(
+          Array.from(mergedMap.values()).sort((a, b) => new Date(b.fecha || 0) - new Date(a.fecha || 0))
+        );
       } catch (error) {
         console.error('Error al cargar embarques:', error);
         if (this.embarques.length === 0) {
@@ -2105,5 +2169,63 @@ export default {
   .info-label, .info-value {
     font-size: 1.1rem;
   }
+}
+
+/* Paginación */
+.paginacion {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 28px;
+  padding: 16px;
+  border-top: 1px solid var(--matrix-green-dim);
+  font-family: 'VT323', monospace;
+}
+
+.pag-btn {
+  background: transparent;
+  color: var(--matrix-green);
+  border: 1px solid var(--matrix-green-dim);
+  padding: 6px 14px;
+  font-family: 'VT323', monospace;
+  font-size: 1.2rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 36px;
+  text-align: center;
+}
+
+.pag-btn:hover:not(:disabled) {
+  background: var(--matrix-green);
+  color: var(--terminal-bg);
+  border-color: var(--matrix-green);
+  box-shadow: 0 0 12px var(--matrix-green-glow);
+}
+
+.pag-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.pag-activa {
+  background: var(--matrix-green);
+  color: var(--terminal-bg);
+  border-color: var(--matrix-green);
+  box-shadow: 0 0 12px var(--matrix-green-glow);
+}
+
+.pag-ellipsis {
+  border-color: transparent;
+  opacity: 0.5;
+}
+
+.pag-info {
+  color: var(--amber);
+  font-size: 1.1rem;
+  margin-left: 10px;
+  opacity: 0.85;
+  letter-spacing: 1px;
 }
 </style>
