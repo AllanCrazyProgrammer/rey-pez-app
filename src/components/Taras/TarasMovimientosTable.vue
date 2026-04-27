@@ -58,6 +58,8 @@
 </template>
 
 <script>
+import { formatearFecha } from '@/utils/formatters';
+
 export default {
   name: 'TarasMovimientosTable',
   props: {
@@ -80,6 +82,7 @@ export default {
     }
   },
   methods: {
+    formatearFecha,
     formatearCantidad(valor) {
       const numero = Number(valor) || 0;
       const prefijo = numero > 0 ? '+' : '';
