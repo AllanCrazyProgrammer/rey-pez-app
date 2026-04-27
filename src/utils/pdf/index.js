@@ -9,7 +9,7 @@ import {
   estilosResumenMedidasSacada,
   normalizarGruposListaMedidasParaPdf,
   TITULO_RESUMEN_MEDIDAS_DESDE_RENDIMIENTOS
-} from '../sacadasResumenPdf';
+} from './sacadas';
 
 // Configurar pdfMake al importar
 configurarPdfMake();

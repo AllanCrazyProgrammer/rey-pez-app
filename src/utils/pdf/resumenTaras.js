@@ -12,12 +12,12 @@ const COLORES_CLIENTES = {
 
 export function generarResumenTarasPDF(embarqueData, clientesDisponibles) {
   const doc = new jsPDF();
-  
+
   // Configurar el título con el estilo de Rey Pez
   doc.setFontSize(24);
   doc.setTextColor(55, 96, 176); // #3760b0 (azul Rey Pez)
   doc.text('Resumen de Taras', 14, 20);
-  
+
   // Fecha con nuevo estilo
   doc.setFontSize(18);
   doc.setTextColor(0, 0, 0);
@@ -108,7 +108,7 @@ function prepararDatosTabla(embarqueData, clientesDisponibles) {
   embarqueData.productos.forEach(producto => {
     const clienteId = producto.clienteId.toString();
     const clientePredefinido = clientesPredefinidos.find(c => c.id === clienteId);
-    
+
     // Solo procesar si es un cliente predefinido
     if (clientePredefinido) {
       const nombreCliente = clientePredefinido.nombre;
@@ -123,7 +123,7 @@ function prepararDatosTabla(embarqueData, clientesDisponibles) {
   if (embarqueData.clienteCrudos) {
     Object.entries(embarqueData.clienteCrudos).forEach(([clienteId, crudos]) => {
       const clientePredefinido = clientesPredefinidos.find(c => c.id === clienteId);
-      
+
       // Solo procesar si es un cliente predefinido
       if (clientePredefinido) {
         const nombreCliente = clientePredefinido.nombre;
@@ -141,7 +141,7 @@ function prepararDatosTabla(embarqueData, clientesDisponibles) {
     .map(([nombreCliente, datos]) => {
       const total = datos.abiertas + datos.cerradas;
       return [
-        { 
+        {
           content: nombreCliente,
           styles: { textColor: COLORES_CLIENTES[nombreCliente] || '#000000' }
         },
@@ -178,7 +178,7 @@ function calcularTarasCrudos(crudos) {
   return crudos.reduce((total, crudo) => {
     return total + crudo.items.reduce((itemTotal, item) => {
       let taras = 0;
-      
+
       // Procesar taras principales
       if (item.taras) {
         const [cantidad] = item.taras.split('-').map(Number);
@@ -186,7 +186,7 @@ function calcularTarasCrudos(crudos) {
           taras += cantidad;
         }
       }
-      
+
       // Procesar sobrantes
       if (item.sobrante) {
         const [cantidadSobrante] = item.sobrante.split('-').map(Number);
@@ -194,7 +194,7 @@ function calcularTarasCrudos(crudos) {
           taras += cantidadSobrante;
         }
       }
-      
+
       return itemTotal + taras;
     }, 0);
   }, 0);

@@ -1,6 +1,6 @@
 import pdfMake from 'pdfmake/build/pdfmake';
 import pdfFonts from 'pdfmake/build/vfs_fonts';
-import { generarResumenLimpios } from './resumenLimpios';
+import { generarResumenLimpios } from '../resumenLimpios';
 
 // Verificar y asignar vfs de manera segura
 if (typeof pdfFonts === 'object' && pdfFonts.hasOwnProperty('default')) {
@@ -44,10 +44,10 @@ const ordenarMedidas = (medidas) => {
     // Convertir a mayúsculas para la comparación
     const aUpper = a.toUpperCase();
     const bUpper = b.toUpperCase();
-    
+
     const indexA = ordenMedidas.findIndex(m => m.toUpperCase() === aUpper);
     const indexB = ordenMedidas.findIndex(m => m.toUpperCase() === bUpper);
-    
+
     // Si ambas medidas están en la lista de orden específico
     if (indexA !== -1 && indexB !== -1) {
       return indexA - indexB;
@@ -77,7 +77,7 @@ const ordenarTaras = (taras) => {
   const tarasPorMedida = {};
   taras.forEach(tara => {
     if (!tara) return; // Ignorar valores nulos o undefined
-    
+
     const medida = obtenerMedida(tara);
     if (!tarasPorMedida[medida]) {
       tarasPorMedida[medida] = [];
@@ -106,7 +106,7 @@ export const generarResumenEmbarquePDF = (embarque, productosPorCliente, obtener
   if (embarque.medidasCrudos && Array.isArray(embarque.medidasCrudos)) {
     medidasCrudos = embarque.medidasCrudos
       .map(medida => medida.replace('c/c', '').trim());
-    
+
     // Aplicar el ordenamiento específico
     medidasCrudos = ordenarMedidas([...new Set(medidasCrudos)]);
   }
@@ -179,13 +179,13 @@ export const generarResumenEmbarquePDF = (embarque, productosPorCliente, obtener
     { text: 'Cliente', style: 'tableHeader' },
     ...medidasCrudos.map(medida => {
       // Buscar si algún crudo con esta medida tiene textoAlternativo
-      const crudoConAlt = embarque.crudos.find(c => 
+      const crudoConAlt = embarque.crudos.find(c =>
         c.medida.replace('c/c', '').trim() === medida && c.textoAlternativo
       );
-      
+
       // Usar el textoAlternativo si existe
       const textoMostrado = crudoConAlt ? crudoConAlt.textoAlternativo : medida;
-      
+
       return { text: textoMostrado, style: 'tableHeader' };
     })
   ];
@@ -193,30 +193,30 @@ export const generarResumenEmbarquePDF = (embarque, productosPorCliente, obtener
   // Preparar datos de la tabla
   const tableData = [];
   const clienteIds = new Set(embarque.crudos.map(c => c.clienteId));
-  
+
   clienteIds.forEach(clienteId => {
     const nombreCliente = obtenerNombreCliente(clienteId);
     const nombreMostrado = nombreCliente === 'Joselito' ? '8A' : nombreCliente;
     const clienteColor = clienteColors[nombreCliente] || '#95a5a6'; // Color gris por defecto
-    
-    const row = [{ 
-      text: nombreMostrado, 
+
+    const row = [{
+      text: nombreMostrado,
       style: 'clienteCell',
       fillColor: clienteColor
     }];
-    
+
     // Llenar datos para cada medida
     medidasCrudos.forEach(medida => {
-      const crudosCliente = embarque.crudos.filter(c => 
-        c.clienteId === clienteId && 
+      const crudosCliente = embarque.crudos.filter(c =>
+        c.clienteId === clienteId &&
         c.medida.replace('c/c', '').trim() === medida
       );
-      
+
       if (crudosCliente.length > 0) {
         let todasLasTaras = [];
         let mostrarPrecio = false;
         let precio = null;
-        
+
         crudosCliente.forEach(crudo => {
           if (crudo.taras && Array.isArray(crudo.taras)) {
             todasLasTaras = todasLasTaras.concat(crudo.taras.filter(tara => tara));
@@ -227,22 +227,22 @@ export const generarResumenEmbarquePDF = (embarque, productosPorCliente, obtener
             precio = crudo.precio;
           }
         });
-        
+
         const tarasOrdenadas = ordenarTaras(todasLasTaras);
-        
+
         // Crear un stack con las taras y, si existe, el precio
         const contenido = [{ text: tarasOrdenadas.join('\n'), style: 'dataCell' }];
-        
+
         if (mostrarPrecio) {
-          contenido.push({ 
-            text: `$${Number(precio).toLocaleString('en-US')}`, 
-            color: 'red', 
+          contenido.push({
+            text: `$${Number(precio).toLocaleString('en-US')}`,
+            color: 'red',
             bold: true,
             fontSize: 16
           });
         }
-        
-        row.push({ 
+
+        row.push({
           stack: contenido,
           style: 'dataCell'
         });
@@ -250,26 +250,26 @@ export const generarResumenEmbarquePDF = (embarque, productosPorCliente, obtener
         row.push({ text: '', style: 'dataCell' });
       }
     });
-    
+
     tableData.push(row);
   });
 
   // Calcular totales por medida
-  const totalesRow = [{ 
-    text: 'TOTAL', 
+  const totalesRow = [{
+    text: 'TOTAL',
     style: 'total',
     fillColor: '#7f8c8d',
     alignment: 'center'
   }];
-  
+
   // Variable para almacenar el total general de todas las medidas
   let totalGeneral = 0;
-  
+
   // Calcular el total para cada medidaa
   medidasCrudos.forEach(medida => {
     // Mapa para almacenar las taras visibles en la tabla
     let tarasVisiblesPorMedida = [];
-    
+
     // Recorrer todos los clientes para esta medida
     embarque.crudos.forEach(crudo => {
       if (crudo.medida.replace('c/c', '').trim() === medida && crudo.taras && Array.isArray(crudo.taras)) {
@@ -281,7 +281,7 @@ export const generarResumenEmbarquePDF = (embarque, productosPorCliente, obtener
 
     // Ordenar las taras como se muestran en la tablaa
     const tarasOrdenadas = ordenarTaras(tarasVisiblesPorMedida);
-    
+
     // Sumar el primer número de cada tara (la cantidad)
     let totalTaras = 0;
     tarasOrdenadas.forEach(tara => {
@@ -296,18 +296,18 @@ export const generarResumenEmbarquePDF = (embarque, productosPorCliente, obtener
         totalTaras += parseInt(tara);
       }
     });
-    
+
     // Sumar al total general
     totalGeneral += totalTaras;
 
-    totalesRow.push({ 
-      text: totalTaras > 0 ? totalTaras.toString() : '', 
+    totalesRow.push({
+      text: totalTaras > 0 ? totalTaras.toString() : '',
       style: 'total',
       fillColor: '#7f8c8d',
       alignment: 'center'
     });
   });
-  
+
   // Agregar la fila de totales
   tableData.push(totalesRow);
 
@@ -340,7 +340,7 @@ export const generarResumenEmbarquePDF = (embarque, productosPorCliente, obtener
       paddingBottom: function(i) { return 4; }
     }
   });
-  
+
   // Agregar el gran total debajo de la tabla
   docDefinition.content.push({
     columns: [
@@ -353,15 +353,15 @@ export const generarResumenEmbarquePDF = (embarque, productosPorCliente, obtener
         table: {
           body: [
             [
-              { 
-                text: 'GRAN TOTAL:', 
-                bold: true, 
+              {
+                text: 'GRAN TOTAL:',
+                bold: true,
                 fontSize: 22 * scaleFactor,
                 alignment: 'right',
                 margin: [0, 0, 10, 0]
               },
-              { 
-                text: totalGeneral.toString(), 
+              {
+                text: totalGeneral.toString(),
                 bold: true,
                 fontSize: 22 * scaleFactor,
                 alignment: 'center'
@@ -393,10 +393,10 @@ export const generarResumenEmbarquePDF = (embarque, productosPorCliente, obtener
   ];
 
   const desglosePorMedida = [];
-  
+
   // Organizar datos por medida
   medidasCrudos.forEach(medida => {
-    const crudosDeMedida = embarque.crudos.filter(c => 
+    const crudosDeMedida = embarque.crudos.filter(c =>
       c.medida.replace('c/c', '').trim() === medida
     );
 
@@ -405,20 +405,20 @@ export const generarResumenEmbarquePDF = (embarque, productosPorCliente, obtener
       const primerCrudo = crudosDeMedida[0];
       const nombreCliente = obtenerNombreCliente(primerCrudo.clienteId);
       const nombreMostrado = nombreCliente === 'Joselito' ? '8A' : nombreCliente;
-      
+
       // Usar textoAlternativo si está disponible
       const medidaMostrada = primerCrudo.textoAlternativo || medida;
-      
+
       desglosePorMedida.push([
-        { 
-          text: medidaMostrada, 
-          style: 'dataCell', 
+        {
+          text: medidaMostrada,
+          style: 'dataCell',
           rowSpan: crudosDeMedida.length,
           alignment: 'center',
           verticalAlignment: 'middle'
         },
-        { 
-          text: nombreMostrado, 
+        {
+          text: nombreMostrado,
           style: 'clienteCell',
           fillColor: clienteColors[nombreCliente] || '#95a5a6'
         },
@@ -430,11 +430,11 @@ export const generarResumenEmbarquePDF = (embarque, productosPorCliente, obtener
         const crudo = crudosDeMedida[i];
         const nombreCliente = obtenerNombreCliente(crudo.clienteId);
         const nombreMostrado = nombreCliente === 'Joselito' ? '8A' : nombreCliente;
-        
+
         desglosePorMedida.push([
           '', // Celda vacía porque está usando rowSpan
-          { 
-            text: nombreMostrado, 
+          {
+            text: nombreMostrado,
             style: 'clienteCell',
             fillColor: clienteColors[nombreCliente] || '#95a5a6'
           },

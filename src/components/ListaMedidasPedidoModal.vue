@@ -153,7 +153,7 @@
 </template>
 
 <script>
-import { generarResumenMedidasSacadaPDF } from '@/utils/sacadasResumenPdf';
+import { generarResumenMedidasSacadaPDF } from '@/utils/pdf/sacadas';
 
 export default {
   name: 'ListaMedidasPedidoModal',

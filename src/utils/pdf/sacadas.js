@@ -53,7 +53,7 @@ const toSafeDate = (value) => {
 
   return String(value)
     .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[̀-ͯ]/g, '')
     .replace(/[^\w-]+/g, '-')
     .replace(/-+/g, '-')
     .replace(/^-|-$/g, '')
@@ -308,4 +308,3 @@ export const generarResumenMedidasSacadaPDF = async ({ fecha, grupos }) => {
 
   pdfMake.createPdf(docDefinition).download(filename);
 };
-

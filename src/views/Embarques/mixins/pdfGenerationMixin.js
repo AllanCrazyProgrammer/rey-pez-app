@@ -1,7 +1,7 @@
 // mixins/pdfGenerationMixin.js
 import { generarNotaVentaPDF } from "@/utils/pdfGenerator";
-import { generarResumenTarasPDF } from "@/utils/resumenTarasPdf";
-import { generarResumenEmbarquePDF } from "@/utils/resumenEmbarque2";
+import { generarResumenTarasPDF } from "@/utils/pdf/resumenTaras";
+import { generarResumenEmbarquePDF } from "@/utils/pdf/resumenEmbarque";
 
 export default {
   methods: {

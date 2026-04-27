@@ -331,7 +331,7 @@ import { collection, addDoc, getDocs, doc, getDoc, updateDoc, query, where } fro
 import BackButton from '../components/BackButton.vue';
 import ListaMedidasPedidoModal from '@/components/ListaMedidasPedidoModal.vue';
 import MedidasParaHoyCards from '@/components/MedidasParaHoyCards.vue';
-import { normalizarGruposListaMedidasParaPdf } from '@/utils/sacadasResumenPdf';
+import { normalizarGruposListaMedidasParaPdf } from '@/utils/pdf/sacadas';
 import moment from 'moment';
 import { formatNumber } from '@/utils/formatters';
 
