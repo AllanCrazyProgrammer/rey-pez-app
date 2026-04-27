@@ -375,15 +375,7 @@ export default {
         .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es', { numeric: true }));
     },
     medidaProveedorOptions() {
-      const opciones = [
-        ...this.medidas.filter((medida) => medida?.createdFromListaMedidasProveedor),
-        ...this.medidasLocales.filter((medida) => medida?.createdFromListaMedidasProveedor),
-        ...this.todosLosItems.map((item) => ({ nombre: item.medida }))
-      ]
-        .map((medida) => medida?.nombre || medida?.medida || medida?.descripcion || '')
-        .filter(Boolean);
-
-      return [...new Set(opciones)].sort((a, b) => a.localeCompare(b, 'es', { numeric: true }));
+      return this.medidasProveedorRegistradas.map((medida) => medida.nombre);
     },
     medidasProveedorRegistradas() {
       const medidas = [
