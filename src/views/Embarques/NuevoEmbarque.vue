@@ -610,6 +610,70 @@ export default {
   },
   
   methods: {
+    volverAEmbarquesMenu() {
+      this.$router.push({ name: 'EmbarquesMenu' });
+    },
+
+    async irARendimientos() {
+      try {
+        if (!this.embarqueId) {
+          const nuevoId = await this.guardarEmbarqueInicial();
+          if (!nuevoId) {
+            alert('Primero guarda el embarque antes de ver los rendimientos.');
+            return;
+          }
+          this.embarqueId = nuevoId;
+        }
+        await this.guardarCambiosEnTiempoReal(true, { immediate: true });
+        if (this.hasPendingChanges) {
+          await this.sincronizarConNube();
+        }
+        this.$router.push({ name: 'Rendimientos', params: { id: this.embarqueId } });
+      } catch (error) {
+        console.error('[Rendimientos] Error al guardar antes de navegar:', error);
+        alert('No se pudo guardar el embarque antes de abrir Rendimientos. Intenta de nuevo.');
+      }
+    },
+
+    async verificarFechaExistente(nuevaFecha) {
+      if (this.embarqueBloqueado) {
+        alert('El embarque está bloqueado. No se puede cambiar la fecha.');
+        return;
+      }
+      if (nuevaFecha === this.embarque.fecha) return;
+      try {
+        const fechaISO = normalizarFechaISO(nuevaFecha);
+        if (this.embarqueId) {
+          localStorage.setItem('ultimoEmbarqueId', this.embarqueId);
+        }
+        this.embarque.fecha = nuevaFecha;
+        this.embarque.camionNumero = await this.obtenerCamionNumeroParaFecha(fechaISO);
+        if (this.modoEdicion && this.embarqueId) {
+          this.guardarCambiosEnTiempoReal();
+        }
+      } catch (error) {
+        console.error('[verificarFechaExistente] Error:', error);
+        alert('Hubo un error al verificar la fecha. Por favor, intente nuevamente.');
+      }
+    },
+
+    async syncOffline() {
+      try {
+        await EmbarquesOfflineService.init();
+        const pendientes = await EmbarquesOfflineService.getPendingSync();
+        if (Array.isArray(pendientes) && pendientes.length > 0) {
+          for (const record of pendientes) {
+            await this.sincronizarRegistroOffline(record);
+          }
+        }
+        if (this.embarqueId) {
+          this.guardarCambiosEnTiempoReal();
+        }
+      } catch (error) {
+        console.error('[syncOffline] Error general al sincronizar embarques offline:', error);
+      }
+    },
+
     // Método para mostrar errores de autenticación
     mostrarErrorAutenticacion(mensaje = null) {
       this.authErrorMessage = mensaje || 'Su sesión ha expirado o hay un problema con su autenticación.';
