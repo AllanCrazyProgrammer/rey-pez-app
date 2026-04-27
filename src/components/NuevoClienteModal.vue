@@ -9,7 +9,9 @@
           id="nombreCliente" 
           v-model="nombreCliente"
           placeholder="Ingrese el nombre del cliente"
-          class="input-field">
+          class="input-field"
+          ref="nombreInput"
+          @keyup.enter="guardarCliente">
       </div>
       <div class="buttons-container">
         <button @click="guardarCliente" class="btn-guardar" :disabled="!nombreCliente.trim()">
@@ -37,12 +39,23 @@ export default {
       nombreCliente: ''
     }
   },
+  watch: {
+    mostrar(visible) {
+      if (visible) {
+        this.$nextTick(() => {
+          this.$refs.nombreInput?.focus()
+        })
+      } else {
+        this.nombreCliente = ''
+      }
+    }
+  },
   methods: {
     guardarCliente() {
-      if (this.nombreCliente.trim()) {
+      const nombre = this.nombreCliente.trim()
+      if (nombre) {
         this.$emit('guardar', {
-          id: this.nombreCliente.toLowerCase().replace(/\s+/g, '-'),
-          nombre: this.nombreCliente.trim()
+          nombre
         })
         this.nombreCliente = ''
       }

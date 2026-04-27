@@ -67,13 +67,13 @@
         <div v-for="(cliente, id) in clientesTemporales" :key="id" class="tab-wrapper">
           <div class="tab-cliente-container">
             <button 
-              @click="clienteActivo = cliente.id"
-              :class="['tab-button temporal', { 'active': clienteActivo === cliente.id }]"
+              @click="seleccionarClienteTemporal(id)"
+              :class="['tab-button temporal', { 'active': clienteActivo === id }]"
             >
-              {{ cliente.nombre }}
+              {{ cliente.nombre || 'Cliente sin nombre' }}
             </button>
             <button 
-              @click="confirmarEliminarCliente(cliente.id, cliente.nombre)"
+              @click="confirmarEliminarCliente(id, cliente.nombre)"
               class="btn-eliminar-cliente"
               title="Eliminar cliente"
             >
@@ -535,10 +535,10 @@
         <!-- Clientes Temporales -->
         <div v-for="(cliente, id) in clientesTemporales" 
              :key="id"
-             v-show="clienteActivo === cliente.id" 
+             v-show="clienteActivo === id" 
              class="cliente-seccion">
           <button 
-            @click="agregarFilaTemporal(cliente.id)" 
+            @click="agregarFilaTemporal(id)" 
             class="btn-agregar"
             :class="{
               'bg-otilio': clienteActivo === 'otilio',
@@ -558,8 +558,8 @@
                   <div class="label-container">
                     <label>Kilos:</label>
                     <div class="tara-checkbox">
-                      <input type="checkbox" v-model="item.esTara" :id="'tara' + cliente.id + index">
-                      <label :for="'tara' + cliente.id + index">T</label>
+                      <input type="checkbox" v-model="item.esTara" :id="'tara' + id + index">
+                      <label :for="'tara' + id + index">T</label>
                     </div>
                   </div>
                   <input type="number" v-model="item.kilos" class="input-field">
@@ -623,7 +623,7 @@
                   </select>
                 </div>
 
-                <button @click="eliminarPedidoTemporal(cliente.id, index)" class="btn-eliminar">
+                <button @click="eliminarPedidoTemporal(id, index)" class="btn-eliminar">
                   <i class="fas fa-trash"></i>
                 </button>
               </div>
@@ -702,6 +702,8 @@ const TIPO_DEFAULT_POR_CLIENTE = {
   ozuna: 'S/H20',
   temporal: ''
 }
+
+const CLIENTES_FIJOS = ['otilio', 'catarro', 'joselito', 'lorena', 'ozuna']
 
 export default {
   name: 'PedidosLimpio',
@@ -1106,7 +1108,7 @@ export default {
           this.pedidoJoselito = data.joselito || [];
           this.pedidoOzuna = data.ozuna || [];
           this.pedidoLorena = data.lorena || [];
-          this.clientesTemporales = data.clientesTemporales || {};
+          this.clientesTemporales = this.normalizarClientesTemporales(data.clientesTemporales || {});
           this.rendimientosGuardados = data.rendimientos || {};
           this.divisoresGuardados = data.divisores || {};
           this.completadosGuardados = data.completados || {};
@@ -1261,7 +1263,70 @@ export default {
       return [...pedidosIncompletos, ...pedidosCompletos];
     },
     isClienteTemporal(clienteId) {
-      return !['otilio', 'catarro', 'joselito', 'lorena', 'ozuna'].includes(clienteId);
+      return !CLIENTES_FIJOS.includes(clienteId);
+    },
+    crearPedidoTemporalVacio() {
+      return {
+        kilos: null,
+        medida: '',
+        tipo: '',
+        tipoOperacion: '',
+        esTara: false,
+        esProveedor: false,
+        proveedor: ''
+      };
+    },
+    normalizarTextoId(texto) {
+      return (texto || '')
+        .toString()
+        .trim()
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '');
+    },
+    generarClienteTemporalId(nombre, existentes = this.clientesTemporales) {
+      const base = this.normalizarTextoId(nombre) || `cliente-${Date.now()}`;
+      let id = `temporal-${base}`;
+      let contador = 2;
+
+      while (existentes[id]) {
+        id = `temporal-${base}-${contador}`;
+        contador += 1;
+      }
+
+      return id;
+    },
+    normalizarClientesTemporales(clientes) {
+      if (!clientes || typeof clientes !== 'object' || Array.isArray(clientes)) {
+        return {};
+      }
+
+      return Object.entries(clientes).reduce((normalizados, [id, cliente]) => {
+        if (!cliente) return normalizados;
+
+        const nombre = Array.isArray(cliente) ? id : (cliente.nombre || id);
+        const clienteId = this.isClienteTemporal(id) && !normalizados[id]
+          ? id
+          : this.generarClienteTemporalId(nombre, normalizados);
+
+        const clienteNormalizado = Array.isArray(cliente)
+          ? { id: clienteId, nombre, pedidos: cliente }
+          : {
+              id: clienteId,
+              nombre,
+              pedidos: Array.isArray(cliente.pedidos) ? cliente.pedidos : []
+            };
+
+        normalizados[clienteId] = clienteNormalizado;
+        return normalizados;
+      }, {});
+    },
+    seleccionarClienteTemporal(clienteId) {
+      if (this.clientesTemporales[clienteId]) {
+        this.clienteActivo = clienteId;
+      }
     },
     calcularTotalesTemporales(clienteId) {
       if (!this.clientesTemporales[clienteId]?.pedidos) return { tarasTotal: '0', kilosTotal: '0' };
@@ -1313,26 +1378,23 @@ export default {
       };
     },
     agregarClienteTemporal(nuevoCliente) {
+      const nombre = (nuevoCliente?.nombre || '').trim();
+      if (!nombre) return;
+
+      const id = this.generarClienteTemporalId(nombre);
       const clienteData = {
-        id: nuevoCliente.id,
-        nombre: nuevoCliente.nombre,
-        pedidos: []
+        id,
+        nombre,
+        pedidos: [this.crearPedidoTemporalVacio()]
       };
-      this.$set(this.clientesTemporales, nuevoCliente.id, clienteData);
-      this.clienteActivo = nuevoCliente.id;
+      this.$set(this.clientesTemporales, id, clienteData);
+      this.clienteActivo = id;
       this.mostrarModalNuevoCliente = false;
     },
     agregarFilaTemporal(clienteId) {
       if (!this.clientesTemporales[clienteId]) return;
       
-      this.clientesTemporales[clienteId].pedidos.unshift({
-        kilos: null,
-        medida: '',
-        tipo: '',
-        esTara: false,
-        esProveedor: false,
-        proveedor: ''
-      });
+      this.clientesTemporales[clienteId].pedidos.unshift(this.crearPedidoTemporalVacio());
     },
     eliminarPedidoTemporal(clienteId, index) {
       if (!this.clientesTemporales[clienteId]) return;
