@@ -88,6 +88,7 @@
                 placeholder="Escribe o selecciona medida"
                 autocomplete="off"
                 :inputmode="pedidoKeyboardEnabled[grupo.id] ? 'text' : 'none'"
+                @pointerdown="handlePedidoPointerDown($event, grupo.id)"
                 @focus="openPedidoDropdown(grupo.id)"
                 @click="handlePedidoClick(grupo.id)"
                 @blur="handlePedidoBlur(grupo.id)"
@@ -131,6 +132,7 @@
                 placeholder="Medida proveedor (ej. 67/90)"
                 autocomplete="off"
                 :inputmode="proveedorKeyboardEnabled[item.id] ? 'text' : 'none'"
+                @pointerdown="handleProveedorPointerDown($event, item.id)"
                 @focus="openProveedorDropdown(item.id)"
                 @click="handleProveedorClick(item.id)"
                 @blur="handleProveedorBlur(item.id)"
@@ -331,6 +333,8 @@ export default {
       closeProveedorDropdownTimer: null,
       pedidoKeyboardEnabled: {},
       proveedorKeyboardEnabled: {},
+      pedidoSuppressNextClick: {},
+      proveedorSuppressNextClick: {},
       quickMeasure: {
         nombre: '',
         targetGroupId: null,
@@ -448,6 +452,27 @@ export default {
     }
   },
   methods: {
+    shouldDelayMobileKeyboard() {
+      if (typeof window === 'undefined') return false;
+      return window.matchMedia?.('(pointer: coarse)').matches
+        || navigator.maxTouchPoints > 0
+        || 'ontouchstart' in window;
+    },
+    handleMobileKeyboardDelay(event, id, keyboardMapName, suppressMapName, openDropdown) {
+      if (!this.shouldDelayMobileKeyboard() || this[keyboardMapName][id]) {
+        return false;
+      }
+
+      event.preventDefault();
+      this.$set(this[suppressMapName], id, true);
+      openDropdown.call(this, id);
+
+      window.setTimeout(() => {
+        this.$set(this[keyboardMapName], id, true);
+      }, 0);
+
+      return true;
+    },
     openPedidoDropdown(groupId) {
       if (this.closePedidoDropdownTimer) {
         clearTimeout(this.closePedidoDropdownTimer);
@@ -455,7 +480,22 @@ export default {
       }
       this.activePedidoDropdownId = groupId;
     },
+    handlePedidoPointerDown(event, groupId) {
+      this.handleMobileKeyboardDelay(
+        event,
+        groupId,
+        'pedidoKeyboardEnabled',
+        'pedidoSuppressNextClick',
+        this.openPedidoDropdown
+      );
+    },
     handlePedidoClick(groupId) {
+      if (this.pedidoSuppressNextClick[groupId]) {
+        this.$set(this.pedidoSuppressNextClick, groupId, false);
+        this.openPedidoDropdown(groupId);
+        return;
+      }
+
       if (this.activePedidoDropdownId === groupId) {
         this.$set(this.pedidoKeyboardEnabled, groupId, true);
       }
@@ -477,8 +517,25 @@ export default {
     selectPedidoOption(grupo, medida) {
       grupo.medidaPedido = medida;
       this.activePedidoDropdownId = null;
+      this.$set(this.pedidoKeyboardEnabled, grupo.id, false);
+      this.$set(this.pedidoSuppressNextClick, grupo.id, false);
+    },
+    handleProveedorPointerDown(event, itemId) {
+      this.handleMobileKeyboardDelay(
+        event,
+        itemId,
+        'proveedorKeyboardEnabled',
+        'proveedorSuppressNextClick',
+        this.openProveedorDropdown
+      );
     },
     handleProveedorClick(itemId) {
+      if (this.proveedorSuppressNextClick[itemId]) {
+        this.$set(this.proveedorSuppressNextClick, itemId, false);
+        this.openProveedorDropdown(itemId);
+        return;
+      }
+
       if (this.activeProveedorDropdownId === itemId) {
         this.$set(this.proveedorKeyboardEnabled, itemId, true);
       }
@@ -507,6 +564,8 @@ export default {
     selectProveedorOption(item, medida) {
       item.medida = this.mergeAutocompleteSelection(item.medida, medida);
       this.activeProveedorDropdownId = null;
+      this.$set(this.proveedorKeyboardEnabled, item.id, false);
+      this.$set(this.proveedorSuppressNextClick, item.id, false);
     },
     getAutocompleteOptions(options, query, includeAll = false) {
       const value = this.normalizeAutocompleteText(query);
@@ -744,6 +803,13 @@ export default {
       return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
     },
     loadFromSacada() {
+      this.pedidoKeyboardEnabled = {};
+      this.proveedorKeyboardEnabled = {};
+      this.pedidoSuppressNextClick = {};
+      this.proveedorSuppressNextClick = {};
+      this.activePedidoDropdownId = null;
+      this.activeProveedorDropdownId = null;
+
       const existing = this.sacada?.listaMedidasPedido || [];
 
       if (!Array.isArray(existing) || existing.length === 0) {
