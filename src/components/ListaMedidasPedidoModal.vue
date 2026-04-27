@@ -471,7 +471,7 @@ export default {
 
       window.setTimeout(() => {
         this.$set(this[keyboardMapName], id, true);
-      }, 0);
+      }, 300);
 
       return true;
     },
