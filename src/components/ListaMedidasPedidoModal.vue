@@ -87,9 +87,10 @@
                 class="text-input"
                 placeholder="Escribe o selecciona medida"
                 autocomplete="off"
+                :inputmode="pedidoKeyboardEnabled[grupo.id] ? 'text' : 'none'"
                 @focus="openPedidoDropdown(grupo.id)"
-                @click="openPedidoDropdown(grupo.id)"
-                @blur="scheduleClosePedidoDropdown"
+                @click="handlePedidoClick(grupo.id)"
+                @blur="handlePedidoBlur(grupo.id)"
               />
               <div
                 v-if="activePedidoDropdownId === grupo.id"
@@ -129,9 +130,10 @@
                 class="text-input"
                 placeholder="Medida proveedor (ej. 67/90)"
                 autocomplete="off"
+                :inputmode="proveedorKeyboardEnabled[item.id] ? 'text' : 'none'"
                 @focus="openProveedorDropdown(item.id)"
-                @click="openProveedorDropdown(item.id)"
-                @blur="scheduleCloseProveedorDropdown"
+                @click="handleProveedorClick(item.id)"
+                @blur="handleProveedorBlur(item.id)"
               />
               <div
                 v-if="activeProveedorDropdownId === item.id"
@@ -327,6 +329,8 @@ export default {
       closePedidoDropdownTimer: null,
       activeProveedorDropdownId: null,
       closeProveedorDropdownTimer: null,
+      pedidoKeyboardEnabled: {},
+      proveedorKeyboardEnabled: {},
       quickMeasure: {
         nombre: '',
         targetGroupId: null,
@@ -451,6 +455,16 @@ export default {
       }
       this.activePedidoDropdownId = groupId;
     },
+    handlePedidoClick(groupId) {
+      if (this.activePedidoDropdownId === groupId) {
+        this.$set(this.pedidoKeyboardEnabled, groupId, true);
+      }
+      this.openPedidoDropdown(groupId);
+    },
+    handlePedidoBlur(groupId) {
+      this.$set(this.pedidoKeyboardEnabled, groupId, false);
+      this.scheduleClosePedidoDropdown();
+    },
     scheduleClosePedidoDropdown() {
       this.closePedidoDropdownTimer = setTimeout(() => {
         this.activePedidoDropdownId = null;
@@ -463,6 +477,16 @@ export default {
     selectPedidoOption(grupo, medida) {
       grupo.medidaPedido = medida;
       this.activePedidoDropdownId = null;
+    },
+    handleProveedorClick(itemId) {
+      if (this.activeProveedorDropdownId === itemId) {
+        this.$set(this.proveedorKeyboardEnabled, itemId, true);
+      }
+      this.openProveedorDropdown(itemId);
+    },
+    handleProveedorBlur(itemId) {
+      this.$set(this.proveedorKeyboardEnabled, itemId, false);
+      this.scheduleCloseProveedorDropdown();
     },
     openProveedorDropdown(itemId) {
       if (this.closeProveedorDropdownTimer) {
