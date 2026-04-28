@@ -1,6 +1,49 @@
 import { formatearPrecio, formatearNumero } from '../formatters';
 import { layoutTablaConTotal } from '../config';
 
+const redondearKilosParaGanancia = (kilos) => Math.floor(Number(kilos) || 0);
+
+const obtenerDetallesPorCliente = (ganancia) => (
+  Array.isArray(ganancia.detallesPorCliente) ? ganancia.detallesPorCliente : []
+);
+
+const calcularKilosEnterosParaGanancia = (ganancia) => {
+  const detallesPorCliente = obtenerDetallesPorCliente(ganancia);
+
+  if (detallesPorCliente.length > 0) {
+    return detallesPorCliente.reduce((total, detalle) => {
+      const kilosDetalle = detalle.totalEmbarcado ?? detalle.kilos;
+
+      return total + redondearKilosParaGanancia(kilosDetalle);
+    }, 0);
+  }
+
+  return redondearKilosParaGanancia(ganancia.totalEmbarcado);
+};
+
+const calcularGananciaTotalConKilosEnteros = (ganancia, gananciaUnitaria) => {
+  const detallesPorCliente = obtenerDetallesPorCliente(ganancia);
+
+  if (detallesPorCliente.length > 0) {
+    return detallesPorCliente.reduce((total, detalle) => {
+      const kilosDetalle = redondearKilosParaGanancia(detalle.totalEmbarcado ?? detalle.kilos);
+      const gananciaUnitariaDetalle = Number(detalle.gananciaUnitaria) || 0;
+
+      return total + Math.floor(gananciaUnitariaDetalle * kilosDetalle);
+    }, 0);
+  }
+
+  const kilosEnteros = redondearKilosParaGanancia(ganancia.totalEmbarcado);
+  return Math.floor((Number(gananciaUnitaria) || 0) * kilosEnteros);
+};
+
+const calcularGananciaMaquilaConKilosEnteros = (ganancia) => {
+  const kilosEnteros = calcularKilosEnterosParaGanancia(ganancia);
+  const precioMaquila = Number(ganancia.precioMaquila) || 0;
+
+  return Math.floor(precioMaquila * kilosEnteros);
+};
+
 export const generarTablaGanancias = (gananciasCalculadas, nombresMedidasPersonalizados, embarqueData, gananciasVisiblesMaquila = {}) => {
   // Verificar si hay datos de ganancias normales o de maquila
   const tieneGananciasNormales = gananciasCalculadas && Object.keys(gananciasCalculadas).length > 0;
@@ -24,8 +67,8 @@ export const generarTablaGanancias = (gananciasCalculadas, nombresMedidasPersona
   const filasGananciasNormales = gananciasVisibles.map(([medida, ganancia]) => {
     const nombreMedida = nombresMedidasPersonalizados[medida] || medida;
     const gananciaUnitaria = ganancia.gananciaUnitaria || 0;
-    const gananciaTotal = ganancia.gananciaTotal || 0;
-    const totalEmbarcado = ganancia.totalEmbarcado || 0;
+    const gananciaTotal = calcularGananciaTotalConKilosEnteros(ganancia, gananciaUnitaria);
+    const totalEmbarcado = calcularKilosEnterosParaGanancia(ganancia);
     const precioVenta = ganancia.precioVenta || 0;
     const costoBase = ganancia.costoBase || 0;
     const costoFinal = ganancia.costoFinal || 0;
@@ -73,8 +116,8 @@ export const generarTablaGanancias = (gananciasCalculadas, nombresMedidasPersona
   const filasGananciasMaquila = Object.entries(gananciasVisiblesMaquila).map(([medida, ganancia]) => {
     const nombreMedida = nombresMedidasPersonalizados[medida] || medida;
     const precioMaquila = ganancia.precioMaquila || 0;
-    const gananciaTotal = ganancia.gananciaTotal || 0;
-    const totalEmbarcado = ganancia.totalEmbarcado || 0;
+    const gananciaTotal = calcularGananciaMaquilaConKilosEnteros(ganancia);
+    const totalEmbarcado = calcularKilosEnterosParaGanancia(ganancia);
     
     return [
       `${nombreMedida} (Maquila)`,
@@ -109,12 +152,12 @@ export const generarTablaGanancias = (gananciasCalculadas, nombresMedidasPersona
   });
 
   // Calcular totales
-  const totalGananciasNormales = gananciasVisibles.reduce((total, [medida, ganancia]) => {
-    return total + (ganancia.gananciaTotal || 0);
+  const totalGananciasNormales = gananciasVisibles.reduce((total, [, ganancia]) => {
+    return total + calcularGananciaTotalConKilosEnteros(ganancia, ganancia.gananciaUnitaria || 0);
   }, 0);
 
   const totalGananciasMaquila = Object.values(gananciasVisiblesMaquila).reduce((total, ganancia) => {
-    return total + (ganancia.gananciaTotal || 0);
+    return total + calcularGananciaMaquilaConKilosEnteros(ganancia);
   }, 0);
 
   const totalGeneral = totalGananciasNormales + totalGananciasMaquila;
