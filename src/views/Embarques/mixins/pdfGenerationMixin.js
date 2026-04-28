@@ -10,7 +10,7 @@ export default {
      * @param {string} type - Tipo de PDF a generar ('cliente', 'taras', 'resumen', 'all')
      * @param {string} [clienteId] - ID del cliente (solo necesario para tipo 'cliente')
      */
-    async generarPDF(type, clienteId = null) {
+    async generarPDF(type, clienteId = null, options = {}) {
       // Configurar indicador de carga
       this.$set(this, "isGeneratingPdf", true);
       this.$set(this, "pdfType", clienteId ? `${type}-${clienteId}` : type);
@@ -27,7 +27,7 @@ export default {
             await this.generarPDFTaras();
             break;
           case "resumen":
-            await this.generarPDFResumen();
+            await this.generarPDFResumen(options.escala);
             break;
           default:
             throw new Error(`Tipo de PDF no soportado: ${type}`);
@@ -145,6 +145,13 @@ export default {
         this.clientesDisponibles,
         escala
       );
+    },
+
+    async generarPDFResumenConEscala() {
+      const escala = Number(this.escalaResumen) || 100;
+
+      await this.generarPDF("resumen", null, { escala });
+      this.mostrarEscalaResumen = false;
     },
 
     // Método auxiliar para preparar datos del resumen de embarque
