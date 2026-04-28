@@ -1,59 +1,183 @@
 <template>
   <div class="gestion-costos-container">
-    <div class="header-container">
-      <button @click="volverAEmbarque" class="btn-volver">
-        <i class="fas fa-arrow-left"></i> Volver al Embarque
-      </button>
-      <button @click="volverARendimientos" class="btn-rendimientos">
-        <i class="fas fa-chart-line"></i> Volver a Rendimientos
-      </button>
-      <h2>Gestión de Costos</h2>
+    <div class="hero-costos">
+      <div class="hero-actions">
+        <button @click="volverAEmbarque" class="btn-volver">
+          <i class="fas fa-arrow-left"></i> Volver al Embarque
+        </button>
+        <button @click="volverARendimientos" class="btn-rendimientos">
+          <i class="fas fa-chart-line"></i> Volver a Rendimientos
+        </button>
+      </div>
+      <div class="hero-copy">
+        <span class="eyebrow">Catálogo de medidas</span>
+        <h2>Gestión de Costos</h2>
+        <p>Actualiza costos por medida y proveedor sin salir del flujo del embarque.</p>
+      </div>
       <button @click="abrirModalNuevoCosto" class="btn-nuevo-costo">
         <i class="fas fa-plus"></i> Nueva Medida
       </button>
     </div>
 
-         <!-- Sección de medidas registradas -->
+    <div class="resumen-costos">
+      <div class="resumen-card">
+        <span>Registros activos</span>
+        <strong>{{ costosActivosLista.length }}</strong>
+      </div>
+      <div class="resumen-card">
+        <span>Limpios</span>
+        <strong>{{ medidasLimpiosVisibles.length }}</strong>
+      </div>
+      <div class="resumen-card">
+        <span>Crudos</span>
+        <strong>{{ medidasCrudosVisibles.length }}</strong>
+      </div>
+      <div class="resumen-card">
+        <span>Archivados</span>
+        <strong>{{ costosArchivadosLista.length }}</strong>
+      </div>
+    </div>
+
+    <!-- Sección de medidas registradas -->
     <div class="costos-section">
-      <h3>Medidas Registradas</h3>
+      <div class="section-title-row">
+        <div>
+          <h3>Medidas Registradas</h3>
+          <p>Registra costos por medida, proveedor y tipo.</p>
+        </div>
+        <div class="filtros-costos">
+          <input
+            v-model="filtrosCostos.busqueda"
+            class="input-filtro"
+            type="search"
+            placeholder="Buscar medida o proveedor"
+            aria-label="Buscar medida o proveedor"
+          >
+          <select v-model="filtrosCostos.proveedor" class="input-filtro" aria-label="Filtrar por proveedor">
+            <option value="">Todos los proveedores</option>
+            <option value="__sin_proveedor__">Sin proveedor</option>
+            <option
+              v-for="proveedor in proveedoresRegistradosOrdenados"
+              :key="proveedor"
+              :value="proveedor"
+            >
+              {{ proveedor }}
+            </option>
+          </select>
+        </div>
+      </div>
+
+      <div class="tabs-bar">
+        <button
+          class="tab-btn"
+          :class="{ activo: tabRegistradas === 'limpios' }"
+          @click="tabRegistradas = 'limpios'"
+        >
+          <i class="fas fa-fish"></i> Limpios
+          <span class="tab-count">{{ costosRegistradosFiltradosLimpios.length }}</span>
+        </button>
+        <button
+          class="tab-btn"
+          :class="{ activo: tabRegistradas === 'crudos' }"
+          @click="tabRegistradas = 'crudos'"
+        >
+          <i class="fas fa-shrimp"></i> Crudos
+          <span class="tab-count">{{ costosRegistradosFiltradosCrudos.length }}</span>
+        </button>
+        <button
+          class="tab-btn"
+          :class="{ activo: tabRegistradas === 'archivadas' }"
+          @click="tabRegistradas = 'archivadas'"
+        >
+          <i class="fas fa-archive"></i> Archivadas
+          <span class="tab-count">{{ costosArchivadosFiltrados.length }}</span>
+        </button>
+      </div>
       <div class="costos-grid">
-        <div v-for="(costoInfo, medida) in costosRegistrados" :key="medida" class="costo-card">
+        <div
+          v-for="grupo in medidasAgrupadasTabActual"
+          :key="grupo.medidaKey"
+          class="costo-card"
+          :class="{ 'costo-card-crudo': grupo.tipoCosto === 'crudo' }"
+        >
           <div class="costo-header">
-            <h4>{{ medida }}</h4>
+            <h4>{{ grupo.medida }}</h4>
             <div class="costo-actions">
-              <button @click="verHistorial(medida)" class="btn-historial">
-                <i class="fas fa-history"></i>
-              </button>
-              <button @click="eliminarMedida(medida)" class="btn-eliminar" :title="`Eliminar medida ${medida} completamente`">
-                <i class="fas fa-trash"></i>
+              <button @click="abrirModalNuevoCostoParaMedida(grupo.medida, grupo.tipoCosto)" class="btn-historial" title="Agregar proveedor">
+                <i class="fas fa-plus"></i>
               </button>
             </div>
           </div>
-          <div class="costo-info">
-            <p><strong>Costo Actual:</strong> ${{ costoInfo.costoBase.toFixed(2) }}</p>
-            <p><strong>Última Actualización:</strong> {{ formatearFecha(costoInfo.fecha) }}</p>
-            <button @click="editarCosto(medida)" class="btn-editar-costo">
-              <i class="fas fa-edit"></i> Editar Costo
-            </button>
+
+          <div class="proveedores-lista">
+            <div
+              v-for="costoInfo in grupo.proveedores"
+              :key="costoInfo.costoKey"
+              class="proveedor-row"
+              :class="{ activo: costoInfo.costoKey === proveedorActivoPorMedida[grupo.medidaKey], archivada: costoInfo.archivado }"
+              @click="!costoInfo.archivado && seleccionarProveedorActivo(grupo.medidaKey, costoInfo.costoKey)"
+            >
+              <div class="proveedor-row-radio">
+                <input
+                  v-if="!costoInfo.archivado"
+                  type="radio"
+                  :name="`activo-${grupo.medidaKey}`"
+                  :value="costoInfo.costoKey"
+                  :checked="costoInfo.costoKey === proveedorActivoPorMedida[grupo.medidaKey]"
+                  @click.stop="seleccionarProveedorActivo(grupo.medidaKey, costoInfo.costoKey)"
+                >
+                <i v-else class="fas fa-archive proveedor-row-archived-icon"></i>
+              </div>
+              <div class="proveedor-row-info">
+                <span class="proveedor-row-nombre">{{ costoInfo.proveedorNombre || 'Sin proveedor' }}</span>
+                <span class="proveedor-row-costo">${{ Number(costoInfo.costoBase).toFixed(2) }}</span>
+                <span class="proveedor-row-fecha">{{ formatearFecha(costoInfo.fecha) }}</span>
+              </div>
+              <div class="proveedor-row-actions" @click.stop>
+                <button @click="editarCosto(costoInfo)" class="btn-mini" title="Editar"><i class="fas fa-edit"></i></button>
+                <button @click="verHistorial(costoInfo)" class="btn-mini" title="Historial"><i class="fas fa-history"></i></button>
+                <button v-if="!costoInfo.archivado" @click="archivarMedida(costoInfo)" class="btn-mini btn-mini-muted" title="Archivar"><i class="fas fa-archive"></i></button>
+                <button v-else @click="restaurarMedida(costoInfo)" class="btn-mini btn-mini-green" title="Restaurar"><i class="fas fa-box-open"></i></button>
+                <button @click="eliminarMedida(costoInfo)" class="btn-mini btn-mini-danger" title="Eliminar"><i class="fas fa-trash"></i></button>
+              </div>
+            </div>
           </div>
+        </div>
+        <div v-if="medidasAgrupadasTabActual.length === 0" class="empty-state">
+          <i :class="tabRegistradas === 'archivadas' ? 'fas fa-archive' : 'fas fa-search'"></i>
+          <p v-if="tabRegistradas === 'archivadas'">No hay medidas archivadas.</p>
+          <p v-else-if="tabRegistradas === 'crudos'">No hay medidas de crudos registradas.</p>
+          <p v-else>No hay medidas de limpios que coincidan.</p>
         </div>
       </div>
     </div>
 
-    <!-- Sección de medidas del embarque -->
+    <!-- Sección de medidas del embarque con tabs -->
     <div class="medidas-embarque-section" v-if="embarqueData">
       <div class="seccion-header">
-        <h3>Medidas del Embarque Actual</h3>
-        <button @click="sincronizarCostos" class="btn-sincronizar" title="Sincronizar costos con los valores más recientes">
-          <i class="fas fa-sync-alt"></i> Sincronizar Costos
+        <h3>Medidas del Embarque</h3>
+        <div class="seccion-header-actions">
+          <button @click="sincronizarCostos" class="btn-sincronizar" title="Sincronizar costos">
+            <i class="fas fa-sync-alt"></i> Sincronizar
+          </button>
+          <button @click="sugerirCrearMedidasFaltantes" class="btn-crear-medidas" title="Crear medidas faltantes">
+            <i class="fas fa-plus-circle"></i> Crear Faltantes
+          </button>
+        </div>
+      </div>
+
+      <div class="tabs-bar">
+        <button class="tab-btn" :class="{ activo: tabEmbarque === 'limpios' }" @click="tabEmbarque = 'limpios'">
+          <i class="fas fa-fish"></i> Limpios
+          <span class="tab-count">{{ medidasLimpiosVisibles.length }}</span>
         </button>
-        <button @click="sugerirCrearMedidasFaltantes" class="btn-crear-medidas" title="Crear medidas faltantes">
-          <i class="fas fa-plus-circle"></i> Crear Medidas Faltantes
+        <button class="tab-btn tab-btn-crudo" :class="{ activo: tabEmbarque === 'crudos' }" @click="tabEmbarque = 'crudos'">
+          <i class="fas fa-shrimp"></i> Crudos
+          <span class="tab-count">{{ medidasCrudosVisibles.length }}</span>
         </button>
       </div>
-      
-      <!-- Campo de costo extra -->
-      <div class="costo-extra-section">
+
+      <div v-if="tabEmbarque === 'limpios'" class="costo-extra-section">
         <label for="costoExtra">Costo Extra:</label>
         <input 
           type="number" 
@@ -67,9 +191,14 @@
         >
         <span class="input-help">Se suma al cálculo del costo final</span>
       </div>
-      
+
       <div class="medidas-grid">
-        <div v-for="medida in medidasVisibles" :key="`${medida}-${costosEmbarque[medida] || 'global'}`" class="medida-card">
+        <div
+          v-for="medida in medidasEmbarqueTabActual"
+          :key="`emb-${tabEmbarque}-${medida}`"
+          class="medida-card"
+          :class="{ 'medida-card-crudo': tabEmbarque === 'crudos' }"
+        >
           <div class="medida-header">
             <h4>{{ medida }}</h4>
             <div class="medida-actions">
@@ -82,7 +211,7 @@
                 <span class="checkmark"></span>
                 Mostrar en PDF
               </label>
-              <label class="checkbox-container">
+              <label v-if="tabEmbarque === 'limpios'" class="checkbox-container">
                 <input 
                   type="checkbox" 
                   v-model="aplicarCostoExtra[medida]"
@@ -96,28 +225,28 @@
           <div class="medida-info">
             <div class="costo-container">
               <div class="costo-valor">
-                <div class="costo-display" @click="editarCostoEmbarque(medida)" :class="{ 'clickeable': true, 'costo-especifico': costosEmbarque[medida] }">
+                <div class="costo-display" @click="editarCostoEmbarque(medida)" :class="{ 'clickeable': true, 'costo-especifico': tieneCostoEspecifico(medida) }">
                   <strong>Costo:</strong> 
                   <span class="costo-amount">${{ costosActuales[medida] || '0.00' }}</span>
-                  <span v-if="costosEmbarque[medida]" class="badge-especifico">Específico</span>
+                  <span v-if="tieneCostoEspecifico(medida)" class="badge-especifico">Manual</span>
                   <i class="fas fa-edit costo-edit-icon"></i>
                 </div>
                 <div class="costo-origen">
-                  <span v-if="costosEmbarque[medida]" class="costo-especifico">
-                    <i class="fas fa-ship"></i> Costo específico del embarque
+                  <span v-if="tieneCostoEspecifico(medida)" class="costo-especifico">
+                    <i class="fas fa-ship"></i> Costo manual del embarque
                     <button @click.stop="limpiarCostoEspecifico(medida)" class="btn-limpiar-costo" title="Volver al costo global">
                       <i class="fas fa-times"></i>
                     </button>
                   </span>
                   <span v-else-if="encontrarCostoParaMedida(medida)" class="costo-global">
-                    <i class="fas fa-globe"></i> Costo global ({{ encontrarCostoParaMedida(medida).medidaEncontrada }})
+                    <i class="fas fa-globe"></i> {{ describirOrigenCosto(medida) }}
                   </span>
                   <span v-else class="sin-costo">
                     <i class="fas fa-exclamation-triangle"></i> Sin costo asignado
                   </span>
                 </div>
               </div>
-              <div v-if="(costosEmbarque[medida] || encontrarCostoParaMedida(medida)) && rendimientos[medida]" class="costo-calculado">
+              <div v-if="tabEmbarque === 'limpios' && (tieneCostoEspecifico(medida) || encontrarCostoParaMedida(medida)) && rendimientos[medida]" class="costo-calculado">
                 <strong>Costo Final: ${{ calcularCostoFinal(medida) }}</strong>
                 <span v-if="aplicarCostoExtra[medida]" class="costo-extra-indicator">
                   (+ ${{ costoExtra }} extra)
@@ -129,36 +258,20 @@
             </p>
           </div>
         </div>
+        <div v-if="medidasEmbarqueTabActual.length === 0" class="empty-state">
+          <i class="fas fa-inbox"></i>
+          <p>No hay medidas de {{ tabEmbarque }} en este embarque.</p>
+        </div>
       </div>
     </div>
 
          <!-- Modales para gestión de costos -->
-    <MedidaModal
-      :mostrar="mostrarModalNuevaMedida"
-      :medida="nuevaMedida.nombre"
-      @cerrar="cerrarModalNuevaMedida"
-      @guardar="siguienteNuevaMedida"
-    />
-    
-    <CostoModal
-      :mostrar="mostrarModalNuevoCosto"
-      :costo="nuevaMedida.costo"
-      :medida="nuevaMedida.nombre"
-      :esNuevo="true"
-      @cerrar="cerrarModalNuevoCosto"
-      @guardar="guardarNuevoCosto"
-    />
-    
-    <CostoModal
-      :mostrar="mostrarModalEditarCosto"
-      :costo="costoEditando.costo"
-      :medida="costoEditando.medida"
-      :esNuevo="false"
-      :costoAnterior="costoEditando.costoAnterior"
-      :fechaUltimaActualizacion="costoEditando.fechaUltimaActualizacion"
-      :fecha="costoEditando.fecha"
-      @cerrar="cerrarModalEditarCosto"
-      @guardar="guardarCostoEditado"
+    <CostoProveedorModal
+      :mostrar="mostrarModalCostoProveedor"
+      :registro="costoProveedorEditando"
+      :esEdicion="modoEdicionCostoProveedor"
+      @cerrar="cerrarModalCostoProveedor"
+      @guardar="guardarCostoProveedor"
     />
     
     <CostoModal
@@ -195,6 +308,9 @@
                 <div class="historial-fecha">
                   {{ formatearFechaCompleta(entrada.fecha) }}
                 </div>
+                <div class="historial-proveedor">
+                  Proveedor: {{ entrada.proveedorNombre || 'Sin proveedor' }}
+                </div>
                 <div v-if="entrada.observacion" class="historial-observacion">
                   <em>{{ entrada.observacion }}</em>
                 </div>
@@ -216,10 +332,10 @@
 </template>
 
 <script>
-import { getFirestore, doc, getDoc, updateDoc, collection, onSnapshot, setDoc, addDoc, deleteDoc, query, where, getDocs } from 'firebase/firestore';
+import { getFirestore, doc, getDoc, updateDoc, collection, onSnapshot, addDoc, deleteDoc, query, where, getDocs } from 'firebase/firestore';
 import { debounce } from 'lodash';
 import CostoModal from './CostoModal.vue';
-import MedidaModal from './MedidaModal.vue';
+import CostoProveedorModal from './CostoProveedorModal.vue';
 import { formatearFecha } from '@/utils/formatters';
 
 export default {
@@ -227,39 +343,47 @@ export default {
   
   components: {
     CostoModal,
-    MedidaModal
+    CostoProveedorModal
   },
   
   data() {
     return {
       embarqueData: null,
       medidasEmbarque: [],
+      medidasLimpios: [],
+      medidasCrudos: [],
       costosRegistrados: {},
       costosRegistradosPorFecha: {},
       costosEmbarque: {},
+      costosEmbarqueManuales: {},
+      filtrosCostos: {
+        busqueda: '',
+        proveedor: ''
+      },
+      tabRegistradas: 'limpios',
+      tabEmbarque: 'limpios',
+      proveedorActivoPorMedida: {},
       medidaSeleccionada: {},
       medidaOculta: {}, // Para el sistema de ocultación en PDF
       aplicarCostoExtra: {}, // Para controlar a qué medidas aplicar costo extra
       rendimientos: {},
       costoExtra: 18, // Valor por defecto
-      mostrarModalNuevaMedida: false,
-      mostrarModalNuevoCosto: false,
-      mostrarModalEditarCosto: false,
+      mostrarModalCostoProveedor: false,
+      modoEdicionCostoProveedor: false,
       mostrarModalCostoEmbarque: false,
       mostrarModalHistorial: false,
       medidaSeleccionadaHistorial: '',
       historialCostos: [],
       cargandoHistorial: false,
-      nuevaMedida: {
-        nombre: '',
-        costo: 0
-      },
-      costoEditando: {
+      costoProveedorEditando: {
         medida: '',
         costo: 0,
         costoAnterior: null,
-        fechaUltimaActualizacion: '',
-        fecha: ''
+        fecha: '',
+        proveedorId: '',
+        proveedorNombre: '',
+        tipoCosto: 'limpio',
+        costoKey: ''
       },
       costoEmbarqueEditando: {
         medida: '',
@@ -281,6 +405,59 @@ export default {
 
   methods: {
     formatearFecha,
+    normalizarProveedor(proveedor) {
+      return (proveedor || '').toString().trim().toLowerCase().replace(/\s+/g, ' ');
+    },
+
+    obtenerProveedorNombre(entrada = {}) {
+      return entrada.proveedorNombre || entrada.proveedor || '';
+    },
+
+    generarCostoKey(medida, proveedorNombre = '') {
+      const medidaNormalizada = this.normalizarMedida(medida);
+      const proveedorNormalizado = this.normalizarProveedor(proveedorNombre) || 'sin-proveedor';
+      return `${medidaNormalizada}__${proveedorNormalizado}`;
+    },
+
+    hidratarEntradaCosto(entrada) {
+      const proveedorNombre = this.obtenerProveedorNombre(entrada);
+      const costoKey = this.generarCostoKey(entrada.medida, proveedorNombre);
+
+      return {
+        ...entrada,
+        costoKey,
+        proveedorNombre,
+        proveedorId: entrada.proveedorId || '',
+        tipoCosto: entrada.tipoCosto || 'limpio'
+      };
+    },
+
+    tieneCostoEspecifico(medida) {
+      return Object.prototype.hasOwnProperty.call(this.costosEmbarqueManuales, medida);
+    },
+
+    obtenerCostoEspecifico(medida) {
+      if (!this.tieneCostoEspecifico(medida)) return null;
+      return this.costosEmbarqueManuales[medida];
+    },
+
+    describirOrigenCosto(medida) {
+      const costo = this.encontrarCostoParaMedida(medida);
+      if (!costo) return 'Sin costo asignado';
+
+      if (costo.tipoCoincidencia === 'medida-proveedor') {
+        return `Coincidencia medida + proveedor (${costo.medidaEncontrada} - ${costo.proveedorNombre})`;
+      }
+
+      if (costo.tipoCoincidencia === 'proveedor-activo') {
+        return `Proveedor activo (${costo.medidaEncontrada} - ${costo.proveedorNombre || 'Sin proveedor'})`;
+      }
+
+      return costo.proveedorNombre
+        ? `Costo global (${costo.medidaEncontrada} - ${costo.proveedorNombre})`
+        : `Costo global (${costo.medidaEncontrada})`;
+    },
+
     async cargarEmbarque() {
       try {
         console.log('[GestionCostos] Cargando embarque...');
@@ -308,7 +485,9 @@ export default {
           this.medidaOculta = this.embarqueData.medidaOculta || {}; // Cargar configuración de ocultación
           this.aplicarCostoExtra = this.embarqueData.aplicarCostoExtra || {}; // Cargar configuración de costo extra
           this.costosEmbarque = this.embarqueData.costosPorMedida || {};
-          this.costoExtra = this.embarqueData.costoExtra || 18;
+          this.costosEmbarqueManuales = this.embarqueData.costosPorMedidaManuales || {};
+          this.proveedorActivoPorMedida = this.embarqueData.proveedorActivoPorMedida || {};
+          this.costoExtra = this.embarqueData.costoExtra ?? 18;
           this.calcularRendimientos();
           // Inicializar configuración de costo extra si no existe
           await this.inicializarConfiguracionCostoExtra();
@@ -323,30 +502,26 @@ export default {
     obtenerMedidasEmbarque() {
       if (!this.embarqueData || !this.embarqueData.clientes) return;
       
-      const medidasSet = new Set();
+      const limpiosSet = new Set();
+      const crudosSet = new Set();
       
       this.embarqueData.clientes.forEach(cliente => {
-        // Procesar productos normales
         cliente.productos.forEach(producto => {
           if (producto.medida) {
             let nombreMedida = producto.medida;
-            
-            // Aplicar lógica de Ozuna si aplica
             if (cliente.nombre === 'Ozuna' && !producto.esVenta) {
               nombreMedida = `${producto.medida} Maquila Ozuna`;
             }
-            
-            medidasSet.add(nombreMedida);
+            limpiosSet.add(nombreMedida);
           }
         });
 
-        // Procesar crudos también
         if (cliente.crudos && Array.isArray(cliente.crudos)) {
           cliente.crudos.forEach(crudo => {
             if (crudo && crudo.items && Array.isArray(crudo.items)) {
               crudo.items.forEach(item => {
                 if (item.talla) {
-                  medidasSet.add(item.talla);
+                  crudosSet.add(item.talla);
                 }
               });
             }
@@ -354,7 +529,9 @@ export default {
         }
       });
       
-      this.medidasEmbarque = Array.from(medidasSet);
+      this.medidasLimpios = Array.from(limpiosSet);
+      this.medidasCrudos = Array.from(crudosSet);
+      this.medidasEmbarque = [...new Set([...this.medidasLimpios, ...this.medidasCrudos])];
     },
 
     calcularRendimientos() {
@@ -437,21 +614,19 @@ export default {
     },
 
     calcularCostoFinal(medida) {
-      // Usar el costo actual (específico del embarque o global)
       let costo = 0;
-      if (this.costosEmbarque[medida]) {
-        costo = Number(this.costosEmbarque[medida]);
-      } else {
-        const costoGlobal = this.encontrarCostoParaMedida(medida);
-        if (costoGlobal) {
-          costo = Number(costoGlobal.costo);
-        }
+      const costoGlobal = this.encontrarCostoParaMedida(medida);
+      if (costoGlobal) {
+        costo = Number(costoGlobal.costo);
+      } else if (this.tieneCostoEspecifico(medida)) {
+        costo = Number(this.obtenerCostoEspecifico(medida));
       }
       
       const rendimientoOriginal = Number(this.rendimientos[medida]) || 0;
       // Usar rendimiento redondeado a 2 decimales (igual que se muestra en la UI)
       const rendimiento = Math.round(rendimientoOriginal * 100) / 100;
-      const costoExtra = Number(this.costoExtra) || 18;
+      const costoExtraNumerico = Number(this.costoExtra);
+      const costoExtra = Number.isNaN(costoExtraNumerico) ? 18 : costoExtraNumerico;
       
       // Verificar si está marcado para aplicar costo extra
       const aplicarExtra = this.aplicarCostoExtra[medida] || false;
@@ -524,30 +699,45 @@ export default {
           const medidasGlobalesProcesadas = new Set();
           const medidasEmbarqueProcesadas = new Set();
           
-          historialCompleto.forEach(entrada => {
-            if (entrada.eliminado || entrada.medidaEliminada) return;
+          historialCompleto.forEach(entradaOriginal => {
+            if (entradaOriginal.eliminado || entradaOriginal.medidaEliminada) return;
+
+            const entrada = this.hidratarEntradaCosto(entradaOriginal);
 
             const fechaCosto = toDate(entrada.fecha) || toDate(entrada.timestamp) || new Date(0);
             fechaCosto.setHours(12, 0, 0, 0);
 
-            if (!medidasGlobalesProcesadas.has(entrada.medida)) {
-              costosGlobales[entrada.medida] = {
+            if (!medidasGlobalesProcesadas.has(entrada.costoKey)) {
+              costosGlobales[entrada.costoKey] = {
+                costoKey: entrada.costoKey,
+                medida: entrada.medida,
+                proveedorId: entrada.proveedorId,
+                proveedorNombre: entrada.proveedorNombre,
+                tipoCosto: entrada.tipoCosto || 'limpio',
+                archivado: Boolean(entrada.archivado),
                 costoBase: entrada.costoBase,
                 fecha: entrada.fecha,
                 timestamp: entrada.timestamp,
                 id: entrada.id
               };
-              medidasGlobalesProcesadas.add(entrada.medida);
+              medidasGlobalesProcesadas.add(entrada.costoKey);
             }
 
-            if (!medidasEmbarqueProcesadas.has(entrada.medida) && fechaCosto <= fechaEmb) {
-              costosValidosParaEmbarque[entrada.medida] = {
+            if (!medidasEmbarqueProcesadas.has(entrada.costoKey) && fechaCosto <= fechaEmb && !entrada.archivado) {
+              medidasEmbarqueProcesadas.add(entrada.costoKey);
+
+              costosValidosParaEmbarque[entrada.costoKey] = {
+                costoKey: entrada.costoKey,
+                medida: entrada.medida,
+                proveedorId: entrada.proveedorId,
+                proveedorNombre: entrada.proveedorNombre,
+                tipoCosto: entrada.tipoCosto || 'limpio',
+                archivado: false,
                 costoBase: entrada.costoBase,
                 fecha: entrada.fecha,
                 timestamp: entrada.timestamp,
                 id: entrada.id
               };
-              medidasEmbarqueProcesadas.add(entrada.medida);
             }
           });
 
@@ -583,126 +773,181 @@ export default {
 
     // Métodos de diagnóstico eliminados
 
-    abrirModalNuevoCosto() {
-      this.mostrarModalNuevaMedida = true;
-      this.nuevaMedida = { nombre: '', costo: 0 };
-    },
-
-    cerrarModalNuevaMedida() {
-      this.mostrarModalNuevaMedida = false;
-      this.nuevaMedida = { nombre: '', costo: 0 };
-    },
-
-    siguienteNuevaMedida(nombreMedida) {
-      this.nuevaMedida.nombre = nombreMedida;
-      this.mostrarModalNuevaMedida = false;
-      this.mostrarModalNuevoCosto = true;
-    },
-
-    cerrarModalNuevoCosto() {
-      this.mostrarModalNuevoCosto = false;
-      this.nuevaMedida = { nombre: '', costo: 0 };
-    },
-
-    async guardarNuevoCosto(data) {
-      if (!this.nuevaMedida.nombre.trim()) {
-        alert('Por favor ingrese el nombre de la medida');
-        return;
-      }
-
+    async seleccionarProveedorActivo(medidaKey, costoKey) {
+      this.$set(this.proveedorActivoPorMedida, medidaKey, costoKey);
       try {
         const db = getFirestore();
+        const embarqueId = this.$route.params.id;
+        const embarqueRef = doc(db, 'embarques', embarqueId);
+        await updateDoc(embarqueRef, {
+          proveedorActivoPorMedida: this.proveedorActivoPorMedida
+        });
+      } catch (error) {
+        console.error('Error al guardar proveedor activo:', error);
+      }
+    },
+
+    abrirModalNuevoCostoParaMedida(medida, tipoCosto) {
+      this.modoEdicionCostoProveedor = false;
+      this.costoProveedorEditando = {
+        medida,
+        costo: '',
+        costoAnterior: null,
+        fecha: new Date().toISOString().split('T')[0],
+        proveedorId: '',
+        proveedorNombre: '',
+        tipoCosto: tipoCosto || 'limpio',
+        costoKey: ''
+      };
+      this.mostrarModalCostoProveedor = true;
+    },
+
+    abrirModalNuevoCosto() {
+      this.modoEdicionCostoProveedor = false;
+      this.costoProveedorEditando = {
+        medida: '',
+        costo: '',
+        costoAnterior: null,
+        fecha: new Date().toISOString().split('T')[0],
+        proveedorId: '',
+        proveedorNombre: '',
+        tipoCosto: this.tabRegistradas === 'crudos' ? 'crudo' : 'limpio',
+        costoKey: ''
+      };
+      this.mostrarModalCostoProveedor = true;
+    },
+
+    cerrarModalCostoProveedor() {
+      this.mostrarModalCostoProveedor = false;
+      this.modoEdicionCostoProveedor = false;
+      this.costoProveedorEditando = {
+        medida: '',
+        costo: '',
+        costoAnterior: null,
+        fecha: new Date().toISOString().split('T')[0],
+        proveedorId: '',
+        proveedorNombre: '',
+        tipoCosto: 'limpio',
+        costoKey: ''
+      };
+    },
+
+    async guardarCostoProveedor(data) {
+      try {
+        const db = getFirestore();
+        const proveedorNombre = data.proveedorNombre || '';
+
         const fecha = new Date(data.fecha);
         fecha.setHours(12, 0, 0, 0); // Establecer la hora a 12:00 PM
+        const costoKey = this.generarCostoKey(data.medida, proveedorNombre);
         
-        // Solo agregar al historial (no más precios_globales)
         await addDoc(collection(db, 'historial_costos'), {
-          medida: this.nuevaMedida.nombre,
-          costoBase: Number(data.costo || 0),
+          medida: data.medida,
+          proveedorId: '',
+          proveedorNombre,
+          tipoCosto: data.tipoCosto || 'limpio',
+          costoKey,
+          costoBase: Number(data.costo ?? 0),
+          archivado: false,
           timestamp: fecha,
           fecha: data.fecha,
-          nuevo: true
+          nuevo: !this.modoEdicionCostoProveedor
         });
 
-        this.cerrarModalNuevoCosto();
-        console.log('Nuevo costo guardado correctamente');
+        this.cerrarModalCostoProveedor();
+        console.log('Costo guardado correctamente');
       } catch (error) {
-        console.error('Error al guardar el nuevo costo:', error);
+        console.error('Error al guardar el costo:', error);
         alert('Error al guardar el costo');
       }
     },
 
-    editarCosto(medida) {
-      const costoInfo = this.costosRegistrados[medida];
-      this.costoEditando = {
-        medida: medida,
+    editarCosto(costoInfo) {
+      this.modoEdicionCostoProveedor = true;
+      this.costoProveedorEditando = {
+        medida: costoInfo.medida,
         costo: costoInfo.costoBase,
         costoAnterior: costoInfo.costoBase,
-        fechaUltimaActualizacion: this.formatearFecha(costoInfo.fecha),
-        fecha: this.obtenerFechaParaInput(costoInfo.fecha)
+        fecha: this.obtenerFechaParaInput(costoInfo.fecha),
+        proveedorId: costoInfo.proveedorId || '',
+        proveedorNombre: costoInfo.proveedorNombre || '',
+        tipoCosto: costoInfo.tipoCosto || 'limpio',
+        costoKey: costoInfo.costoKey || ''
       };
-      this.mostrarModalEditarCosto = true;
+      this.mostrarModalCostoProveedor = true;
     },
 
-    cerrarModalEditarCosto() {
-      this.mostrarModalEditarCosto = false;
-      this.costoEditando = {
-        medida: '',
-        costo: 0,
-        costoAnterior: null,
-        fechaUltimaActualizacion: '',
-        fecha: ''
-      };
-    },
+    async cambiarArchivoMedida(costoInfo, archivado) {
+      const proveedorLabel = costoInfo.proveedorNombre || 'Sin proveedor';
+      const accion = archivado ? 'archivar' : 'restaurar';
+      const mensaje = archivado
+        ? `¿Archivar "${costoInfo.medida}" de "${proveedorLabel}"? Se ocultará de la vista activa sin borrar su historial.`
+        : `¿Restaurar "${costoInfo.medida}" de "${proveedorLabel}" a la vista activa?`;
 
-    async guardarCostoEditado(data) {
+      if (!confirm(mensaje)) return;
+
       try {
         const db = getFirestore();
-        const medida = this.costoEditando.medida;
+        const fecha = new Date();
+        fecha.setHours(12, 0, 0, 0);
+        const fechaString = fecha.toISOString().split('T')[0];
 
-        if (!data.fecha) {
-          alert('Por favor selecciona una fecha válida');
-          return;
-        }
-        
-        const fecha = new Date(data.fecha);
-        fecha.setHours(12, 0, 0, 0); // Establecer la hora a 12:00 PM
-        
-        // Solo agregar entrada al historial
         await addDoc(collection(db, 'historial_costos'), {
-          medida: medida,
-          costoBase: Number(data.costo),
-          fecha: data.fecha,
-          timestamp: fecha
+          medida: costoInfo.medida,
+          proveedorId: '',
+          proveedorNombre: costoInfo.proveedorNombre || '',
+          costoKey: costoInfo.costoKey,
+          costoBase: Number(costoInfo.costoBase ?? 0),
+          archivado,
+          timestamp: fecha,
+          fecha: fechaString,
+          observacion: archivado ? 'Medida archivada' : 'Medida restaurada',
+          restaurado: !archivado
         });
 
-        this.cerrarModalEditarCosto();
-        console.log('Costo actualizado correctamente');
+        if (archivado) {
+          this.$delete(this.costosRegistradosPorFecha, costoInfo.costoKey);
+        }
+
+        console.log(`Medida ${accion} correctamente`);
       } catch (error) {
-        console.error('Error al actualizar el costo:', error);
-        alert('Error al actualizar el costo');
+        console.error(`Error al ${accion} la medida:`, error);
+        alert(`Error al ${accion} la medida`);
       }
     },
 
-    async eliminarMedida(medida) {
-      if (confirm(`¿Está seguro de eliminar completamente la medida "${medida}" y todo su historial?`)) {
+    archivarMedida(costoInfo) {
+      return this.cambiarArchivoMedida(costoInfo, true);
+    },
+
+    restaurarMedida(costoInfo) {
+      return this.cambiarArchivoMedida(costoInfo, false);
+    },
+
+    async eliminarMedida(costoInfo) {
+      const proveedorLabel = costoInfo.proveedorNombre || 'Sin proveedor';
+      if (confirm(`¿Eliminar completamente "${costoInfo.medida}" de "${proveedorLabel}" y todo su historial?`)) {
         try {
           const db = getFirestore();
           
           // Eliminar inmediatamente de la interfaz local
-          this.$delete(this.costosRegistrados, medida);
-          this.$delete(this.costosRegistradosPorFecha, medida);
+          this.$delete(this.costosRegistrados, costoInfo.costoKey);
+          this.$delete(this.costosRegistradosPorFecha, costoInfo.costoKey);
           
-          // Eliminar TODO el historial de esta medida
+          // Eliminar TODO el historial de esta medida + proveedor
           const historialRef = collection(db, 'historial_costos');
-          const q = query(historialRef, where('medida', '==', medida));
+          const q = query(historialRef, where('medida', '==', costoInfo.medida));
           const snapshot = await getDocs(q);
+          const docsParaEliminar = snapshot.docs.filter(docSnapshot => {
+            const entrada = this.hidratarEntradaCosto(docSnapshot.data());
+            return entrada.costoKey === costoInfo.costoKey;
+          });
           
           // Eliminar cada entrada del historial
-          const deletePromises = snapshot.docs.map(doc => deleteDoc(doc.ref));
+          const deletePromises = docsParaEliminar.map(docSnapshot => deleteDoc(docSnapshot.ref));
           await Promise.all(deletePromises);
 
-          console.log(`Medida "${medida}" y todo su historial eliminados correctamente`);
+          console.log(`Medida "${costoInfo.medida}" (${proveedorLabel}) eliminada correctamente`);
         } catch (error) {
           console.error('Error al eliminar la medida:', error);
           alert('Error al eliminar la medida');
@@ -711,7 +956,7 @@ export default {
     },
 
     async eliminarEntradaHistorial(entrada) {
-      if (confirm(`¿Está seguro de eliminar esta entrada del historial ($${entrada.costoBase.toFixed(2)} - ${this.formatearFecha(entrada.fecha)})?`)) {
+      if (confirm(`¿Está seguro de eliminar esta entrada del historial ($${Number(entrada.costoBase).toFixed(2)} - ${this.formatearFecha(entrada.fecha)})?`)) {
         try {
           const db = getFirestore();
           
@@ -735,8 +980,8 @@ export default {
       // Usar el costo actual como valor inicial (específico del embarque o global)
       let costoInicial = 0;
       
-      if (this.costosEmbarque[medida]) {
-        costoInicial = this.costosEmbarque[medida];
+      if (this.tieneCostoEspecifico(medida)) {
+        costoInicial = this.obtenerCostoEspecifico(medida);
       } else {
         const costoGlobal = this.encontrarCostoParaMedida(medida);
         if (costoGlobal) {
@@ -769,16 +1014,19 @@ export default {
         // Actualizar el costo local
         if (nuevoCosto !== null) {
           this.$set(this.costosEmbarque, medida, Number(nuevoCosto));
-          console.log(`Costo específico establecido para ${medida}: ${this.costosEmbarque[medida]}`);
+          this.$set(this.costosEmbarqueManuales, medida, Number(nuevoCosto));
+          console.log(`Costo manual establecido para ${medida}: ${this.costosEmbarque[medida]}`);
         } else {
           // Si es null, eliminar el costo
           this.$delete(this.costosEmbarque, medida);
-          console.log(`Costo específico eliminado para ${medida}`);
+          this.$delete(this.costosEmbarqueManuales, medida);
+          console.log(`Costo manual eliminado para ${medida}`);
         }
         
         // Guardar en Firebase
         await updateDoc(embarqueRef, {
-          costosPorMedida: this.costosEmbarque
+          costosPorMedida: this.costosEmbarque,
+          costosPorMedidaManuales: this.costosEmbarqueManuales
         });
 
         this.cerrarModalCostoEmbarque();
@@ -798,10 +1046,12 @@ export default {
           
           // Eliminar el costo específico
           this.$delete(this.costosEmbarque, medida);
+          this.$delete(this.costosEmbarqueManuales, medida);
           
           // Guardar en Firebase
           await updateDoc(embarqueRef, {
-            costosPorMedida: this.costosEmbarque
+            costosPorMedida: this.costosEmbarque,
+            costosPorMedidaManuales: this.costosEmbarqueManuales
           });
           
           console.log(`Costo específico eliminado para ${medida}, volviendo al costo global`);
@@ -849,9 +1099,10 @@ export default {
         const db = getFirestore();
         const embarqueId = this.$route.params.id;
         const embarqueRef = doc(db, 'embarques', embarqueId);
+        const costoExtraNumerico = Number(this.costoExtra);
         
         await updateDoc(embarqueRef, {
-          costoExtra: Number(this.costoExtra) || 18
+          costoExtra: Number.isNaN(costoExtraNumerico) ? 18 : costoExtraNumerico
         });
 
         console.log('Costo extra guardado correctamente');
@@ -917,97 +1168,210 @@ export default {
     },
 
     // Función auxiliar para encontrar el costo correspondiente a una medida
-    encontrarCostoParaMedida(medidaEmbarque, opciones = {}) {
+    encontrarCostoParaMedida(medidaEmbarque) {
       if (!medidaEmbarque) return null;
 
-      const { incluirCostosFuturos = false } = opciones;
+      const mapasDisponibles = [this.costosRegistradosPorFecha, this.costosRegistradosActivos];
 
-      const mapasDisponibles = [
-        { etiqueta: 'válidos para embarque', mapa: this.costosRegistradosPorFecha }
-      ];
+      const medidaEmbarqueNormalizada = this.normalizarMedida(medidaEmbarque);
+      const medidaBaseSinSufijos = medidaEmbarqueNormalizada
+        .replace(/\s+maquila\s+ozuna/g, '')
+        .replace(/\s+c\/c/g, '')
+        .trim();
 
-      if (incluirCostosFuturos) {
-        mapasDisponibles.push({ etiqueta: 'globales', mapa: this.costosRegistrados });
-      }
+      const crearResultado = (costoInfo, tipoCoincidencia = 'global') => ({
+        medidaEncontrada: costoInfo.medida,
+        proveedorId: costoInfo.proveedorId || '',
+        proveedorNombre: costoInfo.proveedorNombre || '',
+        costo: costoInfo.costoBase,
+        costoKey: costoInfo.costoKey,
+        tipoCoincidencia
+      });
 
-      const buscarEnMapa = ({ etiqueta, mapa }) => {
-        if (!mapa || Object.keys(mapa).length === 0) return null;
+      const medidaKey = this.normalizarMedida(medidaEmbarque);
+      const proveedorActivoKey = this.proveedorActivoPorMedida[medidaKey];
 
-        console.log(`🔍 Buscando costo (${etiqueta}) para: "${medidaEmbarque}"`);
-        console.log(`📋 Medidas disponibles (${etiqueta}):`, Object.keys(mapa));
+      const extraerTallaBase = (texto) => {
+        const match = texto.match(/\d+\/\d+/);
+        return match ? match[0] : '';
+      };
 
-        if (mapa[medidaEmbarque]) {
-          console.log(`✓ Coincidencia exacta encontrada (${etiqueta}): "${medidaEmbarque}"`);
-          return {
-            medidaEncontrada: medidaEmbarque,
-            costo: mapa[medidaEmbarque].costoBase
-          };
-        }
+      const tallaEmbarque = extraerTallaBase(medidaEmbarqueNormalizada);
 
-        if (medidaEmbarque.includes('Maquila Ozuna')) {
-          const medidaBase = medidaEmbarque.replace(' Maquila Ozuna', '').trim();
-          console.log(`🔍 Buscando medida base sin "Maquila Ozuna": "${medidaBase}"`);
-          if (mapa[medidaBase]) {
-            console.log(`✓ Encontrado costo para medida base (${etiqueta}): "${medidaBase}"`);
-            return {
-              medidaEncontrada: medidaBase,
-              costo: mapa[medidaBase].costoBase
-            };
-          }
-        }
-
-        const medidaEmbarqueNormalizada = this.normalizarMedida(medidaEmbarque);
-        console.log(`🔍 Medida normalizada (${etiqueta}): "${medidaEmbarqueNormalizada}"`);
-
-        for (const [medidaRegistrada, costoInfo] of Object.entries(mapa)) {
-          const medidaRegistradaNormalizada = this.normalizarMedida(medidaRegistrada);
-          if (medidaEmbarqueNormalizada === medidaRegistradaNormalizada) {
-            console.log(`✓ Coincidencia normalizada encontrada (${etiqueta}): "${medidaRegistrada}"`);
-            return {
-              medidaEncontrada: medidaRegistrada,
-              costo: costoInfo.costoBase
-            };
-          }
-        }
-
-        const medidaBaseSinSufijos = medidaEmbarqueNormalizada
-          .replace(/\s+maquila\s+ozuna/g, '')
+      // Extrae el proveedor implícito desde la medida del embarque usando la talla
+      // como referencia (ej: "41/50 honduras" → "honduras"). Funciona aun cuando
+      // la medida registrada coincida exactamente con la del embarque.
+      const obtenerProveedorImplicitoEmbarque = () => {
+        if (!tallaEmbarque || tallaEmbarque === medidaEmbarqueNormalizada) return '';
+        return medidaEmbarqueNormalizada
+          .replace(tallaEmbarque, '')
+          .replace(/\bmaquila\b/g, '')
+          .replace(/\bozuna\b/g, '')
           .replace(/\s+c\/c/g, '')
           .trim();
+      };
 
-        console.log(`🔍 Buscando coincidencias parciales (${etiqueta}) para: "${medidaBaseSinSufijos}"`);
+      const proveedorImplicitoEmbarque = obtenerProveedorImplicitoEmbarque();
 
-        for (const [medidaRegistrada, costoInfo] of Object.entries(mapa)) {
-          const medidaRegistradaNormalizada = this.normalizarMedida(medidaRegistrada);
+      const obtenerTextoProveedorDesdeMedida = (costoInfo) => {
+        const medidaRegistrada = this.normalizarMedida(costoInfo.medida);
+        if (medidaRegistrada && medidaEmbarqueNormalizada.includes(medidaRegistrada) && medidaRegistrada !== medidaEmbarqueNormalizada) {
+          const restante = medidaEmbarqueNormalizada
+            .replace(medidaRegistrada, '')
+            .replace(/\bmaquila\b/g, '')
+            .replace(/\bozuna\b/g, '')
+            .replace(/\s+c\/c/g, '')
+            .trim();
+          if (restante) return restante;
+        }
+        // Fallback: usar el proveedor implícito derivado de la talla
+        return proveedorImplicitoEmbarque;
+      };
 
-          if (medidaBaseSinSufijos.includes(medidaRegistradaNormalizada) && medidaRegistradaNormalizada.length > 2) {
-            console.log(`✓ Coincidencia parcial encontrada (${etiqueta}, registrada contenida en embarque): "${medidaRegistrada}"`);
-            return {
-              medidaEncontrada: medidaRegistrada,
-              costo: costoInfo.costoBase
-            };
-          }
+      const puntuarProveedorEnNombre = (costoInfo) => {
+        const proveedorBuscado = obtenerTextoProveedorDesdeMedida(costoInfo);
+        if (!proveedorBuscado) return 0;
 
-          if (medidaRegistradaNormalizada.includes(medidaBaseSinSufijos) && medidaBaseSinSufijos.length > 2) {
-            console.log(`✓ Coincidencia parcial encontrada (${etiqueta}, embarque contenido en registrada): "${medidaRegistrada}"`);
-            return {
-              medidaEncontrada: medidaRegistrada,
-              costo: costoInfo.costoBase
-            };
+        const proveedorRegistrado = this.normalizarMedida(costoInfo.proveedorNombre || '');
+        const medidaRegistrada = this.normalizarMedida(costoInfo.medida);
+
+        // Caso especial: la entrada no tiene proveedor explícito, pero su medida
+        // ya incluye el proveedor buscado (ej: medida="41/50 Honduras" sin proveedor
+        // cuando se busca "honduras"). Esto cubre el costo "base" de la combinación.
+        if (!proveedorRegistrado) {
+          if (medidaRegistrada.includes(proveedorBuscado)) return 800;
+          return 0;
+        }
+
+        if (proveedorRegistrado === proveedorBuscado) return 1000;
+
+        if (proveedorRegistrado.includes(proveedorBuscado) || proveedorBuscado.includes(proveedorRegistrado)) {
+          const diff = Math.abs(proveedorRegistrado.length - proveedorBuscado.length);
+          return Math.max(100, 500 - diff);
+        }
+
+        return proveedorBuscado
+          .split(/\s+/)
+          .filter(token => token.length >= 3)
+          .reduce((score, token) => {
+            return proveedorRegistrado.includes(token) ? score + token.length : score;
+          }, 0);
+      };
+
+      const ordenarPreferencias = (coincidencias) => {
+        const coincidenciasPorProveedor = coincidencias
+          .map(costoInfo => ({
+            costoInfo,
+            score: puntuarProveedorEnNombre(costoInfo)
+          }))
+          .filter(item => item.score > 0)
+          .sort((a, b) => b.score - a.score);
+
+        if (coincidenciasPorProveedor.length > 0) {
+          const coincidenciaProveedor = coincidenciasPorProveedor[0].costoInfo;
+          return [
+            { ...coincidenciaProveedor, tipoCoincidencia: 'medida-proveedor' },
+            ...coincidencias.filter(c => c.costoKey !== coincidenciaProveedor.costoKey)
+          ];
+        }
+
+        // Si la medida del embarque NO incluye un proveedor implícito,
+        // respetamos el "proveedor activo" elegido manualmente.
+        // Si SÍ hay proveedor implícito en el nombre, preferimos la entrada
+        // sin proveedor (interpretada como el costo base de esa medida + proveedor en nombre).
+        if (!proveedorImplicitoEmbarque && proveedorActivoKey) {
+          const activo = coincidencias.find(c => c.costoKey === proveedorActivoKey);
+          if (activo) {
+            return [
+              { ...activo, tipoCoincidencia: 'proveedor-activo' },
+              ...coincidencias.filter(c => c.costoKey !== proveedorActivoKey)
+            ];
           }
         }
 
+        return coincidencias.sort((a, b) => {
+          const aSinProveedor = a.proveedorNombre ? 1 : 0;
+          const bSinProveedor = b.proveedorNombre ? 1 : 0;
+          return aSinProveedor - bSinProveedor;
+        });
+      };
+
+      const obtenerEntradas = (mapa) => {
+        if (!mapa || Object.keys(mapa).length === 0) return [];
+        return Object.values(mapa)
+          .map(costoInfo => this.hidratarEntradaCosto(costoInfo))
+          .filter(costoInfo => !costoInfo.archivado);
+      };
+
+      const buscarExacta = (entradas) => {
+        const exactas = entradas.filter(costoInfo => {
+          return this.normalizarMedida(costoInfo.medida) === medidaEmbarqueNormalizada;
+        });
+        if (exactas.length === 0) return null;
+        const seleccionado = ordenarPreferencias(exactas)[0];
+        return crearResultado(seleccionado, seleccionado.tipoCoincidencia || 'exacta');
+      };
+
+      const buscarPorTalla = (entradas) => {
+        if (!tallaEmbarque || tallaEmbarque === medidaEmbarqueNormalizada) return null;
+        const porTalla = entradas.filter(costoInfo => {
+          return this.normalizarMedida(costoInfo.medida) === tallaEmbarque;
+        });
+        if (porTalla.length === 0) return null;
+        const seleccionado = ordenarPreferencias(porTalla)[0];
+        return crearResultado(seleccionado, seleccionado.tipoCoincidencia || 'talla-proveedor');
+      };
+
+      const buscarBaseOzuna = (entradas) => {
+        if (!medidaEmbarque.includes('Maquila Ozuna')) return null;
+        const medidaBase = this.normalizarMedida(medidaEmbarque.replace(' Maquila Ozuna', '').trim());
+        const tallaOzuna = extraerTallaBase(medidaBase);
+        const clavesBuscar = [medidaBase];
+        if (tallaOzuna && tallaOzuna !== medidaBase) clavesBuscar.push(tallaOzuna);
+
+        for (const clave of clavesBuscar) {
+          const coincidenciaBase = entradas.filter(costoInfo => {
+            return this.normalizarMedida(costoInfo.medida) === clave;
+          });
+          if (coincidenciaBase.length > 0) {
+            const seleccionado = ordenarPreferencias(coincidenciaBase)[0];
+            return crearResultado(seleccionado, seleccionado.tipoCoincidencia || 'base-ozuna');
+          }
+        }
         return null;
       };
 
-      for (const mapa of mapasDisponibles) {
-        const resultado = buscarEnMapa(mapa);
-        if (resultado) {
-          return resultado;
+      const buscarParcial = (entradas) => {
+        const parciales = entradas.filter(costoInfo => {
+          const medidaRegistradaNormalizada = this.normalizarMedida(costoInfo.medida);
+          return (
+            medidaRegistradaNormalizada.length > 2 &&
+            medidaBaseSinSufijos.includes(medidaRegistradaNormalizada)
+          ) || (
+            medidaBaseSinSufijos.length > 2 &&
+            medidaRegistradaNormalizada.includes(medidaBaseSinSufijos)
+          );
+        });
+        if (parciales.length === 0) return null;
+        const seleccionado = ordenarPreferencias(parciales)[0];
+        return crearResultado(seleccionado, seleccionado.tipoCoincidencia || 'parcial');
+      };
+
+      // Estrategias ordenadas de más específica a menos específica.
+      // Cada estrategia se ejecuta en TODOS los mapas antes de pasar a la siguiente,
+      // de modo que un match exacto en cualquier mapa siempre gana sobre un match
+      // por talla o parcial en otro mapa.
+      const estrategias = [buscarExacta, buscarPorTalla, buscarBaseOzuna, buscarParcial];
+
+      for (const estrategia of estrategias) {
+        for (const mapa of mapasDisponibles) {
+          const entradas = obtenerEntradas(mapa);
+          if (entradas.length === 0) continue;
+          const resultado = estrategia(entradas);
+          if (resultado) return resultado;
         }
       }
 
-      console.log(`✗ No se encontró coincidencia para: "${medidaEmbarque}"`);
       return null;
     },
 
@@ -1017,7 +1381,7 @@ export default {
       const medidasParaCrear = new Set();
       
       this.medidasEmbarque.forEach(medida => {
-        if (!this.costosEmbarque[medida] && !this.encontrarCostoParaMedida(medida)) {
+        if (!Object.prototype.hasOwnProperty.call(this.costosEmbarque, medida) && !this.encontrarCostoParaMedida(medida)) {
           medidasFaltantes.push(medida);
           
           // Para medidas "Maquila Ozuna", crear la medida base
@@ -1052,9 +1416,14 @@ export default {
         const fechaString = fecha.toISOString().split('T')[0];
         
         const promesas = medidas.map(medida => {
+          const costoKey = this.generarCostoKey(medida);
           return addDoc(collection(db, 'historial_costos'), {
             medida: medida,
+            proveedorId: '',
+            proveedorNombre: '',
+            costoKey,
             costoBase: 130,
+            archivado: false,
             timestamp: fecha,
             fecha: fechaString,
             nuevo: true
@@ -1071,30 +1440,23 @@ export default {
     },
 
     async aplicarCostosRegistrados() {
-      // Aplicar costos de medidas registradas automáticamente SOLO si no hay costo específico del embarque
       let costosActualizados = false;
-      
-      // Debug: mostrar qué medidas están disponibles
-      console.log('Medidas del embarque:', this.medidasEmbarque);
-      console.log('Costos válidos para embarque disponibles:', Object.keys(this.costosRegistradosPorFecha));
-      
+
       this.medidasEmbarque.forEach(medida => {
         const costoEncontrado = this.encontrarCostoParaMedida(medida);
+        const tieneCostoManual = this.tieneCostoEspecifico(medida);
         
+        if (tieneCostoManual) return;
+
         if (costoEncontrado) {
-          const costoRegistrado = costoEncontrado.costo;
-          const costoEmbarque = this.costosEmbarque[medida];
-          
-          // Solo actualizar si NO hay costo específico del embarque
-          if (!costoEmbarque) {
-            this.$set(this.costosEmbarque, medida, costoRegistrado);
+          const costoNuevo = costoEncontrado.costo;
+          if (this.costosEmbarque[medida] !== costoNuevo) {
+            this.$set(this.costosEmbarque, medida, costoNuevo);
             costosActualizados = true;
-            console.log(`✓ Aplicando costo global de ${medida}: ${costoRegistrado} (encontrado como: ${costoEncontrado.medidaEncontrada})`);
-          } else {
-            console.log(`→ Manteniendo costo específico de ${medida}: ${costoEmbarque} (no se sobrescribe con costo global: ${costoRegistrado})`);
           }
-        } else {
-          console.log(`✗ No se encontró costo para la medida: ${medida}`);
+        } else if (Object.prototype.hasOwnProperty.call(this.costosEmbarque, medida)) {
+          this.$delete(this.costosEmbarque, medida);
+          costosActualizados = true;
         }
       });
 
@@ -1119,8 +1481,9 @@ export default {
       // await this.sugerirCrearMedidasFaltantes();
     },
 
-    async verHistorial(medida) {
-      this.medidaSeleccionadaHistorial = medida;
+    async verHistorial(costoInfo) {
+      const proveedorLabel = costoInfo.proveedorNombre || 'Sin proveedor';
+      this.medidaSeleccionadaHistorial = `${costoInfo.medida} - ${proveedorLabel}`;
       this.mostrarModalHistorial = true;
       this.cargandoHistorial = true;
       
@@ -1131,14 +1494,16 @@ export default {
         // Consulta simple sin ordenamiento para evitar índice compuesto
         const q = query(
           historialRef,
-          where('medida', '==', medida)
+          where('medida', '==', costoInfo.medida)
         );
         
         const snapshot = await getDocs(q);
-        const historialData = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }));
+        const historialData = snapshot.docs
+          .map(doc => this.hidratarEntradaCosto({
+            id: doc.id,
+            ...doc.data()
+          }))
+          .filter(entrada => entrada.costoKey === costoInfo.costoKey);
         
         // Ordenar en el cliente por timestamp descendente
         this.historialCostos = historialData.sort((a, b) => {
@@ -1184,13 +1549,11 @@ export default {
           const costoEmbarque = this.costosEmbarque[medida];
           
           // En sincronización forzada, actualizar siempre que haya diferencia
-          if (!costoEmbarque || costoEmbarque !== costoRegistrado) {
+          if (costoEmbarque !== costoRegistrado || this.tieneCostoEspecifico(medida)) {
             this.$set(this.costosEmbarque, medida, costoRegistrado);
+            this.$delete(this.costosEmbarqueManuales, medida);
             costosActualizados = true;
-            console.log(`✓ Sincronización forzada - Actualizando costo de ${medida}: ${costoEmbarque} -> ${costoRegistrado} (encontrado como: ${costoEncontrado.medidaEncontrada})`);
           }
-        } else {
-          console.log(`✗ No se encontró costo para sincronizar: ${medida}`);
         }
       });
 
@@ -1202,7 +1565,8 @@ export default {
           const embarqueRef = doc(db, 'embarques', embarqueId);
           
           await updateDoc(embarqueRef, {
-            costosPorMedida: this.costosEmbarque
+            costosPorMedida: this.costosEmbarque,
+            costosPorMedidaManuales: this.costosEmbarqueManuales
           });
           
           console.log('Costos sincronizados forzadamente');
@@ -1296,27 +1660,148 @@ export default {
   },
 
   computed: {
-    // Filtrar medidas que NO están marcadas para ocultar en PDF
+    proveedoresRegistradosOrdenados() {
+      const proveedores = new Map();
+      this.costosRegistradosLista.forEach(costoInfo => {
+        const proveedorNombre = (costoInfo.proveedorNombre || '').trim();
+        if (!proveedorNombre) return;
+
+        const proveedorKey = this.normalizarProveedor(proveedorNombre);
+        if (!proveedores.has(proveedorKey)) {
+          proveedores.set(proveedorKey, proveedorNombre);
+        }
+      });
+
+      return Array.from(proveedores.values()).sort((a, b) => a.localeCompare(b));
+    },
+
+    costosRegistradosLista() {
+      return Object.values(this.costosRegistrados)
+        .map(costoInfo => this.hidratarEntradaCosto(costoInfo))
+        .sort((a, b) => {
+          const medidaCompare = String(a.medida || '').localeCompare(String(b.medida || ''));
+          if (medidaCompare !== 0) return medidaCompare;
+          return String(a.proveedorNombre || '').localeCompare(String(b.proveedorNombre || ''));
+        });
+    },
+
+    costosActivosLista() {
+      return this.costosRegistradosLista.filter(costoInfo => !costoInfo.archivado);
+    },
+
+    costosRegistradosActivos() {
+      const activos = {};
+      this.costosActivosLista.forEach(costoInfo => {
+        if (!activos[costoInfo.costoKey]) {
+          activos[costoInfo.costoKey] = costoInfo;
+        }
+      });
+      return activos;
+    },
+
+    costosArchivadosLista() {
+      return this.costosRegistradosLista.filter(costoInfo => costoInfo.archivado);
+    },
+
+    costosRegistradosFiltradosBase() {
+      const busqueda = this.filtrosCostos.busqueda.trim().toLowerCase();
+      const proveedorFiltro = this.filtrosCostos.proveedor;
+
+      return (lista) => lista.filter(costoInfo => {
+        const proveedorNombre = costoInfo.proveedorNombre || '';
+        const coincideProveedor = !proveedorFiltro ||
+          (proveedorFiltro === '__sin_proveedor__' && !proveedorNombre) ||
+          proveedorNombre === proveedorFiltro;
+        const texto = `${costoInfo.medida} ${proveedorNombre}`.toLowerCase();
+        const coincideBusqueda = !busqueda || texto.includes(busqueda);
+        return coincideProveedor && coincideBusqueda;
+      });
+    },
+
+    costosRegistradosFiltradosLimpios() {
+      return this.costosRegistradosFiltradosBase(
+        this.costosActivosLista.filter(c => c.tipoCosto !== 'crudo')
+      );
+    },
+
+    costosRegistradosFiltradosCrudos() {
+      return this.costosRegistradosFiltradosBase(
+        this.costosActivosLista.filter(c => c.tipoCosto === 'crudo')
+      );
+    },
+
+    costosArchivadosFiltrados() {
+      return this.costosRegistradosFiltradosBase(this.costosArchivadosLista);
+    },
+
+    costosRegistradosTabActual() {
+      if (this.tabRegistradas === 'crudos') return this.costosRegistradosFiltradosCrudos;
+      if (this.tabRegistradas === 'archivadas') return this.costosArchivadosFiltrados;
+      return this.costosRegistradosFiltradosLimpios;
+    },
+
+    medidasAgrupadasTabActual() {
+      const lista = this.tabRegistradas === 'archivadas'
+        ? this.costosRegistradosLista
+        : this.costosRegistradosTabActual;
+
+      const grupos = new Map();
+
+      lista.forEach(costoInfo => {
+        if (this.tabRegistradas === 'archivadas' && !costoInfo.archivado) return;
+
+        const medidaKey = this.normalizarMedida(costoInfo.medida);
+        if (!grupos.has(medidaKey)) {
+          grupos.set(medidaKey, {
+            medidaKey,
+            medida: costoInfo.medida,
+            tipoCosto: costoInfo.tipoCosto || 'limpio',
+            proveedores: []
+          });
+        }
+        grupos.get(medidaKey).proveedores.push(costoInfo);
+      });
+
+      grupos.forEach((grupo, medidaKey) => {
+        if (!this.proveedorActivoPorMedida[medidaKey] && grupo.proveedores.length > 0) {
+          const primerActivo = grupo.proveedores.find(p => !p.archivado);
+          if (primerActivo) {
+            this.$set(this.proveedorActivoPorMedida, medidaKey, primerActivo.costoKey);
+          }
+        }
+      });
+
+      return Array.from(grupos.values()).sort((a, b) => a.medida.localeCompare(b.medida));
+    },
+
+    medidasEmbarqueTabActual() {
+      return this.tabEmbarque === 'crudos' ? this.medidasCrudosVisibles : this.medidasLimpiosVisibles;
+    },
+
     medidasVisibles() {
       return this.medidasEmbarque.filter(medida => !this.medidaOculta[medida]);
     },
+
+    medidasLimpiosVisibles() {
+      return this.medidasLimpios.filter(medida => !this.medidaOculta[medida]);
+    },
+
+    medidasCrudosVisibles() {
+      return this.medidasCrudos.filter(medida => !this.medidaOculta[medida]);
+    },
     
-    // Computed property para obtener los costos actuales de forma reactiva
     costosActuales() {
       const costos = {};
       
       this.medidasEmbarque.forEach(medida => {
-        // Primero verificar si hay un costo específico del embarque
-        if (this.costosEmbarque[medida]) {
-          costos[medida] = Number(this.costosEmbarque[medida]).toFixed(2);
+        const costoGlobal = this.encontrarCostoParaMedida(medida);
+
+        if (costoGlobal) {
+          costos[medida] = Number(costoGlobal.costo).toFixed(2);
+        } else if (this.tieneCostoEspecifico(medida)) {
+          costos[medida] = Number(this.obtenerCostoEspecifico(medida)).toFixed(2);
         } else {
-          // Si no hay costo específico, buscar en los costos globales
-          const costoGlobal = this.encontrarCostoParaMedida(medida);
-          if (costoGlobal) {
-            costos[medida] = Number(costoGlobal.costo).toFixed(2);
-          } else {
-            costos[medida] = '0.00';
-          }
+          costos[medida] = '0.00';
         }
       });
       
@@ -1443,7 +1928,7 @@ export default {
   gap: 8px;
 }
 
-.btn-eliminar, .btn-historial {
+.btn-eliminar, .btn-historial, .btn-archivar, .btn-restaurar {
   color: white;
   border: none;
   border-radius: 4px;
@@ -1467,6 +1952,22 @@ export default {
 
 .btn-historial:hover {
   background-color: #2980b9;
+}
+
+.btn-archivar {
+  background-color: #7f8c8d;
+}
+
+.btn-archivar:hover {
+  background-color: #626e70;
+}
+
+.btn-restaurar {
+  background-color: #16a085;
+}
+
+.btn-restaurar:hover {
+  background-color: #138a72;
 }
 
 .costo-info, .medida-info {
@@ -2081,6 +2582,479 @@ export default {
   
   .costo-origen {
     font-size: 0.75em;
+  }
+}
+
+.hero-costos {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 20px;
+  margin-bottom: 20px;
+  padding: 22px;
+  border: 1px solid #e6ecf2;
+  border-radius: 18px;
+  background: linear-gradient(135deg, #f8fbff 0%, #eef7ff 100%);
+  box-shadow: 0 10px 24px rgba(44, 62, 80, 0.08);
+}
+
+.hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.hero-copy {
+  min-width: 0;
+}
+
+.eyebrow {
+  color: #3498db;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.hero-copy h2 {
+  margin: 4px 0;
+  color: #1f2d3d;
+}
+
+.hero-copy p {
+  margin: 0;
+  color: #607080;
+}
+
+.resumen-costos {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 28px;
+}
+
+.resumen-card {
+  padding: 16px;
+  border: 1px solid #e6ecf2;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 4px 14px rgba(44, 62, 80, 0.06);
+}
+
+.resumen-card span {
+  display: block;
+  color: #607080;
+  font-size: 0.85rem;
+  margin-bottom: 4px;
+}
+
+.resumen-card strong {
+  color: #2c3e50;
+  font-size: 1.6rem;
+}
+
+.section-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 18px;
+  margin-bottom: 18px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #e6ecf2;
+}
+
+.section-title-row h3 {
+  margin: 0 0 4px;
+  padding: 0;
+  border: 0;
+}
+
+.section-title-row p {
+  margin: 0;
+  color: #607080;
+}
+
+.filtros-costos {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(170px, 220px);
+  gap: 10px;
+  min-width: min(520px, 100%);
+}
+
+.input-filtro {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #d8dee9;
+  border-radius: 10px;
+  background: #fff;
+  color: #2c3e50;
+  font-size: 0.95rem;
+}
+
+.input-filtro:focus {
+  outline: none;
+  border-color: #3498db;
+  box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.14);
+}
+
+.btn-archivados-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 10px;
+  background: #34495e;
+  color: #fff;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background-color 0.2s ease, transform 0.2s ease;
+}
+
+.btn-archivados-toggle:hover {
+  background: #2c3e50;
+  transform: translateY(-1px);
+}
+
+.btn-archivados-toggle.activo {
+  background: #16a085;
+}
+
+.tabs-bar {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 18px;
+  border-bottom: 2px solid #e6ecf2;
+  padding-bottom: 0;
+}
+
+.tab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border: none;
+  border-bottom: 3px solid transparent;
+  border-radius: 10px 10px 0 0;
+  background: #f0f3f6;
+  color: #607080;
+  font-weight: 700;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.tab-btn:hover {
+  background: #e6ecf2;
+}
+
+.tab-btn.activo {
+  background: #fff;
+  color: #2c3e50;
+  border-bottom-color: #3498db;
+}
+
+.tab-btn-crudo.activo {
+  border-bottom-color: #e67e22;
+}
+
+.tab-count {
+  background: #e6ecf2;
+  color: #607080;
+  font-size: 0.78rem;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.tab-btn.activo .tab-count {
+  background: #3498db;
+  color: #fff;
+}
+
+.tab-btn-crudo.activo .tab-count {
+  background: #e67e22;
+  color: #fff;
+}
+
+.costo-card-crudo {
+  border-left: 4px solid #e67e22;
+}
+
+.proveedores-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.proveedor-row {
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid #e6ecf2;
+  border-radius: 12px;
+  background: #f8fafc;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.proveedor-row:hover {
+  border-color: #3498db;
+  background: #f0f7ff;
+}
+
+.proveedor-row.activo {
+  border-color: #27ae60;
+  background: #f0faf4;
+  box-shadow: inset 0 0 0 1px #27ae60;
+}
+
+.proveedor-row.archivada {
+  opacity: 0.55;
+  cursor: default;
+  border-style: dashed;
+}
+
+.proveedor-row-radio input[type="radio"] {
+  accent-color: #27ae60;
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+
+.proveedor-row-archived-icon {
+  color: #95a5a6;
+  font-size: 0.9em;
+}
+
+.proveedor-row-info {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px 12px;
+  align-items: start;
+  min-width: 0;
+}
+
+.proveedor-row-nombre {
+  font-weight: 700;
+  color: #2c3e50;
+  line-height: 1.25;
+  word-break: break-word;
+}
+
+.proveedor-row-costo {
+  font-weight: 800;
+  color: #27ae60;
+  font-size: 1.18em;
+  white-space: nowrap;
+}
+
+.proveedor-row-fecha {
+  grid-column: 1 / -1;
+  font-size: 0.82em;
+  color: #95a5a6;
+}
+
+.proveedor-row-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+  padding-top: 8px;
+  border-top: 1px solid #e6ecf2;
+}
+
+.btn-mini {
+  border: none;
+  background: #e6ecf2;
+  color: #607080;
+  border-radius: 6px;
+  padding: 7px 9px;
+  cursor: pointer;
+  font-size: 0.82em;
+  transition: all 0.15s ease;
+}
+
+.btn-mini:hover {
+  background: #3498db;
+  color: #fff;
+}
+
+.btn-mini-danger:hover {
+  background: #e74c3c;
+}
+
+.btn-mini-muted:hover {
+  background: #7f8c8d;
+}
+
+.btn-mini-green:hover {
+  background: #16a085;
+}
+
+.costos-grid {
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+}
+
+.medidas-grid {
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+.costo-card,
+.medida-card {
+  border: 1px solid #e6ecf2;
+  border-radius: 14px;
+  box-shadow: 0 8px 18px rgba(44, 62, 80, 0.07);
+}
+
+.costo-card {
+  padding: 22px;
+}
+
+.costo-card .costo-header {
+  align-items: flex-start;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #edf1f5;
+}
+
+.costo-card .costo-header h4 {
+  font-size: 1.18rem;
+}
+
+.proveedor-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #eef7ff;
+  color: #2d74a8;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.estado-archivo-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  margin-left: 6px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #f2f4f5;
+  color: #7f8c8d;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.costo-card.archivada {
+  background: #fbfbfc;
+  border-style: dashed;
+  opacity: 0.88;
+}
+
+.costo-principal {
+  color: #27ae60;
+  font-size: 1.55rem;
+  font-weight: 800;
+}
+
+.empty-state {
+  grid-column: 1 / -1;
+  padding: 28px;
+  border: 1px dashed #cbd6e2;
+  border-radius: 14px;
+  text-align: center;
+  color: #607080;
+  background: #f8fafc;
+}
+
+.empty-state i {
+  display: block;
+  margin-bottom: 8px;
+  color: #9aa8b6;
+}
+
+.historial-proveedor {
+  margin-top: 4px;
+  color: #607080;
+  font-size: 0.85em;
+}
+
+.seccion-header-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.medida-card-crudo {
+  border-left: 4px solid #e67e22;
+}
+
+@media (max-width: 900px) {
+  .resumen-costos {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .hero-costos {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .section-title-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .filtros-costos {
+    min-width: 0;
+  }
+}
+
+@media (max-width: 640px) {
+  .gestion-costos-container {
+    padding: 12px;
+  }
+
+  .hero-actions,
+  .hero-costos .btn-nuevo-costo {
+    width: 100%;
+  }
+
+  .btn-volver,
+  .btn-rendimientos,
+  .btn-nuevo-costo {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .resumen-costos {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .filtros-costos {
+    grid-template-columns: 1fr;
+  }
+
+  .costos-grid,
+  .medidas-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .proveedor-row-info {
+    grid-template-columns: 1fr;
+  }
+
+  .proveedor-row-costo {
+    white-space: normal;
+  }
+
+  .proveedor-row-actions {
+    justify-content: flex-start;
+    flex-wrap: wrap;
   }
 }
 </style> 

@@ -102,7 +102,7 @@
           </div>
 
           
-          <div class="input-group">
+          <div v-if="!esMedidaRefri(medida)" class="input-group">
             <template v-if="esMedidaMix(medida)">
               <div class="mix-inputs">
                 <div class="mix-input">
@@ -139,6 +139,18 @@
               >
             </template>
           </div>
+
+          <div v-else-if="analizarGanancia[medida]" class="input-group rendimiento-manual-group">
+            <label>Rendimiento manual:</label>
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              :value="rendimientoManual[medida] ?? ''"
+              @input="actualizarRendimientoManual(medida, $event.target.value)"
+              placeholder="Ej: 1.18"
+            >
+          </div>
           
           <div class="resultados">
             <p>Total embarcado: {{ formatearNumero(obtenerTotalEmbarcado(medida)) }} kg</p>
@@ -174,11 +186,11 @@
                       📌 {{ gananciasCalculadas[medida].clienteEspecifico }}
                     </span>
                     
-                    <!-- Precio general -->
-                    <span v-else class="precio-general-badge" title="Precio general">
-                      🌐 General
-                    </span>
                   </div>
+                </div>
+                <div class="ganancia-item">
+                  <span class="label">Costo medida:</span>
+                  <span class="valor costo-medida">${{ formatearPrecio(gananciasCalculadas[medida].costoBase) }}</span>
                 </div>
                 <div class="ganancia-item">
                   <span class="label">Costo Final:</span>
@@ -507,6 +519,7 @@ export default {
       gananciasCalculadasCrudos: {}, // Nueva propiedad para ganancias de crudos
       analizarGanancia: {},
       analizarGananciaCrudos: {}, // Nueva propiedad para controlar análisis de crudos
+      rendimientoManual: {},
       aplicarCostoExtra: {}, // Para controlar a qué medidas aplicar costo extra
       diasRecientes: 3, // Días para considerar un embarque como "reciente"
       // Configuración de pesos por defecto
@@ -731,6 +744,7 @@ export default {
         medidaOculta: { ...this.medidaOculta },
         analizarGanancia: { ...this.analizarGanancia },
         analizarGananciaCrudos: { ...this.analizarGananciaCrudos },
+        rendimientoManual: { ...this.rendimientoManual },
         analizarMaquilaGanancia: { ...this.analizarMaquilaGanancia },
         precioMaquila: { ...this.precioMaquila },
         pesoTaraCosto: Number(this.pesoTaraCosto) || 0,
@@ -874,6 +888,7 @@ export default {
       this.medidaOculta = this.embarqueData.medidaOculta || {};
       this.analizarGanancia = this.embarqueData.analizarGanancia || {};
       this.analizarGananciaCrudos = this.embarqueData.analizarGananciaCrudos || {};
+      this.rendimientoManual = this.embarqueData.rendimientoManual || {};
       this.aplicarCostoExtra = this.embarqueData.aplicarCostoExtra || {};
       this.analizarMaquilaGanancia = this.embarqueData.analizarMaquilaGanancia || {};
       this.precioMaquila = this.embarqueData.precioMaquila || {};
@@ -1865,9 +1880,50 @@ export default {
       }
       
       this.gananciasCalculadas = ganancias;
-      
+
       // Calcular también las ganancias de crudos
       this.calcularGananciasCrudos();
+
+      // Persistir el total general (limpios + maquila visibles) para que la lista
+      // de embarques pueda mostrarlo sin recalcular nada.
+      this.actualizarTotalGanancias().catch(err => {
+        console.warn('[Rendimientos] No se pudo actualizar el total de ganancias:', err);
+      });
+    },
+
+    // Calcula el total general de ganancias visible: limpios visibles con
+    // análisis activado, ganancias de maquila visibles y ganancias de crudos
+    // visibles con análisis activado.
+    calcularTotalGeneralGanancias() {
+      const totalNormales = Object.entries(this.gananciasCalculadas || {})
+        .filter(([medida]) => !this.medidaOculta[medida] && this.analizarGanancia[medida])
+        .reduce((total, [, ganancia]) => total + (Number(ganancia?.gananciaTotal) || 0), 0);
+
+      const totalMaquila = Object.keys(this.analizarMaquilaGanancia || {})
+        .filter(medida => this.analizarMaquilaGanancia[medida] && !this.medidaOculta[medida])
+        .reduce((total, medida) => total + (Number(this.calcularGananciaMaquila(medida)) || 0), 0);
+
+      const totalCrudos = Object.entries(this.gananciasCalculadasCrudos || {})
+        .filter(([talla]) => this.analizarGananciaCrudos[talla])
+        .reduce((total, [, ganancia]) => total + (Number(ganancia?.gananciaTotal) || 0), 0);
+
+      return Math.round(totalNormales + totalMaquila + totalCrudos);
+    },
+
+    async actualizarTotalGanancias() {
+      const total = this.calcularTotalGeneralGanancias();
+      const totalActual = Number(this.embarqueData?.totalGanancias);
+
+      // Evitar escrituras innecesarias si no cambió
+      if (Number.isFinite(totalActual) && totalActual === total) {
+        return;
+      }
+
+      if (this.embarqueData) {
+        this.embarqueData.totalGanancias = total;
+      }
+
+      await this.persistirCamposRendimientos({ totalGanancias: total });
     },
 
     // Nuevo método que calcula precio promedio ponderado y ganancias
@@ -2052,6 +2108,11 @@ export default {
       });
       
       this.gananciasCalculadasCrudos = ganancias;
+
+      // Reflejar el cambio en el total general (incluye crudos) para la lista de embarques
+      this.actualizarTotalGanancias().catch(err => {
+        console.warn('[Rendimientos] No se pudo actualizar el total de ganancias (crudos):', err);
+      });
     },
 
     // Calcular ganancias para una talla específica de crudo
@@ -2470,6 +2531,7 @@ export default {
           medidaOculta: payload.medidaOculta,
           analizarGanancia: payload.analizarGanancia,
           analizarGananciaCrudos: payload.analizarGananciaCrudos,
+          rendimientoManual: payload.rendimientoManual,
           analizarMaquilaGanancia: payload.analizarMaquilaGanancia,
           precioMaquila: payload.precioMaquila,
           pesoTaraCosto: payload.pesoTaraCosto,
@@ -2672,6 +2734,10 @@ export default {
     },
 
     calcularRendimiento(medida) {
+      if (this.esMedidaRefri(medida) && this.analizarGanancia[medida]) {
+        return Number(this.rendimientoManual[medida]) || 0;
+      }
+
       const totalEmbarcado = this.obtenerTotalEmbarcado(medida);
       if (totalEmbarcado === 0) return 0;
       
@@ -2702,6 +2768,19 @@ export default {
 
     esMedidaMix(medida) {
       return medida.toLowerCase().includes('mix');
+    },
+
+    esMedidaRefri(medida) {
+      return String(medida || '').toLowerCase().includes('refri');
+    },
+
+    actualizarRendimientoManual(medida, valor) {
+      const numero = Number(valor);
+      this.$set(this.rendimientoManual, medida, Number.isNaN(numero) ? 0 : numero);
+      this.guardarCambiosEnTiempoReal();
+      this.$nextTick(async () => {
+        await this.calcularGanancias();
+      });
     },
 
     debeAplicarCostoExtra(medida) {
@@ -2901,10 +2980,16 @@ export default {
       await this.persistirCamposRendimientos({
         analizarGanancia: { ...this.analizarGanancia },
         analizarGananciaCrudos: { ...this.analizarGananciaCrudos },
+        rendimientoManual: { ...this.rendimientoManual },
         analizarMaquilaGanancia: { ...this.analizarMaquilaGanancia },
         precioMaquila: { ...this.precioMaquila }
       });
       console.log('Estado de análisis de ganancia guardado correctamente');
+
+      // Recalcular ganancias inmediatamente para reflejar el cambio en la UI
+      // sin tener que salir y volver a entrar al componente.
+      await this.calcularGanancias();
+      this.calcularGananciasCrudos();
     },
 
 
@@ -3177,6 +3262,18 @@ export default {
   display: block;
   margin-bottom: 5px;
   color: #666;
+}
+
+.rendimiento-manual-group {
+  padding: 12px;
+  background: #f8fbff;
+  border: 1px solid #d8e8f8;
+  border-radius: 8px;
+}
+
+.rendimiento-manual-group label {
+  color: #2c3e50;
+  font-weight: 600;
 }
 
 input {
@@ -3603,39 +3700,51 @@ input {
 
 .ganancia-info {
   margin-top: 15px;
-  padding: 15px;
-  background-color: #f9f9f9;
-  border: 1px solid #eee;
-  border-radius: 5px;
+  padding: 12px;
+  background-color: #f8fafc;
+  border: 1px solid #dfe7ef;
+  border-radius: 10px;
 }
 
 .ganancia-header h4 {
   margin-top: 0;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
   color: #34495e;
-  font-size: 1.1em;
+  font-size: 1em;
 }
 
 .ganancia-detalles {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
+  grid-template-columns: 1fr;
+  gap: 5px;
 }
 
 .ganancia-item {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 6px 9px;
+  background: #fff;
+  border: 1px solid #edf1f5;
+  border-radius: 8px;
 }
 
 .ganancia-item .label {
   font-weight: bold;
-  color: #555;
+  color: #607080;
+  font-size: 0.86em;
 }
 
 .ganancia-item .valor {
   font-weight: bold;
-  font-size: 1.1em;
+  font-size: 1em;
+  color: #2c3e50;
+  text-align: right;
+}
+
+.costo-medida {
+  color: #2980b9;
 }
 
 .ganancia-positiva {
@@ -3647,14 +3756,14 @@ input {
 }
 
 .ganancia-total-item {
-  grid-column: 1 / -1; /* Ocupa dos columnas */
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px solid #eee;
+  margin-top: 4px;
+  border-color: #d8efe1;
+  background: #f3fbf6;
 }
 
 .ganancia-fecha {
-  margin-top: 10px;
+  margin-top: 4px;
+  padding: 0 2px;
   font-size: 0.9em;
   color: #777;
   display: flex;
@@ -3768,6 +3877,7 @@ input {
   flex-direction: column;
   align-items: flex-end;
   gap: 4px;
+  min-width: 0;
 }
 
 .precio-especifico-badge, .precio-general-badge, .precio-promedio-badge {
@@ -4032,13 +4142,14 @@ input {
   flex-direction: column;
   align-items: flex-end;
   gap: 2px;
+  min-width: 0;
 }
 
 .costo-extra-indicator {
   font-size: 0.8em;
   color: #f39c12;
   font-weight: normal;
-  margin-left: 5px;
+  text-align: right;
 }
 
 @media (max-width: 768px) {

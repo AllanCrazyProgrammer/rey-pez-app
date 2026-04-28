@@ -79,7 +79,7 @@ export const generarTablaGanancias = (gananciasCalculadas, nombresMedidasPersona
       {
         stack: [
           {
-            text: `Compra: $${formatearPrecio(costoBase)}`,
+            text: `Costo: $${formatearPrecio(costoBase)}`,
             fontSize: 14,
             alignment: 'center',
             margin: [0, 0, 0, 2],
@@ -125,7 +125,7 @@ export const generarTablaGanancias = (gananciasCalculadas, nombresMedidasPersona
       {
         stack: [
           {
-            text: `Compra: N/A`,
+            text: `Costo: N/A`,
             fontSize: 14,
             alignment: 'center',
             margin: [0, 0, 0, 2],
