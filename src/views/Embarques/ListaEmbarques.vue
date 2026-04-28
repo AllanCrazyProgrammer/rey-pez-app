@@ -115,8 +115,20 @@
 
             <!-- Información adicional -->
             <div class="additional-info">
-              <span class="info-label">CARGA_CON:</span>
-              <span class="info-value">"{{ embarque.cargaCon || 'NULL' }}"</span>
+              <div class="info-row">
+                <span class="info-label">CARGA_CON:</span>
+                <span class="info-value">"{{ embarque.cargaCon || 'NULL' }}"</span>
+              </div>
+              <div v-if="embarque.totalGanancias != null" class="info-row info-ganancias">
+                <span class="info-label">TOTAL_GANANCIAS:</span>
+                <span
+                  class="info-value ganancia-value"
+                  :class="{
+                    'ganancia-positiva': embarque.totalGanancias > 0,
+                    'ganancia-negativa': embarque.totalGanancias < 0
+                  }"
+                >${{ formatearTotalGanancias(embarque.totalGanancias) }}</span>
+              </div>
             </div>
           </div>
 
@@ -327,9 +339,12 @@ export default {
 
     mapOfflineRecordToLista(record) {
       if (!record) return null;
-      
+
       // Normalizar la fecha directamente sin convertir a Date
       const fechaNormalizada = record.fecha ? normalizarFechaISO(record.fecha) : obtenerFechaActualISO();
+
+      const totalGananciasRaw = record.totalGanancias ?? record.docData?.totalGanancias;
+      const totalGanancias = Number.isFinite(Number(totalGananciasRaw)) ? Number(totalGananciasRaw) : null;
 
       return {
         id: record.id,
@@ -340,6 +355,7 @@ export default {
         cargaCon: record.cargaCon || 'No especificado',
         camionNumero: record.camionNumero || record.docData?.camionNumero || 1,
         pendingSync: Boolean(record.pendingSync),
+        totalGanancias,
       };
     },
 
@@ -395,6 +411,9 @@ export default {
         fecha: fechaNormalizada,
       };
 
+      const totalGananciasRaw = data.totalGanancias;
+      const totalGanancias = Number.isFinite(Number(totalGananciasRaw)) ? Number(totalGananciasRaw) : null;
+
       return {
         id: docId,
         fecha: fechaNormalizada,
@@ -416,6 +435,7 @@ export default {
         costoExtra: data.costoExtra !== undefined ? data.costoExtra : 18,
         medidasConfiguracion: data.medidasConfiguracion || [],
         preciosActuales: [],
+        totalGanancias,
         docData,
       };
     },
@@ -659,6 +679,9 @@ export default {
             ? (Array.isArray(existingOffline?.clientes) ? existingOffline.clientes : (existingOffline?.docData?.clientes || []))
             : (embarque.data.clientes || []);
 
+          const totalGananciasRaw = embarque.data.totalGanancias;
+          const totalGanancias = Number.isFinite(Number(totalGananciasRaw)) ? Number(totalGananciasRaw) : null;
+
           return {
             id: embarque.id,
             fecha: fechaNormalizada,
@@ -668,6 +691,7 @@ export default {
             clientes: clientesParaLista,
             cargaCon: embarque.data.cargaCon || 'No especificado',
             camionNumero: embarque.data.camionNumero || 1,
+            totalGanancias,
           };
         }));
 
@@ -694,6 +718,16 @@ export default {
       } finally {
         this.cargando = false;
       }
+    },
+
+    formatearTotalGanancias(valor) {
+      const numero = Number(valor) || 0;
+      const absoluto = Math.abs(numero);
+      const formateado = absoluto.toLocaleString('es-MX', {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0
+      });
+      return numero < 0 ? `-${formateado}` : formateado;
     },
 
     calcularKilosLimpios(embarque) {
@@ -1807,9 +1841,21 @@ export default {
   background: rgba(0, 255, 65, 0.03);
   border: 1px dashed var(--matrix-green-dim);
   display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 1.4rem;
+}
+
+.info-row {
+  display: flex;
+  align-items: center;
   gap: 12px;
   flex-wrap: wrap;
-  font-size: 1.4rem;
+}
+
+.info-row.info-ganancias {
+  padding-top: 8px;
+  border-top: 1px dashed var(--matrix-green-dim);
 }
 
 .info-label {
@@ -1821,6 +1867,24 @@ export default {
   color: var(--matrix-green);
   opacity: 0.9;
   font-size: 1.4rem;
+}
+
+.ganancia-value {
+  font-weight: 700;
+  font-size: 1.6rem;
+  letter-spacing: 0.5px;
+}
+
+.ganancia-value.ganancia-positiva {
+  color: var(--matrix-green);
+  text-shadow: 0 0 8px var(--matrix-green-glow);
+  opacity: 1;
+}
+
+.ganancia-value.ganancia-negativa {
+  color: var(--red-alert);
+  text-shadow: 0 0 8px rgba(255, 0, 64, 0.45);
+  opacity: 1;
 }
 
 /* Acciones */
@@ -2040,6 +2104,10 @@ export default {
 
   .info-label, .info-value {
     font-size: 1.1rem;
+  }
+
+  .ganancia-value {
+    font-size: 1.3rem;
   }
 
   .data-separator {
