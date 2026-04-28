@@ -303,7 +303,7 @@
                 </div>
                 <div class="ganancia-item">
                   <span class="label">Costo Base:</span>
-                  <span class="valor costo-base">${{ formatearPrecio(gananciasCalculadasCrudos[talla].costoBase) }}</span>
+                  <span class="valor costo-base">${{ formatearPrecioConDecimales(gananciasCalculadasCrudos[talla].costoBase) }}</span>
                 </div>
                 <div class="ganancia-item">
                   <span class="label">Ganancia/kg:</span>
@@ -3056,6 +3056,14 @@ export default {
       const numeroRedondeado = Math.round(precio);
       // Formatear manualmente con comas para asegurar compatibilidad
       return numeroRedondeado.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    },
+
+    formatearPrecioConDecimales(precio, decimales = 2) {
+      const numero = Number(precio) || 0;
+      const [enteros, fraccion] = numero.toFixed(decimales).split('.');
+      const enterosFormateados = enteros.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+
+      return `${enterosFormateados}.${fraccion}`;
     },
     
     formatearNumero(numero) {

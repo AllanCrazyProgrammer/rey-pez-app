@@ -14,6 +14,20 @@ export function formatearPrecio(precio) {
 }
 
 /**
+ * Formatear precio conservando decimales
+ * @param {number} precio - Precio a formatear
+ * @param {number} decimales - Cantidad de decimales a mostrar
+ * @returns {string} Precio formateado
+ */
+export function formatearPrecioConDecimales(precio, decimales = 2) {
+  const numero = Number(precio) || 0;
+  const [enteros, fraccion] = numero.toFixed(decimales).split('.');
+  const enterosFormateados = enteros.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+
+  return `${enterosFormateados}.${fraccion}`;
+}
+
+/**
  * Formatear número eliminando decimales y agregando separador de miles
  * @param {number} numero - Número a formatear
  * @returns {string} Número formateado

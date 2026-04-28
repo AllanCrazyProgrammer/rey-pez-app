@@ -419,7 +419,7 @@ export function useGanancias() {
       talla: talla,
       totalKilos: Math.round(totalKilos),
       precioVenta: Math.round(precioPromedioPonderado),
-      costoBase: Math.round(costoBase),
+      costoBase: costoBase,
       gananciaUnitaria: Math.round(gananciaUnitariaPromedio),
       gananciaTotal: Math.round(totalGanancias),
       hayPreciosIndividuales: hayPreciosIndividuales,

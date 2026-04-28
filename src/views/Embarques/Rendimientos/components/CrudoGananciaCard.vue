@@ -38,7 +38,7 @@
         </div>
         <div class="ganancia-item">
           <span class="label">Costo Base:</span>
-          <span class="valor costo-base">${{ formatearPrecio(ganancia.costoBase) }}</span>
+          <span class="valor costo-base">${{ formatearPrecioConDecimales(ganancia.costoBase) }}</span>
         </div>
         <div class="ganancia-item">
           <span class="label">Ganancia/kg:</span>
@@ -95,7 +95,7 @@
 </template>
 
 <script>
-import { formatearNumero, formatearPrecio } from '../utils/formatters';
+import { formatearNumero, formatearPrecio, formatearPrecioConDecimales } from '../utils/formatters';
 
 export default {
   name: 'CrudoGananciaCard',
@@ -128,6 +128,7 @@ export default {
   methods: {
     formatearNumero,
     formatearPrecio,
+    formatearPrecioConDecimales,
     obtenerIconoFuente(fuentePrecio) {
       switch (fuentePrecio) {
         case 'individual': return '📝';
