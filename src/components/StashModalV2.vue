@@ -285,6 +285,14 @@
                   <span class="grupo-meta">{{ grupo.abonos.length }} {{ grupo.abonos.length === 1 ? 'abono' : 'abonos' }}</span>
                 </div>
                 <div class="grupo-total">${{ formatNumber(grupo.totalMonto) }}</div>
+                <button
+                  class="btn-eliminar-grupo"
+                  type="button"
+                  title="Eliminar todos los abonos de este grupo"
+                  @click.stop="eliminarGrupoAbonos(grupo)"
+                >
+                  🗑️ Eliminar todo
+                </button>
                 <button class="grupo-toggle" type="button" :aria-expanded="esGrupoExpandido(grupo.id)">
                   <i :class="['fas', esGrupoExpandido(grupo.id) ? 'fa-chevron-up' : 'fa-chevron-down']"></i>
                 </button>
@@ -1553,10 +1561,135 @@ export default {
         ])
         
         alert(`✅ Abono eliminado exitosamente\n\nSe eliminó: $${formatNumber(abono.monto)}\nDe la cuenta: ${abono.fechaCuentaFormateada}`)
-        
+
       } catch (error) {
         console.error('Error eliminando abono:', error)
         alert('Error al eliminar el abono: ' + error.message)
+      }
+    }
+
+    const eliminarGrupoAbonos = async (grupo) => {
+      if (!grupo || !grupo.abonos || grupo.abonos.length === 0) return
+
+      const cantidadAbonos = grupo.abonos.length
+      const cantidadNotas = (grupo.cuentas && grupo.cuentas.length) || new Set(grupo.abonos.map(a => a.cuentaId)).size
+
+      const confirmacion = confirm(
+        `¿Eliminar TODOS los abonos de este grupo?\n\n` +
+        `Fecha: ${grupo.fechaLabel}\n` +
+        `Abonos: ${cantidadAbonos}\n` +
+        `Notas afectadas: ${cantidadNotas}\n` +
+        `Monto total: $${formatNumber(grupo.totalMonto)}\n\n` +
+        `Esta acción actualizará el saldo de todas las notas afectadas y no se puede deshacer.`
+      )
+
+      if (!confirmacion) return
+
+      try {
+        const collectionName = `cuentas${props.cliente.charAt(0).toUpperCase() + props.cliente.slice(1)}`
+
+        const abonosPorCuenta = new Map()
+        for (const abono of grupo.abonos) {
+          if (!abono.cuentaId) continue
+          if (!abonosPorCuenta.has(abono.cuentaId)) {
+            abonosPorCuenta.set(abono.cuentaId, [])
+          }
+          abonosPorCuenta.get(abono.cuentaId).push(abono)
+        }
+
+        const abonosEliminadosLog = []
+        const errores = []
+
+        await Promise.all(Array.from(abonosPorCuenta.entries()).map(async ([cuentaId, abonosDeCuenta]) => {
+          try {
+            const cuentaRef = doc(db, collectionName, cuentaId)
+            const cuentaDoc = await getDoc(cuentaRef)
+
+            if (!cuentaDoc.exists()) {
+              errores.push(`No se encontró la cuenta ${cuentaId}`)
+              return
+            }
+
+            const cuentaData = cuentaDoc.data()
+            let nuevosAbonos = [...(cuentaData.abonos || [])]
+
+            const idsAEliminar = new Set(abonosDeCuenta.filter(a => a.abonoId).map(a => a.abonoId))
+            if (idsAEliminar.size > 0) {
+              nuevosAbonos = nuevosAbonos.filter(a => !idsAEliminar.has(a.id))
+            }
+
+            const indicesAEliminar = abonosDeCuenta
+              .filter(a => !a.abonoId && typeof a.abonoIndex === 'number')
+              .map(a => a.abonoIndex)
+              .sort((x, y) => y - x)
+            for (const idx of indicesAEliminar) {
+              if (idx >= 0 && idx < nuevosAbonos.length) {
+                nuevosAbonos.splice(idx, 1)
+              }
+            }
+
+            const totalAbonos = nuevosAbonos.reduce((sum, a) => sum + (a.monto || 0), 0)
+            const totalCobros = (cuentaData.cobros || []).reduce((sum, c) => sum + (c.monto || 0), 0)
+            const totalDia = (cuentaData.totalGeneralVenta || 0) - totalCobros - totalAbonos
+            const nuevoSaldoAcumulado = (cuentaData.saldoAcumuladoAnterior || 0) + totalDia
+
+            await updateDoc(cuentaRef, {
+              abonos: nuevosAbonos,
+              nuevoSaldoAcumulado: Math.max(0, nuevoSaldoAcumulado),
+              estadoPagado: nuevoSaldoAcumulado <= 0,
+              ultimaActualizacion: new Date().toISOString()
+            })
+
+            for (const a of abonosDeCuenta) {
+              abonosEliminadosLog.push({
+                descripcion: a.descripcion,
+                monto: a.monto,
+                cuentaId: a.cuentaId,
+                fechaCuenta: a.fechaCuenta,
+                fechaCuentaFormateada: a.fechaCuentaFormateada
+              })
+            }
+          } catch (err) {
+            console.error(`Error eliminando abonos de cuenta ${cuentaId}:`, err)
+            errores.push(`Cuenta ${cuentaId}: ${err.message}`)
+          }
+        }))
+
+        if (abonosEliminadosLog.length > 0) {
+          await addDoc(collection(db, `historial_aplicaciones_${props.cliente}`), {
+            fechaAplicacion: new Date().toISOString(),
+            modo: 'eliminacion_grupo_abonos',
+            grupoFecha: grupo.id,
+            grupoFechaLabel: grupo.fechaLabel,
+            cantidadAbonos: abonosEliminadosLog.length,
+            montoTotal: abonosEliminadosLog.reduce((sum, a) => sum + (a.monto || 0), 0),
+            abonosEliminados: abonosEliminadosLog,
+            exitoso: errores.length === 0
+          })
+        }
+
+        await Promise.all([
+          cargarTodosLosAbonos(),
+          cargarSaldoActual(),
+          cargarCuentasDisponibles()
+        ])
+
+        if (errores.length > 0) {
+          alert(`⚠️ Se eliminaron ${abonosEliminadosLog.length} abonos, pero hubo errores:\n\n${errores.join('\n')}`)
+        } else {
+          alert(`✅ Se eliminaron ${abonosEliminadosLog.length} abonos del grupo ${grupo.fechaLabel}\n\nMonto total eliminado: $${formatNumber(grupo.totalMonto)}`)
+        }
+
+      } catch (error) {
+        console.error('Error eliminando grupo de abonos:', error)
+        alert('Error al eliminar el grupo de abonos: ' + error.message)
+        try {
+          await Promise.all([
+            cargarTodosLosAbonos(),
+            cargarSaldoActual(),
+            cargarCuentasDisponibles()
+          ])
+        } catch (_) {}
       }
     }
 
@@ -1794,6 +1927,7 @@ export default {
       aplicarAbonosIndividuales,
       eliminarDelHistorial,
       eliminarAbonoIndividual,
+      eliminarGrupoAbonos,
       iniciarEdicionFechaHistorial,
       cancelarEdicionFechaHistorial,
       guardarFechaHistorial,
@@ -2573,6 +2707,25 @@ h4 {
 .btn-eliminar-abono:hover {
   background: #d32f2f;
   transform: scale(1.1);
+}
+
+.btn-eliminar-grupo {
+  background: #f44336;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  transition: all 0.2s ease;
+  margin-right: 8px;
+  white-space: nowrap;
+}
+
+.btn-eliminar-grupo:hover {
+  background: #d32f2f;
+  transform: translateY(-1px);
 }
 
 /* Listas del Stash con selección de fechas */
