@@ -427,7 +427,7 @@ export default {
               totalCobros,
               totalAbonos,
               totalNota: data.nuevoSaldoAcumulado || 0,
-              estadoPagado: saldoPersistido !== null ? saldoPersistido <= 0 : totalDiaActual <= 0,
+              estadoPagado: saldoPersistido !== null ? saldoPersistido <= 0.01 : totalDiaActual <= 0.01,
               nuevoSaldoAcumulado: data.nuevoSaldoAcumulado || 0,
               saldoAcumuladoAnterior: data.saldoAcumuladoAnterior || 0,
               abonos: data.abonos || [],
@@ -452,7 +452,7 @@ export default {
             const totalDia = cuenta.saldoHoy - cuenta.totalCobros - cuenta.totalAbonos;
             const saldoAnterior = i === 0 ? 0 : saldoAcumulado;
             saldoAcumulado += totalDia;
-            const estadoPagado = saldoAcumulado <= 0;
+            const estadoPagado = saldoAcumulado <= TOLERANCIA;
             const saldoNormalizado = estadoPagado ? 0 : saldoAcumulado;
 
             const cambioSaldoAnterior = Math.abs((cuenta.saldoAcumuladoAnterior || 0) - saldoAnterior) > TOLERANCIA;
@@ -475,7 +475,7 @@ export default {
             cuenta.estadoPagado = estadoPagado;
             cuenta.nuevoSaldoAcumulado = saldoNormalizado;
 
-            if (saldoAcumulado <= 0) {
+            if (saldoAcumulado <= TOLERANCIA) {
               saldoAcumulado = 0;
             }
           }

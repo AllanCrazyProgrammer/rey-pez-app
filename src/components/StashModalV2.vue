@@ -1407,7 +1407,7 @@ export default {
       await updateDoc(cuentaRef, {
         abonos: nuevosAbonos,
         nuevoSaldoAcumulado: Math.max(0, nuevoSaldoAcumulado),
-        estadoPagado: nuevoSaldoAcumulado <= 0,
+        estadoPagado: nuevoSaldoAcumulado <= 0.01,
         ultimaActualizacion: new Date().toISOString()
       })
     }
@@ -1514,7 +1514,7 @@ export default {
         const saldoAnterior = saldoAcumulado
         const totalDia = calcularSaldoPendienteNota(cuenta.data)
         saldoAcumulado = redondearMonto(saldoAcumulado + totalDia)
-        const estadoPagado = saldoAcumulado <= 0
+        const estadoPagado = saldoAcumulado <= 0.01
         const nuevoSaldoAcumulado = estadoPagado ? 0 : saldoAcumulado
 
         if (estadoPagado) {

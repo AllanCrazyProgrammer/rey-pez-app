@@ -477,7 +477,7 @@ export default {
       return this.totalGeneralVenta - this.abonos.reduce((sum, a) => sum + (a.monto || 0), 0);
     },
     estadoCuenta() {
-      return this.nuevoSaldoAcumulado <= 0 ? 'Pagado' : 'No Pagado';
+      return this.nuevoSaldoAcumulado <= 0.01 ? 'Pagado' : 'No Pagado';
     },
     gananciaTotal() {
       return this.itemsVenta.reduce((sum, item) => sum + (item.ganancia || 0), 0);
@@ -613,10 +613,11 @@ export default {
             (cuenta.cobros || []).reduce((sum, c) => sum + (parseFloat(c.monto) || 0), 0) -
             (cuenta.abonos || []).reduce((sum, a) => sum + (parseFloat(a.monto) || 0), 0);
           saldoAcumulado += totalDia;
+          const estadoPagado = saldoAcumulado <= 0.01;
           return this.service.update(cuenta.id, {
             saldoAcumuladoAnterior: cuenta.id === this.$route.params.id ? this.saldoAcumuladoAnterior : saldoAcumulado - totalDia,
-            nuevoSaldoAcumulado: saldoAcumulado,
-            estadoPagado: saldoAcumulado <= 0,
+            nuevoSaldoAcumulado: estadoPagado ? 0 : saldoAcumulado,
+            estadoPagado,
           });
         }));
       } catch (error) {
@@ -699,6 +700,7 @@ export default {
           this.abonos.reduce((sum, a) => sum + (parseFloat(a.monto) || 0), 0);
         const saldoActualizado = await this.obtenerSaldoAcumuladoAnterior();
         const nuevoSaldo = saldoActualizado + totalDia;
+        const estadoPagado = nuevoSaldo <= 0.01;
         const notaData = {
           fecha: this.fechaSeleccionada,
           items: this.items.map(item => { const kilos = parseFloat(item.kilos) || 0; return { ...item, kilos, total: kilos * (item.costo || 0) }; }),
@@ -708,9 +710,9 @@ export default {
           abonos: this.abonos,
           totalGeneral: this.totalGeneral,
           totalGeneralVenta: this.totalGeneralVenta,
-          nuevoSaldoAcumulado: nuevoSaldo <= 0 ? 0 : nuevoSaldo,
+          nuevoSaldoAcumulado: estadoPagado ? 0 : nuevoSaldo,
           gananciaDelDia: this.gananciaDelDia,
-          estadoPagado: nuevoSaldo <= 0,
+          estadoPagado,
           tieneObservacion: this.tieneObservacion,
           observacion: this.observacion,
           ultimaActualizacion: new Date().toISOString(),
@@ -773,7 +775,7 @@ export default {
         const saldoAnterior = saldoAcumulado;
         const totalDia = this.calcularSaldoPendienteNota(cuenta);
         saldoAcumulado = this.redondearMonto(saldoAcumulado + totalDia);
-        const estadoPagado = saldoAcumulado <= 0;
+        const estadoPagado = saldoAcumulado <= 0.01;
         const nuevoSaldoAcumulado = estadoPagado ? 0 : saldoAcumulado;
 
         if (estadoPagado) {
