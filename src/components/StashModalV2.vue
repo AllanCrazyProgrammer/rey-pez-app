@@ -282,7 +282,7 @@
               <div class="grupo-header" @click="toggleGrupoHistorial(grupo.id)">
                 <div class="grupo-fecha">
                   <span class="grupo-fecha-texto">{{ grupo.fechaLabel }}</span>
-                  <span class="grupo-meta">{{ grupo.abonos.length }} {{ grupo.abonos.length === 1 ? 'abono' : 'abonos' }}</span>
+                  <span class="grupo-meta">{{ grupo.depositos.length }} {{ grupo.depositos.length === 1 ? 'depósito' : 'depósitos' }}</span>
                 </div>
                 <div class="grupo-total">${{ formatNumber(grupo.totalMonto) }}</div>
                 <button
@@ -321,70 +321,162 @@
                   </div>
                   <div class="grupo-abonos">
                     <div
-                      v-for="abono in grupo.abonos"
-                      :key="abono.uniqueId"
-                      class="abono-item"
+                      v-for="deposito in grupo.depositos"
+                      :key="deposito.id"
+                      class="deposito-item"
+                      :class="{ 'deposito-expandido': esDepositoExpandido(deposito.id) }"
                     >
-                      <div class="abono-main">
+                      <div class="deposito-main">
                         <div class="abono-left">
-                          <div class="abono-fecha">
-                            <span class="fecha-cuenta">{{ abono.fechaCuentaFormateada }}</span>
-                            <div class="historial-fecha-aplicacion">
-                              <template v-if="abono.editandoFecha">
-                                <label class="editar-fecha-label">
-                                  Fecha de registro
-                                  <input
-                                    type="datetime-local"
-                                    v-model="abono.fechaEditable"
-                                    class="input-fecha-registro"
-                                  >
-                                </label>
-                                <div class="acciones-edicion-fecha">
-                                  <button
-                                    class="btn-guardar-fecha"
-                                    :disabled="abono.guardandoFecha || !abono.fechaEditable"
-                                    @click.stop="guardarFechaHistorial(abono)"
-                                  >
-                                    {{ abono.guardandoFecha ? 'Guardando...' : 'Guardar' }}
-                                  </button>
-                                  <button
-                                    class="btn-cancelar-fecha"
-                                    :disabled="abono.guardandoFecha"
-                                    @click.stop="cancelarEdicionFechaHistorial(abono)"
-                                  >
-                                    Cancelar
-                                  </button>
-                                </div>
-                              </template>
-                              <template v-else>
-                                <span>{{ formatearFechaHora(abono.fechaAplicacion) }}</span>
-                                <button
-                                  class="btn-editar-fecha"
-                                  title="Editar fecha de registro"
-                                  @click.stop="iniciarEdicionFechaHistorial(abono)"
+                          <template v-if="deposito.editando">
+                            <div class="deposito-edit-form">
+                              <label>
+                                Fecha del depósito
+                                <input
+                                  type="datetime-local"
+                                  v-model="deposito.fechaEditable"
+                                  class="input-fecha-registro"
                                 >
-                                  Editar
-                                </button>
-                              </template>
+                              </label>
+                              <label>
+                                Descripción
+                                <input
+                                  type="text"
+                                  v-model="deposito.descripcionEditable"
+                                  class="input-deposito-edit"
+                                >
+                              </label>
+                              <label>
+                                Monto total
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  v-model.number="deposito.montoEditable"
+                                  class="input-deposito-edit"
+                                >
+                              </label>
                             </div>
-                          </div>
-                          <div class="abono-descripcion">{{ abono.descripcion }}</div>
-                          <div class="abono-aplicacion">
-                            Aplicado a: {{ abono.fechaCuentaFormateada || 'Sin nota' }}
-                          </div>
-                          <div v-if="abono.origenDescripcion" class="abono-origen">{{ abono.origenDescripcion }}</div>
+                          </template>
+                          <template v-else>
+                            <div class="abono-fecha">
+                              <span class="fecha-cuenta">{{ deposito.fechaLabel }}</span>
+                              <span class="fecha-aplicacion">{{ deposito.aplicaciones.length }} {{ deposito.aplicaciones.length === 1 ? 'aplicación' : 'aplicaciones' }}</span>
+                            </div>
+                            <div class="abono-descripcion">{{ deposito.descripcion }}</div>
+                            <div class="abono-aplicacion">
+                              Aplicado a {{ deposito.cuentas.length }} {{ deposito.cuentas.length === 1 ? 'nota' : 'notas' }}
+                            </div>
+                            <div v-if="deposito.origenDescripcion" class="abono-origen">{{ deposito.origenDescripcion }}</div>
+                          </template>
                         </div>
                         <div class="abono-right">
-                          <div class="abono-monto">${{ formatNumber(abono.monto) }}</div>
-                          <button 
-                            @click.stop="eliminarAbonoIndividual(abono)" 
-                            class="btn-eliminar-abono"
-                            title="Eliminar abono"
+                          <div class="abono-monto">${{ formatNumber(deposito.totalMonto) }}</div>
+                          <template v-if="deposito.editando">
+                            <button
+                              @click.stop="guardarDepositoHistorial(deposito)"
+                              class="btn-guardar-fecha"
+                              type="button"
+                              :disabled="deposito.guardando || !deposito.fechaEditable || !deposito.descripcionEditable || deposito.montoEditable <= 0"
+                            >
+                              {{ deposito.guardando ? 'Guardando...' : 'Guardar' }}
+                            </button>
+                            <button
+                              @click.stop="cancelarEdicionDeposito(deposito)"
+                              class="btn-cancelar-fecha"
+                              type="button"
+                              :disabled="deposito.guardando"
+                            >
+                              Cancelar
+                            </button>
+                          </template>
+                          <button
+                            v-else
+                            @click.stop="iniciarEdicionDeposito(deposito)"
+                            class="btn-editar-fecha"
+                            type="button"
                           >
-                            🗑️
+                            Editar
+                          </button>
+                          <button
+                            v-if="!deposito.editando"
+                            @click.stop="toggleDepositoHistorial(deposito.id)"
+                            class="btn-desglosar-deposito"
+                            type="button"
+                            :aria-expanded="esDepositoExpandido(deposito.id)"
+                          >
+                            {{ esDepositoExpandido(deposito.id) ? 'Ocultar' : 'Desglosar' }}
                           </button>
                         </div>
                       </div>
+                      <transition name="fade">
+                        <div v-if="esDepositoExpandido(deposito.id)" class="deposito-desglose">
+                          <div
+                            v-for="abono in deposito.aplicaciones"
+                            :key="abono.uniqueId"
+                            class="abono-item abono-desglose-item"
+                          >
+                            <div class="abono-main">
+                              <div class="abono-left">
+                                <div class="abono-fecha">
+                                  <span class="fecha-cuenta">{{ abono.fechaCuentaFormateada }}</span>
+                                  <div class="historial-fecha-aplicacion">
+                                    <template v-if="abono.editandoFecha">
+                                      <label class="editar-fecha-label">
+                                        Fecha de registro
+                                        <input
+                                          type="datetime-local"
+                                          v-model="abono.fechaEditable"
+                                          class="input-fecha-registro"
+                                        >
+                                      </label>
+                                      <div class="acciones-edicion-fecha">
+                                        <button
+                                          class="btn-guardar-fecha"
+                                          :disabled="abono.guardandoFecha || !abono.fechaEditable"
+                                          @click.stop="guardarFechaHistorial(abono)"
+                                        >
+                                          {{ abono.guardandoFecha ? 'Guardando...' : 'Guardar' }}
+                                        </button>
+                                        <button
+                                          class="btn-cancelar-fecha"
+                                          :disabled="abono.guardandoFecha"
+                                          @click.stop="cancelarEdicionFechaHistorial(abono)"
+                                        >
+                                          Cancelar
+                                        </button>
+                                      </div>
+                                    </template>
+                                    <template v-else>
+                                      <span>{{ formatearFechaHora(abono.fechaAplicacion) }}</span>
+                                      <button
+                                        class="btn-editar-fecha"
+                                        title="Editar fecha de registro"
+                                        @click.stop="iniciarEdicionFechaHistorial(abono)"
+                                      >
+                                        Editar
+                                      </button>
+                                    </template>
+                                  </div>
+                                </div>
+                                <div class="abono-aplicacion">
+                                  Aplicado a: {{ abono.fechaCuentaFormateada || 'Sin nota' }}
+                                </div>
+                              </div>
+                              <div class="abono-right">
+                                <div class="abono-monto">${{ formatNumber(abono.monto) }}</div>
+                                <button
+                                  @click.stop="eliminarAbonoIndividual(abono)"
+                                  class="btn-eliminar-abono"
+                                  title="Eliminar abono"
+                                >
+                                  🗑️
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </transition>
                     </div>
                   </div>
                 </div>
@@ -435,7 +527,7 @@
 
 <script>
 import { ref, computed, onMounted, watch } from 'vue'
-import { collection, addDoc, deleteDoc, doc, getDocs, getDoc, query, orderBy, limit, where, updateDoc } from 'firebase/firestore'
+import { collection, addDoc, deleteDoc, doc, getDocs, getDoc, query, orderBy, limit, where, updateDoc, writeBatch } from 'firebase/firestore'
 import { db } from '@/firebase'
 import { formatearFecha, formatNumber } from '@/utils/formatters';
 
@@ -560,6 +652,14 @@ export default {
     const historialPorFecha = computed(() => {
       const gruposMap = new Map()
 
+      const crearClaveDeposito = (abono) => {
+        if (abono.stashItemId) return `stash-${abono.stashItemId}`
+        const fechaDeposito = obtenerClaveFecha(abono.fechaOriginalStash || abono.fechaOriginal || abono.fechaAplicacion || abono.fecha)
+        const descripcion = (abono.descripcion || 'Sin descripción').toLowerCase().trim()
+        const tipoPago = abono.esEfectivo ? 'efectivo' : 'deposito'
+        return `${fechaDeposito || 'sin-fecha'}-${descripcion}-${tipoPago}`
+      }
+
       todosLosAbonos.value.forEach(abono => {
         const fechaClave = obtenerClaveFecha(
           abono.fechaOriginalStash || abono.fecha || abono.fechaAplicacion || abono.fechaCuenta
@@ -572,6 +672,7 @@ export default {
             fechaISO: fechaClave,
             totalMonto: 0,
             abonos: [],
+            depositos: new Map(),
             cuentas: new Map()
           })
         }
@@ -580,6 +681,30 @@ export default {
         const monto = Number(abono.monto) || 0
         grupo.totalMonto += monto
         grupo.abonos.push(abono)
+
+        const depositoKey = crearClaveDeposito(abono)
+        if (!grupo.depositos.has(depositoKey)) {
+          grupo.depositos.set(depositoKey, {
+            id: `${fechaClave}-${depositoKey}`,
+            fechaISO: abono.fechaOriginalStash || abono.fechaOriginal || abono.fechaAplicacion || abono.fechaCuenta,
+            fechaLabel: formatearFechaHora(abono.fechaOriginalStash || abono.fechaOriginal || abono.fechaAplicacion || abono.fechaCuenta),
+            descripcion: abono.descripcion || 'Sin descripción',
+            origenDescripcion: abono.origenDescripcion,
+            totalMonto: 0,
+            aplicaciones: [],
+            cuentas: new Map()
+          })
+        }
+
+        const deposito = grupo.depositos.get(depositoKey)
+        deposito.totalMonto += monto
+        deposito.aplicaciones.push(abono)
+        if (abono.cuentaId && !deposito.cuentas.has(abono.cuentaId)) {
+          deposito.cuentas.set(abono.cuentaId, {
+            id: abono.cuentaId,
+            fechaCuentaFormateada: abono.fechaCuentaFormateada
+          })
+        }
 
         const cuentaKey = abono.cuentaId || `sin-cuenta-${abono.uniqueId}`
         if (!grupo.cuentas.has(cuentaKey)) {
@@ -610,7 +735,15 @@ export default {
         fechaLabel: formatearFechaHistorialCabecera(grupo.fechaISO),
         totalMonto: grupo.totalMonto,
         cuentas: Array.from(grupo.cuentas.values()),
-        abonos: grupo.abonos.sort((a, b) => new Date(b.fechaAplicacion) - new Date(a.fechaAplicacion))
+        abonos: grupo.abonos.sort((a, b) => new Date(b.fechaAplicacion) - new Date(a.fechaAplicacion)),
+        depositos: Array.from(grupo.depositos.values())
+          .map(deposito => ({
+            ...deposito,
+            totalMonto: Math.round(deposito.totalMonto * 100) / 100,
+            cuentas: Array.from(deposito.cuentas.values()),
+            aplicaciones: deposito.aplicaciones.sort((a, b) => new Date(a.fechaCuenta) - new Date(b.fechaCuenta))
+          }))
+          .sort((a, b) => new Date(b.fechaISO) - new Date(a.fechaISO))
       }))
 
       return grupos.sort((a, b) => new Date(b.fechaISO) - new Date(a.fechaISO))
@@ -891,6 +1024,8 @@ export default {
                 monto: abono.monto || 0,
                 abonoId: abono.id,
                 abonoIndex: index,
+                stashItemId: abono.stashItemId || null,
+                esEfectivo: !!abono.esEfectivo,
                 esAplicacionIndividual: abono.esAplicacionIndividual || false,
                 origenDescripcion: abono.fechaOriginalStash
                   ? `Stash (${formatearFecha(abono.fechaOriginalStash)})`
@@ -914,6 +1049,7 @@ export default {
         }))
 
         historialGruposExpandidos.value = {}
+        historialDepositosExpandidos.value = {}
 
       } catch (error) {
         console.error('Error cargando todos los abonos:', error)
@@ -1275,6 +1411,370 @@ export default {
         ultimaActualizacion: new Date().toISOString()
       })
     }
+
+    const obtenerCollectionNameCuentas = () =>
+      `cuentas${props.cliente.charAt(0).toUpperCase() + props.cliente.slice(1)}`
+
+    const redondearMonto = (monto) => Math.round((Number(monto) || 0) * 100) / 100
+
+    const obtenerTiempoFecha = (fecha) => {
+      const fechaParseada = parseFechaLocalSeguro(fecha)
+      return fechaParseada ? fechaParseada.getTime() : 0
+    }
+
+    const calcularTotalAbonos = (abonos = []) =>
+      abonos.reduce((sum, abono) => sum + (parseFloat(abono.monto) || 0), 0)
+
+    const calcularTotalCobros = (cobros = []) =>
+      cobros.reduce((sum, cobro) => sum + (parseFloat(cobro.monto) || 0), 0)
+
+    const calcularSaldoPendienteNota = (cuentaData) => {
+      const totalGeneralVenta = parseFloat(cuentaData.totalGeneralVenta) || 0
+      return redondearMonto(totalGeneralVenta - calcularTotalCobros(cuentaData.cobros) - calcularTotalAbonos(cuentaData.abonos))
+    }
+
+    const clonarAbono = (abono = {}) => ({
+      ...abono,
+      monto: redondearMonto(abono.monto)
+    })
+
+    const obtenerFechaOrdenAbono = (abono = {}, fechaCuenta = '') =>
+      abono.fechaOriginalStash || abono.fecha || abono.fechaAplicacion || fechaCuenta || ''
+
+    const crearClaveAbonoObjetivo = (abono) => {
+      if (!abono || !abono.cuentaId) return ''
+      if (abono.abonoId) return `${abono.cuentaId}::id::${abono.abonoId}`
+      if (typeof abono.abonoIndex === 'number') return `${abono.cuentaId}::index::${abono.abonoIndex}`
+      return `${abono.cuentaId}::fallback::${abono.descripcion || ''}::${abono.monto || 0}::${abono.fechaAplicacion || abono.fechaOriginal || ''}`
+    }
+
+    const abonoCoincideConObjetivo = (cuentaId, abono, index, objetivosPorClave, objetivosFallback) => {
+      const claveId = abono?.id ? `${cuentaId}::id::${abono.id}` : ''
+      if (claveId && objetivosPorClave.has(claveId)) {
+        const objetivo = objetivosPorClave.get(claveId)
+        objetivosPorClave.delete(claveId)
+        return objetivo
+      }
+
+      const claveIndex = `${cuentaId}::index::${index}`
+      if (objetivosPorClave.has(claveIndex)) {
+        const objetivo = objetivosPorClave.get(claveIndex)
+        objetivosPorClave.delete(claveIndex)
+        return objetivo
+      }
+
+      const fallbackIndex = objetivosFallback.findIndex(objetivo =>
+        objetivo.cuentaId === cuentaId &&
+        redondearMonto(objetivo.monto) === redondearMonto(abono?.monto) &&
+        (objetivo.descripcion || '') === (abono?.descripcion || 'Sin descripción')
+      )
+
+      if (fallbackIndex === -1) return null
+      const [objetivo] = objetivosFallback.splice(fallbackIndex, 1)
+      return objetivo
+    }
+
+    const prepararObjetivosEliminacion = (abonos = []) => {
+      const objetivosPorClave = new Map()
+      const objetivosFallback = []
+
+      abonos.forEach(abono => {
+        const clave = crearClaveAbonoObjetivo(abono)
+        if (clave.includes('::fallback::')) {
+          objetivosFallback.push(abono)
+        } else if (clave) {
+          objetivosPorClave.set(clave, abono)
+        }
+      })
+
+      return { objetivosPorClave, objetivosFallback }
+    }
+
+    const crearAbonoRedistribuido = (abonoOriginal, monto, contexto) => {
+      const montoRedondeado = redondearMonto(monto)
+      const abonoRedistribuido = {
+        ...abonoOriginal,
+        monto: montoRedondeado,
+        redistribuidoAutomaticamente: true,
+        redistribuidoEn: contexto.fechaRedistribucion,
+        redistribuidoDesdeCuentaId: contexto.cuentaOrigenId
+      }
+
+      if (contexto.requiereNuevoId && abonoRedistribuido.id) {
+        abonoRedistribuido.id = `${abonoRedistribuido.id}_redistribuido_${contexto.indicePieza}`
+      }
+
+      return abonoRedistribuido
+    }
+
+    const recalcularSaldosAcumulados = (cuentas) => {
+      let saldoAcumulado = 0
+
+      return cuentas.map(cuenta => {
+        const saldoAnterior = saldoAcumulado
+        const totalDia = calcularSaldoPendienteNota(cuenta.data)
+        saldoAcumulado = redondearMonto(saldoAcumulado + totalDia)
+        const estadoPagado = saldoAcumulado <= 0
+        const nuevoSaldoAcumulado = estadoPagado ? 0 : saldoAcumulado
+
+        if (estadoPagado) {
+          saldoAcumulado = 0
+        }
+
+        return {
+          ...cuenta,
+          data: {
+            ...cuenta.data,
+            saldoAcumuladoAnterior: saldoAnterior,
+            nuevoSaldoAcumulado,
+            estadoPagado
+          }
+        }
+      })
+    }
+
+    const hayCambioNumerico = (actual, siguiente) =>
+      Math.abs((Number(actual) || 0) - (Number(siguiente) || 0)) > 0.01
+
+    const cuentaNecesitaUpdate = (cuentaOriginal, cuentaActualizada, idsConAbonosModificados) =>
+      idsConAbonosModificados.has(cuentaActualizada.id) ||
+      hayCambioNumerico(cuentaOriginal.data.saldoAcumuladoAnterior, cuentaActualizada.data.saldoAcumuladoAnterior) ||
+      hayCambioNumerico(cuentaOriginal.data.nuevoSaldoAcumulado, cuentaActualizada.data.nuevoSaldoAcumulado) ||
+      cuentaOriginal.data.estadoPagado !== cuentaActualizada.data.estadoPagado
+
+    const aplicarBatchActualizaciones = async (cuentasOriginales, cuentasActualizadas, idsConAbonosModificados, collectionName) => {
+      const ahoraIso = new Date().toISOString()
+      const actualizaciones = []
+
+      cuentasActualizadas.forEach((cuentaActualizada, index) => {
+        const cuentaOriginal = cuentasOriginales[index]
+        if (!cuentaNecesitaUpdate(cuentaOriginal, cuentaActualizada, idsConAbonosModificados)) return
+
+        const updates = {
+          saldoAcumuladoAnterior: cuentaActualizada.data.saldoAcumuladoAnterior,
+          nuevoSaldoAcumulado: cuentaActualizada.data.nuevoSaldoAcumulado,
+          estadoPagado: cuentaActualizada.data.estadoPagado,
+          ultimaActualizacion: ahoraIso
+        }
+
+        if (idsConAbonosModificados.has(cuentaActualizada.id)) {
+          updates.abonos = cuentaActualizada.data.abonos || []
+        }
+
+        actualizaciones.push({ id: cuentaActualizada.id, updates })
+      })
+
+      const TAMANO_LOTE = 400
+      for (let i = 0; i < actualizaciones.length; i += TAMANO_LOTE) {
+        const batch = writeBatch(db)
+        actualizaciones.slice(i, i + TAMANO_LOTE).forEach(({ id, updates }) => {
+          batch.update(doc(db, collectionName, id), updates)
+        })
+        await batch.commit()
+      }
+    }
+
+    const redistribuirAbonosDespuesDeEliminar = async (abonosAEliminar = []) => {
+      if (!abonosAEliminar.length) {
+        return {
+          abonosEliminados: [],
+          abonosRedistribuidos: [],
+          cuentasAfectadas: [],
+          montoRedistribuido: 0,
+          montoSinAplicar: 0,
+          abonosDevueltosAlStash: []
+        }
+      }
+
+      const collectionName = obtenerCollectionNameCuentas()
+      const cuentasSnap = await getDocs(query(collection(db, collectionName), orderBy('fecha', 'asc')))
+      const cuentasOriginales = cuentasSnap.docs.map(docSnap => ({
+        id: docSnap.id,
+        data: {
+          ...docSnap.data(),
+          abonos: [...(docSnap.data().abonos || [])]
+        }
+      }))
+
+      const cuentas = cuentasOriginales.map(cuenta => ({
+        id: cuenta.id,
+        data: {
+          ...cuenta.data,
+          abonos: [...(cuenta.data.abonos || [])]
+        }
+      }))
+
+      const indicesPorCuenta = new Map(cuentas.map((cuenta, index) => [cuenta.id, index]))
+      const indicesObjetivo = abonosAEliminar
+        .map(abono => indicesPorCuenta.get(abono.cuentaId))
+        .filter(index => typeof index === 'number')
+
+      if (!indicesObjetivo.length) {
+        throw new Error('No se encontraron las cuentas de los abonos a eliminar.')
+      }
+
+      const indiceInicio = Math.min(...indicesObjetivo)
+      const { objetivosPorClave, objetivosFallback } = prepararObjetivosEliminacion(abonosAEliminar)
+      const abonosEliminados = []
+      const abonosParaRedistribuir = []
+      const idsConAbonosModificados = new Set()
+
+      cuentas.forEach((cuenta, indiceCuenta) => {
+        if (indiceCuenta < indiceInicio) return
+
+        const abonosOriginales = cuenta.data.abonos || []
+        const abonosConservar = []
+        let primerIndiceEliminado = indiceCuenta === indiceInicio ? Infinity : 0
+
+        abonosOriginales.forEach((abono, index) => {
+          const objetivoEliminado = abonoCoincideConObjetivo(
+            cuenta.id,
+            abono,
+            index,
+            objetivosPorClave,
+            objetivosFallback
+          )
+
+          if (objetivoEliminado) {
+            primerIndiceEliminado = Math.min(primerIndiceEliminado, index)
+            idsConAbonosModificados.add(cuenta.id)
+            abonosEliminados.push({
+              ...objetivoEliminado,
+              cuentaId: cuenta.id,
+              monto: redondearMonto(abono.monto),
+              descripcion: abono.descripcion || objetivoEliminado.descripcion || 'Sin descripción',
+              fechaCuenta: cuenta.data.fecha,
+              fechaCuentaFormateada: formatearFecha(cuenta.data.fecha)
+            })
+            return
+          }
+
+          const esPosterior =
+            indiceCuenta > indiceInicio ||
+            (indiceCuenta === indiceInicio && index > primerIndiceEliminado)
+
+          if (esPosterior) {
+            idsConAbonosModificados.add(cuenta.id)
+            abonosParaRedistribuir.push({
+              abono: clonarAbono(abono),
+              cuentaOrigenId: cuenta.id,
+              fechaCuentaOrigen: cuenta.data.fecha,
+              indiceCuenta,
+              indiceAbono: index,
+              fechaOrden: obtenerFechaOrdenAbono(abono, cuenta.data.fecha)
+            })
+          } else {
+            abonosConservar.push(abono)
+          }
+        })
+
+        if (indiceCuenta > indiceInicio || Number.isFinite(primerIndiceEliminado)) {
+          cuenta.data.abonos = abonosConservar
+        }
+      })
+
+      if (abonosEliminados.length !== abonosAEliminar.length) {
+        throw new Error('No se pudieron encontrar todos los abonos seleccionados para eliminar.')
+      }
+
+      abonosParaRedistribuir.sort((a, b) => {
+        if (a.indiceCuenta !== b.indiceCuenta) return a.indiceCuenta - b.indiceCuenta
+        const diferenciaFecha = obtenerTiempoFecha(a.fechaOrden) - obtenerTiempoFecha(b.fechaOrden)
+        if (diferenciaFecha !== 0) return diferenciaFecha
+        return a.indiceAbono - b.indiceAbono
+      })
+
+      const abonosRedistribuidos = []
+      const abonosDevueltosAlStash = []
+      let indicePieza = 0
+      const fechaRedistribucion = new Date().toISOString()
+
+      for (const item of abonosParaRedistribuir) {
+        let montoRestante = redondearMonto(item.abono.monto)
+        let piezasCreadas = 0
+
+        for (let indiceCuenta = indiceInicio; indiceCuenta < cuentas.length && montoRestante > 0.01; indiceCuenta++) {
+          const cuentaDestino = cuentas[indiceCuenta]
+          const saldoPendiente = calcularSaldoPendienteNota(cuentaDestino.data)
+          const montoAAplicar = redondearMonto(Math.min(montoRestante, saldoPendiente))
+
+          if (montoAAplicar <= 0.01) continue
+
+          indicePieza += 1
+          piezasCreadas += 1
+          const requiereNuevoId = montoAAplicar !== redondearMonto(item.abono.monto) || piezasCreadas > 1
+          const abonoRedistribuido = crearAbonoRedistribuido(item.abono, montoAAplicar, {
+            cuentaOrigenId: item.cuentaOrigenId,
+            fechaRedistribucion,
+            indicePieza,
+            requiereNuevoId
+          })
+
+          cuentaDestino.data.abonos = [...(cuentaDestino.data.abonos || []), abonoRedistribuido]
+          idsConAbonosModificados.add(cuentaDestino.id)
+          abonosRedistribuidos.push({
+            descripcion: abonoRedistribuido.descripcion || 'Sin descripción',
+            monto: montoAAplicar,
+            cuentaOrigenId: item.cuentaOrigenId,
+            cuentaDestinoId: cuentaDestino.id,
+            fechaCuentaOrigen: item.fechaCuentaOrigen,
+            fechaCuentaDestino: cuentaDestino.data.fecha
+          })
+
+          montoRestante = redondearMonto(montoRestante - montoAAplicar)
+        }
+
+        if (montoRestante > 0.01) {
+          abonosDevueltosAlStash.push({
+            fecha: normalizarFechaSeleccionada(obtenerFechaOrdenAbono(item.abono, item.fechaCuentaOrigen)),
+            descripcion: `${item.abono.descripcion || 'Sin descripción'} (sobrante redistribución)`,
+            monto: montoRestante,
+            esEfectivo: !!item.abono.esEfectivo,
+            stashItemIdOriginal: item.abono.stashItemId || null,
+            redistribuidoDesdeCuentaId: item.cuentaOrigenId,
+            creadoPorRedistribucion: true,
+            fechaCreacion: fechaRedistribucion
+          })
+
+          abonosRedistribuidos.push({
+            descripcion: item.abono.descripcion || 'Sin descripción',
+            monto: montoRestante,
+            cuentaOrigenId: item.cuentaOrigenId,
+            cuentaDestinoId: null,
+            fechaCuentaOrigen: item.fechaCuentaOrigen,
+            fechaCuentaDestino: null,
+            sinAplicar: true
+          })
+        }
+      }
+
+      const cuentasRecalculadas = recalcularSaldosAcumulados(cuentas)
+      await aplicarBatchActualizaciones(cuentasOriginales, cuentasRecalculadas, idsConAbonosModificados, collectionName)
+
+      if (abonosDevueltosAlStash.length > 0) {
+        await Promise.all(
+          abonosDevueltosAlStash.map(abonoStash =>
+            addDoc(collection(db, `stash_${props.cliente}`), abonoStash)
+          )
+        )
+      }
+
+      const montoRedistribuido = abonosRedistribuidos
+        .filter(abono => !abono.sinAplicar)
+        .reduce((sum, abono) => sum + (abono.monto || 0), 0)
+      const montoSinAplicar = abonosRedistribuidos
+        .filter(abono => abono.sinAplicar)
+        .reduce((sum, abono) => sum + (abono.monto || 0), 0)
+
+      return {
+        abonosEliminados,
+        abonosRedistribuidos,
+        cuentasAfectadas: Array.from(idsConAbonosModificados),
+        montoRedistribuido: redondearMonto(montoRedistribuido),
+        montoSinAplicar: redondearMonto(montoSinAplicar),
+        abonosDevueltosAlStash
+      }
+    }
     
     const registrarEnHistorial = async (abonosAplicados, tipo = 'cascada') => {
       try {
@@ -1497,51 +1997,18 @@ export default {
         `Cuenta: ${abono.fechaCuentaFormateada}\n` +
         `Descripción: ${abono.descripcion}\n` +
         `Monto: $${formatNumber(abono.monto)}\n\n` +
-        `Esta acción actualizará el saldo de la cuenta.`
+        `Esta acción actualizará el saldo y recorrerá automáticamente los abonos siguientes.`
       )
       
       if (!confirmacion) return
       
       try {
-        const collectionName = `cuentas${props.cliente.charAt(0).toUpperCase() + props.cliente.slice(1)}`
-        const cuentaRef = doc(db, collectionName, abono.cuentaId)
-        const cuentaDoc = await getDoc(cuentaRef)
-        
-        if (!cuentaDoc.exists()) {
-          alert('Error: No se encontró la cuenta.')
-          return
-        }
-        
-        const cuentaData = cuentaDoc.data()
-        let nuevosAbonos = [...(cuentaData.abonos || [])]
-        
-        // Eliminar el abono específico
-        if (abono.abonoId) {
-          // Si tiene ID específico, eliminar por ID
-          nuevosAbonos = nuevosAbonos.filter(a => a.id !== abono.abonoId)
-        } else {
-          // Si no tiene ID, eliminar por índice
-          nuevosAbonos.splice(abono.abonoIndex, 1)
-        }
-        
-        // Recalcular saldo
-        const totalAbonos = nuevosAbonos.reduce((sum, a) => sum + (a.monto || 0), 0)
-        const totalCobros = (cuentaData.cobros || []).reduce((sum, c) => sum + (c.monto || 0), 0)
-        const totalDia = (cuentaData.totalGeneralVenta || 0) - totalCobros - totalAbonos
-        const nuevoSaldoAcumulado = (cuentaData.saldoAcumuladoAnterior || 0) + totalDia
-        
-        // Actualizar la cuenta
-        await updateDoc(cuentaRef, {
-          abonos: nuevosAbonos,
-          nuevoSaldoAcumulado: Math.max(0, nuevoSaldoAcumulado),
-          estadoPagado: nuevoSaldoAcumulado <= 0,
-          ultimaActualizacion: new Date().toISOString()
-        })
+        const resultadoRedistribucion = await redistribuirAbonosDespuesDeEliminar([abono])
         
         // Registrar la eliminación en el historial
         await addDoc(collection(db, `historial_aplicaciones_${props.cliente}`), {
           fechaAplicacion: new Date().toISOString(),
-          modo: 'eliminacion_abono',
+          modo: 'eliminacion_abono_redistribucion',
           abonoEliminado: {
             descripcion: abono.descripcion,
             monto: abono.monto,
@@ -1549,18 +2016,36 @@ export default {
             fechaCuentaFormateada: abono.fechaCuentaFormateada
           },
           cuentaAfectada: abono.cuentaId,
-          nuevoSaldo: nuevoSaldoAcumulado,
+          redistribucionAutomatica: {
+            abonosRedistribuidos: resultadoRedistribucion.abonosRedistribuidos,
+            cuentasAfectadas: resultadoRedistribucion.cuentasAfectadas,
+            montoRedistribuido: resultadoRedistribucion.montoRedistribuido,
+            montoSinAplicar: resultadoRedistribucion.montoSinAplicar,
+            abonosDevueltosAlStash: resultadoRedistribucion.abonosDevueltosAlStash
+          },
           exitoso: true
         })
         
         // Recargar datos
         await Promise.all([
+          cargarStash(),
           cargarTodosLosAbonos(),
+          cargarHistorial(),
           cargarSaldoActual(),
           cargarCuentasDisponibles()
         ])
-        
-        alert(`✅ Abono eliminado exitosamente\n\nSe eliminó: $${formatNumber(abono.monto)}\nDe la cuenta: ${abono.fechaCuentaFormateada}`)
+
+        const mensajeSinAplicar = resultadoRedistribucion.montoSinAplicar > 0
+          ? `\n\nMonto devuelto al stash: $${formatNumber(resultadoRedistribucion.montoSinAplicar)}`
+          : ''
+
+        alert(
+          `✅ Abono eliminado y abonos siguientes redistribuidos\n\n` +
+          `Se eliminó: $${formatNumber(abono.monto)}\n` +
+          `De la cuenta: ${abono.fechaCuentaFormateada}\n` +
+          `Monto redistribuido: $${formatNumber(resultadoRedistribucion.montoRedistribuido)}` +
+          mensajeSinAplicar
+        )
 
       } catch (error) {
         console.error('Error eliminando abono:', error)
@@ -1580,112 +2065,66 @@ export default {
         `Abonos: ${cantidadAbonos}\n` +
         `Notas afectadas: ${cantidadNotas}\n` +
         `Monto total: $${formatNumber(grupo.totalMonto)}\n\n` +
-        `Esta acción actualizará el saldo de todas las notas afectadas y no se puede deshacer.`
+        `Esta acción actualizará el saldo de todas las notas afectadas, recorrerá automáticamente los abonos siguientes y no se puede deshacer.`
       )
 
       if (!confirmacion) return
 
       try {
-        const collectionName = `cuentas${props.cliente.charAt(0).toUpperCase() + props.cliente.slice(1)}`
-
-        const abonosPorCuenta = new Map()
-        for (const abono of grupo.abonos) {
-          if (!abono.cuentaId) continue
-          if (!abonosPorCuenta.has(abono.cuentaId)) {
-            abonosPorCuenta.set(abono.cuentaId, [])
-          }
-          abonosPorCuenta.get(abono.cuentaId).push(abono)
-        }
-
-        const abonosEliminadosLog = []
-        const errores = []
-
-        await Promise.all(Array.from(abonosPorCuenta.entries()).map(async ([cuentaId, abonosDeCuenta]) => {
-          try {
-            const cuentaRef = doc(db, collectionName, cuentaId)
-            const cuentaDoc = await getDoc(cuentaRef)
-
-            if (!cuentaDoc.exists()) {
-              errores.push(`No se encontró la cuenta ${cuentaId}`)
-              return
-            }
-
-            const cuentaData = cuentaDoc.data()
-            let nuevosAbonos = [...(cuentaData.abonos || [])]
-
-            const idsAEliminar = new Set(abonosDeCuenta.filter(a => a.abonoId).map(a => a.abonoId))
-            if (idsAEliminar.size > 0) {
-              nuevosAbonos = nuevosAbonos.filter(a => !idsAEliminar.has(a.id))
-            }
-
-            const indicesAEliminar = abonosDeCuenta
-              .filter(a => !a.abonoId && typeof a.abonoIndex === 'number')
-              .map(a => a.abonoIndex)
-              .sort((x, y) => y - x)
-            for (const idx of indicesAEliminar) {
-              if (idx >= 0 && idx < nuevosAbonos.length) {
-                nuevosAbonos.splice(idx, 1)
-              }
-            }
-
-            const totalAbonos = nuevosAbonos.reduce((sum, a) => sum + (a.monto || 0), 0)
-            const totalCobros = (cuentaData.cobros || []).reduce((sum, c) => sum + (c.monto || 0), 0)
-            const totalDia = (cuentaData.totalGeneralVenta || 0) - totalCobros - totalAbonos
-            const nuevoSaldoAcumulado = (cuentaData.saldoAcumuladoAnterior || 0) + totalDia
-
-            await updateDoc(cuentaRef, {
-              abonos: nuevosAbonos,
-              nuevoSaldoAcumulado: Math.max(0, nuevoSaldoAcumulado),
-              estadoPagado: nuevoSaldoAcumulado <= 0,
-              ultimaActualizacion: new Date().toISOString()
-            })
-
-            for (const a of abonosDeCuenta) {
-              abonosEliminadosLog.push({
-                descripcion: a.descripcion,
-                monto: a.monto,
-                cuentaId: a.cuentaId,
-                fechaCuenta: a.fechaCuenta,
-                fechaCuentaFormateada: a.fechaCuentaFormateada
-              })
-            }
-          } catch (err) {
-            console.error(`Error eliminando abonos de cuenta ${cuentaId}:`, err)
-            errores.push(`Cuenta ${cuentaId}: ${err.message}`)
-          }
+        const resultadoRedistribucion = await redistribuirAbonosDespuesDeEliminar(grupo.abonos)
+        const abonosEliminadosLog = resultadoRedistribucion.abonosEliminados.map(abonoEliminado => ({
+          descripcion: abonoEliminado.descripcion,
+          monto: abonoEliminado.monto,
+          cuentaId: abonoEliminado.cuentaId,
+          fechaCuenta: abonoEliminado.fechaCuenta,
+          fechaCuentaFormateada: abonoEliminado.fechaCuentaFormateada
         }))
 
-        if (abonosEliminadosLog.length > 0) {
-          await addDoc(collection(db, `historial_aplicaciones_${props.cliente}`), {
-            fechaAplicacion: new Date().toISOString(),
-            modo: 'eliminacion_grupo_abonos',
-            grupoFecha: grupo.id,
-            grupoFechaLabel: grupo.fechaLabel,
-            cantidadAbonos: abonosEliminadosLog.length,
-            montoTotal: abonosEliminadosLog.reduce((sum, a) => sum + (a.monto || 0), 0),
-            abonosEliminados: abonosEliminadosLog,
-            exitoso: errores.length === 0
-          })
-        }
+        await addDoc(collection(db, `historial_aplicaciones_${props.cliente}`), {
+          fechaAplicacion: new Date().toISOString(),
+          modo: 'eliminacion_grupo_abonos_redistribucion',
+          grupoFecha: grupo.id,
+          grupoFechaLabel: grupo.fechaLabel,
+          cantidadAbonos: abonosEliminadosLog.length,
+          montoTotal: abonosEliminadosLog.reduce((sum, a) => sum + (a.monto || 0), 0),
+          abonosEliminados: abonosEliminadosLog,
+          redistribucionAutomatica: {
+            abonosRedistribuidos: resultadoRedistribucion.abonosRedistribuidos,
+            cuentasAfectadas: resultadoRedistribucion.cuentasAfectadas,
+            montoRedistribuido: resultadoRedistribucion.montoRedistribuido,
+            montoSinAplicar: resultadoRedistribucion.montoSinAplicar,
+            abonosDevueltosAlStash: resultadoRedistribucion.abonosDevueltosAlStash
+          },
+          exitoso: true
+        })
 
         await Promise.all([
+          cargarStash(),
           cargarTodosLosAbonos(),
+          cargarHistorial(),
           cargarSaldoActual(),
           cargarCuentasDisponibles()
         ])
 
-        if (errores.length > 0) {
-          alert(`⚠️ Se eliminaron ${abonosEliminadosLog.length} abonos, pero hubo errores:\n\n${errores.join('\n')}`)
-        } else {
-          alert(`✅ Se eliminaron ${abonosEliminadosLog.length} abonos del grupo ${grupo.fechaLabel}\n\nMonto total eliminado: $${formatNumber(grupo.totalMonto)}`)
-        }
+        const mensajeSinAplicar = resultadoRedistribucion.montoSinAplicar > 0
+          ? `\nMonto devuelto al stash: $${formatNumber(resultadoRedistribucion.montoSinAplicar)}`
+          : ''
+
+        alert(
+          `✅ Se eliminaron ${abonosEliminadosLog.length} abonos del grupo ${grupo.fechaLabel}\n\n` +
+          `Monto total eliminado: $${formatNumber(grupo.totalMonto)}\n` +
+          `Monto redistribuido: $${formatNumber(resultadoRedistribucion.montoRedistribuido)}` +
+          mensajeSinAplicar
+        )
 
       } catch (error) {
         console.error('Error eliminando grupo de abonos:', error)
         alert('Error al eliminar el grupo de abonos: ' + error.message)
         try {
           await Promise.all([
+            cargarStash(),
             cargarTodosLosAbonos(),
+            cargarHistorial(),
             cargarSaldoActual(),
             cargarCuentasDisponibles()
           ])
@@ -1694,6 +2133,163 @@ export default {
     }
 
     const historialGruposExpandidos = ref({})
+    const historialDepositosExpandidos = ref({})
+
+    const iniciarEdicionDeposito = (deposito) => {
+      deposito.editando = true
+      deposito.guardando = false
+      deposito.fechaEditable = formatearFechaHoraEditable(deposito.fechaISO)
+      deposito.descripcionEditable = deposito.descripcion
+      deposito.montoEditable = redondearMonto(deposito.totalMonto)
+    }
+
+    const cancelarEdicionDeposito = (deposito) => {
+      deposito.editando = false
+      deposito.guardando = false
+      deposito.fechaEditable = formatearFechaHoraEditable(deposito.fechaISO)
+      deposito.descripcionEditable = deposito.descripcion
+      deposito.montoEditable = redondearMonto(deposito.totalMonto)
+    }
+
+    const distribuirMontoDeposito = (aplicaciones, nuevoTotal) => {
+      const totalActual = aplicaciones.reduce((sum, abono) => sum + (Number(abono.monto) || 0), 0)
+      let montoRestante = redondearMonto(nuevoTotal)
+
+      return aplicaciones.map((abono, index) => {
+        if (index === aplicaciones.length - 1) {
+          return montoRestante
+        }
+
+        const proporcion = totalActual > 0
+          ? (Number(abono.monto) || 0) / totalActual
+          : 1 / aplicaciones.length
+        const monto = redondearMonto(nuevoTotal * proporcion)
+        montoRestante = redondearMonto(montoRestante - monto)
+        return monto
+      })
+    }
+
+    const buscarIndiceAbonoEnCuenta = (abonosCuenta, abono) => {
+      if (abono.abonoId) {
+        const indicePorId = abonosCuenta.findIndex(item => item.id === abono.abonoId)
+        if (indicePorId !== -1) return indicePorId
+      }
+
+      if (typeof abono.abonoIndex === 'number' && abonosCuenta[abono.abonoIndex]) {
+        return abono.abonoIndex
+      }
+
+      return abonosCuenta.findIndex(item =>
+        redondearMonto(item.monto) === redondearMonto(abono.monto) &&
+        (item.descripcion || 'Sin descripción') === (abono.descripcion || 'Sin descripción')
+      )
+    }
+
+    const guardarDepositoHistorial = async (deposito) => {
+      if (!deposito || deposito.guardando) return
+
+      const nuevoTotal = redondearMonto(deposito.montoEditable)
+      if (!deposito.fechaEditable || !deposito.descripcionEditable || nuevoTotal <= 0) {
+        alert('Completa fecha, descripción y monto para guardar el depósito.')
+        return
+      }
+
+      const fechaValidacion = new Date(deposito.fechaEditable)
+      if (Number.isNaN(fechaValidacion.getTime())) {
+        alert('La fecha ingresada no es válida.')
+        return
+      }
+
+      deposito.guardando = true
+
+      try {
+        const fechaNormalizada = normalizarFechaSeleccionada(deposito.fechaEditable)
+        const descripcionNormalizada = deposito.descripcionEditable.trim()
+        const montosDistribuidos = distribuirMontoDeposito(deposito.aplicaciones, nuevoTotal)
+        const collectionName = obtenerCollectionNameCuentas()
+        const cuentasSnap = await getDocs(query(collection(db, collectionName), orderBy('fecha', 'asc')))
+        const cuentasOriginales = cuentasSnap.docs.map(docSnap => ({
+          id: docSnap.id,
+          data: {
+            ...docSnap.data(),
+            abonos: [...(docSnap.data().abonos || [])]
+          }
+        }))
+        const cuentasActualizadas = cuentasOriginales.map(cuenta => ({
+          id: cuenta.id,
+          data: {
+            ...cuenta.data,
+            abonos: [...(cuenta.data.abonos || [])]
+          }
+        }))
+        const cuentasPorId = new Map(cuentasActualizadas.map(cuenta => [cuenta.id, cuenta]))
+        const idsConAbonosModificados = new Set()
+        const aplicacionesEditadas = []
+
+        deposito.aplicaciones.forEach((abono, index) => {
+          const cuenta = cuentasPorId.get(abono.cuentaId)
+          if (!cuenta) {
+            throw new Error(`No se encontró la cuenta ${abono.cuentaId}`)
+          }
+
+          const indiceAbono = buscarIndiceAbonoEnCuenta(cuenta.data.abonos, abono)
+          if (indiceAbono < 0 || !cuenta.data.abonos[indiceAbono]) {
+            throw new Error(`No se pudo localizar un abono en ${abono.fechaCuentaFormateada || 'la cuenta'}`)
+          }
+
+          const abonoOriginal = cuenta.data.abonos[indiceAbono]
+          const abonoActualizado = {
+            ...abonoOriginal,
+            descripcion: descripcionNormalizada,
+            monto: montosDistribuidos[index],
+            fecha: fechaNormalizada,
+            fechaAplicacion: fechaNormalizada,
+            fechaOriginalStash: fechaNormalizada
+          }
+
+          cuenta.data.abonos.splice(indiceAbono, 1, abonoActualizado)
+          idsConAbonosModificados.add(cuenta.id)
+          aplicacionesEditadas.push({
+            cuentaId: cuenta.id,
+            fechaCuenta: cuenta.data.fecha,
+            descripcionAnterior: abonoOriginal.descripcion || 'Sin descripción',
+            montoAnterior: redondearMonto(abonoOriginal.monto),
+            montoNuevo: montosDistribuidos[index]
+          })
+        })
+
+        const cuentasRecalculadas = recalcularSaldosAcumulados(cuentasActualizadas)
+        await aplicarBatchActualizaciones(cuentasOriginales, cuentasRecalculadas, idsConAbonosModificados, collectionName)
+
+        await addDoc(collection(db, `historial_aplicaciones_${props.cliente}`), {
+          fechaAplicacion: new Date().toISOString(),
+          modo: 'edicion_deposito_historial',
+          depositoId: deposito.id,
+          descripcionAnterior: deposito.descripcion,
+          descripcionNueva: descripcionNormalizada,
+          montoAnterior: redondearMonto(deposito.totalMonto),
+          montoNuevo: nuevoTotal,
+          fechaAnterior: deposito.fechaISO,
+          fechaNueva: fechaNormalizada,
+          aplicacionesEditadas,
+          exitoso: true
+        })
+
+        await Promise.all([
+          cargarHistorial(),
+          cargarTodosLosAbonos(),
+          cargarSaldoActual(),
+          cargarCuentasDisponibles()
+        ])
+
+        alert('Depósito actualizado en las notas correspondientes.')
+      } catch (error) {
+        console.error('Error al editar depósito del historial:', error)
+        alert('No fue posible editar el depósito: ' + error.message)
+      } finally {
+        deposito.guardando = false
+      }
+    }
 
     const iniciarEdicionFechaHistorial = (abono) => {
       abono.editandoFecha = true
@@ -1795,6 +2391,16 @@ export default {
     }
 
     const esGrupoExpandido = (grupoId) => !!historialGruposExpandidos.value[grupoId]
+
+    const toggleDepositoHistorial = (depositoId) => {
+      const actual = !!historialDepositosExpandidos.value[depositoId]
+      historialDepositosExpandidos.value = {
+        ...historialDepositosExpandidos.value,
+        [depositoId]: !actual
+      }
+    }
+
+    const esDepositoExpandido = (depositoId) => !!historialDepositosExpandidos.value[depositoId]
 
     const cambiarPagina = (numeroPagina) => {
       if (numeroPagina >= 1 && numeroPagina <= totalPaginas.value) {
@@ -1928,11 +2534,16 @@ export default {
       eliminarDelHistorial,
       eliminarAbonoIndividual,
       eliminarGrupoAbonos,
+      iniciarEdicionDeposito,
+      cancelarEdicionDeposito,
+      guardarDepositoHistorial,
       iniciarEdicionFechaHistorial,
       cancelarEdicionFechaHistorial,
       guardarFechaHistorial,
       toggleGrupoHistorial,
       esGrupoExpandido,
+      toggleDepositoHistorial,
+      esDepositoExpandido,
       cargarTodosLosAbonos,
       abrirModal,
       cerrarModal,
@@ -2402,6 +3013,54 @@ h4 {
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
+.deposito-item {
+  background: #ffffff;
+  border-radius: 10px;
+  padding: 12px;
+  border-left: 4px solid #1976d2;
+  box-shadow: 0 2px 8px rgba(21, 101, 192, 0.08);
+}
+
+.deposito-expandido {
+  border-left-color: #2e7d32;
+}
+
+.deposito-main {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.deposito-edit-form {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(140px, 1fr));
+  gap: 10px;
+  width: 100%;
+}
+
+.deposito-edit-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: #546e7a;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.input-deposito-edit {
+  padding: 6px 10px;
+  border: 1px solid #cfd8dc;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.input-deposito-edit:focus {
+  outline: none;
+  border-color: #5c6bc0;
+  box-shadow: 0 0 0 2px rgba(92, 107, 192, 0.15);
+}
+
 .abono-main {
   display: flex;
   justify-content: space-between;
@@ -2653,6 +3312,21 @@ h4 {
   gap: 12px;
 }
 
+.deposito-desglose {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed #cfd8dc;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.abono-desglose-item {
+  margin-bottom: 0;
+  border-left-color: #90caf9;
+  background: #f7fbff;
+}
+
 .abono-origen {
   font-size: 11px;
   color: #78909c;
@@ -2707,6 +3381,24 @@ h4 {
 .btn-eliminar-abono:hover {
   background: #d32f2f;
   transform: scale(1.1);
+}
+
+.btn-desglosar-deposito {
+  background: #eceff1;
+  color: #455a64;
+  border: 1px solid #b0bec5;
+  border-radius: 14px;
+  padding: 5px 12px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.btn-desglosar-deposito:hover {
+  background: #dfe6eb;
+  transform: translateY(-1px);
 }
 
 .btn-eliminar-grupo {
@@ -3439,6 +4131,15 @@ h4 {
     flex-direction: column;
     align-items: stretch;
     gap: 8px;
+  }
+
+  .deposito-main {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .deposito-edit-form {
+    grid-template-columns: 1fr;
   }
   
   .abono-right {

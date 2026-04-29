@@ -223,6 +223,11 @@
 
     <h2>Abonos</h2>
     <div class="abonos card">
+      <div v-if="$route.params.id && !config.features.abonosGenerales" class="abonos-tools">
+        <button @click="reacomodarAbonosPosteriores" class="secondary-button" type="button">
+          Reacomodar abonos posteriores
+        </button>
+      </div>
       <div class="input-row" v-for="(abono, index) in abonos" :key="index">
         <input v-model="abono.descripcion" type="text" placeholder="Descripción" class="responsive-input">
         <input v-model.number="abono.monto" type="number" placeholder="Monto" class="responsive-input">
@@ -357,7 +362,7 @@
 <script>
 import { db } from '@/firebase';
 import {
-  collection, getDocs, doc, updateDoc, deleteDoc, getDoc,
+  collection, addDoc, getDocs, doc, updateDoc, deleteDoc, getDoc, writeBatch,
   query, where, orderBy, limit,
 } from 'firebase/firestore';
 import BackButton from '@/components/BackButton.vue';
@@ -751,13 +756,284 @@ export default {
     removeCobro(index) { this.cobros.splice(index, 1); },
     addAbono() { this.abonos.push({ descripcion: '', monto: 0 }); },
 
+    redondearMonto(monto) {
+      return Math.round((Number(monto) || 0) * 100) / 100;
+    },
+
+    calcularSaldoPendienteNota(cuenta) {
+      const totalCobros = (cuenta.cobros || []).reduce((sum, c) => sum + (parseFloat(c.monto) || 0), 0);
+      const totalAbonos = (cuenta.abonos || []).reduce((sum, a) => sum + (parseFloat(a.monto) || 0), 0);
+      return this.redondearMonto((parseFloat(cuenta.totalGeneralVenta) || 0) - totalCobros - totalAbonos);
+    },
+
+    recalcularCadenaSaldos(cuentas) {
+      let saldoAcumulado = 0;
+
+      return cuentas.map(cuenta => {
+        const saldoAnterior = saldoAcumulado;
+        const totalDia = this.calcularSaldoPendienteNota(cuenta);
+        saldoAcumulado = this.redondearMonto(saldoAcumulado + totalDia);
+        const estadoPagado = saldoAcumulado <= 0;
+        const nuevoSaldoAcumulado = estadoPagado ? 0 : saldoAcumulado;
+
+        if (estadoPagado) {
+          saldoAcumulado = 0;
+        }
+
+        return {
+          ...cuenta,
+          saldoAcumuladoAnterior: saldoAnterior,
+          nuevoSaldoAcumulado,
+          estadoPagado,
+        };
+      });
+    },
+
+    obtenerFechaOrdenAbono(abono, fechaCuenta) {
+      return abono.fechaOriginalStash || abono.fecha || abono.fechaAplicacion || fechaCuenta || '';
+    },
+
+    clonarAbonoParaRedistribucion(abono, monto, cuentaOrigenId, fechaRedistribucion, indicePieza, requiereNuevoId) {
+      const abonoClonado = {
+        ...abono,
+        monto: this.redondearMonto(monto),
+        redistribuidoAutomaticamente: true,
+        redistribuidoEn: fechaRedistribucion,
+        redistribuidoDesdeCuentaId: cuentaOrigenId,
+      };
+
+      if (requiereNuevoId && abonoClonado.id) {
+        abonoClonado.id = `${abonoClonado.id}_redistribuido_${indicePieza}`;
+      }
+
+      return abonoClonado;
+    },
+
+    async redistribuirAbonosDespuesDeEliminarEnNota(abonoEliminado, abonoIndex) {
+      const cuentaActualId = this.$route.params.id;
+      if (!cuentaActualId) return null;
+
+      const esReacomodoManual = typeof abonoIndex !== 'number';
+      const snap = await getDocs(query(this.service._ref(), orderBy('fecha', 'asc')));
+      const cuentasOriginales = snap.docs.map(docSnap => ({
+        id: docSnap.id,
+        ...docSnap.data(),
+        abonos: [...(docSnap.data().abonos || [])],
+      }));
+
+      const cuentas = cuentasOriginales.map(cuenta => ({
+        ...cuenta,
+        abonos: [...(cuenta.abonos || [])],
+      }));
+
+      const indiceInicio = cuentas.findIndex(cuenta => cuenta.id === cuentaActualId);
+      if (indiceInicio === -1) {
+        throw new Error('No se encontró la cuenta actual para redistribuir abonos.');
+      }
+
+      const idsConAbonosModificados = new Set([cuentaActualId]);
+      const abonosParaRedistribuir = [];
+      const fechaRedistribucion = new Date().toISOString();
+
+      cuentas.forEach((cuenta, indiceCuenta) => {
+        if (indiceCuenta < indiceInicio) return;
+
+        const abonosConservar = [];
+        const primerIndiceMovible = indiceCuenta === indiceInicio
+          ? (esReacomodoManual ? 0 : abonoIndex + 1)
+          : 0;
+
+        (cuenta.abonos || []).forEach((abono, index) => {
+          const esCuentaActual = indiceCuenta === indiceInicio;
+          const esAbonoEliminado = !esReacomodoManual && esCuentaActual && index === abonoIndex;
+          const esPosterior = indiceCuenta > indiceInicio || index >= primerIndiceMovible;
+
+          if (esAbonoEliminado) {
+            return;
+          }
+
+          if (esPosterior) {
+            idsConAbonosModificados.add(cuenta.id);
+            abonosParaRedistribuir.push({
+              abono: { ...abono, monto: this.redondearMonto(abono.monto) },
+              cuentaOrigenId: cuenta.id,
+              fechaCuentaOrigen: cuenta.fecha,
+              indiceCuenta,
+              indiceAbono: index,
+              fechaOrden: this.obtenerFechaOrdenAbono(abono, cuenta.fecha),
+            });
+            return;
+          }
+
+          abonosConservar.push(abono);
+        });
+
+        if (indiceCuenta >= indiceInicio) {
+          cuenta.abonos = abonosConservar;
+        }
+      });
+
+      abonosParaRedistribuir.sort((a, b) => {
+        if (a.indiceCuenta !== b.indiceCuenta) return a.indiceCuenta - b.indiceCuenta;
+        const fechaA = new Date(a.fechaOrden).getTime() || 0;
+        const fechaB = new Date(b.fechaOrden).getTime() || 0;
+        if (fechaA !== fechaB) return fechaA - fechaB;
+        return a.indiceAbono - b.indiceAbono;
+      });
+
+      const abonosRedistribuidos = [];
+      const abonosDevueltosAlStash = [];
+      let indicePieza = 0;
+
+      for (const item of abonosParaRedistribuir) {
+        let montoRestante = this.redondearMonto(item.abono.monto);
+        let piezasCreadas = 0;
+
+        for (let indiceCuenta = indiceInicio; indiceCuenta < cuentas.length && montoRestante > 0.01; indiceCuenta++) {
+          const cuentaDestino = cuentas[indiceCuenta];
+          const saldoPendiente = this.calcularSaldoPendienteNota(cuentaDestino);
+          const montoAAplicar = this.redondearMonto(Math.min(montoRestante, saldoPendiente));
+
+          if (montoAAplicar <= 0.01) continue;
+
+          indicePieza += 1;
+          piezasCreadas += 1;
+          const requiereNuevoId = montoAAplicar !== this.redondearMonto(item.abono.monto) || piezasCreadas > 1;
+          const abonoRedistribuido = this.clonarAbonoParaRedistribucion(
+            item.abono,
+            montoAAplicar,
+            item.cuentaOrigenId,
+            fechaRedistribucion,
+            indicePieza,
+            requiereNuevoId
+          );
+
+          cuentaDestino.abonos.push(abonoRedistribuido);
+          idsConAbonosModificados.add(cuentaDestino.id);
+          abonosRedistribuidos.push({
+            descripcion: abonoRedistribuido.descripcion || 'Sin descripción',
+            monto: montoAAplicar,
+            cuentaOrigenId: item.cuentaOrigenId,
+            cuentaDestinoId: cuentaDestino.id,
+            fechaCuentaOrigen: item.fechaCuentaOrigen,
+            fechaCuentaDestino: cuentaDestino.fecha,
+          });
+
+          montoRestante = this.redondearMonto(montoRestante - montoAAplicar);
+        }
+
+        if (montoRestante > 0.01) {
+          abonosDevueltosAlStash.push({
+            fecha: this.obtenerFechaOrdenAbono(item.abono, item.fechaCuentaOrigen),
+            descripcion: `${item.abono.descripcion || 'Sin descripción'} (sobrante redistribución)`,
+            monto: montoRestante,
+            esEfectivo: !!item.abono.esEfectivo,
+            stashItemIdOriginal: item.abono.stashItemId || null,
+            redistribuidoDesdeCuentaId: item.cuentaOrigenId,
+            creadoPorRedistribucion: true,
+            fechaCreacion: fechaRedistribucion,
+          });
+        }
+      }
+
+      const cuentasRecalculadas = this.recalcularCadenaSaldos(cuentas);
+      const batch = writeBatch(db);
+      const ahoraIso = new Date().toISOString();
+
+      cuentasRecalculadas.forEach((cuenta, index) => {
+        const cuentaOriginal = cuentasOriginales[index];
+        const cambioSaldo =
+          Math.abs((Number(cuentaOriginal.saldoAcumuladoAnterior) || 0) - (Number(cuenta.saldoAcumuladoAnterior) || 0)) > 0.01 ||
+          Math.abs((Number(cuentaOriginal.nuevoSaldoAcumulado) || 0) - (Number(cuenta.nuevoSaldoAcumulado) || 0)) > 0.01 ||
+          cuentaOriginal.estadoPagado !== cuenta.estadoPagado;
+
+        if (!idsConAbonosModificados.has(cuenta.id) && !cambioSaldo) return;
+
+        const updates = {
+          saldoAcumuladoAnterior: cuenta.saldoAcumuladoAnterior,
+          nuevoSaldoAcumulado: cuenta.nuevoSaldoAcumulado,
+          estadoPagado: cuenta.estadoPagado,
+          ultimaActualizacion: ahoraIso,
+        };
+
+        if (idsConAbonosModificados.has(cuenta.id)) {
+          updates.abonos = cuenta.abonos;
+        }
+
+        batch.update(doc(this.service._ref(), cuenta.id), updates);
+      });
+
+      await batch.commit();
+
+      if (abonosDevueltosAlStash.length > 0) {
+        await Promise.all(
+          abonosDevueltosAlStash.map(abonoStash =>
+            addDoc(collection(db, `stash_${this.config.clienteId}`), abonoStash)
+          )
+        );
+      }
+
+      await addDoc(collection(db, `historial_aplicaciones_${this.config.clienteId}`), {
+        fechaAplicacion: fechaRedistribucion,
+        modo: esReacomodoManual ? 'reacomodo_abonos_nota' : 'eliminacion_abono_nota_redistribucion',
+        abonoEliminado: esReacomodoManual ? null : {
+          descripcion: abonoEliminado.descripcion || 'Sin descripción',
+          monto: this.redondearMonto(abonoEliminado.monto),
+          fechaCuenta: this.fechaSeleccionada,
+          fechaCuentaFormateada: this.fechaFormateada,
+        },
+        cuentaAfectada: cuentaActualId,
+        redistribucionAutomatica: {
+          abonosRedistribuidos,
+          abonosDevueltosAlStash,
+          montoRedistribuido: this.redondearMonto(abonosRedistribuidos.reduce((sum, abono) => sum + (abono.monto || 0), 0)),
+          montoDevueltoAlStash: this.redondearMonto(abonosDevueltosAlStash.reduce((sum, abono) => sum + (abono.monto || 0), 0)),
+        },
+        exitoso: true,
+      });
+
+      const cuentaActualizada = cuentasRecalculadas.find(cuenta => cuenta.id === cuentaActualId);
+      if (cuentaActualizada) {
+        this.abonos = [...(cuentaActualizada.abonos || [])];
+        this.saldoAcumuladoAnterior = cuentaActualizada.saldoAcumuladoAnterior || 0;
+        this.estadoPagado = !!cuentaActualizada.estadoPagado;
+      }
+
+      return {
+        abonosRedistribuidos,
+        abonosDevueltosAlStash,
+      };
+    },
+
+    async reacomodarAbonosPosteriores() {
+      const confirmar = confirm(
+        `¿Reacomodar los abonos desde esta nota?\n\n` +
+        `Se tomarán los abonos de esta fecha y de las notas posteriores para aplicarlos otra vez desde la cuenta más antigua pendiente.`
+      );
+
+      if (!confirmar) return;
+
+      try {
+        const resultado = await this.redistribuirAbonosDespuesDeEliminarEnNota(null, null);
+        const totalRedistribuido = resultado.abonosRedistribuidos.reduce((sum, abono) => sum + (abono.monto || 0), 0);
+        const totalStash = resultado.abonosDevueltosAlStash.reduce((sum, abono) => sum + (abono.monto || 0), 0);
+        const mensajeStash = totalStash > 0 ? ` y $${this.formatNumber(totalStash)} devueltos al stash` : '';
+        this.showMessage(`Abonos reacomodados: $${this.formatNumber(totalRedistribuido)}${mensajeStash}`, 5000);
+      } catch (error) {
+        console.error('Error al reacomodar abonos posteriores:', error);
+        this.showMessage('Error al reacomodar abonos posteriores');
+      }
+    },
+
     async removeAbono(index) {
+      const abonoEliminado = this.abonos[index];
+      if (!abonoEliminado) return;
+
       // OtilioIndependiente: eliminar también de la colección de abonos generales
       if (this.config.features.abonosGenerales) {
         try {
-          const abono = this.abonos[index];
-          if (abono.abonoGeneralId) {
-            const abonoRef = doc(db, 'abonosGeneralesOtilioIndependiente', abono.abonoGeneralId);
+          if (abonoEliminado.abonoGeneralId) {
+            const abonoRef = doc(db, 'abonosGeneralesOtilioIndependiente', abonoEliminado.abonoGeneralId);
             const abonoDoc = await getDoc(abonoRef);
             if (abonoDoc.exists()) {
               await deleteDoc(abonoRef);
@@ -765,7 +1041,7 @@ export default {
               await Promise.all(cuentasSnap.docs.map(async (docSnap) => {
                 const cuentaData = docSnap.data();
                 if (cuentaData.abonos) {
-                  const abonosActualizados = cuentaData.abonos.filter(a => a.abonoGeneralId !== abono.abonoGeneralId);
+                  const abonosActualizados = cuentaData.abonos.filter(a => a.abonoGeneralId !== abonoEliminado.abonoGeneralId);
                   if (abonosActualizados.length !== cuentaData.abonos.length) {
                     await this.service.update(docSnap.id, { abonos: abonosActualizados });
                   }
@@ -778,16 +1054,20 @@ export default {
           alert('Error al eliminar el abono: ' + error.message);
           return;
         }
+        this.abonos.splice(index, 1);
+        return;
       }
-      this.abonos.splice(index, 1);
       const id = this.$route.params.id;
       if (id) {
         try {
-          await this.service.update(id, { abonos: this.abonos, estadoPagado: this.totalDiaActual <= 0 });
-          await this.actualizarCuentasPosteriores(this.fechaSeleccionada);
+          await this.redistribuirAbonosDespuesDeEliminarEnNota(abonoEliminado, index);
+          this.showMessage('Abono eliminado y abonos siguientes redistribuidos');
         } catch (error) {
-          console.error('Error al guardar después de eliminar abono:', error);
+          console.error('Error al redistribuir después de eliminar abono:', error);
+          this.showMessage('Error al eliminar y redistribuir el abono');
         }
+      } else {
+        this.abonos.splice(index, 1);
       }
     },
 
@@ -1294,6 +1574,8 @@ button:disabled { background-color: #aaa; cursor: not-allowed; transform: none; 
 
 .delete-btn { background-color: #f44336; }
 .delete-btn:hover { background-color: #da190b; }
+.secondary-button { background-color: #607d8b; }
+.secondary-button:hover { background-color: #546e7a; }
 
 table { width: 100%; border-collapse: collapse; margin-bottom: 20px; background-color: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); }
 th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #ddd; }
@@ -1314,6 +1596,7 @@ th { background-color: #4CAF50; color: white; position: sticky; top: 0; z-index:
 .ganancia-negativa { color: #f44336; font-weight: bold; }
 
 .saldo-pendiente, .abonos { margin-bottom: 20px; }
+.abonos-tools { display: flex; justify-content: flex-end; margin-bottom: 12px; }
 
 .button-container { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
 .save-button { background-color: #2196F3; }
@@ -1367,6 +1650,8 @@ th { background-color: #4CAF50; color: white; position: sticky; top: 0; z-index:
   .back-button-container a, .back-button-container button { min-width: 100px; padding: 8px 15px; font-size: 14px; }
   .responsive-input { max-width: 120px; padding: 8px; font-size: 13px; }
   .input-row { flex-wrap: wrap; }
+  .abonos-tools { justify-content: stretch; }
+  .abonos-tools .secondary-button { width: 100%; }
   .desktop-only { display: none; }
   .mobile-only { display: table-row; }
   th, td { padding: 8px 10px; font-size: 13px; }

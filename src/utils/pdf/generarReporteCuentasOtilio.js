@@ -21,6 +21,32 @@ const formatCurrencyNoDecimals = (value) => {
 
 const sumArray = (items = []) => items.reduce((total, item) => total + (Number(item.monto) || 0), 0);
 
+const normalizarFechaDia = (valor) => {
+  if (!valor) return null;
+  if (typeof valor === 'string' && /^\d{4}-\d{2}-\d{2}/.test(valor)) {
+    return valor.slice(0, 10);
+  }
+
+  if (valor.seconds) {
+    return new Date(valor.seconds * 1000).toISOString().slice(0, 10);
+  }
+
+  const fecha = new Date(valor);
+  return Number.isNaN(fecha.getTime()) ? null : fecha.toISOString().slice(0, 10);
+};
+
+const obtenerFechaAbono = (abono = {}, fechaCuenta) =>
+  normalizarFechaDia(abono.fechaOriginalStash || abono.fecha || abono.fechaAplicacion || fechaCuenta);
+
+const filtrarAbonosPorRango = (abonos = [], fechaCuenta, fechaInicio, fechaFin) =>
+  abonos.filter((abono) => {
+    const fechaAbono = obtenerFechaAbono(abono, fechaCuenta);
+    if (!fechaAbono) return false;
+    if (fechaInicio && fechaAbono < fechaInicio) return false;
+    if (fechaFin && fechaAbono > fechaFin) return false;
+    return true;
+  });
+
 export const generarReporteCuentasOtilio = async ({ fechaInicio, fechaFin, registros = [] }) => {
   if (!Array.isArray(registros)) {
     throw new Error('Los registros de cuentas no tienen el formato esperado.');
@@ -67,7 +93,12 @@ export const generarReporteCuentasOtilio = async ({ fechaInicio, fechaFin, regis
   registrosOrdenados.forEach((registro) => {
     const saldoDelDia = Number(registro.totalGeneralVenta) || 0;
     const cobros = Array.isArray(registro.cobros) ? registro.cobros : [];
-    const abonos = Array.isArray(registro.abonos) ? registro.abonos : [];
+    const abonos = filtrarAbonosPorRango(
+      Array.isArray(registro.abonos) ? registro.abonos : [],
+      registro.fecha,
+      fechaInicio,
+      fechaFin
+    );
 
     const totalCobros = sumArray(cobros);
     const totalAbonos = sumArray(abonos);
@@ -106,6 +137,7 @@ export const generarReporteCuentasOtilio = async ({ fechaInicio, fechaFin, regis
         if (!descripcion) descripcion = 'Sin descripción';
 
         const monto = Number(abono.monto) || 0;
+        const fechaAbono = obtenerFechaAbono(abono, registro.fecha) || registro.fecha;
 
         if (!abonosPorDescripcion[descripcion]) {
           abonosPorDescripcion[descripcion] = {
@@ -117,7 +149,8 @@ export const generarReporteCuentasOtilio = async ({ fechaInicio, fechaFin, regis
 
         abonosPorDescripcion[descripcion].montoTotal += monto;
         abonosPorDescripcion[descripcion].fechasAplicadas.push({
-          fecha: registro.fecha,
+          fecha: fechaAbono,
+          fechaCuenta: registro.fecha,
           monto
         });
       });
@@ -192,7 +225,7 @@ export const generarReporteCuentasOtilio = async ({ fechaInicio, fechaFin, regis
         layout: layoutTablaConTotal
       },
       {
-        text: `SALDO ACUMULADO AL DIA DE HOY (${formatearFecha(new Date())}): ${formatCurrencyNoDecimals(saldoAcumulado)}`,
+        text: `SALDO RESTANTE DEL PERIODO (${fechaInicioTexto} - ${fechaFinTexto}): ${formatCurrencyNoDecimals(resumenTotales.totalDia)}`,
         style: 'saldoAcumuladoActual',
         bold: true,
         color: '#8b6914',
@@ -221,7 +254,7 @@ export const generarReporteCuentasOtilio = async ({ fechaInicio, fechaFin, regis
 
     const generarContenidoAbono = (abonoAgrupado) => {
       const fechasTexto = abonoAgrupado.fechasAplicadas.map(
-        (item) => `  • ${formatearFecha(item.fecha)}: ${formatCurrency(item.monto)}`
+        (item) => `  • ${formatearFecha(item.fechaCuenta || item.fecha)}: ${formatCurrency(item.monto)}`
       ).join('\n');
 
       return {
