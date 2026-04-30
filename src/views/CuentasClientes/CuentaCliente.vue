@@ -210,8 +210,21 @@
 
     <h2>Saldo pendiente</h2>
     <div class="saldo-pendiente card">
-      <div class="input-row">
+      <div class="input-row verificacion-saldo-row">
         <span>Saldo Acumulado Anterior: ${{ formatNumber(saldoAcumuladoAnterior) }}</span>
+        <div class="verificacion-saldo">
+          <input
+            v-model.number="saldoAnteriorEsperado"
+            type="number"
+            placeholder="Verificar con nota física"
+            class="verificacion-input"
+            inputmode="decimal"
+          >
+          <span v-if="saldoAnteriorDiscrepancia === 0" class="verificacion-ok">✓ Coincide</span>
+          <span v-else-if="saldoAnteriorDiscrepancia !== null" class="verificacion-error">
+            ⚠ Diferencia: ${{ formatNumber(saldoAnteriorDiscrepancia) }}
+          </span>
+        </div>
       </div>
       <div class="input-row" v-for="(cobro, index) in cobros" :key="index">
         <input v-model="cobro.descripcion" type="text" placeholder="Flete" class="responsive-input" :disabled="isNotaLocked">
@@ -219,6 +232,16 @@
         <button @click="removeCobro(index)" class="delete-btn" :disabled="isNotaLocked">Eliminar</button>
       </div>
       <button @click="addCobro" class="add-btn" :disabled="isNotaLocked">Agregar Flete</button>
+    </div>
+
+    <h2>Correcciones</h2>
+    <div class="correcciones card">
+      <div class="input-row" v-for="(correccion, index) in correcciones" :key="index">
+        <input v-model="correccion.descripcion" type="text" placeholder="Descripción (ej: SI 406x5)" class="responsive-input" :disabled="isNotaLocked">
+        <input v-model.number="correccion.monto" type="number" placeholder="Monto" class="responsive-input" :disabled="isNotaLocked">
+        <button @click="removeCorreccion(index)" class="delete-btn" :disabled="isNotaLocked">Eliminar</button>
+      </div>
+      <button @click="addCorreccion" class="add-btn correccion-btn" :disabled="isNotaLocked">Agregar Corrección</button>
     </div>
 
     <h2>Abonos</h2>
@@ -238,10 +261,6 @@
 
     <table class="tabla-saldo">
       <tr>
-        <td>Saldo Acumulado Anterior</td>
-        <td>${{ formatNumber(saldoAcumuladoAnterior) }}</td>
-      </tr>
-      <tr>
         <td>Saldo Hoy</td>
         <td>${{ formatNumber(totalGeneralVenta) }}</td>
       </tr>
@@ -249,13 +268,25 @@
         <td>{{ cobro.descripcion }}</td>
         <td>-${{ formatNumber(cobro.monto) }}</td>
       </tr>
+      <tr v-if="cobros.length > 0" class="subtotal-neto-row">
+        <td>Subtotal</td>
+        <td>${{ formatNumber(subtotalSinFlete) }}</td>
+      </tr>
+      <tr>
+        <td>Saldo Acumulado Anterior</td>
+        <td>${{ formatNumber(saldoAcumuladoAnterior) }}</td>
+      </tr>
+      <tr class="subtotal-neto-row">
+        <td><strong>Total sin abono</strong></td>
+        <td><strong>${{ formatNumber(totalSinAbono) }}</strong></td>
+      </tr>
+      <tr v-for="(correccion, index) in correcciones" :key="'correccion-'+index" class="correccion-row">
+        <td>{{ correccion.descripcion }} (Corrección)</td>
+        <td>-${{ formatNumber(correccion.monto) }}</td>
+      </tr>
       <tr v-for="(abono, index) in abonos" :key="'abono-'+index">
         <td>{{ abono.descripcion }} (Abono)</td>
         <td>-${{ formatNumber(abono.monto) }}</td>
-      </tr>
-      <tr class="total">
-        <td>Total</td>
-        <td>${{ formatNumber(totalDiaActual) }}</td>
       </tr>
       <tr class="total">
         <td>Nuevo Saldo Acumulado</td>
@@ -402,7 +433,9 @@ export default {
       newItem: { kilos: null, medida: '', costo: null, precioVenta: null },
       saldoAcumuladoAnterior: 0,
       cobros: [],
+      correcciones: [],
       abonos: [],
+      saldoAnteriorEsperado: null,
       fechaSeleccionada: this.obtenerFechaActual(),
       showMobileActions: false,
       selectedItemIndex: null,
@@ -482,10 +515,23 @@ export default {
     gananciaTotal() {
       return this.itemsVenta.reduce((sum, item) => sum + (item.ganancia || 0), 0);
     },
+    subtotalSinFlete() {
+      const totalCobros = this.cobros.reduce((sum, c) => sum + (parseFloat(c.monto) || 0), 0);
+      return this.totalGeneralVenta - totalCobros;
+    },
+    totalSinAbono() {
+      return this.subtotalSinFlete + this.saldoAcumuladoAnterior;
+    },
+    saldoAnteriorDiscrepancia() {
+      if (this.saldoAnteriorEsperado === null || this.saldoAnteriorEsperado === '') return null;
+      const diff = Math.abs(parseFloat(this.saldoAnteriorEsperado) - this.saldoAcumuladoAnterior);
+      return Math.round(diff * 100) / 100;
+    },
     totalDiaActual() {
       const totalCobros = this.cobros.reduce((sum, c) => sum + (parseFloat(c.monto) || 0), 0);
+      const totalCorrecciones = this.correcciones.reduce((sum, c) => sum + (parseFloat(c.monto) || 0), 0);
       const totalAbonos = this.abonos.reduce((sum, a) => sum + (parseFloat(a.monto) || 0), 0);
-      return (this.totalGeneralVenta || 0) - totalCobros - totalAbonos;
+      return (this.totalGeneralVenta || 0) - totalCobros - totalCorrecciones - totalAbonos;
     },
   },
   watch: {
@@ -502,6 +548,7 @@ export default {
     items: { handler: 'handleDataChange', deep: true },
     itemsVenta: { handler: 'handleDataChange', deep: true },
     cobros: { handler: 'handleDataChange', deep: true },
+    correcciones: { handler: 'handleDataChange', deep: true },
     abonos: { handler: 'handleDataChange', deep: true },
     observacion: 'handleDataChange',
   },
@@ -547,6 +594,7 @@ export default {
           });
           this.saldoAcumuladoAnterior = data.saldoAcumuladoAnterior || 0;
           this.cobros = data.cobros || [];
+          this.correcciones = data.correcciones || [];
           this.abonos = data.abonos || [];
           this.fechaSeleccionada = data.fecha || this.obtenerFechaActual();
           this.showObservacionModal = false;
@@ -611,6 +659,7 @@ export default {
         await Promise.all(cuentas.map(async (cuenta) => {
           const totalDia = cuenta.totalGeneralVenta -
             (cuenta.cobros || []).reduce((sum, c) => sum + (parseFloat(c.monto) || 0), 0) -
+            (cuenta.correcciones || []).reduce((sum, c) => sum + (parseFloat(c.monto) || 0), 0) -
             (cuenta.abonos || []).reduce((sum, a) => sum + (parseFloat(a.monto) || 0), 0);
           saldoAcumulado += totalDia;
           const estadoPagado = saldoAcumulado <= 0.01;
@@ -668,6 +717,7 @@ export default {
           itemsVenta: this.itemsVenta.map(item => { const kilos = parseFloat(item.kilosVenta) || 0; return { ...item, kilosVenta: kilos, totalVenta: kilos * (item.precioVenta || 0) }; }),
           saldoAcumuladoAnterior: await this.obtenerSaldoAcumuladoAnterior(),
           cobros: [],
+          correcciones: [],
           abonos: [],
           totalGeneral: this.totalGeneral,
           totalGeneralVenta: 0,
@@ -707,6 +757,7 @@ export default {
           itemsVenta: this.itemsVenta.map(item => { const kilos = parseFloat(item.kilosVenta) || 0; return { ...item, kilosVenta: kilos, totalVenta: kilos * (item.precioVenta || 0) }; }),
           saldoAcumuladoAnterior: saldoActualizado,
           cobros: this.cobros,
+          correcciones: this.correcciones,
           abonos: this.abonos,
           totalGeneral: this.totalGeneral,
           totalGeneralVenta: this.totalGeneralVenta,
@@ -756,6 +807,8 @@ export default {
 
     addCobro() { this.cobros.push({ descripcion: '', monto: 0 }); },
     removeCobro(index) { this.cobros.splice(index, 1); },
+    addCorreccion() { this.correcciones.push({ descripcion: '', monto: 0 }); },
+    removeCorreccion(index) { this.correcciones.splice(index, 1); },
     addAbono() { this.abonos.push({ descripcion: '', monto: 0 }); },
 
     redondearMonto(monto) {
@@ -764,8 +817,9 @@ export default {
 
     calcularSaldoPendienteNota(cuenta) {
       const totalCobros = (cuenta.cobros || []).reduce((sum, c) => sum + (parseFloat(c.monto) || 0), 0);
+      const totalCorrecciones = (cuenta.correcciones || []).reduce((sum, c) => sum + (parseFloat(c.monto) || 0), 0);
       const totalAbonos = (cuenta.abonos || []).reduce((sum, a) => sum + (parseFloat(a.monto) || 0), 0);
-      return this.redondearMonto((parseFloat(cuenta.totalGeneralVenta) || 0) - totalCobros - totalAbonos);
+      return this.redondearMonto((parseFloat(cuenta.totalGeneralVenta) || 0) - totalCobros - totalCorrecciones - totalAbonos);
     },
 
     recalcularCadenaSaldos(cuentas) {
@@ -1228,6 +1282,7 @@ export default {
           totalGeneralVenta: this.totalGeneralVenta,
           nuevoSaldoAcumulado: this.nuevoSaldoAcumulado,
           cobros: this.cobros,
+          correcciones: this.correcciones,
           abonos: this.abonos,
           estadoPagado: this.estadoCuenta === 'Pagado',
           tieneObservacion: this.tieneObservacion,
@@ -1334,6 +1389,7 @@ export default {
         <tr><td>Saldo Acumulado Anterior</td><td>$${this.formatNumber(this.saldoAcumuladoAnterior)}</td></tr>
         <tr><td>Saldo Hoy</td><td>$${this.formatNumber(this.totalGeneralVenta)}</td></tr>
         ${this.cobros.map(c => `<tr><td>${c.descripcion}</td><td>-$${this.formatNumber(c.monto)}</td></tr>`).join('')}
+        ${this.correcciones.map(c => `<tr><td>${c.descripcion} (Corrección)</td><td>-$${this.formatNumber(c.monto)}</td></tr>`).join('')}
         ${this.abonos.map(a => `<tr><td>${a.descripcion} (Abono)</td><td>-$${this.formatNumber(a.monto)}</td></tr>`).join('')}
         <tr class="total"><td>Total</td><td>$${this.formatNumber(this.totalDiaActual)}</td></tr>
         <tr class="highlight"><td>Nuevo Saldo Acumulado</td><td>$${this.formatNumber(this.nuevoSaldoAcumulado)}</td></tr>
@@ -1597,7 +1653,19 @@ th { background-color: #4CAF50; color: white; position: sticky; top: 0; z-index:
 .ganancia-positiva { color: #4CAF50; font-weight: bold; }
 .ganancia-negativa { color: #f44336; font-weight: bold; }
 
-.saldo-pendiente, .abonos { margin-bottom: 20px; }
+.saldo-pendiente, .correcciones, .abonos { margin-bottom: 20px; }
+
+.verificacion-saldo-row { flex-direction: column; align-items: flex-start; gap: 6px; }
+.verificacion-saldo { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.verificacion-input { width: 200px; padding: 6px 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; }
+.verificacion-ok { color: #4CAF50; font-weight: bold; font-size: 14px; }
+.verificacion-error { color: #f44336; font-weight: bold; font-size: 14px; }
+
+.correccion-btn { background-color: #f57c00; }
+.correccion-btn:hover { background-color: #e65100; }
+.correccion-row td { color: #e65100; font-style: italic; }
+
+.subtotal-neto-row td { border-top: 1px solid #ddd; padding-top: 8px; color: #1565c0; }
 .abonos-tools { display: flex; justify-content: flex-end; margin-bottom: 12px; }
 
 .button-container { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }

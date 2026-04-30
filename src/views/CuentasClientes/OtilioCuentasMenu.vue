@@ -468,11 +468,13 @@ export default {
           const cuentasActualizadas = querySnapshot.docs.map((doc) => {
             const data = doc.data();
             const fechaNormalizada = this.normalizarFechaValor(data.fecha);
-            const totalCobros = (data.cobros || []).reduce((sum, cobro) => 
+            const totalCobros = (data.cobros || []).reduce((sum, cobro) =>
               sum + (parseFloat(cobro.monto) || 0), 0);
-            const totalAbonos = (data.abonos || []).reduce((sum, abono) => 
+            const totalCorrecciones = (data.correcciones || []).reduce((sum, c) =>
+              sum + (parseFloat(c.monto) || 0), 0);
+            const totalAbonos = (data.abonos || []).reduce((sum, abono) =>
               sum + (parseFloat(abono.monto) || 0), 0);
-            const totalDiaActual = (data.totalGeneralVenta || 0) - totalCobros - totalAbonos;
+            const totalDiaActual = (data.totalGeneralVenta || 0) - totalCobros - totalCorrecciones - totalAbonos;
             const saldoPersistido = typeof data.nuevoSaldoAcumulado === 'number'
               ? data.nuevoSaldoAcumulado
               : null;
@@ -482,6 +484,7 @@ export default {
               fecha: fechaNormalizada || data.fecha,
               saldoHoy: data.totalGeneralVenta || 0,
               totalCobros,
+              totalCorrecciones,
               totalAbonos,
               totalNota: data.nuevoSaldoAcumulado || 0,
               estadoPagado: saldoPersistido !== null ? saldoPersistido <= 0 : totalDiaActual <= 0,
@@ -503,7 +506,7 @@ export default {
 
           for (let i = 0; i < cuentasOrdenadas.length; i++) {
             const cuenta = cuentasOrdenadas[i];
-            const totalDia = cuenta.saldoHoy - cuenta.totalCobros - cuenta.totalAbonos;
+            const totalDia = cuenta.saldoHoy - cuenta.totalCobros - (cuenta.totalCorrecciones || 0) - cuenta.totalAbonos;
             const saldoAnterior = i === 0 ? 0 : saldoAcumulado;
             saldoAcumulado += totalDia;
             const estadoPagado = saldoAcumulado <= 0;

@@ -949,8 +949,9 @@ export default {
             saldoActual.value = data.nuevoSaldoAcumulado
           } else {
             const totalCobros = (data.cobros || []).reduce((s, c) => s + (parseFloat(c.monto) || 0), 0)
+            const totalCorrecciones = (data.correcciones || []).reduce((s, c) => s + (parseFloat(c.monto) || 0), 0)
             const totalAbonos = (data.abonos || []).reduce((s, a) => s + (parseFloat(a.monto) || 0), 0)
-            const totalDia = (data.totalGeneralVenta || 0) - totalCobros - totalAbonos
+            const totalDia = (data.totalGeneralVenta || 0) - totalCobros - totalCorrecciones - totalAbonos
             saldoActual.value = (data.saldoAcumuladoAnterior || 0) + totalDia
           }
         } else {
@@ -1071,8 +1072,9 @@ export default {
             const data = doc.data() || {}
             const totalGeneralVenta = data.totalGeneralVenta || 0
             const totalCobros = (data.cobros || []).reduce((sum, cobro) => sum + (parseFloat(cobro.monto) || 0), 0)
+            const totalCorrecciones = (data.correcciones || []).reduce((sum, c) => sum + (parseFloat(c.monto) || 0), 0)
             const totalAbonos = (data.abonos || []).reduce((sum, abono) => sum + (parseFloat(abono.monto) || 0), 0)
-            const saldoPendiente = totalGeneralVenta - totalCobros - totalAbonos
+            const saldoPendiente = totalGeneralVenta - totalCobros - totalCorrecciones - totalAbonos
             return {
               id: doc.id,
               fecha: data.fecha,
@@ -1275,7 +1277,8 @@ export default {
           // Recalcular el saldo pendiente de esta nota
           const totalAbonos = (cuentaData.abonos || []).reduce((sum, abono) => sum + (abono.monto || 0), 0)
           const totalCobros = (cuentaData.cobros || []).reduce((sum, cobro) => sum + (cobro.monto || 0), 0)
-          const totalDia = (cuentaData.totalGeneralVenta || 0) - totalCobros - totalAbonos
+          const totalCorrecciones = (cuentaData.correcciones || []).reduce((sum, c) => sum + (c.monto || 0), 0)
+          const totalDia = (cuentaData.totalGeneralVenta || 0) - totalCobros - totalCorrecciones - totalAbonos
           let saldoActualCuenta = totalDia
           
           console.log(`Procesando cuenta ${cuenta.id}:`, {
@@ -1401,7 +1404,8 @@ export default {
       // Calcular nuevo saldo
       const totalAbonos = nuevosAbonos.reduce((sum, abono) => sum + (abono.monto || 0), 0)
       const totalCobros = (cuentaData.cobros || []).reduce((sum, cobro) => sum + (cobro.monto || 0), 0)
-      const totalDia = (cuentaData.totalGeneralVenta || 0) - totalCobros - totalAbonos
+      const totalCorrecciones = (cuentaData.correcciones || []).reduce((sum, c) => sum + (c.monto || 0), 0)
+      const totalDia = (cuentaData.totalGeneralVenta || 0) - totalCobros - totalCorrecciones - totalAbonos
       const nuevoSaldoAcumulado = (cuentaData.saldoAcumuladoAnterior || 0) + totalDia
       
       await updateDoc(cuentaRef, {
@@ -1430,7 +1434,8 @@ export default {
 
     const calcularSaldoPendienteNota = (cuentaData) => {
       const totalGeneralVenta = parseFloat(cuentaData.totalGeneralVenta) || 0
-      return redondearMonto(totalGeneralVenta - calcularTotalCobros(cuentaData.cobros) - calcularTotalAbonos(cuentaData.abonos))
+      const totalCorrecciones = (cuentaData.correcciones || []).reduce((sum, c) => sum + (parseFloat(c.monto) || 0), 0)
+      return redondearMonto(totalGeneralVenta - calcularTotalCobros(cuentaData.cobros) - totalCorrecciones - calcularTotalAbonos(cuentaData.abonos))
     }
 
     const clonarAbono = (abono = {}) => ({
