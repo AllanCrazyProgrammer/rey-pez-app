@@ -14,16 +14,74 @@
         class="action-button bulk-create-btn"
         type="button"
         :disabled="creandoTodas"
-        @click="crearTodasNotasPendientes"
+        @click="abrirPanelPendientes"
       >
         {{ creandoTodas
           ? `Creando ${bulkProgress.actual} de ${bulkProgress.total}...`
-          : `Crear todas las pendientes (${cuentasPendientesCount})` }}
+          : `Crear pendientes... (${cuentasPendientesCount})` }}
       </button>
     </div>
 
     <div v-if="bulkResultado" class="bulk-result" :class="{ 'bulk-result-error': bulkResultado.errores > 0 }">
       Listo: {{ bulkResultado.creadas }} creadas, {{ bulkResultado.errores }} con error de {{ bulkResultado.total }} totales.
+    </div>
+
+    <div v-if="mostrarPanelPendientes" class="bulk-modal-overlay" @click.self="cerrarPanelPendientes">
+      <div class="bulk-modal">
+        <h2>Cuentas pendientes</h2>
+        <p class="bulk-modal-info">
+          Selecciona el rango de fechas y las notas que deseas crear. Se procesarán una por una sin abrir pestañas.
+        </p>
+
+        <div class="bulk-modal-filtros">
+          <label>
+            Desde
+            <input type="date" v-model="bulkFechaDesde" />
+          </label>
+          <label>
+            Hasta
+            <input type="date" v-model="bulkFechaHasta" />
+          </label>
+          <button type="button" class="bulk-link-btn" @click="limpiarRangoFechas">Limpiar rango</button>
+        </div>
+
+        <div class="bulk-modal-acciones-rapidas">
+          <button type="button" class="bulk-link-btn" @click="seleccionarTodasPendientes">Seleccionar todas</button>
+          <button type="button" class="bulk-link-btn" @click="deseleccionarTodasPendientes">Quitar selección</button>
+          <span class="bulk-modal-conteo">
+            {{ pendientesSeleccionadasCount }} de {{ pendientesFiltradas.length }} seleccionadas
+          </span>
+        </div>
+
+        <ul v-if="pendientesFiltradas.length > 0" class="bulk-modal-lista">
+          <li v-for="fecha in pendientesFiltradas" :key="fecha" class="bulk-modal-item">
+            <label>
+              <input
+                type="checkbox"
+                :value="fecha"
+                :checked="bulkSeleccionadas.includes(fecha)"
+                @change="togglePendiente(fecha)"
+              />
+              {{ formatDate(fecha) }}
+            </label>
+          </li>
+        </ul>
+        <p v-else class="bulk-modal-vacio">No hay cuentas pendientes en el rango seleccionado.</p>
+
+        <div class="bulk-modal-footer">
+          <button type="button" class="bulk-cancel-btn" @click="cerrarPanelPendientes">Cancelar</button>
+          <button
+            type="button"
+            class="action-button bulk-create-btn"
+            :disabled="bulkSeleccionadas.length === 0 || creandoTodas"
+            @click="confirmarCrearSeleccionadas"
+          >
+            {{ creandoTodas
+              ? `Creando ${bulkProgress.actual} de ${bulkProgress.total}...`
+              : `Crear ${bulkSeleccionadas.length} seleccionada(s)` }}
+          </button>
+        </div>
+      </div>
     </div>
 
     <div class="cuentas-list">
@@ -90,7 +148,11 @@ export default {
       paginaActual: 1,
       creandoTodas: false,
       bulkProgress: { actual: 0, total: 0 },
-      bulkResultado: null
+      bulkResultado: null,
+      mostrarPanelPendientes: false,
+      bulkFechaDesde: '',
+      bulkFechaHasta: '',
+      bulkSeleccionadas: []
     };
   },
   computed: {
@@ -103,6 +165,25 @@ export default {
     },
     cuentasPendientesCount() {
       return this.cuentas.filter(c => c.missingNota).length;
+    },
+    fechasPendientes() {
+      return this.cuentas
+        .filter(c => c.missingNota)
+        .map(c => this.normalizarFechaValor(c.fecha))
+        .filter(Boolean)
+        .sort((a, b) => new Date(b) - new Date(a));
+    },
+    pendientesFiltradas() {
+      const desde = this.bulkFechaDesde || null;
+      const hasta = this.bulkFechaHasta || null;
+      return this.fechasPendientes.filter(fecha => {
+        if (desde && fecha < desde) return false;
+        if (hasta && fecha > hasta) return false;
+        return true;
+      });
+    },
+    pendientesSeleccionadasCount() {
+      return this.bulkSeleccionadas.filter(f => this.pendientesFiltradas.includes(f)).length;
     }
   },
   methods: {
@@ -291,38 +372,72 @@ export default {
         this.creatingFecha = null;
       }
     },
-    async crearTodasNotasPendientes() {
-      const pendientes = this.cuentas
-        .filter(c => c.missingNota)
-        .map(c => this.normalizarFechaValor(c.fecha))
-        .filter(Boolean);
-
-      if (pendientes.length === 0) return;
-
+    abrirPanelPendientes() {
+      const fechas = this.fechasPendientes;
+      if (fechas.length === 0) return;
+      this.bulkFechaDesde = fechas[fechas.length - 1] || '';
+      this.bulkFechaHasta = fechas[0] || '';
+      this.bulkSeleccionadas = [...fechas];
+      this.bulkResultado = null;
+      this.mostrarPanelPendientes = true;
+    },
+    cerrarPanelPendientes() {
+      if (this.creandoTodas) return;
+      this.mostrarPanelPendientes = false;
+    },
+    limpiarRangoFechas() {
+      this.bulkFechaDesde = '';
+      this.bulkFechaHasta = '';
+    },
+    togglePendiente(fecha) {
+      const idx = this.bulkSeleccionadas.indexOf(fecha);
+      if (idx >= 0) {
+        this.bulkSeleccionadas.splice(idx, 1);
+      } else {
+        this.bulkSeleccionadas.push(fecha);
+      }
+    },
+    seleccionarTodasPendientes() {
+      const visibles = this.pendientesFiltradas;
+      const conjunto = new Set(this.bulkSeleccionadas);
+      visibles.forEach(f => conjunto.add(f));
+      this.bulkSeleccionadas = Array.from(conjunto);
+    },
+    deseleccionarTodasPendientes() {
+      const visibles = new Set(this.pendientesFiltradas);
+      this.bulkSeleccionadas = this.bulkSeleccionadas.filter(f => !visibles.has(f));
+    },
+    async confirmarCrearSeleccionadas() {
+      const seleccion = this.bulkSeleccionadas.filter(f => this.pendientesFiltradas.includes(f));
+      if (seleccion.length === 0) return;
       const confirmacion = confirm(
-        `Se crearán ${pendientes.length} nota(s) pendiente(s) una por una sin abrirlas. ¿Continuar?`
+        `Se crearán ${seleccion.length} nota(s) pendiente(s) una por una sin abrirlas. ¿Continuar?`
       );
       if (!confirmacion) return;
-
+      await this.crearNotasEnLote(seleccion);
+      this.mostrarPanelPendientes = false;
+    },
+    async crearNotasEnLote(fechas) {
+      if (!fechas || fechas.length === 0) return;
       this.creandoTodas = true;
       this.bulkResultado = null;
-      this.bulkProgress = { actual: 0, total: pendientes.length };
+      this.bulkProgress = { actual: 0, total: fechas.length };
 
       let creadas = 0;
       let errores = 0;
 
-      for (let i = 0; i < pendientes.length; i++) {
-        this.bulkProgress = { actual: i + 1, total: pendientes.length };
+      for (let i = 0; i < fechas.length; i++) {
+        this.bulkProgress = { actual: i + 1, total: fechas.length };
         try {
-          await this.crearNota(pendientes[i], { skipOpen: true, silent: true });
+          await this.crearNota(fechas[i], { skipOpen: true, silent: true });
           creadas++;
         } catch (error) {
           errores++;
-          console.error(`Error creando nota para fecha ${pendientes[i]}:`, error);
+          console.error(`Error creando nota para fecha ${fechas[i]}:`, error);
         }
       }
 
-      this.bulkResultado = { creadas, errores, total: pendientes.length };
+      this.bulkResultado = { creadas, errores, total: fechas.length };
       this.creandoTodas = false;
 
       await this.loadCuentas();
@@ -427,6 +542,171 @@ h1, h2 {
   background: #fdecea;
   border-color: #f5a39c;
   color: #b71c1c;
+}
+
+.bulk-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.bulk-modal {
+  background: white;
+  border-radius: 10px;
+  padding: 24px;
+  width: 100%;
+  max-width: 520px;
+  max-height: 85vh;
+  overflow-y: auto;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.bulk-modal h2 {
+  margin: 0;
+  color: #07711e;
+  text-align: left;
+}
+
+.bulk-modal-info {
+  margin: 0;
+  color: #555;
+  font-size: 14px;
+}
+
+.bulk-modal-filtros {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: end;
+}
+
+.bulk-modal-filtros label {
+  display: flex;
+  flex-direction: column;
+  font-size: 13px;
+  color: #555;
+  font-weight: 600;
+  gap: 4px;
+}
+
+.bulk-modal-filtros input[type="date"] {
+  padding: 6px 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.bulk-modal-acciones-rapidas {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+}
+
+.bulk-link-btn {
+  background: none;
+  border: none;
+  color: #1565c0;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 4px 6px;
+  text-decoration: underline;
+}
+
+.bulk-link-btn:hover {
+  color: #0d47a1;
+}
+
+.bulk-modal-conteo {
+  margin-left: auto;
+  color: #666;
+  font-weight: 600;
+}
+
+.bulk-modal-lista {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.bulk-modal-item {
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.bulk-modal-item:last-child {
+  border-bottom: none;
+}
+
+.bulk-modal-item label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.bulk-modal-item label:hover {
+  background: #f7f7f7;
+}
+
+.bulk-modal-vacio {
+  margin: 0;
+  padding: 20px;
+  text-align: center;
+  color: #888;
+  background: #fafafa;
+  border-radius: 6px;
+}
+
+.bulk-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 6px;
+}
+
+.bulk-cancel-btn {
+  background: #eee;
+  border: none;
+  border-radius: 4px;
+  padding: 10px 18px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  color: #444;
+}
+
+.bulk-cancel-btn:hover {
+  background: #ddd;
+}
+
+@media (max-width: 600px) {
+  .bulk-modal {
+    padding: 18px;
+  }
+  .bulk-modal-filtros {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .bulk-modal-conteo {
+    margin-left: 0;
+    width: 100%;
+  }
 }
 
 .cuentas-list {
