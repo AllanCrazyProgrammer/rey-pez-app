@@ -9,6 +9,21 @@
       <router-link to="/cuentas-ozuna/nueva" class="action-button new-cuenta-btn">
         Nueva Cuenta
       </router-link>
+      <button
+        v-if="cuentasPendientesCount > 0"
+        class="action-button bulk-create-btn"
+        type="button"
+        :disabled="creandoTodas"
+        @click="crearTodasNotasPendientes"
+      >
+        {{ creandoTodas
+          ? `Creando ${bulkProgress.actual} de ${bulkProgress.total}...`
+          : `Crear todas las pendientes (${cuentasPendientesCount})` }}
+      </button>
+    </div>
+
+    <div v-if="bulkResultado" class="bulk-result" :class="{ 'bulk-result-error': bulkResultado.errores > 0 }">
+      Listo: {{ bulkResultado.creadas }} creadas, {{ bulkResultado.errores }} con error de {{ bulkResultado.total }} totales.
     </div>
 
     <div class="cuentas-list">
@@ -72,7 +87,10 @@ export default {
       cuentas: [],
       isLoading: true,
       creatingFecha: null,
-      paginaActual: 1
+      paginaActual: 1,
+      creandoTodas: false,
+      bulkProgress: { actual: 0, total: 0 },
+      bulkResultado: null
     };
   },
   computed: {
@@ -82,6 +100,9 @@ export default {
     cuentasPaginadas() {
       const inicio = (this.paginaActual - 1) * 10;
       return this.cuentas.slice(inicio, inicio + 10);
+    },
+    cuentasPendientesCount() {
+      return this.cuentas.filter(c => c.missingNota).length;
     }
   },
   methods: {
@@ -195,9 +216,10 @@ export default {
     editarCuenta(id) {
       this.$router.push(`/cuentas-ozuna/${id}?edit=true`);
     },
-    async crearNota(fecha) {
+    async crearNota(fecha, options = {}) {
+      const { skipOpen = false, silent = false } = options;
       const fechaNormalizada = this.normalizarFechaValor(fecha) || new Date().toISOString().split('T')[0];
-      if (this.creatingFecha === fechaNormalizada) return;
+      if (this.creatingFecha === fechaNormalizada) return false;
 
       this.creatingFecha = fechaNormalizada;
       try {
@@ -209,8 +231,8 @@ export default {
         });
 
         if (!embarqueDoc) {
-          alert('No se encontró un embarque para esta fecha. Crea la nota manualmente.');
-          return;
+          if (!silent) alert('No se encontró un embarque para esta fecha. Crea la nota manualmente.');
+          throw new Error('No se encontró un embarque para esta fecha');
         }
 
         const data = embarqueDoc.data() || {};
@@ -240,8 +262,8 @@ export default {
         });
 
         if (!tieneProductosConDatos && !tieneCrudosConDatos) {
-          alert('No se detectaron productos o crudos de Ozuna para esta fecha. Verifica el embarque antes de crear la nota.');
-          return;
+          if (!silent) alert('No se detectaron productos o crudos de Ozuna para esta fecha. Verifica el embarque antes de crear la nota.');
+          throw new Error('No se detectaron productos o crudos de Ozuna');
         }
 
         const clienteCrudosTotales = data.clienteCrudos || data.clientesCrudos || {};
@@ -257,13 +279,53 @@ export default {
           costoExtra: data.costoExtra
         };
 
-        await EmbarqueCuentasService.crearCuentaOzuna(embarqueCliente, this.$router);
+        const routerArg = skipOpen ? null : this.$router;
+        await EmbarqueCuentasService.crearCuentaOzuna(embarqueCliente, routerArg);
+        return true;
       } catch (error) {
         console.error('Error al crear la nota desde embarque:', error);
-        alert(`No se pudo crear la nota desde el embarque: ${error.message || error}`);
+        if (!silent) alert(`No se pudo crear la nota desde el embarque: ${error.message || error}`);
+        if (silent) throw error;
+        return false;
       } finally {
         this.creatingFecha = null;
       }
+    },
+    async crearTodasNotasPendientes() {
+      const pendientes = this.cuentas
+        .filter(c => c.missingNota)
+        .map(c => this.normalizarFechaValor(c.fecha))
+        .filter(Boolean);
+
+      if (pendientes.length === 0) return;
+
+      const confirmacion = confirm(
+        `Se crearán ${pendientes.length} nota(s) pendiente(s) una por una sin abrirlas. ¿Continuar?`
+      );
+      if (!confirmacion) return;
+
+      this.creandoTodas = true;
+      this.bulkResultado = null;
+      this.bulkProgress = { actual: 0, total: pendientes.length };
+
+      let creadas = 0;
+      let errores = 0;
+
+      for (let i = 0; i < pendientes.length; i++) {
+        this.bulkProgress = { actual: i + 1, total: pendientes.length };
+        try {
+          await this.crearNota(pendientes[i], { skipOpen: true, silent: true });
+          creadas++;
+        } catch (error) {
+          errores++;
+          console.error(`Error creando nota para fecha ${pendientes[i]}:`, error);
+        }
+      }
+
+      this.bulkResultado = { creadas, errores, total: pendientes.length };
+      this.creandoTodas = false;
+
+      await this.loadCuentas();
     },
     async borrarCuenta(id) {
       if (confirm('¿Estás seguro de que quieres borrar este registro de cuenta?')) {
@@ -330,6 +392,41 @@ h1, h2 {
 
 .back-btn:hover {
   background-color: #5a6268;
+}
+
+.bulk-create-btn {
+  background-color: #1565c0;
+  border: none;
+  color: white;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 16px;
+}
+
+.bulk-create-btn:hover:not(:disabled) {
+  background-color: #0d47a1;
+}
+
+.bulk-create-btn:disabled {
+  background-color: #90caf9;
+  cursor: not-allowed;
+}
+
+.bulk-result {
+  background: #e9f6ee;
+  border: 1px solid #6bbf86;
+  border-radius: 6px;
+  padding: 10px 14px;
+  margin-bottom: 15px;
+  color: #07711e;
+  font-weight: 600;
+  text-align: center;
+}
+
+.bulk-result-error {
+  background: #fdecea;
+  border-color: #f5a39c;
+  color: #b71c1c;
 }
 
 .cuentas-list {
