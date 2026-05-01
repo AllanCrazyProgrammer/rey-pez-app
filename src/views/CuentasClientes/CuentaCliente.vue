@@ -59,7 +59,13 @@
       </div>
     </div>
 
-    <div class="table-card table-responsive">
+    <div class="toggle-costos-row">
+      <button class="toggle-costos-btn" @click="mostrarTablaCostos = !mostrarTablaCostos">
+        {{ mostrarTablaCostos ? 'Ocultar tabla de costos' : 'Mostrar tabla de costos' }}
+      </button>
+    </div>
+
+    <div v-if="mostrarTablaCostos" class="table-card table-responsive">
       <table class="tabla-principal">
         <thead>
           <tr>
@@ -471,6 +477,7 @@ export default {
       accionPendiente: null,
       // Otilio features
       isSavingVerificacion: false,
+      mostrarTablaCostos: false,
     };
   },
   computed: {
@@ -1696,6 +1703,9 @@ th { background-color: #4CAF50; color: white; position: sticky; top: 0; z-index:
 .guardar-container { margin-bottom: 20px; }
 .observacion-container { margin-bottom: 10px; }
 .btn-agregar-observacion { background-color: #607d8b; padding: 8px 16px; font-size: 14px; }
+.toggle-costos-row { margin-bottom: 12px; display: flex; justify-content: flex-end; }
+.toggle-costos-btn { background-color: #607d8b; padding: 8px 16px; font-size: 14px; }
+.toggle-costos-btn:hover { background-color: #546e7a; }
 .observacion-existente { background-color: #fff3e0; border-left: 4px solid #ff9800; padding: 12px; border-radius: 4px; margin-top: 10px; }
 .observacion-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
 .observacion-titulo { font-weight: bold; margin: 0; }
