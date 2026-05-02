@@ -47,6 +47,8 @@ import PrestamosMenu from '@/views/Procesos/PrestamosMenu.vue'
 import PrestamosDespicadoras from '@/views/Procesos/PrestamosDespicadoras.vue'
 import PrestamosTrabajadores from '@/views/Procesos/PrestamosTrabajadores.vue'
 import Taras from '@/views/Procesos/Taras.vue'
+import Alan from '@/views/Procesos/Alan.vue'
+import Marie from '@/views/Procesos/Marie.vue'
 import ExistenciasCrudos from '@/views/ExistenciasCrudos.vue'
 import RegistroCrudos from '@/views/RegistroCrudos.vue'
 import BarcosMenu from '@/views/Barcos/BarcosMenu.vue'
@@ -425,6 +427,16 @@ const routes = [
     path: '/procesos/taras',
     name: 'Taras',
     component: Taras
+  },
+  {
+    path: '/procesos/alan',
+    name: 'Alan',
+    component: Alan
+  },
+  {
+    path: '/procesos/alan/marie',
+    name: 'Marie',
+    component: Marie
   },
   {
     path: '/barcos',
