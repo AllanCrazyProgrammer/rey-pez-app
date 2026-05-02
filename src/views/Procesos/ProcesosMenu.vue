@@ -108,6 +108,16 @@
         <span class="icon">🧺</span>
         <span class="btn-text">TARAS</span>
       </router-link>
+
+      <router-link
+        to="/procesos/alan"
+        class="btn-action btn-alan"
+        aria-label="Acceder al área de Alan"
+      >
+        <span class="btn-prefix">[9]</span>
+        <span class="icon">🔐</span>
+        <span class="btn-text">ALAN</span>
+      </router-link>
     </div>
   </div>
 </template>
@@ -394,6 +404,16 @@ export default {
 .btn-taras:hover {
   background: #6c5ce7;
   box-shadow: 0 0 15px rgba(108, 92, 231, 0.5);
+}
+
+.btn-alan {
+  border-color: #f368e0;
+  color: #f368e0;
+}
+
+.btn-alan:hover {
+  background: #f368e0;
+  box-shadow: 0 0 15px rgba(243, 104, 224, 0.5);
 }
 
 /* Responsive */
