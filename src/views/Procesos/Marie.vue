@@ -56,7 +56,7 @@ export default {
 <style scoped>
 .marie-container {
   min-height: 100vh;
-  background: linear-gradient(135deg, #0f0f1e 0%, #1a1033 100%);
+  background: linear-gradient(135deg, #0a1628 0%, #14233a 100%);
   color: #f5f5f5;
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
   padding: 24px;
@@ -76,7 +76,7 @@ export default {
 
 .marie-title {
   margin: 0;
-  color: #f368e0;
+  color: #4dabf7;
   font-size: 2rem;
 }
 
@@ -131,9 +131,9 @@ export default {
 }
 
 .tab.active {
-  background: rgba(243, 104, 224, 0.12);
-  color: #f368e0;
-  border-color: rgba(243, 104, 224, 0.4);
+  background: rgba(77, 171, 247, 0.12);
+  color: #4dabf7;
+  border-color: rgba(77, 171, 247, 0.4);
 }
 
 .tab-icon {

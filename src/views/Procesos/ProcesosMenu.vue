@@ -407,13 +407,13 @@ export default {
 }
 
 .btn-alan {
-  border-color: #f368e0;
-  color: #f368e0;
+  border-color: #339af0;
+  color: #339af0;
 }
 
 .btn-alan:hover {
-  background: #f368e0;
-  box-shadow: 0 0 15px rgba(243, 104, 224, 0.5);
+  background: #339af0;
+  box-shadow: 0 0 15px rgba(51, 154, 240, 0.5);
 }
 
 /* Responsive */
