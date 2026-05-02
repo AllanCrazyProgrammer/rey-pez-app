@@ -101,7 +101,7 @@ export default {
 <style scoped>
 .alan-container {
   min-height: 100vh;
-  background: linear-gradient(135deg, #0f0f1e 0%, #1a1033 100%);
+  background: linear-gradient(135deg, #0a1628 0%, #14233a 100%);
   color: #f5f5f5;
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
   padding: 24px;
@@ -117,13 +117,13 @@ export default {
 
 .lock-card {
   background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(243, 104, 224, 0.4);
+  border: 1px solid rgba(77, 171, 247, 0.4);
   border-radius: 16px;
   padding: 40px 32px;
   width: 100%;
   max-width: 420px;
   text-align: center;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), 0 0 30px rgba(243, 104, 224, 0.15);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), 0 0 30px rgba(77, 171, 247, 0.15);
   backdrop-filter: blur(10px);
 }
 
@@ -135,7 +135,7 @@ export default {
 .lock-title {
   font-size: 1.6rem;
   margin: 0 0 8px 0;
-  color: #f368e0;
+  color: #4dabf7;
   letter-spacing: 2px;
 }
 
@@ -165,8 +165,8 @@ export default {
 }
 
 .lock-input:focus {
-  border-color: #f368e0;
-  box-shadow: 0 0 0 3px rgba(243, 104, 224, 0.25);
+  border-color: #4dabf7;
+  box-shadow: 0 0 0 3px rgba(77, 171, 247, 0.25);
 }
 
 .lock-btn {
@@ -174,7 +174,7 @@ export default {
   font-size: 1rem;
   border-radius: 10px;
   border: none;
-  background: linear-gradient(135deg, #f368e0 0%, #b53cd0 100%);
+  background: linear-gradient(135deg, #4dabf7 0%, #1c7ed6 100%);
   color: #fff;
   font-weight: 600;
   letter-spacing: 1px;
@@ -184,7 +184,7 @@ export default {
 
 .lock-btn:hover {
   transform: translateY(-1px);
-  box-shadow: 0 8px 20px rgba(243, 104, 224, 0.35);
+  box-shadow: 0 8px 20px rgba(77, 171, 247, 0.35);
 }
 
 .lock-error {
@@ -223,7 +223,7 @@ export default {
 .alan-title {
   margin: 0;
   font-size: 2rem;
-  color: #f368e0;
+  color: #4dabf7;
 }
 
 .alan-subtitle {
@@ -276,7 +276,7 @@ export default {
 
 .component-card:hover {
   transform: translateY(-3px);
-  border-color: rgba(243, 104, 224, 0.5);
+  border-color: rgba(77, 171, 247, 0.5);
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
 }
 
@@ -287,7 +287,7 @@ export default {
 
 .component-info h2 {
   margin: 0 0 4px 0;
-  color: #f368e0;
+  color: #4dabf7;
 }
 
 .component-info p {

@@ -152,8 +152,8 @@ const COL_ENTRIES = 'alanMarieBuenosDias';
 const COL_PARTICIPANTS = 'alanMarieParticipantes';
 
 const PALETTE = [
-  '#f368e0', '#54a0ff', '#1dd1a1', '#feca57', '#ff6b6b',
-  '#5f27cd', '#00d2d3', '#ff9f43', '#48dbfb', '#10ac84'
+  '#74c0fc', '#4dabf7', '#339af0', '#228be6', '#1c7ed6',
+  '#1971c2', '#22b8cf', '#15aabf', '#3a86ff', '#4361ee'
 ];
 
 export default {
@@ -377,7 +377,7 @@ export default {
 
 .bd-title {
   margin: 0 0 6px 0;
-  color: #f368e0;
+  color: #4dabf7;
   font-size: 1.4rem;
 }
 
@@ -432,7 +432,7 @@ export default {
 }
 
 .input:focus {
-  border-color: #f368e0;
+  border-color: #4dabf7;
 }
 
 .btn-primary,
@@ -448,13 +448,13 @@ export default {
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, #f368e0 0%, #b53cd0 100%);
+  background: linear-gradient(135deg, #4dabf7 0%, #1c7ed6 100%);
   color: #fff;
 }
 
 .btn-primary:hover:not(:disabled) {
   transform: translateY(-1px);
-  box-shadow: 0 6px 18px rgba(243, 104, 224, 0.35);
+  box-shadow: 0 6px 18px rgba(77, 171, 247, 0.35);
 }
 
 .btn-primary:disabled {
@@ -558,8 +558,8 @@ export default {
 }
 
 .lb-row.gold {
-  background: linear-gradient(90deg, rgba(254, 202, 87, 0.15), rgba(255, 255, 255, 0.03));
-  border: 1px solid rgba(254, 202, 87, 0.3);
+  background: linear-gradient(90deg, rgba(116, 192, 252, 0.18), rgba(255, 255, 255, 0.03));
+  border: 1px solid rgba(116, 192, 252, 0.4);
 }
 
 .lb-rank {
@@ -573,7 +573,7 @@ export default {
 }
 
 .lb-points {
-  color: #f368e0;
+  color: #4dabf7;
   font-weight: 700;
 }
 
@@ -632,7 +632,7 @@ export default {
 }
 
 .cell:hover:not(.empty):not(.future) {
-  border-color: rgba(243, 104, 224, 0.5);
+  border-color: rgba(77, 171, 247, 0.5);
   transform: translateY(-1px);
 }
 
@@ -643,8 +643,8 @@ export default {
 }
 
 .cell.today {
-  border-color: #f368e0;
-  box-shadow: 0 0 0 1px rgba(243, 104, 224, 0.4) inset;
+  border-color: #4dabf7;
+  box-shadow: 0 0 0 1px rgba(77, 171, 247, 0.4) inset;
 }
 
 .cell.future {
@@ -653,7 +653,7 @@ export default {
 }
 
 .cell.has {
-  background: rgba(243, 104, 224, 0.08);
+  background: rgba(77, 171, 247, 0.08);
 }
 
 .cell-num {
@@ -682,7 +682,7 @@ export default {
 
 .cell-pts {
   margin-left: auto;
-  color: #feca57;
+  color: #74c0fc;
   font-weight: 700;
 }
 
@@ -701,8 +701,8 @@ export default {
 .modal {
   width: 100%;
   max-width: 460px;
-  background: linear-gradient(135deg, #1a1033 0%, #2a1655 100%);
-  border: 1px solid rgba(243, 104, 224, 0.4);
+  background: linear-gradient(135deg, #14233a 0%, #1e3a5f 100%);
+  border: 1px solid rgba(77, 171, 247, 0.4);
   border-radius: 14px;
   padding: 0;
   color: #fff;
@@ -721,7 +721,7 @@ export default {
 
 .modal-header h3 {
   margin: 0;
-  color: #f368e0;
+  color: #4dabf7;
   text-transform: capitalize;
 }
 
@@ -771,8 +771,8 @@ export default {
 }
 
 .winner-btn.selected {
-  background: rgba(243, 104, 224, 0.2);
-  border-color: #f368e0;
+  background: rgba(77, 171, 247, 0.2);
+  border-color: #4dabf7;
 }
 
 .modal-footer {
