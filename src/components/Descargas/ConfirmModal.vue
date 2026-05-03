@@ -1,6 +1,6 @@
 <template>
   <div v-if="show" class="modal-bg" @click.self="$emit('cancel')">
-    <div class="modal">
+    <div class="dialog">
       <h3>{{ title || '¿Confirmar?' }}</h3>
       <p class="modal-msg">{{ message }}</p>
       <div class="modal-actions">
@@ -35,7 +35,7 @@ export default {
   font-family: 'VT323', 'Share Tech Mono', monospace;
 }
 
-.modal {
+.dialog {
   background: var(--terminal-bg, #0a0a0a);
   border: 2px solid var(--matrix-green);
   padding: 22px;
@@ -44,7 +44,7 @@ export default {
   box-shadow: 0 0 25px var(--matrix-green-glow);
 }
 
-.modal h3 {
+.dialog h3 {
   margin: 0 0 12px;
   font-size: 1.4rem;
   color: var(--matrix-green);

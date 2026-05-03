@@ -444,7 +444,7 @@ export default {
 
 /* Forzar variables en modales hijos (que usan teleport visual al body via fixed) */
 .descargas-page >>> .modal-bg,
-.descargas-page >>> .modal {
+.descargas-page >>> .dialog {
   --matrix-green: #00ff41;
   --matrix-green-dark: #008f11;
   --matrix-green-glow: #00ff4180;

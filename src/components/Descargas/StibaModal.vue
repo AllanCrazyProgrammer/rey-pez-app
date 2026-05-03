@@ -1,6 +1,6 @@
 <template>
   <div v-if="show" class="modal-bg" @click.self="cancel">
-    <div class="modal">
+    <div class="dialog">
       <h3>
         Agregar por estiba
         <span class="cat-name">→ {{ activeName }}</span>
@@ -170,7 +170,7 @@ export default {
   overflow-y: auto;
 }
 
-.modal {
+.dialog {
   background: var(--terminal-bg, #0a0a0a);
   border: 2px solid var(--matrix-green);
   padding: 22px;
@@ -180,7 +180,7 @@ export default {
   margin: auto;
 }
 
-.modal h3 {
+.dialog h3 {
   margin: 0 0 12px;
   font-size: 1.3rem;
   color: var(--matrix-green);

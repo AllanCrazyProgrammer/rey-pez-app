@@ -1,6 +1,6 @@
 <template>
   <div v-if="show" class="modal-bg" @click.self="cancel">
-    <div class="modal">
+    <div class="dialog">
       <h3>Nueva sesión de descarga</h3>
       <div class="add-cat-mode" v-if="mode === 'category'">
         <label>Nombre (ej. U-15, 16/20, Pacotilla)</label>
@@ -109,7 +109,7 @@ export default {
   z-index: 1400;
   font-family: 'VT323', 'Share Tech Mono', monospace;
 }
-.modal {
+.dialog {
   background: var(--terminal-bg, #0a0a0a);
   border: 2px solid var(--matrix-green);
   padding: 22px;
@@ -117,7 +117,7 @@ export default {
   max-width: 420px;
   box-shadow: 0 0 25px var(--matrix-green-glow);
 }
-.modal h3 {
+.dialog h3 {
   margin: 0 0 12px;
   font-size: 1.3rem;
   color: var(--matrix-green);
