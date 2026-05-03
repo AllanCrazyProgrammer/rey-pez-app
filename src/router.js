@@ -429,6 +429,11 @@ const routes = [
     component: Taras
   },
   {
+    path: '/procesos/descargas',
+    name: 'Descargas',
+    component: () => import('@/views/Procesos/Descargas.vue')
+  },
+  {
     path: '/procesos/alan',
     name: 'Alan',
     component: Alan
