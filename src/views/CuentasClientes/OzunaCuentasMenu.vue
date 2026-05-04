@@ -9,6 +9,79 @@
       <router-link to="/cuentas-ozuna/nueva" class="action-button new-cuenta-btn">
         Nueva Cuenta
       </router-link>
+      <button
+        v-if="cuentasPendientesCount > 0"
+        class="action-button bulk-create-btn"
+        type="button"
+        :disabled="creandoTodas"
+        @click="abrirPanelPendientes"
+      >
+        {{ creandoTodas
+          ? `Creando ${bulkProgress.actual} de ${bulkProgress.total}...`
+          : `Crear pendientes... (${cuentasPendientesCount})` }}
+      </button>
+    </div>
+
+    <div v-if="bulkResultado" class="bulk-result" :class="{ 'bulk-result-error': bulkResultado.errores > 0 }">
+      Listo: {{ bulkResultado.creadas }} creadas, {{ bulkResultado.errores }} con error de {{ bulkResultado.total }} totales.
+    </div>
+
+    <div v-if="mostrarPanelPendientes" class="bulk-modal-overlay" @click.self="cerrarPanelPendientes">
+      <div class="bulk-modal">
+        <h2>Cuentas pendientes</h2>
+        <p class="bulk-modal-info">
+          Selecciona el rango de fechas y las notas que deseas crear. Se procesarán una por una sin abrir pestañas.
+        </p>
+
+        <div class="bulk-modal-filtros">
+          <label>
+            Desde
+            <input type="date" v-model="bulkFechaDesde" />
+          </label>
+          <label>
+            Hasta
+            <input type="date" v-model="bulkFechaHasta" />
+          </label>
+          <button type="button" class="bulk-link-btn" @click="limpiarRangoFechas">Limpiar rango</button>
+        </div>
+
+        <div class="bulk-modal-acciones-rapidas">
+          <button type="button" class="bulk-link-btn" @click="seleccionarTodasPendientes">Seleccionar todas</button>
+          <button type="button" class="bulk-link-btn" @click="deseleccionarTodasPendientes">Quitar selección</button>
+          <span class="bulk-modal-conteo">
+            {{ pendientesSeleccionadasCount }} de {{ pendientesFiltradas.length }} seleccionadas
+          </span>
+        </div>
+
+        <ul v-if="pendientesFiltradas.length > 0" class="bulk-modal-lista">
+          <li v-for="fecha in pendientesFiltradas" :key="fecha" class="bulk-modal-item">
+            <label>
+              <input
+                type="checkbox"
+                :value="fecha"
+                :checked="bulkSeleccionadas.includes(fecha)"
+                @change="togglePendiente(fecha)"
+              />
+              {{ formatDate(fecha) }}
+            </label>
+          </li>
+        </ul>
+        <p v-else class="bulk-modal-vacio">No hay cuentas pendientes en el rango seleccionado.</p>
+
+        <div class="bulk-modal-footer">
+          <button type="button" class="bulk-cancel-btn" @click="cerrarPanelPendientes">Cancelar</button>
+          <button
+            type="button"
+            class="action-button bulk-create-btn"
+            :disabled="bulkSeleccionadas.length === 0 || creandoTodas"
+            @click="confirmarCrearSeleccionadas"
+          >
+            {{ creandoTodas
+              ? `Creando ${bulkProgress.actual} de ${bulkProgress.total}...`
+              : `Crear ${bulkSeleccionadas.length} seleccionada(s)` }}
+          </button>
+        </div>
+      </div>
     </div>
 
     <div class="cuentas-list">
@@ -72,7 +145,14 @@ export default {
       cuentas: [],
       isLoading: true,
       creatingFecha: null,
-      paginaActual: 1
+      paginaActual: 1,
+      creandoTodas: false,
+      bulkProgress: { actual: 0, total: 0 },
+      bulkResultado: null,
+      mostrarPanelPendientes: false,
+      bulkFechaDesde: '',
+      bulkFechaHasta: '',
+      bulkSeleccionadas: []
     };
   },
   computed: {
@@ -82,6 +162,28 @@ export default {
     cuentasPaginadas() {
       const inicio = (this.paginaActual - 1) * 10;
       return this.cuentas.slice(inicio, inicio + 10);
+    },
+    cuentasPendientesCount() {
+      return this.cuentas.filter(c => c.missingNota).length;
+    },
+    fechasPendientes() {
+      return this.cuentas
+        .filter(c => c.missingNota)
+        .map(c => this.normalizarFechaValor(c.fecha))
+        .filter(Boolean)
+        .sort((a, b) => new Date(b) - new Date(a));
+    },
+    pendientesFiltradas() {
+      const desde = this.bulkFechaDesde || null;
+      const hasta = this.bulkFechaHasta || null;
+      return this.fechasPendientes.filter(fecha => {
+        if (desde && fecha < desde) return false;
+        if (hasta && fecha > hasta) return false;
+        return true;
+      });
+    },
+    pendientesSeleccionadasCount() {
+      return this.bulkSeleccionadas.filter(f => this.pendientesFiltradas.includes(f)).length;
     }
   },
   methods: {
@@ -195,9 +297,10 @@ export default {
     editarCuenta(id) {
       this.$router.push(`/cuentas-ozuna/${id}?edit=true`);
     },
-    async crearNota(fecha) {
+    async crearNota(fecha, options = {}) {
+      const { skipOpen = false, silent = false } = options;
       const fechaNormalizada = this.normalizarFechaValor(fecha) || new Date().toISOString().split('T')[0];
-      if (this.creatingFecha === fechaNormalizada) return;
+      if (this.creatingFecha === fechaNormalizada) return false;
 
       this.creatingFecha = fechaNormalizada;
       try {
@@ -209,8 +312,8 @@ export default {
         });
 
         if (!embarqueDoc) {
-          alert('No se encontró un embarque para esta fecha. Crea la nota manualmente.');
-          return;
+          if (!silent) alert('No se encontró un embarque para esta fecha. Crea la nota manualmente.');
+          throw new Error('No se encontró un embarque para esta fecha');
         }
 
         const data = embarqueDoc.data() || {};
@@ -240,8 +343,8 @@ export default {
         });
 
         if (!tieneProductosConDatos && !tieneCrudosConDatos) {
-          alert('No se detectaron productos o crudos de Ozuna para esta fecha. Verifica el embarque antes de crear la nota.');
-          return;
+          if (!silent) alert('No se detectaron productos o crudos de Ozuna para esta fecha. Verifica el embarque antes de crear la nota.');
+          throw new Error('No se detectaron productos o crudos de Ozuna');
         }
 
         const clienteCrudosTotales = data.clienteCrudos || data.clientesCrudos || {};
@@ -257,13 +360,87 @@ export default {
           costoExtra: data.costoExtra
         };
 
-        await EmbarqueCuentasService.crearCuentaOzuna(embarqueCliente, this.$router);
+        const routerArg = skipOpen ? null : this.$router;
+        await EmbarqueCuentasService.crearCuentaOzuna(embarqueCliente, routerArg);
+        return true;
       } catch (error) {
         console.error('Error al crear la nota desde embarque:', error);
-        alert(`No se pudo crear la nota desde el embarque: ${error.message || error}`);
+        if (!silent) alert(`No se pudo crear la nota desde el embarque: ${error.message || error}`);
+        if (silent) throw error;
+        return false;
       } finally {
         this.creatingFecha = null;
       }
+    },
+    abrirPanelPendientes() {
+      const fechas = this.fechasPendientes;
+      if (fechas.length === 0) return;
+      this.bulkFechaDesde = fechas[fechas.length - 1] || '';
+      this.bulkFechaHasta = fechas[0] || '';
+      this.bulkSeleccionadas = [...fechas];
+      this.bulkResultado = null;
+      this.mostrarPanelPendientes = true;
+    },
+    cerrarPanelPendientes() {
+      if (this.creandoTodas) return;
+      this.mostrarPanelPendientes = false;
+    },
+    limpiarRangoFechas() {
+      this.bulkFechaDesde = '';
+      this.bulkFechaHasta = '';
+    },
+    togglePendiente(fecha) {
+      const idx = this.bulkSeleccionadas.indexOf(fecha);
+      if (idx >= 0) {
+        this.bulkSeleccionadas.splice(idx, 1);
+      } else {
+        this.bulkSeleccionadas.push(fecha);
+      }
+    },
+    seleccionarTodasPendientes() {
+      const visibles = this.pendientesFiltradas;
+      const conjunto = new Set(this.bulkSeleccionadas);
+      visibles.forEach(f => conjunto.add(f));
+      this.bulkSeleccionadas = Array.from(conjunto);
+    },
+    deseleccionarTodasPendientes() {
+      const visibles = new Set(this.pendientesFiltradas);
+      this.bulkSeleccionadas = this.bulkSeleccionadas.filter(f => !visibles.has(f));
+    },
+    async confirmarCrearSeleccionadas() {
+      const seleccion = this.bulkSeleccionadas.filter(f => this.pendientesFiltradas.includes(f));
+      if (seleccion.length === 0) return;
+      const confirmacion = confirm(
+        `Se crearán ${seleccion.length} nota(s) pendiente(s) una por una sin abrirlas. ¿Continuar?`
+      );
+      if (!confirmacion) return;
+      await this.crearNotasEnLote(seleccion);
+      this.mostrarPanelPendientes = false;
+    },
+    async crearNotasEnLote(fechas) {
+      if (!fechas || fechas.length === 0) return;
+      this.creandoTodas = true;
+      this.bulkResultado = null;
+      this.bulkProgress = { actual: 0, total: fechas.length };
+
+      let creadas = 0;
+      let errores = 0;
+
+      for (let i = 0; i < fechas.length; i++) {
+        this.bulkProgress = { actual: i + 1, total: fechas.length };
+        try {
+          await this.crearNota(fechas[i], { skipOpen: true, silent: true });
+          creadas++;
+        } catch (error) {
+          errores++;
+          console.error(`Error creando nota para fecha ${fechas[i]}:`, error);
+        }
+      }
+
+      this.bulkResultado = { creadas, errores, total: fechas.length };
+      this.creandoTodas = false;
+
+      await this.loadCuentas();
     },
     async borrarCuenta(id) {
       if (confirm('¿Estás seguro de que quieres borrar este registro de cuenta?')) {
@@ -330,6 +507,206 @@ h1, h2 {
 
 .back-btn:hover {
   background-color: #5a6268;
+}
+
+.bulk-create-btn {
+  background-color: #1565c0;
+  border: none;
+  color: white;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 16px;
+}
+
+.bulk-create-btn:hover:not(:disabled) {
+  background-color: #0d47a1;
+}
+
+.bulk-create-btn:disabled {
+  background-color: #90caf9;
+  cursor: not-allowed;
+}
+
+.bulk-result {
+  background: #e9f6ee;
+  border: 1px solid #6bbf86;
+  border-radius: 6px;
+  padding: 10px 14px;
+  margin-bottom: 15px;
+  color: #07711e;
+  font-weight: 600;
+  text-align: center;
+}
+
+.bulk-result-error {
+  background: #fdecea;
+  border-color: #f5a39c;
+  color: #b71c1c;
+}
+
+.bulk-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.bulk-modal {
+  background: white;
+  border-radius: 10px;
+  padding: 24px;
+  width: 100%;
+  max-width: 520px;
+  max-height: 85vh;
+  overflow-y: auto;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.bulk-modal h2 {
+  margin: 0;
+  color: #07711e;
+  text-align: left;
+}
+
+.bulk-modal-info {
+  margin: 0;
+  color: #555;
+  font-size: 14px;
+}
+
+.bulk-modal-filtros {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: end;
+}
+
+.bulk-modal-filtros label {
+  display: flex;
+  flex-direction: column;
+  font-size: 13px;
+  color: #555;
+  font-weight: 600;
+  gap: 4px;
+}
+
+.bulk-modal-filtros input[type="date"] {
+  padding: 6px 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.bulk-modal-acciones-rapidas {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+}
+
+.bulk-link-btn {
+  background: none;
+  border: none;
+  color: #1565c0;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 4px 6px;
+  text-decoration: underline;
+}
+
+.bulk-link-btn:hover {
+  color: #0d47a1;
+}
+
+.bulk-modal-conteo {
+  margin-left: auto;
+  color: #666;
+  font-weight: 600;
+}
+
+.bulk-modal-lista {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.bulk-modal-item {
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.bulk-modal-item:last-child {
+  border-bottom: none;
+}
+
+.bulk-modal-item label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.bulk-modal-item label:hover {
+  background: #f7f7f7;
+}
+
+.bulk-modal-vacio {
+  margin: 0;
+  padding: 20px;
+  text-align: center;
+  color: #888;
+  background: #fafafa;
+  border-radius: 6px;
+}
+
+.bulk-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 6px;
+}
+
+.bulk-cancel-btn {
+  background: #eee;
+  border: none;
+  border-radius: 4px;
+  padding: 10px 18px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  color: #444;
+}
+
+.bulk-cancel-btn:hover {
+  background: #ddd;
+}
+
+@media (max-width: 600px) {
+  .bulk-modal {
+    padding: 18px;
+  }
+  .bulk-modal-filtros {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .bulk-modal-conteo {
+    margin-left: 0;
+    width: 100%;
+  }
 }
 
 .cuentas-list {
