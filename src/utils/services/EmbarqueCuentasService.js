@@ -1,4 +1,4 @@
-import { getFirestore, collection, addDoc, doc, getDoc, query, where, getDocs, orderBy } from 'firebase/firestore';
+import { getFirestore, collection, addDoc, doc, getDoc, setDoc, query, where, getDocs, orderBy } from 'firebase/firestore';
 import { 
   formatDate, 
   normalizarFechaISO, 
@@ -208,26 +208,6 @@ const obtenerSaldoAcumuladoAnterior = async (coleccion, fecha) => {
   } catch (error) {
     console.error('Error al obtener saldo acumulado anterior:', error);
     return 0;
-  }
-};
-
-/**
- * Verifica si ya existe una cuenta para la fecha dada
- * @param {string} coleccion - Nombre de la colección (cuentasJoselito o cuentasCatarro)
- * @param {string} fecha - Fecha a verificar (formato YYYY-MM-DD)
- * @returns {Promise<boolean>} - true si ya existe una cuenta para esa fecha
- */
-const existeCuentaParaFecha = async (coleccion, fecha) => {
-  try {
-    const db = getFirestore();
-    const cuentasRef = collection(db, coleccion);
-    const q = query(cuentasRef, where('fecha', '==', fecha));
-    const snapshot = await getDocs(q);
-    
-    return !snapshot.empty;
-  } catch (error) {
-    console.error('Error al verificar si existe cuenta para la fecha:', error);
-    throw error;
   }
 };
 
@@ -1496,29 +1476,36 @@ const prepararDatosCuentaOtilio = async (embarqueData) => {
 export const crearCuentaJoselito = async (embarqueData, router) => {
   try {
     console.log('Iniciando creación de cuenta Joselito desde embarque');
-    
-    // Verificar si ya existe una cuenta para esta fecha
-    const existeCuenta = await existeCuentaParaFecha('cuentasJoselito', embarqueData.fecha);
-    if (existeCuenta) {
-      throw new Error('Ya existe una cuenta de Joselito registrada para esta fecha.');
-    }
-    
+
+    // Normalizar la fecha para usarla como ID del documento
+    const fechaNormalizada = normalizarFechaISO(embarqueData?.fecha);
+
     // Preparar los datos para la cuenta
     const datosCuenta = await prepararDatosCuentaJoselito(embarqueData);
-    
-    // Crear la cuenta en Firestore
+
+    // Crear la cuenta en Firestore usando la fecha como ID
+    // Esto previene duplicados automáticamente a nivel de base de datos
     const db = getFirestore();
-    const docRef = await addDoc(collection(db, 'cuentasJoselito'), datosCuenta);
-    
-    console.log('Cuenta de Joselito creada con ID:', docRef.id);
-    
+    const docRef = doc(db, 'cuentasJoselito', fechaNormalizada);
+
+    try {
+      await setDoc(docRef, datosCuenta, { merge: false });
+      console.log('Cuenta de Joselito creada con ID:', fechaNormalizada);
+    } catch (firestoreError) {
+      // Si el documento ya existe, setDoc con merge:false lanzará un error
+      if (firestoreError.code === 'already-exists') {
+        throw new Error('Ya existe una cuenta de Joselito registrada para esta fecha.');
+      }
+      throw firestoreError;
+    }
+
     // Abrir la cuenta en una nueva pestaña en lugar de navegar directamente
     if (router) {
-      const rutaCompleta = `${window.location.origin}/cuentas-joselito/${docRef.id}?edit=true`;
+      const rutaCompleta = `${window.location.origin}/cuentas-joselito/${fechaNormalizada}?edit=true`;
       window.open(rutaCompleta, '_blank');
     }
-    
-    return docRef.id;
+
+    return fechaNormalizada;
   } catch (error) {
     console.error('Error al crear cuenta de Joselito:', error);
     throw error;
@@ -1534,29 +1521,36 @@ export const crearCuentaJoselito = async (embarqueData, router) => {
 export const crearCuentaCatarro = async (embarqueData, router) => {
   try {
     console.log('Iniciando creación de cuenta Catarro desde embarque');
-    
-    // Verificar si ya existe una cuenta para esta fecha
-    const existeCuenta = await existeCuentaParaFecha('cuentasCatarro', embarqueData.fecha);
-    if (existeCuenta) {
-      throw new Error('Ya existe una cuenta de Catarro registrada para esta fecha.');
-    }
-    
+
+    // Normalizar la fecha para usarla como ID del documento
+    const fechaNormalizada = normalizarFechaISO(embarqueData?.fecha);
+
     // Preparar los datos para la cuenta
     const datosCuenta = await prepararDatosCuentaCatarro(embarqueData);
-    
-    // Crear la cuenta en Firestore
+
+    // Crear la cuenta en Firestore usando la fecha como ID
+    // Esto previene duplicados automáticamente a nivel de base de datos
     const db = getFirestore();
-    const docRef = await addDoc(collection(db, 'cuentasCatarro'), datosCuenta);
-    
-    console.log('Cuenta de Catarro creada con ID:', docRef.id);
-    
+    const docRef = doc(db, 'cuentasCatarro', fechaNormalizada);
+
+    try {
+      await setDoc(docRef, datosCuenta, { merge: false });
+      console.log('Cuenta de Catarro creada con ID:', fechaNormalizada);
+    } catch (firestoreError) {
+      // Si el documento ya existe, setDoc con merge:false lanzará un error
+      if (firestoreError.code === 'already-exists') {
+        throw new Error('Ya existe una cuenta de Catarro registrada para esta fecha.');
+      }
+      throw firestoreError;
+    }
+
     // Abrir la cuenta en una nueva pestaña en lugar de navegar directamente
     if (router) {
-      const rutaCompleta = `${window.location.origin}/cuentas-catarro/${docRef.id}?edit=true`;
+      const rutaCompleta = `${window.location.origin}/cuentas-catarro/${fechaNormalizada}?edit=true`;
       window.open(rutaCompleta, '_blank');
     }
-    
-    return docRef.id;
+
+    return fechaNormalizada;
   } catch (error) {
     console.error('Error al crear cuenta de Catarro:', error);
     throw error;
@@ -1572,29 +1566,36 @@ export const crearCuentaCatarro = async (embarqueData, router) => {
 export const crearCuentaOzuna = async (embarqueData, router) => {
   try {
     console.log('Iniciando creación de cuenta Ozuna desde embarque');
-    
-    // Verificar si ya existe una cuenta para esta fecha
-    const existeCuenta = await existeCuentaParaFecha('cuentasOzuna', embarqueData.fecha);
-    if (existeCuenta) {
-      throw new Error('Ya existe una cuenta de Ozuna registrada para esta fecha.');
-    }
-    
+
+    // Normalizar la fecha para usarla como ID del documento
+    const fechaNormalizada = normalizarFechaISO(embarqueData?.fecha);
+
     // Preparar los datos para la cuenta
     const datosCuenta = await prepararDatosCuentaOzuna(embarqueData);
-    
-    // Crear la cuenta en Firestore
+
+    // Crear la cuenta en Firestore usando la fecha como ID
+    // Esto previene duplicados automáticamente a nivel de base de datos
     const db = getFirestore();
-    const docRef = await addDoc(collection(db, 'cuentasOzuna'), datosCuenta);
-    
-    console.log('Cuenta de Ozuna creada con ID:', docRef.id);
-    
+    const docRef = doc(db, 'cuentasOzuna', fechaNormalizada);
+
+    try {
+      await setDoc(docRef, datosCuenta, { merge: false });
+      console.log('Cuenta de Ozuna creada con ID:', fechaNormalizada);
+    } catch (firestoreError) {
+      // Si el documento ya existe, setDoc con merge:false lanzará un error
+      if (firestoreError.code === 'already-exists') {
+        throw new Error('Ya existe una cuenta de Ozuna registrada para esta fecha.');
+      }
+      throw firestoreError;
+    }
+
     // Abrir la cuenta en una nueva pestaña en lugar de navegar directamente
     if (router) {
-      const rutaCompleta = `${window.location.origin}/cuentas-ozuna/${docRef.id}?edit=true`;
+      const rutaCompleta = `${window.location.origin}/cuentas-ozuna/${fechaNormalizada}?edit=true`;
       window.open(rutaCompleta, '_blank');
     }
-    
-    return docRef.id;
+
+    return fechaNormalizada;
   } catch (error) {
     console.error('Error al crear cuenta de Ozuna:', error);
     throw error;
@@ -1610,29 +1611,36 @@ export const crearCuentaOzuna = async (embarqueData, router) => {
 export const crearCuentaOtilio = async (embarqueData, router) => {
   try {
     console.log('Iniciando creación de cuenta Otilio desde embarque');
-    
-    // Verificar si ya existe una cuenta para esta fecha
-    const existeCuenta = await existeCuentaParaFecha('cuentasOtilio', embarqueData.fecha);
-    if (existeCuenta) {
-      throw new Error('Ya existe una cuenta de Otilio registrada para esta fecha.');
-    }
-    
+
+    // Normalizar la fecha para usarla como ID del documento
+    const fechaNormalizada = normalizarFechaISO(embarqueData?.fecha);
+
     // Preparar los datos para la cuenta
     const datosCuenta = await prepararDatosCuentaOtilio(embarqueData);
-    
-    // Crear la cuenta en Firestore
+
+    // Crear la cuenta en Firestore usando la fecha como ID
+    // Esto previene duplicados automáticamente a nivel de base de datos
     const db = getFirestore();
-    const docRef = await addDoc(collection(db, 'cuentasOtilio'), datosCuenta);
-    
-    console.log('Cuenta de Otilio creada con ID:', docRef.id);
-    
+    const docRef = doc(db, 'cuentasOtilio', fechaNormalizada);
+
+    try {
+      await setDoc(docRef, datosCuenta, { merge: false });
+      console.log('Cuenta de Otilio creada con ID:', fechaNormalizada);
+    } catch (firestoreError) {
+      // Si el documento ya existe, setDoc con merge:false lanzará un error
+      if (firestoreError.code === 'already-exists') {
+        throw new Error('Ya existe una cuenta de Otilio registrada para esta fecha.');
+      }
+      throw firestoreError;
+    }
+
     // Abrir la cuenta en una nueva pestaña en lugar de navegar directamente
     if (router) {
-      const rutaCompleta = `${window.location.origin}/cuentas-otilio/${docRef.id}?edit=true`;
+      const rutaCompleta = `${window.location.origin}/cuentas-otilio/${fechaNormalizada}?edit=true`;
       window.open(rutaCompleta, '_blank');
     }
-    
-    return docRef.id;
+
+    return fechaNormalizada;
   } catch (error) {
     console.error('Error al crear cuenta de Otilio:', error);
     throw error;
@@ -2149,34 +2157,72 @@ export const crearCuentaVeronica = async (embarqueData, router) => {
   try {
     console.log('Iniciando creación de cuenta Veronica desde embarque');
     console.log('Datos de embarque recibidos en crearCuentaVeronica:', embarqueData);
-    
-    // Verificar si ya existe una cuenta para esta fecha
+
+    // Normalizar la fecha para usarla como ID del documento
     const fechaNormalizada = normalizarFechaISO(embarqueData?.fecha);
-    const existeCuenta = await existeCuentaParaFecha('cuentasVeronica', fechaNormalizada);
-    if (existeCuenta) {
-      throw new Error('Ya existe una cuenta de Veronica registrada para esta fecha.');
+
+    // VALIDACIÓN 1: Verificar que no exista una cuenta para esta fecha
+    const db = getFirestore();
+    const docRef = doc(db, 'cuentasVeronica', fechaNormalizada);
+    const docSnap = await getDoc(docRef);
+
+    if (docSnap.exists()) {
+      console.warn(`⚠️ Ya existe una cuenta de Veronica para la fecha ${fechaNormalizada}`);
+      throw new Error(`Ya existe una cuenta de Veronica registrada para la fecha ${fechaNormalizada}. No se pueden crear cuentas duplicadas.`);
     }
-    
+
     // Preparar los datos para la cuenta
     console.log('Llamando a prepararDatosCuentaVeronica...');
     const datosCuenta = await prepararDatosCuentaVeronica(embarqueData);
     console.log('Datos de cuenta preparados:', datosCuenta);
-    
-    // Crear la cuenta en Firestore
-    const db = getFirestore();
-    const docRef = await addDoc(collection(db, 'cuentasVeronica'), datosCuenta);
-    
-    console.log('Cuenta de Veronica creada con ID:', docRef.id);
-    
+
+    // VALIDACIÓN 2: Verificar que todos los items tengan precio de venta
+    const itemsSinPrecio = [];
+    if (datosCuenta.itemsVenta && Array.isArray(datosCuenta.itemsVenta)) {
+      datosCuenta.itemsVenta.forEach((item, index) => {
+        if (!item.precioVenta || item.precioVenta <= 0) {
+          itemsSinPrecio.push({
+            index: index + 1,
+            medida: item.medida,
+            kilos: item.kilosVenta,
+            precioVenta: item.precioVenta
+          });
+        }
+      });
+    }
+
+    // Si hay items sin precio, mostrar advertencia detallada
+    if (itemsSinPrecio.length > 0) {
+      console.error('⚠️ ALERTA: Se encontraron items sin precio de venta:');
+      itemsSinPrecio.forEach(item => {
+        console.error(`  - Item ${item.index}: ${item.medida} (${item.kilos} kg) - Precio: ${item.precioVenta || 'VACÍO'}`);
+      });
+
+      const detalleItems = itemsSinPrecio
+        .map(item => `• ${item.medida} (${item.kilos} kg) - Precio: ${item.precioVenta || 'VACÍO'}`)
+        .join('\n');
+
+      throw new Error(
+        `⚠️ NO SE PUEDE CREAR LA CUENTA\n\n` +
+        `Se encontraron ${itemsSinPrecio.length} item(s) sin precio de venta:\n\n${detalleItems}\n\n` +
+        `Por favor, asegúrate de que todos los productos tengan un precio de venta configurado antes de crear la cuenta.`
+      );
+    }
+
+    // Crear la cuenta en Firestore usando la fecha como ID
+    console.log(`✅ Todas las validaciones pasaron. Creando cuenta para fecha ${fechaNormalizada}...`);
+    await setDoc(docRef, datosCuenta);
+    console.log('✅ Cuenta de Veronica creada exitosamente con ID:', fechaNormalizada);
+
     // Abrir la cuenta en una nueva pestaña en lugar de navegar directamente
     if (router) {
-      const rutaCompleta = `${window.location.origin}/cuentas-veronica/${docRef.id}?edit=true`;
+      const rutaCompleta = `${window.location.origin}/cuentas-veronica/${fechaNormalizada}?edit=true`;
       window.open(rutaCompleta, '_blank');
     }
-    
-    return docRef.id;
+
+    return fechaNormalizada;
   } catch (error) {
-    console.error('Error al crear cuenta de Veronica:', error);
+    console.error('❌ Error al crear cuenta de Veronica:', error);
     throw error;
   }
 };
