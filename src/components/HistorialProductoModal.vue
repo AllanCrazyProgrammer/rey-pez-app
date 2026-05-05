@@ -179,6 +179,7 @@ export default {
   },
   methods: {
     formatNumber,
+    formatDate,
     resetSelections() {
       this.filtros.proveedor = '';
       this.filtros.medida = '';
@@ -229,17 +230,31 @@ export default {
                   if (fechaSacada > fechaHasta) return;
                 }
                 
-                historialTemp.push({
-                  fecha: fechaSacada,
-                  kilos: movimiento.kilos,
-                  precio: movimiento.precio,
-                  tipoMovimiento: tipoMovimiento
-                });
+                const fechaISO = fechaSacada.toISOString().split('T')[0];
+                const clave = `${fechaISO}_${tipoMovimiento}`;
+                const existente = historialTemp.find(h => h._clave === clave);
+
+                if (existente) {
+                  existente.kilos += movimiento.kilos || 0;
+                  if (movimiento.precio) {
+                    existente._precios.push(movimiento.precio);
+                    existente.precio = existente._precios.reduce((a, b) => a + b, 0) / existente._precios.length;
+                  }
+                } else {
+                  historialTemp.push({
+                    _clave: clave,
+                    _precios: movimiento.precio ? [movimiento.precio] : [],
+                    fecha: fechaSacada,
+                    kilos: movimiento.kilos || 0,
+                    precio: movimiento.precio,
+                    tipoMovimiento: tipoMovimiento
+                  });
+                }
               }
             });
           });
         });
-        
+
         // Ahora verificar embarques para cada registro del historial
         await this.verificarEmbarques(historialTemp);
         
@@ -332,16 +347,16 @@ export default {
             };
           }
           
+          const { _clave, _precios, ...itemLimpio } = item;
           return {
-            ...item,
+            ...itemLimpio,
             embarqueInfo
           };
         });
-        
+
       } catch (error) {
         console.error('Error al verificar embarques:', error);
-        // Si hay error, usar el historial sin información de embarques
-        this.historial = historialTemp;
+        this.historial = historialTemp.map(({ _clave, _precios, ...item }) => item);
       }
     },
 
@@ -624,15 +639,25 @@ th, td {
   border: 1px solid #ddd;
   padding: 12px;
   text-align: left;
+  color: #1a1a2e;
 }
 
 th {
-  background-color: #f5f5f5;
+  background-color: #2c3e6b;
+  color: #ffffff;
   font-weight: bold;
 }
 
 tr:nth-child(even) {
-  background-color: #f9f9f9;
+  background-color: #eef2ff;
+}
+
+tr:nth-child(odd) {
+  background-color: #ffffff;
+}
+
+tbody tr:hover {
+  background-color: #d6e0ff;
 }
 
 .close-button {

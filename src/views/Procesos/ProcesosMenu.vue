@@ -108,6 +108,26 @@
         <span class="icon">🧺</span>
         <span class="btn-text">TARAS</span>
       </router-link>
+
+      <router-link
+        to="/procesos/alan"
+        class="btn-action btn-alan"
+        aria-label="Acceder al área de Alan"
+      >
+        <span class="btn-prefix">[9]</span>
+        <span class="icon">🔐</span>
+        <span class="btn-text">ALAN</span>
+      </router-link>
+
+      <router-link
+        to="/procesos/descargas"
+        class="btn-action btn-descargas"
+        aria-label="Contador de cajas para descarga de camionetas"
+      >
+        <span class="btn-prefix">[10]</span>
+        <span class="icon">📦</span>
+        <span class="btn-text">DESCARGAS</span>
+      </router-link>
     </div>
   </div>
 </template>
@@ -394,6 +414,26 @@ export default {
 .btn-taras:hover {
   background: #6c5ce7;
   box-shadow: 0 0 15px rgba(108, 92, 231, 0.5);
+}
+
+.btn-alan {
+  border-color: #339af0;
+  color: #339af0;
+}
+
+.btn-alan:hover {
+  background: #339af0;
+  box-shadow: 0 0 15px rgba(51, 154, 240, 0.5);
+}
+
+.btn-descargas {
+  border-color: #00ff41;
+  color: #00ff41;
+}
+
+.btn-descargas:hover {
+  background: #00ff41;
+  box-shadow: 0 0 15px rgba(0, 255, 65, 0.5);
 }
 
 /* Responsive */
