@@ -800,11 +800,19 @@ export default {
     medidasDisponibles() {
       const medidas = [...this.medidasOrdenadas]
       const yaExisteMacuil = medidas.some(medida => this.esMedidaMacuil(medida?.nombre))
+      const yaExisteMaquila = medidas.some(medida => this.esMedidaMaquila(medida?.nombre))
 
       if (!yaExisteMacuil) {
         medidas.push({
           id: 'macuil-opcion',
           nombre: 'macuil'
+        })
+      }
+
+      if (!yaExisteMaquila) {
+        medidas.push({
+          id: 'maquila-opcion',
+          nombre: 'maquila'
         })
       }
 
@@ -1066,13 +1074,16 @@ export default {
     esMedidaMacuil(medida) {
       return (medida || '').toString().trim().toLowerCase() === 'macuil'
     },
+    esMedidaMaquila(medida) {
+      return (medida || '').toString().trim().toLowerCase() === 'maquila'
+    },
     obtenerOpcionesTipo(clienteId) {
       return TIPOS_POR_CLIENTE[clienteId] || TIPOS_POR_CLIENTE.temporal
     },
     manejarCambioMedida(item, clienteId) {
       if (!item) return
 
-      if (this.esMedidaMacuil(item.medida)) {
+      if (this.esMedidaMacuil(item.medida) || this.esMedidaMaquila(item.medida)) {
         item.tipo = ''
         return
       }
