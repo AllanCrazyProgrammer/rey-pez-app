@@ -30,12 +30,31 @@
     </div>
 
     <div class="filter-container">
-      <label for="filter-select">Filtrar por estado:</label>
-      <select id="filter-select" v-model="filtroEstado">
-        <option value="todas">Todas</option>
-        <option value="pagadas">Pagadas</option>
-        <option value="no-pagadas">No Pagadas</option>
-      </select>
+      <div class="filter-group">
+        <label for="filter-select">Filtrar por estado:</label>
+        <select id="filter-select" v-model="filtroEstado">
+          <option value="todas">Todas</option>
+          <option value="pagadas">Pagadas</option>
+          <option value="no-pagadas">No Pagadas</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label for="filter-medida">Buscar por medida:</label>
+        <input
+          id="filter-medida"
+          type="text"
+          v-model="filtroMedida"
+          placeholder="ej: jumbo"
+          class="filter-medida-input"
+        />
+        <button
+          v-if="filtroMedida"
+          type="button"
+          class="filter-medida-clear"
+          @click="filtroMedida = ''"
+          title="Limpiar filtro de medida"
+        >×</button>
+      </div>
     </div>
 
     <div class="cuentas-list card">
@@ -227,19 +246,35 @@ export default {
       embarquesCacheTimestamp: 0,
       embarquesCacheTTL: 30000,
       embarquesFetchPromise: null,
-      paginaActual: 1
+      paginaActual: 1,
+      filtroMedida: ''
     };
   },
   computed: {
     cuentasFiltradas() {
+      const filtroMedidaNormalizado = this.normalizarTextoBusqueda(this.filtroMedida);
+      const filtroMedidaActivo = filtroMedidaNormalizado.length > 0;
+
+      let resultado;
       switch (this.filtroEstado) {
         case 'pagadas':
-          return this.cuentas.filter(cuenta => cuenta.estadoPagado);
+          resultado = this.cuentas.filter(cuenta => cuenta.estadoPagado);
+          break;
         case 'no-pagadas':
-          return this.cuentas.filter(cuenta => !cuenta.estadoPagado);
+          resultado = this.cuentas.filter(cuenta => !cuenta.estadoPagado);
+          break;
         default:
-          return this.cuentas;
+          resultado = this.cuentas;
       }
+
+      if (filtroMedidaActivo) {
+        resultado = resultado.filter(cuenta => {
+          if (cuenta.missingNota) return false;
+          return (cuenta.medidas || []).some(medida => medida.includes(filtroMedidaNormalizado));
+        });
+      }
+
+      return resultado;
     },
     totalPaginas() {
       return Math.max(1, Math.ceil(this.cuentasFiltradas.length / 10));
@@ -252,11 +287,36 @@ export default {
   watch: {
     filtroEstado() {
       this.paginaActual = 1;
+    },
+    filtroMedida() {
+      this.paginaActual = 1;
     }
   },
   methods: {
     formatNumber,
     formatDate,
+    normalizarTextoBusqueda(texto) {
+      if (texto === null || texto === undefined) return '';
+      return texto
+        .toString()
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[̀-ͯ]/g, '')
+        .trim();
+    },
+    extraerMedidasDeCuenta(data = {}) {
+      const medidas = new Set();
+      const recolectar = lista => {
+        if (!Array.isArray(lista)) return;
+        lista.forEach(item => {
+          const medida = this.normalizarTextoBusqueda(item?.medida);
+          if (medida) medidas.add(medida);
+        });
+      };
+      recolectar(data.items);
+      recolectar(data.itemsVenta);
+      return Array.from(medidas);
+    },
     tienePrecioVentaVacio(itemsVenta = []) {
       return itemsVenta.some(item => {
         const valor = item?.precioVenta;
@@ -419,6 +479,7 @@ export default {
             const saldoPersistido = typeof data.nuevoSaldoAcumulado === 'number'
               ? data.nuevoSaldoAcumulado
               : null;
+            const medidas = this.extraerMedidasDeCuenta(data);
 
             return {
               id: doc.id,
@@ -434,7 +495,8 @@ export default {
               notaBloqueada: data.notaBloqueada !== undefined ? data.notaBloqueada : true,
               tieneObservacion: data.tieneObservacion || false,
               observacion: data.observacion || '',
-              tienePrecioVentaVacio: this.tienePrecioVentaVacio(data.itemsVenta || [])
+              tienePrecioVentaVacio: this.tienePrecioVentaVacio(data.itemsVenta || []),
+              medidas
             };
           });
 
@@ -996,13 +1058,84 @@ h1, h2 {
 
 .filter-container {
   margin-bottom: 20px;
-  text-align: right;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
 }
 
-.filter-container select {
-  padding: 5px;
+.filter-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #fff;
+}
+
+.filter-group label {
+  color: #fff;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.filter-container select,
+.filter-medida-input {
+  padding: 5px 8px;
   border-radius: 4px;
   border: 1px solid #ccc;
+  font-size: 14px;
+  color: #222;
+  background-color: #fff;
+}
+
+.filter-medida-input {
+  min-width: 160px;
+}
+
+.filter-medida-input::placeholder {
+  color: #888;
+  opacity: 1;
+}
+
+.filter-medida-input:focus {
+  outline: none;
+  border-color: #ff8c00;
+  box-shadow: 0 0 0 2px rgba(255, 140, 0, 0.2);
+}
+
+.filter-medida-clear {
+  background: #f5f5f5;
+  border: 1px solid #ccc;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  line-height: 1;
+  font-size: 16px;
+  cursor: pointer;
+  color: #444;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.filter-medida-clear:hover {
+  background: #e0e0e0;
+  color: #000;
+}
+
+@media (max-width: 768px) {
+  .filter-container {
+    justify-content: stretch;
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .filter-group {
+    justify-content: space-between;
+  }
+  .filter-medida-input {
+    flex: 1;
+  }
 }
 
 .estado-cuenta {
