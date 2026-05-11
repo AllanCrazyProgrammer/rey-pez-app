@@ -116,8 +116,6 @@ import CuentaFletesAbonoForm from './components/CuentaFletes/CuentaFletesAbonoFo
 import CuentaFletesMovimientos from './components/CuentaFletes/CuentaFletesMovimientos.vue';
 import CuentaFletesEstado from './components/CuentaFletes/CuentaFletesEstado.vue';
 import {
-  COSTO_TARA_CRUDO,
-  COSTO_TARA_LIMPIO,
   agruparFletesPorFechaYCarga,
   calcularDeudaAcumuladaPorId,
   calcularMontoDia,
@@ -147,8 +145,6 @@ export default {
       abonos: [],
       choferes: ['Caminante', 'Porro'],
       choferSeleccionado: 'Caminante',
-      costoTaraLimpio: COSTO_TARA_LIMPIO,
-      costoTaraCrudo: COSTO_TARA_CRUDO,
       cargando: false,
       imprimiendo: false,
       guardandoAbono: false,
@@ -169,12 +165,6 @@ export default {
     };
   },
   computed: {
-    costosFlete() {
-      return {
-        limpio: this.costoTaraLimpio,
-        crudo: this.costoTaraCrudo
-      };
-    },
     fletesFiltrados() {
       return filtrarFletesPorChofer(this.fletes, this.choferSeleccionado);
     },
@@ -216,7 +206,7 @@ export default {
       return `DIAS ${inicio}-${fin} DE ${this.fechasPaginadas.length}`;
     },
     deudaAcumuladaPorId() {
-      return calcularDeudaAcumuladaPorId(this.itemsOrdenados, this.costosFlete);
+      return calcularDeudaAcumuladaPorId(this.itemsOrdenados);
     },
     fletesPendientes() {
       return this.fletesFiltrados.filter(flete => !flete.pagado);
@@ -326,7 +316,7 @@ export default {
       return obtenerTotalTaras(item);
     },
     calcularMontoDiaLocal(flete) {
-      return calcularMontoDia(flete, this.costosFlete);
+      return calcularMontoDia(flete);
     },
     marcarSync(mensaje) {
       this.ultimoGuardado = `${mensaje} ${new Date().toLocaleTimeString('es-MX', {

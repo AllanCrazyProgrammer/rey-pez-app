@@ -1,5 +1,9 @@
 export const COSTO_TARA_LIMPIO = 70;
 export const COSTO_TARA_CRUDO = 60;
+export const COSTO_TARA_LIMPIO_NUEVO = 100;
+export const COSTO_TARA_CRUDO_NUEVO = 80;
+// A partir de esta fecha (inclusive) se aplican los costos nuevos de tara.
+export const FECHA_NUEVOS_COSTOS_TARA = '2026-05-11';
 
 export function normalizarTexto(valor) {
   return (valor || '')
@@ -91,9 +95,18 @@ export function obtenerTotalTaras(item) {
     (item.tarasCrudoVeronica || 0);
 }
 
+export function obtenerCostosTaraPorFecha(fecha) {
+  const fechaISO = obtenerFechaISO(fecha);
+  if (fechaISO && fechaISO >= FECHA_NUEVOS_COSTOS_TARA) {
+    return { limpio: COSTO_TARA_LIMPIO_NUEVO, crudo: COSTO_TARA_CRUDO_NUEVO };
+  }
+  return { limpio: COSTO_TARA_LIMPIO, crudo: COSTO_TARA_CRUDO };
+}
+
 export function calcularMontoDia(flete, costos = {}) {
-  const costoLimpio = costos.limpio || COSTO_TARA_LIMPIO;
-  const costoCrudo = costos.crudo || COSTO_TARA_CRUDO;
+  const defaults = obtenerCostosTaraPorFecha(flete.fecha);
+  const costoLimpio = costos.limpio || defaults.limpio;
+  const costoCrudo = costos.crudo || defaults.crudo;
 
   return ((flete.tarasLimpioJoselito || 0) * costoLimpio) +
     ((flete.tarasCrudoJoselito || 0) * costoCrudo) +
