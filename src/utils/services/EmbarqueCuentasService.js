@@ -162,7 +162,7 @@ const calcularKilosCrudos = (medida, kilosOriginales, esParaCostos = false) => {
 
 const obtenerMultiplicadorVentaCrudoVeronica = (talla) => {
   const tallaNormalizada = normalizarMedida(talla || '');
-  return tallaNormalizada === 'gde c/c' ? 19.5 : 20;
+  return (tallaNormalizada === 'gde c/c' || tallaNormalizada === 'jumbo c/c') ? 19.5 : 20;
 };
 
 /**
@@ -2040,7 +2040,7 @@ const prepararDatosCuentaVeronica = async (embarqueData) => {
             ) || 0;
             const precioVenta = preciosVenta.get(medidaNormalizada) || item.precio || 0;
             
-            // Calcular kilos para ventas. Veronica usa 19.5 solo en Gde c/c.
+            // Calcular kilos para ventas. Veronica usa 19.5 en Gde c/c y Jumbo c/c.
             let kilosTarasVenta = 0;
             if (item.taras) {
               const formatoGuion = /^(\d+)-(\d+(?:\.\d+)?)$/.exec(item.taras);
