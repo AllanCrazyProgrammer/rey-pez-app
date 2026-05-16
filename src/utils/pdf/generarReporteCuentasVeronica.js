@@ -71,14 +71,22 @@ export const generarReporteCuentasVeronica = async ({ fechaInicio, fechaFin, reg
     console.warn('No se pudo cargar el logo de Verónica para el PDF:', error);
   }
 
-  const tablaBody = [
-    [
-      { text: 'Fecha', style: 'tableHeader', alignment: 'center' },
-      { text: 'Saldo del día', style: 'tableHeader', alignment: 'right' },
-      { text: 'Abonos', style: 'tableHeader', alignment: 'right' },
-      { text: 'Resta', style: 'tableHeader', alignment: 'right' }
-    ]
+  const hayObservaciones = registrosOrdenados.some(
+    (registro) => typeof registro.observacion === 'string' && registro.observacion.trim().length > 0
+  );
+
+  const filaEncabezado = [
+    { text: 'Fecha', style: 'tableHeader', alignment: 'center' },
+    { text: 'Saldo del día', style: 'tableHeader', alignment: 'right' },
+    { text: 'Abonos', style: 'tableHeader', alignment: 'right' },
+    { text: 'Resta', style: 'tableHeader', alignment: 'right' }
   ];
+
+  if (hayObservaciones) {
+    filaEncabezado.push({ text: 'Observación', style: 'tableHeader', alignment: 'left' });
+  }
+
+  const tablaBody = [filaEncabezado];
 
   const abonosPorDescripcion = {}; // Agrupar abonos por descripción
   const resumenTotales = {
@@ -118,12 +126,19 @@ export const generarReporteCuentasVeronica = async ({ fechaInicio, fechaFin, reg
 
     saldoAcumulado = saldoFinal;
 
-    tablaBody.push([
+    const filaRegistro = [
       { text: formatearFecha(registro.fecha), alignment: 'center' },
       { text: formatCurrency(saldoDelDia), alignment: 'right' },
       { text: formatCurrency(totalAbonos), alignment: 'right' },
       { text: formatCurrency(totalDia), alignment: 'right' }
-    ]);
+    ];
+
+    if (hayObservaciones) {
+      const observacionTexto = (typeof registro.observacion === 'string' ? registro.observacion : '').trim();
+      filaRegistro.push({ text: observacionTexto, alignment: 'left' });
+    }
+
+    tablaBody.push(filaRegistro);
 
     resumenTotales.saldoDia += saldoDelDia;
     resumenTotales.cobros += totalCobros;
@@ -159,12 +174,18 @@ export const generarReporteCuentasVeronica = async ({ fechaInicio, fechaFin, reg
     }
   });
 
-  tablaBody.push([
+  const filaTotales = [
     { text: 'Totales del período', alignment: 'right', bold: true, fillColor: '#fdebd0' },
     { text: formatCurrency(resumenTotales.saldoDia), alignment: 'right', bold: true, fillColor: '#fdebd0' },
     { text: formatCurrency(resumenTotales.abonos), alignment: 'right', bold: true, fillColor: '#fdebd0' },
     { text: formatCurrency(resumenTotales.totalDia), alignment: 'right', bold: true, fillColor: '#fdebd0' }
-  ]);
+  ];
+
+  if (hayObservaciones) {
+    filaTotales.push({ text: '', alignment: 'left', fillColor: '#fdebd0' });
+  }
+
+  tablaBody.push(filaTotales);
 
   const fechaInicioTexto = fechaInicio ? formatearFecha(fechaInicio) : formatearFecha(registrosOrdenados[0].fecha);
   const fechaFinTexto = fechaFin ? formatearFecha(fechaFin) : formatearFecha(registrosOrdenados[registrosOrdenados.length - 1].fecha);
@@ -222,7 +243,9 @@ export const generarReporteCuentasVeronica = async ({ fechaInicio, fechaFin, reg
       {
         table: {
           headerRows: 1,
-          widths: ['auto', '*', 'auto', 'auto'],
+          widths: hayObservaciones
+            ? ['auto', 'auto', 'auto', 'auto', '*']
+            : ['auto', '*', 'auto', 'auto'],
           body: tablaBody
         },
         layout: layoutTablaConTotal
