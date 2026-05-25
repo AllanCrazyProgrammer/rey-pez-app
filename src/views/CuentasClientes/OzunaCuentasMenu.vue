@@ -107,6 +107,14 @@
             </p>
           </div>
           <div class="cuenta-actions">
+            <button
+              v-if="!cuenta.missingNota"
+              type="button"
+              class="abono-btn"
+              @click="abrirModalAbono(cuenta)"
+            >
+              Abono
+            </button>
             <button v-if="!cuenta.missingNota" @click="editarCuenta(cuenta.id)" class="edit-btn">Editar</button>  
             <button v-if="!cuenta.missingNota" @click="borrarCuenta(cuenta.id)" class="delete-btn">Borrar</button>
             <button
@@ -129,14 +137,62 @@
         <button @click="paginaActual = totalPaginas" :disabled="paginaActual === totalPaginas" class="pagination-btn">&raquo;</button>
       </div>
     </div>
+
+    <div v-if="mostrarModalAbono" class="bulk-modal-overlay" @click.self="cerrarModalAbono">
+      <div class="bulk-modal abono-modal">
+        <h2>Agregar abono</h2>
+        <p class="bulk-modal-info">
+          {{ cuentaAbonoSeleccionada ? formatDate(cuentaAbonoSeleccionada.fecha) : '' }}
+        </p>
+        <label class="abono-field">
+          Monto
+          <input
+            v-model.number="nuevoAbono.monto"
+            type="number"
+            min="0"
+            step="0.01"
+            placeholder="0.00"
+            :disabled="guardandoAbono"
+          />
+        </label>
+        <label class="abono-field">
+          Descripción (opcional)
+          <input
+            v-model="nuevoAbono.descripcion"
+            type="text"
+            placeholder="Ej. Transferencia, efectivo..."
+            :disabled="guardandoAbono"
+          />
+        </label>
+        <div class="bulk-modal-footer">
+          <button type="button" class="bulk-cancel-btn" :disabled="guardandoAbono" @click="cerrarModalAbono">
+            Cancelar
+          </button>
+          <button
+            type="button"
+            class="action-button abono-save-btn"
+            :disabled="guardandoAbono || !puedeGuardarAbono"
+            @click="guardarAbonoEnCuenta"
+          >
+            {{ guardandoAbono ? 'Guardando...' : 'Guardar abono' }}
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script>
 import { db } from '@/firebase';
-import { collection, getDocs, query, orderBy, deleteDoc, doc, limit } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, deleteDoc, doc, limit, getDoc, updateDoc } from 'firebase/firestore';
 import EmbarqueCuentasService from '@/utils/services/EmbarqueCuentasService';
 import { formatNumber, formatearFecha as formatDate } from '@/utils/formatters';
+import {
+  totalesAcumuladosPorCuenta,
+  netoDiaCuentaOzuna,
+  saldoAcumuladoAntesDeFecha,
+  normalizarFechaOzuna as normalizarFechaSaldo
+} from '@/utils/ozunaCuentasSaldo';
 
 export default {
   name: 'OzunaCuentasMenu',
@@ -152,10 +208,18 @@ export default {
       mostrarPanelPendientes: false,
       bulkFechaDesde: '',
       bulkFechaHasta: '',
-      bulkSeleccionadas: []
+      bulkSeleccionadas: [],
+      mostrarModalAbono: false,
+      cuentaAbonoSeleccionada: null,
+      nuevoAbono: { monto: null, descripcion: '' },
+      guardandoAbono: false
     };
   },
   computed: {
+    puedeGuardarAbono() {
+      const monto = Number(this.nuevoAbono.monto);
+      return Number.isFinite(monto) && monto > 0;
+    },
     totalPaginas() {
       return Math.max(1, Math.ceil(this.cuentas.length / 10));
     },
@@ -232,15 +296,22 @@ export default {
         const cuentasRef = collection(db, 'cuentasOzuna');
         const q = query(cuentasRef, orderBy('fecha', 'desc'));
         const querySnapshot = await getDocs(q);
-        const cuentasActualizadas = querySnapshot.docs.map((doc) => {
-          const data = doc.data();
+        const cuentasParaSaldo = querySnapshot.docs.map((docSnap) => ({
+          id: docSnap.id,
+          fecha: this.normalizarFechaValor(docSnap.data().fecha) || docSnap.data().fecha,
+          data: docSnap.data()
+        }));
+        const totalesPorId = totalesAcumuladosPorCuenta(cuentasParaSaldo);
+
+        const cuentasActualizadas = querySnapshot.docs.map((docSnap) => {
+          const data = docSnap.data();
           const totalAbonos = (data.abonos || []).reduce((sum, abono) => sum + (abono.monto || 0), 0);
           const totalCobros = (data.cobros || []).reduce((sum, cobro) => sum + (cobro.monto || 0), 0);
           return {
-            id: doc.id,
+            id: docSnap.id,
             fecha: this.normalizarFechaValor(data.fecha) || data.fecha,
             saldoHoy: data.totalGeneral || 0,
-            totalNota: data.totalSaldo || 0,
+            totalNota: totalesPorId.get(docSnap.id) ?? netoDiaCuentaOzuna(data),
             totalAbonos: totalAbonos,
             totalCobros: totalCobros
           };
@@ -296,6 +367,67 @@ export default {
     },
     editarCuenta(id) {
       this.$router.push(`/cuentas-ozuna/${id}?edit=true`);
+    },
+    abrirModalAbono(cuenta) {
+      this.cuentaAbonoSeleccionada = cuenta;
+      this.nuevoAbono = { monto: null, descripcion: '' };
+      this.mostrarModalAbono = true;
+    },
+    cerrarModalAbono() {
+      if (this.guardandoAbono) return;
+      this.mostrarModalAbono = false;
+      this.cuentaAbonoSeleccionada = null;
+      this.nuevoAbono = { monto: null, descripcion: '' };
+    },
+    async guardarAbonoEnCuenta() {
+      if (!this.cuentaAbonoSeleccionada || !this.puedeGuardarAbono || this.guardandoAbono) return;
+
+      this.guardandoAbono = true;
+      try {
+        const cuentaId = this.cuentaAbonoSeleccionada.id;
+        const cuentaRef = doc(db, 'cuentasOzuna', cuentaId);
+        const cuentaSnap = await getDoc(cuentaRef);
+
+        if (!cuentaSnap.exists()) {
+          alert('No se encontró la cuenta.');
+          return;
+        }
+
+        const data = cuentaSnap.data();
+        const abonoNuevo = {
+          descripcion: (this.nuevoAbono.descripcion || '').trim() || 'Abono',
+          monto: Number(this.nuevoAbono.monto),
+          fechaRegistro: new Date().toISOString()
+        };
+        const abonos = [...(data.abonos || []), abonoNuevo];
+        const dataActualizada = { ...data, abonos };
+        const fechaNorm = normalizarFechaSaldo(data.fecha) || data.fecha;
+        const cuentasRefAll = collection(db, 'cuentasOzuna');
+        const todasSnap = await getDocs(query(cuentasRefAll, orderBy('fecha', 'asc')));
+        const cuentasCache = todasSnap.docs.map((snap) => ({
+          id: snap.id,
+          fecha: this.normalizarFechaValor(snap.data().fecha) || snap.data().fecha,
+          data: snap.id === cuentaId ? dataActualizada : snap.data()
+        }));
+        const saldoAcumuladoAnterior = saldoAcumuladoAntesDeFecha(cuentasCache, fechaNorm);
+        const totalSaldo = saldoAcumuladoAnterior + netoDiaCuentaOzuna(dataActualizada);
+
+        await updateDoc(cuentaRef, {
+          abonos,
+          saldoAcumuladoAnterior,
+          totalSaldo,
+          nuevoSaldoAcumulado: totalSaldo
+        });
+
+        this.cerrarModalAbono();
+        await this.loadCuentas();
+        alert('Abono guardado correctamente.');
+      } catch (error) {
+        console.error('Error al guardar abono:', error);
+        alert('Error al guardar el abono. Intenta de nuevo.');
+      } finally {
+        this.guardandoAbono = false;
+      }
     },
     async crearNota(fecha, options = {}) {
       const { skipOpen = false, silent = false } = options;
@@ -773,13 +905,52 @@ h1, h2 {
   gap: 10px;
 }
 
-.edit-btn, .delete-btn {
+.edit-btn, .delete-btn, .abono-btn {
   padding: 5px 10px;
   border: none;
   border-radius: 4px;
   cursor: pointer;
   font-size: 0.9em;
   transition: background-color 0.3s ease;
+}
+
+.abono-btn {
+  background-color: #1565c0;
+  color: white;
+}
+
+.abono-btn:hover {
+  background-color: #0d47a1;
+}
+
+.abono-modal .abono-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #555;
+}
+
+.abono-modal .abono-field input {
+  padding: 8px 10px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 15px;
+  font-weight: 400;
+}
+
+.abono-save-btn {
+  background-color: #1565c0;
+}
+
+.abono-save-btn:hover:not(:disabled) {
+  background-color: #0d47a1;
+}
+
+.abono-save-btn:disabled {
+  background-color: #90caf9;
+  cursor: not-allowed;
 }
 
 .edit-btn {
@@ -895,13 +1066,16 @@ h1, h2 {
 
   .cuenta-actions {
     flex-direction: row;
-    justify-content: space-between;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px;
   }
 
-  .edit-btn, .delete-btn {
-    padding: 8px 15px;
+  .edit-btn, .delete-btn, .abono-btn {
+    padding: 8px 12px;
     font-size: 0.8em;
-    flex-grow: 1;
+    flex: 1 1 calc(33% - 8px);
+    min-width: 72px;
   }
   .pagination-controls {
     gap: 6px;

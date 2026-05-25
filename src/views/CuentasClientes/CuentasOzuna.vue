@@ -109,7 +109,7 @@
         <td>${{ formatNumber(totalSaldo) }}</td>
       </tr>
       <tr class="total">
-        <td>Nuevo Saldo Acumulado</td>
+        <td>Total acumulado (hasta este día)</td>
         <td>${{ formatNumber(nuevoSaldoAcumulado) }}</td>
       </tr>
     </table>
@@ -134,6 +134,10 @@ import { collection, addDoc, doc, getDoc, updateDoc, query, where, getDocs, orde
 import BackButton from '@/components/BackButton.vue';
 import PreciosClienteButton from '@/components/PreciosClienteButton.vue';
 import { formatNumber } from '@/utils/formatters';
+import {
+  saldoAcumuladoAntesDeFecha,
+  normalizarFechaOzuna
+} from '@/utils/ozunaCuentasSaldo';
 
 export default {
   name: 'CuentasOzuna',
@@ -158,6 +162,8 @@ export default {
       presionTimer: null,
       autoSaveTimeout: null,
       currentDocId: null,
+      cuentaCargando: false,
+      cuentasOzunaCache: []
     }
   },
   computed: {
@@ -192,7 +198,9 @@ export default {
       handler: 'triggerAutoSave'
     },
     fechaSeleccionada: {
-      handler: async function(newVal) {
+      handler: async function() {
+        if (this.cuentaCargando) return;
+        await this.cargarCacheCuentasOzuna();
         await this.loadSaldoAcumuladoAnterior();
         this.triggerAutoSave();
       }
@@ -206,13 +214,14 @@ export default {
       console.log("Iniciando carga de cuenta existente");
       await this.loadExistingCuenta(id);
     } else {
-      console.log("Cargando saldo acumulado anterior para nueva cuenta");
+      await this.cargarCacheCuentasOzuna();
       await this.loadSaldoAcumuladoAnterior();
     }
   },
   methods: {
     formatNumber,
     triggerAutoSave() {
+      if (this.cuentaCargando) return;
       if (this.autoSaveTimeout) {
         clearTimeout(this.autoSaveTimeout);
       }
@@ -259,55 +268,58 @@ export default {
       }
     },
 
+    async cargarCacheCuentasOzuna() {
+      const cuentasRef = collection(db, 'cuentasOzuna');
+      const cuentasSnapshot = await getDocs(query(cuentasRef, orderBy('fecha', 'asc')));
+      this.cuentasOzunaCache = cuentasSnapshot.docs.map((snap) => ({
+        id: snap.id,
+        fecha: normalizarFechaOzuna(snap.data().fecha) || snap.data().fecha,
+        data: snap.data()
+      }));
+      return this.cuentasOzunaCache;
+    },
+
     async loadExistingCuenta(id) {
+      this.cuentaCargando = true;
       try {
-        console.log("Cargando cuenta con ID:", id);
         const cuentaRef = doc(db, 'cuentasOzuna', id);
         const cuentaDoc = await getDoc(cuentaRef);
-        if (cuentaDoc.exists()) {
-          const data = cuentaDoc.data();
-          console.log("Datos de la cuenta cargados:", data);
-          this.currentDocId = id;
-
-          this.$nextTick(() => {
-            this.items = data.items || [];
-            this.saldoAcumuladoAnterior = data.saldoAcumuladoAnterior || 0;
-            this.cobros = data.cobros || [];
-            this.abonos = data.abonos || [];
-            this.fechaSeleccionada = data.fecha || this.obtenerFechaActual();
-            console.log("Estado actualizado con $nextTick");
-          });
-        } else {
-          console.error("No se encontró la cuenta con el ID proporcionado");
+        if (!cuentaDoc.exists()) {
+          console.error('No se encontró la cuenta con el ID proporcionado');
+          return;
         }
+
+        const data = cuentaDoc.data();
+        this.currentDocId = id;
+        this.fechaSeleccionada = normalizarFechaOzuna(data.fecha) || data.fecha || this.obtenerFechaActual();
+        this.items = data.items || [];
+        this.cobros = data.cobros || [];
+        this.abonos = data.abonos || [];
+
+        await this.cargarCacheCuentasOzuna();
+        await this.loadSaldoAcumuladoAnterior();
       } catch (error) {
-        console.error("Error al cargar la cuenta existente: ", error);
+        console.error('Error al cargar la cuenta existente: ', error);
+      } finally {
+        this.cuentaCargando = false;
       }
     },
 
     async loadSaldoAcumuladoAnterior() {
       try {
-        const cuentasRef = collection(db, 'cuentasOzuna');
-        const q = query(
-          cuentasRef, 
-          where('fecha', '<', this.fechaSeleccionada),
-          orderBy('fecha', 'asc')
+        if (!this.cuentasOzunaCache.length) {
+          await this.cargarCacheCuentasOzuna();
+        }
+        const fechaNorm = normalizarFechaOzuna(this.fechaSeleccionada);
+        const cuentasAnteriores = this.cuentasOzunaCache.filter(
+          (c) => c.id !== this.currentDocId
         );
-        const cuentasSnapshot = await getDocs(q);
-        let saldoAcumulado = 0;
-
-        cuentasSnapshot.forEach((doc) => {
-          const cuenta = doc.data();
-          const totalCuenta = cuenta.totalGeneral || 0;
-          const totalCobros = (cuenta.cobros || []).reduce((sum, cobro) => sum + (cobro.monto || 0), 0);
-          const totalAbonos = (cuenta.abonos || []).reduce((sum, abono) => sum + (abono.monto || 0), 0);
-          saldoAcumulado += totalCuenta + totalCobros - totalAbonos;
-        });
-
-        this.saldoAcumuladoAnterior = saldoAcumulado;
-        console.log("Saldo acumulado anterior calculado:", this.saldoAcumuladoAnterior);
+        this.saldoAcumuladoAnterior = saldoAcumuladoAntesDeFecha(
+          cuentasAnteriores,
+          fechaNorm || this.fechaSeleccionada
+        );
       } catch (error) {
-        console.error("Error al calcular el saldo acumulado anterior:", error);
+        console.error('Error al calcular el saldo acumulado anterior:', error);
         this.saldoAcumuladoAnterior = 0;
       }
     },
