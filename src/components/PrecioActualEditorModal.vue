@@ -21,9 +21,52 @@
           <span class="summary-label">Medida</span>
           <strong>{{ precio.producto }}</strong>
         </div>
-        <div class="summary-item">
+        <div class="summary-item summary-item--alcance">
           <span class="summary-label">Aplica para</span>
-          <strong>{{ alcanceTexto }}</strong>
+
+          <div class="alcance-opciones">
+            <label class="alcance-radio">
+              <input
+                v-model="alcanceModo"
+                type="radio"
+                value="todos"
+                :disabled="guardando"
+              >
+              <span>Todos los clientes</span>
+            </label>
+            <label class="alcance-radio">
+              <input
+                v-model="alcanceModo"
+                type="radio"
+                value="especificos"
+                :disabled="guardando"
+              >
+              <span>Clientes específicos</span>
+            </label>
+          </div>
+
+          <div v-if="alcanceModo === 'especificos'" class="cliente-selector">
+            <p class="cliente-selector-hint">Selecciona uno o más clientes:</p>
+            <div class="cliente-botones">
+              <button
+                v-for="cliente in clientes"
+                :key="cliente.id"
+                type="button"
+                class="cliente-btn"
+                :class="{ 'cliente-btn--activo': clientesSeleccionados.includes(cliente.id) }"
+                :style="{ '--cliente-color': cliente.color }"
+                :disabled="guardando"
+                @click="toggleCliente(cliente.id)"
+              >
+                {{ cliente.nombre }}
+              </button>
+            </div>
+            <p v-if="clientesSeleccionados.length" class="alcance-resumen">
+              {{ resumenClientesSeleccionados }}
+            </p>
+          </div>
+
+          <strong v-else class="alcance-todos-label">Todos los clientes</strong>
         </div>
       </div>
 
@@ -92,17 +135,22 @@ export default {
       form: {
         precio: null,
         fecha: ''
-      }
+      },
+      alcanceModo: 'todos',
+      clientesSeleccionados: []
     };
   },
   computed: {
-    alcanceTexto() {
-      if (!this.precio?.clienteId) {
-        return 'Todos los clientes';
+    resumenClientesSeleccionados() {
+      if (!this.clientesSeleccionados.length) {
+        return '';
       }
 
-      const cliente = this.clientes.find((item) => item.id === this.precio.clienteId);
-      return cliente ? cliente.nombre : 'Cliente especifico';
+      const nombres = this.clientesSeleccionados
+        .map((id) => this.clientes.find((c) => c.id === id)?.nombre)
+        .filter(Boolean);
+
+      return nombres.join(', ');
     }
   },
   watch: {
@@ -132,14 +180,37 @@ export default {
         precio: this.precio?.precio ?? null,
         fecha: this.obtenerFechaActual()
       };
+
+      if (this.precio?.clienteId) {
+        this.alcanceModo = 'especificos';
+        this.clientesSeleccionados = [this.precio.clienteId];
+      } else {
+        this.alcanceModo = 'todos';
+        this.clientesSeleccionados = [];
+      }
+    },
+    toggleCliente(clienteId) {
+      const idx = this.clientesSeleccionados.indexOf(clienteId);
+      if (idx >= 0) {
+        this.clientesSeleccionados = this.clientesSeleccionados.filter((id) => id !== clienteId);
+      } else {
+        this.clientesSeleccionados = [...this.clientesSeleccionados, clienteId];
+      }
     },
     emitirGuardado() {
+      if (this.alcanceModo === 'especificos' && !this.clientesSeleccionados.length) {
+        alert('Selecciona al menos un cliente');
+        return;
+      }
+
       this.$emit('save', {
         id: this.precio?.id,
         producto: this.precio?.producto,
         clienteId: this.precio?.clienteId || '',
         precio: this.form.precio,
-        fecha: this.form.fecha
+        fecha: this.form.fecha,
+        alcanceModo: this.alcanceModo,
+        clienteIds: this.alcanceModo === 'especificos' ? [...this.clientesSeleccionados] : []
       });
     }
   }
@@ -214,11 +285,93 @@ export default {
   color: #000;
 }
 
+.summary-item--alcance {
+  grid-column: 1 / -1;
+}
+
 .summary-label {
   display: block;
   color: #6b7280;
   font-size: 0.85rem;
   margin-bottom: 6px;
+}
+
+.alcance-opciones {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 10px 0;
+}
+
+.alcance-radio {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9rem;
+  color: #374151;
+  cursor: pointer;
+}
+
+.alcance-radio input {
+  accent-color: #2196f3;
+}
+
+.alcance-todos-label {
+  display: block;
+  margin-top: 4px;
+  color: #000;
+}
+
+.cliente-selector {
+  margin-top: 12px;
+}
+
+.cliente-selector-hint {
+  margin: 0 0 8px;
+  font-size: 0.85rem;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.cliente-botones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.cliente-btn {
+  padding: 8px 14px;
+  border: 2px solid transparent;
+  border-radius: 20px;
+  cursor: pointer;
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.85rem;
+  background-color: var(--cliente-color, #2196f3);
+  opacity: 0.65;
+  transition: opacity 0.2s, transform 0.2s, box-shadow 0.2s;
+}
+
+.cliente-btn:hover:not(:disabled) {
+  opacity: 0.85;
+  transform: translateY(-1px);
+}
+
+.cliente-btn--activo {
+  opacity: 1;
+  box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--cliente-color, #2196f3);
+  transform: scale(1.03);
+}
+
+.cliente-btn:disabled {
+  cursor: not-allowed;
+}
+
+.alcance-resumen {
+  margin: 10px 0 0;
+  font-size: 0.85rem;
+  color: #1f2937;
+  font-weight: 600;
 }
 
 .editor-form {

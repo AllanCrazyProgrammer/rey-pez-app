@@ -481,6 +481,7 @@ export default {
       historialPrecios: [],
       productoSeleccionado: null,
       precioEnEdicion: null,
+      precioEdicionPendiente: null,
       guardandoEdicionPrecio: false,
       preciosEspecificosAfectados: [],
       nuevoPrecioTemporal: null,
@@ -842,7 +843,7 @@ export default {
       this.precioEnEdicion = null;
     },
     async guardarEdicionPrecio(precioEditado) {
-      if (!precioEditado?.id) {
+      if (!precioEditado?.producto) {
         alert('No se encontró el precio a editar');
         return;
       }
@@ -857,42 +858,77 @@ export default {
         return;
       }
 
+      if (precioEditado.alcanceModo === 'especificos' && !precioEditado.clienteIds?.length) {
+        alert('Selecciona al menos un cliente');
+        return;
+      }
+
+      if (precioEditado.alcanceModo === 'todos') {
+        const preciosEspecificosExistentes = this.preciosActuales.filter((precio) =>
+          precio.producto.toLowerCase() === precioEditado.producto.toLowerCase() &&
+          precio.clienteId
+        );
+
+        if (preciosEspecificosExistentes.length > 0) {
+          this.precioEdicionPendiente = { ...precioEditado };
+          this.preciosEspecificosAfectados = preciosEspecificosExistentes;
+          this.decisionesClientes = {};
+          preciosEspecificosExistentes.forEach((precio) => {
+            this.decisionesClientes[precio.clienteId] = 'mantener';
+          });
+          this.showConfirmacionModal = true;
+          return;
+        }
+      }
+
+      await this.ejecutarEdicionPrecio(precioEditado);
+    },
+    async ejecutarEdicionPrecio(precioEditado, procesarDecisiones = false) {
       try {
         this.guardandoEdicionPrecio = true;
 
         const fechaNormalizada = normalizarFechaISO(precioEditado.fecha);
         const precioNormalizado = parseFloat(precioEditado.precio);
+        const productoNormalizado = this.normalizarNombreProducto(precioEditado.producto);
 
-        await updateDoc(doc(db, 'precios', precioEditado.id), {
-          precio: precioNormalizado,
-          fecha: fechaNormalizada,
-          ultimaActualizacion: obtenerFechaActualISO(),
-          horaActualizacion: new Date().toLocaleTimeString('es-ES')
-        });
+        if (precioEditado.alcanceModo === 'especificos') {
+          for (const clienteId of precioEditado.clienteIds) {
+            await this.insertarRegistroPrecio({
+              producto: productoNormalizado,
+              precio: precioNormalizado,
+              fecha: fechaNormalizada,
+              clienteId
+            });
+          }
+        } else {
+          await this.insertarRegistroPrecio({
+            producto: productoNormalizado,
+            precio: precioNormalizado,
+            fecha: fechaNormalizada
+          });
 
-        await this.cargarPreciosActuales();
-
-        if (this.productoSeleccionado) {
-          const productoActualizado = this.preciosActuales.find(precio =>
-            precio.producto === this.productoSeleccionado.producto &&
-            (precio.clienteId || '') === (this.productoSeleccionado.clienteId || '')
-          );
-
-          if (productoActualizado) {
-            this.productoSeleccionado = productoActualizado;
-            this.historialPrecios = productoActualizado.historial;
+          if (procesarDecisiones && this.preciosEspecificosAfectados.length > 0) {
+            for (const precioEspecifico of this.preciosEspecificosAfectados) {
+              if (this.decisionesClientes[precioEspecifico.clienteId] === 'sobreescribir') {
+                await deleteDoc(doc(db, 'precios', precioEspecifico.id));
+              }
+            }
           }
         }
 
+        await this.cargarPreciosActuales();
+        this.actualizarHistorialSiAbierto(productoNormalizado, precioEditado);
+
         this.$emit('precio-agregado', {
-          id: precioEditado.id,
-          producto: precioEditado.producto,
+          producto: productoNormalizado,
           precio: precioNormalizado,
           fecha: fechaNormalizada,
-          clienteId: precioEditado.clienteId || '',
+          clienteIds: precioEditado.clienteIds || [],
+          alcanceModo: precioEditado.alcanceModo,
           editado: true
         });
 
+        this.precioEdicionPendiente = null;
         this.cerrarEditorPrecio();
       } catch (error) {
         console.error('Error al editar precio:', error);
@@ -900,6 +936,50 @@ export default {
       } finally {
         this.guardandoEdicionPrecio = false;
       }
+    },
+    actualizarHistorialSiAbierto(productoNormalizado, precioEditado) {
+      if (!this.productoSeleccionado) {
+        return;
+      }
+
+      const clienteRef = precioEditado.alcanceModo === 'especificos'
+        ? precioEditado.clienteIds[0]
+        : '';
+
+      const productoActualizado = this.preciosActuales.find((precio) =>
+        precio.producto === productoNormalizado &&
+        (precio.clienteId || '') === (clienteRef || '')
+      );
+
+      if (productoActualizado) {
+        this.productoSeleccionado = productoActualizado;
+        this.historialPrecios = productoActualizado.historial;
+      }
+    },
+    async insertarRegistroPrecio({ producto, precio, fecha, clienteId = null }) {
+      const nombreProducto = producto.toLowerCase();
+      let categoria = 'Otros';
+      if (nombreProducto.includes('s/c') || nombreProducto.match(/\d+\/\d+/)) {
+        categoria = 'Camarón S/C';
+      } else if (nombreProducto.includes('c/c')) {
+        categoria = 'Camarón C/C';
+      }
+
+      const nuevoPrecio = {
+        producto,
+        precio: parseFloat(precio),
+        fecha,
+        categoria,
+        timestamp: obtenerTimestamp(),
+        fechaCreacion: obtenerFechaActualISO(),
+        horaCreacion: new Date().toLocaleTimeString('es-ES')
+      };
+
+      if (clienteId) {
+        nuevoPrecio.clienteId = clienteId;
+      }
+
+      await addDoc(collection(db, 'precios'), nuevoPrecio);
     },
     filtrarPreciosPorCliente(productos) {
       if (!this.filtroCliente) {
@@ -1047,6 +1127,12 @@ export default {
         return;
       }
 
+      if (this.precioEdicionPendiente) {
+        await this.ejecutarEdicionPrecio(this.precioEdicionPendiente, true);
+        this.cerrarConfirmacionModal();
+        return;
+      }
+
       await this.guardarPrecio(this.nuevoPrecioTemporal, true);
       this.cerrarConfirmacionModal();
     },
@@ -1059,6 +1145,7 @@ export default {
       this.showConfirmacionModal = false;
       this.preciosEspecificosAfectados = [];
       this.nuevoPrecioTemporal = null;
+      this.precioEdicionPendiente = null;
       this.decisionesClientes = {};
     },
     async eliminarPrecio(precio) {
