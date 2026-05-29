@@ -9,6 +9,7 @@
       <router-link to="/cuentas-ozuna/nueva" class="action-button new-cuenta-btn">
         Nueva Cuenta
       </router-link>
+      <StashModalV2 cliente="ozuna" />
       <button
         v-if="cuentasPendientesCount > 0"
         class="action-button bulk-create-btn"
@@ -193,9 +194,13 @@ import {
   saldoAcumuladoAntesDeFecha,
   normalizarFechaOzuna as normalizarFechaSaldo
 } from '@/utils/ozunaCuentasSaldo';
+import StashModalV2 from '@/components/StashModalV2.vue';
 
 export default {
   name: 'OzunaCuentasMenu',
+  components: {
+    StashModalV2
+  },
   data() {
     return {
       cuentas: [],
