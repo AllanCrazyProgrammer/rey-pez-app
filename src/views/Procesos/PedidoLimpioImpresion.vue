@@ -1471,16 +1471,27 @@ export default {
           if (!item.medida) return;
           
           const medida = item.medida;
+          // Sufijos adicionales para diferenciar como medidas separadas en el resumen
           // Para Ozuna, si es maquila (esMaquila es true), agregamos el sufijo "Maq"
-          const key = esPedidoOzuna && item.esMaquila 
-            ? (medida.toLowerCase().trim() + '-maq')
-            : medida.toLowerCase().trim();
-          
+          // Si se marcó Selecta (S) u Honduras (H) se trata como otra medida
+          let sufijoClave = '';
+          let sufijoEtiqueta = '';
+          if (esPedidoOzuna && item.esMaquila) {
+            sufijoClave += '-maq';
+            sufijoEtiqueta += ' Maq';
+          }
+          if (item.esSelecta) {
+            sufijoClave += '-selecta';
+            sufijoEtiqueta += ' Selecta';
+          } else if (item.esHonduras) {
+            sufijoClave += '-honduras';
+            sufijoEtiqueta += ' Honduras';
+          }
+          const key = medida.toLowerCase().trim() + sufijoClave;
+
           if (!medidasMap.has(key)) {
             medidasMap.set(key, {
-              medida: esPedidoOzuna && item.esMaquila 
-                ? medida + ' Maq'
-                : medida,
+              medida: medida + sufijoEtiqueta,
               total: 0
             });
           }
@@ -1539,12 +1550,16 @@ export default {
           total: Math.round(value.total)
         }))
         .sort((a, b) => {
-          // Primero ordenamos por medida base (sin el sufijo Maq)
-          const medidaA = a.medida.replace(' Maq', '');
-          const medidaB = b.medida.replace(' Maq', '');
+          // Primero ordenamos por medida base (sin los sufijos Maq/Selecta/Honduras)
+          const limpiarSufijos = (m) => m
+            .replace(' Maq', '')
+            .replace(' Selecta', '')
+            .replace(' Honduras', '');
+          const medidaA = limpiarSufijos(a.medida);
+          const medidaB = limpiarSufijos(b.medida);
           if (medidaA === medidaB) {
-            // Si las medidas base son iguales, ponemos primero la que no es maquila
-            return a.medida.includes('Maq') ? 1 : -1;
+            // Si las medidas base son iguales, ponemos primero la que no tiene sufijo
+            return a.medida.length - b.medida.length;
           }
           return medidaA.localeCompare(medidaB);
         });
