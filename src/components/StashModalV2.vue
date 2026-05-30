@@ -1066,6 +1066,30 @@ export default {
           limit(50) // Aumentar límite para tener más opciones antes del filtro
         )
         const snapshot = await getDocs(q)
+
+        // Ozuna usa un modelo de saldo acumulativo (no tiene totalGeneralVenta ni estadoPagado
+        // por día), por lo que el filtro genérico de "saldo pendiente" descartaría todas las
+        // cuentas. Se listan todas las cuentas con su saldo acumulado guardado.
+        if (props.cliente === 'ozuna') {
+          cuentasDisponibles.value = snapshot.docs
+            .map(doc => {
+              const data = doc.data() || {}
+              const saldoAcumulado = Number(data.nuevoSaldoAcumulado) || 0
+              return {
+                id: doc.id,
+                fecha: data.fecha,
+                totalGeneralVenta: 0,
+                fechaFormateada: formatearFecha(data.fecha),
+                estadoPagado: false,
+                nuevoSaldoAcumulado: saldoAcumulado,
+                saldoPendiente: saldoAcumulado
+              }
+            })
+            .filter(cuenta => cuenta.fecha)
+            .sort((a, b) => new Date(b.fecha) - new Date(a.fecha))
+          return
+        }
+
         // Filtrar solo las cuentas que NO están pagadas
         cuentasDisponibles.value = snapshot.docs
           .map(doc => {
