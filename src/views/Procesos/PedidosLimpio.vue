@@ -133,13 +133,29 @@
                 <div class="input-group-compact medida">
                   <div class="label-container">
                     <label>Medida:</label>
-                    <button 
+                    <button
                       class="btn-proveedor"
                       @click="abrirModalProveedor(item)"
                       :class="{ 'active': item.esProveedor }"
                       :title="item.proveedor || 'Agregar proveedor'"
                     >
                       P
+                    </button>
+                    <button
+                      class="btn-selecta"
+                      @click="toggleSelecta(item)"
+                      :class="{ 'active': item.esSelecta }"
+                      title="Selecta"
+                    >
+                      S
+                    </button>
+                    <button
+                      class="btn-honduras"
+                      @click="toggleHonduras(item)"
+                      :class="{ 'active': item.esHonduras }"
+                      title="Honduras"
+                    >
+                      H
                     </button>
                   </div>
                   <select v-model="item.medida" class="input-field" @change="manejarCambioMedida(item, 'otilio')">
@@ -215,13 +231,29 @@
                 <div class="input-group-compact medida">
                   <div class="label-container">
                     <label>Medida:</label>
-                    <button 
+                    <button
                       class="btn-proveedor"
                       @click="abrirModalProveedor(item)"
                       :class="{ 'active': item.esProveedor }"
                       :title="item.proveedor || 'Agregar proveedor'"
                     >
                       P
+                    </button>
+                    <button
+                      class="btn-selecta"
+                      @click="toggleSelecta(item)"
+                      :class="{ 'active': item.esSelecta }"
+                      title="Selecta"
+                    >
+                      S
+                    </button>
+                    <button
+                      class="btn-honduras"
+                      @click="toggleHonduras(item)"
+                      :class="{ 'active': item.esHonduras }"
+                      title="Honduras"
+                    >
+                      H
                     </button>
                   </div>
                   <select v-model="item.medida" class="input-field" @change="manejarCambioMedida(item, 'catarro')">
@@ -297,13 +329,29 @@
                 <div class="input-group-compact medida">
                   <div class="label-container">
                     <label>Medida:</label>
-                    <button 
+                    <button
                       class="btn-proveedor"
                       @click="abrirModalProveedor(item)"
                       :class="{ 'active': item.esProveedor }"
                       :title="item.proveedor || 'Agregar proveedor'"
                     >
                       P
+                    </button>
+                    <button
+                      class="btn-selecta"
+                      @click="toggleSelecta(item)"
+                      :class="{ 'active': item.esSelecta }"
+                      title="Selecta"
+                    >
+                      S
+                    </button>
+                    <button
+                      class="btn-honduras"
+                      @click="toggleHonduras(item)"
+                      :class="{ 'active': item.esHonduras }"
+                      title="Honduras"
+                    >
+                      H
                     </button>
                   </div>
                   <select v-model="item.medida" class="input-field" @change="manejarCambioMedida(item, 'joselito')">
@@ -381,13 +429,29 @@
                 <div class="input-group-compact medida">
                   <div class="label-container">
                     <label>Medida:</label>
-                    <button 
+                    <button
                       class="btn-proveedor"
                       @click="abrirModalProveedor(item)"
                       :class="{ 'active': item.esProveedor }"
                       :title="item.proveedor || 'Agregar proveedor'"
                     >
                       P
+                    </button>
+                    <button
+                      class="btn-selecta"
+                      @click="toggleSelecta(item)"
+                      :class="{ 'active': item.esSelecta }"
+                      title="Selecta"
+                    >
+                      S
+                    </button>
+                    <button
+                      class="btn-honduras"
+                      @click="toggleHonduras(item)"
+                      :class="{ 'active': item.esHonduras }"
+                      title="Honduras"
+                    >
+                      H
                     </button>
                   </div>
                   <select v-model="item.medida" class="input-field" @change="manejarCambioMedida(item, 'lorena')">
@@ -470,13 +534,29 @@
                 <div class="input-group-compact medida">
                   <div class="label-container">
                     <label>Medida:</label>
-                    <button 
+                    <button
                       class="btn-proveedor"
                       @click="abrirModalProveedor(item)"
                       :class="{ 'active': item.esProveedor }"
                       :title="item.proveedor || 'Agregar proveedor'"
                     >
                       P
+                    </button>
+                    <button
+                      class="btn-selecta"
+                      @click="toggleSelecta(item)"
+                      :class="{ 'active': item.esSelecta }"
+                      title="Selecta"
+                    >
+                      S
+                    </button>
+                    <button
+                      class="btn-honduras"
+                      @click="toggleHonduras(item)"
+                      :class="{ 'active': item.esHonduras }"
+                      title="Honduras"
+                    >
+                      H
                     </button>
                   </div>
                   <select v-model="item.medida" class="input-field" @change="manejarCambioMedida(item, 'ozuna')">
@@ -568,13 +648,29 @@
                 <div class="input-group-compact medida">
                   <div class="label-container">
                     <label>Medida:</label>
-                    <button 
+                    <button
                       class="btn-proveedor"
                       @click="abrirModalProveedor(item)"
                       :class="{ 'active': item.esProveedor }"
                       :title="item.proveedor || 'Agregar proveedor'"
                     >
                       P
+                    </button>
+                    <button
+                      class="btn-selecta"
+                      @click="toggleSelecta(item)"
+                      :class="{ 'active': item.esSelecta }"
+                      title="Selecta"
+                    >
+                      S
+                    </button>
+                    <button
+                      class="btn-honduras"
+                      @click="toggleHonduras(item)"
+                      :class="{ 'active': item.esHonduras }"
+                      title="Honduras"
+                    >
+                      H
                     </button>
                   </div>
                   <select v-model="item.medida" class="input-field" @change="manejarCambioMedida(item, 'temporal')">
@@ -1131,19 +1227,19 @@ export default {
       }
     },
     agregarFilaOtilio() {
-      this.pedidoOtilio.unshift({ kilos: null, medida: '', tipo: '', esTara: true, esProveedor: false, proveedor: '' })
+      this.pedidoOtilio.unshift({ kilos: null, medida: '', tipo: '', esTara: true, esProveedor: false, proveedor: '', esSelecta: false, esHonduras: false })
     },
     agregarFilaCatarro() {
-      this.pedidoCatarro.unshift({ kilos: null, medida: '', tipo: 'S/H20', esTara: false, esProveedor: false, proveedor: '' })
+      this.pedidoCatarro.unshift({ kilos: null, medida: '', tipo: 'S/H20', esTara: false, esProveedor: false, proveedor: '', esSelecta: false, esHonduras: false })
     },
     agregarFilaJoselito() {
-      this.pedidoJoselito.unshift({ kilos: null, medida: '', tipo: '', esTara: false, esProveedor: false, proveedor: '' })
+      this.pedidoJoselito.unshift({ kilos: null, medida: '', tipo: '', esTara: false, esProveedor: false, proveedor: '', esSelecta: false, esHonduras: false })
     },
     agregarFilaOzuna() {
-      this.pedidoOzuna.unshift({ kilos: null, medida: '', tipo: 'S/H20', esTara: false, esProveedor: false, proveedor: '', esMaquila: true })
+      this.pedidoOzuna.unshift({ kilos: null, medida: '', tipo: 'S/H20', esTara: false, esProveedor: false, proveedor: '', esSelecta: false, esHonduras: false, esMaquila: true })
     },
     agregarFilaLorena() {
-      this.pedidoLorena.unshift({ kilos: null, medida: '', tipo: '', esTara: false, esProveedor: false, proveedor: '' })
+      this.pedidoLorena.unshift({ kilos: null, medida: '', tipo: '', esTara: false, esProveedor: false, proveedor: '', esSelecta: false, esHonduras: false })
     },
     async guardarPedido() {
       try {
@@ -1236,6 +1332,22 @@ export default {
       this.mostrarModalProveedor = false
       this.itemSeleccionado = null
     },
+    toggleSelecta(item) {
+      const nuevoValor = !item.esSelecta
+      this.$set(item, 'esSelecta', nuevoValor)
+      // Selecta y Honduras son mutuamente excluyentes
+      if (nuevoValor) {
+        this.$set(item, 'esHonduras', false)
+      }
+    },
+    toggleHonduras(item) {
+      const nuevoValor = !item.esHonduras
+      this.$set(item, 'esHonduras', nuevoValor)
+      // Selecta y Honduras son mutuamente excluyentes
+      if (nuevoValor) {
+        this.$set(item, 'esSelecta', false)
+      }
+    },
     manejarCheckboxProveedor(item) {
       if (item.esProveedor) {
         this.abrirModalProveedor(item)
@@ -1284,7 +1396,9 @@ export default {
         tipoOperacion: '',
         esTara: false,
         esProveedor: false,
-        proveedor: ''
+        proveedor: '',
+        esSelecta: false,
+        esHonduras: false
       };
     },
     normalizarTextoId(texto) {
@@ -2266,6 +2380,48 @@ export default {
   background-color: rgba(39, 174, 96, 0.1);
 }
 
+/* Botones Selecta (S) y Honduras (H) */
+.btn-selecta,
+.btn-honduras {
+  width: 24px;
+  height: 24px;
+  font-size: 12px;
+  padding: 0;
+  margin-left: 4px;
+  font-weight: bold;
+  color: #666;
+  background-color: #f0f0f0;
+  border: 2px solid transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.btn-selecta:hover,
+.btn-honduras:hover {
+  background-color: #e0e0e0;
+}
+
+.btn-selecta.active {
+  border: 2px solid #27ae60;
+  color: white;
+  background-color: #27ae60;
+}
+
+.btn-selecta.active:hover {
+  background-color: #219150;
+}
+
+.btn-honduras.active {
+  border: 2px solid #e67e22;
+  color: white;
+  background-color: #e67e22;
+}
+
+.btn-honduras.active:hover {
+  background-color: #ca6a16;
+}
+
 .btn-eliminar {
   position: static;
   transform: none;
@@ -2665,6 +2821,19 @@ export default {
   }
 
   .btn-proveedor.active {
+    border-width: 1.5px;
+  }
+
+  .btn-selecta,
+  .btn-honduras {
+    width: 20px;
+    height: 20px;
+    font-size: 12px;
+    border-width: 1.5px;
+  }
+
+  .btn-selecta.active,
+  .btn-honduras.active {
     border-width: 1.5px;
   }
 
