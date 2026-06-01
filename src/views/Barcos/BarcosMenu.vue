@@ -59,8 +59,18 @@
         <span>Gestión de Tripulantes</span>
       </router-link>
       
-      <button 
-        @click="barcoSeleccionado ? openProveedoresModal() : null" 
+      <router-link
+        :to="barcoSeleccionado ? `/barcos/entrada-producto?barco=${barcoSeleccionado}` : '#'"
+        :class="['btn-action', 'btn-entrada', barcoSeleccionado ? `barco-theme-${barcoSeleccionado}` : '']"
+        :aria-label="barcoSeleccionado ? 'Registrar entrada de producto del barco' : 'Selecciona un barco primero'"
+        @click="!barcoSeleccionado && $event.preventDefault()"
+      >
+        <i class="icon">📦</i>
+        <span>Entrada de Producto</span>
+      </router-link>
+
+      <button
+        @click="barcoSeleccionado ? openProveedoresModal() : null"
         :class="['btn-action', 'btn-config', barcoSeleccionado ? `barco-theme-${barcoSeleccionado}` : '']"
         :aria-label="barcoSeleccionado ? 'Configurar proveedores de barcos' : 'Selecciona un barco primero'"
       >
@@ -624,6 +634,10 @@ export default {
   background: linear-gradient(135deg, #fd79a8 0%, #fdcb6e 100%);
 }
 
+.btn-entrada {
+  background: linear-gradient(135deg, #0984e3 0%, #74b9ff 100%);
+}
+
 .btn-action:hover {
   transform: translateY(-3px);
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
@@ -654,6 +668,10 @@ export default {
   background: linear-gradient(135deg, #5dade2 0%, #85c1e9 100%) !important;
 }
 
+.barco-theme-galileo.btn-entrada {
+  background: linear-gradient(135deg, #2471a3 0%, #5dade2 100%) !important;
+}
+
 .barco-theme-maria-guadalupe.btn-lista {
   background: linear-gradient(135deg, #27ae60 0%, #58d68d 100%) !important;
 }
@@ -672,6 +690,10 @@ export default {
 
 .barco-theme-maria-guadalupe.btn-tripulantes {
   background: linear-gradient(135deg, #58d68d 0%, #85c1e9 100%) !important;
+}
+
+.barco-theme-maria-guadalupe.btn-entrada {
+  background: linear-gradient(135deg, #16a085 0%, #48c9b0 100%) !important;
 }
 
 /* Modal Styles */
