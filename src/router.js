@@ -56,6 +56,7 @@ import NuevaDeudaBarco from '@/views/Barcos/NuevaDeudaBarco.vue'
 import ListaDeudasBarcos from '@/views/Barcos/ListaDeudasBarcos.vue'
 import ResumenMensualBarcos from '@/views/Barcos/ResumenMensualBarcos.vue'
 import GestionTripulantes from '@/views/Barcos/GestionTripulantes.vue'
+import EntradaProductoBarco from '@/views/Barcos/EntradaProductoBarco.vue'
 
 Vue.use(Router);
 
@@ -467,6 +468,11 @@ const routes = [
     path: '/barcos/tripulantes',
     name: 'GestionTripulantes',
     component: GestionTripulantes
+  },
+  {
+    path: '/barcos/entrada-producto',
+    name: 'EntradaProductoBarco',
+    component: EntradaProductoBarco
   }
 ];
 
