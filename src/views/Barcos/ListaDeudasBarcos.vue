@@ -802,6 +802,7 @@ export default {
   },
   methods: {
     formatDate,
+    formatNumber,
     async loadDeudas() {
       try {
         // Consulta sin orderBy para evitar índice requerido

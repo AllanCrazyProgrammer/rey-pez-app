@@ -85,41 +85,15 @@
           </div>
 
           <div class="descarga-card-body">
-            <div class="medidas-resumen">
-              <div
-                v-for="(medida, mIndex) in descarga.medidas"
-                :key="mIndex"
-                class="medida-resumen-item"
-              >
-                <div class="medida-resumen-header">
-                  <span class="medida-nombre">{{ medida.nombre || 'Sin medida' }}</span>
-                </div>
-                <table class="tabla-medida-resumen">
-                  <thead>
-                    <tr>
-                      <th>Taras</th>
-                      <th>Kilos</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr v-for="(fila, fIndex) in medida.filas" :key="fIndex">
-                      <td>{{ formatNumber(fila.taras, 0) }}</td>
-                      <td>{{ formatNumber(fila.kilos) }}</td>
-                    </tr>
-                  </tbody>
-                  <tfoot>
-                    <tr>
-                      <td>{{ formatNumber(sumaTaras(medida), 0) }}</td>
-                      <td>{{ formatNumber(sumaKilos(medida)) }}</td>
-                    </tr>
-                  </tfoot>
-                </table>
+            <div class="descarga-totales">
+              <div class="descarga-total-item">
+                <span class="footer-label">Total taras:</span>
+                <span class="footer-total-taras">{{ formatNumber(totalTarasDescarga(descarga), 0) }}</span>
               </div>
-            </div>
-
-            <div class="descarga-card-footer">
-              <span class="footer-label">Total descarga:</span>
-              <span class="footer-total">{{ formatNumber(totalKilosDescarga(descarga)) }} kg</span>
+              <div class="descarga-total-item">
+                <span class="footer-label">Total kilos:</span>
+                <span class="footer-total">{{ formatNumber(totalKilosDescarga(descarga)) }} kg</span>
+              </div>
             </div>
           </div>
         </div>
@@ -147,17 +121,36 @@
         </div>
       </div>
 
-      <!-- Tablas por medida -->
+      <!-- Pestañas de medidas -->
+      <div v-if="form.medidas.length > 0" class="medidas-tabs">
+        <button
+          v-for="(medida, mIndex) in form.medidas"
+          :key="mIndex"
+          class="medida-tab"
+          :class="{ 'active': medidaActivaIndex === mIndex }"
+          @click="medidaActivaIndex = mIndex"
+        >
+          <span class="medida-tab-nombre">{{ medida.nombre || `Medida ${mIndex + 1}` }}</span>
+        </button>
+        <button
+          class="medida-tab medida-tab-add"
+          title="Agregar otra medida"
+          @click="agregarMedida"
+        >
+          ➕
+        </button>
+      </div>
+
+      <!-- Tabla de la medida activa -->
       <div
-        v-for="(medida, mIndex) in form.medidas"
-        :key="mIndex"
+        v-if="medidaActiva"
         class="medida-card"
       >
         <div class="medida-card-header">
           <div class="medida-titulo">
             <i class="icon-ruler">📏</i>
             <input
-              v-model="medida.nombre"
+              v-model="medidaActiva.nombre"
               type="text"
               placeholder="Medida (ej. 51/60, U-15, etc.)"
               class="medida-input"
@@ -166,7 +159,7 @@
           <button
             class="btn-delete-medida"
             title="Eliminar esta medida"
-            @click="eliminarMedida(mIndex)"
+            @click="eliminarMedida(medidaActivaIndex)"
           >
             🗑️
           </button>
@@ -182,7 +175,7 @@
               </tr>
             </thead>
             <tbody>
-              <tr v-for="(fila, fIndex) in medida.filas" :key="fIndex">
+              <tr v-for="(fila, fIndex) in medidaActiva.filas" :key="fIndex">
                 <td>
                   <input
                     v-model.number="fila.taras"
@@ -207,7 +200,7 @@
                   <button
                     class="btn-delete-fila"
                     title="Eliminar fila"
-                    @click="eliminarFila(medida, fIndex)"
+                    @click="eliminarFila(medidaActiva, fIndex)"
                   >
                     ✕
                   </button>
@@ -216,33 +209,49 @@
             </tbody>
             <tfoot>
               <tr class="total-row">
-                <td class="total-cell">{{ formatNumber(sumaTaras(medida), 0) }}</td>
-                <td class="total-cell">{{ formatNumber(sumaKilos(medida)) }}</td>
+                <td class="total-cell">{{ formatNumber(sumaTaras(medidaActiva), 0) }}</td>
+                <td class="total-cell">{{ formatNumber(sumaKilos(medidaActiva)) }}</td>
                 <td class="col-accion"></td>
               </tr>
             </tfoot>
           </table>
         </div>
 
-        <button class="btn-add-fila" @click="agregarFila(medida)">
+        <button class="btn-add-fila" @click="agregarFila(medidaActiva)">
           <i class="btn-icon">➕</i> Agregar fila
         </button>
       </div>
 
-      <!-- Agregar otra tabla / medida -->
-      <button class="btn-add-medida" @click="agregarMedida">
-        <i class="btn-icon">➕</i> Agregar tabla para otra medida
-      </button>
-
       <!-- Resumen total -->
       <div class="resumen-total-card">
-        <div class="resumen-total-item">
-          <span>Total taras:</span>
-          <span class="resumen-valor">{{ formatNumber(totalTarasForm, 0) }}</span>
-        </div>
-        <div class="resumen-total-item destacado">
-          <span>Total kilos:</span>
-          <span class="resumen-valor">{{ formatNumber(totalKilosForm) }} kg</span>
+        <h3 class="section-title">
+          <i class="icon-summary">📊</i>
+          Resumen
+        </h3>
+        <div class="tabla-wrapper">
+          <table class="tabla-resumen">
+            <thead>
+              <tr>
+                <th>Medida</th>
+                <th>Taras</th>
+                <th>Kilos</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(medida, mIndex) in form.medidas" :key="mIndex">
+                <td class="medida-col">{{ medida.nombre || `Medida ${mIndex + 1}` }}</td>
+                <td>{{ formatNumber(sumaTaras(medida), 0) }}</td>
+                <td>{{ formatNumber(sumaKilos(medida)) }}</td>
+              </tr>
+            </tbody>
+            <tfoot>
+              <tr class="total-row">
+                <td class="medida-col">Total</td>
+                <td>{{ formatNumber(totalTarasForm, 0) }}</td>
+                <td>{{ formatNumber(totalKilosForm) }} kg</td>
+              </tr>
+            </tfoot>
+          </table>
         </div>
       </div>
 
@@ -287,6 +296,7 @@ export default {
       cargando: false,
       guardando: false,
       editandoId: null,
+      medidaActivaIndex: 0,
       form: {
         fecha: new Date().toISOString().split('T')[0],
         medidas: []
@@ -313,6 +323,9 @@ export default {
     },
     totalKilosForm() {
       return this.form.medidas.reduce((sum, m) => sum + this.sumaKilos(m), 0);
+    },
+    medidaActiva() {
+      return this.form.medidas[this.medidaActivaIndex] || null;
     }
   },
   mounted() {
@@ -332,11 +345,18 @@ export default {
     sumaTaras(medida) {
       return (medida.filas || []).reduce((s, f) => s + (parseFloat(f.taras) || 0), 0);
     },
-    sumaKilos(medida) {
+    sumaKilosBruto(medida) {
       return (medida.filas || []).reduce((s, f) => s + (parseFloat(f.kilos) || 0), 0);
+    },
+    sumaKilos(medida) {
+      const neto = this.sumaKilosBruto(medida) - this.sumaTaras(medida) * 3;
+      return neto > 0 ? neto : 0;
     },
     totalKilosDescarga(descarga) {
       return (descarga.medidas || []).reduce((s, m) => s + this.sumaKilos(m), 0);
+    },
+    totalTarasDescarga(descarga) {
+      return (descarga.medidas || []).reduce((s, m) => s + this.sumaTaras(m), 0);
     },
     async cargarDescargas() {
       this.cargando = true;
@@ -377,6 +397,7 @@ export default {
         fecha: new Date().toISOString().split('T')[0],
         medidas: [this.crearMedidaVacia()]
       };
+      this.medidaActivaIndex = 0;
       this.currentView = 'editor';
     },
     editarDescarga(descarga) {
@@ -393,6 +414,7 @@ export default {
       if (this.form.medidas.length === 0) {
         this.form.medidas.push(this.crearMedidaVacia());
       }
+      this.medidaActivaIndex = 0;
       this.currentView = 'editor';
     },
     volverALista() {
@@ -401,6 +423,7 @@ export default {
     },
     agregarMedida() {
       this.form.medidas.push(this.crearMedidaVacia());
+      this.medidaActivaIndex = this.form.medidas.length - 1;
     },
     eliminarMedida(index) {
       if (this.form.medidas.length === 1) {
@@ -409,10 +432,14 @@ export default {
       }
       if (confirm('¿Eliminar esta tabla de medida?')) {
         this.form.medidas.splice(index, 1);
+        if (this.medidaActivaIndex >= this.form.medidas.length) {
+          this.medidaActivaIndex = this.form.medidas.length - 1;
+        }
       }
     },
     agregarFila(medida) {
       medida.filas.push({ taras: null, kilos: null });
+      this.autoGuardar();
     },
     eliminarFila(medida, index) {
       if (medida.filas.length === 1) {
@@ -433,6 +460,38 @@ export default {
         totalTaras: this.sumaTaras(m),
         totalKilos: this.sumaKilos(m)
       }));
+    },
+    async autoGuardar() {
+      if (this.guardando) return;
+
+      const medidas = this.prepararMedidasParaGuardar();
+      const tieneDatos = medidas.some(m => m.filas.length > 0);
+      if (!tieneDatos) return;
+
+      this.guardando = true;
+      try {
+        const data = {
+          barco: this.barcoSeleccionado,
+          nombreBarco: this.nombreBarco,
+          fecha: this.form.fecha,
+          medidas,
+          totalTaras: medidas.reduce((s, m) => s + m.totalTaras, 0),
+          totalKilos: medidas.reduce((s, m) => s + m.totalKilos, 0),
+          updatedAt: new Date()
+        };
+
+        if (this.editandoId) {
+          await updateDoc(doc(db, COLECCION, this.editandoId), data);
+        } else {
+          data.createdAt = new Date();
+          const docRef = await addDoc(collection(db, COLECCION), data);
+          this.editandoId = docRef.id;
+        }
+      } catch (error) {
+        console.error('Error al auto-guardar la descarga:', error);
+      } finally {
+        this.guardando = false;
+      }
     },
     async guardarDescarga() {
       if (this.guardando) return;
@@ -688,6 +747,30 @@ export default {
 
 .descarga-card-body {
   padding: 20px;
+}
+
+.descarga-totales {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.descarga-total-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px dashed #ecf0f1;
+}
+
+.descarga-total-item:last-child {
+  border-bottom: none;
+}
+
+.footer-total-taras {
+  font-size: 1.2em;
+  font-weight: 700;
+  color: #2c3e50;
 }
 
 .medidas-resumen {
@@ -973,24 +1056,56 @@ export default {
   background: #e1f0ff;
 }
 
-.btn-add-medida {
-  display: block;
-  width: 100%;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  border: none;
-  padding: 16px;
+/* Pestañas de medidas */
+.medidas-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 20px;
+  padding: 10px;
+  background: white;
   border-radius: 12px;
-  font-size: 1.1em;
-  font-weight: 600;
-  cursor: pointer;
-  margin-bottom: 25px;
-  transition: all 0.3s ease;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.08);
 }
 
-.btn-add-medida:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+.medida-tab {
+  background: #f0f3f7;
+  color: #2c3e50;
+  border: 2px solid transparent;
+  padding: 10px 18px;
+  border-radius: 10px;
+  font-size: 1em;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.medida-tab:hover {
+  background: #e1e7ee;
+}
+
+.medida-tab.active {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.medida-tab-nombre {
+  white-space: nowrap;
+}
+
+.medida-tab-add {
+  background: #e8f4ff;
+  color: #2980b9;
+  border: 2px dashed #3498db;
+  font-size: 1em;
+}
+
+.medida-tab-add:hover {
+  background: #d4ecff;
 }
 
 /* Resumen total */
@@ -1002,27 +1117,50 @@ export default {
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
 
-.resumen-total-item {
-  display: flex;
-  justify-content: space-between;
-  padding: 10px 0;
-  font-size: 1.1em;
-  color: #34495e;
+.tabla-resumen {
+  width: 100%;
+  border-collapse: collapse;
 }
 
-.resumen-total-item.destacado {
-  border-top: 2px solid #e0e0e0;
-  margin-top: 5px;
-  padding-top: 15px;
-  font-weight: 700;
+.tabla-resumen th {
+  background: #f8f9fa;
+  padding: 12px 15px;
+  text-align: right;
+  font-weight: 600;
+  color: #2c3e50;
+  border-bottom: 2px solid #e0e0e0;
+  font-size: 0.95em;
+}
+
+.tabla-resumen th:first-child,
+.tabla-resumen td.medida-col {
+  text-align: left;
+}
+
+.tabla-resumen td {
+  padding: 12px 15px;
+  text-align: right;
+  border-bottom: 1px solid #f0f0f0;
+  color: #34495e;
+  font-size: 1em;
+}
+
+.tabla-resumen td.medida-col {
+  font-weight: 600;
   color: #2c3e50;
 }
 
-.resumen-valor {
+.tabla-resumen tfoot .total-row td {
   font-weight: 700;
+  background: #f8f9fa;
+  border-top: 2px solid #e0e0e0;
+  border-bottom: none;
+  color: #2c3e50;
+  font-size: 1.1em;
+  padding: 15px;
 }
 
-.resumen-total-item.destacado .resumen-valor {
+.tabla-resumen tfoot .total-row td:last-child {
   color: #27ae60;
 }
 
