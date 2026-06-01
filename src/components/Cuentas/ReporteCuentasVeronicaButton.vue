@@ -164,8 +164,26 @@ export default {
 
         this.totalRegistros = registros.length;
 
+        // Validar que no existan días duplicados en los registros de cuentas
+        const conteoPorFecha = registros.reduce((acc, registro) => {
+          const fecha = this.normalizarFechaValor(registro.fecha);
+          if (!fecha) return acc;
+          acc[fecha] = (acc[fecha] || 0) + 1;
+          return acc;
+        }, {});
+        const fechasDuplicadas = Object.keys(conteoPorFecha)
+          .filter((fecha) => conteoPorFecha[fecha] > 1)
+          .sort();
+
+        if (fechasDuplicadas.length) {
+          const previewDup = fechasDuplicadas.slice(0, 5).join(', ');
+          const extraDup = fechasDuplicadas.length > 5 ? ` y ${fechasDuplicadas.length - 5} más` : '';
+          this.errorMessage = `Hay ${fechasDuplicadas.length} día(s) con nota duplicada: ${previewDup}${extraDup}. Revisa y elimina los registros duplicados antes de generar el PDF.`;
+          return;
+        }
+
         // Validar si hay embarques de Verónica sin nota en el rango seleccionado
-        const fechasCuentas = new Set(registros.map((r) => this.normalizarFechaValor(r.fecha)).filter(Boolean));
+        const fechasCuentas = new Set(Object.keys(conteoPorFecha));
         const fechasEmbarques = await this.obtenerFechasConEmbarqueVeronica();
         const faltantes = [...fechasEmbarques].filter((fecha) => !fechasCuentas.has(fecha));
 
