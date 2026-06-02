@@ -514,11 +514,6 @@ export default {
       if (this.guardando) return;
 
       const medidas = this.prepararMedidasParaGuardar();
-      const tieneDatos = medidas.some(m => m.filas.length > 0);
-      if (!tieneDatos) {
-        alert('Agrega al menos una fila con taras o kilos antes de guardar.');
-        return;
-      }
 
       this.guardando = true;
       try {
