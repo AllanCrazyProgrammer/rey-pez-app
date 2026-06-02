@@ -165,12 +165,13 @@
           </button>
         </div>
 
-        <div class="tabla-wrapper">
+        <div class="tabla-wrapper" :class="{ 'tabla-scrollable': medidaActiva.filas.length > 9 }">
           <table class="tabla-medida">
             <thead>
               <tr>
                 <th>Taras</th>
                 <th>Kilos</th>
+                <th>Neto</th>
                 <th class="col-accion"></th>
               </tr>
             </thead>
@@ -196,6 +197,7 @@
                     class="celda-input"
                   >
                 </td>
+                <td class="neto-cell">{{ formatNumber(netoFila(fila)) }}</td>
                 <td class="col-accion">
                   <button
                     class="btn-delete-fila"
@@ -210,6 +212,7 @@
             <tfoot>
               <tr class="total-row">
                 <td class="total-cell">{{ formatNumber(sumaTaras(medidaActiva), 0) }}</td>
+                <td class="total-cell">{{ formatNumber(sumaKilosBruto(medidaActiva)) }}</td>
                 <td class="total-cell">{{ formatNumber(sumaKilos(medidaActiva)) }}</td>
                 <td class="col-accion"></td>
               </tr>
@@ -260,6 +263,11 @@
         <button class="save-button" :disabled="guardando" @click="guardarDescarga">
           {{ guardando ? 'Guardando...' : (editandoId ? 'Actualizar Descarga' : 'Guardar Descarga') }}
         </button>
+        <transition name="fade">
+          <div v-if="mostrarExito" class="exito-mensaje">
+            ✓ Guardado correctamente
+          </div>
+        </transition>
       </div>
     </template>
   </div>
@@ -297,6 +305,7 @@ export default {
       guardando: false,
       editandoId: null,
       medidaActivaIndex: 0,
+      mostrarExito: false,
       form: {
         fecha: new Date().toISOString().split('T')[0],
         medidas: []
@@ -350,6 +359,12 @@ export default {
     },
     sumaKilos(medida) {
       const neto = this.sumaKilosBruto(medida) - this.sumaTaras(medida) * 3;
+      return neto > 0 ? neto : 0;
+    },
+    netoFila(fila) {
+      const taras = parseFloat(fila.taras) || 0;
+      const kilos = parseFloat(fila.kilos) || 0;
+      const neto = kilos - taras * 3;
       return neto > 0 ? neto : 0;
     },
     totalKilosDescarga(descarga) {
@@ -420,6 +435,7 @@ export default {
     volverALista() {
       this.currentView = 'lista';
       this.editandoId = null;
+      this.mostrarExito = false;
     },
     agregarMedida() {
       this.form.medidas.push(this.crearMedidaVacia());
@@ -519,11 +535,13 @@ export default {
           await updateDoc(doc(db, COLECCION, this.editandoId), data);
         } else {
           data.createdAt = new Date();
-          await addDoc(collection(db, COLECCION), data);
+          const docRef = await addDoc(collection(db, COLECCION), data);
+          this.editandoId = docRef.id;
         }
 
         await this.cargarDescargas();
-        this.volverALista();
+        this.mostrarExito = true;
+        setTimeout(() => { this.mostrarExito = false; }, 2500);
       } catch (error) {
         console.error('Error al guardar la descarga:', error);
         alert('Error al guardar la descarga');
@@ -972,6 +990,27 @@ export default {
   overflow-x: auto;
 }
 
+.tabla-wrapper.tabla-scrollable {
+  max-height: 540px;
+  overflow-y: auto;
+  border: 1px solid #ecf0f1;
+  border-radius: 10px;
+}
+
+.tabla-wrapper.tabla-scrollable .tabla-medida thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: #f8f9fa;
+}
+
+.tabla-wrapper.tabla-scrollable .tabla-medida tfoot td {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  background: #f8f9fa;
+}
+
 .tabla-medida {
   width: 100%;
   border-collapse: collapse;
@@ -1011,6 +1050,13 @@ export default {
   outline: none;
   border-color: #3498db;
   box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+}
+
+.neto-cell {
+  font-weight: 600;
+  color: #27ae60;
+  text-align: right;
+  padding-right: 22px;
 }
 
 .btn-delete-fila {
@@ -1191,6 +1237,28 @@ export default {
 .save-button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+.exito-mensaje {
+  margin-top: 15px;
+  display: inline-block;
+  background: #d4edda;
+  color: #155724;
+  padding: 10px 22px;
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 1em;
+  border: 1px solid #c3e6cb;
+}
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.fade-enter,
+.fade-leave-to {
+  opacity: 0;
 }
 
 /* Responsive */
