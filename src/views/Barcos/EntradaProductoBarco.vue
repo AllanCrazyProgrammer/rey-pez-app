@@ -1,7 +1,8 @@
 <template>
   <div class="entrada-producto-barco">
     <div class="back-button-container">
-      <BackButton to="/barcos" />
+      <BackButton v-if="currentView === 'lista'" to="/barcos" />
+      <button v-else class="btn-back" @click="volverALista">Atrás</button>
     </div>
 
     <!-- Header -->
@@ -242,16 +243,16 @@
             </thead>
             <tbody>
               <tr v-for="(medida, mIndex) in form.medidas" :key="mIndex">
-                <td class="medida-col">{{ medida.nombre || `Medida ${mIndex + 1}` }}</td>
-                <td>{{ formatNumber(sumaTaras(medida), 0) }}</td>
-                <td>{{ formatNumber(sumaKilos(medida)) }}</td>
+                <td class="medida-col" data-label="Medida">{{ medida.nombre || `Medida ${mIndex + 1}` }}</td>
+                <td data-label="Taras">{{ formatNumber(sumaTaras(medida), 0) }}</td>
+                <td data-label="Kilos">{{ formatNumber(sumaKilos(medida)) }}</td>
               </tr>
             </tbody>
             <tfoot>
               <tr class="total-row">
-                <td class="medida-col">Total</td>
-                <td>{{ formatNumber(totalTarasForm, 0) }}</td>
-                <td>{{ formatNumber(totalKilosForm) }} kg</td>
+                <td class="medida-col" data-label="Medida">Total</td>
+                <td data-label="Taras">{{ formatNumber(totalTarasForm, 0) }}</td>
+                <td data-label="Kilos">{{ formatNumber(totalKilosForm) }} kg</td>
               </tr>
             </tfoot>
           </table>
@@ -1282,6 +1283,40 @@ export default {
 
   .medida-input {
     max-width: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .resumen-total-card {
+    padding: 18px 14px;
+  }
+
+  .tabla-resumen th,
+  .tabla-resumen td {
+    padding: 10px 6px;
+    font-size: 0.9em;
+  }
+
+  .tabla-resumen tfoot .total-row td {
+    padding: 12px 6px;
+    font-size: 1em;
+  }
+}
+
+@media (max-width: 400px) {
+  .resumen-total-card {
+    padding: 14px 10px;
+  }
+
+  .tabla-resumen th,
+  .tabla-resumen td {
+    padding: 8px 4px;
+    font-size: 0.82em;
+  }
+
+  .tabla-resumen tfoot .total-row td {
+    padding: 10px 4px;
+    font-size: 0.95em;
   }
 }
 </style>
