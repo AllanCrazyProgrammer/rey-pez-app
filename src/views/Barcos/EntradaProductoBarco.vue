@@ -1015,6 +1015,7 @@ export default {
 .tabla-medida {
   width: 100%;
   border-collapse: collapse;
+  table-layout: fixed;
 }
 
 .tabla-medida th {
@@ -1169,6 +1170,13 @@ export default {
 .tabla-resumen {
   width: 100%;
   border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.tabla-resumen td,
+.tabla-resumen th {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .tabla-resumen th {
