@@ -1319,4 +1319,44 @@ export default {
     font-size: 0.95em;
   }
 }
+
+/* Galaxy Fold 6 cerrado y otros dispositivos muy angostos */
+@media (max-width: 380px) {
+  .entrada-producto-barco {
+    padding: 10px;
+  }
+
+  .resumen-total-card {
+    padding: 12px 8px;
+  }
+
+  .resumen-total-card .section-title {
+    font-size: 1em;
+    margin-bottom: 12px;
+  }
+
+  .tabla-resumen th,
+  .tabla-resumen td {
+    padding: 6px 3px;
+    font-size: 0.75em;
+  }
+
+  .tabla-resumen tfoot .total-row td {
+    padding: 8px 3px;
+    font-size: 0.85em;
+  }
+}
+
+@media (max-width: 340px) {
+  .tabla-resumen th,
+  .tabla-resumen td {
+    padding: 5px 2px;
+    font-size: 0.7em;
+  }
+
+  .tabla-resumen tfoot .total-row td {
+    padding: 7px 2px;
+    font-size: 0.78em;
+  }
+}
 </style>
