@@ -1039,6 +1039,8 @@ export default {
 .celda-input {
   width: 100%;
   max-width: 160px;
+  min-width: 0;
+  box-sizing: border-box;
   padding: 10px 12px;
   border: 2px solid #e0e0e0;
   border-radius: 8px;
@@ -1301,6 +1303,31 @@ export default {
     padding: 12px 6px;
     font-size: 1em;
   }
+
+  /* Editor: tabla de captura */
+  .medida-card,
+  .fecha-card {
+    padding: 16px 12px;
+  }
+
+  .tabla-medida th {
+    padding: 10px 6px;
+    font-size: 0.9em;
+  }
+
+  .tabla-medida td {
+    padding: 6px 4px;
+  }
+
+  .celda-input {
+    padding: 9px 8px;
+    font-size: 0.95em;
+  }
+
+  .neto-cell,
+  .total-row .total-cell {
+    padding-right: 8px;
+  }
 }
 
 @media (max-width: 400px) {
@@ -1317,6 +1344,46 @@ export default {
   .tabla-resumen tfoot .total-row td {
     padding: 10px 4px;
     font-size: 0.95em;
+  }
+
+  /* Editor: tabla de captura */
+  .medida-card,
+  .fecha-card {
+    padding: 14px 10px;
+  }
+
+  .medida-card-header {
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+
+  .tabla-medida th {
+    padding: 8px 3px;
+    font-size: 0.8em;
+  }
+
+  .tabla-medida td {
+    padding: 5px 2px;
+  }
+
+  .celda-input {
+    padding: 8px 5px;
+    font-size: 0.85em;
+  }
+
+  .col-accion {
+    width: 36px;
+  }
+
+  .btn-delete-fila {
+    width: 28px;
+    height: 28px;
+    font-size: 0.8em;
+  }
+
+  .neto-cell,
+  .total-row .total-cell {
+    padding-right: 4px;
   }
 }
 
@@ -1345,6 +1412,60 @@ export default {
     padding: 8px 3px;
     font-size: 0.85em;
   }
+
+  /* Editor: tabla de captura */
+  .medida-card,
+  .fecha-card {
+    padding: 12px 8px;
+  }
+
+  .medida-card .section-title,
+  .fecha-card .section-title {
+    font-size: 1em;
+  }
+
+  .medida-input {
+    padding: 9px 10px;
+    font-size: 1em;
+  }
+
+  .icon-ruler {
+    font-size: 1.2em;
+  }
+
+  .btn-delete-medida {
+    width: 36px;
+    height: 36px;
+    font-size: 1em;
+  }
+
+  .tabla-medida th {
+    padding: 7px 2px;
+    font-size: 0.72em;
+  }
+
+  .tabla-medida td {
+    padding: 4px 1px;
+  }
+
+  .celda-input {
+    padding: 7px 4px;
+    font-size: 0.8em;
+  }
+
+  .col-accion {
+    width: 30px;
+  }
+
+  .btn-delete-fila {
+    width: 26px;
+    height: 26px;
+    font-size: 0.75em;
+  }
+
+  .fecha-container {
+    gap: 10px;
+  }
 }
 
 @media (max-width: 340px) {
@@ -1357,6 +1478,27 @@ export default {
   .tabla-resumen tfoot .total-row td {
     padding: 7px 2px;
     font-size: 0.78em;
+  }
+
+  /* Editor: tabla de captura */
+  .tabla-medida th {
+    padding: 6px 1px;
+    font-size: 0.68em;
+  }
+
+  .celda-input {
+    padding: 6px 3px;
+    font-size: 0.75em;
+  }
+
+  .col-accion {
+    width: 26px;
+  }
+
+  .btn-delete-fila {
+    width: 24px;
+    height: 24px;
+    font-size: 0.7em;
   }
 }
 </style>
