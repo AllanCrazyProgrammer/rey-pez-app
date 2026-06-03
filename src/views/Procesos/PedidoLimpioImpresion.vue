@@ -1480,18 +1480,19 @@ export default {
             sufijoClave += '-maq';
             sufijoEtiqueta += ' Maq';
           }
-          if (item.esSelecta) {
-            sufijoClave += '-selecta';
-            sufijoEtiqueta += ' Selecta';
-          } else if (item.esHonduras) {
-            sufijoClave += '-honduras';
-            sufijoEtiqueta += ' Honduras';
+          // Etiqueta personalizada (con respaldo a los antiguos campos esSelecta/esHonduras)
+          const etiqueta = item.etiqueta
+            || (item.esSelecta ? 'Selecta' : (item.esHonduras ? 'Honduras' : ''));
+          if (etiqueta) {
+            sufijoClave += '-' + etiqueta.toLowerCase().trim().replace(/\s+/g, '-');
+            sufijoEtiqueta += ' ' + etiqueta;
           }
           const key = medida.toLowerCase().trim() + sufijoClave;
 
           if (!medidasMap.has(key)) {
             medidasMap.set(key, {
               medida: medida + sufijoEtiqueta,
+              medidaBase: medida,
               total: 0
             });
           }
@@ -1545,24 +1546,20 @@ export default {
 
       // Convertir el mapa a un array ordenado
       return Array.from(medidasMap.values())
-        .map(value => ({
-          medida: value.medida,
-          total: Math.round(value.total)
-        }))
         .sort((a, b) => {
-          // Primero ordenamos por medida base (sin los sufijos Maq/Selecta/Honduras)
-          const limpiarSufijos = (m) => m
-            .replace(' Maq', '')
-            .replace(' Selecta', '')
-            .replace(' Honduras', '');
-          const medidaA = limpiarSufijos(a.medida);
-          const medidaB = limpiarSufijos(b.medida);
+          // Ordenamos por medida base (sin los sufijos Maq/etiqueta)
+          const medidaA = a.medidaBase || a.medida;
+          const medidaB = b.medidaBase || b.medida;
           if (medidaA === medidaB) {
             // Si las medidas base son iguales, ponemos primero la que no tiene sufijo
             return a.medida.length - b.medida.length;
           }
           return medidaA.localeCompare(medidaB);
-        });
+        })
+        .map(value => ({
+          medida: value.medida,
+          total: Math.round(value.total)
+        }));
     },
     calcularRendimiento(medida) {
       // Asegurarse de que el valor sea numérico

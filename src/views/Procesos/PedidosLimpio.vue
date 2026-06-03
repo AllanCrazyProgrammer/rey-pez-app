@@ -141,22 +141,12 @@
                     >
                       P
                     </button>
-                    <button
-                      class="btn-selecta"
-                      @click="toggleSelecta(item)"
-                      :class="{ 'active': item.esSelecta }"
-                      title="Selecta"
-                    >
-                      S
-                    </button>
-                    <button
-                      class="btn-honduras"
-                      @click="toggleHonduras(item)"
-                      :class="{ 'active': item.esHonduras }"
-                      title="Honduras"
-                    >
-                      H
-                    </button>
+                    <EtiquetasMedida
+                      :item="item"
+                      :etiquetas="etiquetasPedido"
+                      @toggle="toggleEtiqueta(item, $event)"
+                      @crear="abrirModalEtiquetas"
+                    />
                   </div>
                   <select v-model="item.medida" class="input-field" @change="manejarCambioMedida(item, 'otilio')">
                     <option value="">Seleccionar</option>
@@ -239,22 +229,12 @@
                     >
                       P
                     </button>
-                    <button
-                      class="btn-selecta"
-                      @click="toggleSelecta(item)"
-                      :class="{ 'active': item.esSelecta }"
-                      title="Selecta"
-                    >
-                      S
-                    </button>
-                    <button
-                      class="btn-honduras"
-                      @click="toggleHonduras(item)"
-                      :class="{ 'active': item.esHonduras }"
-                      title="Honduras"
-                    >
-                      H
-                    </button>
+                    <EtiquetasMedida
+                      :item="item"
+                      :etiquetas="etiquetasPedido"
+                      @toggle="toggleEtiqueta(item, $event)"
+                      @crear="abrirModalEtiquetas"
+                    />
                   </div>
                   <select v-model="item.medida" class="input-field" @change="manejarCambioMedida(item, 'catarro')">
                     <option value="">Seleccionar</option>
@@ -337,22 +317,12 @@
                     >
                       P
                     </button>
-                    <button
-                      class="btn-selecta"
-                      @click="toggleSelecta(item)"
-                      :class="{ 'active': item.esSelecta }"
-                      title="Selecta"
-                    >
-                      S
-                    </button>
-                    <button
-                      class="btn-honduras"
-                      @click="toggleHonduras(item)"
-                      :class="{ 'active': item.esHonduras }"
-                      title="Honduras"
-                    >
-                      H
-                    </button>
+                    <EtiquetasMedida
+                      :item="item"
+                      :etiquetas="etiquetasPedido"
+                      @toggle="toggleEtiqueta(item, $event)"
+                      @crear="abrirModalEtiquetas"
+                    />
                   </div>
                   <select v-model="item.medida" class="input-field" @change="manejarCambioMedida(item, 'joselito')">
                     <option value="">Seleccionar</option>
@@ -437,22 +407,12 @@
                     >
                       P
                     </button>
-                    <button
-                      class="btn-selecta"
-                      @click="toggleSelecta(item)"
-                      :class="{ 'active': item.esSelecta }"
-                      title="Selecta"
-                    >
-                      S
-                    </button>
-                    <button
-                      class="btn-honduras"
-                      @click="toggleHonduras(item)"
-                      :class="{ 'active': item.esHonduras }"
-                      title="Honduras"
-                    >
-                      H
-                    </button>
+                    <EtiquetasMedida
+                      :item="item"
+                      :etiquetas="etiquetasPedido"
+                      @toggle="toggleEtiqueta(item, $event)"
+                      @crear="abrirModalEtiquetas"
+                    />
                   </div>
                   <select v-model="item.medida" class="input-field" @change="manejarCambioMedida(item, 'lorena')">
                     <option value="">Seleccionar</option>
@@ -542,22 +502,12 @@
                     >
                       P
                     </button>
-                    <button
-                      class="btn-selecta"
-                      @click="toggleSelecta(item)"
-                      :class="{ 'active': item.esSelecta }"
-                      title="Selecta"
-                    >
-                      S
-                    </button>
-                    <button
-                      class="btn-honduras"
-                      @click="toggleHonduras(item)"
-                      :class="{ 'active': item.esHonduras }"
-                      title="Honduras"
-                    >
-                      H
-                    </button>
+                    <EtiquetasMedida
+                      :item="item"
+                      :etiquetas="etiquetasPedido"
+                      @toggle="toggleEtiqueta(item, $event)"
+                      @crear="abrirModalEtiquetas"
+                    />
                   </div>
                   <select v-model="item.medida" class="input-field" @change="manejarCambioMedida(item, 'ozuna')">
                     <option value="">Seleccionar</option>
@@ -656,22 +606,12 @@
                     >
                       P
                     </button>
-                    <button
-                      class="btn-selecta"
-                      @click="toggleSelecta(item)"
-                      :class="{ 'active': item.esSelecta }"
-                      title="Selecta"
-                    >
-                      S
-                    </button>
-                    <button
-                      class="btn-honduras"
-                      @click="toggleHonduras(item)"
-                      :class="{ 'active': item.esHonduras }"
-                      title="Honduras"
-                    >
-                      H
-                    </button>
+                    <EtiquetasMedida
+                      :item="item"
+                      :etiquetas="etiquetasPedido"
+                      @toggle="toggleEtiqueta(item, $event)"
+                      @crear="abrirModalEtiquetas"
+                    />
                   </div>
                   <select v-model="item.medida" class="input-field" @change="manejarCambioMedida(item, 'temporal')">
                     <option value="">Seleccionar</option>
@@ -770,6 +710,48 @@
       @cerrar="mostrarModalNuevoCliente = false"
       @guardar="agregarClienteTemporal"
     />
+
+    <!-- Modal para crear/administrar botones de etiquetas -->
+    <div v-if="mostrarModalEtiquetas" class="etiquetas-modal-overlay" @click.self="cerrarModalEtiquetas">
+      <div class="etiquetas-modal">
+        <h3>Botones de etiqueta</h3>
+        <p class="etiquetas-modal-ayuda">
+          Crea botones para marcar las filas (por ejemplo "Selecta" u "Honduras").
+          En cada fila solo puede haber un botón activo a la vez.
+        </p>
+
+        <form class="etiquetas-modal-form" @submit.prevent="crearEtiqueta">
+          <input
+            ref="inputNuevaEtiqueta"
+            v-model="nuevaEtiquetaNombre"
+            type="text"
+            class="etiquetas-modal-input"
+            placeholder="Nombre del botón"
+            maxlength="20"
+          >
+          <button type="submit" class="etiquetas-modal-agregar">Crear</button>
+        </form>
+
+        <ul v-if="etiquetasPedido.length" class="etiquetas-modal-lista">
+          <li v-for="etiqueta in etiquetasPedido" :key="etiqueta">
+            <span>{{ etiqueta }}</span>
+            <button
+              type="button"
+              class="etiquetas-modal-eliminar"
+              title="Eliminar botón"
+              @click="eliminarEtiqueta(etiqueta)"
+            >
+              <i class="fas fa-trash"></i>
+            </button>
+          </li>
+        </ul>
+        <p v-else class="etiquetas-modal-vacio">Aún no has creado botones.</p>
+
+        <div class="etiquetas-modal-acciones">
+          <button type="button" class="etiquetas-modal-cerrar" @click="cerrarModalEtiquetas">Listo</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -780,6 +762,7 @@ import PedidoLimpioImpresion from './PedidoLimpioImpresion.vue'
 import MedidasModal from '@/components/MedidasModal.vue'
 import ProveedorModal from '@/components/ProveedorModal.vue'
 import NuevoClienteModal from '@/components/NuevoClienteModal.vue'
+import EtiquetasMedida from '@/components/EtiquetasMedida.vue'
 
 const TIPOS_POR_CLIENTE = {
   otilio: ['S/H20', 'C/H20'],
@@ -807,7 +790,8 @@ export default {
     PedidoLimpioImpresion,
     MedidasModal,
     ProveedorModal,
-    NuevoClienteModal
+    NuevoClienteModal,
+    EtiquetasMedida
   },
   data() {
     return {
@@ -818,6 +802,9 @@ export default {
       pedidoOzuna: [],
       pedidoLorena: [],
       clientesTemporales: {},
+      etiquetasPedido: [],
+      mostrarModalEtiquetas: false,
+      nuevaEtiquetaNombre: '',
       mostrarModalNuevoCliente: false,
       mostrarImpresion: false,
       mostrarModalProveedor: false,
@@ -1216,6 +1203,8 @@ export default {
           this.pedidoOzuna = data.ozuna || [];
           this.pedidoLorena = data.lorena || [];
           this.clientesTemporales = this.normalizarClientesTemporales(data.clientesTemporales || {});
+          this.etiquetasPedido = Array.isArray(data.etiquetas) ? [...data.etiquetas] : [];
+          this.migrarEtiquetasLegado();
           this.rendimientosGuardados = data.rendimientos || {};
           this.divisoresGuardados = data.divisores || {};
           this.completadosGuardados = data.completados || {};
@@ -1227,19 +1216,19 @@ export default {
       }
     },
     agregarFilaOtilio() {
-      this.pedidoOtilio.unshift({ kilos: null, medida: '', tipo: '', esTara: true, esProveedor: false, proveedor: '', esSelecta: false, esHonduras: false })
+      this.pedidoOtilio.unshift({ kilos: null, medida: '', tipo: '', esTara: true, esProveedor: false, proveedor: '', etiqueta: '' })
     },
     agregarFilaCatarro() {
-      this.pedidoCatarro.unshift({ kilos: null, medida: '', tipo: 'S/H20', esTara: false, esProveedor: false, proveedor: '', esSelecta: false, esHonduras: false })
+      this.pedidoCatarro.unshift({ kilos: null, medida: '', tipo: 'S/H20', esTara: false, esProveedor: false, proveedor: '', etiqueta: '' })
     },
     agregarFilaJoselito() {
-      this.pedidoJoselito.unshift({ kilos: null, medida: '', tipo: '', esTara: false, esProveedor: false, proveedor: '', esSelecta: false, esHonduras: false })
+      this.pedidoJoselito.unshift({ kilos: null, medida: '', tipo: '', esTara: false, esProveedor: false, proveedor: '', etiqueta: '' })
     },
     agregarFilaOzuna() {
-      this.pedidoOzuna.unshift({ kilos: null, medida: '', tipo: 'S/H20', esTara: false, esProveedor: false, proveedor: '', esSelecta: false, esHonduras: false, esMaquila: true })
+      this.pedidoOzuna.unshift({ kilos: null, medida: '', tipo: 'S/H20', esTara: false, esProveedor: false, proveedor: '', etiqueta: '', esMaquila: true })
     },
     agregarFilaLorena() {
-      this.pedidoLorena.unshift({ kilos: null, medida: '', tipo: '', esTara: false, esProveedor: false, proveedor: '', esSelecta: false, esHonduras: false })
+      this.pedidoLorena.unshift({ kilos: null, medida: '', tipo: '', esTara: false, esProveedor: false, proveedor: '', etiqueta: '' })
     },
     async guardarPedido() {
       try {
@@ -1252,6 +1241,7 @@ export default {
           ozuna: this.pedidoOzuna,
           lorena: this.pedidoLorena,
           clientesTemporales: this.clientesTemporales,
+          etiquetas: this.etiquetasPedido,
           rendimientos: this.rendimientosGuardados,
           divisores: this.divisoresGuardados,
           completados: this.completadosGuardados,
@@ -1283,6 +1273,7 @@ export default {
           ozuna: this.pedidoOzuna,
           lorena: this.pedidoLorena,
           clientesTemporales: this.clientesTemporales,
+          etiquetas: this.etiquetasPedido,
           rendimientos: this.rendimientosGuardados,
           divisores: this.divisoresGuardados,
           kilosRefrigerados: this.kilosRefrigeradosGuardados,
@@ -1332,21 +1323,99 @@ export default {
       this.mostrarModalProveedor = false
       this.itemSeleccionado = null
     },
-    toggleSelecta(item) {
-      const nuevoValor = !item.esSelecta
-      this.$set(item, 'esSelecta', nuevoValor)
-      // Selecta y Honduras son mutuamente excluyentes
-      if (nuevoValor) {
-        this.$set(item, 'esHonduras', false)
-      }
+    toggleEtiqueta(item, nombre) {
+      // Solo puede haber una etiqueta activa por fila: si ya estaba marcada se quita.
+      this.$set(item, 'etiqueta', item.etiqueta === nombre ? '' : nombre)
     },
-    toggleHonduras(item) {
-      const nuevoValor = !item.esHonduras
-      this.$set(item, 'esHonduras', nuevoValor)
-      // Selecta y Honduras son mutuamente excluyentes
-      if (nuevoValor) {
-        this.$set(item, 'esSelecta', false)
+    abrirModalEtiquetas() {
+      this.mostrarModalEtiquetas = true
+      this.$nextTick(() => {
+        if (this.$refs.inputNuevaEtiqueta) {
+          this.$refs.inputNuevaEtiqueta.focus()
+        }
+      })
+    },
+    cerrarModalEtiquetas() {
+      this.mostrarModalEtiquetas = false
+      this.nuevaEtiquetaNombre = ''
+    },
+    crearEtiqueta() {
+      const nombre = (this.nuevaEtiquetaNombre || '').trim()
+      if (!nombre) return
+      const yaExiste = this.etiquetasPedido.some(
+        e => e.toLowerCase() === nombre.toLowerCase()
+      )
+      if (yaExiste) {
+        alert('Ya existe un botón con ese nombre')
+        return
       }
+      this.etiquetasPedido.push(nombre)
+      this.nuevaEtiquetaNombre = ''
+    },
+    eliminarEtiqueta(nombre) {
+      const indice = this.etiquetasPedido.indexOf(nombre)
+      if (indice !== -1) {
+        this.etiquetasPedido.splice(indice, 1)
+      }
+      // Limpiar la etiqueta de cualquier fila que la tuviera seleccionada
+      this.limpiarEtiquetaDeItems(nombre)
+    },
+    limpiarEtiquetaDeItems(nombre) {
+      const listas = [
+        this.pedidoOtilio,
+        this.pedidoCatarro,
+        this.pedidoJoselito,
+        this.pedidoOzuna,
+        this.pedidoLorena
+      ]
+      Object.values(this.clientesTemporales || {}).forEach(cliente => {
+        if (cliente && Array.isArray(cliente.pedidos)) {
+          listas.push(cliente.pedidos)
+        }
+      })
+      listas.forEach(lista => {
+        if (!Array.isArray(lista)) return
+        lista.forEach(item => {
+          if (item && item.etiqueta === nombre) {
+            this.$set(item, 'etiqueta', '')
+          }
+        })
+      })
+    },
+    migrarEtiquetasLegado() {
+      // Pedidos guardados antes de esta función usaban esSelecta (S) y esHonduras (H).
+      // Los convertimos a la nueva propiedad "etiqueta" y registramos los botones.
+      const asegurarEtiqueta = nombre => {
+        const existe = this.etiquetasPedido.some(
+          e => e.toLowerCase() === nombre.toLowerCase()
+        )
+        if (!existe) this.etiquetasPedido.push(nombre)
+      }
+      const listas = [
+        this.pedidoOtilio,
+        this.pedidoCatarro,
+        this.pedidoJoselito,
+        this.pedidoOzuna,
+        this.pedidoLorena
+      ]
+      Object.values(this.clientesTemporales || {}).forEach(cliente => {
+        if (cliente && Array.isArray(cliente.pedidos)) {
+          listas.push(cliente.pedidos)
+        }
+      })
+      listas.forEach(lista => {
+        if (!Array.isArray(lista)) return
+        lista.forEach(item => {
+          if (!item || item.etiqueta) return
+          if (item.esSelecta) {
+            this.$set(item, 'etiqueta', 'Selecta')
+            asegurarEtiqueta('Selecta')
+          } else if (item.esHonduras) {
+            this.$set(item, 'etiqueta', 'Honduras')
+            asegurarEtiqueta('Honduras')
+          }
+        })
+      })
     },
     manejarCheckboxProveedor(item) {
       if (item.esProveedor) {
@@ -1397,8 +1466,7 @@ export default {
         esTara: false,
         esProveedor: false,
         proveedor: '',
-        esSelecta: false,
-        esHonduras: false
+        etiqueta: ''
       };
     },
     normalizarTextoId(texto) {
@@ -1569,6 +1637,7 @@ export default {
           ozuna: this.pedidoOzuna,
           lorena: this.pedidoLorena,
           clientesTemporales: this.clientesTemporales,
+          etiquetas: this.etiquetasPedido,
           rendimientos: this.rendimientosGuardados,
           divisores: this.divisoresGuardados,
           completados: this.completadosGuardados,
@@ -1608,6 +1677,7 @@ export default {
           ozuna: this.pedidoOzuna,
           lorena: this.pedidoLorena,
           clientesTemporales: this.clientesTemporales,
+          etiquetas: this.etiquetasPedido,
           rendimientos: this.rendimientosGuardados,
           divisores: this.divisoresGuardados,
           completados: this.completadosGuardados,
@@ -1647,6 +1717,7 @@ export default {
           ozuna: this.pedidoOzuna,
           lorena: this.pedidoLorena,
           clientesTemporales: this.clientesTemporales,
+          etiquetas: this.etiquetasPedido,
           rendimientos: this.rendimientosGuardados,
           divisores: this.divisoresGuardados,
           completados: completados,
@@ -1685,6 +1756,7 @@ export default {
           joselito: this.pedidoJoselito,
           ozuna: this.pedidoOzuna,
           clientesTemporales: this.clientesTemporales,
+          etiquetas: this.etiquetasPedido,
           rendimientos: this.rendimientosGuardados,
           divisores: this.divisoresGuardados,
           completados: this.completadosGuardados,
@@ -2380,46 +2452,126 @@ export default {
   background-color: rgba(39, 174, 96, 0.1);
 }
 
-/* Botones Selecta (S) y Honduras (H) */
-.btn-selecta,
-.btn-honduras {
-  width: 24px;
-  height: 24px;
-  font-size: 12px;
-  padding: 0;
-  margin-left: 4px;
-  font-weight: bold;
-  color: #666;
-  background-color: #f0f0f0;
-  border: 2px solid transparent;
+/* Modal de gestión de botones de etiqueta */
+.etiquetas-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.etiquetas-modal {
+  background-color: #fff;
+  border-radius: 8px;
+  padding: 20px;
+  width: 90%;
+  max-width: 420px;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+}
+
+.etiquetas-modal h3 {
+  margin: 0 0 8px;
+  color: #2c3e50;
+}
+
+.etiquetas-modal-ayuda {
+  margin: 0 0 16px;
+  font-size: 14px;
+  color: #777;
+}
+
+.etiquetas-modal-form {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.etiquetas-modal-input {
+  flex: 1;
+  padding: 10px;
+  font-size: 16px;
+  border: 1px solid #ccc;
   border-radius: 4px;
+}
+
+.etiquetas-modal-agregar {
+  padding: 10px 16px;
+  background-color: #2980b9;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  font-weight: bold;
   cursor: pointer;
-  transition: all 0.3s ease;
 }
 
-.btn-selecta:hover,
-.btn-honduras:hover {
-  background-color: #e0e0e0;
+.etiquetas-modal-agregar:hover {
+  background-color: #2471a3;
 }
 
-.btn-selecta.active {
-  border: 2px solid #27ae60;
-  color: white;
+.etiquetas-modal-lista {
+  list-style: none;
+  margin: 0 0 16px;
+  padding: 0;
+}
+
+.etiquetas-modal-lista li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border: 1px solid #eee;
+  border-radius: 4px;
+  margin-bottom: 6px;
+  font-size: 16px;
+  color: #2c3e50;
+}
+
+.etiquetas-modal-eliminar {
+  background-color: #e74c3c;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  width: 32px;
+  height: 32px;
+  cursor: pointer;
+}
+
+.etiquetas-modal-eliminar:hover {
+  background-color: #c0392b;
+}
+
+.etiquetas-modal-vacio {
+  margin: 0 0 16px;
+  font-size: 14px;
+  color: #999;
+  font-style: italic;
+}
+
+.etiquetas-modal-acciones {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.etiquetas-modal-cerrar {
+  padding: 10px 20px;
   background-color: #27ae60;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  font-weight: bold;
+  cursor: pointer;
 }
 
-.btn-selecta.active:hover {
+.etiquetas-modal-cerrar:hover {
   background-color: #219150;
-}
-
-.btn-honduras.active {
-  border: 2px solid #e67e22;
-  color: white;
-  background-color: #e67e22;
-}
-
-.btn-honduras.active:hover {
-  background-color: #ca6a16;
 }
 
 .btn-eliminar {
@@ -2821,19 +2973,6 @@ export default {
   }
 
   .btn-proveedor.active {
-    border-width: 1.5px;
-  }
-
-  .btn-selecta,
-  .btn-honduras {
-    width: 20px;
-    height: 20px;
-    font-size: 12px;
-    border-width: 1.5px;
-  }
-
-  .btn-selecta.active,
-  .btn-honduras.active {
     border-width: 1.5px;
   }
 
