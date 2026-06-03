@@ -132,6 +132,7 @@
           @click="seleccionarMedida(mIndex)"
         >
           <span class="medida-tab-nombre">{{ medida.nombre || `Medida ${mIndex + 1}` }}</span>
+          <span class="medida-tab-stats">{{ formatNumber(sumaTaras(medida), 0) }}-t · {{ formatNumber(sumaKilos(medida), 0) }} kg</span>
         </button>
         <button
           class="medida-tab medida-tab-add"
@@ -1152,8 +1153,10 @@ export default {
   cursor: pointer;
   transition: all 0.2s ease;
   display: inline-flex;
+  flex-direction: column;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
+  gap: 3px;
 }
 
 .medida-tab:hover {
@@ -1168,6 +1171,17 @@ export default {
 
 .medida-tab-nombre {
   white-space: nowrap;
+}
+
+.medida-tab-stats {
+  font-size: 0.78em;
+  font-weight: 600;
+  opacity: 0.7;
+  white-space: nowrap;
+}
+
+.medida-tab.active .medida-tab-stats {
+  opacity: 0.92;
 }
 
 .medida-tab-add {
