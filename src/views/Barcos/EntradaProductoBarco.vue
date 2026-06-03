@@ -128,8 +128,8 @@
           v-for="(medida, mIndex) in form.medidas"
           :key="mIndex"
           class="medida-tab"
-          :class="{ 'active': medidaActivaIndex === mIndex }"
-          @click="medidaActivaIndex = mIndex"
+          :class="{ 'active': medidaActivaIndex === mIndex && !resumenActivo }"
+          @click="seleccionarMedida(mIndex)"
         >
           <span class="medida-tab-nombre">{{ medida.nombre || `Medida ${mIndex + 1}` }}</span>
         </button>
@@ -140,11 +140,31 @@
         >
           ➕
         </button>
+        <button
+          class="medida-tab medida-tab-resumen"
+          :class="{ 'active': resumenActivo }"
+          title="Ver resumen"
+          @click="resumenActivo = true"
+        >
+          📊 Resumen
+        </button>
+      </div>
+
+      <!-- Totales acumulados hasta el momento -->
+      <div v-if="form.medidas.length > 0" class="totales-acumulados">
+        <div class="total-acumulado-item">
+          <span class="total-acumulado-label">Total taras hasta el momento</span>
+          <span class="total-acumulado-valor">{{ formatNumber(totalTarasForm, 0) }}</span>
+        </div>
+        <div class="total-acumulado-item">
+          <span class="total-acumulado-label">Total kilos hasta el momento</span>
+          <span class="total-acumulado-valor kilos">{{ formatNumber(totalKilosForm) }} kg</span>
+        </div>
       </div>
 
       <!-- Tabla de la medida activa -->
       <div
-        v-if="medidaActiva"
+        v-if="medidaActiva && !resumenActivo"
         class="medida-card"
       >
         <div class="medida-card-header">
@@ -227,7 +247,7 @@
       </div>
 
       <!-- Resumen total -->
-      <div class="resumen-total-card">
+      <div v-if="resumenActivo" class="resumen-total-card">
         <h3 class="section-title">
           <i class="icon-summary">📊</i>
           Resumen
@@ -306,6 +326,7 @@ export default {
       guardando: false,
       editandoId: null,
       medidaActivaIndex: 0,
+      resumenActivo: false,
       mostrarExito: false,
       form: {
         fecha: new Date().toISOString().split('T')[0],
@@ -414,6 +435,7 @@ export default {
         medidas: [this.crearMedidaVacia()]
       };
       this.medidaActivaIndex = 0;
+      this.resumenActivo = false;
       this.currentView = 'editor';
     },
     editarDescarga(descarga) {
@@ -431,6 +453,7 @@ export default {
         this.form.medidas.push(this.crearMedidaVacia());
       }
       this.medidaActivaIndex = 0;
+      this.resumenActivo = false;
       this.currentView = 'editor';
     },
     volverALista() {
@@ -438,9 +461,14 @@ export default {
       this.editandoId = null;
       this.mostrarExito = false;
     },
+    seleccionarMedida(index) {
+      this.medidaActivaIndex = index;
+      this.resumenActivo = false;
+    },
     agregarMedida() {
       this.form.medidas.push(this.crearMedidaVacia());
       this.medidaActivaIndex = this.form.medidas.length - 1;
+      this.resumenActivo = false;
     },
     eliminarMedida(index) {
       if (this.form.medidas.length === 1) {
@@ -1151,6 +1179,79 @@ export default {
 
 .medida-tab-add:hover {
   background: #d4ecff;
+}
+
+.medida-tab-resumen {
+  margin-left: auto;
+  background: #eafaf1;
+  color: #1e8449;
+  border: 2px solid #2ecc71;
+}
+
+.medida-tab-resumen:hover {
+  background: #d5f5e3;
+}
+
+.medida-tab-resumen.active {
+  background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%);
+  color: white;
+  box-shadow: 0 4px 12px rgba(46, 204, 113, 0.3);
+}
+
+/* Totales acumulados hasta el momento */
+.totales-acumulados {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 15px;
+  margin-bottom: 20px;
+}
+
+.total-acumulado-item {
+  flex: 1;
+  min-width: 200px;
+  background: white;
+  border-radius: 12px;
+  padding: 16px 20px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.08);
+  border-left: 5px solid #3498db;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.total-acumulado-item:last-child {
+  border-left-color: #27ae60;
+}
+
+.total-acumulado-label {
+  color: #7f8c8d;
+  font-size: 0.9em;
+  font-weight: 600;
+}
+
+.total-acumulado-valor {
+  font-size: 1.6em;
+  font-weight: 700;
+  color: #2c3e50;
+}
+
+.total-acumulado-valor.kilos {
+  color: #27ae60;
+}
+
+@media (max-width: 640px) {
+  .total-acumulado-item {
+    padding: 12px 14px;
+    min-width: 140px;
+  }
+
+  .total-acumulado-valor {
+    font-size: 1.3em;
+  }
+
+  .total-acumulado-label {
+    font-size: 0.8em;
+  }
 }
 
 /* Resumen total */
