@@ -37,7 +37,10 @@ Notas importantes del entorno:
   `$PREVIEW_CHROME` por el hook de inicio. Playwright **no** puede descargar
   navegadores aquí.
 - El hook `.claude/hooks/session-start.sh` deja instaladas las dependencias y
-  Playwright al iniciar cada sesión, así las capturas son rápidas.
+  Playwright al iniciar cada sesión, así las capturas son rápidas. Corre en
+  **modo asíncrono** (en segundo plano), por lo que al inicio de una sesión la
+  instalación puede no haber terminado aún; si `node_modules` o Playwright no
+  están listos, espera o vuelve a correr `npm install` antes de capturar.
 
 ## Módulo de Barcos
 

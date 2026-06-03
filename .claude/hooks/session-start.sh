@@ -12,6 +12,10 @@ if [ "${CLAUDE_CODE_REMOTE:-}" != "true" ]; then
   exit 0
 fi
 
+# Modo asincrono: el hook corre en segundo plano mientras la sesion inicia,
+# para no demorar el arranque. Esta linea JSON debe ser la primera salida.
+echo '{"async": true, "asyncTimeout": 600000}'
+
 cd "${CLAUDE_PROJECT_DIR:-.}"
 
 LOG=/tmp/session-start-hook.log
