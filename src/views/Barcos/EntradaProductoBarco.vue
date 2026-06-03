@@ -123,7 +123,7 @@
       </div>
 
       <!-- Pestañas de medidas -->
-      <div v-if="form.medidas.length > 0" class="medidas-tabs">
+      <div v-if="form.medidas.length > 0" ref="medidasTabs" class="medidas-tabs">
         <button
           v-for="(medida, mIndex) in form.medidas"
           :key="mIndex"
@@ -202,6 +202,7 @@
                 <td>
                   <input
                     v-model.number="fila.taras"
+                    ref="tarasInputs"
                     type="number"
                     step="any"
                     min="0"
@@ -242,13 +243,29 @@
           </table>
         </div>
 
-        <button class="btn-add-fila" @click="agregarFila(medidaActiva)">
-          <i class="btn-icon">➕</i> Agregar fila
-        </button>
+        <div class="acciones-tabla">
+          <button class="btn-add-fila" @click="agregarFila(medidaActiva)">
+            <i class="btn-icon">➕</i> Agregar fila
+          </button>
+          <span class="medida-actual-label">
+            {{ medidaActiva.nombre || `Medida ${medidaActivaIndex + 1}` }}
+          </span>
+          <button
+            class="btn-scroll-top"
+            title="Ir a las medidas"
+            @click="scrollAMedidas"
+          >
+            ⬆ Medidas
+          </button>
+        </div>
       </div>
 
       <!-- Resumen total -->
       <div v-if="resumenActivo" class="resumen-total-card">
+        <div class="resumen-barco-banner" :style="{ background: gradientePrimario }">
+          <i class="resumen-barco-icon">{{ barcoSeleccionado === 'galileo' ? '🚢' : '🛥️' }}</i>
+          <span class="resumen-barco-nombre">{{ nombreBarco }}</span>
+        </div>
         <h3 class="section-title">
           <i class="icon-summary">📊</i>
           Resumen
@@ -457,16 +474,21 @@ export default {
       this.resumenActivo = false;
       this.currentView = 'editor';
     },
-    volverALista() {
+    async volverALista() {
+      await this.autoGuardar();
       this.currentView = 'lista';
       this.editandoId = null;
       this.mostrarExito = false;
+      await this.cargarDescargas();
     },
     seleccionarMedida(index) {
+      if (index === this.medidaActivaIndex && !this.resumenActivo) return;
+      this.autoGuardar();
       this.medidaActivaIndex = index;
       this.resumenActivo = false;
     },
     agregarMedida() {
+      this.autoGuardar();
       this.form.medidas.push(this.crearMedidaVacia());
       this.medidaActivaIndex = this.form.medidas.length - 1;
       this.resumenActivo = false;
@@ -485,7 +507,25 @@ export default {
     },
     agregarFila(medida) {
       medida.filas.push({ taras: null, kilos: null });
+      this.$nextTick(() => {
+        const inputs = this.$refs.tarasInputs;
+        if (inputs && inputs.length) {
+          const ultimo = inputs[inputs.length - 1];
+          if (ultimo && typeof ultimo.focus === 'function') {
+            ultimo.focus();
+            if (typeof ultimo.scrollIntoView === 'function') {
+              ultimo.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+          }
+        }
+      });
       this.autoGuardar();
+    },
+    scrollAMedidas() {
+      const el = this.$refs.medidasTabs;
+      if (el && typeof el.scrollIntoView === 'function') {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
     },
     eliminarFila(medida, index) {
       if (medida.filas.length === 1) {
@@ -1113,8 +1153,15 @@ export default {
   padding-right: 22px;
 }
 
-.btn-add-fila {
+.acciones-tabla {
   margin-top: 15px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.btn-add-fila {
   background: #f0f7ff;
   color: #2980b9;
   border: 2px dashed #3498db;
@@ -1128,6 +1175,35 @@ export default {
 
 .btn-add-fila:hover {
   background: #e1f0ff;
+}
+
+.medida-actual-label {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 8px 14px;
+  border-radius: 10px;
+  font-weight: 700;
+  font-size: 0.95em;
+  box-shadow: 0 3px 8px rgba(102, 126, 234, 0.25);
+  white-space: nowrap;
+}
+
+.btn-scroll-top {
+  margin-left: auto;
+  background: #eafaf1;
+  color: #1e8449;
+  border: 2px solid #2ecc71;
+  padding: 9px 16px;
+  border-radius: 10px;
+  font-size: 0.95em;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-scroll-top:hover {
+  background: #d5f5e3;
+  transform: translateY(-2px);
 }
 
 /* Pestañas de medidas */
@@ -1275,6 +1351,60 @@ export default {
   padding: 25px 30px;
   margin-bottom: 25px;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.resumen-barco-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  padding: 22px 24px;
+  border-radius: 14px;
+  margin-bottom: 22px;
+  color: white;
+  box-shadow: 0 6px 18px rgba(52, 152, 219, 0.25);
+}
+
+.resumen-barco-icon {
+  font-size: 2.6em;
+  line-height: 1;
+}
+
+.resumen-barco-nombre {
+  font-size: 2em;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  color: white;
+}
+
+@media (max-width: 640px) {
+  .resumen-barco-banner {
+    padding: 16px 18px;
+    gap: 12px;
+  }
+
+  .resumen-barco-icon {
+    font-size: 2em;
+  }
+
+  .resumen-barco-nombre {
+    font-size: 1.5em;
+  }
+}
+
+@media (max-width: 400px) {
+  .resumen-barco-banner {
+    padding: 12px 14px;
+    gap: 10px;
+  }
+
+  .resumen-barco-icon {
+    font-size: 1.6em;
+  }
+
+  .resumen-barco-nombre {
+    font-size: 1.2em;
+  }
 }
 
 .tabla-resumen {
