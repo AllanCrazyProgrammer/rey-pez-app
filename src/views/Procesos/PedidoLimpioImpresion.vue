@@ -92,9 +92,9 @@
                   {{ item.medida }}
                   <span v-if="item.proveedor" class="proveedor-tag">{{ item.proveedor }}</span>
                 </td>
-                <td :class="{ 
-                  'text-blue': item.tipo === 'C/H20', 
-                  'text-blue compact': item.tipo === '1.35 y .15' || item.tipo === '1.5 y .3'
+                <td :class="{
+                  'text-blue': item.tipo === 'C/H20',
+                  'text-blue compact': item.tipo === '1.35 y .15' || item.tipo === '1.3 y .2' || item.tipo === '1.5 y .3'
                 }">
                   {{ item.tipo }}
                   <span v-if="item.nota" class="nota-tag">{{ item.nota }}</span>
@@ -1106,8 +1106,8 @@ export default {
                 { 
                   text: item.tipo || '', 
                   fontSize: fontSize * 2,
-                  color: (item.tipo === 'C/H20' || item.tipo === '1.35 y .15' || item.tipo === '1.5 y .3') ? '#0000FF' : undefined,
-                  margin: (item.tipo === '1.35 y .15' || item.tipo === '1.5 y .3') ? [0, 0, 0, 0] : [0, 2, 0, 2]
+                  color: (item.tipo === 'C/H20' || item.tipo === '1.35 y .15' || item.tipo === '1.3 y .2' || item.tipo === '1.5 y .3') ? '#0000FF' : undefined,
+                  margin: (item.tipo === '1.35 y .15' || item.tipo === '1.3 y .2' || item.tipo === '1.5 y .3') ? [0, 0, 0, 0] : [0, 2, 0, 2]
                 }
               ]
             },
@@ -1506,6 +1506,8 @@ export default {
               registro.total += kilos * 30 * 0.65; // Tara con agua
             } else if (item.tipo === '1.35 y .15') {
               registro.total += kilos * 30; // Tara con factor 1.35
+            } else if (item.tipo === '1.3 y .2') {
+              registro.total += kilos * 30; // Tara con factor 1.3
             } else if (item.tipo === '1.5 y .3') {
               registro.total += kilos * 30; // Tara con factor 1.5
             } else {
@@ -1517,6 +1519,8 @@ export default {
               registro.total += kilos * 0.65; // Kilos con agua
             } else if (item.tipo === '1.35 y .15') {
               registro.total += kilos * 1.35; // Kilos con factor 1.35
+            } else if (item.tipo === '1.3 y .2') {
+              registro.total += kilos * 1.3; // Kilos con factor 1.3
             } else if (item.tipo === '1.5 y .3') {
               registro.total += kilos * 1.5; // Kilos con factor 1.5
             } else if (esPedidoOzuna && item.tipo === '.7 y .3') {
@@ -1653,6 +1657,8 @@ export default {
             total += kilos * 30 * 0.65;
           } else if (item.tipo === '1.35 y .15') {
             total += kilos * 30;
+          } else if (item.tipo === '1.3 y .2') {
+            total += kilos * 30;
           } else if (item.tipo === '1.5 y .3') {
             total += kilos * 30;
           } else {
@@ -1664,6 +1670,8 @@ export default {
             total += kilos * 0.65;
           } else if (item.tipo === '1.35 y .15') {
             total += kilos * 1.35;
+          } else if (item.tipo === '1.3 y .2') {
+            total += kilos * 1.3;
           } else if (item.tipo === '1.5 y .3') {
             total += kilos * 1.5;
           } else if (esOzuna && item.tipo === '.7 y .3') {
@@ -1673,7 +1681,7 @@ export default {
           }
         }
       });
-      
+
       return Math.round(total);
     }
   },

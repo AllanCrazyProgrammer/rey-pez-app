@@ -222,6 +222,7 @@ export default {
       let kilosConH2O = 0;
       let kilosTaras = 0;
       let kilos135 = 0;
+      let kilos13y2 = 0;
       let kilosTaras135 = 0;
       let kilos15y3 = 0;
       let kilosTaras15y3 = 0;
@@ -232,7 +233,7 @@ export default {
           if (item.esTara) {
             if (item.tipo === 'C/H20') {
               kilosConH2O += Number(item.kilos) * 30 * 0.65;
-            } else if (item.tipo === '1.35 y .15') {
+            } else if (item.tipo === '1.35 y .15' || item.tipo === '1.3 y .2') {
               kilosTaras135 += Number(item.kilos) * 30;
             } else if (item.tipo === '1.5 y .3') {
               kilosTaras15y3 += Number(item.kilos) * 30;
@@ -245,6 +246,8 @@ export default {
             kilosConH2O += Number(item.kilos);
           } else if (item.tipo === '1.35 y .15') {
             kilos135 += Number(item.kilos) * 1.35;
+          } else if (item.tipo === '1.3 y .2') {
+            kilos13y2 += Number(item.kilos) * 1.3;
           } else if (item.tipo === '1.5 y .3') {
             kilos15y3 += Number(item.kilos) * 1.5;
           } else if (item.tipo === '.7 y .3') {
@@ -253,12 +256,13 @@ export default {
         }
       });
 
-      return kilosSinH2O + kilosTaras + kilosTaras135 + kilosTaras15y3 + kilosConH2O + kilos135 + kilos15y3 + kilos7y3;
+      return kilosSinH2O + kilosTaras + kilosTaras135 + kilosTaras15y3 + kilosConH2O + kilos135 + kilos13y2 + kilos15y3 + kilos7y3;
     },
     calcularTarasCliente(items) {
       let tarasDirectas = 0;
       let kilosSinH2O = 0;
       let kilos135 = 0;
+      let kilos13y2 = 0;
       let kilos15y3 = 0;
 
       items.forEach(item => {
@@ -269,6 +273,8 @@ export default {
             kilosSinH2O += Number(item.kilos);
           } else if (item.tipo === '1.35 y .15') {
             kilos135 += Number(item.kilos);
+          } else if (item.tipo === '1.3 y .2') {
+            kilos13y2 += Number(item.kilos);
           } else if (item.tipo === '1.5 y .3') {
             kilos15y3 += Number(item.kilos);
           }
@@ -277,9 +283,10 @@ export default {
 
       const tarasPorKilos = kilosSinH2O / 25;
       const tarasPor135 = kilos135 / (1.35 * 25);
+      const tarasPor13y2 = kilos13y2 / (1.3 * 25);
       const tarasPor15y3 = kilos15y3 / (1.5 * 25);
 
-      return tarasDirectas + tarasPorKilos + tarasPor135 + tarasPor15y3;
+      return tarasDirectas + tarasPorKilos + tarasPor135 + tarasPor13y2 + tarasPor15y3;
     },
     imprimirPedido(pedido) {
       if (pedido.tipo === 'crudo') {

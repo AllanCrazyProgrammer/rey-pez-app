@@ -348,11 +348,11 @@
                     class="input-field"
                     placeholder="Escribir tipo"
                   >
-                  <select v-else v-model="item.tipo" class="input-field" :class="{ 'text-blue': item.tipo === 'C/H20' || item.tipo === '1.35 y .15' || item.tipo === '1.5 y .3' }">
+                  <select v-else v-model="item.tipo" class="input-field" :class="{ 'text-blue': item.tipo === 'C/H20' || item.tipo === '1.3 y .2' || item.tipo === '1.5 y .3' }">
                     <option value="">Seleccionar</option>
                     <option value="S/H20">S/H20</option>
                     <option value="C/H20" class="text-blue">C/H20</option>
-                    <option value="1.35 y .15" class="text-blue">1.35 y .15</option>
+                    <option value="1.3 y .2" class="text-blue">1.3 y .2</option>
                     <option value="1.5 y .3" class="text-blue">1.5 y .3</option>
                   </select>
                 </div>
@@ -767,7 +767,7 @@ import EtiquetasMedida from '@/components/EtiquetasMedida.vue'
 const TIPOS_POR_CLIENTE = {
   otilio: ['S/H20', 'C/H20'],
   catarro: ['S/H20', 'C/H20'],
-  joselito: ['S/H20', 'C/H20', '1.35 y .15', '1.5 y .3'],
+  joselito: ['S/H20', 'C/H20', '1.3 y .2', '1.5 y .3'],
   lorena: ['S/H20', 'C/H20', '1.35 y .15', '1.5 y .3'],
   ozuna: ['S/H20', 'C/H20', '.7 y .3'],
   temporal: ['S/H20', 'C/H20', '1.35 y .15', '1.5 y .3', '.9 y .1', '.9']
@@ -984,6 +984,7 @@ export default {
       let kilosConH2O = 0;
       let kilosTaras = 0;
       let kilos135 = 0;
+      let kilos13y2 = 0;
       let kilosTaras135 = 0;
       let kilos15y3 = 0;
       let kilosTaras15y3 = 0;
@@ -994,7 +995,7 @@ export default {
             tarasDirectas += Number(item.kilos);
             if (item.tipo === 'C/H20') {
               kilosConH2O += Number(item.kilos) * 30 * 0.65;
-            } else if (item.tipo === '1.35 y .15') {
+            } else if (item.tipo === '1.35 y .15' || item.tipo === '1.3 y .2') {
               kilosTaras135 += Number(item.kilos) * 30;
             } else if (item.tipo === '1.5 y .3') {
               kilosTaras15y3 += Number(item.kilos) * 30;
@@ -1007,6 +1008,8 @@ export default {
             kilosConH2O += Number(item.kilos);
           } else if (item.tipo === '1.35 y .15') {
             kilos135 += Number(item.kilos) * 1.35;
+          } else if (item.tipo === '1.3 y .2') {
+            kilos13y2 += Number(item.kilos) * 1.3;
           } else if (item.tipo === '1.5 y .3') {
             kilos15y3 += Number(item.kilos) * 1.5;
           }
@@ -1015,10 +1018,11 @@ export default {
 
       const tarasPorKilos = kilosSinH2O / 25;
       const tarasPor135 = kilos135 / (1.35 * 25);
+      const tarasPor13y2 = kilos13y2 / (1.3 * 25);
       const tarasPor15y3 = kilos15y3 / (1.5 * 25);
-      const tarasTotal = Math.round(tarasDirectas + tarasPorKilos + tarasPor135 + tarasPor15y3);
+      const tarasTotal = Math.round(tarasDirectas + tarasPorKilos + tarasPor135 + tarasPor13y2 + tarasPor15y3);
       const totalKilosSinH2O = kilosSinH2O + kilosTaras + kilosTaras135 + kilosTaras15y3;
-      const kilosTotal = Math.round(totalKilosSinH2O + kilosConH2O + kilos135 + kilos15y3);
+      const kilosTotal = Math.round(totalKilosSinH2O + kilosConH2O + kilos135 + kilos13y2 + kilos15y3);
 
       return {
         tarasDirectas: tarasDirectas.toFixed(2),

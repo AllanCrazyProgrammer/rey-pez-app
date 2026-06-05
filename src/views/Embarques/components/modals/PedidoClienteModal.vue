@@ -223,7 +223,7 @@ export default {
           if (item.esTara) {
             if (item.tipo === 'C/H20') {
               totalKilos += Number(item.kilos) * 30 * 0.65;
-            } else if (item.tipo === '1.35 y .15') {
+            } else if (item.tipo === '1.35 y .15' || item.tipo === '1.3 y .2') {
               totalKilos += Number(item.kilos) * 30;
             } else {
               totalKilos += Number(item.kilos) * 30;
@@ -234,6 +234,8 @@ export default {
             totalKilos += Number(item.kilos);
           } else if (item.tipo === '1.35 y .15') {
             totalKilos += Number(item.kilos) * 1.35;
+          } else if (item.tipo === '1.3 y .2') {
+            totalKilos += Number(item.kilos) * 1.3;
           } else if (item.tipo === '.7 y .3') {
             totalKilos += Number(item.kilos) * 0.7;
           }
@@ -245,6 +247,7 @@ export default {
       let totalTaras = 0;
       let kilosSinH2O = 0;
       let kilos135 = 0;
+      let kilos13y2 = 0;
 
       this.itemsPedidoLimpio.forEach(item => {
         if (item.kilos) {
@@ -254,14 +257,17 @@ export default {
             kilosSinH2O += Number(item.kilos);
           } else if (item.tipo === '1.35 y .15') {
             kilos135 += Number(item.kilos);
+          } else if (item.tipo === '1.3 y .2') {
+            kilos13y2 += Number(item.kilos);
           }
         }
       });
 
       const tarasPorKilos = kilosSinH2O / 25;
       const tarasPor135 = kilos135 / (1.35 * 25);
+      const tarasPor13y2 = kilos13y2 / (1.3 * 25);
 
-      return Math.round(totalTaras + tarasPorKilos + tarasPor135).toString();
+      return Math.round(totalTaras + tarasPorKilos + tarasPor135 + tarasPor13y2).toString();
     },
     calcularKilosPedidoCrudo() {
       let totalPiezas = 0;
