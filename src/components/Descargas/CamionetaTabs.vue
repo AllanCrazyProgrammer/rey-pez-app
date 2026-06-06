@@ -9,10 +9,23 @@
 
     <div class="tabs-scroll" ref="scroll" @scroll="checkScroll">
       <div
+        v-if="camionetas.length > 0"
+        class="cam-tab cam-tab--resumen"
+        :class="{ 'cam-tab--active': resumenActive }"
+        @click="$emit('show-resumen')"
+      >
+        <div class="tab-inner">
+          <span class="tab-index">Σ</span>
+          <span class="tab-plate">RESUMEN</span>
+          <span class="tab-total">{{ granTotal }} cajas</span>
+        </div>
+      </div>
+
+      <div
         v-for="(cam, i) in camionetas"
         :key="cam.id"
         class="cam-tab"
-        :class="{ 'cam-tab--active': cam.id === activeId }"
+        :class="{ 'cam-tab--active': cam.id === activeId && !resumenActive }"
         @click="$emit('select', cam.id)"
       >
         <div class="tab-inner">
@@ -42,8 +55,14 @@
 export default {
   name: 'CamionetaTabs',
   props: {
-    camionetas: { type: Array, required: true },
-    activeId:   { type: String, default: null }
+    camionetas:    { type: Array, required: true },
+    activeId:      { type: String, default: null },
+    resumenActive: { type: Boolean, default: false }
+  },
+  computed: {
+    granTotal() {
+      return this.camionetas.reduce((s, cam) => s + this.getTotal(cam), 0);
+    }
   },
   data() {
     return { canScrollLeft: false, canScrollRight: false };
@@ -125,6 +144,27 @@ export default {
   color: var(--matrix-green);
   box-shadow: 0 0 12px var(--matrix-green-dim);
 }
+
+/* Resumen tab */
+.cam-tab--resumen {
+  border-color: var(--amber);
+  color: var(--amber);
+  min-width: 130px;
+}
+.cam-tab--resumen:hover {
+  border-color: var(--amber);
+  color: var(--amber);
+  background: rgba(255, 176, 0, 0.08);
+}
+.cam-tab--resumen.cam-tab--active {
+  background: rgba(255, 176, 0, 0.12);
+  border-color: var(--amber);
+  border-bottom-color: var(--terminal-bg);
+  color: var(--amber);
+  box-shadow: 0 0 12px var(--amber-glow);
+}
+.cam-tab--resumen .tab-plate { color: var(--amber); text-shadow: 0 0 6px var(--amber-glow); }
+.cam-tab--resumen .tab-total { color: var(--amber); }
 
 /* Tab inner content */
 .tab-inner {
