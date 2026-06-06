@@ -47,13 +47,23 @@
       <CamionetaTabs
         :camionetas="activeDayCamionetas"
         :active-id="activeCamionetaId"
+        :resumen-active="resumenActive"
         @select="switchCamioneta"
         @delete="askDeleteCamioneta"
         @new-camioneta="showSession = true"
+        @show-resumen="openResumen"
+      />
+
+      <!-- Resumen del día (total por medida de todas las camionetas) -->
+      <ResumenDescarga
+        v-if="resumenActive"
+        :medidas="resumenMedidas"
+        :gran-total="resumenGranTotal"
+        :camionetas-count="activeDayCamionetas.length"
       />
 
       <!-- Sin camionetas aún -->
-      <div v-if="!activeCamionetaId" class="no-cam-msg">
+      <div v-else-if="!activeCamionetaId" class="no-cam-msg">
         <span>// Sin camionetas — agrega una con ⊕ Camioneta</span>
       </div>
 
@@ -164,6 +174,7 @@ import ExportModal from '@/components/Descargas/ExportModal.vue';
 import ConfirmModal from '@/components/Descargas/ConfirmModal.vue';
 import DaysMenu from '@/components/Descargas/DaysMenu.vue';
 import CamionetaTabs from '@/components/Descargas/CamionetaTabs.vue';
+import ResumenDescarga from '@/components/Descargas/ResumenDescarga.vue';
 import { loadDays, saveDays, createNewDay, createNewCamioneta, sanitizeCamioneta, getDaysKey, MAX_LOG } from '@/utils/contadorStorage';
 
 export default {
@@ -179,7 +190,8 @@ export default {
     ExportModal,
     ConfirmModal,
     DaysMenu,
-    CamionetaTabs
+    CamionetaTabs,
+    ResumenDescarga
   },
   data() {
     return {
@@ -187,6 +199,7 @@ export default {
       days: [],
       activeDayId: null,
       activeCamionetaId: null,
+      resumenActive: false,
       state: {
         plate: '',
         provider: '',
@@ -242,6 +255,27 @@ export default {
     activeDayCamionetas() {
       const day = this.days.find(d => d.id === this.activeDayId);
       return day ? (day.camionetas || []) : [];
+    },
+    resumenMedidas() {
+      // Suma cada medida/talla a través de todas las camionetas del día.
+      // Agrupa por nombre (sin distinguir mayúsculas/espacios) y conserva
+      // el primer nombre visto para mostrarlo.
+      const map = new Map();
+      this.activeDayCamionetas.forEach(cam => {
+        (cam.categories || []).forEach(c => {
+          const name = (c.name || '').trim() || '—';
+          const key = name.toLowerCase();
+          const entry = map.get(key) || { name, total: 0 };
+          entry.total += Number(c.count) || 0;
+          map.set(key, entry);
+        });
+      });
+      return Array.from(map.values())
+        .filter(m => m.total > 0)
+        .sort((a, b) => b.total - a.total);
+    },
+    resumenGranTotal() {
+      return this.resumenMedidas.reduce((s, m) => s + m.total, 0);
     },
     activeDayLabel() {
       const day = this.days.find(d => d.id === this.activeDayId);
@@ -321,6 +355,7 @@ export default {
     selectDay(id) {
       const day = this.days.find(d => d.id === id);
       if (!day) return;
+      this.resumenActive = false;
       this.activeDayId = id;
       this.currentView = 'session';
       if (day.camionetas && day.camionetas.length > 0) {
@@ -333,6 +368,7 @@ export default {
     },
     goBackToDays() {
       this.saveAll(false);
+      this.resumenActive = false;
       this.currentView = 'days';
       this.activeDayId = null;
       this.activeCamionetaId = null;
@@ -361,7 +397,13 @@ export default {
       return `${dias[date.getDay()]} ${String(d).padStart(2, '0')} ${meses[m - 1]} ${y}`;
     },
     // ── Camionetas management ──────────────────────────────────────────────
+    openResumen() {
+      // Asegura que la camioneta activa esté guardada en days antes de sumar.
+      this.persist();
+      this.resumenActive = true;
+    },
     switchCamioneta(id) {
+      this.resumenActive = false;
       if (id === this.activeCamionetaId) return;
       this.persist(); // guarda la camioneta actual antes de cambiar
       const day = this.days.find(d => d.id === this.activeDayId);
@@ -489,6 +531,7 @@ export default {
         day.camionetas.push(cam);
         saveDays(this.days);
       }
+      this.resumenActive = false;
       this.activeCamionetaId = cam.id;
       // deep copy para que state sea independiente del objeto en days
       this.state = JSON.parse(JSON.stringify(cam));
