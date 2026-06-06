@@ -289,6 +289,7 @@ export default {
         clientes.forEach(cliente => {
           if (!cliente || typeof cliente !== 'object') return;
           const nombreCliente = cliente.nombre || 'Sin cliente';
+          const esOzuna = nombreCliente === 'Ozuna' || String(cliente.id) === '4';
           const productos = Array.isArray(cliente.productos) ? cliente.productos : [];
 
           productos.forEach(producto => {
@@ -296,7 +297,8 @@ export default {
             const medidaRaw = (producto.medida || '').trim();
             if (!medidaRaw) return;
 
-            const medida = medidaRaw;
+            const esMaquilaOzuna = esOzuna && !producto.esVenta;
+            const medida = esMaquilaOzuna ? `${medidaRaw} Maquila Ozuna` : medidaRaw;
             if (!medidasEmbarque[medida]) {
               medidasEmbarque[medida] = { kilosEmbarcados: 0, clientes: new Set() };
             }
