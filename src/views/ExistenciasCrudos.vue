@@ -230,7 +230,7 @@ import { collection, getDocs, query, orderBy, deleteDoc, doc, addDoc } from 'fir
 import moment from 'moment';
 import GestionProveedoresCrudos from '@/components/GestionProveedoresCrudos.vue';
 import EntradasPorProveedorModal from '@/components/EntradasPorProveedorModal.vue';
-import { formatNumber, formatearFecha as formatDate } from '@/utils/formatters';
+import { formatNumber } from '@/utils/formatters';
 
 export default {
   name: 'ExistenciasCrudos',
@@ -304,8 +304,11 @@ export default {
     }
   },
   methods: {
-    formatDate,
     formatNumber,
+    formatDate(fecha) {
+      if (!fecha) return '';
+      return moment(fecha).format('D [de] MMMM [de] YYYY');
+    },
     normalizeCuarto(cuarto) {
       const valor = (cuarto && cuarto.trim()) ? cuarto.trim() : 's/c';
       return valor.toLowerCase() === 'sin cuarto designado' ? 's/c' : valor;
