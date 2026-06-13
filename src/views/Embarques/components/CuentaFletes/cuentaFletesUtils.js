@@ -4,6 +4,10 @@ export const COSTO_TARA_LIMPIO_NUEVO = 100;
 export const COSTO_TARA_CRUDO_NUEVO = 80;
 // A partir de esta fecha (inclusive) se aplican los costos nuevos de tara.
 export const FECHA_NUEVOS_COSTOS_TARA = '2026-05-11';
+// A partir de esta fecha (inclusive) se descuenta DESCUENTO_TARA_LIMPIO_CATARRO_OTILIO
+// por cada tara de limpio enviada a Catarro u Otilio.
+export const FECHA_DESCUENTO_CATARRO_OTILIO = '2026-06-15';
+export const DESCUENTO_TARA_LIMPIO_CATARRO_OTILIO = 20;
 
 export function normalizarTexto(valor) {
   return (valor || '')
@@ -108,10 +112,15 @@ export function calcularMontoDia(flete, costos = {}) {
   const costoLimpio = costos.limpio || defaults.limpio;
   const costoCrudo = costos.crudo || defaults.crudo;
 
-  return ((flete.tarasLimpioJoselito || 0) * costoLimpio) +
+  const subtotal = ((flete.tarasLimpioJoselito || 0) * costoLimpio) +
     ((flete.tarasCrudoJoselito || 0) * costoCrudo) +
     ((flete.tarasLimpioVeronica || 0) * costoLimpio) +
     ((flete.tarasCrudoVeronica || 0) * costoCrudo);
+
+  const descuento = ((flete.tarasLimpioCatarro || 0) + (flete.tarasLimpioOtilio || 0))
+    * DESCUENTO_TARA_LIMPIO_CATARRO_OTILIO;
+
+  return subtotal - descuento;
 }
 
 export function transformarEmbarqueAFlete(docSnapshot) {
@@ -137,7 +146,28 @@ export function transformarEmbarqueAFlete(docSnapshot) {
     return id === '5' || nombre === 'veronica' || nombre === 'lorena' || nombreNotas === 'lorena';
   });
 
-  if (!clienteJoselito && !clienteVeronica) {
+  const clienteCatarro = clientes.find(cliente => {
+    const id = cliente.id?.toString();
+    const nombre = normalizarTexto(cliente.nombre || '');
+    return id === '2' || nombre === 'catarro';
+  });
+
+  const clienteOtilio = clientes.find(cliente => {
+    const id = cliente.id?.toString();
+    const nombre = normalizarTexto(cliente.nombre || '');
+    return id === '3' || nombre === 'otilio';
+  });
+
+  const fechaISO = obtenerFechaISO(fecha);
+  const aplicaDescuentoCatarroOtilio = fechaISO && fechaISO >= FECHA_DESCUENTO_CATARRO_OTILIO;
+  const tarasLimpioCatarro = aplicaDescuentoCatarroOtilio
+    ? calcularTarasProductos(clienteCatarro?.productos)
+    : 0;
+  const tarasLimpioOtilio = aplicaDescuentoCatarroOtilio
+    ? calcularTarasProductos(clienteOtilio?.productos)
+    : 0;
+
+  if (!clienteJoselito && !clienteVeronica && tarasLimpioCatarro === 0 && tarasLimpioOtilio === 0) {
     return null;
   }
 
@@ -151,6 +181,8 @@ export function transformarEmbarqueAFlete(docSnapshot) {
     tarasCrudoJoselito: calcularTarasCrudos(clienteJoselito?.crudos),
     tarasLimpioVeronica: calcularTarasProductos(clienteVeronica?.productos),
     tarasCrudoVeronica: calcularTarasCrudos(clienteVeronica?.crudos),
+    tarasLimpioCatarro,
+    tarasLimpioOtilio,
     cargaCon,
     pagado,
     pagadoLegacy: data.fletePagado === true,
@@ -177,6 +209,8 @@ export function agruparFletesPorFechaYCarga(fletesBase) {
         tarasCrudoJoselito: flete.tarasCrudoJoselito,
         tarasLimpioVeronica: flete.tarasLimpioVeronica,
         tarasCrudoVeronica: flete.tarasCrudoVeronica,
+        tarasLimpioCatarro: flete.tarasLimpioCatarro || 0,
+        tarasLimpioOtilio: flete.tarasLimpioOtilio || 0,
         cargaCon,
         pagado: flete.pagado,
         pagadoLegacy: flete.pagadoLegacy,
@@ -193,6 +227,8 @@ export function agruparFletesPorFechaYCarga(fletesBase) {
     existente.tarasCrudoJoselito += flete.tarasCrudoJoselito;
     existente.tarasLimpioVeronica += flete.tarasLimpioVeronica;
     existente.tarasCrudoVeronica += flete.tarasCrudoVeronica;
+    existente.tarasLimpioCatarro += flete.tarasLimpioCatarro || 0;
+    existente.tarasLimpioOtilio += flete.tarasLimpioOtilio || 0;
     existente.pagado = existente.pagado && flete.pagado;
     existente.pagadoLegacy = existente.pagadoLegacy && flete.pagadoLegacy;
     existente.pagosPorChofer = {
