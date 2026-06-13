@@ -119,6 +119,7 @@ import {
   agruparFletesPorFechaYCarga,
   calcularDeudaAcumuladaPorId,
   calcularMontoDia,
+  DESCUENTO_TARA_LIMPIO_CATARRO_OTILIO,
   esCargaDeUnSoloChofer,
   filtrarFletesPorChofer,
   normalizarTexto,
@@ -421,8 +422,20 @@ export default {
         this.$delete(this.eliminandoAbonoPorId, abono.id);
       }
     },
+    tarasDescuentoCatarroOtilio(flete) {
+      return (flete.tarasLimpioCatarro || 0) + (flete.tarasLimpioOtilio || 0);
+    },
+    montoDescuentoCatarroOtilio(flete) {
+      return this.tarasDescuentoCatarroOtilio(flete) * DESCUENTO_TARA_LIMPIO_CATARRO_OTILIO;
+    },
     generarFilasFletesPDF() {
-      const filas = this.fletesPendientes.map(flete => `
+      const filas = this.fletesPendientes.map(flete => {
+        const tarasDescuento = this.tarasDescuentoCatarroOtilio(flete);
+        const montoDescuento = this.montoDescuentoCatarroOtilio(flete);
+        const celdaDescuento = tarasDescuento > 0
+          ? `${tarasDescuento}T / -${this.formatearMonto(montoDescuento)}`
+          : '0T / -';
+        return `
         <tr>
           <td>${this.formatearFecha(flete.fecha)}</td>
           <td>${flete.tarasLimpioJoselito}</td>
@@ -430,9 +443,19 @@ export default {
           <td>${flete.tarasLimpioVeronica || 0}</td>
           <td>${flete.tarasCrudoVeronica || 0}</td>
           <td>${this.obtenerTotalTaras(flete)}</td>
+          <td>${celdaDescuento}</td>
           <td>${this.formatearMonto(this.calcularMontoDiaLocal(flete))}</td>
         </tr>
-      `);
+      `;
+      });
+
+      const totalTarasDescuento = this.fletesPendientes.reduce(
+        (sum, f) => sum + this.tarasDescuentoCatarroOtilio(f), 0
+      );
+      const totalMontoDescuento = totalTarasDescuento * DESCUENTO_TARA_LIMPIO_CATARRO_OTILIO;
+      const celdaTotalDescuento = totalTarasDescuento > 0
+        ? `${totalTarasDescuento}T / -${this.formatearMonto(totalMontoDescuento)}`
+        : '0T / -';
 
       filas.push(`
         <tr class="fila-total">
@@ -442,6 +465,7 @@ export default {
           <td><strong>${this.fletesPendientes.reduce((sum, f) => sum + (f.tarasLimpioVeronica || 0), 0)}</strong></td>
           <td><strong>${this.fletesPendientes.reduce((sum, f) => sum + (f.tarasCrudoVeronica || 0), 0)}</strong></td>
           <td><strong>${this.fletesPendientes.reduce((sum, f) => sum + this.obtenerTotalTaras(f), 0)}</strong></td>
+          <td><strong>${celdaTotalDescuento}</strong></td>
           <td><strong>${this.formatearMonto(this.montoFletesPendientes)}</strong></td>
         </tr>
       `);
@@ -457,7 +481,7 @@ export default {
           <thead>
             <tr>
               <th>Fecha</th>
-              <th colspan="5">Descripción</th>
+              <th colspan="6">Descripción</th>
               <th>Monto</th>
             </tr>
           </thead>
@@ -465,12 +489,12 @@ export default {
             ${this.abonosFiltrados.map(abono => `
               <tr class="fila-abono">
                 <td>${this.formatearFecha(abono.fecha)}</td>
-                <td colspan="5">${abono.descripcion || 'Abono realizado'}</td>
+                <td colspan="6">${abono.descripcion || 'Abono realizado'}</td>
                 <td>${this.formatearMonto(abono.monto)}</td>
               </tr>
             `).join('')}
             <tr class="fila-total">
-              <td colspan="6"><strong>TOTAL ABONOS</strong></td>
+              <td colspan="7"><strong>TOTAL ABONOS</strong></td>
               <td><strong>${this.formatearMonto(this.totalAbonos)}</strong></td>
             </tr>
           </tbody>
@@ -496,6 +520,7 @@ export default {
                 <th>Lorena Limpio</th>
                 <th>Lorena Crudo</th>
                 <th>Total Taras</th>
+                <th>T-Limpio Otilio y Catarro</th>
                 <th>Monto</th>
               </tr>
             </thead>
@@ -504,8 +529,6 @@ export default {
           ${this.generarTablaAbonosPDF()}
           <div class="resumen-pdf">
             <h3>Resumen de Cuenta</h3>
-            <p><strong>Deuda Total:</strong> ${this.formatearMonto(this.resumenCuenta.deudaTotal)}</p>
-            <p><strong>Monto Pagado:</strong> ${this.formatearMonto(this.resumenCuenta.montoPagado)}</p>
             <p><strong>Total Abonos:</strong> ${this.formatearMonto(this.resumenCuenta.totalAbonos)}</p>
             <p class="total-final"><strong>Saldo Pendiente:</strong> ${this.formatearMonto(this.resumenCuenta.saldoPendiente)}</p>
           </div>
