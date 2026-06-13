@@ -6,6 +6,7 @@
       type="button"
       class="btn-etiqueta"
       :class="{ active: item.etiqueta === etiqueta }"
+      :style="estiloBoton(etiqueta)"
       :title="etiqueta"
       @click="$emit('toggle', etiqueta)"
     >
@@ -23,6 +24,8 @@
 </template>
 
 <script>
+import { colorParaEtiqueta } from '@/utils/coloresEtiquetas'
+
 export default {
   name: 'EtiquetasMedida',
   props: {
@@ -33,6 +36,29 @@ export default {
     etiquetas: {
       type: Array,
       default: () => []
+    },
+    coloresPorEtiqueta: {
+      type: Object,
+      default: () => ({})
+    }
+  },
+  methods: {
+    estiloBoton(etiqueta) {
+      const color = colorParaEtiqueta(etiqueta, this.etiquetas, this.coloresPorEtiqueta)
+      if (!color) return {}
+      const activa = this.item.etiqueta === etiqueta
+      if (activa) {
+        return {
+          backgroundColor: color.bg,
+          color: color.text,
+          borderColor: color.bg
+        }
+      }
+      return {
+        backgroundColor: color.bgInactive,
+        color: color.textInactive,
+        borderColor: 'transparent'
+      }
     }
   }
 }
@@ -49,12 +75,10 @@ export default {
 .btn-etiqueta {
   height: 24px;
   min-width: 24px;
-  max-width: 110px;
-  padding: 0 6px;
+  max-width: 140px;
+  padding: 0 8px;
   font-size: 12px;
   font-weight: bold;
-  color: #666;
-  background-color: #f0f0f0;
   border: 2px solid transparent;
   border-radius: 4px;
   cursor: pointer;
@@ -65,17 +89,11 @@ export default {
 }
 
 .btn-etiqueta:hover {
-  background-color: #e0e0e0;
+  filter: brightness(0.95);
 }
 
 .btn-etiqueta.active {
-  border: 2px solid #16a085;
-  color: white;
-  background-color: #16a085;
-}
-
-.btn-etiqueta.active:hover {
-  background-color: #128f76;
+  filter: none;
 }
 
 .btn-etiqueta-add {

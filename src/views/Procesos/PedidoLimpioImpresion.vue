@@ -48,7 +48,8 @@
               <td>{{ item.kilos }}<i v-if="item.esTara" class="tara-marca">T</i></td>
               <td :class="{ 'text-orange': esMedidaMacuil(item.medida) }">
                 {{ item.medida }}
-                <span v-if="item.proveedor" class="proveedor-tag">{{ item.proveedor }}</span>
+                <span v-if="item.etiqueta" class="etiqueta-tag" :style="estiloEtiquetaItem(item)">{{ textoEtiquetaItem(item) }}</span>
+                <span v-else-if="item.proveedor" class="proveedor-tag">{{ item.proveedor }}</span>
               </td>
               <td :class="{ 
                 'text-blue': item.tipo === 'C/H20', 
@@ -90,7 +91,8 @@
                 <td>{{ item.kilos }}<i v-if="item.esTara" class="tara-marca">T</i></td>
                 <td :class="{ 'text-orange': esMedidaMacuil(item.medida) }">
                   {{ item.medida }}
-                  <span v-if="item.proveedor" class="proveedor-tag">{{ item.proveedor }}</span>
+                  <span v-if="item.etiqueta" class="etiqueta-tag" :style="estiloEtiquetaItem(item)">{{ textoEtiquetaItem(item) }}</span>
+                  <span v-else-if="item.proveedor" class="proveedor-tag">{{ item.proveedor }}</span>
                 </td>
                 <td :class="{
                   'text-blue': item.tipo === 'C/H20',
@@ -130,7 +132,8 @@
                 <td>{{ item.kilos }}<i v-if="item.esTara" class="tara-marca">T</i></td>
                 <td :class="{ 'text-orange': esMedidaMacuil(item.medida) }">
                   {{ item.medida }}
-                  <span v-if="item.proveedor" class="proveedor-tag">{{ item.proveedor }}</span>
+                  <span v-if="item.etiqueta" class="etiqueta-tag" :style="estiloEtiquetaItem(item)">{{ textoEtiquetaItem(item) }}</span>
+                  <span v-else-if="item.proveedor" class="proveedor-tag">{{ item.proveedor }}</span>
                 </td>
                 <td :class="{ 
                   'text-blue': item.tipo === 'C/H20', 
@@ -171,7 +174,8 @@
                   <td>{{ item.kilos }}<i v-if="item.esTara" class="tara-marca">T</i></td>
                   <td :class="{ 'text-orange': esMedidaMacuil(item.medida) }">
                     {{ item.medida }}
-                    <span v-if="item.proveedor" class="proveedor-tag">{{ item.proveedor }}</span>
+                    <span v-if="item.etiqueta" class="etiqueta-tag" :style="estiloEtiquetaItem(item)">{{ textoEtiquetaItem(item) }}</span>
+                    <span v-else-if="item.proveedor" class="proveedor-tag">{{ item.proveedor }}</span>
                   </td>
                   <td :class="{ 
                     'text-blue': item.tipo === 'C/H20' || item.tipo === '.7 y .3', 
@@ -211,7 +215,8 @@
                   <td>{{ item.kilos }}<i v-if="item.esTara" class="tara-marca">T</i></td>
                   <td :class="{ 'text-orange': esMedidaMacuil(item.medida) }">
                     {{ item.medida }}
-                    <span v-if="item.proveedor" class="proveedor-tag">{{ item.proveedor }}</span>
+                    <span v-if="item.etiqueta" class="etiqueta-tag" :style="estiloEtiquetaItem(item)">{{ textoEtiquetaItem(item) }}</span>
+                    <span v-else-if="item.proveedor" class="proveedor-tag">{{ item.proveedor }}</span>
                   </td>
                   <td :class="{ 
                     'text-blue': item.tipo === 'C/H20' || item.tipo === '.7 y .3', 
@@ -254,7 +259,8 @@
                 <td>{{ item.kilos }}<i v-if="item.esTara" class="tara-marca">T</i></td>
                 <td :class="{ 'text-orange': esMedidaMacuil(item.medida) }">
                   {{ item.medida }}
-                  <span v-if="item.proveedor" class="proveedor-tag">{{ item.proveedor }}</span>
+                  <span v-if="item.etiqueta" class="etiqueta-tag" :style="estiloEtiquetaItem(item)">{{ textoEtiquetaItem(item) }}</span>
+                  <span v-else-if="item.proveedor" class="proveedor-tag">{{ item.proveedor }}</span>
                 </td>
                 <td :class="{ 
                   'text-blue': item.tipo === 'C/H20', 
@@ -550,6 +556,7 @@ import moment from 'moment'
 import KilosRefrigeradosModal from '@/components/KilosRefrigeradosModal.vue'
 import ListaMedidasPedidoModal from '@/components/ListaMedidasPedidoModal.vue'
 import ResumenCalculadora from '@/components/ResumenCalculadora.vue'
+import { colorParaEtiqueta } from '@/utils/coloresEtiquetas'
 import { db } from '@/firebase'
 import { doc, updateDoc, Timestamp, collection, getDocs, query, where } from 'firebase/firestore'
 
@@ -601,6 +608,14 @@ export default {
       required: true
     },
     clientesTemporales: {
+      type: Object,
+      default: () => ({})
+    },
+    etiquetasPedido: {
+      type: Array,
+      default: () => []
+    },
+    etiquetasColoresPedido: {
       type: Object,
       default: () => ({})
     },
@@ -1068,6 +1083,33 @@ export default {
     obtenerMedidaVisible(medida) {
       return this.esMedidaMacuil(medida) ? '' : (medida || '');
     },
+    colorEtiquetaItem(item) {
+      if (!item || !item.etiqueta) return null;
+      return colorParaEtiqueta(item.etiqueta, this.etiquetasPedido, this.etiquetasColoresPedido);
+    },
+    estiloEtiquetaItem(item) {
+      const color = this.colorEtiquetaItem(item);
+      if (!color) return {};
+      return { backgroundColor: color.bg, color: color.text };
+    },
+    textoEtiquetaItem(item) {
+      if (!item || !item.etiqueta) return '';
+      return (item.proveedor || '').trim() || item.etiqueta;
+    },
+    bloqueEtiquetaPDF(item, fontSize) {
+      const color = this.colorEtiquetaItem(item);
+      if (!color) return null;
+      return {
+        text: this.textoEtiquetaItem(item),
+        fontSize: fontSize * 1.1,
+        color: color.text,
+        background: color.bg,
+        bold: true,
+        margin: [0, 2, 0, 0],
+        padding: [2, 1],
+        alignment: 'center'
+      };
+    },
     generarTablaCliente(items, fontSize = 16) {
       const itemsConDatos = this.obtenerItemsParaPDF(items);
       if (itemsConDatos.length === 0) return null;
@@ -1084,27 +1126,28 @@ export default {
           alignment: 'center',
           margin: [0, -2, 0, -2]
         },
-        { 
+        {
           stack: [
             { text: this.obtenerMedidaVisible(item.medida), fontSize: fontSize * 2 },
-            item.proveedor ? { 
-              text: item.proveedor, 
-              fontSize: fontSize * 1.1,
-              color: '#FFFFFF',
-              background: '#FF0000',
-              margin: [0, 2, 0, 0],
-              padding: [2, 1],
-              alignment: 'center'
-            } : ''
+            item.etiqueta ? this.bloqueEtiquetaPDF(item, fontSize)
+              : (item.proveedor ? {
+                text: item.proveedor,
+                fontSize: fontSize * 1.1,
+                color: '#FFFFFF',
+                background: '#FF0000',
+                margin: [0, 2, 0, 0],
+                padding: [2, 1],
+                alignment: 'center'
+              } : '')
           ],
           margin: [0, 2, 0, 2]
         },
-        { 
+        {
           stack: [
-            { 
+            {
               text: [
-                { 
-                  text: item.tipo || '', 
+                {
+                  text: item.tipo || '',
                   fontSize: fontSize * 2,
                   color: (item.tipo === 'C/H20' || item.tipo === '1.35 y .15' || item.tipo === '1.3 y .2' || item.tipo === '1.5 y .3') ? '#0000FF' : undefined,
                   margin: (item.tipo === '1.35 y .15' || item.tipo === '1.3 y .2' || item.tipo === '1.5 y .3') ? [0, 0, 0, 0] : [0, 2, 0, 2]
@@ -1368,14 +1411,15 @@ export default {
               bold: true,
               margin: [0, 2, 0, 2]
             } : '',
-            item.proveedor ? { 
-              text: item.proveedor, 
-              fontSize: fontSize * 1.1,
-              color: '#FFFFFF',
-              background: '#FF0000',
-              padding: [2, 1],
-              alignment: 'center'
-            } : '',
+            item.etiqueta ? this.bloqueEtiquetaPDF(item, fontSize)
+              : (item.proveedor ? {
+                text: item.proveedor,
+                fontSize: fontSize * 1.1,
+                color: '#FFFFFF',
+                background: '#FF0000',
+                padding: [2, 1],
+                alignment: 'center'
+              } : ''),
             item.nota ? { 
               text: item.nota, 
               fontSize: fontSize * 0.9,
@@ -2230,6 +2274,18 @@ h4.cliente-header.ozuna-header {
   margin-top: 2px;
 }
 
+.etiqueta-tag {
+  display: block;
+  color: white;
+  padding: 2px 4px;
+  border-radius: 3px;
+  font-size: 0.8em;
+  font-weight: bold;
+  margin-top: 2px;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
 .nota-tag {
   display: block;
   background-color: #e74c3c;
@@ -2243,6 +2299,7 @@ h4.cliente-header.ozuna-header {
 /* Ajustes responsivos para las etiquetas */
 @media (max-width: 375px) {
   .proveedor-tag,
+  .etiqueta-tag,
   .nota-tag {
     font-size: 0.7em;
     padding: 1px 2px;
@@ -2853,6 +2910,7 @@ h4.cliente-header.ozuna-header {
 
 /* Ajustar el tamaño de los elementos secundarios */
 .proveedor-tag,
+.etiqueta-tag,
 .nota-tag {
   font-size: 0.6em;
   display: block;
@@ -2897,6 +2955,7 @@ h4.cliente-header.ozuna-header {
   }
   
   .proveedor-tag,
+  .etiqueta-tag,
   .nota-tag {
     font-size: 0.5em;
   }

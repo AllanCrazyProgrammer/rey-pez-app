@@ -133,17 +133,20 @@
                 <div class="input-group-compact medida">
                   <div class="label-container">
                     <label>Medida:</label>
-                    <button
-                      class="btn-proveedor"
-                      @click="abrirModalProveedor(item)"
-                      :class="{ 'active': item.esProveedor }"
-                      :title="item.proveedor || 'Agregar proveedor'"
+                    <input
+                      type="text"
+                      class="input-proveedor"
+                      :class="{ 'tiene-proveedor': item.esProveedor }"
+                      :value="item.proveedor"
+                      :title="item.proveedor || 'Proveedor'"
+                      placeholder="P"
+                      maxlength="20"
+                      @input="onProveedorInput(item, $event.target.value)"
                     >
-                      P
-                    </button>
                     <EtiquetasMedida
                       :item="item"
                       :etiquetas="etiquetasPedido"
+                      :colores-por-etiqueta="etiquetasColoresPedido"
                       @toggle="toggleEtiqueta(item, $event)"
                       @crear="abrirModalEtiquetas"
                     />
@@ -221,17 +224,20 @@
                 <div class="input-group-compact medida">
                   <div class="label-container">
                     <label>Medida:</label>
-                    <button
-                      class="btn-proveedor"
-                      @click="abrirModalProveedor(item)"
-                      :class="{ 'active': item.esProveedor }"
-                      :title="item.proveedor || 'Agregar proveedor'"
+                    <input
+                      type="text"
+                      class="input-proveedor"
+                      :class="{ 'tiene-proveedor': item.esProveedor }"
+                      :value="item.proveedor"
+                      :title="item.proveedor || 'Proveedor'"
+                      placeholder="P"
+                      maxlength="20"
+                      @input="onProveedorInput(item, $event.target.value)"
                     >
-                      P
-                    </button>
                     <EtiquetasMedida
                       :item="item"
                       :etiquetas="etiquetasPedido"
+                      :colores-por-etiqueta="etiquetasColoresPedido"
                       @toggle="toggleEtiqueta(item, $event)"
                       @crear="abrirModalEtiquetas"
                     />
@@ -309,17 +315,20 @@
                 <div class="input-group-compact medida">
                   <div class="label-container">
                     <label>Medida:</label>
-                    <button
-                      class="btn-proveedor"
-                      @click="abrirModalProveedor(item)"
-                      :class="{ 'active': item.esProveedor }"
-                      :title="item.proveedor || 'Agregar proveedor'"
+                    <input
+                      type="text"
+                      class="input-proveedor"
+                      :class="{ 'tiene-proveedor': item.esProveedor }"
+                      :value="item.proveedor"
+                      :title="item.proveedor || 'Proveedor'"
+                      placeholder="P"
+                      maxlength="20"
+                      @input="onProveedorInput(item, $event.target.value)"
                     >
-                      P
-                    </button>
                     <EtiquetasMedida
                       :item="item"
                       :etiquetas="etiquetasPedido"
+                      :colores-por-etiqueta="etiquetasColoresPedido"
                       @toggle="toggleEtiqueta(item, $event)"
                       @crear="abrirModalEtiquetas"
                     />
@@ -399,17 +408,20 @@
                 <div class="input-group-compact medida">
                   <div class="label-container">
                     <label>Medida:</label>
-                    <button
-                      class="btn-proveedor"
-                      @click="abrirModalProveedor(item)"
-                      :class="{ 'active': item.esProveedor }"
-                      :title="item.proveedor || 'Agregar proveedor'"
+                    <input
+                      type="text"
+                      class="input-proveedor"
+                      :class="{ 'tiene-proveedor': item.esProveedor }"
+                      :value="item.proveedor"
+                      :title="item.proveedor || 'Proveedor'"
+                      placeholder="P"
+                      maxlength="20"
+                      @input="onProveedorInput(item, $event.target.value)"
                     >
-                      P
-                    </button>
                     <EtiquetasMedida
                       :item="item"
                       :etiquetas="etiquetasPedido"
+                      :colores-por-etiqueta="etiquetasColoresPedido"
                       @toggle="toggleEtiqueta(item, $event)"
                       @crear="abrirModalEtiquetas"
                     />
@@ -494,17 +506,20 @@
                 <div class="input-group-compact medida">
                   <div class="label-container">
                     <label>Medida:</label>
-                    <button
-                      class="btn-proveedor"
-                      @click="abrirModalProveedor(item)"
-                      :class="{ 'active': item.esProveedor }"
-                      :title="item.proveedor || 'Agregar proveedor'"
+                    <input
+                      type="text"
+                      class="input-proveedor"
+                      :class="{ 'tiene-proveedor': item.esProveedor }"
+                      :value="item.proveedor"
+                      :title="item.proveedor || 'Proveedor'"
+                      placeholder="P"
+                      maxlength="20"
+                      @input="onProveedorInput(item, $event.target.value)"
                     >
-                      P
-                    </button>
                     <EtiquetasMedida
                       :item="item"
                       :etiquetas="etiquetasPedido"
+                      :colores-por-etiqueta="etiquetasColoresPedido"
                       @toggle="toggleEtiqueta(item, $event)"
                       @crear="abrirModalEtiquetas"
                     />
@@ -598,17 +613,20 @@
                 <div class="input-group-compact medida">
                   <div class="label-container">
                     <label>Medida:</label>
-                    <button
-                      class="btn-proveedor"
-                      @click="abrirModalProveedor(item)"
-                      :class="{ 'active': item.esProveedor }"
-                      :title="item.proveedor || 'Agregar proveedor'"
+                    <input
+                      type="text"
+                      class="input-proveedor"
+                      :class="{ 'tiene-proveedor': item.esProveedor }"
+                      :value="item.proveedor"
+                      :title="item.proveedor || 'Proveedor'"
+                      placeholder="P"
+                      maxlength="20"
+                      @input="onProveedorInput(item, $event.target.value)"
                     >
-                      P
-                    </button>
                     <EtiquetasMedida
                       :item="item"
                       :etiquetas="etiquetasPedido"
+                      :colores-por-etiqueta="etiquetasColoresPedido"
                       @toggle="toggleEtiqueta(item, $event)"
                       @crear="abrirModalEtiquetas"
                     />
@@ -687,6 +705,8 @@
       :pedidoLorena="pedidoLorena"
       :pedidoOzuna="pedidoOzuna"
       :clientesTemporales="clientesTemporales"
+      :etiquetasPedido="etiquetasPedido"
+      :etiquetasColoresPedido="etiquetasColoresPedido"
       :rendimientosGuardados="rendimientosGuardados"
       :divisoresGuardados="divisoresGuardados"
       :completadosGuardados="completadosGuardados"
@@ -729,8 +749,56 @@
             placeholder="Nombre del botón"
             maxlength="20"
           >
-          <button type="submit" class="etiquetas-modal-agregar">Crear</button>
+
+          <div class="etiquetas-modal-color-picker">
+            <span class="etiquetas-modal-color-label">Color:</span>
+            <button
+              v-for="(color, idx) in coloresEtiquetasDisponibles"
+              :key="idx"
+              type="button"
+              class="color-swatch"
+              :class="{ activo: nuevaEtiquetaColorIdx === idx }"
+              :style="{ backgroundColor: color.bg }"
+              :title="'Color ' + (idx + 1)"
+              @click="nuevaEtiquetaColorIdx = idx"
+            ></button>
+          </div>
+
+          <div class="etiquetas-modal-form-acciones">
+            <button type="submit" class="etiquetas-modal-agregar">Crear</button>
+            <button
+              type="button"
+              class="etiquetas-modal-registrar"
+              :disabled="!puedeRegistrarSugerencia"
+              title="Guardar este nombre y color como sugerencia para futuros pedidos"
+              @click="registrarSugerencia"
+            >
+              <i class="fas fa-bookmark"></i> Registrar sugerencia
+            </button>
+          </div>
         </form>
+
+        <div v-if="sugerenciasDisponibles.length" class="etiquetas-modal-sugerencias">
+          <div class="etiquetas-modal-sugerencias-titulo">Sugerencias</div>
+          <div class="etiquetas-modal-sugerencias-chips">
+            <button
+              v-for="sugerencia in sugerenciasDisponibles"
+              :key="sugerencia.nombre"
+              type="button"
+              class="sugerencia-chip"
+              :style="estiloChipSugerencia(sugerencia)"
+              :title="'Agregar ' + sugerencia.nombre"
+              @click="usarSugerencia(sugerencia)"
+            >
+              {{ sugerencia.nombre }}
+              <span
+                class="sugerencia-chip-eliminar"
+                title="Quitar sugerencia"
+                @click.stop="eliminarSugerencia(sugerencia)"
+              >×</span>
+            </button>
+          </div>
+        </div>
 
         <ul v-if="etiquetasPedido.length" class="etiquetas-modal-lista">
           <li v-for="etiqueta in etiquetasPedido" :key="etiqueta">
@@ -757,12 +825,13 @@
 
 <script>
 import { db } from '@/firebase'
-import { collection, addDoc, Timestamp, getDocs, doc, getDoc, updateDoc } from 'firebase/firestore'
+import { collection, addDoc, Timestamp, getDocs, doc, getDoc, setDoc, updateDoc } from 'firebase/firestore'
 import PedidoLimpioImpresion from './PedidoLimpioImpresion.vue'
 import MedidasModal from '@/components/MedidasModal.vue'
 import ProveedorModal from '@/components/ProveedorModal.vue'
 import NuevoClienteModal from '@/components/NuevoClienteModal.vue'
 import EtiquetasMedida from '@/components/EtiquetasMedida.vue'
+import { COLORES_ETIQUETAS, colorPorIndice } from '@/utils/coloresEtiquetas'
 
 const TIPOS_POR_CLIENTE = {
   otilio: ['S/H20', 'C/H20'],
@@ -803,8 +872,11 @@ export default {
       pedidoLorena: [],
       clientesTemporales: {},
       etiquetasPedido: [],
+      etiquetasColoresPedido: {},
       mostrarModalEtiquetas: false,
       nuevaEtiquetaNombre: '',
+      nuevaEtiquetaColorIdx: 0,
+      sugerenciasEtiquetas: [],
       mostrarModalNuevoCliente: false,
       mostrarImpresion: false,
       mostrarModalProveedor: false,
@@ -848,6 +920,18 @@ export default {
       const maxDate = new Date()
       maxDate.setMonth(maxDate.getMonth() + 3)
       return maxDate.toISOString().split('T')[0]
+    },
+    coloresEtiquetasDisponibles() {
+      return COLORES_ETIQUETAS
+    },
+    puedeRegistrarSugerencia() {
+      const nombre = (this.nuevaEtiquetaNombre || '').trim().toLowerCase()
+      if (!nombre) return false
+      return !this.sugerenciasEtiquetas.some(s => s.nombre.toLowerCase() === nombre)
+    },
+    sugerenciasDisponibles() {
+      const usadas = new Set(this.etiquetasPedido.map(e => e.toLowerCase()))
+      return this.sugerenciasEtiquetas.filter(s => !usadas.has(s.nombre.toLowerCase()))
     },
     medidasOrdenadas() {
       // Separar medidas especiales y de granja
@@ -1208,6 +1292,9 @@ export default {
           this.pedidoLorena = data.lorena || [];
           this.clientesTemporales = this.normalizarClientesTemporales(data.clientesTemporales || {});
           this.etiquetasPedido = Array.isArray(data.etiquetas) ? [...data.etiquetas] : [];
+          this.etiquetasColoresPedido = data.etiquetasColores && typeof data.etiquetasColores === 'object'
+            ? { ...data.etiquetasColores }
+            : {};
           this.migrarEtiquetasLegado();
           this.rendimientosGuardados = data.rendimientos || {};
           this.divisoresGuardados = data.divisores || {};
@@ -1246,6 +1333,7 @@ export default {
           lorena: this.pedidoLorena,
           clientesTemporales: this.clientesTemporales,
           etiquetas: this.etiquetasPedido,
+          etiquetasColores: this.etiquetasColoresPedido,
           rendimientos: this.rendimientosGuardados,
           divisores: this.divisoresGuardados,
           completados: this.completadosGuardados,
@@ -1278,6 +1366,7 @@ export default {
           lorena: this.pedidoLorena,
           clientesTemporales: this.clientesTemporales,
           etiquetas: this.etiquetasPedido,
+          etiquetasColores: this.etiquetasColoresPedido,
           rendimientos: this.rendimientosGuardados,
           divisores: this.divisoresGuardados,
           kilosRefrigerados: this.kilosRefrigeradosGuardados,
@@ -1329,10 +1418,23 @@ export default {
     },
     toggleEtiqueta(item, nombre) {
       // Solo puede haber una etiqueta activa por fila: si ya estaba marcada se quita.
-      this.$set(item, 'etiqueta', item.etiqueta === nombre ? '' : nombre)
+      const yaActiva = item.etiqueta === nombre
+      this.$set(item, 'etiqueta', yaActiva ? '' : nombre)
+      // Al seleccionar una etiqueta, el input "P" (proveedor) se deselecciona.
+      if (!yaActiva) {
+        this.$set(item, 'proveedor', '')
+        this.$set(item, 'esProveedor', false)
+      }
+    },
+    onProveedorInput(item, valor) {
+      const texto = (valor || '').toString()
+      this.$set(item, 'proveedor', texto)
+      this.$set(item, 'esProveedor', texto.trim() !== '')
     },
     abrirModalEtiquetas() {
       this.mostrarModalEtiquetas = true
+      this.nuevaEtiquetaColorIdx = 0
+      this.cargarSugerenciasEtiquetas()
       this.$nextTick(() => {
         if (this.$refs.inputNuevaEtiqueta) {
           this.$refs.inputNuevaEtiqueta.focus()
@@ -1342,6 +1444,21 @@ export default {
     cerrarModalEtiquetas() {
       this.mostrarModalEtiquetas = false
       this.nuevaEtiquetaNombre = ''
+      this.nuevaEtiquetaColorIdx = 0
+    },
+    estiloChipSugerencia(sugerencia) {
+      const color = colorPorIndice(sugerencia.colorIdx)
+      return {
+        backgroundColor: color.bgInactive,
+        color: color.textInactive,
+        borderColor: color.bg
+      }
+    },
+    agregarEtiquetaAlPedido(nombre, colorIdx) {
+      this.etiquetasPedido.push(nombre)
+      if (typeof colorIdx === 'number') {
+        this.$set(this.etiquetasColoresPedido, nombre, colorIdx)
+      }
     },
     crearEtiqueta() {
       const nombre = (this.nuevaEtiquetaNombre || '').trim()
@@ -1353,13 +1470,90 @@ export default {
         alert('Ya existe un botón con ese nombre')
         return
       }
-      this.etiquetasPedido.push(nombre)
+      this.agregarEtiquetaAlPedido(nombre, this.nuevaEtiquetaColorIdx)
       this.nuevaEtiquetaNombre = ''
+    },
+    usarSugerencia(sugerencia) {
+      const nombre = (sugerencia.nombre || '').trim()
+      if (!nombre) return
+      const yaExiste = this.etiquetasPedido.some(
+        e => e.toLowerCase() === nombre.toLowerCase()
+      )
+      if (yaExiste) return
+      this.agregarEtiquetaAlPedido(nombre, sugerencia.colorIdx)
+    },
+    async registrarSugerencia() {
+      const nombre = (this.nuevaEtiquetaNombre || '').trim()
+      if (!nombre) return
+      const yaExiste = this.sugerenciasEtiquetas.some(
+        s => s.nombre.toLowerCase() === nombre.toLowerCase()
+      )
+      if (yaExiste) {
+        alert('Esa sugerencia ya está registrada')
+        return
+      }
+      this.sugerenciasEtiquetas.push({
+        nombre,
+        colorIdx: this.nuevaEtiquetaColorIdx
+      })
+      await this.guardarSugerenciasEnFirestore()
+    },
+    async eliminarSugerencia(sugerencia) {
+      if (!confirm(`¿Quitar la sugerencia "${sugerencia.nombre}"?`)) return
+      const idx = this.sugerenciasEtiquetas.findIndex(
+        s => s.nombre === sugerencia.nombre
+      )
+      if (idx === -1) return
+      this.sugerenciasEtiquetas.splice(idx, 1)
+      await this.guardarSugerenciasEnFirestore()
+    },
+    async guardarSugerenciasEnFirestore() {
+      try {
+        await setDoc(
+          doc(db, 'config', 'etiquetasPedidosLimpio'),
+          { sugerencias: this.sugerenciasEtiquetas },
+          { merge: true }
+        )
+      } catch (error) {
+        console.error('Error al guardar sugerencias:', error)
+        alert('No se pudieron guardar las sugerencias')
+      }
+    },
+    async cargarSugerenciasEtiquetas() {
+      try {
+        const snap = await getDoc(doc(db, 'config', 'etiquetasPedidosLimpio'))
+        if (!snap.exists()) {
+          this.sugerenciasEtiquetas = []
+          return
+        }
+        const data = snap.data() || {}
+        const raw = Array.isArray(data.sugerencias) ? data.sugerencias : []
+        // Migración: las sugerencias antiguas eran strings; se les asigna color por posición.
+        this.sugerenciasEtiquetas = raw
+          .map((s, idx) => {
+            if (typeof s === 'string' && s.trim() !== '') {
+              return { nombre: s.trim(), colorIdx: idx % COLORES_ETIQUETAS.length }
+            }
+            if (s && typeof s.nombre === 'string' && s.nombre.trim() !== '') {
+              const colorIdx = typeof s.colorIdx === 'number'
+                ? s.colorIdx
+                : idx % COLORES_ETIQUETAS.length
+              return { nombre: s.nombre.trim(), colorIdx }
+            }
+            return null
+          })
+          .filter(Boolean)
+      } catch (error) {
+        console.error('Error al cargar sugerencias de etiquetas:', error)
+      }
     },
     eliminarEtiqueta(nombre) {
       const indice = this.etiquetasPedido.indexOf(nombre)
       if (indice !== -1) {
         this.etiquetasPedido.splice(indice, 1)
+      }
+      if (Object.prototype.hasOwnProperty.call(this.etiquetasColoresPedido, nombre)) {
+        this.$delete(this.etiquetasColoresPedido, nombre)
       }
       // Limpiar la etiqueta de cualquier fila que la tuviera seleccionada
       this.limpiarEtiquetaDeItems(nombre)
@@ -1642,6 +1836,7 @@ export default {
           lorena: this.pedidoLorena,
           clientesTemporales: this.clientesTemporales,
           etiquetas: this.etiquetasPedido,
+          etiquetasColores: this.etiquetasColoresPedido,
           rendimientos: this.rendimientosGuardados,
           divisores: this.divisoresGuardados,
           completados: this.completadosGuardados,
@@ -1682,6 +1877,7 @@ export default {
           lorena: this.pedidoLorena,
           clientesTemporales: this.clientesTemporales,
           etiquetas: this.etiquetasPedido,
+          etiquetasColores: this.etiquetasColoresPedido,
           rendimientos: this.rendimientosGuardados,
           divisores: this.divisoresGuardados,
           completados: this.completadosGuardados,
@@ -1722,6 +1918,7 @@ export default {
           lorena: this.pedidoLorena,
           clientesTemporales: this.clientesTemporales,
           etiquetas: this.etiquetasPedido,
+          etiquetasColores: this.etiquetasColoresPedido,
           rendimientos: this.rendimientosGuardados,
           divisores: this.divisoresGuardados,
           completados: completados,
@@ -1761,6 +1958,7 @@ export default {
           ozuna: this.pedidoOzuna,
           clientesTemporales: this.clientesTemporales,
           etiquetas: this.etiquetasPedido,
+          etiquetasColores: this.etiquetasColoresPedido,
           rendimientos: this.rendimientosGuardados,
           divisores: this.divisoresGuardados,
           completados: this.completadosGuardados,
@@ -2440,20 +2638,42 @@ export default {
   font-size: 21px;
 }
 
-.btn-proveedor {
-  width: 24px;
+.input-proveedor {
+  width: 28px;
   height: 24px;
   font-size: 12px;
-  padding: 0;
+  font-weight: bold;
+  padding: 0 4px;
   margin-left: 4px;
-  border: 2px solid transparent;
-  transition: all 0.3s ease;
+  border: 2px solid #cbd2d9;
+  border-radius: 4px;
+  background-color: #f5f7fa;
+  color: #7f8c8d;
+  text-align: center;
+  transition: all 0.2s ease;
+  outline: none;
+  box-sizing: border-box;
 }
 
-.btn-proveedor.active {
-  border: 2px solid #27ae60;
+.input-proveedor:focus {
+  width: 110px;
+  text-align: left;
+  border-color: #27ae60;
+  background-color: #ffffff;
+}
+
+.input-proveedor.tiene-proveedor {
+  width: 110px;
+  text-align: left;
+  border-color: #27ae60;
+  background-color: rgba(39, 174, 96, 0.08);
   color: #27ae60;
-  background-color: rgba(39, 174, 96, 0.1);
+}
+
+.input-proveedor::placeholder {
+  color: #95a5a6;
+  font-weight: bold;
+  text-align: center;
 }
 
 /* Modal de gestión de botones de etiqueta */
@@ -2494,12 +2714,13 @@ export default {
 
 .etiquetas-modal-form {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   margin-bottom: 16px;
 }
 
 .etiquetas-modal-input {
-  flex: 1;
+  flex: 1 1 100%;
   padding: 10px;
   font-size: 16px;
   border: 1px solid #ccc;
@@ -2507,6 +2728,7 @@ export default {
 }
 
 .etiquetas-modal-agregar {
+  flex: 0 0 auto;
   padding: 10px 16px;
   background-color: #2980b9;
   color: #fff;
@@ -2518,6 +2740,133 @@ export default {
 
 .etiquetas-modal-agregar:hover {
   background-color: #2471a3;
+}
+
+.etiquetas-modal-form-acciones {
+  display: flex;
+  flex: 1 1 100%;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.etiquetas-modal-color-picker {
+  display: flex;
+  flex: 1 1 100%;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 10px;
+  background-color: #f8f9fa;
+  border-radius: 6px;
+}
+
+.etiquetas-modal-color-label {
+  font-size: 13px;
+  font-weight: bold;
+  color: #555;
+}
+
+.color-swatch {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
+}
+
+.color-swatch:hover {
+  transform: scale(1.08);
+}
+
+.color-swatch.activo {
+  border-color: #2c3e50;
+  transform: scale(1.12);
+  box-shadow: inset 0 0 0 2px #ffffff;
+}
+
+.etiquetas-modal-registrar {
+  padding: 10px 16px;
+  background-color: #f39c12;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  font-weight: bold;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.etiquetas-modal-registrar:hover:not(:disabled) {
+  background-color: #d68910;
+}
+
+.etiquetas-modal-registrar:disabled {
+  background-color: #f5d6a3;
+  cursor: not-allowed;
+}
+
+.etiquetas-modal-sugerencias {
+  margin-bottom: 16px;
+  padding: 10px 12px;
+  border: 1px dashed #f5d6a3;
+  border-radius: 6px;
+  background-color: #fffaf0;
+}
+
+.etiquetas-modal-sugerencias-titulo {
+  font-size: 13px;
+  font-weight: bold;
+  color: #b9770e;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.etiquetas-modal-sugerencias-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.sugerencia-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background-color: #fdebd0;
+  color: #b9770e;
+  border: 1px solid #f5cba7;
+  border-radius: 14px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.sugerencia-chip:hover {
+  background-color: #fad7a0;
+}
+
+.sugerencia-chip-eliminar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background-color: rgba(0, 0, 0, 0.08);
+  color: inherit;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.sugerencia-chip-eliminar:hover {
+  background-color: rgba(0, 0, 0, 0.18);
 }
 
 .etiquetas-modal-lista {
@@ -2969,15 +3318,17 @@ export default {
     font-size: 14px;
   }
 
-  .btn-proveedor {
-    width: 20px;
-    height: 20px;
-    font-size: 12px;
+  .input-proveedor {
+    width: 24px;
+    height: 22px;
+    font-size: 11px;
     border-width: 1.5px;
+    padding: 0 3px;
   }
 
-  .btn-proveedor.active {
-    border-width: 1.5px;
+  .input-proveedor:focus,
+  .input-proveedor.tiene-proveedor {
+    width: 80px;
   }
 
   .input-field-notas {

@@ -331,6 +331,10 @@ export default {
             pedidoOzuna: pedido.ozuna || [],
             pedidoLorena: pedido.lorena || [],
             clientesTemporales: pedido.clientesTemporales || {},
+            etiquetasPedido: Array.isArray(pedido.etiquetas) ? pedido.etiquetas : [],
+            etiquetasColoresPedido: pedido.etiquetasColores && typeof pedido.etiquetasColores === 'object'
+              ? pedido.etiquetasColores
+              : {},
             rendimientosGuardados: pedido.rendimientos || {},
             divisoresGuardados: pedido.divisores || {},
             completadosGuardados: pedido.completados || {},
