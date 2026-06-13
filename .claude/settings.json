@@ -3,7 +3,8 @@
     "allow": [
       "Bash(curl -s http://localhost:8080)",
       "Bash(pkill -f \"vue-cli-service serve\" 2>/dev/null; sleep 1; nohup npm start > /tmp/devsrv.log 2>&1 & *)",
-      "Bash(node --check src/views/Embarques/components/CuentaFletes/cuentaFletesUtils.js)"
+      "Bash(node --check src/views/Embarques/components/CuentaFletes/cuentaFletesUtils.js)",
+      "Bash(git stash *)"
     ],
     "additionalDirectories": [
       "/tmp"
