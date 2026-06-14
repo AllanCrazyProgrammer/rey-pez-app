@@ -128,16 +128,6 @@
         <span class="icon">📦</span>
         <span class="btn-text">DESCARGAS</span>
       </router-link>
-
-      <router-link
-        to="/procesos/plano-3d"
-        class="btn-action btn-plano3d"
-        aria-label="Simulador 3D de planos a partir de una imagen"
-      >
-        <span class="btn-prefix">[11]</span>
-        <span class="icon">🧊</span>
-        <span class="btn-text">PLANO 3D</span>
-      </router-link>
     </div>
   </div>
 </template>
@@ -444,16 +434,6 @@ export default {
 .btn-descargas:hover {
   background: #00ff41;
   box-shadow: 0 0 15px rgba(0, 255, 65, 0.5);
-}
-
-.btn-plano3d {
-  border-color: #ff5fd0;
-  color: #ff5fd0;
-}
-
-.btn-plano3d:hover {
-  background: #ff5fd0;
-  box-shadow: 0 0 15px rgba(255, 95, 208, 0.5);
 }
 
 /* Responsive */
