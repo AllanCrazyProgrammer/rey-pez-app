@@ -435,6 +435,11 @@ const routes = [
     component: () => import('@/views/Procesos/Descargas.vue')
   },
   {
+    path: '/procesos/plano-3d',
+    name: 'Plano3D',
+    component: () => import('@/views/Procesos/Plano3D.vue')
+  },
+  {
     path: '/procesos/alan',
     name: 'Alan',
     component: Alan
