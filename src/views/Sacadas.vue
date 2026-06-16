@@ -248,7 +248,97 @@
         </tbody>
       </table>
     </div>
-    
+
+    <div class="auditoria-section">
+      <div class="auditoria-header">
+        <button
+          type="button"
+          class="auditoria-toggle"
+          :class="{ 'is-open': mostrarAuditoria }"
+          @click="toggleAuditoria"
+        >
+          <span>Auditoría salidas vs rendimientos del día</span>
+          <span v-if="auditoriaCargada && totalFaltantesAuditoria > 0" class="auditoria-badge faltante">
+            {{ totalFaltantesAuditoria }} con faltante
+          </span>
+          <span v-else-if="auditoriaCargada && auditoriaFilas.length > 0" class="auditoria-badge ok">
+            Todo cuadrado
+          </span>
+        </button>
+      </div>
+
+      <div v-if="mostrarAuditoria" class="auditoria-panel">
+        <p class="auditoria-info">
+          Compara <strong>kilos en crudo</strong> de los rendimientos del día con las
+          <strong>salidas</strong> registradas aquí. Si el rendimiento es mayor, probablemente
+          falte registrar una salida.
+        </p>
+
+        <div v-if="cargandoAuditoria" class="auditoria-loading">
+          Cargando rendimientos del día...
+        </div>
+
+        <div v-else-if="errorAuditoria" class="auditoria-error">{{ errorAuditoria }}</div>
+
+        <template v-else-if="auditoriaCargada">
+          <div class="auditoria-summary">
+            <span>Embarques del día: <strong>{{ embarquesAnalizadosAuditoria }}</strong></span>
+            <span>Rendimientos: <strong>{{ formatNumber(totalEsperadoAuditoria) }} kg</strong></span>
+            <span>Salidas registradas: <strong>{{ formatNumber(totalSalidas) }} kg</strong></span>
+            <span class="auditoria-diff" :class="diffTotalAuditoriaClase">
+              Diferencia: <strong>{{ formatNumber(totalEsperadoAuditoria - totalSalidas) }} kg</strong>
+            </span>
+          </div>
+
+          <div v-if="auditoriaFilas.length === 0" class="auditoria-empty">
+            No hay datos para comparar en este día.
+          </div>
+
+          <table v-else class="auditoria-table">
+            <thead>
+              <tr>
+                <th>Medida</th>
+                <th>Rendimiento (kg)</th>
+                <th>Salidas registradas (kg)</th>
+                <th>Diferencia (kg)</th>
+                <th>Estado</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="fila in auditoriaFilas"
+                :key="fila.medidaKey"
+                :class="['auditoria-row', fila.claseEstado]"
+              >
+                <td>{{ fila.medida }}</td>
+                <td>{{ formatNumber(fila.esperado) }}</td>
+                <td>{{ formatNumber(fila.registrado) }}</td>
+                <td>
+                  <span v-if="fila.diferencia > 0">+</span>{{ formatNumber(fila.diferencia) }}
+                </td>
+                <td>{{ fila.estadoTexto }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </template>
+
+        <div v-else class="auditoria-empty">
+          Pulsa "Verificar" para cargar los rendimientos del día.
+        </div>
+
+        <div class="auditoria-actions">
+          <button
+            type="button"
+            class="auditoria-refresh"
+            :disabled="cargandoAuditoria"
+            @click="cargarAuditoriaRendimientos"
+          >
+            {{ auditoriaCargada ? '🔄 Refrescar' : 'Verificar' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
     <button @click="saveReport" class="save-button">{{ isEditing ? 'Actualizar' : 'Guardar' }} Informe del Día</button>
     
     <!-- Modal de Edición de Entrada -->
@@ -374,7 +464,14 @@ export default {
       isListaMedidasModalOpen: false,
       selectedSacadaForMeasures: null,
       isSavingListaMedidas: false,
-      mostrarMedidasParaHoyResumen: false
+      mostrarMedidasParaHoyResumen: false,
+      mostrarAuditoria: false,
+      cargandoAuditoria: false,
+      errorAuditoria: '',
+      kilosCrudosPorMedida: {},
+      embarquesAnalizadosAuditoria: 0,
+      auditoriaCargada: false,
+      auditoriaToleranciaKg: 0.5
     };
   },
   computed: {
@@ -521,13 +618,87 @@ export default {
       return filas;
     },
     isSalidaValid() {
-      return this.newSalida.tipo && 
-             this.newSalida.proveedor && 
-             this.newSalida.medida && 
-             this.newSalida.kilos && 
+      return this.newSalida.tipo &&
+             this.newSalida.proveedor &&
+             this.newSalida.medida &&
+             this.newSalida.kilos &&
              this.newSalida.kilos > 0 &&
              this.kilosDisponibles !== null &&
              this.newSalida.kilos <= this.kilosDisponibles;
+    },
+    salidasPorMedidaAuditoria() {
+      const acumulado = {};
+      this.salidas.forEach(salida => {
+        const medidaOriginal = String(salida.medida || '').trim();
+        if (!medidaOriginal) return;
+        const proveedorOriginal = String(salida.proveedor || '').trim();
+        const clave = this.firmaDeSalida(salida);
+        if (!clave) return;
+        if (!acumulado[clave]) {
+          const displayName = proveedorOriginal
+            ? `${medidaOriginal} (${proveedorOriginal})`
+            : medidaOriginal;
+          acumulado[clave] = { medida: displayName, kilos: 0 };
+        }
+        acumulado[clave].kilos += Number(salida.kilos || 0);
+      });
+      return acumulado;
+    },
+    totalEsperadoAuditoria() {
+      return Object.values(this.kilosCrudosPorMedida)
+        .reduce((sum, item) => sum + Number(item.kilos || 0), 0);
+    },
+    auditoriaFilas() {
+      const claves = new Set([
+        ...Object.keys(this.kilosCrudosPorMedida),
+        ...Object.keys(this.salidasPorMedidaAuditoria)
+      ]);
+
+      const filas = [];
+      claves.forEach(clave => {
+        const enRendimiento = this.kilosCrudosPorMedida[clave];
+        const enSalidas = this.salidasPorMedidaAuditoria[clave];
+        const esperado = Number((enRendimiento?.kilos || 0).toFixed(1));
+        const registrado = Number((enSalidas?.kilos || 0).toFixed(1));
+        const diferencia = Number((esperado - registrado).toFixed(1));
+        const medidaDisplay = enRendimiento?.medida || enSalidas?.medida || clave;
+
+        let estadoTexto = 'OK';
+        let claseEstado = 'estado-ok';
+        if (diferencia > this.auditoriaToleranciaKg) {
+          estadoTexto = 'Falta registrar salida';
+          claseEstado = 'estado-faltante';
+        } else if (diferencia < -this.auditoriaToleranciaKg) {
+          estadoTexto = 'Salida sin rendimiento';
+          claseEstado = 'estado-exceso';
+        }
+
+        filas.push({
+          medidaKey: clave,
+          medida: medidaDisplay,
+          esperado,
+          registrado,
+          diferencia,
+          estadoTexto,
+          claseEstado
+        });
+      });
+
+      return filas.sort((a, b) => {
+        const ordenEstado = { 'estado-faltante': 0, 'estado-exceso': 1, 'estado-ok': 2 };
+        const cmpEstado = ordenEstado[a.claseEstado] - ordenEstado[b.claseEstado];
+        if (cmpEstado !== 0) return cmpEstado;
+        return this.compareMedidasPorFamilia(a.medida, b.medida);
+      });
+    },
+    totalFaltantesAuditoria() {
+      return this.auditoriaFilas.filter(fila => fila.claseEstado === 'estado-faltante').length;
+    },
+    diffTotalAuditoriaClase() {
+      const diff = this.totalEsperadoAuditoria - this.totalSalidas;
+      if (diff > this.auditoriaToleranciaKg) return 'diff-faltante';
+      if (diff < -this.auditoriaToleranciaKg) return 'diff-exceso';
+      return 'diff-ok';
     }
   },
   methods: {
@@ -1461,6 +1632,197 @@ export default {
 
       return resultado.sort((a, b) => a.nombre.localeCompare(b.nombre));
     },
+    toggleAuditoria() {
+      this.mostrarAuditoria = !this.mostrarAuditoria;
+      if (this.mostrarAuditoria && !this.auditoriaCargada && !this.cargandoAuditoria) {
+        this.cargarAuditoriaRendimientos();
+      }
+    },
+    buildMedidaSignature(...parts) {
+      const stopWords = new Set(['maquila', 'de', 'del', 'la', 'el', 'los', 'las']);
+      const texto = parts.filter(Boolean).join(' ');
+      const tokens = texto
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/^🕐\s*/, '')
+        .replace(/\(\$\d+(?:\.\d+)?\)/g, ' ')
+        .replace(/[()$]/g, ' ')
+        .replace(/(\d+(?:\.\d+)?)\s*[-–—]\s*(\d+(?:\.\d+)?)/g, '$1/$2')
+        .replace(/\s*\/\s*/g, '/')
+        .split(/[\s,]+/)
+        .map(t => t.trim())
+        .filter(t => t.length > 0 && !stopWords.has(t));
+      return [...new Set(tokens)].sort().join('|');
+    },
+    extraerRangoMedida(texto) {
+      if (!texto) return null;
+      const m = String(texto).match(/(\d+(?:\.\d+)?)\s*[/\-–—]\s*(\d+(?:\.\d+)?)/);
+      return m ? `${m[1]}/${m[2]}` : null;
+    },
+    firmaDeSalida(salida) {
+      const medida = String(salida?.medida || '').trim();
+      const proveedor = String(salida?.proveedor || '').trim();
+      if (salida?.tipo === 'maquila' && proveedor) {
+        const rango = this.extraerRangoMedida(medida);
+        if (rango) {
+          return this.buildMedidaSignature(rango, proveedor);
+        }
+      }
+      return this.buildMedidaSignature(medida, proveedor);
+    },
+    firmaDeRendimiento(medidaTexto) {
+      const texto = String(medidaTexto || '').trim();
+      if (!texto) return '';
+      if (/\bmaquila\b/i.test(texto)) {
+        const rango = this.extraerRangoMedida(texto);
+        const proveedor = texto
+          .replace(/(\d+(?:\.\d+)?)\s*[/\-–—]\s*(\d+(?:\.\d+)?)/g, ' ')
+          .replace(/maquila/gi, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+        if (rango && proveedor) {
+          return this.buildMedidaSignature(rango, proveedor);
+        }
+      }
+      return this.buildMedidaSignature(texto);
+    },
+    fechaEmbarqueAYMD(valor) {
+      if (!valor) return null;
+      let fecha = null;
+      if (valor && typeof valor === 'object' && typeof valor.seconds === 'number') {
+        fecha = new Date(valor.seconds * 1000);
+      } else if (valor instanceof Date) {
+        fecha = valor;
+      } else if (typeof valor === 'number') {
+        const f = new Date(valor);
+        fecha = Number.isNaN(f.getTime()) ? null : f;
+      } else if (typeof valor === 'string') {
+        const texto = valor.trim();
+        if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(texto)) {
+          const [d, m, y] = texto.split('/').map(Number);
+          fecha = new Date(y, m - 1, d, 12, 0, 0, 0);
+        } else if (/^\d{4}-\d{2}-\d{2}/.test(texto)) {
+          const [datePart] = texto.split('T');
+          const [y, m, d] = datePart.split('-').map(Number);
+          fecha = new Date(y, m - 1, d, 12, 0, 0, 0);
+        } else if (/^\d{1,2}-\d{1,2}-\d{4}$/.test(texto)) {
+          const [d, m, y] = texto.split('-').map(Number);
+          fecha = new Date(y, m - 1, d, 12, 0, 0, 0);
+        } else {
+          const f = new Date(texto);
+          fecha = Number.isNaN(f.getTime()) ? null : f;
+        }
+      }
+      if (!fecha) return null;
+      const y = fecha.getFullYear();
+      const m = String(fecha.getMonth() + 1).padStart(2, '0');
+      const d = String(fecha.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    },
+    obtenerMedidasActivasDeEmbarque(embarque) {
+      const activas = new Set();
+      const clientes = Array.isArray(embarque?.clientes) ? embarque.clientes : [];
+      const mixBases = [];
+
+      clientes.forEach(cliente => {
+        const productos = Array.isArray(cliente?.productos) ? cliente.productos : [];
+        productos.forEach(producto => {
+          const medidaBase = String(producto?.medida || '').trim();
+          if (!medidaBase) return;
+
+          let nombre = medidaBase;
+          if (cliente?.nombre === 'Ozuna' && !producto.esVenta) {
+            nombre = `${medidaBase} Maquila Ozuna`;
+          }
+
+          if (medidaBase.toLowerCase().endsWith('mix')) {
+            const baseSize = medidaBase.split(' ')[0];
+            if (baseSize && !mixBases.includes(baseSize)) {
+              mixBases.push(baseSize);
+            }
+            activas.add(nombre);
+          } else {
+            activas.add(nombre);
+          }
+        });
+      });
+
+      mixBases.sort();
+      for (let i = 0; i + 1 < mixBases.length; i += 2) {
+        activas.add(`${mixBases[i]}-${mixBases[i + 1]} mix`);
+      }
+
+      return activas;
+    },
+    async cargarAuditoriaRendimientos() {
+      this.cargandoAuditoria = true;
+      this.errorAuditoria = '';
+      try {
+        const objetivoYMD = this.currentDate.format('YYYY-MM-DD');
+        const snapshot = await getDocs(collection(db, 'embarques'));
+        const embarquesDelDia = [];
+
+        snapshot.docs.forEach(docSnap => {
+          const data = docSnap.data() || {};
+          const ymd = this.fechaEmbarqueAYMD(data.fecha || data.fechaRegistro);
+          if (ymd === objetivoYMD) {
+            embarquesDelDia.push({ id: docSnap.id, ...data });
+          }
+        });
+
+        const acumulado = {};
+        embarquesDelDia.forEach(emb => {
+          const kilosCrudos = emb.kilosCrudos || {};
+          const medidaOculta = emb.medidaOculta || {};
+          const nombresPersonalizados = emb.nombresMedidasPersonalizados || {};
+          const medidasActivas = this.obtenerMedidasActivasDeEmbarque(emb);
+
+          Object.entries(kilosCrudos).forEach(([medidaNombre, valor]) => {
+            const medidaOriginal = String(medidaNombre || '').trim();
+            if (!medidaOriginal) return;
+            if (!medidasActivas.has(medidaOriginal)) return;
+            if (medidaOculta[medidaOriginal]) return;
+
+            const nombrePersonalizado = String(nombresPersonalizados[medidaOriginal] || '').trim();
+            const medidaParaFirma = nombrePersonalizado || medidaOriginal;
+
+            const clave = this.firmaDeRendimiento(medidaParaFirma);
+            if (!clave) return;
+
+            let kilos = 0;
+            if (valor && typeof valor === 'object' && !Array.isArray(valor)) {
+              kilos = Number(valor.medida1 || 0) + Number(valor.medida2 || 0);
+            } else {
+              kilos = Number(valor || 0);
+            }
+            if (!Number.isFinite(kilos) || kilos <= 0) return;
+
+            if (!acumulado[clave]) {
+              acumulado[clave] = { medida: medidaParaFirma, kilos: 0 };
+            }
+            acumulado[clave].kilos += kilos;
+          });
+        });
+
+        this.kilosCrudosPorMedida = acumulado;
+        this.embarquesAnalizadosAuditoria = embarquesDelDia.length;
+        this.auditoriaCargada = true;
+      } catch (error) {
+        console.error('[Auditoria] Error al cargar rendimientos:', error);
+        this.errorAuditoria = 'No se pudieron cargar los rendimientos del día. Verifica tu conexión.';
+        this.kilosCrudosPorMedida = {};
+        this.embarquesAnalizadosAuditoria = 0;
+      } finally {
+        this.cargandoAuditoria = false;
+      }
+    },
+    resetAuditoria() {
+      this.kilosCrudosPorMedida = {};
+      this.embarquesAnalizadosAuditoria = 0;
+      this.auditoriaCargada = false;
+      this.errorAuditoria = '';
+    }
   },
   async created() {
     // Si viene fecha desde el pedido, usarla como seleccionada
@@ -1480,6 +1842,14 @@ export default {
       deep: true,
       handler() {
         this.limpiarChecklistSalidas();
+      }
+    },
+    selectedDate() {
+      if (this.mostrarAuditoria) {
+        this.resetAuditoria();
+        this.cargarAuditoriaRendimientos();
+      } else {
+        this.resetAuditoria();
       }
     },
     'newSalida.medida': function () {
@@ -2228,6 +2598,208 @@ button:disabled:hover {
   .btn-guardar,
   .btn-cancelar {
     width: 100%;
+  }
+}
+
+.auditoria-section {
+  margin: 25px 0 15px;
+  border: 1px solid rgba(62, 248, 255, 0.4);
+  border-radius: 12px;
+  background: rgba(20, 10, 42, 0.55);
+  overflow: hidden;
+}
+
+.auditoria-header {
+  display: flex;
+}
+
+.auditoria-toggle {
+  flex: 1;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  background: linear-gradient(90deg, rgba(168, 85, 247, 0.25), rgba(62, 248, 255, 0.18));
+  border: none;
+  color: var(--vw-text);
+  font-size: 1.05rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+}
+
+.auditoria-toggle:hover {
+  background: linear-gradient(90deg, rgba(168, 85, 247, 0.4), rgba(62, 248, 255, 0.3));
+}
+
+.auditoria-toggle.is-open {
+  border-bottom: 1px solid rgba(62, 248, 255, 0.4);
+}
+
+.auditoria-badge {
+  font-size: 0.85rem;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-weight: 700;
+}
+
+.auditoria-badge.faltante {
+  background: rgba(255, 79, 79, 0.85);
+  color: #fff;
+  box-shadow: 0 0 8px rgba(255, 79, 79, 0.6);
+}
+
+.auditoria-badge.ok {
+  background: rgba(62, 248, 255, 0.85);
+  color: #0a0820;
+  box-shadow: 0 0 8px rgba(62, 248, 255, 0.5);
+}
+
+.auditoria-panel {
+  padding: 16px 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.auditoria-info {
+  margin: 0;
+  font-size: 0.95rem;
+  color: var(--vw-soft);
+  line-height: 1.45;
+}
+
+.auditoria-loading,
+.auditoria-empty {
+  padding: 14px;
+  text-align: center;
+  color: var(--vw-soft);
+  font-style: italic;
+}
+
+.auditoria-error {
+  padding: 12px;
+  background: rgba(255, 79, 79, 0.18);
+  border: 1px solid rgba(255, 79, 79, 0.6);
+  border-radius: 8px;
+  color: #ffbcbc;
+}
+
+.auditoria-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: rgba(168, 85, 247, 0.12);
+  border: 1px solid rgba(168, 85, 247, 0.35);
+  font-size: 0.95rem;
+}
+
+.auditoria-summary strong {
+  color: var(--vw-neon-cyan);
+}
+
+.auditoria-diff.diff-faltante strong {
+  color: #ff6b6b;
+}
+
+.auditoria-diff.diff-exceso strong {
+  color: #ffd166;
+}
+
+.auditoria-diff.diff-ok strong {
+  color: #6bff95;
+}
+
+.auditoria-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+}
+
+.auditoria-table th,
+.auditoria-table td {
+  padding: 8px 10px;
+  text-align: left;
+  border-bottom: 1px solid rgba(168, 85, 247, 0.25);
+}
+
+.auditoria-table th {
+  background: rgba(168, 85, 247, 0.25);
+  color: var(--vw-text);
+  font-weight: 600;
+}
+
+.auditoria-table td:nth-child(2),
+.auditoria-table td:nth-child(3),
+.auditoria-table td:nth-child(4),
+.auditoria-table th:nth-child(2),
+.auditoria-table th:nth-child(3),
+.auditoria-table th:nth-child(4) {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.auditoria-row.estado-faltante {
+  background: rgba(255, 79, 79, 0.18);
+}
+
+.auditoria-row.estado-faltante td:last-child {
+  color: #ff8080;
+  font-weight: 600;
+}
+
+.auditoria-row.estado-exceso {
+  background: rgba(255, 209, 102, 0.15);
+}
+
+.auditoria-row.estado-exceso td:last-child {
+  color: #ffd166;
+  font-weight: 600;
+}
+
+.auditoria-row.estado-ok td:last-child {
+  color: #6bff95;
+}
+
+.auditoria-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.auditoria-refresh {
+  background: rgba(62, 248, 255, 0.15);
+  color: var(--vw-neon-cyan);
+  border: 1px solid rgba(62, 248, 255, 0.5);
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.auditoria-refresh:hover:not(:disabled) {
+  background: rgba(62, 248, 255, 0.3);
+}
+
+.auditoria-refresh:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+@media (max-width: 600px) {
+  .auditoria-table {
+    font-size: 0.85rem;
+  }
+  .auditoria-table th,
+  .auditoria-table td {
+    padding: 6px 6px;
+  }
+  .auditoria-summary {
+    font-size: 0.9rem;
+    gap: 10px;
   }
 }
 </style>
