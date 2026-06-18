@@ -1418,13 +1418,9 @@ export default {
     },
     toggleEtiqueta(item, nombre) {
       // Solo puede haber una etiqueta activa por fila: si ya estaba marcada se quita.
+      // El input "P" (proveedor) y la etiqueta pueden coexistir.
       const yaActiva = item.etiqueta === nombre
       this.$set(item, 'etiqueta', yaActiva ? '' : nombre)
-      // Al seleccionar una etiqueta, el input "P" (proveedor) se deselecciona.
-      if (!yaActiva) {
-        this.$set(item, 'proveedor', '')
-        this.$set(item, 'esProveedor', false)
-      }
     },
     onProveedorInput(item, valor) {
       const texto = (valor || '').toString()

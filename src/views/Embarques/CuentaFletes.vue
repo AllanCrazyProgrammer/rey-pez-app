@@ -119,7 +119,7 @@ import {
   agruparFletesPorFechaYCarga,
   calcularDeudaAcumuladaPorId,
   calcularMontoDia,
-  DESCUENTO_TARA_LIMPIO_CATARRO_OTILIO,
+  DESCUENTO_TARA_CRUDO_CATARRO_OTILIO,
   esCargaDeUnSoloChofer,
   filtrarFletesPorChofer,
   normalizarTexto,
@@ -423,10 +423,10 @@ export default {
       }
     },
     tarasDescuentoCatarroOtilio(flete) {
-      return (flete.tarasLimpioCatarro || 0) + (flete.tarasLimpioOtilio || 0);
+      return (flete.tarasCrudoCatarro || 0) + (flete.tarasCrudoOtilio || 0);
     },
     montoDescuentoCatarroOtilio(flete) {
-      return this.tarasDescuentoCatarroOtilio(flete) * DESCUENTO_TARA_LIMPIO_CATARRO_OTILIO;
+      return this.tarasDescuentoCatarroOtilio(flete) * DESCUENTO_TARA_CRUDO_CATARRO_OTILIO;
     },
     generarFilasFletesPDF() {
       const filas = this.fletesPendientes.map(flete => {
@@ -452,7 +452,7 @@ export default {
       const totalTarasDescuento = this.fletesPendientes.reduce(
         (sum, f) => sum + this.tarasDescuentoCatarroOtilio(f), 0
       );
-      const totalMontoDescuento = totalTarasDescuento * DESCUENTO_TARA_LIMPIO_CATARRO_OTILIO;
+      const totalMontoDescuento = totalTarasDescuento * DESCUENTO_TARA_CRUDO_CATARRO_OTILIO;
       const celdaTotalDescuento = totalTarasDescuento > 0
         ? `${totalTarasDescuento}T / -${this.formatearMonto(totalMontoDescuento)}`
         : '0T / -';
@@ -520,7 +520,7 @@ export default {
                 <th>Lorena Limpio</th>
                 <th>Lorena Crudo</th>
                 <th>Total Taras</th>
-                <th>T-Limpio Otilio y Catarro</th>
+                <th>T-Crudo Otilio y Catarro</th>
                 <th>Monto</th>
               </tr>
             </thead>
