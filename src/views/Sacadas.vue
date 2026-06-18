@@ -286,7 +286,7 @@
             <span>Rendimientos: <strong>{{ formatNumber(totalEsperadoAuditoria) }} kg</strong></span>
             <span>Salidas registradas: <strong>{{ formatNumber(totalSalidas) }} kg</strong></span>
             <span class="auditoria-diff" :class="diffTotalAuditoriaClase">
-              Diferencia: <strong>{{ formatNumber(totalEsperadoAuditoria - totalSalidas) }} kg</strong>
+              Diferencia: <strong>{{ formatNumber(totalDiferenciaAuditoria) }} kg</strong>
             </span>
           </div>
 
@@ -302,6 +302,7 @@
                 <th>Salidas registradas (kg)</th>
                 <th>Diferencia (kg)</th>
                 <th>Estado</th>
+                <th class="check-column" title="Marcar como OK manualmente">OK</th>
               </tr>
             </thead>
             <tbody>
@@ -317,6 +318,14 @@
                   <span v-if="fila.diferencia > 0">+</span>{{ formatNumber(fila.diferencia) }}
                 </td>
                 <td>{{ fila.estadoTexto }}</td>
+                <td class="check-column">
+                  <input
+                    type="checkbox"
+                    :checked="!!auditoriaOkChecklist[fila.medidaKey]"
+                    @change="toggleAuditoriaOk(fila.medidaKey, $event.target.checked)"
+                    aria-label="Marcar medida como OK manualmente"
+                  />
+                </td>
               </tr>
             </tbody>
           </table>
@@ -471,7 +480,8 @@ export default {
       kilosCrudosPorMedida: {},
       embarquesAnalizadosAuditoria: 0,
       auditoriaCargada: false,
-      auditoriaToleranciaKg: 0.5
+      auditoriaToleranciaKg: 0.5,
+      auditoriaOkChecklist: {}
     };
   },
   computed: {
@@ -649,19 +659,49 @@ export default {
         .reduce((sum, item) => sum + Number(item.kilos || 0), 0);
     },
     auditoriaFilas() {
+      const rendimientosMap = {};
+      Object.entries(this.kilosCrudosPorMedida).forEach(([k, v]) => {
+        rendimientosMap[k] = { medida: v.medida, kilos: Number(v.kilos || 0) };
+      });
+      const salidasMap = this.salidasPorMedidaAuditoria;
+
+      const rangoRegex = /^\d+(?:\.\d+)?\/\d+(?:\.\d+)?$/;
+      Object.keys(rendimientosMap).forEach(rKey => {
+        const tokens = rKey.split('|');
+        if (tokens.length !== 1) return;
+        const rango = tokens[0];
+        if (!rangoRegex.test(rango)) return;
+
+        const candidatos = Object.keys(salidasMap).filter(sKey => {
+          if (sKey === rKey) return false;
+          if (rendimientosMap[sKey]) return false;
+          return sKey.split('|').includes(rango);
+        });
+
+        if (candidatos.length !== 1) return;
+
+        const targetKey = candidatos[0];
+        const dataR = rendimientosMap[rKey];
+        if (!rendimientosMap[targetKey]) {
+          rendimientosMap[targetKey] = { medida: dataR.medida, kilos: 0 };
+        }
+        rendimientosMap[targetKey].kilos += dataR.kilos;
+        delete rendimientosMap[rKey];
+      });
+
       const claves = new Set([
-        ...Object.keys(this.kilosCrudosPorMedida),
-        ...Object.keys(this.salidasPorMedidaAuditoria)
+        ...Object.keys(rendimientosMap),
+        ...Object.keys(salidasMap)
       ]);
 
       const filas = [];
       claves.forEach(clave => {
-        const enRendimiento = this.kilosCrudosPorMedida[clave];
-        const enSalidas = this.salidasPorMedidaAuditoria[clave];
+        const enRendimiento = rendimientosMap[clave];
+        const enSalidas = salidasMap[clave];
         const esperado = Number((enRendimiento?.kilos || 0).toFixed(1));
         const registrado = Number((enSalidas?.kilos || 0).toFixed(1));
         const diferencia = Number((esperado - registrado).toFixed(1));
-        const medidaDisplay = enRendimiento?.medida || enSalidas?.medida || clave;
+        const medidaDisplay = enSalidas?.medida || enRendimiento?.medida || clave;
 
         let estadoTexto = 'OK';
         let claseEstado = 'estado-ok';
@@ -673,19 +713,34 @@ export default {
           claseEstado = 'estado-exceso';
         }
 
+        const okManual = !!this.auditoriaOkChecklist[clave];
+        let diferenciaMostrada = diferencia;
+        if (okManual && claseEstado !== 'estado-ok') {
+          estadoTexto = 'OK (manual)';
+          claseEstado = 'estado-ok-manual';
+          diferenciaMostrada = 0;
+        }
+
         filas.push({
           medidaKey: clave,
           medida: medidaDisplay,
           esperado,
           registrado,
-          diferencia,
+          diferencia: diferenciaMostrada,
+          diferenciaReal: diferencia,
           estadoTexto,
-          claseEstado
+          claseEstado,
+          okManual
         });
       });
 
       return filas.sort((a, b) => {
-        const ordenEstado = { 'estado-faltante': 0, 'estado-exceso': 1, 'estado-ok': 2 };
+        const ordenEstado = {
+          'estado-faltante': 0,
+          'estado-exceso': 1,
+          'estado-ok': 2,
+          'estado-ok-manual': 3
+        };
         const cmpEstado = ordenEstado[a.claseEstado] - ordenEstado[b.claseEstado];
         if (cmpEstado !== 0) return cmpEstado;
         return this.compareMedidasPorFamilia(a.medida, b.medida);
@@ -694,8 +749,15 @@ export default {
     totalFaltantesAuditoria() {
       return this.auditoriaFilas.filter(fila => fila.claseEstado === 'estado-faltante').length;
     },
+    totalDiferenciaAuditoria() {
+      return Number(
+        this.auditoriaFilas
+          .reduce((sum, fila) => sum + Number(fila.diferencia || 0), 0)
+          .toFixed(1)
+      );
+    },
     diffTotalAuditoriaClase() {
-      const diff = this.totalEsperadoAuditoria - this.totalSalidas;
+      const diff = this.totalDiferenciaAuditoria;
       if (diff > this.auditoriaToleranciaKg) return 'diff-faltante';
       if (diff < -this.auditoriaToleranciaKg) return 'diff-exceso';
       return 'diff-ok';
@@ -1275,6 +1337,7 @@ export default {
         this.salidas = (data.salidas || []).map(salida => this.normalizeRegistroCantidades(salida));
         this.salidasClientesChecklist = data.salidasClientesChecklist || {};
         this.salidasMaquilasChecklist = data.salidasMaquilasChecklist || {};
+        this.auditoriaOkChecklist = data.auditoriaOkChecklist || {};
         this.listaMedidasPedido = Array.isArray(data.listaMedidasPedido) ? data.listaMedidasPedido : [];
         this.sacadaId = id;
         this.isEditing = true;
@@ -1300,7 +1363,8 @@ export default {
           salidasMaquilasChecklist: this.salidasMaquilasChecklist,
           totalEntradas: this.totalEntradas,
           totalSalidas: this.totalSalidas,
-          listaMedidasPedido: this.listaMedidasPedido
+          listaMedidasPedido: this.listaMedidasPedido,
+          auditoriaOkChecklist: this.auditoriaOkChecklist
         };
 
         if (this.isEditing) {
@@ -1640,7 +1704,13 @@ export default {
     },
     buildMedidaSignature(...parts) {
       const stopWords = new Set(['maquila', 'de', 'del', 'la', 'el', 'los', 'las']);
-      const texto = parts.filter(Boolean).join(' ');
+      const aliases = [
+        { from: /\bpac\s*sc\b/gi, to: 'golfo' }
+      ];
+      let texto = parts.filter(Boolean).join(' ');
+      aliases.forEach(({ from, to }) => {
+        texto = texto.replace(from, to);
+      });
       const tokens = texto
         .normalize('NFD')
         .replace(/[\u0300-\u036f]/g, '')
@@ -1668,6 +1738,10 @@ export default {
         if (rango) {
           return this.buildMedidaSignature(rango, proveedor);
         }
+      }
+      const tieneRango = !!this.extraerRangoMedida(medida);
+      if (!tieneRango) {
+        return this.buildMedidaSignature(medida);
       }
       return this.buildMedidaSignature(medida, proveedor);
     },
@@ -1822,6 +1896,16 @@ export default {
       this.embarquesAnalizadosAuditoria = 0;
       this.auditoriaCargada = false;
       this.errorAuditoria = '';
+    },
+    toggleAuditoriaOk(clave, checked) {
+      if (!clave) return;
+      const siguiente = { ...this.auditoriaOkChecklist };
+      if (checked) {
+        siguiente[clave] = true;
+      } else {
+        delete siguiente[clave];
+      }
+      this.auditoriaOkChecklist = siguiente;
     }
   },
   async created() {
@@ -2746,7 +2830,7 @@ button:disabled:hover {
   background: rgba(255, 79, 79, 0.18);
 }
 
-.auditoria-row.estado-faltante td:last-child {
+.auditoria-row.estado-faltante td:nth-last-child(2) {
   color: #ff8080;
   font-weight: 600;
 }
@@ -2755,13 +2839,35 @@ button:disabled:hover {
   background: rgba(255, 209, 102, 0.15);
 }
 
-.auditoria-row.estado-exceso td:last-child {
+.auditoria-row.estado-exceso td:nth-last-child(2) {
   color: #ffd166;
   font-weight: 600;
 }
 
-.auditoria-row.estado-ok td:last-child {
+.auditoria-row.estado-ok td:nth-last-child(2) {
   color: #6bff95;
+}
+
+.auditoria-row.estado-ok-manual {
+  background: rgba(62, 248, 255, 0.08);
+}
+
+.auditoria-row.estado-ok-manual td:nth-last-child(2) {
+  color: var(--vw-neon-cyan);
+  font-weight: 600;
+  font-style: italic;
+}
+
+.auditoria-table .check-column {
+  text-align: center;
+  width: 50px;
+}
+
+.auditoria-table .check-column input[type="checkbox"] {
+  accent-color: var(--vw-neon-cyan);
+  cursor: pointer;
+  width: 18px;
+  height: 18px;
 }
 
 .auditoria-actions {

@@ -12,7 +12,12 @@
       "Bash(tee /tmp/sacadas-build2.log)",
       "Bash(tee /tmp/sacadas-build3.log)",
       "Bash(tee /tmp/sacadas-build4.log)",
-      "Bash(tee /tmp/sacadas-build5.log)"
+      "Bash(tee /tmp/sacadas-build5.log)",
+      "Bash(tee /tmp/sacadas-build6.log)",
+      "Bash(tee /tmp/sacadas-build7.log)",
+      "Bash(tee /tmp/sacadas-build8.log)",
+      "Bash(tee /tmp/sacadas-build9.log)",
+      "Bash(tee /tmp/sacadas-build10.log)"
     ],
     "additionalDirectories": [
       "/tmp"
