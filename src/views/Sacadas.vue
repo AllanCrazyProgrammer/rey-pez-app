@@ -665,17 +665,20 @@ export default {
       });
       const salidasMap = this.salidasPorMedidaAuditoria;
 
-      const rangoRegex = /^\d+(?:\.\d+)?\/\d+(?:\.\d+)?$/;
       Object.keys(rendimientosMap).forEach(rKey => {
-        const tokens = rKey.split('|');
-        if (tokens.length !== 1) return;
-        const rango = tokens[0];
-        if (!rangoRegex.test(rango)) return;
+        if (salidasMap[rKey]) return;
+        const rTokens = new Set(rKey.split('|').filter(Boolean));
+        if (rTokens.size === 0) return;
 
         const candidatos = Object.keys(salidasMap).filter(sKey => {
           if (sKey === rKey) return false;
           if (rendimientosMap[sKey]) return false;
-          return sKey.split('|').includes(rango);
+          const sTokens = new Set(sKey.split('|'));
+          if (sTokens.size <= rTokens.size) return false;
+          for (const t of rTokens) {
+            if (!sTokens.has(t)) return false;
+          }
+          return true;
         });
 
         if (candidatos.length !== 1) return;
@@ -1738,6 +1741,7 @@ export default {
         if (rango) {
           return this.buildMedidaSignature(rango, proveedor);
         }
+        return this.buildMedidaSignature(medida, proveedor);
       }
       const tieneRango = !!this.extraerRangoMedida(medida);
       if (!tieneRango) {
