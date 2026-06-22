@@ -55,9 +55,16 @@ export const embarquePedidoMixin = {
         return referencias[clienteId];
       };
 
-      const agregarReferencia = (clienteId, medida, tipoData, cantidad, esTara) => {
-        const medidaNormalizada = this.normalizarTexto(medida);
-        if (!medidaNormalizada || !clienteId) return;
+      const agregarReferencia = (clienteId, medida, tipoData, cantidad, esTara, etiqueta = '') => {
+        const medidaBase = this.normalizarTexto(medida);
+        if (!medidaBase || !clienteId) return;
+
+        const etiquetaNormalizada = this.normalizarTexto(etiqueta);
+        // Cuando hay etiqueta, el esqueleto la añade al nombre de la medida ("51/60 selecta"),
+        // por lo que la referencia debe indexarse por la misma medida combinada.
+        const medidaNormalizada = etiquetaNormalizada
+          ? `${medidaBase} ${etiquetaNormalizada}`
+          : medidaBase;
 
         const tipoNormalizado = this.normalizarTexto(tipoData?.tipo);
         const tipoPersonalizado = this.normalizarTexto(tipoData?.tipoPersonalizado);
@@ -95,7 +102,7 @@ export const embarquePedidoMixin = {
               if (!medida) return;
               const cantidad = this.normalizarCantidadPedido(item.kilos);
               if (cantidad <= 0) return;
-              agregarReferencia(clienteId, medida, this.normalizarTipoPedido(item.tipo), cantidad, item.esTara);
+              agregarReferencia(clienteId, medida, this.normalizarTipoPedido(item.tipo), cantidad, item.esTara, item.etiqueta);
             });
           });
 
@@ -110,7 +117,7 @@ export const embarquePedidoMixin = {
                 if (!medida) return;
                 const cantidad = this.normalizarCantidadPedido(item.kilos);
                 if (cantidad <= 0) return;
-                agregarReferencia(clienteId, medida, this.normalizarTipoPedido(item.tipo), cantidad, item.esTara);
+                agregarReferencia(clienteId, medida, this.normalizarTipoPedido(item.tipo), cantidad, item.esTara, item.etiqueta);
               });
             });
           }
@@ -315,6 +322,8 @@ export const embarquePedidoMixin = {
               this.setTipoDefaultParaCliente(nuevoProducto);
             }
             if (definicion.nota) nuevoProducto.nota = definicion.nota;
+            if (definicion.noSumarKilos) nuevoProducto.noSumarKilos = true;
+            if (definicion.nombreAlternativoPDF) nuevoProducto.nombreAlternativoPDF = definicion.nombreAlternativoPDF;
             if (definicion.tipo === 'c/h20' && definicion.camaronNeto) {
               nuevoProducto.camaronNeto = definicion.camaronNeto;
             }

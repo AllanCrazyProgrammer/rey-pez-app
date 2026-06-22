@@ -169,21 +169,32 @@ export default {
             }
 
             const tipoNormalizado = this.normalizarTipo(item.tipo);
-            // Obtener la nota (sellado/kileado) del item
-            const nota = (item.nota || '').toString().trim();
+            // Obtener la nota original (sellado/kileado) del item
+            const notaRaw = (item.nota || '').toString().trim();
+            // Kileado se traduce a noSumarKilos (checkbox kg), no se escribe en el campo nota
+            const esKileado = notaRaw.toLowerCase() === 'kileado';
+            const nota = esKileado ? '' : notaRaw;
+            // Obtener la etiqueta (Selecta, Ahumada, etc.) del item
+            const etiqueta = (item.etiqueta || '').toString().trim();
             const esVenta = clienteId === '4' ? !item.esMaquila : null;
             const ventaKey = clienteId === '4' ? (esVenta ? 'venta' : 'maquila') : '';
-            // Incluir la nota en la clave única para diferenciar medidas con diferente nota
-            const clave = `${medida}__${tipoNormalizado.tipo || ''}__${tipoNormalizado.tipoPersonalizado || ''}__${tipoNormalizado.camaronNeto || ''}__${ventaKey}__${nota}`;
+            // Usar notaRaw en la clave para mantener diferenciados ítems kileados de no-kileados
+            const clave = `${medida}__${tipoNormalizado.tipo || ''}__${tipoNormalizado.tipoPersonalizado || ''}__${tipoNormalizado.camaronNeto || ''}__${ventaKey}__${notaRaw}__${etiqueta}`;
+            // Incluir la etiqueta (en minúsculas) en el nombre de la medida para que se vea en el esqueleto
+            const medidaConEtiqueta = etiqueta ? `${medida} ${etiqueta.toLowerCase()}` : medida;
 
             if (!acumuladoPorCliente[clienteId].has(clave)) {
               acumuladoPorCliente[clienteId].set(clave, {
-                medida,
+                medida: medidaConEtiqueta,
                 tipo: tipoNormalizado.tipo,
                 tipoPersonalizado: tipoNormalizado.tipoPersonalizado || '',
                 camaronNeto: tipoNormalizado.camaronNeto,
                 esVenta,
-                nota, // Incluir la nota en el esqueleto
+                nota, // Incluir la nota en el esqueleto (sin "Kileado")
+                etiqueta, // Incluir la etiqueta en el esqueleto
+                noSumarKilos: esKileado, // Si era kileado, marcar el checkbox kg
+                // Si es kileado, anexar "kileado" al nombre que se muestra en el PDF
+                nombreAlternativoPDF: esKileado ? `${medidaConEtiqueta} kileado` : '',
                 pedidoReferencia: {
                   kilos: 0,
                   taras: 0
