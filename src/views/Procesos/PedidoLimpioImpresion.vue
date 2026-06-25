@@ -56,7 +56,7 @@
                 'text-blue compact': item.tipo === '1.35 y .15' || item.tipo === '1.5 y .3'
               }">
                 {{ item.tipo }}
-                <span v-if="item.tipo === 'C/H20'" class="agua-tag">Agua {{ textoAgua(item) }}</span>
+                <span v-if="item.tipo === 'C/H20' && aguaPersonalizada(item)" class="agua-tag">Agua {{ textoAgua(item) }}</span>
                 <span v-if="item.nota" class="nota-tag">{{ item.nota }}</span>
               </td>
             </tr>
@@ -100,7 +100,7 @@
                   'text-blue compact': item.tipo === '1.35 y .15' || item.tipo === '1.3 y .2' || item.tipo === '1.5 y .3'
                 }">
                   {{ item.tipo }}
-                  <span v-if="item.tipo === 'C/H20'" class="agua-tag">Agua {{ textoAgua(item) }}</span>
+                  <span v-if="item.tipo === 'C/H20' && aguaPersonalizada(item)" class="agua-tag">Agua {{ textoAgua(item) }}</span>
                   <span v-if="item.nota" class="nota-tag">{{ item.nota }}</span>
                 </td>
               </tr>
@@ -142,7 +142,7 @@
                   'text-blue compact': item.tipo === '1.35 y .15' || item.tipo === '1.5 y .3'
                 }">
                   {{ item.tipo }}
-                  <span v-if="item.tipo === 'C/H20'" class="agua-tag">Agua {{ textoAgua(item) }}</span>
+                  <span v-if="item.tipo === 'C/H20' && aguaPersonalizada(item)" class="agua-tag">Agua {{ textoAgua(item) }}</span>
                   <span v-if="item.nota" class="nota-tag">{{ item.nota }}</span>
                 </td>
               </tr>
@@ -185,7 +185,7 @@
                     'text-blue compact': item.tipo === '1.35 y .15' || item.tipo === '1.5 y .3'
                   }">
                     {{ item.tipo }}
-                    <span v-if="item.tipo === 'C/H20'" class="agua-tag">Agua {{ textoAgua(item) }}</span>
+                    <span v-if="item.tipo === 'C/H20' && aguaPersonalizada(item)" class="agua-tag">Agua {{ textoAgua(item) }}</span>
                     <span v-if="item.nota" class="nota-tag">{{ item.nota }}</span>
                   </td>
                 </tr>
@@ -227,7 +227,7 @@
                     'text-blue compact': item.tipo === '1.35 y .15' || item.tipo === '1.5 y .3'
                   }">
                     {{ item.tipo }}
-                    <span v-if="item.tipo === 'C/H20'" class="agua-tag">Agua {{ textoAgua(item) }}</span>
+                    <span v-if="item.tipo === 'C/H20' && aguaPersonalizada(item)" class="agua-tag">Agua {{ textoAgua(item) }}</span>
                     <span v-if="item.nota" class="nota-tag">{{ item.nota }}</span>
                   </td>
                 </tr>
@@ -272,7 +272,7 @@
                   'text-blue compact': item.tipo === '1.35 y .15' || item.tipo === '1.5 y .3'
                 }">
                   {{ item.tipo }}
-                  <span v-if="item.tipo === 'C/H20'" class="agua-tag">Agua {{ textoAgua(item) }}</span>
+                  <span v-if="item.tipo === 'C/H20' && aguaPersonalizada(item)" class="agua-tag">Agua {{ textoAgua(item) }}</span>
                   <span v-if="item.nota" class="nota-tag">{{ item.nota }}</span>
                 </td>
               </tr>
@@ -563,7 +563,7 @@ import KilosRefrigeradosModal from '@/components/KilosRefrigeradosModal.vue'
 import ListaMedidasPedidoModal from '@/components/ListaMedidasPedidoModal.vue'
 import ResumenCalculadora from '@/components/ResumenCalculadora.vue'
 import { colorParaEtiqueta } from '@/utils/coloresEtiquetas'
-import { factorAgua, formatearAgua } from '@/utils/factorAgua'
+import { factorAgua, formatearAgua, aguaEsPersonalizada } from '@/utils/factorAgua'
 import { db } from '@/firebase'
 import { doc, updateDoc, Timestamp, collection, getDocs, query, where } from 'firebase/firestore'
 
@@ -1090,6 +1090,9 @@ export default {
     textoAgua(item) {
       return formatearAgua(item);
     },
+    aguaPersonalizada(item) {
+      return aguaEsPersonalizada(item);
+    },
     obtenerMedidaVisible(medida) {
       return this.esMedidaMacuil(medida) ? '' : (medida || '');
     },
@@ -1168,7 +1171,7 @@ export default {
                   color: (item.tipo === 'C/H20' || item.tipo === '1.35 y .15' || item.tipo === '1.3 y .2' || item.tipo === '1.5 y .3') ? '#0000FF' : undefined,
                   margin: (item.tipo === '1.35 y .15' || item.tipo === '1.3 y .2' || item.tipo === '1.5 y .3') ? [0, 0, 0, 0] : [0, 2, 0, 2]
                 },
-                (item.tipo === 'C/H20') ? {
+                (item.tipo === 'C/H20' && aguaEsPersonalizada(item)) ? {
                   text: '  Agua ' + formatearAgua(item),
                   fontSize: fontSize * 1.2,
                   color: '#0000FF'
@@ -1426,7 +1429,7 @@ export default {
           stack: [
             { text: this.obtenerMedidaVisible(item.medida), fontSize: fontSize * 2 },
             (item.tipo && item.tipo !== 'S/H20') ? {
-              text: item.tipo === 'C/H20' ? (item.tipo + '  Agua ' + formatearAgua(item)) : item.tipo,
+              text: (item.tipo === 'C/H20' && aguaEsPersonalizada(item)) ? (item.tipo + '  Agua ' + formatearAgua(item)) : item.tipo,
               fontSize: fontSize * 1.5,
               color: '#0000FF',
               bold: true,
