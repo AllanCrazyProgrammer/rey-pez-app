@@ -184,7 +184,7 @@
 
                 <div v-if="item.tipo === 'C/H20'" class="input-group-compact agua">
                   <div class="label-container">
-                    <label>Agua:</label>
+                    <label class="neto-label">Neto:</label>
                   </div>
                   <input
                     type="number"
@@ -289,7 +289,7 @@
 
                 <div v-if="item.tipo === 'C/H20'" class="input-group-compact agua">
                   <div class="label-container">
-                    <label>Agua:</label>
+                    <label class="neto-label">Neto:</label>
                   </div>
                   <input
                     type="number"
@@ -396,7 +396,7 @@
 
                 <div v-if="item.tipo === 'C/H20'" class="input-group-compact agua">
                   <div class="label-container">
-                    <label>Agua:</label>
+                    <label class="neto-label">Neto:</label>
                   </div>
                   <input
                     type="number"
@@ -509,7 +509,7 @@
 
                 <div v-if="item.tipo === 'C/H20'" class="input-group-compact agua">
                   <div class="label-container">
-                    <label>Agua:</label>
+                    <label class="neto-label">Neto:</label>
                   </div>
                   <input
                     type="number"
@@ -615,7 +615,7 @@
 
                 <div v-if="item.tipo === 'C/H20'" class="input-group-compact agua">
                   <div class="label-container">
-                    <label>Agua:</label>
+                    <label class="neto-label">Neto:</label>
                   </div>
                   <input
                     type="number"
@@ -739,7 +739,7 @@
 
                 <div v-if="item.tipo === 'C/H20'" class="input-group-compact agua">
                   <div class="label-container">
-                    <label>Agua:</label>
+                    <label class="neto-label">Neto:</label>
                   </div>
                   <input
                     type="number"
@@ -2696,6 +2696,14 @@ export default {
 .agua {
   width: 100px;
   flex-shrink: 0;
+}
+
+.neto-label {
+  background-color: #e74c3c;
+  color: #fff;
+  font-weight: bold;
+  padding: 2px 8px;
+  border-radius: 4px;
 }
 
 .operacion {
