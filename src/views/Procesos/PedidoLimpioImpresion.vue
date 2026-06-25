@@ -56,6 +56,7 @@
                 'text-blue compact': item.tipo === '1.35 y .15' || item.tipo === '1.5 y .3'
               }">
                 {{ item.tipo }}
+                <span v-if="item.tipo === 'C/H20'" class="agua-tag">Agua {{ textoAgua(item) }}</span>
                 <span v-if="item.nota" class="nota-tag">{{ item.nota }}</span>
               </td>
             </tr>
@@ -99,6 +100,7 @@
                   'text-blue compact': item.tipo === '1.35 y .15' || item.tipo === '1.3 y .2' || item.tipo === '1.5 y .3'
                 }">
                   {{ item.tipo }}
+                  <span v-if="item.tipo === 'C/H20'" class="agua-tag">Agua {{ textoAgua(item) }}</span>
                   <span v-if="item.nota" class="nota-tag">{{ item.nota }}</span>
                 </td>
               </tr>
@@ -140,6 +142,7 @@
                   'text-blue compact': item.tipo === '1.35 y .15' || item.tipo === '1.5 y .3'
                 }">
                   {{ item.tipo }}
+                  <span v-if="item.tipo === 'C/H20'" class="agua-tag">Agua {{ textoAgua(item) }}</span>
                   <span v-if="item.nota" class="nota-tag">{{ item.nota }}</span>
                 </td>
               </tr>
@@ -182,6 +185,7 @@
                     'text-blue compact': item.tipo === '1.35 y .15' || item.tipo === '1.5 y .3'
                   }">
                     {{ item.tipo }}
+                    <span v-if="item.tipo === 'C/H20'" class="agua-tag">Agua {{ textoAgua(item) }}</span>
                     <span v-if="item.nota" class="nota-tag">{{ item.nota }}</span>
                   </td>
                 </tr>
@@ -223,6 +227,7 @@
                     'text-blue compact': item.tipo === '1.35 y .15' || item.tipo === '1.5 y .3'
                   }">
                     {{ item.tipo }}
+                    <span v-if="item.tipo === 'C/H20'" class="agua-tag">Agua {{ textoAgua(item) }}</span>
                     <span v-if="item.nota" class="nota-tag">{{ item.nota }}</span>
                   </td>
                 </tr>
@@ -267,6 +272,7 @@
                   'text-blue compact': item.tipo === '1.35 y .15' || item.tipo === '1.5 y .3'
                 }">
                   {{ item.tipo }}
+                  <span v-if="item.tipo === 'C/H20'" class="agua-tag">Agua {{ textoAgua(item) }}</span>
                   <span v-if="item.nota" class="nota-tag">{{ item.nota }}</span>
                 </td>
               </tr>
@@ -557,6 +563,7 @@ import KilosRefrigeradosModal from '@/components/KilosRefrigeradosModal.vue'
 import ListaMedidasPedidoModal from '@/components/ListaMedidasPedidoModal.vue'
 import ResumenCalculadora from '@/components/ResumenCalculadora.vue'
 import { colorParaEtiqueta } from '@/utils/coloresEtiquetas'
+import { factorAgua, formatearAgua } from '@/utils/factorAgua'
 import { db } from '@/firebase'
 import { doc, updateDoc, Timestamp, collection, getDocs, query, where } from 'firebase/firestore'
 
@@ -1080,6 +1087,9 @@ export default {
     esMedidaMacuil(medida) {
       return (medida || '').toString().trim().toLowerCase() === 'macuil';
     },
+    textoAgua(item) {
+      return formatearAgua(item);
+    },
     obtenerMedidaVisible(medida) {
       return this.esMedidaMacuil(medida) ? '' : (medida || '');
     },
@@ -1157,7 +1167,12 @@ export default {
                   fontSize: fontSize * 2,
                   color: (item.tipo === 'C/H20' || item.tipo === '1.35 y .15' || item.tipo === '1.3 y .2' || item.tipo === '1.5 y .3') ? '#0000FF' : undefined,
                   margin: (item.tipo === '1.35 y .15' || item.tipo === '1.3 y .2' || item.tipo === '1.5 y .3') ? [0, 0, 0, 0] : [0, 2, 0, 2]
-                }
+                },
+                (item.tipo === 'C/H20') ? {
+                  text: '  Agua ' + formatearAgua(item),
+                  fontSize: fontSize * 1.2,
+                  color: '#0000FF'
+                } : ''
               ]
             },
             item.nota ? { 
@@ -1410,8 +1425,8 @@ export default {
         { 
           stack: [
             { text: this.obtenerMedidaVisible(item.medida), fontSize: fontSize * 2 },
-            (item.tipo && item.tipo !== 'S/H20') ? { 
-              text: item.tipo, 
+            (item.tipo && item.tipo !== 'S/H20') ? {
+              text: item.tipo === 'C/H20' ? (item.tipo + '  Agua ' + formatearAgua(item)) : item.tipo,
               fontSize: fontSize * 1.5,
               color: '#0000FF',
               bold: true,
@@ -1484,7 +1499,7 @@ export default {
           if (item.esTara) {
             tarasDirectas += Number(item.kilos);
             if (item.tipo === 'C/H20') {
-              kilosConH2O += Number(item.kilos) * 30 * 0.65;
+              kilosConH2O += Number(item.kilos) * 30 * factorAgua(item);
             } else if (item.tipo === '1.35 y .15') {
               kilosTaras135 += Number(item.kilos) * 30;
             } else if (item.tipo === '1.5 y .3') {
@@ -1559,7 +1574,7 @@ export default {
           if (item.esTara) {
             // Procesar taras
             if (item.tipo === 'C/H20') {
-              registro.total += kilos * 30 * 0.65; // Tara con agua
+              registro.total += kilos * 30 * factorAgua(item); // Tara con agua
             } else if (item.tipo === '1.35 y .15') {
               registro.total += kilos * 30; // Tara con factor 1.35
             } else if (item.tipo === '1.3 y .2') {
@@ -1572,7 +1587,7 @@ export default {
           } else {
             // Procesar kilos directos
             if (item.tipo === 'C/H20') {
-              registro.total += kilos * 0.65; // Kilos con agua
+              registro.total += kilos * factorAgua(item); // Kilos con agua
             } else if (item.tipo === '1.35 y .15') {
               registro.total += kilos * 1.35; // Kilos con factor 1.35
             } else if (item.tipo === '1.3 y .2') {
@@ -1710,7 +1725,7 @@ export default {
         if (item.esTara) {
           // Procesar taras
           if (item.tipo === 'C/H20') {
-            total += kilos * 30 * 0.65;
+            total += kilos * 30 * factorAgua(item);
           } else if (item.tipo === '1.35 y .15') {
             total += kilos * 30;
           } else if (item.tipo === '1.3 y .2') {
@@ -1723,7 +1738,7 @@ export default {
         } else {
           // Procesar kilos directos
           if (item.tipo === 'C/H20') {
-            total += kilos * 0.65;
+            total += kilos * factorAgua(item);
           } else if (item.tipo === '1.35 y .15') {
             total += kilos * 1.35;
           } else if (item.tipo === '1.3 y .2') {
@@ -2310,6 +2325,17 @@ h4.cliente-header.ozuna-header {
   border-radius: 3px;
   font-size: 0.8em;
   margin-top: 2px;
+}
+
+.agua-tag {
+  display: inline-block;
+  background-color: #2980b9;
+  color: white;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 0.75em;
+  margin-left: 4px;
+  white-space: nowrap;
 }
 
 /* Ajustes responsivos para las etiquetas */

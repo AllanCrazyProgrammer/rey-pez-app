@@ -175,11 +175,25 @@
                     class="input-field"
                     placeholder="Escribir tipo"
                   >
-                  <select v-else v-model="item.tipo" class="input-field" :class="{ 'text-blue': item.tipo === 'C/H20' }">
+                  <select v-else v-model="item.tipo" class="input-field" :class="{ 'text-blue': item.tipo === 'C/H20' }" @change="onTipoChange(item)">
                     <option value="">Seleccionar</option>
                     <option value="S/H20">S/H20</option>
                     <option value="C/H20" class="text-blue">C/H20</option>
                   </select>
+                </div>
+
+                <div v-if="item.tipo === 'C/H20'" class="input-group-compact agua">
+                  <div class="label-container">
+                    <label>Agua:</label>
+                  </div>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    v-model.number="item.agua"
+                    class="input-field"
+                    placeholder="0.65"
+                  >
                 </div>
 
                 <button @click="eliminarPedidoOtilio(index)" class="btn-eliminar">
@@ -266,11 +280,25 @@
                     class="input-field"
                     placeholder="Escribir tipo"
                   >
-                  <select v-else v-model="item.tipo" class="input-field" :class="{ 'text-blue': item.tipo === 'C/H20' }">
+                  <select v-else v-model="item.tipo" class="input-field" :class="{ 'text-blue': item.tipo === 'C/H20' }" @change="onTipoChange(item)">
                     <option value="">Seleccionar</option>
                     <option value="S/H20">S/H20</option>
                     <option value="C/H20" class="text-blue">C/H20</option>
                   </select>
+                </div>
+
+                <div v-if="item.tipo === 'C/H20'" class="input-group-compact agua">
+                  <div class="label-container">
+                    <label>Agua:</label>
+                  </div>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    v-model.number="item.agua"
+                    class="input-field"
+                    placeholder="0.65"
+                  >
                 </div>
 
                 <button @click="eliminarPedidoCatarro(index)" class="btn-eliminar">
@@ -357,13 +385,27 @@
                     class="input-field"
                     placeholder="Escribir tipo"
                   >
-                  <select v-else v-model="item.tipo" class="input-field" :class="{ 'text-blue': item.tipo === 'C/H20' || item.tipo === '1.3 y .2' || item.tipo === '1.5 y .3' }">
+                  <select v-else v-model="item.tipo" class="input-field" :class="{ 'text-blue': item.tipo === 'C/H20' || item.tipo === '1.3 y .2' || item.tipo === '1.5 y .3' }" @change="onTipoChange(item)">
                     <option value="">Seleccionar</option>
                     <option value="S/H20">S/H20</option>
                     <option value="C/H20" class="text-blue">C/H20</option>
                     <option value="1.3 y .2" class="text-blue">1.3 y .2</option>
                     <option value="1.5 y .3" class="text-blue">1.5 y .3</option>
                   </select>
+                </div>
+
+                <div v-if="item.tipo === 'C/H20'" class="input-group-compact agua">
+                  <div class="label-container">
+                    <label>Agua:</label>
+                  </div>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    v-model.number="item.agua"
+                    class="input-field"
+                    placeholder="0.65"
+                  >
                 </div>
 
                 <button @click="eliminarPedidoJoselito(index)" class="btn-eliminar">
@@ -450,11 +492,12 @@
                     class="input-field"
                     placeholder="Escribir tipo"
                   >
-                  <select 
+                  <select
                     v-else
-                    v-model="item.tipo" 
-                    class="input-field" 
+                    v-model="item.tipo"
+                    class="input-field"
                     :class="{ 'text-blue': item.tipo === 'C/H20' || item.tipo === '1.35 y .15' || item.tipo === '1.5 y .3' }"
+                    @change="onTipoChange(item)"
                   >
                     <option value="">Seleccionar</option>
                     <option value="S/H20">S/H20</option>
@@ -462,6 +505,20 @@
                     <option value="1.35 y .15" class="text-blue">1.35 y .15</option>
                     <option value="1.5 y .3" class="text-blue">1.5 y .3</option>
                   </select>
+                </div>
+
+                <div v-if="item.tipo === 'C/H20'" class="input-group-compact agua">
+                  <div class="label-container">
+                    <label>Agua:</label>
+                  </div>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    v-model.number="item.agua"
+                    class="input-field"
+                    placeholder="0.65"
+                  >
                 </div>
 
                 <button @click="eliminarPedidoLorena(index)" class="btn-eliminar">
@@ -548,12 +605,26 @@
                     class="input-field"
                     placeholder="Escribir tipo"
                   >
-                  <select v-else v-model="item.tipo" class="input-field" :class="{ 'text-blue': item.tipo === 'C/H20' }">
+                  <select v-else v-model="item.tipo" class="input-field" :class="{ 'text-blue': item.tipo === 'C/H20' }" @change="onTipoChange(item)">
                     <option value="">Seleccionar</option>
                     <option value="S/H20">S/H20</option>
                     <option value="C/H20" class="text-blue">C/H20</option>
                     <option value=".7 y .3">.7 y .3</option>
                   </select>
+                </div>
+
+                <div v-if="item.tipo === 'C/H20'" class="input-group-compact agua">
+                  <div class="label-container">
+                    <label>Agua:</label>
+                  </div>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    v-model.number="item.agua"
+                    class="input-field"
+                    placeholder="0.65"
+                  >
                 </div>
 
                 <div v-if="clienteActivo === 'ozuna'" class="input-group-compact maquila">
@@ -655,7 +726,7 @@
                     class="input-field"
                     placeholder="Escribir tipo"
                   >
-                  <select v-else v-model="item.tipo" class="input-field" :class="{ 'text-blue': item.tipo === 'C/H20' || item.tipo === '1.35 y .15' || item.tipo === '1.5 y .3' }">
+                  <select v-else v-model="item.tipo" class="input-field" :class="{ 'text-blue': item.tipo === 'C/H20' || item.tipo === '1.35 y .15' || item.tipo === '1.5 y .3' }" @change="onTipoChange(item)">
                     <option value="">Seleccionar</option>
                     <option value="S/H20">S/H20</option>
                     <option value="C/H20" class="text-blue">C/H20</option>
@@ -664,6 +735,20 @@
                     <option value=".9 y .1">.9 y .1</option>
                     <option value=".9">.9</option>
                   </select>
+                </div>
+
+                <div v-if="item.tipo === 'C/H20'" class="input-group-compact agua">
+                  <div class="label-container">
+                    <label>Agua:</label>
+                  </div>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    v-model.number="item.agua"
+                    class="input-field"
+                    placeholder="0.65"
+                  >
                 </div>
 
                 <div class="input-group-compact operacion">
@@ -832,6 +917,7 @@ import ProveedorModal from '@/components/ProveedorModal.vue'
 import NuevoClienteModal from '@/components/NuevoClienteModal.vue'
 import EtiquetasMedida from '@/components/EtiquetasMedida.vue'
 import { COLORES_ETIQUETAS, colorPorIndice } from '@/utils/coloresEtiquetas'
+import { AGUA_DEFAULT, factorAgua } from '@/utils/factorAgua'
 
 const TIPOS_POR_CLIENTE = {
   otilio: ['S/H20', 'C/H20'],
@@ -997,7 +1083,7 @@ export default {
           if (item.esTara) {
             tarasDirectas += Number(item.kilos);
             if (item.tipo === 'C/H20') {
-              kilosConH2O += Number(item.kilos) * 30 * 0.65;
+              kilosConH2O += Number(item.kilos) * 30 * factorAgua(item);
             } else {
               kilosTaras += Number(item.kilos) * 30;
             }
@@ -1035,7 +1121,7 @@ export default {
           if (item.esTara) {
             tarasDirectas += Number(item.kilos);
             if (item.tipo === 'C/H20') {
-              kilosConH2O += Number(item.kilos) * 30 * 0.65;
+              kilosConH2O += Number(item.kilos) * 30 * factorAgua(item);
             } else {
               kilosTaras += Number(item.kilos) * 30;
             }
@@ -1078,7 +1164,7 @@ export default {
           if (item.esTara) {
             tarasDirectas += Number(item.kilos);
             if (item.tipo === 'C/H20') {
-              kilosConH2O += Number(item.kilos) * 30 * 0.65;
+              kilosConH2O += Number(item.kilos) * 30 * factorAgua(item);
             } else if (item.tipo === '1.35 y .15' || item.tipo === '1.3 y .2') {
               kilosTaras135 += Number(item.kilos) * 30;
             } else if (item.tipo === '1.5 y .3') {
@@ -1133,7 +1219,7 @@ export default {
           if (item.esTara) {
             tarasDirectas += Number(item.kilos);
             if (item.tipo === 'C/H20') {
-              kilosConH2O += Number(item.kilos) * 30 * 0.65;
+              kilosConH2O += Number(item.kilos) * 30 * factorAgua(item);
             } else if (item.tipo === '1.35 y .15') {
               kilosTaras135 += Number(item.kilos) * 30;
             } else if (item.tipo === '1.5 y .3') {
@@ -1182,7 +1268,7 @@ export default {
           if (item.esTara) {
             tarasDirectas += Number(item.kilos);
             if (item.tipo === 'C/H20') {
-              kilosConH2O += Number(item.kilos) * 30 * 0.65;
+              kilosConH2O += Number(item.kilos) * 30 * factorAgua(item);
             } else {
               kilosTaras += Number(item.kilos) * 30;
             }
@@ -1265,6 +1351,38 @@ export default {
       }
 
       item.tipo = TIPO_DEFAULT_POR_CLIENTE[clienteId] ?? ''
+
+      this.onTipoChange(item)
+    },
+    onTipoChange(item) {
+      if (!item) return
+      // Al pasar a C/H20 inicializamos el factor de agua (producto neto) con el
+      // default si la fila aún no tiene uno asignado.
+      if (item.tipo === 'C/H20') {
+        if (item.agua === undefined || item.agua === null || item.agua === '') {
+          this.$set(item, 'agua', AGUA_DEFAULT)
+        }
+      }
+    },
+    inicializarAguaPedidos() {
+      // Asegura que las filas C/H20 cargadas tengan el factor de agua visible
+      // (los pedidos antiguos no guardaban este campo).
+      const listas = [
+        this.pedidoOtilio,
+        this.pedidoCatarro,
+        this.pedidoJoselito,
+        this.pedidoOzuna,
+        this.pedidoLorena
+      ]
+      Object.values(this.clientesTemporales || {}).forEach(cliente => {
+        if (cliente && Array.isArray(cliente.pedidos)) {
+          listas.push(cliente.pedidos)
+        }
+      })
+      listas.forEach(lista => {
+        if (!Array.isArray(lista)) return
+        lista.forEach(item => this.onTipoChange(item))
+      })
     },
     async cargarMedidas() {
       try {
@@ -1296,6 +1414,7 @@ export default {
             ? { ...data.etiquetasColores }
             : {};
           this.migrarEtiquetasLegado();
+          this.inicializarAguaPedidos();
           this.rendimientosGuardados = data.rendimientos || {};
           this.divisoresGuardados = data.divisores || {};
           this.completadosGuardados = data.completados || {};
@@ -1732,7 +1851,7 @@ export default {
           if (item.esTara) {
             tarasDirectas += Number(item.kilos);
             if (item.tipo === 'C/H20') {
-              kilosConH2O += Number(item.kilos) * 30 * 0.65;
+              kilosConH2O += Number(item.kilos) * 30 * factorAgua(item);
             } else if (item.tipo === '1.35 y .15') {
               kilosTaras135 += Number(item.kilos) * 30;
             } else if (item.tipo === '1.5 y .3') {
@@ -2571,6 +2690,11 @@ export default {
 
 .tipo {
   width: 180px;
+  flex-shrink: 0;
+}
+
+.agua {
+  width: 100px;
   flex-shrink: 0;
 }
 
