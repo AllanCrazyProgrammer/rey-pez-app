@@ -171,14 +171,17 @@ export default {
             const tipoNormalizado = this.normalizarTipo(item.tipo);
             // Obtener la nota original (sellado/kileado) del item
             const notaRaw = (item.nota || '').toString().trim();
+            const notaLower = notaRaw.toLowerCase();
             // Kileado se traduce a noSumarKilos (checkbox kg), no se escribe en el campo nota
-            const esKileado = notaRaw.toLowerCase() === 'kileado';
-            const nota = esKileado ? '' : notaRaw;
+            const esKileado = notaLower === 'kileado';
+            // Sellado se anexa al nombre que se muestra en el PDF (igual que kileado)
+            const esSellado = notaLower === 'sellado';
+            const nota = (esKileado || esSellado) ? '' : notaRaw;
             // Obtener la etiqueta (Selecta, Ahumada, etc.) del item
             const etiqueta = (item.etiqueta || '').toString().trim();
             const esVenta = clienteId === '4' ? !item.esMaquila : null;
             const ventaKey = clienteId === '4' ? (esVenta ? 'venta' : 'maquila') : '';
-            // Usar notaRaw en la clave para mantener diferenciados ítems kileados de no-kileados
+            // Usar notaRaw en la clave para mantener diferenciados ítems kileados/sellados de los demás
             const clave = `${medida}__${tipoNormalizado.tipo || ''}__${tipoNormalizado.tipoPersonalizado || ''}__${tipoNormalizado.camaronNeto || ''}__${ventaKey}__${notaRaw}__${etiqueta}`;
             // Incluir la etiqueta (en minúsculas) en el nombre de la medida para que se vea en el esqueleto
             const medidaConEtiqueta = etiqueta ? `${medida} ${etiqueta.toLowerCase()}` : medida;
@@ -190,11 +193,13 @@ export default {
                 tipoPersonalizado: tipoNormalizado.tipoPersonalizado || '',
                 camaronNeto: tipoNormalizado.camaronNeto,
                 esVenta,
-                nota, // Incluir la nota en el esqueleto (sin "Kileado")
+                nota, // Incluir la nota en el esqueleto (sin "Kileado"/"Sellado")
                 etiqueta, // Incluir la etiqueta en el esqueleto
                 noSumarKilos: esKileado, // Si era kileado, marcar el checkbox kg
-                // Si es kileado, anexar "kileado" al nombre que se muestra en el PDF
-                nombreAlternativoPDF: esKileado ? `${medidaConEtiqueta} kileado` : '',
+                // Si es kileado/sellado, anexar la palabra al nombre que se muestra en el PDF
+                nombreAlternativoPDF: esKileado
+                  ? `${medidaConEtiqueta} kileado`
+                  : (esSellado ? `${medidaConEtiqueta} sellado` : ''),
                 pedidoReferencia: {
                   kilos: 0,
                   taras: 0

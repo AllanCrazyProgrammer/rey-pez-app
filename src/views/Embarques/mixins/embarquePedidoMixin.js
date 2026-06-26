@@ -55,16 +55,24 @@ export const embarquePedidoMixin = {
         return referencias[clienteId];
       };
 
-      const agregarReferencia = (clienteId, medida, tipoData, cantidad, esTara, etiqueta = '') => {
+      const agregarReferencia = (clienteId, medida, tipoData, cantidad, esTara, etiqueta = '', nota = '') => {
         const medidaBase = this.normalizarTexto(medida);
         if (!medidaBase || !clienteId) return;
 
         const etiquetaNormalizada = this.normalizarTexto(etiqueta);
+        // Sellado/Kileado se reflejan en el nombre de la medida que genera el esqueleto
+        // ("51/60 sellado", "51/60 kileado"), por lo que la referencia debe quedar
+        // separada por variante para que cada tarjeta muestre sus propios kilos pedidos.
+        const notaNormalizada = this.normalizarTexto(nota);
+        const notaSufijo = (notaNormalizada === 'sellado' || notaNormalizada === 'kileado')
+          ? notaNormalizada
+          : '';
+
         // Cuando hay etiqueta, el esqueleto la añade al nombre de la medida ("51/60 selecta"),
         // por lo que la referencia debe indexarse por la misma medida combinada.
-        const medidaNormalizada = etiquetaNormalizada
-          ? `${medidaBase} ${etiquetaNormalizada}`
-          : medidaBase;
+        let medidaNormalizada = medidaBase;
+        if (etiquetaNormalizada) medidaNormalizada += ` ${etiquetaNormalizada}`;
+        if (notaSufijo) medidaNormalizada += ` ${notaSufijo}`;
 
         const tipoNormalizado = this.normalizarTexto(tipoData?.tipo);
         const tipoPersonalizado = this.normalizarTexto(tipoData?.tipoPersonalizado);
@@ -102,7 +110,7 @@ export const embarquePedidoMixin = {
               if (!medida) return;
               const cantidad = this.normalizarCantidadPedido(item.kilos);
               if (cantidad <= 0) return;
-              agregarReferencia(clienteId, medida, this.normalizarTipoPedido(item.tipo), cantidad, item.esTara, item.etiqueta);
+              agregarReferencia(clienteId, medida, this.normalizarTipoPedido(item.tipo), cantidad, item.esTara, item.etiqueta, item.nota);
             });
           });
 
@@ -117,7 +125,7 @@ export const embarquePedidoMixin = {
                 if (!medida) return;
                 const cantidad = this.normalizarCantidadPedido(item.kilos);
                 if (cantidad <= 0) return;
-                agregarReferencia(clienteId, medida, this.normalizarTipoPedido(item.tipo), cantidad, item.esTara, item.etiqueta);
+                agregarReferencia(clienteId, medida, this.normalizarTipoPedido(item.tipo), cantidad, item.esTara, item.etiqueta, item.nota);
               });
             });
           }
@@ -257,11 +265,13 @@ export const embarquePedidoMixin = {
         const tipo = (entrada.tipo || '').toString().trim().toLowerCase();
         const tipoPersonalizado = (entrada.tipoPersonalizado || '').toString().trim().toLowerCase();
         const nota = (entrada.nota || '').toString().trim().toLowerCase();
+        // Incluir nombreAlternativoPDF para que kileado/sellado no colisionen con la variante "plain"
+        const nombreAlt = (entrada.nombreAlternativoPDF || '').toString().trim().toLowerCase();
         const esOzuna = (entrada.clienteId || '').toString() === '4';
         const ventaKey = esOzuna && typeof entrada.esVenta === 'boolean'
           ? (entrada.esVenta ? 'venta' : 'maquila') : '';
         if (!medida) return '';
-        return `${medida}__${tipo}__${tipoPersonalizado}__${ventaKey}__${nota}`;
+        return `${medida}__${tipo}__${tipoPersonalizado}__${ventaKey}__${nota}__${nombreAlt}`;
       };
 
       const construirClaveCrudo = (entrada = {}) => {
