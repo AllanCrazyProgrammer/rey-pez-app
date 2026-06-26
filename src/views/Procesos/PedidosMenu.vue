@@ -98,6 +98,7 @@
 import { db } from '@/firebase'
 import { collection, query, orderBy, onSnapshot, deleteDoc, doc } from 'firebase/firestore'
 import { formatearFecha } from '@/utils/formatters';
+import { factorAgua } from '@/utils/factorAgua';
 
 export default {
   name: 'PedidosMenu',
@@ -232,7 +233,7 @@ export default {
         if (item.kilos) {
           if (item.esTara) {
             if (item.tipo === 'C/H20') {
-              kilosConH2O += Number(item.kilos) * 30 * 0.65;
+              kilosConH2O += Number(item.kilos) * 30 * factorAgua(item);
             } else if (item.tipo === '1.35 y .15' || item.tipo === '1.3 y .2') {
               kilosTaras135 += Number(item.kilos) * 30;
             } else if (item.tipo === '1.5 y .3') {

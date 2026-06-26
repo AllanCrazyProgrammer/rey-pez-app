@@ -216,6 +216,7 @@
 
 <script>
 import { getFirestore, collection, getDocs, query, where, doc, updateDoc } from 'firebase/firestore';
+import { factorAgua } from '@/utils/factorAgua';
 
 export default {
   name: 'PedidoDelDiaModal',
@@ -487,7 +488,7 @@ export default {
         if (item.kilos) {
           if (item.esTara) {
             if (item.tipo === 'C/H20') {
-              kilosConH2O += Number(item.kilos) * 30 * 0.65;
+              kilosConH2O += Number(item.kilos) * 30 * factorAgua(item);
             } else if (item.tipo === '1.35 y .15' || item.tipo === '1.3 y .2') {
               kilosTaras135 += Number(item.kilos) * 30;
             } else {
