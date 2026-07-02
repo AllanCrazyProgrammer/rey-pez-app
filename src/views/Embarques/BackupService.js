@@ -1,5 +1,6 @@
 // Servicio de respaldo de emergencia para embarques
 import { getFirestore, collection, addDoc, serverTimestamp, doc, getDoc, getDocs } from 'firebase/firestore';
+import { normalizarFechaValor } from '@/utils/dateUtils';
 
 class BackupService {
   constructor() {
@@ -93,45 +94,54 @@ class BackupService {
   }
 
   /**
-   * Buscar respaldos por fecha
+   * Buscar respaldos por fecha del embarque original.
+   *
+   * Usa la normalización canónica de fechas (normalizarFechaValor): compara
+   * siempre 'YYYY-MM-DD' contra 'YYYY-MM-DD' sin pasar por conversiones de
+   * zona horaria (que clasificaban embarques capturados por la tarde-noche
+   * en el día siguiente UTC) y nunca lanza por una fecha corrupta, así un
+   * respaldo con datos malos no tumba la búsqueda completa.
    */
   async buscarRespaldosPorFecha(fecha) {
     try {
-      const fechaObj = new Date(fecha);
-      const fechaISO = fechaObj.toISOString().split('T')[0];
-      
+      const fechaISO = normalizarFechaValor(fecha);
+      if (!fechaISO) {
+        throw new Error(`Fecha de búsqueda inválida: ${fecha}`);
+      }
+
       const respaldosRef = collection(this.db, 'respaldos_emergencia');
       const snapshot = await getDocs(respaldosRef);
-      
+
       const respaldosEncontrados = [];
-      
-      snapshot.docs.forEach(doc => {
-        const data = doc.data();
-        
-        // Verificar fecha del embarque original
-        let fechaEmbarque;
-        if (data.fechaEmbarqueOriginal && typeof data.fechaEmbarqueOriginal.toDate === 'function') {
-          fechaEmbarque = data.fechaEmbarqueOriginal.toDate();
-        } else if (data.fechaEmbarqueOriginal instanceof Date) {
-          fechaEmbarque = data.fechaEmbarqueOriginal;
-        } else if (typeof data.fechaEmbarqueOriginal === 'string') {
-          fechaEmbarque = new Date(data.fechaEmbarqueOriginal);
-        } else {
-          return;
-        }
-        
-        const fechaEmbarqueISO = fechaEmbarque.toISOString().split('T')[0];
-        
-        if (fechaEmbarqueISO === fechaISO) {
+
+      snapshot.docs.forEach(docSnap => {
+        const data = docSnap.data();
+
+        // Aceptar el respaldo si CUALQUIERA de sus fechas conocidas coincide:
+        // el campo de metadatos o la fecha dentro de los datos originales
+        // (respaldos viejos no siempre traen fechaEmbarqueOriginal).
+        const candidatas = [
+          normalizarFechaValor(data.fechaEmbarqueOriginal),
+          normalizarFechaValor(data.datosOriginales?.fecha)
+        ];
+
+        if (candidatas.includes(fechaISO)) {
           respaldosEncontrados.push({
-            id: doc.id,
+            id: docSnap.id,
             ...data
           });
         }
       });
-      
+
+      // Más recientes primero, para que el respaldo que se busca (normalmente
+      // el último borrado) aparezca hasta arriba.
+      respaldosEncontrados.sort((a, b) => {
+        const ms = (valor) => (typeof valor?.toMillis === 'function' ? valor.toMillis() : 0);
+        return ms(b.fechaRespaldo) - ms(a.fechaRespaldo);
+      });
+
       return respaldosEncontrados;
-      
+
     } catch (error) {
       console.error('[BACKUP] Error al buscar respaldos por fecha:', error);
       throw error;
