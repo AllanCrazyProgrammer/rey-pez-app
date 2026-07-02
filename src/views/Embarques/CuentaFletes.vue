@@ -108,6 +108,7 @@ import { getFirestore, collection, getDocs, doc, writeBatch, addDoc, deleteDoc }
 import html2pdf from 'html2pdf.js';
 
 import { formatearFecha } from '@/utils/formatters';
+import { obtenerFechaActualISO } from '@/utils/dateUtils';
 
 import CuentaFletesShell from './components/CuentaFletes/CuentaFletesShell.vue';
 import CuentaFletesToolbar from './components/CuentaFletes/CuentaFletesToolbar.vue';
@@ -218,6 +219,18 @@ export default {
     },
     montoFletesPendientes() {
       return this.fletesPendientes.reduce((total, flete) => total + this.calcularMontoDiaLocal(flete), 0);
+    },
+    // Para el PDF se omite el flete del día en curso (y fechas futuras):
+    // no se paga hasta que pasa el día. La vista en pantalla sí lo muestra.
+    fletesPendientesParaPDF() {
+      const hoy = obtenerFechaActualISO();
+      return this.fletesPendientes.filter(flete => {
+        const fechaFlete = this.obtenerClaveFechaMovimiento(flete.fecha);
+        return fechaFlete && fechaFlete < hoy;
+      });
+    },
+    montoFletesPendientesPDF() {
+      return this.fletesPendientesParaPDF.reduce((total, flete) => total + this.calcularMontoDiaLocal(flete), 0);
     },
     resumenCuenta() {
       const totalTarasLimpioJoselito = this.fletesFiltrados.reduce((total, flete) => total + (flete.tarasLimpioJoselito || 0), 0);
@@ -427,7 +440,7 @@ export default {
       return this.tarasDescuentoCatarroOtilio(flete) * DESCUENTO_TARA_CRUDO_CATARRO_OTILIO;
     },
     generarFilasFletesPDF() {
-      const filas = this.fletesPendientes.map(flete => {
+      const filas = this.fletesPendientesParaPDF.map(flete => {
         const tarasDescuento = this.tarasDescuentoCatarroOtilio(flete);
         const montoDescuento = this.montoDescuentoCatarroOtilio(flete);
         const celdaDescuento = tarasDescuento > 0
@@ -447,7 +460,7 @@ export default {
       `;
       });
 
-      const totalTarasDescuento = this.fletesPendientes.reduce(
+      const totalTarasDescuento = this.fletesPendientesParaPDF.reduce(
         (sum, f) => sum + this.tarasDescuentoCatarroOtilio(f), 0
       );
       const totalMontoDescuento = totalTarasDescuento * DESCUENTO_TARA_CRUDO_CATARRO_OTILIO;
@@ -458,13 +471,13 @@ export default {
       filas.push(`
         <tr class="fila-total">
           <td><strong>TOTAL</strong></td>
-          <td><strong>${this.fletesPendientes.reduce((sum, f) => sum + (f.tarasLimpioJoselito || 0), 0)}</strong></td>
-          <td><strong>${this.fletesPendientes.reduce((sum, f) => sum + (f.tarasCrudoJoselito || 0), 0)}</strong></td>
-          <td><strong>${this.fletesPendientes.reduce((sum, f) => sum + (f.tarasLimpioVeronica || 0), 0)}</strong></td>
-          <td><strong>${this.fletesPendientes.reduce((sum, f) => sum + (f.tarasCrudoVeronica || 0), 0)}</strong></td>
-          <td><strong>${this.fletesPendientes.reduce((sum, f) => sum + this.obtenerTotalTaras(f), 0)}</strong></td>
+          <td><strong>${this.fletesPendientesParaPDF.reduce((sum, f) => sum + (f.tarasLimpioJoselito || 0), 0)}</strong></td>
+          <td><strong>${this.fletesPendientesParaPDF.reduce((sum, f) => sum + (f.tarasCrudoJoselito || 0), 0)}</strong></td>
+          <td><strong>${this.fletesPendientesParaPDF.reduce((sum, f) => sum + (f.tarasLimpioVeronica || 0), 0)}</strong></td>
+          <td><strong>${this.fletesPendientesParaPDF.reduce((sum, f) => sum + (f.tarasCrudoVeronica || 0), 0)}</strong></td>
+          <td><strong>${this.fletesPendientesParaPDF.reduce((sum, f) => sum + this.obtenerTotalTaras(f), 0)}</strong></td>
           <td><strong>${celdaTotalDescuento}</strong></td>
-          <td><strong>${this.formatearMonto(this.montoFletesPendientes)}</strong></td>
+          <td><strong>${this.formatearMonto(this.montoFletesPendientesPDF)}</strong></td>
         </tr>
       `);
 
@@ -508,6 +521,7 @@ export default {
         <div class="pdf-container">
           <h2>Cuenta de Fletes - ${this.choferSeleccionado}</h2>
           <p class="fecha-impresion">Fecha de impresión: ${new Date().toLocaleDateString('es-ES')}</p>
+          <p class="fecha-impresion">No incluye el flete del día de hoy (se paga hasta que pasa el día).</p>
           <h3>Fletes Pendientes</h3>
           <table class="tabla-pdf">
             <thead>
@@ -527,8 +541,8 @@ export default {
           ${this.generarTablaAbonosPDF()}
           <div class="resumen-pdf">
             <h3>Resumen de Cuenta</h3>
-            <p><strong>Total Abonos:</strong> ${this.formatearMonto(this.resumenCuenta.totalAbonos)}</p>
-            <p class="total-final"><strong>Saldo Pendiente:</strong> ${this.formatearMonto(this.resumenCuenta.saldoPendiente)}</p>
+            <p><strong>Total Abonos:</strong> ${this.formatearMonto(this.totalAbonos)}</p>
+            <p class="total-final"><strong>Saldo Pendiente:</strong> ${this.formatearMonto(this.montoFletesPendientesPDF - this.totalAbonos)}</p>
           </div>
         </div>
       `;
