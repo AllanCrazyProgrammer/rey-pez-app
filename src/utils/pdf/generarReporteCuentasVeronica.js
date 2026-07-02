@@ -72,9 +72,7 @@ export const generarReporteCuentasVeronica = async ({ fechaInicio, fechaFin, reg
   }
 
   const hayObservaciones = registrosOrdenados.some(
-    (registro) =>
-      (typeof registro.observacion === 'string' && registro.observacion.trim().length > 0) ||
-      Number(registro.ajusteManual) !== 0
+    (registro) => typeof registro.observacion === 'string' && registro.observacion.trim().length > 0
   );
 
   const filaEncabezado = [
@@ -138,16 +136,7 @@ export const generarReporteCuentasVeronica = async ({ fechaInicio, fechaFin, reg
 
     if (hayObservaciones) {
       const observacionTexto = (typeof registro.observacion === 'string' ? registro.observacion : '').trim();
-      const partesObservacion = [];
-      if (observacionTexto) partesObservacion.push(observacionTexto);
-      if (ajusteManual) {
-        const signo = ajusteManual > 0 ? '+' : '';
-        const motivoAjuste = (registro.ajusteManualMotivo || '').trim();
-        partesObservacion.push(
-          `Ajuste: ${signo}${formatCurrency(ajusteManual)}${motivoAjuste ? ` (${motivoAjuste})` : ''}`
-        );
-      }
-      filaRegistro.push({ text: partesObservacion.join(' | '), alignment: 'left' });
+      filaRegistro.push({ text: observacionTexto, alignment: 'left' });
     }
 
     tablaBody.push(filaRegistro);
