@@ -110,14 +110,26 @@
             </span>
             <span v-else class="estado-cuenta estado-sin-nota">Sin nota</span>
           </div>
+          <div v-if="!cuenta.missingNota && cuenta.saldoNegativoDetectado" class="saldo-negativo-alerta">
+            <span class="alerta-icono">⚠️</span>
+            <span class="alerta-texto">Saldo negativo detectado: -${{ formatNumber(cuenta.montoNegativoDetectado) }}</span>
+            <button
+              type="button"
+              class="btn-ajustar-auto"
+              :disabled="aplicandoAjusteAutomaticoId === cuenta.id"
+              @click="ajustarAutomaticamente(cuenta)"
+            >
+              {{ aplicandoAjusteAutomaticoId === cuenta.id ? 'Ajustando...' : 'Ajustar automáticamente' }}
+            </button>
+          </div>
           <div v-if="!cuenta.missingNota && cuenta.ajusteManual" class="ajuste-info">
-            <span class="ajuste-label">Ajuste manual:</span>
+            <span class="ajuste-label">Ajuste{{ cuenta.ajusteManualMotivo && cuenta.ajusteManualMotivo.startsWith('Ajuste automático') ? ' automático' : ' manual' }}:</span>
             <span class="ajuste-monto">{{ cuenta.ajusteManual > 0 ? '+' : '' }}${{ formatNumber(cuenta.ajusteManual) }}</span>
             <span v-if="cuenta.ajusteManualMotivo" class="ajuste-motivo">{{ cuenta.ajusteManualMotivo }}</span>
           </div>
           <div class="cuenta-actions">
             <button v-if="!cuenta.missingNota" @click="editarCuenta(cuenta.id)" class="edit-btn">Editar</button>
-            <button v-if="!cuenta.missingNota" @click="abrirAjusteModal(cuenta)" class="adjust-btn">Ajustar saldo</button>
+            <button v-if="!cuenta.missingNota" @click="abrirAjusteModal(cuenta)" class="adjust-btn">Ajuste manual</button>
             <button v-if="!cuenta.missingNota" @click="borrarCuenta(cuenta.id)" class="delete-btn">Borrar</button>
             <button
               v-else
@@ -313,7 +325,8 @@ export default {
       cuentaAjuste: null,
       ajusteFormMonto: null,
       ajusteFormMotivo: '',
-      guardandoAjuste: false
+      guardandoAjuste: false,
+      aplicandoAjusteAutomaticoId: null
     };
   },
   computed: {
@@ -605,6 +618,10 @@ export default {
             cuenta.saldoAcumuladoAnterior = saldoAnterior;
             cuenta.estadoPagado = estadoPagado;
             cuenta.nuevoSaldoAcumulado = saldoNormalizado;
+            cuenta.saldoNegativoDetectado = totalDia < -TOLERANCIA;
+            cuenta.montoNegativoDetectado = cuenta.saldoNegativoDetectado
+              ? Math.round(Math.abs(totalDia) * 100) / 100
+              : 0;
 
             if (saldoAcumulado <= TOLERANCIA) {
               saldoAcumulado = 0;
@@ -895,6 +912,56 @@ export default {
         this.showSaveMessage = false;
       }, 3000);
     },
+    cuentaMasRecienteNoMissing() {
+      const candidatas = this.cuentas.filter(c => !c.missingNota);
+      if (!candidatas.length) return null;
+      return candidatas.reduce((masReciente, actual) =>
+        new Date(actual.fecha) > new Date(masReciente.fecha) ? actual : masReciente
+      , candidatas[0]);
+    },
+    async ajustarAutomaticamente(cuenta) {
+      const monto = cuenta.montoNegativoDetectado;
+      if (!monto) return;
+
+      const cuentaMasReciente = this.cuentaMasRecienteNoMissing();
+      if (!cuentaMasReciente) {
+        alert('No se encontró una nota reciente para aplicar el ajuste.');
+        return;
+      }
+
+      const esMismaCuenta = cuentaMasReciente.id === cuenta.id;
+      const confirmMsg = esMismaCuenta
+        ? `Se detectó un saldo negativo de $${this.formatNumber(monto)} en la nota del ${this.formatDate(cuenta.fecha)} (es la nota más reciente). Se ajustará a $0. ¿Continuar?`
+        : `Se detectó un saldo negativo de $${this.formatNumber(monto)} en la nota del ${this.formatDate(cuenta.fecha)}. Se corregirá esa nota y el mismo monto se aplicará como ajuste en la nota más reciente (${this.formatDate(cuentaMasReciente.fecha)}). ¿Continuar?`;
+
+      if (!confirm(confirmMsg)) return;
+
+      this.aplicandoAjusteAutomaticoId = cuenta.id;
+      try {
+        const batch = writeBatch(db);
+        const motivoOrigen = `Ajuste automático: saldo negativo de $${this.formatNumber(monto)} detectado el ${this.formatDate(cuenta.fecha)}`;
+        batch.update(doc(db, 'cuentasVeronica', cuenta.id), {
+          ajusteManual: (cuenta.ajusteManual || 0) + monto,
+          ajusteManualMotivo: motivoOrigen
+        });
+
+        if (!esMismaCuenta) {
+          const motivoDestino = `Ajuste automático: crédito de $${this.formatNumber(monto)} trasladado desde la nota del ${this.formatDate(cuenta.fecha)}`;
+          batch.update(doc(db, 'cuentasVeronica', cuentaMasReciente.id), {
+            ajusteManual: (cuentaMasReciente.ajusteManual || 0) - monto,
+            ajusteManualMotivo: motivoDestino
+          });
+        }
+
+        await batch.commit();
+        this.mostrarMensaje('Saldo negativo ajustado automáticamente');
+      } catch (error) {
+        console.error('Error al ajustar automáticamente el saldo:', error);
+        this.mostrarMensaje('Error al ajustar automáticamente el saldo');
+      } finally {
+        this.aplicandoAjusteAutomaticoId = null;
+      }
+    },
     abrirAjusteModal(cuenta) {
       this.cuentaAjuste = cuenta;
       this.ajusteFormMonto = cuenta.ajusteManual || null;
@@ -1151,6 +1218,45 @@ h1, h2 {
 
 .adjust-btn:hover {
   background-color: #e07600;
+}
+
+.saldo-negativo-alerta {
+  margin: 10px 0;
+  padding: 8px 10px;
+  background-color: #ffebee;
+  border-left: 4px solid #f44336;
+  border-radius: 4px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  font-size: 0.9em;
+}
+
+.alerta-texto {
+  font-weight: bold;
+  color: #c62828;
+}
+
+.btn-ajustar-auto {
+  background-color: #f44336;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.85em;
+  font-weight: 600;
+  transition: background-color 0.2s ease;
+}
+
+.btn-ajustar-auto:hover:not(:disabled) {
+  background-color: #d32f2f;
+}
+
+.btn-ajustar-auto:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
 }
 
 .ajuste-info {
