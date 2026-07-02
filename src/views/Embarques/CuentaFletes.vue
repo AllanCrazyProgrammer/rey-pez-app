@@ -124,6 +124,7 @@ import {
   filtrarFletesPorChofer,
   normalizarTexto,
   obtenerClaveChoferPago,
+  obtenerFechaISO,
   obtenerTotalTaras,
   ordenarMovimientos,
   transformarEmbarqueAFlete
@@ -300,10 +301,7 @@ export default {
       return this.formatoMoneda.format(Number(monto) || 0);
     },
     obtenerClaveFechaMovimiento(fecha) {
-      if (!fecha) return '';
-      const fechaObj = fecha instanceof Date ? fecha : new Date(fecha);
-      if (Number.isNaN(fechaObj.getTime())) return '';
-      return fechaObj.toISOString().split('T')[0];
+      return obtenerFechaISO(fecha);
     },
     cambiarChofer(chofer) {
       this.choferSeleccionado = chofer;

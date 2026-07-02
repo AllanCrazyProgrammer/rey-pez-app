@@ -69,11 +69,36 @@ export function normalizarDocDataParaFirestore(docData, record = {}, contexto = 
     fecha: parseFecha(dataCruda.fecha || record.fecha || contexto.fechaDefault),
   };
 
-  // Campos escritos por otras vistas (p. ej. Rendimientos) o flujos:
-  // conservarlos si existen local o remotamente para no borrarlos al
-  // reescribir el documento completo con setDoc.
-  ['totalGanancias', 'rendimientoManual', 'borrador'].forEach((key) => {
+  // Campos del flujo del editor: conservarlos si existen local o remotamente
+  // para no borrarlos al reescribir el documento completo con setDoc.
+  ['borrador'].forEach((key) => {
     const valor = pickConRemoto(key);
+    if (valor !== undefined) {
+      data[key] = valor;
+    }
+  });
+
+  // Campos que otras vistas escriben DIRECTO en Firestore sin pasar por el
+  // espejo offline: Rendimientos (totalGanancias, rendimientoManual) y Cuenta
+  // de Fletes (fletePagado, fletePagos, fletePagoActualizado*). Para estos, el
+  // valor remoto SIEMPRE es el más fresco — el espejo offline puede traer una
+  // copia vieja que revertiría pagos de fletes ya marcados. Preferir
+  // remoto → snapshot local → record; omitirlos borraba las marcas de pago en
+  // cada sincronización y los fletes viejos volvían a aparecer "pendientes".
+  const pickPreferRemoto = (key) => {
+    const remoto = contexto.dataRemota;
+    if (remoto && remoto[key] !== undefined && remoto[key] !== null) return remoto[key];
+    return pickConRemoto(key);
+  };
+  [
+    'totalGanancias',
+    'rendimientoManual',
+    'fletePagado',
+    'fletePagos',
+    'fletePagoActualizadoEn',
+    'fletePagoActualizadoPor'
+  ].forEach((key) => {
+    const valor = pickPreferRemoto(key);
     if (valor !== undefined) {
       data[key] = valor;
     }

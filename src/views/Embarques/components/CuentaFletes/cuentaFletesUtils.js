@@ -1,3 +1,5 @@
+import { normalizarFechaValor } from '@/utils/dateUtils';
+
 export const COSTO_TARA_LIMPIO = 70;
 export const COSTO_TARA_CRUDO = 60;
 export const COSTO_TARA_LIMPIO_NUEVO = 100;
@@ -56,10 +58,10 @@ export function esCargaDeUnSoloChofer(cargaCon, chofer) {
 }
 
 export function obtenerFechaISO(fecha) {
-  if (!fecha) return '';
-  const fechaObj = fecha instanceof Date ? fecha : new Date(fecha);
-  if (Number.isNaN(fechaObj.getTime())) return '';
-  return fechaObj.toISOString().split('T')[0];
+  // Normalización canónica: strings ISO se recortan sin pasar por zona
+  // horaria (toISOString clasificaba capturas de tarde-noche en el día
+  // siguiente UTC) y una fecha corrupta regresa '' en vez de lanzar.
+  return normalizarFechaValor(fecha) || '';
 }
 
 export function calcularTarasProductos(productos = []) {
