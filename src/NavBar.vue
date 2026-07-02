@@ -106,7 +106,7 @@
             <span class="thermal-indicator"></span>
           </router-link>
 
-          <details class="desktop-more-menu desktop-exist-menu">
+          <details class="desktop-more-menu desktop-exist-menu" ref="existDetails">
             <summary class="nav-link nav-link-more" aria-label="Ver existencias">
               <span class="link-bracket">⟨</span>
               <span class="link-index">05</span>
@@ -114,10 +114,10 @@
               <span class="link-bracket">⟩</span>
             </summary>
             <div class="desktop-more-panel">
-              <router-link 
-                to="/existencias" 
+              <router-link
+                to="/existencias"
                 class="nav-link"
-                @click="closeMobileMenu"
+                @click.native="closeMobileMenu(); closeExistMenu()"
                 aria-label="Ver existencias de limpios"
               >
                 <span class="link-bracket">⟨</span>
@@ -125,10 +125,10 @@
                 <span class="link-bracket">⟩</span>
                 <span class="thermal-indicator"></span>
               </router-link>
-              <router-link 
-                to="/existencias-crudos" 
+              <router-link
+                to="/existencias-crudos"
                 class="nav-link"
-                @click="closeMobileMenu"
+                @click.native="closeMobileMenu(); closeExistMenu()"
                 aria-label="Ver existencias de crudos"
               >
                 <span class="link-bracket">⟨</span>
@@ -321,13 +321,25 @@ export default {
       if (window.innerWidth > 1024 && this.mobileMenuOpen) {
         this.closeMobileMenu();
       }
+    },
+    closeExistMenu() {
+      const details = this.$refs.existDetails;
+      if (details) details.open = false;
+    },
+    handleClickOutsideExistMenu(event) {
+      const details = this.$refs.existDetails;
+      if (details && details.open && !details.contains(event.target)) {
+        details.open = false;
+      }
     }
   },
   mounted() {
     window.addEventListener('resize', this.handleResize);
+    document.addEventListener('click', this.handleClickOutsideExistMenu);
   },
   beforeDestroy() {
     window.removeEventListener('resize', this.handleResize);
+    document.removeEventListener('click', this.handleClickOutsideExistMenu);
     // Ensure body scroll is restored
     document.body.style.overflow = '';
     document.body.classList.remove('mobile-menu-open');
