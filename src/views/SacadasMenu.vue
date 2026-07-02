@@ -75,8 +75,9 @@
 
 <script>
 import { db } from '@/firebase';
-import { collection, getDocs, query, orderBy, deleteDoc, doc, updateDoc } from 'firebase/firestore';
+import { collection, getDocs, getDoc, query, orderBy, doc, updateDoc } from 'firebase/firestore';
 import moment from 'moment'; // Import Moment.js
+import PapeleraService from '@/services/PapeleraService';
 import HistorialProductoModal from '@/components/HistorialProductoModal.vue';
 import ListaMedidasPedidoModal from '@/components/ListaMedidasPedidoModal.vue';
 import { formatNumber } from '@/utils/formatters';
@@ -155,14 +156,36 @@ export default {
       this.$router.push(`/sacadas/${id}`);
     },
     async deleteSacada(id) {
-      if (confirm('¿Estás seguro de que quieres borrar este registro de sacadas?')) {
+      // Obtener los datos del día (estado local o Firestore) para el respaldo y el detalle
+      let datosSacada = this.sacadas.find(sacada => sacada.id === id) || null;
+      if (!datosSacada) {
         try {
-          await deleteDoc(doc(db, 'sacadas', id));
+          const docSnap = await getDoc(doc(db, 'sacadas', id));
+          datosSacada = docSnap.exists() ? { id, ...docSnap.data() } : null;
+        } catch (error) {
+          console.error("Error al obtener el registro de sacadas antes de borrar: ", error);
+        }
+      }
+
+      const numEntradas = Array.isArray(datosSacada?.entradas) ? datosSacada.entradas.length : 0;
+      const numSalidas = Array.isArray(datosSacada?.salidas) ? datosSacada.salidas.length : 0;
+      const detalle = datosSacada
+        ? `El día ${this.formatDate(datosSacada.fecha)} contiene ${numEntradas} entrada(s) y ${numSalidas} salida(s).\n\n`
+        : '';
+
+      if (confirm(`${detalle}¿Estás seguro de que quieres borrar este registro de sacadas?`)) {
+        try {
+          await PapeleraService.borrarConRespaldo(
+            'sacadas',
+            id,
+            datosSacada,
+            'Borrado manual de día de sacadas'
+          );
           this.sacadas = this.sacadas.filter(sacada => sacada.id !== id);
           alert('Registro de sacadas borrado con éxito');
         } catch (error) {
-          console.error("Error al borrar el registro de sacadas: ", error);
-          alert('Error al borrar el registro de sacadas');
+          console.error('Error al borrar con respaldo:', error);
+          alert('No se pudo completar el borrado. El registro NO fue borrado.');
         }
       }
     },

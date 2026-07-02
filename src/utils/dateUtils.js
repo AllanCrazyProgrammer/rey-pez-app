@@ -79,6 +79,47 @@ export const normalizarFechaISO = (fecha) => {
 };
 
 /**
+ * Normaliza cualquier representación de fecha (string ISO, string con hora,
+ * Timestamp de Firestore, Date) a 'YYYY-MM-DD', o null si no es interpretable.
+ *
+ * IMPORTANTE: los strings ISO con hora se recortan directamente (sin pasar por
+ * Date/zonas horarias) — convertir a hora local y de vuelta desplazaba la fecha
+ * un día y provocaba falsos "sin nota" en los menús de cuentas.
+ * @param {*} valor - Valor de fecha a normalizar
+ * @returns {string|null} Fecha en formato YYYY-MM-DD o null
+ */
+export const normalizarFechaValor = (valor) => {
+  if (!valor) return null;
+  try {
+    const formatearUTC = (fechaObj) => {
+      if (!(fechaObj instanceof Date) || Number.isNaN(fechaObj.getTime())) return null;
+      const año = fechaObj.getUTCFullYear();
+      const mes = String(fechaObj.getUTCMonth() + 1).padStart(2, '0');
+      const dia = String(fechaObj.getUTCDate()).padStart(2, '0');
+      return `${año}-${mes}-${dia}`;
+    };
+    if (typeof valor === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(valor)) return valor;
+    if (typeof valor === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(valor)) {
+      return valor.slice(0, 10);
+    }
+    if (typeof valor?.toDate === 'function') {
+      return formatearUTC(valor.toDate());
+    }
+    // Timestamps de Firestore, incluida la forma serializada por JSON ({_seconds})
+    const segundos = valor?.seconds ?? valor?._seconds;
+    if (typeof segundos === 'number') {
+      return formatearUTC(new Date(segundos * 1000));
+    }
+    if (valor instanceof Date) {
+      return formatearUTC(valor);
+    }
+    return formatearUTC(new Date(valor));
+  } catch (_) {
+    return null;
+  }
+};
+
+/**
  * Compara dos fechas en formato YYYY-MM-DD
  * @param {string} fecha1 - Primera fecha
  * @param {string} fecha2 - Segunda fecha

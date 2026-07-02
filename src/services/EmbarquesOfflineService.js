@@ -116,16 +116,16 @@ class EmbarquesOfflineService {
   }
 
   /**
-   * Obtiene todos los embarques almacenados localmente ordenados por fecha descendente.
+   * Obtiene todos los registros crudos (incluyendo los marcados como borrados).
    */
-  async getAll() {
+  async getAllRecords() {
     if (this.useMemoryFallback) {
-      return this.sortRecords(Array.from(this.memoryStore.values()));
+      return Array.from(this.memoryStore.values());
     }
 
     const db = await this.getDb();
     if (!db) {
-      return this.sortRecords(Array.from(this.memoryStore.values()));
+      return Array.from(this.memoryStore.values());
     }
 
     return new Promise((resolve, reject) => {
@@ -134,15 +134,26 @@ class EmbarquesOfflineService {
       const request = store.getAll();
 
       request.onsuccess = () => {
-        resolve(this.sortRecords(request.result || []));
+        resolve(request.result || []);
       };
       request.onerror = () => reject(request.error);
     });
   }
 
+  /**
+   * Obtiene todos los embarques almacenados localmente ordenados por fecha descendente.
+   */
+  async getAll() {
+    const records = await this.getAllRecords();
+    return this.sortRecords(records);
+  }
+
   sortRecords(records) {
+    return this.ordenarPorFecha((records || []).filter(record => !record.deleted));
+  }
+
+  ordenarPorFecha(records) {
     return (records || [])
-      .filter(record => !record.deleted)
       .sort((a, b) => {
         const fechaA = a.fecha ? new Date(a.fecha).getTime() : 0;
         const fechaB = b.fecha ? new Date(b.fecha).getTime() : 0;
@@ -219,11 +230,16 @@ class EmbarquesOfflineService {
   }
 
   /**
-   * Devuelve los embarques pendientes de sincronizar.
+   * Devuelve los embarques pendientes de sincronizar, INCLUYENDO los marcados
+   * como borrados (pending-delete): un sync que no ve los borrados nunca los
+   * propaga a Firestore y el embarque borrado "resucita". Pasar
+   * incluirBorrados=false solo para excluirlos explícitamente.
    */
-  async getPendingSync() {
-    const records = await this.getAll();
-    return records.filter(record => record.pendingSync);
+  async getPendingSync(incluirBorrados = true) {
+    const records = await this.getAllRecords();
+    return this.ordenarPorFecha(
+      records.filter(record => record.pendingSync && (incluirBorrados || !record.deleted))
+    );
   }
 
   /**

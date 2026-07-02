@@ -1,9 +1,96 @@
-import { getFirestore, doc, addDoc, updateDoc, setDoc, getDoc, serverTimestamp, collection, deleteDoc } from 'firebase/firestore';
+import { getFirestore, doc, updateDoc, setDoc, getDoc, serverTimestamp, deleteDoc } from 'firebase/firestore';
 import { v4 as uuidv4 } from 'uuid';
 import EmbarquesOfflineService from '@/services/EmbarquesOfflineService';
-import { normalizarFechaISO } from '@/utils/dateUtils';
+import BackupService from '../BackupService.js';
+import { normalizarFechaISO, normalizarFechaValor, obtenerFechaActualISO } from '@/utils/dateUtils';
 import { crearNuevoProducto } from '@/constants.js/embarque';
 import { embarqueTieneContenidoOperativoEstado } from '@/utils/embarqueContenido';
+
+/**
+ * Normaliza los datos de un embarque para escribirlos en Firestore.
+ * Contiene la UNIÓN completa de los campos que manejan los distintos caminos
+ * de sincronización (NuevoEmbarque y ListaEmbarques) para que ninguno borre
+ * campos que el otro sí conserva al reescribir el documento completo.
+ *
+ * @param {Object} docData - Datos crudos del embarque (docData del snapshot offline).
+ * @param {Object} record - Registro offline completo (fallback de campos).
+ * @param {Object} contexto - { dataRemota, costoExtraDefault, fechaDefault }.
+ */
+export function normalizarDocDataParaFirestore(docData, record = {}, contexto = {}) {
+  const dataCruda = docData ? JSON.parse(JSON.stringify(docData)) : {};
+
+  const parseFecha = (valor) => normalizarFechaValor(valor) || obtenerFechaActualISO();
+
+  const pickConRemoto = (key) => {
+    if (dataCruda[key] !== undefined && dataCruda[key] !== null) return dataCruda[key];
+    if (record && record[key] !== undefined && record[key] !== null) return record[key];
+    const remoto = contexto.dataRemota;
+    if (remoto && remoto[key] !== undefined && remoto[key] !== null) return remoto[key];
+    return undefined;
+  };
+
+  const data = {
+    cargaCon: dataCruda.cargaCon || record.cargaCon || '',
+    camionNumero: dataCruda.camionNumero || record.camionNumero || 1,
+    kilosCrudos: dataCruda.kilosCrudos || record.kilosCrudos || {},
+    clientes: Array.isArray(dataCruda.clientes)
+      ? dataCruda.clientes
+      : (Array.isArray(record.clientes) ? record.clientes : []),
+    clientesJuntarMedidas: dataCruda.clientesJuntarMedidas || record.clientesJuntarMedidas || {},
+    clientesReglaOtilio: dataCruda.clientesReglaOtilio || record.clientesReglaOtilio || {},
+    clientesIncluirPrecios: dataCruda.clientesIncluirPrecios || record.clientesIncluirPrecios || {},
+    clientesCuentaEnPdf: dataCruda.clientesCuentaEnPdf || record.clientesCuentaEnPdf || {},
+    clientesSumarKgCatarro: dataCruda.clientesSumarKgCatarro || record.clientesSumarKgCatarro || {},
+    clientesPersonalizados: Array.isArray(dataCruda.clientesPersonalizados)
+      ? dataCruda.clientesPersonalizados
+      : (Array.isArray(record.clientesPersonalizados) ? record.clientesPersonalizados : []),
+    embarqueBloqueado: Boolean(record.embarqueBloqueado ?? dataCruda.embarqueBloqueado ?? false),
+    noEnviadoMexico: Boolean(pickConRemoto('noEnviadoMexico') ?? false),
+    costosPorMedida: dataCruda.costosPorMedida || record.costosPorMedida || {},
+    aplicarCostoExtra: dataCruda.aplicarCostoExtra || record.aplicarCostoExtra || {},
+    costoExtra: typeof dataCruda.costoExtra === 'number'
+      ? dataCruda.costoExtra
+      : (typeof record.costoExtra === 'number' ? record.costoExtra : (contexto.costoExtraDefault || 18)),
+    medidasConfiguracion: Array.isArray(dataCruda.medidasConfiguracion)
+      ? dataCruda.medidasConfiguracion
+      : (Array.isArray(record.medidasConfiguracion) ? record.medidasConfiguracion : []),
+    preciosActuales: Array.isArray(dataCruda.preciosActuales)
+      ? dataCruda.preciosActuales
+      : (Array.isArray(record.preciosActuales) ? record.preciosActuales : []),
+    medidaOculta: dataCruda.medidaOculta || record.medidaOculta || {},
+    analizarGanancia: dataCruda.analizarGanancia || record.analizarGanancia || {},
+    analizarGananciaCrudos: dataCruda.analizarGananciaCrudos || record.analizarGananciaCrudos || {},
+    analizarMaquilaGanancia: dataCruda.analizarMaquilaGanancia || record.analizarMaquilaGanancia || {},
+    precioMaquila: dataCruda.precioMaquila || record.precioMaquila || {},
+    pesoTaraCosto: typeof dataCruda.pesoTaraCosto === 'number' ? dataCruda.pesoTaraCosto : (record.pesoTaraCosto ?? 19),
+    pesoTaraVenta: typeof dataCruda.pesoTaraVenta === 'number' ? dataCruda.pesoTaraVenta : (record.pesoTaraVenta ?? 20),
+    nombresMedidasPersonalizados: dataCruda.nombresMedidasPersonalizados || record.nombresMedidasPersonalizados || {},
+    notaRendimientos: dataCruda.notaRendimientos || record.notaRendimientos || '',
+    fecha: parseFecha(dataCruda.fecha || record.fecha || contexto.fechaDefault),
+  };
+
+  // Campos escritos por otras vistas (p. ej. Rendimientos) o flujos:
+  // conservarlos si existen local o remotamente para no borrarlos al
+  // reescribir el documento completo con setDoc.
+  ['totalGanancias', 'rendimientoManual', 'borrador'].forEach((key) => {
+    const valor = pickConRemoto(key);
+    if (valor !== undefined) {
+      data[key] = valor;
+    }
+  });
+
+  data.clientes = data.clientes.map(cliente => ({
+    ...cliente,
+    productos: Array.isArray(cliente.productos) ? cliente.productos.map(producto => ({
+      ...producto,
+      restarTaras: producto.restarTaras || false,
+      noSumarKilos: producto.noSumarKilos || false,
+    })) : [],
+    crudos: Array.isArray(cliente.crudos) ? cliente.crudos : [],
+  }));
+
+  return data;
+}
 
 export const embarqueSyncMixin = {
   methods: {
@@ -69,6 +156,11 @@ export const embarqueSyncMixin = {
     },
 
     async sincronizarConNube() {
+      if (this.isSyncing) {
+        console.warn('[sincronizarConNube] Sincronización ya en curso, se omite la llamada duplicada.');
+        return;
+      }
+
       if (!this.hasPendingChanges) {
         this.mostrarMensaje('No hay cambios pendientes para subir.');
         return;
@@ -154,87 +246,6 @@ export const embarqueSyncMixin = {
       }
     },
 
-    normalizarDocDataParaFirestore(docData, record = {}) {
-      const dataCruda = docData ? JSON.parse(JSON.stringify(docData)) : this.prepararDatosEmbarque();
-
-      const parseFecha = (valor) => {
-        if (!valor) {
-          const hoy = new Date();
-          return `${hoy.getUTCFullYear()}-${String(hoy.getUTCMonth() + 1).padStart(2, '0')}-${String(hoy.getUTCDate()).padStart(2, '0')}`;
-        }
-        if (typeof valor === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(valor)) {
-          return valor;
-        }
-        if (typeof valor === 'string') {
-          const match = valor.match(/^(\d{4}-\d{2}-\d{2})/);
-          if (match) return match[1];
-        }
-        if (valor instanceof Date) {
-          return `${valor.getUTCFullYear()}-${String(valor.getUTCMonth() + 1).padStart(2, '0')}-${String(valor.getUTCDate()).padStart(2, '0')}`;
-        }
-        if (typeof valor === 'object' && valor !== null) {
-          const seconds = valor.seconds ?? valor._seconds;
-          if (typeof seconds === 'number') {
-            const fecha = new Date(seconds * 1000);
-            return `${fecha.getUTCFullYear()}-${String(fecha.getUTCMonth() + 1).padStart(2, '0')}-${String(fecha.getUTCDate()).padStart(2, '0')}`;
-          }
-        }
-        if (typeof valor === 'string') {
-          try {
-            const parsed = new Date(valor);
-            if (!Number.isNaN(parsed.getTime())) {
-              return `${parsed.getUTCFullYear()}-${String(parsed.getUTCMonth() + 1).padStart(2, '0')}-${String(parsed.getUTCDate()).padStart(2, '0')}`;
-            }
-          } catch (_) {
-            console.warn('[normalizarDocDataParaFirestore] No se pudo parsear la fecha:', valor);
-          }
-        }
-        const hoy = new Date();
-        return `${hoy.getUTCFullYear()}-${String(hoy.getUTCMonth() + 1).padStart(2, '0')}-${String(hoy.getUTCDate()).padStart(2, '0')}`;
-      };
-
-      const data = {
-        cargaCon: dataCruda.cargaCon || '',
-        camionNumero: dataCruda.camionNumero || record.camionNumero || 1,
-        kilosCrudos: dataCruda.kilosCrudos || record.kilosCrudos || {},
-        clientes: Array.isArray(dataCruda.clientes) ? dataCruda.clientes : [],
-        clientesJuntarMedidas: dataCruda.clientesJuntarMedidas || {},
-        clientesReglaOtilio: dataCruda.clientesReglaOtilio || {},
-        clientesIncluirPrecios: dataCruda.clientesIncluirPrecios || {},
-        clientesCuentaEnPdf: dataCruda.clientesCuentaEnPdf || {},
-        clientesSumarKgCatarro: dataCruda.clientesSumarKgCatarro || {},
-        clientesPersonalizados: Array.isArray(dataCruda.clientesPersonalizados) ? dataCruda.clientesPersonalizados : [],
-        embarqueBloqueado: record.embarqueBloqueado ?? dataCruda.embarqueBloqueado ?? false,
-        costosPorMedida: dataCruda.costosPorMedida || {},
-        aplicarCostoExtra: dataCruda.aplicarCostoExtra || {},
-        costoExtra: typeof dataCruda.costoExtra === 'number' ? dataCruda.costoExtra : (this.costoExtra || 18),
-        medidasConfiguracion: Array.isArray(dataCruda.medidasConfiguracion) ? dataCruda.medidasConfiguracion : [],
-        preciosActuales: Array.isArray(dataCruda.preciosActuales) ? dataCruda.preciosActuales : [],
-        medidaOculta: dataCruda.medidaOculta || record.medidaOculta || {},
-        analizarGanancia: dataCruda.analizarGanancia || record.analizarGanancia || {},
-        analizarGananciaCrudos: dataCruda.analizarGananciaCrudos || record.analizarGananciaCrudos || {},
-        analizarMaquilaGanancia: dataCruda.analizarMaquilaGanancia || record.analizarMaquilaGanancia || {},
-        precioMaquila: dataCruda.precioMaquila || record.precioMaquila || {},
-        pesoTaraCosto: typeof dataCruda.pesoTaraCosto === 'number' ? dataCruda.pesoTaraCosto : (record.pesoTaraCosto ?? 19),
-        pesoTaraVenta: typeof dataCruda.pesoTaraVenta === 'number' ? dataCruda.pesoTaraVenta : (record.pesoTaraVenta ?? 20),
-        nombresMedidasPersonalizados: dataCruda.nombresMedidasPersonalizados || record.nombresMedidasPersonalizados || {},
-        notaRendimientos: dataCruda.notaRendimientos || record.notaRendimientos || '',
-        fecha: parseFecha(dataCruda.fecha || record.fecha || this.embarque.fecha),
-      };
-
-      data.clientes = data.clientes.map(cliente => ({
-        ...cliente,
-        productos: Array.isArray(cliente.productos) ? cliente.productos.map(producto => ({
-          ...producto,
-          restarTaras: producto.restarTaras || false,
-          noSumarKilos: producto.noSumarKilos || false,
-        })) : [],
-        crudos: Array.isArray(cliente.crudos) ? cliente.crudos : [],
-      }));
-
-      return data;
-    },
-
     async sincronizarRegistroOffline(record) {
       if (!record || !record.id) {
         return;
@@ -244,7 +255,6 @@ export const embarqueSyncMixin = {
         const db = getFirestore();
         const embarqueRef = doc(db, 'embarques', record.id);
         const docData = record.docData || (record.id === this.embarqueId ? this.prepararDatosEmbarque() : null);
-        const payload = this.normalizarDocDataParaFirestore(docData, record);
 
         const metadataUltimaEdicion = {
           userId: this.authStore.userId,
@@ -257,11 +267,20 @@ export const embarqueSyncMixin = {
 
         if (record.deleted && record.deletedByUser) {
           if (snapshot.exists()) {
+            // Respaldo de emergencia ANTES de borrar en la nube; si falla,
+            // el error se propaga y el registro queda pendiente para reintentar.
+            await BackupService.crearRespaldoEmergencia(record.id, 'eliminacion_offline_sincronizada');
             await deleteDoc(embarqueRef);
           }
           await EmbarquesOfflineService.hardDelete(record.id);
           return;
         }
+
+        const payload = normalizarDocDataParaFirestore(docData || this.prepararDatosEmbarque(), record, {
+          dataRemota,
+          costoExtraDefault: this.costoExtra,
+          fechaDefault: this.embarque.fecha,
+        });
 
         const dataParaFirestore = {
           ...(dataRemota && this.tieneContenidoOperativo(dataRemota) && !this.tieneContenidoOperativo(payload)

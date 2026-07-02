@@ -226,8 +226,9 @@
 
 <script>
 import { db } from '@/firebase';
-import { collection, getDocs, query, orderBy, deleteDoc, doc, addDoc } from 'firebase/firestore';
+import { collection, getDocs, getDoc, query, orderBy, doc, addDoc } from 'firebase/firestore';
 import moment from 'moment';
+import PapeleraService from '@/services/PapeleraService';
 import GestionProveedoresCrudos from '@/components/GestionProveedoresCrudos.vue';
 import EntradasPorProveedorModal from '@/components/EntradasPorProveedorModal.vue';
 import { formatNumber } from '@/utils/formatters';
@@ -529,7 +530,7 @@ export default {
                   cuarto: cuarto
                 };
               }
-              existencias[entrada.proveedor][claveProducto].kilos += entrada.kilos;
+              existencias[entrada.proveedor][claveProducto].kilos += Number(entrada.kilos) || 0;
               if (entrada.precio) {
                 existencias[entrada.proveedor][claveProducto].ultimoPrecio = entrada.precio;
               }
@@ -559,7 +560,7 @@ export default {
                   return precioA - precioB;
                 });
 
-              let kilosRestantes = salida.kilos;
+              let kilosRestantes = Number(salida.kilos) || 0;
               
               // Distribuir la salida entre los diferentes precios usando FIFO
               for (const claveProducto of productosConMismoNombre) {
@@ -682,15 +683,37 @@ export default {
     },
 
     async deleteRegistro(id) {
-      if (confirm('¿Estás seguro de que quieres borrar este registro de crudos?')) {
+      // Obtener los datos del registro (estado local o Firestore) para el respaldo y el detalle
+      let datosRegistro = this.registros.find(registro => registro.id === id) || null;
+      if (!datosRegistro) {
         try {
-          await deleteDoc(doc(db, 'existenciasCrudos', id));
+          const docSnap = await getDoc(doc(db, 'existenciasCrudos', id));
+          datosRegistro = docSnap.exists() ? { id, ...docSnap.data() } : null;
+        } catch (error) {
+          console.error("Error al obtener el registro de crudos antes de borrar: ", error);
+        }
+      }
+
+      const numEntradas = Array.isArray(datosRegistro?.entradas) ? datosRegistro.entradas.length : 0;
+      const numSalidas = Array.isArray(datosRegistro?.salidas) ? datosRegistro.salidas.length : 0;
+      const detalle = datosRegistro
+        ? `El registro del ${this.formatDate(datosRegistro.fecha)} contiene ${numEntradas} entrada(s) y ${numSalidas} salida(s).\n\n`
+        : '';
+
+      if (confirm(`${detalle}¿Estás seguro de que quieres borrar este registro de crudos?`)) {
+        try {
+          await PapeleraService.borrarConRespaldo(
+            'existenciasCrudos',
+            id,
+            datosRegistro,
+            'Borrado manual de registro de existencias de crudos'
+          );
           this.registros = this.registros.filter(registro => registro.id !== id);
           await this.loadExistencias(); // Recargar existencias después de borrar
           alert('Registro de crudos borrado con éxito');
         } catch (error) {
-          console.error("Error al borrar el registro de crudos: ", error);
-          alert('Error al borrar el registro de crudos');
+          console.error('Error al borrar con respaldo:', error);
+          alert('No se pudo completar el borrado. El registro NO fue borrado.');
         }
       }
     },

@@ -399,7 +399,7 @@
 <script>
 import { db } from '@/firebase';
 import {
-  collection, addDoc, getDocs, doc, updateDoc, deleteDoc, getDoc, writeBatch,
+  collection, getDocs, doc, updateDoc, deleteDoc, getDoc, writeBatch,
   query, where, orderBy, limit,
 } from 'firebase/firestore';
 import BackButton from '@/components/BackButton.vue';
@@ -407,6 +407,9 @@ import PreciosHistorialModal from '@/components/PreciosHistorialModal.vue';
 import StashModalV2 from '@/components/StashModalV2.vue';
 import PreciosClienteButton from '@/components/PreciosClienteButton.vue';
 import { formatNumber } from '@/utils/formatters';
+import { normalizarFechaISO } from '@/utils/dateUtils';
+import { redondearCentavos, sumarMontos } from '@/utils/dinero';
+import { crearCuentaSegura as crearCuentaSeguraEnColeccion } from '@/utils/services/EmbarqueCuentasService';
 import {
   joselitoCuentas,
   veronicaCuentas,
@@ -710,14 +713,25 @@ export default {
       }
     },
 
+    // La fecha normalizada (YYYY-MM-DD) es el ID del documento y la creación es
+    // transaccional (misma garantía que las cuentas creadas desde embarques).
+    async crearCuentaSegura(notaData) {
+      const fechaISO = normalizarFechaISO(this.fechaSeleccionada);
+      try {
+        return await crearCuentaSeguraEnColeccion(
+          this.service.coleccion,
+          fechaISO,
+          notaData,
+          this.config.titulo || this.clienteId
+        );
+      } catch (error) {
+        if (error.code === 'cuenta-duplicada') error.esDuplicado = true;
+        throw error;
+      }
+    },
+
     async crearNuevaCuenta() {
       try {
-        const id = this.$route.params.id;
-        const isEditing = this.$route.query.edit === 'true';
-        if (!id || !isEditing) {
-          const existing = await getDocs(query(this.service._ref(), where('fecha', '==', this.fechaSeleccionada)));
-          if (!existing.empty) throw new Error('Ya existe una nota registrada para esta fecha.');
-        }
         const notaData = {
           fecha: this.fechaSeleccionada,
           items: this.items.map(item => { const kilos = parseFloat(item.kilos) || 0; return { ...item, kilos, total: kilos * (item.costo || 0) }; }),
@@ -733,18 +747,24 @@ export default {
           tieneObservacion: this.tieneObservacion,
           observacion: this.observacion,
         };
-        const docRef = await this.service.create(notaData);
-        this.$router.replace({ name: this.$route.name, params: { id: docRef.id }, query: { edit: 'true' } });
-        return docRef.id;
+        const nuevoId = await this.crearCuentaSegura(notaData);
+        this.$router.replace({ name: this.$route.name, params: { id: nuevoId }, query: { edit: 'true' } });
+        return nuevoId;
       } catch (error) {
-        const id = this.$route.params.id;
-        const isEditing = this.$route.query.edit === 'true';
-        if (error.message === 'Ya existe una nota registrada para esta fecha.' && (!id || !isEditing)) {
-          this.showMessage(error.message);
-        } else if (!isEditing) {
-          console.error('Error al crear nueva cuenta:', error);
-          this.showMessage('Error al crear la cuenta. Por favor, intente nuevamente.');
+        if (error.esDuplicado) {
+          // El autosave reintenta cada pocos segundos: alertar solo la primera
+          // vez por fecha para no bloquear la pantalla con alerts repetidos.
+          const fechaISO = normalizarFechaISO(this.fechaSeleccionada);
+          if (this._fechaDuplicadaAlertada !== fechaISO) {
+            this._fechaDuplicadaAlertada = fechaISO;
+            alert('Ya existe una nota registrada para esta fecha. No se creó otra cuenta; abre la nota existente para editarla.');
+          } else {
+            this.showMessage('Ya existe una nota para esta fecha; los cambios NO se están guardando.');
+          }
+          return null;
         }
+        console.error('Error al crear nueva cuenta:', error);
+        this.showMessage('Error al crear la cuenta. Por favor, intente nuevamente.');
         throw error;
       }
     },
@@ -752,9 +772,9 @@ export default {
     async guardarNota() {
       try {
         this.isGuardando = true;
-        const totalDia = this.totalGeneralVenta -
-          this.cobros.reduce((sum, c) => sum + (parseFloat(c.monto) || 0), 0) -
-          this.abonos.reduce((sum, a) => sum + (parseFloat(a.monto) || 0), 0);
+        // Misma fórmula que el auto-guardado (computed totalDiaActual): incluye
+        // cobros, correcciones y abonos, para que ambos caminos den el mismo saldo.
+        const totalDia = this.totalDiaActual;
         const saldoActualizado = await this.obtenerSaldoAcumuladoAnterior();
         const nuevoSaldo = saldoActualizado + totalDia;
         const estadoPagado = nuevoSaldo <= 0.01;
@@ -783,17 +803,16 @@ export default {
           this.showMessage('Cuenta guardada exitosamente');
           setTimeout(() => { this.$router.push(this.config.backPath); }, 500);
         } else {
-          const existing = await getDocs(query(this.service._ref(), where('fecha', '==', this.fechaSeleccionada)));
-          if (!existing.empty) {
-            this.showMessage('Ya existe una nota registrada para esta fecha. No se puede crear una nueva.');
-            return;
-          }
-          await this.service.create(notaData);
+          await this.crearCuentaSegura(notaData);
           this.actualizarCuentasPosteriores(this.fechaSeleccionada).catch(console.error);
           this.showMessage('Cuenta guardada exitosamente');
           setTimeout(() => { this.$router.push(this.config.backPath); }, 500);
         }
       } catch (error) {
+        if (error.esDuplicado) {
+          alert('Ya existe una nota registrada para esta fecha. No se puede crear una nueva.');
+          return;
+        }
         console.error('Error al guardar la cuenta:', error);
         this.showMessage('Error al guardar la cuenta');
       } finally {
@@ -819,7 +838,7 @@ export default {
     addAbono() { this.abonos.push({ descripcion: '', monto: 0 }); },
 
     redondearMonto(monto) {
-      return Math.round((Number(monto) || 0) * 100) / 100;
+      return redondearCentavos(monto);
     },
 
     calcularSaldoPendienteNota(cuenta) {
@@ -1000,9 +1019,9 @@ export default {
       }
 
       const cuentasRecalculadas = this.recalcularCadenaSaldos(cuentas);
-      const batch = writeBatch(db);
       const ahoraIso = new Date().toISOString();
 
+      const actualizacionesCuentas = [];
       cuentasRecalculadas.forEach((cuenta, index) => {
         const cuentaOriginal = cuentasOriginales[index];
         const cambioSaldo =
@@ -1023,20 +1042,33 @@ export default {
           updates.abonos = cuenta.abonos;
         }
 
-        batch.update(doc(this.service._ref(), cuenta.id), updates);
+        actualizacionesCuentas.push({ cuentaId: cuenta.id, updates });
       });
 
-      await batch.commit();
-
-      if (abonosDevueltosAlStash.length > 0) {
-        await Promise.all(
-          abonosDevueltosAlStash.map(abonoStash =>
-            addDoc(collection(db, `stash_${this.config.clienteId}`), abonoStash)
-          )
+      // Confirmación solo cuando el usuario elimina un abono (el reacomodo
+      // manual ya confirma antes de llamar aquí). Todavía no se ha escrito nada.
+      if (!esReacomodoManual) {
+        const montoStash = sumarMontos(abonosDevueltosAlStash.map(abono => abono.monto));
+        const confirmar = confirm(
+          `¿Eliminar el abono "${abonoEliminado.descripcion || 'Sin descripción'}" de $${this.formatNumber(this.redondearMonto(abonoEliminado.monto))}?\n\n` +
+          `Se redistribuirán los abonos posteriores y se reescribirán ${actualizacionesCuentas.length} nota(s).` +
+          (montoStash > 0.01 ? `\nSe devolverán $${this.formatNumber(montoStash)} al stash.` : '')
         );
+        if (!confirmar) return null;
       }
 
-      await addDoc(collection(db, `historial_aplicaciones_${this.config.clienteId}`), {
+      // Todo va en el mismo batch atómico (cuentas, stash e historial): si algo
+      // falla, no se pierde el registro del dinero sobrante ni queda a medias.
+      const batch = writeBatch(db);
+      actualizacionesCuentas.forEach(({ cuentaId, updates }) => {
+        batch.update(doc(this.service._ref(), cuentaId), updates);
+      });
+
+      abonosDevueltosAlStash.forEach(abonoStash => {
+        batch.set(doc(collection(db, `stash_${this.config.clienteId}`)), abonoStash);
+      });
+
+      batch.set(doc(collection(db, `historial_aplicaciones_${this.config.clienteId}`)), {
         fechaAplicacion: fechaRedistribucion,
         modo: esReacomodoManual ? 'reacomodo_abonos_nota' : 'eliminacion_abono_nota_redistribucion',
         abonoEliminado: esReacomodoManual ? null : {
@@ -1049,11 +1081,13 @@ export default {
         redistribucionAutomatica: {
           abonosRedistribuidos,
           abonosDevueltosAlStash,
-          montoRedistribuido: this.redondearMonto(abonosRedistribuidos.reduce((sum, abono) => sum + (abono.monto || 0), 0)),
-          montoDevueltoAlStash: this.redondearMonto(abonosDevueltosAlStash.reduce((sum, abono) => sum + (abono.monto || 0), 0)),
+          montoRedistribuido: sumarMontos(abonosRedistribuidos.map(abono => abono.monto)),
+          montoDevueltoAlStash: sumarMontos(abonosDevueltosAlStash.map(abono => abono.monto)),
         },
         exitoso: true,
       });
+
+      await batch.commit();
 
       const cuentaActualizada = cuentasRecalculadas.find(cuenta => cuenta.id === cuentaActualId);
       if (cuentaActualizada) {
@@ -1078,6 +1112,7 @@ export default {
 
       try {
         const resultado = await this.redistribuirAbonosDespuesDeEliminarEnNota(null, null);
+        if (!resultado) return;
         const totalRedistribuido = resultado.abonosRedistribuidos.reduce((sum, abono) => sum + (abono.monto || 0), 0);
         const totalStash = resultado.abonosDevueltosAlStash.reduce((sum, abono) => sum + (abono.monto || 0), 0);
         const mensajeStash = totalStash > 0 ? ` y $${this.formatNumber(totalStash)} devueltos al stash` : '';
@@ -1123,7 +1158,8 @@ export default {
       const id = this.$route.params.id;
       if (id) {
         try {
-          await this.redistribuirAbonosDespuesDeEliminarEnNota(abonoEliminado, index);
+          const resultado = await this.redistribuirAbonosDespuesDeEliminarEnNota(abonoEliminado, index);
+          if (!resultado) return; // el usuario canceló la confirmación; no se escribió nada
           this.showMessage('Abono eliminado y abonos siguientes redistribuidos');
         } catch (error) {
           console.error('Error al redistribuir después de eliminar abono:', error);
@@ -1241,11 +1277,21 @@ export default {
     },
 
     async queueSave() {
-      const id = this.$route.params.id;
-      const isEditing = this.$route.query.edit === 'true';
+      // Si ya se detectó que esta fecha tiene una nota existente, no encolar más
+      // intentos de creación: cada uno repetiría la consulta y fallaría igual.
+      if (!this.$route.params.id &&
+          this._fechaDuplicadaAlertada === normalizarFechaISO(this.fechaSeleccionada)) {
+        this.showMessage('Ya existe una nota para esta fecha; los cambios NO se están guardando.');
+        return;
+      }
       this.saveQueue.push({
         timestamp: Date.now(),
         operation: async () => {
+          // Evaluar el ID al momento de ejecutar (no al encolar): si un guardado
+          // anterior de la cola ya creó la cuenta y asignó el ID vía router.replace,
+          // este guardado debe actualizarla en lugar de crear un documento extra.
+          const id = this.$route.params.id;
+          const isEditing = this.$route.query.edit === 'true';
           if (!id || !isEditing) await this.crearNuevaCuenta();
           else await this.autoSaveNota();
         },

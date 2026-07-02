@@ -348,7 +348,7 @@
       </div>
     </div>
 
-    <button @click="saveReport" class="save-button">{{ isEditing ? 'Actualizar' : 'Guardar' }} Informe del Día</button>
+    <button @click="saveReport" class="save-button" :disabled="guardando">{{ guardando ? 'Guardando...' : (isEditing ? 'Actualizar' : 'Guardar') + ' Informe del Día' }}</button>
     
     <!-- Modal de Edición de Entrada -->
     <div v-if="editandoEntrada" class="modal-overlay" @click.self="cancelarEdicionEntrada">
@@ -462,7 +462,9 @@ export default {
       newSalida: { tipo: 'proveedor', proveedor: '', medida: '', kilos: null, cajas: null, cuartoFrio: '' },
       isEditing: false,
       sacadaId: null,
+      fechaOriginal: null,
       isLoaded: false,
+      guardando: false,
       kilosDisponibles: null,
       editandoEntrada: false,
       entradaEditIndex: null,
@@ -908,7 +910,8 @@ export default {
       );
       
       const querySnapshot = await getDocs(q);
-      return !querySnapshot.empty;
+      // Excluir el propio documento cuando se edita (p. ej. al cambiar la fecha)
+      return querySnapshot.docs.some(docSnap => docSnap.id !== this.sacadaId);
     },
     resetEntradaSelections() {
       this.newEntrada.proveedor = '';
@@ -1171,6 +1174,24 @@ export default {
         this.kilosDisponibles = null;
       }
     },
+    // Este cálculo corre en watchers de captura (cada tecleo): cachear el
+    // snapshot remoto unos segundos evita descargar la colección completa de
+    // sacadas en cada pulsación. Se invalida al guardar.
+    async obtenerSacadasOrdenadas() {
+      const ahora = Date.now();
+      if (this._sacadasCache && (ahora - this._sacadasCacheTs) < 30000) {
+        return this._sacadasCache;
+      }
+      const querySnapshot = await getDocs(collection(db, 'sacadas'));
+      this._sacadasCache = querySnapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() }))
+        .sort((a, b) => a.fecha.toDate() - b.fecha.toDate());
+      this._sacadasCacheTs = ahora;
+      return this._sacadasCache;
+    },
+    invalidarCacheSacadas() {
+      this._sacadasCache = null;
+    },
     async getKilosDisponibles(proveedor, medidaDisplay, cuartoSeleccionado = '') {
       let kilosDisponibles = 0;
       let totalEntradas = 0;
@@ -1181,49 +1202,59 @@ export default {
       const cuartoParsed = this.normalizeCuarto(cuartoSeleccionado || cuartoFrio);
       const sumarTodosLosCuartos = !cuartoSeleccionado || cuartoSeleccionado === noEspecificadoLabel;
 
-      const sacadasRef = collection(db, 'sacadas');
-      const querySnapshot = await getDocs(sacadasRef);
+      const sacadasOrdenadas = await this.obtenerSacadasOrdenadas();
 
-      const sacadasOrdenadas = querySnapshot.docs
-        .map(doc => ({ id: doc.id, ...doc.data() }))
-        .sort((a, b) => a.fecha.toDate() - b.fecha.toDate());
+      // Comparar medida, precio y cuarto correctamente
+      const coincideMovimiento = (movimiento) => {
+        const medidaCoincide = movimiento.proveedor === proveedor && movimiento.medida === medidaBase;
+        const precioCoincide = precio === null ?
+          (movimiento.precio === null || movimiento.precio === undefined) :
+          movimiento.precio === precio;
+        const cuartoCoincide = sumarTodosLosCuartos
+          ? true
+          : this.normalizeCuarto(movimiento.cuartoFrio) === cuartoParsed;
+
+        return medidaCoincide && precioCoincide && cuartoCoincide;
+      };
 
       const fechaActual = this.currentDate.clone().endOf('day');
       sacadasOrdenadas.forEach((sacada) => {
+        // El registro en edición se procesa desde los arreglos locales (incluye renglones sin guardar)
+        if (this.isEditing && sacada.id === this.sacadaId) {
+          return;
+        }
+
         const sacadaFecha = sacada.fecha instanceof Date ? sacada.fecha : sacada.fecha.toDate();
-        
+
         if (moment(sacadaFecha).isSameOrBefore(fechaActual)) {
           sacada.entradas.forEach(entrada => {
-            // Comparar medida, precio y cuarto correctamente
-            const medidaCoincide = entrada.proveedor === proveedor && entrada.medida === medidaBase;
-            const precioCoincide = precio === null ? 
-              (entrada.precio === null || entrada.precio === undefined) : 
-              entrada.precio === precio;
-            const cuartoCoincide = sumarTodosLosCuartos
-              ? true
-              : this.normalizeCuarto(entrada.cuartoFrio) === cuartoParsed;
-              
-            if (medidaCoincide && precioCoincide && cuartoCoincide) {
-              kilosDisponibles += entrada.kilos;
-              totalEntradas += entrada.kilos;
+            if (coincideMovimiento(entrada)) {
+              kilosDisponibles += Number(entrada.kilos) || 0;
+              totalEntradas += Number(entrada.kilos) || 0;
             }
           });
 
           sacada.salidas.forEach(salida => {
-            // Comparar medida, precio y cuarto correctamente
-            const medidaCoincide = salida.proveedor === proveedor && salida.medida === medidaBase;
-            const precioCoincide = precio === null ? 
-              (salida.precio === null || salida.precio === undefined) : 
-              salida.precio === precio;
-            const cuartoCoincide = sumarTodosLosCuartos
-              ? true
-              : this.normalizeCuarto(salida.cuartoFrio) === cuartoParsed;
-              
-            if (medidaCoincide && precioCoincide && cuartoCoincide) {
-              kilosDisponibles -= salida.kilos;
-              totalSalidas += salida.kilos;
+            if (coincideMovimiento(salida)) {
+              kilosDisponibles -= Number(salida.kilos) || 0;
+              totalSalidas += Number(salida.kilos) || 0;
             }
           });
+        }
+      });
+
+      // Incluir los renglones locales del día aún no guardados
+      this.entradas.forEach(entrada => {
+        if (coincideMovimiento(entrada)) {
+          kilosDisponibles += Number(entrada.kilos) || 0;
+          totalEntradas += Number(entrada.kilos) || 0;
+        }
+      });
+
+      this.salidas.forEach(salida => {
+        if (coincideMovimiento(salida)) {
+          kilosDisponibles -= Number(salida.kilos) || 0;
+          totalSalidas += Number(salida.kilos) || 0;
         }
       });
 
@@ -1344,16 +1375,24 @@ export default {
         this.listaMedidasPedido = Array.isArray(data.listaMedidasPedido) ? data.listaMedidasPedido : [];
         this.sacadaId = id;
         this.isEditing = true;
+        this.fechaOriginal = this.currentDate.format('YYYY-MM-DD');
         this.limpiarChecklistSalidas();
         await this.updateKilosDisponibles();
       }
     },
     async saveReport() {
+      if (this.guardando) return;
+      this.guardando = true;
       try {
-        if (!this.isEditing) {
+        const fechaCambiada = this.isEditing &&
+          this.fechaOriginal !== this.currentDate.format('YYYY-MM-DD');
+
+        if (!this.isEditing || fechaCambiada) {
           const existingSacada = await this.checkExistingSacada();
           if (existingSacada) {
-            alert("Ya existe un registro de sacada para esta fecha. No se puede crear uno nuevo.");
+            alert(this.isEditing
+              ? "Ya existe otro registro de sacada para la nueva fecha. No se puede tener dos registros del mismo día."
+              : "Ya existe un registro de sacada para esta fecha. No se puede crear uno nuevo.");
             return;
           }
         }
@@ -1377,10 +1416,13 @@ export default {
           await addDoc(collection(db, 'sacadas'), reportData);
           alert("Informe del día guardado exitosamente");
         }
+        this.invalidarCacheSacadas();
         this.$router.push('/sacadas');
       } catch (error) {
         console.error("Error al guardar/actualizar el documento: ", error);
         alert("Error al guardar/actualizar el informe del día: " + error.message);
+      } finally {
+        this.guardando = false;
       }
     },
     updateCurrentDate() {
@@ -1391,12 +1433,8 @@ export default {
       const fechaActual = this.currentDate.clone().endOf('day');
       const normalizeCuarto = this.normalizeCuarto;
 
-      // Obtenemos las sacadas anteriores
-      const sacadasRef = collection(db, 'sacadas');
-      const querySnapshot = await getDocs(sacadasRef);
-      const sacadasOrdenadas = querySnapshot.docs
-        .map(doc => ({ id: doc.id, ...doc.data() }))
-        .sort((a, b) => a.fecha.toDate() - b.fecha.toDate());
+      // Obtenemos las sacadas anteriores (snapshot cacheado de la sesión)
+      const sacadasOrdenadas = await this.obtenerSacadasOrdenadas();
 
       // FIFO por medida+precio+cuarto (consistente con Existencias)
       const actualizarBalance = (medida, precio, kilos, fecha, esEntrada = true, cuartoFrio = '') => {

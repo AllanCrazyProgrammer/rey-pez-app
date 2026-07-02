@@ -133,11 +133,13 @@
 
 <script>
 import { db } from '@/firebase';
-import { collection, query, orderBy, deleteDoc, doc, onSnapshot, updateDoc, getDocs } from 'firebase/firestore';
+import { collection, query, orderBy, doc, onSnapshot, updateDoc, getDocs } from 'firebase/firestore';
+import PapeleraService from '@/services/PapeleraService';
 import BackButton from '@/components/BackButton.vue';
 import PreciosHistorialModal from '@/components/PreciosHistorialModal.vue';
 import StashModalV2 from '@/components/StashModalV2.vue';
 import { formatNumber, formatearFecha as formatDate } from '@/utils/formatters';
+import { sonMontosIguales } from '@/utils/dinero';
 
 export default {
   name: 'OtilioIndependienteCuentasMenu',
@@ -217,8 +219,8 @@ export default {
 
             const saldoAnterior = i === 0 ? 0 : cuentasOrdenadas[i-1].nuevoSaldoAcumulado;
             
-            if (cuenta.saldoAcumuladoAnterior !== saldoAnterior || 
-                cuenta.nuevoSaldoAcumulado !== saldoAcumulado) {
+            if (!sonMontosIguales(cuenta.saldoAcumuladoAnterior, saldoAnterior) ||
+                !sonMontosIguales(cuenta.nuevoSaldoAcumulado, saldoAcumulado)) {
               
               actualizaciones.push({
                 id: cuenta.id,
@@ -237,10 +239,15 @@ export default {
             }
           }
 
-          if (actualizaciones.length > 0) {
-            await Promise.all(actualizaciones.map(({ id, updates }) => 
-              updateDoc(doc(db, 'cuentasOtilioIndependiente', id), updates)
-            ));
+          if (actualizaciones.length > 0 && !this._recalculandoSaldos) {
+            this._recalculandoSaldos = true;
+            try {
+              await Promise.all(actualizaciones.map(({ id, updates }) =>
+                updateDoc(doc(db, 'cuentasOtilioIndependiente', id), updates)
+              ));
+            } finally {
+              this._recalculandoSaldos = false;
+            }
           }
 
           this.cuentas = cuentasOrdenadas.reverse();
@@ -258,13 +265,17 @@ export default {
       this.$router.push(`/cuentas-otilio-independiente/${id}?edit=true`);
     },
     async borrarCuenta(id) {
-      if (confirm('¿Estás seguro de que quieres borrar este registro de cuenta?')) {
+      const cuenta = this.cuentas.find(c => c.id === id);
+      const detalleCuenta = cuenta
+        ? `la cuenta del ${this.formatDate(cuenta.fecha)} (Saldo Hoy: $${this.formatNumber(cuenta.saldoHoy)}, Total Acumulado: $${this.formatNumber(cuenta.totalNota)})`
+        : 'este registro de cuenta';
+      if (confirm(`¿Estás seguro de que quieres borrar ${detalleCuenta}?`)) {
         try {
-          await deleteDoc(doc(db, 'cuentasOtilioIndependiente', id));
+          await PapeleraService.borrarConRespaldo('cuentasOtilioIndependiente', id, null, 'Borrado manual desde menú de cuentas Otilio Independiente');
           alert('Registro de cuenta borrado con éxito');
         } catch (error) {
-          console.error("Error al borrar el registro de cuenta: ", error);
-          alert('Error al borrar el registro de cuenta');
+          console.error('Error al borrar con respaldo:', error);
+          alert('No se pudo completar el borrado. El registro NO fue borrado.');
         }
       }
     },

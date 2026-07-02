@@ -55,7 +55,7 @@ export const embarqueCuentasMixin = {
         await EmbarqueCuentasService.crearCuentaJoselito(embarqueCliente, this.$router);
       } catch (error) {
         console.error('Error al crear cuenta para Joselito:', error);
-        alert('Error al crear cuenta para Joselito');
+        alert(`Error al crear cuenta para Joselito: ${error.message}`);
       } finally {
         this.isCreatingAccount = false;
       }

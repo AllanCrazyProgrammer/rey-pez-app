@@ -16,6 +16,8 @@ import {
 } from 'firebase/firestore';
 
 const createCuentasService = (coleccion) => ({
+  coleccion,
+
   _ref() {
     return collection(db, coleccion);
   },
