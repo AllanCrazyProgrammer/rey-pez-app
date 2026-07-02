@@ -339,11 +339,11 @@ export default {
 
           const registro = newExistencias[entrada.proveedor][medidaKey];
           registro.lotes.push({
-            kilos: entrada.kilos,
+            kilos: Number(entrada.kilos) || 0,
             fechaEntrada: sacadaFecha,
             cuartoFrio: cuarto
           });
-          registro.kilos = (registro.kilos || 0) + entrada.kilos;
+          registro.kilos = (registro.kilos || 0) + (Number(entrada.kilos) || 0);
         });
 
         // Procesar salidas - respetando la selección exacta del usuario

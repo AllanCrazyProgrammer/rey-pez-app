@@ -4,7 +4,7 @@ import { normalizarFechaISO, obtenerFechaActualISO } from '@/utils/dateUtils';
 import { crearNuevoProducto } from '@/constants.js/embarque';
 import { embarqueTieneContenidoOperativoDoc, embarqueTieneContenidoOperativoEstado } from '@/utils/embarqueContenido';
 
-const esUUIDValido = (id) => {
+export const esUUIDValido = (id) => {
   const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
   return typeof id === 'string' && uuidRegex.test(id);
 };
@@ -65,213 +65,216 @@ export const embarqueCargaMixin = {
           data.clientes = Array.isArray(data.clientes) ? data.clientes : [];
           this._aplicandoRemoto = true;
 
-          if (!this.tieneContenidoOperativo(data)) {
-            let hayContenidoOffline = false;
-            try {
-              const offlineRecord = await EmbarquesOfflineService.getById(id);
-              const offlineData = offlineRecord?.docData || offlineRecord || {};
-              hayContenidoOffline = this.tieneContenidoOperativo(offlineData);
-            } catch (error) {
-              console.warn('[onSnapshot] No se pudo validar snapshot offline para protección de contenido:', error);
+          try {
+            if (!this.tieneContenidoOperativo(data)) {
+              let hayContenidoOffline = false;
+              try {
+                const offlineRecord = await EmbarquesOfflineService.getById(id);
+                const offlineData = offlineRecord?.docData || offlineRecord || {};
+                hayContenidoOffline = this.tieneContenidoOperativo(offlineData);
+              } catch (error) {
+                console.warn('[onSnapshot] No se pudo validar snapshot offline para protección de contenido:', error);
+              }
+
+              const hayContenidoLocal = this.tieneContenidoOperativoActual();
+              if (hayContenidoLocal || hayContenidoOffline) {
+                console.warn('[onSnapshot] Snapshot remoto vacío ignorado para evitar sobrescritura de datos completos locales/offline.');
+                this._inicializandoEmbarque = false;
+                this._aplicandoRemoto = false;
+                return;
+              }
             }
 
-            const hayContenidoLocal = this.tieneContenidoOperativoActual();
-            if (hayContenidoLocal || hayContenidoOffline) {
-              console.warn('[onSnapshot] Snapshot remoto vacío ignorado para evitar sobrescritura de datos completos locales/offline.');
-              this._inicializandoEmbarque = false;
-              this._aplicandoRemoto = false;
-              return;
+            console.log('[DEBUG-FECHA] Cargando embarque ID:', id);
+            console.log('[DEBUG-FECHA] Fecha cruda de Firebase:', data.fecha);
+            console.log('[DEBUG-FECHA] Tipo de fecha:', typeof data.fecha, data.fecha?.constructor?.name);
+
+            this.embarqueBloqueado = data.embarqueBloqueado || false;
+
+            if (data.clientesPersonalizados && Array.isArray(data.clientesPersonalizados)) {
+              this.clientesPersonalizados = data.clientesPersonalizados;
+              console.log('[cargarEmbarque] Clientes personalizados cargados desde Firebase:', this.clientesPersonalizados);
+              localStorage.setItem('clientesPersonalizados', JSON.stringify(this.clientesPersonalizados));
+            } else {
+              console.log('[cargarEmbarque] No se encontraron clientes personalizados en Firebase, usando localStorage como respaldo');
             }
-          }
 
-          console.log('[DEBUG-FECHA] Cargando embarque ID:', id);
-          console.log('[DEBUG-FECHA] Fecha cruda de Firebase:', data.fecha);
-          console.log('[DEBUG-FECHA] Tipo de fecha:', typeof data.fecha, data.fecha?.constructor?.name);
-
-          this.embarqueBloqueado = data.embarqueBloqueado || false;
-
-          if (data.clientesPersonalizados && Array.isArray(data.clientesPersonalizados)) {
-            this.clientesPersonalizados = data.clientesPersonalizados;
-            console.log('[cargarEmbarque] Clientes personalizados cargados desde Firebase:', this.clientesPersonalizados);
-            localStorage.setItem('clientesPersonalizados', JSON.stringify(this.clientesPersonalizados));
-          } else {
-            console.log('[cargarEmbarque] No se encontraron clientes personalizados en Firebase, usando localStorage como respaldo');
-          }
-
-          if (data.clientesJuntarMedidas) {
-            this.clientesJuntarMedidas = data.clientesJuntarMedidas;
-          } else {
-            this.clientesJuntarMedidas = {};
-            data.clientes.forEach(cliente => {
-              this.$set(this.clientesJuntarMedidas, cliente.id, false);
-            });
-          }
-
-          if (data.clientesReglaOtilio) {
-            this.clientesReglaOtilio = data.clientesReglaOtilio;
-          } else {
-            this.clientesReglaOtilio = {};
-            data.clientes.forEach(cliente => {
-              const esOtilio = cliente.nombre && cliente.nombre.toLowerCase().includes('otilio');
-              this.$set(this.clientesReglaOtilio, cliente.id, esOtilio);
-            });
-          }
-
-          if (data.clientesIncluirPrecios) {
-            this.clientesIncluirPrecios = data.clientesIncluirPrecios;
-          } else {
-            this.clientesIncluirPrecios = {};
-            data.clientes.forEach(cliente => {
-              this.$set(this.clientesIncluirPrecios, cliente.id, false);
-            });
-          }
-
-          if (data.clientesCuentaEnPdf) {
-            this.clientesCuentaEnPdf = data.clientesCuentaEnPdf;
-          } else {
-            this.clientesCuentaEnPdf = {};
-            data.clientes.forEach(cliente => {
-              this.$set(this.clientesCuentaEnPdf, cliente.id, false);
-            });
-          }
-
-          if (data.clientesSumarKgCatarro) {
-            this.clientesSumarKgCatarro = data.clientesSumarKgCatarro;
-          } else {
-            this.clientesSumarKgCatarro = {};
-            data.clientes.forEach(cliente => {
-              const esCatarro = cliente.nombre && cliente.nombre.toLowerCase().includes('catarro');
-              this.$set(this.clientesSumarKgCatarro, cliente.id, esCatarro);
-            });
-          }
-
-          let fecha;
-          if (data.fecha && typeof data.fecha.toDate === 'function') {
-            fecha = data.fecha.toDate();
-            console.log('[DEBUG-FECHA] Fecha convertida de Timestamp:', fecha);
-          } else if (data.fecha instanceof Date) {
-            fecha = data.fecha;
-            console.log('[DEBUG-FECHA] Fecha es Date object:', fecha);
-          } else if (typeof data.fecha === 'string') {
-            fecha = data.fecha;
-            console.log('[DEBUG-FECHA] Fecha es string:', fecha);
-          } else {
-            console.warn('Formato de fecha no reconocido, usando la fecha actual');
-            fecha = new Date();
-          }
-
-          const fechaNormalizada = normalizarFechaISO(fecha);
-          console.log('[DEBUG-FECHA] Fecha normalizada final:', fechaNormalizada);
-
-          const clientesPredefinidosMap = new Map(this.clientesPredefinidos.map(c => [c.id.toString(), c]));
-
-          const personalizadosServidor = (data.clientes || [])
-            .filter(cliente => !clientesPredefinidosMap.has(cliente.id.toString()))
-            .map(cliente => ({
-              id: cliente.id,
-              nombre: cliente.nombre,
-              editable: true,
-              personalizado: true,
-              key: `personalizado_${cliente.id}`
-            }));
-
-          const mapaPorId = new Map();
-          (this.clientesPersonalizados || []).forEach(c => {
-            mapaPorId.set(String(c.id), { ...c });
-          });
-          personalizadosServidor.forEach(c => {
-            mapaPorId.set(String(c.id), { ...c });
-          });
-          this.clientesPersonalizados = Array.from(mapaPorId.values());
-
-          const productosDesdeServidor = data.clientes.flatMap(cliente => {
-            const clienteInfo = clientesPredefinidosMap.get(cliente.id.toString()) || cliente;
-            return cliente.productos.map(producto => ({
-              ...producto,
-              clienteId: cliente.id,
-              nombreCliente: clienteInfo.nombre,
-              restarTaras: producto.restarTaras || false,
-            }));
-          });
-
-          let productosFiltrados = productosDesdeServidor;
-          if (this.productosEliminadosLocalmente && this.productosEliminadosLocalmente.size > 0) {
-            console.log('[onSnapshot] Filtrando productos eliminados localmente:', this.productosEliminadosLocalmente);
-            productosFiltrados = productosDesdeServidor.filter(p =>
-              !this.productosEliminadosLocalmente.has(p.id)
-            );
-          }
-
-          let productosFinales;
-
-          if (this.agregandoProducto) {
-            console.log('[onSnapshot] Agregando producto en proceso, preservando productos locales');
-            productosFinales = this.embarque.productos || [];
-          } else if (this.camposEnEdicion && this.camposEnEdicion.size > 0) {
-            console.log('[onSnapshot] Hay campos en edición, mergear cuidadosamente');
-            productosFinales = this.mergeProductosConCamposEnEdicion(productosDesdeServidor, productosFiltrados);
-          } else {
-            const productosNuevosAPreservar = [];
-            if (this.productosNuevosPendientes && this.productosNuevosPendientes.size > 0) {
-              console.log('[onSnapshot] Preservando productos nuevos pendientes:', this.productosNuevosPendientes.size);
-              this.productosNuevosPendientes.forEach((producto, id) => {
-                const existeEnServidor = productosDesdeServidor.some(p => p.id === id);
-                if (!existeEnServidor) {
-                  productosNuevosAPreservar.push(producto);
-                  console.log('[onSnapshot] Preservando producto nuevo:', id);
-                } else {
-                  this.productosNuevosPendientes.delete(id);
-                  console.log('[onSnapshot] Producto sincronizado, removiendo de pendientes:', id);
-                }
+            if (data.clientesJuntarMedidas) {
+              this.clientesJuntarMedidas = data.clientesJuntarMedidas;
+            } else {
+              this.clientesJuntarMedidas = {};
+              data.clientes.forEach(cliente => {
+                this.$set(this.clientesJuntarMedidas, cliente.id, false);
               });
             }
 
-            const productosLocalesActuales = this.embarque.productos || [];
-            productosLocalesActuales.forEach(productoLocal => {
-              if (esUUIDValido(productoLocal.id) &&
-                  !productosDesdeServidor.some(p => p.id === productoLocal.id) &&
-                  !productosNuevosAPreservar.some(p => p.id === productoLocal.id)) {
-                console.log('[onSnapshot] Preservando producto local no sincronizado:', productoLocal.id);
-                productosNuevosAPreservar.push(productoLocal);
-                if (!this.productosNuevosPendientes.has(productoLocal.id)) {
-                  this.productosNuevosPendientes.set(productoLocal.id, { ...productoLocal });
+            if (data.clientesReglaOtilio) {
+              this.clientesReglaOtilio = data.clientesReglaOtilio;
+            } else {
+              this.clientesReglaOtilio = {};
+              data.clientes.forEach(cliente => {
+                const esOtilio = cliente.nombre && cliente.nombre.toLowerCase().includes('otilio');
+                this.$set(this.clientesReglaOtilio, cliente.id, esOtilio);
+              });
+            }
+
+            if (data.clientesIncluirPrecios) {
+              this.clientesIncluirPrecios = data.clientesIncluirPrecios;
+            } else {
+              this.clientesIncluirPrecios = {};
+              data.clientes.forEach(cliente => {
+                this.$set(this.clientesIncluirPrecios, cliente.id, false);
+              });
+            }
+
+            if (data.clientesCuentaEnPdf) {
+              this.clientesCuentaEnPdf = data.clientesCuentaEnPdf;
+            } else {
+              this.clientesCuentaEnPdf = {};
+              data.clientes.forEach(cliente => {
+                this.$set(this.clientesCuentaEnPdf, cliente.id, false);
+              });
+            }
+
+            if (data.clientesSumarKgCatarro) {
+              this.clientesSumarKgCatarro = data.clientesSumarKgCatarro;
+            } else {
+              this.clientesSumarKgCatarro = {};
+              data.clientes.forEach(cliente => {
+                const esCatarro = cliente.nombre && cliente.nombre.toLowerCase().includes('catarro');
+                this.$set(this.clientesSumarKgCatarro, cliente.id, esCatarro);
+              });
+            }
+
+            let fecha;
+            if (data.fecha && typeof data.fecha.toDate === 'function') {
+              fecha = data.fecha.toDate();
+              console.log('[DEBUG-FECHA] Fecha convertida de Timestamp:', fecha);
+            } else if (data.fecha instanceof Date) {
+              fecha = data.fecha;
+              console.log('[DEBUG-FECHA] Fecha es Date object:', fecha);
+            } else if (typeof data.fecha === 'string') {
+              fecha = data.fecha;
+              console.log('[DEBUG-FECHA] Fecha es string:', fecha);
+            } else {
+              console.warn('Formato de fecha no reconocido, usando la fecha actual');
+              fecha = new Date();
+            }
+
+            const fechaNormalizada = normalizarFechaISO(fecha);
+            console.log('[DEBUG-FECHA] Fecha normalizada final:', fechaNormalizada);
+
+            const clientesPredefinidosMap = new Map(this.clientesPredefinidos.map(c => [c.id.toString(), c]));
+
+            const personalizadosServidor = (data.clientes || [])
+              .filter(cliente => !clientesPredefinidosMap.has(cliente.id.toString()))
+              .map(cliente => ({
+                id: cliente.id,
+                nombre: cliente.nombre,
+                editable: true,
+                personalizado: true,
+                key: `personalizado_${cliente.id}`
+              }));
+
+            const mapaPorId = new Map();
+            (this.clientesPersonalizados || []).forEach(c => {
+              mapaPorId.set(String(c.id), { ...c });
+            });
+            personalizadosServidor.forEach(c => {
+              mapaPorId.set(String(c.id), { ...c });
+            });
+            this.clientesPersonalizados = Array.from(mapaPorId.values());
+
+            const productosDesdeServidor = data.clientes.flatMap(cliente => {
+              const clienteInfo = clientesPredefinidosMap.get(cliente.id.toString()) || cliente;
+              return cliente.productos.map(producto => ({
+                ...producto,
+                clienteId: cliente.id,
+                nombreCliente: clienteInfo.nombre,
+                restarTaras: producto.restarTaras || false,
+              }));
+            });
+
+            let productosFiltrados = productosDesdeServidor;
+            if (this.productosEliminadosLocalmente && this.productosEliminadosLocalmente.size > 0) {
+              console.log('[onSnapshot] Filtrando productos eliminados localmente:', this.productosEliminadosLocalmente);
+              productosFiltrados = productosDesdeServidor.filter(p =>
+                !this.productosEliminadosLocalmente.has(p.id)
+              );
+            }
+
+            let productosFinales;
+
+            if (this.agregandoProducto) {
+              console.log('[onSnapshot] Agregando producto en proceso, preservando productos locales');
+              productosFinales = this.embarque.productos || [];
+            } else if (this.camposEnEdicion && this.camposEnEdicion.size > 0) {
+              console.log('[onSnapshot] Hay campos en edición, mergear cuidadosamente');
+              productosFinales = this.mergeProductosConCamposEnEdicion(productosDesdeServidor, productosFiltrados);
+            } else {
+              const productosNuevosAPreservar = [];
+              if (this.productosNuevosPendientes && this.productosNuevosPendientes.size > 0) {
+                console.log('[onSnapshot] Preservando productos nuevos pendientes:', this.productosNuevosPendientes.size);
+                this.productosNuevosPendientes.forEach((producto, id) => {
+                  const existeEnServidor = productosDesdeServidor.some(p => p.id === id);
+                  if (!existeEnServidor) {
+                    productosNuevosAPreservar.push(producto);
+                    console.log('[onSnapshot] Preservando producto nuevo:', id);
+                  } else {
+                    this.productosNuevosPendientes.delete(id);
+                    console.log('[onSnapshot] Producto sincronizado, removiendo de pendientes:', id);
+                  }
+                });
+              }
+
+              const productosLocalesActuales = this.embarque.productos || [];
+              productosLocalesActuales.forEach(productoLocal => {
+                if (esUUIDValido(productoLocal.id) &&
+                    !productosDesdeServidor.some(p => p.id === productoLocal.id) &&
+                    !productosNuevosAPreservar.some(p => p.id === productoLocal.id)) {
+                  console.log('[onSnapshot] Preservando producto local no sincronizado:', productoLocal.id);
+                  productosNuevosAPreservar.push(productoLocal);
+                  if (!this.productosNuevosPendientes.has(productoLocal.id)) {
+                    this.productosNuevosPendientes.set(productoLocal.id, { ...productoLocal });
+                  }
                 }
+              });
+
+              productosFinales = [...productosFiltrados, ...productosNuevosAPreservar];
+            }
+
+            this.embarque = {
+              fecha: fechaNormalizada,
+              cargaCon: data.cargaCon || '',
+              camionNumero: data.camionNumero || 1,
+              productos: productosFinales,
+              kilosCrudos: data.kilosCrudos || {}
+            };
+
+            console.log('[DEBUG-FECHA] Embarque asignado con fecha:', this.embarque.fecha);
+            console.log('[DEBUG-FECHA] Total productos cargados:', productosFinales.length);
+
+            this.costosPorMedida = { ...(data.costosPorMedida || {}) };
+            this.aplicarCostoExtra = { ...(data.aplicarCostoExtra || {}) };
+            this.costoExtra = data.costoExtra !== undefined ? data.costoExtra : 18;
+
+            this.clienteCrudos = {};
+            data.clientes.forEach(cliente => {
+              if (cliente.crudos && cliente.crudos.length > 0) {
+                this.$set(this.clienteCrudos, cliente.id, cliente.crudos);
+              } else {
+                this.$set(this.clienteCrudos, cliente.id, []);
               }
             });
 
-            productosFinales = [...productosFiltrados, ...productosNuevosAPreservar];
+            this.embarqueId = id;
+            this.modoEdicion = true;
+            this.guardadoAutomaticoActivo = true;
+
+          } finally {
+            this._inicializandoEmbarque = false;
+            this._aplicandoRemoto = false;
           }
-
-          this.embarque = {
-            fecha: fechaNormalizada,
-            cargaCon: data.cargaCon || '',
-            camionNumero: data.camionNumero || 1,
-            productos: productosFinales,
-            kilosCrudos: data.kilosCrudos || {}
-          };
-
-          console.log('[DEBUG-FECHA] Embarque asignado con fecha:', this.embarque.fecha);
-          console.log('[DEBUG-FECHA] Total productos cargados:', productosFinales.length);
-
-          this.costosPorMedida = { ...(data.costosPorMedida || {}) };
-          this.aplicarCostoExtra = { ...(data.aplicarCostoExtra || {}) };
-          this.costoExtra = data.costoExtra !== undefined ? data.costoExtra : 18;
-
-          this.clienteCrudos = {};
-          data.clientes.forEach(cliente => {
-            if (cliente.crudos && cliente.crudos.length > 0) {
-              this.$set(this.clienteCrudos, cliente.id, cliente.crudos);
-            } else {
-              this.$set(this.clienteCrudos, cliente.id, []);
-            }
-          });
-
-          this.embarqueId = id;
-          this.modoEdicion = true;
-          this.guardadoAutomaticoActivo = true;
-
-          this._inicializandoEmbarque = false;
-          this._aplicandoRemoto = false;
 
           this.guardarSnapshotOffline({ pendingSync: false, docData: data, syncState: 'synced' });
         } else {

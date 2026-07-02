@@ -2,21 +2,11 @@
  * Utilidades para saldos acumulados de cuentas Ozuna (por fecha, sin incluir días posteriores).
  */
 
-export function normalizarFechaOzuna(valor) {
-  if (!valor) return null;
-  if (typeof valor === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(valor)) return valor;
-  if (valor?.seconds) {
-    return new Date(valor.seconds * 1000).toISOString().split('T')[0];
-  }
-  if (valor instanceof Date) {
-    return valor.toISOString().split('T')[0];
-  }
-  const d = new Date(valor);
-  if (!Number.isNaN(d.getTime())) {
-    return d.toISOString().split('T')[0];
-  }
-  return null;
-}
+import { normalizarFechaValor } from './dateUtils';
+
+// Versión canónica (segura con UTC y strings con hora); se conserva el nombre
+// exportado para no romper a los consumidores existentes.
+export const normalizarFechaOzuna = normalizarFechaValor;
 
 export function netoDiaCuentaOzuna(data = {}) {
   const totalGeneral = Number(data.totalGeneral) || 0;

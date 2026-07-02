@@ -185,9 +185,12 @@
 
 <script>
 import { db } from '@/firebase';
-import { collection, getDocs, query, orderBy, deleteDoc, doc, limit, getDoc, updateDoc } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, doc, limit, runTransaction } from 'firebase/firestore';
 import EmbarqueCuentasService from '@/utils/services/EmbarqueCuentasService';
+import PapeleraService from '@/services/PapeleraService';
 import { formatNumber, formatearFecha as formatDate } from '@/utils/formatters';
+import { normalizarFechaValor } from '@/utils/dateUtils';
+import { sumarMontos } from '@/utils/dinero';
 import {
   totalesAcumuladosPorCuenta,
   netoDiaCuentaOzuna,
@@ -258,26 +261,7 @@ export default {
   methods: {
     formatNumber,
     formatDate,
-    normalizarFechaValor(valor) {
-      if (!valor) return null;
-      try {
-        if (typeof valor === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(valor)) return valor;
-        if (valor.seconds) {
-          const d = new Date(valor.seconds * 1000);
-          return d.toISOString().split('T')[0];
-        }
-        if (valor instanceof Date) {
-          return valor.toISOString().split('T')[0];
-        }
-        const d = new Date(valor);
-        if (!Number.isNaN(d.getTime())) {
-          return d.toISOString().split('T')[0];
-        }
-      } catch (_) {
-        return null;
-      }
-      return null;
-    },
+    normalizarFechaValor,
     mapProductosConNombreAlternativo(productos = []) {
       return (productos || []).map(prod => {
         const nombreAlt = prod.nombreAlternativoPDF
@@ -310,8 +294,8 @@ export default {
 
         const cuentasActualizadas = querySnapshot.docs.map((docSnap) => {
           const data = docSnap.data();
-          const totalAbonos = (data.abonos || []).reduce((sum, abono) => sum + (abono.monto || 0), 0);
-          const totalCobros = (data.cobros || []).reduce((sum, cobro) => sum + (cobro.monto || 0), 0);
+          const totalAbonos = sumarMontos((data.abonos || []).map(a => a.monto));
+          const totalCobros = sumarMontos((data.cobros || []).map(c => c.monto));
           return {
             id: docSnap.id,
             fecha: this.normalizarFechaValor(data.fecha) || data.fecha,
@@ -391,37 +375,44 @@ export default {
       try {
         const cuentaId = this.cuentaAbonoSeleccionada.id;
         const cuentaRef = doc(db, 'cuentasOzuna', cuentaId);
-        const cuentaSnap = await getDoc(cuentaRef);
-
-        if (!cuentaSnap.exists()) {
-          alert('No se encontró la cuenta.');
-          return;
-        }
-
-        const data = cuentaSnap.data();
         const abonoNuevo = {
           descripcion: (this.nuevoAbono.descripcion || '').trim() || 'Abono',
           monto: Number(this.nuevoAbono.monto),
           fechaRegistro: new Date().toISOString()
         };
-        const abonos = [...(data.abonos || []), abonoNuevo];
-        const dataActualizada = { ...data, abonos };
-        const fechaNorm = normalizarFechaSaldo(data.fecha) || data.fecha;
+
+        // El resto de las cuentas se lee fuera de la transacción (solo se usa
+        // para el saldo acumulado anterior); la lectura y escritura del array
+        // de abonos de esta cuenta sí es atómica, para que dos dispositivos
+        // no se pisen entre sí.
         const cuentasRefAll = collection(db, 'cuentasOzuna');
         const todasSnap = await getDocs(query(cuentasRefAll, orderBy('fecha', 'asc')));
-        const cuentasCache = todasSnap.docs.map((snap) => ({
-          id: snap.id,
-          fecha: this.normalizarFechaValor(snap.data().fecha) || snap.data().fecha,
-          data: snap.id === cuentaId ? dataActualizada : snap.data()
-        }));
-        const saldoAcumuladoAnterior = saldoAcumuladoAntesDeFecha(cuentasCache, fechaNorm);
-        const totalSaldo = saldoAcumuladoAnterior + netoDiaCuentaOzuna(dataActualizada);
 
-        await updateDoc(cuentaRef, {
-          abonos,
-          saldoAcumuladoAnterior,
-          totalSaldo,
-          nuevoSaldoAcumulado: totalSaldo
+        await runTransaction(db, async (transaction) => {
+          const cuentaSnap = await transaction.get(cuentaRef);
+
+          if (!cuentaSnap.exists()) {
+            throw new Error('No se encontró la cuenta.');
+          }
+
+          const data = cuentaSnap.data();
+          const abonos = [...(data.abonos || []), abonoNuevo];
+          const dataActualizada = { ...data, abonos };
+          const fechaNorm = normalizarFechaSaldo(data.fecha) || data.fecha;
+          const cuentasCache = todasSnap.docs.map((snap) => ({
+            id: snap.id,
+            fecha: this.normalizarFechaValor(snap.data().fecha) || snap.data().fecha,
+            data: snap.id === cuentaId ? dataActualizada : snap.data()
+          }));
+          const saldoAcumuladoAnterior = saldoAcumuladoAntesDeFecha(cuentasCache, fechaNorm);
+          const totalSaldo = saldoAcumuladoAnterior + netoDiaCuentaOzuna(dataActualizada);
+
+          transaction.update(cuentaRef, {
+            abonos,
+            saldoAcumuladoAnterior,
+            totalSaldo,
+            nuevoSaldoAcumulado: totalSaldo
+          });
         });
 
         this.cerrarModalAbono();
@@ -429,7 +420,11 @@ export default {
         alert('Abono guardado correctamente.');
       } catch (error) {
         console.error('Error al guardar abono:', error);
-        alert('Error al guardar el abono. Intenta de nuevo.');
+        if (error && error.message === 'No se encontró la cuenta.') {
+          alert('No se encontró la cuenta.');
+        } else {
+          alert('Error al guardar el abono. Intenta de nuevo.');
+        }
       } finally {
         this.guardandoAbono = false;
       }
@@ -580,15 +575,19 @@ export default {
       await this.loadCuentas();
     },
     async borrarCuenta(id) {
-      if (confirm('¿Estás seguro de que quieres borrar este registro de cuenta?')) {
+      const cuenta = this.cuentas.find(c => c.id === id);
+      const detalleCuenta = cuenta
+        ? `la cuenta del ${this.formatDate(cuenta.fecha)} (Saldo Hoy: $${this.formatNumber(cuenta.saldoHoy)}, Total Acumulado: $${this.formatNumber(cuenta.totalNota)})`
+        : 'este registro de cuenta';
+      if (confirm(`¿Estás seguro de que quieres borrar ${detalleCuenta}?`)) {
         try {
-          await deleteDoc(doc(db, 'cuentasOzuna', id));
+          await PapeleraService.borrarConRespaldo('cuentasOzuna', id, null, 'Borrado manual desde menú de cuentas Ozuna');
           this.cuentas = this.cuentas.filter(cuenta => cuenta.id !== id);
           alert('Registro de cuenta borrado con éxito');
           this.loadCuentas();
         } catch (error) {
-          console.error("Error al borrar el registro de cuenta: ", error);
-          alert('Error al borrar el registro de cuenta');
+          console.error('Error al borrar con respaldo:', error);
+          alert('No se pudo completar el borrado. El registro NO fue borrado.');
         }
       }
     }

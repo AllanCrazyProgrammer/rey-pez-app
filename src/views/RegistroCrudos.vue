@@ -190,7 +190,7 @@
       <p>Diferencia: {{ formatNumber(totalEntradas - totalSalidas) }} kg</p>
     </div>
     
-    <button @click="saveReport" class="save-button">{{ isEditing ? 'Actualizar' : 'Guardar' }} Registro</button>
+    <button @click="saveReport" class="save-button" :disabled="guardando">{{ guardando ? 'Guardando...' : (isEditing ? 'Actualizar' : 'Guardar') + ' Registro' }}</button>
 
     <!-- Modal edición entrada -->
     <div v-if="editandoEntrada" class="modal-overlay" @click.self="cancelarEdicionEntrada">
@@ -269,9 +269,12 @@ export default {
       customProducto: '',
       isEditing: false,
       registroId: null,
+      fechaOriginal: null,
       isLoaded: false,
+      guardando: false,
       productosDisponibles: [],
       lotesDisponibles: [],
+      salidasSinExistencias: [],
       kilosDisponiblesSeleccionados: 0,
       editandoEntrada: false,
       entradaEditIndex: null,
@@ -409,12 +412,13 @@ export default {
           });
         };
 
+        // Devuelve los kilos que no alcanzaron a cubrirse con los lotes disponibles
         const descontarSalida = (salida) => {
           const proveedor = salida.proveedor;
           const producto = salida.producto;
           const kilosSalida = Number(salida.kilos || 0);
 
-          if (!proveedor || !producto || kilosSalida <= 0) return;
+          if (!proveedor || !producto || kilosSalida <= 0) return 0;
 
           const meta = asegurarProducto(proveedor, producto);
           if (salida.precio) {
@@ -437,6 +441,8 @@ export default {
             lote.kilosDisponibles = Number((lote.kilosDisponibles - descuento).toFixed(1));
             restante = Number((restante - descuento).toFixed(1));
           }
+
+          return restante;
         };
 
         const registrosOrdenados = registrosSnapshot.docs
@@ -471,7 +477,23 @@ export default {
 
         const fechaActual = this.currentDate.toDate();
         this.entradas.forEach(entrada => registrarEntrada(entrada, fechaActual));
-        this.salidas.forEach(salida => descontarSalida(salida));
+
+        // Registrar las salidas locales que exceden las existencias (para revalidar al guardar)
+        const salidasSinExistencias = [];
+        this.salidas.forEach(salida => {
+          const faltante = descontarSalida(salida) || 0;
+          if (faltante > 0) {
+            const solicitado = Number(salida.kilos || 0);
+            salidasSinExistencias.push({
+              proveedor: salida.proveedor,
+              producto: salida.producto,
+              cuartoFrio: salida.cuartoFrio,
+              solicitado,
+              disponible: Number((solicitado - faltante).toFixed(1))
+            });
+          }
+        });
+        this.salidasSinExistencias = salidasSinExistencias;
 
         const productosAgrupados = {};
         const lotesRestantes = lotesDisponibles.filter(lote => lote.kilosDisponibles > 0);
@@ -520,6 +542,7 @@ export default {
         console.error('Error al cargar productos disponibles:', error);
         this.productosDisponibles = [];
         this.lotesDisponibles = [];
+        this.salidasSinExistencias = [];
       }
     },
 
@@ -760,6 +783,7 @@ export default {
         }));
         this.registroId = id;
         this.isEditing = true;
+        this.fechaOriginal = this.currentDate.format('YYYY-MM-DD');
         await this.loadProductosDisponibles();
       } else {
         console.log("No se encontró el documento con ID:", id);
@@ -767,19 +791,42 @@ export default {
     },
 
     async saveReport() {
+      if (this.guardando) return;
+      this.guardando = true;
       try {
-        if (!this.isEditing) {
+        const fechaCambiada = this.isEditing &&
+          this.fechaOriginal !== this.currentDate.format('YYYY-MM-DD');
+
+        if (!this.isEditing || fechaCambiada) {
           const existingQuery = query(
             collection(db, 'existenciasCrudos'),
             where('fecha', '>=', this.currentDate.clone().startOf('day').toDate()),
             where('fecha', '<=', this.currentDate.clone().endOf('day').toDate())
           );
           const existingSnapshot = await getDocs(existingQuery);
-          
-          if (!existingSnapshot.empty) {
-            alert("Ya existe un registro para esta fecha. No se puede crear uno nuevo.");
+          const hayOtroRegistro = existingSnapshot.docs.some(docSnap => docSnap.id !== this.registroId);
+
+          if (hayOtroRegistro) {
+            alert(this.isEditing
+              ? "Ya existe otro registro para la nueva fecha. No se puede tener dos registros del mismo día."
+              : "Ya existe un registro para esta fecha. No se puede crear uno nuevo.");
             return;
           }
+        }
+
+        // Revalidar las salidas contra las existencias más recientes justo antes de escribir
+        await this.loadProductosDisponibles();
+        if (this.salidasSinExistencias.length > 0) {
+          const detalle = this.salidasSinExistencias
+            .map(item => {
+              const cuarto = item.cuartoFrio && item.cuartoFrio !== 'Todos los cuartos'
+                ? ` (${item.cuartoFrio})`
+                : '';
+              return `- ${item.proveedor} / ${item.producto}${cuarto}: disponible ${this.formatNumber(item.disponible)} kg, solicitado ${this.formatNumber(item.solicitado)} kg`;
+            })
+            .join('\n');
+          alert(`No se puede guardar: hay salidas que exceden las existencias disponibles:\n\n${detalle}\n\nAjusta las salidas e intenta de nuevo.`);
+          return;
         }
 
         const reportData = {
@@ -802,6 +849,8 @@ export default {
       } catch (error) {
         console.error("Error al guardar/actualizar el registro: ", error);
         alert("Error al guardar/actualizar el registro: " + error.message);
+      } finally {
+        this.guardando = false;
       }
     },
 

@@ -1,10 +1,11 @@
-import { getFirestore, collection, addDoc, doc, getDoc, setDoc, query, where, getDocs, orderBy } from 'firebase/firestore';
-import { 
-  formatDate, 
-  normalizarFechaISO, 
-  obtenerFechaActualISO, 
-  esFechaValida 
+import { getFirestore, collection, doc, query, where, getDocs, orderBy, limit, runTransaction } from 'firebase/firestore';
+import {
+  formatDate,
+  normalizarFechaISO,
+  obtenerFechaActualISO,
+  esFechaValida
 } from '../dateUtils';
+import { acumularLote } from '../dinero';
 
 /**
  * Servicio para gestionar la creación y actualización de cuentas de clientes a partir de embarques
@@ -113,20 +114,30 @@ const calcularKilosCrudos = (medida, kilosOriginales, esParaCostos = false) => {
   
   // Verificar si es un crudo y tiene el formato adecuado
   const medidaLower = medida.toLowerCase().trim();
-  
+
   // Verificar si tiene formato de números separados por guión (ej: "5-19")
   const formatoGuion = /^(\d+)-(\d+)$/.exec(medidaLower);
   if (formatoGuion) {
     const cajas = parseInt(formatoGuion[1]) || 0;
     const kilosPorCaja = parseInt(formatoGuion[2]) || 0;
-    
-    // Si el segundo número es 19, sustituirlo por 20 solo si NO es para la tabla de costos
-    const kiloPorCaja = (kilosPorCaja === 19 && !esParaCostos) ? 20 : kilosPorCaja;
-    
-    // Calcular kilos totales: cajas * kiloPorCaja
-    const kilosCalculados = cajas * kiloPorCaja;
-    
-    return kilosCalculados;
+
+    // Solo interpretar como "cajas-kilosPorCaja" cuando el segundo número es un
+    // peso de caja real (19 o 20). Una talla escrita con guión ("51-60", "21-25")
+    // también empata con el regex y se convertía en cajas × kilos (p.ej. 51 cajas
+    // × 60 kg = 3,060 kg fantasma en la cuenta). "16-20" se excluye explícitamente
+    // por ser una talla estándar de camarón.
+    const esNotacionCajas = (kilosPorCaja === 19 || kilosPorCaja === 20) && medidaLower !== '16-20';
+    if (esNotacionCajas) {
+      // Si el segundo número es 19, sustituirlo por 20 solo si NO es para la tabla de costos
+      const kiloPorCaja = (kilosPorCaja === 19 && !esParaCostos) ? 20 : kilosPorCaja;
+
+      // Calcular kilos totales: cajas * kiloPorCaja
+      const kilosCalculados = cajas * kiloPorCaja;
+
+      return kilosCalculados;
+    }
+
+    return kilosOriginales;
   }
   
   // Verificar si es un crudo
@@ -175,39 +186,26 @@ const obtenerSaldoAcumuladoAnterior = async (coleccion, fecha) => {
   try {
     const db = getFirestore();
     const cuentasRef = collection(db, coleccion);
-    
-    // Consultar cuentas anteriores a la fecha dada
-    const q = query(cuentasRef, where('fecha', '<', fecha));
+
+    // Solo se necesita la cuenta anterior más reciente: pedir 1 documento
+    // ordenado por fecha en vez de descargar toda la colección.
+    const q = query(cuentasRef, where('fecha', '<', fecha), orderBy('fecha', 'desc'), limit(1));
     const snapshot = await getDocs(q);
-    
+
     if (snapshot.empty) {
       console.log('No se encontraron cuentas anteriores');
       return 0;
     }
-    
-    // Ordenar las cuentas por fecha en orden descendente
-    const cuentasOrdenadas = snapshot.docs
-      .map(doc => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          fecha: data.fecha,
-          nuevoSaldoAcumulado: data.nuevoSaldoAcumulado || 0
-        };
-      })
-      .sort((a, b) => {
-        return new Date(b.fecha) - new Date(a.fecha);
-      });
-    
-    // Tomar el saldo de la cuenta más reciente
-    if (cuentasOrdenadas.length > 0) {
-      return cuentasOrdenadas[0].nuevoSaldoAcumulado;
-    }
-    
-    return 0;
+
+    return Number(snapshot.docs[0].data().nuevoSaldoAcumulado) || 0;
   } catch (error) {
     console.error('Error al obtener saldo acumulado anterior:', error);
-    return 0;
+    // No regresar 0 en silencio: crearía una cuenta con saldo anterior $0
+    // y toda la cadena de saldos posteriores quedaría mal.
+    throw new Error(
+      `No se pudo consultar el saldo anterior de ${coleccion} (¿problema de conexión?). ` +
+      'La cuenta NO se creó para no registrar un saldo incorrecto. Intenta de nuevo.'
+    );
   }
 };
 
@@ -375,11 +373,14 @@ const prepararItemsJoselito = (productos, clienteCrudos = {}, preciosVenta = new
     
     if (productosAgrupados.has(medidaNormalizada)) {
       const itemExistente = productosAgrupados.get(medidaNormalizada);
-      itemExistente.kilos += kilosCalculados;
-      // Usar el último costo encontrado
-      itemExistente.costo = costo;
+      const combinado = acumularLote(
+        { kilos: itemExistente.kilos, precio: itemExistente.costo, total: itemExistente.total },
+        { kilos: kilosCalculados, precio: costo }
+      );
+      itemExistente.kilos = combinado.kilos;
+      itemExistente.costo = combinado.precio;
+      itemExistente.total = combinado.total;
       itemExistente.precioVenta = precioVenta;
-      itemExistente.total = itemExistente.kilos * itemExistente.costo;
     } else {
       productosAgrupados.set(medidaNormalizada, {
         kilos: kilosCalculados,
@@ -438,13 +439,16 @@ const prepararItemsJoselito = (productos, clienteCrudos = {}, preciosVenta = new
           
           if (productosAgrupados.has(medidaNormalizada)) {
             const itemExistente = productosAgrupados.get(medidaNormalizada);
-            itemExistente.kilos += kilosTotales;
-            // Actualizar costo si el item tiene precio
+            const combinado = acumularLote(
+              { kilos: itemExistente.kilos, precio: itemExistente.costo, total: itemExistente.total },
+              { kilos: kilosTotales, precio: item.precio ? costo : 0 }
+            );
+            itemExistente.kilos = combinado.kilos;
+            itemExistente.costo = combinado.precio;
+            itemExistente.total = combinado.total;
             if (item.precio) {
-              itemExistente.costo = costo;
               itemExistente.precioVenta = precioVenta;
             }
-            itemExistente.total = itemExistente.kilos * itemExistente.costo;
           } else {
             productosAgrupados.set(medidaNormalizada, {
               kilos: kilosTotales,
@@ -465,10 +469,14 @@ const prepararItemsJoselito = (productos, clienteCrudos = {}, preciosVenta = new
     const medidaNorm = normalizarMedida(item.medida);
     if (itemsConsolidados.has(medidaNorm)) {
       const existente = itemsConsolidados.get(medidaNorm);
-      existente.kilos += item.kilos;
-      existente.costo = item.costo; // último costo
+      const combinado = acumularLote(
+        { kilos: existente.kilos, precio: existente.costo, total: existente.total },
+        { kilos: item.kilos, precio: item.costo }
+      );
+      existente.kilos = combinado.kilos;
+      existente.costo = combinado.precio;
+      existente.total = combinado.total;
       existente.precioVenta = item.precioVenta;
-      existente.total = existente.kilos * existente.costo;
     } else {
       // Usar la medida normalizada como nombre final
       itemsConsolidados.set(medidaNorm, { ...item, medida: medidaNorm });
@@ -542,10 +550,13 @@ const prepararItemsVentaJoselito = (productos, clienteCrudos = {}, preciosVenta 
     
     if (itemsVentaAgrupados.has(medidaNormalizada)) {
       const itemExistente = itemsVentaAgrupados.get(medidaNormalizada);
-      itemExistente.kilosVenta += kilosVenta;
-      // Usar el último precio encontrado
-      itemExistente.precioVenta = precioVenta;
-      itemExistente.totalVenta = itemExistente.kilosVenta * itemExistente.precioVenta;
+      const combinado = acumularLote(
+        { kilos: itemExistente.kilosVenta, precio: itemExistente.precioVenta, total: itemExistente.totalVenta },
+        { kilos: kilosVenta, precio: precioVenta }
+      );
+      itemExistente.kilosVenta = combinado.kilos;
+      itemExistente.precioVenta = combinado.precio;
+      itemExistente.totalVenta = combinado.total;
     } else {
       itemsVentaAgrupados.set(medidaNormalizada, {
         kilosVenta: kilosVenta,
@@ -605,12 +616,13 @@ const prepararItemsVentaJoselito = (productos, clienteCrudos = {}, preciosVenta 
           
           if (itemsVentaAgrupados.has(medidaNormalizada)) {
             const itemExistente = itemsVentaAgrupados.get(medidaNormalizada);
-            itemExistente.kilosVenta += kilosTotales;
-            // Usar el último precio encontrado
-            if (item.precio) {
-              itemExistente.precioVenta = precioVenta;
-            }
-            itemExistente.totalVenta = itemExistente.kilosVenta * itemExistente.precioVenta;
+            const combinado = acumularLote(
+              { kilos: itemExistente.kilosVenta, precio: itemExistente.precioVenta, total: itemExistente.totalVenta },
+              { kilos: kilosTotales, precio: item.precio ? precioVenta : 0 }
+            );
+            itemExistente.kilosVenta = combinado.kilos;
+            itemExistente.precioVenta = combinado.precio;
+            itemExistente.totalVenta = combinado.total;
           } else {
             itemsVentaAgrupados.set(medidaNormalizada, {
               kilosVenta: kilosTotales,
@@ -632,9 +644,13 @@ const prepararItemsVentaJoselito = (productos, clienteCrudos = {}, preciosVenta 
     const medidaNorm = normalizarMedida(item.medida);
     if (itemsVentaConsolidados.has(medidaNorm)) {
       const existente = itemsVentaConsolidados.get(medidaNorm);
-      existente.kilosVenta += item.kilosVenta;
-      existente.precioVenta = item.precioVenta; // último precio
-      existente.totalVenta = existente.kilosVenta * existente.precioVenta;
+      const combinado = acumularLote(
+        { kilos: existente.kilosVenta, precio: existente.precioVenta, total: existente.totalVenta },
+        { kilos: item.kilosVenta, precio: item.precioVenta }
+      );
+      existente.kilosVenta = combinado.kilos;
+      existente.precioVenta = combinado.precio;
+      existente.totalVenta = combinado.total;
     } else {
       // Conservar la medida original para mostrarla tal cual (con espacios)
       itemsVentaConsolidados.set(medidaNorm, { ...item });
@@ -1390,8 +1406,13 @@ const prepararDatosCuentaOtilio = async (embarqueData) => {
       const clave = normalizarMedida(item.medida);
       if (mapa.has(clave)) {
         const ex = mapa.get(clave);
-        ex.kilos += item.kilos;
-        ex.total = ex.kilos * ex.costo;
+        const combinado = acumularLote(
+          { kilos: ex.kilos, precio: ex.costo, total: ex.total },
+          { kilos: item.kilos, precio: item.costo }
+        );
+        ex.kilos = combinado.kilos;
+        ex.costo = combinado.precio;
+        ex.total = combinado.total;
         if (item.medida.length < ex.medida.length) ex.medida = item.medida;
       } else {
         mapa.set(clave, { ...item });
@@ -1406,8 +1427,13 @@ const prepararDatosCuentaOtilio = async (embarqueData) => {
       const clave = normalizarMedida(item.medida);
       if (mapa.has(clave)) {
         const ex = mapa.get(clave);
-        ex.kilosVenta += item.kilosVenta;
-        ex.totalVenta = ex.kilosVenta * ex.precioVenta;
+        const combinado = acumularLote(
+          { kilos: ex.kilosVenta, precio: ex.precioVenta, total: ex.totalVenta },
+          { kilos: item.kilosVenta, precio: item.precioVenta }
+        );
+        ex.kilosVenta = combinado.kilos;
+        ex.precioVenta = combinado.precio;
+        ex.totalVenta = combinado.total;
         if (item.medida.length < ex.medida.length) ex.medida = item.medida;
       } else {
         mapa.set(clave, { ...item });
@@ -1468,6 +1494,109 @@ const prepararDatosCuentaOtilio = async (embarqueData) => {
 };
 
 /**
+ * Crea una cuenta nueva de forma atómica usando la fecha como ID del documento.
+ *
+ * Garantías:
+ * - Si ya existe una cuenta con ese ID, la transacción falla con un mensaje
+ *   claro y NO se toca la cuenta existente. (El patrón anterior con
+ *   `setDoc(..., {merge:false})` NUNCA lanza `already-exists`: sobrescribía en
+ *   silencio la cuenta del día, perdiendo abonos y ajustes manuales.)
+ * - También detecta cuentas legacy de la misma fecha guardadas con ID aleatorio
+ *   (creadas con addDoc desde el editor de cuentas).
+ * - Dos dispositivos creando la cuenta a la vez: solo uno gana; el otro recibe
+ *   el error de duplicado, sin pisar datos.
+ *
+ * Los errores por duplicado llevan `error.code === 'cuenta-duplicada'` para que
+ * los llamadores puedan distinguirlos programáticamente.
+ *
+ * @param {string} nombreColeccion - Colección destino (ej. 'cuentasJoselito')
+ * @param {string} fechaISO - Fecha normalizada YYYY-MM-DD (será el ID del doc)
+ * @param {Object} datosCuenta - Datos de la cuenta a crear
+ * @param {string} nombreCliente - Nombre del cliente para mensajes de error
+ * @returns {Promise<string>} - El ID de la cuenta creada (la fecha)
+ */
+export const crearCuentaSegura = async (nombreColeccion, fechaISO, datosCuenta, nombreCliente) => {
+  const db = getFirestore();
+
+  const errorDuplicado = () => {
+    const error = new Error(
+      `Ya existe una cuenta de ${nombreCliente} registrada para la fecha ${fechaISO}. ` +
+      'No se pueden crear cuentas duplicadas.'
+    );
+    error.code = 'cuenta-duplicada';
+    return error;
+  };
+
+  // Detectar cuentas legacy con ID aleatorio para la misma fecha
+  const cuentasMismaFecha = await getDocs(
+    query(collection(db, nombreColeccion), where('fecha', '==', fechaISO))
+  );
+  if (!cuentasMismaFecha.empty) {
+    throw errorDuplicado();
+  }
+
+  // El campo `fecha` del documento debe coincidir con el ID: las cadenas de
+  // saldos y la detección de duplicados consultan por este campo.
+  const datos = { ...datosCuenta, fecha: fechaISO };
+
+  const docRef = doc(db, nombreColeccion, fechaISO);
+  try {
+    await runTransaction(db, async (transaction) => {
+      const snapshot = await transaction.get(docRef);
+      if (snapshot.exists()) {
+        throw errorDuplicado();
+      }
+      transaction.set(docRef, datos);
+    });
+  } catch (error) {
+    // La transacción requiere conexión; traducir el error técnico a algo accionable.
+    if (error?.code === 'unavailable' || /offline|network/i.test(String(error?.message))) {
+      throw new Error(
+        `No hay conexión con el servidor. La cuenta de ${nombreCliente} NO se creó ` +
+        'para evitar duplicados; intenta de nuevo cuando tengas internet.'
+      );
+    }
+    throw error;
+  }
+
+  console.log(`Cuenta de ${nombreCliente} creada con ID:`, fechaISO);
+  return fechaISO;
+};
+
+/**
+ * Valida que todos los items de venta de la cuenta tengan precio.
+ * Una cuenta creada con items a $0 le cobra de menos al cliente sin que nadie
+ * lo note; es preferible detener la creación y pedir que se asigne el precio.
+ * @param {Object} datosCuenta - Datos preparados de la cuenta
+ * @param {string} nombreCliente - Nombre del cliente para el mensaje de error
+ * @throws {Error} si hay items de venta sin precio
+ */
+const validarItemsVentaConPrecio = (datosCuenta, nombreCliente) => {
+  if (!datosCuenta || !Array.isArray(datosCuenta.itemsVenta)) return;
+
+  const itemsSinPrecio = datosCuenta.itemsVenta
+    .map((item, index) => ({
+      index: index + 1,
+      medida: item.medida,
+      kilos: item.kilosVenta,
+      precioVenta: item.precioVenta
+    }))
+    .filter(item => !item.precioVenta || item.precioVenta <= 0);
+
+  if (itemsSinPrecio.length === 0) return;
+
+  const detalleItems = itemsSinPrecio
+    .map(item => `• ${item.medida} (${item.kilos} kg) - Precio: ${item.precioVenta || 'VACÍO'}`)
+    .join('\n');
+
+  throw new Error(
+    `⚠️ NO SE PUEDE CREAR LA CUENTA DE ${String(nombreCliente).toUpperCase()}\n\n` +
+    `Se encontraron ${itemsSinPrecio.length} item(s) sin precio de venta:\n\n${detalleItems}\n\n` +
+    'Por favor, asegúrate de que todos los productos tengan un precio de venta configurado antes de crear la cuenta.'
+  );
+};
+
+/**
  * Crea una cuenta de cliente Joselito a partir de los datos de un embarque
  * @param {Object} embarqueData - Datos del embarque
  * @param {Object} router - Router de Vue para navegar después de crear la cuenta
@@ -1483,21 +1612,9 @@ export const crearCuentaJoselito = async (embarqueData, router) => {
     // Preparar los datos para la cuenta
     const datosCuenta = await prepararDatosCuentaJoselito(embarqueData);
 
-    // Crear la cuenta en Firestore usando la fecha como ID
-    // Esto previene duplicados automáticamente a nivel de base de datos
-    const db = getFirestore();
-    const docRef = doc(db, 'cuentasJoselito', fechaNormalizada);
-
-    try {
-      await setDoc(docRef, datosCuenta, { merge: false });
-      console.log('Cuenta de Joselito creada con ID:', fechaNormalizada);
-    } catch (firestoreError) {
-      // Si el documento ya existe, setDoc con merge:false lanzará un error
-      if (firestoreError.code === 'already-exists') {
-        throw new Error('Ya existe una cuenta de Joselito registrada para esta fecha.');
-      }
-      throw firestoreError;
-    }
+    // Validar precios y crear de forma atómica (falla si ya existe una cuenta para la fecha)
+    validarItemsVentaConPrecio(datosCuenta, 'Joselito');
+    await crearCuentaSegura('cuentasJoselito', fechaNormalizada, datosCuenta, 'Joselito');
 
     // Abrir la cuenta en una nueva pestaña en lugar de navegar directamente
     if (router) {
@@ -1528,21 +1645,9 @@ export const crearCuentaCatarro = async (embarqueData, router) => {
     // Preparar los datos para la cuenta
     const datosCuenta = await prepararDatosCuentaCatarro(embarqueData);
 
-    // Crear la cuenta en Firestore usando la fecha como ID
-    // Esto previene duplicados automáticamente a nivel de base de datos
-    const db = getFirestore();
-    const docRef = doc(db, 'cuentasCatarro', fechaNormalizada);
-
-    try {
-      await setDoc(docRef, datosCuenta, { merge: false });
-      console.log('Cuenta de Catarro creada con ID:', fechaNormalizada);
-    } catch (firestoreError) {
-      // Si el documento ya existe, setDoc con merge:false lanzará un error
-      if (firestoreError.code === 'already-exists') {
-        throw new Error('Ya existe una cuenta de Catarro registrada para esta fecha.');
-      }
-      throw firestoreError;
-    }
+    // Validar precios y crear de forma atómica (falla si ya existe una cuenta para la fecha)
+    validarItemsVentaConPrecio(datosCuenta, 'Catarro');
+    await crearCuentaSegura('cuentasCatarro', fechaNormalizada, datosCuenta, 'Catarro');
 
     // Abrir la cuenta en una nueva pestaña en lugar de navegar directamente
     if (router) {
@@ -1573,21 +1678,9 @@ export const crearCuentaOzuna = async (embarqueData, router) => {
     // Preparar los datos para la cuenta
     const datosCuenta = await prepararDatosCuentaOzuna(embarqueData);
 
-    // Crear la cuenta en Firestore usando la fecha como ID
-    // Esto previene duplicados automáticamente a nivel de base de datos
-    const db = getFirestore();
-    const docRef = doc(db, 'cuentasOzuna', fechaNormalizada);
-
-    try {
-      await setDoc(docRef, datosCuenta, { merge: false });
-      console.log('Cuenta de Ozuna creada con ID:', fechaNormalizada);
-    } catch (firestoreError) {
-      // Si el documento ya existe, setDoc con merge:false lanzará un error
-      if (firestoreError.code === 'already-exists') {
-        throw new Error('Ya existe una cuenta de Ozuna registrada para esta fecha.');
-      }
-      throw firestoreError;
-    }
+    // Validar precios y crear de forma atómica (falla si ya existe una cuenta para la fecha)
+    validarItemsVentaConPrecio(datosCuenta, 'Ozuna');
+    await crearCuentaSegura('cuentasOzuna', fechaNormalizada, datosCuenta, 'Ozuna');
 
     // Abrir la cuenta en una nueva pestaña en lugar de navegar directamente
     if (router) {
@@ -1618,21 +1711,9 @@ export const crearCuentaOtilio = async (embarqueData, router) => {
     // Preparar los datos para la cuenta
     const datosCuenta = await prepararDatosCuentaOtilio(embarqueData);
 
-    // Crear la cuenta en Firestore usando la fecha como ID
-    // Esto previene duplicados automáticamente a nivel de base de datos
-    const db = getFirestore();
-    const docRef = doc(db, 'cuentasOtilio', fechaNormalizada);
-
-    try {
-      await setDoc(docRef, datosCuenta, { merge: false });
-      console.log('Cuenta de Otilio creada con ID:', fechaNormalizada);
-    } catch (firestoreError) {
-      // Si el documento ya existe, setDoc con merge:false lanzará un error
-      if (firestoreError.code === 'already-exists') {
-        throw new Error('Ya existe una cuenta de Otilio registrada para esta fecha.');
-      }
-      throw firestoreError;
-    }
+    // Validar precios y crear de forma atómica (falla si ya existe una cuenta para la fecha)
+    validarItemsVentaConPrecio(datosCuenta, 'Otilio');
+    await crearCuentaSegura('cuentasOtilio', fechaNormalizada, datosCuenta, 'Otilio');
 
     // Abrir la cuenta en una nueva pestaña en lugar de navegar directamente
     if (router) {
@@ -2161,58 +2242,14 @@ export const crearCuentaVeronica = async (embarqueData, router) => {
     // Normalizar la fecha para usarla como ID del documento
     const fechaNormalizada = normalizarFechaISO(embarqueData?.fecha);
 
-    // VALIDACIÓN 1: Verificar que no exista una cuenta para esta fecha
-    const db = getFirestore();
-    const docRef = doc(db, 'cuentasVeronica', fechaNormalizada);
-    const docSnap = await getDoc(docRef);
-
-    if (docSnap.exists()) {
-      console.warn(`⚠️ Ya existe una cuenta de Veronica para la fecha ${fechaNormalizada}`);
-      throw new Error(`Ya existe una cuenta de Veronica registrada para la fecha ${fechaNormalizada}. No se pueden crear cuentas duplicadas.`);
-    }
-
     // Preparar los datos para la cuenta
     console.log('Llamando a prepararDatosCuentaVeronica...');
     const datosCuenta = await prepararDatosCuentaVeronica(embarqueData);
     console.log('Datos de cuenta preparados:', datosCuenta);
 
-    // VALIDACIÓN 2: Verificar que todos los items tengan precio de venta
-    const itemsSinPrecio = [];
-    if (datosCuenta.itemsVenta && Array.isArray(datosCuenta.itemsVenta)) {
-      datosCuenta.itemsVenta.forEach((item, index) => {
-        if (!item.precioVenta || item.precioVenta <= 0) {
-          itemsSinPrecio.push({
-            index: index + 1,
-            medida: item.medida,
-            kilos: item.kilosVenta,
-            precioVenta: item.precioVenta
-          });
-        }
-      });
-    }
-
-    // Si hay items sin precio, mostrar advertencia detallada
-    if (itemsSinPrecio.length > 0) {
-      console.error('⚠️ ALERTA: Se encontraron items sin precio de venta:');
-      itemsSinPrecio.forEach(item => {
-        console.error(`  - Item ${item.index}: ${item.medida} (${item.kilos} kg) - Precio: ${item.precioVenta || 'VACÍO'}`);
-      });
-
-      const detalleItems = itemsSinPrecio
-        .map(item => `• ${item.medida} (${item.kilos} kg) - Precio: ${item.precioVenta || 'VACÍO'}`)
-        .join('\n');
-
-      throw new Error(
-        `⚠️ NO SE PUEDE CREAR LA CUENTA\n\n` +
-        `Se encontraron ${itemsSinPrecio.length} item(s) sin precio de venta:\n\n${detalleItems}\n\n` +
-        `Por favor, asegúrate de que todos los productos tengan un precio de venta configurado antes de crear la cuenta.`
-      );
-    }
-
-    // Crear la cuenta en Firestore usando la fecha como ID
-    console.log(`✅ Todas las validaciones pasaron. Creando cuenta para fecha ${fechaNormalizada}...`);
-    await setDoc(docRef, datosCuenta);
-    console.log('✅ Cuenta de Veronica creada exitosamente con ID:', fechaNormalizada);
+    // Validar precios y crear de forma atómica (falla si ya existe una cuenta para la fecha)
+    validarItemsVentaConPrecio(datosCuenta, 'Veronica');
+    await crearCuentaSegura('cuentasVeronica', fechaNormalizada, datosCuenta, 'Veronica');
 
     // Abrir la cuenta en una nueva pestaña en lugar de navegar directamente
     if (router) {
@@ -2228,6 +2265,7 @@ export const crearCuentaVeronica = async (embarqueData, router) => {
 };
 
 export default {
+  crearCuentaSegura,
   crearCuentaJoselito,
   crearCuentaCatarro,
   crearCuentaOzuna,

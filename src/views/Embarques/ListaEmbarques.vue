@@ -262,8 +262,9 @@
 </template>
 
 <script>
-import { getFirestore, collection, getDocs, doc, deleteDoc, getDoc, setDoc, serverTimestamp, query, orderBy, limit } from 'firebase/firestore';
+import { getFirestore, collection, getDocs, doc, deleteDoc, getDoc, setDoc, updateDoc, serverTimestamp, query, orderBy, limit } from 'firebase/firestore';
 import BackupService from './BackupService.js';
+import { normalizarDocDataParaFirestore } from './mixins/embarqueSyncMixin';
 import NotificacionRespaldo from './NotificacionRespaldo.vue';
 import EmbarquesOfflineService from '@/services/EmbarquesOfflineService';
 import { useAuthStore } from '@/stores/auth';
@@ -440,86 +441,13 @@ export default {
       };
     },
 
-    normalizarDocDataParaFirestore(record) {
-      const source = record && record.docData ? JSON.parse(JSON.stringify(record.docData)) : {};
-
-      const parseFecha = (valor) => {
-        if (!valor) return new Date();
-        if (valor instanceof Date) return valor;
-        if (typeof valor === 'string') {
-          const parsed = new Date(valor);
-          if (!Number.isNaN(parsed.getTime())) {
-            return parsed;
-          }
-        }
-        if (typeof valor === 'object') {
-          const seconds = valor?.seconds ?? valor?._seconds;
-          if (typeof seconds === 'number') {
-            return new Date(seconds * 1000);
-          }
-        }
-        try {
-          return new Date(valor);
-        } catch (error) {
-          console.warn('[ListaEmbarques] No se pudo parsear la fecha, usando fecha actual.', error);
-          return new Date();
-        }
-      };
-
-      const pick = (key, fallback) => {
-        if (source[key] !== undefined) return source[key];
-        if (record && record[key] !== undefined) return record[key];
-        return fallback;
-      };
-
-      const payload = {
-        fecha: parseFecha(pick('fecha', null)),
-        cargaCon: pick('cargaCon', ''),
-        camionNumero: pick('camionNumero', 1),
-        clientes: Array.isArray(pick('clientes', [])) ? pick('clientes', []).map(cliente => ({
-          ...cliente,
-          productos: Array.isArray(cliente.productos) ? cliente.productos.map(producto => ({
-            ...producto,
-            restarTaras: producto.restarTaras || false,
-            noSumarKilos: producto.noSumarKilos || false,
-          })) : [],
-          crudos: Array.isArray(cliente.crudos) ? cliente.crudos : [],
-        })) : [],
-        clientesJuntarMedidas: pick('clientesJuntarMedidas', {}),
-        clientesReglaOtilio: pick('clientesReglaOtilio', {}),
-        clientesIncluirPrecios: pick('clientesIncluirPrecios', {}),
-        clientesCuentaEnPdf: pick('clientesCuentaEnPdf', {}),
-        clientesSumarKgCatarro: pick('clientesSumarKgCatarro', {}),
-        clientesPersonalizados: Array.isArray(pick('clientesPersonalizados', [])) ? pick('clientesPersonalizados', []) : [],
-        costosPorMedida: pick('costosPorMedida', {}),
-        aplicarCostoExtra: pick('aplicarCostoExtra', {}),
-        costoExtra: typeof pick('costoExtra', undefined) === 'number' ? pick('costoExtra', undefined) : 18,
-        kilosCrudos: pick('kilosCrudos', {}),
-        medidasConfiguracion: Array.isArray(pick('medidasConfiguracion', [])) ? pick('medidasConfiguracion', []) : [],
-        preciosActuales: Array.isArray(pick('preciosActuales', [])) ? pick('preciosActuales', []) : [],
-        medidaOculta: pick('medidaOculta', {}),
-        analizarGanancia: pick('analizarGanancia', {}),
-        analizarGananciaCrudos: pick('analizarGananciaCrudos', {}),
-        analizarMaquilaGanancia: pick('analizarMaquilaGanancia', {}),
-        precioMaquila: pick('precioMaquila', {}),
-        pesoTaraCosto: typeof pick('pesoTaraCosto', undefined) === 'number' ? pick('pesoTaraCosto', undefined) : 19,
-        pesoTaraVenta: typeof pick('pesoTaraVenta', undefined) === 'number' ? pick('pesoTaraVenta', undefined) : 20,
-        nombresMedidasPersonalizados: pick('nombresMedidasPersonalizados', {}),
-        notaRendimientos: pick('notaRendimientos', ''),
-        embarqueBloqueado: Boolean(pick('embarqueBloqueado', false)),
-        noEnviadoMexico: Boolean(pick('noEnviadoMexico', false)),
-      };
-
-      return payload;
-    },
-
     tieneContenidoOperativo(data) {
       return embarqueTieneContenidoOperativoDoc(data);
     },
 
     async sincronizarPendientesOffline() {
       try {
-        const pendientes = await EmbarquesOfflineService.getPendingSync();
+        const pendientes = await EmbarquesOfflineService.getPendingSync(true);
         if (!Array.isArray(pendientes) || pendientes.length === 0) {
           return;
         }
@@ -534,14 +462,17 @@ export default {
 
             if (record.deleted && record.deletedByUser) {
               if (snapshot.exists()) {
+                // Respaldo de emergencia ANTES de borrar en la nube; si falla,
+                // el error se propaga y el registro queda pendiente para reintentar.
+                await BackupService.crearRespaldoEmergencia(record.id, 'eliminacion_offline_sincronizada');
                 await deleteDoc(embarqueRef);
               }
               await EmbarquesOfflineService.hardDelete(record.id);
               continue;
             }
 
-            const payload = this.normalizarDocDataParaFirestore(record);
             const dataRemota = snapshot.exists() ? (snapshot.data() || {}) : null;
+            const payload = normalizarDocDataParaFirestore(record.docData, record, { dataRemota });
 
             if (dataRemota && this.tieneContenidoOperativo(dataRemota) && !this.tieneContenidoOperativo(payload)) {
               console.warn('[ListaEmbarques] Snapshot offline incompleto detectado, preservando datos remotos para evitar sobrescritura.');
@@ -589,9 +520,17 @@ export default {
         await EmbarquesOfflineService.init();
 
         let offlineById = new Map();
+        let idsBorradosOffline = new Set();
         try {
           const registrosOffline = await EmbarquesOfflineService.getAll();
           offlineById = new Map((registrosOffline || []).map(r => [r.id, r]));
+
+          // Embarques borrados offline pendientes de sincronizar: no deben
+          // re-guardarse ni "resucitar" con los datos remotos.
+          const pendientesConBorrados = await EmbarquesOfflineService.getPendingSync(true);
+          idsBorradosOffline = new Set(
+            (pendientesConBorrados || []).filter(r => r.deleted).map(r => r.id)
+          );
           if (Array.isArray(registrosOffline) && registrosOffline.length > 0) {
             const embarquesOrdenados = registrosOffline
               .map(this.mapOfflineRecordToLista)
@@ -648,7 +587,12 @@ export default {
         });
 
         // Procesar y guardar en IndexedDB en paralelo
-        const embarquesFiltrados = await Promise.all(embarquesProcesados.map(async (embarque) => {
+        const embarquesFiltrados = (await Promise.all(embarquesProcesados.map(async (embarque) => {
+          // No resucitar embarques marcados como borrados offline (pending-delete)
+          if (idsBorradosOffline.has(embarque.id)) {
+            return null;
+          }
+
           const fechaObj = embarque.fecha instanceof Date ? embarque.fecha : (embarque.fecha ? new Date(embarque.fecha) : new Date());
           const snapshotOffline = this.construirSnapshotOfflineDesdeRemoto(embarque.id, embarque.data, fechaObj);
 
@@ -693,7 +637,7 @@ export default {
             camionNumero: embarque.data.camionNumero || 1,
             totalGanancias,
           };
-        }));
+        }))).filter(Boolean);
 
         // Mezclar con pendientes offline para no perder registros no sincronizados
         const pendientesOffline = await EmbarquesOfflineService.getAll();
@@ -900,7 +844,7 @@ export default {
           
           if (!navigator.onLine) {
             // En modo offline, guardar en IndexedDB
-            const record = await EmbarquesOfflineService.get(embarqueId);
+            const record = await EmbarquesOfflineService.getById(embarqueId);
             if (record) {
               record.noEnviadoMexico = nuevoEstado;
               if (record.docData) {
@@ -933,8 +877,12 @@ export default {
                 }
               };
               
-              await setDoc(embarqueRef, dataActualizada, { merge: false });
-              
+              // Actualización puntual para no pisar cambios concurrentes de otros dispositivos
+              await updateDoc(embarqueRef, {
+                noEnviadoMexico: nuevoEstado,
+                ultimaEdicion: dataActualizada.ultimaEdicion
+              });
+
               // Actualizar en IndexedDB también
               const snapshotOffline = this.construirSnapshotOfflineDesdeRemoto(
                 embarqueId, 

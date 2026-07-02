@@ -232,14 +232,16 @@
 
 <script>
 import { db } from '@/firebase';
-import { collection, query, orderBy, deleteDoc, doc, onSnapshot, updateDoc, getDocs, limit, writeBatch } from 'firebase/firestore';
+import { collection, query, orderBy, doc, onSnapshot, updateDoc, getDocs, limit, writeBatch } from 'firebase/firestore';
 import EmbarqueCuentasService from '@/utils/services/EmbarqueCuentasService';
+import PapeleraService from '@/services/PapeleraService';
 import BackButton from '@/components/BackButton.vue';
 import PreciosHistorialModal from '@/components/PreciosHistorialModal.vue';
 import StashModalV2 from '@/components/StashModalV2.vue';
 import ObservacionesModal from '@/components/ObservacionesModal.vue';
 
 import { formatNumber, formatearFecha as formatDate } from '@/utils/formatters';
+import { normalizarFechaValor } from '@/utils/dateUtils';
 
 import ReporteCuentasOtilioButton from '@/components/Cuentas/ReporteCuentasOtilioButton.vue';
 import moment from 'moment';
@@ -320,31 +322,7 @@ export default {
     formatNumber,
     formatDate,
 
-    normalizarFechaValor(valor) {
-      if (!valor) return null;
-      try {
-        const formatearUTC = (fechaObj) => {
-          if (!(fechaObj instanceof Date) || Number.isNaN(fechaObj.getTime())) return null;
-          const año = fechaObj.getUTCFullYear();
-          const mes = String(fechaObj.getUTCMonth() + 1).padStart(2, '0');
-          const dia = String(fechaObj.getUTCDate()).padStart(2, '0');
-          return `${año}-${mes}-${dia}`;
-        };
-        if (typeof valor === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(valor)) return valor;
-        if (typeof valor === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(valor)) {
-          return valor.slice(0, 10);
-        }
-        if (valor?.seconds) {
-          return formatearUTC(new Date(valor.seconds * 1000));
-        }
-        if (valor instanceof Date) {
-          return formatearUTC(valor);
-        }
-        return formatearUTC(new Date(valor));
-      } catch (_) {
-        return null;
-      }
-    },
+    normalizarFechaValor,
     tieneContenidoProducto(producto = {}) {
       return Boolean(
         producto &&
@@ -738,9 +716,13 @@ export default {
       }
     },
     async borrarCuenta(id) {
-      if (confirm('¿Estás seguro de que quieres borrar este registro de cuenta?')) {
+      const cuenta = this.cuentas.find(c => c.id === id);
+      const detalleCuenta = cuenta
+        ? `la cuenta del ${this.formatDate(cuenta.fecha)} (Saldo Hoy: $${this.formatNumber(cuenta.saldoHoy)}, Total Acumulado: $${this.formatNumber(cuenta.totalNota)})`
+        : 'este registro de cuenta';
+      if (confirm(`¿Estás seguro de que quieres borrar ${detalleCuenta}?`)) {
         try {
-          await deleteDoc(doc(db, 'cuentasOtilio', id));
+          await PapeleraService.borrarConRespaldo('cuentasOtilio', id, null, 'Borrado manual desde menú de cuentas Otilio');
           if (this.lastSaveMessage !== 'Registro de cuenta borrado con éxito' || !this.showSaveMessage) {
             this.lastSaveMessage = 'Registro de cuenta borrado con éxito';
             this.showSaveMessage = true;
@@ -750,9 +732,9 @@ export default {
             }, 3000);
           }
         } catch (error) {
-          console.error("Error al borrar el registro de cuenta: ", error);
-          if (this.lastSaveMessage !== 'Error al borrar el registro de cuenta' || !this.showSaveMessage) {
-            this.lastSaveMessage = 'Error al borrar el registro de cuenta';
+          console.error('Error al borrar con respaldo:', error);
+          if (this.lastSaveMessage !== 'No se pudo completar el borrado. El registro NO fue borrado.' || !this.showSaveMessage) {
+            this.lastSaveMessage = 'No se pudo completar el borrado. El registro NO fue borrado.';
             this.showSaveMessage = true;
             if (this.saveMessageTimer) clearTimeout(this.saveMessageTimer);
             this.saveMessageTimer = setTimeout(() => {

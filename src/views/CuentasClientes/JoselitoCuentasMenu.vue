@@ -154,12 +154,15 @@
 
 <script>
 import { db } from '@/firebase';
-import { collection, query, orderBy, deleteDoc, doc, onSnapshot, updateDoc, getDocs, where, limit } from 'firebase/firestore';
+import { collection, query, orderBy, doc, onSnapshot, updateDoc, getDocs, where, limit } from 'firebase/firestore';
 import EmbarqueCuentasService from '@/utils/services/EmbarqueCuentasService';
+import PapeleraService from '@/services/PapeleraService';
 import BackButton from '@/components/BackButton.vue';
 import PreciosHistorialModal from '@/components/PreciosHistorialModal.vue';
 import StashModalV2 from '@/components/StashModalV2.vue';
 import { formatNumber, formatearFecha as formatDate } from '@/utils/formatters';
+import { normalizarFechaValor } from '@/utils/dateUtils';
+import { sonMontosIguales } from '@/utils/dinero';
 
 export default {
   name: 'JoselitoCuentasMenu',
@@ -200,26 +203,7 @@ export default {
   methods: {
     formatNumber,
     formatDate,
-    normalizarFechaValor(valor) {
-      if (!valor) return null;
-      try {
-        if (typeof valor === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(valor)) return valor;
-        if (valor.seconds) {
-          const d = new Date(valor.seconds * 1000);
-          return d.toISOString().split('T')[0];
-        }
-        if (valor instanceof Date) {
-          return valor.toISOString().split('T')[0];
-        }
-        const d = new Date(valor);
-        if (!Number.isNaN(d.getTime())) {
-          return d.toISOString().split('T')[0];
-        }
-      } catch (_) {
-        return null;
-      }
-      return null;
-    },
+    normalizarFechaValor,
     async loadCuentas() {
       try {
         this.isLoading = true;
@@ -267,9 +251,9 @@ export default {
 
             const saldoAnterior = i === 0 ? 0 : cuentasOrdenadas[i-1].nuevoSaldoAcumulado;
             
-            if (cuenta.saldoAcumuladoAnterior !== saldoAnterior || 
-                cuenta.nuevoSaldoAcumulado !== saldoAcumulado) {
-              
+            if (!sonMontosIguales(cuenta.saldoAcumuladoAnterior, saldoAnterior) ||
+                !sonMontosIguales(cuenta.nuevoSaldoAcumulado, saldoAcumulado)) {
+
               actualizaciones.push({
                 id: cuenta.id,
                 updates: {
@@ -287,10 +271,15 @@ export default {
             }
           }
 
-          if (actualizaciones.length > 0) {
-            await Promise.all(actualizaciones.map(({ id, updates }) => 
-              updateDoc(doc(db, 'cuentasJoselito', id), updates)
-            ));
+          if (actualizaciones.length > 0 && !this._recalculandoSaldos) {
+            this._recalculandoSaldos = true;
+            try {
+              await Promise.all(actualizaciones.map(({ id, updates }) =>
+                updateDoc(doc(db, 'cuentasJoselito', id), updates)
+              ));
+            } finally {
+              this._recalculandoSaldos = false;
+            }
           }
 
           // Buscar embarques de Joselito que no tengan nota
@@ -436,9 +425,13 @@ export default {
       }
     },
     async borrarCuenta(id) {
-      if (confirm('¿Estás seguro de que quieres borrar este registro de cuenta?')) {
+      const cuenta = this.cuentas.find(c => c.id === id);
+      const detalleCuenta = cuenta
+        ? `la cuenta del ${this.formatDate(cuenta.fecha)} (Saldo Hoy: $${this.formatNumber(cuenta.saldoHoy)}, Total Acumulado: $${this.formatNumber(cuenta.totalNota)})`
+        : 'este registro de cuenta';
+      if (confirm(`¿Estás seguro de que quieres borrar ${detalleCuenta}?`)) {
         try {
-          await deleteDoc(doc(db, 'cuentasJoselito', id));
+          await PapeleraService.borrarConRespaldo('cuentasJoselito', id, null, 'Borrado manual desde menú de cuentas Joselito');
           if (this.lastSaveMessage !== 'Registro de cuenta borrado con éxito' || !this.showSaveMessage) {
             this.lastSaveMessage = 'Registro de cuenta borrado con éxito';
             this.showSaveMessage = true;
@@ -448,9 +441,9 @@ export default {
             }, 3000);
           }
         } catch (error) {
-          console.error("Error al borrar el registro de cuenta: ", error);
-          if (this.lastSaveMessage !== 'Error al borrar el registro de cuenta' || !this.showSaveMessage) {
-            this.lastSaveMessage = 'Error al borrar el registro de cuenta';
+          console.error('Error al borrar con respaldo:', error);
+          if (this.lastSaveMessage !== 'No se pudo completar el borrado. El registro NO fue borrado.' || !this.showSaveMessage) {
+            this.lastSaveMessage = 'No se pudo completar el borrado. El registro NO fue borrado.';
             this.showSaveMessage = true;
             if (this.saveMessageTimer) clearTimeout(this.saveMessageTimer);
             this.saveMessageTimer = setTimeout(() => {

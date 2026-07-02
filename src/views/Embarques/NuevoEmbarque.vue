@@ -242,7 +242,7 @@ import { embarquePdfModalMixin } from './mixins/embarquePdfModalMixin';
 import { embarquePedidoMixin } from './mixins/embarquePedidoMixin';
 import { embarqueCrudosMixin } from './mixins/embarqueCrudosMixin';
 import { embarqueDatosMixin } from './mixins/embarqueDatosMixin';
-import { embarqueCargaMixin } from './mixins/embarqueCargaMixin';
+import { embarqueCargaMixin, esUUIDValido } from './mixins/embarqueCargaMixin';
 import { embarqueSyncMixin } from './mixins/embarqueSyncMixin';
 import { embarqueClientesMixin } from './mixins/embarqueClientesMixin';
 import ClienteProductos from './components/ClienteProductos.vue';
@@ -660,7 +660,7 @@ export default {
     async syncOffline() {
       try {
         await EmbarquesOfflineService.init();
-        const pendientes = await EmbarquesOfflineService.getPendingSync();
+        const pendientes = await EmbarquesOfflineService.getPendingSync(true);
         if (Array.isArray(pendientes) && pendientes.length > 0) {
           for (const record of pendientes) {
             await this.sincronizarRegistroOffline(record);
@@ -671,6 +671,14 @@ export default {
         }
       } catch (error) {
         console.error('[syncOffline] Error general al sincronizar embarques offline:', error);
+      }
+    },
+
+    // Advertir al usuario si cierra la pestaña con cambios pendientes de subir
+    handleBeforeUnload(event) {
+      if (this.hasPendingChanges) {
+        event.preventDefault();
+        event.returnValue = '';
       }
     },
 
@@ -1518,7 +1526,11 @@ export default {
           return;
         }
         
-        localStorage.setItem('embarque', JSON.stringify(nuevoValor));
+        try {
+          localStorage.setItem('embarque', JSON.stringify(nuevoValor));
+        } catch (error) {
+          console.warn('[watch embarque] No se pudo guardar el embarque en localStorage:', error);
+        }
         this.undoStack.push(JSON.stringify(nuevoValor));
         this.redoStack = [];
 
@@ -1576,20 +1588,6 @@ export default {
         }
       }
     }
-  },
-
-  beforeUnmount() {
-    console.log('[beforeUnmount] Limpiando conexiones y listeners...');
-    
-    // Limpiar conexiones de Firestore
-    this.limpiarConexionesFirestore();
-    
-    // Limpiar listeners de red
-    window.removeEventListener('online', this.configurarReconexionAutomatica);
-    window.removeEventListener('offline', this.configurarReconexionAutomatica);
-    
-    // Limpiar listener de beforeunload
-    window.removeEventListener('beforeunload', this.handleBeforeUnload);
   },
 
   async created() {
@@ -1761,9 +1759,7 @@ export default {
     }
     
     // Cancelar la suscripción a los cambios en tiempo real
-    if (this.unsubscribe) {
-      this.unsubscribe();
-    }
+    this.limpiarConexionesFirestore();
 
     // Limpiar debounce del guardado automático (DEPRECATED)
     if (this.debouncedSave && this.debouncedSave.cancel) {
@@ -1785,6 +1781,8 @@ export default {
     // Eliminar los escuchadores de recarga y reconexión
     window.removeEventListener('beforeunload', this.handleBeforeUnload);
     window.removeEventListener('online', this.syncOffline);
+    window.removeEventListener('online', this.configurarReconexionAutomatica);
+    window.removeEventListener('offline', this.configurarReconexionAutomatica);
   },
 
   updated() {

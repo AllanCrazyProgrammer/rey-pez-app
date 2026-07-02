@@ -79,11 +79,13 @@
 
 <script>
 import { db } from '@/firebase';
-import { collection, query, orderBy, deleteDoc, doc, onSnapshot, where, updateDoc } from 'firebase/firestore';
+import { collection, query, orderBy, doc, onSnapshot, where, updateDoc } from 'firebase/firestore';
+import PapeleraService from '@/services/PapeleraService';
 import BackButton from '@/components/BackButton.vue';
 import PreciosHistorialModal from '@/components/PreciosHistorialModal.vue';
 import StashModalV2 from '@/components/StashModalV2.vue';
 import { formatNumber, formatearFecha as formatDate } from '@/utils/formatters';
+import { sonMontosIguales } from '@/utils/dinero';
 
 export default {
   name: 'CatarroCuentasMenu',
@@ -179,9 +181,9 @@ export default {
 
             const saldoAnterior = i === 0 ? 0 : cuentasOrdenadas[i-1].nuevoSaldoAcumulado;
             
-            // Solo actualizar si los valores han cambiado
-            if (cuenta.saldoAcumuladoAnterior !== saldoAnterior || 
-                cuenta.nuevoSaldoAcumulado !== saldoAcumulado) {
+            // Solo actualizar si los valores han cambiado (con tolerancia de centavos)
+            if (!sonMontosIguales(cuenta.saldoAcumuladoAnterior, saldoAnterior) ||
+                !sonMontosIguales(cuenta.nuevoSaldoAcumulado, saldoAcumulado)) {
               
               actualizaciones.push({
                 id: cuenta.id,
@@ -204,11 +206,16 @@ export default {
             }
           }
 
-          // Realizar todas las actualizaciones en paralelo
-          if (actualizaciones.length > 0) {
-            await Promise.all(actualizaciones.map(({ id, updates }) => 
-              updateDoc(doc(db, 'cuentasCatarro', id), updates)
-            ));
+          // Realizar todas las actualizaciones en paralelo (evitando recálculos solapados)
+          if (actualizaciones.length > 0 && !this._recalculandoSaldos) {
+            this._recalculandoSaldos = true;
+            try {
+              await Promise.all(actualizaciones.map(({ id, updates }) =>
+                updateDoc(doc(db, 'cuentasCatarro', id), updates)
+              ));
+            } finally {
+              this._recalculandoSaldos = false;
+            }
           }
 
           // Actualizar el estado local con las cuentas ordenadas por fecha descendente
@@ -227,9 +234,13 @@ export default {
       this.$router.push(`/cuentas-catarro/${id}?edit=true`);
     },
     async borrarCuenta(id) {
-      if (confirm('¿Estás seguro de que quieres borrar este registro de cuenta?')) {
+      const cuenta = this.cuentas.find(c => c.id === id);
+      const detalleCuenta = cuenta
+        ? `la cuenta del ${this.formatDate(cuenta.fecha)} (Saldo Hoy: $${this.formatNumber(cuenta.saldoHoy)}, Total Acumulado: $${this.formatNumber(cuenta.totalNota)})`
+        : 'este registro de cuenta';
+      if (confirm(`¿Estás seguro de que quieres borrar ${detalleCuenta}?`)) {
         try {
-          await deleteDoc(doc(db, 'cuentasCatarro', id));
+          await PapeleraService.borrarConRespaldo('cuentasCatarro', id, null, 'Borrado manual desde menú de cuentas Catarro');
           if (this.lastSaveMessage !== 'Registro de cuenta borrado con éxito' || !this.showSaveMessage) {
             this.lastSaveMessage = 'Registro de cuenta borrado con éxito';
             this.showSaveMessage = true;
@@ -239,9 +250,9 @@ export default {
             }, 3000);
           }
         } catch (error) {
-          console.error("Error al borrar el registro de cuenta: ", error);
-          if (this.lastSaveMessage !== 'Error al borrar el registro de cuenta' || !this.showSaveMessage) {
-            this.lastSaveMessage = 'Error al borrar el registro de cuenta';
+          console.error('Error al borrar con respaldo:', error);
+          if (this.lastSaveMessage !== 'No se pudo completar el borrado. El registro NO fue borrado.' || !this.showSaveMessage) {
+            this.lastSaveMessage = 'No se pudo completar el borrado. El registro NO fue borrado.';
             this.showSaveMessage = true;
             if (this.saveMessageTimer) clearTimeout(this.saveMessageTimer);
             this.saveMessageTimer = setTimeout(() => {
