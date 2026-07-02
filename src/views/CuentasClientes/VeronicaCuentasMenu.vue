@@ -110,8 +110,14 @@
             </span>
             <span v-else class="estado-cuenta estado-sin-nota">Sin nota</span>
           </div>
+          <div v-if="!cuenta.missingNota && cuenta.ajusteManual" class="ajuste-info">
+            <span class="ajuste-label">Ajuste manual:</span>
+            <span class="ajuste-monto">{{ cuenta.ajusteManual > 0 ? '+' : '' }}${{ formatNumber(cuenta.ajusteManual) }}</span>
+            <span v-if="cuenta.ajusteManualMotivo" class="ajuste-motivo">{{ cuenta.ajusteManualMotivo }}</span>
+          </div>
           <div class="cuenta-actions">
-            <button v-if="!cuenta.missingNota" @click="editarCuenta(cuenta.id)" class="edit-btn">Editar</button>  
+            <button v-if="!cuenta.missingNota" @click="editarCuenta(cuenta.id)" class="edit-btn">Editar</button>
+            <button v-if="!cuenta.missingNota" @click="abrirAjusteModal(cuenta)" class="adjust-btn">Ajustar saldo</button>
             <button v-if="!cuenta.missingNota" @click="borrarCuenta(cuenta.id)" class="delete-btn">Borrar</button>
             <button
               v-else
@@ -179,12 +185,68 @@
         </div>
 
         <div class="modal-buttons" style="justify-content: center; flex-direction: column; gap: 10px;">
-          <ReporteSemanalPDFButton 
-            :reporte-data="reporteSemanalData" 
+          <ReporteSemanalPDFButton
+            :reporte-data="reporteSemanalData"
             :detalle-ventas="detalleVentasSemanal"
             :detalle-abonos="detalleAbonosSemanal"
           />
           <button @click="showReporteSemanalModal = false" class="btn-cerrar">Cerrar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal Ajustar Saldo -->
+    <div v-if="cuentaAjuste" class="modal-overlay" @click.self="cerrarAjusteModal">
+      <div class="modal-content">
+        <h2>Ajustar Saldo</h2>
+        <p class="ajuste-modal-fecha">{{ formatDate(cuentaAjuste.fecha) }}</p>
+        <p class="ajuste-modal-hint">
+          Usa esto cuando una corrección deja un "restante" negativo o incorrecto en
+          esta nota (por ejemplo, un abono ya aplicado quedó más alto que el saldo
+          corregido). El monto se suma al total del día para corregir el resultado.
+        </p>
+        <div class="ajuste-form-row">
+          <label for="ajuste-monto">Monto del ajuste</label>
+          <input
+            id="ajuste-monto"
+            type="number"
+            step="0.01"
+            v-model.number="ajusteFormMonto"
+            placeholder="ej: 4250 o -4250"
+            class="ajuste-input"
+          />
+        </div>
+        <div class="ajuste-form-row">
+          <label for="ajuste-motivo">Motivo</label>
+          <input
+            id="ajuste-motivo"
+            type="text"
+            v-model="ajusteFormMotivo"
+            placeholder="ej: Corrección de precio dejó saldo negativo"
+            class="ajuste-input"
+          />
+        </div>
+        <div class="modal-buttons" style="justify-content: center; gap: 10px;">
+          <button
+            v-if="cuentaAjuste.ajusteManual"
+            @click="quitarAjuste"
+            class="btn-secondary"
+            type="button"
+            :disabled="guardandoAjuste"
+          >
+            Quitar ajuste
+          </button>
+          <button
+            @click="guardarAjuste"
+            class="btn-cerrar"
+            type="button"
+            :disabled="guardandoAjuste || !ajusteFormMonto"
+          >
+            {{ guardandoAjuste ? 'Guardando...' : 'Guardar ajuste' }}
+          </button>
+          <button @click="cerrarAjusteModal" class="btn-secondary" type="button" :disabled="guardandoAjuste">
+            Cancelar
+          </button>
         </div>
       </div>
     </div>
@@ -247,7 +309,11 @@ export default {
       embarquesCacheTTL: 30000,
       embarquesFetchPromise: null,
       paginaActual: 1,
-      filtroMedida: ''
+      filtroMedida: '',
+      cuentaAjuste: null,
+      ajusteFormMonto: null,
+      ajusteFormMotivo: '',
+      guardandoAjuste: false
     };
   },
   computed: {
@@ -473,9 +539,10 @@ export default {
             const fechaNormalizada = this.normalizarFechaValor(data.fecha);
             const totalCobros = (data.cobros || []).reduce((sum, cobro) => 
               sum + (parseFloat(cobro.monto) || 0), 0);
-            const totalAbonos = (data.abonos || []).reduce((sum, abono) => 
+            const totalAbonos = (data.abonos || []).reduce((sum, abono) =>
               sum + (parseFloat(abono.monto) || 0), 0);
-            const totalDiaActual = (data.totalGeneralVenta || 0) - totalCobros - totalAbonos;
+            const ajusteManual = parseFloat(data.ajusteManual) || 0;
+            const totalDiaActual = (data.totalGeneralVenta || 0) - totalCobros - totalAbonos + ajusteManual;
             const saldoPersistido = typeof data.nuevoSaldoAcumulado === 'number'
               ? data.nuevoSaldoAcumulado
               : null;
@@ -496,7 +563,9 @@ export default {
               tieneObservacion: data.tieneObservacion || false,
               observacion: data.observacion || '',
               tienePrecioVentaVacio: this.tienePrecioVentaVacio(data.itemsVenta || []),
-              medidas
+              medidas,
+              ajusteManual,
+              ajusteManualMotivo: data.ajusteManualMotivo || ''
             };
           });
 
@@ -511,7 +580,7 @@ export default {
 
           for (let i = 0; i < cuentasOrdenadas.length; i++) {
             const cuenta = cuentasOrdenadas[i];
-            const totalDia = cuenta.saldoHoy - cuenta.totalCobros - cuenta.totalAbonos;
+            const totalDia = cuenta.saldoHoy - cuenta.totalCobros - cuenta.totalAbonos + (cuenta.ajusteManual || 0);
             const saldoAnterior = i === 0 ? 0 : saldoAcumulado;
             saldoAcumulado += totalDia;
             const estadoPagado = saldoAcumulado <= TOLERANCIA;
@@ -817,6 +886,64 @@ export default {
           }
         }
       }
+    },
+    mostrarMensaje(mensaje) {
+      this.lastSaveMessage = mensaje;
+      this.showSaveMessage = true;
+      if (this.saveMessageTimer) clearTimeout(this.saveMessageTimer);
+      this.saveMessageTimer = setTimeout(() => {
+        this.showSaveMessage = false;
+      }, 3000);
+    },
+    abrirAjusteModal(cuenta) {
+      this.cuentaAjuste = cuenta;
+      this.ajusteFormMonto = cuenta.ajusteManual || null;
+      this.ajusteFormMotivo = cuenta.ajusteManualMotivo || '';
+    },
+    cerrarAjusteModal() {
+      if (this.guardandoAjuste) return;
+      this.cuentaAjuste = null;
+      this.ajusteFormMonto = null;
+      this.ajusteFormMotivo = '';
+    },
+    async guardarAjuste() {
+      if (!this.cuentaAjuste || !this.ajusteFormMonto) return;
+      this.guardandoAjuste = true;
+      try {
+        await updateDoc(doc(db, 'cuentasVeronica', this.cuentaAjuste.id), {
+          ajusteManual: Number(this.ajusteFormMonto),
+          ajusteManualMotivo: this.ajusteFormMotivo || ''
+        });
+        this.mostrarMensaje('Ajuste guardado con éxito');
+        this.cuentaAjuste = null;
+        this.ajusteFormMonto = null;
+        this.ajusteFormMotivo = '';
+      } catch (error) {
+        console.error('Error al guardar el ajuste:', error);
+        this.mostrarMensaje('Error al guardar el ajuste');
+      } finally {
+        this.guardandoAjuste = false;
+      }
+    },
+    async quitarAjuste() {
+      if (!this.cuentaAjuste) return;
+      if (!confirm('¿Quitar el ajuste manual de esta cuenta?')) return;
+      this.guardandoAjuste = true;
+      try {
+        await updateDoc(doc(db, 'cuentasVeronica', this.cuentaAjuste.id), {
+          ajusteManual: 0,
+          ajusteManualMotivo: ''
+        });
+        this.mostrarMensaje('Ajuste eliminado');
+        this.cuentaAjuste = null;
+        this.ajusteFormMonto = null;
+        this.ajusteFormMotivo = '';
+      } catch (error) {
+        console.error('Error al quitar el ajuste:', error);
+        this.mostrarMensaje('Error al quitar el ajuste');
+      } finally {
+        this.guardandoAjuste = false;
+      }
     }
   },
   mounted() {
@@ -1011,6 +1138,88 @@ h1, h2 {
   background-color: #d32f2f;
 }
 
+.adjust-btn {
+  padding: 5px 10px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9em;
+  transition: background-color 0.3s ease;
+  background-color: #ff8c00;
+  color: white;
+}
+
+.adjust-btn:hover {
+  background-color: #e07600;
+}
+
+.ajuste-info {
+  margin: 10px 0;
+  padding: 8px 10px;
+  background-color: #fff8e1;
+  border-left: 4px solid #ff8c00;
+  border-radius: 4px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  font-size: 0.9em;
+}
+
+.ajuste-label {
+  font-weight: bold;
+  color: #b84300;
+}
+
+.ajuste-monto {
+  font-weight: bold;
+  color: #d67a00;
+}
+
+.ajuste-motivo {
+  color: #666;
+  font-style: italic;
+}
+
+.ajuste-modal-fecha {
+  text-align: center;
+  color: #ff8c00;
+  font-weight: bold;
+  margin: 0 0 8px;
+}
+
+.ajuste-modal-hint {
+  color: #666;
+  font-size: 0.85em;
+  margin: 0 0 16px;
+}
+
+.ajuste-form-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.ajuste-form-row label {
+  font-weight: 600;
+  color: #444;
+  font-size: 0.9em;
+}
+
+.ajuste-input {
+  padding: 8px 10px;
+  border-radius: 4px;
+  border: 1px solid #ccc;
+  font-size: 14px;
+}
+
+.ajuste-input:focus {
+  outline: none;
+  border-color: #ff8c00;
+  box-shadow: 0 0 0 2px rgba(255, 140, 0, 0.2);
+}
+
 @media (max-width: 768px) {
   .veronica-cuentas-menu-container {
     padding: 10px;
@@ -1049,7 +1258,7 @@ h1, h2 {
     justify-content: space-between;
   }
 
-  .edit-btn, .delete-btn {
+  .edit-btn, .delete-btn, .adjust-btn {
     padding: 8px 15px;
     font-size: 0.8em;
     flex-grow: 1;
