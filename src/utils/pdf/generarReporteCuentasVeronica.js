@@ -110,7 +110,8 @@ export const generarReporteCuentasVeronica = async ({ fechaInicio, fechaFin, reg
 
     const totalCobros = sumArray(cobros);
     const totalAbonos = sumArray(abonos);
-    const totalDia = saldoDelDia - totalCobros - totalAbonos;
+    const ajusteManual = Number(registro.ajusteManual) || 0;
+    const totalDia = saldoDelDia - totalCobros - totalAbonos + ajusteManual;
 
     const saldoAnterior = registro.saldoAcumuladoAnterior != null
       ? Number(registro.saldoAcumuladoAnterior)

@@ -110,8 +110,26 @@
             </span>
             <span v-else class="estado-cuenta estado-sin-nota">Sin nota</span>
           </div>
+          <div v-if="!cuenta.missingNota && cuenta.saldoNegativoDetectado" class="saldo-negativo-alerta">
+            <span class="alerta-icono">⚠️</span>
+            <span class="alerta-texto">Saldo negativo detectado: -${{ formatNumber(cuenta.montoNegativoDetectado) }}</span>
+            <button
+              type="button"
+              class="btn-ajustar-auto"
+              :disabled="aplicandoAjusteAutomaticoId === cuenta.id"
+              @click="ajustarAutomaticamente(cuenta)"
+            >
+              {{ aplicandoAjusteAutomaticoId === cuenta.id ? 'Ajustando...' : 'Ajustar automáticamente' }}
+            </button>
+          </div>
+          <div v-if="!cuenta.missingNota && cuenta.ajusteManual" class="ajuste-info">
+            <span class="ajuste-label">Ajuste{{ cuenta.ajusteManualMotivo && cuenta.ajusteManualMotivo.startsWith('Ajuste automático') ? ' automático' : ' manual' }}:</span>
+            <span class="ajuste-monto">{{ cuenta.ajusteManual > 0 ? '+' : '' }}${{ formatNumber(cuenta.ajusteManual) }}</span>
+            <span v-if="cuenta.ajusteManualMotivo" class="ajuste-motivo">{{ cuenta.ajusteManualMotivo }}</span>
+          </div>
           <div class="cuenta-actions">
-            <button v-if="!cuenta.missingNota" @click="editarCuenta(cuenta.id)" class="edit-btn">Editar</button>  
+            <button v-if="!cuenta.missingNota" @click="editarCuenta(cuenta.id)" class="edit-btn">Editar</button>
+            <button v-if="!cuenta.missingNota" @click="abrirAjusteModal(cuenta)" class="adjust-btn">Ajuste manual</button>
             <button v-if="!cuenta.missingNota" @click="borrarCuenta(cuenta.id)" class="delete-btn">Borrar</button>
             <button
               v-else
@@ -179,12 +197,68 @@
         </div>
 
         <div class="modal-buttons" style="justify-content: center; flex-direction: column; gap: 10px;">
-          <ReporteSemanalPDFButton 
-            :reporte-data="reporteSemanalData" 
+          <ReporteSemanalPDFButton
+            :reporte-data="reporteSemanalData"
             :detalle-ventas="detalleVentasSemanal"
             :detalle-abonos="detalleAbonosSemanal"
           />
           <button @click="showReporteSemanalModal = false" class="btn-cerrar">Cerrar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal Ajustar Saldo -->
+    <div v-if="cuentaAjuste" class="modal-overlay" @click.self="cerrarAjusteModal">
+      <div class="modal-content">
+        <h2>Ajustar Saldo</h2>
+        <p class="ajuste-modal-fecha">{{ formatDate(cuentaAjuste.fecha) }}</p>
+        <p class="ajuste-modal-hint">
+          Usa esto cuando una corrección deja un "restante" negativo o incorrecto en
+          esta nota (por ejemplo, un abono ya aplicado quedó más alto que el saldo
+          corregido). El monto se suma al total del día para corregir el resultado.
+        </p>
+        <div class="ajuste-form-row">
+          <label for="ajuste-monto">Monto del ajuste</label>
+          <input
+            id="ajuste-monto"
+            type="number"
+            step="0.01"
+            v-model.number="ajusteFormMonto"
+            placeholder="ej: 4250 o -4250"
+            class="ajuste-input"
+          />
+        </div>
+        <div class="ajuste-form-row">
+          <label for="ajuste-motivo">Motivo</label>
+          <input
+            id="ajuste-motivo"
+            type="text"
+            v-model="ajusteFormMotivo"
+            placeholder="ej: Corrección de precio dejó saldo negativo"
+            class="ajuste-input"
+          />
+        </div>
+        <div class="modal-buttons" style="justify-content: center; gap: 10px;">
+          <button
+            v-if="cuentaAjuste.ajusteManual"
+            @click="quitarAjuste"
+            class="btn-secondary"
+            type="button"
+            :disabled="guardandoAjuste"
+          >
+            Quitar ajuste
+          </button>
+          <button
+            @click="guardarAjuste"
+            class="btn-cerrar"
+            type="button"
+            :disabled="guardandoAjuste || !ajusteFormMonto"
+          >
+            {{ guardandoAjuste ? 'Guardando...' : 'Guardar ajuste' }}
+          </button>
+          <button @click="cerrarAjusteModal" class="btn-secondary" type="button" :disabled="guardandoAjuste">
+            Cancelar
+          </button>
         </div>
       </div>
     </div>
@@ -247,7 +321,12 @@ export default {
       embarquesCacheTTL: 30000,
       embarquesFetchPromise: null,
       paginaActual: 1,
-      filtroMedida: ''
+      filtroMedida: '',
+      cuentaAjuste: null,
+      ajusteFormMonto: null,
+      ajusteFormMotivo: '',
+      guardandoAjuste: false,
+      aplicandoAjusteAutomaticoId: null
     };
   },
   computed: {
@@ -473,9 +552,10 @@ export default {
             const fechaNormalizada = this.normalizarFechaValor(data.fecha);
             const totalCobros = (data.cobros || []).reduce((sum, cobro) => 
               sum + (parseFloat(cobro.monto) || 0), 0);
-            const totalAbonos = (data.abonos || []).reduce((sum, abono) => 
+            const totalAbonos = (data.abonos || []).reduce((sum, abono) =>
               sum + (parseFloat(abono.monto) || 0), 0);
-            const totalDiaActual = (data.totalGeneralVenta || 0) - totalCobros - totalAbonos;
+            const ajusteManual = parseFloat(data.ajusteManual) || 0;
+            const totalDiaActual = (data.totalGeneralVenta || 0) - totalCobros - totalAbonos + ajusteManual;
             const saldoPersistido = typeof data.nuevoSaldoAcumulado === 'number'
               ? data.nuevoSaldoAcumulado
               : null;
@@ -496,7 +576,9 @@ export default {
               tieneObservacion: data.tieneObservacion || false,
               observacion: data.observacion || '',
               tienePrecioVentaVacio: this.tienePrecioVentaVacio(data.itemsVenta || []),
-              medidas
+              medidas,
+              ajusteManual,
+              ajusteManualMotivo: data.ajusteManualMotivo || ''
             };
           });
 
@@ -511,7 +593,7 @@ export default {
 
           for (let i = 0; i < cuentasOrdenadas.length; i++) {
             const cuenta = cuentasOrdenadas[i];
-            const totalDia = cuenta.saldoHoy - cuenta.totalCobros - cuenta.totalAbonos;
+            const totalDia = cuenta.saldoHoy - cuenta.totalCobros - cuenta.totalAbonos + (cuenta.ajusteManual || 0);
             const saldoAnterior = i === 0 ? 0 : saldoAcumulado;
             saldoAcumulado += totalDia;
             const estadoPagado = saldoAcumulado <= TOLERANCIA;
@@ -536,6 +618,10 @@ export default {
             cuenta.saldoAcumuladoAnterior = saldoAnterior;
             cuenta.estadoPagado = estadoPagado;
             cuenta.nuevoSaldoAcumulado = saldoNormalizado;
+            cuenta.saldoNegativoDetectado = totalDia < -TOLERANCIA;
+            cuenta.montoNegativoDetectado = cuenta.saldoNegativoDetectado
+              ? Math.round(Math.abs(totalDia) * 100) / 100
+              : 0;
 
             if (saldoAcumulado <= TOLERANCIA) {
               saldoAcumulado = 0;
@@ -817,6 +903,114 @@ export default {
           }
         }
       }
+    },
+    mostrarMensaje(mensaje) {
+      this.lastSaveMessage = mensaje;
+      this.showSaveMessage = true;
+      if (this.saveMessageTimer) clearTimeout(this.saveMessageTimer);
+      this.saveMessageTimer = setTimeout(() => {
+        this.showSaveMessage = false;
+      }, 3000);
+    },
+    cuentaMasRecienteNoMissing() {
+      const candidatas = this.cuentas.filter(c => !c.missingNota);
+      if (!candidatas.length) return null;
+      return candidatas.reduce((masReciente, actual) =>
+        new Date(actual.fecha) > new Date(masReciente.fecha) ? actual : masReciente
+      , candidatas[0]);
+    },
+    async ajustarAutomaticamente(cuenta) {
+      const monto = cuenta.montoNegativoDetectado;
+      if (!monto) return;
+
+      const cuentaMasReciente = this.cuentaMasRecienteNoMissing();
+      if (!cuentaMasReciente) {
+        alert('No se encontró una nota reciente para aplicar el ajuste.');
+        return;
+      }
+
+      const esMismaCuenta = cuentaMasReciente.id === cuenta.id;
+      const confirmMsg = esMismaCuenta
+        ? `Se detectó un saldo negativo de $${this.formatNumber(monto)} en la nota del ${this.formatDate(cuenta.fecha)} (es la nota más reciente). Se ajustará a $0. ¿Continuar?`
+        : `Se detectó un saldo negativo de $${this.formatNumber(monto)} en la nota del ${this.formatDate(cuenta.fecha)}. Se corregirá esa nota y el mismo monto se aplicará como ajuste en la nota más reciente (${this.formatDate(cuentaMasReciente.fecha)}). ¿Continuar?`;
+
+      if (!confirm(confirmMsg)) return;
+
+      this.aplicandoAjusteAutomaticoId = cuenta.id;
+      try {
+        const batch = writeBatch(db);
+        const motivoOrigen = `Ajuste automático: saldo negativo de $${this.formatNumber(monto)} detectado el ${this.formatDate(cuenta.fecha)}`;
+        batch.update(doc(db, 'cuentasVeronica', cuenta.id), {
+          ajusteManual: (cuenta.ajusteManual || 0) + monto,
+          ajusteManualMotivo: motivoOrigen
+        });
+
+        if (!esMismaCuenta) {
+          const motivoDestino = `Ajuste automático: crédito de $${this.formatNumber(monto)} trasladado desde la nota del ${this.formatDate(cuenta.fecha)}`;
+          batch.update(doc(db, 'cuentasVeronica', cuentaMasReciente.id), {
+            ajusteManual: (cuentaMasReciente.ajusteManual || 0) - monto,
+            ajusteManualMotivo: motivoDestino
+          });
+        }
+
+        await batch.commit();
+        this.mostrarMensaje('Saldo negativo ajustado automáticamente');
+      } catch (error) {
+        console.error('Error al ajustar automáticamente el saldo:', error);
+        this.mostrarMensaje('Error al ajustar automáticamente el saldo');
+      } finally {
+        this.aplicandoAjusteAutomaticoId = null;
+      }
+    },
+    abrirAjusteModal(cuenta) {
+      this.cuentaAjuste = cuenta;
+      this.ajusteFormMonto = cuenta.ajusteManual || null;
+      this.ajusteFormMotivo = cuenta.ajusteManualMotivo || '';
+    },
+    cerrarAjusteModal() {
+      if (this.guardandoAjuste) return;
+      this.cuentaAjuste = null;
+      this.ajusteFormMonto = null;
+      this.ajusteFormMotivo = '';
+    },
+    async guardarAjuste() {
+      if (!this.cuentaAjuste || !this.ajusteFormMonto) return;
+      this.guardandoAjuste = true;
+      try {
+        await updateDoc(doc(db, 'cuentasVeronica', this.cuentaAjuste.id), {
+          ajusteManual: Number(this.ajusteFormMonto),
+          ajusteManualMotivo: this.ajusteFormMotivo || ''
+        });
+        this.mostrarMensaje('Ajuste guardado con éxito');
+        this.cuentaAjuste = null;
+        this.ajusteFormMonto = null;
+        this.ajusteFormMotivo = '';
+      } catch (error) {
+        console.error('Error al guardar el ajuste:', error);
+        this.mostrarMensaje('Error al guardar el ajuste');
+      } finally {
+        this.guardandoAjuste = false;
+      }
+    },
+    async quitarAjuste() {
+      if (!this.cuentaAjuste) return;
+      if (!confirm('¿Quitar el ajuste manual de esta cuenta?')) return;
+      this.guardandoAjuste = true;
+      try {
+        await updateDoc(doc(db, 'cuentasVeronica', this.cuentaAjuste.id), {
+          ajusteManual: 0,
+          ajusteManualMotivo: ''
+        });
+        this.mostrarMensaje('Ajuste eliminado');
+        this.cuentaAjuste = null;
+        this.ajusteFormMonto = null;
+        this.ajusteFormMotivo = '';
+      } catch (error) {
+        console.error('Error al quitar el ajuste:', error);
+        this.mostrarMensaje('Error al quitar el ajuste');
+      } finally {
+        this.guardandoAjuste = false;
+      }
     }
   },
   mounted() {
@@ -1011,6 +1205,127 @@ h1, h2 {
   background-color: #d32f2f;
 }
 
+.adjust-btn {
+  padding: 5px 10px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9em;
+  transition: background-color 0.3s ease;
+  background-color: #ff8c00;
+  color: white;
+}
+
+.adjust-btn:hover {
+  background-color: #e07600;
+}
+
+.saldo-negativo-alerta {
+  margin: 10px 0;
+  padding: 8px 10px;
+  background-color: #ffebee;
+  border-left: 4px solid #f44336;
+  border-radius: 4px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  font-size: 0.9em;
+}
+
+.alerta-texto {
+  font-weight: bold;
+  color: #c62828;
+}
+
+.btn-ajustar-auto {
+  background-color: #f44336;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.85em;
+  font-weight: 600;
+  transition: background-color 0.2s ease;
+}
+
+.btn-ajustar-auto:hover:not(:disabled) {
+  background-color: #d32f2f;
+}
+
+.btn-ajustar-auto:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.ajuste-info {
+  margin: 10px 0;
+  padding: 8px 10px;
+  background-color: #fff8e1;
+  border-left: 4px solid #ff8c00;
+  border-radius: 4px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  font-size: 0.9em;
+}
+
+.ajuste-label {
+  font-weight: bold;
+  color: #b84300;
+}
+
+.ajuste-monto {
+  font-weight: bold;
+  color: #d67a00;
+}
+
+.ajuste-motivo {
+  color: #666;
+  font-style: italic;
+}
+
+.ajuste-modal-fecha {
+  text-align: center;
+  color: #ff8c00;
+  font-weight: bold;
+  margin: 0 0 8px;
+}
+
+.ajuste-modal-hint {
+  color: #666;
+  font-size: 0.85em;
+  margin: 0 0 16px;
+}
+
+.ajuste-form-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.ajuste-form-row label {
+  font-weight: 600;
+  color: #444;
+  font-size: 0.9em;
+}
+
+.ajuste-input {
+  padding: 8px 10px;
+  border-radius: 4px;
+  border: 1px solid #ccc;
+  font-size: 14px;
+}
+
+.ajuste-input:focus {
+  outline: none;
+  border-color: #ff8c00;
+  box-shadow: 0 0 0 2px rgba(255, 140, 0, 0.2);
+}
+
 @media (max-width: 768px) {
   .veronica-cuentas-menu-container {
     padding: 10px;
@@ -1049,7 +1364,7 @@ h1, h2 {
     justify-content: space-between;
   }
 
-  .edit-btn, .delete-btn {
+  .edit-btn, .delete-btn, .adjust-btn {
     padding: 8px 15px;
     font-size: 0.8em;
     flex-grow: 1;
