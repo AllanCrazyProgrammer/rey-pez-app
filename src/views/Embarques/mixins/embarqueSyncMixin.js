@@ -108,6 +108,13 @@ export function normalizarDocDataParaFirestore(docData, record = {}, contexto = 
   // como una revisión nueva sobre lo remoto.
   data.rev = (Number(pickPreferRemoto('rev')) || 0) + 1;
 
+  // Lápidas de borrado de productos: unión de lo local y lo remoto para que
+  // una sincronización no reviva productos borrados por otro editor.
+  data.productosEliminados = {
+    ...((contexto.dataRemota && contexto.dataRemota.productosEliminados) || {}),
+    ...(dataCruda.productosEliminados || record.productosEliminados || {})
+  };
+
   data.clientes = data.clientes.map(cliente => ({
     ...cliente,
     productos: Array.isArray(cliente.productos) ? cliente.productos.map(producto => ({
@@ -521,11 +528,31 @@ export const embarqueSyncMixin = {
     },
 
     prepararDatosEmbarque() {
+      // Lápidas de borrado: registro de productos eliminados para que los
+      // demás editores en vivo los quiten en lugar de "preservarlos" como si
+      // fueran productos nuevos del otro lado. Se depuran a los 7 días.
+      const productosEliminados = { ...(this._productosEliminadosDoc || {}) };
+      const ahora = Date.now();
+      if (this.productosEliminadosLocalmente) {
+        this.productosEliminadosLocalmente.forEach((idProducto) => {
+          if (!productosEliminados[idProducto]) {
+            productosEliminados[idProducto] = ahora;
+          }
+        });
+      }
+      Object.keys(productosEliminados).forEach((idProducto) => {
+        if (ahora - Number(productosEliminados[idProducto] || 0) > 7 * 24 * 60 * 60 * 1000) {
+          delete productosEliminados[idProducto];
+        }
+      });
+      this._productosEliminadosDoc = productosEliminados;
+
       const embarqueData = {
         fecha: this.embarque.fecha,
         cargaCon: this.embarque.cargaCon,
         camionNumero: this.embarque.camionNumero || 1,
         kilosCrudos: this.embarque.kilosCrudos || {},
+        productosEliminados,
         clientes: [],
         borrador: !embarqueTieneContenidoOperativoEstado({
           cargaCon: this.embarque?.cargaCon,

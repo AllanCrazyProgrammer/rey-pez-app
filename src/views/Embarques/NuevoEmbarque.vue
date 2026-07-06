@@ -831,12 +831,16 @@ export default {
         !productoTieneContenido(producto) &&
         clientesConProductosEnServidor.has(String(producto.clienteId));
 
+      // Lápidas de borrado: productos eliminados por algún editor no se
+      // preservan (sin esto, el borrado de la otra persona "revivía" aquí).
+      const eliminadosRemotos = this._productosEliminadosDoc || {};
+
       // Preservar productos nuevos pendientes de sincronización
       const productosNuevosAPreservar = [];
       if (this.productosNuevosPendientes && this.productosNuevosPendientes.size > 0) {
         this.productosNuevosPendientes.forEach((producto, id) => {
           const existeEnServidor = productosServidor.some(p => p.id === id);
-          if (!existeEnServidor && !esPlaceholderRedundante(producto)) {
+          if (!existeEnServidor && !esPlaceholderRedundante(producto) && !eliminadosRemotos[id]) {
             productosNuevosAPreservar.push(producto);
           } else {
             this.productosNuevosPendientes.delete(id);
@@ -849,7 +853,8 @@ export default {
         if (esUUIDValido(productoLocal.id) &&
             !productosServidor.some(p => p.id === productoLocal.id) &&
             !productosNuevosAPreservar.some(p => p.id === productoLocal.id) &&
-            !esPlaceholderRedundante(productoLocal)) {
+            !esPlaceholderRedundante(productoLocal) &&
+            !eliminadosRemotos[productoLocal.id]) {
           productosNuevosAPreservar.push(productoLocal);
           if (!this.productosNuevosPendientes.has(productoLocal.id)) {
             this.productosNuevosPendientes.set(productoLocal.id, { ...productoLocal });
@@ -978,6 +983,11 @@ export default {
       if (this.productosEliminadosLocalmente && this.productosEliminadosLocalmente.has(nuevoProducto.id)) {
         console.log('[AGREGAR-PRODUCTO] Removiendo producto de la lista de eliminados:', nuevoProducto.id);
         this.productosEliminadosLocalmente.delete(nuevoProducto.id);
+      }
+      if (this._productosEliminadosDoc && this._productosEliminadosDoc[nuevoProducto.id]) {
+        const lapidas = { ...this._productosEliminadosDoc };
+        delete lapidas[nuevoProducto.id];
+        this._productosEliminadosDoc = lapidas;
       }
 
       // Marcar el producto como nuevo pendiente de sincronización ANTES de agregarlo

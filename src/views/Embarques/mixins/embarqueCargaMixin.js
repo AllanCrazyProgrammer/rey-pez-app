@@ -262,10 +262,16 @@ export const embarqueCargaMixin = {
               }));
             });
 
-            let productosFiltrados = productosDesdeServidor;
+            // Lápidas de borrado del documento: productos que algún editor
+            // eliminó. Sin esto, el producto borrado por la otra persona se
+            // "preservaba" aquí como si fuera un producto nuevo local.
+            const eliminadosRemotos = data.productosEliminados || {};
+            this._productosEliminadosDoc = eliminadosRemotos;
+
+            let productosFiltrados = productosDesdeServidor.filter(p => !eliminadosRemotos[p.id]);
             if (this.productosEliminadosLocalmente && this.productosEliminadosLocalmente.size > 0) {
               console.log('[onSnapshot] Filtrando productos eliminados localmente:', this.productosEliminadosLocalmente);
-              productosFiltrados = productosDesdeServidor.filter(p =>
+              productosFiltrados = productosFiltrados.filter(p =>
                 !this.productosEliminadosLocalmente.has(p.id)
               );
             }
@@ -295,12 +301,12 @@ export const embarqueCargaMixin = {
                 console.log('[onSnapshot] Preservando productos nuevos pendientes:', this.productosNuevosPendientes.size);
                 this.productosNuevosPendientes.forEach((producto, id) => {
                   const existeEnServidor = productosDesdeServidor.some(p => p.id === id);
-                  if (!existeEnServidor && !esPlaceholderRedundante(producto)) {
+                  if (!existeEnServidor && !esPlaceholderRedundante(producto) && !eliminadosRemotos[id]) {
                     productosNuevosAPreservar.push(producto);
                     console.log('[onSnapshot] Preservando producto nuevo:', id);
                   } else {
                     this.productosNuevosPendientes.delete(id);
-                    console.log('[onSnapshot] Producto sincronizado o placeholder redundante, removiendo de pendientes:', id);
+                    console.log('[onSnapshot] Producto sincronizado, borrado o placeholder redundante, removiendo de pendientes:', id);
                   }
                 });
               }
@@ -310,7 +316,8 @@ export const embarqueCargaMixin = {
                 if (esUUIDValido(productoLocal.id) &&
                     !productosDesdeServidor.some(p => p.id === productoLocal.id) &&
                     !productosNuevosAPreservar.some(p => p.id === productoLocal.id) &&
-                    !esPlaceholderRedundante(productoLocal)) {
+                    !esPlaceholderRedundante(productoLocal) &&
+                    !eliminadosRemotos[productoLocal.id]) {
                   console.log('[onSnapshot] Preservando producto local no sincronizado:', productoLocal.id);
                   productosNuevosAPreservar.push(productoLocal);
                   if (!this.productosNuevosPendientes.has(productoLocal.id)) {
