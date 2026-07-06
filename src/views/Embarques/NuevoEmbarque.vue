@@ -1044,13 +1044,7 @@ export default {
 
     eliminarProducto(producto) {
       console.log(`[ELIMINAR-PRODUCTO] Intentando eliminar: ID: ${producto.id}, Medida: ${producto.medida}, Cliente: ${this.obtenerNombreCliente(producto.clienteId)}`);
-      
-      // Marcar el producto como eliminado localmente para evitar que se restaure
-      if (!this.productosEliminadosLocalmente) {
-        this.productosEliminadosLocalmente = new Set();
-      }
-      this.productosEliminadosLocalmente.add(producto.id);
-      
+
       // Marcar el cliente como modificado inmediatamente
       this.$set(this.clientesModificados, producto.clienteId, true);
       
@@ -1122,24 +1116,54 @@ export default {
     
     _eliminarProductoPorIndice(index, metodo) {
       const producto = this.embarque.productos[index];
-      
+
       console.log(`[ELIMINAR-PRODUCTO] 🗑️  Eliminando producto (${metodo}):`, {
         indice: index,
         id: producto.id,
         medida: producto.medida,
         clienteId: producto.clienteId
       });
-      
+
+      // Marcar como eliminado localmente SOLO cuando el borrado realmente
+      // procede (si se registrara antes y el borrado se abortara, la lápida
+      // se subiría igual y borraría el producto de todos modos).
+      if (!this.productosEliminadosLocalmente) {
+        this.productosEliminadosLocalmente = new Set();
+      }
+      this.productosEliminadosLocalmente.add(producto.id);
+
       // Eliminar el producto del array
       this.embarque.productos.splice(index, 1);
-      
+
       console.log(`[ELIMINAR-PRODUCTO] ✅ Producto eliminado exitosamente. Productos restantes: ${this.embarque.productos.length}`);
+
+      // Publicar la lápida DE INMEDIATO con un update puntual: si otro editor
+      // está tecleando, la subida completa puede perder la carrera de
+      // revisiones una y otra vez, pero este update pequeño entra igual y la
+      // fusión del otro lado respeta la lápida (el borrado no se pierde).
+      if (this.embarqueId && navigator.onLine) {
+        const db = getFirestore();
+        const marcaLapida = Date.now();
+        const revNueva = (Number(this._revBase) || 0) + 1;
+        updateDoc(doc(db, "embarques", this.embarqueId), {
+          [`productosEliminados.${producto.id}`]: marcaLapida,
+          rev: revNueva
+        }).then(() => {
+          this._revBase = revNueva;
+          this._productosEliminadosDoc = {
+            ...(this._productosEliminadosDoc || {}),
+            [producto.id]: marcaLapida
+          };
+        }).catch((error) => {
+          console.warn('[ELIMINAR-PRODUCTO] No se pudo publicar la lápida de inmediato (se subirá con el guardado normal):', error);
+        });
+      }
 
       // Guardar cambios si es necesario
       if (this.embarqueId) {
         this.guardarCambiosEnTiempoReal();
       }
-      
+
       // Actualizar las medidas usadas después de eliminar
       this.actualizarMedidasUsadas();
     },

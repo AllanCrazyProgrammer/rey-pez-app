@@ -407,14 +407,17 @@ export const embarqueSyncMixin = {
       return Promise.resolve();
     },
 
-    programarSubidaEnVivo() {
+    programarSubidaEnVivo(retrasoMs) {
+      // Jitter: si dos sesiones agendan la subida con la misma cadencia fija,
+      // chocan sincronizadas en conflictos una y otra vez.
+      const retraso = retrasoMs || (1500 + Math.floor(Math.random() * 700));
       if (this._timerSubidaEnVivo) {
         clearTimeout(this._timerSubidaEnVivo);
       }
       this._timerSubidaEnVivo = setTimeout(() => {
         this._timerSubidaEnVivo = null;
         this.subirCambiosEnVivo();
-      }, 1500);
+      }, retraso);
     },
 
     /**
@@ -476,8 +479,13 @@ export const embarqueSyncMixin = {
         if (dataConflicto) {
           this._reintentosSubidaEnVivo = (this._reintentosSubidaEnVivo || 0) + 1;
           if (this._reintentosSubidaEnVivo > 4) {
-            console.warn('[subirCambiosEnVivo] Demasiados conflictos seguidos; se reintentará con el próximo cambio.');
+            // NUNCA abandonar cambios pendientes: si el otro editor está
+            // tecleando sin parar, esperar más largo y volver a intentar.
+            // (Antes se esperaba "al próximo cambio local", que podía no
+            // llegar nunca — un borrado quedaba sin subir para siempre.)
+            console.warn('[subirCambiosEnVivo] Muchos conflictos seguidos; reintentando con espera más larga.');
             this._reintentosSubidaEnVivo = 0;
+            this.programarSubidaEnVivo(6000 + Math.floor(Math.random() * 3000));
             return;
           }
           console.log('[subirCambiosEnVivo] Conflicto de revisión: fusionando cambios remotos antes de subir.');
