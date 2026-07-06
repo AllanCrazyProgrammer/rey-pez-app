@@ -54,16 +54,72 @@ export const embarqueCargaMixin = {
       const db = getFirestore();
       const embarqueRef = doc(db, "embarques", id);
 
-      this.unsubscribe = onSnapshot(embarqueRef, async (doc) => {
-        if (this.hasPendingChanges) {
-          console.log('[onSnapshot] Ignorando actualización remota porque hay cambios locales pendientes.');
+      this.unsubscribe = onSnapshot(embarqueRef, async (docSnapshot) => {
+        // Eco optimista de una escritura local pendiente de confirmar: ignorar.
+        if (docSnapshot.metadata && docSnapshot.metadata.hasPendingWrites) {
           return;
         }
 
-        if (doc.exists()) {
-          const data = doc.data();
+        if (docSnapshot.exists()) {
+          const data = docSnapshot.data();
+
+          if (this.hasPendingChanges) {
+            // Hay cambios locales sin subir: aplicar lo remoto ahora pisaría
+            // lo que se está capturando. Se difiere; la subida transaccional
+            // (subirCambiosEnVivo) detecta la revisión nueva y fusiona.
+            this._snapshotRemotoDiferido = data;
+            return;
+          }
+
+          this._snapshotRemotoDiferido = null;
+          await this.aplicarDocRemoto(id, data);
+        } else {
+          this.cargarEmbarqueOffline(id).then((cargadoOffline) => {
+            if (cargadoOffline) {
+              this._inicializandoEmbarque = false;
+              this._aplicandoRemoto = false;
+              return;
+            }
+            alert('No se encontró el embarque en nube ni en cache local para ese ID. Se conservará el estado actual; verifica conexión y vuelve a intentar.');
+            this._inicializandoEmbarque = false;
+            this._aplicandoRemoto = false;
+          });
+        }
+      }, (error) => {
+        console.error("Error al escuchar cambios del embarque:", error);
+
+        if (error.code === 'unavailable' || error.message.includes('network') || error.message.includes('NETWORK')) {
+          console.warn('[onSnapshot] Error de red detectado, reintentando conexión en 5 segundos...');
+          setTimeout(() => {
+            if (this.embarqueId && !this.unsubscribe) {
+              console.log('[onSnapshot] Reintentando conexión...');
+              this.cargarEmbarque(this.embarqueId);
+            }
+          }, 5000);
+        } else if (error.code === 'permission-denied') {
+          console.error('[onSnapshot] Error de permisos:', error);
+          alert('Error de permisos. Por favor, verifique su acceso.');
+        } else {
+          console.error('[onSnapshot] Error desconocido:', error);
+        }
+
+        this._inicializandoEmbarque = false;
+        this._aplicandoRemoto = false;
+      });
+    },
+
+    /**
+     * Aplica un documento remoto del embarque al estado local, fusionando con
+     * protecciones para lo que se está editando (campos con foco, productos
+     * nuevos sin sincronizar, productos eliminados localmente). También lo usa
+     * la subida transaccional cuando detecta un conflicto de revisión.
+     */
+    async aplicarDocRemoto(id, data) {
           data.clientes = Array.isArray(data.clientes) ? data.clientes : [];
           this._aplicandoRemoto = true;
+          // Revisión remota sobre la que queda basado el estado local
+          // (subirCambiosEnVivo la usa para detectar conflictos).
+          this._revBase = Number(data.rev) || 0;
 
           try {
             if (!this.tieneContenidoOperativo(data)) {
@@ -277,39 +333,6 @@ export const embarqueCargaMixin = {
           }
 
           this.guardarSnapshotOffline({ pendingSync: false, docData: data, syncState: 'synced' });
-        } else {
-          this.cargarEmbarqueOffline(id).then((cargadoOffline) => {
-            if (cargadoOffline) {
-              this._inicializandoEmbarque = false;
-              this._aplicandoRemoto = false;
-              return;
-            }
-            alert('No se encontró el embarque en nube ni en cache local para ese ID. Se conservará el estado actual; verifica conexión y vuelve a intentar.');
-            this._inicializandoEmbarque = false;
-            this._aplicandoRemoto = false;
-          });
-        }
-      }, (error) => {
-        console.error("Error al escuchar cambios del embarque:", error);
-
-        if (error.code === 'unavailable' || error.message.includes('network') || error.message.includes('NETWORK')) {
-          console.warn('[onSnapshot] Error de red detectado, reintentando conexión en 5 segundos...');
-          setTimeout(() => {
-            if (this.embarqueId && !this.unsubscribe) {
-              console.log('[onSnapshot] Reintentando conexión...');
-              this.cargarEmbarque(this.embarqueId);
-            }
-          }, 5000);
-        } else if (error.code === 'permission-denied') {
-          console.error('[onSnapshot] Error de permisos:', error);
-          alert('Error de permisos. Por favor, verifique su acceso.');
-        } else {
-          console.error('[onSnapshot] Error desconocido:', error);
-        }
-
-        this._inicializandoEmbarque = false;
-        this._aplicandoRemoto = false;
-      });
     },
 
     limpiarConexionesFirestore() {

@@ -39,6 +39,15 @@
         @abrir-multi-notas="abrirModalNotasMultiple"
       />
 
+      <!-- Aviso de edición colaborativa: quién más está editando este embarque -->
+      <div v-if="editoresEmbarque.length > 0" class="banner-colaboracion">
+        <span class="banner-colaboracion-icono">👥</span>
+        <span>
+          También editando ahora: <strong>{{ editoresEmbarque.join(', ') }}</strong>.
+          Los cambios de ambos se sincronizan en vivo.
+        </span>
+      </div>
+
       <!-- Slider de escala para el resumen PDF -->
       <div v-if="mostrarEscalaResumen" class="scale-control scale-control-resumen">
         <label>Escala del resumen PDF:</label>
@@ -1509,6 +1518,14 @@ export default {
   },
 
   watch: {
+    embarqueId(nuevoId) {
+      // Presencia colaborativa: registrar/retirar a este usuario como editor
+      if (nuevoId) {
+        this.iniciarPresenciaEmbarque(nuevoId);
+      } else {
+        this.detenerPresenciaEmbarque();
+      }
+    },
     embarque: {
       handler(nuevoValor) {
         if (this.isUndoRedo) {
@@ -1792,6 +1809,25 @@ export default {
 </script>
 
 <style scoped>
+/* Aviso de edición colaborativa */
+.banner-colaboracion {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 12px;
+  padding: 10px 14px;
+  background-color: #e8f4fd;
+  border: 1px solid #7cc0ef;
+  border-left: 4px solid #2196f3;
+  border-radius: 6px;
+  color: #0d47a1;
+  font-size: 0.95rem;
+}
+
+.banner-colaboracion-icono {
+  font-size: 1.2rem;
+}
+
 /* Estilos base */
 .nuevo-embarque-container {
   position: relative;
