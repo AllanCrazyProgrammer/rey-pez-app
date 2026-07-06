@@ -840,8 +840,12 @@ export default {
       if (this.productosNuevosPendientes && this.productosNuevosPendientes.size > 0) {
         this.productosNuevosPendientes.forEach((producto, id) => {
           const existeEnServidor = productosServidor.some(p => p.id === id);
-          if (!existeEnServidor && !esPlaceholderRedundante(producto) && !eliminadosRemotos[id]) {
-            productosNuevosAPreservar.push(producto);
+          // Preservar la versión local VIVA (lo que se está tecleando), no la
+          // copia tomada al crear el producto: la copia vieja pisaba lo escrito.
+          const productoVivo = productosLocales.find(p => p.id === id) || producto;
+          if (!existeEnServidor && !esPlaceholderRedundante(productoVivo) && !eliminadosRemotos[id]) {
+            productosNuevosAPreservar.push(productoVivo);
+            this.productosNuevosPendientes.set(id, { ...productoVivo });
           } else {
             this.productosNuevosPendientes.delete(id);
           }

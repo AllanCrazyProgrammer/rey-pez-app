@@ -296,13 +296,20 @@ export const embarqueCargaMixin = {
                 !productoTieneContenido(producto) &&
                 clientesConProductosEnServidor.has(String(producto.clienteId));
 
+              const productosLocalesActuales = this.embarque.productos || [];
+
               const productosNuevosAPreservar = [];
               if (this.productosNuevosPendientes && this.productosNuevosPendientes.size > 0) {
                 console.log('[onSnapshot] Preservando productos nuevos pendientes:', this.productosNuevosPendientes.size);
                 this.productosNuevosPendientes.forEach((producto, id) => {
                   const existeEnServidor = productosDesdeServidor.some(p => p.id === id);
-                  if (!existeEnServidor && !esPlaceholderRedundante(producto) && !eliminadosRemotos[id]) {
-                    productosNuevosAPreservar.push(producto);
+                  // Preservar la versión local VIVA (lo que se está tecleando
+                  // ahora mismo), no la copia tomada al crear el producto: la
+                  // copia vieja pisaba lo recién escrito al aplicar snapshots.
+                  const productoVivo = productosLocalesActuales.find(p => p.id === id) || producto;
+                  if (!existeEnServidor && !esPlaceholderRedundante(productoVivo) && !eliminadosRemotos[id]) {
+                    productosNuevosAPreservar.push(productoVivo);
+                    this.productosNuevosPendientes.set(id, { ...productoVivo });
                     console.log('[onSnapshot] Preservando producto nuevo:', id);
                   } else {
                     this.productosNuevosPendientes.delete(id);
@@ -310,8 +317,6 @@ export const embarqueCargaMixin = {
                   }
                 });
               }
-
-              const productosLocalesActuales = this.embarque.productos || [];
               productosLocalesActuales.forEach(productoLocal => {
                 if (esUUIDValido(productoLocal.id) &&
                     !productosDesdeServidor.some(p => p.id === productoLocal.id) &&
