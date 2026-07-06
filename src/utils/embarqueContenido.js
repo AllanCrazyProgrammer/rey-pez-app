@@ -33,6 +33,33 @@ export function serializarEstable(valor) {
 }
 
 /**
+ * Fusión de 3 vías CAMPO POR CAMPO de un producto editado por dos personas a
+ * la vez: cada campo se compara contra la última versión sincronizada (base).
+ * El campo que cambió localmente conserva el valor local (incluye borrados de
+ * campo); el que cambió solo en remoto toma el remoto. Si ambos cambiaron el
+ * mismo campo gana el local — converge porque el otro lado hace la elección
+ * espejo y el último en subir define el valor final.
+ */
+export function fusionarProductoTresVias(base, local, remoto) {
+  const resultado = {};
+  const llaves = new Set([
+    ...Object.keys(remoto || {}),
+    ...Object.keys(local || {})
+  ]);
+  llaves.forEach((llave) => {
+    const sBase = serializarEstable(base ? base[llave] : undefined);
+    const vLocal = local ? local[llave] : undefined;
+    const vRemoto = remoto ? remoto[llave] : undefined;
+    const localCambio = serializarEstable(vLocal) !== sBase;
+    const valor = localCambio ? vLocal : vRemoto;
+    if (valor !== undefined) {
+      resultado[llave] = valor;
+    }
+  });
+  return resultado;
+}
+
+/**
  * Determina si un producto individual tiene información capturada
  * (medida, precio, kilos, taras o reportes). Un producto sin nada de esto es
  * un renglón placeholder: cada editor crea el suyo automáticamente, así que

@@ -2,7 +2,7 @@ import { getFirestore, doc, onSnapshot, addDoc, collection } from 'firebase/fire
 import EmbarquesOfflineService from '@/services/EmbarquesOfflineService';
 import { normalizarFechaISO, obtenerFechaActualISO } from '@/utils/dateUtils';
 import { crearNuevoProducto } from '@/constants.js/embarque';
-import { embarqueTieneContenidoOperativoDoc, embarqueTieneContenidoOperativoEstado, productoTieneContenido, serializarEstable } from '@/utils/embarqueContenido';
+import { embarqueTieneContenidoOperativoDoc, embarqueTieneContenidoOperativoEstado, productoTieneContenido, serializarEstable, fusionarProductoTresVias } from '@/utils/embarqueContenido';
 
 export const esUUIDValido = (id) => {
   const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -265,28 +265,40 @@ export const embarqueCargaMixin = {
               );
             }
 
-            // Fusión de 3 vías a nivel producto: si la versión local difiere
-            // de la ÚLTIMA VERSIÓN SINCRONIZADA (base), el usuario la editó y
-            // su versión gana sobre la del servidor aunque el campo ya no
-            // tenga el foco. Sin esto, una fusión por conflicto revertía las
-            // ediciones locales aún no subidas ("el segundo cambio se
-            // perdía" cuando dos personas editaban a la vez).
+            // Fusión de 3 vías por producto contra la ÚLTIMA VERSIÓN
+            // SINCRONIZADA (base). Sin esto, una fusión por conflicto
+            // revertía las ediciones locales aún no subidas:
+            // - Solo lo local cambió → gana lo local completo.
+            // - Solo lo remoto cambió → gana lo remoto completo.
+            // - AMBOS cambiaron el mismo producto → fusión campo por campo
+            //   (usuario 1 borra kilos mientras usuario 2 agrega taras y
+            //   bolsas: sobreviven ambas intenciones).
             const baseSincronizada = this._productosBase instanceof Map ? this._productosBase : new Map();
             const productosLocalesParaMerge = this.embarque.productos || [];
             productosFiltrados = productosFiltrados.map((pServidor) => {
               const pLocal = productosLocalesParaMerge.find(p => p.id === pServidor.id);
               if (!pLocal) return pServidor;
-              const baseStr = baseSincronizada.get(pServidor.id);
-              if (baseStr && serializarEstable(pLocal) !== baseStr) {
+              const entradaBase = baseSincronizada.get(pServidor.id);
+              if (!entradaBase) return pServidor;
+              const localCambio = serializarEstable(pLocal) !== entradaBase.str;
+              if (!localCambio) return pServidor;
+              const remotoCambio = serializarEstable(pServidor) !== entradaBase.str;
+              if (!remotoCambio) {
                 console.log('[onSnapshot] Conservando edición local sin subir del producto:', pServidor.id);
                 return pLocal;
               }
-              return pServidor;
+              console.log('[onSnapshot] Producto editado por ambos: fusión campo por campo:', pServidor.id);
+              return fusionarProductoTresVias(entradaBase.obj, pLocal, pServidor);
             });
 
-            // La nueva base es lo que el SERVIDOR tiene en esta revisión.
+            // La nueva base es lo que el SERVIDOR tiene en esta revisión
+            // (clonada: los objetos del snapshot pasan al estado local y
+            // mutarían la base por referencia).
             this._productosBase = new Map(
-              productosDesdeServidor.map(p => [p.id, serializarEstable(p)])
+              productosDesdeServidor.map(p => [
+                p.id,
+                { obj: JSON.parse(JSON.stringify(p)), str: serializarEstable(p) }
+              ])
             );
 
             let productosFinales;

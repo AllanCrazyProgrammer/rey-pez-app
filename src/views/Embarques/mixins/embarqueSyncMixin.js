@@ -363,7 +363,10 @@ export const embarqueSyncMixin = {
           this._revBase = Number(dataParaFirestore.rev) || Number(this._revBase) || 0;
           this._snapshotRemotoDiferido = null;
           this._productosBase = new Map(
-            (this.embarque.productos || []).map(p => [p.id, serializarEstable(p)])
+            (this.embarque.productos || []).map(p => [
+              p.id,
+              { obj: JSON.parse(JSON.stringify(p)), str: serializarEstable(p) }
+            ])
           );
         }
       } catch (error) {
@@ -505,7 +508,10 @@ export const embarqueSyncMixin = {
         // El estado local acaba de subirse tal cual: es la nueva base
         // sincronizada para la fusión de 3 vías de productos.
         this._productosBase = new Map(
-          (this.embarque.productos || []).map(p => [p.id, serializarEstable(p)])
+          (this.embarque.productos || []).map(p => [
+            p.id,
+            { obj: JSON.parse(JSON.stringify(p)), str: serializarEstable(p) }
+          ])
         );
         await this.guardarSnapshotOffline({ pendingSync: false, syncState: 'synced' });
         console.log('[subirCambiosEnVivo] Cambios sincronizados con la nube (rev', revEscrita + ').');
