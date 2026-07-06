@@ -15,6 +15,27 @@ const arrayHasPositiveNumber = (arr) => {
 const stringHasContent = (value) => typeof value === 'string' && value.trim().length > 0;
 
 /**
+ * Determina si un producto individual tiene información capturada
+ * (medida, precio, kilos, taras o reportes). Un producto sin nada de esto es
+ * un renglón placeholder: cada editor crea el suyo automáticamente, así que
+ * al fusionar ediciones colaborativas los placeholders ajenos se descartan
+ * para no duplicar renglones vacíos.
+ */
+export function productoTieneContenido(producto) {
+  if (!producto) return false;
+  return (
+    stringHasContent(producto.medida) ||
+    stringHasContent(producto.nombreAlternativoPDF) ||
+    toNumber(producto.precio) > 0 ||
+    arrayHasPositiveNumber(producto.kilos) ||
+    arrayHasPositiveNumber(producto.taras) ||
+    arrayHasPositiveNumber(producto.tarasExtra) ||
+    arrayHasPositiveNumber(producto.reporteTaras) ||
+    arrayHasPositiveNumber(producto.reporteBolsas)
+  );
+}
+
+/**
  * Determina si un embarque (docData) tiene datos operativos reales.
  *
  * Importante: NO considera como "contenido" el simple hecho de que existan

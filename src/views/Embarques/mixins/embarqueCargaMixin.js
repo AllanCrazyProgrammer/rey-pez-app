@@ -2,7 +2,7 @@ import { getFirestore, doc, onSnapshot, addDoc, collection } from 'firebase/fire
 import EmbarquesOfflineService from '@/services/EmbarquesOfflineService';
 import { normalizarFechaISO, obtenerFechaActualISO } from '@/utils/dateUtils';
 import { crearNuevoProducto } from '@/constants.js/embarque';
-import { embarqueTieneContenidoOperativoDoc, embarqueTieneContenidoOperativoEstado } from '@/utils/embarqueContenido';
+import { embarqueTieneContenidoOperativoDoc, embarqueTieneContenidoOperativoEstado, productoTieneContenido } from '@/utils/embarqueContenido';
 
 export const esUUIDValido = (id) => {
   const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -62,6 +62,17 @@ export const embarqueCargaMixin = {
 
         if (docSnapshot.exists()) {
           const data = docSnapshot.data();
+
+          // Eco de nuestra propia escritura (o snapshot repetido): si el
+          // documento trae exactamente la revisión en la que ya está basado
+          // el estado local, no hay nada nuevo que aplicar. Sin este corte,
+          // re-aplicar el eco dispara watchers y provoca un bucle de
+          // subidas/aplicaciones sin cambios reales.
+          const revRemota = Number(data.rev) || 0;
+          if (!this._inicializandoEmbarque && revRemota !== 0 &&
+              revRemota === (Number(this._revBase) || 0)) {
+            return;
+          }
 
           if (this.hasPendingChanges) {
             // Hay cambios locales sin subir: aplicar lo remoto ahora pisaría
@@ -268,17 +279,28 @@ export const embarqueCargaMixin = {
               console.log('[onSnapshot] Hay campos en edición, mergear cuidadosamente');
               productosFinales = this.mergeProductosConCamposEnEdicion(productosDesdeServidor, productosFiltrados);
             } else {
+              // Placeholder redundante: renglón vacío de un cliente que ya
+              // tiene productos en el servidor. Cada editor crea el suyo
+              // automáticamente; si se preservan, cada colaborador duplica
+              // los renglones vacíos del otro.
+              const clientesConProductosEnServidor = new Set(
+                productosDesdeServidor.map(p => String(p.clienteId))
+              );
+              const esPlaceholderRedundante = (producto) =>
+                !productoTieneContenido(producto) &&
+                clientesConProductosEnServidor.has(String(producto.clienteId));
+
               const productosNuevosAPreservar = [];
               if (this.productosNuevosPendientes && this.productosNuevosPendientes.size > 0) {
                 console.log('[onSnapshot] Preservando productos nuevos pendientes:', this.productosNuevosPendientes.size);
                 this.productosNuevosPendientes.forEach((producto, id) => {
                   const existeEnServidor = productosDesdeServidor.some(p => p.id === id);
-                  if (!existeEnServidor) {
+                  if (!existeEnServidor && !esPlaceholderRedundante(producto)) {
                     productosNuevosAPreservar.push(producto);
                     console.log('[onSnapshot] Preservando producto nuevo:', id);
                   } else {
                     this.productosNuevosPendientes.delete(id);
-                    console.log('[onSnapshot] Producto sincronizado, removiendo de pendientes:', id);
+                    console.log('[onSnapshot] Producto sincronizado o placeholder redundante, removiendo de pendientes:', id);
                   }
                 });
               }
@@ -287,7 +309,8 @@ export const embarqueCargaMixin = {
               productosLocalesActuales.forEach(productoLocal => {
                 if (esUUIDValido(productoLocal.id) &&
                     !productosDesdeServidor.some(p => p.id === productoLocal.id) &&
-                    !productosNuevosAPreservar.some(p => p.id === productoLocal.id)) {
+                    !productosNuevosAPreservar.some(p => p.id === productoLocal.id) &&
+                    !esPlaceholderRedundante(productoLocal)) {
                   console.log('[onSnapshot] Preservando producto local no sincronizado:', productoLocal.id);
                   productosNuevosAPreservar.push(productoLocal);
                   if (!this.productosNuevosPendientes.has(productoLocal.id)) {
@@ -329,7 +352,14 @@ export const embarqueCargaMixin = {
 
           } finally {
             this._inicializandoEmbarque = false;
-            this._aplicandoRemoto = false;
+            // Los watchers de Vue corren en el siguiente microtask; si esta
+            // bandera se apaga aquí (síncrono), cuando corren ya está en
+            // false y marcan los cambios remotos como cambios locales
+            // pendientes → bucle de subidas sin cambios reales. Liberarla
+            // en $nextTick garantiza que los watchers ya corrieron.
+            this.$nextTick(() => {
+              this._aplicandoRemoto = false;
+            });
           }
 
           this.guardarSnapshotOffline({ pendingSync: false, docData: data, syncState: 'synced' });

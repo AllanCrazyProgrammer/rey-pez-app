@@ -286,7 +286,7 @@ import {
 } from '@/utils/dateUtils';
 import { obtenerPrecioMaquilaOzunaDefault } from '@/utils/preciosHistoricos';
 import { generarNotaVentaPDF } from '@/utils/pdfGenerator';
-import { embarqueTieneContenidoOperativoDoc, embarqueTieneContenidoOperativoEstado } from '@/utils/embarqueContenido';
+import { embarqueTieneContenidoOperativoDoc, embarqueTieneContenidoOperativoEstado, productoTieneContenido } from '@/utils/embarqueContenido';
 
 // Después de las imports existentes, agregar:
 import EmbarquesOfflineService from '@/services/EmbarquesOfflineService';
@@ -821,12 +821,22 @@ export default {
         productosFinales.push(productoMergeado);
       });
 
+      // Placeholder redundante: renglón vacío de un cliente que ya tiene
+      // productos en el servidor (cada editor crea el suyo; preservarlos
+      // duplica renglones vacíos entre colaboradores).
+      const clientesConProductosEnServidor = new Set(
+        productosServidor.map(p => String(p.clienteId))
+      );
+      const esPlaceholderRedundante = (producto) =>
+        !productoTieneContenido(producto) &&
+        clientesConProductosEnServidor.has(String(producto.clienteId));
+
       // Preservar productos nuevos pendientes de sincronización
       const productosNuevosAPreservar = [];
       if (this.productosNuevosPendientes && this.productosNuevosPendientes.size > 0) {
         this.productosNuevosPendientes.forEach((producto, id) => {
           const existeEnServidor = productosServidor.some(p => p.id === id);
-          if (!existeEnServidor) {
+          if (!existeEnServidor && !esPlaceholderRedundante(producto)) {
             productosNuevosAPreservar.push(producto);
           } else {
             this.productosNuevosPendientes.delete(id);
@@ -836,9 +846,10 @@ export default {
 
       // También preservar productos locales con UUID no sincronizados
       productosLocales.forEach(productoLocal => {
-        if (esUUIDValido(productoLocal.id) && 
+        if (esUUIDValido(productoLocal.id) &&
             !productosServidor.some(p => p.id === productoLocal.id) &&
-            !productosNuevosAPreservar.some(p => p.id === productoLocal.id)) {
+            !productosNuevosAPreservar.some(p => p.id === productoLocal.id) &&
+            !esPlaceholderRedundante(productoLocal)) {
           productosNuevosAPreservar.push(productoLocal);
           if (!this.productosNuevosPendientes.has(productoLocal.id)) {
             this.productosNuevosPendientes.set(productoLocal.id, { ...productoLocal });
@@ -1565,8 +1576,17 @@ export default {
     },
     clienteCrudos: {
       handler() {
+        // No marcar cambios pendientes cuando lo que cambió vino del servidor
+        // (aplicarDocRemoto): eso creaba un bucle de subidas sin cambios.
+        if (this._inicializandoEmbarque || this._aplicandoRemoto) {
+          return;
+        }
         // Guardar crudos en localStorage para persistencia offline
-        localStorage.setItem('clienteCrudos', JSON.stringify(this.clienteCrudos));
+        try {
+          localStorage.setItem('clienteCrudos', JSON.stringify(this.clienteCrudos));
+        } catch (error) {
+          console.warn('[watch clienteCrudos] No se pudo guardar en localStorage:', error);
+        }
         this.guardarCambiosEnTiempoReal();
       },
       deep: true
@@ -1597,6 +1617,10 @@ export default {
     },
     'embarque.cargaCon': {
       handler(newVal, oldVal) {
+        // Ignorar cambios que vienen de aplicar el documento remoto
+        if (this._inicializandoEmbarque || this._aplicandoRemoto) {
+          return;
+        }
         if (!this.embarqueId) {
           this.triggerGuardadoInicial();
         } else {
