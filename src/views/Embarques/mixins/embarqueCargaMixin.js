@@ -2,7 +2,7 @@ import { getFirestore, doc, onSnapshot, addDoc, collection } from 'firebase/fire
 import EmbarquesOfflineService from '@/services/EmbarquesOfflineService';
 import { normalizarFechaISO, obtenerFechaActualISO } from '@/utils/dateUtils';
 import { crearNuevoProducto } from '@/constants.js/embarque';
-import { embarqueTieneContenidoOperativoDoc, embarqueTieneContenidoOperativoEstado, productoTieneContenido } from '@/utils/embarqueContenido';
+import { embarqueTieneContenidoOperativoDoc, embarqueTieneContenidoOperativoEstado, productoTieneContenido, serializarEstable } from '@/utils/embarqueContenido';
 
 export const esUUIDValido = (id) => {
   const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -153,18 +153,11 @@ export const embarqueCargaMixin = {
               }
             }
 
-            console.log('[DEBUG-FECHA] Cargando embarque ID:', id);
-            console.log('[DEBUG-FECHA] Fecha cruda de Firebase:', data.fecha);
-            console.log('[DEBUG-FECHA] Tipo de fecha:', typeof data.fecha, data.fecha?.constructor?.name);
-
             this.embarqueBloqueado = data.embarqueBloqueado || false;
 
             if (data.clientesPersonalizados && Array.isArray(data.clientesPersonalizados)) {
               this.clientesPersonalizados = data.clientesPersonalizados;
-              console.log('[cargarEmbarque] Clientes personalizados cargados desde Firebase:', this.clientesPersonalizados);
               localStorage.setItem('clientesPersonalizados', JSON.stringify(this.clientesPersonalizados));
-            } else {
-              console.log('[cargarEmbarque] No se encontraron clientes personalizados en Firebase, usando localStorage como respaldo');
             }
 
             if (data.clientesJuntarMedidas) {
@@ -217,20 +210,16 @@ export const embarqueCargaMixin = {
             let fecha;
             if (data.fecha && typeof data.fecha.toDate === 'function') {
               fecha = data.fecha.toDate();
-              console.log('[DEBUG-FECHA] Fecha convertida de Timestamp:', fecha);
             } else if (data.fecha instanceof Date) {
               fecha = data.fecha;
-              console.log('[DEBUG-FECHA] Fecha es Date object:', fecha);
             } else if (typeof data.fecha === 'string') {
               fecha = data.fecha;
-              console.log('[DEBUG-FECHA] Fecha es string:', fecha);
             } else {
               console.warn('Formato de fecha no reconocido, usando la fecha actual');
               fecha = new Date();
             }
 
             const fechaNormalizada = normalizarFechaISO(fecha);
-            console.log('[DEBUG-FECHA] Fecha normalizada final:', fechaNormalizada);
 
             const clientesPredefinidosMap = new Map(this.clientesPredefinidos.map(c => [c.id.toString(), c]));
 
@@ -271,16 +260,38 @@ export const embarqueCargaMixin = {
 
             let productosFiltrados = productosDesdeServidor.filter(p => !eliminadosRemotos[p.id]);
             if (this.productosEliminadosLocalmente && this.productosEliminadosLocalmente.size > 0) {
-              console.log('[onSnapshot] Filtrando productos eliminados localmente:', this.productosEliminadosLocalmente);
               productosFiltrados = productosFiltrados.filter(p =>
                 !this.productosEliminadosLocalmente.has(p.id)
               );
             }
 
+            // Fusión de 3 vías a nivel producto: si la versión local difiere
+            // de la ÚLTIMA VERSIÓN SINCRONIZADA (base), el usuario la editó y
+            // su versión gana sobre la del servidor aunque el campo ya no
+            // tenga el foco. Sin esto, una fusión por conflicto revertía las
+            // ediciones locales aún no subidas ("el segundo cambio se
+            // perdía" cuando dos personas editaban a la vez).
+            const baseSincronizada = this._productosBase instanceof Map ? this._productosBase : new Map();
+            const productosLocalesParaMerge = this.embarque.productos || [];
+            productosFiltrados = productosFiltrados.map((pServidor) => {
+              const pLocal = productosLocalesParaMerge.find(p => p.id === pServidor.id);
+              if (!pLocal) return pServidor;
+              const baseStr = baseSincronizada.get(pServidor.id);
+              if (baseStr && serializarEstable(pLocal) !== baseStr) {
+                console.log('[onSnapshot] Conservando edición local sin subir del producto:', pServidor.id);
+                return pLocal;
+              }
+              return pServidor;
+            });
+
+            // La nueva base es lo que el SERVIDOR tiene en esta revisión.
+            this._productosBase = new Map(
+              productosDesdeServidor.map(p => [p.id, serializarEstable(p)])
+            );
+
             let productosFinales;
 
             if (this.agregandoProducto) {
-              console.log('[onSnapshot] Agregando producto en proceso, preservando productos locales');
               productosFinales = this.embarque.productos || [];
               // Fusión PARCIAL: los productos remotos no se integraron, así
               // que el estado local NO queda basado en esta revisión. Si la
@@ -290,7 +301,6 @@ export const embarqueCargaMixin = {
               // conflicto→fusión completa en el siguiente intento.
               this._revBase = revBaseAnterior;
             } else if (this.camposEnEdicion && this.camposEnEdicion.size > 0) {
-              console.log('[onSnapshot] Hay campos en edición, mergear cuidadosamente');
               productosFinales = this.mergeProductosConCamposEnEdicion(productosDesdeServidor, productosFiltrados);
             } else {
               // Placeholder redundante: renglón vacío de un cliente que ya
@@ -308,7 +318,6 @@ export const embarqueCargaMixin = {
 
               const productosNuevosAPreservar = [];
               if (this.productosNuevosPendientes && this.productosNuevosPendientes.size > 0) {
-                console.log('[onSnapshot] Preservando productos nuevos pendientes:', this.productosNuevosPendientes.size);
                 this.productosNuevosPendientes.forEach((producto, id) => {
                   const existeEnServidor = productosDesdeServidor.some(p => p.id === id);
                   // Preservar la versión local VIVA (lo que se está tecleando
@@ -321,10 +330,8 @@ export const embarqueCargaMixin = {
                   if (!existeEnServidor && !eliminadosRemotos[id]) {
                     productosNuevosAPreservar.push(productoVivo);
                     this.productosNuevosPendientes.set(id, { ...productoVivo });
-                    console.log('[onSnapshot] Preservando producto nuevo:', id);
                   } else {
                     this.productosNuevosPendientes.delete(id);
-                    console.log('[onSnapshot] Producto sincronizado, borrado o placeholder redundante, removiendo de pendientes:', id);
                   }
                 });
               }
@@ -334,7 +341,6 @@ export const embarqueCargaMixin = {
                     !productosNuevosAPreservar.some(p => p.id === productoLocal.id) &&
                     !esPlaceholderRedundante(productoLocal) &&
                     !eliminadosRemotos[productoLocal.id]) {
-                  console.log('[onSnapshot] Preservando producto local no sincronizado:', productoLocal.id);
                   productosNuevosAPreservar.push(productoLocal);
                   if (!this.productosNuevosPendientes.has(productoLocal.id)) {
                     this.productosNuevosPendientes.set(productoLocal.id, { ...productoLocal });
@@ -352,9 +358,6 @@ export const embarqueCargaMixin = {
               productos: productosFinales,
               kilosCrudos: data.kilosCrudos || {}
             };
-
-            console.log('[DEBUG-FECHA] Embarque asignado con fecha:', this.embarque.fecha);
-            console.log('[DEBUG-FECHA] Total productos cargados:', productosFinales.length);
 
             this.costosPorMedida = { ...(data.costosPorMedida || {}) };
             this.aplicarCostoExtra = { ...(data.aplicarCostoExtra || {}) };

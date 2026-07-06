@@ -15,6 +15,24 @@ const arrayHasPositiveNumber = (arr) => {
 const stringHasContent = (value) => typeof value === 'string' && value.trim().length > 0;
 
 /**
+ * Serialización estable (llaves ordenadas recursivamente) para comparar
+ * objetos que dieron una vuelta por Firestore, donde el orden de llaves no
+ * está garantizado. `undefined` se trata como null.
+ */
+export function serializarEstable(valor) {
+  if (valor === undefined || valor === null) return 'null';
+  if (Array.isArray(valor)) {
+    return '[' + valor.map(serializarEstable).join(',') + ']';
+  }
+  if (typeof valor === 'object') {
+    return '{' + Object.keys(valor).sort()
+      .map((k) => JSON.stringify(k) + ':' + serializarEstable(valor[k]))
+      .join(',') + '}';
+  }
+  return JSON.stringify(valor);
+}
+
+/**
  * Determina si un producto individual tiene información capturada
  * (medida, precio, kilos, taras o reportes). Un producto sin nada de esto es
  * un renglón placeholder: cada editor crea el suyo automáticamente, así que

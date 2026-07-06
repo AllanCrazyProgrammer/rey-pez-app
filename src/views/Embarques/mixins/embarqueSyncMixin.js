@@ -4,7 +4,7 @@ import EmbarquesOfflineService from '@/services/EmbarquesOfflineService';
 import BackupService from '../BackupService.js';
 import { normalizarFechaISO, normalizarFechaValor, obtenerFechaActualISO } from '@/utils/dateUtils';
 import { crearNuevoProducto } from '@/constants.js/embarque';
-import { embarqueTieneContenidoOperativoEstado } from '@/utils/embarqueContenido';
+import { embarqueTieneContenidoOperativoEstado, serializarEstable } from '@/utils/embarqueContenido';
 
 /**
  * Normaliza los datos de un embarque para escribirlos en Firestore.
@@ -362,6 +362,9 @@ export const embarqueSyncMixin = {
           this.hasPendingChanges = false;
           this._revBase = Number(dataParaFirestore.rev) || Number(this._revBase) || 0;
           this._snapshotRemotoDiferido = null;
+          this._productosBase = new Map(
+            (this.embarque.productos || []).map(p => [p.id, serializarEstable(p)])
+          );
         }
       } catch (error) {
         console.error('[sincronizarRegistroOffline] Error al sincronizar embarque offline:', error);
@@ -390,7 +393,6 @@ export const embarqueSyncMixin = {
       this.hasPendingChanges = true;
       await this.guardarSnapshotOffline({ pendingSync: true });
 
-      console.log('Cambios guardados localmente:', new Date().toLocaleString());
       this.$emit('guardado-automatico');
 
       // Edición colaborativa: subir automáticamente a la nube para que otros
@@ -492,6 +494,11 @@ export const embarqueSyncMixin = {
         this._reintentosSubidaEnVivo = 0;
         this.hasPendingChanges = false;
         this._snapshotRemotoDiferido = null;
+        // El estado local acaba de subirse tal cual: es la nueva base
+        // sincronizada para la fusión de 3 vías de productos.
+        this._productosBase = new Map(
+          (this.embarque.productos || []).map(p => [p.id, serializarEstable(p)])
+        );
         await this.guardarSnapshotOffline({ pendingSync: false, syncState: 'synced' });
         console.log('[subirCambiosEnVivo] Cambios sincronizados con la nube (rev', revEscrita + ').');
       } catch (error) {
