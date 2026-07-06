@@ -39,6 +39,15 @@
         @abrir-multi-notas="abrirModalNotasMultiple"
       />
 
+      <!-- Aviso de edición colaborativa: quién más está editando este embarque -->
+      <div v-if="editoresEmbarque.length > 0" class="banner-colaboracion">
+        <span class="banner-colaboracion-icono">👥</span>
+        <span>
+          También editando ahora: <strong>{{ editoresEmbarque.join(', ') }}</strong>.
+          Los cambios de ambos se sincronizan en vivo.
+        </span>
+      </div>
+
       <!-- Slider de escala para el resumen PDF -->
       <div v-if="mostrarEscalaResumen" class="scale-control scale-control-resumen">
         <label>Escala del resumen PDF:</label>
@@ -277,7 +286,7 @@ import {
 } from '@/utils/dateUtils';
 import { obtenerPrecioMaquilaOzunaDefault } from '@/utils/preciosHistoricos';
 import { generarNotaVentaPDF } from '@/utils/pdfGenerator';
-import { embarqueTieneContenidoOperativoDoc, embarqueTieneContenidoOperativoEstado } from '@/utils/embarqueContenido';
+import { embarqueTieneContenidoOperativoDoc, embarqueTieneContenidoOperativoEstado, productoTieneContenido } from '@/utils/embarqueContenido';
 
 // Después de las imports existentes, agregar:
 import EmbarquesOfflineService from '@/services/EmbarquesOfflineService';
@@ -812,13 +821,33 @@ export default {
         productosFinales.push(productoMergeado);
       });
 
+      // Placeholder redundante: renglón vacío de un cliente que ya tiene
+      // productos en el servidor (cada editor crea el suyo; preservarlos
+      // duplica renglones vacíos entre colaboradores).
+      const clientesConProductosEnServidor = new Set(
+        productosServidor.map(p => String(p.clienteId))
+      );
+      const esPlaceholderRedundante = (producto) =>
+        !productoTieneContenido(producto) &&
+        clientesConProductosEnServidor.has(String(producto.clienteId));
+
+      // Lápidas de borrado: productos eliminados por algún editor no se
+      // preservan (sin esto, el borrado de la otra persona "revivía" aquí).
+      const eliminadosRemotos = this._productosEliminadosDoc || {};
+
       // Preservar productos nuevos pendientes de sincronización
       const productosNuevosAPreservar = [];
       if (this.productosNuevosPendientes && this.productosNuevosPendientes.size > 0) {
         this.productosNuevosPendientes.forEach((producto, id) => {
           const existeEnServidor = productosServidor.some(p => p.id === id);
-          if (!existeEnServidor) {
-            productosNuevosAPreservar.push(producto);
+          // Preservar la versión local VIVA (lo que se está tecleando), no la
+          // copia tomada al crear el producto: la copia vieja pisaba lo escrito.
+          // Las filas creadas por el usuario se preservan aunque estén vacías;
+          // el descarte de placeholders aplica solo a renglones auto-creados.
+          const productoVivo = productosLocales.find(p => p.id === id) || producto;
+          if (!existeEnServidor && !eliminadosRemotos[id]) {
+            productosNuevosAPreservar.push(productoVivo);
+            this.productosNuevosPendientes.set(id, { ...productoVivo });
           } else {
             this.productosNuevosPendientes.delete(id);
           }
@@ -827,9 +856,11 @@ export default {
 
       // También preservar productos locales con UUID no sincronizados
       productosLocales.forEach(productoLocal => {
-        if (esUUIDValido(productoLocal.id) && 
+        if (esUUIDValido(productoLocal.id) &&
             !productosServidor.some(p => p.id === productoLocal.id) &&
-            !productosNuevosAPreservar.some(p => p.id === productoLocal.id)) {
+            !productosNuevosAPreservar.some(p => p.id === productoLocal.id) &&
+            !esPlaceholderRedundante(productoLocal) &&
+            !eliminadosRemotos[productoLocal.id]) {
           productosNuevosAPreservar.push(productoLocal);
           if (!this.productosNuevosPendientes.has(productoLocal.id)) {
             this.productosNuevosPendientes.set(productoLocal.id, { ...productoLocal });
@@ -959,6 +990,11 @@ export default {
         console.log('[AGREGAR-PRODUCTO] Removiendo producto de la lista de eliminados:', nuevoProducto.id);
         this.productosEliminadosLocalmente.delete(nuevoProducto.id);
       }
+      if (this._productosEliminadosDoc && this._productosEliminadosDoc[nuevoProducto.id]) {
+        const lapidas = { ...this._productosEliminadosDoc };
+        delete lapidas[nuevoProducto.id];
+        this._productosEliminadosDoc = lapidas;
+      }
 
       // Marcar el producto como nuevo pendiente de sincronización ANTES de agregarlo
       if (!this.productosNuevosPendientes) {
@@ -1008,13 +1044,7 @@ export default {
 
     eliminarProducto(producto) {
       console.log(`[ELIMINAR-PRODUCTO] Intentando eliminar: ID: ${producto.id}, Medida: ${producto.medida}, Cliente: ${this.obtenerNombreCliente(producto.clienteId)}`);
-      
-      // Marcar el producto como eliminado localmente para evitar que se restaure
-      if (!this.productosEliminadosLocalmente) {
-        this.productosEliminadosLocalmente = new Set();
-      }
-      this.productosEliminadosLocalmente.add(producto.id);
-      
+
       // Marcar el cliente como modificado inmediatamente
       this.$set(this.clientesModificados, producto.clienteId, true);
       
@@ -1086,24 +1116,54 @@ export default {
     
     _eliminarProductoPorIndice(index, metodo) {
       const producto = this.embarque.productos[index];
-      
+
       console.log(`[ELIMINAR-PRODUCTO] 🗑️  Eliminando producto (${metodo}):`, {
         indice: index,
         id: producto.id,
         medida: producto.medida,
         clienteId: producto.clienteId
       });
-      
+
+      // Marcar como eliminado localmente SOLO cuando el borrado realmente
+      // procede (si se registrara antes y el borrado se abortara, la lápida
+      // se subiría igual y borraría el producto de todos modos).
+      if (!this.productosEliminadosLocalmente) {
+        this.productosEliminadosLocalmente = new Set();
+      }
+      this.productosEliminadosLocalmente.add(producto.id);
+
       // Eliminar el producto del array
       this.embarque.productos.splice(index, 1);
-      
+
       console.log(`[ELIMINAR-PRODUCTO] ✅ Producto eliminado exitosamente. Productos restantes: ${this.embarque.productos.length}`);
+
+      // Publicar la lápida DE INMEDIATO con un update puntual: si otro editor
+      // está tecleando, la subida completa puede perder la carrera de
+      // revisiones una y otra vez, pero este update pequeño entra igual y la
+      // fusión del otro lado respeta la lápida (el borrado no se pierde).
+      if (this.embarqueId && navigator.onLine) {
+        const db = getFirestore();
+        const marcaLapida = Date.now();
+        const revNueva = (Number(this._revBase) || 0) + 1;
+        updateDoc(doc(db, "embarques", this.embarqueId), {
+          [`productosEliminados.${producto.id}`]: marcaLapida,
+          rev: revNueva
+        }).then(() => {
+          this._revBase = revNueva;
+          this._productosEliminadosDoc = {
+            ...(this._productosEliminadosDoc || {}),
+            [producto.id]: marcaLapida
+          };
+        }).catch((error) => {
+          console.warn('[ELIMINAR-PRODUCTO] No se pudo publicar la lápida de inmediato (se subirá con el guardado normal):', error);
+        });
+      }
 
       // Guardar cambios si es necesario
       if (this.embarqueId) {
         this.guardarCambiosEnTiempoReal();
       }
-      
+
       // Actualizar las medidas usadas después de eliminar
       this.actualizarMedidasUsadas();
     },
@@ -1394,11 +1454,17 @@ export default {
     toggleBloqueo() {
       this.embarqueBloqueado = !this.embarqueBloqueado;
 
-      // Guardar el estado en Firebase si estamos en modo edición
+      // Guardar el estado en Firebase si estamos en modo edición.
+      // Incrementar rev: sin señal de cambio, los demás editores descartan
+      // el snapshot como eco repetido y no se enteran del bloqueo.
       if (this.modoEdicion && this.embarqueId) {
         const db = getFirestore();
+        const revNueva = (Number(this._revBase) || 0) + 1;
         updateDoc(doc(db, "embarques", this.embarqueId), {
-          embarqueBloqueado: this.embarqueBloqueado
+          embarqueBloqueado: this.embarqueBloqueado,
+          rev: revNueva
+        }).then(() => {
+          this._revBase = revNueva;
         }).catch(error => {
           console.error("Error al guardar estado de bloqueo:", error);
         });
@@ -1509,6 +1575,14 @@ export default {
   },
 
   watch: {
+    embarqueId(nuevoId) {
+      // Presencia colaborativa: registrar/retirar a este usuario como editor
+      if (nuevoId) {
+        this.iniciarPresenciaEmbarque(nuevoId);
+      } else {
+        this.detenerPresenciaEmbarque();
+      }
+    },
     embarque: {
       handler(nuevoValor) {
         if (this.isUndoRedo) {
@@ -1548,8 +1622,17 @@ export default {
     },
     clienteCrudos: {
       handler() {
+        // No marcar cambios pendientes cuando lo que cambió vino del servidor
+        // (aplicarDocRemoto): eso creaba un bucle de subidas sin cambios.
+        if (this._inicializandoEmbarque || this._aplicandoRemoto) {
+          return;
+        }
         // Guardar crudos en localStorage para persistencia offline
-        localStorage.setItem('clienteCrudos', JSON.stringify(this.clienteCrudos));
+        try {
+          localStorage.setItem('clienteCrudos', JSON.stringify(this.clienteCrudos));
+        } catch (error) {
+          console.warn('[watch clienteCrudos] No se pudo guardar en localStorage:', error);
+        }
         this.guardarCambiosEnTiempoReal();
       },
       deep: true
@@ -1580,6 +1663,10 @@ export default {
     },
     'embarque.cargaCon': {
       handler(newVal, oldVal) {
+        // Ignorar cambios que vienen de aplicar el documento remoto
+        if (this._inicializandoEmbarque || this._aplicandoRemoto) {
+          return;
+        }
         if (!this.embarqueId) {
           this.triggerGuardadoInicial();
         } else {
@@ -1792,6 +1879,25 @@ export default {
 </script>
 
 <style scoped>
+/* Aviso de edición colaborativa */
+.banner-colaboracion {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 12px;
+  padding: 10px 14px;
+  background-color: #e8f4fd;
+  border: 1px solid #7cc0ef;
+  border-left: 4px solid #2196f3;
+  border-radius: 6px;
+  color: #0d47a1;
+  font-size: 0.95rem;
+}
+
+.banner-colaboracion-icono {
+  font-size: 1.2rem;
+}
+
 /* Estilos base */
 .nuevo-embarque-container {
   position: relative;

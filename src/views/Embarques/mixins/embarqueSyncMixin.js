@@ -1,10 +1,10 @@
-import { getFirestore, doc, updateDoc, setDoc, getDoc, serverTimestamp, deleteDoc } from 'firebase/firestore';
+import { getFirestore, doc, updateDoc, setDoc, getDoc, serverTimestamp, deleteDoc, runTransaction } from 'firebase/firestore';
 import { v4 as uuidv4 } from 'uuid';
 import EmbarquesOfflineService from '@/services/EmbarquesOfflineService';
 import BackupService from '../BackupService.js';
 import { normalizarFechaISO, normalizarFechaValor, obtenerFechaActualISO } from '@/utils/dateUtils';
 import { crearNuevoProducto } from '@/constants.js/embarque';
-import { embarqueTieneContenidoOperativoEstado } from '@/utils/embarqueContenido';
+import { embarqueTieneContenidoOperativoEstado, serializarEstable } from '@/utils/embarqueContenido';
 
 /**
  * Normaliza los datos de un embarque para escribirlos en Firestore.
@@ -104,6 +104,17 @@ export function normalizarDocDataParaFirestore(docData, record = {}, contexto = 
     }
   });
 
+  // Señal de cambio para los editores en vivo: cada sincronización cuenta
+  // como una revisión nueva sobre lo remoto.
+  data.rev = (Number(pickPreferRemoto('rev')) || 0) + 1;
+
+  // Lápidas de borrado de productos: unión de lo local y lo remoto para que
+  // una sincronización no reviva productos borrados por otro editor.
+  data.productosEliminados = {
+    ...((contexto.dataRemota && contexto.dataRemota.productosEliminados) || {}),
+    ...(dataCruda.productosEliminados || record.productosEliminados || {})
+  };
+
   data.clientes = data.clientes.map(cliente => ({
     ...cliente,
     productos: Array.isArray(cliente.productos) ? cliente.productos.map(producto => ({
@@ -118,6 +129,12 @@ export function normalizarDocDataParaFirestore(docData, record = {}, contexto = 
 }
 
 export const embarqueSyncMixin = {
+  beforeDestroy() {
+    if (this._timerSubidaEnVivo) {
+      clearTimeout(this._timerSubidaEnVivo);
+      this._timerSubidaEnVivo = null;
+    }
+  },
   methods: {
     async guardarEmbarqueInicial(clienteId) {
       const modalAbierto = this.mostrarModalPrecio ||
@@ -204,8 +221,12 @@ export const embarqueSyncMixin = {
         const embarqueData = this.prepararDatosEmbarque();
         const snap = await getDoc(embarqueRef);
 
+        // Señal de cambio para editores en vivo (control de revisiones)
+        const revNueva = (snap.exists() ? (Number(snap.data().rev) || 0) : (Number(this._revBase) || 0)) + 1;
+
         const payload = {
           ...embarqueData,
+          rev: revNueva,
           ultimaEdicion: {
             userId: this.authStore.userId,
             username: this.authStore.user?.username || 'Usuario desconocido',
@@ -218,6 +239,8 @@ export const embarqueSyncMixin = {
         } else {
           await setDoc(embarqueRef, payload);
         }
+
+        this._revBase = revNueva;
 
         await EmbarquesOfflineService.markSynced(this.embarqueId);
         this.hasPendingChanges = false;
@@ -331,6 +354,20 @@ export const embarqueSyncMixin = {
         if (record.id === this.embarqueId) {
           this.guardadoAutomaticoActivo = true;
           this.modoEdicion = true;
+          // El embarque abierto acaba de subirse: ya no hay cambios locales
+          // pendientes y nuestra base es la revisión recién escrita. Sin este
+          // reset, hasPendingChanges quedaba en true para siempre y TODOS los
+          // snapshots remotos se diferían: la otra sesión dejaba de reflejarse
+          // hasta la siguiente edición local.
+          this.hasPendingChanges = false;
+          this._revBase = Number(dataParaFirestore.rev) || Number(this._revBase) || 0;
+          this._snapshotRemotoDiferido = null;
+          this._productosBase = new Map(
+            (this.embarque.productos || []).map(p => [
+              p.id,
+              { obj: JSON.parse(JSON.stringify(p)), str: serializarEstable(p) }
+            ])
+          );
         }
       } catch (error) {
         console.error('[sincronizarRegistroOffline] Error al sincronizar embarque offline:', error);
@@ -359,9 +396,136 @@ export const embarqueSyncMixin = {
       this.hasPendingChanges = true;
       await this.guardarSnapshotOffline({ pendingSync: true });
 
-      console.log('Cambios guardados localmente:', new Date().toLocaleString());
       this.$emit('guardado-automatico');
+
+      // Edición colaborativa: subir automáticamente a la nube para que otros
+      // editores vean los cambios en vivo (sin esperar al botón de subir).
+      if (navigator.onLine) {
+        if (immediate) {
+          this.subirCambiosEnVivo();
+        } else {
+          this.programarSubidaEnVivo();
+        }
+      }
       return Promise.resolve();
+    },
+
+    programarSubidaEnVivo(retrasoMs) {
+      // Jitter: si dos sesiones agendan la subida con la misma cadencia fija,
+      // chocan sincronizadas en conflictos una y otra vez.
+      const retraso = retrasoMs || (1500 + Math.floor(Math.random() * 700));
+      if (this._timerSubidaEnVivo) {
+        clearTimeout(this._timerSubidaEnVivo);
+      }
+      this._timerSubidaEnVivo = setTimeout(() => {
+        this._timerSubidaEnVivo = null;
+        this.subirCambiosEnVivo();
+      }, retraso);
+    },
+
+    /**
+     * Sube los cambios locales a Firestore con control de revisiones para
+     * edición colaborativa: la escritura solo procede si nadie más guardó
+     * desde la última revisión que aplicamos (campo `rev`). Si otra persona
+     * guardó primero, NO se pisa su trabajo: se fusiona el documento remoto
+     * al estado local (aplicarDocRemoto protege lo que se está editando) y
+     * se reintenta la subida con el estado fusionado.
+     */
+    async subirCambiosEnVivo() {
+      if (!this.embarqueId || !this.hasPendingChanges || !navigator.onLine) {
+        return;
+      }
+      if (this._subiendoEnVivo) {
+        this._resubirAlTerminar = true;
+        return;
+      }
+      this._subiendoEnVivo = true;
+
+      try {
+        const db = getFirestore();
+        const embarqueRef = doc(db, 'embarques', this.embarqueId);
+        const payload = {
+          ...this.prepararDatosEmbarque(),
+          ultimaEdicion: {
+            userId: this.authStore.userId,
+            username: this.authStore.user?.username || 'Usuario desconocido',
+            timestamp: serverTimestamp()
+          }
+        };
+
+        let dataConflicto = null;
+        let revEscrita = null;
+
+        await runTransaction(db, async (transaction) => {
+          dataConflicto = null;
+          const snapshot = await transaction.get(embarqueRef);
+
+          if (!snapshot.exists()) {
+            revEscrita = (Number(this._revBase) || 0) + 1;
+            transaction.set(embarqueRef, { ...payload, rev: revEscrita });
+            return;
+          }
+
+          const revRemota = Number(snapshot.data().rev) || 0;
+          if (revRemota !== (Number(this._revBase) || 0)) {
+            // Alguien más guardó desde nuestra base: no escribir nada.
+            dataConflicto = snapshot.data();
+            return;
+          }
+
+          revEscrita = revRemota + 1;
+          // update (no set): conserva campos que otras vistas escriben en el
+          // mismo documento (fletePagos, totalGanancias, etc.).
+          transaction.update(embarqueRef, { ...payload, rev: revEscrita });
+        });
+
+        if (dataConflicto) {
+          this._reintentosSubidaEnVivo = (this._reintentosSubidaEnVivo || 0) + 1;
+          if (this._reintentosSubidaEnVivo > 4) {
+            // NUNCA abandonar cambios pendientes: si el otro editor está
+            // tecleando sin parar, esperar más largo y volver a intentar.
+            // (Antes se esperaba "al próximo cambio local", que podía no
+            // llegar nunca — un borrado quedaba sin subir para siempre.)
+            console.warn('[subirCambiosEnVivo] Muchos conflictos seguidos; reintentando con espera más larga.');
+            this._reintentosSubidaEnVivo = 0;
+            this.programarSubidaEnVivo(6000 + Math.floor(Math.random() * 3000));
+            return;
+          }
+          console.log('[subirCambiosEnVivo] Conflicto de revisión: fusionando cambios remotos antes de subir.');
+          // hasPendingChanges se queda en true durante la fusión: cualquier
+          // snapshot que llegue en medio se difiere en vez de aplicarse encima.
+          this._snapshotRemotoDiferido = null;
+          await this.aplicarDocRemoto(this.embarqueId, dataConflicto);
+          await this.guardarSnapshotOffline({ pendingSync: true });
+          this.programarSubidaEnVivo();
+          return;
+        }
+
+        this._revBase = revEscrita;
+        this._reintentosSubidaEnVivo = 0;
+        this.hasPendingChanges = false;
+        this._snapshotRemotoDiferido = null;
+        // El estado local acaba de subirse tal cual: es la nueva base
+        // sincronizada para la fusión de 3 vías de productos.
+        this._productosBase = new Map(
+          (this.embarque.productos || []).map(p => [
+            p.id,
+            { obj: JSON.parse(JSON.stringify(p)), str: serializarEstable(p) }
+          ])
+        );
+        await this.guardarSnapshotOffline({ pendingSync: false, syncState: 'synced' });
+        console.log('[subirCambiosEnVivo] Cambios sincronizados con la nube (rev', revEscrita + ').');
+      } catch (error) {
+        console.error('[subirCambiosEnVivo] Error al subir cambios:', error);
+        // El espejo offline conserva pendingSync: se reintenta con el próximo
+        // cambio, al reconectar, o con el botón de subir manual.
+      } finally {
+        this._subiendoEnVivo = false;
+        if (this._resubirAlTerminar) {
+          this._resubirAlTerminar = false;
+          this.programarSubidaEnVivo();
+        }
+      }
     },
 
     async guardarEmbarque() {
@@ -383,7 +547,9 @@ export const embarqueSyncMixin = {
 
       try {
         await this.guardarCambiosEnTiempoReal(true);
-        this.mostrarMensaje('Embarque guardado localmente. Recuerde subir los cambios para respaldar en la nube.');
+        this.mostrarMensaje(navigator.onLine
+          ? 'Embarque guardado. Los cambios se sincronizan automáticamente con la nube.'
+          : 'Embarque guardado localmente. Se subirá a la nube al recuperar la conexión.');
       } catch (error) {
         console.error("Error al guardar localmente:", error);
         alert('Error al guardar localmente.');
@@ -391,11 +557,31 @@ export const embarqueSyncMixin = {
     },
 
     prepararDatosEmbarque() {
+      // Lápidas de borrado: registro de productos eliminados para que los
+      // demás editores en vivo los quiten en lugar de "preservarlos" como si
+      // fueran productos nuevos del otro lado. Se depuran a los 7 días.
+      const productosEliminados = { ...(this._productosEliminadosDoc || {}) };
+      const ahora = Date.now();
+      if (this.productosEliminadosLocalmente) {
+        this.productosEliminadosLocalmente.forEach((idProducto) => {
+          if (!productosEliminados[idProducto]) {
+            productosEliminados[idProducto] = ahora;
+          }
+        });
+      }
+      Object.keys(productosEliminados).forEach((idProducto) => {
+        if (ahora - Number(productosEliminados[idProducto] || 0) > 7 * 24 * 60 * 60 * 1000) {
+          delete productosEliminados[idProducto];
+        }
+      });
+      this._productosEliminadosDoc = productosEliminados;
+
       const embarqueData = {
         fecha: this.embarque.fecha,
         cargaCon: this.embarque.cargaCon,
         camionNumero: this.embarque.camionNumero || 1,
         kilosCrudos: this.embarque.kilosCrudos || {},
+        productosEliminados,
         clientes: [],
         borrador: !embarqueTieneContenidoOperativoEstado({
           cargaCon: this.embarque?.cargaCon,

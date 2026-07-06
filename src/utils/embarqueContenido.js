@@ -15,6 +15,72 @@ const arrayHasPositiveNumber = (arr) => {
 const stringHasContent = (value) => typeof value === 'string' && value.trim().length > 0;
 
 /**
+ * Serialización estable (llaves ordenadas recursivamente) para comparar
+ * objetos que dieron una vuelta por Firestore, donde el orden de llaves no
+ * está garantizado. `undefined` se trata como null.
+ */
+export function serializarEstable(valor) {
+  if (valor === undefined || valor === null) return 'null';
+  if (Array.isArray(valor)) {
+    return '[' + valor.map(serializarEstable).join(',') + ']';
+  }
+  if (typeof valor === 'object') {
+    return '{' + Object.keys(valor).sort()
+      .map((k) => JSON.stringify(k) + ':' + serializarEstable(valor[k]))
+      .join(',') + '}';
+  }
+  return JSON.stringify(valor);
+}
+
+/**
+ * Fusión de 3 vías CAMPO POR CAMPO de un producto editado por dos personas a
+ * la vez: cada campo se compara contra la última versión sincronizada (base).
+ * El campo que cambió localmente conserva el valor local (incluye borrados de
+ * campo); el que cambió solo en remoto toma el remoto. Si ambos cambiaron el
+ * mismo campo gana el local — converge porque el otro lado hace la elección
+ * espejo y el último en subir define el valor final.
+ */
+export function fusionarProductoTresVias(base, local, remoto) {
+  const resultado = {};
+  const llaves = new Set([
+    ...Object.keys(remoto || {}),
+    ...Object.keys(local || {})
+  ]);
+  llaves.forEach((llave) => {
+    const sBase = serializarEstable(base ? base[llave] : undefined);
+    const vLocal = local ? local[llave] : undefined;
+    const vRemoto = remoto ? remoto[llave] : undefined;
+    const localCambio = serializarEstable(vLocal) !== sBase;
+    const valor = localCambio ? vLocal : vRemoto;
+    if (valor !== undefined) {
+      resultado[llave] = valor;
+    }
+  });
+  return resultado;
+}
+
+/**
+ * Determina si un producto individual tiene información capturada
+ * (medida, precio, kilos, taras o reportes). Un producto sin nada de esto es
+ * un renglón placeholder: cada editor crea el suyo automáticamente, así que
+ * al fusionar ediciones colaborativas los placeholders ajenos se descartan
+ * para no duplicar renglones vacíos.
+ */
+export function productoTieneContenido(producto) {
+  if (!producto) return false;
+  return (
+    stringHasContent(producto.medida) ||
+    stringHasContent(producto.nombreAlternativoPDF) ||
+    toNumber(producto.precio) > 0 ||
+    arrayHasPositiveNumber(producto.kilos) ||
+    arrayHasPositiveNumber(producto.taras) ||
+    arrayHasPositiveNumber(producto.tarasExtra) ||
+    arrayHasPositiveNumber(producto.reporteTaras) ||
+    arrayHasPositiveNumber(producto.reporteBolsas)
+  );
+}
+
+/**
  * Determina si un embarque (docData) tiene datos operativos reales.
  *
  * Importante: NO considera como "contenido" el simple hecho de que existan

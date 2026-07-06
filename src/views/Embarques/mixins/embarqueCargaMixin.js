@@ -2,7 +2,7 @@ import { getFirestore, doc, onSnapshot, addDoc, collection } from 'firebase/fire
 import EmbarquesOfflineService from '@/services/EmbarquesOfflineService';
 import { normalizarFechaISO, obtenerFechaActualISO } from '@/utils/dateUtils';
 import { crearNuevoProducto } from '@/constants.js/embarque';
-import { embarqueTieneContenidoOperativoDoc, embarqueTieneContenidoOperativoEstado } from '@/utils/embarqueContenido';
+import { embarqueTieneContenidoOperativoDoc, embarqueTieneContenidoOperativoEstado, productoTieneContenido, serializarEstable, fusionarProductoTresVias } from '@/utils/embarqueContenido';
 
 export const esUUIDValido = (id) => {
   const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -54,16 +54,84 @@ export const embarqueCargaMixin = {
       const db = getFirestore();
       const embarqueRef = doc(db, "embarques", id);
 
-      this.unsubscribe = onSnapshot(embarqueRef, async (doc) => {
-        if (this.hasPendingChanges) {
-          console.log('[onSnapshot] Ignorando actualización remota porque hay cambios locales pendientes.');
+      this.unsubscribe = onSnapshot(embarqueRef, async (docSnapshot) => {
+        // Eco optimista de una escritura local pendiente de confirmar: ignorar.
+        if (docSnapshot.metadata && docSnapshot.metadata.hasPendingWrites) {
           return;
         }
 
-        if (doc.exists()) {
-          const data = doc.data();
+        if (docSnapshot.exists()) {
+          const data = docSnapshot.data();
+
+          // Eco de nuestra propia escritura (o snapshot repetido): si el
+          // documento trae exactamente la revisión en la que ya está basado
+          // el estado local, no hay nada nuevo que aplicar. Sin este corte,
+          // re-aplicar el eco dispara watchers y provoca un bucle de
+          // subidas/aplicaciones sin cambios reales.
+          const revRemota = Number(data.rev) || 0;
+          if (!this._inicializandoEmbarque && revRemota !== 0 &&
+              revRemota === (Number(this._revBase) || 0)) {
+            return;
+          }
+
+          if (this.hasPendingChanges) {
+            // Hay cambios locales sin subir: aplicar lo remoto ahora pisaría
+            // lo que se está capturando. Se difiere; la subida transaccional
+            // (subirCambiosEnVivo) detecta la revisión nueva y fusiona.
+            this._snapshotRemotoDiferido = data;
+            return;
+          }
+
+          this._snapshotRemotoDiferido = null;
+          await this.aplicarDocRemoto(id, data);
+        } else {
+          this.cargarEmbarqueOffline(id).then((cargadoOffline) => {
+            if (cargadoOffline) {
+              this._inicializandoEmbarque = false;
+              this._aplicandoRemoto = false;
+              return;
+            }
+            alert('No se encontró el embarque en nube ni en cache local para ese ID. Se conservará el estado actual; verifica conexión y vuelve a intentar.');
+            this._inicializandoEmbarque = false;
+            this._aplicandoRemoto = false;
+          });
+        }
+      }, (error) => {
+        console.error("Error al escuchar cambios del embarque:", error);
+
+        if (error.code === 'unavailable' || error.message.includes('network') || error.message.includes('NETWORK')) {
+          console.warn('[onSnapshot] Error de red detectado, reintentando conexión en 5 segundos...');
+          setTimeout(() => {
+            if (this.embarqueId && !this.unsubscribe) {
+              console.log('[onSnapshot] Reintentando conexión...');
+              this.cargarEmbarque(this.embarqueId);
+            }
+          }, 5000);
+        } else if (error.code === 'permission-denied') {
+          console.error('[onSnapshot] Error de permisos:', error);
+          alert('Error de permisos. Por favor, verifique su acceso.');
+        } else {
+          console.error('[onSnapshot] Error desconocido:', error);
+        }
+
+        this._inicializandoEmbarque = false;
+        this._aplicandoRemoto = false;
+      });
+    },
+
+    /**
+     * Aplica un documento remoto del embarque al estado local, fusionando con
+     * protecciones para lo que se está editando (campos con foco, productos
+     * nuevos sin sincronizar, productos eliminados localmente). También lo usa
+     * la subida transaccional cuando detecta un conflicto de revisión.
+     */
+    async aplicarDocRemoto(id, data) {
           data.clientes = Array.isArray(data.clientes) ? data.clientes : [];
           this._aplicandoRemoto = true;
+          // Revisión remota sobre la que queda basado el estado local
+          // (subirCambiosEnVivo la usa para detectar conflictos).
+          const revBaseAnterior = Number(this._revBase) || 0;
+          this._revBase = Number(data.rev) || 0;
 
           try {
             if (!this.tieneContenidoOperativo(data)) {
@@ -85,18 +153,11 @@ export const embarqueCargaMixin = {
               }
             }
 
-            console.log('[DEBUG-FECHA] Cargando embarque ID:', id);
-            console.log('[DEBUG-FECHA] Fecha cruda de Firebase:', data.fecha);
-            console.log('[DEBUG-FECHA] Tipo de fecha:', typeof data.fecha, data.fecha?.constructor?.name);
-
             this.embarqueBloqueado = data.embarqueBloqueado || false;
 
             if (data.clientesPersonalizados && Array.isArray(data.clientesPersonalizados)) {
               this.clientesPersonalizados = data.clientesPersonalizados;
-              console.log('[cargarEmbarque] Clientes personalizados cargados desde Firebase:', this.clientesPersonalizados);
               localStorage.setItem('clientesPersonalizados', JSON.stringify(this.clientesPersonalizados));
-            } else {
-              console.log('[cargarEmbarque] No se encontraron clientes personalizados en Firebase, usando localStorage como respaldo');
             }
 
             if (data.clientesJuntarMedidas) {
@@ -149,20 +210,16 @@ export const embarqueCargaMixin = {
             let fecha;
             if (data.fecha && typeof data.fecha.toDate === 'function') {
               fecha = data.fecha.toDate();
-              console.log('[DEBUG-FECHA] Fecha convertida de Timestamp:', fecha);
             } else if (data.fecha instanceof Date) {
               fecha = data.fecha;
-              console.log('[DEBUG-FECHA] Fecha es Date object:', fecha);
             } else if (typeof data.fecha === 'string') {
               fecha = data.fecha;
-              console.log('[DEBUG-FECHA] Fecha es string:', fecha);
             } else {
               console.warn('Formato de fecha no reconocido, usando la fecha actual');
               fecha = new Date();
             }
 
             const fechaNormalizada = normalizarFechaISO(fecha);
-            console.log('[DEBUG-FECHA] Fecha normalizada final:', fechaNormalizada);
 
             const clientesPredefinidosMap = new Map(this.clientesPredefinidos.map(c => [c.id.toString(), c]));
 
@@ -195,44 +252,107 @@ export const embarqueCargaMixin = {
               }));
             });
 
-            let productosFiltrados = productosDesdeServidor;
+            // Lápidas de borrado del documento: productos que algún editor
+            // eliminó. Sin esto, el producto borrado por la otra persona se
+            // "preservaba" aquí como si fuera un producto nuevo local.
+            const eliminadosRemotos = data.productosEliminados || {};
+            this._productosEliminadosDoc = eliminadosRemotos;
+
+            let productosFiltrados = productosDesdeServidor.filter(p => !eliminadosRemotos[p.id]);
             if (this.productosEliminadosLocalmente && this.productosEliminadosLocalmente.size > 0) {
-              console.log('[onSnapshot] Filtrando productos eliminados localmente:', this.productosEliminadosLocalmente);
-              productosFiltrados = productosDesdeServidor.filter(p =>
+              productosFiltrados = productosFiltrados.filter(p =>
                 !this.productosEliminadosLocalmente.has(p.id)
               );
             }
 
+            // Fusión de 3 vías por producto contra la ÚLTIMA VERSIÓN
+            // SINCRONIZADA (base). Sin esto, una fusión por conflicto
+            // revertía las ediciones locales aún no subidas:
+            // - Solo lo local cambió → gana lo local completo.
+            // - Solo lo remoto cambió → gana lo remoto completo.
+            // - AMBOS cambiaron el mismo producto → fusión campo por campo
+            //   (usuario 1 borra kilos mientras usuario 2 agrega taras y
+            //   bolsas: sobreviven ambas intenciones).
+            const baseSincronizada = this._productosBase instanceof Map ? this._productosBase : new Map();
+            const productosLocalesParaMerge = this.embarque.productos || [];
+            productosFiltrados = productosFiltrados.map((pServidor) => {
+              const pLocal = productosLocalesParaMerge.find(p => p.id === pServidor.id);
+              if (!pLocal) return pServidor;
+              const entradaBase = baseSincronizada.get(pServidor.id);
+              if (!entradaBase) return pServidor;
+              const localCambio = serializarEstable(pLocal) !== entradaBase.str;
+              if (!localCambio) return pServidor;
+              const remotoCambio = serializarEstable(pServidor) !== entradaBase.str;
+              if (!remotoCambio) {
+                console.log('[onSnapshot] Conservando edición local sin subir del producto:', pServidor.id);
+                return pLocal;
+              }
+              console.log('[onSnapshot] Producto editado por ambos: fusión campo por campo:', pServidor.id);
+              return fusionarProductoTresVias(entradaBase.obj, pLocal, pServidor);
+            });
+
+            // La nueva base es lo que el SERVIDOR tiene en esta revisión
+            // (clonada: los objetos del snapshot pasan al estado local y
+            // mutarían la base por referencia).
+            this._productosBase = new Map(
+              productosDesdeServidor.map(p => [
+                p.id,
+                { obj: JSON.parse(JSON.stringify(p)), str: serializarEstable(p) }
+              ])
+            );
+
             let productosFinales;
 
             if (this.agregandoProducto) {
-              console.log('[onSnapshot] Agregando producto en proceso, preservando productos locales');
               productosFinales = this.embarque.productos || [];
+              // Fusión PARCIAL: los productos remotos no se integraron, así
+              // que el estado local NO queda basado en esta revisión. Si la
+              // reclamáramos, la siguiente subida escribiría nuestra lista
+              // (sin los productos del otro editor) como si fuera la fusión
+              // completa y los borraría. Mantener la base anterior fuerza un
+              // conflicto→fusión completa en el siguiente intento.
+              this._revBase = revBaseAnterior;
             } else if (this.camposEnEdicion && this.camposEnEdicion.size > 0) {
-              console.log('[onSnapshot] Hay campos en edición, mergear cuidadosamente');
               productosFinales = this.mergeProductosConCamposEnEdicion(productosDesdeServidor, productosFiltrados);
             } else {
+              // Placeholder redundante: renglón vacío de un cliente que ya
+              // tiene productos en el servidor. Cada editor crea el suyo
+              // automáticamente; si se preservan, cada colaborador duplica
+              // los renglones vacíos del otro.
+              const clientesConProductosEnServidor = new Set(
+                productosDesdeServidor.map(p => String(p.clienteId))
+              );
+              const esPlaceholderRedundante = (producto) =>
+                !productoTieneContenido(producto) &&
+                clientesConProductosEnServidor.has(String(producto.clienteId));
+
+              const productosLocalesActuales = this.embarque.productos || [];
+
               const productosNuevosAPreservar = [];
               if (this.productosNuevosPendientes && this.productosNuevosPendientes.size > 0) {
-                console.log('[onSnapshot] Preservando productos nuevos pendientes:', this.productosNuevosPendientes.size);
                 this.productosNuevosPendientes.forEach((producto, id) => {
                   const existeEnServidor = productosDesdeServidor.some(p => p.id === id);
-                  if (!existeEnServidor) {
-                    productosNuevosAPreservar.push(producto);
-                    console.log('[onSnapshot] Preservando producto nuevo:', id);
+                  // Preservar la versión local VIVA (lo que se está tecleando
+                  // ahora mismo), no la copia tomada al crear el producto: la
+                  // copia vieja pisaba lo recién escrito al aplicar snapshots.
+                  // Las filas creadas por el usuario se preservan aunque estén
+                  // vacías (las está por llenar); el descarte de placeholders
+                  // aplica solo a los renglones auto-creados (loop de abajo).
+                  const productoVivo = productosLocalesActuales.find(p => p.id === id) || producto;
+                  if (!existeEnServidor && !eliminadosRemotos[id]) {
+                    productosNuevosAPreservar.push(productoVivo);
+                    this.productosNuevosPendientes.set(id, { ...productoVivo });
                   } else {
                     this.productosNuevosPendientes.delete(id);
-                    console.log('[onSnapshot] Producto sincronizado, removiendo de pendientes:', id);
                   }
                 });
               }
-
-              const productosLocalesActuales = this.embarque.productos || [];
               productosLocalesActuales.forEach(productoLocal => {
                 if (esUUIDValido(productoLocal.id) &&
                     !productosDesdeServidor.some(p => p.id === productoLocal.id) &&
-                    !productosNuevosAPreservar.some(p => p.id === productoLocal.id)) {
-                  console.log('[onSnapshot] Preservando producto local no sincronizado:', productoLocal.id);
+                    !productosNuevosAPreservar.some(p => p.id === productoLocal.id) &&
+                    !esPlaceholderRedundante(productoLocal) &&
+                    !eliminadosRemotos[productoLocal.id]) {
                   productosNuevosAPreservar.push(productoLocal);
                   if (!this.productosNuevosPendientes.has(productoLocal.id)) {
                     this.productosNuevosPendientes.set(productoLocal.id, { ...productoLocal });
@@ -250,9 +370,6 @@ export const embarqueCargaMixin = {
               productos: productosFinales,
               kilosCrudos: data.kilosCrudos || {}
             };
-
-            console.log('[DEBUG-FECHA] Embarque asignado con fecha:', this.embarque.fecha);
-            console.log('[DEBUG-FECHA] Total productos cargados:', productosFinales.length);
 
             this.costosPorMedida = { ...(data.costosPorMedida || {}) };
             this.aplicarCostoExtra = { ...(data.aplicarCostoExtra || {}) };
@@ -273,43 +390,17 @@ export const embarqueCargaMixin = {
 
           } finally {
             this._inicializandoEmbarque = false;
-            this._aplicandoRemoto = false;
+            // Los watchers de Vue corren en el siguiente microtask; si esta
+            // bandera se apaga aquí (síncrono), cuando corren ya está en
+            // false y marcan los cambios remotos como cambios locales
+            // pendientes → bucle de subidas sin cambios reales. Liberarla
+            // en $nextTick garantiza que los watchers ya corrieron.
+            this.$nextTick(() => {
+              this._aplicandoRemoto = false;
+            });
           }
 
           this.guardarSnapshotOffline({ pendingSync: false, docData: data, syncState: 'synced' });
-        } else {
-          this.cargarEmbarqueOffline(id).then((cargadoOffline) => {
-            if (cargadoOffline) {
-              this._inicializandoEmbarque = false;
-              this._aplicandoRemoto = false;
-              return;
-            }
-            alert('No se encontró el embarque en nube ni en cache local para ese ID. Se conservará el estado actual; verifica conexión y vuelve a intentar.');
-            this._inicializandoEmbarque = false;
-            this._aplicandoRemoto = false;
-          });
-        }
-      }, (error) => {
-        console.error("Error al escuchar cambios del embarque:", error);
-
-        if (error.code === 'unavailable' || error.message.includes('network') || error.message.includes('NETWORK')) {
-          console.warn('[onSnapshot] Error de red detectado, reintentando conexión en 5 segundos...');
-          setTimeout(() => {
-            if (this.embarqueId && !this.unsubscribe) {
-              console.log('[onSnapshot] Reintentando conexión...');
-              this.cargarEmbarque(this.embarqueId);
-            }
-          }, 5000);
-        } else if (error.code === 'permission-denied') {
-          console.error('[onSnapshot] Error de permisos:', error);
-          alert('Error de permisos. Por favor, verifique su acceso.');
-        } else {
-          console.error('[onSnapshot] Error desconocido:', error);
-        }
-
-        this._inicializandoEmbarque = false;
-        this._aplicandoRemoto = false;
-      });
     },
 
     limpiarConexionesFirestore() {
