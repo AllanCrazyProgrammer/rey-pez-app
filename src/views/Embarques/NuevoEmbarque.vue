@@ -842,8 +842,10 @@ export default {
           const existeEnServidor = productosServidor.some(p => p.id === id);
           // Preservar la versión local VIVA (lo que se está tecleando), no la
           // copia tomada al crear el producto: la copia vieja pisaba lo escrito.
+          // Las filas creadas por el usuario se preservan aunque estén vacías;
+          // el descarte de placeholders aplica solo a renglones auto-creados.
           const productoVivo = productosLocales.find(p => p.id === id) || producto;
-          if (!existeEnServidor && !esPlaceholderRedundante(productoVivo) && !eliminadosRemotos[id]) {
+          if (!existeEnServidor && !eliminadosRemotos[id]) {
             productosNuevosAPreservar.push(productoVivo);
             this.productosNuevosPendientes.set(id, { ...productoVivo });
           } else {
@@ -1428,11 +1430,17 @@ export default {
     toggleBloqueo() {
       this.embarqueBloqueado = !this.embarqueBloqueado;
 
-      // Guardar el estado en Firebase si estamos en modo edición
+      // Guardar el estado en Firebase si estamos en modo edición.
+      // Incrementar rev: sin señal de cambio, los demás editores descartan
+      // el snapshot como eco repetido y no se enteran del bloqueo.
       if (this.modoEdicion && this.embarqueId) {
         const db = getFirestore();
+        const revNueva = (Number(this._revBase) || 0) + 1;
         updateDoc(doc(db, "embarques", this.embarqueId), {
-          embarqueBloqueado: this.embarqueBloqueado
+          embarqueBloqueado: this.embarqueBloqueado,
+          rev: revNueva
+        }).then(() => {
+          this._revBase = revNueva;
         }).catch(error => {
           console.error("Error al guardar estado de bloqueo:", error);
         });

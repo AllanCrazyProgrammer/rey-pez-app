@@ -354,6 +354,14 @@ export const embarqueSyncMixin = {
         if (record.id === this.embarqueId) {
           this.guardadoAutomaticoActivo = true;
           this.modoEdicion = true;
+          // El embarque abierto acaba de subirse: ya no hay cambios locales
+          // pendientes y nuestra base es la revisión recién escrita. Sin este
+          // reset, hasPendingChanges quedaba en true para siempre y TODOS los
+          // snapshots remotos se diferían: la otra sesión dejaba de reflejarse
+          // hasta la siguiente edición local.
+          this.hasPendingChanges = false;
+          this._revBase = Number(dataParaFirestore.rev) || Number(this._revBase) || 0;
+          this._snapshotRemotoDiferido = null;
         }
       } catch (error) {
         console.error('[sincronizarRegistroOffline] Error al sincronizar embarque offline:', error);

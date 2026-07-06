@@ -130,6 +130,7 @@ export const embarqueCargaMixin = {
           this._aplicandoRemoto = true;
           // Revisión remota sobre la que queda basado el estado local
           // (subirCambiosEnVivo la usa para detectar conflictos).
+          const revBaseAnterior = Number(this._revBase) || 0;
           this._revBase = Number(data.rev) || 0;
 
           try {
@@ -281,6 +282,13 @@ export const embarqueCargaMixin = {
             if (this.agregandoProducto) {
               console.log('[onSnapshot] Agregando producto en proceso, preservando productos locales');
               productosFinales = this.embarque.productos || [];
+              // Fusión PARCIAL: los productos remotos no se integraron, así
+              // que el estado local NO queda basado en esta revisión. Si la
+              // reclamáramos, la siguiente subida escribiría nuestra lista
+              // (sin los productos del otro editor) como si fuera la fusión
+              // completa y los borraría. Mantener la base anterior fuerza un
+              // conflicto→fusión completa en el siguiente intento.
+              this._revBase = revBaseAnterior;
             } else if (this.camposEnEdicion && this.camposEnEdicion.size > 0) {
               console.log('[onSnapshot] Hay campos en edición, mergear cuidadosamente');
               productosFinales = this.mergeProductosConCamposEnEdicion(productosDesdeServidor, productosFiltrados);
@@ -306,8 +314,11 @@ export const embarqueCargaMixin = {
                   // Preservar la versión local VIVA (lo que se está tecleando
                   // ahora mismo), no la copia tomada al crear el producto: la
                   // copia vieja pisaba lo recién escrito al aplicar snapshots.
+                  // Las filas creadas por el usuario se preservan aunque estén
+                  // vacías (las está por llenar); el descarte de placeholders
+                  // aplica solo a los renglones auto-creados (loop de abajo).
                   const productoVivo = productosLocalesActuales.find(p => p.id === id) || producto;
-                  if (!existeEnServidor && !esPlaceholderRedundante(productoVivo) && !eliminadosRemotos[id]) {
+                  if (!existeEnServidor && !eliminadosRemotos[id]) {
                     productosNuevosAPreservar.push(productoVivo);
                     this.productosNuevosPendientes.set(id, { ...productoVivo });
                     console.log('[onSnapshot] Preservando producto nuevo:', id);
