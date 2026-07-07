@@ -400,6 +400,16 @@ export const embarqueCargaMixin = {
             });
           }
 
+          // El watcher de embarque.fecha está silenciado por _aplicandoRemoto
+          // durante aplicarDocRemoto, así que la carga inicial en created()
+          // corrió con embarque.fecha=null (sin cargar nada) y el cambio a
+          // la fecha real no dispara el watcher. Cargar aquí con la fecha
+          // recién aplicada asegura que las referencias del pedido lleguen
+          // para embarques guardados.
+          if (typeof this.cargarPedidoReferenciaDelDia === 'function' && this.embarque?.fecha) {
+            this.cargarPedidoReferenciaDelDia(this.embarque.fecha);
+          }
+
           this.guardarSnapshotOffline({ pendingSync: false, docData: data, syncState: 'synced' });
     },
 
