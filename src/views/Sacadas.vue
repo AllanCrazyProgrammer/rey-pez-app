@@ -1,11 +1,41 @@
 <template>
-  <div class="sacadas-container" v-if="isLoaded">
-    <div class="back-button-container">
+  <div class="sacadas-container" :class="{ 'modo-modal': modoModal }" v-if="isLoaded">
+    <div v-if="!modoModal" class="back-button-container">
       <BackButton to="/sacadas" />
       <button v-if="tienePedidoOrigen" @click="regresarAlPedido" class="btn-regresar-pedido">Regresar al Pedido</button>
     </div>
+    <div v-else class="modal-header-modal">
+      <div class="modal-header-left">
+        <div class="modal-tabs">
+          <button
+            type="button"
+            class="modal-tab-btn"
+            :class="{ active: pestanaModal === 'entradas' }"
+            @click="pestanaModal = 'entradas'"
+          >
+            Entradas{{ entradas.length > 0 ? ` (${entradas.length})` : '' }}
+          </button>
+          <button
+            type="button"
+            class="modal-tab-btn"
+            :class="{ active: pestanaModal === 'salidas' }"
+            @click="pestanaModal = 'salidas'"
+          >
+            Salidas{{ salidas.length > 0 ? ` (${salidas.length})` : '' }}
+          </button>
+        </div>
+        <router-link
+          v-if="sacadaId"
+          :to="`/sacadas/${sacadaId}`"
+          class="link-dia-completo"
+        >
+          Ver día completo
+        </router-link>
+      </div>
+      <button type="button" class="close-modal-btn" @click="cerrarModal" title="Cerrar">&times;</button>
+    </div>
     <h2 class="date-header">{{ formattedDate }}</h2>
-    <div class="date-selector-row">
+    <div v-if="!modoModal" class="date-selector-row">
       <div class="date-selector">
         <input type="date" v-model="selectedDate" @change="updateCurrentDate">
       </div>
@@ -13,8 +43,8 @@
         Medidas a sacar
       </button>
     </div>
-    <div class="sacadas-content">
-      <div class="salidas-section">
+    <div class="sacadas-content" :class="{ 'solo-una-seccion': modoModal }">
+      <div v-if="!modoModal || pestanaModal === 'salidas'" class="salidas-section">
         <h3>Salidas</h3>
         <div class="input-group">
           <select v-model="newSalida.tipo" required @change="resetSalidaSelections">
@@ -84,7 +114,7 @@
         <p class="total">Total Salidas: {{ formatNumber(totalSalidas) }} kg</p>
       </div>
       
-      <div class="entradas-section">
+      <div v-if="!modoModal || pestanaModal === 'entradas'" class="entradas-section">
         <h3>Entradas</h3>
         <div class="input-group">
           <select v-model="newEntrada.tipo" required @change="resetEntradaSelections">
@@ -162,7 +192,7 @@
       </div>
     </div>
     
-    <div class="summary">
+    <div v-if="!modoModal" class="summary">
       <h3>Resumen del Día</h3>
       <p>Total Entradas: {{ formatNumber(totalEntradas) }} kg</p>
       <p>Total Salidas: {{ formatNumber(totalSalidas) }} kg</p>
@@ -249,7 +279,7 @@
       </table>
     </div>
 
-    <div class="auditoria-section">
+    <div v-if="!modoModal" class="auditoria-section">
       <div class="auditoria-header">
         <button
           type="button"
@@ -348,7 +378,10 @@
       </div>
     </div>
 
-    <button @click="saveReport" class="save-button" :disabled="guardando">{{ guardando ? 'Guardando...' : (isEditing ? 'Actualizar' : 'Guardar') + ' Informe del Día' }}</button>
+    <div class="save-actions" :class="{ 'save-actions-modal': modoModal }">
+      <button @click="saveReport" class="save-button" :disabled="guardando">{{ guardando ? 'Guardando...' : (isEditing ? 'Actualizar' : 'Guardar') + ' Informe del Día' }}</button>
+      <button v-if="modoModal" @click="cerrarModal" class="cancel-modal-button" type="button">Cerrar sin guardar</button>
+    </div>
     
     <!-- Modal de Edición de Entrada -->
     <div v-if="editandoEntrada" class="modal-overlay" @click.self="cancelarEdicionEntrada">
@@ -447,6 +480,16 @@ export default {
     ListaMedidasPedidoModal,
     MedidasParaHoyCards
   },
+  props: {
+    modoModal: {
+      type: Boolean,
+      default: false
+    },
+    sacadaIdProp: {
+      type: String,
+      default: null
+    }
+  },
   data() {
     return {
       currentDate: moment(),
@@ -483,7 +526,9 @@ export default {
       embarquesAnalizadosAuditoria: 0,
       auditoriaCargada: false,
       auditoriaToleranciaKg: 0.5,
-      auditoriaOkChecklist: {}
+      auditoriaOkChecklist: {},
+      pestanaModal: 'salidas',
+      salidasIniciales: 0
     };
   },
   computed: {
@@ -1376,6 +1421,7 @@ export default {
         this.sacadaId = id;
         this.isEditing = true;
         this.fechaOriginal = this.currentDate.format('YYYY-MM-DD');
+        this.salidasIniciales = this.salidas.length;
         this.limpiarChecklistSalidas();
         await this.updateKilosDisponibles();
       }
@@ -1411,13 +1457,22 @@ export default {
 
         if (this.isEditing) {
           await updateDoc(doc(db, 'sacadas', this.sacadaId), reportData);
-          alert("Informe del día actualizado exitosamente");
+          if (!this.modoModal) alert("Informe del día actualizado exitosamente");
         } else {
-          await addDoc(collection(db, 'sacadas'), reportData);
-          alert("Informe del día guardado exitosamente");
+          const docRef = await addDoc(collection(db, 'sacadas'), reportData);
+          this.sacadaId = docRef.id;
+          this.isEditing = true;
+          this.fechaOriginal = this.currentDate.format('YYYY-MM-DD');
+          if (!this.modoModal) alert("Informe del día guardado exitosamente");
         }
+        this.salidasIniciales = this.salidas.length;
         this.invalidarCacheSacadas();
-        this.$router.push('/sacadas');
+
+        if (this.modoModal) {
+          this.$emit('guardado', this.sacadaId);
+        } else {
+          this.$router.push('/sacadas');
+        }
       } catch (error) {
         console.error("Error al guardar/actualizar el documento: ", error);
         alert("Error al guardar/actualizar el informe del día: " + error.message);
@@ -1427,6 +1482,13 @@ export default {
     },
     updateCurrentDate() {
       this.currentDate = moment(this.selectedDate);
+    },
+    cerrarModal() {
+      const hayCambiosSinGuardar = this.salidas.length !== this.salidasIniciales;
+      if (hayCambiosSinGuardar && !confirm('Hay salidas sin guardar. ¿Cerrar de todas formas?')) {
+        return;
+      }
+      this.$emit('cerrar');
     },
     async getMedidasConPrecio(proveedor) {
       const medidasDisponibles = new Map();
@@ -1995,14 +2057,15 @@ export default {
   },
   async created() {
     // Si viene fecha desde el pedido, usarla como seleccionada
-    if (this.$route.query && this.$route.query.fecha) {
+    if (!this.modoModal && this.$route.query && this.$route.query.fecha) {
       this.selectedDate = this.$route.query.fecha
       this.updateCurrentDate()
     }
     await this.loadProveedores();
     await this.loadMedidas();
-    if (this.$route.params.id) {
-      await this.loadSacada(this.$route.params.id);
+    const idAEditar = this.modoModal ? this.sacadaIdProp : this.$route.params.id;
+    if (idAEditar) {
+      await this.loadSacada(idAEditar);
     }
     this.isLoaded = true;
   },
@@ -2082,6 +2145,111 @@ export default {
   box-shadow:
     0 0 0 1px rgba(62, 248, 255, 0.15) inset,
     0 16px 40px rgba(3, 2, 20, 0.7);
+}
+
+.sacadas-container.modo-modal {
+  max-width: 900px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.modal-header-modal {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.modal-header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.modal-tabs {
+  display: flex;
+  gap: 6px;
+  background: rgba(12, 16, 43, 0.85);
+  border: 1px solid rgba(62, 248, 255, 0.3);
+  padding: 4px;
+  border-radius: 999px;
+}
+
+.modal-tab-btn {
+  background: transparent;
+  color: var(--vw-soft);
+  border: none;
+  padding: 8px 16px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 0.9em;
+  font-weight: 600;
+  transition: background-color 0.3s, color 0.3s, box-shadow 0.3s;
+}
+
+.modal-tab-btn:hover {
+  color: var(--vw-text);
+}
+
+.modal-tab-btn.active {
+  background: linear-gradient(135deg, #3ef8ff, #2563eb);
+  color: #0f172a;
+  box-shadow: 0 0 14px rgba(62, 248, 255, 0.4);
+}
+
+.link-dia-completo {
+  color: var(--vw-neon-cyan);
+  font-weight: 600;
+  text-decoration: underline;
+}
+
+.close-modal-btn {
+  background: transparent;
+  border: none;
+  font-size: 1.8em;
+  line-height: 1;
+  color: var(--vw-soft);
+  cursor: pointer;
+  padding: 0 6px;
+}
+
+.close-modal-btn:hover {
+  color: var(--vw-text);
+}
+
+.sacadas-content.solo-una-seccion {
+  grid-template-columns: 1fr;
+}
+
+.save-actions {
+  display: flex;
+}
+
+.save-actions-modal {
+  gap: 10px;
+}
+
+.save-actions .save-button {
+  flex: 1;
+}
+
+.cancel-modal-button {
+  margin-top: 20px;
+  padding: 14px 22px;
+  font-size: 1em;
+  font-weight: 600;
+  background: linear-gradient(135deg, #64748b, #475569);
+  color: #ffffff;
+  border-radius: 999px;
+  white-space: nowrap;
+  box-shadow: 0 0 14px rgba(100, 116, 139, 0.3);
+}
+
+.cancel-modal-button:hover {
+  box-shadow: 0 0 20px rgba(100, 116, 139, 0.45);
 }
 
 .date-header {
