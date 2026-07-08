@@ -1056,14 +1056,13 @@ export default {
       };
 
       embarques.forEach(embarque => {
-        const pesoTaraVenta = Number(embarque.pesoTaraVenta) || 20;
         (embarque.clientes || []).forEach(cliente => {
           (cliente.crudos || []).forEach(grupo => {
             const items = grupo && grupo.items ? grupo.items : [];
             items.forEach(item => {
               const nombre = item.talla || item.medida;
               if (!nombre) return;
-              agregar(nombre, this.kilosDeCrudoItem(item, pesoTaraVenta), cliente.nombre, this.esNombreMacuil(nombre));
+              agregar(nombre, this.kilosDeCrudoItem(item), cliente.nombre, this.esNombreMacuil(nombre));
             });
           });
           // El macuil viaja como producto limpio (camarón c/cabeza cocido),
@@ -1081,16 +1080,17 @@ export default {
       }));
     },
 
-    kilosDeCrudoItem(item, pesoTaraVenta) {
+    kilosDeCrudoItem(item) {
+      // Para comparar contra las salidas se usa el peso real de la tara (19 kg),
+      // no el peso de venta que aplica el módulo de embarques.
       const parsear = (valor) => {
         if (!valor) return 0;
-        const match = String(valor).trim().match(/^(\d+)\s*-\s*(\d+(?:\.\d+)?)$/);
-        if (!match) return 0;
-        const cantidad = Number(match[1]);
-        let peso = Number(match[2]);
-        // Misma regla que en Embarques: las taras capturadas a 19 se venden a peso de venta
-        if (peso === 19) peso = pesoTaraVenta;
-        return cantidad * peso;
+        const texto = String(valor).trim();
+        const conPeso = texto.match(/^(\d+)\s*-\s*(\d+(?:\.\d+)?)$/);
+        if (conPeso) return Number(conPeso[1]) * 19;
+        const soloCantidad = texto.match(/^(\d+)$/);
+        if (soloCantidad) return Number(soloCantidad[1]) * 19;
+        return 0;
       };
       return Number((parsear(item.taras) + parsear(item.sobrante)).toFixed(1));
     },
