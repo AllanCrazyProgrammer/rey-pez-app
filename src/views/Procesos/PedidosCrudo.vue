@@ -127,7 +127,7 @@ export default {
     return {
       fecha: new Date().toISOString().split('T')[0],
       clientes: ['8a', 'Catarro', 'Otilio', 'Ozuna', 'Veronica'],
-      columnasBase: ['Med', 'Med-Esp', 'Med-gde', 'Gde', 'Extra'],
+      columnasBase: ['Med', 'Med-Esp', 'Med-gde', 'Gde', 'Extra', 'Jumbo', 'Cam s/c'],
       columnasAdicionales: [],
       nuevaColumna: '',
       pedidos: {},
