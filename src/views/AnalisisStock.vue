@@ -165,7 +165,21 @@
                     {{ fila.deficit > 0 ? formatNumber(fila.deficit) + ' kg' : '—' }}
                   </td>
                 </template>
-                <td class="num compra-col"><strong>{{ formatNumber(fila.compra) }} kg</strong></td>
+                <td class="num compra-col">
+                  <div class="compra-editable">
+                    <input
+                      type="number"
+                      class="compra-input"
+                      :class="{ 'compra-editada': fila.compraManual !== null }"
+                      :value="fila.compra"
+                      min="0"
+                      step="1"
+                      :title="fila.compraManual !== null ? 'Cantidad editada manualmente' : 'Compra recomendada (editable)'"
+                      @input="onCompraEditada(fila, $event.target.value)"
+                    />
+                    <span class="compra-unidad">kg</span>
+                  </div>
+                </td>
                 <td class="num" :class="{ 'stock-negativo': fila.stockActual < 0 }">
                   {{ formatNumber(fila.stockActual) }} kg
                 </td>
@@ -190,6 +204,11 @@
               </tr>
             </tfoot>
           </table>
+          <p class="compra-nota">
+            ✏️ Puedes editar la compra de una medida (por ejemplo, si solo hay cierta cantidad
+            disponible en el mercado); el resto se reparte entre las demás medidas. Borra el
+            valor para volver a la recomendación automática.
+          </p>
         </div>
 
         <div v-if="resultado.sinVentas.length > 0" class="sin-ventas-card">
@@ -238,7 +257,11 @@ export default {
       resultado: null,
       // Snapshot de la última consulta a Firestore, para poder recalcular al
       // instante al cambiar de modo o de meta de cobertura sin releer datos.
-      datosCalculo: null
+      datosCalculo: null,
+      // Compras editadas a mano por el usuario (medida -> kilos), por si solo
+      // hay cierta cantidad disponible de esa medida. Se conservan aunque se
+      // cambie de modo o de meta, y se limpian solo con un nuevo cálculo.
+      comprasManualPorMedida: {}
     };
   },
   watch: {
@@ -338,6 +361,7 @@ export default {
       this.medidasSeleccionadas = [];
       this.resultado = null;
       this.datosCalculo = null;
+      this.comprasManualPorMedida = {};
       this.error = '';
 
       if (!this.proveedorSeleccionado) return;
@@ -387,7 +411,7 @@ export default {
       const totalBloques = Math.round(totalKilos / bloque);
 
       if (items.length === 0 || totalBloques <= 0) {
-        return items.map(({ idealKg, ...resto }) => ({ ...resto, compra: 0 }));
+        return items.map(item => ({ ...item, compra: 0 }));
       }
 
       const sumaIdeal = items.reduce((sum, item) => sum + item.idealKg, 0);
@@ -395,7 +419,7 @@ export default {
       if (sumaIdeal <= 0) {
         const base = Math.floor(totalBloques / items.length);
         const resto = totalBloques % items.length;
-        return items.map(({ idealKg, ...item }, index) => ({
+        return items.map((item, index) => ({
           ...item,
           compra: (base + (index < resto ? 1 : 0)) * bloque
         }));
@@ -416,7 +440,7 @@ export default {
         ordenResiduo[i % ordenResiduo.length].bloques += 1;
       }
 
-      return conBloques.map(({ bloquesExactos, bloques, idealKg, ...resto }) => ({
+      return conBloques.map(({ bloquesExactos, bloques, ...resto }) => ({
         ...resto,
         compra: bloques * bloque
       }));
@@ -428,6 +452,7 @@ export default {
       this.error = '';
       this.resultado = null;
       this.datosCalculo = null;
+      this.comprasManualPorMedida = {};
 
       try {
         const proveedor = this.proveedorSeleccionado;
@@ -516,7 +541,12 @@ export default {
         .map(fila => ({
           ...fila,
           porcentaje: totalVendido > 0 ? (fila.vendido / totalVendido) * 100 : 0,
-          stockPostCompra: Number((fila.stockActual + fila.compra).toFixed(1))
+          stockPostCompra: Number((fila.stockActual + fila.compra).toFixed(1)),
+          // Compra editada a mano por el usuario para esta medida, si la hay
+          // (persiste aunque se cambie de modo o de meta de cobertura).
+          compraManual: Object.prototype.hasOwnProperty.call(this.comprasManualPorMedida, fila.medida)
+            ? this.comprasManualPorMedida[fila.medida]
+            : null
         }))
         .sort((a, b) => b.vendido - a.vendido);
 
@@ -542,6 +572,58 @@ export default {
         filas,
         sinVentas
       };
+
+      // Si había compras editadas a mano, respetarlas y repartir el resto
+      // entre las medidas que siguen en automático.
+      this.aplicarBloqueosYRedistribuir();
+    },
+
+    // Se ejecuta cada vez que el usuario edita (o borra) la compra de una
+    // medida. Las medidas con un valor manual quedan "bloqueadas" y no se
+    // tocan al editar otra; las demás se reparten proporcionalmente entre sí
+    // con los kilos que sobran después de restar lo bloqueado.
+    onCompraEditada(fila, valorTexto) {
+      if (!this.resultado) return;
+
+      let valor = null;
+      if (valorTexto !== '' && valorTexto !== null && valorTexto !== undefined) {
+        const parsed = Number(valorTexto);
+        valor = Number.isFinite(parsed) ? Math.max(0, Math.round(parsed)) : null;
+      }
+
+      fila.compraManual = valor;
+      if (valor === null) {
+        this.comprasManualPorMedida = { ...this.comprasManualPorMedida };
+        delete this.comprasManualPorMedida[fila.medida];
+      } else {
+        this.comprasManualPorMedida = { ...this.comprasManualPorMedida, [fila.medida]: valor };
+      }
+
+      this.aplicarBloqueosYRedistribuir();
+    },
+
+    aplicarBloqueosYRedistribuir() {
+      if (!this.resultado || !this.datosCalculo) return;
+
+      const filas = this.resultado.filas;
+      const bloqueadas = filas.filter(fila => fila.compraManual !== null);
+      const libres = filas.filter(fila => fila.compraManual === null);
+
+      const totalBloqueado = bloqueadas.reduce((sum, fila) => sum + fila.compraManual, 0);
+      const kilosRestantes = Math.max(0, this.datosCalculo.kilosAComprar - totalBloqueado);
+
+      const repartidas = this.redondearABloques(libres, kilosRestantes, 500);
+
+      const compraPorMedida = {};
+      bloqueadas.forEach(fila => { compraPorMedida[fila.medida] = fila.compraManual; });
+      repartidas.forEach(fila => { compraPorMedida[fila.medida] = fila.compra; });
+
+      filas.forEach(fila => {
+        fila.compra = compraPorMedida[fila.medida];
+        fila.stockPostCompra = Number((fila.stockActual + fila.compra).toFixed(1));
+      });
+
+      this.resultado.totalCompra = filas.reduce((sum, fila) => sum + fila.compra, 0);
     }
   },
   async created() {
@@ -879,6 +961,48 @@ h2 {
 .resultado-tabla th.compra-col {
   background-color: #3498db;
   color: white;
+}
+
+.compra-editable {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.compra-input {
+  width: 90px;
+  text-align: right;
+  padding: 6px 8px;
+  border: 1px solid #3498db;
+  border-radius: 4px;
+  font-size: 15px;
+  font-weight: bold;
+  color: #2c3e50;
+  background-color: white;
+}
+
+.compra-input:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.35);
+}
+
+.compra-input.compra-editada {
+  border-color: #e67e22;
+  background-color: #fff8ee;
+  color: #e67e22;
+}
+
+.compra-unidad {
+  color: #666;
+  font-size: 13px;
+}
+
+.compra-nota {
+  margin-top: 12px;
+  color: #666;
+  font-size: 13px;
+  font-style: italic;
 }
 
 .resultado-tabla tfoot td {
