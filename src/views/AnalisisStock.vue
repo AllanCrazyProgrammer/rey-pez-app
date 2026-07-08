@@ -28,7 +28,7 @@
           </label>
           <label>
             Proveedor
-            <select v-model="proveedorSeleccionado">
+            <select v-model="proveedorSeleccionado" @change="cargarMedidasProveedor">
               <option value="">Seleccionar proveedor</option>
               <option v-for="prov in proveedores" :key="prov" :value="prov">
                 {{ prov }}
@@ -52,6 +52,35 @@
           >
             {{ cargando ? 'Calculando...' : 'Calcular Distribución' }}
           </button>
+        </div>
+
+        <div class="medidas-selector">
+          <div class="medidas-selector-header">
+            <span>Medidas a incluir{{ proveedorSeleccionado ? ` — ${proveedorSeleccionado}` : '' }}</span>
+            <div v-if="medidasDisponibles.length > 0" class="medidas-selector-acciones">
+              <button type="button" @click="medidasSeleccionadas = medidasDisponibles.map(m => m.nombre)">
+                Todas
+              </button>
+              <button type="button" @click="medidasSeleccionadas = []">
+                Ninguna
+              </button>
+            </div>
+          </div>
+
+          <div v-if="cargandoMedidas" class="medidas-mensaje">Cargando medidas...</div>
+          <div v-else-if="!proveedorSeleccionado" class="medidas-mensaje">
+            Selecciona un proveedor para ver sus medidas disponibles.
+          </div>
+          <div v-else-if="medidasDisponibles.length === 0" class="medidas-mensaje">
+            No se encontraron medidas para este proveedor.
+          </div>
+          <div v-else class="medidas-checkbox-grid">
+            <label v-for="medida in medidasDisponibles" :key="medida.nombre" class="medida-checkbox">
+              <input type="checkbox" :value="medida.nombre" v-model="medidasSeleccionadas" />
+              <span class="medida-nombre">{{ medida.nombre }}</span>
+              <span class="medida-stock-hint">{{ formatNumber(medida.stockActual) }} kg</span>
+            </label>
+          </div>
         </div>
       </div>
 
@@ -142,6 +171,10 @@ export default {
       proveedorSeleccionado: '',
       diasHistorial: 30,
       proveedores: [],
+      proveedoresObjetos: [],
+      medidasDisponibles: [],
+      medidasSeleccionadas: [],
+      cargandoMedidas: false,
       cargando: false,
       error: '',
       resultado: null
@@ -151,7 +184,8 @@ export default {
     puedeCalcular() {
       return this.proveedorSeleccionado &&
              this.kilosDisponibles &&
-             this.kilosDisponibles > 0;
+             this.kilosDisponibles > 0 &&
+             this.medidasSeleccionadas.length > 0;
     }
   },
   methods: {
@@ -174,15 +208,145 @@ export default {
     async loadProveedores() {
       try {
         const querySnapshot = await getDocs(collection(db, 'proveedores'));
-        this.proveedores = querySnapshot.docs
-          .map(docItem => docItem.data())
+        this.proveedoresObjetos = querySnapshot.docs
+          .map(docItem => ({ id: docItem.id, ...docItem.data() }))
           .filter(p => p.tipo === 'proveedor' && p.nombre)
-          .map(p => p.nombre)
-          .sort((a, b) => a.localeCompare(b));
+          .sort((a, b) => a.nombre.localeCompare(b.nombre));
+        this.proveedores = this.proveedoresObjetos.map(p => p.nombre);
       } catch (error) {
         console.error('Error al cargar proveedores:', error);
+        this.proveedoresObjetos = [];
         this.proveedores = [];
       }
+    },
+
+    // Lee la colección 'sacadas' una vez y calcula, para el proveedor dado,
+    // el stock actual por medida (entradas - salidas de todo el histórico) y,
+    // si se pasan fechas, la demanda (salidas) dentro de ese periodo.
+    async obtenerMovimientosProveedor(proveedorNombre, fechaInicio, fechaFin) {
+      const snapshot = await getDocs(collection(db, 'sacadas'));
+      const demandaPorMedida = {};
+      const stockPorMedida = {};
+      let totalVendido = 0;
+
+      snapshot.docs.forEach(docSnap => {
+        const sacada = docSnap.data();
+        const fecha = this.parseFechaSacada(sacada.fecha);
+        if (!fecha) return;
+        const enPeriodo = fechaInicio && fechaFin
+          ? moment(fecha).isBetween(fechaInicio, fechaFin, undefined, '[]')
+          : false;
+
+        (sacada.entradas || []).forEach(entrada => {
+          if (!this.coincideProveedor(entrada.proveedor, proveedorNombre)) return;
+          const medida = String(entrada.medida || '').trim();
+          if (!medida) return;
+          stockPorMedida[medida] = (stockPorMedida[medida] || 0) + (Number(entrada.kilos) || 0);
+        });
+
+        (sacada.salidas || []).forEach(salida => {
+          if (!this.coincideProveedor(salida.proveedor, proveedorNombre)) return;
+          const medida = String(salida.medida || '').trim();
+          if (!medida) return;
+          const kilos = Number(salida.kilos) || 0;
+
+          stockPorMedida[medida] = (stockPorMedida[medida] || 0) - kilos;
+
+          if (enPeriodo && kilos > 0) {
+            demandaPorMedida[medida] = (demandaPorMedida[medida] || 0) + kilos;
+            totalVendido += kilos;
+          }
+        });
+      });
+
+      return { demandaPorMedida, stockPorMedida, totalVendido };
+    },
+
+    async cargarMedidasProveedor() {
+      this.medidasDisponibles = [];
+      this.medidasSeleccionadas = [];
+      this.resultado = null;
+      this.error = '';
+
+      if (!this.proveedorSeleccionado) return;
+
+      this.cargandoMedidas = true;
+      try {
+        const proveedorObj = this.proveedoresObjetos.find(p => p.nombre === this.proveedorSeleccionado);
+        const nombresCatalogo = new Set();
+
+        if (proveedorObj) {
+          const medidasSnapshot = await getDocs(collection(db, 'medidas'));
+          medidasSnapshot.docs.forEach(docSnap => {
+            const medida = docSnap.data();
+            if (medida.proveedorId === proveedorObj.id && medida.nombre) {
+              nombresCatalogo.add(String(medida.nombre).trim());
+            }
+          });
+        }
+
+        const { stockPorMedida } = await this.obtenerMovimientosProveedor(this.proveedorSeleccionado, null, null);
+        Object.keys(stockPorMedida).forEach(medida => nombresCatalogo.add(medida));
+
+        const lista = Array.from(nombresCatalogo)
+          .sort((a, b) => a.localeCompare(b, 'es', { numeric: true }))
+          .map(nombre => ({
+            nombre,
+            stockActual: Number((stockPorMedida[nombre] || 0).toFixed(1))
+          }));
+
+        this.medidasDisponibles = lista;
+        // Por default, seleccionar las medidas que tenemos en existencia actual
+        this.medidasSeleccionadas = lista.filter(m => m.stockActual > 1).map(m => m.nombre);
+      } catch (error) {
+        console.error('Error al cargar medidas del proveedor:', error);
+        this.medidasDisponibles = [];
+        this.medidasSeleccionadas = [];
+      } finally {
+        this.cargandoMedidas = false;
+      }
+    },
+
+    // Reparte totalKilos en bloques de "bloque" kg entre las filas, en
+    // proporción a su demanda, usando el método de restos mayores para que
+    // cada compra sea un múltiplo cerrado y la suma cuadre con totalKilos.
+    distribuirEnMultiplos(filas, totalKilos, bloque = 500) {
+      const totalBloques = Math.round(totalKilos / bloque);
+
+      if (filas.length === 0 || totalBloques <= 0) {
+        return filas.map(fila => ({ ...fila, compra: 0 }));
+      }
+
+      const totalDemanda = filas.reduce((sum, fila) => sum + fila.vendido, 0);
+
+      if (totalDemanda <= 0) {
+        const base = Math.floor(totalBloques / filas.length);
+        const resto = totalBloques % filas.length;
+        return filas.map((fila, index) => ({
+          ...fila,
+          compra: (base + (index < resto ? 1 : 0)) * bloque
+        }));
+      }
+
+      const conBloques = filas.map(fila => {
+        const exacto = (fila.vendido / totalDemanda) * totalBloques;
+        return { ...fila, bloquesExactos: exacto, bloques: Math.floor(exacto) };
+      });
+
+      const asignados = conBloques.reduce((sum, fila) => sum + fila.bloques, 0);
+      const restantes = totalBloques - asignados;
+
+      const ordenResiduo = [...conBloques].sort(
+        (a, b) => (b.bloquesExactos - b.bloques) - (a.bloquesExactos - a.bloques)
+      );
+      for (let i = 0; i < restantes; i += 1) {
+        ordenResiduo[i % ordenResiduo.length].bloques += 1;
+      }
+
+      return conBloques.map(({ bloquesExactos, bloques, ...resto }) => ({
+        ...resto,
+        compra: bloques * bloque
+      }));
     },
 
     async calcular() {
@@ -197,72 +361,39 @@ export default {
         const fechaInicio = moment().subtract(dias, 'days').startOf('day');
         const fechaFin = moment().endOf('day');
 
-        // Una sola lectura de la colección: sirve tanto para la demanda del
-        // periodo como para el stock actual (entradas - salidas de todo el
-        // histórico), igual que lo calcula la vista de Existencias.
-        const snapshot = await getDocs(collection(db, 'sacadas'));
+        const { demandaPorMedida, stockPorMedida } = await this.obtenerMovimientosProveedor(
+          proveedor, fechaInicio, fechaFin
+        );
 
-        const demandaPorMedida = {};
-        const stockPorMedida = {};
-        let totalVendido = 0;
-
-        snapshot.docs.forEach(docSnap => {
-          const sacada = docSnap.data();
-          const fecha = this.parseFechaSacada(sacada.fecha);
-          if (!fecha) return;
-          const enPeriodo = moment(fecha).isBetween(fechaInicio, fechaFin, undefined, '[]');
-
-          (sacada.entradas || []).forEach(entrada => {
-            if (!this.coincideProveedor(entrada.proveedor, proveedor)) return;
-            const medida = String(entrada.medida || '').trim();
-            if (!medida) return;
-            stockPorMedida[medida] = (stockPorMedida[medida] || 0) + (Number(entrada.kilos) || 0);
-          });
-
-          (sacada.salidas || []).forEach(salida => {
-            if (!this.coincideProveedor(salida.proveedor, proveedor)) return;
-            const medida = String(salida.medida || '').trim();
-            if (!medida) return;
-            const kilos = Number(salida.kilos) || 0;
-
-            stockPorMedida[medida] = (stockPorMedida[medida] || 0) - kilos;
-
-            if (enPeriodo && kilos > 0) {
-              demandaPorMedida[medida] = (demandaPorMedida[medida] || 0) + kilos;
-              totalVendido += kilos;
-            }
-          });
-        });
-
+        const seleccionadas = new Set(this.medidasSeleccionadas);
         const kilosAComprar = Number(this.kilosDisponibles) || 0;
 
-        // Distribuir proporcionalmente y absorber el residuo de redondeo en la
-        // medida de mayor demanda, para que la suma cuadre con lo disponible.
-        const filas = Object.entries(demandaPorMedida)
-          .map(([medida, vendido]) => {
-            const porcentaje = totalVendido > 0 ? (vendido / totalVendido) * 100 : 0;
+        const filasBase = Object.entries(demandaPorMedida)
+          .filter(([medida]) => seleccionadas.has(medida))
+          .map(([medida, vendido]) => ({ medida, vendido: Number(vendido.toFixed(1)) }));
+
+        const totalVendido = filasBase.reduce((sum, fila) => sum + fila.vendido, 0);
+
+        // Compra recomendada en múltiplos cerrados de 500 kg
+        const filas = this.distribuirEnMultiplos(filasBase, kilosAComprar, 500)
+          .map(fila => {
+            const stockActual = Number((stockPorMedida[fila.medida] || 0).toFixed(1));
             return {
-              medida,
-              vendido: Number(vendido.toFixed(1)),
-              porcentaje,
-              compra: Math.round(kilosAComprar * (porcentaje / 100)),
-              stockActual: Number((stockPorMedida[medida] || 0).toFixed(1))
+              medida: fila.medida,
+              vendido: fila.vendido,
+              porcentaje: totalVendido > 0 ? (fila.vendido / totalVendido) * 100 : 0,
+              compra: fila.compra,
+              stockActual,
+              stockPostCompra: Number((stockActual + fila.compra).toFixed(1))
             };
           })
           .sort((a, b) => b.vendido - a.vendido);
 
-        if (filas.length > 0) {
-          const sumaCompras = filas.reduce((sum, fila) => sum + fila.compra, 0);
-          filas[0].compra += kilosAComprar - sumaCompras;
-        }
-
-        filas.forEach(fila => {
-          fila.stockPostCompra = Number((fila.stockActual + fila.compra).toFixed(1));
-        });
-
-        const sinVentas = Object.entries(stockPorMedida)
-          .filter(([medida, kilos]) => !demandaPorMedida[medida] && kilos > 1)
-          .map(([medida, kilos]) => ({ medida, stockActual: Number(kilos.toFixed(1)) }))
+        // Medidas seleccionadas sin demanda en el periodo: no reciben compra,
+        // pero se muestran aparte para que no queden ocultas.
+        const sinVentas = this.medidasSeleccionadas
+          .filter(medida => !demandaPorMedida[medida])
+          .map(medida => ({ medida, stockActual: Number((stockPorMedida[medida] || 0).toFixed(1)) }))
           .sort((a, b) => b.stockActual - a.stockActual);
 
         this.resultado = {
@@ -271,7 +402,7 @@ export default {
           fechaInicio: fechaInicio.format('DD/MM/YYYY'),
           fechaFin: fechaFin.format('DD/MM/YYYY'),
           totalVendido: Number(totalVendido.toFixed(1)),
-          totalCompra: kilosAComprar,
+          totalCompra: filas.reduce((sum, fila) => sum + fila.compra, 0),
           totalStockActual: Number(
             filas.reduce((sum, fila) => sum + fila.stockActual, 0).toFixed(1)
           ),
@@ -375,6 +506,89 @@ h2 {
   border-radius: 5px;
   font-size: 16px;
   background-color: white;
+}
+
+.medidas-selector {
+  margin-top: 18px;
+  padding-top: 15px;
+  border-top: 1px solid #dee2e6;
+}
+
+.medidas-selector-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 10px;
+  font-weight: bold;
+  color: #2c3e50;
+  font-size: 14px;
+}
+
+.medidas-selector-acciones {
+  display: flex;
+  gap: 8px;
+}
+
+.medidas-selector-acciones button {
+  background: none;
+  border: 1px solid #3498db;
+  color: #3498db;
+  padding: 4px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: bold;
+}
+
+.medidas-selector-acciones button:hover {
+  background-color: #3498db;
+  color: white;
+}
+
+.medidas-mensaje {
+  color: #666;
+  font-size: 14px;
+  font-style: italic;
+  padding: 10px 0;
+}
+
+.medidas-checkbox-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 8px;
+  max-height: 260px;
+  overflow-y: auto;
+  padding: 4px;
+}
+
+.medida-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background-color: white;
+  border: 1px solid #dee2e6;
+  border-radius: 5px;
+  padding: 8px 10px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.medida-checkbox input {
+  flex-shrink: 0;
+  accent-color: #3498db;
+}
+
+.medida-nombre {
+  flex: 1;
+  color: #2c3e50;
+}
+
+.medida-stock-hint {
+  color: #888;
+  font-size: 12px;
+  white-space: nowrap;
 }
 
 .calcular-btn {
