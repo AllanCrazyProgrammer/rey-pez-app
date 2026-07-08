@@ -1062,6 +1062,9 @@ export default {
             items.forEach(item => {
               const nombre = item.talla || item.medida;
               if (!nombre) return;
+              // "Cam s/c" aquí representa piojo, que se descuenta de las
+              // existencias de limpios (Sacadas), no de las de crudos.
+              if (this.esCamSinCabeza(nombre)) return;
               agregar(nombre, this.kilosDeCrudoItem(item), cliente.nombre, this.esNombreMacuil(nombre));
             });
           });
@@ -1124,6 +1127,10 @@ export default {
 
     esNombreMacuil(nombre) {
       return this.normalizarNombreComparacion(nombre).includes('macuil');
+    },
+
+    esCamSinCabeza(nombre) {
+      return this.normalizarNombreComparacion(nombre) === 'cam s/c';
     }
   },
 
