@@ -1819,14 +1819,14 @@ export default {
       return Number(total.toFixed(1));
     },
     kilosDeTaraCrudo(valor) {
-      // El peso real de una tara de crudo es 19 kg, independientemente del
-      // peso capturado en el string (que puede reflejar el peso de venta).
+      // A diferencia de las existencias de crudos (19 kg reales por tara),
+      // en limpios el kilaje de venta de estas taras se calcula a 20 kg.
       if (!valor) return 0;
       const texto = String(valor).trim();
       const conPeso = texto.match(/^(\d+)\s*-\s*(\d+(?:\.\d+)?)$/);
-      if (conPeso) return Number(conPeso[1]) * 19;
+      if (conPeso) return Number(conPeso[1]) * 20;
       const soloCantidad = texto.match(/^(\d+)$/);
-      if (soloCantidad) return Number(soloCantidad[1]) * 19;
+      if (soloCantidad) return Number(soloCantidad[1]) * 20;
       return 0;
     },
     fechaEmbarqueAYMD(valor) {
@@ -1948,13 +1948,15 @@ export default {
 
           // "Cam s/c" en los crudos del embarque representa piojo, que se
           // descuenta de las existencias de limpios (aquí en Sacadas), no de
-          // las de crudos. Se suma como kilos esperados de "Piojo".
+          // las de crudos. Se suma aparte, con una firma propia que no se
+          // confunde con una salida de "Piojo" normal/no relacionada.
           const kilosPiojo = this.kilosCamSinCabezaDeEmbarque(emb);
           if (kilosPiojo > 0) {
-            const clavePiojo = this.firmaDeRendimiento('Piojo');
+            const medidaPiojoCamSC = 'Piojo (Cam s/c)';
+            const clavePiojo = this.firmaDeRendimiento(medidaPiojoCamSC);
             if (clavePiojo) {
               if (!acumulado[clavePiojo]) {
-                acumulado[clavePiojo] = { medida: 'Piojo', kilos: 0 };
+                acumulado[clavePiojo] = { medida: medidaPiojoCamSC, kilos: 0 };
               }
               acumulado[clavePiojo].kilos += kilosPiojo;
             }
