@@ -204,47 +204,46 @@
             para el {{ formattedDate }}<span v-if="descripcionEmbarques"> ({{ descripcionEmbarques }})</span>.
             <button @click="cargarEmbarquesDelDia" class="btn-recargar">Actualizar</button>
           </p>
-          <div v-if="!comparacion.filas.length" class="no-productos">
+          <div v-if="comparacion.totalEmbarcado <= 0" class="no-productos">
             El embarque no tiene crudos ni macuil registrados.
           </div>
-          <div v-else class="comparacion-tabla-wrapper">
-            <table class="comparacion-tabla">
-              <thead>
-                <tr>
-                  <th>Producto del embarque</th>
-                  <th>Embarcado</th>
-                  <th>Salidas registradas</th>
-                  <th>Estado</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="fila in comparacion.filas" :key="fila.clave" :class="'estado-' + fila.estado">
-                  <td>
-                    {{ fila.nombre }}
-                    <span v-if="fila.clientes.length" class="clientes-info">({{ fila.clientes.join(', ') }})</span>
-                  </td>
-                  <td>{{ formatNumber(fila.kilos) }} kg</td>
-                  <td>{{ formatNumber(fila.kilosSalida) }} kg</td>
-                  <td>
-                    <span class="estado-icono">{{ fila.estado === 'ok' ? '✓' : (fila.estado === 'faltante' ? '✗' : '⚠') }}</span>
-                    {{ fila.estadoTexto }}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+          <div v-else>
+            <div class="comparacion-totales">
+              <div class="total-card">
+                <span class="total-etiqueta">Crudos embarcados</span>
+                <span class="total-valor">{{ formatNumber(comparacion.totalCrudos) }} kg</span>
+              </div>
+              <div v-if="comparacion.totalMacuil > 0" class="total-card">
+                <span class="total-etiqueta">Macuil embarcado (cocido)</span>
+                <span class="total-valor">{{ formatNumber(comparacion.totalMacuil) }} kg</span>
+              </div>
+              <div class="total-card">
+                <span class="total-etiqueta">Total embarcado</span>
+                <span class="total-valor">{{ formatNumber(comparacion.totalEmbarcado) }} kg</span>
+              </div>
+              <div class="total-card">
+                <span class="total-etiqueta">Salidas registradas del día</span>
+                <span class="total-valor">{{ formatNumber(comparacion.totalSalidas) }} kg</span>
+              </div>
+            </div>
+            <p class="comparacion-estado" :class="'estado-' + comparacion.estado">
+              <span class="estado-icono">{{ comparacion.estado === 'ok' ? '✓' : (comparacion.estado === 'faltante' ? '✗' : '⚠') }}</span>
+              {{ comparacion.estadoTexto }}
+            </p>
+            <div v-if="comparacion.desglose.length" class="sin-correspondencia">
+              <h4>Desglose de lo embarcado</h4>
+              <ul>
+                <li v-for="item in comparacion.desglose" :key="item.clave">
+                  {{ item.nombre }}: {{ formatNumber(item.kilos) }} kg
+                  <span v-if="item.clientes.length" class="clientes-info">({{ item.clientes.join(', ') }})</span>
+                </li>
+              </ul>
+            </div>
+            <p v-if="comparacion.totalMacuil > 0" class="comparacion-nota">
+              ℹ️ El macuil es camarón con cabeza cocido: las salidas de crudo del día deben
+              <strong>superar</strong> el total embarcado por la merma de cocción.
+            </p>
           </div>
-          <div v-if="comparacion.sinCorrespondencia.length" class="sin-correspondencia">
-            <h4>Salidas de hoy sin correspondencia en el embarque</h4>
-            <ul>
-              <li v-for="(salida, index) in comparacion.sinCorrespondencia" :key="'sc-' + index">
-                {{ salida.producto }}: {{ formatNumber(salida.kilos) }} kg
-              </li>
-            </ul>
-          </div>
-          <p class="comparacion-nota">
-            ℹ️ El macuil es camarón con cabeza cocido: la salida de crudo debe ser
-            <strong>mayor</strong> que los kilos embarcados por la merma de cocción.
-          </p>
         </div>
       </div>
     </div>
@@ -412,68 +411,59 @@ export default {
         .join(', ');
     },
     comparacion() {
-      // Agrupar las salidas registradas hoy por nombre normalizado de producto
-      const salidasAgrupadas = {};
-      this.salidas.forEach(salida => {
-        const clave = this.normalizarNombreComparacion(salida.producto);
-        if (!clave) return;
-        if (!salidasAgrupadas[clave]) {
-          salidasAgrupadas[clave] = { producto: salida.producto, kilos: 0 };
-        }
-        salidasAgrupadas[clave].kilos += Number(salida.kilos) || 0;
-      });
+      // Comparación por kilos totales del día: los nombres de producto varían
+      // por proveedor, así que no se cruza por nombre.
+      const totalCrudos = Number(
+        this.crudosEmbarque
+          .filter(item => !item.esMacuil)
+          .reduce((total, item) => total + item.kilos, 0)
+          .toFixed(1)
+      );
+      const totalMacuil = Number(
+        this.crudosEmbarque
+          .filter(item => item.esMacuil)
+          .reduce((total, item) => total + item.kilos, 0)
+          .toFixed(1)
+      );
+      const totalEmbarcado = Number((totalCrudos + totalMacuil).toFixed(1));
+      const totalSalidas = this.totalSalidas;
+      const diferencia = Number((totalSalidas - totalEmbarcado).toFixed(1));
 
-      const clavesUsadas = new Set();
-      const filas = this.crudosEmbarque.map(item => {
-        let kilosSalida = 0;
-        Object.keys(salidasAgrupadas).forEach(claveSalida => {
-          if (this.coincideNombre(item, claveSalida)) {
-            kilosSalida += salidasAgrupadas[claveSalida].kilos;
-            clavesUsadas.add(claveSalida);
-          }
-        });
-        kilosSalida = Number(kilosSalida.toFixed(1));
-        const diferencia = Number((kilosSalida - item.kilos).toFixed(1));
-
-        let estado;
-        let estadoTexto;
-        if (kilosSalida <= 0) {
-          estado = 'faltante';
-          estadoTexto = 'Sin salida registrada';
-        } else if (item.esMacuil) {
-          if (diferencia > 0) {
-            const merma = ((diferencia / kilosSalida) * 100).toFixed(1);
-            estado = 'ok';
-            estadoTexto = `Registrada con merma de ${formatNumber(diferencia)} kg (${merma}%)`;
-          } else {
-            estado = 'revisar';
-            estadoTexto = 'La salida debería ser mayor que lo embarcado (merma de cocción)';
-          }
+      let estado;
+      let estadoTexto;
+      if (totalSalidas <= 0) {
+        estado = 'faltante';
+        estadoTexto = 'No hay salidas registradas para este día';
+      } else if (totalMacuil > 0) {
+        if (diferencia > 0) {
+          const crudoParaMacuil = Number((totalMacuil + diferencia).toFixed(1));
+          const merma = ((diferencia / crudoParaMacuil) * 100).toFixed(1);
+          estado = 'ok';
+          estadoTexto = `Las salidas cubren lo embarcado, con merma de cocción del macuil de ${formatNumber(diferencia)} kg (${merma}%)`;
         } else {
-          const tolerancia = Math.max(0.5, item.kilos * 0.01);
-          if (Math.abs(diferencia) <= tolerancia) {
-            estado = 'ok';
-            estadoTexto = 'Registrada';
-          } else if (diferencia < 0) {
-            estado = 'revisar';
-            estadoTexto = `Faltan ${formatNumber(Math.abs(diferencia))} kg por registrar`;
-          } else {
-            estado = 'revisar';
-            estadoTexto = `Salida mayor que lo embarcado por ${formatNumber(diferencia)} kg`;
-          }
+          estado = 'revisar';
+          estadoTexto = `Las salidas deberían superar lo embarcado por la merma de cocción del macuil; faltan al menos ${formatNumber(Math.abs(diferencia))} kg por registrar`;
         }
+      } else {
+        const tolerancia = Math.max(0.5, totalEmbarcado * 0.01);
+        if (Math.abs(diferencia) <= tolerancia) {
+          estado = 'ok';
+          estadoTexto = 'Las salidas del día cuadran con lo embarcado';
+        } else if (diferencia < 0) {
+          estado = 'revisar';
+          estadoTexto = `Faltan ${formatNumber(Math.abs(diferencia))} kg de salidas por registrar`;
+        } else {
+          estado = 'revisar';
+          estadoTexto = `Las salidas superan lo embarcado por ${formatNumber(diferencia)} kg`;
+        }
+      }
 
-        return { ...item, kilosSalida, diferencia, estado, estadoTexto };
+      const desglose = [...this.crudosEmbarque].sort((a, b) => {
+        if (a.esMacuil !== b.esMacuil) return a.esMacuil ? 1 : -1;
+        return b.kilos - a.kilos;
       });
 
-      const sinCorrespondencia = Object.keys(salidasAgrupadas)
-        .filter(clave => !clavesUsadas.has(clave))
-        .map(clave => ({
-          producto: salidasAgrupadas[clave].producto,
-          kilos: Number(salidasAgrupadas[clave].kilos.toFixed(1))
-        }));
-
-      return { filas, sinCorrespondencia };
+      return { totalCrudos, totalMacuil, totalEmbarcado, totalSalidas, diferencia, estado, estadoTexto, desglose };
     },
     medidasDelProveedorEntrada() {
       if (!this.newEntrada.proveedor || this.newEntrada.proveedor === '__nuevo__') {
@@ -1134,26 +1124,6 @@ export default {
 
     esNombreMacuil(nombre) {
       return this.normalizarNombreComparacion(nombre).includes('macuil');
-    },
-
-    extraerRango(texto) {
-      const match = String(texto).match(/(\d+)\s*\/\s*(\d+)/);
-      return match ? `${match[1]}/${match[2]}` : null;
-    },
-
-    coincideNombre(itemEmbarque, claveSalida) {
-      const esSalidaMacuil = claveSalida.includes('macuil');
-      if (itemEmbarque.esMacuil) return esSalidaMacuil;
-      if (esSalidaMacuil) return false;
-
-      const claveItem = itemEmbarque.clave;
-      if (claveItem === claveSalida) return true;
-
-      const rangoItem = this.extraerRango(claveItem);
-      const rangoSalida = this.extraerRango(claveSalida);
-      if (rangoItem && rangoSalida) return rangoItem === rangoSalida;
-
-      return claveItem.includes(claveSalida) || claveSalida.includes(claveItem);
     }
   },
 
@@ -1545,60 +1515,63 @@ h3 {
   font-size: 13px;
 }
 
-.comparacion-tabla-wrapper {
-  overflow-x: auto;
+.comparacion-totales {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+  margin-bottom: 15px;
 }
 
-.comparacion-tabla {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 14px;
+.total-card {
+  background-color: #f8f9fa;
+  border-left: 4px solid #3760b0;
+  border-radius: 6px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
-.comparacion-tabla th,
-.comparacion-tabla td {
-  padding: 10px;
-  text-align: left;
-  border-bottom: 1px solid #e9ecef;
+.total-etiqueta {
+  color: #666;
+  font-size: 13px;
 }
 
-.comparacion-tabla th {
-  background-color: #f0f4f8;
+.total-valor {
   color: #3760b0;
+  font-weight: bold;
+  font-size: 18px;
 }
 
-.comparacion-tabla .clientes-info {
+.comparacion-estado {
+  padding: 12px;
+  border-radius: 6px;
+  font-weight: bold;
+  font-size: 15px;
+}
+
+.comparacion-estado .estado-icono {
+  margin-right: 6px;
+}
+
+.comparacion-estado.estado-ok {
+  background-color: #f4fff6;
+  color: #1e7e34;
+}
+
+.comparacion-estado.estado-revisar {
+  background-color: #fff8e6;
+  color: #9c6f00;
+}
+
+.comparacion-estado.estado-faltante {
+  background-color: #fff1f0;
+  color: #c62828;
+}
+
+.clientes-info {
   color: #666;
   font-size: 12px;
-}
-
-.comparacion-tabla .estado-icono {
-  font-weight: bold;
-  margin-right: 4px;
-}
-
-.comparacion-tabla tr.estado-ok td {
-  background-color: #f4fff6;
-}
-
-.comparacion-tabla tr.estado-ok .estado-icono {
-  color: #28a745;
-}
-
-.comparacion-tabla tr.estado-revisar td {
-  background-color: #fff8e6;
-}
-
-.comparacion-tabla tr.estado-revisar .estado-icono {
-  color: #e6a700;
-}
-
-.comparacion-tabla tr.estado-faltante td {
-  background-color: #fff1f0;
-}
-
-.comparacion-tabla tr.estado-faltante .estado-icono {
-  color: #f44336;
 }
 
 .sin-correspondencia {
