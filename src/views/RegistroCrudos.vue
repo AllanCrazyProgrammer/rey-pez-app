@@ -5,14 +5,24 @@
     </div>
     <div v-else class="modal-header-modal">
       <div class="modal-header-left">
-        <button
-          v-if="entradas.length > 0"
-          type="button"
-          class="toggle-entradas-btn"
-          @click="mostrarEntradasEnModal = !mostrarEntradasEnModal"
-        >
-          {{ mostrarEntradasEnModal ? 'Ocultar Entradas' : `Ver Entradas (${entradas.length})` }}
-        </button>
+        <div class="modal-tabs">
+          <button
+            type="button"
+            class="modal-tab-btn"
+            :class="{ active: pestanaModal === 'entradas' }"
+            @click="pestanaModal = 'entradas'"
+          >
+            Entradas{{ entradas.length > 0 ? ` (${entradas.length})` : '' }}
+          </button>
+          <button
+            type="button"
+            class="modal-tab-btn"
+            :class="{ active: pestanaModal === 'salidas' }"
+            @click="pestanaModal = 'salidas'"
+          >
+            Salidas{{ salidas.length > 0 ? ` (${salidas.length})` : '' }}
+          </button>
+        </div>
         <router-link
           v-if="registroId"
           :to="`/existencias-crudos/${registroId}`"
@@ -29,7 +39,7 @@
     </div>
 
     <div class="registro-content" :class="{ 'solo-salidas': modoModal }">
-      <div v-if="!modoModal || mostrarEntradasEnModal" class="entradas-section">
+      <div v-if="!modoModal || pestanaModal === 'entradas'" class="entradas-section">
         <h3>Entradas de Crudos</h3>
         <div class="form-section">
           <div class="input-group">
@@ -127,7 +137,7 @@
         <p class="total">Total Entradas: {{ formatNumber(totalEntradas) }} kg</p>
       </div>
       
-      <div class="salidas-section">
+      <div v-if="!modoModal || pestanaModal === 'salidas'" class="salidas-section">
         <h3>Salidas de Crudos</h3>
         <div class="form-section">
           <div class="input-group">
@@ -384,7 +394,7 @@ export default {
       embarquesDelDia: [],
       crudosEmbarque: [],
       salidasIniciales: 0,
-      mostrarEntradasEnModal: false
+      pestanaModal: 'salidas'
     };
   },
   computed: {
@@ -1245,20 +1255,33 @@ export default {
   flex-wrap: wrap;
 }
 
-.toggle-entradas-btn {
-  background-color: #3760b0;
-  color: white;
+.modal-tabs {
+  display: flex;
+  gap: 6px;
+  background-color: #dbe6f5;
+  padding: 4px;
+  border-radius: 8px;
+}
+
+.modal-tab-btn {
+  background-color: transparent;
+  color: #3760b0;
   border: none;
-  padding: 8px 14px;
+  padding: 8px 16px;
   border-radius: 6px;
   cursor: pointer;
   font-size: 0.9em;
   font-weight: bold;
-  transition: background-color 0.3s;
+  transition: background-color 0.3s, color 0.3s;
 }
 
-.toggle-entradas-btn:hover {
-  background-color: #2a4a87;
+.modal-tab-btn:hover {
+  background-color: rgba(55, 96, 176, 0.15);
+}
+
+.modal-tab-btn.active {
+  background-color: #3760b0;
+  color: white;
 }
 
 .link-dia-completo {
