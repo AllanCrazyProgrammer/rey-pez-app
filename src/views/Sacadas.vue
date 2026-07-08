@@ -1948,15 +1948,16 @@ export default {
 
           // "Cam s/c" en los crudos del embarque representa piojo, que se
           // descuenta de las existencias de limpios (aquí en Sacadas), no de
-          // las de crudos. Se suma aparte, con una firma propia que no se
-          // confunde con una salida de "Piojo" normal/no relacionada.
+          // las de crudos. Se suma a la misma firma que cualquier salida de
+          // "Piojo" normal (sin importar el proveedor), para que reconcilie
+          // contra lo ya registrado; si nadie ha registrado nada todavía se
+          // muestra como "Piojo (Cam s/c)" para dejar claro su origen.
           const kilosPiojo = this.kilosCamSinCabezaDeEmbarque(emb);
           if (kilosPiojo > 0) {
-            const medidaPiojoCamSC = 'Piojo (Cam s/c)';
-            const clavePiojo = this.firmaDeRendimiento(medidaPiojoCamSC);
+            const clavePiojo = this.firmaDeRendimiento('Piojo');
             if (clavePiojo) {
               if (!acumulado[clavePiojo]) {
-                acumulado[clavePiojo] = { medida: medidaPiojoCamSC, kilos: 0 };
+                acumulado[clavePiojo] = { medida: 'Piojo (Cam s/c)', kilos: 0 };
               }
               acumulado[clavePiojo].kilos += kilosPiojo;
             }
