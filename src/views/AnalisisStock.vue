@@ -38,6 +38,8 @@
           <label>
             Días de historial
             <select v-model.number="diasHistorial">
+              <option :value="10">10 días</option>
+              <option :value="15">15 días</option>
               <option :value="30">30 días</option>
               <option :value="60">60 días</option>
               <option :value="90">90 días</option>
