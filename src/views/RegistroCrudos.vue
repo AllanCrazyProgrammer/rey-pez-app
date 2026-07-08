@@ -1,15 +1,26 @@
 <template>
-  <div class="registro-crudos-container" v-if="isLoaded">
-    <div class="back-button-container">
+  <div class="registro-crudos-container" :class="{ 'modo-modal': modoModal }" v-if="isLoaded">
+    <div v-if="!modoModal" class="back-button-container">
       <BackButton to="/existencias-crudos" />
     </div>
+    <div v-else class="modal-header-modal">
+      <router-link
+        v-if="registroId"
+        :to="`/existencias-crudos/${registroId}`"
+        class="link-dia-completo"
+      >
+        Ver día completo (entradas y comparación)
+      </router-link>
+      <span v-else></span>
+      <button type="button" class="close-modal-btn" @click="cerrarModal" title="Cerrar">&times;</button>
+    </div>
     <h2 class="date-header">{{ formattedDate }}</h2>
-    <div class="date-selector">
+    <div v-if="!modoModal" class="date-selector">
       <input type="date" v-model="selectedDate" @change="updateCurrentDate">
     </div>
-    
-    <div class="registro-content">
-      <div class="entradas-section">
+
+    <div class="registro-content" :class="{ 'solo-salidas': modoModal }">
+      <div v-if="!modoModal" class="entradas-section">
         <h3>Entradas de Crudos</h3>
         <div class="form-section">
           <div class="input-group">
@@ -183,7 +194,7 @@
       </div>
     </div>
 
-    <div class="comparacion-embarque">
+    <div v-if="!modoModal" class="comparacion-embarque">
       <div class="comparacion-header" @click="toggleComparacion">
         <h3>
           Comparar salidas con embarque del día
@@ -255,7 +266,10 @@
       <p>Diferencia: {{ formatNumber(totalEntradas - totalSalidas) }} kg</p>
     </div>
     
-    <button @click="saveReport" class="save-button" :disabled="guardando">{{ guardando ? 'Guardando...' : (isEditing ? 'Actualizar' : 'Guardar') + ' Registro' }}</button>
+    <div class="save-actions" :class="{ 'save-actions-modal': modoModal }">
+      <button @click="saveReport" class="save-button" :disabled="guardando">{{ guardando ? 'Guardando...' : (isEditing ? 'Actualizar' : 'Guardar') + ' Registro' }}</button>
+      <button v-if="modoModal" @click="cerrarModal" class="cancel-modal-button" type="button">Cerrar sin guardar</button>
+    </div>
 
     <!-- Modal edición entrada -->
     <div v-if="editandoEntrada" class="modal-overlay" @click.self="cancelarEdicionEntrada">
@@ -310,6 +324,16 @@ export default {
   components: {
     BackButton
   },
+  props: {
+    modoModal: {
+      type: Boolean,
+      default: false
+    },
+    registroIdProp: {
+      type: String,
+      default: null
+    }
+  },
   data() {
     return {
       currentDate: moment(),
@@ -349,7 +373,8 @@ export default {
       cargandoEmbarques: false,
       embarquesCargados: false,
       embarquesDelDia: [],
-      crudosEmbarque: []
+      crudosEmbarque: [],
+      salidasIniciales: 0
     };
   },
   computed: {
@@ -916,6 +941,7 @@ export default {
         this.registroId = id;
         this.isEditing = true;
         this.fechaOriginal = this.currentDate.format('YYYY-MM-DD');
+        this.salidasIniciales = this.salidas.length;
         await this.loadProductosDisponibles();
       } else {
         console.log("No se encontró el documento con ID:", id);
@@ -971,19 +997,35 @@ export default {
 
         if (this.isEditing) {
           await updateDoc(doc(db, 'existenciasCrudos', this.registroId), reportData);
-          alert("Registro de crudos actualizado exitosamente");
+          if (!this.modoModal) alert("Registro de crudos actualizado exitosamente");
         } else {
-          await addDoc(collection(db, 'existenciasCrudos'), reportData);
-          alert("Registro de crudos guardado exitosamente");
+          const docRef = await addDoc(collection(db, 'existenciasCrudos'), reportData);
+          this.registroId = docRef.id;
+          this.isEditing = true;
+          this.fechaOriginal = this.currentDate.format('YYYY-MM-DD');
+          if (!this.modoModal) alert("Registro de crudos guardado exitosamente");
         }
-        
-        this.$router.push('/existencias-crudos');
+        this.salidasIniciales = this.salidas.length;
+
+        if (this.modoModal) {
+          this.$emit('guardado', this.registroId);
+        } else {
+          this.$router.push('/existencias-crudos');
+        }
       } catch (error) {
         console.error("Error al guardar/actualizar el registro: ", error);
         alert("Error al guardar/actualizar el registro: " + error.message);
       } finally {
         this.guardando = false;
       }
+    },
+
+    cerrarModal() {
+      const hayCambiosSinGuardar = this.salidas.length !== this.salidasIniciales;
+      if (hayCambiosSinGuardar && !confirm('Hay salidas sin guardar. ¿Cerrar de todas formas?')) {
+        return;
+      }
+      this.$emit('cerrar');
     },
 
     updateCurrentDate() {
@@ -1146,11 +1188,12 @@ export default {
       this.loadMedidasCrudos()
     ]);
     await this.loadProductosDisponibles();
-    
-    if (this.$route.params.id) {
-      await this.loadRegistro(this.$route.params.id);
+
+    const idAEditar = this.modoModal ? this.registroIdProp : this.$route.params.id;
+    if (idAEditar) {
+      await this.loadRegistro(idAEditar);
     }
-    
+
     this.isLoaded = true;
   }
 };
@@ -1168,6 +1211,40 @@ export default {
 
 .back-button-container {
   margin-bottom: 20px;
+}
+
+.registro-crudos-container.modo-modal {
+  max-width: 900px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.modal-header-modal {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  gap: 10px;
+}
+
+.link-dia-completo {
+  color: #3760b0;
+  font-weight: bold;
+  text-decoration: underline;
+}
+
+.close-modal-btn {
+  background: transparent;
+  border: none;
+  font-size: 1.8em;
+  line-height: 1;
+  color: #666;
+  cursor: pointer;
+  padding: 0 6px;
+}
+
+.close-modal-btn:hover {
+  color: #000;
 }
 
 .date-header {
@@ -1194,6 +1271,10 @@ export default {
   grid-template-columns: 1fr 1fr;
   gap: 30px;
   margin-bottom: 30px;
+}
+
+.registro-content.solo-salidas {
+  grid-template-columns: 1fr;
 }
 
 .entradas-section,
@@ -1627,6 +1708,14 @@ h3 {
   font-size: 16px;
 }
 
+.save-actions {
+  display: flex;
+}
+
+.save-actions-modal {
+  gap: 10px;
+}
+
 .save-button {
   display: block;
   width: 100%;
@@ -1638,6 +1727,22 @@ h3 {
   border-radius: 8px;
   cursor: pointer;
   transition: background-color 0.3s;
+}
+
+.cancel-modal-button {
+  padding: 15px 20px;
+  font-size: 1.05em;
+  background-color: #6c757d;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.3s;
+  white-space: nowrap;
+}
+
+.cancel-modal-button:hover {
+  background-color: #565e64;
 }
 
 .save-button:hover {

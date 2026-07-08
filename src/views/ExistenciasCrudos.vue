@@ -231,6 +231,16 @@
       :registros="registros"
       @cerrar="cerrarModalEntradasProveedor"
     />
+
+    <!-- Modal rápido: solo la sección de salidas del día -->
+    <div v-if="modalSalida.abierto" class="modal-overlay" @click.self="cerrarModalSalida">
+      <RegistroCrudos
+        modo-modal
+        :registro-id-prop="modalSalida.registroId"
+        @guardado="onSalidaGuardada"
+        @cerrar="cerrarModalSalida"
+      />
+    </div>
   </div>
 </template>
 
@@ -241,13 +251,15 @@ import moment from 'moment';
 import PapeleraService from '@/services/PapeleraService';
 import GestionProveedoresCrudos from '@/components/GestionProveedoresCrudos.vue';
 import EntradasPorProveedorModal from '@/components/EntradasPorProveedorModal.vue';
+import RegistroCrudos from './RegistroCrudos.vue';
 import { formatNumber } from '@/utils/formatters';
 
 export default {
   name: 'ExistenciasCrudos',
   components: {
     GestionProveedoresCrudos,
-    EntradasPorProveedorModal
+    EntradasPorProveedorModal,
+    RegistroCrudos
   },
   data() {
     return {
@@ -273,6 +285,10 @@ export default {
         abierto: false,
         producto: null,
         movimientos: []
+      },
+      modalSalida: {
+        abierto: false,
+        registroId: null
       }
     };
   },
@@ -689,17 +705,25 @@ export default {
     },
 
     editRegistro(id) {
-      this.$router.push(`/existencias-crudos/${id}`);
+      this.modalSalida = { abierto: true, registroId: id };
     },
 
     irASalidaDeHoy() {
       const hoy = moment().startOf('day');
       const registroHoy = this.registros.find(registro => moment(registro.fecha).isSame(hoy, 'day'));
-      if (registroHoy) {
-        this.$router.push(`/existencias-crudos/${registroHoy.id}`);
-      } else {
-        this.$router.push('/existencias-crudos/new');
-      }
+      this.modalSalida = { abierto: true, registroId: registroHoy ? registroHoy.id : null };
+    },
+
+    cerrarModalSalida() {
+      this.modalSalida = { abierto: false, registroId: null };
+    },
+
+    async onSalidaGuardada() {
+      this.cerrarModalSalida();
+      await Promise.all([
+        this.loadRegistros(),
+        this.loadExistencias()
+      ]);
     },
 
     async deleteRegistro(id) {
