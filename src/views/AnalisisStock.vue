@@ -143,8 +143,8 @@
                 </template>
                 <template v-else>
                   <th class="num">Consumo diario</th>
-                  <th class="num">Días cobertura</th>
-                  <th class="num">Déficit (meta {{ resultado.metaDiasCobertura }}d)</th>
+                  <th class="num">Te dura el stock</th>
+                  <th class="num">Te falta para {{ resultado.metaDiasCobertura }}d</th>
                 </template>
                 <th class="num compra-col">Compra recomendada</th>
                 <th class="num">Stock actual</th>
@@ -227,7 +227,7 @@ export default {
       proveedorSeleccionado: '',
       diasHistorial: 30,
       modo: 'demanda', // 'demanda' | 'cobertura'
-      metaDiasCobertura: 30,
+      metaDiasCobertura: 12,
       proveedores: [],
       proveedoresObjetos: [],
       medidasDisponibles: [],
