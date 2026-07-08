@@ -149,6 +149,7 @@
                 <th class="num compra-col">Compra recomendada</th>
                 <th class="num">Stock actual</th>
                 <th class="num">Stock post-compra</th>
+                <th v-if="resultado.modo === 'cobertura'" class="num">Cobertura resultante</th>
               </tr>
             </thead>
             <tbody>
@@ -184,6 +185,9 @@
                   {{ formatNumber(fila.stockActual) }} kg
                 </td>
                 <td class="num"><strong>{{ formatNumber(fila.stockPostCompra) }} kg</strong></td>
+                <td v-if="resultado.modo === 'cobertura'" class="num">
+                  {{ fila.coberturaResultante.toFixed(1) }} d
+                </td>
               </tr>
             </tbody>
             <tfoot>
@@ -196,11 +200,14 @@
                 <template v-else>
                   <td class="num"></td>
                   <td class="num"></td>
-                  <td class="num"></td>
+                  <td class="num" :class="{ 'deficit-urgente': resultado.totalDeficit > 0 }">
+                    <strong>{{ formatNumber(resultado.totalDeficit) }} kg</strong>
+                  </td>
                 </template>
                 <td class="num compra-col"><strong>{{ formatNumber(resultado.totalCompra) }} kg</strong></td>
                 <td class="num"><strong>{{ formatNumber(resultado.totalStockActual) }} kg</strong></td>
                 <td class="num"><strong>{{ formatNumber(resultado.totalStockActual + resultado.totalCompra) }} kg</strong></td>
+                <td v-if="resultado.modo === 'cobertura'" class="num"></td>
               </tr>
             </tfoot>
           </table>
@@ -209,6 +216,15 @@
             disponible en el mercado); el resto se reparte entre las demás medidas. Borra el
             valor para volver a la recomendación automática.
           </p>
+
+          <div v-if="resultado.modo === 'cobertura'" class="explicaciones-cobertura">
+            <h4>¿Por qué esta cantidad?</h4>
+            <ul>
+              <li v-for="fila in resultado.filas" :key="'exp-' + fila.medida">
+                {{ explicacionFila(fila) }}
+              </li>
+            </ul>
+          </div>
         </div>
 
         <div v-if="resultado.sinVentas.length > 0" class="sin-ventas-card">
@@ -510,11 +526,10 @@ export default {
         });
 
       const totalVendido = filasBase.reduce((sum, fila) => sum + fila.vendido, 0);
+      const totalDeficit = Number(filasBase.reduce((sum, fila) => sum + fila.deficit, 0).toFixed(1));
 
       let itemsConIdeal;
       if (this.modo === 'cobertura') {
-        const totalDeficit = filasBase.reduce((sum, fila) => sum + fila.deficit, 0);
-
         if (totalDeficit > 0 && totalDeficit > kilosAComprar) {
           // Los déficits superan lo disponible: repartir proporcional al
           // tamaño del déficit para priorizar las medidas más urgentes.
@@ -538,16 +553,21 @@ export default {
       }
 
       const filas = this.redondearABloques(itemsConIdeal, kilosAComprar, 500)
-        .map(fila => ({
-          ...fila,
-          porcentaje: totalVendido > 0 ? (fila.vendido / totalVendido) * 100 : 0,
-          stockPostCompra: Number((fila.stockActual + fila.compra).toFixed(1)),
-          // Compra editada a mano por el usuario para esta medida, si la hay
-          // (persiste aunque se cambie de modo o de meta de cobertura).
-          compraManual: Object.prototype.hasOwnProperty.call(this.comprasManualPorMedida, fila.medida)
-            ? this.comprasManualPorMedida[fila.medida]
-            : null
-        }))
+        .map(fila => {
+          const stockPostCompra = Number((fila.stockActual + fila.compra).toFixed(1));
+          return {
+            ...fila,
+            porcentaje: totalVendido > 0 ? (fila.vendido / totalVendido) * 100 : 0,
+            stockPostCompra,
+            // Para cuántos días te alcanzaría el stock después de esta compra
+            coberturaResultante: Number((stockPostCompra / fila.consumoDiario).toFixed(1)),
+            // Compra editada a mano por el usuario para esta medida, si la hay
+            // (persiste aunque se cambie de modo o de meta de cobertura).
+            compraManual: Object.prototype.hasOwnProperty.call(this.comprasManualPorMedida, fila.medida)
+              ? this.comprasManualPorMedida[fila.medida]
+              : null
+          };
+        })
         .sort((a, b) => b.vendido - a.vendido);
 
       // Medidas seleccionadas sin demanda en el periodo: no reciben compra,
@@ -565,6 +585,7 @@ export default {
         modo: this.modo,
         metaDiasCobertura: metaDias,
         totalVendido: Number(totalVendido.toFixed(1)),
+        totalDeficit,
         totalCompra: filas.reduce((sum, fila) => sum + fila.compra, 0),
         totalStockActual: Number(
           filas.reduce((sum, fila) => sum + fila.stockActual, 0).toFixed(1)
@@ -621,9 +642,38 @@ export default {
       filas.forEach(fila => {
         fila.compra = compraPorMedida[fila.medida];
         fila.stockPostCompra = Number((fila.stockActual + fila.compra).toFixed(1));
+        if (fila.consumoDiario) {
+          fila.coberturaResultante = Number((fila.stockPostCompra / fila.consumoDiario).toFixed(1));
+        }
       });
 
       this.resultado.totalCompra = filas.reduce((sum, fila) => sum + fila.compra, 0);
+    },
+
+    // Texto breve explicando, para una medida, por qué se le asignó (o le
+    // falta) esta cantidad en modo "por días de cobertura".
+    explicacionFila(fila) {
+      const meta = this.resultado.metaDiasCobertura;
+      const dura = fila.diasCobertura.toFixed(1);
+      const resultante = fila.coberturaResultante.toFixed(1);
+
+      if (fila.compraManual !== null) {
+        return `${fila.medida}: cantidad editada a mano (${this.formatNumber(fila.compra)} kg), por ejemplo por disponibilidad ` +
+          `en el mercado. Te duraba ${dura}d antes de comprar; con esto te quedarían ${resultante}d de cobertura.`;
+      }
+
+      if (fila.deficit > 0 && fila.compra < fila.deficit) {
+        return `${fila.medida}: te dura ${dura}d y necesitarías ${this.formatNumber(fila.deficit)} kg para llegar a ${meta}d, ` +
+          `pero no alcanzó el presupuesto; con lo asignado (${this.formatNumber(fila.compra)} kg) te quedarían ${resultante}d de cobertura.`;
+      }
+
+      if (fila.deficit > 0) {
+        return `${fila.medida}: te dura solo ${dura}d, así que primero se cubrió su déficit de ${this.formatNumber(fila.deficit)} kg ` +
+          `para llegar a tu meta de ${meta}d; el resto de tu compra se sumó según su consumo mensual, dejándote ${resultante}d de cobertura.`;
+      }
+
+      return `${fila.medida}: ya te duraba ${dura}d (más que tu meta de ${meta}d), así que no tenía déficit; ` +
+        `esta cantidad es su parte del sobrante repartida según su consumo mensual, dejándote ${resultante}d de cobertura.`;
     }
   },
   async created() {
@@ -1003,6 +1053,32 @@ h2 {
   color: #666;
   font-size: 13px;
   font-style: italic;
+}
+
+.explicaciones-cobertura {
+  margin-top: 15px;
+  padding: 12px 15px;
+  background-color: #f0f7ff;
+  border: 1px solid #bcd9f5;
+  border-radius: 8px;
+}
+
+.explicaciones-cobertura h4 {
+  color: #2c3e50;
+  margin: 0 0 8px 0;
+  font-size: 14px;
+}
+
+.explicaciones-cobertura ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.explicaciones-cobertura li {
+  color: #444;
+  font-size: 13px;
+  margin-bottom: 6px;
+  line-height: 1.4;
 }
 
 .resultado-tabla tfoot td {
