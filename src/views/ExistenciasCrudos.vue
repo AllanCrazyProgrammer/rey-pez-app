@@ -2,6 +2,16 @@
   <div class="existencias-crudos-container">
     <h1>Existencias de Crudos</h1>
     
+    <button
+      @click="irASalidaDeHoy"
+      :disabled="isLoadingRegistros"
+      class="quick-salida-btn"
+      title="Ir directo al registro de hoy para agregar una salida"
+    >
+      <i class="fas fa-bolt"></i>
+      Registrar Salida de Hoy
+    </button>
+
     <div class="actions-container">
       <router-link to="/existencias-crudos/new" class="action-button new-entrada-btn">
         Nueva Entrada/Salida
@@ -221,6 +231,16 @@
       :registros="registros"
       @cerrar="cerrarModalEntradasProveedor"
     />
+
+    <!-- Modal rápido: solo la sección de salidas del día -->
+    <div v-if="modalSalida.abierto" class="modal-overlay" @click.self="cerrarModalSalida">
+      <RegistroCrudos
+        modo-modal
+        :registro-id-prop="modalSalida.registroId"
+        @guardado="onSalidaGuardada"
+        @cerrar="cerrarModalSalida"
+      />
+    </div>
   </div>
 </template>
 
@@ -231,13 +251,16 @@ import moment from 'moment';
 import PapeleraService from '@/services/PapeleraService';
 import GestionProveedoresCrudos from '@/components/GestionProveedoresCrudos.vue';
 import EntradasPorProveedorModal from '@/components/EntradasPorProveedorModal.vue';
+import RegistroCrudos from './RegistroCrudos.vue';
 import { formatNumber } from '@/utils/formatters';
+import { useUIStore } from '@/stores/ui';
 
 export default {
   name: 'ExistenciasCrudos',
   components: {
     GestionProveedoresCrudos,
-    EntradasPorProveedorModal
+    EntradasPorProveedorModal,
+    RegistroCrudos
   },
   data() {
     return {
@@ -263,6 +286,10 @@ export default {
         abierto: false,
         producto: null,
         movimientos: []
+      },
+      modalSalida: {
+        abierto: false,
+        registroId: null
       }
     };
   },
@@ -679,7 +706,28 @@ export default {
     },
 
     editRegistro(id) {
-      this.$router.push(`/existencias-crudos/${id}`);
+      this.modalSalida = { abierto: true, registroId: id };
+      useUIStore().openModal('salida-crudo');
+    },
+
+    irASalidaDeHoy() {
+      const hoy = moment().startOf('day');
+      const registroHoy = this.registros.find(registro => moment(registro.fecha).isSame(hoy, 'day'));
+      this.modalSalida = { abierto: true, registroId: registroHoy ? registroHoy.id : null };
+      useUIStore().openModal('salida-crudo');
+    },
+
+    cerrarModalSalida() {
+      this.modalSalida = { abierto: false, registroId: null };
+      useUIStore().closeModal();
+    },
+
+    async onSalidaGuardada() {
+      this.cerrarModalSalida();
+      await Promise.all([
+        this.loadRegistros(),
+        this.loadExistencias()
+      ]);
     },
 
     async deleteRegistro(id) {
@@ -981,6 +1029,11 @@ export default {
       this.loadExistencias(),
       this.loadProveedoresRegistrados()
     ]);
+  },
+
+  beforeDestroy() {
+    // Evitar que el navbar quede oculto si se navega fuera con el modal abierto
+    useUIStore().closeModal();
   }
 };
 </script>
@@ -998,6 +1051,37 @@ export default {
 
 h1, h2, h3 {
   color: #3760b0;
+}
+
+.quick-salida-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  background: linear-gradient(135deg, #ff9800, #f57c00);
+  color: white;
+  border: none;
+  padding: 16px 24px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 18px;
+  font-weight: bold;
+  margin-bottom: 20px;
+  box-shadow: 0 4px 8px rgba(245, 124, 0, 0.35);
+  transition: background 0.3s, transform 0.15s;
+}
+
+.quick-salida-btn:hover {
+  background: linear-gradient(135deg, #fb8c00, #ef6c00);
+  transform: translateY(-1px);
+}
+
+.quick-salida-btn:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
 }
 
 .actions-container {

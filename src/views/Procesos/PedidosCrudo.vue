@@ -127,7 +127,7 @@ export default {
     return {
       fecha: new Date().toISOString().split('T')[0],
       clientes: ['8a', 'Catarro', 'Otilio', 'Ozuna', 'Veronica'],
-      columnasBase: ['Med', 'Med-Esp', 'Med-gde', 'Gde', 'Extra'],
+      columnasBase: ['Med', 'Med-Esp', 'Med-gde', 'Gde', 'Extra', 'Jumbo', 'Cam s/c'],
       columnasAdicionales: [],
       nuevaColumna: '',
       pedidos: {},
@@ -479,7 +479,7 @@ export default {
 
 <style scoped>
 .pedidos-crudo-container {
-  max-width: 800px;
+  max-width: 1200px;
   margin: 0 auto;
   padding: 20px;
   font-size: 16px;

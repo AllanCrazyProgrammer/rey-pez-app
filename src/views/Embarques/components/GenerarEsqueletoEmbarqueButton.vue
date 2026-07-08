@@ -45,7 +45,8 @@ const MEDIDAS_CRUDOS_MAP = {
   'linea': 'Linea',
   'lag gde': 'Lag gde c/c',
   'acamaya': 'Acamaya',
-  'rechazo': 'Rechazo'
+  'rechazo': 'Rechazo',
+  'cam s/c': 'Cam s/c'
 };
 
 const MEDIDAS_CRUDOS_ORDEN = [

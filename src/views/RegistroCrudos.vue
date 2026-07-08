@@ -1,15 +1,45 @@
 <template>
-  <div class="registro-crudos-container" v-if="isLoaded">
-    <div class="back-button-container">
+  <div class="registro-crudos-container" :class="{ 'modo-modal': modoModal }" v-if="isLoaded">
+    <div v-if="!modoModal" class="back-button-container">
       <BackButton to="/existencias-crudos" />
     </div>
+    <div v-else class="modal-header-modal">
+      <div class="modal-header-left">
+        <div class="modal-tabs">
+          <button
+            type="button"
+            class="modal-tab-btn"
+            :class="{ active: pestanaModal === 'entradas' }"
+            @click="pestanaModal = 'entradas'"
+          >
+            Entradas{{ entradas.length > 0 ? ` (${entradas.length})` : '' }}
+          </button>
+          <button
+            type="button"
+            class="modal-tab-btn"
+            :class="{ active: pestanaModal === 'salidas' }"
+            @click="pestanaModal = 'salidas'"
+          >
+            Salidas{{ salidas.length > 0 ? ` (${salidas.length})` : '' }}
+          </button>
+        </div>
+        <router-link
+          v-if="registroId"
+          :to="`/existencias-crudos/${registroId}`"
+          class="link-dia-completo"
+        >
+          Ver día completo
+        </router-link>
+      </div>
+      <button type="button" class="close-modal-btn" @click="cerrarModal" title="Cerrar">&times;</button>
+    </div>
     <h2 class="date-header">{{ formattedDate }}</h2>
-    <div class="date-selector">
+    <div v-if="!modoModal" class="date-selector">
       <input type="date" v-model="selectedDate" @change="updateCurrentDate">
     </div>
-    
-    <div class="registro-content">
-      <div class="entradas-section">
+
+    <div class="registro-content" :class="{ 'solo-salidas': modoModal }">
+      <div v-if="!modoModal || pestanaModal === 'entradas'" class="entradas-section">
         <h3>Entradas de Crudos</h3>
         <div class="form-section">
           <div class="input-group">
@@ -107,7 +137,7 @@
         <p class="total">Total Entradas: {{ formatNumber(totalEntradas) }} kg</p>
       </div>
       
-      <div class="salidas-section">
+      <div v-if="!modoModal || pestanaModal === 'salidas'" class="salidas-section">
         <h3>Salidas de Crudos</h3>
         <div class="form-section">
           <div class="input-group">
@@ -182,7 +212,72 @@
         <p class="total">Total Salidas: {{ formatNumber(totalSalidas) }} kg</p>
       </div>
     </div>
-    
+
+    <div v-if="!modoModal" class="comparacion-embarque">
+      <div class="comparacion-header" @click="toggleComparacion">
+        <h3>
+          Comparar salidas con embarque del día
+          <span class="toggle-icon">{{ comparacionVisible ? '▲' : '▼' }}</span>
+        </h3>
+      </div>
+      <div v-if="comparacionVisible" class="comparacion-body">
+        <div v-if="cargandoEmbarques" class="comparacion-cargando">
+          Buscando embarque del {{ formattedDate }}...
+        </div>
+        <div v-else-if="!embarquesDelDia.length" class="no-productos">
+          No se encontró ningún embarque para el {{ formattedDate }}.
+          <button @click="cargarEmbarquesDelDia" class="btn-recargar">Volver a buscar</button>
+        </div>
+        <div v-else>
+          <p class="comparacion-info">
+            {{ embarquesDelDia.length === 1 ? 'Embarque encontrado' : embarquesDelDia.length + ' embarques encontrados' }}
+            para el {{ formattedDate }}<span v-if="descripcionEmbarques"> ({{ descripcionEmbarques }})</span>.
+            <button @click="cargarEmbarquesDelDia" class="btn-recargar">Actualizar</button>
+          </p>
+          <div v-if="comparacion.totalEmbarcado <= 0" class="no-productos">
+            El embarque no tiene crudos ni macuil registrados.
+          </div>
+          <div v-else>
+            <div class="comparacion-totales">
+              <div class="total-card">
+                <span class="total-etiqueta">Crudos embarcados</span>
+                <span class="total-valor">{{ formatNumber(comparacion.totalCrudos) }} kg</span>
+              </div>
+              <div v-if="comparacion.totalMacuil > 0" class="total-card">
+                <span class="total-etiqueta">Macuil embarcado (cocido)</span>
+                <span class="total-valor">{{ formatNumber(comparacion.totalMacuil) }} kg</span>
+              </div>
+              <div class="total-card">
+                <span class="total-etiqueta">Total embarcado</span>
+                <span class="total-valor">{{ formatNumber(comparacion.totalEmbarcado) }} kg</span>
+              </div>
+              <div class="total-card">
+                <span class="total-etiqueta">Salidas registradas del día</span>
+                <span class="total-valor">{{ formatNumber(comparacion.totalSalidas) }} kg</span>
+              </div>
+            </div>
+            <p class="comparacion-estado" :class="'estado-' + comparacion.estado">
+              <span class="estado-icono">{{ comparacion.estado === 'ok' ? '✓' : (comparacion.estado === 'faltante' ? '✗' : '⚠') }}</span>
+              {{ comparacion.estadoTexto }}
+            </p>
+            <div v-if="comparacion.desglose.length" class="sin-correspondencia">
+              <h4>Desglose de lo embarcado</h4>
+              <ul>
+                <li v-for="item in comparacion.desglose" :key="item.clave">
+                  {{ item.nombre }}: {{ formatNumber(item.kilos) }} kg
+                  <span v-if="item.clientes.length" class="clientes-info">({{ item.clientes.join(', ') }})</span>
+                </li>
+              </ul>
+            </div>
+            <p v-if="comparacion.totalMacuil > 0" class="comparacion-nota">
+              ℹ️ El macuil es camarón con cabeza cocido: las salidas de crudo del día deben
+              <strong>superar</strong> el total embarcado por la merma de cocción.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div class="summary">
       <h3>Resumen del Día</h3>
       <p>Total Entradas: {{ formatNumber(totalEntradas) }} kg</p>
@@ -190,7 +285,10 @@
       <p>Diferencia: {{ formatNumber(totalEntradas - totalSalidas) }} kg</p>
     </div>
     
-    <button @click="saveReport" class="save-button" :disabled="guardando">{{ guardando ? 'Guardando...' : (isEditing ? 'Actualizar' : 'Guardar') + ' Registro' }}</button>
+    <div class="save-actions" :class="{ 'save-actions-modal': modoModal }">
+      <button @click="saveReport" class="save-button" :disabled="guardando">{{ guardando ? 'Guardando...' : (isEditing ? 'Actualizar' : 'Guardar') + ' Registro' }}</button>
+      <button v-if="modoModal" @click="cerrarModal" class="cancel-modal-button" type="button">Cerrar sin guardar</button>
+    </div>
 
     <!-- Modal edición entrada -->
     <div v-if="editandoEntrada" class="modal-overlay" @click.self="cancelarEdicionEntrada">
@@ -238,11 +336,22 @@ import { collection, addDoc, getDocs, doc, getDoc, updateDoc, query, where } fro
 import BackButton from '../components/BackButton.vue';
 import moment from 'moment';
 import { formatNumber } from '@/utils/formatters';
+import { normalizarFechaValor } from '@/utils/dateUtils';
 
 export default {
   name: 'RegistroCrudos',
   components: {
     BackButton
+  },
+  props: {
+    modoModal: {
+      type: Boolean,
+      default: false
+    },
+    registroIdProp: {
+      type: String,
+      default: null
+    }
   },
   data() {
     return {
@@ -278,7 +387,14 @@ export default {
       kilosDisponiblesSeleccionados: 0,
       editandoEntrada: false,
       entradaEditIndex: null,
-      entradaEditData: { kilos: null, cuartoFrio: '' }
+      entradaEditData: { kilos: null, cuartoFrio: '' },
+      comparacionVisible: false,
+      cargandoEmbarques: false,
+      embarquesCargados: false,
+      embarquesDelDia: [],
+      crudosEmbarque: [],
+      salidasIniciales: 0,
+      pestanaModal: 'salidas'
     };
   },
   computed: {
@@ -332,6 +448,67 @@ export default {
       );
       if (!productoSel || !productoSel.cuartos) return [];
       return productoSel.cuartos.map(c => c.nombre);
+    },
+    descripcionEmbarques() {
+      return this.embarquesDelDia
+        .map(e => e.descripcion)
+        .filter(Boolean)
+        .join(', ');
+    },
+    comparacion() {
+      // Comparación por kilos totales del día: los nombres de producto varían
+      // por proveedor, así que no se cruza por nombre.
+      const totalCrudos = Number(
+        this.crudosEmbarque
+          .filter(item => !item.esMacuil)
+          .reduce((total, item) => total + item.kilos, 0)
+          .toFixed(1)
+      );
+      const totalMacuil = Number(
+        this.crudosEmbarque
+          .filter(item => item.esMacuil)
+          .reduce((total, item) => total + item.kilos, 0)
+          .toFixed(1)
+      );
+      const totalEmbarcado = Number((totalCrudos + totalMacuil).toFixed(1));
+      const totalSalidas = this.totalSalidas;
+      const diferencia = Number((totalSalidas - totalEmbarcado).toFixed(1));
+
+      let estado;
+      let estadoTexto;
+      if (totalSalidas <= 0) {
+        estado = 'faltante';
+        estadoTexto = 'No hay salidas registradas para este día';
+      } else if (totalMacuil > 0) {
+        if (diferencia > 0) {
+          const crudoParaMacuil = Number((totalMacuil + diferencia).toFixed(1));
+          const merma = ((diferencia / crudoParaMacuil) * 100).toFixed(1);
+          estado = 'ok';
+          estadoTexto = `Las salidas cubren lo embarcado, con merma de cocción del macuil de ${formatNumber(diferencia)} kg (${merma}%)`;
+        } else {
+          estado = 'revisar';
+          estadoTexto = `Las salidas deberían superar lo embarcado por la merma de cocción del macuil; faltan al menos ${formatNumber(Math.abs(diferencia))} kg por registrar`;
+        }
+      } else {
+        const tolerancia = Math.max(0.5, totalEmbarcado * 0.01);
+        if (Math.abs(diferencia) <= tolerancia) {
+          estado = 'ok';
+          estadoTexto = 'Las salidas del día cuadran con lo embarcado';
+        } else if (diferencia < 0) {
+          estado = 'revisar';
+          estadoTexto = `Faltan ${formatNumber(Math.abs(diferencia))} kg de salidas por registrar`;
+        } else {
+          estado = 'revisar';
+          estadoTexto = `Las salidas superan lo embarcado por ${formatNumber(diferencia)} kg`;
+        }
+      }
+
+      const desglose = [...this.crudosEmbarque].sort((a, b) => {
+        if (a.esMacuil !== b.esMacuil) return a.esMacuil ? 1 : -1;
+        return b.kilos - a.kilos;
+      });
+
+      return { totalCrudos, totalMacuil, totalEmbarcado, totalSalidas, diferencia, estado, estadoTexto, desglose };
     },
     medidasDelProveedorEntrada() {
       if (!this.newEntrada.proveedor || this.newEntrada.proveedor === '__nuevo__') {
@@ -784,6 +961,7 @@ export default {
         this.registroId = id;
         this.isEditing = true;
         this.fechaOriginal = this.currentDate.format('YYYY-MM-DD');
+        this.salidasIniciales = this.salidas.length;
         await this.loadProductosDisponibles();
       } else {
         console.log("No se encontró el documento con ID:", id);
@@ -839,13 +1017,21 @@ export default {
 
         if (this.isEditing) {
           await updateDoc(doc(db, 'existenciasCrudos', this.registroId), reportData);
-          alert("Registro de crudos actualizado exitosamente");
+          if (!this.modoModal) alert("Registro de crudos actualizado exitosamente");
         } else {
-          await addDoc(collection(db, 'existenciasCrudos'), reportData);
-          alert("Registro de crudos guardado exitosamente");
+          const docRef = await addDoc(collection(db, 'existenciasCrudos'), reportData);
+          this.registroId = docRef.id;
+          this.isEditing = true;
+          this.fechaOriginal = this.currentDate.format('YYYY-MM-DD');
+          if (!this.modoModal) alert("Registro de crudos guardado exitosamente");
         }
-        
-        this.$router.push('/existencias-crudos');
+        this.salidasIniciales = this.salidas.length;
+
+        if (this.modoModal) {
+          this.$emit('guardado', this.registroId);
+        } else {
+          this.$router.push('/existencias-crudos');
+        }
       } catch (error) {
         console.error("Error al guardar/actualizar el registro: ", error);
         alert("Error al guardar/actualizar el registro: " + error.message);
@@ -854,9 +1040,159 @@ export default {
       }
     },
 
+    cerrarModal() {
+      const hayCambiosSinGuardar = this.salidas.length !== this.salidasIniciales;
+      if (hayCambiosSinGuardar && !confirm('Hay salidas sin guardar. ¿Cerrar de todas formas?')) {
+        return;
+      }
+      this.$emit('cerrar');
+    },
+
     updateCurrentDate() {
       this.currentDate = moment(this.selectedDate);
       this.loadProductosDisponibles();
+      this.embarquesCargados = false;
+      this.embarquesDelDia = [];
+      this.crudosEmbarque = [];
+      if (this.comparacionVisible) {
+        this.cargarEmbarquesDelDia();
+      }
+    },
+
+    async toggleComparacion() {
+      this.comparacionVisible = !this.comparacionVisible;
+      if (this.comparacionVisible && !this.embarquesCargados && !this.cargandoEmbarques) {
+        await this.cargarEmbarquesDelDia();
+      }
+    },
+
+    async cargarEmbarquesDelDia() {
+      this.cargandoEmbarques = true;
+      try {
+        const objetivo = this.currentDate.format('YYYY-MM-DD');
+        // La fecha de los embarques se guarda en formatos heterogéneos
+        // (Timestamp, Date o string), por lo que se filtra en cliente.
+        const snapshot = await getDocs(collection(db, 'embarques'));
+        const embarques = [];
+        snapshot.docs.forEach(docSnap => {
+          const data = docSnap.data();
+          const fecha = normalizarFechaValor(data.fecha || data.fechaRegistro);
+          if (fecha === objetivo) {
+            embarques.push({ id: docSnap.id, ...data });
+          }
+        });
+
+        this.embarquesDelDia = embarques.map(e => ({
+          id: e.id,
+          descripcion: [e.cargaCon ? `carga con ${e.cargaCon}` : '', e.borrador ? 'borrador' : '']
+            .filter(Boolean)
+            .join(', ')
+        }));
+        this.crudosEmbarque = this.extraerCrudosDeEmbarques(embarques);
+        this.embarquesCargados = true;
+      } catch (error) {
+        console.error('Error al cargar embarques del día:', error);
+        alert('Error al cargar el embarque del día: ' + error.message);
+      } finally {
+        this.cargandoEmbarques = false;
+      }
+    },
+
+    extraerCrudosDeEmbarques(embarques) {
+      const acumulado = {};
+      const agregar = (nombre, kilos, cliente, esMacuil) => {
+        if (!kilos || kilos <= 0) return;
+        const clave = esMacuil ? 'macuil' : this.normalizarNombreComparacion(nombre);
+        if (!clave) return;
+        if (!acumulado[clave]) {
+          acumulado[clave] = {
+            clave,
+            nombre: esMacuil ? 'Macuil (cocido)' : nombre,
+            kilos: 0,
+            esMacuil,
+            clientes: new Set()
+          };
+        }
+        acumulado[clave].kilos = Number((acumulado[clave].kilos + kilos).toFixed(1));
+        if (cliente) acumulado[clave].clientes.add(cliente);
+      };
+
+      embarques.forEach(embarque => {
+        (embarque.clientes || []).forEach(cliente => {
+          (cliente.crudos || []).forEach(grupo => {
+            const items = grupo && grupo.items ? grupo.items : [];
+            items.forEach(item => {
+              const nombre = item.talla || item.medida;
+              if (!nombre) return;
+              // "Cam s/c" aquí representa piojo, que se descuenta de las
+              // existencias de limpios (Sacadas), no de las de crudos.
+              if (this.esCamSinCabeza(nombre)) return;
+              agregar(nombre, this.kilosDeCrudoItem(item), cliente.nombre, this.esNombreMacuil(nombre));
+            });
+          });
+          // El macuil viaja como producto limpio (camarón c/cabeza cocido),
+          // pero su salida se registra como crudo con merma de cocción.
+          (cliente.productos || []).forEach(producto => {
+            if (!this.esNombreMacuil(producto.medida)) return;
+            agregar(producto.medida, this.kilosNetosProducto(producto), cliente.nombre, true);
+          });
+        });
+      });
+
+      return Object.values(acumulado).map(item => ({
+        ...item,
+        clientes: Array.from(item.clientes)
+      }));
+    },
+
+    kilosDeCrudoItem(item) {
+      // Para comparar contra las salidas se usa el peso real de la tara (19 kg),
+      // no el peso de venta que aplica el módulo de embarques.
+      const parsear = (valor) => {
+        if (!valor) return 0;
+        const texto = String(valor).trim();
+        const conPeso = texto.match(/^(\d+)\s*-\s*(\d+(?:\.\d+)?)$/);
+        if (conPeso) return Number(conPeso[1]) * 19;
+        const soloCantidad = texto.match(/^(\d+)$/);
+        if (soloCantidad) return Number(soloCantidad[1]) * 19;
+        return 0;
+      };
+      return Number((parsear(item.taras) + parsear(item.sobrante)).toFixed(1));
+    },
+
+    kilosNetosProducto(producto) {
+      if (!producto) return 0;
+      if (producto.tipo === 'c/h20') {
+        const reporteTaras = producto.reporteTaras || [];
+        const reporteBolsas = producto.reporteBolsas || [];
+        let totalBolsas = 0;
+        reporteTaras.forEach((tara, i) => {
+          totalBolsas += (Number(tara) || 0) * (Number(reporteBolsas[i]) || 0);
+        });
+        return Number((totalBolsas * (Number(producto.camaronNeto) || 0.65)).toFixed(1));
+      }
+      const sumaKilos = (producto.kilos || []).reduce((s, k) => s + (Number(k) || 0), 0);
+      const totalTaras = (producto.taras || []).reduce((s, t) => s + (Number(t) || 0), 0)
+        + (producto.tarasExtra || []).reduce((s, t) => s + (Number(t) || 0), 0);
+      const descuento = producto.restarTaras !== false ? totalTaras * 3 : 0;
+      return Number(Math.max(sumaKilos - descuento, 0).toFixed(1));
+    },
+
+    normalizarNombreComparacion(nombre) {
+      return String(nombre || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+    },
+
+    esNombreMacuil(nombre) {
+      return this.normalizarNombreComparacion(nombre).includes('macuil');
+    },
+
+    esCamSinCabeza(nombre) {
+      return this.normalizarNombreComparacion(nombre) === 'cam s/c';
     }
   },
 
@@ -872,11 +1208,12 @@ export default {
       this.loadMedidasCrudos()
     ]);
     await this.loadProductosDisponibles();
-    
-    if (this.$route.params.id) {
-      await this.loadRegistro(this.$route.params.id);
+
+    const idAEditar = this.modoModal ? this.registroIdProp : this.$route.params.id;
+    if (idAEditar) {
+      await this.loadRegistro(idAEditar);
     }
-    
+
     this.isLoaded = true;
   }
 };
@@ -894,6 +1231,77 @@ export default {
 
 .back-button-container {
   margin-bottom: 20px;
+}
+
+.registro-crudos-container.modo-modal {
+  max-width: 900px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.modal-header-modal {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.modal-header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.modal-tabs {
+  display: flex;
+  gap: 6px;
+  background-color: #dbe6f5;
+  padding: 4px;
+  border-radius: 8px;
+}
+
+.modal-tab-btn {
+  background-color: transparent;
+  color: #3760b0;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9em;
+  font-weight: bold;
+  transition: background-color 0.3s, color 0.3s;
+}
+
+.modal-tab-btn:hover {
+  background-color: rgba(55, 96, 176, 0.15);
+}
+
+.modal-tab-btn.active {
+  background-color: #3760b0;
+  color: white;
+}
+
+.link-dia-completo {
+  color: #3760b0;
+  font-weight: bold;
+  text-decoration: underline;
+}
+
+.close-modal-btn {
+  background: transparent;
+  border: none;
+  font-size: 1.8em;
+  line-height: 1;
+  color: #666;
+  cursor: pointer;
+  padding: 0 6px;
+}
+
+.close-modal-btn:hover {
+  color: #000;
 }
 
 .date-header {
@@ -920,6 +1328,10 @@ export default {
   grid-template-columns: 1fr 1fr;
   gap: 30px;
   margin-bottom: 30px;
+}
+
+.registro-content.solo-salidas {
+  grid-template-columns: 1fr;
 }
 
 .entradas-section,
@@ -1203,6 +1615,138 @@ h3 {
   border-radius: 6px;
 }
 
+.comparacion-embarque {
+  background-color: white;
+  border-radius: 10px;
+  padding: 20px;
+  margin-bottom: 20px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.comparacion-header {
+  cursor: pointer;
+}
+
+.comparacion-header h3 {
+  margin-bottom: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.comparacion-header .toggle-icon {
+  font-size: 0.8em;
+}
+
+.comparacion-body {
+  margin-top: 20px;
+}
+
+.comparacion-cargando {
+  text-align: center;
+  color: #3760b0;
+  padding: 20px;
+  font-style: italic;
+}
+
+.comparacion-info {
+  color: #3760b0;
+  margin-bottom: 15px;
+}
+
+.btn-recargar {
+  margin-left: 10px;
+  padding: 5px 10px;
+  font-size: 13px;
+}
+
+.comparacion-totales {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+  margin-bottom: 15px;
+}
+
+.total-card {
+  background-color: #f8f9fa;
+  border-left: 4px solid #3760b0;
+  border-radius: 6px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.total-etiqueta {
+  color: #666;
+  font-size: 13px;
+}
+
+.total-valor {
+  color: #3760b0;
+  font-weight: bold;
+  font-size: 18px;
+}
+
+.comparacion-estado {
+  padding: 12px;
+  border-radius: 6px;
+  font-weight: bold;
+  font-size: 15px;
+}
+
+.comparacion-estado .estado-icono {
+  margin-right: 6px;
+}
+
+.comparacion-estado.estado-ok {
+  background-color: #f4fff6;
+  color: #1e7e34;
+}
+
+.comparacion-estado.estado-revisar {
+  background-color: #fff8e6;
+  color: #9c6f00;
+}
+
+.comparacion-estado.estado-faltante {
+  background-color: #fff1f0;
+  color: #c62828;
+}
+
+.clientes-info {
+  color: #666;
+  font-size: 12px;
+}
+
+.sin-correspondencia {
+  margin-top: 15px;
+  padding: 12px;
+  background-color: #f8f9fa;
+  border-radius: 6px;
+}
+
+.sin-correspondencia h4 {
+  color: #3760b0;
+  margin: 0 0 8px 0;
+  font-size: 14px;
+}
+
+.sin-correspondencia ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.comparacion-nota {
+  margin-top: 15px;
+  padding: 10px;
+  background-color: #f0f8ff;
+  border-left: 4px solid #3760b0;
+  border-radius: 4px;
+  font-size: 13px;
+  color: #333;
+}
+
 .summary {
   background-color: white;
   border-radius: 10px;
@@ -1221,6 +1765,14 @@ h3 {
   font-size: 16px;
 }
 
+.save-actions {
+  display: flex;
+}
+
+.save-actions-modal {
+  gap: 10px;
+}
+
 .save-button {
   display: block;
   width: 100%;
@@ -1232,6 +1784,22 @@ h3 {
   border-radius: 8px;
   cursor: pointer;
   transition: background-color 0.3s;
+}
+
+.cancel-modal-button {
+  padding: 15px 20px;
+  font-size: 1.05em;
+  background-color: #6c757d;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.3s;
+  white-space: nowrap;
+}
+
+.cancel-modal-button:hover {
+  background-color: #565e64;
 }
 
 .save-button:hover {

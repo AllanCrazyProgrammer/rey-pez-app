@@ -1,7 +1,17 @@
 <template>
   <div class="sacadas-menu-container">
     <h1>Menú de Sacadas</h1>
-    
+
+    <button
+      @click="irASalidaDeHoy"
+      :disabled="isLoading"
+      class="quick-salida-btn"
+      title="Ir directo al registro de hoy para agregar una salida"
+    >
+      <i class="fas fa-bolt"></i>
+      Registrar Salida de Hoy
+    </button>
+
     <div class="actions-container">
       <router-link to="/sacadas/new" class="action-button new-sacada-btn">
         Nueva Sacada
@@ -70,6 +80,16 @@
       @medida-created="loadMedidas"
       @medida-deleted="loadMedidas"
     />
+
+    <!-- Modal rápido: solo entradas/salidas del día -->
+    <div v-if="modalSalida.abierto" class="modal-overlay" @click.self="cerrarModalSalida">
+      <Sacadas
+        modo-modal
+        :sacada-id-prop="modalSalida.sacadaId"
+        @guardado="onSalidaGuardada"
+        @cerrar="cerrarModalSalida"
+      />
+    </div>
   </div>
 </template>
 
@@ -80,13 +100,16 @@ import moment from 'moment'; // Import Moment.js
 import PapeleraService from '@/services/PapeleraService';
 import HistorialProductoModal from '@/components/HistorialProductoModal.vue';
 import ListaMedidasPedidoModal from '@/components/ListaMedidasPedidoModal.vue';
+import Sacadas from './Sacadas.vue';
 import { formatNumber } from '@/utils/formatters';
+import { useUIStore } from '@/stores/ui';
 
 export default {
   name: 'SacadasMenu',
   components: {
     HistorialProductoModal,
-    ListaMedidasPedidoModal
+    ListaMedidasPedidoModal,
+    Sacadas
   },
   data() {
     return {
@@ -99,7 +122,11 @@ export default {
       medidas: [],
       isListaMedidasModalOpen: false,
       selectedSacadaForMeasures: null,
-      isSavingListaMedidas: false
+      isSavingListaMedidas: false,
+      modalSalida: {
+        abierto: false,
+        sacadaId: null
+      }
     };
   },
   computed: {
@@ -153,7 +180,25 @@ export default {
       return moment(date).format('DD [de] MMMM [de] YYYY');
     },
     editSacada(id) {
-      this.$router.push(`/sacadas/${id}`);
+      this.modalSalida = { abierto: true, sacadaId: id };
+      useUIStore().openModal('salida-sacada');
+    },
+
+    irASalidaDeHoy() {
+      const hoy = moment().startOf('day');
+      const sacadaHoy = this.sacadas.find(sacada => moment(sacada.fecha).isSame(hoy, 'day'));
+      this.modalSalida = { abierto: true, sacadaId: sacadaHoy ? sacadaHoy.id : null };
+      useUIStore().openModal('salida-sacada');
+    },
+
+    cerrarModalSalida() {
+      this.modalSalida = { abierto: false, sacadaId: null };
+      useUIStore().closeModal();
+    },
+
+    async onSalidaGuardada() {
+      this.cerrarModalSalida();
+      await this.loadSacadas();
     },
     async deleteSacada(id) {
       // Obtener los datos del día (estado local o Firestore) para el respaldo y el detalle
@@ -280,6 +325,11 @@ export default {
       this.loadProveedores(),
       this.loadMedidas()
     ]);
+  },
+
+  beforeDestroy() {
+    // Evitar que el navbar quede oculto si se navega fuera con el modal abierto
+    useUIStore().closeModal();
   }
 };
 </script>
@@ -316,6 +366,51 @@ h2 {
   font-size: 1.15rem;
   color: var(--vw-neon-purple);
   text-shadow: 0 0 8px rgba(168, 85, 247, 0.45);
+}
+
+.quick-salida-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  background: linear-gradient(135deg, #ff9800, #f57c00);
+  color: white;
+  border: none;
+  padding: 16px 24px;
+  border-radius: 12px;
+  cursor: pointer;
+  font-size: 18px;
+  font-weight: bold;
+  margin-bottom: 16px;
+  box-shadow: 0 0 20px rgba(245, 124, 0, 0.4);
+  transition: box-shadow 0.3s, transform 0.15s;
+}
+
+.quick-salida-btn:hover {
+  box-shadow: 0 0 26px rgba(245, 124, 0, 0.55);
+  transform: translateY(-1px);
+}
+
+.quick-salida-btn:disabled {
+  background: #4b5563;
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
+}
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.6);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  padding: 20px;
 }
 
 .actions-container {
