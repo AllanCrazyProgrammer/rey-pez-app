@@ -2,6 +2,16 @@
   <div class="existencias-crudos-container">
     <h1>Existencias de Crudos</h1>
     
+    <button
+      @click="irASalidaDeHoy"
+      :disabled="isLoadingRegistros"
+      class="quick-salida-btn"
+      title="Ir directo al registro de hoy para agregar una salida"
+    >
+      <i class="fas fa-bolt"></i>
+      Registrar Salida de Hoy
+    </button>
+
     <div class="actions-container">
       <router-link to="/existencias-crudos/new" class="action-button new-entrada-btn">
         Nueva Entrada/Salida
@@ -682,6 +692,16 @@ export default {
       this.$router.push(`/existencias-crudos/${id}`);
     },
 
+    irASalidaDeHoy() {
+      const hoy = moment().startOf('day');
+      const registroHoy = this.registros.find(registro => moment(registro.fecha).isSame(hoy, 'day'));
+      if (registroHoy) {
+        this.$router.push(`/existencias-crudos/${registroHoy.id}`);
+      } else {
+        this.$router.push('/existencias-crudos/new');
+      }
+    },
+
     async deleteRegistro(id) {
       // Obtener los datos del registro (estado local o Firestore) para el respaldo y el detalle
       let datosRegistro = this.registros.find(registro => registro.id === id) || null;
@@ -998,6 +1018,37 @@ export default {
 
 h1, h2, h3 {
   color: #3760b0;
+}
+
+.quick-salida-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  background: linear-gradient(135deg, #ff9800, #f57c00);
+  color: white;
+  border: none;
+  padding: 16px 24px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 18px;
+  font-weight: bold;
+  margin-bottom: 20px;
+  box-shadow: 0 4px 8px rgba(245, 124, 0, 0.35);
+  transition: background 0.3s, transform 0.15s;
+}
+
+.quick-salida-btn:hover {
+  background: linear-gradient(135deg, #fb8c00, #ef6c00);
+  transform: translateY(-1px);
+}
+
+.quick-salida-btn:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
 }
 
 .actions-container {
