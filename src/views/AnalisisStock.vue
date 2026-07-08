@@ -54,6 +54,36 @@
           </button>
         </div>
 
+        <div class="modo-selector">
+          <span class="modo-selector-label">Modo de cálculo</span>
+          <div class="modo-opciones">
+            <label class="modo-opcion" :class="{ active: modo === 'demanda' }">
+              <input type="radio" value="demanda" v-model="modo" />
+              <span>
+                <strong>Por demanda (simple)</strong>
+                <small>Proporcional al % de ventas de cada medida</small>
+              </span>
+            </label>
+            <label class="modo-opcion" :class="{ active: modo === 'cobertura' }">
+              <input type="radio" value="cobertura" v-model="modo" />
+              <span>
+                <strong>Por días de cobertura (recomendado)</strong>
+                <small>Prioriza medidas con menos días de stock según su consumo diario</small>
+              </span>
+            </label>
+          </div>
+          <label v-if="modo === 'cobertura'" class="meta-dias-label">
+            Meta de días de cobertura
+            <input
+              v-model.number="metaDiasCobertura"
+              type="number"
+              inputmode="decimal"
+              min="1"
+              step="1"
+            />
+          </label>
+        </div>
+
         <div class="medidas-selector">
           <div class="medidas-selector-header">
             <span>Medidas a incluir{{ proveedorSeleccionado ? ` — ${proveedorSeleccionado}` : '' }}</span>
@@ -92,6 +122,9 @@
           Basado en <strong>{{ formatNumber(resultado.totalVendido) }} kg</strong> de salidas
           entre el {{ resultado.fechaInicio }} y el {{ resultado.fechaFin }}
           ({{ resultado.diasHistorial }} días).
+          <template v-if="resultado.modo === 'cobertura'">
+            Meta de cobertura: <strong>{{ resultado.metaDiasCobertura }} días</strong>.
+          </template>
         </p>
 
         <div v-if="resultado.filas.length === 0" class="sin-datos">
@@ -105,7 +138,14 @@
               <tr>
                 <th>Medida</th>
                 <th class="num">Vendido ({{ resultado.diasHistorial }}d)</th>
-                <th class="num">% Demanda</th>
+                <template v-if="resultado.modo === 'demanda'">
+                  <th class="num">% Demanda</th>
+                </template>
+                <template v-else>
+                  <th class="num">Consumo diario</th>
+                  <th class="num">Días cobertura</th>
+                  <th class="num">Déficit (meta {{ resultado.metaDiasCobertura }}d)</th>
+                </template>
                 <th class="num compra-col">Compra recomendada</th>
                 <th class="num">Stock actual</th>
                 <th class="num">Stock post-compra</th>
@@ -115,7 +155,16 @@
               <tr v-for="fila in resultado.filas" :key="fila.medida">
                 <td>{{ fila.medida }}</td>
                 <td class="num">{{ formatNumber(fila.vendido) }} kg</td>
-                <td class="num">{{ fila.porcentaje.toFixed(1) }}%</td>
+                <template v-if="resultado.modo === 'demanda'">
+                  <td class="num">{{ fila.porcentaje.toFixed(1) }}%</td>
+                </template>
+                <template v-else>
+                  <td class="num">{{ formatNumber(fila.consumoDiario) }} kg/d</td>
+                  <td class="num">{{ fila.diasCobertura.toFixed(1) }} d</td>
+                  <td class="num" :class="{ 'deficit-urgente': fila.deficit > 0 }">
+                    {{ fila.deficit > 0 ? formatNumber(fila.deficit) + ' kg' : '—' }}
+                  </td>
+                </template>
                 <td class="num compra-col"><strong>{{ formatNumber(fila.compra) }} kg</strong></td>
                 <td class="num" :class="{ 'stock-negativo': fila.stockActual < 0 }">
                   {{ formatNumber(fila.stockActual) }} kg
@@ -127,7 +176,14 @@
               <tr>
                 <td><strong>Total</strong></td>
                 <td class="num"><strong>{{ formatNumber(resultado.totalVendido) }} kg</strong></td>
-                <td class="num"><strong>100%</strong></td>
+                <template v-if="resultado.modo === 'demanda'">
+                  <td class="num"><strong>100%</strong></td>
+                </template>
+                <template v-else>
+                  <td class="num"></td>
+                  <td class="num"></td>
+                  <td class="num"></td>
+                </template>
                 <td class="num compra-col"><strong>{{ formatNumber(resultado.totalCompra) }} kg</strong></td>
                 <td class="num"><strong>{{ formatNumber(resultado.totalStockActual) }} kg</strong></td>
                 <td class="num"><strong>{{ formatNumber(resultado.totalStockActual + resultado.totalCompra) }} kg</strong></td>
@@ -170,6 +226,8 @@ export default {
       kilosDisponibles: null,
       proveedorSeleccionado: '',
       diasHistorial: 30,
+      modo: 'demanda', // 'demanda' | 'cobertura'
+      metaDiasCobertura: 30,
       proveedores: [],
       proveedoresObjetos: [],
       medidasDisponibles: [],
@@ -177,8 +235,21 @@ export default {
       cargandoMedidas: false,
       cargando: false,
       error: '',
-      resultado: null
+      resultado: null,
+      // Snapshot de la última consulta a Firestore, para poder recalcular al
+      // instante al cambiar de modo o de meta de cobertura sin releer datos.
+      datosCalculo: null
     };
+  },
+  watch: {
+    modo() {
+      this.recalcularResultado();
+    },
+    metaDiasCobertura() {
+      if (this.modo === 'cobertura') {
+        this.recalcularResultado();
+      }
+    }
   },
   computed: {
     puedeCalcular() {
@@ -266,6 +337,7 @@ export default {
       this.medidasDisponibles = [];
       this.medidasSeleccionadas = [];
       this.resultado = null;
+      this.datosCalculo = null;
       this.error = '';
 
       if (!this.proveedorSeleccionado) return;
@@ -307,33 +379,34 @@ export default {
       }
     },
 
-    // Reparte totalKilos en bloques de "bloque" kg entre las filas, en
-    // proporción a su demanda, usando el método de restos mayores para que
-    // cada compra sea un múltiplo cerrado y la suma cuadre con totalKilos.
-    distribuirEnMultiplos(filas, totalKilos, bloque = 500) {
+    // Reparte totalKilos en bloques de "bloque" kg entre los items, en
+    // proporción a su "idealKg" (el kilaje ideal ya calculado por el modo
+    // activo), usando el método de restos mayores para que cada compra sea
+    // un múltiplo cerrado y la suma cuadre con totalKilos.
+    redondearABloques(items, totalKilos, bloque = 500) {
       const totalBloques = Math.round(totalKilos / bloque);
 
-      if (filas.length === 0 || totalBloques <= 0) {
-        return filas.map(fila => ({ ...fila, compra: 0 }));
+      if (items.length === 0 || totalBloques <= 0) {
+        return items.map(({ idealKg, ...resto }) => ({ ...resto, compra: 0 }));
       }
 
-      const totalDemanda = filas.reduce((sum, fila) => sum + fila.vendido, 0);
+      const sumaIdeal = items.reduce((sum, item) => sum + item.idealKg, 0);
 
-      if (totalDemanda <= 0) {
-        const base = Math.floor(totalBloques / filas.length);
-        const resto = totalBloques % filas.length;
-        return filas.map((fila, index) => ({
-          ...fila,
+      if (sumaIdeal <= 0) {
+        const base = Math.floor(totalBloques / items.length);
+        const resto = totalBloques % items.length;
+        return items.map(({ idealKg, ...item }, index) => ({
+          ...item,
           compra: (base + (index < resto ? 1 : 0)) * bloque
         }));
       }
 
-      const conBloques = filas.map(fila => {
-        const exacto = (fila.vendido / totalDemanda) * totalBloques;
-        return { ...fila, bloquesExactos: exacto, bloques: Math.floor(exacto) };
+      const conBloques = items.map(item => {
+        const exacto = (item.idealKg / sumaIdeal) * totalBloques;
+        return { ...item, bloquesExactos: exacto, bloques: Math.floor(exacto) };
       });
 
-      const asignados = conBloques.reduce((sum, fila) => sum + fila.bloques, 0);
+      const asignados = conBloques.reduce((sum, item) => sum + item.bloques, 0);
       const restantes = totalBloques - asignados;
 
       const ordenResiduo = [...conBloques].sort(
@@ -343,7 +416,7 @@ export default {
         ordenResiduo[i % ordenResiduo.length].bloques += 1;
       }
 
-      return conBloques.map(({ bloquesExactos, bloques, ...resto }) => ({
+      return conBloques.map(({ bloquesExactos, bloques, idealKg, ...resto }) => ({
         ...resto,
         compra: bloques * bloque
       }));
@@ -354,6 +427,7 @@ export default {
       this.cargando = true;
       this.error = '';
       this.resultado = null;
+      this.datosCalculo = null;
 
       try {
         const proveedor = this.proveedorSeleccionado;
@@ -365,56 +439,109 @@ export default {
           proveedor, fechaInicio, fechaFin
         );
 
-        const seleccionadas = new Set(this.medidasSeleccionadas);
-        const kilosAComprar = Number(this.kilosDisponibles) || 0;
-
-        const filasBase = Object.entries(demandaPorMedida)
-          .filter(([medida]) => seleccionadas.has(medida))
-          .map(([medida, vendido]) => ({ medida, vendido: Number(vendido.toFixed(1)) }));
-
-        const totalVendido = filasBase.reduce((sum, fila) => sum + fila.vendido, 0);
-
-        // Compra recomendada en múltiplos cerrados de 500 kg
-        const filas = this.distribuirEnMultiplos(filasBase, kilosAComprar, 500)
-          .map(fila => {
-            const stockActual = Number((stockPorMedida[fila.medida] || 0).toFixed(1));
-            return {
-              medida: fila.medida,
-              vendido: fila.vendido,
-              porcentaje: totalVendido > 0 ? (fila.vendido / totalVendido) * 100 : 0,
-              compra: fila.compra,
-              stockActual,
-              stockPostCompra: Number((stockActual + fila.compra).toFixed(1))
-            };
-          })
-          .sort((a, b) => b.vendido - a.vendido);
-
-        // Medidas seleccionadas sin demanda en el periodo: no reciben compra,
-        // pero se muestran aparte para que no queden ocultas.
-        const sinVentas = this.medidasSeleccionadas
-          .filter(medida => !demandaPorMedida[medida])
-          .map(medida => ({ medida, stockActual: Number((stockPorMedida[medida] || 0).toFixed(1)) }))
-          .sort((a, b) => b.stockActual - a.stockActual);
-
-        this.resultado = {
+        this.datosCalculo = {
           proveedor,
-          diasHistorial: dias,
-          fechaInicio: fechaInicio.format('DD/MM/YYYY'),
-          fechaFin: fechaFin.format('DD/MM/YYYY'),
-          totalVendido: Number(totalVendido.toFixed(1)),
-          totalCompra: filas.reduce((sum, fila) => sum + fila.compra, 0),
-          totalStockActual: Number(
-            filas.reduce((sum, fila) => sum + fila.stockActual, 0).toFixed(1)
-          ),
-          filas,
-          sinVentas
+          dias,
+          fechaInicioTexto: fechaInicio.format('DD/MM/YYYY'),
+          fechaFinTexto: fechaFin.format('DD/MM/YYYY'),
+          demandaPorMedida,
+          stockPorMedida,
+          medidasSeleccionadas: [...this.medidasSeleccionadas],
+          kilosAComprar: Number(this.kilosDisponibles) || 0
         };
+
+        this.recalcularResultado();
       } catch (error) {
         console.error('Error al calcular la distribución:', error);
         this.error = 'No se pudo calcular la distribución: ' + error.message;
       } finally {
         this.cargando = false;
       }
+    },
+
+    // Recalcula la tabla de resultados a partir de los datos ya consultados
+    // (this.datosCalculo), aplicando el modo de cálculo activo. Se usa tanto
+    // al terminar calcular() como al cambiar de modo o la meta de cobertura,
+    // para que el resultado se actualice al instante sin releer Firestore.
+    recalcularResultado() {
+      if (!this.datosCalculo) return;
+
+      const {
+        proveedor, dias, fechaInicioTexto, fechaFinTexto,
+        demandaPorMedida, stockPorMedida, medidasSeleccionadas, kilosAComprar
+      } = this.datosCalculo;
+
+      const metaDias = Number(this.metaDiasCobertura) || 0;
+
+      const filasBase = medidasSeleccionadas
+        .filter(medida => demandaPorMedida[medida])
+        .map(medida => {
+          const vendido = Number(demandaPorMedida[medida].toFixed(1));
+          const stockActual = Number((stockPorMedida[medida] || 0).toFixed(1));
+          const consumoDiario = Number((vendido / dias).toFixed(2));
+          const diasCobertura = Number((stockActual / consumoDiario).toFixed(1));
+          const deficit = Math.max(0, Number(((metaDias - diasCobertura) * consumoDiario).toFixed(1)));
+          return { medida, vendido, stockActual, consumoDiario, diasCobertura, deficit };
+        });
+
+      const totalVendido = filasBase.reduce((sum, fila) => sum + fila.vendido, 0);
+
+      let itemsConIdeal;
+      if (this.modo === 'cobertura') {
+        const totalDeficit = filasBase.reduce((sum, fila) => sum + fila.deficit, 0);
+
+        if (totalDeficit > 0 && totalDeficit > kilosAComprar) {
+          // Los déficits superan lo disponible: repartir proporcional al
+          // tamaño del déficit para priorizar las medidas más urgentes.
+          itemsConIdeal = filasBase.map(fila => ({ ...fila, idealKg: fila.deficit }));
+        } else {
+          // Alcanza para cubrir todos los déficits; lo que sobra se reparte
+          // proporcionalmente al consumo mensual de cada medida.
+          const kilosRestantes = kilosAComprar - totalDeficit;
+          const totalConsumoMensual = filasBase.reduce((sum, fila) => sum + fila.consumoDiario * 30, 0);
+          itemsConIdeal = filasBase.map(fila => {
+            const consumoMensual = fila.consumoDiario * 30;
+            const shareRemanente = totalConsumoMensual > 0
+              ? kilosRestantes * (consumoMensual / totalConsumoMensual)
+              : 0;
+            return { ...fila, idealKg: fila.deficit + shareRemanente };
+          });
+        }
+      } else {
+        // Modo por demanda: reparto proporcional al % de ventas de cada medida
+        itemsConIdeal = filasBase.map(fila => ({ ...fila, idealKg: fila.vendido }));
+      }
+
+      const filas = this.redondearABloques(itemsConIdeal, kilosAComprar, 500)
+        .map(fila => ({
+          ...fila,
+          porcentaje: totalVendido > 0 ? (fila.vendido / totalVendido) * 100 : 0,
+          stockPostCompra: Number((fila.stockActual + fila.compra).toFixed(1))
+        }))
+        .sort((a, b) => b.vendido - a.vendido);
+
+      // Medidas seleccionadas sin demanda en el periodo: no reciben compra,
+      // pero se muestran aparte para que no queden ocultas.
+      const sinVentas = medidasSeleccionadas
+        .filter(medida => !demandaPorMedida[medida])
+        .map(medida => ({ medida, stockActual: Number((stockPorMedida[medida] || 0).toFixed(1)) }))
+        .sort((a, b) => b.stockActual - a.stockActual);
+
+      this.resultado = {
+        proveedor,
+        diasHistorial: dias,
+        fechaInicio: fechaInicioTexto,
+        fechaFin: fechaFinTexto,
+        modo: this.modo,
+        metaDiasCobertura: metaDias,
+        totalVendido: Number(totalVendido.toFixed(1)),
+        totalCompra: filas.reduce((sum, fila) => sum + fila.compra, 0),
+        totalStockActual: Number(
+          filas.reduce((sum, fila) => sum + fila.stockActual, 0).toFixed(1)
+        ),
+        filas,
+        sinVentas
+      };
     }
   },
   async created() {
@@ -506,6 +633,84 @@ h2 {
   border-radius: 5px;
   font-size: 16px;
   background-color: white;
+}
+
+.modo-selector {
+  margin-top: 18px;
+  padding-top: 15px;
+  border-top: 1px solid #dee2e6;
+}
+
+.modo-selector-label {
+  display: block;
+  font-weight: bold;
+  color: #2c3e50;
+  font-size: 14px;
+  margin-bottom: 10px;
+}
+
+.modo-opciones {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 10px;
+}
+
+.modo-opcion {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background-color: white;
+  border: 2px solid #dee2e6;
+  border-radius: 6px;
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.modo-opcion.active {
+  border-color: #3498db;
+  background-color: rgba(52, 152, 219, 0.06);
+}
+
+.modo-opcion input {
+  margin-top: 3px;
+  accent-color: #3498db;
+}
+
+.modo-opcion strong {
+  display: block;
+  color: #2c3e50;
+  font-size: 14px;
+}
+
+.modo-opcion small {
+  display: block;
+  color: #666;
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+.meta-dias-label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-weight: bold;
+  color: #2c3e50;
+  font-size: 14px;
+  margin-top: 12px;
+  max-width: 220px;
+}
+
+.meta-dias-label input {
+  padding: 10px;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  font-size: 16px;
+}
+
+.deficit-urgente {
+  color: #c0392b;
+  font-weight: bold;
 }
 
 .medidas-selector {
