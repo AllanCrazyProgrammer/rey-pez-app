@@ -1,5 +1,5 @@
 <template>
-  <div class="predator-nav-wrapper">
+  <div class="predator-nav-wrapper" v-if="!ocultarNavbar">
     <div class="safe-area-top"></div>
     
     <!-- Scanlines overlay -->
@@ -292,12 +292,19 @@
 </template>
 
 <script>
+import { useUIStore } from './stores/ui';
+
 export default {
   name: "Navbar",
   data() {
     return {
       mobileMenuOpen: false
     };
+  },
+  computed: {
+    ocultarNavbar() {
+      return !!useUIStore().activeModal;
+    }
   },
   methods: {
     toggleMobileMenu() {

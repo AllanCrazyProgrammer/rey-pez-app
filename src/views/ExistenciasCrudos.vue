@@ -253,6 +253,7 @@ import GestionProveedoresCrudos from '@/components/GestionProveedoresCrudos.vue'
 import EntradasPorProveedorModal from '@/components/EntradasPorProveedorModal.vue';
 import RegistroCrudos from './RegistroCrudos.vue';
 import { formatNumber } from '@/utils/formatters';
+import { useUIStore } from '@/stores/ui';
 
 export default {
   name: 'ExistenciasCrudos',
@@ -706,16 +707,19 @@ export default {
 
     editRegistro(id) {
       this.modalSalida = { abierto: true, registroId: id };
+      useUIStore().openModal('salida-crudo');
     },
 
     irASalidaDeHoy() {
       const hoy = moment().startOf('day');
       const registroHoy = this.registros.find(registro => moment(registro.fecha).isSame(hoy, 'day'));
       this.modalSalida = { abierto: true, registroId: registroHoy ? registroHoy.id : null };
+      useUIStore().openModal('salida-crudo');
     },
 
     cerrarModalSalida() {
       this.modalSalida = { abierto: false, registroId: null };
+      useUIStore().closeModal();
     },
 
     async onSalidaGuardada() {
@@ -1025,6 +1029,11 @@ export default {
       this.loadExistencias(),
       this.loadProveedoresRegistrados()
     ]);
+  },
+
+  beforeDestroy() {
+    // Evitar que el navbar quede oculto si se navega fuera con el modal abierto
+    useUIStore().closeModal();
   }
 };
 </script>

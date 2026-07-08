@@ -102,6 +102,7 @@ import HistorialProductoModal from '@/components/HistorialProductoModal.vue';
 import ListaMedidasPedidoModal from '@/components/ListaMedidasPedidoModal.vue';
 import Sacadas from './Sacadas.vue';
 import { formatNumber } from '@/utils/formatters';
+import { useUIStore } from '@/stores/ui';
 
 export default {
   name: 'SacadasMenu',
@@ -180,16 +181,19 @@ export default {
     },
     editSacada(id) {
       this.modalSalida = { abierto: true, sacadaId: id };
+      useUIStore().openModal('salida-sacada');
     },
 
     irASalidaDeHoy() {
       const hoy = moment().startOf('day');
       const sacadaHoy = this.sacadas.find(sacada => moment(sacada.fecha).isSame(hoy, 'day'));
       this.modalSalida = { abierto: true, sacadaId: sacadaHoy ? sacadaHoy.id : null };
+      useUIStore().openModal('salida-sacada');
     },
 
     cerrarModalSalida() {
       this.modalSalida = { abierto: false, sacadaId: null };
+      useUIStore().closeModal();
     },
 
     async onSalidaGuardada() {
@@ -321,6 +325,11 @@ export default {
       this.loadProveedores(),
       this.loadMedidas()
     ]);
+  },
+
+  beforeDestroy() {
+    // Evitar que el navbar quede oculto si se navega fuera con el modal abierto
+    useUIStore().closeModal();
   }
 };
 </script>
