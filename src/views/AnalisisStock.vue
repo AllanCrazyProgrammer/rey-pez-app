@@ -330,19 +330,48 @@ export default {
       }
     },
 
+    normalizarCuartoStock(cuarto) {
+      const valor = (cuarto && cuarto.trim()) ? cuarto.trim() : 's/c';
+      return valor.toLowerCase() === 'sin cuarto designado' ? 's/c' : valor;
+    },
+
     // Lee la colección 'sacadas' una vez y calcula, para el proveedor dado,
-    // el stock actual por medida (entradas - salidas de todo el histórico) y,
-    // si se pasan fechas, la demanda (salidas) dentro de ese periodo.
+    // el stock actual por medida y, si se pasan fechas, la demanda (salidas)
+    // dentro de ese periodo.
+    //
+    // El stock se calcula replicando la lógica de la vista de Existencias:
+    // se bucketiza cada movimiento por (medida + precio + cuarto), las
+    // salidas se restan por FIFO dentro del bucket exacto que las alimentó, y
+    // lo que sobra de una salida sin lote propio se descarta silenciosamente
+    // en lugar de generar negativos falsos. Así los totales por medida cuadran
+    // con lo que muestra Existencias aunque haya salidas registradas con
+    // nombres/precios/cuartos que no coinciden con sus entradas.
     async obtenerMovimientosProveedor(proveedorNombre, fechaInicio, fechaFin) {
       const snapshot = await getDocs(collection(db, 'sacadas'));
       const demandaPorMedida = {};
-      const stockPorMedida = {};
       let totalVendido = 0;
 
-      snapshot.docs.forEach(docSnap => {
-        const sacada = docSnap.data();
-        const fecha = this.parseFechaSacada(sacada.fecha);
-        if (!fecha) return;
+      // Ordenar sacadas cronológicamente (el FIFO depende de que las entradas
+      // hayan quedado registradas antes que las salidas que las consumen).
+      const sacadasOrdenadas = snapshot.docs
+        .map(docSnap => ({ id: docSnap.id, data: docSnap.data() }))
+        .map(item => ({ ...item, fecha: this.parseFechaSacada(item.data.fecha) }))
+        .filter(item => item.fecha)
+        .sort((a, b) => a.fecha - b.fecha);
+
+      // buckets[clave] = { medida, lotes: [{ kilos }] } donde clave =
+      // `${medida}_$${precio}__${cuarto}` (o `${medida}__${cuarto}` sin precio).
+      // La misma fórmula que usa Existencias.vue en ambos lados.
+      const buckets = {};
+
+      const claveBucket = (medida, precio, cuarto) => {
+        const c = this.normalizarCuartoStock(cuarto);
+        return precio !== null && precio !== undefined
+          ? `${medida}_$${precio}__${c}`
+          : `${medida}__${c}`;
+      };
+
+      sacadasOrdenadas.forEach(({ data: sacada, fecha }) => {
         const enPeriodo = fechaInicio && fechaFin
           ? moment(fecha).isBetween(fechaInicio, fechaFin, undefined, '[]')
           : false;
@@ -351,7 +380,14 @@ export default {
           if (!this.coincideProveedor(entrada.proveedor, proveedorNombre)) return;
           const medida = String(entrada.medida || '').trim();
           if (!medida) return;
-          stockPorMedida[medida] = (stockPorMedida[medida] || 0) + (Number(entrada.kilos) || 0);
+          const kilos = Number(entrada.kilos) || 0;
+          if (kilos <= 0) return;
+          const precio = entrada.precio !== null && entrada.precio !== undefined
+            ? entrada.precio
+            : null;
+          const clave = claveBucket(medida, precio, entrada.cuartoFrio);
+          if (!buckets[clave]) buckets[clave] = { medida, lotes: [] };
+          buckets[clave].lotes.push({ kilos });
         });
 
         (sacada.salidas || []).forEach(salida => {
@@ -359,14 +395,46 @@ export default {
           const medida = String(salida.medida || '').trim();
           if (!medida) return;
           const kilos = Number(salida.kilos) || 0;
+          if (kilos <= 0) return;
 
-          stockPorMedida[medida] = (stockPorMedida[medida] || 0) - kilos;
+          const precio = salida.precio !== null && salida.precio !== undefined
+            ? salida.precio
+            : null;
+          const clave = claveBucket(medida, precio, salida.cuartoFrio);
+          if (!buckets[clave]) buckets[clave] = { medida, lotes: [] };
 
-          if (enPeriodo && kilos > 0) {
+          // FIFO clampado a cero por lote: los kilos que no encuentran lote
+          // propio se descartan (mismo comportamiento que Existencias.vue).
+          let restante = kilos;
+          for (let i = 0; i < buckets[clave].lotes.length && restante > 0; i += 1) {
+            const lote = buckets[clave].lotes[i];
+            if (lote.kilos >= restante) {
+              lote.kilos -= restante;
+              restante = 0;
+            } else {
+              restante -= lote.kilos;
+              lote.kilos = 0;
+            }
+          }
+
+          // La demanda del periodo sí cuenta la salida completa (aunque no
+          // haya encontrado lote propio): representa lo que sí se vendió.
+          if (enPeriodo) {
             demandaPorMedida[medida] = (demandaPorMedida[medida] || 0) + kilos;
             totalVendido += kilos;
           }
         });
+      });
+
+      // Sumar los residuos positivos de cada bucket por nombre de medida.
+      const stockPorMedida = {};
+      Object.values(buckets).forEach(bucket => {
+        const disponible = bucket.lotes.reduce(
+          (sum, lote) => sum + Math.max(0, lote.kilos),
+          0
+        );
+        if (disponible <= 0) return;
+        stockPorMedida[bucket.medida] = (stockPorMedida[bucket.medida] || 0) + disponible;
       });
 
       return { demandaPorMedida, stockPorMedida, totalVendido };
