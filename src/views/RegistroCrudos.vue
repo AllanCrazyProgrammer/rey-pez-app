@@ -182,7 +182,73 @@
         <p class="total">Total Salidas: {{ formatNumber(totalSalidas) }} kg</p>
       </div>
     </div>
-    
+
+    <div class="comparacion-embarque">
+      <div class="comparacion-header" @click="toggleComparacion">
+        <h3>
+          Comparar salidas con embarque del día
+          <span class="toggle-icon">{{ comparacionVisible ? '▲' : '▼' }}</span>
+        </h3>
+      </div>
+      <div v-if="comparacionVisible" class="comparacion-body">
+        <div v-if="cargandoEmbarques" class="comparacion-cargando">
+          Buscando embarque del {{ formattedDate }}...
+        </div>
+        <div v-else-if="!embarquesDelDia.length" class="no-productos">
+          No se encontró ningún embarque para el {{ formattedDate }}.
+          <button @click="cargarEmbarquesDelDia" class="btn-recargar">Volver a buscar</button>
+        </div>
+        <div v-else>
+          <p class="comparacion-info">
+            {{ embarquesDelDia.length === 1 ? 'Embarque encontrado' : embarquesDelDia.length + ' embarques encontrados' }}
+            para el {{ formattedDate }}<span v-if="descripcionEmbarques"> ({{ descripcionEmbarques }})</span>.
+            <button @click="cargarEmbarquesDelDia" class="btn-recargar">Actualizar</button>
+          </p>
+          <div v-if="!comparacion.filas.length" class="no-productos">
+            El embarque no tiene crudos ni macuil registrados.
+          </div>
+          <div v-else class="comparacion-tabla-wrapper">
+            <table class="comparacion-tabla">
+              <thead>
+                <tr>
+                  <th>Producto del embarque</th>
+                  <th>Embarcado</th>
+                  <th>Salidas registradas</th>
+                  <th>Estado</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="fila in comparacion.filas" :key="fila.clave" :class="'estado-' + fila.estado">
+                  <td>
+                    {{ fila.nombre }}
+                    <span v-if="fila.clientes.length" class="clientes-info">({{ fila.clientes.join(', ') }})</span>
+                  </td>
+                  <td>{{ formatNumber(fila.kilos) }} kg</td>
+                  <td>{{ formatNumber(fila.kilosSalida) }} kg</td>
+                  <td>
+                    <span class="estado-icono">{{ fila.estado === 'ok' ? '✓' : (fila.estado === 'faltante' ? '✗' : '⚠') }}</span>
+                    {{ fila.estadoTexto }}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div v-if="comparacion.sinCorrespondencia.length" class="sin-correspondencia">
+            <h4>Salidas de hoy sin correspondencia en el embarque</h4>
+            <ul>
+              <li v-for="(salida, index) in comparacion.sinCorrespondencia" :key="'sc-' + index">
+                {{ salida.producto }}: {{ formatNumber(salida.kilos) }} kg
+              </li>
+            </ul>
+          </div>
+          <p class="comparacion-nota">
+            ℹ️ El macuil es camarón con cabeza cocido: la salida de crudo debe ser
+            <strong>mayor</strong> que los kilos embarcados por la merma de cocción.
+          </p>
+        </div>
+      </div>
+    </div>
+
     <div class="summary">
       <h3>Resumen del Día</h3>
       <p>Total Entradas: {{ formatNumber(totalEntradas) }} kg</p>
@@ -238,6 +304,7 @@ import { collection, addDoc, getDocs, doc, getDoc, updateDoc, query, where } fro
 import BackButton from '../components/BackButton.vue';
 import moment from 'moment';
 import { formatNumber } from '@/utils/formatters';
+import { normalizarFechaValor } from '@/utils/dateUtils';
 
 export default {
   name: 'RegistroCrudos',
@@ -278,7 +345,12 @@ export default {
       kilosDisponiblesSeleccionados: 0,
       editandoEntrada: false,
       entradaEditIndex: null,
-      entradaEditData: { kilos: null, cuartoFrio: '' }
+      entradaEditData: { kilos: null, cuartoFrio: '' },
+      comparacionVisible: false,
+      cargandoEmbarques: false,
+      embarquesCargados: false,
+      embarquesDelDia: [],
+      crudosEmbarque: []
     };
   },
   computed: {
@@ -332,6 +404,76 @@ export default {
       );
       if (!productoSel || !productoSel.cuartos) return [];
       return productoSel.cuartos.map(c => c.nombre);
+    },
+    descripcionEmbarques() {
+      return this.embarquesDelDia
+        .map(e => e.descripcion)
+        .filter(Boolean)
+        .join(', ');
+    },
+    comparacion() {
+      // Agrupar las salidas registradas hoy por nombre normalizado de producto
+      const salidasAgrupadas = {};
+      this.salidas.forEach(salida => {
+        const clave = this.normalizarNombreComparacion(salida.producto);
+        if (!clave) return;
+        if (!salidasAgrupadas[clave]) {
+          salidasAgrupadas[clave] = { producto: salida.producto, kilos: 0 };
+        }
+        salidasAgrupadas[clave].kilos += Number(salida.kilos) || 0;
+      });
+
+      const clavesUsadas = new Set();
+      const filas = this.crudosEmbarque.map(item => {
+        let kilosSalida = 0;
+        Object.keys(salidasAgrupadas).forEach(claveSalida => {
+          if (this.coincideNombre(item, claveSalida)) {
+            kilosSalida += salidasAgrupadas[claveSalida].kilos;
+            clavesUsadas.add(claveSalida);
+          }
+        });
+        kilosSalida = Number(kilosSalida.toFixed(1));
+        const diferencia = Number((kilosSalida - item.kilos).toFixed(1));
+
+        let estado;
+        let estadoTexto;
+        if (kilosSalida <= 0) {
+          estado = 'faltante';
+          estadoTexto = 'Sin salida registrada';
+        } else if (item.esMacuil) {
+          if (diferencia > 0) {
+            const merma = ((diferencia / kilosSalida) * 100).toFixed(1);
+            estado = 'ok';
+            estadoTexto = `Registrada con merma de ${formatNumber(diferencia)} kg (${merma}%)`;
+          } else {
+            estado = 'revisar';
+            estadoTexto = 'La salida debería ser mayor que lo embarcado (merma de cocción)';
+          }
+        } else {
+          const tolerancia = Math.max(0.5, item.kilos * 0.01);
+          if (Math.abs(diferencia) <= tolerancia) {
+            estado = 'ok';
+            estadoTexto = 'Registrada';
+          } else if (diferencia < 0) {
+            estado = 'revisar';
+            estadoTexto = `Faltan ${formatNumber(Math.abs(diferencia))} kg por registrar`;
+          } else {
+            estado = 'revisar';
+            estadoTexto = `Salida mayor que lo embarcado por ${formatNumber(diferencia)} kg`;
+          }
+        }
+
+        return { ...item, kilosSalida, diferencia, estado, estadoTexto };
+      });
+
+      const sinCorrespondencia = Object.keys(salidasAgrupadas)
+        .filter(clave => !clavesUsadas.has(clave))
+        .map(clave => ({
+          producto: salidasAgrupadas[clave].producto,
+          kilos: Number(salidasAgrupadas[clave].kilos.toFixed(1))
+        }));
+
+      return { filas, sinCorrespondencia };
     },
     medidasDelProveedorEntrada() {
       if (!this.newEntrada.proveedor || this.newEntrada.proveedor === '__nuevo__') {
@@ -857,6 +999,161 @@ export default {
     updateCurrentDate() {
       this.currentDate = moment(this.selectedDate);
       this.loadProductosDisponibles();
+      this.embarquesCargados = false;
+      this.embarquesDelDia = [];
+      this.crudosEmbarque = [];
+      if (this.comparacionVisible) {
+        this.cargarEmbarquesDelDia();
+      }
+    },
+
+    async toggleComparacion() {
+      this.comparacionVisible = !this.comparacionVisible;
+      if (this.comparacionVisible && !this.embarquesCargados && !this.cargandoEmbarques) {
+        await this.cargarEmbarquesDelDia();
+      }
+    },
+
+    async cargarEmbarquesDelDia() {
+      this.cargandoEmbarques = true;
+      try {
+        const objetivo = this.currentDate.format('YYYY-MM-DD');
+        // La fecha de los embarques se guarda en formatos heterogéneos
+        // (Timestamp, Date o string), por lo que se filtra en cliente.
+        const snapshot = await getDocs(collection(db, 'embarques'));
+        const embarques = [];
+        snapshot.docs.forEach(docSnap => {
+          const data = docSnap.data();
+          const fecha = normalizarFechaValor(data.fecha || data.fechaRegistro);
+          if (fecha === objetivo) {
+            embarques.push({ id: docSnap.id, ...data });
+          }
+        });
+
+        this.embarquesDelDia = embarques.map(e => ({
+          id: e.id,
+          descripcion: [e.cargaCon ? `carga con ${e.cargaCon}` : '', e.borrador ? 'borrador' : '']
+            .filter(Boolean)
+            .join(', ')
+        }));
+        this.crudosEmbarque = this.extraerCrudosDeEmbarques(embarques);
+        this.embarquesCargados = true;
+      } catch (error) {
+        console.error('Error al cargar embarques del día:', error);
+        alert('Error al cargar el embarque del día: ' + error.message);
+      } finally {
+        this.cargandoEmbarques = false;
+      }
+    },
+
+    extraerCrudosDeEmbarques(embarques) {
+      const acumulado = {};
+      const agregar = (nombre, kilos, cliente, esMacuil) => {
+        if (!kilos || kilos <= 0) return;
+        const clave = esMacuil ? 'macuil' : this.normalizarNombreComparacion(nombre);
+        if (!clave) return;
+        if (!acumulado[clave]) {
+          acumulado[clave] = {
+            clave,
+            nombre: esMacuil ? 'Macuil (cocido)' : nombre,
+            kilos: 0,
+            esMacuil,
+            clientes: new Set()
+          };
+        }
+        acumulado[clave].kilos = Number((acumulado[clave].kilos + kilos).toFixed(1));
+        if (cliente) acumulado[clave].clientes.add(cliente);
+      };
+
+      embarques.forEach(embarque => {
+        const pesoTaraVenta = Number(embarque.pesoTaraVenta) || 20;
+        (embarque.clientes || []).forEach(cliente => {
+          (cliente.crudos || []).forEach(grupo => {
+            const items = grupo && grupo.items ? grupo.items : [];
+            items.forEach(item => {
+              const nombre = item.talla || item.medida;
+              if (!nombre) return;
+              agregar(nombre, this.kilosDeCrudoItem(item, pesoTaraVenta), cliente.nombre, this.esNombreMacuil(nombre));
+            });
+          });
+          // El macuil viaja como producto limpio (camarón c/cabeza cocido),
+          // pero su salida se registra como crudo con merma de cocción.
+          (cliente.productos || []).forEach(producto => {
+            if (!this.esNombreMacuil(producto.medida)) return;
+            agregar(producto.medida, this.kilosNetosProducto(producto), cliente.nombre, true);
+          });
+        });
+      });
+
+      return Object.values(acumulado).map(item => ({
+        ...item,
+        clientes: Array.from(item.clientes)
+      }));
+    },
+
+    kilosDeCrudoItem(item, pesoTaraVenta) {
+      const parsear = (valor) => {
+        if (!valor) return 0;
+        const match = String(valor).trim().match(/^(\d+)\s*-\s*(\d+(?:\.\d+)?)$/);
+        if (!match) return 0;
+        const cantidad = Number(match[1]);
+        let peso = Number(match[2]);
+        // Misma regla que en Embarques: las taras capturadas a 19 se venden a peso de venta
+        if (peso === 19) peso = pesoTaraVenta;
+        return cantidad * peso;
+      };
+      return Number((parsear(item.taras) + parsear(item.sobrante)).toFixed(1));
+    },
+
+    kilosNetosProducto(producto) {
+      if (!producto) return 0;
+      if (producto.tipo === 'c/h20') {
+        const reporteTaras = producto.reporteTaras || [];
+        const reporteBolsas = producto.reporteBolsas || [];
+        let totalBolsas = 0;
+        reporteTaras.forEach((tara, i) => {
+          totalBolsas += (Number(tara) || 0) * (Number(reporteBolsas[i]) || 0);
+        });
+        return Number((totalBolsas * (Number(producto.camaronNeto) || 0.65)).toFixed(1));
+      }
+      const sumaKilos = (producto.kilos || []).reduce((s, k) => s + (Number(k) || 0), 0);
+      const totalTaras = (producto.taras || []).reduce((s, t) => s + (Number(t) || 0), 0)
+        + (producto.tarasExtra || []).reduce((s, t) => s + (Number(t) || 0), 0);
+      const descuento = producto.restarTaras !== false ? totalTaras * 3 : 0;
+      return Number(Math.max(sumaKilos - descuento, 0).toFixed(1));
+    },
+
+    normalizarNombreComparacion(nombre) {
+      return String(nombre || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+    },
+
+    esNombreMacuil(nombre) {
+      return this.normalizarNombreComparacion(nombre).includes('macuil');
+    },
+
+    extraerRango(texto) {
+      const match = String(texto).match(/(\d+)\s*\/\s*(\d+)/);
+      return match ? `${match[1]}/${match[2]}` : null;
+    },
+
+    coincideNombre(itemEmbarque, claveSalida) {
+      const esSalidaMacuil = claveSalida.includes('macuil');
+      if (itemEmbarque.esMacuil) return esSalidaMacuil;
+      if (esSalidaMacuil) return false;
+
+      const claveItem = itemEmbarque.clave;
+      if (claveItem === claveSalida) return true;
+
+      const rangoItem = this.extraerRango(claveItem);
+      const rangoSalida = this.extraerRango(claveSalida);
+      if (rangoItem && rangoSalida) return rangoItem === rangoSalida;
+
+      return claveItem.includes(claveSalida) || claveSalida.includes(claveItem);
     }
   },
 
@@ -1201,6 +1498,135 @@ h3 {
   padding: 10px;
   background-color: #f0f4f8;
   border-radius: 6px;
+}
+
+.comparacion-embarque {
+  background-color: white;
+  border-radius: 10px;
+  padding: 20px;
+  margin-bottom: 20px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.comparacion-header {
+  cursor: pointer;
+}
+
+.comparacion-header h3 {
+  margin-bottom: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.comparacion-header .toggle-icon {
+  font-size: 0.8em;
+}
+
+.comparacion-body {
+  margin-top: 20px;
+}
+
+.comparacion-cargando {
+  text-align: center;
+  color: #3760b0;
+  padding: 20px;
+  font-style: italic;
+}
+
+.comparacion-info {
+  color: #3760b0;
+  margin-bottom: 15px;
+}
+
+.btn-recargar {
+  margin-left: 10px;
+  padding: 5px 10px;
+  font-size: 13px;
+}
+
+.comparacion-tabla-wrapper {
+  overflow-x: auto;
+}
+
+.comparacion-tabla {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.comparacion-tabla th,
+.comparacion-tabla td {
+  padding: 10px;
+  text-align: left;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.comparacion-tabla th {
+  background-color: #f0f4f8;
+  color: #3760b0;
+}
+
+.comparacion-tabla .clientes-info {
+  color: #666;
+  font-size: 12px;
+}
+
+.comparacion-tabla .estado-icono {
+  font-weight: bold;
+  margin-right: 4px;
+}
+
+.comparacion-tabla tr.estado-ok td {
+  background-color: #f4fff6;
+}
+
+.comparacion-tabla tr.estado-ok .estado-icono {
+  color: #28a745;
+}
+
+.comparacion-tabla tr.estado-revisar td {
+  background-color: #fff8e6;
+}
+
+.comparacion-tabla tr.estado-revisar .estado-icono {
+  color: #e6a700;
+}
+
+.comparacion-tabla tr.estado-faltante td {
+  background-color: #fff1f0;
+}
+
+.comparacion-tabla tr.estado-faltante .estado-icono {
+  color: #f44336;
+}
+
+.sin-correspondencia {
+  margin-top: 15px;
+  padding: 12px;
+  background-color: #f8f9fa;
+  border-radius: 6px;
+}
+
+.sin-correspondencia h4 {
+  color: #3760b0;
+  margin: 0 0 8px 0;
+  font-size: 14px;
+}
+
+.sin-correspondencia ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.comparacion-nota {
+  margin-top: 15px;
+  padding: 10px;
+  background-color: #f0f8ff;
+  border-left: 4px solid #3760b0;
+  border-radius: 4px;
+  font-size: 13px;
+  color: #333;
 }
 
 .summary {
