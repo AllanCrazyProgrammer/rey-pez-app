@@ -4,14 +4,23 @@
       <BackButton to="/existencias-crudos" />
     </div>
     <div v-else class="modal-header-modal">
-      <router-link
-        v-if="registroId"
-        :to="`/existencias-crudos/${registroId}`"
-        class="link-dia-completo"
-      >
-        Ver día completo (entradas y comparación)
-      </router-link>
-      <span v-else></span>
+      <div class="modal-header-left">
+        <button
+          v-if="entradas.length > 0"
+          type="button"
+          class="toggle-entradas-btn"
+          @click="mostrarEntradasEnModal = !mostrarEntradasEnModal"
+        >
+          {{ mostrarEntradasEnModal ? 'Ocultar Entradas' : `Ver Entradas (${entradas.length})` }}
+        </button>
+        <router-link
+          v-if="registroId"
+          :to="`/existencias-crudos/${registroId}`"
+          class="link-dia-completo"
+        >
+          Ver día completo
+        </router-link>
+      </div>
       <button type="button" class="close-modal-btn" @click="cerrarModal" title="Cerrar">&times;</button>
     </div>
     <h2 class="date-header">{{ formattedDate }}</h2>
@@ -20,7 +29,7 @@
     </div>
 
     <div class="registro-content" :class="{ 'solo-salidas': modoModal }">
-      <div v-if="!modoModal" class="entradas-section">
+      <div v-if="!modoModal || mostrarEntradasEnModal" class="entradas-section">
         <h3>Entradas de Crudos</h3>
         <div class="form-section">
           <div class="input-group">
@@ -374,7 +383,8 @@ export default {
       embarquesCargados: false,
       embarquesDelDia: [],
       crudosEmbarque: [],
-      salidasIniciales: 0
+      salidasIniciales: 0,
+      mostrarEntradasEnModal: false
     };
   },
   computed: {
@@ -1225,6 +1235,30 @@ export default {
   align-items: center;
   margin-bottom: 10px;
   gap: 10px;
+  flex-wrap: wrap;
+}
+
+.modal-header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.toggle-entradas-btn {
+  background-color: #3760b0;
+  color: white;
+  border: none;
+  padding: 8px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9em;
+  font-weight: bold;
+  transition: background-color 0.3s;
+}
+
+.toggle-entradas-btn:hover {
+  background-color: #2a4a87;
 }
 
 .link-dia-completo {
