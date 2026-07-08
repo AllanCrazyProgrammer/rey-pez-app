@@ -3,9 +3,14 @@
     <div class="existencias-container">
       <div class="header">
         <h1>Reporte de Existencias</h1>
-        <button @click="imprimirReporte" class="print-button">
-          Imprimir Reporte
-        </button>
+        <div class="header-actions">
+          <router-link to="/analisis-stock" class="analisis-button">
+            📊 Análisis de Stock
+          </router-link>
+          <button @click="imprimirReporte" class="print-button">
+            Imprimir Reporte
+          </button>
+        </div>
       </div>
       
       <div class="filters">
@@ -1606,6 +1611,30 @@ h1 {
   color: #2c3e50;
   margin: 0;
   font-size: 24px;
+}
+
+.header-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.analisis-button {
+  background-color: #8e44ad;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 16px;
+  text-decoration: none;
+  display: inline-block;
+  transition: background-color 0.3s ease;
+}
+
+.analisis-button:hover {
+  background-color: #7d3c98;
 }
 
 .print-button {
