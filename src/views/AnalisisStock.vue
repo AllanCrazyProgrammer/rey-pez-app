@@ -8,6 +8,26 @@
         </div>
       </div>
 
+      <div class="vista-tabs">
+        <button
+          type="button"
+          class="vista-tab-btn"
+          :class="{ active: vistaActiva === 'plan' }"
+          @click="vistaActiva = 'plan'"
+        >
+          📦 Plan de Compra
+        </button>
+        <button
+          type="button"
+          class="vista-tab-btn"
+          :class="{ active: vistaActiva === 'consulta' }"
+          @click="vistaActiva = 'consulta'"
+        >
+          🔍 Consultar una Medida
+        </button>
+      </div>
+
+      <template v-if="vistaActiva === 'plan'">
       <div class="form-card">
         <h2>Recomendación de Compra</h2>
         <p class="form-descripcion">
@@ -240,6 +260,148 @@
           </ul>
         </div>
       </div>
+      </template>
+
+      <template v-else>
+        <div class="form-card">
+          <h2>Consultar una Medida</h2>
+          <p class="form-descripcion">
+            Elige un proveedor y una medida para ver cuánto durará tu stock, cuándo convendría
+            resurtir y otros datos útiles para decidir.
+          </p>
+          <div class="form-grid">
+            <label>
+              Proveedor
+              <select v-model="consultaProveedor" @change="cargarMedidasConsulta">
+                <option value="">Seleccionar proveedor</option>
+                <option v-for="prov in proveedores" :key="prov" :value="prov">
+                  {{ prov }}
+                </option>
+              </select>
+            </label>
+            <label>
+              Medida
+              <select v-model="consultaMedida" :disabled="consultaMedidasDisponibles.length === 0">
+                <option value="">Seleccionar medida</option>
+                <option v-for="m in consultaMedidasDisponibles" :key="m.nombre" :value="m.nombre">
+                  {{ m.nombre }} ({{ formatNumber(m.stockActual) }} kg)
+                </option>
+              </select>
+            </label>
+            <label>
+              Días de historial
+              <select v-model.number="consultaDiasHistorial">
+                <option :value="10">10 días</option>
+                <option :value="15">15 días</option>
+                <option :value="30">30 días</option>
+                <option :value="60">60 días</option>
+                <option :value="90">90 días</option>
+              </select>
+            </label>
+            <label>
+              Meta de días de cobertura
+              <input
+                v-model.number="consultaMetaDias"
+                type="number"
+                inputmode="decimal"
+                min="1"
+                step="1"
+              />
+            </label>
+            <button
+              class="calcular-btn"
+              :disabled="!consultaProveedor || !consultaMedida || consultaCargando"
+              @click="analizarMedida"
+            >
+              {{ consultaCargando ? 'Analizando...' : 'Analizar' }}
+            </button>
+          </div>
+          <p v-if="consultaCargandoMedidas" class="medidas-mensaje">Cargando medidas...</p>
+        </div>
+
+        <div v-if="consultaError" class="error-box">{{ consultaError }}</div>
+
+        <div v-if="consultaResultado" class="resultado-card">
+          <h2>{{ consultaResultado.medida }} — {{ consultaResultado.proveedor }}</h2>
+
+          <div class="consulta-metricas">
+            <div class="metrica-card">
+              <span class="metrica-label">Stock actual</span>
+              <span class="metrica-valor">{{ formatNumber(consultaResultado.stockActual) }} kg</span>
+            </div>
+            <div class="metrica-card">
+              <span class="metrica-label">Consumo diario ({{ consultaResultado.diasHistorial }}d)</span>
+              <span class="metrica-valor">{{ formatNumber(consultaResultado.consumoDiario) }} kg/d</span>
+            </div>
+            <div class="metrica-card" v-if="consultaResultado.diasCobertura !== null">
+              <span class="metrica-label">Te dura el stock</span>
+              <span class="metrica-valor">{{ consultaResultado.diasCobertura.toFixed(1) }} días</span>
+            </div>
+            <div class="metrica-card" v-if="consultaResultado.ultimoPrecio">
+              <span class="metrica-label">Último precio registrado</span>
+              <span class="metrica-valor">${{ formatNumber(consultaResultado.ultimoPrecio) }}</span>
+            </div>
+          </div>
+
+          <div v-if="consultaResultado.diasCobertura === null" class="sin-datos">
+            No hay salidas registradas en los últimos {{ consultaResultado.diasHistorial }} días
+            para estimar el consumo, así que no se puede calcular cuánto durará el stock.
+          </div>
+
+          <template v-else>
+            <div class="agotamiento-info">
+              <p>
+                Con tu consumo actual (<strong>{{ formatNumber(consultaResultado.consumoDiario) }} kg/día</strong>),
+                el stock se agotaría alrededor del <strong>{{ consultaResultado.fechaAgotamiento }}</strong>.
+              </p>
+              <p :class="consultaResultado.diasParaResurtir > 0 ? 'resurtir-ok' : 'resurtir-urgente'">
+                <template v-if="consultaResultado.diasParaResurtir > 0">
+                  📅 Conviene resurtir a partir del <strong>{{ consultaResultado.fechaResurtir }}</strong>
+                  (en {{ consultaResultado.diasParaResurtir.toFixed(1) }} días), para mantener al menos
+                  {{ consultaResultado.metaDiasCobertura }} días de cobertura.
+                </template>
+                <template v-else>
+                  ⚠️ Ya deberías resurtir esta medida: tu cobertura está por debajo de tu meta de
+                  {{ consultaResultado.metaDiasCobertura }} días
+                  ({{ formatNumber(-consultaResultado.diasParaResurtir, 1) }} días de atraso).
+                </template>
+              </p>
+            </div>
+
+            <p class="tendencia-info">
+              Tendencia de consumo:
+              <strong>
+                <template v-if="consultaResultado.tendencia === 'subiendo'">📈 subiendo</template>
+                <template v-else-if="consultaResultado.tendencia === 'bajando'">📉 bajando</template>
+                <template v-else>➡️ estable</template>
+              </strong>
+              (últimos 7 días: {{ formatNumber(consultaResultado.consumoReciente) }} kg/d
+              vs. promedio de {{ consultaResultado.diasHistorial }}d:
+              {{ formatNumber(consultaResultado.consumoDiario) }} kg/d)
+            </p>
+          </template>
+
+          <div v-if="consultaResultado.ultimasEntradas.length > 0" class="ultimas-entradas">
+            <h4>Últimas entradas registradas</h4>
+            <table class="resultado-tabla">
+              <thead>
+                <tr>
+                  <th>Fecha</th>
+                  <th class="num">Kilos</th>
+                  <th class="num">Precio</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="(entrada, idx) in consultaResultado.ultimasEntradas" :key="idx">
+                  <td>{{ entrada.fecha }}</td>
+                  <td class="num">{{ formatNumber(entrada.kilos) }} kg</td>
+                  <td class="num">{{ entrada.precio ? '$' + formatNumber(entrada.precio) : '—' }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </template>
     </div>
   </div>
 </template>
@@ -258,6 +420,7 @@ export default {
   },
   data() {
     return {
+      vistaActiva: 'plan', // 'plan' | 'consulta'
       kilosDisponibles: null,
       proveedorSeleccionado: '',
       diasHistorial: 30,
@@ -277,7 +440,18 @@ export default {
       // Compras editadas a mano por el usuario (medida -> kilos), por si solo
       // hay cierta cantidad disponible de esa medida. Se conservan aunque se
       // cambie de modo o de meta, y se limpian solo con un nuevo cálculo.
-      comprasManualPorMedida: {}
+      comprasManualPorMedida: {},
+
+      // Estado de la vista "Consultar una Medida"
+      consultaProveedor: '',
+      consultaMedida: '',
+      consultaDiasHistorial: 30,
+      consultaMetaDias: 12,
+      consultaMedidasDisponibles: [],
+      consultaCargandoMedidas: false,
+      consultaCargando: false,
+      consultaError: '',
+      consultaResultado: null
     };
   },
   watch: {
@@ -440,6 +614,35 @@ export default {
       return { demandaPorMedida, stockPorMedida, totalVendido };
     },
 
+    // Devuelve las medidas "disponibles" de un proveedor: las de su catálogo
+    // (colección 'medidas') más cualquiera con movimiento histórico, cada una
+    // con su stock actual. Se reutiliza tanto para el plan de compra como
+    // para la consulta individual de una medida.
+    async obtenerMedidasParaProveedor(proveedorNombre) {
+      const proveedorObj = this.proveedoresObjetos.find(p => p.nombre === proveedorNombre);
+      const nombresCatalogo = new Set();
+
+      if (proveedorObj) {
+        const medidasSnapshot = await getDocs(collection(db, 'medidas'));
+        medidasSnapshot.docs.forEach(docSnap => {
+          const medida = docSnap.data();
+          if (medida.proveedorId === proveedorObj.id && medida.nombre) {
+            nombresCatalogo.add(String(medida.nombre).trim());
+          }
+        });
+      }
+
+      const { stockPorMedida } = await this.obtenerMovimientosProveedor(proveedorNombre, null, null);
+      Object.keys(stockPorMedida).forEach(medida => nombresCatalogo.add(medida));
+
+      return Array.from(nombresCatalogo)
+        .sort((a, b) => a.localeCompare(b, 'es', { numeric: true }))
+        .map(nombre => ({
+          nombre,
+          stockActual: Number((stockPorMedida[nombre] || 0).toFixed(1))
+        }));
+    },
+
     async cargarMedidasProveedor() {
       this.medidasDisponibles = [];
       this.medidasSeleccionadas = [];
@@ -452,29 +655,7 @@ export default {
 
       this.cargandoMedidas = true;
       try {
-        const proveedorObj = this.proveedoresObjetos.find(p => p.nombre === this.proveedorSeleccionado);
-        const nombresCatalogo = new Set();
-
-        if (proveedorObj) {
-          const medidasSnapshot = await getDocs(collection(db, 'medidas'));
-          medidasSnapshot.docs.forEach(docSnap => {
-            const medida = docSnap.data();
-            if (medida.proveedorId === proveedorObj.id && medida.nombre) {
-              nombresCatalogo.add(String(medida.nombre).trim());
-            }
-          });
-        }
-
-        const { stockPorMedida } = await this.obtenerMovimientosProveedor(this.proveedorSeleccionado, null, null);
-        Object.keys(stockPorMedida).forEach(medida => nombresCatalogo.add(medida));
-
-        const lista = Array.from(nombresCatalogo)
-          .sort((a, b) => a.localeCompare(b, 'es', { numeric: true }))
-          .map(nombre => ({
-            nombre,
-            stockActual: Number((stockPorMedida[nombre] || 0).toFixed(1))
-          }));
-
+        const lista = await this.obtenerMedidasParaProveedor(this.proveedorSeleccionado);
         this.medidasDisponibles = lista;
         // Por default, seleccionar las medidas que tenemos en existencia actual
         this.medidasSeleccionadas = lista.filter(m => m.stockActual > 1).map(m => m.nombre);
@@ -484,6 +665,141 @@ export default {
         this.medidasSeleccionadas = [];
       } finally {
         this.cargandoMedidas = false;
+      }
+    },
+
+    async cargarMedidasConsulta() {
+      this.consultaMedidasDisponibles = [];
+      this.consultaMedida = '';
+      this.consultaResultado = null;
+      this.consultaError = '';
+
+      if (!this.consultaProveedor) return;
+
+      this.consultaCargandoMedidas = true;
+      try {
+        this.consultaMedidasDisponibles = await this.obtenerMedidasParaProveedor(this.consultaProveedor);
+      } catch (error) {
+        console.error('Error al cargar medidas para consulta:', error);
+        this.consultaMedidasDisponibles = [];
+      } finally {
+        this.consultaCargandoMedidas = false;
+      }
+    },
+
+    // Lee la colección 'sacadas' una vez y devuelve el historial completo de
+    // entradas y salidas (con fecha) de una medida concreta de un proveedor,
+    // para poder analizarla individualmente (consumo, tendencia, precios).
+    async obtenerHistorialMedida(proveedorNombre, medidaNombre) {
+      const snapshot = await getDocs(collection(db, 'sacadas'));
+      const entradas = [];
+      const salidas = [];
+
+      snapshot.docs.forEach(docSnap => {
+        const sacada = docSnap.data();
+        const fecha = this.parseFechaSacada(sacada.fecha);
+        if (!fecha) return;
+
+        (sacada.entradas || []).forEach(entrada => {
+          if (!this.coincideProveedor(entrada.proveedor, proveedorNombre)) return;
+          if (String(entrada.medida || '').trim() !== medidaNombre) return;
+          entradas.push({ fecha, kilos: Number(entrada.kilos) || 0, precio: entrada.precio ?? null });
+        });
+
+        (sacada.salidas || []).forEach(salida => {
+          if (!this.coincideProveedor(salida.proveedor, proveedorNombre)) return;
+          if (String(salida.medida || '').trim() !== medidaNombre) return;
+          salidas.push({ fecha, kilos: Number(salida.kilos) || 0 });
+        });
+      });
+
+      entradas.sort((a, b) => b.fecha - a.fecha);
+      salidas.sort((a, b) => b.fecha - a.fecha);
+
+      return { entradas, salidas };
+    },
+
+    async analizarMedida() {
+      if (!this.consultaProveedor || !this.consultaMedida || this.consultaCargando) return;
+      this.consultaCargando = true;
+      this.consultaError = '';
+      this.consultaResultado = null;
+
+      try {
+        const { entradas, salidas } = await this.obtenerHistorialMedida(
+          this.consultaProveedor, this.consultaMedida
+        );
+
+        // El stock actual se toma de consultaMedidasDisponibles, ya calculado
+        // con la misma lógica de buckets (medida+precio+cuarto) y FIFO que usa
+        // Existencias.vue, para que cuadre con el resto de la app.
+        const medidaInfo = this.consultaMedidasDisponibles.find(
+          m => m.nombre === this.consultaMedida
+        );
+        const stockActual = medidaInfo ? medidaInfo.stockActual : 0;
+
+        const sumaSalidasDesde = (dias) => {
+          const desde = moment().subtract(dias, 'days').startOf('day');
+          return salidas
+            .filter(s => moment(s.fecha).isSameOrAfter(desde))
+            .reduce((sum, s) => sum + s.kilos, 0);
+        };
+
+        const dias = this.consultaDiasHistorial;
+        const vendidoPeriodo = Number(sumaSalidasDesde(dias).toFixed(1));
+        const consumoDiario = Number((vendidoPeriodo / dias).toFixed(2));
+
+        const vendidoReciente = Number(sumaSalidasDesde(7).toFixed(1));
+        const consumoReciente = Number((vendidoReciente / 7).toFixed(2));
+
+        const meta = Number(this.consultaMetaDias) || 0;
+        let diasCobertura = null;
+        let fechaAgotamiento = null;
+        let diasParaResurtir = null;
+        let fechaResurtir = null;
+
+        if (consumoDiario > 0) {
+          diasCobertura = Number((stockActual / consumoDiario).toFixed(1));
+          fechaAgotamiento = moment().add(diasCobertura, 'days').format('DD/MM/YYYY');
+          diasParaResurtir = Number((diasCobertura - meta).toFixed(1));
+          fechaResurtir = moment().add(diasParaResurtir, 'days').format('DD/MM/YYYY');
+        }
+
+        let tendencia = 'estable';
+        if (consumoDiario > 0) {
+          if (consumoReciente > consumoDiario * 1.15) tendencia = 'subiendo';
+          else if (consumoReciente < consumoDiario * 0.85) tendencia = 'bajando';
+        }
+
+        const entradaConPrecio = entradas.find(e => e.precio !== null && e.precio !== undefined);
+
+        this.consultaResultado = {
+          proveedor: this.consultaProveedor,
+          medida: this.consultaMedida,
+          diasHistorial: dias,
+          stockActual,
+          vendidoPeriodo,
+          consumoDiario,
+          vendidoReciente,
+          consumoReciente,
+          tendencia,
+          diasCobertura,
+          fechaAgotamiento,
+          metaDiasCobertura: meta,
+          diasParaResurtir,
+          fechaResurtir,
+          ultimoPrecio: entradaConPrecio ? entradaConPrecio.precio : null,
+          ultimasEntradas: entradas.slice(0, 5).map(e => ({
+            fecha: moment(e.fecha).format('DD/MM/YYYY'),
+            kilos: Number(e.kilos.toFixed(1)),
+            precio: e.precio
+          }))
+        };
+      } catch (error) {
+        console.error('Error al analizar la medida:', error);
+        this.consultaError = 'No se pudo analizar la medida: ' + error.message;
+      } finally {
+        this.consultaCargando = false;
       }
     },
 
@@ -793,6 +1109,35 @@ h2 {
   font-size: 20px;
   border-bottom: 2px solid #3498db;
   padding-bottom: 8px;
+}
+
+.vista-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 18px;
+  border-bottom: 2px solid #dee2e6;
+}
+
+.vista-tab-btn {
+  background: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  padding: 10px 16px;
+  margin-bottom: -2px;
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: bold;
+  color: #666;
+  transition: color 0.2s, border-color 0.2s;
+}
+
+.vista-tab-btn:hover {
+  color: #2c3e50;
+}
+
+.vista-tab-btn.active {
+  color: #3498db;
+  border-bottom-color: #3498db;
 }
 
 .form-card,
@@ -1187,6 +1532,75 @@ h2 {
 
 .sin-ventas-card li {
   margin-bottom: 4px;
+}
+
+.consulta-metricas {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.metrica-card {
+  background-color: white;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  padding: 12px 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.metrica-label {
+  color: #666;
+  font-size: 12px;
+  font-weight: bold;
+  text-transform: uppercase;
+}
+
+.metrica-valor {
+  color: #2c3e50;
+  font-size: 20px;
+  font-weight: bold;
+}
+
+.agotamiento-info {
+  background-color: white;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  padding: 12px 15px;
+  margin-bottom: 12px;
+}
+
+.agotamiento-info p {
+  margin: 0 0 8px 0;
+  color: #444;
+  font-size: 14px;
+}
+
+.agotamiento-info p:last-child {
+  margin-bottom: 0;
+}
+
+.agotamiento-info p.resurtir-ok {
+  color: #1e7a34;
+}
+
+.agotamiento-info p.resurtir-urgente {
+  color: #c0392b;
+  font-weight: bold;
+}
+
+.tendencia-info {
+  color: #444;
+  font-size: 14px;
+  margin: 0 0 18px 0;
+}
+
+.ultimas-entradas h4 {
+  color: #2c3e50;
+  margin: 0 0 10px 0;
+  font-size: 14px;
 }
 
 @media (max-width: 768px) {
