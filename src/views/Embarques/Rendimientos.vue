@@ -1241,16 +1241,39 @@ export default {
                       kilosItem += (cantidadSobrante || 0) * (pesoSobrante || 0);
                     }
                   }
-                  
+
+                  // Procesar segundo sobrante
+                  if (item.sobrante2) {
+                    const formatoGuion2 = /^(\d+)-(\d+)$/.exec(item.sobrante2);
+                    if (formatoGuion2) {
+                      const cantidadSobrante2 = parseInt(formatoGuion2[1]) || 0;
+                      let pesoSobrante2 = parseInt(formatoGuion2[2]) || 0;
+
+                      // Si el peso es 19, usar el peso configurado para costos
+                      if (pesoSobrante2 === 19) {
+                        pesoSobrante2 = this.pesoTaraCosto;
+                      }
+
+                      tarasItem += cantidadSobrante2;
+                      kilosItem += cantidadSobrante2 * pesoSobrante2;
+                    } else {
+                      // Formato original si no coincide con el patrón
+                      const [cantidadSobrante2, pesoSobrante2] = item.sobrante2.split('-').map(Number);
+                      tarasItem += cantidadSobrante2 || 0;
+                      kilosItem += (cantidadSobrante2 || 0) * (pesoSobrante2 || 0);
+                    }
+                  }
+
                   tarasPorMedida[medida].totalTaras += tarasItem;
                   tarasPorMedida[medida].totalKilos += kilosItem;
-                  
+
                     // Agregar detalles para debugging
                     if (tarasItem > 0) {
                       tarasPorMedida[medida].detalles.push({
                         cliente: cliente.nombre,
                         taras: item.taras,
                         sobrante: item.sobrante,
+                        sobrante2: item.sobrante2,
                         tarasCalculadas: tarasItem,
                         kilosCalculados: kilosItem
                       });
@@ -2178,7 +2201,8 @@ export default {
                         gananciaTotal: 0, // Se recalcula después
                         fuentePrecio: fuentePrecio,
                         taras: item.taras,
-                        sobrante: item.sobrante
+                        sobrante: item.sobrante,
+                        sobrante2: item.sobrante2
                       });
                     }
                   }
@@ -2335,9 +2359,32 @@ export default {
           kilosTotales += detalleCalculo.kilosDeSobrante;
         }
       }
-      
+
+      // Procesar segundo sobrante
+      if (item.sobrante2) {
+        const formatoGuion2 = /^(\d+)-(\d+)$/.exec(item.sobrante2);
+        if (formatoGuion2) {
+          const cantidadSobrante2 = parseInt(formatoGuion2[1]) || 0;
+          let pesoSobrante2 = parseInt(formatoGuion2[2]) || 0;
+
+          // Si el peso es 19, usar el peso configurado para ventas
+          if (pesoSobrante2 === 19) {
+            pesoSobrante2 = this.pesoTaraVenta;
+          }
+
+          detalleCalculo.kilosDeSobrante2 = cantidadSobrante2 * pesoSobrante2;
+          kilosTotales += detalleCalculo.kilosDeSobrante2;
+        } else {
+          // Formato original si no coincide con el patrón
+          const [cantidadSobrante2, pesoSobrante2] = item.sobrante2.split('-').map(Number);
+          detalleCalculo.kilosDeSobrante2 = (cantidadSobrante2 || 0) * (pesoSobrante2 || 0);
+          kilosTotales += detalleCalculo.kilosDeSobrante2;
+        }
+      }
+
+      detalleCalculo.sobrante2 = item.sobrante2;
       detalleCalculo.kilosTotales = kilosTotales;
-      
+
       return kilosTotales;
     },
 

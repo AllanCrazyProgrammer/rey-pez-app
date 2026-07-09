@@ -570,9 +570,13 @@ export default {
             const [cantidadSobrante] = item.sobrante.split('-');
             tarasItem += parseInt(cantidadSobrante) || 0;
           }
+          if (item.sobrante2) {
+            const [cantidadSobrante2] = item.sobrante2.split('-');
+            tarasItem += parseInt(cantidadSobrante2) || 0;
+          }
           return itemTotal + tarasItem;
         }, 0);
-        
+
         return total + tarasCrudo;
       }, 0);
     },
@@ -608,6 +612,10 @@ export default {
             if (item.sobrante) {
               const [cantidadSobrante] = item.sobrante.split('-');
               tarasItem += parseInt(cantidadSobrante) || 0;
+            }
+            if (item.sobrante2) {
+              const [cantidadSobrante2] = item.sobrante2.split('-');
+              tarasItem += parseInt(cantidadSobrante2) || 0;
             }
             return itemTotal + tarasItem;
           }, 0);

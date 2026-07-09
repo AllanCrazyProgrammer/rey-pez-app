@@ -615,7 +615,7 @@ function contarTotalProductos(embarque) {
           if (crudo && Array.isArray(crudo.items)) {
             contador += crudo.items.filter(item => {
               // Simplificamos la verificación para el conteo
-              return item && (item.taras || item.sobrante);
+              return item && (item.taras || item.sobrante || item.sobrante2);
             }).length;
           }
         });
@@ -1145,10 +1145,15 @@ function calcularKilosCrudosPorMedida(embarque, medida) {
           const [cantidad, peso] = item.sobrante.split('-').map(Number);
           kilosCrudos += cantidad * peso;
         }
+        // Sumar kilos del segundo sobrante si existe
+        if (item.sobrante2) {
+          const [cantidad, peso] = item.sobrante2.split('-').map(Number);
+          kilosCrudos += cantidad * peso;
+        }
       }
     });
   });
-  
+
   return kilosCrudos;
 }
 
@@ -1897,6 +1902,10 @@ function calcularTarasTotales(item) {
     const [cantidadSobrante] = item.sobrante.split('-').map(Number);
     tarasTotales += cantidadSobrante;
   }
+  if (item.sobrante2) {
+    const [cantidadSobrante2] = item.sobrante2.split('-').map(Number);
+    tarasTotales += cantidadSobrante2;
+  }
   return tarasTotales;
 }
 
@@ -2034,7 +2043,13 @@ function calcularKilosCrudos(item, clienteNombre, multiplicadorLorenaGdeCc = 20)
     const [, kilosSobrante] = item.sobrante.split('-').map(Number);
     kilosTotales += kilosSobrante;
   }
-  
+
+  // Procesar segundo sobrante (se suma directamente el peso especificado)
+  if (item.sobrante2) {
+    const [, kilosSobrante2] = item.sobrante2.split('-').map(Number);
+    kilosTotales += kilosSobrante2;
+  }
+
   // Para Elizabeth, redondeamos a entero (sin decimales)
   if (nombreClienteNormalizado.includes('elizabeth')) {
     return Math.round(kilosTotales).toString();

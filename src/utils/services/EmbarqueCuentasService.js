@@ -422,16 +422,23 @@ const prepararItemsJoselito = (productos, clienteCrudos = {}, preciosVenta = new
           if (item.sobrante && item.mostrarSobrante) {
             kilosSobrante = extraerValorSobrante(item.sobrante);
           }
-          
+
+          // Calcular kilos del segundo sobrante - sumar tal cual
+          let kilosSobrante2 = 0;
+          if (item.sobrante2 && item.mostrarSobrante2) {
+            kilosSobrante2 = extraerValorSobrante(item.sobrante2);
+          }
+
           // Para el caso específico "Med c/c" con taras "10-19" y sobrante "1-10",
           // Forzar el total exacto a 200 kg
-          const esProductoEspecifico = 
-            medida.toLowerCase().includes('med c/c') && 
-            item.taras === '10-19' && 
-            item.sobrante === '1-10';
-          
+          const esProductoEspecifico =
+            medida.toLowerCase().includes('med c/c') &&
+            item.taras === '10-19' &&
+            item.sobrante === '1-10' &&
+            !item.sobrante2;
+
           // Suma para llegar a 200 kg total en costos
-          const kilosTotales = esProductoEspecifico ? 200 : kilosTaras + kilosSobrante;
+          const kilosTotales = esProductoEspecifico ? 200 : kilosTaras + kilosSobrante + kilosSobrante2;
           
           // Obtener precio
           const costo = item.precio || 0;
@@ -598,16 +605,23 @@ const prepararItemsVentaJoselito = (productos, clienteCrudos = {}, preciosVenta 
           if (item.sobrante && item.mostrarSobrante) {
             kilosSobrante = parseInt(item.sobrante.split('-').pop()) || 0;
           }
-          
+
+          // Calcular kilos del segundo sobrante - sumar tal cual
+          let kilosSobrante2 = 0;
+          if (item.sobrante2 && item.mostrarSobrante2) {
+            kilosSobrante2 = parseInt(item.sobrante2.split('-').pop()) || 0;
+          }
+
           // Para el caso específico "Med c/c" con taras "10-19" y sobrante "1-10",
           // Forzar el total exacto a 210 kg
-          const esProductoEspecifico = 
-            medida.toLowerCase().includes('med c/c') && 
-            item.taras === '10-19' && 
-            item.sobrante === '1-10';
-          
+          const esProductoEspecifico =
+            medida.toLowerCase().includes('med c/c') &&
+            item.taras === '10-19' &&
+            item.sobrante === '1-10' &&
+            !item.sobrante2;
+
           // Suma para llegar a 210 kg total en ventas
-          const kilosTotales = esProductoEspecifico ? 210 : kilosTaras + kilosSobrante;
+          const kilosTotales = esProductoEspecifico ? 210 : kilosTaras + kilosSobrante + kilosSobrante2;
           
           // Buscar el precio de venta en el mapa de precios
           const precioVenta = preciosVenta.get(medidaNormalizada) || 
@@ -855,7 +869,7 @@ const prepararDatosCuentaCatarro = async (embarqueData) => {
             let kilosSobrante = 0;
             if (item.sobrante && item.mostrarSobrante) {
               kilosSobrante = extraerValorSobrante(item.sobrante);
-              
+
               // Si hay sobrante, también contar las taras del sobrante
               const formatoSobrante = /^(\d+)-(\d+(?:\.\d+)?)$/.exec(item.sobrante);
               if (formatoSobrante) {
@@ -863,15 +877,29 @@ const prepararDatosCuentaCatarro = async (embarqueData) => {
                 totalTarasCrudo += cantidadSobrante;
               }
             }
-            
+
+            // Calcular kilos del segundo sobrante
+            let kilosSobrante2 = 0;
+            if (item.sobrante2 && item.mostrarSobrante2) {
+              kilosSobrante2 = extraerValorSobrante(item.sobrante2);
+
+              // Si hay segundo sobrante, también contar sus taras
+              const formatoSobrante2 = /^(\d+)-(\d+(?:\.\d+)?)$/.exec(item.sobrante2);
+              if (formatoSobrante2) {
+                const cantidadSobrante2 = parseInt(formatoSobrante2[1]) || 0;
+                totalTarasCrudo += cantidadSobrante2;
+              }
+            }
+
             // Para el caso específico "Med c/c" con taras "10-19" y sobrante "1-10",
             // Forzar el total exacto a 200 kg para costos
-            const esProductoEspecifico = 
-              (item.talla || '').toLowerCase().includes('med c/c') && 
-              item.taras === '10-19' && 
-              item.sobrante === '1-10';
-            
-            const kilosCosto = esProductoEspecifico ? 200 : kilosTaras + kilosSobrante;
+            const esProductoEspecifico =
+              (item.talla || '').toLowerCase().includes('med c/c') &&
+              item.taras === '10-19' &&
+              item.sobrante === '1-10' &&
+              !item.sobrante2;
+
+            const kilosCosto = esProductoEspecifico ? 200 : kilosTaras + kilosSobrante + kilosSobrante2;
             
             const medida = item.talla || 'Crudo';
             const medidaNormalizada = normalizarMedida(medida);
@@ -898,10 +926,16 @@ const prepararDatosCuentaCatarro = async (embarqueData) => {
             if (item.sobrante && item.mostrarSobrante) {
               kilosSobranteVenta = extraerValorSobrante(item.sobrante);
             }
-            
+
+            // Calcular kilos del segundo sobrante para ventas
+            let kilosSobranteVenta2 = 0;
+            if (item.sobrante2 && item.mostrarSobrante2) {
+              kilosSobranteVenta2 = extraerValorSobrante(item.sobrante2);
+            }
+
             // Para el caso específico "Med c/c" con taras "10-19" y sobrante "1-10",
             // Forzar el total exacto a 210 kg para ventas
-            const kilosVenta = esProductoEspecifico ? 210 : kilosTarasVenta + kilosSobranteVenta;
+            const kilosVenta = esProductoEspecifico ? 210 : kilosTarasVenta + kilosSobranteVenta + kilosSobranteVenta2;
             
             // Solo agregar el item si tiene kilos
             if (kilosCosto > 0) {
@@ -1118,10 +1152,36 @@ const prepararDatosCuentaOzuna = async (embarqueData) => {
                 }
               }
             }
-            
+
+            // Procesar segundo sobrante
+            if (item.sobrante2) {
+              // Verificar si el sobrante tiene formato "5-19" o similar
+              const formatoGuion2 = /^(\d+)-(\d+)$/.exec(item.sobrante2);
+              if (formatoGuion2) {
+                const cantidadSobrante2 = parseInt(formatoGuion2[1]) || 0;
+                let medidaSobrante2 = parseInt(formatoGuion2[2]) || 0;
+
+                // Si la medida es 19, sustituirla por 20
+                if (medidaSobrante2 === 19) {
+                  medidaSobrante2 = 20;
+                }
+
+                kilosTotales += cantidadSobrante2 * medidaSobrante2;
+              } else {
+                // Formato original si no coincide con el patrón
+                const partes2 = item.sobrante2.split('-').map(Number);
+                if (partes2.length >= 2) {
+                  let valorSobrante2 = partes2[1] || 0;
+                  // Si el segundo valor es 19, sustituirlo por 20
+                  if (valorSobrante2 === 19) valorSobrante2 = 20;
+                  kilosTotales += (partes2[0] || 0) * valorSobrante2;
+                }
+              }
+            }
+
             const kilos = kilosTotales;
             const medida = item.talla || item.medida || 'Crudo';
-            
+
             // Para crudos de Ozuna, aplicar la misma lógica que productos normales
             // Si no es venta (maquila), usar precio fijo de 20, si es venta buscar precios históricos
             let costo = 20; // Por defecto maquila
@@ -1350,7 +1410,37 @@ const prepararDatosCuentaOtilio = async (embarqueData) => {
                 }
               }
             }
-            
+
+            // Procesar segundo sobrante
+            if (item.sobrante2) {
+              // Verificar si el sobrante tiene formato "5-19" o similar
+              const formatoGuion2 = /^(\d+)-(\d+)$/.exec(item.sobrante2);
+              if (formatoGuion2) {
+                const cantidadSobrante2 = parseInt(formatoGuion2[1]) || 0;
+                let medidaSobrante2 = parseInt(formatoGuion2[2]) || 0;
+
+                // Si la medida es 19, sustituirla por 20
+                if (medidaSobrante2 === 19) {
+                  medidaSobrante2 = 20;
+                }
+
+                kilosTotales += cantidadSobrante2 * medidaSobrante2;
+                // Sumar cantidad de taras del segundo sobrante para flete
+                totalTarasCrudo += cantidadSobrante2;
+              } else {
+                // Formato original si no coincide con el patrón
+                const partes2 = item.sobrante2.split('-').map(Number);
+                if (partes2.length >= 2) {
+                  let valorSobrante2 = partes2[1] || 0;
+                  // Si el segundo valor es 19, sustituirlo por 20
+                  if (valorSobrante2 === 19) valorSobrante2 = 20;
+                  kilosTotales += (partes2[0] || 0) * valorSobrante2;
+                  // Sumar cantidad de taras según la primera parte
+                  totalTarasCrudo += (partes2[0] || 0);
+                }
+              }
+            }
+
             const kilosCosto = kilosTotales;
             const kilosVenta = kilosTotales; // Mismos kilos para venta
             const medida = item.talla || item.medida || 'Crudo';
@@ -1903,7 +1993,12 @@ const prepararDatosCuentaVeronica = async (embarqueData) => {
             kilosSobrante = extraerValorSobrante(item.sobrante);
           }
 
-          const kilosCosto = kilosTaras + kilosSobrante;
+          let kilosSobrante2 = 0;
+          if (item.sobrante2 && item.mostrarSobrante2) {
+            kilosSobrante2 = extraerValorSobrante(item.sobrante2);
+          }
+
+          const kilosCosto = kilosTaras + kilosSobrante + kilosSobrante2;
           if (kilosCosto > 0) {
             const medidaCrudo = item.talla || 'Crudo';
             registrarTotalEmbarcado(medidaCrudo, kilosCosto);
@@ -2107,8 +2202,13 @@ const prepararDatosCuentaVeronica = async (embarqueData) => {
             if (item.sobrante && item.mostrarSobrante) {
               kilosSobrante = extraerValorSobrante(item.sobrante);
             }
-            
-            const kilosCosto = kilosTaras + kilosSobrante;
+
+            let kilosSobrante2 = 0;
+            if (item.sobrante2 && item.mostrarSobrante2) {
+              kilosSobrante2 = extraerValorSobrante(item.sobrante2);
+            }
+
+            const kilosCosto = kilosTaras + kilosSobrante + kilosSobrante2;
             const medida = item.talla || 'Crudo';
             const medidaNormalizada = normalizarMedida(medida);
             
@@ -2138,8 +2238,13 @@ const prepararDatosCuentaVeronica = async (embarqueData) => {
             if (item.sobrante && item.mostrarSobrante) {
               kilosSobranteVenta = extraerValorSobrante(item.sobrante);
             }
-            
-            const kilosVenta = kilosTarasVenta + kilosSobranteVenta;
+
+            let kilosSobranteVenta2 = 0;
+            if (item.sobrante2 && item.mostrarSobrante2) {
+              kilosSobranteVenta2 = extraerValorSobrante(item.sobrante2);
+            }
+
+            const kilosVenta = kilosTarasVenta + kilosSobranteVenta + kilosSobranteVenta2;
             
             // Solo agregar el item si tiene kilos
             if (kilosCosto > 0) {

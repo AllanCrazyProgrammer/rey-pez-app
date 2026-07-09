@@ -1157,7 +1157,7 @@ export default {
         if (soloCantidad) return Number(soloCantidad[1]) * 19;
         return 0;
       };
-      return Number((parsear(item.taras) + parsear(item.sobrante)).toFixed(1));
+      return Number((parsear(item.taras) + parsear(item.sobrante) + parsear(item.sobrante2)).toFixed(1));
     },
 
     kilosNetosProducto(producto) {

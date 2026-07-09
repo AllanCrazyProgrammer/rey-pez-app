@@ -1874,7 +1874,7 @@ export default {
           items.forEach(item => {
             const nombre = String(item.talla || item.medida || '').trim().toLowerCase();
             if (nombre !== 'cam s/c') return;
-            total += this.kilosDeTaraCrudo(item.taras) + this.kilosDeTaraCrudo(item.sobrante);
+            total += this.kilosDeTaraCrudo(item.taras) + this.kilosDeTaraCrudo(item.sobrante) + this.kilosDeTaraCrudo(item.sobrante2);
           });
         });
       });

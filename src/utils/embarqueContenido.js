@@ -113,7 +113,7 @@ export function embarqueTieneContenidoOperativoDoc(data) {
     for (const crudo of crudos) {
       const items = Array.isArray(crudo?.items) ? crudo.items : [];
       for (const item of items) {
-        if (stringHasContent(item?.taras) || stringHasContent(item?.sobrante)) return true;
+        if (stringHasContent(item?.taras) || stringHasContent(item?.sobrante) || stringHasContent(item?.sobrante2)) return true;
         const kilos = toNumber(item?.kilos);
         if (Number.isFinite(kilos) && kilos > 0) return true;
       }
@@ -149,7 +149,7 @@ export function embarqueTieneContenidoOperativoEstado({ cargaCon, productos, cli
     for (const crudo of listaCrudos) {
       const items = Array.isArray(crudo?.items) ? crudo.items : [];
       for (const item of items) {
-        if (stringHasContent(item?.taras) || stringHasContent(item?.sobrante)) return true;
+        if (stringHasContent(item?.taras) || stringHasContent(item?.sobrante) || stringHasContent(item?.sobrante2)) return true;
         const kilos = toNumber(item?.kilos);
         if (Number.isFinite(kilos) && kilos > 0) return true;
       }

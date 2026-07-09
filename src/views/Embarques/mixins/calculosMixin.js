@@ -113,6 +113,26 @@ export default {
         }
       }
 
+      // Procesar segundo sobrante
+      if (item.sobrante2) {
+        const formatoGuion2 = /^(\d+)-(\d+)$/.exec(item.sobrante2);
+        if (formatoGuion2) {
+          const cantidadSobrante2 = parseInt(formatoGuion2[1]) || 0;
+          let medidaSobrante2 = parseInt(formatoGuion2[2]) || 0;
+
+          if (medidaSobrante2 === 19) {
+            medidaSobrante2 = 20;
+          }
+
+          kilosTotales += cantidadSobrante2 * medidaSobrante2;
+        } else {
+          const [cantidadSobrante2, medidaSobrante2] = item.sobrante2
+            .split("-")
+            .map(Number);
+          kilosTotales += cantidadSobrante2 * medidaSobrante2;
+        }
+      }
+
       return kilosTotales;
     },
 
@@ -126,6 +146,10 @@ export default {
       if (item.sobrante) {
         const [cantidadSobrante] = item.sobrante.split("-").map(Number);
         totalTaras += cantidadSobrante;
+      }
+      if (item.sobrante2) {
+        const [cantidadSobrante2] = item.sobrante2.split("-").map(Number);
+        totalTaras += cantidadSobrante2;
       }
       return totalTaras;
     },

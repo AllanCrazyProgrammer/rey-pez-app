@@ -75,10 +75,17 @@ export const embarqueCrudosMixin = {
         return;
       }
       const item = this.clienteCrudos[clienteId][crudoIndex].items[itemIndex];
-      if (!Object.prototype.hasOwnProperty.call(item, 'mostrarSobrante')) {
+      const nivel = (item.mostrarSobrante ? 1 : 0) + (item.mostrarSobrante2 ? 1 : 0);
+
+      if (nivel === 0) {
         this.$set(item, 'mostrarSobrante', true);
+      } else if (nivel === 1) {
+        this.$set(item, 'mostrarSobrante2', true);
       } else {
-        item.mostrarSobrante = !item.mostrarSobrante;
+        this.$set(item, 'mostrarSobrante', false);
+        this.$set(item, 'mostrarSobrante2', false);
+        item.sobrante = '';
+        item.sobrante2 = '';
       }
       this.guardarCambiosEnTiempoReal();
     },
