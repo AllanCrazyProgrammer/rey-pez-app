@@ -351,7 +351,8 @@ export default {
                 return total + crudo.items.reduce((itemTotal, item) => {
                     let taras = this.extraerNumero(item.taras);
                     let sobrante = this.extraerNumero(item.sobrante);
-                    return itemTotal + taras + sobrante;
+                    let sobrante2 = this.extraerNumero(item.sobrante2);
+                    return itemTotal + taras + sobrante + sobrante2;
                 }, 0);
             }, 0);
         },
@@ -485,6 +486,24 @@ export default {
                     // Formato original si no coincide con el patrón
                     const [cantidadSobrante, medidaSobrante] = item.sobrante.split('-').map(Number);
                     kilosTotales += cantidadSobrante * medidaSobrante;
+                }
+            }
+
+            // Procesar segundo sobrante
+            if (item.sobrante2) {
+                const formatoGuion2 = /^(\d+)-(\d+)$/.exec(item.sobrante2);
+                if (formatoGuion2) {
+                    const cantidadSobrante2 = parseInt(formatoGuion2[1]) || 0;
+                    let medidaSobrante2 = parseInt(formatoGuion2[2]) || 0;
+
+                    if (medidaSobrante2 === 19) {
+                        medidaSobrante2 = 20;
+                    }
+
+                    kilosTotales += cantidadSobrante2 * medidaSobrante2;
+                } else {
+                    const [cantidadSobrante2, medidaSobrante2] = item.sobrante2.split('-').map(Number);
+                    kilosTotales += cantidadSobrante2 * medidaSobrante2;
                 }
             }
 

@@ -302,7 +302,8 @@ export const embarquePedidoMixin = {
             nuevosCrudosPorCliente[clienteIdStr].push({
               talla: definicion.medida || '',
               medida: definicion.medida || '',
-              barco: '', taras: null, sobrante: null, mostrarSobrante: false, precio: null,
+              barco: '', taras: null, sobrante: null, mostrarSobrante: false,
+              sobrante2: null, mostrarSobrante2: false, precio: null,
               pedidoReferencia: definicion.pedidoReferencia
                 ? { taras: definicion.pedidoReferencia.taras || 0 } : null,
             });

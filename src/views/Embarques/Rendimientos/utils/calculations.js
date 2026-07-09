@@ -91,7 +91,25 @@ export function calcularKilosCrudosItem(item, pesoTaraVenta = 20) {
       kilosTotales += (cantidadSobrante || 0) * (pesoSobrante || 0);
     }
   }
-  
+
+  // Procesar segundo sobrante
+  if (item.sobrante2) {
+    const formatoGuion2 = /^(\d+)-(\d+)$/.exec(item.sobrante2);
+    if (formatoGuion2) {
+      const cantidadSobrante2 = parseInt(formatoGuion2[1]) || 0;
+      let pesoSobrante2 = parseInt(formatoGuion2[2]) || 0;
+
+      if (pesoSobrante2 === 19) {
+        pesoSobrante2 = pesoTaraVenta;
+      }
+
+      kilosTotales += cantidadSobrante2 * pesoSobrante2;
+    } else {
+      const [cantidadSobrante2, pesoSobrante2] = item.sobrante2.split('-').map(Number);
+      kilosTotales += (cantidadSobrante2 || 0) * (pesoSobrante2 || 0);
+    }
+  }
+
   return kilosTotales;
 }
 

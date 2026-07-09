@@ -88,8 +88,12 @@ export function calcularTarasCrudos(crudos = []) {
     return total + crudo.items.reduce((itemTotal, item) => {
       const [cantidad = 0] = (item.taras || '').split('-');
       const [cantidadSobrante = 0] = (item.sobrante || '').split('-');
+      const [cantidadSobrante2 = 0] = (item.sobrante2 || '').split('-');
 
-      return itemTotal + (parseInt(cantidad, 10) || 0) + (parseInt(cantidadSobrante, 10) || 0);
+      return itemTotal
+        + (parseInt(cantidad, 10) || 0)
+        + (parseInt(cantidadSobrante, 10) || 0)
+        + (parseInt(cantidadSobrante2, 10) || 0);
     }, 0);
   }, 0);
 }

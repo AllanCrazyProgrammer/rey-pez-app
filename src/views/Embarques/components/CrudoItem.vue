@@ -53,6 +53,9 @@
                         <input v-if="item.mostrarSobrante" type="text" v-model="item.sobrante"
                             class="form-control taras-input" placeholder="Sbrte" @input="actualizarCrudo"
                             :disabled="embarqueBloqueado">
+                        <input v-if="item.mostrarSobrante2" type="text" v-model="item.sobrante2"
+                            class="form-control taras-input" placeholder="Sbrte 2" @input="actualizarCrudo"
+                            :disabled="embarqueBloqueado">
                     </div>
                     <div class="buttons-wrapper">
                         <button type="button" @click="eliminarCrudoItem(itemIndex)"
@@ -173,7 +176,8 @@ export default {
             return this.crudoData.items.reduce((total, item) => {
                 let taras = this.extraerNumero(item.taras);
                 let sobrante = this.extraerNumero(item.sobrante);
-                return total + taras + sobrante;
+                let sobrante2 = this.extraerNumero(item.sobrante2);
+                return total + taras + sobrante + sobrante2;
             }, 0);
         },
 
@@ -192,7 +196,8 @@ export default {
                 if (!talla) return;
                 const taras = this.extraerNumero(item.taras);
                 const sobrante = this.extraerNumero(item.sobrante);
-                mapa[talla] = (mapa[talla] || 0) + taras + sobrante;
+                const sobrante2 = this.extraerNumero(item.sobrante2);
+                mapa[talla] = (mapa[talla] || 0) + taras + sobrante + sobrante2;
             });
             return mapa;
         }
@@ -235,8 +240,10 @@ export default {
                 barco: '',
                 taras: '',
                 sobrante: '',
+                sobrante2: '',
                 precio: null,
                 mostrarSobrante: false,
+                mostrarSobrante2: false,
                 esVenta: this.isClienteOzuna, // Auto-establecer esVenta a true para Ozuna
                 pedidoReferencia: null
             };
@@ -262,18 +269,25 @@ export default {
         },
 
         toggleSobrante(itemIndex) {
-            // Cambiar el estado de mostrarSobrante directamente
-            if (this.crudoData.items && this.crudoData.items.length > itemIndex) {
-                this.crudoData.items[itemIndex].mostrarSobrante = !this.crudoData.items[itemIndex].mostrarSobrante;
-                
-                // Si se oculta el sobrante, limpiar su valor
-                if (!this.crudoData.items[itemIndex].mostrarSobrante) {
-                    this.crudoData.items[itemIndex].sobrante = '';
-                }
-                
-                // Actualizar el componente padre
-                this.actualizarCrudo();
+            // Permite hasta 2 sobrantes por item, ciclando 0 -> 1 -> 2 -> 0
+            if (!this.crudoData.items || this.crudoData.items.length <= itemIndex) return;
+
+            const item = this.crudoData.items[itemIndex];
+            const nivel = (item.mostrarSobrante ? 1 : 0) + (item.mostrarSobrante2 ? 1 : 0);
+
+            if (nivel === 0) {
+                this.$set(item, 'mostrarSobrante', true);
+            } else if (nivel === 1) {
+                this.$set(item, 'mostrarSobrante2', true);
+            } else {
+                this.$set(item, 'mostrarSobrante', false);
+                this.$set(item, 'mostrarSobrante2', false);
+                item.sobrante = '';
+                item.sobrante2 = '';
             }
+
+            // Actualizar el componente padre
+            this.actualizarCrudo();
         },
 
         asignarPrecioAutomaticoCrudo(itemRef = null) {

@@ -764,7 +764,27 @@ export default {
                 kilosItem += (cantidadSobrante || 0) * (medidaSobrante || 0);
               }
             }
-            
+
+            // Procesar segundo sobrante
+            if (item.sobrante2) {
+              const formatoGuion2 = /^(\d+)-(\d+)$/.exec(item.sobrante2);
+              if (formatoGuion2) {
+                const cantidadSobrante2 = parseInt(formatoGuion2[1]) || 0;
+                let medidaSobrante2 = parseInt(formatoGuion2[2]) || 0;
+
+                // Si la medida es 19, sustituirla por 20 para el cálculo de ventas
+                if (medidaSobrante2 === 19) {
+                  medidaSobrante2 = 20;
+                }
+
+                kilosItem += cantidadSobrante2 * medidaSobrante2;
+              } else {
+                // Formato original si no coincide con el patrón
+                const [cantidadSobrante2, medidaSobrante2] = item.sobrante2.split('-').map(Number);
+                kilosItem += (cantidadSobrante2 || 0) * (medidaSobrante2 || 0);
+              }
+            }
+
             totalKilosCrudos += kilosItem;
           });
         });
@@ -804,6 +824,10 @@ export default {
                 if (item.sobrante) {
                   const [cantidadSobrante] = item.sobrante.split('-');
                   totalTaras += parseInt(cantidadSobrante) || 0;
+                }
+                if (item.sobrante2) {
+                  const [cantidadSobrante2] = item.sobrante2.split('-');
+                  totalTaras += parseInt(cantidadSobrante2) || 0;
                 }
               });
             }

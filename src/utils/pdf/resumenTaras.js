@@ -195,6 +195,13 @@ function calcularTarasCrudos(crudos) {
         }
       }
 
+      if (item.sobrante2) {
+        const [cantidadSobrante2] = item.sobrante2.split('-').map(Number);
+        if (!isNaN(cantidadSobrante2)) {
+          taras += cantidadSobrante2;
+        }
+      }
+
       return itemTotal + taras;
     }, 0);
   }, 0);

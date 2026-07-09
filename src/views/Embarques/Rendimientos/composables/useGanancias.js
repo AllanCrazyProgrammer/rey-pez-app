@@ -397,7 +397,8 @@ export function useGanancias() {
                       gananciaTotal: gananciaTotal,
                       fuentePrecio: fuentePrecio,
                       taras: item.taras,
-                      sobrante: item.sobrante
+                      sobrante: item.sobrante,
+                      sobrante2: item.sobrante2
                     });
                   }
                 }

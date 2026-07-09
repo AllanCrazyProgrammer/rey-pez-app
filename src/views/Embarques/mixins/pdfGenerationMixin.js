@@ -179,6 +179,11 @@ export default {
                   tarasArray.push(item.sobrante);
                 }
 
+                // Agregar segundo sobrante si existe
+                if (item.sobrante2) {
+                  tarasArray.push(item.sobrante2);
+                }
+
                 return {
                   clienteId,
                   medida: item.talla,
