@@ -269,6 +269,8 @@
             Elige una o varias medidas para ver cuánto durará su stock, cuándo convendría
             resurtir y otros datos útiles para decidir. Por default se consultan todos los
             proveedores juntos, para saber cuánto se desplazó una medida sin importar de quién vino.
+            Puedes cambiar de proveedor para revisar sus medidas sin perder lo que ya
+            marcaste de otros proveedores.
           </p>
           <div class="form-grid">
             <label>
@@ -302,7 +304,7 @@
             </label>
             <button
               class="calcular-btn"
-              :disabled="consultaMedidasSeleccionadas.length === 0 || consultaCargando"
+              :disabled="consultaSeleccion.length === 0 || consultaCargando"
               @click="analizarMedida"
             >
               {{ consultaCargando ? 'Analizando...' : 'Analizar' }}
@@ -313,10 +315,10 @@
             <div class="medidas-selector-header">
               <span>Medidas a consultar{{ consultaProveedor ? ` — ${consultaProveedor}` : ' — todos los proveedores' }}</span>
               <div v-if="consultaMedidasDisponibles.length > 0" class="medidas-selector-acciones">
-                <button type="button" @click="consultaMedidasSeleccionadas = consultaMedidasDisponibles.map(m => m.nombre)">
+                <button type="button" @click="seleccionarTodasVisibles">
                   Todas
                 </button>
-                <button type="button" @click="consultaMedidasSeleccionadas = []">
+                <button type="button" @click="deseleccionarTodasVisibles">
                   Ninguna
                 </button>
               </div>
@@ -328,17 +330,34 @@
             </div>
             <div v-else class="medidas-checkbox-grid">
               <label v-for="medida in consultaMedidasDisponibles" :key="medida.nombre" class="medida-checkbox">
-                <input type="checkbox" :value="medida.nombre" v-model="consultaMedidasSeleccionadas" />
+                <input
+                  type="checkbox"
+                  :checked="estaSeleccionada(medida.nombre)"
+                  @change="toggleSeleccion(medida.nombre)"
+                />
                 <span class="medida-nombre">{{ medida.nombre }}</span>
                 <span class="medida-stock-hint">{{ formatNumber(medida.stockActual) }} kg</span>
               </label>
             </div>
           </div>
+
+          <div v-if="consultaSeleccion.length > 0" class="seleccion-resumen">
+            <span class="seleccion-resumen-label">Seleccionadas ({{ consultaSeleccion.length }}):</span>
+            <span v-for="(item, idx) in consultaSeleccion" :key="idx" class="seleccion-chip">
+              {{ item.medida }}
+              <small>({{ item.proveedor || 'todos' }})</small>
+              <button type="button" @click="quitarSeleccion(idx)">×</button>
+            </span>
+          </div>
         </div>
 
         <div v-if="consultaError" class="error-box">{{ consultaError }}</div>
 
-        <div v-for="resultado in consultaResultados" :key="resultado.medida" class="resultado-card">
+        <div
+          v-for="resultado in consultaResultados"
+          :key="`${resultado.proveedor}::${resultado.medida}`"
+          class="resultado-card"
+        >
           <h2>{{ resultado.medida }} — {{ resultado.proveedor }}</h2>
 
           <div class="consulta-metricas">
@@ -465,7 +484,10 @@ export default {
 
       // Estado de la vista "Consultar una Medida"
       consultaProveedor: '',
-      consultaMedidasSeleccionadas: [],
+      // Selección acumulada de { proveedor, medida }. No se reinicia al
+      // cambiar el filtro de proveedor, para poder ir marcando medidas de
+      // varios proveedores distintos (o de "todos") antes de analizar.
+      consultaSeleccion: [],
       consultaDiasHistorial: 30,
       consultaMetaDias: 12,
       consultaMedidasDisponibles: [],
@@ -693,10 +715,11 @@ export default {
       }
     },
 
+    // No reinicia consultaSeleccion a propósito: cambiar el filtro de
+    // proveedor solo refresca la lista de medidas mostradas, para poder
+    // seguir marcando medidas de otros proveedores sin perder lo ya elegido.
     async cargarMedidasConsulta() {
       this.consultaMedidasDisponibles = [];
-      this.consultaMedidasSeleccionadas = [];
-      this.consultaResultados = [];
       this.consultaError = '';
 
       this.consultaCargandoMedidas = true;
@@ -708,6 +731,41 @@ export default {
       } finally {
         this.consultaCargandoMedidas = false;
       }
+    },
+
+    estaSeleccionada(medidaNombre) {
+      return this.consultaSeleccion.some(
+        s => s.proveedor === this.consultaProveedor && s.medida === medidaNombre
+      );
+    },
+
+    toggleSeleccion(medidaNombre) {
+      const idx = this.consultaSeleccion.findIndex(
+        s => s.proveedor === this.consultaProveedor && s.medida === medidaNombre
+      );
+      if (idx >= 0) {
+        this.consultaSeleccion.splice(idx, 1);
+      } else {
+        this.consultaSeleccion.push({ proveedor: this.consultaProveedor, medida: medidaNombre });
+      }
+    },
+
+    seleccionarTodasVisibles() {
+      this.consultaMedidasDisponibles.forEach(m => {
+        if (!this.estaSeleccionada(m.nombre)) {
+          this.consultaSeleccion.push({ proveedor: this.consultaProveedor, medida: m.nombre });
+        }
+      });
+    },
+
+    deseleccionarTodasVisibles() {
+      this.consultaSeleccion = this.consultaSeleccion.filter(
+        s => s.proveedor !== this.consultaProveedor
+      );
+    },
+
+    quitarSeleccion(idx) {
+      this.consultaSeleccion.splice(idx, 1);
     },
 
     seleccionarVista(vista) {
@@ -758,85 +816,110 @@ export default {
       return historialPorMedida;
     },
 
+    // Calcula las métricas de una medida (consumo, cobertura, tendencia,
+    // últimas entradas) a partir de su stock actual y su historial ya
+    // filtrado. No sabe de proveedores: eso lo agrega quien la llama.
+    calcularAnalisisMedida(stockActual, entradas, salidas, dias, meta) {
+      const sumaSalidasDesde = (diasAtras) => {
+        const desde = moment().subtract(diasAtras, 'days').startOf('day');
+        return salidas
+          .filter(s => moment(s.fecha).isSameOrAfter(desde))
+          .reduce((sum, s) => sum + s.kilos, 0);
+      };
+
+      const vendidoPeriodo = Number(sumaSalidasDesde(dias).toFixed(1));
+      const consumoDiario = Number((vendidoPeriodo / dias).toFixed(2));
+
+      const vendidoReciente = Number(sumaSalidasDesde(7).toFixed(1));
+      const consumoReciente = Number((vendidoReciente / 7).toFixed(2));
+
+      let diasCobertura = null;
+      let fechaAgotamiento = null;
+      let diasParaResurtir = null;
+      let fechaResurtir = null;
+
+      if (consumoDiario > 0) {
+        diasCobertura = Number((stockActual / consumoDiario).toFixed(1));
+        fechaAgotamiento = moment().add(diasCobertura, 'days').format('DD/MM/YYYY');
+        diasParaResurtir = Number((diasCobertura - meta).toFixed(1));
+        fechaResurtir = moment().add(diasParaResurtir, 'days').format('DD/MM/YYYY');
+      }
+
+      let tendencia = 'estable';
+      if (consumoDiario > 0) {
+        if (consumoReciente > consumoDiario * 1.15) tendencia = 'subiendo';
+        else if (consumoReciente < consumoDiario * 0.85) tendencia = 'bajando';
+      }
+
+      const entradaConPrecio = entradas.find(e => e.precio !== null && e.precio !== undefined);
+
+      return {
+        diasHistorial: dias,
+        stockActual,
+        vendidoPeriodo,
+        consumoDiario,
+        vendidoReciente,
+        consumoReciente,
+        tendencia,
+        diasCobertura,
+        fechaAgotamiento,
+        metaDiasCobertura: meta,
+        diasParaResurtir,
+        fechaResurtir,
+        ultimoPrecio: entradaConPrecio ? entradaConPrecio.precio : null,
+        ultimasEntradas: entradas.slice(0, 5).map(e => ({
+          fecha: moment(e.fecha).format('DD/MM/YYYY'),
+          kilos: Number(e.kilos.toFixed(1)),
+          precio: e.precio
+        }))
+      };
+    },
+
     async analizarMedida() {
-      if (this.consultaMedidasSeleccionadas.length === 0 || this.consultaCargando) return;
+      if (this.consultaSeleccion.length === 0 || this.consultaCargando) return;
       this.consultaCargando = true;
       this.consultaError = '';
       this.consultaResultados = [];
 
       try {
-        const historialPorMedida = await this.obtenerHistorialMedidas(
-          this.consultaProveedor, this.consultaMedidasSeleccionadas
-        );
-        const proveedorEtiqueta = this.consultaProveedor || 'Todos los proveedores';
         const dias = this.consultaDiasHistorial;
         const meta = Number(this.consultaMetaDias) || 0;
 
-        this.consultaResultados = this.consultaMedidasSeleccionadas.map(medidaNombre => {
-          const { entradas, salidas } = historialPorMedida[medidaNombre];
-
-          // El stock actual se toma de consultaMedidasDisponibles, ya calculado
-          // con la misma lógica de buckets (medida+precio+cuarto) y FIFO que usa
-          // Existencias.vue, para que cuadre con el resto de la app.
-          const medidaInfo = this.consultaMedidasDisponibles.find(m => m.nombre === medidaNombre);
-          const stockActual = medidaInfo ? medidaInfo.stockActual : 0;
-
-          const sumaSalidasDesde = (diasAtras) => {
-            const desde = moment().subtract(diasAtras, 'days').startOf('day');
-            return salidas
-              .filter(s => moment(s.fecha).isSameOrAfter(desde))
-              .reduce((sum, s) => sum + s.kilos, 0);
-          };
-
-          const vendidoPeriodo = Number(sumaSalidasDesde(dias).toFixed(1));
-          const consumoDiario = Number((vendidoPeriodo / dias).toFixed(2));
-
-          const vendidoReciente = Number(sumaSalidasDesde(7).toFixed(1));
-          const consumoReciente = Number((vendidoReciente / 7).toFixed(2));
-
-          let diasCobertura = null;
-          let fechaAgotamiento = null;
-          let diasParaResurtir = null;
-          let fechaResurtir = null;
-
-          if (consumoDiario > 0) {
-            diasCobertura = Number((stockActual / consumoDiario).toFixed(1));
-            fechaAgotamiento = moment().add(diasCobertura, 'days').format('DD/MM/YYYY');
-            diasParaResurtir = Number((diasCobertura - meta).toFixed(1));
-            fechaResurtir = moment().add(diasParaResurtir, 'days').format('DD/MM/YYYY');
+        // Agrupar la selección por proveedor (clave '' = todos), para no
+        // repetir lecturas a Firestore cuando varias medidas comparten el
+        // mismo proveedor.
+        const medidasPorProveedor = {};
+        this.consultaSeleccion.forEach(item => {
+          const clave = item.proveedor || '';
+          if (!medidasPorProveedor[clave]) medidasPorProveedor[clave] = [];
+          if (!medidasPorProveedor[clave].includes(item.medida)) {
+            medidasPorProveedor[clave].push(item.medida);
           }
-
-          let tendencia = 'estable';
-          if (consumoDiario > 0) {
-            if (consumoReciente > consumoDiario * 1.15) tendencia = 'subiendo';
-            else if (consumoReciente < consumoDiario * 0.85) tendencia = 'bajando';
-          }
-
-          const entradaConPrecio = entradas.find(e => e.precio !== null && e.precio !== undefined);
-
-          return {
-            proveedor: proveedorEtiqueta,
-            medida: medidaNombre,
-            diasHistorial: dias,
-            stockActual,
-            vendidoPeriodo,
-            consumoDiario,
-            vendidoReciente,
-            consumoReciente,
-            tendencia,
-            diasCobertura,
-            fechaAgotamiento,
-            metaDiasCobertura: meta,
-            diasParaResurtir,
-            fechaResurtir,
-            ultimoPrecio: entradaConPrecio ? entradaConPrecio.precio : null,
-            ultimasEntradas: entradas.slice(0, 5).map(e => ({
-              fecha: moment(e.fecha).format('DD/MM/YYYY'),
-              kilos: Number(e.kilos.toFixed(1)),
-              precio: e.precio
-            }))
-          };
         });
+
+        const resultadoPorClave = {};
+        for (const proveedor of Object.keys(medidasPorProveedor)) {
+          const medidasDelGrupo = medidasPorProveedor[proveedor];
+          const [{ stockPorMedida }, historialPorMedida] = await Promise.all([
+            this.obtenerMovimientosProveedor(proveedor, null, null),
+            this.obtenerHistorialMedidas(proveedor, medidasDelGrupo)
+          ]);
+
+          medidasDelGrupo.forEach(medidaNombre => {
+            const stockActual = Number((stockPorMedida[medidaNombre] || 0).toFixed(1));
+            const { entradas, salidas } = historialPorMedida[medidaNombre];
+            resultadoPorClave[`${proveedor}::${medidaNombre}`] = {
+              proveedor: proveedor || 'Todos los proveedores',
+              medida: medidaNombre,
+              ...this.calcularAnalisisMedida(stockActual, entradas, salidas, dias, meta)
+            };
+          });
+        }
+
+        // Conservar el orden en el que el usuario fue marcando las medidas.
+        this.consultaResultados = this.consultaSeleccion.map(
+          item => resultadoPorClave[`${item.proveedor || ''}::${item.medida}`]
+        );
       } catch (error) {
         console.error('Error al analizar las medidas:', error);
         this.consultaError = 'No se pudieron analizar las medidas: ' + error.message;
@@ -1381,6 +1464,52 @@ h2 {
   color: #888;
   font-size: 12px;
   white-space: nowrap;
+}
+
+.seleccion-resumen {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid #dee2e6;
+}
+
+.seleccion-resumen-label {
+  color: #2c3e50;
+  font-weight: bold;
+  font-size: 14px;
+}
+
+.seleccion-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background-color: #eaf3fb;
+  border: 1px solid #b8d9ef;
+  border-radius: 14px;
+  padding: 4px 6px 4px 12px;
+  font-size: 13px;
+  color: #2c3e50;
+}
+
+.seleccion-chip small {
+  color: #7a8a99;
+}
+
+.seleccion-chip button {
+  background: none;
+  border: none;
+  color: #7a8a99;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 2px 6px;
+}
+
+.seleccion-chip button:hover {
+  color: #c0392b;
 }
 
 .calcular-btn {
