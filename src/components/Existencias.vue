@@ -7,6 +7,9 @@
           <router-link to="/analisis-stock" class="analisis-button">
             📊 Análisis de Stock
           </router-link>
+          <router-link to="/asesor-experto" class="asesor-button">
+            🦐 Asesor Experto
+          </router-link>
           <button @click="imprimirReporte" class="print-button">
             Imprimir Reporte
           </button>
@@ -1635,6 +1638,23 @@ h1 {
 
 .analisis-button:hover {
   background-color: #7d3c98;
+}
+
+.asesor-button {
+  background-color: #e67e22;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 16px;
+  text-decoration: none;
+  display: inline-block;
+  transition: background-color 0.3s ease;
+}
+
+.asesor-button:hover {
+  background-color: #d35400;
 }
 
 .print-button {

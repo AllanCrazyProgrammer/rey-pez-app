@@ -12,6 +12,7 @@ import GestionarMedidas from '@/components/GestionarMedidas.vue'
 import GestionarProveedores from '@/components/GestionarProveedores.vue'
 import Existencias from '@/components/Existencias.vue'
 import AnalisisStock from '@/views/AnalisisStock.vue'
+import AsesorExperto from '@/views/AsesorExperto.vue'
 import CuentasMexico from '@/views/CuentasMexico.vue'
 import OzunaCuentasMenu from '@/views/CuentasClientes/OzunaCuentasMenu.vue'
 import CuentasOzuna from '@/views/CuentasClientes/CuentasOzuna.vue'
@@ -133,6 +134,11 @@ const routes = [
     path: '/analisis-stock',
     name: 'AnalisisStock',
     component: AnalisisStock
+  },
+  {
+    path: '/asesor-experto',
+    name: 'AsesorExperto',
+    component: AsesorExperto
   },
   {
     path: '/existencias-crudos',
