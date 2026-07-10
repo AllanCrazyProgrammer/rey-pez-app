@@ -324,12 +324,23 @@
               </div>
             </div>
 
+            <input
+              v-if="consultaMedidasDisponibles.length > 0"
+              v-model="consultaFiltroMedida"
+              type="text"
+              class="medidas-filtro"
+              placeholder="Filtrar por medida (ej: 71/90)"
+            />
+
             <div v-if="consultaCargandoMedidas" class="medidas-mensaje">Cargando medidas...</div>
             <div v-else-if="consultaMedidasDisponibles.length === 0" class="medidas-mensaje">
               No se encontraron medidas{{ consultaProveedor ? ` para ${consultaProveedor}` : '' }}.
             </div>
+            <div v-else-if="consultaMedidasFiltradas.length === 0" class="medidas-mensaje">
+              Ninguna medida coincide con "{{ consultaFiltroMedida }}".
+            </div>
             <div v-else class="medidas-checkbox-grid">
-              <label v-for="medida in consultaMedidasDisponibles" :key="medida.nombre" class="medida-checkbox">
+              <label v-for="medida in consultaMedidasFiltradas" :key="medida.nombre" class="medida-checkbox">
                 <input
                   type="checkbox"
                   :checked="estaSeleccionada(medida.nombre)"
@@ -488,6 +499,7 @@ export default {
       // cambiar el filtro de proveedor, para poder ir marcando medidas de
       // varios proveedores distintos (o de "todos") antes de analizar.
       consultaSeleccion: [],
+      consultaFiltroMedida: '',
       consultaDiasHistorial: 30,
       consultaMetaDias: 12,
       consultaMedidasDisponibles: [],
@@ -513,6 +525,13 @@ export default {
              this.kilosDisponibles &&
              this.kilosDisponibles > 0 &&
              this.medidasSeleccionadas.length > 0;
+    },
+    consultaMedidasFiltradas() {
+      const filtro = this.consultaFiltroMedida.trim().toLowerCase();
+      if (!filtro) return this.consultaMedidasDisponibles;
+      return this.consultaMedidasDisponibles.filter(
+        m => m.nombre.toLowerCase().includes(filtro)
+      );
     }
   },
   methods: {
@@ -750,8 +769,10 @@ export default {
       }
     },
 
+    // "Visibles" respeta el filtro de texto: Todas/Ninguna solo tocan las
+    // medidas que el usuario está viendo en este momento.
     seleccionarTodasVisibles() {
-      this.consultaMedidasDisponibles.forEach(m => {
+      this.consultaMedidasFiltradas.forEach(m => {
         if (!this.estaSeleccionada(m.nombre)) {
           this.consultaSeleccion.push({ proveedor: this.consultaProveedor, medida: m.nombre });
         }
@@ -759,8 +780,9 @@ export default {
     },
 
     deseleccionarTodasVisibles() {
+      const visibles = new Set(this.consultaMedidasFiltradas.map(m => m.nombre));
       this.consultaSeleccion = this.consultaSeleccion.filter(
-        s => s.proveedor !== this.consultaProveedor
+        s => !(s.proveedor === this.consultaProveedor && visibles.has(s.medida))
       );
     },
 
@@ -1420,6 +1442,16 @@ h2 {
 .medidas-selector-acciones button:hover {
   background-color: #3498db;
   color: white;
+}
+
+.medidas-filtro {
+  width: 100%;
+  box-sizing: border-box;
+  margin: 10px 0;
+  padding: 8px 10px;
+  border: 1px solid #dee2e6;
+  border-radius: 5px;
+  font-size: 14px;
 }
 
 .medidas-mensaje {
