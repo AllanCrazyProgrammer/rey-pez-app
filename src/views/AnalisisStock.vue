@@ -8,7 +8,27 @@
         </div>
       </div>
 
-      <div class="form-card">
+      <div class="vista-tabs">
+        <button
+          type="button"
+          class="vista-tab-btn"
+          :class="{ active: vistaActiva === 'plan' }"
+          @click="seleccionarVista('plan')"
+        >
+          📦 Plan de Compra
+        </button>
+        <button
+          type="button"
+          class="vista-tab-btn"
+          :class="{ active: vistaActiva === 'consulta' }"
+          @click="seleccionarVista('consulta')"
+        >
+          🔍 Consultar una Medida
+        </button>
+      </div>
+
+      <template v-if="vistaActiva === 'plan'">
+      <div class="form-card" key="plan-form-card">
         <h2>Recomendación de Compra</h2>
         <p class="form-descripcion">
           Ingresa cuántos kilos puedes comprar y el proveedor; la distribución por medida se
@@ -240,6 +260,214 @@
           </ul>
         </div>
       </div>
+      </template>
+
+      <template v-else>
+        <div class="form-card" key="consulta-form-card">
+          <h2>Consultar una Medida</h2>
+          <p class="form-descripcion">
+            Elige una o varias medidas para ver cuánto durará su stock, cuándo convendría
+            resurtir y otros datos útiles para decidir. Por default se consultan todos los
+            proveedores juntos, para saber cuánto se desplazó una medida sin importar de quién vino.
+            Puedes cambiar de proveedor para revisar sus medidas sin perder lo que ya
+            marcaste de otros proveedores.
+          </p>
+          <div class="form-grid">
+            <label>
+              Proveedor
+              <select v-model="consultaProveedor" @change="cargarMedidasConsulta">
+                <option value="">Todos los proveedores</option>
+                <option v-for="prov in proveedores" :key="prov" :value="prov">
+                  {{ prov }}
+                </option>
+              </select>
+            </label>
+            <label>
+              Días de historial
+              <select v-model.number="consultaDiasHistorial">
+                <option :value="10">10 días</option>
+                <option :value="15">15 días</option>
+                <option :value="30">30 días</option>
+                <option :value="60">60 días</option>
+                <option :value="90">90 días</option>
+              </select>
+            </label>
+            <label>
+              Meta de días de cobertura
+              <input
+                v-model.number="consultaMetaDias"
+                type="number"
+                inputmode="decimal"
+                min="1"
+                step="1"
+              />
+            </label>
+            <button
+              class="calcular-btn"
+              :disabled="consultaSeleccion.length === 0 || consultaCargando"
+              @click="analizarMedida"
+            >
+              {{ consultaCargando ? 'Analizando...' : 'Analizar' }}
+            </button>
+          </div>
+
+          <div class="medidas-selector">
+            <div class="medidas-selector-header">
+              <span>Medidas a consultar{{ consultaProveedor ? ` — ${consultaProveedor}` : ' — todos los proveedores' }}</span>
+              <div v-if="consultaMedidasDisponibles.length > 0" class="medidas-selector-acciones">
+                <button type="button" @click="seleccionarTodasVisibles">
+                  Todas
+                </button>
+                <button type="button" @click="deseleccionarTodasVisibles">
+                  Ninguna
+                </button>
+              </div>
+            </div>
+
+            <input
+              v-if="consultaMedidasDisponibles.length > 0"
+              v-model="consultaFiltroMedida"
+              type="text"
+              class="medidas-filtro"
+              placeholder="Filtrar por medida (ej: 71/90)"
+            />
+
+            <div v-if="consultaCargandoMedidas" class="medidas-mensaje">Cargando medidas...</div>
+            <div v-else-if="consultaMedidasDisponibles.length === 0" class="medidas-mensaje">
+              No se encontraron medidas{{ consultaProveedor ? ` para ${consultaProveedor}` : '' }}.
+            </div>
+            <div v-else-if="consultaMedidasFiltradas.length === 0" class="medidas-mensaje">
+              Ninguna medida coincide con "{{ consultaFiltroMedida }}".
+            </div>
+            <div v-else class="medidas-checkbox-grid">
+              <label v-for="medida in consultaMedidasFiltradas" :key="medida.nombre" class="medida-checkbox">
+                <input
+                  type="checkbox"
+                  :checked="estaSeleccionada(medida.nombre)"
+                  @change="toggleSeleccion(medida.nombre)"
+                />
+                <span class="medida-nombre">{{ medida.nombre }}</span>
+                <span class="medida-stock-hint">{{ formatNumber(medida.stockActual) }} kg</span>
+              </label>
+            </div>
+          </div>
+
+          <div v-if="consultaSeleccion.length > 0" class="seleccion-resumen">
+            <span class="seleccion-resumen-label">Seleccionadas ({{ consultaSeleccion.length }}):</span>
+            <span v-for="(item, idx) in consultaSeleccion" :key="idx" class="seleccion-chip">
+              {{ item.medida }}
+              <small>({{ item.proveedor || 'todos' }})</small>
+              <button type="button" @click="quitarSeleccion(idx)">×</button>
+            </span>
+          </div>
+        </div>
+
+        <div v-if="consultaError" class="error-box">{{ consultaError }}</div>
+
+        <div
+          v-for="grupo in consultaGruposResultados"
+          :key="grupo.medida"
+          class="resultado-card"
+        >
+          <div v-if="grupo.items.length > 1" class="resultado-tabs">
+            <button
+              v-for="item in grupo.items"
+              :key="item.proveedor"
+              type="button"
+              class="resultado-tab-btn"
+              :class="{ active: grupo.activo.proveedor === item.proveedor }"
+              @click="seleccionarTabResultado(grupo.medida, item.proveedor)"
+            >
+              {{ item.proveedor }}
+            </button>
+          </div>
+
+          <h2>{{ grupo.medida }} — {{ grupo.activo.proveedor }}</h2>
+
+          <div class="consulta-metricas">
+            <div class="metrica-card">
+              <span class="metrica-label">Stock actual</span>
+              <span class="metrica-valor">{{ formatNumber(grupo.activo.stockActual) }} kg</span>
+            </div>
+            <div class="metrica-card">
+              <span class="metrica-label">Vendido ({{ grupo.activo.diasHistorial }}d)</span>
+              <span class="metrica-valor">{{ formatNumber(grupo.activo.vendidoPeriodo) }} kg</span>
+            </div>
+            <div class="metrica-card">
+              <span class="metrica-label">Consumo diario ({{ grupo.activo.diasHistorial }}d)</span>
+              <span class="metrica-valor">{{ formatNumber(grupo.activo.consumoDiario) }} kg/d</span>
+            </div>
+            <div class="metrica-card" v-if="grupo.activo.diasCobertura !== null">
+              <span class="metrica-label">Te dura el stock</span>
+              <span class="metrica-valor">{{ grupo.activo.diasCobertura.toFixed(1) }} días</span>
+            </div>
+            <div class="metrica-card" v-if="grupo.activo.ultimoPrecio">
+              <span class="metrica-label">Último precio registrado</span>
+              <span class="metrica-valor">${{ formatNumber(grupo.activo.ultimoPrecio) }}</span>
+            </div>
+          </div>
+
+          <div v-if="grupo.activo.diasCobertura === null" class="sin-datos">
+            No hay salidas registradas en los últimos {{ grupo.activo.diasHistorial }} días
+            para estimar el consumo, así que no se puede calcular cuánto durará el stock.
+          </div>
+
+          <template v-else>
+            <div class="agotamiento-info">
+              <p>
+                Con tu consumo actual (<strong>{{ formatNumber(grupo.activo.consumoDiario) }} kg/día</strong>),
+                el stock se agotaría alrededor del <strong>{{ grupo.activo.fechaAgotamiento }}</strong>.
+              </p>
+              <p :class="grupo.activo.diasParaResurtir > 0 ? 'resurtir-ok' : 'resurtir-urgente'">
+                <template v-if="grupo.activo.diasParaResurtir > 0">
+                  📅 Conviene resurtir a partir del <strong>{{ grupo.activo.fechaResurtir }}</strong>
+                  (en {{ grupo.activo.diasParaResurtir.toFixed(1) }} días), para mantener al menos
+                  {{ grupo.activo.metaDiasCobertura }} días de cobertura.
+                </template>
+                <template v-else>
+                  ⚠️ Ya deberías resurtir esta medida: tu cobertura está por debajo de tu meta de
+                  {{ grupo.activo.metaDiasCobertura }} días
+                  ({{ formatNumber(-grupo.activo.diasParaResurtir, 1) }} días de atraso).
+                </template>
+              </p>
+            </div>
+
+            <p class="tendencia-info">
+              Tendencia de consumo:
+              <strong>
+                <template v-if="grupo.activo.tendencia === 'subiendo'">📈 subiendo</template>
+                <template v-else-if="grupo.activo.tendencia === 'bajando'">📉 bajando</template>
+                <template v-else>➡️ estable</template>
+              </strong>
+              (últimos 7 días: {{ formatNumber(grupo.activo.consumoReciente) }} kg/d
+              vs. promedio de {{ grupo.activo.diasHistorial }}d:
+              {{ formatNumber(grupo.activo.consumoDiario) }} kg/d)
+            </p>
+          </template>
+
+          <div v-if="grupo.activo.ultimasEntradas.length > 0" class="ultimas-entradas">
+            <h4>Últimas entradas registradas</h4>
+            <table class="resultado-tabla">
+              <thead>
+                <tr>
+                  <th>Fecha</th>
+                  <th>Proveedor</th>
+                  <th class="num">Kilos</th>
+                  <th class="num">Precio</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="(entrada, idx) in grupo.activo.ultimasEntradas" :key="idx">
+                  <td>{{ entrada.fecha }}</td>
+                  <td>{{ entrada.proveedor || '—' }}</td>
+                  <td class="num">{{ formatNumber(entrada.kilos) }} kg</td>
+                  <td class="num">{{ entrada.precio ? '$' + formatNumber(entrada.precio) : '—' }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </template>
     </div>
   </div>
 </template>
@@ -258,6 +486,7 @@ export default {
   },
   data() {
     return {
+      vistaActiva: 'plan', // 'plan' | 'consulta'
       kilosDisponibles: null,
       proveedorSeleccionado: '',
       diasHistorial: 30,
@@ -277,7 +506,25 @@ export default {
       // Compras editadas a mano por el usuario (medida -> kilos), por si solo
       // hay cierta cantidad disponible de esa medida. Se conservan aunque se
       // cambie de modo o de meta, y se limpian solo con un nuevo cálculo.
-      comprasManualPorMedida: {}
+      comprasManualPorMedida: {},
+
+      // Estado de la vista "Consultar una Medida"
+      consultaProveedor: '',
+      // Selección acumulada de { proveedor, medida }. No se reinicia al
+      // cambiar el filtro de proveedor, para poder ir marcando medidas de
+      // varios proveedores distintos (o de "todos") antes de analizar.
+      consultaSeleccion: [],
+      consultaFiltroMedida: '',
+      consultaDiasHistorial: 30,
+      consultaMetaDias: 12,
+      consultaMedidasDisponibles: [],
+      consultaCargandoMedidas: false,
+      consultaCargando: false,
+      consultaError: '',
+      consultaResultados: [],
+      // Pestaña activa por medida cuando hay resultados de la misma medida
+      // de más de un proveedor (medida -> proveedor mostrado actualmente).
+      consultaTabActivoPorMedida: {}
     };
   },
   watch: {
@@ -296,6 +543,35 @@ export default {
              this.kilosDisponibles &&
              this.kilosDisponibles > 0 &&
              this.medidasSeleccionadas.length > 0;
+    },
+    consultaMedidasFiltradas() {
+      const filtro = this.consultaFiltroMedida.trim().toLowerCase();
+      if (!filtro) return this.consultaMedidasDisponibles;
+      return this.consultaMedidasDisponibles.filter(
+        m => m.nombre.toLowerCase().includes(filtro)
+      );
+    },
+    // Agrupa consultaResultados por medida, para poder mostrar los
+    // resultados de una misma medida de varios proveedores como pestañas
+    // dentro de una sola tarjeta en vez de tarjetas repetidas.
+    consultaGruposResultados() {
+      const grupos = [];
+      const indicePorMedida = {};
+
+      this.consultaResultados.forEach(item => {
+        if (indicePorMedida[item.medida] === undefined) {
+          indicePorMedida[item.medida] = grupos.length;
+          grupos.push({ medida: item.medida, items: [] });
+        }
+        grupos[indicePorMedida[item.medida]].items.push(item);
+      });
+
+      grupos.forEach(grupo => {
+        const proveedorActivo = this.consultaTabActivoPorMedida[grupo.medida] || grupo.items[0].proveedor;
+        grupo.activo = grupo.items.find(item => item.proveedor === proveedorActivo) || grupo.items[0];
+      });
+
+      return grupos;
     }
   },
   methods: {
@@ -440,6 +716,39 @@ export default {
       return { demandaPorMedida, stockPorMedida, totalVendido };
     },
 
+    // Devuelve las medidas "disponibles" de un proveedor: las de su catálogo
+    // (colección 'medidas') más cualquiera con movimiento histórico, cada una
+    // con su stock actual. Si no se pasa proveedorNombre, agrega el catálogo y
+    // el stock de todos los proveedores juntos. Se reutiliza tanto para el
+    // plan de compra como para la consulta individual de una medida.
+    async obtenerMedidasParaProveedor(proveedorNombre) {
+      const proveedorObj = proveedorNombre
+        ? this.proveedoresObjetos.find(p => p.nombre === proveedorNombre)
+        : null;
+      const nombresCatalogo = new Set();
+
+      if (!proveedorNombre || proveedorObj) {
+        const medidasSnapshot = await getDocs(collection(db, 'medidas'));
+        medidasSnapshot.docs.forEach(docSnap => {
+          const medida = docSnap.data();
+          if (!medida.nombre) return;
+          if (!proveedorNombre || medida.proveedorId === proveedorObj.id) {
+            nombresCatalogo.add(String(medida.nombre).trim());
+          }
+        });
+      }
+
+      const { stockPorMedida } = await this.obtenerMovimientosProveedor(proveedorNombre || '', null, null);
+      Object.keys(stockPorMedida).forEach(medida => nombresCatalogo.add(medida));
+
+      return Array.from(nombresCatalogo)
+        .sort((a, b) => a.localeCompare(b, 'es', { numeric: true }))
+        .map(nombre => ({
+          nombre,
+          stockActual: Number((stockPorMedida[nombre] || 0).toFixed(1))
+        }));
+    },
+
     async cargarMedidasProveedor() {
       this.medidasDisponibles = [];
       this.medidasSeleccionadas = [];
@@ -452,29 +761,7 @@ export default {
 
       this.cargandoMedidas = true;
       try {
-        const proveedorObj = this.proveedoresObjetos.find(p => p.nombre === this.proveedorSeleccionado);
-        const nombresCatalogo = new Set();
-
-        if (proveedorObj) {
-          const medidasSnapshot = await getDocs(collection(db, 'medidas'));
-          medidasSnapshot.docs.forEach(docSnap => {
-            const medida = docSnap.data();
-            if (medida.proveedorId === proveedorObj.id && medida.nombre) {
-              nombresCatalogo.add(String(medida.nombre).trim());
-            }
-          });
-        }
-
-        const { stockPorMedida } = await this.obtenerMovimientosProveedor(this.proveedorSeleccionado, null, null);
-        Object.keys(stockPorMedida).forEach(medida => nombresCatalogo.add(medida));
-
-        const lista = Array.from(nombresCatalogo)
-          .sort((a, b) => a.localeCompare(b, 'es', { numeric: true }))
-          .map(nombre => ({
-            nombre,
-            stockActual: Number((stockPorMedida[nombre] || 0).toFixed(1))
-          }));
-
+        const lista = await this.obtenerMedidasParaProveedor(this.proveedorSeleccionado);
         this.medidasDisponibles = lista;
         // Por default, seleccionar las medidas que tenemos en existencia actual
         this.medidasSeleccionadas = lista.filter(m => m.stockActual > 1).map(m => m.nombre);
@@ -484,6 +771,233 @@ export default {
         this.medidasSeleccionadas = [];
       } finally {
         this.cargandoMedidas = false;
+      }
+    },
+
+    // No reinicia consultaSeleccion a propósito: cambiar el filtro de
+    // proveedor solo refresca la lista de medidas mostradas, para poder
+    // seguir marcando medidas de otros proveedores sin perder lo ya elegido.
+    async cargarMedidasConsulta() {
+      this.consultaMedidasDisponibles = [];
+      this.consultaError = '';
+
+      this.consultaCargandoMedidas = true;
+      try {
+        this.consultaMedidasDisponibles = await this.obtenerMedidasParaProveedor(this.consultaProveedor);
+      } catch (error) {
+        console.error('Error al cargar medidas para consulta:', error);
+        this.consultaMedidasDisponibles = [];
+      } finally {
+        this.consultaCargandoMedidas = false;
+      }
+    },
+
+    estaSeleccionada(medidaNombre) {
+      return this.consultaSeleccion.some(
+        s => s.proveedor === this.consultaProveedor && s.medida === medidaNombre
+      );
+    },
+
+    toggleSeleccion(medidaNombre) {
+      const idx = this.consultaSeleccion.findIndex(
+        s => s.proveedor === this.consultaProveedor && s.medida === medidaNombre
+      );
+      if (idx >= 0) {
+        this.consultaSeleccion.splice(idx, 1);
+      } else {
+        this.consultaSeleccion.push({ proveedor: this.consultaProveedor, medida: medidaNombre });
+      }
+    },
+
+    // "Visibles" respeta el filtro de texto: Todas/Ninguna solo tocan las
+    // medidas que el usuario está viendo en este momento.
+    seleccionarTodasVisibles() {
+      this.consultaMedidasFiltradas.forEach(m => {
+        if (!this.estaSeleccionada(m.nombre)) {
+          this.consultaSeleccion.push({ proveedor: this.consultaProveedor, medida: m.nombre });
+        }
+      });
+    },
+
+    deseleccionarTodasVisibles() {
+      const visibles = new Set(this.consultaMedidasFiltradas.map(m => m.nombre));
+      this.consultaSeleccion = this.consultaSeleccion.filter(
+        s => !(s.proveedor === this.consultaProveedor && visibles.has(s.medida))
+      );
+    },
+
+    quitarSeleccion(idx) {
+      this.consultaSeleccion.splice(idx, 1);
+    },
+
+    seleccionarTabResultado(medida, proveedor) {
+      this.consultaTabActivoPorMedida = {
+        ...this.consultaTabActivoPorMedida,
+        [medida]: proveedor
+      };
+    },
+
+    seleccionarVista(vista) {
+      this.vistaActiva = vista;
+      if (vista === 'consulta' && this.consultaMedidasDisponibles.length === 0 && !this.consultaCargandoMedidas) {
+        this.cargarMedidasConsulta();
+      }
+    },
+
+    // Lee la colección 'sacadas' una sola vez y devuelve el historial completo
+    // de entradas y salidas (con fecha) de cada una de las medidas pedidas,
+    // filtradas por proveedor (o de todos si proveedorNombre viene vacío),
+    // para poder analizarlas individualmente (consumo, tendencia, precios).
+    async obtenerHistorialMedidas(proveedorNombre, medidasNombres) {
+      const snapshot = await getDocs(collection(db, 'sacadas'));
+      const historialPorMedida = {};
+      medidasNombres.forEach(nombre => {
+        historialPorMedida[nombre] = { entradas: [], salidas: [] };
+      });
+
+      snapshot.docs.forEach(docSnap => {
+        const sacada = docSnap.data();
+        const fecha = this.parseFechaSacada(sacada.fecha);
+        if (!fecha) return;
+
+        (sacada.entradas || []).forEach(entrada => {
+          if (!this.coincideProveedor(entrada.proveedor, proveedorNombre)) return;
+          const medida = String(entrada.medida || '').trim();
+          if (!historialPorMedida[medida]) return;
+          historialPorMedida[medida].entradas.push({
+            fecha,
+            kilos: Number(entrada.kilos) || 0,
+            precio: entrada.precio ?? null,
+            proveedor: entrada.proveedor || ''
+          });
+        });
+
+        (sacada.salidas || []).forEach(salida => {
+          if (!this.coincideProveedor(salida.proveedor, proveedorNombre)) return;
+          const medida = String(salida.medida || '').trim();
+          if (!historialPorMedida[medida]) return;
+          historialPorMedida[medida].salidas.push({ fecha, kilos: Number(salida.kilos) || 0 });
+        });
+      });
+
+      Object.values(historialPorMedida).forEach(({ entradas, salidas }) => {
+        entradas.sort((a, b) => b.fecha - a.fecha);
+        salidas.sort((a, b) => b.fecha - a.fecha);
+      });
+
+      return historialPorMedida;
+    },
+
+    // Calcula las métricas de una medida (consumo, cobertura, tendencia,
+    // últimas entradas) a partir de su stock actual y su historial ya
+    // filtrado. No sabe de proveedores: eso lo agrega quien la llama.
+    calcularAnalisisMedida(stockActual, entradas, salidas, dias, meta) {
+      const sumaSalidasDesde = (diasAtras) => {
+        const desde = moment().subtract(diasAtras, 'days').startOf('day');
+        return salidas
+          .filter(s => moment(s.fecha).isSameOrAfter(desde))
+          .reduce((sum, s) => sum + s.kilos, 0);
+      };
+
+      const vendidoPeriodo = Number(sumaSalidasDesde(dias).toFixed(1));
+      const consumoDiario = Number((vendidoPeriodo / dias).toFixed(2));
+
+      const vendidoReciente = Number(sumaSalidasDesde(7).toFixed(1));
+      const consumoReciente = Number((vendidoReciente / 7).toFixed(2));
+
+      let diasCobertura = null;
+      let fechaAgotamiento = null;
+      let diasParaResurtir = null;
+      let fechaResurtir = null;
+
+      if (consumoDiario > 0) {
+        diasCobertura = Number((stockActual / consumoDiario).toFixed(1));
+        fechaAgotamiento = moment().add(diasCobertura, 'days').format('DD/MM/YYYY');
+        diasParaResurtir = Number((diasCobertura - meta).toFixed(1));
+        fechaResurtir = moment().add(diasParaResurtir, 'days').format('DD/MM/YYYY');
+      }
+
+      let tendencia = 'estable';
+      if (consumoDiario > 0) {
+        if (consumoReciente > consumoDiario * 1.15) tendencia = 'subiendo';
+        else if (consumoReciente < consumoDiario * 0.85) tendencia = 'bajando';
+      }
+
+      const entradaConPrecio = entradas.find(e => e.precio !== null && e.precio !== undefined);
+
+      return {
+        diasHistorial: dias,
+        stockActual,
+        vendidoPeriodo,
+        consumoDiario,
+        vendidoReciente,
+        consumoReciente,
+        tendencia,
+        diasCobertura,
+        fechaAgotamiento,
+        metaDiasCobertura: meta,
+        diasParaResurtir,
+        fechaResurtir,
+        ultimoPrecio: entradaConPrecio ? entradaConPrecio.precio : null,
+        ultimasEntradas: entradas.slice(0, 5).map(e => ({
+          fecha: moment(e.fecha).format('DD/MM/YYYY'),
+          kilos: Number(e.kilos.toFixed(1)),
+          precio: e.precio,
+          proveedor: e.proveedor
+        }))
+      };
+    },
+
+    async analizarMedida() {
+      if (this.consultaSeleccion.length === 0 || this.consultaCargando) return;
+      this.consultaCargando = true;
+      this.consultaError = '';
+      this.consultaResultados = [];
+
+      try {
+        const dias = this.consultaDiasHistorial;
+        const meta = Number(this.consultaMetaDias) || 0;
+
+        // Agrupar la selección por proveedor (clave '' = todos), para no
+        // repetir lecturas a Firestore cuando varias medidas comparten el
+        // mismo proveedor.
+        const medidasPorProveedor = {};
+        this.consultaSeleccion.forEach(item => {
+          const clave = item.proveedor || '';
+          if (!medidasPorProveedor[clave]) medidasPorProveedor[clave] = [];
+          if (!medidasPorProveedor[clave].includes(item.medida)) {
+            medidasPorProveedor[clave].push(item.medida);
+          }
+        });
+
+        const resultadoPorClave = {};
+        for (const proveedor of Object.keys(medidasPorProveedor)) {
+          const medidasDelGrupo = medidasPorProveedor[proveedor];
+          const [{ stockPorMedida }, historialPorMedida] = await Promise.all([
+            this.obtenerMovimientosProveedor(proveedor, null, null),
+            this.obtenerHistorialMedidas(proveedor, medidasDelGrupo)
+          ]);
+
+          medidasDelGrupo.forEach(medidaNombre => {
+            const stockActual = Number((stockPorMedida[medidaNombre] || 0).toFixed(1));
+            const { entradas, salidas } = historialPorMedida[medidaNombre];
+            resultadoPorClave[`${proveedor}::${medidaNombre}`] = {
+              proveedor: proveedor || 'Todos los proveedores',
+              medida: medidaNombre,
+              ...this.calcularAnalisisMedida(stockActual, entradas, salidas, dias, meta)
+            };
+          });
+        }
+
+        // Conservar el orden en el que el usuario fue marcando las medidas.
+        this.consultaResultados = this.consultaSeleccion.map(
+          item => resultadoPorClave[`${item.proveedor || ''}::${item.medida}`]
+        );
+      } catch (error) {
+        console.error('Error al analizar las medidas:', error);
+        this.consultaError = 'No se pudieron analizar las medidas: ' + error.message;
+      } finally {
+        this.consultaCargando = false;
       }
     },
 
@@ -795,6 +1309,35 @@ h2 {
   padding-bottom: 8px;
 }
 
+.vista-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 18px;
+  border-bottom: 2px solid #dee2e6;
+}
+
+.vista-tab-btn {
+  background: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  padding: 10px 16px;
+  margin-bottom: -2px;
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: bold;
+  color: #666;
+  transition: color 0.2s, border-color 0.2s;
+}
+
+.vista-tab-btn:hover {
+  color: #2c3e50;
+}
+
+.vista-tab-btn.active {
+  color: #3498db;
+  border-bottom-color: #3498db;
+}
+
 .form-card,
 .resultado-card {
   background-color: #f8f9fa;
@@ -802,6 +1345,36 @@ h2 {
   border-radius: 8px;
   padding: 20px;
   margin-bottom: 20px;
+}
+
+.resultado-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.resultado-tab-btn {
+  background-color: white;
+  border: 1px solid #dee2e6;
+  border-radius: 16px;
+  padding: 5px 14px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: bold;
+  color: #666;
+  transition: color 0.2s, border-color 0.2s, background-color 0.2s;
+}
+
+.resultado-tab-btn:hover {
+  border-color: #3498db;
+  color: #3498db;
+}
+
+.resultado-tab-btn.active {
+  background-color: #3498db;
+  border-color: #3498db;
+  color: white;
 }
 
 .form-descripcion {
@@ -952,6 +1525,16 @@ h2 {
   color: white;
 }
 
+.medidas-filtro {
+  width: 100%;
+  box-sizing: border-box;
+  margin: 10px 0;
+  padding: 8px 10px;
+  border: 1px solid #dee2e6;
+  border-radius: 5px;
+  font-size: 14px;
+}
+
 .medidas-mensaje {
   color: #666;
   font-size: 14px;
@@ -994,6 +1577,52 @@ h2 {
   color: #888;
   font-size: 12px;
   white-space: nowrap;
+}
+
+.seleccion-resumen {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid #dee2e6;
+}
+
+.seleccion-resumen-label {
+  color: #2c3e50;
+  font-weight: bold;
+  font-size: 14px;
+}
+
+.seleccion-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background-color: #eaf3fb;
+  border: 1px solid #b8d9ef;
+  border-radius: 14px;
+  padding: 4px 6px 4px 12px;
+  font-size: 13px;
+  color: #2c3e50;
+}
+
+.seleccion-chip small {
+  color: #7a8a99;
+}
+
+.seleccion-chip button {
+  background: none;
+  border: none;
+  color: #7a8a99;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 2px 6px;
+}
+
+.seleccion-chip button:hover {
+  color: #c0392b;
 }
 
 .calcular-btn {
@@ -1187,6 +1816,75 @@ h2 {
 
 .sin-ventas-card li {
   margin-bottom: 4px;
+}
+
+.consulta-metricas {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.metrica-card {
+  background-color: white;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  padding: 12px 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.metrica-label {
+  color: #666;
+  font-size: 12px;
+  font-weight: bold;
+  text-transform: uppercase;
+}
+
+.metrica-valor {
+  color: #2c3e50;
+  font-size: 20px;
+  font-weight: bold;
+}
+
+.agotamiento-info {
+  background-color: white;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  padding: 12px 15px;
+  margin-bottom: 12px;
+}
+
+.agotamiento-info p {
+  margin: 0 0 8px 0;
+  color: #444;
+  font-size: 14px;
+}
+
+.agotamiento-info p:last-child {
+  margin-bottom: 0;
+}
+
+.agotamiento-info p.resurtir-ok {
+  color: #1e7a34;
+}
+
+.agotamiento-info p.resurtir-urgente {
+  color: #c0392b;
+  font-weight: bold;
+}
+
+.tendencia-info {
+  color: #444;
+  font-size: 14px;
+  margin: 0 0 18px 0;
+}
+
+.ultimas-entradas h4 {
+  color: #2c3e50;
+  margin: 0 0 10px 0;
+  font-size: 14px;
 }
 
 @media (max-width: 768px) {
