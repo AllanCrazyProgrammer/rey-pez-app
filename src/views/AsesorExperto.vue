@@ -15,6 +15,37 @@
           de los últimos {{ diasContexto }} días.
         </p>
 
+        <div
+          v-if="mensajes.length === 0 && (conversaciones.length > 0 || conversacionesCargando)"
+          class="historial"
+        >
+          <h3 class="historial-titulo">Conversaciones anteriores</h3>
+          <p v-if="conversacionesCargando" class="historial-cargando">Cargando conversaciones...</p>
+          <div v-else class="historial-lista">
+            <div
+              v-for="conv in conversaciones"
+              :key="conv.id"
+              class="historial-item"
+              @click="abrirConversacion(conv)"
+            >
+              <div class="historial-info">
+                <span class="historial-item-titulo">{{ conv.titulo }}</span>
+                <span class="historial-item-fecha">
+                  {{ formatearFecha(conv.actualizadaEn) }} · {{ (conv.mensajes || []).length }} mensajes
+                </span>
+              </div>
+              <button
+                type="button"
+                class="historial-borrar"
+                title="Eliminar conversación"
+                @click.stop="eliminarConversacion(conv)"
+              >
+                ×
+              </button>
+            </div>
+          </div>
+        </div>
+
         <div v-if="mensajes.length === 0" class="sugerencias">
           <button
             v-for="sugerencia in sugerencias"
@@ -93,7 +124,18 @@
 
 <script>
 import { httpsCallable } from 'firebase/functions';
-import { functions } from '@/firebase';
+import {
+  collection,
+  getDocs,
+  addDoc,
+  doc,
+  updateDoc,
+  deleteDoc,
+  query,
+  orderBy,
+  limit
+} from 'firebase/firestore';
+import { db, functions } from '@/firebase';
 import { construirContextoInventario } from '@/utils/contextoInventario';
 import BackButton from '@/components/BackButton.vue';
 
@@ -113,6 +155,9 @@ export default {
       contexto: null,
       contextoFecha: '',
       contextoCargando: false,
+      conversaciones: [],
+      conversacionesCargando: false,
+      conversacionId: null,
       sugerencias: [
         '¿Qué medidas me conviene resurtir esta semana?',
         '¿Cuáles medidas se están moviendo más lento?',
@@ -120,7 +165,94 @@ export default {
       ]
     };
   },
+  created() {
+    this.cargarConversaciones();
+  },
   methods: {
+    async cargarConversaciones() {
+      this.conversacionesCargando = true;
+      try {
+        const consulta = query(
+          collection(db, 'conversacionesAsesor'),
+          orderBy('actualizadaEn', 'desc'),
+          limit(20)
+        );
+        const snapshot = await getDocs(consulta);
+        this.conversaciones = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      } catch (error) {
+        console.error('Error al cargar conversaciones anteriores:', error);
+      } finally {
+        this.conversacionesCargando = false;
+      }
+    },
+
+    abrirConversacion(conv) {
+      this.mensajes = (conv.mensajes || []).map(m => ({ rol: m.rol, texto: m.texto }));
+      this.conversacionId = conv.id;
+      this.error = '';
+      this.desplazarAlFinal();
+    },
+
+    async eliminarConversacion(conv) {
+      if (!window.confirm(`¿Eliminar la conversación "${conv.titulo}"?`)) return;
+      try {
+        await deleteDoc(doc(db, 'conversacionesAsesor', conv.id));
+        this.conversaciones = this.conversaciones.filter(c => c.id !== conv.id);
+        if (this.conversacionId === conv.id) {
+          this.nuevaConversacion();
+        }
+      } catch (error) {
+        console.error('Error al eliminar la conversación:', error);
+        this.error = 'No se pudo eliminar la conversación: ' + error.message;
+      }
+    },
+
+    // Guarda (o actualiza) la conversación activa en Firestore. Si falla no
+    // interrumpe el chat: solo queda registrado en consola.
+    async guardarConversacion() {
+      try {
+        const ahora = new Date().toISOString();
+        const mensajes = this.mensajes.map(m => ({ rol: m.rol, texto: m.texto }));
+        let titulo;
+
+        if (this.conversacionId) {
+          const existente = this.conversaciones.find(c => c.id === this.conversacionId);
+          titulo = existente ? existente.titulo : 'Conversación';
+          await updateDoc(doc(db, 'conversacionesAsesor', this.conversacionId), {
+            mensajes,
+            actualizadaEn: ahora
+          });
+        } else {
+          const primera = mensajes.find(m => m.rol === 'usuario');
+          titulo = primera ? primera.texto.slice(0, 80) : 'Conversación';
+          const ref = await addDoc(collection(db, 'conversacionesAsesor'), {
+            titulo,
+            mensajes,
+            creadaEn: ahora,
+            actualizadaEn: ahora
+          });
+          this.conversacionId = ref.id;
+        }
+
+        // Mantener la lista local al día, con la más reciente arriba.
+        this.conversaciones = [
+          { id: this.conversacionId, titulo, mensajes, actualizadaEn: ahora },
+          ...this.conversaciones.filter(c => c.id !== this.conversacionId)
+        ];
+      } catch (error) {
+        console.warn('No se pudo guardar la conversación:', error);
+      }
+    },
+
+    formatearFecha(iso) {
+      if (!iso) return '';
+      const fecha = new Date(iso);
+      if (isNaN(fecha.getTime())) return '';
+      return fecha.toLocaleDateString('es-MX', {
+        day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit'
+      });
+    },
+
     async asegurarContexto() {
       if (this.contexto) return this.contexto;
       this.contextoCargando = true;
@@ -150,6 +282,7 @@ export default {
 
     nuevaConversacion() {
       this.mensajes = [];
+      this.conversacionId = null;
       this.error = '';
     },
 
@@ -177,6 +310,7 @@ export default {
           respuesta += '\n\n(La respuesta se cortó por longitud; pide que continúe si necesitas más.)';
         }
         this.mensajes.push({ rol: 'asesor', texto: respuesta });
+        this.guardarConversacion();
       } catch (error) {
         console.error('Error al consultar al asesor:', error);
         // Quitar la pregunta fallida para que el usuario pueda reintentar limpio.
@@ -247,6 +381,85 @@ h1 {
   color: #666;
   margin: 0 0 15px 0;
   font-size: 14px;
+}
+
+.historial {
+  margin-bottom: 18px;
+}
+
+.historial-titulo {
+  color: #2c3e50;
+  font-size: 15px;
+  margin: 0 0 8px 0;
+}
+
+.historial-cargando {
+  color: #888;
+  font-size: 13px;
+  font-style: italic;
+  margin: 0;
+}
+
+.historial-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.historial-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background-color: white;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: border-color 0.2s, background-color 0.2s;
+}
+
+.historial-item:hover {
+  border-color: #3498db;
+  background-color: #eaf3fb;
+}
+
+.historial-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.historial-item-titulo {
+  color: #2c3e50;
+  font-size: 14px;
+  font-weight: bold;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.historial-item-fecha {
+  color: #888;
+  font-size: 12px;
+}
+
+.historial-borrar {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  color: #b0bec5;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 2px 8px;
+}
+
+.historial-borrar:hover {
+  color: #c0392b;
 }
 
 .sugerencias {
