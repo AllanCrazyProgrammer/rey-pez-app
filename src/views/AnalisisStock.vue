@@ -365,56 +365,69 @@
         <div v-if="consultaError" class="error-box">{{ consultaError }}</div>
 
         <div
-          v-for="resultado in consultaResultados"
-          :key="`${resultado.proveedor}::${resultado.medida}`"
+          v-for="grupo in consultaGruposResultados"
+          :key="grupo.medida"
           class="resultado-card"
         >
-          <h2>{{ resultado.medida }} — {{ resultado.proveedor }}</h2>
+          <div v-if="grupo.items.length > 1" class="resultado-tabs">
+            <button
+              v-for="item in grupo.items"
+              :key="item.proveedor"
+              type="button"
+              class="resultado-tab-btn"
+              :class="{ active: grupo.activo.proveedor === item.proveedor }"
+              @click="seleccionarTabResultado(grupo.medida, item.proveedor)"
+            >
+              {{ item.proveedor }}
+            </button>
+          </div>
+
+          <h2>{{ grupo.medida }} — {{ grupo.activo.proveedor }}</h2>
 
           <div class="consulta-metricas">
             <div class="metrica-card">
               <span class="metrica-label">Stock actual</span>
-              <span class="metrica-valor">{{ formatNumber(resultado.stockActual) }} kg</span>
+              <span class="metrica-valor">{{ formatNumber(grupo.activo.stockActual) }} kg</span>
             </div>
             <div class="metrica-card">
-              <span class="metrica-label">Vendido ({{ resultado.diasHistorial }}d)</span>
-              <span class="metrica-valor">{{ formatNumber(resultado.vendidoPeriodo) }} kg</span>
+              <span class="metrica-label">Vendido ({{ grupo.activo.diasHistorial }}d)</span>
+              <span class="metrica-valor">{{ formatNumber(grupo.activo.vendidoPeriodo) }} kg</span>
             </div>
             <div class="metrica-card">
-              <span class="metrica-label">Consumo diario ({{ resultado.diasHistorial }}d)</span>
-              <span class="metrica-valor">{{ formatNumber(resultado.consumoDiario) }} kg/d</span>
+              <span class="metrica-label">Consumo diario ({{ grupo.activo.diasHistorial }}d)</span>
+              <span class="metrica-valor">{{ formatNumber(grupo.activo.consumoDiario) }} kg/d</span>
             </div>
-            <div class="metrica-card" v-if="resultado.diasCobertura !== null">
+            <div class="metrica-card" v-if="grupo.activo.diasCobertura !== null">
               <span class="metrica-label">Te dura el stock</span>
-              <span class="metrica-valor">{{ resultado.diasCobertura.toFixed(1) }} días</span>
+              <span class="metrica-valor">{{ grupo.activo.diasCobertura.toFixed(1) }} días</span>
             </div>
-            <div class="metrica-card" v-if="resultado.ultimoPrecio">
+            <div class="metrica-card" v-if="grupo.activo.ultimoPrecio">
               <span class="metrica-label">Último precio registrado</span>
-              <span class="metrica-valor">${{ formatNumber(resultado.ultimoPrecio) }}</span>
+              <span class="metrica-valor">${{ formatNumber(grupo.activo.ultimoPrecio) }}</span>
             </div>
           </div>
 
-          <div v-if="resultado.diasCobertura === null" class="sin-datos">
-            No hay salidas registradas en los últimos {{ resultado.diasHistorial }} días
+          <div v-if="grupo.activo.diasCobertura === null" class="sin-datos">
+            No hay salidas registradas en los últimos {{ grupo.activo.diasHistorial }} días
             para estimar el consumo, así que no se puede calcular cuánto durará el stock.
           </div>
 
           <template v-else>
             <div class="agotamiento-info">
               <p>
-                Con tu consumo actual (<strong>{{ formatNumber(resultado.consumoDiario) }} kg/día</strong>),
-                el stock se agotaría alrededor del <strong>{{ resultado.fechaAgotamiento }}</strong>.
+                Con tu consumo actual (<strong>{{ formatNumber(grupo.activo.consumoDiario) }} kg/día</strong>),
+                el stock se agotaría alrededor del <strong>{{ grupo.activo.fechaAgotamiento }}</strong>.
               </p>
-              <p :class="resultado.diasParaResurtir > 0 ? 'resurtir-ok' : 'resurtir-urgente'">
-                <template v-if="resultado.diasParaResurtir > 0">
-                  📅 Conviene resurtir a partir del <strong>{{ resultado.fechaResurtir }}</strong>
-                  (en {{ resultado.diasParaResurtir.toFixed(1) }} días), para mantener al menos
-                  {{ resultado.metaDiasCobertura }} días de cobertura.
+              <p :class="grupo.activo.diasParaResurtir > 0 ? 'resurtir-ok' : 'resurtir-urgente'">
+                <template v-if="grupo.activo.diasParaResurtir > 0">
+                  📅 Conviene resurtir a partir del <strong>{{ grupo.activo.fechaResurtir }}</strong>
+                  (en {{ grupo.activo.diasParaResurtir.toFixed(1) }} días), para mantener al menos
+                  {{ grupo.activo.metaDiasCobertura }} días de cobertura.
                 </template>
                 <template v-else>
                   ⚠️ Ya deberías resurtir esta medida: tu cobertura está por debajo de tu meta de
-                  {{ resultado.metaDiasCobertura }} días
-                  ({{ formatNumber(-resultado.diasParaResurtir, 1) }} días de atraso).
+                  {{ grupo.activo.metaDiasCobertura }} días
+                  ({{ formatNumber(-grupo.activo.diasParaResurtir, 1) }} días de atraso).
                 </template>
               </p>
             </div>
@@ -422,17 +435,17 @@
             <p class="tendencia-info">
               Tendencia de consumo:
               <strong>
-                <template v-if="resultado.tendencia === 'subiendo'">📈 subiendo</template>
-                <template v-else-if="resultado.tendencia === 'bajando'">📉 bajando</template>
+                <template v-if="grupo.activo.tendencia === 'subiendo'">📈 subiendo</template>
+                <template v-else-if="grupo.activo.tendencia === 'bajando'">📉 bajando</template>
                 <template v-else>➡️ estable</template>
               </strong>
-              (últimos 7 días: {{ formatNumber(resultado.consumoReciente) }} kg/d
-              vs. promedio de {{ resultado.diasHistorial }}d:
-              {{ formatNumber(resultado.consumoDiario) }} kg/d)
+              (últimos 7 días: {{ formatNumber(grupo.activo.consumoReciente) }} kg/d
+              vs. promedio de {{ grupo.activo.diasHistorial }}d:
+              {{ formatNumber(grupo.activo.consumoDiario) }} kg/d)
             </p>
           </template>
 
-          <div v-if="resultado.ultimasEntradas.length > 0" class="ultimas-entradas">
+          <div v-if="grupo.activo.ultimasEntradas.length > 0" class="ultimas-entradas">
             <h4>Últimas entradas registradas</h4>
             <table class="resultado-tabla">
               <thead>
@@ -444,7 +457,7 @@
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="(entrada, idx) in resultado.ultimasEntradas" :key="idx">
+                <tr v-for="(entrada, idx) in grupo.activo.ultimasEntradas" :key="idx">
                   <td>{{ entrada.fecha }}</td>
                   <td>{{ entrada.proveedor || '—' }}</td>
                   <td class="num">{{ formatNumber(entrada.kilos) }} kg</td>
@@ -508,7 +521,10 @@ export default {
       consultaCargandoMedidas: false,
       consultaCargando: false,
       consultaError: '',
-      consultaResultados: []
+      consultaResultados: [],
+      // Pestaña activa por medida cuando hay resultados de la misma medida
+      // de más de un proveedor (medida -> proveedor mostrado actualmente).
+      consultaTabActivoPorMedida: {}
     };
   },
   watch: {
@@ -534,6 +550,28 @@ export default {
       return this.consultaMedidasDisponibles.filter(
         m => m.nombre.toLowerCase().includes(filtro)
       );
+    },
+    // Agrupa consultaResultados por medida, para poder mostrar los
+    // resultados de una misma medida de varios proveedores como pestañas
+    // dentro de una sola tarjeta en vez de tarjetas repetidas.
+    consultaGruposResultados() {
+      const grupos = [];
+      const indicePorMedida = {};
+
+      this.consultaResultados.forEach(item => {
+        if (indicePorMedida[item.medida] === undefined) {
+          indicePorMedida[item.medida] = grupos.length;
+          grupos.push({ medida: item.medida, items: [] });
+        }
+        grupos[indicePorMedida[item.medida]].items.push(item);
+      });
+
+      grupos.forEach(grupo => {
+        const proveedorActivo = this.consultaTabActivoPorMedida[grupo.medida] || grupo.items[0].proveedor;
+        grupo.activo = grupo.items.find(item => item.proveedor === proveedorActivo) || grupo.items[0];
+      });
+
+      return grupos;
     }
   },
   methods: {
@@ -790,6 +828,13 @@ export default {
 
     quitarSeleccion(idx) {
       this.consultaSeleccion.splice(idx, 1);
+    },
+
+    seleccionarTabResultado(medida, proveedor) {
+      this.consultaTabActivoPorMedida = {
+        ...this.consultaTabActivoPorMedida,
+        [medida]: proveedor
+      };
     },
 
     seleccionarVista(vista) {
@@ -1300,6 +1345,36 @@ h2 {
   border-radius: 8px;
   padding: 20px;
   margin-bottom: 20px;
+}
+
+.resultado-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.resultado-tab-btn {
+  background-color: white;
+  border: 1px solid #dee2e6;
+  border-radius: 16px;
+  padding: 5px 14px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: bold;
+  color: #666;
+  transition: color 0.2s, border-color 0.2s, background-color 0.2s;
+}
+
+.resultado-tab-btn:hover {
+  border-color: #3498db;
+  color: #3498db;
+}
+
+.resultado-tab-btn.active {
+  background-color: #3498db;
+  border-color: #3498db;
+  color: white;
 }
 
 .form-descripcion {
