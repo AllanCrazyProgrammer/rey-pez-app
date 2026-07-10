@@ -107,7 +107,7 @@ exports.asesorExperto = onCall(
       if (error instanceof Anthropic.AuthenticationError) {
         throw new HttpsError(
           'failed-precondition',
-          'La API key de Anthropic no es válida. Revisa el secreto ANTHROPIC_API_KEY.'
+          'La API key de Anthropic no es válida. Revisa el secreto ANTHROPIC_API_KEY y vuelve a desplegar.'
         );
       }
       if (error instanceof Anthropic.RateLimitError) {
@@ -124,10 +124,24 @@ exports.asesorExperto = onCall(
       }
       if (error instanceof Anthropic.APIError) {
         console.error('Error del API de Anthropic:', error.status, error.message);
-        throw new HttpsError('internal', 'El asesor no pudo procesar la consulta.');
+        const mensaje = String(error.message || '');
+        if (mensaje.toLowerCase().includes('credit balance')) {
+          throw new HttpsError(
+            'failed-precondition',
+            'Tu cuenta de Anthropic no tiene crédito disponible. Entra a platform.claude.com → Settings → Billing y agrega saldo.'
+          );
+        }
+        // Superficie el error real para poder diagnosticar sin ir a los logs.
+        throw new HttpsError(
+          'internal',
+          `El asesor no pudo procesar la consulta (Anthropic ${error.status || '?'}): ${mensaje}`
+        );
       }
       console.error('Error inesperado en asesorExperto:', error);
-      throw new HttpsError('internal', 'Error inesperado del asesor.');
+      throw new HttpsError(
+        'internal',
+        'Error inesperado del asesor: ' + (error.message || String(error))
+      );
     }
 
     if (response.stop_reason === 'refusal') {

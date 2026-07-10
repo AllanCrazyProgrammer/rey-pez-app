@@ -106,7 +106,7 @@
                   </tr>
                 </thead>
                 <tbody>
-                  <tr v-for="medida in proveedorData.items" :key="`${medida.medida}-${medida.proveedor}-${medida.precio || 'sin-precio'}`" v-if="medida.kilos > 0">
+                  <tr v-for="(medida, medidaIdx) in proveedorData.items" :key="`${medida.medida}-${medida.proveedor}-${medida.precio || 'sin-precio'}-${medidaIdx}`" v-if="medida.kilos > 0">
                     <td>
                       {{ medida.medida }}
                       <span class="fecha-entrada" v-if="medida.fechaEntrada">
@@ -213,7 +213,7 @@
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="salida in salidasProveedoresDiaSiguiente" :key="`${salida.proveedor}-${salida.medida}-${salida.precio || 'sin-precio'}`">
+                <tr v-for="(salida, salidaIdx) in salidasProveedoresDiaSiguiente" :key="`${salida.proveedor}-${salida.medida}-${salida.precio || 'sin-precio'}-${salidaIdx}`">
                   <td>{{ salida.proveedor }}</td>
                   <td>{{ salida.medida }}</td>
                   <td v-if="tienePrecio" class="precio-cell">{{ salida.precio ? `$${salida.precio}` : '-' }}</td>
@@ -235,7 +235,7 @@
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="salida in salidasMaquilasDiaSiguiente" :key="`${salida.proveedor}-${salida.medida}-${salida.precio || 'sin-precio'}`">
+                <tr v-for="(salida, salidaIdx) in salidasMaquilasDiaSiguiente" :key="`${salida.proveedor}-${salida.medida}-${salida.precio || 'sin-precio'}-${salidaIdx}`">
                   <td>{{ salida.proveedor }}</td>
                   <td>{{ salida.medida }}</td>
                   <td v-if="tienePrecio" class="precio-cell">{{ salida.precio ? `$${salida.precio}` : '-' }}</td>
