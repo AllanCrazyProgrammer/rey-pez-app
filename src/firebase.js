@@ -9,6 +9,7 @@ import {
   persistentSingleTabManager
 } from "firebase/firestore";
 import { getDatabase, ref, onDisconnect, serverTimestamp, set } from "firebase/database";
+import { getFunctions } from "firebase/functions";
 
 // Tu configuración de Firebase
 const firebaseConfig = {
@@ -62,6 +63,9 @@ const db = initFirestore();
 // Inicializar Realtime Database
 const rtdb = getDatabase(app);
 
+// Cloud Functions (asesor experto)
+const functions = getFunctions(app);
+
 // Función para manejar la presencia de usuarios
 const handleUserPresence = async (userId, username) => {
   if (!userId || !username) {
@@ -87,4 +91,4 @@ const handleUserPresence = async (userId, username) => {
   }
 };
 
-export { db, rtdb, handleUserPresence };
+export { db, rtdb, functions, handleUserPresence };
