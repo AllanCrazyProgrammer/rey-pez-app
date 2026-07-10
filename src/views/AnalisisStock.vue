@@ -25,14 +25,6 @@
         >
           🔍 Consultar una Medida
         </button>
-        <button
-          type="button"
-          class="vista-tab-btn"
-          :class="{ active: vistaActiva === 'asesor' }"
-          @click="seleccionarVista('asesor')"
-        >
-          🦐 Asesor Experto
-        </button>
       </div>
 
       <template v-if="vistaActiva === 'plan'">
@@ -270,7 +262,7 @@
       </div>
       </template>
 
-      <template v-else-if="vistaActiva === 'consulta'">
+      <template v-else>
         <div class="form-card" key="consulta-form-card">
           <h2>Consultar una Medida</h2>
           <p class="form-descripcion">
@@ -476,14 +468,6 @@
           </div>
         </div>
       </template>
-
-      <template v-else>
-        <AsesorStock
-          key="asesor-card"
-          :obtener-contexto="construirContextoInventario"
-          :dias-contexto="30"
-        />
-      </template>
     </div>
   </div>
 </template>
@@ -493,18 +477,16 @@ import { db } from '@/firebase';
 import { collection, getDocs } from 'firebase/firestore';
 import moment from 'moment';
 import BackButton from '@/components/BackButton.vue';
-import AsesorStock from '@/components/AsesorStock.vue';
 import { formatNumber } from '@/utils/formatters';
 
 export default {
   name: 'AnalisisStock',
   components: {
-    BackButton,
-    AsesorStock
+    BackButton
   },
   data() {
     return {
-      vistaActiva: 'plan', // 'plan' | 'consulta' | 'asesor'
+      vistaActiva: 'plan', // 'plan' | 'consulta'
       kilosDisponibles: null,
       proveedorSeleccionado: '',
       diasHistorial: 30,
@@ -904,74 +886,6 @@ export default {
       });
 
       return historialPorMedida;
-    },
-
-    // Arma el resumen de inventario que se le manda al asesor experto (Cloud
-    // Function + Claude): stock FIFO, ventas de 30 días, consumo diario,
-    // cobertura y último precio de compra por medida, de todos los proveedores.
-    async construirContextoInventario() {
-      const dias = 30;
-      const fin = moment().endOf('day');
-      const inicio = moment().subtract(dias, 'days').startOf('day');
-
-      const { demandaPorMedida, stockPorMedida, totalVendido } =
-        await this.obtenerMovimientosProveedor('', inicio, fin);
-
-      const nombres = Array.from(
-        new Set([...Object.keys(stockPorMedida), ...Object.keys(demandaPorMedida)])
-      );
-      const historialPorMedida = await this.obtenerHistorialMedidas('', nombres);
-      const hace7 = moment().subtract(7, 'days').startOf('day');
-
-      const medidas = nombres
-        .map(nombre => {
-          const stockKg = Number((stockPorMedida[nombre] || 0).toFixed(1));
-          const vendido30dKg = Number((demandaPorMedida[nombre] || 0).toFixed(1));
-          const consumoDiarioKg = Number((vendido30dKg / dias).toFixed(2));
-          const { entradas, salidas } = historialPorMedida[nombre] || { entradas: [], salidas: [] };
-          const vendido7dKg = Number(
-            salidas
-              .filter(s => moment(s.fecha).isSameOrAfter(hace7))
-              .reduce((sum, s) => sum + s.kilos, 0)
-              .toFixed(1)
-          );
-          const entradaConPrecio = entradas.find(e => e.precio !== null && e.precio !== undefined);
-          const ultimaEntrada = entradas[0] || null;
-
-          return {
-            medida: nombre,
-            stockKg,
-            vendido30dKg,
-            vendido7dKg,
-            consumoDiarioKg,
-            diasCobertura: consumoDiarioKg > 0
-              ? Number((stockKg / consumoDiarioKg).toFixed(1))
-              : null,
-            ultimoPrecioCompra: entradaConPrecio ? entradaConPrecio.precio : null,
-            ultimaEntrada: ultimaEntrada
-              ? {
-                  fecha: moment(ultimaEntrada.fecha).format('YYYY-MM-DD'),
-                  kilos: Number(ultimaEntrada.kilos.toFixed(1)),
-                  proveedor: ultimaEntrada.proveedor || null
-                }
-              : null
-          };
-        })
-        .filter(m => m.stockKg > 0 || m.vendido30dKg > 0)
-        .sort((a, b) => b.vendido30dKg - a.vendido30dKg);
-
-      if (this.proveedores.length === 0) {
-        await this.loadProveedores();
-      }
-
-      return {
-        fecha: moment().format('YYYY-MM-DD'),
-        periodoDias: dias,
-        totalVendido30dKg: Number(totalVendido.toFixed(1)),
-        totalStockKg: Number(medidas.reduce((sum, m) => sum + m.stockKg, 0).toFixed(1)),
-        proveedores: this.proveedores,
-        medidas
-      };
     },
 
     // Calcula las métricas de una medida (consumo, cobertura, tendencia,

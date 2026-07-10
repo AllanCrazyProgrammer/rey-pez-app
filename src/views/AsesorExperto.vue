@@ -1,83 +1,91 @@
 <template>
-  <div class="asesor-stock">
-    <div class="form-card">
-      <h2>Asesor Experto</h2>
-      <p class="form-descripcion">
-        Pregúntale al asesor sobre tu inventario de camarón: qué resurtir, qué medidas se mueven
-        más, cobertura, compras. El asesor recibe un resumen de tus existencias y salidas reales
-        de los últimos {{ diasContexto }} días.
-      </p>
-
-      <div v-if="mensajes.length === 0" class="sugerencias">
-        <button
-          v-for="sugerencia in sugerencias"
-          :key="sugerencia"
-          type="button"
-          class="sugerencia-chip"
-          :disabled="cargando"
-          @click="enviarPregunta(sugerencia)"
-        >
-          {{ sugerencia }}
-        </button>
-      </div>
-
-      <div v-if="mensajes.length > 0" ref="conversacion" class="conversacion">
-        <div
-          v-for="(mensaje, idx) in mensajes"
-          :key="idx"
-          class="mensaje"
-          :class="mensaje.rol === 'usuario' ? 'mensaje-usuario' : 'mensaje-asesor'"
-        >
-          <span class="mensaje-autor">{{ mensaje.rol === 'usuario' ? 'Tú' : '🦐 Asesor' }}</span>
-          <div class="mensaje-texto">{{ mensaje.texto }}</div>
-        </div>
-        <div v-if="cargando" class="mensaje mensaje-asesor">
-          <span class="mensaje-autor">🦐 Asesor</span>
-          <div class="mensaje-texto mensaje-pensando">{{ estadoCargando }}</div>
+  <div class="asesor-page">
+    <div class="asesor-container">
+      <div class="header">
+        <div class="header-left">
+          <BackButton to="/existencias" />
+          <h1>🦐 Asesor Experto</h1>
         </div>
       </div>
 
-      <div v-if="error" class="error-box">{{ error }}</div>
+      <div class="form-card">
+        <p class="form-descripcion">
+          Pregúntale al asesor sobre tu inventario de camarón: qué resurtir, qué medidas se mueven
+          más, cobertura, compras. El asesor recibe un resumen de tus existencias y salidas reales
+          de los últimos {{ diasContexto }} días.
+        </p>
 
-      <form class="pregunta-form" @submit.prevent="enviarPregunta(preguntaActual)">
-        <input
-          v-model="preguntaActual"
-          type="text"
-          class="pregunta-input"
-          placeholder="Ej: ¿Qué medidas me conviene resurtir esta semana?"
-          :disabled="cargando"
-          maxlength="1000"
-        />
-        <button
-          type="submit"
-          class="calcular-btn"
-          :disabled="cargando || !preguntaActual.trim()"
-        >
-          {{ cargando ? 'Pensando...' : 'Preguntar' }}
-        </button>
-      </form>
+        <div v-if="mensajes.length === 0" class="sugerencias">
+          <button
+            v-for="sugerencia in sugerencias"
+            :key="sugerencia"
+            type="button"
+            class="sugerencia-chip"
+            :disabled="cargando"
+            @click="enviarPregunta(sugerencia)"
+          >
+            {{ sugerencia }}
+          </button>
+        </div>
 
-      <div class="asesor-pie">
-        <button
-          v-if="mensajes.length > 0"
-          type="button"
-          class="pie-btn"
-          :disabled="cargando"
-          @click="nuevaConversacion"
-        >
-          Nueva conversación
-        </button>
-        <button
-          type="button"
-          class="pie-btn"
-          :disabled="cargando"
-          @click="refrescarContexto"
-        >
-          {{ contextoCargando ? 'Actualizando datos...' : 'Actualizar datos de inventario' }}
-        </button>
-        <span v-if="contextoFecha" class="pie-nota">
-          Datos de inventario al {{ contextoFecha }}
-        </span>
+        <div v-if="mensajes.length > 0" ref="conversacion" class="conversacion">
+          <div
+            v-for="(mensaje, idx) in mensajes"
+            :key="idx"
+            class="mensaje"
+            :class="mensaje.rol === 'usuario' ? 'mensaje-usuario' : 'mensaje-asesor'"
+          >
+            <span class="mensaje-autor">{{ mensaje.rol === 'usuario' ? 'Tú' : '🦐 Asesor' }}</span>
+            <div class="mensaje-texto">{{ mensaje.texto }}</div>
+          </div>
+          <div v-if="cargando" class="mensaje mensaje-asesor">
+            <span class="mensaje-autor">🦐 Asesor</span>
+            <div class="mensaje-texto mensaje-pensando">{{ estadoCargando }}</div>
+          </div>
+        </div>
+
+        <div v-if="error" class="error-box">{{ error }}</div>
+
+        <form class="pregunta-form" @submit.prevent="enviarPregunta(preguntaActual)">
+          <input
+            v-model="preguntaActual"
+            type="text"
+            class="pregunta-input"
+            placeholder="Ej: ¿Qué medidas me conviene resurtir esta semana?"
+            :disabled="cargando"
+            maxlength="1000"
+          />
+          <button
+            type="submit"
+            class="preguntar-btn"
+            :disabled="cargando || !preguntaActual.trim()"
+          >
+            {{ cargando ? 'Pensando...' : 'Preguntar' }}
+          </button>
+        </form>
+
+        <div class="asesor-pie">
+          <button
+            v-if="mensajes.length > 0"
+            type="button"
+            class="pie-btn"
+            :disabled="cargando"
+            @click="nuevaConversacion"
+          >
+            Nueva conversación
+          </button>
+          <button
+            type="button"
+            class="pie-btn"
+            :disabled="cargando"
+            @click="refrescarContexto"
+          >
+            {{ contextoCargando ? 'Actualizando datos...' : 'Actualizar datos de inventario' }}
+          </button>
+          <span v-if="contextoFecha" class="pie-nota">
+            Datos de inventario al {{ contextoFecha }}
+          </span>
+        </div>
       </div>
     </div>
   </div>
@@ -86,22 +94,17 @@
 <script>
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '@/firebase';
+import { construirContextoInventario } from '@/utils/contextoInventario';
+import BackButton from '@/components/BackButton.vue';
 
 export default {
-  name: 'AsesorStock',
-  props: {
-    // Función (del padre) que arma el resumen de inventario para el asesor.
-    obtenerContexto: {
-      type: Function,
-      required: true
-    },
-    diasContexto: {
-      type: Number,
-      default: 30
-    }
+  name: 'AsesorExperto',
+  components: {
+    BackButton
   },
   data() {
     return {
+      diasContexto: 30,
       mensajes: [],
       preguntaActual: '',
       cargando: false,
@@ -123,7 +126,7 @@ export default {
       this.contextoCargando = true;
       this.estadoCargando = 'Leyendo tu inventario...';
       try {
-        this.contexto = await this.obtenerContexto();
+        this.contexto = await construirContextoInventario(this.diasContexto);
         this.contextoFecha = new Date().toLocaleDateString('es-MX', {
           day: '2-digit', month: '2-digit', year: 'numeric',
           hour: '2-digit', minute: '2-digit'
@@ -197,19 +200,47 @@ export default {
 </script>
 
 <style scoped>
+.asesor-page {
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 20px;
+}
+
+.asesor-container {
+  max-width: 900px;
+  width: 100%;
+  background-color: white;
+  border-radius: 10px;
+  padding: 20px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+h1 {
+  color: #2c3e50;
+  margin: 0;
+  font-size: 24px;
+}
+
 .form-card {
   background-color: #f8f9fa;
   border: 1px solid #dee2e6;
   border-radius: 8px;
   padding: 20px;
-  margin-bottom: 20px;
-}
-
-.form-card h2 {
-  color: #2c3e50;
-  border-bottom: 2px solid #3498db;
-  padding-bottom: 10px;
-  margin-top: 0;
 }
 
 .form-descripcion {
@@ -245,7 +276,7 @@ export default {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  max-height: 420px;
+  max-height: 480px;
   overflow-y: auto;
   padding: 12px;
   margin-bottom: 15px;
@@ -311,7 +342,7 @@ export default {
   border-color: #3498db;
 }
 
-.calcular-btn {
+.preguntar-btn {
   background-color: #3498db;
   color: white;
   border: none;
@@ -323,11 +354,11 @@ export default {
   transition: background-color 0.2s;
 }
 
-.calcular-btn:hover:not(:disabled) {
+.preguntar-btn:hover:not(:disabled) {
   background-color: #2980b9;
 }
 
-.calcular-btn:disabled {
+.preguntar-btn:disabled {
   background-color: #b0bec5;
   cursor: not-allowed;
 }
