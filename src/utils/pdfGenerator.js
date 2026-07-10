@@ -3,7 +3,8 @@
 import pdfMake from 'pdfmake/build/pdfmake';
 import * as pdfFonts from 'pdfmake/build/vfs_fonts';
 import { db } from '@/firebase';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { collection, getDocs } from 'firebase/firestore';
+import { obtenerPrecioParaMedida } from './preciosHistoricos';
 
 let activePdfMake = pdfMake;
 
@@ -77,54 +78,52 @@ const contarPaginasDesdeBuffer = (buffer) => {
 const LOGO_DEFAULT_URL = 'https://res.cloudinary.com/hwkcovsmr/image/upload/v1620946647/samples/REY_PEZ_LOGO_nsotww.png';
 const LOGO_VERONICA_URL = 'https://res.cloudinary.com/hwkcovsmr/image/upload/w_1000,c_fill,ar_1:1,g_auto,r_max,bo_5px_solid_red,f_png,b_transparent/v1757615801/allan_logo_ra8ruv.jpg';
 
-// Función para obtener el precio actual de un producto para un cliente específico
-async function obtenerPrecioProductoCatarro(nombreProducto) {
+// Cache breve de la colección de precios para no consultar Firestore por cada producto del PDF
+let preciosColeccionCache = null;
+let preciosColeccionCacheTs = 0;
+const PRECIOS_CACHE_TTL_MS = 60 * 1000;
+
+async function cargarColeccionPrecios() {
+  const ahora = Date.now();
+  if (preciosColeccionCache && (ahora - preciosColeccionCacheTs) < PRECIOS_CACHE_TTL_MS) {
+    return preciosColeccionCache;
+  }
+  const snapshot = await getDocs(collection(db, 'precios'));
+  preciosColeccionCache = snapshot.docs.map(doc => doc.data());
+  preciosColeccionCacheTs = ahora;
+  return preciosColeccionCache;
+}
+
+// Mismo mapeo nombre → clienteId que usa ProductoItem/CrudoItem para precios específicos
+function obtenerClienteIdParaPrecios(nombreCliente) {
+  const nombre = (nombreCliente || '').trim().toLowerCase();
+  const mapa = {
+    catarro: 'catarro',
+    joselito: 'joselito',
+    otilio: 'otilio',
+    ozuna: 'ozuna',
+    veronica: 'veronica',
+    lorena: 'veronica' // Lorena es la misma que Verónica
+  };
+  for (const [clave, id] of Object.entries(mapa)) {
+    if (nombre.includes(clave)) return id;
+  }
+  return null;
+}
+
+// Busca el precio vigente a la fecha del embarque para el cliente de la nota,
+// probando cada nombre candidato en orden (medida real primero, alternativo después).
+async function obtenerPrecioProductoParaPdf(nombresProducto, fechaEmbarque, nombreCliente) {
   try {
-    const preciosRef = collection(db, 'precios');
-    
-    // Buscar todos los precios para este producto
-    const q = query(
-      preciosRef, 
-      where('producto', '==', nombreProducto)
-    );
-    
-    const snapshot = await getDocs(q);
-    if (snapshot.empty) {
-      return null;
-    }
-    
-    // Separar precios específicos de Catarro y precios generales
-    const preciosCatarro = [];
-    const preciosGenerales = [];
-    
-    snapshot.docs.forEach(doc => {
-      const data = doc.data();
-      if (data.clienteId === 'catarro') {
-        preciosCatarro.push(data);
-      } else if (!data.clienteId) {
-        preciosGenerales.push(data);
+    const precios = await cargarColeccionPrecios();
+    const clienteId = obtenerClienteIdParaPrecios(nombreCliente);
+    for (const nombre of nombresProducto) {
+      if (!nombre) continue;
+      const precio = obtenerPrecioParaMedida(precios, nombre, fechaEmbarque, clienteId);
+      if (precio !== null && precio !== undefined) {
+        return precio;
       }
-    });
-    
-    // Ordenar por fecha (más reciente primero)
-    const ordenarPorFecha = (a, b) => {
-      const fechaA = a.fecha ? new Date(a.fecha) : new Date(0);
-      const fechaB = b.fecha ? new Date(b.fecha) : new Date(0);
-      return fechaB - fechaA;
-    };
-    
-    // Priorizar precio específico de Catarro si existe
-    if (preciosCatarro.length > 0) {
-      preciosCatarro.sort(ordenarPorFecha);
-      return preciosCatarro[0].precio;
     }
-    
-    // Si no hay precio específico, usar precio general más reciente
-    if (preciosGenerales.length > 0) {
-      preciosGenerales.sort(ordenarPorFecha);
-      return preciosGenerales[0].precio;
-    }
-    
     return null;
   } catch (error) {
     console.error('Error al obtener precio:', error);
@@ -742,6 +741,7 @@ async function generarContenidoClientes(embarque, clientesDisponibles, clientesJ
             productosAgrupados[clave] = {
               ...producto,
               medida: medidaNombre,
+              medidaOriginal: producto.medida,
               kilos: [...producto.kilos],
               taras: [...producto.taras],
               tarasExtra: [...(producto.tarasExtra || [])],
@@ -797,8 +797,12 @@ async function generarContenidoClientes(embarque, clientesDisponibles, clientesJ
           const promesasPrecios = productosAgrupados.map(async (producto) => {
             // Solo asignar precio automático si no lo tiene Y no fue borrado manualmente
             if (!producto.precio && !producto.precioBorradoManualmente) {
-              const nombreProducto = producto.nombreAlternativoPDF || producto.medida;
-              const precio = await obtenerPrecioProductoCatarro(nombreProducto);
+              // Buscar por la medida real primero; el nombre alternativo es solo respaldo
+              const precio = await obtenerPrecioProductoParaPdf(
+                [producto.medidaOriginal || producto.medida, producto.nombreAlternativoPDF],
+                embarque.fecha,
+                nombreCliente
+              );
               if (precio) {
                 producto.precio = precio;
               }
@@ -851,7 +855,7 @@ async function generarContenidoClientes(embarque, clientesDisponibles, clientesJ
               // Solo asignar precio automático si no lo tiene Y no fue borrado manualmente
               if (!item.precio && !item.precioBorradoManualmente && item.talla) {
                 // Buscar precio basado en la talla del crudo
-                const precio = await obtenerPrecioProductoCatarro(item.talla);
+                const precio = await obtenerPrecioProductoParaPdf([item.talla], embarque.fecha, nombreCliente);
                 if (precio) {
                   item.precio = precio;
                 }
@@ -2571,6 +2575,7 @@ async function generarContenidoClientesSinPrecios(embarque, clientesDisponibles,
             productosAgrupados[clave] = {
               ...producto,
               medida: medidaNombre,
+              medidaOriginal: producto.medida,
               kilos: [...producto.kilos],
               taras: [...producto.taras],
               tarasExtra: [...(producto.tarasExtra || [])],
