@@ -1,4 +1,4 @@
-import { getFirestore, doc, updateDoc, setDoc, getDoc, serverTimestamp, deleteDoc, runTransaction } from 'firebase/firestore';
+import { getFirestore, doc, setDoc, getDoc, serverTimestamp, deleteDoc, runTransaction } from 'firebase/firestore';
 import { v4 as uuidv4 } from 'uuid';
 import EmbarquesOfflineService from '@/services/EmbarquesOfflineService';
 import BackupService from '../BackupService.js';
@@ -125,6 +125,40 @@ export function normalizarDocDataParaFirestore(docData, record = {}, contexto = 
     crudos: Array.isArray(cliente.crudos) ? cliente.crudos : [],
   }));
 
+  // Colaboración: este payload se escribe con setDoc(merge:false), y el
+  // registro offline puede estar REZAGADO respecto al documento remoto. Los
+  // productos que otros editores agregaron después y que no tienen lápida se
+  // conservan (unión por id) — sin esto, sincronizar un registro viejo
+  // borraba el trabajo ajeno.
+  const remotoColab = contexto.dataRemota;
+  if (remotoColab && Array.isArray(remotoColab.clientes)) {
+    const idsEnPayload = new Set();
+    data.clientes.forEach((cliente) => {
+      (Array.isArray(cliente.productos) ? cliente.productos : []).forEach((producto) => {
+        if (producto && producto.id) idsEnPayload.add(producto.id);
+      });
+    });
+    const lapidas = data.productosEliminados || {};
+
+    remotoColab.clientes.forEach((clienteRemoto) => {
+      const productosFaltantes = (Array.isArray(clienteRemoto.productos) ? clienteRemoto.productos : [])
+        .filter((producto) => producto && producto.id &&
+          !idsEnPayload.has(producto.id) && !lapidas[producto.id]);
+      if (productosFaltantes.length === 0) return;
+
+      const clienteDestino = data.clientes.find(c => String(c.id) === String(clienteRemoto.id));
+      if (clienteDestino) {
+        clienteDestino.productos = [...(clienteDestino.productos || []), ...productosFaltantes];
+      } else {
+        data.clientes.push({
+          ...clienteRemoto,
+          productos: productosFaltantes,
+          crudos: Array.isArray(clienteRemoto.crudos) ? clienteRemoto.crudos : []
+        });
+      }
+    });
+  }
+
   return data;
 }
 
@@ -216,35 +250,20 @@ export const embarqueSyncMixin = {
       this.isSyncing = true;
 
       try {
-        const db = getFirestore();
-        const embarqueRef = doc(db, "embarques", this.embarqueId);
-        const embarqueData = this.prepararDatosEmbarque();
-        const snap = await getDoc(embarqueRef);
+        // Misma vía transaccional que el guardado en vivo: verifica la
+        // revisión y fusiona si alguien más guardó primero. La versión
+        // anterior escribía el documento completo A CIEGAS (updateDoc sin
+        // transacción): al salir de la página con cambios pendientes
+        // rezagados, pisaba el trabajo de los demás editores.
+        await this.subirCambiosEnVivo();
 
-        // Señal de cambio para editores en vivo (control de revisiones)
-        const revNueva = (snap.exists() ? (Number(snap.data().rev) || 0) : (Number(this._revBase) || 0)) + 1;
-
-        const payload = {
-          ...embarqueData,
-          rev: revNueva,
-          ultimaEdicion: {
-            userId: this.authStore.userId,
-            username: this.authStore.user?.username || 'Usuario desconocido',
-            timestamp: serverTimestamp()
-          }
-        };
-
-        if (snap.exists()) {
-          await updateDoc(embarqueRef, payload);
+        if (!this.hasPendingChanges) {
+          this.mostrarMensaje('Cambios subidos exitosamente a la nube.');
         } else {
-          await setDoc(embarqueRef, payload);
+          // Hubo conflicto: ya se fusionó lo remoto y la resubida quedó
+          // agendada; el espejo offline conserva pendingSync como respaldo.
+          this.mostrarMensaje('Se fusionaron cambios de otra persona; subiendo la versión combinada...');
         }
-
-        this._revBase = revNueva;
-
-        await EmbarquesOfflineService.markSynced(this.embarqueId);
-        this.hasPendingChanges = false;
-        this.mostrarMensaje('Cambios subidos exitosamente a la nube.');
       } catch (error) {
         console.error("Error al sincronizar con la nube:", error);
         this.mostrarError('Error al subir los cambios. Verifique su conexión.');
@@ -517,8 +536,13 @@ export const embarqueSyncMixin = {
         console.log('[subirCambiosEnVivo] Cambios sincronizados con la nube (rev', revEscrita + ').');
       } catch (error) {
         console.error('[subirCambiosEnVivo] Error al subir cambios:', error);
-        // El espejo offline conserva pendingSync: se reintenta con el próximo
-        // cambio, al reconectar, o con el botón de subir manual.
+        // NUNCA quedarse atorado con cambios pendientes: si seguimos en
+        // línea, reintentar con espera. (Quedarse esperando "el próximo
+        // cambio local" dejaba la sesión difiriendo todos los snapshots
+        // remotos indefinidamente: dejaba de ver al otro editor.)
+        if (navigator.onLine && this.hasPendingChanges) {
+          this.programarSubidaEnVivo(5000 + Math.floor(Math.random() * 3000));
+        }
       } finally {
         this._subiendoEnVivo = false;
         if (this._resubirAlTerminar) {

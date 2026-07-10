@@ -79,6 +79,13 @@ export const embarqueCargaMixin = {
             // lo que se está capturando. Se difiere; la subida transaccional
             // (subirCambiosEnVivo) detecta la revisión nueva y fusiona.
             this._snapshotRemotoDiferido = data;
+            // Garantía de salida: si por cualquier razón no hay una subida
+            // agendada ni en curso, agendar una — la deferral no puede
+            // quedarse esperando para siempre.
+            if (!this._subiendoEnVivo && !this._timerSubidaEnVivo &&
+                typeof this.programarSubidaEnVivo === 'function') {
+              this.programarSubidaEnVivo();
+            }
             return;
           }
 
