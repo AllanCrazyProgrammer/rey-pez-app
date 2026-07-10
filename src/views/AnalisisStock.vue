@@ -438,6 +438,7 @@
               <thead>
                 <tr>
                   <th>Fecha</th>
+                  <th>Proveedor</th>
                   <th class="num">Kilos</th>
                   <th class="num">Precio</th>
                 </tr>
@@ -445,6 +446,7 @@
               <tbody>
                 <tr v-for="(entrada, idx) in resultado.ultimasEntradas" :key="idx">
                   <td>{{ entrada.fecha }}</td>
+                  <td>{{ entrada.proveedor || '—' }}</td>
                   <td class="num">{{ formatNumber(entrada.kilos) }} kg</td>
                   <td class="num">{{ entrada.precio ? '$' + formatNumber(entrada.precio) : '—' }}</td>
                 </tr>
@@ -818,7 +820,10 @@ export default {
           const medida = String(entrada.medida || '').trim();
           if (!historialPorMedida[medida]) return;
           historialPorMedida[medida].entradas.push({
-            fecha, kilos: Number(entrada.kilos) || 0, precio: entrada.precio ?? null
+            fecha,
+            kilos: Number(entrada.kilos) || 0,
+            precio: entrada.precio ?? null,
+            proveedor: entrada.proveedor || ''
           });
         });
 
@@ -892,7 +897,8 @@ export default {
         ultimasEntradas: entradas.slice(0, 5).map(e => ({
           fecha: moment(e.fecha).format('DD/MM/YYYY'),
           kilos: Number(e.kilos.toFixed(1)),
-          precio: e.precio
+          precio: e.precio,
+          proveedor: e.proveedor
         }))
       };
     },
