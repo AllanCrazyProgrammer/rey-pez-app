@@ -204,7 +204,8 @@
                 <div v-for="(tara, index) in producto.reporteTaras" :key="index" class="input-group mb-2">
                     <input type="tel" v-model="producto.reporteTaras[index]" class="form-control reporte-input"
                         ref="reporteTaraInputs"
-                        @focus="$event.target.select()" :disabled="embarqueBloqueado" @input="actualizarProducto">
+                        @focus="$event.target.select()" :disabled="embarqueBloqueado" @input="actualizarProducto"
+                        @keydown.tab="handleReporteTaraTab($event, index)">
                     <button type="button" @click="eliminarReporteTara(index)" class="btn btn-danger btn-sm"
                         tabindex="-1" :disabled="embarqueBloqueado">-</button>
                 </div>
@@ -218,7 +219,9 @@
                 <h5>Bolsas</h5>
                 <div v-for="(bolsa, index) in producto.reporteBolsas" :key="index" class="input-group mb-2">
                     <input type="tel" v-model="producto.reporteBolsas[index]" class="form-control reporte-input"
-                        @focus="$event.target.select()" :disabled="embarqueBloqueado" @input="actualizarProducto">
+                        ref="reporteBolsaInputs"
+                        @focus="$event.target.select()" :disabled="embarqueBloqueado" @input="actualizarProducto"
+                        @keydown.tab="handleReporteBolsaTab($event, index)">
                 </div>
                 <div style="height: 31px"></div>
                 <div class="total-bolsas-reporte">
@@ -644,6 +647,31 @@ export default {
             if (siguienteTaraIndex < (this.producto.taras || []).length) {
                 event.preventDefault();
                 this.enfocarInput(this.$refs.taraInputs, siguienteTaraIndex);
+            }
+        },
+
+        handleReporteTaraTab(event, index) {
+            if (event.shiftKey) {
+                if (index > 0) {
+                    event.preventDefault();
+                    this.enfocarInput(this.$refs.reporteBolsaInputs, index - 1);
+                }
+                return;
+            }
+            event.preventDefault();
+            this.enfocarInput(this.$refs.reporteBolsaInputs, index);
+        },
+
+        handleReporteBolsaTab(event, index) {
+            if (event.shiftKey) {
+                event.preventDefault();
+                this.enfocarInput(this.$refs.reporteTaraInputs, index);
+                return;
+            }
+            const siguienteIndex = index + 1;
+            if (siguienteIndex < (this.producto.reporteTaras || []).length) {
+                event.preventDefault();
+                this.enfocarInput(this.$refs.reporteTaraInputs, siguienteIndex);
             }
         },
 
