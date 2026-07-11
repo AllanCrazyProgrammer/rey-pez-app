@@ -159,7 +159,8 @@
                         @focus="onTaraFocus(taraIndex, $event)"
                         @blur="onTaraBlur(taraIndex)"
                         :disabled="embarqueBloqueado"
-                        @input="onTaraInput(taraIndex)">
+                        @input="onTaraInput(taraIndex)"
+                        @keydown.tab="handleTaraTab($event, taraIndex)">
                     <button type="button" @click="eliminarTara(taraIndex)" class="btn btn-danger btn-sm"
                         tabindex="-1" :disabled="embarqueBloqueado">-</button>
                 </div>
@@ -190,7 +191,8 @@
                         @focus="onKiloFocus(kiloIndex, $event)"
                         @blur="onKiloBlur(kiloIndex)"
                         :disabled="embarqueBloqueado"
-                        @input="onKiloInput(kiloIndex)">
+                        @input="onKiloInput(kiloIndex)"
+                        @keydown.tab="handleKiloTab($event, kiloIndex)">
                 </div>
                 <div style="height: 38px"></div>
                 <div class="total">Total: {{ totalKilos }}</div>
@@ -610,6 +612,39 @@ export default {
 
         onTaraInput(taraIndex) {
             // No llamar actualizarProducto inmediatamente
+        },
+
+        // Hace que Tab alterne entre la tara y el kilo de la misma fila
+        enfocarInput(inputs, index) {
+            const input = Array.isArray(inputs) ? inputs[index] : null;
+            if (input) {
+                input.focus();
+            }
+        },
+
+        handleTaraTab(event, taraIndex) {
+            if (event.shiftKey) {
+                if (taraIndex > 0) {
+                    event.preventDefault();
+                    this.enfocarInput(this.$refs.kiloInputs, taraIndex - 1);
+                }
+                return;
+            }
+            event.preventDefault();
+            this.enfocarInput(this.$refs.kiloInputs, taraIndex);
+        },
+
+        handleKiloTab(event, kiloIndex) {
+            if (event.shiftKey) {
+                event.preventDefault();
+                this.enfocarInput(this.$refs.taraInputs, kiloIndex);
+                return;
+            }
+            const siguienteTaraIndex = kiloIndex + 1;
+            if (siguienteTaraIndex < (this.producto.taras || []).length) {
+                event.preventDefault();
+                this.enfocarInput(this.$refs.taraInputs, siguienteTaraIndex);
+            }
         },
 
         // Método para manejar el clic en el nombre para abrir el modal
