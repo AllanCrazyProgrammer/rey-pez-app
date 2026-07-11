@@ -79,7 +79,7 @@
       </div>
 
       <div class="existencias-grid" v-if="!filtroCuarto">
-        <div v-for="(datos, medidaKey) in filteredExistencias" :key="medidaKey" class="medida-card" :class="{ 'maquila-card': medidaKey === 'Ozuna' || medidaKey === 'Joselito' }">
+        <div v-for="(datos, medidaKey, medidaIdx) in filteredExistencias" :key="medidaKey" class="medida-card" :class="{ 'maquila-card': medidaKey === 'Ozuna' || medidaKey === 'Joselito' }" :style="estiloAcento(medidaIdx)">
           <!-- Para maquilas (Ozuna y Joselito) -->
           <template v-if="medidaKey === 'Ozuna' || medidaKey === 'Joselito'">
             <h2>
@@ -199,7 +199,7 @@
       </div>
 
       <div class="existencias-grid" v-else>
-        <div v-for="(items, cuartoKey) in filteredExistenciasPorCuarto" :key="cuartoKey" class="medida-card">
+        <div v-for="(items, cuartoKey, cuartoIdx) in filteredExistenciasPorCuarto" :key="cuartoKey" class="medida-card" :style="estiloAcento(cuartoIdx)">
           <h2>{{ cuartoKey }}</h2>
           <table class="medida-table">
             <thead>
@@ -996,6 +996,24 @@ export default {
       return lista.some(item => !!item.cuartoFrio);
     };
 
+    // Color de acento único por tarjeta: reparte el círculo cromático con el
+    // ángulo áureo (137.508°), así los matices quedan máximamente separados y
+    // no se repiten sin importar cuántas medidas haya. Arranca en verde para
+    // que la primera tarjeta conserve el color del tema.
+    const colorAcento = (indice, alpha) => {
+      const matiz = Math.round((120 + indice * 137.508) % 360 * 10) / 10;
+      return alpha === undefined
+        ? `hsl(${matiz}, 100%, 62%)`
+        : `hsla(${matiz}, 100%, 62%, ${alpha})`;
+    };
+
+    const estiloAcento = (indice) => ({
+      '--acento': colorAcento(indice),
+      '--acento-dim': colorAcento(indice, 0.45),
+      '--acento-glow': colorAcento(indice, 0.22),
+      '--acento-tenue': colorAcento(indice, 0.14)
+    });
+
     const imprimirReporte = () => {
       const fechaActual = new Date().toLocaleDateString('es-ES', {
         year: 'numeric',
@@ -1625,7 +1643,8 @@ export default {
       totalSalidasDiaSiguiente,
       promedioCombinado516141,
       tieneCuarto,
-      agruparMedidasIguales
+      agruparMedidasIguales,
+      estiloAcento
     };
   }
 };
@@ -2222,10 +2241,13 @@ h1 {
    y barrido de escaneo al pasar el mouse. */
 .medida-card {
   --acento: var(--verde);
+  --acento-dim: var(--verde-dim);
+  --acento-glow: rgba(0, 255, 102, 0.22);
+  --acento-tenue: var(--verde-tenue);
   position: relative;
   overflow: hidden;
   background: rgba(2, 10, 6, 0.85);
-  border: 1px solid var(--verde-tenue);
+  border: 1px solid var(--acento-tenue);
   border-radius: 10px;
   padding: 14px;
   transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
@@ -2304,19 +2326,8 @@ h1 {
 
 .medida-card:hover {
   transform: translateY(-4px);
-  border-color: var(--verde-dim);
-  box-shadow: 0 0 30px rgba(0, 255, 102, 0.18), 0 14px 40px rgba(0, 0, 0, 0.5);
-}
-
-/* Maquilas (Ozuna / Joselito) con acento violeta. */
-.maquila-card {
-  --acento: var(--violeta);
-  border-color: rgba(177, 108, 255, 0.25);
-}
-
-.maquila-card:hover {
-  border-color: rgba(177, 108, 255, 0.5);
-  box-shadow: 0 0 30px rgba(177, 108, 255, 0.2), 0 14px 40px rgba(0, 0, 0, 0.5);
+  border-color: var(--acento-dim);
+  box-shadow: 0 0 30px var(--acento-glow), 0 14px 40px rgba(0, 0, 0, 0.5);
 }
 
 .medida-card h2 {
@@ -2466,7 +2477,7 @@ h1 {
 
 .proveedor-section {
   margin-bottom: 15px;
-  border-left: 2px solid var(--verde-dim);
+  border-left: 2px solid var(--acento-dim);
   padding-left: 10px;
 }
 
@@ -2498,19 +2509,19 @@ h1 {
 .total-medida {
   margin-top: 12px;
   padding: 10px;
-  background: linear-gradient(90deg, rgba(0, 255, 102, 0.16), rgba(0, 229, 255, 0.1));
-  border: 1px solid var(--verde-dim);
+  background: linear-gradient(90deg, var(--acento-tenue), rgba(0, 229, 255, 0.08));
+  border: 1px solid var(--acento-dim);
   color: var(--verde-claro);
   text-align: center;
   border-radius: 6px;
-  box-shadow: inset 0 0 20px rgba(0, 255, 102, 0.12);
+  box-shadow: inset 0 0 20px var(--acento-tenue);
 }
 
 .total-medida-kilos {
   font-size: 16px;
   margin-bottom: 5px;
-  color: var(--verde);
-  text-shadow: 0 0 12px rgba(0, 255, 102, 0.5);
+  color: var(--acento);
+  text-shadow: 0 0 12px var(--acento-glow);
 }
 
 .total-medida-valor {
@@ -2526,13 +2537,13 @@ h1 {
 .total-maquila-valor {
   margin-top: 8px;
   padding: 8px;
-  background: rgba(177, 108, 255, 0.12);
-  border: 1px solid rgba(177, 108, 255, 0.45);
-  color: var(--violeta);
+  background: var(--acento-tenue);
+  border: 1px solid var(--acento-dim);
+  color: var(--acento);
   text-align: center;
   border-radius: 6px;
   font-size: 15px;
-  text-shadow: 0 0 10px rgba(177, 108, 255, 0.5);
+  text-shadow: 0 0 10px var(--acento-glow);
 }
 
 /* Resumen inferior como registro del sistema. */
