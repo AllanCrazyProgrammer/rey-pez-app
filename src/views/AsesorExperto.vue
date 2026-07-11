@@ -1,15 +1,15 @@
 <template>
   <div class="asesor-page">
-    <canvas ref="matrixCanvas" class="matrix-bg" aria-hidden="true"></canvas>
+    <FondoMatrix class="matrix-bg" :opacity="0.5" />
     <div class="crt-overlay" aria-hidden="true"></div>
 
     <div class="asesor-container">
       <div class="header">
         <div class="header-left">
           <BackButton to="/existencias" />
-          <h1 class="titulo">
-            <span class="titulo-icono">🦐</span>
-            <span class="glitch" data-text="ASESOR_EXPERTO">ASESOR_EXPERTO</span>
+          <h1 class="titulo" aria-label="Asesor Experto">
+            <span class="titulo-icono" aria-hidden="true">🦐</span>
+            <span class="glitch" aria-hidden="true" data-text="ASESOR_EXPERTO">ASESOR_EXPERTO</span>
             <span class="cursor-blink" aria-hidden="true">▊</span>
           </h1>
         </div>
@@ -199,11 +199,13 @@ import {
 import { db, functions } from '@/firebase';
 import { construirContextoInventario } from '@/utils/contextoInventario';
 import BackButton from '@/components/BackButton.vue';
+import FondoMatrix from '@/components/FondoMatrix.vue';
 
 export default {
   name: 'AsesorExperto',
   components: {
-    BackButton
+    BackButton,
+    FondoMatrix
   },
   data() {
     return {
@@ -228,12 +230,6 @@ export default {
   },
   created() {
     this.cargarConversaciones();
-  },
-  mounted() {
-    this.iniciarLluviaMatrix();
-  },
-  beforeDestroy() {
-    this.detenerLluviaMatrix();
   },
   methods: {
     async cargarConversaciones() {
@@ -395,60 +391,6 @@ export default {
         const contenedor = this.$refs.conversacion;
         if (contenedor) contenedor.scrollTop = contenedor.scrollHeight;
       });
-    },
-
-    // Fondo decorativo de "lluvia Matrix". Se desactiva si el usuario prefiere
-    // movimiento reducido y se limpia al salir de la vista.
-    iniciarLluviaMatrix() {
-      const canvas = this.$refs.matrixCanvas;
-      if (!canvas) return;
-      if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-        return;
-      }
-
-      const ctx = canvas.getContext('2d');
-      const caracteres = 'アイウエオカキクケコ0123456789$#%&@REYPZ71><';
-      const tam = 16;
-      let columnas = 0;
-      let gotas = [];
-
-      const ajustar = () => {
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
-        columnas = Math.ceil(canvas.width / tam);
-        gotas = Array.from({ length: columnas }, () => Math.floor(Math.random() * -60));
-      };
-      ajustar();
-      this._matrixResize = ajustar;
-      window.addEventListener('resize', ajustar);
-
-      let ultimoCuadro = 0;
-      const dibujar = tiempo => {
-        this._matrixRaf = requestAnimationFrame(dibujar);
-        if (tiempo - ultimoCuadro < 55) return;
-        ultimoCuadro = tiempo;
-
-        ctx.fillStyle = 'rgba(2, 8, 5, 0.1)';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.font = tam + 'px monospace';
-        for (let i = 0; i < columnas; i++) {
-          const letra = caracteres[Math.floor(Math.random() * caracteres.length)];
-          ctx.fillStyle = Math.random() > 0.95 ? 'rgba(190, 255, 214, 0.9)' : 'rgba(0, 255, 102, 0.5)';
-          ctx.fillText(letra, i * tam, gotas[i] * tam);
-          if (gotas[i] * tam > canvas.height && Math.random() > 0.975) {
-            gotas[i] = 0;
-          }
-          gotas[i]++;
-        }
-      };
-      this._matrixRaf = requestAnimationFrame(dibujar);
-    },
-
-    detenerLluviaMatrix() {
-      if (this._matrixRaf) cancelAnimationFrame(this._matrixRaf);
-      if (this._matrixResize) window.removeEventListener('resize', this._matrixResize);
-      this._matrixRaf = null;
-      this._matrixResize = null;
     }
   }
 };
@@ -484,11 +426,7 @@ export default {
 }
 
 .matrix-bg {
-  position: fixed;
-  inset: 0;
   z-index: 0;
-  opacity: 0.5;
-  pointer-events: none;
 }
 
 /* Capa CRT: scanlines, viñeta y barrido de luz. */
@@ -516,16 +454,19 @@ export default {
 .crt-overlay::after {
   content: '';
   position: absolute;
+  top: -140px;
   left: 0;
   right: 0;
   height: 140px;
   background: linear-gradient(180deg, transparent, rgba(0, 255, 102, 0.06), transparent);
   animation: barrido 8s linear infinite;
+  will-change: transform;
 }
 
+/* Anima transform (compositor) en vez de top para no forzar reflow continuo. */
 @keyframes barrido {
-  0% { top: -20%; }
-  100% { top: 110%; }
+  0% { transform: translateY(0); }
+  100% { transform: translateY(calc(100vh + 280px)); }
 }
 
 .asesor-container {
@@ -618,6 +559,9 @@ export default {
   left: 0;
   width: 100%;
   opacity: 0.8;
+  /* Estado de reposo oculto: sin esto, con prefers-reduced-motion las dos
+     copias de color quedarían visibles de forma permanente. */
+  clip-path: inset(0 0 100% 0);
 }
 
 .glitch::before {
