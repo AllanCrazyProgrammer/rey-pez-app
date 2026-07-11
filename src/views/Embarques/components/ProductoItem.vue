@@ -154,28 +154,31 @@
                 </div>
                 <div v-for="(tara, taraIndex) in producto.taras" :key="taraIndex" class="input-group">
                     <input v-model.number="producto.taras[taraIndex]" type="tel" class="form-control tara-input"
+                        ref="taraInputs"
                         placeholder="Tara" :size="String(producto.taras[taraIndex] || '').length || 1"
-                        @focus="onTaraFocus(taraIndex, $event)" 
+                        @focus="onTaraFocus(taraIndex, $event)"
                         @blur="onTaraBlur(taraIndex)"
                         :disabled="embarqueBloqueado"
-                        @input="onTaraInput(taraIndex)">
+                        @input="onTaraInput(taraIndex)"
+                        @keydown.tab="handleTaraTab($event, taraIndex)">
                     <button type="button" @click="eliminarTara(taraIndex)" class="btn btn-danger btn-sm"
-                        :disabled="embarqueBloqueado">-</button>
+                        tabindex="-1" :disabled="embarqueBloqueado">-</button>
                 </div>
                 <div v-for="(taraExtra, taraExtraIndex) in producto.tarasExtra" :key="'extra-' + taraExtraIndex"
                     class="input-group">
                     <input v-model.number="producto.tarasExtra[taraExtraIndex]" type="tel"
                         class="form-control tara-input" placeholder="Tara Extra"
+                        ref="taraExtraInputs"
                         :size="String(producto.tarasExtra[taraExtraIndex] || '').length || 1"
                         @focus="$event.target.select()" :disabled="embarqueBloqueado">
                     <button type="button" @click="eliminarTaraExtra(taraExtraIndex)" class="btn btn-danger btn-sm"
-                        :disabled="embarqueBloqueado">-</button>
+                        tabindex="-1" :disabled="embarqueBloqueado">-</button>
                 </div>
                 <div class="botones-tara">
                     <button type="button" @click="agregarTara" class="btn btn-success btn-sm agregar-tara"
-                        :disabled="embarqueBloqueado">+</button>
+                        tabindex="-1" :disabled="embarqueBloqueado">+</button>
                     <button type="button" @click="agregarTaraExtra" class="btn btn-warning btn-sm agregar-tara-extra"
-                        :disabled="embarqueBloqueado">+ Extra</button>
+                        tabindex="-1" :disabled="embarqueBloqueado">+ Extra</button>
                 </div>
                 <div class="total">Total: {{ totalTaras }}</div>
             </div>
@@ -183,11 +186,13 @@
                 <h5>Kilos</h5>
                 <div v-for="(kilo, kiloIndex) in producto.kilos" :key="kiloIndex" class="input-group">
                     <input v-model.number="producto.kilos[kiloIndex]" type="tel" class="form-control kilo-input"
+                        ref="kiloInputs"
                         placeholder="Kilos" :size="String(producto.kilos[kiloIndex] || '').length || 1"
-                        @focus="onKiloFocus(kiloIndex, $event)" 
+                        @focus="onKiloFocus(kiloIndex, $event)"
                         @blur="onKiloBlur(kiloIndex)"
-                        :disabled="embarqueBloqueado" 
-                        @input="onKiloInput(kiloIndex)">
+                        :disabled="embarqueBloqueado"
+                        @input="onKiloInput(kiloIndex)"
+                        @keydown.tab="handleKiloTab($event, kiloIndex)">
                 </div>
                 <div style="height: 38px"></div>
                 <div class="total">Total: {{ totalKilos }}</div>
@@ -198,12 +203,14 @@
                 <h5>Taras</h5>
                 <div v-for="(tara, index) in producto.reporteTaras" :key="index" class="input-group mb-2">
                     <input type="tel" v-model="producto.reporteTaras[index]" class="form-control reporte-input"
-                        @focus="$event.target.select()" :disabled="embarqueBloqueado" @input="actualizarProducto">
+                        ref="reporteTaraInputs"
+                        @focus="$event.target.select()" :disabled="embarqueBloqueado" @input="actualizarProducto"
+                        @keydown.tab="handleReporteTaraTab($event, index)">
                     <button type="button" @click="eliminarReporteTara(index)" class="btn btn-danger btn-sm"
-                        :disabled="embarqueBloqueado">-</button>
+                        tabindex="-1" :disabled="embarqueBloqueado">-</button>
                 </div>
                 <button type="button" @click="agregarReporteTara" class="btn btn-success btn-sm"
-                    :disabled="embarqueBloqueado">+</button>
+                    tabindex="-1" :disabled="embarqueBloqueado">+</button>
                 <div class="total-taras-reporte" :class="{ 'coincide': coincideTaras, 'no-coincide': !coincideTaras }">
                     Reportadas: {{ totalTarasReportadas }}
                 </div>
@@ -212,7 +219,9 @@
                 <h5>Bolsas</h5>
                 <div v-for="(bolsa, index) in producto.reporteBolsas" :key="index" class="input-group mb-2">
                     <input type="tel" v-model="producto.reporteBolsas[index]" class="form-control reporte-input"
-                        @focus="$event.target.select()" :disabled="embarqueBloqueado" @input="actualizarProducto">
+                        ref="reporteBolsaInputs"
+                        @focus="$event.target.select()" :disabled="embarqueBloqueado" @input="actualizarProducto"
+                        @keydown.tab="handleReporteBolsaTab($event, index)">
                 </div>
                 <div style="height: 31px"></div>
                 <div class="total-bolsas-reporte">
@@ -608,6 +617,64 @@ export default {
             // No llamar actualizarProducto inmediatamente
         },
 
+        // Hace que Tab alterne entre la tara y el kilo de la misma fila
+        enfocarInput(inputs, index) {
+            const input = Array.isArray(inputs) ? inputs[index] : null;
+            if (input) {
+                input.focus();
+            }
+        },
+
+        handleTaraTab(event, taraIndex) {
+            if (event.shiftKey) {
+                if (taraIndex > 0) {
+                    event.preventDefault();
+                    this.enfocarInput(this.$refs.kiloInputs, taraIndex - 1);
+                }
+                return;
+            }
+            event.preventDefault();
+            this.enfocarInput(this.$refs.kiloInputs, taraIndex);
+        },
+
+        handleKiloTab(event, kiloIndex) {
+            if (event.shiftKey) {
+                event.preventDefault();
+                this.enfocarInput(this.$refs.taraInputs, kiloIndex);
+                return;
+            }
+            const siguienteTaraIndex = kiloIndex + 1;
+            if (siguienteTaraIndex < (this.producto.taras || []).length) {
+                event.preventDefault();
+                this.enfocarInput(this.$refs.taraInputs, siguienteTaraIndex);
+            }
+        },
+
+        handleReporteTaraTab(event, index) {
+            if (event.shiftKey) {
+                if (index > 0) {
+                    event.preventDefault();
+                    this.enfocarInput(this.$refs.reporteBolsaInputs, index - 1);
+                }
+                return;
+            }
+            event.preventDefault();
+            this.enfocarInput(this.$refs.reporteBolsaInputs, index);
+        },
+
+        handleReporteBolsaTab(event, index) {
+            if (event.shiftKey) {
+                event.preventDefault();
+                this.enfocarInput(this.$refs.reporteTaraInputs, index);
+                return;
+            }
+            const siguienteIndex = index + 1;
+            if (siguienteIndex < (this.producto.reporteTaras || []).length) {
+                event.preventDefault();
+                this.enfocarInput(this.$refs.reporteTaraInputs, siguienteIndex);
+            }
+        },
+
         // Método para manejar el clic en el nombre para abrir el modal
         handleNombreAlternativoClick() {
             if (!this.embarqueBloqueado) {
@@ -620,6 +687,13 @@ export default {
             this.producto.taras.push(null);
             this.producto.kilos.push(null);
             this.actualizarProducto();
+            this.$nextTick(() => {
+                const inputs = this.$refs.taraInputs;
+                const ultimoInput = Array.isArray(inputs) ? inputs[inputs.length - 1] : inputs;
+                if (ultimoInput) {
+                    ultimoInput.focus();
+                }
+            });
         },
 
         eliminarTara(index) {
@@ -634,6 +708,13 @@ export default {
             }
             this.producto.tarasExtra.push(null);
             this.actualizarProducto();
+            this.$nextTick(() => {
+                const inputs = this.$refs.taraExtraInputs;
+                const ultimoInput = Array.isArray(inputs) ? inputs[inputs.length - 1] : inputs;
+                if (ultimoInput) {
+                    ultimoInput.focus();
+                }
+            });
         },
 
         eliminarTaraExtra(index) {
@@ -652,6 +733,13 @@ export default {
             this.producto.reporteTaras.push(null);
             this.producto.reporteBolsas.push(null);
             this.actualizarProducto();
+            this.$nextTick(() => {
+                const inputs = this.$refs.reporteTaraInputs;
+                const ultimoInput = Array.isArray(inputs) ? inputs[inputs.length - 1] : inputs;
+                if (ultimoInput) {
+                    ultimoInput.focus();
+                }
+            });
         },
 
         eliminarReporteTara(index) {
