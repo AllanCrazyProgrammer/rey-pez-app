@@ -198,12 +198,13 @@
                 <h5>Taras</h5>
                 <div v-for="(tara, index) in producto.reporteTaras" :key="index" class="input-group mb-2">
                     <input type="tel" v-model="producto.reporteTaras[index]" class="form-control reporte-input"
+                        ref="reporteTaraInputs"
                         @focus="$event.target.select()" :disabled="embarqueBloqueado" @input="actualizarProducto">
                     <button type="button" @click="eliminarReporteTara(index)" class="btn btn-danger btn-sm"
-                        :disabled="embarqueBloqueado">-</button>
+                        tabindex="-1" :disabled="embarqueBloqueado">-</button>
                 </div>
                 <button type="button" @click="agregarReporteTara" class="btn btn-success btn-sm"
-                    :disabled="embarqueBloqueado">+</button>
+                    tabindex="-1" :disabled="embarqueBloqueado">+</button>
                 <div class="total-taras-reporte" :class="{ 'coincide': coincideTaras, 'no-coincide': !coincideTaras }">
                     Reportadas: {{ totalTarasReportadas }}
                 </div>
@@ -652,6 +653,13 @@ export default {
             this.producto.reporteTaras.push(null);
             this.producto.reporteBolsas.push(null);
             this.actualizarProducto();
+            this.$nextTick(() => {
+                const inputs = this.$refs.reporteTaraInputs;
+                const ultimoInput = Array.isArray(inputs) ? inputs[inputs.length - 1] : inputs;
+                if (ultimoInput) {
+                    ultimoInput.focus();
+                }
+            });
         },
 
         eliminarReporteTara(index) {
