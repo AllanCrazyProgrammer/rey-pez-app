@@ -203,6 +203,7 @@ export const embarqueSyncMixin = {
           this.embarqueId = uuidv4();
           this.modoEdicion = true;
           this.guardadoAutomaticoActivo = true;
+          this._dirtyGen = (Number(this._dirtyGen) || 0) + 1;
           this.hasPendingChanges = true;
 
           await EmbarquesOfflineService.init();
@@ -321,6 +322,10 @@ export const embarqueSyncMixin = {
       try {
         const db = getFirestore();
         const embarqueRef = doc(db, 'embarques', record.id);
+        // Generación de cambios vigente al armar el payload (ver
+        // subirCambiosEnVivo): si avanza durante la escritura, el estado no
+        // puede declararse sincronizado al terminar.
+        const genCapturada = Number(this._dirtyGen) || 0;
         const docData = record.docData || (record.id === this.embarqueId ? this.prepararDatosEmbarque() : null);
 
         const metadataUltimaEdicion = {
@@ -373,20 +378,27 @@ export const embarqueSyncMixin = {
         if (record.id === this.embarqueId) {
           this.guardadoAutomaticoActivo = true;
           this.modoEdicion = true;
-          // El embarque abierto acaba de subirse: ya no hay cambios locales
-          // pendientes y nuestra base es la revisión recién escrita. Sin este
-          // reset, hasPendingChanges quedaba en true para siempre y TODOS los
-          // snapshots remotos se diferían: la otra sesión dejaba de reflejarse
-          // hasta la siguiente edición local.
-          this.hasPendingChanges = false;
           this._revBase = Number(dataParaFirestore.rev) || Number(this._revBase) || 0;
           this._snapshotRemotoDiferido = null;
-          this._productosBase = new Map(
-            (this.embarque.productos || []).map(p => [
-              p.id,
-              { obj: JSON.parse(JSON.stringify(p)), str: serializarEstable(p) }
-            ])
-          );
+          // La base de fusión es lo ESCRITO (dataParaFirestore), no el estado
+          // vivo: puede haber ediciones posteriores que no van en esta subida.
+          this.actualizarBasesSincronizadas(dataParaFirestore);
+          if ((Number(this._dirtyGen) || 0) === genCapturada) {
+            // El embarque abierto acaba de subirse: ya no hay cambios locales
+            // pendientes. Sin este reset, hasPendingChanges quedaba en true
+            // para siempre y TODOS los snapshots remotos se diferían: la otra
+            // sesión dejaba de reflejarse hasta la siguiente edición local.
+            this.hasPendingChanges = false;
+          } else {
+            // Hubo ediciones mientras se escribía: siguen pendientes. El
+            // markSynced de arriba dejó el registro offline como "synced";
+            // volver a guardarlo como pendiente para no perderlas si la app
+            // se cierra antes de la próxima subida.
+            await this.guardarSnapshotOffline({ pendingSync: true });
+            if (typeof this.programarSubidaEnVivo === 'function') {
+              this.programarSubidaEnVivo();
+            }
+          }
         }
       } catch (error) {
         console.error('[sincronizarRegistroOffline] Error al sincronizar embarque offline:', error);
@@ -412,6 +424,10 @@ export const embarqueSyncMixin = {
         if (!desdeModal) return Promise.resolve();
       }
 
+      // Generación de cambios locales: cada edición avanza el contador. Las
+      // subidas capturan la generación al armar su payload y solo declaran
+      // "sin pendientes" si nadie tecleó mientras la escritura viajaba.
+      this._dirtyGen = (Number(this._dirtyGen) || 0) + 1;
       this.hasPendingChanges = true;
       await this.guardarSnapshotOffline({ pendingSync: true });
 
@@ -427,6 +443,32 @@ export const embarqueSyncMixin = {
         }
       }
       return Promise.resolve();
+    },
+
+    /**
+     * Registra el documento recién escrito en la nube como la "última versión
+     * sincronizada" para las fusiones de 3 vías (productos, crudos por
+     * cliente y cargaCon). Debe recibir el payload ESCRITO, nunca el estado
+     * vivo: el estado vivo puede contener ediciones posteriores a la captura
+     * del payload que aún no están en la nube.
+     */
+    actualizarBasesSincronizadas(docData) {
+      const clientes = Array.isArray(docData && docData.clientes) ? docData.clientes : [];
+      this._productosBase = new Map(
+        clientes
+          .flatMap(c => (Array.isArray(c.productos) ? c.productos : []))
+          .map(p => [
+            p.id,
+            { obj: JSON.parse(JSON.stringify(p)), str: serializarEstable(p) }
+          ])
+      );
+      this._crudosBase = new Map(
+        clientes.map(c => [
+          String(c.id),
+          serializarEstable(Array.isArray(c.crudos) ? c.crudos : [])
+        ])
+      );
+      this._cargaConBase = (docData && docData.cargaCon) || '';
     },
 
     programarSubidaEnVivo(retrasoMs) {
@@ -463,8 +505,18 @@ export const embarqueSyncMixin = {
       try {
         const db = getFirestore();
         const embarqueRef = doc(db, 'embarques', this.embarqueId);
+        // Generación vigente al capturar el payload: si el usuario sigue
+        // tecleando mientras la transacción viaja a Firestore, la generación
+        // avanza y el estado NO puede declararse sincronizado al confirmar
+        // (esas teclas no van en este payload).
+        const genCapturada = Number(this._dirtyGen) || 0;
+        // Copia CONGELADA del estado a subir. prepararDatosEmbarque copia los
+        // productos de forma superficial y sus arrays (kilos/taras) quedaban
+        // compartidos con el estado vivo: las teclas escritas durante la
+        // transacción se colaban a medias en la escritura y en la base.
+        const docData = JSON.parse(JSON.stringify(this.prepararDatosEmbarque()));
         const payload = {
-          ...this.prepararDatosEmbarque(),
+          ...docData,
           ultimaEdicion: {
             userId: this.authStore.userId,
             username: this.authStore.user?.username || 'Usuario desconocido',
@@ -522,17 +574,26 @@ export const embarqueSyncMixin = {
 
         this._revBase = revEscrita;
         this._reintentosSubidaEnVivo = 0;
-        this.hasPendingChanges = false;
+        // Cualquier snapshot diferido es anterior a la revisión recién
+        // escrita (la transacción habría detectado conflicto si no): ya es
+        // obsoleto en ambos casos de abajo.
         this._snapshotRemotoDiferido = null;
-        // El estado local acaba de subirse tal cual: es la nueva base
-        // sincronizada para la fusión de 3 vías de productos.
-        this._productosBase = new Map(
-          (this.embarque.productos || []).map(p => [
-            p.id,
-            { obj: JSON.parse(JSON.stringify(p)), str: serializarEstable(p) }
-          ])
-        );
-        await this.guardarSnapshotOffline({ pendingSync: false, syncState: 'synced' });
+        // La nueva base de fusión de 3 vías es EXACTAMENTE lo que se escribió
+        // en la nube (el payload congelado), NO el estado vivo. El estado
+        // vivo puede traer ya teclas nuevas que no se subieron; registrarlas
+        // como "sincronizadas" hacía que el siguiente snapshot remoto las
+        // pisara: el campo que se estaba capturando se borraba solo.
+        this.actualizarBasesSincronizadas(docData);
+
+        if ((Number(this._dirtyGen) || 0) === genCapturada) {
+          this.hasPendingChanges = false;
+          await this.guardarSnapshotOffline({ pendingSync: false, syncState: 'synced', docData });
+        } else {
+          // El usuario tecleó mientras la transacción viajaba: esos cambios
+          // NO van en la revisión escrita y siguen pendientes de subir.
+          await this.guardarSnapshotOffline({ pendingSync: true });
+          this.programarSubidaEnVivo();
+        }
         console.log('[subirCambiosEnVivo] Cambios sincronizados con la nube (rev', revEscrita + ').');
       } catch (error) {
         console.error('[subirCambiosEnVivo] Error al subir cambios:', error);

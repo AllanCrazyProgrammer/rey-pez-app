@@ -110,7 +110,10 @@
 
         <div class="productos-container">
             <!-- Lista de productos -->
-            <ProductoItem v-for="(producto, index) in productos" :key="index" :producto="producto"
+            <!-- Key por id estable (no por índice): si otro editor inserta un
+                 producto y la lista se recorre, el key por índice re-enlazaba
+                 el input con foco a OTRO producto y lo tecleado "desaparecía". -->
+            <ProductoItem v-for="(producto, index) in productos" :key="producto.id || ('idx-' + index)" :producto="producto"
                 :embarque-bloqueado="embarqueBloqueado" :medidas-usadas="medidasUsadas" :medidas-configuracion="medidasConfiguracion" :nombre-cliente="nombreCliente"
                 :pedido-referencia-cliente="pedidoReferenciaPorCliente[clienteId] || null"
                 :totales-agrupados-por-clave="totalesAgrupadosPorClave"
