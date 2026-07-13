@@ -73,32 +73,44 @@ export default {
 
 <style scoped>
 .pedido-referencia {
-  margin-top: 4px;
-  font-size: 0.85rem;
-  color: #6c757d;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  padding: 5px 9px;
+  color: #41526a;
+  border: 1px solid #d3deea;
+  border-radius: 9px;
+  background: linear-gradient(135deg, #f8fbff, #eaf0f7);
+  box-shadow: inset 0 1px rgba(255,255,255,.82), 0 5px 12px rgba(15,23,42,.06);
+  font-size: .78rem;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .pedido-label {
-  font-weight: 600;
-  color: #495057;
+  color: #64748b;
+  font-size: .55rem;
+  font-weight: 850;
+  letter-spacing: .08em;
+  text-transform: uppercase;
 }
 
 .pedido-valor {
-  font-weight: 500;
+  font-size: .88rem;
+  font-weight: 950;
 }
 
 .pedido-valor.cumple {
-  color: #00a651;
+  color: #059669;
 }
 
 .pedido-valor.falta {
-  color: #e10600;
+  color: #e11d48;
 }
 
 .pedido-valor.neutro {
-  color: inherit;
+  color: #475569;
 }
 </style>

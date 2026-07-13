@@ -1,25 +1,34 @@
 <template>
   <div class="rendimientos-container">
     <div class="header-container">
-      <button @click="volverAEmbarque" class="btn-volver">
-        <i class="fas fa-arrow-left"></i> Volver al Embarque
-      </button>
-      <h2>Rendimientos por Medida</h2>
-      <button @click="abrirModalNota" class="btn-nota">
-        <i class="fas fa-sticky-note"></i> Agregar Nota
-      </button>
-      <button @click="irAGestionCostos" class="btn-costos">
-        <i class="fas fa-dollar-sign"></i> Gestión de Costos
-      </button>
-      <button @click="irAPreparacion" class="btn-preparacion">
-        <i class="fas fa-tasks"></i> Ir a Preparación
-      </button>
-      <button @click="abrirModalConfiguracion" class="btn-configuracion">
-        <i class="fas fa-cog"></i> Configurar Pesos
-      </button>
-      <button @click="generarPDF" class="btn-pdf">
-        <i class="fas fa-file-pdf"></i> Generar PDF
-      </button>
+      <div class="rendimientos-title-block">
+        <span class="rendimientos-title-icon"><i class="fas fa-chart-line"></i></span>
+        <div>
+          <span class="rendimientos-eyebrow">Control de producción</span>
+          <h2>Rendimientos por medida</h2>
+        </div>
+        <span class="medidas-counter">{{ medidasUnicas.length }} medidas</span>
+      </div>
+      <div class="header-actions">
+        <button type="button" @click="volverAEmbarque" class="btn-volver">
+          <i class="fas fa-arrow-left"></i> Embarque
+        </button>
+        <button type="button" @click="abrirModalNota" class="btn-nota">
+          <i class="fas fa-sticky-note"></i> Nota
+        </button>
+        <button type="button" @click="irAGestionCostos" class="btn-costos">
+          <i class="fas fa-dollar-sign"></i> Costos
+        </button>
+        <button type="button" @click="irAPreparacion" class="btn-preparacion">
+          <i class="fas fa-tasks"></i> Preparación
+        </button>
+        <button type="button" @click="abrirModalConfiguracion" class="btn-configuracion">
+          <i class="fas fa-cog"></i> Pesos
+        </button>
+        <button type="button" @click="generarPDF" class="btn-pdf">
+          <i class="fas fa-file-pdf"></i> PDF
+        </button>
+      </div>
     </div>
     
     <div class="resumen-header-row">
@@ -53,12 +62,22 @@
       </div>
       
       <div v-else class="rendimientos-grid">
-        <div v-for="(medida, index) in medidasUnicas" :key="index" class="rendimiento-card">
+        <div
+          v-for="(medida, index) in medidasUnicas"
+          :key="index"
+          class="rendimiento-card"
+          :class="{ 'rendimiento-pendiente': requiereCompletarMedida(medida) }"
+        >
           <div class="medida-info">
           <div class="medida-header">
-            <span class="medida-label editable-label" @click="editarNombreMedida(medida)">
-              {{ obtenerNombreMedidaPersonalizado(medida) }}
-            </span>
+            <div class="medida-identidad">
+              <span class="medida-label editable-label" @click="editarNombreMedida(medida)">
+                {{ obtenerNombreMedidaPersonalizado(medida) }}
+              </span>
+              <span v-if="requiereCompletarMedida(medida)" class="datos-pendientes">
+                <i class="fas fa-exclamation-triangle"></i> Completar
+              </span>
+            </div>
             <div class="controles-medida">
               <div class="ocultar-control">
                 <input 
@@ -102,7 +121,11 @@
           </div>
 
           
-          <div v-if="!esMedidaRefri(medida)" class="input-group">
+          <div
+            v-if="!esMedidaRefri(medida)"
+            class="input-group"
+            :class="{ 'grupo-cero-alerta': tieneEntradaPendiente(medida) && !medidaOculta[medida] }"
+          >
             <template v-if="esMedidaMix(medida)">
               <div class="mix-inputs">
                 <div class="mix-input">
@@ -112,6 +135,7 @@
                   <input 
                     type="number" 
                     v-model="kilosCrudos[medida].medida1" 
+                    :class="{ 'valor-cero-alerta': debeAlertarCero(medida, kilosCrudos[medida].medida1) }"
                     @input="calcularRendimiento(medida)"
                     placeholder="Kilos medida 1"
                   >
@@ -123,6 +147,7 @@
                   <input 
                     type="number" 
                     v-model="kilosCrudos[medida].medida2" 
+                    :class="{ 'valor-cero-alerta': debeAlertarCero(medida, kilosCrudos[medida].medida2) }"
                     @input="calcularRendimiento(medida)"
                     placeholder="Kilos medida 2"
                   >
@@ -134,27 +159,35 @@
               <input 
                 type="number" 
                 v-model="kilosCrudos[medida]" 
+                :class="{ 'valor-cero-alerta': debeAlertarCero(medida, kilosCrudos[medida]) }"
                 @input="calcularRendimiento(medida)"
                 placeholder="Ingrese kilos"
               >
             </template>
           </div>
 
-          <div v-else-if="analizarGanancia[medida]" class="input-group rendimiento-manual-group">
+          <div
+            v-else-if="analizarGanancia[medida]"
+            class="input-group rendimiento-manual-group"
+            :class="{ 'grupo-cero-alerta': debeAlertarCero(medida, rendimientoManual[medida]) }"
+          >
             <label>Rendimiento manual:</label>
             <input
               type="number"
               step="0.01"
               min="0"
               :value="rendimientoManual[medida] ?? ''"
+              :class="{ 'valor-cero-alerta': debeAlertarCero(medida, rendimientoManual[medida]) }"
               @input="actualizarRendimientoManual(medida, $event.target.value)"
               placeholder="Ej: 1.18"
             >
           </div>
           
           <div class="resultados">
-            <p>Total embarcado: {{ formatearNumero(obtenerTotalEmbarcado(medida)) }} kg</p>
-            <p class="rendimiento">
+            <p :class="{ 'valor-resumen-alerta': debeAlertarCero(medida, obtenerTotalEmbarcado(medida)) }">
+              Total embarcado: {{ formatearNumero(obtenerTotalEmbarcado(medida)) }} kg
+            </p>
+            <p class="rendimiento" :class="{ 'rendimiento-cero-alerta': debeAlertarCero(medida, obtenerRendimientoActual(medida)) }">
               Rendimiento: 
               <span :class="{ 'rendimiento-alto': getRendimiento(medida) > 1 }">
                 {{ getRendimiento(medida).toFixed(2) }}
@@ -2802,6 +2835,49 @@ export default {
       return rendimiento;
     },
 
+    debeAlertarCero(medida, valor) {
+      if (this.medidaOculta[medida]) return false;
+      return (Number(valor) || 0) <= 0;
+    },
+
+    obtenerRendimientoActual(medida) {
+      if (this.esMedidaRefri(medida) && this.analizarGanancia[medida]) {
+        return Number(this.rendimientoManual[medida]) || 0;
+      }
+
+      const totalEmbarcado = Number(this.obtenerTotalEmbarcado(medida)) || 0;
+      if (totalEmbarcado <= 0) return 0;
+
+      const valorCrudo = this.kilosCrudos[medida];
+      const kilosCrudos = this.esMedidaMix(medida)
+        ? (Number(valorCrudo?.medida1) || 0) + (Number(valorCrudo?.medida2) || 0)
+        : Number(valorCrudo) || 0;
+
+      return kilosCrudos / totalEmbarcado;
+    },
+
+    tieneEntradaPendiente(medida) {
+      if (this.esMedidaRefri(medida)) {
+        return Boolean(this.analizarGanancia[medida]) &&
+          (Number(this.rendimientoManual[medida]) || 0) <= 0;
+      }
+
+      if (this.esMedidaMix(medida)) {
+        const valores = this.kilosCrudos[medida] || {};
+        return (Number(valores.medida1) || 0) <= 0 ||
+          (Number(valores.medida2) || 0) <= 0;
+      }
+
+      return (Number(this.kilosCrudos[medida]) || 0) <= 0;
+    },
+
+    requiereCompletarMedida(medida) {
+      if (this.medidaOculta[medida]) return false;
+      return this.tieneEntradaPendiente(medida) ||
+        (Number(this.obtenerTotalEmbarcado(medida)) || 0) <= 0 ||
+        (Number(this.obtenerRendimientoActual(medida)) || 0) <= 0;
+    },
+
     getRendimiento(medida) {
       return this.calcularRendimiento(medida) || 0;
     },
@@ -4318,6 +4394,730 @@ input {
   .btn-configuracion {
     margin-left: 0;
     margin-right: 0;
+  }
+}
+
+/* Cabina visual de rendimientos */
+.rendimientos-container {
+  --rend-bg: #050914;
+  --rend-panel: rgba(11, 20, 36, .86);
+  --rend-border: rgba(148, 163, 184, .16);
+  --rend-text: #e8eef9;
+  --rend-muted: #8da0bd;
+  --rend-cyan: #38d9ff;
+  --rend-violet: #8b5cf6;
+  position: relative;
+  isolation: isolate;
+  min-height: 100vh;
+  overflow-x: hidden;
+  padding: clamp(14px, 2.4vw, 34px);
+  color: var(--rend-text);
+  background:
+    radial-gradient(circle at 84% 3%, rgba(56, 217, 255, .13), transparent 29rem),
+    radial-gradient(circle at 22% 34%, rgba(139, 92, 246, .1), transparent 34rem),
+    var(--rend-bg);
+  font-family: Inter, Roboto, 'Segoe UI', sans-serif;
+}
+
+.rendimientos-container::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: .2;
+  background-image:
+    linear-gradient(rgba(82, 104, 138, .16) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(82, 104, 138, .16) 1px, transparent 1px);
+  background-size: 42px 42px;
+  -webkit-mask-image: linear-gradient(to bottom, #000, transparent 86%);
+  mask-image: linear-gradient(to bottom, #000, transparent 86%);
+}
+
+.header-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  overflow: hidden;
+  margin: 0 0 10px;
+  padding: 11px 12px;
+  border: 1px solid var(--rend-border);
+  border-radius: 16px;
+  background: linear-gradient(125deg, rgba(18, 30, 52, .96), rgba(8, 15, 29, .91));
+  box-shadow: 0 24px 62px rgba(0, 0, 0, .34), inset 0 1px rgba(255, 255, 255, .07);
+  backdrop-filter: blur(22px);
+}
+
+.header-container::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(110deg, transparent 38%, rgba(255, 255, 255, .045) 48%, transparent 58%);
+  transform: translateX(-120%);
+  animation: rend-panel-scan 9s ease-in-out infinite;
+}
+
+.rendimientos-title-block,
+.header-actions {
+  position: relative;
+  z-index: 1;
+}
+
+.rendimientos-title-block {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+
+.rendimientos-title-icon {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  place-items: center;
+  color: #06101c;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #b8f4ff, var(--rend-cyan) 55%, var(--rend-violet));
+  box-shadow: 0 0 28px rgba(56, 217, 255, .3);
+}
+
+.rendimientos-eyebrow {
+  display: block;
+  margin-bottom: 2px;
+  color: #71839f;
+  font-size: .55rem;
+  font-weight: 850;
+  letter-spacing: .13em;
+  text-transform: uppercase;
+}
+
+.rendimientos-title-block h2 {
+  margin: 0;
+  color: #f8fbff;
+  font-size: clamp(1.08rem, 2vw, 1.42rem);
+  font-weight: 820;
+  letter-spacing: -.035em;
+  line-height: 1.05;
+}
+
+.medidas-counter {
+  padding: 5px 8px;
+  color: #a8efff;
+  border: 1px solid rgba(56, 217, 255, .2);
+  border-radius: 999px;
+  background: rgba(56, 217, 255, .07);
+  font-size: .62rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.header-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.header-actions .btn-volver,
+.header-actions .btn-nota,
+.header-actions .btn-costos,
+.header-actions .btn-preparacion,
+.header-actions .btn-configuracion,
+.header-actions .btn-pdf {
+  min-height: 31px;
+  margin: 0;
+  padding: 6px 9px;
+  gap: 6px;
+  color: #dbe7f8;
+  border: 1px solid rgba(148, 163, 184, .17);
+  border-radius: 9px;
+  background: rgba(20, 33, 55, .78);
+  box-shadow: inset 0 1px rgba(255, 255, 255, .06);
+  font-size: .7rem;
+  font-weight: 750;
+  line-height: 1;
+  transition: transform .18s ease, border-color .18s ease, background .18s ease, box-shadow .18s ease;
+}
+
+.header-actions .btn-volver:hover,
+.header-actions .btn-nota:hover,
+.header-actions .btn-costos:hover,
+.header-actions .btn-preparacion:hover,
+.header-actions .btn-configuracion:hover,
+.header-actions .btn-pdf:hover {
+  transform: translateY(-2px);
+  color: #fff;
+  border-color: rgba(56, 217, 255, .48);
+  background: rgba(28, 48, 78, .95);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, .2), 0 0 16px rgba(56, 217, 255, .07);
+}
+
+.header-actions button i { margin: 0; }
+.header-actions .btn-volver i { color: #93c5fd; }
+.header-actions .btn-nota i { color: #fbbf24; }
+.header-actions .btn-costos i { color: #4ade80; }
+.header-actions .btn-preparacion i { color: #38d9ff; }
+.header-actions .btn-configuracion i { color: #c4b5fd; }
+.header-actions .btn-pdf i { color: #fb7185; }
+
+.resumen-header-row {
+  margin: 0 0 12px;
+  padding: 5px;
+  border: 1px solid rgba(148, 163, 184, .12);
+  border-radius: 12px;
+  background: rgba(3, 8, 18, .42);
+  backdrop-filter: blur(14px);
+}
+
+.resumen-tabs { gap: 5px; }
+
+.resumen-tab-button {
+  min-height: 34px;
+  padding: 7px 12px;
+  color: #9aabc4;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: transparent;
+  box-shadow: none;
+  font-size: .76rem;
+  font-weight: 750;
+}
+
+.resumen-tab-button:hover {
+  color: #edf8ff;
+  border-color: rgba(56, 217, 255, .18);
+  background: rgba(56, 217, 255, .06);
+}
+
+.resumen-tab-button.activo {
+  color: #06101c;
+  border-color: rgba(184, 244, 255, .7);
+  background: linear-gradient(135deg, #b8f4ff, var(--rend-cyan));
+  box-shadow: 0 0 22px rgba(56, 217, 255, .2);
+}
+
+.rendimientos-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 315px), 1fr));
+  gap: 14px;
+  margin-top: 12px;
+}
+
+.rendimiento-card {
+  --card-accent: #38d9ff;
+  position: relative;
+  overflow: hidden;
+  padding: 14px;
+  color: #172033;
+  border: 1px solid rgba(255, 255, 255, .92);
+  border-radius: 18px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, .99), rgba(235, 242, 250, .97));
+  box-shadow: 0 16px 34px rgba(0, 6, 18, .22), inset 0 1px rgba(255, 255, 255, .92);
+  transition: transform .24s cubic-bezier(.22, 1, .36, 1), box-shadow .24s ease, border-color .24s ease;
+}
+
+.rendimiento-card:nth-child(4n + 2) { --card-accent: #8b5cf6; }
+.rendimiento-card:nth-child(4n + 3) { --card-accent: #10b981; }
+.rendimiento-card:nth-child(4n + 4) { --card-accent: #f59e0b; }
+
+.rendimiento-card.rendimiento-pendiente {
+  --card-accent: #f43f5e;
+  border-color: rgba(244, 63, 94, .72);
+  box-shadow: 0 18px 38px rgba(0, 6, 18, .24), 0 0 0 2px rgba(244, 63, 94, .16), 0 0 28px rgba(244, 63, 94, .2);
+}
+
+.rendimiento-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 14px;
+  left: 14px;
+  height: 3px;
+  border-radius: 0 0 5px 5px;
+  background: var(--card-accent);
+  box-shadow: 0 0 18px var(--card-accent);
+}
+
+.rendimiento-card:hover {
+  transform: translateY(-4px);
+  border-color: color-mix(in srgb, var(--card-accent) 40%, white);
+  box-shadow: 0 24px 48px rgba(0, 6, 18, .28), 0 0 24px color-mix(in srgb, var(--card-accent) 11%, transparent);
+}
+
+.medida-header {
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0 0 11px;
+  padding-bottom: 11px;
+  border-bottom: 1px solid #dce4ef;
+}
+
+.medida-identidad {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.datos-pendientes {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 8px;
+  color: #fff;
+  border: 1px solid #fb7185;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #e11d48, #be123c);
+  box-shadow: 0 6px 14px rgba(190, 18, 60, .23), 0 0 14px rgba(244, 63, 94, .2);
+  font-size: .66rem;
+  font-weight: 900;
+  letter-spacing: .055em;
+  text-transform: uppercase;
+  animation: alerta-cero-pulse 1.8s ease-in-out infinite;
+}
+
+.medida-label {
+  display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
+  margin: 0;
+  padding: 8px 11px;
+  color: #ecfbff;
+  border: 1px solid color-mix(in srgb, var(--card-accent) 65%, #fff);
+  border-radius: 11px;
+  background: linear-gradient(135deg, #0b5f78, #07364d);
+  box-shadow: 0 8px 18px rgba(6, 78, 99, .22), 0 0 18px color-mix(in srgb, var(--card-accent) 22%, transparent);
+  font-size: 1.08rem;
+  font-weight: 900;
+  line-height: 1.1;
+}
+
+.controles-medida {
+  min-width: 172px;
+  gap: 7px;
+  padding: 9px;
+  border: 1px solid #dae3ee;
+  border-radius: 10px;
+  background: rgba(235, 241, 248, .86);
+}
+
+.ocultar-control,
+.analizar-ganancia-control,
+.maquila-ganancia-control {
+  color: #52627a;
+  font-size: .82rem;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.rendimiento-card input[type='checkbox'] {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  margin: 0;
+  accent-color: var(--card-accent);
+  cursor: pointer;
+}
+
+.ocultar-control label,
+.analizar-ganancia-control label,
+.maquila-ganancia-control label {
+  margin: 0;
+  cursor: pointer;
+}
+
+.input-group,
+.rendimiento-manual-group {
+  margin: 10px 0;
+  padding: 9px;
+  border: 1px solid #dce4ef;
+  border-radius: 11px;
+  background: rgba(238, 243, 249, .82);
+}
+
+.input-group label,
+.rendimiento-manual-group label,
+.mix-input label {
+  margin-bottom: 4px;
+  color: #607087;
+  font-size: .68rem;
+  font-weight: 800;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.rendimiento-card input:not([type='checkbox']),
+.modal-content input,
+.modal-content textarea {
+  min-height: 38px;
+  padding: 7px 9px;
+  color: #172033;
+  border: 1px solid #d3deeb;
+  border-radius: 9px;
+  outline: none;
+  background: rgba(255, 255, 255, .94);
+  box-shadow: inset 0 1px 2px rgba(15, 23, 42, .04);
+  font-weight: 700;
+  transition: border-color .18s ease, box-shadow .18s ease;
+}
+
+.rendimiento-card input:not([type='checkbox']):focus,
+.modal-content input:focus,
+.modal-content textarea:focus {
+  border-color: #22b8dc;
+  box-shadow: 0 0 0 3px rgba(34, 184, 220, .13), 0 5px 14px rgba(15, 23, 42, .07);
+}
+
+.mix-inputs { gap: 8px; }
+
+.input-group.grupo-cero-alerta,
+.rendimiento-manual-group.grupo-cero-alerta {
+  border-color: rgba(244, 63, 94, .58);
+  background: linear-gradient(135deg, rgba(255, 228, 230, .9), rgba(255, 241, 242, .82));
+  box-shadow: 0 0 0 3px rgba(244, 63, 94, .08);
+}
+
+.rendimiento-card input.valor-cero-alerta:not([type='checkbox']) {
+  color: #be123c;
+  border: 2px solid #f43f5e;
+  background: #fff1f2;
+  box-shadow: 0 0 0 4px rgba(244, 63, 94, .11), inset 0 1px 2px rgba(190, 18, 60, .05);
+  font-weight: 950;
+}
+
+.rendimiento-card input.valor-cero-alerta:not([type='checkbox']):focus {
+  border-color: #e11d48;
+  box-shadow: 0 0 0 4px rgba(225, 29, 72, .18), 0 7px 18px rgba(190, 18, 60, .12);
+}
+
+.resultados {
+  margin-top: 10px;
+}
+
+.resultados > p {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0 0 7px;
+  padding: 8px 10px;
+  color: #53647b;
+  border: 1px solid #dce4ef;
+  border-radius: 10px;
+  background: rgba(241, 245, 249, .86);
+  font-size: .76rem;
+  font-weight: 750;
+}
+
+.resultados .rendimiento {
+  margin: 0 0 8px;
+  padding: 11px 12px;
+  color: #dff9ff;
+  border: 1px solid rgba(56, 217, 255, .45);
+  border-radius: 12px;
+  background: linear-gradient(135deg, #075d75, #062f45);
+  box-shadow: 0 10px 22px rgba(6, 78, 99, .2), 0 0 19px rgba(56, 217, 255, .13), inset 0 1px rgba(255, 255, 255, .12);
+}
+
+.resultados > p.valor-resumen-alerta {
+  color: #be123c;
+  border-color: rgba(244, 63, 94, .42);
+  background: #fff1f2;
+  box-shadow: 0 0 0 3px rgba(244, 63, 94, .07);
+}
+
+.resultados .rendimiento.rendimiento-cero-alerta {
+  color: #ffe4e6;
+  border-color: #fb7185;
+  background: linear-gradient(135deg, #be123c, #881337);
+  box-shadow: 0 10px 24px rgba(136, 19, 55, .3), 0 0 22px rgba(244, 63, 94, .24), inset 0 1px rgba(255, 255, 255, .14);
+}
+
+.resultados .rendimiento.rendimiento-cero-alerta span {
+  color: #fff;
+  text-shadow: 0 0 16px rgba(255, 228, 230, .65);
+}
+
+.rendimiento span {
+  color: #fff;
+  font-size: 1.45rem;
+  font-weight: 950;
+  letter-spacing: -.035em;
+  text-shadow: 0 0 17px rgba(56, 217, 255, .55);
+}
+
+.rendimiento .rendimiento-alto { color: #86efac; }
+
+.ganancia-info,
+.maquila-ganancia-info {
+  margin-top: 9px;
+  padding: 9px;
+  border: 1px solid #dbe5ef;
+  border-radius: 12px;
+  background: rgba(247, 250, 252, .9);
+}
+
+.ganancia-header h4,
+.maquila-ganancia-header h4 {
+  margin: 0 0 7px;
+  color: #26364b;
+  font-size: .82rem;
+  font-weight: 850;
+}
+
+.ganancia-detalles,
+.maquila-ganancia-detalles { gap: 5px; }
+
+.ganancia-item {
+  min-height: 34px;
+  padding: 6px 8px;
+  border-color: #e4ebf2;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.ganancia-item .label { color: #6b7b90; font-size: .7rem; }
+.ganancia-item .valor { color: #243247; font-size: .82rem; }
+
+.ganancia-total-item {
+  border-color: rgba(16, 185, 129, .28);
+  background: linear-gradient(90deg, rgba(16, 185, 129, .08), rgba(255, 255, 255, .94));
+}
+
+.ganancia-total-item .ganancia-total {
+  font-size: 1.08rem;
+  font-weight: 950;
+}
+
+.ganancia-positiva { color: #059669 !important; }
+.ganancia-negativa { color: #e11d48 !important; }
+
+.sin-precio-venta,
+.sin-datos-crudo {
+  border-color: rgba(245, 158, 11, .3);
+  border-radius: 10px;
+  background: rgba(254, 243, 199, .75);
+}
+
+.crudos-ganancias-section,
+.resumen-dia-panel,
+.medidas-hoy-panel {
+  margin-top: 14px;
+  padding: 14px;
+  color: var(--rend-text);
+  border: 1px solid var(--rend-border);
+  border-radius: 18px;
+  background: var(--rend-panel);
+  box-shadow: 0 22px 54px rgba(0, 0, 0, .28), inset 0 1px rgba(255, 255, 255, .05);
+  backdrop-filter: blur(20px);
+}
+
+.crudos-ganancias-section h2,
+.medidas-hoy-title {
+  margin: 0 0 12px;
+  color: #f3f8ff;
+  font-size: 1.22rem;
+  font-weight: 850;
+  letter-spacing: -.025em;
+  text-align: left;
+}
+
+.crudos-ganancias-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 315px), 1fr));
+  gap: 12px;
+}
+
+.crudo-ganancia-card {
+  padding: 14px;
+  color: #172033;
+  border: 1px solid rgba(255, 255, 255, .92);
+  border-radius: 15px;
+  background: linear-gradient(145deg, #fff, #edf3f9);
+  box-shadow: 0 14px 28px rgba(0, 6, 18, .2);
+}
+
+.crudo-ganancia-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 20px 38px rgba(0, 6, 18, .26), 0 0 20px rgba(56, 217, 255, .07);
+}
+
+.crudo-ganancia-header {
+  margin-bottom: 10px;
+  padding-bottom: 9px;
+  border-color: #dce4ef;
+}
+
+.crudo-ganancia-header h4 {
+  padding: 6px 9px;
+  color: #eafaff;
+  border-radius: 9px;
+  background: linear-gradient(135deg, #0b5f78, #07364d);
+  font-size: .95rem;
+}
+
+.crudo-ganancia-detalles { gap: 7px; }
+
+.detalles-clientes {
+  padding: 10px;
+  border-color: #dce4ef;
+  border-radius: 10px;
+  background: #eef3f8;
+}
+
+.detalle-cliente {
+  border-color: #e1e8f0;
+  border-radius: 8px;
+}
+
+.resumen-dia-total {
+  display: inline-flex;
+  margin: 0 7px 10px 0;
+  padding: 8px 11px;
+  color: #e5f9ff;
+  border: 1px solid rgba(56, 217, 255, .25);
+  border-radius: 10px;
+  background: rgba(56, 217, 255, .08);
+  font-size: .8rem;
+}
+
+.resumen-dia-panel h4 { color: #c8d8eb; }
+
+.resumen-dia-table {
+  overflow: hidden;
+  color: #dbe7f8;
+  border-radius: 10px;
+  background: rgba(4, 11, 23, .5);
+}
+
+.resumen-dia-table th,
+.resumen-dia-table td {
+  border-color: rgba(148, 163, 184, .14);
+}
+
+.resumen-dia-table th {
+  color: #a8efff;
+  background: rgba(56, 217, 255, .08);
+}
+
+.resumen-dia-estado,
+.medidas-hoy-fecha { color: #9fb0c8; }
+.resumen-dia-estado.error { color: #fda4af; }
+
+.medidas-hoy-panel ::v-deep .medidas-hoy-grid { gap: 12px; }
+
+.medidas-hoy-panel ::v-deep .medidas-hoy-card {
+  border-color: rgba(255, 255, 255, .88);
+  border-radius: 14px;
+  background: linear-gradient(145deg, #fff, #edf3f9);
+  box-shadow: 0 14px 28px rgba(0, 6, 18, .2);
+}
+
+.medidas-hoy-panel ::v-deep .medidas-hoy-card--ozuna {
+  border-color: rgba(16, 185, 129, .48);
+  background: linear-gradient(145deg, #f3fff9, #dff7eb);
+}
+
+.medidas-hoy-panel ::v-deep .medidas-hoy-totales-valor,
+.medidas-hoy-panel ::v-deep .medidas-hoy-limpios {
+  color: #075d75;
+  font-weight: 900;
+}
+
+.modal-overlay {
+  z-index: 10000;
+  padding: 16px;
+  background: rgba(2, 6, 15, .76);
+  backdrop-filter: blur(10px);
+}
+
+.modal-content {
+  padding: 18px;
+  color: #e8eef9;
+  border: 1px solid rgba(148, 163, 184, .2);
+  border-radius: 16px;
+  background: linear-gradient(145deg, rgba(19, 32, 54, .98), rgba(8, 16, 30, .98));
+  box-shadow: 0 30px 80px rgba(0, 0, 0, .52), inset 0 1px rgba(255, 255, 255, .07);
+}
+
+.modal-content h3,
+.config-item label { color: #f3f8ff; }
+.config-help { color: #8da0bd; }
+
+.modal-content textarea,
+.modal-content input {
+  color: #e8eef9;
+  border-color: rgba(148, 163, 184, .24);
+  background: rgba(3, 8, 18, .55);
+}
+
+.btn-guardar,
+.btn-cancelar {
+  min-height: 36px;
+  padding: 7px 13px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  font-weight: 800;
+}
+
+.btn-guardar {
+  color: #d1fae5;
+  border-color: rgba(74, 222, 128, .28);
+  background: rgba(16, 185, 129, .16);
+}
+
+.btn-cancelar {
+  color: #fecdd3;
+  border-color: rgba(251, 113, 133, .25);
+  background: rgba(244, 63, 94, .12);
+}
+
+@keyframes rend-panel-scan {
+  0%, 58% { transform: translateX(-120%); }
+  82%, 100% { transform: translateX(120%); }
+}
+
+@keyframes alerta-cero-pulse {
+  50% { box-shadow: 0 7px 16px rgba(190, 18, 60, .3), 0 0 22px rgba(244, 63, 94, .34); }
+}
+
+@media (max-width: 900px) {
+  .header-container { align-items: stretch; }
+  .rendimientos-title-block { width: 100%; }
+  .header-actions { width: 100%; justify-content: flex-start; }
+  .header-actions button { flex: 1 1 105px; justify-content: center; }
+}
+
+@media (max-width: 768px) {
+  .rendimientos-container { padding: 12px 12px 88px; }
+  .header-container { padding: 10px; }
+  .medidas-counter { margin-left: auto; }
+  .resumen-tabs { flex-direction: row; gap: 5px; }
+  .resumen-tab-button {
+    width: auto;
+    min-height: 36px;
+    padding: 8px 9px;
+    border-radius: 9px;
+    font-size: .72rem;
+  }
+  .medida-header { flex-direction: column; }
+  .controles-medida { width: 100%; min-width: 0; }
+  .mix-inputs { grid-template-columns: 1fr; }
+  .crudos-ganancias-section,
+  .resumen-dia-panel,
+  .medidas-hoy-panel { padding: 11px; border-radius: 15px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rendimientos-container,
+  .rendimientos-container * {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
   }
 }
 </style>

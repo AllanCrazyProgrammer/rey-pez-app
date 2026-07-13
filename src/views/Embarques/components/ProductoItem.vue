@@ -6,7 +6,8 @@
         'taras-no-reportadas': totalTaras > 0 && !coincideTaras,
         'producto-en-cero': totalTaras === 0 && totalTarasReportadas === 0,
         'medida-vacia': !producto.medida,
-        'selector-medidas-abierto': mostrarSugerencias && (sugerenciasMedidas.length > 0 || medidasConfiguracion.length > 0)
+        'selector-medidas-abierto': mostrarSugerencias === true && (sugerenciasMedidas.length > 0 || medidasConfiguracion.length > 0),
+        'selector-tipo-abierto': mostrarSugerencias === 'tipo'
     }">
         <!-- Checkbox de venta para Ozuna -->
         <div v-if="isClienteOzuna" class="venta-checkbox-container">
@@ -45,24 +46,35 @@
                     <template v-if="producto.tipo === 'c/h20'">
                         {{ producto.nombreAlternativoPDF || producto.medida || 'Sin Medida' }}
                         <span class="ch20-text">c/h20</span>
-                        <span v-if="producto.nombreAlternativoPDF" class="pdf-badge"
-                            title="Nombre personalizado para PDF">PDF</span>
+                        <span v-if="producto.nombreAlternativoPDF" class="pdf-identidad"
+                            title="Nombre personalizado para PDF y medida original">
+                            <span class="pdf-badge">PDF</span>
+                            <span class="medida-original">{{ producto.medida }}</span>
+                        </span>
                     </template>
                     <template v-else>
                         {{ producto.nombreAlternativoPDF || producto.medida || 'Sin Medida' }}
                         - {{ obtenerTipoProducto }}
-                        <span v-if="producto.nombreAlternativoPDF" class="pdf-badge"
-                            title="Nombre personalizado para PDF">PDF</span>
+                        <span v-if="producto.nombreAlternativoPDF" class="pdf-identidad"
+                            title="Nombre personalizado para PDF y medida original">
+                            <span class="pdf-badge">PDF</span>
+                            <span class="medida-original">{{ producto.medida }}</span>
+                        </span>
                     </template>
                 </span>
-                <PedidoReferencia
-                    :pedido-referencia="producto.pedidoReferencia"
-                    :total-kilos="totalesCompartidos.totalKilos"
-                    :total-taras="totalesCompartidos.totalTaras"
-                />
             </div>
-            <span v-if="producto.precio" class="precio-tag">${{ producto.precio }}</span>
         </h2>
+        <div v-if="mostrarIndicadoresProducto" class="producto-indicadores">
+            <PedidoReferencia
+                :pedido-referencia="producto.pedidoReferencia"
+                :total-kilos="totalesCompartidos.totalKilos"
+                :total-taras="totalesCompartidos.totalTaras"
+            />
+            <span v-if="producto.precio" class="precio-tag">
+                <span class="precio-tag-label">Venta</span>
+                <strong>${{ producto.precio }}</strong>
+            </span>
+        </div>
         <div class="producto-header">
             <div class="medida-input-container">
                 <input 
@@ -81,7 +93,7 @@
                     Alt
                 </button>
                 <!-- Sugerencias de medidas personalizadas y dropdown -->
-                <div v-if="mostrarSugerencias && (sugerenciasMedidas.length > 0 || medidasConfiguracion.length > 0)" class="sugerencias-container">
+                <div v-if="mostrarSugerencias === true && (sugerenciasMedidas.length > 0 || medidasConfiguracion.length > 0)" class="sugerencias-container">
                     <!-- Medidas configuradas que coinciden -->
                     <div v-if="medidasConfiguradas.length > 0" class="sugerencias-seccion">
                         <div class="sugerencias-titulo">Medidas configuradas:</div>
@@ -109,15 +121,84 @@
                 </div>
             </div>
             
-            <select v-model="producto.tipo" class="form-control tipo-select" @change="onTipoChange" :class="{
-                'tipo-azul': producto.tipo === 'c/h20',
-                'tipo-verde': producto.tipo === 's/h20'
-            }" :disabled="embarqueBloqueado">
-                <option value="">Seleccionar</option>
-                <option value="s/h20">S/H20</option>
-                <option value="c/h20">C/H20</option>
-                <option value="otro">Otro</option>
-            </select>
+            <div
+                class="tipo-dropdown"
+                :class="{
+                    'tipo-c-h20': producto.tipo === 'c/h20',
+                    'tipo-s-h20': producto.tipo === 's/h20',
+                    'tipo-otro': producto.tipo === 'otro',
+                    'abierto': mostrarSugerencias === 'tipo'
+                }"
+                @focusout="!$event.currentTarget.contains($event.relatedTarget) && (mostrarSugerencias = false)"
+                @keydown.esc.stop="mostrarSugerencias = false"
+            >
+                <button
+                    type="button"
+                    class="tipo-trigger"
+                    :disabled="embarqueBloqueado"
+                    :aria-expanded="mostrarSugerencias === 'tipo' ? 'true' : 'false'"
+                    aria-haspopup="listbox"
+                    @click="mostrarSugerencias = mostrarSugerencias === 'tipo' ? false : 'tipo'"
+                >
+                    <span class="tipo-dot"></span>
+                    <span class="tipo-trigger-texto">
+                        {{ producto.tipo === 's/h20' ? 'S/H20' : producto.tipo === 'c/h20' ? 'C/H20' : producto.tipo === 'otro' ? 'Otro' : 'Seleccionar' }}
+                    </span>
+                    <i class="fas fa-chevron-down tipo-chevron"></i>
+                </button>
+                <transition name="tipo-menu">
+                    <div v-if="mostrarSugerencias === 'tipo'" class="tipo-menu" role="listbox" aria-label="Tipo de producto">
+                        <button
+                            type="button"
+                            class="tipo-opcion tipo-neutro"
+                            :class="{ 'activa': producto.tipo === '' }"
+                            role="option"
+                            :aria-selected="producto.tipo === '' ? 'true' : 'false'"
+                            @click="producto.tipo = ''; mostrarSugerencias = false; onTipoChange()"
+                        >
+                            <span class="tipo-opcion-dot"></span>
+                            <span>Seleccionar</span>
+                            <i v-if="producto.tipo === ''" class="fas fa-check"></i>
+                        </button>
+                        <button
+                            type="button"
+                            class="tipo-opcion tipo-s-h20"
+                            :class="{ 'activa': producto.tipo === 's/h20' }"
+                            role="option"
+                            :aria-selected="producto.tipo === 's/h20' ? 'true' : 'false'"
+                            @click="producto.tipo = 's/h20'; mostrarSugerencias = false; onTipoChange()"
+                        >
+                            <span class="tipo-opcion-dot"></span>
+                            <span>S/H20</span>
+                            <i v-if="producto.tipo === 's/h20'" class="fas fa-check"></i>
+                        </button>
+                        <button
+                            type="button"
+                            class="tipo-opcion tipo-c-h20"
+                            :class="{ 'activa': producto.tipo === 'c/h20' }"
+                            role="option"
+                            :aria-selected="producto.tipo === 'c/h20' ? 'true' : 'false'"
+                            @click="producto.tipo = 'c/h20'; mostrarSugerencias = false; onTipoChange()"
+                        >
+                            <span class="tipo-opcion-dot"></span>
+                            <span>C/H20</span>
+                            <i v-if="producto.tipo === 'c/h20'" class="fas fa-check"></i>
+                        </button>
+                        <button
+                            type="button"
+                            class="tipo-opcion tipo-otro"
+                            :class="{ 'activa': producto.tipo === 'otro' }"
+                            role="option"
+                            :aria-selected="producto.tipo === 'otro' ? 'true' : 'false'"
+                            @click="producto.tipo = 'otro'; mostrarSugerencias = false; onTipoChange()"
+                        >
+                            <span class="tipo-opcion-dot"></span>
+                            <span>Otro</span>
+                            <i v-if="producto.tipo === 'otro'" class="fas fa-check"></i>
+                        </button>
+                    </div>
+                </transition>
+            </div>
 
             <input v-if="producto.tipo === 'otro'" type="text" v-model="producto.tipoPersonalizado"
                 class="form-control tipo-input" placeholder="Especificar" :disabled="embarqueBloqueado">
@@ -383,6 +464,18 @@ export default {
                 return { totalKilos: this.totalKilos, totalTaras: this.totalTaras };
             }
             return this.totalesAgrupadosPorClave[this.claveReferenciaProducto];
+        },
+
+        tienePedidoReferencia() {
+            const referencia = this.producto.pedidoReferencia || {};
+            const normalizar = valor => Number(
+                typeof valor === 'string' ? valor.replace(',', '.') : (valor || 0)
+            ) || 0;
+            return normalizar(referencia.kilos) > 0 || normalizar(referencia.taras) > 0;
+        },
+
+        mostrarIndicadoresProducto() {
+            return Boolean(this.producto.precio) || this.tienePedidoReferencia;
         },
 
         // Total de taras reportadas
@@ -1070,6 +1163,30 @@ export default {
     margin-left: 5px;
 }
 
+.pdf-identidad {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: 6px;
+    white-space: nowrap;
+}
+
+.pdf-identidad .pdf-badge {
+    margin-left: 0;
+}
+
+.medida-original {
+    padding: 2px 5px;
+    color: rgba(226, 245, 250, .78);
+    border: 1px solid rgba(184, 244, 255, .18);
+    border-radius: 6px;
+    background: rgba(2, 14, 24, .25);
+    font-size: .70rem;
+    font-weight: 750;
+    letter-spacing: .01em;
+    line-height: 1.15;
+}
+
 .precio-tag {
     color: #27ae60;
     font-weight: bold;
@@ -1091,7 +1208,7 @@ export default {
 
 .medida-input {
     width: 100%;
-    padding: 8px;
+    padding: 8px 52px 8px 8px;
     border: 1px solid #ddd;
     border-radius: 4px;
 }
@@ -1574,12 +1691,50 @@ export default {
 }
 
 .precio-tag {
-    padding: 5px 8px;
-    color: #087a55;
-    border: 1px solid rgba(16,185,129,.2);
-    border-radius: 8px;
-    background: rgba(16,185,129,.08);
-    font-size: .8rem;
+    display: inline-flex;
+    min-height: 30px;
+    align-items: center;
+    gap: 7px;
+    padding: 5px 9px;
+    color: #065f46;
+    border: 1px solid rgba(16,185,129,.28);
+    border-radius: 9px;
+    background: linear-gradient(135deg, rgba(209,250,229,.94), rgba(236,253,245,.96));
+    box-shadow: inset 0 1px rgba(255,255,255,.8), 0 5px 12px rgba(5,150,105,.08);
+    font-size: .78rem;
+    line-height: 1;
+    white-space: nowrap;
+}
+
+.precio-tag-label {
+    color: #568074;
+    font-size: .55rem;
+    font-weight: 850;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+}
+
+.precio-tag strong {
+    color: #047857;
+    font-size: .9rem;
+    font-weight: 950;
+}
+
+.producto-indicadores {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: -5px 0 10px;
+    padding: 6px;
+    border: 1px solid #dfe7f0;
+    border-radius: 11px;
+    background: rgba(237,242,248,.68);
+}
+
+.producto-indicadores > * {
+    flex: 0 0 auto;
 }
 
 .botones-encabezado {
@@ -1615,8 +1770,20 @@ export default {
 .kg-checkbox { accent-color: #38a9c7; }
 
 .producto-header {
+    align-items: stretch;
+    flex-wrap: wrap;
     gap: 7px;
     margin-bottom: 13px;
+}
+
+.producto-header .medida-input-container {
+    width: 100%;
+    flex: 1 0 100%;
+}
+
+.producto-header .tipo-input {
+    min-width: 0;
+    flex: 1 1 120px;
 }
 
 .medida-input,
@@ -1663,6 +1830,186 @@ export default {
     border-color: rgba(16,185,129,.32);
     background: #eafbf4;
 }
+
+.tipo-dropdown {
+    position: relative;
+    min-width: 0;
+    flex: 1 1 140px;
+}
+
+.tipo-trigger {
+    display: flex;
+    width: 100%;
+    min-height: 38px;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 10px;
+    color: #53647a;
+    border: 1px solid #d5deea;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #fff, #eef3f8);
+    box-shadow: inset 0 1px rgba(255,255,255,.9), 0 5px 12px rgba(15,23,42,.05);
+    cursor: pointer;
+    font-size: .78rem;
+    font-weight: 850;
+    letter-spacing: .015em;
+    transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease, background .18s ease;
+}
+
+.tipo-trigger:hover:not(:disabled),
+.tipo-dropdown.abierto .tipo-trigger {
+    transform: translateY(-1px);
+    border-color: rgba(56,217,255,.52);
+    box-shadow: 0 7px 17px rgba(15,23,42,.11), 0 0 0 3px rgba(56,217,255,.08);
+}
+
+.tipo-trigger:disabled { opacity: .58; cursor: not-allowed; }
+
+.tipo-dot,
+.tipo-opcion-dot {
+    width: 8px;
+    height: 8px;
+    flex: 0 0 8px;
+    border-radius: 50%;
+    background: #94a3b8;
+    box-shadow: 0 0 0 4px rgba(148,163,184,.12);
+}
+
+.tipo-trigger-texto {
+    overflow: hidden;
+    flex: 1;
+    text-align: left;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.tipo-chevron {
+    color: currentColor;
+    font-size: .62rem;
+    transition: transform .18s ease;
+}
+
+.tipo-dropdown.abierto .tipo-chevron { transform: rotate(180deg); }
+
+.tipo-dropdown.tipo-c-h20 .tipo-trigger {
+    color: #eaf8ff;
+    border-color: #38bdf8;
+    background: linear-gradient(135deg, #0f79b5, #075985);
+    box-shadow: 0 7px 16px rgba(2,132,199,.2), inset 0 1px rgba(255,255,255,.16);
+}
+
+.tipo-dropdown.tipo-c-h20 .tipo-dot,
+.tipo-opcion.tipo-c-h20 .tipo-opcion-dot {
+    background: #38bdf8;
+    box-shadow: 0 0 0 4px rgba(56,189,248,.16), 0 0 13px rgba(56,189,248,.7);
+}
+
+.tipo-dropdown.tipo-s-h20 .tipo-trigger {
+    color: #ecfdf5;
+    border-color: #34d399;
+    background: linear-gradient(135deg, #0c8b68, #047857);
+    box-shadow: 0 7px 16px rgba(5,150,105,.18), inset 0 1px rgba(255,255,255,.16);
+}
+
+.tipo-dropdown.tipo-s-h20 .tipo-dot,
+.tipo-opcion.tipo-s-h20 .tipo-opcion-dot {
+    background: #34d399;
+    box-shadow: 0 0 0 4px rgba(52,211,153,.15), 0 0 13px rgba(52,211,153,.6);
+}
+
+.tipo-dropdown.tipo-otro .tipo-trigger {
+    color: #f5f3ff;
+    border-color: #a78bfa;
+    background: linear-gradient(135deg, #7c3aed, #5b21b6);
+    box-shadow: 0 7px 16px rgba(124,58,237,.18), inset 0 1px rgba(255,255,255,.16);
+}
+
+.tipo-dropdown.tipo-otro .tipo-dot,
+.tipo-opcion.tipo-otro .tipo-opcion-dot {
+    background: #a78bfa;
+    box-shadow: 0 0 0 4px rgba(167,139,250,.15), 0 0 13px rgba(167,139,250,.6);
+}
+
+.tipo-menu {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    left: 0;
+    z-index: 95;
+    display: grid;
+    min-width: 170px;
+    gap: 4px;
+    padding: 6px;
+    color: #dce7f6;
+    border: 1px solid rgba(148,163,184,.22);
+    border-radius: 12px;
+    background: linear-gradient(145deg, rgba(18,30,52,.99), rgba(7,14,27,.99));
+    box-shadow: 0 20px 42px rgba(2,6,23,.42), inset 0 1px rgba(255,255,255,.07), 0 0 20px rgba(56,217,255,.07);
+    backdrop-filter: blur(18px);
+}
+
+.tipo-opcion {
+    display: flex;
+    width: 100%;
+    min-height: 36px;
+    align-items: center;
+    gap: 9px;
+    padding: 7px 9px;
+    color: #b9c7da;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    background: transparent;
+    cursor: pointer;
+    font-size: .76rem;
+    font-weight: 800;
+    text-align: left;
+    transition: border-color .16s ease, background .16s ease, color .16s ease, transform .16s ease;
+}
+
+.tipo-opcion span:nth-child(2) { flex: 1; }
+.tipo-opcion i { color: #a8efff; font-size: .65rem; }
+
+.tipo-opcion:hover,
+.tipo-opcion.activa {
+    transform: translateX(2px);
+    color: #fff;
+    border-color: rgba(148,163,184,.18);
+    background: rgba(255,255,255,.07);
+}
+
+.tipo-opcion.tipo-c-h20:hover,
+.tipo-opcion.tipo-c-h20.activa {
+    color: #dff6ff;
+    border-color: rgba(56,189,248,.32);
+    background: rgba(14,165,233,.14);
+}
+
+.tipo-opcion.tipo-s-h20:hover,
+.tipo-opcion.tipo-s-h20.activa {
+    color: #dcfce7;
+    border-color: rgba(52,211,153,.3);
+    background: rgba(16,185,129,.13);
+}
+
+.tipo-opcion.tipo-otro:hover,
+.tipo-opcion.tipo-otro.activa {
+    color: #ede9fe;
+    border-color: rgba(167,139,250,.32);
+    background: rgba(139,92,246,.14);
+}
+
+.tipo-menu-enter-active,
+.tipo-menu-leave-active { transition: opacity .15s ease, transform .15s ease; }
+.tipo-menu-enter,
+.tipo-menu-leave-to { opacity: 0; transform: translateY(-5px) scale(.98); }
+
+.producto.selector-tipo-abierto {
+    z-index: 72;
+    overflow: visible;
+}
+
+.producto.selector-tipo-abierto .producto-header { z-index: 78; }
+.producto.selector-tipo-abierto::after { display: none; }
 
 .btn-alt {
     right: 6px;
