@@ -97,4 +97,4 @@ export const useAuthStore = defineStore('auth', {
     isLoggedIn: (state) => state.isAuthenticated,
     currentUser: (state) => state.user
   }
-}) 
+})

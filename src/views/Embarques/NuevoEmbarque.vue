@@ -892,18 +892,6 @@ export default {
         
       }
     },
-    seleccionarMedida(medida) {
-      if (this.productoSeleccionado) {
-        this.productoSeleccionado.medida = medida;
-        this.mostrarSugerencias = false;
-        this.productoSeleccionado.isEditing = true;
-        this.$nextTick(() => {
-          setTimeout(() => {
-            this.productoSeleccionado.isEditing = false;
-          }, 100);
-        });
-      }
-    },
     // Métodos de gestión de productos y clientes
     actualizarProductosCliente(clienteId, productos) {
       // Filtrar productos que no han sido eliminados localmente
@@ -2298,5 +2286,159 @@ input[type="number"]::-webkit-outer-spin-button {
   padding: 10px;
   border-radius: 8px;
   justify-content: center;
+}
+
+/* Rediseño 2026: cabina logística */
+.nuevo-embarque-container {
+  --bg-profundo: #050914;
+  --panel: rgba(12, 20, 36, 0.82);
+  --borde: rgba(148, 163, 184, 0.16);
+  --texto: #e8eef9;
+  --texto-suave: #8da0bd;
+  --cian: #38d9ff;
+  --violeta: #8b5cf6;
+  isolation: isolate;
+  overflow-x: hidden;
+  background:
+    radial-gradient(circle at 76% 4%, rgba(56, 217, 255, 0.12), transparent 30rem),
+    radial-gradient(circle at 38% 28%, rgba(139, 92, 246, 0.1), transparent 36rem),
+    var(--bg-profundo);
+}
+
+.nuevo-embarque-container::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.22;
+  background-image:
+    linear-gradient(rgba(82, 104, 138, 0.16) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(82, 104, 138, 0.16) 1px, transparent 1px);
+  background-size: 42px 42px;
+  -webkit-mask-image: linear-gradient(to bottom, black, transparent 85%);
+  mask-image: linear-gradient(to bottom, black, transparent 85%);
+}
+
+.nuevo-embarque {
+  position: relative;
+  z-index: 1;
+  margin-left: 176px;
+  width: calc(100% - 176px);
+  min-width: 0;
+  padding: clamp(18px, 2.5vw, 36px);
+  color: var(--texto);
+  background: transparent;
+  font-family: Inter, Roboto, 'Segoe UI', sans-serif;
+  transition: margin-left 0.45s cubic-bezier(.22, 1, .36, 1), width 0.45s cubic-bezier(.22, 1, .36, 1);
+}
+
+.nuevo-embarque.sidebar-collapsed {
+  width: calc(100% - 76px);
+  margin-left: 76px;
+}
+
+.nuevo-embarque form {
+  position: relative;
+  z-index: 1;
+}
+
+.banner-colaboracion {
+  margin: 0 0 18px;
+  padding: 14px 18px;
+  color: #bfefff;
+  background: linear-gradient(90deg, rgba(56, 217, 255, 0.16), rgba(56, 217, 255, 0.05));
+  border: 1px solid rgba(56, 217, 255, 0.28);
+  border-left: 3px solid var(--cian);
+  border-radius: 14px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.18), inset 0 1px rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(16px);
+}
+
+.banner-colaboracion-icono {
+  filter: drop-shadow(0 0 8px var(--cian));
+}
+
+.botones-undo-redo {
+  justify-content: flex-end;
+  gap: 8px;
+  margin: 0 0 16px;
+}
+
+.botones-undo-redo .btn,
+.scale-control-resumen .btn {
+  border: 1px solid var(--borde);
+  border-radius: 999px;
+  color: #dbe7f8;
+  background: rgba(16, 27, 47, 0.76);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.06);
+  transition: transform .2s ease, border-color .2s ease, background .2s ease;
+}
+
+.botones-undo-redo .btn:hover:not(:disabled),
+.scale-control-resumen .btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  border-color: rgba(56, 217, 255, 0.48);
+  background: rgba(27, 45, 74, 0.92);
+}
+
+.botones-undo-redo .btn:disabled { opacity: .35; }
+
+.scale-control-resumen {
+  margin: 0 0 18px;
+  padding: 16px 20px;
+  color: var(--texto);
+  background: var(--panel);
+  border: 1px solid var(--borde);
+  border-radius: 18px;
+  box-shadow: 0 18px 44px rgba(0, 0, 0, .24);
+  backdrop-filter: blur(18px);
+}
+
+.scale-slider { accent-color: var(--cian); }
+
+.scale-value {
+  min-width: 52px;
+  color: var(--cian);
+  font-weight: 800;
+}
+
+@media (max-width: 768px) {
+  .nuevo-embarque {
+    width: calc(100% - 150px);
+    margin-left: 150px;
+    padding: 18px;
+  }
+
+  .nuevo-embarque.sidebar-collapsed {
+    width: calc(100% - 64px);
+    margin-left: 64px;
+  }
+
+  .scale-control-resumen {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 576px) {
+  .nuevo-embarque,
+  .nuevo-embarque.sidebar-collapsed {
+    width: 100%;
+    margin-left: 0;
+    padding: 14px 14px 96px;
+  }
+
+  .botones-undo-redo { justify-content: center; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nuevo-embarque,
+  .nuevo-embarque * {
+    scroll-behavior: auto !important;
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
 }
 </style>

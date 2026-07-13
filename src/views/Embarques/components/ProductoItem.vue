@@ -5,7 +5,8 @@
         'taras-reportadas': coincideTaras,
         'taras-no-reportadas': totalTaras > 0 && !coincideTaras,
         'producto-en-cero': totalTaras === 0 && totalTarasReportadas === 0,
-        'medida-vacia': !producto.medida
+        'medida-vacia': !producto.medida,
+        'selector-medidas-abierto': mostrarSugerencias && (sugerenciasMedidas.length > 0 || medidasConfiguracion.length > 0)
     }">
         <!-- Checkbox de venta para Ozuna -->
         <div v-if="isClienteOzuna" class="venta-checkbox-container">
@@ -85,7 +86,7 @@
                     <div v-if="medidasConfiguradas.length > 0" class="sugerencias-seccion">
                         <div class="sugerencias-titulo">Medidas configuradas:</div>
                         <div v-for="medida in medidasConfiguradas" :key="'config-' + medida" class="sugerencia-item config-medida"
-                            @mousedown="seleccionarMedida(medida)">
+                            @pointerdown.prevent="seleccionarMedida(medida)">
                             <i class="fas fa-star"></i> {{ medida }}
                         </div>
                     </div>
@@ -93,7 +94,7 @@
                     <div v-if="sugerenciasMedidas.length > 0" class="sugerencias-seccion">
                         <div class="sugerencias-titulo">Medidas usadas anteriormente:</div>
                         <div v-for="medida in sugerenciasMedidas" :key="'hist-' + medida" class="sugerencia-item hist-medida"
-                            @mousedown="seleccionarMedida(medida)">
+                            @pointerdown.prevent="seleccionarMedida(medida)">
                             <i class="fas fa-history"></i> {{ medida }}
                         </div>
                     </div>
@@ -101,7 +102,7 @@
                     <div v-if="mostrarTodasLasMedidasDisponibles" class="sugerencias-seccion">
                         <div class="sugerencias-titulo">Todas las medidas disponibles:</div>
                         <div v-for="medida in medidasConfiguracion" :key="'all-' + medida" class="sugerencia-item all-medida"
-                            @mousedown="seleccionarMedida(medida)">
+                            @pointerdown.prevent="seleccionarMedida(medida)">
                             {{ medida }}
                         </div>
                     </div>
@@ -1491,5 +1492,365 @@ export default {
 .producto[data-es-venta="true"] {
     border-left: 4px solid #07711e;
     background-color: rgba(7, 113, 30, 0.05);
+}
+
+/* Tarjeta técnica de producto */
+.producto {
+    overflow: hidden;
+    padding: 15px;
+    color: #172033;
+    border: 1px solid rgba(255,255,255,.9);
+    border-radius: 18px;
+    background:
+        linear-gradient(145deg, rgba(255,255,255,.98), rgba(236,242,250,.96)),
+        #f5f8fc;
+    box-shadow: 0 14px 30px rgba(0, 6, 18, .18), inset 0 1px rgba(255,255,255,.9);
+    transition: transform .25s cubic-bezier(.22,1,.36,1), box-shadow .25s ease, border-color .25s ease;
+}
+
+.producto::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    border-radius: inherit;
+    background: linear-gradient(118deg, transparent 30%, rgba(255,255,255,.72) 48%, transparent 66%);
+    transform: translateX(-120%);
+    transition: transform .7s ease;
+}
+
+.producto:hover {
+    z-index: 2;
+    transform: translateY(-4px);
+    border-color: rgba(56, 217, 255, .5);
+    box-shadow: 0 22px 44px rgba(0, 6, 18, .25), 0 0 24px rgba(56,217,255,.08);
+}
+
+.producto:hover::after { transform: translateX(120%); }
+.producto > * { position: relative; z-index: 1; }
+
+.encabezado-medida {
+    align-items: flex-start;
+    margin-bottom: 12px;
+    padding-bottom: 12px;
+    border-color: #dce4ef;
+}
+
+.medida-texto {
+    display: inline-flex;
+    width: fit-content;
+    max-width: 100%;
+    align-items: center;
+    flex-wrap: wrap;
+    padding: 8px 11px;
+    color: #ecfbff;
+    border: 1px solid rgba(56,217,255,.5);
+    border-radius: 11px;
+    background: linear-gradient(135deg, #0b5f78, #07364d);
+    box-shadow: 0 8px 18px rgba(6,78,99,.22), 0 0 18px rgba(56,217,255,.16), inset 0 1px rgba(255,255,255,.13);
+    font-size: 1.22rem;
+    font-weight: 900;
+    letter-spacing: -.015em;
+    line-height: 1.1;
+}
+
+.medida-texto:hover:not(.disabled) {
+    color: #fff;
+    border-color: #8eeeff;
+    box-shadow: 0 10px 22px rgba(6,78,99,.27), 0 0 25px rgba(56,217,255,.25), inset 0 1px rgba(255,255,255,.16);
+}
+
+.medida-texto .ch20-text {
+    margin-left: 5px;
+    color: #9bedff;
+    font-weight: 800;
+}
+
+.medida-texto.tiene-nombre-alternativo {
+    color: #effff8;
+    border-color: rgba(52,211,153,.58);
+    background: linear-gradient(135deg, #08765a, #064d3d);
+    box-shadow: 0 8px 18px rgba(4,120,87,.22), 0 0 18px rgba(52,211,153,.17), inset 0 1px rgba(255,255,255,.13);
+}
+
+.precio-tag {
+    padding: 5px 8px;
+    color: #087a55;
+    border: 1px solid rgba(16,185,129,.2);
+    border-radius: 8px;
+    background: rgba(16,185,129,.08);
+    font-size: .8rem;
+}
+
+.botones-encabezado {
+    margin-right: 10px;
+    padding: 5px;
+    border: 1px solid #dce4ef;
+    border-radius: 11px;
+    background: #edf2f8;
+}
+
+.botones-fila-superior,
+.botones-fila-inferior { margin-bottom: 3px; }
+
+.btn-precio,
+.btn-hilos,
+.btn-nota {
+    width: 26px;
+    height: 26px;
+    color: #52627a;
+    border-color: #d3dce9;
+    border-radius: 8px;
+    background: #fff;
+    font-size: .68rem;
+    font-weight: 800;
+    transition: transform .18s ease, box-shadow .18s ease;
+}
+
+.btn-precio:hover,
+.btn-hilos:hover,
+.btn-nota:hover { transform: translateY(-1px); box-shadow: 0 5px 10px rgba(30,41,59,.12); }
+
+.kg-radio { color: #617087; font-size: .66rem; }
+.kg-checkbox { accent-color: #38a9c7; }
+
+.producto-header {
+    gap: 7px;
+    margin-bottom: 13px;
+}
+
+.medida-input,
+.form-control,
+.tara-input,
+.kilo-input,
+.reporte-input,
+.camaron-neto-input {
+    min-height: 38px;
+    color: #172033;
+    border: 1px solid #d5deea;
+    border-radius: 10px;
+    outline: 0;
+    background: rgba(255,255,255,.92);
+    box-shadow: inset 0 1px 2px rgba(15,23,42,.04);
+    transition: border-color .18s ease, box-shadow .18s ease, background .18s ease;
+}
+
+.medida-input:focus,
+.form-control:focus,
+.tara-input:focus,
+.kilo-input:focus,
+.reporte-input:focus,
+.camaron-neto-input:focus {
+    border-color: #22b8dc;
+    background: #fff;
+    box-shadow: 0 0 0 3px rgba(34,184,220,.13), 0 5px 14px rgba(15,23,42,.07);
+}
+
+.tipo-select {
+    min-width: 104px;
+    font-size: .78rem;
+    font-weight: 700;
+}
+
+.tipo-azul {
+    color: #075985;
+    border-color: rgba(14,165,233,.35);
+    background: #e8f7ff;
+}
+
+.tipo-verde {
+    color: #047857;
+    border-color: rgba(16,185,129,.32);
+    background: #eafbf4;
+}
+
+.btn-alt {
+    right: 6px;
+    color: #52627a;
+    border: 0;
+    border-radius: 7px;
+    background: #e8eef6;
+    font-weight: 750;
+}
+
+.sugerencias-container {
+    top: calc(100% + 4px);
+    right: 0;
+    left: 0;
+    overflow: hidden auto;
+    width: 100%;
+    margin-top: 0;
+    color: #1e293b;
+    border: 1px solid #cfd9e6;
+    border-radius: 12px;
+    background: rgba(255,255,255,.98);
+    box-shadow: 0 18px 42px rgba(15,23,42,.2);
+    z-index: 80;
+}
+
+/* El menú debe escapar de la tarjeta y quedar sobre Taras/Kilos y las
+   tarjetas vecinas. La clase solo se activa mientras existen sugerencias. */
+.producto.selector-medidas-abierto {
+    z-index: 70;
+    overflow: visible;
+}
+
+.producto.selector-medidas-abierto .producto-header {
+    z-index: 75;
+}
+
+.producto.selector-medidas-abierto::after {
+    display: none;
+}
+
+.sugerencias-titulo {
+    color: #64748b;
+    background: #edf2f7;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+}
+
+.sugerencia-item:hover { background: #eaf8fc; }
+
+.eliminar-producto,
+.input-group .btn,
+.botones-tara .btn,
+.reporte-item > .btn {
+    min-width: 34px;
+    min-height: 34px;
+    padding: 5px 9px;
+    border: 0;
+    border-radius: 9px;
+    box-shadow: none;
+    font-weight: 800;
+}
+
+.eliminar-producto,
+.input-group .btn-danger {
+    color: #be123c;
+    background: #ffe4e9;
+}
+
+.botones-tara .btn-success,
+.reporte-item > .btn-success {
+    color: #047857;
+    background: #d9f8eb;
+}
+
+.botones-tara .btn-warning {
+    color: #92400e;
+    background: #fff1c7;
+}
+
+.sumas-verticales {
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.columna {
+    min-width: 0;
+    padding: 10px;
+    border: 1px solid #dfe6ef;
+    border-radius: 13px;
+    background: rgba(236, 242, 248, .74);
+}
+
+.taras-header h5,
+.columna h5,
+.reporte-item h5 {
+    color: #506078;
+    font-size: .69rem;
+    font-weight: 850;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+}
+
+.checkbox-container { color: #68788f; font-size: .72rem; }
+.checkbox-container input { accent-color: #22a6c8; }
+
+.tara-input,
+.kilo-input,
+.reporte-input {
+    min-width: 0;
+    min-height: 34px;
+    padding: 6px 8px;
+    font-weight: 700;
+}
+
+.total {
+    margin-top: auto;
+    padding: 11px 12px;
+    color: #e9fbff;
+    border: 1px solid rgba(56,217,255,.48);
+    border-radius: 11px;
+    background: linear-gradient(135deg, #0b536b, #073449);
+    box-shadow: 0 8px 18px rgba(6,78,99,.24), inset 0 1px rgba(255,255,255,.13), 0 0 16px rgba(56,217,255,.12);
+    font-size: 1.02rem;
+    font-weight: 900;
+    letter-spacing: .01em;
+    text-align: center;
+}
+
+.reporte-taras-bolsas {
+    gap: 10px;
+    margin: 0;
+    padding: 12px;
+    color: #dbe7f8;
+    border: 0;
+    border-radius: 14px;
+    background: linear-gradient(135deg, #111d31, #0a1425);
+    box-shadow: inset 0 1px rgba(255,255,255,.06);
+}
+
+.reporte-item { min-width: 0; }
+.reporte-item h5 { color: #91a2bc; }
+
+.total-taras-reporte,
+.total-bolsas-reporte {
+    margin-top: 8px;
+    padding: 8px 9px;
+    color: #dffaff;
+    border: 1px solid rgba(56,217,255,.22);
+    border-radius: 9px;
+    background: rgba(56,217,255,.09);
+    box-shadow: 0 0 14px rgba(56,217,255,.07);
+    font-size: .88rem;
+    font-weight: 850;
+    text-align: center;
+}
+
+.reporte-extenso {
+    color: #334155;
+    border: 1px solid #dbe4ee;
+    border-radius: 11px;
+    background: #edf3f8;
+}
+
+.refrigeracion-checkbox-container,
+.valores-container-debajo,
+.venta-checkbox-container {
+    border: 1px solid rgba(14,165,233,.14);
+    border-radius: 10px;
+    background: rgba(14,165,233,.07);
+}
+
+.producto[data-es-venta="true"] {
+    border-left: 4px solid #10b981;
+    background: linear-gradient(145deg, #f3fff9, #eaf8f1);
+}
+
+@media screen and (min-width: 1101px) {
+    .producto {
+        flex: 0 0 calc(25% - 10px) !important;
+        max-width: calc(25% - 10px) !important;
+    }
+}
+
+@media screen and (max-width: 1100px) {
+    .producto { flex-basis: calc(50% - 7px); max-width: calc(50% - 7px); }
+}
+
+@media screen and (max-width: 620px) {
+    .producto { flex-basis: 100% !important; max-width: 100% !important; }
 }
 </style>

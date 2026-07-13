@@ -3,7 +3,7 @@
     <div class="modal-configuracion-medidas">
       <div class="modal-header">
         <h3>Configuración de Medidas</h3>
-        <button @click="cerrar" class="btn-cerrar">&times;</button>
+        <button type="button" @click="cerrar" class="btn-cerrar">&times;</button>
       </div>
       
       <div class="modal-body">
@@ -15,10 +15,10 @@
               v-model="nuevaMedida" 
               type="text" 
               placeholder="Ingresa una nueva medida (ej: 16/20, 21/25, etc.)"
-              @keydown.enter="agregarMedida"
+              @keydown.enter.prevent="agregarMedida"
               class="input-nueva-medida"
             >
-            <button @click="agregarMedida" class="btn btn-success" :disabled="!nuevaMedida.trim()">
+            <button type="button" @click="agregarMedida" class="btn btn-success" :disabled="!nuevaMedida.trim()">
               Agregar
             </button>
           </div>
@@ -50,8 +50,8 @@
       </div>
 
       <div class="modal-footer">
-        <button @click="cerrar" class="btn btn-secondary">Cancelar</button>
-        <button @click="guardar" class="btn btn-primary">Guardar Configuración</button>
+        <button type="button" @click="cerrar" class="btn btn-secondary">Cancelar</button>
+        <button type="button" @click="guardar" class="btn btn-primary">Guardar Configuración</button>
       </div>
     </div>
   </div>
@@ -102,16 +102,22 @@ export default {
         this.medidasSeleccionadas = [...nuevas];
       },
       immediate: true
+    },
+    mostrar(visible) {
+      if (visible) {
+        this.medidasSeleccionadas = [...this.medidasConfiguracion];
+        this.nuevaMedida = '';
+      }
     }
   },
 
   methods: {
     agregarMedida() {
       const medida = this.nuevaMedida.trim();
-      if (medida && !this.todasLasMedidas.includes(medida)) {
+      if (medida && !this.medidasSeleccionadas.includes(medida)) {
         this.medidasSeleccionadas.push(medida);
-        this.nuevaMedida = '';
       }
+      this.nuevaMedida = '';
     },
 
 
@@ -348,4 +354,4 @@ export default {
     align-items: stretch;
   }
 }
-</style> 
+</style>

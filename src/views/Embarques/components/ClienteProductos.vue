@@ -1,8 +1,9 @@
 <template>
-    <div class="cliente-grupo" v-show="clienteActivo === clienteId || clienteActivo === null">
+    <div class="cliente-grupo" :style="{ '--cliente-color': clienteVisualColor }" v-show="clienteActivo === clienteId || clienteActivo === null">
         <div class="cliente-header sticky-header" :data-cliente="nombreCliente">
             <div class="cliente-info">
                 <h3>
+                    <span class="cliente-indicador"><i class="fas fa-user"></i></span>
                     {{ nombreCliente || 'Cliente Desconocido' }}
                     <button @click.stop="$emit('ver-pedido-cliente')" class="btn-pedido-mini"
                         title="Ver pedidos del cliente">
@@ -282,6 +283,17 @@ export default {
     ],
 
     computed: {
+        clienteVisualColor() {
+            const nombre = (this.nombreCliente || '').toLowerCase();
+            if (nombre.includes('joselito')) return '#3498db';
+            if (nombre.includes('catarro')) return '#e74c3c';
+            if (nombre.includes('otilio')) return '#f1c40f';
+            if (nombre.includes('ozuna')) return '#2ecc71';
+            if (nombre.includes('veronica') || nombre.includes('lorena')) return '#e67e22';
+            if (nombre.includes('canelo')) return '#7e3a99';
+            return '#95a5a6';
+        },
+
         // Verificar si el cliente es Joselito
         esClienteJoselito() {
             return this.nombreCliente && this.nombreCliente.toLowerCase().includes('joselito');
@@ -842,5 +854,192 @@ button:disabled {
         flex-direction: column;
         gap: 5px;
     }
+}
+
+/* Plataforma visual por cliente */
+.cliente-grupo {
+    position: relative;
+    overflow: visible;
+    margin-bottom: 26px !important;
+    padding: 0 !important;
+    border: 1px solid rgba(148, 163, 184, .15) !important;
+    border-radius: 22px !important;
+    background: rgba(10, 18, 33, .76) !important;
+    box-shadow: 0 24px 62px rgba(0, 0, 0, .28), inset 0 1px rgba(255,255,255,.045) !important;
+    backdrop-filter: blur(20px);
+}
+
+.cliente-grupo::before {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    z-index: -1;
+    border-radius: inherit;
+    background: radial-gradient(circle at 7% 0, color-mix(in srgb, var(--cliente-color) 17%, transparent), transparent 25rem);
+    filter: blur(1px);
+}
+
+.cliente-grupo .cliente-header {
+    top: 8px;
+    padding: 17px 18px;
+    color: #f4f8ff;
+    border: 1px solid color-mix(in srgb, var(--cliente-color) 30%, rgba(148, 163, 184, .12));
+    border-top: 3px solid var(--cliente-color);
+    border-left: 1px solid color-mix(in srgb, var(--cliente-color) 30%, rgba(148, 163, 184, .12));
+    border-radius: 18px;
+    background: linear-gradient(105deg, color-mix(in srgb, var(--cliente-color) 16%, #121d31), rgba(10, 19, 35, .95) 54%);
+    box-shadow: 0 14px 34px rgba(0,0,0,.28), 0 0 26px color-mix(in srgb, var(--cliente-color) 10%, transparent), inset 0 1px rgba(255,255,255,.06);
+    backdrop-filter: blur(24px);
+}
+
+.cliente-info h3 {
+    color: #f8fbff;
+    font-size: clamp(1.15rem, 1.8vw, 1.45rem);
+    font-weight: 780;
+    letter-spacing: -.025em;
+}
+
+.cliente-indicador {
+    display: inline-grid;
+    width: 35px;
+    height: 35px;
+    place-items: center;
+    color: #07101d;
+    border-radius: 11px;
+    background: var(--cliente-color);
+    box-shadow: 0 0 22px color-mix(in srgb, var(--cliente-color) 48%, transparent);
+    font-size: .78rem;
+}
+
+.btn-pedido-mini {
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    color: #aebdd2;
+    border: 1px solid rgba(255,255,255,.11);
+    border-radius: 9px;
+    background: rgba(255,255,255,.045);
+}
+
+.btn-pedido-mini:hover {
+    color: var(--cliente-color);
+    border-color: var(--cliente-color);
+    background: color-mix(in srgb, var(--cliente-color) 10%, transparent);
+}
+
+.cliente-totales {
+    gap: 10px;
+    margin: 8px 0 0 47px;
+    color: #f5fbff;
+    font-size: .88rem;
+    font-weight: 850;
+}
+
+.cliente-totales span {
+    padding: 8px 12px;
+    border: 1px solid color-mix(in srgb, var(--cliente-color) 44%, rgba(255,255,255,.12));
+    border-radius: 11px;
+    background: linear-gradient(135deg, color-mix(in srgb, var(--cliente-color) 22%, rgba(0,0,0,.45)), rgba(0,0,0,.28));
+    box-shadow: 0 6px 16px rgba(0,0,0,.18), 0 0 15px color-mix(in srgb, var(--cliente-color) 14%, transparent), inset 0 1px rgba(255,255,255,.08);
+    letter-spacing: .015em;
+}
+
+.cliente-header-controls { gap: 7px; }
+
+.juntar-medidas-checkbox,
+.regla-otilio-checkbox,
+.incluir-precios-checkbox,
+.cuenta-en-pdf-checkbox,
+.sumar-kg-catarro-checkbox {
+    gap: 6px;
+    margin: 0;
+    padding: 7px 9px;
+    color: #b9c6d9;
+    border: 1px solid rgba(255,255,255,.09);
+    border-radius: 10px;
+    background: rgba(0,0,0,.16);
+    font-size: .72rem;
+}
+
+.cliente-header-controls input[type="checkbox"] {
+    accent-color: var(--cliente-color);
+}
+
+.cliente-header-controls .btn {
+    min-height: 34px;
+    padding: 7px 10px;
+    color: #dce7f6;
+    border: 1px solid rgba(255,255,255,.1);
+    border-radius: 10px;
+    background: rgba(255,255,255,.055);
+    box-shadow: inset 0 1px rgba(255,255,255,.05);
+    font-size: .72rem;
+    transition: transform .2s ease, border-color .2s ease, background .2s ease;
+}
+
+.cliente-header-controls .btn:hover:not(:disabled) {
+    transform: translateY(-2px);
+    border-color: var(--cliente-color);
+    background: color-mix(in srgb, var(--cliente-color) 15%, rgba(255,255,255,.05));
+}
+
+.cliente-header-controls .btn i { color: var(--cliente-color); }
+
+.cliente-header-controls .eliminar-cliente {
+    color: #fecdd3;
+    border-color: rgba(251,113,133,.22);
+    background: rgba(251,113,133,.08);
+}
+
+.productos-container {
+    gap: 13px;
+    padding: 22px 18px 18px;
+}
+
+.botones-agregar {
+    gap: 9px;
+    padding: 0 18px 18px;
+}
+
+.botones-agregar .btn {
+    min-height: 40px;
+    padding: 9px 14px;
+    color: #dce7f6;
+    border: 1px dashed color-mix(in srgb, var(--cliente-color) 45%, rgba(255,255,255,.1));
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--cliente-color) 8%, rgba(255,255,255,.03));
+    transition: transform .2s ease, background .2s ease;
+}
+
+.botones-agregar .btn:hover:not(:disabled) {
+    transform: translateY(-2px);
+    color: #06101c;
+    border-style: solid;
+    background: var(--cliente-color);
+}
+
+.cliente-seleccionado {
+    animation: client-lock 1.3s ease-out;
+}
+
+@keyframes client-lock {
+    0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--cliente-color) 50%, transparent); }
+    45% { box-shadow: 0 0 0 8px transparent, 0 0 42px color-mix(in srgb, var(--cliente-color) 35%, transparent); }
+    100% { box-shadow: 0 14px 34px rgba(0,0,0,.28); }
+}
+
+@media (max-width: 900px) {
+    .cliente-grupo .cliente-header { align-items: stretch; flex-direction: column; gap: 14px; }
+    .cliente-header-controls { width: 100%; }
+}
+
+@media (max-width: 576px) {
+    .cliente-grupo { border-radius: 18px; }
+    .cliente-grupo .cliente-header { top: 4px; padding: 14px; border-radius: 15px; }
+    .cliente-totales { margin-left: 0; flex-direction: row; flex-wrap: wrap; }
+    .cliente-header-controls > div { flex: 1 1 140px; }
+    .cliente-header-controls .btn { flex: 1 1 130px; justify-content: center; }
+    .productos-container { padding: 16px 12px; }
+    .botones-agregar { padding: 0 12px 14px; }
 }
 </style>

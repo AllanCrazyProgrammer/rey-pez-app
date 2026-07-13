@@ -1,7 +1,7 @@
 <template>
   <div class="sidebar-clientes" :class="{ 'sidebar-collapsed': sidebarCollapsed }">
     <div class="sidebar-header">
-      <h3><i class="fas fa-users"></i> Clientes</h3>
+      <h3><i class="fas fa-users"></i> <span>Clientes</span></h3>
       <button @click="toggleSidebar" class="toggle-sidebar-btn" :title="sidebarCollapsed ? 'Expandir' : 'Colapsar'">
         <i class="fas" :class="sidebarCollapsed ? 'fa-chevron-right' : 'fa-chevron-left'"></i>
       </button>
@@ -15,11 +15,11 @@
         @click="seleccionarCliente(cliente.id.toString())" 
         class="btn-nota-cliente"
         :class="{ 'activo': clienteActivoLocal === cliente.id.toString() }"
-        :style="{ backgroundColor: cliente.color, color: cliente.textColor }"
+        :style="{ '--cliente-color': cliente.color, '--cliente-text': cliente.textColor }"
         :title="sidebarCollapsed ? cliente.nombre : ''"
       >
         <i class="fas fa-user-circle" v-if="sidebarCollapsed"></i>
-        <span v-else>{{ cliente.nombre }}</span>
+        <span v-else class="cliente-boton-contenido"><i class="cliente-color-dot"></i>{{ cliente.nombre }}</span>
       </button>
       
       <button 
@@ -29,11 +29,11 @@
         @click="seleccionarCliente(cliente.id.toString())" 
         class="btn-nota-cliente cliente-personalizado"
         :class="{ 'activo': clienteActivoLocal === cliente.id.toString() }"
-        :style="{ backgroundColor: obtenerColorCliente(cliente.nombre), color: obtenerColorTextoCliente(cliente.nombre) }"
+        :style="{ '--cliente-color': obtenerColorCliente(cliente.nombre), '--cliente-text': obtenerColorTextoCliente(cliente.nombre) }"
         :title="sidebarCollapsed ? cliente.nombre : ''"
       >
         <i class="fas fa-user-circle" v-if="sidebarCollapsed"></i>
-        <span v-else>{{ cliente.nombre }}</span>
+        <span v-else class="cliente-boton-contenido"><i class="cliente-color-dot"></i>{{ cliente.nombre }}</span>
       </button>
       
       <!-- Botón para agregar nuevo cliente -->
@@ -818,6 +818,335 @@ export default {
 .sidebar-clientes::-webkit-scrollbar-thumb:hover {
   background: linear-gradient(180deg, rgba(52, 152, 219, 0.7), rgba(46, 204, 113, 0.7));
 }
+
+/* Manifiesto lateral */
+.sidebar-clientes {
+  width: 176px !important;
+  padding: 14px 10px !important;
+  align-items: stretch !important;
+  background:
+    radial-gradient(circle at 30% 4%, rgba(56, 217, 255, .15), transparent 14rem),
+    linear-gradient(180deg, rgba(12, 22, 39, .98), rgba(5, 10, 21, .98)) !important;
+  border-right: 1px solid rgba(148, 163, 184, .14) !important;
+  box-shadow: 18px 0 52px rgba(0, 0, 0, .33), inset -1px 0 rgba(255,255,255,.025) !important;
+  backdrop-filter: blur(24px);
+}
+
+.sidebar-clientes::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: -1px;
+  width: 1px;
+  height: 22%;
+  background: linear-gradient(transparent, #38d9ff, transparent);
+  box-shadow: 0 0 14px rgba(56, 217, 255, .75);
+  animation: rail-scan 5s ease-in-out infinite;
+}
+
+.sidebar-header {
+  min-height: 54px;
+  margin-bottom: 14px;
+  padding: 0 4px 14px;
+  border-color: rgba(148, 163, 184, .12);
+}
+
+.sidebar-header h3 {
+  color: #e8eef9;
+  font-size: .76rem;
+  font-weight: 800;
+  letter-spacing: .13em;
+  text-transform: uppercase;
+  text-shadow: none;
+}
+
+.sidebar-header h3 i {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  color: #06101c;
+  -webkit-text-fill-color: currentColor;
+  font-size: .9rem;
+  border-radius: 11px;
+  background: linear-gradient(135deg, #b8f4ff, #38d9ff 55%, #8b5cf6);
+  box-shadow: 0 0 24px rgba(56, 217, 255, .25);
+}
+
+.toggle-sidebar-btn {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  color: #91a2bc;
+  border: 1px solid rgba(148, 163, 184, .16);
+  border-radius: 9px;
+  background: rgba(255,255,255,.035);
+}
+
+.toggle-sidebar-btn:hover {
+  color: #38d9ff;
+  border-color: rgba(56, 217, 255, .4);
+  background: rgba(56, 217, 255, .08);
+  transform: translateX(-2px);
+}
+
+.sidebar-clientes-contenido {
+  gap: 9px;
+  padding: 0 2px 12px;
+  margin: 0;
+}
+
+.btn-nota-cliente {
+  min-height: 43px;
+  justify-content: flex-start;
+  padding: 10px 12px 10px 15px;
+  color: #dfe8f6;
+  border: 1px solid rgba(148, 163, 184, .11);
+  border-radius: 12px;
+  background:
+    linear-gradient(90deg, var(--cliente-color) 0 4px, transparent 4px),
+    rgba(16, 27, 47, .68);
+  box-shadow: inset 0 1px rgba(255,255,255,.035);
+  font-size: .8rem;
+  letter-spacing: .02em;
+  text-align: left;
+}
+
+.btn-nota-cliente::before {
+  left: 4px;
+  width: calc(100% - 4px);
+  background: linear-gradient(100deg, transparent, rgba(255,255,255,.07), transparent);
+  transform: translateX(-110%);
+}
+
+.btn-nota-cliente:hover {
+  opacity: 1;
+  color: #fff;
+  border-color: var(--cliente-color);
+  background:
+    linear-gradient(90deg, var(--cliente-color) 0 4px, transparent 4px),
+    rgba(25, 42, 69, .9);
+  box-shadow: 0 10px 25px rgba(0,0,0,.25), 0 0 18px color-mix(in srgb, var(--cliente-color) 24%, transparent);
+  transform: translateX(4px);
+}
+
+.btn-nota-cliente:hover::before { transform: translateX(110%); }
+
+.cliente-boton-contenido {
+  display: flex !important;
+  align-items: center;
+  gap: 9px;
+}
+
+.cliente-color-dot {
+  width: 9px;
+  height: 9px;
+  flex: 0 0 9px;
+  border: 2px solid rgba(255,255,255,.55);
+  border-radius: 50%;
+  background: var(--cliente-color);
+  box-shadow: 0 0 11px var(--cliente-color);
+}
+
+.btn-nota-cliente.activo {
+  color: #fff;
+  border-color: var(--cliente-color);
+  background:
+    linear-gradient(90deg, var(--cliente-color) 0 5px, transparent 5px),
+    linear-gradient(90deg, color-mix(in srgb, var(--cliente-color) 17%, #17263e), #111d31);
+  box-shadow: 0 12px 28px rgba(0,0,0,.28), 0 0 20px color-mix(in srgb, var(--cliente-color) 28%, transparent);
+  transform: translateX(5px);
+  animation: none;
+}
+
+.btn-nota-cliente.activo::after {
+  content: '';
+  position: absolute;
+  right: 10px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--cliente-color);
+  box-shadow: 0 0 10px var(--cliente-color);
+}
+
+.btn-agregar-cliente {
+  min-height: 43px;
+  margin-top: 4px;
+  color: #b8f4ff;
+  border: 1px dashed rgba(56, 217, 255, .34);
+  border-radius: 12px;
+  background: rgba(56, 217, 255, .055);
+  box-shadow: none;
+  text-shadow: none;
+  font-size: .78rem;
+}
+
+.btn-agregar-cliente:hover {
+  color: #06101c;
+  border-style: solid;
+  background: #38d9ff;
+  box-shadow: 0 0 26px rgba(56, 217, 255, .25);
+  transform: translateY(-2px);
+}
+
+.sidebar-resumen {
+  width: 100%;
+  margin: auto 0 0;
+  padding: 12px;
+  border: 1px solid rgba(56, 217, 255, .2);
+  border-radius: 16px;
+  background: linear-gradient(145deg, rgba(19, 34, 57, .72), rgba(7, 15, 28, .72));
+  box-shadow: inset 0 1px rgba(255,255,255,.06), 0 18px 34px rgba(0,0,0,.25), 0 0 22px rgba(56,217,255,.08);
+}
+
+.resumen-seccion { margin-bottom: 13px; }
+
+.resumen-seccion::after {
+  bottom: -7px;
+  width: 100%;
+  height: 1px;
+  background: rgba(148, 163, 184, .1);
+}
+
+.sidebar-resumen h4 {
+  justify-content: flex-start;
+  margin-bottom: 7px;
+  color: #8da0bd;
+  font-size: .62rem;
+  font-weight: 800;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  text-shadow: none;
+}
+
+.sidebar-resumen h4 i {
+  color: #38d9ff;
+  -webkit-text-fill-color: currentColor;
+  font-size: .8rem;
+}
+
+.sidebar-item {
+  margin-bottom: 4px;
+  padding: 5px 7px;
+  color: #91a2bc;
+  border-radius: 7px;
+  background: rgba(1, 5, 12, .24);
+  font-size: .7rem;
+}
+
+.sidebar-item strong { color: #f3f7fd; }
+
+.sidebar-item.total {
+  margin-top: 7px;
+  padding: 10px 8px;
+  color: #ecfcff;
+  border: 1px solid rgba(56, 217, 255, .48);
+  background: linear-gradient(135deg, rgba(16,113,143,.82), rgba(8,55,76,.88));
+  box-shadow: 0 7px 16px rgba(0,0,0,.22), 0 0 17px rgba(56,217,255,.14), inset 0 1px rgba(255,255,255,.13);
+  font-size: .86rem;
+  font-weight: 900;
+}
+
+.sidebar-item.total strong {
+  color: #fff;
+  font-size: 1rem;
+  text-shadow: 0 0 10px rgba(184,244,255,.55);
+}
+
+.sidebar-collapsed { width: 76px !important; }
+.sidebar-collapsed .sidebar-header { justify-content: center; }
+.sidebar-collapsed .sidebar-header h3 { display: none; }
+.sidebar-collapsed .btn-nota-cliente,
+.sidebar-collapsed .btn-agregar-cliente {
+  width: 48px;
+  height: 48px;
+  min-height: 48px;
+  align-self: center;
+  border-radius: 14px;
+}
+
+@keyframes rail-scan {
+  0%, 100% { transform: translateY(-100%); opacity: 0; }
+  20%, 80% { opacity: 1; }
+  50% { transform: translateY(450%); }
+}
+
+@media (max-width: 1200px) {
+  .sidebar-clientes { width: 176px !important; }
+}
+
+@media (max-width: 992px) {
+  .sidebar-clientes { width: 176px !important; }
+}
+
+@media (max-width: 768px) {
+  .sidebar-clientes { width: 150px !important; }
+  .sidebar-collapsed { width: 64px !important; }
+  .sidebar-header h3 { font-size: .65rem; }
+}
+
+@media (max-width: 576px) {
+  .sidebar-clientes {
+    top: auto !important;
+    bottom: 0 !important;
+    width: 100% !important;
+    height: 78px !important;
+    padding: 9px 10px !important;
+    flex-direction: row !important;
+    z-index: 1050;
+    transform: none !important;
+    border-top: 1px solid rgba(148, 163, 184, .14);
+    border-right: 0 !important;
+    box-shadow: 0 -16px 42px rgba(0,0,0,.36) !important;
+  }
+
+  .sidebar-clientes::after,
+  .sidebar-header,
+  .sidebar-resumen,
+  .sidebar-toggle-mobile { display: none; }
+
+  .sidebar-clientes-contenido {
+    flex: 1;
+    flex-direction: row;
+    align-items: center;
+    gap: 7px;
+    margin: 0;
+    padding: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+
+  .sidebar-clientes .btn-nota-cliente,
+  .sidebar-clientes.sidebar-collapsed .btn-nota-cliente {
+    width: auto;
+    height: 52px;
+    min-width: 78px;
+    min-height: 52px;
+    flex: 0 0 auto;
+    padding: 8px 11px;
+    border-radius: 13px;
+    transform: none;
+  }
+
+  .sidebar-clientes.sidebar-collapsed .btn-nota-cliente span {
+    display: flex;
+  }
+
+  .sidebar-clientes .btn-agregar-cliente,
+  .sidebar-clientes.sidebar-collapsed .btn-agregar-cliente {
+    width: 52px;
+    height: 52px;
+    min-width: 52px;
+    min-height: 52px;
+    flex: 0 0 52px;
+    margin: 0;
+    padding: 0;
+    border-radius: 13px;
+  }
+
+  .sidebar-clientes .btn-agregar-cliente span { display: none; }
+}
 </style>
 
 <style>
@@ -826,4 +1155,4 @@ body.mobile-menu-open .sidebar-clientes {
   display: none !important;
   z-index: 0;
 }
-</style> 
+</style>

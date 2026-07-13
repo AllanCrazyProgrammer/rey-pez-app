@@ -1,9 +1,14 @@
 <template>
   <div>
     <!-- Botón para abrir el modal -->
-    <button @click="abrirModal" class="precio-historial-btn">
+    <button
+      type="button"
+      @click="abrirModal"
+      class="precio-historial-btn"
+      :class="{ 'precio-historial-btn--compact': compact }"
+    >
       <i class="nav-icon">💰</i>
-      <span>{{ clienteActual ? `Precios de Venta - ${obtenerNombreCliente(clienteActual)}` : 'Precios de Venta' }}</span>
+      <span>{{ compact ? 'Precios' : (clienteActual ? `Precios de Venta - ${obtenerNombreCliente(clienteActual)}` : 'Precios de Venta') }}</span>
     </button>
 
     <!-- Modal -->
@@ -461,6 +466,10 @@ export default {
     clienteActual: {
       type: String,
       default: ''
+    },
+    compact: {
+      type: Boolean,
+      default: false
     }
   },
   data() {
@@ -1364,6 +1373,33 @@ export default {
 .precio-historial-btn:focus {
   outline: 2px solid rgba(255, 255, 255, 0.6);
   outline-offset: 2px;
+}
+
+.precio-historial-btn--compact {
+  min-height: 30px;
+  padding: 5px 9px;
+  color: #fde68a;
+  border: 1px solid rgba(251, 191, 36, .3);
+  border-radius: 9px;
+  background: rgba(20, 33, 55, .78);
+  box-shadow: inset 0 1px rgba(255, 255, 255, .06);
+  font-size: .72rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 1;
+  text-transform: none;
+}
+
+.precio-historial-btn--compact:hover {
+  color: #fff7d6;
+  border-color: rgba(251, 191, 36, .65);
+  background: rgba(71, 50, 15, .72);
+  box-shadow: 0 7px 20px rgba(0, 0, 0, .2), 0 0 14px rgba(251, 191, 36, .08);
+  transform: translateY(-1px);
+}
+
+.precio-historial-btn--compact .nav-icon {
+  font-size: .82rem;
 }
 
 .modal-overlay {
@@ -2934,4 +2970,4 @@ export default {
     padding: 1px 4px;
   }
 }
-</style> 
+</style>
