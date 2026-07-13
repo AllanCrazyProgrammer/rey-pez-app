@@ -38,6 +38,17 @@ export const embarqueCargaMixin = {
         this.camposEnEdicion.clear();
       }
 
+      if (id !== this.embarqueId) {
+        // Cambio de embarque: las bases de fusión de 3 vías del embarque
+        // anterior no aplican al nuevo (los ids de cliente se repiten entre
+        // embarques). En reconexiones (mismo id) se conservan para proteger
+        // las ediciones locales pendientes.
+        this._productosBase = new Map();
+        this._crudosBase = new Map();
+        this._cargaConBase = undefined;
+        this._revBase = 0;
+      }
+
       this._inicializandoEmbarque = true;
       this.limpiarConexionesFirestore();
 
@@ -319,6 +330,10 @@ export const embarqueCargaMixin = {
               // completa y los borraría. Mantener la base anterior fuerza un
               // conflicto→fusión completa en el siguiente intento.
               this._revBase = revBaseAnterior;
+              // Por lo mismo, la base de productos tampoco puede avanzar a
+              // esta revisión: los cambios remotos no aplicados parecerían
+              // "ya integrados" y la próxima fusión los revertiría.
+              this._productosBase = baseSincronizada;
             } else if (this.camposEnEdicion && this.camposEnEdicion.size > 0) {
               productosFinales = this.mergeProductosConCamposEnEdicion(productosDesdeServidor, productosFiltrados);
             } else {
@@ -370,9 +385,21 @@ export const embarqueCargaMixin = {
               productosFinales = [...productosFiltrados, ...productosNuevosAPreservar];
             }
 
+            // cargaCon: fusión de 3 vías simple. Si la selección local difiere
+            // de la última versión sincronizada, es un cambio local sin subir
+            // y se conserva (aplicar lo remoto encima lo "deshacía" ante el
+            // usuario); si no, se toma lo remoto.
+            const cargaConRemoto = data.cargaCon || '';
+            const cargaConLocal = (this.embarque && this.embarque.cargaCon) || '';
+            const cargaConFinal = (this._cargaConBase !== undefined &&
+                cargaConLocal !== this._cargaConBase)
+              ? cargaConLocal
+              : cargaConRemoto;
+            this._cargaConBase = cargaConRemoto;
+
             this.embarque = {
               fecha: fechaNormalizada,
-              cargaCon: data.cargaCon || '',
+              cargaCon: cargaConFinal,
               camionNumero: data.camionNumero || 1,
               productos: productosFinales,
               kilosCrudos: data.kilosCrudos || {}
@@ -382,14 +409,48 @@ export const embarqueCargaMixin = {
             this.aplicarCostoExtra = { ...(data.aplicarCostoExtra || {}) };
             this.costoExtra = data.costoExtra !== undefined ? data.costoExtra : 18;
 
-            this.clienteCrudos = {};
+            // Crudos: fusión por cliente contra la última versión sincronizada
+            // (la misma protección que ya tienen los productos, con
+            // granularidad por cliente). El reemplazo directo con lo remoto
+            // borraba lo que se estaba capturando en los inputs de crudos
+            // (taras/sobrante/barco) cuando otro editor guardaba primero.
+            const crudosBase = this._crudosBase instanceof Map ? this._crudosBase : new Map();
+            const crudosLocales = this.clienteCrudos || {};
+            const nuevaBaseCrudos = new Map();
+            const crudosFinales = {};
+
             data.clientes.forEach(cliente => {
-              if (cliente.crudos && cliente.crudos.length > 0) {
-                this.$set(this.clienteCrudos, cliente.id, cliente.crudos);
-              } else {
-                this.$set(this.clienteCrudos, cliente.id, []);
+              const remotos = Array.isArray(cliente.crudos) ? cliente.crudos : [];
+              nuevaBaseCrudos.set(String(cliente.id), serializarEstable(remotos));
+              crudosFinales[cliente.id] = remotos;
+            });
+
+            Object.keys(crudosLocales).forEach(clienteId => {
+              const locales = Array.isArray(crudosLocales[clienteId]) ? crudosLocales[clienteId] : [];
+              const baseStr = crudosBase.get(String(clienteId));
+              if (baseStr === undefined) {
+                // Sin base conocida (primera carga o cliente nuevo local):
+                // conservar lo local solo si lo remoto no trae nada para este
+                // cliente, para no perder crudos recién capturados.
+                const remotosCliente = crudosFinales[clienteId];
+                if (locales.length > 0 && !(Array.isArray(remotosCliente) && remotosCliente.length > 0)) {
+                  crudosFinales[clienteId] = locales;
+                }
+                return;
+              }
+              if (serializarEstable(locales) !== baseStr) {
+                // Cambio local sin subir: gana lo local. Converge porque la
+                // subida pendiente define el valor final (misma regla que el
+                // conflicto de campo en fusionarProductoTresVias).
+                crudosFinales[clienteId] = locales;
               }
             });
+
+            this.clienteCrudos = {};
+            Object.keys(crudosFinales).forEach(clienteId => {
+              this.$set(this.clienteCrudos, clienteId, crudosFinales[clienteId]);
+            });
+            this._crudosBase = nuevaBaseCrudos;
 
             this.embarqueId = id;
             this.modoEdicion = true;

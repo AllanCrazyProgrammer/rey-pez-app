@@ -16,16 +16,18 @@
     </div>
 
     <div class="botones-accion">
-      <button 
-        v-if="hasPendingChanges || isSyncing"
-        @click="$emit('sync-manual')" 
-        class="btn" 
-        :class="isSyncing ? 'btn-secondary' : 'btn-primary'"
-        :disabled="isSyncing"
-        title="Guardar cambios en la nube"
+      <!-- Siempre renderizado (sin v-if): montarlo y desmontarlo con cada
+           ciclo de guardado movía todo el contenido de abajo y la pantalla
+           "brincaba" mientras se capturaba. Ahora solo cambia de estado. -->
+      <button
+        @click="$emit('sync-manual')"
+        class="btn btn-sync"
+        :class="isSyncing ? 'btn-secondary' : (hasPendingChanges ? 'btn-primary' : 'btn-sincronizado')"
+        :disabled="isSyncing || !hasPendingChanges"
+        :title="hasPendingChanges || isSyncing ? 'Guardar cambios en la nube' : 'Todos los cambios están guardados'"
       >
-        <i class="fas" :class="isSyncing ? 'fa-spinner fa-spin' : 'fa-cloud-upload-alt'"></i>
-        {{ isSyncing ? 'Subiendo...' : 'Subir Cambios' }}
+        <i class="fas" :class="isSyncing ? 'fa-spinner fa-spin' : (hasPendingChanges ? 'fa-cloud-upload-alt' : 'fa-check-circle')"></i>
+        {{ isSyncing ? 'Subiendo...' : (hasPendingChanges ? 'Subir Cambios' : 'Guardado') }}
       </button>
       <button @click="verPedidoDelDia" class="btn btn-success" title="Ver pedido del día de hoy">
         <i class="fas fa-clipboard-list"></i> Pedido del Día
@@ -378,6 +380,26 @@ label {
 .btn.disabled {
   opacity: 0.65;
   cursor: not-allowed;
+}
+
+/* Ancho fijo para que el cambio de texto (Subir Cambios / Subiendo... /
+   Guardado) no mueva los botones vecinos. */
+.btn-sync {
+  min-width: 158px;
+  justify-content: center;
+}
+
+.btn-sincronizado {
+  background-color: #f1f8f2;
+  color: #2e7d32;
+  /* Borde interior (no border real): un border agrega 2px de alto respecto
+     a los otros estados del botón y movería la fila de abajo. */
+  box-shadow: inset 0 0 0 1px #c8e6c9;
+}
+
+.btn-sincronizado:disabled {
+  opacity: 1;
+  cursor: default;
 }
 
 .loader-inline {
