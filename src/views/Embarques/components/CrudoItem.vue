@@ -659,15 +659,15 @@ button:disabled {
 .barco-input,
 .taras-input {
     min-width: 0;
-    min-height: 36px;
-    padding: 6px 8px;
+    min-height: 44px;
+    padding: 9px 10px;
     color: #172033;
     border: 1px solid #d4deea;
     border-radius: 9px;
     outline: 0;
     background: #fff;
-    font-size: .78rem;
-    font-weight: 650;
+    font-size: .9rem;
+    font-weight: 700;
     transition: border-color .18s ease, box-shadow .18s ease;
 }
 
@@ -679,7 +679,24 @@ button:disabled {
     box-shadow: 0 0 0 3px rgba(139,92,246,.11);
 }
 
-.talla-select { min-width: 90px; }
+.talla-select {
+    min-width: 90px;
+    min-height: 48px;
+    font-size: 1rem;
+    font-weight: 850;
+}
+
+.barco-input {
+    min-height: 48px;
+    font-size: .95rem;
+}
+
+.taras-input {
+    min-height: 48px;
+    font-size: 1rem;
+    font-weight: 850;
+}
+
 .taras-wrapper { gap: 6px; min-width: 0; }
 
 .btn-precio {
@@ -710,11 +727,12 @@ button:disabled {
 }
 
 .buttons-wrapper .btn {
-    width: 34px;
-    min-height: 34px;
+    width: 40px;
+    min-height: 48px;
     padding: 4px;
     border: 0;
     border-radius: 9px;
+    font-size: 1rem;
     font-weight: 850;
 }
 
