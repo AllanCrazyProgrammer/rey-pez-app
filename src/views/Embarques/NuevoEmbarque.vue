@@ -1370,12 +1370,8 @@ export default {
           this.medidasConfiguracion = [];
         }
       } else {
-        // Medidas por defecto si no hay configuración guardada
-        this.medidasConfiguracion = [
-          '16/20', '21/25', '26/30', '31/35', '36/40', '41/50', '51/60', '61/70', '71/90', '91/110',
-          'U-10', 'U-12', 'U-15', 'U-20', 'U-24', 'U-30',
-          'Colita', 'Entero'
-        ];
+        // La lista inicia vacía: cada usuario decide qué medidas agregar y en qué orden.
+        this.medidasConfiguracion = [];
       }
     },
 

@@ -26,26 +26,63 @@
 
         <!-- Lista de medidas configuradas -->
         <div class="medidas-configuradas-section">
-          <h4>Medidas Disponibles en el Selector</h4>
+          <h4>Orden de Medidas en el Selector</h4>
           <p class="descripcion">
-            Selecciona las medidas que aparecerán como opciones en el campo de medida. 
-            Los usuarios también podrán escribir manualmente medidas que no estén en esta lista.
+            Agrega únicamente las medidas que quieras mostrar y acomódalas en el orden deseado.
+            También se podrán escribir otras medidas manualmente y las recomendaciones seguirán disponibles.
           </p>
-          
-          <div class="medidas-grid">
-            <div 
-              v-for="medida in todasLasMedidas" 
-              :key="medida" 
-              class="medida-item"
-              :class="{ 'seleccionada': medidasSeleccionadas.includes(medida) }"
-              @click="toggleMedida(medida)"
-            >
-              <span class="medida-texto">{{ medida }}</span>
-              <span v-if="medidasSeleccionadas.includes(medida)" class="checkmark">✓</span>
-            </div>
+
+          <div v-if="medidasSeleccionadas.length === 0" class="medidas-vacias">
+            No hay medidas configuradas. Agrega la primera medida arriba.
           </div>
 
-
+          <div v-else class="medidas-ordenadas">
+            <div 
+              v-for="(medida, index) in medidasSeleccionadas"
+              :key="medida" 
+              class="medida-orden-item"
+              :class="{ 'arrastrando': indiceArrastrado === index }"
+              draggable="true"
+              @dragstart="iniciarArrastre(index, $event)"
+              @dragover.prevent
+              @drop="soltarMedida(index)"
+              @dragend="finalizarArrastre"
+            >
+              <span class="asa-arrastre" title="Arrastrar para ordenar">
+                <i class="fas fa-grip-vertical"></i>
+              </span>
+              <span class="numero-orden">{{ index + 1 }}</span>
+              <span class="medida-texto">{{ medida }}</span>
+              <div class="controles-orden">
+                <button
+                  type="button"
+                  class="btn-orden"
+                  :disabled="index === 0"
+                  :aria-label="`Subir ${medida}`"
+                  @click="moverMedida(index, -1)"
+                >
+                  <i class="fas fa-arrow-up"></i>
+                </button>
+                <button
+                  type="button"
+                  class="btn-orden"
+                  :disabled="index === medidasSeleccionadas.length - 1"
+                  :aria-label="`Bajar ${medida}`"
+                  @click="moverMedida(index, 1)"
+                >
+                  <i class="fas fa-arrow-down"></i>
+                </button>
+                <button
+                  type="button"
+                  class="btn-eliminar-medida"
+                  :aria-label="`Eliminar ${medida}`"
+                  @click="eliminarMedida(index)"
+                >
+                  <i class="fas fa-trash-alt"></i>
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -81,19 +118,9 @@ export default {
   data() {
     return {
       nuevaMedida: '',
-      medidasSeleccionadas: [...this.medidasConfiguracion]
+      medidasSeleccionadas: [...this.medidasConfiguracion],
+      indiceArrastrado: null
     };
-  },
-
-  computed: {
-    todasLasMedidas() {
-      // Combinar medidas usadas históricamente con medidas agregadas manualmente
-      const combinadas = new Set([
-        ...this.medidasUsadas,
-        ...this.medidasSeleccionadas
-      ]);
-      return Array.from(combinadas).sort();
-    }
   },
 
   watch: {
@@ -107,6 +134,7 @@ export default {
       if (visible) {
         this.medidasSeleccionadas = [...this.medidasConfiguracion];
         this.nuevaMedida = '';
+        this.indiceArrastrado = null;
       }
     }
   },
@@ -114,21 +142,49 @@ export default {
   methods: {
     agregarMedida() {
       const medida = this.nuevaMedida.trim();
-      if (medida && !this.medidasSeleccionadas.includes(medida)) {
+      const yaExiste = this.medidasSeleccionadas.some(
+        existente => existente.toLocaleLowerCase() === medida.toLocaleLowerCase()
+      );
+
+      if (medida && !yaExiste) {
         this.medidasSeleccionadas.push(medida);
       }
       this.nuevaMedida = '';
     },
 
+    moverMedida(index, desplazamiento) {
+      const destino = index + desplazamiento;
+      if (destino < 0 || destino >= this.medidasSeleccionadas.length) return;
 
+      const [medida] = this.medidasSeleccionadas.splice(index, 1);
+      this.medidasSeleccionadas.splice(destino, 0, medida);
+    },
 
-    toggleMedida(medida) {
-      const index = this.medidasSeleccionadas.indexOf(medida);
-      if (index === -1) {
-        this.medidasSeleccionadas.push(medida);
-      } else {
-        this.medidasSeleccionadas.splice(index, 1);
+    eliminarMedida(index) {
+      this.medidasSeleccionadas.splice(index, 1);
+    },
+
+    iniciarArrastre(index, event) {
+      this.indiceArrastrado = index;
+      if (event?.dataTransfer) {
+        event.dataTransfer.effectAllowed = 'move';
+        event.dataTransfer.setData('text/plain', String(index));
       }
+    },
+
+    soltarMedida(indexDestino) {
+      if (this.indiceArrastrado === null || this.indiceArrastrado === indexDestino) {
+        this.indiceArrastrado = null;
+        return;
+      }
+
+      const [medida] = this.medidasSeleccionadas.splice(this.indiceArrastrado, 1);
+      this.medidasSeleccionadas.splice(indexDestino, 0, medida);
+      this.indiceArrastrado = null;
+    },
+
+    finalizarArrastre() {
+      this.indiceArrastrado = null;
     },
 
     cerrar() {
@@ -243,47 +299,103 @@ export default {
   line-height: 1.4;
 }
 
-.medidas-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-  gap: 10px;
+.medidas-ordenadas {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
   margin-bottom: 30px;
 }
 
-.medida-item {
-  padding: 10px;
-  border: 2px solid #e0e0e0;
-  border-radius: 8px;
-  cursor: pointer;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  transition: all 0.3s ease;
-  background-color: white;
+.medidas-vacias {
+  padding: 24px;
+  margin-bottom: 30px;
+  color: #6b7280;
+  border: 2px dashed #cbd5e1;
+  border-radius: 10px;
+  background: #f8fafc;
+  text-align: center;
+  font-weight: 600;
 }
 
-.medida-item:hover {
+.medida-orden-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 58px;
+  padding: 8px 10px;
+  border: 2px solid #dbe4ee;
+  border-radius: 8px;
+  background-color: white;
+  transition: border-color .2s ease, box-shadow .2s ease, opacity .2s ease;
+}
+
+.medida-orden-item:hover {
   border-color: #007bff;
-  transform: translateY(-2px);
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
 }
 
-.medida-item.seleccionada {
-  background-color: #007bff;
+.medida-orden-item.arrastrando {
+  opacity: .45;
   border-color: #007bff;
-  color: white;
 }
 
 .medida-texto {
-  font-weight: 500;
+  flex: 1;
+  min-width: 0;
+  font-size: 18px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
 }
 
-.checkmark {
-  font-weight: bold;
-  color: white;
+.asa-arrastre {
+  color: #94a3b8;
+  cursor: grab;
 }
 
+.numero-orden {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  color: #075985;
+  border-radius: 50%;
+  background: #e0f2fe;
+  font-weight: 800;
+}
 
+.controles-orden {
+  display: flex;
+  gap: 6px;
+}
+
+.btn-orden,
+.btn-eliminar-medida {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #f8fafc;
+  cursor: pointer;
+}
+
+.btn-orden { color: #0369a1; }
+
+.btn-eliminar-medida {
+  color: #be123c;
+  border-color: #fecdd3;
+  background: #fff1f2;
+}
+
+.btn-orden:disabled {
+  opacity: .35;
+  cursor: not-allowed;
+}
 
 .modal-footer {
   display: flex;
@@ -344,14 +456,23 @@ export default {
     margin: 10px;
   }
   
-  .medidas-grid {
-    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
-    gap: 8px;
-  }
-  
   .input-group {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .medida-orden-item {
+    gap: 8px;
+  }
+
+  .asa-arrastre {
+    display: none;
+  }
+
+  .btn-orden,
+  .btn-eliminar-medida {
+    width: 38px;
+    height: 38px;
   }
 }
 </style>
