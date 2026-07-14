@@ -21,6 +21,125 @@ export const normalizarMedida = (medida) => {
 };
 
 /**
+ * Genera las claves de búsqueda de una medida, en orden de prioridad:
+ * 1. El texto completo (coincidencia exacta).
+ * 2. La talla numérica inicial, por ejemplo "71/90" en
+ *    "71/90 61 selecta" (coincidencia base).
+ *
+ * De esta forma un precio registrado específicamente como
+ * "71/90 selecta" gana sobre "71/90", pero cualquier descripción sin
+ * registro exacto todavía puede heredar el precio de la talla base.
+ */
+export const obtenerClavesBusquedaMedida = (medida) => {
+  const claveExacta = normalizarMedida(medida);
+  if (!claveExacta) return [];
+
+  const texto = String(medida).trim();
+  const coincidenciaBase = texto.match(
+    /^(\d+(?:[.,]\d+)?\s*\/\s*\d+(?:[.,]\d+)?)(?=\s|[-–—]|$)/
+  );
+  const claveBase = coincidenciaBase
+    ? normalizarMedida(coincidenciaBase[1])
+    : '';
+
+  return claveBase && claveBase !== claveExacta
+    ? [claveExacta, claveBase]
+    : [claveExacta];
+};
+
+const obtenerCoincidenciaDeMedida = (preciosParaFecha, medida) => {
+  const claves = obtenerClavesBusquedaMedida(medida);
+
+  for (let indice = 0; indice < claves.length; indice += 1) {
+    const detalle = preciosParaFecha.get(claves[indice]);
+    if (detalle) {
+      return {
+        ...detalle,
+        tipoCoincidencia: indice === 0 ? 'exacta' : 'base',
+        medidaBuscada: String(medida),
+        medidaCoincidente: detalle.producto
+      };
+    }
+  }
+
+  return null;
+};
+
+const obtenerTimestampComparable = (timestamp) => {
+  if (!timestamp) return 0;
+  if (typeof timestamp === 'number') return timestamp;
+  if (typeof timestamp?.toMillis === 'function') return timestamp.toMillis();
+
+  const seconds = timestamp?.seconds ?? timestamp?._seconds;
+  const nanoseconds = timestamp?.nanoseconds ?? timestamp?._nanoseconds ?? 0;
+  if (typeof seconds === 'number') {
+    return (seconds * 1000) + Math.floor(nanoseconds / 1000000);
+  }
+
+  const parsed = Number(timestamp);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+export const compararPreciosMasAntiguosPrimero = (a, b) => {
+  const fechaA = normalizarFechaISO(a?.fecha);
+  const fechaB = normalizarFechaISO(b?.fecha);
+
+  if (fechaA !== fechaB) {
+    return fechaA < fechaB ? -1 : 1;
+  }
+
+  return obtenerTimestampComparable(a?.timestamp) - obtenerTimestampComparable(b?.timestamp);
+};
+
+/**
+ * Devuelve el precio junto con la fecha y el alcance que lo originaron.
+ * Mantiene la regla histórica de la app: un precio específico del cliente
+ * tiene prioridad sobre el general.
+ */
+export const obtenerDetallesPreciosParaFecha = (preciosActuales, fechaEmbarque, clienteId = null) => {
+  if (!Array.isArray(preciosActuales)) {
+    console.warn('[PRECIOS] preciosActuales no es un array válido');
+    return new Map();
+  }
+
+  const fechaLimiteISO = normalizarFechaISO(fechaEmbarque || obtenerFechaActualISO());
+  const preciosGenerales = new Map();
+  const preciosEspecificos = new Map();
+  const preciosOrdenados = [...preciosActuales].sort(compararPreciosMasAntiguosPrimero);
+
+  preciosOrdenados.forEach((precio) => {
+    if (!precio?.fecha || !precio?.producto) return;
+
+    const fechaPrecioISO = normalizarFechaISO(precio.fecha);
+    if (!esFechaValida(fechaPrecioISO, fechaLimiteISO)) return;
+
+    const medidaNormalizada = normalizarMedida(precio.producto);
+    const detalleBase = {
+      precio: precio.precio,
+      fecha: fechaPrecioISO,
+      timestamp: obtenerTimestampComparable(precio.timestamp),
+      producto: precio.producto
+    };
+
+    if (clienteId && precio.clienteId === clienteId) {
+      preciosEspecificos.set(medidaNormalizada, {
+        ...detalleBase,
+        origen: 'especifico',
+        clienteId: precio.clienteId
+      });
+    } else if (!precio.clienteId) {
+      preciosGenerales.set(medidaNormalizada, {
+        ...detalleBase,
+        origen: 'general',
+        clienteId: null
+      });
+    }
+  });
+
+  return new Map([...preciosGenerales, ...preciosEspecificos]);
+};
+
+/**
  * Filtra precios por fecha del embarque
  * 
  * IMPORTANTE: Incluye modificaciones del mismo día del embarque
@@ -33,116 +152,8 @@ export const normalizarMedida = (medida) => {
  * @returns {Map} - Mapa con los precios relevantes por medida normalizada
  */
 export const obtenerPreciosParaFecha = (preciosActuales, fechaEmbarque, clienteId = null) => {
-  if (!Array.isArray(preciosActuales)) {
-    console.warn('[PRECIOS] preciosActuales no es un array válido');
-    return new Map();
-  }
-  
-  // Si no hay fecha del embarque, usar la fecha actual como fallback
-  if (!fechaEmbarque) {
-    console.warn('[PRECIOS] No hay fecha del embarque, usando fecha actual como fallback');
-    fechaEmbarque = obtenerFechaActualISO();
-  }
-
-  // Normalizar la fecha del embarque
-  const fechaLimiteISO = normalizarFechaISO(fechaEmbarque);
-  
-  
-  
-  // Mapa para almacenar los precios más recientes por medida
-  const preciosPorMedida = new Map();
-  // Mapa para precios específicos del cliente
-  const preciosEspecificos = new Map();
-  
-  // Ordenar precios por fecha y luego por timestamp para garantizar orden correcto
-  const preciosOrdenados = [...preciosActuales].sort((a, b) => {
-    // Normalizar fechas para comparación
-    const fechaA = normalizarFechaISO(a.fecha);
-    const fechaB = normalizarFechaISO(b.fecha);
-    
-    if (fechaA !== fechaB) {
-      return fechaA < fechaB ? -1 : 1; // Más antiguos primero
-    }
-    
-    // Si misma fecha, ordenar por timestamp (más recientes al final)
-    const timestampA = a.timestamp || 0;
-    const timestampB = b.timestamp || 0;
-    return timestampA - timestampB;
-  });
-  
-  
-  
-  // Filtrar y organizar precios (ahora usando el array ordenado)
-  preciosOrdenados.forEach(precio => {
-    if (!precio.fecha || !precio.producto) return;
-    
-    const fechaPrecioISO = normalizarFechaISO(precio.fecha);
-    
-    // Usar la nueva utilidad para validar fechas
-    if (esFechaValida(fechaPrecioISO, fechaLimiteISO)) {
-      const medidaNormalizada = normalizarMedida(precio.producto);
-      
-              // Si es un precio específico para este cliente, tiene prioridad
-        if (precio.clienteId === clienteId) {
-          const precioExistente = preciosEspecificos.get(medidaNormalizada);
-          
-          // Debido al ordenamiento, siempre actualizar si:
-          // 1. No existe precio previo
-          // 2. Es una fecha más reciente 
-          // 3. Es la misma fecha (será más reciente por el ordenamiento)
-          if (!precioExistente || fechaPrecioISO >= precioExistente.fecha) {
-            
-            const esActualizacionMismoDia = precioExistente && fechaPrecioISO === precioExistente.fecha;
-            if (esActualizacionMismoDia) {
-            } else {
-            }
-            
-            preciosEspecificos.set(medidaNormalizada, {
-              precio: precio.precio,
-              fecha: fechaPrecioISO,
-              clienteId: precio.clienteId,
-              timestamp: precio.timestamp || new Date().getTime()
-            });
-          }
-        } 
-        // Para precios generales, almacenar el más reciente
-        else if (!precio.clienteId) {
-          const precioExistente = preciosPorMedida.get(medidaNormalizada);
-          
-          // Misma lógica para precios generales
-          if (!precioExistente || fechaPrecioISO >= precioExistente.fecha) {
-            
-            const esActualizacionMismoDia = precioExistente && fechaPrecioISO === precioExistente.fecha;
-            if (esActualizacionMismoDia) {
-            }
-            
-            preciosPorMedida.set(medidaNormalizada, {
-              precio: precio.precio,
-              fecha: fechaPrecioISO,
-              clienteId: null,
-              timestamp: precio.timestamp || new Date().getTime()
-            });
-          }
-        }
-    }
-  });
-  
-  // Combinar ambos mapas, dando prioridad a los precios específicos
-  const preciosFinales = new Map();
-  
-  // Agregar precios generales
-  for (const [medida, precio] of preciosPorMedida) {
-    preciosFinales.set(medida, precio.precio);
-  }
-  
-  // Sobrescribir con precios específicos si existen
-  for (const [medida, precio] of preciosEspecificos) {
-    preciosFinales.set(medida, precio.precio);
-  }
-  
-  
-  
-  return preciosFinales;
+  const detalles = obtenerDetallesPreciosParaFecha(preciosActuales, fechaEmbarque, clienteId);
+  return new Map([...detalles].map(([medida, detalle]) => [medida, detalle.precio]));
 };
 
 /**
@@ -154,9 +165,13 @@ export const obtenerPreciosParaFecha = (preciosActuales, fechaEmbarque, clienteI
  * @returns {number|null} - Precio encontrado o null
  */
 export const obtenerPrecioParaMedida = (preciosActuales, medida, fechaEmbarque, clienteId = null) => {
-  const preciosParaFecha = obtenerPreciosParaFecha(preciosActuales, fechaEmbarque, clienteId);
-  const medidaNormalizada = normalizarMedida(medida);
-  return preciosParaFecha.get(medidaNormalizada) || null;
+  const preciosParaFecha = obtenerDetallesPreciosParaFecha(preciosActuales, fechaEmbarque, clienteId);
+  return obtenerCoincidenciaDeMedida(preciosParaFecha, medida)?.precio ?? null;
+};
+
+export const obtenerDetallePrecioParaMedida = (preciosActuales, medida, fechaEmbarque, clienteId = null) => {
+  const preciosParaFecha = obtenerDetallesPreciosParaFecha(preciosActuales, fechaEmbarque, clienteId);
+  return obtenerCoincidenciaDeMedida(preciosParaFecha, medida);
 };
 
 /**
@@ -236,8 +251,11 @@ export const obtenerPreciosParaFechaNotaVenta = (preciosActuales, fechaEmbarque,
  */
 export const obtenerPrecioParaMedidaNotaVenta = (preciosActuales, medida, fechaEmbarque, clienteNombre = null) => {
   const preciosParaFecha = obtenerPreciosParaFechaNotaVenta(preciosActuales, fechaEmbarque, clienteNombre);
-  const medidaNormalizada = normalizarMedida(medida);
-  return preciosParaFecha.get(medidaNormalizada) || null;
+  const claves = obtenerClavesBusquedaMedida(medida);
+  for (const clave of claves) {
+    if (preciosParaFecha.has(clave)) return preciosParaFecha.get(clave);
+  }
+  return null;
 };
 
 /** Nombre fijo del “producto” en la colección `precios` para el precio por kg de maquila de Ozuna. */

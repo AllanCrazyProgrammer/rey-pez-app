@@ -79,7 +79,7 @@
 
 <script>
 import PedidoReferencia from './PedidoReferencia.vue';
-import { obtenerPrecioParaMedida } from '@/utils/preciosHistoricos';
+import { obtenerDetallePrecioParaMedida, normalizarMedida } from '@/utils/preciosHistoricos';
 import { normalizarFechaISO, obtenerFechaActualISO } from '@/utils/dateUtils';
 
 export default {
@@ -309,12 +309,23 @@ export default {
                 if (!medida) return;
                 if (item.precioBorradoManualmente) return;
 
-                const precio = obtenerPrecioParaMedida(this.preciosActuales, medida, fechaParaPrecios, clienteId);
-                if (precio !== null && precio !== undefined) {
-                    this.$set(item, 'precio', precio);
+                const esManualMismaMedida = item.precioOrigen === 'manual' &&
+                    normalizarMedida(item.precioMedidaBase) === normalizarMedida(medida);
+                if (esManualMismaMedida) return;
+
+                const detalle = obtenerDetallePrecioParaMedida(this.preciosActuales, medida, fechaParaPrecios, clienteId);
+                if (detalle && detalle.precio !== null && detalle.precio !== undefined) {
+                    this.$set(item, 'precio', detalle.precio);
+                    this.$set(item, 'precioOrigen', detalle.origen);
+                    this.$set(item, 'precioFecha', detalle.fecha);
+                    this.$set(item, 'precioClienteId', detalle.clienteId);
+                    this.$set(item, 'precioMedidaBase', medida);
                 } else if (item.precio !== null && item.precio !== undefined) {
                     // Limpiar precio si no existe para la nueva talla para evitar valores obsoletos
                     this.$set(item, 'precio', null);
+                    ['precioOrigen', 'precioFecha', 'precioClienteId', 'precioMedidaBase'].forEach((campo) => {
+                        this.$delete(item, campo);
+                    });
                 }
             };
 

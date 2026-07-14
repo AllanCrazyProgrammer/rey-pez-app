@@ -111,15 +111,29 @@ export const embarqueModalesMixin = {
           this.$set(this.itemSeleccionado, 'precioBorradoManualmente', false);
           if (esOzunaMaquila) {
             this.$set(this.itemSeleccionado, 'precioMaquila', precio);
+            this.$set(this.itemSeleccionado, 'precioOrigen', 'maquila');
+            this.$set(this.itemSeleccionado, 'precioClienteId', 'ozuna');
+          } else {
+            this.$set(this.itemSeleccionado, 'precioOrigen', 'manual');
+            this.$set(this.itemSeleccionado, 'precioClienteId', clienteId || null);
           }
+          this.$set(this.itemSeleccionado, 'precioFecha', null);
+          this.$set(this.itemSeleccionado, 'precioMedidaBase', this.itemSeleccionado.medida || this.itemSeleccionado.talla || '');
         } else {
           if (esOzunaMaquila) {
             this.$delete(this.itemSeleccionado, 'precioMaquila');
             this.$set(this.itemSeleccionado, 'precio', this.precioMaquilaOzunaDefault);
             this.$set(this.itemSeleccionado, 'precioBorradoManualmente', false);
+            this.$set(this.itemSeleccionado, 'precioOrigen', 'maquila');
+            this.$set(this.itemSeleccionado, 'precioClienteId', 'ozuna');
+            this.$set(this.itemSeleccionado, 'precioFecha', this.embarque?.fecha || null);
+            this.$set(this.itemSeleccionado, 'precioMedidaBase', this.itemSeleccionado.medida || this.itemSeleccionado.talla || '');
           } else {
             this.$delete(this.itemSeleccionado, 'precio');
             this.$set(this.itemSeleccionado, 'precioBorradoManualmente', true);
+            ['precioOrigen', 'precioClienteId', 'precioFecha', 'precioMedidaBase'].forEach((campo) => {
+              this.$delete(this.itemSeleccionado, campo);
+            });
           }
         }
 

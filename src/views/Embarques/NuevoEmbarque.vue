@@ -1761,7 +1761,9 @@ export default {
         await this.cargarClientesPersonalizados();
         await this.cargarPedidoReferenciaDelDia();
         this.guardadoAutomaticoActivo = true;
-        await this.cargarPreciosActuales();
+        // Mantener el catálogo guardado en el snapshot offline y dejar una
+        // escucha preparada para actualizarlo en cuanto regrese la conexión.
+        this.iniciarEscuchaPreciosActuales();
         return;
       }
 
@@ -1775,7 +1777,7 @@ export default {
     await this.cargarPedidoReferenciaDelDia();
     await this.iniciarPresenciaUsuario();
     this.escucharUsuariosActivos();
-    await this.cargarPreciosActuales();
+    await this.iniciarEscuchaPreciosActuales();
   },
 
   async beforeRouteLeave(to, from, next) {
@@ -1843,6 +1845,7 @@ export default {
     
     // Cancelar la suscripción a los cambios en tiempo real
     this.limpiarConexionesFirestore();
+    this.detenerEscuchaPreciosActuales();
 
     // Limpiar debounce del guardado automático (DEPRECATED)
     if (this.debouncedSave && this.debouncedSave.cancel) {

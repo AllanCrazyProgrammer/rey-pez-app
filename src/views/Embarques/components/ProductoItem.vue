@@ -6,6 +6,8 @@
         'taras-no-reportadas': totalTaras > 0 && !coincideTaras,
         'producto-en-cero': totalTaras === 0 && totalTarasReportadas === 0,
         'medida-vacia': !producto.medida,
+        'pedido-cubierto': tienePedidoReferencia && pedidoCubierto,
+        'pedido-pendiente': tienePedidoReferencia && !pedidoCubierto,
         'selector-medidas-abierto': mostrarSugerencias === true && (sugerenciasMedidas.length > 0 || medidasConfiguracion.length > 0),
         'selector-tipo-abierto': mostrarSugerencias === 'tipo'
     }">
@@ -70,9 +72,16 @@
                 :total-kilos="totalesCompartidos.totalKilos"
                 :total-taras="totalesCompartidos.totalTaras"
             />
-            <span v-if="producto.precio" class="precio-tag">
-                <span class="precio-tag-label">Venta</span>
-                <strong>${{ producto.precio }}</strong>
+            <span
+                v-if="producto.precio"
+                class="precio-tag"
+                :class="{ 'precio-tag-especifico': producto.precioOrigen === 'especifico' }"
+            >
+                <span class="precio-tag-valor">
+                    <span class="precio-tag-label">Venta</span>
+                    <strong>${{ producto.precio }}</strong>
+                </span>
+                <small v-if="descripcionPrecio" class="precio-tag-origen">{{ descripcionPrecio }}</small>
             </span>
         </div>
         <div class="producto-header">
@@ -321,7 +330,7 @@
 <script>
 import PedidoReferencia from './PedidoReferencia.vue';
 import {
-    obtenerPrecioParaMedida,
+    obtenerDetallePrecioParaMedida,
     normalizarMedida,
     PRECIO_MAQUILA_OZUNA_FALLBACK
 } from '@/utils/preciosHistoricos';
@@ -378,7 +387,10 @@ export default {
     data() {
         return {
             mostrarSugerencias: false,
-            sugerenciasMedidas: []
+            sugerenciasMedidas: [],
+            // Solo la medida operativa determina el precio. El nombre para PDF
+            // nunca modifica esta referencia.
+            medidaPrecioAnteriorNormalizada: normalizarMedida(this.producto?.medida)
         };
     },
 
@@ -474,8 +486,36 @@ export default {
             return normalizar(referencia.kilos) > 0 || normalizar(referencia.taras) > 0;
         },
 
+        pedidoCubierto() {
+            if (!this.tienePedidoReferencia) return false;
+
+            const referencia = this.producto.pedidoReferencia || {};
+            const normalizar = valor => Number(
+                typeof valor === 'string' ? valor.replace(',', '.') : (valor || 0)
+            ) || 0;
+            const kilosPedido = normalizar(referencia.kilos);
+            const tarasPedido = normalizar(referencia.taras);
+
+            if (kilosPedido > 0) {
+                return this.totalesCompartidos.totalKilos >= kilosPedido;
+            }
+            return this.totalesCompartidos.totalTaras >= tarasPedido;
+        },
+
         mostrarIndicadoresProducto() {
             return Boolean(this.producto.precio) || this.tienePedidoReferencia;
+        },
+
+        descripcionPrecio() {
+            const origen = this.producto.precioOrigen;
+            if (origen === 'manual') return 'Manual';
+            if (origen === 'maquila') return 'Maquila';
+
+            const alcance = origen === 'especifico'
+                ? 'Específico'
+                : (origen === 'general' ? 'General' : '');
+            const fecha = this.formatearFechaPrecio(this.producto.precioFecha);
+            return [alcance, fecha].filter(Boolean).join(' · ');
         },
 
         // Total de taras reportadas
@@ -554,6 +594,8 @@ export default {
             this.actualizarPedidoReferencia();
         },
         'producto.nombreAlternativoPDF': function() {
+            // El alias es exclusivamente visual/PDF. No recalcular contra el
+            // alias: el precio debe seguir ligado a producto.medida.
             this.actualizarPedidoReferencia();
         },
         nombreCliente: function() {
@@ -605,6 +647,21 @@ export default {
         // Método para actualizar el componente padre
         actualizarProducto() {
             this.$emit('update:producto', this.producto);
+        },
+        formatearFechaPrecio(fecha) {
+            const match = String(fecha || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+            return match ? `${match[3]}/${match[2]}/${match[1].slice(2)}` : '';
+        },
+        establecerDatoPrecio(campo, valor) {
+            this.$set(this.producto, campo, valor);
+        },
+        limpiarDatosPrecioAutomatico({ conservarPrecio = false } = {}) {
+            if (!conservarPrecio) {
+                this.$delete(this.producto, 'precio');
+            }
+            ['precioOrigen', 'precioFecha', 'precioClienteId', 'precioMedidaBase'].forEach((campo) => {
+                this.$delete(this.producto, campo);
+            });
         },
         normalizarMedidaParaReferencia(valor) {
             const texto = (valor || '').toString();
@@ -861,7 +918,25 @@ export default {
 
         // Método para asignar el precio automáticamente según la medida y el cliente
         asignarPrecioAutomatico() {
-            if (!this.producto.medida) {
+            const medidaBasePrecio = this.producto.medida;
+            const medidaNormalizada = normalizarMedida(medidaBasePrecio);
+            const medidaCambio = Boolean(
+                this.medidaPrecioAnteriorNormalizada &&
+                this.medidaPrecioAnteriorNormalizada !== medidaNormalizada
+            );
+
+            if (!medidaBasePrecio) {
+                if (medidaCambio) this.limpiarDatosPrecioAutomatico();
+                this.medidaPrecioAnteriorNormalizada = medidaNormalizada;
+                return;
+            }
+
+            // Un precio capturado con el botón "$" pertenece a la medida
+            // operativa. Cambiar solo nombreAlternativoPDF lo conserva.
+            const esManualMismaMedida = this.producto.precioOrigen === 'manual' &&
+                normalizarMedida(this.producto.precioMedidaBase) === medidaNormalizada;
+            if (esManualMismaMedida) {
+                this.medidaPrecioAnteriorNormalizada = medidaNormalizada;
                 return;
             }
 
@@ -886,6 +961,12 @@ export default {
                     // No persistir precioMaquila aquí: si solo es el default global, las líneas
                     // siguen al precio del modal cuando cambie (ver precioMaquila en edición manual).
                 }
+
+                this.establecerDatoPrecio('precioOrigen', 'maquila');
+                this.establecerDatoPrecio('precioFecha', this.fechaEmbarque || obtenerFechaActualISO());
+                this.establecerDatoPrecio('precioClienteId', 'ozuna');
+                this.establecerDatoPrecio('precioMedidaBase', medidaBasePrecio);
+                this.medidaPrecioAnteriorNormalizada = medidaNormalizada;
                 
                 // Emitir evento para notificar que se asignó precio automáticamente
                 this.$emit('precio-asignado-automaticamente', {
@@ -918,31 +999,39 @@ export default {
             
             // Usar las nuevas utilidades para normalizar fecha
             const fechaParaPrecios = this.fechaEmbarque ? normalizarFechaISO(this.fechaEmbarque) : obtenerFechaActualISO();
-            
-            
-            
-            const precioHistorico = obtenerPrecioParaMedida(
+
+            const detallePrecio = obtenerDetallePrecioParaMedida(
                 this.preciosActuales, 
-                this.producto.medida, 
+                medidaBasePrecio,
                 fechaParaPrecios, 
                 clienteId
             );
             
-            if (precioHistorico) {
-                this.producto.precio = precioHistorico;
-                
-                
+            if (detallePrecio && detallePrecio.precio !== null && detallePrecio.precio !== undefined) {
+                this.producto.precio = detallePrecio.precio;
+                this.establecerDatoPrecio('precioOrigen', detallePrecio.origen);
+                this.establecerDatoPrecio('precioFecha', detallePrecio.fecha);
+                this.establecerDatoPrecio('precioClienteId', detallePrecio.clienteId);
+                this.establecerDatoPrecio('precioMedidaBase', medidaBasePrecio);
+
                 // Emitir evento para notificar que se asignó precio automáticamente
                 this.$emit('precio-asignado-automaticamente', {
-                    medida: this.producto.medida,
+                    medida: medidaBasePrecio,
                     cliente: nombreCliente,
-                    precio: precioHistorico,
+                    precio: detallePrecio.precio,
                     fecha: fechaParaPrecios,
                     esMismoDiaActual: fechaParaPrecios === obtenerFechaActualISO(),
-                    clienteId: clienteId
+                    clienteId: clienteId,
+                    origen: detallePrecio.origen
                 });
-            } else {
+            } else if (medidaCambio || (this.preciosActuales.length > 0 && navigator.onLine)) {
+                // Una medida sin coincidencia no debe heredar el valor de la
+                // medida anterior. En modo offline se conserva el último valor
+                // conocido hasta recuperar el catálogo.
+                this.limpiarDatosPrecioAutomatico();
             }
+
+            this.medidaPrecioAnteriorNormalizada = medidaNormalizada;
         },
 
         // Métodos para el manejo de la medida
@@ -1692,10 +1781,11 @@ export default {
 
 .precio-tag {
     display: inline-flex;
-    min-height: 30px;
-    align-items: center;
-    gap: 7px;
-    padding: 5px 9px;
+    min-height: 40px;
+    align-items: flex-end;
+    flex-direction: column;
+    gap: 4px;
+    padding: 7px;
     color: #065f46;
     border: 1px solid rgba(16,185,129,.28);
     border-radius: 9px;
@@ -1706,9 +1796,15 @@ export default {
     white-space: nowrap;
 }
 
+.precio-tag-valor {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+
 .precio-tag-label {
     color: #568074;
-    font-size: .55rem;
+    font-size: .64rem;
     font-weight: 850;
     letter-spacing: .08em;
     text-transform: uppercase;
@@ -1716,25 +1812,49 @@ export default {
 
 .precio-tag strong {
     color: #047857;
-    font-size: .9rem;
+    font-size: 1.18rem;
     font-weight: 950;
+}
+
+.precio-tag-origen {
+    color: #5f7f76;
+    font-size: .60rem;
+    font-weight: 750;
+    letter-spacing: .01em;
+}
+
+.precio-tag.precio-tag-especifico {
+    color: #5b21b6;
+    border-color: rgba(124,58,237,.38);
+    background: linear-gradient(135deg, rgba(237,233,254,.97), rgba(245,243,255,.98));
+    box-shadow: inset 0 1px rgba(255,255,255,.86), 0 6px 15px rgba(109,40,217,.13);
+}
+
+.precio-tag-especifico .precio-tag-label,
+.precio-tag-especifico .precio-tag-origen {
+    color: #7c3aed;
+}
+
+.precio-tag-especifico strong {
+    color: #5b21b6;
 }
 
 .producto-indicadores {
     display: flex;
     align-items: center;
     justify-content: flex-end;
-    flex-wrap: wrap;
-    gap: 6px;
+    flex-wrap: nowrap;
+    gap: 3px;
     margin: -5px 0 10px;
-    padding: 6px;
+    padding: 4px;
     border: 1px solid #dfe7f0;
     border-radius: 11px;
     background: rgba(237,242,248,.68);
 }
 
 .producto-indicadores > * {
-    flex: 0 0 auto;
+    flex: 0 1 auto;
+    min-width: 0;
 }
 
 .botones-encabezado {
@@ -2184,6 +2304,23 @@ export default {
 .producto[data-es-venta="true"] {
     border-left: 4px solid #10b981;
     background: linear-gradient(145deg, #f3fff9, #eaf8f1);
+}
+
+/* Estado del pedido de la medida: contorno completo y fácil de identificar. */
+.producto.pedido-cubierto {
+    border: 3px solid #10b981;
+    box-shadow:
+        0 0 0 2px rgba(16,185,129,.22),
+        0 16px 34px rgba(5,150,105,.20),
+        inset 0 1px rgba(255,255,255,.9);
+}
+
+.producto.pedido-pendiente {
+    border: 3px solid #ef4444;
+    box-shadow:
+        0 0 0 2px rgba(239,68,68,.20),
+        0 16px 34px rgba(220,38,38,.18),
+        inset 0 1px rgba(255,255,255,.9);
 }
 
 @media screen and (min-width: 1101px) {

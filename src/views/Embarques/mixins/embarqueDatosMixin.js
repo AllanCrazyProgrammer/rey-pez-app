@@ -1,7 +1,14 @@
-import { getFirestore, collection, doc, getDoc, updateDoc, getDocs, query, orderBy, serverTimestamp } from 'firebase/firestore';
+import { getFirestore, collection, doc, getDoc, updateDoc, getDocs, onSnapshot, serverTimestamp } from 'firebase/firestore';
 import { normalizarFechaISO } from '@/utils/dateUtils';
+import { compararPreciosMasAntiguosPrimero } from '@/utils/preciosHistoricos';
 
 export const embarqueDatosMixin = {
+  data() {
+    return {
+      unsubscribePreciosActuales: null,
+    };
+  },
+
   methods: {
     async guardarClientesPersonalizados() {
       localStorage.setItem('clientesPersonalizados', JSON.stringify(this.clientesPersonalizados));
@@ -60,40 +67,73 @@ export const embarqueDatosMixin = {
       }
     },
 
+    aplicarSnapshotPrecios(preciosSnapshot) {
+      const precios = preciosSnapshot.docs.map(d => ({
+        id: d.id,
+        ...d.data(),
+        timestamp: d.data().timestamp || 0,
+        fecha: normalizarFechaISO(d.data().fecha),
+      }));
+
+      // Firestore excluye documentos que no tienen un campo usado en
+      // orderBy. Ordenar aquí permite incluir también todo el historial
+      // legado sin timestamp.
+      this.preciosActuales = precios.sort((a, b) => compararPreciosMasAntiguosPrimero(b, a));
+
+      const sinTimestamp = this.preciosActuales.filter(p => !p.timestamp || p.timestamp === 0);
+      if (sinTimestamp.length > 0) {
+        console.warn(`[cargarPreciosActuales] ${sinTimestamp.length} precios sin timestamp`);
+      }
+    },
+
     async cargarPreciosActuales() {
       try {
         const db = getFirestore();
         const preciosRef = collection(db, 'precios');
-
-        const preciosSnapshotSimple = await getDocs(preciosRef);
-        if (preciosSnapshotSimple.size === 0) {
-          this.preciosActuales = [];
-          return;
-        }
-
-        let preciosSnapshot;
-        try {
-          preciosSnapshot = await getDocs(
-            query(preciosRef, orderBy('fecha', 'desc'), orderBy('timestamp', 'desc'))
-          );
-        } catch {
-          preciosSnapshot = await getDocs(query(preciosRef, orderBy('fecha', 'desc')));
-        }
-
-        this.preciosActuales = preciosSnapshot.docs.map(d => ({
-          id: d.id,
-          ...d.data(),
-          timestamp: d.data().timestamp || 0,
-          fecha: normalizarFechaISO(d.data().fecha),
-        }));
-
-        const sinTimestamp = this.preciosActuales.filter(p => !p.timestamp || p.timestamp === 0);
-        if (sinTimestamp.length > 0) {
-          console.warn(`[cargarPreciosActuales] ${sinTimestamp.length} precios sin timestamp`);
-        }
+        const preciosSnapshot = await getDocs(preciosRef);
+        this.aplicarSnapshotPrecios(preciosSnapshot);
       } catch (error) {
         console.error('[cargarPreciosActuales] Error:', error);
-        this.preciosActuales = [];
+        // Conservar el último catálogo conocido (incluido el snapshot offline)
+        // en vez de vaciarlo y dejar productos sin referencia de precio.
+      }
+    },
+
+    iniciarEscuchaPreciosActuales() {
+      if (this.unsubscribePreciosActuales) return Promise.resolve();
+
+      const db = getFirestore();
+      const preciosRef = collection(db, 'precios');
+
+      return new Promise((resolve) => {
+        let primeraRespuesta = true;
+        this.unsubscribePreciosActuales = onSnapshot(preciosRef, (snapshot) => {
+          // Si estamos sin conexión y no existe caché de precios, conservar el
+          // catálogo que venía en el snapshot offline del embarque.
+          const conservarCatalogoOffline = snapshot.empty &&
+            snapshot.metadata.fromCache &&
+            this.preciosActuales.length > 0;
+          if (!conservarCatalogoOffline) {
+            this.aplicarSnapshotPrecios(snapshot);
+          }
+          if (primeraRespuesta) {
+            primeraRespuesta = false;
+            resolve();
+          }
+        }, (error) => {
+          console.error('[escucharPreciosActuales] Error:', error);
+          if (primeraRespuesta) {
+            primeraRespuesta = false;
+            resolve();
+          }
+        });
+      });
+    },
+
+    detenerEscuchaPreciosActuales() {
+      if (this.unsubscribePreciosActuales) {
+        this.unsubscribePreciosActuales();
+        this.unsubscribePreciosActuales = null;
       }
     },
 

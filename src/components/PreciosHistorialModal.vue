@@ -12,7 +12,7 @@
     </button>
 
     <!-- Modal -->
-    <div v-if="showModal" class="modal-overlay" @click.self="showModal = false">
+    <div v-if="showModal" v-portal-body class="modal-overlay" @click.self="showModal = false">
       <div ref="modalContent" class="modal-content">
         <div class="modal-header">
           <h2>
@@ -432,7 +432,7 @@
 
 <script>
 import { db } from '@/firebase';
-import { collection, addDoc, query, where, getDocs, orderBy, deleteDoc, doc, updateDoc } from 'firebase/firestore';
+import { collection, addDoc, where, getDocs, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import { 
   obtenerFechaActualISO, 
   normalizarFechaISO, 
@@ -444,7 +444,8 @@ import PrecioActualEditorModal from '@/components/PrecioActualEditorModal.vue';
 import {
   PRODUCTO_PRECIO_MAQUILA_OZUNA,
   obtenerPrecioMaquilaOzunaDefault,
-  PRECIO_MAQUILA_OZUNA_FALLBACK
+  PRECIO_MAQUILA_OZUNA_FALLBACK,
+  compararPreciosMasAntiguosPrimero
 } from '@/utils/preciosHistoricos';
 import { formatNumber, formatearFecha as formatDate } from '@/utils/formatters';
 
@@ -461,6 +462,18 @@ export default {
   name: 'PreciosHistorialModal',
   components: {
     PrecioActualEditorModal
+  },
+  directives: {
+    // El botón vive dentro de HeaderEmbarque, cuyo backdrop-filter y overflow
+    // crean un bloque de contención. Mover únicamente el overlay a <body>
+    // evita que el modal se recorte al tamaño del encabezado.
+    portalBody: {
+      inserted(el) {
+        if (typeof document !== 'undefined' && el.parentNode !== document.body) {
+          document.body.appendChild(el);
+        }
+      }
+    }
   },
   props: {
     clienteActual: {
@@ -639,6 +652,19 @@ export default {
   methods: {
     formatNumber,
     formatDate,
+    actualizarBloqueoScrollPagina(abierto) {
+      if (typeof document === 'undefined') return;
+
+      if (abierto) {
+        if (this._bodyOverflowAnterior === undefined) {
+          this._bodyOverflowAnterior = document.body.style.overflow;
+        }
+        document.body.style.overflow = 'hidden';
+      } else if (this._bodyOverflowAnterior !== undefined) {
+        document.body.style.overflow = this._bodyOverflowAnterior;
+        this._bodyOverflowAnterior = undefined;
+      }
+    },
     // Normaliza el nombre del producto para unificar duplicados
     normalizarNombreProducto(nombre) {
       if (!nombre) return nombre;
@@ -671,8 +697,7 @@ export default {
     async cargarPreciosActuales() {
       try {
         const preciosRef = collection(db, 'precios');
-        const q = query(preciosRef, orderBy('fecha', 'desc'));
-        const preciosSnapshot = await getDocs(q);
+        const preciosSnapshot = await getDocs(preciosRef);
 
         this.preciosFirestoreRaw = preciosSnapshot.docs.map((docSnap) => {
           const data = docSnap.data();
@@ -682,14 +707,13 @@ export default {
             fecha: data.fecha ? normalizarFechaISO(data.fecha) : data.fecha,
             timestamp: data.timestamp || 0
           };
-        });
+        }).sort((a, b) => compararPreciosMasAntiguosPrimero(b, a));
         
         // Crear un mapa para organizar los precios por producto y cliente
         // Ahora normalizamos los nombres para unificar productos duplicados
         const preciosMap = new Map();
         
-        preciosSnapshot.docs.forEach(doc => {
-          const precio = { id: doc.id, ...doc.data() };
+        this.preciosFirestoreRaw.forEach(precio => {
           
           // Normalizar el nombre del producto para unificar duplicados
           const productoNormalizado = this.normalizarNombreProducto(precio.producto);
@@ -708,20 +732,14 @@ export default {
               clienteId: precio.clienteId || null,
               historial: []
             });
-          } else {
-            // Si ya existe, verificar si este registro es más reciente
-            const existente = preciosMap.get(clave);
-            if (new Date(precio.fecha) > new Date(existente.fechaActual)) {
-              existente.precioActual = precio.precio;
-              existente.fechaActual = precio.fecha;
-            }
           }
           
           // Agregar al historial con el nombre normalizado
           preciosMap.get(clave).historial.push({
-            id: doc.id,
+            id: precio.id,
             fecha: precio.fecha,
             precio: precio.precio,
+            timestamp: precio.timestamp || 0,
             clienteId: precio.clienteId || null,
             productoOriginal: precio.producto // Mantener referencia al nombre original
           });
@@ -729,7 +747,7 @@ export default {
         
         // Ordenar el historial de cada producto por fecha descendente
         preciosMap.forEach((item) => {
-          item.historial.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+          item.historial.sort((a, b) => compararPreciosMasAntiguosPrimero(b, a));
         });
         
         this.preciosActuales = Array.from(preciosMap.values()).map(item => ({
@@ -1281,6 +1299,10 @@ export default {
     }
   },
   watch: {
+    showModal(abierto) {
+      this.actualizarBloqueoScrollPagina(abierto);
+    },
+
     // Observar cambios en clienteActual para actualizar el filtro
     clienteActual: {
       immediate: true,
@@ -1333,6 +1355,7 @@ export default {
     this.cargarPreciosActuales();
   },
   beforeDestroy() {
+    this.actualizarBloqueoScrollPagina(false);
     // Limpiar timeout para evitar memory leaks
     if (this.buscarPrecioTimeout) {
       clearTimeout(this.buscarPrecioTimeout);
@@ -1404,25 +1427,35 @@ export default {
 
 .modal-overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(0, 0, 0, 0.5);
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  padding: clamp(12px, 2vw, 28px);
+  box-sizing: border-box;
+  overflow: hidden;
+  background-color: rgba(2, 8, 18, 0.78);
   display: flex;
   justify-content: center;
   align-items: center;
-  z-index: 1000;
+  isolation: isolate;
+  z-index: 2147483000;
+  backdrop-filter: blur(8px);
 }
 
 .modal-content {
   background-color: white;
   padding: 20px;
   border-radius: 8px;
-  width: 90%;
-  max-width: 800px;
-  max-height: 90vh;
-  overflow-y: auto;
+  width: min(1100px, 100%);
+  max-width: 1100px;
+  max-height: calc(100vh - 24px);
+  max-height: calc(100dvh - 24px);
+  max-height: 100%;
+  margin: 0;
+  box-sizing: border-box;
+  overflow: auto;
+  overscroll-behavior: contain;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
   backdrop-filter: blur(10px);
   border: 1px solid rgba(255, 255, 255, 0.2);
