@@ -184,7 +184,7 @@
           </div>
           
           <div class="resultados">
-            <p :class="{ 'valor-resumen-alerta': debeAlertarCero(medida, obtenerTotalEmbarcado(medida)) }">
+            <p class="total-embarcado" :class="{ 'valor-resumen-alerta': debeAlertarCero(medida, obtenerTotalEmbarcado(medida)) }">
               Total embarcado: {{ formatearNumero(obtenerTotalEmbarcado(medida)) }} kg
             </p>
             <p class="rendimiento" :class="{ 'rendimiento-cero-alerta': debeAlertarCero(medida, obtenerRendimientoActual(medida)) }">
@@ -4529,19 +4529,24 @@ input {
 .header-actions .btn-preparacion,
 .header-actions .btn-configuracion,
 .header-actions .btn-pdf {
-  min-height: 31px;
+  min-height: 40px;
   margin: 0;
-  padding: 6px 9px;
-  gap: 6px;
+  padding: 9px 13px;
+  gap: 8px;
   color: #dbe7f8;
   border: 1px solid rgba(148, 163, 184, .17);
   border-radius: 9px;
   background: rgba(20, 33, 55, .78);
   box-shadow: inset 0 1px rgba(255, 255, 255, .06);
-  font-size: .7rem;
-  font-weight: 750;
+  font-size: .84rem;
+  font-weight: 800;
   line-height: 1;
   transition: transform .18s ease, border-color .18s ease, background .18s ease, box-shadow .18s ease;
+}
+
+.header-actions button i {
+  margin: 0;
+  font-size: 1rem;
 }
 
 .header-actions .btn-volver:hover,
@@ -4557,7 +4562,6 @@ input {
   box-shadow: 0 8px 22px rgba(0, 0, 0, .2), 0 0 16px rgba(56, 217, 255, .07);
 }
 
-.header-actions button i { margin: 0; }
 .header-actions .btn-volver i { color: #93c5fd; }
 .header-actions .btn-nota i { color: #fbbf24; }
 .header-actions .btn-costos i { color: #4ade80; }
@@ -4812,6 +4816,11 @@ input {
   background: rgba(241, 245, 249, .86);
   font-size: .76rem;
   font-weight: 750;
+}
+
+.resultados > p.total-embarcado {
+  font-size: 1rem;
+  font-weight: 850;
 }
 
 .resultados .rendimiento {

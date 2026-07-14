@@ -16,6 +16,15 @@
         <button type="button" @click="volverAEmbarquesMenu" class="btn-volver">
           <i class="fas fa-arrow-left"></i> Menú
         </button>
+        <button
+          type="button"
+          @click="toggleNavbarPrincipal"
+          class="btn-navbar-principal"
+          :title="navbarPrincipalVisible ? 'Ocultar la barra principal' : 'Mostrar la barra principal'"
+        >
+          <i :class="['fas', navbarPrincipalVisible ? 'fa-eye-slash' : 'fa-bars']"></i>
+          {{ navbarPrincipalVisible ? 'Ocultar barra' : 'Mostrar barra' }}
+        </button>
         <button type="button" @click="toggleBloqueo" :class="['btn-bloqueo', { 'bloqueado': embarqueBloqueado }]">
           <i :class="['fas', embarqueBloqueado ? 'fa-lock' : 'fa-lock-open']"></i>
           {{ embarqueBloqueado ? 'Desbloquear' : 'Proteger' }}
@@ -122,6 +131,7 @@
 import PreciosHistorialModal from '@/components/PreciosHistorialModal.vue';
 import PedidoDelDiaModal from './PedidoDelDiaModal.vue';
 import GenerarEsqueletoEmbarqueButton from './GenerarEsqueletoEmbarqueButton.vue';
+import { useUIStore } from '@/stores/ui';
 
 export default {
   name: 'HeaderEmbarque',
@@ -178,6 +188,11 @@ export default {
       mostrarModalPedido: false
     };
   },
+  computed: {
+    navbarPrincipalVisible() {
+      return useUIStore().navbarVisibleEnEmbarque;
+    }
+  },
   watch: {
     'embarque.fecha'(newVal) {
       this.fechaLocal = newVal;
@@ -187,6 +202,9 @@ export default {
     }
   },
   methods: {
+    toggleNavbarPrincipal() {
+      useUIStore().toggleNavbarEnEmbarque();
+    },
     volverAEmbarquesMenu() {
       this.$emit('volver');
     },
@@ -222,6 +240,9 @@ export default {
     onEsqueletoError(mensaje) {
       this.$emit('esqueleto-error', mensaje);
     }
+  },
+  beforeDestroy() {
+    useUIStore().setNavbarVisibleEnEmbarque(false);
   }
 };
 </script>
@@ -580,22 +601,30 @@ label {
 
 .btn-volver,
 .btn-bloqueo,
+.btn-navbar-principal,
 .btn-configuracion-medidas,
 .btn {
-  min-height: 30px;
-  padding: 5px 8px;
-  font-size: .72rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  padding: 8px 10px;
+  gap: 7px;
+  font-size: .84rem;
+  font-weight: 700;
   line-height: 1;
   color: #dbe7f8;
   border: 1px solid rgba(148, 163, 184, .17);
   border-radius: 8px;
   background: rgba(20, 33, 55, .78);
   box-shadow: inset 0 1px rgba(255,255,255,.06);
+  cursor: pointer;
   transition: transform .2s ease, border-color .2s ease, box-shadow .2s ease, background .2s ease;
 }
 
 .btn-volver:hover,
 .btn-bloqueo:hover,
+.btn-navbar-principal:hover,
 .btn-configuracion-medidas:hover,
 .btn:hover:not(:disabled) {
   transform: translateY(-2px);
@@ -607,11 +636,21 @@ label {
 
 .btn-bloqueo,
 .btn-bloqueo.bloqueado,
+.btn-navbar-principal,
 .btn-configuracion-medidas { background: rgba(20, 33, 55, .78); }
 
+.btn-navbar-principal i { color: #fbbf24; }
 .btn-bloqueo:not(.bloqueado) i { color: #4ade80; }
 .btn-bloqueo.bloqueado i { color: #fb7185; }
 .btn-configuracion-medidas i { color: #38d9ff; }
+
+.btn-volver i,
+.btn-bloqueo i,
+.btn-navbar-principal i,
+.btn-configuracion-medidas i,
+.btn i {
+  font-size: .95rem;
+}
 
 .botones-accion {
   justify-content: flex-start;
@@ -639,7 +678,7 @@ label {
 /* El ancho permanece estable en Guardado / Subir cambios / Subiendo para
    que los botones vecinos y las secciones inferiores no se desplacen. */
 .btn-sync {
-  min-width: 138px;
+  min-width: 146px;
   justify-content: center;
 }
 

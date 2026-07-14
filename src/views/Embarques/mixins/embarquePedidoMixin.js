@@ -55,11 +55,12 @@ export const embarquePedidoMixin = {
         return referencias[clienteId];
       };
 
-      const agregarReferencia = (clienteId, medida, tipoData, cantidad, esTara, etiqueta = '', nota = '') => {
+      const agregarReferencia = (clienteId, medida, tipoData, cantidad, esTara, etiqueta = '', nota = '', proveedor = '') => {
         const medidaBase = this.normalizarTexto(medida);
         if (!medidaBase || !clienteId) return;
 
         const etiquetaNormalizada = this.normalizarTexto(etiqueta);
+        const proveedorNormalizado = this.normalizarTexto(proveedor);
         // Sellado/Kileado se reflejan en el nombre de la medida que genera el esqueleto
         // ("51/60 sellado", "51/60 kileado"), por lo que la referencia debe quedar
         // separada por variante para que cada tarjeta muestre sus propios kilos pedidos.
@@ -72,6 +73,7 @@ export const embarquePedidoMixin = {
         // por lo que la referencia debe indexarse por la misma medida combinada.
         let medidaNormalizada = medidaBase;
         if (etiquetaNormalizada) medidaNormalizada += ` ${etiquetaNormalizada}`;
+        if (proveedorNormalizado) medidaNormalizada += ` ${proveedorNormalizado}`;
         if (notaSufijo) medidaNormalizada += ` ${notaSufijo}`;
 
         const tipoNormalizado = this.normalizarTexto(tipoData?.tipo);
@@ -110,7 +112,7 @@ export const embarquePedidoMixin = {
               if (!medida) return;
               const cantidad = this.normalizarCantidadPedido(item.kilos);
               if (cantidad <= 0) return;
-              agregarReferencia(clienteId, medida, this.normalizarTipoPedido(item.tipo), cantidad, item.esTara, item.etiqueta, item.nota);
+              agregarReferencia(clienteId, medida, this.normalizarTipoPedido(item.tipo), cantidad, item.esTara, item.etiqueta, item.nota, item.proveedor);
             });
           });
 
@@ -125,7 +127,7 @@ export const embarquePedidoMixin = {
                 if (!medida) return;
                 const cantidad = this.normalizarCantidadPedido(item.kilos);
                 if (cantidad <= 0) return;
-                agregarReferencia(clienteId, medida, this.normalizarTipoPedido(item.tipo), cantidad, item.esTara, item.etiqueta, item.nota);
+                agregarReferencia(clienteId, medida, this.normalizarTipoPedido(item.tipo), cantidad, item.esTara, item.etiqueta, item.nota, item.proveedor);
               });
             });
           }

@@ -5,6 +5,7 @@ export const useUIStore = defineStore('ui', {
     activeModal: null,
     modalData: null,
     notifications: [],
+    navbarVisibleEnEmbarque: false,
   }),
 
   getters: {
@@ -20,6 +21,14 @@ export const useUIStore = defineStore('ui', {
     closeModal() {
       this.activeModal = null;
       this.modalData = null;
+    },
+
+    setNavbarVisibleEnEmbarque(visible) {
+      this.navbarVisibleEnEmbarque = Boolean(visible);
+    },
+
+    toggleNavbarEnEmbarque() {
+      this.navbarVisibleEnEmbarque = !this.navbarVisibleEnEmbarque;
     },
 
     notify(message, type = 'info', duration = 3000) {

@@ -1399,14 +1399,14 @@ export default {
 }
 
 .precio-historial-btn--compact {
-  min-height: 30px;
-  padding: 5px 9px;
+  min-height: 38px;
+  padding: 8px 11px;
   color: #fde68a;
   border: 1px solid rgba(251, 191, 36, .3);
   border-radius: 9px;
   background: rgba(20, 33, 55, .78);
   box-shadow: inset 0 1px rgba(255, 255, 255, .06);
-  font-size: .72rem;
+  font-size: .84rem;
   font-weight: 700;
   letter-spacing: 0;
   line-height: 1;
@@ -1422,7 +1422,7 @@ export default {
 }
 
 .precio-historial-btn--compact .nav-icon {
-  font-size: .82rem;
+  font-size: .95rem;
 }
 
 .modal-overlay {

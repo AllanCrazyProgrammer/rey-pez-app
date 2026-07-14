@@ -303,7 +303,11 @@ export default {
   },
   computed: {
     ocultarNavbar() {
-      return !!useUIStore().activeModal;
+      const uiStore = useUIStore();
+      const rutasConNavegacionPropia = ['EditarEmbarque', 'NuevoEmbarque'];
+      const embarqueOcupaTodaLaPantalla = rutasConNavegacionPropia.includes(this.$route?.name);
+
+      return !!uiStore.activeModal || (embarqueOcupaTodaLaPantalla && !uiStore.navbarVisibleEnEmbarque);
     }
   },
   methods: {

@@ -951,29 +951,37 @@ button:disabled {
 .incluir-precios-checkbox,
 .cuenta-en-pdf-checkbox,
 .sumar-kg-catarro-checkbox {
-    gap: 6px;
+    gap: 8px;
     margin: 0;
-    padding: 7px 9px;
+    min-height: 42px;
+    padding: 10px 12px;
     color: #b9c6d9;
     border: 1px solid rgba(255,255,255,.09);
     border-radius: 10px;
     background: rgba(0,0,0,.16);
-    font-size: .72rem;
+    font-size: .84rem;
+    font-weight: 700;
+    white-space: nowrap;
 }
 
 .cliente-header-controls input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    flex: 0 0 18px;
     accent-color: var(--cliente-color);
 }
 
 .cliente-header-controls .btn {
-    min-height: 34px;
-    padding: 7px 10px;
+    min-height: 42px;
+    padding: 10px 13px;
     color: #dce7f6;
     border: 1px solid rgba(255,255,255,.1);
     border-radius: 10px;
     background: rgba(255,255,255,.055);
     box-shadow: inset 0 1px rgba(255,255,255,.05);
-    font-size: .72rem;
+    font-size: .84rem;
+    font-weight: 700;
+    white-space: nowrap;
     transition: transform .2s ease, border-color .2s ease, background .2s ease;
 }
 
@@ -983,7 +991,10 @@ button:disabled {
     background: color-mix(in srgb, var(--cliente-color) 15%, rgba(255,255,255,.05));
 }
 
-.cliente-header-controls .btn i { color: var(--cliente-color); }
+.cliente-header-controls .btn i {
+    color: var(--cliente-color);
+    font-size: .95rem;
+}
 
 .cliente-header-controls .eliminar-cliente {
     color: #fecdd3;

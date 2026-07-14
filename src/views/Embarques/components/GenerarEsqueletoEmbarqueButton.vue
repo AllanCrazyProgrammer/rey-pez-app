@@ -180,12 +180,19 @@ export default {
             const nota = (esKileado || esSellado) ? '' : notaRaw;
             // Obtener la etiqueta (Selecta, Ahumada, etc.) del item
             const etiqueta = (item.etiqueta || '').toString().trim();
+            // El campo "P" del pedido se guarda como proveedor y debe conservarse
+            // como parte del nombre que se mostrará en el PDF del embarque.
+            const proveedor = (item.proveedor || '').toString().trim();
             const esVenta = clienteId === '4' ? !item.esMaquila : null;
             const ventaKey = clienteId === '4' ? (esVenta ? 'venta' : 'maquila') : '';
-            // Usar notaRaw en la clave para mantener diferenciados ítems kileados/sellados de los demás
-            const clave = `${medida}__${tipoNormalizado.tipo || ''}__${tipoNormalizado.tipoPersonalizado || ''}__${tipoNormalizado.camaronNeto || ''}__${ventaKey}__${notaRaw}__${etiqueta}`;
+            // Mantener diferenciados ítems con distinto P, etiqueta o nota.
+            const clave = `${medida}__${tipoNormalizado.tipo || ''}__${tipoNormalizado.tipoPersonalizado || ''}__${tipoNormalizado.camaronNeto || ''}__${ventaKey}__${notaRaw}__${etiqueta}__${proveedor}`;
             // Incluir la etiqueta (en minúsculas) en el nombre de la medida para que se vea en el esqueleto
             const medidaConEtiqueta = etiqueta ? `${medida} ${etiqueta.toLowerCase()}` : medida;
+            const sufijoNotaPDF = esKileado ? 'kileado' : (esSellado ? 'sellado' : '');
+            const nombreAlternativoPDF = (proveedor || sufijoNotaPDF)
+              ? [medidaConEtiqueta, proveedor, sufijoNotaPDF].filter(Boolean).join(' ')
+              : '';
 
             if (!acumuladoPorCliente[clienteId].has(clave)) {
               acumuladoPorCliente[clienteId].set(clave, {
@@ -196,11 +203,10 @@ export default {
                 esVenta,
                 nota, // Incluir la nota en el esqueleto (sin "Kileado"/"Sellado")
                 etiqueta, // Incluir la etiqueta en el esqueleto
+                proveedor,
                 noSumarKilos: esKileado, // Si era kileado, marcar el checkbox kg
-                // Si es kileado/sellado, anexar la palabra al nombre que se muestra en el PDF
-                nombreAlternativoPDF: esKileado
-                  ? `${medidaConEtiqueta} kileado`
-                  : (esSellado ? `${medidaConEtiqueta} sellado` : ''),
+                // Mostrar en el PDF el campo P y las variantes kileado/sellado.
+                nombreAlternativoPDF,
                 pedidoReferencia: {
                   kilos: 0,
                   taras: 0
