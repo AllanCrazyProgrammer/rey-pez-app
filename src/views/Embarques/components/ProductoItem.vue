@@ -2,7 +2,7 @@
     <div class="producto" :data-es-venta="producto.esVenta" @keydown="handleCalculadoraC" :class="{
         'reporte-completo': coincideTarasYBolsas,
         'reporte-incompleto': !coincideTarasYBolsas && tieneAlgunReporte,
-        'taras-reportadas': coincideTaras,
+        'taras-reportadas': totalTaras > 0 && coincideTaras,
         'taras-no-reportadas': totalTaras > 0 && !coincideTaras,
         'producto-en-cero': totalTaras === 0 && totalTarasReportadas === 0,
         'medida-vacia': !producto.medida,
@@ -2430,6 +2430,16 @@ export default {
     box-shadow:
         0 0 0 2px rgba(239,68,68,.24),
         0 16px 34px rgba(220,38,38,.22),
+        inset 0 1px rgba(255,255,255,.9);
+}
+
+/* El reporte completo gobierna el contorno de la tarjeta. El indicador
+   PEDIDO conserva por separado su rojo hasta cubrir la cantidad solicitada. */
+.producto.taras-reportadas {
+    border: 3px solid #10b981;
+    box-shadow:
+        0 0 0 2px rgba(16,185,129,.24),
+        0 16px 34px rgba(5,150,105,.22),
         inset 0 1px rgba(255,255,255,.9);
 }
 
