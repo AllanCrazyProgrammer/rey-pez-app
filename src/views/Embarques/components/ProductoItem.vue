@@ -1,5 +1,5 @@
 <template>
-    <div class="producto" :data-es-venta="producto.esVenta" :class="{
+    <div class="producto" :data-es-venta="producto.esVenta" @keydown="handleCalculadoraC" :class="{
         'reporte-completo': coincideTarasYBolsas,
         'reporte-incompleto': !coincideTarasYBolsas && tieneAlgunReporte,
         'taras-reportadas': coincideTaras,
@@ -774,6 +774,86 @@ export default {
             if (input) {
                 input.focus();
             }
+        },
+
+        esTeclaAvanceCalculadora(event) {
+            if (!event || event.ctrlKey || event.metaKey || event.altKey) return false;
+
+            const tecla = String(event.key || '').toLowerCase();
+            const codigo = String(event.code || '').toLowerCase();
+            return tecla === 'c' || tecla === 'clear' ||
+                codigo === 'keyc' || codigo === 'numpadclear';
+        },
+
+        obtenerIndiceInput(inputs, inputActual) {
+            if (!Array.isArray(inputs)) return -1;
+            return inputs.indexOf(inputActual);
+        },
+
+        enfocarSiguienteInputNumerico(inputActual) {
+            if (typeof document === 'undefined' || !inputActual) return;
+
+            const selector = [
+                '.producto .camaron-neto-input:not([disabled])',
+                '.producto .tara-input:not([disabled])',
+                '.producto .kilo-input:not([disabled])',
+                '.producto .reporte-input:not([disabled])'
+            ].join(', ');
+            const inputs = Array.from(document.querySelectorAll(selector))
+                .filter(input => input.offsetParent !== null);
+            const indiceActual = inputs.indexOf(inputActual);
+            const siguiente = indiceActual >= 0 ? inputs[indiceActual + 1] : null;
+
+            if (siguiente) {
+                siguiente.focus();
+                if (typeof siguiente.select === 'function') siguiente.select();
+            }
+        },
+
+        // Algunos teclados numéricos de calculadora envían "C" o "Clear".
+        // En los campos de captura se interpreta como Tab y nunca se escribe.
+        handleCalculadoraC(event) {
+            if (!this.esTeclaAvanceCalculadora(event) || event.repeat) return;
+
+            const inputActual = event.target;
+            if (!(inputActual instanceof HTMLInputElement)) return;
+            if (!inputActual.matches('.camaron-neto-input, .tara-input, .kilo-input, .reporte-input')) return;
+
+            event.preventDefault();
+            event.stopPropagation();
+
+            const taraIndex = this.obtenerIndiceInput(this.$refs.taraInputs, inputActual);
+            if (taraIndex >= 0) {
+                this.enfocarInput(this.$refs.kiloInputs, taraIndex);
+                return;
+            }
+
+            const kiloIndex = this.obtenerIndiceInput(this.$refs.kiloInputs, inputActual);
+            if (kiloIndex >= 0) {
+                const siguienteTara = kiloIndex + 1;
+                if (siguienteTara < (this.producto.taras || []).length) {
+                    this.enfocarInput(this.$refs.taraInputs, siguienteTara);
+                } else if (Array.isArray(this.$refs.reporteTaraInputs) && this.$refs.reporteTaraInputs[0]) {
+                    this.$refs.reporteTaraInputs[0].focus();
+                } else {
+                    this.enfocarSiguienteInputNumerico(inputActual);
+                }
+                return;
+            }
+
+            const reporteTaraIndex = this.obtenerIndiceInput(this.$refs.reporteTaraInputs, inputActual);
+            if (reporteTaraIndex >= 0) {
+                this.enfocarInput(this.$refs.reporteBolsaInputs, reporteTaraIndex);
+                return;
+            }
+
+            const reporteBolsaIndex = this.obtenerIndiceInput(this.$refs.reporteBolsaInputs, inputActual);
+            if (reporteBolsaIndex >= 0 && reporteBolsaIndex + 1 < (this.producto.reporteTaras || []).length) {
+                this.enfocarInput(this.$refs.reporteTaraInputs, reporteBolsaIndex + 1);
+                return;
+            }
+
+            this.enfocarSiguienteInputNumerico(inputActual);
         },
 
         handleTaraTab(event, taraIndex) {
