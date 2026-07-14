@@ -917,7 +917,11 @@ import ProveedorModal from '@/components/ProveedorModal.vue'
 import NuevoClienteModal from '@/components/NuevoClienteModal.vue'
 import EtiquetasMedida from '@/components/EtiquetasMedida.vue'
 import { COLORES_ETIQUETAS, colorPorIndice } from '@/utils/coloresEtiquetas'
-import { AGUA_DEFAULT, factorAgua } from '@/utils/factorAgua'
+import { AGUA_DEFAULT } from '@/utils/factorAgua'
+import {
+  calcularTotalesClientePedidoLimpio,
+  calcularTotalesPedidoLimpio
+} from '@/utils/calculosPedidoLimpio'
 
 const TIPOS_POR_CLIENTE = {
   otilio: ['S/H20', 'C/H20'],
@@ -1073,258 +1077,57 @@ export default {
     },
     // Cálculos para Otilio
     calculosOtilio() {
-      let tarasDirectas = 0;
-      let kilosSinH2O = 0;
-      let kilosConH2O = 0;
-      let kilosTaras = 0;
-
-      this.pedidoOtilio.forEach(item => {
-        if (item.kilos) {
-          if (item.esTara) {
-            tarasDirectas += Number(item.kilos);
-            if (item.tipo === 'C/H20') {
-              kilosConH2O += Number(item.kilos) * 30 * factorAgua(item);
-            } else {
-              kilosTaras += Number(item.kilos) * 30;
-            }
-          } else if (item.tipo === 'S/H20') {
-            kilosSinH2O += Number(item.kilos);
-          } else if (item.tipo === 'C/H20') {
-            kilosConH2O += Number(item.kilos);
-          }
-        }
-      });
-
-      const tarasPorKilos = kilosSinH2O / 27;
-      const tarasTotal = Math.round(tarasDirectas + tarasPorKilos);
-      const totalKilosSinH2O = kilosSinH2O + kilosTaras;
-      const kilosTotal = Math.round(totalKilosSinH2O + kilosConH2O);
-
+      const totales = calcularTotalesClientePedidoLimpio(this.pedidoOtilio, 'otilio')
       return {
-        tarasDirectas: tarasDirectas.toFixed(2),
-        tarasPorKilos: tarasPorKilos.toFixed(2),
-        tarasTotal: tarasTotal.toString(),
-        kilosSinH2O: Math.round(totalKilosSinH2O).toString(),
-        kilosConH2O: kilosConH2O.toFixed(2),
-        kilosTotal: kilosTotal.toString()
-      };
+        tarasTotal: totales.tarasTotal.toString(),
+        kilosTotal: totales.kilosTotal.toString()
+      }
     },
     // Cálculos para Catarro
     calculosCatarro() {
-      let tarasDirectas = 0;
-      let kilosSinH2O = 0;
-      let kilosConH2O = 0;
-      let kilosTaras = 0;
-
-      this.pedidoCatarro.forEach(item => {
-        if (item.kilos) {
-          if (item.esTara) {
-            tarasDirectas += Number(item.kilos);
-            if (item.tipo === 'C/H20') {
-              kilosConH2O += Number(item.kilos) * 30 * factorAgua(item);
-            } else {
-              kilosTaras += Number(item.kilos) * 30;
-            }
-          } else if (item.tipo === 'S/H20') {
-            kilosSinH2O += Number(item.kilos);
-          } else if (item.tipo === 'C/H20') {
-            kilosConH2O += Number(item.kilos);
-          }
-        }
-      });
-
-      const tarasPorKilos = kilosSinH2O / 27;
-      const tarasTotal = Math.round(tarasDirectas + tarasPorKilos);
-      const totalKilosSinH2O = kilosSinH2O + kilosTaras;
-      const kilosTotal = Math.round(totalKilosSinH2O + kilosConH2O);
-
+      const totales = calcularTotalesClientePedidoLimpio(this.pedidoCatarro, 'catarro')
       return {
-        tarasDirectas: tarasDirectas.toFixed(2),
-        tarasPorKilos: tarasPorKilos.toFixed(2),
-        tarasTotal: tarasTotal.toString(),
-        kilosSinH2O: Math.round(totalKilosSinH2O).toString(),
-        kilosConH2O: kilosConH2O.toFixed(2),
-        kilosTotal: kilosTotal.toString()
-      };
+        tarasTotal: totales.tarasTotal.toString(),
+        kilosTotal: totales.kilosTotal.toString()
+      }
     },
     // Cálculos para Joselito
     calculosJoselito() {
-      let tarasDirectas = 0;
-      let kilosSinH2O = 0;
-      let kilosConH2O = 0;
-      let kilosTaras = 0;
-      let kilos135 = 0;
-      let kilos13y2 = 0;
-      let kilosTaras135 = 0;
-      let kilos15y3 = 0;
-      let kilosTaras15y3 = 0;
-
-      this.pedidoJoselito.forEach(item => {
-        if (item.kilos) {
-          if (item.esTara) {
-            tarasDirectas += Number(item.kilos);
-            if (item.tipo === 'C/H20') {
-              kilosConH2O += Number(item.kilos) * 30 * factorAgua(item);
-            } else if (item.tipo === '1.35 y .15' || item.tipo === '1.3 y .2') {
-              kilosTaras135 += Number(item.kilos) * 30;
-            } else if (item.tipo === '1.5 y .3') {
-              kilosTaras15y3 += Number(item.kilos) * 30;
-            } else {
-              kilosTaras += Number(item.kilos) * 30;
-            }
-          } else if (item.tipo === 'S/H20') {
-            kilosSinH2O += Number(item.kilos);
-          } else if (item.tipo === 'C/H20') {
-            kilosConH2O += Number(item.kilos);
-          } else if (item.tipo === '1.35 y .15') {
-            kilos135 += Number(item.kilos) * 1.35;
-          } else if (item.tipo === '1.3 y .2') {
-            kilos13y2 += Number(item.kilos) * 1.3;
-          } else if (item.tipo === '1.5 y .3') {
-            kilos15y3 += Number(item.kilos) * 1.5;
-          }
-        }
-      });
-
-      const tarasPorKilos = kilosSinH2O / 25;
-      const tarasPor135 = kilos135 / (1.35 * 25);
-      const tarasPor13y2 = kilos13y2 / (1.3 * 25);
-      const tarasPor15y3 = kilos15y3 / (1.5 * 25);
-      const tarasTotal = Math.round(tarasDirectas + tarasPorKilos + tarasPor135 + tarasPor13y2 + tarasPor15y3);
-      const totalKilosSinH2O = kilosSinH2O + kilosTaras + kilosTaras135 + kilosTaras15y3;
-      const kilosTotal = Math.round(totalKilosSinH2O + kilosConH2O + kilos135 + kilos13y2 + kilos15y3);
-
+      const totales = calcularTotalesClientePedidoLimpio(this.pedidoJoselito, 'joselito')
       return {
-        tarasDirectas: tarasDirectas.toFixed(2),
-        tarasPorKilos: tarasPorKilos.toFixed(2),
-        tarasTotal: tarasTotal.toString(),
-        kilosSinH2O: Math.round(totalKilosSinH2O).toString(),
-        kilosConH2O: kilosConH2O.toFixed(2),
-        kilosTotal: kilosTotal.toString()
-      };
+        tarasTotal: totales.tarasTotal.toString(),
+        kilosTotal: totales.kilosTotal.toString()
+      }
     },
     // Cálculos para Lorena
     calculosLorena() {
-      let tarasDirectas = 0;
-      let kilosSinH2O = 0;
-      let kilosConH2O = 0;
-      let kilosTaras = 0;
-      let kilos135 = 0;
-      let kilosTaras135 = 0;
-      let kilos15y3 = 0;
-      let kilosTaras15y3 = 0;
-
-      this.pedidoLorena.forEach(item => {
-        if (item.kilos) {
-          if (item.esTara) {
-            tarasDirectas += Number(item.kilos);
-            if (item.tipo === 'C/H20') {
-              kilosConH2O += Number(item.kilos) * 30 * factorAgua(item);
-            } else if (item.tipo === '1.35 y .15') {
-              kilosTaras135 += Number(item.kilos) * 30;
-            } else if (item.tipo === '1.5 y .3') {
-              kilosTaras15y3 += Number(item.kilos) * 30;
-            } else {
-              kilosTaras += Number(item.kilos) * 30;
-            }
-          } else if (item.tipo === 'S/H20') {
-            kilosSinH2O += Number(item.kilos);
-          } else if (item.tipo === 'C/H20') {
-            kilosConH2O += Number(item.kilos);
-          } else if (item.tipo === '1.35 y .15') {
-            kilos135 += Number(item.kilos) * 1.35;
-          } else if (item.tipo === '1.5 y .3') {
-            kilos15y3 += Number(item.kilos) * 1.5;
-          }
-        }
-      });
-
-      const tarasPorKilos = kilosSinH2O / 25;
-      const tarasPor135 = kilos135 / (1.35 * 25);
-      const tarasPor15y3 = kilos15y3 / (1.5 * 25);
-      const tarasTotal = Math.round(tarasDirectas + tarasPorKilos + tarasPor135 + tarasPor15y3);
-      const totalKilosSinH2O = kilosSinH2O + kilosTaras + kilosTaras135 + kilosTaras15y3;
-      const kilosTotal = Math.round(totalKilosSinH2O + kilosConH2O + kilos135 + kilos15y3);
-
+      const totales = calcularTotalesClientePedidoLimpio(this.pedidoLorena, 'lorena')
       return {
-        tarasDirectas: tarasDirectas.toFixed(2),
-        tarasPorKilos: tarasPorKilos.toFixed(2),
-        tarasTotal: tarasTotal.toString(),
-        kilosSinH2O: Math.round(totalKilosSinH2O).toString(),
-        kilosConH2O: kilosConH2O.toFixed(2),
-        kilosTotal: kilosTotal.toString()
-      };
+        tarasTotal: totales.tarasTotal.toString(),
+        kilosTotal: totales.kilosTotal.toString()
+      }
     },
     // Cálculos para Ozuna
     calculosOzuna() {
-      let tarasDirectas = 0;
-      let kilosSinH2O = 0;
-      let kilosConH2O = 0;
-      let kilosTaras = 0;
-      let kilos7y3 = 0;
-
-      this.pedidoOzuna.forEach(item => {
-        if (item.kilos) {
-          if (item.esTara) {
-            tarasDirectas += Number(item.kilos);
-            if (item.tipo === 'C/H20') {
-              kilosConH2O += Number(item.kilos) * 30 * factorAgua(item);
-            } else {
-              kilosTaras += Number(item.kilos) * 30;
-            }
-          } else if (item.tipo === 'S/H20') {
-            kilosSinH2O += Number(item.kilos);
-          } else if (item.tipo === 'C/H20') {
-            kilosConH2O += Number(item.kilos);
-          } else if (item.tipo === '.7 y .3') {
-            kilos7y3 += Number(item.kilos) * 0.7;
-          }
-        }
-      });
-
-      const tarasPorKilos = kilosSinH2O / 27;
-      const tarasTotal = Math.round(tarasDirectas + tarasPorKilos);
-      const totalKilosSinH2O = kilosSinH2O + kilosTaras;
-      const kilosTotal = Math.round(totalKilosSinH2O + kilosConH2O + kilos7y3);
-
+      const totales = calcularTotalesClientePedidoLimpio(this.pedidoOzuna, 'ozuna')
       return {
-        tarasDirectas: tarasDirectas.toFixed(2),
-        tarasPorKilos: tarasPorKilos.toFixed(2),
-        tarasTotal: tarasTotal.toString(),
-        kilosSinH2O: Math.round(totalKilosSinH2O).toString(),
-        kilosConH2O: kilosConH2O.toFixed(2),
-        kilos7y3: kilos7y3.toFixed(2),
-        kilosTotal: kilosTotal.toString()
-      };
+        tarasTotal: totales.tarasTotal.toString(),
+        kilosTotal: totales.kilosTotal.toString()
+      }
     },
     totalesGenerales() {
-      let tarasTotal = Math.round(
-        Number(this.calculosOtilio.tarasTotal) +
-        Number(this.calculosCatarro.tarasTotal) +
-        Number(this.calculosJoselito.tarasTotal) +
-        Number(this.calculosLorena.tarasTotal) +
-        Number(this.calculosOzuna.tarasTotal)
-      );
-
-      let kilosTotal = Math.round(
-        Number(this.calculosOtilio.kilosTotal) +
-        Number(this.calculosCatarro.kilosTotal) +
-        Number(this.calculosJoselito.kilosTotal) +
-        Number(this.calculosLorena.kilosTotal) +
-        Number(this.calculosOzuna.kilosTotal)
-      );
-
-      // Agregar totales de clientes temporales
-      Object.keys(this.clientesTemporales).forEach(clienteId => {
-        const totalesTemporal = this.calcularTotalesTemporales(clienteId);
-        tarasTotal += Number(totalesTemporal.tarasTotal);
-        kilosTotal += Number(totalesTemporal.kilosTotal);
-      });
-
+      const totales = calcularTotalesPedidoLimpio({
+        otilio: this.pedidoOtilio,
+        catarro: this.pedidoCatarro,
+        joselito: this.pedidoJoselito,
+        lorena: this.pedidoLorena,
+        ozuna: this.pedidoOzuna,
+        clientesTemporales: this.clientesTemporales
+      })
       return {
-        tarasTotal: tarasTotal.toString(),
-        kilosTotal: kilosTotal.toString()
-      };
+        tarasTotal: totales.tarasTotal.toString(),
+        kilosTotal: totales.kilosTotal.toString()
+      }
     }
   },
   methods: {
@@ -1836,52 +1639,14 @@ export default {
     },
     calcularTotalesTemporales(clienteId) {
       if (!this.clientesTemporales[clienteId]?.pedidos) return { tarasTotal: '0', kilosTotal: '0' };
-
-      let tarasDirectas = 0;
-      let kilosSinH2O = 0;
-      let kilosConH2O = 0;
-      let kilosTaras = 0;
-      let kilos135 = 0;
-      let kilosTaras135 = 0;
-      let kilos15y3 = 0;
-      let kilosTaras15y3 = 0;
-
-      this.clientesTemporales[clienteId].pedidos.forEach(item => {
-        if (item.kilos) {
-          if (item.esTara) {
-            tarasDirectas += Number(item.kilos);
-            if (item.tipo === 'C/H20') {
-              kilosConH2O += Number(item.kilos) * 30 * factorAgua(item);
-            } else if (item.tipo === '1.35 y .15') {
-              kilosTaras135 += Number(item.kilos) * 30;
-            } else if (item.tipo === '1.5 y .3') {
-              kilosTaras15y3 += Number(item.kilos) * 30;
-            } else {
-              kilosTaras += Number(item.kilos) * 30;
-            }
-          } else if (item.tipo === 'S/H20') {
-            kilosSinH2O += Number(item.kilos);
-          } else if (item.tipo === 'C/H20') {
-            kilosConH2O += Number(item.kilos);
-          } else if (item.tipo === '1.35 y .15') {
-            kilos135 += Number(item.kilos) * 1.35;
-          } else if (item.tipo === '1.5 y .3') {
-            kilos15y3 += Number(item.kilos) * 1.5;
-          }
-        }
-      });
-
-      const tarasPorKilos = kilosSinH2O / 27;
-      const tarasPor135 = kilos135 / (1.35 * 25);
-      const tarasPor15y3 = kilos15y3 / (1.5 * 25);
-      const tarasTotal = Math.round(tarasDirectas + tarasPorKilos + tarasPor135 + tarasPor15y3);
-      const totalKilosSinH2O = kilosSinH2O + kilosTaras + kilosTaras135 + kilosTaras15y3;
-      const kilosTotal = Math.round(totalKilosSinH2O + kilosConH2O + kilos135 + kilos15y3);
-
+      const totales = calcularTotalesClientePedidoLimpio(
+        this.clientesTemporales[clienteId].pedidos,
+        'temporal'
+      )
       return {
-        tarasTotal: tarasTotal.toString(),
-        kilosTotal: kilosTotal.toString()
-      };
+        tarasTotal: totales.tarasTotal.toString(),
+        kilosTotal: totales.kilosTotal.toString()
+      }
     },
     agregarClienteTemporal(nuevoCliente) {
       const nombre = (nuevoCliente?.nombre || '').trim();

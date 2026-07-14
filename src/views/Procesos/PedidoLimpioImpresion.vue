@@ -563,7 +563,11 @@ import KilosRefrigeradosModal from '@/components/KilosRefrigeradosModal.vue'
 import ListaMedidasPedidoModal from '@/components/ListaMedidasPedidoModal.vue'
 import ResumenCalculadora from '@/components/ResumenCalculadora.vue'
 import { colorParaEtiqueta } from '@/utils/coloresEtiquetas'
-import { factorAgua, formatearAgua, aguaEsPersonalizada } from '@/utils/factorAgua'
+import { formatearAgua, aguaEsPersonalizada } from '@/utils/factorAgua'
+import {
+  calcularKilosItemPedidoLimpio,
+  calcularTotalesClientePedidoLimpio
+} from '@/utils/calculosPedidoLimpio'
 import { db } from '@/firebase'
 import { doc, updateDoc, Timestamp, collection, getDocs, query, where } from 'firebase/firestore'
 
@@ -1492,55 +1496,13 @@ export default {
     },
     calcularTotalesTemporales(clienteId) {
       if (!this.clientesTemporales[clienteId]) return { tarasTotal: '0', kilosTotal: '0' };
-
-      let tarasDirectas = 0;
-      let kilosSinH2O = 0;
-      let kilosConH2O = 0;
-      let kilosTaras = 0;
-      let kilos135 = 0;
-      let kilosTaras135 = 0;
-      let kilos15y3 = 0;
-      let kilosTaras15y3 = 0;
-      let kilos7y3 = 0;
-
-      this.clientesTemporales[clienteId].forEach(item => {
-        if (item.kilos) {
-          if (item.esTara) {
-            tarasDirectas += Number(item.kilos);
-            if (item.tipo === 'C/H20') {
-              kilosConH2O += Number(item.kilos) * 30 * factorAgua(item);
-            } else if (item.tipo === '1.35 y .15') {
-              kilosTaras135 += Number(item.kilos) * 30;
-            } else if (item.tipo === '1.5 y .3') {
-              kilosTaras15y3 += Number(item.kilos) * 30;
-            } else {
-              kilosTaras += Number(item.kilos) * 30;
-            }
-          } else if (item.tipo === 'S/H20') {
-            kilosSinH2O += Number(item.kilos);
-          } else if (item.tipo === 'C/H20') {
-            kilosConH2O += Number(item.kilos);
-          } else if (item.tipo === '1.35 y .15') {
-            kilos135 += Number(item.kilos) * 1.35;
-          } else if (item.tipo === '1.5 y .3') {
-            kilos15y3 += Number(item.kilos) * 1.5;
-          } else if (item.tipo === '.7 y .3') {
-            kilos7y3 += Number(item.kilos) * 0.7;
-          }
-        }
-      });
-
-      const tarasPorKilos = kilosSinH2O / 27;
-      const tarasPor135 = kilos135 / (1.35 * 25);
-      const tarasPor15y3 = kilos15y3 / (1.5 * 25);
-      const tarasTotal = Math.round(tarasDirectas + tarasPorKilos + tarasPor135 + tarasPor15y3);
-      const totalKilosSinH2O = kilosSinH2O + kilosTaras + kilosTaras135 + kilosTaras15y3;
-      const kilosTotal = Math.round(totalKilosSinH2O + kilosConH2O + kilos135 + kilos15y3 + kilos7y3);
-
+      const cliente = this.clientesTemporales[clienteId]
+      const items = Array.isArray(cliente) ? cliente : cliente?.pedidos
+      const totales = calcularTotalesClientePedidoLimpio(items, 'temporal')
       return {
-        tarasTotal: tarasTotal.toString(),
-        kilosTotal: kilosTotal.toString()
-      };
+        tarasTotal: totales.tarasTotal.toString(),
+        kilosTotal: totales.kilosTotal.toString()
+      }
     },
     calcularTotalesPorMedida() {
       const medidasMap = new Map();
@@ -1578,37 +1540,7 @@ export default {
           }
           
           const registro = medidasMap.get(key);
-          const kilos = Number(item.kilos) || 0;
-          
-          if (item.esTara) {
-            // Procesar taras
-            if (item.tipo === 'C/H20') {
-              registro.total += kilos * 30 * factorAgua(item); // Tara con agua
-            } else if (item.tipo === '1.35 y .15') {
-              registro.total += kilos * 30; // Tara con factor 1.35
-            } else if (item.tipo === '1.3 y .2') {
-              registro.total += kilos * 30; // Tara con factor 1.3
-            } else if (item.tipo === '1.5 y .3') {
-              registro.total += kilos * 30; // Tara con factor 1.5
-            } else {
-              registro.total += kilos * 30; // Tara normal
-            }
-          } else {
-            // Procesar kilos directos
-            if (item.tipo === 'C/H20') {
-              registro.total += kilos * factorAgua(item); // Kilos con agua
-            } else if (item.tipo === '1.35 y .15') {
-              registro.total += kilos * 1.35; // Kilos con factor 1.35
-            } else if (item.tipo === '1.3 y .2') {
-              registro.total += kilos * 1.3; // Kilos con factor 1.3
-            } else if (item.tipo === '1.5 y .3') {
-              registro.total += kilos * 1.5; // Kilos con factor 1.5
-            } else if (esPedidoOzuna && item.tipo === '.7 y .3') {
-              registro.total += kilos * 0.7; // Para Ozuna, kilos con factor 0.7
-            } else {
-              registro.total += kilos; // Kilos normales
-            }
-          }
+          registro.total += calcularKilosItemPedidoLimpio(item)
         });
       };
 
@@ -1723,46 +1655,8 @@ export default {
       const refrigerados = this.kilosRefrigerados[medida.medida] || 0;
       return medida.total - refrigerados;
     },
-    calcularTotalKilosCliente(pedido, esOzuna = false) {
-      if (!pedido || !Array.isArray(pedido)) return 0;
-      
-      let total = 0;
-      pedido.forEach(item => {
-        const kilos = Number(item.kilos) || 0;
-        if (kilos === 0) return;
-        
-        if (item.esTara) {
-          // Procesar taras
-          if (item.tipo === 'C/H20') {
-            total += kilos * 30 * factorAgua(item);
-          } else if (item.tipo === '1.35 y .15') {
-            total += kilos * 30;
-          } else if (item.tipo === '1.3 y .2') {
-            total += kilos * 30;
-          } else if (item.tipo === '1.5 y .3') {
-            total += kilos * 30;
-          } else {
-            total += kilos * 30;
-          }
-        } else {
-          // Procesar kilos directos
-          if (item.tipo === 'C/H20') {
-            total += kilos * factorAgua(item);
-          } else if (item.tipo === '1.35 y .15') {
-            total += kilos * 1.35;
-          } else if (item.tipo === '1.3 y .2') {
-            total += kilos * 1.3;
-          } else if (item.tipo === '1.5 y .3') {
-            total += kilos * 1.5;
-          } else if (esOzuna && item.tipo === '.7 y .3') {
-            total += kilos * 0.7;
-          } else {
-            total += kilos;
-          }
-        }
-      });
-
-      return Math.round(total);
+    calcularTotalKilosCliente(pedido) {
+      return calcularTotalesClientePedidoLimpio(pedido).kilosTotal
     }
   },
   watch: {

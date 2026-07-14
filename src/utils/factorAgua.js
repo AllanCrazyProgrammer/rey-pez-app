@@ -11,6 +11,13 @@ export function factorAgua(item) {
   return Number.isFinite(valor) && valor > 0 ? valor : AGUA_DEFAULT
 }
 
+// Los productos sellados se empacan en taras de 25 kg.
+// El resto conserva la conversión estándar indicada por cada cálculo.
+export function kilosPorTara(item, kilosDefault = 30) {
+  const nota = String(item?.nota || '').trim().toLowerCase()
+  return nota === 'sellado' ? 25 : kilosDefault
+}
+
 // Indica si la fila usa un factor de agua distinto al default (.65).
 // Se usa para mostrar el dato en el PDF solo cuando fue personalizado.
 export function aguaEsPersonalizada(item) {

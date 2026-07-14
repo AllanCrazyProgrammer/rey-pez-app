@@ -98,7 +98,7 @@
 import { db } from '@/firebase'
 import { collection, query, orderBy, onSnapshot, deleteDoc, doc } from 'firebase/firestore'
 import { formatearFecha } from '@/utils/formatters';
-import { factorAgua } from '@/utils/factorAgua';
+import { calcularTotalesPedidoLimpio } from '@/utils/calculosPedidoLimpio'
 
 export default {
   name: 'PedidosMenu',
@@ -175,119 +175,10 @@ export default {
       return (kilos / 19).toFixed(2);
     },
     calcularKilosLimpio(pedido) {
-      let totalKilos = 0;
-      
-      // Sumar kilos de cada cliente
-      if (pedido.otilio) {
-        totalKilos += this.calcularKilosCliente(pedido.otilio);
-      }
-      if (pedido.catarro) {
-        totalKilos += this.calcularKilosCliente(pedido.catarro);
-      }
-      if (pedido.joselito) {
-        totalKilos += this.calcularKilosCliente(pedido.joselito);
-      }
-      if (pedido.ozuna) {
-        totalKilos += this.calcularKilosCliente(pedido.ozuna);
-      }
-      if (pedido.lorena) {
-        totalKilos += this.calcularKilosCliente(pedido.lorena);
-      }
-      
-      return totalKilos;
+      return calcularTotalesPedidoLimpio(pedido).kilosTotal
     },
     calcularTarasLimpio(pedido) {
-      let totalTaras = 0;
-      
-      // Sumar taras de cada cliente
-      if (pedido.otilio) {
-        totalTaras += this.calcularTarasCliente(pedido.otilio);
-      }
-      if (pedido.catarro) {
-        totalTaras += this.calcularTarasCliente(pedido.catarro);
-      }
-      if (pedido.joselito) {
-        totalTaras += this.calcularTarasCliente(pedido.joselito);
-      }
-      if (pedido.ozuna) {
-        totalTaras += this.calcularTarasCliente(pedido.ozuna);
-      }
-      if (pedido.lorena) {
-        totalTaras += this.calcularTarasCliente(pedido.lorena);
-      }
-      
-      return totalTaras;
-    },
-    calcularKilosCliente(items) {
-      let kilosSinH2O = 0;
-      let kilosConH2O = 0;
-      let kilosTaras = 0;
-      let kilos135 = 0;
-      let kilos13y2 = 0;
-      let kilosTaras135 = 0;
-      let kilos15y3 = 0;
-      let kilosTaras15y3 = 0;
-      let kilos7y3 = 0;
-
-      items.forEach(item => {
-        if (item.kilos) {
-          if (item.esTara) {
-            if (item.tipo === 'C/H20') {
-              kilosConH2O += Number(item.kilos) * 30 * factorAgua(item);
-            } else if (item.tipo === '1.35 y .15' || item.tipo === '1.3 y .2') {
-              kilosTaras135 += Number(item.kilos) * 30;
-            } else if (item.tipo === '1.5 y .3') {
-              kilosTaras15y3 += Number(item.kilos) * 30;
-            } else {
-              kilosTaras += Number(item.kilos) * 30;
-            }
-          } else if (item.tipo === 'S/H20') {
-            kilosSinH2O += Number(item.kilos);
-          } else if (item.tipo === 'C/H20') {
-            kilosConH2O += Number(item.kilos);
-          } else if (item.tipo === '1.35 y .15') {
-            kilos135 += Number(item.kilos) * 1.35;
-          } else if (item.tipo === '1.3 y .2') {
-            kilos13y2 += Number(item.kilos) * 1.3;
-          } else if (item.tipo === '1.5 y .3') {
-            kilos15y3 += Number(item.kilos) * 1.5;
-          } else if (item.tipo === '.7 y .3') {
-            kilos7y3 += Number(item.kilos) * 0.7;
-          }
-        }
-      });
-
-      return kilosSinH2O + kilosTaras + kilosTaras135 + kilosTaras15y3 + kilosConH2O + kilos135 + kilos13y2 + kilos15y3 + kilos7y3;
-    },
-    calcularTarasCliente(items) {
-      let tarasDirectas = 0;
-      let kilosSinH2O = 0;
-      let kilos135 = 0;
-      let kilos13y2 = 0;
-      let kilos15y3 = 0;
-
-      items.forEach(item => {
-        if (item.kilos) {
-          if (item.esTara) {
-            tarasDirectas += Number(item.kilos);
-          } else if (item.tipo === 'S/H20') {
-            kilosSinH2O += Number(item.kilos);
-          } else if (item.tipo === '1.35 y .15') {
-            kilos135 += Number(item.kilos);
-          } else if (item.tipo === '1.3 y .2') {
-            kilos13y2 += Number(item.kilos);
-          } else if (item.tipo === '1.5 y .3') {
-            kilos15y3 += Number(item.kilos);
-          }
-        }
-      });
-
-      const tarasPorKilos = kilosSinH2O / 25;
-      const tarasPor135 = kilos135 / (1.35 * 25);
-      const tarasPor13y2 = kilos13y2 / (1.3 * 25);
-      const tarasPor15y3 = kilos15y3 / (1.5 * 25);
-
-      return tarasDirectas + tarasPorKilos + tarasPor135 + tarasPor13y2 + tarasPor15y3;
+      return calcularTotalesPedidoLimpio(pedido).tarasTotal
     },
     imprimirPedido(pedido) {
       if (pedido.tipo === 'crudo') {
