@@ -2423,6 +2423,16 @@ export default {
         inset 0 1px rgba(255,255,255,.9);
 }
 
+/* Un reporte de taras incompleto siempre debe advertirse en rojo, aunque
+   la cantidad solicitada del pedido ya se encuentre cubierta. */
+.producto.taras-no-reportadas {
+    border: 3px solid #ef4444;
+    box-shadow:
+        0 0 0 2px rgba(239,68,68,.24),
+        0 16px 34px rgba(220,38,38,.22),
+        inset 0 1px rgba(255,255,255,.9);
+}
+
 @media screen and (min-width: 1101px) {
     .producto {
         flex: 0 0 calc(25% - 10px) !important;
