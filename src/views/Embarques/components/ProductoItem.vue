@@ -781,8 +781,28 @@ export default {
 
             const tecla = String(event.key || '').toLowerCase();
             const codigo = String(event.code || '').toLowerCase();
-            return tecla === 'c' || tecla === 'clear' ||
-                codigo === 'keyc' || codigo === 'numpadclear';
+            const codigoLegado = Number(event.keyCode || event.which || 0);
+            const esUbicacionNumpad = event.location === 3 || codigo.startsWith('numpad');
+
+            // La tecla rotulada "C" en numpads tipo calculadora no siempre
+            // envía KeyC. Este dispositivo la reporta como Escape; otros
+            // pueden enviarla como Clear, NumLock/Clear o 12/144.
+            if (
+                tecla === 'escape' || tecla === 'clear' || tecla === 'numlock' ||
+                codigo === 'escape' || codigo === 'numpadclear' || codigo === 'numlock' ||
+                codigoLegado === 12 || codigoLegado === 27 || codigoLegado === 144
+            ) {
+                return true;
+            }
+
+            // Algunos numpads económicos asignan C a borrar. Solo aceptamos
+            // Backspace/Delete cuando el navegador confirma origen numérico,
+            // para no alterar esas teclas en el teclado principal.
+            return esUbicacionNumpad && (
+                tecla === 'backspace' || tecla === 'delete' ||
+                codigo === 'backspace' || codigo === 'delete' ||
+                codigoLegado === 8 || codigoLegado === 46
+            );
         },
 
         obtenerIndiceInput(inputs, inputActual) {
