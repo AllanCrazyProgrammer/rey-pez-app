@@ -227,7 +227,8 @@ export async function generarNotaVentaPDF(embarque, clientesDisponibles, cliente
       mostrarCuentasSegundaPagina[clienteId] = cuentaEnPdf;
     });
 
-    // Lorena/Verónica: 1ª y 2ª sin precios; solo la última hoja lleva precios (y Gde c/c × 19.5 en crudos)
+    // Lorena/Verónica: 1ª y 2ª sin precios; sólo la última hoja lleva precios.
+    // En crudos, Gde c/c, Jumbo c/c y Extra c/c usan 19.5 kg por tara en esa hoja.
     let contenidoPagina1;
     if (esNotaVeronica) {
       contenidoPagina1 = [
@@ -312,7 +313,8 @@ export async function generarNotaVentaPDF(embarque, clientesDisponibles, cliente
               )),
     ];
 
-    // Tercera página solo para nota exclusiva Lorena/Verónica: única hoja con precios (Gde c/c × 19.5 en crudos)
+    // Tercera página solo para nota exclusiva Lorena/Verónica: única hoja con precios
+    // (Gde c/c, Jumbo c/c y Extra c/c × 19.5 en crudos).
     const contenidoTerceraLorenaVeronicaReferencia = esNotaVeronica
       ? [
           {
@@ -2033,7 +2035,7 @@ function calcularKilosCrudos(item, clienteNombre, multiplicadorLorenaGdeCc = 20)
   if (item.taras) {
     const [cantidad] = String(item.taras).split('-').map(Number);
     const esLorena = nombreClienteNormalizado.includes('lorena') || nombreClienteNormalizado.includes('veronica');
-    const aplicaReglaEspecial = tallaNormalizada === 'gde c/c' || tallaNormalizada === 'jumbo c/c';
+    const aplicaReglaEspecial = ['gde c/c', 'jumbo c/c', 'extra c/c'].includes(tallaNormalizada);
     const multiplicador = esLorena && aplicaReglaEspecial ? multiplicadorLorenaGdeCc : 20;
     kilosTotales += cantidad * multiplicador;
   }
