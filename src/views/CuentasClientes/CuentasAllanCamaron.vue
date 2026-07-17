@@ -1,594 +1,747 @@
 <template>
-  <div class="allan-camaron-page">
-    <div class="scanlines" aria-hidden="true"></div>
+  <div class="allan-page" :class="{ 'modal-open': modalActivo }">
     <div class="bg-grid" aria-hidden="true"></div>
+    <div class="scanlines" aria-hidden="true"></div>
 
-    <div class="content-shell">
-      <div class="header-panel">
-        <button class="back-button" @click="volverAMexico">
+    <main class="page-shell">
+      <header class="page-header">
+        <button class="back-button" type="button" @click="volverAMexico">
           <i class="fas fa-arrow-left"></i>
-          Volver a Cuentas Mexico
+          <span>Volver</span>
         </button>
 
         <div class="title-block">
-          <p class="eyebrow">Control especial de camarón</p>
-          <h1>Allan</h1>
-          <p class="subtitle">
-            Registra entradas, ventas por cliente y consulta tus ganancias al momento.
-          </p>
+          <span class="eyebrow">CUENTAS DE ALLAN</span>
+          <h1>Compras por lote</h1>
+          <p>Cada compra lleva sus propias ventas, existencia, utilidad y deuda.</p>
         </div>
+
+        <button class="new-purchase-button" type="button" @click="abrirNuevaCompra">
+          <i class="fas fa-plus"></i>
+          Nueva compra
+        </button>
+      </header>
+
+      <CuentasAllanResumen :resumen="resumenGeneral" />
+
+      <section class="workflow-hint" aria-label="Flujo de trabajo">
+        <div><span>1</span><p><strong>Registra la compra</strong><small>Proveedor, producto, kilos y costo</small></p></div>
+        <i class="fas fa-chevron-right"></i>
+        <div><span>2</span><p><strong>Vende desde su lote</strong><small>La existencia se descuenta ahí</small></p></div>
+        <i class="fas fa-chevron-right"></i>
+        <div><span>3</span><p><strong>Registra tus abonos</strong><small>La deuda se actualiza al momento</small></p></div>
+      </section>
+
+      <section class="lots-section">
+        <div class="section-toolbar">
+          <div>
+            <h2>Mis compras</h2>
+            <p>{{ lotesFiltrados.length }} de {{ lotes.length }} lotes</p>
+          </div>
+
+          <div class="toolbar-controls">
+            <label class="search-control">
+              <i class="fas fa-search"></i>
+              <input v-model.trim="busqueda" type="search" placeholder="Buscar proveedor o producto" />
+            </label>
+            <div class="filter-tabs" role="group" aria-label="Filtrar lotes">
+              <button type="button" :class="{ active: filtro === 'activos' }" @click="filtro = 'activos'">Con existencia</button>
+              <button type="button" :class="{ active: filtro === 'todos' }" @click="filtro = 'todos'">Todos</button>
+              <button type="button" :class="{ active: filtro === 'deuda' }" @click="filtro = 'deuda'">Con deuda</button>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="cargando" class="page-state">
+          <i class="fas fa-circle-notch fa-spin"></i>
+          <strong>Cargando compras...</strong>
+        </div>
+
+        <div v-else-if="!lotes.length" class="page-state empty">
+          <div class="state-icon"><i class="fas fa-box-open"></i></div>
+          <strong>Empieza con tu primera compra</strong>
+          <p>Registra a quién le compraste, cuántos kilos y a qué precio.</p>
+          <button type="button" @click="abrirNuevaCompra"><i class="fas fa-plus"></i> Registrar primera compra</button>
+        </div>
+
+        <div v-else-if="!lotesFiltrados.length" class="page-state empty compact">
+          <strong>No hay compras que coincidan</strong>
+          <p>Prueba otro filtro o cambia la búsqueda.</p>
+        </div>
+
+        <div v-else class="lots-grid">
+          <LoteCompraCard
+            v-for="lote in lotesFiltrados"
+            :key="lote.id"
+            :lote="lote"
+            @registrar-venta="abrirVenta"
+            @registrar-abono="abrirAbono"
+            @editar-lote="abrirEditarCompra"
+            @eliminar-lote="eliminarLote"
+            @eliminar-movimiento="eliminarMovimiento"
+          />
+        </div>
+      </section>
+
+      <aside v-if="ventasSinLote.length" class="legacy-warning">
+        <i class="fas fa-exclamation-triangle"></i>
+        <div>
+          <strong>{{ ventasSinLote.length }} venta(s) anterior(es) no pudieron ligarse a una compra.</strong>
+          <p>Se conservan en el total de ventas, pero necesitan una compra compatible para calcular su utilidad.</p>
+        </div>
+      </aside>
+    </main>
+
+    <transition name="modal-fade">
+      <div v-if="modalActivo" class="modal-backdrop" @mousedown.self="cerrarModal">
+        <section class="modal-card" role="dialog" aria-modal="true" :aria-labelledby="`modal-title-${modalActivo}`">
+          <header class="modal-header">
+            <div>
+              <span class="modal-step">{{ modalEyebrow }}</span>
+              <h2 :id="`modal-title-${modalActivo}`">{{ modalTitulo }}</h2>
+              <p>{{ modalDescripcion }}</p>
+            </div>
+            <button class="close-button" type="button" aria-label="Cerrar" @click="cerrarModal">
+              <i class="fas fa-times"></i>
+            </button>
+          </header>
+
+          <form v-if="modalActivo === 'compra'" class="modal-form" @submit.prevent="guardarCompra">
+            <div class="form-grid">
+              <label class="field full-field">
+                <span>Proveedor <b>*</b></span>
+                <input ref="primerCampo" v-model.trim="compraForm.proveedor" type="text" required placeholder="Ej. Joselito, Verónica u Otilio" />
+              </label>
+              <label class="field">
+                <span>Fecha de compra <b>*</b></span>
+                <input v-model="compraForm.fecha" type="date" required />
+              </label>
+              <label class="field">
+                <span>Producto <b>*</b></span>
+                <input v-model.trim="compraForm.producto" type="text" required placeholder="Ej. Camarón mediano" />
+              </label>
+              <label class="field">
+                <span>Kilos comprados <b>*</b></span>
+                <div class="input-suffix"><input v-model="compraForm.kilos" type="number" min="0.01" step="0.01" required placeholder="0.00" /><span>kg</span></div>
+              </label>
+              <label class="field">
+                <span>Precio de compra por kg <b>*</b></span>
+                <div class="input-prefix"><span>$</span><input v-model="compraForm.precio" type="number" min="0" step="0.01" required placeholder="0.00" /></div>
+              </label>
+              <label class="field">
+                <span>Pago al momento</span>
+                <div class="input-prefix"><span>$</span><input v-model="compraForm.pagadoInicial" type="number" min="0" step="0.01" placeholder="0.00" /></div>
+                <small>Déjalo en cero si quedó todo pendiente.</small>
+              </label>
+              <label class="field full-field">
+                <span>Notas</span>
+                <textarea v-model.trim="compraForm.notas" rows="2" placeholder="Tamaño, presentación o algún detalle"></textarea>
+              </label>
+            </div>
+
+            <div class="calculation-preview purchase-preview">
+              <div><span>Total de la compra</span><strong>{{ formatearMoneda(previewCompra.total) }}</strong></div>
+              <i class="fas fa-minus"></i>
+              <div><span>Pagado registrado</span><strong>{{ formatearMoneda(previewCompra.pagado) }}</strong></div>
+              <i class="fas fa-equals"></i>
+              <div class="highlight amber"><span>Quedará pendiente</span><strong>{{ formatearMoneda(previewCompra.deuda) }}</strong></div>
+            </div>
+
+            <footer class="modal-actions">
+              <button class="cancel-button" type="button" @click="cerrarModal">Cancelar</button>
+              <button class="submit-button" type="submit" :disabled="guardando">
+                <i :class="guardando ? 'fas fa-circle-notch fa-spin' : 'fas fa-check'"></i>
+                {{ guardando ? 'Guardando...' : (compraEditandoId ? 'Guardar cambios' : 'Guardar compra') }}
+              </button>
+            </footer>
+          </form>
+
+          <form v-else-if="modalActivo === 'venta'" class="modal-form" @submit.prevent="guardarVenta">
+            <div v-if="loteSeleccionado" class="selected-lot">
+              <div><span>Venta tomada de</span><strong>{{ loteSeleccionado.proveedor }} · {{ loteSeleccionado.producto }}</strong></div>
+              <div><span>Disponible</span><strong>{{ formatearNumero(loteSeleccionado.kilosInventario) }} kg</strong></div>
+              <div><span>Costo base</span><strong>{{ formatearMoneda(loteSeleccionado.precio) }}/kg</strong></div>
+            </div>
+
+            <div class="form-grid">
+              <label class="field">
+                <span>Fecha de venta <b>*</b></span>
+                <input v-model="ventaForm.fecha" type="date" required />
+              </label>
+              <label class="field">
+                <span>Cliente <b>*</b></span>
+                <input ref="primerCampo" v-model.trim="ventaForm.cliente" type="text" required placeholder="Nombre del cliente" />
+              </label>
+              <label class="field">
+                <span>Kilos vendidos <b>*</b></span>
+                <div class="input-suffix"><input v-model="ventaForm.kilos" type="number" min="0.01" :max="loteSeleccionado ? loteSeleccionado.kilosInventario : null" step="0.01" required placeholder="0.00" /><span>kg</span></div>
+              </label>
+              <label class="field">
+                <span>Precio de venta por kg <b>*</b></span>
+                <div class="input-prefix"><span>$</span><input v-model="ventaForm.totalVenta" type="number" min="0" step="0.01" required placeholder="0.00" /></div>
+              </label>
+              <label class="field full-field">
+                <span>Notas</span>
+                <textarea v-model.trim="ventaForm.notas" rows="2" placeholder="Presentación o detalle de la venta"></textarea>
+              </label>
+            </div>
+
+            <div class="calculation-preview sale-preview">
+              <div><span>Ingreso</span><strong>{{ formatearMoneda(previewVenta.ingreso) }}</strong></div>
+              <i class="fas fa-minus"></i>
+              <div><span>Costo vendido</span><strong>{{ formatearMoneda(previewVenta.costo) }}</strong></div>
+              <i class="fas fa-equals"></i>
+              <div class="highlight" :class="previewVenta.utilidad < 0 ? 'red' : 'green'"><span>Utilidad de esta venta</span><strong>{{ formatearMoneda(previewVenta.utilidad) }}</strong></div>
+            </div>
+
+            <footer class="modal-actions">
+              <button class="cancel-button" type="button" @click="cerrarModal">Cancelar</button>
+              <button class="submit-button cyan" type="submit" :disabled="guardando">
+                <i :class="guardando ? 'fas fa-circle-notch fa-spin' : 'fas fa-check'"></i>
+                {{ guardando ? 'Guardando...' : 'Guardar venta' }}
+              </button>
+            </footer>
+          </form>
+
+          <form v-else-if="modalActivo === 'abono'" class="modal-form" @submit.prevent="guardarAbono">
+            <div v-if="loteSeleccionado" class="selected-lot payment-selection">
+              <div><span>Abono para</span><strong>{{ loteSeleccionado.proveedor }} · Lote #{{ loteSeleccionado.folio }}</strong></div>
+              <div><span>Deuda actual</span><strong>{{ formatearMoneda(loteSeleccionado.deuda) }}</strong></div>
+            </div>
+
+            <div class="form-grid">
+              <label class="field">
+                <span>Fecha del abono <b>*</b></span>
+                <input v-model="abonoForm.fecha" type="date" required />
+              </label>
+              <label class="field">
+                <span>Monto abonado <b>*</b></span>
+                <div class="input-prefix"><span>$</span><input ref="primerCampo" v-model="abonoForm.monto" type="number" min="0.01" :max="loteSeleccionado ? loteSeleccionado.deuda : null" step="0.01" required placeholder="0.00" /></div>
+              </label>
+              <label class="field">
+                <span>Forma de pago</span>
+                <select v-model="abonoForm.metodo">
+                  <option>Efectivo</option>
+                  <option>Transferencia</option>
+                  <option>Depósito</option>
+                  <option>Otro</option>
+                </select>
+              </label>
+              <label class="field">
+                <span>Notas</span>
+                <input v-model.trim="abonoForm.notas" type="text" placeholder="Referencia o detalle" />
+              </label>
+            </div>
+
+            <div class="calculation-preview payment-preview">
+              <div><span>Deuda actual</span><strong>{{ formatearMoneda(loteSeleccionado ? loteSeleccionado.deuda : 0) }}</strong></div>
+              <i class="fas fa-minus"></i>
+              <div><span>Este abono</span><strong>{{ formatearMoneda(toNumber(abonoForm.monto)) }}</strong></div>
+              <i class="fas fa-equals"></i>
+              <div class="highlight amber"><span>Nuevo saldo</span><strong>{{ formatearMoneda(previewSaldoAbono) }}</strong></div>
+            </div>
+
+            <footer class="modal-actions">
+              <button class="cancel-button" type="button" @click="cerrarModal">Cancelar</button>
+              <button class="submit-button amber" type="submit" :disabled="guardando">
+                <i :class="guardando ? 'fas fa-circle-notch fa-spin' : 'fas fa-check'"></i>
+                {{ guardando ? 'Guardando...' : 'Guardar abono' }}
+              </button>
+            </footer>
+          </form>
+        </section>
       </div>
-
-      <section class="summary-grid">
-        <article class="summary-card">
-          <span class="summary-label">Entradas</span>
-          <strong>{{ formatearMoneda(totalEntradas) }}</strong>
-          <small>{{ entradas.length }} registros · {{ formatearNumero(totalKilosEntradas) }} kg</small>
-        </article>
-
-        <article class="summary-card ventas">
-          <span class="summary-label">Ventas</span>
-          <strong>{{ formatearMoneda(totalVentas) }}</strong>
-          <small>{{ ventas.length }} registros · {{ formatearNumero(totalKilosVentas) }} kg</small>
-        </article>
-
-        <article class="summary-card ganancias" :class="{ negativa: gananciaTotal < 0 }">
-          <span class="summary-label">Ganancia</span>
-          <strong>{{ formatearMoneda(gananciaTotal) }}</strong>
-          <small>{{ resumenGanancia }}</small>
-        </article>
-
-        <article class="summary-card kilos">
-          <span class="summary-label">Inventario</span>
-          <strong>{{ formatearNumero(analisisGanancia.kilosInventario) }} kg</strong>
-          <small>Costo pendiente: {{ formatearMoneda(analisisGanancia.costoInventario) }}</small>
-        </article>
-      </section>
-
-      <section class="forms-grid">
-        <article class="panel-card">
-          <div class="panel-heading">
-            <h2>Registrar entrada</h2>
-            <p>Guarda cada compra de camarón con fecha, kilos y precio por kilo.</p>
-          </div>
-
-          <form class="movement-form" @submit.prevent="guardarEntrada">
-            <label>
-              Fecha
-              <input v-model="entradaForm.fecha" type="date" required />
-            </label>
-
-            <label>
-              Producto
-              <input
-                v-model.trim="entradaForm.producto"
-                type="text"
-                required
-                placeholder="Ej. Camarón chico"
-              />
-            </label>
-
-            <label>
-              Kilos
-              <input
-                v-model="entradaForm.kilos"
-                type="number"
-                min="0"
-                step="0.01"
-                required
-                placeholder="0.00"
-              />
-            </label>
-
-            <label>
-              Precio por kilo ($)
-              <input
-                v-model="entradaForm.precio"
-                type="number"
-                min="0"
-                step="0.01"
-                required
-                placeholder="0.00"
-              />
-            </label>
-
-            <label>
-              Notas
-              <textarea
-                v-model.trim="entradaForm.notas"
-                rows="3"
-                placeholder="Ej. Camarón mediano o detalle de la compra"
-              ></textarea>
-            </label>
-
-            <button class="action-button save" type="submit" :disabled="guardandoEntrada">
-              {{ guardandoEntrada ? 'Guardando...' : 'Guardar entrada' }}
-            </button>
-          </form>
-        </article>
-
-        <article class="panel-card">
-          <div class="panel-heading">
-            <h2>Registrar venta / salida</h2>
-            <p>Indica la fecha, el cliente, los kilos y el precio por kilo.</p>
-          </div>
-
-          <form class="movement-form" @submit.prevent="guardarVenta">
-            <label>
-              Fecha
-              <input v-model="ventaForm.fecha" type="date" required />
-            </label>
-
-            <label>
-              Producto
-              <select v-model="ventaForm.producto" required :disabled="!productosDisponiblesVenta.length">
-                <option disabled value="">
-                  {{ productosDisponiblesVenta.length ? 'Selecciona un producto con existencia' : 'No hay productos con existencia' }}
-                </option>
-                <option
-                  v-for="item in productosDisponiblesVenta"
-                  :key="item.producto"
-                  :value="item.producto"
-                >
-                  {{ item.producto }} · {{ formatearNumero(item.kilosInventario) }} kg disponibles
-                </option>
-              </select>
-            </label>
-
-            <p v-if="productoSeleccionadoVenta" class="inventory-hint">
-              Existencia disponible: {{ formatearNumero(productoSeleccionadoVenta.kilosInventario) }} kg
-            </p>
-
-            <label>
-              Cliente
-              <input
-                v-model.trim="ventaForm.cliente"
-                type="text"
-                required
-                placeholder="Nombre del cliente"
-              />
-            </label>
-
-            <label>
-              Kilos vendidos
-              <input
-                v-model="ventaForm.kilos"
-                type="number"
-                min="0"
-                step="0.01"
-                required
-                placeholder="0.00"
-              />
-            </label>
-
-            <label>
-              Precio por kilo ($)
-              <input
-                v-model="ventaForm.totalVenta"
-                type="number"
-                min="0"
-                step="0.01"
-                required
-                placeholder="0.00"
-              />
-            </label>
-
-            <label>
-              Notas
-              <textarea
-                v-model.trim="ventaForm.notas"
-                rows="3"
-                placeholder="Ej. Tamaño, presentación o detalle de la venta"
-              ></textarea>
-            </label>
-
-            <button class="action-button sale" type="submit" :disabled="guardandoVenta">
-              {{ guardandoVenta ? 'Guardando...' : 'Guardar venta' }}
-            </button>
-          </form>
-        </article>
-      </section>
-
-      <section class="lists-grid">
-        <article class="panel-card list-card">
-          <div class="panel-heading">
-            <h2>Entradas registradas</h2>
-            <p>Historial de compras de camarón.</p>
-          </div>
-
-          <div v-if="cargando" class="empty-state">Cargando registros...</div>
-          <div v-else-if="!entradas.length" class="empty-state">Aún no hay entradas registradas.</div>
-          <div v-else class="movement-list">
-            <div v-for="entrada in entradas" :key="entrada.id" class="movement-item entry">
-              <div class="item-main">
-                <strong>{{ entrada.producto }}</strong>
-                <span>{{ formatearFecha(entrada.fecha) }}</span>
-                <span>{{ entrada.notas || 'Sin notas' }}</span>
-              </div>
-              <div class="item-metrics">
-                <span>{{ formatearNumero(entrada.kilos) }} kg</span>
-                <strong>{{ formatearMoneda(entrada.precio) }}/kg</strong>
-                <span>Total: {{ formatearMoneda(entrada.kilos * entrada.precio) }}</span>
-              </div>
-              <button class="delete-button" @click="eliminarRegistro('entrada', entrada.id)">
-                Eliminar
-              </button>
-            </div>
-          </div>
-        </article>
-
-        <article class="panel-card list-card">
-          <div class="panel-heading">
-            <h2>Ventas registradas</h2>
-            <p>Historial de salidas por cliente.</p>
-          </div>
-
-          <div v-if="cargando" class="empty-state">Cargando registros...</div>
-          <div v-else-if="!ventas.length" class="empty-state">Aún no hay ventas registradas.</div>
-          <div v-else class="movement-list">
-            <div v-for="venta in ventas" :key="venta.id" class="movement-item sale">
-              <div class="item-main">
-                <strong>{{ venta.cliente }}</strong>
-                <span>{{ venta.producto }} · {{ formatearFecha(venta.fecha) }}</span>
-                <span>{{ venta.notas || 'Sin notas' }}</span>
-              </div>
-              <div class="item-metrics">
-                <span>{{ formatearNumero(venta.kilos) }} kg</span>
-                <strong>{{ formatearMoneda(venta.totalVenta) }}/kg</strong>
-                <span>Total: {{ formatearMoneda(venta.kilos * venta.totalVenta) }}</span>
-              </div>
-              <button class="delete-button" @click="eliminarRegistro('venta', venta.id)">
-                Eliminar
-              </button>
-            </div>
-          </div>
-        </article>
-      </section>
-    </div>
+    </transition>
   </div>
 </template>
 
 <script>
 import { db } from '@/firebase';
-import { addDoc, collection, deleteDoc, doc, getDocs } from 'firebase/firestore';
-import { formatearFecha } from '@/utils/formatters';
+import { addDoc, collection, deleteDoc, doc, getDocs, updateDoc, writeBatch } from 'firebase/firestore';
+import CuentasAllanResumen from './components/allan/CuentasAllanResumen.vue';
+import LoteCompraCard from './components/allan/LoteCompraCard.vue';
 
 const ENTRADAS_COLLECTION = 'cuentasAllanCamaronEntradas';
 const VENTAS_COLLECTION = 'cuentasAllanCamaronVentas';
+const ABONOS_COLLECTION = 'cuentasAllanCamaronAbonos';
+const EPSILON = 0.001;
 
-const getToday = () => new Date().toISOString().split('T')[0];
-const createEmptyEntradaForm = () => ({
+const getToday = () => {
+  const now = new Date();
+  const local = new Date(now.getTime() - (now.getTimezoneOffset() * 60000));
+  return local.toISOString().split('T')[0];
+};
+
+const emptyCompra = () => ({
+  proveedor: '',
   fecha: getToday(),
   producto: '',
   kilos: '',
   precio: '',
+  pagadoInicial: '',
   notas: ''
 });
-const createEmptyVentaForm = () => ({
-  fecha: getToday(),
-  producto: '',
-  cliente: '',
-  kilos: '',
-  totalVenta: '',
-  notas: ''
-});
+
+const emptyVenta = () => ({ fecha: getToday(), cliente: '', kilos: '', totalVenta: '', notas: '' });
+const emptyAbono = () => ({ fecha: getToday(), monto: '', metodo: 'Efectivo', notas: '' });
 
 export default {
   name: 'CuentasAllanCamaron',
+  components: { CuentasAllanResumen, LoteCompraCard },
   data() {
     return {
       cargando: false,
-      guardandoEntrada: false,
-      guardandoVenta: false,
+      guardando: false,
       entradas: [],
       ventas: [],
-      entradaForm: createEmptyEntradaForm(),
-      ventaForm: createEmptyVentaForm()
+      abonos: [],
+      filtro: 'activos',
+      busqueda: '',
+      modalActivo: '',
+      loteSeleccionado: null,
+      compraEditandoId: '',
+      compraForm: emptyCompra(),
+      ventaForm: emptyVenta(),
+      abonoForm: emptyAbono()
     };
   },
   computed: {
-    resumenProductos() {
-      const productosMap = new Map();
+    analisisLotes() {
+      const lotes = this.entradas
+        .map((entrada) => ({ ...entrada, ventas: [], abonos: [], kilosAsignados: 0 }))
+        .sort(this.ordenarPorFechaAsc);
+      const lotePorId = new Map(lotes.map((lote) => [lote.id, lote]));
 
-      this.entradas.forEach((entrada) => {
-        const producto = entrada.producto || 'General';
-        if (!productosMap.has(producto)) {
-          productosMap.set(producto, { entradas: [], ventas: [] });
-        }
-        productosMap.get(producto).entradas.push(entrada);
+      this.abonos.forEach((abono) => {
+        const lote = lotePorId.get(abono.entradaId);
+        if (lote) lote.abonos.push(abono);
       });
 
+      const ventasPendientes = [];
       this.ventas.forEach((venta) => {
-        const producto = venta.producto || 'General';
-        if (!productosMap.has(producto)) {
-          productosMap.set(producto, { entradas: [], ventas: [] });
+        const lote = venta.entradaId ? lotePorId.get(venta.entradaId) : null;
+        if (lote) {
+          lote.ventas.push(venta);
+          lote.kilosAsignados += venta.kilos;
+        } else {
+          ventasPendientes.push(venta);
         }
-        productosMap.get(producto).ventas.push(venta);
       });
 
-      return [...productosMap.entries()]
-        .map(([producto, movimientos]) => this.calcularAnalisisProducto(producto, movimientos))
-        .sort((a, b) => a.producto.localeCompare(b.producto, 'es'));
+      const sinLote = [];
+      ventasPendientes.sort(this.ordenarPorFechaAsc).forEach((venta) => {
+        let kilosPendientes = venta.kilos;
+        const candidatos = lotes.filter((lote) => (
+          this.claveProducto(lote.producto) === this.claveProducto(venta.producto)
+          && lote.kilos - lote.kilosAsignados > EPSILON
+        ));
+
+        candidatos.forEach((lote, index) => {
+          if (kilosPendientes <= EPSILON) return;
+          const disponibles = Math.max(0, lote.kilos - lote.kilosAsignados);
+          const kilosTomados = Math.min(disponibles, kilosPendientes);
+          lote.ventas.push({
+            ...venta,
+            kilos: kilosTomados,
+            segmentoId: `${venta.id}-${index}`,
+            asignacionHistorica: true
+          });
+          lote.kilosAsignados += kilosTomados;
+          kilosPendientes -= kilosTomados;
+        });
+
+        if (kilosPendientes > EPSILON) sinLote.push({ ...venta, kilos: kilosPendientes });
+      });
+
+      const lotesCalculados = lotes
+        .map((lote) => {
+          const kilosVendidos = lote.ventas.reduce((total, venta) => total + venta.kilos, 0);
+          const ingresos = lote.ventas.reduce((total, venta) => total + (venta.kilos * venta.totalVenta), 0);
+          const costoVendido = kilosVendidos * lote.precio;
+          const totalCompra = lote.kilos * lote.precio;
+          const totalAbonos = lote.pagadoInicial + lote.abonos.reduce((total, abono) => total + abono.monto, 0);
+          const kilosInventario = Math.max(0, lote.kilos - kilosVendidos);
+
+          return {
+            ...lote,
+            folio: lote.id.slice(-6).toUpperCase(),
+            kilosVendidos,
+            kilosInventario,
+            porcentajeExistencia: lote.kilos > 0 ? Math.min(100, (kilosInventario / lote.kilos) * 100) : 0,
+            ingresos,
+            costoVendido,
+            utilidad: ingresos - costoVendido,
+            totalCompra,
+            totalAbonos,
+            deuda: Math.max(0, totalCompra - totalAbonos),
+            agotado: kilosInventario <= EPSILON
+          };
+        })
+        .sort(this.ordenarPorFechaDesc);
+
+      return { lotes: lotesCalculados, ventasSinLote: sinLote };
     },
-    productosDisponiblesVenta() {
-      return this.resumenProductos
-        .filter((item) => item.kilosInventario > 0)
-        .sort((a, b) => a.producto.localeCompare(b.producto, 'es'));
+    lotes() {
+      return this.analisisLotes.lotes;
     },
-    productoSeleccionadoVenta() {
-      return this.resumenProductos.find((item) => item.producto === this.ventaForm.producto) || null;
+    ventasSinLote() {
+      return this.analisisLotes.ventasSinLote;
     },
-    totalEntradas() {
-      return this.entradas.reduce((total, entrada) => total + (entrada.kilos * entrada.precio), 0);
+    lotesFiltrados() {
+      const term = this.busqueda.toLocaleLowerCase('es');
+      return this.lotes.filter((lote) => {
+        const coincideFiltro = this.filtro === 'todos'
+          || (this.filtro === 'activos' && !lote.agotado)
+          || (this.filtro === 'deuda' && lote.deuda > EPSILON);
+        const contenido = `${lote.proveedor} ${lote.producto} ${lote.notas}`.toLocaleLowerCase('es');
+        return coincideFiltro && (!term || contenido.includes(term));
+      });
     },
-    totalVentas() {
-      return this.ventas.reduce((total, venta) => total + (venta.kilos * venta.totalVenta), 0);
-    },
-    analisisGanancia() {
+    resumenGeneral() {
+      const totalVentas = this.ventas.reduce((total, venta) => total + (venta.kilos * venta.totalVenta), 0);
+      const costoVentas = this.lotes.reduce((total, lote) => total + lote.costoVendido, 0);
       return {
-        costoVentas: this.resumenProductos.reduce((total, item) => total + item.costoVentas, 0),
-        kilosSinCosto: this.resumenProductos.reduce((total, item) => total + item.kilosSinCosto, 0),
-        costoInventario: this.resumenProductos.reduce((total, item) => total + item.costoInventario, 0),
-        kilosInventario: this.resumenProductos.reduce((total, item) => total + item.kilosInventario, 0),
-        entradasSinKilos: this.entradas.filter((entrada) => entrada.kilos <= 0).length,
-        ventasSinKilos: this.ventas.filter((venta) => venta.kilos <= 0).length
+        kilosInventario: this.lotes.reduce((total, lote) => total + lote.kilosInventario, 0),
+        lotesActivos: this.lotes.filter((lote) => !lote.agotado).length,
+        totalVentas,
+        kilosVendidos: this.ventas.reduce((total, venta) => total + venta.kilos, 0),
+        utilidad: totalVentas - costoVentas,
+        deuda: this.lotes.reduce((total, lote) => total + lote.deuda, 0),
+        totalCompras: this.lotes.reduce((total, lote) => total + lote.totalCompra, 0)
       };
     },
-    gananciaTotal() {
-      return this.totalVentas - this.analisisGanancia.costoVentas;
+    previewCompra() {
+      const total = this.toNumber(this.compraForm.kilos) * this.toNumber(this.compraForm.precio);
+      const abonosAnteriores = this.compraEditandoId && this.loteSeleccionado
+        ? this.loteSeleccionado.abonos.reduce((suma, abono) => suma + abono.monto, 0)
+        : 0;
+      const pagado = Math.min(total, this.toNumber(this.compraForm.pagadoInicial) + abonosAnteriores);
+      return { total, pagado, deuda: Math.max(0, total - pagado) };
     },
-    totalKilosEntradas() {
-      return this.entradas.reduce((total, entrada) => total + entrada.kilos, 0);
+    previewVenta() {
+      const kilos = this.toNumber(this.ventaForm.kilos);
+      const ingreso = kilos * this.toNumber(this.ventaForm.totalVenta);
+      const costo = kilos * (this.loteSeleccionado ? this.loteSeleccionado.precio : 0);
+      return { ingreso, costo, utilidad: ingreso - costo };
     },
-    totalKilosVentas() {
-      return this.ventas.reduce((total, venta) => total + venta.kilos, 0);
+    previewSaldoAbono() {
+      const deuda = this.loteSeleccionado ? this.loteSeleccionado.deuda : 0;
+      return Math.max(0, deuda - this.toNumber(this.abonoForm.monto));
     },
-    resumenGanancia() {
-      if (!this.totalVentas && !this.totalEntradas) {
-        return 'Sin movimientos todavía';
-      }
-
-      if (this.analisisGanancia.entradasSinKilos || this.analisisGanancia.ventasSinKilos) {
-        return 'Faltan kilos en registros anteriores';
-      }
-
-      if (this.analisisGanancia.kilosSinCosto > 0) {
-        return `Faltan ${this.formatearNumero(this.analisisGanancia.kilosSinCosto)} kg por costear`;
-      }
-
-      return this.gananciaTotal >= 0 ? 'Utilidad positiva' : 'Costo arriba de ventas';
+    modalEyebrow() {
+      return { compra: 'PASO 1 · ENTRADA', venta: 'PASO 2 · SALIDA', abono: 'PASO 3 · PAGO' }[this.modalActivo] || '';
+    },
+    modalTitulo() {
+      if (this.modalActivo === 'compra' && this.compraEditandoId) return 'Editar compra';
+      return { compra: 'Nueva compra', venta: 'Registrar venta', abono: 'Registrar abono' }[this.modalActivo] || '';
+    },
+    modalDescripcion() {
+      return {
+        compra: this.compraEditandoId
+          ? 'Corrige los datos generales de este lote.'
+          : 'Esta compra se convertirá en un lote independiente.',
+        venta: 'La venta se descontará únicamente de la compra seleccionada.',
+        abono: 'El pago reducirá la deuda de esta compra.'
+      }[this.modalActivo] || '';
     }
   },
   mounted() {
     this.cargarMovimientos();
+    window.addEventListener('keydown', this.manejarEscape);
+  },
+  beforeDestroy() {
+    window.removeEventListener('keydown', this.manejarEscape);
+    document.body.style.overflow = '';
   },
   methods: {
-    formatearFecha,
-    getEmptyEntradaForm() {
-      return createEmptyEntradaForm();
-    },
-    getEmptyVentaForm() {
-      return createEmptyVentaForm();
-    },
-    normalizarProducto(value) {
-      const producto = (value || '').trim();
-      return producto || 'General';
-    },
-    calcularAnalisisProducto(producto, movimientos) {
-      const entradasOrdenadas = [...movimientos.entradas]
-        .filter((entrada) => entrada.kilos > 0 && entrada.precio >= 0)
-        .sort(this.ordenarPorFechaAsc)
-        .map((entrada) => ({
-          ...entrada,
-          kilosDisponibles: entrada.kilos,
-          costoUnitario: entrada.precio
-        }));
-
-      const ventasOrdenadas = [...movimientos.ventas]
-        .filter((venta) => venta.kilos > 0 && venta.totalVenta >= 0)
-        .sort(this.ordenarPorFechaAsc);
-
-      let costoVentas = 0;
-      let kilosSinCosto = 0;
-
-      ventasOrdenadas.forEach((venta) => {
-        let kilosPendientes = venta.kilos;
-
-        for (let index = 0; index < entradasOrdenadas.length && kilosPendientes > 0; index += 1) {
-          const lote = entradasOrdenadas[index];
-
-          if (lote.kilosDisponibles <= 0) {
-            continue;
-          }
-
-          const kilosTomados = Math.min(lote.kilosDisponibles, kilosPendientes);
-          costoVentas += kilosTomados * lote.costoUnitario;
-          lote.kilosDisponibles -= kilosTomados;
-          kilosPendientes -= kilosTomados;
-        }
-
-        if (kilosPendientes > 0) {
-          kilosSinCosto += kilosPendientes;
-        }
-      });
-
-      return {
-        producto,
-        costoVentas,
-        kilosSinCosto,
-        costoInventario: entradasOrdenadas.reduce(
-          (total, lote) => total + (lote.kilosDisponibles * lote.costoUnitario),
-          0
-        ),
-        kilosInventario: entradasOrdenadas.reduce(
-          (total, lote) => total + lote.kilosDisponibles,
-          0
-        )
-      };
-    },
     async cargarMovimientos() {
       this.cargando = true;
-
       try {
-        const [entradasSnapshot, ventasSnapshot] = await Promise.all([
+        const [entradasSnapshot, ventasSnapshot, abonosSnapshot] = await Promise.all([
           getDocs(collection(db, ENTRADAS_COLLECTION)),
-          getDocs(collection(db, VENTAS_COLLECTION))
+          getDocs(collection(db, VENTAS_COLLECTION)),
+          getDocs(collection(db, ABONOS_COLLECTION))
         ]);
-
-        this.entradas = entradasSnapshot.docs
-          .map((registro) => this.normalizarEntrada(registro))
-          .sort(this.ordenarPorFechaDesc);
-
-        this.ventas = ventasSnapshot.docs
-          .map((registro) => this.normalizarVenta(registro))
-          .sort(this.ordenarPorFechaDesc);
+        this.entradas = entradasSnapshot.docs.map(this.normalizarEntrada).sort(this.ordenarPorFechaDesc);
+        this.ventas = ventasSnapshot.docs.map(this.normalizarVenta).sort(this.ordenarPorFechaDesc);
+        this.abonos = abonosSnapshot.docs.map(this.normalizarAbono).sort(this.ordenarPorFechaDesc);
       } catch (error) {
-        console.error('Error al cargar movimientos de Allan:', error);
-        alert('No se pudieron cargar los movimientos de Allan.');
+        console.error('Error al cargar las cuentas de Allan:', error);
+        alert('No se pudieron cargar las cuentas de Allan. Intenta nuevamente.');
       } finally {
         this.cargando = false;
       }
     },
     normalizarEntrada(registro) {
       const data = registro.data();
-
       return {
         id: registro.id,
         fecha: data.fecha || '',
+        proveedor: (data.proveedor || data.vendedor || 'Proveedor sin especificar').trim(),
         producto: this.normalizarProducto(data.producto),
-        kilos: Number(data.kilos) || 0,
-        precio: Number(data.precio) || 0,
+        kilos: this.toNumber(data.kilos),
+        precio: this.toNumber(data.precio),
+        pagadoInicial: this.toNumber(data.pagadoInicial),
         notas: data.notas || ''
       };
     },
     normalizarVenta(registro) {
       const data = registro.data();
-
       return {
         id: registro.id,
+        entradaId: data.entradaId || '',
         fecha: data.fecha || '',
         producto: this.normalizarProducto(data.producto),
         cliente: data.cliente || 'Cliente sin nombre',
-        kilos: Number(data.kilos) || 0,
-        totalVenta: Number(data.totalVenta) || 0,
+        kilos: this.toNumber(data.kilos),
+        totalVenta: this.toNumber(data.totalVenta),
         notas: data.notas || ''
       };
     },
-    ordenarPorFechaDesc(a, b) {
-      return new Date(b.fecha) - new Date(a.fecha);
+    normalizarAbono(registro) {
+      const data = registro.data();
+      return {
+        id: registro.id,
+        entradaId: data.entradaId || '',
+        fecha: data.fecha || '',
+        monto: this.toNumber(data.monto),
+        metodo: data.metodo || 'Abono',
+        notas: data.notas || ''
+      };
     },
-    ordenarPorFechaAsc(a, b) {
-      return new Date(a.fecha) - new Date(b.fecha);
+    abrirNuevaCompra() {
+      this.compraForm = emptyCompra();
+      this.loteSeleccionado = null;
+      this.compraEditandoId = '';
+      this.abrirModal('compra');
     },
-    async guardarEntrada() {
-      if (!this.entradaForm.producto.trim()) {
-        alert('Captura el producto de la entrada.');
+    abrirEditarCompra(lote) {
+      this.loteSeleccionado = lote;
+      this.compraEditandoId = lote.id;
+      this.compraForm = {
+        proveedor: lote.proveedor === 'Proveedor sin especificar' ? '' : lote.proveedor,
+        fecha: lote.fecha,
+        producto: lote.producto,
+        kilos: lote.kilos,
+        precio: lote.precio,
+        pagadoInicial: lote.pagadoInicial,
+        notas: lote.notas
+      };
+      this.abrirModal('compra');
+    },
+    abrirVenta(lote) {
+      this.loteSeleccionado = lote;
+      this.ventaForm = emptyVenta();
+      this.abrirModal('venta');
+    },
+    abrirAbono(lote) {
+      this.loteSeleccionado = lote;
+      this.abonoForm = emptyAbono();
+      this.abrirModal('abono');
+    },
+    abrirModal(tipo) {
+      this.modalActivo = tipo;
+      document.body.style.overflow = 'hidden';
+      this.$nextTick(() => {
+        const field = this.$refs.primerCampo;
+        if (field && typeof field.focus === 'function') field.focus();
+      });
+    },
+    cerrarModal(forzar) {
+      if (this.guardando && forzar !== true) return;
+      this.modalActivo = '';
+      this.loteSeleccionado = null;
+      this.compraEditandoId = '';
+      document.body.style.overflow = '';
+    },
+    manejarEscape(event) {
+      if (event.key === 'Escape' && this.modalActivo) this.cerrarModal();
+    },
+    async guardarCompra() {
+      const kilos = this.toNumber(this.compraForm.kilos);
+      const precio = this.toNumber(this.compraForm.precio);
+      const pagadoInicial = this.toNumber(this.compraForm.pagadoInicial);
+      const total = kilos * precio;
+      const abonosAnteriores = this.compraEditandoId && this.loteSeleccionado
+        ? this.loteSeleccionado.abonos.reduce((suma, abono) => suma + abono.monto, 0)
+        : 0;
+
+      if (!this.compraForm.proveedor || !this.compraForm.producto || kilos <= 0) {
+        alert('Completa el proveedor, producto y kilos de la compra.');
+        return;
+      }
+      if (precio < 0 || pagadoInicial < 0 || pagadoInicial + abonosAnteriores - total > EPSILON) {
+        alert('Los pagos registrados no pueden ser mayores al total de la compra.');
+        return;
+      }
+      if (this.compraEditandoId && this.loteSeleccionado && kilos + EPSILON < this.loteSeleccionado.kilosVendidos) {
+        alert(`Esta compra ya tiene ${this.formatearNumero(this.loteSeleccionado.kilosVendidos)} kg vendidos. No puedes bajar los kilos de ese límite.`);
         return;
       }
 
-      if (this.toNumber(this.entradaForm.kilos) <= 0) {
-        alert('Captura los kilos de la entrada para calcular la ganancia correctamente.');
-        return;
-      }
-
-      this.guardandoEntrada = true;
-
+      this.guardando = true;
       try {
-        await addDoc(collection(db, ENTRADAS_COLLECTION), {
-          fecha: this.entradaForm.fecha,
-          producto: this.normalizarProducto(this.entradaForm.producto),
-          kilos: this.toNumber(this.entradaForm.kilos),
-          precio: this.toNumber(this.entradaForm.precio),
-          notas: this.entradaForm.notas,
-          creadoEn: new Date().toISOString()
-        });
-
-        this.entradaForm = this.getEmptyEntradaForm();
+        const datosCompra = {
+          proveedor: this.compraForm.proveedor,
+          fecha: this.compraForm.fecha,
+          producto: this.normalizarProducto(this.compraForm.producto),
+          kilos,
+          precio,
+          pagadoInicial,
+          notas: this.compraForm.notas,
+          modelo: 'lote-v2'
+        };
+        if (this.compraEditandoId) {
+          await updateDoc(doc(db, ENTRADAS_COLLECTION, this.compraEditandoId), {
+            ...datosCompra,
+            actualizadoEn: new Date().toISOString()
+          });
+        } else {
+          await addDoc(collection(db, ENTRADAS_COLLECTION), {
+            ...datosCompra,
+            creadoEn: new Date().toISOString()
+          });
+        }
         await this.cargarMovimientos();
+        this.cerrarModal(true);
       } catch (error) {
-        console.error('Error al guardar entrada:', error);
-        alert('No se pudo guardar la entrada.');
+        console.error('Error al guardar la compra:', error);
+        alert('No se pudo guardar la compra.');
       } finally {
-        this.guardandoEntrada = false;
+        this.guardando = false;
+        if (!this.modalActivo) document.body.style.overflow = '';
       }
     },
     async guardarVenta() {
-      if (!this.ventaForm.producto.trim()) {
-        alert('Selecciona un producto con existencia.');
+      const kilos = this.toNumber(this.ventaForm.kilos);
+      const precioVenta = this.toNumber(this.ventaForm.totalVenta);
+      if (!this.loteSeleccionado || !this.ventaForm.cliente || kilos <= 0) {
+        alert('Completa el cliente y los kilos vendidos.');
+        return;
+      }
+      if (kilos - this.loteSeleccionado.kilosInventario > EPSILON) {
+        alert(`Solo quedan ${this.formatearNumero(this.loteSeleccionado.kilosInventario)} kg en este lote.`);
+        return;
+      }
+      if (precioVenta < 0) {
+        alert('El precio de venta no puede ser negativo.');
         return;
       }
 
-      if (this.toNumber(this.ventaForm.kilos) <= 0) {
-        alert('Captura los kilos vendidos para calcular la ganancia correctamente.');
-        return;
-      }
-
-      if (!this.productoSeleccionadoVenta || this.productoSeleccionadoVenta.kilosInventario <= 0) {
-        alert('El producto seleccionado no tiene existencia disponible.');
-        return;
-      }
-
-      if (this.toNumber(this.ventaForm.kilos) > this.productoSeleccionadoVenta.kilosInventario) {
-        alert(`Solo tienes ${this.formatearNumero(this.productoSeleccionadoVenta.kilosInventario)} kg disponibles de ${this.ventaForm.producto}.`);
-        return;
-      }
-
-      this.guardandoVenta = true;
-
+      this.guardando = true;
       try {
         await addDoc(collection(db, VENTAS_COLLECTION), {
+          entradaId: this.loteSeleccionado.id,
           fecha: this.ventaForm.fecha,
-          producto: this.normalizarProducto(this.ventaForm.producto),
+          producto: this.loteSeleccionado.producto,
           cliente: this.ventaForm.cliente,
-          kilos: this.toNumber(this.ventaForm.kilos),
-          totalVenta: this.toNumber(this.ventaForm.totalVenta),
+          kilos,
+          totalVenta: precioVenta,
           notas: this.ventaForm.notas,
-          creadoEn: new Date().toISOString()
+          creadoEn: new Date().toISOString(),
+          modelo: 'lote-v2'
         });
-
-        this.ventaForm = this.getEmptyVentaForm();
         await this.cargarMovimientos();
+        this.cerrarModal(true);
       } catch (error) {
-        console.error('Error al guardar venta:', error);
+        console.error('Error al guardar la venta:', error);
         alert('No se pudo guardar la venta.');
       } finally {
-        this.guardandoVenta = false;
+        this.guardando = false;
+        if (!this.modalActivo) document.body.style.overflow = '';
       }
     },
-    async eliminarRegistro(tipo, id) {
-      const mensaje = tipo === 'entrada'
-        ? '¿Eliminar esta entrada de camarón?'
-        : '¿Eliminar esta venta?';
-
-      if (!window.confirm(mensaje)) {
+    async guardarAbono() {
+      const monto = this.toNumber(this.abonoForm.monto);
+      if (!this.loteSeleccionado || monto <= 0) {
+        alert('Captura un monto válido para el abono.');
+        return;
+      }
+      if (monto - this.loteSeleccionado.deuda > EPSILON) {
+        alert(`El abono no puede superar la deuda de ${this.formatearMoneda(this.loteSeleccionado.deuda)}.`);
         return;
       }
 
+      this.guardando = true;
       try {
-        const collectionName = tipo === 'entrada' ? ENTRADAS_COLLECTION : VENTAS_COLLECTION;
-        await deleteDoc(doc(db, collectionName, id));
+        await addDoc(collection(db, ABONOS_COLLECTION), {
+          entradaId: this.loteSeleccionado.id,
+          fecha: this.abonoForm.fecha,
+          monto,
+          metodo: this.abonoForm.metodo,
+          notas: this.abonoForm.notas,
+          creadoEn: new Date().toISOString()
+        });
+        await this.cargarMovimientos();
+        this.cerrarModal(true);
+      } catch (error) {
+        console.error('Error al guardar el abono:', error);
+        alert('No se pudo guardar el abono.');
+      } finally {
+        this.guardando = false;
+        if (!this.modalActivo) document.body.style.overflow = '';
+      }
+    },
+    async eliminarLote(lote) {
+      const ventasLigadas = this.ventas.filter((venta) => venta.entradaId === lote.id);
+      const abonosLigados = this.abonos.filter((abono) => abono.entradaId === lote.id);
+      const movimientosLigados = ventasLigadas.length + abonosLigados.length;
+      const detalleMovimientos = movimientosLigados
+        ? `\n\nTambién se eliminarán ${ventasLigadas.length} venta(s) y ${abonosLigados.length} abono(s) ligados a este lote.`
+        : '';
+      const ventasHistoricas = lote.ventas.filter((venta) => !venta.entradaId).length;
+      const detalleHistorico = ventasHistoricas
+        ? '\n\nLas ventas antiguas sin vínculo de lote se conservarán y se intentarán reasignar.'
+        : '';
+
+      if (!window.confirm(
+        `¿Eliminar la compra de ${lote.proveedor} por ${this.formatearNumero(lote.kilos)} kg?${detalleMovimientos}${detalleHistorico}\n\nEsta acción no se puede deshacer.`
+      )) return;
+
+      try {
+        const batch = writeBatch(db);
+        ventasLigadas.forEach((venta) => batch.delete(doc(db, VENTAS_COLLECTION, venta.id)));
+        abonosLigados.forEach((abono) => batch.delete(doc(db, ABONOS_COLLECTION, abono.id)));
+        batch.delete(doc(db, ENTRADAS_COLLECTION, lote.id));
+        await batch.commit();
         await this.cargarMovimientos();
       } catch (error) {
-        console.error('Error al eliminar movimiento:', error);
-        alert('No se pudo eliminar el registro.');
+        console.error('Error al eliminar la compra:', error);
+        alert('No se pudo eliminar la compra.');
       }
+    },
+    async eliminarMovimiento({ tipo, id }) {
+      const esVenta = tipo === 'venta';
+      if (!window.confirm(`¿Eliminar ${esVenta ? 'esta venta' : 'este abono'}?`)) return;
+      try {
+        await deleteDoc(doc(db, esVenta ? VENTAS_COLLECTION : ABONOS_COLLECTION, id));
+        await this.cargarMovimientos();
+      } catch (error) {
+        console.error('Error al eliminar el movimiento:', error);
+        alert('No se pudo eliminar el movimiento.');
+      }
+    },
+    normalizarProducto(value) {
+      return String(value || '').trim() || 'General';
+    },
+    claveProducto(value) {
+      return this.normalizarProducto(value).toLocaleLowerCase('es');
+    },
+    ordenarPorFechaDesc(a, b) {
+      return String(b.fecha || '').localeCompare(String(a.fecha || ''));
+    },
+    ordenarPorFechaAsc(a, b) {
+      return String(a.fecha || '').localeCompare(String(b.fecha || ''));
     },
     toNumber(value) {
       const parsed = Number(value);
       return Number.isFinite(parsed) ? parsed : 0;
     },
     formatearMoneda(value) {
-      return new Intl.NumberFormat('es-MX', {
-        style: 'currency',
-        currency: 'MXN',
-        minimumFractionDigits: 2
-      }).format(Number(value) || 0);
+      return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', minimumFractionDigits: 2 }).format(Number(value) || 0);
     },
     formatearNumero(value) {
-      return new Intl.NumberFormat('es-MX', {
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 2
-      }).format(Number(value) || 0);
+      return new Intl.NumberFormat('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(Number(value) || 0);
     },
     volverAMexico() {
       this.$router.push('/cuentas-mexico');
@@ -600,386 +753,270 @@ export default {
 <style scoped>
 @import url('https://fonts.googleapis.com/css2?family=VT323&family=Share+Tech+Mono:wght@400;700&display=swap');
 
-.allan-camaron-page {
-  --bg-main: #05070b;
-  --panel-bg: rgba(7, 18, 15, 0.92);
-  --panel-border: rgba(0, 255, 163, 0.35);
-  --text-main: #dfffee;
-  --text-muted: #8ed7b2;
-  --accent: #00ffa3;
-  --accent-2: #4fc3ff;
-  --warning: #ffd166;
-  --danger: #ff6b6b;
+.allan-page {
+  --page-bg: #06070b;
+  --surface: rgba(13, 15, 22, 0.95);
+  --surface-raised: #12151f;
+  --border-soft: rgba(255, 255, 255, 0.09);
+  --text-main: #f1f0f5;
+  --text-muted: #aaa7b5;
+  --text-dim: #74717e;
+  --accent: #b388ff;
+  --accent-soft: #ceb7ff;
+  --cyan: #4fc3ff;
+  --success: #61ff9a;
+  --amber: #ffc857;
+  --danger: #ff6b78;
   min-height: 100vh;
   position: relative;
-  overflow: hidden;
+  overflow-x: hidden;
   background:
-    radial-gradient(circle at top right, rgba(79, 195, 255, 0.12), transparent 26%),
-    radial-gradient(circle at top left, rgba(0, 255, 163, 0.12), transparent 24%),
-    var(--bg-main);
+    radial-gradient(circle at 78% -10%, rgba(179, 136, 255, 0.12), transparent 34%),
+    radial-gradient(circle at -5% 20%, rgba(79, 195, 255, 0.06), transparent 26%),
+    var(--page-bg);
   color: var(--text-main);
-  font-family: 'VT323', 'Share Tech Mono', monospace;
+  font-family: 'VT323', monospace;
 }
 
-.scanlines,
-.bg-grid {
-  position: absolute;
+.allan-page.modal-open {
+  z-index: 10001 !important;
+}
+
+.bg-grid,
+.scanlines {
+  position: fixed;
   inset: 0;
   pointer-events: none;
 }
 
-.scanlines {
-  background: repeating-linear-gradient(
-    0deg,
-    rgba(255, 255, 255, 0.02),
-    rgba(255, 255, 255, 0.02) 1px,
-    transparent 1px,
-    transparent 3px
-  );
-  opacity: 0.35;
-}
-
 .bg-grid {
   background-image:
-    linear-gradient(rgba(0, 255, 163, 0.06) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(0, 255, 163, 0.06) 1px, transparent 1px);
-  background-size: 24px 24px;
-  opacity: 0.45;
+    linear-gradient(rgba(179, 136, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(179, 136, 255, 0.035) 1px, transparent 1px);
+  background-size: 30px 30px;
+  mask-image: linear-gradient(to bottom, black, transparent 72%);
 }
 
-.content-shell {
+.scanlines {
+  z-index: 5;
+  background: repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.012), rgba(255, 255, 255, 0.012) 1px, transparent 1px, transparent 3px);
+}
+
+.page-shell {
   position: relative;
-  z-index: 1;
-  max-width: 1280px;
+  z-index: 6;
+  width: min(1280px, calc(100% - 36px));
   margin: 0 auto;
-  padding: 32px 20px 48px;
+  padding: 28px 0 54px;
 }
 
-.header-panel,
-.panel-card,
-.summary-card {
-  border: 1px solid var(--panel-border);
-  background: var(--panel-bg);
-  box-shadow: 0 0 24px rgba(0, 255, 163, 0.08);
-  backdrop-filter: blur(6px);
-}
-
-.header-panel {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 24px;
-  margin-bottom: 24px;
-}
-
-.title-block {
-  flex: 1;
-  min-width: 240px;
-}
-
-.eyebrow {
-  margin: 0 0 6px;
-  color: var(--warning);
-  letter-spacing: 2px;
-  text-transform: uppercase;
-  font-size: 1.25rem;
-}
-
-h1 {
-  margin: 0;
-  font-size: clamp(2.5rem, 6vw, 4rem);
-  line-height: 0.95;
-  color: var(--accent);
-  letter-spacing: 2px;
-}
-
-.subtitle {
-  margin: 10px 0 0;
-  max-width: 640px;
-  color: var(--text-muted);
-  font-size: 1.5rem;
+.page-header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 22px;
+  margin-bottom: 20px;
 }
 
 .back-button,
-.action-button,
-.delete-button {
-  border: 1px solid currentColor;
-  background: transparent;
-  color: inherit;
+.new-purchase-button,
+.filter-tabs button,
+.page-state button,
+.close-button,
+.cancel-button,
+.submit-button {
+  font-family: 'Share Tech Mono', monospace;
   cursor: pointer;
-  transition: transform 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
-  font-family: inherit;
 }
 
 .back-button {
-  align-self: flex-start;
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  color: var(--accent-2);
-  padding: 12px 16px;
-  font-size: 1.35rem;
-}
-
-.back-button:hover,
-.action-button:hover,
-.delete-button:hover {
-  transform: translateY(-2px);
-}
-
-.summary-grid,
-.forms-grid,
-.lists-grid {
-  display: grid;
-  gap: 18px;
-}
-
-.summary-grid {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  margin-bottom: 24px;
-}
-
-.summary-card {
-  padding: 20px;
-}
-
-.summary-card strong {
-  display: block;
-  margin: 8px 0 6px;
-  font-size: clamp(1.9rem, 4vw, 2.6rem);
-  color: var(--accent);
-}
-
-.summary-card small,
-.summary-label {
-  display: block;
-}
-
-.summary-label {
-  color: var(--warning);
-  letter-spacing: 1px;
-  font-size: 1.2rem;
-  text-transform: uppercase;
-}
-
-.summary-card small {
+  gap: 8px;
+  padding: 9px 11px;
+  border: 1px solid var(--border-soft);
+  background: rgba(255, 255, 255, 0.02);
   color: var(--text-muted);
-  font-size: 1.2rem;
+  font-size: 0.72rem;
 }
 
-.summary-card.ventas strong {
-  color: var(--accent-2);
-}
+.back-button:hover { border-color: var(--accent); color: var(--accent-soft); }
 
-.summary-card.ganancias strong {
-  color: #87ff65;
-}
+.title-block { min-width: 0; }
+.eyebrow { color: var(--accent); font-family: 'Share Tech Mono', monospace; font-size: 0.66rem; letter-spacing: 0.16em; }
+.title-block h1 { margin: 3px 0 0; color: var(--text-main); font-size: clamp(2.1rem, 4vw, 3.15rem); font-weight: 400; line-height: 0.95; }
+.title-block p { margin: 6px 0 0; color: var(--text-muted); font-family: 'Share Tech Mono', monospace; font-size: 0.76rem; }
 
-.summary-card.ganancias.negativa strong {
-  color: var(--danger);
-}
-
-.summary-card.kilos strong {
-  color: var(--warning);
-}
-
-.forms-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  margin-bottom: 24px;
-}
-
-.lists-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.panel-card {
-  padding: 22px;
-}
-
-.panel-heading {
-  margin-bottom: 16px;
-}
-
-.panel-heading h2 {
-  margin: 0 0 6px;
-  color: var(--accent);
-  font-size: 2rem;
-}
-
-.panel-heading p {
-  margin: 0;
-  color: var(--text-muted);
-  font-size: 1.25rem;
-}
-
-.movement-form {
-  display: grid;
-  gap: 14px;
-}
-
-.movement-form label {
-  display: grid;
-  gap: 6px;
-  color: var(--warning);
-  font-size: 1.25rem;
-}
-
-.movement-form input,
-.movement-form select,
-.movement-form textarea {
-  width: 100%;
-  border: 1px solid rgba(0, 255, 163, 0.25);
-  background: rgba(0, 0, 0, 0.25);
-  color: var(--text-main);
-  padding: 12px 14px;
-  font-family: inherit;
-  font-size: 1.2rem;
-  resize: vertical;
-}
-
-.movement-form input:focus,
-.movement-form select:focus,
-.movement-form textarea:focus {
-  outline: none;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px rgba(0, 255, 163, 0.18);
-}
-
-.movement-form select option {
-  background: #07120f;
-  color: var(--text-main);
-}
-
-.inventory-hint {
-  margin: -4px 0 2px;
-  color: var(--accent-2);
-  font-size: 1.1rem;
-}
-
-.action-button {
-  padding: 12px 16px;
-  font-size: 1.3rem;
-}
-
-.action-button.save {
-  color: var(--accent);
-}
-
-.action-button.sale {
-  color: var(--accent-2);
-}
-
-.action-button:disabled {
-  opacity: 0.65;
-  cursor: not-allowed;
-  transform: none;
-}
-
-.list-card {
-  min-height: 340px;
-}
-
-.movement-list {
-  display: grid;
-  gap: 12px;
-}
-
-.movement-item {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  gap: 14px;
+.new-purchase-button {
+  display: inline-flex;
   align-items: center;
-  padding: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(0, 0, 0, 0.24);
+  gap: 8px;
+  min-height: 43px;
+  padding: 0 17px;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: #0a0710;
+  font-size: 0.76rem;
+  font-weight: 700;
+  box-shadow: 0 0 20px rgba(179, 136, 255, 0.17);
 }
 
-.movement-item.entry {
-  border-left: 3px solid var(--accent);
+.new-purchase-button:hover { background: var(--accent-soft); }
+
+.workflow-hint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 28px;
+  margin: 18px 0 24px;
+  padding: 13px 18px;
+  border: 1px solid var(--border-soft);
+  background: rgba(255, 255, 255, 0.018);
 }
 
-.movement-item.sale {
-  border-left: 3px solid var(--accent-2);
+.workflow-hint > div { display: flex; align-items: center; gap: 9px; }
+.workflow-hint > div > span { display: grid; width: 25px; height: 25px; place-items: center; border: 1px solid var(--accent); color: var(--accent); font-size: 1rem; }
+.workflow-hint p { margin: 0; }
+.workflow-hint strong,
+.workflow-hint small { display: block; font-family: 'Share Tech Mono', monospace; font-weight: 400; }
+.workflow-hint strong { color: var(--text-main); font-size: 0.68rem; }
+.workflow-hint small { margin-top: 2px; color: var(--text-dim); font-size: 0.6rem; }
+.workflow-hint > i { color: var(--text-dim); font-size: 0.65rem; }
+
+.lots-section { margin-top: 8px; }
+.section-toolbar { display: flex; align-items: flex-end; justify-content: space-between; gap: 22px; margin-bottom: 13px; }
+.section-toolbar h2 { margin: 0; color: var(--text-main); font-size: 1.75rem; font-weight: 400; }
+.section-toolbar p { margin: 2px 0 0; color: var(--text-dim); font-family: 'Share Tech Mono', monospace; font-size: 0.67rem; }
+.toolbar-controls { display: flex; align-items: center; gap: 10px; }
+
+.search-control {
+  display: flex;
+  align-items: center;
+  min-width: 240px;
+  height: 35px;
+  padding: 0 10px;
+  border: 1px solid var(--border-soft);
+  background: var(--surface);
+  color: var(--text-dim);
+}
+.search-control:focus-within { border-color: var(--accent); color: var(--accent); }
+.search-control input { width: 100%; border: 0; outline: 0; background: transparent; color: var(--text-main); padding: 0 0 0 8px; font-family: 'Share Tech Mono', monospace; font-size: 0.68rem; }
+.search-control input::placeholder { color: var(--text-dim); }
+
+.filter-tabs { display: flex; border: 1px solid var(--border-soft); }
+.filter-tabs button { height: 33px; padding: 0 10px; border: 0; border-left: 1px solid var(--border-soft); background: var(--surface); color: var(--text-dim); font-size: 0.62rem; }
+.filter-tabs button:first-child { border-left: 0; }
+.filter-tabs button.active { background: rgba(179, 136, 255, 0.1); color: var(--accent-soft); }
+
+.lots-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 15px; }
+.page-state { display: grid; min-height: 260px; place-items: center; align-content: center; gap: 8px; border: 1px dashed var(--border-soft); background: rgba(255, 255, 255, 0.015); color: var(--text-muted); text-align: center; }
+.page-state > i { color: var(--accent); font-size: 1.5rem; }
+.page-state strong { color: var(--text-main); font-size: 1.55rem; font-weight: 400; }
+.page-state p { margin: 0; color: var(--text-dim); font-family: 'Share Tech Mono', monospace; font-size: 0.7rem; }
+.page-state .state-icon { display: grid; width: 52px; height: 52px; place-items: center; border: 1px solid var(--accent); color: var(--accent); font-size: 1.15rem; }
+.page-state button { margin-top: 6px; padding: 10px 14px; border: 1px solid var(--accent); background: transparent; color: var(--accent-soft); font-size: 0.7rem; }
+.page-state.compact { min-height: 180px; }
+
+.legacy-warning { display: flex; gap: 12px; margin-top: 16px; padding: 14px 16px; border: 1px solid rgba(255, 200, 87, 0.35); background: rgba(255, 200, 87, 0.05); color: var(--amber); }
+.legacy-warning strong { font-size: 1.1rem; font-weight: 400; }
+.legacy-warning p { margin: 2px 0 0; color: var(--text-muted); font-family: 'Share Tech Mono', monospace; font-size: 0.66rem; }
+
+.modal-backdrop { position: fixed; inset: 0; z-index: 11000; display: grid; overflow-y: auto; place-items: center; padding: 24px; background: rgba(2, 3, 7, 0.88); opacity: 1 !important; transition: none !important; backdrop-filter: blur(5px); }
+.modal-card { width: min(680px, 100%); max-height: calc(100vh - 48px); overflow-y: auto; border: 1px solid rgba(179, 136, 255, 0.5); background: #0d0f16; color: var(--text-main); box-shadow: 0 30px 90px rgba(0, 0, 0, 0.65), 0 0 35px rgba(179, 136, 255, 0.1); font-family: 'VT323', monospace; }
+.modal-header { display: flex; justify-content: space-between; gap: 16px; padding: 21px 24px 17px; border-bottom: 1px solid var(--border-soft); }
+.modal-step { color: var(--accent); font-family: 'Share Tech Mono', monospace; font-size: 0.62rem; letter-spacing: 0.12em; }
+.modal-header h2 { margin: 3px 0 0; font-size: 2rem; font-weight: 400; line-height: 1; }
+.modal-header p { margin: 5px 0 0; color: var(--text-muted); font-family: 'Share Tech Mono', monospace; font-size: 0.67rem; }
+.close-button { width: 34px; height: 34px; border: 1px solid var(--border-soft); background: transparent; color: var(--text-muted); }
+.close-button:hover { border-color: var(--danger); color: var(--danger); }
+.modal-form { padding: 20px 24px 24px; }
+.form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.full-field { grid-column: 1 / -1; }
+.field { display: grid; gap: 5px; min-width: 0; }
+.field > span { color: var(--text-muted); font-family: 'Share Tech Mono', monospace; font-size: 0.68rem; }
+.field b { color: var(--danger); font-weight: 400; }
+.field small { color: var(--text-dim); font-family: 'Share Tech Mono', monospace; font-size: 0.58rem; }
+.field input,
+.field textarea,
+.field select { width: 100%; min-height: 40px; border: 1px solid var(--border-soft); outline: 0; background: rgba(0, 0, 0, 0.28); color: var(--text-main); padding: 9px 11px; font-family: 'Share Tech Mono', monospace; font-size: 0.72rem; resize: vertical; }
+.field input:focus,
+.field textarea:focus,
+.field select:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(179, 136, 255, 0.08); }
+.input-prefix,
+.input-suffix { display: flex; align-items: center; border: 1px solid var(--border-soft); background: rgba(0, 0, 0, 0.28); }
+.input-prefix:focus-within,
+.input-suffix:focus-within { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(179, 136, 255, 0.08); }
+.input-prefix > span,
+.input-suffix > span { padding: 0 10px; color: var(--accent-soft); font-size: 1rem; }
+.input-prefix input,
+.input-suffix input { border: 0; background: transparent; box-shadow: none !important; }
+.input-prefix input { padding-left: 0; }
+.input-suffix input { padding-right: 0; }
+
+.selected-lot { display: grid; grid-template-columns: 1.5fr 0.7fr 0.7fr; gap: 1px; margin-bottom: 16px; border: 1px solid var(--border-soft); background: var(--border-soft); }
+.selected-lot > div { padding: 10px 12px; background: #11131b; }
+.selected-lot span,
+.selected-lot strong { display: block; }
+.selected-lot span { color: var(--text-dim); font-family: 'Share Tech Mono', monospace; font-size: 0.59rem; text-transform: uppercase; }
+.selected-lot strong { margin-top: 3px; color: var(--accent-soft); font-size: 1.05rem; font-weight: 400; }
+.payment-selection { grid-template-columns: 1.5fr 0.7fr; }
+.payment-selection > div:last-child strong { color: var(--amber); }
+
+.calculation-preview { display: grid; grid-template-columns: 1fr auto 1fr auto 1.25fr; align-items: center; gap: 11px; margin-top: 17px; padding: 13px 14px; border: 1px solid var(--border-soft); background: rgba(0, 0, 0, 0.2); }
+.calculation-preview > i { color: var(--text-dim); font-size: 0.65rem; }
+.calculation-preview span,
+.calculation-preview strong { display: block; }
+.calculation-preview span { color: var(--text-dim); font-family: 'Share Tech Mono', monospace; font-size: 0.57rem; text-transform: uppercase; }
+.calculation-preview strong { margin-top: 3px; color: var(--text-main); font-size: 1.15rem; font-weight: 400; }
+.calculation-preview .highlight { padding-left: 11px; border-left: 2px solid currentColor; }
+.calculation-preview .highlight.green strong { color: var(--success); }
+.calculation-preview .highlight.red strong { color: var(--danger); }
+.calculation-preview .highlight.amber strong { color: var(--amber); }
+
+.modal-actions { display: flex; justify-content: flex-end; gap: 9px; margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border-soft); }
+.cancel-button,
+.submit-button { min-height: 40px; padding: 0 16px; font-size: 0.7rem; }
+.cancel-button { border: 1px solid var(--border-soft); background: transparent; color: var(--text-muted); }
+.submit-button { border: 1px solid var(--accent); background: var(--accent); color: #09060f; font-weight: 700; }
+.submit-button.cyan { border-color: var(--cyan); background: var(--cyan); }
+.submit-button.amber { border-color: var(--amber); background: var(--amber); }
+.submit-button:disabled { opacity: 0.55; cursor: not-allowed; }
+.submit-button i { margin-right: 5px; }
+@media (max-width: 1000px) {
+  .lots-grid { grid-template-columns: 1fr; }
+  .workflow-hint { gap: 14px; }
+  .section-toolbar { align-items: flex-start; flex-direction: column; }
+  .toolbar-controls { width: 100%; }
+  .search-control { flex: 1; }
 }
 
-.item-main,
-.item-metrics {
-  display: grid;
-  gap: 4px;
-}
-
-.item-main strong,
-.item-metrics strong {
-  font-size: 1.35rem;
-}
-
-.item-main span,
-.item-metrics span {
-  color: var(--text-muted);
-  font-size: 1.1rem;
-}
-
-.item-metrics {
-  text-align: right;
-}
-
-.delete-button {
-  padding: 10px 12px;
-  color: var(--danger);
-  font-size: 1.1rem;
-}
-
-.empty-state {
-  display: grid;
-  place-items: center;
-  min-height: 220px;
-  padding: 20px;
-  text-align: center;
-  color: var(--text-muted);
-  font-size: 1.25rem;
-  border: 1px dashed rgba(0, 255, 163, 0.2);
-}
-
-@media (max-width: 1080px) {
-  .summary-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .forms-grid,
-  .lists-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
-@media (max-width: 640px) {
-  .content-shell {
-    padding: 20px 14px 32px;
-  }
-
-  .header-panel,
-  .panel-card,
-  .summary-card {
-    padding: 16px;
-  }
-
-  .summary-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .back-button,
-  .action-button,
-  .delete-button {
-    width: 100%;
-    justify-content: center;
-  }
-
-  .movement-item {
-    grid-template-columns: 1fr;
-  }
-
-  .item-metrics {
-    text-align: left;
-  }
+@media (max-width: 680px) {
+  .page-shell { width: min(100% - 24px, 1280px); padding-top: 18px; }
+  .page-header { grid-template-columns: auto 1fr; gap: 12px; }
+  .title-block { grid-column: 2; grid-row: 1; }
+  .back-button { grid-column: 1; grid-row: 1; width: 38px; height: 38px; justify-content: center; padding: 0; }
+  .back-button span { display: none; }
+  .new-purchase-button { grid-column: 1 / -1; width: 100%; justify-content: center; }
+  .title-block p { display: none; }
+  .workflow-hint { align-items: stretch; flex-direction: column; gap: 8px; }
+  .workflow-hint > i { display: none; }
+  .toolbar-controls { align-items: stretch; flex-direction: column; }
+  .search-control { width: 100%; min-width: 0; }
+  .filter-tabs { display: grid; grid-template-columns: repeat(3, 1fr); }
+  .filter-tabs button { padding: 0 5px; }
+  .modal-backdrop { align-items: end; padding: 0; }
+  .modal-card { width: 100%; max-height: 94vh; border-width: 1px 0 0; }
+  .modal-header { padding: 18px 16px 14px; }
+  .modal-form { padding: 16px; }
+  .form-grid { grid-template-columns: 1fr; }
+  .full-field { grid-column: auto; }
+  .selected-lot { grid-template-columns: 1fr 1fr; }
+  .selected-lot > div:first-child { grid-column: 1 / -1; }
+  .payment-selection { grid-template-columns: 1fr; }
+  .payment-selection > div:first-child { grid-column: auto; }
+  .calculation-preview { grid-template-columns: 1fr auto 1fr; }
+  .calculation-preview > i:nth-of-type(2) { display: none; }
+  .calculation-preview .highlight { grid-column: 1 / -1; padding: 9px 0 0; border-top: 1px solid var(--border-soft); border-left: 0; }
+  .modal-actions { display: grid; grid-template-columns: 0.8fr 1.2fr; }
 }
 </style>
