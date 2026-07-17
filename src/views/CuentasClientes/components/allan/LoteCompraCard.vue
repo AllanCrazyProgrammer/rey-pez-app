@@ -35,8 +35,9 @@
 
     <div class="metrics-grid">
       <div>
-        <span>Vendido</span>
-        <strong>{{ formatNumber(lote.kilosVendidos) }} kg</strong>
+        <span>Crudo utilizado</span>
+        <strong>{{ formatNumber(lote.kilosCrudoUtilizados) }} kg</strong>
+        <small>{{ formatNumber(lote.kilosVendidos) }} kg vendidos</small>
       </div>
       <div>
         <span>Ingresos</span>
@@ -89,11 +90,21 @@
           <div v-for="venta in lote.ventas" :key="venta.segmentoId || venta.id" class="movement-row">
             <div>
               <strong>{{ venta.cliente }}</strong>
-              <small>{{ formatDate(venta.fecha) }} · {{ formatNumber(venta.kilos) }} kg a {{ formatMoney(venta.totalVenta) }}/kg</small>
+              <small>{{ formatDate(venta.fecha) }} · {{ formatNumber(venta.kilosCrudo) }} kg crudo → {{ formatNumber(venta.kilos) }} kg vendidos</small>
+              <small>{{ formatMoney(venta.totalVenta) }}/kg vendido</small>
               <small v-if="venta.notas">{{ venta.notas }}</small>
             </div>
             <div class="movement-amount">
               <strong>{{ formatMoney(venta.kilos * venta.totalVenta) }}</strong>
+              <button
+                v-if="!venta.asignacionHistorica"
+                class="edit-movement"
+                type="button"
+                title="Editar venta"
+                @click="$emit('editar-venta', { venta, lote })"
+              >
+                <i class="fas fa-pen"></i>
+              </button>
               <button type="button" title="Eliminar venta" @click="$emit('eliminar-movimiento', { tipo: 'venta', id: venta.id })">
                 <i class="fas fa-trash-alt"></i>
               </button>
@@ -320,7 +331,8 @@ export default {
 .metrics-grid > div:first-child { border-left: 0; padding-left: 0; }
 
 .metrics-grid span,
-.metrics-grid strong {
+.metrics-grid strong,
+.metrics-grid small {
   display: block;
 }
 
@@ -338,6 +350,16 @@ export default {
   color: var(--text-main);
   font-size: 1.25rem;
   font-weight: 400;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.metrics-grid small {
+  overflow: hidden;
+  margin-top: 2px;
+  color: var(--accent-soft);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.58rem;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -455,6 +477,10 @@ export default {
   background: transparent;
   color: var(--danger);
   cursor: pointer;
+}
+
+.movement-amount .edit-movement {
+  color: var(--cyan);
 }
 
 .empty-row {

@@ -76,6 +76,7 @@
             :lote="lote"
             @registrar-venta="abrirVenta"
             @registrar-abono="abrirAbono"
+            @editar-venta="abrirEditarVenta"
             @editar-lote="abrirEditarCompra"
             @eliminar-lote="eliminarLote"
             @eliminar-movimiento="eliminarMovimiento"
@@ -159,7 +160,7 @@
           <form v-else-if="modalActivo === 'venta'" class="modal-form" @submit.prevent="guardarVenta">
             <div v-if="loteSeleccionado" class="selected-lot">
               <div><span>Venta tomada de</span><strong>{{ loteSeleccionado.proveedor }} · {{ loteSeleccionado.producto }}</strong></div>
-              <div><span>Disponible</span><strong>{{ formatearNumero(loteSeleccionado.kilosInventario) }} kg</strong></div>
+              <div><span>Disponible</span><strong>{{ formatearNumero(maxKilosCrudoVenta) }} kg</strong></div>
               <div><span>Costo base</span><strong>{{ formatearMoneda(loteSeleccionado.precio) }}/kg</strong></div>
             </div>
 
@@ -173,8 +174,14 @@
                 <input ref="primerCampo" v-model.trim="ventaForm.cliente" type="text" required placeholder="Nombre del cliente" />
               </label>
               <label class="field">
+                <span>Kilos en crudo <b>*</b></span>
+                <div class="input-suffix"><input v-model="ventaForm.kilosCrudo" type="number" min="0.01" :max="maxKilosCrudoVenta" step="0.01" required placeholder="0.00" @input="sincronizarKilosVendidos($event.target.value)" /><span>kg</span></div>
+                <small>Estos kilos se descontarán de la existencia.</small>
+              </label>
+              <label class="field">
                 <span>Kilos vendidos <b>*</b></span>
-                <div class="input-suffix"><input v-model="ventaForm.kilos" type="number" min="0.01" :max="loteSeleccionado ? loteSeleccionado.kilosInventario : null" step="0.01" required placeholder="0.00" /><span>kg</span></div>
+                <div class="input-suffix"><input v-model="ventaForm.kilos" type="number" min="0.01" step="0.01" required placeholder="0.00" @input="marcarKilosVendidosEditados" /><span>kg</span></div>
+                <small>Se igualan al crudo automáticamente, pero puedes cambiarlos.</small>
               </label>
               <label class="field">
                 <span>Precio de venta por kg <b>*</b></span>
@@ -198,7 +205,7 @@
               <button class="cancel-button" type="button" @click="cerrarModal">Cancelar</button>
               <button class="submit-button cyan" type="submit" :disabled="guardando">
                 <i :class="guardando ? 'fas fa-circle-notch fa-spin' : 'fas fa-check'"></i>
-                {{ guardando ? 'Guardando...' : 'Guardar venta' }}
+                {{ guardando ? 'Guardando...' : (ventaEditandoId ? 'Guardar cambios' : 'Guardar venta') }}
               </button>
             </footer>
           </form>
@@ -282,7 +289,7 @@ const emptyCompra = () => ({
   notas: ''
 });
 
-const emptyVenta = () => ({ fecha: getToday(), cliente: '', kilos: '', totalVenta: '', notas: '' });
+const emptyVenta = () => ({ fecha: getToday(), cliente: '', kilosCrudo: '', kilos: '', totalVenta: '', notas: '' });
 const emptyAbono = () => ({ fecha: getToday(), monto: '', metodo: 'Efectivo', notas: '' });
 
 export default {
@@ -300,6 +307,9 @@ export default {
       modalActivo: '',
       loteSeleccionado: null,
       compraEditandoId: '',
+      ventaEditandoId: '',
+      kilosCrudoVentaOriginal: 0,
+      kilosVendidosEditados: false,
       compraForm: emptyCompra(),
       ventaForm: emptyVenta(),
       abonoForm: emptyAbono()
@@ -322,7 +332,7 @@ export default {
         const lote = venta.entradaId ? lotePorId.get(venta.entradaId) : null;
         if (lote) {
           lote.ventas.push(venta);
-          lote.kilosAsignados += venta.kilos;
+          lote.kilosAsignados += venta.kilosCrudo;
         } else {
           ventasPendientes.push(venta);
         }
@@ -330,7 +340,7 @@ export default {
 
       const sinLote = [];
       ventasPendientes.sort(this.ordenarPorFechaAsc).forEach((venta) => {
-        let kilosPendientes = venta.kilos;
+        let kilosPendientes = venta.kilosCrudo;
         const candidatos = lotes.filter((lote) => (
           this.claveProducto(lote.producto) === this.claveProducto(venta.producto)
           && lote.kilos - lote.kilosAsignados > EPSILON
@@ -342,7 +352,10 @@ export default {
           const kilosTomados = Math.min(disponibles, kilosPendientes);
           lote.ventas.push({
             ...venta,
-            kilos: kilosTomados,
+            kilosCrudo: kilosTomados,
+            kilos: venta.kilosCrudo > 0
+              ? venta.kilos * (kilosTomados / venta.kilosCrudo)
+              : kilosTomados,
             segmentoId: `${venta.id}-${index}`,
             asignacionHistorica: true
           });
@@ -350,21 +363,23 @@ export default {
           kilosPendientes -= kilosTomados;
         });
 
-        if (kilosPendientes > EPSILON) sinLote.push({ ...venta, kilos: kilosPendientes });
+        if (kilosPendientes > EPSILON) sinLote.push({ ...venta, kilosCrudo: kilosPendientes });
       });
 
       const lotesCalculados = lotes
         .map((lote) => {
+          const kilosCrudoUtilizados = lote.ventas.reduce((total, venta) => total + venta.kilosCrudo, 0);
           const kilosVendidos = lote.ventas.reduce((total, venta) => total + venta.kilos, 0);
           const ingresos = lote.ventas.reduce((total, venta) => total + (venta.kilos * venta.totalVenta), 0);
-          const costoVendido = kilosVendidos * lote.precio;
+          const costoVendido = kilosCrudoUtilizados * lote.precio;
           const totalCompra = lote.kilos * lote.precio;
           const totalAbonos = lote.pagadoInicial + lote.abonos.reduce((total, abono) => total + abono.monto, 0);
-          const kilosInventario = Math.max(0, lote.kilos - kilosVendidos);
+          const kilosInventario = Math.max(0, lote.kilos - kilosCrudoUtilizados);
 
           return {
             ...lote,
             folio: lote.id.slice(-6).toUpperCase(),
+            kilosCrudoUtilizados,
             kilosVendidos,
             kilosInventario,
             porcentajeExistencia: lote.kilos > 0 ? Math.min(100, (kilosInventario / lote.kilos) * 100) : 0,
@@ -419,20 +434,26 @@ export default {
       return { total, pagado, deuda: Math.max(0, total - pagado) };
     },
     previewVenta() {
-      const kilos = this.toNumber(this.ventaForm.kilos);
-      const ingreso = kilos * this.toNumber(this.ventaForm.totalVenta);
-      const costo = kilos * (this.loteSeleccionado ? this.loteSeleccionado.precio : 0);
+      const kilosVendidos = this.toNumber(this.ventaForm.kilos);
+      const kilosCrudo = this.toNumber(this.ventaForm.kilosCrudo);
+      const ingreso = kilosVendidos * this.toNumber(this.ventaForm.totalVenta);
+      const costo = kilosCrudo * (this.loteSeleccionado ? this.loteSeleccionado.precio : 0);
       return { ingreso, costo, utilidad: ingreso - costo };
     },
     previewSaldoAbono() {
       const deuda = this.loteSeleccionado ? this.loteSeleccionado.deuda : 0;
       return Math.max(0, deuda - this.toNumber(this.abonoForm.monto));
     },
+    maxKilosCrudoVenta() {
+      if (!this.loteSeleccionado) return 0;
+      return this.loteSeleccionado.kilosInventario + this.kilosCrudoVentaOriginal;
+    },
     modalEyebrow() {
       return { compra: 'PASO 1 · ENTRADA', venta: 'PASO 2 · SALIDA', abono: 'PASO 3 · PAGO' }[this.modalActivo] || '';
     },
     modalTitulo() {
       if (this.modalActivo === 'compra' && this.compraEditandoId) return 'Editar compra';
+      if (this.modalActivo === 'venta' && this.ventaEditandoId) return 'Editar venta';
       return { compra: 'Nueva compra', venta: 'Registrar venta', abono: 'Registrar abono' }[this.modalActivo] || '';
     },
     modalDescripcion() {
@@ -440,7 +461,9 @@ export default {
         compra: this.compraEditandoId
           ? 'Corrige los datos generales de este lote.'
           : 'Esta compra se convertirá en un lote independiente.',
-        venta: 'La venta se descontará únicamente de la compra seleccionada.',
+        venta: this.ventaEditandoId
+          ? 'Corrige los datos y el inventario se recalculará automáticamente.'
+          : 'La venta se descontará únicamente de la compra seleccionada.',
         abono: 'El pago reducirá la deuda de esta compra.'
       }[this.modalActivo] || '';
     }
@@ -493,6 +516,7 @@ export default {
         fecha: data.fecha || '',
         producto: this.normalizarProducto(data.producto),
         cliente: data.cliente || 'Cliente sin nombre',
+        kilosCrudo: this.toNumber(data.kilosCrudo !== undefined ? data.kilosCrudo : data.kilos),
         kilos: this.toNumber(data.kilos),
         totalVenta: this.toNumber(data.totalVenta),
         notas: data.notas || ''
@@ -532,6 +556,24 @@ export default {
     abrirVenta(lote) {
       this.loteSeleccionado = lote;
       this.ventaForm = emptyVenta();
+      this.ventaEditandoId = '';
+      this.kilosCrudoVentaOriginal = 0;
+      this.kilosVendidosEditados = false;
+      this.abrirModal('venta');
+    },
+    abrirEditarVenta({ venta, lote }) {
+      this.loteSeleccionado = lote;
+      this.ventaEditandoId = venta.id;
+      this.kilosCrudoVentaOriginal = venta.kilosCrudo;
+      this.kilosVendidosEditados = Math.abs(venta.kilos - venta.kilosCrudo) > EPSILON;
+      this.ventaForm = {
+        fecha: venta.fecha,
+        cliente: venta.cliente,
+        kilosCrudo: venta.kilosCrudo,
+        kilos: venta.kilos,
+        totalVenta: venta.totalVenta,
+        notas: venta.notas
+      };
       this.abrirModal('venta');
     },
     abrirAbono(lote) {
@@ -552,6 +594,8 @@ export default {
       this.modalActivo = '';
       this.loteSeleccionado = null;
       this.compraEditandoId = '';
+      this.ventaEditandoId = '';
+      this.kilosCrudoVentaOriginal = 0;
       document.body.style.overflow = '';
     },
     manejarEscape(event) {
@@ -574,8 +618,8 @@ export default {
         alert('Los pagos registrados no pueden ser mayores al total de la compra.');
         return;
       }
-      if (this.compraEditandoId && this.loteSeleccionado && kilos + EPSILON < this.loteSeleccionado.kilosVendidos) {
-        alert(`Esta compra ya tiene ${this.formatearNumero(this.loteSeleccionado.kilosVendidos)} kg vendidos. No puedes bajar los kilos de ese límite.`);
+      if (this.compraEditandoId && this.loteSeleccionado && kilos + EPSILON < this.loteSeleccionado.kilosCrudoUtilizados) {
+        alert(`Esta compra ya utilizó ${this.formatearNumero(this.loteSeleccionado.kilosCrudoUtilizados)} kg en crudo. No puedes bajar los kilos de ese límite.`);
         return;
       }
 
@@ -613,14 +657,15 @@ export default {
       }
     },
     async guardarVenta() {
+      const kilosCrudo = this.toNumber(this.ventaForm.kilosCrudo);
       const kilos = this.toNumber(this.ventaForm.kilos);
       const precioVenta = this.toNumber(this.ventaForm.totalVenta);
-      if (!this.loteSeleccionado || !this.ventaForm.cliente || kilos <= 0) {
-        alert('Completa el cliente y los kilos vendidos.');
+      if (!this.loteSeleccionado || !this.ventaForm.cliente || kilosCrudo <= 0 || kilos <= 0) {
+        alert('Completa el cliente, los kilos en crudo y los kilos vendidos.');
         return;
       }
-      if (kilos - this.loteSeleccionado.kilosInventario > EPSILON) {
-        alert(`Solo quedan ${this.formatearNumero(this.loteSeleccionado.kilosInventario)} kg en este lote.`);
+      if (kilosCrudo - this.maxKilosCrudoVenta > EPSILON) {
+        alert(`Solo puedes utilizar hasta ${this.formatearNumero(this.maxKilosCrudoVenta)} kg en crudo en esta venta.`);
         return;
       }
       if (precioVenta < 0) {
@@ -630,17 +675,28 @@ export default {
 
       this.guardando = true;
       try {
-        await addDoc(collection(db, VENTAS_COLLECTION), {
+        const datosVenta = {
           entradaId: this.loteSeleccionado.id,
           fecha: this.ventaForm.fecha,
           producto: this.loteSeleccionado.producto,
           cliente: this.ventaForm.cliente,
+          kilosCrudo,
           kilos,
           totalVenta: precioVenta,
           notas: this.ventaForm.notas,
-          creadoEn: new Date().toISOString(),
           modelo: 'lote-v2'
-        });
+        };
+        if (this.ventaEditandoId) {
+          await updateDoc(doc(db, VENTAS_COLLECTION, this.ventaEditandoId), {
+            ...datosVenta,
+            actualizadoEn: new Date().toISOString()
+          });
+        } else {
+          await addDoc(collection(db, VENTAS_COLLECTION), {
+            ...datosVenta,
+            creadoEn: new Date().toISOString()
+          });
+        }
         await this.cargarMovimientos();
         this.cerrarModal(true);
       } catch (error) {
@@ -681,6 +737,12 @@ export default {
         this.guardando = false;
         if (!this.modalActivo) document.body.style.overflow = '';
       }
+    },
+    sincronizarKilosVendidos(kilosCrudo) {
+      if (!this.kilosVendidosEditados) this.ventaForm.kilos = kilosCrudo;
+    },
+    marcarKilosVendidosEditados() {
+      this.kilosVendidosEditados = true;
     },
     async eliminarLote(lote) {
       const ventasLigadas = this.ventas.filter((venta) => venta.entradaId === lote.id);
