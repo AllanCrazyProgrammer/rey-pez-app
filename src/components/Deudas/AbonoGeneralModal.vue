@@ -1,117 +1,61 @@
 <template>
   <div v-if="mostrar" class="modal-overlay" @click="cerrarModal">
-    <div class="modal-content abono-general-modal" @click.stop>
-      <div class="modal-header">
-        <h2>Abono General - {{ proveedor?.nombre }}</h2>
-        <button @click="$emit('cerrar')" class="close-button">×</button>
-      </div>
-      
+    <div class="modal-content abono-general-modal" role="dialog" aria-modal="true" aria-labelledby="abono-general-title" @click.stop>
+      <header class="modal-header">
+        <div class="terminal-title">
+          <span class="prompt">&gt;</span>
+          <div><small>ABONO_GENERAL.exe</small><h2 id="abono-general-title">Distribuir abono general</h2></div>
+        </div>
+        <button @click="$emit('cerrar')" class="close-button" aria-label="Cerrar">×</button>
+      </header>
+
       <div class="modal-body">
-        <!-- Mensaje de error cuando no hay proveedor -->
         <div v-if="!proveedor" class="error-no-proveedor">
-          <div class="error-icon">⚠️</div>
+          <div class="error-icon"><i class="fas fa-exclamation-triangle"></i></div>
           <h3>No hay proveedor seleccionado</h3>
-          <p>Para realizar un abono general, primero debe seleccionar un proveedor en el filtro.</p>
-        </div>
-        
-        <!-- Contenido normal cuando hay proveedor -->
-        <div v-else>
-          <div class="proveedor-info">
-            <div class="info-card">
-              <h3>Resumen de Deudas</h3>
-              <div class="resumen-items">
-                <div class="resumen-item">
-                  <span class="label">Total deudas pendientes:</span>
-                  <span class="valor">{{ deudasPendientes.length }}</span>
-                </div>
-                <div class="resumen-item">
-                  <span class="label">Saldo total pendiente:</span>
-                  <span class="valor saldo-total">${{ formatNumber(saldoTotalPendiente) }}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-        <div class="form-abono">
-          <h3>Realizar Abono General</h3>
-          <div class="form-group">
-            <label for="fechaAbono">Fecha del abono:</label>
-            <input 
-              id="fechaAbono" 
-              type="date" 
-              v-model="nuevoAbono.fecha" 
-              required
-            >
-          </div>
-          
-          <div class="form-group">
-            <label for="descripcionAbono">Descripción:</label>
-            <input 
-              id="descripcionAbono" 
-              type="text" 
-              v-model="nuevoAbono.descripcion" 
-              placeholder="Ej: Pago general, Transferencia, etc."
-              required
-            >
-          </div>
-          
-          <div class="form-group">
-            <label for="montoAbono">Monto total a abonar:</label>
-            <input 
-              id="montoAbono" 
-              type="number" 
-              v-model.number="nuevoAbono.monto" 
-              :max="saldoTotalPendiente"
-              min="1"
-              step="0.01"
-              placeholder="0.00"
-              required
-            >
-          </div>
-
-          <div v-if="nuevoAbono.monto > 0" class="distribucion-preview">
-            <h4>Distribución del abono:</h4>
-            <div class="deudas-list">
-              <div 
-                v-for="(distribucion, index) in distribucionCalculada" 
-                :key="distribucion.deudaId"
-                class="deuda-distribucion"
-              >
-                <div class="deuda-info">
-                  <span class="fecha">{{ formatearFecha(distribucion.fecha) }}</span>
-                  <span class="saldo-actual">${{ formatNumber(distribucion.saldoActual) }}</span>
-                </div>
-                <div class="abono-aplicado">
-                  <span class="monto-abono">${{ formatNumber(distribucion.montoAbono) }}</span>
-                  <span class="saldo-restante">(Restante: ${{ formatNumber(distribucion.saldoRestante) }})</span>
-                </div>
-              </div>
-            </div>
-            
-            <div class="resumen-distribucion">
-              <div class="total-distribuido">
-                <span>Total distribuido: ${{ formatNumber(totalDistribuido) }}</span>
-              </div>
-              <div v-if="montoSobrante > 0" class="monto-sobrante">
-                <span>⚠️ Sobrante (se aplicará a la primera deuda): ${{ formatNumber(montoSobrante) }}</span>
-              </div>
-            </div>
-          </div>
+          <p>Selecciona un proveedor en la consulta para continuar.</p>
         </div>
 
-        <div class="modal-actions">
-          <button @click="$emit('cerrar')" class="btn-cancelar">
-            Cancelar
-          </button>
-          <button 
-            @click="aplicarAbonoGeneral" 
-            class="btn-aplicar"
-            :disabled="!puedeAplicar || guardando"
-          >
-            {{ guardando ? 'Aplicando...' : 'Aplicar Abono General' }}
-          </button>
+        <div v-else class="general-payment-layout">
+          <section class="provider-summary">
+            <div><span>PROVEEDOR</span><strong>{{ proveedor.nombre }}</strong></div>
+            <div><span>NOTAS PENDIENTES</span><strong>{{ deudasPendientes.length }}</strong></div>
+            <div><span>SALDO TOTAL</span><strong class="saldo-total">${{ formatNumber(saldoTotalPendiente) }}</strong></div>
+          </section>
+
+          <div v-if="cargando" class="loading-state"><span class="loader">▋</span> Cargando notas pendientes…</div>
+          <template v-else>
+            <section class="form-abono">
+              <div class="section-label"><span>01</span><h3>Datos del pago</h3></div>
+              <div class="form-grid">
+                <div class="form-group"><label for="fechaAbono">Fecha del abono</label><input id="fechaAbono" type="date" v-model="nuevoAbono.fecha" required></div>
+                <div class="form-group description-field"><label for="descripcionAbono">Descripción o referencia</label><input id="descripcionAbono" type="text" v-model.trim="nuevoAbono.descripcion" placeholder="Ej. Transferencia semanal" required></div>
+                <div class="form-group amount-field"><label for="montoAbono">Monto total</label><div class="amount-input"><span>$</span><input id="montoAbono" type="number" v-model.number="nuevoAbono.monto" :max="saldoTotalPendiente" min="0.01" step="0.01" placeholder="0.00" required></div><small>Máximo: ${{ formatNumber(saldoTotalPendiente) }}</small></div>
+              </div>
+            </section>
+
+            <section class="distribution-section">
+              <div class="section-label"><span>02</span><div><h3>Vista previa de distribución</h3><small>La numeración indica la prioridad de aplicación.</small></div></div>
+              <div v-if="!nuevoAbono.monto" class="preview-empty"><i class="fas fa-keyboard"></i><p>Captura un monto para ver cómo se repartirá.</p></div>
+              <div v-else-if="nuevoAbono.monto > saldoTotalPendiente" class="preview-error"><i class="fas fa-exclamation-triangle"></i> El monto supera el saldo total pendiente.</div>
+              <div v-else class="deudas-list">
+                <article v-for="(distribucion, index) in distribucionCalculada" :key="distribucion.deudaId" class="deuda-distribucion">
+                  <span class="priority-number">{{ String(index + 1).padStart(2, '0') }}</span>
+                  <div class="deuda-info"><span class="fecha">Nota del {{ formatearFecha(distribucion.fecha) }}</span><span class="saldo-actual">Saldo antes: ${{ formatNumber(distribucion.saldoActual) }}</span></div>
+                  <div class="distribution-arrow"><i class="fas fa-long-arrow-alt-right"></i></div>
+                  <div class="abono-aplicado"><span class="monto-abono">-${{ formatNumber(distribucion.montoAbono) }}</span><span class="saldo-restante">Queda ${{ formatNumber(distribucion.saldoRestante) }}</span></div>
+                  <span :class="['result-badge', { paid: distribucion.saldoRestante <= 0 }]">{{ distribucion.saldoRestante <= 0 ? 'Liquidada' : 'Parcial' }}</span>
+                </article>
+              </div>
+            </section>
+
+            <footer class="modal-actions">
+              <div class="distribution-total"><span>Total a distribuir</span><strong>${{ formatNumber(totalDistribuido) }}</strong></div>
+              <button @click="$emit('cerrar')" class="btn-cancelar">Cancelar</button>
+              <button @click="aplicarAbonoGeneral" class="btn-aplicar" :disabled="!puedeAplicar || guardando"><i :class="guardando ? 'fas fa-circle-notch fa-spin' : 'fas fa-check'"></i>{{ guardando ? 'Aplicando…' : 'Confirmar distribución' }}</button>
+            </footer>
+          </template>
         </div>
-        </div> <!-- Cierre del div v-else -->
       </div>
     </div>
   </div>
@@ -119,7 +63,7 @@
 
 <script>
 import { db } from '@/firebase';
-import { collection, addDoc, updateDoc, doc, getDocs, query, where, orderBy } from 'firebase/firestore';
+import { collection, doc, getDocs, query, where, writeBatch } from 'firebase/firestore';
 import { formatNumber, formatearFecha } from '@/utils/formatters';
 
 export default {
@@ -139,10 +83,11 @@ export default {
   data() {
     return {
       deudasPendientes: [],
+      cargando: false,
       guardando: false,
       nuevoAbono: {
         fecha: this.obtenerFechaActual(),
-        descripcion: '',
+        descripcion: 'Pago',
         monto: null
       }
     };
@@ -157,7 +102,8 @@ export default {
              this.nuevoAbono.descripcion && 
              this.nuevoAbono.monto > 0 && 
              this.nuevoAbono.monto <= this.saldoTotalPendiente &&
-             this.deudasPendientes.length > 0;
+             this.deudasPendientes.length > 0 &&
+             !this.cargando;
     },
     
     distribucionCalculada() {
@@ -167,9 +113,7 @@ export default {
       const distribucion = [];
       
       // Ordenar deudas por fecha (más antiguas primero)
-      const deudasOrdenadas = [...this.deudasPendientes].sort((a, b) => 
-        new Date(a.fecha) - new Date(b.fecha)
-      );
+      const deudasOrdenadas = [...this.deudasPendientes].sort(this.compararDeudasFIFO);
       
       for (const deuda of deudasOrdenadas) {
         if (montoRestante <= 0) break;
@@ -196,10 +140,11 @@ export default {
     },
     
     montoSobrante() {
-      return this.nuevoAbono.monto - this.totalDistribuido;
+      return Math.max(0, (Number(this.nuevoAbono.monto) || 0) - this.totalDistribuido);
     }
   },
   methods: {
+    formatNumber,
     formatearFecha,
     obtenerFechaActual() {
       const fecha = new Date();
@@ -215,6 +160,23 @@ export default {
         this.$emit('cerrar');
       }
     },
+
+    fechaEnMilisegundos(valor) {
+      if (!valor) return Number.MAX_SAFE_INTEGER;
+      if (typeof valor.toDate === 'function') return valor.toDate().getTime();
+      const fecha = new Date(valor);
+      return Number.isNaN(fecha.getTime()) ? Number.MAX_SAFE_INTEGER : fecha.getTime();
+    },
+
+    compararDeudasFIFO(a, b) {
+      const porFecha = this.fechaEnMilisegundos(a.fecha) - this.fechaEnMilisegundos(b.fecha);
+      if (porFecha !== 0) return porFecha;
+
+      const porCreacion = this.fechaEnMilisegundos(a.fechaCreacion) - this.fechaEnMilisegundos(b.fechaCreacion);
+      if (porCreacion !== 0) return porCreacion;
+
+      return String(a.id).localeCompare(String(b.id));
+    },
     
     async cargarDeudasPendientes() {
       if (!this.proveedor?.id) {
@@ -224,6 +186,7 @@ export default {
       }
       
       try {
+        this.cargando = true;
         // Consulta sin orderBy para evitar el error de índice
         const deudasQuery = query(
           collection(db, 'deudas'),
@@ -238,11 +201,7 @@ export default {
         }));
         
         // Ordenar manualmente por fecha para evitar problema de índice
-        deudas.sort((a, b) => {
-          const fechaA = new Date(a.fecha);
-          const fechaB = new Date(b.fecha);
-          return fechaA - fechaB;
-        });
+        deudas.sort(this.compararDeudasFIFO);
         
         this.deudasPendientes = deudas;
         
@@ -255,6 +214,8 @@ export default {
         } else {
           alert('Error al cargar las deudas pendientes. Por favor, intente de nuevo.');
         }
+      } finally {
+        this.cargando = false;
       }
     },
     
@@ -263,50 +224,34 @@ export default {
       
       try {
         this.guardando = true;
-        
-        // Aplicar abonos a cada deuda según la distribución calculada
+        const batch = writeBatch(db);
+        const fechaCreacion = new Date();
+        const abonoGeneralId = doc(collection(db, 'abonosGenerales')).id;
+
+        // La distribución ya está ordenada FIFO. Todas las escrituras se confirman juntas.
         for (const distribucion of this.distribucionCalculada) {
           if (distribucion.montoAbono > 0) {
-            // Agregar el abono a la deuda
-            await addDoc(collection(db, 'deudas', distribucion.deudaId, 'abonos'), {
+            const abonoRef = doc(collection(db, 'deudas', distribucion.deudaId, 'abonos'));
+            batch.set(abonoRef, {
               descripcion: `${this.nuevoAbono.descripcion} (Abono General)`,
               monto: distribucion.montoAbono,
               fecha: this.nuevoAbono.fecha,
-              fechaCreacion: new Date(),
-              esAbonoGeneral: true
+              fechaCreacion,
+              esAbonoGeneral: true,
+              abonoGeneralId
             });
-            
-            // Actualizar el saldo pendiente y estado de la deuda
+
             const nuevoSaldoPendiente = distribucion.saldoRestante;
             const nuevoEstado = nuevoSaldoPendiente <= 0 ? 'pagado' : 'pendiente';
-            
-            await updateDoc(doc(db, 'deudas', distribucion.deudaId), {
+            batch.update(doc(db, 'deudas', distribucion.deudaId), {
               saldoPendiente: nuevoSaldoPendiente,
               estado: nuevoEstado
             });
           }
         }
-        
-        // Si hay monto sobrante, aplicarlo a la primera deuda
-        if (this.montoSobrante > 0 && this.distribucionCalculada.length > 0) {
-          const primeraDeuda = this.distribucionCalculada[0];
-          
-          await addDoc(collection(db, 'deudas', primeraDeuda.deudaId, 'abonos'), {
-            descripcion: `${this.nuevoAbono.descripcion} (Abono General - Sobrante)`,
-            monto: this.montoSobrante,
-            fecha: this.nuevoAbono.fecha,
-            fechaCreacion: new Date(),
-            esAbonoGeneral: true
-          });
-          
-          // Actualizar saldo de la primera deuda con el sobrante
-          const saldoActualizado = primeraDeuda.saldoRestante - this.montoSobrante;
-          await updateDoc(doc(db, 'deudas', primeraDeuda.deudaId), {
-            saldoPendiente: Math.max(0, saldoActualizado),
-            estado: saldoActualizado <= 0 ? 'pagado' : 'pendiente'
-          });
-        }
-        
+
+        await batch.commit();
+
         alert(`Abono general de $${this.formatNumber(this.nuevoAbono.monto)} aplicado correctamente`);
         this.$emit('abono-aplicado');
         this.$emit('cerrar');
@@ -328,7 +273,7 @@ export default {
         // Resetear formulario
         this.nuevoAbono = {
           fecha: this.obtenerFechaActual(),
-          descripcion: '',
+          descripcion: 'Pago',
           monto: null
         };
       }
@@ -338,6 +283,7 @@ export default {
 </script>
 
 <style scoped>
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=VT323&display=swap');
 .modal-overlay {
   position: fixed;
   top: 0;
@@ -666,4 +612,64 @@ export default {
     flex-direction: column;
   }
 }
+/* Terminal CRT modal */
+.modal-overlay { padding: 18px; box-sizing: border-box; background: rgba(0,5,3,.88); backdrop-filter: blur(7px); }
+.abono-general-modal { --green:#00ff88; --amber:#ffb000; --cyan:#22d3ee; --red:#ff5f56; width:min(920px,100%); max-width:920px; max-height:94vh; border:1px solid rgba(0,255,136,.38); border-radius:0; background:repeating-linear-gradient(0deg,rgba(255,255,255,.015) 0,rgba(255,255,255,.015) 1px,transparent 1px,transparent 4px),#050d09; box-shadow:0 0 42px rgba(0,255,136,.13); color:#d8ffe9; font-family:'Share Tech Mono',monospace; }
+.modal-header { padding:14px 18px; border:0; border-bottom:1px solid rgba(0,255,136,.3); border-radius:0; background:#091710; }
+.terminal-title { display:flex; align-items:center; gap:12px; }
+.terminal-title .prompt { color:var(--amber); font:2rem 'VT323',monospace; }
+.terminal-title small { color:#668a74; font-size:.62rem; letter-spacing:.1em; }
+.terminal-title h2 { color:var(--green); font:1.65rem 'VT323',monospace; letter-spacing:.04em; text-shadow:0 0 8px rgba(0,255,136,.4); }
+.close-button { border:1px solid rgba(255,95,86,.4); border-radius:0; color:var(--red); font:1.3rem 'Share Tech Mono',monospace; }
+.close-button:hover { background:rgba(255,95,86,.12); }
+.modal-body { padding:18px; }
+.general-payment-layout { display:grid; gap:14px; }
+.provider-summary { display:grid; grid-template-columns:1.5fr 1fr 1fr; border:1px solid rgba(0,255,136,.24); background:#07110c; }
+.provider-summary > div { display:flex; flex-direction:column; gap:6px; padding:14px 16px; border-right:1px solid rgba(0,255,136,.18); }
+.provider-summary > div:last-child { border:0; }
+.provider-summary span { color:#668a74; font-size:.62rem; letter-spacing:.08em; }
+.provider-summary strong { color:#d8ffe9; font-size:.95rem; }
+.provider-summary .saldo-total { color:var(--amber); }
+.loading-state { padding:32px; border:1px dashed rgba(0,255,136,.28); color:#85ab92; text-align:center; }
+.loader { color:var(--green); animation:crtBlink .8s steps(1) infinite; }
+@keyframes crtBlink { 50%{opacity:0;} }
+.form-abono,.distribution-section { margin:0; padding:0; border:1px solid rgba(0,255,136,.22); border-radius:0; background:#06100b; }
+.section-label { display:flex; align-items:center; gap:10px; padding:11px 14px; border-bottom:1px solid rgba(0,255,136,.22); background:#091710; }
+.section-label > span { color:var(--green); font:1.15rem 'VT323',monospace; }
+.section-label h3 { margin:0; color:#cfeadb; font-size:.78rem; letter-spacing:.06em; text-transform:uppercase; }
+.section-label small { color:#668a74; font-size:.61rem; }
+.form-grid { display:grid; grid-template-columns:170px minmax(220px,1fr) 190px; gap:12px; padding:15px; }
+.form-group { margin:0; }
+.form-group label { margin-bottom:7px; color:#89aa96; font-size:.68rem; text-transform:uppercase; }
+.form-group input { box-sizing:border-box; border:1px solid #26503a; border-radius:0; background:#020805; color:#e3ffec; font:.78rem 'Share Tech Mono',monospace; color-scheme:dark; }
+.form-group input:focus { border-color:var(--green); box-shadow:0 0 0 2px rgba(0,255,136,.1); }
+.amount-input { position:relative; }
+.amount-input span { position:absolute; top:50%; left:12px; color:var(--amber); transform:translateY(-50%); }
+.amount-input input { padding-left:28px; }
+.amount-field small { display:block; margin-top:5px; color:#657f70; font-size:.6rem; }
+.preview-empty,.preview-error { display:flex; align-items:center; justify-content:center; gap:9px; min-height:90px; color:#627d6d; font-size:.72rem; }
+.preview-empty p { margin:0; }
+.preview-error { color:#ff8a83; }
+.deudas-list { max-height:290px; margin:0; padding:10px; }
+.deuda-distribucion { display:grid; grid-template-columns:38px minmax(160px,1fr) auto minmax(140px,.8fr) auto; align-items:center; gap:11px; margin:0 0 7px; padding:11px; border:1px solid rgba(0,255,136,.14); border-left:1px solid rgba(0,255,136,.14); border-radius:0; background:#040b07; }
+.priority-number { display:grid; place-items:center; width:32px; height:32px; border:1px solid var(--green); color:var(--green); font:1rem 'VT323',monospace; }
+.deuda-info,.abono-aplicado { gap:3px; }
+.fecha { color:#cdebd7; font-size:.72rem; }
+.saldo-actual,.saldo-restante { color:#6e8878; font-size:.62rem; }
+.distribution-arrow { color:#4a6655; }
+.abono-aplicado { align-items:flex-start; }
+.monto-abono { color:var(--cyan); font-size:.8rem; }
+.result-badge { padding:4px 6px; border:1px solid var(--amber); color:var(--amber); font-size:.58rem; text-transform:uppercase; }
+.result-badge.paid { border-color:var(--green); color:var(--green); }
+.modal-actions { display:grid; grid-template-columns:1fr auto auto; align-items:center; gap:10px; padding:14px; border:1px solid rgba(0,255,136,.22); background:#07110c; }
+.distribution-total { display:flex; flex-direction:column; gap:3px; }
+.distribution-total span { color:#668a74; font-size:.6rem; text-transform:uppercase; }
+.distribution-total strong { color:var(--amber); font-size:1rem; }
+.btn-cancelar,.btn-aplicar { min-width:0; padding:10px 14px; border-radius:0; font:.7rem 'Share Tech Mono',monospace; text-transform:uppercase; }
+.btn-cancelar { border:1px solid #41604d; background:transparent; color:#9ab7a4; }
+.btn-aplicar { display:flex; align-items:center; gap:7px; border:1px solid var(--green); background:var(--green); color:#021008; }
+.btn-aplicar:hover:not(:disabled) { box-shadow:0 0 15px rgba(0,255,136,.2); transform:none; }
+.btn-aplicar:disabled { border-color:#355143; background:#1b2b22; color:#597064; }
+
+@media(max-width:720px){ .modal-overlay{padding:8px;} .abono-general-modal{width:100%;max-height:97vh;} .provider-summary,.form-grid{grid-template-columns:1fr;} .provider-summary>div{border-right:0;border-bottom:1px solid rgba(0,255,136,.18);} .deuda-distribucion{grid-template-columns:34px 1fr auto;} .distribution-arrow{display:none;} .abono-aplicado{grid-column:2;} .result-badge{grid-column:3;grid-row:1;} .modal-actions{grid-template-columns:1fr 1fr;} .distribution-total{grid-column:1/-1;} }
 </style>

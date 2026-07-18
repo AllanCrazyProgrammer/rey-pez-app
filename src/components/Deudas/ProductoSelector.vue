@@ -1,23 +1,29 @@
 <template>
   <div class="producto-selector">
-    <!-- Selector de producto existente o nuevo -->
-    <div class="input-row">
-      <input 
-        v-model.number="kilos" 
-        type="number" 
-        step="0.01"
-        placeholder="Kilos" 
-        class="input-kilos"
-        @input="$emit('update:kilos', kilos)"
-      >
-      
-      <div class="producto-input-container">
+    <div class="capture-grid">
+      <label class="capture-field kilos-field">
+        <span><b>01</b> Kilos</span>
+        <input
+          v-model.number="kilos"
+          type="number"
+          min="0.01"
+          step="0.01"
+          inputmode="decimal"
+          placeholder="0.00"
+          class="input-kilos"
+          @input="$emit('update:kilos', kilos)"
+        >
+      </label>
+
+      <label class="capture-field product-field">
+        <span><b>02</b> Producto</span>
+        <div class="producto-input-container">
         <select 
           v-model="productoSeleccionado" 
           @change="onProductoChange"
           class="producto-select"
         >
-          <option value="">Seleccionar producto existente</option>
+          <option value="">Selecciona un producto</option>
           <option 
             v-for="producto in productosDisponibles" 
             :key="producto.nombre" 
@@ -25,54 +31,68 @@
           >
             {{ producto.nombre }} - ${{ formatearPrecio(producto.precioActual) }}
           </option>
-          <option value="__nuevo__">+ Nuevo producto</option>
+          <option value="__nuevo__">+ Capturar producto nuevo</option>
         </select>
         
         <input 
           v-if="productoSeleccionado === '__nuevo__'"
           v-model="productoManual" 
           type="text" 
-          placeholder="Nombre del nuevo producto" 
+          placeholder="Escribe el nombre del producto"
           class="input-producto-manual producto-nuevo"
           @input="onProductoManualChange"
           ref="inputProductoNuevo"
         >
+        </div>
+      </label>
+
+      <label class="capture-field price-field">
+        <span><b>03</b> Precio por kilo</span>
+        <div class="money-input">
+          <i>$</i>
+          <input
+            v-model.number="precio"
+            type="number"
+            min="0.01"
+            step="0.01"
+            inputmode="decimal"
+            placeholder="0.00"
+            class="input-precio"
+            @input="$emit('update:precio', precio)"
+          >
+        </div>
+      </label>
+
+      <div class="line-total">
+        <span>IMPORTE</span>
+        <strong>${{ calcularTotal() }}</strong>
+        <small>{{ kilos || 0 }} kg × ${{ formatearPrecio(precio) }}</small>
       </div>
-      
-      <input 
-        v-model.number="precio" 
-        type="number" 
-        step="0.01"
-        placeholder="Precio" 
-        class="input-precio"
-        @input="$emit('update:precio', precio)"
-      >
-      
-      <span class="total-calculado">
-        Total: ${{ calcularTotal() }}
-      </span>
-      
+
       <button 
+        type="button"
         @click="agregarProducto" 
         class="add-btn"
         :disabled="!puedeAgregar"
       >
-        {{ cargandoProductos ? 'Cargando...' : 'Agregar' }}
+        <i :class="cargandoProductos ? 'fas fa-circle-notch fa-spin' : 'fas fa-plus'"></i>
+        {{ cargandoProductos ? 'Cargando…' : 'Agregar producto' }}
       </button>
     </div>
     
     <!-- Información del precio histórico -->
     <div v-if="productoSeleccionado && productoSeleccionado !== '__nuevo__'" class="precio-info">
       <div class="precio-historico">
-        <span class="label">Último precio:</span>
+        <span class="label">Precio anterior:</span>
         <span class="precio-valor">${{ formatearPrecio(precioUltimoRegistrado) }}</span>
         <span class="fecha-precio">({{ formatearFecha(fechaUltimoPrecio) }})</span>
         <button 
           @click="usarPrecioHistorico" 
           class="btn-usar-precio"
+          type="button"
           v-if="precio !== precioUltimoRegistrado"
         >
-          Usar este precio
+          Usar precio anterior
         </button>
       </div>
       <div class="stats-producto">
@@ -122,7 +142,10 @@ export default {
   },
   computed: {
     puedeAgregar() {
-      return this.kilos && this.obtenerNombreProducto() && this.precio && !this.cargandoProductos;
+      return Number(this.kilos) > 0 &&
+        Boolean(this.obtenerNombreProducto().trim()) &&
+        Number(this.precio) > 0 &&
+        !this.cargandoProductos;
     },
     
     precioUltimoRegistrado() {
@@ -568,4 +591,31 @@ export default {
     min-width: auto;
   }
 }
-</style> 
+/* CRT capture layout */
+.producto-selector { margin: 0; color: #d8ffe9; font-family: 'Share Tech Mono', monospace; }
+.capture-grid { display: grid; grid-template-columns: 120px minmax(220px,1.5fr) 160px 155px; gap: 12px; align-items: flex-end; margin: 0; }
+.capture-field { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+.capture-field > span { color: #b2cdbb; font-size: .74rem; letter-spacing: .06em; line-height: 1.35; text-transform: uppercase; }
+.capture-field > span b { margin-right: 4px; color: #00ff88; font-weight: normal; }
+.input-kilos, .input-precio, .producto-select, .input-producto-manual { width: 100%; min-width: 0; box-sizing: border-box; padding: 12px; border: 1px solid #3e6b50; border-radius: 0; outline: none; background: #030a07; color: #f2fff6; font: .9rem 'Share Tech Mono', monospace; color-scheme: dark; }
+.input-kilos:focus, .input-precio:focus, .producto-select:focus, .input-producto-manual:focus { border-color: #00ff88; box-shadow: 0 0 0 2px rgba(0,255,136,.1); }
+.producto-input-container { gap: 6px; }
+.producto-select option { background: #07100c; color: #d8ffe9; }
+.money-input { position: relative; }
+.money-input i { position: absolute; top: 50%; left: 11px; z-index: 1; color: #ffb000; font-style: normal; transform: translateY(-50%); }
+.money-input .input-precio { padding-left: 27px; }
+.line-total { display: flex; flex-direction: column; justify-content: center; min-height: 64px; padding: 7px 12px; border: 1px solid rgba(255,176,0,.38); background: rgba(255,176,0,.045); }
+.line-total span { color: #c3a86d; font-size: .68rem; letter-spacing: .08em; }
+.line-total strong { color: #ffb000; font: 1.35rem 'VT323', monospace; font-variant-numeric: tabular-nums; }
+.line-total small { overflow: hidden; color: #a0b7a7; font-size: .64rem; text-overflow: ellipsis; white-space: nowrap; }
+.add-btn { grid-column: 1 / -1; justify-self: end; min-width: 190px; padding: 11px 16px; border: 1px solid #00ff88; border-radius: 0; background: #00ff88; color: #021008; cursor: pointer; font: .76rem 'Share Tech Mono', monospace; font-weight: bold; text-transform: uppercase; }
+.add-btn:hover:not(:disabled) { background: #00ff88; color: #021008; box-shadow: none; transform: none; }
+.add-btn:disabled { opacity: .32; cursor: not-allowed; }
+.precio-info { display: grid; grid-template-columns: 1fr auto; gap: 12px; margin: 14px 0 0; padding: 10px 12px; border: 1px dashed rgba(34,211,238,.3); border-radius: 0; background: rgba(34,211,238,.035); }
+.precio-historico, .stats-producto { color: #8eaa99; font-size: .68rem; }
+.precio-valor, .precio-promedio { color: #22d3ee; }
+.btn-usar-precio { padding: 5px 8px; border: 1px solid #22d3ee; border-radius: 0; background: transparent; color: #22d3ee; font: .64rem 'Share Tech Mono', monospace; }
+
+@media (max-width: 860px) { .capture-grid { grid-template-columns: 1fr 1fr; } .product-field { grid-column: 1 / -1; grid-row: 1; } .add-btn { grid-column: 1 / -1; } }
+@media (max-width: 520px) { .capture-grid, .precio-info { grid-template-columns: 1fr; } .product-field { grid-column: auto; grid-row: auto; } .add-btn { width: 100%; min-width: 0; } .stats-producto { align-items: flex-start; } }
+</style>

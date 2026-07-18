@@ -1,108 +1,62 @@
 <template>
   <div class="lista-deudas">
-    <div class="back-button-container">
-      <BackButton to="/procesos/deudas" />
-    </div>
-    
-    <!-- Header moderno -->
-    <div class="header-section">
-      <div class="header-content">
-        <h1 class="main-title">
-          <i class="icon-list">📋</i>
-          Lista de Deudas a Proveedores
-        </h1>
-        <p class="subtitle">Administra y monitorea todas las deudas pendientes</p>
+    <main class="debts-shell">
+      <nav class="terminal-nav" aria-label="Navegación del módulo">
+        <BackButton to="/procesos/deudas" />
+        <span>~/procesos/deudas/consulta</span>
+      </nav>
+
+      <header class="terminal-page-header">
+        <div class="terminal-window-bar"><span class="terminal-dots"><i></i><i></i><i></i></span><span>DEUDAS_DB — monitor</span><span class="online-status">● SINCRONIZADO</span></div>
+        <div class="header-command">
+          <span class="prompt">&gt;</span>
+          <div><p>CONSULTAR_SALDOS</p><h1>Deudas y abonos<span class="cursor">_</span></h1><small>Consulta notas pendientes, registra pagos específicos o distribuye un abono general.</small></div>
+        </div>
+        <div class="header-stats">
+          <div><span>SALDO PENDIENTE</span><strong class="amber">${{ formatNumber(totalPendiente) }}</strong></div>
+          <div><span>TOTAL ABONADO</span><strong class="cyan">${{ formatNumber(totalPagado) }}</strong></div>
+          <div><span>NOTAS VISIBLES</span><strong>{{ totalDeudas }}</strong></div>
+        </div>
+      </header>
+
+      <div class="primary-actions">
+        <router-link to="/procesos/deudas/nueva" class="terminal-button primary"><i class="fas fa-plus"></i> Registrar nueva deuda</router-link>
+        <button @click="openHistorialPreciosModal" class="terminal-button"><i class="fas fa-chart-line"></i> Historial de precios</button>
       </div>
-    </div>
-    
-    <!-- Filtros modernos -->
-    <div class="filtros-container">
-      <div class="filtros-card">
-        <h3 class="filtros-title">
-          <i class="icon-filter">🔍</i>
-          Filtros de Búsqueda
-        </h3>
+
+      <section class="terminal-panel filters-panel">
+        <div class="panel-heading"><div><span>[FILTROS]</span><h2>Acotar resultados</h2></div><button v-if="hayFiltrosActivos" @click="limpiarFiltros" class="clear-filters">Limpiar filtros</button></div>
         <div class="filtros-grid">
           <div class="filtro-group">
-            <label for="filtroProveedor">Proveedor:</label>
+            <label for="filtroProveedor">Proveedor</label>
             <select id="filtroProveedor" v-model="filtroProveedor" class="modern-select">
               <option value="">Todos los proveedores</option>
               <option v-for="proveedor in proveedores" :key="proveedor.id" :value="proveedor.id">
                 {{ proveedor.nombre }}
               </option>
             </select>
-            <!-- Indicador de color del proveedor seleccionado -->
-            <div v-if="filtroProveedor" class="proveedor-color-indicator">
-              <div 
-                class="color-dot" 
-                :style="{ backgroundColor: getProveedorColor(filtroProveedor) }"
-              ></div>
-              <span>{{ getNombreProveedorSeleccionado() }}</span>
-            </div>
           </div>
           
           <div class="filtro-group">
-            <label for="filtroEstado">Estado:</label>
+            <label for="filtroEstado">Estado</label>
             <select id="filtroEstado" v-model="filtroEstado" class="modern-select">
-              <option value="">Todos los estados</option>
-              <option value="pendiente">No Pagados (Pendientes)</option>
+              <option value="">Todos</option>
+              <option value="pendiente">Pendientes</option>
               <option value="pagado">Pagados</option>
             </select>
           </div>
           
           <div class="filtro-group fecha-group">
-            <label>Rango de fechas:</label>
+            <label>Rango de fechas</label>
             <div class="fecha-inputs">
-              <input type="date" v-model="filtroFechaDesde" class="modern-input" placeholder="Desde">
-              <span class="fecha-separator">a</span>
-              <input type="date" v-model="filtroFechaHasta" class="modern-input" placeholder="Hasta">
+              <label><small>Desde</small><input type="date" v-model="filtroFechaDesde" class="modern-input"></label>
+              <span class="fecha-separator">→</span>
+              <label><small>Hasta</small><input type="date" v-model="filtroFechaHasta" class="modern-input"></label>
             </div>
           </div>
         </div>
-      </div>
-    </div>
-    
-    <!-- Resumen moderno -->
-    <div class="resumen-container">
-      <div class="resumen-card saldo-pendiente">
-        <div class="card-icon">💰</div>
-        <div class="card-content">
-          <h3>Saldo Pendiente</h3>
-          <p class="amount">${{ formatNumber(totalPendiente) }}</p>
-        </div>
-      </div>
-    </div>
-    
-    <!-- Acciones modernas -->
-    <div class="acciones-container">
-      <router-link to="/procesos/deudas/nueva" class="btn-action btn-nueva-deuda">
-        <i class="icon">➕</i>
-        <span>Nueva Deuda</span>
-      </router-link>
-      
-      <button @click="openHistorialPreciosModal" class="btn-action btn-historial-precios">
-        <i class="icon">📈</i>
-        <span>Historial de Precios</span>
-      </button>
-    </div>
+      </section>
 
-    <!-- Sección de Abonos por Proveedor -->
-    <div v-if="filtroProveedor" class="abonos-proveedor-section">
-      <div class="proveedor-selected-info">
-        <h3>Gestión de Abonos - {{ getNombreProveedorSeleccionado() }}</h3>
-        <div class="abonos-actions">
-          <button @click="abrirAbonoGeneral" class="btn-abono-general" :disabled="!tieneDeudasPendientes">
-            <i class="fas fa-money-check-alt"></i>
-            Abono General
-          </button>
-          <button @click="abrirHistorialAbonos" class="btn-historial-abonos">
-            <i class="fas fa-history"></i>
-            Historial de Abonos
-          </button>
-        </div>
-      </div>
-    </div>
-    
     <!-- Estados de carga -->
     <div v-if="cargando" class="loading-state">
       <div class="loading-spinner"></div>
@@ -133,14 +87,26 @@
               class="proveedor-color-circle" 
               :style="{ backgroundColor: grupo.proveedor.color }"
             ></div>
-                         <h2 
-               :class="['proveedor-nombre', 'clickeable', { 'filtrado': filtroProveedor === grupo.proveedor.id }]" 
+            <h2
+               class="proveedor-nombre clickeable"
                @click="filtrarPorProveedor(grupo.proveedor.id)" 
                :title="filtroProveedor === grupo.proveedor.id ? 'Haz clic para quitar el filtro' : 'Haz clic para filtrar por este proveedor'"
              >
                {{ grupo.proveedor.nombre }}
-               <i :class="['fas', filtroProveedor === grupo.proveedor.id ? 'fa-check-circle' : 'fa-filter', 'filter-icon']"></i>
+               <i class="fas fa-filter filter-icon"></i>
              </h2>
+            <button
+              type="button"
+              class="provider-general-payment"
+              :disabled="grupo.totalPendiente <= 0"
+              @click.stop="abrirAbonoGeneralParaProveedor(grupo.proveedor)"
+              :aria-label="`Realizar abono general a ${grupo.proveedor.nombre}`"
+              title="Aplicar el pago de las notas más antiguas a las más nuevas"
+            >
+              <i class="fas fa-layer-group"></i>
+              Abono general
+              <small>Antiguas → nuevas</small>
+            </button>
           </div>
           <div class="proveedor-resumen">
             <div class="resumen-item">
@@ -181,13 +147,13 @@
                   </span>
                 </td>
                 <td class="acciones">
-                  <button @click="verDetalle(deuda)" class="btn-detalle" title="Ver detalles">
-                    <i class="fas fa-eye"></i>
+                  <button @click="verDetalle(deuda)" class="btn-detalle" :aria-label="`Ver detalle de la deuda del ${formatearFecha(deuda.fecha)}`">
+                    <i class="fas fa-eye"></i><span>Detalle</span>
                   </button>
-                  <button @click="agregarAbono(deuda)" class="btn-abono" :disabled="deuda.estado === 'pagado'" title="Agregar abono">
-                    <i class="fas fa-money-bill"></i>
+                  <button @click="agregarAbono(deuda)" class="btn-abono" :disabled="deuda.estado === 'pagado'" :aria-label="`Abonar a la deuda del ${formatearFecha(deuda.fecha)}`">
+                    <i class="fas fa-money-bill"></i><span>Abonar</span>
                   </button>
-                  <button @click="eliminarDeuda(deuda)" class="btn-eliminar" title="Eliminar deuda">
+                  <button @click="eliminarDeuda(deuda)" class="btn-eliminar" aria-label="Eliminar deuda">
                     <i class="fas fa-trash-alt"></i>
                   </button>
                 </td>
@@ -197,13 +163,14 @@
         </div>
       </div>
     </div>
+    </main>
     
     <!-- Modal de Detalle de Deuda -->
     <div v-if="showDetalleModal" class="modal-overlay" @click="closeModalOnOverlay">
-      <div class="modal-content" @click.stop>
+      <div class="modal-content debt-detail-modal" role="dialog" aria-modal="true" aria-labelledby="debt-detail-title" @click.stop>
         <div class="modal-header">
-          <h2>Detalle de Deuda</h2>
-          <button @click="showDetalleModal = false" class="close-button">×</button>
+          <h2 id="debt-detail-title">Detalle de Deuda</h2>
+          <button @click="showDetalleModal = false" class="close-button" aria-label="Cerrar detalle de deuda">×</button>
         </div>
         <div class="modal-body">
           <div class="deuda-info editable-container">
@@ -423,36 +390,40 @@
     
     <!-- Modal de Agregar Abono -->
     <div v-if="showAbonoModal" class="modal-overlay" @click="closeModalOnOverlay">
-      <div class="modal-content" @click.stop>
+      <div class="modal-content specific-payment-modal" role="dialog" aria-modal="true" aria-labelledby="specific-payment-title" @click.stop>
         <div class="modal-header">
-          <h2>Agregar Abono</h2>
-          <button @click="showAbonoModal = false" class="close-button">×</button>
+          <div><small>ABONO_ESPECIFICO.exe</small><h2 id="specific-payment-title"><span>&gt;</span> Abonar a una nota</h2></div>
+          <button @click="showAbonoModal = false" class="close-button" aria-label="Cerrar">×</button>
         </div>
         <div class="modal-body">
-          <div class="deuda-info">
-            <p><strong>Proveedor:</strong> {{ deudaSeleccionada?.proveedorNombre }}</p>
-            <p><strong>Fecha Deuda:</strong> {{ formatearFecha(deudaSeleccionada?.fecha) }}</p>
-            <p><strong>Saldo Pendiente:</strong> ${{ formatNumber(deudaSeleccionada?.saldoPendiente) }}</p>
+          <div class="specific-debt-summary">
+            <div><span>PROVEEDOR</span><strong>{{ deudaSeleccionada?.proveedorNombre }}</strong></div>
+            <div><span>FECHA DE LA NOTA</span><strong>{{ formatearFecha(deudaSeleccionada?.fecha) }}</strong></div>
+            <div><span>SALDO ACTUAL</span><strong class="amber">${{ formatNumber(deudaSeleccionada?.saldoPendiente) }}</strong></div>
           </div>
-          
+
+          <div class="payment-type-note"><i class="fas fa-crosshairs"></i><p><strong>Pago específico</strong><span>Este abono se aplicará solamente a esta nota.</span></p></div>
+
           <form @submit.prevent="guardarAbono" class="form-abono">
-            <div class="form-group">
-              <label for="fechaAbono">Fecha:</label>
-              <input id="fechaAbono" type="date" v-model="nuevoAbono.fecha" required>
+            <div class="specific-form-grid">
+              <div class="form-group"><label for="fechaAbono">Fecha del pago</label><input id="fechaAbono" type="date" v-model="nuevoAbono.fecha" required></div>
+              <div class="form-group description-field"><label for="descripcionAbono">Descripción o referencia</label><input id="descripcionAbono" type="text" v-model.trim="nuevoAbono.descripcion" required placeholder="Ej. Transferencia parcial"></div>
+              <div class="form-group"><label for="montoAbono">Monto</label><div class="specific-amount-input"><span>$</span><input id="montoAbono" type="number" v-model.number="nuevoAbono.monto" required min="0.01" step="0.01" :max="deudaSeleccionada?.saldoPendiente" placeholder="0.00"></div></div>
             </div>
-            <div class="form-group">
-              <label for="descripcionAbono">Descripción:</label>
-              <input id="descripcionAbono" type="text" v-model="nuevoAbono.descripcion" required placeholder="Ej: Pago parcial, Transferencia, etc.">
+
+            <div class="balance-preview">
+              <div><span>Saldo antes</span><strong>${{ formatNumber(deudaSeleccionada?.saldoPendiente) }}</strong></div>
+              <i class="fas fa-long-arrow-alt-right"></i>
+              <div><span>Abono</span><strong class="cyan">-${{ formatNumber(nuevoAbono.monto || 0) }}</strong></div>
+              <i class="fas fa-equals"></i>
+              <div><span>Saldo después</span><strong class="amber">${{ formatNumber(saldoPosteriorAbono) }}</strong></div>
             </div>
-            <div class="form-group">
-              <label for="montoAbono">Monto:</label>
-              <input id="montoAbono" type="number" v-model.number="nuevoAbono.monto" required min="1" :max="deudaSeleccionada?.saldoPendiente">
-            </div>
-            
+
             <div class="form-actions">
               <button type="button" @click="showAbonoModal = false" class="btn-cancelar">Cancelar</button>
-              <button type="submit" class="btn-guardar" :disabled="guardando">
-                {{ guardando ? 'Guardando...' : 'Guardar Abono' }}
+              <button type="submit" class="btn-guardar" :disabled="!puedeGuardarAbonoEspecifico || guardando">
+                <i :class="guardando ? 'fas fa-circle-notch fa-spin' : 'fas fa-check'"></i>
+                {{ guardando ? 'Guardando…' : 'Confirmar abono' }}
               </button>
             </div>
           </form>
@@ -477,6 +448,7 @@
 
     <!-- Modal de Historial de Abonos -->
     <HistorialAbonosModal
+      v-if="proveedorSeleccionadoParaAbono"
       :mostrar="showHistorialAbonosModal"
       :proveedor="proveedorSeleccionadoParaAbono"
       @cerrar="showHistorialAbonosModal = false"
@@ -486,10 +458,8 @@
 </template>
 
 <script>
-import { ref, computed, onMounted } from 'vue';
 import { db } from '@/firebase';
-import { collection, addDoc, getDocs, query, where, orderBy, doc, getDoc, updateDoc, deleteDoc, writeBatch, getDocs as getDocsWithQuery } from 'firebase/firestore';
-import { useRouter } from 'vue-router';
+import { collection, addDoc, getDocs, query, where, orderBy, doc, getDoc, updateDoc, deleteDoc, writeBatch } from 'firebase/firestore';
 import BackButton from '@/components/BackButton.vue';
 import PreciosProveedorPanel from '@/components/Deudas/Precios/PreciosProveedorPanel.vue';
 import ProductoSelector from '@/components/Deudas/ProductoSelector.vue';
@@ -537,7 +507,7 @@ export default {
       // Nuevo abono
       nuevoAbono: {
         fecha: this.obtenerFechaActual(),
-        descripcion: '',
+        descripcion: 'Pago',
         monto: null
       },
       
@@ -651,6 +621,29 @@ export default {
     totalAbonos() {
       return this.abonos.reduce((sum, abono) => sum + abono.monto, 0);
     },
+    saldoPosteriorAbono() {
+      const saldo = Number(this.deudaSeleccionada?.saldoPendiente) || 0;
+      const abono = Number(this.nuevoAbono.monto) || 0;
+      return Math.max(0, saldo - abono);
+    },
+    puedeGuardarAbonoEspecifico() {
+      const monto = Number(this.nuevoAbono.monto) || 0;
+      const saldo = Number(this.deudaSeleccionada?.saldoPendiente) || 0;
+      return Boolean(
+        this.nuevoAbono.fecha &&
+        this.nuevoAbono.descripcion &&
+        monto > 0 &&
+        monto <= saldo
+      );
+    },
+    hayFiltrosActivos() {
+      return Boolean(
+        this.filtroProveedor ||
+        this.filtroFechaDesde ||
+        this.filtroFechaHasta ||
+        this.filtroEstado !== 'pendiente'
+      );
+    },
     
     tieneDeudasPendientes() {
       return this.deudasFiltradas.some(deuda => deuda.estado === 'pendiente');
@@ -673,6 +666,13 @@ export default {
         // Scroll hacia arriba al cambiar de página
         window.scrollTo({ top: 0, behavior: 'smooth' });
       }
+    },
+    limpiarFiltros() {
+      this.filtroProveedor = '';
+      this.filtroEstado = 'pendiente';
+      this.filtroFechaDesde = '';
+      this.filtroFechaHasta = '';
+      this.paginaActual = 1;
     },
     async loadDeudas() {
       try {
@@ -747,7 +747,7 @@ export default {
       this.deudaSeleccionada = deuda;
       this.nuevoAbono = {
         fecha: this.obtenerFechaActual(),
-        descripcion: '',
+        descripcion: 'Pago',
         monto: null
       };
       this.showAbonoModal = true;
@@ -770,23 +770,24 @@ export default {
       
       try {
         this.guardando = true;
-        
-        // Guardar el abono
-        await addDoc(collection(db, 'deudas', this.deudaSeleccionada.id, 'abonos'), {
+        const batch = writeBatch(db);
+        const abonoRef = doc(collection(db, 'deudas', this.deudaSeleccionada.id, 'abonos'));
+        batch.set(abonoRef, {
           descripcion: this.nuevoAbono.descripcion,
           monto: this.nuevoAbono.monto,
           fecha: this.nuevoAbono.fecha,
-          fechaCreacion: new Date()
+          fechaCreacion: new Date(),
+          esAbonoGeneral: false
         });
-        
-        // Actualizar el saldo pendiente de la deuda
+
         const nuevoSaldoPendiente = this.deudaSeleccionada.saldoPendiente - this.nuevoAbono.monto;
         const nuevoEstado = nuevoSaldoPendiente <= 0 ? 'pagado' : 'pendiente';
-        
-        await updateDoc(doc(db, 'deudas', this.deudaSeleccionada.id), {
+        batch.update(doc(db, 'deudas', this.deudaSeleccionada.id), {
           saldoPendiente: nuevoSaldoPendiente,
           estado: nuevoEstado
         });
+
+        await batch.commit();
         
         // Actualizar la deuda en el array local
         this.deudas = this.deudas.map(d => {
@@ -1289,12 +1290,17 @@ export default {
       
       const proveedor = this.proveedores.find(p => p.id === this.filtroProveedor);
       if (proveedor) {
-        this.proveedorSeleccionadoParaAbono = proveedor;
-        this.showAbonoGeneralModal = true;
+        this.abrirAbonoGeneralParaProveedor(proveedor);
       } else {
         alert('No se encontró el proveedor seleccionado. Por favor, actualice la página e intente de nuevo.');
         console.error('Proveedor no encontrado:', this.filtroProveedor, 'en lista:', this.proveedores);
       }
+    },
+
+    abrirAbonoGeneralParaProveedor(proveedor) {
+      if (!proveedor?.id) return;
+      this.proveedorSeleccionadoParaAbono = proveedor;
+      this.showAbonoGeneralModal = true;
     },
     
     abrirHistorialAbonos() {
@@ -1497,6 +1503,7 @@ export default {
 </script>
 
 <style scoped>
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=VT323&display=swap');
 .lista-deudas {
   min-height: 100vh;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -3055,4 +3062,483 @@ export default {
     height: 10px;
   }
 }
-</style> 
+/* Terminal CRT redesign */
+.lista-deudas { --green:#00ff88; --green-dim:rgba(0,255,136,.15); --amber:#ffb000; --cyan:#22d3ee; --red:#ff5f56; --panel:#07110c; --line:rgba(0,255,136,.26); min-height:100vh; padding:0; background:repeating-linear-gradient(0deg,rgba(255,255,255,.016) 0,rgba(255,255,255,.016) 1px,transparent 1px,transparent 4px),radial-gradient(circle at 50% -20%,#102a1d,#050a08 48%); color:#d8ffe9; font-family:'Share Tech Mono',monospace; }
+.debts-shell { width:min(1240px,calc(100% - 40px)); margin:0 auto; padding:24px 0 60px; }
+.terminal-nav { display:flex; align-items:center; gap:14px; margin-bottom:18px; color:#668573; font-size:.75rem; }
+.terminal-nav ::v-deep .btn-back { margin:0; padding:9px 14px; border:1px solid var(--line); border-radius:0; background:#07100c; color:var(--green); font:.8rem 'Share Tech Mono',monospace; }
+.terminal-nav ::v-deep .btn-back::before { content:'< '; color:var(--amber); }
+.terminal-page-header { border:1px solid var(--line); background:rgba(3,14,9,.94); box-shadow:0 0 28px rgba(0,255,136,.07),inset 0 0 45px rgba(0,255,136,.025); }
+.terminal-window-bar { display:grid; grid-template-columns:1fr auto 1fr; align-items:center; padding:9px 13px; border-bottom:1px solid var(--line); background:#0a1711; color:#71907c; font-size:.66rem; letter-spacing:.08em; }
+.terminal-dots { display:flex; gap:6px; }.terminal-dots i{width:9px;height:9px;border-radius:50%;background:var(--red)}.terminal-dots i:nth-child(2){background:var(--amber)}.terminal-dots i:nth-child(3){background:var(--green)}
+.online-status { justify-self:end; color:var(--green); }
+.header-command { display:flex; gap:16px; padding:25px 30px; }
+.header-command .prompt { color:var(--amber); font:2.2rem 'VT323',monospace; }
+.header-command p { margin:0 0 3px; color:var(--green); font-size:.68rem; letter-spacing:.12em; }
+.header-command h1 { margin:0; color:var(--green); font:2.8rem 'VT323',monospace; letter-spacing:.04em; text-shadow:0 0 11px rgba(0,255,136,.5); }
+.header-command small { color:#82a08e; font-size:.76rem; }
+.cursor{animation:crtBlink 1s steps(1) infinite}@keyframes crtBlink{50%{opacity:0}}
+.header-stats { display:grid; grid-template-columns:repeat(3,1fr); border-top:1px solid var(--line); }
+.header-stats>div { display:flex; flex-direction:column; gap:5px; padding:13px 17px; border-right:1px solid var(--line); }
+.header-stats>div:last-child{border:0}.header-stats span{color:#62806e;font-size:.6rem;letter-spacing:.08em}.header-stats strong{color:#d7fbe3;font-size:1rem}.header-stats .amber{color:var(--amber)}.header-stats .cyan{color:var(--cyan)}
+.primary-actions { display:flex; justify-content:flex-end; gap:10px; margin:16px 0; }
+.terminal-button { display:inline-flex; align-items:center; justify-content:center; gap:8px; min-height:40px; padding:9px 14px; border:1px solid #345442; border-radius:0; background:#07100c; color:#a8c8b3; cursor:pointer; font:.72rem 'Share Tech Mono',monospace; text-decoration:none; text-transform:uppercase; }
+.terminal-button:hover:not(:disabled){border-color:var(--green);background:var(--green-dim);color:var(--green);text-decoration:none}.terminal-button.primary{border-color:var(--green);background:var(--green);color:#021008;font-weight:bold}.terminal-button.primary:hover:not(:disabled){background:#49ffa9;color:#021008}.terminal-button:disabled{opacity:.3;cursor:not-allowed}
+.terminal-panel { margin-bottom:16px; border:1px solid var(--line); border-radius:0; background:rgba(6,17,12,.94); box-shadow:inset 0 0 28px rgba(0,255,136,.018); }
+.panel-heading { display:flex; align-items:center; justify-content:space-between; gap:15px; padding:11px 15px; border-bottom:1px solid var(--line); background:#091710; }
+.panel-heading span{color:var(--green);font-size:.61rem;letter-spacing:.08em}.panel-heading h2{margin:3px 0 0;color:#d2f0dc;font-size:.82rem;text-transform:uppercase}.clear-filters{border:0;background:transparent;color:var(--amber);cursor:pointer;font:.65rem 'Share Tech Mono',monospace;text-decoration:underline}
+.filters-panel .filtros-grid { grid-template-columns:1.15fr .75fr 1.35fr; gap:14px; padding:15px; }
+.filtro-group label { margin:0 0 7px; color:#83a58f; font-size:.66rem; text-transform:uppercase; }
+.modern-select,.modern-input { width:100%; box-sizing:border-box; padding:10px 11px; border:1px solid #26503a; border-radius:0; background:#020805; color:#e0ffea; font:.74rem 'Share Tech Mono',monospace; color-scheme:dark; }
+.modern-select:focus,.modern-input:focus{border-color:var(--green);background:#020805;box-shadow:0 0 0 2px rgba(0,255,136,.1)}.modern-select option{background:#07100c;color:#e0ffea}
+.fecha-inputs { display:grid; grid-template-columns:1fr auto 1fr; align-items:flex-end; gap:8px; }.fecha-inputs label{margin:0}.fecha-inputs small{display:block;margin-bottom:5px;color:#597362;font-size:.55rem}.fecha-separator{padding-bottom:10px;color:var(--green)}
+.proveedor-color-indicator { margin-top:7px; color:var(--green); font-size:.65rem; }.color-dot{box-shadow:0 0 7px currentColor}
+.payment-console { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:18px; padding:16px; border-color:rgba(34,211,238,.3); }
+.payment-console-copy { display:flex; gap:13px; align-items:center; }.console-icon{display:grid;place-items:center;width:42px;height:42px;border:1px solid var(--cyan);color:var(--cyan)}.payment-console-copy>div>span{color:var(--cyan);font-size:.58rem;letter-spacing:.09em}.payment-console h2{margin:3px 0;color:#d9fff0;font-size:1rem}.payment-console p{max-width:650px;margin:0;color:#779181;font-size:.67rem;line-height:1.45}.abonos-actions{display:flex;gap:9px}.abonos-actions .terminal-button{min-width:150px;text-align:left}.terminal-button>span{display:flex;flex-direction:column;gap:2px}.terminal-button small{font-size:.54rem;font-weight:normal;opacity:.7;text-transform:none}
+.provider-hint { display:flex; align-items:center; gap:8px; margin-bottom:16px; padding:10px 13px; border:1px dashed rgba(0,255,136,.2); color:#668573; font-size:.66rem; }
+.loading-state,.empty-state { padding:45px 20px; border:1px dashed var(--line); border-radius:0; background:#050d09; color:#71927e; }.loading-spinner{border-color:rgba(0,255,136,.15);border-top-color:var(--green)}.empty-state h3{color:var(--green);font-family:'VT323',monospace;font-size:1.5rem}.empty-state .btn-action{border-radius:0;background:var(--green);color:#021008}
+.deudas-container { margin:0; padding:0; border-radius:0; background:transparent; box-shadow:none; color:#d8ffe9; }.paginacion-info{color:#668573;font-size:.66rem}.proveedor-grupo { margin-bottom:14px; overflow:hidden; border:1px solid var(--line); border-radius:0; background:#06100b; box-shadow:none; }
+.proveedor-header { padding:13px 15px; border-bottom:1px solid var(--line); background:#091710; }.proveedor-title{gap:9px}.proveedor-color-circle{width:11px;height:11px;box-shadow:0 0 8px currentColor}.proveedor-nombre{color:var(--green);font:.98rem 'Share Tech Mono',monospace}.proveedor-nombre:hover{color:#6effb7}.filter-icon{font-size:.62rem}.proveedor-resumen{gap:18px}.proveedor-resumen .resumen-item{gap:3px}.proveedor-resumen .label{color:#668573;font-size:.58rem}.proveedor-resumen .value{color:#cfeadb;font-size:.76rem}.proveedor-resumen .value.pendiente{color:var(--amber)}
+.tabla-container-proveedor{overflow-x:auto}.tabla-deudas-proveedor{color:#cfeadb;font-size:.73rem}.tabla-deudas-proveedor th{padding:10px 12px;border-color:var(--line);background:#020805;color:var(--green);font-size:.61rem;letter-spacing:.06em}.tabla-deudas-proveedor tbody tr{background:#06100b;color:#cfeadb}.tabla-deudas-proveedor td{padding:11px 12px;border-color:rgba(0,255,136,.1);background:transparent;color:inherit}.tabla-deudas-proveedor tbody tr:hover{background:rgba(0,255,136,.055)}.deuda-pagada{opacity:.55}.estado-badge{border-radius:0;font-size:.56rem;text-transform:uppercase}.estado-badge.pendiente{border:1px solid var(--amber);background:rgba(255,176,0,.08);color:var(--amber)}.estado-badge.pagado{border:1px solid var(--green);background:rgba(0,255,136,.08);color:var(--green)}
+.acciones { display:flex; justify-content:flex-end; gap:6px; }.acciones button{display:inline-flex;align-items:center;gap:5px;width:auto;height:31px;padding:0 8px;border-radius:0;background:transparent;font:.58rem 'Share Tech Mono',monospace}.btn-detalle{border:1px solid #436353!important;color:#a8c8b3!important}.btn-abono{border:1px solid var(--cyan)!important;color:var(--cyan)!important}.btn-eliminar{border:1px solid rgba(255,95,86,.4)!important;color:var(--red)!important}.acciones button:hover:not(:disabled){background:rgba(255,255,255,.05)!important;transform:none!important}.acciones button:disabled{opacity:.25}
+
+/* Modals owned by this view */
+.lista-deudas>.modal-overlay { background:rgba(0,5,3,.88);backdrop-filter:blur(7px) }.lista-deudas>.modal-overlay>.modal-content{max-width:900px;border:1px solid var(--line);border-radius:0;background:repeating-linear-gradient(0deg,rgba(255,255,255,.014) 0,rgba(255,255,255,.014) 1px,transparent 1px,transparent 4px),#060e0a;color:#d8ffe9;box-shadow:0 0 40px rgba(0,255,136,.11);font-family:'Share Tech Mono',monospace}.lista-deudas>.modal-overlay .modal-header{border-bottom:1px solid var(--line);border-radius:0;background:#091710;color:var(--green)}.lista-deudas>.modal-overlay .close-button{border-radius:0;color:var(--red)}.lista-deudas>.modal-overlay .modal-body{background:transparent}.lista-deudas>.modal-overlay input,.lista-deudas>.modal-overlay select{border:1px solid #26503a;border-radius:0;background:#020805;color:#e0ffea;font-family:'Share Tech Mono',monospace;color-scheme:dark}
+.specific-payment-modal{max-width:760px!important}.specific-payment-modal .modal-header>div small{color:#668573;font-size:.58rem;letter-spacing:.09em}.specific-payment-modal .modal-header h2{margin:3px 0 0;color:var(--green);font:1.55rem 'VT323',monospace}.specific-payment-modal .modal-header h2 span{color:var(--amber)}
+.specific-debt-summary{display:grid;grid-template-columns:1.3fr 1fr 1fr;border:1px solid var(--line);background:#07110c}.specific-debt-summary>div{display:flex;flex-direction:column;gap:5px;padding:12px 14px;border-right:1px solid var(--line)}.specific-debt-summary>div:last-child{border:0}.specific-debt-summary span{color:#668573;font-size:.58rem;letter-spacing:.07em}.specific-debt-summary strong{color:#d7fbe3;font-size:.78rem}.specific-debt-summary .amber,.balance-preview .amber{color:var(--amber)}.payment-type-note{display:flex;align-items:center;gap:10px;margin:12px 0;padding:10px 12px;border:1px solid rgba(34,211,238,.25);color:var(--cyan)}.payment-type-note p{display:flex;flex-direction:column;gap:2px;margin:0}.payment-type-note strong{font-size:.7rem}.payment-type-note span{color:#6f8a7a;font-size:.61rem}.specific-payment-modal .form-abono{padding:0;background:transparent}.specific-form-grid{display:grid;grid-template-columns:160px minmax(200px,1fr) 160px;gap:10px}.specific-payment-modal .form-group{margin:0}.specific-payment-modal .form-group label{color:#85a791;font-size:.64rem;text-transform:uppercase}.specific-payment-modal .form-group input{box-sizing:border-box;padding:10px}.specific-amount-input{position:relative}.specific-amount-input span{position:absolute;top:50%;left:11px;color:var(--amber);transform:translateY(-50%)}.specific-amount-input input{padding-left:26px!important}.balance-preview{display:grid;grid-template-columns:1fr auto 1fr auto 1fr;align-items:center;gap:10px;margin-top:14px;padding:12px;border:1px dashed rgba(0,255,136,.24)}.balance-preview>div{display:flex;flex-direction:column;gap:4px}.balance-preview span{color:#668573;font-size:.58rem}.balance-preview strong{font-size:.82rem}.balance-preview .cyan{color:var(--cyan)}.balance-preview>i{color:#476151}.specific-payment-modal .form-actions{margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}.specific-payment-modal .btn-cancelar,.specific-payment-modal .btn-guardar{display:inline-flex;align-items:center;gap:7px;padding:10px 14px;border-radius:0;font:.68rem 'Share Tech Mono',monospace;text-transform:uppercase}.specific-payment-modal .btn-cancelar{border:1px solid #3e5c49;background:transparent;color:#9ab7a4}.specific-payment-modal .btn-guardar{border:1px solid var(--green);background:var(--green);color:#021008}
+
+/* Contraste estable: evita colores heredados y cambios visuales al pasar el cursor */
+.lista-deudas {
+  --green: #39f6a0;
+  --amber: #ffc247;
+  --cyan: #67e8f9;
+  --red: #ff7b72;
+  --line: rgba(57, 246, 160, .38);
+}
+
+.provider-hint,
+.paginacion-info,
+.terminal-nav,
+.header-command small,
+.payment-console p {
+  color: #9bb9a6;
+}
+
+.proveedor-grupo,
+.tabla-deudas-proveedor tbody tr,
+.tabla-deudas-proveedor tbody tr:hover,
+.tabla-deudas-proveedor tbody tr:focus-within {
+  background: #08150f !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+.tabla-deudas-proveedor tbody tr td,
+.tabla-deudas-proveedor tbody tr:hover td,
+.tabla-deudas-proveedor tbody tr:focus-within td {
+  background: #08150f !important;
+  color: #eefcf3 !important;
+}
+
+.tabla-deudas-proveedor th {
+  background: #030b07 !important;
+  color: var(--green) !important;
+}
+
+.proveedor-header {
+  background: #0a1a12;
+}
+
+.proveedor-nombre,
+.proveedor-nombre:hover,
+.proveedor-nombre.clickeable:hover {
+  color: var(--green);
+  transform: none;
+}
+
+.provider-general-payment {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 7px 10px;
+  border: 1px solid rgba(103, 232, 249, .7);
+  border-radius: 0;
+  background: rgba(103, 232, 249, .045);
+  color: var(--cyan) !important;
+  cursor: pointer;
+  font: .62rem 'Share Tech Mono', monospace;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+}
+
+.provider-general-payment i,
+.provider-general-payment small {
+  color: var(--cyan) !important;
+  text-shadow: none !important;
+}
+
+.provider-general-payment small {
+  padding-left: 7px;
+  border-left: 1px solid rgba(103, 232, 249, .35);
+  font-size: .5rem;
+  opacity: .72;
+  text-transform: none;
+}
+
+.provider-general-payment:hover:not(:disabled) {
+  border-color: rgba(103, 232, 249, .7);
+  background: rgba(103, 232, 249, .045);
+  color: var(--cyan) !important;
+  box-shadow: none;
+  transform: none;
+}
+
+.provider-general-payment:disabled {
+  cursor: not-allowed;
+  opacity: .32;
+}
+
+.proveedor-resumen .label {
+  color: #a8c8b3 !important;
+  text-shadow: none !important;
+}
+
+.proveedor-resumen .value {
+  color: #f2fff6 !important;
+  text-shadow: none !important;
+}
+
+.proveedor-resumen .value.pendiente {
+  color: var(--amber) !important;
+}
+
+.terminal-button:hover:not(:disabled) {
+  border-color: #345442;
+  background: #07100c;
+  color: #a8c8b3;
+  box-shadow: none;
+}
+
+.terminal-button.primary:hover:not(:disabled) {
+  border-color: var(--green);
+  background: var(--green);
+  color: #021008;
+}
+
+.acciones button:hover:not(:disabled) {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.btn-detalle:hover:not(:disabled) {
+  color: #a8c8b3 !important;
+}
+
+.btn-abono:hover:not(:disabled) {
+  color: var(--cyan) !important;
+}
+
+.btn-eliminar:hover:not(:disabled) {
+  color: var(--red) !important;
+}
+
+.lista-deudas > .modal-overlay > .modal-content {
+  border-color: rgba(57, 246, 160, .5);
+  background:
+    repeating-linear-gradient(0deg, rgba(255,255,255,.012) 0, rgba(255,255,255,.012) 1px, transparent 1px, transparent 4px),
+    #07110c;
+}
+
+.lista-deudas > .modal-overlay .modal-header {
+  background: #0b1c13;
+}
+
+.lista-deudas > .modal-overlay .modal-body,
+.lista-deudas > .modal-overlay .modal-body * {
+  color: #eefcf3 !important;
+}
+
+.specific-payment-modal .modal-header > div small,
+.specific-debt-summary span,
+.specific-payment-modal .form-group label,
+.balance-preview span {
+  color: #a8c8b3 !important;
+}
+
+.specific-payment-modal .modal-header h2 {
+  color: var(--green) !important;
+}
+
+.specific-payment-modal .modal-header h2 span {
+  color: var(--amber) !important;
+}
+
+.specific-debt-summary {
+  border-color: rgba(57, 246, 160, .42);
+  background: #091710;
+}
+
+.specific-debt-summary > div {
+  border-color: rgba(57, 246, 160, .32);
+}
+
+.specific-debt-summary strong,
+.balance-preview strong {
+  color: #ffffff !important;
+}
+
+.specific-debt-summary .amber,
+.balance-preview .amber,
+.specific-amount-input span {
+  color: var(--amber) !important;
+}
+
+.payment-type-note {
+  border-color: rgba(103, 232, 249, .45);
+  background: rgba(103, 232, 249, .055);
+  color: var(--cyan) !important;
+}
+
+.payment-type-note i,
+.payment-type-note strong,
+.balance-preview .cyan {
+  color: var(--cyan) !important;
+}
+
+.payment-type-note span {
+  color: #b6d0bf !important;
+}
+
+.lista-deudas > .modal-overlay input,
+.lista-deudas > .modal-overlay select {
+  border-color: #3e6b50;
+  background: #020805;
+  color: #ffffff !important;
+}
+
+.lista-deudas > .modal-overlay input::placeholder {
+  color: #82968a !important;
+  opacity: 1;
+}
+
+.balance-preview {
+  border-color: rgba(57, 246, 160, .42);
+  background: rgba(57, 246, 160, .025);
+}
+
+.balance-preview > i {
+  color: #8fb39d !important;
+}
+
+.specific-payment-modal .btn-cancelar,
+.specific-payment-modal .btn-cancelar:hover {
+  border-color: #587563;
+  background: transparent;
+  color: #c5ddce !important;
+}
+
+.specific-payment-modal .btn-guardar,
+.specific-payment-modal .btn-guardar:hover:not(:disabled) {
+  border-color: var(--green);
+  background: var(--green);
+  color: #021008 !important;
+  box-shadow: none;
+}
+
+.specific-payment-modal .btn-guardar:disabled {
+  border-color: #315945;
+  background: #193a2a;
+  color: #91ad9c !important;
+  opacity: 1;
+}
+
+.lista-deudas > .modal-overlay .close-button:hover {
+  background: transparent;
+  color: var(--red);
+  transform: none;
+}
+
+/* Debt detail: readable CRT hierarchy */
+.debt-detail-modal {
+  max-width: 1040px !important;
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+.debt-detail-modal .modal-header h2 {
+  margin: 0;
+  color: #f2fff6 !important;
+  font: 2.15rem/1 'VT323', monospace;
+  letter-spacing: .035em;
+}
+
+.debt-detail-modal .modal-header h2::before {
+  content: '> ';
+  color: var(--amber);
+}
+
+.debt-detail-modal .modal-body {
+  padding: 22px;
+}
+
+.debt-detail-modal .deuda-info {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  padding: 0;
+  border: 1px solid rgba(57, 246, 160, .38);
+  border-radius: 0;
+  background: #091710 !important;
+}
+
+.debt-detail-modal .deuda-info p {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+  margin: 0;
+  padding: 14px 16px;
+  border-right: 1px solid rgba(57, 246, 160, .24);
+}
+
+.debt-detail-modal .deuda-info p:last-child {
+  border-right: 0;
+}
+
+.debt-detail-modal .deuda-info strong {
+  color: #a8c8b3 !important;
+  font-size: .72rem;
+  font-weight: 500;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.debt-detail-modal .deuda-info .editable-field > span {
+  color: #ffffff !important;
+  font-size: 1rem;
+}
+
+.debt-detail-modal .estado-badge.pendiente {
+  width: fit-content;
+  border-color: var(--amber);
+  background: transparent !important;
+  color: var(--amber) !important;
+}
+
+.debt-detail-modal .estado-badge.pagado {
+  width: fit-content;
+  border-color: var(--green);
+  background: transparent !important;
+  color: var(--green) !important;
+}
+
+.debt-detail-modal h3,
+.debt-detail-modal .add-product-section h4 {
+  margin: 24px 0 10px;
+  color: #f2fff6 !important;
+  font: 1.55rem/1.1 'VT323', monospace;
+  letter-spacing: .03em;
+}
+
+.debt-detail-modal .small-text {
+  color: #9ab9a5 !important;
+  font: .72rem 'Share Tech Mono', monospace;
+}
+
+.debt-detail-modal .tabla-productos,
+.debt-detail-modal .tabla-abonos {
+  overflow: hidden;
+  border: 1px solid rgba(57, 246, 160, .3);
+  border-collapse: collapse;
+  background: #050d09 !important;
+}
+
+.debt-detail-modal .tabla-productos th,
+.debt-detail-modal .tabla-abonos th {
+  padding: 12px 14px;
+  border-color: rgba(57, 246, 160, .28);
+  background: #031009 !important;
+  color: var(--green) !important;
+  font-size: .72rem;
+  font-weight: 500;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.debt-detail-modal .tabla-productos td,
+.debt-detail-modal .tabla-abonos td {
+  padding: 13px 14px;
+  border-color: rgba(57, 246, 160, .18);
+  background: #08150f !important;
+  color: #f2fff6 !important;
+  font-size: .88rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.debt-detail-modal .tabla-productos tbody tr:hover td,
+.debt-detail-modal .tabla-abonos tbody tr:hover td {
+  background: #08150f !important;
+  color: #f2fff6 !important;
+}
+
+.debt-detail-modal .tabla-productos tfoot td {
+  border-top: 1px solid rgba(255, 176, 0, .55);
+  background: #0b160f !important;
+  color: var(--amber) !important;
+  font-weight: 600;
+}
+
+.debt-detail-modal .tabla-productos .total-label {
+  color: #f2fff6 !important;
+}
+
+.debt-detail-modal .editable-cell > span {
+  color: #f2fff6 !important;
+}
+
+.debt-detail-modal .add-product-section,
+.debt-detail-modal .no-abonos,
+.debt-detail-modal .resumen-deuda {
+  border: 1px solid rgba(57, 246, 160, .3);
+  border-radius: 0;
+  background: #07110c !important;
+}
+
+.debt-detail-modal .add-product-section {
+  margin-top: 22px;
+  padding: 18px;
+}
+
+.debt-detail-modal .add-product-section h4 {
+  margin-top: 0;
+}
+
+.debt-detail-modal .no-abonos p {
+  color: #a8c8b3 !important;
+}
+
+.debt-detail-modal .resumen-deuda strong,
+.debt-detail-modal .resumen-deuda span {
+  color: #f2fff6 !important;
+}
+
+.debt-detail-modal .resumen-deuda .saldo-pendiente,
+.debt-detail-modal .resumen-deuda .total {
+  color: var(--amber) !important;
+}
+
+.debt-detail-modal .btn-eliminar-sm,
+.debt-detail-modal .btn-eliminar-sm:hover {
+  border-color: rgba(255, 95, 86, .62);
+  background: transparent;
+  color: var(--red) !important;
+  box-shadow: none;
+  transform: none;
+}
+
+@media(max-width:800px){.filters-panel .filtros-grid{grid-template-columns:1fr}.payment-console{grid-template-columns:1fr}.abonos-actions{flex-wrap:wrap}.header-stats{grid-template-columns:1fr}.header-stats>div{border-right:0;border-bottom:1px solid var(--line)}.specific-form-grid{grid-template-columns:1fr}.specific-debt-summary{grid-template-columns:1fr}.specific-debt-summary>div{border-right:0;border-bottom:1px solid var(--line)}}
+@media(max-width:800px){.debt-detail-modal .deuda-info{grid-template-columns:1fr}.debt-detail-modal .deuda-info p{border-right:0;border-bottom:1px solid rgba(57,246,160,.24)}.debt-detail-modal .deuda-info p:last-child{border-bottom:0}.debt-detail-modal .modal-body{padding:14px}.debt-detail-modal .tabla-productos,.debt-detail-modal .tabla-abonos{display:block;overflow-x:auto}}
+@media(max-width:620px){.debts-shell{width:min(100% - 22px,1240px);padding-top:12px}.terminal-nav>span,.online-status{display:none}.terminal-window-bar{grid-template-columns:1fr auto}.header-command{padding:20px 17px;gap:9px}.header-command h1{font-size:2.15rem}.primary-actions{align-items:stretch;flex-direction:column}.terminal-button{width:100%;box-sizing:border-box}.fecha-inputs{grid-template-columns:1fr}.fecha-separator{display:none}.abonos-actions{flex-direction:column}.proveedor-header{align-items:flex-start;flex-direction:column}.proveedor-title{align-items:flex-start;flex-wrap:wrap}.provider-general-payment{flex-basis:100%;justify-content:center}.proveedor-resumen{width:100%;justify-content:space-between}.acciones button span{display:none}.balance-preview{grid-template-columns:1fr}.balance-preview>i{transform:rotate(90deg);justify-self:center}.specific-payment-modal .form-actions{flex-direction:column}.specific-payment-modal .form-actions button{width:100%}}
+</style>

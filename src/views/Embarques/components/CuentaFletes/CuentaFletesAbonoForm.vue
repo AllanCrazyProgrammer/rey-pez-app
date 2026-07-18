@@ -94,7 +94,7 @@ export default {
   display: flex;
   justify-content: space-between;
   gap: 16px;
-  align-items: end;
+  align-items: flex-end;
   margin-bottom: 16px;
 }
 
@@ -125,7 +125,7 @@ h2 {
   display: grid;
   grid-template-columns: 170px 190px minmax(220px, 1fr) auto;
   gap: 14px;
-  align-items: end;
+  align-items: flex-end;
 }
 
 label {

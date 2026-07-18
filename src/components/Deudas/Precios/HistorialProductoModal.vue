@@ -1,12 +1,12 @@
 <template>
   <div v-if="mostrar" class="modal-overlay" @click="cerrarModal">
-    <div class="modal-content" @click.stop>
+    <div class="modal-content product-history-modal" role="dialog" aria-modal="true" aria-labelledby="product-history-title" @click.stop>
       <div class="modal-header">
         <div class="modal-title-info">
-          <h2>{{ producto?.nombre || 'Producto' }}</h2>
+          <h2 id="product-history-title">{{ producto?.nombre || 'Producto' }}</h2>
           <span class="proveedor-badge">{{ proveedorNombre }}</span>
         </div>
-        <button @click="$emit('cerrar')" class="close-button">×</button>
+        <button @click="$emit('cerrar')" class="close-button" aria-label="Cerrar historial de precios">×</button>
       </div>
       
       <div class="modal-body">
@@ -312,6 +312,7 @@ export default {
 </script>
 
 <style scoped>
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=VT323&display=swap');
 .modal-overlay {
   position: fixed;
   top: 0;
@@ -742,4 +743,166 @@ export default {
     align-self: flex-end;
   }
 }
-</style> 
+/* Terminal CRT product history */
+.modal-overlay{background:rgba(0,5,3,.9);backdrop-filter:blur(7px)}.modal-content{--green:#00ff88;--amber:#ffb000;--cyan:#22d3ee;--red:#ff5f56;--line:rgba(0,255,136,.26);border:1px solid var(--line);border-radius:0;background:#050d09;color:#d8ffe9;box-shadow:0 0 38px rgba(0,255,136,.11);font-family:'Share Tech Mono',monospace}.modal-header{border-bottom:1px solid var(--line);border-radius:0;background:#091710}.modal-header h2{color:var(--green);font:1.6rem 'VT323',monospace}.modal-header h2::before{content:'> ';color:var(--amber)}.proveedor-badge{border:1px solid var(--cyan);border-radius:0;background:transparent;color:var(--cyan)}.close-button{border:1px solid rgba(255,95,86,.4);border-radius:0;color:var(--red)}.producto-resumen,.agregar-precio-section,.historial-section{border:1px solid var(--line);border-radius:0;background:#07110c}.precio-principal .label,.stat-label{color:#6d8978}.precio-principal .precio-valor,.stat-numero{color:var(--amber)}.section-header{border-bottom:1px solid var(--line);background:#091710}.section-header h3,.historial-section h3{color:#d8ffe9}.btn-toggle-form{border:1px solid var(--green);border-radius:0;background:transparent;color:var(--green)}.precio-form{background:#050d09}.form-group label{color:#84a58f}.form-control{border:1px solid #26503a;border-radius:0;background:#020805;color:#e0ffea;font-family:'Share Tech Mono',monospace;color-scheme:dark}.btn-guardar{border:1px solid var(--green);border-radius:0;background:var(--green);color:#021008}.precio-item{border:1px solid rgba(0,255,136,.16);border-radius:0;background:#06100b}.precio-item.precio-actual{border-color:var(--green);background:rgba(0,255,136,.04)}.precio-fecha-badge{border-radius:0;background:#0b1a12;color:#8ba995}.actual-badge{border-radius:0;background:var(--green);color:#021008}.precio-actions button{border-radius:0}
+
+/* Readable typography and stable states */
+.product-history-modal {
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+.product-history-modal .modal-header h2 {
+  color: #f2fff6;
+  font: 2.15rem/1 'VT323', monospace;
+  letter-spacing: .035em;
+}
+
+.product-history-modal .proveedor-badge {
+  color: var(--cyan);
+  font-size: .82rem;
+  letter-spacing: .04em;
+}
+
+.product-history-modal .producto-resumen,
+.product-history-modal .agregar-precio-section,
+.product-history-modal .historial-section {
+  background: #07110c !important;
+}
+
+.product-history-modal .precio-principal .label,
+.product-history-modal .fecha-actual,
+.product-history-modal .stat-label,
+.product-history-modal .form-group label {
+  color: #a8c8b3 !important;
+  font-size: .78rem;
+  letter-spacing: .05em;
+}
+
+.product-history-modal .precio-principal .precio-valor,
+.product-history-modal .stat-numero,
+.product-history-modal .precio-monto .precio-valor {
+  color: var(--amber) !important;
+  font-family: 'VT323', monospace;
+  font-variant-numeric: tabular-nums;
+  text-shadow: none;
+}
+
+.product-history-modal .precio-principal .precio-valor {
+  font-size: 3rem;
+}
+
+.product-history-modal .stat-numero {
+  font-size: 1.7rem;
+}
+
+.product-history-modal .section-header h3,
+.product-history-modal .historial-section h3 {
+  color: #f2fff6 !important;
+  font: 1.55rem/1.1 'VT323', monospace;
+  letter-spacing: .03em;
+}
+
+.product-history-modal .precio-item,
+.product-history-modal .precio-item.precio-actual,
+.product-history-modal .precio-item:hover,
+.product-history-modal .precio-item.precio-actual:hover {
+  border-color: rgba(57, 246, 160, .35);
+  background: #08150f !important;
+  color: #f2fff6;
+  box-shadow: none;
+  transform: none;
+}
+
+.product-history-modal .precio-item.precio-actual {
+  border-color: var(--green);
+}
+
+.product-history-modal .precio-fecha-badge,
+.product-history-modal .precio-actual .precio-fecha-badge {
+  border: 1px solid rgba(34, 211, 238, .55);
+  background: #07110c !important;
+  color: #d9faff !important;
+  font-size: .8rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.product-history-modal .precio-monto .precio-valor {
+  font-size: 1.9rem;
+}
+
+.product-history-modal .actual-badge {
+  border: 1px solid var(--green);
+  background: var(--green) !important;
+  color: #021008 !important;
+  font-size: .68rem;
+  font-weight: 600;
+}
+
+.product-history-modal .precio-notas,
+.product-history-modal .no-historial {
+  color: #a8c8b3 !important;
+}
+
+.product-history-modal .cambio-precio {
+  border: 1px solid currentColor;
+  border-radius: 0;
+  background: transparent !important;
+  font-size: .7rem;
+}
+
+.product-history-modal .cambio-precio.aumento {
+  color: var(--cyan) !important;
+}
+
+.product-history-modal .cambio-precio.disminucion {
+  color: var(--red) !important;
+}
+
+.product-history-modal .cambio-precio.igual {
+  color: #a8c8b3 !important;
+}
+
+.product-history-modal .form-control::placeholder {
+  color: #82968a;
+  opacity: 1;
+}
+
+.product-history-modal .btn-toggle-form:hover,
+.product-history-modal .btn-editar:hover,
+.product-history-modal .btn-eliminar:hover,
+.product-history-modal .close-button:hover {
+  background: transparent;
+  box-shadow: none;
+  transform: none;
+}
+
+.product-history-modal .btn-toggle-form,
+.product-history-modal .btn-toggle-form:hover {
+  color: var(--green);
+}
+
+.product-history-modal .btn-editar,
+.product-history-modal .btn-editar:hover {
+  border-color: var(--cyan);
+  color: var(--cyan);
+}
+
+.product-history-modal .btn-eliminar,
+.product-history-modal .btn-eliminar:hover,
+.product-history-modal .close-button,
+.product-history-modal .close-button:hover {
+  border-color: rgba(255, 95, 86, .55);
+  color: var(--red);
+}
+
+.product-history-modal .btn-guardar,
+.product-history-modal .btn-guardar:hover:not(:disabled) {
+  border-color: var(--green);
+  background: var(--green);
+  color: #021008;
+  box-shadow: none;
+  transform: none;
+}
+</style>

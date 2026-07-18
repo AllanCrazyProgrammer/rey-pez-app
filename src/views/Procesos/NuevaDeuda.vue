@@ -1,161 +1,166 @@
 <template>
   <div class="nueva-deuda">
-    <div class="back-button-container">
-      <BackButton to="/procesos/deudas" />
-    </div>
-    
-    <!-- Header moderno -->
-    <div class="header-section">
-      <div class="header-content">
-        <h1 class="main-title">
-          <i class="icon-new">➕</i>
-          Nueva Deuda a Proveedor
-        </h1>
-        <p class="subtitle">Registra una nueva deuda con productos y abonos iniciales</p>
-      </div>
-    </div>
+    <main class="debt-shell">
+      <nav class="terminal-nav" aria-label="Navegación del módulo">
+        <BackButton to="/procesos/deudas" />
+        <span class="terminal-path">~/procesos/deudas/nueva</span>
+      </nav>
 
-    <!-- Sección de fecha -->
-    <div class="fecha-card">
-      <h3 class="section-title">
-        <i class="icon-calendar">📅</i>
-        Fecha de la Deuda
-      </h3>
-      <div class="fecha-container">
-        <input type="date" v-model="fechaSeleccionada" class="modern-input">
-        <span class="fecha-display">{{ fechaFormateada }}</span>
-      </div>
-    </div>
-
-    <!-- Selector de proveedor -->
-    <div class="proveedor-card">
-      <h3 class="section-title">
-        <i class="icon-supplier">🏭</i>
-        Seleccionar Proveedor
-      </h3>
-      <select v-model="proveedorSeleccionado" required class="modern-select">
-        <option value="" disabled>Seleccione un proveedor</option>
-        <option v-for="proveedor in proveedores" :key="proveedor.id" :value="proveedor.id">
-          {{ proveedor.nombre }}
-        </option>
-      </select>
-      <div v-if="proveedorSeleccionado && getNombreProveedor()" class="proveedor-selected-info">
-        <div class="proveedor-color-display">
-          <div 
-            class="color-indicator-large" 
-            :style="{ backgroundColor: getProveedorColor(proveedorSeleccionado) }"
-          ></div>
-          <div class="proveedor-details">
-            <span class="proveedor-nombre">{{ getNombreProveedor() }}</span>
-            <span class="proveedor-label">Proveedor seleccionado</span>
+      <header class="terminal-header-panel">
+        <div class="terminal-bar">
+          <span class="terminal-dots"><i></i><i></i><i></i></span>
+          <span>NUEVA_DEUDA.exe</span>
+          <span class="terminal-status">● EN LÍNEA</span>
+        </div>
+        <div class="terminal-heading">
+          <span class="terminal-prompt">&gt;</span>
+          <div>
+            <p class="terminal-command">INICIAR_REGISTRO</p>
+            <h1>Registrar nueva deuda<span class="terminal-cursor">_</span></h1>
+            <p class="subtitle">Completa el proveedor, agrega productos y revisa el saldo antes de guardar.</p>
           </div>
         </div>
-      </div>
-    </div>
+      </header>
 
-    <!-- Sección de productos -->
-    <div class="productos-card" v-if="proveedorSeleccionado">
-      <h3 class="section-title">
-        <i class="icon-products">📦</i>
-        Ingresar Productos
-      </h3>
-      <ProductoSelector 
-        :proveedor-id="proveedorSeleccionado"
-        @agregar-producto="addItem"
-      />
-    </div>
+      <ol class="workflow-steps" aria-label="Progreso del registro">
+        <li :class="{ active: true, complete: proveedorSeleccionado }">
+          <span>01</span><div><strong>Datos</strong><small>Fecha y proveedor</small></div>
+        </li>
+        <li :class="{ active: proveedorSeleccionado, complete: items.length > 0 }">
+          <span>02</span><div><strong>Productos</strong><small>Conceptos de la deuda</small></div>
+        </li>
+        <li :class="{ active: items.length > 0 }">
+          <span>03</span><div><strong>Confirmar</strong><small>Abonos y saldo</small></div>
+        </li>
+      </ol>
 
-    <!-- Tabla de productos -->
-    <div class="tabla-container" v-if="items.length > 0">
-      <h3 class="section-title">
-        <i class="icon-list">📋</i>
-        Productos Agregados
-      </h3>
-      <div class="tabla-wrapper">
-        <table class="tabla-productos">
-          <thead>
-            <tr>
-              <th>Kilos</th>
-              <th>Producto</th>
-              <th>Precio</th>
-              <th>Total</th>
-              <th>Acciones</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="(item, index) in items" :key="index">
-              <td @click="editarItem(index, 'kilos')" class="editable">
-                <span v-if="!item.editando || item.campoEditando !== 'kilos'">{{ formatNumber(item.kilos) }}</span>
-                <input v-else v-model.number="item.kilos" type="number" class="table-input" @blur="finalizarEdicion(index)" @keyup.enter="finalizarEdicion(index)">
-              </td>
-              <td @click="editarItem(index, 'producto')" class="editable">
-                <span v-if="!item.editando || item.campoEditando !== 'producto'">{{ item.producto }}</span>
-                <input v-else v-model="item.producto" type="text" class="table-input" @blur="finalizarEdicion(index)" @keyup.enter="finalizarEdicion(index)">
-              </td>
-              <td @click="editarItem(index, 'precio')" class="editable">
-                <span v-if="!item.editando || item.campoEditando !== 'precio'">${{ formatNumber(item.precio) }}</span>
-                <input v-else v-model.number="item.precio" type="number" class="table-input" @blur="finalizarEdicion(index)" @keyup.enter="finalizarEdicion(index)">
-              </td>
-              <td class="total-cell">${{ formatNumber(item.total) }}</td>
-              <td class="action-column">
-                <button @click="removeItem(index)" class="btn-delete">
-                  <i class="icon-trash">🗑️</i>
-                </button>
-              </td>
-            </tr>
-          </tbody>
-          <tfoot>
-            <tr class="total-row">
-              <td colspan="3" class="total-label">Total General</td>
-              <td class="total-amount">${{ formatNumber(totalGeneral) }}</td>
-              <td></td>
-            </tr>
-          </tfoot>
-        </table>
-      </div>
-    </div>
+      <div class="registration-layout">
+        <div class="registration-main">
+          <section class="terminal-card setup-card">
+            <div class="card-heading">
+              <div><span class="card-index">01</span><h2>Datos de la deuda</h2></div>
+              <small>Campos obligatorios</small>
+            </div>
+            <div class="setup-grid">
+              <label class="field-group">
+                <span>Fecha de la deuda</span>
+                <input type="date" v-model="fechaSeleccionada" class="crt-input">
+                <small>{{ fechaFormateada }}</small>
+              </label>
+              <label class="field-group">
+                <span>Proveedor</span>
+                <select v-model="proveedorSeleccionado" required class="crt-input crt-select">
+                  <option value="" disabled>Selecciona un proveedor</option>
+                  <option v-for="proveedor in proveedores" :key="proveedor.id" :value="proveedor.id">
+                    {{ proveedor.nombre }}
+                  </option>
+                </select>
+                <small v-if="!proveedorSeleccionado">Elige quién emitió la nota.</small>
+                <small v-else class="selected-supplier">
+                  <i :style="{ backgroundColor: getProveedorColor(proveedorSeleccionado) }"></i>
+                  {{ getNombreProveedor() }} seleccionado
+                </small>
+              </label>
+            </div>
+          </section>
 
-    <div class="abonos-section" v-if="items.length > 0">
-      <h2>Abonos Iniciales</h2>
-      <div class="abonos">
-        <div class="input-row" v-for="(abono, index) in abonos" :key="index">
-          <input v-model="abono.descripcion" type="text" placeholder="Descripción">
-          <input v-model.number="abono.monto" type="number" placeholder="Monto">
-          <button @click="removeAbono(index)" class="delete-btn">Eliminar</button>
+          <section class="terminal-card products-entry-card" :class="{ locked: !proveedorSeleccionado }">
+            <div class="card-heading">
+              <div><span class="card-index">02</span><h2>Productos de la nota</h2></div>
+              <small>{{ items.length }} {{ items.length === 1 ? 'producto agregado' : 'productos agregados' }}</small>
+            </div>
+            <div v-if="!proveedorSeleccionado" class="locked-message">
+              <i class="fas fa-lock" aria-hidden="true"></i>
+              <div><strong>Selecciona un proveedor</strong><p>Después podrás capturar kilos, producto y precio.</p></div>
+            </div>
+            <ProductoSelector
+              v-else
+              :proveedor-id="proveedorSeleccionado"
+              @agregar-producto="addItem"
+            />
+          </section>
+
+          <section v-if="items.length > 0" class="terminal-card items-card">
+            <div class="card-heading">
+              <div><span class="card-index">03</span><h2>Conceptos agregados</h2></div>
+              <small>Haz clic en kilos, producto o precio para editar.</small>
+            </div>
+            <div class="table-scroll">
+              <table class="crt-table">
+                <thead><tr><th>Kilos</th><th>Producto</th><th>Precio</th><th>Importe</th><th></th></tr></thead>
+                <tbody>
+                  <tr v-for="(item, index) in items" :key="index">
+                    <td @click="editarItem(index, 'kilos')" class="editable">
+                      <span v-if="!item.editando || item.campoEditando !== 'kilos'">{{ formatNumber(item.kilos) }}</span>
+                      <input v-else v-model.number="item.kilos" type="number" min="0" step="0.01" class="table-input" @blur="finalizarEdicion(index)" @keyup.enter="finalizarEdicion(index)">
+                    </td>
+                    <td @click="editarItem(index, 'producto')" class="editable">
+                      <span v-if="!item.editando || item.campoEditando !== 'producto'">{{ item.producto }}</span>
+                      <input v-else v-model="item.producto" type="text" class="table-input" @blur="finalizarEdicion(index)" @keyup.enter="finalizarEdicion(index)">
+                    </td>
+                    <td @click="editarItem(index, 'precio')" class="editable">
+                      <span v-if="!item.editando || item.campoEditando !== 'precio'">${{ formatNumber(item.precio) }}</span>
+                      <input v-else v-model.number="item.precio" type="number" min="0" step="0.01" class="table-input" @blur="finalizarEdicion(index)" @keyup.enter="finalizarEdicion(index)">
+                    </td>
+                    <td class="money-cell">${{ formatNumber(item.total) }}</td>
+                    <td><button @click="removeItem(index)" class="icon-button danger" :aria-label="`Eliminar ${item.producto}`"><i class="fas fa-trash-alt"></i></button></td>
+                  </tr>
+                </tbody>
+                <tfoot><tr><td colspan="3">TOTAL DE LA DEUDA</td><td class="money-cell">${{ formatNumber(totalGeneral) }}</td><td></td></tr></tfoot>
+              </table>
+            </div>
+          </section>
+
+          <section v-if="items.length > 0" class="terminal-card initial-payments-card">
+            <div class="card-heading">
+              <div><span class="card-index optional">+</span><h2>Abono inicial</h2></div>
+              <small>Opcional · se descuenta del saldo al guardar</small>
+            </div>
+            <div v-if="abonos.length === 0" class="optional-empty">
+              <p>¿Ya entregaste un pago al recibir esta nota?</p>
+              <button @click="addAbono" class="crt-button secondary"><i class="fas fa-plus"></i> Agregar abono inicial</button>
+            </div>
+            <div v-else class="initial-payments-list">
+              <div v-for="(abono, index) in abonos" :key="index" class="payment-row">
+                <label><span>Fecha</span><input v-model="abono.fecha" type="date" class="crt-input"></label>
+                <label class="payment-description"><span>Descripción</span><input v-model.trim="abono.descripcion" type="text" class="crt-input" placeholder="Ej. Transferencia inicial"></label>
+                <label><span>Monto</span><input v-model.number="abono.monto" type="number" min="0.01" :max="totalGeneral" step="0.01" class="crt-input" placeholder="0.00"></label>
+                <button @click="removeAbono(index)" class="icon-button danger" aria-label="Eliminar abono inicial"><i class="fas fa-trash-alt"></i></button>
+              </div>
+              <button @click="addAbono" class="crt-button text-button"><i class="fas fa-plus"></i> Agregar otro abono</button>
+              <p v-if="totalAbonos > totalGeneral" class="validation-error"><i class="fas fa-exclamation-triangle"></i> Los abonos no pueden superar el total de la deuda.</p>
+            </div>
+          </section>
         </div>
-        <button @click="addAbono" class="add-btn">Agregar Abono</button>
-      </div>
 
-      <div class="resumen">
-        <h3>Resumen</h3>
-        <div class="resumen-item">
-          <span>Total deuda:</span>
-          <span>${{ formatNumber(totalGeneral) }}</span>
-        </div>
-        <div class="resumen-item">
-          <span>Total abonos:</span>
-          <span>${{ formatNumber(totalAbonos) }}</span>
-        </div>
-        <div class="resumen-item total">
-          <span>Saldo pendiente:</span>
-          <span>${{ formatNumber(saldoPendiente) }}</span>
-        </div>
+        <aside class="terminal-card summary-panel">
+          <div class="summary-heading"><span>RESUMEN_DE_REGISTRO</span><i class="fas fa-receipt"></i></div>
+          <dl class="summary-list">
+            <div><dt>Proveedor</dt><dd>{{ getNombreProveedor() || 'Sin seleccionar' }}</dd></div>
+            <div><dt>Productos</dt><dd>{{ items.length }}</dd></div>
+            <div><dt>Total deuda</dt><dd>${{ formatNumber(totalGeneral) }}</dd></div>
+            <div><dt>Abono inicial</dt><dd class="paid">-${{ formatNumber(totalAbonos) }}</dd></div>
+            <div class="balance-row"><dt>Saldo pendiente</dt><dd>${{ formatNumber(Math.max(0, saldoPendiente)) }}</dd></div>
+          </dl>
+          <div class="save-checklist">
+            <p :class="{ ready: proveedorSeleccionado }"><i class="fas fa-check-circle"></i> Proveedor seleccionado</p>
+            <p :class="{ ready: items.length > 0 }"><i class="fas fa-check-circle"></i> Al menos un producto</p>
+            <p :class="{ ready: abonosValidos }"><i class="fas fa-check-circle"></i> Abonos válidos</p>
+          </div>
+          <button @click="guardarDeuda" class="crt-button primary save-button" :disabled="!puedeGuardar || guardando">
+            <i :class="guardando ? 'fas fa-circle-notch fa-spin' : 'fas fa-save'"></i>
+            {{ guardando ? 'Guardando registro…' : 'Guardar deuda' }}
+          </button>
+          <small class="save-hint">Se guardarán la deuda, sus productos y abonos en una sola operación.</small>
+        </aside>
       </div>
-    </div>
-
-    <div class="button-container" v-if="proveedorSeleccionado && items.length > 0">
-      <button @click="guardarDeuda" class="save-button" :disabled="guardando">
-        {{ guardando ? 'Guardando...' : 'Guardar Deuda' }}
-      </button>
-    </div>
+    </main>
   </div>
 </template>
 
 <script>
-import { ref, computed, onMounted } from 'vue';
 import { db } from '@/firebase';
-import { collection, addDoc, getDocs, doc, setDoc } from 'firebase/firestore';
-import { useRouter } from 'vue-router';
+import { collection, getDocs, doc, writeBatch } from 'firebase/firestore';
 import BackButton from '@/components/BackButton.vue';
 import ProductoSelector from '@/components/Deudas/ProductoSelector.vue';
 import { formatNumber } from '@/utils/formatters';
@@ -190,6 +195,21 @@ export default {
     },
     saldoPendiente() {
       return this.totalGeneral - this.totalAbonos;
+    },
+    abonosValidos() {
+      return this.totalAbonos <= this.totalGeneral && this.abonos.every(abono => (
+        abono.fecha &&
+        abono.descripcion &&
+        Number(abono.monto) > 0
+      ));
+    },
+    puedeGuardar() {
+      return Boolean(
+        this.proveedorSeleccionado &&
+        this.items.length > 0 &&
+        this.totalGeneral > 0 &&
+        this.abonosValidos
+      );
     }
   },
   methods: {
@@ -209,6 +229,11 @@ export default {
           id: doc.id,
           ...doc.data()
         }));
+
+        const proveedorIdInicial = this.$route.query.proveedorId;
+        if (proveedorIdInicial && this.proveedores.some(proveedor => proveedor.id === proveedorIdInicial)) {
+          this.proveedorSeleccionado = proveedorIdInicial;
+        }
       } catch (error) {
         console.error("Error al cargar proveedores: ", error);
       }
@@ -281,11 +306,18 @@ export default {
         return;
       }
 
+      if (!this.abonosValidos) {
+        alert('Revise los abonos iniciales. Todos deben tener fecha, descripción y un monto válido sin superar el total de la deuda.');
+        return;
+      }
+
       try {
         this.guardando = true;
-        
-        // Crear la nueva deuda
-        const deudaRef = await addDoc(collection(db, 'deudas'), {
+
+        // Guardar deuda, productos y abonos como una sola operación atómica.
+        const batch = writeBatch(db);
+        const deudaRef = doc(collection(db, 'deudas'));
+        batch.set(deudaRef, {
           proveedorId: this.proveedorSeleccionado,
           proveedorNombre: this.getNombreProveedor(),
           fecha: this.fechaSeleccionada,
@@ -295,11 +327,9 @@ export default {
           estado: this.saldoPendiente > 0 ? 'pendiente' : 'pagado'
         });
 
-        // Guardar los productos de la deuda
-        const productosRef = collection(db, 'deudas', deudaRef.id, 'productos');
-        
         for (const item of this.items) {
-          await addDoc(productosRef, {
+          const productoRef = doc(collection(db, 'deudas', deudaRef.id, 'productos'));
+          batch.set(productoRef, {
             kilos: item.kilos,
             producto: item.producto,
             precio: item.precio,
@@ -307,21 +337,18 @@ export default {
           });
         }
 
-        // Guardar los abonos iniciales
-        if (this.abonos.length > 0) {
-          const abonosRef = collection(db, 'deudas', deudaRef.id, 'abonos');
-          
-          for (const abono of this.abonos) {
-            if (abono.descripcion && abono.monto) {
-              await addDoc(abonosRef, {
-                descripcion: abono.descripcion,
-                monto: abono.monto,
-                fecha: this.fechaSeleccionada,
-                fechaCreacion: new Date()
-              });
-            }
-          }
+        for (const abono of this.abonos) {
+          const abonoRef = doc(collection(db, 'deudas', deudaRef.id, 'abonos'));
+          batch.set(abonoRef, {
+            descripcion: abono.descripcion,
+            monto: Number(abono.monto),
+            fecha: abono.fecha,
+            fechaCreacion: new Date(),
+            esAbonoGeneral: false
+          });
         }
+
+        await batch.commit();
 
         alert('Deuda guardada correctamente');
         this.$router.push('/procesos/deudas/lista');
@@ -340,6 +367,7 @@ export default {
 </script>
 
 <style scoped>
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=VT323&display=swap');
 .nueva-deuda {
   min-height: 100vh;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -889,4 +917,143 @@ export default {
     font-size: 0.8rem;
   }
 }
-</style> 
+/* Terminal CRT redesign */
+.nueva-deuda {
+  --crt-green: #00ff88;
+  --crt-green-dim: rgba(0, 255, 136, 0.16);
+  --crt-amber: #ffb000;
+  --crt-cyan: #22d3ee;
+  --crt-red: #ff5f56;
+  --crt-bg: #050a08;
+  --crt-panel: #08120e;
+  --crt-line: rgba(0, 255, 136, 0.28);
+  min-height: 100vh;
+  padding: 0;
+  overflow-x: hidden;
+  background:
+    repeating-linear-gradient(0deg, rgba(255,255,255,0.018) 0, rgba(255,255,255,0.018) 1px, transparent 1px, transparent 4px),
+    radial-gradient(circle at 50% -20%, #102a1d 0%, var(--crt-bg) 48%);
+  color: #d8ffe9;
+  font-family: 'Share Tech Mono', monospace;
+}
+
+.debt-shell { width: min(1240px, calc(100% - 40px)); margin: 0 auto; padding: 24px 0 60px; }
+.terminal-nav { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; }
+.terminal-nav ::v-deep .btn-back { margin: 0; padding: 9px 14px; border: 1px solid var(--crt-line); border-radius: 2px; background: #07100c; color: var(--crt-green); font: 0.85rem 'Share Tech Mono', monospace; box-shadow: inset 0 0 18px rgba(0,255,136,.04); }
+.terminal-nav ::v-deep .btn-back::before { content: '< '; color: var(--crt-amber); }
+.terminal-path { color: #769985; font-size: .78rem; }
+
+.terminal-header-panel { border: 1px solid var(--crt-line); background: rgba(3,14,9,.92); box-shadow: 0 0 28px rgba(0,255,136,.08), inset 0 0 50px rgba(0,255,136,.025); }
+.terminal-bar { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; padding: 9px 14px; border-bottom: 1px solid var(--crt-line); background: #0a1711; color: #7ca68c; font-size: .72rem; letter-spacing: .08em; }
+.terminal-dots { display: flex; gap: 6px; }
+.terminal-dots i { width: 9px; height: 9px; border-radius: 50%; background: var(--crt-red); box-shadow: 0 0 7px currentColor; }
+.terminal-dots i:nth-child(2) { background: var(--crt-amber); }
+.terminal-dots i:nth-child(3) { background: var(--crt-green); }
+.terminal-status { justify-self: end; color: var(--crt-green); }
+.terminal-heading { display: flex; gap: 18px; padding: 30px 34px 34px; }
+.terminal-prompt { color: var(--crt-amber); font: 2.4rem 'VT323', monospace; text-shadow: 0 0 10px rgba(255,176,0,.7); }
+.terminal-command { margin: 0 0 5px; color: var(--crt-green); font-size: .76rem; letter-spacing: .12em; }
+.terminal-heading h1 { margin: 0; color: var(--crt-green); font: 3.1rem/1 'VT323', monospace; letter-spacing: .04em; text-shadow: 0 0 12px rgba(0,255,136,.55); }
+.terminal-heading .subtitle { margin: 10px 0 0; color: #95b8a2; font-size: .9rem; }
+.terminal-cursor { animation: crtBlink 1s steps(1) infinite; }
+@keyframes crtBlink { 50% { opacity: 0; } }
+
+.workflow-steps { display: grid; grid-template-columns: repeat(3,1fr); gap: 1px; margin: 18px 0; padding: 0; border: 1px solid var(--crt-line); background: var(--crt-line); list-style: none; }
+.workflow-steps li { display: flex; align-items: center; gap: 12px; padding: 14px 18px; background: #07100c; color: #557363; }
+.workflow-steps li.active { color: #b6dbc4; background: #091710; }
+.workflow-steps li.complete { color: var(--crt-green); }
+.workflow-steps li > span { font: 1.35rem 'VT323', monospace; }
+.workflow-steps li div { display: flex; flex-direction: column; gap: 2px; }
+.workflow-steps strong { font-size: .82rem; text-transform: uppercase; }
+.workflow-steps small { color: #658171; font-size: .68rem; }
+
+.registration-layout { display: grid; grid-template-columns: minmax(0,1fr) 310px; gap: 18px; align-items: flex-start; }
+.registration-main { display: grid; gap: 18px; min-width: 0; }
+.terminal-card { border: 1px solid var(--crt-line); border-radius: 0; background: rgba(6,17,12,.94); box-shadow: inset 0 0 32px rgba(0,255,136,.02); color: #d8ffe9; }
+.card-heading { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 14px 18px; border-bottom: 1px solid var(--crt-line); background: #091710; }
+.card-heading > div { display: flex; align-items: center; gap: 10px; }
+.card-heading h2 { margin: 0; color: #d8ffe9; font-size: .95rem; letter-spacing: .05em; text-transform: uppercase; }
+.card-heading > small { color: #6f9580; font-size: .68rem; text-align: right; }
+.card-index { display: grid; place-items: center; width: 27px; height: 27px; border: 1px solid var(--crt-green); color: var(--crt-green); font: 1rem 'VT323', monospace; box-shadow: 0 0 8px rgba(0,255,136,.18); }
+.card-index.optional { border-color: var(--crt-amber); color: var(--crt-amber); }
+
+.setup-grid { display: grid; grid-template-columns: 1fr 1.5fr; gap: 18px; padding: 20px; }
+.field-group, .payment-row label { display: flex; flex-direction: column; gap: 7px; color: #9ec7ac; font-size: .76rem; text-transform: uppercase; letter-spacing: .04em; }
+.field-group small { min-height: 1em; color: #668574; font-size: .68rem; text-transform: none; }
+.crt-input { width: 100%; box-sizing: border-box; padding: 12px 13px; border: 1px solid #26503a; border-radius: 0; outline: none; background: #030a07; color: #e0ffea; font: .86rem 'Share Tech Mono', monospace; color-scheme: dark; }
+.crt-input:focus { border-color: var(--crt-green); box-shadow: 0 0 0 2px rgba(0,255,136,.12), inset 0 0 14px rgba(0,255,136,.04); }
+.crt-select option { background: #07100c; }
+.selected-supplier { display: flex; align-items: center; gap: 6px; color: var(--crt-green) !important; }
+.selected-supplier i { width: 8px; height: 8px; border-radius: 50%; }
+.products-entry-card.locked { border-style: dashed; }
+.locked-message { display: flex; align-items: center; justify-content: center; gap: 15px; min-height: 120px; padding: 20px; color: #688475; }
+.locked-message i { font-size: 1.35rem; }
+.locked-message p { margin: 4px 0 0; font-size: .74rem; }
+.products-entry-card ::v-deep .producto-selector { padding: 20px; margin: 0; }
+
+.table-scroll { overflow-x: auto; }
+.crt-table { width: 100%; border-collapse: collapse; color: #cdeed8; font-size: .79rem; }
+.crt-table th { padding: 11px 14px; border-bottom: 1px solid var(--crt-line); background: #030a07; color: var(--crt-green); font-size: .68rem; letter-spacing: .06em; text-align: left; text-transform: uppercase; }
+.crt-table td { padding: 12px 14px; border-bottom: 1px solid rgba(0,255,136,.1); }
+.crt-table tbody tr:hover { background: rgba(0,255,136,.035); }
+.crt-table .editable { cursor: text; }
+.crt-table .editable:hover { color: var(--crt-green); }
+.crt-table tfoot td { border-top: 1px solid var(--crt-green); color: var(--crt-green); font-weight: bold; }
+.money-cell { color: var(--crt-amber); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.table-input { width: 100%; min-width: 80px; box-sizing: border-box; border: 1px solid var(--crt-green); background: #020604; color: #eafff1; font: inherit; }
+.icon-button { display: grid; place-items: center; width: 34px; height: 34px; border: 1px solid var(--crt-line); background: transparent; color: #9bc3aa; cursor: pointer; }
+.icon-button.danger { border-color: rgba(255,95,86,.35); color: var(--crt-red); }
+.icon-button:hover { background: rgba(255,255,255,.04); }
+
+.optional-empty { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 20px; }
+.optional-empty p { margin: 0; color: #86a894; font-size: .8rem; }
+.initial-payments-list { display: grid; gap: 12px; padding: 18px; }
+.payment-row { display: grid; grid-template-columns: 150px minmax(180px,1fr) 150px auto; gap: 10px; align-items: flex-end; padding: 12px; border: 1px solid rgba(0,255,136,.14); background: #050d09; }
+.payment-description { min-width: 0; }
+.validation-error { margin: 0; padding: 10px; border: 1px solid rgba(255,95,86,.4); color: #ff8b84; font-size: .75rem; }
+
+.crt-button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 40px; padding: 10px 15px; border: 1px solid var(--crt-green); border-radius: 0; background: transparent; color: var(--crt-green); cursor: pointer; font: .78rem 'Share Tech Mono', monospace; font-weight: 700; text-transform: uppercase; }
+.crt-button:hover:not(:disabled) { background: var(--crt-green-dim); box-shadow: 0 0 14px rgba(0,255,136,.16); }
+.crt-button.primary { background: var(--crt-green); color: #021008; }
+.crt-button.secondary { border-color: var(--crt-amber); color: var(--crt-amber); }
+.crt-button.text-button { justify-self: start; min-height: 32px; padding: 6px 0; border: 0; }
+.crt-button:disabled { opacity: .35; cursor: not-allowed; }
+
+.summary-panel { position: sticky; top: 16px; overflow: hidden; }
+.summary-heading { display: flex; justify-content: space-between; padding: 15px 17px; border-bottom: 1px solid var(--crt-line); background: #091710; color: var(--crt-green); font-size: .76rem; letter-spacing: .05em; }
+.summary-list { margin: 0; padding: 8px 18px; }
+.summary-list > div { display: flex; justify-content: space-between; gap: 15px; padding: 12px 0; border-bottom: 1px dashed rgba(0,255,136,.17); }
+.summary-list dt { color: #72907d; font-size: .73rem; }
+.summary-list dd { margin: 0; color: #d8ffe9; font-size: .8rem; text-align: right; }
+.summary-list dd.paid { color: var(--crt-cyan); }
+.summary-list .balance-row { margin-top: 4px; border-bottom: 0; }
+.summary-list .balance-row dt, .summary-list .balance-row dd { color: var(--crt-amber); font-size: .93rem; font-weight: bold; }
+.save-checklist { padding: 12px 18px; border-top: 1px solid var(--crt-line); border-bottom: 1px solid var(--crt-line); }
+.save-checklist p { margin: 7px 0; color: #4c6758; font-size: .7rem; }
+.save-checklist p.ready { color: var(--crt-green); }
+.summary-panel .save-button { width: calc(100% - 36px); margin: 18px; }
+.save-hint { display: block; margin: -8px 18px 18px; color: #5d7868; font-size: .65rem; line-height: 1.45; text-align: center; }
+
+@media (max-width: 940px) {
+  .registration-layout { grid-template-columns: 1fr; }
+  .summary-panel { position: static; }
+  .payment-row { grid-template-columns: 1fr 1fr; }
+  .payment-description { grid-column: 1 / -1; grid-row: 1; }
+}
+
+@media (max-width: 640px) {
+  .debt-shell { width: min(100% - 22px,1240px); padding-top: 12px; }
+  .terminal-path, .terminal-status { display: none; }
+  .terminal-bar { grid-template-columns: 1fr auto; }
+  .terminal-heading { padding: 22px 18px 25px; gap: 10px; }
+  .terminal-heading h1 { font-size: 2.25rem; }
+  .workflow-steps { grid-template-columns: 1fr; }
+  .workflow-steps li { padding: 10px 14px; }
+  .setup-grid, .payment-row { grid-template-columns: 1fr; }
+  .card-heading { align-items: flex-start; flex-direction: column; gap: 7px; }
+  .card-heading > small { text-align: left; }
+  .optional-empty { align-items: stretch; flex-direction: column; }
+  .crt-button { width: 100%; }
+  .payment-row .icon-button { width: 100%; }
+}
+</style>

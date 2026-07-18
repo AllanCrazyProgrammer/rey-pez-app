@@ -2834,7 +2834,7 @@ export default {
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 6px 12px;
-  align-items: start;
+  align-items: flex-start;
   min-width: 0;
 }
 

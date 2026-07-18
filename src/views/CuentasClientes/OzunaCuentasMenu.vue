@@ -721,7 +721,7 @@ h1, h2 {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
-  align-items: end;
+  align-items: flex-end;
 }
 
 .bulk-modal-filtros label {

@@ -286,6 +286,7 @@ export default {
 </script>
 
 <style scoped>
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=VT323&display=swap');
 .modal-overlay {
   position: fixed;
   top: 0;
@@ -633,4 +634,6 @@ export default {
     align-items: stretch;
   }
 }
-</style> 
+/* Terminal CRT price panel */
+.modal-overlay{background:rgba(0,5,3,.88);backdrop-filter:blur(7px)}.modal-content{--green:#00ff88;--amber:#ffb000;--cyan:#22d3ee;--red:#ff5f56;--line:rgba(0,255,136,.26);border:1px solid var(--line);border-radius:0;background:repeating-linear-gradient(0deg,rgba(255,255,255,.014) 0,rgba(255,255,255,.014) 1px,transparent 1px,transparent 4px),#050d09;color:#d8ffe9;box-shadow:0 0 42px rgba(0,255,136,.12);font-family:'Share Tech Mono',monospace}.modal-header{border-bottom:1px solid var(--line);border-radius:0;background:#091710}.modal-header h2{color:var(--green);font:1.65rem 'VT323',monospace}.modal-header h2::before{content:'> ';color:var(--amber)}.close-button{border:1px solid rgba(255,95,86,.4);border-radius:0;color:var(--red)}.modal-body{background:transparent}.proveedor-selector{border:1px solid var(--line);border-radius:0;background:#07110c}.proveedor-selector label{color:#85a690}.proveedor-selector select,.form-input{border:1px solid #26503a;border-radius:0;background:#020805;color:#e0ffea;font-family:'Share Tech Mono',monospace;color-scheme:dark}.productos-header h3{color:#d8ffe9}.btn-agregar-producto,.btn-guardar-producto{border:1px solid var(--green);border-radius:0;background:var(--green);color:#021008}.btn-cancelar-producto{border:1px solid #45604f;border-radius:0;background:transparent;color:#9bb6a3}.nuevo-producto-form{border:1px solid var(--line);border-radius:0;background:#07110c}.producto-card{border:1px solid var(--line);border-radius:0;background:#06100b;box-shadow:none}.producto-card:hover{border-color:var(--green);box-shadow:0 0 15px rgba(0,255,136,.08);transform:translateY(-2px)}.producto-nombre{color:#d5f3df}.precio-valor{color:var(--amber)}.precio-fecha,.total-registros{color:#6c8977}.precio-icono{color:var(--cyan)}
+</style>

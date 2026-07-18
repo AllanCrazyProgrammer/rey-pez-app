@@ -262,7 +262,8 @@ export default {
     },
     proveedor: {
       type: Object,
-      required: true
+      required: false,
+      default: null
     }
   },
   emits: ['cerrar', 'abono-eliminado'],
@@ -296,7 +297,9 @@ export default {
           ? this.normalizarDescripcionGeneral(abono.descripcion)
           : (abono.descripcion || 'Abono');
         const loteTimestamp = this.parseTimestamp(abono.fechaCreacion);
-        const loteId = loteTimestamp ? Math.floor(loteTimestamp.getTime() / 60000) : 'sin-lote';
+        // Los abonos nuevos incluyen un id de lote exacto; se conserva el agrupado
+        // por minuto como compatibilidad con registros anteriores.
+        const loteId = abono.abonoGeneralId || (loteTimestamp ? Math.floor(loteTimestamp.getTime() / 60000) : 'sin-lote');
         const clave = esGeneral
           ? `${fechaClave || 'sin-fecha'}||${baseDescripcion || 'general'}||${loteId}`
           : `${abono.deudaId}-${abono.id}`;
@@ -806,6 +809,7 @@ export default {
 </script>
 
 <style scoped>
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=VT323&display=swap');
 .modal-overlay {
   position: fixed;
   top: 0;
@@ -880,7 +884,7 @@ export default {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 15px;
-  align-items: end;
+  align-items: flex-end;
 }
 
 .filtro-grupo {
@@ -1457,4 +1461,7 @@ export default {
     gap: 15px;
   }
 }
+/* Terminal CRT history */
+.modal-overlay{padding:16px;box-sizing:border-box;background:rgba(0,5,3,.88);backdrop-filter:blur(7px)}.historial-abonos-modal{--green:#00ff88;--amber:#ffb000;--cyan:#22d3ee;--red:#ff5f56;--line:rgba(0,255,136,.26);width:min(1080px,100%);max-width:1080px;border:1px solid var(--line);border-radius:0;background:repeating-linear-gradient(0deg,rgba(255,255,255,.014) 0,rgba(255,255,255,.014) 1px,transparent 1px,transparent 4px),#050d09;color:#d8ffe9;box-shadow:0 0 42px rgba(0,255,136,.12);font-family:'Share Tech Mono',monospace}.modal-header{padding:14px 18px;border-bottom:1px solid var(--line);border-radius:0;background:#091710}.modal-header h2{color:var(--green);font:1.65rem 'VT323',monospace;letter-spacing:.04em}.modal-header h2::before{content:'> ';color:var(--amber)}.close-button{border:1px solid rgba(255,95,86,.4);border-radius:0;color:var(--red)}.modal-body{background:transparent}.filtros-container{border:1px solid var(--line);border-radius:0;background:#07110c}.filtros-row{gap:10px}.filtro-grupo label{color:#789683;font-size:.62rem;text-transform:uppercase}.filtro-grupo input,.filtro-grupo select{border:1px solid #26503a;border-radius:0;background:#020805;color:#e0ffea;font-family:'Share Tech Mono',monospace;color-scheme:dark}.btn-limpiar{border:1px solid var(--amber);border-radius:0;background:transparent;color:var(--amber);font-family:'Share Tech Mono',monospace}.estadisticas-container{gap:10px}.estadistica-card{border:1px solid var(--line);border-radius:0;background:#07110c;box-shadow:none}.estadistica-valor{color:var(--amber);font-family:'Share Tech Mono',monospace}.estadistica-label{color:#6d8b78;font-size:.64rem;text-transform:uppercase}.abono-item{border:1px solid var(--line);border-radius:0;background:#06100b;box-shadow:none}.abono-item.abono-general{border-left:3px solid var(--cyan)}.abono-header{background:#08140e}.abono-fecha,.abono-descripcion-resumen{color:#b9d8c4}.abono-monto{color:var(--amber)}.tipo-general,.tipo-individual{border-radius:0}.tipo-general{border:1px solid var(--cyan);background:rgba(34,211,238,.07);color:var(--cyan)}.tipo-individual{border:1px solid var(--green);background:rgba(0,255,136,.07);color:var(--green)}.btn-toggle-desglose{border:1px solid #365643;border-radius:0;background:transparent;color:#9bb8a4}.abono-desglose{border-top:1px solid var(--line);background:#040b07}.abono-detalle-item{border:1px solid rgba(0,255,136,.13);border-radius:0;background:#06100b}.detalle-monto{color:var(--cyan)}.pagination button{border-radius:0!important;background:#07110c!important;color:#a7c5b1!important}.pagination button.active{border-color:var(--green)!important;color:var(--green)!important}.loading-container,.no-abonos{color:#6f8c79}.spinner{border-top-color:var(--green)}
+@media(max-width:700px){.modal-overlay{padding:7px}.historial-abonos-modal{max-height:97vh}.estadisticas-container{grid-template-columns:1fr}.filtros-row{grid-template-columns:1fr}.abono-header{align-items:flex-start;flex-direction:column}.abono-header-actions{width:100%;justify-content:space-between}}
 </style>

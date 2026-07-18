@@ -240,7 +240,7 @@ export default {
   display: flex;
   justify-content: space-between;
   gap: 16px;
-  align-items: end;
+  align-items: flex-end;
   margin-bottom: 16px;
 }
 
@@ -439,7 +439,7 @@ tr.abono {
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  align-items: start;
+  align-items: flex-start;
   padding-bottom: 12px;
   border-bottom: 1px solid rgba(0, 255, 65, 0.16);
 }

@@ -1066,7 +1066,7 @@ export default {
   .search-control { width: 100%; min-width: 0; }
   .filter-tabs { display: grid; grid-template-columns: repeat(3, 1fr); }
   .filter-tabs button { padding: 0 5px; }
-  .modal-backdrop { align-items: end; padding: 0; }
+  .modal-backdrop { align-items: flex-end; padding: 0; }
   .modal-card { width: 100%; max-height: 94vh; border-width: 1px 0 0; }
   .modal-header { padding: 18px 16px 14px; }
   .modal-form { padding: 16px; }

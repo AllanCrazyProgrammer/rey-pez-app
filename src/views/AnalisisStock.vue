@@ -1387,7 +1387,7 @@ h2 {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 15px;
-  align-items: end;
+  align-items: flex-end;
 }
 
 .form-grid label {

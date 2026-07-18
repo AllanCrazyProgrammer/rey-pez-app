@@ -686,7 +686,7 @@ h1 {
   display: grid;
   grid-template-columns: repeat(4, minmax(120px, 1fr));
   gap: 10px;
-  align-items: end;
+  align-items: flex-end;
   margin-bottom: 14px;
 }
 
