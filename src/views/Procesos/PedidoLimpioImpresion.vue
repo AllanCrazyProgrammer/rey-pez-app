@@ -14,8 +14,9 @@
       <span class="scale-value">{{ (contentScale * 100).toFixed(0) }}%</span>
     </div>
     <div class="buttons-container">
-      <button @click="generarPDF" class="btn-generar">
-        <span class="icon">📄</span> Generar PDF
+      <button @click="abrirVistaPreviaPDF" class="btn-preview-pdf" :disabled="generandoPreviewPdf">
+        <i class="fas fa-eye"></i>
+        {{ generandoPreviewPdf ? 'Preparando vista...' : 'Previsualizar PDF' }}
       </button>
       <button @click="$router.push('/procesos/pedidos')" class="btn-menu">
         Menú
@@ -30,6 +31,86 @@
         Ir a Pedido de Crudos
       </button>
     </div>
+
+    <div
+      v-if="mostrarPreviewPdf"
+      class="pdf-preview-overlay"
+      @click.self="cerrarVistaPreviaPDF"
+    >
+      <section
+        class="pdf-preview-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="pdf-preview-title"
+      >
+        <header class="pdf-preview-header">
+          <div>
+            <span class="pdf-preview-kicker">VISTA REAL DEL ARCHIVO</span>
+            <h3 id="pdf-preview-title">Así se imprimirá el PDF</h3>
+            <p>Revisa los saltos de página y que ningún contenido quede cortado.</p>
+          </div>
+          <button
+            type="button"
+            class="pdf-preview-close"
+            aria-label="Cerrar vista previa del PDF"
+            @click="cerrarVistaPreviaPDF"
+          >×</button>
+        </header>
+
+        <div class="pdf-preview-toolbar">
+          <label for="pdf-preview-scale">Escala del contenido</label>
+          <input
+            id="pdf-preview-scale"
+            v-model="contentScale"
+            type="range"
+            min="0.5"
+            max="2"
+            step="0.01"
+          >
+          <strong>{{ (contentScale * 100).toFixed(0) }}%</strong>
+          <span class="pdf-page-count">
+            {{ pdfPreviewPageCount }} {{ pdfPreviewPageCount === 1 ? 'página' : 'páginas' }}
+          </span>
+          <button
+            type="button"
+            class="btn-refresh-preview"
+            :disabled="generandoPreviewPdf"
+            @click="actualizarVistaPreviaPDF"
+          >
+            <i class="fas fa-sync-alt"></i>
+            {{ generandoPreviewPdf ? 'Actualizando...' : 'Aplicar escala' }}
+          </button>
+          <button type="button" class="btn-download-preview" @click="generarPDF">
+            <i class="fas fa-download"></i> Descargar PDF
+          </button>
+        </div>
+
+        <div class="pdf-preview-frame-shell">
+          <div v-if="generandoPreviewPdf" class="pdf-preview-loading">
+            <i class="fas fa-circle-notch fa-spin"></i>
+            Generando páginas…
+          </div>
+          <div v-else-if="pdfPreviewUrl" class="pdf-preview-pages-grid">
+            <article
+              v-for="pagina in pdfPreviewPageCount"
+              :key="`pdf-page-${pagina}`"
+              class="pdf-page-card"
+            >
+              <header>
+                <span>Página {{ pagina }}</span>
+                <small>{{ pagina }} / {{ pdfPreviewPageCount }}</small>
+              </header>
+              <iframe
+                :src="urlPreviewPagina(pagina)"
+                class="pdf-preview-page-frame"
+                :title="`Vista previa de la página ${pagina} del PDF`"
+              ></iframe>
+            </article>
+          </div>
+        </div>
+      </section>
+    </div>
+
     <div id="pdfPreview" class="pdf-preview">
       <div class="preview-page">
         <h3 class="cliente-header otilio-header">Otilio</h3>
@@ -569,7 +650,10 @@ import {
   calcularTotalesClientePedidoLimpio
 } from '@/utils/calculosPedidoLimpio'
 import { db } from '@/firebase'
+import { useUIStore } from '@/stores/ui'
 import { doc, updateDoc, Timestamp, collection, getDocs, query, where } from 'firebase/firestore'
+
+const PDF_PREVIEW_MODAL_ID = 'pedido-limpio-pdf-preview'
 
 const fonts = {
   Roboto: {
@@ -652,6 +736,11 @@ export default {
       rendimientos: this.rendimientosGuardados || {},
       divisores: this.divisoresGuardados || {},
       contentScale: 1,
+      mostrarPreviewPdf: false,
+      generandoPreviewPdf: false,
+      pdfPreviewUrl: '',
+      pdfPreviewPageCount: 1,
+      bodyOverflowAntesPreview: '',
       completados: this.completadosGuardados || {},
       kilosRefrigerados: this.kilosRefrigeradosGuardados || {},
       modalKilosVisible: false,
@@ -1215,7 +1304,7 @@ export default {
         }
       };
     },
-    generarPDF() {
+    construirDefinicionPDF() {
       const tieneOtilio = this.clienteTieneDatosParaPDF(this.pedidoOtilio);
       const tieneJoselito = this.clienteTieneDatosParaPDF(this.pedidoJoselito);
       const tieneLorena = this.clienteTieneDatosParaPDF(this.pedidoLorena);
@@ -1418,7 +1507,71 @@ export default {
         }
       };
 
+      return docDefinition;
+    },
+    generarPDF() {
+      const docDefinition = this.construirDefinicionPDF();
       pdfMake.createPdf(docDefinition).download('Ped-limpio-' + this.fecha + '.pdf');
+    },
+    crearBlobPDF() {
+      return new Promise((resolve, reject) => {
+        try {
+          const pdfDocument = pdfMake.createPdf(this.construirDefinicionPDF());
+          pdfDocument._createDoc({}, (pdfKitDocument) => {
+            pdfDocument._flushDoc(pdfKitDocument, (buffer, pages) => {
+              resolve({
+                blob: pdfDocument._bufferToBlob(buffer),
+                pageCount: Math.max(1, Array.isArray(pages) ? pages.length : 1)
+              });
+            });
+          });
+        } catch (error) {
+          reject(error);
+        }
+      });
+    },
+    liberarPreviewPdfUrl() {
+      if (this.pdfPreviewUrl) {
+        URL.revokeObjectURL(this.pdfPreviewUrl.split('#')[0]);
+        this.pdfPreviewUrl = '';
+      }
+    },
+    async actualizarVistaPreviaPDF() {
+      if (this.generandoPreviewPdf) return;
+
+      this.generandoPreviewPdf = true;
+      try {
+        const { blob, pageCount } = await this.crearBlobPDF();
+        this.liberarPreviewPdfUrl();
+        this.pdfPreviewPageCount = pageCount;
+        this.pdfPreviewUrl = URL.createObjectURL(blob);
+      } catch (error) {
+        console.error('Error al generar la vista previa del PDF:', error);
+        alert('No se pudo preparar la vista previa del PDF. Intenta nuevamente.');
+      } finally {
+        this.generandoPreviewPdf = false;
+      }
+    },
+    async abrirVistaPreviaPDF() {
+      this.contentScale = 1;
+      this.bodyOverflowAntesPreview = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      useUIStore().openModal(PDF_PREVIEW_MODAL_ID);
+      this.mostrarPreviewPdf = true;
+      await this.actualizarVistaPreviaPDF();
+    },
+    urlPreviewPagina(pagina) {
+      if (!this.pdfPreviewUrl) return '';
+      return `${this.pdfPreviewUrl}#page=${pagina}&zoom=page-fit&toolbar=0&navpanes=0&scrollbar=0`;
+    },
+    cerrarVistaPreviaPDF() {
+      this.mostrarPreviewPdf = false;
+      this.liberarPreviewPdfUrl();
+      document.body.style.overflow = this.bodyOverflowAntesPreview;
+      const uiStore = useUIStore();
+      if (uiStore.isModalOpen(PDF_PREVIEW_MODAL_ID)) {
+        uiStore.closeModal();
+      }
     },
     generarTablaClienteReducido(items, fontSize = 16) {
       const itemsConDatos = this.obtenerItemsParaPDF(items);
@@ -1739,6 +1892,14 @@ export default {
         }
       }
     }
+  },
+  beforeDestroy() {
+    document.body.style.overflow = this.bodyOverflowAntesPreview;
+    const uiStore = useUIStore();
+    if (uiStore.isModalOpen(PDF_PREVIEW_MODAL_ID)) {
+      uiStore.closeModal();
+    }
+    this.liberarPreviewPdfUrl();
   }
 }
 </script>
@@ -1835,6 +1996,7 @@ export default {
 }
 
 .btn-generar,
+.btn-preview-pdf,
 .btn-menu,
 .btn-volver,
 .btn-sacada,
@@ -1850,6 +2012,25 @@ export default {
   gap: 8px;
 }
 
+.btn-preview-pdf {
+  border: 2px solid #22d3ee;
+  background: #073042;
+  color: #ecfeff;
+  font-weight: 700;
+  box-shadow: 0 0 0 1px rgba(34, 211, 238, .18);
+}
+
+.btn-preview-pdf:hover:not(:disabled) {
+  background: #073042;
+  color: #ecfeff;
+  box-shadow: 0 0 16px rgba(34, 211, 238, .25);
+}
+
+.btn-preview-pdf:disabled {
+  opacity: .65;
+  cursor: wait;
+}
+
 .btn-generar {
   background-color: #34495e;
   color: white;
@@ -1857,6 +2038,260 @@ export default {
 
 .btn-generar:hover {
   background-color: #2c3e50;
+}
+
+.pdf-preview-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  background: rgba(1, 7, 5, .92);
+  backdrop-filter: blur(6px);
+}
+
+.pdf-preview-dialog {
+  display: flex;
+  flex-direction: column;
+  width: min(1180px, 100%);
+  height: 100%;
+  max-height: 920px;
+  overflow: hidden;
+  border: 1px solid rgba(34, 211, 238, .65);
+  border-radius: 0;
+  background: #07110c;
+  color: #eefcf3;
+  box-shadow: 0 0 36px rgba(34, 211, 238, .16);
+  font-family: 'Share Tech Mono', monospace;
+}
+
+.pdf-preview-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 16px 20px;
+  border-bottom: 1px solid rgba(34, 211, 238, .35);
+  background: #0a1a12;
+}
+
+.pdf-preview-kicker {
+  color: #22d3ee;
+  font-size: .7rem;
+  letter-spacing: .12em;
+}
+
+.pdf-preview-header h3 {
+  margin: 4px 0;
+  color: #ffffff;
+  font: 2rem/1 'VT323', monospace;
+  letter-spacing: .03em;
+}
+
+.pdf-preview-header p {
+  margin: 0;
+  color: #a8c8b3;
+  font-size: .78rem;
+}
+
+.pdf-preview-close {
+  min-width: 42px;
+  min-height: 42px;
+  border: 1px solid rgba(255, 95, 86, .55);
+  border-radius: 0;
+  background: transparent;
+  color: #ff5f56;
+  cursor: pointer;
+  font-size: 1.45rem;
+}
+
+.pdf-preview-close:hover {
+  background: transparent;
+  color: #ff5f56;
+}
+
+.pdf-preview-toolbar {
+  display: grid;
+  grid-template-columns: auto minmax(160px, 1fr) 62px auto auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
+  border-bottom: 1px solid rgba(0, 255, 136, .25);
+  background: #06100b;
+}
+
+.pdf-preview-toolbar label {
+  color: #b7d2c0;
+  font-size: .78rem;
+}
+
+.pdf-preview-toolbar input[type='range'] {
+  width: 100%;
+  accent-color: #22d3ee;
+}
+
+.pdf-preview-toolbar strong {
+  color: #ffb000;
+  font-variant-numeric: tabular-nums;
+}
+
+.pdf-page-count {
+  padding: 5px 8px;
+  border: 1px solid rgba(168, 200, 179, .35);
+  color: #b7d2c0;
+  font-size: .7rem;
+  white-space: nowrap;
+}
+
+.btn-refresh-preview,
+.btn-download-preview {
+  min-height: 40px;
+  padding: 9px 14px;
+  border-radius: 0;
+  cursor: pointer;
+  font: .76rem 'Share Tech Mono', monospace;
+}
+
+.btn-refresh-preview {
+  border: 1px solid #22d3ee;
+  background: transparent;
+  color: #22d3ee;
+}
+
+.btn-download-preview {
+  border: 1px solid #00ff88;
+  background: #00ff88;
+  color: #021008;
+  font-weight: 700;
+}
+
+.btn-refresh-preview:hover:not(:disabled),
+.btn-download-preview:hover:not(:disabled) {
+  box-shadow: none;
+  transform: none;
+}
+
+.btn-refresh-preview:hover:not(:disabled) {
+  background: transparent;
+  color: #22d3ee;
+}
+
+.btn-download-preview:hover:not(:disabled) {
+  background: #00ff88;
+  color: #021008;
+}
+
+.btn-refresh-preview:disabled {
+  opacity: .55;
+  cursor: wait;
+}
+
+.pdf-preview-frame-shell {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  padding: 12px;
+  background: #020805;
+}
+
+.pdf-preview-pages-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(235px, 1fr));
+  gap: 12px;
+  height: 100%;
+  overflow: auto;
+  padding: 2px;
+  align-content: start;
+}
+
+.pdf-page-card {
+  overflow: hidden;
+  border: 1px solid rgba(34, 211, 238, .42);
+  background: #0a1510;
+  box-shadow: 0 5px 16px rgba(0, 0, 0, .24);
+}
+
+.pdf-page-card > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 34px;
+  padding: 7px 10px;
+  border-bottom: 1px solid rgba(34, 211, 238, .28);
+  color: #e6fff0;
+  font-size: .72rem;
+}
+
+.pdf-page-card > header small {
+  color: #8fae9a;
+  font-size: .64rem;
+}
+
+.pdf-preview-page-frame {
+  display: block;
+  width: 100%;
+  height: clamp(300px, 52vh, 420px);
+  border: 0;
+  background: #525659;
+}
+
+.pdf-preview-loading {
+  position: absolute;
+  inset: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border: 1px dashed rgba(34, 211, 238, .38);
+  color: #a8c8b3;
+}
+
+@media (max-width: 760px) {
+  .buttons-container {
+    flex-wrap: wrap;
+  }
+
+  .pdf-preview-overlay {
+    inset: 0;
+    padding: 0;
+  }
+
+  .pdf-preview-dialog {
+    width: 100%;
+    height: 100vh;
+  }
+
+  .pdf-preview-toolbar {
+    grid-template-columns: 1fr 62px;
+  }
+
+  .pdf-preview-toolbar label {
+    grid-column: 1 / -1;
+  }
+
+  .pdf-preview-toolbar input[type='range'] {
+    grid-column: 1;
+  }
+
+  .btn-refresh-preview,
+  .btn-download-preview {
+    grid-column: 1 / -1;
+  }
+
+  .pdf-page-count {
+    grid-column: 1 / -1;
+    width: fit-content;
+  }
+
+  .pdf-preview-pages-grid {
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  }
+
+  .pdf-preview-page-frame {
+    height: 360px;
+  }
 }
 
 .btn-menu {
