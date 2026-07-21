@@ -868,8 +868,15 @@ export default {
             }
 
             const reporteBolsaIndex = this.obtenerIndiceInput(this.$refs.reporteBolsaInputs, inputActual);
-            if (reporteBolsaIndex >= 0 && reporteBolsaIndex + 1 < (this.producto.reporteTaras || []).length) {
-                this.enfocarInput(this.$refs.reporteTaraInputs, reporteBolsaIndex + 1);
+            if (reporteBolsaIndex >= 0) {
+                const siguienteReporteIndex = reporteBolsaIndex + 1;
+                if (siguienteReporteIndex < (this.producto.reporteTaras || []).length) {
+                    this.enfocarInput(this.$refs.reporteTaraInputs, siguienteReporteIndex);
+                } else {
+                    // En la última bolsa, la tecla C/Escape replica el botón "+":
+                    // crea otro par Taras/Bolsas y enfoca la nueva tara.
+                    this.agregarReporteTara();
+                }
                 return;
             }
 

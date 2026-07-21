@@ -1,7 +1,7 @@
 <template>
   <div class="lista-embarques">
     <!-- Terminal Window -->
-    <div class="terminal-window">
+    <div class="terminal-window" :style="terminal3dStyle">
       <div class="terminal-header">
         <span class="terminal-dots">
           <span class="dot red"></span>
@@ -61,9 +61,15 @@
         <div
           v-for="(embarque, index) in embarquesPaginados"
           :key="embarque.id"
-          class="embarque-card"
-          :class="{ 'card-blocked': embarque.embarqueBloqueado, 'card-no-mexico': embarque.noEnviadoMexico }"
+          class="embarque-card-shell"
+          :data-card-id="embarque.id"
+          :data-card-index="index"
+          :style="getEmbarqueCard3dStyle(embarque.id)"
         >
+          <div
+            class="embarque-card"
+            :class="{ 'card-blocked': embarque.embarqueBloqueado, 'card-no-mexico': embarque.noEnviadoMexico }"
+          >
           <!-- Header de la card -->
           <div class="card-header">
             <div class="record-id">[REC_{{ String((paginaActual - 1) * porPagina + index + 1).padStart(3, '0') }}]</div>
@@ -158,6 +164,7 @@
             >
               [DEL]
             </button>
+          </div>
           </div>
         </div>
       </div>
@@ -302,7 +309,11 @@ export default {
         clientes: [],
         cargando: false,
         error: ''
-      }
+      },
+      terminal3dStyle: {},
+      embarqueCard3dStyles: {},
+      lista3dFrame: null,
+      listaReduceMotionQuery: null
     };
   },
   computed: {
@@ -324,8 +335,81 @@ export default {
       return paginas;
     },
   },
+  watch: {
+    paginaActual() {
+      this.$nextTick(this.requestList3dUpdate);
+    },
+    embarques() {
+      this.$nextTick(this.requestList3dUpdate);
+    }
+  },
   methods: {
     formatearFecha,
+    requestList3dUpdate() {
+      if (this.lista3dFrame !== null) return;
+
+      this.lista3dFrame = window.requestAnimationFrame(() => {
+        this.lista3dFrame = null;
+        this.updateList3dStyles();
+      });
+    },
+    updateList3dStyles() {
+      if (this.listaReduceMotionQuery && this.listaReduceMotionQuery.matches) {
+        this.terminal3dStyle = {};
+        this.embarqueCard3dStyles = {};
+        return;
+      }
+
+      const viewportHeight = window.innerHeight || 1;
+      const viewportWidth = window.innerWidth || 1;
+      const viewportCenterY = viewportHeight * 0.52;
+      const intensity = viewportWidth < 500 ? 0.38 : viewportWidth < 900 ? 0.62 : 1;
+      this.terminal3dStyle = {};
+
+      const cards = this.$el ? this.$el.querySelectorAll('.embarque-card-shell') : [];
+      const nextStyles = {};
+
+      cards.forEach((card) => {
+        const rect = card.getBoundingClientRect();
+        const centerY = rect.top + rect.height / 2;
+        const centerX = rect.left + rect.width / 2;
+        const verticalPosition = Math.min(1.2, Math.max(-1.2, (centerY - viewportCenterY) / (viewportHeight * 0.72)));
+        const horizontalPosition = Math.min(1, Math.max(-1, (centerX - viewportWidth / 2) / (viewportWidth / 2)));
+        const index = Number(card.dataset.cardIndex || 0);
+        const layerOffset = (index % 3) - 1;
+        const crumbleStrength = Math.min(1, Math.max(0, (-verticalPosition + 0.05) / 0.95));
+        const fragmentDirection = layerOffset === 0
+          ? (horizontalPosition >= 0 ? 1 : -1)
+          : layerOffset;
+        const fragmentX = fragmentDirection * crumbleStrength * (10 + Math.abs(horizontalPosition) * 8) * intensity;
+        const fragmentY = crumbleStrength * 18 * intensity;
+        const fragmentScale = 1 + crumbleStrength * 0.12;
+        const shadowOpacity = 0.08 + crumbleStrength * 0.2;
+        const cardSurface = card.querySelector('.embarque-card');
+        const fragmentColor = cardSurface && cardSurface.classList.contains('card-blocked')
+          ? 'rgba(255, 0, 64, 0.82)'
+          : cardSurface && cardSurface.classList.contains('card-no-mexico')
+            ? 'rgba(255, 176, 0, 0.82)'
+            : 'rgba(0, 255, 65, 0.82)';
+
+        nextStyles[String(card.dataset.cardId)] = {
+          '--card-fragment-color': fragmentColor,
+          '--card-crumble-opacity': (0.03 + crumbleStrength * 0.82).toFixed(2),
+          '--card-fragment-x': `${fragmentX}px`,
+          '--card-fragment-y': `${fragmentY}px`,
+          '--card-fragment-scale': fragmentScale.toFixed(3),
+          '--card-border-scale': (1 - crumbleStrength * 0.2).toFixed(3),
+          '--card-crumble-hole': `${crumbleStrength * 8.2}px`,
+          '--card-body-opacity': (1 - crumbleStrength * 0.28).toFixed(3),
+          '--card-depth-shadow': `0 ${crumbleStrength * 8}px ${14 + crumbleStrength * 28}px rgba(0, 0, 0, ${shadowOpacity})`
+        };
+      });
+
+      this.embarqueCard3dStyles = nextStyles;
+    },
+    getEmbarqueCard3dStyle(embarqueId) {
+      return this.embarqueCard3dStyles[String(embarqueId)] || null;
+    },
     safeClone(value, fallback = null) {
       if (value === undefined || value === null) {
         return fallback;
@@ -1350,7 +1434,20 @@ export default {
   },
 
   async mounted() {
+    this.listaReduceMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    window.addEventListener('scroll', this.requestList3dUpdate, { passive: true });
+    window.addEventListener('resize', this.requestList3dUpdate, { passive: true });
     await this.cargarEmbarques();
+    this.$nextTick(this.requestList3dUpdate);
+  },
+
+  beforeDestroy() {
+    window.removeEventListener('scroll', this.requestList3dUpdate);
+    window.removeEventListener('resize', this.requestList3dUpdate);
+
+    if (this.lista3dFrame !== null) {
+      window.cancelAnimationFrame(this.lista3dFrame);
+    }
   }
 };
 </script>
@@ -1388,6 +1485,8 @@ export default {
   box-shadow: 
     0 0 30px var(--matrix-green-glow),
     inset 0 0 60px rgba(0, 255, 65, 0.03);
+  position: relative;
+  transition: box-shadow 160ms ease;
 }
 
 .terminal-header {
@@ -1587,13 +1686,68 @@ export default {
 }
 
 /* Cards de embarques */
+.embarque-card-shell {
+  position: relative;
+  isolation: isolate;
+  overflow: visible;
+  min-width: 0;
+}
+
 .embarque-card {
   background: rgba(0, 20, 0, 0.9);
   border: 1px solid var(--matrix-green);
   padding: 0;
-  transition: all 0.3s ease;
   position: relative;
   overflow: hidden;
+  isolation: isolate;
+  opacity: var(--card-body-opacity, 1);
+  -webkit-mask-image: radial-gradient(
+    circle at center,
+    transparent 0 var(--card-crumble-hole, 0px),
+    #000 calc(var(--card-crumble-hole, 0px) + 0.9px)
+  );
+  -webkit-mask-size: 18px 19px;
+  -webkit-mask-repeat: repeat;
+  mask-image: radial-gradient(
+    circle at center,
+    transparent 0 var(--card-crumble-hole, 0px),
+    #000 calc(var(--card-crumble-hole, 0px) + 0.9px)
+  );
+  mask-size: 18px 19px;
+  mask-repeat: repeat;
+  box-shadow: var(--card-depth-shadow, 0 10px 24px rgba(0, 0, 0, 0.28));
+  transition: opacity 90ms linear, box-shadow 0.22s ease, border-color 0.3s ease;
+}
+
+.embarque-card-shell::after {
+  content: '';
+  position: absolute;
+  inset: -18px -24px;
+  z-index: 2;
+  pointer-events: none;
+  opacity: var(--card-crumble-opacity, 0);
+  transform: translate(
+    var(--card-fragment-x, 0),
+    var(--card-fragment-y, 0)
+  ) scale(var(--card-fragment-scale, 1));
+  filter: drop-shadow(0 0 4px var(--card-fragment-color));
+  background:
+    radial-gradient(circle, var(--card-fragment-color) 0 1.5px, transparent 2.5px) 0 0 / 17px 19px,
+    radial-gradient(circle, var(--card-fragment-color) 0 1px, transparent 2px) 8px 6px / 27px 23px;
+  -webkit-mask-image: linear-gradient(
+    90deg,
+    #000 0 38px,
+    transparent 62px calc(100% - 62px),
+    #000 calc(100% - 38px) 100%
+  );
+  mask-image: linear-gradient(
+    90deg,
+    #000 0 38px,
+    transparent 62px calc(100% - 62px),
+    #000 calc(100% - 38px) 100%
+  );
+  mix-blend-mode: screen;
+  transition: opacity 90ms linear, transform 90ms linear;
 }
 
 .embarque-card::before {
@@ -1605,6 +1759,9 @@ export default {
   height: 3px;
   background: var(--matrix-green);
   box-shadow: 0 0 10px var(--matrix-green);
+  transform: scaleX(var(--card-border-scale, 1));
+  transform-origin: center;
+  transition: transform 90ms linear;
 }
 
 .embarque-card:hover {
@@ -2267,5 +2424,23 @@ export default {
   margin-left: 10px;
   opacity: 0.85;
   letter-spacing: 1px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .terminal-window,
+  .embarque-card {
+    transform: none !important;
+    transition: none !important;
+  }
+
+  .embarque-card-shell::after {
+    opacity: 0 !important;
+  }
+
+  .embarque-card {
+    opacity: 1 !important;
+    -webkit-mask-image: none !important;
+    mask-image: none !important;
+  }
 }
 </style>

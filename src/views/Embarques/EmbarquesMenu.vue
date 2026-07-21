@@ -4,7 +4,12 @@
   <div class="crt-overlay"></div>
   <div class="crt-flicker"></div>
   
-  <div class="terminal-container">
+  <div
+    ref="menuStage"
+    class="terminal-container"
+    :class="{ 'scroll-3d-active': scroll3dProgress > 0.01 }"
+    :style="scroll3dStyles"
+  >
     <div class="menu-layout">
       <div class="header-section">
         <div class="terminal-header">
@@ -42,7 +47,11 @@ _____|____|____|______
       
       <div class="menu-options">
         <div class="menu-label">&gt;&gt; SELECCIONE UNA OPCIÓN:</div>
-        <button @click="nuevoEmbarque" class="btn-action btn-nuevo-embarque">
+        <button
+          @click="nuevoEmbarque"
+          class="btn-action btn-nuevo-embarque"
+          :style="getMenuItem3dStyle(0)"
+        >
           <span class="btn-prefix">[1]</span>
           <span class="btn-icon">+</span>
           <span class="btn-text">NUEVO_EMBARQUE</span>
@@ -57,22 +66,35 @@ _____|____|____|______
           @mouseenter="preloadCuentaFletes"
           @focus="preloadCuentaFletes"
           @click="verCuentaFletes"
+          :style="getMenuItem3dStyle(1)"
         >
           <span class="btn-prefix">[2]</span>
           <span class="btn-icon">$</span>
           <span class="btn-text">{{ isNavigatingCuentaFletes ? 'ABRIENDO_CUENTA_FLETES...' : 'CUENTA_FLETES' }}</span>
         </button>
-        <button @click="abrirSalidasRendimientos" class="btn-action btn-salidas-rendimientos">
+        <button
+          @click="abrirSalidasRendimientos"
+          class="btn-action btn-salidas-rendimientos"
+          :style="getMenuItem3dStyle(2)"
+        >
           <span class="btn-prefix">[3]</span>
           <span class="btn-icon">&gt;</span>
           <span class="btn-text">SALIDAS_RENDIMIENTOS</span>
         </button>
-        <button @click="abrirBuscarSalidas" class="btn-action btn-buscar-salidas">
+        <button
+          @click="abrirBuscarSalidas"
+          class="btn-action btn-buscar-salidas"
+          :style="getMenuItem3dStyle(3)"
+        >
           <span class="btn-prefix">[4]</span>
           <span class="btn-icon">🔍</span>
           <span class="btn-text">BUSCAR_SALIDAS</span>
         </button>
-        <button @click="recuperacionEmergencia" class="btn-action btn-emergencia">
+        <button
+          @click="recuperacionEmergencia"
+          class="btn-action btn-emergencia"
+          :style="getMenuItem3dStyle(4)"
+        >
           <span class="btn-prefix">[!]</span>
           <span class="btn-icon">⚠</span>
           <span class="btn-text">RECUPERAR_DATOS</span>
@@ -116,10 +138,23 @@ export default {
       mostrarSalidasRendimientos: false,
       mostrarBuscarSalidas: false,
       isNavigatingCuentaFletes: false,
-      cuentaFletesComponentPreloaded: false
+      cuentaFletesComponentPreloaded: false,
+      scroll3dProgress: 0,
+      scroll3dFrame: null,
+      reduceMotionQuery: null
     }
   },
   computed: {
+    scroll3dStyles() {
+      const progress = this.scroll3dProgress;
+      const easedProgress = 1 - Math.pow(1 - progress, 3);
+
+      return {
+        '--header-3d-transform': `translate3d(${-38 * easedProgress}px, ${-18 * easedProgress}px, ${-115 * easedProgress}px) rotateX(${-4 * easedProgress}deg) rotateY(${8 * easedProgress}deg)`,
+        '--menu-3d-transform': `translate3d(${38 * easedProgress}px, ${-8 * easedProgress}px, ${-72 * easedProgress}px) rotateX(${-2 * easedProgress}deg) rotateY(${-8 * easedProgress}deg)`,
+        '--stage-shadow-opacity': (0.18 + easedProgress * 0.45).toFixed(2)
+      };
+    },
     randomChars() {
       const chars = 'アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン01234567890';
       let result = '';
@@ -129,7 +164,54 @@ export default {
       return result;
     }
   },
+  mounted() {
+    this.reduceMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    window.addEventListener('scroll', this.requestScroll3dUpdate, { passive: true });
+    window.addEventListener('resize', this.requestScroll3dUpdate, { passive: true });
+    this.requestScroll3dUpdate();
+  },
+  beforeDestroy() {
+    window.removeEventListener('scroll', this.requestScroll3dUpdate);
+    window.removeEventListener('resize', this.requestScroll3dUpdate);
+
+    if (this.scroll3dFrame !== null) {
+      window.cancelAnimationFrame(this.scroll3dFrame);
+    }
+  },
   methods: {
+    requestScroll3dUpdate() {
+      if (this.scroll3dFrame !== null) return;
+
+      this.scroll3dFrame = window.requestAnimationFrame(() => {
+        this.scroll3dFrame = null;
+        this.updateScroll3dProgress();
+      });
+    },
+    updateScroll3dProgress() {
+      if (this.reduceMotionQuery && this.reduceMotionQuery.matches) {
+        this.scroll3dProgress = 0;
+        return;
+      }
+
+      const stage = this.$refs.menuStage;
+      if (!stage) return;
+
+      const rect = stage.getBoundingClientRect();
+      const travel = Math.max(rect.height * 0.72, 420);
+      this.scroll3dProgress = Math.min(1, Math.max(0, -rect.top / travel));
+    },
+    getMenuItem3dStyle(index) {
+      const progress = 1 - Math.pow(1 - this.scroll3dProgress, 3);
+      const direction = index % 2 === 0 ? -1 : 1;
+      const horizontalOffset = direction * progress * (5 + index * 1.5);
+      const verticalOffset = progress * index * 2.5;
+      const depth = progress * (28 - index * 4);
+      const rotation = direction * progress * 1.4;
+
+      return {
+        transform: `translate3d(${horizontalOffset}px, ${verticalOffset}px, ${depth}px) rotateY(${rotation}deg)`
+      };
+    },
     nuevoEmbarque() {
       this.$router.push({ name: 'NuevoEmbarque', params: { id: 'nuevo' } });
     },
@@ -237,6 +319,29 @@ export default {
   max-width: 1200px;
   width: 100%;
   margin: 0 auto;
+  perspective: 1500px;
+  perspective-origin: 50% 28%;
+}
+
+.terminal-container::after {
+  content: '';
+  position: absolute;
+  top: 18px;
+  left: 7%;
+  right: 7%;
+  height: min(52vw, 460px);
+  z-index: -1;
+  pointer-events: none;
+  opacity: var(--stage-shadow-opacity, 0.18);
+  background: radial-gradient(
+    ellipse at center,
+    rgba(0, 255, 65, 0.16) 0%,
+    rgba(0, 255, 65, 0.05) 42%,
+    transparent 72%
+  );
+  filter: blur(28px);
+  transform: translateZ(-170px) scale(0.92);
+  transition: opacity 120ms linear;
 }
 
 .menu-layout {
@@ -244,6 +349,7 @@ export default {
   flex-direction: column;
   gap: 25px;
   margin-bottom: 30px;
+  transform-style: preserve-3d;
 }
 
 /* Header estilo ventana de terminal */
@@ -256,6 +362,11 @@ export default {
     0 0 20px var(--matrix-green-glow),
     inset 0 0 60px rgba(0, 255, 65, 0.05);
   overflow: hidden;
+  transform: var(--header-3d-transform, none);
+  transform-origin: right center;
+  transform-style: preserve-3d;
+  will-change: transform;
+  transition: transform 80ms linear, box-shadow 160ms ease;
 }
 
 .terminal-header {
@@ -413,6 +524,24 @@ export default {
   border: 2px solid var(--matrix-green);
   padding: 25px;
   box-shadow: 0 0 20px var(--matrix-green-glow);
+  transform: var(--menu-3d-transform, none);
+  transform-origin: left center;
+  transform-style: preserve-3d;
+  will-change: transform;
+  transition: transform 80ms linear, box-shadow 160ms ease;
+}
+
+.scroll-3d-active .header-section {
+  box-shadow:
+    22px 24px 48px rgba(0, 0, 0, 0.72),
+    0 0 24px var(--matrix-green-glow),
+    inset 0 0 60px rgba(0, 255, 65, 0.05);
+}
+
+.scroll-3d-active .menu-options {
+  box-shadow:
+    -22px 24px 48px rgba(0, 0, 0, 0.72),
+    0 0 24px var(--matrix-green-glow);
 }
 
 .menu-label {
@@ -444,6 +573,8 @@ export default {
   width: 100%;
   min-height: 62px;
   touch-action: manipulation;
+  transform-style: preserve-3d;
+  will-change: transform;
 }
 
 .btn-action::before {
@@ -656,6 +787,7 @@ export default {
 
   .header-section {
     margin-bottom: 20px;
+    transform: none;
   }
 
   .header-content {
@@ -684,6 +816,7 @@ export default {
   .menu-options {
     padding: 20px 15px;
     gap: 12px;
+    transform: none;
   }
 
   .menu-label {
@@ -775,5 +908,12 @@ export default {
     animation: none !important;
     transition: none !important;
   }
+
+  .header-section,
+  .menu-options,
+  .btn-action {
+    transform: none !important;
+  }
+
 }
 </style>
