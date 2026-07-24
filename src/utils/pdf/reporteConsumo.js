@@ -43,10 +43,49 @@ const SERIE = [
 const kg = n => `${formatNumber(n, 0)} kg`;
 const pct = (parte, total) => (total > 0 ? `${formatNumber((parte / total) * 100, 1)}%` : '0.0%');
 
+// Compacta kilos para el centro de la dona sin perder precisión relativa:
+// bajo 1000 kg se muestra el número exacto (redondear a "0k" sería
+// engañoso), entre 1000 y 10000 se usa un decimal.
+function kgCompacto(n) {
+  if (n < 1000) return formatNumber(n, 0);
+  if (n < 10000) return `${formatNumber(n / 1000, 1)}k`;
+  return `${formatNumber(n / 1000, 0)}k`;
+}
+
+// Recorta texto con "…" para que quepa en anchoMax con la fuente/tamaño
+// vigentes del doc. jsPDF no envuelve ni recorta texto por su cuenta, así
+// que sin esto un nombre largo se sobrepone al bloque de resumen contiguo.
+function truncarTexto(doc, texto, anchoMax) {
+  if (anchoMax <= 0) return '';
+  if (doc.getTextWidth(texto) <= anchoMax) return texto;
+  let recorte = texto;
+  while (recorte.length > 1 && doc.getTextWidth(`${recorte}…`) > anchoMax) {
+    recorte = recorte.slice(0, -1);
+  }
+  return `${recorte.trimEnd()}…`;
+}
+
 function fechaCorta(iso) {
   if (!iso) return '';
   const [a, m, d] = iso.split('-');
   return `${d}/${m}/${a}`;
+}
+
+// Texto de rango para el encabezado, sin huecos ni "Del  al X" cuando el
+// usuario borró una de las fechas del filtro.
+function rangoLegible(rango) {
+  const desde = fechaCorta(rango.desde);
+  const hasta = fechaCorta(rango.hasta);
+  if (desde && hasta) return `Del ${desde} al ${hasta}`;
+  if (desde) return `Desde el ${desde}`;
+  if (hasta) return `Hasta el ${hasta}`;
+  return 'Todo el historial';
+}
+
+// Slug de fecha para el nombre de archivo; sin fecha usa un marcador claro
+// en vez de dejar guiones colgando ("reporte---a-2026-07-24.pdf").
+function fechaSlug(iso) {
+  return iso || 'sin-fecha';
 }
 
 function ahoraLegible() {
@@ -83,7 +122,7 @@ function dibujarEncabezado(doc, subtitulo, rango) {
 
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(9);
-  doc.text(`Del ${fechaCorta(rango.desde)} al ${fechaCorta(rango.hasta)}`, PAGINA.ancho - PAGINA.margen, 40, { align: 'right' });
+  doc.text(rangoLegible(rango), PAGINA.ancho - PAGINA.margen, 40, { align: 'right' });
   doc.setTextColor(190, 215, 235);
   doc.setFontSize(8);
   doc.text(`Generado el ${ahoraLegible()}`, PAGINA.ancho - PAGINA.margen, 54, { align: 'right' });
@@ -151,6 +190,32 @@ function tituloSeccion(ctx, y, texto, nota, color = COLOR.azulOscuro, colorLinea
   doc.setLineWidth(1.5);
   doc.line(PAGINA.margen, y + 5, PAGINA.ancho - PAGINA.margen, y + 5);
   return y + 20;
+}
+
+// Banda de encabezado de tarjeta (medida/proveedor/maquila): nombre a la
+// izquierda, resumen a la derecha. El nombre se trunca al ancho disponible
+// para que nunca se sobreponga al resumen (nombres de proveedor son texto
+// libre y pueden ser muy largos).
+function dibujarBandaTarjeta(doc, y, { nombre, resumen, fondo, acento, colorNombre }) {
+  doc.setFillColor(...fondo);
+  doc.roundedRect(PAGINA.margen, y, PAGINA.ancho - 2 * PAGINA.margen, 20, 3, 3, 'F');
+  doc.setFillColor(...acento);
+  doc.roundedRect(PAGINA.margen, y, 3.5, 20, 1.5, 1.5, 'F');
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.setTextColor(...COLOR.grisTexto);
+  const anchoResumen = doc.getTextWidth(resumen);
+  doc.text(resumen, PAGINA.ancho - PAGINA.margen - 8, y + 14, { align: 'right' });
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10.5);
+  doc.setTextColor(...colorNombre);
+  const inicioNombre = PAGINA.margen + 12;
+  const finResumen = PAGINA.ancho - PAGINA.margen - 8 - anchoResumen - 14;
+  doc.text(truncarTexto(doc, nombre, finResumen - inicioNombre), inicioNombre, y + 14);
+
+  return y + 26;
 }
 
 function dibujarTiles(doc, y, tiles) {
@@ -333,15 +398,30 @@ function totalMaquilaPorAnio(maquilas) {
 
 const porKilosDesc = (a, b) => b.kilos - a.kilos;
 
+// Colapsa los elementos que sobran del límite en una fila "Otros",
+// sumando también porAnio/entradas cuando el mapeo los incluye (para que
+// las columnas de una tabla sigan cuadrando con el pie de totales).
 function topConOtros(items, limite, mapear) {
   const mapeados = items.map(mapear);
   if (mapeados.length <= limite) return mapeados;
   const visibles = mapeados.slice(0, limite - 1);
   const resto = mapeados.slice(limite - 1);
-  visibles.push({
+  const otros = {
     etiqueta: 'Otros',
     valor: resto.reduce((s, i) => s + i.valor, 0)
-  });
+  };
+  if (resto.some(i => i.porAnio)) {
+    otros.porAnio = {};
+    resto.forEach(i => {
+      Object.keys(i.porAnio || {}).forEach(anio => {
+        otros.porAnio[anio] = (otros.porAnio[anio] || 0) + i.porAnio[anio];
+      });
+    });
+  }
+  if (resto.some(i => i.entradas != null)) {
+    otros.entradas = resto.reduce((s, i) => s + (i.entradas || 0), 0);
+  }
+  visibles.push(otros);
   return visibles;
 }
 
@@ -353,7 +433,7 @@ function entradasDeProveedorAgrupado(prov) {
 }
 
 function nombreArchivo(tipo, rango) {
-  return `reporte-consumo-${tipo}-${rango.desde}-a-${rango.hasta}.pdf`;
+  return `reporte-consumo-${tipo}-${fechaSlug(rango.desde)}-a-${fechaSlug(rango.hasta)}.pdf`;
 }
 
 function opcionesTablaBase(ctx, startY, extras = {}) {
@@ -469,7 +549,7 @@ export function generarReporteConsumoResumenPDF(datos) {
     const cx = PAGINA.margen + anchoIzq + 78;
     const cy = yGraficas + 52;
     dibujarDona(doc, cx, cy, 50, 30, segmentos, {
-      valor: formatNumber(reporte.totalKilos / 1000, 0) + 'k',
+      valor: kgCompacto(reporte.totalKilos),
       etiqueta: 'kg propios'
     });
     const yFinLeyenda = dibujarLeyenda(
@@ -596,7 +676,7 @@ export function generarReporteConsumoDetalladoPDF(datos) {
     const cxDona = PAGINA.margen + 330 + 90;
     const cyDona = yGraficas + 52;
     dibujarDona(doc, cxDona, cyDona, 52, 31, segmentos, {
-      valor: formatNumber(reporte.totalKilos / 1000, 0) + 'k',
+      valor: kgCompacto(reporte.totalKilos),
       etiqueta: 'kg propios'
     });
     const yLeyenda = dibujarLeyenda(
@@ -634,17 +714,6 @@ export function generarReporteConsumoDetalladoPDF(datos) {
     y = asegurarEspacio(ctx, y, 90);
 
     // Encabezado de la medida.
-    doc.setFillColor(...COLOR.azulSuave);
-    doc.roundedRect(PAGINA.margen, y, PAGINA.ancho - 2 * PAGINA.margen, 20, 3, 3, 'F');
-    doc.setFillColor(...COLOR.azul);
-    doc.roundedRect(PAGINA.margen, y, 3.5, 20, 1.5, 1.5, 'F');
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(10.5);
-    doc.setTextColor(...COLOR.azulOscuro);
-    doc.text(medida.base, PAGINA.margen + 12, y + 14);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8);
-    doc.setTextColor(...COLOR.grisTexto);
     const resumenMedida = [
       kg(medida.kilos),
       `${pct(medida.kilos, reporte.totalKilos)} del total`,
@@ -653,8 +722,13 @@ export function generarReporteConsumoDetalladoPDF(datos) {
     if (mostrarPrecios && medida.precioPromedio) {
       resumenMedida.push(`prom. $${formatNumber(medida.precioPromedio)}`);
     }
-    doc.text(resumenMedida.join('  ·  '), PAGINA.ancho - PAGINA.margen - 8, y + 14, { align: 'right' });
-    y += 26;
+    y = dibujarBandaTarjeta(doc, y, {
+      nombre: medida.base,
+      resumen: resumenMedida.join('  ·  '),
+      fondo: COLOR.azulSuave,
+      acento: COLOR.azul,
+      colorNombre: COLOR.azulOscuro
+    });
 
     // Filas: proveedor (subtotal) + variantes.
     const cuerpo = [];
@@ -742,24 +816,13 @@ export function generarReporteConsumoDetalladoPDF(datos) {
   proveedores.forEach(prov => {
     y = asegurarEspacio(ctx, y, 90);
 
-    doc.setFillColor(...COLOR.azulSuave);
-    doc.roundedRect(PAGINA.margen, y, PAGINA.ancho - 2 * PAGINA.margen, 20, 3, 3, 'F');
-    doc.setFillColor(...COLOR.verde);
-    doc.roundedRect(PAGINA.margen, y, 3.5, 20, 1.5, 1.5, 'F');
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(10.5);
-    doc.setTextColor(...COLOR.azulOscuro);
-    doc.text(prov.nombre, PAGINA.margen + 12, y + 14);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8);
-    doc.setTextColor(...COLOR.grisTexto);
-    doc.text(
-      [kg(prov.kilos), `${pct(prov.kilos, reporte.totalKilos)} del total`, `${entradasDeProveedorAgrupado(prov)} entradas`].join('  ·  '),
-      PAGINA.ancho - PAGINA.margen - 8,
-      y + 14,
-      { align: 'right' }
-    );
-    y += 26;
+    y = dibujarBandaTarjeta(doc, y, {
+      nombre: prov.nombre,
+      resumen: [kg(prov.kilos), `${pct(prov.kilos, reporte.totalKilos)} del total`, `${entradasDeProveedorAgrupado(prov)} entradas`].join('  ·  '),
+      fondo: COLOR.azulSuave,
+      acento: COLOR.verde,
+      colorNombre: COLOR.azulOscuro
+    });
 
     const cuerpo = [];
     const tipos = [];
@@ -847,14 +910,17 @@ export function generarReporteConsumoDetalladoPDF(datos) {
           }
         }
       },
-      willDrawCell: data => {
-        // Micro-barra de porcentaje detrás del texto en la columna % Prov.
+      didDrawCell: data => {
+        // Micro-barra de porcentaje bajo el texto en la columna % Prov.
+        // Va en didDrawCell (no willDrawCell): autotable rellena y dibuja
+        // el texto de la celda DESPUÉS de willDrawCell, así que ahí
+        // cualquier trazo quedaba tapado. didDrawCell corre al final.
         if (data.section === 'body' && data.column.index === columnaPorcentaje) {
           const fraccion = porcentajes[data.row.index] || 0;
           const anchoBarra = Math.max((data.cell.width - 8) * Math.min(fraccion, 1), 0);
           if (anchoBarra > 0.5) {
-            doc.setFillColor(214, 234, 248);
-            doc.rect(data.cell.x + 4, data.cell.y + 2.5, anchoBarra, data.cell.height - 5, 'F');
+            doc.setFillColor(...COLOR.azul);
+            doc.rect(data.cell.x + 4, data.cell.y + data.cell.height - 4, anchoBarra, 2, 'F');
           }
         }
       }
@@ -868,24 +934,13 @@ export function generarReporteConsumoDetalladoPDF(datos) {
     maquilas.forEach(maq => {
       y = asegurarEspacio(ctx, y, 80);
 
-      doc.setFillColor(...COLOR.naranjaSuave);
-      doc.roundedRect(PAGINA.margen, y, PAGINA.ancho - 2 * PAGINA.margen, 20, 3, 3, 'F');
-      doc.setFillColor(...COLOR.naranja);
-      doc.roundedRect(PAGINA.margen, y, 3.5, 20, 1.5, 1.5, 'F');
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(10.5);
-      doc.setTextColor(...COLOR.naranjaOscuro);
-      doc.text(`${maq.nombre} (Maquila)`, PAGINA.margen + 12, y + 14);
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(8);
-      doc.setTextColor(...COLOR.grisTexto);
-      doc.text(
-        [kg(maq.kilos), `${maq.entradas} entradas`].join('  ·  '),
-        PAGINA.ancho - PAGINA.margen - 8,
-        y + 14,
-        { align: 'right' }
-      );
-      y += 26;
+      y = dibujarBandaTarjeta(doc, y, {
+        nombre: `${maq.nombre} (Maquila)`,
+        resumen: [kg(maq.kilos), `${maq.entradas} entradas`].join('  ·  '),
+        fondo: COLOR.naranjaSuave,
+        acento: COLOR.naranja,
+        colorNombre: COLOR.naranjaOscuro
+      });
 
       autoTable(doc, opcionesTablaBase(ctx, y, {
         head: [['Medida', ...reporte.anios.map(String), 'Entradas', 'Kilos']],

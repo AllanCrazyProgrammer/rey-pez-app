@@ -619,43 +619,13 @@ export default {
       );
     },
     proveedoresAgrupados() {
-      const grupos = {};
-      const proveedoresIndividuales = [];
-
-      this.proveedoresFiltrados.forEach(prov => {
-        const nombreGrupo = PROVEEDORES_GRUPO[prov.nombre];
-        if (nombreGrupo) {
-          if (!grupos[nombreGrupo]) {
-            grupos[nombreGrupo] = {
-              nombre: nombreGrupo,
-              kilos: 0,
-              entradas: 0,
-              porAnio: {},
-              medidas: [],
-              proveedoresIndividuales: []
-            };
-          }
-          const grupo = grupos[nombreGrupo];
-          grupo.kilos += prov.kilos;
-          grupo.entradas += prov.entradas;
-          Object.keys(prov.porAnio).forEach(anio => {
-            grupo.porAnio[anio] = (grupo.porAnio[anio] || 0) + prov.porAnio[anio];
-          });
-          grupo.proveedoresIndividuales.push({
-            nombre: prov.nombre,
-            medidas: prov.medidas,
-            kilos: prov.kilos,
-            porAnio: prov.porAnio
-          });
-        } else {
-          proveedoresIndividuales.push(prov);
-        }
-      });
-
-      return [
-        ...Object.values(grupos),
-        ...proveedoresIndividuales
-      ];
+      return this.agruparProveedores(this.proveedoresFiltrados);
+    },
+    // Versión sin filtro de búsqueda: los PDF siempre exportan el reporte
+    // completo, para que sus totales cuadren con las filas que muestran
+    // (el cuadro de búsqueda es solo una ayuda de lectura en pantalla).
+    proveedoresAgrupadosCompletos() {
+      return this.agruparProveedores(this.reporte.proveedores);
     },
     detalleEntradas() {
       if (!this.detalle) return [];
@@ -736,16 +706,57 @@ export default {
     imprimir() {
       window.print();
     },
+    agruparProveedores(lista) {
+      const grupos = {};
+      const proveedoresIndividuales = [];
+
+      lista.forEach(prov => {
+        const nombreGrupo = PROVEEDORES_GRUPO[prov.nombre];
+        if (nombreGrupo) {
+          if (!grupos[nombreGrupo]) {
+            grupos[nombreGrupo] = {
+              nombre: nombreGrupo,
+              kilos: 0,
+              entradas: 0,
+              porAnio: {},
+              medidas: [],
+              proveedoresIndividuales: []
+            };
+          }
+          const grupo = grupos[nombreGrupo];
+          grupo.kilos += prov.kilos;
+          grupo.entradas += prov.entradas;
+          Object.keys(prov.porAnio).forEach(anio => {
+            grupo.porAnio[anio] = (grupo.porAnio[anio] || 0) + prov.porAnio[anio];
+          });
+          grupo.proveedoresIndividuales.push({
+            nombre: prov.nombre,
+            medidas: prov.medidas,
+            kilos: prov.kilos,
+            porAnio: prov.porAnio
+          });
+        } else {
+          proveedoresIndividuales.push(prov);
+        }
+      });
+
+      return [
+        ...Object.values(grupos),
+        ...proveedoresIndividuales
+      ];
+    },
     async descargarPdf(tipo) {
       if (this.generandoPdf || this.cargando) return;
       this.generandoPdf = tipo;
       try {
         const modulo = await import(/* webpackChunkName: "pdf-reporte-consumo" */ '@/utils/pdf/reporteConsumo');
+        // Los PDF ignoran el buscador de pantalla: siempre exportan el
+        // reporte completo para que sus totales cuadren consigo mismos.
         const datos = {
           reporte: this.reporte,
-          medidas: this.medidasFiltradas,
-          proveedores: this.proveedoresAgrupados,
-          maquilas: this.maquilasFiltradas,
+          medidas: this.reporte.medidas,
+          proveedores: this.proveedoresAgrupadosCompletos,
+          maquilas: this.reporte.maquilas,
           fechaDesde: this.fechaDesde,
           fechaHasta: this.fechaHasta,
           mostrarPrecios: this.mostrarPrecios
