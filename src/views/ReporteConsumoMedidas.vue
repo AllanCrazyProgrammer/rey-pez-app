@@ -305,39 +305,6 @@
         </div>
       </section>
 
-      <!-- ============ MEDIDAS A DEPURAR ============ -->
-      <section class="seccion seccion-depurar" v-if="reporte.sinClasificar.length > 0">
-        <h2>Medidas a depurar <span class="seccion-nota">(no se pudieron agrupar por medida base)</span></h2>
-        <p class="nota-depurar no-print">
-          Estas medidas no empiezan con un número (ej. "Aarón"), así que no entran en el global por medida
-          — aunque sí cuentan en los totales y en la sección por proveedor. Para reasignarlas a un grupo
-          (ej. "51/60"), se agregan al mapa <code>DEPURACION_MEDIDAS</code> de esta vista.
-        </p>
-        <table class="tabla">
-          <thead>
-            <tr>
-              <th class="col-nombre">Medida</th>
-              <th class="col-nombre">Proveedor</th>
-              <th class="col-num">Entradas</th>
-              <th class="col-num">Kilos</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr
-              v-for="item in reporte.sinClasificar"
-              :key="`sc-${item.medida}-${item.proveedor}`"
-              class="fila-clic"
-              title="Clic para ver el desglose por fecha"
-              @click="abrirDetalle({ titulo: `${item.medida} · ${item.proveedor}`, proveedor: item.proveedor, medidaExacta: item.medida, esMaquila: false })"
-            >
-              <td class="col-nombre">{{ item.medida }}</td>
-              <td class="col-nombre">{{ item.proveedor }}</td>
-              <td class="col-num">{{ item.entradas }}</td>
-              <td class="col-num">{{ formatNumber(item.kilos, 0) }}</td>
-            </tr>
-          </tbody>
-        </table>
-      </section>
     </template>
 
     <!-- ============ MODAL DE DESGLOSE POR FECHA ============ -->
@@ -998,21 +965,10 @@ export default {
   border-bottom-color: #e67e22;
 }
 
-.seccion-depurar h2 {
-  color: #922b21;
-  border-bottom-color: #c0392b;
-}
-
 .seccion-nota {
   font-size: 0.8rem;
   font-weight: 400;
   color: #6c7a89;
-}
-
-.nota-depurar {
-  font-size: 0.85rem;
-  color: #6c7a89;
-  margin: 0 0 10px;
 }
 
 .medida-card {
