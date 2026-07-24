@@ -394,18 +394,22 @@ import BackButton from '@/components/BackButton.vue';
 const MAQUILAS = ['Ozuna', 'Joselito'];
 
 // Depuración manual de medidas: medida exacta (tal como está guardada) →
-// medida con la que debe reportarse. Las entradas con estas medidas se suman
-// como si tuvieran el nombre depurado (en el global, por proveedor y en el
-// desglose). Las medidas que no empiezan con número y no estén aquí aparecen
-// en la sección "Medidas a depurar".
-const DEPURACION_MEDIDAS = {
-  '51/60 chuy': '51/60',
-  '51/60 Chuy': '51/60',
-  '51/60 nueva': '51/60'
-};
+// medida con la que debe reportarse. Útil para medidas que no empiezan con
+// número (ej. 'Aarón': '51/60'); las que no estén aquí aparecen en la
+// sección "Medidas a depurar".
+const DEPURACION_MEDIDAS = {};
 
+// Regla general de depuración: si la medida empieza con la talla (ej. "51/60")
+// y NO dice "1ra Nacional", se considera la medida original y se reporta solo
+// con la talla ("51/60 chuy", "51/60 Tirado" → "51/60"). Si dice "1ra
+// Nacional" se conserva como esa variante, con el nombre normalizado.
 function medidaDepurada(medida) {
-  return DEPURACION_MEDIDAS[medida] || medida;
+  const manual = DEPURACION_MEDIDAS[medida];
+  if (manual) return manual;
+  const token = medida.split(/\s+/)[0];
+  if (!/\d/.test(token)) return medida;
+  if (/1ra\s+nacional/i.test(medida)) return `${token} 1ra Nacional`;
+  return token;
 }
 
 // Agrupación de proveedores: mapea nombres de proveedores a su grupo.
