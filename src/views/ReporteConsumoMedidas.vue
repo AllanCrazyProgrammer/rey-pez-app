@@ -393,15 +393,20 @@ import BackButton from '@/components/BackButton.vue';
 // Proveedores que trabajan producto de terceros: se reportan aparte.
 const MAQUILAS = ['Ozuna', 'Joselito'];
 
-// Depuración manual de medidas: medida exacta (tal como está guardada) → grupo
-// al que debe sumarse en el "Global por medida". Las medidas que no empiezan
-// con número y no estén aquí aparecen en la sección "Medidas a depurar".
-// Ejemplo: 'Aarón': '51/60 Otros',
+// Depuración manual de medidas: medida exacta (tal como está guardada) →
+// medida con la que debe reportarse. Las entradas con estas medidas se suman
+// como si tuvieran el nombre depurado (en el global, por proveedor y en el
+// desglose). Las medidas que no empiezan con número y no estén aquí aparecen
+// en la sección "Medidas a depurar".
 const DEPURACION_MEDIDAS = {
   '51/60 chuy': '51/60',
-  '51/60 nueva': '51/60',
-  '51/60 Chuy': '51/60'
+  '51/60 Chuy': '51/60',
+  '51/60 nueva': '51/60'
 };
+
+function medidaDepurada(medida) {
+  return DEPURACION_MEDIDAS[medida] || medida;
+}
 
 // Agrupación de proveedores: mapea nombres de proveedores a su grupo.
 // En la sección "Por proveedor", los proveedores del mismo grupo se muestran
@@ -426,9 +431,7 @@ function fechaLocalISO(date) {
 }
 
 function baseDeMedida(medida) {
-  const depurada = DEPURACION_MEDIDAS[medida];
-  if (depurada) return depurada;
-  const token = medida.split(/\s+/)[0];
+  const token = medidaDepurada(medida).split(/\s+/)[0];
   return /\d/.test(token) ? token : null;
 }
 
@@ -508,6 +511,8 @@ export default {
         if (hasta && entrada.fecha > hasta) return;
         anios.add(entrada.anio);
 
+        const medida = medidaDepurada(entrada.medida);
+
         if (entrada.esMaquila) {
           r.maquilaKilos += entrada.kilos;
           r.maquilaEntradas += 1;
@@ -516,10 +521,10 @@ export default {
           }
           const maq = maquilas[entrada.proveedor];
           acumular(maq, entrada);
-          if (!maq.medidas[entrada.medida]) {
-            maq.medidas[entrada.medida] = nuevoAcumulador({ nombre: entrada.medida });
+          if (!maq.medidas[medida]) {
+            maq.medidas[medida] = nuevoAcumulador({ nombre: medida });
           }
-          acumular(maq.medidas[entrada.medida], entrada);
+          acumular(maq.medidas[medida], entrada);
           return;
         }
 
@@ -527,8 +532,8 @@ export default {
         r.totalEntradas += 1;
         r.porAnio[entrada.anio] = (r.porAnio[entrada.anio] || 0) + entrada.kilos;
 
-        const base = baseDeMedida(entrada.medida);
-        const baseProveedor = base || entrada.medida;
+        const base = baseDeMedida(medida);
+        const baseProveedor = base || medida;
 
         if (!proveedores[entrada.proveedor]) {
           proveedores[entrada.proveedor] = nuevoAcumulador({ nombre: entrada.proveedor, medidas: {} });
@@ -541,9 +546,9 @@ export default {
         acumular(prov.medidas[baseProveedor], entrada);
 
         if (!base) {
-          const clave = `${entrada.medida}||${entrada.proveedor}`;
+          const clave = `${medida}||${entrada.proveedor}`;
           if (!sinClasificar[clave]) {
-            sinClasificar[clave] = nuevoAcumulador({ medida: entrada.medida, proveedor: entrada.proveedor });
+            sinClasificar[clave] = nuevoAcumulador({ medida, proveedor: entrada.proveedor });
           }
           acumular(sinClasificar[clave], entrada);
           return;
@@ -559,10 +564,10 @@ export default {
         }
         const medProv = med.proveedores[entrada.proveedor];
         acumular(medProv, entrada);
-        if (!medProv.variantes[entrada.medida]) {
-          medProv.variantes[entrada.medida] = nuevoAcumulador({ medida: entrada.medida });
+        if (!medProv.variantes[medida]) {
+          medProv.variantes[medida] = nuevoAcumulador({ medida });
         }
-        acumular(medProv.variantes[entrada.medida], entrada);
+        acumular(medProv.variantes[medida], entrada);
       });
 
       const porKilosDesc = (a, b) => b.kilos - a.kilos;
@@ -674,11 +679,12 @@ export default {
           if (hasta && e.fecha > hasta) return false;
           if (d.esMaquila !== undefined && e.esMaquila !== d.esMaquila) return false;
           if (d.proveedor && e.proveedor !== d.proveedor) return false;
-          if (d.medidaExacta && e.medida !== d.medidaExacta) return false;
-          if (d.base && baseDeMedida(e.medida) !== d.base) return false;
+          const medida = medidaDepurada(e.medida);
+          if (d.medidaExacta && medida !== d.medidaExacta) return false;
+          if (d.base && baseDeMedida(medida) !== d.base) return false;
           // "grupo" es la fila de la sección por proveedor: medida base, o la
           // medida completa cuando no se pudo clasificar.
-          if (d.grupo && (baseDeMedida(e.medida) || e.medida) !== d.grupo) return false;
+          if (d.grupo && (baseDeMedida(medida) || medida) !== d.grupo) return false;
           return true;
         })
         .sort((a, b) => a.fecha - b.fecha);
