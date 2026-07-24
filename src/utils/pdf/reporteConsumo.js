@@ -467,6 +467,80 @@ function segmentosProveedores(proveedores, limite) {
   }));
 }
 
+function dibujarRelacionGranja(ctx, y, datos) {
+  const filas = datos.resumenGranja || [];
+  if (filas.length === 0) return y;
+  const proveedor = datos.proveedorResumen || 'Selecta';
+
+  y = tituloSeccion(
+    ctx,
+    y,
+    'Relación anual de granja',
+    `(comparación contra ${proveedor})`,
+    [25, 111, 61],
+    COLOR.verde
+  );
+
+  filas.forEach(fila => {
+    const proveedoresTexto = fila.totalProveedores === 1 ? 'proveedor' : 'proveedores';
+    const textoConsumo =
+      `En ${fila.anio}, dentro del período seleccionado, consumiste ${kg(fila.kilosTotales)} ` +
+      `de granja entre ${fila.totalProveedores} ${proveedoresTexto}. De ${proveedor} fueron ` +
+      `${kg(fila.kilosProveedor)}, equivalentes al ${formatNumber(fila.porcentajeProveedor, 1)}% del total.`;
+    const textoAcuerdo = fila.kilosAdicionales > 0
+      ? `Para pedir toda la granja con ${proveedor}, el acuerdo tendría que cubrir ${kg(fila.kilosTotales)}: ` +
+        `${kg(fila.kilosAdicionales)} adicionales sobre lo que ya surtió.`
+      : `${proveedor} ya concentró el 100% de la granja de ese año.`;
+    const lineasConsumo = ctx.doc.splitTextToSize(textoConsumo, PAGINA.ancho - 2 * PAGINA.margen - 28);
+    const lineasAcuerdo = ctx.doc.splitTextToSize(textoAcuerdo, PAGINA.ancho - 2 * PAGINA.margen - 42);
+    const alto = 31 + lineasConsumo.length * 11 + lineasAcuerdo.length * 11;
+    y = asegurarEspacio(ctx, y, alto + 12);
+
+    ctx.doc.setFillColor(244, 252, 247);
+    ctx.doc.setDrawColor(169, 223, 191);
+    ctx.doc.setLineWidth(0.75);
+    ctx.doc.roundedRect(PAGINA.margen, y, PAGINA.ancho - 2 * PAGINA.margen, alto, 4, 4, 'FD');
+    ctx.doc.setFillColor(...COLOR.verde);
+    ctx.doc.roundedRect(PAGINA.margen, y, 4, alto, 2, 2, 'F');
+
+    ctx.doc.setFont('helvetica', 'bold');
+    ctx.doc.setFontSize(10.5);
+    ctx.doc.setTextColor(25, 111, 61);
+    ctx.doc.text(String(fila.anio), PAGINA.margen + 14, y + 16);
+
+    ctx.doc.setFont('helvetica', 'normal');
+    ctx.doc.setFontSize(8.5);
+    ctx.doc.setTextColor(...COLOR.texto);
+    ctx.doc.text(lineasConsumo, PAGINA.margen + 14, y + 30);
+    const yAcuerdo = y + 34 + lineasConsumo.length * 11;
+
+    ctx.doc.setFillColor(233, 247, 239);
+    ctx.doc.roundedRect(
+      PAGINA.margen + 12,
+      yAcuerdo - 9,
+      PAGINA.ancho - 2 * PAGINA.margen - 24,
+      lineasAcuerdo.length * 11 + 8,
+      3,
+      3,
+      'F'
+    );
+    ctx.doc.setFont('helvetica', 'bold');
+    ctx.doc.setTextColor(25, 111, 61);
+    ctx.doc.text(lineasAcuerdo, PAGINA.margen + 20, yAcuerdo);
+    y += alto + 12;
+  });
+
+  ctx.doc.setFont('helvetica', 'italic');
+  ctx.doc.setFontSize(7.5);
+  ctx.doc.setTextColor(...COLOR.grisTexto);
+  ctx.doc.text(
+    'Cálculo basado en entradas/compras propias de tallas numéricas y Mixta; no incluye maquila.',
+    PAGINA.margen,
+    y
+  );
+  return y + 14;
+}
+
 // ================================================================== RESUMEN
 
 export function generarReporteConsumoResumenPDF(datos) {
@@ -606,6 +680,8 @@ export function generarReporteConsumoResumenPDF(datos) {
     doc.text(detalle, PAGINA.margen + 12, y + 26);
     y += 34;
   }
+
+  y = dibujarRelacionGranja(ctx, y + 16, datos);
 
   dibujarPiesDePagina(doc);
   doc.save(nombreArchivo('resumen', rango));
@@ -983,6 +1059,8 @@ export function generarReporteConsumoDetalladoPDF(datos) {
       y = doc.lastAutoTable.finalY + 14;
     });
   }
+
+  y = dibujarRelacionGranja(ctx, y + 10, datos);
 
   dibujarPiesDePagina(doc);
   doc.save(nombreArchivo('detallado', rango));

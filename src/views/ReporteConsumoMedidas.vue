@@ -366,6 +366,63 @@
         </div>
       </section>
 
+      <!-- ============ CONCLUSIÓN PARA NEGOCIACIÓN ============ -->
+      <section class="seccion seccion-relacion-granja">
+        <div class="relacion-granja-encabezado">
+          <h2>Relación anual de granja</h2>
+          <label class="selector-proveedor-resumen no-print">
+            Proveedor para comparar
+            <select v-model="proveedorResumen">
+              <option
+                v-for="proveedor in proveedoresGranjaDisponibles"
+                :key="`resumen-${proveedor}`"
+                :value="proveedor"
+              >
+                {{ proveedor }}
+              </option>
+            </select>
+          </label>
+        </div>
+        <p class="relacion-introduccion">
+          Comparación de la granja consumida entre todos tus proveedores contra
+          <strong>{{ proveedorResumen }}</strong>.
+        </p>
+        <div v-if="resumenGranjaPorAnio.length === 0" class="sin-datos">
+          No hay entradas de granja visibles en el período seleccionado.
+        </div>
+        <article
+          v-for="fila in resumenGranjaPorAnio"
+          :key="`relacion-granja-${fila.anio}`"
+          class="relacion-anual-card"
+        >
+          <h3>{{ fila.anio }}</h3>
+          <p>
+            En {{ fila.anio }}, dentro del período seleccionado, consumiste
+            <strong>{{ formatNumber(fila.kilosTotales, 0) }} kg de granja</strong>
+            entre {{ fila.totalProveedores }}
+            {{ fila.totalProveedores === 1 ? 'proveedor' : 'proveedores' }}.
+            De <strong>{{ proveedorResumen }}</strong> fueron
+            <strong>{{ formatNumber(fila.kilosProveedor, 0) }} kg</strong>,
+            equivalentes al <strong>{{ formatNumber(fila.porcentajeProveedor, 1) }}%</strong>
+            del total.
+          </p>
+          <p v-if="fila.kilosAdicionales > 0" class="conclusion-acuerdo">
+            Si acordaras pedir toda la granja con {{ proveedorResumen }}, el acuerdo
+            tendría que cubrir <strong>{{ formatNumber(fila.kilosTotales, 0) }} kg</strong>
+            al ritmo de ese año: serían
+            <strong>{{ formatNumber(fila.kilosAdicionales, 0) }} kg adicionales</strong>
+            sobre lo que ya te surtió.
+          </p>
+          <p v-else class="conclusion-acuerdo conclusion-completa">
+            {{ proveedorResumen }} ya concentró el 100% de la granja de ese año.
+          </p>
+        </article>
+        <p class="relacion-nota">
+          Cálculo basado en entradas/compras propias de tallas numéricas y Mixta;
+          no incluye maquila.
+        </p>
+      </section>
+
     </template>
 
     <!-- ============ MODAL DE DESGLOSE POR FECHA ============ -->
@@ -522,7 +579,8 @@ export default {
       detalle: null,
       generandoPdf: null,
       medidasExcluidas: [],
-      modoFiltroMedidas: 'todas'
+      modoFiltroMedidas: 'todas',
+      proveedorResumen: 'Selecta'
     };
   },
   computed: {
@@ -763,6 +821,68 @@ export default {
         ...proveedoresIndividuales
       ];
     },
+    proveedoresGranjaDisponibles() {
+      const { desde, hasta } = this.rangoFechas;
+      const proveedores = new Set([this.proveedorResumen || 'Selecta']);
+      this.entradas.forEach(entrada => {
+        if (desde && entrada.fecha < desde) return;
+        if (hasta && entrada.fecha > hasta) return;
+        if (entrada.esMaquila) return;
+        const base = baseDeMedida(medidaDepurada(entrada.medida));
+        if (!esMedidaGranja(base) || !this.esMedidaVisible(base)) return;
+        proveedores.add(entrada.proveedor);
+      });
+      return Array.from(proveedores).sort((a, b) =>
+        a.localeCompare(b, 'es', { sensitivity: 'base' })
+      );
+    },
+    resumenGranjaPorAnio() {
+      const { desde, hasta } = this.rangoFechas;
+      const porAnio = {};
+      const proveedorBuscado = String(this.proveedorResumen || 'Selecta').toLocaleLowerCase('es');
+
+      this.entradas.forEach(entrada => {
+        if (desde && entrada.fecha < desde) return;
+        if (hasta && entrada.fecha > hasta) return;
+        if (entrada.esMaquila) return;
+        const base = baseDeMedida(medidaDepurada(entrada.medida));
+        if (!esMedidaGranja(base) || !this.esMedidaVisible(base)) return;
+
+        if (!porAnio[entrada.anio]) {
+          porAnio[entrada.anio] = {
+            anio: entrada.anio,
+            kilosTotales: 0,
+            entradasTotales: 0,
+            proveedores: new Set(),
+            kilosProveedor: 0,
+            entradasProveedor: 0
+          };
+        }
+        const fila = porAnio[entrada.anio];
+        fila.kilosTotales += entrada.kilos;
+        fila.entradasTotales += 1;
+        fila.proveedores.add(entrada.proveedor);
+        if (entrada.proveedor.toLocaleLowerCase('es') === proveedorBuscado) {
+          fila.kilosProveedor += entrada.kilos;
+          fila.entradasProveedor += 1;
+        }
+      });
+
+      return Object.values(porAnio)
+        .map(fila => ({
+          anio: fila.anio,
+          kilosTotales: fila.kilosTotales,
+          entradasTotales: fila.entradasTotales,
+          totalProveedores: fila.proveedores.size,
+          kilosProveedor: fila.kilosProveedor,
+          entradasProveedor: fila.entradasProveedor,
+          porcentajeProveedor: fila.kilosTotales > 0
+            ? (fila.kilosProveedor / fila.kilosTotales) * 100
+            : 0,
+          kilosAdicionales: Math.max(fila.kilosTotales - fila.kilosProveedor, 0)
+        }))
+        .sort((a, b) => a.anio - b.anio);
+    },
     detalleEntradas() {
       if (!this.detalle) return [];
       const d = this.detalle;
@@ -888,7 +1008,9 @@ export default {
           fechaDesde: this.fechaDesde,
           fechaHasta: this.fechaHasta,
           mostrarPrecios: this.mostrarPrecios,
-          filtroMedidas: this.descripcionFiltroMedidas
+          filtroMedidas: this.descripcionFiltroMedidas,
+          proveedorResumen: this.proveedorResumen,
+          resumenGranja: this.resumenGranjaPorAnio
         };
         if (tipo === 'detallado') {
           modulo.generarReporteConsumoDetalladoPDF(datos);
@@ -928,6 +1050,10 @@ export default {
           });
         });
         this.entradas = entradas;
+        const selecta = entradas.find(entrada =>
+          entrada.proveedor.toLocaleLowerCase('es') === 'selecta'
+        );
+        if (selecta) this.proveedorResumen = selecta.proveedor;
       } catch (error) {
         console.error('Error al cargar entradas para el reporte de consumo:', error);
         this.errorCarga = 'No se pudieron cargar las entradas. Revisa la conexión e intenta de nuevo.';
@@ -961,20 +1087,20 @@ export default {
 
 .reporte-header h1 {
   margin: 0 0 4px;
-  font-size: 1.9rem;
+  font-size: 2.2rem;
   color: #1a5276;
 }
 
 .subtitulo {
   margin: 0;
   color: #6c7a89;
-  font-size: 0.95rem;
+  font-size: 1.1rem;
 }
 
 .filtro-aplicado {
   margin: 5px 0 0;
   color: #1e8449;
-  font-size: 0.82rem;
+  font-size: 0.95rem;
   font-weight: 700;
 }
 
@@ -999,7 +1125,7 @@ export default {
 .filtro-fechas label {
   display: flex;
   flex-direction: column;
-  font-size: 0.8rem;
+  font-size: 0.92rem;
   color: #5d6d7e;
   gap: 2px;
 }
@@ -1009,7 +1135,7 @@ export default {
   padding: 6px 8px;
   border: 1px solid #b0c4d4;
   border-radius: 5px;
-  font-size: 0.9rem;
+  font-size: 1.02rem;
 }
 
 .filtro-rapidos {
@@ -1025,6 +1151,7 @@ export default {
   background: white;
   color: #2980b9;
   cursor: pointer;
+  font-size: 1rem;
   font-weight: 600;
 }
 
@@ -1060,11 +1187,12 @@ export default {
   align-items: baseline;
   gap: 8px;
   color: #34495e;
+  font-size: 1.05rem;
 }
 
 .filtro-medidas-header span {
   color: #6c7a89;
-  font-size: 0.8rem;
+  font-size: 0.92rem;
 }
 
 .filtro-medidas-acciones {
@@ -1080,7 +1208,7 @@ export default {
   background: white;
   color: #466579;
   cursor: pointer;
-  font-size: 0.78rem;
+  font-size: 0.92rem;
   font-weight: 600;
 }
 
@@ -1115,7 +1243,7 @@ export default {
   background: white;
   color: #2c3e50;
   cursor: pointer;
-  font-size: 0.82rem;
+  font-size: 0.95rem;
 }
 
 .medidas-checklist label.excluida {
@@ -1133,7 +1261,7 @@ export default {
   border-radius: 8px;
   background: #d5f5e3;
   color: #1e8449;
-  font-size: 0.65rem;
+  font-size: 0.76rem;
   font-weight: 700;
   text-decoration: none;
 }
@@ -1141,7 +1269,7 @@ export default {
 .filtro-medidas-ayuda {
   margin: 8px 0 0;
   color: #6c7a89;
-  font-size: 0.75rem;
+  font-size: 0.88rem;
 }
 
 .busqueda-input {
@@ -1152,7 +1280,7 @@ export default {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 0.85rem;
+  font-size: 0.98rem;
   color: #5d6d7e;
   cursor: pointer;
 }
@@ -1163,6 +1291,7 @@ export default {
   border-radius: 5px;
   background: #27ae60;
   color: white;
+  font-size: 1rem;
   font-weight: 700;
   cursor: pointer;
 }
@@ -1176,6 +1305,7 @@ export default {
   border: none;
   border-radius: 5px;
   color: white;
+  font-size: 1rem;
   font-weight: 700;
   cursor: pointer;
   display: inline-flex;
@@ -1218,6 +1348,7 @@ export default {
   text-align: center;
   padding: 30px 10px;
   color: #6c7a89;
+  font-size: 1.05rem;
 }
 
 .estado-error {
@@ -1258,20 +1389,20 @@ export default {
 }
 
 .tile-label {
-  font-size: 0.75rem;
+  font-size: 0.88rem;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   color: #5d6d7e;
 }
 
 .tile-valor {
-  font-size: 1.3rem;
+  font-size: 1.55rem;
   font-weight: 700;
   color: #1a5276;
 }
 
 .tile-sub {
-  font-size: 0.8rem;
+  font-size: 0.93rem;
   color: #6c7a89;
 }
 
@@ -1284,7 +1415,7 @@ export default {
   border-bottom: 2px solid #2980b9;
   padding-bottom: 6px;
   margin-bottom: 14px;
-  font-size: 1.3rem;
+  font-size: 1.5rem;
 }
 
 .seccion-maquila h2 {
@@ -1292,8 +1423,101 @@ export default {
   border-bottom-color: #e67e22;
 }
 
+.seccion-relacion-granja {
+  margin-top: 44px;
+  padding: 20px;
+  border: 2px solid #239b56;
+  border-radius: 10px;
+  background: #f4fcf7;
+}
+
+.relacion-granja-encabezado {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 2px solid #239b56;
+  padding-bottom: 8px;
+  margin-bottom: 12px;
+}
+
+.seccion-relacion-granja h2 {
+  margin: 0;
+  padding: 0;
+  border: none;
+  color: #196f3d;
+}
+
+.selector-proveedor-resumen {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  color: #496b59;
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+
+.selector-proveedor-resumen select {
+  min-width: 180px;
+  padding: 7px 9px;
+  border: 1px solid #82c99f;
+  border-radius: 5px;
+  background: white;
+  color: #1d5f3a;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.relacion-introduccion {
+  margin: 0 0 14px;
+  color: #496b59;
+  font-size: 1rem;
+}
+
+.relacion-anual-card {
+  margin-bottom: 12px;
+  padding: 14px 16px;
+  border: 1px solid #a9dfbf;
+  border-left: 5px solid #239b56;
+  border-radius: 7px;
+  background: white;
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.relacion-anual-card h3 {
+  margin: 0 0 7px;
+  color: #196f3d;
+  font-size: 1.35rem;
+}
+
+.relacion-anual-card p {
+  margin: 0;
+  color: #2c3e50;
+  font-size: 1.05rem;
+  line-height: 1.5;
+}
+
+.relacion-anual-card .conclusion-acuerdo {
+  margin-top: 9px;
+  padding: 9px 11px;
+  border-radius: 5px;
+  background: #e9f7ef;
+  color: #196f3d;
+}
+
+.relacion-anual-card .conclusion-completa {
+  background: #d5f5e3;
+}
+
+.relacion-nota {
+  margin: 8px 0 0;
+  color: #6c7a89;
+  font-size: 0.88rem;
+}
+
 .seccion-nota {
-  font-size: 0.8rem;
+  font-size: 0.93rem;
   font-weight: 400;
   color: #6c7a89;
 }
@@ -1318,12 +1542,12 @@ export default {
 
 .medida-card-header h3 {
   margin: 0;
-  font-size: 1.15rem;
+  font-size: 1.32rem;
   color: #21618c;
 }
 
 .medida-totales {
-  font-size: 0.9rem;
+  font-size: 1.03rem;
   color: #5d6d7e;
 }
 
@@ -1335,7 +1559,7 @@ export default {
   width: 100%;
   border-collapse: collapse;
   background: white;
-  font-size: 0.88rem;
+  font-size: 1.02rem;
   margin-bottom: 8px;
 }
 
@@ -1343,12 +1567,12 @@ export default {
   background: #f4f8fb;
   color: #34495e;
   text-align: left;
-  padding: 6px 8px;
+  padding: 8px 9px;
   border-bottom: 2px solid #d6e4ef;
 }
 
 .tabla td {
-  padding: 5px 8px;
+  padding: 7px 9px;
   border-bottom: 1px solid #edf3f8;
 }
 
@@ -1425,13 +1649,13 @@ th.col-num {
 .detalle-header h3 {
   margin: 0;
   color: #1a5276;
-  font-size: 1.15rem;
+  font-size: 1.32rem;
 }
 
 .detalle-cerrar {
   border: none;
   background: transparent;
-  font-size: 1.6rem;
+  font-size: 1.9rem;
   line-height: 1;
   color: #6c7a89;
   cursor: pointer;
@@ -1444,7 +1668,7 @@ th.col-num {
 
 .detalle-sub {
   margin: 4px 0 10px;
-  font-size: 0.88rem;
+  font-size: 1rem;
   color: #5d6d7e;
 }
 
@@ -1463,8 +1687,17 @@ th.col-num {
     flex-direction: column;
   }
 
+  .relacion-granja-encabezado {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .selector-proveedor-resumen select {
+    width: 100%;
+  }
+
   .tabla {
-    font-size: 0.78rem;
+    font-size: 0.9rem;
   }
 
   .tabla th,
@@ -1473,7 +1706,7 @@ th.col-num {
   }
 
   .reporte-header h1 {
-    font-size: 1.4rem;
+    font-size: 1.7rem;
   }
 }
 
@@ -1498,7 +1731,7 @@ th.col-num {
   }
 
   .tabla {
-    font-size: 10pt;
+    font-size: 11pt;
   }
 }
 </style>
