@@ -156,8 +156,8 @@
       <!-- ============ POR PROVEEDOR ============ -->
       <section class="seccion">
         <h2>Por proveedor <span class="seccion-nota">(compras propias)</span></h2>
-        <div v-if="proveedoresFiltrados.length === 0" class="sin-datos">Sin entradas en este período.</div>
-        <div class="medida-card" v-for="prov in proveedoresFiltrados" :key="`prov-${prov.nombre}`">
+        <div v-if="proveedoresAgrupados.length === 0" class="sin-datos">Sin entradas en este período.</div>
+        <div class="medida-card" v-for="prov in proveedoresAgrupados" :key="`prov-${prov.nombre}`">
           <div class="medida-card-header">
             <h3>{{ prov.nombre }}</h3>
             <div class="medida-totales">
@@ -178,26 +178,67 @@
               </tr>
             </thead>
             <tbody>
-              <tr
-                v-for="med in prov.medidas"
-                :key="`prov-${prov.nombre}-${med.nombre}`"
-                class="fila-clic"
-                title="Clic para ver el desglose por fecha"
-                @click="abrirDetalle({ titulo: `${prov.nombre} · ${med.nombre}`, proveedor: prov.nombre, grupo: med.nombre, esMaquila: false })"
-              >
-                <td class="col-nombre">{{ med.nombre }}</td>
-                <td v-for="anio in reporte.anios" :key="anio" class="col-num">
-                  {{ med.porAnio[anio] ? formatNumber(med.porAnio[anio], 0) : '—' }}
-                </td>
-                <td class="col-num">{{ med.entradas }}</td>
-                <td v-if="mostrarPrecios" class="col-num precio">
-                  {{ med.precioPromedio ? `$${formatNumber(med.precioPromedio)}` : '—' }}
-                </td>
-                <td class="col-num">{{ formatNumber(med.kilos, 0) }}</td>
-                <td class="col-num">
-                  {{ prov.kilos > 0 ? formatNumber((med.kilos / prov.kilos) * 100, 1) : '0.0' }}%
-                </td>
-              </tr>
+              <!-- Proveedores individuales en el grupo (si hay) -->
+              <template v-if="prov.proveedoresIndividuales">
+                <template v-for="indiv in prov.proveedoresIndividuales">
+                  <tr
+                    :key="`prov-${indiv.nombre}`"
+                    class="fila-proveedor"
+                  >
+                    <td class="col-nombre">{{ indiv.nombre }}</td>
+                    <td v-for="anio in reporte.anios" :key="anio" class="col-num">
+                      {{ indiv.porAnio[anio] ? formatNumber(indiv.porAnio[anio], 0) : '—' }}
+                    </td>
+                    <td class="col-num">{{ indiv.medidas.reduce((s, m) => s + m.entradas, 0) }}</td>
+                    <td v-if="mostrarPrecios" class="col-num"></td>
+                    <td class="col-num"><strong>{{ formatNumber(indiv.kilos, 0) }}</strong></td>
+                    <td class="col-num">{{ formatNumber((indiv.kilos / prov.kilos) * 100, 1) }}%</td>
+                  </tr>
+                  <tr
+                    v-for="med in indiv.medidas"
+                    :key="`prov-${indiv.nombre}-${med.nombre}`"
+                    class="fila-variante fila-clic"
+                    title="Clic para ver el desglose por fecha"
+                    @click="abrirDetalle({ titulo: `${indiv.nombre} · ${med.nombre}`, proveedor: indiv.nombre, grupo: med.nombre, esMaquila: false })"
+                  >
+                    <td class="col-nombre variante-nombre">{{ med.nombre }}</td>
+                    <td v-for="anio in reporte.anios" :key="anio" class="col-num">
+                      {{ med.porAnio[anio] ? formatNumber(med.porAnio[anio], 0) : '—' }}
+                    </td>
+                    <td class="col-num">{{ med.entradas }}</td>
+                    <td v-if="mostrarPrecios" class="col-num precio">
+                      {{ med.precioPromedio ? `$${formatNumber(med.precioPromedio)}` : '—' }}
+                    </td>
+                    <td class="col-num">{{ formatNumber(med.kilos, 0) }}</td>
+                    <td class="col-num">
+                      {{ indiv.kilos > 0 ? formatNumber((med.kilos / indiv.kilos) * 100, 1) : '0.0' }}%
+                    </td>
+                  </tr>
+                </template>
+              </template>
+              <!-- Proveedores sin agrupar (mostrar medidas directamente) -->
+              <template v-else>
+                <tr
+                  v-for="med in prov.medidas"
+                  :key="`prov-${prov.nombre}-${med.nombre}`"
+                  class="fila-clic"
+                  title="Clic para ver el desglose por fecha"
+                  @click="abrirDetalle({ titulo: `${prov.nombre} · ${med.nombre}`, proveedor: prov.nombre, grupo: med.nombre, esMaquila: false })"
+                >
+                  <td class="col-nombre">{{ med.nombre }}</td>
+                  <td v-for="anio in reporte.anios" :key="anio" class="col-num">
+                    {{ med.porAnio[anio] ? formatNumber(med.porAnio[anio], 0) : '—' }}
+                  </td>
+                  <td class="col-num">{{ med.entradas }}</td>
+                  <td v-if="mostrarPrecios" class="col-num precio">
+                    {{ med.precioPromedio ? `$${formatNumber(med.precioPromedio)}` : '—' }}
+                  </td>
+                  <td class="col-num">{{ formatNumber(med.kilos, 0) }}</td>
+                  <td class="col-num">
+                    {{ prov.kilos > 0 ? formatNumber((med.kilos / prov.kilos) * 100, 1) : '0.0' }}%
+                  </td>
+                </tr>
+              </template>
               <tr class="fila-total">
                 <td class="col-nombre">Total {{ prov.nombre }}</td>
                 <td v-for="anio in reporte.anios" :key="anio" class="col-num">
@@ -356,7 +397,20 @@ const MAQUILAS = ['Ozuna', 'Joselito'];
 // al que debe sumarse en el "Global por medida". Las medidas que no empiezan
 // con número y no estén aquí aparecen en la sección "Medidas a depurar".
 // Ejemplo: 'Aarón': '51/60 Otros',
-const DEPURACION_MEDIDAS = {};
+const DEPURACION_MEDIDAS = {
+  '51/60 chuy': '51/60',
+  '51/60 nueva': '51/60',
+  '51/60 Chuy': '51/60'
+};
+
+// Agrupación de proveedores: mapea nombres de proveedores a su grupo.
+// En la sección "Por proveedor", los proveedores del mismo grupo se muestran
+// juntos con desglose individual dentro del grupo.
+// Ej: { 'Ahumada': 'Ahumada / Vayon', 'Vayon': 'Ahumada / Vayon' }
+const PROVEEDORES_GRUPO = {
+  'Ahumada': 'Ahumada / Vayon',
+  'Vayon': 'Ahumada / Vayon'
+};
 
 function parseFechaSacada(fecha) {
   if (!fecha) return new Date(0);
@@ -570,6 +624,45 @@ export default {
         maq.nombre.toLowerCase().includes(q) ||
         maq.medidas.some(med => med.nombre.toLowerCase().includes(q))
       );
+    },
+    proveedoresAgrupados() {
+      const grupos = {};
+      const proveedoresIndividuales = [];
+
+      this.proveedoresFiltrados.forEach(prov => {
+        const nombreGrupo = PROVEEDORES_GRUPO[prov.nombre];
+        if (nombreGrupo) {
+          if (!grupos[nombreGrupo]) {
+            grupos[nombreGrupo] = {
+              nombre: nombreGrupo,
+              kilos: 0,
+              entradas: 0,
+              porAnio: {},
+              medidas: [],
+              proveedoresIndividuales: []
+            };
+          }
+          const grupo = grupos[nombreGrupo];
+          grupo.kilos += prov.kilos;
+          grupo.entradas += prov.entradas;
+          Object.keys(prov.porAnio).forEach(anio => {
+            grupo.porAnio[anio] = (grupo.porAnio[anio] || 0) + prov.porAnio[anio];
+          });
+          grupo.proveedoresIndividuales.push({
+            nombre: prov.nombre,
+            medidas: prov.medidas,
+            kilos: prov.kilos,
+            porAnio: prov.porAnio
+          });
+        } else {
+          proveedoresIndividuales.push(prov);
+        }
+      });
+
+      return [
+        ...Object.values(grupos),
+        ...proveedoresIndividuales
+      ];
     },
     detalleEntradas() {
       if (!this.detalle) return [];
