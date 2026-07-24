@@ -443,6 +443,14 @@ function tilesPrincipales(reporte) {
       fondo: [232, 248, 240],
       borde: [184, 230, 206],
       acento: COLOR.verde
+    },
+    {
+      etiqueta: 'Granja (compras propias)',
+      valor: kg(reporte.granjaKilos || 0),
+      sub: `${reporte.granjaEntradas || 0} entradas`,
+      fondo: [234, 250, 241],
+      borde: [169, 223, 191],
+      acento: COLOR.verde
     }
   ];
 }
@@ -468,7 +476,8 @@ export function generarReporteConsumoResumenPDF(datos) {
   const doc = nuevoDocumento();
   const ctx = { doc, subtitulo: 'Resumen ejecutivo' };
 
-  let y = dibujarEncabezado(doc, 'Resumen ejecutivo · Entradas de producto', rango);
+  const filtro = datos.filtroMedidas ? ` · ${datos.filtroMedidas}` : '';
+  let y = dibujarEncabezado(doc, `Resumen ejecutivo · Entradas de producto${filtro}`, rango);
 
   // ---- KPIs
   y = dibujarTiles(doc, y, tilesPrincipales(reporte));
@@ -611,7 +620,8 @@ export function generarReporteConsumoDetalladoPDF(datos) {
   const doc = nuevoDocumento();
   const ctx = { doc, subtitulo: 'Versión detallada' };
 
-  let y = dibujarEncabezado(doc, 'Versión detallada · Entradas de producto', rango);
+  const filtro = datos.filtroMedidas ? ` · ${datos.filtroMedidas}` : '';
+  let y = dibujarEncabezado(doc, `Versión detallada · Entradas de producto${filtro}`, rango);
 
   // ---- KPIs principales + por año
   y = dibujarTiles(doc, y, tilesPrincipales(reporte));

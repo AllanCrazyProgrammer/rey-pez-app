@@ -10,6 +10,9 @@
         Entradas de producto del {{ formatearFechaCorta(fechaDesde) }} al {{ formatearFechaCorta(fechaHasta) }}
         · Rey Pez
       </p>
+      <p v-if="descripcionFiltroMedidas !== 'Todas las medidas'" class="filtro-aplicado">
+        Filtro: {{ descripcionFiltroMedidas }}
+      </p>
     </header>
 
     <div class="filtros no-print">
@@ -61,6 +64,45 @@
           {{ generandoPdf === 'resumen' ? 'Generando…' : '📄 PDF Resumen' }}
         </button>
       </div>
+      <div v-if="medidasDisponibles.length" class="filtro-medidas">
+        <div class="filtro-medidas-header">
+          <div>
+            <strong>Medidas a mostrar</strong>
+            <span>{{ cantidadMedidasVisibles }} de {{ medidasDisponibles.length }} seleccionadas</span>
+          </div>
+          <div class="filtro-medidas-acciones">
+            <button type="button" @click="mostrarTodasMedidas">Todas</button>
+            <button
+              type="button"
+              class="btn-solo-granja"
+              :class="{ activo: mostrandoSoloGranja }"
+              @click="mostrarSoloGranja"
+            >
+              Solo granja
+            </button>
+            <button type="button" @click="ocultarTodasMedidas">Ninguna</button>
+          </div>
+        </div>
+        <div class="medidas-checklist">
+          <label
+            v-for="medida in medidasDisponibles"
+            :key="`filtro-${medida.nombre}`"
+            :class="{ excluida: !esMedidaVisible(medida.nombre) }"
+          >
+            <input
+              type="checkbox"
+              :checked="esMedidaVisible(medida.nombre)"
+              @change="cambiarVisibilidadMedida(medida.nombre, $event.target.checked)"
+            />
+            <span>{{ medida.nombre }}</span>
+            <small v-if="medida.esGranja">Granja</small>
+          </label>
+        </div>
+        <p class="filtro-medidas-ayuda">
+          “Solo granja” incluye las tallas numéricas (por ejemplo 51/60) y Mixta;
+          excluye Piojo, PAC/SC y las demás medidas.
+        </p>
+      </div>
     </div>
 
     <div v-if="cargando" class="estado-carga">Cargando entradas…</div>
@@ -82,6 +124,11 @@
           <span class="tile-label">Volumen total procesado</span>
           <span class="tile-valor">{{ formatNumber(reporte.totalKilos + reporte.maquilaKilos, 0) }} kg</span>
           <span class="tile-sub">{{ reporte.totalEntradas + reporte.maquilaEntradas }} entradas</span>
+        </div>
+        <div class="tile tile-granja">
+          <span class="tile-label">Granja (compras propias)</span>
+          <span class="tile-valor">{{ formatNumber(reporte.granjaKilos, 0) }} kg</span>
+          <span class="tile-sub">{{ reporte.granjaEntradas }} entradas en el período seleccionado</span>
         </div>
         <div class="tile" v-for="anio in reporte.anios" :key="`tile-${anio}`">
           <span class="tile-label">Compras {{ anio }}</span>
@@ -435,6 +482,13 @@ function baseDeMedida(medida) {
   return /\d/.test(token) ? token : depurada;
 }
 
+// Para este reporte, "granja" comprende las tallas numéricas tipo 51/60 y
+// la medida Mixta. Piojo, PAC/SC y cualquier otra medida quedan fuera.
+function esMedidaGranja(medida) {
+  const base = baseDeMedida(medida);
+  return /^\d+\s*\/\s*\d+/.test(base) || /^mixta\b/i.test(base);
+}
+
 function nuevoAcumulador(extra = {}) {
   return { kilos: 0, entradas: 0, porAnio: {}, precioSum: 0, precioKilos: 0, ...extra };
 }
@@ -466,7 +520,9 @@ export default {
       busqueda: '',
       mostrarPrecios: false,
       detalle: null,
-      generandoPdf: null
+      generandoPdf: null,
+      medidasExcluidas: [],
+      modoFiltroMedidas: 'todas'
     };
   },
   computed: {
@@ -485,6 +541,50 @@ export default {
         hasta: this.fechaHasta ? new Date(`${this.fechaHasta}T23:59:59.999`) : null
       };
     },
+    medidasDisponibles() {
+      const { desde, hasta } = this.rangoFechas;
+      const medidas = {};
+
+      this.entradas.forEach(entrada => {
+        if (desde && entrada.fecha < desde) return;
+        if (hasta && entrada.fecha > hasta) return;
+        const nombre = baseDeMedida(medidaDepurada(entrada.medida));
+        if (!medidas[nombre]) {
+          medidas[nombre] = {
+            nombre,
+            kilos: 0,
+            entradas: 0,
+            esGranja: esMedidaGranja(nombre)
+          };
+        }
+        medidas[nombre].kilos += entrada.kilos;
+        medidas[nombre].entradas += 1;
+      });
+
+      return Object.values(medidas).sort((a, b) =>
+        a.nombre.localeCompare(b.nombre, 'es', { numeric: true, sensitivity: 'base' })
+      );
+    },
+    cantidadMedidasVisibles() {
+      return this.medidasDisponibles.filter(medida => this.esMedidaVisible(medida.nombre)).length;
+    },
+    mostrandoSoloGranja() {
+      return this.modoFiltroMedidas === 'solo-granja';
+    },
+    descripcionFiltroMedidas() {
+      if (!this.medidasDisponibles.length || this.cantidadMedidasVisibles === this.medidasDisponibles.length) {
+        return 'Todas las medidas';
+      }
+      if (this.mostrandoSoloGranja) return 'Solo granja (tallas numéricas y Mixta)';
+      if (this.cantidadMedidasVisibles === 0) return 'Ninguna medida seleccionada';
+
+      const visibles = this.medidasDisponibles
+        .filter(medida => this.esMedidaVisible(medida.nombre))
+        .map(medida => medida.nombre);
+      return visibles.length <= 4
+        ? `Medidas: ${visibles.join(', ')}`
+        : `${visibles.length} medidas seleccionadas`;
+    },
     reporte() {
       const { desde, hasta } = this.rangoFechas;
 
@@ -494,6 +594,8 @@ export default {
         porAnio: {},
         maquilaKilos: 0,
         maquilaEntradas: 0,
+        granjaKilos: 0,
+        granjaEntradas: 0,
         anios: [],
         medidas: [],
         proveedores: [],
@@ -508,9 +610,11 @@ export default {
       this.entradas.forEach(entrada => {
         if (desde && entrada.fecha < desde) return;
         if (hasta && entrada.fecha > hasta) return;
-        anios.add(entrada.anio);
 
         const medida = medidaDepurada(entrada.medida);
+        const base = baseDeMedida(medida);
+        if (!this.esMedidaVisible(base)) return;
+        anios.add(entrada.anio);
 
         if (entrada.esMaquila) {
           r.maquilaKilos += entrada.kilos;
@@ -530,8 +634,10 @@ export default {
         r.totalKilos += entrada.kilos;
         r.totalEntradas += 1;
         r.porAnio[entrada.anio] = (r.porAnio[entrada.anio] || 0) + entrada.kilos;
-
-        const base = baseDeMedida(medida);
+        if (esMedidaGranja(base)) {
+          r.granjaKilos += entrada.kilos;
+          r.granjaEntradas += 1;
+        }
 
         if (!proveedores[entrada.proveedor]) {
           proveedores[entrada.proveedor] = nuevoAcumulador({ nombre: entrada.proveedor, medidas: {} });
@@ -668,6 +774,7 @@ export default {
           if (d.esMaquila !== undefined && e.esMaquila !== d.esMaquila) return false;
           if (d.proveedor && e.proveedor !== d.proveedor) return false;
           const medida = medidaDepurada(e.medida);
+          if (!this.esMedidaVisible(baseDeMedida(medida))) return false;
           if (d.medidaExacta && medida !== d.medidaExacta) return false;
           if (d.base && baseDeMedida(medida) !== d.base) return false;
           // "grupo" es la fila de la sección por proveedor (la medida base).
@@ -719,6 +826,38 @@ export default {
     cerrarDetalle() {
       this.detalle = null;
     },
+    esMedidaVisible(nombre) {
+      if (this.modoFiltroMedidas === 'solo-granja') return esMedidaGranja(nombre);
+      if (this.modoFiltroMedidas === 'ninguna') return false;
+      return !this.medidasExcluidas.includes(nombre);
+    },
+    cambiarVisibilidadMedida(nombre, visible) {
+      if (this.modoFiltroMedidas !== 'manual') {
+        this.medidasExcluidas = this.medidasDisponibles
+          .filter(medida => !this.esMedidaVisible(medida.nombre))
+          .map(medida => medida.nombre);
+        this.modoFiltroMedidas = 'manual';
+      }
+      if (visible) {
+        this.medidasExcluidas = this.medidasExcluidas.filter(medida => medida !== nombre);
+      } else if (!this.medidasExcluidas.includes(nombre)) {
+        this.medidasExcluidas = [...this.medidasExcluidas, nombre];
+      }
+      this.cerrarDetalle();
+    },
+    mostrarTodasMedidas() {
+      this.medidasExcluidas = [];
+      this.modoFiltroMedidas = 'todas';
+      this.cerrarDetalle();
+    },
+    mostrarSoloGranja() {
+      this.modoFiltroMedidas = 'solo-granja';
+      this.cerrarDetalle();
+    },
+    ocultarTodasMedidas() {
+      this.modoFiltroMedidas = 'ninguna';
+      this.cerrarDetalle();
+    },
     seleccionarAnio(anio) {
       this.fechaDesde = `${anio}-01-01`;
       const hoy = fechaLocalISO();
@@ -748,7 +887,8 @@ export default {
           maquilas: this.maquilasFiltradas,
           fechaDesde: this.fechaDesde,
           fechaHasta: this.fechaHasta,
-          mostrarPrecios: this.mostrarPrecios
+          mostrarPrecios: this.mostrarPrecios,
+          filtroMedidas: this.descripcionFiltroMedidas
         };
         if (tipo === 'detallado') {
           modulo.generarReporteConsumoDetalladoPDF(datos);
@@ -831,6 +971,13 @@ export default {
   font-size: 0.95rem;
 }
 
+.filtro-aplicado {
+  margin: 5px 0 0;
+  color: #1e8449;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
 .filtros {
   display: flex;
   flex-wrap: wrap;
@@ -892,6 +1039,109 @@ export default {
   gap: 12px;
   align-items: center;
   flex-wrap: wrap;
+}
+
+.filtro-medidas {
+  flex: 1 0 100%;
+  border-top: 1px solid #d6e4ef;
+  padding-top: 12px;
+}
+
+.filtro-medidas-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 9px;
+}
+
+.filtro-medidas-header > div:first-child {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  color: #34495e;
+}
+
+.filtro-medidas-header span {
+  color: #6c7a89;
+  font-size: 0.8rem;
+}
+
+.filtro-medidas-acciones {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.filtro-medidas-acciones button {
+  padding: 5px 10px;
+  border: 1px solid #9fb9cc;
+  border-radius: 5px;
+  background: white;
+  color: #466579;
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.filtro-medidas-acciones button:hover {
+  background: #eaf2f8;
+}
+
+.filtro-medidas-acciones .btn-solo-granja {
+  border-color: #229954;
+  color: #1e8449;
+}
+
+.filtro-medidas-acciones .btn-solo-granja.activo,
+.filtro-medidas-acciones .btn-solo-granja:hover {
+  background: #229954;
+  color: white;
+}
+
+.medidas-checklist {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.medidas-checklist label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 8px;
+  border: 1px solid #b9ccda;
+  border-radius: 5px;
+  background: white;
+  color: #2c3e50;
+  cursor: pointer;
+  font-size: 0.82rem;
+}
+
+.medidas-checklist label.excluida {
+  opacity: 0.55;
+  background: #edf1f4;
+  text-decoration: line-through;
+}
+
+.medidas-checklist input {
+  margin: 0;
+}
+
+.medidas-checklist small {
+  padding: 1px 5px;
+  border-radius: 8px;
+  background: #d5f5e3;
+  color: #1e8449;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.filtro-medidas-ayuda {
+  margin: 8px 0 0;
+  color: #6c7a89;
+  font-size: 0.75rem;
 }
 
 .busqueda-input {
@@ -1000,6 +1250,11 @@ export default {
 .tile-total {
   background: #e8f8f0;
   border-color: #b8e6ce;
+}
+
+.tile-granja {
+  background: #eafaf1;
+  border-color: #a9dfbf;
 }
 
 .tile-label {
@@ -1203,6 +1458,11 @@ th.col-num {
 }
 
 @media (max-width: 700px) {
+  .filtro-medidas-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
   .tabla {
     font-size: 0.78rem;
   }
