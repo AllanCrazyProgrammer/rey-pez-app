@@ -46,6 +46,20 @@
           Mostrar precio promedio
         </label>
         <button class="btn-imprimir" @click="imprimir">⎙ Imprimir</button>
+        <button
+          class="btn-pdf btn-pdf-detallado"
+          :disabled="!!generandoPdf || cargando || !!errorCarga"
+          @click="descargarPdf('detallado')"
+        >
+          {{ generandoPdf === 'detallado' ? 'Generando…' : '📊 PDF Detallado' }}
+        </button>
+        <button
+          class="btn-pdf btn-pdf-resumen"
+          :disabled="!!generandoPdf || cargando || !!errorCarga"
+          @click="descargarPdf('resumen')"
+        >
+          {{ generandoPdf === 'resumen' ? 'Generando…' : '📄 PDF Resumen' }}
+        </button>
       </div>
     </div>
 
@@ -447,7 +461,8 @@ export default {
       fechaHasta: fechaLocalISO(),
       busqueda: '',
       mostrarPrecios: false,
-      detalle: null
+      detalle: null,
+      generandoPdf: null
     };
   },
   computed: {
@@ -731,6 +746,39 @@ export default {
     imprimir() {
       window.print();
     },
+    async descargarPdf(tipo) {
+      if (this.generandoPdf || this.cargando) return;
+      this.generandoPdf = tipo;
+      try {
+        const modulo = await import(/* webpackChunkName: "pdf-reporte-consumo" */ '@/utils/pdf/reporteConsumo');
+        const q = this.busqueda.trim().toLowerCase();
+        const sinClasificar = q
+          ? this.reporte.sinClasificar.filter(item =>
+              item.medida.toLowerCase().includes(q) || item.proveedor.toLowerCase().includes(q)
+            )
+          : this.reporte.sinClasificar;
+        const datos = {
+          reporte: this.reporte,
+          medidas: this.medidasFiltradas,
+          sinClasificar,
+          proveedores: this.proveedoresAgrupados,
+          maquilas: this.maquilasFiltradas,
+          fechaDesde: this.fechaDesde,
+          fechaHasta: this.fechaHasta,
+          mostrarPrecios: this.mostrarPrecios
+        };
+        if (tipo === 'detallado') {
+          modulo.generarReporteConsumoDetalladoPDF(datos);
+        } else {
+          modulo.generarReporteConsumoResumenPDF(datos);
+        }
+      } catch (error) {
+        console.error('Error al generar el PDF del reporte de consumo:', error);
+        alert('No se pudo generar el PDF. Intenta de nuevo.');
+      } finally {
+        this.generandoPdf = null;
+      }
+    },
     async cargarEntradas() {
       this.cargando = true;
       this.errorCarga = null;
@@ -888,6 +936,47 @@ export default {
 
 .btn-imprimir:hover {
   background: #219653;
+}
+
+.btn-pdf {
+  padding: 7px 14px;
+  border: none;
+  border-radius: 5px;
+  color: white;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: transform 0.15s ease, box-shadow 0.2s ease;
+}
+
+.btn-pdf:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.btn-pdf:not(:disabled):hover {
+  transform: translateY(-1px);
+}
+
+.btn-pdf-detallado {
+  background: linear-gradient(90deg, #1a5276, #2980b9);
+  box-shadow: 0 2px 6px rgba(26, 82, 118, 0.35);
+}
+
+.btn-pdf-detallado:not(:disabled):hover {
+  box-shadow: 0 3px 10px rgba(26, 82, 118, 0.45);
+}
+
+.btn-pdf-resumen {
+  background: linear-gradient(90deg, #6c3483, #8e44ad);
+  box-shadow: 0 2px 6px rgba(108, 52, 131, 0.35);
+}
+
+.btn-pdf-resumen:not(:disabled):hover {
+  box-shadow: 0 3px 10px rgba(108, 52, 131, 0.45);
 }
 
 .estado-carga,
