@@ -399,17 +399,28 @@ const MAQUILAS = ['Ozuna', 'Joselito'];
 // sección "Medidas a depurar".
 const DEPURACION_MEDIDAS = {};
 
+// Calificativos que SÍ marcan una variante real (se mantienen separados de
+// la base). Cualquier otro calificativo ("chuy", "nueva", "gde", "café",
+// "Tirado", etc.) se considera la misma medida original y se fusiona con la
+// base. Para agregar una nueva variante a mantener aparte, añade su patrón
+// aquí.
+const VARIANTES_A_CONSERVAR = [
+  { patron: /1ra\s+nacional/i, etiqueta: '1ra Nacional' },
+  { patron: /cristal/i, etiqueta: 'Cristal' }
+];
+
 // Regla general de depuración: la primera palabra de la medida (ej. "51/60",
-// "Mixta", "Piojo") es la base. Si el resto NO dice "1ra Nacional", se
-// considera la medida original y se reporta solo con la base ("51/60 chuy",
-// "Mixta chuy", "Piojo chuy" → "51/60", "Mixta", "Piojo"). Si dice "1ra
-// Nacional" se conserva como esa variante, con el nombre normalizado.
+// "Mixta", "Piojo") es la base. Si el resto no coincide con ninguna
+// variante de VARIANTES_A_CONSERVAR, se considera la medida original y se
+// reporta solo con la base ("51/60 chuy", "Piojo gde", "Piojo café" →
+// "51/60", "Piojo"). Si coincide, se conserva como esa variante, con el
+// nombre normalizado ("Piojo cristal" → "Piojo Cristal").
 function medidaDepurada(medida) {
   const manual = DEPURACION_MEDIDAS[medida];
   if (manual) return manual;
   const token = medida.split(/\s+/)[0];
-  if (/1ra\s+nacional/i.test(medida)) return `${token} 1ra Nacional`;
-  return token;
+  const variante = VARIANTES_A_CONSERVAR.find(v => v.patron.test(medida));
+  return variante ? `${token} ${variante.etiqueta}` : token;
 }
 
 // Agrupación de proveedores: mapea nombres de proveedores a su grupo.
