@@ -333,51 +333,6 @@ function totalMaquilaPorAnio(maquilas) {
 
 const porKilosDesc = (a, b) => b.kilos - a.kilos;
 
-// Las medidas "sin clasificar" (no empiezan con número: Mixta, Piojo, etc.)
-// no vienen en reporte.medidas; aquí se agrupan por medida para que el PDF
-// las incluya y los totales cuadren con las compras propias.
-function medidasDesdeSinClasificar(sinClasificar) {
-  const porMedida = {};
-  (sinClasificar || []).forEach(item => {
-    if (!porMedida[item.medida]) {
-      porMedida[item.medida] = {
-        base: item.medida,
-        kilos: 0,
-        entradas: 0,
-        porAnio: {},
-        precioSum: 0,
-        precioKilos: 0,
-        proveedores: []
-      };
-    }
-    const med = porMedida[item.medida];
-    med.kilos += item.kilos;
-    med.entradas += item.entradas;
-    Object.keys(item.porAnio || {}).forEach(anio => {
-      med.porAnio[anio] = (med.porAnio[anio] || 0) + item.porAnio[anio];
-    });
-    med.precioSum += item.precioSum || 0;
-    med.precioKilos += item.precioKilos || 0;
-    med.proveedores.push({
-      nombre: item.proveedor,
-      kilos: item.kilos,
-      entradas: item.entradas,
-      porAnio: item.porAnio || {},
-      precioPromedio: item.precioKilos > 0 ? item.precioSum / item.precioKilos : null,
-      variantes: []
-    });
-  });
-  return Object.values(porMedida).map(med => ({
-    ...med,
-    precioPromedio: med.precioKilos > 0 ? med.precioSum / med.precioKilos : null,
-    proveedores: med.proveedores.sort(porKilosDesc)
-  }));
-}
-
-function combinarMedidas(medidas, sinClasificar) {
-  return [...medidas, ...medidasDesdeSinClasificar(sinClasificar)].sort(porKilosDesc);
-}
-
 function topConOtros(items, limite, mapear) {
   const mapeados = items.map(mapear);
   if (mapeados.length <= limite) return mapeados;
@@ -508,7 +463,7 @@ function segmentosProveedores(proveedores, limite) {
 
 export function generarReporteConsumoResumenPDF(datos) {
   const { reporte, proveedores, maquilas } = datos;
-  const medidas = combinarMedidas(datos.medidas, datos.sinClasificar);
+  const medidas = [...datos.medidas].sort(porKilosDesc);
   const rango = { desde: datos.fechaDesde, hasta: datos.fechaHasta };
   const doc = nuevoDocumento();
   const ctx = { doc, subtitulo: 'Resumen ejecutivo' };
@@ -651,7 +606,7 @@ export function generarReporteConsumoResumenPDF(datos) {
 
 export function generarReporteConsumoDetalladoPDF(datos) {
   const { reporte, proveedores, maquilas, mostrarPrecios } = datos;
-  const medidas = combinarMedidas(datos.medidas, datos.sinClasificar);
+  const medidas = [...datos.medidas].sort(porKilosDesc);
   const rango = { desde: datos.fechaDesde, hasta: datos.fechaHasta };
   const doc = nuevoDocumento();
   const ctx = { doc, subtitulo: 'Versión detallada' };

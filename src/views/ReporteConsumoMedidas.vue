@@ -427,8 +427,12 @@ function fechaLocalISO(date) {
 }
 
 function baseDeMedida(medida) {
-  const token = medidaDepurada(medida).split(/\s+/)[0];
-  return /\d/.test(token) ? token : null;
+  // Medidas con talla numérica se agrupan por la talla ("51/60 1ra Nacional"
+  // → tarjeta "51/60"). Las que no empiezan con número (Piojo, Mixta,
+  // Piojo Cristal…) usan su nombre depurado completo como grupo propio.
+  const depurada = medidaDepurada(medida);
+  const token = depurada.split(/\s+/)[0];
+  return /\d/.test(token) ? token : depurada;
 }
 
 function nuevoAcumulador(extra = {}) {
@@ -493,14 +497,12 @@ export default {
         anios: [],
         medidas: [],
         proveedores: [],
-        maquilas: [],
-        sinClasificar: []
+        maquilas: []
       };
 
       const medidas = {};
       const proveedores = {};
       const maquilas = {};
-      const sinClasificar = {};
       const anios = new Set();
 
       this.entradas.forEach(entrada => {
@@ -530,26 +532,16 @@ export default {
         r.porAnio[entrada.anio] = (r.porAnio[entrada.anio] || 0) + entrada.kilos;
 
         const base = baseDeMedida(medida);
-        const baseProveedor = base || medida;
 
         if (!proveedores[entrada.proveedor]) {
           proveedores[entrada.proveedor] = nuevoAcumulador({ nombre: entrada.proveedor, medidas: {} });
         }
         const prov = proveedores[entrada.proveedor];
         acumular(prov, entrada);
-        if (!prov.medidas[baseProveedor]) {
-          prov.medidas[baseProveedor] = nuevoAcumulador({ nombre: baseProveedor });
+        if (!prov.medidas[base]) {
+          prov.medidas[base] = nuevoAcumulador({ nombre: base });
         }
-        acumular(prov.medidas[baseProveedor], entrada);
-
-        if (!base) {
-          const clave = `${medida}||${entrada.proveedor}`;
-          if (!sinClasificar[clave]) {
-            sinClasificar[clave] = nuevoAcumulador({ medida, proveedor: entrada.proveedor });
-          }
-          acumular(sinClasificar[clave], entrada);
-          return;
-        }
+        acumular(prov.medidas[base], entrada);
 
         if (!medidas[base]) {
           medidas[base] = nuevoAcumulador({ base, proveedores: {} });
@@ -596,7 +588,6 @@ export default {
       r.maquilas = Object.values(maquilas)
         .map(maq => ({ ...maq, medidas: Object.values(maq.medidas).sort(porKilosDesc) }))
         .sort(porKilosDesc);
-      r.sinClasificar = Object.values(sinClasificar).sort(porKilosDesc);
 
       return r;
     },
@@ -679,9 +670,8 @@ export default {
           const medida = medidaDepurada(e.medida);
           if (d.medidaExacta && medida !== d.medidaExacta) return false;
           if (d.base && baseDeMedida(medida) !== d.base) return false;
-          // "grupo" es la fila de la sección por proveedor: medida base, o la
-          // medida completa cuando no se pudo clasificar.
-          if (d.grupo && (baseDeMedida(medida) || medida) !== d.grupo) return false;
+          // "grupo" es la fila de la sección por proveedor (la medida base).
+          if (d.grupo && baseDeMedida(medida) !== d.grupo) return false;
           return true;
         })
         .sort((a, b) => a.fecha - b.fecha);
@@ -751,16 +741,9 @@ export default {
       this.generandoPdf = tipo;
       try {
         const modulo = await import(/* webpackChunkName: "pdf-reporte-consumo" */ '@/utils/pdf/reporteConsumo');
-        const q = this.busqueda.trim().toLowerCase();
-        const sinClasificar = q
-          ? this.reporte.sinClasificar.filter(item =>
-              item.medida.toLowerCase().includes(q) || item.proveedor.toLowerCase().includes(q)
-            )
-          : this.reporte.sinClasificar;
         const datos = {
           reporte: this.reporte,
           medidas: this.medidasFiltradas,
-          sinClasificar,
           proveedores: this.proveedoresAgrupados,
           maquilas: this.maquilasFiltradas,
           fechaDesde: this.fechaDesde,
