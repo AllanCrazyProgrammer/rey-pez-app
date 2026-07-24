@@ -399,15 +399,15 @@ const MAQUILAS = ['Ozuna', 'Joselito'];
 // sección "Medidas a depurar".
 const DEPURACION_MEDIDAS = {};
 
-// Regla general de depuración: si la medida empieza con la talla (ej. "51/60")
-// y NO dice "1ra Nacional", se considera la medida original y se reporta solo
-// con la talla ("51/60 chuy", "51/60 Tirado" → "51/60"). Si dice "1ra
+// Regla general de depuración: la primera palabra de la medida (ej. "51/60",
+// "Mixta", "Piojo") es la base. Si el resto NO dice "1ra Nacional", se
+// considera la medida original y se reporta solo con la base ("51/60 chuy",
+// "Mixta chuy", "Piojo chuy" → "51/60", "Mixta", "Piojo"). Si dice "1ra
 // Nacional" se conserva como esa variante, con el nombre normalizado.
 function medidaDepurada(medida) {
   const manual = DEPURACION_MEDIDAS[medida];
   if (manual) return manual;
   const token = medida.split(/\s+/)[0];
-  if (!/\d/.test(token)) return medida;
   if (/1ra\s+nacional/i.test(medida)) return `${token} 1ra Nacional`;
   return token;
 }
