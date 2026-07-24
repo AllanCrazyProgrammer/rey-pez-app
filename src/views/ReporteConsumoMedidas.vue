@@ -103,7 +103,12 @@
             </thead>
             <tbody>
               <template v-for="prov in m.proveedores">
-                <tr class="fila-proveedor" :key="`${m.base}-${prov.nombre}`">
+                <tr
+                  class="fila-proveedor fila-clic"
+                  :key="`${m.base}-${prov.nombre}`"
+                  title="Clic para ver el desglose por fecha"
+                  @click="abrirDetalle({ titulo: `${m.base} · ${prov.nombre}`, proveedor: prov.nombre, base: m.base, esMaquila: false })"
+                >
                   <td class="col-nombre">{{ prov.nombre }}</td>
                   <td v-for="anio in reporte.anios" :key="anio" class="col-num">
                     {{ prov.porAnio[anio] ? formatNumber(prov.porAnio[anio], 0) : '—' }}
@@ -117,7 +122,9 @@
                 <tr
                   v-for="v in prov.variantes"
                   :key="`${m.base}-${prov.nombre}-${v.medida}`"
-                  class="fila-variante"
+                  class="fila-variante fila-clic"
+                  title="Clic para ver el desglose por fecha"
+                  @click="abrirDetalle({ titulo: `${v.medida} · ${prov.nombre}`, proveedor: prov.nombre, medidaExacta: v.medida, esMaquila: false })"
                 >
                   <td class="col-nombre variante-nombre">{{ v.medida }}</td>
                   <td v-for="anio in reporte.anios" :key="anio" class="col-num">
@@ -171,7 +178,13 @@
               </tr>
             </thead>
             <tbody>
-              <tr v-for="med in prov.medidas" :key="`prov-${prov.nombre}-${med.nombre}`">
+              <tr
+                v-for="med in prov.medidas"
+                :key="`prov-${prov.nombre}-${med.nombre}`"
+                class="fila-clic"
+                title="Clic para ver el desglose por fecha"
+                @click="abrirDetalle({ titulo: `${prov.nombre} · ${med.nombre}`, proveedor: prov.nombre, grupo: med.nombre, esMaquila: false })"
+              >
                 <td class="col-nombre">{{ med.nombre }}</td>
                 <td v-for="anio in reporte.anios" :key="anio" class="col-num">
                   {{ med.porAnio[anio] ? formatNumber(med.porAnio[anio], 0) : '—' }}
@@ -224,7 +237,13 @@
               </tr>
             </thead>
             <tbody>
-              <tr v-for="med in maq.medidas" :key="`maq-${maq.nombre}-${med.nombre}`">
+              <tr
+                v-for="med in maq.medidas"
+                :key="`maq-${maq.nombre}-${med.nombre}`"
+                class="fila-clic"
+                title="Clic para ver el desglose por fecha"
+                @click="abrirDetalle({ titulo: `${maq.nombre} (Maquila) · ${med.nombre}`, proveedor: maq.nombre, medidaExacta: med.nombre, esMaquila: true })"
+              >
                 <td class="col-nombre">{{ med.nombre }}</td>
                 <td v-for="anio in reporte.anios" :key="anio" class="col-num">
                   {{ med.porAnio[anio] ? formatNumber(med.porAnio[anio], 0) : '—' }}
@@ -263,7 +282,13 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="item in reporte.sinClasificar" :key="`sc-${item.medida}-${item.proveedor}`">
+            <tr
+              v-for="item in reporte.sinClasificar"
+              :key="`sc-${item.medida}-${item.proveedor}`"
+              class="fila-clic"
+              title="Clic para ver el desglose por fecha"
+              @click="abrirDetalle({ titulo: `${item.medida} · ${item.proveedor}`, proveedor: item.proveedor, medidaExacta: item.medida, esMaquila: false })"
+            >
               <td class="col-nombre">{{ item.medida }}</td>
               <td class="col-nombre">{{ item.proveedor }}</td>
               <td class="col-num">{{ item.entradas }}</td>
@@ -273,6 +298,48 @@
         </table>
       </section>
     </template>
+
+    <!-- ============ MODAL DE DESGLOSE POR FECHA ============ -->
+    <div v-if="detalle" class="detalle-overlay no-print" @click.self="cerrarDetalle">
+      <div class="detalle-modal">
+        <div class="detalle-header">
+          <h3>{{ detalle.titulo }}</h3>
+          <button class="detalle-cerrar" @click="cerrarDetalle" title="Cerrar">&times;</button>
+        </div>
+        <p class="detalle-sub">
+          {{ detalleEntradas.length }} entradas
+          · <strong>{{ formatNumber(detalleKilos, 0) }} kg</strong>
+          <span v-if="detallePrecioPromedio"> · prom. ${{ formatNumber(detallePrecioPromedio) }}</span>
+          · {{ formatearFechaCorta(fechaDesde) }} — {{ formatearFechaCorta(fechaHasta) }}
+        </p>
+        <div class="detalle-tabla-wrap">
+          <table class="tabla">
+            <thead>
+              <tr>
+                <th class="col-nombre">Fecha</th>
+                <th class="col-nombre">Medida</th>
+                <th v-if="detalleTienePrecio" class="col-num">Precio</th>
+                <th class="col-num">Kilos</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(e, idx) in detalleEntradas" :key="`det-${idx}`">
+                <td class="col-nombre">{{ formatearFechaDia(e.fecha) }}</td>
+                <td class="col-nombre">{{ e.medida }}</td>
+                <td v-if="detalleTienePrecio" class="col-num precio">
+                  {{ e.precio !== null && e.precio > 0 ? `$${formatNumber(e.precio)}` : '—' }}
+                </td>
+                <td class="col-num">{{ formatNumber(e.kilos, 0) }}</td>
+              </tr>
+              <tr class="fila-total">
+                <td class="col-nombre" :colspan="detalleTienePrecio ? 3 : 2">Total</td>
+                <td class="col-num">{{ formatNumber(detalleKilos, 0) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -340,7 +407,8 @@ export default {
       fechaDesde: '2024-01-01',
       fechaHasta: fechaLocalISO(),
       busqueda: '',
-      mostrarPrecios: false
+      mostrarPrecios: false,
+      detalle: null
     };
   },
   computed: {
@@ -353,9 +421,14 @@ export default {
     esRangoTodo() {
       return this.fechaDesde === '2024-01-01' && this.fechaHasta === fechaLocalISO();
     },
+    rangoFechas() {
+      return {
+        desde: this.fechaDesde ? new Date(`${this.fechaDesde}T00:00:00`) : null,
+        hasta: this.fechaHasta ? new Date(`${this.fechaHasta}T23:59:59.999`) : null
+      };
+    },
     reporte() {
-      const desde = this.fechaDesde ? new Date(`${this.fechaDesde}T00:00:00`) : null;
-      const hasta = this.fechaHasta ? new Date(`${this.fechaHasta}T23:59:59.999`) : null;
+      const { desde, hasta } = this.rangoFechas;
 
       const r = {
         totalKilos: 0,
@@ -497,10 +570,48 @@ export default {
         maq.nombre.toLowerCase().includes(q) ||
         maq.medidas.some(med => med.nombre.toLowerCase().includes(q))
       );
+    },
+    detalleEntradas() {
+      if (!this.detalle) return [];
+      const d = this.detalle;
+      const { desde, hasta } = this.rangoFechas;
+      return this.entradas
+        .filter(e => {
+          if (desde && e.fecha < desde) return false;
+          if (hasta && e.fecha > hasta) return false;
+          if (d.esMaquila !== undefined && e.esMaquila !== d.esMaquila) return false;
+          if (d.proveedor && e.proveedor !== d.proveedor) return false;
+          if (d.medidaExacta && e.medida !== d.medidaExacta) return false;
+          if (d.base && baseDeMedida(e.medida) !== d.base) return false;
+          // "grupo" es la fila de la sección por proveedor: medida base, o la
+          // medida completa cuando no se pudo clasificar.
+          if (d.grupo && (baseDeMedida(e.medida) || e.medida) !== d.grupo) return false;
+          return true;
+        })
+        .sort((a, b) => a.fecha - b.fecha);
+    },
+    detalleKilos() {
+      return this.detalleEntradas.reduce((sum, e) => sum + e.kilos, 0);
+    },
+    detalleTienePrecio() {
+      return this.detalleEntradas.some(e => e.precio !== null && e.precio > 0);
+    },
+    detallePrecioPromedio() {
+      const conPrecio = this.detalleEntradas.filter(e => e.precio !== null && e.precio > 0);
+      const kilos = conPrecio.reduce((sum, e) => sum + e.kilos, 0);
+      if (kilos <= 0) return null;
+      return conPrecio.reduce((sum, e) => sum + e.precio * e.kilos, 0) / kilos;
     }
   },
   async mounted() {
+    this.onKeydown = (e) => {
+      if (e.key === 'Escape') this.cerrarDetalle();
+    };
+    document.addEventListener('keydown', this.onKeydown);
     await this.cargarEntradas();
+  },
+  beforeDestroy() {
+    document.removeEventListener('keydown', this.onKeydown);
   },
   methods: {
     formatNumber,
@@ -511,6 +622,16 @@ export default {
     },
     porcentaje(kilos) {
       return this.reporte.totalKilos > 0 ? (kilos / this.reporte.totalKilos) * 100 : 0;
+    },
+    formatearFechaDia(fecha) {
+      const d = fecha instanceof Date ? fecha : new Date(fecha);
+      return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+    },
+    abrirDetalle(detalle) {
+      this.detalle = detalle;
+    },
+    cerrarDetalle() {
+      this.detalle = null;
     },
     seleccionarAnio(anio) {
       this.fechaDesde = `${anio}-01-01`;
@@ -865,6 +986,78 @@ th.col-num {
 .precio {
   color: #27ae60;
   font-weight: 600;
+}
+
+.fila-clic {
+  cursor: pointer;
+}
+
+.fila-clic:hover td {
+  background: #d6eaf8;
+}
+
+.detalle-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 40, 60, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 16px;
+}
+
+.detalle-modal {
+  background: white;
+  border-radius: 10px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.35);
+  width: min(680px, 100%);
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  padding: 14px 18px 18px;
+}
+
+.detalle-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.detalle-header h3 {
+  margin: 0;
+  color: #1a5276;
+  font-size: 1.15rem;
+}
+
+.detalle-cerrar {
+  border: none;
+  background: transparent;
+  font-size: 1.6rem;
+  line-height: 1;
+  color: #6c7a89;
+  cursor: pointer;
+  padding: 2px 6px;
+}
+
+.detalle-cerrar:hover {
+  color: #c0392b;
+}
+
+.detalle-sub {
+  margin: 4px 0 10px;
+  font-size: 0.88rem;
+  color: #5d6d7e;
+}
+
+.detalle-tabla-wrap {
+  overflow-y: auto;
+}
+
+.detalle-tabla-wrap .tabla th {
+  position: sticky;
+  top: 0;
 }
 
 @media (max-width: 700px) {
