@@ -136,6 +136,11 @@ const routes = [
     component: AnalisisStock
   },
   {
+    path: '/reporte-consumo',
+    name: 'ReporteConsumoMedidas',
+    component: () => import('@/views/ReporteConsumoMedidas.vue')
+  },
+  {
     path: '/asesor-experto',
     name: 'AsesorExperto',
     component: AsesorExperto

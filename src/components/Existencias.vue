@@ -31,6 +31,9 @@
           </div>
         </div>
         <div class="header-actions">
+          <router-link to="/reporte-consumo" class="consumo-button">
+            <span class="btn-icono" aria-hidden="true">📈</span> Consumo Histórico
+          </router-link>
           <router-link to="/analisis-stock" class="analisis-button">
             <span class="btn-icono" aria-hidden="true">📊</span> Análisis de Stock
           </router-link>
@@ -1945,6 +1948,7 @@ h1 {
 }
 
 /* Botones de acción: neón por color con destello que cruza al pasar el mouse. */
+.consumo-button,
 .analisis-button,
 .asesor-button,
 .print-button {
@@ -1966,6 +1970,7 @@ h1 {
   transition: background-color 0.2s, box-shadow 0.2s;
 }
 
+.consumo-button::after,
 .analisis-button::after,
 .asesor-button::after,
 .print-button::after {
@@ -1980,10 +1985,22 @@ h1 {
   transition: left 0.45s ease;
 }
 
+.consumo-button:hover::after,
 .analisis-button:hover::after,
 .asesor-button:hover::after,
 .print-button:hover::after {
   left: 130%;
+}
+
+.consumo-button {
+  color: var(--verde);
+  border-color: rgba(0, 255, 102, 0.55);
+  text-shadow: 0 0 10px rgba(0, 255, 102, 0.5);
+}
+
+.consumo-button:hover {
+  background: rgba(0, 255, 102, 0.14);
+  box-shadow: 0 0 20px rgba(0, 255, 102, 0.35);
 }
 
 .btn-icono {
