@@ -389,36 +389,6 @@ function alinearNumericasDerecha(dataCell) {
 }
 
 // --------------------------------------------------------- contenido: resumen
-// Puntos clave calculados a partir de los datos (para el resumen ejecutivo).
-function calcularPuntosClave(datos, todasMedidas) {
-  const { reporte, proveedores } = datos;
-  const puntos = [];
-  if (todasMedidas.length > 0) {
-    const top = todasMedidas[0];
-    puntos.push(`La medida con mayor consumo es ${top.base}: ${kg(top.kilos)} (${pct(top.kilos, reporte.totalKilos)} de las compras propias).`);
-  }
-  if (proveedores.length > 0) {
-    const top = [...proveedores].sort(porKilosDesc)[0];
-    puntos.push(`El proveedor principal es ${top.nombre}: ${kg(top.kilos)} (${pct(top.kilos, reporte.totalKilos)}) en ${entradasDeProveedorAgrupado(top)} entradas.`);
-  }
-  const anios = reporte.anios;
-  if (anios.length >= 2) {
-    const a1 = anios[anios.length - 2];
-    const a2 = anios[anios.length - 1];
-    const v1 = reporte.porAnio[a1] || 0;
-    const v2 = reporte.porAnio[a2] || 0;
-    if (v1 > 0) {
-      const delta = ((v2 - v1) / v1) * 100;
-      const signo = delta >= 0 ? 'más' : 'menos';
-      puntos.push(`En ${a2} se han comprado ${formatNumber(Math.abs(delta), 1)}% ${signo} kilos que en ${a1} (${kg(v2)} vs ${kg(v1)}).`);
-    }
-  }
-  if (reporte.maquilaKilos > 0) {
-    const totalProcesado = reporte.totalKilos + reporte.maquilaKilos;
-    puntos.push(`La maquila aporta ${kg(reporte.maquilaKilos)} adicionales: el volumen total procesado es ${kg(totalProcesado)}.`);
-  }
-  return puntos;
-}
 
 function tilesPrincipales(reporte) {
   return [
@@ -472,29 +442,7 @@ export function generarReporteConsumoResumenPDF(datos) {
 
   // ---- KPIs
   y = dibujarTiles(doc, y, tilesPrincipales(reporte));
-
-  // ---- Puntos clave
-  const puntos = calcularPuntosClave(datos, medidas);
-  if (puntos.length > 0) {
-    const altoCaja = 16 + puntos.length * 13;
-    doc.setFillColor(247, 250, 253);
-    doc.setDrawColor(...COLOR.azulBorde);
-    doc.setLineWidth(0.75);
-    doc.roundedRect(PAGINA.margen, y, PAGINA.ancho - 2 * PAGINA.margen, altoCaja, 4, 4, 'FD');
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(8);
-    doc.setTextColor(...COLOR.azulOscuro);
-    doc.text('PUNTOS CLAVE', PAGINA.margen + 12, y + 13);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8);
-    doc.setTextColor(...COLOR.texto);
-    puntos.forEach((punto, i) => {
-      doc.setFillColor(...COLOR.azul);
-      doc.circle(PAGINA.margen + 16, y + 23.5 + i * 13, 1.5, 'F');
-      doc.text(punto, PAGINA.margen + 24, y + 26 + i * 13);
-    });
-    y += altoCaja + 18;
-  }
+  y += 8;
 
   // ---- Gráficas: barras de medidas (izq) + dona de proveedores (der)
   y = tituloSeccion(ctx, y, 'Consumo por medida y proveedor', '(compras propias)');
