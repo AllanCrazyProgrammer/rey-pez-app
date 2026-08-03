@@ -370,18 +370,27 @@
       <section class="seccion seccion-relacion-granja">
         <div class="relacion-granja-encabezado">
           <h2>Relación anual de granja</h2>
-          <label class="selector-proveedor-resumen no-print">
-            Proveedor para comparar
-            <select v-model="proveedorResumen">
-              <option
-                v-for="proveedor in proveedoresGranjaDisponibles"
-                :key="`resumen-${proveedor}`"
-                :value="proveedor"
-              >
-                {{ proveedor }}
-              </option>
-            </select>
-          </label>
+          <div class="relacion-granja-acciones no-print">
+            <label class="selector-proveedor-resumen">
+              Proveedor para comparar
+              <select v-model="proveedorResumen">
+                <option
+                  v-for="proveedor in proveedoresGranjaDisponibles"
+                  :key="`resumen-${proveedor}`"
+                  :value="proveedor"
+                >
+                  {{ proveedor }}
+                </option>
+              </select>
+            </label>
+            <button
+              class="btn-pdf-relacion"
+              :disabled="!!generandoPdf || cargando || resumenGranjaPorAnio.length === 0"
+              @click="descargarPdf('relacion')"
+            >
+              {{ generandoPdf === 'relacion' ? 'Generando…' : '📄 PDF Relación Granja' }}
+            </button>
+          </div>
         </div>
         <p class="relacion-introduccion">
           Comparación de la granja consumida entre todos tus proveedores contra
@@ -1014,6 +1023,8 @@ export default {
         };
         if (tipo === 'detallado') {
           modulo.generarReporteConsumoDetalladoPDF(datos);
+        } else if (tipo === 'relacion') {
+          modulo.generarReporteRelacionGranjaPDF(datos);
         } else {
           modulo.generarReporteConsumoResumenPDF(datos);
         }
@@ -1457,6 +1468,13 @@ export default {
   font-weight: 600;
 }
 
+.relacion-granja-acciones {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
 .selector-proveedor-resumen select {
   min-width: 180px;
   padding: 7px 9px;
@@ -1466,6 +1484,30 @@ export default {
   color: #1d5f3a;
   font-size: 1rem;
   font-weight: 700;
+}
+
+.btn-pdf-relacion {
+  min-height: 39px;
+  padding: 8px 14px;
+  border: none;
+  border-radius: 5px;
+  background: linear-gradient(90deg, #196f3d, #27ae60);
+  box-shadow: 0 2px 6px rgba(25, 111, 61, 0.32);
+  color: white;
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.btn-pdf-relacion:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 10px rgba(25, 111, 61, 0.42);
+}
+
+.btn-pdf-relacion:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  box-shadow: none;
 }
 
 .relacion-introduccion {
@@ -1688,6 +1730,11 @@ th.col-num {
   }
 
   .relacion-granja-encabezado {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .relacion-granja-acciones {
     align-items: stretch;
     flex-direction: column;
   }

@@ -64,7 +64,9 @@ function nuevoDocumento() {
 
 // ---------------------------------------------------------------- encabezados
 
-function dibujarEncabezado(doc, subtitulo, rango) {
+function dibujarEncabezado(doc, subtitulo, rango, titulo = 'Reporte de Consumo por Medida') {
+  doc.setFillColor(255, 255, 255);
+  doc.rect(0, 0, PAGINA.ancho, PAGINA.alto, 'F');
   doc.setFillColor(...COLOR.azulOscuro);
   doc.rect(0, 0, PAGINA.ancho, ALTO_ENCABEZADO, 'F');
   doc.setFillColor(...COLOR.azul);
@@ -75,7 +77,7 @@ function dibujarEncabezado(doc, subtitulo, rango) {
   doc.setFontSize(9);
   doc.text('R E Y   P E Z', PAGINA.margen, 24);
   doc.setFontSize(18);
-  doc.text('Reporte de Consumo por Medida', PAGINA.margen, 46);
+  doc.text(titulo, PAGINA.margen, 46);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9);
   doc.setTextColor(190, 215, 235);
@@ -92,6 +94,8 @@ function dibujarEncabezado(doc, subtitulo, rango) {
 }
 
 function dibujarEncabezadoContinuacion(doc, subtitulo) {
+  doc.setFillColor(255, 255, 255);
+  doc.rect(0, 0, PAGINA.ancho, PAGINA.alto, 'F');
   doc.setFillColor(...COLOR.azulOscuro);
   doc.rect(0, 0, PAGINA.ancho, ALTO_ENCABEZADO_CONT - 8, 'F');
   doc.setTextColor(255, 255, 255);
@@ -356,6 +360,15 @@ function nombreArchivo(tipo, rango) {
   return `reporte-consumo-${tipo}-${rango.desde}-a-${rango.hasta}.pdf`;
 }
 
+function nombreSeguro(texto) {
+  return String(texto || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/gi, '-')
+    .replace(/^-|-$/g, '')
+    .toLowerCase();
+}
+
 function opcionesTablaBase(ctx, startY, extras = {}) {
   return {
     startY,
@@ -491,7 +504,7 @@ function dibujarRelacionGranja(ctx, y, datos) {
       ? `Para pedir toda la granja con ${proveedor}, el acuerdo tendría que cubrir ${kg(fila.kilosTotales)}: ` +
         `${kg(fila.kilosAdicionales)} adicionales sobre lo que ya surtió.`
       : `${proveedor} ya concentró el 100% de la granja de ese año.`;
-    const lineasConsumo = ctx.doc.splitTextToSize(textoConsumo, PAGINA.ancho - 2 * PAGINA.margen - 28);
+    const lineasConsumo = ctx.doc.splitTextToSize(textoConsumo, PAGINA.ancho - 2 * PAGINA.margen - 60);
     const lineasAcuerdo = ctx.doc.splitTextToSize(textoAcuerdo, PAGINA.ancho - 2 * PAGINA.margen - 42);
     const alto = 31 + lineasConsumo.length * 11 + lineasAcuerdo.length * 11;
     y = asegurarEspacio(ctx, y, alto + 12);
@@ -539,6 +552,94 @@ function dibujarRelacionGranja(ctx, y, datos) {
     y
   );
   return y + 14;
+}
+
+// ===================================================== RELACIÓN DE GRANJA
+
+export function generarReporteRelacionGranjaPDF(datos) {
+  const filas = datos.resumenGranja || [];
+  const proveedor = datos.proveedorResumen || 'Selecta';
+  const rango = { desde: datos.fechaDesde, hasta: datos.fechaHasta };
+  const doc = nuevoDocumento();
+  const ctx = { doc, subtitulo: `Relación de granja contra ${proveedor}` };
+  let y = dibujarEncabezado(
+    doc,
+    `Relación anual de granja · Comparación contra ${proveedor}`,
+    rango,
+    'Relación de Granja por Proveedor'
+  );
+
+  const totalGranja = filas.reduce((suma, fila) => suma + fila.kilosTotales, 0);
+  const totalProveedor = filas.reduce((suma, fila) => suma + fila.kilosProveedor, 0);
+  const totalOtros = Math.max(totalGranja - totalProveedor, 0);
+  const participacion = totalGranja > 0 ? (totalProveedor / totalGranja) * 100 : 0;
+
+  y = dibujarTiles(doc, y, [
+    {
+      etiqueta: 'Granja total',
+      valor: kg(totalGranja),
+      sub: `${filas.length} ${filas.length === 1 ? 'año' : 'años'}`,
+      fondo: [234, 250, 241],
+      borde: [169, 223, 191],
+      acento: COLOR.verde
+    },
+    {
+      etiqueta: proveedor,
+      valor: kg(totalProveedor),
+      sub: `${formatNumber(participacion, 1)}% de la granja`,
+      acento: COLOR.azul
+    },
+    {
+      etiqueta: 'Otros proveedores',
+      valor: kg(totalOtros),
+      sub: `${formatNumber(100 - participacion, 1)}% de la granja`,
+      fondo: COLOR.naranjaSuave,
+      borde: [245, 217, 168],
+      acento: COLOR.naranja
+    }
+  ]);
+
+  y = tituloSeccion(ctx, y, 'Kilos de granja por año', `(total vs. ${proveedor})`);
+  autoTable(doc, opcionesTablaBase(ctx, y, {
+    head: [[
+      'Año',
+      'Granja total',
+      proveedor,
+      'Otros proveedores',
+      `% ${proveedor}`
+    ]],
+    body: filas.map(fila => [
+      String(fila.anio),
+      formatNumber(fila.kilosTotales, 0),
+      formatNumber(fila.kilosProveedor, 0),
+      formatNumber(fila.kilosAdicionales, 0),
+      `${formatNumber(fila.porcentajeProveedor, 1)}%`
+    ]),
+    foot: [[
+      'Total',
+      formatNumber(totalGranja, 0),
+      formatNumber(totalProveedor, 0),
+      formatNumber(totalOtros, 0),
+      `${formatNumber(participacion, 1)}%`
+    ]],
+    footStyles: {
+      fillColor: [234, 250, 241],
+      textColor: [25, 111, 61],
+      fontStyle: 'bold',
+      fontSize: 8.2,
+      lineColor: [169, 223, 191]
+    },
+    showFoot: 'lastPage',
+    didParseCell: data => alinearNumericasDerecha(data)
+  }));
+  y = doc.lastAutoTable.finalY + 16;
+
+  y = dibujarRelacionGranja(ctx, y, datos);
+
+  dibujarPiesDePagina(doc);
+  doc.save(
+    `relacion-granja-${nombreSeguro(proveedor) || 'proveedor'}-${rango.desde}-a-${rango.hasta}.pdf`
+  );
 }
 
 // ================================================================== RESUMEN
