@@ -48,7 +48,7 @@
         <i class="fas" :class="isSyncing ? 'fa-spinner fa-spin' : (hasPendingChanges ? 'fa-cloud-upload-alt' : 'fa-check-circle')"></i>
         {{ isSyncing ? 'Subiendo...' : (hasPendingChanges ? 'Subir Cambios' : 'Guardado') }}
       </button>
-      <button @click="verPedidoDelDia" class="btn btn-success" title="Ver pedido del día de hoy">
+      <button @click="$emit('ver-pedido-dia')" class="btn btn-success" title="Ver pedido del día de hoy">
         <i class="fas fa-clipboard-list"></i> Pedido del Día
       </button>
       <GenerarEsqueletoEmbarqueButton
@@ -117,19 +117,11 @@
         </div>
       </div>
     </div>
-
-    <!-- Modal del Pedido del Día -->
-    <PedidoDelDiaModal 
-      :mostrar="mostrarModalPedido"
-      :fechaEmbarque="fechaLocal"
-      @cerrar="cerrarModalPedido"
-    />
   </div>
 </template>
 
 <script>
 import PreciosHistorialModal from '@/components/PreciosHistorialModal.vue';
-import PedidoDelDiaModal from './PedidoDelDiaModal.vue';
 import GenerarEsqueletoEmbarqueButton from './GenerarEsqueletoEmbarqueButton.vue';
 import { useUIStore } from '@/stores/ui';
 
@@ -137,7 +129,6 @@ export default {
   name: 'HeaderEmbarque',
   components: {
     PreciosHistorialModal,
-    PedidoDelDiaModal,
     GenerarEsqueletoEmbarqueButton
   },
   props: {
@@ -184,8 +175,7 @@ export default {
   data() {
     return {
       fechaLocal: this.embarque.fecha,
-      cargaConLocal: this.embarque.cargaCon,
-      mostrarModalPedido: false
+      cargaConLocal: this.embarque.cargaCon
     };
   },
   computed: {
@@ -219,12 +209,6 @@ export default {
     },
     actualizarCargaCon() {
       this.$emit('update:cargaCon', this.cargaConLocal);
-    },
-    verPedidoDelDia() {
-      this.mostrarModalPedido = true;
-    },
-    cerrarModalPedido() {
-      this.mostrarModalPedido = false;
     },
     abrirConfiguracionMedidas() {
       this.$emit('abrir-configuracion-medidas');

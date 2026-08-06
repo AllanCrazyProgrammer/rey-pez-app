@@ -37,6 +37,7 @@
         @esqueleto-error="onEsqueletoError"
         @abrir-rendimientos="irARendimientos"
         @abrir-multi-notas="abrirModalNotasMultiple"
+        @ver-pedido-dia="mostrarModalPedidoDia = true"
       />
 
       <!-- Aviso de edición colaborativa: quién más está editando este embarque -->
@@ -145,6 +146,14 @@
     </div>
 
     <!-- Modales Refactorizados -->
+    <!-- Fuera de .nuevo-embarque: evita que los paneles con overflow y
+         stacking context recorten o cubran el modal de pantalla completa. -->
+    <PedidoDelDiaModal
+      :mostrar="mostrarModalPedidoDia"
+      :fecha-embarque="embarque.fecha"
+      @cerrar="mostrarModalPedidoDia = false"
+    />
+
     <NuevoClienteModal 
       :mostrar="mostrarModalNuevoCliente" 
       @cerrar="mostrarModalNuevoCliente = false" 
@@ -274,6 +283,7 @@ import AltModal from './components/modals/AltModal.vue';
 import ConfiguracionMedidasModal from './components/modals/ConfiguracionMedidasModal.vue';
 import PedidoClienteModal from './components/modals/PedidoClienteModal.vue';
 import NotasPdfMultipleModal from './components/modals/NotasPdfMultipleModal.vue';
+import PedidoDelDiaModal from './components/PedidoDelDiaModal.vue';
 
 
 // Lazy loaded components
@@ -325,6 +335,7 @@ export default {
     ConfiguracionMedidasModal,
     PedidoClienteModal,
     NotasPdfMultipleModal,
+    PedidoDelDiaModal,
     SaveStatusIndicator,
     AuthErrorNotification
   },
@@ -377,6 +388,7 @@ export default {
       
       mostrarModalConfiguracionMedidas: false,
       medidasConfiguracion: [],
+      mostrarModalPedidoDia: false,
       mostrarModalPedidoCliente: false,
       clienteSeleccionadoPedido: null,
       

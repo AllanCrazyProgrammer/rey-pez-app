@@ -2547,6 +2547,14 @@ h4.cliente-header.ozuna-header {
   .impresion-container {
     padding: 10px;
   }
+
+  .pdf-preview {
+    padding: 12px;
+  }
+
+  .preview-page {
+    margin-bottom: 28px;
+  }
   
   .scale-control {
     flex-direction: column;
@@ -2558,15 +2566,59 @@ h4.cliente-header.ozuna-header {
     flex-direction: column;
     gap: 8px;
   }
-  
-  .btn-generar,
-  .btn-menu,
-  .btn-editar,
-  .btn-sacada,
-  .btn-crudos {
+
+  .buttons-container > button {
     width: 100%;
+    justify-content: center;
     padding: 10px;
     font-size: 14px;
+  }
+
+  /* En escritorio estas dos tablas comparten fila. En móvil necesitan todo el
+     ancho para que sus columnas y etiquetas no invadan al cliente vecino. */
+  .bottom-section {
+    flex-direction: column;
+    gap: 24px;
+    padding-top: 0;
+  }
+
+  .bottom-cliente,
+  .bottom-cliente:first-child,
+  .bottom-cliente:last-child {
+    width: 100%;
+    min-width: 0;
+    margin: 0;
+  }
+
+  .impresion-container .preview-table {
+    table-layout: fixed;
+  }
+
+  .preview-table th,
+  .preview-table td {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    word-break: normal;
+  }
+
+  .preview-table th:first-child,
+  .preview-table td:first-child {
+    width: 10%;
+  }
+
+  .preview-table th:nth-child(2),
+  .preview-table td:nth-child(2) {
+    width: 29%;
+  }
+
+  .preview-table th:nth-child(3),
+  .preview-table td:nth-child(3) {
+    width: 33%;
+  }
+
+  .preview-table th:nth-child(4),
+  .preview-table td:nth-child(4) {
+    width: 28%;
   }
   
   .total-kilos-cell {
@@ -2598,17 +2650,8 @@ h4.cliente-header.ozuna-header {
     word-break: break-word;
   }
   
-  .bottom-section {
-    flex-direction: column;
-    gap: 20px;
-    border-top: none;
-    padding-top: 0;
-  }
-
   .bottom-cliente {
-    width: 100%;
-    margin: 0 !important;
-    padding: 15px 0;
+    padding: 10px 0;
     border-top: none;
   }
 

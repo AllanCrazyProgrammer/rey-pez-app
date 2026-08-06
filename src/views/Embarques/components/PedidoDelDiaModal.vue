@@ -1,9 +1,22 @@
 <template>
   <div v-if="mostrar" class="modal-pedido-overlay" @click="cerrarModal">
-    <div class="modal-pedido-content" @click.stop>
+    <section
+      class="modal-pedido-content"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="pedido-dia-titulo"
+      @click.stop
+    >
       <div class="modal-pedido-header">
-        <h2>📋 Pedido del Día - {{ fechaEmbarque }}</h2>
-        <button class="btn-cerrar-modal" @click="cerrarModal">&times;</button>
+        <div class="modal-pedido-titulo">
+          <span class="modal-pedido-icono"><i class="fas fa-clipboard-list"></i></span>
+          <div>
+            <span class="modal-pedido-kicker">PEDIDO DEL EMBARQUE</span>
+            <h2 id="pedido-dia-titulo">Pedido del día</h2>
+            <p>{{ fechaEmbarque }}</p>
+          </div>
+        </div>
+        <button class="btn-cerrar-modal" type="button" aria-label="Cerrar pedido del día" @click="cerrarModal">&times;</button>
       </div>
       
       <div class="modal-pedido-body">
@@ -37,10 +50,10 @@
               </div>
               <div class="pedido-acciones">
                 <button @click="verDetallesPedido(pedido)" class="btn-ver-pedido">
-                  👁️ Ver
+                  <i class="fas fa-eye"></i> {{ pedido.mostrarDetalles ? 'Ocultar' : 'Ver detalle' }}
                 </button>
                 <button @click="editarPedido(pedido)" class="btn-editar-pedido">
-                  ✏️ Editar
+                  <i class="fas fa-pen"></i> Editar
                 </button>
               </div>
             </div>
@@ -210,7 +223,7 @@
       <div class="modal-pedido-footer">
         <button @click="cerrarModal" class="btn-cerrar-footer">Cerrar</button>
       </div>
-    </div>
+    </section>
   </div>
 </template>
 
@@ -574,17 +587,21 @@ export default {
 /* Modal del Pedido del Día */
 .modal-pedido-overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(135deg, rgba(74, 144, 226, 0.3) 0%, rgba(80, 200, 120, 0.3) 100%);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  padding: clamp(14px, 3vw, 34px);
+  background: rgba(2, 8, 20, 0.86);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
   display: flex;
   justify-content: center;
   align-items: center;
-  z-index: 1000;
+  z-index: 50000;
+  box-sizing: border-box;
+  isolation: isolate;
+  overscroll-behavior: contain;
   animation: modalFadeIn 0.3s ease-out;
 }
 
@@ -600,17 +617,20 @@ export default {
 }
 
 .modal-pedido-content {
-  background: linear-gradient(145deg, #ffffff 0%, #f8f9fc 100%);
-  border-radius: 20px;
+  background: linear-gradient(145deg, #101c31 0%, #08111f 100%);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  border-radius: 18px;
   box-shadow: 
-    0 25px 50px -12px rgba(0, 0, 0, 0.25),
-    0 0 0 1px rgba(255, 255, 255, 0.1);
-  width: 95%;
-  max-width: 1200px;
-  max-height: 98vh;
+    0 28px 80px rgba(0, 0, 0, 0.58),
+    0 0 0 1px rgba(255, 255, 255, 0.04),
+    0 0 48px rgba(14, 165, 233, 0.10);
+  width: min(1120px, 100%);
+  height: min(860px, calc(100dvh - clamp(28px, 6vw, 68px)));
+  min-height: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  color: #e8eef9;
   animation: modalSlideIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
@@ -629,9 +649,12 @@ export default {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 15px 20px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
+  flex: 0 0 auto;
+  gap: 20px;
+  padding: 18px 22px;
+  background: linear-gradient(120deg, rgba(17, 34, 58, 0.98), rgba(8, 19, 35, 0.98));
+  color: #f8fbff;
+  border-bottom: 1px solid rgba(56, 189, 248, 0.28);
   position: relative;
   overflow: hidden;
 }
@@ -653,21 +676,62 @@ export default {
 }
 
 .modal-pedido-header h2 {
-  margin: 0;
-  font-size: 1.5rem;
+  margin: 2px 0 0;
+  font-size: clamp(1.3rem, 2vw, 1.65rem);
   font-weight: 700;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  line-height: 1.1;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
   z-index: 1;
   position: relative;
 }
 
+.modal-pedido-titulo {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.modal-pedido-icono {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 46px;
+  flex: 0 0 46px;
+  border: 1px solid rgba(56, 189, 248, 0.48);
+  border-radius: 13px;
+  color: #67e8f9;
+  background: linear-gradient(145deg, rgba(14, 165, 233, 0.22), rgba(59, 130, 246, 0.08));
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.08);
+  font-size: 1.15rem;
+}
+
+.modal-pedido-kicker {
+  display: block;
+  color: #7dd3fc;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.13em;
+}
+
+.modal-pedido-titulo p {
+  margin: 5px 0 0;
+  color: #94a3b8;
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+}
+
 .btn-cerrar-modal {
-  background: linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%);
-  color: white;
-  border: none;
-  border-radius: 50%;
-  width: 35px;
-  height: 35px;
+  background: rgba(15, 23, 42, 0.78);
+  color: #fda4af;
+  border: 1px solid rgba(251, 113, 133, 0.40);
+  border-radius: 10px;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
   display: flex;
   justify-content: center;
   align-items: center;
@@ -675,22 +739,29 @@ export default {
   font-size: 1.2em;
   line-height: 1;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 4px 15px rgba(238, 90, 82, 0.3);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.24);
   z-index: 1;
   position: relative;
 }
 
 .btn-cerrar-modal:hover {
-  transform: scale(1.1) rotate(90deg);
-  box-shadow: 0 6px 20px rgba(238, 90, 82, 0.4);
+  transform: scale(1.05);
+  color: #fff;
+  border-color: rgba(251, 113, 133, 0.75);
+  background: rgba(190, 24, 93, 0.28);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.32);
 }
 
 .modal-pedido-body {
-  flex-grow: 1;
-  padding: 15px 20px;
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 20px 22px;
   overflow-y: auto;
+  overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
-  background: linear-gradient(180deg, rgba(248, 250, 252, 0.5) 0%, rgba(255, 255, 255, 0.8) 100%);
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  background: linear-gradient(180deg, rgba(8, 18, 33, 0.98), rgba(5, 12, 24, 0.98));
 }
 
 .cargando-pedidos {
@@ -699,20 +770,20 @@ export default {
   align-items: center;
   justify-content: center;
   padding: 60px 0;
-  color: #64748b;
+  color: #94a3b8;
 }
 
 .cargando-pedidos p {
   font-size: 1.1rem;
   font-weight: 500;
   margin-top: 10px;
-  color: #64748b;
+  color: #94a3b8;
 }
 
 .spinner {
   width: 50px;
   height: 50px;
-  border: 4px solid #e2e8f0;
+  border: 4px solid rgba(148, 163, 184, 0.22);
   border-radius: 50%;
   border-top-color: #667eea;
   animation: spin 1s linear infinite;
@@ -751,7 +822,7 @@ export default {
 
 .sin-pedidos-dia p {
   font-size: 1.2rem;
-  color: #64748b;
+  color: #94a3b8;
   margin-bottom: 30px;
   font-weight: 500;
 }
@@ -816,23 +887,23 @@ export default {
 }
 
 .pedidos-dia-lista {
-  padding: 0 5px;
+  width: 100%;
 }
 
 .pedido-item {
-  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
-  border: 1px solid rgba(226, 232, 240, 0.5);
-  border-radius: 16px;
-  padding: 15px;
-  margin-bottom: 15px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  background: linear-gradient(140deg, rgba(20, 34, 57, 0.96), rgba(11, 22, 39, 0.96));
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 14px;
+  padding: 16px;
+  margin-bottom: 16px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.18), inset 0 1px rgba(255, 255, 255, 0.04);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .pedido-item:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
-  border-color: rgba(99, 102, 241, 0.3);
+  transform: translateY(-2px);
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.24);
+  border-color: rgba(56, 189, 248, 0.34);
 }
 
 .pedido-header {
@@ -859,7 +930,7 @@ export default {
   font-size: 0.95rem;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #0284c7 0%, #2563eb 100%);
   color: white;
   box-shadow: 0 3px 10px rgba(102, 126, 234, 0.3);
 }
@@ -869,7 +940,7 @@ export default {
   gap: 20px;
   font-size: 1.2rem;
   font-weight: 600;
-  color: #475569;
+  color: #dbeafe;
 }
 
 .pedido-totales span {
@@ -877,7 +948,8 @@ export default {
   align-items: center;
   gap: 5px;
   padding: 6px 14px;
-  background: linear-gradient(135deg, #e0e7ff 0%, #e0f2fe 100%);
+  background: rgba(30, 64, 175, 0.20);
+  border: 1px solid rgba(96, 165, 250, 0.25);
   border-radius: 20px;
   font-size: 1rem;
 }
@@ -927,6 +999,8 @@ export default {
 
 .pedido-detalles {
   margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px solid rgba(148, 163, 184, 0.16);
   animation: fadeIn 0.3s ease-out;
 }
 
@@ -943,42 +1017,44 @@ export default {
 
 .clientes-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
   gap: 15px;
   margin-top: 10px;
+  align-items: start;
 }
 
 .detalles-crudo h4,
 .detalles-limpio h4 {
   margin-top: 0;
   margin-bottom: 15px;
-  color: #1e293b;
   font-size: 1.2rem;
   font-weight: 700;
   text-align: center;
   padding: 10px 20px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  border-radius: 12px;
+  background: rgba(14, 165, 233, 0.12);
+  color: #bae6fd;
+  border: 1px solid rgba(56, 189, 248, 0.22);
+  border-radius: 10px;
   text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
 .cliente-crudo,
 .cliente-limpio {
-  margin-bottom: 15px;
+  min-width: 0;
+  margin-bottom: 0;
   padding: 15px;
-  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+  background: linear-gradient(145deg, rgba(22, 35, 56, 0.94), rgba(13, 25, 43, 0.94));
   border-radius: 12px;
-  border: 1px solid rgba(226, 232, 240, 0.5);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.14);
   transition: all 0.3s ease;
 }
 
 .cliente-crudo:hover,
 .cliente-limpio:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  border-color: rgba(99, 102, 241, 0.3);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.20);
+  border-color: rgba(56, 189, 248, 0.28);
 }
 
 .cliente-crudo strong,
@@ -987,9 +1063,9 @@ export default {
   margin-bottom: 15px;
   font-size: 1.1rem;
   font-weight: 700;
-  color: #1e293b;
+  color: #e2e8f0;
   padding: 8px 12px;
-  background: linear-gradient(135deg, #f0f4f8 0%, #e5e7eb 100%);
+  background: rgba(51, 65, 85, 0.55);
   border-radius: 8px;
   text-align: center;
 }
@@ -1006,17 +1082,18 @@ export default {
   align-items: center;
   gap: 10px;
   padding: 10px 12px;
-  background: linear-gradient(135deg, #fafbfc 0%, #f3f4f6 100%);
+  min-width: 0;
+  background: rgba(6, 15, 29, 0.58);
   border-radius: 8px;
-  border: 1px solid rgba(229, 231, 235, 0.5);
+  border: 1px solid rgba(148, 163, 184, 0.14);
   transition: all 0.3s ease;
 }
 
 .columna-item:hover,
 .item-limpio-container:hover {
-  background: linear-gradient(135deg, #f9fafb 0%, #e5e7eb 100%);
-  border-color: rgba(99, 102, 241, 0.2);
-  transform: translateX(5px);
+  background: rgba(15, 32, 54, 0.86);
+  border-color: rgba(56, 189, 248, 0.24);
+  transform: translateX(2px);
 }
 
 .item-checkbox-container {
@@ -1104,9 +1181,11 @@ export default {
 .columna-texto,
 .item-limpio {
   flex: 1;
+  min-width: 0;
   font-size: 1.2rem;
   font-weight: 600;
-  color: #334155;
+  color: #dbe6f5;
+  overflow-wrap: anywhere;
   transition: all 0.3s ease;
 }
 
@@ -1159,27 +1238,29 @@ export default {
 }
 
 .modal-pedido-footer {
-  padding: 20px;
-  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-  border-top: 1px solid rgba(226, 232, 240, 0.5);
+  flex: 0 0 auto;
+  padding: 14px 22px;
+  background: rgba(8, 18, 33, 0.98);
+  border-top: 1px solid rgba(148, 163, 184, 0.16);
   display: flex;
-  justify-content: center;
-  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.05);
+  justify-content: flex-end;
+  box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.18);
 }
 
 .btn-cerrar-footer {
-  padding: 12px 40px;
-  background: linear-gradient(135deg, #64748b 0%, #475569 100%);
-  color: white;
-  border: none;
-  border-radius: 12px;
+  min-width: 130px;
+  padding: 10px 24px;
+  background: rgba(30, 41, 59, 0.88);
+  color: #e2e8f0;
+  border: 1px solid rgba(148, 163, 184, 0.30);
+  border-radius: 9px;
   font-size: 1rem;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  box-shadow: 0 4px 15px rgba(100, 116, 139, 0.3);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.20);
   position: relative;
   overflow: hidden;
 }
@@ -1201,21 +1282,30 @@ export default {
 
 .btn-cerrar-footer:hover {
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(100, 116, 139, 0.4);
+  color: #fff;
+  border-color: rgba(125, 211, 252, 0.50);
+  background: rgba(30, 64, 175, 0.28);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.28);
 }
 
 @media (max-width: 1024px) and (min-width: 769px) {
   .clientes-grid {
-    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 12px;
   }
 }
 
 @media (max-width: 768px) {
+  .modal-pedido-overlay {
+    padding: 10px;
+  }
+
   .modal-pedido-content {
-    width: 95%;
+    width: 100%;
     max-width: 100%;
-    margin: 10px;
+    height: calc(100dvh - 20px);
+    margin: 0;
+    border-radius: 14px;
   }
 
   .modal-pedido-header {
@@ -1283,7 +1373,7 @@ export default {
   }
 
   .clientes-grid {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr;
     gap: 12px;
   }
 
@@ -1309,7 +1399,7 @@ export default {
 
 @media (max-width: 480px) {
   .modal-pedido-content {
-    width: 98%;
+    width: 100%;
     border-radius: 12px;
   }
 
@@ -1319,6 +1409,21 @@ export default {
 
   .modal-pedido-header h2 {
     font-size: 1.1rem;
+  }
+
+  .modal-pedido-icono {
+    width: 38px;
+    height: 38px;
+    flex-basis: 38px;
+    border-radius: 10px;
+  }
+
+  .modal-pedido-kicker {
+    font-size: 0.58rem;
+  }
+
+  .modal-pedido-titulo p {
+    font-size: 0.75rem;
   }
 
   .btn-cerrar-modal {
@@ -1403,4 +1508,4 @@ export default {
     gap: 10px;
   }
 }
-</style> 
+</style>
