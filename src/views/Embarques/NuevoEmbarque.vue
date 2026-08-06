@@ -61,7 +61,14 @@
           class="scale-slider"
         >
         <span class="scale-value">{{ escalaResumen }}%</span>
-        <button class="btn btn-primary" @click="generarPDFResumenConEscala">Generar PDF Resumen</button>
+        <button
+          class="btn btn-primary"
+          :disabled="verificandoCuentasResumen"
+          @click="generarPDFResumenConEscala"
+        >
+          <i v-if="verificandoCuentasResumen" class="fas fa-spinner fa-spin"></i>
+          {{ verificandoCuentasResumen ? 'Revisando cuentas...' : 'Generar PDF Resumen' }}
+        </button>
         <button class="btn btn-secondary" @click="mostrarEscalaResumen = false">Cancelar</button>
       </div>
 
@@ -227,6 +234,17 @@
       @confirmar="generarNotasPdfMultiples"
     />
 
+    <CuentasResumenModal
+      :mostrar="mostrarModalCuentasResumen"
+      :cuentas="cuentasFaltantesResumen"
+      :fecha="embarque.fecha"
+      :cargando="creandoCuentasResumen"
+      :error="errorCuentasResumen"
+      @cerrar="cerrarModalCuentasResumen"
+      @omitir="omitirCuentasResumenYGenerar"
+      @confirmar="crearCuentasFaltantesYGenerarResumen"
+    />
+
     <!-- Indicador de estado del guardado -->
     <SaveStatusIndicator />
     
@@ -283,6 +301,7 @@ import AltModal from './components/modals/AltModal.vue';
 import ConfiguracionMedidasModal from './components/modals/ConfiguracionMedidasModal.vue';
 import PedidoClienteModal from './components/modals/PedidoClienteModal.vue';
 import NotasPdfMultipleModal from './components/modals/NotasPdfMultipleModal.vue';
+import CuentasResumenModal from './components/modals/CuentasResumenModal.vue';
 import PedidoDelDiaModal from './components/PedidoDelDiaModal.vue';
 
 
@@ -335,6 +354,7 @@ export default {
     ConfiguracionMedidasModal,
     PedidoClienteModal,
     NotasPdfMultipleModal,
+    CuentasResumenModal,
     PedidoDelDiaModal,
     SaveStatusIndicator,
     AuthErrorNotification

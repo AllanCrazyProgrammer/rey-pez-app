@@ -150,6 +150,11 @@ export default {
     async generarPDFResumenConEscala() {
       const escala = Number(this.escalaResumen) || 100;
 
+      if (typeof this.verificarCuentasResumenAntesDeGenerar === 'function') {
+        const puedeContinuar = await this.verificarCuentasResumenAntesDeGenerar(escala);
+        if (!puedeContinuar) return;
+      }
+
       await this.generarPDF("resumen", null, { escala });
       this.mostrarEscalaResumen = false;
     },

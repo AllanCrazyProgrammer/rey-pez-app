@@ -6,6 +6,7 @@ import {
   esFechaValida
 } from '../dateUtils';
 import { acumularLote } from '../dinero';
+import { obtenerSobrantesDeItem } from '../sobrantesCrudos';
 
 /**
  * Servicio para gestionar la creación y actualización de cuentas de clientes a partir de embarques
@@ -311,6 +312,37 @@ const extraerValorSobrante = (texto) => {
   
   // Si no tiene formato especial, interpretar como valor directo
   return parseInt(texto) || 0;
+};
+
+/**
+ * Calcula el peso facturable de un crudo en una cuenta de Ozuna.
+ *
+ * Regla de Ozuna:
+ * - cada tara completa cuenta como 20 kg, aunque el texto venga como "10-19";
+ * - el sobrante conserva su peso real ("1-7" suma 7 kg, no 20 ni 1 × 7);
+ * - admite tanto `sobrantes[]` como los campos históricos `sobrante/sobrante2`.
+ */
+export const calcularKilosCrudoCuentaOzuna = (item = {}) => {
+  const kilosTaras = extraerNumeroTaras(item.taras) * 20;
+
+  let sobrantes = [];
+  if (Array.isArray(item.sobrantes)) {
+    sobrantes = obtenerSobrantesDeItem(item);
+  } else {
+    if (item.sobrante && item.mostrarSobrante !== false) {
+      sobrantes.push(item.sobrante);
+    }
+    if (item.sobrante2 && item.mostrarSobrante2 !== false) {
+      sobrantes.push(item.sobrante2);
+    }
+  }
+
+  const kilosSobrantes = sobrantes.reduce(
+    (total, sobrante) => total + extraerValorSobrante(sobrante),
+    0
+  );
+
+  return kilosTaras + kilosSobrantes;
 };
 
 /**
@@ -1098,88 +1130,7 @@ const prepararDatosCuentaOzuna = async (embarqueData) => {
       if (crudo && Array.isArray(crudo.items)) {
         crudo.items.forEach(item => {
           if (item) {
-            // Calcular kilos utilizando el mismo método que en la vista
-            let kilosTotales = 0;
-            
-            // Procesar taras
-            if (item.taras) {
-              // Verificar si la tara tiene formato "5-19" o similar
-              const formatoGuion = /^(\d+)-(\d+)$/.exec(item.taras);
-              if (formatoGuion) {
-                const cantidad = parseInt(formatoGuion[1]) || 0;
-                let medida = parseInt(formatoGuion[2]) || 0;
-                
-                // Para Ozuna, SIEMPRE interpretar 10-19 como 10*20=200
-                if (medida === 19) {
-                  medida = 20;
-                }
-                
-                kilosTotales += cantidad * medida;
-              } else {
-                // Formato original si no coincide con el patrón
-                const partes = item.taras.split('-').map(Number);
-                if (partes.length >= 2) {
-                  let valorPorTara = partes[1] || 0;
-                  // Si el segundo valor es 19, sustituirlo por 20
-                  if (valorPorTara === 19) valorPorTara = 20;
-                  kilosTotales += (partes[0] || 0) * valorPorTara;
-                }
-              }
-            }
-            
-            // Procesar sobrante
-            if (item.sobrante) {
-              // Verificar si el sobrante tiene formato "5-19" o similar
-              const formatoGuion = /^(\d+)-(\d+)$/.exec(item.sobrante);
-              if (formatoGuion) {
-                const cantidadSobrante = parseInt(formatoGuion[1]) || 0;
-                let medidaSobrante = parseInt(formatoGuion[2]) || 0;
-                
-                // Si la medida es 19, sustituirla por 20
-                if (medidaSobrante === 19) {
-                  medidaSobrante = 20;
-                }
-                
-                kilosTotales += cantidadSobrante * medidaSobrante;
-              } else {
-                // Formato original si no coincide con el patrón
-                const partes = item.sobrante.split('-').map(Number);
-                if (partes.length >= 2) {
-                  let valorSobrante = partes[1] || 0;
-                  // Si el segundo valor es 19, sustituirlo por 20
-                  if (valorSobrante === 19) valorSobrante = 20;
-                  kilosTotales += (partes[0] || 0) * valorSobrante;
-                }
-              }
-            }
-
-            // Procesar segundo sobrante
-            if (item.sobrante2) {
-              // Verificar si el sobrante tiene formato "5-19" o similar
-              const formatoGuion2 = /^(\d+)-(\d+)$/.exec(item.sobrante2);
-              if (formatoGuion2) {
-                const cantidadSobrante2 = parseInt(formatoGuion2[1]) || 0;
-                let medidaSobrante2 = parseInt(formatoGuion2[2]) || 0;
-
-                // Si la medida es 19, sustituirla por 20
-                if (medidaSobrante2 === 19) {
-                  medidaSobrante2 = 20;
-                }
-
-                kilosTotales += cantidadSobrante2 * medidaSobrante2;
-              } else {
-                // Formato original si no coincide con el patrón
-                const partes2 = item.sobrante2.split('-').map(Number);
-                if (partes2.length >= 2) {
-                  let valorSobrante2 = partes2[1] || 0;
-                  // Si el segundo valor es 19, sustituirlo por 20
-                  if (valorSobrante2 === 19) valorSobrante2 = 20;
-                  kilosTotales += (partes2[0] || 0) * valorSobrante2;
-                }
-              }
-            }
-
-            const kilos = kilosTotales;
+            const kilos = calcularKilosCrudoCuentaOzuna(item);
             const medida = item.talla || item.medida || 'Crudo';
 
             // Para crudos de Ozuna, aplicar la misma lógica que productos normales
@@ -1195,18 +1146,18 @@ const prepararDatosCuentaOzuna = async (embarqueData) => {
               costo = precioEncontrado || parseFloat(item.precio) || 20;
             }
             
-                          // Solo agregar el item si tiene kilos
-              if (kilos > 0) {
-                items.push({
-                  kilos,
-                  medida,
-                  costo,
-                  total: kilos * costo,
-                  esVenta: item.esVenta || false, // Respetar el estado real de venta/maquila
-                  editando: false,
-                  campoEditando: null
-                });
-              }
+            // Solo agregar el item si tiene kilos
+            if (kilos > 0) {
+              items.push({
+                kilos,
+                medida,
+                costo,
+                total: kilos * costo,
+                esVenta: item.esVenta || false, // Respetar el estado real de venta/maquila
+                editando: false,
+                campoEditando: null
+              });
+            }
           }
         });
       }
