@@ -17,6 +17,14 @@
           </button>
         </router-link>
       </div>
+      <button type="button" class="btn-analisis-pedidos" @click="mostrarAnalisisLimpio = true">
+        <span class="analisis-boton-icono"><i class="fas fa-chart-column"></i></span>
+        <span class="analisis-boton-texto">
+          <strong>Análisis de Pedido Limpio</strong>
+          <small>Consulta kilos y taras por medida entre fechas</small>
+        </span>
+        <i class="fas fa-arrow-right analisis-boton-flecha"></i>
+      </button>
     </div>
 
     <div class="pedidos-list">
@@ -91,6 +99,12 @@
         No hay pedidos que coincidan con los filtros seleccionados
       </div>
     </div>
+
+    <AnalisisPedidoLimpioModal
+      :mostrar="mostrarAnalisisLimpio"
+      :pedidos="pedidos"
+      @cerrar="mostrarAnalisisLimpio = false"
+    />
   </div>
 </template>
 
@@ -99,14 +113,19 @@ import { db } from '@/firebase'
 import { collection, query, orderBy, onSnapshot, deleteDoc, doc } from 'firebase/firestore'
 import { formatearFecha } from '@/utils/formatters';
 import { calcularTotalesPedidoLimpio } from '@/utils/calculosPedidoLimpio'
+import AnalisisPedidoLimpioModal from './components/AnalisisPedidoLimpioModal.vue'
 
 export default {
   name: 'PedidosMenu',
+  components: {
+    AnalisisPedidoLimpioModal
+  },
   data() {
     return {
       pedidos: [],
       filtroTipo: 'todos',
-      filtroFecha: ''
+      filtroFecha: '',
+      mostrarAnalisisLimpio: false
     }
   },
   computed: {
@@ -319,7 +338,7 @@ export default {
   gap: 20px;
   margin-top: 30px;
   width: 100%;
-  max-width: 500px;
+  max-width: 720px;
 }
 
 .nuevo-pedido-buttons {
@@ -357,6 +376,58 @@ export default {
 
 .btn-nuevo-pedido.limpio:hover {
   background-color: #ff9800;
+}
+
+.btn-analisis-pedidos {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 14px;
+  align-items: center;
+  width: 100%;
+  padding: 14px 17px;
+  color: #eaf7ff;
+  text-align: left;
+  cursor: pointer;
+  background: linear-gradient(120deg, #183b67, #135f75 65%, #16775e);
+  border: 1px solid rgba(111, 220, 231, 0.42);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(5, 31, 61, 0.24);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.btn-analisis-pedidos:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 30px rgba(5, 31, 61, 0.34);
+}
+
+.analisis-boton-icono {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  color: #072238;
+  font-size: 18px;
+  background: linear-gradient(135deg, #58dfff, #57e6a9);
+  border-radius: 11px;
+}
+
+.analisis-boton-texto strong,
+.analisis-boton-texto small {
+  display: block;
+}
+
+.analisis-boton-texto strong {
+  font-size: 15px;
+}
+
+.analisis-boton-texto small {
+  margin-top: 3px;
+  color: #b8d0df;
+  font-size: 11px;
+}
+
+.analisis-boton-flecha {
+  color: #73e1c0;
 }
 
 .action-button {
