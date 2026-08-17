@@ -317,7 +317,7 @@
 <script>
 import { ref, computed, onMounted, onUnmounted, watchEffect } from 'vue';
 import { db } from '@/firebase';
-import { collection, getDocs, onSnapshot, query, orderBy, where } from 'firebase/firestore';
+import { collection, getDocs, onSnapshot, orderBy, query, where } from 'firebase/firestore';
 import moment from 'moment';
 import { formatearFecha, formatNumber } from '@/utils/formatters';
 import FondoMatrix from '@/components/FondoMatrix.vue';
@@ -1017,12 +1017,141 @@ export default {
       '--acento-tenue': colorAcento(indice, 0.14)
     });
 
-    const imprimirReporte = () => {
+    const UMBRAL_CAMBIO_KILOS = 0.05;
+    const UMBRAL_BAJO_STOCK_KILOS = 10000;
+
+    const normalizarMedidaInventario = (medida) => String(medida || '')
+      .trim()
+      .toLocaleLowerCase('es')
+      .replace(/\s+/g, ' ');
+
+    const construirCorteInventario = () => {
+      const porMedida = new Map();
+
+      Object.values(existencias.value || {}).forEach(medidas => {
+        Object.values(medidas || {}).forEach(datos => {
+          const medida = String(datos?.medida || '').trim();
+          const clave = normalizarMedidaInventario(medida);
+          if (!clave) return;
+
+          const kilos = Array.isArray(datos?.lotes)
+            ? datos.lotes.reduce((total, lote) => total + (Number(lote?.kilos) || 0), 0)
+            : (Number(datos?.kilos) || 0);
+          if (kilos <= 0) return;
+
+          if (!porMedida.has(clave)) {
+            porMedida.set(clave, { clave, medida, kilos: 0 });
+          }
+          porMedida.get(clave).kilos += kilos;
+        });
+      });
+
+      return [...porMedida.values()]
+        .map(item => ({ ...item, kilos: Number(item.kilos.toFixed(2)) }))
+        .sort((a, b) => a.medida.localeCompare(b.medida, 'es', { numeric: true }));
+    };
+
+    const obtenerMovimientosInventarioDelDia = async () => {
+      const inicioDia = moment().startOf('day').toDate();
+      const finDia = moment().endOf('day').toDate();
+      const movimientos = new Map();
+      const snapshot = await getDocs(
+        query(
+          collection(db, 'sacadas'),
+          where('fecha', '>=', inicioDia),
+          where('fecha', '<=', finDia)
+        )
+      );
+
+      const acumular = (registro, tipo) => {
+        const medida = String(registro?.medida || '').trim();
+        const clave = normalizarMedidaInventario(medida);
+        const kilos = Number(registro?.kilos) || 0;
+        if (!clave || kilos <= 0) return;
+
+        if (!movimientos.has(clave)) {
+          movimientos.set(clave, { clave, medida, entradas: 0, salidas: 0 });
+        }
+        movimientos.get(clave)[tipo] += kilos;
+      };
+
+      snapshot.docs.forEach(documento => {
+        const sacada = documento.data();
+        (Array.isArray(sacada?.entradas) ? sacada.entradas : [])
+          .forEach(entrada => acumular(entrada, 'entradas'));
+        (Array.isArray(sacada?.salidas) ? sacada.salidas : [])
+          .forEach(salida => acumular(salida, 'salidas'));
+      });
+
+      return movimientos;
+    };
+
+    const prepararComparativoInventario = async () => {
+      const corteActual = new Map(
+        construirCorteInventario().map(item => [item.clave, item])
+      );
+      const movimientos = await obtenerMovimientosInventarioDelDia();
+      const cambios = [...movimientos.values()].map(item => {
+        const kilosDespues = Number(corteActual.get(item.clave)?.kilos) || 0;
+        const entradas = Number(item.entradas.toFixed(2));
+        const salidas = Number(item.salidas.toFixed(2));
+        const diferencia = Number((entradas - salidas).toFixed(2));
+        const kilosAntes = Number((kilosDespues - diferencia).toFixed(2));
+        let movimiento = entradas > 0 && salidas > 0 ? 'Entradas y salidas' : 'Entrada';
+        if (entradas <= UMBRAL_CAMBIO_KILOS && salidas > 0) movimiento = 'Salida';
+
+        return {
+          ...item,
+          medida: corteActual.get(item.clave)?.medida || item.medida,
+          kilosAntes,
+          kilosDespues,
+          entradas,
+          salidas,
+          diferencia,
+          movimiento
+        };
+      })
+        .filter(item => item.entradas > UMBRAL_CAMBIO_KILOS || item.salidas > UMBRAL_CAMBIO_KILOS)
+        .sort((a, b) => (b.entradas + b.salidas) - (a.entradas + a.salidas) ||
+          a.medida.localeCompare(b.medida, 'es', { numeric: true }));
+
+      return {
+        cambios,
+        entradas: cambios.reduce((total, item) => total + item.entradas, 0),
+        salidas: cambios.reduce((total, item) => total + item.salidas, 0)
+      };
+    };
+
+    const escaparHtml = (valor) => String(valor ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+
+    const imprimirReporte = async () => {
+      const ventanaImpresion = window.open('', '_blank');
+      if (!ventanaImpresion) {
+        window.alert('Permite las ventanas emergentes para generar el reporte.');
+        return;
+      }
+      ventanaImpresion.document.write('<p style="font-family: Arial; padding: 24px;">Preparando reporte y comparativo diario...</p>');
+
       const fechaActual = new Date().toLocaleDateString('es-ES', {
         year: 'numeric',
         month: 'long',
         day: 'numeric'
       });
+      let comparativoInventario;
+      try {
+        comparativoInventario = await prepararComparativoInventario();
+      } catch (error) {
+        console.error('[Existencias] No se pudieron calcular los movimientos del día.', error);
+        ventanaImpresion.document.open();
+        ventanaImpresion.document.write('<p style="font-family: Arial; padding: 24px; color: #c0392b;">No fue posible consultar los movimientos de hoy. Cierra esta ventana e intenta generar el reporte nuevamente.</p>');
+        ventanaImpresion.document.close();
+        return;
+      }
 
       const columnasPrecio = tienePrecio.value ? `
         <th>Precio</th>
@@ -1314,6 +1443,98 @@ export default {
             font-size: 16pt;
             margin: 0;
           }
+          .pagina-movimientos {
+            break-after: page;
+            page-break-after: always;
+            padding: 12px 18px;
+          }
+          .movimientos-header {
+            border: 2px solid #2c3e50;
+            padding: 12px 16px;
+            margin-bottom: 14px;
+          }
+          .movimientos-header h1 {
+            font-size: 28pt;
+            color: #2c3e50;
+            margin: 0 0 5px;
+          }
+          .movimientos-header p {
+            font-size: 15pt;
+            color: #5d6d7e;
+            margin: 2px 0;
+          }
+          .movimientos-resumen {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-bottom: 14px;
+          }
+          .movimiento-resumen-card {
+            border: 1px solid #7f8c8d;
+            padding: 10px;
+            text-align: center;
+          }
+          .movimiento-resumen-card span {
+            display: block;
+            color: #5d6d7e;
+            font-size: 13pt;
+            text-transform: uppercase;
+          }
+          .movimiento-resumen-card strong {
+            display: block;
+            margin-top: 4px;
+            color: #2c3e50;
+            font-size: 21pt;
+          }
+          .movimientos-table th,
+          .movimientos-table td {
+            font-size: 15pt;
+            padding: 8px;
+          }
+          .movimientos-table .numero {
+            text-align: right;
+          }
+          .movimientos-table .aumento {
+            color: #1e8449;
+            font-weight: bold;
+          }
+          .movimientos-table .disminucion {
+            color: #c0392b;
+            font-weight: bold;
+          }
+          .movimientos-table .entrada {
+            color: #1e8449;
+            font-weight: bold;
+          }
+          .movimientos-table .salida {
+            color: #c0392b;
+            font-weight: bold;
+          }
+          .movimientos-table .bajo-stock-cell {
+            background-color: #fdecea !important;
+            color: #b71c1c;
+            font-weight: bold;
+          }
+          .alerta-bajo-stock {
+            display: block;
+            margin-top: 3px;
+            color: #b71c1c;
+            font-size: 12pt;
+            font-weight: bold;
+            text-transform: uppercase;
+          }
+          .sin-movimientos {
+            border: 1px dashed #7f8c8d;
+            padding: 40px;
+            text-align: center;
+            color: #5d6d7e;
+            font-size: 18pt;
+          }
+          .movimientos-nota {
+            margin-top: 12px;
+            color: #5d6d7e;
+            font-size: 12pt;
+          }
           @media print {
             .medida-card {
               box-shadow: none;
@@ -1340,6 +1561,10 @@ export default {
               display: grid;
               grid-template-columns: 1fr 1fr;
               gap: 15px;
+            }
+            .pagina-movimientos {
+              break-after: page;
+              page-break-after: always;
             }
           }
         </style>
@@ -1368,6 +1593,47 @@ export default {
         <div class="total-general">
           <h2>Kilos Totales: ${formatNumber(totalGeneral.value)}</h2>
         </div>
+      `;
+
+      const filasMovimientosHtml = comparativoInventario.cambios.map(item => {
+        const bajoStock = item.kilosDespues < UMBRAL_BAJO_STOCK_KILOS;
+        return `
+          <tr>
+            <td><strong>${escaparHtml(item.medida)}</strong></td>
+            <td class="numero">${formatNumber(item.kilosAntes)} kg</td>
+            <td class="numero entrada">${item.entradas ? '+' : ''}${formatNumber(item.entradas)} kg</td>
+            <td class="numero salida">${item.salidas ? '-' : ''}${formatNumber(item.salidas)} kg</td>
+            <td class="numero ${bajoStock ? 'bajo-stock-cell' : ''}">
+              ${formatNumber(item.kilosDespues)} kg
+              ${bajoStock ? '<span class="alerta-bajo-stock">Alerta: bajo stock</span>' : ''}
+            </td>
+          </tr>
+        `;
+      }).join('');
+      const movimientosHtml = `
+        <section class="pagina-movimientos">
+          <div class="movimientos-header">
+            <h1>Movimientos del Inventario de Limpios</h1>
+            <p><strong>Corte actual:</strong> ${moment().format('DD/MM/YYYY')}</p>
+            <p><strong>Comparado contra:</strong> inventario al inicio del día, reconstruido con las entradas y salidas registradas hoy.</p>
+          </div>
+          <div class="movimientos-resumen">
+            <div class="movimiento-resumen-card"><span>Medidas modificadas</span><strong>${comparativoInventario.cambios.length}</strong></div>
+            <div class="movimiento-resumen-card"><span>Entradas / aumentos</span><strong>+${formatNumber(comparativoInventario.entradas)} kg</strong></div>
+            <div class="movimiento-resumen-card"><span>Salidas / bajas</span><strong>-${formatNumber(comparativoInventario.salidas)} kg</strong></div>
+          </div>
+          ${filasMovimientosHtml ? `
+            <table class="movimientos-table">
+              <thead><tr><th>Medida</th><th>Antes</th><th>Entradas</th><th>Salidas</th><th>Después</th></tr></thead>
+              <tbody>${filasMovimientosHtml}</tbody>
+            </table>
+          ` : `
+            <div class="sin-movimientos">
+              No se encontraron entradas ni salidas registradas en el día de hoy.
+            </div>
+          `}
+          <p class="movimientos-nota">Comparativo agregado por medida a partir de los movimientos de hoy. Incluye todos los proveedores, precios, lotes y cuartos fríos del inventario de limpios.</p>
+        </section>
       `;
 
       // Generar HTML para salidas del día siguiente
@@ -1449,6 +1715,7 @@ export default {
           ${estilos}
         </head>
         <body>
+          ${movimientosHtml}
           <div class="header">
             <h1>Reporte de Existencias</h1>
             <div class="fecha-reporte">Fecha: ${fechaActual}</div>
@@ -1578,7 +1845,7 @@ export default {
       `;
 
       // Configurar la impresión
-      const ventanaImpresion = window.open('', '_blank');
+      ventanaImpresion.document.open();
       ventanaImpresion.document.write(htmlCompleto);
       ventanaImpresion.document.close();
 
