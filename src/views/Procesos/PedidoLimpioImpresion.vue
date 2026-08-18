@@ -403,6 +403,16 @@
             </div>
             <button
               type="button"
+              class="resumen-refrigerados-btn"
+              :disabled="acomodandoKilosRefrigerados || resumenSacadaHoy.loading"
+              :aria-busy="acomodandoKilosRefrigerados ? 'true' : 'false'"
+              @click="acomodarKilosRefrigeradosAutomaticamente"
+            >
+              <span aria-hidden="true">🧊</span>
+              {{ acomodandoKilosRefrigerados ? 'Acomodando…' : 'Acomodar refrigerados' }}
+            </button>
+            <button
+              type="button"
               class="resumen-medidas-sacar-btn"
               :disabled="cargandoSacadaParaModal"
               :aria-busy="cargandoSacadaParaModal ? 'true' : 'false'"
@@ -412,6 +422,14 @@
             </button>
           </div>
         </div>
+        <p
+          v-if="mensajeAcomodoRefrigerados"
+          class="resumen-refrigerados-estado"
+          :class="{ error: errorAcomodoRefrigerados }"
+          role="status"
+        >
+          {{ mensajeAcomodoRefrigerados }}
+        </p>
         <ResumenCalculadora
           v-if="showCalculadoraResumen"
           class="resumen-calculadora-panel"
@@ -554,7 +572,7 @@
                       min="0"
                       step="0.01"
                       v-model.number="rendimientosResumen[item.key]"
-                      placeholder="1.00"
+                      placeholder="1.20"
                       class="resumen-rendimiento-input"
                     >
                   </td>
@@ -593,7 +611,7 @@
                       min="0"
                       step="0.01"
                       v-model.number="rendimientosResumenMaquilas[fila.key]"
-                      placeholder="1.00"
+                      placeholder="1.20"
                       class="resumen-rendimiento-input"
                     >
                   </td>
@@ -645,6 +663,12 @@ import ListaMedidasPedidoModal from '@/components/ListaMedidasPedidoModal.vue'
 import ResumenCalculadora from '@/components/ResumenCalculadora.vue'
 import { colorParaEtiqueta } from '@/utils/coloresEtiquetas'
 import { formatearAgua, aguaEsPersonalizada } from '@/utils/factorAgua'
+import { normalizarFechaValor } from '@/utils/dateUtils'
+import {
+  sumarKilosRefriPorMedida,
+  sumarLimpiosResumenDiaPorMedida,
+  combinarKilosRefrigerados
+} from '@/utils/kilosRefrigerados'
 import {
   calcularKilosItemPedidoLimpio,
   calcularTotalesClientePedidoLimpio
@@ -765,7 +789,10 @@ export default {
       selectedSacadaForMeasures: null,
       isSavingListaMedidas: false,
       medidasCatalogo: [],
-      cargandoSacadaParaModal: false
+      cargandoSacadaParaModal: false,
+      acomodandoKilosRefrigerados: false,
+      mensajeAcomodoRefrigerados: '',
+      errorAcomodoRefrigerados: false
     }
   },
   created() {
@@ -981,6 +1008,107 @@ export default {
           disponible: false,
           error: 'No se pudo cargar el resumen de sacadas del día de hoy.'
         };
+      }
+    },
+    async obtenerEmbarquesDelDiaAnterior() {
+      const fechaPedido = normalizarFechaValor(this.fecha)
+      if (!fechaPedido) return { fecha: null, embarques: [] }
+
+      const snapshot = await getDocs(collection(db, 'embarques'))
+      const embarquesAnteriores = snapshot.docs
+        .map((documento) => ({ id: documento.id, ...documento.data() }))
+        .map((embarque) => ({
+          embarque,
+          fecha: normalizarFechaValor(embarque.fecha)
+        }))
+        .filter(({ embarque, fecha }) => fecha && fecha < fechaPedido && embarque.borrador !== true)
+
+      if (!embarquesAnteriores.length) return { fecha: null, embarques: [] }
+
+      const fechaAnterior = embarquesAnteriores.reduce((ultima, item) => (
+        !ultima || item.fecha > ultima ? item.fecha : ultima
+      ), null)
+
+      return {
+        fecha: fechaAnterior,
+        embarques: embarquesAnteriores
+          .filter((item) => item.fecha === fechaAnterior)
+          .map((item) => item.embarque)
+      }
+    },
+    async acomodarKilosRefrigeradosAutomaticamente() {
+      const medidasPedido = this.calcularTotalesPorMedida()
+      if (!medidasPedido.length) {
+        this.errorAcomodoRefrigerados = true
+        this.mensajeAcomodoRefrigerados = 'No hay medidas en el pedido para acomodar.'
+        return
+      }
+
+      this.acomodandoKilosRefrigerados = true
+      this.errorAcomodoRefrigerados = false
+      this.mensajeAcomodoRefrigerados = ''
+
+      try {
+        // El acomodo automático usa 1.2 cuando una salida del Resumen del Día
+        // todavía no tiene rendimiento. Los valores capturados por el usuario
+        // se respetan y no se reemplazan.
+        ;(this.resumenSacadaHoy.salidasClientes || []).forEach((fila) => {
+          if (!(Number(this.rendimientosResumen[fila.key]) > 0)) {
+            this.$set(this.rendimientosResumen, fila.key, 1.2)
+          }
+        })
+        ;(this.resumenSacadaHoy.salidasMaquilas || []).forEach((fila) => {
+          if (!(Number(this.rendimientosResumenMaquilas[fila.key]) > 0)) {
+            this.$set(this.rendimientosResumenMaquilas, fila.key, 1.2)
+          }
+        })
+
+        const resumenDia = sumarLimpiosResumenDiaPorMedida({
+          resumen: this.resumenSacadaHoy,
+          rendimientosClientes: this.rendimientosResumen,
+          rendimientosMaquilas: this.rendimientosResumenMaquilas,
+          medidasPedido
+        })
+        const embarqueAnterior = await this.obtenerEmbarquesDelDiaAnterior()
+        const kilosRefriAnteriores = sumarKilosRefriPorMedida(
+          embarqueAnterior.embarques,
+          medidasPedido
+        )
+        const nuevosKilos = combinarKilosRefrigerados(
+          medidasPedido,
+          resumenDia.kilosPorMedida,
+          kilosRefriAnteriores
+        )
+        const totalResumen = Object.values(resumenDia.kilosPorMedida)
+          .reduce((suma, kilos) => suma + Number(kilos || 0), 0)
+        const totalAnterior = Object.values(kilosRefriAnteriores)
+          .reduce((suma, kilos) => suma + Number(kilos || 0), 0)
+
+        if (!Object.keys(nuevosKilos).length) {
+          const detalleRendimientos = resumenDia.filasSinRendimiento
+            ? ` Faltan rendimientos en ${resumenDia.filasSinRendimiento} fila(s) del Resumen del Día.`
+            : ''
+          this.errorAcomodoRefrigerados = true
+          this.mensajeAcomodoRefrigerados = `No se encontraron kilos refrigerados para las medidas de este pedido.${detalleRendimientos}`
+          return
+        }
+
+        this.kilosRefrigerados = { ...nuevosKilos }
+        await this.persistirKilosRefrigerados()
+
+        const fechaAnteriorTexto = embarqueAnterior.fecha
+          ? embarqueAnterior.fecha.split('-').reverse().join('/')
+          : 'sin embarque anterior'
+        const avisoRendimientos = resumenDia.filasSinRendimiento
+          ? ` ${resumenDia.filasSinRendimiento} fila(s) sin rendimiento no se incluyeron.`
+          : ''
+        this.mensajeAcomodoRefrigerados = `Refrigerados acomodados: ${this.formatDecimal(totalResumen)} kg del Resumen del Día + ${this.formatDecimal(totalAnterior)} kg de Refri del embarque anterior (${fechaAnteriorTexto}).${avisoRendimientos}`
+      } catch (error) {
+        console.error('Error al acomodar kilos refrigerados:', error)
+        this.errorAcomodoRefrigerados = true
+        this.mensajeAcomodoRefrigerados = 'No se pudieron acomodar los kilos refrigerados. Intenta nuevamente.'
+      } finally {
+        this.acomodandoKilosRefrigerados = false
       }
     },
     itemTieneDatos(item) {
@@ -1791,14 +1919,21 @@ export default {
     },
     guardarKilosRefrigerados(datos) {
       this.$set(this.kilosRefrigerados, datos.medida, datos.kilosRefrigerados);
-      
+      this.persistirKilosRefrigerados().catch(() => {
+        // El método ya registra el detalle; se evita una promesa rechazada sin manejar.
+      });
+    },
+    async persistirKilosRefrigerados() {
       // Si estamos en modo edición, guardar directamente en Firebase
       if (this.editando && this.pedidoId) {
-        updateDoc(doc(db, 'pedidos', this.pedidoId), {
-          kilosRefrigerados: this.kilosRefrigerados
-        }).catch(error => {
+        try {
+          await updateDoc(doc(db, 'pedidos', this.pedidoId), {
+            kilosRefrigerados: this.kilosRefrigerados
+          })
+        } catch (error) {
           console.error('Error al actualizar kilos refrigerados:', error);
-        });
+          throw error
+        }
       }
       
       // También emitir el evento para compatibilidad
@@ -3188,6 +3323,43 @@ h4.cliente-header.ozuna-header {
   cursor: pointer;
   white-space: nowrap;
   flex-shrink: 0;
+}
+
+.resumen-refrigerados-btn {
+  background-color: #0f9f9a;
+  color: #fff;
+  border: none;
+  padding: 8px 14px;
+  border-radius: 20px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.resumen-refrigerados-btn:hover:not(:disabled) {
+  background-color: #087c78;
+}
+
+.resumen-refrigerados-btn:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
+.resumen-refrigerados-estado {
+  margin: -4px 0 14px;
+  padding: 9px 12px;
+  border: 1px solid #91d7d4;
+  border-radius: 8px;
+  background: #e8f8f7;
+  color: #126763;
+  font-size: 0.9rem;
+}
+
+.resumen-refrigerados-estado.error {
+  border-color: #efb0b0;
+  background: #fff0f0;
+  color: #a12626;
 }
 
 .resumen-medidas-sacar-btn:hover:not(:disabled) {
