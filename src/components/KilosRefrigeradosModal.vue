@@ -111,7 +111,7 @@ export default {
   },
   computed: {
     kilosFaltantes() {
-      return this.totalKilos - this.kilosRefrigerados;
+      return Math.round((this.totalKilos - this.kilosRefrigerados) * 10) / 10;
     }
   },
   watch: {

@@ -9,11 +9,16 @@ export const normalizarClaveMedida = (valor) => (valor || '')
   .toLowerCase()
   .replace(/\s+/g, ' ')
 
+export const esMedidaMaquilaResumen = (valor) => {
+  return normalizarClaveMedida(valor).split(' ').includes('maq')
+}
+
 const crearIndiceMedidasPedido = (medidasPedido = []) => {
   const porClave = new Map()
 
   medidasPedido.forEach((item) => {
     const medida = (item?.medida || '').toString().trim()
+    if (esMedidaMaquilaResumen(medida)) return
     const clave = normalizarClaveMedida(medida)
     if (clave) porClave.set(clave, medida)
   })
@@ -162,7 +167,7 @@ export const combinarKilosRefrigerados = (medidasPedido = [], ...fuentes) => {
 
   medidasPedido.forEach((item) => {
     const medida = item?.medida
-    if (!medida) return
+    if (!medida || esMedidaMaquilaResumen(medida)) return
     const total = fuentes.reduce((suma, fuente) => suma + (Number(fuente?.[medida]) || 0), 0)
     if (total > 0) resultado[medida] = redondearUnDecimal(total)
   })
