@@ -451,23 +451,19 @@
                 <div class="kilos-container">
                   <div class="kilos-column">
                     <span
-                      v-if="!esMedidaMaquilaResumen(medida.medida)"
                       class="total-kilos-clickeable" 
                       @click="abrirModalKilosRefrigerados(medida)"
                       :title="'Click para agregar kilos refrigerados'"
                     >
                       {{ medida.total }} kg
                     </span>
-                    <span v-else class="total-kilos-clickeable total-kilos-sin-refrigerados" title="Las maquilas no aplican kilos refrigerados">
-                      {{ medida.total }} kg
-                    </span>
                   </div>
-                  <div v-if="!esMedidaMaquilaResumen(medida.medida) && kilosRefrigerados[medida.medida]" class="kilos-column kilos-refrigerados-column">
+                  <div v-if="kilosRefrigerados[medida.medida]" class="kilos-column kilos-refrigerados-column">
                     <span class="kilos-refrigerados">
                       🧊 {{ formatDecimal(kilosRefrigerados[medida.medida]) }} kg
                     </span>
                   </div>
-                  <div v-if="!esMedidaMaquilaResumen(medida.medida) && kilosRefrigerados[medida.medida]" class="kilos-column kilos-faltantes-column">
+                  <div v-if="kilosRefrigerados[medida.medida]" class="kilos-column kilos-faltantes-column">
                     <span class="kilos-faltantes" :class="{ 
                       'suficientes': obtenerKilosFaltantes(medida) <= 0,
                       'sobra': obtenerKilosFaltantes(medida) < 0 
@@ -524,10 +520,10 @@
               </td>
               <td data-label="Cajas">
                 <template v-if="rendimientos[medida.medida]">
-                  <span v-if="esMedidaGranja(medida.medida) && divisores[medida.medida]" class="cajas-result" :class="{ 'cajas-faltantes': !esMedidaMaquilaResumen(medida.medida) && kilosRefrigerados[medida.medida] > 0 }">
+                  <span v-if="esMedidaGranja(medida.medida) && divisores[medida.medida]" class="cajas-result" :class="{ 'cajas-faltantes': kilosRefrigerados[medida.medida] > 0 }">
                     {{ Math.round((Math.max(0, obtenerKilosFaltantes(medida)) * rendimientos[medida.medida]) / divisores[medida.medida]) }}
                   </span>
-                  <span v-else class="cajas-result" :class="{ 'cajas-faltantes': !esMedidaMaquilaResumen(medida.medida) && kilosRefrigerados[medida.medida] > 0 }">
+                  <span v-else class="cajas-result" :class="{ 'cajas-faltantes': kilosRefrigerados[medida.medida] > 0 }">
                     {{ Math.round(Math.max(0, obtenerKilosFaltantes(medida)) * rendimientos[medida.medida]) }} kg
                   </span>
                 </template>
@@ -671,8 +667,7 @@ import { normalizarFechaValor } from '@/utils/dateUtils'
 import {
   sumarKilosRefriPorMedida,
   sumarLimpiosResumenDiaPorMedida,
-  combinarKilosRefrigerados,
-  esMedidaMaquilaResumen
+  combinarKilosRefrigerados
 } from '@/utils/kilosRefrigerados'
 import {
   calcularKilosItemPedidoLimpio,
@@ -1067,9 +1062,9 @@ export default {
             this.$set(this.rendimientosResumenMaquilas, fila.key, 1.2)
           }
         })
-
         const resumenDia = sumarLimpiosResumenDiaPorMedida({
-          resumen: this.resumenSacadaHoy,
+          salidasClientes: this.resumenSacadaHoy.salidasClientes,
+          salidasMaquilas: this.resumenSacadaHoy.salidasMaquilas,
           rendimientosClientes: this.rendimientosResumen,
           rendimientosMaquilas: this.rendimientosResumenMaquilas,
           medidasPedido
@@ -1913,7 +1908,6 @@ export default {
       return sumaTotal.toLocaleString(); // Formateamos con comas para mejor legibilidad
     },
     abrirModalKilosRefrigerados(medida) {
-      if (this.esMedidaMaquilaResumen(medida?.medida)) return;
       this.medidaSeleccionada = medida.medida;
       this.totalKilosSeleccionados = medida.total;
       this.modalKilosVisible = true;
@@ -1946,12 +1940,8 @@ export default {
       this.$emit('actualizar-kilos-refrigerados', this.kilosRefrigerados);
     },
     obtenerKilosFaltantes(medida) {
-      if (this.esMedidaMaquilaResumen(medida?.medida)) return medida.total;
       const refrigerados = this.kilosRefrigerados[medida.medida] || 0;
       return Math.round((medida.total - refrigerados) * 10) / 10;
-    },
-    esMedidaMaquilaResumen(medida) {
-      return esMedidaMaquilaResumen(medida);
     },
     calcularTotalKilosCliente(pedido) {
       return calcularTotalesClientePedidoLimpio(pedido).kilosTotal
@@ -3753,19 +3743,6 @@ h4.cliente-header.ozuna-header {
 
 .total-kilos-clickeable:active {
   transform: translateY(0);
-}
-
-.total-kilos-clickeable.total-kilos-sin-refrigerados {
-  cursor: default;
-}
-
-.total-kilos-clickeable.total-kilos-sin-refrigerados:hover,
-.total-kilos-clickeable.total-kilos-sin-refrigerados:active {
-  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-  color: #2c3e50;
-  transform: none;
-  box-shadow: none;
-  border-color: transparent;
 }
 
 .kilos-refrigerados-column,

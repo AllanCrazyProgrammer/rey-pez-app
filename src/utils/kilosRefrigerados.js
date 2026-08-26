@@ -18,7 +18,6 @@ const crearIndiceMedidasPedido = (medidasPedido = []) => {
 
   medidasPedido.forEach((item) => {
     const medida = (item?.medida || '').toString().trim()
-    if (esMedidaMaquilaResumen(medida)) return
     const clave = normalizarClaveMedida(medida)
     if (clave) porClave.set(clave, medida)
   })
@@ -26,26 +25,50 @@ const crearIndiceMedidasPedido = (medidasPedido = []) => {
   return porClave
 }
 
-const resolverMedidaPedido = (indice, medida, detalle = '') => {
-  const claveMedida = normalizarClaveMedida(medida)
-  const claveConDetalle = normalizarClaveMedida(`${medida || ''} ${detalle || ''}`)
+const quitarMarcaMaquila = (valor) => normalizarClaveMedida(valor)
+  .split(' ')
+  .filter((token) => token !== 'maq')
+  .join(' ')
 
-  if (claveConDetalle && indice.has(claveConDetalle)) return indice.get(claveConDetalle)
-  if (claveMedida && indice.has(claveMedida)) return indice.get(claveMedida)
+const resolverMedidaPedido = (
+  indice,
+  medida,
+  detalle = '',
+  destinoMaquila = esMedidaMaquilaResumen(`${medida || ''} ${detalle || ''}`)
+) => {
+  // Nunca se comparan entre sí las filas de clientes y las de maquila. Para
+  // una maquila se quita únicamente el marcador "Maq" de la medida destino,
+  // de modo que "41/50 selecta" se asigne a "41/50 Maq" sin tocar "41/50".
+  const entradas = Array.from(indice.entries())
+    .filter(([_, medidaPedido]) => esMedidaMaquilaResumen(medidaPedido) === destinoMaquila)
+    .map(([clave, medidaPedido]) => [
+      destinoMaquila ? quitarMarcaMaquila(clave) : clave,
+      medidaPedido
+    ])
+
+  const normalizarFuente = destinoMaquila ? quitarMarcaMaquila : normalizarClaveMedida
+  const claveMedida = normalizarFuente(medida)
+  const claveConDetalle = normalizarFuente(`${medida || ''} ${detalle || ''}`)
+
+  const exactaConDetalle = entradas.find(([clave]) => claveConDetalle && clave === claveConDetalle)
+  if (exactaConDetalle) return exactaConDetalle[1]
+
+  const exactaMedida = entradas.find(([clave]) => claveMedida && clave === claveMedida)
+  if (exactaMedida) return exactaMedida[1]
 
   // Algunos embarques guardan la etiqueta o el proveedor dentro del nombre de
   // la medida. Si no existe coincidencia exacta, solo usamos una coincidencia
   // por prefijo cuando es inequívoca.
   const candidatasFuente = [claveConDetalle, claveMedida].filter(Boolean)
   for (const claveFuente of candidatasFuente) {
-    const contenidas = Array.from(indice.entries())
+    const contenidas = entradas
       .filter(([clave]) => claveFuente.startsWith(`${clave} `))
       .sort((a, b) => b[0].length - a[0].length)
     if (contenidas.length) return contenidas[0][1]
   }
 
   if (claveMedida) {
-    const variantes = Array.from(indice.entries())
+    const variantes = entradas
       .filter(([clave]) => clave.startsWith(`${claveMedida} `))
     if (variantes.length === 1) return variantes[0][1]
   }
@@ -109,7 +132,10 @@ export const sumarKilosRefriPorMedida = (embarques = [], medidasPedido = []) => 
   embarques.forEach((embarque) => {
     obtenerProductosRefri(embarque).forEach((producto) => {
       const medidaFuente = producto?.nombreAlternativoPDF || producto?.medida
-      const medidaPedido = resolverMedidaPedido(indice, medidaFuente)
+      const productoEsMaquila = esMedidaMaquilaResumen(
+        `${producto?.nombreAlternativoPDF || ''} ${producto?.medida || ''}`
+      )
+      const medidaPedido = resolverMedidaPedido(indice, medidaFuente, '', productoEsMaquila)
       if (!medidaPedido) return
 
       kilosPorMedida[medidaPedido] = (kilosPorMedida[medidaPedido] || 0)
@@ -125,7 +151,8 @@ export const sumarKilosRefriPorMedida = (embarques = [], medidasPedido = []) => 
 }
 
 export const sumarLimpiosResumenDiaPorMedida = ({
-  resumen = {},
+  salidasClientes = [],
+  salidasMaquilas = [],
   rendimientosClientes = {},
   rendimientosMaquilas = {},
   medidasPedido = []
@@ -134,7 +161,7 @@ export const sumarLimpiosResumenDiaPorMedida = ({
   const kilosPorMedida = {}
   let filasSinRendimiento = 0
 
-  const agregarFila = (fila, rendimiento, detalle = '') => {
+  const agregarFila = (fila, rendimiento, detalle = '', destinoMaquila = false) => {
     const rendimientoNumero = Number(rendimiento)
     const total = Number(fila?.total)
     if (!(rendimientoNumero > 0) || !(total > 0)) {
@@ -142,18 +169,34 @@ export const sumarLimpiosResumenDiaPorMedida = ({
       return
     }
 
-    const medidaPedido = resolverMedidaPedido(indice, fila?.medida, detalle)
+    const medidaPedido = resolverMedidaPedido(
+      indice,
+      fila?.medida,
+      detalle,
+      destinoMaquila
+    )
     if (!medidaPedido) return
 
     kilosPorMedida[medidaPedido] = (kilosPorMedida[medidaPedido] || 0)
       + (total / rendimientoNumero)
   }
 
-  ;(Array.isArray(resumen.salidasClientes) ? resumen.salidasClientes : [])
-    .forEach((fila) => agregarFila(fila, rendimientosClientes[fila.key], fila.proveedor))
+  ;(Array.isArray(salidasClientes) ? salidasClientes : [])
+    .filter((fila) => fila?.tipo !== 'maquila' && fila?.esMaquila !== true)
+    .forEach((fila) => agregarFila(
+      fila,
+      rendimientosClientes[fila.key],
+      fila.proveedor,
+      false
+    ))
 
-  ;(Array.isArray(resumen.salidasMaquilas) ? resumen.salidasMaquilas : [])
-    .forEach((fila) => agregarFila(fila, rendimientosMaquilas[fila.key], fila.maquila))
+  ;(Array.isArray(salidasMaquilas) ? salidasMaquilas : [])
+    .forEach((fila) => agregarFila(
+      fila,
+      rendimientosMaquilas[fila.key],
+      fila.maquila,
+      true
+    ))
 
   Object.keys(kilosPorMedida).forEach((medida) => {
     kilosPorMedida[medida] = redondearUnDecimal(kilosPorMedida[medida])
@@ -167,7 +210,7 @@ export const combinarKilosRefrigerados = (medidasPedido = [], ...fuentes) => {
 
   medidasPedido.forEach((item) => {
     const medida = item?.medida
-    if (!medida || esMedidaMaquilaResumen(medida)) return
+    if (!medida) return
     const total = fuentes.reduce((suma, fuente) => suma + (Number(fuente?.[medida]) || 0), 0)
     if (total > 0) resultado[medida] = redondearUnDecimal(total)
   })

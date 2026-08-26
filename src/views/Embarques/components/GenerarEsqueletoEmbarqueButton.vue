@@ -15,6 +15,7 @@
 
 <script>
 import { getFirestore, collection, getDocs, query, where } from 'firebase/firestore';
+import { factorAgua } from '@/utils/factorAgua';
 
 const LIMPIO_CLIENTES_MAP = {
   joselito: '1',
@@ -169,7 +170,10 @@ export default {
               return;
             }
 
-            const tipoNormalizado = this.normalizarTipo(item.tipo);
+            // El valor neto pertenece a la fila del pedido limpio. Al generar
+            // el esqueleto debe viajar junto con el tipo C/H20 para que la
+            // tarjeta del embarque no vuelva al valor genérico de 0.65.
+            const tipoNormalizado = this.normalizarTipo(item.tipo, factorAgua(item));
             // Obtener la nota original (sellado/kileado) del item
             const notaRaw = (item.nota || '').toString().trim();
             const notaLower = notaRaw.toLowerCase();
@@ -329,7 +333,7 @@ export default {
         esqueletoPorCliente[clienteId] = [...noCrudos, ...ordenados];
       });
     },
-    normalizarTipo(tipo) {
+    normalizarTipo(tipo, camaronNetoPedido = 0.65) {
       const tipoTexto = (tipo || '').toString().trim();
       const valor = tipoTexto.toLowerCase();
 
@@ -340,7 +344,7 @@ export default {
         return { tipo: 's/h20' };
       }
       if (valor === 'c/h20' || valor === 'c/h2o') {
-        return { tipo: 'c/h20' };
+        return { tipo: 'c/h20', camaronNeto: camaronNetoPedido };
       }
       if (valor === 'crudo') {
         return { tipo: 'crudo' };
