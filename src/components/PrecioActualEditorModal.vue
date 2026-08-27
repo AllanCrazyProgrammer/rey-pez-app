@@ -2,6 +2,7 @@
   <div
     v-if="visible && precio"
     class="editor-overlay"
+    :class="{ 'editor-overlay--con-panel-lateral': conPanelLateral }"
     :style="{ top: `${topOffset}px` }"
     @click.self="$emit('close')"
   >
@@ -128,6 +129,10 @@ export default {
     topOffset: {
       type: Number,
       default: 24
+    },
+    conPanelLateral: {
+      type: Boolean,
+      default: false
     }
   },
   data() {
@@ -229,6 +234,15 @@ export default {
   justify-content: center;
   z-index: 1003;
   padding: 20px;
+  box-sizing: border-box;
+}
+
+.editor-overlay--con-panel-lateral {
+  justify-content: flex-start;
+}
+
+.editor-overlay--con-panel-lateral .editor-modal {
+  width: min(calc(50% - 8px), 480px);
 }
 
 .editor-modal {
@@ -454,6 +468,16 @@ export default {
   .secondary-btn,
   .primary-btn {
     width: 100%;
+  }
+}
+
+@media (max-width: 900px) {
+  .editor-overlay--con-panel-lateral {
+    justify-content: center;
+  }
+
+  .editor-overlay--con-panel-lateral .editor-modal {
+    width: min(100%, 480px);
   }
 }
 </style>

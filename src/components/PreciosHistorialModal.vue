@@ -13,7 +13,7 @@
 
     <!-- Modal -->
     <div v-if="showModal" v-portal-body class="modal-overlay" @click.self="showModal = false">
-      <div ref="modalContent" class="modal-content">
+      <div ref="modalContent" class="modal-content" @scroll="sincronizarPosicionDialogos">
         <div class="modal-header">
           <h2>
             <i class="header-icon">📊</i>
@@ -323,7 +323,13 @@
         </div>
 
         <!-- Modal de confirmación para precios específicos existentes -->
-        <div v-if="showConfirmacionModal" class="confirmacion-modal-overlay" @click.self="cancelarConfirmacion">
+        <div
+          v-if="showConfirmacionModal"
+          class="confirmacion-modal-overlay"
+          :class="{ 'confirmacion-modal-overlay--junto-editor': showEditarPrecioModal }"
+          :style="showEditarPrecioModal ? { top: `${editorModalTop}px` } : null"
+          @click.self="cancelarConfirmacion"
+        >
           <div class="confirmacion-modal-content">
             <div class="confirmacion-header">
               <h3>
@@ -416,6 +422,7 @@
           :clientes="clientes"
           :guardando="guardandoEdicionPrecio"
           :top-offset="editorModalTop"
+          :con-panel-lateral="showConfirmacionModal"
           @close="cerrarEditorPrecio"
           @save="guardarEdicionPrecio"
         />
@@ -860,6 +867,14 @@ export default {
         clienteId: producto.clienteId || ''
       };
       this.showEditarPrecioModal = true;
+    },
+    sincronizarPosicionDialogos() {
+      if (!this.showEditarPrecioModal) {
+        return;
+      }
+
+      const modalContent = this.$refs.modalContent;
+      this.editorModalTop = modalContent ? modalContent.scrollTop + 24 : 24;
     },
     cerrarEditorPrecio() {
       if (this.guardandoEdicionPrecio) {
@@ -2609,6 +2624,32 @@ export default {
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.7));
 }
 
+/* Cuando la confirmación nace desde "Editar precio actual", ambos diálogos
+   comparten la misma altura y cada uno ocupa un lado del modal de precios. */
+.confirmacion-modal-overlay--junto-editor {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 20px;
+  box-sizing: border-box;
+  justify-content: flex-end;
+  align-items: flex-start;
+  background: transparent;
+  pointer-events: none;
+  z-index: 1004;
+}
+
+.confirmacion-modal-overlay--junto-editor .confirmacion-modal-content {
+  width: min(calc(50% - 8px), 500px);
+  max-width: none;
+  max-height: calc(100vh - 80px);
+  max-height: calc(100dvh - 80px);
+  box-sizing: border-box;
+  overflow-y: auto;
+  pointer-events: auto;
+}
+
 .confirmacion-header {
   display: flex;
   justify-content: space-between;
@@ -2821,6 +2862,18 @@ export default {
 
 .cancel-icon, .confirm-icon {
   font-size: 1.1em;
+}
+
+@media (max-width: 900px) {
+  .confirmacion-modal-overlay--junto-editor {
+    justify-content: center;
+    background-color: rgba(0, 0, 0, 0.5);
+    pointer-events: auto;
+  }
+
+  .confirmacion-modal-overlay--junto-editor .confirmacion-modal-content {
+    width: min(95%, 500px);
+  }
 }
 
 .overwrite-icon {
