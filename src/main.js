@@ -16,6 +16,14 @@ import "bootstrap-vue/dist/bootstrap-vue.css";
 // Import Font Awesome
 import '@fortawesome/fontawesome-free/css/all.css';
 
+// En Windows el cursor claro del sistema se pierde sobre varias superficies
+// blancas de la aplicación. La clase permite usar cursores oscuros solo en esa
+// plataforma y conserva el cursor nativo en macOS, iOS y Android.
+const desktopPlatform = window.desktop?.platform;
+const browserPlatform = navigator.userAgentData?.platform || navigator.platform || '';
+const esWindows = desktopPlatform === 'win32' || /windows|win32|win64/i.test(browserPlatform);
+document.documentElement.classList.toggle('platform-windows', esWindows);
+
 Vue.use(BootstrapVue);
 Vue.use(IconsPlugin);
 Vue.use(PiniaVuePlugin);

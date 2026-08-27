@@ -61,6 +61,40 @@ html, body {
   padding: 0;
 }
 
+/* Cursores de alto contraste para Windows. Se usa relleno oscuro para fondos
+   claros y un borde blanco delgado para que sigan visibles en el fondo azul. */
+html.platform-windows body,
+html.platform-windows body * {
+  cursor: url('./assets/cursors/dark-arrow.svg') 3 2, default !important;
+}
+
+html.platform-windows a,
+html.platform-windows button,
+html.platform-windows select,
+html.platform-windows summary,
+html.platform-windows [role="button"],
+html.platform-windows label[for],
+html.platform-windows input[type="button"],
+html.platform-windows input[type="submit"],
+html.platform-windows input[type="reset"],
+html.platform-windows input[type="checkbox"],
+html.platform-windows input[type="radio"] {
+  cursor: url('./assets/cursors/dark-pointer.svg') 7 2, pointer !important;
+}
+
+html.platform-windows input:not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+html.platform-windows textarea,
+html.platform-windows [contenteditable="true"] {
+  cursor: url('./assets/cursors/dark-text.svg') 12 14, text !important;
+}
+
+html.platform-windows button:disabled,
+html.platform-windows input:disabled,
+html.platform-windows select:disabled,
+html.platform-windows [aria-disabled="true"] {
+  cursor: url('./assets/cursors/dark-arrow.svg') 3 2, not-allowed !important;
+}
+
 #app {
   display: flex;
   flex-direction: column;
