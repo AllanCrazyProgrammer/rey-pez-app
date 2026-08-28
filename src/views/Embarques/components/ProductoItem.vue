@@ -930,7 +930,13 @@ export default {
             if (siguienteIndex < (this.producto.reporteTaras || []).length) {
                 event.preventDefault();
                 this.enfocarInput(this.$refs.reporteTaraInputs, siguienteIndex);
+                return;
             }
+
+            // Tab desde la última bolsa replica el botón "+": crea el siguiente
+            // par Taras/Bolsas y deja el foco en la nueva captura de Taras.
+            event.preventDefault();
+            if (!event.repeat) this.agregarReporteTara();
         },
 
         // Método para manejar el clic en el nombre para abrir el modal
