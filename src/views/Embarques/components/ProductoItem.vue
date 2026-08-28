@@ -905,7 +905,13 @@ export default {
             if (siguienteTaraIndex < (this.producto.taras || []).length) {
                 event.preventDefault();
                 this.enfocarInput(this.$refs.taraInputs, siguienteTaraIndex);
+                return;
             }
+
+            // Tab desde el último campo de Kilos replica el botón "+":
+            // agrega otro par Taras/Kilos y enfoca la nueva Tara.
+            event.preventDefault();
+            if (!event.repeat) this.agregarTara();
         },
 
         handleReporteTaraTab(event, index) {
