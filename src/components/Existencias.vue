@@ -401,9 +401,12 @@ export default {
           if (!newExistencias[entrada.proveedor][medidaKey]) {
             newExistencias[entrada.proveedor][medidaKey] = {
               medida: entrada.medida,
+              tipo: entrada.tipo || null,
               precio: precio,
               lotes: []
             };
+          } else if (!newExistencias[entrada.proveedor][medidaKey].tipo && entrada.tipo) {
+            newExistencias[entrada.proveedor][medidaKey].tipo = entrada.tipo;
           }
 
           const registro = newExistencias[entrada.proveedor][medidaKey];
@@ -439,9 +442,12 @@ export default {
           if (!newExistencias[salida.proveedor][medidaKey]) {
             newExistencias[salida.proveedor][medidaKey] = {
               medida: salida.medida,
+              tipo: salida.tipo || null,
               precio: precio,
               lotes: []
             };
+          } else if (!newExistencias[salida.proveedor][medidaKey].tipo && salida.tipo) {
+            newExistencias[salida.proveedor][medidaKey].tipo = salida.tipo;
           }
 
           const registroSalida = newExistencias[salida.proveedor][medidaKey];
@@ -1018,37 +1024,69 @@ export default {
     });
 
     const UMBRAL_CAMBIO_KILOS = 0.05;
-    const UMBRAL_BAJO_STOCK_KILOS = 10000;
 
     const normalizarMedidaInventario = (medida) => String(medida || '')
       .trim()
       .toLocaleLowerCase('es')
       .replace(/\s+/g, ' ');
 
-    const construirCorteInventario = () => {
-      const porMedida = new Map();
+    const normalizarOrigenInventario = (origen) => String(origen || '')
+      .trim()
+      .toLocaleLowerCase('es')
+      .replace(/\s+/g, ' ');
 
-      Object.values(existencias.value || {}).forEach(medidas => {
+    const obtenerTipoInventario = (registro, proveedor) => {
+      const tipoExplicito = String(registro?.tipo || '').trim().toLocaleLowerCase('es');
+      if (tipoExplicito === 'maquila') return 'maquila';
+      if (tipoExplicito === 'proveedor') return 'proveedor';
+
+      const proveedorNormalizado = normalizarOrigenInventario(proveedor);
+      return proveedorNormalizado === 'ozuna' || proveedorNormalizado === 'joselito'
+        ? 'maquila'
+        : 'proveedor';
+    };
+
+    const construirClaveMovimiento = (medida, proveedor, tipo) => [
+      normalizarMedidaInventario(medida),
+      tipo,
+      normalizarOrigenInventario(proveedor)
+    ].join('::');
+
+    const construirCorteInventario = () => {
+      const porOrigenYMedida = new Map();
+
+      Object.entries(existencias.value || {}).forEach(([proveedor, medidas]) => {
         Object.values(medidas || {}).forEach(datos => {
           const medida = String(datos?.medida || '').trim();
-          const clave = normalizarMedidaInventario(medida);
-          if (!clave) return;
+          const claveMedida = normalizarMedidaInventario(medida);
+          const tipo = obtenerTipoInventario(datos, proveedor);
+          const clave = construirClaveMovimiento(medida, proveedor, tipo);
+          if (!claveMedida) return;
 
           const kilos = Array.isArray(datos?.lotes)
             ? datos.lotes.reduce((total, lote) => total + (Number(lote?.kilos) || 0), 0)
             : (Number(datos?.kilos) || 0);
           if (kilos <= 0) return;
 
-          if (!porMedida.has(clave)) {
-            porMedida.set(clave, { clave, medida, kilos: 0 });
+          if (!porOrigenYMedida.has(clave)) {
+            porOrigenYMedida.set(clave, {
+              clave,
+              claveMedida,
+              medida,
+              proveedor: String(proveedor || '').trim() || 'Sin especificar',
+              tipo,
+              kilos: 0
+            });
           }
-          porMedida.get(clave).kilos += kilos;
+          porOrigenYMedida.get(clave).kilos += kilos;
         });
       });
 
-      return [...porMedida.values()]
+      return [...porOrigenYMedida.values()]
         .map(item => ({ ...item, kilos: Number(item.kilos.toFixed(2)) }))
-        .sort((a, b) => a.medida.localeCompare(b.medida, 'es', { numeric: true }));
+        .sort((a, b) => a.medida.localeCompare(b.medida, 'es', { numeric: true }) ||
+          a.tipo.localeCompare(b.tipo, 'es') ||
+          a.proveedor.localeCompare(b.proveedor, 'es'));
     };
 
     const obtenerMovimientosInventarioDelDia = async () => {
@@ -1065,12 +1103,23 @@ export default {
 
       const acumular = (registro, tipo) => {
         const medida = String(registro?.medida || '').trim();
-        const clave = normalizarMedidaInventario(medida);
+        const claveMedida = normalizarMedidaInventario(medida);
+        const proveedor = String(registro?.proveedor || '').trim() || 'Sin especificar';
+        const tipoInventario = obtenerTipoInventario(registro, proveedor);
+        const clave = construirClaveMovimiento(medida, proveedor, tipoInventario);
         const kilos = Number(registro?.kilos) || 0;
-        if (!clave || kilos <= 0) return;
+        if (!claveMedida || kilos <= 0) return;
 
         if (!movimientos.has(clave)) {
-          movimientos.set(clave, { clave, medida, entradas: 0, salidas: 0 });
+          movimientos.set(clave, {
+            clave,
+            claveMedida,
+            medida,
+            proveedor,
+            tipo: tipoInventario,
+            entradas: 0,
+            salidas: 0
+          });
         }
         movimientos.get(clave)[tipo] += kilos;
       };
@@ -1090,6 +1139,13 @@ export default {
       const corteActual = new Map(
         construirCorteInventario().map(item => [item.clave, item])
       );
+      const kilosActualesPorMedida = new Map();
+      corteActual.forEach(item => {
+        kilosActualesPorMedida.set(
+          item.claveMedida,
+          (kilosActualesPorMedida.get(item.claveMedida) || 0) + item.kilos
+        );
+      });
       const movimientos = await obtenerMovimientosInventarioDelDia();
       const cambios = [...movimientos.values()].map(item => {
         const kilosDespues = Number(corteActual.get(item.clave)?.kilos) || 0;
@@ -1103,6 +1159,8 @@ export default {
         return {
           ...item,
           medida: corteActual.get(item.clave)?.medida || item.medida,
+          proveedor: corteActual.get(item.clave)?.proveedor || item.proveedor,
+          tipo: corteActual.get(item.clave)?.tipo || item.tipo,
           kilosAntes,
           kilosDespues,
           entradas,
@@ -1112,11 +1170,42 @@ export default {
         };
       })
         .filter(item => item.entradas > UMBRAL_CAMBIO_KILOS || item.salidas > UMBRAL_CAMBIO_KILOS)
-        .sort((a, b) => (b.entradas + b.salidas) - (a.entradas + a.salidas) ||
-          a.medida.localeCompare(b.medida, 'es', { numeric: true }));
+        .sort((a, b) => a.medida.localeCompare(b.medida, 'es', { numeric: true }) ||
+          a.tipo.localeCompare(b.tipo, 'es') ||
+          a.proveedor.localeCompare(b.proveedor, 'es'));
+
+      const gruposPorMedida = new Map();
+      cambios.forEach(item => {
+        if (!gruposPorMedida.has(item.claveMedida)) {
+          gruposPorMedida.set(item.claveMedida, {
+            clave: item.claveMedida,
+            medida: item.medida,
+            detalles: [],
+            kilosAntes: 0,
+            kilosDespues: Number(kilosActualesPorMedida.get(item.claveMedida)) || 0,
+            entradas: 0,
+            salidas: 0
+          });
+        }
+
+        const grupo = gruposPorMedida.get(item.claveMedida);
+        grupo.detalles.push(item);
+        grupo.entradas += item.entradas;
+        grupo.salidas += item.salidas;
+      });
+
+      const grupos = [...gruposPorMedida.values()].map(grupo => ({
+        ...grupo,
+        kilosAntes: Number((grupo.kilosDespues - grupo.entradas + grupo.salidas).toFixed(2)),
+        kilosDespues: Number(grupo.kilosDespues.toFixed(2)),
+        entradas: Number(grupo.entradas.toFixed(2)),
+        salidas: Number(grupo.salidas.toFixed(2))
+      }));
 
       return {
         cambios,
+        grupos,
+        medidasModificadas: grupos.length,
         entradas: cambios.reduce((total, item) => total + item.entradas, 0),
         salidas: cambios.reduce((total, item) => total + item.salidas, 0)
       };
@@ -1446,53 +1535,79 @@ export default {
           .pagina-movimientos {
             break-after: page;
             page-break-after: always;
-            padding: 12px 18px;
+            padding: 4px 8px;
           }
           .movimientos-header {
             border: 2px solid #2c3e50;
-            padding: 12px 16px;
-            margin-bottom: 14px;
+            padding: 5px 8px;
+            margin-bottom: 6px;
           }
           .movimientos-header h1 {
-            font-size: 28pt;
+            font-size: 30pt;
             color: #2c3e50;
-            margin: 0 0 5px;
+            margin: 0 0 2px;
           }
           .movimientos-header p {
             font-size: 15pt;
             color: #5d6d7e;
-            margin: 2px 0;
+            margin: 1px 0;
           }
           .movimientos-resumen {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
-            gap: 10px;
-            margin-bottom: 14px;
+            gap: 5px;
+            margin-bottom: 6px;
           }
           .movimiento-resumen-card {
             border: 1px solid #7f8c8d;
-            padding: 10px;
+            padding: 4px;
             text-align: center;
           }
           .movimiento-resumen-card span {
             display: block;
             color: #5d6d7e;
-            font-size: 13pt;
+            font-size: 13.5pt;
             text-transform: uppercase;
           }
           .movimiento-resumen-card strong {
             display: block;
-            margin-top: 4px;
+            margin-top: 1px;
             color: #2c3e50;
-            font-size: 21pt;
+            font-size: 23pt;
+          }
+          .movimientos-table {
+            table-layout: fixed;
           }
           .movimientos-table th,
           .movimientos-table td {
-            font-size: 15pt;
-            padding: 8px;
+            font-size: 16pt;
+            line-height: 1.05;
+            padding: 3px 4px;
           }
           .movimientos-table .numero {
             text-align: right;
+            white-space: nowrap;
+          }
+          .movimientos-table .origen-cell {
+            min-width: 130px;
+            white-space: normal;
+          }
+          .movimientos-table .origen-tipo {
+            display: inline-block;
+            margin-right: 5px;
+            color: #5d6d7e;
+            font-size: 11pt;
+            font-weight: bold;
+            text-transform: uppercase;
+          }
+          .movimientos-table .origen-tipo.maquila {
+            color: #d35400;
+          }
+          .movimientos-table .movimiento-separador td {
+            height: 8px;
+            padding: 0;
+            border: 0;
+            background-color: white !important;
           }
           .movimientos-table .aumento {
             color: #1e8449;
@@ -1510,19 +1625,6 @@ export default {
             color: #c0392b;
             font-weight: bold;
           }
-          .movimientos-table .bajo-stock-cell {
-            background-color: #fdecea !important;
-            color: #b71c1c;
-            font-weight: bold;
-          }
-          .alerta-bajo-stock {
-            display: block;
-            margin-top: 3px;
-            color: #b71c1c;
-            font-size: 12pt;
-            font-weight: bold;
-            text-transform: uppercase;
-          }
           .sin-movimientos {
             border: 1px dashed #7f8c8d;
             padding: 40px;
@@ -1531,9 +1633,9 @@ export default {
             font-size: 18pt;
           }
           .movimientos-nota {
-            margin-top: 12px;
+            margin-top: 5px;
             color: #5d6d7e;
-            font-size: 12pt;
+            font-size: 12.5pt;
           }
           @media print {
             .medida-card {
@@ -1595,18 +1697,29 @@ export default {
         </div>
       `;
 
-      const filasMovimientosHtml = comparativoInventario.cambios.map(item => {
-        const bajoStock = item.kilosDespues < UMBRAL_BAJO_STOCK_KILOS;
+      const filasMovimientosHtml = comparativoInventario.grupos.map(grupo => {
+        const detallesHtml = grupo.detalles.map(item => {
+          const esMaquila = item.tipo === 'maquila';
+          return `
+            <tr>
+              <td><strong>${escaparHtml(item.medida)}</strong></td>
+              <td class="origen-cell">
+                <span class="origen-tipo ${esMaquila ? 'maquila' : ''}">${esMaquila ? 'Maquila' : 'Proveedor'}</span>
+                <strong>${escaparHtml(item.proveedor)}</strong>
+              </td>
+              <td class="numero">${formatNumber(item.kilosAntes)} kg</td>
+              <td class="numero entrada">${item.entradas ? '+' : ''}${formatNumber(item.entradas)} kg</td>
+              <td class="numero salida">${item.salidas ? '-' : ''}${formatNumber(item.salidas)} kg</td>
+              <td class="numero">
+                ${formatNumber(item.kilosDespues)} kg
+              </td>
+            </tr>
+          `;
+        }).join('');
         return `
-          <tr>
-            <td><strong>${escaparHtml(item.medida)}</strong></td>
-            <td class="numero">${formatNumber(item.kilosAntes)} kg</td>
-            <td class="numero entrada">${item.entradas ? '+' : ''}${formatNumber(item.entradas)} kg</td>
-            <td class="numero salida">${item.salidas ? '-' : ''}${formatNumber(item.salidas)} kg</td>
-            <td class="numero ${bajoStock ? 'bajo-stock-cell' : ''}">
-              ${formatNumber(item.kilosDespues)} kg
-              ${bajoStock ? '<span class="alerta-bajo-stock">Alerta: bajo stock</span>' : ''}
-            </td>
+          ${detallesHtml}
+          <tr class="movimiento-separador" aria-hidden="true">
+            <td colspan="6"></td>
           </tr>
         `;
       }).join('');
@@ -1618,13 +1731,21 @@ export default {
             <p><strong>Comparado contra:</strong> inventario al inicio del día, reconstruido con las entradas y salidas registradas hoy.</p>
           </div>
           <div class="movimientos-resumen">
-            <div class="movimiento-resumen-card"><span>Medidas modificadas</span><strong>${comparativoInventario.cambios.length}</strong></div>
+            <div class="movimiento-resumen-card"><span>Medidas modificadas</span><strong>${comparativoInventario.medidasModificadas}</strong></div>
             <div class="movimiento-resumen-card"><span>Entradas / aumentos</span><strong>+${formatNumber(comparativoInventario.entradas)} kg</strong></div>
             <div class="movimiento-resumen-card"><span>Salidas / bajas</span><strong>-${formatNumber(comparativoInventario.salidas)} kg</strong></div>
           </div>
           ${filasMovimientosHtml ? `
             <table class="movimientos-table">
-              <thead><tr><th>Medida</th><th>Antes</th><th>Entradas</th><th>Salidas</th><th>Después</th></tr></thead>
+              <colgroup>
+                <col style="width: 11%">
+                <col style="width: 26%">
+                <col style="width: 15%">
+                <col style="width: 14%">
+                <col style="width: 14%">
+                <col style="width: 20%">
+              </colgroup>
+              <thead><tr><th>Medida</th><th>Proveedor / maquila</th><th>Antes</th><th>Entradas</th><th>Salidas</th><th>Después</th></tr></thead>
               <tbody>${filasMovimientosHtml}</tbody>
             </table>
           ` : `
@@ -1632,7 +1753,7 @@ export default {
               No se encontraron entradas ni salidas registradas en el día de hoy.
             </div>
           `}
-          <p class="movimientos-nota">Comparativo agregado por medida a partir de los movimientos de hoy. Incluye todos los proveedores, precios, lotes y cuartos fríos del inventario de limpios.</p>
+          <p class="movimientos-nota">Comparativo detallado por medida y origen. Cada medida se separa visualmente para distinguir sus proveedores y maquilas.</p>
         </section>
       `;
 
