@@ -77,6 +77,7 @@ const routes = [
     path: '/',
     name: 'home',
     component: Home,
+    meta: { public: true },
   },
   {
     path: '/sale-note/:noteId?',
@@ -508,6 +509,13 @@ router.beforeEach((to, from, next) => {
       return;
     }
 
+    // Home es de acceso libre para que la calculadora pueda usarse sin
+    // solicitar usuario y contraseña.
+    if (to.matched.some(route => route.meta.public)) {
+      next();
+      return;
+    }
+
     // Verificar autenticación de manera más robusta
     const userString = localStorage.getItem('user');
     let isAuthenticated = false;
@@ -545,8 +553,8 @@ router.beforeEach((to, from, next) => {
     next();
   } catch (error) {
     console.error('Error en navigation guard:', error);
-    // En caso de error, permitir navegación a login
-    if (to.path === '/login') {
+    // En caso de error, conservar accesibles login y las rutas públicas.
+    if (to.path === '/login' || to.matched.some(route => route.meta.public)) {
       next();
     } else {
       next('/login');
