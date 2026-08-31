@@ -1192,9 +1192,8 @@ function calcularKilosLimpios(producto) {
     // Para productos sin agua
     const sumaKilos = producto.kilos.reduce((sum, kilo) => sum + (Number(kilo) || 0), 0);
     const sumaTaras = producto.taras.reduce((sum, tara) => sum + (Number(tara) || 0), 0);
-    const sumaTarasExtra = (producto.tarasExtra || []).reduce((sum, tara) => sum + (Number(tara) || 0), 0);
-    const totalTaras = sumaTaras + sumaTarasExtra;
-    const descuentoTaras = producto.restarTaras ? totalTaras * 3 : 0;
+    // Las taras extra corrigen el conteo de taras, no los kilos de rendimiento.
+    const descuentoTaras = producto.restarTaras ? sumaTaras * 3 : 0;
     
     return sumaKilos - descuentoTaras;
   }

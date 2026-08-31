@@ -1,6 +1,11 @@
 import { ref, computed } from 'vue';
 import { RendimientosService } from '../services/rendimientosService';
-import { calcularCostoFinal, calcularKilosCrudosItem, calcularGananciaMaquila } from '../utils/calculations';
+import {
+  calcularCostoFinal,
+  calcularKilosCrudosItem,
+  calcularGananciaMaquila,
+  calcularTotalKilos
+} from '../utils/calculations';
 
 /**
  * Composable para manejar los cálculos de ganancias
@@ -148,11 +153,7 @@ export function useGanancias() {
             const valorNeto = parseFloat(producto.camaronNeto) || 0.65;
             totalEmbarcado += (sumaTotalKilos * valorNeto);
           } else {
-            const sumaKilos = producto.kilos.reduce((sum, kilo) => sum + (Number(kilo) || 0), 0);
-            const sumaTaras = (producto.taras || []).reduce((sum, tara) => sum + (Number(tara) || 0), 0) +
-                             (producto.tarasExtra || []).reduce((sum, tara) => sum + (Number(tara) || 0), 0);
-            const descuentoTaras = producto.restarTaras ? sumaTaras * 3 : 0;
-            totalEmbarcado += (sumaKilos - descuentoTaras);
+            totalEmbarcado += calcularTotalKilos(producto);
           }
         }
       });

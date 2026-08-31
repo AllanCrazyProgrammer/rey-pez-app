@@ -1,7 +1,7 @@
 import { ref, computed } from 'vue';
 import { debounce } from 'lodash';
 import { RendimientosService } from '../services/rendimientosService';
-import { calcularTotalBolsas, calcularTotalTaras, calcularTotalKilos, esMedidaMix } from '../utils/calculations';
+import { calcularTotalBolsas, calcularTotalKilos, esMedidaMix } from '../utils/calculations';
 
 /**
  * Composable para manejar los datos de rendimientos
@@ -217,10 +217,9 @@ export function useRendimientosData() {
             const valorNeto = parseFloat(producto.camaronNeto) || 0.65;
             return subtotal + (totalBolsas * valorNeto);
           } else {
-            const sumaKilos = producto.kilos.reduce((sum, kilo) => sum + (Number(kilo) || 0), 0);
-            const sumaTaras = calcularTotalTaras(producto);
-            const descuentoTaras = producto.restarTaras ? sumaTaras * 3 : 0;
-            return subtotal + (sumaKilos - descuentoTaras);
+            // Las taras extra sólo ajustan el conteo; no cambian los kilos
+            // que sirven como base para calcular el rendimiento.
+            return subtotal + calcularTotalKilos(producto);
           }
         }, 0);
     }, 0);

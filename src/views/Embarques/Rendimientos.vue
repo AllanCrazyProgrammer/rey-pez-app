@@ -2574,10 +2574,8 @@ export default {
                 const valorNeto = parseFloat(producto.camaronNeto) || 0.65;
                 totalEmbarcado += (totalBolsas * valorNeto);
               } else {
-                const sumaKilos = producto.kilos.reduce((sum, kilo) => sum + (Number(kilo) || 0), 0);
-                const sumaTaras = this.calcularTotalTaras(producto);
-                const descuentoTaras = producto.restarTaras ? sumaTaras * 3 : 0;
-                totalEmbarcado += (sumaKilos - descuentoTaras);
+                // Las taras extra corrigen el conteo de taras, pero no los kilos.
+                totalEmbarcado += this.calcularTotalKilos(producto);
               }
             }
           }
@@ -2726,10 +2724,9 @@ export default {
               const valorNeto = parseFloat(producto.camaronNeto) || 0.65;
               return subtotal + (totalBolsas * valorNeto);
             } else {
-              const sumaKilos = producto.kilos.reduce((sum, kilo) => sum + (Number(kilo) || 0), 0);
-              const sumaTaras = this.calcularTotalTaras(producto);
-              const descuentoTaras = producto.restarTaras ? sumaTaras * 3 : 0;
-              return subtotal + (sumaKilos - descuentoTaras);
+              // Mantener el mismo total de kilos mostrado en el embarque: el
+              // descuento de 3 kg sólo corresponde a las taras normales.
+              return subtotal + this.calcularTotalKilos(producto);
             }
           }, 0);
       }, 0);
