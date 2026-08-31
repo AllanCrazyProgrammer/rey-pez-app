@@ -136,7 +136,7 @@
                 'text-blue': item.tipo === 'C/H20', 
                 'text-blue compact': item.tipo === '1.35 y .15' || item.tipo === '1.5 y .3'
               }">
-                {{ item.tipo }}
+                {{ tipoParaImpresion(item.tipo) }}
                 <span v-if="item.tipo === 'C/H20' && aguaPersonalizada(item)" class="neto-tag">Neto {{ textoAgua(item) }}</span>
                 <span v-if="item.nota" class="nota-tag">{{ item.nota }}</span>
               </td>
@@ -180,7 +180,7 @@
                   'text-blue': item.tipo === 'C/H20',
                   'text-blue compact': item.tipo === '1.35 y .15' || item.tipo === '1.3 y .2' || item.tipo === '1.5 y .3'
                 }">
-                  {{ item.tipo }}
+                  {{ tipoParaImpresion(item.tipo) }}
                   <span v-if="item.tipo === 'C/H20' && aguaPersonalizada(item)" class="neto-tag">Neto {{ textoAgua(item) }}</span>
                   <span v-if="item.nota" class="nota-tag">{{ item.nota }}</span>
                 </td>
@@ -222,7 +222,7 @@
                   'text-blue': item.tipo === 'C/H20', 
                   'text-blue compact': item.tipo === '1.35 y .15' || item.tipo === '1.5 y .3'
                 }">
-                  {{ item.tipo }}
+                  {{ tipoParaImpresion(item.tipo) }}
                   <span v-if="item.tipo === 'C/H20' && aguaPersonalizada(item)" class="neto-tag">Neto {{ textoAgua(item) }}</span>
                   <span v-if="item.nota" class="nota-tag">{{ item.nota }}</span>
                 </td>
@@ -265,7 +265,7 @@
                     'text-blue': item.tipo === 'C/H20' || item.tipo === '.7 y .3', 
                     'text-blue compact': item.tipo === '1.35 y .15' || item.tipo === '1.5 y .3'
                   }">
-                    {{ item.tipo }}
+                    {{ tipoParaImpresion(item.tipo) }}
                     <span v-if="item.tipo === 'C/H20' && aguaPersonalizada(item)" class="neto-tag">Neto {{ textoAgua(item) }}</span>
                     <span v-if="item.nota" class="nota-tag">{{ item.nota }}</span>
                   </td>
@@ -307,7 +307,7 @@
                     'text-blue': item.tipo === 'C/H20' || item.tipo === '.7 y .3', 
                     'text-blue compact': item.tipo === '1.35 y .15' || item.tipo === '1.5 y .3'
                   }">
-                    {{ item.tipo }}
+                    {{ tipoParaImpresion(item.tipo) }}
                     <span v-if="item.tipo === 'C/H20' && aguaPersonalizada(item)" class="neto-tag">Neto {{ textoAgua(item) }}</span>
                     <span v-if="item.nota" class="nota-tag">{{ item.nota }}</span>
                   </td>
@@ -352,7 +352,7 @@
                   'text-blue': item.tipo === 'C/H20', 
                   'text-blue compact': item.tipo === '1.35 y .15' || item.tipo === '1.5 y .3'
                 }">
-                  {{ item.tipo }}
+                  {{ tipoParaImpresion(item.tipo) }}
                   <span v-if="item.tipo === 'C/H20' && aguaPersonalizada(item)" class="neto-tag">Neto {{ textoAgua(item) }}</span>
                   <span v-if="item.nota" class="nota-tag">{{ item.nota }}</span>
                 </td>
@@ -1317,6 +1317,12 @@ export default {
     obtenerMedidaVisible(medida) {
       return this.esMedidaMacuil(medida) ? '' : (medida || '');
     },
+    tipoParaImpresion(tipo) {
+      const tipoNormalizado = (tipo || '').toString().trim();
+      return tipoNormalizado === '1.4' || tipoNormalizado === '1.5'
+        ? `${tipoNormalizado} S/H20`
+        : tipoNormalizado;
+    },
     colorEtiquetaItem(item) {
       if (!item || !item.etiqueta) return null;
       return colorParaEtiqueta(item.etiqueta, this.etiquetasPedido, this.etiquetasColoresPedido);
@@ -1387,8 +1393,9 @@ export default {
             {
               text: [
                 {
-                  text: item.tipo || '',
-                  fontSize: fontSize * 2,
+                  text: this.tipoParaImpresion(item.tipo),
+                  fontSize: (item.tipo === '1.4' || item.tipo === '1.5') ? fontSize * 1.8 : fontSize * 2,
+                  noWrap: item.tipo === '1.4' || item.tipo === '1.5',
                   color: (item.tipo === 'C/H20' || item.tipo === '1.35 y .15' || item.tipo === '1.3 y .2' || item.tipo === '1.5 y .3') ? '#0000FF' : undefined,
                   margin: (item.tipo === '1.35 y .15' || item.tipo === '1.3 y .2' || item.tipo === '1.5 y .3') ? [0, 0, 0, 0] : [0, 2, 0, 2]
                 }
@@ -1719,9 +1726,10 @@ export default {
             { text: this.obtenerMedidaVisible(item.medida), fontSize: fontSize * 2 },
             (item.tipo && item.tipo !== 'S/H20') ? {
               text: (item.tipo === 'C/H20' && aguaEsPersonalizada(item))
-                ? [{ text: item.tipo }, { text: '  Neto ' + formatearAgua(item), background: '#FF0000', color: '#FFFFFF' }]
-                : item.tipo,
-              fontSize: fontSize * 1.5,
+                ? [{ text: this.tipoParaImpresion(item.tipo) }, { text: '  Neto ' + formatearAgua(item), background: '#FF0000', color: '#FFFFFF' }]
+                : this.tipoParaImpresion(item.tipo),
+              fontSize: (item.tipo === '1.4' || item.tipo === '1.5') ? fontSize * 1.8 : fontSize * 1.5,
+              noWrap: item.tipo === '1.4' || item.tipo === '1.5',
               color: '#0000FF',
               bold: true,
               margin: [0, 2, 0, 2]

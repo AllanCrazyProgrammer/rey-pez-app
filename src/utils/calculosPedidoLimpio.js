@@ -1,12 +1,21 @@
 import { factorAgua, kilosPorTara } from '@/utils/factorAgua'
 
 const FACTORES_POR_TIPO = {
+  '1.4': 1.4,
+  '1.5': 1.5,
   '1.35 y .15': 1.35,
   '1.3 y .2': 1.3,
   '1.5 y .3': 1.5,
   '.7 y .3': 0.7,
   '.9 y .1': 0.9,
   '.9': 0.9
+}
+
+// En Otilio, los tipos 1.4 y 1.5 representan el rendimiento aplicado a una
+// tara base de 20 kg: taras × 20 × factor.
+const KILOS_BASE_TARA_POR_TIPO = {
+  '1.4': 20,
+  '1.5': 20
 }
 
 const CLIENTES_CON_TARA_DE_27 = new Set(['otilio', 'catarro', 'ozuna', 'temporal'])
@@ -33,8 +42,13 @@ export function calcularKilosItemPedidoLimpio(item) {
   if (!cantidad) return 0
 
   if (item?.esTara) {
+    const tipo = String(item?.tipo || '').trim()
+    if (KILOS_BASE_TARA_POR_TIPO[tipo]) {
+      return cantidad * KILOS_BASE_TARA_POR_TIPO[tipo] * FACTORES_POR_TIPO[tipo]
+    }
+
     const kilosBase = cantidad * kilosPorTara(item)
-    return item.tipo === 'C/H20' ? kilosBase * factorAgua(item) : kilosBase
+    return tipo === 'C/H20' ? kilosBase * factorAgua(item) : kilosBase
   }
 
   return cantidad * factorPorTipo(item)

@@ -175,10 +175,12 @@
                     class="input-field"
                     placeholder="Escribir tipo"
                   >
-                  <select v-else v-model="item.tipo" class="input-field" :class="{ 'text-blue': item.tipo === 'C/H20' }" @change="onTipoChange(item)">
+                  <select v-else v-model="item.tipo" class="input-field" :class="{ 'text-blue': item.tipo === 'C/H20' || item.tipo === '1.4' || item.tipo === '1.5' }" @change="onTipoChange(item)">
                     <option value="">Seleccionar</option>
                     <option value="S/H20">S/H20</option>
                     <option value="C/H20" class="text-blue">C/H20</option>
+                    <option value="1.4" class="text-blue">1.4</option>
+                    <option value="1.5" class="text-blue">1.5</option>
                   </select>
                 </div>
 
@@ -924,7 +926,7 @@ import {
 } from '@/utils/calculosPedidoLimpio'
 
 const TIPOS_POR_CLIENTE = {
-  otilio: ['S/H20', 'C/H20'],
+  otilio: ['S/H20', 'C/H20', '1.4', '1.5'],
   catarro: ['S/H20', 'C/H20'],
   joselito: ['S/H20', 'C/H20', '1.3 y .2', '1.5 y .3'],
   lorena: ['S/H20', 'C/H20', '1.35 y .15', '1.5 y .3'],
