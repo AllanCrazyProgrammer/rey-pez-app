@@ -13,6 +13,18 @@
         <strong>{{ embarqueBloqueado ? 'Protegido' : 'Editable' }}</strong>
       </div>
       <div class="botones">
+        <button
+          type="button"
+          class="btn-sonidos"
+          data-toggle-sonidos
+          :aria-pressed="sonidosActivados ? 'true' : 'false'"
+          aria-label="Sonidos de terminal retro electrónica"
+          :title="sonidosActivados ? 'Silenciar terminal retro electrónica' : 'Activar terminal retro electrónica'"
+          @click="$emit('toggle-sonidos')"
+        >
+          <i :class="['fas', sonidosActivados ? 'fa-volume-up' : 'fa-volume-mute']" aria-hidden="true"></i>
+          {{ sonidosActivados ? 'Sonido activo' : 'Sin sonido' }}
+        </button>
         <button type="button" @click="volverAEmbarquesMenu" class="btn-volver">
           <i class="fas fa-arrow-left"></i> Menú
         </button>
@@ -132,6 +144,10 @@ export default {
     GenerarEsqueletoEmbarqueButton
   },
   props: {
+    sonidosActivados: {
+      type: Boolean,
+      default: true
+    },
     modoEdicion: {
       type: Boolean,
       default: false
@@ -586,6 +602,7 @@ label {
 .btn-volver,
 .btn-bloqueo,
 .btn-navbar-principal,
+.btn-sonidos,
 .btn-configuracion-medidas,
 .btn {
   display: inline-flex;
@@ -609,6 +626,7 @@ label {
 .btn-volver:hover,
 .btn-bloqueo:hover,
 .btn-navbar-principal:hover,
+.btn-sonidos:hover,
 .btn-configuracion-medidas:hover,
 .btn:hover:not(:disabled) {
   transform: translateY(-2px);
@@ -624,6 +642,8 @@ label {
 .btn-configuracion-medidas { background: rgba(20, 33, 55, .78); }
 
 .btn-navbar-principal i { color: #fbbf24; }
+.btn-sonidos i { color: #a5b4fc; }
+.btn-sonidos:focus-visible { outline: 2px solid #38d9ff; outline-offset: 3px; }
 .btn-bloqueo:not(.bloqueado) i { color: #4ade80; }
 .btn-bloqueo.bloqueado i { color: #fb7185; }
 .btn-configuracion-medidas i { color: #38d9ff; }

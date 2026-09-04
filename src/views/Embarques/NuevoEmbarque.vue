@@ -23,6 +23,8 @@
         :embarque-id="embarqueId"
         :has-pending-changes="hasPendingChanges"
         :is-syncing="isSyncing"
+        :sonidos-activados="sonidosActivados"
+        @toggle-sonidos="alternarSonidosEmbarque"
         @sync-manual="sincronizarConNube"
         @volver="volverAEmbarquesMenu" 
         @toggle-bloqueo="toggleBloqueo" 
@@ -63,6 +65,7 @@
         <span class="scale-value">{{ escalaResumen }}%</span>
         <button
           class="btn btn-primary"
+          data-sonido="mision-cumplida"
           :disabled="verificandoCuentasResumen"
           @click="generarPDFResumenConEscala"
         >
@@ -281,6 +284,7 @@ import { embarqueDatosMixin } from './mixins/embarqueDatosMixin';
 import { embarqueCargaMixin, esUUIDValido } from './mixins/embarqueCargaMixin';
 import { embarqueSyncMixin } from './mixins/embarqueSyncMixin';
 import { embarqueClientesMixin } from './mixins/embarqueClientesMixin';
+import { embarqueSonidosMixin } from './mixins/embarqueSonidosMixin';
 import ClienteProductos from './components/ClienteProductos.vue';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -335,6 +339,7 @@ export default {
     embarqueCargaMixin,
     embarqueSyncMixin,
     embarqueClientesMixin,
+    embarqueSonidosMixin,
   ],
 
   name: 'NuevoEmbarque',

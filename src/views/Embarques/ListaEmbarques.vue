@@ -265,6 +265,16 @@
       @buscar="cargarEmbarquesModalPdf"
       @confirmar="generarPdfDesdeModal"
     />
+
+    <AperturaEmbarqueLoader
+      :visible="abriendoEmbarque"
+      :progreso="progresoApertura"
+      :fase="faseApertura"
+      :mensaje="mensajeApertura"
+      :embarque="embarqueSeleccionado"
+      :sonido-activo="sonidoAperturaActivo"
+      @omitir="completarAperturaEmbarque"
+    />
   </div>
 </template>
 
@@ -280,12 +290,15 @@ import { normalizarFechaISO, obtenerFechaActualISO } from '@/utils/dateUtils';
 import { generarNotaVentaPDF } from '@/utils/pdfGenerator';
 import { embarqueTieneContenidoOperativoDoc } from '@/utils/embarqueContenido';
 import { formatearFecha } from '@/utils/formatters';
+import { crearSonidosTerminal } from '@/utils/sonidosTerminal';
+import AperturaEmbarqueLoader from './components/AperturaEmbarqueLoader.vue';
 
 export default {
   name: 'ListaEmbarques',
   components: {
     NotificacionRespaldo,
-    GenerarPdfClienteModal
+    GenerarPdfClienteModal,
+    AperturaEmbarqueLoader
   },
   data() {
     return {
@@ -313,7 +326,17 @@ export default {
       terminal3dStyle: {},
       embarqueCard3dStyles: {},
       lista3dFrame: null,
-      listaReduceMotionQuery: null
+      listaReduceMotionQuery: null,
+      abriendoEmbarque: false,
+      progresoApertura: 0,
+      faseApertura: 0,
+      mensajeApertura: 'Localizando registro en la bitácora',
+      embarqueSeleccionado: {},
+      temporizadoresApertura: [],
+      navegacionAperturaEnCurso: false,
+      overflowBodyAnterior: '',
+      bloqueoScrollAperturaActivo: false,
+      sonidoAperturaActivo: true
     };
   },
   computed: {
@@ -923,11 +946,112 @@ export default {
     },
 
     editarEmbarque(embarqueId) {
+      if (this.abriendoEmbarque || this.navegacionAperturaEnCurso) return;
+
       const embarque = this.embarques.find(e => e.id === embarqueId);
       console.log('[DEBUG-LISTA] Editando embarque con ID:', embarqueId);
       console.log('[DEBUG-LISTA] Fecha del embarque en la lista:', embarque?.fecha);
       console.log('[DEBUG-LISTA] Fecha formateada mostrada:', this.formatearFecha(embarque?.fecha));
-      this.$router.push({ name: 'NuevoEmbarque', params: { id: embarqueId } });
+
+      this.embarqueSeleccionado = {
+        id: embarqueId,
+        fechaVisible: this.formatearFecha(embarque?.fecha),
+        cargaCon: embarque?.cargaCon || 'sin asignar',
+        kilosLimpios: this.calcularKilosLimpios(embarque),
+        kilosCrudos: this.calcularKilosCrudos(embarque),
+        totalTaras: this.calcularTotalTaras(embarque),
+        camionNumero: embarque?.camionNumero || 1
+      };
+      this.abriendoEmbarque = true;
+      this.progresoApertura = 7;
+      this.faseApertura = 0;
+      this.mensajeApertura = 'Localizando registro en la bitácora';
+      this.overflowBodyAnterior = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      this.bloqueoScrollAperturaActivo = true;
+
+      const reduceMotion = this.listaReduceMotionQuery && this.listaReduceMotionQuery.matches;
+      this.reproducirSonidoApertura(reduceMotion);
+      this.$nextTick(() => {
+        const botonOmitir = this.$el && this.$el.querySelector('.skip-button');
+        if (botonOmitir) botonOmitir.focus();
+      });
+
+      if (reduceMotion) {
+        this.progresoApertura = 100;
+        this.faseApertura = 3;
+        this.mensajeApertura = 'Embarque listo';
+        this.agendarApertura(this.completarAperturaEmbarque, 240);
+        return;
+      }
+
+      this.agendarApertura(() => {
+        this.progresoApertura = 18;
+      }, 180);
+      this.agendarApertura(() => {
+        this.progresoApertura = 39;
+        this.faseApertura = 1;
+        this.mensajeApertura = 'Verificando manifiesto y carga';
+      }, 1250);
+      this.agendarApertura(() => {
+        this.progresoApertura = 67;
+        this.faseApertura = 2;
+        this.mensajeApertura = 'Sincronizando clientes y productos';
+      }, 2550);
+      this.agendarApertura(() => {
+        this.progresoApertura = 89;
+        this.faseApertura = 3;
+        this.mensajeApertura = 'Preparando cubierta de trabajo';
+      }, 3850);
+      this.agendarApertura(() => {
+        this.progresoApertura = 100;
+        this.mensajeApertura = 'Embarque listo';
+      }, 4700);
+      this.agendarApertura(this.completarAperturaEmbarque, 5000);
+    },
+
+    agendarApertura(accion, demora) {
+      const timer = window.setTimeout(accion, demora);
+      this.temporizadoresApertura.push(timer);
+    },
+
+    limpiarTemporizadoresApertura() {
+      this.temporizadoresApertura.forEach(timer => window.clearTimeout(timer));
+      this.temporizadoresApertura = [];
+    },
+
+    reproducirSonidoApertura(reduceMotion = false) {
+      let sonidosActivados = true;
+      try {
+        sonidosActivados = localStorage.getItem('embarque:sonidos-terminal') !== 'false';
+      } catch (error) {
+        // Si el almacenamiento está bloqueado, se conserva el sonido por defecto.
+      }
+
+      this.sonidoAperturaActivo = sonidosActivados;
+      if (!sonidosActivados) return;
+      if (this._sonidosApertura) this._sonidosApertura.cerrar();
+      this._sonidosApertura = crearSonidosTerminal();
+      this._sonidosApertura.habilitar(true);
+      this._sonidosApertura.preparar();
+      this._sonidosApertura.reproducir(reduceMotion ? 'boton' : 'apertura');
+    },
+
+    restaurarScrollTrasApertura() {
+      if (!this.bloqueoScrollAperturaActivo) return;
+      document.body.style.overflow = this.overflowBodyAnterior;
+      this.bloqueoScrollAperturaActivo = false;
+    },
+
+    completarAperturaEmbarque() {
+      if (this.navegacionAperturaEnCurso || !this.embarqueSeleccionado.id) return;
+      this.navegacionAperturaEnCurso = true;
+      this.limpiarTemporizadoresApertura();
+      this.restaurarScrollTrasApertura();
+      this.$router.push({
+        name: 'NuevoEmbarque',
+        params: { id: this.embarqueSeleccionado.id }
+      });
     },
 
     regresarAMenu() {
@@ -1448,6 +1572,10 @@ export default {
     if (this.lista3dFrame !== null) {
       window.cancelAnimationFrame(this.lista3dFrame);
     }
+
+    this.limpiarTemporizadoresApertura();
+    this.restaurarScrollTrasApertura();
+    if (this._sonidosApertura) this._sonidosApertura.cerrar();
   }
 };
 </script>

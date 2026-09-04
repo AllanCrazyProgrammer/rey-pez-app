@@ -58,6 +58,7 @@
                 </div>
                 
                 <button type="button" @click.stop="$emit('generar-pdf', 'cliente', clienteId)"
+                    data-sonido="explosion"
                     class="btn btn-primary btn-sm generar-pdf-cliente" title="Generar Nota de Venta PDF (incluye página sin precios)"
                     :disabled="isGeneratingPdf">
                     <span v-if="isGeneratingPdf && pdfType === 'cliente-' + clienteId" class="loader-inline"></span>
