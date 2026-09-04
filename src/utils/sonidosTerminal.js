@@ -35,7 +35,8 @@ export function crearSonidosTerminal() {
     const esBorrado = tipo === 'borrar';
     const esExplosion = tipo === 'explosion';
     const esMisionCumplida = tipo === 'mision-cumplida';
-    const duracion = esApertura ? 4.65 : (esMisionCumplida ? 1.25 : (esExplosion ? 0.62 : (esBoton ? 0.13 : (esBorrado ? 0.075 : 0.038))));
+    const esNavegacion = tipo === 'navegacion';
+    const duracion = esApertura ? 4.65 : (esMisionCumplida ? 1.25 : (esExplosion ? 0.62 : (esNavegacion ? 0.07 : (esBoton ? 0.13 : (esBorrado ? 0.075 : 0.038)))));
     const buffer = contexto.createBuffer(1, Math.ceil(contexto.sampleRate * duracion), contexto.sampleRate);
     const datos = buffer.getChannelData(0);
     const iniciosPing = [0.12, 1.18, 2.38, 3.55, 4.18];
@@ -118,6 +119,18 @@ export function crearSonidosTerminal() {
           fanfarria += acorde * entrada * salida * brillo;
         }
         datos[i] = fanfarria;
+        continue;
+      }
+
+      if (esNavegacion) {
+        // Dos pulsos cortos ascienden al pasar al siguiente campo.
+        const segundaNota = t >= 0.032;
+        const tiempoNota = segundaNota ? t - 0.032 : t;
+        if (tiempoNota >= 0.03) continue;
+        const frecuencia = segundaNota ? 880 : 659.25;
+        const fase = 2 * Math.PI * frecuencia * tiempoNota;
+        const envolvente = Math.min(1, tiempoNota / 0.002) * Math.min(1, (0.03 - tiempoNota) / 0.008);
+        datos[i] = (Math.sin(fase) * 0.22 + Math.sin(fase * 2) * 0.025) * envolvente;
         continue;
       }
 

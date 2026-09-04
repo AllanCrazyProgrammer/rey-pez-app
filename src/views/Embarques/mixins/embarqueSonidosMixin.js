@@ -10,6 +10,23 @@ function esCampoEditable(elemento) {
   );
 }
 
+function esAvanceConCalculadora(evento) {
+  if (evento.ctrlKey || evento.metaKey || evento.altKey || evento.repeat) return false;
+  const campo = evento.target;
+  if (!campo.matches('.camaron-neto-input, .tara-input, .kilo-input, .reporte-input')) return false;
+
+  const tecla = String(evento.key || '').toLowerCase();
+  const codigo = String(evento.code || '').toLowerCase();
+  const codigoLegado = Number(evento.keyCode || evento.which || 0);
+  const esNumpad = evento.location === 3 || codigo.startsWith('numpad');
+
+  return tecla === 'escape' || tecla === 'clear' || tecla === 'numlock' ||
+    codigo === 'escape' || codigo === 'numpadclear' || codigo === 'numlock' ||
+    codigoLegado === 12 || codigoLegado === 27 || codigoLegado === 144 ||
+    (esNumpad && (tecla === 'backspace' || tecla === 'delete' ||
+      codigo === 'backspace' || codigo === 'delete' || codigoLegado === 8 || codigoLegado === 46));
+}
+
 export const embarqueSonidosMixin = {
   data() {
     let sonidosActivados = true;
@@ -68,6 +85,10 @@ export const embarqueSonidosMixin = {
     prepararTecladoEmbarque(evento) {
       if (!evento.isTrusted || !this.sonidosActivados || !esCampoEditable(evento.target)) return;
       this._sonidosTerminal.preparar();
+      if (evento.key === 'Tab' || esAvanceConCalculadora(evento)) {
+        this._sonidosTerminal.reproducir('navegacion');
+        return;
+      }
       // Enter tiene sonido incluso en los formularios que impiden el envío.
       if (evento.key === 'Enter' && !evento.isComposing && !evento.ctrlKey && !evento.metaKey && !evento.altKey) {
         this._sonidosTerminal.reproducir('boton');
