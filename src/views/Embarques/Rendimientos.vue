@@ -2815,8 +2815,9 @@ export default {
         return Number(this.rendimientoManual[medida]) || 0;
       }
 
-      const totalEmbarcado = this.obtenerTotalEmbarcado(medida);
-      if (totalEmbarcado === 0) return 0;
+      // Usar los kilos enteros que muestra el total embarcado, sin redondear hacia arriba.
+      const totalEmbarcado = Math.floor(Number(this.obtenerTotalEmbarcado(medida)) || 0);
+      if (totalEmbarcado <= 0) return 0;
       
       let kilosCrudos;
       if (this.esMedidaMix(medida)) {
@@ -2842,7 +2843,7 @@ export default {
         return Number(this.rendimientoManual[medida]) || 0;
       }
 
-      const totalEmbarcado = Number(this.obtenerTotalEmbarcado(medida)) || 0;
+      const totalEmbarcado = Math.floor(Number(this.obtenerTotalEmbarcado(medida)) || 0);
       if (totalEmbarcado <= 0) return 0;
 
       const valorCrudo = this.kilosCrudos[medida];
