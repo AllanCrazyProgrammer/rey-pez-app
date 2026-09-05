@@ -420,6 +420,9 @@
             >
               {{ cargandoSacadaParaModal ? 'Cargando…' : 'Medidas a sacar' }}
             </button>
+            <button type="button" class="resumen-medidas-sacar-btn" @click="abrirImagenCajas">
+              Crear imagen para WhatsApp
+            </button>
           </div>
         </div>
         <p
@@ -632,6 +635,14 @@
       </div>
     </div>
 
+    <ImagenCajasModal
+      v-if="mostrarImagenCajas"
+      :iniciales="filasImagenCajas"
+      :pendientes="pendientesImagenCajas"
+      :fecha="fecha"
+      @close="mostrarImagenCajas = false"
+    />
+
     <!-- Modal de Kilos Refrigerados -->
     <KilosRefrigeradosModal
       :mostrar="modalKilosVisible"
@@ -661,6 +672,7 @@ import moment from 'moment'
 import KilosRefrigeradosModal from '@/components/KilosRefrigeradosModal.vue'
 import ListaMedidasPedidoModal from '@/components/ListaMedidasPedidoModal.vue'
 import ResumenCalculadora from '@/components/ResumenCalculadora.vue'
+import ImagenCajasModal from '@/components/ImagenCajasModal.vue'
 import { colorParaEtiqueta } from '@/utils/coloresEtiquetas'
 import { formatearAgua, aguaEsPersonalizada } from '@/utils/factorAgua'
 import { normalizarFechaValor } from '@/utils/dateUtils'
@@ -695,7 +707,8 @@ export default {
   components: {
     KilosRefrigeradosModal,
     ListaMedidasPedidoModal,
-    ResumenCalculadora
+    ResumenCalculadora,
+    ImagenCajasModal
   },
   props: {
     fecha: {
@@ -759,6 +772,9 @@ export default {
     return {
       rendimientos: this.rendimientosGuardados || {},
       divisores: this.divisoresGuardados || {},
+      mostrarImagenCajas: false,
+      filasImagenCajas: [],
+      pendientesImagenCajas: [],
       contentScale: 1,
       mostrarPreviewPdf: false,
       generandoPreviewPdf: false,
@@ -826,6 +842,21 @@ export default {
     this.cargarMedidasCatalogo();
   },
   methods: {
+    abrirImagenCajas() {
+      this.pendientesImagenCajas = []
+      this.filasImagenCajas = this.calcularTotalesPorMedida().reduce((filas, medida) => {
+        const rendimiento = Number(this.rendimientos[medida.medida])
+        if (!Number.isFinite(rendimiento) || rendimiento <= 0) {
+          this.pendientesImagenCajas.push(medida.medida)
+          return filas
+        }
+        const master = this.esMedidaGranja(medida.medida) ? Number(this.divisores[medida.medida]) : 0
+        const kilos = Math.max(0, this.obtenerKilosFaltantes(medida)) * rendimiento
+        filas.push({ medida: medida.medida, cantidad: Math.round(master > 0 ? kilos / master : kilos), unidad: master > 0 ? 'cajas' : 'kg', master: master || 20 })
+        return filas
+      }, [])
+      this.mostrarImagenCajas = true
+    },
     mapSacadaFromDoc(docSnapshot) {
       const data = docSnapshot.data() || {};
       let fecha;
