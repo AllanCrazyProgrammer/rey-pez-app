@@ -13,7 +13,7 @@
       <section class="pesadas-card pesadas-sheet-card">
         <div class="pesadas-toolbar">
           <button class="pesadas-button primary" @click="agregarPersona()">+ Despicadora</button><button class="pesadas-button" :disabled="!puedeImprimir" @click="abrirResumen">Resumen / imprimir</button><button v-if="estado.error || errorCarga" class="pesadas-button" @click="reintentar">Reintentar guardado</button>
-          <button class="pesadas-button" :disabled="!puedeImprimir" @click="abrirCuentas">Sacar cuentas</button>
+          <button class="pesadas-button pesadas-cuentas-button" :disabled="!puedeImprimir" @click="abrirCuentas"><span class="cuentas-bracket" aria-hidden="true">[</span><span class="cuentas-symbol" aria-hidden="true">$</span> Sacar cuentas <span class="cuentas-bracket" aria-hidden="true">]</span></button>
           <span class="pesadas-hint">Kg y precios: máximo 1 decimal</span>
         </div>
         <p v-if="errorCarga || estado.error" class="pesadas-alert" role="alert">{{ errorCarga || estado.error }}</p>

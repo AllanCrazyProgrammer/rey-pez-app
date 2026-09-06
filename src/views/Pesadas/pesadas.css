@@ -128,3 +128,27 @@
   .pesadas-grid tbody { font-size: 24px; }
   .pesadas-grid .measure-row input { font-size: 24px; }
 }
+
+.pesadas-page .pesadas-cuentas-button {
+  background: #071a0c;
+  color: #00ff41;
+  border: 2px solid #00ff41;
+  border-radius: 3px;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 16px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  text-shadow: 0 0 8px #00ff4166;
+  box-shadow: 0 0 12px #00ff4140, inset 0 0 12px #00ff4114;
+  transition: background-color .2s ease, box-shadow .2s ease;
+}
+.pesadas-page .pesadas-cuentas-button:hover:not(:disabled) {
+  background: #0b3015;
+  box-shadow: 0 0 20px #00ff4170, inset 0 0 16px #00ff4126;
+}
+.pesadas-cuentas-button .cuentas-bracket { color: #ffcc00; }
+.pesadas-cuentas-button .cuentas-symbol { color: #00d4ff; font-size: 20px; }
+.pesadas-page .pesadas-cuentas-button:disabled { box-shadow: none; text-shadow: none; cursor: not-allowed; }
+@media (prefers-reduced-motion: reduce) {
+  .pesadas-page .pesadas-cuentas-button { transition: none; }
+}
