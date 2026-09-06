@@ -1,14 +1,14 @@
 <template>
-  <div id="app">
+  <div id="app" :class="{ 'app--pesadas': !mostrarFooter }">
     <Navbar />
-    <div class="content-wrapper">
+    <div class="content-wrapper" :class="{ 'content-wrapper--pesadas': !mostrarFooter }">
       <div class="content-horizon-grid" aria-hidden="true">
         <div class="content-horizon-grid__sun"></div>
         <div class="content-horizon-grid__plane"></div>
       </div>
       <router-view />
     </div>
-    <Footer />
+    <Footer v-if="mostrarFooter" />
 
     <transition-group name="toast" tag="div" class="toast-container">
       <div
@@ -37,6 +37,9 @@ export default {
   computed: {
     notifications() {
       return useUIStore().notifications;
+    },
+    mostrarFooter() {
+      return this.$route.name !== 'PesadasDia';
     },
   },
   created() {
@@ -101,6 +104,12 @@ html.platform-windows [aria-disabled="true"] {
   min-height: 100vh;
 }
 
+#app.app--pesadas {
+  height: 100vh;
+  min-height: 0;
+  overflow: hidden;
+}
+
 .content-wrapper {
   flex: 1 0 auto;
   display: flex;
@@ -111,6 +120,13 @@ html.platform-windows [aria-disabled="true"] {
     radial-gradient(circle at 20% 15%, rgba(255, 95, 217, 0.18), transparent 35%),
     radial-gradient(circle at 80% 25%, rgba(62, 248, 255, 0.14), transparent 40%),
     linear-gradient(160deg, #100625 0%, #1a0d3a 45%, #102e63 100%);
+}
+
+/* La hoja diaria de pesadas conserva su tabla dentro de la ventana, sin el
+   espacio del footer y sin obligar a desplazar toda la página. */
+.content-wrapper--pesadas {
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .content-wrapper::before,
