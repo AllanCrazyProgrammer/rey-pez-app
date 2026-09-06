@@ -105,9 +105,8 @@ html.platform-windows [aria-disabled="true"] {
 }
 
 #app.app--pesadas {
-  height: 100vh;
-  min-height: 0;
-  overflow: hidden;
+  min-height: 100vh;
+  overflow: visible;
 }
 
 .content-wrapper {
@@ -122,11 +121,10 @@ html.platform-windows [aria-disabled="true"] {
     linear-gradient(160deg, #100625 0%, #1a0d3a 45%, #102e63 100%);
 }
 
-/* La hoja diaria de pesadas conserva su tabla dentro de la ventana, sin el
-   espacio del footer y sin obligar a desplazar toda la página. */
+/* La hoja diaria crece con sus filas y se desplaza junto con la navegación. */
 .content-wrapper--pesadas {
-  flex: 1 1 auto;
-  min-height: 0;
+  flex: 1 0 auto;
+  overflow: visible;
 }
 
 .content-wrapper::before,

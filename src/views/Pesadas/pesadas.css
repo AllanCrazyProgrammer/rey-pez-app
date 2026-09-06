@@ -1,5 +1,5 @@
 .pesadas-page { position: relative; z-index: 1; width: calc(100% - 40px); max-width: 1680px; margin: 30px auto 48px; color: #25233c; font-family: Arial, sans-serif; }
-.pesadas-day-page { align-self: stretch; flex: 1; min-height: 0; display: flex; flex-direction: column; margin: 12px auto 0; }
+.pesadas-day-page { width: calc(100% - 24px); max-width: none; margin: 12px auto 0; }
 .pesadas-page * { box-sizing: border-box; }
 .pesadas-heading { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-bottom: 24px; color: #fff; }
 .pesadas-heading h1 { font-size: clamp(28px, 3vw, 40px); font-weight: 800; margin: 8px 0; letter-spacing: -1px; }
@@ -41,7 +41,7 @@
 .pesadas-summary-cards .pesadas-best-card strong { display: block; font-size: 20px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pesadas-summary-cards .pesadas-best-card > span { display: block; color: #716780; font-size: 12px; margin-top: 4px; font-variant-numeric: tabular-nums; }
 .pesadas-sheet-card { padding: 20px 0 0; overflow: hidden; }
-.pesadas-day-page .pesadas-sheet-card { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+
 .pesadas-sheet-card > .pesadas-toolbar, .pesadas-sheet-card > .pesadas-alert { margin-left: 20px; margin-right: 20px; }
 .pesadas-grid-scroll { overflow: auto; max-height: 65vh; min-height: 230px; border-top: 1px solid #d5cfdf; border-bottom: 1px solid #d5cfdf; }
 .pesadas-day-page .pesadas-heading { margin-bottom: 12px; }
@@ -51,7 +51,7 @@
 .pesadas-day-page .pesadas-summary-cards small { margin-bottom: 3px; }
 .pesadas-day-page .pesadas-sheet-card { padding-top: 12px; margin-bottom: 0; }
 .pesadas-day-page .pesadas-toolbar { margin-bottom: 10px; }
-.pesadas-day-page .pesadas-grid-scroll { flex: 1; min-height: 0; max-height: none; }
+.pesadas-day-page .pesadas-grid-scroll { max-height: none; min-height: 0; overflow-x: auto; overflow-y: hidden; }
 .pesadas-day-page .pesadas-sheet-footer { padding: 10px 20px; }
 .pesadas-grid { border-collapse: separate; border-spacing: 0; width: 100%; table-layout: auto; font-size: 15px; margin: 0; }
 .pesadas-grid th, .pesadas-grid td { padding: 0; border-right: 1px solid #ded9e7; border-bottom: 1px solid #ded9e7; background: white; min-width: 140px; height: 50px; }
@@ -110,3 +110,10 @@
   .pesadas-preview-overlay { padding: 8px; }
   .pesadas-preview-dialog { padding: 14px; height: 96vh; }
 }
+
+/* El nombre más largo determina el ancho, con un límite para pantallas pequeñas. */
+.pesadas-grid .name-cell { width: 1%; min-width: 0; }
+.pesadas-grid .name-input { width: max-content; }
+.pesadas-grid .name-editor { position: relative; display: block; min-width: 125px; max-width: min(420px, 45vw); }
+.pesadas-grid .name-width { display: block; padding: 10px 12px; white-space: pre; font-weight: 700; visibility: hidden; overflow: hidden; }
+.pesadas-grid .name-input .name-editor input { position: absolute; inset: 0; width: 100%; min-width: 0; }
