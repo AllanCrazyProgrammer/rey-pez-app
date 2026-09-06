@@ -34,7 +34,7 @@
       <button 
         class="mobile-toggle"
         @click="toggleMobileMenu"
-        :aria-expanded="mobileMenuOpen"
+        :aria-expanded="mobileMenuOpen ? 'true' : 'false'"
         aria-controls="mobile-navigation"
         aria-label="Abrir menú de navegación"
       >
@@ -165,6 +165,13 @@
             <span class="thermal-indicator"></span>
           </router-link>
 
+          <router-link to="/pesadas" class="nav-link" @click.native="closeMobileMenu" aria-label="Registrar pesadas de despicadoras">
+            <span class="link-bracket">⟨</span>
+            <span class="link-index">08</span>
+            <span class="nav-text">PESADAS</span>
+            <span class="link-bracket">⟩</span>
+            <span class="thermal-indicator"></span>
+          </router-link>
         </div>
 
         <div class="mobile-nav-items">
@@ -268,6 +275,13 @@
             <span class="link-bracket">⟨</span>
             <span class="link-index">08</span>
             <span class="nav-text">PROCESOS</span>
+            <span class="link-bracket">⟩</span>
+            <span class="thermal-indicator"></span>
+          </router-link>
+          <router-link to="/pesadas" class="nav-link" @click.native="closeMobileMenu" aria-label="Registrar pesadas de despicadoras">
+            <span class="link-bracket">⟨</span>
+            <span class="link-index">09</span>
+            <span class="nav-text">PESADAS</span>
             <span class="link-bracket">⟩</span>
             <span class="thermal-indicator"></span>
           </router-link>
@@ -677,6 +691,11 @@ export default {
 
 .mobile-nav-items {
   display: none;
+}
+
+.desktop-nav-items {
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 /* Navigation links */

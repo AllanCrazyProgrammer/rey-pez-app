@@ -64,6 +64,17 @@ Vue.use(Router);
 
 const routes = [
   {
+    path: '/pesadas',
+    name: 'PesadasHistorial',
+    component: () => import('@/views/Pesadas/PesadasHistorial.vue')
+  },
+  {
+    path: '/pesadas/:fecha',
+    name: 'PesadasDia',
+    component: () => import('@/views/Pesadas/PesadasDia.vue'),
+    props: true
+  },
+  {
     path: '/login',
     name: 'Login',
     component: Login
