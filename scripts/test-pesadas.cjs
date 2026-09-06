@@ -259,3 +259,44 @@ test('Enter on kilos skips unnamed rows and never creates people', () => {
   methods.enterPeso.call(vm, { personaId: 'p1', columnaId: 'c1' });
   assert.equal(focused, null);
 });
+
+const cuentasSource = compiler.parseComponent(fs.readFileSync(path.join(root, 'src/Cuentas.vue'), 'utf8')).script.content;
+const cuentasModule = new Module(path.join(root, 'src/Cuentas.test.js'), module);
+cuentasModule.require = () => ({});
+cuentasModule._compile(babel.transformSync(cuentasSource, { configFile: false, babelrc: false, plugins: ['@babel/plugin-transform-modules-commonjs'] }).code, cuentasModule.id);
+const cuentas = cuentasModule.exports.default;
+const cashVm = admitirDecimales => {
+  const vm = { admitirDecimales };
+  Object.assign(vm, cuentas.data.call(vm));
+  Object.entries(cuentas.methods).forEach(([name, fn]) => { vm[name] = fn.bind(vm); });
+  return vm;
+};
+test('cash breakdown preserves tenths per worker and both coin choices', () => {
+  const vm = cashVm(true);
+  for (const isTwo of [true, false]) {
+    vm.procesarDatos({ data: ['77.2', '2.9', '0', '119'], isTwo });
+    assert.equal(cuentas.computed.totalGeneral.call(vm), 199.1);
+    assert.equal(vm.billetes[0.5], 1);
+    assert.equal(vm.billetes[0.2], 3);
+    assert.equal(vm.billetes[2] > 0, isTwo);
+  }
+  vm.procesarDatos({ data: ['3', '3'], isTwo: true });
+  assert.equal(vm.billetes[5], 0); // Separate envelopes, not one breakdown of the total.
+  assert.equal(vm.billetes[2], 2);
+});
+test('legacy accounts preserve whole-peso mode', () => {
+  const vm = cashVm(false);
+  vm.procesarDatos({ data: ['77.2'], isTwo: true });
+  assert.equal(cuentas.computed.totalGeneral.call(vm), 77);
+});
+test('weighing cash uses final named payments and blocks invalid sheets', () => {
+  let flushed = false;
+  const vm = { puedeImprimir: true, _outbox: { flush() { flushed = true; } }, resumen: resumenPesadas(sample()) };
+  methods.abrirCuentas.call(vm);
+  assert.equal(vm.cuentasDatos, '77.2');
+  assert.equal(vm.cuentasAbiertas, true);
+  assert.equal(flushed, true);
+  const invalid = { puedeImprimir: false };
+  methods.abrirCuentas.call(invalid);
+  assert.equal(invalid.cuentasAbiertas, undefined);
+});

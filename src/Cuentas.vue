@@ -44,7 +44,7 @@
           </div>
           <div v-if="totalGeneral > 0" class="promedio-general">
             <span class="promedio-label">AVG:</span>
-            <span class="promedio-value">${{ Math.round(promedioPorLinea).toLocaleString() }}</span>
+            <span class="promedio-value">${{ (admitirDecimales ? Math.round(promedioPorLinea * 10) / 10 : Math.round(promedioPorLinea)).toLocaleString() }}</span>
           </div>
         </div>
       </b-col>
@@ -54,13 +54,16 @@
 
 <script>
 import Calcular from "./Calcular";
+import { BRow, BCol } from "bootstrap-vue";
 
 export default {
   name: "Cuentas",
   components: {
-    Calcular,
+    Calcular, BRow, BCol,
   },
   props: {
+    fecha: { type: String, default: "" },
+    admitirDecimales: { type: Boolean, default: false },
     datos: {
       type: String,
       default: "",
@@ -69,6 +72,7 @@ export default {
   data() {
     return {
       billetes: {
+        ...(this.admitirDecimales ? { 0.5: 0, 0.2: 0, 0.1: 0 } : {}),
         500: 0,
         200: 0,
         100: 0,
@@ -84,14 +88,14 @@ export default {
   computed: {
     fechaFormateada() {
       const opciones = { year: 'numeric', month: 'long', day: 'numeric' };
-      return new Date().toLocaleDateString('es-ES', opciones);
+      return (this.fecha ? new Date(this.fecha + 'T12:00:00') : new Date()).toLocaleDateString('es-ES', opciones);
     },
     tieneDatos() {
       return Object.values(this.billetes).some(cantidad => cantidad > 0);
     },
     totalGeneral() {
       return Object.entries(this.billetes)
-        .reduce((total, [denominacion, cantidad]) => total + (denominacion * cantidad), 0);
+        .reduce((total, [denominacion, cantidad]) => total + (Math.round(Number(denominacion) * 100) * cantidad), 0) / 100;
     },
     promedioPorLinea() {
       // Calcular el promedio basado en los datos procesados
@@ -244,6 +248,8 @@ export default {
         ? [500, 200, 100, 50, 20, 10, 5, 2, 1]
         : [500, 200, 100, 50, 20, 10, 5, 1, 2];
 
+      if (this.admitirDecimales) denominaciones.push(0.5, 0.2, 0.1);
+
       data.forEach(cantidad => {
         const montoRestante = this.calcularBilletes(cantidad, denominaciones);
         if (montoRestante > 0) {
@@ -252,18 +258,18 @@ export default {
       });
     },
     calcularBilletes(cantidad, denominaciones) {
-      let montoRestante = parseInt(cantidad) || 0;
+      let montoRestante = this.admitirDecimales ? Math.round(Number(cantidad) * 100) : (parseInt(cantidad) || 0) * 100;
       if (montoRestante <= 0) return 0;
 
       denominaciones.forEach(denominacion => {
-        const cantidadBilletes = Math.floor(montoRestante / denominacion);
+        const cantidadBilletes = Math.floor(montoRestante / Math.round(denominacion * 100));
         if (cantidadBilletes > 0) {
           this.billetes[denominacion] += cantidadBilletes;
-          montoRestante -= cantidadBilletes * denominacion;
+          montoRestante -= cantidadBilletes * Math.round(denominacion * 100);
         }
       });
 
-      return montoRestante;
+      return montoRestante / 100;
     },
     reiniciarBilletes() {
       Object.keys(this.billetes).forEach(denominacion => {

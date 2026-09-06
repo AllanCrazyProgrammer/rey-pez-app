@@ -13,6 +13,7 @@
       <section class="pesadas-card pesadas-sheet-card">
         <div class="pesadas-toolbar">
           <button class="pesadas-button primary" @click="agregarPersona()">+ Despicadora</button><button class="pesadas-button" :disabled="!puedeImprimir" @click="abrirResumen">Resumen / imprimir</button><button v-if="estado.error || errorCarga" class="pesadas-button" @click="reintentar">Reintentar guardado</button>
+          <button class="pesadas-button" :disabled="!puedeImprimir" @click="abrirCuentas">Sacar cuentas</button>
           <span class="pesadas-hint">Kg y precios: máximo 1 decimal</span>
         </div>
         <p v-if="errorCarga || estado.error" class="pesadas-alert" role="alert">{{ errorCarga || estado.error }}</p>
@@ -24,12 +25,19 @@
         <footer class="pesadas-sheet-footer"><strong>{{ resumen.banos }} despicadoras</strong><strong>Total a pagar: ${{ numero(resumen.pagos) }}</strong><strong>A pagar promedio: ${{ numero(resumen.pagoPromedio) }}</strong><strong>Mejor: {{ resumen.mejor ? resumen.mejor.nombre : '—' }}<span v-if="resumen.mejor"> · {{ numero(resumen.mejor.kilos) }} kg · ${{ numero(resumen.mejor.pago) }}</span></strong></footer>
       </section>
     </template>
+    <b-modal v-model="cuentasAbiertas" title="Billetes y monedas para pagar" size="lg" hide-footer @shown="calcularCuentas" @hidden="cuentasDatos = ''">
+      <p>{{ fechaTexto }} · Pagos finales de las despicadoras, después del descuento de baños.</p>
+      <p v-if="estado.pending || servidorPendiente" class="pesadas-alert">Incluye cambios pendientes de sincronizar.</p>
+      <Cuentas v-if="cuentasAbiertas" ref="cuentas" :datos="cuentasDatos" :fecha="fecha" admitir-decimales />
+    </b-modal>
     <PesadasResumen v-if="preview" :fecha="fecha" :datos="preview" :pendiente="estado.pending || servidorPendiente" @cerrar="preview = null" />
   </main>
 </template>
 
 <script>
 import { nanoid } from 'nanoid';
+import { BModal } from 'bootstrap-vue';
+import Cuentas from '@/Cuentas.vue';
 import { conectarPesadas } from '@/services/pesadas.service';
 import { PesadasOutbox } from '@/services/pesadasOutbox';
 import { decimalPesada, elementosPesadas, fechaPesadasValida, formatoFechaPesadas, formatoPesada, resumenPesadas } from '@/utils/pesadas';
@@ -39,11 +47,11 @@ import './pesadas.css';
 
 export default {
   name: 'PesadasDia',
-  components: { PesadasTabla, PesadasResumen },
+  components: { PesadasTabla, PesadasResumen, BModal, Cuentas },
   props: { fecha: { type: String, required: true } },
   data: () => ({ datosGuardados: {}, estado: { pending: false, saving: false, error: '', storageError: false },
     cargando: true, errorCarga: '', online: navigator.onLine, desdeCache: true, servidorPendiente: false,
-    borradores: {}, errores: {}, preview: null, filaInicialId: 'inicial' }),
+    borradores: {}, errores: {}, preview: null, cuentasAbiertas: false, cuentasDatos: '', filaInicialId: 'inicial' }),
   computed: {
     fechaValida() { return fechaPesadasValida(this.fecha); },
     fechaTexto() { return this.fechaValida ? formatoFechaPesadas(this.fecha) : ''; },
@@ -104,6 +112,7 @@ export default {
       this.errores = {};
       this.errorCarga = '';
       this.preview = null;
+      this.cuentasAbiertas = false;
       this.filaInicialId = 'inicial';
       this.cargando = true;
       this.desdeCache = true;
@@ -209,6 +218,15 @@ export default {
       this.limpiarBorradores(path => path.startsWith(`columnas.${col.id}.`) || (path.startsWith('pesos.') && path.endsWith(`.${col.id}`)));
       this.guardarCampos({ [`columnas.${col.id}.eliminado`]: true });
       this._outbox.flush();
+    },
+    calcularCuentas() {
+      if (this.$refs.cuentas) this.$refs.cuentas.procesarDatos({ data: this.cuentasDatos.split('\n'), isTwo: true });
+    },
+    abrirCuentas() {
+      if (!this.puedeImprimir) return;
+      this._outbox.flush();
+      this.cuentasDatos = this.resumen.personas.map(persona => String(persona.pago)).join('\n');
+      this.cuentasAbiertas = true;
     },
     abrirResumen() { if (this.puedeImprimir) { this._outbox.flush(); this.preview = JSON.parse(JSON.stringify(this.datos)); } },
     actualizarConexion() { this.online = navigator.onLine; if (this.online && this._outbox) this._outbox.flush(); },
