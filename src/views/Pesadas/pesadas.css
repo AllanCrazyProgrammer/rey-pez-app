@@ -114,7 +114,7 @@
 /* El nombre más largo determina el ancho, con un límite para pantallas pequeñas. */
 .pesadas-grid .name-cell { width: 1%; min-width: 0; }
 .pesadas-grid .name-input { width: max-content; }
-.pesadas-grid .name-editor { position: relative; display: block; min-width: 125px; max-width: min(420px, 45vw); }
+.pesadas-grid .name-editor { position: relative; display: block; min-width: 0; max-width: min(420px, 45vw); }
 .pesadas-grid .name-width { display: block; padding: 10px 12px; white-space: pre; font-weight: 700; visibility: hidden; overflow: hidden; }
 .pesadas-grid .name-input .name-editor input { position: absolute; inset: 0; width: 100%; min-width: 0; }
 
@@ -123,8 +123,8 @@
 .pesadas-grid tbody th, .pesadas-grid tbody td { height: 66px; }
 .pesadas-grid tbody input { height: 65px; font-size: inherit; font-weight: 700; }
 .pesadas-grid .name-width { min-height: 65px; line-height: 45px; }
-.pesadas-grid .name-editor { min-width: 210px; }
+.pesadas-grid .measure-row input { font-size: 26px; }
 @media (max-width: 760px) {
   .pesadas-grid tbody { font-size: 24px; }
-  .pesadas-grid .name-editor { min-width: 160px; }
+  .pesadas-grid .measure-row input { font-size: 24px; }
 }
