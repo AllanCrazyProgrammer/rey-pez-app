@@ -19,7 +19,7 @@
           <li v-for="dia in visibles" :key="dia.fecha">
             <router-link :to="`/pesadas/${dia.fecha}`">
               <div><strong>{{ fechaTexto(dia.fecha) }}</strong><small v-if="dia.pendiente">Pendiente de sincronizar</small></div>
-              <div class="pesadas-history-metrics"><span>{{ dia.resumen.banos }} personas</span><span>{{ numero(dia.resumen.kilos) }} kg</span><strong>${{ numero(dia.resumen.pagos) }} <small>pago a despicadoras</small></strong></div>
+              <div class="pesadas-history-metrics"><span>{{ dia.resumen.banos }} personas</span><span>{{ numero(dia.resumen.kilos) }} kg</span><strong>${{ numero(dia.resumen.pagos) }} <small>pago a despicadoras</small></strong><strong>${{ numero(dia.resumen.pagoPromedio) }} <small>pago promedio por despicadora</small></strong></div>
               <span aria-hidden="true">→</span>
             </router-link>
           </li>
