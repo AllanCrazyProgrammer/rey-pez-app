@@ -63,12 +63,13 @@ async function run() {
     await page.getByLabel('Kilos de Luisa, columna 1', { exact: true }).press('Enter');
     await page.waitForFunction(() => document.activeElement.getAttribute('aria-label') === 'Kilos de Sandra, columna 1');
     await page.getByLabel('Kilos de Sandra, columna 1', { exact: true }).fill('1.2');
-    await page.getByRole('button', { name: '+ Columna', exact: true }).click();
     await page.getByLabel('Medida columna 2', { exact: true }).fill('laguna');
     await page.getByLabel('Precio por kilo columna 2', { exact: true }).fill('12');
     await page.getByLabel('Kilos de Luisa, columna 2', { exact: true }).fill('4.1');
     await page.getByLabel('Kilos de Sandra, columna 2', { exact: true }).fill('2.3');
     await page.getByLabel('Kilos de Sandra, columna 2', { exact: true }).press('Tab');
+    await page.getByLabel('Agregar columna', { exact: true }).click();
+    await page.getByLabel('Medida columna 4', { exact: true }).waitFor();
     await page.waitForFunction(() => document.querySelector('.pesadas-status').textContent === 'Guardado');
     assert.match(await page.locator('.pesadas-grid tbody tr').nth(0).innerText(), /\$77\.2/);
     assert.match(await page.locator('.pesadas-grid tbody tr').nth(1).innerText(), /\$38\.6/);

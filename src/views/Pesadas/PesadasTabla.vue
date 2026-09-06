@@ -5,7 +5,8 @@
         <tr class="number-row">
           <th class="name-cell" scope="col">Columna</th>
           <th v-for="(columna, index) in columnas" :key="columna.id" scope="col"><span>{{ index + 1 }}</span><button class="remove-column" :aria-label="`Eliminar columna ${index + 1}`" @click="$emit('eliminar-columna', columna)">×</button></th>
-          <th rowspan="3" scope="col">Total kg</th><th rowspan="3" scope="col">Por pesadas</th><th rowspan="3" scope="col">A pagar<small>− $1 de baños</small></th>
+          <th rowspan="3" class="add-column-cell" scope="col"><button aria-label="Agregar columna" title="Agregar columna" @click="$emit('agregar-columna')">+</button></th>
+          <th rowspan="3" scope="col">Total kg</th><th rowspan="3" scope="col">A pagar<small>− $1 de baños</small></th>
         </tr>
         <tr class="measure-row">
           <th class="name-cell" scope="row">Medida</th>
@@ -22,7 +23,7 @@
         <tr v-for="(persona, rowIndex) in personas" :key="persona.id">
           <th class="name-cell" scope="row"><div class="name-input"><span class="row-number">{{ rowIndex + 1 }}</span><input :ref="`nombre-${persona.id}`" :value="valor(`personas.${persona.id}.nombre`, persona.nombre)" :aria-label="`Nombre despicadora ${rowIndex + 1}`" placeholder="Nombre + Enter" maxlength="120" autocomplete="off" @input="editar(`personas.${persona.id}.nombre`, $event, 'texto')" @blur="confirmar(`personas.${persona.id}.nombre`)" @keydown.enter.prevent="$emit('enter-nombre', persona.id)"><button :aria-label="`Eliminar fila ${persona.nombre || rowIndex + 1}`" @click="$emit('eliminar-persona', persona)">×</button></div></th>
           <td v-for="(columna, colIndex) in columnas" :key="columna.id"><input :ref="`peso-${persona.id}-${columna.id}`" :value="valor(`pesos.${persona.id}.${columna.id}`, pesos[persona.id] && pesos[persona.id][columna.id])" inputmode="decimal" :disabled="!persona.nombre.trim()" :aria-label="`Kilos de ${persona.nombre || 'fila ' + (rowIndex + 1)}, columna ${colIndex + 1}`" :aria-invalid="!!errores[`pesos.${persona.id}.${columna.id}`]" :title="errores[`pesos.${persona.id}.${columna.id}`]" placeholder="—" @input="editar(`pesos.${persona.id}.${columna.id}`, $event, 'kilos')" @blur="confirmar(`pesos.${persona.id}.${columna.id}`)" @keydown.enter.prevent="$emit('enter-peso', { personaId: persona.id, columnaId: columna.id })"></td>
-          <td class="total-cell">{{ total(persona.id, 'kilos') }}</td><td class="total-cell">{{ total(persona.id, 'bruto', true) }}</td><td class="total-cell final-cell" :class="{ negative: totales[persona.id] && totales[persona.id].pago < 0 }">{{ total(persona.id, 'pago', true) }}</td>
+          <td class="add-column-body" aria-hidden="true"></td><td class="total-cell">{{ total(persona.id, 'kilos') }}</td><td class="total-cell final-cell" :class="{ negative: totales[persona.id] && totales[persona.id].pago < 0 }">{{ total(persona.id, 'pago', true) }}</td>
         </tr>
       </tbody>
     </table>

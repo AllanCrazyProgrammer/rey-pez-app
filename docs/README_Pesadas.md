@@ -5,8 +5,9 @@ Acceso desde el menú de computadora y móvil: `/pesadas` (historial) y
 
 ## Captura y cálculo
 
-- Cada fecha inicia con una fila y una columna. Enter en un nombre avanza o agrega
+- Cada fecha inicia con una fila y tres columnas. Enter en un nombre avanza o agrega
   la siguiente fila; Enter en kilos avanza a la siguiente persona sin crear filas.
+- El recuadro con `+` al final de las columnas agrega otra columna directamente desde la tabla.
 - Medida libre por columna; precio inicial $10/kg. Nombres independientes de préstamos.
 - Kilos y precios admiten un decimal, punto o coma, sin redondear entradas inválidas.
   Máximo técnico por entrada: 1,000,000. Celdas vacías de kilos equivalen a cero.
@@ -14,6 +15,8 @@ Acceso desde el menú de computadora y móvil: `/pesadas` (historial) y
   un decimal, con mitades hacia arriba. Después se descuenta $1 para baños.
 - Cada fila con nombre cuenta para baños. Filas sin nombre no aparecen en el PDF.
   Pagos negativos, datos inválidos o kilos sin nombre impiden imprimir.
+- La pantalla muestra pago promedio, precio promedio por kilo y la mejor despicadora
+  (mayor pago final; en empate, mayor cantidad de kilos).
 - PDF carta vertical: fecha repetida, pagos netos y Baños al final. La descarga,
   la vista previa y la impresión utilizan la misma definición.
 

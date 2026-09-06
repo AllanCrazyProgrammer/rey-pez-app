@@ -8,11 +8,11 @@
     <section v-else-if="cargando" class="pesadas-card"><p class="pesadas-empty">Abriendo la hoja del día…</p><p v-if="errorCarga" class="pesadas-alert" role="alert">{{ errorCarga }}</p><button v-if="errorCarga" class="pesadas-button" @click="reintentar">Reintentar</button></section>
     <template v-else>
       <section class="pesadas-card pesadas-summary-cards" aria-label="Totales del día">
-        <div><small>Despicadoras</small><strong>{{ resumen.banos }}</strong></div><div><small>Kilos del día</small><strong>{{ numero(resumen.kilos) }} <span>kg</span></strong></div><div><small>Pago a despicadoras</small><strong>${{ numero(resumen.pagos) }}</strong></div><div><small>Baños · $1 por persona</small><strong>${{ numero(resumen.banos) }}</strong></div>
+        <div><small>Despicadoras</small><strong>{{ resumen.banos }}</strong></div><div><small>Kilos del día</small><strong>{{ numero(resumen.kilos) }} <span>kg</span></strong></div><div><small>Pago a despicadoras</small><strong>${{ numero(resumen.pagos) }}</strong></div><div><small>Pago promedio</small><strong>${{ numero(resumen.pagoPromedio) }}</strong></div><div class="pesadas-best-card"><small>Mejor despicadora</small><strong>{{ resumen.mejor ? resumen.mejor.nombre : '—' }}</strong><span v-if="resumen.mejor">{{ numero(resumen.mejor.kilos) }} kg · ${{ numero(resumen.mejor.pago) }}</span></div>
       </section>
       <section class="pesadas-card pesadas-sheet-card">
         <div class="pesadas-toolbar">
-          <button class="pesadas-button primary" @click="agregarPersona()">+ Despicadora</button><button class="pesadas-button" @click="agregarColumna">+ Columna</button><button class="pesadas-button" :disabled="!puedeImprimir" @click="abrirResumen">Resumen / imprimir</button><button v-if="estado.error || errorCarga" class="pesadas-button" @click="reintentar">Reintentar guardado</button>
+          <button class="pesadas-button primary" @click="agregarPersona()">+ Despicadora</button><button class="pesadas-button" :disabled="!puedeImprimir" @click="abrirResumen">Resumen / imprimir</button><button v-if="estado.error || errorCarga" class="pesadas-button" @click="reintentar">Reintentar guardado</button>
           <span class="pesadas-hint">Kg y precios: máximo 1 decimal</span>
         </div>
         <p v-if="errorCarga || estado.error" class="pesadas-alert" role="alert">{{ errorCarga || estado.error }}</p>
@@ -20,8 +20,8 @@
         <p v-if="erroresLista.length" class="pesadas-alert" role="alert">{{ erroresLista[0] }} Los campos marcados no se han guardado.</p>
         <p v-if="pagosNegativos" class="pesadas-alert">Hay pagos menores a cero después de descontar baños. Completa las pesadas o corrige las personas antes de imprimir.</p>
         <p v-if="filasSinNombre" class="pesadas-alert">Hay kilos en una fila sin nombre. Escribe el nombre o elimina esa fila antes de imprimir.</p>
-        <PesadasTabla ref="tabla" :columnas="columnas" :personas="personas" :pesos="datos.pesos || {}" :totales="totales" :borradores="borradores" :errores="errores" @editar="editar" @confirmar="confirmar" @enter-nombre="enterNombre" @enter-peso="enterPeso" @eliminar-persona="eliminarPersona" @eliminar-columna="eliminarColumna" />
-        <footer class="pesadas-sheet-footer"><span>Cada fila con nombre cuenta para baños.</span><strong>Por pesadas: ${{ numero(resumen.bruto) }} = pagos + baños</strong></footer>
+        <PesadasTabla ref="tabla" :columnas="columnas" :personas="personas" :pesos="datos.pesos || {}" :totales="totales" :borradores="borradores" :errores="errores" @editar="editar" @confirmar="confirmar" @enter-nombre="enterNombre" @enter-peso="enterPeso" @eliminar-persona="eliminarPersona" @eliminar-columna="eliminarColumna" @agregar-columna="agregarColumna" />
+        <footer class="pesadas-sheet-footer"><strong>{{ resumen.banos }} despicadoras</strong><strong>Precio promedio: ${{ numero(resumen.precioPromedio) }} / kg</strong><strong>Mejor: {{ resumen.mejor ? resumen.mejor.nombre : '—' }}<span v-if="resumen.mejor"> · {{ numero(resumen.mejor.kilos) }} kg · ${{ numero(resumen.mejor.pago) }}</span></strong></footer>
       </section>
     </template>
     <PesadasResumen v-if="preview" :fecha="fecha" :datos="preview" :pendiente="estado.pending || servidorPendiente" @cerrar="preview = null" />
@@ -49,7 +49,11 @@ export default {
     fechaTexto() { return this.fechaValida ? formatoFechaPesadas(this.fecha) : ''; },
     datos() {
       const data = { ...this.datosGuardados };
-      if (!Object.keys(data.columnas || {}).length) data.columnas = { inicial: { medida: '', precio: 10, orden: '0' } };
+      if (!Object.keys(data.columnas || {}).length) data.columnas = {
+        inicial: { medida: '', precio: 10, orden: '0' },
+        inicial2: { medida: '', precio: 10, orden: '1' },
+        inicial3: { medida: '', precio: 10, orden: '2' }
+      };
       if (!elementosPesadas(data.personas).length) data.personas = { ...data.personas, [this.filaInicialId]: { nombre: '', orden: '0' } };
       return data;
     },

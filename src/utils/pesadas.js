@@ -64,8 +64,16 @@ export function resumenPesadas(data) {
     return { id: row.id, nombre: row.nombre.trim(), kilos: kilosDecimas / 10,
       bruto: brutoDecimas / 10, pago: (brutoDecimas - 10) / 10 };
   });
-  return { personas, banos: personas.length, kilos: totalKilosDecimas / 10,
-    bruto: totalBrutoDecimas / 10, pagos: (totalBrutoDecimas - personas.length * 10) / 10 };
+  const kilos = totalKilosDecimas / 10;
+  const bruto = totalBrutoDecimas / 10;
+  const pagos = (totalBrutoDecimas - personas.length * 10) / 10;
+  const mejor = personas.length ? personas.reduce((current, person) => {
+    if (!current || person.pago > current.pago || (person.pago === current.pago && person.kilos > current.kilos)) return person;
+    return current;
+  }, null) : null;
+  return { personas, banos: personas.length, kilos, bruto, pagos, mejor,
+    pagoPromedio: personas.length ? pagos / personas.length : 0,
+    precioPromedio: kilos ? bruto / kilos : 0 };
 }
 
 // Field paths are generated internally with stable IDs, never from names/measures.

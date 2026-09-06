@@ -44,6 +44,9 @@ test('calculates mixed column prices and deducts bathrooms once per named person
   assert.equal(summary.banos, 1);
   assert.equal(summary.pagos, 77.2);
   assert.equal(summary.bruto, 78.2);
+  assert.equal(summary.pagoPromedio, 77.2);
+  assert.deepEqual(summary.mejor, summary.personas[0]);
+  assert.equal(Math.round(summary.precioPromedio * 10) / 10, 11.2);
 });
 
 test('rounds once per person, half up, and totals rounded payments', () => {
