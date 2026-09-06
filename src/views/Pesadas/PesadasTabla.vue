@@ -10,7 +10,7 @@
         </tr>
         <tr class="measure-row">
           <th class="name-cell" scope="row">Medida</th>
-          <td v-for="(columna, index) in columnas" :key="columna.id"><input :value="valor(`columnas.${columna.id}.medida`, columna.medida)" :aria-label="`Medida columna ${index + 1}`" placeholder="Ej. 51 o laguna" maxlength="80" @input="editar(`columnas.${columna.id}.medida`, $event, 'texto')" @blur="confirmar(`columnas.${columna.id}.medida`)" @keydown.enter.prevent="confirmar(`columnas.${columna.id}.medida`)"></td>
+          <td v-for="(columna, index) in columnas" :key="columna.id"><input :value="valor(`columnas.${columna.id}.medida`, columna.medida)" :aria-label="`Medida columna ${index + 1}`" maxlength="80" @input="editar(`columnas.${columna.id}.medida`, $event, 'texto')" @blur="confirmar(`columnas.${columna.id}.medida`)" @keydown.enter.prevent="confirmar(`columnas.${columna.id}.medida`)"></td>
         </tr>
         <tr class="price-row">
           <th class="name-cell" scope="row">Precio / kg</th>
