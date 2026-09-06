@@ -21,7 +21,7 @@
         <p v-if="pagosNegativos" class="pesadas-alert">Hay pagos menores a cero después de descontar baños. Completa las pesadas o corrige las personas antes de imprimir.</p>
         <p v-if="filasSinNombre" class="pesadas-alert">Hay kilos en una fila sin nombre. Escribe el nombre o elimina esa fila antes de imprimir.</p>
         <PesadasTabla ref="tabla" :columnas="columnas" :personas="personas" :pesos="datos.pesos || {}" :totales="totales" :borradores="borradores" :errores="errores" @editar="editar" @confirmar="confirmar" @enter-nombre="enterNombre" @enter-peso="enterPeso" @eliminar-persona="eliminarPersona" @eliminar-columna="eliminarColumna" @agregar-columna="agregarColumna" />
-        <footer class="pesadas-sheet-footer"><strong>{{ resumen.banos }} despicadoras</strong><strong>Precio promedio: ${{ numero(resumen.precioPromedio) }} / kg</strong><strong>Mejor: {{ resumen.mejor ? resumen.mejor.nombre : '—' }}<span v-if="resumen.mejor"> · {{ numero(resumen.mejor.kilos) }} kg · ${{ numero(resumen.mejor.pago) }}</span></strong></footer>
+        <footer class="pesadas-sheet-footer"><strong>{{ resumen.banos }} despicadoras</strong><strong>Total a pagar: ${{ numero(resumen.pagos) }}</strong><strong>A pagar promedio: ${{ numero(resumen.pagoPromedio) }}</strong><strong>Mejor: {{ resumen.mejor ? resumen.mejor.nombre : '—' }}<span v-if="resumen.mejor"> · {{ numero(resumen.mejor.kilos) }} kg · ${{ numero(resumen.mejor.pago) }}</span></strong></footer>
       </section>
     </template>
     <PesadasResumen v-if="preview" :fecha="fecha" :datos="preview" :pendiente="estado.pending || servidorPendiente" @cerrar="preview = null" />

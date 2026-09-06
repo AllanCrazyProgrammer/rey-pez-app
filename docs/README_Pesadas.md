@@ -15,7 +15,7 @@ Acceso desde el menú de computadora y móvil: `/pesadas` (historial) y
   un decimal, con mitades hacia arriba. Después se descuenta $1 para baños.
 - Cada fila con nombre cuenta para baños. Filas sin nombre no aparecen en el PDF.
   Pagos negativos, datos inválidos o kilos sin nombre impiden imprimir.
-- La pantalla muestra pago promedio, precio promedio por kilo y la mejor despicadora
+- La pantalla muestra total a pagar, pago promedio y la mejor despicadora
   (mayor pago final; en empate, mayor cantidad de kilos).
 - PDF carta vertical: fecha repetida, pagos netos y Baños al final. La descarga,
   la vista previa y la impresión utilizan la misma definición.
