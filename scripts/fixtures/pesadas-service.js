@@ -43,7 +43,9 @@ export async function eliminarDiaPesadas(fecha) {
 
 export async function crearDiaPesadas(fecha) {
   const days = all();
-  days[fecha] = { ...days[fecha], fecha, creadoEn: new Date().toISOString() };
+  if (!days[fecha] || days[fecha].eliminado) {
+    days[fecha] = { fecha, eliminado: false, creadoEn: new Date().toISOString(), columnas: {}, personas: {}, pesos: {} };
+  }
   localStorage.setItem(key, JSON.stringify(days));
   emit();
 }

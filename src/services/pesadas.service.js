@@ -1,4 +1,4 @@
-import { collection, doc, FieldPath, onSnapshot, orderBy, query, serverTimestamp, setDoc } from 'firebase/firestore';
+import { collection, doc, FieldPath, onSnapshot, orderBy, query, runTransaction, serverTimestamp, setDoc } from 'firebase/firestore';
 import { db } from '@/firebase';
 import { aplicarCamposPesadas, fechaPesadasValida } from '@/utils/pesadas';
 
@@ -19,9 +19,16 @@ export function eliminarDiaPesadas(fecha) {
 
 export function crearDiaPesadas(fecha) {
   if (!fechaPesadasValida(fecha)) throw new Error('Fecha inválida.');
-  return setDoc(doc(db, 'pesadasDiarias', fecha), {
-    fecha, creadoEn: serverTimestamp(), actualizadoEn: serverTimestamp()
-  }, { merge: true });
+  const reference = doc(db, 'pesadasDiarias', fecha);
+  return runTransaction(db, async transaction => {
+    const current = await transaction.get(reference);
+    // Existing active days retain all of their capture. A deleted day starts clean.
+    if (current.exists() && !current.data().eliminado) return;
+    transaction.set(reference, {
+      fecha, eliminado: false, creadoEn: serverTimestamp(), actualizadoEn: serverTimestamp(),
+      columnas: {}, personas: {}, pesos: {}
+    });
+  });
 }
 
 export function conectarPesadas(fecha, onData, onError) {

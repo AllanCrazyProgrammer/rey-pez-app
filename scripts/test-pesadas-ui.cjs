@@ -157,6 +157,9 @@ async function run() {
     await page.goto(day);
     await page.getByText('Esta jornada fue eliminada.', { exact: false }).waitFor();
     assert.equal(await page.locator('.pesadas-grid').count(), 0);
+    await page.getByRole('button', { name: 'Crear esta jornada de nuevo', exact: true }).click();
+    await page.getByLabel('Nombre despicadora 1', { exact: true }).waitFor();
+    assert.equal(await page.getByLabel('Nombre despicadora 1', { exact: true }).inputValue(), '');
     assert.deepEqual(errors, []);
     console.log('PASS: Enter, precision, totals, reload, separate days, two tabs, offline recovery, PDF download, mobile navigation, cancel/confirm deletion and reload.');
   } finally {

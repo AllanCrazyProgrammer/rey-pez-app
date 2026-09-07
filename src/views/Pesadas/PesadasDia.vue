@@ -6,7 +6,11 @@
     </header>
     <section v-if="!fechaValida" class="pesadas-card"><p class="pesadas-alert">La fecha no es válida. Vuelve al historial y selecciona un día.</p></section>
     <section v-else-if="cargando" class="pesadas-card"><p class="pesadas-empty">Abriendo la hoja del día…</p><p v-if="errorCarga" class="pesadas-alert" role="alert">{{ errorCarga }}</p><button v-if="errorCarga" class="pesadas-button" @click="reintentar">Reintentar</button></section>
-    <section v-else-if="datosGuardados.eliminado" class="pesadas-card"><p class="pesadas-alert" role="alert">Esta jornada fue eliminada. Vuelve al historial para abrir otra fecha.</p></section>
+    <section v-else-if="datosGuardados.eliminado" class="pesadas-card">
+      <p class="pesadas-alert" role="alert">Esta jornada fue eliminada.</p>
+      <button class="pesadas-button primary" :disabled="restaurando" @click="restaurarDia">{{ restaurando ? 'Creando…' : 'Crear esta jornada de nuevo' }}</button>
+      <router-link class="pesadas-button" to="/pesadas">Volver al historial</router-link>
+    </section>
     <template v-else>
       <section class="pesadas-card pesadas-summary-cards" aria-label="Totales del día">
         <div><small>Despicadoras</small><strong>{{ resumen.banos }}</strong></div><div><small>Kilos del día</small><strong>{{ numero(resumen.kilos) }} <span>kg</span></strong></div><div><small>Pago a despicadoras</small><strong>${{ numero(resumen.pagos) }}</strong></div><div><small>Pago promedio</small><strong>${{ numero(resumen.pagoPromedio) }}</strong></div><div class="pesadas-best-card"><small>Mejor despicadora</small><strong>{{ resumen.mejor ? resumen.mejor.nombre : '—' }}</strong><span v-if="resumen.mejor">{{ numero(resumen.mejor.kilos) }} kg · ${{ numero(resumen.mejor.pago) }}</span></div>
@@ -39,7 +43,7 @@
 import { nanoid } from 'nanoid';
 import { BModal } from 'bootstrap-vue';
 import Cuentas from '@/Cuentas.vue';
-import { conectarPesadas } from '@/services/pesadas.service';
+import { conectarPesadas, crearDiaPesadas } from '@/services/pesadas.service';
 import { PesadasOutbox } from '@/services/pesadasOutbox';
 import { decimalPesada, elementosPesadas, fechaPesadasValida, formatoFechaPesadas, formatoPesada, resumenPesadas } from '@/utils/pesadas';
 import PesadasTabla from './PesadasTabla.vue';
@@ -52,7 +56,7 @@ export default {
   props: { fecha: { type: String, required: true } },
   data: () => ({ datosGuardados: {}, estado: { pending: false, saving: false, error: '', storageError: false },
     cargando: true, errorCarga: '', online: navigator.onLine, desdeCache: true, servidorPendiente: false,
-    borradores: {}, errores: {}, preview: null, cuentasAbiertas: false, cuentasDatos: '', filaInicialId: 'inicial' }),
+    borradores: {}, errores: {}, preview: null, cuentasAbiertas: false, cuentasDatos: '', restaurando: false, filaInicialId: 'inicial' }),
   computed: {
     fechaValida() { return fechaPesadasValida(this.fecha); },
     fechaTexto() { return this.fechaValida ? formatoFechaPesadas(this.fecha) : ''; },
@@ -102,6 +106,13 @@ export default {
   },
   methods: {
     numero: formatoPesada,
+    async restaurarDia() {
+      if (this.restaurando) return;
+      this.restaurando = true;
+      try { await crearDiaPesadas(this.fecha); }
+      catch (_error) { this.errorCarga = 'No se pudo crear esta jornada. Revisa la conexión e inténtalo de nuevo.'; }
+      finally { this.restaurando = false; }
+    },
     desconectar() {
       if (this._unsubscribe) this._unsubscribe();
       if (this._outbox) this._outbox.dispose();
