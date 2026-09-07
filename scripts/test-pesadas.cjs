@@ -14,7 +14,7 @@ require.extensions['.js'] = (module, filename) => {
   });
   module._compile(result.code, filename);
 };
-const { decimalPesada, resumenPesadas, aplicarCamposPesadas, fechaPesadasHoy, fechaPesadasValida, formatoPesada } = require('../src/utils/pesadas');
+const { decimalPesada, elementosPesadas, resumenPesadas, aplicarCamposPesadas, fechaPesadasHoy, fechaPesadasValida, formatoPesada } = require('../src/utils/pesadas');
 const { documentoPesadas } = require('../src/utils/pdf/pesadas');
 const { PesadasOutbox } = require('../src/services/pesadasOutbox');
 
@@ -36,6 +36,14 @@ test('accepts one decimal, comma, zero and blank kilos; rejects silent rounding'
   assert.throws(() => decimalPesada('999999999999999999'));
   assert.equal(formatoPesada(10), '10');
   assert.equal(formatoPesada(77.2), '77.2');
+});
+
+test('new timestamp-ordered columns stay after the initial weighing columns', () => {
+  const columns = elementosPesadas({
+    c1: { orden: '0' }, c2: { orden: '1' }, c3: { orden: '2' },
+    newest: { orden: '1757270000000-a1b2' }
+  });
+  assert.deepEqual(columns.map(column => column.id), ['c1', 'c2', 'c3', 'newest']);
 });
 
 test('calculates mixed column prices and deducts bathrooms once per named person', () => {

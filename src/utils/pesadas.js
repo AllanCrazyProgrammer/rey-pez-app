@@ -37,9 +37,14 @@ export function formatoFechaPesadas(fecha) {
 }
 
 export function elementosPesadas(map = {}) {
+  const numeroOrden = value => {
+    const match = String(value == null ? '' : value).match(/^-?\d+/);
+    return match ? Number(match[0]) : Number.MAX_SAFE_INTEGER;
+  };
   return Object.entries(map).map(([id, value]) => ({ ...value, id }))
     .filter(value => !value.eliminado)
-    .sort((a, b) => String(a.orden).localeCompare(String(b.orden)) || a.id.localeCompare(b.id));
+    .sort((a, b) => numeroOrden(a.orden) - numeroOrden(b.orden)
+      || String(a.orden).localeCompare(String(b.orden)) || a.id.localeCompare(b.id));
 }
 
 export function resumenPesadas(data) {
