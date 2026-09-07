@@ -260,7 +260,7 @@ test('Enter on kilos skips unnamed rows and never creates people', () => {
   assert.equal(focused, null);
 });
 
-test('Enter moves from measures to prices and then starts weighing', () => {
+test('Enter moves vertically from a measure to its price and weighings', () => {
   const focused = [];
   const confirmed = [];
   const vm = {
@@ -270,12 +270,8 @@ test('Enter moves from measures to prices and then starts weighing', () => {
     confirmar: path => confirmed.push(path), enfocar: ref => focused.push(ref)
   };
   methods.enterMedida.call(vm, 'c1');
-  assert.deepEqual(focused.pop(), 'medida-c2');
-  methods.enterMedida.call(vm, 'c2');
   assert.deepEqual(focused.pop(), 'precio-c1');
   methods.enterPrecio.call(vm, 'c1');
-  assert.deepEqual(focused.pop(), 'precio-c2');
-  methods.enterPrecio.call(vm, 'c2');
   assert.deepEqual(focused.pop(), 'peso-p1-c1');
   vm.personas = [{ id: 'p1', nombre: '' }];
   methods.enterPrecio.call(vm, 'c2');

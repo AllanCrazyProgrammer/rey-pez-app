@@ -203,23 +203,16 @@ export default {
       else this.agregarPersona(true);
     },
     enterMedida(id) {
-      const index = this.columnas.findIndex(column => column.id === id);
-      if (index < 0) return;
       this.confirmar(`columnas.${id}.medida`);
-      const next = this.columnas[index + 1];
-      if (next) this.enfocar(`medida-${next.id}`);
-      else if (this.columnas[0]) this.enfocar(`precio-${this.columnas[0].id}`);
+      if (this.columnas.some(column => column.id === id)) this.enfocar(`precio-${id}`);
     },
     enterPrecio(id) {
       const path = `columnas.${id}.precio`;
       if (this.errores[path]) return;
-      const index = this.columnas.findIndex(column => column.id === id);
-      if (index < 0) return;
+      if (!this.columnas.some(column => column.id === id)) return;
       this.confirmar(path);
-      const next = this.columnas[index + 1];
-      if (next) { this.enfocar(`precio-${next.id}`); return; }
       const firstNamed = this.personas.find(persona => persona.nombre.trim());
-      if (firstNamed && this.columnas[0]) this.enfocar(`peso-${firstNamed.id}-${this.columnas[0].id}`);
+      if (firstNamed) this.enfocar(`peso-${firstNamed.id}-${id}`);
       else if (this.personas[0]) this.enfocar(`nombre-${this.personas[0].id}`);
     },
     enterPeso({ personaId, columnaId }) {
