@@ -30,8 +30,8 @@ const storage = () => {
 const deferred = () => { let resolve, reject; const promise = new Promise((yes, no) => { resolve = yes; reject = no; }); return { promise, resolve, reject }; };
 
 test('accepts one decimal, comma, zero and blank kilos; rejects silent rounding', () => {
-  for (const [input, expected] of [['2,9', 2.9], ['0', 0], ['10.0', 10], ['', null], [' 3.1 ', 3.1]]) assert.equal(decimalPesada(input), expected);
-  for (const input of ['1.25', '2,90', '-1', 'Infinity', 'NaN', '1e3', '2.', '1,2.3']) assert.throws(() => decimalPesada(input));
+  for (const [input, expected] of [['2,9', 2.9], ['.4', 0.4], [',4', 0.4], ['0', 0], ['10.0', 10], ['', null], [' 3.1 ', 3.1]]) assert.equal(decimalPesada(input), expected);
+  for (const input of ['1.25', '2,90', '-1', 'Infinity', 'NaN', '1e3', '.', '2.', '1,2.3']) assert.throws(() => decimalPesada(input));
   assert.throws(() => decimalPesada('', false));
   assert.throws(() => decimalPesada('999999999999999999'));
   assert.equal(formatoPesada(10), '10');

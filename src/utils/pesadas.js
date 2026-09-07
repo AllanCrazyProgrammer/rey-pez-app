@@ -2,10 +2,11 @@
 export function decimalPesada(value, allowEmpty = true) {
   const text = String(value == null ? '' : value).trim().replace(',', '.');
   if (!text && allowEmpty) return null;
-  if (!/^\d+(?:\.\d)?$/.test(text)) {
+  if (!/^(?:\d+(?:\.\d)?|\.\d)$/.test(text)) {
     throw new Error('Usa un número positivo o cero, con máximo un decimal.');
   }
-  const [whole, fraction = '0'] = text.split('.');
+  const [wholeText, fraction = '0'] = text.split('.');
+  const whole = wholeText || '0';
   const tenths = Number(whole) * 10 + Number(fraction);
   if (!Number.isSafeInteger(tenths) || tenths > 10000000) {
     throw new Error('El valor máximo es 1000000.');
