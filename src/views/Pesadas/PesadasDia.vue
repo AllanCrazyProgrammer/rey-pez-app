@@ -90,6 +90,7 @@ export default {
   watch: { fecha() { this.iniciar(); } },
   mounted() {
     this.iniciar();
+    window.addEventListener('wheel', this.bloquearRetrocesoHorizontal, { capture: true, passive: false });
     window.addEventListener('online', this.actualizarConexion);
     window.addEventListener('offline', this.actualizarConexion);
     window.addEventListener('storage', this.actualizarStorage);
@@ -103,9 +104,18 @@ export default {
     window.removeEventListener('offline', this.actualizarConexion);
     window.removeEventListener('storage', this.actualizarStorage);
     window.removeEventListener('beforeunload', this.antesDeCerrar);
+    window.removeEventListener('wheel', this.bloquearRetrocesoHorizontal, true);
   },
   methods: {
     numero: formatoPesada,
+    bloquearRetrocesoHorizontal(event) {
+      if (Math.abs(event.deltaX) <= Math.abs(event.deltaY)) return;
+      const table = event.target && event.target.closest && event.target.closest('.pesadas-grid-scroll');
+      if (!table) { event.preventDefault(); return; }
+      const atLeft = table.scrollLeft <= 0 && event.deltaX < 0;
+      const atRight = table.scrollLeft + table.clientWidth >= table.scrollWidth - 1 && event.deltaX > 0;
+      if (atLeft || atRight) event.preventDefault();
+    },
     async restaurarDia() {
       if (this.restaurando) return;
       this.restaurando = true;

@@ -107,6 +107,7 @@ html.platform-windows [aria-disabled="true"] {
 #app.app--pesadas {
   min-height: 100vh;
   overflow: visible;
+  overscroll-behavior-x: none;
 }
 
 .content-wrapper {

@@ -282,6 +282,19 @@ test('Enter moves vertically from a measure to its price and weighings', () => {
   assert.equal(confirmed.length, confirmationsBeforeError);
 });
 
+test('horizontal swipe at table edges never propagates to browser history', () => {
+  let prevented = 0;
+  const atEdge = (scrollLeft, deltaX) => ({ deltaX, deltaY: 0,
+    target: { closest: () => ({ scrollLeft, clientWidth: 200, scrollWidth: 600 }) },
+    preventDefault: () => { prevented++; } });
+  methods.bloquearRetrocesoHorizontal(atEdge(0, -20));
+  methods.bloquearRetrocesoHorizontal(atEdge(400, 20));
+  methods.bloquearRetrocesoHorizontal(atEdge(150, 20));
+  assert.equal(prevented, 2);
+  methods.bloquearRetrocesoHorizontal({ deltaX: 30, deltaY: 0, target: { closest: () => null }, preventDefault: () => { prevented++; } });
+  assert.equal(prevented, 3);
+});
+
 const cuentasSource = compiler.parseComponent(fs.readFileSync(path.join(root, 'src/Cuentas.vue'), 'utf8')).script.content;
 const cuentasModule = new Module(path.join(root, 'src/Cuentas.test.js'), module);
 cuentasModule.require = () => ({});
