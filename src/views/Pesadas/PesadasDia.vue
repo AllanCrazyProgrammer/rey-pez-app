@@ -246,7 +246,7 @@ export default {
       this._outbox.flush();
     },
     calcularCuentas() {
-      if (this.$refs.cuentas) this.$refs.cuentas.procesarDatos({ data: this.cuentasDatos.split('\n'), isTwo: true });
+      if (this.$refs.cuentas) this.$refs.cuentas.procesarDatos({ data: this.cuentasDatos.split('\n'), isTwo: false });
     },
     abrirCuentas() {
       if (!this.puedeImprimir) return;

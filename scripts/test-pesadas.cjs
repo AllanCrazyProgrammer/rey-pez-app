@@ -322,3 +322,10 @@ test('weighing cash uses final named payments and blocks invalid sheets', () => 
   methods.abrirCuentas.call(invalid);
   assert.equal(invalid.cuentasAbiertas, undefined);
 });
+
+test('weighing cash opens with one-peso coins by default', () => {
+  let input;
+  const vm = { cuentasDatos: '77.2\n19', $refs: { cuentas: { procesarDatos(value) { input = value; } } } };
+  methods.calcularCuentas.call(vm);
+  assert.deepEqual(input, { data: ['77.2', '19'], isTwo: false });
+});
