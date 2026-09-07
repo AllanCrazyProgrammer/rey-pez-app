@@ -26,7 +26,7 @@
         <p v-if="erroresLista.length" class="pesadas-alert" role="alert">{{ erroresLista[0] }} Los campos marcados no se han guardado.</p>
         <p v-if="pagosNegativos" class="pesadas-alert">Hay pagos menores a cero después de descontar baños. Completa las pesadas o corrige las personas antes de imprimir.</p>
         <p v-if="filasSinNombre" class="pesadas-alert">Hay kilos en una fila sin nombre. Escribe el nombre o elimina esa fila antes de imprimir.</p>
-        <PesadasTabla ref="tabla" :columnas="columnas" :personas="personas" :pesos="datos.pesos || {}" :totales="totales" :borradores="borradores" :errores="errores" @editar="editar" @confirmar="confirmar" @enter-nombre="enterNombre" @enter-peso="enterPeso" @eliminar-persona="eliminarPersona" @eliminar-columna="eliminarColumna" @agregar-columna="agregarColumna" />
+        <PesadasTabla ref="tabla" :columnas="columnas" :personas="personas" :pesos="datos.pesos || {}" :totales="totales" :borradores="borradores" :errores="errores" @editar="editar" @confirmar="confirmar" @enter-nombre="enterNombre" @enter-medida="enterMedida" @enter-precio="enterPrecio" @enter-peso="enterPeso" @eliminar-persona="eliminarPersona" @eliminar-columna="eliminarColumna" @agregar-columna="agregarColumna" />
         <footer class="pesadas-sheet-footer"><strong>{{ resumen.banos }} despicadoras</strong><strong>Total a pagar: ${{ numero(resumen.pagos) }}</strong><strong>A pagar promedio: ${{ numero(resumen.pagoPromedio) }}</strong><strong>Mejor: {{ resumen.mejor ? resumen.mejor.nombre : '—' }}<span v-if="resumen.mejor"> · {{ numero(resumen.mejor.kilos) }} kg · ${{ numero(resumen.mejor.pago) }}</span></strong></footer>
       </section>
     </template>
@@ -201,6 +201,26 @@ export default {
       const next = this.personas[index + 1];
       if (next) this.enfocar(`nombre-${next.id}`);
       else this.agregarPersona(true);
+    },
+    enterMedida(id) {
+      const index = this.columnas.findIndex(column => column.id === id);
+      if (index < 0) return;
+      this.confirmar(`columnas.${id}.medida`);
+      const next = this.columnas[index + 1];
+      if (next) this.enfocar(`medida-${next.id}`);
+      else if (this.columnas[0]) this.enfocar(`precio-${this.columnas[0].id}`);
+    },
+    enterPrecio(id) {
+      const path = `columnas.${id}.precio`;
+      if (this.errores[path]) return;
+      const index = this.columnas.findIndex(column => column.id === id);
+      if (index < 0) return;
+      this.confirmar(path);
+      const next = this.columnas[index + 1];
+      if (next) { this.enfocar(`precio-${next.id}`); return; }
+      const firstNamed = this.personas.find(persona => persona.nombre.trim());
+      if (firstNamed && this.columnas[0]) this.enfocar(`peso-${firstNamed.id}-${this.columnas[0].id}`);
+      else if (this.personas[0]) this.enfocar(`nombre-${this.personas[0].id}`);
     },
     enterPeso({ personaId, columnaId }) {
       const path = `pesos.${personaId}.${columnaId}`;

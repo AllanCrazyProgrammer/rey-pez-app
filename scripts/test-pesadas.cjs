@@ -260,6 +260,32 @@ test('Enter on kilos skips unnamed rows and never creates people', () => {
   assert.equal(focused, null);
 });
 
+test('Enter moves from measures to prices and then starts weighing', () => {
+  const focused = [];
+  const confirmed = [];
+  const vm = {
+    errores: {},
+    columnas: [{ id: 'c1' }, { id: 'c2' }],
+    personas: [{ id: 'p1', nombre: 'Luisa' }, { id: 'p2', nombre: '' }],
+    confirmar: path => confirmed.push(path), enfocar: ref => focused.push(ref)
+  };
+  methods.enterMedida.call(vm, 'c1');
+  assert.deepEqual(focused.pop(), 'medida-c2');
+  methods.enterMedida.call(vm, 'c2');
+  assert.deepEqual(focused.pop(), 'precio-c1');
+  methods.enterPrecio.call(vm, 'c1');
+  assert.deepEqual(focused.pop(), 'precio-c2');
+  methods.enterPrecio.call(vm, 'c2');
+  assert.deepEqual(focused.pop(), 'peso-p1-c1');
+  vm.personas = [{ id: 'p1', nombre: '' }];
+  methods.enterPrecio.call(vm, 'c2');
+  assert.deepEqual(focused.pop(), 'nombre-p1');
+  vm.errores['columnas.c1.precio'] = 'Inválido';
+  const confirmationsBeforeError = confirmed.length;
+  methods.enterPrecio.call(vm, 'c1');
+  assert.equal(confirmed.length, confirmationsBeforeError);
+});
+
 const cuentasSource = compiler.parseComponent(fs.readFileSync(path.join(root, 'src/Cuentas.vue'), 'utf8')).script.content;
 const cuentasModule = new Module(path.join(root, 'src/Cuentas.test.js'), module);
 cuentasModule.require = () => ({});
