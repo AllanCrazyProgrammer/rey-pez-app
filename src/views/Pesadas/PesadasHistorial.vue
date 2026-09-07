@@ -17,12 +17,14 @@
         <p v-if="!jornadas.length" class="pesadas-empty">Todavía no hay pesadas registradas. Abre un día para comenzar.</p>
         <ul v-else class="pesadas-history">
           <li v-for="dia in visibles" :key="dia.fecha">
+            <div class="pesadas-history-day-heading">
+              <router-link :to="`/pesadas/${dia.fecha}`"><strong>{{ fechaTexto(dia.fecha) }}</strong><small v-if="dia.pendiente">Pendiente de sincronizar</small></router-link>
+            <button class="pesadas-button pesadas-delete-day" :disabled="!!eliminando || dia.pendiente || desdeCache" :aria-label="`Eliminar día ${fechaTexto(dia.fecha)}`" @click="eliminarDia(dia)">{{ eliminando === dia.fecha ? 'Eliminando…' : 'Eliminar día' }}</button>
+            </div>
             <router-link :to="`/pesadas/${dia.fecha}`">
-              <div><strong>{{ fechaTexto(dia.fecha) }}</strong><small v-if="dia.pendiente">Pendiente de sincronizar</small></div>
               <div class="pesadas-history-metrics"><span>{{ dia.resumen.banos }} personas</span><span>{{ numero(dia.resumen.kilos) }} kg</span><strong>${{ numero(dia.resumen.pagos) }} <small>pago a despicadoras</small></strong><strong>${{ numero(dia.resumen.pagoPromedio) }} <small>pago promedio por despicadora</small></strong></div>
               <span aria-hidden="true">→</span>
             </router-link>
-            <button class="pesadas-button pesadas-delete-day" :disabled="!!eliminando || dia.pendiente || desdeCache" :aria-label="`Eliminar día ${fechaTexto(dia.fecha)}`" @click="eliminarDia(dia)">{{ eliminando === dia.fecha ? 'Eliminando…' : 'Eliminar día' }}</button>
           </li>
         </ul>
         <button v-if="visibles.length < jornadas.length" class="pesadas-button" @click="limite += 20">Mostrar más días</button>
