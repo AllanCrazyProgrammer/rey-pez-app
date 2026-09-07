@@ -136,8 +136,21 @@ async function run() {
     await page.getByRole('link', { name: 'Registrar pesadas de despicadoras' }).filter({ visible: true }).click();
     await page.getByRole('heading', { name: 'Historial de jornadas' }).waitFor();
     assert.equal(await page.getByRole('button', { name: 'Abrir menú de navegación' }).getAttribute('aria-expanded'), 'false');
+    // Delete only isolated test data; cancellation preserves the day.
+    page.removeAllListeners('dialog');
+    page.once('dialog', dialog => dialog.dismiss());
+    await page.getByRole('button', { name: 'Eliminar día 5/9/2026', exact: true }).click();
+    assert.equal(await page.locator('.pesadas-history li').count(), 1);
+    page.once('dialog', dialog => dialog.accept());
+    await page.getByRole('button', { name: 'Eliminar día 5/9/2026', exact: true }).click();
+    await page.getByText('Todavía no hay pesadas registradas.', { exact: false }).waitFor();
+    await page.reload();
+    await page.getByText('Todavía no hay pesadas registradas.', { exact: false }).waitFor();
+    await page.goto(day);
+    await page.getByText('Esta jornada fue eliminada.', { exact: false }).waitFor();
+    assert.equal(await page.locator('.pesadas-grid').count(), 0);
     assert.deepEqual(errors, []);
-    console.log('PASS: Enter, precision, totals, reload, separate days, two tabs, offline recovery, PDF download, mobile navigation.');
+    console.log('PASS: Enter, precision, totals, reload, separate days, two tabs, offline recovery, PDF download, mobile navigation, cancel/confirm deletion and reload.');
   } finally {
     if (browser) await browser.close();
     await new Promise(resolve => server.close(resolve));

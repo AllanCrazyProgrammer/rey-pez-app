@@ -9,6 +9,14 @@ export function observarHistorialPesadas(onData, onError) {
     })), snapshot.metadata.fromCache), onError);
 }
 
+// Keep a tombstone so writes queued in another tab cannot restore the day.
+export function eliminarDiaPesadas(fecha) {
+  if (!fechaPesadasValida(fecha)) throw new Error('Fecha inválida.');
+  return setDoc(doc(db, 'pesadasDiarias', fecha), {
+    fecha, eliminado: true, eliminadoEn: serverTimestamp(), actualizadoEn: serverTimestamp()
+  });
+}
+
 export function conectarPesadas(fecha, onData, onError) {
   if (!fechaPesadasValida(fecha)) throw new Error('Fecha inválida.');
   const reference = doc(db, 'pesadasDiarias', fecha);

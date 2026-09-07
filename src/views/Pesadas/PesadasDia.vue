@@ -6,6 +6,7 @@
     </header>
     <section v-if="!fechaValida" class="pesadas-card"><p class="pesadas-alert">La fecha no es válida. Vuelve al historial y selecciona un día.</p></section>
     <section v-else-if="cargando" class="pesadas-card"><p class="pesadas-empty">Abriendo la hoja del día…</p><p v-if="errorCarga" class="pesadas-alert" role="alert">{{ errorCarga }}</p><button v-if="errorCarga" class="pesadas-button" @click="reintentar">Reintentar</button></section>
+    <section v-else-if="datosGuardados.eliminado" class="pesadas-card"><p class="pesadas-alert" role="alert">Esta jornada fue eliminada. Vuelve al historial para abrir otra fecha.</p></section>
     <template v-else>
       <section class="pesadas-card pesadas-summary-cards" aria-label="Totales del día">
         <div><small>Despicadoras</small><strong>{{ resumen.banos }}</strong></div><div><small>Kilos del día</small><strong>{{ numero(resumen.kilos) }} <span>kg</span></strong></div><div><small>Pago a despicadoras</small><strong>${{ numero(resumen.pagos) }}</strong></div><div><small>Pago promedio</small><strong>${{ numero(resumen.pagoPromedio) }}</strong></div><div class="pesadas-best-card"><small>Mejor despicadora</small><strong>{{ resumen.mejor ? resumen.mejor.nombre : '—' }}</strong><span v-if="resumen.mejor">{{ numero(resumen.mejor.kilos) }} kg · ${{ numero(resumen.mejor.pago) }}</span></div>
@@ -72,7 +73,7 @@ export default {
     erroresLista() { return Object.values(this.errores); },
     pagosNegativos() { return this.resumen.personas.some(row => row.pago < 0); },
     filasSinNombre() { return this.personas.some(row => !row.nombre.trim() && this.columnas.some(col => this.datos.pesos?.[row.id]?.[col.id] > 0)); },
-    puedeImprimir() { return this.resumen.banos > 0 && !this.pagosNegativos && !this.filasSinNombre && !this.erroresLista.length; },
+    puedeImprimir() { return !this.datosGuardados.eliminado && this.resumen.banos > 0 && !this.pagosNegativos && !this.filasSinNombre && !this.erroresLista.length; },
     estadoTexto() {
       if (this.errorCarga || this.estado.error) return 'Error de sincronización';
       if (!this.online && (this.estado.pending || this.servidorPendiente)) return 'Sin conexión · cambios pendientes';
@@ -149,6 +150,7 @@ export default {
       } else event.target.value = this.fecha;
     },
     guardarCampos(fields) {
+      if (this.datosGuardados.eliminado) return;
       const additions = {};
       if (!this.datosGuardados.creadoEn) additions.creadoEn = new Date().toISOString();
       Object.entries(this.datos.columnas || {}).forEach(([id, col]) => {

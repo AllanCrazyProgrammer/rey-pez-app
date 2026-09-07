@@ -22,6 +22,7 @@
               <div class="pesadas-history-metrics"><span>{{ dia.resumen.banos }} personas</span><span>{{ numero(dia.resumen.kilos) }} kg</span><strong>${{ numero(dia.resumen.pagos) }} <small>pago a despicadoras</small></strong><strong>${{ numero(dia.resumen.pagoPromedio) }} <small>pago promedio por despicadora</small></strong></div>
               <span aria-hidden="true">→</span>
             </router-link>
+            <button class="pesadas-button pesadas-delete-day" :disabled="!!eliminando || dia.pendiente || desdeCache" :aria-label="`Eliminar día ${fechaTexto(dia.fecha)}`" @click="eliminarDia(dia)">{{ eliminando === dia.fecha ? 'Eliminando…' : 'Eliminar día' }}</button>
           </li>
         </ul>
         <button v-if="visibles.length < jornadas.length" class="pesadas-button" @click="limite += 20">Mostrar más días</button>
@@ -31,21 +32,21 @@
 </template>
 
 <script>
-import { observarHistorialPesadas } from '@/services/pesadas.service';
+import { observarHistorialPesadas, eliminarDiaPesadas } from '@/services/pesadas.service';
 import { PESADAS_PENDING_PREFIX, leerOperacionesPesadas, camposOperacionesPesadas } from '@/services/pesadasOutbox';
 import { aplicarCamposPesadas, fechaPesadasHoy, fechaPesadasValida, formatoFechaPesadas, formatoPesada, resumenPesadas } from '@/utils/pesadas';
 import './pesadas.css';
 
 export default {
   name: 'PesadasHistorial',
-  data: () => ({ hoy: fechaPesadasHoy(), fecha: fechaPesadasHoy(), registros: [], locales: {}, cargando: true, desdeCache: false, error: '', limite: 20 }),
+  data: () => ({ hoy: fechaPesadasHoy(), fecha: fechaPesadasHoy(), eliminando: '', registros: [], locales: {}, cargando: true, desdeCache: false, error: '', limite: 20 }),
   computed: {
     jornadas() {
       const days = Object.fromEntries(this.registros.map(day => [day.fecha, day]));
       Object.entries(this.locales).forEach(([fecha, fields]) => {
         days[fecha] = { ...aplicarCamposPesadas(days[fecha], fields), fecha, pendiente: true };
       });
-      return Object.values(days).filter(day => fechaPesadasValida(day.fecha))
+      return Object.values(days).filter(day => fechaPesadasValida(day.fecha) && !day.eliminado)
         .map(day => ({ ...day, resumen: resumenPesadas(day) })).sort((a, b) => b.fecha.localeCompare(a.fecha));
     },
     visibles() { return this.jornadas.slice(0, this.limite); }
@@ -66,6 +67,18 @@ export default {
     window.removeEventListener('storage', this.leerLocales);
   },
   methods: {
+    async eliminarDia(dia) {
+      if (this.eliminando || dia.pendiente || this.desdeCache) return;
+      if (!window.confirm(`¿Eliminar las pesadas del ${this.fechaTexto(dia.fecha)}? Se eliminarán las personas, kilos y pagos de esa jornada. Esta acción no se puede deshacer.`)) return;
+      this.eliminando = dia.fecha;
+      this.error = '';
+      try {
+        await eliminarDiaPesadas(dia.fecha);
+        this.leerLocales();
+      } catch (_error) {
+        this.error = 'No se pudo eliminar el día. Revisa la conexión e inténtalo de nuevo.';
+      } finally { this.eliminando = ''; }
+    },
     numero: formatoPesada,
     fechaTexto: formatoFechaPesadas,
     abrirFecha() {

@@ -33,3 +33,10 @@ export function observarHistorialPesadas(onData) {
   queueMicrotask(listener);
   return () => listeners.delete(listener);
 }
+
+export async function eliminarDiaPesadas(fecha) {
+  const days = all();
+  days[fecha] = { fecha, eliminado: true };
+  localStorage.setItem(key, JSON.stringify(days));
+  emit();
+}

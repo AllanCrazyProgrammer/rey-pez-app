@@ -152,3 +152,8 @@
 @media (prefers-reduced-motion: reduce) {
   .pesadas-page .pesadas-cuentas-button { transition: none; }
 }
+
+.pesadas-history li { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding-bottom: 8px; }
+.pesadas-history li > a { flex: 1 1 650px; min-width: 0; }
+.pesadas-page .pesadas-delete-day { color: #a12e2e; border-color: #dfb5b5; font-size: 12px; margin-left: auto; }
+.pesadas-page .pesadas-delete-day:hover:not(:disabled) { background: #fff0ec; }
