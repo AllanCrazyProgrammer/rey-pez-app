@@ -17,6 +17,13 @@ export function eliminarDiaPesadas(fecha) {
   });
 }
 
+export function crearDiaPesadas(fecha) {
+  if (!fechaPesadasValida(fecha)) throw new Error('Fecha inválida.');
+  return setDoc(doc(db, 'pesadasDiarias', fecha), {
+    fecha, creadoEn: serverTimestamp(), actualizadoEn: serverTimestamp()
+  }, { merge: true });
+}
+
 export function conectarPesadas(fecha, onData, onError) {
   if (!fechaPesadasValida(fecha)) throw new Error('Fecha inválida.');
   const reference = doc(db, 'pesadasDiarias', fecha);

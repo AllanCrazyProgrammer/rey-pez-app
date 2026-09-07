@@ -40,3 +40,10 @@ export async function eliminarDiaPesadas(fecha) {
   localStorage.setItem(key, JSON.stringify(days));
   emit();
 }
+
+export async function crearDiaPesadas(fecha) {
+  const days = all();
+  days[fecha] = { ...days[fecha], fecha, creadoEn: new Date().toISOString() };
+  localStorage.setItem(key, JSON.stringify(days));
+  emit();
+}

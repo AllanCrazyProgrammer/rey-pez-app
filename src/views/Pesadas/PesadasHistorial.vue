@@ -2,12 +2,13 @@
   <main class="pesadas-page">
     <header class="pesadas-heading">
       <div><p class="pesadas-eyebrow">REGISTRO DIARIO</p><h1>Pesadas</h1><p>Las pesadas y los pagos de cada jornada, en su propia hoja.</p></div>
-      <router-link class="pesadas-button primary" :to="`/pesadas/${hoy}`">Pesadas de hoy <span aria-hidden="true">→</span></router-link>
+      <button class="pesadas-button primary" :disabled="!!creando" @click="crearDia">Crear día de hoy <span aria-hidden="true">→</span></button>
     </header>
     <section class="pesadas-card">
-      <form class="pesadas-toolbar" @submit.prevent="abrirFecha">
-        <label>Consultar o crear un día <input v-model="fecha" type="date" min="1900-01-01" required aria-label="Fecha de pesadas"></label>
-        <button class="pesadas-button primary" type="submit">Abrir día</button>
+      <form class="pesadas-toolbar" @submit.prevent="crearDia">
+        <label>Fecha del nuevo día <input v-model="fecha" type="date" min="1900-01-01" required aria-label="Fecha de pesadas"></label>
+        <button class="pesadas-button" type="button" @click="usarManana">Mañana</button>
+        <button class="pesadas-button primary" :disabled="!!creando" type="submit">{{ creando ? 'Creando…' : 'Crear día' }}</button>
       </form>
       <p v-if="error" class="pesadas-alert" role="alert">{{ error }}</p>
       <p v-if="cargando" class="pesadas-empty">Cargando jornadas…</p>
@@ -34,14 +35,14 @@
 </template>
 
 <script>
-import { observarHistorialPesadas, eliminarDiaPesadas } from '@/services/pesadas.service';
+import { observarHistorialPesadas, eliminarDiaPesadas, crearDiaPesadas } from '@/services/pesadas.service';
 import { PESADAS_PENDING_PREFIX, leerOperacionesPesadas, camposOperacionesPesadas } from '@/services/pesadasOutbox';
 import { aplicarCamposPesadas, fechaPesadasHoy, fechaPesadasValida, formatoFechaPesadas, formatoPesada, resumenPesadas } from '@/utils/pesadas';
 import './pesadas.css';
 
 export default {
   name: 'PesadasHistorial',
-  data: () => ({ hoy: fechaPesadasHoy(), fecha: fechaPesadasHoy(), eliminando: '', registros: [], locales: {}, cargando: true, desdeCache: false, error: '', limite: 20 }),
+  data: () => ({ hoy: fechaPesadasHoy(), fecha: fechaPesadasHoy(), creando: '', eliminando: '', registros: [], locales: {}, cargando: true, desdeCache: false, error: '', limite: 20 }),
   computed: {
     jornadas() {
       const days = Object.fromEntries(this.registros.map(day => [day.fecha, day]));
@@ -69,6 +70,24 @@ export default {
     window.removeEventListener('storage', this.leerLocales);
   },
   methods: {
+    usarManana() {
+      const [year, month, day] = this.hoy.split('-').map(Number);
+      const tomorrow = new Date(year, month - 1, day + 1);
+      this.fecha = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, '0')}-${String(tomorrow.getDate()).padStart(2, '0')}`;
+    },
+    async crearDia() {
+      if (this.creando) return;
+      const target = this.fecha || this.hoy;
+      if (!fechaPesadasValida(target)) { this.error = 'Selecciona una fecha válida.'; return; }
+      this.creando = target;
+      this.error = '';
+      try {
+        await crearDiaPesadas(target);
+        this.$router.push(`/pesadas/${target}`);
+      } catch (_error) {
+        this.error = 'No se pudo crear el día. Revisa la conexión e inténtalo de nuevo.';
+      } finally { this.creando = ''; }
+    },
     async eliminarDia(dia) {
       if (this.eliminando || dia.pendiente || this.desdeCache) return;
       if (!window.confirm(`¿Eliminar las pesadas del ${this.fechaTexto(dia.fecha)}? Se eliminarán las personas, kilos y pagos de esa jornada. Esta acción no se puede deshacer.`)) return;
@@ -83,10 +102,6 @@ export default {
     },
     numero: formatoPesada,
     fechaTexto: formatoFechaPesadas,
-    abrirFecha() {
-      if (!fechaPesadasValida(this.fecha)) { this.error = 'Selecciona una fecha válida.'; return; }
-      this.$router.push(`/pesadas/${this.fecha}`);
-    },
     leerLocales() {
       const locales = {};
       try {

@@ -122,8 +122,12 @@ async function run() {
     await page.getByRole('link', { name: '← Historial de pesadas' }).click();
     await page.getByRole('heading', { name: 'Historial de jornadas' }).waitFor();
     assert.equal(await page.locator('.pesadas-history li').count(), 1);
+    const fechaNueva = page.getByLabel('Fecha de pesadas', { exact: true });
+    const hoySeleccionado = await fechaNueva.inputValue();
+    await page.getByRole('button', { name: 'Mañana', exact: true }).click();
+    assert.ok((await fechaNueva.inputValue()) > hoySeleccionado);
     await page.getByLabel('Fecha de pesadas', { exact: true }).fill('2026-09-06');
-    await page.getByRole('button', { name: 'Abrir día', exact: true }).click();
+    await page.getByRole('button', { name: 'Crear día', exact: true }).click();
     await page.getByLabel('Nombre despicadora 1', { exact: true }).waitFor();
     assert.equal(await page.getByLabel('Nombre despicadora 1', { exact: true }).inputValue(), '');
     await page.goto(day);
@@ -136,13 +140,17 @@ async function run() {
     await page.getByRole('link', { name: 'Registrar pesadas de despicadoras' }).filter({ visible: true }).click();
     await page.getByRole('heading', { name: 'Historial de jornadas' }).waitFor();
     assert.equal(await page.getByRole('button', { name: 'Abrir menú de navegación' }).getAttribute('aria-expanded'), 'false');
+    assert.equal(await page.locator('.pesadas-history li').count(), 2);
     // Delete only isolated test data; cancellation preserves the day.
     page.removeAllListeners('dialog');
     page.once('dialog', dialog => dialog.dismiss());
     await page.getByRole('button', { name: 'Eliminar día 5/9/2026', exact: true }).click();
-    assert.equal(await page.locator('.pesadas-history li').count(), 1);
+    assert.equal(await page.locator('.pesadas-history li').count(), 2);
     page.once('dialog', dialog => dialog.accept());
     await page.getByRole('button', { name: 'Eliminar día 5/9/2026', exact: true }).click();
+    await page.getByRole('button', { name: 'Eliminar día 6/9/2026', exact: true }).waitFor();
+    page.once('dialog', dialog => dialog.accept());
+    await page.getByRole('button', { name: 'Eliminar día 6/9/2026', exact: true }).click();
     await page.getByText('Todavía no hay pesadas registradas.', { exact: false }).waitFor();
     await page.reload();
     await page.getByText('Todavía no hay pesadas registradas.', { exact: false }).waitFor();
