@@ -67,6 +67,14 @@
             <span class="thermal-indicator"></span>
           </router-link>
 
+          <router-link to="/pesadas" class="nav-link" @click.native="closeMobileMenu" aria-label="Registrar pesadas de despicadoras">
+            <span class="link-bracket">⟨</span>
+            <span class="link-index">02</span>
+            <span class="nav-text">PESADAS</span>
+            <span class="link-bracket">⟩</span>
+            <span class="thermal-indicator"></span>
+          </router-link>
+
           <router-link 
             to="/procesos/pedidos" 
             class="nav-link nav-link-priority"
@@ -74,7 +82,7 @@
             aria-label="Acceso rapido a pedidos"
           >
             <span class="link-bracket">⟨</span>
-            <span class="link-index">02</span>
+            <span class="link-index">03</span>
             <span class="nav-text">PEDIDOS</span>
             <span class="link-bracket">⟩</span>
             <span class="thermal-indicator"></span>
@@ -87,7 +95,7 @@
             aria-label="Ver cuentas de México"
           >
             <span class="link-bracket">⟨</span>
-            <span class="link-index">03</span>
+            <span class="link-index">04</span>
             <span class="nav-text">CUENTAS</span>
             <span class="link-bracket">⟩</span>
             <span class="thermal-indicator"></span>
@@ -100,7 +108,7 @@
             aria-label="Ver entradas y salidas"
           >
             <span class="link-bracket">⟨</span>
-            <span class="link-index">04</span>
+            <span class="link-index">05</span>
             <span class="nav-text">E/S</span>
             <span class="link-bracket">⟩</span>
             <span class="thermal-indicator"></span>
@@ -109,7 +117,7 @@
           <details class="desktop-more-menu desktop-exist-menu" ref="existDetails">
             <summary class="nav-link nav-link-more" aria-label="Ver existencias">
               <span class="link-bracket">⟨</span>
-              <span class="link-index">05</span>
+              <span class="link-index">06</span>
               <span class="nav-text">EXIST</span>
               <span class="link-bracket">⟩</span>
             </summary>
@@ -146,7 +154,7 @@
             aria-label="Gestionar embarques"
           >
             <span class="link-bracket">⟨</span>
-            <span class="link-index">06</span>
+            <span class="link-index">07</span>
             <span class="nav-text">EMBARQUES</span>
             <span class="link-bracket">⟩</span>
             <span class="thermal-indicator"></span>
@@ -159,19 +167,12 @@
             aria-label="Ver procesos"
           >
             <span class="link-bracket">⟨</span>
-            <span class="link-index">07</span>
+            <span class="link-index">08</span>
             <span class="nav-text">PROCESOS</span>
             <span class="link-bracket">⟩</span>
             <span class="thermal-indicator"></span>
           </router-link>
 
-          <router-link to="/pesadas" class="nav-link" @click.native="closeMobileMenu" aria-label="Registrar pesadas de despicadoras">
-            <span class="link-bracket">⟨</span>
-            <span class="link-index">08</span>
-            <span class="nav-text">PESADAS</span>
-            <span class="link-bracket">⟩</span>
-            <span class="thermal-indicator"></span>
-          </router-link>
         </div>
 
         <div class="mobile-nav-items">
@@ -187,6 +188,14 @@
             <span class="link-bracket">⟩</span>
             <span class="thermal-indicator"></span>
           </router-link>
+
+          <router-link to="/pesadas" class="nav-link" @click.native="closeMobileMenu" aria-label="Registrar pesadas de despicadoras">
+            <span class="link-bracket">⟨</span>
+            <span class="link-index">02</span>
+            <span class="nav-text">PESADAS</span>
+            <span class="link-bracket">⟩</span>
+            <span class="thermal-indicator"></span>
+          </router-link>
           
           <router-link 
             to="/procesos/pedidos" 
@@ -195,7 +204,7 @@
             aria-label="Acceso rapido a pedidos"
           >
             <span class="link-bracket">⟨</span>
-            <span class="link-index">02</span>
+            <span class="link-index">03</span>
             <span class="nav-text">PEDIDOS</span>
             <span class="link-bracket">⟩</span>
             <span class="thermal-indicator"></span>
@@ -208,7 +217,7 @@
             aria-label="Ver entradas y salidas"
           >
             <span class="link-bracket">⟨</span>
-            <span class="link-index">03</span>
+            <span class="link-index">04</span>
             <span class="nav-text">E/S</span>
             <span class="link-bracket">⟩</span>
             <span class="thermal-indicator"></span>
@@ -221,7 +230,7 @@
             aria-label="Ver existencias"
           >
             <span class="link-bracket">⟨</span>
-            <span class="link-index">04</span>
+            <span class="link-index">05</span>
             <span class="nav-text">EXIST</span>
             <span class="link-bracket">⟩</span>
             <span class="thermal-indicator"></span>
@@ -234,7 +243,7 @@
             aria-label="Ver existencias de productos crudos"
           >
             <span class="link-bracket">⟨</span>
-            <span class="link-index">05</span>
+            <span class="link-index">06</span>
             <span class="nav-text">CRUDOS</span>
             <span class="link-bracket">⟩</span>
             <span class="thermal-indicator"></span>
@@ -247,7 +256,7 @@
             aria-label="Ver cuentas de México"
           >
             <span class="link-bracket">⟨</span>
-            <span class="link-index">06</span>
+            <span class="link-index">07</span>
             <span class="nav-text">CUENTAS</span>
             <span class="link-bracket">⟩</span>
             <span class="thermal-indicator"></span>
@@ -260,7 +269,7 @@
             aria-label="Gestionar embarques"
           >
             <span class="link-bracket">⟨</span>
-            <span class="link-index">07</span>
+            <span class="link-index">08</span>
             <span class="nav-text">EMBARQUES</span>
             <span class="link-bracket">⟩</span>
             <span class="thermal-indicator"></span>
@@ -273,15 +282,8 @@
             aria-label="Ver procesos"
           >
             <span class="link-bracket">⟨</span>
-            <span class="link-index">08</span>
-            <span class="nav-text">PROCESOS</span>
-            <span class="link-bracket">⟩</span>
-            <span class="thermal-indicator"></span>
-          </router-link>
-          <router-link to="/pesadas" class="nav-link" @click.native="closeMobileMenu" aria-label="Registrar pesadas de despicadoras">
-            <span class="link-bracket">⟨</span>
             <span class="link-index">09</span>
-            <span class="nav-text">PESADAS</span>
+            <span class="nav-text">PROCESOS</span>
             <span class="link-bracket">⟩</span>
             <span class="thermal-indicator"></span>
           </router-link>
