@@ -6,7 +6,7 @@
           <th class="name-cell" scope="col">Columna</th>
           <th v-for="(columna, index) in columnas" :key="columna.id" scope="col"><span>{{ index + 1 }}</span><button class="remove-column" :aria-label="`Eliminar columna ${index + 1}`" @click="$emit('eliminar-columna', columna)">×</button></th>
           <th rowspan="3" class="add-column-cell" scope="col"><button aria-label="Agregar columna" title="Agregar columna" @click="$emit('agregar-columna')">+</button></th>
-          <th rowspan="3" scope="col">Total kg</th><th rowspan="3" scope="col">A pagar<small>− $1 de baños</small></th>
+          <th rowspan="3" class="total-header" scope="col">Total kg</th><th rowspan="3" class="pay-header" scope="col">A pagar<small>− $1 de baños</small></th>
         </tr>
         <tr class="measure-row">
           <th class="name-cell" scope="row">Medida</th>

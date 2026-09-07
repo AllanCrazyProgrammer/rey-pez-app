@@ -59,6 +59,8 @@
 .pesadas-grid thead .number-row th { top: 0; background: #ece8f2; color: #613775; height: 44px; }
 .pesadas-grid thead .measure-row th, .pesadas-grid thead .measure-row td { top: 44px; background: #f4f1f8; }
 .pesadas-grid thead .price-row th, .pesadas-grid thead .price-row td { top: 94px; background: #faf9fc; }
+.pesadas-grid thead .number-row .total-header { background: #e8f3fc; color: #215d82; }
+.pesadas-grid thead .number-row .pay-header { background: #eaf7f1; color: #23654c; }
 .pesadas-grid thead small { display: block; font-size: 11px; color: #746780; margin-top: 6px; }
 .pesadas-grid .name-cell { position: sticky; left: 0; z-index: 2; min-width: 240px; width: 240px; background: #f5f3f8; text-align: left; }
 .pesadas-grid thead .name-cell { z-index: 5; padding: 10px 16px; }
