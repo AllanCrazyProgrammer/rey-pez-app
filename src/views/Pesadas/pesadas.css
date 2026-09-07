@@ -82,6 +82,7 @@
 .pesadas-grid .row-number { font-size: 11px; color: #8d819b; padding-left: 10px; }
 .pesadas-grid .price-input > span { padding-left: 12px; color: #736885; }
 .pesadas-grid .total-cell { padding: 10px 16px; text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
+.pesadas-grid .total-cell:not(.final-cell) { background: #f0f7fc; color: #215d82; }
 .pesadas-grid .final-cell { background: #f1f8f5; color: #23654c; }
 .pesadas-grid .negative { color: #a12e2e; background: #fff0ec; }
 .pesadas-sheet-footer { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; padding: 16px 20px; font-size: 13px; color: #746880; background: #faf9fc; }
