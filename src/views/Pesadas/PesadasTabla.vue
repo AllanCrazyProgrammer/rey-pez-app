@@ -26,6 +26,13 @@
           <td class="add-column-body" aria-hidden="true"></td><td class="total-cell">{{ total(persona.id, 'kilos') }}</td><td class="total-cell final-cell" :class="{ negative: totales[persona.id] && totales[persona.id].pago < 0 }">{{ total(persona.id, 'pago', true) }}</td>
         </tr>
       </tbody>
+      <tfoot>
+        <tr class="column-totals-row">
+          <th class="name-cell" scope="row">Total kg</th>
+          <td v-for="columna in columnas" :key="columna.id">{{ formato(totalesColumnas[columna.id]) }}</td>
+          <td class="add-column-body" aria-hidden="true"></td><td class="total-cell">{{ formato(totalKilos) }}</td><td class="total-cell final-cell" aria-hidden="true">—</td>
+        </tr>
+      </tfoot>
     </table>
   </div>
 </template>
@@ -37,13 +44,18 @@ export default {
   props: {
     columnas: { type: Array, required: true }, personas: { type: Array, required: true },
     pesos: { type: Object, default: () => ({}) }, totales: { type: Object, required: true },
+    totalesColumnas: { type: Object, default: () => ({}) },
     borradores: { type: Object, required: true }, errores: { type: Object, required: true }
   },
   data: () => ({ personaActivaId: '' }),
+  computed: {
+    totalKilos() { return Object.values(this.totalesColumnas).reduce((total, kilos) => total + kilos, 0); }
+  },
   methods: {
     valor(path, fallback) { return Object.prototype.hasOwnProperty.call(this.borradores, path) ? this.borradores[path] : (fallback == null ? '' : String(fallback)); },
     editar(path, event, tipo) { this.$emit('editar', { path, value: event.target.value, tipo }); },
     confirmar(path) { this.$emit('confirmar', path); },
+    formato: formatoPesada,
     navegarFlecha(event, celda) {
       if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)) return;
       event.preventDefault();

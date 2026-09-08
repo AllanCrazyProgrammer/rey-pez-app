@@ -55,6 +55,7 @@ test('calculates mixed column prices and deducts bathrooms once per named person
   assert.equal(summary.pagoPromedio, 77.2);
   assert.equal(summary.pagosRedondeados, 77);
   assert.equal(summary.pagoPromedioRedondeado, 77);
+  assert.deepEqual(summary.kilosPorColumna, { c1: 2.9, c2: 4.1 });
   assert.deepEqual(summary.mejor, summary.personas[0]);
   assert.equal(Math.round(summary.precioPromedio * 10) / 10, 11.2);
 });

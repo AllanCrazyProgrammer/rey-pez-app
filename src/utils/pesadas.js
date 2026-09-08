@@ -58,6 +58,7 @@ export function resumenPesadas(data) {
   const columns = elementosPesadas(data.columnas);
   let totalKilosDecimas = 0;
   let totalBrutoDecimas = 0;
+  const kilosPorColumna = Object.fromEntries(columns.map(column => [column.id, 0]));
   const personas = elementosPesadas(data.personas).filter(row => (row.nombre || '').trim()).map(row => {
     let kilosDecimas = 0;
     let importeCentesimas = 0;
@@ -65,6 +66,7 @@ export function resumenPesadas(data) {
       const kilos = Math.round((data.pesos?.[row.id]?.[column.id] || 0) * 10);
       const precio = Math.round(column.precio * 10);
       kilosDecimas += kilos;
+      kilosPorColumna[column.id] += kilos;
       importeCentesimas += kilos * precio;
     });
     if (!Number.isSafeInteger(importeCentesimas) || !Number.isSafeInteger(kilosDecimas)) {
@@ -86,6 +88,7 @@ export function resumenPesadas(data) {
   }, null) : null;
   const pagosRedondeados = personas.reduce((total, person) => total + person.pagoRedondeado, 0);
   return { personas, banos: personas.length, kilos, bruto, pagos, pagosRedondeados, mejor,
+    kilosPorColumna: Object.fromEntries(Object.entries(kilosPorColumna).map(([id, decimas]) => [id, decimas / 10])),
     pagoPromedio: personas.length ? pagos / personas.length : 0,
     pagoPromedioRedondeado: personas.length ? pagosRedondeados / personas.length : 0,
     precioPromedio: kilos ? bruto / kilos : 0 };
