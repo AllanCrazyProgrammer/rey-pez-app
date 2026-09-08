@@ -290,6 +290,25 @@ test('Enter moves vertically from a measure to its price and weighings', () => {
   assert.equal(confirmed.length, confirmationsBeforeError);
 });
 
+test('arrow keys move through editable weighing cells', () => {
+  const focused = [];
+  const vm = {
+    columnas: [{ id: 'c1' }, { id: 'c2' }],
+    personas: [{ id: 'p1', nombre: 'Luisa' }, { id: 'p2', nombre: 'Sandra' }, { id: 'p3', nombre: '' }],
+    enfocar: ref => focused.push(ref)
+  };
+  methods.flechaCelda.call(vm, { tipo: 'peso', personaId: 'p1', columnaId: 'c1', direccion: 'ArrowRight' });
+  assert.equal(focused.pop(), 'peso-p1-c2');
+  methods.flechaCelda.call(vm, { tipo: 'peso', personaId: 'p1', columnaId: 'c1', direccion: 'ArrowDown' });
+  assert.equal(focused.pop(), 'peso-p2-c1');
+  methods.flechaCelda.call(vm, { tipo: 'peso', personaId: 'p1', columnaId: 'c1', direccion: 'ArrowUp' });
+  assert.equal(focused.pop(), 'precio-c1');
+  methods.flechaCelda.call(vm, { tipo: 'nombre', personaId: 'p1', direccion: 'ArrowRight' });
+  assert.equal(focused.pop(), 'peso-p1-c1');
+  methods.flechaCelda.call(vm, { tipo: 'medida', columnaId: 'c2', direccion: 'ArrowLeft' });
+  assert.equal(focused.pop(), 'medida-c1');
+});
+
 test('horizontal swipe at table edges never propagates to browser history', () => {
   let prevented = 0;
   const atEdge = (scrollLeft, deltaX) => ({ deltaX, deltaY: 0,

@@ -26,7 +26,7 @@
         <p v-if="erroresLista.length" class="pesadas-alert" role="alert">{{ erroresLista[0] }} Los campos marcados no se han guardado.</p>
         <p v-if="pagosNegativos" class="pesadas-alert">Hay pagos menores a cero después de descontar baños. Completa las pesadas o corrige las personas antes de imprimir.</p>
         <p v-if="filasSinNombre" class="pesadas-alert">Hay kilos en una fila sin nombre. Escribe el nombre o elimina esa fila antes de imprimir.</p>
-        <PesadasTabla ref="tabla" :columnas="columnas" :personas="personas" :pesos="datos.pesos || {}" :totales="totales" :borradores="borradores" :errores="errores" @editar="editar" @confirmar="confirmar" @enter-nombre="enterNombre" @enter-medida="enterMedida" @enter-precio="enterPrecio" @enter-peso="enterPeso" @eliminar-persona="eliminarPersona" @eliminar-columna="eliminarColumna" @agregar-columna="agregarColumna" />
+        <PesadasTabla ref="tabla" :columnas="columnas" :personas="personas" :pesos="datos.pesos || {}" :totales="totales" :borradores="borradores" :errores="errores" @editar="editar" @confirmar="confirmar" @enter-nombre="enterNombre" @enter-medida="enterMedida" @enter-precio="enterPrecio" @enter-peso="enterPeso" @flecha="flechaCelda" @eliminar-persona="eliminarPersona" @eliminar-columna="eliminarColumna" @agregar-columna="agregarColumna" />
         <footer class="pesadas-sheet-footer"><strong>{{ resumen.banos }} despicadoras</strong><strong>Total a pagar: ${{ numero(resumen.pagos) }}</strong><strong>A pagar promedio: ${{ numero(resumen.pagoPromedio) }}</strong><strong>Mejor: {{ resumen.mejor ? resumen.mejor.nombre : '—' }}<span v-if="resumen.mejor"> · {{ numero(resumen.mejor.kilos) }} kg · ${{ numero(resumen.mejor.pago) }}</span></strong></footer>
       </section>
     </template>
@@ -232,6 +232,37 @@ export default {
       const index = this.personas.findIndex(row => row.id === personaId);
       const next = this.personas.slice(index + 1).find(row => row.nombre.trim());
       if (next) this.enfocar(`peso-${next.id}-${columnaId}`);
+    },
+    flechaCelda({ tipo, personaId, columnaId, direccion }) {
+      const columnIndex = this.columnas.findIndex(column => column.id === columnaId);
+      const personIndex = this.personas.findIndex(persona => persona.id === personaId);
+      const columnAt = index => this.columnas[index];
+      const personAt = index => this.personas[index];
+      const firstNamed = this.personas.find(persona => persona.nombre.trim());
+      const namedBefore = this.personas.slice(0, personIndex).reverse().find(persona => persona.nombre.trim());
+      const namedAfter = this.personas.slice(personIndex + 1).find(persona => persona.nombre.trim());
+      let ref = null;
+
+      if (tipo === 'medida') {
+        if (direccion === 'ArrowLeft' && columnAt(columnIndex - 1)) ref = `medida-${columnAt(columnIndex - 1).id}`;
+        if (direccion === 'ArrowRight' && columnAt(columnIndex + 1)) ref = `medida-${columnAt(columnIndex + 1).id}`;
+        if (direccion === 'ArrowDown') ref = `precio-${columnaId}`;
+      } else if (tipo === 'precio') {
+        if (direccion === 'ArrowLeft' && columnAt(columnIndex - 1)) ref = `precio-${columnAt(columnIndex - 1).id}`;
+        if (direccion === 'ArrowRight' && columnAt(columnIndex + 1)) ref = `precio-${columnAt(columnIndex + 1).id}`;
+        if (direccion === 'ArrowUp') ref = `medida-${columnaId}`;
+        if (direccion === 'ArrowDown') ref = firstNamed ? `peso-${firstNamed.id}-${columnaId}` : (personAt(0) ? `nombre-${personAt(0).id}` : null);
+      } else if (tipo === 'nombre') {
+        if (direccion === 'ArrowUp' && personAt(personIndex - 1)) ref = `nombre-${personAt(personIndex - 1).id}`;
+        if (direccion === 'ArrowDown' && personAt(personIndex + 1)) ref = `nombre-${personAt(personIndex + 1).id}`;
+        if (direccion === 'ArrowRight' && this.personas[personIndex]?.nombre.trim() && columnAt(0)) ref = `peso-${personaId}-${columnAt(0).id}`;
+      } else if (tipo === 'peso') {
+        if (direccion === 'ArrowLeft') ref = columnAt(columnIndex - 1) ? `peso-${personaId}-${columnAt(columnIndex - 1).id}` : `nombre-${personaId}`;
+        if (direccion === 'ArrowRight' && columnAt(columnIndex + 1)) ref = `peso-${personaId}-${columnAt(columnIndex + 1).id}`;
+        if (direccion === 'ArrowUp') ref = namedBefore ? `peso-${namedBefore.id}-${columnaId}` : `precio-${columnaId}`;
+        if (direccion === 'ArrowDown' && namedAfter) ref = `peso-${namedAfter.id}-${columnaId}`;
+      }
+      if (ref) this.enfocar(ref);
     },
     agregarColumna() {
       const id = nanoid();
