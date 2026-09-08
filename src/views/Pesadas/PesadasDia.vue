@@ -13,7 +13,7 @@
     </section>
     <template v-else>
       <section class="pesadas-card pesadas-summary-cards" aria-label="Totales del día">
-        <div><small>Despicadoras</small><strong>{{ resumen.banos }}</strong></div><div><small>Kilos del día</small><strong>{{ numero(resumen.kilos) }} <span>kg</span></strong></div><div><small>Pago a despicadoras</small><strong>${{ numero(resumen.pagos) }}</strong></div><div><small>Pago promedio</small><strong>${{ numero(resumen.pagoPromedio) }}</strong></div><div class="pesadas-best-card"><small>Mejor despicadora</small><strong>{{ resumen.mejor ? resumen.mejor.nombre : '—' }}</strong><span v-if="resumen.mejor">{{ numero(resumen.mejor.kilos) }} kg · ${{ numero(resumen.mejor.pago) }}</span></div>
+        <div><small>Despicadoras</small><strong>{{ resumen.banos }}</strong></div><div><small>Kilos del día</small><strong>{{ numero(resumen.kilos) }} <span>kg</span></strong></div><div><small>Pago a despicadoras</small><strong>${{ pago(resumen.pagosRedondeados) }}</strong></div><div><small>Pago promedio</small><strong>${{ pago(resumen.pagoPromedioRedondeado) }}</strong></div><div class="pesadas-best-card"><small>Mejor despicadora</small><strong>{{ resumen.mejor ? resumen.mejor.nombre : '—' }}</strong><span v-if="resumen.mejor">{{ numero(resumen.mejor.kilos) }} kg · ${{ pago(resumen.mejor.pagoRedondeado) }}</span></div>
       </section>
       <section class="pesadas-card pesadas-sheet-card">
         <div class="pesadas-toolbar">
@@ -27,7 +27,7 @@
         <p v-if="pagosNegativos" class="pesadas-alert">Hay pagos menores a cero después de descontar baños. Completa las pesadas o corrige las personas antes de imprimir.</p>
         <p v-if="filasSinNombre" class="pesadas-alert">Hay kilos en una fila sin nombre. Escribe el nombre o elimina esa fila antes de imprimir.</p>
         <PesadasTabla ref="tabla" :columnas="columnas" :personas="personas" :pesos="datos.pesos || {}" :totales="totales" :borradores="borradores" :errores="errores" @editar="editar" @confirmar="confirmar" @enter-nombre="enterNombre" @enter-medida="enterMedida" @enter-precio="enterPrecio" @enter-peso="enterPeso" @flecha="flechaCelda" @eliminar-persona="eliminarPersona" @eliminar-columna="eliminarColumna" @agregar-columna="agregarColumna" />
-        <footer class="pesadas-sheet-footer"><strong>{{ resumen.banos }} despicadoras</strong><strong>Total a pagar: ${{ numero(resumen.pagos) }}</strong><strong>A pagar promedio: ${{ numero(resumen.pagoPromedio) }}</strong><strong>Mejor: {{ resumen.mejor ? resumen.mejor.nombre : '—' }}<span v-if="resumen.mejor"> · {{ numero(resumen.mejor.kilos) }} kg · ${{ numero(resumen.mejor.pago) }}</span></strong></footer>
+        <footer class="pesadas-sheet-footer"><strong>{{ resumen.banos }} despicadoras</strong><strong>Total a pagar: ${{ pago(resumen.pagosRedondeados) }}</strong><strong>A pagar promedio: ${{ pago(resumen.pagoPromedioRedondeado) }}</strong><strong>Mejor: {{ resumen.mejor ? resumen.mejor.nombre : '—' }}<span v-if="resumen.mejor"> · {{ numero(resumen.mejor.kilos) }} kg · ${{ pago(resumen.mejor.pagoRedondeado) }}</span></strong></footer>
       </section>
     </template>
     <b-modal v-model="cuentasAbiertas" title="Billetes y monedas para pagar" size="lg" hide-footer @shown="calcularCuentas" @hidden="cuentasDatos = ''">
@@ -45,7 +45,7 @@ import { BModal } from 'bootstrap-vue';
 import Cuentas from '@/Cuentas.vue';
 import { conectarPesadas, crearDiaPesadas } from '@/services/pesadas.service';
 import { PesadasOutbox } from '@/services/pesadasOutbox';
-import { decimalPesada, elementosPesadas, fechaPesadasValida, formatoFechaPesadas, formatoPesada, resumenPesadas } from '@/utils/pesadas';
+import { decimalPesada, elementosPesadas, fechaPesadasValida, formatoFechaPesadas, formatoPagoPesada, formatoPesada, resumenPesadas } from '@/utils/pesadas';
 import PesadasTabla from './PesadasTabla.vue';
 import PesadasResumen from './PesadasResumen.vue';
 import './pesadas.css';
@@ -108,6 +108,7 @@ export default {
   },
   methods: {
     numero: formatoPesada,
+    pago: formatoPagoPesada,
     bloquearRetrocesoHorizontal(event) {
       if (Math.abs(event.deltaX) <= Math.abs(event.deltaY)) return;
       const table = event.target && event.target.closest && event.target.closest('.pesadas-grid-scroll');
@@ -292,7 +293,7 @@ export default {
     abrirCuentas() {
       if (!this.puedeImprimir) return;
       this._outbox.flush();
-      this.cuentasDatos = this.resumen.personas.map(persona => String(persona.pago)).join('\n');
+      this.cuentasDatos = this.resumen.personas.map(persona => String(persona.pagoRedondeado)).join('\n');
       this.cuentasAbiertas = true;
     },
     abrirResumen() { if (this.puedeImprimir) { this._outbox.flush(); this.preview = JSON.parse(JSON.stringify(this.datos)); } },

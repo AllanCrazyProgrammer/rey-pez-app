@@ -23,7 +23,7 @@
             <button class="pesadas-button pesadas-delete-day" :disabled="!!eliminando || dia.pendiente || desdeCache" :aria-label="`Eliminar día ${fechaTexto(dia.fecha)}`" @click="eliminarDia(dia)">{{ eliminando === dia.fecha ? 'Eliminando…' : 'Eliminar día' }}</button>
             </div>
             <router-link :to="`/pesadas/${dia.fecha}`">
-              <div class="pesadas-history-metrics"><span>{{ dia.resumen.banos }} personas</span><span>{{ numero(dia.resumen.kilos) }} kg</span><strong>${{ numero(dia.resumen.pagos) }} <small>pago a despicadoras</small></strong><strong>${{ numero(dia.resumen.pagoPromedio) }} <small>pago promedio por despicadora</small></strong></div>
+              <div class="pesadas-history-metrics"><span>{{ dia.resumen.banos }} personas</span><span>{{ numero(dia.resumen.kilos) }} kg</span><strong>${{ pago(dia.resumen.pagosRedondeados) }} <small>pago a despicadoras</small></strong><strong>${{ pago(dia.resumen.pagoPromedioRedondeado) }} <small>pago promedio por despicadora</small></strong></div>
               <span aria-hidden="true">→</span>
             </router-link>
           </li>
@@ -37,7 +37,7 @@
 <script>
 import { observarHistorialPesadas, eliminarDiaPesadas, crearDiaPesadas } from '@/services/pesadas.service';
 import { PESADAS_PENDING_PREFIX, leerOperacionesPesadas, camposOperacionesPesadas } from '@/services/pesadasOutbox';
-import { aplicarCamposPesadas, fechaPesadasHoy, fechaPesadasValida, formatoFechaPesadas, formatoPesada, resumenPesadas } from '@/utils/pesadas';
+import { aplicarCamposPesadas, fechaPesadasHoy, fechaPesadasValida, formatoFechaPesadas, formatoPagoPesada, formatoPesada, resumenPesadas } from '@/utils/pesadas';
 import './pesadas.css';
 
 export default {
@@ -101,6 +101,7 @@ export default {
       } finally { this.eliminando = ''; }
     },
     numero: formatoPesada,
+    pago: formatoPagoPesada,
     fechaTexto: formatoFechaPesadas,
     leerLocales() {
       const locales = {};

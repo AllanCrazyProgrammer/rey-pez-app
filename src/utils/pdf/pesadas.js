@@ -1,4 +1,4 @@
-import { formatoFechaPesadas, formatoPesada, resumenPesadas } from '../pesadas';
+import { formatoFechaPesadas, formatoPagoPesada, formatoPesada, resumenPesadas } from '../pesadas';
 
 export function documentoPesadas(fecha, data) {
   const resumen = resumenPesadas(data);
@@ -16,7 +16,7 @@ export function documentoPesadas(fecha, data) {
             fontSize: 38, italics: true, decoration: 'underline', margin: [0, 4, 0, 6] }, {}],
           ...resumen.personas.map(row => [
             { text: row.nombre, margin: [0, 5, 0, 5] },
-            { text: formatoPesada(row.pago), alignment: 'right', margin: [0, 5, 0, 5] }
+            { text: formatoPagoPesada(row.pagoRedondeado), alignment: 'right', margin: [0, 5, 0, 5] }
           ]),
           [{ text: 'Baños', margin: [0, 5, 0, 5] },
             { text: formatoPesada(resumen.banos), alignment: 'right', margin: [0, 5, 0, 5] }]

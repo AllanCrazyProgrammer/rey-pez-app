@@ -63,6 +63,7 @@
 .pesadas-grid thead .number-row .pay-header { background: #eaf7f1; color: #23654c; }
 .pesadas-grid thead small { display: block; font-size: 11px; color: #746780; margin-top: 6px; }
 .pesadas-grid .name-cell { position: sticky; left: 0; z-index: 2; min-width: 240px; width: 240px; background: #f5f3f8; text-align: left; }
+.pesadas-grid .name-cell.active-person { box-shadow: inset 4px 0 0 #1976a8, inset 0 0 0 2px #1976a8; background: #edf7fd; }
 .pesadas-grid thead .name-cell { z-index: 5; padding: 10px 16px; }
 .pesadas-grid input { width: 100%; min-width: 100px; height: 49px; padding: 10px 12px; border: 0; border-radius: 0; background: transparent; color: #262039; font: inherit; text-align: right; font-variant-numeric: tabular-nums; }
 .pesadas-grid input:focus { outline: 2px solid #7251aa; outline-offset: -2px; background: #fff; }
@@ -127,6 +128,7 @@
 .pesadas-grid tbody input { height: 65px; font-size: inherit; font-weight: 700; }
 .pesadas-grid .name-width { min-height: 65px; line-height: 45px; }
 .pesadas-grid .measure-row input { font-size: 26px; }
+.pesadas-day-page .pesadas-sheet-card, .pesadas-day-page .pesadas-grid-scroll { overflow: visible; }
 @media (max-width: 760px) {
   .pesadas-grid tbody { font-size: 24px; }
   .pesadas-grid .measure-row input { font-size: 24px; }

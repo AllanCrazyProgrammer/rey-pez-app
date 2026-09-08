@@ -18,6 +18,12 @@ export const formatoPesada = value => new Intl.NumberFormat('es-MX', {
   maximumFractionDigits: 1
 }).format(value || 0);
 
+// Los kilos y las tarifas conservan una décima; los pagos se entregan en pesos enteros.
+export const redondearPagoPesada = value => Math.round(value || 0);
+export const formatoPagoPesada = value => new Intl.NumberFormat('es-MX', {
+  maximumFractionDigits: 0
+}).format(redondearPagoPesada(value));
+
 export function fechaPesadasHoy(now = new Date()) {
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone: 'America/Mexico_City', year: 'numeric', month: '2-digit', day: '2-digit'
@@ -67,8 +73,9 @@ export function resumenPesadas(data) {
     const brutoDecimas = Math.floor((importeCentesimas + 5) / 10);
     totalKilosDecimas += kilosDecimas;
     totalBrutoDecimas += brutoDecimas;
+    const pago = (brutoDecimas - 10) / 10;
     return { id: row.id, nombre: row.nombre.trim(), kilos: kilosDecimas / 10,
-      bruto: brutoDecimas / 10, pago: (brutoDecimas - 10) / 10 };
+      bruto: brutoDecimas / 10, pago, pagoRedondeado: redondearPagoPesada(pago) };
   });
   const kilos = totalKilosDecimas / 10;
   const bruto = totalBrutoDecimas / 10;
@@ -77,8 +84,10 @@ export function resumenPesadas(data) {
     if (!current || person.pago > current.pago || (person.pago === current.pago && person.kilos > current.kilos)) return person;
     return current;
   }, null) : null;
-  return { personas, banos: personas.length, kilos, bruto, pagos, mejor,
+  const pagosRedondeados = personas.reduce((total, person) => total + person.pagoRedondeado, 0);
+  return { personas, banos: personas.length, kilos, bruto, pagos, pagosRedondeados, mejor,
     pagoPromedio: personas.length ? pagos / personas.length : 0,
+    pagoPromedioRedondeado: personas.length ? pagosRedondeados / personas.length : 0,
     precioPromedio: kilos ? bruto / kilos : 0 };
 }
 

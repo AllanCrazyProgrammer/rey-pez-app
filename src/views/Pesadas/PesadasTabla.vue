@@ -21,8 +21,8 @@
       </thead>
       <tbody>
         <tr v-for="(persona, rowIndex) in personas" :key="persona.id">
-          <th class="name-cell" scope="row"><div class="name-input"><span class="row-number">{{ rowIndex + 1 }}</span><span class="name-editor"><span class="name-width" aria-hidden="true">{{ valor(`personas.${persona.id}.nombre`, persona.nombre) || 'Nombre' }}</span><input :ref="`nombre-${persona.id}`" :value="valor(`personas.${persona.id}.nombre`, persona.nombre)" :aria-label="`Nombre despicadora ${rowIndex + 1}`" placeholder="Nombre" maxlength="120" autocomplete="off" @input="editar(`personas.${persona.id}.nombre`, $event, 'texto')" @blur="confirmar(`personas.${persona.id}.nombre`)" @keydown.enter.prevent="$emit('enter-nombre', persona.id)" @keydown="navegarFlecha($event, { tipo: 'nombre', personaId: persona.id })"></span><button :aria-label="`Eliminar fila ${persona.nombre || rowIndex + 1}`" @click="$emit('eliminar-persona', persona)">×</button></div></th>
-          <td v-for="(columna, colIndex) in columnas" :key="columna.id"><input :ref="`peso-${persona.id}-${columna.id}`" :value="valor(`pesos.${persona.id}.${columna.id}`, pesos[persona.id] && pesos[persona.id][columna.id])" inputmode="decimal" :disabled="!persona.nombre.trim()" :aria-label="`Kilos de ${persona.nombre || 'fila ' + (rowIndex + 1)}, columna ${colIndex + 1}`" :aria-invalid="!!errores[`pesos.${persona.id}.${columna.id}`]" :title="errores[`pesos.${persona.id}.${columna.id}`]" placeholder="—" @input="editar(`pesos.${persona.id}.${columna.id}`, $event, 'kilos')" @blur="confirmar(`pesos.${persona.id}.${columna.id}`)" @keydown.enter.prevent="$emit('enter-peso', { personaId: persona.id, columnaId: columna.id })" @keydown="navegarFlecha($event, { tipo: 'peso', personaId: persona.id, columnaId: columna.id })"></td>
+          <th class="name-cell" :class="{ 'active-person': personaActivaId === persona.id }" scope="row"><div class="name-input"><span class="row-number">{{ rowIndex + 1 }}</span><span class="name-editor"><span class="name-width" aria-hidden="true">{{ valor(`personas.${persona.id}.nombre`, persona.nombre) || 'Nombre' }}</span><input :ref="`nombre-${persona.id}`" :value="valor(`personas.${persona.id}.nombre`, persona.nombre)" :aria-label="`Nombre despicadora ${rowIndex + 1}`" placeholder="Nombre" maxlength="120" autocomplete="off" @focus="personaActivaId = ''" @input="editar(`personas.${persona.id}.nombre`, $event, 'texto')" @blur="confirmar(`personas.${persona.id}.nombre`)" @keydown.enter.prevent="$emit('enter-nombre', persona.id)" @keydown="navegarFlecha($event, { tipo: 'nombre', personaId: persona.id })"></span><button :aria-label="`Eliminar fila ${persona.nombre || rowIndex + 1}`" @click="$emit('eliminar-persona', persona)">×</button></div></th>
+          <td v-for="(columna, colIndex) in columnas" :key="columna.id"><input :ref="`peso-${persona.id}-${columna.id}`" :value="valor(`pesos.${persona.id}.${columna.id}`, pesos[persona.id] && pesos[persona.id][columna.id])" inputmode="decimal" :disabled="!persona.nombre.trim()" :aria-label="`Kilos de ${persona.nombre || 'fila ' + (rowIndex + 1)}, columna ${colIndex + 1}`" :aria-invalid="!!errores[`pesos.${persona.id}.${columna.id}`]" :title="errores[`pesos.${persona.id}.${columna.id}`]" placeholder="—" @focus="personaActivaId = persona.id" @input="editar(`pesos.${persona.id}.${columna.id}`, $event, 'kilos')" @blur="confirmar(`pesos.${persona.id}.${columna.id}`)" @keydown.enter.prevent="$emit('enter-peso', { personaId: persona.id, columnaId: columna.id })" @keydown="navegarFlecha($event, { tipo: 'peso', personaId: persona.id, columnaId: columna.id })"></td>
           <td class="add-column-body" aria-hidden="true"></td><td class="total-cell">{{ total(persona.id, 'kilos') }}</td><td class="total-cell final-cell" :class="{ negative: totales[persona.id] && totales[persona.id].pago < 0 }">{{ total(persona.id, 'pago', true) }}</td>
         </tr>
       </tbody>
@@ -31,7 +31,7 @@
 </template>
 
 <script>
-import { formatoPesada } from '@/utils/pesadas';
+import { formatoPagoPesada, formatoPesada } from '@/utils/pesadas';
 export default {
   name: 'PesadasTabla',
   props: {
@@ -39,6 +39,7 @@ export default {
     pesos: { type: Object, default: () => ({}) }, totales: { type: Object, required: true },
     borradores: { type: Object, required: true }, errores: { type: Object, required: true }
   },
+  data: () => ({ personaActivaId: '' }),
   methods: {
     valor(path, fallback) { return Object.prototype.hasOwnProperty.call(this.borradores, path) ? this.borradores[path] : (fallback == null ? '' : String(fallback)); },
     editar(path, event, tipo) { this.$emit('editar', { path, value: event.target.value, tipo }); },
@@ -48,7 +49,7 @@ export default {
       event.preventDefault();
       this.$emit('flecha', { ...celda, direccion: event.key });
     },
-    total(id, field, money = false) { return this.totales[id] ? `${money ? '$' : ''}${formatoPesada(this.totales[id][field])}` : '—'; },
+    total(id, field, money = false) { return this.totales[id] ? `${money ? '$' : ''}${money ? formatoPagoPesada(this.totales[id][field]) : formatoPesada(this.totales[id][field])}` : '—'; },
     enfocar(ref) {
       const input = this.$refs[ref];
       const element = Array.isArray(input) ? input[0] : input;

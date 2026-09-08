@@ -48,11 +48,13 @@ test('new timestamp-ordered columns stay after the initial weighing columns', ()
 
 test('calculates mixed column prices and deducts bathrooms once per named person', () => {
   const summary = resumenPesadas(sample());
-  assert.deepEqual(summary.personas[0], { id: 'p1', nombre: 'Luisa', kilos: 7, bruto: 78.2, pago: 77.2 });
+  assert.deepEqual(summary.personas[0], { id: 'p1', nombre: 'Luisa', kilos: 7, bruto: 78.2, pago: 77.2, pagoRedondeado: 77 });
   assert.equal(summary.banos, 1);
   assert.equal(summary.pagos, 77.2);
   assert.equal(summary.bruto, 78.2);
   assert.equal(summary.pagoPromedio, 77.2);
+  assert.equal(summary.pagosRedondeados, 77);
+  assert.equal(summary.pagoPromedioRedondeado, 77);
   assert.deepEqual(summary.mejor, summary.personas[0]);
   assert.equal(Math.round(summary.precioPromedio * 10) / 10, 11.2);
 });
@@ -92,7 +94,7 @@ test('named zero-weight rows count for bathrooms; negative pay blocks print', ()
   assert.throws(() => documentoPesadas('2026-09-05', {}), /despicadora/);
 });
 
-test('PDF uses the same one-decimal payments, named rows only, date header and last bathrooms row', () => {
+test('PDF uses rounded payments, named rows only, date header and last bathrooms row', () => {
   const pdf = documentoPesadas('2026-09-05', sample());
   assert.equal(pdf.pageSize, 'LETTER');
   const table = pdf.content[0].table;
@@ -100,7 +102,7 @@ test('PDF uses the same one-decimal payments, named rows only, date header and l
   assert.equal(table.dontBreakRows, true);
   assert.equal(table.body.length, 3);
   assert.equal(table.body[0][0].text, '5/9/2026');
-  assert.equal(table.body[1][1].text, '77.2');
+  assert.equal(table.body[1][1].text, '77');
   assert.equal(table.body[2][0].text, 'Baños');
   assert.equal(table.body[2][1].text, '1');
 });
@@ -355,7 +357,7 @@ test('weighing cash uses final named payments and blocks invalid sheets', () => 
   let flushed = false;
   const vm = { puedeImprimir: true, _outbox: { flush() { flushed = true; } }, resumen: resumenPesadas(sample()) };
   methods.abrirCuentas.call(vm);
-  assert.equal(vm.cuentasDatos, '77.2');
+  assert.equal(vm.cuentasDatos, '77');
   assert.equal(vm.cuentasAbiertas, true);
   assert.equal(flushed, true);
   const invalid = { puedeImprimir: false };
