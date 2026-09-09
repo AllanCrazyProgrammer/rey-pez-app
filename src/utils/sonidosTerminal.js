@@ -36,6 +36,11 @@ export function crearSonidosTerminal() {
     const esExplosion = tipo === 'explosion';
     const esMisionCumplida = tipo === 'mision-cumplida';
     const esNavegacion = tipo === 'navegacion';
+    const esTecla = tipo === 'tecla' || tipo.startsWith('tecla:');
+    const identidadTecla = esTecla ? (tipo.split(':').slice(1).join(':') || 'entrada') : '';
+    const codigoTecla = identidadTecla.codePointAt(0) || 0;
+    // Las teclas ASCII ocupan posiciones únicas dentro del mismo registro.
+    const frecuenciaTecla = 640 + ((codigoTecla * 17) % 113) * 6.1;
     const duracion = esApertura ? 4.65 : (esMisionCumplida ? 1.25 : (esExplosion ? 0.62 : (esNavegacion ? 0.07 : (esBoton ? 0.13 : (esBorrado ? 0.075 : 0.038)))));
     const buffer = contexto.createBuffer(1, Math.ceil(contexto.sampleRate * duracion), contexto.sampleRate);
     const datos = buffer.getChannelData(0);
@@ -134,18 +139,19 @@ export function crearSonidosTerminal() {
         continue;
       }
 
-      // Los botones ascienden, borrar desciende y escribir produce un único bip.
+      // Los botones ascienden, borrar desciende y cada tecla conserva su propia nota.
       const segundaNota = (esBoton && t >= 0.065) || (esBorrado && t >= 0.036);
       const tiempoNota = segundaNota ? t - (esBoton ? 0.065 : 0.036) : t;
       const duracionNota = esBoton ? 0.055 : (esBorrado ? 0.032 : duracion);
       if (tiempoNota >= duracionNota) continue;
       const frecuencia = esBoton
         ? (segundaNota ? 1046.5 : 784)
-        : (esBorrado ? (segundaNota ? 659.25 : 987.77) : 1174.7);
+        : (esBorrado ? (segundaNota ? 659.25 : 987.77) : frecuenciaTecla);
       const fase = 2 * Math.PI * frecuencia * tiempoNota;
       // Armónicos limitados dan un timbre digital sin un agudo estridente.
       const onda = Math.sin(fase) * 0.34 +
-        Math.sin(fase * 3) * 0.065 + Math.sin(fase * 5) * 0.025;
+        Math.sin(fase * 3) * (0.052 + (codigoTecla % 5) * 0.004) +
+        Math.sin(fase * 5) * 0.025;
       const ataque = Math.min(1, tiempoNota / 0.003);
       const cierre = Math.min(1, (duracionNota - tiempoNota) / 0.012);
       datos[i] = onda * ataque * cierre;

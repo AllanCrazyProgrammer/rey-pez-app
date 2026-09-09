@@ -80,7 +80,11 @@ export const embarqueSonidosMixin = {
       if (!evento.isTrusted || !this.sonidosActivados || !esCampoEditable(evento.target)) return;
       if (evento.inputType === 'insertLineBreak' || evento.inputType === 'insertParagraph') return;
       const esBorrado = evento.inputType && evento.inputType.startsWith('delete');
-      this._sonidosTerminal.reproducir(esBorrado ? 'borrar' : 'tecla');
+      const caracteres = evento.data ? Array.from(evento.data) : [];
+      const identidadTecla = caracteres.length === 1
+        ? caracteres[0].toLocaleLowerCase()
+        : (evento.inputType || 'entrada');
+      this._sonidosTerminal.reproducir(esBorrado ? 'borrar' : `tecla:${identidadTecla}`);
     },
     prepararTecladoEmbarque(evento) {
       if (!evento.isTrusted || !this.sonidosActivados || !esCampoEditable(evento.target)) return;
