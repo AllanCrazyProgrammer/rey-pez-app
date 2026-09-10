@@ -4,31 +4,45 @@ export function documentoPesadas(fecha, data) {
   const resumen = resumenPesadas(data);
   if (!resumen.personas.length) throw new Error('Agrega al menos una despicadora.');
   if (resumen.personas.some(row => row.pago < 0)) throw new Error('Corrige los pagos negativos antes de imprimir.');
-  return {
-    pageSize: 'LETTER', pageOrientation: 'portrait', pageMargins: [32, 30, 32, 30],
-    info: { title: `Pesadas ${formatoFechaPesadas(fecha)}`, author: 'Rey Pez' },
-    defaultStyle: { font: 'Roboto', fontSize: 26, bold: true, color: '#000000' },
-    content: [{
-      table: {
-        widths: ['*', '36%'], headerRows: 1, dontBreakRows: true,
-        body: [
-          [{ text: formatoFechaPesadas(fecha), colSpan: 2, alignment: 'center',
-            fontSize: 38, italics: true, decoration: 'underline', margin: [0, 4, 0, 6] }, {}],
-          ...resumen.personas.map(row => [
-            { text: row.nombre, margin: [0, 5, 0, 5] },
-            { text: formatoPagoPesada(row.pagoRedondeado), alignment: 'right', margin: [0, 5, 0, 5] }
-          ]),
-          [{ text: 'Baños', margin: [0, 5, 0, 5] },
-            { text: formatoPesada(resumen.banos), alignment: 'right', margin: [0, 5, 0, 5] }]
-        ]
-      },
+  const filas = resumen.personas.map(row => [row.nombre, formatoPagoPesada(row.pagoRedondeado)]);
+  filas.push(['Baños', formatoPesada(resumen.banos)]);
+  const content = [];
+  // Cuatro listas verticales de hasta 24 nombres por hoja. Las filas pueden
+  // crecer para nombres largos; pdfmake repite el encabezado si se desbordan.
+  for (let inicio = 0; inicio < filas.length; inicio += 96) {
+    const grupo = filas.slice(inicio, inicio + 96);
+    const alto = Math.ceil(grupo.length / 4);
+    const body = [Array.from({ length: 8 }, (_, i) => ({
+      text: i % 2 ? 'Pago' : 'Nombre', bold: true,
+      alignment: 'center', fillColor: '#eeeeee'
+    }))];
+    for (let fila = 0; fila < alto; fila++) {
+      const celdas = [];
+      for (let columna = 0; columna < 4; columna++) {
+        const registro = grupo[columna * alto + fila];
+        celdas.push({ text: registro ? registro[0] : '', alignment: 'center' },
+          { text: registro ? registro[1] : '', alignment: 'center', bold: true });
+      }
+      body.push(celdas);
+    }
+    content.push({
+      ...(inicio ? { pageBreak: 'before' } : {}),
+      table: { widths: ['*', 56, '*', 56, '*', 56, '*', 56], headerRows: 1, dontBreakRows: true, body },
       layout: {
-        hLineWidth: () => 0.5, vLineWidth: () => 0.5,
-        hLineColor: () => '#999999', vLineColor: () => '#999999',
-        paddingLeft: () => 10, paddingRight: () => 10,
+        hLineWidth: () => 0.4, vLineWidth: i => i % 2 === 0 ? 0.6 : 0.4,
+        hLineColor: () => '#cccccc', vLineColor: i => i % 2 === 0 ? '#999999' : '#cccccc',
+        paddingLeft: () => 2, paddingRight: () => 2,
         paddingTop: () => 5, paddingBottom: () => 5
       }
-    }]
+    });
+  }
+  return {
+    pageSize: 'LETTER', pageOrientation: 'portrait', pageMargins: [18, 64, 18, 30],
+    info: { title: `Pesadas ${formatoFechaPesadas(fecha)}`, author: 'Rey Pez' },
+    defaultStyle: { font: 'Roboto', fontSize: 18, color: '#000000' },
+    header: { text: `Pesadas · ${formatoFechaPesadas(fecha)}`, alignment: 'center', fontSize: 24, bold: true, margin: [24, 22, 24, 0] },
+    footer: (pagina, total) => ({ text: `${pagina} / ${total}`, alignment: 'center', fontSize: 10, margin: [0, 10, 0, 0] }),
+    content
   };
 }
 

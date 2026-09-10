@@ -101,11 +101,12 @@ test('PDF uses rounded payments, named rows only, date header and last bathrooms
   const table = pdf.content[0].table;
   assert.equal(table.headerRows, 1);
   assert.equal(table.dontBreakRows, true);
-  assert.equal(table.body.length, 3);
-  assert.equal(table.body[0][0].text, '5/9/2026');
+  assert.equal(table.widths.length, 8);
+  assert.equal(table.body.length, 2);
+  assert.match(pdf.header.text, /5\/9\/2026/);
   assert.equal(table.body[1][1].text, '77');
-  assert.equal(table.body[2][0].text, 'Baños');
-  assert.equal(table.body[2][1].text, '1');
+  assert.equal(table.body[1][2].text, 'Baños');
+  assert.equal(table.body[1][3].text, '1');
 });
 
 test('dates use Mexico City local day and reject invalid dates', () => {
