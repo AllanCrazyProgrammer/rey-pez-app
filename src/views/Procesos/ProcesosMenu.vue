@@ -100,11 +100,21 @@
       </router-link>
 
       <router-link
+        to="/procesos/journal"
+        class="btn-action btn-journal"
+        aria-label="Abrir journal de conocimiento"
+      >
+        <span class="btn-prefix">[8]</span>
+        <span class="icon">📖</span>
+        <span class="btn-text">JOURNAL</span>
+      </router-link>
+
+      <router-link
         to="/procesos/taras"
         class="btn-action btn-taras"
         aria-label="Gestionar taras por proveedor"
       >
-        <span class="btn-prefix">[8]</span>
+        <span class="btn-prefix">[9]</span>
         <span class="icon">🧺</span>
         <span class="btn-text">TARAS</span>
       </router-link>
@@ -114,7 +124,7 @@
         class="btn-action btn-alan"
         aria-label="Acceder al área de Alan"
       >
-        <span class="btn-prefix">[9]</span>
+        <span class="btn-prefix">[10]</span>
         <span class="icon">🔐</span>
         <span class="btn-text">ALAN</span>
       </router-link>
@@ -124,7 +134,7 @@
         class="btn-action btn-descargas"
         aria-label="Contador de cajas para descarga de camionetas"
       >
-        <span class="btn-prefix">[10]</span>
+        <span class="btn-prefix">[11]</span>
         <span class="icon">📦</span>
         <span class="btn-text">DESCARGAS</span>
       </router-link>
@@ -525,4 +535,4 @@ export default {
     font-size: 1.8rem;
   }
 }
-</style> 
+</style>

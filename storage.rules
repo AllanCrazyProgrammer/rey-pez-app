@@ -1,0 +1,10 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Rey Pez usa un login propio en el cliente, no Firebase Auth.
+    // Se conserva el mismo modelo de acceso que Firestore en este proyecto.
+    match /journal/{entryId}/{fileName} {
+      allow read, write: if true;
+    }
+  }
+}

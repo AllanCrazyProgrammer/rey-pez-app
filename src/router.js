@@ -59,6 +59,7 @@ import ListaDeudasBarcos from '@/views/Barcos/ListaDeudasBarcos.vue'
 import ResumenMensualBarcos from '@/views/Barcos/ResumenMensualBarcos.vue'
 import GestionTripulantes from '@/views/Barcos/GestionTripulantes.vue'
 import EntradaProductoBarco from '@/views/Barcos/EntradaProductoBarco.vue'
+import Journal from '@/views/Procesos/Journal.vue'
 
 Vue.use(Router);
 
@@ -422,6 +423,23 @@ const routes = [
     path: '/procesos/bitacoras',
     name: 'Bitacoras',
     component: Bitacoras
+  },
+  {
+    path: '/procesos/journal',
+    name: 'Journal',
+    component: Journal
+  },
+  {
+    path: '/procesos/journal/categoria/:id',
+    name: 'JournalCategoria',
+    component: Journal,
+    props: true
+  },
+  {
+    path: '/procesos/journal/entrada/:id',
+    name: 'JournalEntrada',
+    component: Journal,
+    props: true
   },
   {
     path: '/procesos/deudas',

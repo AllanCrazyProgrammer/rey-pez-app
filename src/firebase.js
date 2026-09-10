@@ -10,6 +10,7 @@ import {
 } from "firebase/firestore";
 import { getDatabase, ref, onDisconnect, serverTimestamp, set } from "firebase/database";
 import { getFunctions } from "firebase/functions";
+import { getStorage } from "firebase/storage";
 
 // Tu configuración de Firebase
 const firebaseConfig = {
@@ -65,6 +66,7 @@ const rtdb = getDatabase(app);
 
 // Cloud Functions (asesor experto)
 const functions = getFunctions(app);
+const storage = getStorage(app);
 
 // Función para manejar la presencia de usuarios
 const handleUserPresence = async (userId, username) => {
@@ -91,4 +93,4 @@ const handleUserPresence = async (userId, username) => {
   }
 };
 
-export { db, rtdb, functions, handleUserPresence };
+export { db, rtdb, functions, storage, handleUserPresence };
