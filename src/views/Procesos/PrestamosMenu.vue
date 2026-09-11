@@ -4,10 +4,11 @@
       <BackButton to="/procesos" />
     </div>
     
-    <h1 class="menu-title">Gestión de Préstamos</h1>
+    <span class="eyebrow">ADMINISTRACIÓN · REY PEZ</span>
+    <h1 class="menu-title">Gestión de préstamos</h1>
     
     <div class="menu-description">
-      <p>Administra los préstamos otorgados a despicadoras y trabajadores</p>
+      <p>Todos los préstamos, cada abono y los saldos por cobrar en un solo lugar.</p>
     </div>
     
     <div class="actions-container">
@@ -16,7 +17,8 @@
           <i class="fas fa-industry"></i>
           <div class="button-text">
             <h3>Préstamos a Despicadoras</h3>
-            <p>Gestiona préstamos otorgados a las despicadoras</p>
+            <p>Consulta cuentas y registra préstamos o abonos.</p>
+            <span class="category-cta">Ver cuentas de despicadoras →</span>
           </div>
         </div>
         <i class="fas fa-arrow-right"></i>
@@ -27,7 +29,8 @@
           <i class="fas fa-users"></i>
           <div class="button-text">
             <h3>Préstamos a Trabajadores</h3>
-            <p>Gestiona préstamos otorgados a empleados</p>
+            <p>Consulta cuentas y registra préstamos o abonos.</p>
+            <span class="category-cta">Ver cuentas de trabajadores →</span>
           </div>
         </div>
         <i class="fas fa-arrow-right"></i>
@@ -36,15 +39,16 @@
     
     <div class="resumen-container">
       <div class="resumen-card">
-        <h3>Resumen General</h3>
+        <h3>Resumen de cuentas</h3>
+        <p v-if="errorCarga" role="alert">{{ errorCarga }} <button @click="cargarResumen">Reintentar</button></p>
         <div class="resumen-stats">
           <div class="stat-item">
-            <span class="stat-label">Total Préstamos Activos:</span>
-            <span class="stat-value">{{ totalPrestamosActivos }}</span>
+            <span class="stat-label">Cuentas con saldo pendiente:</span>
+            <span class="stat-value">{{ cargando ? '…' : errorCarga ? '—' : totalPrestamosActivos }}</span>
           </div>
           <div class="stat-item">
             <span class="stat-label">Monto Total Pendiente:</span>
-            <span class="stat-value">${{ formatNumber(montoTotalPendiente) }}</span>
+            <span class="stat-value">{{ cargando ? '…' : errorCarga ? '—' : '$' + formatNumber(montoTotalPendiente) }}</span>
           </div>
         </div>
       </div>
@@ -53,8 +57,8 @@
 </template>
 
 <script>
-import { db } from '@/firebase';
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import { cargarCuentasPrestamos } from '@/services/prestamosService';
+import { resumirSaldos } from '@/utils/prestamos';
 import BackButton from '@/components/BackButton.vue';
 import { formatNumber } from '@/utils/formatters';
 
@@ -66,43 +70,32 @@ export default {
   data() {
     return {
       totalPrestamosActivos: 0,
+      cargando: true,
+      errorCarga: '',
       montoTotalPendiente: 0
     };
   },
   methods: {
     formatNumber,
     async cargarResumen() {
+      this.cargando = true;
+      this.errorCarga = '';
       try {
-        // Cargar préstamos de despicadoras
-        const prestamosDesQuery = query(
-          collection(db, 'prestamosDespicadoras'),
-          where('estado', '==', 'activo')
-        );
-        const prestamosDesSnapshot = await getDocs(prestamosDesQuery);
-        
-        // Cargar préstamos de trabajadores
-        const prestamosTrabQuery = query(
-          collection(db, 'prestamosTrabajadores'),
-          where('estado', '==', 'activo')
-        );
-        const prestamosTrabSnapshot = await getDocs(prestamosTrabQuery);
-        
-        this.totalPrestamosActivos = prestamosDesSnapshot.size + prestamosTrabSnapshot.size;
-        
-        let montoTotal = 0;
-        prestamosDesSnapshot.forEach(doc => {
-          const data = doc.data();
-          montoTotal += data.saldoPendiente || 0;
-        });
-        
-        prestamosTrabSnapshot.forEach(doc => {
-          const data = doc.data();
-          montoTotal += data.saldoPendiente || 0;
-        });
-        
-        this.montoTotalPendiente = montoTotal;
+        const [despicadoras, trabajadores] = await Promise.all([
+          cargarCuentasPrestamos('prestamosDespicadoras', 'despicadora'),
+          cargarCuentasPrestamos('prestamosTrabajadores', 'trabajador')
+        ]);
+        const resumen = resumirSaldos([
+          ...despicadoras.map(c => ({ ...c, cuentaId: 'despicadora:' + c.despicadoraId })),
+          ...trabajadores.map(c => ({ ...c, cuentaId: 'trabajador:' + c.trabajadorId }))
+        ]);
+        this.totalPrestamosActivos = resumen.cuentasConDeuda;
+        this.montoTotalPendiente = resumen.totalPendiente;
       } catch (error) {
         console.error("Error al cargar resumen de préstamos: ", error);
+        this.errorCarga = 'No se pudo cargar el resumen.';
+      } finally {
+        this.cargando = false;
       }
     }
   },
@@ -292,4 +285,26 @@ export default {
     gap: 5px;
   }
 }
-</style> 
+</style>
+
+<style scoped>
+.prestamos-menu-container { max-width: 1160px; padding: 28px 20px 60px; background: #f8faf8; border-radius: 16px; margin-top: 20px; }
+.eyebrow { display: block; margin-top: 28px; font-size: 11px; letter-spacing: .15em; font-weight: 700; color: #397267; }
+.menu-title { text-align: left; border: 0; margin: 10px 0; padding: 0; color: #183d40; font-size: clamp(28px, 4vw, 42px); }
+.menu-description { text-align: left; color: #687a75; margin-bottom: 32px; }
+.actions-container { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+.action-button { border: 1px solid #dce7e2; border-top: 4px solid #2f8470; box-shadow: 0 4px 12px #173f3a05; padding: 28px; align-items: start; }
+.action-button.despicadoras { border-left-color: #dce7e2; }
+.action-button.trabajadores { border-left-color: #dce7e2; border-top-color: #5183a0; }
+.button-content { flex-direction: column; align-items: start; gap: 22px; }
+.action-button.despicadoras .button-content i { color: #2f8470; }
+.action-button.trabajadores .button-content i { color: #5183a0; }
+.button-text h3 { font-size: 21px; color: #254c44; }
+.button-text p { margin: 10px 0 24px; line-height: 1.6; }
+.category-cta { color: #216652; font-size: 13px; font-weight: 600; }
+.resumen-card { border: 1px solid #dce7e2; background: #f1f6f3; box-shadow: none; }
+.resumen-card h3 { text-align: left; font-size: 17px; color: #365a4b; }
+.resumen-stats { flex-direction: row; gap: 40px; flex-wrap: wrap; }
+.stat-item { border: 0; flex: 1; min-width: 200px; }
+@media (max-width: 650px) { .actions-container { grid-template-columns: 1fr; } .prestamos-menu-container { padding: 18px 12px; } }
+</style>

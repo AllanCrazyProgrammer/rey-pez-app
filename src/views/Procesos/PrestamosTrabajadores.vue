@@ -1,12 +1,14 @@
 <template>
-  <div class="prestamos-trabajadores-container">
+  <div class="prestamos-trabajadores-container prestamos-workspace">
     <div class="back-button-container">
       <BackButton to="/procesos/prestamos" />
     </div>
     
-    <h1>Préstamos a Trabajadores</h1>
+    <div class="workspace-heading"><div><span class="eyebrow">CONTROL DE CUENTAS</span><h1>Préstamos a Trabajadores</h1><p>Consulta saldos, registra préstamos y lleva cada abono al día.</p></div><button class="btn-refresh" :disabled="cargando || guardando" @click="cargarPrestamos()"><i class="fas fa-sync-alt"></i> Actualizar</button></div>
+    <div v-if="mensaje" role="status" class="notice-success">{{ mensaje }} <button @click="mensaje = ''" aria-label="Cerrar aviso">×</button></div>
     
     <div class="filtros-container">
+      <div class="filtro filtro-busqueda"><label for="buscarCuenta">Buscar por nombre</label><input id="buscarCuenta" v-model="busqueda" type="search" placeholder="Escribe un nombre…" autocomplete="off"></div>
       <div class="filtro">
         <label for="filtroTrabajador">Trabajador:</label>
         <select id="filtroTrabajador" v-model="filtroTrabajador">
@@ -27,23 +29,25 @@
       </div>
     </div>
     
+    <div class="results-caption">{{ cuentasFiltradas.length }} cuentas encontradas · El resumen refleja los filtros seleccionados</div>
     <div class="resumen-container">
+      <div class="resumen-card abonado"><h3>Total abonado</h3><p>{{ cargando ? '…' : '$' + formatNumber(totalAbonadoGeneral) }}</p></div>
       <div class="resumen-card activos">
         <h3>Trabajadores con Deuda</h3>
-        <p>{{ cuentasConDeuda }}</p>
+        <p>{{ cargando ? '…' : cuentasConDeuda }}</p>
       </div>
       <div class="resumen-card pendiente">
         <h3>Total Pendiente</h3>
-        <p>${{ formatNumber(totalPendienteGeneral) }}</p>
+        <p>{{ cargando ? '…' : '$' + formatNumber(totalPendienteGeneral) }}</p>
       </div>
       <div class="resumen-card total-prestado">
         <h3>Total Prestado</h3>
-        <p>${{ formatNumber(totalPrestadoGeneral) }}</p>
+        <p>{{ cargando ? '…' : '$' + formatNumber(totalPrestadoGeneral) }}</p>
       </div>
     </div>
     
-    <div class="acciones-container">
-      <button @click="mostrarModalNuevoPrestamo" class="btn-nuevo-prestamo">
+    <div class="acciones-container"><div class="orden-cuentas"><label for="ordenCuentas">Ordenar por</label><select id="ordenCuentas" v-model="orden"><option value="saldo">Mayor saldo pendiente</option><option value="nombre">Nombre A–Z</option></select></div>
+      <button @click="mostrarModalNuevoPrestamo" class="btn-nuevo-prestamo" :disabled="cargando || !!errorCarga || guardando">
         <i class="fas fa-plus"></i> Nuevo Préstamo
       </button>
       <button @click="mostrarModalNuevoTrabajador" class="btn-nuevo-trabajador">
@@ -51,28 +55,30 @@
       </button>
     </div>
     
+    <div v-if="errorCarga" role="alert" class="notice-error">{{ errorCarga }} <button @click="cargarPrestamos()" :disabled="cargando">Reintentar</button></div>
     <div v-if="cargando" class="loading-spinner">
       <div class="spinner"></div>
       <p>Cargando cuentas...</p>
     </div>
     
-    <div v-else-if="cuentasTrabajadores.length === 0" class="no-data">
-      <p>No hay cuentas registradas.</p>
+    <div v-else-if="errorCarga" class="no-data">
+      <p>Los saldos no están disponibles.</p>
       <button @click="mostrarModalNuevoPrestamo" class="btn-nuevo-prestamo">
         Crear Nuevo Préstamo
       </button>
     </div>
     
+    <div v-else-if="!cuentasFiltradas.length" class="no-data"><h3>No hay cuentas que mostrar</h3><p>{{ cuentasTrabajadores.length ? 'Prueba con otro nombre o cambia los filtros.' : 'Registra el primer préstamo para comenzar.' }}</p></div>
     <div v-else class="cuentas-container">
       <div 
-        v-for="cuenta in cuentasFiltradas" 
+        v-for="cuenta in cuentasVisibles"
         :key="cuenta.trabajadorId" 
         class="cuenta-card"
         :class="{ 'sin-deuda': cuenta.saldoPendiente <= 0 }"
       >
         <div class="cuenta-header">
           <div class="cuenta-info">
-            <h3 class="trabajador-nombre">{{ cuenta.trabajadorNombre }}</h3>
+            <h3 class="trabajador-nombre">{{ cuenta.trabajadorNombre }}</h3><span class="account-status" :class="{ settled: cuenta.saldoPendiente <= 0 }">{{ cuenta.saldoPendiente > 0 ? 'Con saldo pendiente' : 'Al día' }}</span><span class="loan-count">{{ cuenta.prestamos.length }} préstamo(s)</span>
             <div class="cuenta-stats">
               <div class="stat">
                 <span class="label">Total Prestado:</span>
@@ -95,9 +101,13 @@
               <i class="fas fa-history"></i>
               Historial
             </button>
-            <button @click="agregarAbonoCuenta(cuenta)" class="btn-abono" :disabled="cuenta.saldoPendiente <= 0" title="Agregar abono">
+            <button @click="agregarAbonoCuenta(cuenta)" class="btn-abono" :disabled="cuenta.saldoPendiente <= 0 || guardando" title="Agregar abono">
               <i class="fas fa-money-bill"></i>
               Abonar
+            </button>
+            <button @click="eliminarCuenta(cuenta)" class="btn-eliminar-cuenta" :disabled="guardando" title="Borrar todos los préstamos y abonos de esta cuenta">
+              <i class="fas fa-trash-alt"></i>
+              Borrar cuenta
             </button>
           </div>
         </div>
@@ -112,12 +122,13 @@
     </div>
     
     <!-- Modales similares a PrestamosDespicadoras pero adaptados para trabajadores -->
+    <nav v-if="!cargando && !errorCarga && paginas > 1" class="pagination-bar" aria-label="Páginas de cuentas"><button :disabled="pagina === 1" @click="pagina--">Anterior</button><span>Página {{ pagina }} de {{ paginas }}</span><button :disabled="pagina >= paginas" @click="pagina++">Siguiente</button></nav>
     <!-- Modal Nuevo Préstamo -->
     <div v-if="showModalNuevoPrestamo" class="modal-overlay" @click="closeModalOnOverlay">
-      <div class="modal-content" @click.stop>
+      <div class="modal-content" role="dialog" aria-modal="true" aria-label="Gestión de préstamos" @click.stop>
         <div class="modal-header">
           <h2>Nuevo Préstamo a Trabajador</h2>
-          <button @click="showModalNuevoPrestamo = false" class="close-button">×</button>
+          <button @click="showModalNuevoPrestamo = false" :disabled="guardando" aria-label="Cerrar ventana" class="close-button">×</button>
         </div>
         <div class="modal-body">
           <form @submit.prevent="guardarNuevoPrestamo" class="form-prestamo">
@@ -144,7 +155,7 @@
             </div>
             
             <div class="form-actions">
-              <button type="button" @click="showModalNuevoPrestamo = false" class="btn-cancelar">Cancelar</button>
+              <button type="button" @click="showModalNuevoPrestamo = false" :disabled="guardando" class="btn-cancelar">Cancelar</button>
               <button type="submit" class="btn-guardar" :disabled="guardando">
                 {{ guardando ? 'Guardando...' : 'Guardar Préstamo' }}
               </button>
@@ -156,10 +167,10 @@
     
     <!-- Modal Nuevo Trabajador -->
     <div v-if="showModalNuevoTrabajador" class="modal-overlay" @click="closeModalOnOverlay">
-      <div class="modal-content" @click.stop>
+      <div class="modal-content" role="dialog" aria-modal="true" aria-label="Gestión de préstamos" @click.stop>
         <div class="modal-header">
           <h2>Nuevo Trabajador</h2>
-          <button @click="showModalNuevoTrabajador = false" class="close-button">×</button>
+          <button @click="showModalNuevoTrabajador = false" :disabled="guardando" aria-label="Cerrar ventana" class="close-button">×</button>
         </div>
         <div class="modal-body">
           <form @submit.prevent="guardarNuevoTrabajador" class="form-trabajador">
@@ -177,7 +188,7 @@
             </div>
             
             <div class="form-actions">
-              <button type="button" @click="showModalNuevoTrabajador = false" class="btn-cancelar">Cancelar</button>
+              <button type="button" @click="showModalNuevoTrabajador = false" :disabled="guardando" class="btn-cancelar">Cancelar</button>
               <button type="submit" class="btn-guardar" :disabled="guardando">
                 {{ guardando ? 'Guardando...' : 'Guardar Trabajador' }}
               </button>
@@ -187,137 +198,12 @@
       </div>
     </div>
     
-    <!-- Modal Detalle Préstamo -->
-    <div v-if="showDetalleModal" class="modal-overlay" @click="closeModalOnOverlay">
-      <div class="modal-content modal-large" @click.stop>
-        <div class="modal-header">
-          <h2>Detalle del Préstamo</h2>
-          <button @click="showDetalleModal = false" class="close-button">×</button>
-        </div>
-        <div class="modal-body">
-          <div class="prestamo-info">
-            <div class="info-grid">
-              <div class="info-item">
-                <strong>Trabajador:</strong>
-                <span>{{ prestamoSeleccionado?.trabajadorNombre }}</span>
-              </div>
-              <div class="info-item">
-                <strong>Fecha:</strong>
-                <span>{{ formatearFecha(prestamoSeleccionado?.fecha) }}</span>
-              </div>
-              <div class="info-item">
-                <strong>Monto Inicial:</strong>
-                <span>${{ formatNumber(prestamoSeleccionado?.montoInicial) }}</span>
-              </div>
-              <div class="info-item">
-                <strong>Estado:</strong>
-                <span :class="'estado-badge ' + prestamoSeleccionado?.estado">
-                  {{ prestamoSeleccionado?.estado === 'activo' ? 'Activo' : 'Pagado' }}
-                </span>
-              </div>
-            </div>
-            <div v-if="prestamoSeleccionado?.descripcion" class="descripcion">
-              <strong>Descripción:</strong>
-              <p>{{ prestamoSeleccionado.descripcion }}</p>
-            </div>
-          </div>
-          
-          <h3>Historial de Abonos</h3>
-          <div v-if="abonos.length === 0" class="no-abonos">
-            <p>No hay abonos registrados para este préstamo.</p>
-          </div>
-          <table v-else class="tabla-abonos">
-            <thead>
-              <tr>
-                <th>Fecha</th>
-                <th>Descripción</th>
-                <th>Monto</th>
-                <th>Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="(abono, index) in abonos" :key="index">
-                <td>{{ formatearFecha(abono.fecha) }}</td>
-                <td>{{ abono.descripcion }}</td>
-                <td>${{ formatNumber(abono.monto) }}</td>
-                <td>
-                  <button @click="eliminarAbono(index)" class="btn-eliminar-sm">
-                    <i class="fas fa-trash-alt"></i>
-                  </button>
-                </td>
-              </tr>
-            </tbody>
-            <tfoot>
-              <tr>
-                <td colspan="2" class="total-label">Total Abonos</td>
-                <td>${{ formatNumber(totalAbonos) }}</td>
-                <td></td>
-              </tr>
-            </tfoot>
-          </table>
-          
-          <div class="resumen-prestamo">
-            <div class="resumen-item">
-              <span>Monto inicial:</span>
-              <span>${{ formatNumber(prestamoSeleccionado?.montoInicial) }}</span>
-            </div>
-            <div class="resumen-item">
-              <span>Total abonos:</span>
-              <span>${{ formatNumber(totalAbonos) }}</span>
-            </div>
-            <div class="resumen-item total">
-              <span>Saldo pendiente:</span>
-              <span>${{ formatNumber(calcularSaldoPendiente()) }}</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-    
-    <!-- Modal Agregar Abono -->
-    <div v-if="showAbonoModal" class="modal-overlay" @click="closeModalOnOverlay">
-      <div class="modal-content" @click.stop>
-        <div class="modal-header">
-          <h2>Agregar Abono</h2>
-          <button @click="showAbonoModal = false" class="close-button">×</button>
-        </div>
-        <div class="modal-body">
-          <div class="prestamo-info">
-            <p><strong>Trabajador:</strong> {{ prestamoSeleccionado?.trabajadorNombre }}</p>
-            <p><strong>Saldo Pendiente:</strong> ${{ formatNumber(prestamoSeleccionado?.saldoPendiente) }}</p>
-          </div>
-          
-          <form @submit.prevent="guardarAbono" class="form-abono">
-            <div class="form-group">
-              <label for="fechaAbono">Fecha:</label>
-              <input id="fechaAbono" type="date" v-model="nuevoAbono.fecha" required>
-            </div>
-            <div class="form-group">
-              <label for="descripcionAbono">Descripción:</label>
-              <input id="descripcionAbono" type="text" v-model="nuevoAbono.descripcion" required placeholder="Ej: Descuento de nómina, Pago efectivo, etc.">
-            </div>
-            <div class="form-group">
-              <label for="montoAbono">Monto:</label>
-              <input id="montoAbono" type="number" v-model.number="nuevoAbono.monto" required min="1" :max="prestamoSeleccionado?.saldoPendiente" step="0.01">
-            </div>
-            
-            <div class="form-actions">
-              <button type="button" @click="showAbonoModal = false" class="btn-cancelar">Cancelar</button>
-              <button type="submit" class="btn-guardar" :disabled="guardando">
-                {{ guardando ? 'Guardando...' : 'Guardar Abono' }}
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>
-    
     <!-- Modal Historial Completo -->
     <div v-if="showHistorialModal" class="modal-overlay" @click="closeModalOnOverlay">
-      <div class="modal-content modal-large" @click.stop>
+      <div class="modal-content modal-large" role="dialog" aria-modal="true" aria-label="Gestión de préstamos" @click.stop>
         <div class="modal-header">
           <h2>Historial Completo - {{ cuentaSeleccionada?.trabajadorNombre }}</h2>
-          <button @click="showHistorialModal = false" class="close-button">×</button>
+          <button @click="showHistorialModal = false" :disabled="guardando" aria-label="Cerrar ventana" class="close-button">×</button>
         </div>
         <div class="modal-body">
           <div class="cuenta-resumen-modal">
@@ -344,14 +230,15 @@
             </div>
           </div>
           
-          <h3>Historial de Movimientos</h3>
-          <div v-if="historialCompleto.length === 0" class="no-historial">
+          <div class="history-heading"><h3>Movimientos</h3><select v-model="filtroMovimiento" aria-label="Filtrar movimientos"><option value="">Todos los movimientos</option><option value="prestamo">Solo préstamos</option><option value="abono">Solo abonos</option></select></div><p class="results-caption">{{ movimientosFiltrados.length }} movimientos · Del más reciente al más antiguo</p>
+          <div v-if="movimientosFiltrados.length === 0" class="no-historial">
             <p>No hay movimientos registrados.</p>
           </div>
-          <div v-else class="historial-container">
+          <button v-if="movimientosFiltrados.length > limiteHistorial" class="btn-refresh" @click="limiteHistorial += 40">Mostrar 40 movimientos más</button>
+          <div class="historial-container">
             <div 
-              v-for="(movimiento, index) in historialCompleto" 
-              :key="index" 
+              v-for="movimiento in movimientosVisibles"
+              :key="movimiento.tipo + movimiento.id + (movimiento.prestamoId || '')"
               class="movimiento-item"
               :class="movimiento.tipo"
             >
@@ -371,7 +258,7 @@
                 </div>
               </div>
               <div class="movimiento-actions">
-                <button @click="eliminarMovimiento(movimiento)" class="btn-eliminar-sm" title="Eliminar">
+                <button @click="eliminarMovimiento(movimiento)" :disabled="guardando" class="btn-eliminar-sm" title="Eliminar movimiento" aria-label="Eliminar movimiento">
                   <i class="fas fa-trash-alt"></i>
                 </button>
               </div>
@@ -381,12 +268,12 @@
       </div>
     </div>
     
-    <!-- Modal Agregar Abono (Actualizado) -->
+    <!-- Abono a la cuenta completa -->
     <div v-if="showAbonoModal" class="modal-overlay" @click="closeModalOnOverlay">
-      <div class="modal-content" @click.stop>
+      <div class="modal-content" role="dialog" aria-modal="true" aria-label="Gestión de préstamos" @click.stop>
         <div class="modal-header">
           <h2>Agregar Abono</h2>
-          <button @click="showAbonoModal = false" class="close-button">×</button>
+          <button @click="showAbonoModal = false" :disabled="guardando" aria-label="Cerrar ventana" class="close-button">×</button>
         </div>
         <div class="modal-body">
           <div class="prestamo-info">
@@ -405,11 +292,12 @@
             </div>
             <div class="form-group">
               <label for="montoAbono">Monto:</label>
-              <input id="montoAbono" type="number" v-model.number="nuevoAbono.monto" required min="1" :max="cuentaSeleccionada?.saldoPendiente" step="0.01">
+              <input id="montoAbono" type="number" v-model.number="nuevoAbono.monto" required min="0.01" :max="cuentaSeleccionada?.saldoPendiente" step="0.01">
             </div>
             
+            <div class="abono-preview"><span>Saldo después de este abono</span><strong>${{ formatNumber(saldoDespuesAbono) }}</strong><button type="button" @click="nuevoAbono.monto = cuentaSeleccionada.saldoPendiente">Abonar saldo completo</button></div>
             <div class="form-actions">
-              <button type="button" @click="showAbonoModal = false" class="btn-cancelar">Cancelar</button>
+              <button type="button" @click="showAbonoModal = false" :disabled="guardando" class="btn-cancelar">Cancelar</button>
               <button type="submit" class="btn-guardar" :disabled="guardando">
                 {{ guardando ? 'Guardando...' : 'Guardar Abono' }}
               </button>
@@ -423,7 +311,9 @@
 
 <script>
 import { db } from '@/firebase';
-import { collection, addDoc, getDocs, getDoc, query, where, orderBy, doc, updateDoc, deleteDoc, writeBatch } from 'firebase/firestore';
+import { collection, addDoc, getDocs, getDoc, doc, updateDoc, deleteDoc, writeBatch } from 'firebase/firestore';
+import { movimientosCuenta, fechaMovimiento } from '@/utils/prestamos';
+import { cargarCuentasPrestamos, eliminarCuentaPrestamos } from '@/services/prestamosService';
 import BackButton from '@/components/BackButton.vue';
 import { formatNumber } from '@/utils/formatters';
 
@@ -434,6 +324,13 @@ export default {
   },
   data() {
     return {
+      busqueda: '',
+      orden: 'saldo',
+      pagina: 1,
+      limiteHistorial: 40,
+      filtroMovimiento: '',
+      errorCarga: '',
+      mensaje: '',
       prestamos: [],
       trabajadores: [],
       cuentasTrabajadores: [],
@@ -474,9 +371,25 @@ export default {
     };
   },
   
+  watch: {
+    busqueda() { this.pagina = 1; },
+    filtroTrabajador() { this.pagina = 1; },
+    filtroEstado() { this.pagina = 1; },
+    orden() { this.pagina = 1; },
+    filtroMovimiento() { this.limiteHistorial = 40; }
+  },
   computed: {
+    cuentasVisibles() { return this.cuentasFiltradas.slice((this.pagina - 1) * 20, this.pagina * 20); },
+    paginas() { return Math.max(1, Math.ceil(this.cuentasFiltradas.length / 20)); },
+    movimientosFiltrados() { return this.historialCompleto.filter(m => !this.filtroMovimiento || m.tipo === this.filtroMovimiento); },
+    movimientosVisibles() { return this.movimientosFiltrados.slice(0, this.limiteHistorial); },
+    saldoDespuesAbono() { return Math.max(0, Math.round(((this.cuentaSeleccionada?.saldoPendiente || 0) - (Number(this.nuevoAbono.monto) || 0)) * 100) / 100); },
+    totalAbonadoGeneral() { return this.cuentasFiltradas.reduce((sum, c) => sum + c.totalAbonado, 0); },
     cuentasFiltradas() {
+      const normalizar = valor => String(valor || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+      const termino = normalizar(this.busqueda.trim());
       return this.cuentasTrabajadores.filter(cuenta => {
+        if (termino && !normalizar(cuenta.trabajadorNombre).includes(termino)) return false;
         if (this.filtroTrabajador && cuenta.trabajadorId !== this.filtroTrabajador) {
           return false;
         }
@@ -487,7 +400,9 @@ export default {
           return false;
         }
         return true;
-      });
+      }).sort((a, b) => this.orden === 'nombre'
+        ? a.trabajadorNombre.localeCompare(b.trabajadorNombre, 'es')
+        : b.saldoPendiente - a.saldoPendiente || a.trabajadorNombre.localeCompare(b.trabajadorNombre, 'es'));
     },
     
     cuentasConDeuda() {
@@ -522,77 +437,19 @@ export default {
       return fecha.toLocaleDateString('es-ES', opciones);
     },
     
-    async cargarPrestamos() {
+    async cargarPrestamos(actualizar = true) {
       try {
         this.cargando = true;
-        const querySnapshot = await getDocs(
-          query(collection(db, 'prestamosTrabajadores'), orderBy('fechaCreacion', 'desc'))
-        );
-        
-        this.prestamos = querySnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }));
-        
-        await this.agruparCuentasPorTrabajador();
+        this.errorCarga = '';
+        this.pagina = 1;
+        this.cuentasTrabajadores = await cargarCuentasPrestamos('prestamosTrabajadores', 'trabajador', actualizar);
+        this.prestamos = this.cuentasTrabajadores.flatMap(cuenta => cuenta.prestamos);
       } catch (error) {
         console.error("Error al cargar préstamos: ", error);
+        this.errorCarga = "No se pudieron actualizar los saldos. Intenta de nuevo antes de registrar un movimiento.";
       } finally {
         this.cargando = false;
       }
-    },
-    
-    async agruparCuentasPorTrabajador() {
-      const cuentasMap = new Map();
-      
-      // Agrupar préstamos por trabajador
-      for (const prestamo of this.prestamos) {
-        if (!cuentasMap.has(prestamo.trabajadorId)) {
-          cuentasMap.set(prestamo.trabajadorId, {
-            trabajadorId: prestamo.trabajadorId,
-            trabajadorNombre: prestamo.trabajadorNombre,
-            totalPrestado: 0,
-            totalAbonado: 0,
-            saldoPendiente: 0,
-            prestamos: []
-          });
-        }
-        
-        const cuenta = cuentasMap.get(prestamo.trabajadorId);
-        cuenta.totalPrestado += prestamo.montoInicial;
-        cuenta.prestamos.push(prestamo);
-      }
-      
-      // Calcular total abonado real cargando abonos desde la base de datos
-      for (const [trabajadorId, cuenta] of cuentasMap) {
-        let totalAbonadoCuenta = 0;
-        
-        for (const prestamo of cuenta.prestamos) {
-          try {
-            const abonosSnapshot = await getDocs(collection(db, 'prestamosTrabajadores', prestamo.id, 'abonos'));
-            let totalAbonosPrestamo = 0;
-            
-            abonosSnapshot.forEach(doc => {
-              const abono = doc.data();
-              totalAbonosPrestamo += abono.monto || 0;
-            });
-            
-            totalAbonadoCuenta += totalAbonosPrestamo;
-            
-            // Actualizar el saldoPendiente del préstamo en memoria
-            prestamo.saldoPendienteReal = prestamo.montoInicial - totalAbonosPrestamo;
-          } catch (error) {
-            console.error(`Error al cargar abonos para préstamo ${prestamo.id}:`, error);
-          }
-        }
-        
-        cuenta.totalAbonado = totalAbonadoCuenta;
-        cuenta.saldoPendiente = cuenta.totalPrestado - cuenta.totalAbonado;
-        cuenta.porcentajePagado = cuenta.totalPrestado > 0 ? 
-          Math.round((cuenta.totalAbonado / cuenta.totalPrestado) * 100) : 0;
-      }
-      
-      this.cuentasTrabajadores = Array.from(cuentasMap.values());
     },
     
     async cargarTrabajadores() {
@@ -627,7 +484,8 @@ export default {
     },
     
     async guardarNuevoPrestamo() {
-      if (!this.nuevoPrestamo.trabajadorId || !this.nuevoPrestamo.monto) {
+      if (this.guardando) return;
+      if (!this.nuevoPrestamo.trabajadorId || !Number.isFinite(this.nuevoPrestamo.monto) || this.nuevoPrestamo.monto <= 0) {
         alert('Por favor complete todos los campos requeridos');
         return;
       }
@@ -650,7 +508,7 @@ export default {
         
         this.showModalNuevoPrestamo = false;
         await this.cargarPrestamos();
-        alert('Préstamo registrado correctamente');
+        this.mensaje = 'Préstamo registrado correctamente';
       } catch (error) {
         console.error("Error al guardar préstamo: ", error);
         alert('Error al guardar préstamo: ' + error.message);
@@ -686,41 +544,11 @@ export default {
       }
     },
     
-    async verHistorial(cuenta) {
+    verHistorial(cuenta) {
       this.cuentaSeleccionada = cuenta;
-      const historial = [];
-      cuenta.prestamos.forEach(prestamo => {
-        historial.push({
-          tipo: 'prestamo',
-          fecha: prestamo.fecha,
-          fechaCreacion: prestamo.fechaCreacion,
-          descripcion: prestamo.descripcion || 'Préstamo otorgado',
-          monto: prestamo.montoInicial,
-          id: prestamo.id
-        });
-      });
-      try {
-        const abonosPorPrestamo = await Promise.all(
-          cuenta.prestamos.map(async (prestamo) => {
-            const snap = await getDocs(collection(db, 'prestamosTrabajadores', prestamo.id, 'abonos'));
-            return snap.docs.map(d => ({ id: d.id, prestamoId: prestamo.id, ...d.data() }));
-          })
-        );
-        abonosPorPrestamo.flat().forEach(abono => {
-          historial.push({
-            tipo: 'abono',
-            fecha: abono.fecha,
-            fechaCreacion: abono.fechaCreacion,
-            descripcion: abono.descripcion,
-            monto: abono.monto,
-            id: abono.id,
-            prestamoId: abono.prestamoId
-          });
-        });
-      } catch (error) {
-        console.error('Error al cargar abonos para historial: ', error);
-      }
-      this.historialCompleto = historial.sort((a, b) => new Date(b.fechaCreacion) - new Date(a.fechaCreacion));
+      this.filtroMovimiento = '';
+      this.limiteHistorial = 40;
+      this.historialCompleto = movimientosCuenta(cuenta);
       this.showHistorialModal = true;
     },
     
@@ -734,46 +562,14 @@ export default {
       this.showAbonoModal = true;
     },
     
-    async verDetalle(prestamo) {
-      this.prestamoSeleccionado = prestamo;
-      this.abonos = [];
-      
-      try {
-        const abonosSnapshot = await getDocs(
-          query(
-            collection(db, 'prestamosTrabajadores', prestamo.id, 'abonos'),
-            orderBy('fechaCreacion', 'desc')
-          )
-        );
-        
-        this.abonos = abonosSnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }));
-        
-        this.showDetalleModal = true;
-      } catch (error) {
-        console.error("Error al cargar detalle del préstamo: ", error);
-      }
-    },
-    
-    agregarAbono(prestamo) {
-      this.prestamoSeleccionado = prestamo;
-      this.nuevoAbono = {
-        fecha: this.obtenerFechaActual(),
-        descripcion: '',
-        monto: null
-      };
-      this.showAbonoModal = true;
-    },
-    
     async guardarAbono() {
+      if (this.guardando) return;
       if (!this.nuevoAbono.descripcion || !this.nuevoAbono.monto) {
         alert('Por favor complete todos los campos del abono');
         return;
       }
       
-      if (this.nuevoAbono.monto <= 0) {
+      if (!Number.isFinite(this.nuevoAbono.monto) || this.nuevoAbono.monto <= 0) {
         alert('El monto del abono debe ser mayor a cero');
         return;
       }
@@ -787,8 +583,8 @@ export default {
         this.guardando = true;
         
         // Buscar el préstamo más reciente de la cuenta para asociar el abono
-        const prestamoMasReciente = this.cuentaSeleccionada.prestamos
-          .sort((a, b) => new Date(b.fechaCreacion) - new Date(a.fechaCreacion))[0];
+        const prestamoMasReciente = [...this.cuentaSeleccionada.prestamos]
+          .sort((a, b) => fechaMovimiento(b.fechaCreacion) - fechaMovimiento(a.fechaCreacion))[0];
         
         if (!prestamoMasReciente) {
           alert('Error: No se encontró un préstamo para asociar el abono');
@@ -817,7 +613,7 @@ export default {
         
         this.showAbonoModal = false;
         await this.cargarPrestamos(); // Recargar todo para actualizar las cuentas
-        alert('Abono registrado correctamente');
+        this.mensaje = 'Abono registrado correctamente';
       } catch (error) {
         console.error("Error al guardar abono: ", error);
         alert('Error al guardar abono: ' + error.message);
@@ -826,75 +622,10 @@ export default {
       }
     },
     
-    async eliminarPrestamo(prestamo) {
-      if (confirm(`¿Está seguro que desea eliminar el préstamo de ${prestamo.trabajadorNombre}? Esta acción no se puede deshacer.`)) {
-        try {
-          this.cargando = true;
-          
-          const abonosSnapshot = await getDocs(collection(db, 'prestamosTrabajadores', prestamo.id, 'abonos'));
-          const batch = writeBatch(db);
-          
-          abonosSnapshot.forEach((documento) => {
-            batch.delete(doc(db, 'prestamosTrabajadores', prestamo.id, 'abonos', documento.id));
-          });
-          
-          await batch.commit();
-          await deleteDoc(doc(db, 'prestamosTrabajadores', prestamo.id));
-          
-          this.prestamos = this.prestamos.filter(p => p.id !== prestamo.id);
-          
-          alert('Préstamo eliminado correctamente');
-        } catch (error) {
-          console.error("Error al eliminar el préstamo: ", error);
-          alert('Error al eliminar el préstamo: ' + error.message);
-        } finally {
-          this.cargando = false;
-        }
-      }
-    },
-    
-    async eliminarAbono(index) {
-      if (!confirm('¿Está seguro de eliminar este abono?')) return;
-      
-      const abono = this.abonos[index];
-      
+    async eliminarMovimiento(movimiento) {
+      if (this.guardando) return;
       try {
         this.guardando = true;
-        
-        await deleteDoc(doc(db, 'prestamosTrabajadores', this.prestamoSeleccionado.id, 'abonos', abono.id));
-        
-        this.abonos.splice(index, 1);
-        
-        const nuevoSaldoPendiente = this.calcularSaldoPendiente();
-        
-        await updateDoc(doc(db, 'prestamosTrabajadores', this.prestamoSeleccionado.id), {
-          saldoPendiente: nuevoSaldoPendiente,
-          estado: nuevoSaldoPendiente <= 0 ? 'pagado' : 'activo'
-        });
-        
-        this.prestamos = this.prestamos.map(p => {
-          if (p.id === this.prestamoSeleccionado.id) {
-            return {
-              ...p,
-              saldoPendiente: nuevoSaldoPendiente,
-              estado: nuevoSaldoPendiente <= 0 ? 'pagado' : 'activo'
-            };
-          }
-          return p;
-        });
-        
-        this.prestamoSeleccionado.saldoPendiente = nuevoSaldoPendiente;
-        this.prestamoSeleccionado.estado = nuevoSaldoPendiente <= 0 ? 'pagado' : 'activo';
-      } catch (error) {
-        console.error("Error al eliminar abono: ", error);
-        alert('Error al eliminar abono: ' + error.message);
-      } finally {
-        this.guardando = false;
-      }
-    },
-    
-    async eliminarMovimiento(movimiento) {
-      try {
         if (movimiento.tipo === 'abono') {
           if (!confirm('¿Eliminar este abono? Esta acción no se puede deshacer.')) return;
           await deleteDoc(doc(db, 'prestamosTrabajadores', movimiento.prestamoId, 'abonos', movimiento.id));
@@ -933,15 +664,38 @@ export default {
       } catch (error) {
         console.error('Error al eliminar movimiento: ', error);
         alert('Error al eliminar: ' + error.message);
+      } finally {
+        this.guardando = false;
+      }
+    },
+
+    async eliminarCuenta(cuenta) {
+      if (this.guardando) return;
+      const confirmacion = confirm(
+        `¿Borrar la cuenta de préstamos de ${cuenta.trabajadorNombre}?\n\n` +
+        `Se eliminarán ${cuenta.prestamos.length} préstamo(s), todos sus abonos y el historial completo. ` +
+        'El trabajador seguirá disponible. Esta acción no se puede deshacer.'
+      );
+      if (!confirmacion) return;
+
+      try {
+        this.guardando = true;
+        await eliminarCuentaPrestamos('prestamosTrabajadores', cuenta);
+        this.showHistorialModal = false;
+        this.showAbonoModal = false;
+        this.cuentaSeleccionada = null;
+        await this.cargarPrestamos(true);
+        this.mensaje = `Cuenta de préstamos de ${cuenta.trabajadorNombre} eliminada`;
+      } catch (error) {
+        console.error('Error al borrar cuenta de préstamos:', error);
+        alert('No se pudo borrar la cuenta: ' + error.message);
+      } finally {
+        this.guardando = false;
       }
     },
     
-    calcularSaldoPendiente() {
-      return this.prestamoSeleccionado?.montoInicial - this.totalAbonos;
-    },
-    
     closeModalOnOverlay(event) {
-      if (event.target === event.currentTarget) {
+      if (!this.guardando && event.target === event.currentTarget) {
         this.showModalNuevoPrestamo = false;
         this.showModalNuevoTrabajador = false;
         this.showHistorialModal = false;
@@ -951,7 +705,7 @@ export default {
   },
   
   async mounted() {
-    await Promise.all([this.cargarPrestamos(), this.cargarTrabajadores()]);
+    await Promise.all([this.cargarPrestamos(false), this.cargarTrabajadores()]);
   }
 };
 </script>
@@ -1868,4 +1622,5 @@ h1 {
     grid-template-columns: 1fr;
   }
 }
-</style> 
+</style>
+<style scoped src="./prestamos-workspace.css"></style>

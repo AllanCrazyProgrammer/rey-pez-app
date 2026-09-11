@@ -1,0 +1,90 @@
+.prestamos-workspace { max-width: 1320px; padding: 28px 20px 64px; color: #203b48; background: #f8faf8; border-radius: 16px; margin-top: 20px; min-height: calc(100vh - 150px); }
+.prestamos-workspace .workspace-heading { display: flex; justify-content: space-between; align-items: center; gap: 20px; margin: 22px 0 28px; }
+.prestamos-workspace .eyebrow { color: #397267; font-size: 11px; font-weight: 700; letter-spacing: .16em; }
+.prestamos-workspace h1 { text-align: left; border: 0; padding: 0; margin: 8px 0; font-size: clamp(24px, 3vw, 34px); font-weight: 750; color: #183d40; }
+.prestamos-workspace .workspace-heading p { margin: 0; color: #647780; }
+.prestamos-workspace button, .prestamos-workspace input, .prestamos-workspace select { min-height: 42px; }
+.prestamos-workspace button { cursor: pointer; transition: background .15s; }
+.prestamos-workspace button:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+.prestamos-workspace button:focus-visible, .prestamos-workspace input:focus-visible, .prestamos-workspace select:focus-visible { outline: 3px solid #5ebbb0; outline-offset: 3px; }
+.prestamos-workspace .btn-refresh, .prestamos-workspace .pagination-bar button { padding: 9px 16px; border: 1px solid #cedcda; background: white; color: #28554e; border-radius: 9px; white-space: nowrap; }
+.prestamos-workspace .filtros-container { background: #f0f5f4; border: 1px solid #dce7e3; border-radius: 14px; box-shadow: none; margin-bottom: 12px; padding: 16px; gap: 16px; }
+.prestamos-workspace .filtro { min-width: 150px; }
+.prestamos-workspace .filtro-busqueda { flex: 2; }
+.prestamos-workspace .filtro input, .prestamos-workspace select { width: 100%; border: 1px solid #cbd8d4; border-radius: 8px; padding: 10px 12px; background: white; color: #284c49; }
+.prestamos-workspace .results-caption { color: #687c79; font-size: 12px; margin: 10px 0 16px; }
+.prestamos-workspace .resumen-container { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 24px; }
+.prestamos-workspace .resumen-card { min-width: 0; text-align: left; border: 1px solid #e1e9e5; border-radius: 12px; box-shadow: none; padding: 20px; }
+.prestamos-workspace .resumen-card.pendiente { order: -2; background: #173f3a; border-color: #173f3a; }
+.prestamos-workspace .resumen-card.pendiente h3, .prestamos-workspace .resumen-card.pendiente p { color: white; }
+.prestamos-workspace .resumen-card.total-prestado { order: -1; }
+.prestamos-workspace .resumen-card.activos { order: 2; }
+.prestamos-workspace .resumen-card h3 { font-size: 12px; font-weight: 600; color: #5b726c; }
+.prestamos-workspace .resumen-card p { font-size: clamp(20px, 2.3vw, 29px); color: #244c48; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.prestamos-workspace .resumen-card.abonado p { color: #157754; }
+.prestamos-workspace .acciones-container { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; margin-bottom: 22px; }
+.prestamos-workspace .orden-cuentas { margin-right: auto; text-align: left; }
+.prestamos-workspace .orden-cuentas label { display: block; font-size: 12px; color: #647870; margin-bottom: 5px; }
+.prestamos-workspace .btn-nuevo-prestamo, .prestamos-workspace .btn-abono, .prestamos-workspace .btn-guardar { background: #196a5a; border: 1px solid #196a5a; border-radius: 9px; padding: 10px 17px; color: white; box-shadow: none; }
+.prestamos-workspace .btn-nuevo-trabajador, .prestamos-workspace .btn-nueva-despicadora, .prestamos-workspace .btn-historial { background: white; border: 1px solid #cbdad4; color: #315d54; border-radius: 9px; padding: 10px 16px; box-shadow: none; }
+.prestamos-workspace .btn-eliminar-cuenta { background: #fff; border: 1px solid #e3b9b2; color: #a33f32; border-radius: 9px; padding: 10px 16px; font-size: .9em; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 8px; }
+.prestamos-workspace .btn-eliminar-cuenta:hover { background: #fff1ee; border-color: #cb786b; }
+.prestamos-workspace .cuentas-container { gap: 12px; }
+.prestamos-workspace .cuenta-card { border: 1px solid #dce6e1; border-radius: 13px; box-shadow: 0 2px 5px #173f3a04; overflow: hidden; }
+.prestamos-workspace .cuenta-card:hover { transform: none; box-shadow: 0 3px 12px #173f3a0a; }
+.prestamos-workspace .cuenta-header { padding: 21px 24px 12px; gap: 24px; align-items: center; }
+.prestamos-workspace .trabajador-nombre, .prestamos-workspace .despicadora-nombre { color: #233e3c; font-size: 19px; margin: 0 0 8px; }
+.prestamos-workspace .account-status { display: inline-block; border-radius: 5px; background: #fff1da; color: #855614; padding: 4px 8px; font-size: 11px; font-weight: 600; }
+.prestamos-workspace .account-status.settled { background: #e4f3ec; color: #216044; }
+.prestamos-workspace .loan-count { color: #72817a; font-size: 12px; margin-left: 10px; }
+.prestamos-workspace .cuenta-stats { margin-top: 16px; gap: 32px; }
+.prestamos-workspace .stat .label { font-size: 11px; color: #62756c; }
+.prestamos-workspace .stat .value { font-size: 18px; font-variant-numeric: tabular-nums; }
+.prestamos-workspace .stat .value.prestado { color: #35596b; }
+.prestamos-workspace .stat .value.abonado { color: #19805b; }
+.prestamos-workspace .stat .value.pendiente { color: #956019; font-size: 22px; }
+.prestamos-workspace .cuenta-resumen { padding: 10px 24px 18px; background: transparent; border: 0; }
+.prestamos-workspace .progress-bar { height: 5px; background: #e7efeb; }
+.prestamos-workspace .progress-fill, .prestamos-workspace .progress-fill-large { background: #36a180; }
+.prestamos-workspace .progress-text { font-size: 11px; color: #64786d; }
+.prestamos-workspace .pagination-bar { display: flex; align-items: center; justify-content: center; gap: 18px; margin-top: 24px; font-size: 13px; }
+.prestamos-workspace .modal-overlay { background: #102e3b80; backdrop-filter: blur(3px); padding: 18px; z-index: 1100; }
+.prestamos-workspace .modal-content { border: 0; border-radius: 16px; box-shadow: 0 24px 80px #102e3b33; max-height: 90vh; width: 100%; max-width: 560px; }
+.prestamos-workspace .modal-content.modal-large { max-width: 880px; }
+.prestamos-workspace .modal-header { background: #f2f7f4; border-bottom: 1px solid #dfebe3; padding: 20px 24px; }
+.prestamos-workspace .modal-header h2 { font-size: 20px; color: #244f42; margin: 0; }
+.prestamos-workspace .modal-body { padding: 24px; overflow-y: auto; }
+.prestamos-workspace .history-heading { display: flex; align-items: center; gap: 16px; justify-content: space-between; }
+.prestamos-workspace .history-heading h3 { font-size: 18px; margin: 0; }
+.prestamos-workspace .history-heading select { width: auto; }
+.prestamos-workspace .movimiento-item { box-shadow: none; border-radius: 10px; margin-bottom: 10px; padding: 15px; border: 1px solid #e3eae6; }
+.prestamos-workspace .movimiento-item.prestamo { border-left: 4px solid #5286a2; background: #f6f9fc; }
+.prestamos-workspace .movimiento-item.abono { border-left: 4px solid #36a180; background: #f3faf5; }
+.prestamos-workspace .movimiento-monto.prestamo, .prestamos-workspace .movimiento-item.prestamo .movimiento-icon { color: #386983; }
+.prestamos-workspace .movimiento-monto.abono, .prestamos-workspace .movimiento-item.abono .movimiento-icon { color: #187451; }
+.prestamos-workspace .movimiento-descripcion { overflow-wrap: anywhere; }
+.prestamos-workspace .movimiento-monto { font-variant-numeric: tabular-nums; font-size: 20px; }
+.prestamos-workspace .abono-preview { display: grid; gap: 7px; border: 1px solid #cce3d5; border-radius: 10px; padding: 17px; background: #f2faf5; margin: 16px 0; color: #39634c; }
+.prestamos-workspace .abono-preview strong { font-size: 26px; color: #175e3c; }
+.prestamos-workspace .abono-preview button { justify-self: start; background: none; border: 0; padding: 0; color: #196a5a; text-decoration: underline; }
+.prestamos-workspace .notice-error, .prestamos-workspace .notice-success { padding: 14px 18px; margin: 14px 0; border-radius: 9px; background: #fff1ee; color: #984c37; }
+.prestamos-workspace .notice-success { background: #eaf6ee; color: #286548; }
+.prestamos-workspace .notice-success button { float: right; border: 0; background: none; min-height: 24px; }
+@media (max-width: 700px) {
+  .prestamos-workspace { width: 100%; padding: 14px 12px 40px; }
+  .prestamos-workspace .workspace-heading { align-items: flex-start; }
+  .prestamos-workspace .workspace-heading p { font-size: 12px; }
+  .prestamos-workspace .resumen-container { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .prestamos-workspace .resumen-card { padding: 15px; }
+  .prestamos-workspace .cuenta-header { padding: 18px 16px 10px; flex-direction: column; align-items: stretch; gap: 16px; }
+  .prestamos-workspace .cuenta-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .prestamos-workspace .stat.saldo { grid-column: 1 / -1; }
+  .prestamos-workspace .cuenta-acciones { display: flex; width: 100%; }
+  .prestamos-workspace .cuenta-acciones button { flex: 1; }
+  .prestamos-workspace .filtro-busqueda { flex-basis: 100%; }
+  .prestamos-workspace .history-heading { flex-wrap: wrap; }
+  .prestamos-workspace .modal-overlay { padding: 8px; }
+  .prestamos-workspace .modal-body { padding: 16px; }
+  .prestamos-workspace .resumen-stats { display: grid; grid-template-columns: 1fr; }
+  .prestamos-workspace .orden-cuentas { width: 100%; }
+}

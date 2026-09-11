@@ -1,8 +1,8 @@
 <template>
   <div id="app" :class="{ 'app--pesadas': !mostrarFooter }">
     <Navbar />
-    <div class="content-wrapper" :class="{ 'content-wrapper--pesadas': !mostrarFooter }">
-      <div class="content-horizon-grid" aria-hidden="true">
+    <div class="content-wrapper" :class="{ 'content-wrapper--pesadas': !mostrarFooter, 'content-wrapper--prestamos': esPrestamos }">
+      <div v-if="!esPrestamos" class="content-horizon-grid" aria-hidden="true">
         <div class="content-horizon-grid__sun"></div>
         <div class="content-horizon-grid__plane"></div>
       </div>
@@ -35,6 +35,9 @@ export default {
     Footer
   },
   computed: {
+    esPrestamos() {
+      return this.$route.path === '/procesos/prestamos' || this.$route.path.startsWith('/procesos/prestamos/');
+    },
     notifications() {
       return useUIStore().notifications;
     },
@@ -123,6 +126,15 @@ html.platform-windows [aria-disabled="true"] {
 }
 
 /* La hoja diaria crece con sus filas y se desplaza junto con la navegación. */
+.content-wrapper.content-wrapper--prestamos {
+  background: #edf3ef;
+}
+.content-wrapper.content-wrapper--prestamos::before,
+.content-wrapper.content-wrapper--prestamos::after {
+  display: none;
+  animation: none;
+}
+
 .content-wrapper--pesadas {
   flex: 1 0 auto;
   overflow: visible;
