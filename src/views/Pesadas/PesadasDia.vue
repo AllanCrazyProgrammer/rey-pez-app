@@ -1,7 +1,7 @@
 <template>
   <main class="pesadas-page pesadas-day-page">
     <header class="pesadas-heading">
-      <div><router-link class="pesadas-back" to="/pesadas">← Historial de pesadas</router-link><h1>Pesadas <span v-if="fechaValida">{{ fechaTexto }}</span></h1><p>Agrega un nombre y presiona Enter para continuar con la siguiente persona.</p></div>
+      <div><router-link class="pesadas-back" to="/pesadas"><span class="pesadas-back-icon">←</span> Historial de pesadas</router-link><h1>Pesadas <span v-if="fechaValida">{{ fechaTexto }}</span></h1><p>Agrega un nombre y presiona Enter para continuar con la siguiente persona.</p></div>
       <div class="pesadas-day-controls"><label>Fecha <input :value="fecha" type="date" min="1900-01-01" aria-label="Cambiar fecha de pesadas" @change="cambiarFecha"></label><span class="pesadas-status" role="status" aria-live="polite">{{ estadoTexto }}</span></div>
     </header>
     <section v-if="!fechaValida" class="pesadas-card"><p class="pesadas-alert">La fecha no es válida. Vuelve al historial y selecciona un día.</p></section>

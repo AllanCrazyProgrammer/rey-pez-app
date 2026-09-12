@@ -60,6 +60,43 @@ test('calculates mixed column prices and deducts bathrooms once per named person
   assert.equal(Math.round(summary.precioPromedio * 10) / 10, 11.2);
 });
 
+test('groups kilos by measure across columns and people regardless of column price', () => {
+  const data = {
+    columnas: {
+      a: { orden: 0, medida: ' 51 / 60 ', precio: 10 },
+      b: { orden: 1, medida: '51/60', precio: 12 },
+      c: { orden: 2, medida: 'Laguna', precio: 8 },
+      d: { orden: 3, medida: ' laguna ', precio: 9 },
+      e: { orden: 4, medida: '', precio: 10 },
+      f: { orden: 5, medida: ' ', precio: 10 },
+      deleted: { orden: 6, medida: '51/60', precio: 10, eliminado: true }
+    },
+    personas: { p1: { nombre: 'Luisa' }, p2: { nombre: 'Sandra' }, blank: { nombre: '' }, deleted: { nombre: 'Ana', eliminado: true } },
+    pesos: {
+      p1: { a: .1, b: .2, c: 2.5, d: 1.1, e: .3, f: .6, deleted: 999 },
+      p2: { a: 3, b: 4, c: 1.5 },
+      blank: { a: 999 }, deleted: { a: 999 }
+    }
+  };
+  const summary = resumenPesadas(data);
+  assert.deepEqual(summary.kilosPorMedida, [
+    { medida: '51/60', kilos: 7.3 }, { medida: 'Laguna', kilos: 5.1 }, { medida: 'Sin medida', kilos: .9 }
+  ]);
+  assert.equal(summary.kilos, 13.3);
+  assert.equal(summary.kilosPorMedida.reduce((total, group) => total + Math.round(group.kilos * 10), 0), Math.round(summary.kilos * 10));
+  // Local pending edits must regroup both column labels and captured weights.
+  const edited = aplicarCamposPesadas(data, { 'columnas.b.medida': 'Laguna', 'pesos.p1.a': .2 });
+  assert.deepEqual(resumenPesadas(edited).kilosPorMedida.slice(0, 2), [
+    { medida: '51/60', kilos: 3.2 }, { medida: 'Laguna', kilos: 9.3 }
+  ]);
+});
+
+test('measure totals handle empty days and zero kilos without inventing a measure', () => {
+  assert.deepEqual(resumenPesadas({}).kilosPorMedida, []);
+  assert.deepEqual(resumenPesadas({ columnas: { a: { medida: '71/90', precio: 10 } } }).kilosPorMedida,
+    [{ medida: '71/90', kilos: 0 }]);
+});
+
 test('rounds once per person, half up, and totals rounded payments', () => {
   const data = sample();
   data.columnas.c1.precio = 1.5;

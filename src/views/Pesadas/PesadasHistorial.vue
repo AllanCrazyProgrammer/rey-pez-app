@@ -20,7 +20,10 @@
           <li v-for="dia in visibles" :key="dia.fecha">
             <div class="pesadas-history-day-heading">
               <router-link :to="`/pesadas/${dia.fecha}`"><strong>{{ fechaTexto(dia.fecha) }}</strong><small v-if="dia.pendiente">Pendiente de sincronizar</small></router-link>
-            <button class="pesadas-button pesadas-delete-day" :disabled="!!eliminando || dia.pendiente || desdeCache" :aria-label="`Eliminar día ${fechaTexto(dia.fecha)}`" @click="eliminarDia(dia)">{{ eliminando === dia.fecha ? 'Eliminando…' : 'Eliminar día' }}</button>
+              <div class="pesadas-history-actions">
+                <button class="pesadas-button" :aria-label="`Ver kilos por medida del ${fechaTexto(dia.fecha)}`" @click="fechaMedidas = dia.fecha">Kilos por medida</button>
+                <button class="pesadas-button pesadas-delete-day" :disabled="!!eliminando || dia.pendiente || desdeCache" :aria-label="`Eliminar día ${fechaTexto(dia.fecha)}`" @click="eliminarDia(dia)">{{ eliminando === dia.fecha ? 'Eliminando…' : 'Eliminar día' }}</button>
+              </div>
             </div>
             <router-link :to="`/pesadas/${dia.fecha}`">
               <div class="pesadas-history-metrics"><span>{{ dia.resumen.banos }} personas</span><span>{{ numero(dia.resumen.kilos) }} kg</span><strong>${{ pago(dia.resumen.pagosRedondeados) }} <small>pago a despicadoras</small></strong><strong>${{ pago(dia.resumen.pagoPromedioRedondeado) }} <small>pago promedio por despicadora</small></strong></div>
@@ -31,6 +34,7 @@
         <button v-if="visibles.length < jornadas.length" class="pesadas-button" @click="limite += 20">Mostrar más días</button>
       </template>
     </section>
+    <PesadasMedidas v-if="diaMedidas" :dia="diaMedidas" :desde-cache="desdeCache" @cerrar="fechaMedidas = ''" />
   </main>
 </template>
 
@@ -39,10 +43,12 @@ import { observarHistorialPesadas, eliminarDiaPesadas, crearDiaPesadas } from '@
 import { PESADAS_PENDING_PREFIX, leerOperacionesPesadas, camposOperacionesPesadas } from '@/services/pesadasOutbox';
 import { aplicarCamposPesadas, fechaPesadasHoy, fechaPesadasValida, formatoFechaPesadas, formatoPagoPesada, formatoPesada, resumenPesadas } from '@/utils/pesadas';
 import './pesadas.css';
+import PesadasMedidas from './PesadasMedidas.vue';
 
 export default {
   name: 'PesadasHistorial',
-  data: () => ({ hoy: fechaPesadasHoy(), fecha: fechaPesadasHoy(), creando: '', eliminando: '', registros: [], locales: {}, cargando: true, desdeCache: false, error: '', limite: 20 }),
+  components: { PesadasMedidas },
+  data: () => ({ hoy: fechaPesadasHoy(), fecha: fechaPesadasHoy(), creando: '', eliminando: '', registros: [], locales: {}, cargando: true, desdeCache: false, error: '', limite: 20, fechaMedidas: '' }),
   computed: {
     jornadas() {
       const days = Object.fromEntries(this.registros.map(day => [day.fecha, day]));
@@ -52,7 +58,8 @@ export default {
       return Object.values(days).filter(day => fechaPesadasValida(day.fecha) && !day.eliminado)
         .map(day => ({ ...day, resumen: resumenPesadas(day) })).sort((a, b) => b.fecha.localeCompare(a.fecha));
     },
-    visibles() { return this.jornadas.slice(0, this.limite); }
+    visibles() { return this.jornadas.slice(0, this.limite); },
+    diaMedidas() { return this.jornadas.find(dia => dia.fecha === this.fechaMedidas); }
   },
   mounted() {
     this.leerLocales();

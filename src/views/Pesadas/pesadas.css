@@ -6,7 +6,12 @@
 .pesadas-heading h1 span { font-weight: 400; color: #d5cef5; }
 .pesadas-heading p { color: #d5cef5; margin: 8px 0; }
 .pesadas-heading .pesadas-eyebrow { font-size: 12px; font-weight: bold; letter-spacing: 2px; color: #ace8ee; }
-.pesadas-back { color: #c9f4fa; font-size: 14px; }
+.pesadas-page .pesadas-back { display: inline-flex; align-items: center; gap: 10px; min-height: 44px; padding: 8px 16px 8px 8px; margin-bottom: 12px; border: 1px solid #ace8ee66; border-radius: 12px; background: #241739; color: #d4f8fc; font-size: 14px; font-weight: 700; line-height: 1.2; text-decoration: none; box-shadow: 0 3px 12px #10062533; transition: background-color .18s ease, border-color .18s ease, box-shadow .18s ease; }
+.pesadas-back-icon { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; flex-shrink: 0; border-radius: 8px; background: #ace8ee1f; color: #ace8ee; font-size: 21px; line-height: 1; }
+.pesadas-page .pesadas-back:hover { background: #33234b; border-color: #ace8ee; color: #fff; text-decoration: none; box-shadow: 0 3px 16px #ace8ee1f; }
+.pesadas-page .pesadas-back:focus-visible { outline-color: #ace8ee; outline-offset: 3px; }
+.pesadas-page .pesadas-back:active { background: #1b102d; box-shadow: none; }
+@media (prefers-reduced-motion: reduce) { .pesadas-page .pesadas-back { transition: none; } }
 .pesadas-card { background: #fff; border: 1px solid #dedbea; border-radius: 16px; padding: 24px; margin-bottom: 20px; box-shadow: 0 8px 32px #10062526; }
 .pesadas-page .pesadas-button { display: inline-flex; align-items: center; justify-content: center; gap: 10px; background: #fff; color: #453575; border: 1px solid #cec7e0; border-radius: 9px; min-height: 42px; padding: 10px 16px; font-size: 14px; font-weight: 700; text-decoration: none; cursor: pointer; }
 .pesadas-page .pesadas-button:hover { background: #f0edf8; }
@@ -167,3 +172,21 @@
 .pesadas-history li > a .pesadas-history-metrics { flex: 1; order: 0; }
 .pesadas-page .pesadas-delete-day { color: #a12e2e; border-color: #dfb5b5; background: #fff0ec; font-size: 13px; margin-left: auto; }
 .pesadas-page .pesadas-delete-day:hover:not(:disabled) { background: #fff0ec; }
+
+.pesadas-history-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.pesadas-history-actions .pesadas-delete-day { margin-left: 0; }
+.pesadas-measures-overlay { width: auto; margin: 0; }
+.pesadas-measures-dialog { width: min(560px, 100%); height: auto; max-height: 90vh; }
+.pesadas-measures-dialog header { align-items: flex-start; }
+.pesadas-measures-dialog header .pesadas-button { flex-shrink: 0; }
+.pesadas-measures-table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 16px; }
+.pesadas-measures-table th, .pesadas-measures-table td { padding: 14px 12px; border-bottom: 1px solid #eeeaf4; text-align: left; }
+.pesadas-measures-table th:first-child { overflow-wrap: anywhere; }
+.pesadas-measures-table thead { background: #f4f1f8; color: #453575; font-size: 13px; }
+.pesadas-measures-table th:last-child, .pesadas-measures-table td { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pesadas-measures-table tfoot { background: #ece8f2; color: #453575; font-weight: 800; }
+@media (max-width: 480px) {
+  .pesadas-history-day-heading { flex-wrap: wrap; }
+  .pesadas-history-actions { width: 100%; justify-content: space-between; }
+  .pesadas-history-actions .pesadas-button { padding: 10px 12px; }
+}

@@ -87,7 +87,16 @@ export function resumenPesadas(data) {
     return current;
   }, null) : null;
   const pagosRedondeados = personas.reduce((total, person) => total + person.pagoRedondeado, 0);
+  const medidas = new Map();
+  columns.forEach(column => {
+    const medida = String(column.medida || '').trim().replace(/\s+/g, ' ').replace(/\s*\/\s*/g, '/');
+    const key = medida.toLocaleLowerCase('es-MX');
+    if (!medidas.has(key)) medidas.set(key, { medida: medida || 'Sin medida', decimas: 0 });
+    medidas.get(key).decimas += kilosPorColumna[column.id];
+  });
+  const kilosPorMedida = Array.from(medidas.values(), ({ medida, decimas }) => ({ medida, kilos: decimas / 10 }));
   return { personas, banos: personas.length, kilos, bruto, pagos, pagosRedondeados, mejor,
+    kilosPorMedida,
     kilosPorColumna: Object.fromEntries(Object.entries(kilosPorColumna).map(([id, decimas]) => [id, decimas / 10])),
     pagoPromedio: personas.length ? pagos / personas.length : 0,
     pagoPromedioRedondeado: personas.length ? pagosRedondeados / personas.length : 0,
