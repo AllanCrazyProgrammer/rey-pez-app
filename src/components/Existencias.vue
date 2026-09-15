@@ -40,7 +40,7 @@
           <router-link to="/asesor-experto" class="asesor-button">
             <span class="btn-icono" aria-hidden="true">🦐</span> Asesor Experto
           </router-link>
-          <button @click="imprimirReporte" class="print-button">
+          <button @click="solicitarImpresion" class="print-button" :disabled="!inventarioListo">
             <span class="btn-icono" aria-hidden="true">⎙</span> Imprimir Reporte
           </button>
         </div>
@@ -64,6 +64,14 @@
           <span class="hud-valor">${{ formatNumber(valorLibre) }}</span>
         </div>
       </div>
+
+      <p v-if="errorInventario" class="error-inventario" role="alert">{{ errorInventario }} <button type="button" @click="loadExistencias">Reintentar</button></p>
+      <AlertasExistenciasLimpios
+        ref="alertasExistencias"
+        :existencias="existencias"
+        :inventario-listo="inventarioListo"
+        @continuar-impresion="imprimirReporte"
+      />
 
       <div class="filters">
         <label class="input-wrap">
@@ -103,7 +111,7 @@
               <tbody>
                 <tr v-for="(item, itemKey) in datos.items" :key="itemKey" v-if="item.kilos > 0">
                   <td>
-                    {{ item.medida }}
+                    <button type="button" class="medida-alerta-button" @click="abrirAlertaLote(item, medidaKey)" :aria-label="'Configurar mínimo del lote ' + item.medida + ' del ' + (item.fechaEntrada ? formatearFecha(item.fechaEntrada) : 'sin fecha')">{{ item.medida }}</button>
                     <span class="fecha-entrada" v-if="item.fechaEntrada">
                       ({{ formatearFecha(item.fechaEntrada) }})
                     </span>
@@ -161,7 +169,7 @@
                 <tbody>
                   <tr v-for="(medida, medidaIdx) in proveedorData.items" :key="`${medida.medida}-${medida.proveedor}-${medida.precio || 'sin-precio'}-${medidaIdx}`" v-if="medida.kilos > 0">
                     <td>
-                      {{ medida.medida }}
+                      <button type="button" class="medida-alerta-button" @click="abrirAlertaLote(medida, proveedor)" :aria-label="'Configurar mínimo del lote ' + medida.medida + ' del ' + (medida.fechaEntrada ? formatearFecha(medida.fechaEntrada) : 'sin fecha')">{{ medida.medida }}</button>
                       <span class="fecha-entrada" v-if="medida.fechaEntrada">
                         ({{ formatearFecha(medida.fechaEntrada) }})
                       </span>
@@ -217,7 +225,7 @@
             <tbody>
               <tr v-for="(item, idx) in items" :key="`${cuartoKey}-${idx}-${item.medida}-${item.proveedor}`">
                 <td>{{ item.proveedor }}</td>
-                <td>{{ item.medida }}</td>
+                <td><button type="button" class="medida-alerta-button" @click="abrirAlertaLote(item, item.proveedor)" :aria-label="'Configurar mínimo del lote ' + item.medida + ' del ' + (item.fechaEntrada ? formatearFecha(item.fechaEntrada) : 'sin fecha')">{{ item.medida }}</button></td>
                 <td v-if="tienePrecio" class="precio-cell">{{ item.precio ? `$${item.precio}` : '-' }}</td>
                 <td class="kilos-cell">{{ formatNumber(item.kilos) }}</td>
                 <td class="fecha-entrada">{{ item.fechaEntrada ? formatearFecha(item.fechaEntrada) : '' }}</td>
@@ -321,14 +329,25 @@ import { collection, getDocs, onSnapshot, orderBy, query, where } from 'firebase
 import moment from 'moment';
 import { formatearFecha, formatNumber } from '@/utils/formatters';
 import FondoMatrix from '@/components/FondoMatrix.vue';
+import AlertasExistenciasLimpios from '@/components/AlertasExistenciasLimpios.vue';
 
 export default {
   name: 'Existencias',
   components: {
-    FondoMatrix
+    FondoMatrix,
+    AlertasExistenciasLimpios
   },
   setup() {
     const existencias = ref({});
+    const alertasExistencias = ref(null);
+    const inventarioListo = ref(false);
+    const errorInventario = ref('');
+    const abrirAlertaLote = (item, proveedor) => {
+      if (alertasExistencias.value) alertasExistencias.value.abrir(item, proveedor);
+    };
+    const solicitarImpresion = () => {
+      if (inventarioListo.value && alertasExistencias.value && alertasExistencias.value.revisarAntesDeImprimir()) imprimirReporte();
+    };
     const search = ref('');
     const tienePrecio = ref(false);
     const filtroCuarto = ref(false);
@@ -347,7 +366,7 @@ export default {
       return valor.toLowerCase() === 'sin cuarto designado' ? 's/c' : valor;
     };
 
-    const loadExistencias = async () => {
+    const obtenerExistencias = async (version) => {
       const sacadasSnapshot = await getDocs(collection(db, 'sacadas'));
       const newExistencias = {};
       let hayPrecios = false;
@@ -502,8 +521,24 @@ export default {
         }
       });
 
-      existencias.value = newExistencias;
-      tienePrecio.value = hayPrecios;
+      if (version === versionCarga) {
+        existencias.value = newExistencias;
+        tienePrecio.value = hayPrecios;
+      }
+    };
+
+    let versionCarga = 0;
+    const loadExistencias = async () => {
+      const version = ++versionCarga;
+      inventarioListo.value = false;
+      errorInventario.value = '';
+      try {
+        await obtenerExistencias(version);
+        if (version === versionCarga) inventarioListo.value = true;
+      } catch (error) {
+        if (version === versionCarga) errorInventario.value = 'No se pudieron actualizar las existencias. Reintenta antes de imprimir.';
+        console.error('[Existencias] Error al cargar inventario', error);
+      }
     };
 
     const loadDeudas = async () => {
@@ -667,6 +702,7 @@ export default {
           agrupados[key] = {
             ...item,
             kilos: 0,
+            lotesAlerta: [],
             _fechaMin: fechaItem,
             _fechaMax: fechaItem,
             _cuartos: new Set(item.cuartoFrio ? [item.cuartoFrio] : [])
@@ -674,6 +710,7 @@ export default {
         }
 
         agrupados[key].kilos += item.kilos;
+        agrupados[key].lotesAlerta.push(item);
 
         if (fechaItem) {
           if (!agrupados[key]._fechaMin || fechaItem < agrupados[key]._fechaMin) {
@@ -1219,6 +1256,7 @@ export default {
       .replace(/'/g, '&#039;');
 
     const imprimirReporte = async () => {
+      if (!inventarioListo.value) return;
       const ventanaImpresion = window.open('', '_blank');
       if (!ventanaImpresion) {
         window.alert('Permite las ventanas emergentes para generar el reporte.');
@@ -1980,13 +2018,15 @@ export default {
     let unsubscribe;
 
     onMounted(() => {
-      loadExistencias();
       loadDeudas();
       loadSalidasDiaSiguiente();
       
       unsubscribe = onSnapshot(collection(db, 'sacadas'), () => {
         loadExistencias();
         loadSalidasDiaSiguiente();
+      }, () => {
+        inventarioListo.value = false;
+        errorInventario.value = 'Se perdió la conexión con las existencias. Reintenta antes de imprimir.';
       });
       
       // También escuchar cambios en deudas
@@ -2013,6 +2053,12 @@ export default {
     });
 
     return {
+      alertasExistencias,
+      inventarioListo,
+      errorInventario,
+      loadExistencias,
+      abrirAlertaLote,
+      solicitarImpresion,
       existencias,
       filteredExistencias,
       filteredExistenciasPorCuarto,
@@ -2042,6 +2088,13 @@ export default {
 </script>
 
 <style scoped>
+.medida-alerta-button { background: transparent; border: 0; border-bottom: 1px dashed currentColor; border-radius: 3px; color: inherit; font: inherit; text-align: left; padding: 5px 2px; min-height: 36px; cursor: pointer; }
+.medida-alerta-button span { font-size: 12px; margin-left: 5px; }
+.medida-alerta-button:hover { background: rgba(0, 255, 102, .12); }
+.medida-alerta-button:focus-visible { outline: 2px solid #00e5ff; outline-offset: 3px; }
+.error-inventario { color: #ffbdac; }
+.print-button:disabled { opacity: .5; cursor: wait; }
+
 .existencias-page {
   --verde: #00ff66;
   --verde-claro: #a8ffcb;
