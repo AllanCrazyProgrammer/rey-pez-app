@@ -1008,7 +1008,7 @@ const prepararDatosCuentaCatarro = async (embarqueData) => {
   const saldoAcumuladoAnterior = await obtenerSaldoAcumuladoAnterior('cuentasCatarro', fecha);
   
   // Calcular el flete automáticamente
-  const fleteTotal = (totalTarasLimpio * 70) + (totalTarasCrudo * 60);
+  const fleteTotal = (totalTarasLimpio + totalTarasCrudo) * 100;
   
   // Crear el array de cobros con el flete calculado
   const cobros = [];
@@ -1019,8 +1019,8 @@ const prepararDatosCuentaCatarro = async (embarqueData) => {
     });
     
     console.log(`[DEBUG] Flete calculado automáticamente:`);
-    console.log(`  - Taras de limpio: ${totalTarasLimpio} × $70 = $${totalTarasLimpio * 70}`);
-    console.log(`  - Taras de crudo: ${totalTarasCrudo} × $60 = $${totalTarasCrudo * 60}`);
+    console.log(`  - Taras de limpio: ${totalTarasLimpio} × $100 = $${totalTarasLimpio * 100}`);
+    console.log(`  - Taras de crudo: ${totalTarasCrudo} × $100 = $${totalTarasCrudo * 100}`);
     console.log(`  - Total flete: $${fleteTotal}`);
   }
   

@@ -961,7 +961,7 @@ async function generarContenidoClientes(embarque, clientesDisponibles, clientesJ
       const esClienteEspecial = nombreLower.includes('catarro');
       let totalDineroLimpiosConFlete = totalDineroLimpiosCliente;
       if (esClienteEspecial && totalDineroLimpiosCliente > 0) {
-        const fleteTarifaLimpio = 70;
+        const fleteTarifaLimpio = 100;
         const fleteLimpios = Math.round(totalTarasLimpiosCliente * fleteTarifaLimpio);
         totalDineroLimpiosConFlete = Math.max(0, Math.round(totalDineroLimpiosCliente) - fleteLimpios);
       }
@@ -988,7 +988,7 @@ async function generarContenidoClientes(embarque, clientesDisponibles, clientesJ
       // Calcular y restar flete de crudos para clientes especiales
       let totalDineroCrudosConFlete = totalDineroCrudosCliente;
       if (esClienteEspecial && totalDineroCrudosCliente > 0) {
-        const fleteTarifaCrudo = 60;
+        const fleteTarifaCrudo = 100;
         const fleteCrudos = Math.round(totalTarasCrudosCliente * fleteTarifaCrudo);
         totalDineroCrudosConFlete = Math.max(0, Math.round(totalDineroCrudosCliente) - fleteCrudos);
       }
@@ -1485,7 +1485,7 @@ function generarTablaProductos(productos, estiloCliente, nombreCliente, aplicarR
     const nombreLower = (nombreCliente || '').toLowerCase();
     const esClienteEspecial = nombreLower.includes('catarro');
     if (esClienteEspecial) {
-      const fleteTarifa = 70; // limpio
+      const fleteTarifa = 100; // limpio
       const flete = Math.round((totalTarasParaFlete || 0) * fleteTarifa);
       const totalConFlete = Math.max(0, Math.round(granTotal) - flete);
 
@@ -1773,7 +1773,7 @@ function generarTablaCrudos(crudos, estiloCliente, incluirPreciosCliente = false
     const nombreLower = (nombreCliente || '').toLowerCase();
     const esClienteEspecial = nombreLower.includes('catarro');
     if (esClienteEspecial) {
-      const fleteTarifa = 60; // crudo
+      const fleteTarifa = 100; // crudo
       const flete = Math.round((totalTarasParaFlete || 0) * fleteTarifa);
       const totalConFlete = Math.max(0, Math.round(granTotal) - flete);
 
