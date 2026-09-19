@@ -17,6 +17,7 @@
       </section>
       <section class="pesadas-card pesadas-sheet-card">
         <div class="pesadas-toolbar">
+          <button class="pesadas-button" @click="busquedaAbierta = true">Buscar despicadora</button>
           <button class="pesadas-button primary" @click="agregarPersona()">+ Despicadora</button><button class="pesadas-button" :disabled="!puedeImprimir" @click="abrirResumen">Resumen / imprimir</button><button v-if="estado.error || errorCarga" class="pesadas-button" @click="reintentar">Reintentar guardado</button>
           <button class="pesadas-button pesadas-cuentas-button" :disabled="!puedeImprimir" @click="abrirCuentas"><span class="cuentas-bracket" aria-hidden="true">[</span><span class="cuentas-symbol" aria-hidden="true">$</span> Sacar cuentas <span class="cuentas-bracket" aria-hidden="true">]</span></button>
           <span class="pesadas-hint">Kg y precios: máximo 1 decimal</span>
@@ -30,6 +31,15 @@
         <footer class="pesadas-sheet-footer"><strong>{{ resumen.banos }} despicadoras</strong><strong>Total a pagar: ${{ pago(resumen.pagosRedondeados) }}</strong><strong>A pagar promedio: ${{ pago(resumen.pagoPromedioRedondeado) }}</strong><strong>Mejor: {{ resumen.mejor ? resumen.mejor.nombre : '—' }}<span v-if="resumen.mejor"> · {{ numero(resumen.mejor.kilos) }} kg · ${{ pago(resumen.mejor.pagoRedondeado) }}</span></strong></footer>
       </section>
     </template>
+    <b-modal v-model="busquedaAbierta" title="Buscar despicadora" hide-footer @shown="$refs.buscarNombre.focus()" @hidden="terminoBusqueda = ''">
+      <label for="buscar-despicadora">Nombre de la despicadora</label>
+      <input id="buscar-despicadora" ref="buscarNombre" v-model="terminoBusqueda" class="form-control" type="search" autocomplete="off" placeholder="Escribe un nombre…" @keydown.enter.prevent="coincidencias.length === 1 && seleccionarPersona(coincidencias[0])">
+      <p class="mt-3" role="status">{{ coincidencias.length }} coincidencias</p>
+      <ul class="pesadas-search-results">
+        <li v-for="persona in coincidencias" :key="persona.id"><button class="pesadas-button" @click="seleccionarPersona(persona)">{{ persona.nombre }} <small>Fila {{ personas.findIndex(row => row.id === persona.id) + 1 }}</small></button></li>
+      </ul>
+      <p v-if="!coincidencias.length">No se encontró ninguna despicadora con ese nombre.</p>
+    </b-modal>
     <b-modal v-model="cuentasAbiertas" title="Billetes y monedas para pagar" size="lg" hide-footer @shown="calcularCuentas" @hidden="cuentasDatos = ''">
       <p>{{ fechaTexto }} · Pagos finales de las despicadoras, después del descuento de baños.</p>
       <p v-if="estado.pending || servidorPendiente" class="pesadas-alert">Incluye cambios pendientes de sincronizar.</p>
@@ -56,7 +66,7 @@ export default {
   props: { fecha: { type: String, required: true } },
   data: () => ({ datosGuardados: {}, estado: { pending: false, saving: false, error: '', storageError: false },
     cargando: true, errorCarga: '', online: navigator.onLine, desdeCache: true, servidorPendiente: false,
-    borradores: {}, errores: {}, preview: null, cuentasAbiertas: false, cuentasDatos: '', restaurando: false, filaInicialId: 'inicial' }),
+    borradores: {}, errores: {}, preview: null, busquedaAbierta: false, terminoBusqueda: '', cuentasAbiertas: false, cuentasDatos: '', restaurando: false, filaInicialId: 'inicial' }),
   computed: {
     fechaValida() { return fechaPesadasValida(this.fecha); },
     fechaTexto() { return this.fechaValida ? formatoFechaPesadas(this.fecha) : ''; },
@@ -72,6 +82,11 @@ export default {
     },
     columnas() { return elementosPesadas(this.datos.columnas); },
     personas() { return elementosPesadas(this.datos.personas); },
+    coincidencias() {
+      const normalizar = texto => texto.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('es').trim();
+      const termino = normalizar(this.terminoBusqueda);
+      return this.personas.filter(persona => persona.nombre.trim() && normalizar(persona.nombre).includes(termino));
+    },
     resumen() { return resumenPesadas(this.datos); },
     totales() { return Object.fromEntries(this.resumen.personas.map(row => [row.id, row])); },
     erroresLista() { return Object.values(this.errores); },
@@ -109,6 +124,14 @@ export default {
   methods: {
     numero: formatoPesada,
     pago: formatoPagoPesada,
+    seleccionarPersona(persona) {
+      // Wait until the modal releases focus before moving into the sheet.
+      this.$root.$once('bv::modal::hidden', () => {
+        const columna = this.columnas[0];
+        this.enfocar(columna ? `peso-${persona.id}-${columna.id}` : `nombre-${persona.id}`);
+      });
+      this.busquedaAbierta = false;
+    },
     bloquearRetrocesoHorizontal(event) {
       if (Math.abs(event.deltaX) <= Math.abs(event.deltaY)) return;
       const table = event.target && event.target.closest && event.target.closest('.pesadas-grid-scroll');
@@ -135,6 +158,8 @@ export default {
       this.errores = {};
       this.errorCarga = '';
       this.preview = null;
+      this.busquedaAbierta = false;
+      this.terminoBusqueda = '';
       this.cuentasAbiertas = false;
       this.filaInicialId = 'inicial';
       this.cargando = true;
