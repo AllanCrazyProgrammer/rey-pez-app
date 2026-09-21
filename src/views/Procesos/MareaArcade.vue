@@ -14,9 +14,10 @@
             <span class="marea-eyebrow"><span class="marea-dot"></span> UN DESCANSO BIEN GANADO</span>
             <h1>Marea <em>Arcade.</em></h1>
             <p>Mucho camarón.<br>Un gran equipo. <strong>Tu mejor jugada.</strong></p>
-            <div class="marea-pills"><span>3 formas de jugar</span><span>60–75 segundos</span><span>Con un dedo</span></div>
+            <div class="marea-pills"><span>3 retos avanzados</span><span>75–90 segundos</span><span>Oleadas progresivas</span></div>
           </div>
           <div class="marea-hero-art" aria-hidden="true">
+            <HarborScene class="marea-harbor" />
             <span class="marea-art-sun"></span><span class="marea-art-wave">≋</span>
             <ArcadeArt kind="worker" class="marea-hero-worker" />
             <ArcadeArt kind="basket" class="marea-hero-basket" />
@@ -26,7 +27,7 @@
         <div class="marea-section-title"><h2>Elige tu próxima aventura</h2><span>PARTIDAS CORTAS, BUENAS RACHAS</span></div>
         <section class="marea-modes" aria-label="Modos de juego">
           <button v-for="item in modes" :key="item.id" class="marea-mode" :class="'marea-mode--' + item.id" @click="chooseMode(item.id)">
-            <div class="marea-mode-scene"><span class="marea-mode-number">{{ item.number }}</span><ArcadeArt :kind="item.icon" :color="item.id === 'equipo' ? '#c67b50' : '#2c8a78'" /><span class="marea-mode-duration">{{ item.duration }} s</span></div>
+            <div class="marea-mode-scene"><HarborScene class="marea-card-harbor" /><span class="marea-mode-number">{{ item.number }}</span><ArcadeArt :kind="item.icon" :color="item.id === 'equipo' ? '#c67b50' : '#2c8a78'" /><span class="marea-mode-duration">{{ item.duration }} s</span></div>
             <div class="marea-mode-copy"><span class="marea-eyebrow">{{ item.tag }}</span><h3>{{ item.title }}</h3><p>{{ item.description }}</p><div class="marea-mode-bottom"><span>Récord <b>{{ records[item.id] }}</b></span><span class="marea-play-link">Jugar <span aria-hidden="true">↗</span></span></div></div>
           </button>
         </section>
@@ -38,25 +39,29 @@
         <ArcadeArt :kind="mode.icon" class="marea-instruction-art" />
         <h1>{{ mode.title }}</h1><p class="marea-lead">{{ mode.description }}</p>
         <ol><li v-for="(step, index) in mode.steps" :key="index"><span>{{ index + 1 }}</span><p>{{ step }}</p></li></ol>
-        <div class="marea-mission"><span>Tu reto</span><strong>{{ mode.goal }} puntos en {{ mode.duration }} segundos</strong></div>
+        <div class="marea-mission"><span>Reto de 3 estrellas</span><strong>{{ mode.goal }} puntos y sobrevivir {{ mode.duration }} segundos</strong></div>
         <button ref="startButton" class="marea-primary" @click="startGame">¡A jugar! <span aria-hidden="true">→</span></button>
         <p class="marea-small">Sin prisa para aprender. El reloj empieza cuando juegas.</p>
       </section>
 
       <section v-else-if="screen === 'play'" class="marea-game" :aria-label="mode.title">
         <div class="marea-game-title"><div><span class="marea-eyebrow">{{ mode.tag }}</span><h1>{{ mode.title }}</h1></div><button ref="pauseButton" class="marea-pause" aria-label="Pausar partida" @click="pauseGame">Ⅱ</button></div>
-        <div class="marea-hud"><div><small>PUNTOS</small><strong>{{ view.score }}</strong></div><div :class="{ 'marea-urgent': view.remaining <= 10 }"><small>TIEMPO</small><strong>{{ view.remaining }}<span>s</span></strong></div><div><small>{{ mode.id === 'limpiar' ? 'RACHA' : 'VIDAS' }}</small><strong v-if="mode.id === 'limpiar'">{{ view.combo }}<span>↗</span></strong><strong v-else class="marea-hearts" :aria-label="view.lives + ' vidas'">{{ '♥'.repeat(view.lives) }}<span>{{ '♡'.repeat(3 - view.lives) }}</span></strong></div></div>
+        <div class="marea-hud"><div><small>PUNTOS</small><strong>{{ view.score }}</strong></div><div :class="{ 'marea-urgent': view.remaining <= 10 }"><small>TIEMPO</small><strong>{{ view.remaining }}<span>s</span></strong></div><div><small>VIDAS</small><strong class="marea-hearts" :aria-label="view.lives + ' vidas'">{{ '♥'.repeat(view.lives) }}<span>{{ '♡'.repeat(3 - view.lives) }}</span></strong></div></div>
+        <div class="marea-wave"><strong>OLEADA {{ view.level }}</strong><span>Racha {{ view.combo }} · ×{{ Math.min(3, 1 + Math.floor(view.combo / 5)) }}</span><span v-if="mode.id === 'atrapar'">Perdidos {{ view.lost }}/3</span></div>
         <div class="marea-time-track" role="progressbar" aria-label="Tiempo restante" :aria-valuenow="view.remaining" :aria-valuemax="mode.duration" aria-valuemin="0"><span :style="{ transform: `scaleX(${view.progress})` }"></span></div>
         <p class="marea-feedback" :class="{ 'marea-feedback--error': !view.goodEvent }" role="status">{{ view.feedback || (view.combo >= 5 ? '¡Buena racha! Sigue así.' : 'Cada camarón cuenta.') }}</p>
 
         <template v-if="mode.id === 'limpiar'">
           <div class="marea-clean-board" :class="{ 'is-clean': view.shrimp.clean }">
-            <div class="marea-board-heading"><span>MESA DE DESPICADO</span><span class="marea-size-chip">{{ sizes[view.shrimp.size] }}</span></div>
-            <button ref="shrimpButton" class="marea-shrimp" :class="{ 'is-dragging': dragging }" :style="dragStyle" :aria-label="view.shrimp.clean ? 'Camarón limpio, elige su tara' : 'Limpiar camarón'" @pointerdown="shrimpDown" @pointermove="shrimpMove" @pointerup="shrimpUp" @pointercancel="cancelDrag" @click="shrimpClick">
-              <ArcadeArt kind="shrimp" :clean="view.shrimp.clean" :style="{ width: [135, 165, 195][view.shrimp.size] + 'px' }" />
+            <div class="marea-board-heading"><span>FRESCURA {{ Math.ceil(view.shrimp.freshness) }} s</span><span class="marea-size-chip">{{ sizes[view.shrimp.size] }}</span></div>
+            <div class="marea-freshness"><i :style="{ transform: `scaleX(${Math.max(0, view.shrimp.freshness / view.shrimp.deadline)})` }"></i></div>
+            <div class="marea-cut-sequence"><span v-for="(direction, index) in view.shrimp.sequence" :key="index" :class="{ done: view.shrimp.step > index, current: view.shrimp.step === index }">{{ view.shrimp.step > index ? '✓' : arrows[direction] }} <small>{{ index === 0 ? 'Cabeza' : 'Cáscara' }}</small></span></div>
+            <button ref="shrimpButton" class="marea-shrimp" :class="{ 'is-dragging': dragging }" :style="dragStyle" :aria-label="view.shrimp.bad ? 'Camarón con manchas, descartar' : 'Camarón fresco, sigue las flechas'" @pointerdown="shrimpDown" @pointermove="shrimpMove" @pointerup="shrimpUp" @pointercancel="cancelDrag" @keydown.left.prevent="clean('left')" @keydown.right.prevent="clean('right')" @keydown.up.prevent="clean('up')">
+              <ArcadeArt kind="shrimp" :bad="view.shrimp.bad" :clean="view.shrimp.clean" :style="{ width: [135, 165, 195][view.shrimp.size] + 'px' }" />
             </button>
-            <span class="marea-board-instruction">{{ view.shrimp.clean ? '↓ Arrástralo o toca la tara correcta' : '↔ Desliza o toca para limpiar' }}</span>
+            <span class="marea-board-instruction">{{ view.shrimp.clean ? '↓ Revisa las manchas y elige su tara' : 'Sigue la flecha iluminada · Un gesto por paso' }}</span>
           </div>
+          <div class="marea-cut-controls"><button v-for="direction in ['left', 'up', 'right']" :key="direction" :disabled="view.shrimp.clean" :aria-label="'Cortar ' + directionNames[direction]" @click="clean(direction)">{{ arrows[direction] }}</button><button class="marea-discard" @click="discard">Descartar <small>con manchas</small></button></div>
           <div class="marea-baskets"><button v-for="(size, index) in sizes" :key="size" :data-basket="index" :aria-label="'Tara ' + size" @click="sort(index)"><ArcadeArt kind="basket" :color="colors[index]" /><strong>{{ size }}</strong></button></div>
         </template>
 
@@ -64,18 +69,19 @@
           <div class="marea-orders-heading"><h2>Pedidos en espera</h2><span>1. Elige una tara</span></div>
           <div class="marea-orders">
             <button v-for="order in view.orders" :key="order.id" class="marea-order" :class="{ 'is-selected': view.selected === order.id, 'is-urgent': order.remaining < 5 }" :aria-pressed="view.selected === order.id" :aria-label="`Pedido ${order.id}, ${sizes[order.size]}`" @click="select(order.id)">
-              <span>#{{ order.id }}</span><ArcadeArt kind="basket" :color="colors[order.size]" /><strong>{{ sizes[order.size] }}</strong><small>{{ Math.ceil(order.remaining) }} s</small><span class="marea-order-timer"><i :style="{ transform: `scaleX(${order.remaining / order.deadline})` }"></i></span>
+              <span>#{{ order.id }} {{ order.urgent ? '⚡' : '' }} · {{ order.quantity }} taras</span><ArcadeArt kind="basket" :color="colors[order.size]" /><strong>{{ sizes[order.size] }}</strong><small>{{ Math.ceil(order.remaining) }} s{{ order.urgent ? ' · urgente' : '' }}</small><span class="marea-order-timer"><i :style="{ transform: `scaleX(${order.remaining / order.deadline})` }"></i></span>
             </button>
             <div v-if="!view.orders.length" class="marea-orders-empty">¡Todo en marcha! Vienen más pedidos…</div>
           </div>
           <div class="marea-orders-heading"><h2>Tu cuadrilla</h2><span>2. Asigna a alguien libre</span></div>
-          <div class="marea-workers"><button v-for="(worker, index) in view.workers" :key="worker.name" class="marea-worker" :disabled="!!worker.job" :aria-label="`Asignar a ${worker.name}, especialidad ${sizes[worker.size]}`" @click="assign(index)"><ArcadeArt kind="worker" :color="colors[index]" /><strong>{{ worker.name }}</strong><small>{{ sizes[worker.size] }}</small><span class="marea-worker-status">{{ worker.job ? 'En marcha · ' + Math.ceil(worker.job.work) + ' s' : 'Libre →' }}</span><span class="marea-work-track"><i :style="{ transform: `scaleX(${worker.job ? 1 - worker.job.work / worker.job.duration : 0})` }"></i></span></button></div>
-          <p class="marea-small">Mismo tamaño + especialidad = entrega más rápida.</p>
+          <div class="marea-workers"><div v-for="(worker, index) in view.workers" :key="worker.name" class="marea-worker-station"><button class="marea-worker" :class="{ 'is-ready': worker.job && !worker.job.work, 'is-working': worker.job && worker.job.work > 0 }" :disabled="!!worker.resting || !!(worker.job && worker.job.work > 0)" :aria-label="worker.job && !worker.job.work ? `Entregar pedido de ${worker.name}` : `Asignar a ${worker.name}, especialidad ${sizes[worker.size]}`" @click="worker.job ? deliver(index) : assign(index)"><ArcadeArt kind="worker" :color="colors[index]" /><strong>{{ worker.name }}</strong><small>{{ sizes[worker.size] }} · Energía {{ Math.round(worker.energy) }}%</small><span class="marea-worker-status">{{ worker.resting ? 'Descanso · ' + Math.ceil(worker.resting) + ' s' : worker.job ? worker.job.work ? 'Trabajando · ' + Math.ceil(worker.job.work) + ' s' : '¡Entregar! · ' + Math.ceil(worker.job.remaining) + ' s' : 'Asignar →' }}</span><span class="marea-work-track"><i :style="{ transform: `scaleX(${worker.job ? 1 - worker.job.work / worker.job.duration : worker.energy / 100})` }"></i></span></button><button class="marea-rest" :disabled="!!worker.job || !!worker.resting || worker.energy >= 100" :aria-label="'Descansar ' + worker.name" @click="rest(index)">Descansar ↻</button></div></div>
+          <p class="marea-small">3. Toca Entregar al terminar. El pedido aún puede vencer.</p>
         </template>
 
         <template v-else>
           <div class="marea-catch-wrap"><canvas ref="catchCanvas" class="marea-catch" width="360" height="360" tabindex="0" role="img" aria-label="Atrapa camarones y evita las piedras. Arrastra la tara o usa las flechas izquierda y derecha." @pointerdown="catchDown" @pointermove="catchMove" @pointerup="catchUp" @pointercancel="catchUp" @keydown="catchKey($event, true)" @keyup="catchKey($event, false)" @blur="clearKeys"></canvas></div>
-          <div class="marea-catch-controls"><button aria-label="Mover tara a la izquierda" @pointerdown.prevent="holdDirection($event, -1)" @pointerup="releaseDirection" @pointercancel="releaseDirection" @lostpointercapture="clearKeys" @click="nudge($event, -1)">←</button><span><b>Dorado ×3</b><small>Piedra = −1 vida</small></span><button aria-label="Mover tara a la derecha" @pointerdown.prevent="holdDirection($event, 1)" @pointerup="releaseDirection" @pointercancel="releaseDirection" @lostpointercapture="clearKeys" @click="nudge($event, 1)">→</button></div>
+          <div class="marea-powerups"><span :class="{ active: view.shield }">⬡ {{ view.shield ? 'Escudo activo' : 'Escudo azul' }}</span><span :class="{ active: view.frozen }">❄ {{ view.frozen ? 'Hielo ' + view.frozen + ' s' : 'Hielo: ralentiza' }}</span></div>
+          <div class="marea-catch-controls"><button aria-label="Mover tara a la izquierda" @pointerdown.prevent="holdDirection($event, -1)" @pointerup="releaseDirection" @pointercancel="releaseDirection" @lostpointercapture="clearKeys" @click="nudge($event, -1)">←</button><span><b>{{ view.current < 0 ? '← Corriente' : 'Corriente →' }}</b><small>Dorado ×3 · Evita piedras</small></span><button aria-label="Mover tara a la derecha" @pointerdown.prevent="holdDirection($event, 1)" @pointerup="releaseDirection" @pointercancel="releaseDirection" @lostpointercapture="clearKeys" @click="nudge($event, 1)">→</button></div>
         </template>
         <div class="marea-game-footer"><span>Reto: {{ mode.goal }} pts</span><span>Récord: {{ records[mode.id] }}</span></div>
 
@@ -87,8 +93,8 @@
       <section v-else-if="screen === 'result'" class="marea-result">
         <span class="marea-eyebrow">{{ mode.title }} · {{ resultReason === 'vidas' ? 'FIN DE LA JORNADA' : 'TIEMPO CUMPLIDO' }}</span>
         <div class="marea-result-stars" :aria-label="stars + ' de 3 estrellas'"><span v-for="n in 3" :key="n" :class="{ 'is-earned': n <= stars }">★</span></div>
-        <h1>{{ view.score >= mode.goal ? '¡Qué buena jornada!' : '¡Cada vez mejor!' }}</h1>
-        <p>{{ view.score >= mode.goal ? 'Reto cumplido. Tu cuadrilla se luce.' : 'Una más y le tomas el ritmo. ¡Vamos, equipo!' }}</p>
+        <h1>{{ won ? '¡Qué buena jornada!' : '¡Cada vez mejor!' }}</h1>
+        <p>{{ won ? 'Reto cumplido. Tu cuadrilla se luce.' : resultReason === 'vidas' ? 'Se acabaron las vidas. Completa la jornada para ganar las tres estrellas.' : 'Jornada completa. Supera el objetivo para ganar las tres estrellas.' }}</p>
         <div class="marea-result-score"><strong>{{ view.score }}</strong><span>PUNTOS</span><b v-if="newRecord">✦ NUEVO RÉCORD</b></div>
         <div class="marea-result-stats"><div><b>{{ view.completed }}</b><span>{{ mode.id === 'equipo' ? 'Pedidos listos' : 'Camarones' }}</span></div><div><b>{{ view.bestCombo }}</b><span>Mejor racha</span></div><div><b>{{ records[mode.id] }}</b><span>Tu récord</span></div></div>
         <p class="marea-small">{{ storageAvailable ? 'Récord guardado en este dispositivo.' : 'No se pudo guardar el récord; se conserva durante esta sesión.' }}</p>
@@ -100,18 +106,21 @@
 
 <script>
 import ArcadeArt from '@/games/marea/ArcadeArt.vue';
-import { MODES, SIZES, STORAGE_KEY, createGame, cleanShrimp, sortShrimp, selectOrder, assignOrder, moveBasket, stepGame, snapshot, loadRecords } from '@/games/marea/engine';
+import HarborScene from '@/games/marea/HarborScene.vue';
+import { MODES, SIZES, STORAGE_KEY, createGame, cleanShrimp, discardShrimp, sortShrimp, selectOrder, assignOrder, deliverOrder, restWorker, moveBasket, stepGame, snapshot, loadRecords } from '@/games/marea/engine';
 import { drawCatch } from '@/games/marea/canvas';
 import './marea-arcade.css';
 
 export default {
-  name: 'MareaArcade', components: { ArcadeArt },
+  name: 'MareaArcade', components: { ArcadeArt, HarborScene },
   data: () => ({ modes: MODES, sizes: SIZES, colors: ['#2c8a78', '#c78051', '#6f81b5'], screen: 'home', modeId: 'limpiar',
     paused: false, sound: false, records: { limpiar: 0, equipo: 0, atrapar: 0 }, storageAvailable: true,
-    view: {}, newRecord: false, resultReason: '', dragging: false, dragX: 0, dragY: 0 }),
+    view: {}, newRecord: false, resultReason: '', dragging: false, dragX: 0, dragY: 0,
+    arrows: { left: '←', right: '→', up: '↑' }, directionNames: { left: 'izquierda', right: 'derecha', up: 'arriba' } }),
   computed: {
     mode() { return this.modes.find(item => item.id === this.modeId); },
-    stars() { return this.view.score >= this.mode.goal ? 3 : this.view.score >= this.mode.goal / 2 ? 2 : this.view.score > 0 ? 1 : 0; },
+    won() { return this.resultReason === 'tiempo' && this.view.score >= this.mode.goal; },
+    stars() { return this.won ? 3 : this.view.score >= this.mode.goal / 2 ? 2 : this.view.score > 0 ? 1 : 0; },
     dragStyle() { return this.dragging ? { transform: `translate(${this.dragX}px, ${this.dragY}px)` } : {}; }
   },
   mounted() {
@@ -175,34 +184,38 @@ export default {
       if (event.shiftKey && document.activeElement === buttons[0]) { event.preventDefault(); buttons[buttons.length - 1].focus(); }
       else if (!event.shiftKey && document.activeElement === buttons[buttons.length - 1]) { event.preventDefault(); buttons[0].focus(); }
     },
-    clean() { if (this.active()) { cleanShrimp(this._game); this.refresh(); } },
+    clean(direction) { if (this.active()) { cleanShrimp(this._game, direction); this.refresh(); } },
+    discard() { if (this.active()) { discardShrimp(this._game); this.refresh(); } },
+    deliver(index) { if (this.active()) { deliverOrder(this._game, index); this.refresh(); } },
+    rest(index) { if (this.active()) { restWorker(this._game, index); this.refresh(); } },
     sort(index) { if (this.active()) { sortShrimp(this._game, index); this.refresh(); } },
     select(id) { if (this.active()) { selectOrder(this._game, id); this.refresh(); } },
     assign(index) { if (this.active()) { assignOrder(this._game, index); this.refresh(); } },
     shrimpDown(event) {
       if (!this.active() || event.isPrimary === false || event.button > 0) return;
-      this._gesture = { x: event.clientX, y: event.clientY, clean: this._game.shrimp.clean, id: event.pointerId };
+      this._gesture = { x: event.clientX, y: event.clientY, clean: this._game.shrimp.clean, shrimpId: this._game.shrimp.id, handled: false, id: event.pointerId };
       event.currentTarget.setPointerCapture(event.pointerId);
     },
     shrimpMove(event) {
       if (!this._gesture || event.pointerId !== this._gesture.id || !this.active()) return;
       const dx = event.clientX - this._gesture.x, dy = event.clientY - this._gesture.y;
       if (this._gesture.clean) { this.dragging = true; this.dragX = dx; this.dragY = dy; }
-      else if (Math.hypot(dx, dy) > 28) this.clean();
+      else if (!this._gesture.handled && Math.hypot(dx, dy) > 28 && this._gesture.shrimpId === this._game.shrimp.id) {
+        this._gesture.handled = true;
+        this.clean(Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? 'left' : 'right') : dy < 0 ? 'up' : 'down');
+      }
     },
     shrimpUp(event) {
       if (!this._gesture || event.pointerId !== this._gesture.id) return;
-      this._ignoreClick = true;
       if (this._gesture.clean) {
         const basket = Array.from(this.$refs.root.querySelectorAll('[data-basket]')).find(element => {
           const rect = element.getBoundingClientRect();
           return event.clientX >= rect.left && event.clientX <= rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom;
         });
-        if (basket) this.sort(Number(basket.dataset.basket));
-      } else this.clean();
+        if (basket && this._gesture.shrimpId === this._game.shrimp.id) this.sort(Number(basket.dataset.basket));
+      }
       this.cancelDrag();
     },
-    shrimpClick(event) { if (this._ignoreClick && event.detail !== 0) { this._ignoreClick = false; return; } this.clean(); },
     cancelDrag() { this._gesture = null; this.dragging = false; this.dragX = 0; this.dragY = 0; },
     catchDown(event) { if (!this.active() || event.isPrimary === false) return; this._catchPointer = event.pointerId; event.currentTarget.setPointerCapture(event.pointerId); this.catchMove(event); },
     catchMove(event) { if (!this.active() || this._catchPointer !== event.pointerId) return; const rect = event.currentTarget.getBoundingClientRect(); moveBasket(this._game, (event.clientX - rect.left) / rect.width); },

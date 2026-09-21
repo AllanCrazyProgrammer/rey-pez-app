@@ -53,24 +53,31 @@ async function run() {
     await page.screenshot({ path: path.join(output, 'home-desktop.png'), fullPage: true });
     await page.setViewportSize({ width: 390, height: 844 });
     await start('limpiar');
-    await page.getByRole('button', { name: 'Limpiar camarón', exact: true }).tap();
+    const directions = { left: 'izquierda', right: 'derecha', up: 'arriba' };
+    for (let i = 0; i < 2; i++) {
+      const direction = await page.evaluate(() => window.qaGame._game.shrimp.sequence[window.qaGame._game.shrimp.step]);
+      await page.getByRole('button', { name: 'Cortar ' + directions[direction], exact: true }).tap();
+    }
     let size = await page.locator('.marea-size-chip').innerText();
     await page.getByRole('button', { name: 'Tara ' + size, exact: true }).tap();
-    assert.equal(await page.evaluate(() => window.qaGame._game.score), 10);
-    // A real touch swipe cleans; a second drag drops into the matching basket.
+    assert.equal(await page.evaluate(() => window.qaGame._game.score), 25);
+    // Two distinct real touch swipes clean; a third drag sorts the shrimp.
     const cdp = await context.newCDPSession(page);
     let box = await page.locator('.marea-shrimp').boundingBox();
     const x = box.x + box.width / 2, y = box.y + box.height / 2;
-    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] });
-    await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x + 45, y }] });
-    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    for (let i = 0; i < 2; i++) {
+      const direction = await page.evaluate(() => window.qaGame._game.shrimp.sequence[window.qaGame._game.shrimp.step]);
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] });
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x + (direction === 'left' ? -45 : direction === 'right' ? 45 : 0), y: y - (direction === 'up' ? 45 : 0) }] });
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    }
     assert.equal(await page.evaluate(() => window.qaGame._game.shrimp.clean), true);
     size = await page.locator('.marea-size-chip').innerText();
     const target = await page.getByRole('button', { name: 'Tara ' + size, exact: true }).boundingBox();
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] });
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: target.x + target.width / 2, y: target.y + target.height / 2 }] });
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
-    assert.equal(await page.evaluate(() => window.qaGame._game.score), 20);
+    assert.equal(await page.evaluate(() => window.qaGame._game.score), 50);
     await page.getByRole('button', { name: 'Pausar partida' }).click();
     const remaining = await page.evaluate(() => window.qaGame._game.remaining);
     await page.waitForTimeout(300);
@@ -80,15 +87,19 @@ async function run() {
     await page.evaluate(() => window.dispatchEvent(new Event('blur')));
     await page.getByRole('button', { name: 'Seguir jugando' }).click();
     await page.screenshot({ path: path.join(output, 'clean-mobile.png'), fullPage: true });
-    await finish(); assert.match(await page.locator('.marea-result-score').innerText(), /20/);
+    await finish(); assert.match(await page.locator('.marea-result-score').innerText(), /50/);
     await home(); await page.reload(); await attach();
-    assert.equal(await page.evaluate(() => window.qaGame.records.limpiar), 20);
+    assert.equal(await page.evaluate(() => window.qaGame.records.limpiar), 50);
     await start('equipo');
     const first = page.locator('.marea-order').first();
     const orderSize = await first.locator('strong').innerText();
     await first.tap(); await page.getByRole('button', { name: new RegExp('Asignar a .*, especialidad ' + orderSize) }).tap();
-    await page.waitForFunction(() => window.qaGame._game.completed >= 1);
-    assert.equal(await page.evaluate(() => window.qaGame._game.score), 30);
+    await page.getByRole('button', { name: /Entregar pedido de/ }).waitFor();
+    assert.equal(await page.evaluate(() => window.qaGame._game.completed), 0);
+    await page.getByRole('button', { name: /Entregar pedido de/ }).tap();
+    assert.ok(await page.evaluate(() => window.qaGame._game.score) >= 30);
+    await page.locator('.marea-rest:not([disabled])').first().tap();
+    await page.waitForFunction(() => window.qaGame._game.workers.some(w => w.resting > 0));
     await fit(); await page.screenshot({ path: path.join(output, 'team-mobile.png'), fullPage: true });
     await finish(); await home(); await start('atrapar');
     const canvas = page.locator('canvas'); box = await canvas.boundingBox();
@@ -99,8 +110,12 @@ async function run() {
     await canvas.focus(); await page.keyboard.down('ArrowLeft'); await page.waitForTimeout(180); await page.keyboard.up('ArrowLeft');
     assert.ok(await page.evaluate(() => window.qaGame._game.basket) < .7);
     // Deterministic collision, through the live animation loop.
-    await page.evaluate(() => { const g = window.qaGame._game; g.drops = [{ x: g.basket, y: .76, speed: .3, kind: 'gold' }]; });
-    await page.waitForFunction(() => window.qaGame._game.score === 30);
+    await page.evaluate(() => { const g = window.qaGame._game; g.drops = [{ id: 99, x: g.basket, y: .76, speed: .3, kind: 'gold' }]; });
+    await page.waitForFunction(() => window.qaGame._game.score === 45);
+    await page.evaluate(() => { const g = window.qaGame._game; g.drops = [{ id: 100, x: g.basket, y: .76, speed: .4, kind: 'shield' }]; });
+    await page.waitForFunction(() => window.qaGame.view.shield === 1);
+    await page.evaluate(() => { const g = window.qaGame._game; g.drops = [{ id: 101, x: g.basket, y: .76, speed: .4, kind: 'ice' }]; });
+    await page.waitForFunction(() => window.qaGame.view.frozen > 0);
     await fit(); await page.screenshot({ path: path.join(output, 'catch-mobile.png'), fullPage: true });
     await finish(); await page.screenshot({ path: path.join(output, 'result-mobile.png'), fullPage: true });
     await page.getByRole('button', { name: 'Otra partida' }).click();
@@ -116,7 +131,7 @@ async function run() {
     await page.getByText('No se pudo guardar el récord; se conserva durante esta sesión.').waitFor();
     await home(); await page.getByRole('link', { name: '← Procesos' }).click();
     assert.deepEqual(errors, []);
-    console.log('PASS: 3 modes, mobile touch + drag, keyboard, pause/resume, time expiry, records/reload, replay, blocked storage, 320px/landscape, navigation.');
+    console.log('PASS: 2 directional cuts + touch drag, delivery + rest, shield + ice, keyboard, pause, records, replay, blocked storage, 320px/landscape, navigation.');
     console.log('Screenshots: ' + output);
   } finally { if (browser) await browser.close(); await new Promise(resolve => server.close(resolve)); }
 }
