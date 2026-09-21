@@ -138,6 +138,15 @@
         <span class="icon">📦</span>
         <span class="btn-text">DESCARGAS</span>
       </router-link>
+      <router-link
+        to="/procesos/arcade"
+        class="btn-action btn-juegos"
+        aria-label="Jugar Marea Arcade: camarones y despicadoras"
+      >
+        <span class="btn-prefix">[12]</span>
+        <span class="icon">🦐</span>
+        <span class="btn-text">MAREA ARCADE</span>
+      </router-link>
     </div>
   </div>
 </template>
@@ -447,6 +456,9 @@ export default {
 }
 
 /* Responsive */
+.btn-juegos { border-color: #f5bf75; color: #f5bf75; }
+.btn-juegos:hover { background: #f5bf75; box-shadow: 0 0 15px #f5bf7566; }
+
 @media (max-width: 768px) {
   .procesos-menu {
     padding: 15px;

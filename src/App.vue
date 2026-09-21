@@ -1,14 +1,14 @@
 <template>
   <div id="app" :class="{ 'app--pesadas': !mostrarFooter }">
-    <Navbar />
-    <div class="content-wrapper" :class="{ 'content-wrapper--pesadas': !mostrarFooter, 'content-wrapper--prestamos': esPrestamos, 'content-wrapper--bitacoras': esBitacoras }">
-      <div v-if="!esPrestamos && !esBitacoras" class="content-horizon-grid" aria-hidden="true">
+    <Navbar v-if="!esArcade" />
+    <div class="content-wrapper" :class="{ 'content-wrapper--pesadas': !mostrarFooter, 'content-wrapper--prestamos': esPrestamos, 'content-wrapper--bitacoras': esBitacoras, 'content-wrapper--arcade': esArcade }">
+      <div v-if="!esPrestamos && !esBitacoras && !esArcade" class="content-horizon-grid" aria-hidden="true">
         <div class="content-horizon-grid__sun"></div>
         <div class="content-horizon-grid__plane"></div>
       </div>
       <router-view />
     </div>
-    <Footer v-if="mostrarFooter" />
+    <Footer v-if="mostrarFooter && !esArcade" />
 
     <transition-group name="toast" tag="div" class="toast-container">
       <div
@@ -35,6 +35,9 @@ export default {
     Footer
   },
   computed: {
+    esArcade() {
+      return this.$route.name === 'MareaArcade';
+    },
     esBitacoras() {
       return this.$route.path === '/procesos/bitacoras';
     },
@@ -136,10 +139,14 @@ html.platform-windows [aria-disabled="true"] {
 .content-wrapper.content-wrapper--prestamos::before,
 .content-wrapper.content-wrapper--prestamos::after,
 .content-wrapper.content-wrapper--bitacoras::before,
-.content-wrapper.content-wrapper--bitacoras::after {
+.content-wrapper.content-wrapper--bitacoras::after,
+.content-wrapper.content-wrapper--arcade::before,
+.content-wrapper.content-wrapper--arcade::after {
   display: none;
   animation: none;
 }
+.content-wrapper.content-wrapper--arcade { background: #fbf8ef; }
+.content-wrapper--arcade > .marea { flex: 1; }
 
 .content-wrapper--pesadas {
   flex: 1 0 auto;

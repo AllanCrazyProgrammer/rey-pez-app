@@ -1,0 +1,191 @@
+.marea { --sea: #205b4e; --ink: #203d35; --muted: #64746a; --paper: #fbf8ef; --coral: #c9573e; --line: #dedfd3; position: relative; z-index: 1; min-height: 85vh; padding: 0 22px 32px; background: var(--paper); color: var(--ink); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; isolation: isolate; }
+.marea *, .marea *::before, .marea *::after { box-sizing: border-box; }
+.marea button, .marea a { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+.marea button { font: inherit; cursor: pointer; color: inherit; }
+.marea button:disabled { cursor: default; }
+.marea :is(button, a, canvas):focus-visible { outline: 3px solid #c85b3e; outline-offset: 4px; }
+.marea h1, .marea h2, .marea h3, .marea p { margin: 0; }
+.marea-shell { max-width: 1050px; margin: auto; }
+.marea-topbar { min-height: 72px; display: flex; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--line); }
+.marea-back { display: inline-flex; align-items: center; min-height: 44px; color: var(--sea); text-decoration: none; font-size: 13px; font-weight: 650; background: none; border: 0; padding: 0 8px 0 0; }
+.marea-back:hover { color: var(--coral); text-decoration: none; }
+.marea-brand { font-size: 11px; letter-spacing: 1.8px; font-weight: 800; white-space: nowrap; }
+.marea-brand > span { font-size: 25px; vertical-align: middle; margin-right: 6px; }
+.marea-brand b { font-weight: 500; color: var(--muted); }
+.marea-sound { border: 1px solid var(--line); border-radius: 30px; background: transparent; padding: 8px 14px; font-size: 12px !important; min-height: 44px; }
+.marea-hero { display: grid; grid-template-columns: 1.2fr 1fr; align-items: center; gap: 20px; padding: 45px 0 34px; }
+.marea-eyebrow { display: block; font-size: 10px; letter-spacing: 1.8px; font-weight: 750; }
+.marea-dot { display: inline-block; width: 7px; height: 7px; margin-right: 8px; border-radius: 50%; background: var(--coral); }
+.marea-hero h1 { font-family: Georgia, 'Times New Roman', serif; font-size: clamp(42px, 5.5vw, 72px); line-height: 1.12; letter-spacing: -3px; font-weight: 500; margin: 20px 0 17px; }
+.marea-hero h1 em { color: var(--coral); font-weight: 400; }
+.marea-hero-copy > p { font-size: 17px; line-height: 1.6; color: var(--muted); }
+.marea-hero-copy > p strong { font-weight: 500; color: var(--ink); }
+.marea-pills { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 24px; }
+.marea-pills span { font-size: 10px; border: 1px solid #dadbd0; border-radius: 30px; padding: 7px 10px; }
+.arcade-art { display: block; width: 100%; height: auto; }
+.marea-hero-art { position: relative; min-height: 275px; background: #e3eade; border-radius: 48% 48% 9px 9px; overflow: hidden; }
+.marea-art-sun { position: absolute; right: 16%; top: 20px; width: 95px; height: 95px; background: #edc576; border-radius: 50%; }
+.marea-art-wave { position: absolute; bottom: -70px; left: -5%; color: #a9c7b8; font: 350px/1 Georgia, serif; transform: rotate(-12deg); }
+.marea-hero-worker { position: absolute; width: 220px; bottom: -2px; left: 0; }
+.marea-hero-basket { position: absolute; width: 165px; bottom: 0; right: 10px; transform: rotate(9deg); }
+.marea-stamp { position: absolute; top: 28px; left: 23px; border: 1px solid #657f6b; border-radius: 50%; width: 78px; height: 78px; text-align: center; padding-top: 20px; font-size: 9px; letter-spacing: .8px; transform: rotate(-13deg); }
+.marea-section-title { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin: 10px 0 18px; }
+.marea-section-title h2 { font-size: 17px; font-weight: 650; }
+.marea-section-title > span { font-size: 9px; letter-spacing: 1px; color: var(--muted); }
+.marea-modes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+.marea-mode { display: flex; flex-direction: column; padding: 0; overflow: hidden; text-align: left; background: #fffdf8; border: 1px solid var(--line); border-radius: 15px; transition: transform .18s, box-shadow .18s; }
+.marea-mode:hover { transform: translateY(-4px); box-shadow: 0 10px 24px #244c3910; }
+.marea-mode-scene { position: relative; height: 164px; width: 100%; flex-shrink: 0; background: #f7e4d8; overflow: hidden; }
+.marea-mode--equipo .marea-mode-scene { background: #e3eadb; }
+.marea-mode--atrapar .marea-mode-scene { background: #e0e9ef; }
+.marea-mode-scene::before { content: ''; width: 180px; height: 180px; border: 1px solid #ffffff90; position: absolute; border-radius: 50%; left: calc(50% - 90px); top: 25px; }
+.marea-mode-scene .arcade-art { width: 165px; height: 147px; position: absolute; left: calc(50% - 82px); bottom: 0; }
+.marea-mode-number { position: absolute; top: 15px; left: 16px; font: italic 23px Georgia, serif; opacity: .5; }
+.marea-mode-duration { position: absolute; right: 12px; top: 14px; padding: 4px 8px; border-radius: 20px; background: #ffffff90; font-size: 10px; }
+.marea-mode-copy { display: flex; flex-direction: column; flex: 1; width: 100%; padding: 21px 20px 18px; }
+.marea-mode-copy .marea-eyebrow { font-size: 9px; color: var(--coral); }
+.marea-mode h3 { font: 500 25px/1.15 Georgia, serif; margin: 9px 0 12px; }
+.marea-mode p { font-size: 13px; line-height: 1.6; color: var(--muted); min-height: 42px; margin-bottom: 21px; }
+.marea-mode-bottom { border-top: 1px solid var(--line); padding-top: 14px; margin-top: auto; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.marea-mode-bottom > span:first-child { font-size: 11px; color: var(--muted); }
+.marea-mode-bottom b { color: var(--ink); margin-left: 4px; font-size: 13px; }
+.marea-play-link { color: var(--sea); font-size: 13px; font-weight: 700; }
+.marea-play-link > span { margin-left: 10px; }
+.marea-home-footer { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-top: 25px; color: var(--muted); font-size: 11px; }
+.marea-instructions, .marea-result { max-width: 450px; margin: 30px auto 20px; text-align: center; }
+.marea-instruction-art { width: 150px; height: 135px; margin: 12px auto; }
+.marea-instructions h1, .marea-result h1 { font: 500 34px/1.15 Georgia, serif; margin: 12px 0; }
+.marea-lead, .marea-result > p { color: var(--muted); font-size: 14px; line-height: 1.6; }
+.marea-instructions ol { list-style: none; padding: 0; margin: 24px 0; text-align: left; }
+.marea-instructions li { display: flex; gap: 12px; align-items: flex-start; margin: 14px 0; font-size: 14px; line-height: 1.5; }
+.marea-instructions li > span { background: #e7ecdf; color: var(--sea); border-radius: 50%; width: 26px; height: 26px; display: grid; place-items: center; flex-shrink: 0; font-size: 12px; font-weight: 800; }
+.marea-mission { display: flex; flex-direction: column; gap: 6px; border-top: 1px solid var(--line); padding: 16px 0 20px; font-size: 13px; }
+.marea-mission > span { color: var(--muted); }
+.marea-primary { background: var(--sea); color: #fffdf3 !important; border: 0; padding: 15px 24px; min-height: 52px; border-radius: 12px; width: 100%; font-weight: 700 !important; }
+.marea-primary:hover { background: #16483d; }
+.marea-secondary { display: block; background: transparent; border: 1px solid var(--line); border-radius: 12px; width: 100%; padding: 14px; margin-top: 10px; min-height: 48px; font-size: 14px !important; }
+.marea-small { font-size: 11px; line-height: 1.5; color: var(--muted); text-align: center; margin-top: 14px !important; }
+.marea-game { max-width: 460px; margin: 18px auto 0; }
+.marea-game-title { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.marea-game-title h1 { font: 500 27px Georgia, serif; margin-top: 5px; }
+.marea-pause { width: 46px; height: 46px; flex-shrink: 0; border: 1px solid var(--line); background: #fffdf7; border-radius: 50%; font-weight: 900 !important; }
+.marea-hud { display: grid; grid-template-columns: repeat(3, 1fr); margin-top: 18px; border: 1px solid var(--line); background: #fffdf7; border-radius: 12px; padding: 10px 0; text-align: center; }
+.marea-hud > div + div { border-left: 1px solid var(--line); }
+.marea-hud small { display: block; font-size: 9px; letter-spacing: 1.1px; color: var(--muted); }
+.marea-hud strong { font-size: 28px; line-height: 1.3; font-weight: 750; font-variant-numeric: tabular-nums; }
+.marea-hud strong > span { font-size: 14px; margin-left: 2px; }
+.marea-hud .marea-hearts { font-size: 22px; line-height: 1.65; color: var(--coral); letter-spacing: 1px; }
+.marea-hud .marea-hearts > span { font-size: inherit; }
+.marea-hud .marea-urgent strong { color: #b64029; }
+.marea-time-track { height: 4px; border-radius: 4px; overflow: hidden; margin-top: 10px; background: #e0e5d8; }
+.marea-time-track > span { display: block; width: 100%; height: 100%; background: var(--sea); transform-origin: left; transition: transform .1s linear; }
+.marea-feedback { min-height: 34px; display: grid; place-items: center; text-align: center; font-size: 12px; font-weight: 600; color: var(--sea); }
+.marea-feedback--error { color: #ae422b; }
+.marea-clean-board { position: relative; padding: 15px; border: 1px solid #dfd5c2; border-radius: 16px; background: repeating-linear-gradient(0deg, transparent 0 37px, #ad85500b 38px 39px), #f3ead9; }
+.marea-board-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: 9px; letter-spacing: 1px; color: #716655; }
+.marea-size-chip { border-radius: 20px; padding: 6px 12px; background: #fffcf3; color: var(--ink); font-size: 12px; font-weight: 700; letter-spacing: 0; }
+.marea-shrimp { position: relative; display: flex; align-items: center; justify-content: center; min-height: 133px; height: clamp(133px, 23svh, 180px); width: 100%; padding: 0; border: 0; background: none; touch-action: none !important; user-select: none; -webkit-user-select: none; z-index: 2; }
+.marea-shrimp .arcade-art { max-height: 100%; pointer-events: none; }
+.marea-shrimp.is-dragging { z-index: 5; pointer-events: none; }
+.marea-board-instruction { display: block; text-align: center; font-size: 11px; color: #716655; }
+.marea-clean-board.is-clean { border-color: #88ab90; }
+.marea-baskets { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 12px; }
+.marea-baskets button { border: 1px solid var(--line); background: #fffdf7; padding: 5px 5px 10px; border-radius: 12px; font-size: 12px; min-height: 88px; }
+.marea-baskets button:hover { background: #eaf0e3; border-color: var(--sea); }
+.marea-baskets .arcade-art { max-width: 85px; margin: auto; }
+.marea-game-footer { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--line); }
+.marea-orders-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 10px 0; }
+.marea-orders-heading h2 { font-size: 13px; font-weight: 750; }
+.marea-orders-heading > span { font-size: 10px; color: var(--muted); }
+.marea-orders, .marea-workers { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; }
+.marea-orders { min-height: 141px; margin-bottom: 20px; }
+.marea-order { position: relative; border: 2px solid #dfe2d4; border-radius: 12px; background: #fffdf7; padding: 8px; min-width: 0; overflow: hidden; }
+.marea-order.is-selected { border-color: var(--sea); background: #e3eddf; box-shadow: 0 0 0 2px #c7d8c7; }
+.marea-order > span:first-child { display: block; font-size: 10px; text-align: left; color: var(--muted); }
+.marea-order .arcade-art { height: 62px; }
+.marea-order strong { display: block; font-size: 12px; }
+.marea-order small { font-size: 11px; color: var(--muted); }
+.marea-order-timer { display: block; height: 4px; margin-top: 7px; background: #e1e5d9; border-radius: 3px; overflow: hidden; }
+.marea-order-timer i, .marea-work-track i { display: block; width: 100%; height: 100%; background: #468a71; transform-origin: left; }
+.marea-order.is-urgent .marea-order-timer i { background: #c45436; }
+.marea-order.is-urgent small { color: #ac4028; }
+.marea-orders-empty { grid-column: 1 / -1; display: grid; place-items: center; border: 1px dashed var(--line); font-size: 12px; color: var(--muted); border-radius: 12px; }
+.marea-worker { padding: 0 5px 10px; border: 1px solid var(--line); border-radius: 12px; background: #edf2e7; min-width: 0; }
+.marea-worker:disabled { background: #e1e8dc; }
+.marea-worker .arcade-art { height: 82px; width: 100%; }
+.marea-worker strong { display: block; font-size: 14px; margin-top: 5px; }
+.marea-worker small { display: block; color: var(--muted); font-size: 10px; margin-top: 2px; }
+.marea-worker-status { display: block; font-size: 10px; margin: 10px 0 5px; font-weight: 650; }
+.marea-work-track { display: block; height: 4px; border-radius: 3px; overflow: hidden; background: #d3dfcb; }
+.marea-catch-wrap { width: min(100%, 360px, max(230px, calc(100svh - 320px))); margin: auto; }
+.marea-catch { display: block; width: 100%; aspect-ratio: 1; height: auto; border-radius: 14px; border: 1px solid #c3d8cc; touch-action: none !important; }
+.marea-catch-controls { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-top: 12px; }
+.marea-catch-controls button { width: 76px; min-height: 48px; border: 1px solid #cad8c6; border-radius: 12px; background: #e5eddc; font-size: 25px; touch-action: none; user-select: none; }
+.marea-catch-controls > span { font-size: 12px; text-align: center; }
+.marea-catch-controls small { display: block; font-size: 10px; color: var(--muted); margin-top: 3px; }
+.marea-overlay { position: fixed; inset: 0; z-index: 1100; background: #173c32b3; backdrop-filter: blur(5px); display: grid; place-items: center; padding: 20px; }
+.marea-dialog { width: 100%; max-width: 350px; border-radius: 22px; background: var(--paper); padding: 30px 24px; text-align: center; box-shadow: 0 20px 90px #12352c50; }
+.marea-dialog h2 { font: 32px Georgia, serif; margin: 18px 0 12px; }
+.marea-dialog p { font-size: 14px; color: var(--muted); line-height: 1.7; margin-bottom: 25px; }
+.marea-result-stars { display: flex; justify-content: center; gap: 8px; margin: 30px 0 20px; font-size: 44px; color: #d9ddcf; }
+.marea-result-stars span:nth-child(2) { transform: translateY(-10px); font-size: 53px; }
+.marea-result-stars .is-earned { color: #d5a333; text-shadow: 0 3px 0 #edce87; }
+.marea-result-score { margin: 25px auto; }
+.marea-result-score > strong { display: block; font-size: 70px; font-weight: 750; letter-spacing: -3px; line-height: 1.1; }
+.marea-result-score > span { display: block; font-size: 10px; letter-spacing: 3px; color: var(--muted); margin-top: 5px; }
+.marea-result-score > b { display: inline-block; font-size: 10px; letter-spacing: 1px; background: #f5e6b9; color: #715314; border-radius: 20px; padding: 7px 12px; margin-top: 15px; }
+.marea-result-stats { display: grid; grid-template-columns: repeat(3, 1fr); padding: 20px 0; border-block: 1px solid var(--line); }
+.marea-result-stats b { display: block; font-size: 22px; }
+.marea-result-stats span { font-size: 11px; color: var(--muted); }
+.marea-result .marea-primary { margin-top: 22px; }
+@media (max-width: 700px) {
+  .marea { padding: 0 16px 24px; }
+  .marea-topbar { min-height: 60px; gap: 8px; }
+  .marea-brand { font-size: 9px; letter-spacing: 1px; }
+  .marea-brand > span { font-size: 20px; margin-right: 3px; }
+  .marea-sound { padding: 7px 9px; font-size: 10px !important; }
+  .marea-back { font-size: 11px; }
+  .marea-hero { gap: 12px; padding: 28px 0; grid-template-columns: 1fr .7fr; }
+  .marea-hero h1 { font-size: 46px; letter-spacing: -2px; margin: 14px 0; }
+  .marea-hero h1 em { display: block; }
+  .marea-hero-copy > p { font-size: 13px; }
+  .marea-hero-copy .marea-eyebrow { font-size: 8px; line-height: 1.7; letter-spacing: 1px; }
+  .marea-hero-art { min-height: 228px; }
+  .marea-hero-worker { width: 155px; left: -28px; bottom: 30px; }
+  .marea-hero-basket { width: 110px; right: -5px; }
+  .marea-art-sun { width: 65px; height: 65px; top: 25px; right: 10px; }
+  .marea-art-wave { font-size: 230px; bottom: -30px; }
+  .marea-stamp { display: none; }
+  .marea-pills { gap: 5px; margin-top: 16px; }
+  .marea-pills span { font-size: 9px; padding: 5px 8px; }
+  .marea-section-title h2 { font-size: 15px; }
+  .marea-section-title > span { display: none; }
+  .marea-modes { grid-template-columns: 1fr; gap: 13px; }
+  .marea-mode { display: grid; grid-template-columns: 110px 1fr; }
+  .marea-mode-scene { height: 100%; min-height: 172px; }
+  .marea-mode-scene .arcade-art { width: 112px; height: 108px; left: -1px; bottom: 19px; }
+  .marea-mode-duration { top: auto; bottom: 9px; right: auto; left: 10px; font-size: 8px; }
+  .marea-mode-number { font-size: 20px; }
+  .marea-mode-copy { padding: 16px 14px 13px; }
+  .marea-mode h3 { font-size: 23px; margin: 7px 0 8px; }
+  .marea-mode p { font-size: 12px; min-height: 0; line-height: 1.45; margin-bottom: 12px; }
+  .marea-mode-bottom { padding-top: 10px; }
+  .marea-home-footer { font-size: 10px; line-height: 1.6; }
+  .marea-game { margin-top: 13px; }
+  .marea-game-title h1 { font-size: 25px; }
+  .marea-game-title .marea-eyebrow { font-size: 9px; }
+  .marea-instructions { margin-top: 22px; }
+  .marea-instructions h1 { font-size: 30px; }
+}
+@media (max-width: 360px) {
+  .marea { padding-inline: 11px; }
+  .marea-brand b { display: none; }
+  .marea-mode { grid-template-columns: 90px 1fr; }
+  .marea-mode h3 { font-size: 21px; }
+  .marea-mode-scene .arcade-art { left: -11px; }
+  .marea-orders-heading > span { font-size: 9px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .marea *, .marea *::before { transition: none !important; animation: none !important; }
+}
+.marea { padding-top: env(safe-area-inset-top, 0px); padding-bottom: max(24px, env(safe-area-inset-bottom, 0px)); }
