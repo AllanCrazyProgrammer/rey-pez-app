@@ -2,7 +2,7 @@
   <div
     v-if="tieneReferencia"
     class="pedido-referencia"
-    :class="`pedido-${claseCumplimiento}`"
+    :class="[`pedido-${claseCumplimiento}`, { 'pedido-compacto': compacto }]"
   >
     <span class="pedido-label">Pedido:</span>
     <span class="pedido-valor" :class="claseCumplimiento">{{ textoReferencia }}</span>
@@ -13,6 +13,10 @@
 export default {
   name: 'PedidoReferencia',
   props: {
+    compacto: {
+      type: Boolean,
+      default: false
+    },
     pedidoReferencia: {
       type: Object,
       default: () => ({})
@@ -157,5 +161,39 @@ export default {
 
 .pedido-valor.neutro {
   color: #475569;
+}
+.pedido-referencia.pedido-compacto {
+  align-self: flex-start;
+  flex-wrap: wrap;
+  max-width: 100%;
+  min-height: 22px;
+  padding: 3px 5px;
+  gap: 3px;
+  border-radius: 6px;
+  box-shadow: none;
+  line-height: 1.2;
+  white-space: normal;
+}
+
+.pedido-compacto::before {
+  position: static;
+  flex: 0 0 12px;
+  width: 12px;
+  height: 12px;
+  transform: none;
+  border: 0;
+  box-shadow: none;
+  font-size: 9px;
+}
+
+.pedido-compacto .pedido-label {
+  font-size: 10px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.pedido-compacto .pedido-valor {
+  font-size: 11px;
+  font-weight: 800;
 }
 </style>

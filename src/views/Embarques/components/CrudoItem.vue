@@ -1,5 +1,5 @@
 <template>
-    <div class="producto crudo" :class="{'crudo-ozuna': isClienteOzuna}">
+    <div class="producto crudo" :class="{'crudo-ozuna': isClienteOzuna}" :style="{ '--ancho-crudo': anchoCrudo }">
         <h2 class="crudo-header">Crudos</h2>
 
         <div class="crudo-items">
@@ -10,30 +10,20 @@
                         :disabled="embarqueBloqueado">
                         $
                     </button>
-                    <div class="talla-referencia">
-                        <PedidoReferencia
+                    <div class="talla-referencia" :style="{ width: anchoTalla(item.talla) + 'px' }">
+                        <PedidoReferencia compacto
                             :pedido-referencia="pedidoReferenciaCrudos && item.talla ? (pedidoReferenciaCrudos[item.talla] || item.pedidoReferencia) : item.pedidoReferencia"
                             :total-taras="totalTarasPorTalla[item.talla] || 0"
                         />
-                        <select v-model="item.talla" class="form-control talla-select" @change="onTallaCrudoChange(item)"
+                        <select :value="item.talla" class="form-control talla-select" @change="seleccionarTalla(item, $event)"
                             :disabled="embarqueBloqueado">
                             <option value="">Elige talla</option>
-                            <option value="Med c/c">Med c/c</option>
-                            <option value="Med-Esp c/c">Med-Esp c/c</option>
-                            <option value="Lag gde c/c">Lag gde c/c</option>
-                            <option value="Med-Gde c/c">Med-Gde c/c</option>
-                            <option value="Gde c/c">Gde c/c</option>
-                            <option value="Extra c/c">Extra c/c</option>
-                            <option value="Chico c/c">Chico c/c</option>
-                            <option value="Gde c/ Extra">Gde c/ Extra c/c</option>
-                            <option value="Jumbo c/c">Jumbo c/c</option>
-                            <option value="Linea">Linea</option>
-                            <option value="Acamaya">Acamaya</option>
-                            <option value="Cam s/c">Cam s/c</option>
-                            <option value="Rechazo">Rechazo</option>
+                            <option v-for="talla in tallasDisponibles" :key="talla" :value="talla">
+                                {{ talla === 'Gde c/ Extra' ? 'Gde c/ Extra c/c' : talla }}
+                            </option>
+                            <option value="__otra_medida__">Otra medida…</option>
                         </select>
                     </div>
-                    <span v-if="item.precio" class="precio-tag">${{ item.precio }}</span>
 
                     <!-- Checkbox de venta para Ozuna -->
                     <div v-if="isClienteOzuna" class="venta-checkbox-container" style="display: none;">
@@ -43,7 +33,25 @@
                     </div>
 
                     <input type="text" v-model="item.barco" class="form-control barco-input" placeholder="Barco"
+                        :style="{ width: anchoBarco(item.barco) + 'px' }" :title="item.barco || 'Barco'"
                         :disabled="embarqueBloqueado" @input="actualizarCrudo">
+                </div>
+
+                <span v-if="item.precio" class="precio-tag precio-crudo">${{ item.precio }}</span>
+
+                <div v-if="itemEditandoMedida === item" class="medida-personalizada">
+                    <label :for="'medida-crudo-' + clienteId + '-' + crudoIndex + '-' + itemIndex">Nombre de la medida</label>
+                    <input :id="'medida-crudo-' + clienteId + '-' + crudoIndex + '-' + itemIndex"
+                        ref="nombreMedidaInput" v-model="nombreMedida" type="text" class="form-control"
+                        placeholder="Escribe el nombre" :disabled="embarqueBloqueado"
+                        @keydown.enter.prevent="guardarMedidaPersonalizada(item)"
+                        @keydown.esc.prevent="cancelarMedidaPersonalizada">
+                    <div class="medida-acciones">
+                        <button type="button" class="btn agregar-crudo-item"
+                            :disabled="embarqueBloqueado || !nombreMedida.trim() || nombreMedida.trim() === '__otra_medida__'"
+                            @click="guardarMedidaPersonalizada(item)">Usar medida</button>
+                        <button type="button" class="btn" @click="cancelarMedidaPersonalizada">Cancelar</button>
+                    </div>
                 </div>
 
                 <div class="crudo-taras-container">
@@ -133,7 +141,12 @@ export default {
 
     data() {
         return {
-            crudoData: this.crudo || { items: [] }
+            crudoData: this.crudo || { items: [] },
+            itemEditandoMedida: null,
+            nombreMedida: '',
+            tallasBase: ['Med c/c', 'Med-Esp c/c', 'Lag gde c/c', 'Med-Gde c/c',
+                'Gde c/c', 'Extra c/c', 'Chico c/c', 'Gde c/ Extra', 'Jumbo c/c',
+                'Linea', 'Acamaya', 'Cam s/c', 'Rechazo']
         };
     },
 
@@ -169,6 +182,16 @@ export default {
     },
 
     computed: {
+        anchoCrudo() {
+            const anchos = (this.crudoData.items || []).map(item =>
+                this.anchoTalla(item.talla) + this.anchoBarco(item.barco));
+            return `${90 + Math.max(160, ...anchos)}px`;
+        },
+        tallasDisponibles() {
+            return [...new Set([...this.tallasBase,
+                ...(this.crudoData.items || []).map(item => item.talla).filter(Boolean)])];
+        },
+
         calcularTotalCrudos() {
             if (!this.crudoData || !this.crudoData.items || !Array.isArray(this.crudoData.items)) {
                 return 0;
@@ -204,6 +227,24 @@ export default {
     },
 
     methods: {
+        medirTextoCampo(texto) {
+            // Medir los glifos evita crecer antes de que se agote el espacio del campo.
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            const familia = getComputedStyle(this.$el || document.body).fontFamily;
+            context.font = `700 14px ${familia}`;
+            return Math.ceil(context.measureText(texto).width);
+        },
+
+        anchoTalla(talla) {
+            const etiqueta = talla === 'Gde c/ Extra' ? 'Gde c/ Extra c/c' : (talla || 'Elige talla');
+            return Math.max(96, this.medirTextoCampo(etiqueta) + 32);
+        },
+
+        anchoBarco(nombre) {
+            return Math.max(64, this.medirTextoCampo(nombre || 'Barco') + 22);
+        },
+
         extraerNumero(valor) {
             if (!valor) return 0;
             const match = valor.toString().match(/^(\d+)/);
@@ -218,9 +259,42 @@ export default {
             this.$emit('mostrar-modal-precio', item);
         },
 
+        seleccionarTalla(item, event) {
+            if (this.embarqueBloqueado) return;
+            const talla = event.target.value;
+            if (talla === '__otra_medida__') {
+                event.target.value = item.talla || '';
+                this.itemEditandoMedida = item;
+                this.nombreMedida = this.tallasBase.includes(item.talla) ? '' : (item.talla || '');
+                this.$nextTick(() => {
+                    const inputs = this.$refs.nombreMedidaInput;
+                    const input = Array.isArray(inputs) ? inputs[0] : inputs;
+                    if (input) input.focus();
+                });
+                return;
+            }
+            this.cancelarMedidaPersonalizada();
+            this.$set(item, 'talla', talla);
+            this.onTallaCrudoChange(item);
+        },
+
+        guardarMedidaPersonalizada(item) {
+            const nombre = this.nombreMedida.trim();
+            if (this.embarqueBloqueado || !nombre || nombre === '__otra_medida__') return;
+            const existente = this.tallasDisponibles.find(talla => talla.toLowerCase() === nombre.toLowerCase());
+            this.$set(item, 'talla', existente || nombre);
+            this.cancelarMedidaPersonalizada();
+            this.onTallaCrudoChange(item);
+        },
+
+        cancelarMedidaPersonalizada() {
+            this.itemEditandoMedida = null;
+            this.nombreMedida = '';
+        },
+
         onTallaCrudoChange(item) {
             // Sincronizar medida con la talla seleccionada siempre
-            item.medida = item.talla;
+            this.$set(item, 'medida', item.talla);
             // Permitir nueva asignación automática si se cambió la talla
             if (item.precioBorradoManualmente) {
                 this.$set(item, 'precioBorradoManualmente', false);
@@ -342,6 +416,31 @@ export default {
 
 
 <style scoped>
+.medida-personalizada {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+}
+
+.medida-personalizada label {
+    margin: 0;
+    font-size: .85rem;
+    font-weight: 700;
+}
+
+.medida-acciones {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.medida-acciones .btn {
+    padding: 7px 10px;
+    border-radius: 9px;
+    font-size: .8rem;
+}
+
 .producto.crudo {
     flex: 0 0 calc(25% - 6px);
     margin: 0 0 8px 0;
@@ -816,5 +915,131 @@ button:disabled {
     .producto.crudo { flex-basis: 100% !important; max-width: 100% !important; }
     .crudo-footer { align-items: stretch; flex-wrap: wrap; }
     .total-crudos { width: 100%; margin: 0; text-align: center; }
+}
+.precio-crudo { align-self: flex-start; }
+
+/* La tarjeta crece con el nombre y conserva talla y barco en la misma fila. */
+.producto.crudo {
+    container-type: inline-size;
+    container-name: crudo;
+    flex: 0 1 var(--ancho-crudo) !important;
+    width: var(--ancho-crudo);
+    max-width: 100% !important;
+    min-width: 0;
+}
+
+.crudo-talla-container {
+    flex-wrap: nowrap;
+    gap: 10px;
+}
+
+.talla-referencia {
+    flex: 0 1 auto;
+}
+
+.talla-select {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+}
+
+.barco-input {
+    flex: 0 1 auto;
+    min-width: 0;
+}
+
+.crudo-item {
+    gap: 12px;
+}
+
+.medida-personalizada {
+    gap: 8px;
+    padding-top: 10px;
+    border-top: 1px solid #e2d9f5;
+}
+
+.medida-acciones {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.medida-acciones .btn {
+    min-width: 0;
+    min-height: 36px;
+    margin: 0;
+    padding: 6px;
+    font-size: .78rem;
+    line-height: 1.25;
+    white-space: normal;
+}
+
+.crudo-taras-container {
+    align-items: flex-start;
+    gap: 8px;
+}
+
+.taras-wrapper {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 80px), 1fr));
+}
+
+.taras-input {
+    width: 100%;
+}
+
+.buttons-wrapper {
+    flex-shrink: 0;
+}
+
+.crudo-footer {
+    flex-wrap: wrap;
+}
+
+.total-crudos {
+    flex: 1 1 100%;
+    margin-left: 0;
+    text-align: center;
+}
+
+@container crudo (max-width: 230px) {
+    .crudo-taras-container {
+        flex-wrap: wrap;
+    }
+
+    .taras-wrapper {
+        flex-basis: 100%;
+    }
+
+    .buttons-wrapper {
+        width: 100%;
+        justify-content: flex-end;
+    }
+}
+.producto.crudo {
+    padding: 12px;
+}
+
+.crudo-item {
+    padding: 8px;
+}
+
+.crudo-talla-container {
+    gap: 8px;
+}
+
+.talla-select,
+.barco-input {
+    font-size: 14px;
+    font-weight: 700;
+    padding-left: 9px;
+    padding-right: 9px;
+}
+.crudo-talla-container {
+    align-items: flex-end;
+}
+
+.crudo-talla-container > .btn-precio {
+    margin-bottom: 9px;
 }
 </style>

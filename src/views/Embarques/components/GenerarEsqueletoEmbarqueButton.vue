@@ -33,7 +33,7 @@ const CRUDO_CLIENTES_MAP = {
   'veronica': '5'
 };
 
-// Mapeo de medidas del pedido de crudos al formato del embarque
+// Equivalencias solo para ordenar; el nombre del pedido se conserva intacto.
 const MEDIDAS_CRUDOS_MAP = {
   'chico': 'Chico c/c',
   'med': 'Med c/c',
@@ -281,12 +281,10 @@ export default {
               return;
             }
 
-            // Normalizar el nombre de la medida usando el mapa
-            const medidaLowerCase = medida.toLowerCase().trim();
-            const medidaNormalizada = MEDIDAS_CRUDOS_MAP[medidaLowerCase] || medida;
+            // Conservar exactamente la medida capturada en el pedido de crudos.
             
             // Crear clave única para crudo: usar "crudo" como tipo
-            const claveCrudo = `${medidaNormalizada}__crudo__`;
+            const claveCrudo = `${medida}__crudo__`;
 
             // Verificar si ya existe esta medida como crudo
             const yaExiste = esqueletoPorCliente[clienteId].some(item => {
@@ -297,7 +295,7 @@ export default {
             // Solo agregar si no existe
             if (!yaExiste) {
               esqueletoPorCliente[clienteId].push({
-                medida: medidaNormalizada,
+                medida,
                 tipo: 'crudo',
                 tipoPersonalizado: '',
                 pedidoReferencia: {
@@ -319,8 +317,10 @@ export default {
         }
 
         const ordenados = [...crudos].sort((a, b) => {
-          const keyA = (a.medida || '').toString().trim().toLowerCase();
-          const keyB = (b.medida || '').toString().trim().toLowerCase();
+          const nombreA = (a.medida || '').toString().trim().toLowerCase();
+          const nombreB = (b.medida || '').toString().trim().toLowerCase();
+          const keyA = (MEDIDAS_CRUDOS_MAP[nombreA] || nombreA).toLowerCase();
+          const keyB = (MEDIDAS_CRUDOS_MAP[nombreB] || nombreB).toLowerCase();
           const indexA = ordenMedidas.has(keyA) ? ordenMedidas.get(keyA) : Number.MAX_SAFE_INTEGER;
           const indexB = ordenMedidas.has(keyB) ? ordenMedidas.get(keyB) : Number.MAX_SAFE_INTEGER;
           if (indexA !== indexB) {

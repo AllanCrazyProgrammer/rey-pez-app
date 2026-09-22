@@ -149,6 +149,7 @@ export const embarquePedidoMixin = {
       };
 
       const referencias = {};
+      const referenciasAnteriores = {};
 
       pedidos
         .filter(pedido => this.normalizarTexto(pedido?.tipo) === 'crudo')
@@ -159,19 +160,28 @@ export const embarquePedidoMixin = {
             const clienteId = crudoClientesMap[clienteKey];
             if (!clienteId || !medidasCliente || typeof medidasCliente !== 'object') return;
             if (!referencias[clienteId]) referencias[clienteId] = {};
+            if (!referenciasAnteriores[clienteId]) referenciasAnteriores[clienteId] = {};
             Object.entries(medidasCliente).forEach(([medida, cantidad]) => {
               const cantidadNum = this.normalizarCantidadPedido(cantidad);
               if (cantidadNum <= 0) return;
               const medidaKey = medida.toString().trim().toLowerCase();
               const tallaNormalizada = medidasCrudosMap[medidaKey] || medida.toString().trim();
-              if (!referencias[clienteId][tallaNormalizada]) {
-                referencias[clienteId][tallaNormalizada] = { taras: 0 };
+              if (!referencias[clienteId][medida]) {
+                referencias[clienteId][medida] = { taras: 0 };
               }
-              referencias[clienteId][tallaNormalizada].taras += cantidadNum;
+              referencias[clienteId][medida].taras += cantidadNum;
+              // Mantener las referencias de embarques generados con los nombres anteriores.
+              if (!referenciasAnteriores[clienteId][tallaNormalizada]) {
+                referenciasAnteriores[clienteId][tallaNormalizada] = { taras: 0 };
+              }
+              referenciasAnteriores[clienteId][tallaNormalizada].taras += cantidadNum;
             });
           });
         });
 
+      Object.keys(referencias).forEach(clienteId => {
+        referencias[clienteId] = { ...referenciasAnteriores[clienteId], ...referencias[clienteId] };
+      });
       return referencias;
     },
 
