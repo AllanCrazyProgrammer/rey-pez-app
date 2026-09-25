@@ -1,7 +1,6 @@
-import { getFirestore, doc, setDoc, getDoc, serverTimestamp, deleteDoc, runTransaction } from 'firebase/firestore';
+import { getFirestore, collection, doc, serverTimestamp, runTransaction } from 'firebase/firestore';
 import { v4 as uuidv4 } from 'uuid';
 import EmbarquesOfflineService from '@/services/EmbarquesOfflineService';
-import BackupService from '../BackupService.js';
 import { normalizarFechaISO, normalizarFechaValor, obtenerFechaActualISO } from '@/utils/dateUtils';
 import { crearNuevoProducto } from '@/constants.js/embarque';
 import { embarqueTieneContenidoOperativoEstado, serializarEstable } from '@/utils/embarqueContenido';
@@ -164,6 +163,7 @@ export function normalizarDocDataParaFirestore(docData, record = {}, contexto = 
 
 export const embarqueSyncMixin = {
   beforeDestroy() {
+    this._editorCerrado = true;
     if (this._timerSubidaEnVivo) {
       clearTimeout(this._timerSubidaEnVivo);
       this._timerSubidaEnVivo = null;
@@ -292,6 +292,9 @@ export const embarqueSyncMixin = {
         });
       } catch (error) {
         console.error('[guardarSnapshotOffline] Error al guardar snapshot offline:', error);
+        this.hasPendingChanges = true;
+        alert('No se pudo guardar en este equipo. No cierres esta ventana. ' + error.message);
+        throw error;
       }
     },
 
@@ -299,7 +302,7 @@ export const embarqueSyncMixin = {
       try {
         await EmbarquesOfflineService.init();
         const record = await EmbarquesOfflineService.getById(id);
-        if (!record) {
+        if (!record || record.deleted) {
           console.log('[DEBUG-OFFLINE] No se encontró registro offline para ID:', id);
           return false;
         }
@@ -311,102 +314,6 @@ export const embarqueSyncMixin = {
       } catch (error) {
         console.error('[cargarEmbarqueOffline] No se pudo cargar el embarque offline:', error);
         return false;
-      }
-    },
-
-    async sincronizarRegistroOffline(record) {
-      if (!record || !record.id) {
-        return;
-      }
-
-      try {
-        const db = getFirestore();
-        const embarqueRef = doc(db, 'embarques', record.id);
-        // Generación de cambios vigente al armar el payload (ver
-        // subirCambiosEnVivo): si avanza durante la escritura, el estado no
-        // puede declararse sincronizado al terminar.
-        const genCapturada = Number(this._dirtyGen) || 0;
-        const docData = record.docData || (record.id === this.embarqueId ? this.prepararDatosEmbarque() : null);
-
-        const metadataUltimaEdicion = {
-          userId: this.authStore.userId,
-          username: this.authStore.user?.username || 'Usuario desconocido',
-          timestamp: serverTimestamp()
-        };
-
-        const snapshot = await getDoc(embarqueRef);
-        const dataRemota = snapshot.exists() ? (snapshot.data() || {}) : null;
-
-        if (record.deleted && record.deletedByUser) {
-          if (snapshot.exists()) {
-            // Respaldo de emergencia ANTES de borrar en la nube; si falla,
-            // el error se propaga y el registro queda pendiente para reintentar.
-            await BackupService.crearRespaldoEmergencia(record.id, 'eliminacion_offline_sincronizada');
-            await deleteDoc(embarqueRef);
-          }
-          await EmbarquesOfflineService.hardDelete(record.id);
-          return;
-        }
-
-        const payload = normalizarDocDataParaFirestore(docData || this.prepararDatosEmbarque(), record, {
-          dataRemota,
-          costoExtraDefault: this.costoExtra,
-          fechaDefault: this.embarque.fecha,
-        });
-
-        const dataParaFirestore = {
-          ...(dataRemota && this.tieneContenidoOperativo(dataRemota) && !this.tieneContenidoOperativo(payload)
-            ? {
-                ...payload,
-                clientes: Array.isArray(dataRemota.clientes) ? dataRemota.clientes : [],
-                kilosCrudos: dataRemota.kilosCrudos || payload.kilosCrudos || {},
-                cargaCon: payload.cargaCon || dataRemota.cargaCon || '',
-                camionNumero: payload.camionNumero || dataRemota.camionNumero || 1
-              }
-            : payload),
-          ultimaEdicion: metadataUltimaEdicion
-        };
-
-        if (snapshot.exists()) {
-          await setDoc(embarqueRef, dataParaFirestore, { merge: false });
-        } else {
-          await setDoc(embarqueRef, dataParaFirestore);
-        }
-
-        await EmbarquesOfflineService.markSynced(record.id);
-
-        if (record.id === this.embarqueId) {
-          this.guardadoAutomaticoActivo = true;
-          this.modoEdicion = true;
-          this._revBase = Number(dataParaFirestore.rev) || Number(this._revBase) || 0;
-          this._snapshotRemotoDiferido = null;
-          // La base de fusión es lo ESCRITO (dataParaFirestore), no el estado
-          // vivo: puede haber ediciones posteriores que no van en esta subida.
-          this.actualizarBasesSincronizadas(dataParaFirestore);
-          if ((Number(this._dirtyGen) || 0) === genCapturada) {
-            // El embarque abierto acaba de subirse: ya no hay cambios locales
-            // pendientes. Sin este reset, hasPendingChanges quedaba en true
-            // para siempre y TODOS los snapshots remotos se diferían: la otra
-            // sesión dejaba de reflejarse hasta la siguiente edición local.
-            this.hasPendingChanges = false;
-          } else {
-            // Hubo ediciones mientras se escribía: siguen pendientes. El
-            // markSynced de arriba dejó el registro offline como "synced";
-            // volver a guardarlo como pendiente para no perderlas si la app
-            // se cierra antes de la próxima subida.
-            await this.guardarSnapshotOffline({ pendingSync: true });
-            if (typeof this.programarSubidaEnVivo === 'function') {
-              this.programarSubidaEnVivo();
-            }
-          }
-        }
-      } catch (error) {
-        console.error('[sincronizarRegistroOffline] Error al sincronizar embarque offline:', error);
-        try {
-          await EmbarquesOfflineService.markSyncError(record.id, error.message || error);
-        } catch (markError) {
-          console.warn('[sincronizarRegistroOffline] No se pudo marcar el error de sincronización:', markError);
-        }
       }
     },
 
@@ -472,6 +379,7 @@ export const embarqueSyncMixin = {
     },
 
     programarSubidaEnVivo(retrasoMs) {
+      if (this._editorCerrado) return;
       // Jitter: si dos sesiones agendan la subida con la misma cadencia fija,
       // chocan sincronizadas en conflictos una y otra vez.
       const retraso = retrasoMs || (1500 + Math.floor(Math.random() * 700));
@@ -504,7 +412,9 @@ export const embarqueSyncMixin = {
 
       try {
         const db = getFirestore();
-        const embarqueRef = doc(db, 'embarques', this.embarqueId);
+        const idCapturado = this.embarqueId;
+        const revCapturada = Number(this._revBase) || 0;
+        const embarqueRef = doc(db, 'embarques', idCapturado);
         // Generación vigente al capturar el payload: si el usuario sigue
         // tecleando mientras la transacción viaja a Firestore, la generación
         // avanza y el estado NO puede declararse sincronizado al confirmar
@@ -524,6 +434,7 @@ export const embarqueSyncMixin = {
           }
         };
 
+        const respaldoConflicto = doc(collection(db, 'respaldos_emergencia'));
         let dataConflicto = null;
         let revEscrita = null;
 
@@ -532,15 +443,23 @@ export const embarqueSyncMixin = {
           const snapshot = await transaction.get(embarqueRef);
 
           if (!snapshot.exists()) {
-            revEscrita = (Number(this._revBase) || 0) + 1;
+            if (revCapturada > 0) {
+              throw new Error('El embarque fue eliminado en otro equipo. La copia local se conserva; no se volverá a crear automáticamente.');
+            }
+            revEscrita = revCapturada + 1;
             transaction.set(embarqueRef, { ...payload, rev: revEscrita });
             return;
           }
 
           const revRemota = Number(snapshot.data().rev) || 0;
-          if (revRemota !== (Number(this._revBase) || 0)) {
+          if (revRemota !== revCapturada) {
             // Alguien más guardó desde nuestra base: no escribir nada.
             dataConflicto = snapshot.data();
+            transaction.set(respaldoConflicto, {
+              embarqueOriginalId: idCapturado, datosOriginales: docData,
+              fechaRespaldo: serverTimestamp(), razonRespaldo: 'cambios_locales_antes_de_combinar',
+              tipoRespaldo: 'emergencia', version: '1.0'
+            });
             return;
           }
 
@@ -549,6 +468,8 @@ export const embarqueSyncMixin = {
           // mismo documento (fletePagos, totalGanancias, etc.).
           transaction.update(embarqueRef, { ...payload, rev: revEscrita });
         });
+
+        if (this._editorCerrado || this.embarqueId !== idCapturado) return;
 
         if (dataConflicto) {
           this._reintentosSubidaEnVivo = (this._reintentosSubidaEnVivo || 0) + 1;

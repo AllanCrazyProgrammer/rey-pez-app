@@ -1,4 +1,3 @@
-import { getFirestore, collection, getDocs } from 'firebase/firestore';
 import { v4 as uuidv4 } from 'uuid';
 import EmbarquesOfflineService from '@/services/EmbarquesOfflineService';
 import { normalizarFechaISO } from '@/utils/dateUtils';
@@ -47,50 +46,10 @@ export const embarqueClientesMixin = {
         return 1;
       }
 
-      try {
-        if (!navigator.onLine) {
-          await EmbarquesOfflineService.init();
-          const registrosLocales = await EmbarquesOfflineService.getAll();
-          const totalLocales = registrosLocales.filter(registro => {
-            if (!registro || !registro.fecha) {
-              return false;
-            }
-            try {
-              const registroISO = normalizarFechaISO(registro.fecha);
-              return registroISO === fechaISO;
-            } catch (_) {
-              return false;
-            }
-          }).length;
-          return totalLocales + 1;
-        }
-
-        const db = getFirestore();
-        const embarquesRef = collection(db, 'embarques');
-        const snapshot = await getDocs(embarquesRef);
-        const totalRemotos = snapshot.docs.filter(doc => {
-          const data = doc.data();
-          let fechaEmbarque;
-
-          if (data.fecha && typeof data.fecha.toDate === 'function') {
-            fechaEmbarque = data.fecha.toDate();
-          } else if (data.fecha instanceof Date) {
-            fechaEmbarque = data.fecha;
-          } else if (typeof data.fecha === 'string') {
-            fechaEmbarque = data.fecha;
-          } else {
-            return false;
-          }
-
-          const fechaEmbarqueISO = normalizarFechaISO(fechaEmbarque);
-          return fechaEmbarqueISO === fechaISO;
-        }).length;
-
-        return totalRemotos + 1;
-      } catch (error) {
-        console.warn('[obtenerCamionNumeroParaFecha] Error al calcular camión, usando 1:', error);
-        return 1;
-      }
+      const registros = await EmbarquesOfflineService.getAll();
+      const numeros = registros.filter(r => r.id !== this.embarqueId && r.fecha && normalizarFechaISO(r.fecha) === fechaISO)
+        .map(r => Number(r.camionNumero) || 1);
+      return Math.max(0, ...numeros) + 1;
     },
 
     async eliminarCliente(clienteId) {

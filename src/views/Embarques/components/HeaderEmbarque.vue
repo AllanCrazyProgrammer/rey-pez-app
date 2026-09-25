@@ -25,6 +25,9 @@
           <i :class="['fas', sonidosActivados ? 'fa-volume-up' : 'fa-volume-mute']" aria-hidden="true"></i>
           {{ sonidosActivados ? 'Sonido activo' : 'Sin sonido' }}
         </button>
+        <button type="button" class="btn-sonidos" title="Conexión y respaldos" aria-label="Conexión y respaldos" aria-haspopup="dialog" @click="$emit('open-offline-options')">
+          <i class="fas fa-cloud" aria-hidden="true"></i>
+        </button>
         <button type="button" @click="volverAEmbarquesMenu" class="btn-volver">
           <i class="fas fa-arrow-left"></i> Menú
         </button>

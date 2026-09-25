@@ -14,7 +14,8 @@
 
     <div class="nuevo-embarque" :class="{ 'sidebar-collapsed': sidebarCollapsed }">
       <!-- Header Component -->
-      <header-embarque 
+      <header-embarque
+        @open-offline-options="$emit('open-offline-options')"
         :modo-edicion="modoEdicion" 
         :embarque-bloqueado="embarqueBloqueado" 
         :embarque="embarque"
@@ -322,6 +323,7 @@ import { generarNotaVentaPDF } from '@/utils/pdfGenerator';
 import { embarqueTieneContenidoOperativoDoc, embarqueTieneContenidoOperativoEstado, productoTieneContenido } from '@/utils/embarqueContenido';
 
 // Después de las imports existentes, agregar:
+import EmbarquesSync from '@/services/EmbarquesSync';
 import EmbarquesOfflineService from '@/services/EmbarquesOfflineService';
 
 export default {
@@ -664,6 +666,13 @@ export default {
   },
   
   methods: {
+    async guardarAntesDeExportar() {
+      await this.$nextTick();
+      if (this._guardandoInicial || this._creandoEmbarque || this._inicializandoEmbarque) {
+        throw new Error('Espera a que termine de abrirse o crearse el embarque e intenta exportar de nuevo.');
+      }
+      if (this.embarqueId) await this.guardarSnapshotOffline({ pendingSync: Boolean(this.hasPendingChanges) });
+    },
     volverAEmbarquesMenu() {
       this.$router.push({ name: 'EmbarquesMenu' });
     },
@@ -712,24 +721,14 @@ export default {
     },
 
     async syncOffline() {
-      try {
-        await EmbarquesOfflineService.init();
-        const pendientes = await EmbarquesOfflineService.getPendingSync(true);
-        if (Array.isArray(pendientes) && pendientes.length > 0) {
-          for (const record of pendientes) {
-            await this.sincronizarRegistroOffline(record);
-          }
-        }
-        if (this.embarqueId) {
-          this.guardarCambiosEnTiempoReal();
-        }
-      } catch (error) {
-        console.error('[syncOffline] Error general al sincronizar embarques offline:', error);
+      if (this.embarqueId && this.hasPendingChanges && navigator.onLine) {
+        this.programarSubidaEnVivo(100);
       }
     },
 
     // Advertir al usuario si cierra la pestaña con cambios pendientes de subir
     handleBeforeUnload(event) {
+      if (window.desktop?.isClosing?.()) return;
       if (this.hasPendingChanges) {
         event.preventDefault();
         event.returnValue = '';
@@ -758,7 +757,7 @@ export default {
         }
       }
 
-      this.guardarSnapshotOffline({ pendingSync: !navigator.onLine }).catch(error => {
+      this.guardarSnapshotOffline({ pendingSync: this.hasPendingChanges || !navigator.onLine }).catch(error => {
         console.warn('[mostrarError] No se pudo registrar snapshot offline del error:', error);
       });
     },
@@ -1605,6 +1604,7 @@ export default {
 
   watch: {
     embarqueId(nuevoId) {
+      EmbarquesSync.editorId = nuevoId;
       // Presencia colaborativa: registrar/retirar a este usuario como editor
       if (nuevoId) {
         this.iniciarPresenciaEmbarque(nuevoId);
@@ -1707,6 +1707,7 @@ export default {
   },
 
   async created() {
+    EmbarquesSync.editorId = this.$route.params.id || 'nuevo';
     
     // Verificar autenticación al inicializar el componente
     try {
@@ -1755,62 +1756,30 @@ export default {
     await EmbarquesOfflineService.init();
     window.addEventListener('online', this.syncOffline);
 
-    if (navigator.onLine) {
-      await this.syncOffline();
-    }
-
-    const embarqueId = this.$route.params.id;
-
-    if (!navigator.onLine) {
-      let cargadoOffline = false;
-
-      if (embarqueId && embarqueId !== 'nuevo') {
-        cargadoOffline = await this.cargarEmbarqueOffline(embarqueId);
-      } else {
-        const registrosLocales = await EmbarquesOfflineService.getAll();
-        if (registrosLocales.length > 0) {
-          this.aplicarSnapshotOffline(registrosLocales[0]);
-          cargadoOffline = true;
-        }
-      }
-
-      if (!cargadoOffline) {
-        const localEmbarque = localStorage.getItem('embarque');
-        if (localEmbarque) {
-          try {
-            this.embarque = JSON.parse(localEmbarque);
-            const localCrudos = localStorage.getItem('clienteCrudos');
-            if (localCrudos) this.clienteCrudos = JSON.parse(localCrudos);
-            cargadoOffline = true;
-          } catch (error) {
-            console.warn('[NuevoEmbarque] Error al restaurar embarque desde localStorage:', error);
-          }
-        }
-      }
-
-      if (cargadoOffline) {
-        this.initUndo(this.embarque);
-        this.actualizarMedidasUsadas();
-        await this.cargarClientesPersonalizados();
-        await this.cargarPedidoReferenciaDelDia();
-        this.guardadoAutomaticoActivo = true;
-        // Mantener el catálogo guardado en el snapshot offline y dejar una
-        // escucha preparada para actualizarlo en cuanto regrese la conexión.
-        this.iniciarEscuchaPreciosActuales();
-        return;
-      }
-
-      console.warn('[NuevoEmbarque] No se encontraron datos offline para el embarque solicitado.');
-    }
-
+    const embarqueId = this.$route.params.id || 'nuevo';
     await this.cargarEmbarque(embarqueId);
+    this.syncOffline();
     this.initUndo(this.embarque);
     this.actualizarMedidasUsadas();
     await this.cargarClientesPersonalizados();
     await this.cargarPedidoReferenciaDelDia();
-    await this.iniciarPresenciaUsuario();
+    this.iniciarPresenciaUsuario();
     this.escucharUsuariosActivos();
     await this.iniciarEscuchaPreciosActuales();
+  },
+
+  async beforeRouteUpdate(to, from, next) {
+    try {
+      if (this.hasPendingChanges) await this.guardarSnapshotOffline({ pendingSync: true });
+      if (this._timerSubidaEnVivo) clearTimeout(this._timerSubidaEnVivo);
+      this.hasPendingChanges = false;
+      await this.cargarEmbarque(to.params.id || 'nuevo');
+      this.syncOffline();
+      next();
+    } catch (error) {
+      alert('No se pudo guardar el embarque antes de cambiar: ' + error.message);
+      next(false);
+    }
   },
 
   async beforeRouteLeave(to, from, next) {
@@ -1834,19 +1803,14 @@ export default {
       }
     }
 
-    // 2. Subir cambios a la nube automáticamente si hay pendientes
+    // Navigation waits only for durable local storage, never for a network request.
     if (this.hasPendingChanges && this.embarqueId) {
-      if (navigator.onLine) {
-        console.log('[NuevoEmbarque] Subiendo cambios a la nube antes de salir...');
-        try {
-          await this.sincronizarConNube();
-          console.log('[NuevoEmbarque] Cambios subidos a la nube exitosamente');
-        } catch (error) {
-          console.error('[NuevoEmbarque] Error al subir cambios a la nube al salir:', error);
-          // No bloqueamos la navegación si falla la subida a la nube
-        }
-      } else {
-        console.warn('[NuevoEmbarque] Sin conexión al salir: los cambios quedan pendientes de sincronización.');
+      try {
+        await this.guardarSnapshotOffline({ pendingSync: true });
+      } catch (error) {
+        alert(error.message);
+        next(false);
+        return;
       }
     }
 
@@ -1854,28 +1818,9 @@ export default {
   },
 
   beforeDestroy() {
-    // Intentar forzar guardado local y subida a la nube antes de destruir
-    if (this.embarqueId) {
-      // Guardar en saveManager si hay operaciones pendientes
-      if (this.saveManager && this.guardadoAutomaticoActivo) {
-        const status = this.saveManager.getStatus();
-        if (status.pendingOperations > 0) {
-          console.log('[NuevoEmbarque] Forzando guardado local antes de destruir componente');
-          this.saveManager.forceProcessAll().catch(error => {
-            console.error('[NuevoEmbarque] Error al forzar guardado local en destrucción:', error);
-          });
-        }
-      }
-
-      // Subir a la nube si hay cambios pendientes y hay conexión
-      if (this.hasPendingChanges && navigator.onLine) {
-        console.log('[NuevoEmbarque] Subiendo cambios a la nube antes de destruir componente');
-        this.sincronizarConNube().catch(error => {
-          console.error('[NuevoEmbarque] Error al subir a la nube en destrucción:', error);
-        });
-      }
-    }
-    
+    EmbarquesSync.editorId = null;
+    // The global queue resumes after the editor has released its live writer.
+    EmbarquesSync.sync();
     // Cancelar la suscripción a los cambios en tiempo real
     this.limpiarConexionesFirestore();
     this.detenerEscuchaPreciosActuales();
@@ -1900,8 +1845,7 @@ export default {
     // Eliminar los escuchadores de recarga y reconexión
     window.removeEventListener('beforeunload', this.handleBeforeUnload);
     window.removeEventListener('online', this.syncOffline);
-    window.removeEventListener('online', this.configurarReconexionAutomatica);
-    window.removeEventListener('offline', this.configurarReconexionAutomatica);
+    window.removeEventListener('online', this._reconexionHandler);
   },
 
   updated() {

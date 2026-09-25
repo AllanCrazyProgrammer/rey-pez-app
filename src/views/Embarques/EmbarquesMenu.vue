@@ -39,7 +39,7 @@ _____|____|____|______
             <span class="line-prefix">[SYS]</span> Gestiona todos tus embarques de manera eficiente
           </p>
           <p class="system-status">
-            <span class="status-item"><span class="status-dot online"></span> SISTEMA: ONLINE</span>
+            <span class="status-item"><span class="status-dot online"></span> {{ conexion.online ? 'CON CONEXIÓN' : 'SIN INTERNET' }}</span>
             <span class="status-item"><span class="status-dot"></span> CONEXIÓN: ACTIVA</span>
           </p>
         </div>
@@ -122,6 +122,7 @@ _____|____|____|______
 </template>
 
 <script>
+import { estadoOffline } from '@/services/EmbarquesSync'
 import ListaEmbarques from './ListaEmbarques.vue'
 import SalidasRendimientosModal from './components/SalidasRendimientosModal.vue'
 import BuscarSalidasProductosModal from './components/BuscarSalidasProductosModal.vue'
@@ -135,6 +136,7 @@ export default {
   },
   data() {
     return {
+      conexion: estadoOffline,
       mostrarSalidasRendimientos: false,
       mostrarBuscarSalidas: false,
       isNavigatingCuentaFletes: false,
@@ -252,7 +254,6 @@ export default {
 </script>
 
 <style scoped>
-@import url('https://fonts.googleapis.com/css2?family=VT323&family=Share+Tech+Mono&display=swap');
 
 /* Variables de colores Matrix/Terminal */
 .embarques-menu {

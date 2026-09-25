@@ -52,7 +52,7 @@ export default {
         const authStore = useAuthStore()
         const success = await authStore.login(this.username, this.password)
         if (success) {
-          this.$router.push('/')
+          this.$router.push(window.desktop ? '/embarques' : '/')
         } else {
           this.error = 'Usuario o contraseña incorrectos'
         }

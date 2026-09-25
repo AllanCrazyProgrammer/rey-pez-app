@@ -1,21 +1,33 @@
 {
   "name": "rey-pez",
-  "version": "0.1.0",
+  "version": "0.3.1",
   "private": true,
   "main": "electron/main.js",
   "scripts": {
     "start": "vue-cli-service serve",
     "build:web": "vue-cli-service build",
     "build": "vue-cli-service build && npx cap sync",
+    "test:embarques-offline": "node scripts/test-embarques-offline.cjs",
     "lint": "vue-cli-service lint",
-    "electron:dev": "concurrently \"npm run start\" \"wait-on http://localhost:8080 && electron electron/main.js\"",
-    "electron:build": "VUE_APP_TARGET=electron npm run build:web && electron-builder"
+    "electron:dev": "node scripts/dev-desktop.cjs",
+    "electron:build": "node scripts/build-desktop.cjs",
+    "electron:assets": "node scripts/build-desktop.cjs --assets-only",
+    "electron:mac": "node scripts/build-desktop.cjs --mac --arm64",
+    "electron:win": "node scripts/build-desktop.cjs --win --x64",
+    "electron:local": "electron electron/main.js",
+    "test:desktop-offline": "node scripts/test-desktop-offline.cjs",
+    "test:embarques-transfer": "node scripts/test-embarques-transfer.cjs"
   },
   "dependencies": {
     "@capacitor/cli": "^6.1.2",
     "@capacitor/core": "^6.1.2",
     "@capacitor/ios": "^6.1.2",
+    "@fontsource/orbitron": "^5.3.0",
+    "@fontsource/pacifico": "^5.3.0",
     "@fontsource/roboto": "^5.1.0",
+    "@fontsource/sail": "^5.3.0",
+    "@fontsource/share-tech-mono": "^5.3.0",
+    "@fontsource/vt323": "^5.3.0",
     "@fortawesome/fontawesome-free": "^6.7.2",
     "axios": "^0.21.4",
     "babel-eslint": "^10.1.0",
@@ -55,6 +67,7 @@
     "concurrently": "^9.2.1",
     "electron": "^39.2.7",
     "electron-builder": "^26.0.12",
+    "playwright": "^1.63.0",
     "vue-template-compiler": "^2.6.11",
     "wait-on": "^9.0.3"
   },
@@ -65,18 +78,42 @@
     "appId": "com.reypez.desktop",
     "productName": "ReyPez",
     "directories": {
-      "output": "release"
+      "output": "release/offline-0.3.1"
     },
     "files": [
-      "dist/**/*",
+      "desktop-dist/**/*",
       "electron/**/*",
-      "package.json"
+      "package.json",
+      "!node_modules/**/*"
     ],
     "mac": {
-      "category": "public.app-category.productivity"
+      "category": "public.app-category.productivity",
+      "target": [
+        "dmg"
+      ],
+      "identity": "-",
+      "hardenedRuntime": false
     },
     "win": {
-      "target": "nsis"
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "signAndEditExecutable": false
+    },
+    "npmRebuild": false,
+    "artifactName": "ReyPez-${version}-${os}-${arch}.${ext}",
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "deleteAppDataOnUninstall": false
     }
-  }
+  },
+  "description": "Embarques ReyPez con almacenamiento local y sincronización"
 }

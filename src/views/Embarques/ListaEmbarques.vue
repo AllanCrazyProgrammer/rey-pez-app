@@ -223,7 +223,7 @@
       </div>
 
       <!-- Estado vacío -->
-      <div v-else class="empty-state">
+      <div v-if="embarques.length === 0" class="empty-state">
         <pre class="empty-ascii">
 ╔═════════════════════════════════════════╗
 ║                                         ║
@@ -279,9 +279,10 @@
 </template>
 
 <script>
-import { getFirestore, collection, getDocs, doc, deleteDoc, getDoc, setDoc, updateDoc, serverTimestamp, query, orderBy, limit } from 'firebase/firestore';
+import { getFirestore, collection, getDocs, doc, deleteDoc, getDoc, updateDoc, serverTimestamp, query, orderBy, limit } from 'firebase/firestore';
 import BackupService from './BackupService.js';
-import { normalizarDocDataParaFirestore } from './mixins/embarqueSyncMixin';
+import { snapshotEmbarque } from '@/utils/embarqueOfflineSnapshot';
+import EmbarquesSync, { estadoOffline } from '@/services/EmbarquesSync';
 import NotificacionRespaldo from './NotificacionRespaldo.vue';
 import EmbarquesOfflineService from '@/services/EmbarquesOfflineService';
 import { useAuthStore } from '@/stores/auth';
@@ -369,6 +370,7 @@ export default {
   methods: {
     formatearFecha,
     requestList3dUpdate() {
+      if (window.desktop) return;
       if (this.lista3dFrame !== null) return;
 
       this.lista3dFrame = window.requestAnimationFrame(() => {
@@ -496,56 +498,7 @@ export default {
     },
 
     construirSnapshotOfflineDesdeRemoto(docId, data, fecha) {
-      const clientes = Array.isArray(data.clientes) ? data.clientes : [];
-      const productos = clientes.flatMap(cliente => {
-        const productosCliente = Array.isArray(cliente.productos) ? cliente.productos : [];
-        return productosCliente.map(producto => ({
-          ...producto,
-          clienteId: cliente.id,
-          nombreCliente: cliente.nombre,
-        }));
-      });
-
-      const clienteCrudos = {};
-      clientes.forEach(cliente => {
-        clienteCrudos[cliente.id] = Array.isArray(cliente.crudos) ? cliente.crudos : [];
-      });
-      
-      // Normalizar la fecha para evitar problemas de zona horaria
-      const fechaNormalizada = fecha ? normalizarFechaISO(fecha) : null;
-
-      const docData = {
-        ...this.safeClone(data, {}),
-        fecha: fechaNormalizada,
-      };
-
-      const totalGananciasRaw = data.totalGanancias;
-      const totalGanancias = Number.isFinite(Number(totalGananciasRaw)) ? Number(totalGananciasRaw) : null;
-
-      return {
-        id: docId,
-        fecha: fechaNormalizada,
-        cargaCon: data.cargaCon || '',
-        camionNumero: data.camionNumero || 1,
-        embarqueBloqueado: data.embarqueBloqueado || false,
-        noEnviadoMexico: data.noEnviadoMexico || false,
-        clientesPersonalizados: data.clientesPersonalizados || [],
-        clientesJuntarMedidas: data.clientesJuntarMedidas || {},
-        clientesReglaOtilio: data.clientesReglaOtilio || {},
-        clientesIncluirPrecios: data.clientesIncluirPrecios || {},
-        clientesCuentaEnPdf: data.clientesCuentaEnPdf || {},
-        clientesSumarKgCatarro: data.clientesSumarKgCatarro || {},
-        clientes: clientes,
-        productos,
-        clienteCrudos,
-        costosPorMedida: data.costosPorMedida || {},
-        aplicarCostoExtra: data.aplicarCostoExtra || {},
-        costoExtra: data.costoExtra !== undefined ? data.costoExtra : 18,
-        medidasConfiguracion: data.medidasConfiguracion || [],
-        preciosActuales: [],
-        totalGanancias,
-        docData,
-      };
+      return snapshotEmbarque(docId, data, fecha);
     },
 
     tieneContenidoOperativo(data) {
@@ -553,72 +506,12 @@ export default {
     },
 
     async sincronizarPendientesOffline() {
-      try {
-        const pendientes = await EmbarquesOfflineService.getPendingSync(true);
-        if (!Array.isArray(pendientes) || pendientes.length === 0) {
-          return;
-        }
-
-        const authStore = useAuthStore();
-        const db = getFirestore();
-
-        for (const record of pendientes) {
-          try {
-            const embarqueRef = doc(db, 'embarques', record.id);
-            const snapshot = await getDoc(embarqueRef);
-
-            if (record.deleted && record.deletedByUser) {
-              if (snapshot.exists()) {
-                // Respaldo de emergencia ANTES de borrar en la nube; si falla,
-                // el error se propaga y el registro queda pendiente para reintentar.
-                await BackupService.crearRespaldoEmergencia(record.id, 'eliminacion_offline_sincronizada');
-                await deleteDoc(embarqueRef);
-              }
-              await EmbarquesOfflineService.hardDelete(record.id);
-              continue;
-            }
-
-            const dataRemota = snapshot.exists() ? (snapshot.data() || {}) : null;
-            const payload = normalizarDocDataParaFirestore(record.docData, record, { dataRemota });
-
-            if (dataRemota && this.tieneContenidoOperativo(dataRemota) && !this.tieneContenidoOperativo(payload)) {
-              console.warn('[ListaEmbarques] Snapshot offline incompleto detectado, preservando datos remotos para evitar sobrescritura.');
-              payload.clientes = Array.isArray(dataRemota.clientes) ? dataRemota.clientes : [];
-              payload.kilosCrudos = dataRemota.kilosCrudos || payload.kilosCrudos || {};
-              payload.cargaCon = payload.cargaCon || dataRemota.cargaCon || '';
-              payload.camionNumero = payload.camionNumero || dataRemota.camionNumero || 1;
-            }
-
-            const dataParaFirestore = {
-              ...payload,
-              ultimaEdicion: {
-                userId: authStore?.userId || 'offline-user',
-                username: authStore?.user?.username || 'Modo offline',
-                timestamp: serverTimestamp()
-              }
-            };
-
-            if (snapshot.exists()) {
-              await setDoc(embarqueRef, dataParaFirestore, { merge: false });
-            } else {
-              await setDoc(embarqueRef, dataParaFirestore);
-            }
-
-            await EmbarquesOfflineService.markSynced(record.id);
-          } catch (error) {
-            console.error('[ListaEmbarques] Error al sincronizar registro offline:', error);
-            try {
-              await EmbarquesOfflineService.markSyncError(record.id, error.message || error);
-            } catch (markError) {
-              console.warn('[ListaEmbarques] No se pudo marcar el error de sincronización:', markError);
-            }
-          }
-        }
-      } catch (error) {
-        console.error('[ListaEmbarques] Error general al sincronizar registros offline:', error);
-      }
+      return EmbarquesSync.sync();
     },
 
+    async refrescarLocales() {
+      this.embarques = this.asignarCamionNumero((await EmbarquesOfflineService.getAll()).map(this.mapOfflineRecordToLista));
+    },
     async cargarEmbarques() {
       try {
         this.cargando = true;
@@ -629,12 +522,13 @@ export default {
         let offlineById = new Map();
         let idsBorradosOffline = new Set();
         try {
-          const registrosOffline = await EmbarquesOfflineService.getAll();
+          const todosLosRegistros = await EmbarquesOfflineService.getAllRecords();
+          const registrosOffline = EmbarquesOfflineService.sortRecords(todosLosRegistros);
           offlineById = new Map((registrosOffline || []).map(r => [r.id, r]));
 
           // Embarques borrados offline pendientes de sincronizar: no deben
           // re-guardarse ni "resucitar" con los datos remotos.
-          const pendientesConBorrados = await EmbarquesOfflineService.getPendingSync(true);
+          const pendientesConBorrados = todosLosRegistros.filter(r => r.pendingSync);
           idsBorradosOffline = new Set(
             (pendientesConBorrados || []).filter(r => r.deleted).map(r => r.id)
           );
@@ -667,6 +561,8 @@ export default {
           console.warn('[ListaEmbarques] Error en sincronización background:', e)
         );
 
+        // The archive downloader already writes and notifies the list by page.
+        if (estadoOffline.downloading) return;
         const db = getFirestore();
         const embarquesRef = collection(db, 'embarques');
         const q = query(embarquesRef, orderBy('fecha', 'desc'), limit(100));
@@ -718,7 +614,7 @@ export default {
             }
           }
 
-          await EmbarquesOfflineService.save(snapshotOffline, { pendingSync: false, syncState: 'synced' });
+          await EmbarquesOfflineService.save(snapshotOffline, { pendingSync: false, syncState: 'synced', preservePending: true });
 
           const fechaNormalizada = normalizarFechaISO(fechaObj);
           const remoteDocParaContenido = embarque.data || {};
@@ -751,7 +647,9 @@ export default {
         const mergedMap = new Map();
         pendientesOffline.map(this.mapOfflineRecordToLista).filter(Boolean)
           .forEach(emb => mergedMap.set(emb.id, emb));
-        embarquesFiltrados.forEach(emb => mergedMap.set(emb.id, emb));
+        embarquesFiltrados.forEach(emb => {
+          if (!mergedMap.get(emb.id)?.pendingSync) mergedMap.set(emb.id, emb);
+        });
 
         this.embarques = this.asignarCamionNumero(
           Array.from(mergedMap.values()).sort((a, b) => new Date(b.fecha || 0) - new Date(a.fecha || 0))
@@ -948,66 +846,8 @@ export default {
     editarEmbarque(embarqueId) {
       if (this.abriendoEmbarque || this.navegacionAperturaEnCurso) return;
 
-      const embarque = this.embarques.find(e => e.id === embarqueId);
-      console.log('[DEBUG-LISTA] Editando embarque con ID:', embarqueId);
-      console.log('[DEBUG-LISTA] Fecha del embarque en la lista:', embarque?.fecha);
-      console.log('[DEBUG-LISTA] Fecha formateada mostrada:', this.formatearFecha(embarque?.fecha));
-
-      this.embarqueSeleccionado = {
-        id: embarqueId,
-        fechaVisible: this.formatearFecha(embarque?.fecha),
-        cargaCon: embarque?.cargaCon || 'sin asignar',
-        kilosLimpios: this.calcularKilosLimpios(embarque),
-        kilosCrudos: this.calcularKilosCrudos(embarque),
-        totalTaras: this.calcularTotalTaras(embarque),
-        camionNumero: embarque?.camionNumero || 1
-      };
-      this.abriendoEmbarque = true;
-      this.progresoApertura = 7;
-      this.faseApertura = 0;
-      this.mensajeApertura = 'Localizando registro en la bitácora';
-      this.overflowBodyAnterior = document.body.style.overflow;
-      document.body.style.overflow = 'hidden';
-      this.bloqueoScrollAperturaActivo = true;
-
-      const reduceMotion = this.listaReduceMotionQuery && this.listaReduceMotionQuery.matches;
-      this.reproducirSonidoApertura(reduceMotion);
-      this.$nextTick(() => {
-        const botonOmitir = this.$el && this.$el.querySelector('.skip-button');
-        if (botonOmitir) botonOmitir.focus();
-      });
-
-      if (reduceMotion) {
-        this.progresoApertura = 100;
-        this.faseApertura = 3;
-        this.mensajeApertura = 'Embarque listo';
-        this.agendarApertura(this.completarAperturaEmbarque, 240);
-        return;
-      }
-
-      this.agendarApertura(() => {
-        this.progresoApertura = 18;
-      }, 180);
-      this.agendarApertura(() => {
-        this.progresoApertura = 39;
-        this.faseApertura = 1;
-        this.mensajeApertura = 'Verificando manifiesto y carga';
-      }, 1250);
-      this.agendarApertura(() => {
-        this.progresoApertura = 67;
-        this.faseApertura = 2;
-        this.mensajeApertura = 'Sincronizando clientes y productos';
-      }, 2550);
-      this.agendarApertura(() => {
-        this.progresoApertura = 89;
-        this.faseApertura = 3;
-        this.mensajeApertura = 'Preparando cubierta de trabajo';
-      }, 3850);
-      this.agendarApertura(() => {
-        this.progresoApertura = 100;
-        this.mensajeApertura = 'Embarque listo';
-      }, 4700);
-      this.agendarApertura(this.completarAperturaEmbarque, 5000);
+      this.embarqueSeleccionado = { id: embarqueId };
+      this.completarAperturaEmbarque();
     },
 
     agendarApertura(accion, demora) {
@@ -1121,7 +961,7 @@ export default {
                 dataActualizada, 
                 embarqueDoc.data().fecha?.toDate ? embarqueDoc.data().fecha.toDate() : new Date(embarqueDoc.data().fecha)
               );
-              await EmbarquesOfflineService.save(snapshotOffline, { pendingSync: false, syncState: 'synced' });
+              await EmbarquesOfflineService.save(snapshotOffline, { pendingSync: false, syncState: 'synced', preservePending: true });
               
               this.mostrarNotificacionRespaldo(
                 'success',
@@ -1561,11 +1401,13 @@ export default {
     this.listaReduceMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
     window.addEventListener('scroll', this.requestList3dUpdate, { passive: true });
     window.addEventListener('resize', this.requestList3dUpdate, { passive: true });
+    window.addEventListener('embarques-local-updated', this.refrescarLocales);
     await this.cargarEmbarques();
     this.$nextTick(this.requestList3dUpdate);
   },
 
   beforeDestroy() {
+    window.removeEventListener('embarques-local-updated', this.refrescarLocales);
     window.removeEventListener('scroll', this.requestList3dUpdate);
     window.removeEventListener('resize', this.requestList3dUpdate);
 
@@ -1581,7 +1423,6 @@ export default {
 </script>
 
 <style scoped>
-@import url('https://fonts.googleapis.com/css2?family=VT323&family=Share+Tech+Mono&display=swap');
 
 /* Variables de colores Matrix/Terminal */
 .lista-embarques {

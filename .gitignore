@@ -41,3 +41,6 @@ out/
 *.bak
 *_old.vue
 *_original.vue
+
+# Bundled desktop frontend
+desktop-dist/

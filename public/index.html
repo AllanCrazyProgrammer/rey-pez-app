@@ -1,18 +1,17 @@
 <!DOCTYPE html>
-<html lang="">
+<html lang="es">
   <head>
     <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <link href="https://fonts.googleapis.com/css2?family=Pacifico&display=swap" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Sail&display=swap" rel="stylesheet">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <link rel="icon" href="<%= BASE_URL %>favicon.ico">
     <title><%= htmlWebpackPlugin.options.title %></title>
-    <!-- Agregar Fabric.js desde CDN para asegurar disponibilidad -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
-    <!-- Agregar pdfmake desde CDN para asegurar disponibilidad -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/pdfmake.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/vfs_fonts.js"></script>
+    <!-- Local copies: the drawing and PDF tools must also start offline. -->
+    <script src="<%= BASE_URL %>vendor/fabric-5.3.1.min.js"></script>
+    <script src="<%= BASE_URL %>vendor/pdfmake.min.js"></script>
+    <script src="<%= BASE_URL %>vendor/vfs_fonts.js"></script>
+    <link rel="manifest" href="<%= BASE_URL %>manifest.webmanifest">
+    <meta name="theme-color" content="#123e50">
   </head>
   <body>
     <noscript>

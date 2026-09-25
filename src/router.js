@@ -1,65 +1,65 @@
 import Vue from 'vue';
 import Router from 'vue-router';
 import { useAuthStore } from './stores/auth';
-import Home from './views/Home.vue';
-import NoteMenu from './views/NoteMenu.vue'; // Asegúrate de que la ruta sea correcta
-import SaleNote from '@/views/SaleNote.vue'; // Asegúrate de que la ruta de importación sea correcta
-import AddClient from '@/components/AddClient.vue';
-import Sacadas from '@/views/Sacadas.vue';
-import SacadasMenu from '@/views/SacadasMenu.vue'
-import GestionarProductos from '@/components/GestionarProductos.vue'
-import GestionarMedidas from '@/components/GestionarMedidas.vue'
-import GestionarProveedores from '@/components/GestionarProveedores.vue'
-import Existencias from '@/components/Existencias.vue'
-import AnalisisStock from '@/views/AnalisisStock.vue'
-import AsesorExperto from '@/views/AsesorExperto.vue'
-import CuentasMexico from '@/views/CuentasMexico.vue'
-import OzunaCuentasMenu from '@/views/CuentasClientes/OzunaCuentasMenu.vue'
-import CuentasOzuna from '@/views/CuentasClientes/CuentasOzuna.vue'
-import CatarroCuentasMenu from '@/views/CuentasClientes/CatarroCuentasMenu.vue'
-import JoselitoCuentasMenu from '@/views/CuentasClientes/JoselitoCuentasMenu.vue'
-import EmbarquesMenu from '@/views/Embarques/EmbarquesMenu.vue'; // Asegúrate de que esta ruta de importación sea correcta
-import VentasYGananciasCatarro from '@/views/CuentasClientes/VentasYGananciasCatarro.vue'; // Asegúrate de crear este componente
-import VentasYGananciasJoselito from '@/views/CuentasClientes/VentasYGananciasJoselito.vue';
-import VeronicaCuentasMenu from '@/views/CuentasClientes/VeronicaCuentasMenu.vue'
-import VentasYGananciasVeronica from '@/views/CuentasClientes/VentasYGananciasVeronica.vue';
-import ListaEmbarques from '@/views/Embarques/ListaEmbarques.vue';
-import NuevoEmbarque from '@/views/Embarques/NuevoEmbarque.vue';
-import Rendimientos from '@/views/Embarques/Rendimientos.vue';
-import RecuperacionEmergencia from '@/views/Embarques/RecuperacionEmergencia.vue';
-import GestionCostos from '@/components/GestionCostos.vue';
+const Home = () => import('./views/Home.vue');
+const NoteMenu = () => import('./views/NoteMenu.vue');
+const SaleNote = () => import('@/views/SaleNote.vue');
+const AddClient = () => import('@/components/AddClient.vue');
+const Sacadas = () => import('@/views/Sacadas.vue');
+const SacadasMenu = () => import('@/views/SacadasMenu.vue');
+const GestionarProductos = () => import('@/components/GestionarProductos.vue');
+const GestionarMedidas = () => import('@/components/GestionarMedidas.vue');
+const GestionarProveedores = () => import('@/components/GestionarProveedores.vue');
+const Existencias = () => import('@/components/Existencias.vue');
+const AnalisisStock = () => import('@/views/AnalisisStock.vue');
+const AsesorExperto = () => import('@/views/AsesorExperto.vue');
+const CuentasMexico = () => import('@/views/CuentasMexico.vue');
+const OzunaCuentasMenu = () => import('@/views/CuentasClientes/OzunaCuentasMenu.vue');
+const CuentasOzuna = () => import('@/views/CuentasClientes/CuentasOzuna.vue');
+const CatarroCuentasMenu = () => import('@/views/CuentasClientes/CatarroCuentasMenu.vue');
+const JoselitoCuentasMenu = () => import('@/views/CuentasClientes/JoselitoCuentasMenu.vue');
+const EmbarquesMenu = () => import('@/views/Embarques/EmbarquesMenu.vue');
+const VentasYGananciasCatarro = () => import('@/views/CuentasClientes/VentasYGananciasCatarro.vue');
+const VentasYGananciasJoselito = () => import('@/views/CuentasClientes/VentasYGananciasJoselito.vue');
+const VeronicaCuentasMenu = () => import('@/views/CuentasClientes/VeronicaCuentasMenu.vue');
+const VentasYGananciasVeronica = () => import('@/views/CuentasClientes/VentasYGananciasVeronica.vue');
+const ListaEmbarques = () => import('@/views/Embarques/ListaEmbarques.vue');
+const NuevoEmbarque = () => import('@/views/Embarques/NuevoEmbarque.vue');
+const Rendimientos = () => import('@/views/Embarques/Rendimientos.vue');
+const RecuperacionEmergencia = () => import('@/views/Embarques/RecuperacionEmergencia.vue');
+const GestionCostos = () => import('@/components/GestionCostos.vue');
 import Login from './views/Login.vue';
-import OtilioCuentasMenu from '@/views/CuentasClientes/OtilioCuentasMenu.vue'
-import OtilioIndependienteCuentasMenu from '@/views/CuentasClientes/OtilioIndependienteCuentasMenu.vue'
-import CuentaCliente from '@/views/CuentasClientes/CuentaCliente.vue'
-import CuentasAllanCamaron from '@/views/CuentasClientes/CuentasAllanCamaron.vue'
-import ProcesosMenu from '@/views/Procesos/ProcesosMenu.vue'
-import Preparacion from '@/views/Procesos/Preparacion.vue'
-import PedidosMenu from '@/views/Procesos/PedidosMenu.vue'
-import Pedidos from '@/views/Procesos/Pedidos.vue'
-import PedidosCrudo from '@/views/Procesos/PedidosCrudo.vue'
-import PedidoCrudosImpresion from '@/views/Procesos/PedidoCrudosImpresion.vue'
-import PedidosLimpio from '@/views/Procesos/PedidosLimpio.vue'
-import PedidoLimpioImpresion from '@/views/Procesos/PedidoLimpioImpresion.vue'
-import Bitacoras from '@/views/Procesos/Bitacoras.vue'
-import DeudasMenu from '@/views/Procesos/DeudasMenu.vue'
-import NuevaDeuda from '@/views/Procesos/NuevaDeuda.vue'
-import ListaDeudas from '@/views/Procesos/ListaDeudas.vue'
-import PrestamosMenu from '@/views/Procesos/PrestamosMenu.vue'
-import PrestamosDespicadoras from '@/views/Procesos/PrestamosDespicadoras.vue'
-import PrestamosTrabajadores from '@/views/Procesos/PrestamosTrabajadores.vue'
-import Taras from '@/views/Procesos/Taras.vue'
-import Alan from '@/views/Procesos/Alan.vue'
-import Marie from '@/views/Procesos/Marie.vue'
-import ExistenciasCrudos from '@/views/ExistenciasCrudos.vue'
-import RegistroCrudos from '@/views/RegistroCrudos.vue'
-import BarcosMenu from '@/views/Barcos/BarcosMenu.vue'
-import NuevaDeudaBarco from '@/views/Barcos/NuevaDeudaBarco.vue'
-import ListaDeudasBarcos from '@/views/Barcos/ListaDeudasBarcos.vue'
-import ResumenMensualBarcos from '@/views/Barcos/ResumenMensualBarcos.vue'
-import GestionTripulantes from '@/views/Barcos/GestionTripulantes.vue'
-import EntradaProductoBarco from '@/views/Barcos/EntradaProductoBarco.vue'
-import Journal from '@/views/Procesos/Journal.vue'
+const OtilioCuentasMenu = () => import('@/views/CuentasClientes/OtilioCuentasMenu.vue');
+const OtilioIndependienteCuentasMenu = () => import('@/views/CuentasClientes/OtilioIndependienteCuentasMenu.vue');
+const CuentaCliente = () => import('@/views/CuentasClientes/CuentaCliente.vue');
+const CuentasAllanCamaron = () => import('@/views/CuentasClientes/CuentasAllanCamaron.vue');
+const ProcesosMenu = () => import('@/views/Procesos/ProcesosMenu.vue');
+const Preparacion = () => import('@/views/Procesos/Preparacion.vue');
+const PedidosMenu = () => import('@/views/Procesos/PedidosMenu.vue');
+const Pedidos = () => import('@/views/Procesos/Pedidos.vue');
+const PedidosCrudo = () => import('@/views/Procesos/PedidosCrudo.vue');
+const PedidoCrudosImpresion = () => import('@/views/Procesos/PedidoCrudosImpresion.vue');
+const PedidosLimpio = () => import('@/views/Procesos/PedidosLimpio.vue');
+const PedidoLimpioImpresion = () => import('@/views/Procesos/PedidoLimpioImpresion.vue');
+const Bitacoras = () => import('@/views/Procesos/Bitacoras.vue');
+const DeudasMenu = () => import('@/views/Procesos/DeudasMenu.vue');
+const NuevaDeuda = () => import('@/views/Procesos/NuevaDeuda.vue');
+const ListaDeudas = () => import('@/views/Procesos/ListaDeudas.vue');
+const PrestamosMenu = () => import('@/views/Procesos/PrestamosMenu.vue');
+const PrestamosDespicadoras = () => import('@/views/Procesos/PrestamosDespicadoras.vue');
+const PrestamosTrabajadores = () => import('@/views/Procesos/PrestamosTrabajadores.vue');
+const Taras = () => import('@/views/Procesos/Taras.vue');
+const Alan = () => import('@/views/Procesos/Alan.vue');
+const Marie = () => import('@/views/Procesos/Marie.vue');
+const ExistenciasCrudos = () => import('@/views/ExistenciasCrudos.vue');
+const RegistroCrudos = () => import('@/views/RegistroCrudos.vue');
+const BarcosMenu = () => import('@/views/Barcos/BarcosMenu.vue');
+const NuevaDeudaBarco = () => import('@/views/Barcos/NuevaDeudaBarco.vue');
+const ListaDeudasBarcos = () => import('@/views/Barcos/ListaDeudasBarcos.vue');
+const ResumenMensualBarcos = () => import('@/views/Barcos/ResumenMensualBarcos.vue');
+const GestionTripulantes = () => import('@/views/Barcos/GestionTripulantes.vue');
+const EntradaProductoBarco = () => import('@/views/Barcos/EntradaProductoBarco.vue');
+const Journal = () => import('@/views/Procesos/Journal.vue');
 
 Vue.use(Router);
 
@@ -529,7 +529,7 @@ const routes = [
 ];
 
 const router = new Router({
-  mode: 'history',
+  mode: process.env.VUE_APP_TARGET === 'electron' ? 'hash' : 'history',
   base: process.env.BASE_URL,
   routes
 });

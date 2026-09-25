@@ -1,6 +1,8 @@
+const OfflinePlugin = require('./build/OfflinePlugin');
 const isElectron = process.env.VUE_APP_TARGET === 'electron';
 
 module.exports = {
+  outputDir: isElectron ? 'desktop-dist' : 'dist',
   // Configuración del servidor de desarrollo
   devServer: {
     // Configuración para permitir acceso desde cualquier IP
@@ -35,6 +37,7 @@ module.exports = {
   productionSourceMap: false,
   // Configuración de webpack para asegurar carga correcta de chunks
   configureWebpack: {
+    plugins: process.env.NODE_ENV === 'production' && !isElectron ? [new OfflinePlugin()] : [],
     optimization: {
       splitChunks: {
         chunks: 'all',
@@ -70,6 +73,9 @@ module.exports = {
     }
   },
   chainWebpack: config => {
+    // Do not prefetch every module while the initial screen is opening.
+    // The service worker owns offline preloading; desktop chunks are installed already.
+    config.plugins.delete('prefetch');
     // Usar hashed para una generación más estable de los hashes en producción
     config.optimization.set('moduleIds', 'hashed');
     // Usar named chunk IDs para mejor depuración en desarrollo

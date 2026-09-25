@@ -6,7 +6,7 @@ const STORE_EMBARQUES = 'embarques';
  * Servicio ligero encima de IndexedDB para almacenar embarques offline.
  * Provee operaciones CRUD básicas y mantiene metadatos de sincronización.
  */
-class EmbarquesOfflineService {
+export class EmbarquesOfflineService {
   constructor() {
     this.dbPromise = null;
     this.memoryStore = new Map();
@@ -94,24 +94,66 @@ class EmbarquesOfflineService {
   async save(embarque, options = {}) {
     const record = this.buildRecord(embarque, options);
 
-    if (this.useMemoryFallback) {
-      this.memoryStore.set(record.id, record);
-      return record.id;
-    }
+    return this.mutate(record.id, existing => this.mergeDownloadedRecord(record, existing, options));
+  }
 
+  mergeDownloadedRecord(record, existing, options) {
+    if (options.preservePending && existing) {
+      if (existing.pendingSync || existing.deleted ||
+          Number(existing.baseRev ?? existing.docData?.rev) > Number(record.baseRev ?? record.docData?.rev ?? 0)) return existing;
+      // Unchanged downloads do not rewrite the disk or invalidate the list.
+      if (JSON.stringify(existing.docData) === JSON.stringify(record.docData)) return existing;
+    }
+    return { ...record, transferReceipts: existing?.transferReceipts || [], localVersion: `${Date.now()}-${Math.random()}` };
+  }
+
+  async saveBatch(embarques, options = {}) {
+    const records = embarques.map(record => this.buildRecord(record, options));
     const db = await this.getDb();
-    if (!db) {
-      this.memoryStore.set(record.id, record);
-      return record.id;
-    }
-
+    if (!db) throw new Error('No se puede guardar el historial en este equipo.');
     return new Promise((resolve, reject) => {
       const tx = db.transaction(STORE_EMBARQUES, 'readwrite');
       const store = tx.objectStore(STORE_EMBARQUES);
-      store.put(record);
+      let failure;
+      for (const record of records) {
+        const request = store.get(record.id);
+        request.onsuccess = () => {
+          try {
+            const existing = request.result;
+            const next = this.mergeDownloadedRecord(record, existing, options);
+            if (next !== existing) store.put(next);
+          } catch (error) { failure = error; tx.abort(); }
+        };
+      }
+      tx.oncomplete = () => resolve();
+      tx.onabort = () => reject(failure || tx.error || new Error('Descarga local interrumpida'));
+      tx.onerror = () => { failure = tx.error; };
+    });
+  }
 
-      tx.oncomplete = () => resolve(record.id);
+  // Read and write inside one transaction: downloads and acknowledgements
+  // must never erase a newer edit from this or another tab.
+  async mutate(id, transform) {
+    const db = await this.getDb();
+    if (!db) throw new Error('No se puede guardar en este equipo. Habilita el almacenamiento del navegador y no cierres el embarque.');
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_EMBARQUES, 'readwrite');
+      const store = tx.objectStore(STORE_EMBARQUES);
+      const request = store.get(id);
+      request.onsuccess = () => {
+        const next = transform(request.result || null);
+        if (next && next !== request.result) store.put(next);
+      };
+      tx.oncomplete = () => resolve(id);
       tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error || new Error('Guardado local interrumpido'));
+    });
+  }
+
+  async acknowledge(record, remoteRecord) {
+    return this.mutate(record.id, current => {
+      if (!current || current.localVersion !== record.localVersion) return current;
+      return this.buildRecord({ ...remoteRecord, transferReceipts: current.transferReceipts || [], localVersion: current.localVersion }, { pendingSync: false });
     });
   }
 

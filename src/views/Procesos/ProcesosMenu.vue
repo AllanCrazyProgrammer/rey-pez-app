@@ -158,7 +158,6 @@ export default {
 </script>
 
 <style scoped>
-@import url('https://fonts.googleapis.com/css2?family=VT323&family=Share+Tech+Mono&display=swap');
 
 .procesos-menu {
   --matrix-green: #00ff41;

@@ -99,7 +99,6 @@ export default {
 </script>
 
 <style scoped>
-@import url('https://fonts.googleapis.com/css2?family=VT323&family=Share+Tech+Mono&display=swap');
 
 .page-container {
   --matrix-green: #00ff41;

@@ -813,7 +813,6 @@ export default {
 </script>
 
 <style scoped>
-@import url('https://fonts.googleapis.com/css2?family=VT323&family=Share+Tech+Mono:wght@400;700&display=swap');
 
 .allan-page {
   --page-bg: #06070b;

@@ -1,4 +1,4 @@
-import { getFirestore, collection, doc, getDoc, updateDoc, getDocs, onSnapshot, serverTimestamp } from 'firebase/firestore';
+import { getFirestore, collection, doc, getDoc, getDocs, onSnapshot } from 'firebase/firestore';
 import { normalizarFechaISO } from '@/utils/dateUtils';
 import { compararPreciosMasAntiguosPrimero } from '@/utils/preciosHistoricos';
 
@@ -15,31 +15,12 @@ export const embarqueDatosMixin = {
 
       if (!this.embarqueId) return;
 
-      try {
-        const operacionGuardado = async () => {
-          const db = getFirestore();
-          await updateDoc(doc(db, 'embarques', this.embarqueId), {
-            clientesPersonalizados: this.clientesPersonalizados,
-            ultimaActualizacionClientes: serverTimestamp(),
-          });
-        };
-
-        if (this.saveManager) {
-          await this.saveManager.scheduleSave(
-            `clientes-personalizados-${this.embarqueId}`,
-            operacionGuardado,
-            { priority: 'high', merge: false, immediate: true }
-          );
-        } else {
-          await operacionGuardado();
-        }
-      } catch (error) {
-        console.error('[guardarClientesPersonalizados] Error:', error);
-      }
+      await this.guardarCambiosEnTiempoReal(true);
     },
 
     async cargarClientesPersonalizados() {
-      if (this.embarqueId) {
+      if (this.embarqueId) return; // The shipment snapshot is authoritative, even offline.
+      if (this.embarqueId && !this.hasPendingChanges && navigator.onLine) {
         try {
           const db = getFirestore();
           const embarqueDoc = await getDoc(doc(db, 'embarques', this.embarqueId));

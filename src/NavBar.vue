@@ -289,6 +289,9 @@
           </router-link>
         </div>
         
+        <button v-if="/embarque/i.test($route.path)" type="button" class="offline-menu-button" title="Conexión y respaldos" aria-label="Conexión y respaldos" aria-haspopup="dialog" @click="closeMobileMenu(); $emit('open-offline-options')">
+          <i class="fas fa-cloud" aria-hidden="true"></i><span>Respaldos</span>
+        </button>
         <!-- HUD Data display in mobile -->
         <div class="hud-data-mobile">
           <span class="hud-coord">LAT: 24.0277°N</span>
@@ -375,7 +378,9 @@ export default {
 </script>
 
 <style scoped>
-@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap');
+.offline-menu-button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; flex-shrink: 0; padding: 8px 10px; color: #a7c8d2; background: transparent; border: 1px solid #72939d55; border-radius: 6px; font-size: 12px; cursor: pointer; }
+.offline-menu-button:hover, .offline-menu-button:focus-visible { color: #fff; border-color: #a7c8d2; background: #ffffff0c; }
+
 
 /* ═══════════════════════════════════════════
    PREDATOR VISION - THERMAL HUD NAVBAR

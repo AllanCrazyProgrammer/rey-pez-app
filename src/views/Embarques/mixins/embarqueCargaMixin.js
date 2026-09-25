@@ -1,4 +1,5 @@
-import { getFirestore, doc, onSnapshot, addDoc, collection } from 'firebase/firestore';
+import { v4 as uuidv4 } from 'uuid';
+import { getFirestore, doc, onSnapshot } from 'firebase/firestore';
 import EmbarquesOfflineService from '@/services/EmbarquesOfflineService';
 import { normalizarFechaISO, obtenerFechaActualISO } from '@/utils/dateUtils';
 import { crearNuevoProducto } from '@/constants.js/embarque';
@@ -52,8 +53,8 @@ export const embarqueCargaMixin = {
       this._inicializandoEmbarque = true;
       this.limpiarConexionesFirestore();
 
+      const cargadoOffline = await this.cargarEmbarqueOffline(id);
       if (!navigator.onLine) {
-        const cargadoOffline = await this.cargarEmbarqueOffline(id);
         if (!cargadoOffline) {
           console.warn('[cargarEmbarque] No se encontró información offline para el embarque solicitado:', id);
           alert('No se encontró información local para este embarque. Conéctate a internet para recuperarlo. Se conservará el estado actual para evitar pérdida de datos.');
@@ -274,7 +275,7 @@ export const embarqueCargaMixin = {
             // eliminó. Sin esto, el producto borrado por la otra persona se
             // "preservaba" aquí como si fuera un producto nuevo local.
             const eliminadosRemotos = data.productosEliminados || {};
-            this._productosEliminadosDoc = eliminadosRemotos;
+            this._productosEliminadosDoc = { ...this._productosEliminadosDoc, ...eliminadosRemotos };
 
             let productosFiltrados = productosDesdeServidor.filter(p => !eliminadosRemotos[p.id]);
             if (this.productosEliminadosLocalmente && this.productosEliminadosLocalmente.size > 0) {
@@ -297,7 +298,7 @@ export const embarqueCargaMixin = {
               const pLocal = productosLocalesParaMerge.find(p => p.id === pServidor.id);
               if (!pLocal) return pServidor;
               const entradaBase = baseSincronizada.get(pServidor.id);
-              if (!entradaBase) return pServidor;
+              if (!entradaBase) return this.hasPendingChanges ? pLocal : pServidor;
               const localCambio = serializarEstable(pLocal) !== entradaBase.str;
               if (!localCambio) return pServidor;
               const remotoCambio = serializarEstable(pServidor) !== entradaBase.str;
@@ -478,7 +479,9 @@ export const embarqueCargaMixin = {
             this.cargarPedidoReferenciaDelDia(this.embarque.fecha);
           }
 
-          this.guardarSnapshotOffline({ pendingSync: false, docData: data, syncState: 'synced' });
+          await this.guardarSnapshotOffline(this.hasPendingChanges
+            ? { pendingSync: true }
+            : { pendingSync: false, docData: data, syncState: 'synced' });
     },
 
     limpiarConexionesFirestore() {
@@ -494,18 +497,11 @@ export const embarqueCargaMixin = {
     },
 
     configurarReconexionAutomatica() {
-      window.addEventListener('online', () => {
-        console.log('[Reconexión] Conexión restaurada, reestableciendo listeners...');
-        if (this.embarqueId && !this.unsubscribe) {
-          setTimeout(() => {
-            this.cargarEmbarque(this.embarqueId);
-          }, 1000);
-        }
-      });
-
-      window.addEventListener('offline', () => {
-        console.warn('[Conexión] Conexión perdida, modo offline activado');
-      });
+      this._reconexionHandler = () => {
+        if (this.embarqueId && !this.unsubscribe) this.cargarEmbarque(this.embarqueId);
+        this.syncOffline();
+      };
+      window.addEventListener('online', this._reconexionHandler);
     },
 
     async resetearEmbarque() {
@@ -528,7 +524,6 @@ export const embarqueCargaMixin = {
       this.costoExtra = 18;
 
       try {
-        const db = getFirestore();
         const fechaEmbarque = fechaActual;
 
         this.embarque = {
@@ -543,6 +538,8 @@ export const embarqueCargaMixin = {
         this.clientesReglaOtilio = {};
         this.clientesIncluirPrecios = {};
         this.embarqueId = null;
+        this.hasPendingChanges = false;
+        this._revBase = 0;
         this.modoEdicion = false;
         this.guardadoAutomaticoActivo = false;
         this.embarqueBloqueado = false;
@@ -589,8 +586,12 @@ export const embarqueCargaMixin = {
             try {
               this.embarque.camionNumero = await this.obtenerCamionNumeroParaFecha(this.embarque.fecha);
               const embarqueData = this.prepararDatosEmbarque();
-              const docRef = await addDoc(collection(db, "embarques"), embarqueData);
-              this.embarqueId = docRef.id;
+              this.embarqueId = uuidv4();
+              this._revBase = 0;
+              this._inicializandoEmbarque = false;
+              this.hasPendingChanges = true;
+              await this.guardarSnapshotOffline({ pendingSync: true, docData: embarqueData, syncState: 'pending-create' });
+              if (navigator.onLine) this.programarSubidaEnVivo();
               this.modoEdicion = true;
               this.guardadoAutomaticoActivo = true;
               localStorage.setItem('ultimoEmbarqueId', this.embarqueId);
@@ -617,6 +618,8 @@ export const embarqueCargaMixin = {
           this.$set(this.clientesReglaOtilio, cliente.id.toString(), esOtilio);
         });
         this.embarqueId = null;
+        this.hasPendingChanges = false;
+        this._revBase = 0;
         this.modoEdicion = false;
         this.guardadoAutomaticoActivo = false;
         this.embarqueBloqueado = false;
@@ -649,6 +652,12 @@ export const embarqueCargaMixin = {
 
       return {
         id: this.embarqueId,
+        baseRev: Number(this._revBase) || 0,
+        mergeBase: {
+          productos: Array.from(this._productosBase || []),
+          crudos: Array.from(this._crudosBase || []),
+          cargaCon: this._cargaConBase
+        },
         fecha: docData?.fecha || this.embarque.fecha || null,
         cargaCon: docData?.cargaCon || this.embarque.cargaCon || '',
         camionNumero: docData?.camionNumero || this.embarque.camionNumero || 1,
@@ -672,7 +681,7 @@ export const embarqueCargaMixin = {
     },
 
     aplicarSnapshotOffline(record) {
-      if (!record || !record.id) {
+      if (!record || !record.id || record.deleted) {
         return;
       }
 
@@ -689,12 +698,22 @@ export const embarqueCargaMixin = {
       };
 
       this._inicializandoEmbarque = true;
+      this._aplicandoRemoto = true;
 
       this.embarqueId = record.id;
       this.modoEdicion = true;
       this.guardadoAutomaticoActivo = true;
       this.embarqueBloqueado = Boolean(record.embarqueBloqueado);
       this.hasPendingChanges = Boolean(record.pendingSync);
+      this._revBase = Number(record.baseRev ?? record.docData?.rev) || 0;
+      this._productosEliminadosDoc = safeClone(record.docData?.productosEliminados || {}, {});
+      if (record.mergeBase) {
+        this._productosBase = new Map(record.mergeBase.productos || []);
+        this._crudosBase = new Map(record.mergeBase.crudos || []);
+        this._cargaConBase = record.mergeBase.cargaCon;
+      } else if (!record.pendingSync) {
+        this.actualizarBasesSincronizadas(record.docData || {});
+      }
 
       const fechaRecord = record.fecha || record.docData?.fecha || null;
       const fechaNormalizada = fechaRecord ? normalizarFechaISO(fechaRecord) : null;
@@ -734,11 +753,12 @@ export const embarqueCargaMixin = {
         console.warn('[aplicarSnapshotOffline] No se pudo sincronizar clientes personalizados con localStorage:', error);
       }
 
-      this.productosEliminadosLocalmente = new Set();
+      this.productosEliminadosLocalmente = new Set(Object.keys(this._productosEliminadosDoc || {}));
       this.productosNuevosPendientes = new Map();
       this.camposEnEdicion = new Set();
 
       this._inicializandoEmbarque = false;
+      this.$nextTick(() => { this._aplicandoRemoto = false; });
 
       this.actualizarMedidasUsadas();
       this.initUndo(this.embarque);

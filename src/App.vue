@@ -1,14 +1,22 @@
 <template>
   <div id="app" :class="{ 'app--pesadas': !mostrarFooter }">
-    <Navbar v-if="!esArcade" />
+    <Navbar v-if="!esArcade" @open-offline-options="abrirOpcionesOffline" />
     <div class="content-wrapper" :class="{ 'content-wrapper--pesadas': !mostrarFooter, 'content-wrapper--prestamos': esPrestamos, 'content-wrapper--bitacoras': esBitacoras, 'content-wrapper--arcade': esArcade }">
       <div v-if="!esPrestamos && !esBitacoras && !esArcade" class="content-horizon-grid" aria-hidden="true">
         <div class="content-horizon-grid__sun"></div>
         <div class="content-horizon-grid__plane"></div>
       </div>
-      <router-view />
+      <router-view ref="activeView" @open-offline-options="abrirOpcionesOffline" />
     </div>
     <Footer v-if="mostrarFooter && !esArcade" />
+
+    <dialog ref="offlineDialog" class="offline-dialog" aria-labelledby="offline-dialog-title">
+      <header class="offline-dialog-header">
+        <h2 id="offline-dialog-title">Conexión y respaldos</h2>
+        <button type="button" autofocus aria-label="Cerrar conexión y respaldos" @click="$refs.offlineDialog.close()">✕</button>
+      </header>
+      <EmbarquesOfflineStatus v-if="offlineOpened" :before-export="guardarAntesDeExportar" :editor-open="esEditorEmbarques" />
+    </dialog>
 
     <transition-group name="toast" tag="div" class="toast-container">
       <div
@@ -23,6 +31,8 @@
 </template>
 
 <script>
+import EmbarquesSync from './services/EmbarquesSync';
+import EmbarquesOfflineStatus from './components/EmbarquesOfflineStatus.vue';
 import Navbar from "./NavBar.vue";
 import Footer from './Footer.vue';
 import { useAuthStore } from './stores/auth';
@@ -32,9 +42,25 @@ export default {
   name: "app",
   components: {
     Navbar,
+    EmbarquesOfflineStatus,
     Footer
   },
+  data: () => ({ offlineOpened: false }),
+  watch: { '$route'() { this.$refs.offlineDialog?.close(); } },
+  methods: {
+    async abrirOpcionesOffline() {
+      this.offlineOpened = true;
+      await this.$nextTick();
+      this.$refs.offlineDialog.showModal();
+    },
+    async guardarAntesDeExportar() {
+      const editor = this.$refs.activeView;
+      if (this.esEditorEmbarques && editor?.guardarAntesDeExportar) await editor.guardarAntesDeExportar();
+    }
+  },
   computed: {
+    esEditorEmbarques() { return ['NuevoEmbarque', 'EditarEmbarque'].includes(this.$route.name); },
+    esEmbarques() { return /embarque/i.test(this.$route.path); },
     esArcade() {
       return this.$route.name === 'MareaArcade';
     },
@@ -56,7 +82,23 @@ export default {
     const authStore = useAuthStore();
     authStore.checkAuth();
   },
+  beforeDestroy() {
+    if (this._removeDesktopClose) this._removeDesktopClose();
+  },
   mounted() {
+    EmbarquesSync.start();
+    if (window.desktop?.onPrepareClose) {
+      this._removeDesktopClose = window.desktop.onPrepareClose(async () => {
+        await this.$nextTick();
+        const editor = this.$refs.activeView;
+        if (editor?._guardandoInicial || editor?._creandoEmbarque) {
+          throw new Error('Se está creando el embarque. Espera un momento e intenta cerrar de nuevo.');
+        }
+        if (editor?.embarqueId && editor.guardarSnapshotOffline) {
+          await editor.guardarSnapshotOffline({ pendingSync: Boolean(editor.hasPendingChanges) });
+        }
+      });
+    }
     // Prevenir el cambio de valor al hacer scroll en inputs de tipo número globalmente
     document.addEventListener('wheel', (event) => {
       if (document.activeElement.type === 'number') {
@@ -67,6 +109,28 @@ export default {
 };
 </script>
 <style>
+/* Keep decorative effects static on desktop so the app stays idle between edits. */
+html.desktop-app .content-wrapper::before,
+html.desktop-app .content-wrapper::after { display: none; }
+html.desktop-app .content-horizon-grid__plane,
+html.desktop-app .content-horizon-grid__sun,
+html.desktop-app .reticle-ring,
+html.desktop-app .reticle-dot,
+html.desktop-app .system-status,
+html.desktop-app .lista-embarques .fecha-value,
+html.desktop-app .lista-embarques .status-icon { animation: none !important; }
+html.desktop-app .embarque-card-shell::before,
+html.desktop-app .embarque-card-shell::after { display: none; }
+
+.offline-dialog { width: min(760px, calc(100vw - 32px)); max-height: 85vh; padding: 20px; border: 1px solid #c5d5dc; border-radius: 14px; color: #123e50; background: #f8fbfc; box-shadow: 0 20px 70px #0005; }
+.offline-dialog::backdrop { background: #07132188; }
+.offline-dialog-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.offline-dialog-header h2 { margin: 0; font-size: 20px; }
+.offline-dialog-header button { border: 0; border-radius: 6px; padding: 6px 10px; background: transparent; color: #123e50; }
+.offline-dialog-header button:hover { background: #e3edf1; }
+.offline-dialog-header button:focus-visible { outline: 2px solid #24718c; }
+.offline-dialog .offline-status { margin-bottom: 0; }
+
 html, body {
   height: 100%;
   margin: 0;
