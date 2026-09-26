@@ -1,7 +1,7 @@
 <template>
   <div class="lista-embarques">
     <!-- Terminal Window -->
-    <div class="terminal-window" :style="terminal3dStyle">
+    <div class="terminal-window">
       <div class="terminal-header">
         <span class="terminal-dots">
           <span class="dot red"></span>
@@ -64,7 +64,6 @@
           class="embarque-card-shell"
           :data-card-id="embarque.id"
           :data-card-index="index"
-          :style="getEmbarqueCard3dStyle(embarque.id)"
         >
           <div
             class="embarque-card"
@@ -324,10 +323,6 @@ export default {
         cargando: false,
         error: ''
       },
-      terminal3dStyle: {},
-      embarqueCard3dStyles: {},
-      lista3dFrame: null,
-      listaReduceMotionQuery: null,
       abriendoEmbarque: false,
       progresoApertura: 0,
       faseApertura: 0,
@@ -359,82 +354,8 @@ export default {
       return paginas;
     },
   },
-  watch: {
-    paginaActual() {
-      this.$nextTick(this.requestList3dUpdate);
-    },
-    embarques() {
-      this.$nextTick(this.requestList3dUpdate);
-    }
-  },
   methods: {
     formatearFecha,
-    requestList3dUpdate() {
-      if (window.desktop) return;
-      if (this.lista3dFrame !== null) return;
-
-      this.lista3dFrame = window.requestAnimationFrame(() => {
-        this.lista3dFrame = null;
-        this.updateList3dStyles();
-      });
-    },
-    updateList3dStyles() {
-      if (this.listaReduceMotionQuery && this.listaReduceMotionQuery.matches) {
-        this.terminal3dStyle = {};
-        this.embarqueCard3dStyles = {};
-        return;
-      }
-
-      const viewportHeight = window.innerHeight || 1;
-      const viewportWidth = window.innerWidth || 1;
-      const viewportCenterY = viewportHeight * 0.52;
-      const intensity = viewportWidth < 500 ? 0.38 : viewportWidth < 900 ? 0.62 : 1;
-      this.terminal3dStyle = {};
-
-      const cards = this.$el ? this.$el.querySelectorAll('.embarque-card-shell') : [];
-      const nextStyles = {};
-
-      cards.forEach((card) => {
-        const rect = card.getBoundingClientRect();
-        const centerY = rect.top + rect.height / 2;
-        const centerX = rect.left + rect.width / 2;
-        const verticalPosition = Math.min(1.2, Math.max(-1.2, (centerY - viewportCenterY) / (viewportHeight * 0.72)));
-        const horizontalPosition = Math.min(1, Math.max(-1, (centerX - viewportWidth / 2) / (viewportWidth / 2)));
-        const index = Number(card.dataset.cardIndex || 0);
-        const layerOffset = (index % 3) - 1;
-        const crumbleStrength = Math.min(1, Math.max(0, (-verticalPosition + 0.05) / 0.95));
-        const fragmentDirection = layerOffset === 0
-          ? (horizontalPosition >= 0 ? 1 : -1)
-          : layerOffset;
-        const fragmentX = fragmentDirection * crumbleStrength * (10 + Math.abs(horizontalPosition) * 8) * intensity;
-        const fragmentY = crumbleStrength * 18 * intensity;
-        const fragmentScale = 1 + crumbleStrength * 0.12;
-        const shadowOpacity = 0.08 + crumbleStrength * 0.2;
-        const cardSurface = card.querySelector('.embarque-card');
-        const fragmentColor = cardSurface && cardSurface.classList.contains('card-blocked')
-          ? 'rgba(255, 0, 64, 0.82)'
-          : cardSurface && cardSurface.classList.contains('card-no-mexico')
-            ? 'rgba(255, 176, 0, 0.82)'
-            : 'rgba(0, 255, 65, 0.82)';
-
-        nextStyles[String(card.dataset.cardId)] = {
-          '--card-fragment-color': fragmentColor,
-          '--card-crumble-opacity': (0.03 + crumbleStrength * 0.82).toFixed(2),
-          '--card-fragment-x': `${fragmentX}px`,
-          '--card-fragment-y': `${fragmentY}px`,
-          '--card-fragment-scale': fragmentScale.toFixed(3),
-          '--card-border-scale': (1 - crumbleStrength * 0.2).toFixed(3),
-          '--card-crumble-hole': `${crumbleStrength * 8.2}px`,
-          '--card-body-opacity': (1 - crumbleStrength * 0.28).toFixed(3),
-          '--card-depth-shadow': `0 ${crumbleStrength * 8}px ${14 + crumbleStrength * 28}px rgba(0, 0, 0, ${shadowOpacity})`
-        };
-      });
-
-      this.embarqueCard3dStyles = nextStyles;
-    },
-    getEmbarqueCard3dStyle(embarqueId) {
-      return this.embarqueCard3dStyles[String(embarqueId)] || null;
-    },
     safeClone(value, fallback = null) {
       if (value === undefined || value === null) {
         return fallback;
@@ -1398,22 +1319,13 @@ export default {
   },
 
   async mounted() {
-    this.listaReduceMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
-    window.addEventListener('scroll', this.requestList3dUpdate, { passive: true });
-    window.addEventListener('resize', this.requestList3dUpdate, { passive: true });
     window.addEventListener('embarques-local-updated', this.refrescarLocales);
     await this.cargarEmbarques();
-    this.$nextTick(this.requestList3dUpdate);
   },
 
   beforeDestroy() {
     window.removeEventListener('embarques-local-updated', this.refrescarLocales);
-    window.removeEventListener('scroll', this.requestList3dUpdate);
-    window.removeEventListener('resize', this.requestList3dUpdate);
 
-    if (this.lista3dFrame !== null) {
-      window.cancelAnimationFrame(this.lista3dFrame);
-    }
 
     this.limpiarTemporizadoresApertura();
     this.restaurarScrollTrasApertura();

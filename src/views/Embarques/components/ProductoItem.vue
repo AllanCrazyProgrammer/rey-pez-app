@@ -604,11 +604,10 @@ export default {
                 this.$emit('activar-incluir-precios-catarro');
             }
         },
-        preciosActuales: {
-            handler() {
-                this.asignarPrecioAutomatico();
-            },
-            deep: true
+        // The catalog is replaced atomically by the snapshot listener. Avoid
+        // traversing the entire price history once per product on every update.
+        preciosActuales() {
+            this.asignarPrecioAutomatico();
         },
         precioMaquilaOzunaDefault() {
             if (this.isClienteOzuna) {

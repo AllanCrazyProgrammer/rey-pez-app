@@ -1,8 +1,8 @@
 <template>
-  <div id="app" :class="{ 'app--pesadas': !mostrarFooter }">
+  <div id="app" :class="{ 'app--pesadas': !mostrarFooter, 'app--embarques': esEmbarques }">
     <Navbar v-if="!esArcade" @open-offline-options="abrirOpcionesOffline" />
     <div class="content-wrapper" :class="{ 'content-wrapper--pesadas': !mostrarFooter, 'content-wrapper--prestamos': esPrestamos, 'content-wrapper--bitacoras': esBitacoras, 'content-wrapper--arcade': esArcade }">
-      <div v-if="!esPrestamos && !esBitacoras && !esArcade" class="content-horizon-grid" aria-hidden="true">
+      <div v-if="!esPrestamos && !esBitacoras && !esArcade && !esEmbarques" class="content-horizon-grid" aria-hidden="true">
         <div class="content-horizon-grid__sun"></div>
         <div class="content-horizon-grid__plane"></div>
       </div>
@@ -83,6 +83,7 @@ export default {
     authStore.checkAuth();
   },
   beforeDestroy() {
+    document.removeEventListener('wheel', this._onNumberWheel);
     if (this._removeDesktopClose) this._removeDesktopClose();
   },
   mounted() {
@@ -100,15 +101,42 @@ export default {
       });
     }
     // Prevenir el cambio de valor al hacer scroll en inputs de tipo número globalmente
-    document.addEventListener('wheel', (event) => {
-      if (document.activeElement.type === 'number') {
-        document.activeElement.blur();
-      }
-    });
+    this._onNumberWheel = () => {
+      if (document.activeElement?.type === 'number') document.activeElement.blur();
+    };
+    document.addEventListener('wheel', this._onNumberWheel, { passive: true });
   }
 };
 </script>
 <style>
+/* Embarques: avoid repainting blurred layers while the document scrolls.
+   Keep sticky headers, input focus and all product rows in the normal DOM. */
+.app--embarques .content-wrapper::before,
+.app--embarques .content-wrapper::after,
+.app--embarques .header-embarque::before,
+.app--embarques .header-embarque::after,
+.app--embarques .embarque-card-shell::before,
+.app--embarques .embarque-card-shell::after { display: none; }
+
+.app--embarques .nuevo-embarque-container *,
+.app--embarques .lista-embarques * {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+.app--embarques .cliente-grupo {
+  background: #0d1728 !important;
+  box-shadow: 0 4px 12px #0003 !important;
+}
+.app--embarques .cliente-grupo::before { filter: none; }
+.app--embarques .cliente-header {
+  box-shadow: 0 3px 8px #0003 !important;
+}
+.app--embarques .sidebar-clientes::after,
+.app--embarques .estado-punto,
+.app--embarques .lista-embarques .fecha-value,
+.app--embarques .lista-embarques .status-icon { animation: none !important; }
+
+
 /* Keep decorative effects static on desktop so the app stays idle between edits. */
 html.desktop-app .content-wrapper::before,
 html.desktop-app .content-wrapper::after { display: none; }

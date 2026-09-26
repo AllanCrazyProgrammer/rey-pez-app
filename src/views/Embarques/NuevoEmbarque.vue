@@ -1629,12 +1629,15 @@ export default {
           return;
         }
         
+        const snapshot = JSON.stringify(nuevoValor);
         try {
-          localStorage.setItem('embarque', JSON.stringify(nuevoValor));
+          localStorage.setItem('embarque', snapshot);
         } catch (error) {
           console.warn('[watch embarque] No se pudo guardar el embarque en localStorage:', error);
         }
-        this.undoStack.push(JSON.stringify(nuevoValor));
+        this.undoStack.push(snapshot);
+        // Bound full-document history so long editing sessions do not retain unbounded copies.
+        if (this.undoStack.length > 100) this.undoStack.shift();
         this.redoStack = [];
 
         // Disparar auto-guardado si hay productos con medida válida (tipo opcional)
@@ -1663,14 +1666,6 @@ export default {
           console.warn('[watch clienteCrudos] No se pudo guardar en localStorage:', error);
         }
         this.guardarCambiosEnTiempoReal();
-      },
-      deep: true
-    },
-    'embarque.productos': {
-      handler(newProductos) {
-        newProductos.forEach(producto => {
-          // Eliminando console.log de "Producto actualizado"
-        });
       },
       deep: true
     },
