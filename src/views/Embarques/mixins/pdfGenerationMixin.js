@@ -150,7 +150,7 @@ export default {
         { returnForDrive: true }
       );
 
-      const embarqueId = String(this.embarque.id || this.$route?.params?.id || 'embarque');
+      const embarqueId = String(this.embarqueId || this.embarque.id || this.$route?.params?.id || 'embarque');
       if (driveNotasDisponible()) {
         const { period, name, data } = resumen;
         const id = `resumen-${embarqueId.replace(/[^a-zA-Z0-9._:-]/g, '_')}-${period.year}-${period.month}-${period.day}`;

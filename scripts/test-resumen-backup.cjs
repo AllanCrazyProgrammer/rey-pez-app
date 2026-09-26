@@ -47,7 +47,7 @@ test('real summary PDF uses shipment date and delivers identical bytes to local 
   assert.ok(queued[0].data.length > 5000);
   await instance.generarPDFResumen(90);
   assert.equal(queued[0].id, queued[1].id, 'regeneration updates the same summary');
-  instance.embarque.id = 'shipment-2';
+  instance.embarqueId = 'shipment-2';
   await instance.generarPDFResumen(100);
   assert.notEqual(queued[0].id, queued[2].id, 'another shipment has a distinct queue entry');
   assert.throws(() => filenames.nombreArchivoResumen({ fecha: 'invalid' }), /fecha/);
