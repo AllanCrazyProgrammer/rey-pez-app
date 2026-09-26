@@ -143,7 +143,7 @@ async function obtenerPrecioProductoCatarro(nombreProducto) {
   }
 }
 
-export async function generarNotaVentaPDF(embarque, clientesDisponibles, clientesJuntarMedidas, clientesReglaOtilio = {}, clientesIncluirPrecios = {}, clientesSumarKgCatarro = {}, clientesCuentaEnPdf = {}) {
+export async function generarNotaVentaPDF(embarque, clientesDisponibles, clientesJuntarMedidas, clientesReglaOtilio = {}, clientesIncluirPrecios = {}, clientesSumarKgCatarro = {}, clientesCuentaEnPdf = {}, options = {}) {
   try {
     // Validación más robusta de los datos de entrada
     if (!embarque || !embarque.productos || !Array.isArray(embarque.productos)) {
@@ -594,11 +594,15 @@ export async function generarNotaVentaPDF(embarque, clientesDisponibles, cliente
         };
         
         // Crear y descargar el PDF con los ajustes
-        await entregarPdf(activePdfMake.createPdf(docDefinitionAjustado), nombreArchivoNota(embarque, clientesDisponibles), 'download', null, periodoNota(embarque));
+        const pdf = activePdfMake.createPdf(docDefinitionAjustado);
+        if (options.returnForDrive) return { data: new Uint8Array(await obtenerBufferPdf(pdf)), name: nombreArchivoNota(embarque, clientesDisponibles), period: periodoNota(embarque) };
+        await entregarPdf(pdf, nombreArchivoNota(embarque, clientesDisponibles), 'download', null, periodoNota(embarque));
         console.log(`PDF generado con nivel de reducción: ${nivelReduccion}`);
       } else {
         // Si son pocos productos, descargar el original
-        await entregarPdf(activePdfMake.createPdf(docDefinition), nombreArchivoNota(embarque, clientesDisponibles), 'download', buffer, periodoNota(embarque));
+        const pdf = activePdfMake.createPdf(docDefinition);
+        if (options.returnForDrive) return { data: new Uint8Array(buffer), name: nombreArchivoNota(embarque, clientesDisponibles), period: periodoNota(embarque) };
+        await entregarPdf(pdf, nombreArchivoNota(embarque, clientesDisponibles), 'download', buffer, periodoNota(embarque));
         console.log('PDF generado sin reducción de escala');
       }
     }

@@ -14,6 +14,22 @@
     <input ref="backupFile" type="file" accept=".json,application/json" hidden @change="leerArchivo">
     <p v-if="transferMessage" role="status">{{ transferMessage }}</p>
     <p v-if="transferError" role="alert">{{ transferError }}</p>
+    <details v-if="driveAvailable" class="drive-archive">
+      <summary>Notas en Google Drive <span v-if="driveStatus.connected">· {{ driveStatus.folderName }}</span><span v-else>· configurar respaldo</span></summary>
+      <p>Al crear el resumen final, las notas de cada cliente se guardan aquí y se suben cuando haya conexión.</p>
+      <template v-if="desktop">
+        <label for="drive-client-id">ID OAuth de {{ drivePlatformLabel }}</label>
+        <input id="drive-client-id" v-model.trim="driveClientId" type="text" autocomplete="off" placeholder="…apps.googleusercontent.com">
+      </template>
+      <button :disabled="driveBusy || (desktop && !driveClientId) || !drivePickerConfigured" @click="conectarDrive">{{ driveBusy ? 'Conectando…' : driveStatus.connected ? (driveStatus.needsAuth ? 'Autorizar y subir pendientes' : 'Reconectar / elegir carpeta') : 'Conectar y elegir carpeta compartida' }}</button>
+      <button v-if="driveStatus.connected && !driveStatus.needsAuth" :disabled="driveBusy" @click="sincronizarDrive">{{ driveStatus.syncing ? 'Subiendo notas…' : 'Subir notas pendientes' }}</button>
+      <button v-if="driveStatus.connected" :disabled="driveBusy" @click="desconectarDrive">Desconectar</button>
+      <span v-if="driveStatus.pending">{{ driveStatus.pending }} nota(s) pendiente(s)</span>
+      <p v-if="driveStatus.error" role="alert">{{ driveStatus.error }}</p>
+      <small v-if="desktop">Conecta la cuenta autorizada en la carpeta compartida y selecciona esa misma carpeta en cada equipo. El ID de cliente queda guardado en este equipo.</small>
+      <small v-else>La web guarda las notas pendientes en este navegador. Al reconectar Google se subirán a la carpeta compartida; por seguridad, después de cerrar o recargar la página tendrás que autorizar Drive otra vez.</small>
+      <small v-if="!desktop && !drivePickerConfigured">El administrador debe terminar la configuración del selector de Google Drive para habilitar la conexión web.</small>
+    </details>
     <section v-if="backup" class="transfer-review" aria-label="Revisar respaldo">
       <strong>{{ backupName }} · {{ backup.records.length }} embarques pendientes</strong>
       <p>Se conservarán los identificadores originales. Los embarques con cambios pendientes o una versión más reciente en este equipo no se reemplazarán.</p>
@@ -37,13 +53,42 @@
 <script>
 import sync, { estadoOffline } from '@/services/EmbarquesSync';
 import { exportPending, parseBackup, importBackup, MAX_BACKUP_BYTES } from '@/services/EmbarquesTransferService';
+import { estadoDrive, conectarGoogleDrive, desconectarGoogleDrive, driveNotasDisponible, drivePickerConfigurado, iniciarSincronizacionDrive, sincronizarNotasDrive } from '@/services/DriveNotasSync';
+const DRIVE_CLIENT_IDS = {
+  darwin: '512757841511-dei6iqrdunuo49ok9cmse6fapoodslm8.apps.googleusercontent.com',
+  win32: '512757841511-cftpbu6iasorjao0f3krm9le8tfk5i31.apps.googleusercontent.com'
+};
 export default {
   props: { beforeExport: Function, editorOpen: Boolean },
-  data: () => ({ state: estadoOffline, desktop: Boolean(window.desktop), busy: '', backup: null, backupText: '', backupName: '', transferMessage: '', transferError: '', skipped: [] }),
-  computed: { deletions() { return this.backup ? this.backup.records.filter(r => r.deleted).length : 0; } },
-  mounted() { sync.start(); },
+  data: () => ({ state: estadoOffline, desktop: Boolean(window.desktop), driveAvailable: driveNotasDisponible(), drivePickerConfigured: drivePickerConfigurado(), busy: '', backup: null, backupText: '', backupName: '', transferMessage: '', transferError: '', skipped: [], driveStatus: estadoDrive, driveClientId: localStorage.getItem(`reypez.googleDrive.clientId.${window.desktop?.platform || 'web'}`) || DRIVE_CLIENT_IDS[window.desktop?.platform] || '', driveBusy: false }),
+  computed: {
+    deletions() { return this.backup ? this.backup.records.filter(r => r.deleted).length : 0; },
+    drivePlatformLabel() { return window.desktop?.platform === 'win32' ? 'Windows' : 'Mac'; }
+  },
+  mounted() { sync.start(); iniciarSincronizacionDrive(); },
   methods: {
     prepare() { sync.prepare(); sync.sync(); },
+    async conectarDrive() {
+      this.driveBusy = true;
+      this.driveStatus.error = '';
+      try {
+        if (this.desktop) localStorage.setItem(`reypez.googleDrive.clientId.${window.desktop.platform}`, this.driveClientId);
+        await conectarGoogleDrive(this.driveClientId);
+        this.transferMessage = `Drive conectado. Las notas pendientes se subirán a ${this.driveStatus.folderName}.`;
+      } catch (error) { this.driveStatus.error = error.message; }
+      finally { this.driveBusy = false; }
+    },
+    async sincronizarDrive() {
+      this.driveBusy = true;
+      try { await sincronizarNotasDrive({ interactive: true }); }
+      finally { this.driveBusy = false; }
+    },
+    async desconectarDrive() {
+      this.driveBusy = true;
+      try { await desconectarGoogleDrive(); }
+      catch (error) { this.driveStatus.error = error.message; }
+      finally { this.driveBusy = false; }
+    },
     cancelar() { this.backup = null; this.backupText = ''; this.$refs.backupFile.value = ''; },
     async exportar() {
       this.busy = 'export'; this.transferError = ''; this.transferMessage = '';
@@ -94,4 +139,9 @@ export default {
 .transfer-review { width: 100%; padding: 12px; background: white; border: 1px solid #92cbd5; border-radius: 6px; overflow-wrap: anywhere; }
 .transfer-review button { margin: 8px 8px 0 0; }
 .offline-status a { text-decoration: underline; }
+.drive-archive { display: flex; width: 100%; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px; background: #fff; border: 1px solid #c6d9de; border-radius: 6px; }
+.drive-archive summary { cursor: pointer; font-weight: 700; }
+.drive-archive p, .drive-archive small { width: 100%; margin: 0; }
+.drive-archive label { font-weight: 600; }
+.drive-archive input { min-width: 300px; padding: 6px 8px; border: 1px solid #9ab3bc; border-radius: 5px; }
 </style>

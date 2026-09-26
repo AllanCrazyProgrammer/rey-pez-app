@@ -1,7 +1,8 @@
-const { app, BrowserWindow, shell, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, shell, ipcMain, dialog, safeStorage } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { pathToFileURL } = require('url');
+const { initGoogleDrive } = require('./googleDrive');
 
 // A separate profile supports isolated QA without touching real shipments.
 const profile = app.commandLine.getSwitchValue('user-data-dir');
@@ -14,6 +15,7 @@ const devUrl = !app.isPackaged && process.env.ELECTRON_DEV_URL;
 const localIndex = path.join(__dirname, '..', 'desktop-dist', 'index.html');
 let mainWindow;
 let quitting = false;
+initGoogleDrive({ app, shell, dialog, ipcMain, safeStorage, getMainWindow: () => mainWindow });
 
 function isExternal(url) {
   try { return ['https:', 'http:'].includes(new URL(url).protocol); }

@@ -2,6 +2,8 @@
 import { generarNotaVentaPDF } from "@/utils/pdfGenerator";
 import { generarResumenTarasPDF } from "@/utils/pdf/resumenTaras";
 import { generarResumenEmbarquePDF } from "@/utils/pdf/resumenEmbarque";
+import { nombreArchivoNota, periodoNota } from '@/utils/pdf/filename';
+import { encolarNotaDrive, driveNotasDisponible } from '@/services/DriveNotasSync';
 
 export default {
   methods: {
@@ -145,6 +147,52 @@ export default {
         this.clientesDisponibles,
         escala
       );
+
+      if (driveNotasDisponible()) {
+        const clientes = Array.isArray(this.clientesDisponibles) ? this.clientesDisponibles : [];
+        const clientIds = new Set([
+          ...Object.keys(this.productosPorCliente || {}).filter(id => (this.productosPorCliente[id] || []).length),
+          ...Object.entries(this.clienteCrudos || {}).filter(([, crudos]) => Array.isArray(crudos) && crudos.length).map(([id]) => id)
+        ]);
+        const fallos = [];
+        const embarqueId = String(this.embarque.id || this.$route?.params?.id || 'embarque');
+        const periodo = periodoNota(this.embarque);
+
+        for (const clienteId of clientIds) {
+          try {
+            const productos = this.productosPorCliente?.[clienteId] || [];
+            const crudos = this.clienteCrudos?.[clienteId] || [];
+            const datosNota = {
+              ...this.embarque,
+              productos: productos.map(producto => ({ ...producto, clienteId: producto.clienteId || clienteId })),
+              clienteCrudos: { [clienteId]: crudos },
+              kilosCrudos: this.embarque.kilosCrudos || {}
+            };
+            const clientesNota = clientes.some(cliente => String(cliente.id) === String(clienteId))
+              ? clientes
+              : [...clientes, { id: clienteId, nombre: this.obtenerNombreCliente(clienteId) }];
+            const nota = await generarNotaVentaPDF(
+              datosNota,
+              clientesNota,
+              this.clientesJuntarMedidas,
+              this.clientesReglaOtilio,
+              this.clientesIncluirPrecios,
+              this.clientesSumarKgCatarro,
+              this.clientesCuentaEnPdf,
+              { returnForDrive: true }
+            );
+            if (!nota?.data?.byteLength) throw new Error('La nota quedó vacía.');
+            const id = `${embarqueId}-${String(clienteId).replace(/[^a-zA-Z0-9._:-]/g, '_')}-${periodo.year}-${periodo.month}-${periodo.day}`;
+            await encolarNotaDrive({ id, name: nombreArchivoNota(datosNota, clientesNota), period: periodo, data: nota.data });
+          } catch (error) {
+            console.error('[Drive] No se pudo preparar la nota del cliente:', clienteId, error);
+            fallos.push(this.obtenerNombreCliente(clienteId) || clienteId);
+          }
+        }
+        if (fallos.length) {
+          throw new Error(`El resumen está listo, pero no se pudieron preparar las notas de: ${fallos.join(', ')}.`);
+        }
+      }
     },
 
     async generarPDFResumenConEscala() {

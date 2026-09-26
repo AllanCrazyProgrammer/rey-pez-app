@@ -1,6 +1,6 @@
 {
   "name": "rey-pez",
-  "version": "0.3.7",
+  "version": "0.3.9",
   "private": true,
   "main": "electron/main.js",
   "scripts": {
@@ -78,7 +78,7 @@
     "appId": "com.reypez.desktop",
     "productName": "ReyPez",
     "directories": {
-      "output": "release/offline-0.3.7"
+      "output": "release/offline-0.3.8"
     },
     "files": [
       "desktop-dist/**/*",
