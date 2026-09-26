@@ -68,7 +68,7 @@ export default {
       };
 
       // Llamar directamente (importación estática) – funciona sin internet
-      generarNotaVentaPDF(
+      await generarNotaVentaPDF(
         embarqueCliente,
         this.clientesDisponibles,
         this.clientesJuntarMedidas,
@@ -98,7 +98,7 @@ export default {
         kilosCrudos: this.embarque.kilosCrudos || {},
       };
 
-      generarNotaVentaPDF(
+      await generarNotaVentaPDF(
         embarqueCliente,
         this.clientesDisponibles,
         this.clientesJuntarMedidas,

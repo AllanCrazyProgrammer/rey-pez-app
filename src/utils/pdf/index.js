@@ -1,3 +1,4 @@
+import { entregarPdf } from './delivery';
 import pdfMake, { configurarPdfMake, estilosPdf, configuracionDocumento } from './config';
 import { loadImageAsBase64, formatearFecha } from './formatters';
 import { generarTablaRendimientos } from './generators/rendimientos';
@@ -26,7 +27,13 @@ export const generarPDFRendimientos = async (
   gruposListaMedidasDiaEmbarque = null
 ) => {
   try {
-    const logoBase64 = await loadImageAsBase64('https://res.cloudinary.com/hwkcovsmr/image/upload/v1620946647/samples/REY_PEZ_LOGO_nsotww.png');
+    // Rendimientos debe poder generarse con los datos locales, aunque no haya internet.
+    let logoBase64 = '';
+    try {
+      logoBase64 = await loadImageAsBase64(`${process.env.BASE_URL}pdf/rey-pez.png`);
+    } catch (logoError) {
+      console.warn('[Rendimientos PDF] Logo remoto no disponible; se generará sin logo.', logoError);
+    }
     
     const nombresMedidasPersonalizados = embarqueData?.nombresMedidasPersonalizados || {};
 
@@ -53,12 +60,12 @@ export const generarPDFRendimientos = async (
         // PRIMERA PÁGINA - RENDIMIENTOS
         {
           columns: [
-            {
+            ...(logoBase64 ? [{
               image: logoBase64,
               width: 80,
               alignment: 'left',
               margin: [0, 0, 0, 5]
-            },
+            }] : []),
             {
               text: 'Reporte de Rendimientos',
               style: 'header',
@@ -112,8 +119,9 @@ export const generarPDFRendimientos = async (
       });
     }
 
-    pdfMake.createPdf(docDefinition).open();
+    await entregarPdf(pdfMake.createPdf(docDefinition), 'rendimientos.pdf', 'open');
   } catch (error) {
     console.error('Error al generar el PDF de rendimientos:', error);
+    throw error;
   }
 };

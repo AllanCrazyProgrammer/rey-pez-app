@@ -20,6 +20,61 @@ function isExternal(url) {
   catch (_) { return false; }
 }
 
+ipcMain.handle('desktop:save-pdf', async (event, { bytes, filename, notePeriod } = {}) => {
+  if (!mainWindow || event.sender !== mainWindow.webContents || event.senderFrame !== event.sender.mainFrame) {
+    throw new Error('Solicitud de PDF no autorizada.');
+  }
+  if (!(bytes instanceof Uint8Array) || bytes.length > 100 * 1024 * 1024) {
+    throw new Error('Archivo PDF inválido.');
+  }
+  const buffer = Buffer.from(bytes);
+  if (buffer.subarray(0, 5).toString() !== '%PDF-') throw new Error('Archivo PDF inválido.');
+  const safeName = path.basename(String(filename || 'documento.pdf')).replace(/[^a-zA-Z0-9._-]/g, '-');
+  let filePath;
+  if (notePeriod) {
+    const { year, month, day } = notePeriod;
+    if (!Number.isInteger(year) || year < 1900 || year > 9999 || !Number.isInteger(month) || month < 1 || month > 12 ||
+        !Number.isInteger(day) || day < 1 || day > new Date(Date.UTC(year, month, 0)).getUTCDate()) {
+      throw new Error('Fecha del embarque inválida.');
+    }
+    const months = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+    const folder = path.join(app.getPath('documents'), 'embarques', String(year), months[month - 1], String(day));
+    await fs.promises.mkdir(folder, { recursive: true });
+    const stem = safeName.replace(/\.pdf$/i, '');
+    filePath = path.join(folder, `${stem}.pdf`);
+    try {
+      await fs.promises.writeFile(filePath, buffer, { flag: 'wx' });
+    } catch (error) {
+      if (error.code !== 'EEXIST') throw error;
+      const { response } = await dialog.showMessageBox(mainWindow, {
+        type: 'question', title: 'Reemplazar nota',
+        message: `Ya existe ${stem}.pdf. ¿Quieres reemplazarla?`,
+        detail: 'Si la reemplazas, se guardará la nueva nota en lugar de la anterior.',
+        buttons: ['Cancelar', 'Reemplazar'], defaultId: 0, cancelId: 0, noLink: true
+      });
+      if (response !== 1) return { canceled: true };
+      await fs.promises.writeFile(filePath, buffer);
+    }
+  } else {
+    const result = await dialog.showSaveDialog(mainWindow, {
+    title: 'Guardar PDF para imprimir',
+    defaultPath: path.join(app.getPath('downloads'), safeName),
+    filters: [{ name: 'Documento PDF', extensions: ['pdf'] }]
+  });
+    if (result.canceled || !result.filePath) return { canceled: true };
+    filePath = result.filePath;
+    await fs.promises.writeFile(filePath, buffer);
+  }
+  const openError = await shell.openPath(filePath);
+  if (openError) {
+    await dialog.showMessageBox(mainWindow, {
+      type: 'warning', message: 'El PDF se guardó, pero no se pudo abrir automáticamente.',
+      detail: `Ábrelo desde ${filePath} para imprimirlo.\n${openError}`
+    });
+  }
+  return { canceled: false, filePath };
+});
+
 function createMainWindow() {
   const win = new BrowserWindow({
     title: 'ReyPez · Embarques', width: 1280, height: 850, minWidth: 1024, minHeight: 640,

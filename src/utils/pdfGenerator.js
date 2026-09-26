@@ -1,6 +1,8 @@
 //Generador de Notas de Venta Pdf
 
 import pdfMake from 'pdfmake/build/pdfmake';
+import { entregarPdf, obtenerBufferPdf } from './pdf/delivery';
+import { nombreArchivoNota, periodoNota } from './pdf/filename';
 import * as pdfFonts from 'pdfmake/build/vfs_fonts';
 import { db } from '@/firebase';
 import { collection, query, where, getDocs } from 'firebase/firestore';
@@ -74,8 +76,17 @@ const contarPaginasDesdeBuffer = (buffer) => {
 };
 
 // URLs de logos
-const LOGO_DEFAULT_URL = 'https://res.cloudinary.com/hwkcovsmr/image/upload/v1620946647/samples/REY_PEZ_LOGO_nsotww.png';
-const LOGO_VERONICA_URL = 'https://res.cloudinary.com/hwkcovsmr/image/upload/w_1000,c_fill,ar_1:1,g_auto,r_max,bo_5px_solid_red,f_png,b_transparent/v1757615801/allan_logo_ra8ruv.jpg';
+const LOGO_DEFAULT_URL = `${process.env.BASE_URL}pdf/rey-pez.png`;
+const LOGO_VERONICA_URL = `${process.env.BASE_URL}pdf/veronica.png`;
+
+async function loadOptionalLogo(url) {
+  try {
+    return await loadImageAsBase64(url);
+  } catch (error) {
+    console.warn('[PDF] Logo remoto no disponible; se continuará sin logo.', error);
+    return '';
+  }
+}
 
 // Función para obtener el precio actual de un producto para un cliente específico
 async function obtenerPrecioProductoCatarro(nombreProducto) {
@@ -164,7 +175,7 @@ export async function generarNotaVentaPDF(embarque, clientesDisponibles, cliente
     const footerTextoDefault = ' 2025 Rey Pez - Tampico, Tamps.';
     const footerTextoVeronica = 'Allan Estuardo Reyes Garcia.  C.P 8920.  Tampico, Tamps.';
     const footerTexto = esNotaVeronica ? footerTextoVeronica : footerTextoDefault;
-    const logoBase64 = await loadImageAsBase64(
+    const logoBase64 = await loadOptionalLogo(
       esNotaVeronica ? LOGO_VERONICA_URL : LOGO_DEFAULT_URL
     );
     
@@ -178,12 +189,12 @@ export async function generarNotaVentaPDF(embarque, clientesDisponibles, cliente
 
     const columnasEncabezadoNotaVenta = {
       columns: [
-        {
+        ...(logoBase64 ? [{
           image: logoBase64,
           width: 100,
           alignment: 'left',
           margin: [0, 0, 0, 10]
-        },
+        }] : []),
         {
           text: 'Nota de Venta',
           style: 'notaVentaHeader',
@@ -510,7 +521,8 @@ export async function generarNotaVentaPDF(embarque, clientesDisponibles, cliente
     };
 
     // Crear el documento PDF y verificar número de páginas
-    activePdfMake.createPdf(docDefinition).getBuffer((buffer) => {
+    const buffer = await obtenerBufferPdf(activePdfMake.createPdf(docDefinition));
+    {
       const numPages = contarPaginasDesdeBuffer(buffer);
       
       // Contamos el total de productos para ambas páginas
@@ -582,17 +594,18 @@ export async function generarNotaVentaPDF(embarque, clientesDisponibles, cliente
         };
         
         // Crear y descargar el PDF con los ajustes
-        activePdfMake.createPdf(docDefinitionAjustado).download('nota-venta.pdf');
+        await entregarPdf(activePdfMake.createPdf(docDefinitionAjustado), nombreArchivoNota(embarque, clientesDisponibles), 'download', null, periodoNota(embarque));
         console.log(`PDF generado con nivel de reducción: ${nivelReduccion}`);
       } else {
         // Si son pocos productos, descargar el original
-        activePdfMake.createPdf(docDefinition).download('nota-venta.pdf');
+        await entregarPdf(activePdfMake.createPdf(docDefinition), nombreArchivoNota(embarque, clientesDisponibles), 'download', buffer, periodoNota(embarque));
         console.log('PDF generado sin reducción de escala');
       }
-    });
+    }
 
   } catch (error) {
     console.error('Error al generar el PDF:', error);
+    throw error;
   }
 }
 
@@ -2243,7 +2256,7 @@ export async function generarNotaVentaSinPreciosPDF(embarque, clientesDisponible
     const footerTextoDefault = ' 2025 Rey Pez - Tampico, Tamps.';
     const footerTextoVeronica = 'Allan Estuardo Reyes Garcia.  C.P 8920.  Tampico, Tamps.';
     const footerTexto = esNotaVeronica ? footerTextoVeronica : footerTextoDefault;
-    const logoBase64 = await loadImageAsBase64(
+    const logoBase64 = await loadOptionalLogo(
       esNotaVeronica ? LOGO_VERONICA_URL : LOGO_DEFAULT_URL
     );
     
@@ -2251,12 +2264,12 @@ export async function generarNotaVentaSinPreciosPDF(embarque, clientesDisponible
       content: [
         {
           columns: [
-            {
+            ...(logoBase64 ? [{
               image: logoBase64,
               width: 100,
               alignment: 'left',
               margin: [0, 0, 0, 10]
-            },
+            }] : []),
             {
               text: 'Nota de Embarque',
               style: 'notaVentaHeader',
@@ -2379,7 +2392,8 @@ export async function generarNotaVentaSinPreciosPDF(embarque, clientesDisponible
     };
 
     // Crear el documento PDF y verificar número de páginas
-    activePdfMake.createPdf(docDefinition).getBuffer((buffer) => {
+    const buffer = await obtenerBufferPdf(activePdfMake.createPdf(docDefinition));
+    {
       const numPages = contarPaginasDesdeBuffer(buffer);
       
       // Contamos el total de productos
@@ -2444,17 +2458,18 @@ export async function generarNotaVentaSinPreciosPDF(embarque, clientesDisponible
         };
         
         // Crear y descargar el PDF con los ajustes
-        activePdfMake.createPdf(docDefinitionAjustado).download('nota-embarque.pdf');
+        await entregarPdf(activePdfMake.createPdf(docDefinitionAjustado), nombreArchivoNota(embarque, clientesDisponibles), 'download', null, periodoNota(embarque));
         console.log(`PDF sin precios generado con nivel de reducción: ${nivelReduccion}`);
       } else {
         // Si es una sola página y menos de 8 productos, descargar el original
-        activePdfMake.createPdf(docDefinition).download('nota-embarque.pdf');
+        await entregarPdf(activePdfMake.createPdf(docDefinition), nombreArchivoNota(embarque, clientesDisponibles), 'download', buffer, periodoNota(embarque));
         console.log('PDF sin precios generado sin reducción de escala');
       }
-    });
+    }
 
   } catch (error) {
     console.error('Error al generar el PDF sin precios:', error);
+    throw error;
   }
 }
 

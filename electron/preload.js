@@ -3,6 +3,7 @@ let savedForClose = false;
 
 contextBridge.exposeInMainWorld('desktop', {
   platform: process.platform,
+  savePdf: (bytes, filename, notePeriod) => ipcRenderer.invoke('desktop:save-pdf', { bytes, filename, notePeriod }),
   isClosing: () => savedForClose,
   onPrepareClose(handler) {
     const listener = async (_event, requestId) => {

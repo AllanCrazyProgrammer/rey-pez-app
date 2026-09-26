@@ -3036,21 +3036,26 @@ export default {
         }
       });
 
-      const gruposListaMedidasDiaEmbarque = navigator.onLine
-        ? await this.obtenerGruposListaMedidasPedidoDiaEmbarque()
-        : null;
+      try {
+        const gruposListaMedidasDiaEmbarque = navigator.onLine
+          ? await this.obtenerGruposListaMedidasPedidoDiaEmbarque()
+          : null;
 
-      await generarPDFRendimientos(
-        datosRendimientos,
-        embarqueDataConNota,
-        gananciasVisibles,
-        tarasCrudosPorMedida,
-        gananciasVisiblesCrudos,
-        costosCrudos,
-        configuracionPesos,
-        gananciasVisiblesMaquila,
-        gruposListaMedidasDiaEmbarque
-      );
+        await generarPDFRendimientos(
+          datosRendimientos,
+          embarqueDataConNota,
+          gananciasVisibles,
+          tarasCrudosPorMedida,
+          gananciasVisiblesCrudos,
+          costosCrudos,
+          configuracionPesos,
+          gananciasVisiblesMaquila,
+          gruposListaMedidasDiaEmbarque
+        );
+      } catch (error) {
+        console.error('[Rendimientos] No se pudo generar el PDF:', error);
+        alert('No se pudo generar el PDF de rendimientos. Intenta de nuevo.');
+      }
     },
 
     obtenerNombreMedidaPersonalizado(medida) {
