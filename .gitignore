@@ -44,3 +44,6 @@ out/
 
 # Bundled desktop frontend
 desktop-dist/
+
+# Desktop OAuth client configuration (bundled in native installers, never in Git/web)
+electron/google-drive-clients.local.json

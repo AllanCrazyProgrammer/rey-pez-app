@@ -14,6 +14,18 @@ La conexión usa el permiso limitado `drive.file`. En cada equipo, cada persona 
 
 ## En ReyPez
 
-Abre el panel de historial sin conexión y despliega **Notas en Google Drive**. En escritorio, pega el ID OAuth correspondiente al equipo. En web, el ID de cliente y la clave de Picker vienen de la configuración de compilación. Elige **Conectar y elegir carpeta compartida**, autoriza ReyPez y selecciona la carpeta raíz `Embarques`. Haz lo mismo en cada equipo con una cuenta a la que se haya compartido esa carpeta.
+Abre el panel de historial sin conexión y despliega **Notas en Google Drive**. En escritorio, el ID OAuth correspondiente al equipo ya está configurado; solo se cambia desde Configuración avanzada. En web, el ID de cliente y la clave de Picker vienen de la configuración de compilación. Elige **Conectar y elegir carpeta compartida**, autoriza ReyPez y selecciona la carpeta raíz `Embarques`. Haz lo mismo en cada equipo con una cuenta a la que se haya compartido esa carpeta.
 
 Cuando se crea el resumen, ReyPez genera una nota PDF por cliente y la conserva en una cola local hasta que se pueda subir. En el navegador, la cola está en IndexedDB y la carpeta elegida en localStorage; el token OAuth vive solo en memoria por seguridad. Por ello, después de recargar o cerrar la web es necesario presionar **Autorizar y subir pendientes** para reanudar la carga. En las apps instaladas, la autorización persistente queda en el almacén seguro del sistema operativo. Una nota con el mismo nombre que un archivo ya existente en Drive pide confirmación antes de reemplazarlo. La cola conserva lo pendiente hasta completar la carga.
+
+## Confirmación y diagnóstico
+
+Una nota solo sale de la cola después de subir sus bytes por `/upload/drive/v3/files` y consultar el archivo en Drive para verificar que es PDF y que su tamaño coincide. Una respuesta de metadatos sin contenido nunca se considera una subida completada. Los reintentos conservan el identificador de carga para recuperar una subida interrumpida, y una confirmación anterior no elimina una nota regenerada mientras estaba subiendo.
+
+El panel indica expresamente cuándo falta conectar la cuenta, cuántos PDF permanecen únicamente en este equipo y cuál fue la última nota verificada. La página de regreso desde Google confirma la conexión solo después de intercambiar el código y validar la carpeta. El enlace Abrir carpeta en Drive permite revisar el resultado. Una autorización vencida conserva la cola y pide reconectar.
+
+Verificación automatizada: `npm run test:drive-notas` cubre el contrato de carga de archivos, reemplazos, archivos incompletos, autorización de escritorio y errores de intercambio, reintentos, ediciones concurrentes y conexión/subida desde web. Las pruebas usan servicios simulados y no escriben en Drive real.
+
+## Credenciales de escritorio para empaquetar
+
+Los clientes OAuth de tipo Escritorio requieren enviar `client_secret` tanto en el intercambio inicial como al renovar el token. El dato se obtiene del JSON descargado al crear el secreto en Google Cloud. Guarda la configuración en `electron/google-drive-clients.local.json` (ignorado por Git), con claves `darwin` y `win32`, cada una con `clientId` y `clientSecret`. El empaquetado comprueba que existe la configuración de la plataforma; no genera instaladores incompletos. Este archivo va únicamente en el proceso principal del instalador nativo y no se importa en el frontend ni en la web. Como explica Google, una app instalada no puede mantener confidencial un secreto distribuido: la protección de la autorización del usuario proviene del flujo PKCE, de su consentimiento y del almacenamiento cifrado de sus tokens. No confundir esta configuración de cliente de escritorio con el secreto del cliente web, que nunca debe distribuirse.

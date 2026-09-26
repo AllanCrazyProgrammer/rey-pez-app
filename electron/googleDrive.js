@@ -2,14 +2,17 @@ const http = require('node:http');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
+const { uploadPdf } = require('./driveUpload');
+const { getDesktopClientSecret } = require('./googleDriveClients');
 
 const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
 const DRIVE_API = 'https://www.googleapis.com/drive/v3';
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 
-function initGoogleDrive({ app, shell, dialog, ipcMain, safeStorage, getMainWindow }) {
+function initGoogleDrive({ app, shell, dialog, ipcMain, safeStorage, getMainWindow, getClientSecret = getDesktopClientSecret }) {
   const tokenPath = path.join(app.getPath('userData'), 'google-drive-auth.dat');
   let auth = null;
+  let connecting = false;
 
   function assertSender(event) {
     const win = getMainWindow();
@@ -49,7 +52,11 @@ function initGoogleDrive({ app, shell, dialog, ipcMain, safeStorage, getMainWind
       body: new URLSearchParams(body), signal: AbortSignal.timeout(30000)
     });
     const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(data.error_description || data.error || 'Google no pudo autorizar la conexión.');
+    if (!response.ok) {
+      const error = new Error(data.error_description || data.error || 'Google no pudo autorizar la conexión.');
+      error.code = data.error;
+      throw error;
+    }
     return data;
   }
 
@@ -57,11 +64,18 @@ function initGoogleDrive({ app, shell, dialog, ipcMain, safeStorage, getMainWind
     const saved = loadAuth();
     if (!saved?.refreshToken) throw new Error('Conecta Google Drive para subir las notas.');
     if (saved.accessToken && saved.expiresAt > Date.now() + 60000) return saved.accessToken;
-    const data = await postToken({
-      client_id: saved.clientId,
-      refresh_token: saved.refreshToken,
-      grant_type: 'refresh_token'
-    });
+    let data;
+    try {
+      data = await postToken({ client_id: saved.clientId, client_secret: getClientSecret(saved.clientId), refresh_token: saved.refreshToken, grant_type: 'refresh_token' });
+    } catch (error) {
+      if (['invalid_grant', 'invalid_client'].includes(error.code)) {
+        saved.needsAuth = true;
+        saveAuth(saved);
+        throw new Error('La autorización de Google venció o fue revocada. Reconecta Drive; tus notas siguen pendientes.');
+      }
+      throw error;
+    }
+    saved.needsAuth = false;
     saved.accessToken = data.access_token;
     saved.expiresAt = Date.now() + (Number(data.expires_in) || 3600) * 1000;
     saveAuth(saved);
@@ -94,17 +108,29 @@ function initGoogleDrive({ app, shell, dialog, ipcMain, safeStorage, getMainWind
     }
     if (!safeStorage.isEncryptionAvailable()) throw new Error('El almacén seguro de este equipo no está disponible.');
 
+    // Validate the shipped desktop configuration before sending the user to Google.
+    const clientSecret = getClientSecret(normalizedClientId);
+    if (connecting) throw new Error('Ya hay una conexión de Google abierta. Termínala en el navegador.');
+    connecting = true;
     const verifier = crypto.randomBytes(48).toString('base64url');
     const challenge = crypto.createHash('sha256').update(verifier).digest('base64url');
     const state = crypto.randomBytes(24).toString('hex');
     const server = http.createServer();
     await new Promise((resolve, reject) => {
-      server.once('error', reject);
+      server.once('error', error => { connecting = false; reject(error); });
       server.listen(0, '127.0.0.1', resolve);
     });
     const port = server.address().port;
     const redirectUri = `http://127.0.0.1:${port}/oauth2callback`;
 
+    let timer;
+    let browserResponse;
+    const reply = (message, success) => {
+      if (!browserResponse || browserResponse.writableEnded) return;
+      const escaped = message.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+      browserResponse.writeHead(success ? 200 : 400, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
+      browserResponse.end(`<!doctype html><meta charset="utf-8"><title>ReyPez · Google Drive</title><main style="font:18px system-ui;max-width:640px;margin:80px auto"><h1>${success ? 'Drive conectado' : 'No se pudo conectar Drive'}</h1><p>${escaped}</p><p>Regresa a ReyPez para ver el estado de las notas.</p></main>`);
+    };
     try {
       const authorizationUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
       authorizationUrl.search = new URLSearchParams({
@@ -116,37 +142,42 @@ function initGoogleDrive({ app, shell, dialog, ipcMain, safeStorage, getMainWind
         prompt: 'consent',
         trigger_onepick: 'true',
         allow_folder_selection: 'true',
+        mimetypes: 'application/vnd.google-apps.folder',
         state,
         code_challenge: challenge,
         code_challenge_method: 'S256'
       }).toString();
 
       const callback = new Promise((resolve, reject) => {
-        const timer = setTimeout(() => reject(new Error('Se agotó el tiempo para conectar Google Drive.')), 5 * 60 * 1000);
+        timer = setTimeout(() => reject(new Error('Se agotó el tiempo para conectar Google Drive.')), 5 * 60 * 1000);
         server.on('request', (req, res) => {
           const url = new URL(req.url, redirectUri);
           if (url.pathname !== '/oauth2callback') { res.writeHead(404).end(); return; }
           if (url.searchParams.get('state') !== state) {
             res.writeHead(400, { 'content-type': 'text/plain; charset=utf-8' }).end('No se pudo validar esta autorización. Cierra esta ventana.');
-            clearTimeout(timer); reject(new Error('La respuesta de Google no coincide con esta solicitud.')); return;
+            return;
           }
+          browserResponse = res;
           if (url.searchParams.has('error')) {
-            res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }).end('<p>Puedes regresar a ReyPez.</p>');
+            reply('Se canceló la autorización. Las notas siguen guardadas en tu equipo.', false);
             clearTimeout(timer); reject(new Error('Se canceló la conexión con Google Drive.')); return;
           }
           const code = url.searchParams.get('code');
           const folderId = (url.searchParams.get('picked_file_ids') || '').split(',')[0];
-          res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }).end('<!doctype html><meta charset="utf-8"><title>ReyPez</title><p>Google Drive quedó conectado. Ya puedes cerrar esta pestaña y regresar a ReyPez.</p>');
+          if (res.destroyed) return;
           clearTimeout(timer);
           if (!code || !folderId) reject(new Error('Selecciona la carpeta compartida de Embarques en Google Drive.'));
           else resolve({ code, folderId });
         });
       });
 
+      // Attach a rejection handler before opening the browser, including launch failures.
+      callback.catch(() => {});
       await shell.openExternal(authorizationUrl.toString());
       const { code, folderId } = await callback;
       const tokenData = await postToken({
         client_id: normalizedClientId,
+        client_secret: clientSecret,
         code,
         code_verifier: verifier,
         grant_type: 'authorization_code',
@@ -174,8 +205,14 @@ function initGoogleDrive({ app, shell, dialog, ipcMain, safeStorage, getMainWind
         clearAuth();
         throw new Error('Google no entregó una autorización persistente. Intenta conectar de nuevo.');
       }
-      return { connected: true, folderName: folder.name };
+      reply('La carpeta fue autorizada correctamente. ReyPez comenzará a subir las notas pendientes.', true);
+      return { connected: true, folderName: folder.name, folderId: folder.id };
+    } catch (error) {
+      reply(error.message || 'No se pudo completar la conexión.', false);
+      throw error;
     } finally {
+      connecting = false;
+      clearTimeout(timer);
       server.close();
     }
   }
@@ -220,27 +257,6 @@ function initGoogleDrive({ app, shell, dialog, ipcMain, safeStorage, getMainWind
     return data.files?.[0] || null;
   }
 
-  async function uploadMedia({ fileId, parentId, name, noteId, bytes }) {
-    const endpoint = fileId
-      ? `${DRIVE_API}/files/${encodeURIComponent(fileId)}?uploadType=resumable&supportsAllDrives=true`
-      : `${DRIVE_API}/files?uploadType=resumable&supportsAllDrives=true`;
-    const start = await driveRequest(endpoint, {
-      method: fileId ? 'PATCH' : 'POST',
-      headers: {
-        'content-type': 'application/json; charset=UTF-8',
-        'x-upload-content-type': 'application/pdf',
-        'x-upload-content-length': String(bytes.byteLength)
-      },
-      body: JSON.stringify({ name, ...(fileId ? {} : { parents: [parentId] }), appProperties: { reyPezNoteId: noteId } })
-    });
-    const uploadUrl = start.headers.get('location');
-    if (!uploadUrl) throw new Error('Google Drive no inició la carga del PDF.');
-    const complete = await driveRequest(uploadUrl, {
-      method: 'PUT', headers: { 'content-type': 'application/pdf', 'content-length': String(bytes.byteLength) }, body: Buffer.from(bytes)
-    });
-    return complete.json();
-  }
-
   async function uploadNote(event, input = {}) {
     const win = assertSender(event);
     const saved = loadAuth();
@@ -267,14 +283,14 @@ function initGoogleDrive({ app, shell, dialog, ipcMain, safeStorage, getMainWind
       });
       if (response !== 1) return { canceled: true };
     }
-    const result = await uploadMedia({ fileId, parentId, name, noteId, bytes: data });
-    return { uploaded: true, fileId: result.id, folderName: saved.folderName };
+    const result = await uploadPdf(driveRequest, { fileId, parentId, name, noteId, bytes: Buffer.from(data) });
+    return { uploaded: true, fileId: result.id, folderName: saved.folderName, folderId: saved.folderId };
   }
 
   ipcMain.handle('drive:status', event => {
     assertSender(event);
     const saved = loadAuth();
-    return { connected: Boolean(saved?.refreshToken && saved?.folderId), folderName: saved?.folderName || '' };
+    return { connected: Boolean(saved?.refreshToken && saved?.folderId), folderName: saved?.folderName || '', folderId: saved?.folderId || '', needsAuth: Boolean(saved?.needsAuth) };
   });
   ipcMain.handle('drive:connect', async (event, clientId) => { assertSender(event); return connect(clientId); });
   ipcMain.handle('drive:disconnect', event => { assertSender(event); clearAuth(); return { connected: false }; });

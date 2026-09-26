@@ -16,19 +16,32 @@
     <p v-if="transferError" role="alert">{{ transferError }}</p>
     <details v-if="driveAvailable" class="drive-archive">
       <summary>Notas en Google Drive <span v-if="driveStatus.connected">· {{ driveStatus.folderName }}</span><span v-else>· configurar respaldo</span></summary>
-      <p>Al crear el resumen final, las notas de cada cliente se guardan aquí y se suben cuando haya conexión.</p>
-      <template v-if="desktop">
-        <label for="drive-client-id">ID OAuth de {{ drivePlatformLabel }}</label>
-        <input id="drive-client-id" v-model.trim="driveClientId" type="text" autocomplete="off" placeholder="…apps.googleusercontent.com">
-      </template>
-      <button :disabled="driveBusy || (desktop && !driveClientId) || !drivePickerConfigured" @click="conectarDrive">{{ driveBusy ? 'Conectando…' : driveStatus.connected ? (driveStatus.needsAuth ? 'Autorizar y subir pendientes' : 'Reconectar / elegir carpeta') : 'Conectar y elegir carpeta compartida' }}</button>
-      <button v-if="driveStatus.connected && !driveStatus.needsAuth" :disabled="driveBusy" @click="sincronizarDrive">{{ driveStatus.syncing ? 'Subiendo notas…' : 'Subir notas pendientes' }}</button>
-      <button v-if="driveStatus.connected" :disabled="driveBusy" @click="desconectarDrive">Desconectar</button>
-      <span v-if="driveStatus.pending">{{ driveStatus.pending }} nota(s) pendiente(s)</span>
-      <p v-if="driveStatus.error" role="alert">{{ driveStatus.error }}</p>
-      <small v-if="desktop">Conecta la cuenta autorizada en la carpeta compartida y selecciona esa misma carpeta en cada equipo. El ID de cliente queda guardado en este equipo.</small>
-      <small v-else>La web guarda las notas pendientes en este navegador. Al reconectar Google se subirán a la carpeta compartida; por seguridad, después de cerrar o recargar la página tendrás que autorizar Drive otra vez.</small>
-      <small v-if="!desktop && !drivePickerConfigured">El administrador debe terminar la configuración del selector de Google Drive para habilitar la conexión web.</small>
+      <div class="drive-content">
+        <p>Al crear el resumen final se prepara un PDF por cliente. Cada nota permanece en este equipo hasta confirmar su copia completa en Drive.</p>
+        <p v-if="!driveStatus.connected" class="drive-notice">Falta conectar Google Drive y elegir la carpeta. Tener internet no inicia el respaldo hasta completar este paso.</p>
+        <p v-else-if="driveStatus.needsAuth" class="drive-notice">Es necesario autorizar Google otra vez para continuar con las notas pendientes.</p>
+        <p v-else>Carpeta conectada: <strong>{{ driveStatus.folderName }}</strong></p>
+        <details v-if="desktop" class="drive-advanced">
+          <summary>Configuración avanzada</summary>
+          <label for="drive-client-id">ID OAuth de {{ drivePlatformLabel }}</label>
+          <input id="drive-client-id" v-model.trim="driveClientId" type="text" autocomplete="off" placeholder="…apps.googleusercontent.com">
+        </details>
+        <div class="drive-actions">
+          <button :disabled="driveBusy || driveStatus.syncing || !state.online || (desktop && !driveClientId) || !drivePickerConfigured" @click="conectarDrive">{{ driveBusy ? 'Conectando…' : driveStatus.connected ? (driveStatus.needsAuth ? 'Reconectar y subir pendientes' : 'Cambiar carpeta / reconectar') : 'Conectar Google Drive y elegir carpeta' }}</button>
+          <button v-if="driveStatus.connected && !driveStatus.needsAuth" :disabled="driveBusy || driveStatus.syncing || !state.online" @click="sincronizarDrive">{{ driveStatus.syncing ? 'Subiendo notas…' : 'Subir notas pendientes' }}</button>
+          <a v-if="driveStatus.folderId" :href="'https://drive.google.com/drive/folders/' + encodeURIComponent(driveStatus.folderId)" target="_blank" rel="noopener noreferrer">Abrir carpeta en Drive</a>
+          <button v-if="driveStatus.connected" :disabled="driveBusy || driveStatus.syncing" @click="desconectarDrive">Desconectar</button>
+        </div>
+        <p v-if="driveBusy" role="status">Continúa en la ventana de Google: elige tu cuenta, autoriza ReyPez y selecciona la carpeta compartida Embarques.</p>
+        <p v-if="driveStatus.pending" class="drive-notice">{{ driveStatus.pending }} nota(s) pendiente(s) de respaldo en Drive. Su copia está guardada en este equipo.</p>
+        <p v-else-if="driveStatus.uploaded" class="drive-success" role="status">Todas las notas pendientes se subieron y verificaron en Google Drive.</p>
+        <p v-else>No hay notas pendientes de subir desde este equipo.</p>
+        <p v-if="driveStatus.lastUploadedName">Última nota verificada: {{ driveStatus.lastUploadedName }}</p>
+        <p v-if="driveStatus.error" class="drive-error" role="alert">{{ driveStatus.error }}</p>
+        <small v-if="desktop">Selecciona la misma carpeta compartida en cada equipo. Después de conectar, la app abierta subirá las notas al recuperar internet.</small>
+        <small v-else>Las notas pendientes quedan en este navegador. Después de recargar o cerrar la web, autoriza Google otra vez para reanudar la subida.</small>
+        <small v-if="!desktop && !drivePickerConfigured">Falta terminar la configuración del selector de Google Drive para habilitar la conexión web.</small>
+      </div>
     </details>
     <section v-if="backup" class="transfer-review" aria-label="Revisar respaldo">
       <strong>{{ backupName }} · {{ backup.records.length }} embarques pendientes</strong>
@@ -71,10 +84,11 @@ export default {
     async conectarDrive() {
       this.driveBusy = true;
       this.driveStatus.error = '';
+      this.transferMessage = '';
       try {
         if (this.desktop) localStorage.setItem(`reypez.googleDrive.clientId.${window.desktop.platform}`, this.driveClientId);
-        await conectarGoogleDrive(this.driveClientId);
-        this.transferMessage = `Drive conectado. Las notas pendientes se subirán a ${this.driveStatus.folderName}.`;
+        await conectarGoogleDrive(this.driveClientId, { changeFolder: this.driveStatus.connected && !this.driveStatus.needsAuth });
+        this.transferMessage = this.driveStatus.error ? '' : this.driveStatus.pending ? `Carpeta conectada: ${this.driveStatus.folderName}. Quedan notas pendientes.` : `Carpeta conectada: ${this.driveStatus.folderName}. No hay notas pendientes de subir.`;
       } catch (error) { this.driveStatus.error = error.message; }
       finally { this.driveBusy = false; }
     },
@@ -139,9 +153,16 @@ export default {
 .transfer-review { width: 100%; padding: 12px; background: white; border: 1px solid #92cbd5; border-radius: 6px; overflow-wrap: anywhere; }
 .transfer-review button { margin: 8px 8px 0 0; }
 .offline-status a { text-decoration: underline; }
-.drive-archive { display: flex; width: 100%; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px; background: #fff; border: 1px solid #c6d9de; border-radius: 6px; }
+.drive-archive { width: 100%; padding: 10px; background: #fff; border: 1px solid #c6d9de; border-radius: 6px; }
 .drive-archive summary { cursor: pointer; font-weight: 700; }
 .drive-archive p, .drive-archive small { width: 100%; margin: 0; }
 .drive-archive label { font-weight: 600; }
-.drive-archive input { min-width: 300px; padding: 6px 8px; border: 1px solid #9ab3bc; border-radius: 5px; }
+.drive-archive input { width: 100%; min-width: 0; box-sizing: border-box; padding: 6px 8px; border: 1px solid #9ab3bc; border-radius: 5px; }
+.drive-content { display: grid; gap: 12px; margin-top: 12px; }
+.drive-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.drive-advanced { display: block; }
+.drive-advanced label { display: block; margin-top: 8px; }
+.drive-notice { padding: 10px; background: #fff4d7; border-radius: 5px; box-sizing: border-box; }
+.drive-success { color: #166534; font-weight: 600; }
+.drive-error { padding: 10px; color: #9f1239; background: #fff1f2; border: 1px solid #fda4af; border-radius: 5px; overflow-wrap: anywhere; box-sizing: border-box; }
 </style>

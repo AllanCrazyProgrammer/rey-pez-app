@@ -1,3 +1,4 @@
+import { uploadPdf } from '../../electron/driveUpload';
 const DB_NAME = 'ReyPezDriveNotasDB';
 const STORE = 'notasPendientes';
 const WEB_CLIENT_ID = process.env.VUE_APP_GOOGLE_DRIVE_WEB_CLIENT_ID || '512757841511-a0r0kosltjrihl9vl0bgn7hqvuanhk7h.apps.googleusercontent.com';
@@ -18,14 +19,15 @@ function transaction(action, mode, operation) {
   return dbRequest().then(db => new Promise((resolve, reject) => {
     const tx = db.transaction(STORE, mode);
     const request = operation(tx.objectStore(STORE));
-    request.onsuccess = () => resolve(request.result);
+    let result;
+    request.onsuccess = () => { result = request.result; };
     request.onerror = () => reject(request.error);
-    tx.oncomplete = () => db.close();
+    tx.oncomplete = () => { db.close(); resolve(result); };
     tx.onabort = tx.onerror = () => { db.close(); reject(tx.error || new Error(`No se pudo ${action} la cola de Drive.`)); };
   }));
 }
 
-export const estadoDrive = { pending: 0, syncing: false, connected: false, folderName: '', error: '', needsAuth: false };
+export const estadoDrive = { pending: 0, syncing: false, connected: false, folderName: '', error: '', needsAuth: false, folderId: '', uploaded: 0, lastUploadedName: '' };
 let started = false;
 let access = null;
 let tokenClient = null;
@@ -50,12 +52,14 @@ export async function refreshDriveStatus() {
       const status = await window.desktop.drive.status();
       estadoDrive.connected = status.connected;
       estadoDrive.folderName = status.folderName || '';
-      estadoDrive.needsAuth = false;
+      estadoDrive.folderId = status.folderId || '';
+      estadoDrive.needsAuth = Boolean(status.needsAuth);
     } catch (error) { estadoDrive.error = error.message; }
   } else if (isWebConfigured()) {
     const folder = savedFolder();
     estadoDrive.connected = Boolean(folder?.id);
     estadoDrive.folderName = folder?.name || '';
+    estadoDrive.folderId = folder?.id || '';
     estadoDrive.needsAuth = Boolean(folder?.id && (!access || access.expiresAt < Date.now() + 30000));
   }
   await updatePendingCount();
@@ -128,7 +132,7 @@ function chooseFolder(token) {
 }
 async function driveRequest(url, options = {}) {
   if (!access || access.expiresAt < Date.now() + 30000) throw new Error('Autoriza Google Drive para continuar con la subida.');
-  const response = await fetch(url, { ...options, headers: { ...(options.headers || {}), authorization: `Bearer ${access.token}` } });
+  const response = await fetch(url, { ...options, signal: AbortSignal.timeout(45000), headers: { ...(options.headers || {}), authorization: `Bearer ${access.token}` } });
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
     if (response.status === 401) { access = null; estadoDrive.needsAuth = true; }
@@ -180,18 +184,8 @@ async function uploadWebNote(note) {
     if (!window.confirm(`Ya existe ${note.name} en Google Drive. ¿Quieres reemplazarla?`)) return { canceled: true };
     fileId = existing.id;
   } else if (existing?.id) fileId = existing.id;
-  const endpoint = fileId
-    ? `${DRIVE_API}/files/${encodeURIComponent(fileId)}?uploadType=resumable&supportsAllDrives=true`
-    : `${DRIVE_API}/files?uploadType=resumable&supportsAllDrives=true`;
-  const start = await driveRequest(endpoint, {
-    method: fileId ? 'PATCH' : 'POST',
-    headers: { 'content-type': 'application/json; charset=UTF-8', 'x-upload-content-type': 'application/pdf', 'x-upload-content-length': String(note.data.byteLength) },
-    body: JSON.stringify({ name: note.name, ...(fileId ? {} : { parents: [parentId] }), appProperties: { reyPezNoteId: note.uploadId } })
-  });
-  const uploadUrl = start.headers.get('location');
-  if (!uploadUrl) throw new Error('Google Drive no inició la carga del PDF.');
-  await driveRequest(uploadUrl, { method: 'PUT', headers: { 'content-type': 'application/pdf' }, body: note.data });
-  return { uploaded: true };
+  const result = await uploadPdf(driveRequest, { fileId, parentId, name: note.name, noteId: note.uploadId, bytes: note.data });
+  return { uploaded: true, fileId: result.id };
 }
 
 export async function sincronizarNotasDrive({ interactive = false } = {}) {
@@ -200,7 +194,11 @@ export async function sincronizarNotasDrive({ interactive = false } = {}) {
   estadoDrive.error = '';
   try {
     await refreshDriveStatus();
-    if (!estadoDrive.connected) return;
+    if (!estadoDrive.connected) {
+      if (interactive) estadoDrive.error = 'Conecta Google Drive y elige la carpeta para subir las notas pendientes.';
+      return;
+    }
+    if (isDesktop() && estadoDrive.needsAuth) { estadoDrive.error = 'La autorización de Google venció. Pulsa Reconectar para continuar.'; return; }
     if (isDesktop()) {
       let canceled = false;
       while (!canceled) {
@@ -209,9 +207,12 @@ export async function sincronizarNotasDrive({ interactive = false } = {}) {
         for (const note of queue) {
           try {
             const result = await window.desktop.drive.uploadNote({ name: note.name, noteId: note.uploadId, period: note.period, data: note.data });
-            if (result.canceled) { estadoDrive.error = 'Se canceló la carga de la nota existente.'; canceled = true; break; }
-            await transaction('actualizar', 'readwrite', store => store.delete(note.id));
-            estadoDrive.pending = Math.max(0, estadoDrive.pending - 1);
+            if (result?.canceled) { estadoDrive.error = 'Se canceló la carga de la nota existente.'; canceled = true; break; }
+            if (!result?.uploaded || !result.fileId) throw new Error('Drive no confirmó la subida. La nota sigue pendiente.');
+            await acknowledgeNote(note);
+            estadoDrive.uploaded += 1;
+            estadoDrive.lastUploadedName = note.name;
+            await updatePendingCount();
           } catch (error) { estadoDrive.error = error.message || 'No se pudo subir una nota a Google Drive.'; canceled = true; break; }
         }
       }
@@ -224,17 +225,34 @@ export async function sincronizarNotasDrive({ interactive = false } = {}) {
       for (const note of await readQueue()) {
         try {
           const result = await uploadWebNote(note);
-          if (result.canceled) { estadoDrive.error = 'Se canceló la carga de la nota existente.'; break; }
-          await transaction('actualizar', 'readwrite', store => store.delete(note.id));
+          if (result?.canceled) { estadoDrive.error = 'Se canceló la carga de la nota existente.'; break; }
+          if (!result?.uploaded || !result.fileId) throw new Error('Drive no confirmó la subida. La nota sigue pendiente.');
+          await acknowledgeNote(note);
+          estadoDrive.uploaded += 1;
+          estadoDrive.lastUploadedName = note.name;
         } catch (error) { estadoDrive.error = error.message || 'No se pudo subir una nota a Google Drive.'; break; }
       }
     }
   } catch (error) { estadoDrive.error = error.message || 'No se pudieron revisar las notas pendientes.'; }
   finally {
+    await refreshDriveStatus();
     estadoDrive.syncing = false;
-    await updatePendingCount();
-    if (isDesktop() && estadoDrive.connected && estadoDrive.pending && !estadoDrive.error && navigator.onLine) setTimeout(sincronizarNotasDrive, 0);
+    if (estadoDrive.connected && !estadoDrive.needsAuth && estadoDrive.pending && !estadoDrive.error && navigator.onLine) setTimeout(sincronizarNotasDrive, 0);
   }
+}
+
+
+// An upload acknowledgement must not delete a newer PDF generated during upload.
+async function acknowledgeNote(note) {
+  const db = await dbRequest();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, 'readwrite');
+    const store = tx.objectStore(STORE);
+    const read = store.get(note.id);
+    read.onsuccess = () => { if (read.result?.uploadId === note.uploadId) store.delete(note.id); };
+    tx.oncomplete = () => { db.close(); resolve(); };
+    tx.onabort = tx.onerror = () => { db.close(); reject(tx.error || new Error('No se pudo confirmar la cola de Drive.')); };
+  });
 }
 
 export async function encolarNotaDrive(note) {
@@ -243,19 +261,20 @@ export async function encolarNotaDrive(note) {
   void sincronizarNotasDrive();
 }
 
-export async function conectarGoogleDrive(clientId) {
+export async function conectarGoogleDrive(clientId, { changeFolder = false } = {}) {
   estadoDrive.error = '';
   if (isDesktop()) {
     const result = await window.desktop.drive.connect(clientId);
     estadoDrive.connected = result.connected;
     estadoDrive.folderName = result.folderName || '';
+    await refreshDriveStatus();
     await sincronizarNotasDrive();
     return;
   }
   if (!isWebConfigured()) throw new Error('Falta configurar el cliente OAuth y la clave segura del selector de carpetas para la web.');
   const existingFolder = savedFolder();
   const token = await requestToken(existingFolder?.id ? '' : 'consent');
-  if (existingFolder?.id) {
+  if (existingFolder?.id && !changeFolder) {
     estadoDrive.connected = true;
     estadoDrive.folderName = existingFolder.name || '';
     await sincronizarNotasDrive();
@@ -269,6 +288,7 @@ export async function conectarGoogleDrive(clientId) {
   localStorage.setItem(FOLDER_KEY, JSON.stringify({ id: info.id, name: info.name }));
   estadoDrive.connected = true;
   estadoDrive.folderName = info.name;
+  estadoDrive.folderId = info.id;
   estadoDrive.needsAuth = false;
   await sincronizarNotasDrive();
 }
@@ -282,6 +302,8 @@ export async function desconectarGoogleDrive() {
   }
   estadoDrive.connected = false;
   estadoDrive.folderName = '';
+  estadoDrive.folderId = '';
+  estadoDrive.error = '';
   estadoDrive.needsAuth = false;
 }
 
