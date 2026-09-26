@@ -14,7 +14,7 @@
     <input ref="backupFile" type="file" accept=".json,application/json" hidden @change="leerArchivo">
     <p v-if="transferMessage" role="status">{{ transferMessage }}</p>
     <p v-if="transferError" role="alert">{{ transferError }}</p>
-    <details v-if="driveAvailable" class="drive-archive">
+    <details v-if="driveAvailable" class="drive-archive" :open="!desktop">
       <summary>Notas y resúmenes en Google Drive <span v-if="driveStatus.connected">· {{ driveStatus.folderName }}</span><span v-else>· configurar respaldo</span></summary>
       <div class="drive-content">
         <p>Al crear el resumen final se respaldan el resumen del embarque y un PDF por cliente. Cada archivo permanece en este equipo hasta confirmar su copia completa en Drive.</p>
@@ -85,12 +85,18 @@ export default {
       this.driveBusy = true;
       this.driveStatus.error = '';
       this.transferMessage = '';
+      // Google Picker is outside the native dialog's top layer. Release the
+      // modal while authorizing so the folder picker can receive input.
+      if (!this.desktop) this.$emit('drive-auth-start');
       try {
         if (this.desktop) localStorage.setItem(`reypez.googleDrive.clientId.${window.desktop.platform}`, this.driveClientId);
         await conectarGoogleDrive(this.driveClientId, { changeFolder: this.driveStatus.connected && !this.driveStatus.needsAuth });
         this.transferMessage = this.driveStatus.error ? '' : this.driveStatus.pending ? `Carpeta conectada: ${this.driveStatus.folderName}. Quedan notas pendientes.` : `Carpeta conectada: ${this.driveStatus.folderName}. No hay PDF pendientes de subir.`;
       } catch (error) { this.driveStatus.error = error.message; }
-      finally { this.driveBusy = false; }
+      finally {
+        this.driveBusy = false;
+        if (!this.desktop) this.$emit('drive-auth-end');
+      }
     },
     async sincronizarDrive() {
       this.driveBusy = true;

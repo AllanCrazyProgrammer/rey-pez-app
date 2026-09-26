@@ -10,12 +10,13 @@
     </div>
     <Footer v-if="mostrarFooter && !esArcade" />
 
+    <WebUpdateNotice v-if="!desktopApp" :before-update="guardarAntesDeActualizarWeb" />
     <dialog ref="offlineDialog" class="offline-dialog" aria-labelledby="offline-dialog-title">
       <header class="offline-dialog-header">
         <h2 id="offline-dialog-title">Conexión y respaldos</h2>
         <button type="button" autofocus aria-label="Cerrar conexión y respaldos" @click="$refs.offlineDialog.close()">✕</button>
       </header>
-      <EmbarquesOfflineStatus v-if="offlineOpened" :before-export="guardarAntesDeExportar" :editor-open="esEditorEmbarques" />
+      <EmbarquesOfflineStatus v-if="offlineOpened" :before-export="guardarAntesDeExportar" :editor-open="esEditorEmbarques" @drive-auth-start="$refs.offlineDialog.close()" @drive-auth-end="$refs.offlineDialog.showModal()" />
     </dialog>
 
     <transition-group name="toast" tag="div" class="toast-container">
@@ -31,6 +32,7 @@
 </template>
 
 <script>
+import WebUpdateNotice from './components/WebUpdateNotice.vue';
 import EmbarquesSync from './services/EmbarquesSync';
 import EmbarquesOfflineStatus from './components/EmbarquesOfflineStatus.vue';
 import Navbar from "./NavBar.vue";
@@ -42,16 +44,22 @@ export default {
   name: "app",
   components: {
     Navbar,
+    WebUpdateNotice,
     EmbarquesOfflineStatus,
     Footer
   },
-  data: () => ({ offlineOpened: false }),
+  data: () => ({ offlineOpened: false, desktopApp: Boolean(window.desktop) }),
   watch: { '$route'() { this.$refs.offlineDialog?.close(); } },
   methods: {
     async abrirOpcionesOffline() {
       this.offlineOpened = true;
       await this.$nextTick();
       this.$refs.offlineDialog.showModal();
+    },
+    async guardarAntesDeActualizarWeb() {
+      const editor = this.$refs.activeView;
+      if (editor?._guardandoInicial || editor?._creandoEmbarque) throw new Error('Espera a que termine de crearse el embarque antes de actualizar.');
+      await this.guardarAntesDeExportar();
     },
     async guardarAntesDeExportar() {
       const editor = this.$refs.activeView;

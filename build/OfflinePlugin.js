@@ -15,6 +15,18 @@ self.addEventListener('install', event => {
     for (let i = 0; i < ASSETS.length; i += 12) await cache.addAll(ASSETS.slice(i, i + 12));
   }));
 });
+// Only an explicit action in the sole open tab can replace the running shell.
+self.addEventListener('message', event => {
+  if (event.data?.type !== 'ACTIVATE_WEB_UPDATE') return;
+  event.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(async clients => {
+    if (clients.length > 1) {
+      event.ports[0]?.postMessage({ error: 'Cierra las otras pestañas de ReyPez y vuelve a pulsar Actualizar web. Tus datos guardados se conservarán.' });
+      return;
+    }
+    event.ports[0]?.postMessage({ ok: true });
+    await self.skipWaiting();
+  }));
+});
 self.addEventListener('activate', event => {
   event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key.startsWith('reypez-shell-') && key !== CACHE).map(key => caches.delete(key)))).then(() => self.clients.claim()));
 });

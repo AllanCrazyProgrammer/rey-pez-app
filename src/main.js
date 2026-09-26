@@ -90,14 +90,3 @@ if (!window.pdfMake) {
     console.log('Usando versión de CDN si está disponible');
   });
 }
-
-// A version becomes active only after all tabs using the old build close.
-if (process.env.NODE_ENV === 'production' && 'serviceWorker' in navigator &&
-    ['http:', 'https:'].includes(location.protocol) && !window.desktop) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/service-worker.js').then(() => navigator.serviceWorker.ready)
-      .then(() => import('./services/EmbarquesSync'))
-      .then(({ estadoOffline }) => { estadoOffline.shellReady = true; })
-      .catch(error => console.warn('No se pudo preparar la aplicación sin conexión:', error));
-  });
-}
