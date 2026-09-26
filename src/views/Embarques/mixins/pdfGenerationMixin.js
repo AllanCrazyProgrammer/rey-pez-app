@@ -3,6 +3,7 @@ import { generarNotaVentaPDF } from "@/utils/pdfGenerator";
 import { generarResumenTarasPDF } from "@/utils/pdf/resumenTaras";
 import { generarResumenEmbarquePDF } from "@/utils/pdf/resumenEmbarque";
 import { nombreArchivoNota, periodoNota } from '@/utils/pdf/filename';
+import { entregarPdf } from '@/utils/pdf/delivery';
 import { encolarNotaDrive, driveNotasDisponible } from '@/services/DriveNotasSync';
 
 export default {
@@ -140,13 +141,22 @@ export default {
 
       const embarqueData = this.prepararDatosResumenEmbarque(medidasCrudos);
 
-      generarResumenEmbarquePDF(
+      const resumen = await generarResumenEmbarquePDF(
         embarqueData,
         this.productosPorCliente,
         this.obtenerNombreCliente,
         this.clientesDisponibles,
-        escala
+        escala,
+        { returnForDrive: true }
       );
+
+      const embarqueId = String(this.embarque.id || this.$route?.params?.id || 'embarque');
+      if (driveNotasDisponible()) {
+        const { period, name, data } = resumen;
+        const id = `resumen-${embarqueId.replace(/[^a-zA-Z0-9._:-]/g, '_')}-${period.year}-${period.month}-${period.day}`;
+        await encolarNotaDrive({ id, name, period, data });
+      }
+      await entregarPdf(resumen.pdf, resumen.name, 'download', resumen.data, resumen.period);
 
       if (driveNotasDisponible()) {
         const clientes = Array.isArray(this.clientesDisponibles) ? this.clientesDisponibles : [];
@@ -155,7 +165,6 @@ export default {
           ...Object.entries(this.clienteCrudos || {}).filter(([, crudos]) => Array.isArray(crudos) && crudos.length).map(([id]) => id)
         ]);
         const fallos = [];
-        const embarqueId = String(this.embarque.id || this.$route?.params?.id || 'embarque');
         const periodo = periodoNota(this.embarque);
 
         for (const clienteId of clientIds) {

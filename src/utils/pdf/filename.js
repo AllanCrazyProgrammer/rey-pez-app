@@ -1,5 +1,13 @@
 const meses = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sept', 'oct', 'nov', 'dic'];
 
+export function nombreArchivoResumen(embarque) {
+  const periodo = periodoNota(embarque);
+  if (!periodo) throw new Error('La fecha del embarque no es válida.');
+  const carga = String(embarque.cargaCon || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9-]+/g, '-').replace(/^-+|-+$/g, '');
+  return `Resumen-Embarque${carga ? `-${carga}` : ''}-${periodo.day}-${meses[periodo.month - 1]}-${String(periodo.year).slice(-2)}.pdf`;
+}
+
 export function periodoNota(embarque) {
   const fecha = embarque.fecha;
   const date = fecha && typeof fecha.toDate === 'function' ? fecha.toDate()

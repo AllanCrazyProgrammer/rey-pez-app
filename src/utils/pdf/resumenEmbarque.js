@@ -1,6 +1,8 @@
 import pdfMake from 'pdfmake/build/pdfmake';
 import pdfFonts from 'pdfmake/build/vfs_fonts';
 import { generarResumenLimpios } from '../resumenLimpios';
+import { entregarPdf, obtenerBufferPdf } from './delivery';
+import { nombreArchivoResumen, periodoNota } from './filename';
 
 // Verificar y asignar vfs de manera segura
 if (typeof pdfFonts === 'object' && pdfFonts.hasOwnProperty('default')) {
@@ -100,7 +102,9 @@ const ordenarTaras = (taras) => {
   }, []);
 };
 
-export const generarResumenEmbarquePDF = (embarque, productosPorCliente, obtenerNombreCliente, clientesPersonalizados = [], escala = 100) => {
+export const generarResumenEmbarquePDF = async (embarque, productosPorCliente, obtenerNombreCliente, clientesPersonalizados = [], escala = 100, options = {}) => {
+  const name = nombreArchivoResumen(embarque);
+  const period = periodoNota(embarque);
   // Obtener y ordenar las medidas de los crudos del embarque
   let medidasCrudos = [];
   if (embarque.medidasCrudos && Array.isArray(embarque.medidasCrudos)) {
@@ -126,11 +130,11 @@ export const generarResumenEmbarquePDF = (embarque, productosPorCliente, obtener
             [
               { text: `Carga: ${embarque.cargaCon}`, alignment: 'left', fontSize: 20 * scaleFactor, border: [false, false, false, true] },
               { text: 'Embarque', alignment: 'center', fontSize: 25 * scaleFactor, bold: true, border: [false, false, false, true] },
-              { text: `${new Date(new Date(embarque.fecha).getTime() + 24 * 60 * 60 * 1000).toLocaleDateString('es-MX', {
+              { text: `${new Date(Date.UTC(period.year, period.month - 1, period.day)).toLocaleDateString('es-MX', {
                 day: '2-digit',
                 month: 'short',
                 year: 'numeric',
-                timeZone: 'America/Mexico_City'
+                timeZone: 'UTC'
               })}`, alignment: 'right', fontSize: 20 * scaleFactor, border: [false, false, false, true] }
             ]
           ]
@@ -484,8 +488,10 @@ export const generarResumenEmbarquePDF = (embarque, productosPorCliente, obtener
     ...generarResumenLimpios(productosPorCliente, clienteColors, escala, clientesPersonalizados)
   );
 
-  // Generar y descargar el PDF
-  pdfMake.createPdf(docDefinition).download('resumen-embarque-completo.pdf');
+  const pdf = pdfMake.createPdf(docDefinition);
+  const data = new Uint8Array(await obtenerBufferPdf(pdf));
+  if (options.returnForDrive) return { pdf, data, name, period };
+  return entregarPdf(pdf, name, 'download', data, period);
 };
 
 // Función auxiliar para calcular kilos

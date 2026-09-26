@@ -29,3 +29,14 @@ Verificación automatizada: `npm run test:drive-notas` cubre el contrato de carg
 ## Credenciales de escritorio para empaquetar
 
 Los clientes OAuth de tipo Escritorio requieren enviar `client_secret` tanto en el intercambio inicial como al renovar el token. El dato se obtiene del JSON descargado al crear el secreto en Google Cloud. Guarda la configuración en `electron/google-drive-clients.local.json` (ignorado por Git), con claves `darwin` y `win32`, cada una con `clientId` y `clientSecret`. El empaquetado comprueba que existe la configuración de la plataforma; no genera instaladores incompletos. Este archivo va únicamente en el proceso principal del instalador nativo y no se importa en el frontend ni en la web. Como explica Google, una app instalada no puede mantener confidencial un secreto distribuido: la protección de la autorización del usuario proviene del flujo PKCE, de su consentimiento y del almacenamiento cifrado de sus tokens. No confundir esta configuración de cliente de escritorio con el secreto del cliente web, que nunca debe distribuirse.
+# Resumen del embarque
+
+Al crear el resumen final se guarda también su PDF en la cola persistente de Drive,
+junto con las notas por cliente. Usa el nombre `Resumen-Embarque-Porro-25-sept-26.pdf`
+(el responsable de carga se omite si está vacío). La fecha procede del embarque,
+tanto para el encabezado como para el nombre y las carpetas de año/mes/día.
+
+En escritorio, el mismo PDF se guarda en `Documentos/embarques/2026/septiembre/25/`
+y se abre para imprimir. Si el archivo local ya existe, se pregunta si debe reemplazarse.
+En web se descarga con ese nombre; el navegador administra el destino de descarga.
+La copia en Drive utiliza la carpeta compartida configurada y la misma estructura de fecha.
