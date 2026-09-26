@@ -40,3 +40,24 @@ En escritorio, el mismo PDF se guarda en `Documentos/embarques/2026/septiembre/2
 y se abre para imprimir. Si el archivo local ya existe, se pregunta si debe reemplazarse.
 En web se descarga con ese nombre; el navegador administra el destino de descarga.
 La copia en Drive utiliza la carpeta compartida configurada y la misma estructura de fecha.
+
+## Actualizaciones y conexión desde la web
+
+La web muestra la sección de Drive desplegada en Conexión y respaldos. Durante
+la autorización se cierra temporalmente ese diálogo para permitir interacción
+con el selector de carpetas de Google; vuelve a abrirse al terminar.
+
+Cuando hay una versión descargada esperando, aparece **Actualizar web**. Antes
+de activarla se guarda el editor actual. Si hay otras pestañas del mismo sitio,
+se pide cerrarlas para evitar interrumpir otro embarque. No se borran IndexedDB
+ni las colas de embarques o PDF.
+
+Una web anterior sin ese aviso puede seguir mostrando el código antiguo aunque
+se recargue. Guarda el trabajo, cierra las pestañas de ese sitio y vuelve a abrirlo.
+No borres los datos del navegador para actualizar.
+
+Si Picker muestra `The API developer key is invalid`, comprueba que el valor de
+`VUE_APP_GOOGLE_PICKER_API_KEY` coincide exactamente con la clave existente
+**ReyPez Picker Web** en Google Cloud, tanto en `.env.local` como en Heroku. La
+clave se incorpora durante la compilación: cambiar la variable requiere volver
+a compilar/publicar. Mantén las restricciones de sitios y de Google Picker API.
