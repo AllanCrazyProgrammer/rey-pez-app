@@ -8,6 +8,9 @@ contextBridge.exposeInMainWorld('desktop', {
     status: () => ipcRenderer.invoke('drive:status'),
     connect: clientId => ipcRenderer.invoke('drive:connect', clientId),
     disconnect: () => ipcRenderer.invoke('drive:disconnect'),
+    prepareNote: note => ipcRenderer.invoke('drive:prepare-note', note),
+    uploadPrepared: input => ipcRenderer.invoke('drive:upload-prepared', input),
+    discardPrepared: ticket => ipcRenderer.invoke('drive:discard-prepared', ticket),
     uploadNote: note => ipcRenderer.invoke('drive:upload-note', note)
   },
   isClosing: () => savedForClose,

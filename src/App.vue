@@ -10,7 +10,7 @@
     </div>
     <Footer v-if="mostrarFooter && !esArcade" />
 
-    <DriveBackupNotice v-if="!desktopApp" @open-settings="abrirOpcionesOffline" />
+    <DriveBackupNotice @open-settings="abrirOpcionesOffline" />
     <WebUpdateNotice v-if="!desktopApp" :before-update="guardarAntesDeActualizarWeb" />
     <dialog ref="offlineDialog" class="offline-dialog" aria-labelledby="offline-dialog-title">
       <header class="offline-dialog-header">

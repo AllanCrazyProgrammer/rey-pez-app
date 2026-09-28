@@ -56,6 +56,7 @@ async function desktopHarness(tokenError = false) {
   let browserRequest;
   let uploaded;
   let refreshes = 0;
+  let existingFile = null;
   global.fetch = async (url, options = {}) => {
     if (String(url).startsWith('http://127.0.0.1:')) return originalFetch(url, options);
     if (url === 'https://oauth2.googleapis.com/token') {
@@ -66,10 +67,12 @@ async function desktopHarness(tokenError = false) {
       return tokenError ? json({ error: 'invalid_grant', error_description: 'QA rejected code' }, 400) : json({ access_token: 'qa-access', refresh_token: 'qa-refresh', expires_in: 3600 });
     }
     if (String(url).includes('/files/root?')) return json({ id: 'root', name: 'Embarques', mimeType: 'application/vnd.google-apps.folder', capabilities: { canAddChildren: true } });
-    if (String(url).includes('/upload/drive/v3/files?')) return json({}, 200, { location: 'https://www.googleapis.com/upload/session/qa' });
+    if (String(url).includes('/upload/drive/v3/files')) return json({}, 200, { location: 'https://www.googleapis.com/upload/session/qa' });
     if (url === 'https://www.googleapis.com/upload/session/qa') { uploaded = Buffer.from(options.body); return json({ id: 'pdf-id' }); }
     if (String(url).includes('/files/pdf-id?')) return json({ id: 'pdf-id', mimeType: 'application/pdf', size: String(uploaded.length) });
     if (options.method === 'POST') return json({ id: 'child-folder' });
+    const q = new URL(url).searchParams.get('q') || '';
+    if (existingFile && q.includes('name =') && !q.includes('mimeType')) return json({ files: [{ id: existingFile, name: 'Joselito-2-sept-26.pdf' }] });
     return json({ files: [] });
   };
   initGoogleDrive({
@@ -109,6 +112,28 @@ async function desktopHarness(tokenError = false) {
         assert.equal(refreshes, 1);
       } finally { Date.now = realNow; }
       await assert.rejects(handlers['drive:upload-note']({ sender: {} }, {}), /no autorizada/);
+      const input = { name: 'Joselito-2-sept-26.pdf', noteId: 'prepared-id', period: { year: 2026, month: 9, day: 2 }, data: new Uint8Array(pdf) };
+      const fresh = await handlers['drive:prepare-note'](event, input);
+      assert.equal(fresh.existing, null);
+      input.data.fill(0); // The privileged process keeps its own immutable bytes.
+      assert.equal((await handlers['drive:upload-prepared'](event, { ticket: fresh.ticket })).uploaded, true);
+      assert.deepEqual(uploaded, pdf);
+      await assert.rejects(handlers['drive:upload-prepared'](event, { ticket: fresh.ticket }), /venció/);
+      input.data = new Uint8Array(pdf);
+      existingFile = 'pdf-id';
+      const conflict = await handlers['drive:prepare-note'](event, input);
+      assert.equal(conflict.existing.sameNote, false);
+      assert.equal((await handlers['drive:upload-prepared'](event, { ticket: conflict.ticket })).canceled, true);
+      const accepted = await handlers['drive:prepare-note'](event, input);
+      assert.equal((await handlers['drive:upload-prepared'](event, { ticket: accepted.ticket, replaceApproved: true })).uploaded, true);
+      const raced = await handlers['drive:prepare-note'](event, input);
+      existingFile = 'different-file';
+      await assert.rejects(handlers['drive:upload-prepared'](event, { ticket: raced.ticket, replaceApproved: true }), /cambió/);
+      const discarded = await handlers['drive:prepare-note'](event, input);
+      await handlers['drive:discard-prepared'](event, discarded.ticket);
+      await assert.rejects(handlers['drive:upload-prepared'](event, { ticket: discarded.ticket, replaceApproved: true }), /venció/);
+      await assert.rejects(handlers['drive:prepare-note']({ sender: {} }, input), /no autorizada/);
+
     }
   } finally { global.fetch = originalFetch; fs.rmSync(profile, { recursive: true, force: true }); }
 }
@@ -119,7 +144,7 @@ test('desktop OAuth callback does not claim success if token exchange fails', ()
 function queueHarness(uploadNote) {
   const source = fs.readFileSync(path.join(__dirname, '../src/services/DriveNotasSync.js'), 'utf8')
     .replace(/import \{ uploadPdf \}[^\n]+\n/, 'const uploadPdf = injectedUploadPdf;\n')
-    .replace(/export /g, '') + '\nthis.api = { estadoDrive, encolarNotaDrive, sincronizarNotasDrive, refreshDriveStatus };';
+    .replace(/export /g, '') + '\nthis.api = { estadoDrive, encolarNotaDrive, sincronizarNotasDrive, refreshDriveStatus, responderReemplazoDrive, agruparRespaldoDrive };';
   const context = vm.createContext({
     injectedUploadPdf: uploadPdf, process: { env: {} }, indexedDB: new IDBFactory(),
     Uint8Array, TextDecoder, URL, URLSearchParams, AbortSignal, setTimeout,
@@ -237,5 +262,32 @@ test('web: Google authorization, folder selection, failed upload retained and ve
   ctx.api.responderReemplazoDrive(true);
   await accepted;
   assert.equal(uploads, 4, 'one acceptance replaces both files');
+  assert.equal(ctx.api.estadoDrive.pending, 0);
+});
+
+test('desktop batch: one styled confirmation covers all conflicts, declined files do not block new reports', async () => {
+  const ctx = queueHarness(() => { throw new Error('Legacy native dialog must not be called'); });
+  const sent = [], discarded = [];
+  ctx.window.desktop.drive.prepareNote = async input => ({ ticket: input.name, existing: input.name.startsWith('existing') ? { id: input.name, sameNote: false } : null });
+  ctx.window.desktop.drive.uploadPrepared = async input => { sent.push(input); return { uploaded: true, fileId: input.ticket }; };
+  ctx.window.desktop.drive.discardPrepared = async ticket => discarded.push(ticket);
+  for (const name of ['existing-summary.pdf', 'existing-note.pdf', 'Resumen-Taras.pdf', 'Rendimientos.pdf']) await ctx.api.encolarNotaDrive({ ...note, id: name, name });
+  ctx.navigator.onLine = true;
+  const syncing = ctx.api.sincronizarNotasDrive();
+  for (let i = 0; !ctx.api.estadoDrive.replacementRequest && i < 100; i++) await new Promise(resolve => setTimeout(resolve, 2));
+  assert.equal(ctx.api.estadoDrive.replacementRequest.length, 2);
+  ctx.api.responderReemplazoDrive(false);
+  await syncing;
+  assert.deepEqual(sent.map(item => item.ticket).sort(), ['Rendimientos.pdf', 'Resumen-Taras.pdf']);
+  assert.equal(discarded.length, 2);
+  await ctx.api.sincronizarNotasDrive();
+  assert.equal(ctx.api.estadoDrive.replacementRequest, null);
+  assert.equal(ctx.api.estadoDrive.pending, 2);
+  const retry = ctx.api.sincronizarNotasDrive({ interactive: true });
+  for (let i = 0; !ctx.api.estadoDrive.replacementRequest && i < 100; i++) await new Promise(resolve => setTimeout(resolve, 2));
+  ctx.api.responderReemplazoDrive(true);
+  await retry;
+  assert.equal(sent.length, 4);
+  assert.ok(sent.slice(2).every(input => input.replaceApproved));
   assert.equal(ctx.api.estadoDrive.pending, 0);
 });

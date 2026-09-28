@@ -257,13 +257,15 @@ function initGoogleDrive({ app, shell, dialog, ipcMain, safeStorage, getMainWind
     return data.files?.[0] || null;
   }
 
-  async function uploadNote(event, input = {}) {
-    const win = assertSender(event);
+  async function prepareNote(event, input = {}) {
+    assertSender(event);
     const saved = loadAuth();
     if (!saved?.folderId) throw new Error('Conecta Google Drive y selecciona la carpeta compartida.');
     const { name, noteId, period, data } = input;
     if (!/^[a-zA-Z0-9._-]+\.pdf$/i.test(name || '') || !/^[a-zA-Z0-9._:-]{1,200}$/.test(noteId || '') ||
-        !Number.isInteger(period?.year) || !Number.isInteger(period?.month) || !Number.isInteger(period?.day) ||
+        !Number.isInteger(period?.year) || period.year < 1900 || period.year > 9999 ||
+        !Number.isInteger(period?.month) || period.month < 1 || period.month > 12 ||
+        !Number.isInteger(period?.day) || period.day < 1 || period.day > new Date(Date.UTC(period.year, period.month, 0)).getUTCDate() ||
         !(data instanceof Uint8Array) || data.byteLength < 5 || data.byteLength > 25 * 1024 * 1024 || Buffer.from(data).subarray(0, 5).toString() !== '%PDF-') {
       throw new Error('La nota pendiente no tiene datos válidos.');
     }
@@ -274,17 +276,48 @@ function initGoogleDrive({ app, shell, dialog, ipcMain, safeStorage, getMainWind
       parentId = await ensureFolder(parentId, segment);
     }
     const existing = await findNote(parentId, name, noteId);
-    let fileId = existing?.id || null;
+    return { existing, parentId, name, noteId, bytes: Buffer.from(data), folderName: saved.folderName, folderId: saved.folderId };
+  }
+
+  const preparedNotes = new Map();
+  ipcMain.handle('drive:prepare-note', async (event, input) => {
+    const prepared = await prepareNote(event, input);
+    const now = Date.now();
+    for (const [key, value] of preparedNotes) if (value.expiresAt < now) preparedNotes.delete(key);
+    if (preparedNotes.size >= 500) throw new Error('Hay demasiados PDF en preparación. Reintenta la sincronización.');
+    const ticket = require('node:crypto').randomUUID();
+    preparedNotes.set(ticket, { ...prepared, expiresAt: now + 30 * 60 * 1000 });
+    return { ticket, existing: prepared.existing ? { id: prepared.existing.id, sameNote: Boolean(prepared.existing.sameNote) } : null };
+  });
+  ipcMain.handle('drive:upload-prepared', async (event, { ticket, replaceApproved = false } = {}) => {
+    assertSender(event);
+    const prepared = preparedNotes.get(ticket);
+    preparedNotes.delete(ticket);
+    if (!prepared || prepared.expiresAt < Date.now()) throw new Error('La preparación del PDF venció. Vuelve a sincronizar.');
+    if (loadAuth()?.folderId !== prepared.folderId) throw new Error('La carpeta de Drive cambió. Vuelve a sincronizar.');
+    const { existing, parentId, name, noteId, bytes } = prepared;
+    if (existing && !existing.sameNote && !replaceApproved) return { canceled: true };
+    const current = await findNote(parentId, name, noteId);
+    if (current?.id !== existing?.id) throw new Error('El archivo en Drive cambió mientras confirmabas. Vuelve a sincronizar para revisarlo.');
+    const result = await uploadPdf(driveRequest, { fileId: existing?.id || null, parentId, name, noteId, bytes });
+    return { uploaded: true, fileId: result.id };
+  });
+  ipcMain.handle('drive:discard-prepared', (event, ticket) => { assertSender(event); preparedNotes.delete(ticket); });
+
+  // Compatibility with older renderer bundles. New bundles confirm the whole batch.
+  async function uploadNote(event, input = {}) {
+    const prepared = await prepareNote(event, input);
+    const { existing, parentId, name, noteId, bytes } = prepared;
     if (existing && !existing.sameNote) {
-      const { response } = await dialog.showMessageBox(win, {
+      const { response } = await dialog.showMessageBox(assertSender(event), {
         type: 'question', title: 'Reemplazar nota en Google Drive',
         message: `Ya existe ${name} en la carpeta compartida. ¿Quieres reemplazarla?`,
         buttons: ['Cancelar', 'Reemplazar'], defaultId: 0, cancelId: 0, noLink: true
       });
       if (response !== 1) return { canceled: true };
     }
-    const result = await uploadPdf(driveRequest, { fileId, parentId, name, noteId, bytes: Buffer.from(data) });
-    return { uploaded: true, fileId: result.id, folderName: saved.folderName, folderId: saved.folderId };
+    const result = await uploadPdf(driveRequest, { fileId: existing?.id || null, parentId, name, noteId, bytes });
+    return { uploaded: true, fileId: result.id };
   }
 
   ipcMain.handle('drive:status', event => {

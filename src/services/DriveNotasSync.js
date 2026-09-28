@@ -233,7 +233,7 @@ export async function sincronizarNotasDrive({ interactive = false } = {}) {
       return;
     }
     if (isDesktop() && estadoDrive.needsAuth) { estadoDrive.error = 'La autorización de Google venció. Pulsa Reconectar para continuar.'; return; }
-    if (isDesktop()) {
+    if (isDesktop() && !window.desktop.drive.prepareNote) {
       let canceled = false;
       while (!canceled) {
         const queue = await readQueue();
@@ -251,7 +251,7 @@ export async function sincronizarNotasDrive({ interactive = false } = {}) {
         }
       }
     } else {
-      if (!access || access.expiresAt < Date.now() + 30000) {
+      if (!isDesktop() && (!access || access.expiresAt < Date.now() + 30000)) {
         estadoDrive.needsAuth = true;
         if (!interactive) return;
         await requestToken('');
@@ -259,18 +259,25 @@ export async function sincronizarNotasDrive({ interactive = false } = {}) {
       const prepared = [];
       for (const note of await readQueue()) {
         if (note.replacementDeferred && !interactive) continue;
-        try { prepared.push(await prepararSubidaWeb(note)); }
+        try {
+          prepared.push(isDesktop()
+            ? { note, ...await window.desktop.drive.prepareNote({ name: note.name, noteId: note.uploadId, period: note.period, data: note.data }) }
+            : await prepararSubidaWeb(note));
+        }
         catch (error) { estadoDrive.error = error.message; }
       }
       const conflicts = prepared.filter(item => item.existing && !item.existing.sameNote);
       const replace = !conflicts.length || await confirmarReemplazos(conflicts);
       for (const item of prepared) {
         if (!replace && item.existing && !item.existing.sameNote) {
+          if (item.ticket) await window.desktop.drive.discardPrepared(item.ticket);
           await marcarReemplazoPendiente(item.note);
           continue;
         }
         try {
-          const result = await uploadWebNote(item);
+          const result = isDesktop()
+            ? await window.desktop.drive.uploadPrepared({ ticket: item.ticket, replaceApproved: replace })
+            : await uploadWebNote(item);
           if (!result?.uploaded || !result.fileId) throw new Error('Drive no confirmó la subida. El PDF sigue pendiente.');
           await acknowledgeNote(item.note);
           estadoDrive.uploaded += 1;
