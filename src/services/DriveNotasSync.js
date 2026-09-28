@@ -34,7 +34,7 @@ export function responderReemplazoDrive(accepted) {
   const resolve = replacementResolver;
   replacementResolver = null;
   estadoDrive.replacementRequest = null;
-  if (resolve) resolve(Boolean(accepted));
+  if (resolve) resolve(accepted === 'keep' ? 'keep' : accepted === true);
 }
 function confirmarReemplazos(files) {
   return new Promise(resolve => {
@@ -55,7 +55,10 @@ let pickerPromise;
 
 export function driveNotasDisponible() { return isDesktop() || Boolean(WEB_CLIENT_ID); }
 export function drivePickerConfigurado() { return isDesktop() || isWebConfigured(); }
-async function readQueue() { return transaction('leer', 'readonly', store => store.getAll()); }
+async function readQueue() {
+  const records = await transaction('leer', 'readonly', store => store.getAll());
+  return records.filter(note => !note.keptExisting);
+}
 async function updatePendingCount() {
   try {
     const queue = await readQueue();
@@ -208,18 +211,27 @@ async function uploadWebNote({ note, parentId, existing }) {
   const result = await uploadPdf(driveRequest, { fileId: existing?.id || null, parentId, name: note.name, noteId: note.uploadId, bytes: note.data });
   return { uploaded: true, fileId: result.id };
 }
-async function marcarReemplazoPendiente(note) {
+async function marcarReemplazoPendiente(note, keptExisting = false) {
   const db = await dbRequest();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE, 'readwrite');
     const store = tx.objectStore(STORE);
     const request = store.get(note.id);
     request.onsuccess = () => {
-      if (request.result?.uploadId === note.uploadId) store.put({ ...request.result, replacementDeferred: true });
+      if (request.result?.uploadId === note.uploadId) store.put({ ...request.result, replacementDeferred: !keptExisting, keptExisting });
     };
     tx.oncomplete = () => { db.close(); resolve(); };
     tx.onabort = tx.onerror = () => { db.close(); reject(tx.error); };
   });
+}
+
+// Keep the local PDF bytes; only retire confirmed, deferred replacements.
+export async function conservarReemplazosDrive() {
+  if (estadoDrive.syncing) return 0;
+  const deferred = (await readQueue()).filter(note => note.replacementDeferred);
+  for (const note of deferred) await marcarReemplazoPendiente(note, true);
+  await updatePendingCount();
+  return deferred.length;
 }
 
 export async function sincronizarNotasDrive({ interactive = false } = {}) {
@@ -267,11 +279,12 @@ export async function sincronizarNotasDrive({ interactive = false } = {}) {
         catch (error) { estadoDrive.error = error.message; }
       }
       const conflicts = prepared.filter(item => item.existing && !item.existing.sameNote);
-      const replace = !conflicts.length || await confirmarReemplazos(conflicts);
+      const decision = !conflicts.length || await confirmarReemplazos(conflicts);
+      const replace = decision === true;
       for (const item of prepared) {
         if (!replace && item.existing && !item.existing.sameNote) {
           if (item.ticket) await window.desktop.drive.discardPrepared(item.ticket);
-          await marcarReemplazoPendiente(item.note);
+          await marcarReemplazoPendiente(item.note, decision === 'keep');
           continue;
         }
         try {
@@ -309,7 +322,7 @@ async function acknowledgeNote(note) {
 }
 
 export async function encolarNotaDrive(note) {
-  await transaction('guardar', 'readwrite', store => store.put({ ...note, uploadId: window.crypto.randomUUID() }));
+  await transaction('guardar', 'readwrite', store => store.put({ ...note, uploadId: window.crypto.randomUUID(), keptExisting: false, replacementDeferred: false }));
   await updatePendingCount();
   void sincronizarNotasDrive();
 }

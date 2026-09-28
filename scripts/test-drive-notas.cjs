@@ -144,7 +144,7 @@ test('desktop OAuth callback does not claim success if token exchange fails', ()
 function queueHarness(uploadNote) {
   const source = fs.readFileSync(path.join(__dirname, '../src/services/DriveNotasSync.js'), 'utf8')
     .replace(/import \{ uploadPdf \}[^\n]+\n/, 'const uploadPdf = injectedUploadPdf;\n')
-    .replace(/export /g, '') + '\nthis.api = { estadoDrive, encolarNotaDrive, sincronizarNotasDrive, refreshDriveStatus, responderReemplazoDrive, agruparRespaldoDrive };';
+    .replace(/export /g, '') + '\nthis.api = { estadoDrive, encolarNotaDrive, sincronizarNotasDrive, refreshDriveStatus, responderReemplazoDrive, agruparRespaldoDrive, conservarReemplazosDrive };';
   const context = vm.createContext({
     injectedUploadPdf: uploadPdf, process: { env: {} }, indexedDB: new IDBFactory(),
     Uint8Array, TextDecoder, URL, URLSearchParams, AbortSignal, setTimeout,
@@ -290,4 +290,71 @@ test('desktop batch: one styled confirmation covers all conflicts, declined file
   assert.equal(sent.length, 4);
   assert.ok(sent.slice(2).every(input => input.replaceApproved));
   assert.equal(ctx.api.estadoDrive.pending, 0);
+});
+
+async function storedPdfs(ctx) {
+  return new Promise((resolve, reject) => {
+    const open = ctx.indexedDB.open('ReyPezDriveNotasDB', 1);
+    open.onsuccess = () => {
+      const db = open.result;
+      const tx = db.transaction('notasPendientes', 'readonly');
+      const read = tx.objectStore('notasPendientes').getAll();
+      tx.oncomplete = () => { db.close(); resolve(read.result); };
+      tx.onerror = () => reject(tx.error);
+    };
+    open.onerror = () => reject(open.error);
+  });
+}
+
+test('keeping existing Drive PDFs retires conflicts, retains bytes and still uploads new reports', async () => {
+  const ctx = queueHarness(() => { throw new Error('Legacy upload'); });
+  const sent = [];
+  ctx.window.desktop.drive.prepareNote = async input => ({
+    ticket: input.name, existing: input.name === note.name ? { id: 'old', sameNote: false } : null
+  });
+  ctx.window.desktop.drive.uploadPrepared = async input => { sent.push(input.ticket); return { uploaded: true, fileId: input.ticket }; };
+  ctx.window.desktop.drive.discardPrepared = async () => {};
+  await ctx.api.encolarNotaDrive(note);
+  await ctx.api.encolarNotaDrive({ ...note, id: 'new', name: 'Taras.pdf' });
+  ctx.navigator.onLine = true;
+  const syncing = ctx.api.sincronizarNotasDrive();
+  for (let i = 0; !ctx.api.estadoDrive.replacementRequest && i < 100; i++) await new Promise(resolve => setTimeout(resolve, 2));
+  assert.ok(ctx.api.estadoDrive.replacementRequest);
+  ctx.api.responderReemplazoDrive('keep');
+  await syncing;
+  assert.deepEqual(sent, ['Taras.pdf']);
+  assert.equal(ctx.api.estadoDrive.pending, 0);
+  const stored = await storedPdfs(ctx);
+  assert.equal(stored.length, 1);
+  assert.equal(stored[0].keptExisting, true);
+  assert.deepEqual(stored[0].data, note.data);
+  await ctx.api.sincronizarNotasDrive({ interactive: true });
+  assert.equal(ctx.api.estadoDrive.replacementRequest, null);
+  assert.deepEqual(sent, ['Taras.pdf']);
+  ctx.navigator.onLine = false;
+  await ctx.api.encolarNotaDrive(note);
+  assert.equal(ctx.api.estadoDrive.pending, 1, 'regenerated PDF must be pending again');
+});
+
+test('clear deferred replacements offline preserves new pending PDFs and survives status refresh', async () => {
+  const ctx = queueHarness(() => {});
+  ctx.window.desktop.drive.prepareNote = async () => ({ ticket: 'old', existing: { id: 'old', sameNote: false } });
+  ctx.window.desktop.drive.discardPrepared = async () => {};
+  await ctx.api.encolarNotaDrive(note);
+  ctx.navigator.onLine = true;
+  const syncing = ctx.api.sincronizarNotasDrive();
+  for (let i = 0; !ctx.api.estadoDrive.replacementRequest && i < 100; i++) await new Promise(resolve => setTimeout(resolve, 2));
+  ctx.api.responderReemplazoDrive(false);
+  await syncing;
+  ctx.navigator.onLine = false;
+  await ctx.api.encolarNotaDrive({ ...note, id: 'new', name: 'Rendimientos.pdf' });
+  assert.equal(await ctx.api.conservarReemplazosDrive(), 1);
+  await ctx.api.refreshDriveStatus();
+  assert.equal(ctx.api.estadoDrive.pending, 1);
+  assert.equal(ctx.api.estadoDrive.pendingFiles[0].name, 'Rendimientos.pdf');
+  const stored = await storedPdfs(ctx);
+  assert.equal(stored.length, 2);
+  assert.deepEqual(stored.find(item => item.id === note.id).data, note.data);
+  assert.equal(stored.find(item => item.id === 'new').keptExisting, false);
+  assert.equal(await ctx.api.conservarReemplazosDrive(), 0);
 });

@@ -34,8 +34,9 @@
         </div>
         <p v-if="driveBusy" role="status">Continúa en la ventana de Google: elige tu cuenta, autoriza ReyPez y selecciona la carpeta compartida Embarques.</p>
         <p v-if="driveStatus.pending" class="drive-notice">{{ driveStatus.pending }} PDF pendiente(s) de respaldo en Drive. Su copia está guardada en este equipo. Pulsa «Subir PDF pendientes» para revisar los reemplazos pospuestos.</p>
-        <p v-else-if="driveStatus.uploaded" class="drive-success" role="status">Todos los PDF pendientes se subieron y verificaron en Google Drive.</p>
-        <p v-else>No hay PDF pendientes de subir desde este equipo.</p>
+        <p v-else role="status">No hay PDF pendientes de subir desde este equipo.</p>
+        <button v-if="deferredDriveCount" :disabled="driveBusy || driveStatus.syncing" @click="conservarDrive">Conservar los de Drive y quitar de pendientes ({{ deferredDriveCount }})</button>
+        <p v-if="deferredDriveCount">Se mantienen los archivos de Drive y tus copias locales. Solo se quitan los reemplazos pospuestos de esta lista.</p>
         <ul v-if="driveStatus.pendingFiles.length" class="drive-pending-files"><li v-for="(file, index) in driveStatus.pendingFiles" :key="index">{{ file.name }}{{ file.deferred ? ' · reemplazo pospuesto' : '' }}</li></ul>
         <p v-if="driveStatus.lastUploadedName">Último PDF verificado: {{ driveStatus.lastUploadedName }}</p>
         <p v-if="driveStatus.error" class="drive-error" role="alert">{{ driveStatus.error }}</p>
@@ -67,7 +68,7 @@
 <script>
 import sync, { estadoOffline } from '@/services/EmbarquesSync';
 import { exportPending, parseBackup, importBackup, MAX_BACKUP_BYTES } from '@/services/EmbarquesTransferService';
-import { estadoDrive, conectarGoogleDrive, desconectarGoogleDrive, driveNotasDisponible, drivePickerConfigurado, iniciarSincronizacionDrive, sincronizarNotasDrive } from '@/services/DriveNotasSync';
+import { estadoDrive, conectarGoogleDrive, desconectarGoogleDrive, driveNotasDisponible, drivePickerConfigurado, iniciarSincronizacionDrive, sincronizarNotasDrive, conservarReemplazosDrive } from '@/services/DriveNotasSync';
 const DRIVE_CLIENT_IDS = {
   darwin: '512757841511-dei6iqrdunuo49ok9cmse6fapoodslm8.apps.googleusercontent.com',
   win32: '512757841511-cftpbu6iasorjao0f3krm9le8tfk5i31.apps.googleusercontent.com'
@@ -76,6 +77,7 @@ export default {
   props: { beforeExport: Function, editorOpen: Boolean },
   data: () => ({ state: estadoOffline, desktop: Boolean(window.desktop), driveAvailable: driveNotasDisponible(), drivePickerConfigured: drivePickerConfigurado(), busy: '', backup: null, backupText: '', backupName: '', transferMessage: '', transferError: '', skipped: [], driveStatus: estadoDrive, driveClientId: localStorage.getItem(`reypez.googleDrive.clientId.${window.desktop?.platform || 'web'}`) || DRIVE_CLIENT_IDS[window.desktop?.platform] || '', driveBusy: false }),
   computed: {
+    deferredDriveCount() { return this.driveStatus.pendingFiles.filter(file => file.deferred).length; },
     deletions() { return this.backup ? this.backup.records.filter(r => r.deleted).length : 0; },
     drivePlatformLabel() { return window.desktop?.platform === 'win32' ? 'Windows' : 'Mac'; }
   },
@@ -98,6 +100,14 @@ export default {
         this.driveBusy = false;
         if (!this.desktop) this.$emit('drive-auth-end');
       }
+    },
+    async conservarDrive() {
+      this.driveBusy = true;
+      try {
+        const count = await conservarReemplazosDrive();
+        this.transferMessage = `${count} reemplazo(s) quitados de pendientes. Se conservaron los archivos de Drive y las copias locales.`;
+      } catch (error) { this.driveStatus.error = error.message; }
+      finally { this.driveBusy = false; }
     },
     async sincronizarDrive() {
       this.driveBusy = true;
