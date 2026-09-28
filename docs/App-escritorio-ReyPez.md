@@ -2,21 +2,25 @@
 
 Esta aplicación contiene todas las pantallas y herramientas dentro de la instalación. Abre desde su icono aunque no haya internet, aunque la web esté caída y aunque nunca se haya abierto la web en ese equipo. No necesita Node, una terminal, Chrome ni un servidor local instalado.
 
-## Versión 0.3.13: reportes y respaldo agrupado
+## Versión 0.3.15: abrir solo el resumen solicitado
+
+Al generar el PDF de resumen, ReyPez abre únicamente ese archivo. Los reportes de taras y rendimientos se siguen guardando y respaldando automáticamente con el resumen, pero solo se abren cuando se solicitan desde sus botones correspondientes.
+
+## Versión 0.3.14: reportes y respaldo agrupado
 
 Al generar el resumen final se preparan automáticamente el resumen del embarque, taras, rendimientos y las notas por cliente. Los tres reportes se guardan en `Documentos/embarques/año/mes/día`, usando la fecha del embarque; Drive utiliza la misma organización dentro de la carpeta conectada.
 
-La confirmación de Drive muestra todos los archivos existentes en una sola ventana. Al conservar los anteriores, los PDF nuevos continúan subiendo y los reemplazos dejan de aparecer pendientes, conservando sus copias locales. «Decidir después» los deja pospuestos. En Respaldos, «Conservar los de Drive y quitar de pendientes» resuelve los reemplazos ya pospuestos sin subir ni borrar archivos. Volver a la ventana o recuperar internet no repite la pregunta; «Subir PDF pendientes» permite reconsiderarla. Las confirmaciones locales de archivos existentes siguen siendo independientes de Drive.
+La confirmación de Drive muestra todos los archivos existentes en una sola ventana. Al conservar los anteriores, los PDF nuevos continúan subiendo y los reemplazos dejan de aparecer pendientes, conservando sus copias locales. «Decidir después» los deja pospuestos. En Respaldos, «Conservar los de Drive y quitar de pendientes» resuelve los reemplazos ya pospuestos sin subir ni borrar archivos. Volver a la ventana o recuperar internet no repite la pregunta; «Subir PDF pendientes» permite reconsiderarla. Los PDF locales del embarque se actualizan automáticamente en su misma ruta, sin pedir confirmación de reemplazo.
 
 El proceso principal de Electron prepara los archivos y devuelve identificadores temporales; solo sube las copias preparadas tras la decisión del usuario. Si cambia la carpeta o el archivo de destino durante la confirmación, exige revisar la subida otra vez. Las pruebas `npm run test:drive-notas` cubren la cola agrupada, la confirmación, la cancelación, archivos nuevos, reintentos y la validación de IPC.
 
-El instalador actual de Mac es `release/offline-0.3.13/ReyPez-0.3.13-mac-arm64.dmg`. El código compartido incluye Windows; para generar un instalador Windows con Drive, la validación exige configurar primero el cliente OAuth de Windows en `electron/google-drive-clients.local.json`. No se generó un instalador Windows 0.3.13 sin esas credenciales.
+El instalador actual de Mac es `release/offline-0.3.15/ReyPez-0.3.15-mac-arm64.dmg`. El código compartido incluye Windows; para generar un instalador Windows con Drive, la validación exige configurar primero el cliente OAuth de Windows en `electron/google-drive-clients.local.json`. No se generó un instalador Windows 0.3.15 sin esas credenciales.
 
 ## Mac (Apple Silicon: M1, M2, M3, M4 y posteriores)
 
 - Aplicaciones locales actualizadas: `/Applications/ReyPez.app` y `~/Applications/ReyPez.app`.
 - Copia del Escritorio actualizada: `~/Desktop/ReyPez.app`.
-- Instalador para trasladar a otra Mac: `release/offline-0.3.13/ReyPez-0.3.13-mac-arm64.dmg`.
+- Instalador para trasladar a otra Mac: `release/offline-0.3.15/ReyPez-0.3.15-mac-arm64.dmg`.
 - Abrir el DMG y arrastrar ReyPez a Aplicaciones. Luego abrir desde Aplicaciones o Spotlight. El instalador no necesita internet.
 
 ## Windows de 64 bits (Intel/AMD)

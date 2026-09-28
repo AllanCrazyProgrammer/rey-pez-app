@@ -44,19 +44,7 @@ ipcMain.handle('desktop:save-pdf', async (event, { bytes, filename, notePeriod }
     await fs.promises.mkdir(folder, { recursive: true });
     const stem = safeName.replace(/\.pdf$/i, '');
     filePath = path.join(folder, `${stem}.pdf`);
-    try {
-      await fs.promises.writeFile(filePath, buffer, { flag: 'wx' });
-    } catch (error) {
-      if (error.code !== 'EEXIST') throw error;
-      const { response } = await dialog.showMessageBox(mainWindow, {
-        type: 'question', title: 'Reemplazar nota',
-        message: `Ya existe ${stem}.pdf. ¿Quieres reemplazarla?`,
-        detail: 'Si la reemplazas, se guardará la nueva nota en lugar de la anterior.',
-        buttons: ['Cancelar', 'Reemplazar'], defaultId: 0, cancelId: 0, noLink: true
-      });
-      if (response !== 1) return { canceled: true };
-      await fs.promises.writeFile(filePath, buffer);
-    }
+    await fs.promises.writeFile(filePath, buffer);
   } else {
     const result = await dialog.showSaveDialog(mainWindow, {
     title: 'Guardar PDF para imprimir',
