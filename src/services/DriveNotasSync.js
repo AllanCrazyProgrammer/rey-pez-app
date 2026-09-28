@@ -287,7 +287,7 @@ export async function sincronizarNotasDrive({ interactive = false } = {}) {
         const replaceThis = !isConflict || replaceAll || selectedIds.includes(item.note.uploadId);
         if (isConflict && !replaceThis) {
           if (item.ticket) await window.desktop.drive.discardPrepared(item.ticket);
-          await marcarReemplazoPendiente(item.note, decision === 'keep' || decision?.action === 'selected');
+          await marcarReemplazoPendiente(item.note, decision === 'keep');
           continue;
         }
         try {

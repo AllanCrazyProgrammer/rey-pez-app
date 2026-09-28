@@ -17,7 +17,7 @@
           <span class="drive-file-name">{{ file.name }}<small>{{ file.period.day }}/{{ file.period.month }}/{{ file.period.year }}</small></span>
         </label>
       </li></ul>
-      <p class="drive-confirm-hint">Los PDF nuevos se subirán automáticamente. Los PDF que no selecciones se conservarán en Drive y sus copias locales se mantendrán.</p>
+      <p class="drive-confirm-hint">Los PDF nuevos se subirán automáticamente. Los PDF que no selecciones se conservarán en Drive y seguirán pendientes por si después quieres reemplazarlos.</p>
       <footer><button type="button" class="keep" autofocus @click="answer('keep')">Conservar todos y quitar de pendientes</button><button type="button" class="replace" :disabled="!selectedFiles.length" @click="replaceSelected">Reemplazar seleccionados ({{ selectedFiles.length }})</button></footer>
       <button type="button" class="postpone" @click="answer(false)">Decidir después</button>
     </dialog>
