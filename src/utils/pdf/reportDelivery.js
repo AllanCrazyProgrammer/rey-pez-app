@@ -24,7 +24,7 @@ export async function guardarYRespaldarReporte(tipo, embarque, bytes, destino) {
   const period = periodoNota(embarque);
   const data = new Uint8Array(bytes);
   if (window.desktop) {
-    const result = await window.desktop.savePdf(data, name, period);
+    const result = await window.desktop.savePdf(data, name, period, { open: destino.open !== false });
     if (result?.canceled) return result;
   } else if (destino.handle) {
     const writable = await destino.handle.createWritable();

@@ -178,7 +178,7 @@ export default {
           const reporte = tipo === 'taras'
             ? await generarResumenTarasPDF(datosReportes, this.clientesDisponibles, { returnForDrive: true })
             : await generarRendimientosParaResumen(datosReportes);
-          await guardarYRespaldarReporte(tipo, datosReportes, reporte.data, { name: reporte.name });
+          await guardarYRespaldarReporte(tipo, datosReportes, reporte.data, { name: reporte.name, open: false });
         } catch (error) {
           fallosReportes.push(`${tipo}: ${error.message}`);
         }

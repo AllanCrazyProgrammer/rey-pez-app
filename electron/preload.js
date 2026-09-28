@@ -3,7 +3,7 @@ let savedForClose = false;
 
 contextBridge.exposeInMainWorld('desktop', {
   platform: process.platform,
-  savePdf: (bytes, filename, notePeriod) => ipcRenderer.invoke('desktop:save-pdf', { bytes, filename, notePeriod }),
+  savePdf: (bytes, filename, notePeriod, options = {}) => ipcRenderer.invoke('desktop:save-pdf', { bytes, filename, notePeriod, open: options.open !== false }),
   drive: {
     status: () => ipcRenderer.invoke('drive:status'),
     connect: clientId => ipcRenderer.invoke('drive:connect', clientId),

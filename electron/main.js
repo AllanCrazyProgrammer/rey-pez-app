@@ -22,7 +22,7 @@ function isExternal(url) {
   catch (_) { return false; }
 }
 
-ipcMain.handle('desktop:save-pdf', async (event, { bytes, filename, notePeriod } = {}) => {
+ipcMain.handle('desktop:save-pdf', async (event, { bytes, filename, notePeriod, open = true } = {}) => {
   if (!mainWindow || event.sender !== mainWindow.webContents || event.senderFrame !== event.sender.mainFrame) {
     throw new Error('Solicitud de PDF no autorizada.');
   }
@@ -55,7 +55,7 @@ ipcMain.handle('desktop:save-pdf', async (event, { bytes, filename, notePeriod }
     filePath = result.filePath;
     await fs.promises.writeFile(filePath, buffer);
   }
-  const openError = await shell.openPath(filePath);
+  const openError = open ? await shell.openPath(filePath) : '';
   if (openError) {
     await dialog.showMessageBox(mainWindow, {
       type: 'warning', message: 'El PDF se guardó, pero no se pudo abrir automáticamente.',
