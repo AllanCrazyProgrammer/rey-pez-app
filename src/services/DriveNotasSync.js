@@ -34,12 +34,12 @@ export function responderReemplazoDrive(accepted) {
   const resolve = replacementResolver;
   replacementResolver = null;
   estadoDrive.replacementRequest = null;
-  if (resolve) resolve(accepted === 'keep' ? 'keep' : accepted === true);
+  if (resolve) resolve(accepted === true || accepted === 'keep' || accepted?.action === 'selected' ? accepted : false);
 }
 function confirmarReemplazos(files) {
   return new Promise(resolve => {
     replacementResolver = resolve;
-    estadoDrive.replacementRequest = files.map(({ note }) => ({ name: note.name, period: note.period }));
+    estadoDrive.replacementRequest = files.map(({ note }) => ({ uploadId: note.uploadId, name: note.name, period: note.period }));
   });
 }
 export async function agruparRespaldoDrive(work) {
@@ -280,16 +280,19 @@ export async function sincronizarNotasDrive({ interactive = false } = {}) {
       }
       const conflicts = prepared.filter(item => item.existing && !item.existing.sameNote);
       const decision = !conflicts.length || await confirmarReemplazos(conflicts);
-      const replace = decision === true;
+      const selectedIds = decision?.action === 'selected' && Array.isArray(decision.uploadIds) ? decision.uploadIds : [];
+      const replaceAll = decision === true;
       for (const item of prepared) {
-        if (!replace && item.existing && !item.existing.sameNote) {
+        const isConflict = item.existing && !item.existing.sameNote;
+        const replaceThis = !isConflict || replaceAll || selectedIds.includes(item.note.uploadId);
+        if (isConflict && !replaceThis) {
           if (item.ticket) await window.desktop.drive.discardPrepared(item.ticket);
-          await marcarReemplazoPendiente(item.note, decision === 'keep');
+          await marcarReemplazoPendiente(item.note, decision === 'keep' || decision?.action === 'selected');
           continue;
         }
         try {
           const result = isDesktop()
-            ? await window.desktop.drive.uploadPrepared({ ticket: item.ticket, replaceApproved: replace })
+            ? await window.desktop.drive.uploadPrepared({ ticket: item.ticket, replaceApproved: isConflict && replaceThis })
             : await uploadWebNote(item);
           if (!result?.uploaded || !result.fileId) throw new Error('Drive no confirmó la subida. El PDF sigue pendiente.');
           await acknowledgeNote(item.note);
