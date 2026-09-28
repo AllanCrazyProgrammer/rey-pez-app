@@ -667,7 +667,7 @@
 </template>
 
 <script>
-import pdfMake from 'pdfmake/build/pdfmake'
+import { crearDocumentoPedidoLimpio, crearPreviewPedidoLimpio } from '@/utils/pdf/pedidoLimpio'
 import moment from 'moment'
 import KilosRefrigeradosModal from '@/components/KilosRefrigeradosModal.vue'
 import ListaMedidasPedidoModal from '@/components/ListaMedidasPedidoModal.vue'
@@ -690,17 +690,6 @@ import { useUIStore } from '@/stores/ui'
 import { doc, updateDoc, Timestamp, collection, getDocs, query, where } from 'firebase/firestore'
 
 const PDF_PREVIEW_MODAL_ID = 'pedido-limpio-pdf-preview'
-
-const fonts = {
-  Roboto: {
-    normal: 'https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.1.66/fonts/Roboto/Roboto-Regular.ttf',
-    bold: 'https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.1.66/fonts/Roboto/Roboto-Medium.ttf',
-    italics: 'https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.1.66/fonts/Roboto/Roboto-Italic.ttf',
-    bolditalics: 'https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.1.66/fonts/Roboto/Roboto-MediumItalic.ttf'
-  }
-}
-
-pdfMake.fonts = fonts
 
 export default {
   name: 'PedidoLimpioImpresion',
@@ -1677,24 +1666,10 @@ export default {
     },
     generarPDF() {
       const docDefinition = this.construirDefinicionPDF();
-      pdfMake.createPdf(docDefinition).download('Ped-limpio-' + this.fecha + '.pdf');
+      crearDocumentoPedidoLimpio(docDefinition).download('Ped-limpio-' + this.fecha + '.pdf');
     },
     crearBlobPDF() {
-      return new Promise((resolve, reject) => {
-        try {
-          const pdfDocument = pdfMake.createPdf(this.construirDefinicionPDF());
-          pdfDocument._createDoc({}, (pdfKitDocument) => {
-            pdfDocument._flushDoc(pdfKitDocument, (buffer, pages) => {
-              resolve({
-                blob: pdfDocument._bufferToBlob(buffer),
-                pageCount: Math.max(1, Array.isArray(pages) ? pages.length : 1)
-              });
-            });
-          });
-        } catch (error) {
-          reject(error);
-        }
-      });
+      return crearPreviewPedidoLimpio(this.construirDefinicionPDF());
     },
     liberarPreviewPdfUrl() {
       if (this.pdfPreviewUrl) {
@@ -1708,6 +1683,7 @@ export default {
       this.generandoPreviewPdf = true;
       try {
         const { blob, pageCount } = await this.crearBlobPDF();
+        if (!this.mostrarPreviewPdf) return;
         this.liberarPreviewPdfUrl();
         this.pdfPreviewPageCount = pageCount;
         this.pdfPreviewUrl = URL.createObjectURL(blob);
