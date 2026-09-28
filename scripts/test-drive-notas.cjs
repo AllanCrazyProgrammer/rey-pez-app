@@ -179,7 +179,7 @@ test('web: Google authorization, folder selection, failed upload retained and ve
   const confirmations = [];
   const source = fs.readFileSync(path.join(__dirname, '../src/services/DriveNotasSync.js'), 'utf8')
     .replace(/import \{ uploadPdf \}[^\n]+\n/, 'const uploadPdf = injectedUploadPdf;\n')
-    .replace(/export /g, '') + '\nthis.api = { estadoDrive, encolarNotaDrive, conectarGoogleDrive, sincronizarNotasDrive };';
+    .replace(/export /g, '') + '\nthis.api = { estadoDrive, encolarNotaDrive, conectarGoogleDrive, sincronizarNotasDrive, responderReemplazoDrive, agruparRespaldoDrive };';
   class DocsView { setIncludeFolders() { return this; } setSelectFolderEnabled() { return this; } }
   class PickerBuilder {
     setDeveloperKey() { return this; } setAppId() { return this; } setOAuthToken() { return this; }
@@ -201,7 +201,7 @@ test('web: Google authorization, folder selection, failed upload retained and ve
       if (url.includes('/files/stored?')) return json({ id: 'stored', mimeType: 'application/pdf', size: String(pdf.length) });
       if (options.method === 'POST') return json({ id: 'child' });
       const q = new URL(url).searchParams.get('q') || '';
-      if (existing && q.includes('name =') && !q.includes('mimeType')) return json({ files: [{ id: 'stored', name: note.name }] });
+      if (existing && (q.includes(note.name) || q.includes('another.pdf')) && q.includes('name =') && !q.includes('mimeType')) return json({ files: [{ id: 'stored', name: note.name }] });
       return json({ files: [] });
     }
   });
@@ -219,13 +219,23 @@ test('web: Google authorization, folder selection, failed upload retained and ve
   existing = true;
   ctx.navigator.onLine = false;
   await ctx.api.encolarNotaDrive(note);
+  await ctx.api.encolarNotaDrive({ ...note, id: 'another', name: 'another.pdf' });
+  await ctx.api.encolarNotaDrive({ ...note, id: 'taras', name: 'Resumen-Taras.pdf' });
   ctx.navigator.onLine = true;
+  const declined = ctx.api.sincronizarNotasDrive();
+  for (let i = 0; !ctx.api.estadoDrive.replacementRequest && i < 100; i++) await new Promise(resolve => setTimeout(resolve, 2));
+  assert.equal(ctx.api.estadoDrive.replacementRequest.length, 2, 'one dialog lists both conflicts');
+  ctx.api.responderReemplazoDrive(false);
+  await declined;
+  assert.equal(uploads, 2, 'new taras uploads even when replacements are declined');
+  assert.equal(ctx.api.estadoDrive.pending, 2);
   await ctx.api.sincronizarNotasDrive();
-  assert.equal(uploads, 1, 'declining replacement does not upload');
-  assert.equal(ctx.api.estadoDrive.pending, 1, 'declined PDF remains pending');
-  assert.match(confirmations[0], /reemplazar/);
-  replace = true;
-  await ctx.api.sincronizarNotasDrive();
-  assert.equal(uploads, 2, 'accepted replacement uploads');
+  assert.equal(ctx.api.estadoDrive.replacementRequest, null, 'focus/online retry never repeats a declined prompt');
+  const accepted = ctx.api.sincronizarNotasDrive({ interactive: true });
+  for (let i = 0; !ctx.api.estadoDrive.replacementRequest && i < 100; i++) await new Promise(resolve => setTimeout(resolve, 2));
+  assert.equal(ctx.api.estadoDrive.replacementRequest.length, 2);
+  ctx.api.responderReemplazoDrive(true);
+  await accepted;
+  assert.equal(uploads, 4, 'one acceptance replaces both files');
   assert.equal(ctx.api.estadoDrive.pending, 0);
 });

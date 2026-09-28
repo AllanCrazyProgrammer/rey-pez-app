@@ -1,3 +1,4 @@
+import { nombreArchivoReporte, periodoNota } from './filename';
 import { obtenerBufferPdf } from './delivery';
 import { prepararGuardadoReporte, guardarYRespaldarReporte } from './reportDelivery';
 import pdfMake, { configurarPdfMake, estilosPdf, configuracionDocumento } from './config';
@@ -124,6 +125,7 @@ export const generarPDFRendimientos = async (
     }
 
     const data = await obtenerBufferPdf(pdfMake.createPdf(docDefinition));
+    if (destino.returnForDrive) return { name: nombreArchivoReporte('rendimientos', embarqueData), period: periodoNota(embarqueData), data };
     return await guardarYRespaldarReporte('rendimientos', embarqueData, data, destino);
   } catch (error) {
     console.error('Error al generar el PDF de rendimientos:', error);

@@ -2961,7 +2961,7 @@ export default {
       }
     },
 
-    async generarPDF() {
+    async generarPDF(options = {}) {
       const datosRendimientos = this.medidasUnicas
         .filter(medida => !this.medidaOculta[medida])
         .map(medida => {
@@ -3039,13 +3039,13 @@ export default {
       });
 
       try {
-        const destinoLocal = await prepararGuardadoReporte('rendimientos', embarqueDataConNota);
+        const destinoLocal = options.returnForDrive ? { returnForDrive: true } : await prepararGuardadoReporte('rendimientos', embarqueDataConNota);
         if (destinoLocal.canceled) return;
         const gruposListaMedidasDiaEmbarque = navigator.onLine
           ? await this.obtenerGruposListaMedidasPedidoDiaEmbarque()
           : null;
 
-        await generarPDFRendimientos(
+        return await generarPDFRendimientos(
           datosRendimientos,
           embarqueDataConNota,
           gananciasVisibles,
@@ -3058,6 +3058,7 @@ export default {
           destinoLocal
         );
       } catch (error) {
+        if (options.returnForDrive) throw error;
         console.error('[Rendimientos] No se pudo generar el PDF:', error);
         alert(error.message || 'No se pudo generar el PDF de rendimientos. Intenta de nuevo.');
       }

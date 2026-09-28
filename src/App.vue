@@ -10,6 +10,7 @@
     </div>
     <Footer v-if="mostrarFooter && !esArcade" />
 
+    <DriveBackupNotice v-if="!desktopApp" @open-settings="abrirOpcionesOffline" />
     <WebUpdateNotice v-if="!desktopApp" :before-update="guardarAntesDeActualizarWeb" />
     <dialog ref="offlineDialog" class="offline-dialog" aria-labelledby="offline-dialog-title">
       <header class="offline-dialog-header">
@@ -32,6 +33,7 @@
 </template>
 
 <script>
+import DriveBackupNotice from './components/DriveBackupNotice.vue';
 import WebUpdateNotice from './components/WebUpdateNotice.vue';
 import EmbarquesSync from './services/EmbarquesSync';
 import EmbarquesOfflineStatus from './components/EmbarquesOfflineStatus.vue';
@@ -44,6 +46,7 @@ export default {
   name: "app",
   components: {
     Navbar,
+    DriveBackupNotice,
     WebUpdateNotice,
     EmbarquesOfflineStatus,
     Footer

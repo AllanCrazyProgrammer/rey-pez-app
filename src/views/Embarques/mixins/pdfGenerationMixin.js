@@ -4,7 +4,9 @@ import { generarResumenTarasPDF } from "@/utils/pdf/resumenTaras";
 import { generarResumenEmbarquePDF } from "@/utils/pdf/resumenEmbarque";
 import { nombreArchivoNota, periodoNota } from '@/utils/pdf/filename';
 import { entregarPdf } from '@/utils/pdf/delivery';
-import { encolarNotaDrive, driveNotasDisponible } from '@/services/DriveNotasSync';
+import { generarRendimientosParaResumen } from '@/services/RendimientosReport';
+import { guardarYRespaldarReporte } from '@/utils/pdf/reportDelivery';
+import { encolarNotaDrive, driveNotasDisponible, agruparRespaldoDrive } from '@/services/DriveNotasSync';
 
 export default {
   methods: {
@@ -125,6 +127,10 @@ export default {
     },
 
     async generarPDFResumen(escala = 100) {
+      return agruparRespaldoDrive(() => this.generarPDFResumenCompleto(escala));
+    },
+
+    async generarPDFResumenCompleto(escala = 100) {
       // Obtener las medidas únicas de los crudos
       const medidasCrudos = new Set();
       Object.values(this.clienteCrudos).forEach((crudos) => {
@@ -159,13 +165,32 @@ export default {
       }
       await entregarPdf(resumen.pdf, resumen.name, 'download', resumen.data, resumen.period);
 
+      const fallosReportes = [];
+      const datosReportes = { ...this.embarque, id: embarqueId, clienteCrudos: this.clienteCrudos };
+      // Include clients with only crudos, and preserve the current editor values.
+      const idsReportes = new Set([...Object.keys(this.productosPorCliente || {}), ...Object.keys(this.clienteCrudos || {})]);
+      datosReportes.clientes = [...idsReportes].map(id => ({
+        id, nombre: this.obtenerNombreCliente(id),
+        productos: this.productosPorCliente?.[id] || [], crudos: this.clienteCrudos?.[id] || []
+      }));
+      for (const tipo of ['taras', 'rendimientos']) {
+        try {
+          const reporte = tipo === 'taras'
+            ? await generarResumenTarasPDF(datosReportes, this.clientesDisponibles, { returnForDrive: true })
+            : await generarRendimientosParaResumen(datosReportes);
+          await guardarYRespaldarReporte(tipo, datosReportes, reporte.data, { name: reporte.name });
+        } catch (error) {
+          fallosReportes.push(`${tipo}: ${error.message}`);
+        }
+      }
+
       if (driveNotasDisponible()) {
         const clientes = Array.isArray(this.clientesDisponibles) ? this.clientesDisponibles : [];
         const clientIds = new Set([
           ...Object.keys(this.productosPorCliente || {}).filter(id => (this.productosPorCliente[id] || []).length),
           ...Object.entries(this.clienteCrudos || {}).filter(([, crudos]) => Array.isArray(crudos) && crudos.length).map(([id]) => id)
         ]);
-        const fallos = [];
+        const fallos = [...fallosReportes];
         const periodo = periodoNota(this.embarque);
 
         for (const clienteId of clientIds) {
@@ -200,7 +225,7 @@ export default {
           }
         }
         if (fallos.length) {
-          throw new Error(`El resumen está listo, pero no se pudieron preparar las notas de: ${fallos.join(', ')}.`);
+          throw new Error(`El resumen está listo, pero no se pudieron preparar todos los PDF: ${fallos.join(', ')}.`);
         }
       }
     },

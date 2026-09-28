@@ -17,7 +17,7 @@
     <details v-if="driveAvailable" class="drive-archive" :open="!desktop">
       <summary>Notas y resúmenes en Google Drive <span v-if="driveStatus.connected">· {{ driveStatus.folderName }}</span><span v-else>· configurar respaldo</span></summary>
       <div class="drive-content">
-        <p>Al crear el resumen final se respaldan el resumen del embarque y un PDF por cliente. Los PDF de taras y rendimientos también se guardan localmente y se respaldan en Drive al generarlos. En Chrome puedes elegir dónde guardarlos y confirmar si reemplazas un archivo existente. En otros navegadores se descargan con el manejo de archivos del navegador. Cada PDF pendiente permanece en este equipo hasta confirmar su copia completa en Drive.</p>
+        <p>Al crear el resumen final se generan y respaldan el resumen del embarque, las notas por cliente, el resumen de taras y el reporte de rendimientos. Los tres reportes se guardan también en este equipo. Puedes generar taras y rendimientos por separado desde sus botones PDF. En Chrome puedes elegir dónde guardarlos y confirmar si reemplazas un archivo existente. En otros navegadores se descargan con el manejo de archivos del navegador. Cada PDF pendiente permanece en este equipo hasta confirmar su copia completa en Drive.</p>
         <p v-if="!driveStatus.connected" class="drive-notice">Falta conectar Google Drive y elegir la carpeta. Tener internet no inicia el respaldo hasta completar este paso.</p>
         <p v-else-if="driveStatus.needsAuth" class="drive-notice">Es necesario autorizar Google otra vez para continuar con las notas pendientes.</p>
         <p v-else>Carpeta conectada: <strong>{{ driveStatus.folderName }}</strong></p>
@@ -33,9 +33,10 @@
           <button v-if="driveStatus.connected" :disabled="driveBusy || driveStatus.syncing" @click="desconectarDrive">Desconectar</button>
         </div>
         <p v-if="driveBusy" role="status">Continúa en la ventana de Google: elige tu cuenta, autoriza ReyPez y selecciona la carpeta compartida Embarques.</p>
-        <p v-if="driveStatus.pending" class="drive-notice">{{ driveStatus.pending }} PDF pendiente(s) de respaldo en Drive. Su copia está guardada en este equipo.</p>
+        <p v-if="driveStatus.pending" class="drive-notice">{{ driveStatus.pending }} PDF pendiente(s) de respaldo en Drive. Su copia está guardada en este equipo. Pulsa «Subir PDF pendientes» para revisar los reemplazos pospuestos.</p>
         <p v-else-if="driveStatus.uploaded" class="drive-success" role="status">Todos los PDF pendientes se subieron y verificaron en Google Drive.</p>
         <p v-else>No hay PDF pendientes de subir desde este equipo.</p>
+        <ul v-if="driveStatus.pendingFiles.length" class="drive-pending-files"><li v-for="(file, index) in driveStatus.pendingFiles" :key="index">{{ file.name }}{{ file.deferred ? ' · reemplazo pospuesto' : '' }}</li></ul>
         <p v-if="driveStatus.lastUploadedName">Último PDF verificado: {{ driveStatus.lastUploadedName }}</p>
         <p v-if="driveStatus.error" class="drive-error" role="alert">{{ driveStatus.error }}</p>
         <small v-if="desktop">Selecciona la misma carpeta compartida en cada equipo. Después de conectar, la app abierta subirá las notas al recuperar internet.</small>
