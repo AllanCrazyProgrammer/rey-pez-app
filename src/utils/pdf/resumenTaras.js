@@ -1,5 +1,7 @@
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
+import { periodoNota } from './filename';
+import { prepararGuardadoReporte, guardarYRespaldarReporte } from './reportDelivery';
 
 // Agregar constantes para los colores de los clientes
 const COLORES_CLIENTES = {
@@ -10,7 +12,9 @@ const COLORES_CLIENTES = {
   'Lorena': '#e67e22'    // Naranja (Verónica/Lorena)
 };
 
-export function generarResumenTarasPDF(embarqueData, clientesDisponibles) {
+export async function generarResumenTarasPDF(embarqueData, clientesDisponibles) {
+  const destino = await prepararGuardadoReporte('taras', embarqueData);
+  if (destino.canceled) return destino;
   const doc = new jsPDF();
 
   // Configurar el título con el estilo de Rey Pez
@@ -21,9 +25,8 @@ export function generarResumenTarasPDF(embarqueData, clientesDisponibles) {
   // Fecha con nuevo estilo
   doc.setFontSize(18);
   doc.setTextColor(0, 0, 0);
-  const fechaEmbarque = new Date(embarqueData.fecha);
-  fechaEmbarque.setDate(fechaEmbarque.getDate() + 1);
-  const fecha = fechaEmbarque.toLocaleDateString();
+  const periodo = periodoNota(embarqueData);
+  const fecha = `${periodo.day}/${periodo.month}/${periodo.year}`;
   doc.text(`Fecha: ${fecha}`, 14, 30);
 
   // Agregar información de quién carga
@@ -80,7 +83,7 @@ export function generarResumenTarasPDF(embarqueData, clientesDisponibles) {
   });
 
   // Guardar el PDF
-  doc.save('resumen-taras.pdf');
+  return guardarYRespaldarReporte('taras', embarqueData, doc.output('arraybuffer'), destino);
 }
 
 function prepararDatosTabla(embarqueData, clientesDisponibles) {

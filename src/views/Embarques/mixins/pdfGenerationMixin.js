@@ -114,13 +114,14 @@ export default {
 
     async generarPDFTaras() {
       const embarqueData = {
+        id: this.embarqueId || this.embarque.id || this.$route?.params?.id,
         fecha: this.embarque.fecha,
         cargaCon: this.embarque.cargaCon,
         productos: this.embarque.productos,
         clienteCrudos: this.clienteCrudos,
       };
 
-      generarResumenTarasPDF(embarqueData, this.clientesDisponibles);
+      return await generarResumenTarasPDF(embarqueData, this.clientesDisponibles);
     },
 
     async generarPDFResumen(escala = 100) {

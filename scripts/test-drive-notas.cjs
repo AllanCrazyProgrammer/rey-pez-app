@@ -174,6 +174,9 @@ test('web: Google authorization, folder selection, failed upload retained and ve
   const storage = new Map();
   let fail = true;
   let uploads = 0;
+  let existing = false;
+  let replace = false;
+  const confirmations = [];
   const source = fs.readFileSync(path.join(__dirname, '../src/services/DriveNotasSync.js'), 'utf8')
     .replace(/import \{ uploadPdf \}[^\n]+\n/, 'const uploadPdf = injectedUploadPdf;\n')
     .replace(/export /g, '') + '\nthis.api = { estadoDrive, encolarNotaDrive, conectarGoogleDrive, sincronizarNotasDrive };';
@@ -187,16 +190,18 @@ test('web: Google authorization, folder selection, failed upload retained and ve
     injectedUploadPdf: uploadPdf, process: { env: { VUE_APP_GOOGLE_PICKER_API_KEY: 'qa-key' } }, indexedDB: new IDBFactory(),
     Uint8Array, TextDecoder, URL, URLSearchParams, AbortSignal, setTimeout,
     localStorage: { getItem: key => storage.get(key) || null, setItem: (key, value) => storage.set(key, value) }, navigator: { onLine: false },
-    window: { crypto, confirm: () => true, google: {
+    window: { crypto, confirm: message => { confirmations.push(message); return replace; }, google: {
       accounts: { oauth2: { initTokenClient: options => ({ ...options, requestAccessToken() { this.callback({ access_token: 'qa-token', expires_in: 3600 }); } }) } },
       picker: { DocsView, ViewId: { FOLDERS: 'folders' }, PickerBuilder, Action: { PICKED: 'picked', CANCEL: 'cancel' } }
     } },
     fetch: async (url, options = {}) => {
       if (url.includes('/files/root?')) return json({ id: 'root', name: 'Embarques', mimeType: 'application/vnd.google-apps.folder', capabilities: { canAddChildren: true } });
-      if (url.includes('/upload/drive/v3/files?')) return json({}, 200, { location: 'https://www.googleapis.com/upload/session/qa' });
+      if (url.includes('/upload/drive/v3/files')) return json({}, 200, { location: 'https://www.googleapis.com/upload/session/qa' });
       if (url.includes('/upload/session/')) { if (fail) throw new Error('QA network lost'); uploads++; return json({ id: 'stored' }); }
       if (url.includes('/files/stored?')) return json({ id: 'stored', mimeType: 'application/pdf', size: String(pdf.length) });
       if (options.method === 'POST') return json({ id: 'child' });
+      const q = new URL(url).searchParams.get('q') || '';
+      if (existing && q.includes('name =') && !q.includes('mimeType')) return json({ files: [{ id: 'stored', name: note.name }] });
       return json({ files: [] });
     }
   });
@@ -210,5 +215,17 @@ test('web: Google authorization, folder selection, failed upload retained and ve
   fail = false;
   await ctx.api.sincronizarNotasDrive();
   assert.equal(uploads, 1);
+  assert.equal(ctx.api.estadoDrive.pending, 0);
+  existing = true;
+  ctx.navigator.onLine = false;
+  await ctx.api.encolarNotaDrive(note);
+  ctx.navigator.onLine = true;
+  await ctx.api.sincronizarNotasDrive();
+  assert.equal(uploads, 1, 'declining replacement does not upload');
+  assert.equal(ctx.api.estadoDrive.pending, 1, 'declined PDF remains pending');
+  assert.match(confirmations[0], /reemplazar/);
+  replace = true;
+  await ctx.api.sincronizarNotasDrive();
+  assert.equal(uploads, 2, 'accepted replacement uploads');
   assert.equal(ctx.api.estadoDrive.pending, 0);
 });

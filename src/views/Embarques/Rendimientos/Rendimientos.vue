@@ -324,7 +324,7 @@ export default {
     };
     
     // Método para generar PDF
-    const generarPDF = () => {
+    const generarPDF = async () => {
       const datosRendimientos = medidasUnicas.value
         .filter(medida => !medidaOculta.value[medida])
         .map(medida => {
@@ -352,6 +352,7 @@ export default {
 
       const embarqueDataConNota = {
         ...embarqueData.value,
+        id: route.params.id || embarqueData.value.id,
         notaRendimientos: embarqueData.value?.notaRendimientos || '',
         mostrarColumnaCosto: true
       };
@@ -388,7 +389,8 @@ export default {
         }
       });
 
-      generarPDFRendimientos(
+      try {
+        await generarPDFRendimientos(
         datosRendimientos,
         embarqueDataConNota,
         gananciasVisibles,
@@ -397,7 +399,10 @@ export default {
         costosCrudos,
         configuracionPesos,
         gananciasVisiblesMaquila
-      );
+        );
+      } catch (error) {
+        alert(error.message || 'No se pudo guardar el PDF de rendimientos.');
+      }
     };
     
     // Métodos auxiliares para PDF

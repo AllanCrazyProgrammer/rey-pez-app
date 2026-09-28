@@ -35,3 +35,7 @@ export function nombreArchivoNota(embarque, clientes = []) {
   // Las notas muestran la fecha en UTC; el nombre debe usar el mismo día.
   return `${cliente}-${date.getUTCDate()}-${meses[date.getUTCMonth()]}-${String(date.getUTCFullYear()).slice(-2)}.pdf`;
 }
+
+export function nombreArchivoReporte(tipo, embarque) {
+  return nombreArchivoResumen(embarque).replace('Resumen-Embarque', tipo === 'taras' ? 'Resumen-Taras' : 'Rendimientos');
+}

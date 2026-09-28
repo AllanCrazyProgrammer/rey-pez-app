@@ -17,7 +17,7 @@
     "electron:local": "electron electron/main.js",
     "test:desktop-offline": "node scripts/test-desktop-offline.cjs",
     "test:embarques-transfer": "node scripts/test-embarques-transfer.cjs",
-    "test:drive-notas": "node --test scripts/test-drive-notas.cjs scripts/test-resumen-backup.cjs"
+    "test:drive-notas": "node --test scripts/test-drive-notas.cjs scripts/test-resumen-backup.cjs scripts/test-reportes-backup.cjs"
   },
   "dependencies": {
     "@capacitor/cli": "^6.1.2",

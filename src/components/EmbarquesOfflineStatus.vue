@@ -17,7 +17,7 @@
     <details v-if="driveAvailable" class="drive-archive" :open="!desktop">
       <summary>Notas y resúmenes en Google Drive <span v-if="driveStatus.connected">· {{ driveStatus.folderName }}</span><span v-else>· configurar respaldo</span></summary>
       <div class="drive-content">
-        <p>Al crear el resumen final se respaldan el resumen del embarque y un PDF por cliente. Cada archivo permanece en este equipo hasta confirmar su copia completa en Drive.</p>
+        <p>Al crear el resumen final se respaldan el resumen del embarque y un PDF por cliente. Los PDF de taras y rendimientos también se guardan localmente y se respaldan en Drive al generarlos. En Chrome puedes elegir dónde guardarlos y confirmar si reemplazas un archivo existente. En otros navegadores se descargan con el manejo de archivos del navegador. Cada PDF pendiente permanece en este equipo hasta confirmar su copia completa en Drive.</p>
         <p v-if="!driveStatus.connected" class="drive-notice">Falta conectar Google Drive y elegir la carpeta. Tener internet no inicia el respaldo hasta completar este paso.</p>
         <p v-else-if="driveStatus.needsAuth" class="drive-notice">Es necesario autorizar Google otra vez para continuar con las notas pendientes.</p>
         <p v-else>Carpeta conectada: <strong>{{ driveStatus.folderName }}</strong></p>

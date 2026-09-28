@@ -527,6 +527,7 @@
 import { getFirestore, doc, getDoc, updateDoc, collection, getDocs, query, where, orderBy } from 'firebase/firestore';
 import { debounce } from 'lodash';
 import { generarPDFRendimientos } from '@/utils/RendimientosPdf';
+import { prepararGuardadoReporte } from '@/utils/pdf/reportDelivery';
 import { normalizarGruposListaMedidasParaPdf } from '@/utils/pdf/sacadas';
 import MedidasParaHoyCards from '@/components/MedidasParaHoyCards.vue';
 import EmbarquesOfflineService from '@/services/EmbarquesOfflineService';
@@ -2992,6 +2993,7 @@ export default {
 
       const embarqueDataConNota = {
         ...this.embarqueData,
+        id: this.$route.params.id || this.embarqueData.id,
         notaRendimientos: this.embarqueData?.notaRendimientos || '',
         mostrarColumnaCosto: true // Siempre mostrar la columna de costos
       };
@@ -3037,6 +3039,8 @@ export default {
       });
 
       try {
+        const destinoLocal = await prepararGuardadoReporte('rendimientos', embarqueDataConNota);
+        if (destinoLocal.canceled) return;
         const gruposListaMedidasDiaEmbarque = navigator.onLine
           ? await this.obtenerGruposListaMedidasPedidoDiaEmbarque()
           : null;
@@ -3050,11 +3054,12 @@ export default {
           costosCrudos,
           configuracionPesos,
           gananciasVisiblesMaquila,
-          gruposListaMedidasDiaEmbarque
+          gruposListaMedidasDiaEmbarque,
+          destinoLocal
         );
       } catch (error) {
         console.error('[Rendimientos] No se pudo generar el PDF:', error);
-        alert('No se pudo generar el PDF de rendimientos. Intenta de nuevo.');
+        alert(error.message || 'No se pudo generar el PDF de rendimientos. Intenta de nuevo.');
       }
     },
 
