@@ -147,6 +147,11 @@
         <span class="icon">🦐</span>
         <span class="btn-text">MAREA ARCADE</span>
       </router-link>
+      <router-link to="/procesos/maria" class="btn-action btn-maria" aria-label="Maria: registro y control de horarios laborales">
+        <span class="btn-prefix">[13]</span>
+        <span class="icon">🕒</span>
+        <span class="btn-text">Maria</span>
+      </router-link>
     </div>
   </div>
 </template>
@@ -453,6 +458,9 @@ export default {
   background: #00ff41;
   box-shadow: 0 0 15px rgba(0, 255, 65, 0.5);
 }
+
+.btn-maria { border-color: #82e5c4; color: #82e5c4; text-transform: none; }
+.btn-maria:hover { background: #82e5c4; box-shadow: 0 0 15px #82e5c466; }
 
 /* Responsive */
 .btn-juegos { border-color: #f5bf75; color: #f5bf75; }

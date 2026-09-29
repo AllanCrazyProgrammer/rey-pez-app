@@ -7,6 +7,7 @@
     "start": "vue-cli-service serve",
     "build:web": "vue-cli-service build",
     "build": "vue-cli-service build && npx cap sync",
+    "test:maria": "node --test scripts/test-maria.cjs",
     "test:embarques-offline": "node scripts/test-embarques-offline.cjs",
     "lint": "vue-cli-service lint",
     "electron:dev": "node scripts/dev-desktop.cjs",

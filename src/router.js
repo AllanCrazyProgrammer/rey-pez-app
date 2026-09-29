@@ -383,6 +383,11 @@ const routes = [
     component: ProcesosMenu
   },
   {
+    path: '/procesos/maria',
+    name: 'Maria',
+    component: () => import(/* webpackChunkName: "maria" */ '@/views/Procesos/Maria.vue')
+  },
+  {
     path: '/procesos/arcade',
     name: 'MareaArcade',
     component: () => import(/* webpackChunkName: "marea-arcade" */ '@/views/Procesos/MareaArcade.vue')
