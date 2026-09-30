@@ -97,6 +97,8 @@ html, body { background: #080b08; }
 .rp-empty h2 { color: var(--rp-ink); }
 .rp-success { border: 1px solid var(--rp-teal); border-radius: 0; background: #082510; color: #bcffcd; }
 .rp-history-date { color: var(--rp-yellow); font-family: var(--rp-data); font-size: 17px; }
+.rp-history-actions { display: grid; gap: 10px; }
+.rp-future-date { display: flex; align-items: center; gap: 10px; margin-bottom: 18px !important; border-color: #a48c27; background: #231e09; color: #ffe98a; }
 .rp-history-date > .rp-icon:first-child { color: var(--rp-orange); }
 .rp-history-date > .rp-icon:last-child { color: var(--rp-yellow); }
 .rp-history-totals strong { color: var(--rp-teal); font-family: var(--rp-data); font-size: 30px; }

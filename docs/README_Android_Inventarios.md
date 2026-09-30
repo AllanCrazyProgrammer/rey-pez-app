@@ -26,6 +26,9 @@ y `ExistenciasCrudos.vue`. Conserva la configuración de Firebase y el acceso de
 - Salidas del día con la última captura primero dentro de cada apartado;
   el apartado que contiene la captura más reciente se muestra al inicio.
 - Accesos desde inventario al registro de hoy sin crear días duplicados.
+- En movimientos de limpios, «Registrar para mañana» abre Salidas con la fecha
+  del día siguiente en México. Reutiliza el registro de esa fecha si ya existe
+  y muestra la fecha futura en el editor; se guarda al terminar la captura.
 - Fechas de Timestamp convertidas al día del negocio en México; una fecha
   ausente o inválida muestra «Sin fecha» y nunca se sustituye por hoy.
 - Apariencia oscura con marcos naranja, verde neón y acentos amarillos;

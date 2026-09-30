@@ -43,7 +43,7 @@ async function run() {
   try {
     // Evitar artefactos de captura del compositor GPU de Chrome en macOS.
     browser = await chromium.launch({ headless: true, args: ['--disable-gpu'], executablePath: process.env.INVENTARIOS_CHROME_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' });
-    const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    const context = await browser.newContext({ viewport: { width: 390, height: 844 }, timezoneId: 'America/Monterrey' });
     await context.route('**/*', route => route.request().url().startsWith(base) ? route.continue() : route.abort());
     const page = await context.newPage();
     // Observar el audio real de Web Audio, sin reemplazar la síntesis ni el click.
@@ -131,6 +131,15 @@ async function run() {
     assert.match(fechasEspeciales[1], /16.*enero.*2024/);
     assert.deepEqual(fechasEspeciales.slice(2, 4), ['Sin fecha', 'Sin fecha']);
     assert.match(fechasEspeciales[4], /15.*enero.*2024/, 'La fecha debe conservar el día del negocio en México');
+    assert.deepEqual(await page.evaluate(() => [
+      window.__fechaSiguientePrueba('2026-09-30'),
+      window.__fechaSiguientePrueba('2026-12-31'),
+      window.__fechaSiguientePrueba('2024-02-28'),
+      window.__fechaSiguientePrueba('2024-02-29'),
+      window.__fechaSiguientePrueba('2026-02-28'),
+      window.__fechaSiguientePrueba(new Date('2027-01-01T03:00:00Z')),
+      window.__fechaSiguientePrueba(null)
+    ]), ['2026-10-01', '2027-01-01', '2024-02-29', '2024-03-01', '2026-03-01', '2027-01-01', null], 'Mañana respeta meses, años, años bisiestos y el día de México');
     await page.screenshot({ path: path.join(output, 'historial.png'), fullPage: true });
     await page.locator('.mobile-registros a').first().click();
     await page.locator('.rp-editor form').waitFor();
@@ -335,8 +344,60 @@ async function run() {
     await page.getByRole('form', { name: 'Capturar salida' }).waitFor();
     assert.equal(await page.getByRole('tab', { name: /Salida/ }).getAttribute('aria-selected'), 'true');
 
+    // Preparar mañana desde hoy, con un filtro histórico activo. Abrir la
+    // captura no escribe; guardar y volver reutiliza el mismo día futuro.
+    await page.getByRole('link', { name: 'Movimientos de limpios', exact: true }).click();
+    await page.getByRole('button', { name: 'Registrar para mañana', exact: true }).waitFor();
+    await page.screenshot({ path: path.join(output, 'movimientos-manana.png') });
+    const fechaManana = await page.evaluate(() => window.__fechaSiguientePrueba(new Date()));
+    const datosHoy = await page.evaluate(href => JSON.stringify(window.__inventariosPrueba.data.sacadas[href.split('/').at(-1)]), registroHoy);
+    const escriturasAntesManana = await page.evaluate(() => window.__inventariosPrueba.escrituras.length);
+    await page.getByLabel('Ver una fecha', { exact: true }).fill(fechaAnterior);
+    await page.getByRole('button', { name: 'Registrar para mañana', exact: true }).click();
+    await page.getByRole('form', { name: 'Capturar salida' }).waitFor();
+    assert.equal(await page.getByLabel('Fecha del registro', { exact: true }).inputValue(), fechaManana);
+    assert.match(page.url(), /sacadas\/new\?fecha=/);
+    assert.equal(await page.getByRole('tab', { name: /Salida/ }).getAttribute('aria-selected'), 'true');
+    assert.match(await page.locator('.rp-future-date').innerText(), /Registrando para el/);
+    assert.equal(await page.evaluate(() => window.__inventariosPrueba.escrituras.length), escriturasAntesManana, 'Abrir mañana no crea un registro vacío');
+    await page.screenshot({ path: path.join(output, 'captura-manana.png') });
+    const salidaManana = page.getByRole('form', { name: 'Capturar salida' });
+    await salidaManana.getByLabel('Proveedor', { exact: true }).selectOption('Proveedor prueba');
+    await salidaManana.getByLabel('Medida', { exact: true }).locator('option').filter({ hasText: '51/60' }).first().waitFor({ state: 'attached' });
+    await salidaManana.getByLabel('Medida', { exact: true }).selectOption({ index: 1 });
+    await salidaManana.getByLabel('Kilos', { exact: true }).fill('5');
+    await salidaManana.getByRole('button', { name: 'Agregar salida', exact: true }).click();
+    await page.getByRole('button', { name: 'Guardar cambios', exact: true }).click();
+    await page.getByRole('heading', { name: 'Movimientos de limpios' }).waitFor();
+    const registroManana = await page.locator('.mobile-registros a').first().getAttribute('href');
+    assert.equal(await page.locator('.rp-history-date time').first().getAttribute('datetime'), fechaManana);
+    await page.getByRole('button', { name: 'Registrar para mañana', exact: true }).click();
+    await page.getByRole('form', { name: 'Capturar salida' }).waitFor();
+    assert.ok(page.url().includes(registroManana + '?fecha=' + fechaManana), 'Volver a mañana abre el registro guardado');
+    assert.equal(await page.getByLabel('Fecha del registro', { exact: true }).inputValue(), fechaManana);
+    assert.equal(await page.locator('.rp-movement-items li').count(), 1);
+    const otraSalidaManana = page.getByRole('form', { name: 'Capturar salida' });
+    await otraSalidaManana.getByLabel('Proveedor', { exact: true }).selectOption('Proveedor prueba');
+    await otraSalidaManana.getByLabel('Medida', { exact: true }).locator('option').filter({ hasText: '51/60' }).first().waitFor({ state: 'attached' });
+    await otraSalidaManana.getByLabel('Medida', { exact: true }).selectOption({ index: 1 });
+    await otraSalidaManana.getByLabel('Kilos', { exact: true }).fill('7');
+    await otraSalidaManana.getByRole('button', { name: 'Agregar salida', exact: true }).click();
+    await page.getByRole('button', { name: 'Guardar cambios', exact: true }).click();
+    await page.getByRole('heading', { name: 'Movimientos de limpios' }).waitFor();
+    assert.equal(await page.locator('.mobile-registros a').first().getAttribute('href'), registroManana);
+    assert.equal(await page.evaluate(fecha => Object.values(window.__inventariosPrueba.data.sacadas).filter(r => window.__fechaRegistroPrueba(r.fecha) === fecha).length, fechaManana), 1, 'Las dos salidas de mañana comparten un solo registro');
+    assert.equal(await page.evaluate(href => window.__inventariosPrueba.data.sacadas[href.split('/').at(-1)].totalSalidas, registroManana), 12);
+    assert.equal(await page.evaluate(href => JSON.stringify(window.__inventariosPrueba.data.sacadas[href.split('/').at(-1)]), registroHoy), datosHoy, 'Registrar mañana conserva el día de hoy');
+    await page.getByRole('button', { name: 'Registrar para mañana', exact: true }).click();
+    await page.getByRole('form', { name: 'Capturar salida' }).waitFor();
+    await page.getByRole('tab', { name: 'Resumen', exact: true }).click();
+    assert.match(await page.locator('.rp-day-summary .rp-stock-hero').innerText(), /12\.0.*0\.60 cajas/s);
+    await page.screenshot({ path: path.join(output, 'resumen-manana.png') });
+
     await page.getByRole('link', { name: 'Inicio', exact: true }).click();
     await page.locator('.inventarios-acceso').nth(3).click();
+    await page.getByRole('heading', { name: 'Movimientos de crudos' }).waitFor();
+    assert.equal(await page.getByRole('button', { name: 'Registrar para mañana', exact: true }).count(), 0);
     await page.locator('.mobile-registros a').first().click();
     await page.locator('.rp-editor form').waitFor();
     assert.equal(await page.getByRole('tab', { name: /Salida/ }).getAttribute('aria-selected'), 'true', 'Abrir un día de crudos muestra Salidas');
@@ -372,7 +433,7 @@ async function run() {
     assert.equal(await page.getByRole('columnheader', { name: 'Taras', exact: true }).count(), 0);
     await page.screenshot({ path: path.join(output, 'crudos.png'), fullPage: true });
     const writes = await page.evaluate(() => window.__inventariosPrueba.escrituras);
-    assert.deepEqual(writes.map(w => w.collection), ['sacadas', 'sacadas', 'sacadas', 'existenciasCrudos', 'existenciasCrudos']);
+    assert.deepEqual(writes.map(w => w.collection), ['sacadas', 'sacadas', 'sacadas', 'sacadas', 'sacadas', 'existenciasCrudos', 'existenciasCrudos']);
     const reads = await page.evaluate(() => window.__inventariosPrueba.lecturas);
     assert.ok(!reads.includes('embarques'), 'Los inventarios no deben consultar rendimientos');
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth), false);
@@ -395,7 +456,7 @@ async function run() {
     assert.equal(await sinAudio.locator('.rp-sound-toggle').getAttribute('aria-pressed'), 'true', 'La app funciona si el dispositivo no tiene Web Audio');
     await sinAudio.close();
     assert.deepEqual(errors, []);
-    console.log('PASS: sonidos breves por control, silencio persistente, acceso, inventarios por medida, desglose de marcas/entradas, resumen diario de salidas, kilos/cajas, guardado compartido, cambios pendientes y recuperación de errores.');
+    console.log('PASS: captura para mañana sin duplicar días, sonidos breves por control, silencio persistente, acceso, inventarios por medida, desglose de marcas/entradas, resumen diario de salidas, kilos/cajas, guardado compartido, cambios pendientes y recuperación de errores.');
   } finally {
     if (browser) await browser.close();
     await new Promise(resolve => server.close(resolve));

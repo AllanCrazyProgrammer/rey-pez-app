@@ -52,9 +52,31 @@ export async function crearPdfPesadas(fecha, data) {
     import('pdfmake/build/pdfmake'), import('pdfmake/build/vfs_fonts')
   ]);
   const pdfMake = pdfModule.default || pdfModule;
-  const fonts = fontsModule.default || fontsModule;
-  pdfMake.vfs = fonts.pdfMake?.vfs || fonts.vfs || fonts;
-  const pdf = pdfMake.createPdf(definition);
-  const blob = await new Promise(resolve => pdf.getBlob(resolve));
+  const fontFiles = fontsModule.default || fontsModule;
+  const vfs = fontFiles.pdfMake?.vfs || fontFiles.vfs || fontFiles;
+  const fonts = {
+    Roboto: {
+      normal: 'Roboto-Regular.ttf',
+      bold: 'Roboto-Medium.ttf',
+      italics: 'Roboto-Italic.ttf',
+      bolditalics: 'Roboto-MediumItalic.ttf'
+    }
+  };
+  // Las fuentes pertenecen a este documento; otras pantallas pueden cambiar
+  // el VFS o las fuentes globales de pdfmake.
+  const pdf = pdfMake.createPdf(definition, undefined, fonts, vfs);
+  const blob = await new Promise((resolve, reject) => {
+    // getBlob pierde los errores de maquetación en su callback interno.
+    // El stream permite rechazarlos y quitar el estado de carga de la vista.
+    const stream = pdf.getStream();
+    const chunks = [];
+    stream.on('error', reject);
+    stream.on('data', chunk => chunks.push(chunk));
+    stream.on('end', () => {
+      try { resolve(new Blob(chunks, { type: 'application/pdf' })); }
+      catch (error) { reject(error); }
+    });
+    stream.end();
+  });
   return { pdf, blob };
 }

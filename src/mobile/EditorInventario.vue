@@ -5,6 +5,7 @@
     <p v-if="!isLoaded" class="rp-message" role="status">Cargando el registro…</p>
     <template v-else>
       <label class="rp-date-field">Fecha del registro<input type="date" v-model="selectedDate" @change="updateCurrentDate" :disabled="guardando" /></label>
+      <p v-if="fechaFutura" class="rp-message rp-future-date" role="status"><MobileIcon name="calendar" /><span>Registrando para el {{ mostrarFecha(selectedDate) }}.</span></p>
       <div class="rp-segment" role="tablist" aria-label="Tipo de movimiento">
         <button role="tab" :aria-selected="tab === 'entrada'" :class="{ selected: tab === 'entrada' }" @click="tab = 'entrada'"><MobileIcon name="in" />Entrada <span>{{ entradas.length }}</span></button>
         <button role="tab" :aria-selected="tab === 'salida'" :class="{ selected: tab === 'salida' }" @click="tab = 'salida'"><MobileIcon name="out" />Salida <span>{{ salidas.length }}</span></button>
@@ -77,12 +78,13 @@
 </template>
 <script>
 import MobileIcon from './MobileIcon.vue';
-import { mostrarFecha } from './fechas';
+import { fechaRegistro, mostrarFecha } from './fechas';
 import { agruparPorMedida, agruparPorProveedor, separarLimpios } from './medidas';
 export default {
   components: { MobileIcon },
   data() { return { tab: this.$route.query.tipo === 'entrada' ? 'entrada' : 'salida', cuartosBase: ['Cuarto 1', 'Cuarto 2', 'Cuarto 3', 'Cuarto 4', 'Cuarto 5', 'Aaron'] }; },
   computed: {
+    fechaFutura() { return this.esLimpio && fechaRegistro(this.selectedDate) > fechaRegistro(new Date()); },
     rutaHistorial() { return this.esLimpio ? '/sacadas' : '/movimientos-crudos'; },
     resumenSalidas() { return this.esLimpio ? agruparPorMedida(this.salidas) : []; },
     seccionesResumen() { return this.esLimpio ? separarLimpios(this.salidas, this.proveedores) : []; },

@@ -3,7 +3,10 @@
     <div class="rp-page-heading"><p class="rp-eyebrow">HISTORIAL</p><h1>Movimientos de {{ tipo }}</h1><p>Entradas y salidas, organizadas por día.</p></div>
     <SectionTabs :tipo="tipo" />
     <p v-if="$route.query.guardado" class="rp-success" role="status"><MobileIcon name="check" />Cambios guardados</p>
-    <router-link v-if="!cargando && !error" :to="destinoCaptura" class="rp-button rp-button-primary rp-full"><MobileIcon name="plus" />{{ fecha ? 'Registrar en esta fecha' : 'Registrar movimiento de hoy' }}</router-link>
+    <div v-if="!cargando && !error" class="rp-history-actions">
+      <router-link :to="destinoCaptura" class="rp-button rp-button-primary rp-full"><MobileIcon name="plus" />{{ fecha ? 'Registrar en esta fecha' : 'Registrar movimiento de hoy' }}</router-link>
+      <button v-if="esLimpio" type="button" class="rp-button rp-button-secondary rp-full" @click="registrarManana"><MobileIcon name="calendar" />Registrar para mañana</button>
+    </div>
     <div class="rp-history-filter"><label>Ver una fecha<input type="date" v-model="fecha" /></label><button v-if="fecha" class="rp-icon-button" @click="fecha = ''" aria-label="Limpiar fecha"><MobileIcon name="close" /></button></div>
     <div class="rp-list-heading"><span>{{ filtrados.length }} registros</span><span>Más recientes primero</span></div>
     <p v-if="cargando" class="rp-message" role="status">Cargando movimientos…</p>
@@ -25,7 +28,7 @@
 import { collection, onSnapshot } from 'firebase/firestore';
 import { db } from '@/firebase';
 import { formatNumber } from '@/utils/formatters';
-import { fechaRegistro, mostrarFecha } from './fechas';
+import { fechaRegistro, fechaSiguiente, mostrarFecha } from './fechas';
 import MobileIcon from './MobileIcon.vue';
 import SectionTabs from './SectionTabs.vue';
 export default {
@@ -35,13 +38,18 @@ export default {
     esLimpio() { return this.tipo === 'limpios'; },
     base() { return this.esLimpio ? '/sacadas' : '/existencias-crudos'; },
     fechaCaptura() { return this.fecha || fechaRegistro(new Date()); },
-    destinoCaptura() { const registro = this.registros.find(r => r.fechaISO === this.fechaCaptura); return { path: registro ? this.base + '/' + registro.id : this.base + '/new', query: { fecha: this.fechaCaptura, tipo: this.$route.query.capturar || 'salida' } }; },
+    destinoCaptura() { return this.destinoParaFecha(this.fechaCaptura, this.$route.query.capturar || 'salida'); },
     filtrados() { return this.registros.filter(r => !this.fecha || r.fechaISO === this.fecha); },
     visibles() { return this.filtrados.slice(0, this.limite); }
   },
   watch: { tipo() { this.fecha = ''; this.limite = 20; this.suscribir(); }, fecha() { this.limite = 20; } },
   methods: {
     mostrarFecha, formatNumber,
+    destinoParaFecha(fecha, tipo = 'salida') { const registro = this.registros.find(r => r.fechaISO === fecha); return { path: registro ? this.base + '/' + registro.id : this.base + '/new', query: { fecha, tipo } }; },
+    registrarManana() {
+      // Calcular al pulsar, aunque la app haya quedado abierta desde ayer.
+      this.$router.push(this.destinoParaFecha(fechaSiguiente(new Date())));
+    },
     suscribir() {
       if (this._unsubscribe) this._unsubscribe();
       this.cargando = true; this.error = '';
