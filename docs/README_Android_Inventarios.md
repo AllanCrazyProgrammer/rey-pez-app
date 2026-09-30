@@ -23,9 +23,16 @@ y `ExistenciasCrudos.vue`. Conserva la configuración de Firebase y el acceso de
 - Captura con pestañas Entrada/Salida, precio opcional y guardado fijo.
 - Abrir un día muestra Salidas por defecto; el acceso Entrada desde inventario
   abre directamente la captura de entradas.
+- Salidas del día con la última captura primero dentro de cada apartado;
+  el apartado que contiene la captura más reciente se muestra al inicio.
 - Accesos desde inventario al registro de hoy sin crear días duplicados.
 - Fechas de Timestamp convertidas al día del negocio en México; una fecha
   ausente o inválida muestra «Sin fecha» y nunca se sustituye por hoy.
+- Apariencia oscura con marcos naranja, verde neón y acentos amarillos;
+  tipografías Orbitron y Share Tech Mono incluidas en el APK, sin descargas.
+- Pulsos electrónicos breves al tocar botones, pestañas, accesos y desgloses.
+  Se generan localmente; el icono de altavoz permite silenciarlos y recuerda
+  la preferencia al volver a abrir la app. No suenan al escribir o desplazar.
 
 ## Compilar
 

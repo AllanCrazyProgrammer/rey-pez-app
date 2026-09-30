@@ -18,6 +18,9 @@ Acceso desde el menú de computadora y móvil: `/pesadas` (historial) y
 - Sacar cuentas incluye los pagos finales de las despicadoras y un pago aparte
   para la persona encargada de los baños ($1 por despicadora). Los billetes,
   monedas y el total del reporte de cuentas incluyen ambos conceptos.
+- En la app local, PRINT_REPORT guarda el PDF de cuentas y lo abre en el visor
+  del sistema para imprimir. No requiere ventanas emergentes. El reporte de
+  existencias de limpios utiliza el mismo flujo, en A4 horizontal.
 - La pantalla muestra total a pagar, pago promedio y la mejor despicadora
   (mayor pago final; en empate, mayor cantidad de kilos).
 - PDF carta vertical: fecha repetida, pagos netos y Baños al final. La descarga,
@@ -52,3 +55,5 @@ advertencia de salida. No hay migraciones ni cambios a préstamos o inventario.
   `PESADAS_CHROME_PATH` para usar instalaciones existentes. Genera capturas y PDF
   de prueba en la carpeta temporal que imprime al iniciar.
 - `npm run build:web`: compilación de producción.
+- `npm run test:desktop-print`: prueba la app empaquetada con un perfil aislado,
+  baños incluidos, PDF de cuentas, reporte de limpio y guardado nativo.

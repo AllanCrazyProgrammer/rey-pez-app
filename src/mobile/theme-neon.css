@@ -1,0 +1,145 @@
+/* Apariencia Android. Las pantallas conservan la distribución de mobile.css. */
+html, body { background: #080b08; }
+#inventarios-app {
+  --rp-ink: #e3f8e9; --rp-muted: #a5bcac; --rp-line: #2c4a34;
+  --rp-teal: #31ff5f; --rp-surface: #07120b; --rp-orange: #ff781f; --rp-yellow: #ffe34c;
+  --rp-display: 'Orbitron', Arial, sans-serif; --rp-data: 'Share Tech Mono', monospace;
+  color-scheme: dark;
+  background-color: #080b08;
+  background-image: repeating-linear-gradient(0deg, #ffffff02 0, #ffffff02 1px, transparent 1px, transparent 4px), linear-gradient(#ff781f06 1px, transparent 1px), linear-gradient(90deg, #ff781f06 1px, transparent 1px), radial-gradient(ellipse at 50% 0, #ff781f0c, transparent 65%);
+  background-size: auto, 32px 32px, 32px 32px, auto;
+}
+#inventarios-app h1, #inventarios-app h2 { font-family: var(--rp-display); }
+#inventarios-app h1 { color: var(--rp-orange); font-size: 25px; line-height: 1.35; letter-spacing: .01em; text-transform: uppercase; text-shadow: 0 0 14px #ff781f24; }
+#inventarios-app h2 { font-size: 16px; letter-spacing: .015em; }
+#inventarios-app :focus-visible { outline-color: var(--rp-yellow); }
+#inventarios-app button, #inventarios-app a, #inventarios-app input, #inventarios-app select { -webkit-tap-highlight-color: #ffe34c25; }
+#inventarios-app button:disabled { opacity: .65; box-shadow: none; text-shadow: none; }
+
+.mobile-header { background: #100d09; border-bottom: 1px solid var(--rp-orange); box-shadow: 0 4px 24px #ff781f12; padding-left: 18px; padding-right: 18px; }
+.mobile-brand { color: var(--rp-orange); font-family: var(--rp-display); font-size: 23px; letter-spacing: 1px; text-transform: uppercase; text-shadow: 0 0 12px #ff781f35; }
+.mobile-brand small { color: var(--rp-yellow); font-family: var(--rp-data); font-size: 11px; letter-spacing: 2px; text-shadow: none; }
+.rp-brand-mark { border: 1px solid var(--rp-orange); border-radius: 50%; background: #211208; color: var(--rp-orange); box-shadow: inset 0 0 14px #ff781f10; }
+.rp-logout { border: 1px solid #a94c1d; border-radius: 0; background: #1a1009; color: var(--rp-orange); font-family: var(--rp-data) !important; text-transform: uppercase; }
+.rp-header-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.rp-sound-toggle.rp-sound-on { border-color: var(--rp-teal); background: #0c210e; color: var(--rp-teal); }
+.mobile-nav { background: #100e08; border-top: 1px solid var(--rp-orange); box-shadow: 0 -4px 20px #ff781f0d; }
+.mobile-nav a { border: 1px solid transparent; border-radius: 0; color: var(--rp-orange); font-family: var(--rp-data); font-size: 13px; text-transform: uppercase; }
+.mobile-nav a.router-link-exact-active, .mobile-nav a.activo { border-color: var(--rp-yellow); background: #29220c; color: var(--rp-yellow); box-shadow: inset 0 -2px var(--rp-yellow), 0 0 12px #ffe34c10; }
+.mobile-offline { border-bottom: 1px solid var(--rp-yellow); background: #2b2108; color: #fff0a3; }
+.rp-eyebrow { color: var(--rp-yellow); font-family: var(--rp-data); font-size: 12px; letter-spacing: 1.2px; }
+.rp-page-heading p:not(.rp-eyebrow) { color: var(--rp-muted); }
+.rp-icon-button { border-color: var(--rp-orange); border-radius: 0; background: #191108; color: var(--rp-orange); }
+
+.rp-card, .inventarios-acceso, .rp-stock-hero, #inventarios-app .login-box, .rp-dialog { --rp-frame: var(--rp-teal); position: relative; border: 1px solid var(--rp-frame); border-radius: 0; background: var(--rp-surface); box-shadow: 0 0 18px #31ff5f0b; }
+.rp-card::before, .inventarios-acceso::before, .rp-stock-hero::before, #inventarios-app .login-box::before, .rp-dialog::before { content: ''; position: absolute; top: -1px; left: -1px; width: 11px; height: 11px; border-top: 2px solid var(--rp-frame); border-left: 2px solid var(--rp-frame); pointer-events: none; }
+.rp-card::after, .inventarios-acceso::after, .rp-stock-hero::after, #inventarios-app .login-box::after, .rp-dialog::after { content: ''; position: absolute; bottom: -1px; right: -1px; width: 11px; height: 11px; border-bottom: 2px solid var(--rp-frame); border-right: 2px solid var(--rp-frame); pointer-events: none; }
+.rp-section-tabs, .rp-segment { border: 1px solid #915022; border-radius: 0; background: #100e09; }
+.rp-section-tabs a { border: 1px solid transparent; border-radius: 0; color: var(--rp-orange); font-family: var(--rp-data); font-size: 16px; }
+.rp-section-tabs .router-link-exact-active { border-color: var(--rp-yellow); background: #211c08; color: var(--rp-yellow); box-shadow: inset 0 -2px var(--rp-yellow); }
+.rp-button { border-radius: 0; font-family: var(--rp-data); font-size: 17px; letter-spacing: .1px; }
+.rp-button-primary { border-color: var(--rp-teal); background: var(--rp-teal); color: #031408; box-shadow: 0 0 14px #31ff5f12; }
+.rp-button-primary:hover { background: #71ff8d; color: #031408; }
+.rp-button-secondary { border-color: var(--rp-orange); background: #171008; color: #ff9c51; }
+.rp-text-button { color: var(--rp-yellow); font-family: var(--rp-data) !important; font-size: 14px !important; }
+
+#inventarios-app label { color: #b6dcc0; font-family: var(--rp-data); font-size: 15px; font-weight: 400; }
+#inventarios-app input, #inventarios-app select { border-color: #42804e; border-radius: 0; background: #030b05; color: #e6ffec; font-family: Roboto, Arial, sans-serif; color-scheme: dark; }
+#inventarios-app input:focus, #inventarios-app select:focus { border-color: var(--rp-teal); }
+#inventarios-app input::placeholder { color: #92af9b; }
+#inventarios-app input:disabled, #inventarios-app select:disabled { opacity: .75; }
+.rp-search { border-color: #42804e; border-radius: 0; background: #07120b; color: var(--rp-teal) !important; }
+.rp-filters, .rp-optional { color: var(--rp-muted); }
+.rp-filter-dot { background: var(--rp-yellow); }
+
+.rp-stock-hero { padding: 22px; background: #07190b; }
+.rp-stock-hero > span { color: var(--rp-orange); font-family: var(--rp-data); font-size: 15px; text-transform: uppercase; }
+.rp-stock-hero > strong { color: var(--rp-teal); font-family: var(--rp-data); font-size: 46px; letter-spacing: 0; text-shadow: 0 0 15px #31ff5f22; }
+.rp-stock-hero small { color: #bcf7ca; }
+.rp-stock-hero > div { border-top-color: #31603a; color: #c2dfc9; font-family: var(--rp-data); font-size: 13px; }
+.rp-stock-raw { --rp-frame: var(--rp-orange); background: #161207; box-shadow: 0 0 18px #ff781f0b; }
+.rp-stock-raw > strong { color: var(--rp-yellow); text-shadow: 0 0 15px #ffe34c18; }
+.rp-stock-raw > div { border-top-color: #785026; }
+.rp-list-heading { color: var(--rp-muted); }
+.rp-list-heading h2 { color: var(--rp-orange); font-size: 15px !important; }
+.rp-list-heading > strong { color: var(--rp-teal); font-family: var(--rp-data); font-size: 18px; }
+.rp-stock-main h2, .rp-stock-main > strong, .rp-measure-main > strong, .rp-summary-row > div:first-child strong { color: #d9ffe2; font-family: var(--rp-data); }
+.rp-measure-main > strong { font-size: 28px; }
+.rp-provider, .rp-room, .rp-meta, .rp-stock-amount > span, .rp-measure-main > span { color: var(--rp-muted); }
+.rp-stock-amount strong, .rp-measure-heading .rp-stock-amount strong { color: var(--rp-teal); font-family: var(--rp-data); font-size: 29px; letter-spacing: 0; }
+.rp-stock-amount small { border: 1px solid #426029; border-radius: 0; background: #14200b; color: var(--rp-yellow); font-family: var(--rp-data); font-size: 12px; }
+.rp-measure-main .rp-measure-hint { color: var(--rp-teal); }
+.rp-measure-chevron { color: var(--rp-yellow); }
+.rp-measure-detail { background: #040e07; border-top-color: var(--rp-line); }
+.rp-stock-lot { border-top-color: var(--rp-line); }
+.rp-stock-lot .rp-stock-main > strong { font-family: Roboto, Arial, sans-serif; }
+.rp-stock-lot .rp-stock-amount strong { font-size: 24px; }
+.rp-stock-lot .rp-stock-amount small { font-size: 11px; }
+.rp-brand-heading h3 { color: var(--rp-orange); font-family: var(--rp-data); font-size: 18px; }
+.rp-brand-heading > span { color: var(--rp-teal); }
+.rp-origin-heading h2, .rp-origin-heading h3, .rp-origin-title { color: var(--rp-teal); font-family: var(--rp-display); }
+.rp-origin-heading h3 { font-size: 16px; }
+.rp-origin-total { color: var(--rp-teal); font-family: var(--rp-data); font-size: 17px; }
+.rp-origin-total > span { color: var(--rp-muted); font-size: 12px; }
+.rp-maquila-section > .rp-origin-heading { border-left-color: var(--rp-orange); }
+.rp-maquila-section > .rp-origin-heading h2, .rp-maquila-section > .rp-origin-heading h3, .rp-maquila-section .rp-origin-total { color: var(--rp-yellow); }
+.rp-maquila-section .rp-card { --rp-frame: #cf882d; box-shadow: 0 0 14px #ff781f09; }
+.rp-summary-heading h2 { color: var(--rp-teal); }
+.rp-summary-note { color: var(--rp-yellow); }
+.rp-summary-origins strong { color: var(--rp-orange); }
+.rp-summary-origins li > span:last-child { font-family: var(--rp-data); font-size: 15px; }
+.rp-summary-row > div:first-child strong { font-size: 26px; }
+
+.rp-message { border: 1px solid #427650; border-radius: 0; background: #101d13; color: #bed8c5; }
+.rp-error { border-color: #ff7a62; background: #2a110c; color: #ffb5a2; }
+.rp-empty { border-color: #5a805e; border-radius: 0; background: #07120bcf; }
+.rp-empty > .rp-icon { color: var(--rp-teal); }
+.rp-empty h2 { color: var(--rp-ink); }
+.rp-success { border: 1px solid var(--rp-teal); border-radius: 0; background: #082510; color: #bcffcd; }
+.rp-history-date { color: var(--rp-yellow); font-family: var(--rp-data); font-size: 17px; }
+.rp-history-date > .rp-icon:first-child { color: var(--rp-orange); }
+.rp-history-date > .rp-icon:last-child { color: var(--rp-yellow); }
+.rp-history-totals strong { color: var(--rp-teal); font-family: var(--rp-data); font-size: 30px; }
+.rp-history-totals > div:last-child strong { color: var(--rp-yellow); }
+.rp-history-foot > span { color: var(--rp-yellow); }
+.rp-back { color: #ffd27d; font-family: var(--rp-data); font-size: 15px; }
+.rp-segment button { border: 1px solid transparent; border-radius: 0; padding-left: 5px; padding-right: 5px; color: #b9cdbc; font-family: var(--rp-data) !important; font-size: 15px !important; }
+.rp-segment .selected { border-color: var(--rp-yellow); background: #27210a; color: var(--rp-yellow); box-shadow: inset 0 -2px var(--rp-yellow); }
+.rp-segment span { border-radius: 0; background: #23321b; color: #c5efcb; }
+.rp-capture h2 { color: var(--rp-teal); font-size: 15px !important; }
+.rp-type-icon { border: 1px solid var(--rp-teal); border-radius: 0; background: #122c14; color: var(--rp-teal); }
+.rp-type-icon.salida { border-color: var(--rp-orange); background: #291806; color: var(--rp-orange); }
+#inventarios-app .rp-quantity-grid input { background: #030b05 !important; color: var(--rp-teal); font-family: var(--rp-data); font-size: 30px !important; }
+.rp-field-hint { font-size: 11px; }
+.rp-available { border: 1px solid #487b31; border-radius: 0; background: #10260d; color: #d5f6cd; }
+.rp-available strong { color: var(--rp-yellow); }
+.rp-inline-error { color: #ffac91; }
+.rp-item-main > span:not(.rp-meta) { color: #ffc484; }
+.rp-item-amount strong { color: var(--rp-teal); font-family: var(--rp-data); font-size: 26px; }
+.rp-item-actions button, .rp-dialog-heading button { border: 1px solid #548162; border-radius: 0; background: #112018; color: #c4e1cc; }
+.rp-item-actions button:last-child { border-color: #cc694d; background: #26140c; color: #ffb090; }
+.rp-save-bar { background: #0f140d; border-top: 1px solid var(--rp-orange); border-bottom: 1px solid var(--rp-line); box-shadow: 0 -4px 20px #0009; }
+.rp-save-bar > div { font-family: var(--rp-data); }
+.rp-save-bar strong { color: var(--rp-yellow); font-size: 13px; }
+.rp-save-bar span { font-size: 12px; }
+.rp-save-bar button { font-size: 15px; }
+.rp-overlay { background: #020702e8; }
+.rp-dialog-heading h2 { color: var(--rp-teal); }
+
+.inventarios-acceso { background: #07170b; color: var(--rp-teal); }
+.inventarios-acceso strong { font-family: var(--rp-display); font-size: 15px; line-height: 1.5; }
+.inventarios-acceso > span:not(.rp-home-icon) { color: #b1cfb8; font-family: var(--rp-data); font-size: 14px; }
+.rp-home-icon { border: 1px solid var(--rp-teal); border-radius: 0; background: #0c270f; color: var(--rp-teal); }
+.rp-home-raw { --rp-frame: var(--rp-orange); background: #181207; color: var(--rp-yellow); box-shadow: 0 0 18px #ff781f0b; }
+.rp-home-raw .rp-home-icon { border-color: var(--rp-orange); background: #271a08; color: var(--rp-orange); }
+.rp-home-arrow { color: var(--rp-yellow); }
+.rp-home-note { color: #b4cebd; }
+#inventarios-app .login-container { background: transparent; }
+#inventarios-app .login-box { --rp-frame: var(--rp-orange); background: #07120b; box-shadow: 0 0 24px #ff781f10; }
+#inventarios-app .login-box h2 { color: var(--rp-orange); font-family: var(--rp-display); }
+#inventarios-app .login-button { border: 1px solid var(--rp-teal); border-radius: 0; background: var(--rp-teal); color: #031408; font-family: var(--rp-data); font-size: 18px; }
+#inventarios-app .login-button:hover { background: #71ff8d; }
+#inventarios-app .error-message { color: #ffad98; }
+@media (min-width: 650px) { .rp-save-bar { border-radius: 0; } }
+@media (max-width: 360px) { .rp-segment { gap: 2px; } .rp-segment button { font-size: 14px !important; } .rp-stock-amount strong { font-size: 26px; } .rp-save-bar button { font-size: 14px; } }
+@media (prefers-reduced-motion: reduce) { .rp-measure-chevron { transition: none; } }

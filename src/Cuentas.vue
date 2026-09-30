@@ -13,12 +13,13 @@
         <Calcular cantidad="$1" :datos="datos" @dataArray="procesarDatos" />
       </b-col>
       <b-col cols="12" class="mb-3">
-        <button @click="imprimirCuentas" class="btn-imprimir" :disabled="!tieneDatos">
+        <button @click="imprimirCuentas" class="btn-imprimir" :disabled="!tieneDatos || imprimiendo">
           <span class="btn-bracket">[</span>
           <span class="btn-icon">⎙</span>
           <span class="btn-text">PRINT_REPORT</span>
           <span class="btn-bracket">]</span>
         </button>
+        <p v-if="errorImpresion" role="alert">{{ errorImpresion }}</p>
       </b-col>
       <b-col cols="12" class="mb-3">
         <div ref="seccionImpresion" class="seccion-impresion">
@@ -73,6 +74,8 @@ export default {
   },
   data() {
     return {
+      imprimiendo: false,
+      errorImpresion: '',
       billetes: {
         ...(this.admitirDecimales ? { 0.5: 0, 0.2: 0, 0.1: 0 } : {}),
         500: 0,
@@ -115,7 +118,8 @@ export default {
     }
   },
   methods: {
-    imprimirCuentas() {
+    async imprimirCuentas() {
+      if (this.imprimiendo) return;
       const seccionImpresion = this.$refs.seccionImpresion;
       if (!seccionImpresion) {
         console.error('Sección de impresión no encontrada');
@@ -205,13 +209,7 @@ export default {
         </style>
       `;
 
-      const ventanaImpresion = window.open('', '_blank');
-      if (!ventanaImpresion) {
-        console.error('No se pudo abrir la ventana de impresión');
-        return;
-      }
-
-      ventanaImpresion.document.write(`
+      const html = `
         <!DOCTYPE html>
         <html>
           <head>
@@ -225,7 +223,25 @@ export default {
             </div>
           </body>
         </html>
-      `);
+      `;
+
+      this.errorImpresion = '';
+      if (window.desktop) {
+        this.imprimiendo = true;
+        try {
+          if (!window.desktop.printHtml) throw new Error('Actualiza la app local para imprimir las cuentas.');
+          await window.desktop.printHtml(html, `cuentas-${this.fecha || new Date().toLocaleDateString('en-CA')}.pdf`);
+        } catch (error) {
+          this.errorImpresion = `No se pudo preparar la impresión: ${error.message}`;
+        } finally { this.imprimiendo = false; }
+        return;
+      }
+      const ventanaImpresion = window.open('', '_blank');
+      if (!ventanaImpresion) {
+        this.errorImpresion = 'Permite las ventanas emergentes para imprimir las cuentas.';
+        return;
+      }
+      ventanaImpresion.document.write(html);
 
       ventanaImpresion.document.close();
       ventanaImpresion.focus();

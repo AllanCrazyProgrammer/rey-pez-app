@@ -4,6 +4,7 @@ let savedForClose = false;
 contextBridge.exposeInMainWorld('desktop', {
   platform: process.platform,
   savePdf: (bytes, filename, notePeriod, options = {}) => ipcRenderer.invoke('desktop:save-pdf', { bytes, filename, notePeriod, open: options.open !== false }),
+  printHtml: (html, filename, options = {}) => ipcRenderer.invoke('desktop:print-html', { html, filename, landscape: options.landscape === true }),
   drive: {
     status: () => ipcRenderer.invoke('drive:status'),
     connect: clientId => ipcRenderer.invoke('drive:connect', clientId),

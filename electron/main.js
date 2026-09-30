@@ -3,6 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const { pathToFileURL } = require('url');
 const { initGoogleDrive } = require('./googleDrive');
+const { renderHtmlPdf } = require('./printHtml');
 
 // A separate profile supports isolated QA without touching real shipments.
 const profile = app.commandLine.getSwitchValue('user-data-dir');
@@ -22,7 +23,7 @@ function isExternal(url) {
   catch (_) { return false; }
 }
 
-ipcMain.handle('desktop:save-pdf', async (event, { bytes, filename, notePeriod, open = true } = {}) => {
+async function savePdf(event, { bytes, filename, notePeriod, open = true } = {}) {
   if (!mainWindow || event.sender !== mainWindow.webContents || event.senderFrame !== event.sender.mainFrame) {
     throw new Error('Solicitud de PDF no autorizada.');
   }
@@ -63,6 +64,14 @@ ipcMain.handle('desktop:save-pdf', async (event, { bytes, filename, notePeriod, 
     });
   }
   return { canceled: false, filePath };
+}
+ipcMain.handle('desktop:save-pdf', savePdf);
+ipcMain.handle('desktop:print-html', async (event, { html, filename, landscape = false } = {}) => {
+  if (!mainWindow || event.sender !== mainWindow.webContents || event.senderFrame !== event.sender.mainFrame) {
+    throw new Error('Solicitud de impresión no autorizada.');
+  }
+  const bytes = await renderHtmlPdf(BrowserWindow, html, { landscape, tempPath: app.getPath('temp') });
+  return savePdf(event, { bytes: new Uint8Array(bytes), filename });
 });
 
 function createMainWindow() {

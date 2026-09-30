@@ -22,6 +22,8 @@ const icons = {
   check: ['m4 12 5 5L20 6'],
   close: ['m6 6 12 12', 'm6 18 12-12'],
   refresh: ['M20 7V2l-4 4', 'M20 7a9 9 0 1 0 1 8'],
+  volume: ['M11 4 6 8H3v8h3l5 4Z', 'M15 8a6 6 0 0 1 0 8', 'M18 5a10 10 0 0 1 0 14'],
+  muted: ['M11 4 6 8H3v8h3l5 4Z', 'm16 9 5 6', 'm21 9-5 6'],
   clock: ['M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0', 'M12 7v5l3 2']
 };
 export default { props: { name: String }, computed: { paths() { return icons[this.name] || icons.box; } } };

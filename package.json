@@ -1,6 +1,6 @@
 {
   "name": "rey-pez",
-  "version": "0.3.16",
+  "version": "0.3.17",
   "private": true,
   "main": "electron/main.js",
   "scripts": {
@@ -17,6 +17,7 @@
     "electron:win": "node scripts/build-desktop.cjs --win --x64",
     "electron:local": "electron electron/main.js",
     "test:desktop-offline": "node scripts/test-desktop-offline.cjs",
+    "test:desktop-print": "node scripts/test-desktop-print.cjs",
     "test:embarques-transfer": "node scripts/test-embarques-transfer.cjs",
     "test:drive-notas": "node --test scripts/test-drive-notas.cjs scripts/test-resumen-backup.cjs scripts/test-reportes-backup.cjs scripts/test-rendimientos-report.cjs",
     "build:android:web": "VUE_APP_TARGET=android vue-cli-service build",
@@ -89,7 +90,7 @@
     "appId": "com.reypez.desktop",
     "productName": "ReyPez",
     "directories": {
-      "output": "release/offline-0.3.16"
+      "output": "release/offline-0.3.17"
     },
     "files": [
       "desktop-dist/**/*",

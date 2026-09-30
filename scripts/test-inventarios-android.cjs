@@ -33,17 +33,37 @@ async function run() {
   const server = http.createServer((req, res) => {
     const requested = path.join(output, decodeURIComponent(req.url.split('?')[0]));
     const file = fs.existsSync(requested) && fs.statSync(requested).isFile() ? requested : path.join(output, 'index.html');
-    res.setHeader('Content-Type', file.endsWith('.js') ? 'application/javascript' : file.endsWith('.png') ? 'image/png' : 'text/html');
+    const types = { '.js': 'application/javascript', '.png': 'image/png', '.woff2': 'font/woff2', '.woff': 'font/woff', '.ttf': 'font/ttf', '.html': 'text/html' };
+    res.setHeader('Content-Type', types[path.extname(file)] || 'application/octet-stream');
     res.end(fs.readFileSync(file));
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const base = `http://127.0.0.1:${server.address().port}`;
   let browser;
   try {
-    browser = await chromium.launch({ headless: true, executablePath: process.env.INVENTARIOS_CHROME_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' });
+    // Evitar artefactos de captura del compositor GPU de Chrome en macOS.
+    browser = await chromium.launch({ headless: true, args: ['--disable-gpu'], executablePath: process.env.INVENTARIOS_CHROME_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' });
     const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
     await context.route('**/*', route => route.request().url().startsWith(base) ? route.continue() : route.abort());
     const page = await context.newPage();
+    // Observar el audio real de Web Audio, sin reemplazar la síntesis ni el click.
+    await page.addInitScript(() => {
+      const AudioOriginal = window.AudioContext;
+      window.__audioPrueba = { contextos: 0, reproducciones: [] };
+      window.AudioContext = class extends AudioOriginal {
+        constructor(...args) { super(...args); window.__audioPrueba.contextos++; window.__contextoPrueba = this; }
+        createBufferSource() {
+          const fuente = super.createBufferSource();
+          const iniciar = fuente.start.bind(fuente);
+          fuente.start = (...args) => {
+            const datos = fuente.buffer.getChannelData(0);
+            window.__audioPrueba.reproducciones.push({ duracion: fuente.buffer.duration, pico: datos.reduce((max, valor) => Math.max(max, Math.abs(valor)), 0), inicio: this.currentTime });
+            return iniciar(...args);
+          };
+          return fuente;
+        }
+      };
+    });
     const errors = []; const dialogs = []; let aceptarSalida = true;
     page.on('pageerror', error => errors.push(error.message));
     page.on('dialog', async dialog => {
@@ -53,15 +73,45 @@ async function run() {
     await page.goto(base + '/#/existencias');
     await page.getByRole('heading', { name: 'Iniciar Sesión' }).waitFor();
     assert.match(page.url(), /#\/login$/);
+    await page.evaluate(() => document.fonts.ready);
+    assert.equal(await page.evaluate(() => document.fonts.check('700 16px Orbitron') && document.fonts.check('16px "Share Tech Mono"')), true, 'Las fuentes del tema deben cargar desde archivos locales');
+    assert.equal(await page.evaluate(() => window.__audioPrueba.contextos), 0, 'No debe sonar ni crear audio al iniciar');
+    await page.screenshot({ path: path.join(output, 'acceso-neon.png'), fullPage: true });
     await page.getByLabel('Usuario:', { exact: true }).fill('allan');
     // Usar el acceso existente sin publicar la contraseña en el resultado.
     const authSource = fs.readFileSync(path.join(root, 'src/stores/auth.js'), 'utf8');
     const password = authSource.match(/username: 'allan', password: '([^']+)'/)[1];
     await page.getByLabel('Contraseña:', { exact: true }).fill(password);
+    assert.equal(await page.evaluate(() => window.__audioPrueba.contextos), 0, 'Escribir en campos no genera sonidos');
     await page.getByRole('button', { name: 'Iniciar Sesión', exact: true }).click();
     await page.getByRole('heading', { name: /Todo tu inventario/ }).waitFor();
+    await page.waitForFunction(() => window.__contextoPrueba?.state === 'running');
+    const primerAudio = await page.evaluate(() => window.__audioPrueba);
+    assert.equal(primerAudio.contextos, 1);
+    assert.equal(primerAudio.reproducciones.length, 1, 'Un botón genera un solo sonido');
+    assert.ok(primerAudio.reproducciones[0].pico > 0.01 && primerAudio.reproducciones[0].duracion < 0.15, 'El pulso contiene audio y es breve');
+    await page.getByRole('button', { name: 'Silenciar sonidos', exact: true }).click();
+    assert.equal(await page.locator('.rp-sound-toggle').getAttribute('aria-pressed'), 'false');
+    assert.equal(await page.evaluate(() => window.__audioPrueba.reproducciones.length), 1, 'Silenciar no reproduce un último sonido');
+    await page.reload();
+    await page.getByRole('heading', { name: /Todo tu inventario/ }).waitFor();
+    assert.equal(await page.locator('.rp-sound-toggle').getAttribute('aria-pressed'), 'false', 'La preferencia persiste al reabrir');
+    await page.getByRole('link', { name: 'Inicio', exact: true }).locator('svg').click();
+    assert.equal(await page.evaluate(() => window.__audioPrueba.contextos), 0, 'Los controles silenciados no crean audio');
+    await page.getByRole('button', { name: 'Activar sonidos', exact: true }).click();
+    await page.waitForFunction(() => window.__contextoPrueba?.state === 'running' && window.__contextoPrueba.currentTime > window.__audioPrueba.reproducciones.at(-1).inicio + 0.15);
+    await page.getByRole('link', { name: 'Inicio', exact: true }).locator('svg').click();
+    assert.equal(await page.evaluate(() => window.__audioPrueba.reproducciones.length), 2, 'Tocar el icono del acceso también suena una sola vez');
+    assert.ok(await page.evaluate(() => window.__audioPrueba.reproducciones.at(-1).duracion < 0.08), 'La navegación utiliza un pulso más corto');
+    await page.waitForFunction(() => window.__contextoPrueba.currentTime > window.__audioPrueba.reproducciones.at(-1).inicio + 0.1);
+    await page.getByRole('link', { name: 'Inicio', exact: true }).focus();
+    await page.keyboard.press('Enter');
+    assert.equal(await page.evaluate(() => window.__audioPrueba.reproducciones.length), 3, 'La activación por teclado también emite un solo sonido');
     assert.equal(await page.locator('.inventarios-acceso').count(), 4);
     await page.screenshot({ path: path.join(output, 'inicio.png'), fullPage: true });
+    await page.setViewportSize({ width: 360, height: 800 });
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth), false);
+    await page.setViewportSize({ width: 390, height: 844 });
 
     await page.locator('.inventarios-acceso').nth(1).click();
     await page.locator('.rp-history-date time').first().waitFor();
@@ -84,6 +134,9 @@ async function run() {
     await page.screenshot({ path: path.join(output, 'historial.png'), fullPage: true });
     await page.locator('.mobile-registros a').first().click();
     await page.locator('.rp-editor form').waitFor();
+    const sonidosAntesDeshabilitado = await page.evaluate(() => window.__audioPrueba.reproducciones.length);
+    await page.locator('.rp-save-button').click({ force: true });
+    assert.equal(await page.evaluate(() => window.__audioPrueba.reproducciones.length), sonidosAntesDeshabilitado, 'Los botones deshabilitados no suenan');
     assert.equal(await page.locator('.auditoria-section').count(), 0);
     assert.equal(await page.getByRole('tab', { name: /Salida/ }).getAttribute('aria-selected'), 'true', 'Abrir un día de limpios muestra Salidas');
     assert.equal(await page.locator('.rp-movement-items li').count(), 0);
@@ -92,6 +145,10 @@ async function run() {
     assert.equal(await page.locator('.rp-summary-row').count(), 0);
     await page.getByRole('tab', { name: /Entrada/ }).click();
     assert.equal(await page.locator('.rp-movement-items li').count(), 1);
+    await page.getByRole('button', { name: 'Editar entrada de 51/60', exact: true }).click();
+    await page.getByRole('dialog', { name: 'Editar entrada', exact: true }).waitFor();
+    await page.screenshot({ path: path.join(output, 'edicion-neon.png') });
+    await page.getByRole('button', { name: 'Cancelar', exact: true }).click();
     const entrada = page.getByRole('form', { name: 'Capturar entrada' });
     await entrada.getByLabel('Proveedor', { exact: true }).selectOption({ label: 'Proveedor prueba' });
     await entrada.getByLabel('Medida', { exact: true }).selectOption({ label: '51/60' });
@@ -176,6 +233,7 @@ async function run() {
     assert.equal(await page.locator('.rp-maquila-section').count(), 4);
     assert.doesNotMatch(await stockProveedores.innerText(), /Ozuna|Joselito|Taller registro|Maquila prueba/);
     await page.screenshot({ path: path.join(output, 'medidas-totales.png'), fullPage: true });
+    await page.screenshot({ path: path.join(output, 'inventario-neon.png') });
     await medida4150.locator('summary').click();
     assert.equal(await medida4150.locator('.rp-stock-lot').count(), 3);
     const marcaA = medida4150.getByRole('region', { name: 'Entradas de Marca A', exact: true });
@@ -213,12 +271,33 @@ async function run() {
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth), false);
     await page.screenshot({ path: path.join(output, 'resumen-salidas.png'), fullPage: true });
     await page.getByRole('tab', { name: /Salida/ }).click();
+    await page.screenshot({ path: path.join(output, 'salidas-neon.png') });
+    assert.deepEqual(await page.locator('.rp-movement-section').evaluateAll(secciones => secciones.map(seccion => seccion.getAttribute('aria-label'))), [
+      'Movimientos de Taller registro', 'Movimientos de Joselito', 'Movimientos de Ozuna', 'Movimientos de Maquila prueba', 'Movimientos de proveedores'
+    ], 'El apartado con la salida más reciente aparece primero');
+    assert.deepEqual(await page.getByRole('region', { name: 'Movimientos de proveedores', exact: true }).locator('.rp-item-main > span:not(.rp-meta)').allTextContents(), [
+      'Proveedor: Marca B', 'Proveedor: Marca A', 'Proveedor: Proveedor prueba'
+    ], 'Las salidas guardadas se muestran desde la última captura a la primera');
+    assert.deepEqual(await page.evaluate(() => window.__inventariosPrueba.data.sacadas.limpio1.salidas.map(salida => salida.proveedor.trim())), [
+      'Proveedor prueba', 'Marca A', 'Marca B', 'Maquila prueba', 'Ozuna', 'Joselito', 'Taller registro'
+    ], 'Consultar las salidas no cambia su orden en los datos originales');
     assert.match(await page.getByRole('region', { name: 'Movimientos de proveedores', exact: true }).innerText(), /Proveedor: Marca A/);
     assert.match(await page.getByRole('region', { name: 'Movimientos de Ozuna', exact: true }).innerText(), /Maquila:.*Ozuna/);
     await page.getByLabel('Origen', { exact: true }).selectOption('maquila');
     await page.getByLabel('Maquila', { exact: true }).waitFor();
     assert.equal(await page.getByLabel('Proveedor', { exact: true }).count(), 0);
     await page.getByLabel('Origen', { exact: true }).selectOption('proveedor');
+    const nuevaSalida = page.getByRole('form', { name: 'Capturar salida' });
+    await nuevaSalida.getByLabel('Proveedor', { exact: true }).selectOption('Proveedor prueba');
+    await nuevaSalida.getByLabel('Medida', { exact: true }).locator('option').filter({ hasText: '51/60' }).first().waitFor({ state: 'attached' });
+    await nuevaSalida.getByLabel('Medida', { exact: true }).selectOption({ index: 1 });
+    await nuevaSalida.getByLabel('Kilos', { exact: true }).fill('3');
+    await nuevaSalida.getByRole('button', { name: 'Agregar salida', exact: true }).click();
+    assert.equal(await page.locator('.rp-movement-section').first().getAttribute('aria-label'), 'Movimientos de proveedores');
+    assert.match(await page.locator('.rp-movement-items .rp-item-amount').first().innerText(), /3\.0 kg/);
+    await page.locator('.rp-movement-items li').first().getByRole('button', { name: 'Eliminar salida de 51/60', exact: true }).click();
+    await page.waitForFunction(() => document.querySelector('.rp-movement-section')?.getAttribute('aria-label') === 'Movimientos de Taller registro');
+    assert.equal(await page.locator('.rp-movement-items li').count(), 7, 'Eliminar la nueva salida conserva las salidas anteriores');
     await page.getByRole('button', { name: 'Eliminar salida de 41/50 2da', exact: true }).click();
     await page.getByRole('tab', { name: 'Resumen', exact: true }).click();
     assert.match(await page.locator('.rp-day-summary .rp-stock-hero').innerText(), /42\.0.*2\.10 cajas/s);
@@ -306,8 +385,17 @@ async function run() {
     await page.locator('.mobile-registros').waitFor();
     await page.getByRole('button', { name: 'Salir', exact: true }).click();
     await page.getByRole('heading', { name: 'Iniciar Sesión' }).waitFor();
+    const sinAudio = await context.newPage();
+    await sinAudio.addInitScript(() => { window.AudioContext = undefined; window.webkitAudioContext = undefined; });
+    sinAudio.on('pageerror', error => errors.push(error.message));
+    await sinAudio.goto(base);
+    await sinAudio.getByRole('heading', { name: 'Iniciar Sesión' }).waitFor();
+    await sinAudio.getByRole('button', { name: 'Silenciar sonidos', exact: true }).click();
+    await sinAudio.getByRole('button', { name: 'Activar sonidos', exact: true }).click();
+    assert.equal(await sinAudio.locator('.rp-sound-toggle').getAttribute('aria-pressed'), 'true', 'La app funciona si el dispositivo no tiene Web Audio');
+    await sinAudio.close();
     assert.deepEqual(errors, []);
-    console.log('PASS: acceso, inventarios por medida, desglose de marcas/entradas, resumen diario de salidas, kilos/cajas, guardado compartido, cambios pendientes y recuperación de errores.');
+    console.log('PASS: sonidos breves por control, silencio persistente, acceso, inventarios por medida, desglose de marcas/entradas, resumen diario de salidas, kilos/cajas, guardado compartido, cambios pendientes y recuperación de errores.');
   } finally {
     if (browser) await browser.close();
     await new Promise(resolve => server.close(resolve));

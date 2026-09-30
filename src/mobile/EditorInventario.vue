@@ -49,6 +49,7 @@
         <p class="rp-form-note">Se agregará al registro. Guarda los cambios al terminar.</p>
       </form>
       <div class="rp-list-heading"><h2>{{ tab === 'entrada' ? 'Entradas del día' : 'Salidas del día' }}</h2><strong>{{ formatNumber(tab === 'entrada' ? totalEntradas : totalSalidas, 1) }} kg</strong></div>
+      <p v-if="tab === 'salida' && renglones.length" class="rp-meta">Más recientes primero en cada apartado.</p>
       <p v-if="!renglones.length" class="rp-empty-small">Todavía no hay {{ tab === 'entrada' ? 'entradas' : 'salidas' }} para este día.</p>
       <section v-for="seccion in seccionesRenglones" :key="seccion.key" class="rp-movement-section" :class="{ 'rp-maquila-section': esLimpio && seccion.tipo === 'maquila' }" :aria-label="esLimpio ? (seccion.tipo === 'maquila' ? 'Movimientos de ' + seccion.nombre : 'Movimientos de proveedores') : 'Movimientos del día'">
       <div v-if="esLimpio" class="rp-origin-heading"><h2>{{ seccion.tipo === 'maquila' ? 'Maquila: ' + seccion.nombre : 'Proveedores' }}</h2><strong>{{ formatNumber(seccion.kilos, 1) }} kg</strong></div>
@@ -90,7 +91,15 @@ export default {
     modelo() { return this.tab === 'entrada' ? this.newEntrada : this.newSalida; },
     campoProducto() { return this.esLimpio ? 'medida' : 'producto'; },
     renglones() { return this.tab === 'entrada' ? this.entradas : this.salidas; },
-    seccionesRenglones() { const items = this.renglones.map((item, indice) => ({ ...item, indice })); return this.esLimpio ? separarLimpios(items, this.proveedores) : [{ key: 'crudos', items }]; },
+    seccionesRenglones() {
+      const items = this.renglones.map((item, indice) => ({ ...item, indice }));
+      const secciones = this.esLimpio ? separarLimpios(items, this.proveedores) : [{ key: 'crudos', items }];
+      if (this.tab !== 'salida') return secciones;
+      // El índice conserva el orden de captura y la referencia original al
+      // eliminar. Ordenar copias evita cambiar los movimientos guardados.
+      return secciones.map(seccion => ({ ...seccion, items: [...seccion.items].reverse() }))
+        .sort((a, b) => (b.items[0]?.indice ?? -1) - (a.items[0]?.indice ?? -1));
+    },
     pendientes() { return this.inventarioGuardado !== null && this.inventarioActual() !== this.inventarioGuardado; },
     disponible() { return Number(this.esLimpio ? this.kilosDisponibles : this.kilosDisponiblesSeleccionados) || 0; },
     opcionesProveedor() {

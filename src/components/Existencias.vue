@@ -1259,12 +1259,12 @@ export default {
 
     const imprimirReporte = async () => {
       if (!inventarioListo.value) return;
-      const ventanaImpresion = window.open('', '_blank');
-      if (!ventanaImpresion) {
+      const ventanaImpresion = window.desktop ? null : window.open('', '_blank');
+      if (!window.desktop && !ventanaImpresion) {
         window.alert('Permite las ventanas emergentes para generar el reporte.');
         return;
       }
-      ventanaImpresion.document.write('<p style="font-family: Arial; padding: 24px;">Preparando reporte y comparativo diario...</p>');
+      if (ventanaImpresion) ventanaImpresion.document.write('<p style="font-family: Arial; padding: 24px;">Preparando reporte y comparativo diario...</p>');
 
       const fechaActual = new Date().toLocaleDateString('es-ES', {
         year: 'numeric',
@@ -1276,6 +1276,10 @@ export default {
         comparativoInventario = await prepararComparativoInventario();
       } catch (error) {
         console.error('[Existencias] No se pudieron calcular los movimientos del día.', error);
+        if (!ventanaImpresion) {
+          window.alert('No fue posible consultar los movimientos de hoy. Intenta generar el reporte nuevamente.');
+          return;
+        }
         ventanaImpresion.document.open();
         ventanaImpresion.document.write('<p style="font-family: Arial; padding: 24px; color: #c0392b;">No fue posible consultar los movimientos de hoy. Cierra esta ventana e intenta generar el reporte nuevamente.</p>');
         ventanaImpresion.document.close();
@@ -2006,6 +2010,15 @@ export default {
       `;
 
       // Configurar la impresión
+      if (window.desktop) {
+        try {
+          if (!window.desktop.printHtml) throw new Error('Actualiza la app local para imprimir las existencias.');
+          await window.desktop.printHtml(htmlCompleto, `existencias-limpios-${moment().format('YYYY-MM-DD')}.pdf`, { landscape: true });
+        } catch (error) {
+          window.alert(`No se pudo preparar la impresión de existencias: ${error.message}`);
+        }
+        return;
+      }
       ventanaImpresion.document.open();
       ventanaImpresion.document.write(htmlCompleto);
       ventanaImpresion.document.close();
