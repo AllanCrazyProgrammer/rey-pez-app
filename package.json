@@ -18,9 +18,17 @@
     "electron:local": "electron electron/main.js",
     "test:desktop-offline": "node scripts/test-desktop-offline.cjs",
     "test:embarques-transfer": "node scripts/test-embarques-transfer.cjs",
-    "test:drive-notas": "node --test scripts/test-drive-notas.cjs scripts/test-resumen-backup.cjs scripts/test-reportes-backup.cjs scripts/test-rendimientos-report.cjs"
+    "test:drive-notas": "node --test scripts/test-drive-notas.cjs scripts/test-resumen-backup.cjs scripts/test-reportes-backup.cjs scripts/test-rendimientos-report.cjs",
+    "build:android:web": "VUE_APP_TARGET=android vue-cli-service build",
+    "android:sync": "VUE_APP_TARGET=android cap sync android",
+    "android:open": "VUE_APP_TARGET=android cap open android",
+    "android:apk": "node scripts/build-android.cjs",
+    "test:android:inventarios": "node scripts/test-inventarios-android.cjs",
+    "test:android:arranque": "node scripts/test-inventarios-build.cjs"
   },
   "dependencies": {
+    "@capacitor/android": "6.1.2",
+    "@capacitor/app": "6.0.2",
     "@capacitor/cli": "^6.1.2",
     "@capacitor/core": "^6.1.2",
     "@capacitor/ios": "^6.1.2",

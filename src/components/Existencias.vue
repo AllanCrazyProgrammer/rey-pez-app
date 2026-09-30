@@ -1,6 +1,6 @@
 <template>
   <div class="existencias-page">
-    <FondoMatrix class="matrix-bg" :opacity="0.4" />
+    <FondoMatrix v-if="!soloInventario" class="matrix-bg" :opacity="0.4" />
     <div class="crt-overlay" aria-hidden="true"></div>
 
     <div class="existencias-container">
@@ -31,16 +31,17 @@
           </div>
         </div>
         <div class="header-actions">
-          <router-link to="/reporte-consumo" class="consumo-button">
+          <router-link v-if="!soloInventario" to="/reporte-consumo" class="consumo-button">
             <span class="btn-icono" aria-hidden="true">📈</span> Consumo Histórico
           </router-link>
-          <router-link to="/analisis-stock" class="analisis-button">
+          <router-link v-if="!soloInventario" to="/analisis-stock" class="analisis-button">
             <span class="btn-icono" aria-hidden="true">📊</span> Análisis de Stock
           </router-link>
-          <router-link to="/asesor-experto" class="asesor-button">
+          <router-link v-if="!soloInventario" to="/asesor-experto" class="asesor-button">
             <span class="btn-icono" aria-hidden="true">🦐</span> Asesor Experto
           </router-link>
-          <button @click="solicitarImpresion" class="print-button" :disabled="!inventarioListo">
+          <router-link v-if="soloInventario" to="/sacadas" class="mobile-primary">Entradas y salidas</router-link>
+          <button v-if="!soloInventario" @click="solicitarImpresion" class="print-button" :disabled="!inventarioListo">
             <span class="btn-icono" aria-hidden="true">⎙</span> Imprimir Reporte
           </button>
         </div>
@@ -333,6 +334,7 @@ import AlertasExistenciasLimpios from '@/components/AlertasExistenciasLimpios.vu
 
 export default {
   name: 'Existencias',
+  props: { soloInventario: { type: Boolean, default: false } },
   components: {
     FondoMatrix,
     AlertasExistenciasLimpios

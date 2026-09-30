@@ -22,7 +22,7 @@
       <button @click="showGestionarModal" class="action-button">
         Gestionar Proveedores y Medidas
       </button>
-      <button @click="imprimirReporte" class="action-button">
+      <button v-if="!soloInventario" @click="imprimirReporte" class="action-button">
         Imprimir Reporte
       </button>
     </div>
@@ -58,7 +58,7 @@
                 <th>Medida</th>
                 <th>Cuarto</th>
                 <th>Kilos</th>
-                <th>Taras</th>
+                <th v-if="!soloInventario">Taras</th>
                 <th v-if="tienePreciosValidos(productos)">Precio</th>
                 <th v-if="tienePreciosValidos(productos)">Valor</th>
               </tr>
@@ -85,7 +85,7 @@
                   </button>
                 </td>
                 <td class="kilos-cell">{{ formatNumber(producto.kilos) }}</td>
-                <td class="taras-cell">{{ (producto.kilos / 19).toFixed(1) }}</td>
+                <td v-if="!soloInventario" class="taras-cell">{{ (producto.kilos / 19).toFixed(1) }}</td>
                 <td v-if="tienePreciosValidos(productos)" class="precio-cell">${{ formatearPrecio(producto.ultimoPrecio) }}</td>
                 <td v-if="tienePreciosValidos(productos)" class="valor-cell">${{ formatearValor(producto.valor) }}</td>
               </tr>
@@ -184,7 +184,7 @@
     </div>
 
     <!-- Lista de registros recientes -->
-    <div class="registros-list">
+    <div v-if="!soloInventario" class="registros-list">
       <h2>Registros Recientes</h2>
       <div v-if="isLoadingRegistros" class="loading">Cargando registros...</div>
       <div v-else-if="registros.length === 0" class="no-records">
@@ -236,6 +236,7 @@
     <div v-if="modalSalida.abierto" class="modal-overlay" @click.self="cerrarModalSalida">
       <RegistroCrudos
         modo-modal
+        :solo-inventario="soloInventario"
         :registro-id-prop="modalSalida.registroId"
         @guardado="onSalidaGuardada"
         @cerrar="cerrarModalSalida"
@@ -257,6 +258,7 @@ import { useUIStore } from '@/stores/ui';
 
 export default {
   name: 'ExistenciasCrudos',
+  props: { soloInventario: { type: Boolean, default: false } },
   components: {
     GestionProveedoresCrudos,
     EntradasPorProveedorModal,
@@ -268,6 +270,7 @@ export default {
       existenciasPorProveedor: {},
       isLoadingRegistros: true,
       isLoadingExistencias: true,
+      errorExistencias: '',
       currentPage: 1,
       itemsPerPage: 10,
       showGestionModal: false,
@@ -516,6 +519,7 @@ export default {
     },
 
     async loadExistencias() {
+      this.errorExistencias = '';
       try {
         this.isLoadingExistencias = true;
         const registrosSnapshot = await getDocs(collection(db, 'existenciasCrudos'));
@@ -626,6 +630,7 @@ export default {
         this.existenciasPorProveedor = existenciasFiltradas;
       } catch (error) {
         console.error("Error al cargar existencias de crudos: ", error);
+        this.errorExistencias = 'No se pudieron cargar las existencias. Revisa tu conexión e intenta de nuevo.';
         this.existenciasPorProveedor = {};
       } finally {
         this.isLoadingExistencias = false;
@@ -713,6 +718,10 @@ export default {
     irASalidaDeHoy() {
       const hoy = moment().startOf('day');
       const registroHoy = this.registros.find(registro => moment(registro.fecha).isSame(hoy, 'day'));
+      if (this.soloInventario) {
+        this.$router.push(registroHoy ? `/existencias-crudos/${registroHoy.id}` : '/existencias-crudos/new');
+        return;
+      }
       this.modalSalida = { abierto: true, registroId: registroHoy ? registroHoy.id : null };
       useUIStore().openModal('salida-crudo');
     },

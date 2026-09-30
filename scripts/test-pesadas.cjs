@@ -368,8 +368,8 @@ const cuentasModule = new Module(path.join(root, 'src/Cuentas.test.js'), module)
 cuentasModule.require = () => ({});
 cuentasModule._compile(babel.transformSync(cuentasSource, { configFile: false, babelrc: false, plugins: ['@babel/plugin-transform-modules-commonjs'] }).code, cuentasModule.id);
 const cuentas = cuentasModule.exports.default;
-const cashVm = admitirDecimales => {
-  const vm = { admitirDecimales };
+const cashVm = (admitirDecimales, pagoBanos = 0) => {
+  const vm = { admitirDecimales, pagoBanos };
   Object.assign(vm, cuentas.data.call(vm));
   Object.entries(cuentas.methods).forEach(([name, fn]) => { vm[name] = fn.bind(vm); });
   return vm;
@@ -392,7 +392,7 @@ test('legacy accounts preserve whole-peso mode', () => {
   vm.procesarDatos({ data: ['77.2'], isTwo: true });
   assert.equal(cuentas.computed.totalGeneral.call(vm), 77);
 });
-test('weighing cash uses final named payments and blocks invalid sheets', () => {
+test('weighing cash includes bathrooms alongside final named payments and blocks invalid sheets', () => {
   let flushed = false;
   const vm = { puedeImprimir: true, _outbox: { flush() { flushed = true; } }, resumen: resumenPesadas(sample()) };
   methods.abrirCuentas.call(vm);
@@ -402,6 +402,41 @@ test('weighing cash uses final named payments and blocks invalid sheets', () => 
   const invalid = { puedeImprimir: false };
   methods.abrirCuentas.call(invalid);
   assert.equal(invalid.cuentasAbiertas, undefined);
+});
+
+test('bathrooms are paid together to one recipient in both coin choices', () => {
+  const data = {
+    columnas: { c1: { precio: 10, orden: '0' } },
+    personas: Object.fromEntries(Array.from({ length: 25 }, (_, index) => [`p${index}`, { nombre: `Persona ${index}`, orden: String(index) }])),
+    pesos: Object.fromEntries(Array.from({ length: 25 }, (_, index) => [`p${index}`, { c1: 1.1 }]))
+  };
+  data.personas.vacia = { nombre: '', orden: '26' };
+  data.personas.eliminada = { nombre: 'Eliminada', eliminado: true, orden: '27' };
+  const summary = resumenPesadas(data);
+  const vm = { puedeImprimir: true, _outbox: { flush() {} }, resumen: summary };
+  methods.abrirCuentas.call(vm);
+  const payments = vm.cuentasDatos.split('\n');
+  assert.equal(payments.length, 25);
+  for (const isTwo of [true, false]) {
+    const cash = cashVm(true, summary.banos);
+    cash.procesarDatos({ data: payments, isTwo });
+    assert.equal(cuentas.computed.totalGeneral.call(cash), summary.pagosRedondeados + summary.banos);
+    assert.equal(cash.billetes[10], 25);
+    assert.equal(cash.billetes[20], 1);
+    assert.equal(cash.billetes[5], 1);
+    assert.equal(cash.billetes[1], 0);
+  }
+});
+
+test('recalculating accounts always includes bathrooms without duplicating them', () => {
+  const cash = cashVm(true, 2);
+  for (const isTwo of [false, true, false]) {
+    cash.procesarDatos({ data: ['10', '10'], isTwo });
+    assert.equal(cuentas.computed.totalGeneral.call(cash), 22);
+    assert.equal(cash.billetes[10], 2);
+    assert.equal(cash.billetes[1], isTwo ? 0 : 2);
+    assert.equal(cash.billetes[2], isTwo ? 1 : 0);
+  }
 });
 
 test('weighing cash opens with one-peso coins by default', () => {

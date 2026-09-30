@@ -15,6 +15,9 @@ Acceso desde el menú de computadora y móvil: `/pesadas` (historial) y
   un decimal, con mitades hacia arriba. Después se descuenta $1 para baños.
 - Cada fila con nombre cuenta para baños. Filas sin nombre no aparecen en el PDF.
   Pagos negativos, datos inválidos o kilos sin nombre impiden imprimir.
+- Sacar cuentas incluye los pagos finales de las despicadoras y un pago aparte
+  para la persona encargada de los baños ($1 por despicadora). Los billetes,
+  monedas y el total del reporte de cuentas incluyen ambos conceptos.
 - La pantalla muestra total a pagar, pago promedio y la mejor despicadora
   (mayor pago final; en empate, mayor cantidad de kilos).
 - PDF carta vertical: fecha repetida, pagos netos y Baños al final. La descarga,

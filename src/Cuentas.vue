@@ -30,6 +30,7 @@
           <p class="fecha-impresion">
             <span class="fecha-label">DATE:</span> {{ fechaFormateada }}
           </p>
+          <p v-if="pagoBanos > 0" class="fecha-impresion">Incluye pago de baños: ${{ pagoBanos.toLocaleString() }}</p>
           <div class="lista-cuentas">
             <div v-for="(cantidad, denominacion) in billetes" :key="denominacion" class="cuenta-item"
               v-show="cantidad > 0">
@@ -64,6 +65,7 @@ export default {
   props: {
     fecha: { type: String, default: "" },
     admitirDecimales: { type: Boolean, default: false },
+    pagoBanos: { type: Number, default: 0 },
     datos: {
       type: String,
       default: "",
@@ -250,7 +252,8 @@ export default {
 
       if (this.admitirDecimales) denominaciones.push(0.5, 0.2, 0.1);
 
-      data.forEach(cantidad => {
+      const pagos = this.pagoBanos > 0 ? [...data, this.pagoBanos] : data;
+      pagos.forEach(cantidad => {
         const montoRestante = this.calcularBilletes(cantidad, denominaciones);
         if (montoRestante > 0) {
           console.warn(`No se pudo calcular completamente la cantidad: ${cantidad}, restante: ${montoRestante}`);

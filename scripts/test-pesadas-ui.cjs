@@ -71,8 +71,21 @@ async function run() {
     await page.getByLabel('Agregar columna', { exact: true }).click();
     await page.getByLabel('Medida columna 4', { exact: true }).waitFor();
     await page.waitForFunction(() => document.querySelector('.pesadas-status').textContent === 'Guardado');
-    assert.match(await page.locator('.pesadas-grid tbody tr').nth(0).innerText(), /\$77\.2/);
-    assert.match(await page.locator('.pesadas-grid tbody tr').nth(1).innerText(), /\$38\.6/);
+    assert.match(await page.locator('.pesadas-grid tbody tr').nth(0).innerText(), /\$77\b/);
+    assert.match(await page.locator('.pesadas-grid tbody tr').nth(1).innerText(), /\$39\b/);
+    await page.getByRole('button', { name: 'Sacar cuentas' }).click();
+    const cashModal = page.getByRole('dialog');
+    await cashModal.getByText('Pago de baños: $2', { exact: true }).waitFor();
+    await page.waitForFunction(() => document.querySelector('[role="dialog"] .total-value')?.textContent === '$118');
+    assert.equal(await cashModal.locator('.total-value').innerText(), '$118');
+    for (const coin of ['$2', '$1']) {
+      await cashModal.getByRole('button', { name: `Calcular con ${coin}` }).click();
+      await cashModal.locator('.calcular-container').filter({ has: page.getByRole('button', { name: `Calcular con ${coin}` }) }).getByText(/Procesadas 2 líneas correctamente/).waitFor();
+      assert.equal(await cashModal.locator('.total-value').innerText(), '$118');
+    }
+    await cashModal.getByText('Incluye pago de baños: $2', { exact: true }).waitFor();
+    await cashModal.getByRole('button', { name: 'Close', exact: true }).click();
+    await cashModal.waitFor({ state: 'hidden' });
     await page.getByLabel('Precio por kilo columna 2', { exact: true }).fill('12.34');
     await page.getByLabel('Precio por kilo columna 2', { exact: true }).press('Tab');
     assert.equal(await page.getByRole('button', { name: 'Resumen / imprimir' }).isDisabled(), true);

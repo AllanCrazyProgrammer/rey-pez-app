@@ -1,8 +1,10 @@
 const OfflinePlugin = require('./build/OfflinePlugin');
 const isElectron = process.env.VUE_APP_TARGET === 'electron';
+const isAndroid = process.env.VUE_APP_TARGET === 'android';
 
 module.exports = {
-  outputDir: isElectron ? 'desktop-dist' : 'dist',
+  outputDir: isElectron ? 'desktop-dist' : isAndroid ? 'android-dist' : 'dist',
+  ...(isAndroid ? { pages: { index: { entry: 'src/mobile/main.js', template: 'public/android.html', title: 'ReyPez Inventarios', chunks: 'all' } } } : {}),
   // Configuración del servidor de desarrollo
   devServer: {
     // Configuración para permitir acceso desde cualquier IP
@@ -30,14 +32,14 @@ module.exports = {
     // Forzar publicPath
     public: 'localhost:8080'
   },
-  publicPath: isElectron ? './' : '/',
+  publicPath: isElectron || isAndroid ? './' : '/',
   // Transpilación para soporte de navegadores
   transpileDependencies: [],
   // Configuración para producción
   productionSourceMap: false,
   // Configuración de webpack para asegurar carga correcta de chunks
   configureWebpack: {
-    plugins: process.env.NODE_ENV === 'production' && !isElectron ? [new OfflinePlugin()] : [],
+    plugins: process.env.NODE_ENV === 'production' && !isElectron && !isAndroid ? [new OfflinePlugin()] : [],
     optimization: {
       splitChunks: {
         chunks: 'all',
@@ -76,6 +78,7 @@ module.exports = {
     // Do not prefetch every module while the initial screen is opening.
     // The service worker owns offline preloading; desktop chunks are installed already.
     config.plugins.delete('prefetch');
+    if (isAndroid) config.plugins.delete('prefetch-index');
     // Usar hashed para una generación más estable de los hashes en producción
     config.optimization.set('moduleIds', 'hashed');
     // Usar named chunk IDs para mejor depuración en desarrollo
@@ -86,4 +89,4 @@ module.exports = {
       config.optimization.set('chunkIds', 'natural');
     }
   }
-} 
+}

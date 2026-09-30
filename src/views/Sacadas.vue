@@ -279,7 +279,7 @@
       </table>
     </div>
 
-    <div v-if="!modoModal" class="auditoria-section">
+    <div v-if="!modoModal && !soloInventario" class="auditoria-section">
       <div class="auditoria-header">
         <button
           type="button"
@@ -472,15 +472,18 @@ import MedidasParaHoyCards from '@/components/MedidasParaHoyCards.vue';
 import { normalizarGruposListaMedidasParaPdf } from '@/utils/pdf/sacadas';
 import moment from 'moment';
 import { formatNumber } from '@/utils/formatters';
+import inventarioNavigation from '@/mobile/inventarioNavigation';
 
 export default {
   name: 'Sacadas',
+  mixins: [inventarioNavigation],
   components: {
     BackButton,
     ListaMedidasPedidoModal,
     MedidasParaHoyCards
   },
   props: {
+    soloInventario: { type: Boolean, default: false },
     modoModal: {
       type: Boolean,
       default: false
@@ -1412,6 +1415,7 @@ export default {
       if (docSnap.exists()) {
         const data = docSnap.data();
         this.currentDate = moment(data.fecha.toDate());
+        this.selectedDate = this.currentDate.format('YYYY-MM-DD');
         this.entradas = (data.entradas || []).map(entrada => this.normalizeRegistroCantidades(entrada));
         this.salidas = (data.salidas || []).map(salida => this.normalizeRegistroCantidades(salida));
         this.salidasClientesChecklist = data.salidasClientesChecklist || {};
@@ -1467,6 +1471,7 @@ export default {
         }
         this.salidasIniciales = this.salidas.length;
         this.invalidarCacheSacadas();
+        this.marcarInventarioGuardado();
 
         if (this.modoModal) {
           this.$emit('guardado', this.sacadaId);

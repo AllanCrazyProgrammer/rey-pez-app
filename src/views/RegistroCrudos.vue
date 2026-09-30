@@ -213,7 +213,7 @@
       </div>
     </div>
 
-    <div v-if="!modoModal" class="comparacion-embarque">
+    <div v-if="!modoModal && !soloInventario" class="comparacion-embarque">
       <div class="comparacion-header" @click="toggleComparacion">
         <h3>
           Comparar salidas con embarque del día
@@ -337,13 +337,16 @@ import BackButton from '../components/BackButton.vue';
 import moment from 'moment';
 import { formatNumber } from '@/utils/formatters';
 import { normalizarFechaValor } from '@/utils/dateUtils';
+import inventarioNavigation from '@/mobile/inventarioNavigation';
 
 export default {
   name: 'RegistroCrudos',
+  mixins: [inventarioNavigation],
   components: {
     BackButton
   },
   props: {
+    soloInventario: { type: Boolean, default: false },
     modoModal: {
       type: Boolean,
       default: false
@@ -962,6 +965,7 @@ export default {
         this.isEditing = true;
         this.fechaOriginal = this.currentDate.format('YYYY-MM-DD');
         this.salidasIniciales = this.salidas.length;
+        this.marcarInventarioGuardado();
         await this.loadProductosDisponibles();
       } else {
         console.log("No se encontró el documento con ID:", id);
@@ -1030,7 +1034,8 @@ export default {
         if (this.modoModal) {
           this.$emit('guardado', this.registroId);
         } else {
-          this.$router.push('/existencias-crudos');
+          this.marcarInventarioGuardado();
+          this.$router.push(this.soloInventario ? '/movimientos-crudos' : '/existencias-crudos');
         }
       } catch (error) {
         console.error("Error al guardar/actualizar el registro: ", error);
@@ -1855,4 +1860,4 @@ button:disabled {
     grid-template-columns: 1fr;
   }
 }
-</style> 
+</style>

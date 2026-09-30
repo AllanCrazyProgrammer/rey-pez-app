@@ -1,5 +1,11 @@
 # rey-pez
 
+## Android: inventarios de limpios y crudos
+
+`npm run android:apk` genera el APK de prueba de ReyPez Inventarios, conectado
+a la misma base de Firebase. Consulta [la guía de Android](docs/README_Android_Inventarios.md)
+para compilar, instalar y verificar sus pantallas.
+
 ## Project setup
 ```
 npm install

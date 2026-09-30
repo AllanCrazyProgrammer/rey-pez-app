@@ -7,6 +7,16 @@ import { useAuthStore } from "./stores/auth";
 // Helper de autenticación para desarrollo
 if (process.env.NODE_ENV === 'development') {
   import('./utils/authHelper.js');
+  // A previous production preview on localhost can keep serving its offline
+  // shell instead of the development server, even after an ordinary reload.
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.getRegistrations().then(registrations => Promise.all(
+      registrations.filter(registration => {
+        const worker = registration.active || registration.waiting || registration.installing;
+        return worker && new URL(worker.scriptURL).pathname === '/service-worker.js';
+      }).map(registration => registration.unregister())
+    )).catch(error => console.warn('No se pudo desactivar la versión offline de desarrollo:', error));
+  }
 }
 
 import { BootstrapVue, IconsPlugin } from "bootstrap-vue";

@@ -41,9 +41,10 @@
       <p v-if="!coincidencias.length">No se encontró ninguna despicadora con ese nombre.</p>
     </b-modal>
     <b-modal v-model="cuentasAbiertas" title="Billetes y monedas para pagar" size="lg" hide-footer @shown="calcularCuentas" @hidden="cuentasDatos = ''">
-      <p>{{ fechaTexto }} · Pagos finales de las despicadoras, después del descuento de baños.</p>
+      <p>{{ fechaTexto }} · Pagos finales de las despicadoras, después del descuento de baños, más el pago a la persona encargada de los baños.</p>
+      <p><strong>Pago de baños: ${{ pago(resumen.banos) }}</strong> ({{ resumen.banos }} despicadoras × $1). Incluido como un pago aparte en los billetes y monedas.</p>
       <p v-if="estado.pending || servidorPendiente" class="pesadas-alert">Incluye cambios pendientes de sincronizar.</p>
-      <Cuentas v-if="cuentasAbiertas" ref="cuentas" :datos="cuentasDatos" :fecha="fecha" admitir-decimales />
+      <Cuentas v-if="cuentasAbiertas" ref="cuentas" :datos="cuentasDatos" :fecha="fecha" :pago-banos="resumen.banos" admitir-decimales />
     </b-modal>
     <PesadasResumen v-if="preview" :fecha="fecha" :datos="preview" :pendiente="estado.pending || servidorPendiente" @cerrar="preview = null" />
   </main>
