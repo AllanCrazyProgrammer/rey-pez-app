@@ -1,18 +1,25 @@
 import pdfMake from 'pdfmake/build/pdfmake';
 import vfsFonts from 'pdfmake/build/vfs_fonts';
 
+const vfs = vfsFonts.pdfMake?.vfs || vfsFonts.vfs || vfsFonts;
+const fuentesLocales = {
+  Roboto: {
+    normal: 'Roboto-Regular.ttf',
+    bold: 'Roboto-Medium.ttf',
+    italics: 'Roboto-Italic.ttf',
+    bolditalics: 'Roboto-MediumItalic.ttf'
+  }
+};
+
+export const crearPdfConFuentesLocales = (docDefinition) => {
+  // Cada documento conserva sus fuentes aunque otra pantalla cambie pdfmake
+  // mientras se esperan imágenes o datos del reporte.
+  return pdfMake.createPdf(docDefinition, undefined, fuentesLocales, vfs);
+};
+
 // Configuración de fuentes para pdfMake
 export const configurarPdfMake = () => {
-  // Asignar las fuentes directamente desde el módulo vfsFonts
-  if (typeof vfsFonts === 'object') {
-    if (vfsFonts.pdfMake && vfsFonts.pdfMake.vfs) {
-      pdfMake.vfs = vfsFonts.pdfMake.vfs;
-    } else if (vfsFonts.vfs) {
-      pdfMake.vfs = vfsFonts.vfs;
-    } else {
-      pdfMake.vfs = vfsFonts;
-    }
-  }
+  pdfMake.addVirtualFileSystem(vfs);
 
   // También necesitamos asegurarnos de que las fuentes estén disponibles globalmente
   if (typeof window !== 'undefined' && !window.pdfMake) {

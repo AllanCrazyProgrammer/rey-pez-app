@@ -1,4 +1,4 @@
-import pdfMake, { configurarPdfMake, estilosPdf, layoutTablaConTotal, configuracionDocumento } from './config';
+import { crearPdfConFuentesLocales, configurarPdfMake, estilosPdf, layoutTablaConTotal, configuracionDocumento } from './config';
 import { loadImageAsBase64, formatearFecha } from './formatters';
 
 const LOGO_OTILIO_URL = 'https://res.cloudinary.com/hwkcovsmr/image/upload/w_1000,c_fill,ar_1:1,g_auto,r_max,bo_5px_solid_red,f_png,b_transparent/v1757615801/allan_logo_ra8ruv.jpg';
@@ -300,7 +300,7 @@ export const generarReporteCuentasOtilio = async ({ fechaInicio, fechaFin, regis
     });
   }
 
-  pdfMake.createPdf(docDefinition).open();
+  crearPdfConFuentesLocales(docDefinition).open();
 
   return true;
 };

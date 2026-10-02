@@ -25,7 +25,8 @@
     "android:open": "VUE_APP_TARGET=android cap open android",
     "android:apk": "node scripts/build-android.cjs",
     "test:android:inventarios": "node scripts/test-inventarios-android.cjs",
-    "test:android:arranque": "node scripts/test-inventarios-build.cjs"
+    "test:android:arranque": "node scripts/test-inventarios-build.cjs",
+    "test:sacadas:dias": "node scripts/test-sacadas-dias.cjs"
   },
   "dependencies": {
     "@capacitor/android": "6.1.2",

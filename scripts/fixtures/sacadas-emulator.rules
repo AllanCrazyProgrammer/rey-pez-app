@@ -1,0 +1,9 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{coleccion}/{documento} {
+      allow read: if true;
+      allow write: if coleccion != 'papelera' || request.resource.data.razon != 'fallar-respaldo';
+    }
+  }
+}

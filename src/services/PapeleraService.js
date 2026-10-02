@@ -1,5 +1,6 @@
 import { db } from '@/firebase';
-import { collection, doc, getDoc, setDoc, deleteDoc, getDocs, query, where, serverTimestamp } from 'firebase/firestore';
+import { collection, doc, getDoc, setDoc, deleteDoc, getDocs, query, where, serverTimestamp, runTransaction } from 'firebase/firestore';
+import { fechaRegistro } from '@/utils/fechasInventario';
 
 /**
  * PapeleraService: respaldo obligatorio antes de borrar documentos sensibles
@@ -60,6 +61,28 @@ export const respaldarAntesDeBorrar = async (coleccionOrigen, docId, datos, razo
  * @returns {Promise<string>} - ID del respaldo creado
  */
 export const borrarConRespaldo = async (coleccion, docId, datos = null, razon = '') => {
+  if (coleccion === 'sacadas') {
+    const origen = doc(db, coleccion, docId);
+    const respaldo = doc(collection(db, COLECCION_PAPELERA));
+    await runTransaction(db, async transaction => {
+      const actual = await transaction.get(origen);
+      if (!actual.exists()) throw new Error('Este día ya fue borrado. Actualiza el historial.');
+      const contenido = actual.data();
+      const fecha = fechaRegistro(contenido.fecha);
+      const indice = fecha ? doc(db, 'sacadasDias', fecha) : null;
+      const propietario = indice ? await transaction.get(indice) : null;
+      // Copiar el contenido más reciente y borrar en la misma operación. Si la
+      // papelera falla, tampoco se borra el día ni se libera su fecha.
+      transaction.set(respaldo, {
+        coleccionOrigen: coleccion, docIdOriginal: docId,
+        datos: limpiarParaFirestore(contenido), razon,
+        fechaBorrado: serverTimestamp(), fechaBorradoISO: new Date().toISOString()
+      });
+      transaction.delete(origen);
+      if (propietario?.exists() && propietario.data().sacadaId === docId) transaction.delete(indice);
+    });
+    return respaldo.id;
+  }
   let contenido = datos;
   if (!contenido) {
     const snapshot = await getDoc(doc(db, coleccion, docId));

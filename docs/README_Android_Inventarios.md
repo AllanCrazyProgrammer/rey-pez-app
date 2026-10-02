@@ -9,7 +9,7 @@ y `ExistenciasCrudos.vue`. Conserva la configuración de Firebase y el acceso de
 - Crudos: captura únicamente kilos, proveedor, producto y cuarto frío.
 - Historial por fecha; abre el registro existente para agregar movimientos de hoy.
 - Cambios en las colecciones actuales `sacadas` y `existenciasCrudos`;
-  no mantiene un inventario paralelo ni modifica el esquema de datos.
+  no mantiene un inventario paralelo ni cambia los campos de los registros.
 - Sin pantallas de rendimientos, merma o comparación con embarques.
 - Advertencia al salir del editor con movimientos sin guardar.
 - Tarjetas de existencias, búsqueda por proveedor/medida y filtros por cuarto.
@@ -26,6 +26,14 @@ y `ExistenciasCrudos.vue`. Conserva la configuración de Firebase y el acceso de
 - Salidas del día con la última captura primero dentro de cada apartado;
   el apartado que contiene la captura más reciente se muestra al inicio.
 - Accesos desde inventario al registro de hoy sin crear días duplicados.
+- Borrar un día de limpios desde el historial, confirmando la fecha y las
+  cantidades de entradas/salidas. La copia a `papelera`, el borrado del registro
+  y la liberación de su fecha son una sola transacción; una copia fallida impide
+  el borrado. Los días duplicados anteriores se señalan para revisión manual.
+- Guardado compartido de limpios con índice `sacadasDias/<YYYY-MM-DD>` que apunta
+  al ID del registro. Impide crear la misma fecha simultáneamente, cambiar un
+  día a una fecha ocupada o guardar desde un editor cuyo día fue borrado.
+  Consulta registros anteriores al servidor y mantiene sus IDs y contenido.
 - En movimientos de limpios, «Registrar para mañana» abre Salidas con la fecha
   del día siguiente en México. Reutiliza el registro de esa fecha si ya existe
   y muestra la fecha futura en el editor; se guarda al terminar la captura.
@@ -69,6 +77,7 @@ las pantallas desde los archivos incluidos en el APK.
 ```sh
 npm run test:android:inventarios
 npm run test:android:arranque
+npm run test:sacadas:dias
 ```
 
 Las pruebas compilan pantallas reales contra un adaptador de Firestore aislado.
@@ -78,10 +87,15 @@ errores. No leen ni escriben en Firebase. Generan capturas en la carpeta tempora
 indicada al iniciar; `INVENTARIOS_CHROME_PATH` permite seleccionar Chrome/Chromium.
 La prueba de arranque carga los archivos reales de `android-dist` y verifica el
 acceso de producción sin conexiones externas. Primero ejecuta `npm run build:android:web`.
+La prueba de días inicia un emulador Firestore local con el proyecto de prueba
+`demo-reypez-inventarios`; verifica concurrencia real y borrado atómico. Requiere
+Java y el JAR del emulador en la caché de Firebase, o `FIRESTORE_EMULATOR_JAR`.
 
 La configuración de producción se conecta al Firebase actual. Los guardados
-conservan las reglas de la aplicación existente; esta versión no añade resolución
-de ediciones simultáneas del mismo registro. Sin conexión, la caché puede mostrar
-datos anteriores; no garantiza captura ni confirmación de guardados sin internet.
+conservan las reglas existentes; los clientes actualizados usan el índice de
+fechas en la transacción. Versiones anteriores que escriban directamente sin
+ese índice no participan en esta protección. No se combinan ediciones simultáneas
+del contenido del mismo registro. Sin conexión, la caché puede mostrar datos
+anteriores; el guardado de limpios requiere confirmar la fecha al servidor.
 Debe verificarse la conexión y el flujo de trabajo en un teléfono antes del uso
 diario con datos reales.

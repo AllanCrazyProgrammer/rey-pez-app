@@ -12,16 +12,18 @@ const data = {
   existenciasCrudos: { crudo1: { fecha, entradas: [{ proveedor: 'Proveedor crudo', producto: 'Crudo mediano', kilos: 80, cuartoFrio: 'Cuarto 1' }], salidas: [], totalEntradas: 80, totalSalidas: 0 } }
 };
 const listeners = new Set();
-window.__inventariosPrueba = { data, escrituras: [], lecturas: [], fallar: null, fallarLecturas: null };
+const versiones = new Map();
+let siguienteId = 0;
+window.__inventariosPrueba = { data, escrituras: [], borrados: [], lecturas: [], fallar: null, fallarLecturas: null };
 export const collection = (_, name) => ({ name });
-export const doc = (_, name, id) => ({ name, id });
+export const doc = (parent, name, id) => parent.name ? ({ name: parent.name, id: name || 'auto' + (++siguienteId) }) : ({ name, id });
 export const where = (field, op, value) => ({ field, op, value });
 export const orderBy = () => ({});
 export const query = (ref, ...filters) => ({ ...ref, filters });
 const valueOf = value => value && value.toDate ? value.toDate().getTime() : value instanceof Date ? value.getTime() : value;
-const snapDoc = (id, value) => ({ id, exists: () => Boolean(value), data: () => value });
+const snapDoc = (id, value, name) => ({ id, ref: { name, id }, exists: () => Boolean(value), data: () => value });
 function snapshot(ref) {
-  let docs = Object.entries(data[ref.name] || {}).map(([id, value]) => snapDoc(id, value));
+  let docs = Object.entries(data[ref.name] || {}).map(([id, value]) => snapDoc(id, value, ref.name));
   for (const f of ref.filters || []) {
     if (!f.field) continue;
     docs = docs.filter(d => {
@@ -32,7 +34,8 @@ function snapshot(ref) {
   return { docs, size: docs.length, empty: !docs.length, metadata: { fromCache: false, hasPendingWrites: false }, forEach: callback => docs.forEach(callback) };
 }
 export async function getDocs(ref) { window.__inventariosPrueba.lecturas.push(ref.name); return snapshot(ref); }
-export async function getDoc(ref) { return snapDoc(ref.id, (data[ref.name] || {})[ref.id]); }
+export async function getDocsFromServer(ref) { if (window.__inventariosPrueba.fallarLecturas === ref.name) throw new Error('Fallo de lectura de prueba'); return getDocs(ref); }
+export async function getDoc(ref) { return snapDoc(ref.id, (data[ref.name] || {})[ref.id], ref.name); }
 export function onSnapshot(ref, optionsOrCallback, callbackOrError, finalError) {
   const callback = typeof optionsOrCallback === 'function' ? optionsOrCallback : callbackOrError;
   const error = typeof optionsOrCallback === 'function' ? callbackOrError : finalError;
@@ -41,20 +44,40 @@ export function onSnapshot(ref, optionsOrCallback, callbackOrError, finalError) 
   queueMicrotask(() => {
     if (!listeners.has(listener)) return;
     if (window.__inventariosPrueba.fallarLecturas === ref.name) return error && error(new Error('Fallo de lectura de prueba'));
-    callback(ref.id ? snapDoc(ref.id, (data[ref.name] || {})[ref.id]) : snapshot(ref));
+    callback(ref.id ? snapDoc(ref.id, (data[ref.name] || {})[ref.id], ref.name) : snapshot(ref));
   });
   return () => listeners.delete(listener);
 }
-function write(ref, value, merge) {
+function notificar(nombre) { for (const listener of listeners) if (listener.ref.name === nombre) listener.callback(listener.ref.id ? snapDoc(listener.ref.id, (data[nombre] || {})[listener.ref.id], nombre) : snapshot(listener.ref)); }
+function write(ref, value, merge, emitir = true) {
   if (window.__inventariosPrueba.fallar === ref.name) throw new Error('Fallo de prueba');
   if (!data[ref.name]) data[ref.name] = {};
   const converted = { ...value, ...(value.fecha instanceof Date ? { fecha: timestamp(value.fecha) } : {}) };
   data[ref.name][ref.id] = merge ? { ...data[ref.name][ref.id], ...converted } : converted;
+  versiones.set(ref.name + '/' + ref.id, (versiones.get(ref.name + '/' + ref.id) || 0) + 1);
   window.__inventariosPrueba.escrituras.push({ collection: ref.name, id: ref.id, data: converted });
-  for (const listener of listeners) if (listener.ref.name === ref.name) listener.callback(snapshot(listener.ref));
+  if (emitir) notificar(ref.name);
 }
 export async function addDoc(ref, value) { const result = { ...ref, id: 'nuevo' + Object.keys(data[ref.name] || {}).length }; write(result, value, false); return result; }
 export async function updateDoc(ref, value) { write(ref, value, true); }
 export async function setDoc(ref, value) { write(ref, value, true); }
-export async function deleteDoc(ref) { delete data[ref.name][ref.id]; }
+function remove(ref, emitir = true) { delete (data[ref.name] || {})[ref.id]; versiones.set(ref.name + '/' + ref.id, (versiones.get(ref.name + '/' + ref.id) || 0) + 1); window.__inventariosPrueba.borrados.push({ collection: ref.name, id: ref.id }); if (emitir) notificar(ref.name); }
+export async function deleteDoc(ref) { if (window.__inventariosPrueba.fallar === ref.name) throw new Error('Fallo de prueba'); remove(ref); }
+export async function runTransaction(_, callback) {
+  for (let intento = 0; intento < 5; intento++) {
+    const leidos = new Map(); const cambios = [];
+    const resultado = await callback({
+      get: async ref => { const key = ref.name + '/' + ref.id; leidos.set(key, versiones.get(key) || 0); return getDoc(ref); },
+      set: (ref, value) => cambios.push({ ref, value, merge: false }),
+      update: (ref, value) => cambios.push({ ref, value, merge: true }),
+      delete: ref => cambios.push({ ref, eliminar: true })
+    });
+    if ([...leidos].some(([key, version]) => (versiones.get(key) || 0) !== version)) continue;
+    if (cambios.some(c => c.ref.name === window.__inventariosPrueba.fallar)) throw new Error('Fallo de prueba');
+    cambios.forEach(c => c.eliminar ? remove(c.ref, false) : write(c.ref, c.value, c.merge, false));
+    new Set(cambios.map(c => c.ref.name)).forEach(notificar);
+    return resultado;
+  }
+  throw new Error('Conflicto de transacción de prueba');
+}
 export const serverTimestamp = () => timestamp(new Date());

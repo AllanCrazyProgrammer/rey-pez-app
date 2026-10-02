@@ -465,7 +465,8 @@
 
 <script>
 import { db } from '@/firebase';
-import { collection, addDoc, getDocs, doc, getDoc, updateDoc, query, where } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc, updateDoc } from 'firebase/firestore';
+import { guardarDiaLimpio } from '@/services/sacadas.service';
 import BackButton from '../components/BackButton.vue';
 import ListaMedidasPedidoModal from '@/components/ListaMedidasPedidoModal.vue';
 import MedidasParaHoyCards from '@/components/MedidasParaHoyCards.vue';
@@ -947,20 +948,6 @@ export default {
       const querySnapshot = await getDocs(collection(db, 'medidas'));
       this.medidas = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     },
-    async checkExistingSacada() {
-      const sacadasRef = collection(db, 'sacadas');
-      const startOfDay = this.currentDate.clone().startOf('day');
-      const endOfDay = this.currentDate.clone().endOf('day');
-      
-      const q = query(sacadasRef, 
-        where('fecha', '>=', startOfDay.toDate()),
-        where('fecha', '<=', endOfDay.toDate())
-      );
-      
-      const querySnapshot = await getDocs(q);
-      // Excluir el propio documento cuando se edita (p. ej. al cambiar la fecha)
-      return querySnapshot.docs.some(docSnap => docSnap.id !== this.sacadaId);
-    },
     resetEntradaSelections() {
       this.newEntrada.proveedor = '';
       this.newEntrada.medida = '';
@@ -1434,19 +1421,6 @@ export default {
       if (this.guardando) return;
       this.guardando = true;
       try {
-        const fechaCambiada = this.isEditing &&
-          this.fechaOriginal !== this.currentDate.format('YYYY-MM-DD');
-
-        if (!this.isEditing || fechaCambiada) {
-          const existingSacada = await this.checkExistingSacada();
-          if (existingSacada) {
-            alert(this.isEditing
-              ? "Ya existe otro registro de sacada para la nueva fecha. No se puede tener dos registros del mismo día."
-              : "Ya existe un registro de sacada para esta fecha. No se puede crear uno nuevo.");
-            return;
-          }
-        }
-
         const reportData = {
           fecha: this.currentDate.toDate(),
           entradas: this.entradas,
@@ -1459,16 +1433,14 @@ export default {
           auditoriaOkChecklist: this.auditoriaOkChecklist
         };
 
-        if (this.isEditing) {
-          await updateDoc(doc(db, 'sacadas', this.sacadaId), reportData);
-          if (!this.modoModal) alert("Informe del día actualizado exitosamente");
-        } else {
-          const docRef = await addDoc(collection(db, 'sacadas'), reportData);
-          this.sacadaId = docRef.id;
-          this.isEditing = true;
-          this.fechaOriginal = this.currentDate.format('YYYY-MM-DD');
-          if (!this.modoModal) alert("Informe del día guardado exitosamente");
-        }
+        const editando = this.isEditing;
+        this.sacadaId = await guardarDiaLimpio(reportData, {
+          id: this.sacadaId || (this.modoModal ? this.sacadaIdProp : this.$route.params.id) || null,
+          fechaOriginal: this.fechaOriginal
+        });
+        this.isEditing = true;
+        this.fechaOriginal = this.currentDate.format('YYYY-MM-DD');
+        if (!this.modoModal) alert(editando ? 'Informe del día actualizado exitosamente' : 'Informe del día guardado exitosamente');
         this.salidasIniciales = this.salidas.length;
         this.invalidarCacheSacadas();
         this.marcarInventarioGuardado();
@@ -1480,7 +1452,7 @@ export default {
         }
       } catch (error) {
         console.error("Error al guardar/actualizar el documento: ", error);
-        alert("Error al guardar/actualizar el informe del día: " + error.message);
+        alert(error.code?.startsWith('dia-') || error.code === 'fecha-invalida' ? error.message : "Error al guardar/actualizar el informe del día: " + error.message);
       } finally {
         this.guardando = false;
       }

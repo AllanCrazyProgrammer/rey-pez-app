@@ -98,6 +98,8 @@ html, body { background: #080b08; }
 .rp-success { border: 1px solid var(--rp-teal); border-radius: 0; background: #082510; color: #bcffcd; }
 .rp-history-date { color: var(--rp-yellow); font-family: var(--rp-data); font-size: 17px; }
 .rp-history-actions { display: grid; gap: 10px; }
+.rp-delete-day { width: 100%; min-height: 44px; margin-top: 6px; display: flex; align-items: center; justify-content: center; gap: 8px; border: 1px solid #9d503d; background: #21100c; color: #ffb49c; font-size: 14px !important; }
+.rp-duplicate-day { margin-top: 10px !important; padding: 8px; border: 1px solid #a48c27; color: var(--rp-yellow); background: #231e09; font-size: 12px; }
 .rp-future-date { display: flex; align-items: center; gap: 10px; margin-bottom: 18px !important; border-color: #a48c27; background: #231e09; color: #ffe98a; }
 .rp-history-date > .rp-icon:first-child { color: var(--rp-orange); }
 .rp-history-date > .rp-icon:last-child { color: var(--rp-yellow); }
