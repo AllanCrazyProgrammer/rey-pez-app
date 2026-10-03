@@ -3128,152 +3128,145 @@ h4.cliente-header.ozuna-header {
   opacity: 1;
 }
 
-/* Ajustes responsivos */
-@media (max-width: 375px) {
+/* Cada medida muestra todos sus campos en móvil, incluida la cantidad de cajas. */
+@media screen and (max-width: 768px) {
   .resumen-medidas {
     padding: 0;
-    margin: 10px 0;
-  }
-
-  .resumen-header {
-    font-size: 16px;
-    padding: 8px;
-    margin-bottom: 10px;
+    min-width: 0;
   }
 
   .resumen-table {
-    width: 100%;
-    min-width: 560px;
-    display: table;
-  }
-
-  .resumen-medidas {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
+    display: block;
+    min-width: 0;
   }
 
   .resumen-table thead {
-    display: table-header-group;
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 
   .resumen-table tbody {
-    display: table-row-group;
-  }
-
-  .resumen-table tr {
-    display: table-row;
-    margin-bottom: 0;
-    border: none;
-    border-radius: 0;
-    padding: 0;
-    background: transparent;
-  }
-
-  .resumen-table tr {
-    width: auto;
-  }
-
-  .resumen-table td {
-    display: table-cell;
-    text-align: center;
-    padding: 4px 8px;
-    border: 1px solid #ddd;
-    position: static;
-    min-height: 0;
-    margin-bottom: 0;
-    width: auto;
-  }
-  
-  /* Mantener layout horizontal para kilos en responsive */
-  .resumen-table td.total-kilos-cell {
-    padding: 4px 8px !important;
-    display: table-cell !important;
-    justify-content: center !important;
-  }
-  
-  .resumen-table td.total-kilos-cell .kilos-container {
-    flex-direction: row !important;
-    justify-content: center !important;
-    flex-wrap: wrap !important;
-  }
-
-  .resumen-table td::before {
-    content: none;
-  }
-  
-  /* Ocultar etiqueta "Total Kilos" para evitar empalmamiento */
-  .resumen-table td.total-kilos-cell::before {
-    content: none !important;
-  }
-
-  .rendimientos-column {
-    flex-direction: row;
-    width: 100%;
-    justify-content: flex-start;
-    padding-left: 0;
-    gap: 8px;
-  }
-
-  .rendimiento-box {
-    width: 60px;
-    min-width: 60px;
-    max-width: 60px;
-    font-size: 14px;
-    padding: 4px;
-    height: 30px;
-  }
-
-  .rendimiento-total {
-    min-width: 30px;
-    font-size: 14px;
-  }
-
-  .checkbox-group {
-    padding-left: 0;
-    justify-content: flex-start;
-    gap: 15px;
-  }
-
-  .checkbox-group label {
-    font-size: 14px;
-  }
-
-  .cajas-result {
-    padding-left: 0;
-    text-align: center;
-    font-size: 14px;
-    min-width: 35px;
-  }
-  
-  .cajas-result.cajas-faltantes {
-    padding: 4px 8px;
-    font-size: 13px;
-    min-width: 50px;
-    gap: 3px;
-  }
-  
-  .cajas-result.cajas-faltantes::before {
-    font-size: 0.85em;
-  }
-  
-  .cajas-result.cajas-faltantes::after {
-    display: none; /* Ocultar tooltip en móviles */
-  }
-  
-  .checkbox-group {
+    display: grid;
     gap: 12px;
-    padding: 4px;
   }
-  
-  .checkbox-group label {
-    gap: 5px;
+
+  .resumen-table tr {
+    display: block;
+    min-width: 0;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    background: #fff;
+  }
+
+  .resumen-table tr td {
+    display: grid;
+    grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+    align-items: center;
+    gap: 8px;
+    width: auto;
+    min-width: 0;
+    padding: 10px 12px;
+    border: 0;
+    border-bottom: 1px solid #eee;
+    text-align: right;
+    overflow-wrap: anywhere;
+  }
+
+  .resumen-table tr td:first-child {
+    border-radius: 8px 8px 0 0;
+    background: #f2f2f2;
+    font-weight: bold;
+  }
+
+  .resumen-table tr td:last-child {
+    border-bottom: 0;
+    border-radius: 0 0 8px 8px;
+  }
+
+  .resumen-table td[data-label]::before {
+    content: attr(data-label);
+    text-align: left;
     font-size: 14px;
-    padding: 3px 6px;
+    font-weight: 600;
+    color: #4b5563;
   }
-  
-  .checkbox-group input[type="radio"] {
-    width: 16px;
-    height: 16px;
+
+  .resumen-table .kilos-container {
+    gap: 6px !important;
+    padding: 0 !important;
+  }
+
+  .resumen-table .kilos-column {
+    min-width: 0 !important;
+    margin: 0;
+  }
+
+  .resumen-table .kilos-column > span {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .resumen-table .rendimientos-column {
+    flex-wrap: wrap;
+    width: 100%;
+    justify-content: flex-end;
+    gap: 6px;
+  }
+
+  .resumen-table .rendimiento-box {
+    min-height: 44px;
+  }
+
+  .resumen-table .rendimiento-total {
+    min-width: 0;
+  }
+
+  .resumen-table .checkbox-group {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 4px;
+    padding: 0;
+    margin: 0 0 0 auto;
+  }
+
+  .resumen-table .checkbox-group label {
+    min-height: 44px;
+    padding: 4px;
+    margin: 0;
+  }
+
+  .resumen-table .cajas-result {
+    justify-self: end;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .resumen-table .cajas-result.cajas-faltantes::after {
+    display: none;
+  }
+
+  .resumen-table tr.total-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .resumen-table tr.total-row td {
+    display: block;
+    border: 0;
+    border-radius: 8px;
+  }
+
+  .resumen-table tr.total-row td:first-child {
+    text-align: left;
+  }
+
+  .resumen-table tr.total-row td:empty {
+    display: none;
   }
 }
 
@@ -3536,11 +3529,15 @@ h4.cliente-header.ozuna-header {
   display: inline-block;
 }
 
-/* Ajustes responsivos */
-@media (max-width: 375px) {
+/* El título y las acciones también deben caber en teléfonos de más de 375 px. */
+@media screen and (max-width: 768px) {
   .resumen-header-row {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .resumen-header {
+    font-size: 20px;
   }
 
   .resumen-header-actions {
@@ -3553,15 +3550,19 @@ h4.cliente-header.ozuna-header {
     width: 100%;
   }
 
-  .resumen-tab-button {
-    width: 100%;
-  }
-
+  .resumen-tab-button,
+  .resumen-refrigerados-btn,
   .resumen-medidas-sacar-btn {
     width: 100%;
+    min-height: 44px;
+    white-space: normal;
+    overflow-wrap: anywhere;
     text-align: center;
   }
+}
 
+/* Ajustes responsivos */
+@media (max-width: 375px) {
   .preview-table td:first-child,
   .preview-table td:nth-child(2),
   .preview-table td:nth-child(3),
