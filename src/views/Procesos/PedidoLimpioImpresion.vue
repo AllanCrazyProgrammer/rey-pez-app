@@ -493,6 +493,8 @@
                     @input="calcularRendimiento(medida)"
                     placeholder="1.00"
                     class="rendimiento-box"
+                    :aria-label="'Rendimiento de ' + medida.medida"
+                    inputmode="decimal"
                   >
                   <div v-if="rendimientos[medida.medida]" class="rendimiento-total">
                     {{ Math.round(medida.total * rendimientos[medida.medida]) }}
@@ -3128,155 +3130,6 @@ h4.cliente-header.ozuna-header {
   opacity: 1;
 }
 
-/* Ajustes responsivos */
-@media (max-width: 375px) {
-  .resumen-medidas {
-    padding: 0;
-    margin: 10px 0;
-  }
-
-  .resumen-header {
-    font-size: 16px;
-    padding: 8px;
-    margin-bottom: 10px;
-  }
-
-  .resumen-table {
-    width: 100%;
-    min-width: 560px;
-    display: table;
-  }
-
-  .resumen-medidas {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-  }
-
-  .resumen-table thead {
-    display: table-header-group;
-  }
-
-  .resumen-table tbody {
-    display: table-row-group;
-  }
-
-  .resumen-table tr {
-    display: table-row;
-    margin-bottom: 0;
-    border: none;
-    border-radius: 0;
-    padding: 0;
-    background: transparent;
-  }
-
-  .resumen-table tr {
-    width: auto;
-  }
-
-  .resumen-table td {
-    display: table-cell;
-    text-align: center;
-    padding: 4px 8px;
-    border: 1px solid #ddd;
-    position: static;
-    min-height: 0;
-    margin-bottom: 0;
-    width: auto;
-  }
-  
-  /* Mantener layout horizontal para kilos en responsive */
-  .resumen-table td.total-kilos-cell {
-    padding: 4px 8px !important;
-    display: table-cell !important;
-    justify-content: center !important;
-  }
-  
-  .resumen-table td.total-kilos-cell .kilos-container {
-    flex-direction: row !important;
-    justify-content: center !important;
-    flex-wrap: wrap !important;
-  }
-
-  .resumen-table td::before {
-    content: none;
-  }
-  
-  /* Ocultar etiqueta "Total Kilos" para evitar empalmamiento */
-  .resumen-table td.total-kilos-cell::before {
-    content: none !important;
-  }
-
-  .rendimientos-column {
-    flex-direction: row;
-    width: 100%;
-    justify-content: flex-start;
-    padding-left: 0;
-    gap: 8px;
-  }
-
-  .rendimiento-box {
-    width: 60px;
-    min-width: 60px;
-    max-width: 60px;
-    font-size: 14px;
-    padding: 4px;
-    height: 30px;
-  }
-
-  .rendimiento-total {
-    min-width: 30px;
-    font-size: 14px;
-  }
-
-  .checkbox-group {
-    padding-left: 0;
-    justify-content: flex-start;
-    gap: 15px;
-  }
-
-  .checkbox-group label {
-    font-size: 14px;
-  }
-
-  .cajas-result {
-    padding-left: 0;
-    text-align: center;
-    font-size: 14px;
-    min-width: 35px;
-  }
-  
-  .cajas-result.cajas-faltantes {
-    padding: 4px 8px;
-    font-size: 13px;
-    min-width: 50px;
-    gap: 3px;
-  }
-  
-  .cajas-result.cajas-faltantes::before {
-    font-size: 0.85em;
-  }
-  
-  .cajas-result.cajas-faltantes::after {
-    display: none; /* Ocultar tooltip en móviles */
-  }
-  
-  .checkbox-group {
-    gap: 12px;
-    padding: 4px;
-  }
-  
-  .checkbox-group label {
-    gap: 5px;
-    font-size: 14px;
-    padding: 3px 6px;
-  }
-  
-  .checkbox-group input[type="radio"] {
-    width: 16px;
-    height: 16px;
-  }
-}
-
 /* Ajustes para impresión */
 @media print {
   .rendimiento-box {
@@ -3880,4 +3733,172 @@ h4.cliente-header.ozuna-header {
     box-shadow: none !important;
   }
 }
+
+/* El resumen se apila en móvil para mantener las cajas siempre a la vista. */
+@media screen and (max-width: 768px) {
+  .resumen-medidas {
+    width: 100%;
+    min-width: 0;
+    margin-top: 20px;
+  }
+
+  .resumen-header-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .resumen-header {
+    font-size: 20px;
+    padding: 12px;
+  }
+
+  .resumen-header-actions,
+  .resumen-tabs {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .resumen-header-actions > button,
+  .resumen-tab-button {
+    flex: 1 1 140px;
+    min-height: 44px;
+    white-space: normal;
+  }
+
+  .resumen-table,
+  .resumen-table tbody {
+    display: block;
+    min-width: 0;
+  }
+
+  .resumen-table thead {
+    display: none;
+  }
+
+  .resumen-table tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin-bottom: 12px;
+    border: 1px solid #ddd;
+    border-radius: 10px;
+    overflow: hidden;
+    background: #fff;
+  }
+
+  .resumen-table tbody tr td:nth-child(n) {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    width: auto;
+    min-width: 0;
+    padding: 10px;
+    border: 0;
+    border-bottom: 1px solid #eee;
+    overflow-wrap: anywhere;
+    font-size: 16px;
+  }
+
+  .resumen-table td::before {
+    content: attr(data-label);
+    color: #596675;
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .resumen-table td:nth-child(-n+3) {
+    grid-column: 1 / -1;
+  }
+
+  .resumen-table td:first-child {
+    background: #343a40;
+    color: #fff;
+    font-size: 18px;
+    font-weight: bold;
+  }
+
+  .resumen-table td:first-child::before {
+    content: none;
+  }
+
+  .resumen-table td.total-kilos-cell .kilos-container {
+    justify-content: center !important;
+    flex-direction: row !important;
+    gap: 8px !important;
+  }
+
+  .resumen-table .kilos-column {
+    min-width: 0 !important;
+    width: auto !important;
+    margin: 0;
+    white-space: normal;
+  }
+
+  .resumen-table .kilos-column span {
+    white-space: normal;
+  }
+
+  .resumen-table .rendimientos-column {
+    width: 100%;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .resumen-table .rendimiento-box {
+    width: 88px;
+    min-width: 88px;
+    max-width: 88px;
+    min-height: 44px;
+    font-size: 16px;
+  }
+
+  .resumen-table .checkbox-group {
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 0;
+  }
+
+  .resumen-table .checkbox-group label {
+    min-height: 44px;
+    padding: 4px 6px;
+  }
+
+  .resumen-table td:last-child {
+    background: #eef8f0;
+  }
+
+  .resumen-table .cajas-result {
+    font-size: 22px;
+  }
+
+  .resumen-table .cajas-result.cajas-faltantes {
+    min-width: 0;
+    white-space: normal;
+  }
+
+  .resumen-table .cajas-result.cajas-faltantes::after {
+    display: none;
+  }
+
+  .resumen-table tr.total-row {
+    display: flex;
+    justify-content: space-between;
+    background: #f8f9fa;
+  }
+
+  .resumen-table tr.total-row td {
+    background: transparent;
+    color: #212529;
+    border: 0;
+    padding: 12px;
+    font-size: 18px;
+  }
+
+  .resumen-table tr.total-row td::before,
+  .resumen-table tr.total-row td:nth-child(n+3) {
+    display: none;
+  }
+}
+
 </style> 
