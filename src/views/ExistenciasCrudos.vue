@@ -56,6 +56,7 @@
             <thead>
               <tr>
                 <th>Medida</th>
+                <th>Pcz</th>
                 <th>Cuarto</th>
                 <th>Kilos</th>
                 <th v-if="!soloInventario">Taras</th>
@@ -74,6 +75,7 @@
                     {{ producto.nombre }}
                   </button>
                 </td>
+                <td>{{ producto.piezas || '—' }}</td>
                 <td>
                   <button 
                     class="cuarto-button"
@@ -466,6 +468,7 @@ export default {
         producto: nombreProducto,
         kilos,
         precio: producto.ultimoPrecio || 0,
+        piezas: producto.piezas || '',
         cuartoFrio: nuevoCuarto
       };
 
@@ -473,6 +476,7 @@ export default {
         proveedor,
         producto: nombreProducto,
         kilos,
+        piezas: producto.piezas || '',
         cuartoFrio: cuartoOrigen
       };
 
@@ -549,11 +553,13 @@ export default {
               // Crear clave única usando producto + precio (si existe)
               const precioKey = entrada.precio ? entrada.precio.toString() : 'sin_precio';
               const cuarto = normalizeCuarto(entrada.cuartoFrio);
-              const claveProducto = `${entrada.producto}_${precioKey}_${cuarto}`;
+              const piezas = entrada.piezas == null ? '' : String(entrada.piezas).trim();
+              const claveProducto = JSON.stringify([entrada.producto, precioKey, cuarto, piezas]);
               
               if (!existencias[entrada.proveedor][claveProducto]) {
                 existencias[entrada.proveedor][claveProducto] = {
                   nombre: entrada.producto,
+                  piezas,
                   kilos: 0,
                   ultimoPrecio: entrada.precio || 0,
                   proveedor: entrada.proveedor,
@@ -582,7 +588,9 @@ export default {
               const productosConMismoNombre = Object.keys(existencias[salida.proveedor])
                 .filter(key => {
                   const prod = existencias[salida.proveedor][key];
+                  const piezasSalida = salida.piezas == null ? '' : String(salida.piezas).trim();
                   return prod.producto === salida.producto &&
+                    (!piezasSalida || prod.piezas === piezasSalida) &&
                     (usarTodosLosCuartos || prod.cuarto === cuartoSalida);
                 })
                 .sort((a, b) => {
@@ -618,7 +626,7 @@ export default {
             .filter(producto => this.tieneKilosVisibles(producto.kilos))
             .map(producto => ({
               ...producto,
-              clave: `${producto.producto}_${producto.ultimoPrecio}_${producto.cuarto}`,
+              clave: JSON.stringify([producto.producto, producto.ultimoPrecio, producto.cuarto, producto.piezas]),
               valor: producto.kilos * producto.ultimoPrecio
             }));
           
@@ -816,6 +824,11 @@ export default {
       }
     },
 
+    escaparTextoReporte(valor) {
+      return String(valor).replace(/[&<>"']/g, caracter => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      }[caracter]));
+    },
     imprimirReporte() {
       const fechaActual = new Date().toLocaleDateString('es-ES', {
         year: 'numeric',
@@ -969,6 +982,7 @@ export default {
               <thead>
                 <tr>
                   <th>Medida</th>
+                  <th>Pcz</th>
                   <th>Kilos</th>
                   <th>Taras</th>
                   ${mostrarPrecios ? '<th>Precio</th>' : ''}
@@ -982,6 +996,7 @@ export default {
           contenidoHTML += `
             <tr>
               <td>${producto.nombre}</td>
+              <td>${this.escaparTextoReporte(producto.piezas || '—')}</td>
               <td class="kilos-cell">${this.formatNumber(producto.kilos)}</td>
               <td class="taras-cell">${(producto.kilos / 19).toFixed(1)}</td>
               ${mostrarPrecios ? `<td class="precio-cell">$${this.formatearPrecio(producto.ultimoPrecio)}</td>` : ''}

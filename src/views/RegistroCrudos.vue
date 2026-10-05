@@ -89,6 +89,12 @@
                 placeholder="Producto/Medida" 
                 required 
               />
+              <input
+                v-model="newEntrada.piezas"
+                type="text"
+                placeholder="Piezas (opcional)"
+                aria-label="Piezas"
+              />
               <input 
                 v-model.number="newEntrada.precio" 
                 type="number" 
@@ -123,6 +129,7 @@
           <li v-for="(entrada, index) in entradas" :key="'entrada-' + index">
             <div class="item-info">
               <strong>{{ entrada.proveedor }}</strong> - {{ entrada.producto }}
+              <span v-if="entrada.piezas" class="total-info"> - Pcz: {{ entrada.piezas }}</span>
               <span v-if="entrada.precio" class="precio-info"> (${{ formatearPrecio(entrada.precio) }})</span>
               : {{ formatNumber(entrada.kilos) }} kg
               <span v-if="entrada.precio" class="total-info"> - Total: ${{ formatearPrecio(entrada.kilos * entrada.precio) }}</span>
@@ -310,6 +317,10 @@
             />
           </label>
           <label>
+            Piezas (opcional):
+            <input v-model="entradaEditData.piezas" type="text" placeholder="Piezas" />
+          </label>
+          <label>
             Cuarto frío (opcional):
             <select v-model="entradaEditData.cuartoFrio">
               <option value="s/c">s/c</option>
@@ -369,6 +380,7 @@ export default {
         producto: '', 
         kilos: null, 
         precio: null,
+        piezas: '',
         cuartoFrio: ''
       },
       newSalida: { 
@@ -390,7 +402,7 @@ export default {
       kilosDisponiblesSeleccionados: 0,
       editandoEntrada: false,
       entradaEditIndex: null,
-      entradaEditData: { kilos: null, cuartoFrio: '' },
+      entradaEditData: { kilos: null, piezas: '', cuartoFrio: '' },
       comparacionVisible: false,
       cargandoEmbarques: false,
       embarquesCargados: false,
@@ -730,6 +742,7 @@ export default {
       this.newEntrada.producto = '';
       this.newEntrada.kilos = null;
       this.newEntrada.precio = null;
+      this.newEntrada.piezas = '';
       this.nuevoProveedorEntrada = '';
       this.customProducto = '';
       this.newEntrada.cuartoFrio = '';
@@ -828,6 +841,7 @@ export default {
         proveedor: proveedorNombre,
         producto: productoNombre,
         kilos: Number(this.newEntrada.kilos.toFixed(1)),
+        piezas: String(this.newEntrada.piezas || '').trim(),
         precio: precioReferencia ? Number(precioReferencia.toFixed(2)) : null,
         cuartoFrio: this.normalizeCuarto(this.newEntrada.cuartoFrio)
       });
@@ -884,6 +898,7 @@ export default {
       const entrada = this.entradas[index];
       this.entradaEditData = {
         kilos: entrada.kilos,
+        piezas: entrada.piezas == null ? '' : String(entrada.piezas),
         cuartoFrio: this.normalizeCuarto(entrada.cuartoFrio)
       };
       this.editandoEntrada = true;
@@ -891,7 +906,7 @@ export default {
     cancelarEdicionEntrada() {
       this.editandoEntrada = false;
       this.entradaEditIndex = null;
-      this.entradaEditData = { kilos: null, cuartoFrio: '' };
+      this.entradaEditData = { kilos: null, piezas: '', cuartoFrio: '' };
     },
     async guardarEdicionEntrada() {
       if (this.entradaEditIndex === null) return;
@@ -900,6 +915,7 @@ export default {
 
       const entrada = this.entradas[this.entradaEditIndex];
       entrada.kilos = Number(nuevaCantidad.toFixed(1));
+      this.$set(entrada, 'piezas', String(this.entradaEditData.piezas || '').trim());
       entrada.cuartoFrio = this.normalizeCuarto(this.entradaEditData.cuartoFrio);
 
       this.cancelarEdicionEntrada();

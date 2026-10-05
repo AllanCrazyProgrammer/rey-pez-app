@@ -44,6 +44,7 @@
           <label>Kilos<input aria-label="Kilos" ref="cantidad" :value="modelo.kilos == null ? '' : modelo.kilos" type="number" inputmode="decimal" min="0" step="0.1" placeholder="0.0" @input="capturarKilos($event.target.value)" /></label>
           <label v-if="esLimpio">Cajas <span class="rp-field-hint">20 kg c/u</span><input aria-label="Cajas" :value="modelo.cajas == null ? '' : modelo.cajas" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0" @input="updateCantidadDesdeCajas(tab === 'entrada' ? 'newEntrada' : 'newSalida', $event.target.value)" /></label>
         </div>
+        <label v-if="!esLimpio && tab === 'entrada'">Piezas (opcional)<input aria-label="Piezas" v-model="modelo.piezas" type="text" placeholder="Piezas" /></label>
         <details v-if="tab === 'entrada'" class="rp-optional"><summary>Precio opcional</summary><label>Precio por kilo<input v-model.number="modelo.precio" type="number" inputmode="decimal" min="0" step="0.01" placeholder="$0.00" /></label></details>
         <p v-if="tab === 'salida' && Number(modelo.kilos) > disponible" class="rp-inline-error" role="alert">La cantidad supera los kilos disponibles.</p>
         <button class="rp-button rp-button-primary" type="submit" :disabled="!puedeAgregar || guardando"><MobileIcon name="plus" />{{ tab === 'entrada' ? 'Agregar entrada' : 'Agregar salida' }}</button>
@@ -57,6 +58,7 @@
       <ul class="rp-movement-items">
         <li v-for="item in seccion.items" :key="item.indice" class="rp-card rp-item">
           <div class="rp-item-main"><strong>{{ esLimpio ? item.medida : item.producto }}</strong><span>{{ esLimpio && seccion.tipo === 'maquila' ? 'Maquila' : 'Proveedor' }}: {{ item.proveedor }}</span><span class="rp-meta">{{ item.cuartoFrio || 'Sin cuarto' }}<template v-if="item.precio"> · ${{ formatNumber(item.precio) }}/kg</template></span></div>
+          <span v-if="!esLimpio && item.piezas" class="rp-meta">Pcz: {{ item.piezas }}</span>
           <div class="rp-item-amount"><strong>{{ formatNumber(item.kilos, 1) }} <small>kg</small></strong><span v-if="esLimpio">{{ formatNumber(item.kilos / 20, 2) }} cajas</span></div>
           <div class="rp-item-actions"><button v-if="tab === 'entrada'" type="button" @click="editarEntrada(item.indice)" :aria-label="'Editar entrada de ' + (item.medida || item.producto)"><MobileIcon name="edit" /></button><button type="button" @click="quitar(item.indice)" :aria-label="'Eliminar ' + tab + ' de ' + (item.medida || item.producto)"><MobileIcon name="trash" /></button></div>
         </li>
@@ -69,6 +71,7 @@
       <section class="rp-dialog" role="dialog" aria-modal="true" aria-labelledby="rp-edit-title">
         <div class="rp-dialog-heading"><h2 id="rp-edit-title">Editar entrada</h2><button @click="cancelarEdicionEntrada" aria-label="Cerrar edición"><MobileIcon name="close" /></button></div>
         <div class="rp-quantity-grid" :class="{ single: !esLimpio }"><label>Kilos<input :value="entradaEditData.kilos" type="number" inputmode="decimal" min="0" step="0.1" @input="editarKilos($event.target.value)" /></label><label v-if="esLimpio">Cajas<input :value="entradaEditData.cajas" type="number" inputmode="decimal" min="0" step="0.01" @input="updateCantidadDesdeCajas('entradaEditData', $event.target.value)" /></label></div>
+        <label v-if="!esLimpio">Piezas (opcional)<input v-model="entradaEditData.piezas" type="text" placeholder="Piezas" /></label>
         <label>Cuarto frío<select v-model="entradaEditData.cuartoFrio"><option value="">Sin especificar</option><option v-for="c in cuartosBase" :key="c" :value="c">{{ c }}</option></select></label>
         <label v-if="esLimpio">Precio por kilo<input v-model.number="entradaEditData.precio" type="number" inputmode="decimal" min="0" step="0.01" /></label>
         <button class="rp-button rp-button-primary" @click="guardarEdicionEntrada">Aplicar cambios</button><button class="rp-button rp-button-secondary" @click="cancelarEdicionEntrada">Cancelar</button>

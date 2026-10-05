@@ -22,7 +22,7 @@
     </div>
     <ul v-else class="rp-stock-list">
       <li v-for="item in visibles" :key="item.id" class="rp-card rp-stock-item">
-        <div class="rp-stock-main"><span class="rp-provider">{{ item.proveedor }}</span><h2>{{ item.medida }}</h2><span class="rp-room"><MobileIcon name="box" />{{ item.cuarto === 's/c' ? 'Sin cuarto' : item.cuarto }}</span><span v-if="item.fecha" class="rp-meta">Entrada {{ mostrarFecha(item.fecha, true) }}</span><span v-if="item.precio" class="rp-meta">${{ formatNumber(item.precio) }}/kg</span></div>
+        <div class="rp-stock-main"><span class="rp-provider">{{ item.proveedor }}</span><h2>{{ item.medida }}<span v-if="tipo === 'crudos'" class="rp-meta"> · Pcz: {{ item.piezas || '—' }}</span></h2><span class="rp-room"><MobileIcon name="box" />{{ item.cuarto === 's/c' ? 'Sin cuarto' : item.cuarto }}</span><span v-if="item.fecha" class="rp-meta">Entrada {{ mostrarFecha(item.fecha, true) }}</span><span v-if="item.precio" class="rp-meta">${{ formatNumber(item.precio) }}/kg</span></div>
         <div class="rp-stock-amount"><strong>{{ formatNumber(item.kilos, 1) }}</strong><span>kilos</span><small v-if="tipo === 'limpios'">{{ formatNumber(item.kilos / 20, 2) }} cajas</small></div>
       </li>
     </ul>
