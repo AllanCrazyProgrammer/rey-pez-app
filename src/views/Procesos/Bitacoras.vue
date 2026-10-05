@@ -346,6 +346,29 @@
               :deshabilitado="guardando"
               @dictando="actualizarDictado('acciones', $event)"
             />
+            <div class="form-group full-width">
+              <label for="fotos-bitacora">Fotos (opcional)</label>
+              <input
+                id="fotos-bitacora"
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                multiple
+                class="form-control"
+                aria-describedby="fotos-ayuda"
+                @change="agregarFotos"
+              />
+              <p id="fotos-ayuda" class="form-help">
+                Hasta 12 fotos JPG, PNG o WebP, de máximo 10 MB cada una.
+              </p>
+              <div v-if="bitacoraActual.fotos.length" class="fotos-grid">
+                <figure v-for="(foto, index) in bitacoraActual.fotos" :key="foto.id" class="foto-card">
+                  <img :src="foto.preview || foto.url" :alt="foto.nombre || 'Foto del mantenimiento'" />
+                  <figcaption>{{ foto.nombre }}</figcaption>
+                  <button type="button" class="btn-secondary" @click="quitarFoto(index)"
+                    :aria-label="'Quitar foto ' + (foto.nombre || index + 1)">Quitar</button>
+                </figure>
+              </div>
+            </div>
           </fieldset>
         </form>
         <div class="modal-footer">
@@ -427,6 +450,18 @@
               {{ bitacoraDetalle.accionesRealizadas || 'Sin acciones registradas' }}
             </p>
           </div>
+          <div class="detalle-grupo">
+            <h3>Fotos</h3>
+            <div v-if="bitacoraDetalle.fotos && bitacoraDetalle.fotos.length" class="fotos-grid">
+              <a v-for="foto in bitacoraDetalle.fotos" :key="foto.id" :href="foto.url"
+                target="_blank" rel="noopener noreferrer" class="foto-card"
+                :aria-label="'Abrir foto ' + (foto.nombre || 'del mantenimiento')">
+                <img :src="foto.url" :alt="foto.nombre || 'Foto del mantenimiento'" loading="lazy" />
+                <span>{{ foto.nombre || 'Ver foto' }}</span>
+              </a>
+            </div>
+            <p v-else>Sin fotos registradas</p>
+          </div>
         </div>
 
         <div class="modal-footer">
@@ -482,10 +517,11 @@
 </template>
 
 <script>
-import { db } from '@/firebase';
+import { db, storage } from '@/firebase';
+import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import {
   collection,
-  addDoc,
+  setDoc,
   getDocs,
   doc,
   updateDoc,
@@ -625,6 +661,7 @@ export default {
   },
   beforeDestroy() {
     document.removeEventListener('keydown', this.tecladoModal);
+    this.liberarPreviews();
     if (this.modalActivo) document.body.style.overflow = this.overflowAnterior || '';
   },
   created() {
@@ -652,6 +689,7 @@ export default {
       return 'estado-' + this.normalizarTexto(estado).replace(/\s+/g, '-');
     },
     nuevaBitacora() {
+      this.liberarPreviews();
       this.modoEdicion = false;
       this.errorFormulario = '';
       this.bitacoraActual = this.inicializarBitacora();
@@ -678,7 +716,7 @@ export default {
       }
       if (event.key === 'Tab' && this.$refs.dialogo) {
         const controles = [
-          ...this.$refs.dialogo.querySelectorAll('button, input, select, textarea, [tabindex="0"]'),
+          ...this.$refs.dialogo.querySelectorAll('button, input, select, textarea, a[href], [tabindex="0"]'),
         ].filter((el) => !el.matches(':disabled'));
         const primero = controles[0];
         const ultimo = controles[controles.length - 1];
@@ -712,6 +750,7 @@ export default {
         estado: '',
         observaciones: '',
         accionesRealizadas: '',
+        fotos: [],
         createdAt: null,
         updatedAt: null,
       };
@@ -746,6 +785,7 @@ export default {
             estado: data.estado || '',
             observaciones: data.observaciones || '',
             accionesRealizadas: data.accionesRealizadas || '',
+            fotos: Array.isArray(data.fotos) ? data.fotos : [],
             createdAt: data.createdAt || null,
             updatedAt: data.updatedAt || null,
           };
@@ -767,7 +807,8 @@ export default {
     editarBitacora(bitacora) {
       this.errorFormulario = '';
       this.modoEdicion = true;
-      this.bitacoraActual = { ...bitacora };
+      this.liberarPreviews();
+      this.bitacoraActual = { ...bitacora, fotos: (bitacora.fotos || []).map((foto) => ({ ...foto })) };
       this.mostrarFormulario = true;
     },
     verDetalles(bitacora) {
@@ -776,81 +817,114 @@ export default {
     },
     cerrarFormulario() {
       if (this.guardando) return;
+      this.liberarPreviews();
       this.mostrarFormulario = false;
       this.modoEdicion = false;
       this.bitacoraActual = this.inicializarBitacora();
       this.guardando = false;
     },
+    agregarFotos(event) {
+      if (this.guardando) return;
+      this.errorFormulario = '';
+      const archivos = Array.from(event.target.files || []);
+      event.target.value = '';
+      if (this.bitacoraActual.fotos.length + archivos.length > 12) {
+        this.errorFormulario = 'Puedes adjuntar un máximo de 12 fotos por bitácora.';
+        return;
+      }
+      if (archivos.some((archivo) => !['image/jpeg', 'image/png', 'image/webp'].includes(archivo.type)
+        || archivo.size > 10 * 1024 * 1024 || !archivo.size)) {
+        this.errorFormulario = 'Selecciona fotos JPG, PNG o WebP de máximo 10 MB cada una.';
+        return;
+      }
+      archivos.forEach((archivo) => {
+        this.bitacoraActual.fotos.push({
+          id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+          nombre: archivo.name,
+          file: archivo,
+          preview: URL.createObjectURL(archivo),
+        });
+      });
+    },
+    quitarFoto(index) {
+      if (this.guardando) return;
+      const foto = this.bitacoraActual.fotos[index];
+      if (foto.preview) URL.revokeObjectURL(foto.preview);
+      this.bitacoraActual.fotos.splice(index, 1);
+    },
+    liberarPreviews() {
+      (this.bitacoraActual.fotos || []).forEach((foto) => {
+        if (foto.preview) URL.revokeObjectURL(foto.preview);
+      });
+    },
+    async borrarArchivosFotos(fotos) {
+      await Promise.all(fotos.filter((foto) => foto.path && foto.path.startsWith('bitacoras/'))
+        .map(async (foto) => {
+          try { await deleteObject(ref(storage, foto.path)); }
+          catch (error) { console.warn('No se pudo limpiar una foto de bitácora:', error); }
+        }));
+    },
     async guardarBitacora() {
       if (this.guardando || this.campoDictado) return;
       this.errorFormulario = '';
-      if (this.validarFormulario()) {
-        this.guardando = true;
-        try {
-          // Asegurarse de que los datos sean válidos
-          const bitacoraData = {
-            ...this.bitacoraActual,
-            cuartoId: this.bitacoraActual.cuartoId.toString(),
-            temperatura: this.tieneTemperatura(this.bitacoraActual.temperatura)
-              ? Number(this.bitacoraActual.temperatura)
-              : null,
-            tecnico: this.bitacoraActual.tecnico.trim(),
-            tipoMantenimiento: this.bitacoraActual.tipoMantenimiento,
-            estado: this.bitacoraActual.estado,
-            observaciones: this.bitacoraActual.observaciones || '',
-            accionesRealizadas: this.bitacoraActual.accionesRealizadas || '',
-            updatedAt: serverTimestamp(),
-          };
-
-          if (this.modoEdicion) {
-            // Verificar que el ID sea válido
-            if (!bitacoraData.id) {
-              throw new Error('ID de bitácora no válido para actualización');
-            }
-
-            console.log('Actualizando bitácora con ID:', bitacoraData.id);
-
-            // Actualizar bitácora existente
-            const { id, ...dataSinId } = bitacoraData;
-            const bitacoraRef = doc(db, 'bitacoras', id.toString());
-            await updateDoc(bitacoraRef, dataSinId);
-
-            // Actualizar en el array local
-            const index = this.bitacoras.findIndex((b) => b.id === id);
-            if (index !== -1) {
-              this.bitacoras.splice(index, 1, bitacoraData);
-            }
-
-            console.log('Bitácora actualizada con éxito');
-          } else {
-            // Crear nueva bitácora
-            bitacoraData.createdAt = serverTimestamp();
-            console.log('Creando nueva bitácora');
-
-            const docRef = await addDoc(collection(db, 'bitacoras'), bitacoraData);
-
-            // Agregar al array local con el ID generado
-            const nuevaBitacora = {
-              ...bitacoraData,
-              id: docRef.id.toString(),
-            };
-
-            console.log('Nueva bitácora creada con ID:', nuevaBitacora.id);
-            this.bitacoras.unshift(nuevaBitacora);
-          }
-
-          this.mensaje = this.modoEdicion
-            ? 'Bitácora actualizada correctamente.'
-            : 'Bitácora creada correctamente.';
-          this.guardando = false;
-          this.cerrarFormulario();
-        } catch (error) {
-          console.error('Error al guardar bitácora:', error);
-          this.errorFormulario =
-            'No se pudo guardar. Tus cambios siguen aquí; revisa tu conexión y vuelve a intentarlo.';
-        } finally {
-          this.guardando = false;
+      if (!this.validarFormulario()) return;
+      this.guardando = true;
+      const subidas = [];
+      try {
+        if (this.modoEdicion && !this.bitacoraActual.id) {
+          throw new Error('ID de bitácora no válido para actualización');
         }
+        const bitacoraRef = this.modoEdicion
+          ? doc(db, 'bitacoras', this.bitacoraActual.id.toString())
+          : doc(collection(db, 'bitacoras'));
+        const anteriores = (this.bitacoras.find((b) => b.id === bitacoraRef.id) || {}).fotos || [];
+        const fotos = [];
+        for (const foto of this.bitacoraActual.fotos) {
+          if (foto.file) {
+            const path = `bitacoras/${bitacoraRef.id}/${foto.id}`;
+            const fotoRef = ref(storage, path);
+            subidas.push({ path });
+            await uploadBytes(fotoRef, foto.file, { contentType: foto.file.type });
+            fotos.push({ id: foto.id, nombre: foto.nombre, path, url: await getDownloadURL(fotoRef) });
+          } else {
+            fotos.push({ id: foto.id, nombre: foto.nombre || '', path: foto.path || '', url: foto.url });
+          }
+        }
+        const campos = { ...this.bitacoraActual };
+        delete campos.id;
+        const bitacoraData = {
+          ...campos,
+          cuartoId: this.bitacoraActual.cuartoId.toString(),
+          temperatura: this.tieneTemperatura(this.bitacoraActual.temperatura)
+            ? Number(this.bitacoraActual.temperatura) : null,
+          tecnico: this.bitacoraActual.tecnico.trim(),
+          observaciones: this.bitacoraActual.observaciones || '',
+          accionesRealizadas: this.bitacoraActual.accionesRealizadas || '',
+          fotos,
+          updatedAt: serverTimestamp(),
+        };
+        if (this.modoEdicion) await updateDoc(bitacoraRef, bitacoraData);
+        else {
+          bitacoraData.createdAt = serverTimestamp();
+          await setDoc(bitacoraRef, bitacoraData);
+        }
+        const guardada = { ...bitacoraData, id: bitacoraRef.id };
+        const index = this.bitacoras.findIndex((b) => b.id === bitacoraRef.id);
+        if (index !== -1) this.bitacoras.splice(index, 1, guardada);
+        else this.bitacoras.unshift(guardada);
+        this.mensaje = this.modoEdicion
+          ? 'Bitácora actualizada correctamente.' : 'Bitácora creada correctamente.';
+        // El registro ya está guardado: limpiar únicamente fotos que dejaron de usarse.
+        await this.borrarArchivosFotos(anteriores.filter((foto) => !fotos.some((f) => f.path === foto.path)));
+        this.guardando = false;
+        this.cerrarFormulario();
+      } catch (error) {
+        await this.borrarArchivosFotos(subidas);
+        console.error('Error al guardar bitácora:', error);
+        this.errorFormulario =
+          'No se pudo guardar la bitácora o sus fotos. Tus cambios siguen aquí; revisa tu conexión y vuelve a intentarlo.';
+      } finally {
+        this.guardando = false;
       }
     },
     validarFormulario() {
@@ -901,6 +975,7 @@ export default {
 
         const bitacoraRef = doc(db, 'bitacoras', bitacoraId);
         await deleteDoc(bitacoraRef);
+        await this.borrarArchivosFotos(this.bitacoraEliminar.fotos || []);
 
         // Eliminar del array local
         const index = this.bitacoras.findIndex((b) => b.id === bitacoraId);
@@ -1396,6 +1471,33 @@ a:focus-visible,
 .full-width {
   grid-column: 1 / -1;
 }
+.fotos-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 12px;
+}
+.foto-card {
+  margin: 0;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  color: var(--accent);
+}
+.foto-card img {
+  width: 100%;
+  height: 130px;
+  object-fit: cover;
+  border-radius: 5px;
+}
+.foto-card figcaption,
+.foto-card span {
+  display: block;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  margin: 8px 0;
+}
+.foto-card button { width: 100%; }
 textarea.form-control {
   resize: vertical;
   min-height: 82px;

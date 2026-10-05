@@ -6,13 +6,18 @@ class OfflinePlugin {
     compiler.hooks.emit.tap('OfflinePlugin', compilation => {
       const assets = Object.keys(compilation.assets).filter(name => !/\.map$/.test(name));
       const version = crypto.createHash('sha256');
+      // A cache policy change must create a separate shell, even with identical assets.
+      version.update('network-refresh-v1');
       assets.forEach(name => version.update(compilation.assets[name].source()));
       const source = `const CACHE = 'reypez-shell-${version.digest('hex').slice(0, 16)}';
 const ASSETS = ${JSON.stringify(assets.map(name => '/' + name))};
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(async cache => {
     // Bound concurrent downloads for mobile connections.
-    for (let i = 0; i < ASSETS.length; i += 12) await cache.addAll(ASSETS.slice(i, i + 12));
+    for (let i = 0; i < ASSETS.length; i += 12) {
+      // Never populate a new release with a still-fresh HTTP copy of index.html.
+      await cache.addAll(ASSETS.slice(i, i + 12).map(url => new Request(url, { cache: 'reload' })));
+    }
   }));
 });
 // Only an explicit action in the sole open tab can replace the running shell.
