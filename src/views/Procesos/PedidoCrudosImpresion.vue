@@ -16,7 +16,7 @@
           <tr>
             <th>Cliente</th>
             <th v-for="columna in obtenerColumnasConDatos()" :key="columna">
-              {{ columna }}
+              {{ formatearMedidaPedidoCrudo(columna) }}
             </th>
           </tr>
         </thead>
@@ -54,6 +54,7 @@
 
 <script>
 import pdfMake from 'pdfmake/build/pdfmake'
+import { formatearMedidaPedidoCrudo } from '@/utils/medidasPedidoCrudo'
 
 const fonts = {
   Roboto: {
@@ -83,6 +84,7 @@ export default {
     }
   },
   methods: {
+    formatearMedidaPedidoCrudo,
     obtenerClientesConDatos() {
       return Object.keys(this.pedidos).filter(cliente => {
         return Object.values(this.pedidos[cliente]).some(valor => {
@@ -146,7 +148,7 @@ export default {
         return fila
       })
 
-      const headers = ['Cliente', ...columnasConDatos].map(header => ({
+      const headers = ['Cliente', ...columnasConDatos.map(formatearMedidaPedidoCrudo)].map(header => ({
         text: header,
         alignment: 'center'
       }))
@@ -408,4 +410,4 @@ export default {
     margin: 1cm;
   }
 }
-</style> 
+</style>

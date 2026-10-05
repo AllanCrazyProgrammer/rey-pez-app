@@ -29,7 +29,7 @@
           <tr>
             <th>Cliente</th>
             <th v-for="columna in columnas" :key="columna">
-              {{ columna }}
+              {{ formatearMedidaPedidoCrudo(columna) }}
               <span 
                 v-if="!columnasBase.includes(columna)" 
                 class="eliminar-columna"
@@ -119,6 +119,7 @@
 
 <script>
 import { db } from '@/firebase'
+import { formatearMedidaPedidoCrudo } from '@/utils/medidasPedidoCrudo'
 import { collection, addDoc, Timestamp, doc, getDoc, updateDoc } from 'firebase/firestore'
 
 export default {
@@ -212,6 +213,7 @@ export default {
         this.$router.push('/procesos/pedidos')
       }
     },
+    formatearMedidaPedidoCrudo,
     normalizarNombreColumna(columna) {
       return columna.toLowerCase();
     },
@@ -895,4 +897,4 @@ input.cliente-veronica:focus {
     font-size: 1.2rem;
   }
 }
-</style> 
+</style>
