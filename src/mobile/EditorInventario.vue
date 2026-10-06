@@ -73,7 +73,7 @@
         <div class="rp-quantity-grid" :class="{ single: !esLimpio }"><label>Kilos<input :value="entradaEditData.kilos" type="number" inputmode="decimal" min="0" step="0.1" @input="editarKilos($event.target.value)" /></label><label v-if="esLimpio">Cajas<input :value="entradaEditData.cajas" type="number" inputmode="decimal" min="0" step="0.01" @input="updateCantidadDesdeCajas('entradaEditData', $event.target.value)" /></label></div>
         <label v-if="!esLimpio">Piezas (opcional)<input v-model="entradaEditData.piezas" type="text" placeholder="Piezas" /></label>
         <label>Cuarto frío<select v-model="entradaEditData.cuartoFrio"><option value="">Sin especificar</option><option v-for="c in cuartosBase" :key="c" :value="c">{{ c }}</option></select></label>
-        <label v-if="esLimpio">Precio por kilo<input v-model.number="entradaEditData.precio" type="number" inputmode="decimal" min="0" step="0.01" /></label>
+        <label>Precio por kilo (opcional)<input v-model.number="entradaEditData.precio" type="number" inputmode="decimal" min="0" step="0.01" /></label>
         <button class="rp-button rp-button-primary" @click="guardarEdicionEntrada">Aplicar cambios</button><button class="rp-button rp-button-secondary" @click="cancelarEdicionEntrada">Cancelar</button>
       </section>
     </div>

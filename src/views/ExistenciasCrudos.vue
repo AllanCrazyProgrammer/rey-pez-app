@@ -60,7 +60,7 @@
                 <th>Cuarto</th>
                 <th>Kilos</th>
                 <th v-if="!soloInventario">Taras</th>
-                <th v-if="tienePreciosValidos(productos)">Precio</th>
+                <th>Precio/kg</th>
                 <th v-if="tienePreciosValidos(productos)">Valor</th>
               </tr>
             </thead>
@@ -88,7 +88,7 @@
                 </td>
                 <td class="kilos-cell">{{ formatNumber(producto.kilos) }}</td>
                 <td v-if="!soloInventario" class="taras-cell">{{ (producto.kilos / 19).toFixed(1) }}</td>
-                <td v-if="tienePreciosValidos(productos)" class="precio-cell">${{ formatearPrecio(producto.ultimoPrecio) }}</td>
+                <td class="precio-cell">{{ producto.ultimoPrecio > 0 ? `$${formatearPrecio(producto.ultimoPrecio)}` : '—' }}</td>
                 <td v-if="tienePreciosValidos(productos)" class="valor-cell">${{ formatearValor(producto.valor) }}</td>
               </tr>
             </tbody>
@@ -985,7 +985,7 @@ export default {
                   <th>Pcz</th>
                   <th>Kilos</th>
                   <th>Taras</th>
-                  ${mostrarPrecios ? '<th>Precio</th>' : ''}
+                  <th>Precio/kg</th>
                   ${mostrarPrecios ? '<th>Valor</th>' : ''}
                 </tr>
               </thead>
@@ -999,7 +999,7 @@ export default {
               <td>${this.escaparTextoReporte(producto.piezas || '—')}</td>
               <td class="kilos-cell">${this.formatNumber(producto.kilos)}</td>
               <td class="taras-cell">${(producto.kilos / 19).toFixed(1)}</td>
-              ${mostrarPrecios ? `<td class="precio-cell">$${this.formatearPrecio(producto.ultimoPrecio)}</td>` : ''}
+              <td class="precio-cell">${producto.ultimoPrecio > 0 ? `$${this.formatearPrecio(producto.ultimoPrecio)}` : '—'}</td>
               ${mostrarPrecios ? `<td class="valor-cell">$${this.formatearValor(producto.valor)}</td>` : ''}
             </tr>
           `;

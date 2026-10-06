@@ -406,10 +406,20 @@ async function run() {
     assert.equal(await page.getByRole('tab', { name: 'Resumen', exact: true }).count(), 0);
     assert.equal(await page.locator('.comparacion-embarque').count(), 0);
     await page.getByRole('tab', { name: /Entrada/ }).click();
+    await page.getByRole('button', { name: 'Editar entrada de Crudo mediano', exact: true }).click();
+    const editarCrudo = page.getByRole('dialog', { name: 'Editar entrada', exact: true });
+    await editarCrudo.getByLabel(/Precio por kilo/).fill('-1');
+    await editarCrudo.getByRole('button', { name: 'Aplicar cambios', exact: true }).click();
+    assert.match(dialogs.at(-1), /precio.*mayor o igual a cero/);
+    await editarCrudo.getByLabel(/Precio por kilo/).fill('125.50');
+    await editarCrudo.getByRole('button', { name: 'Aplicar cambios', exact: true }).click();
+    assert.match(await page.locator('.rp-movement-items').innerText(), /125\.50.*\/kg/);
     const raw = page.getByRole('form', { name: 'Capturar entrada' });
     await raw.getByLabel('Proveedor', { exact: true }).selectOption('Proveedor crudo');
     await raw.getByLabel('Producto', { exact: true }).selectOption('Crudo mediano');
     await raw.getByLabel('Kilos', { exact: true }).fill('25');
+    await raw.locator('summary').click();
+    await raw.getByLabel('Precio por kilo', { exact: true }).fill('140.25');
     await raw.getByRole('button', { name: 'Agregar entrada', exact: true }).click();
     await page.evaluate(() => { window.__inventariosPrueba.fallar = 'existenciasCrudos'; });
     await page.getByRole('button', { name: 'Guardar cambios', exact: true }).click();
@@ -420,6 +430,7 @@ async function run() {
     await page.getByRole('button', { name: 'Guardar cambios', exact: true }).click();
     await page.getByRole('heading', { name: 'Movimientos de crudos' }).waitFor();
     assert.match(await page.locator('.mobile-registros').innerText(), /105\.0 kg/);
+    assert.deepEqual(await page.evaluate(() => window.__inventariosPrueba.data.existenciasCrudos.crudo1.entradas.map(e => e.precio)), [125.5, 140.25], 'Los precios editados y nuevos se guardan en el registro');
     await page.locator('.mobile-registros a').first().click();
     await page.getByRole('tab', { name: /Salida/ }).click();
     const rawSalida = page.getByRole('form', { name: 'Capturar salida' });
@@ -431,6 +442,8 @@ async function run() {
     await page.getByRole('heading', { name: 'Movimientos de crudos' }).waitFor();
     await page.getByRole('link', { name: 'Crudos', exact: true }).click();
     await page.waitForFunction(() => document.querySelector('.rp-stock-hero')?.textContent.includes('100.0'));
+    assert.match(await page.locator('.rp-stock-list').innerText(), /125\.50.*\/kg/);
+    assert.match(await page.locator('.rp-stock-list').innerText(), /140\.25.*\/kg/);
     assert.equal(await page.getByRole('columnheader', { name: 'Taras', exact: true }).count(), 0);
     await page.screenshot({ path: path.join(output, 'crudos.png'), fullPage: true });
     const writes = await page.evaluate(() => window.__inventariosPrueba.escrituras);

@@ -100,7 +100,9 @@
                 type="number" 
                 inputmode="decimal" 
                 step="0.01" 
-                placeholder="Precio (opcional)" 
+                min="0"
+                aria-label="Precio por kilo (opcional)"
+                placeholder="Precio/kg (opcional)"
               />
             <select v-model="newEntrada.cuartoFrio">
               <option value="">Cuarto frío (opcional)</option>
@@ -130,7 +132,7 @@
             <div class="item-info">
               <strong>{{ entrada.proveedor }}</strong> - {{ entrada.producto }}
               <span v-if="entrada.piezas" class="total-info"> - Pcz: {{ entrada.piezas }}</span>
-              <span v-if="entrada.precio" class="precio-info"> (${{ formatearPrecio(entrada.precio) }})</span>
+              <span v-if="entrada.precio" class="precio-info"> (${{ formatearPrecio(entrada.precio) }}/kg)</span>
               : {{ formatNumber(entrada.kilos) }} kg
               <span v-if="entrada.precio" class="total-info"> - Total: ${{ formatearPrecio(entrada.kilos * entrada.precio) }}</span>
               <span v-if="entrada.cuartoFrio" class="total-info"> - Cuarto: {{ entrada.cuartoFrio }}</span>
@@ -321,6 +323,17 @@
             <input v-model="entradaEditData.piezas" type="text" placeholder="Piezas" />
           </label>
           <label>
+            Precio por kilo (opcional):
+            <input
+              v-model.number="entradaEditData.precio"
+              type="number"
+              inputmode="decimal"
+              min="0"
+              step="0.01"
+              placeholder="Precio/kg"
+            />
+          </label>
+          <label>
             Cuarto frío (opcional):
             <select v-model="entradaEditData.cuartoFrio">
               <option value="s/c">s/c</option>
@@ -402,7 +415,7 @@ export default {
       kilosDisponiblesSeleccionados: 0,
       editandoEntrada: false,
       entradaEditIndex: null,
-      entradaEditData: { kilos: null, piezas: '', cuartoFrio: '' },
+      entradaEditData: { kilos: null, precio: null, piezas: '', cuartoFrio: '' },
       comparacionVisible: false,
       cargandoEmbarques: false,
       embarquesCargados: false,
@@ -434,7 +447,8 @@ export default {
       return proveedorValido &&
              productoValido &&
              this.newEntrada.kilos &&
-             this.newEntrada.kilos > 0;
+             this.newEntrada.kilos > 0 &&
+             this.esPrecioValido(this.newEntrada.precio);
     },
     isSalidaValida() {
       return this.newSalida.proveedor &&
@@ -842,7 +856,7 @@ export default {
         producto: productoNombre,
         kilos: Number(this.newEntrada.kilos.toFixed(1)),
         piezas: String(this.newEntrada.piezas || '').trim(),
-        precio: precioReferencia ? Number(precioReferencia.toFixed(2)) : null,
+        precio: precioReferencia ? Number(Number(precioReferencia).toFixed(2)) : null,
         cuartoFrio: this.normalizeCuarto(this.newEntrada.cuartoFrio)
       });
 
@@ -898,6 +912,7 @@ export default {
       const entrada = this.entradas[index];
       this.entradaEditData = {
         kilos: entrada.kilos,
+        precio: entrada.precio == null ? null : entrada.precio,
         piezas: entrada.piezas == null ? '' : String(entrada.piezas),
         cuartoFrio: this.normalizeCuarto(entrada.cuartoFrio)
       };
@@ -906,15 +921,21 @@ export default {
     cancelarEdicionEntrada() {
       this.editandoEntrada = false;
       this.entradaEditIndex = null;
-      this.entradaEditData = { kilos: null, piezas: '', cuartoFrio: '' };
+      this.entradaEditData = { kilos: null, precio: null, piezas: '', cuartoFrio: '' };
     },
     async guardarEdicionEntrada() {
       if (this.entradaEditIndex === null) return;
       const nuevaCantidad = Number(this.entradaEditData.kilos);
       if (!nuevaCantidad || nuevaCantidad <= 0) return;
+      if (!this.esPrecioValido(this.entradaEditData.precio)) {
+        alert('El precio debe ser un número mayor o igual a cero.');
+        return;
+      }
 
       const entrada = this.entradas[this.entradaEditIndex];
       entrada.kilos = Number(nuevaCantidad.toFixed(1));
+      const precio = Number(this.entradaEditData.precio);
+      this.$set(entrada, 'precio', precio > 0 ? Number(precio.toFixed(2)) : null);
       this.$set(entrada, 'piezas', String(this.entradaEditData.piezas || '').trim());
       entrada.cuartoFrio = this.normalizeCuarto(this.entradaEditData.cuartoFrio);
 
@@ -956,6 +977,9 @@ export default {
       await this.loadProductosDisponibles();
     },
 
+    esPrecioValido(precio) {
+      return precio == null || precio === '' || (Number.isFinite(Number(precio)) && Number(precio) >= 0);
+    },
     formatearPrecio(precio) {
       return precio ? precio.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00';
     },
