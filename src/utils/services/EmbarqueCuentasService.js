@@ -314,17 +314,7 @@ const extraerValorSobrante = (texto) => {
   return parseInt(texto) || 0;
 };
 
-/**
- * Calcula el peso facturable de un crudo en una cuenta de Ozuna.
- *
- * Regla de Ozuna:
- * - cada tara completa cuenta como 20 kg, aunque el texto venga como "10-19";
- * - el sobrante conserva su peso real ("1-7" suma 7 kg, no 20 ni 1 × 7);
- * - admite tanto `sobrantes[]` como los campos históricos `sobrante/sobrante2`.
- */
-export const calcularKilosCrudoCuentaOzuna = (item = {}) => {
-  const kilosTaras = extraerNumeroTaras(item.taras) * 20;
-
+const obtenerSobrantesCuentaOzuna = (item) => {
   let sobrantes = [];
   if (Array.isArray(item.sobrantes)) {
     sobrantes = obtenerSobrantesDeItem(item);
@@ -337,12 +327,30 @@ export const calcularKilosCrudoCuentaOzuna = (item = {}) => {
     }
   }
 
-  const kilosSobrantes = sobrantes.reduce(
+  return sobrantes;
+};
+
+/**
+ * Cada tara completa de Ozuna cuenta como 20 kg; los sobrantes conservan su
+ * peso real. Admite sobrantes[] y los campos históricos sobrante/sobrante2.
+ */
+export const calcularKilosCrudoCuentaOzuna = (item = {}) => {
+  const kilosTaras = extraerNumeroTaras(item.taras) * 20;
+  const kilosSobrantes = obtenerSobrantesCuentaOzuna(item).reduce(
     (total, sobrante) => total + extraerValorSobrante(sobrante),
     0
   );
 
   return kilosTaras + kilosSobrantes;
+};
+
+const contarTarasCrudoCuentaOzuna = (item) => {
+  const tarasSobrantes = obtenerSobrantesCuentaOzuna(item).reduce((total, sobrante) => {
+    if (extraerValorSobrante(String(sobrante)) <= 0) return total;
+    // "1-7" es una tara con 7 kg; un peso suelto también ocupa una tara.
+    return total + (String(sobrante).includes('-') ? extraerNumeroTaras(sobrante) : 1);
+  }, 0);
+  return extraerNumeroTaras(item.taras) + tarasSobrantes;
 };
 
 /**
@@ -1057,6 +1065,8 @@ const prepararDatosCuentaOzuna = async (embarqueData) => {
   
   // Preparar los items de la cuenta
   const items = [];
+  let tarasVentaLimpio = 0;
+  let tarasVentaCrudo = 0;
   
   // Procesar productos normales
   if (Array.isArray(productos)) {
@@ -1109,6 +1119,12 @@ const prepararDatosCuentaOzuna = async (embarqueData) => {
         
         // Solo agregar el item si tiene kilos
         if (kilos > 0) {
+          if (producto.esVenta) {
+            const taras = producto.tipo === 'c/h20'
+              ? (producto.reporteTaras || [])
+              : [...(producto.taras || []), ...(producto.tarasExtra || [])];
+            tarasVentaLimpio += taras.reduce((sum, tara) => sum + extraerNumeroTaras(tara), 0);
+          }
           items.push({
             kilos,
             medida,
@@ -1148,6 +1164,9 @@ const prepararDatosCuentaOzuna = async (embarqueData) => {
             
             // Solo agregar el item si tiene kilos
             if (kilos > 0) {
+              if (item.esVenta) {
+                tarasVentaCrudo += contarTarasCrudoCuentaOzuna(item);
+              }
               items.push({
                 kilos,
                 medida,
@@ -1169,16 +1188,30 @@ const prepararDatosCuentaOzuna = async (embarqueData) => {
   
   // Obtener saldo acumulado anterior
   const saldoAcumuladoAnterior = await obtenerSaldoAcumuladoAnterior('cuentasOzuna', fecha);
+  const abonos = [];
+  if (tarasVentaLimpio > 0) {
+    abonos.push({
+      descripcion: `Venta de limpio: ${tarasVentaLimpio} taras × $100`,
+      monto: tarasVentaLimpio * 100
+    });
+  }
+  if (tarasVentaCrudo > 0) {
+    abonos.push({
+      descripcion: `Venta de crudo: ${tarasVentaCrudo} taras × $100`,
+      monto: tarasVentaCrudo * 100
+    });
+  }
+  const totalAbonos = abonos.reduce((sum, abono) => sum + abono.monto, 0);
   
   return {
     fecha,
     items,
     saldoAcumuladoAnterior,
     cobros: [],
-    abonos: [],
+    abonos,
     totalGeneral,
-    totalSaldo: saldoAcumuladoAnterior + totalGeneral,
-    nuevoSaldoAcumulado: saldoAcumuladoAnterior + totalGeneral,
+    totalSaldo: saldoAcumuladoAnterior + totalGeneral - totalAbonos,
+    nuevoSaldoAcumulado: saldoAcumuladoAnterior + totalGeneral - totalAbonos,
     ultimaActualizacion: new Date().toISOString()
   };
 };
