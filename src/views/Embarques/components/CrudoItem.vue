@@ -168,6 +168,15 @@ export default {
             },
             immediate: true
         },
+        'crudo.items.length'(cantidad, cantidadAnterior) {
+            // El esqueleto añade filas al bloque existente sin cambiar su prop.
+            // Resolver solo las altas; no recalcular los precios ya capturados.
+            if (cantidad > cantidadAnterior && this.crudo && Array.isArray(this.crudo.items)) {
+                this.crudo.items.slice(cantidadAnterior).forEach(item => {
+                    this.asignarPrecioAutomaticoCrudo(item);
+                });
+            }
+        },
         preciosActuales: {
             handler() {
                 this.asignarPrecioAutomaticoCrudo();

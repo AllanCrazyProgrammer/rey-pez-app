@@ -16,6 +16,7 @@
 <script>
 import { getFirestore, collection, getDocs, query, where } from 'firebase/firestore';
 import { factorAgua } from '@/utils/factorAgua';
+import { normalizarMedidaCrudoEmbarque } from '@/utils/medidasPedidoCrudo';
 
 const LIMPIO_CLIENTES_MAP = {
   joselito: '1',
@@ -31,23 +32,6 @@ const CRUDO_CLIENTES_MAP = {
   'otilio': '3',
   'ozuna': '4',
   'veronica': '5'
-};
-
-// Equivalencias solo para ordenar; el nombre del pedido se conserva intacto.
-const MEDIDAS_CRUDOS_MAP = {
-  'chico': 'Chico c/c',
-  'med': 'Med c/c',
-  'med-esp': 'Med-Esp c/c',
-  'med-gde': 'Med-Gde c/c',
-  'gde': 'Gde c/c',
-  'gde c/ extra': 'Gde c/ Extra c/c',
-  'extra': 'Extra c/c',
-  'jumbo': 'Jumbo c/c',
-  'linea': 'Linea',
-  'lag gde': 'Lag gde c/c',
-  'acamaya': 'Acamaya',
-  'rechazo': 'Rechazo',
-  'cam s/c': 'Cam s/c'
 };
 
 const MEDIDAS_CRUDOS_ORDEN = [
@@ -165,7 +149,7 @@ export default {
               return;
             }
 
-            const medida = (item.medida || '').toString().trim();
+            let medida = (item.medida || '').toString().trim();
             if (!medida) {
               return;
             }
@@ -174,6 +158,9 @@ export default {
             // el esqueleto debe viajar junto con el tipo C/H20 para que la
             // tarjeta del embarque no vuelva al valor genérico de 0.65.
             const tipoNormalizado = this.normalizarTipo(item.tipo, factorAgua(item));
+            if (tipoNormalizado.tipo === 'crudo') {
+              medida = normalizarMedidaCrudoEmbarque(medida);
+            }
             // Obtener la nota original (sellado/kileado) del item
             const notaRaw = (item.nota || '').toString().trim();
             const notaLower = notaRaw.toLowerCase();
@@ -241,6 +228,7 @@ export default {
       return esqueletoPorCliente;
     },
     agregarCrudosAlEsqueleto(esqueletoPorCliente, pedidosCrudos) {
+      const crudosGenerados = new Map();
       const ordenMedidas = new Map(
         MEDIDAS_CRUDOS_ORDEN.map((medida, index) => [medida.toLowerCase(), index])
       );
@@ -281,27 +269,36 @@ export default {
               return;
             }
 
-            // Conservar exactamente la medida capturada en el pedido de crudos.
+            // Resolver el nombre de embarque/precio sin cambiar el pedido original.
+            const medidaEmbarque = normalizarMedidaCrudoEmbarque(medida);
             
             // Crear clave única para crudo: usar "crudo" como tipo
-            const claveCrudo = `${medida}__crudo__`;
+            const claveCrudo = `${medidaEmbarque.toLowerCase()}__crudo__`;
+
+            const claveGenerada = `${clienteId}__${claveCrudo}`;
+            if (crudosGenerados.has(claveGenerada)) {
+              crudosGenerados.get(claveGenerada).pedidoReferencia.taras += cantidadNormalizada;
+              return;
+            }
 
             // Verificar si ya existe esta medida como crudo
             const yaExiste = esqueletoPorCliente[clienteId].some(item => {
-              const claveExistente = `${item.medida}__${item.tipo || ''}__${item.tipoPersonalizado || ''}`;
+              const claveExistente = `${normalizarMedidaCrudoEmbarque(item.medida).toLowerCase()}__${item.tipo || ''}__${item.tipoPersonalizado || ''}`;
               return claveExistente === claveCrudo;
             });
 
             // Solo agregar si no existe
             if (!yaExiste) {
-              esqueletoPorCliente[clienteId].push({
-                medida,
+              const crudo = {
+                medida: medidaEmbarque,
                 tipo: 'crudo',
                 tipoPersonalizado: '',
                 pedidoReferencia: {
                   taras: cantidadNormalizada
                 }
-              });
+              };
+              esqueletoPorCliente[clienteId].push(crudo);
+              crudosGenerados.set(claveGenerada, crudo);
             }
           });
         });
@@ -319,8 +316,8 @@ export default {
         const ordenados = [...crudos].sort((a, b) => {
           const nombreA = (a.medida || '').toString().trim().toLowerCase();
           const nombreB = (b.medida || '').toString().trim().toLowerCase();
-          const keyA = (MEDIDAS_CRUDOS_MAP[nombreA] || nombreA).toLowerCase();
-          const keyB = (MEDIDAS_CRUDOS_MAP[nombreB] || nombreB).toLowerCase();
+          const keyA = normalizarMedidaCrudoEmbarque(nombreA).toLowerCase();
+          const keyB = normalizarMedidaCrudoEmbarque(nombreB).toLowerCase();
           const indexA = ordenMedidas.has(keyA) ? ordenMedidas.get(keyA) : Number.MAX_SAFE_INTEGER;
           const indexB = ordenMedidas.has(keyB) ? ordenMedidas.get(keyB) : Number.MAX_SAFE_INTEGER;
           if (indexA !== indexB) {

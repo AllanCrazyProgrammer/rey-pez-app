@@ -1,5 +1,6 @@
 import { getFirestore, collection, getDocs, query, where } from 'firebase/firestore';
 import { crearNuevoProducto } from '@/constants.js/embarque';
+import { normalizarMedidaCrudoEmbarque } from '@/utils/medidasPedidoCrudo';
 
 export const embarquePedidoMixin = {
   data() {
@@ -141,11 +142,9 @@ export const embarquePedidoMixin = {
         '8a': '1', joselito: '1', catarro: '2', otilio: '3',
         ozuna: '4', veronica: '5', lorena: '5',
       };
-      const medidasCrudosMap = {
-        chico: 'Chico c/c', med: 'Med c/c', 'med-esp': 'Med-Esp c/c',
-        'med-gde': 'Med-Gde c/c', gde: 'Gde c/c', 'gde c/ extra': 'Gde c/ Extra c/c',
-        extra: 'Extra c/c', jumbo: 'Jumbo c/c', linea: 'Linea',
-        'lag gde': 'Lag gde c/c', acamaya: 'Acamaya', rechazo: 'Rechazo', 'cam s/c': 'Cam s/c',
+      // Conservar las claves de referencia históricas que no llevan c/c.
+      const referenciasSinCabeza = {
+        linea: 'Linea', acamaya: 'Acamaya', rechazo: 'Rechazo', 'cam s/c': 'Cam s/c'
       };
 
       const referencias = {};
@@ -164,8 +163,8 @@ export const embarquePedidoMixin = {
             Object.entries(medidasCliente).forEach(([medida, cantidad]) => {
               const cantidadNum = this.normalizarCantidadPedido(cantidad);
               if (cantidadNum <= 0) return;
-              const medidaKey = medida.toString().trim().toLowerCase();
-              const tallaNormalizada = medidasCrudosMap[medidaKey] || medida.toString().trim();
+              const medidaKey = this.normalizarTexto(medida);
+              const tallaNormalizada = referenciasSinCabeza[medidaKey] || normalizarMedidaCrudoEmbarque(medida);
               if (!referencias[clienteId][medida]) {
                 referencias[clienteId][medida] = { taras: 0 };
               }
@@ -180,7 +179,7 @@ export const embarquePedidoMixin = {
         });
 
       Object.keys(referencias).forEach(clienteId => {
-        referencias[clienteId] = { ...referenciasAnteriores[clienteId], ...referencias[clienteId] };
+        referencias[clienteId] = { ...referencias[clienteId], ...referenciasAnteriores[clienteId] };
       });
       return referencias;
     },
@@ -287,7 +286,8 @@ export const embarquePedidoMixin = {
       };
 
       const construirClaveCrudo = (entrada = {}) => {
-        return (entrada.medida || entrada.talla || '').toString().trim().toLowerCase() || '';
+        // Comparar también los nombres cortos históricos sin reescribirlos.
+        return normalizarMedidaCrudoEmbarque(entrada.medida || entrada.talla).toLowerCase();
       };
 
       clientesConDefiniciones.forEach(clienteId => {
