@@ -1,5 +1,6 @@
 import { ref, computed } from 'vue';
 import { RendimientosService } from '../services/rendimientosService';
+import { obtenerGrupoPreciosPorAlias } from '@/utils/preciosAliasCatalogo';
 import {
   calcularCostoFinal,
   calcularKilosCrudosItem,
@@ -51,7 +52,8 @@ export function useGanancias() {
   const obtenerPrecioVentaParaFecha = (medida, fechaEmbarque, clienteId = null) => {
     const medidaNormalizada = medida.toLowerCase().trim().replace(' maquila ozuna', '');
     
-    let preciosProducto = preciosVenta.value[medidaNormalizada];
+    const grupoAlias = obtenerGrupoPreciosPorAlias(preciosVenta.value, medidaNormalizada);
+    let preciosProducto = grupoAlias ? grupoAlias.precios : preciosVenta.value[medidaNormalizada];
     
     if (!preciosProducto || preciosProducto.length === 0) {
       const medidaConEspacio = medidaNormalizada.replace(/-/g, ' ');

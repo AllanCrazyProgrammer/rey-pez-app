@@ -1,4 +1,5 @@
 import { getFirestore, doc, getDoc, updateDoc, collection, getDocs, query, where, orderBy } from 'firebase/firestore';
+import { normalizarNombreProductoPrecio } from '@/utils/preciosHistoricos';
 
 /**
  * Servicio para manejar operaciones de Firebase relacionadas con rendimientos
@@ -42,7 +43,7 @@ export class RendimientosService {
       
       preciosSnapshot.docs.forEach(docSnapshot => {
         const precio = { id: docSnapshot.id, ...docSnapshot.data() };
-        const clave = precio.producto.toLowerCase().trim();
+        const clave = normalizarNombreProductoPrecio(precio.producto).toLowerCase().trim();
         
         if (!preciosMap.has(clave)) {
           preciosMap.set(clave, []);

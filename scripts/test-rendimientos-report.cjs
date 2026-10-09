@@ -12,6 +12,11 @@ function compile(source, mocks, globals = {}) {
   } });
   return module.exports;
 }
+const dateUtils = compile(fs.readFileSync('src/utils/dateUtils.js', 'utf8'), {
+  moment: require('moment'), 'moment/locale/es': require('moment/locale/es')
+});
+const preciosHistoricos = compile(fs.readFileSync('src/utils/preciosHistoricos.js', 'utf8'), { './dateUtils': dateUtils });
+const preciosAliasCatalogo = compile(fs.readFileSync('src/utils/preciosAliasCatalogo.js', 'utf8'), { './preciosHistoricos': preciosHistoricos });
 test('automatic report reuses real screen calculations, includes current products and never saves shipment edits', async () => {
   const calls = [];
   const base = { id: 'shipment', docData: { fecha: '2026-09-26', kilosCrudos: { '51/60': 180 }, analizarGanancia: {}, clientes: [] } };
@@ -23,7 +28,9 @@ test('automatic report reuses real screen calculations, includes current product
   const screen = compile(fs.readFileSync('src/views/Embarques/Rendimientos.vue', 'utf8').match(/<script>([\s\S]*?)<\/script>/)[1], {
     'firebase/firestore': firestore, lodash: {}, '@/utils/RendimientosPdf': { generarPDFRendimientos: async (...args) => { calls.push(args); return { data: new Uint8Array([37,80,68,70]), name: 'rendimientos.pdf' }; } },
     '@/utils/pdf/reportDelivery': { prepararGuardadoReporte: () => { throw new Error('automatic export must not open another save picker'); } },
-    '@/utils/pdf/sacadas': {}, '@/components/MedidasParaHoyCards.vue': {}, '@/services/EmbarquesOfflineService': offline, '@/utils/formatters': { formatearFecha: value => value }
+    '@/utils/pdf/sacadas': {}, '@/components/MedidasParaHoyCards.vue': {}, '@/services/EmbarquesOfflineService': offline, '@/utils/formatters': { formatearFecha: value => value },
+    '@/utils/preciosHistoricos': preciosHistoricos,
+    '@/utils/preciosAliasCatalogo': preciosAliasCatalogo
   }).default;
   const source = fs.readFileSync('src/services/RendimientosReport.js', 'utf8').replace("await import('@/views/Embarques/Rendimientos.vue')", '({ default: injectedScreen })');
   const { generarRendimientosParaResumen } = compile(source, { './EmbarquesOfflineService': offline, 'firebase/firestore': firestore }, { injectedScreen: screen });

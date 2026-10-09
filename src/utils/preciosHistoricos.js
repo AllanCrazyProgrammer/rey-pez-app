@@ -10,7 +10,7 @@ import {
 /**
  * Normaliza una medida para comparación
  */
-export const normalizarMedida = (medida) => {
+const normalizarClaveMedida = (medida) => {
   if (!medida) return '';
   return medida.toString()
     .toLowerCase()
@@ -19,6 +19,26 @@ export const normalizarMedida = (medida) => {
     .replace(/-/g, '/')
     .trim();
 };
+
+// Alias cerrados: no unificar otras tallas, sufijos ni descripciones.
+const NOMBRES_PRODUCTO_PRECIO = Object.freeze({
+  'medespc/c': 'Med-Esp c/c',
+  'med/espc/c': 'Med-Esp c/c',
+  'medgdec/c': 'Med-Gde c/c',
+  'med/gdec/c': 'Med-Gde c/c'
+});
+
+/** Nombre canónico compartido por el catálogo y la resolución de precios. */
+export const normalizarNombreProductoPrecio = (nombre) => {
+  if (!nombre) return nombre;
+  const clave = normalizarClaveMedida(nombre);
+  return Object.prototype.hasOwnProperty.call(NOMBRES_PRODUCTO_PRECIO, clave)
+    ? NOMBRES_PRODUCTO_PRECIO[clave]
+    : String(nombre).trim();
+};
+
+export const normalizarMedida = (medida) =>
+  normalizarClaveMedida(normalizarNombreProductoPrecio(medida));
 
 /**
  * Genera las claves de búsqueda de una medida, en orden de prioridad:

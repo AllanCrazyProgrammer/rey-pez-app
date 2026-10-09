@@ -6,6 +6,7 @@ import { nombreArchivoNota, periodoNota } from './pdf/filename';
 import * as pdfFonts from 'pdfmake/build/vfs_fonts';
 import { db } from '@/firebase';
 import { collection, query, where, getDocs } from 'firebase/firestore';
+import { normalizarNombreProductoPrecio } from './preciosHistoricos';
 
 let activePdfMake = pdfMake;
 
@@ -93,10 +94,18 @@ async function obtenerPrecioProductoCatarro(nombreProducto) {
   try {
     const preciosRef = collection(db, 'precios');
     
-    // Buscar todos los precios para este producto
+    // Consultar juntas únicamente las dos variantes autorizadas de cada alias.
+    const nombreCanonico = normalizarNombreProductoPrecio(nombreProducto);
+    const variantes = nombreCanonico === 'Med-Esp c/c'
+      ? ['Med-Esp c/c', 'Med Esp c/c']
+      : nombreCanonico === 'Med-Gde c/c'
+        ? ['Med-Gde c/c', 'Med Gde c/c']
+        : null;
     const q = query(
       preciosRef, 
-      where('producto', '==', nombreProducto)
+      variantes
+        ? where('producto', 'in', variantes)
+        : where('producto', '==', nombreProducto)
     );
     
     const snapshot = await getDocs(q);

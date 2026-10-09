@@ -532,6 +532,8 @@ import { normalizarGruposListaMedidasParaPdf } from '@/utils/pdf/sacadas';
 import MedidasParaHoyCards from '@/components/MedidasParaHoyCards.vue';
 import EmbarquesOfflineService from '@/services/EmbarquesOfflineService';
 import { formatearFecha } from '@/utils/formatters';
+import { normalizarNombreProductoPrecio } from '@/utils/preciosHistoricos';
+import { obtenerGrupoPreciosPorAlias } from '@/utils/preciosAliasCatalogo';
 
 export default {
   name: 'Rendimientos',
@@ -1456,7 +1458,7 @@ export default {
         
         preciosSnapshot.docs.forEach(docSnapshot => {
           const precio = { id: docSnapshot.id, ...docSnapshot.data() };
-          const clave = precio.producto.toLowerCase().trim();
+          const clave = normalizarNombreProductoPrecio(precio.producto).toLowerCase().trim();
           
           if (!preciosMap.has(clave)) {
             preciosMap.set(clave, []);
@@ -1490,12 +1492,15 @@ export default {
 
     // Función auxiliar para encontrar precios con búsqueda inteligente
     encontrarPreciosParaMedida(medida) {
+      const grupoAlias = obtenerGrupoPreciosPorAlias(this.preciosVenta, medida);
+      if (grupoAlias) return grupoAlias;
+
       // 1. Buscar coincidencia exacta primero
       let preciosProducto = this.preciosVenta[medida.toLowerCase().trim()];
       if (preciosProducto && preciosProducto.length > 0) {
         return { medidaEncontrada: medida, precios: preciosProducto };
       }
-      
+
       // 2. Normalizar quitando sufijos comunes
       const medidaNormalizada = medida.toLowerCase().trim()
         .replace(' maquila ozuna', '')

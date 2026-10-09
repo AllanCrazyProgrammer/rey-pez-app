@@ -452,7 +452,8 @@ import {
   PRODUCTO_PRECIO_MAQUILA_OZUNA,
   obtenerPrecioMaquilaOzunaDefault,
   PRECIO_MAQUILA_OZUNA_FALLBACK,
-  compararPreciosMasAntiguosPrimero
+  compararPreciosMasAntiguosPrimero,
+  normalizarNombreProductoPrecio
 } from '@/utils/preciosHistoricos';
 import { formatNumber, formatearFecha as formatDate } from '@/utils/formatters';
 
@@ -529,25 +530,7 @@ export default {
       filtroCliente: '',
       newPrice: crearNuevoPrecio(),
       precioActualMostrar: null,
-      buscarPrecioTimeout: null,
-      // Mapeo de nombres duplicados a nombres normalizados
-      // El nombre estándar es con guión y mayúsculas: "Med-Esp c/c" y "Med-Gde c/c"
-      nombresNormalizados: {
-        // Variantes de Med-Esp c/c
-        'Med Esp c/c': 'Med-Esp c/c',
-        'med esp c/c': 'Med-Esp c/c',
-        'Med esp c/c': 'Med-Esp c/c',
-        'MED ESP c/c': 'Med-Esp c/c',
-        'MED-ESP c/c': 'Med-Esp c/c',
-        'Med-esp c/c': 'Med-Esp c/c',
-        // Variantes de Med-Gde c/c
-        'Med Gde c/c': 'Med-Gde c/c',
-        'med gde c/c': 'Med-Gde c/c',
-        'Med gde c/c': 'Med-Gde c/c',
-        'Med-gde c/c': 'Med-Gde c/c', // Variante con g minúscula
-        'MED GDE c/c': 'Med-Gde c/c',
-        'MED-GDE c/c': 'Med-Gde c/c'
-      }
+      buscarPrecioTimeout: null
     };
   },
   computed: {
@@ -674,23 +657,7 @@ export default {
     },
     // Normaliza el nombre del producto para unificar duplicados
     normalizarNombreProducto(nombre) {
-      if (!nombre) return nombre;
-      const nombreTrim = nombre.trim();
-      
-      // Buscar coincidencia exacta en el mapeo
-      if (this.nombresNormalizados[nombreTrim]) {
-        return this.nombresNormalizados[nombreTrim];
-      }
-      
-      // Buscar coincidencia ignorando mayúsculas/minúsculas
-      const nombreLower = nombreTrim.toLowerCase();
-      for (const [variante, normalizado] of Object.entries(this.nombresNormalizados)) {
-        if (variante.toLowerCase() === nombreLower) {
-          return normalizado;
-        }
-      }
-      
-      return nombreTrim;
+      return normalizarNombreProductoPrecio(nombre);
     },
     calcularCambio(precioActual, precioAnterior) {
       const diferencia = precioActual - precioAnterior;
