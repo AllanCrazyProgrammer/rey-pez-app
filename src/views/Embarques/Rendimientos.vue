@@ -532,8 +532,8 @@ import { normalizarGruposListaMedidasParaPdf } from '@/utils/pdf/sacadas';
 import MedidasParaHoyCards from '@/components/MedidasParaHoyCards.vue';
 import EmbarquesOfflineService from '@/services/EmbarquesOfflineService';
 import { formatearFecha } from '@/utils/formatters';
-import { normalizarNombreProductoPrecio } from '@/utils/preciosHistoricos';
-import { obtenerGrupoPreciosPorAlias } from '@/utils/preciosAliasCatalogo';
+import { normalizarNombreProductoPrecio, obtenerClavesBusquedaMedida } from '@/utils/preciosHistoricos';
+import { obtenerGrupoPreciosPorNombre } from '@/utils/preciosAliasCatalogo';
 
 export default {
   name: 'Rendimientos',
@@ -1492,7 +1492,7 @@ export default {
 
     // Función auxiliar para encontrar precios con búsqueda inteligente
     encontrarPreciosParaMedida(medida) {
-      const grupoAlias = obtenerGrupoPreciosPorAlias(this.preciosVenta, medida);
+      const grupoAlias = obtenerGrupoPreciosPorNombre(this.preciosVenta, medida);
       if (grupoAlias) return grupoAlias;
 
       // 1. Buscar coincidencia exacta primero
@@ -1508,7 +1508,7 @@ export default {
         .trim();
       
       // 3. Buscar con medida normalizada
-      preciosProducto = this.preciosVenta[medidaNormalizada];
+      preciosProducto = obtenerGrupoPreciosPorNombre(this.preciosVenta, medidaNormalizada)?.precios;
       if (preciosProducto && preciosProducto.length > 0) {
         return { medidaEncontrada: medidaNormalizada, precios: preciosProducto };
       }
@@ -1517,33 +1517,24 @@ export default {
       const medidaConEspacio = medidaNormalizada.replace(/-/g, ' ');
       const medidaConGuion = medidaNormalizada.replace(/ /g, '-');
       
-      preciosProducto = this.preciosVenta[medidaConEspacio];
+      preciosProducto = obtenerGrupoPreciosPorNombre(this.preciosVenta, medidaConEspacio)?.precios;
       if (preciosProducto && preciosProducto.length > 0) {
         return { medidaEncontrada: medidaConEspacio, precios: preciosProducto };
       }
       
-      preciosProducto = this.preciosVenta[medidaConGuion];
+      preciosProducto = obtenerGrupoPreciosPorNombre(this.preciosVenta, medidaConGuion)?.precios;
       if (preciosProducto && preciosProducto.length > 0) {
         return { medidaEncontrada: medidaConGuion, precios: preciosProducto };
       }
       
-      // 5. Buscar coincidencias parciales
-      const medidaLower = medidaNormalizada.toLowerCase();
-      
-      for (const [claveProducto, precios] of Object.entries(this.preciosVenta)) {
-        const claveProductoLower = claveProducto.toLowerCase().trim();
-        
-        // Si la clave del producto está contenida en la medida
-        if (medidaLower.includes(claveProductoLower) && claveProductoLower.length > 2) {
-          return { medidaEncontrada: claveProducto, precios: precios };
-        }
-        
-        // Si la medida está contenida en la clave del producto
-        if (claveProductoLower.includes(medidaLower) && medidaLower.length > 2) {
-          return { medidaEncontrada: claveProducto, precios: precios };
-        }
+      // Solo una talla numérica inicial puede heredar su precio base.
+      // Los nombres completos (Piojo / Piojo panga) son productos distintos.
+      const clavesBase = obtenerClavesBusquedaMedida(medidaNormalizada).slice(1);
+      for (const clave of clavesBase) {
+        const grupo = obtenerGrupoPreciosPorNombre(this.preciosVenta, clave);
+        if (grupo) return grupo;
       }
-      
+
       return null; // No se encontró
     },
 
