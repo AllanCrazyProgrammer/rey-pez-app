@@ -145,7 +145,7 @@ test('useGanancias keeps client and historical date selection with mixed offline
   }
 });
 
-test('Catarro PDF queries only each authorized pair together and retains client priority and date tie behavior', async () => {
+test('Catarro PDF reads the sales catalog and retains alias, client priority and date tie behavior', async () => {
   for (const [oldName, newName] of pairs) for (const renamed of [false, true]) {
     const records = fixture(oldName, newName).map(p => ({ ...p,
       producto: renamed ? prices.normalizarNombreProductoPrecio(p.producto) : p.producto
@@ -159,12 +159,171 @@ test('Catarro PDF queries only each authorized pair together and retains client 
     }, '\nexport { obtenerPrecioProductoCatarro };');
     for (const name of [oldName, newName]) {
       assert.equal(await obtenerPrecioProductoCatarro(name), 82);
-      const filter = calls.at(-1).filters[0];
-      assert.equal(filter[1], 'in');
-      assert.deepEqual([...filter[2]].sort(), [oldName, newName].sort());
+      assert.equal(calls.at(-1).ref, 'precios');
+      assert.equal(calls.at(-1).filters.length, 0);
     }
     assert.equal(await obtenerPrecioProductoCatarro('Med Esp s/c'), null);
-    assert.equal(calls.at(-1).filters[0][1], '==');
+    assert.equal(calls.at(-1).filters.length, 0);
     assert.equal(JSON.stringify(records), before);
   }
+});
+
+const caseFixture = () => [
+  { producto: 'Piojo', fecha: '2020-01-01', precio: 160, timestamp: 1 },
+  { producto: 'PIOJO', fecha: '2020-01-02', precio: 170, timestamp: 2 },
+  { producto: 'piojo', fecha: '2020-01-01', precio: 180, clienteId: 'catarro' },
+  { producto: 'Piojo panga', fecha: '2020-01-03', precio: 190 },
+  { producto: 'Piojo panga', fecha: '2020-01-02', precio: 195, clienteId: 'catarro' },
+  { producto: 'PIOJO', fecha: '2020-01-04', precio: 1, clienteId: 'otro' },
+  { producto: 'Tirado', fecha: '2020-01-04', precio: 122 }
+];
+function mixedCatalog(records) {
+  return records.reduce((catalog, p) => {
+    (catalog[p.producto] ||= []).push(p);
+    return catalog;
+  }, {});
+}
+
+test('editor historical lookup is case insensitive with exact names, dates and client precedence', () => {
+  const records = caseFixture();
+  const before = JSON.stringify(records);
+  for (const name of ['piojo', 'Piojo', 'PIOJO']) {
+    assert.equal(prices.obtenerPrecioParaMedida(records, name, '2020-01-02'), 170);
+    assert.equal(prices.obtenerPrecioParaMedida(records, name, '2020-01-02', 'catarro'), 180);
+    assert.equal(prices.obtenerPrecioParaMedida(records, name, '2019-12-31'), null);
+  }
+  for (const name of ['piojo panga', 'Piojo panga', 'PIOJO PANGA']) {
+    assert.equal(prices.obtenerPrecioParaMedida(records, name, '2020-01-03'), 190);
+    assert.equal(prices.obtenerPrecioParaMedida(records, name, '2020-01-03', 'catarro'), 195);
+    assert.equal(prices.obtenerPrecioParaMedida(records, name, '2020-01-01'), null);
+  }
+  assert.equal(prices.obtenerPrecioParaMedida(records, 'Piojo extra', '2020-01-04'), null);
+  assert.equal(JSON.stringify(records), before);
+});
+
+test('both Rendimientos price routes merge mixed-case cache groups without mixing product names', () => {
+  const records = caseFixture();
+  const catalog = mixedCatalog(records);
+  const before = JSON.stringify(catalog);
+  const screen = load('src/views/Embarques/Rendimientos.vue', screenMocks(firestoreFor([]))).default;
+  const { useGanancias } = load('src/views/Embarques/Rendimientos/composables/useGanancias.js', {
+    vue: { ref: value => ({ value }), computed: fn => ({ value: fn() }) },
+    'firebase/firestore': firestoreFor([]), '../utils/calculations': {}
+  });
+  const ctx = useGanancias();
+  ctx.preciosVenta.value = catalog;
+  for (const name of ['piojo', 'Piojo', 'PIOJO']) {
+    const result = screen.methods.encontrarPreciosParaMedida.call({ preciosVenta: catalog }, name);
+    assert.equal(result.precios.filter(p => !p.clienteId)[0].precio, 170);
+    assert.equal(result.precios.length, 4);
+    assert.equal(ctx.obtenerPrecioVentaParaFecha(name, '2020-01-02').precio, 170);
+    assert.equal(ctx.obtenerPrecioVentaParaFecha(name, '2020-01-02', 'catarro').precio, 180);
+  }
+  for (const name of ['piojo panga', 'Piojo panga', 'PIOJO PANGA']) {
+    const result = screen.methods.encontrarPreciosParaMedida.call({ preciosVenta: catalog }, name);
+    assert.equal(result.precios.filter(p => !p.clienteId)[0].precio, 190);
+    assert.equal(ctx.obtenerPrecioVentaParaFecha(name, '2020-01-03').precio, 190);
+    assert.equal(ctx.obtenerPrecioVentaParaFecha(name, '2020-01-03', 'catarro').precio, 195);
+  }
+  for (const [name, available] of [['Piojo', 'Piojo panga'], ['Piojo panga', 'Piojo']]) {
+    const onlyOther = { [available]: records.filter(p => p.producto === available) };
+    assert.equal(screen.methods.encontrarPreciosParaMedida.call({ preciosVenta: onlyOther }, name), null);
+    ctx.preciosVenta.value = onlyOther;
+    assert.equal(ctx.obtenerPrecioVentaParaFecha(name, '2020-01-03'), null);
+  }
+  assert.equal(JSON.stringify(catalog), before);
+});
+
+test('PDF resolves every letter-case variant from sales prices only with client priority', async () => {
+  for (const clientPrices of [false, true]) {
+    const records = caseFixture().filter(p => clientPrices || !p.clienteId);
+    const calls = [];
+    const { obtenerPrecioProductoCatarro } = load('src/utils/pdfGenerator.js', {
+      'firebase/firestore': firestoreFor(records, calls), '@/firebase': { db: {} },
+      'pdfmake/build/pdfmake': {}, 'pdfmake/build/vfs_fonts': {},
+      './pdf/delivery': {}, './pdf/filename': {}
+    }, '\nexport { obtenerPrecioProductoCatarro };');
+    for (const name of ['piojo', 'Piojo', 'PIOJO']) {
+      assert.equal(await obtenerPrecioProductoCatarro(name), clientPrices ? 180 : 170);
+    }
+    for (const name of ['piojo panga', 'Piojo panga', 'PIOJO PANGA']) {
+      assert.equal(await obtenerPrecioProductoCatarro(name), clientPrices ? 195 : 190);
+    }
+    assert.equal(await obtenerPrecioProductoCatarro('Piojo extra'), null);
+    assert.equal(await obtenerPrecioProductoCatarro(''), null);
+    assert.ok(calls.every(q => q.ref === 'precios'));
+  }
+});
+
+test('full PDF generation shares one sales read for clean/raw products and reloads newly created prices', async () => {
+  const records = caseFixture().filter(p => !p.clienteId && p.producto !== 'Piojo panga');
+  const calls = [];
+  const definitions = [];
+  const { generarNotaVentaPDF } = load('src/utils/pdfGenerator.js', {
+    'firebase/firestore': firestoreFor(records, calls), '@/firebase': { db: {} },
+    'pdfmake/build/pdfmake': { createPdf: definition => { definitions.push(definition); return {}; } },
+    'pdfmake/build/vfs_fonts': {},
+    './pdf/delivery': { obtenerBufferPdf: async () => new Uint8Array([37, 80, 68, 70]), entregarPdf: async () => {} },
+    './pdf/filename': { nombreArchivoNota: () => 'test.pdf', periodoNota: () => ({}) }
+  });
+  const clients = [{ id: 'qa', nombre: 'Catarro' }];
+  const shipment = () => ({
+    fecha: '2026-10-10', cargaCon: 'Prueba',
+    productos: [
+      { id: 'a', clienteId: 'qa', medida: 'PIOJO', kilos: [20], taras: [1], tipo: 'Limpio', restarTaras: false },
+      { id: 'b', clienteId: 'qa', medida: 'piojo panga', kilos: [20], taras: [1], tipo: 'Limpio', restarTaras: false },
+      { id: 'c', clienteId: 'qa', medida: 'Piojo', kilos: [20], taras: [1], tipo: 'Limpio', precio: 777 },
+      { id: 'd', clienteId: 'qa', medida: 'Piojo', kilos: [20], taras: [1], tipo: 'Limpio', precioBorradoManualmente: true }
+    ].map(p => ({ tarasExtra: [], reporteTaras: [], reporteBolsas: [], ...p })),
+    clienteCrudos: { qa: [{ items: [{ talla: 'PiOjO PaNgA', taras: '1', precio: null }] }] }
+  });
+  await generarNotaVentaPDF(shipment(), clients, {}, {}, { qa: true });
+  assert.equal(calls.length, 1);
+  assert.ok(!JSON.stringify(definitions.at(-1)).includes('$190'));
+  records.push({ producto: 'Piojo panga', fecha: '2026-10-10', precio: 190 });
+  const next = shipment();
+  await generarNotaVentaPDF(next, clients, {}, {}, { qa: true });
+  assert.equal(calls.length, 2, 'new PDF must refresh the catalog once');
+  assert.equal(next.clienteCrudos.qa[0].items[0].precio, 190);
+  const output = JSON.stringify(definitions.at(-1));
+  assert.ok(output.includes('$190'));
+  assert.ok(output.includes('$170'));
+  assert.ok(output.includes('$777'));
+  assert.equal(next.productos[3].precio, undefined, 'manual clearing stays intact');
+  assert.equal(next.productos[0].medida, 'PIOJO');
+  assert.equal(next.productos[1].medida, 'piojo panga');
+  assert.ok(calls.every(q => q.ref === 'precios'));
+  // Alternate Lorena/Verónica page uses the same loader parameter.
+  await generarNotaVentaPDF(shipment(), [{ id: 'qa', nombre: 'Veronica' }], {}, {}, { qa: true });
+  assert.equal(calls.length, 3);
+});
+
+test('clean/raw editors apply case-equivalent prices and retain manual overrides without rewriting names', () => {
+  const Product = load('src/views/Embarques/components/ProductoItem.vue').default;
+  const Crudo = load('src/views/Embarques/components/CrudoItem.vue').default;
+  for (const name of ['piojo', 'Piojo', 'PIOJO', 'piojo panga', 'Piojo panga', 'PIOJO PANGA']) {
+    for (const manual of [false, true]) {
+      const expected = manual ? 777 : name.toLowerCase() === 'piojo' ? 180 : 195;
+      const producto = { medida: name, precio: 777, precioOrigen: manual ? 'manual' : 'general', precioMedidaBase: name.toLowerCase() };
+      const ctx = { producto, nombreCliente: 'Catarro', fechaEmbarque: '2020-01-03', preciosActuales: caseFixture(), medidaPrecioAnteriorNormalizada: prices.normalizarMedida(name), $emit() {}, establecerDatoPrecio(k, v) { producto[k] = v; }, limpiarDatosPrecioAutomatico() { throw Error('Unexpected clear'); } };
+      Product.methods.asignarPrecioAutomatico.call(ctx);
+      assert.equal(producto.precio, expected);
+      assert.equal(producto.medida, name);
+      const item = { medida: name, precio: 777, precioOrigen: manual ? 'manual' : 'general', precioMedidaBase: name.toLowerCase() };
+      Crudo.methods.asignarPrecioAutomaticoCrudo.call({ ...ctx, $set(o,k,v) { o[k]=v; }, $delete(o,k) { delete o[k]; } }, item);
+      assert.equal(item.precio, expected);
+      assert.equal(item.medida, name);
+    }
+  }
+});
+
+test('Rendimientos numeric fallback preserves exact priority without crossing distinct sizes', () => {
+  const screen = load('src/views/Embarques/Rendimientos.vue', screenMocks(firestoreFor([]))).default;
+  const find = (catalog, name) => screen.methods.encontrarPreciosParaMedida.call({ preciosVenta: catalog }, name);
+  const base = { fecha: '2020-01-01', precio: 100 };
+  const exact = { fecha: '2020-01-01', precio: 110 };
+  assert.equal(find({ '71/90': [base], '71/90 Selecta': [exact] }, '71/90 SELECTA').precios[0], exact);
+  assert.equal(find({ '71/90': [base] }, '71/90 61 selecta').precios[0], base);
+  assert.equal(find({ '71/90': [base] }, '171/90'), null);
+  assert.equal(find({ '71/90 selecta': [exact] }, '71/90'), null);
 });
