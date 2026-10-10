@@ -176,6 +176,8 @@
               type="text"
               placeholder="Medida (ej. 51/60, U-15, etc.)"
               class="medida-input"
+              :style="estiloColoresHilo(medidaActiva.coloresHilo)"
+              aria-label="Nombre de la medida"
             >
           </div>
           <button
@@ -186,6 +188,12 @@
             🗑️
           </button>
         </div>
+
+        <SelectorColoresHilo
+          :key="medidaActivaIndex"
+          :medida="medidaActiva"
+          v-model="medidaActiva.coloresHilo"
+        />
 
         <div class="tabla-wrapper" :class="{ 'tabla-scrollable': medidaActiva.filas.length > 9 }">
           <table class="tabla-medida">
@@ -326,6 +334,8 @@ import {
   orderBy
 } from 'firebase/firestore';
 import BackButton from '@/components/BackButton.vue';
+import SelectorColoresHilo from '@/components/Barcos/SelectorColoresHilo.vue';
+import { normalizarColoresHilo, estiloColoresHilo } from '@/utils/coloresHilo';
 import { formatNumber } from '@/utils/formatters';
 
 const COLECCION = 'entradasProductoBarcos';
@@ -333,7 +343,8 @@ const COLECCION = 'entradasProductoBarcos';
 export default {
   name: 'EntradaProductoBarco',
   components: {
-    BackButton
+    BackButton,
+    SelectorColoresHilo
   },
   data() {
     return {
@@ -384,6 +395,7 @@ export default {
   },
   methods: {
     formatNumber,
+    estiloColoresHilo,
     formatearFecha(fechaISO) {
       if (!fechaISO) return '';
       const fecha = new Date(fechaISO + 'T00:00:00');
@@ -443,6 +455,7 @@ export default {
     crearMedidaVacia() {
       return {
         nombre: '',
+        coloresHilo: [],
         filas: [{ taras: null, kilos: null }]
       };
     },
@@ -462,6 +475,7 @@ export default {
         fecha: descarga.fecha || new Date().toISOString().split('T')[0],
         medidas: (descarga.medidas || []).map(m => ({
           nombre: m.nombre || '',
+          coloresHilo: normalizarColoresHilo(m.coloresHilo),
           filas: (m.filas && m.filas.length > 0)
             ? m.filas.map(f => ({ taras: f.taras, kilos: f.kilos }))
             : [{ taras: null, kilos: null }]
@@ -537,6 +551,7 @@ export default {
     prepararMedidasParaGuardar() {
       return this.form.medidas.map(m => ({
         nombre: (m.nombre || '').trim(),
+        coloresHilo: normalizarColoresHilo(m.coloresHilo),
         filas: m.filas
           .filter(f => f.taras !== null && f.taras !== '' || f.kilos !== null && f.kilos !== '')
           .map(f => ({
@@ -1006,6 +1021,7 @@ export default {
 }
 
 .medida-titulo {
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -1017,6 +1033,7 @@ export default {
 }
 
 .medida-input {
+  min-width: 0;
   flex: 1;
   max-width: 350px;
   padding: 12px 15px;
