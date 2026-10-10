@@ -5,7 +5,7 @@ import { entregarPdf, obtenerBufferPdf } from './pdf/delivery';
 import { nombreArchivoNota, periodoNota } from './pdf/filename';
 import * as pdfFonts from 'pdfmake/build/vfs_fonts';
 import { db } from '@/firebase';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { collection, query, getDocs } from 'firebase/firestore';
 import { normalizarNombreProductoPrecio } from './preciosHistoricos';
 
 let activePdfMake = pdfMake;
@@ -90,25 +90,13 @@ async function loadOptionalLogo(url) {
 }
 
 // Función para obtener el precio actual de un producto para un cliente específico
-async function obtenerPrecioProductoCatarro(nombreProducto) {
+async function obtenerPrecioProductoCatarro(nombreProducto, cargarPrecios = () => getDocs(query(collection(db, 'precios')))) {
   try {
-    const preciosRef = collection(db, 'precios');
-    
-    // Consultar juntas únicamente las dos variantes autorizadas de cada alias.
-    const nombreCanonico = normalizarNombreProductoPrecio(nombreProducto);
-    const variantes = nombreCanonico === 'Med-Esp c/c'
-      ? ['Med-Esp c/c', 'Med Esp c/c']
-      : nombreCanonico === 'Med-Gde c/c'
-        ? ['Med-Gde c/c', 'Med Gde c/c']
-        : null;
-    const q = query(
-      preciosRef, 
-      variantes
-        ? where('producto', 'in', variantes)
-        : where('producto', '==', nombreProducto)
-    );
-    
-    const snapshot = await getDocs(q);
+    // Firestore compara strings con mayúsculas: filtrar el catálogo de venta
+    // por nombre completo en memoria, sin consultar precios de entrada.
+    const clave = normalizarNombreProductoPrecio(nombreProducto)?.toLowerCase().trim();
+    if (!clave) return null;
+    const snapshot = await cargarPrecios();
     if (snapshot.empty) {
       return null;
     }
@@ -119,6 +107,7 @@ async function obtenerPrecioProductoCatarro(nombreProducto) {
     
     snapshot.docs.forEach(doc => {
       const data = doc.data();
+      if (normalizarNombreProductoPrecio(data.producto)?.toLowerCase().trim() !== clave) return;
       if (data.clienteId === 'catarro') {
         preciosCatarro.push(data);
       } else if (!data.clienteId) {
@@ -153,6 +142,13 @@ async function obtenerPrecioProductoCatarro(nombreProducto) {
 }
 
 export async function generarNotaVentaPDF(embarque, clientesDisponibles, clientesJuntarMedidas, clientesReglaOtilio = {}, clientesIncluirPrecios = {}, clientesSumarKgCatarro = {}, clientesCuentaEnPdf = {}, options = {}) {
+  // Una sola lectura por PDF, compartida incluso entre productos en paralelo.
+  // Se renueva en cada generación para incluir precios recién agregados.
+  let catalogoPreciosPromise;
+  const cargarPreciosPDF = () => {
+    if (!catalogoPreciosPromise) catalogoPreciosPromise = getDocs(query(collection(db, 'precios')));
+    return catalogoPreciosPromise;
+  };
   try {
     // Validación más robusta de los datos de entrada
     if (!embarque || !embarque.productos || !Array.isArray(embarque.productos)) {
@@ -277,7 +273,9 @@ export async function generarNotaVentaPDF(embarque, clientesDisponibles, cliente
           clientesReglaOtilio,
           clientesIncluirPrecios,
           clientesSumarKgCatarro,
-          clientesCuentaEnPdf
+          clientesCuentaEnPdf,
+          20,
+          cargarPreciosPDF
         )),
         ...generarSeccionRendimientos(embarqueRendimientos, clientesDisponibles)
       ];
@@ -381,7 +379,8 @@ export async function generarNotaVentaPDF(embarque, clientesDisponibles, cliente
             clientesIncluirPrecios,
             clientesSumarKgCatarro,
             clientesCuentaEnPdf,
-            19.5
+            19.5,
+            cargarPreciosPDF
           )),
           ...generarSeccionRendimientos(embarqueRendimientos, clientesDisponibles)
         ]
@@ -654,7 +653,7 @@ function contarTotalProductos(embarque) {
   return contador;
 }
 
-async function generarContenidoClientes(embarque, clientesDisponibles, clientesJuntarMedidas, clientesReglaOtilio = {}, clientesIncluirPrecios = {}, clientesSumarKgCatarro = {}, clientesCuentaEnPdf = {}, multiplicadorLorenaGdeCc = 20) {
+async function generarContenidoClientes(embarque, clientesDisponibles, clientesJuntarMedidas, clientesReglaOtilio = {}, clientesIncluirPrecios = {}, clientesSumarKgCatarro = {}, clientesCuentaEnPdf = {}, multiplicadorLorenaGdeCc = 20, cargarPreciosPDF) {
   const contenido = [];
   let totalTarasLimpio = 0;
   let totalTarasCrudos = 0;
@@ -826,7 +825,7 @@ async function generarContenidoClientes(embarque, clientesDisponibles, clientesJ
             // Solo asignar precio automático si no lo tiene Y no fue borrado manualmente
             if (!producto.precio && !producto.precioBorradoManualmente) {
               const nombreProducto = producto.nombreAlternativoPDF || producto.medida;
-              const precio = await obtenerPrecioProductoCatarro(nombreProducto);
+              const precio = await obtenerPrecioProductoCatarro(nombreProducto, cargarPreciosPDF);
               if (precio) {
                 producto.precio = precio;
               }
@@ -879,7 +878,7 @@ async function generarContenidoClientes(embarque, clientesDisponibles, clientesJ
               // Solo asignar precio automático si no lo tiene Y no fue borrado manualmente
               if (!item.precio && !item.precioBorradoManualmente && item.talla) {
                 // Buscar precio basado en la talla del crudo
-                const precio = await obtenerPrecioProductoCatarro(item.talla);
+                const precio = await obtenerPrecioProductoCatarro(item.talla, cargarPreciosPDF);
                 if (precio) {
                   item.precio = precio;
                 }
