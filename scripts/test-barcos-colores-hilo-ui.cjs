@@ -29,7 +29,7 @@ const records = new Map(); let adds = 0;
 const factories = {}, cache = {
   '@/firebase': { db: {} },
   '@/utils/formatters': { formatNumber: (n, d = 2) => Number(n || 0).toLocaleString('es-MX', { minimumFractionDigits: d, maximumFractionDigits: d }) },
-  '@/components/BackButton.vue': { default: { template: '<span></span>' } },
+  '@/components/BackButton.vue': { __esModule: true, default: { template: '<span></span>' } },
   'firebase/firestore': {
     collection: () => 'test', doc: (db, col, id) => id, query() {}, where() {}, orderBy() {},
     async getDocs() { return { docs: [...records].map(([id, data]) => ({ id, data: () => JSON.parse(JSON.stringify(data)) })) }; },
@@ -43,7 +43,50 @@ const Component = require('view').default; Component.mounted = function() { this
 window.app = new Vue(Component).$mount('#app');
 window.fixture = { records, get adds() { return adds; } };
 `;
+async function testDOM() {
+  // No canvas is exercised; tolerate an unavailable optional native canvas binding.
+  try { require('canvas'); } catch (_) {
+    try { const id = require.resolve('canvas'); require.cache[id] = { id, filename: id, loaded: true, exports: {} }; } catch (_) { /* optional dependency absent */ }
+  }
+  const { JSDOM } = require('jsdom');
+  const dom = new JSDOM('<html><body><div id="app"></div></body></html>', { runScripts: 'dangerously', url: 'https://fixture.invalid/' });
+  const window = dom.window;
+  window.eval(fs.readFileSync(path.join(root, 'node_modules/vue/dist/vue.js'), 'utf8'));
+  window.eval(runtime);
+  const tick = () => window.Vue.nextTick();
+  await tick();
+  const selector = () => window.document.querySelector('.selector-hilos');
+  const button = () => selector().querySelector('.boton-color');
+  const clickColor = name => [...selector().querySelectorAll('.opcion-hilo')].find(el => el.textContent.trim().startsWith(name)).click();
+  const key = (el, code, keyCode) => el.dispatchEvent(new window.KeyboardEvent('keydown', { key: code, keyCode, bubbles: true }));
+  assert.equal(selector().querySelectorAll('.colores-hilo').length, 0);
+  assert.equal(button().textContent, 'Color');
+  button().click(); await tick();
+  assert.equal(button().getAttribute('aria-expanded'), 'true');
+  assert.equal(window.document.activeElement.type, 'checkbox');
+  clickColor('Rojo'); await tick();
+  const checkbox = selector().querySelector('input'); checkbox.click(); await tick();
+  clickColor('Azul'); await tick();
+  assert.deepEqual(JSON.parse(JSON.stringify(window.app.medidaActiva.coloresHilo)), ['rojo', 'azul']);
+  key(checkbox, 'Escape', 27); await tick();
+  assert.equal(selector().querySelectorAll('.colores-hilo').length, 0);
+  assert.equal(window.document.activeElement, button());
+  key(button(), 'ArrowDown', 40); await tick();
+  assert.equal(button().getAttribute('aria-expanded'), 'true');
+  window.document.body.dispatchEvent(new window.Event('pointerdown', { bubbles: true })); await tick();
+  assert.equal(button().getAttribute('aria-expanded'), 'false');
+  button().click(); await tick();
+  window.document.querySelector('.medida-input').focus(); await tick();
+  assert.equal(button().getAttribute('aria-expanded'), 'false');
+  button().click(); await tick(); clickColor('Sin color'); await tick();
+  assert.equal(window.app.medidaActiva.coloresHilo.length, 0);
+  selector().querySelector('.cerrar-hilos').click(); await tick();
+  assert.equal(window.document.activeElement, button());
+  window.app.$destroy(); dom.window.close();
+  console.log('PASS: real Vue/DOM compact button, open/focus, two colors, Escape/ArrowDown, outside pointer/focus dismissal, clear, close/focus restore. No visual layout validation.');
+}
 (async () => {
+  if (process.env.DOM_ONLY === '1') { await testDOM(); return; }
   const browser = await chromium.launch({ executablePath: process.env.PREVIEW_CHROME || '/usr/bin/chromium', args: ['--no-sandbox', '--disable-dev-shm-usage'] });
   const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
   const errors = []; page.on('pageerror', e => errors.push(e.message));
@@ -51,6 +94,8 @@ window.fixture = { records, get adds() { return adds; } };
   await page.setContent('<html lang="es"><meta name="viewport" content="width=device-width, initial-scale=1"><style>body{margin:0;font-family:Arial,sans-serif}*{box-sizing:border-box}' + css + '</style><div id="app"></div></html>');
   await page.addScriptTag({ content: fs.readFileSync(path.join(root, 'node_modules/vue/dist/vue.js'), 'utf8') });
   await page.addScriptTag({ content: runtime });
+  const open = async () => { if (!(await page.locator('.colores-hilo').count())) await page.getByRole('button', { name: 'Color', exact: true }).click(); };
+  await open();
   const color = name => page.getByRole('button', { name, exact: false }).filter({ has: page.locator('.muestra-hilo') });
   await color('Rojo').click();
   assert.equal(await page.locator('.medida-input').evaluate(el => getComputedStyle(el).backgroundColor), 'rgb(254, 202, 202)');
@@ -59,28 +104,41 @@ window.fixture = { records, get adds() { return adds; } };
   await page.locator('.medida-card').screenshot({ path: path.join(out, 'hilos-dos-colores-movil.png') });
   await page.evaluate(async () => { await Promise.all([app.guardarDescarga(), app.guardarDescarga()]); app.editarDescarga({ id: app.editandoId, ...fixture.records.get(app.editandoId) }); });
   assert.equal(await page.evaluate(() => fixture.adds), 1);
+  await open();
   assert(await page.getByLabel('Combinar dos colores').isChecked());
   assert.match(await page.locator('.estado-hilos').innerText(), /Rojo \+ Azul/);
   // Switching, adding, deleting and reopening preserve independent measure colors.
   await page.evaluate(() => { app.form.medidas.push({ nombre: 'Pac gde', coloresHilo: ['verde'], filas: [{ taras: 1, kilos: 10 }] }); app.seleccionarMedida(1); });
+  await open();
   assert(!(await page.getByLabel('Combinar dos colores').isChecked()));
   await page.evaluate(() => app.seleccionarMedida(0));
+  await open();
   assert(await page.getByLabel('Combinar dos colores').isChecked());
   page.on('dialog', dialog => dialog.accept());
   await page.evaluate(() => { app.eliminarMedida(0); });
+  await open();
   assert(!(await page.getByLabel('Combinar dos colores').isChecked()));
   assert.match(await page.locator('.estado-hilos').innerText(), /Verde/);
   await page.getByRole('button', { name: 'Sin color', exact: true }).click();
   assert.equal(await page.locator('.medida-input').evaluate(el => el.style.background), '');
   await page.evaluate(async () => { await app.guardarDescarga(); app.editarDescarga({ id: app.editandoId, ...fixture.records.get(app.editandoId) }); });
+  await open();
   assert.match(await page.locator('.estado-hilos').innerText(), /Sin color/);
   assert.equal(await page.evaluate(() => fixture.adds), 1);
   for (const width of [320, 390, 768, 1280]) {
     await page.setViewportSize({ width, height: 900 });
     assert(await page.locator('.colores-hilo').evaluate(el => el.scrollWidth <= el.clientWidth), 'Color selector overflow at ' + width);
   }
+  await open();
   await color('Amarillo').click();
   await page.locator('.medida-card').screenshot({ path: path.join(out, 'hilos-un-color-escritorio.png') });
+  await page.keyboard.press('Escape');
+  assert.equal(await page.locator('.colores-hilo').count(), 0);
+  assert(await page.getByRole('button', { name: 'Color', exact: true }).evaluate(el => el === document.activeElement));
+  await page.keyboard.press('ArrowDown');
+  assert.equal(await page.locator('.colores-hilo').count(), 1);
+  await page.locator('.medida-input').click();
+  assert.equal(await page.locator('.colores-hilo').count(), 0);
   assert.deepEqual(errors, []);
   await browser.close();
   console.log('PASS: mobile/desktop UI, real Vue reactivity, dual/single/none, isolated save/reopen, repeat save, same-index delete, per-measure separation; no Firebase/network writes.');

@@ -18,7 +18,7 @@ function load(file) {
   let source = fs.readFileSync(path.join(root, file), 'utf8');
   if (file.endsWith('.vue')) source = source.match(/<script>([\s\S]*?)<\/script>/)[1];
   const code = babel.transformSync(source, { configFile: false, babelrc: false, plugins: ['@babel/plugin-transform-modules-commonjs'] }).code;
-  const ctx = { exports: {}, console, setTimeout() {}, alert(message) { throw Error(message); }, require(name) {
+  const ctx = { exports: {}, console, document: { addEventListener() {}, removeEventListener() {} }, setTimeout() {}, alert(message) { throw Error(message); }, require(name) {
     if (name === '@/firebase') return { db: {} };
     if (name === 'firebase/firestore') return firestore;
     if (name.endsWith('.vue')) return {};
@@ -116,4 +116,21 @@ test('Vue 2 reacts to initialized legacy colors and same-index measure replaceme
   child.value = []; child.medida = { nombre: 'tercera' };
   await Vue.nextTick(); assert.equal(child.combinar, false);
   view.$destroy(); child.$destroy();
+});
+test('compact menu opens, dismisses outside and restores keyboard focus without changing selection', () => {
+  const c = context(Selector, { value: ['azul', 'rojo'], medida: {} });
+  let focus = '', pending;
+  c.$refs = { botonColor: { focus() { focus = 'button'; } }, panel: { querySelector() { return { focus() { focus = 'checkbox'; } }; } } };
+  c.$nextTick = fn => { pending = fn; };
+  const inside = {};
+  c.$el = { contains: target => target === inside };
+  assert.equal(c.abierto, false);
+  c.alternarMenu(); assert.equal(c.abierto, true); pending(); assert.equal(focus, 'checkbox');
+  c.cerrarDesdeFuera({ target: inside }); assert.equal(c.abierto, true);
+  c.cerrarDesdeFuera({ target: {} }); assert.equal(c.abierto, false);
+  c.abrirMenu(); c.cerrarMenu(true); pending(); assert.equal(focus, 'button');
+  assert.equal(c.abierto, false);
+  c.alternarMenu(); c.alternarMenu(); assert.equal(c.abierto, false);
+  c.abrirMenu(); Selector.watch.medida.call(c); assert.equal(c.abierto, false);
+  assert.deepEqual(clone(c.value), ['azul', 'rojo']);
 });

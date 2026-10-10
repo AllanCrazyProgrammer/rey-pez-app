@@ -1,6 +1,18 @@
 <template>
-  <fieldset class="colores-hilo">
-    <legend>Color <span>(hilos)</span></legend>
+  <div class="selector-hilos" @keydown.esc.stop.prevent="cerrarMenu(true)">
+    <button
+      ref="botonColor"
+      type="button"
+      class="boton-color"
+      :aria-expanded="abierto ? 'true' : 'false'"
+      :aria-controls="panelId"
+      :title="'Color de hilos: ' + descripcion"
+      @click="alternarMenu"
+      @keydown.down.prevent="abrirMenu"
+    >Color</button>
+    <fieldset v-if="abierto" :id="panelId" ref="panel" class="colores-hilo">
+      <legend class="titulo-panel-hilos">Color de hilos</legend>
+      <button type="button" class="cerrar-hilos" aria-label="Cerrar colores" @click="cerrarMenu(true)">✕</button>
     <label class="combinar-hilos">
       <input type="checkbox" :checked="combinar" @change="cambiarCombinacion($event.target.checked)">
       Combinar dos colores
@@ -21,7 +33,8 @@
     </div>
     <p class="estado-hilos" role="status">{{ descripcion }}<span v-if="combinar && seleccion.length < 2"> · Elige {{ seleccion.length ? 'el segundo color' : 'hasta dos colores' }}.</span></p>
     <p v-if="combinar && seleccion.length === 2" class="ayuda-hilos">Para cambiar un color, desmárcalo primero.</p>
-  </fieldset>
+    </fieldset>
+  </div>
 </template>
 
 <script>
@@ -34,16 +47,46 @@ export default {
     medida: { type: Object, required: true }
   },
   data() {
-    return { colores: COLORES_HILO, combinar: normalizarColoresHilo(this.value).length === 2 };
+    return { abierto: false, panelId: `colores-hilo-${this._uid}`, colores: COLORES_HILO, combinar: normalizarColoresHilo(this.value).length === 2 };
   },
   watch: {
-    medida() { this.combinar = normalizarColoresHilo(this.value).length === 2; }
+    medida() {
+      this.combinar = normalizarColoresHilo(this.value).length === 2;
+      this.cerrarMenu();
+    }
+  },
+  mounted() {
+    document.addEventListener('pointerdown', this.cerrarDesdeFuera);
+    document.addEventListener('focusin', this.cerrarDesdeFuera);
+  },
+  beforeDestroy() {
+    document.removeEventListener('pointerdown', this.cerrarDesdeFuera);
+    document.removeEventListener('focusin', this.cerrarDesdeFuera);
   },
   computed: {
     seleccion() { return normalizarColoresHilo(this.value); },
     descripcion() { return descripcionColoresHilo(this.value); }
   },
   methods: {
+    alternarMenu() {
+      if (this.abierto) this.cerrarMenu();
+      else this.abrirMenu();
+    },
+    abrirMenu() {
+      this.abierto = true;
+      this.$nextTick(() => {
+        if (!this.abierto || !this.$refs.panel) return;
+        const control = this.$refs.panel.querySelector('input');
+        if (control) control.focus();
+      });
+    },
+    cerrarMenu(devolverFoco = false) {
+      this.abierto = false;
+      if (devolverFoco && this.$refs.botonColor) this.$refs.botonColor.focus();
+    },
+    cerrarDesdeFuera(event) {
+      if (this.abierto && !this.$el.contains(event.target)) this.cerrarMenu();
+    },
     cambiarCombinacion(combinar) {
       this.combinar = combinar;
       if (!combinar) this.$emit('input', this.seleccion.slice(0, 1));
@@ -63,7 +106,14 @@ export default {
 </script>
 
 <style scoped>
-.colores-hilo { border: 0; padding: 0; margin: 0 0 20px; min-width: 0; color: #253448; }
+.selector-hilos { position: relative; margin: 0 0 16px; }
+.boton-color { min-height: 44px; padding: 8px 18px; border: 2px solid #cbd5e1; border-radius: 9px; background: #fff; color: #253448; font: inherit; font-weight: 600; cursor: pointer; }
+.boton-color[aria-expanded="true"] { border-color: #1d4ed8; }
+.colores-hilo { position: absolute; z-index: 20; top: calc(100% + 8px); left: 0; box-sizing: border-box; width: min(440px, 100%); max-height: 65vh; overflow-y: auto; border: 1px solid #cbd5e1; border-radius: 12px; padding: 16px; margin: 0; min-width: 0; color: #253448; background: #fff; box-shadow: 0 8px 24px rgba(15, 23, 42, .18); }
+.colores-hilo .titulo-panel-hilos { float: left; width: calc(100% - 44px); padding: 0; min-height: 44px; display: flex; align-items: center; }
+.cerrar-hilos { float: right; min-width: 44px; min-height: 44px; border: 0; border-radius: 8px; background: #f1f5f9; color: #253448; font: inherit; cursor: pointer; }
+.combinar-hilos { clear: both; }
+.boton-color:focus-visible, .cerrar-hilos:focus-visible { outline: 3px solid #1d4ed8; outline-offset: 3px; }
 .colores-hilo legend { font-size: 1rem; font-weight: 700; margin-bottom: 8px; }
 .colores-hilo legend span { font-weight: 400; }
 .combinar-hilos { display: flex; align-items: center; gap: 8px; min-height: 44px; cursor: pointer; }
