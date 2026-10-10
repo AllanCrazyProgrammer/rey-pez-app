@@ -49,24 +49,27 @@
         </label>
       </div>
 
+      <p v-if="!isLoadingExistencias && Object.keys(existenciasPorProveedor).length > 0 && Object.keys(existenciasFiltradasPorCuarto).length === 0" class="no-existencias">
+        No hay existencias en el cuarto seleccionado.
+      </p>
       <div v-if="!isLoadingExistencias && Object.keys(existenciasFiltradasPorCuarto).length > 0" class="existencias-grid">
         <div v-for="(productos, proveedor) in existenciasFiltradasPorCuarto" :key="proveedor" class="proveedor-card">
           <h3>{{ proveedor }}</h3>
-          <table class="productos-table">
+          <table class="productos-table" :aria-label="`Existencias de ${proveedor}`" role="table">
             <thead>
               <tr>
-                <th>Medida</th>
-                <th>Pcz</th>
-                <th>Cuarto</th>
-                <th>Kilos</th>
-                <th v-if="!soloInventario">Taras</th>
-                <th>Precio/kg</th>
-                <th v-if="tienePreciosValidos(productos)">Valor</th>
+                <th scope="col">Medida</th>
+                <th v-if="tienePiezas(productos)" scope="col">Pcz</th>
+                <th v-if="tieneCuartos(productos)" scope="col">Cuarto</th>
+                <th scope="col">Kilos</th>
+                <th v-if="!soloInventario" scope="col">Taras</th>
+                <th v-if="tienePreciosValidos(productos)" scope="col">Precio/kg</th>
+                <th v-if="tienePreciosValidos(productos)" scope="col">Valor</th>
               </tr>
             </thead>
             <tbody>
               <tr v-for="producto in productos" :key="producto.clave" v-if="tieneKilosVisibles(producto.kilos)">
-                <td>
+                <td data-label="Medida" class="medida-cell">
                   <button
                     class="medida-button"
                     @click="abrirModalHistorialProducto(producto)"
@@ -74,9 +77,13 @@
                   >
                     {{ producto.nombre }}
                   </button>
+                  <button v-if="!tieneCuartos(productos)" class="cuarto-button asignar-cuarto"
+                    @click="abrirModalCambioCuarto(producto)" :aria-label="`Asignar cuarto a ${producto.nombre}`">
+                    Asignar cuarto
+                  </button>
                 </td>
-                <td>{{ producto.piezas || '—' }}</td>
-                <td>
+                <td v-if="tienePiezas(productos)" data-label="Pcz">{{ tieneDato(producto.piezas) ? producto.piezas : '—' }}</td>
+                <td v-if="tieneCuartos(productos)" data-label="Cuarto">
                   <button 
                     class="cuarto-button"
                     @click="abrirModalCambioCuarto(producto)"
@@ -86,10 +93,10 @@
                     {{ producto.cuarto }}
                   </button>
                 </td>
-                <td class="kilos-cell">{{ formatNumber(producto.kilos) }}</td>
-                <td v-if="!soloInventario" class="taras-cell">{{ (producto.kilos / 19).toFixed(1) }}</td>
-                <td class="precio-cell">{{ producto.ultimoPrecio > 0 ? `$${formatearPrecio(producto.ultimoPrecio)}` : '—' }}</td>
-                <td v-if="tienePreciosValidos(productos)" class="valor-cell">${{ formatearValor(producto.valor) }}</td>
+                <td data-label="Kilos" class="kilos-cell">{{ formatNumber(producto.kilos) }}</td>
+                <td v-if="!soloInventario" data-label="Taras" class="taras-cell">{{ (producto.kilos / 19).toFixed(1) }}</td>
+                <td v-if="tienePreciosValidos(productos)" data-label="Precio/kg" class="precio-cell">{{ producto.ultimoPrecio > 0 ? `$${formatearPrecio(producto.ultimoPrecio)}` : '—' }}</td>
+                <td v-if="tienePreciosValidos(productos)" data-label="Valor" class="valor-cell">{{ producto.ultimoPrecio > 0 ? `$${formatearValor(producto.valor)}` : '—' }}</td>
               </tr>
             </tbody>
           </table>
@@ -320,8 +327,8 @@ export default {
     },
 
     tieneAlgunPrecioValido() {
-      return Object.values(this.existenciasPorProveedor).some(productos => 
-        productos.some(producto => producto.ultimoPrecio > 0 || producto.valor > 0)
+      return Object.values(this.existenciasFiltradasPorCuarto).some(productos =>
+        this.tienePreciosValidos(productos)
       );
     },
     existenciasFiltradasPorCuarto() {
@@ -714,8 +721,22 @@ export default {
       return productos.reduce((total, producto) => total + producto.valor, 0);
     },
 
+    // Missing values are distinct from a valid numeric zero (notably Pcz).
+    tieneDato(valor) {
+      return valor !== null && valor !== undefined && String(valor).trim() !== '';
+    },
+
+    tienePiezas(productos) {
+      return productos.some(producto => this.tieneKilosVisibles(producto.kilos) && this.tieneDato(producto.piezas));
+    },
+
+    tieneCuartos(productos) {
+      return productos.some(producto => this.tieneKilosVisibles(producto.kilos) && this.normalizeCuarto(producto.cuarto) !== 's/c');
+    },
+
     tienePreciosValidos(productos) {
-      return productos.some(producto => producto.ultimoPrecio > 0 || producto.valor > 0);
+      // In the existing inventory model, a price of zero represents no price.
+      return productos.some(producto => this.tieneKilosVisibles(producto.kilos) && (producto.ultimoPrecio > 0 || producto.valor > 0));
     },
 
     editRegistro(id) {
@@ -1064,8 +1085,10 @@ export default {
 
 <style scoped>
 .existencias-crudos-container {
-  max-width: 1200px;
-  width: 95%;
+  max-width: 1600px;
+  width: 100%;
+  box-sizing: border-box;
+  min-width: 0;
   margin: 0 auto;
   padding: 20px;
   min-height: calc(100vh - 160px);
@@ -1150,7 +1173,7 @@ h1, h2, h3 {
 
 .existencias-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 640px), 1fr));
   gap: 15px;
   margin-bottom: 20px;
 }
@@ -1169,6 +1192,9 @@ h1, h2, h3 {
 }
 
 .proveedor-card {
+  min-width: 0;
+  container-type: inline-size;
+  overflow-wrap: anywhere;
   background-color: white;
   border: 2px solid #3760b0;
   border-radius: 8px;
@@ -1187,6 +1213,7 @@ h1, h2, h3 {
 
 .productos-table {
   width: 100%;
+  table-layout: fixed;
   border-collapse: collapse;
   margin: 12px 0;
 }
@@ -1522,24 +1549,20 @@ h1, h2, h3 {
   cursor: not-allowed;
 }
 
-@media (max-width: 1200px) {
-  .existencias-grid {
-    grid-template-columns: repeat(3, 1fr);
-  }
-}
-
-@media (max-width: 992px) {
-  .existencias-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
 @media (max-width: 768px) {
   .actions-container {
     flex-direction: column;
   }
 
+  .existencias-crudos-container { padding: 12px; }
+  .resumen-existencias { padding: 12px; }
+  .resumen-existencias h2 { font-size: 24px; overflow-wrap: anywhere; }
+  .proveedor-card { padding: 12px; }
+  .filters-cuarto, .filters-cuarto label { display: flex; flex-direction: column; align-items: stretch; width: 100%; }
+  .filters-cuarto select { min-width: 0; max-width: 100%; }
+  .total-general { padding: 12px; overflow-wrap: anywhere; }
   .action-button {
+    box-sizing: border-box;
     width: 100%;
     margin-bottom: 10px;
   }
@@ -1570,4 +1593,25 @@ h1, h2, h3 {
     justify-content: flex-end;
   }
 }
+/* Each provider responds to its own available width, including narrow desktop panes. */
+@container (max-width: 600px) {
+  .productos-table, .productos-table tbody { display: block; }
+  .productos-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+  .productos-table tr { display: block; border: 1px solid #d5deeb; border-radius: 8px; margin-bottom: 12px; padding: 8px; }
+  .productos-table td { display: grid; grid-template-columns: minmax(64px, 0.65fr) minmax(0, 1fr); align-items: center; gap: 8px; border: 0; padding: 6px 4px; text-align: right; }
+  .productos-table td::before { content: attr(data-label); text-align: left; font-size: 13px; font-weight: 600; color: #56647b; }
+  .productos-table .medida-cell { display: block; border-bottom: 1px solid #d5deeb; padding-bottom: 8px; margin-bottom: 4px; text-align: left; }
+  .productos-table .medida-cell::before { display: none; }
+  .medida-button, .cuarto-button { min-height: 44px; overflow-wrap: anywhere; max-width: 100%; }
+  .medida-button { font-size: 16px; }
+  .cuarto-button { justify-self: end; }
+}
+.asignar-cuarto { display: block; font-size: 12px; color: #3760b0; text-decoration: underline; }
+.medida-button:focus-visible, .cuarto-button:focus-visible { outline: 2px solid #3760b0; outline-offset: 3px; }
 </style> 
