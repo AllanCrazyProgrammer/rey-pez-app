@@ -1,15 +1,16 @@
 import { normalizarNombreProductoPrecio } from './preciosHistoricos';
 
 /**
- * Lee las dos parejas de alias también desde cachés anteriores al cambio de
- * nombre. Conserva el orden de entrada en empates y nunca modifica los arrays.
+ * Compara el nombre completo sin distinguir mayúsculas y conserva los alias
+ * históricos también en cachés anteriores al cambio de nombre. Conserva el orden de entrada en empates y nunca modifica los arrays.
  */
-export const obtenerGrupoPreciosPorAlias = (catalogo, medida) => {
+export const obtenerGrupoPreciosPorNombre = (catalogo, medida) => {
   const nombreCanonico = normalizarNombreProductoPrecio(medida);
-  if (nombreCanonico !== 'Med-Esp c/c' && nombreCanonico !== 'Med-Gde c/c') return null;
+  if (!nombreCanonico) return null;
+  const clave = nombreCanonico.toLowerCase().trim();
 
   const grupos = Object.entries(catalogo).filter(([producto, precios]) =>
-    normalizarNombreProductoPrecio(producto) === nombreCanonico && precios.length > 0
+    normalizarNombreProductoPrecio(producto).toLowerCase().trim() === clave && precios.length > 0
   );
   if (grupos.length === 0) return null;
 
@@ -19,4 +20,12 @@ export const obtenerGrupoPreciosPorAlias = (catalogo, medida) => {
       .sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
 
   return { medidaEncontrada: nombreCanonico, precios };
+};
+
+// Compatibilidad para consumidores que solo necesitan los dos alias históricos.
+export const obtenerGrupoPreciosPorAlias = (catalogo, medida) => {
+  const nombre = normalizarNombreProductoPrecio(medida);
+  return nombre === 'Med-Esp c/c' || nombre === 'Med-Gde c/c'
+    ? obtenerGrupoPreciosPorNombre(catalogo, medida)
+    : null;
 };
