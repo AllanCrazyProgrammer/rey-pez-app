@@ -33,7 +33,7 @@
       <ul v-else>
         <li v-for="sacada in paginatedSacadas" :key="sacada.id" class="sacada-item">
           <div class="sacada-content" @click="editSacada(sacada.id)">
-            <span class="sacada-date">{{ formatDate(sacada.fecha) }}</span>
+            <span class="sacada-date">{{ sacada.fechaTexto }}</span>
             <div class="sacada-summary">
               <div class="sacada-entry">
                 <span class="sacada-label">Entradas:</span>
@@ -96,7 +96,8 @@
 <script>
 import { db } from '@/firebase';
 import { collection, getDocs, getDoc, query, orderBy, doc, updateDoc } from 'firebase/firestore';
-import moment from 'moment'; // Import Moment.js
+import { momentoInventario } from '@/utils/momentoInventario';
+import { fechaRegistro } from '@/utils/fechasInventario';
 import PapeleraService from '@/services/PapeleraService';
 import HistorialProductoModal from '@/components/HistorialProductoModal.vue';
 import ListaMedidasPedidoModal from '@/components/ListaMedidasPedidoModal.vue';
@@ -149,21 +150,14 @@ export default {
         const querySnapshot = await getDocs(q);
         this.sacadas = querySnapshot.docs.map(doc => {
           const data = doc.data();
-          let fecha;
-          if (data.fecha instanceof Date) {
-            fecha = moment(data.fecha).toDate(); // Use Moment.js to handle dates
-          } else if (data.fecha && typeof data.fecha.toDate === 'function') {
-            fecha = moment(data.fecha.toDate()).toDate(); // Use Moment.js to handle dates
-          } else {
-            fecha = moment(data.fecha).toDate(); // Use Moment.js to handle dates
-          }
-          // Ajustar la fecha para la zona horaria local
-          fecha = moment(fecha).toDate(); // Use Moment.js to handle dates
+          // Preserve the stored instant; format its day in the inventory timezone.
+          const fecha = momentoInventario(data.fecha).toDate();
           return {
             id: doc.id,
             ...data,
             fecha: fecha,
-            fechaTexto: this.formatDate(fecha),
+            fechaDia: fechaRegistro(data.fecha),
+            fechaTexto: this.formatDate(data.fecha),
             totalEntradas: data.totalEntradas || 0,
             totalSalidas: data.totalSalidas || 0,
             listaMedidasPedido: Array.isArray(data.listaMedidasPedido) ? data.listaMedidasPedido : []
@@ -177,7 +171,7 @@ export default {
       }
     },
     formatDate(date) {
-      return moment(date).format('DD [de] MMMM [de] YYYY');
+      return momentoInventario(fechaRegistro(date)).format('DD [de] MMMM [de] YYYY');
     },
     editSacada(id) {
       this.modalSalida = { abierto: true, sacadaId: id };
@@ -185,8 +179,8 @@ export default {
     },
 
     irASalidaDeHoy() {
-      const hoy = moment().startOf('day');
-      const sacadaHoy = this.sacadas.find(sacada => moment(sacada.fecha).isSame(hoy, 'day'));
+      const hoy = momentoInventario().format('YYYY-MM-DD');
+      const sacadaHoy = this.sacadas.find(sacada => (sacada.fechaDia || fechaRegistro(sacada.fecha)) === hoy);
       this.modalSalida = { abierto: true, sacadaId: sacadaHoy ? sacadaHoy.id : null };
       useUIStore().openModal('salida-sacada');
     },
@@ -215,7 +209,7 @@ export default {
       const numEntradas = Array.isArray(datosSacada?.entradas) ? datosSacada.entradas.length : 0;
       const numSalidas = Array.isArray(datosSacada?.salidas) ? datosSacada.salidas.length : 0;
       const detalle = datosSacada
-        ? `El día ${this.formatDate(datosSacada.fecha)} contiene ${numEntradas} entrada(s) y ${numSalidas} salida(s).\n\n`
+        ? `El día ${this.formatDate(datosSacada.fechaDia || datosSacada.fecha)} contiene ${numEntradas} entrada(s) y ${numSalidas} salida(s).\n\n`
         : '';
 
       if (confirm(`${detalle}¿Estás seguro de que quieres borrar este registro de sacadas?`)) {

@@ -471,7 +471,7 @@ import BackButton from '../components/BackButton.vue';
 import ListaMedidasPedidoModal from '@/components/ListaMedidasPedidoModal.vue';
 import MedidasParaHoyCards from '@/components/MedidasParaHoyCards.vue';
 import { normalizarGruposListaMedidasParaPdf } from '@/utils/pdf/sacadas';
-import moment from 'moment';
+import { momentoInventario, inicioDiaInventario, finDiaInventario } from '@/utils/momentoInventario';
 import { formatNumber } from '@/utils/formatters';
 import inventarioNavigation from '@/mobile/inventarioNavigation';
 
@@ -495,9 +495,10 @@ export default {
     }
   },
   data() {
+    const currentDate = momentoInventario();
     return {
-      currentDate: moment(),
-      selectedDate: moment().format('YYYY-MM-DD'),
+      currentDate,
+      selectedDate: currentDate.format('YYYY-MM-DD'),
       entradas: [],
       salidas: [],
       proveedores: [],
@@ -882,7 +883,7 @@ export default {
       this.selectedSacadaForMeasures = {
         id: this.sacadaId,
         fecha: this.currentDate.toDate(),
-        fechaTexto: moment(this.currentDate).format('DD [de] MMMM [de] YYYY'),
+        fechaTexto: momentoInventario(this.currentDate).format('DD [de] MMMM [de] YYYY'),
         listaMedidasPedido: this.listaMedidasPedido
       };
       this.isListaMedidasModalOpen = true;
@@ -1252,7 +1253,7 @@ export default {
         return medidaCoincide && precioCoincide && cuartoCoincide;
       };
 
-      const fechaActual = this.currentDate.clone().endOf('day');
+      const fechaActual = finDiaInventario(this.currentDate);
       sacadasOrdenadas.forEach((sacada) => {
         // El registro en edición se procesa desde los arreglos locales (incluye renglones sin guardar)
         if (this.isEditing && sacada.id === this.sacadaId) {
@@ -1261,7 +1262,7 @@ export default {
 
         const sacadaFecha = sacada.fecha instanceof Date ? sacada.fecha : sacada.fecha.toDate();
 
-        if (moment(sacadaFecha).isSameOrBefore(fechaActual)) {
+        if (momentoInventario(sacadaFecha).isSameOrBefore(fechaActual)) {
           sacada.entradas.forEach(entrada => {
             if (coincideMovimiento(entrada)) {
               kilosDisponibles += Number(entrada.kilos) || 0;
@@ -1401,7 +1402,7 @@ export default {
       const docSnap = await getDoc(docRef);
       if (docSnap.exists()) {
         const data = docSnap.data();
-        this.currentDate = moment(data.fecha.toDate());
+        this.currentDate = momentoInventario(data.fecha.toDate());
         this.selectedDate = this.currentDate.format('YYYY-MM-DD');
         this.entradas = (data.entradas || []).map(entrada => this.normalizeRegistroCantidades(entrada));
         this.salidas = (data.salidas || []).map(salida => this.normalizeRegistroCantidades(salida));
@@ -1458,7 +1459,9 @@ export default {
       }
     },
     updateCurrentDate() {
-      this.currentDate = moment(this.selectedDate);
+      // Re-selecting the same day must not replace a historical timestamp.
+      if (this.currentDate.isValid() && this.currentDate.format('YYYY-MM-DD') === this.selectedDate) return;
+      this.currentDate = momentoInventario(this.selectedDate);
     },
     cerrarModal() {
       const hayCambiosSinGuardar = this.salidas.length !== this.salidasIniciales;
@@ -1469,7 +1472,7 @@ export default {
     },
     async getMedidasConPrecio(proveedor) {
       const medidasDisponibles = new Map();
-      const fechaActual = this.currentDate.clone().endOf('day');
+      const fechaActual = finDiaInventario(this.currentDate);
       const normalizeCuarto = this.normalizeCuarto;
 
       // Obtenemos las sacadas anteriores (snapshot cacheado de la sesión)
@@ -1539,11 +1542,11 @@ export default {
       };
 
       // Procesar todas las sacadas anteriores hasta el día ANTERIOR al actual (NO incluir el día actual)
-      const inicioDiaActual = this.currentDate.clone().startOf('day');
+      const inicioDiaActual = inicioDiaInventario(this.currentDate);
       
       sacadasOrdenadas.forEach(sacada => {
         const sacadaFecha = sacada.fecha instanceof Date ? sacada.fecha : sacada.fecha.toDate();
-        const momentSacada = moment(sacadaFecha);
+        const momentSacada = momentoInventario(sacadaFecha);
         
         if (momentSacada.isBefore(inicioDiaActual)) {
           
@@ -1636,7 +1639,7 @@ export default {
           let nombreDisplay = datos.nombre;
           
           if (datos.precio !== null && datos.primeraFecha !== null) {
-            const fechaStr = moment(datos.primeraFecha).format('DD/MM/YY');
+            const fechaStr = momentoInventario(datos.primeraFecha).format('DD/MM/YY');
             if (datos.esElMasAntiguo) {
               nombreDisplay = `🕐 ${datos.medida} ($${datos.precio}) - Más antiguo (${fechaStr})`;
             } else {
@@ -1716,11 +1719,11 @@ export default {
         .map(docSnapshot => ({ id: docSnapshot.id, ...docSnapshot.data() }))
         .sort((a, b) => a.fecha.toDate() - b.fecha.toDate());
 
-      const inicioDiaActual = this.currentDate.clone().startOf('day');
+      const inicioDiaActual = inicioDiaInventario(this.currentDate);
 
       sacadasOrdenadas.forEach(sacada => {
         const fechaSacada = sacada.fecha instanceof Date ? sacada.fecha : sacada.fecha.toDate();
-        const momentoSacada = moment(fechaSacada);
+        const momentoSacada = momentoInventario(fechaSacada);
 
         if (!momentoSacada.isBefore(inicioDiaActual)) {
           return;
