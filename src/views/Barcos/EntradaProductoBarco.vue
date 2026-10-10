@@ -128,10 +128,14 @@
           v-for="(medida, mIndex) in form.medidas"
           :key="mIndex"
           class="medida-tab"
-          :class="{ 'active': medidaActivaIndex === mIndex && !resumenActivo }"
+          :class="{ 'active': medidaActivaIndex === mIndex && !resumenActivo, 'medida-tab-con-color': normalizarColoresHilo(medida.coloresHilo).length > 0 }"
+          :style="estiloColoresHilo(medida.coloresHilo)"
+          :title="'Hilos: ' + descripcionColoresHilo(medida.coloresHilo)"
+          :aria-pressed="medidaActivaIndex === mIndex && !resumenActivo ? 'true' : 'false'"
           @click="seleccionarMedida(mIndex)"
         >
           <span class="medida-tab-nombre">{{ medida.nombre || `Medida ${mIndex + 1}` }}</span>
+          <span v-if="normalizarColoresHilo(medida.coloresHilo).length" class="medida-hilos-descripcion">{{ descripcionColoresHilo(medida.coloresHilo) }}</span>
           <span class="medida-tab-stats">{{ formatNumber(sumaTaras(medida), 0) }}-t · {{ formatNumber(sumaKilos(medida), 0) }} kg</span>
         </button>
         <button
@@ -289,7 +293,15 @@
             </thead>
             <tbody>
               <tr v-for="(medida, mIndex) in form.medidas" :key="mIndex">
-                <td class="medida-col" data-label="Medida">{{ medida.nombre || `Medida ${mIndex + 1}` }}</td>
+                <td
+                  class="medida-col"
+                  data-label="Medida"
+                  :style="estiloColoresHilo(medida.coloresHilo)"
+                  :title="'Hilos: ' + descripcionColoresHilo(medida.coloresHilo)"
+                >
+                  {{ medida.nombre || `Medida ${mIndex + 1}` }}
+                  <span v-if="normalizarColoresHilo(medida.coloresHilo).length" class="medida-hilos-descripcion">{{ descripcionColoresHilo(medida.coloresHilo) }}</span>
+                </td>
                 <td data-label="Taras">{{ formatNumber(sumaTaras(medida), 0) }}</td>
                 <td data-label="Kilos">{{ formatNumber(sumaKilos(medida)) }}</td>
               </tr>
@@ -335,7 +347,7 @@ import {
 } from 'firebase/firestore';
 import BackButton from '@/components/BackButton.vue';
 import SelectorColoresHilo from '@/components/Barcos/SelectorColoresHilo.vue';
-import { normalizarColoresHilo, estiloColoresHilo } from '@/utils/coloresHilo';
+import { normalizarColoresHilo, estiloColoresHilo, descripcionColoresHilo } from '@/utils/coloresHilo';
 import { formatNumber } from '@/utils/formatters';
 
 const COLECCION = 'entradasProductoBarcos';
@@ -396,6 +408,8 @@ export default {
   methods: {
     formatNumber,
     estiloColoresHilo,
+    normalizarColoresHilo,
+    descripcionColoresHilo,
     formatearFecha(fechaISO) {
       if (!fechaISO) return '';
       const fecha = new Date(fechaISO + 'T00:00:00');
@@ -1260,6 +1274,28 @@ export default {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
   box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.medida-tab-con-color.active {
+  border-color: #1d4ed8;
+  box-shadow: 0 0 0 2px #fff, 0 0 0 4px #1d4ed8;
+}
+
+.medida-tab:focus-visible {
+  outline: 3px solid #1d4ed8;
+  outline-offset: 3px;
+}
+
+.medida-hilos-descripcion {
+  display: block;
+  font-size: 0.75em;
+  font-weight: 500;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.medida-tab.medida-tab-con-color .medida-tab-stats {
+  opacity: 1;
 }
 
 .medida-tab-nombre {

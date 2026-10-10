@@ -68,7 +68,32 @@ async function testDOM() {
   const checkbox = selector().querySelector('input'); checkbox.click(); await tick();
   clickColor('Azul'); await tick();
   assert.deepEqual(JSON.parse(JSON.stringify(window.app.medidaActiva.coloresHilo)), ['rojo', 'azul']);
-  key(checkbox, 'Escape', 27); await tick();
+  const top = window.document.querySelector('.medida-tab');
+  assert.equal(top.title, 'Hilos: Rojo + Azul');
+  assert.equal(top.getAttribute('aria-pressed'), 'true');
+  assert(top.classList.contains('medida-tab-con-color'));
+  assert.equal(top.querySelector('.medida-hilos-descripcion').textContent, 'Rojo + Azul');
+  const previousData = JSON.stringify(window.app.prepararMedidasParaGuardar());
+  window.app.form.medidas.push({ nombre: 'Pac gde', coloresHilo: ['amarillo'], filas: [{ taras: 1, kilos: 13 }] });
+  window.app.form.medidas.push({ nombre: 'Legado', filas: [{ taras: 2, kilos: 26 }] });
+  const beforeSummary = JSON.stringify(window.app.prepararMedidasParaGuardar());
+  window.app.resumenActivo = true; await tick();
+  const cells = [...window.document.querySelectorAll('.tabla-resumen tbody .medida-col')];
+  assert.equal(cells.length, 3);
+  assert.equal(cells[0].title, 'Hilos: Rojo + Azul');
+  assert.equal(cells[0].querySelector('.medida-hilos-descripcion').textContent, 'Rojo + Azul');
+  assert.equal(cells[1].title, 'Hilos: Amarillo');
+  assert.equal(cells[1].style.background, 'rgb(254, 243, 176)');
+  assert.equal(cells[2].title, 'Hilos: Sin color');
+  assert.equal(cells[2].style.background, '');
+  assert.equal(cells[2].querySelector('.medida-hilos-descripcion'), null);
+  assert.equal(window.document.querySelector('.medida-tab').getAttribute('aria-pressed'), 'false');
+  assert.equal(JSON.stringify(window.app.prepararMedidasParaGuardar()), beforeSummary);
+  window.app.resumenActivo = false; window.app.form.medidas.splice(1); await tick();
+  assert.equal(JSON.stringify(window.app.prepararMedidasParaGuardar()), previousData);
+  button().click(); await tick();
+  const reopenedCheckbox = selector().querySelector('input');
+  key(reopenedCheckbox, 'Escape', 27); await tick();
   assert.equal(selector().querySelectorAll('.colores-hilo').length, 0);
   assert.equal(window.document.activeElement, button());
   key(button(), 'ArrowDown', 40); await tick();
@@ -80,10 +105,13 @@ async function testDOM() {
   assert.equal(button().getAttribute('aria-expanded'), 'false');
   button().click(); await tick(); clickColor('Sin color'); await tick();
   assert.equal(window.app.medidaActiva.coloresHilo.length, 0);
+  assert.equal(window.document.querySelector('.medida-tab').title, 'Hilos: Sin color');
+  assert(!window.document.querySelector('.medida-tab').classList.contains('medida-tab-con-color'));
+  assert.equal(window.document.querySelector('.medida-tab .medida-hilos-descripcion'), null);
   selector().querySelector('.cerrar-hilos').click(); await tick();
   assert.equal(window.document.activeElement, button());
   window.app.$destroy(); dom.window.close();
-  console.log('PASS: real Vue/DOM compact button, open/focus, two colors, Escape/ArrowDown, outside pointer/focus dismissal, clear, close/focus restore. No visual layout validation.');
+  console.log('PASS: real Vue/DOM compact button, open/focus, two colors, Escape/ArrowDown, outside pointer/focus dismissal, clear, close/focus restore. Summary and top cards: dual/single/legacy/cleared colors, active indicator and unchanged data. No visual layout validation.');
 }
 (async () => {
   if (process.env.DOM_ONLY === '1') { await testDOM(); return; }
