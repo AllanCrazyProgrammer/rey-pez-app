@@ -63,7 +63,7 @@ async function obtenerOCrearDia(transaction, fecha, sacadaIdExistente = null) {
   const indice = db.collection('sacadasDias').doc(fecha);
   const indiceSnap = await transaction.get(indice);
   
-  if (indiceSnap.exists()) {
+  if (indiceSnap.exists) {
     const sacadaId = indiceSnap.data().sacadaId;
     if (sacadaIdExistente && sacadaId !== sacadaIdExistente) {
       throw new Error('DIA_DUPLICADO');
@@ -71,7 +71,7 @@ async function obtenerOCrearDia(transaction, fecha, sacadaIdExistente = null) {
     const sacadaRef = db.collection('sacadas').doc(sacadaId);
     const sacadaSnap = await transaction.get(sacadaRef);
     
-    if (!sacadaSnap.exists()) {
+    if (!sacadaSnap.exists) {
       throw new Error('DIA_ELIMINADO');
     }
     
@@ -110,7 +110,7 @@ async function obtenerOCrearDia(transaction, fecha, sacadaIdExistente = null) {
   
   return { 
     sacadaRef, 
-    sacadaSnap: { exists: () => false, data: () => nuevoDia }, 
+    sacadaSnap: { exists: false, data: () => nuevoDia }, 
     indice 
   };
 }
@@ -169,7 +169,7 @@ async function handlePostSalida(req, res) {
   if (idempotencyKey) {
     const idemRef = db.collection('asistenteIdem').doc(idempotencyKey);
     const idemSnap = await idemRef.get();
-    if (idemSnap.exists()) {
+    if (idemSnap.exists) {
       const resultado = idemSnap.data();
       return res.status(200).json({
         success: true,
@@ -193,7 +193,7 @@ async function handlePostSalida(req, res) {
       
       // Obtener o crear el documento del día
       const { sacadaRef, sacadaSnap } = await obtenerOCrearDia(transaction, fecha);
-      const diaData = sacadaSnap.exists() ? sacadaSnap.data() : {
+      const diaData = sacadaSnap.exists ? sacadaSnap.data() : {
         entradas: [],
         salidas: [],
         totalEntradas: 0,
@@ -337,8 +337,8 @@ async function handlePostSalida(req, res) {
         };
       }
       
-      // Escribir la actualización
-      if (sacadaSnap.exists()) {
+      // Escribir la actualización      
+      if (sacadaSnap.exists) {
         transaction.update(sacadaRef, actualizacion);
       } else {
         transaction.set(sacadaRef, {
@@ -528,7 +528,7 @@ async function handleGetDia(req, res) {
     // Buscar el día en el índice
     const indiceSnap = await db.collection('sacadasDias').doc(fecha).get();
     
-    if (!indiceSnap.exists()) {
+    if (!indiceSnap.exists) {
       // Buscar en documentos antiguos sin índice
       const sacadasSnap = await db.collection('sacadas').get();
       const dia = sacadasSnap.docs.find(doc => 
@@ -560,7 +560,7 @@ async function handleGetDia(req, res) {
     const sacadaId = indiceSnap.data().sacadaId;
     const sacadaSnap = await db.collection('sacadas').doc(sacadaId).get();
     
-    if (!sacadaSnap.exists()) {
+    if (!sacadaSnap.exists) {
       return errorResponse(res, 404, 'DIA_NO_ENCONTRADO', 
         'El índice apunta a un documento que no existe');
     }
