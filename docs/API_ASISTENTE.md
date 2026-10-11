@@ -4,16 +4,18 @@ Cloud Function HTTPS para que el asistente de Allan pueda registrar movimientos 
 
 ## Descripción
 
-La función `asistente` expone siete endpoints protegidos con autenticación por Bearer token:
+La función `asistente` expone nueve endpoints protegidos con autenticación por Bearer token:
 
 **Limpios:**
 - **POST /salida** - Registra una salida de producto limpio
+- **POST /deshacer** - Deshace una salida de limpios registrada previamente
 - **GET /existencias** - Consulta el inventario actual de limpios
 - **GET /dia** - Obtiene las entradas y salidas de un día específico de limpios
 
 **Crudos:**
 - **POST /crudos/entrada** - Registra una entrada de producto crudo
 - **POST /crudos/salida** - Registra una salida de producto crudo
+- **POST /crudos/deshacer** - Deshace una entrada o salida de crudos registrada previamente
 - **GET /crudos/existencias** - Consulta el inventario actual de crudos
 - **GET /crudos/dia** - Obtiene las entradas y salidas de un día específico de crudos
 
@@ -345,6 +347,170 @@ curl -X GET "https://asistente-<hash>-uc.a.run.app/dia?fecha=2027-01-15" \
   "message": "No hay registro para esta fecha"
 }
 ```
+
+### POST /deshacer
+
+Deshace una salida de limpios registrada previamente por el asistente. Solo se pueden deshacer operaciones creadas por el asistente (que tienen identificador `_asistenteId`).
+
+**URL:** `https://asistente-<hash>-uc.a.run.app/deshacer`
+
+**Método:** `POST`
+
+**Headers:**
+```
+Authorization: Bearer <ASISTENTE_API_KEY>
+Content-Type: application/json
+```
+
+**Body (JSON):**
+
+```json
+{
+  "idempotencyKey": "orden-123-item-456",
+  "idempotencyKey": "undo-orden-123"
+}
+```
+
+O bien:
+
+```json
+{
+  "logId": "abc123xyz",
+  "dryRun": false
+}
+```
+
+**Campos requeridos (uno de):**
+- `idempotencyKey` (string): La clave de idempotencia de la operación original que quieres deshacer
+- `logId` (string): El ID del documento en `asistenteLog` de la operación original
+
+**Campos opcionales:**
+- `dryRun` (boolean): Si es `true`, simula la operación sin escribir a Firestore
+- `idempotencyKey` (string, segundo parámetro): Clave de idempotencia para la operación de deshacer (para evitar duplicados)
+
+**Ejemplo de request con curl:**
+
+```bash
+curl -X POST https://asistente-<hash>-uc.a.run.app/deshacer \
+  -H "Authorization: Bearer <tu-clave-secreta>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "idempotencyKey": "orden-123",
+    "idempotencyKey": "undo-orden-123"
+  }'
+```
+
+**Respuesta exitosa (200 OK):**
+
+```json
+{
+  "success": true,
+  "fecha": "2027-01-15",
+  "originalLogId": "log-abc123",
+  "filaEliminada": {
+    "tipo": "proveedor",
+    "proveedor": "Proveedor A",
+    "medida": "51/60",
+    "precio": 120,
+    "kilos": 50,
+    "cajas": 2.5,
+    "cuartoFrio": "Cuarto 1",
+    "_asistenteId": "uuid-xxx"
+  },
+  "metodoEncontrado": "asistenteId",
+  "totalSalidasAntes": 150,
+  "totalSalidasDespues": 100
+}
+```
+
+**Respuesta cuando ya fue deshecha (200 OK):**
+
+```json
+{
+  "success": true,
+  "alreadyUndone": true,
+  "message": "Esta operación ya fue deshecha anteriormente",
+  "data": {
+    "fecha": "2027-01-15",
+    "originalLogId": "log-abc123",
+    "undoTimestamp": { "_seconds": 1234567890, "_nanoseconds": 0 },
+    "row": { ... }
+  }
+}
+```
+
+**Respuesta con dryRun:**
+
+```json
+{
+  "success": true,
+  "dryRun": true,
+  "message": "Simulación exitosa (sin escribir a Firestore)",
+  "fecha": "2027-01-15",
+  "filaEliminada": { ... },
+  "totalSalidasDespues": 100
+}
+```
+
+**Errores comunes:**
+
+- **404 OPERACION_NO_ENCONTRADA** - No se encontró la operación con ese idempotencyKey o logId
+  ```json
+  {
+    "error": {
+      "code": "OPERACION_NO_ENCONTRADA",
+      "message": "No se encontró ninguna operación de salida con ese idempotencyKey. Solo se pueden deshacer operaciones creadas por el asistente."
+    }
+  }
+  ```
+
+- **400 NO_DESHACIBLE** - La operación es demasiado antigua (antes de tener soporte para deshacer)
+  ```json
+  {
+    "error": {
+      "code": "NO_DESHACIBLE",
+      "message": "Esta operación fue creada antes de que existiera soporte para deshacer. Solo se pueden deshacer operaciones con identificador de asistente."
+    }
+  }
+  ```
+
+- **404 FILA_NO_ENCONTRADA** - La fila ya no existe en el día (fue eliminada o editada manualmente)
+  ```json
+  {
+    "error": {
+      "code": "FILA_NO_ENCONTRADA",
+      "message": "No se encontró la fila en el documento del día. Es posible que ya haya sido eliminada o editada manualmente.",
+      "details": {
+        "busquedaPor": "asistenteId y contenido exacto",
+        "filaOriginal": { ... },
+        "salidasActuales": 5
+      }
+    }
+  }
+  ```
+
+- **409 FILA_MODIFICADA** - La fila fue editada manualmente después de ser registrada
+  ```json
+  {
+    "error": {
+      "code": "FILA_MODIFICADA",
+      "message": "La fila fue modificada manualmente después de ser registrada. No se puede deshacer.",
+      "details": {
+        "filaOriginal": { ... },
+        "filaActual": { ... }
+      }
+    }
+  }
+  ```
+
+**Notas importantes:**
+
+- Solo se pueden deshacer operaciones creadas por el asistente (que tienen `_asistenteId`)
+- Si intentas deshacer la misma operación dos veces, la segunda vez retorna éxito con `alreadyUndone: true`
+- La operación de deshacer es transaccional: o se completa totalmente o falla sin cambios
+- Se crea un log de auditoría tipo `deshacer` en `asistenteLog` para cada operación deshecha
+- El campo `metodoEncontrado` indica si la fila se encontró por `asistenteId` o por `contenido` exacto
+- Si la fila fue modificada manualmente en la UI, el deshacer será rechazado para evitar inconsistencias
 
 ## Concurrencia y seguridad
 
@@ -846,6 +1012,206 @@ curl -X GET "https://asistente-<hash>-uc.a.run.app/crudos/dia?fecha=2026-10-11" 
   "message": "No hay registro para esta fecha"
 }
 ```
+
+### POST /crudos/deshacer
+
+Deshace una entrada o salida de crudos registrada previamente por el asistente. Solo se pueden deshacer operaciones creadas por el asistente (que tienen identificador `_asistenteId`).
+
+**URL:** `https://asistente-<hash>-uc.a.run.app/crudos/deshacer`
+
+**Método:** `POST`
+
+**Headers:**
+```
+Authorization: Bearer <ASISTENTE_API_KEY>
+Content-Type: application/json
+```
+
+**Body (JSON):**
+
+```json
+{
+  "idempotencyKey": "entrada-123",
+  "idempotencyKey": "undo-entrada-123"
+}
+```
+
+O bien:
+
+```json
+{
+  "logId": "abc123xyz",
+  "dryRun": false
+}
+```
+
+**Campos requeridos (uno de):**
+- `idempotencyKey` (string): La clave de idempotencia de la operación original que quieres deshacer
+- `logId` (string): El ID del documento en `asistenteLog` de la operación original
+
+**Campos opcionales:**
+- `dryRun` (boolean): Si es `true`, simula la operación sin escribir a Firestore
+- `idempotencyKey` (string, segundo parámetro): Clave de idempotencia para la operación de deshacer (para evitar duplicados)
+
+**Ejemplo de request con curl:**
+
+```bash
+curl -X POST https://asistente-<hash>-uc.a.run.app/crudos/deshacer \
+  -H "Authorization: Bearer <tu-clave-secreta>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "idempotencyKey": "entrada-galileo-123",
+    "idempotencyKey": "undo-entrada-galileo-123"
+  }'
+```
+
+**Respuesta exitosa para entrada (200 OK):**
+
+```json
+{
+  "success": true,
+  "fecha": "2026-10-10",
+  "originalLogId": "log-abc123",
+  "tipoOriginal": "entrada-crudo",
+  "filaEliminada": {
+    "proveedor": "Galileo",
+    "producto": "Pac Ch",
+    "kilos": 300,
+    "precio": 120,
+    "piezas": "100",
+    "cuartoFrio": "Cuarto 1",
+    "_asistenteId": "uuid-xxx"
+  },
+  "metodoEncontrado": "asistenteId",
+  "totalEntradasAntes": 800,
+  "totalEntradasDespues": 500
+}
+```
+
+**Respuesta exitosa para salida (200 OK):**
+
+```json
+{
+  "success": true,
+  "fecha": "2026-10-11",
+  "originalLogId": "log-xyz789",
+  "tipoOriginal": "salida-crudo",
+  "filaEliminada": {
+    "proveedor": "Galileo",
+    "producto": "Pac Ch",
+    "kilos": 113,
+    "cuartoFrio": "Cuarto 1",
+    "_asistenteId": "uuid-yyy"
+  },
+  "metodoEncontrado": "asistenteId",
+  "totalSalidasAntes": 113,
+  "totalSalidasDespues": 0
+}
+```
+
+**Respuesta cuando ya fue deshecha (200 OK):**
+
+```json
+{
+  "success": true,
+  "alreadyUndone": true,
+  "message": "Esta operación ya fue deshecha anteriormente",
+  "data": {
+    "fecha": "2026-10-10",
+    "originalLogId": "log-abc123",
+    "undoTimestamp": { "_seconds": 1234567890, "_nanoseconds": 0 },
+    "row": { ... },
+    "tipoOriginal": "entrada-crudo"
+  }
+}
+```
+
+**Respuesta con dryRun:**
+
+```json
+{
+  "success": true,
+  "dryRun": true,
+  "message": "Simulación exitosa (sin escribir a Firestore)",
+  "fecha": "2026-10-10",
+  "tipoOriginal": "entrada-crudo",
+  "filaEliminada": { ... },
+  "totalEntradasDespues": 500
+}
+```
+
+**Errores comunes:**
+
+- **404 OPERACION_NO_ENCONTRADA** - No se encontró la operación con ese idempotencyKey o logId
+  ```json
+  {
+    "error": {
+      "code": "OPERACION_NO_ENCONTRADA",
+      "message": "No se encontró ninguna operación de crudos con ese idempotencyKey. Solo se pueden deshacer operaciones creadas por el asistente."
+    }
+  }
+  ```
+
+- **400 TIPO_INVALIDO** - El logId corresponde a una operación de limpios, no de crudos
+  ```json
+  {
+    "error": {
+      "code": "TIPO_INVALIDO",
+      "message": "El log especificado no es una entrada/salida de crudos. Usa /deshacer para limpios."
+    }
+  }
+  ```
+
+- **400 NO_DESHACIBLE** - La operación es demasiado antigua (antes de tener soporte para deshacer)
+  ```json
+  {
+    "error": {
+      "code": "NO_DESHACIBLE",
+      "message": "Esta operación fue creada antes de que existiera soporte para deshacer. Solo se pueden deshacer operaciones con identificador de asistente."
+    }
+  }
+  ```
+
+- **404 FILA_NO_ENCONTRADA** - La fila ya no existe en el día
+  ```json
+  {
+    "error": {
+      "code": "FILA_NO_ENCONTRADA",
+      "message": "No se encontró la fila en el documento del día. Es posible que ya haya sido eliminada o editada manualmente.",
+      "details": {
+        "busquedaPor": "asistenteId y contenido exacto",
+        "tipoOperacion": "entrada-crudo",
+        "filaOriginal": { ... },
+        "registrosActuales": 5
+      }
+    }
+  }
+  ```
+
+- **409 FILA_MODIFICADA** - La fila fue editada manualmente después de ser registrada
+  ```json
+  {
+    "error": {
+      "code": "FILA_MODIFICADA",
+      "message": "La fila fue modificada manualmente después de ser registrada. No se puede deshacer.",
+      "details": {
+        "filaOriginal": { ... },
+        "filaActual": { ... }
+      }
+    }
+  }
+  ```
+
+**Notas importantes:**
+
+- Funciona tanto para entradas como para salidas de crudos
+- Solo se pueden deshacer operaciones creadas por el asistente (que tienen `_asistenteId`)
+- Si intentas deshacer la misma operación dos veces, la segunda vez retorna éxito con `alreadyUndone: true`
+- La operación de deshacer es transaccional: o se completa totalmente o falla sin cambios
+- Se crea un log de auditoría tipo `deshacer-crudo` en `asistenteLog` para cada operación deshecha
+- El campo `tipoOriginal` indica si era una `entrada-crudo` o `salida-crudo`
+- El campo `metodoEncontrado` indica si la fila se encontró por `asistenteId` o por `contenido` exacto
+- Si la fila fue modificada manualmente en la UI, el deshacer será rechazado para evitar inconsistencias
 
 ## Diferencias entre Limpios y Crudos
 

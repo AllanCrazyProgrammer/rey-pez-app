@@ -7,9 +7,17 @@ const {
   fechaRegistroAdmin,
   medianocheMexico,
   finDiaMexico,
+  inicioDiaMexico,
   calcularDisponibles,
   obtenerOpcionesDisponibles
 } = require('./lib/inventario');
+
+/**
+ * Genera un ID único para identificar filas creadas por el asistente.
+ */
+function generarAsistenteId() {
+  return crypto.randomUUID();
+}
 
 // La API key vive como secreto de Firebase (nunca en el código):
 //   firebase functions:secrets:set ASISTENTE_API_KEY
@@ -300,6 +308,7 @@ async function handlePostSalida(req, res) {
       }
       
       // Construir la nueva salida (igual que la UI)
+      const asistenteId = generarAsistenteId();
       const nuevaSalida = {
         tipo: 'proveedor',
         proveedor,
@@ -307,7 +316,8 @@ async function handlePostSalida(req, res) {
         precio: precioNorm,
         kilos,
         cajas,
-        cuartoFrio: cuartoNorm
+        cuartoFrio: cuartoNorm,
+        _asistenteId: asistenteId
       };
       
       const salidasActualizadas = [...(diaData.salidas || []), nuevaSalida];
@@ -373,7 +383,10 @@ async function handlePostSalida(req, res) {
           totalSalidas: totalSalidasActualizado,
           numSalidas: salidasActualizadas.length
         },
-        sacadaId: sacadaRef.id
+        sacadaId: sacadaRef.id,
+        asistenteId: asistenteId,
+        row: nuevaSalida,
+        idempotencyKey: idempotencyKey || null
       });
       
       // Guardar idempotencia
@@ -717,13 +730,15 @@ async function handlePostCrudosEntrada(req, res) {
       };
       
       // Construir la nueva entrada (igual que la UI)
+      const asistenteId = generarAsistenteId();
       const nuevaEntrada = {
         proveedor,
         producto,
         kilos,
         precio: precioNorm,
         piezas: piezasNorm,
-        cuartoFrio: cuartoNorm
+        cuartoFrio: cuartoNorm,
+        _asistenteId: asistenteId
       };
       
       const entradasActualizadas = [...(diaData.entradas || []), nuevaEntrada];
@@ -787,7 +802,10 @@ async function handlePostCrudosEntrada(req, res) {
           totalEntradas: totalEntradasActualizado,
           numEntradas: entradasActualizadas.length
         },
-        crudoId: crudoRef.id
+        crudoId: crudoRef.id,
+        asistenteId: asistenteId,
+        row: nuevaEntrada,
+        idempotencyKey: idempotencyKey || null
       });
       
       // Guardar idempotencia
@@ -1224,11 +1242,13 @@ async function handlePostCrudosSalida(req, res) {
       }
       
       // Construir la nueva salida (igual que la UI)
+      const asistenteId = generarAsistenteId();
       const nuevaSalida = {
         proveedor,
         producto,
         kilos,
-        cuartoFrio: cuartoNorm
+        cuartoFrio: cuartoNorm,
+        _asistenteId: asistenteId
       };
       
       const salidasActualizadas = [...(diaData.salidas || []), nuevaSalida];
@@ -1293,7 +1313,10 @@ async function handlePostCrudosSalida(req, res) {
           totalSalidas: totalSalidasActualizado,
           numSalidas: salidasActualizadas.length
         },
-        crudoId: crudoRef.id
+        crudoId: crudoRef.id,
+        asistenteId: asistenteId,
+        row: nuevaSalida,
+        idempotencyKey: idempotencyKey || null
       });
       
       // Guardar idempotencia
@@ -1435,6 +1458,529 @@ async function handleGetCrudosExistencias(req, res) {
 }
 
 /**
+ * POST /deshacer
+ * Deshace una salida de limpios registrada previamente por el asistente.
+ */
+async function handlePostDeshacer(req, res) {
+  const {
+    idempotencyKey: lookupIdempotencyKey,
+    logId,
+    dryRun = false,
+    idempotencyKey: undoIdempotencyKey
+  } = req.body;
+  
+  // Validación: debe especificar idempotencyKey o logId
+  if (!lookupIdempotencyKey && !logId) {
+    return errorResponse(res, 400, 'PARAMETRO_INVALIDO', 
+      'Debes especificar "idempotencyKey" o "logId" para identificar la operación a deshacer');
+  }
+  
+  // Verificar idempotencia del undo
+  if (undoIdempotencyKey) {
+    const undoIdemRef = db.collection('asistenteIdem').doc(undoIdempotencyKey);
+    const undoIdemSnap = await undoIdemRef.get();
+    if (undoIdemSnap.exists) {
+      const resultado = undoIdemSnap.data();
+      return res.status(200).json({
+        success: true,
+        idempotent: true,
+        message: 'Operación de deshacer ya procesada anteriormente',
+        data: resultado.data
+      });
+    }
+  }
+  
+  try {
+    // Buscar el log original
+    let logSnap;
+    
+    if (lookupIdempotencyKey) {
+      // Buscar por idempotencyKey en los logs
+      const logsQuery = await db.collection('asistenteLog')
+        .where('idempotencyKey', '==', lookupIdempotencyKey)
+        .where('tipo', '==', 'salida')
+        .limit(1)
+        .get();
+      
+      if (logsQuery.empty) {
+        return errorResponse(res, 404, 'OPERACION_NO_ENCONTRADA', 
+          'No se encontró ninguna operación de salida con ese idempotencyKey. Solo se pueden deshacer operaciones creadas por el asistente.');
+      }
+      
+      logSnap = logsQuery.docs[0];
+    } else {
+      // Buscar por logId directamente
+      logSnap = await db.collection('asistenteLog').doc(logId).get();
+      
+      if (!logSnap.exists) {
+        return errorResponse(res, 404, 'OPERACION_NO_ENCONTRADA', 
+          'No se encontró ninguna operación con ese logId');
+      }
+      
+      if (logSnap.data().tipo !== 'salida') {
+        return errorResponse(res, 400, 'TIPO_INVALIDO', 
+          'El log especificado no es una salida de limpios. Usa /crudos/deshacer para crudos.');
+      }
+    }
+    
+    const logData = logSnap.data();
+    const { sacadaId, asistenteId, row: rowOriginal, fecha } = logData;
+    
+    if (!sacadaId) {
+      return errorResponse(res, 500, 'LOG_INCOMPLETO', 
+        'El log de auditoría no tiene sacadaId. No se puede deshacer.');
+    }
+    
+    if (!asistenteId) {
+      return errorResponse(res, 400, 'NO_DESHACIBLE', 
+        'Esta operación fue creada antes de que existiera soporte para deshacer. Solo se pueden deshacer operaciones con identificador de asistente.');
+    }
+    
+    // Verificar si ya fue deshecha
+    const undoLogsQuery = await db.collection('asistenteLog')
+      .where('tipo', '==', 'deshacer')
+      .where('originalLogId', '==', logSnap.id)
+      .limit(1)
+      .get();
+    
+    if (!undoLogsQuery.empty) {
+      const undoLogData = undoLogsQuery.docs[0].data();
+      return res.status(200).json({
+        success: true,
+        alreadyUndone: true,
+        message: 'Esta operación ya fue deshecha anteriormente',
+        data: {
+          fecha,
+          originalLogId: logSnap.id,
+          undoTimestamp: undoLogData.timestamp,
+          row: rowOriginal
+        }
+      });
+    }
+    
+    const resultado = await db.runTransaction(async (transaction) => {
+      // Obtener el documento del día
+      const sacadaRef = db.collection('sacadas').doc(sacadaId);
+      const sacadaSnap = await transaction.get(sacadaRef);
+      
+      if (!sacadaSnap.exists) {
+        throw {
+          code: 'DIA_NO_ENCONTRADO',
+          message: 'El día donde se registró la salida ya no existe',
+          status: 404
+        };
+      }
+      
+      const diaData = sacadaSnap.data();
+      const salidas = diaData.salidas || [];
+      
+      // Buscar la fila por _asistenteId
+      let indiceEncontrado = salidas.findIndex(s => s._asistenteId === asistenteId);
+      let metodoEncontrado = 'asistenteId';
+      
+      // Fallback: buscar por contenido exacto (sin _asistenteId)
+      if (indiceEncontrado === -1 && rowOriginal) {
+        const rowSinId = { ...rowOriginal };
+        delete rowSinId._asistenteId;
+        
+        indiceEncontrado = salidas.findIndex(s => {
+          const sSinId = { ...s };
+          delete sSinId._asistenteId;
+          return JSON.stringify(sSinId) === JSON.stringify(rowSinId);
+        });
+        
+        if (indiceEncontrado !== -1) {
+          metodoEncontrado = 'contenido';
+        }
+      }
+      
+      if (indiceEncontrado === -1) {
+        throw {
+          code: 'FILA_NO_ENCONTRADA',
+          message: 'No se encontró la fila en el documento del día. Es posible que ya haya sido eliminada o editada manualmente.',
+          status: 404,
+          details: {
+            busquedaPor: 'asistenteId y contenido exacto',
+            filaOriginal: rowOriginal,
+            salidasActuales: salidas.length
+          }
+        };
+      }
+      
+      // Verificar si la fila fue modificada manualmente (solo si la encontramos por ID)
+      if (metodoEncontrado === 'asistenteId' && rowOriginal) {
+        const filaActual = salidas[indiceEncontrado];
+        const filaActualSinId = { ...filaActual };
+        delete filaActualSinId._asistenteId;
+        const rowOriginalSinId = { ...rowOriginal };
+        delete rowOriginalSinId._asistenteId;
+        
+        if (JSON.stringify(filaActualSinId) !== JSON.stringify(rowOriginalSinId)) {
+          throw {
+            code: 'FILA_MODIFICADA',
+            message: 'La fila fue modificada manualmente después de ser registrada. No se puede deshacer.',
+            status: 409,
+            details: {
+              filaOriginal: rowOriginalSinId,
+              filaActual: filaActualSinId
+            }
+          };
+        }
+      }
+      
+      // Remover la fila
+      const salidasActualizadas = salidas.filter((_, i) => i !== indiceEncontrado);
+      const totalSalidasActualizado = salidasActualizadas.reduce(
+        (sum, s) => sum + (Number(s.kilos) || 0), 0
+      );
+      
+      const dataParaRespuesta = {
+        fecha,
+        originalLogId: logSnap.id,
+        filaEliminada: salidas[indiceEncontrado],
+        metodoEncontrado,
+        totalSalidasAntes: diaData.totalSalidas || 0,
+        totalSalidasDespues: totalSalidasActualizado
+      };
+      
+      if (dryRun) {
+        return {
+          dryRun: true,
+          message: 'Simulación exitosa (sin escribir a Firestore)',
+          ...dataParaRespuesta
+        };
+      }
+      
+      // Actualizar el documento
+      const actualizacion = {
+        salidas: salidasActualizadas,
+        totalSalidas: totalSalidasActualizado,
+        version: admin.firestore.FieldValue.increment(1),
+        actualizadoEn: admin.firestore.FieldValue.serverTimestamp()
+      };
+      
+      transaction.update(sacadaRef, actualizacion);
+      
+      // Escribir log de deshacer
+      const undoLogRef = db.collection('asistenteLog').doc();
+      transaction.set(undoLogRef, {
+        tipo: 'deshacer',
+        fecha,
+        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        originalLogId: logSnap.id,
+        originalRequest: logData.request,
+        originalRow: rowOriginal,
+        asistenteId: asistenteId,
+        before: {
+          totalSalidas: diaData.totalSalidas || 0,
+          numSalidas: salidas.length
+        },
+        after: {
+          totalSalidas: totalSalidasActualizado,
+          numSalidas: salidasActualizadas.length
+        },
+        sacadaId: sacadaId,
+        metodoEncontrado: metodoEncontrado
+      });
+      
+      // Guardar idempotencia del undo
+      if (undoIdempotencyKey) {
+        const undoIdemRef = db.collection('asistenteIdem').doc(undoIdempotencyKey);
+        transaction.set(undoIdemRef, {
+          timestamp: admin.firestore.FieldValue.serverTimestamp(),
+          data: dataParaRespuesta,
+          expiresAt: admin.firestore.Timestamp.fromDate(
+            new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+          )
+        });
+      }
+      
+      return dataParaRespuesta;
+    });
+    
+    return res.status(200).json({
+      success: true,
+      ...resultado
+    });
+    
+  } catch (error) {
+    if (error.code) {
+      return errorResponse(res, error.status || 500, error.code, error.message, error.details);
+    }
+    
+    console.error('Error en POST /deshacer:', error);
+    return errorResponse(res, 500, 'ERROR_INTERNO', 
+      'Error inesperado al deshacer la operación: ' + error.message);
+  }
+}
+
+/**
+ * POST /crudos/deshacer
+ * Deshace una entrada o salida de crudos registrada previamente por el asistente.
+ */
+async function handlePostCrudosDeshacer(req, res) {
+  const {
+    idempotencyKey: lookupIdempotencyKey,
+    logId,
+    dryRun = false,
+    idempotencyKey: undoIdempotencyKey
+  } = req.body;
+  
+  // Validación: debe especificar idempotencyKey o logId
+  if (!lookupIdempotencyKey && !logId) {
+    return errorResponse(res, 400, 'PARAMETRO_INVALIDO', 
+      'Debes especificar "idempotencyKey" o "logId" para identificar la operación a deshacer');
+  }
+  
+  // Verificar idempotencia del undo
+  if (undoIdempotencyKey) {
+    const undoIdemRef = db.collection('asistenteIdem').doc(undoIdempotencyKey);
+    const undoIdemSnap = await undoIdemRef.get();
+    if (undoIdemSnap.exists) {
+      const resultado = undoIdemSnap.data();
+      return res.status(200).json({
+        success: true,
+        idempotent: true,
+        message: 'Operación de deshacer ya procesada anteriormente',
+        data: resultado.data
+      });
+    }
+  }
+  
+  try {
+    // Buscar el log original
+    let logSnap;
+    
+    if (lookupIdempotencyKey) {
+      // Buscar por idempotencyKey en los logs
+      const logsQuery = await db.collection('asistenteLog')
+        .where('idempotencyKey', '==', lookupIdempotencyKey)
+        .where('tipo', 'in', ['entrada-crudo', 'salida-crudo'])
+        .limit(1)
+        .get();
+      
+      if (logsQuery.empty) {
+        return errorResponse(res, 404, 'OPERACION_NO_ENCONTRADA', 
+          'No se encontró ninguna operación de crudos con ese idempotencyKey. Solo se pueden deshacer operaciones creadas por el asistente.');
+      }
+      
+      logSnap = logsQuery.docs[0];
+    } else {
+      // Buscar por logId directamente
+      logSnap = await db.collection('asistenteLog').doc(logId).get();
+      
+      if (!logSnap.exists) {
+        return errorResponse(res, 404, 'OPERACION_NO_ENCONTRADA', 
+          'No se encontró ninguna operación con ese logId');
+      }
+      
+      const tipo = logSnap.data().tipo;
+      if (tipo !== 'entrada-crudo' && tipo !== 'salida-crudo') {
+        return errorResponse(res, 400, 'TIPO_INVALIDO', 
+          'El log especificado no es una entrada/salida de crudos. Usa /deshacer para limpios.');
+      }
+    }
+    
+    const logData = logSnap.data();
+    const { crudoId, asistenteId, row: rowOriginal, fecha, tipo } = logData;
+    
+    if (!crudoId) {
+      return errorResponse(res, 500, 'LOG_INCOMPLETO', 
+        'El log de auditoría no tiene crudoId. No se puede deshacer.');
+    }
+    
+    if (!asistenteId) {
+      return errorResponse(res, 400, 'NO_DESHACIBLE', 
+        'Esta operación fue creada antes de que existiera soporte para deshacer. Solo se pueden deshacer operaciones con identificador de asistente.');
+    }
+    
+    // Verificar si ya fue deshecha
+    const undoLogsQuery = await db.collection('asistenteLog')
+      .where('tipo', '==', 'deshacer-crudo')
+      .where('originalLogId', '==', logSnap.id)
+      .limit(1)
+      .get();
+    
+    if (!undoLogsQuery.empty) {
+      const undoLogData = undoLogsQuery.docs[0].data();
+      return res.status(200).json({
+        success: true,
+        alreadyUndone: true,
+        message: 'Esta operación ya fue deshecha anteriormente',
+        data: {
+          fecha,
+          originalLogId: logSnap.id,
+          undoTimestamp: undoLogData.timestamp,
+          row: rowOriginal,
+          tipoOriginal: tipo
+        }
+      });
+    }
+    
+    const esEntrada = tipo === 'entrada-crudo';
+    const campoArray = esEntrada ? 'entradas' : 'salidas';
+    const campoTotal = esEntrada ? 'totalEntradas' : 'totalSalidas';
+    
+    const resultado = await db.runTransaction(async (transaction) => {
+      // Obtener el documento del día
+      const crudoRef = db.collection('existenciasCrudos').doc(crudoId);
+      const crudoSnap = await transaction.get(crudoRef);
+      
+      if (!crudoSnap.exists) {
+        throw {
+          code: 'DIA_NO_ENCONTRADO',
+          message: 'El día donde se registró la operación ya no existe',
+          status: 404
+        };
+      }
+      
+      const diaData = crudoSnap.data();
+      const registros = diaData[campoArray] || [];
+      
+      // Buscar la fila por _asistenteId
+      let indiceEncontrado = registros.findIndex(r => r._asistenteId === asistenteId);
+      let metodoEncontrado = 'asistenteId';
+      
+      // Fallback: buscar por contenido exacto (sin _asistenteId)
+      if (indiceEncontrado === -1 && rowOriginal) {
+        const rowSinId = { ...rowOriginal };
+        delete rowSinId._asistenteId;
+        
+        indiceEncontrado = registros.findIndex(r => {
+          const rSinId = { ...r };
+          delete rSinId._asistenteId;
+          return JSON.stringify(rSinId) === JSON.stringify(rowSinId);
+        });
+        
+        if (indiceEncontrado !== -1) {
+          metodoEncontrado = 'contenido';
+        }
+      }
+      
+      if (indiceEncontrado === -1) {
+        throw {
+          code: 'FILA_NO_ENCONTRADA',
+          message: `No se encontró la fila en el documento del día. Es posible que ya haya sido eliminada o editada manualmente.`,
+          status: 404,
+          details: {
+            busquedaPor: 'asistenteId y contenido exacto',
+            tipoOperacion: tipo,
+            filaOriginal: rowOriginal,
+            registrosActuales: registros.length
+          }
+        };
+      }
+      
+      // Verificar si la fila fue modificada manualmente (solo si la encontramos por ID)
+      if (metodoEncontrado === 'asistenteId' && rowOriginal) {
+        const filaActual = registros[indiceEncontrado];
+        const filaActualSinId = { ...filaActual };
+        delete filaActualSinId._asistenteId;
+        const rowOriginalSinId = { ...rowOriginal };
+        delete rowOriginalSinId._asistenteId;
+        
+        if (JSON.stringify(filaActualSinId) !== JSON.stringify(rowOriginalSinId)) {
+          throw {
+            code: 'FILA_MODIFICADA',
+            message: 'La fila fue modificada manualmente después de ser registrada. No se puede deshacer.',
+            status: 409,
+            details: {
+              filaOriginal: rowOriginalSinId,
+              filaActual: filaActualSinId
+            }
+          };
+        }
+      }
+      
+      // Remover la fila
+      const registrosActualizados = registros.filter((_, i) => i !== indiceEncontrado);
+      const totalActualizado = registrosActualizados.reduce(
+        (sum, r) => sum + (Number(r.kilos) || 0), 0
+      );
+      
+      const dataParaRespuesta = {
+        fecha,
+        originalLogId: logSnap.id,
+        tipoOriginal: tipo,
+        filaEliminada: registros[indiceEncontrado],
+        metodoEncontrado,
+        [`${campoTotal}Antes`]: diaData[campoTotal] || 0,
+        [`${campoTotal}Despues`]: totalActualizado
+      };
+      
+      if (dryRun) {
+        return {
+          dryRun: true,
+          message: 'Simulación exitosa (sin escribir a Firestore)',
+          ...dataParaRespuesta
+        };
+      }
+      
+      // Actualizar el documento
+      const actualizacion = {
+        [campoArray]: registrosActualizados,
+        [campoTotal]: totalActualizado,
+        version: admin.firestore.FieldValue.increment(1),
+        actualizadoEn: admin.firestore.FieldValue.serverTimestamp()
+      };
+      
+      transaction.update(crudoRef, actualizacion);
+      
+      // Escribir log de deshacer
+      const undoLogRef = db.collection('asistenteLog').doc();
+      transaction.set(undoLogRef, {
+        tipo: 'deshacer-crudo',
+        fecha,
+        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        originalLogId: logSnap.id,
+        originalTipo: tipo,
+        originalRequest: logData.request,
+        originalRow: rowOriginal,
+        asistenteId: asistenteId,
+        before: {
+          [campoTotal]: diaData[campoTotal] || 0,
+          [`num${esEntrada ? 'Entradas' : 'Salidas'}`]: registros.length
+        },
+        after: {
+          [campoTotal]: totalActualizado,
+          [`num${esEntrada ? 'Entradas' : 'Salidas'}`]: registrosActualizados.length
+        },
+        crudoId: crudoId,
+        metodoEncontrado: metodoEncontrado
+      });
+      
+      // Guardar idempotencia del undo
+      if (undoIdempotencyKey) {
+        const undoIdemRef = db.collection('asistenteIdem').doc(undoIdempotencyKey);
+        transaction.set(undoIdemRef, {
+          timestamp: admin.firestore.FieldValue.serverTimestamp(),
+          data: dataParaRespuesta,
+          expiresAt: admin.firestore.Timestamp.fromDate(
+            new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+          )
+        });
+      }
+      
+      return dataParaRespuesta;
+    });
+    
+    return res.status(200).json({
+      success: true,
+      ...resultado
+    });
+    
+  } catch (error) {
+    if (error.code) {
+      return errorResponse(res, error.status || 500, error.code, error.message, error.details);
+    }
+    
+    console.error('Error en POST /crudos/deshacer:', error);
+    return errorResponse(res, 500, 'ERROR_INTERNO', 
+      'Error inesperado al deshacer la operación: ' + error.message);
+  }
+}
+
+/**
  * GET /crudos/dia
  * Devuelve las entradas y salidas de un día específico de crudos.
  */
@@ -1518,6 +2064,10 @@ exports.asistente = onRequest(
       return handleGetDia(req, res);
     }
     
+    if (path === '/deshacer' && method === 'POST') {
+      return handlePostDeshacer(req, res);
+    }
+    
     // Rutas de crudos
     if (path === '/crudos/entrada' && method === 'POST') {
       return handlePostCrudosEntrada(req, res);
@@ -1535,8 +2085,12 @@ exports.asistente = onRequest(
       return handleGetCrudosDia(req, res);
     }
     
+    if (path === '/crudos/deshacer' && method === 'POST') {
+      return handlePostCrudosDeshacer(req, res);
+    }
+    
     return res.status(404).json({ 
-      error: 'Ruta no encontrada. Rutas disponibles: POST /salida, GET /existencias, GET /dia, POST /crudos/entrada, POST /crudos/salida, GET /crudos/existencias, GET /crudos/dia' 
+      error: 'Ruta no encontrada. Rutas disponibles: POST /salida, POST /deshacer, GET /existencias, GET /dia, POST /crudos/entrada, POST /crudos/salida, POST /crudos/deshacer, GET /crudos/existencias, GET /crudos/dia' 
     });
   }
 );
