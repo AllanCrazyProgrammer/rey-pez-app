@@ -2166,6 +2166,8 @@ function calcularTotalesPedidoLimpio(pedido) {
  * Crea o actualiza un pedido limpio con líneas por cliente.
  */
 async function handlePostPedidosLimpio(req, res) {
+  const Firestore = require('firebase-admin').firestore;
+  
   const {
     fecha,
     lineas = [],
@@ -2374,20 +2376,26 @@ async function handlePostPedidosLimpio(req, res) {
       divisores: {},
       completados: {},
       kilosRefrigerados: {},
-      _asistenteId: generarAsistenteId(),
-      createdAt: admin.firestore.FieldValue.serverTimestamp()
+      _asistenteId: generarAsistenteId()
     };
 
     if (dryRun) {
       return res.json({
         dryRun: true,
-        document: pedidoData,
+        document: {
+          ...pedidoData,
+          createdAt: new Date().toISOString()
+        },
         totales: {
           taras: totales.tarasTotal,
           kilos: totales.kilosTotal
         }
       });
     }
+    
+    // Add createdAt for actual write
+    const Firestore = require('firebase-admin').firestore;
+    pedidoData.createdAt = Firestore.FieldValue.serverTimestamp();
 
     // Buscar si ya existe un pedido para esta fecha
     const pedidosExistentes = await db.collection('pedidos')
@@ -2426,15 +2434,20 @@ async function handlePostPedidosLimpio(req, res) {
     }
 
     // Guardar audit log
+    const afterData = { ...pedidoData };
+    delete afterData.createdAt; // Remove FieldValue for serialization
+    
+    const Firestore = require('firebase-admin').firestore;
+    
     await db.collection('asistenteLog').add({
       operation,
-      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      timestamp: Firestore.FieldValue.serverTimestamp(),
       idempotencyKey,
       pedidoId,
       fecha,
       _asistenteId: pedidoData._asistenteId,
       before,
-      after: pedidoData,
+      after: afterData,
       totales,
       request: {
         fecha,
@@ -2456,7 +2469,7 @@ async function handlePostPedidosLimpio(req, res) {
     // Guardar idempotencia
     await idemRef.set({
       operation,
-      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      timestamp: Firestore.FieldValue.serverTimestamp(),
       response
     });
 
@@ -2529,6 +2542,8 @@ async function handleGetPedidosLimpio(req, res) {
  * Deshace un pedido limpio creado por el asistente.
  */
 async function handlePostPedidosLimpioDeshacer(req, res) {
+  const Firestore = require('firebase-admin').firestore;
+  
   const {
     idempotencyKey: originalKey,
     id: pedidoId,
@@ -2631,7 +2646,7 @@ async function handlePostPedidosLimpioDeshacer(req, res) {
     // Guardar audit log del undo
     await db.collection('asistenteLog').add({
       operation: 'pedidos_limpio_undo',
-      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      timestamp: Firestore.FieldValue.serverTimestamp(),
       undoIdempotencyKey: undoKey,
       originalIdempotencyKey: originalKey || null,
       pedidoId: pedidoSnap.id,
@@ -2648,7 +2663,7 @@ async function handlePostPedidosLimpioDeshacer(req, res) {
     // Guardar idempotencia del undo
     await undoIdemRef.set({
       operation: 'pedidos_limpio_undo',
-      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      timestamp: Firestore.FieldValue.serverTimestamp(),
       response
     });
 

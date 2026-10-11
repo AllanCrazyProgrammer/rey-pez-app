@@ -14,7 +14,7 @@ const http = require('http');
 // Configuración
 const EMULATOR_HOST = 'localhost';
 const EMULATOR_PORT = 5001;
-const PROJECT_ID = 'rey-pez-app';
+const PROJECT_ID = 'reypezapp-1ced2';
 const REGION = 'us-central1';
 const FUNCTION_NAME = 'asistente';
 const API_KEY = 'test-secret-key-for-emulator';
@@ -46,7 +46,9 @@ function assertEqual(actual, expected, message) {
 
 async function makeRequest(method, path, body = null) {
   return new Promise((resolve, reject) => {
-    const url = new URL(path, BASE_URL);
+    const fullPath = BASE_URL + path;
+    const url = new URL(fullPath);
+    console.log(`Making ${method} request to: ${url.toString()}`);
     
     const options = {
       hostname: url.hostname,
@@ -69,9 +71,9 @@ async function makeRequest(method, path, body = null) {
       res.on('end', () => {
         try {
           const json = JSON.parse(data);
-          resolve({ status: res.statusCode, body: json });
+          resolve({ status: res.statusCode, body: json, rawData: data });
         } catch (e) {
-          resolve({ status: res.statusCode, body: data });
+          resolve({ status: res.statusCode, body: data, rawData: data });
         }
       });
     });
@@ -111,6 +113,9 @@ async function testDryRun() {
     ]
   });
 
+  if (response.status !== 200) {
+    console.error('Response:', response);
+  }
   assertEqual(response.status, 200, 'Status debe ser 200');
   assert(response.body.dryRun === true, 'dryRun debe ser true');
   assert(response.body.document, 'Debe incluir document');
@@ -151,6 +156,9 @@ async function testCreatePedido() {
     ]
   });
 
+  if (response.status !== 200) {
+    console.error('Error response:', JSON.stringify(response.body, null, 2));
+  }
   assertEqual(response.status, 200, 'Status debe ser 200');
   assert(response.body.success, 'success debe ser true');
   assertEqual(response.body.operation, 'pedidos_limpio_create', 'operation debe ser create');
@@ -383,11 +391,46 @@ async function testTiposGlaseo() {
   return { idempotencyKey, pedidoId: response.body.pedidoId };
 }
 
+async function setupMedidas() {
+  console.log('\n🔧 Configurando medidas en Firestore...');
+  
+  // Connect to Firestore emulator
+  const admin = require('../functions/node_modules/firebase-admin');
+  
+  if (!admin.apps.length) {
+    admin.initializeApp({
+      projectId: PROJECT_ID
+    });
+  }
+  
+  // Use emulator
+  process.env.FIRESTORE_EMULATOR_HOST = 'localhost:8080';
+  
+  const db = admin.firestore();
+  
+  // Add test medidas
+  const medidas = [
+    { nombre: '51/60', tipo: 'granja' },
+    { nombre: '36/40', tipo: 'granja' },
+    { nombre: '41/50', tipo: 'especial' },
+    { nombre: '26/30', tipo: 'granja' }
+  ];
+  
+  for (const medida of medidas) {
+    await db.collection('medidas').add(medida);
+  }
+  
+  console.log('✅ Medidas configuradas');
+}
+
 async function runAllTests() {
   console.log('🧪 Iniciando tests de pedidos limpio...');
   console.log(`📡 Usando emulador en ${BASE_URL}\n`);
 
   try {
+    // Setup: Create medidas in Firestore
+    await setupMedidas();
+    
     // Test 1: DryRun con caso del usuario
     await testDryRun();
     
