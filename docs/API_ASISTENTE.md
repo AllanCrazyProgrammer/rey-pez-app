@@ -1,14 +1,21 @@
 # API del Asistente - Rey Pez
 
-Cloud Function HTTPS para que el asistente de Allan pueda registrar salidas de limpios desde fuera de la interfaz web.
+Cloud Function HTTPS para que el asistente de Allan pueda registrar movimientos de limpios y crudos desde fuera de la interfaz web.
 
 ## Descripción
 
-La función `asistente` expone tres endpoints protegidos con autenticación por Bearer token:
+La función `asistente` expone siete endpoints protegidos con autenticación por Bearer token:
 
+**Limpios:**
 - **POST /salida** - Registra una salida de producto limpio
-- **GET /existencias** - Consulta el inventario actual
-- **GET /dia** - Obtiene las entradas y salidas de un día específico
+- **GET /existencias** - Consulta el inventario actual de limpios
+- **GET /dia** - Obtiene las entradas y salidas de un día específico de limpios
+
+**Crudos:**
+- **POST /crudos/entrada** - Registra una entrada de producto crudo
+- **POST /crudos/salida** - Registra una salida de producto crudo
+- **GET /crudos/existencias** - Consulta el inventario actual de crudos
+- **GET /crudos/dia** - Obtiene las entradas y salidas de un día específico de crudos
 
 Todos los endpoints requieren autenticación mediante el header `Authorization: Bearer <API_KEY>`.
 
@@ -487,12 +494,421 @@ Los tests validan:
 - Control de versión
 - Auditoría
 
+## API de Crudos
+
+Los endpoints de crudos funcionan de manera similar a los de limpios, pero operan sobre la colección `existenciasCrudos`.
+
+### POST /crudos/entrada
+
+Registra una entrada de producto crudo. Las entradas pueden incluir precio y piezas de forma opcional.
+
+**URL:** `https://asistente-<hash>-uc.a.run.app/crudos/entrada`
+
+**Método:** `POST`
+
+**Headers:**
+```
+Authorization: Bearer <ASISTENTE_API_KEY>
+Content-Type: application/json
+```
+
+**Body (JSON):**
+
+```json
+{
+  "fecha": "2026-10-10",
+  "proveedor": "Maria Guadalupe",
+  "producto": "Pac Ch",
+  "kilos": 500,
+  "precio": 120,
+  "piezas": "100",
+  "cuarto": "Cuarto 1",
+  "idempotencyKey": "entrada-123"
+}
+```
+
+**Campos obligatorios:**
+- `fecha` (string): Fecha en formato `YYYY-MM-DD` (día de calendario en zona `America/Mexico_City`)
+- `proveedor` (string): Nombre del proveedor
+- `producto` (string): Nombre del producto o medida (ej. `Pac Ch`, `Cam 51/60`)
+- `kilos` (number): Cantidad en kilogramos
+
+**Campos opcionales:**
+- `precio` (number): Precio por kilo. Puede ser null o no especificarse
+- `piezas` (string): Número de piezas. Puede ser vacío o no especificarse
+- `cuarto` (string): Cuarto frío. Si no se especifica, usa `s/c` (sin cuarto)
+- `dryRun` (boolean): Si es `true`, simula la operación sin escribir a Firestore
+- `idempotencyKey` (string): Clave única para evitar duplicados en caso de reintentos
+
+**Ejemplo de request con curl:**
+
+```bash
+curl -X POST https://asistente-<hash>-uc.a.run.app/crudos/entrada \
+  -H "Authorization: Bearer <tu-clave-secreta>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "fecha": "2026-10-10",
+    "proveedor": "Galileo",
+    "producto": "Pac Ch",
+    "kilos": 300,
+    "precio": 120,
+    "piezas": "100",
+    "cuarto": "Cuarto 1",
+    "idempotencyKey": "entrada-galileo-123"
+  }'
+```
+
+**Respuesta exitosa (200 OK):**
+
+```json
+{
+  "success": true,
+  "fecha": "2026-10-10",
+  "entrada": {
+    "proveedor": "Galileo",
+    "producto": "Pac Ch",
+    "kilos": 300,
+    "precio": 120,
+    "piezas": "100",
+    "cuartoFrio": "Cuarto 1"
+  },
+  "totalEntradas": 800
+}
+```
+
+**Respuesta con dryRun:**
+
+```json
+{
+  "success": true,
+  "dryRun": true,
+  "message": "Simulación exitosa (sin escribir a Firestore)",
+  "fecha": "2026-10-10",
+  "entrada": { ... },
+  "totalEntradas": 800
+}
+```
+
+**Errores comunes:**
+
+- **401 Unauthorized** - Token inválido o falta el header de autorización
+- **409 DIA_DUPLICADO** - Ya existe un registro para esa fecha
+- **400 PARAMETRO_INVALIDO** - Falta un campo requerido o el formato es incorrecto
+
+### POST /crudos/salida
+
+Registra una salida de producto crudo con validación FIFO y actualización transaccional. Verifica que haya suficiente stock disponible antes de registrar la salida.
+
+**URL:** `https://asistente-<hash>-uc.a.run.app/crudos/salida`
+
+**Método:** `POST`
+
+**Headers:**
+```
+Authorization: Bearer <ASISTENTE_API_KEY>
+Content-Type: application/json
+```
+
+**Body (JSON):**
+
+```json
+{
+  "fecha": "2026-10-11",
+  "proveedor": "Galileo",
+  "producto": "Pac Ch",
+  "kilos": 113,
+  "precio": 120,
+  "cuarto": "Cuarto 1",
+  "idempotencyKey": "salida-123"
+}
+```
+
+**Campos obligatorios:**
+- `fecha` (string): Fecha en formato `YYYY-MM-DD`
+- `proveedor` (string): Nombre del proveedor
+- `producto` (string): Nombre del producto
+- `kilos` (number): Cantidad a sacar
+
+**Campos opcionales:**
+- `precio` (number): Precio por kilo. Si no se especifica o hay múltiples precios disponibles, la API puede rechazar la operación pidiendo que desambigües
+- `cuarto` (string): Cuarto frío. Si no se especifica, usa `s/c`. Puede usar `"Todos los cuartos"` para descontar de cualquier cuarto disponible
+- `dryRun` (boolean): Si es `true`, simula la operación sin escribir
+- `idempotencyKey` (string): Clave única para idempotencia
+
+**Ejemplo de request con curl:**
+
+```bash
+curl -X POST https://asistente-<hash>-uc.a.run.app/crudos/salida \
+  -H "Authorization: Bearer <tu-clave-secreta>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "fecha": "2026-10-11",
+    "proveedor": "Galileo",
+    "producto": "Pac Ch",
+    "kilos": 113,
+    "cuarto": "Cuarto 1",
+    "idempotencyKey": "salida-galileo-456"
+  }'
+```
+
+**Respuesta exitosa (200 OK):**
+
+```json
+{
+  "success": true,
+  "fecha": "2026-10-11",
+  "salida": {
+    "proveedor": "Galileo",
+    "producto": "Pac Ch",
+    "kilos": 113,
+    "cuartoFrio": "Cuarto 1"
+  },
+  "totalSalidas": 113,
+  "kilosDisponiblesAntes": 300,
+  "kilosDisponiblesDespues": 187
+}
+```
+
+**Errores comunes:**
+
+- **400 SIN_EXISTENCIAS** - No hay stock para ese proveedor+producto
+  ```json
+  {
+    "error": {
+      "code": "SIN_EXISTENCIAS",
+      "message": "No hay existencias de Galileo - Pac Ch"
+    }
+  }
+  ```
+
+- **400 KILOS_INSUFICIENTES** - No hay suficiente stock
+  ```json
+  {
+    "error": {
+      "code": "KILOS_INSUFICIENTES",
+      "message": "Kilos insuficientes. Solicitados: 400 kg, disponibles: 300 kg",
+      "details": {
+        "solicitados": 400,
+        "disponibles": 300,
+        "faltante": 100
+      }
+    }
+  }
+  ```
+
+- **400 PRECIO_CUARTO_AMBIGUO** - Hay múltiples precios/cuartos disponibles
+  ```json
+  {
+    "error": {
+      "code": "PRECIO_CUARTO_AMBIGUO",
+      "message": "Hay múltiples precios/cuartos disponibles para Galileo - Pac Ch. Especifica \"precio\" y/o \"cuarto\" para desambiguar",
+      "details": {
+        "opcionesDisponibles": [
+          { "precio": 120, "cuarto": "Cuarto 1", "kilosDisponibles": 300 },
+          { "precio": null, "cuarto": "s/c", "kilosDisponibles": 200 }
+        ]
+      }
+    }
+  }
+  ```
+
+### GET /crudos/existencias
+
+Consulta las existencias actuales de crudos, agrupadas por proveedor, producto, precio y cuarto frío.
+
+**URL:** `https://asistente-<hash>-uc.a.run.app/crudos/existencias`
+
+**Método:** `GET`
+
+**Headers:**
+```
+Authorization: Bearer <ASISTENTE_API_KEY>
+```
+
+**Query params opcionales:**
+- `proveedor` - Filtrar por proveedor específico
+- `producto` - Filtrar por producto específico
+
+**Ejemplo:**
+
+```bash
+curl -X GET "https://asistente-<hash>-uc.a.run.app/crudos/existencias?proveedor=Galileo" \
+  -H "Authorization: Bearer <tu-clave-secreta>"
+```
+
+**Respuesta exitosa (200 OK):**
+
+```json
+{
+  "success": true,
+  "fecha": "2026-10-11",
+  "existencias": [
+    {
+      "proveedor": "Galileo",
+      "producto": "Pac Ch",
+      "precio": 120,
+      "cuarto": "Cuarto 1",
+      "kilos": 187,
+      "taras": 9.8,
+      "valor": 22440
+    },
+    {
+      "proveedor": "Maria Guadalupe",
+      "producto": "Pac Ch",
+      "precio": null,
+      "cuarto": "s/c",
+      "kilos": 500,
+      "taras": 26.3,
+      "valor": 0
+    },
+    {
+      "proveedor": "Memo",
+      "producto": "Cam 51/60",
+      "precio": 150,
+      "cuarto": "s/c",
+      "kilos": 200,
+      "taras": 10.5,
+      "valor": 30000
+    }
+  ],
+  "total": 3
+}
+```
+
+**Notas:**
+- `taras` se calcula como `kilos / 19` (peso estándar de una tara de crudos)
+- `valor` es `kilos * precio`, o 0 si no hay precio
+- Los resultados están ordenados por proveedor, producto, precio y cuarto
+
+### GET /crudos/dia
+
+Obtiene las entradas y salidas registradas para un día específico de crudos.
+
+**URL:** `https://asistente-<hash>-uc.a.run.app/crudos/dia`
+
+**Método:** `GET`
+
+**Headers:**
+```
+Authorization: Bearer <ASISTENTE_API_KEY>
+```
+
+**Query params:**
+- `fecha` (requerido) - Fecha en formato `YYYY-MM-DD`
+
+**Ejemplo:**
+
+```bash
+curl -X GET "https://asistente-<hash>-uc.a.run.app/crudos/dia?fecha=2026-10-11" \
+  -H "Authorization: Bearer <tu-clave-secreta>"
+```
+
+**Respuesta exitosa (200 OK):**
+
+```json
+{
+  "success": true,
+  "fecha": "2026-10-11",
+  "encontrado": true,
+  "crudoId": "abc123",
+  "entradas": [
+    {
+      "proveedor": "Memo",
+      "producto": "Cam 51/60",
+      "kilos": 200,
+      "precio": 150,
+      "piezas": "",
+      "cuartoFrio": "s/c"
+    }
+  ],
+  "salidas": [
+    {
+      "proveedor": "Galileo",
+      "producto": "Pac Ch",
+      "kilos": 113,
+      "cuartoFrio": "Cuarto 1"
+    }
+  ],
+  "totalEntradas": 200,
+  "totalSalidas": 113,
+  "version": 2,
+  "actualizadoEn": { "_seconds": 1234567890, "_nanoseconds": 0 }
+}
+```
+
+**Respuesta cuando no hay registro para esa fecha:**
+
+```json
+{
+  "success": true,
+  "fecha": "2026-10-16",
+  "encontrado": false,
+  "message": "No hay registro para esta fecha"
+}
+```
+
+## Diferencias entre Limpios y Crudos
+
+### Estructura de datos
+
+**Limpios (sacadas):**
+- Entradas y salidas tienen: `proveedor`, `medida`, `precio`, `kilos`, `cajas`, `cuartoFrio`
+- Colección: `sacadas`
+- Índice separado: `sacadasDias`
+
+**Crudos (existenciasCrudos):**
+- Entradas tienen: `proveedor`, `producto`, `kilos`, `precio` (opcional), `piezas` (opcional), `cuartoFrio`
+- Salidas tienen: `proveedor`, `producto`, `kilos`, `cuartoFrio`
+- Colección: `existenciasCrudos`
+- Sin índice separado (búsqueda directa en la colección)
+
+### Cálculo de taras
+
+- **Limpios:** 1 caja = 20 kg
+- **Crudos:** 1 tara = 19 kg
+
+## Concurrencia y seguridad (aplica a limpios y crudos)
+
+### Control de versión
+
+Cada documento de día tiene un campo `version` que se incrementa en cada escritura. La UI verifica que la versión no haya cambiado antes de guardar, evitando que se sobrescriban cambios externos.
+
+Si el asistente llama a POST /salida o POST /crudos/entrada y un usuario edita el día al mismo tiempo en la UI, una de las dos escrituras fallará con un error de versión.
+
+### Idempotencia
+
+Usa el campo `idempotencyKey` en POST /salida, POST /crudos/entrada y POST /crudos/salida para evitar duplicados. Si reenvías un request con la misma clave dentro de 7 días, la API responde con el resultado original sin volver a escribir.
+
+### Auditoría
+
+Cada operación registrada por la API crea un documento en la colección `asistenteLog` con:
+- Timestamp de la operación
+- Request completo
+- Estado antes y después
+- ID del documento modificado
+- Tipo de operación: `salida`, `entrada-crudo`, `salida-crudo`
+
+### Logs de idempotencia
+
+Los requests exitosos con `idempotencyKey` se guardan en la colección `asistenteIdem` por 7 días.
+
+## Validación FIFO
+
+La API calcula los kilos disponibles usando el mismo algoritmo FIFO que la UI:
+
+1. Agrupa las entradas por proveedor + producto + precio + cuarto
+2. Ordena los lotes por fecha (primero en entrar, primero en salir)
+3. Al registrar una salida, descuenta de los lotes más antiguos primero
+4. Rechaza la operación si no hay suficiente stock
+
+Si hay múltiples precios o cuartos disponibles para un producto y no especificas cuál usar, la API rechaza el request y te muestra las opciones disponibles.
+
 ## Seguridad
 
 ⚠️ **IMPORTANTE:**
 - Nunca comitas la clave `ASISTENTE_API_KEY` en el código
 - Usa variables de entorno o secretos seguros
-- La clave da acceso completo de escritura al inventario
+- La clave da acceso completo de escritura al inventario (limpios Y crudos)
 - Rota la clave si se filtra: `firebase functions:secrets:set ASISTENTE_API_KEY` y redespliega
 
 ## Contacto
