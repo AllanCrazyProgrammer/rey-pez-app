@@ -2203,21 +2203,32 @@ async function handlePostPedidosLimpio(req, res) {
       }
     }
 
-    // Validar medidas
+    // Validar medidas - handle duplicates: valid if ANY doc has tipo granja/especial
     const medidasSnapshot = await db.collection('medidas').get();
-    const medidasMap = new Map();
+    const validMedidaNombres = new Set(); // Nombres válidos (case-insensitive)
+    const medidaNombresMap = new Map(); // Map lowercase -> exact nombre for suggestions
+    
     medidasSnapshot.forEach(doc => {
       const data = doc.data();
-      medidasMap.set(data.nombre.toLowerCase(), {
-        id: doc.id,
-        nombre: data.nombre,
-        tipo: data.tipo
-      });
+      const nombreKey = data.nombre.toLowerCase();
+      
+      // Track exact nombre (prefer granja/especial version if duplicates exist)
+      if (!medidaNombresMap.has(nombreKey) || 
+          data.tipo === 'granja' || data.tipo === 'especial') {
+        medidaNombresMap.set(nombreKey, data.nombre);
+      }
+      
+      // Mark as valid if ANY doc with this nombre has tipo granja/especial
+      if (data.tipo === 'granja' || data.tipo === 'especial') {
+        validMedidaNombres.add(nombreKey);
+      }
     });
 
     // Agregar macuil y maquila especiales
-    medidasMap.set('macuil', { id: 'macuil-opcion', nombre: 'macuil', tipo: 'especial' });
-    medidasMap.set('maquila', { id: 'maquila-opcion', nombre: 'maquila', tipo: 'especial' });
+    validMedidaNombres.add('macuil');
+    validMedidaNombres.add('maquila');
+    medidaNombresMap.set('macuil', 'macuil');
+    medidaNombresMap.set('maquila', 'maquila');
 
     // Validar y normalizar líneas
     const errores = [];
@@ -2255,34 +2266,25 @@ async function handlePostPedidosLimpio(req, res) {
       }
 
       const medidaKey = medidaNombre.toLowerCase();
-      const medida = medidasMap.get(medidaKey);
       
-      if (!medida) {
+      // Check if valid (ANY doc with this nombre has tipo granja/especial)
+      if (!validMedidaNombres.has(medidaKey)) {
         // Sugerir medidas similares
-        const sugerencias = Array.from(medidasMap.values())
-          .filter(m => m.tipo === 'granja' || m.tipo === 'especial' || m.nombre === 'macuil' || m.nombre === 'maquila')
-          .map(m => m.nombre)
+        const sugerencias = Array.from(medidaNombresMap.values())
           .filter(n => n.toLowerCase().includes(medidaKey) || medidaKey.includes(n.toLowerCase()))
           .slice(0, 3);
         
         errores.push({
           linea: idx,
           campo: 'medida',
-          mensaje: `Medida "${medidaNombre}" no encontrada`,
+          mensaje: `Medida "${medidaNombre}" no encontrada o no es válida para pedidos limpio`,
           sugerencias: sugerencias.length > 0 ? sugerencias : undefined
         });
         continue;
       }
-
-      // Validar que la medida sea de tipo granja o especial
-      if (medida.tipo !== 'granja' && medida.tipo !== 'especial' && medida.nombre !== 'macuil' && medida.nombre !== 'maquila') {
-        errores.push({
-          linea: idx,
-          campo: 'medida',
-          mensaje: `La medida "${medidaNombre}" no es válida para pedidos limpio (tipo: ${medida.tipo})`
-        });
-        continue;
-      }
+      
+      // Use exact nombre from valid doc (prefer granja/especial version)
+      const exactNombre = medidaNombresMap.get(medidaKey) || medidaNombre;
 
       // Normalizar tipo (glaseo)
       let tipo = String(linea.tipo || linea.glaseo || '').trim();
@@ -2308,7 +2310,7 @@ async function handlePostPedidosLimpio(req, res) {
         cliente,
         cantidad,
         unidad,
-        medida: medida.nombre,
+        medida: exactNombre,
         tipo,
         nota,
         proveedor: linea.proveedor || ''

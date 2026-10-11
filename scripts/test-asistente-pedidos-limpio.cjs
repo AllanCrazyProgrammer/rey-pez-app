@@ -104,18 +104,20 @@ async function run() {
     
     console.log('✓ Emulador y Admin SDK listos');
     
-    // Setup medidas
+    // Setup medidas - include duplicates to test production scenario
     console.log('✓ Configurando medidas...');
     const medidas = [
       { nombre: '51/60', tipo: 'granja' },
+      { nombre: '51/60', tipo: 'general' }, // Duplicate with different tipo
       { nombre: '36/40', tipo: 'granja' },
+      { nombre: '36/40', tipo: 'general' }, // Duplicate with different tipo
       { nombre: '41/50', tipo: 'especial' },
       { nombre: '26/30', tipo: 'granja' }
     ];
     for (const medida of medidas) {
       await db.collection('medidas').add(medida);
     }
-    console.log('✓ Medidas configuradas');
+    console.log('✓ Medidas configuradas (con duplicados tipo granja + general)');
     
     // Set up env for handlers
     process.env.NODE_ENV = 'test';
