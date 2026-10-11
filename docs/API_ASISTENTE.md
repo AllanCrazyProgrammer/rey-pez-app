@@ -1277,6 +1277,496 @@ Si hay múltiples precios o cuartos disponibles para un producto y no especifica
 - La clave da acceso completo de escritura al inventario (limpios Y crudos)
 - Rota la clave si se filtra: `firebase functions:secrets:set ASISTENTE_API_KEY` y redespliega
 
+## API de Pedidos Limpio
+
+Los endpoints de pedidos limpio permiten crear, consultar y deshacer pedidos de camarón limpio de forma programática. Los pedidos se crean con líneas por cliente y soporte para todos los tipos de glaseo y medidas que maneja la UI.
+
+### POST /pedidos/limpio
+
+Crea o actualiza un pedido de camarón limpio con líneas por cliente. Si ya existe un pedido para la fecha especificada, actualiza el pedido existente; de lo contrario, crea uno nuevo.
+
+**URL:** `https://asistente-<hash>-uc.a.run.app/pedidos/limpio`
+
+**Método:** `POST`
+
+**Headers:**
+```
+Authorization: Bearer <ASISTENTE_API_KEY>
+Content-Type: application/json
+```
+
+**Body (JSON):**
+
+```json
+{
+  "fecha": "2026-10-11",
+  "idempotencyKey": "pedido-oct11-123",
+  "lineas": [
+    {
+      "cliente": "otilio",
+      "cantidad": 20,
+      "unidad": "taras",
+      "medida": "51/60",
+      "tipo": "S/H20"
+    },
+    {
+      "cliente": "otilio",
+      "cantidad": 12,
+      "unidad": "taras",
+      "medida": "36/40",
+      "tipo": "C/H20"
+    },
+    {
+      "cliente": "catarro",
+      "cantidad": 100,
+      "unidad": "kg",
+      "medida": "51/60",
+      "tipo": "S/H20",
+      "proveedor": "P"
+    }
+  ]
+}
+```
+
+**Campos obligatorios:**
+- `fecha` (string): Fecha en formato `YYYY-MM-DD`
+- `idempotencyKey` (string): Clave única para evitar duplicados
+- `lineas` (array): Array de líneas del pedido. Cada línea debe tener:
+  - `cliente` (string): Cliente (otilio, catarro, joselito, lorena, ozuna, o nombre personalizado)
+  - `cantidad` (number): Cantidad a pedir
+  - `unidad` (string): Unidad de medida: `"taras"` o `"kg"`
+  - `medida` (string): Medida del producto (debe existir en la colección `medidas` con tipo `granja` o `especial`, o ser `macuil` o `maquila`)
+
+**Campos opcionales por línea:**
+- `tipo` o `glaseo` (string): Tipo de glaseo. Opciones: `S/H20`, `C/H20`, `1.4`, `1.5`, `1.35 y .15`, `1.3 y .2`, `1.5 y .3`, `.7 y .3`, `.9 y .1`, `.9`. Por defecto vacío.
+- `nota` (string): Tipo de empaque: `Sellado` o `Kileado`. Por defecto vacío (representa "Notas").
+- `proveedor` (string): Proveedor de la línea (marcado con "P" en la UI). Por defecto vacío.
+
+**Campos opcionales generales:**
+- `dryRun` (boolean): Si es `true`, simula la operación sin escribir a Firestore y retorna el documento que se crearía
+
+**Ejemplo de request con curl:**
+
+```bash
+curl -X POST https://asistente-<hash>-uc.a.run.app/pedidos/limpio \
+  -H "Authorization: Bearer <tu-clave-secreta>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "fecha": "2026-10-11",
+    "idempotencyKey": "pedido-oct11-001",
+    "lineas": [
+      {
+        "cliente": "otilio",
+        "cantidad": 20,
+        "unidad": "taras",
+        "medida": "51/60",
+        "tipo": "S/H20"
+      },
+      {
+        "cliente": "otilio",
+        "cantidad": 12,
+        "unidad": "taras",
+        "medida": "36/40",
+        "tipo": "C/H20"
+      }
+    ]
+  }'
+```
+
+**Respuesta exitosa - nuevo pedido (200 OK):**
+
+```json
+{
+  "success": true,
+  "operation": "pedidos_limpio_create",
+  "pedidoId": "abc123xyz",
+  "fecha": "2026-10-11",
+  "totales": {
+    "taras": 32,
+    "kilos": 834
+  }
+}
+```
+
+**Respuesta exitosa - actualización de pedido existente (200 OK):**
+
+```json
+{
+  "success": true,
+  "operation": "pedidos_limpio_update",
+  "pedidoId": "abc123xyz",
+  "fecha": "2026-10-11",
+  "totales": {
+    "taras": 50,
+    "kilos": 1200
+  }
+}
+```
+
+**Respuesta con dryRun (200 OK):**
+
+```json
+{
+  "dryRun": true,
+  "document": {
+    "fecha": "2026-10-11",
+    "tipo": "limpio",
+    "otilio": [
+      {
+        "kilos": 20,
+        "esTara": true,
+        "medida": "51/60",
+        "tipo": "S/H20",
+        "nota": "",
+        "esProveedor": false,
+        "proveedor": "",
+        "etiqueta": "",
+        "_asistenteId": "uuid-xxx"
+      },
+      {
+        "kilos": 12,
+        "esTara": true,
+        "medida": "36/40",
+        "tipo": "C/H20",
+        "nota": "",
+        "esProveedor": false,
+        "proveedor": "",
+        "etiqueta": "",
+        "_asistenteId": "uuid-yyy"
+      }
+    ],
+    "catarro": [],
+    "joselito": [],
+    "ozuna": [],
+    "lorena": [],
+    "clientesTemporales": {},
+    "etiquetas": [],
+    "etiquetasColores": {},
+    "rendimientos": {},
+    "divisores": {},
+    "completados": {},
+    "kilosRefrigerados": {},
+    "_asistenteId": "uuid-zzz"
+  },
+  "totales": {
+    "taras": 32,
+    "kilos": 834
+  }
+}
+```
+
+**Errores comunes:**
+
+- **400 VALIDACION_ERROR** - Errores de validación en las líneas
+  ```json
+  {
+    "error": {
+      "code": "VALIDACION_ERROR",
+      "message": "Errores de validación en las líneas",
+      "details": {
+        "errores": [
+          {
+            "linea": 1,
+            "campo": "medida",
+            "mensaje": "Medida \"51/65\" no encontrada",
+            "sugerencias": ["51/60", "56/60"]
+          }
+        ]
+      }
+    }
+  }
+  ```
+
+- **400 FECHA_INVALIDA** - Formato de fecha incorrecto
+- **400 IDEMPOTENCY_KEY_REQUERIDA** - Falta el campo idempotencyKey
+- **400 LINEAS_REQUERIDAS** - El array de líneas está vacío
+
+**Cálculo de totales:**
+
+El sistema calcula los totales automáticamente según las reglas de la UI:
+
+- **Unidad "taras":**
+  - Tipo `S/H20` o vacío: `kilos = cantidad * 30` (Otilio/Catarro/Ozuna/temporales) o `cantidad * 25` (Joselito/Lorena)
+  - Tipo `C/H20`: `kilos = cantidad * 30 * 0.65` (factor de agua por defecto)
+  - Tipo `1.4`: `kilos = cantidad * 20 * 1.4`
+  - Tipo `1.5`: `kilos = cantidad * 20 * 1.5`
+  - Nota `Sellado`: usa 25 kg por tara en lugar de 30
+
+- **Unidad "kg":**
+  - Tipo `S/H20` o vacío: `kilos = cantidad * 1`
+  - Tipo `C/H20`: `kilos = cantidad * 0.65`
+  - Otros tipos: `kilos = cantidad * factor`
+
+- **Taras:**
+  - Si unidad es "taras": `taras = cantidad`
+  - Si unidad es "kg" y tipo es `S/H20` o vacío: `taras = cantidad / 27` (Otilio/Catarro/Ozuna) o `cantidad / 25` (Joselito/Lorena)
+  - Si tipo es `C/H20`: `taras = 0` (no cuenta para el total de taras)
+
+### GET /pedidos/limpio
+
+Obtiene el pedido limpio de una fecha específica.
+
+**URL:** `https://asistente-<hash>-uc.a.run.app/pedidos/limpio`
+
+**Método:** `GET`
+
+**Headers:**
+```
+Authorization: Bearer <ASISTENTE_API_KEY>
+```
+
+**Query params:**
+- `fecha` (requerido): Fecha en formato `YYYY-MM-DD`
+
+**Ejemplo de request con curl:**
+
+```bash
+curl -X GET "https://asistente-<hash>-uc.a.run.app/pedidos/limpio?fecha=2026-10-11" \
+  -H "Authorization: Bearer <tu-clave-secreta>"
+```
+
+**Respuesta exitosa cuando existe el pedido (200 OK):**
+
+```json
+{
+  "fecha": "2026-10-11",
+  "exists": true,
+  "pedido": {
+    "id": "abc123xyz",
+    "fecha": "2026-10-11",
+    "tipo": "limpio",
+    "otilio": [
+      {
+        "kilos": 20,
+        "esTara": true,
+        "medida": "51/60",
+        "tipo": "S/H20",
+        "nota": "",
+        "esProveedor": false,
+        "proveedor": "",
+        "etiqueta": "",
+        "_asistenteId": "uuid-xxx"
+      }
+    ],
+    "catarro": [],
+    "joselito": [],
+    "ozuna": [],
+    "lorena": [],
+    "clientesTemporales": {},
+    "etiquetas": [],
+    "etiquetasColores": {},
+    "rendimientos": {},
+    "divisores": {},
+    "completados": {},
+    "kilosRefrigerados": {},
+    "createdAt": "2026-10-11T08:00:00.000Z",
+    "_asistenteId": "uuid-zzz"
+  },
+  "totales": {
+    "taras": 20,
+    "kilos": 600
+  }
+}
+```
+
+**Respuesta cuando no existe el pedido (200 OK):**
+
+```json
+{
+  "fecha": "2026-10-11",
+  "exists": false,
+  "pedido": null
+}
+```
+
+**Errores comunes:**
+
+- **400 FECHA_INVALIDA** - Formato de fecha incorrecto
+
+### POST /pedidos/limpio/deshacer
+
+Deshace un pedido limpio creado por el asistente. Solo se pueden deshacer pedidos que fueron creados por el asistente (que tienen el campo `_asistenteId`).
+
+**URL:** `https://asistente-<hash>-uc.a.run.app/pedidos/limpio/deshacer`
+
+**Método:** `POST`
+
+**Headers:**
+```
+Authorization: Bearer <ASISTENTE_API_KEY>
+Content-Type: application/json
+```
+
+**Body (JSON):**
+
+```json
+{
+  "idempotencyKey": "pedido-oct11-123",
+  "idempotencyKey": "undo-pedido-oct11"
+}
+```
+
+O bien:
+
+```json
+{
+  "id": "abc123xyz",
+  "idempotencyKey": "undo-pedido-oct11"
+}
+```
+
+**Campos requeridos (uno de):**
+- `idempotencyKey` (string): La clave de idempotencia del pedido original que quieres deshacer
+- `id` (string): El ID del documento del pedido a deshacer
+
+**Campos opcionales:**
+- `idempotencyKey` (string): Clave de idempotencia para la operación de deshacer (para evitar duplicados). Si no se proporciona, se genera automáticamente con prefijo `undo:` + la clave original o ID
+- `dryRun` (boolean): Si es `true`, simula la operación sin escribir
+
+**Ejemplo de request con curl:**
+
+```bash
+curl -X POST https://asistente-<hash>-uc.a.run.app/pedidos/limpio/deshacer \
+  -H "Authorization: Bearer <tu-clave-secreta>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "idempotencyKey": "pedido-oct11-001",
+    "idempotencyKey": "undo-pedido-oct11"
+  }'
+```
+
+**Respuesta exitosa (200 OK):**
+
+```json
+{
+  "success": true,
+  "operation": "pedidos_limpio_undo",
+  "pedidoId": "abc123xyz",
+  "fecha": "2026-10-11"
+}
+```
+
+**Respuesta con dryRun (200 OK):**
+
+```json
+{
+  "dryRun": true,
+  "wouldDelete": "abc123xyz",
+  "pedido": {
+    "id": "abc123xyz",
+    "fecha": "2026-10-11",
+    "_asistenteId": "uuid-zzz"
+  }
+}
+```
+
+**Errores comunes:**
+
+- **404 PEDIDO_NO_ENCONTRADO** - No se encontró el pedido
+  ```json
+  {
+    "error": {
+      "code": "PEDIDO_NO_ENCONTRADO",
+      "message": "No se encontró un pedido con idempotencyKey: pedido-oct11-123"
+    }
+  }
+  ```
+
+- **403 NO_CREADO_POR_ASISTENTE** - El pedido fue creado manualmente en la UI
+  ```json
+  {
+    "error": {
+      "code": "NO_CREADO_POR_ASISTENTE",
+      "message": "Este pedido no fue creado por el asistente y no puede deshacerse automáticamente"
+    }
+  }
+  ```
+
+- **400 YA_DESHECHO** - El pedido ya fue deshecho anteriormente
+  ```json
+  {
+    "error": {
+      "code": "YA_DESHECHO",
+      "message": "Este pedido ya fue deshecho previamente",
+      "details": {
+        "undoneAt": "2026-10-11T10:00:00.000Z"
+      }
+    }
+  }
+  ```
+
+- **400 KEY_O_ID_REQUERIDO** - Falta tanto idempotencyKey como id
+
+**Notas importantes:**
+
+- Solo se pueden deshacer pedidos creados por el asistente
+- Si intentas deshacer el mismo pedido dos veces usando la misma `idempotencyKey`, la segunda vez retorna éxito sin error (idempotencia del undo)
+- La operación elimina completamente el documento del pedido de la colección `pedidos`
+- Se crea un log de auditoría tipo `pedidos_limpio_undo` en `asistenteLog` para cada operación deshecha
+
+### Validación de medidas
+
+El endpoint POST /pedidos/limpio valida que las medidas especificadas:
+
+1. Existan en la colección `medidas` de Firestore
+2. Tengan tipo `granja` o `especial`
+3. O sean las medidas especiales `macuil` o `maquila`
+
+Si una medida no es válida, el endpoint retorna un error con sugerencias de medidas similares que sí existen.
+
+### Clientes soportados
+
+**Clientes fijos:**
+- `otilio`
+- `catarro`
+- `joselito`
+- `lorena`
+- `ozuna`
+
+**Clientes temporales:**
+Cualquier otro nombre de cliente se trata como un cliente temporal y se guarda en el campo `clientesTemporales` del pedido.
+
+### Estructura del documento en Firestore
+
+```javascript
+{
+  fecha: "2026-10-11",
+  tipo: "limpio",
+  otilio: [
+    {
+      kilos: 20,
+      esTara: true,
+      medida: "51/60",
+      tipo: "S/H20",
+      nota: "",
+      esProveedor: false,
+      proveedor: "",
+      etiqueta: "",
+      _asistenteId: "uuid-xxx"
+    }
+  ],
+  catarro: [],
+  joselito: [],
+  ozuna: [],
+  lorena: [],
+  clientesTemporales: {
+    "clientenuevo": {
+      id: "clientenuevo",
+      nombre: "Clientenuevo",
+      pedidos: [...]
+    }
+  },
+  etiquetas: [],
+  etiquetasColores: {},
+  rendimientos: {},
+  divisores: {},
+  completados: {},
+  kilosRefrigerados: {},
+  _asistenteId: "uuid-zzz",
+  createdAt: Timestamp
+}
+```
+
 ## Contacto
 
 Para dudas o problemas, contacta a Allan (propietario de Rey Pez).
