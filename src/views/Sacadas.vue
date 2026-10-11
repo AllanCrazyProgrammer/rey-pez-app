@@ -511,6 +511,7 @@ export default {
       isEditing: false,
       sacadaId: null,
       fechaOriginal: null,
+      versionActual: null,
       isLoaded: false,
       guardando: false,
       kilosDisponibles: null,
@@ -1413,6 +1414,7 @@ export default {
         this.sacadaId = id;
         this.isEditing = true;
         this.fechaOriginal = this.currentDate.format('YYYY-MM-DD');
+        this.versionActual = data.version || null;
         this.salidasIniciales = this.salidas.length;
         this.limpiarChecklistSalidas();
         await this.updateKilosDisponibles();
@@ -1437,10 +1439,13 @@ export default {
         const editando = this.isEditing;
         this.sacadaId = await guardarDiaLimpio(reportData, {
           id: this.sacadaId || (this.modoModal ? this.sacadaIdProp : this.$route.params.id) || null,
-          fechaOriginal: this.fechaOriginal
+          fechaOriginal: this.fechaOriginal,
+          versionEsperada: this.versionActual
         });
         this.isEditing = true;
         this.fechaOriginal = this.currentDate.format('YYYY-MM-DD');
+        // Actualizar la versión después de guardar exitosamente
+        this.versionActual = (this.versionActual || 0) + 1;
         if (!this.modoModal) alert(editando ? 'Informe del día actualizado exitosamente' : 'Informe del día guardado exitosamente');
         this.salidasIniciales = this.salidas.length;
         this.invalidarCacheSacadas();

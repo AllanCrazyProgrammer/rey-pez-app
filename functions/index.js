@@ -2,6 +2,10 @@ const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { defineSecret } = require('firebase-functions/params');
 const Anthropic = require('@anthropic-ai/sdk');
 
+// Exportar la función asistente
+const { asistente } = require('./asistente');
+exports.asistente = asistente;
+
 // La API key vive como secreto de Firebase (nunca en el código ni en el navegador):
 //   firebase functions:secrets:set ANTHROPIC_API_KEY
 const anthropicApiKey = defineSecret('ANTHROPIC_API_KEY');
