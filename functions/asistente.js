@@ -2746,6 +2746,7 @@ async function handlePostPedidosLimpioDeshacer(req, res) {
     }
 
     let response;
+    let undoAction; // Track action for audit log
 
     // Use transaction to check for concurrent modifications
     await db.runTransaction(async (transaction) => {
@@ -2862,11 +2863,12 @@ async function handlePostPedidosLimpioDeshacer(req, res) {
       if (isFullDelete) {
         // El documento solo contiene líneas del asistente - eliminarlo completamente
         transaction.delete(pedidoRef);
+        undoAction = 'deleted_document';
         
         response = {
           success: true,
           operation: 'pedidos_limpio_undo',
-          action: 'deleted_document',
+          action: undoAction,
           pedidoId: freshSnap.id,
           fecha: currentData.fecha
         };
@@ -2912,11 +2914,12 @@ async function handlePostPedidosLimpioDeshacer(req, res) {
         
         // Actualizar el documento sin las líneas del asistente
         transaction.update(pedidoRef, updatedData);
+        undoAction = 'removed_lines';
         
         response = {
           success: true,
           operation: 'pedidos_limpio_undo',
-          action: 'removed_lines',
+          action: undoAction,
           pedidoId: freshSnap.id,
           fecha: currentData.fecha,
           linesRemoved: removedCount
@@ -2933,7 +2936,7 @@ async function handlePostPedidosLimpioDeshacer(req, res) {
       originalOperation: operation,
       pedidoId: pedidoSnap.id,
       before: pedidoData,
-      action: isFullDelete ? 'deleted_document' : 'removed_lines',
+      action: undoAction,
       assistantIdsRemoved: Array.from(assistantIds)
     });
 
