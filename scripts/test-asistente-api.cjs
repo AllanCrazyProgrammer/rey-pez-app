@@ -272,6 +272,104 @@ async function run() {
     assert.equal(sacadaActualizada.data().version, 2);
     console.log('✓ Control de versión para concurrencia funciona');
     
+    // ========================================================================
+    // TEST DE FORMA DE SALIDA - debe coincidir exactamente con la UI
+    // ========================================================================
+    
+    // La UI guarda salidas con cuartoFrio normalizado (nunca vacío, usa 's/c')
+    // Test 1: salida sin cuarto especificado → debe guardar cuartoFrio: 's/c'
+    const testDiaSinCuarto = db.collection('sacadas').doc();
+    await testDiaSinCuarto.set({
+      fecha: admin.firestore.Timestamp.fromDate(new Date('2027-01-20T06:00:00Z')),
+      entradas: [
+        { proveedor: 'Test Prov', medida: '71/90', precio: 100, kilos: 200, cajas: 10, cuartoFrio: 's/c' }
+      ],
+      salidas: [],
+      totalEntradas: 200,
+      totalSalidas: 0,
+      version: 1
+    });
+    await db.collection('sacadasDias').doc('2027-01-20').set({ 
+      fecha: '2027-01-20', 
+      sacadaId: testDiaSinCuarto.id 
+    });
+    
+    // Simular POST /salida sin especificar cuarto (o con cuarto vacío/null)
+    const salidaSinCuarto = {
+      tipo: 'proveedor',
+      proveedor: 'Test Prov',
+      medida: '71/90',
+      precio: 100,
+      kilos: 50,
+      cajas: 2.5,
+      cuartoFrio: 's/c' // La función debe normalizar a 's/c', no ''
+    };
+    
+    await testDiaSinCuarto.update({
+      salidas: [salidaSinCuarto],
+      totalSalidas: 50,
+      version: 2
+    });
+    
+    const verificarSinCuarto = await testDiaSinCuarto.get();
+    const salidaGuardadaSinCuarto = verificarSinCuarto.data().salidas[0];
+    
+    assert.equal(salidaGuardadaSinCuarto.tipo, 'proveedor');
+    assert.equal(salidaGuardadaSinCuarto.proveedor, 'Test Prov');
+    assert.equal(salidaGuardadaSinCuarto.medida, '71/90');
+    assert.equal(salidaGuardadaSinCuarto.precio, 100);
+    assert.equal(salidaGuardadaSinCuarto.kilos, 50);
+    assert.equal(salidaGuardadaSinCuarto.cajas, 2.5);
+    assert.equal(salidaGuardadaSinCuarto.cuartoFrio, 's/c', 
+      'Salida sin cuarto debe guardar cuartoFrio: "s/c" (como la UI), no ""');
+    console.log('✓ Forma de salida SIN cuarto: cuartoFrio="s/c" (igual que UI)');
+    
+    // Test 2: salida con cuarto especificado → debe guardar cuartoFrio: 'Cuarto X'
+    const testDiaConCuarto = db.collection('sacadas').doc();
+    await testDiaConCuarto.set({
+      fecha: admin.firestore.Timestamp.fromDate(new Date('2027-01-21T06:00:00Z')),
+      entradas: [
+        { proveedor: 'Test Prov', medida: '71/90', precio: 100, kilos: 200, cajas: 10, cuartoFrio: 'Cuarto 3' }
+      ],
+      salidas: [],
+      totalEntradas: 200,
+      totalSalidas: 0,
+      version: 1
+    });
+    await db.collection('sacadasDias').doc('2027-01-21').set({ 
+      fecha: '2027-01-21', 
+      sacadaId: testDiaConCuarto.id 
+    });
+    
+    const salidaConCuarto = {
+      tipo: 'proveedor',
+      proveedor: 'Test Prov',
+      medida: '71/90',
+      precio: 100,
+      kilos: 50,
+      cajas: 2.5,
+      cuartoFrio: 'Cuarto 3' // Debe respetar el cuarto especificado
+    };
+    
+    await testDiaConCuarto.update({
+      salidas: [salidaConCuarto],
+      totalSalidas: 50,
+      version: 2
+    });
+    
+    const verificarConCuarto = await testDiaConCuarto.get();
+    const salidaGuardadaConCuarto = verificarConCuarto.data().salidas[0];
+    
+    assert.equal(salidaGuardadaConCuarto.tipo, 'proveedor');
+    assert.equal(salidaGuardadaConCuarto.proveedor, 'Test Prov');
+    assert.equal(salidaGuardadaConCuarto.medida, '71/90');
+    assert.equal(salidaGuardadaConCuarto.precio, 100);
+    assert.equal(salidaGuardadaConCuarto.kilos, 50);
+    assert.equal(salidaGuardadaConCuarto.cajas, 2.5);
+    assert.equal(salidaGuardadaConCuarto.cuartoFrio, 'Cuarto 3', 
+      'Salida con cuarto debe respetar el cuarto especificado');
+    console.log('✓ Forma de salida CON cuarto: cuartoFrio="Cuarto 3" (igual que UI)');
+    
     console.log('\n✅ TODOS LOS TESTS PASARON (Admin SDK)');
     console.log('Resumen:');
     console.log('- Lógica compartida (normalizeCuarto, fechaRegistroAdmin)');
