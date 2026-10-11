@@ -23,12 +23,15 @@ function generarAsistenteId() {
 //   firebase functions:secrets:set ASISTENTE_API_KEY
 const asistenteApiKey = defineSecret('ASISTENTE_API_KEY');
 
-// Inicializar Admin SDK solo si aún no está inicializado
-if (!admin.apps.length) {
+// Inicializar Admin SDK solo si aún no está inicializado (skip en tests)
+if (!admin.apps.length && process.env.NODE_ENV !== 'test') {
   admin.initializeApp();
 }
 
-const db = admin.firestore();
+// En tests, usar la app que ya fue inicializada por el test
+const db = process.env.NODE_ENV === 'test' 
+  ? admin.firestore(admin.app('pedidos-tests'))
+  : admin.firestore();
 
 /**
  * Compara dos strings en tiempo constante para evitar timing attacks.
@@ -2031,6 +2034,941 @@ async function handleGetCrudosDia(req, res) {
   }
 }
 
+// =============================
+// PEDIDOS LIMPIO - Calculation Logic
+// =============================
+
+/**
+ * Factor de agua para medidas C/H20 (neto por defecto 65%).
+ */
+const AGUA_DEFAULT = 0.65;
+
+const FACTORES_POR_TIPO = {
+  '1.4': 1.4,
+  '1.5': 1.5,
+  '1.35 y .15': 1.35,
+  '1.3 y .2': 1.3,
+  '1.5 y .3': 1.5,
+  '.7 y .3': 0.7,
+  '.9 y .1': 0.9,
+  '.9': 0.9
+};
+
+const KILOS_BASE_TARA_POR_TIPO = {
+  '1.4': 20,
+  '1.5': 20
+};
+
+const CLIENTES_CON_TARA_DE_27 = new Set(['otilio', 'catarro', 'ozuna', 'temporal']);
+const CLIENTES_FIJOS = ['otilio', 'catarro', 'joselito', 'lorena', 'ozuna'];
+
+function numeroPositivo(valor) {
+  const numero = Number(valor);
+  return Number.isFinite(numero) && numero > 0 ? numero : 0;
+}
+
+function normalizarCliente(clienteId) {
+  const cliente = String(clienteId || 'temporal').trim().toLowerCase();
+  return CLIENTES_FIJOS.includes(cliente) ? cliente : 'temporal';
+}
+
+function factorAgua(item) {
+  if (!item) return AGUA_DEFAULT;
+  const valor = Number(item.agua);
+  return Number.isFinite(valor) && valor > 0 ? valor : AGUA_DEFAULT;
+}
+
+function kilosPorTara(item, kilosDefault = 30) {
+  const nota = String(item?.nota || '').trim().toLowerCase();
+  return nota === 'sellado' ? 25 : kilosDefault;
+}
+
+function factorPorTipo(item) {
+  const tipo = String(item?.tipo || '').trim();
+  if (tipo === 'C/H20') return factorAgua(item);
+  return FACTORES_POR_TIPO[tipo] || 1;
+}
+
+function calcularKilosItemPedidoLimpio(item) {
+  const cantidad = numeroPositivo(item?.kilos);
+  if (!cantidad) return 0;
+
+  if (item?.esTara) {
+    const tipo = String(item?.tipo || '').trim();
+    if (KILOS_BASE_TARA_POR_TIPO[tipo]) {
+      return cantidad * KILOS_BASE_TARA_POR_TIPO[tipo] * FACTORES_POR_TIPO[tipo];
+    }
+
+    const kilosBase = cantidad * kilosPorTara(item);
+    return tipo === 'C/H20' ? kilosBase * factorAgua(item) : kilosBase;
+  }
+
+  return cantidad * factorPorTipo(item);
+}
+
+function calcularTarasItemPedidoLimpio(item, clienteId = 'temporal') {
+  const cantidad = numeroPositivo(item?.kilos);
+  if (!cantidad) return 0;
+  if (item?.esTara) return cantidad;
+
+  const tipo = String(item?.tipo || '').trim();
+  if (tipo === 'C/H20') return 0;
+
+  if (tipo === 'S/H20' || !tipo) {
+    const cliente = normalizarCliente(clienteId);
+    const kilosPorTaraSinAgua = CLIENTES_CON_TARA_DE_27.has(cliente) ? 27 : 25;
+    return cantidad / kilosPorTaraSinAgua;
+  }
+
+  return cantidad / 25;
+}
+
+function calcularTotalesClientePedidoLimpio(items, clienteId = 'temporal') {
+  const filas = Array.isArray(items) ? items : [];
+  const kilos = filas.reduce((total, item) => total + calcularKilosItemPedidoLimpio(item), 0);
+  const taras = filas.reduce(
+    (total, item) => total + calcularTarasItemPedidoLimpio(item, clienteId),
+    0
+  );
+
+  return {
+    kilosTotal: Math.round(kilos),
+    tarasTotal: Math.round(taras)
+  };
+}
+
+function calcularTotalesPedidoLimpio(pedido) {
+  if (!pedido || typeof pedido !== 'object') return { kilosTotal: 0, tarasTotal: 0 };
+
+  const grupos = CLIENTES_FIJOS.map(clienteId => ({
+    clienteId,
+    items: pedido[clienteId]
+  }));
+
+  const temporales = pedido.clientesTemporales && typeof pedido.clientesTemporales === 'object'
+    ? Object.values(pedido.clientesTemporales).map(cliente => ({
+      clienteId: 'temporal',
+      items: Array.isArray(cliente) ? cliente : cliente?.pedidos
+    }))
+    : [];
+
+  return [...grupos, ...temporales].reduce((acumulado, grupo) => {
+    const totales = calcularTotalesClientePedidoLimpio(grupo.items, grupo.clienteId);
+    acumulado.kilosTotal += totales.kilosTotal;
+    acumulado.tarasTotal += totales.tarasTotal;
+    return acumulado;
+  }, { kilosTotal: 0, tarasTotal: 0 });
+}
+
+// =============================
+// PEDIDOS LIMPIO - Handlers
+// =============================
+
+/**
+ * POST /pedidos/limpio
+ * Crea o actualiza un pedido limpio con líneas por cliente.
+ */
+async function handlePostPedidosLimpio(req, res) {
+  const {
+    fecha,
+    lineas = [],
+    idempotencyKey,
+    dryRun = false
+  } = req.body;
+
+  if (!fecha || !/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
+    return errorResponse(res, 400, 'FECHA_INVALIDA', 
+      'La fecha es requerida y debe estar en formato YYYY-MM-DD');
+  }
+
+  if (!idempotencyKey || typeof idempotencyKey !== 'string' || !idempotencyKey.trim()) {
+    return errorResponse(res, 400, 'IDEMPOTENCY_KEY_REQUERIDA',
+      'El campo idempotencyKey es requerido y debe ser único');
+  }
+
+  if (!Array.isArray(lineas) || lineas.length === 0) {
+    return errorResponse(res, 400, 'LINEAS_REQUERIDAS',
+      'Debe proporcionar al menos una línea en el campo lineas');
+  }
+
+  try {
+    // Verificar idempotencia (sin importar dryRun)
+    const idemRef = db.collection('asistenteIdem').doc(idempotencyKey);
+    const idemSnap = await idemRef.get();
+    
+    if (idemSnap.exists) {
+      const idemData = idemSnap.data();
+      if (idemData.operation === 'pedidos_limpio_create' || idemData.operation === 'pedidos_limpio_update') {
+        return res.json(idemData.response);
+      }
+    }
+
+    // Validar medidas
+    const medidasSnapshot = await db.collection('medidas').get();
+    const medidasMap = new Map();
+    medidasSnapshot.forEach(doc => {
+      const data = doc.data();
+      medidasMap.set(data.nombre.toLowerCase(), {
+        id: doc.id,
+        nombre: data.nombre,
+        tipo: data.tipo
+      });
+    });
+
+    // Agregar macuil y maquila especiales
+    medidasMap.set('macuil', { id: 'macuil-opcion', nombre: 'macuil', tipo: 'especial' });
+    medidasMap.set('maquila', { id: 'maquila-opcion', nombre: 'maquila', tipo: 'especial' });
+
+    // Validar y normalizar líneas
+    const errores = [];
+    const lineasNormalizadas = [];
+
+    for (let i = 0; i < lineas.length; i++) {
+      const linea = lineas[i];
+      const idx = i + 1;
+
+      // Validar cliente
+      const cliente = String(linea.cliente || '').trim().toLowerCase();
+      if (!cliente) {
+        errores.push({ linea: idx, campo: 'cliente', mensaje: 'El cliente es requerido' });
+        continue;
+      }
+
+      // Validar cantidad y unidad
+      const cantidad = numeroPositivo(linea.cantidad);
+      if (!cantidad) {
+        errores.push({ linea: idx, campo: 'cantidad', mensaje: 'La cantidad debe ser mayor a 0' });
+        continue;
+      }
+
+      const unidad = String(linea.unidad || '').trim().toLowerCase();
+      if (!['taras', 'kg'].includes(unidad)) {
+        errores.push({ linea: idx, campo: 'unidad', mensaje: 'La unidad debe ser "taras" o "kg"' });
+        continue;
+      }
+
+      // Validar medida
+      const medidaNombre = String(linea.medida || '').trim();
+      if (!medidaNombre) {
+        errores.push({ linea: idx, campo: 'medida', mensaje: 'La medida es requerida' });
+        continue;
+      }
+
+      const medidaKey = medidaNombre.toLowerCase();
+      const medida = medidasMap.get(medidaKey);
+      
+      if (!medida) {
+        // Sugerir medidas similares
+        const sugerencias = Array.from(medidasMap.values())
+          .filter(m => m.tipo === 'granja' || m.tipo === 'especial' || m.nombre === 'macuil' || m.nombre === 'maquila')
+          .map(m => m.nombre)
+          .filter(n => n.toLowerCase().includes(medidaKey) || medidaKey.includes(n.toLowerCase()))
+          .slice(0, 3);
+        
+        errores.push({
+          linea: idx,
+          campo: 'medida',
+          mensaje: `Medida "${medidaNombre}" no encontrada`,
+          sugerencias: sugerencias.length > 0 ? sugerencias : undefined
+        });
+        continue;
+      }
+
+      // Validar que la medida sea de tipo granja o especial
+      if (medida.tipo !== 'granja' && medida.tipo !== 'especial' && medida.nombre !== 'macuil' && medida.nombre !== 'maquila') {
+        errores.push({
+          linea: idx,
+          campo: 'medida',
+          mensaje: `La medida "${medidaNombre}" no es válida para pedidos limpio (tipo: ${medida.tipo})`
+        });
+        continue;
+      }
+
+      // Normalizar tipo (glaseo)
+      let tipo = String(linea.tipo || linea.glaseo || '').trim();
+      if (tipo) {
+        tipo = tipo.toUpperCase();
+        if (!['S/H20', 'C/H20', '1.4', '1.5', '1.35 Y .15', '1.3 Y .2', '1.5 Y .3', '.7 Y .3', '.9 Y .1', '.9'].includes(tipo)) {
+          errores.push({
+            linea: idx,
+            campo: 'tipo',
+            mensaje: `Tipo/glaseo inválido: ${tipo}. Opciones: S/H20, C/H20, 1.4, 1.5, 1.35 y .15, 1.3 y .2, 1.5 y .3, .7 y .3, .9 y .1, .9`
+          });
+          continue;
+        }
+      } else {
+        tipo = '';
+      }
+
+      // Normalizar nota (Notas/Sellado/Kileado)
+      const notaValor = linea.nota || '';
+      const nota = ['Sellado', 'Kileado'].includes(notaValor) ? notaValor : '';
+
+      lineasNormalizadas.push({
+        cliente,
+        cantidad,
+        unidad,
+        medida: medida.nombre,
+        tipo,
+        nota,
+        proveedor: linea.proveedor || ''
+      });
+    }
+
+    if (errores.length > 0) {
+      return errorResponse(res, 400, 'VALIDACION_ERROR', 
+        'Errores de validación en las líneas', { errores });
+    }
+
+    // Agrupar líneas por cliente
+    const pedidoPorCliente = {
+      otilio: [],
+      catarro: [],
+      joselito: [],
+      lorena: [],
+      ozuna: [],
+      clientesTemporales: {}
+    };
+
+    for (const linea of lineasNormalizadas) {
+      const item = {
+        kilos: linea.cantidad,
+        esTara: linea.unidad === 'taras',
+        medida: linea.medida,
+        tipo: linea.tipo,
+        nota: linea.nota,
+        esProveedor: !!linea.proveedor,
+        proveedor: linea.proveedor,
+        etiqueta: '',
+        _asistenteId: generarAsistenteId()
+      };
+      
+      // Set agua field for C/H20 lines (like the UI does)
+      if (linea.tipo === 'C/H20') {
+        item.agua = AGUA_DEFAULT;
+      }
+
+      if (CLIENTES_FIJOS.includes(linea.cliente)) {
+        pedidoPorCliente[linea.cliente].push(item);
+      } else {
+        // Cliente temporal
+        if (!pedidoPorCliente.clientesTemporales[linea.cliente]) {
+          pedidoPorCliente.clientesTemporales[linea.cliente] = {
+            id: linea.cliente,
+            nombre: linea.cliente.charAt(0).toUpperCase() + linea.cliente.slice(1),
+            pedidos: []
+          };
+        }
+        pedidoPorCliente.clientesTemporales[linea.cliente].pedidos.push(item);
+      }
+    }
+
+    // Calcular totales
+    const totales = calcularTotalesPedidoLimpio(pedidoPorCliente);
+
+    // Preparar documento base (sin _asistenteId - solo para nuevos)
+    const pedidoData = {
+      fecha,
+      tipo: 'limpio',
+      otilio: pedidoPorCliente.otilio,
+      catarro: pedidoPorCliente.catarro,
+      joselito: pedidoPorCliente.joselito,
+      ozuna: pedidoPorCliente.ozuna,
+      lorena: pedidoPorCliente.lorena,
+      clientesTemporales: pedidoPorCliente.clientesTemporales,
+      etiquetas: [],
+      etiquetasColores: {},
+      rendimientos: {},
+      divisores: {},
+      completados: {},
+      kilosRefrigerados: {}
+    };
+
+    if (dryRun) {
+      return res.json({
+        dryRun: true,
+        document: {
+          ...pedidoData,
+          createdAt: new Date().toISOString()
+        },
+        totales: {
+          taras: totales.tarasTotal,
+          kilos: totales.kilosTotal
+        }
+      });
+    }
+    
+    // Buscar si ya existe un pedido para esta fecha
+    const pedidosExistentes = await db.collection('pedidos')
+      .where('fecha', '==', fecha)
+      .where('tipo', '==', 'limpio')
+      .get();
+
+    let pedidoId;
+    let operation;
+    let before = null;
+
+    // Collect assistant line IDs for audit log
+    const assistantLineIds = [];
+    ['otilio', 'catarro', 'joselito', 'lorena', 'ozuna'].forEach(cliente => {
+      pedidoPorCliente[cliente].forEach(item => {
+        if (item._asistenteId) assistantLineIds.push(item._asistenteId);
+      });
+    });
+    Object.values(pedidoPorCliente.clientesTemporales).forEach(clienteData => {
+      const pedidos = Array.isArray(clienteData) ? clienteData : clienteData.pedidos;
+      if (Array.isArray(pedidos)) {
+        pedidos.forEach(item => {
+          if (item._asistenteId) assistantLineIds.push(item._asistenteId);
+        });
+      }
+    });
+
+    if (!pedidosExistentes.empty) {
+      // APPEND lines to existing document - ALL writes in ONE transaction
+      const docExistente = pedidosExistentes.docs[0];
+      pedidoId = docExistente.id;
+      before = docExistente.data();
+      operation = 'pedidos_limpio_update';
+      
+      // Use transaction for pedido update, audit log, and idempotency (all-or-nothing)
+      await db.runTransaction(async (transaction) => {
+        const pedidoRef = db.collection('pedidos').doc(pedidoId);
+        const freshSnap = await transaction.get(pedidoRef);
+        
+        if (!freshSnap.exists) {
+          throw { code: 'PEDIDO_ELIMINADO', message: 'El pedido fue eliminado durante la operación', status: 409 };
+        }
+        
+        const currentData = freshSnap.data();
+        
+        // APPEND assistant lines to existing arrays
+        const updatedData = {
+          otilio: [...(currentData.otilio || []), ...pedidoPorCliente.otilio],
+          catarro: [...(currentData.catarro || []), ...pedidoPorCliente.catarro],
+          joselito: [...(currentData.joselito || []), ...pedidoPorCliente.joselito],
+          ozuna: [...(currentData.ozuna || []), ...pedidoPorCliente.ozuna],
+          lorena: [...(currentData.lorena || []), ...pedidoPorCliente.lorena]
+        };
+        
+        // Merge clientesTemporales
+        const mergedTemporales = { ...(currentData.clientesTemporales || {}) };
+        Object.keys(pedidoPorCliente.clientesTemporales).forEach(clienteId => {
+          if (mergedTemporales[clienteId]) {
+            // Append to existing
+            const existing = mergedTemporales[clienteId];
+            const newLines = pedidoPorCliente.clientesTemporales[clienteId];
+            if (Array.isArray(existing)) {
+              mergedTemporales[clienteId] = [...existing, ...(Array.isArray(newLines) ? newLines : newLines.pedidos)];
+            } else if (existing.pedidos) {
+              existing.pedidos = [...existing.pedidos, ...(Array.isArray(newLines) ? newLines : newLines.pedidos)];
+            }
+          } else {
+            mergedTemporales[clienteId] = pedidoPorCliente.clientesTemporales[clienteId];
+          }
+        });
+        updatedData.clientesTemporales = mergedTemporales;
+        
+        // DO NOT set document-level _asistenteId on existing docs
+        // DO NOT increment version (UI doesn't use it, so we can't rely on it)
+        
+        transaction.update(pedidoRef, updatedData);
+        
+        // Write audit log in same transaction
+        const logRef = db.collection('asistenteLog').doc();
+        transaction.set(logRef, {
+          operation,
+          timestamp: admin.firestore.FieldValue.serverTimestamp(),
+          idempotencyKey,
+          pedidoId,
+          fecha,
+          assistantLineIds, // Store line IDs (never undefined)
+          before: currentData,
+          addedLines: pedidoPorCliente, // Snapshot of what we added
+          totales,
+          request: {
+            fecha,
+            lineas: lineasNormalizadas
+          }
+        });
+        
+        // Write idempotency record in same transaction
+        transaction.set(idemRef, {
+          operation,
+          timestamp: admin.firestore.FieldValue.serverTimestamp(),
+          response: {
+            success: true,
+            operation,
+            pedidoId,
+            fecha,
+            totales: {
+              taras: totales.tarasTotal,
+              kilos: totales.kilosTotal
+            }
+          }
+        });
+      });
+    } else {
+      // Create new document - use transaction for audit + idempotency
+      operation = 'pedidos_limpio_create';
+      pedidoData.createdAt = admin.firestore.FieldValue.serverTimestamp();
+      pedidoData.version = 1;
+      const docLevelAsistenteId = generarAsistenteId(); // Only set on new docs
+      pedidoData._asistenteId = docLevelAsistenteId;
+      
+      await db.runTransaction(async (transaction) => {
+        const docRef = db.collection('pedidos').doc();
+        pedidoId = docRef.id;
+        
+        transaction.set(docRef, pedidoData);
+        
+        // Write audit log in same transaction
+        const logRef = db.collection('asistenteLog').doc();
+        const afterData = { ...pedidoData };
+        delete afterData.createdAt; // Remove FieldValue for serialization
+        
+        transaction.set(logRef, {
+          operation,
+          timestamp: admin.firestore.FieldValue.serverTimestamp(),
+          idempotencyKey,
+          pedidoId,
+          fecha,
+          _asistenteId: docLevelAsistenteId, // Document-level ID for creates
+          assistantLineIds, // Line-level IDs
+          before: null,
+          after: afterData,
+          totales,
+          request: {
+            fecha,
+            lineas: lineasNormalizadas
+          }
+        });
+        
+        // Write idempotency record in same transaction
+        transaction.set(idemRef, {
+          operation,
+          timestamp: admin.firestore.FieldValue.serverTimestamp(),
+          response: {
+            success: true,
+            operation,
+            pedidoId,
+            fecha,
+            totales: {
+              taras: totales.tarasTotal,
+              kilos: totales.kilosTotal
+            }
+          }
+        });
+      });
+    }
+
+    const response = {
+      success: true,
+      operation,
+      pedidoId,
+      fecha,
+      totales: {
+        taras: totales.tarasTotal,
+        kilos: totales.kilosTotal
+      }
+    };
+
+    return res.json(response);
+
+  } catch (error) {
+    if (error.code) {
+      return errorResponse(res, error.status || 500, error.code, error.message, error.details);
+    }
+    
+    console.error('Error en POST /pedidos/limpio:', error);
+    return errorResponse(res, 500, 'ERROR_INTERNO', 
+      'Error inesperado al procesar el pedido limpio: ' + error.message);
+  }
+}
+
+/**
+ * GET /pedidos/limpio?fecha=YYYY-MM-DD
+ * Obtiene el pedido limpio de una fecha específica.
+ */
+async function handleGetPedidosLimpio(req, res) {
+  const { fecha } = req.query;
+
+  if (!fecha || !/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
+    return errorResponse(res, 400, 'FECHA_INVALIDA', 
+      'La fecha es requerida y debe estar en formato YYYY-MM-DD');
+  }
+
+  try {
+    const pedidosSnapshot = await db.collection('pedidos')
+      .where('fecha', '==', fecha)
+      .where('tipo', '==', 'limpio')
+      .get();
+
+    if (pedidosSnapshot.empty) {
+      return res.json({
+        fecha,
+        exists: false,
+        pedido: null
+      });
+    }
+
+    const doc = pedidosSnapshot.docs[0];
+    const data = doc.data();
+    const totales = calcularTotalesPedidoLimpio(data);
+
+    return res.json({
+      fecha,
+      exists: true,
+      pedido: {
+        id: doc.id,
+        ...data,
+        createdAt: data.createdAt?.toDate?.()?.toISOString() || null
+      },
+      totales: {
+        taras: totales.tarasTotal,
+        kilos: totales.kilosTotal
+      }
+    });
+
+  } catch (error) {
+    console.error('Error en GET /pedidos/limpio:', error);
+    return errorResponse(res, 500, 'ERROR_INTERNO', 
+      'Error inesperado al obtener el pedido limpio: ' + error.message);
+  }
+}
+
+/**
+ * POST /pedidos/limpio/deshacer
+ * Deshace un pedido limpio creado por el asistente.
+ */
+async function handlePostPedidosLimpioDeshacer(req, res) {
+  const {
+    idempotencyKey: originalKey,
+    id: pedidoId,
+    undoIdempotencyKey,
+    dryRun = false
+  } = req.body;
+
+  if (!originalKey && !pedidoId) {
+    return errorResponse(res, 400, 'KEY_O_ID_REQUERIDO',
+      'Debe proporcionar idempotencyKey o id del pedido a deshacer');
+  }
+
+  const lookupKey = originalKey || pedidoId;
+  const undoKey = undoIdempotencyKey || `undo:${lookupKey}`;
+
+  if (!undoKey || typeof undoKey !== 'string' || !undoKey.trim()) {
+    return errorResponse(res, 400, 'UNDO_IDEMPOTENCY_KEY_REQUERIDA',
+      'El campo idempotencyKey para el undo es requerido');
+  }
+
+  try {
+    // Verificar idempotencia del undo
+    const undoIdemRef = db.collection('asistenteIdem').doc(undoKey);
+    const undoIdemSnap = await undoIdemRef.get();
+    
+    if (undoIdemSnap.exists) {
+      return res.json(undoIdemSnap.data().response);
+    }
+
+    // Verificar si ya fue deshecho (antes de buscar el pedido)
+    if (originalKey) {
+      const undoLogSnapshot = await db.collection('asistenteLog')
+        .where('operation', '==', 'pedidos_limpio_undo')
+        .where('originalIdempotencyKey', '==', originalKey)
+        .get();
+
+      if (!undoLogSnapshot.empty) {
+        const undoLog = undoLogSnapshot.docs[0].data();
+        return errorResponse(res, 400, 'YA_DESHECHO',
+          'Este pedido ya fue deshecho previamente', {
+            undoneAt: undoLog.timestamp?.toDate?.()?.toISOString()
+          });
+      }
+    }
+
+    // Buscar el pedido a deshacer
+    let pedidoRef;
+    let pedidoSnap;
+    let logEntry = null;
+
+    if (originalKey) {
+      // Buscar por idempotency key en audit log
+      const logSnapshot = await db.collection('asistenteLog')
+        .where('idempotencyKey', '==', originalKey)
+        .where('operation', 'in', ['pedidos_limpio_create', 'pedidos_limpio_update'])
+        .orderBy('timestamp', 'desc')
+        .limit(1)
+        .get();
+
+      if (logSnapshot.empty) {
+        return errorResponse(res, 404, 'PEDIDO_NO_ENCONTRADO',
+          `No se encontró un pedido con idempotencyKey: ${originalKey}`);
+      }
+
+      logEntry = { id: logSnapshot.docs[0].id, ...logSnapshot.docs[0].data() };
+      pedidoRef = db.collection('pedidos').doc(logEntry.pedidoId);
+      pedidoSnap = await pedidoRef.get();
+    } else {
+      // Buscar por ID directo
+      pedidoRef = db.collection('pedidos').doc(pedidoId);
+      pedidoSnap = await pedidoRef.get();
+    }
+
+    if (!pedidoSnap.exists) {
+      return errorResponse(res, 404, 'PEDIDO_NO_ENCONTRADO',
+        'El pedido ya no existe o fue eliminado');
+    }
+
+    const pedidoData = pedidoSnap.data();
+
+    // Determinar el tipo de operación original y los IDs a remover
+    const operation = logEntry?.operation || 'pedidos_limpio_create';
+    const assistantLineIds = logEntry?.assistantLineIds || [];
+    const assistantIds = new Set(assistantLineIds);
+    
+    // For creates, also track doc-level _asistenteId
+    if (operation === 'pedidos_limpio_create' && logEntry?._asistenteId) {
+      assistantIds.add(logEntry._asistenteId);
+    }
+    
+    // Store snapshot of original lines for verification
+    const originalLines = logEntry?.addedLines || logEntry?.after;
+    
+    if (dryRun) {
+      return res.json({
+        dryRun: true,
+        operation: operation === 'pedidos_limpio_create' ? 'delete_or_remove_lines' : 'remove_lines',
+        pedidoId: pedidoSnap.id,
+        assistantIdsToRemove: Array.from(assistantIds),
+        wouldRemoveLineCount: assistantIds.size
+      });
+    }
+
+    let response;
+    let undoAction; // Track action for audit log
+
+    // Use transaction to check for concurrent modifications
+    await db.runTransaction(async (transaction) => {
+      const freshSnap = await transaction.get(pedidoRef);
+      
+      if (!freshSnap.exists) {
+        throw {
+          code: 'PEDIDO_ELIMINADO',
+          message: 'El pedido fue eliminado durante la operación de undo',
+          status: 409
+        };
+      }
+      
+      const currentData = freshSnap.data();
+      
+      // Check if assistant's lines were modified/removed (works without UI version support)
+      if (originalLines && assistantLineIds.length > 0) {
+        // Collect current assistant lines and verify they match original snapshot
+        const currentAssistantLines = [];
+        ['otilio', 'catarro', 'joselito', 'lorena', 'ozuna'].forEach(cliente => {
+          if (Array.isArray(currentData[cliente])) {
+            currentData[cliente].forEach(item => {
+              if (assistantIds.has(item._asistenteId)) {
+                currentAssistantLines.push({ cliente, ...item });
+              }
+            });
+          }
+        });
+        
+        if (currentData.clientesTemporales) {
+          Object.keys(currentData.clientesTemporales).forEach(clienteId => {
+            const clienteTemp = currentData.clientesTemporales[clienteId];
+            const pedidos = Array.isArray(clienteTemp) ? clienteTemp : clienteTemp?.pedidos;
+            if (Array.isArray(pedidos)) {
+              pedidos.forEach(item => {
+                if (assistantIds.has(item._asistenteId)) {
+                  currentAssistantLines.push({ cliente: clienteId, ...item });
+                }
+              });
+            }
+          });
+        }
+        
+        // If count doesn't match, lines were removed/modified
+        if (currentAssistantLines.length !== assistantLineIds.length) {
+          throw {
+            code: 'CONFLICT',
+            message: 'Las líneas del asistente fueron modificadas o eliminadas. No se puede deshacer sin pérdida de datos.',
+            status: 409,
+            details: {
+              expectedLineCount: assistantLineIds.length,
+              currentLineCount: currentAssistantLines.length
+            }
+          };
+        }
+        
+        // Verify each line hasn't been modified (compare key fields)
+        if (originalLines) {
+          for (const line of currentAssistantLines) {
+            const originalClientLines = originalLines[line.cliente];
+            if (!originalClientLines) continue;
+            
+            const originalLine = (Array.isArray(originalClientLines) ? originalClientLines : originalClientLines.pedidos || [])
+              .find(ol => ol._asistenteId === line._asistenteId);
+            
+            if (originalLine) {
+              // Compare key fields (kilos, medida, tipo can't change)
+              if (originalLine.kilos !== line.kilos || 
+                  originalLine.medida !== line.medida || 
+                  originalLine.tipo !== line.tipo) {
+                throw {
+                  code: 'CONFLICT',
+                  message: 'Las líneas del asistente fueron modificadas. No se puede deshacer sin pérdida de datos.',
+                  status: 409,
+                  details: {
+                    modifiedLine: line._asistenteId
+                  }
+                };
+              }
+            }
+          }
+        }
+      }
+      
+      // Decide: full delete or partial remove
+      let isFullDelete = false;
+      
+      if (operation === 'pedidos_limpio_create') {
+        // Check if doc ONLY contains this request's lines
+        let totalLines = 0;
+        let assistantLinesCount = 0;
+        
+        ['otilio', 'catarro', 'joselito', 'lorena', 'ozuna'].forEach(cliente => {
+          if (Array.isArray(currentData[cliente])) {
+            totalLines += currentData[cliente].length;
+            assistantLinesCount += currentData[cliente].filter(item => assistantIds.has(item._asistenteId)).length;
+          }
+        });
+        
+        if (currentData.clientesTemporales) {
+          Object.values(currentData.clientesTemporales).forEach(clienteTemp => {
+            const pedidos = Array.isArray(clienteTemp) ? clienteTemp : clienteTemp?.pedidos;
+            if (Array.isArray(pedidos)) {
+              totalLines += pedidos.length;
+              assistantLinesCount += pedidos.filter(item => assistantIds.has(item._asistenteId)).length;
+            }
+          });
+        }
+        
+        // Only delete whole doc if it ONLY has assistant lines
+        isFullDelete = (totalLines === assistantLinesCount && assistantLinesCount > 0);
+      }
+
+      if (isFullDelete) {
+        // El documento solo contiene líneas del asistente - eliminarlo completamente
+        transaction.delete(pedidoRef);
+        undoAction = 'deleted_document';
+        
+        response = {
+          success: true,
+          operation: 'pedidos_limpio_undo',
+          action: undoAction,
+          pedidoId: freshSnap.id,
+          fecha: currentData.fecha
+        };
+      } else {
+        // Remover solo las líneas del asistente (doc tiene otras líneas)
+        const updatedData = {};
+        let removedCount = 0;
+        
+        // Filtrar líneas del asistente de cada cliente
+        ['otilio', 'catarro', 'joselito', 'lorena', 'ozuna'].forEach(cliente => {
+          if (Array.isArray(currentData[cliente])) {
+            const filtered = currentData[cliente].filter(item => !assistantIds.has(item._asistenteId));
+            removedCount += currentData[cliente].length - filtered.length;
+            updatedData[cliente] = filtered;
+          }
+        });
+        
+        // Filtrar de clientes temporales
+        if (currentData.clientesTemporales) {
+          const mergedTemporales = { ...currentData.clientesTemporales };
+          Object.keys(mergedTemporales).forEach(clienteId => {
+            const clienteTemp = mergedTemporales[clienteId];
+            const pedidos = Array.isArray(clienteTemp) ? clienteTemp : clienteTemp?.pedidos;
+            
+            if (Array.isArray(pedidos)) {
+              const filtered = pedidos.filter(item => !assistantIds.has(item._asistenteId));
+              removedCount += pedidos.length - filtered.length;
+              
+              if (Array.isArray(clienteTemp)) {
+                mergedTemporales[clienteId] = filtered;
+              } else if (clienteTemp?.pedidos) {
+                mergedTemporales[clienteId].pedidos = filtered;
+              }
+            }
+          });
+          updatedData.clientesTemporales = mergedTemporales;
+        }
+        
+        // Remover _asistenteId del documento principal si era del asistente
+        if (currentData._asistenteId && assistantIds.has(currentData._asistenteId)) {
+          updatedData._asistenteId = admin.firestore.FieldValue.delete();
+        }
+        
+        // Actualizar el documento sin las líneas del asistente
+        transaction.update(pedidoRef, updatedData);
+        undoAction = 'removed_lines';
+        
+        response = {
+          success: true,
+          operation: 'pedidos_limpio_undo',
+          action: undoAction,
+          pedidoId: freshSnap.id,
+          fecha: currentData.fecha,
+          linesRemoved: removedCount
+        };
+      }
+    });
+
+    // Guardar audit log del undo
+    await db.collection('asistenteLog').add({
+      operation: 'pedidos_limpio_undo',
+      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      undoIdempotencyKey: undoKey,
+      originalIdempotencyKey: originalKey || null,
+      originalOperation: operation,
+      pedidoId: pedidoSnap.id,
+      before: pedidoData,
+      action: undoAction,
+      assistantIdsRemoved: Array.from(assistantIds)
+    });
+
+    // Guardar idempotencia del undo
+    await undoIdemRef.set({
+      operation: 'pedidos_limpio_undo',
+      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      response
+    });
+
+    return res.json(response);
+
+  } catch (error) {
+    if (error.code) {
+      return errorResponse(res, error.status || 500, error.code, error.message, error.details);
+    }
+    
+    console.error('Error en POST /pedidos/limpio/deshacer:', error);
+    return errorResponse(res, 500, 'ERROR_INTERNO', 
+      'Error inesperado al deshacer el pedido limpio: ' + error.message);
+  }
+}
+
+// Export handlers for testing
+if (process.env.NODE_ENV === 'test') {
+  exports._testHandlers = {
+    handlePostPedidosLimpio,
+    handleGetPedidosLimpio,
+    handlePostPedidosLimpioDeshacer
+  };
+}
+
 /**
  * Cloud Function principal que maneja todas las rutas.
  */
@@ -2091,8 +3029,21 @@ exports.asistente = onRequest(
       return handlePostCrudosDeshacer(req, res);
     }
     
+    // Rutas de pedidos limpio
+    if (path === '/pedidos/limpio' && method === 'POST') {
+      return handlePostPedidosLimpio(req, res);
+    }
+    
+    if (path === '/pedidos/limpio' && method === 'GET') {
+      return handleGetPedidosLimpio(req, res);
+    }
+    
+    if (path === '/pedidos/limpio/deshacer' && method === 'POST') {
+      return handlePostPedidosLimpioDeshacer(req, res);
+    }
+    
     return res.status(404).json({ 
-      error: 'Ruta no encontrada. Rutas disponibles: POST /salida, POST /deshacer, GET /existencias, GET /dia, POST /crudos/entrada, POST /crudos/salida, POST /crudos/deshacer, GET /crudos/existencias, GET /crudos/dia' 
+      error: 'Ruta no encontrada. Rutas disponibles: POST /salida, POST /deshacer, GET /existencias, GET /dia, POST /crudos/entrada, POST /crudos/salida, POST /crudos/deshacer, GET /crudos/existencias, GET /crudos/dia, POST /pedidos/limpio, GET /pedidos/limpio, POST /pedidos/limpio/deshacer' 
     });
   }
 );
