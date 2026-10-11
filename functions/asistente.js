@@ -23,12 +23,15 @@ function generarAsistenteId() {
 //   firebase functions:secrets:set ASISTENTE_API_KEY
 const asistenteApiKey = defineSecret('ASISTENTE_API_KEY');
 
-// Inicializar Admin SDK solo si aún no está inicializado
-if (!admin.apps.length) {
+// Inicializar Admin SDK solo si aún no está inicializado (skip en tests)
+if (!admin.apps.length && process.env.NODE_ENV !== 'test') {
   admin.initializeApp();
 }
 
-const db = admin.firestore();
+// En tests, usar la app que ya fue inicializada por el test
+const db = process.env.NODE_ENV === 'test' 
+  ? admin.firestore(admin.app('pedidos-tests'))
+  : admin.firestore();
 
 /**
  * Compara dos strings en tiempo constante para evitar timing attacks.
