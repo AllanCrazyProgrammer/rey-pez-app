@@ -2166,8 +2166,6 @@ function calcularTotalesPedidoLimpio(pedido) {
  * Crea o actualiza un pedido limpio con líneas por cliente.
  */
 async function handlePostPedidosLimpio(req, res) {
-  const { firestore: Firestore } = require('firebase-admin');
-  
   const {
     fecha,
     lineas = [],
@@ -2394,7 +2392,7 @@ async function handlePostPedidosLimpio(req, res) {
     }
     
     // Add createdAt for actual write
-    pedidoData.createdAt = Firestore.FieldValue.serverTimestamp();
+    pedidoData.createdAt = admin.firestore.FieldValue.serverTimestamp();
 
     // Buscar si ya existe un pedido para esta fecha
     const pedidosExistentes = await db.collection('pedidos')
@@ -2438,7 +2436,7 @@ async function handlePostPedidosLimpio(req, res) {
     
     await db.collection('asistenteLog').add({
       operation,
-      timestamp: Firestore.FieldValue.serverTimestamp(),
+      timestamp: admin.firestore.FieldValue.serverTimestamp(),
       idempotencyKey,
       pedidoId,
       fecha,
@@ -2466,7 +2464,7 @@ async function handlePostPedidosLimpio(req, res) {
     // Guardar idempotencia
     await idemRef.set({
       operation,
-      timestamp: Firestore.FieldValue.serverTimestamp(),
+      timestamp: admin.firestore.FieldValue.serverTimestamp(),
       response
     });
 
@@ -2539,8 +2537,6 @@ async function handleGetPedidosLimpio(req, res) {
  * Deshace un pedido limpio creado por el asistente.
  */
 async function handlePostPedidosLimpioDeshacer(req, res) {
-  const { firestore: Firestore } = require('firebase-admin');
-  
   const {
     idempotencyKey: originalKey,
     id: pedidoId,
@@ -2755,7 +2751,7 @@ async function handlePostPedidosLimpioDeshacer(req, res) {
     // Guardar audit log del undo
     await db.collection('asistenteLog').add({
       operation: 'pedidos_limpio_undo',
-      timestamp: Firestore.FieldValue.serverTimestamp(),
+      timestamp: admin.firestore.FieldValue.serverTimestamp(),
       undoIdempotencyKey: undoKey,
       originalIdempotencyKey: originalKey || null,
       originalOperation: operation,
@@ -2768,7 +2764,7 @@ async function handlePostPedidosLimpioDeshacer(req, res) {
     // Guardar idempotencia del undo
     await undoIdemRef.set({
       operation: 'pedidos_limpio_undo',
-      timestamp: Firestore.FieldValue.serverTimestamp(),
+      timestamp: admin.firestore.FieldValue.serverTimestamp(),
       response
     });
 
