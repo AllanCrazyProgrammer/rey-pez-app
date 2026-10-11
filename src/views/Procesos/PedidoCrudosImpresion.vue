@@ -53,19 +53,8 @@
 </template>
 
 <script>
-import pdfMake from 'pdfmake/build/pdfmake'
+import { crearPdfConFuentesLocales } from '@/utils/pdf/config'
 import { formatearMedidaPedidoCrudo } from '@/utils/medidasPedidoCrudo'
-
-const fonts = {
-  Roboto: {
-    normal: 'https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.1.66/fonts/Roboto/Roboto-Regular.ttf',
-    bold: 'https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.1.66/fonts/Roboto/Roboto-Medium.ttf',
-    italics: 'https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.1.66/fonts/Roboto/Roboto-Italic.ttf',
-    bolditalics: 'https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.1.66/fonts/Roboto/Roboto-MediumItalic.ttf'
-  }
-}
-
-pdfMake.fonts = fonts
 
 export default {
   name: 'PedidoCrudosImpresion',
@@ -235,7 +224,7 @@ export default {
         }
       }
 
-      pdfMake.createPdf(docDefinition).download('Ped-crudos-' + this.fecha + '.pdf')
+      crearPdfConFuentesLocales(docDefinition).download('Ped-crudos-' + this.fecha + '.pdf')
     }
   }
 }
