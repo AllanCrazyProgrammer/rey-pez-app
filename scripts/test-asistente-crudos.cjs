@@ -154,9 +154,8 @@ async function run() {
     // TESTS DE CÁLCULO DE DISPONIBLES FIFO PARA CRUDOS
     // ========================================================================
     
-    // Simular la función calcularDisponiblesCrudos localmente para probar
-    // Esta función sigue la lógica de la UI: las salidas descuentan de TODOS los precios
-    // para el mismo proveedor+producto+cuarto, en orden FIFO
+    // Simular la función calcularDisponiblesCrudos localmente siguiendo RegistroCrudos.vue
+    // FIFO por FECHA (no por precio), como lo hace loadProductosDisponibles + descontarSalida
     function calcularDisponiblesCrudosLocal(params) {
       const {
         proveedor,
@@ -174,11 +173,53 @@ async function run() {
       const precioNormalizado = precio !== null && precio !== undefined ? precio : null;
       const cuartoNormalizado = normalizeCuarto(cuarto);
       
-      // Construir el inventario completo primero (todas las combinaciones de proveedor+producto+precio+cuarto)
-      const existencias = {};
+      // Construir lotes disponibles siguiendo RegistroCrudos.vue
+      const lotesDisponibles = [];
+      let ordenLote = 0;
       
       const fechaLimiteDate = finDiaMexico(fechaLimite);
       
+      const registrarEntrada = (entrada, fechaRegistro) => {
+        if (entrada.proveedor !== proveedor || entrada.producto !== producto) return;
+        
+        const kilos = Number(entrada.kilos) || 0;
+        if (kilos <= 0) return;
+        
+        const precioEntrada = entrada.precio !== null && entrada.precio !== undefined ? entrada.precio : null;
+        const cuartoEntrada = normalizeCuarto(entrada.cuartoFrio);
+        
+        lotesDisponibles.push({
+          precio: precioEntrada,
+          cuarto: cuartoEntrada,
+          kilos,
+          fecha: fechaRegistro,
+          fechaMs: fechaRegistro.getTime(),
+          orden: ordenLote++
+        });
+      };
+      
+      const descontarSalida = (salida) => {
+        if (salida.proveedor !== proveedor || salida.producto !== producto) return;
+        
+        const usarTodosLosCuartos = normalizeCuarto(salida.cuartoFrio) === 'Todos los cuartos';
+        const cuartoSalida = normalizeCuarto(salida.cuartoFrio);
+        
+        let restante = Number(salida.kilos) || 0;
+        if (restante <= 0) return;
+        
+        // Descontar de lotes en orden (ya están en orden de fecha)
+        for (const lote of lotesDisponibles) {
+          if (restante <= 0) break;
+          if (lote.kilos <= 0) continue;
+          if (!usarTodosLosCuartos && lote.cuarto !== cuartoSalida) continue;
+          
+          const descuento = Math.min(restante, lote.kilos);
+          lote.kilos = Number((lote.kilos - descuento).toFixed(1));
+          restante = Number((restante - descuento).toFixed(1));
+        }
+      };
+      
+      // Procesar registros en orden de fecha
       for (const registro of registros) {
         if (registroIdActual && registro.id === registroIdActual) continue;
         
@@ -189,146 +230,50 @@ async function run() {
         
         if (registroDate > fechaLimiteDate) continue;
         
-        // Procesar entradas
         const entradas = registro.entradas || [];
         for (const entrada of entradas) {
-          if (entrada.proveedor !== proveedor || entrada.producto !== producto) continue;
-          
-          const precioEntrada = entrada.precio !== null && entrada.precio !== undefined ? entrada.precio : null;
-          const cuartoEntrada = normalizeCuarto(entrada.cuartoFrio);
-          const key = `${precioEntrada}__${cuartoEntrada}`;
-          
-          if (!existencias[key]) {
-            existencias[key] = {
-              precio: precioEntrada,
-              cuarto: cuartoEntrada,
-              lotes: []
-            };
-          }
-          
-          existencias[key].lotes.push({
-            kilos: Number(entrada.kilos) || 0,
-            fecha: registroDate
-          });
+          registrarEntrada(entrada, registroDate);
         }
         
-        // Procesar salidas (descuentan de todas las combinaciones de precio para el mismo cuarto)
         const salidas = registro.salidas || [];
         for (const salida of salidas) {
-          if (salida.proveedor !== proveedor || salida.producto !== producto) continue;
-          
-          const usarTodosLosCuartos = normalizeCuarto(salida.cuartoFrio) === 'Todos los cuartos';
-          const cuartoSalida = normalizeCuarto(salida.cuartoFrio);
-          
-          // Filtrar las claves que coinciden con el cuarto de la salida
-          const keysCoincidentes = Object.keys(existencias).filter(key => {
-            const cuartoClave = existencias[key].cuarto;
-            return usarTodosLosCuartos || cuartoClave === cuartoSalida;
-          });
-          
-          // Ordenar por precio (FIFO por precio más bajo primero)
-          keysCoincidentes.sort((a, b) => {
-            const precioA = existencias[a].precio ?? -1;
-            const precioB = existencias[b].precio ?? -1;
-            return precioA - precioB;
-          });
-          
-          let kilosPendientes = Number(salida.kilos) || 0;
-          
-          for (const key of keysCoincidentes) {
-            if (kilosPendientes <= 0) break;
-            
-            const lotes = existencias[key].lotes;
-            lotes.sort((a, b) => a.fecha - b.fecha);
-            
-            for (let i = 0; i < lotes.length && kilosPendientes > 0; i++) {
-              const lote = lotes[i];
-              if (lote.kilos >= kilosPendientes) {
-                lote.kilos -= kilosPendientes;
-                kilosPendientes = 0;
-              } else {
-                kilosPendientes -= lote.kilos;
-                lote.kilos = 0;
-              }
-            }
-            
-            existencias[key].lotes = lotes.filter(l => l.kilos > 0);
-          }
+          descontarSalida(salida);
         }
       }
       
-      // Procesar entradas locales
+      // Procesar movimientos locales
+      const fechaActual = new Date();
       for (const entrada of entradasLocales) {
-        if (entrada.proveedor !== proveedor || entrada.producto !== producto) continue;
-        
-        const precioEntrada = entrada.precio !== null && entrada.precio !== undefined ? entrada.precio : null;
-        const cuartoEntrada = normalizeCuarto(entrada.cuartoFrio);
-        const key = `${precioEntrada}__${cuartoEntrada}`;
-        
-        if (!existencias[key]) {
-          existencias[key] = {
-            precio: precioEntrada,
-            cuarto: cuartoEntrada,
-            lotes: []
-          };
-        }
-        
-        existencias[key].lotes.push({
-          kilos: Number(entrada.kilos) || 0,
-          fecha: new Date()
-        });
+        registrarEntrada(entrada, fechaActual);
       }
       
-      // Procesar salidas locales
       for (const salida of salidasLocales) {
-        if (salida.proveedor !== proveedor || salida.producto !== producto) continue;
-        
-        const usarTodosLosCuartos = normalizeCuarto(salida.cuartoFrio) === 'Todos los cuartos';
-        const cuartoSalida = normalizeCuarto(salida.cuartoFrio);
-        
-        const keysCoincidentes = Object.keys(existencias).filter(key => {
-          const cuartoClave = existencias[key].cuarto;
-          return usarTodosLosCuartos || cuartoClave === cuartoSalida;
-        });
-        
-        keysCoincidentes.sort((a, b) => {
-          const precioA = existencias[a].precio ?? -1;
-          const precioB = existencias[b].precio ?? -1;
-          return precioA - precioB;
-        });
-        
-        let kilosPendientes = Number(salida.kilos) || 0;
-        
-        for (const key of keysCoincidentes) {
-          if (kilosPendientes <= 0) break;
-          
-          const lotes = existencias[key].lotes;
-          lotes.sort((a, b) => a.fecha - b.fecha);
-          
-          for (let i = 0; i < lotes.length && kilosPendientes > 0; i++) {
-            const lote = lotes[i];
-            if (lote.kilos >= kilosPendientes) {
-              lote.kilos -= kilosPendientes;
-              kilosPendientes = 0;
-            } else {
-              kilosPendientes -= lote.kilos;
-              lote.kilos = 0;
-            }
-          }
-          
-          existencias[key].lotes = lotes.filter(l => l.kilos > 0);
-        }
+        descontarSalida(salida);
       }
       
       // Calcular disponibles para la combinación específica solicitada
-      const keyBuscada = `${precioNormalizado}__${cuartoNormalizado}`;
-      const lotesResultado = existencias[keyBuscada] ? existencias[keyBuscada].lotes : [];
-      const disponibles = lotesResultado.reduce((sum, lote) => sum + lote.kilos, 0);
+      let disponibles = 0;
+      const lotesResultado = [];
+      
+      for (const lote of lotesDisponibles) {
+        if (lote.kilos <= 0) continue;
+        
+        const coincidePrecio = precioNormalizado === null 
+          ? lote.precio === null 
+          : lote.precio === precioNormalizado;
+        
+        const coincideCuarto = todosLosCuartos || lote.cuarto === cuartoNormalizado;
+        
+        if (coincidePrecio && coincideCuarto) {
+          disponibles += lote.kilos;
+          lotesResultado.push(lote);
+        }
+      }
       
       return {
         disponibles: Number(disponibles.toFixed(1)),
         lotes: lotesResultado,
-        totalEntradas: 0,  // No calculamos estos en el test simplificado
+        totalEntradas: 0,
         totalSalidas: 0
       };
     }
