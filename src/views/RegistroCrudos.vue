@@ -407,6 +407,7 @@ export default {
       isEditing: false,
       registroId: null,
       fechaOriginal: null,
+      versionInicial: 0,
       isLoaded: false,
       guardando: false,
       productosDisponibles: [],
@@ -1003,6 +1004,7 @@ export default {
         }));
         this.registroId = id;
         this.isEditing = true;
+        this.versionInicial = data.version || 0;
         this.fechaOriginal = this.currentDate.format('YYYY-MM-DD');
         this.salidasIniciales = this.salidas.length;
         this.marcarInventarioGuardado();
@@ -1060,12 +1062,39 @@ export default {
         };
 
         if (this.isEditing) {
-          await updateDoc(doc(db, 'existenciasCrudos', this.registroId), reportData);
+          // Verificar versión para evitar sobrescrituras (control de concurrencia)
+          const docRef = doc(db, 'existenciasCrudos', this.registroId);
+          const docSnap = await getDoc(docRef);
+          
+          if (!docSnap.exists()) {
+            alert('El día fue eliminado desde otro lugar. No se puede guardar.');
+            return;
+          }
+          
+          const versionActual = docSnap.data().version || 0;
+          const versionLocal = this.versionInicial || 0;
+          
+          if (versionActual > versionLocal) {
+            alert('Este día fue modificado desde otro lugar. Recarga antes de guardar.');
+            return;
+          }
+          
+          // Incrementar la versión al actualizar
+          reportData.version = (versionActual || 0) + 1;
+          reportData.actualizadoEn = new Date();
+          
+          await updateDoc(docRef, reportData);
+          this.versionInicial = reportData.version;
           if (!this.modoModal) alert("Registro de crudos actualizado exitosamente");
         } else {
+          // Nuevo documento comienza con versión 1
+          reportData.version = 1;
+          reportData.actualizadoEn = new Date();
+          
           const docRef = await addDoc(collection(db, 'existenciasCrudos'), reportData);
           this.registroId = docRef.id;
           this.isEditing = true;
+          this.versionInicial = 1;
           this.fechaOriginal = this.currentDate.format('YYYY-MM-DD');
           if (!this.modoModal) alert("Registro de crudos guardado exitosamente");
         }
