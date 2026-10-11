@@ -367,7 +367,7 @@ Content-Type: application/json
 ```json
 {
   "idempotencyKey": "orden-123-item-456",
-  "idempotencyKey": "undo-orden-123"
+  "undoIdempotencyKey": "undo-orden-123"
 }
 ```
 
@@ -386,7 +386,7 @@ O bien:
 
 **Campos opcionales:**
 - `dryRun` (boolean): Si es `true`, simula la operación sin escribir a Firestore
-- `idempotencyKey` (string, segundo parámetro): Clave de idempotencia para la operación de deshacer (para evitar duplicados)
+- `undoIdempotencyKey` (string): Clave de idempotencia para la operación de deshacer (para evitar duplicados). Se almacena con prefijo `undo:` en namespace separado
 
 **Ejemplo de request con curl:**
 
@@ -396,7 +396,7 @@ curl -X POST https://asistente-<hash>-uc.a.run.app/deshacer \
   -H "Content-Type: application/json" \
   -d '{
     "idempotencyKey": "orden-123",
-    "idempotencyKey": "undo-orden-123"
+    "undoIdempotencyKey": "undo-orden-123"
   }'
 ```
 
@@ -1032,7 +1032,7 @@ Content-Type: application/json
 ```json
 {
   "idempotencyKey": "entrada-123",
-  "idempotencyKey": "undo-entrada-123"
+  "undoIdempotencyKey": "undo-entrada-123"
 }
 ```
 
@@ -1051,7 +1051,7 @@ O bien:
 
 **Campos opcionales:**
 - `dryRun` (boolean): Si es `true`, simula la operación sin escribir a Firestore
-- `idempotencyKey` (string, segundo parámetro): Clave de idempotencia para la operación de deshacer (para evitar duplicados)
+- `undoIdempotencyKey` (string): Clave de idempotencia para la operación de deshacer (para evitar duplicados). Se almacena con prefijo `undo:` en namespace separado
 
 **Ejemplo de request con curl:**
 
@@ -1061,7 +1061,7 @@ curl -X POST https://asistente-<hash>-uc.a.run.app/crudos/deshacer \
   -H "Content-Type: application/json" \
   -d '{
     "idempotencyKey": "entrada-galileo-123",
-    "idempotencyKey": "undo-entrada-galileo-123"
+    "undoIdempotencyKey": "undo-entrada-galileo-123"
   }'
 ```
 

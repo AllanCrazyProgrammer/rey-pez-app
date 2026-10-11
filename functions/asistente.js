@@ -1463,21 +1463,22 @@ async function handleGetCrudosExistencias(req, res) {
  */
 async function handlePostDeshacer(req, res) {
   const {
-    idempotencyKey: lookupIdempotencyKey,
+    idempotencyKey,
     logId,
     dryRun = false,
-    idempotencyKey: undoIdempotencyKey
+    undoIdempotencyKey
   } = req.body;
   
   // Validación: debe especificar idempotencyKey o logId
-  if (!lookupIdempotencyKey && !logId) {
+  if (!idempotencyKey && !logId) {
     return errorResponse(res, 400, 'PARAMETRO_INVALIDO', 
       'Debes especificar "idempotencyKey" o "logId" para identificar la operación a deshacer');
   }
   
-  // Verificar idempotencia del undo
-  if (undoIdempotencyKey) {
-    const undoIdemRef = db.collection('asistenteIdem').doc(undoIdempotencyKey);
+  // DryRun nunca debe usar idempotencia
+  if (!dryRun && undoIdempotencyKey) {
+    // Verificar idempotencia del undo (namespace separado)
+    const undoIdemRef = db.collection('asistenteIdem').doc(`undo:${undoIdempotencyKey}`);
     const undoIdemSnap = await undoIdemRef.get();
     if (undoIdemSnap.exists) {
       const resultado = undoIdemSnap.data();
@@ -1494,10 +1495,10 @@ async function handlePostDeshacer(req, res) {
     // Buscar el log original
     let logSnap;
     
-    if (lookupIdempotencyKey) {
-      // Buscar por idempotencyKey en los logs
+    if (idempotencyKey) {
+      // Buscar por idempotencyKey en los logs de la operación ORIGINAL
       const logsQuery = await db.collection('asistenteLog')
-        .where('idempotencyKey', '==', lookupIdempotencyKey)
+        .where('idempotencyKey', '==', idempotencyKey)
         .where('tipo', '==', 'salida')
         .limit(1)
         .get();
@@ -1683,9 +1684,9 @@ async function handlePostDeshacer(req, res) {
         metodoEncontrado: metodoEncontrado
       });
       
-      // Guardar idempotencia del undo
+      // Guardar idempotencia del undo (namespace separado con prefijo 'undo:')
       if (undoIdempotencyKey) {
-        const undoIdemRef = db.collection('asistenteIdem').doc(undoIdempotencyKey);
+        const undoIdemRef = db.collection('asistenteIdem').doc(`undo:${undoIdempotencyKey}`);
         transaction.set(undoIdemRef, {
           timestamp: admin.firestore.FieldValue.serverTimestamp(),
           data: dataParaRespuesta,
@@ -1720,21 +1721,22 @@ async function handlePostDeshacer(req, res) {
  */
 async function handlePostCrudosDeshacer(req, res) {
   const {
-    idempotencyKey: lookupIdempotencyKey,
+    idempotencyKey,
     logId,
     dryRun = false,
-    idempotencyKey: undoIdempotencyKey
+    undoIdempotencyKey
   } = req.body;
   
   // Validación: debe especificar idempotencyKey o logId
-  if (!lookupIdempotencyKey && !logId) {
+  if (!idempotencyKey && !logId) {
     return errorResponse(res, 400, 'PARAMETRO_INVALIDO', 
       'Debes especificar "idempotencyKey" o "logId" para identificar la operación a deshacer');
   }
   
-  // Verificar idempotencia del undo
-  if (undoIdempotencyKey) {
-    const undoIdemRef = db.collection('asistenteIdem').doc(undoIdempotencyKey);
+  // DryRun nunca debe usar idempotencia
+  if (!dryRun && undoIdempotencyKey) {
+    // Verificar idempotencia del undo (namespace separado)
+    const undoIdemRef = db.collection('asistenteIdem').doc(`undo:${undoIdempotencyKey}`);
     const undoIdemSnap = await undoIdemRef.get();
     if (undoIdemSnap.exists) {
       const resultado = undoIdemSnap.data();
@@ -1751,10 +1753,10 @@ async function handlePostCrudosDeshacer(req, res) {
     // Buscar el log original
     let logSnap;
     
-    if (lookupIdempotencyKey) {
-      // Buscar por idempotencyKey en los logs
+    if (idempotencyKey) {
+      // Buscar por idempotencyKey en los logs de la operación ORIGINAL
       const logsQuery = await db.collection('asistenteLog')
-        .where('idempotencyKey', '==', lookupIdempotencyKey)
+        .where('idempotencyKey', '==', idempotencyKey)
         .where('tipo', 'in', ['entrada-crudo', 'salida-crudo'])
         .limit(1)
         .get();
@@ -1949,9 +1951,9 @@ async function handlePostCrudosDeshacer(req, res) {
         metodoEncontrado: metodoEncontrado
       });
       
-      // Guardar idempotencia del undo
+      // Guardar idempotencia del undo (namespace separado con prefijo 'undo:')
       if (undoIdempotencyKey) {
-        const undoIdemRef = db.collection('asistenteIdem').doc(undoIdempotencyKey);
+        const undoIdemRef = db.collection('asistenteIdem').doc(`undo:${undoIdempotencyKey}`);
         transaction.set(undoIdemRef, {
           timestamp: admin.firestore.FieldValue.serverTimestamp(),
           data: dataParaRespuesta,
