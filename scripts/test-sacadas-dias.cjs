@@ -109,7 +109,28 @@ async function run() {
     await assert.rejects(guardarDiaLimpio(reporte('2027-02-01')), 'No se guarda basándose en una caché sin conexión');
     await enableNetwork(db);
     assert.equal((await getDoc(indice('2027-02-01'))).exists(), false);
-    console.log('PASS: concurrencia real, registros anteriores, cambio de fecha, borrado atómico con papelera, fallo de copia, editor obsoleto y guardado sin conexión.');
+
+    // Test de compatibilidad con documentos antiguos sin campo version
+    const refSinVersion = doc(collection(db, 'sacadas'));
+    await setDoc(refSinVersion, reporte('2027-03-01')); // Simular doc antiguo: setDoc directo, sin version
+    await setDoc(indice('2027-03-01'), { fecha: '2027-03-01', sacadaId: refSinVersion.id });
+    const docSinVersion = await getDoc(refSinVersion);
+    assert.equal(docSinVersion.data().version, undefined, 'El documento antiguo no tiene version');
+    
+    // Debe poder guardarse sin error aunque el doc no tenga version (versionEsperada: null ignora la verificación)
+    await guardarDiaLimpio({ ...reporte('2027-03-01'), totalSalidas: 10 }, { id: refSinVersion.id, fechaOriginal: '2027-03-01', versionEsperada: null });
+    const actualizado = await getDoc(refSinVersion);
+    assert.equal(actualizado.data().totalSalidas, 10, 'Se actualizó correctamente sin version previa');
+    assert.equal(actualizado.data().version, 1, 'Se agregó version al actualizar');
+    
+    // Ahora con version, debe validar
+    await assert.rejects(
+      guardarDiaLimpio({ ...reporte('2027-03-01'), totalSalidas: 20 }, { id: refSinVersion.id, fechaOriginal: '2027-03-01', versionEsperada: 999 }),
+      error => error.code === 'dia-modificado-externamente',
+      'Debe fallar si la version esperada no coincide'
+    );
+    
+    console.log('PASS: concurrencia real, registros anteriores, cambio de fecha, borrado atómico con papelera, fallo de copia, editor obsoleto, guardado sin conexión, y compatibilidad con docs antiguos sin version.');
   } finally {
     if (db) await firestore.terminate(db);
     if (app) await deleteApp(app);
