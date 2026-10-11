@@ -2339,6 +2339,11 @@ async function handlePostPedidosLimpio(req, res) {
         etiqueta: '',
         _asistenteId: generarAsistenteId()
       };
+      
+      // Set agua field for C/H20 lines (like the UI does)
+      if (linea.tipo === 'C/H20') {
+        item.agua = AGUA_DEFAULT;
+      }
 
       if (CLIENTES_FIJOS.includes(linea.cliente)) {
         pedidoPorCliente[linea.cliente].push(item);
@@ -2358,7 +2363,7 @@ async function handlePostPedidosLimpio(req, res) {
     // Calcular totales
     const totales = calcularTotalesPedidoLimpio(pedidoPorCliente);
 
-    // Preparar documento
+    // Preparar documento base (sin _asistenteId - solo para nuevos)
     const pedidoData = {
       fecha,
       tipo: 'limpio',
@@ -2373,8 +2378,7 @@ async function handlePostPedidosLimpio(req, res) {
       rendimientos: {},
       divisores: {},
       completados: {},
-      kilosRefrigerados: {},
-      _asistenteId: generarAsistenteId()
+      kilosRefrigerados: {}
     };
 
     if (dryRun) {
@@ -2391,9 +2395,6 @@ async function handlePostPedidosLimpio(req, res) {
       });
     }
     
-    // Add createdAt for actual write
-    pedidoData.createdAt = admin.firestore.FieldValue.serverTimestamp();
-
     // Buscar si ya existe un pedido para esta fecha
     const pedidosExistentes = await db.collection('pedidos')
       .where('fecha', '==', fecha)
@@ -2405,27 +2406,73 @@ async function handlePostPedidosLimpio(req, res) {
     let before = null;
 
     if (!pedidosExistentes.empty) {
-      // Actualizar el primer pedido existente
+      // APPEND lines to existing document using transaction
       const docExistente = pedidosExistentes.docs[0];
       pedidoId = docExistente.id;
       before = docExistente.data();
       operation = 'pedidos_limpio_update';
-
-      // Mezclar con datos existentes (no sobrescribir campos adicionales)
-      const updateData = {
-        otilio: pedidoPorCliente.otilio,
-        catarro: pedidoPorCliente.catarro,
-        joselito: pedidoPorCliente.joselito,
-        ozuna: pedidoPorCliente.ozuna,
-        lorena: pedidoPorCliente.lorena,
-        clientesTemporales: pedidoPorCliente.clientesTemporales,
-        _asistenteId: pedidoData._asistenteId
-      };
-
-      await db.collection('pedidos').doc(pedidoId).update(updateData);
+      
+      // Use transaction with version check
+      await db.runTransaction(async (transaction) => {
+        const pedidoRef = db.collection('pedidos').doc(pedidoId);
+        const freshSnap = await transaction.get(pedidoRef);
+        
+        if (!freshSnap.exists) {
+          throw { code: 'PEDIDO_ELIMINADO', message: 'El pedido fue eliminado durante la operación' };
+        }
+        
+        const currentData = freshSnap.data();
+        
+        // Check version if present (like salidas does)
+        if (before.version && currentData.version && currentData.version !== before.version) {
+          throw { 
+            code: 'VERSION_CONFLICT',
+            message: 'El pedido fue modificado por otro usuario',
+            status: 409
+          };
+        }
+        
+        // APPEND assistant lines to existing arrays
+        const updatedData = {
+          otilio: [...(currentData.otilio || []), ...pedidoPorCliente.otilio],
+          catarro: [...(currentData.catarro || []), ...pedidoPorCliente.catarro],
+          joselito: [...(currentData.joselito || []), ...pedidoPorCliente.joselito],
+          ozuna: [...(currentData.ozuna || []), ...pedidoPorCliente.ozuna],
+          lorena: [...(currentData.lorena || []), ...pedidoPorCliente.lorena]
+        };
+        
+        // Merge clientesTemporales
+        const mergedTemporales = { ...(currentData.clientesTemporales || {}) };
+        Object.keys(pedidoPorCliente.clientesTemporales).forEach(clienteId => {
+          if (mergedTemporales[clienteId]) {
+            // Append to existing
+            const existing = mergedTemporales[clienteId];
+            const newLines = pedidoPorCliente.clientesTemporales[clienteId];
+            if (Array.isArray(existing)) {
+              mergedTemporales[clienteId] = [...existing, ...(Array.isArray(newLines) ? newLines : newLines.pedidos)];
+            } else if (existing.pedidos) {
+              existing.pedidos = [...existing.pedidos, ...(Array.isArray(newLines) ? newLines : newLines.pedidos)];
+            }
+          } else {
+            mergedTemporales[clienteId] = pedidoPorCliente.clientesTemporales[clienteId];
+          }
+        });
+        updatedData.clientesTemporales = mergedTemporales;
+        
+        // Increment version
+        updatedData.version = admin.firestore.FieldValue.increment(1);
+        
+        // DO NOT set document-level _asistenteId on existing docs
+        
+        transaction.update(pedidoRef, updatedData);
+      });
     } else {
-      // Crear nuevo pedido
+      // Create new document
       operation = 'pedidos_limpio_create';
+      pedidoData.createdAt = admin.firestore.FieldValue.serverTimestamp();
+      pedidoData.version = 1;
+      pedidoData._asistenteId = generarAsistenteId(); // Only set on new docs
+      
       const docRef = await db.collection('pedidos').add(pedidoData);
       pedidoId = docRef.id;
     }
@@ -2540,7 +2587,7 @@ async function handlePostPedidosLimpioDeshacer(req, res) {
   const {
     idempotencyKey: originalKey,
     id: pedidoId,
-    idempotencyKey: undoIdempotencyKey,
+    undoIdempotencyKey,
     dryRun = false
   } = req.body;
 
@@ -2564,6 +2611,22 @@ async function handlePostPedidosLimpioDeshacer(req, res) {
     
     if (undoIdemSnap.exists) {
       return res.json(undoIdemSnap.data().response);
+    }
+
+    // Verificar si ya fue deshecho (antes de buscar el pedido)
+    if (originalKey) {
+      const undoLogSnapshot = await db.collection('asistenteLog')
+        .where('operation', '==', 'pedidos_limpio_undo')
+        .where('originalIdempotencyKey', '==', originalKey)
+        .get();
+
+      if (!undoLogSnapshot.empty) {
+        const undoLog = undoLogSnapshot.docs[0].data();
+        return errorResponse(res, 400, 'YA_DESHECHO',
+          'Este pedido ya fue deshecho previamente', {
+            undoneAt: undoLog.timestamp?.toDate?.()?.toISOString()
+          });
+      }
     }
 
     // Buscar el pedido a deshacer
@@ -2601,26 +2664,6 @@ async function handlePostPedidosLimpioDeshacer(req, res) {
 
     const pedidoData = pedidoSnap.data();
 
-    // Verificar que fue creado por el asistente
-    if (!pedidoData._asistenteId) {
-      return errorResponse(res, 403, 'NO_CREADO_POR_ASISTENTE',
-        'Este pedido no fue creado por el asistente y no puede deshacerse automáticamente');
-    }
-
-    // Verificar si ya fue deshecho
-    const undoLogSnapshot = await db.collection('asistenteLog')
-      .where('operation', '==', 'pedidos_limpio_undo')
-      .where('originalIdempotencyKey', '==', originalKey || null)
-      .get();
-
-    if (!undoLogSnapshot.empty) {
-      const undoLog = undoLogSnapshot.docs[0].data();
-      return errorResponse(res, 400, 'YA_DESHECHO',
-        'Este pedido ya fue deshecho previamente', {
-          undoneAt: undoLog.timestamp?.toDate?.()?.toISOString()
-        });
-    }
-
     // Determinar el tipo de operación original y los IDs a remover
     const operation = logEntry?.operation || 'pedidos_limpio_create';
     const assistantIds = new Set();
@@ -2657,21 +2700,6 @@ async function handlePostPedidosLimpioDeshacer(req, res) {
       assistantIds.add(pedidoData._asistenteId);
     }
 
-    // Verificar cambios concurrentes: comparar timestamp del log con el documento actual
-    if (logEntry && logEntry.timestamp && pedidoData.createdAt) {
-      const logTimestamp = logEntry.timestamp.toMillis ? logEntry.timestamp.toMillis() : 0;
-      const docTimestamp = pedidoData.createdAt.toMillis ? pedidoData.createdAt.toMillis() : 0;
-      
-      // Si el documento fue modificado después de nuestra escritura, rechazar
-      if (docTimestamp > logTimestamp + 1000) { // 1 segundo de margen
-        return errorResponse(res, 409, 'DOCUMENTO_MODIFICADO',
-          'El pedido fue modificado después de la operación del asistente. No se puede deshacer para evitar pérdida de datos.', {
-            operationTimestamp: new Date(logTimestamp).toISOString(),
-            documentTimestamp: new Date(docTimestamp).toISOString()
-          });
-      }
-    }
-
     const isFullDelete = operation === 'pedidos_limpio_create';
     
     if (dryRun) {
@@ -2686,67 +2714,101 @@ async function handlePostPedidosLimpioDeshacer(req, res) {
 
     let response;
 
-    if (isFullDelete) {
-      // El asistente creó todo el documento - eliminarlo completamente
-      await pedidoRef.delete();
+    // Use transaction to check for concurrent modifications
+    await db.runTransaction(async (transaction) => {
+      const freshSnap = await transaction.get(pedidoRef);
       
-      response = {
-        success: true,
-        operation: 'pedidos_limpio_undo',
-        action: 'deleted_document',
-        pedidoId: pedidoSnap.id,
-        fecha: pedidoData.fecha
-      };
-    } else {
-      // El asistente solo agregó líneas a un documento existente - remover solo esas líneas
-      const updatedData = { ...pedidoData };
-      let removedCount = 0;
+      if (!freshSnap.exists) {
+        throw {
+          code: 'PEDIDO_ELIMINADO',
+          message: 'El pedido fue eliminado durante la operación de undo',
+          status: 409
+        };
+      }
       
-      // Filtrar líneas del asistente de cada cliente
-      ['otilio', 'catarro', 'joselito', 'lorena', 'ozuna'].forEach(cliente => {
-        if (Array.isArray(updatedData[cliente])) {
-          const filtered = updatedData[cliente].filter(item => !assistantIds.has(item._asistenteId));
-          removedCount += updatedData[cliente].length - filtered.length;
-          updatedData[cliente] = filtered;
-        }
-      });
+      const currentData = freshSnap.data();
       
-      // Filtrar de clientes temporales
-      if (updatedData.clientesTemporales) {
-        Object.keys(updatedData.clientesTemporales).forEach(clienteId => {
-          const clienteTemp = updatedData.clientesTemporales[clienteId];
-          const pedidos = Array.isArray(clienteTemp) ? clienteTemp : clienteTemp?.pedidos;
-          
-          if (Array.isArray(pedidos)) {
-            const filtered = pedidos.filter(item => !assistantIds.has(item._asistenteId));
-            removedCount += pedidos.length - filtered.length;
-            
-            if (Array.isArray(clienteTemp)) {
-              updatedData.clientesTemporales[clienteId] = filtered;
-            } else if (clienteTemp?.pedidos) {
-              updatedData.clientesTemporales[clienteId].pedidos = filtered;
-            }
+      // Check version for concurrent modifications (if updating)
+      if (!isFullDelete && pedidoData.version && currentData.version && 
+          currentData.version !== pedidoData.version) {
+        throw {
+          code: 'VERSION_CONFLICT',
+          message: 'El pedido fue modificado por otro usuario. No se puede deshacer para evitar pérdida de datos.',
+          status: 409,
+          details: {
+            expectedVersion: pedidoData.version,
+            currentVersion: currentData.version
+          }
+        };
+      }
+
+      if (isFullDelete) {
+        // El asistente creó todo el documento - eliminarlo completamente
+        transaction.delete(pedidoRef);
+        
+        response = {
+          success: true,
+          operation: 'pedidos_limpio_undo',
+          action: 'deleted_document',
+          pedidoId: freshSnap.id,
+          fecha: currentData.fecha
+        };
+      } else {
+        // El asistente solo agregó líneas a un documento existente - remover solo esas líneas
+        const updatedData = {};
+        let removedCount = 0;
+        
+        // Filtrar líneas del asistente de cada cliente
+        ['otilio', 'catarro', 'joselito', 'lorena', 'ozuna'].forEach(cliente => {
+          if (Array.isArray(currentData[cliente])) {
+            const filtered = currentData[cliente].filter(item => !assistantIds.has(item._asistenteId));
+            removedCount += currentData[cliente].length - filtered.length;
+            updatedData[cliente] = filtered;
           }
         });
+        
+        // Filtrar de clientes temporales
+        if (currentData.clientesTemporales) {
+          const mergedTemporales = { ...currentData.clientesTemporales };
+          Object.keys(mergedTemporales).forEach(clienteId => {
+            const clienteTemp = mergedTemporales[clienteId];
+            const pedidos = Array.isArray(clienteTemp) ? clienteTemp : clienteTemp?.pedidos;
+            
+            if (Array.isArray(pedidos)) {
+              const filtered = pedidos.filter(item => !assistantIds.has(item._asistenteId));
+              removedCount += pedidos.length - filtered.length;
+              
+              if (Array.isArray(clienteTemp)) {
+                mergedTemporales[clienteId] = filtered;
+              } else if (clienteTemp?.pedidos) {
+                mergedTemporales[clienteId].pedidos = filtered;
+              }
+            }
+          });
+          updatedData.clientesTemporales = mergedTemporales;
+        }
+        
+        // Remover _asistenteId del documento principal si era del asistente
+        if (currentData._asistenteId && assistantIds.has(currentData._asistenteId)) {
+          updatedData._asistenteId = admin.firestore.FieldValue.delete();
+        }
+        
+        // Increment version
+        updatedData.version = admin.firestore.FieldValue.increment(1);
+        
+        // Actualizar el documento sin las líneas del asistente
+        transaction.update(pedidoRef, updatedData);
+        
+        response = {
+          success: true,
+          operation: 'pedidos_limpio_undo',
+          action: 'removed_lines',
+          pedidoId: freshSnap.id,
+          fecha: currentData.fecha,
+          linesRemoved: removedCount
+        };
       }
-      
-      // Remover _asistenteId del documento principal si era del asistente
-      if (updatedData._asistenteId === pedidoData._asistenteId) {
-        delete updatedData._asistenteId;
-      }
-      
-      // Actualizar el documento sin las líneas del asistente
-      await pedidoRef.update(updatedData);
-      
-      response = {
-        success: true,
-        operation: 'pedidos_limpio_undo',
-        action: 'removed_lines',
-        pedidoId: pedidoSnap.id,
-        fecha: pedidoData.fecha,
-        linesRemoved: removedCount
-      };
-    }
+    });
 
     // Guardar audit log del undo
     await db.collection('asistenteLog').add({

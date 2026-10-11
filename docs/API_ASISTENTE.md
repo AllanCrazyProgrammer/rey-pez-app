@@ -1602,7 +1602,7 @@ Content-Type: application/json
 ```json
 {
   "idempotencyKey": "pedido-oct11-123",
-  "idempotencyKey": "undo-pedido-oct11"
+  "undoIdempotencyKey": "undo-pedido-oct11"
 }
 ```
 
@@ -1611,7 +1611,7 @@ O bien:
 ```json
 {
   "id": "abc123xyz",
-  "idempotencyKey": "undo-pedido-oct11"
+  "undoIdempotencyKey": "undo-pedido-oct11"
 }
 ```
 
@@ -1620,7 +1620,7 @@ O bien:
 - `id` (string): El ID del documento del pedido a deshacer
 
 **Campos opcionales:**
-- `idempotencyKey` (string): Clave de idempotencia para la operación de deshacer (para evitar duplicados). Si no se proporciona, se genera automáticamente con prefijo `undo:` + la clave original o ID
+- `undoIdempotencyKey` (string): Clave de idempotencia para la operación de deshacer (para evitar duplicados). Si no se proporciona, se genera automáticamente con prefijo `undo:` + la clave original o ID
 - `dryRun` (boolean): Si es `true`, simula la operación sin escribir
 
 **Ejemplo de request con curl:**
@@ -1631,7 +1631,7 @@ curl -X POST https://asistente-<hash>-uc.a.run.app/pedidos/limpio/deshacer \
   -H "Content-Type: application/json" \
   -d '{
     "idempotencyKey": "pedido-oct11-001",
-    "idempotencyKey": "undo-pedido-oct11"
+    "undoIdempotencyKey": "undo-pedido-oct11"
   }'
 ```
 
@@ -1699,9 +1699,9 @@ curl -X POST https://asistente-<hash>-uc.a.run.app/pedidos/limpio/deshacer \
 
 **Notas importantes:**
 
-- Solo se pueden deshacer pedidos creados por el asistente
-- Si intentas deshacer el mismo pedido dos veces usando la misma `idempotencyKey`, la segunda vez retorna éxito sin error (idempotencia del undo)
-- La operación elimina completamente el documento del pedido de la colección `pedidos`
+- Solo se pueden deshacer operaciones del asistente: si el asistente creó el pedido completo, se elimina el documento; si solo agregó líneas a un pedido existente, se remueven únicamente las líneas del asistente (por su `_asistenteId`), preservando las líneas creadas en la UI
+- Si intentas deshacer el mismo pedido dos veces usando la misma `undoIdempotencyKey`, la segunda vez retorna éxito sin error (idempotencia del undo)
+- La operación usa transacciones para detectar modificaciones concurrentes y rechaza con error 409 VERSION_CONFLICT si el pedido fue editado desde que el asistente lo modificó
 - Se crea un log de auditoría tipo `pedidos_limpio_undo` en `asistenteLog` para cada operación deshecha
 
 ### Validación de medidas
