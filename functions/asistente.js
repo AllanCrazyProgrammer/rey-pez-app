@@ -298,7 +298,7 @@ async function handlePostSalida(req, res) {
         }
       }
       
-      // Construir la nueva salida
+      // Construir la nueva salida (igual que la UI)
       const nuevaSalida = {
         tipo: 'proveedor',
         proveedor,
@@ -306,7 +306,7 @@ async function handlePostSalida(req, res) {
         precio: precioNorm,
         kilos,
         cajas,
-        cuartoFrio: cuartoNorm === 's/c' ? '' : cuartoNorm
+        cuartoFrio: cuartoNorm
       };
       
       const salidasActualizadas = [...(diaData.salidas || []), nuevaSalida];
