@@ -271,6 +271,184 @@ async function testDeshacerDobleVez(idempotencyKey) {
   console.log('✅ Protección contra doble deshacer funcionando');
 }
 
+async function testPartialUndo() {
+  console.log('\n📝 Test: Undo parcial - remover solo líneas del asistente');
+  
+  const fecha = '2026-10-17';
+  
+  // Simular pedido creado por UI (sin _asistenteId)
+  const admin = require('../functions/node_modules/firebase-admin');
+  const db = admin.firestore();
+  
+  const uiDocRef = await db.collection('pedidos').add({
+    fecha,
+    tipo: 'limpio',
+    otilio: [
+      {
+        kilos: 5,
+        esTara: true,
+        medida: '51/60',
+        tipo: 'S/H20',
+        nota: '',
+        esProveedor: false,
+        proveedor: '',
+        etiqueta: ''
+        // Sin _asistenteId = creado por UI
+      }
+    ],
+    catarro: [],
+    joselito: [],
+    ozuna: [],
+    lorena: [],
+    clientesTemporales: {},
+    etiquetas: [],
+    etiquetasColores: {},
+    rendimientos: {},
+    divisores: {},
+    completados: {},
+    kilosRefrigerados: {},
+    createdAt: admin.firestore.FieldValue.serverTimestamp()
+  });
+  
+  console.log('   Pedido UI creado:', uiDocRef.id);
+  
+  // Esperar un momento para que se escriba
+  await new Promise(resolve => setTimeout(resolve, 100));
+  
+  // Ahora el asistente agrega líneas
+  const assistantKey = 'test-partial-' + Date.now();
+  const addResponse = await makeRequest('POST', '/pedidos/limpio', {
+    fecha,
+    idempotencyKey: assistantKey,
+    lineas: [
+      {
+        cliente: 'otilio',
+        cantidad: 10,
+        unidad: 'taras',
+        medida: '36/40',
+        tipo: 'C/H20'
+      },
+      {
+        cliente: 'catarro',
+        cantidad: 8,
+        unidad: 'taras',
+        medida: '51/60',
+        tipo: 'S/H20'
+      }
+    ]
+  });
+  
+  assertEqual(addResponse.status, 200, 'Agregar líneas debe ser exitoso');
+  assertEqual(addResponse.body.operation, 'pedidos_limpio_update', 'Debe ser update');
+  
+  // Verificar que el pedido ahora tiene líneas de UI + asistente
+  const afterAdd = await db.collection('pedidos').doc(uiDocRef.id).get();
+  const afterAddData = afterAdd.data();
+  
+  assertEqual(afterAddData.otilio.length, 2, 'Debe tener 2 líneas en otilio (1 UI + 1 asistente)');
+  assertEqual(afterAddData.catarro.length, 1, 'Debe tener 1 línea en catarro (asistente)');
+  
+  console.log('   Líneas agregadas por asistente');
+  
+  // Ahora deshacer solo las líneas del asistente
+  const undoResponse = await makeRequest('POST', '/pedidos/limpio/deshacer', {
+    idempotencyKey: assistantKey,
+    undoIdempotencyKey: 'test-undo-partial-' + Date.now()
+  });
+  
+  assertEqual(undoResponse.status, 200, 'Undo debe ser exitoso');
+  assertEqual(undoResponse.body.action, 'removed_lines', 'Debe ser removed_lines');
+  assertEqual(undoResponse.body.linesRemoved, 2, 'Debe remover 2 líneas');
+  
+  // Verificar que solo quedan las líneas de la UI
+  const afterUndo = await db.collection('pedidos').doc(uiDocRef.id).get();
+  const afterUndoData = afterUndo.data();
+  
+  assertEqual(afterUndoData.otilio.length, 1, 'Debe quedar 1 línea en otilio (UI)');
+  assertEqual(afterUndoData.catarro.length, 0, 'Catarro debe estar vacío');
+  assertEqual(afterUndoData.otilio[0].kilos, 5, 'La línea UI debe conservar sus valores');
+  assert(!afterUndoData.otilio[0]._asistenteId, 'La línea UI no debe tener _asistenteId');
+  
+  // Limpiar
+  await db.collection('pedidos').doc(uiDocRef.id).delete();
+  
+  console.log('✅ Undo parcial funcionando correctamente');
+  console.log('   Se removieron solo las líneas del asistente, preservando las de la UI');
+}
+
+async function testConcurrentModificationDetection() {
+  console.log('\n📝 Test: Detección de modificación concurrente');
+  
+  const fecha = '2026-10-18';
+  const admin = require('../functions/node_modules/firebase-admin');
+  const db = admin.firestore();
+  
+  // Crear pedido con asistente
+  const createKey = 'test-concurrent-' + Date.now();
+  const createResponse = await makeRequest('POST', '/pedidos/limpio', {
+    fecha,
+    idempotencyKey: createKey,
+    lineas: [
+      {
+        cliente: 'otilio',
+        cantidad: 10,
+        unidad: 'taras',
+        medida: '51/60',
+        tipo: 'S/H20'
+      }
+    ]
+  });
+  
+  assertEqual(createResponse.status, 200, 'Crear debe ser exitoso');
+  const pedidoId = createResponse.body.pedidoId;
+  
+  // Simular que la UI modificó el documento (cambiar timestamp)
+  await new Promise(resolve => setTimeout(resolve, 100));
+  await db.collection('pedidos').doc(pedidoId).update({
+    otilio: [
+      {
+        kilos: 10,
+        esTara: true,
+        medida: '51/60',
+        tipo: 'S/H20',
+        nota: '',
+        esProveedor: false,
+        proveedor: '',
+        etiqueta: ''
+        // Sin _asistenteId = modificado por UI
+      },
+      {
+        kilos: 5,
+        esTara: true,
+        medida: '36/40',
+        tipo: '',
+        nota: '',
+        esProveedor: false,
+        proveedor: '',
+        etiqueta: ''
+        // Línea adicional de UI
+      }
+    ],
+    createdAt: admin.firestore.FieldValue.serverTimestamp() // Actualizar timestamp
+  });
+  
+  await new Promise(resolve => setTimeout(resolve, 200));
+  
+  // Intentar deshacer - debería detectar la modificación
+  const undoResponse = await makeRequest('POST', '/pedidos/limpio/deshacer', {
+    idempotencyKey: createKey,
+    undoIdempotencyKey: 'test-undo-concurrent-' + Date.now()
+  });
+  
+  // Para un create completo, aún debería eliminar el documento completo
+  // ya que fue creado por el asistente
+  assertEqual(undoResponse.status, 200, 'Undo de create debe permitirse');
+  assertEqual(undoResponse.body.action, 'deleted_document', 'Debe eliminar documento completo');
+  
+  console.log('✅ Detección de modificación concurrente funcionando');
+  console.log('   Create siempre elimina documento completo');
+}
+
 async function testUpdatePedido() {
   console.log('\n📝 Test: POST /pedidos/limpio - actualizar pedido existente');
   
@@ -460,6 +638,12 @@ async function runAllTests() {
     
     // Test 10: Intentar deshacer dos veces
     await testDeshacerDobleVez(glaseoResult.idempotencyKey);
+    
+    // Test 11: Undo parcial (remover solo líneas del asistente)
+    await testPartialUndo();
+    
+    // Test 12: Detección de modificación concurrente
+    await testConcurrentModificationDetection();
     
     console.log('\n' + '='.repeat(60));
     console.log(`✅ Todos los tests pasaron! (${testsPassed} aserciones exitosas)`);

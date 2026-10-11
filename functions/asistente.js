@@ -2617,7 +2617,7 @@ async function handlePostPedidosLimpioDeshacer(req, res) {
     // Verificar si ya fue deshecho
     const undoLogSnapshot = await db.collection('asistenteLog')
       .where('operation', '==', 'pedidos_limpio_undo')
-      .where('pedidoId', '==', pedidoSnap.id)
+      .where('originalIdempotencyKey', '==', originalKey || null)
       .get();
 
     if (!undoLogSnapshot.empty) {
@@ -2628,20 +2628,132 @@ async function handlePostPedidosLimpioDeshacer(req, res) {
         });
     }
 
+    // Determinar el tipo de operación original y los IDs a remover
+    const operation = logEntry?.operation || 'pedidos_limpio_create';
+    const assistantIds = new Set();
+    
+    if (logEntry && logEntry.after) {
+      // Recoger todos los _asistenteId de las líneas agregadas
+      ['otilio', 'catarro', 'joselito', 'lorena', 'ozuna'].forEach(cliente => {
+        if (Array.isArray(logEntry.after[cliente])) {
+          logEntry.after[cliente].forEach(item => {
+            if (item._asistenteId) {
+              assistantIds.add(item._asistenteId);
+            }
+          });
+        }
+      });
+      
+      // También de clientes temporales
+      if (logEntry.after.clientesTemporales) {
+        Object.values(logEntry.after.clientesTemporales).forEach(clienteTemp => {
+          const pedidos = Array.isArray(clienteTemp) ? clienteTemp : clienteTemp?.pedidos;
+          if (Array.isArray(pedidos)) {
+            pedidos.forEach(item => {
+              if (item._asistenteId) {
+                assistantIds.add(item._asistenteId);
+              }
+            });
+          }
+        });
+      }
+    }
+
+    // Si no hay log entry o no hay IDs, solo podemos deshacer si todo el documento es del asistente
+    if (assistantIds.size === 0) {
+      assistantIds.add(pedidoData._asistenteId);
+    }
+
+    // Verificar cambios concurrentes: comparar timestamp del log con el documento actual
+    if (logEntry && logEntry.timestamp && pedidoData.createdAt) {
+      const logTimestamp = logEntry.timestamp.toMillis ? logEntry.timestamp.toMillis() : 0;
+      const docTimestamp = pedidoData.createdAt.toMillis ? pedidoData.createdAt.toMillis() : 0;
+      
+      // Si el documento fue modificado después de nuestra escritura, rechazar
+      if (docTimestamp > logTimestamp + 1000) { // 1 segundo de margen
+        return errorResponse(res, 409, 'DOCUMENTO_MODIFICADO',
+          'El pedido fue modificado después de la operación del asistente. No se puede deshacer para evitar pérdida de datos.', {
+            operationTimestamp: new Date(logTimestamp).toISOString(),
+            documentTimestamp: new Date(docTimestamp).toISOString()
+          });
+      }
+    }
+
+    const isFullDelete = operation === 'pedidos_limpio_create';
+    
     if (dryRun) {
       return res.json({
         dryRun: true,
-        wouldDelete: pedidoSnap.id,
-        pedido: {
-          id: pedidoSnap.id,
-          fecha: pedidoData.fecha,
-          _asistenteId: pedidoData._asistenteId
-        }
+        operation: isFullDelete ? 'delete_document' : 'remove_lines',
+        pedidoId: pedidoSnap.id,
+        assistantIdsToRemove: Array.from(assistantIds),
+        wouldRemoveLineCount: assistantIds.size
       });
     }
 
-    // Eliminar el pedido
-    await pedidoRef.delete();
+    let response;
+
+    if (isFullDelete) {
+      // El asistente creó todo el documento - eliminarlo completamente
+      await pedidoRef.delete();
+      
+      response = {
+        success: true,
+        operation: 'pedidos_limpio_undo',
+        action: 'deleted_document',
+        pedidoId: pedidoSnap.id,
+        fecha: pedidoData.fecha
+      };
+    } else {
+      // El asistente solo agregó líneas a un documento existente - remover solo esas líneas
+      const updatedData = { ...pedidoData };
+      let removedCount = 0;
+      
+      // Filtrar líneas del asistente de cada cliente
+      ['otilio', 'catarro', 'joselito', 'lorena', 'ozuna'].forEach(cliente => {
+        if (Array.isArray(updatedData[cliente])) {
+          const filtered = updatedData[cliente].filter(item => !assistantIds.has(item._asistenteId));
+          removedCount += updatedData[cliente].length - filtered.length;
+          updatedData[cliente] = filtered;
+        }
+      });
+      
+      // Filtrar de clientes temporales
+      if (updatedData.clientesTemporales) {
+        Object.keys(updatedData.clientesTemporales).forEach(clienteId => {
+          const clienteTemp = updatedData.clientesTemporales[clienteId];
+          const pedidos = Array.isArray(clienteTemp) ? clienteTemp : clienteTemp?.pedidos;
+          
+          if (Array.isArray(pedidos)) {
+            const filtered = pedidos.filter(item => !assistantIds.has(item._asistenteId));
+            removedCount += pedidos.length - filtered.length;
+            
+            if (Array.isArray(clienteTemp)) {
+              updatedData.clientesTemporales[clienteId] = filtered;
+            } else if (clienteTemp?.pedidos) {
+              updatedData.clientesTemporales[clienteId].pedidos = filtered;
+            }
+          }
+        });
+      }
+      
+      // Remover _asistenteId del documento principal si era del asistente
+      if (updatedData._asistenteId === pedidoData._asistenteId) {
+        delete updatedData._asistenteId;
+      }
+      
+      // Actualizar el documento sin las líneas del asistente
+      await pedidoRef.update(updatedData);
+      
+      response = {
+        success: true,
+        operation: 'pedidos_limpio_undo',
+        action: 'removed_lines',
+        pedidoId: pedidoSnap.id,
+        fecha: pedidoData.fecha,
+        linesRemoved: removedCount
+      };
+    }
 
     // Guardar audit log del undo
     await db.collection('asistenteLog').add({
@@ -2649,16 +2761,12 @@ async function handlePostPedidosLimpioDeshacer(req, res) {
       timestamp: Firestore.FieldValue.serverTimestamp(),
       undoIdempotencyKey: undoKey,
       originalIdempotencyKey: originalKey || null,
+      originalOperation: operation,
       pedidoId: pedidoSnap.id,
-      before: pedidoData
+      before: pedidoData,
+      action: isFullDelete ? 'deleted_document' : 'removed_lines',
+      assistantIdsRemoved: Array.from(assistantIds)
     });
-
-    const response = {
-      success: true,
-      operation: 'pedidos_limpio_undo',
-      pedidoId: pedidoSnap.id,
-      fecha: pedidoData.fecha
-    };
 
     // Guardar idempotencia del undo
     await undoIdemRef.set({
