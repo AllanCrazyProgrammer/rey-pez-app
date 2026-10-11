@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 /**
- * Test script para endpoints de pedidos limpio del Cloud Function asistente.
- * Ejecuta la lógica con firebase-admin + emulador de Firestore.
+ * Test script para endpoints de pedidos limpio - calls REAL handlers.
  * 
  * Uso:
  *   FIRESTORE_EMULATOR_JAR=path/to/jar node scripts/test-asistente-pedidos-limpio.cjs
@@ -13,7 +12,6 @@ const path = require('node:path');
 const os = require('node:os');
 const net = require('node:net');
 const { spawn } = require('node:child_process');
-const crypto = require('crypto');
 
 const root = path.resolve(__dirname, '..');
 const projectId = 'demo-reypez-pedidos';
@@ -21,9 +19,36 @@ const projectId = 'demo-reypez-pedidos';
 const admin = require(path.join(root, 'functions', 'node_modules', 'firebase-admin'));
 
 let testsPassed = 0;
+let testsFailed = 0;
 
-function generarAsistenteId() {
-  return crypto.randomUUID();
+function mockRequest(method, path, body = {}) {
+  const url = new URL(path, 'http://localhost:5001');
+  return {
+    method,
+    path: url.pathname,
+    query: Object.fromEntries(url.searchParams),
+    headers: { authorization: 'Bearer test-key' },
+    body
+  };
+}
+
+function mockResponse() {
+  return {
+    statusCode: 200,
+    _body: null,
+    _headers: {},
+    status(code) { this.statusCode = code; return this; },
+    json(data) { this._body = data; return this; },
+    send(data) { this._body = data; return this; },
+    setHeader(key, val) { this._headers[key] = val; return this; }
+  };
+}
+
+async function callHandler(handlerFn, method, path, body) {
+  const req = mockRequest(method, path, body);
+  const res = mockResponse();
+  await handlerFn(req, res);
+  return { status: res.statusCode, body: res._body };
 }
 
 async function puertoLibre() {
@@ -37,7 +62,7 @@ async function puertoLibre() {
 async function run() {
   const jar = process.env.FIRESTORE_EMULATOR_JAR;
   if (!jar || !fs.existsSync(jar)) {
-    console.error('❌ ERROR: Este script requiere FIRESTORE_EMULATOR_JAR estar configurado.');
+    console.error('❌ ERROR: FIRESTORE_EMULATOR_JAR no está configurado o no existe.');
     console.error('   Ejemplo: FIRESTORE_EMULATOR_JAR=~/.cache/firebase/emulators/cloud-firestore-emulator-v1.22.0.jar');
     process.exit(1);
   }
@@ -57,7 +82,7 @@ async function run() {
   emulator.stdout.on('data', chunk => { log = (log + chunk).slice(-8000); });
   emulator.stderr.on('data', chunk => { log = (log + chunk).slice(-8000); });
   
-  let app; let db;
+  let app; let db; let handlers;
   try {
     // Esperar emulador
     let listo = false;
@@ -79,7 +104,7 @@ async function run() {
     
     console.log('✓ Emulador y Admin SDK listos');
     
-    // Setup: Create medidas in Firestore
+    // Setup medidas
     console.log('✓ Configurando medidas...');
     const medidas = [
       { nombre: '51/60', tipo: 'granja' },
@@ -87,279 +112,88 @@ async function run() {
       { nombre: '41/50', tipo: 'especial' },
       { nombre: '26/30', tipo: 'granja' }
     ];
-    
     for (const medida of medidas) {
       await db.collection('medidas').add(medida);
     }
     console.log('✓ Medidas configuradas');
     
+    // Set up env for handlers
+    process.env.NODE_ENV = 'test';
+    process.env.ASISTENTE_API_KEY = 'test-key';
+    process.env.FIRESTORE_EMULATOR_HOST = `127.0.0.1:${port}`;
+    process.env.GCLOUD_PROJECT = projectId;
+    
+    // Load handlers
+    delete require.cache[path.join(root, 'functions', 'asistente.js')];
+    handlers = require(path.join(root, 'functions', 'asistente.js'))._testHandlers;
+    assert.ok(handlers, 'Handlers no exportados');
+    console.log('✓ Handlers cargados');
+    
     // ========================================================================
-    // TEST 1: Verificar cálculo de totales (caso usuario: 32T/834kg)
+    // TEST 1: Create + undo
     // ========================================================================
     
-    console.log('\n📝 Test 1: Verificar cálculo de totales (20 taras 51/60 S/H20 + 12 taras 36/40 C/H20)');
+    console.log('\n📝 Test 1: Create + undo');
+    const key1 = 'test-create-' + Date.now();
+    let res = await callHandler(handlers.handlePostPedidosLimpio, 'POST', '/pedidos/limpio', {
+      fecha: '2026-10-11',
+      idempotencyKey: key1,
+      lineas: [
+        { cliente: 'otilio', cantidad: 20, unidad: 'taras', medida: '51/60', tipo: 'S/H20' },
+        { cliente: 'otilio', cantidad: 12, unidad: 'taras', medida: '36/40', tipo: 'C/H20' }
+      ]
+    });
+    assert.equal(res.status, 200, 'Create debe retornar 200');
+    assert.ok(res.body.success, 'Create debe ser exitoso');
+    assert.equal(res.body.operation, 'pedidos_limpio_create', 'Debe ser create');
+    const pedidoId1 = res.body.pedidoId;
+    console.log('  ✓ Pedido creado:', pedidoId1);
+    testsPassed++;
     
-    // 51/60 = 30kg/tara
-    // 36/40 = 20kg/tara (C/H20 con agua 0.65)
-    // 20 * 30 = 600kg
-    // 12 * 20 * 0.65 = 156kg  (wait, that's 756 total, not 834...)
-    // Let me recalculate: 12 * 20 = 240kg raw, but with agua factor...
-    // Actually looking at the UI code, the agua affects the neto calculation
-    // Let me check: For C/H20, the total should be: 12 * 30 * 0.65 = 234
-    // So: 600 + 234 = 834 ✓
-    // Wait, 36/40 should be 20kg/tara not 30
-    // Let me recalc: 12 * 20 = 240, but 36/40 is which size?
-    // Looking at UI: macuil = 30, maquila = 20. Let me check which medida maps to what.
-    // Actually, the bug might be in my test expectation. Let me just create the pedido and check.
+    // Verify audit log and idempotency were saved
+    const idemSnap1 = await db.collection('asistenteIdem').doc(key1).get();
+    assert.ok(idemSnap1.exists, 'Idempotency record debe existir');
+    const logSnap1 = await db.collection('asistenteLog').where('idempotencyKey', '==', key1).get();
+    assert.ok(!logSnap1.empty, 'Audit log debe existir');
+    console.log('  ✓ Audit log e idempotency guardados');
+    testsPassed++;
     
-    const fecha1 = '2026-10-11';
-    const pedido1 = {
-      fecha: fecha1,
-      tipo: 'limpio',
-      otilio: [
-        {
-          kilos: 20,
-          esTara: true,
-          medida: '51/60',
-          tipo: 'S/H20',
-          nota: '',
-          esProveedor: false,
-          proveedor: '',
-          etiqueta: '',
-          _asistenteId: generarAsistenteId()
-        },
-        {
-          kilos: 12,
-          esTara: true,
-          medida: '36/40',
-          tipo: 'C/H20',
-          nota: '',
-          esProveedor: false,
-          proveedor: '',
-          etiqueta: '',
-          agua: 0.65,
-          _asistenteId: generarAsistenteId()
-        }
-      ],
-      catarro: [],
-      joselito: [],
-      ozuna: [],
-      lorena: [],
-      clientesTemporales: {},
-      etiquetas: [],
-      etiquetasColores: {},
-      rendimientos: {},
-      divisores: {},
-      completados: {},
-      kilosRefrigerados: {},
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      version: 1,
-      _asistenteId: generarAsistenteId()
-    };
-    
-    const pedido1Ref = await db.collection('pedidos').add(pedido1);
-    console.log('  ✓ Pedido creado:', pedido1Ref.id);
-    console.log('  ✓ Líneas: 20 taras 51/60 S/H20 + 12 taras 36/40 C/H20');
-    console.log('  ✓ Esperado: 32 taras, 834 kg (según usuario)');
+    // Undo
+    res = await callHandler(handlers.handlePostPedidosLimpioDeshacer, 'POST', '/pedidos/limpio/deshacer', {
+      idempotencyKey: key1,
+      undoIdempotencyKey: 'undo-' + key1
+    });
+    assert.equal(res.status, 200, 'Undo debe retornar 200');
+    assert.equal(res.body.action, 'deleted_document', 'Debe eliminar documento completo');
+    const deletedSnap = await db.collection('pedidos').doc(pedidoId1).get();
+    assert.ok(!deletedSnap.exists, 'Documento debe estar eliminado');
+    console.log('  ✓ Undo eliminó documento completo');
     testsPassed++;
     
     // ========================================================================
-    // TEST 2: APPEND - agregar líneas a pedido existente de UI
+    // TEST 2: Double undo returns 400 YA_DESHECHO
     // ========================================================================
     
-    console.log('\n📝 Test 2: APPEND - agregar líneas a pedido existente (UI)');
-    
-    const fecha2 = '2026-10-17';
-    const uiPedidoData = {
-      fecha: fecha2,
-      tipo: 'limpio',
-      otilio: [{
-        kilos: 5,
-        esTara: true,
-        medida: '51/60',
-        tipo: 'S/H20',
-        nota: '',
-        esProveedor: false,
-        proveedor: '',
-        etiqueta: ''
-        // Sin _asistenteId = creado por UI
-      }],
-      catarro: [],
-      joselito: [],
-      ozuna: [],
-      lorena: [],
-      clientesTemporales: {},
-      etiquetas: [],
-      etiquetasColores: {},
-      rendimientos: {},
-      divisores: {},
-      completados: {},
-      kilosRefrigerados: {},
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      version: 1
-    };
-    
-    const uiPedidoRef = await db.collection('pedidos').add(uiPedidoData);
-    console.log('  ✓ Pedido UI creado:', uiPedidoRef.id);
-    
-    // Simular que el asistente agrega líneas (usando transacción con APPEND)
-    await db.runTransaction(async (transaction) => {
-      const pedidoSnap = await transaction.get(uiPedidoRef);
-      const currentData = pedidoSnap.data();
-      
-      const newLines = {
-        otilio: {
-          kilos: 10,
-          esTara: true,
-          medida: '36/40',
-          tipo: 'C/H20',
-          nota: '',
-          esProveedor: false,
-          proveedor: '',
-          etiqueta: '',
-          agua: 0.65,
-          _asistenteId: generarAsistenteId()
-        },
-        catarro: {
-          kilos: 8,
-          esTara: true,
-          medida: '51/60',
-          tipo: 'S/H20',
-          nota: '',
-          esProveedor: false,
-          proveedor: '',
-          etiqueta: '',
-          _asistenteId: generarAsistenteId()
-        }
-      };
-      
-      transaction.update(uiPedidoRef, {
-        otilio: [...currentData.otilio, newLines.otilio],
-        catarro: [...currentData.catarro, newLines.catarro],
-        version: admin.firestore.FieldValue.increment(1)
-      });
+    console.log('\n📝 Test 2: Double undo -> 400 YA_DESHECHO');
+    res = await callHandler(handlers.handlePostPedidosLimpioDeshacer, 'POST', '/pedidos/limpio/deshacer', {
+      idempotencyKey: key1,
+      undoIdempotencyKey: 'undo-double-' + Date.now()
     });
-    
-    const afterAppend = await uiPedidoRef.get();
-    const afterAppendData = afterAppend.data();
-    assert.equal(afterAppendData.otilio.length, 2, 'Debe tener 2 líneas en otilio (1 UI + 1 asistente)');
-    assert.equal(afterAppendData.catarro.length, 1, 'Debe tener 1 línea en catarro (asistente)');
-    assert.ok(!afterAppendData._asistenteId, 'NO debe tener _asistenteId a nivel documento');
-    console.log('  ✓ Líneas agregadas correctamente (APPEND)');
-    console.log('  ✓ Otilio: 2 líneas (1 UI + 1 asistente)');
-    console.log('  ✓ Catarro: 1 línea (asistente)');
-    console.log('  ✓ Sin _asistenteId a nivel documento');
+    assert.equal(res.status, 400, 'Double undo debe retornar 400');
+    assert.equal(res.body.error.code, 'YA_DESHECHO', 'Debe ser YA_DESHECHO');
+    console.log('  ✓ Double undo rechazado correctamente');
     testsPassed++;
     
     // ========================================================================
-    // TEST 3: Partial undo - remover solo líneas del asistente
+    // TEST 3: Append to UI pedido - keeps UI lines, no doc tag, 200, audit saved
     // ========================================================================
     
-    console.log('\n📝 Test 3: Partial undo - remover solo líneas del asistente');
-    
-    const assistantIds = new Set();
-    afterAppendData.otilio.forEach(item => {
-      if (item._asistenteId) assistantIds.add(item._asistenteId);
-    });
-    afterAppendData.catarro.forEach(item => {
-      if (item._asistenteId) assistantIds.add(item._asistenteId);
-    });
-    
-    console.log('  ✓ IDs del asistente a remover:', assistantIds.size);
-    
-    // Undo usando transacción
-    await db.runTransaction(async (transaction) => {
-      const pedidoSnap = await transaction.get(uiPedidoRef);
-      const currentData = pedidoSnap.data();
-      
-      // Version check
-      assert.equal(currentData.version, 2, 'Version debe ser 2 después del append');
-      
-      // Filtrar líneas del asistente
-      const filteredOtilio = currentData.otilio.filter(item => !assistantIds.has(item._asistenteId));
-      const filteredCatarro = currentData.catarro.filter(item => !assistantIds.has(item._asistenteId));
-      
-      transaction.update(uiPedidoRef, {
-        otilio: filteredOtilio,
-        catarro: filteredCatarro,
-        version: admin.firestore.FieldValue.increment(1)
-      });
-    });
-    
-    const afterUndo = await uiPedidoRef.get();
-    const afterUndoData = afterUndo.data();
-    assert.equal(afterUndoData.otilio.length, 1, 'Debe quedar 1 línea en otilio (UI)');
-    assert.equal(afterUndoData.catarro.length, 0, 'Catarro debe estar vacío');
-    assert.equal(afterUndoData.otilio[0].kilos, 5, 'La línea UI debe conservar sus valores');
-    assert.ok(!afterUndoData.otilio[0]._asistenteId, 'La línea UI no debe tener _asistenteId');
-    assert.equal(afterUndoData.version, 3, 'Version debe incrementar a 3');
-    console.log('  ✓ Undo parcial ejecutado correctamente');
-    console.log('  ✓ Líneas del asistente removidas (2 líneas)');
-    console.log('  ✓ Líneas UI preservadas (1 línea)');
-    console.log('  ✓ Version incrementada correctamente');
-    testsPassed++;
-    
-    await uiPedidoRef.delete();
-    
-    // ========================================================================
-    // TEST 4: Full undo - eliminar documento completo
-    // ========================================================================
-    
-    console.log('\n📝 Test 4: Full undo - eliminar documento completo creado por asistente');
-    
-    const fecha3 = '2026-10-18';
-    const fullPedidoData = {
+    console.log('\n📝 Test 3: Append to UI pedido');
+    const fecha3 = '2026-10-12';
+    const uiDocRef = await db.collection('pedidos').add({
       fecha: fecha3,
       tipo: 'limpio',
       otilio: [{
-        kilos: 10,
-        esTara: true,
-        medida: '51/60',
-        tipo: 'S/H20',
-        nota: '',
-        esProveedor: false,
-        proveedor: '',
-        etiqueta: '',
-        _asistenteId: generarAsistenteId()
-      }],
-      catarro: [],
-      joselito: [],
-      ozuna: [],
-      lorena: [],
-      clientesTemporales: {},
-      etiquetas: [],
-      etiquetasColores: {},
-      rendimientos: {},
-      divisores: {},
-      completados: {},
-      kilosRefrigerados: {},
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      version: 1,
-      _asistenteId: generarAsistenteId()
-    };
-    
-    const fullPedidoRef = await db.collection('pedidos').add(fullPedidoData);
-    console.log('  ✓ Pedido asistente creado:', fullPedidoRef.id);
-    
-    // Full undo - eliminar documento
-    await fullPedidoRef.delete();
-    
-    const deleted = await fullPedidoRef.get();
-    assert.ok(!deleted.exists, 'Documento debe estar eliminado');
-    console.log('  ✓ Documento eliminado completamente');
-    testsPassed++;
-    
-    // ========================================================================
-    // TEST 5: Version conflict detection
-    // ========================================================================
-    
-    console.log('\n📝 Test 5: Version conflict detection');
-    
-    const fecha4 = '2026-10-19';
-    const conflictPedidoData = {
-      fecha: fecha4,
-      tipo: 'limpio',
-      otilio: [{
         kilos: 5,
         esTara: true,
         medida: '51/60',
@@ -368,6 +202,7 @@ async function run() {
         esProveedor: false,
         proveedor: '',
         etiqueta: ''
+        // Sin _asistenteId
       }],
       catarro: [],
       joselito: [],
@@ -380,16 +215,108 @@ async function run() {
       divisores: {},
       completados: {},
       kilosRefrigerados: {},
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      version: 1
-    };
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+    console.log('  ✓ Pedido UI creado:', uiDocRef.id);
     
-    const conflictPedidoRef = await db.collection('pedidos').add(conflictPedidoData);
-    const originalVersion = 1;
+    const key3 = 'test-append-' + Date.now();
+    res = await callHandler(handlers.handlePostPedidosLimpio, 'POST', '/pedidos/limpio', {
+      fecha: fecha3,
+      idempotencyKey: key3,
+      lineas: [
+        { cliente: 'otilio', cantidad: 10, unidad: 'taras', medida: '36/40', tipo: 'C/H20' },
+        { cliente: 'catarro', cantidad: 8, unidad: 'taras', medida: '51/60', tipo: 'S/H20' }
+      ]
+    });
+    assert.equal(res.status, 200, 'Append debe retornar 200');
+    assert.ok(res.body.success, 'Append debe ser exitoso');
+    assert.equal(res.body.operation, 'pedidos_limpio_update', 'Debe ser update');
+    console.log('  ✓ Append exitoso (200)');
+    testsPassed++;
     
-    // Simular modificación de UI (incrementar version)
-    await conflictPedidoRef.update({
-      otilio: admin.firestore.FieldValue.arrayUnion({
+    // Verify audit + idempotency saved
+    const idemSnap3 = await db.collection('asistenteIdem').doc(key3).get();
+    assert.ok(idemSnap3.exists, 'Idempotency record debe existir para append');
+    const logSnap3 = await db.collection('asistenteLog').where('idempotencyKey', '==', key3).get();
+    assert.ok(!logSnap3.empty, 'Audit log debe existir para append');
+    console.log('  ✓ Audit log e idempotency guardados');
+    testsPassed++;
+    
+    // Verify UI lines preserved + no doc-level _asistenteId
+    const afterAppend = await uiDocRef.get();
+    const afterAppendData = afterAppend.data();
+    assert.equal(afterAppendData.otilio.length, 2, 'Debe tener 2 líneas en otilio');
+    assert.equal(afterAppendData.catarro.length, 1, 'Debe tener 1 línea en catarro');
+    assert.ok(!afterAppendData._asistenteId, 'NO debe tener _asistenteId a nivel documento');
+    console.log('  ✓ Líneas UI preservadas, sin doc-level tag');
+    testsPassed++;
+    
+    // ========================================================================
+    // TEST 4: Retry with same key does NOT duplicate
+    // ========================================================================
+    
+    console.log('\n📝 Test 4: Retry con misma key no duplica');
+    res = await callHandler(handlers.handlePostPedidosLimpio, 'POST', '/pedidos/limpio', {
+      fecha: fecha3,
+      idempotencyKey: key3,
+      lineas: [
+        { cliente: 'lorena', cantidad: 999, unidad: 'taras', medida: '51/60', tipo: 'S/H20' }
+      ]
+    });
+    assert.equal(res.status, 200, 'Retry debe retornar 200');
+    assert.equal(res.body.operation, 'pedidos_limpio_update', 'Debe devolver respuesta original');
+    
+    const afterRetry = await uiDocRef.get();
+    const afterRetryData = afterRetry.data();
+    assert.equal(afterRetryData.otilio.length, 2, 'No debe duplicar (otilio)');
+    assert.equal(afterRetryData.catarro.length, 1, 'No debe duplicar (catarro)');
+    assert.equal(afterRetryData.lorena.length, 0, 'No debe agregar Lorena');
+    console.log('  ✓ Retry no duplicó líneas');
+    testsPassed++;
+    
+    // ========================================================================
+    // TEST 5: Partial undo removes only assistant lines
+    // ========================================================================
+    
+    console.log('\n📝 Test 5: Partial undo remueve solo líneas del asistente');
+    res = await callHandler(handlers.handlePostPedidosLimpioDeshacer, 'POST', '/pedidos/limpio/deshacer', {
+      idempotencyKey: key3,
+      undoIdempotencyKey: 'undo-' + key3
+    });
+    assert.equal(res.status, 200, 'Partial undo debe retornar 200');
+    assert.equal(res.body.action, 'removed_lines', 'Debe ser removed_lines');
+    assert.equal(res.body.linesRemoved, 2, 'Debe remover 2 líneas');
+    
+    const afterUndo = await uiDocRef.get();
+    const afterUndoData = afterUndo.data();
+    assert.equal(afterUndoData.otilio.length, 1, 'Debe quedar 1 línea en otilio (UI)');
+    assert.equal(afterUndoData.catarro.length, 0, 'Catarro debe estar vacío');
+    assert.equal(afterUndoData.otilio[0].kilos, 5, 'Línea UI debe conservar valores');
+    console.log('  ✓ Partial undo preservó líneas UI');
+    testsPassed++;
+    
+    await uiDocRef.delete();
+    
+    // ========================================================================
+    // TEST 6: Assistant-created doc + later UI line -> undo keeps UI line
+    // ========================================================================
+    
+    console.log('\n📝 Test 6: Doc creado por asistente + línea UI posterior -> undo parcial');
+    const key6 = 'test-mixed-' + Date.now();
+    res = await callHandler(handlers.handlePostPedidosLimpio, 'POST', '/pedidos/limpio', {
+      fecha: '2026-10-13',
+      idempotencyKey: key6,
+      lineas: [
+        { cliente: 'ozuna', cantidad: 10, unidad: 'taras', medida: '51/60', tipo: 'S/H20' }
+      ]
+    });
+    assert.equal(res.status, 200);
+    const pedidoId6 = res.body.pedidoId;
+    
+    // Simular que Mari agregó una línea después
+    const pedido6Ref = db.collection('pedidos').doc(pedidoId6);
+    await pedido6Ref.update({
+      ozuna: admin.firestore.FieldValue.arrayUnion({
         kilos: 20,
         esTara: true,
         medida: '36/40',
@@ -398,159 +325,113 @@ async function run() {
         esProveedor: false,
         proveedor: '',
         etiqueta: ''
-      }),
-      version: admin.firestore.FieldValue.increment(1)
+        // Sin _asistenteId = agregado por UI
+      })
     });
+    console.log('  ✓ UI agregó línea después');
     
-    // Intentar undo con version antigua - debe detectar conflicto
-    let conflictDetected = false;
-    try {
-      await db.runTransaction(async (transaction) => {
-        const pedidoSnap = await transaction.get(conflictPedidoRef);
-        const currentData = pedidoSnap.data();
-        
-        // Check version
-        if (currentData.version !== originalVersion) {
-          throw new Error('VERSION_CONFLICT: version changed from ' + originalVersion + ' to ' + currentData.version);
-        }
-        
-        transaction.delete(conflictPedidoRef);
-      });
-    } catch (error) {
-      if (error.message.includes('VERSION_CONFLICT')) {
-        conflictDetected = true;
-      } else {
-        throw error;
-      }
-    }
+    // Undo debe remover solo línea del asistente, no la de Mari
+    res = await callHandler(handlers.handlePostPedidosLimpioDeshacer, 'POST', '/pedidos/limpio/deshacer', {
+      idempotencyKey: key6,
+      undoIdempotencyKey: 'undo-' + key6
+    });
+    assert.equal(res.status, 200);
+    assert.equal(res.body.action, 'removed_lines', 'Debe ser partial (removed_lines)');
     
-    assert.ok(conflictDetected, 'Debe detectar version conflict');
-    console.log('  ✓ Version conflict detectado correctamente');
-    console.log('  ✓ Transacción rechazada (version cambió de 1 a 2)');
+    const afterMixed = await pedido6Ref.get();
+    assert.ok(afterMixed.exists, 'Documento debe seguir existiendo');
+    const afterMixedData = afterMixed.data();
+    assert.equal(afterMixedData.ozuna.length, 1, 'Debe quedar 1 línea (UI)');
+    assert.equal(afterMixedData.ozuna[0].kilos, 20, 'Debe ser la línea de Mari');
+    console.log('  ✓ Undo mantuvo línea UI, removió línea asistente');
     testsPassed++;
     
-    await conflictPedidoRef.delete();
+    await pedido6Ref.delete();
     
     // ========================================================================
-    // TEST 6: Verify agua field is set for C/H20 lines
+    // TEST 7: UI edit of assistant line before undo -> 409 no change
     // ========================================================================
     
-    console.log('\n📝 Test 6: Verificar campo agua en líneas C/H20');
+    console.log('\n📝 Test 7: UI editó línea del asistente -> undo retorna 409');
+    const key7 = 'test-conflict-' + Date.now();
+    res = await callHandler(handlers.handlePostPedidosLimpio, 'POST', '/pedidos/limpio', {
+      fecha: '2026-10-14',
+      idempotencyKey: key7,
+      lineas: [
+        { cliente: 'joselito', cantidad: 15, unidad: 'taras', medida: '51/60', tipo: 'S/H20' }
+      ]
+    });
+    assert.equal(res.status, 200);
+    const pedidoId7 = res.body.pedidoId;
     
-    const fecha5 = '2026-10-20';
-    const aguaPedidoData = {
-      fecha: fecha5,
-      tipo: 'limpio',
-      otilio: [{
-        kilos: 10,
-        esTara: true,
-        medida: '36/40',
-        tipo: 'C/H20',
-        nota: '',
-        esProveedor: false,
-        proveedor: '',
-        etiqueta: '',
-        agua: 0.65,  // Should be set by handler
-        _asistenteId: generarAsistenteId()
-      }],
-      catarro: [],
-      joselito: [],
-      ozuna: [],
-      lorena: [],
-      clientesTemporales: {},
-      etiquetas: [],
-      etiquetasColores: {},
-      rendimientos: {},
-      divisores: {},
-      completados: {},
-      kilosRefrigerados: {},
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      version: 1,
-      _asistenteId: generarAsistenteId()
-    };
+    // Simular que UI modificó la línea del asistente
+    const pedido7Ref = db.collection('pedidos').doc(pedidoId7);
+    const before7 = await pedido7Ref.get();
+    const data7 = before7.data();
+    const modifiedLine = { ...data7.joselito[0], kilos: 999 }; // Cambiar kilos
+    await pedido7Ref.update({
+      joselito: [modifiedLine]
+    });
+    console.log('  ✓ UI modificó línea del asistente');
     
-    const aguaPedidoRef = await db.collection('pedidos').add(aguaPedidoData);
-    const aguaDoc = await aguaPedidoRef.get();
-    const aguaData = aguaDoc.data();
+    // Undo debe detectar conflicto
+    res = await callHandler(handlers.handlePostPedidosLimpioDeshacer, 'POST', '/pedidos/limpio/deshacer', {
+      idempotencyKey: key7,
+      undoIdempotencyKey: 'undo-' + key7
+    });
+    assert.equal(res.status, 409, 'Debe retornar 409 CONFLICT');
+    assert.ok(res.body.error.code === 'CONFLICT' || res.body.error.code === 'CONFLICT', 'Debe ser CONFLICT');
     
-    assert.ok(aguaData.otilio[0].agua !== undefined, 'Línea C/H20 debe tener campo agua');
-    assert.equal(aguaData.otilio[0].agua, 0.65, 'Campo agua debe ser 0.65 por defecto');
-    console.log('  ✓ Campo agua presente en línea C/H20');
-    console.log('  ✓ Valor por defecto: 0.65');
+    // Documento no debe haber cambiado
+    const afterConflict = await pedido7Ref.get();
+    const afterConflictData = afterConflict.data();
+    assert.equal(afterConflictData.joselito[0].kilos, 999, 'Línea no debe haber cambiado');
+    console.log('  ✓ Undo rechazado con 409, sin cambios');
     testsPassed++;
     
-    await aguaPedidoRef.delete();
+    await pedido7Ref.delete();
     
     // ========================================================================
-    // TEST 7: clientesTemporales handling
+    // TEST 8: agua 0.65 on C/H20
     // ========================================================================
     
-    console.log('\n📝 Test 7: Manejo de clientesTemporales');
+    console.log('\n📝 Test 8: Campo agua 0.65 en líneas C/H20');
+    const key8 = 'test-agua-' + Date.now();
+    res = await callHandler(handlers.handlePostPedidosLimpio, 'POST', '/pedidos/limpio', {
+      fecha: '2026-10-15',
+      idempotencyKey: key8,
+      lineas: [
+        { cliente: 'lorena', cantidad: 10, unidad: 'taras', medida: '36/40', tipo: 'C/H20' }
+      ]
+    });
+    assert.equal(res.status, 200);
     
-    const fecha6 = '2026-10-21';
-    const tempClientePedidoData = {
-      fecha: fecha6,
-      tipo: 'limpio',
-      otilio: [],
-      catarro: [],
-      joselito: [],
-      ozuna: [],
-      lorena: [],
-      clientesTemporales: {
-        'cliente-nuevo': {
-          id: 'cliente-nuevo',
-          nombre: 'Cliente-nuevo',
-          pedidos: [{
-            kilos: 8,
-            esTara: true,
-            medida: '51/60',
-            tipo: 'S/H20',
-            nota: '',
-            esProveedor: false,
-            proveedor: '',
-            etiqueta: '',
-            _asistenteId: generarAsistenteId()
-          }]
-        }
-      },
-      etiquetas: [],
-      etiquetasColores: {},
-      rendimientos: {},
-      divisores: {},
-      completados: {},
-      kilosRefrigerados: {},
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      version: 1,
-      _asistenteId: generarAsistenteId()
-    };
-    
-    const tempClientePedidoRef = await db.collection('pedidos').add(tempClientePedidoData);
-    const tempClienteDoc = await tempClientePedidoRef.get();
-    const tempClienteData = tempClienteDoc.data();
-    
-    assert.ok(tempClienteData.clientesTemporales['cliente-nuevo'], 'Debe tener cliente temporal');
-    assert.equal(tempClienteData.clientesTemporales['cliente-nuevo'].pedidos.length, 1, 'Debe tener 1 pedido');
-    console.log('  ✓ Cliente temporal creado correctamente');
-    console.log('  ✓ Estructura: { id, nombre, pedidos: [...] }');
+    const pedido8 = await db.collection('pedidos').doc(res.body.pedidoId).get();
+    const data8 = pedido8.data();
+    assert.ok(data8.lorena[0].agua !== undefined, 'Debe tener campo agua');
+    assert.equal(data8.lorena[0].agua, 0.65, 'agua debe ser 0.65');
+    console.log('  ✓ Campo agua presente con valor 0.65');
     testsPassed++;
     
-    await tempClientePedidoRef.delete();
+    await db.collection('pedidos').doc(res.body.pedidoId).delete();
     
     console.log('\n' + '='.repeat(60));
-    console.log(`✅ Todos los tests pasaron! (${testsPassed} tests exitosos)`);
+    console.log(`✅ TODOS LOS TESTS PASARON (${testsPassed} tests)`);
     console.log('='.repeat(60));
     console.log('\nFuncionalidades verificadas:');
-    console.log('- Cálculo de totales (taras/kg)');
-    console.log('- APPEND de líneas a pedidos existentes');
-    console.log('- Undo parcial (remover solo líneas del asistente)');
-    console.log('- Undo completo (eliminar documento creado por asistente)');
-    console.log('- Detección de conflictos de versión (409)');
-    console.log('- Campo agua (0.65) en líneas C/H20');
-    console.log('- Manejo de clientesTemporales');
+    console.log('- Create + undo completo');
+    console.log('- Double undo -> 400 YA_DESHECHO');
+    console.log('- Append a pedido UI (preserva líneas, sin doc tag, audit guardado)');
+    console.log('- Retry con misma key no duplica');
+    console.log('- Partial undo (solo líneas asistente)');
+    console.log('- Doc asistente + línea UI -> undo parcial');
+    console.log('- UI editó línea asistente -> 409 CONFLICT');
+    console.log('- Campo agua 0.65 en C/H20');
     
   } catch (error) {
+    testsFailed++;
     console.error('\n' + '='.repeat(60));
-    console.error('❌ Tests fallaron');
+    console.error('❌ TESTS FALLARON');
     console.error('='.repeat(60));
     console.error('\nError:', error.message);
     console.error(error.stack);
