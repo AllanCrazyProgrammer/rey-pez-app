@@ -2166,7 +2166,7 @@ function calcularTotalesPedidoLimpio(pedido) {
  * Crea o actualiza un pedido limpio con líneas por cliente.
  */
 async function handlePostPedidosLimpio(req, res) {
-  const Firestore = require('firebase-admin').firestore;
+  const { firestore: Firestore } = require('firebase-admin');
   
   const {
     fecha,
@@ -2394,7 +2394,6 @@ async function handlePostPedidosLimpio(req, res) {
     }
     
     // Add createdAt for actual write
-    const Firestore = require('firebase-admin').firestore;
     pedidoData.createdAt = Firestore.FieldValue.serverTimestamp();
 
     // Buscar si ya existe un pedido para esta fecha
@@ -2436,8 +2435,6 @@ async function handlePostPedidosLimpio(req, res) {
     // Guardar audit log
     const afterData = { ...pedidoData };
     delete afterData.createdAt; // Remove FieldValue for serialization
-    
-    const Firestore = require('firebase-admin').firestore;
     
     await db.collection('asistenteLog').add({
       operation,
@@ -2542,7 +2539,7 @@ async function handleGetPedidosLimpio(req, res) {
  * Deshace un pedido limpio creado por el asistente.
  */
 async function handlePostPedidosLimpioDeshacer(req, res) {
-  const Firestore = require('firebase-admin').firestore;
+  const { firestore: Firestore } = require('firebase-admin');
   
   const {
     idempotencyKey: originalKey,
