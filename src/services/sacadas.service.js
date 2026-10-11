@@ -5,7 +5,7 @@ import { fechaRegistro } from '@/utils/fechasInventario';
 function errorDia(codigo, mensaje) { return Object.assign(new Error(mensaje), { code: codigo }); }
 const duplicado = () => errorDia('dia-duplicado', 'Ya existe un registro de limpios para esta fecha. Abre ese día para agregar movimientos; no se permiten días duplicados.');
 
-export async function guardarDiaLimpio(datos, { id = null, fechaOriginal = null } = {}) {
+export async function guardarDiaLimpio(datos, { id = null, fechaOriginal = null, versionEsperada = null } = {}) {
   const fecha = fechaRegistro(datos.fecha);
   if (!fecha || !/^\d{4}-\d{2}-\d{2}$/.test(fecha)) throw errorDia('fecha-invalida', 'Selecciona una fecha válida para el registro.');
 
@@ -22,6 +22,14 @@ export async function guardarDiaLimpio(datos, { id = null, fechaOriginal = null 
     const fechaAnterior = actual.exists() ? fechaRegistro(actual.data().fecha) : null;
     if (id && fechaOriginal && fechaAnterior !== fechaOriginal) throw errorDia('dia-cambiado', 'La fecha del registro cambió desde otro equipo. Vuelve a abrir el día antes de guardar.');
 
+    // Verificación de versión para detectar modificaciones concurrentes
+    if (actual.exists() && versionEsperada !== null) {
+      const versionActual = actual.data().version;
+      if (versionActual !== undefined && versionActual !== versionEsperada) {
+        throw errorDia('dia-modificado-externamente', 'Este día fue modificado desde otro lugar. Recarga antes de guardar.');
+      }
+    }
+
     const ocupado = await transaction.get(indice);
     if (ocupado.exists() && ocupado.data().sacadaId !== referencia.id) {
       const propietario = await transaction.get(doc(db, 'sacadas', ocupado.data().sacadaId));
@@ -36,8 +44,15 @@ export async function guardarDiaLimpio(datos, { id = null, fechaOriginal = null 
 
     // El índice se reclama junto con el registro: dos creaciones simultáneas
     // para una fecha compiten por el mismo documento y no pueden duplicar el día.
-    if (actual.exists()) transaction.update(referencia, datos);
-    else transaction.set(referencia, datos);
+    const versionNueva = actual.exists() ? (actual.data().version || 0) + 1 : 1;
+    const datosConVersion = {
+      ...datos,
+      version: versionNueva,
+      actualizadoEn: new Date()
+    };
+
+    if (actual.exists()) transaction.update(referencia, datosConVersion);
+    else transaction.set(referencia, datosConVersion);
     transaction.set(indice, { fecha, sacadaId: referencia.id });
     if (anterior?.exists() && anterior.data().sacadaId === referencia.id) transaction.delete(indiceAnterior);
   });

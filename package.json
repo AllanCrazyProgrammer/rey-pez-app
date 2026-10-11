@@ -80,6 +80,7 @@
     "electron": "^39.2.7",
     "electron-builder": "^26.0.12",
     "fake-indexeddb": "^6.2.5",
+    "firebase-tools": "^15.33.0",
     "playwright": "^1.63.0",
     "vue-template-compiler": "^2.6.11",
     "wait-on": "^9.0.3"
