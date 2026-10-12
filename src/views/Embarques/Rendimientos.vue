@@ -31,6 +31,9 @@
       </div>
     </div>
 
+    <div v-if="avisoError" class="aviso-conflicto aviso-error" role="alert">
+      <p>{{ avisoError }}</p>
+    </div>
     <div v-if="avisoConflicto" class="aviso-conflicto" role="status">
       <p>{{ avisoConflicto }}</p>
       <button type="button" @click="reintentarCambiosPendientes">Usar lo de esta pantalla</button>
@@ -600,6 +603,7 @@ export default {
       _baseCamposRendimientos: null,
       _hidratandoRendimientos: false,
       avisoConflicto: '',
+      avisoError: '',
       _clavesEnConflicto: [],
       _clavesConservarMio: []
     }
@@ -634,8 +638,8 @@ export default {
       return;
     }
 
-    await this.cargarEmbarque();
     if (navigator.onLine) await this.syncOfflineRendimientos();
+    await this.cargarEmbarque();
     await this.cargarPreciosVenta();
     await this.precargarCostos();
     await this.cargarResumenSacadasHoy();
@@ -657,8 +661,8 @@ export default {
       return;
     }
 
-    await this.cargarEmbarque();
     if (navigator.onLine) await this.syncOfflineRendimientos();
+    await this.cargarEmbarque();
     await this.cargarPreciosVenta();
     await this.precargarCostos();
     await this.cargarResumenSacadasHoy();
@@ -825,8 +829,20 @@ export default {
         + '«Usar lo del otro equipo» recarga y deja el valor de ellos.'
       );
     },
-    recargarPantalla() {
-      window.location.reload();
+    async recargarPantalla() {
+      this.avisoConflicto = '';
+      this._clavesEnConflicto = [];
+      this._clavesConservarMio = [];
+      await EmbarquesOfflineService.mergeSave(this.$route.params.id, existing => {
+        if (!existing) return null;
+        return {
+          record: { ...existing, clavesEnConflicto: [] },
+          options: { pendingSync: false, syncState: 'synced' }
+        };
+      }).catch(() => {});
+      if (typeof window !== 'undefined' && window.location && typeof window.location.reload === 'function') {
+        window.location.reload();
+      }
     },
     async reintentarCambiosPendientes() {
       const embarqueId = this.$route.params.id;
@@ -928,7 +944,7 @@ export default {
           record.baseCamposRendimientos = pending
             ? (yaPendiente && existing.baseCamposRendimientos
               ? existing.baseCamposRendimientos
-              : fotoCampos(docPrevio, claves))
+              : (this._baseCamposRendimientos || fotoCampos(docPrevio, claves)))
             : {
               ...(existing && existing.baseCamposRendimientos || {}),
               ...fotoCampos(docData || {}, claves),
@@ -990,9 +1006,9 @@ export default {
       const bloqueadas = (opts.forzar || opts.reintentar)
         ? []
         : [...(this._clavesEnConflicto || []), ...(opts.clavesBloqueadas || [])];
-      const paraServidor = prepararPayloadServidor(completo, bloqueadas);
       const baseRev = opts.baseRev != null ? opts.baseRev : (Number(this._revBase) || 0);
       const baseCampos = opts.baseCampos !== undefined ? opts.baseCampos : this._baseCamposRendimientos;
+      const paraServidor = prepararPayloadServidor(completo, bloqueadas, baseCampos);
       const sinBase = opts.sinBase || (baseCampos ? 'conflicto' : 'ultima');
       if (!navigator.onLine) {
         await this.actualizarOfflineRendimientos(true, completo, {
@@ -1056,6 +1072,9 @@ export default {
           return;
         }
         console.error('[Rendimientos] Error al guardar cambios en Firestore:', error);
+        const mensaje = 'No se pudieron guardar los rendimientos. ' + (error && error.message ? error.message : 'Intenta de nuevo.');
+        this.avisoError = mensaje;
+        if (typeof alert === 'function') alert(mensaje);
       }
     },
     /**
@@ -1633,29 +1652,49 @@ export default {
 
           const combinado = this.combinarEmbarquesPorFecha(embarquesRelacionados, embarqueId);
           const previoOffline = await EmbarquesOfflineService.getById(embarqueId).catch(() => null);
-          this.aplicarEmbarqueCargado(combinado || embarqueBase);
-          const conservar = (previoOffline && previoOffline.clavesEnConflicto) || [];
-          if (conservar.length) {
-            this._clavesConservarMio = conservar;
-            this.mostrarAvisoConflicto();
-          }
+          const habiaPendiente = Boolean(previoOffline && previoOffline.pendingSync);
 
-          await EmbarquesOfflineService.mergeSave(embarqueId, existing => {
-            const record = {
-              ...(existing || {}),
-              id: embarqueId,
-              docData: this.deepClone(embarqueBase)
-            };
-            return {
-              record,
-              options: {
-                pendingSync: existing?.pendingSync ?? false,
-                syncState: existing?.pendingSync ? existing.syncState : 'synced'
+          if (habiaPendiente) {
+            const docOffline = previoOffline.docData || {};
+            const baseServidor = combinado || embarqueBase;
+            this.aplicarEmbarqueCargado({
+              ...baseServidor,
+              ...docOffline,
+              fecha: docOffline.fecha || baseServidor.fecha,
+              clientes: (docOffline.clientes && docOffline.clientes.length)
+                ? docOffline.clientes
+                : (baseServidor.clientes || []),
+              kilosCrudos: docOffline.kilosCrudos || baseServidor.kilosCrudos,
+            });
+            if (previoOffline.baseCamposRendimientos) {
+              try {
+                this._baseCamposRendimientos = JSON.parse(JSON.stringify(previoOffline.baseCamposRendimientos));
+              } catch (error) {
+                this._baseCamposRendimientos = previoOffline.baseCamposRendimientos;
               }
-            };
-          });
-
-          await this.actualizarOfflineRendimientos(false, this.crearPayloadRendimientos(), { respetarConflictos: true });
+            }
+            if (previoOffline.baseRev != null) this._revBase = Number(previoOffline.baseRev) || 0;
+            const claves = Array.isArray(previoOffline.clavesEnConflicto) ? previoOffline.clavesEnConflicto.slice() : [];
+            this._clavesEnConflicto = claves;
+            this._clavesConservarMio = claves.slice();
+            if (claves.length) this.mostrarAvisoConflicto();
+            else this.avisoConflicto = '';
+          } else {
+            this.aplicarEmbarqueCargado(combinado || embarqueBase);
+            await EmbarquesOfflineService.mergeSave(embarqueId, existing => {
+              const record = {
+                ...(existing || {}),
+                id: embarqueId,
+                docData: this.deepClone(embarqueBase),
+                clavesEnConflicto: []
+              };
+              return {
+                record,
+                options: { pendingSync: false, syncState: 'synced' }
+              };
+            });
+            await this.actualizarOfflineRendimientos(false, this.crearPayloadRendimientos());
+          }
 
           
           
@@ -2845,6 +2884,7 @@ export default {
         cliente.productos.forEach(producto => {
           if (producto.medida) {
             const medidaNormalizada = producto.medida.toLowerCase().trim();
+            if (!medidaNormalizada) return;
             let nombreMedida = producto.medida.trim();
             let claveUnica = medidaNormalizada;
             
@@ -3583,6 +3623,12 @@ export default {
   border-radius: 8px;
   background: #fff4e5;
   color: #6a4b12;
+}
+
+.aviso-error {
+  border-color: #d36b6b;
+  background: #fdecec;
+  color: #7a2424;
 }
 
 .aviso-conflicto p {

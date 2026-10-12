@@ -227,11 +227,18 @@ function partirHost(valor) {
     assert.ok(combinado.rev > 4);
     console.log('✓ editor y Rendimientos se fusionan; los kilos nuevos se quedan');
 
+    const sinCambio = await escribirCamposEmbarque(db, id, {
+      baseRev: 3,
+      baseCampos: { kilosCrudos: { '16/20': 100 } },
+      campos: { kilosCrudos: { '16/20': 100 } },
+    });
+    assert.equal((sinCambio.camposEscritos || {}).kilosCrudos, undefined);
+    assert.equal((await leer(id)).kilosCrudos['16/20'], 250, 'igual a la base: se queda lo del otro equipo');
     await assert.rejects(
       () => escribirCamposEmbarque(db, id, {
         baseRev: 3,
         baseCampos: { kilosCrudos: { '16/20': 100 } },
-        campos: { kilosCrudos: { '16/20': 100 } },
+        campos: { kilosCrudos: { '16/20': 80 } },
       }),
       (error) => error.code === 'embarque-modificado-externamente'
     );
@@ -391,7 +398,8 @@ function partirHost(valor) {
       baseCampos: { kilosCrudos: { '16/20': 100 }, notaRendimientos: '' },
       campos: { kilosCrudos: { '16/20': 100 }, notaRendimientos: 'sigue' },
     });
-    assert.ok(parcial.camposEnConflicto.includes('kilosCrudos'));
+    assert.equal((parcial.camposEnConflicto || []).includes('kilosCrudos'), false);
+    assert.equal((parcial.camposEscritos || {}).kilosCrudos, undefined);
     assert.equal((await leer(idDespues)).notaRendimientos, 'sigue');
     assert.equal((await leer(idDespues)).kilosCrudos['16/20'], 250);
     await escribirCamposEmbarque(db, idDespues, {
@@ -442,7 +450,12 @@ function partirHost(valor) {
     await assert.rejects(
       () => escribirCamposEmbarquesAtomico(db, [
         { embarqueId: fleteA, baseRev: 2, baseCampos: { fletePagado: true }, campos: { fletePagado: false } },
-        { embarqueId: fleteB, baseRev: 1, baseCampos: { fletePagado: false }, campos: { fletePagado: false } },
+        {
+          embarqueId: fleteB,
+          baseRev: 1,
+          baseCampos: { fletePagado: false, nota: 'base' },
+          campos: { fletePagado: false, nota: 'mia' },
+        },
       ]),
       (error) => error.code === 'embarque-modificado-externamente'
     );
@@ -548,7 +561,7 @@ function partirHost(valor) {
         baseCampos: baseTrasCheckbox,
         campos: { kilosCrudos: { '16/20': 100 }, analizarGanancia: { '16/20': true } },
       });
-      pisóR7 = !(pleno.camposEnConflicto || []).includes('kilosCrudos');
+      pisóR7 = Boolean(pleno.camposEscritos && pleno.camposEscritos.kilosCrudos);
     } catch (error) {
       assert.equal(error.code, 'embarque-modificado-externamente');
     }
@@ -584,7 +597,7 @@ function partirHost(valor) {
         baseCampos: { ...costosViejos, ...(extra.camposEscritos || {}) },
         campos: { costosPorMedida: { '16/20': 10 }, costoExtra: 20 },
       });
-      pisóCostos = !(pleno.camposEnConflicto || []).includes('costosPorMedida');
+      pisóCostos = Boolean(pleno.camposEscritos && pleno.camposEscritos.costosPorMedida);
     } catch (error) {
       assert.equal(error.code, 'embarque-modificado-externamente');
     }
@@ -603,7 +616,8 @@ function partirHost(valor) {
       baseCampos: { kilosCrudos: { '16/20': 100 } },
       campos: prepararPayloadServidor({ kilosCrudos: { '16/20': 100, '21/25': 40 } }, []),
     });
-    assert.ok(parcialR9.camposEnConflicto.includes('kilosCrudos.16/20'));
+    assert.equal((parcialR9.camposEnConflicto || []).includes('kilosCrudos.16/20'), false);
+    assert.equal((parcialR9.camposEscritos || {})['kilosCrudos.16/20'], undefined);
     let r9 = await leer(idR9);
     assert.equal(r9.kilosCrudos['16/20'], 300);
     assert.equal(r9.kilosCrudos['21/25'], 40);
@@ -677,6 +691,58 @@ function partirHost(valor) {
     assert.ok(respaldoMio);
     assert.equal(respaldoMio.datosOriginales['kilosCrudos.16/20'], 300);
     console.log('✓ Reintentar guarda lo de esta pantalla y respalda lo del otro equipo');
+
+    const idPunto = 'revision-medida-punto';
+    referencia(idPunto);
+    await setDoc(doc(db, 'embarques', idPunto), { rev: 2, kilosCrudos: { '7.5': 300 } });
+    let pisoPunto = false;
+    try {
+      const punto = await escribirCamposEmbarque(db, idPunto, {
+        baseRev: 1,
+        baseCampos: { kilosCrudos: { '7.5': 100 } },
+        campos: prepararPayloadServidor({ kilosCrudos: { '7.5': 250 } }, [], { kilosCrudos: { '7.5': 100 } }),
+      });
+      pisoPunto = !(punto.camposEnConflicto || []).includes('kilosCrudos.7.5');
+    } catch (error) {
+      assert.equal(error.code, 'embarque-modificado-externamente');
+    }
+    assert.equal(pisoPunto, false);
+    assert.equal((await leer(idPunto)).kilosCrudos['7.5'], 300);
+    console.log('✓ una talla con punto (7.5) no se pisa por partir el nombre');
+
+    const idIgualBase = 'revision-talla-sin-tocar';
+    referencia(idIgualBase);
+    await setDoc(doc(db, 'embarques', idIgualBase), {
+      rev: 2,
+      kilosCrudos: { '16/20': 100, '21/25': 300 },
+    });
+    const sinTocar = await escribirCamposEmbarque(db, idIgualBase, {
+      baseRev: 1,
+      baseCampos: { kilosCrudos: { '16/20': 100, '21/25': 50 } },
+      campos: prepararPayloadServidor(
+        { kilosCrudos: { '16/20': 180, '21/25': 50 } },
+        [],
+        { kilosCrudos: { '16/20': 100, '21/25': 50 } }
+      ),
+      forzar: true,
+    });
+    assert.equal((sinTocar.camposEnConflicto || []).includes('kilosCrudos.21/25'), false);
+    const tallas = await leer(idIgualBase);
+    assert.equal(tallas.kilosCrudos['16/20'], 180);
+    assert.equal(tallas.kilosCrudos['21/25'], 300);
+    console.log('✓ una talla igual a la base no se manda y no revierte la del otro equipo');
+
+    const idVacia = 'revision-talla-vacia';
+    referencia(idVacia);
+    await setDoc(doc(db, 'embarques', idVacia), { rev: 1, kilosCrudos: { '16/20': 1 } });
+    await escribirCamposEmbarque(db, idVacia, {
+      baseRev: 1,
+      baseCampos: { kilosCrudos: { '16/20': 1 } },
+      campos: prepararPayloadServidor({ kilosCrudos: { '': 9, '16/20': 12 } }, []),
+    });
+    assert.equal((await leer(idVacia)).kilosCrudos['16/20'], 12);
+    assert.equal((await leer(idVacia)).kilosCrudos[''], undefined);
+    console.log('✓ una talla vacía no rompe el guardado del resto');
 
     console.log('PASS embarque revision (' + projectId + ' @ ' + hostEmulador + ')');
   } finally {

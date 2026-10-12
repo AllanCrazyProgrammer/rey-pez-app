@@ -54,6 +54,8 @@ const revisionMock = {
   CAMPOS_RENDIMIENTOS: [],
   MENSAJE_CONFLICTO_EMBARQUE: 'conflicto',
   fotoCampos: () => ({}),
+  integrarCamposEnBase: (base, campos) => ({ ...(base || {}), ...(campos || {}) }),
+  prepararPayloadServidor: (campos) => ({ ...(campos || {}) }),
   equivalentes: (a, b) => JSON.stringify(a) === JSON.stringify(b),
   esErrorConflictoEmbarque: () => false,
   pedirRecargaPorConflicto: () => false,

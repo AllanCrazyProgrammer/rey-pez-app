@@ -15,7 +15,9 @@ function escribirActualizacion(transaction, ref, payload) {
   const especiales = [];
   Object.keys(payload).forEach(clave => {
     if (clave.indexOf('kilosCrudos.') === 0) {
-      especiales.push(new FieldPath('kilosCrudos', clave.slice('kilosCrudos.'.length)));
+      const medida = clave.slice('kilosCrudos.'.length);
+      if (!String(medida).trim()) return;
+      especiales.push(new FieldPath('kilosCrudos', medida));
       especiales.push(payload[clave]);
       return;
     }

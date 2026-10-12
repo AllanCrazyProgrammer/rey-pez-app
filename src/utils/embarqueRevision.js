@@ -96,15 +96,28 @@ export function esEcoDeRevisionLocal({ revRemota, revBase, inicializando = false
   return !inicializando && remota !== 0 && remota === base;
 }
 
+/**
+ * `kilosCrudos.<medida>`: todo lo que va después del primer punto es el
+ * nombre de la medida, aunque tenga puntos (`7.5`). No se parte en segmentos.
+ */
+export function segmentosDeClave(clave) {
+  if (Array.isArray(clave)) return clave;
+  if (typeof clave !== 'string') return [String(clave)];
+  const prefijo = 'kilosCrudos.';
+  if (clave.indexOf(prefijo) === 0) return ['kilosCrudos', clave.slice(prefijo.length)];
+  if (clave.indexOf('.') === -1) return [clave];
+  return clave.split('.');
+}
+
 export function leerCampo(data, path) {
-  if (!data || path == null) return undefined;
-  if (Object.prototype.hasOwnProperty.call(data, path)) return data[path];
-  if (typeof path !== 'string' || path.indexOf('.') === -1) return undefined;
-  const partes = path.split('.');
+  if (data == null || path == null) return undefined;
+  if (typeof path === 'string' && Object.prototype.hasOwnProperty.call(data, path)) return data[path];
+  const segmentos = segmentosDeClave(path);
   let actual = data;
-  for (let i = 0; i < partes.length; i += 1) {
+  for (let i = 0; i < segmentos.length; i += 1) {
     if (actual == null || typeof actual !== 'object') return undefined;
-    actual = actual[partes[i]];
+    if (!Object.prototype.hasOwnProperty.call(actual, segmentos[i])) return undefined;
+    actual = actual[segmentos[i]];
   }
   return actual;
 }
@@ -178,6 +191,8 @@ export function planearEscritura({ remoto, baseRev, baseCampos, campos, sinBase 
   claves.forEach(clave => {
     const remotoValor = leerCampo(remoto, clave);
     const nuevo = cambios[clave];
+    // Esta pantalla no tocó el campo: se queda lo del otro equipo.
+    if (baseConocida && equivalentes(nuevo, leerCampo(baseCampos, clave))) return;
     // Ya está en el servidor el valor que íbamos a guardar. No se reescribe,
     // pero la base de esta pantalla tiene que reconocerlo: si se queda en el
     // valor viejo, el siguiente cambio se marca conflicto sin serlo.
@@ -224,6 +239,7 @@ export function expandirKilosCrudos(campos) {
   if (mapa == null || typeof mapa !== 'object' || Array.isArray(mapa)) return salida;
   delete salida.kilosCrudos;
   Object.keys(mapa).forEach(medida => {
+    if (!String(medida).trim()) return;
     salida[`kilosCrudos.${medida}`] = mapa[medida];
   });
   return salida;
@@ -233,12 +249,22 @@ export function expandirKilosCrudos(campos) {
  * Lo que sí puede ir al servidor: kilos por medida, sin las claves bloqueadas.
  * El mapa completo se queda en la copia de este equipo.
  */
-export function prepararPayloadServidor(campos, bloqueadas) {
+export function prepararPayloadServidor(campos, bloqueadas, baseCampos) {
   const lista = bloqueadas || [];
   let salida = expandirKilosCrudos(campos);
   if (lista.includes('kilosCrudos')) {
     Object.keys(salida).forEach(clave => {
       if (clave === 'kilosCrudos' || clave.indexOf('kilosCrudos.') === 0) delete salida[clave];
+    });
+  }
+  Object.keys(salida).forEach(clave => {
+    if (clave.indexOf('kilosCrudos.') === 0 && !clave.slice('kilosCrudos.'.length).trim()) {
+      delete salida[clave];
+    }
+  });
+  if (baseCampos) {
+    Object.keys(salida).forEach(clave => {
+      if (equivalentes(salida[clave], leerCampo(baseCampos, clave))) delete salida[clave];
     });
   }
   salida = sinClavesBloqueadas(salida, lista);
@@ -249,10 +275,10 @@ export function prepararPayloadServidor(campos, bloqueadas) {
 export function integrarCamposEnBase(base, campos) {
   const siguiente = { ...(base || {}) };
   Object.keys(campos || {}).forEach(clave => {
-    const punto = clave.indexOf('.');
-    if (punto > 0) {
-      const padre = clave.slice(0, punto);
-      const hijo = clave.slice(punto + 1);
+    const segmentos = segmentosDeClave(clave);
+    if (segmentos.length > 1) {
+      const padre = segmentos[0];
+      const hijo = segmentos.slice(1).join('.');
       const mapa = siguiente[padre] && typeof siguiente[padre] === 'object' && !Array.isArray(siguiente[padre])
         ? { ...siguiente[padre] }
         : {};
