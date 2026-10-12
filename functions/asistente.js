@@ -28,9 +28,19 @@ if (!admin.apps.length && process.env.NODE_ENV !== 'test') {
   admin.initializeApp();
 }
 
-// En tests, usar la app que ya fue inicializada por el test
-const db = process.env.NODE_ENV === 'test' 
-  ? admin.firestore(admin.app('pedidos-tests'))
+function firestoreParaTests() {
+  const apps = admin.apps.filter(Boolean);
+  const preferida = apps.find((app) => app.name === 'pedidos-tests') || apps[0];
+  if (!preferida) {
+    throw new Error('Firebase app no inicializada para tests del asistente');
+  }
+  return admin.firestore(preferida);
+}
+
+// En tests, usar la app que ya fue inicializada por el test.
+// Se prefiere 'pedidos-tests' para no romper ese script; el resto usa la app activa.
+const db = process.env.NODE_ENV === 'test'
+  ? firestoreParaTests()
   : admin.firestore();
 
 /**
@@ -66,6 +76,62 @@ function errorResponse(res, status, code, message, details = null) {
   const body = { error: { code, message } };
   if (details) body.error.details = details;
   return res.status(status).json(body);
+}
+
+/**
+ * true si el body trae un cuarto. Vacío, null u omitido no cuentan: normalizeCuarto()
+ * los convierte en 's/c', que también es un cuarto real. 's/c' explícito sí cuenta.
+ */
+function cuartoFueIndicado(cuarto) {
+  if (cuarto === undefined || cuarto === null) return false;
+  return String(cuarto).trim() !== '';
+}
+
+function preciosCoinciden(precioOpcion, precioNorm) {
+  const opcion = precioOpcion === undefined ? null : precioOpcion;
+  if (precioNorm === null || precioNorm === undefined) return opcion === null;
+  return Number(opcion) === Number(precioNorm);
+}
+
+/**
+ * Hay que revisar ambigüedad cuando el caller no cerró la combinación.
+ * Precio y cuarto explícitos (incluido 's/c') identifican una sola opción.
+ * "Todos los cuartos" es una instrucción de descuento, no una combinación ambigua.
+ */
+function debeRevisarAmbiguedad(precioNorm, cuarto, { todosLosCuartos = false } = {}) {
+  if (todosLosCuartos && normalizeCuarto(cuarto) === 'Todos los cuartos') return false;
+  const precioDado = precioNorm !== null && precioNorm !== undefined;
+  return !precioDado || !cuartoFueIndicado(cuarto);
+}
+
+/**
+ * Deja solo las opciones compatibles con el precio y/o cuarto indicados.
+ * Si no se indicó ninguno, devuelve la lista completa.
+ */
+function filtrarOpcionesIndicadas(opciones, precioNorm, cuarto) {
+  const precioDado = precioNorm !== null && precioNorm !== undefined;
+  const cuartoDado = cuartoFueIndicado(cuarto);
+  const cuartoNorm = normalizeCuarto(cuarto);
+  return opciones.filter((opcion) => {
+    const coincidePrecio = !precioDado || preciosCoinciden(opcion.precio, precioNorm);
+    const coincideCuarto = !cuartoDado || opcion.cuarto === cuartoNorm;
+    return coincidePrecio && coincideCuarto;
+  });
+}
+
+function errorPrecioCuartoAmbiguo(etiqueta, opciones) {
+  return {
+    code: 'PRECIO_CUARTO_AMBIGUO',
+    message: `Hay múltiples precios/cuartos disponibles para ${etiqueta}. Especifica "precio" y/o "cuarto" para desambiguar`,
+    status: 400,
+    details: {
+      opcionesDisponibles: opciones.map((o) => ({
+        precio: o.precio,
+        cuarto: o.cuarto,
+        kilosDisponibles: o.kilos
+      }))
+    }
+  };
 }
 
 /**
@@ -280,8 +346,11 @@ async function handlePostSalida(req, res) {
         };
       }
       
-      // Si hay múltiples opciones con diferentes precios/cuartos, advertir
-      if (precioNorm === null || cuartoNorm === 's/c') {
+      // Ambiguo solo si, con el precio y/o cuarto indicados, sigue habiendo
+      // más de una opción. Un precio que identifica un único lote (aunque su
+      // cuarto sea 's/c', explícito u omitido) no es ambiguo. Sin precio ni
+      // cuarto, varias opciones siguen siéndolo.
+      if (debeRevisarAmbiguedad(precioNorm, cuarto)) {
         const opciones = obtenerOpcionesDisponibles({
           proveedor,
           medidaBase: medida,
@@ -290,22 +359,12 @@ async function handlePostSalida(req, res) {
           entradasLocales: diaData.entradas || [],
           sacadaIdActual: sacadaRef.id
         });
-        
-        if (opciones.length > 1) {
-          const totalDisponible = opciones.reduce((sum, o) => sum + o.kilos, 0);
+        const coincidentes = filtrarOpcionesIndicadas(opciones, precioNorm, cuarto);
+
+        if (coincidentes.length > 1) {
+          const totalDisponible = coincidentes.reduce((sum, o) => sum + o.kilos, 0);
           if (totalDisponible >= kilos) {
-            throw {
-              code: 'PRECIO_CUARTO_AMBIGUO',
-              message: `Hay múltiples precios/cuartos disponibles para ${proveedor} - ${medida}. Especifica "precio" y/o "cuarto" para desambiguar`,
-              status: 400,
-              details: {
-                opcionesDisponibles: opciones.map(o => ({
-                  precio: o.precio,
-                  cuarto: o.cuarto,
-                  kilosDisponibles: o.kilos
-                }))
-              }
-            };
+            throw errorPrecioCuartoAmbiguo(`${proveedor} - ${medida}`, coincidentes);
           }
         }
       }
@@ -1214,8 +1273,9 @@ async function handlePostCrudosSalida(req, res) {
         };
       }
       
-      // Si hay múltiples opciones con diferentes precios/cuartos, advertir
-      if ((precioNorm === null || cuartoNorm === 's/c') && cuartoNorm !== 'Todos los cuartos') {
+      // Misma regla que limpios: filtrar por el precio y/o cuarto indicados
+      // y solo marcar ambigüedad si queda más de una opción.
+      if (debeRevisarAmbiguedad(precioNorm, cuarto, { todosLosCuartos: true })) {
         const opciones = obtenerOpcionesDisponiblesCrudos({
           proveedor,
           producto,
@@ -1224,22 +1284,12 @@ async function handlePostCrudosSalida(req, res) {
           entradasLocales: diaData.entradas || [],
           registroIdActual: crudoRef.id
         });
-        
-        if (opciones.length > 1) {
-          const totalDisponible = opciones.reduce((sum, o) => sum + o.kilos, 0);
+        const coincidentes = filtrarOpcionesIndicadas(opciones, precioNorm, cuarto);
+
+        if (coincidentes.length > 1) {
+          const totalDisponible = coincidentes.reduce((sum, o) => sum + o.kilos, 0);
           if (totalDisponible >= kilos) {
-            throw {
-              code: 'PRECIO_CUARTO_AMBIGUO',
-              message: `Hay múltiples precios/cuartos disponibles para ${proveedor} - ${producto}. Especifica "precio" y/o "cuarto" para desambiguar`,
-              status: 400,
-              details: {
-                opcionesDisponibles: opciones.map(o => ({
-                  precio: o.precio,
-                  cuarto: o.cuarto,
-                  kilosDisponibles: o.kilos
-                }))
-              }
-            };
+            throw errorPrecioCuartoAmbiguo(`${proveedor} - ${producto}`, coincidentes);
           }
         }
       }
@@ -2968,7 +3018,9 @@ if (process.env.NODE_ENV === 'test') {
     handlePostPedidosLimpio,
     handleGetPedidosLimpio,
     handlePostPedidosLimpioDeshacer,
-    calcularTotalesClientePedidoLimpio
+    calcularTotalesClientePedidoLimpio,
+    handlePostSalida,
+    handlePostCrudosSalida
   };
 }
 

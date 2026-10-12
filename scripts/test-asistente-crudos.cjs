@@ -21,6 +21,35 @@ async function puertoLibre() {
   return port;
 }
 
+function mockRequest(method, urlPath, body = {}) {
+  const url = new URL(urlPath, 'http://localhost:5001');
+  return {
+    method,
+    path: url.pathname,
+    query: Object.fromEntries(url.searchParams),
+    headers: { authorization: 'Bearer test-key' },
+    body
+  };
+}
+
+function mockResponse() {
+  return {
+    statusCode: 200,
+    _body: null,
+    status(code) { this.statusCode = code; return this; },
+    json(data) { this._body = data; return this; },
+    send(data) { this._body = data; return this; },
+    setHeader() { return this; }
+  };
+}
+
+async function callHandler(handlerFn, method, urlPath, body) {
+  const req = mockRequest(method, urlPath, body);
+  const res = mockResponse();
+  await handlerFn(req, res);
+  return { status: res.statusCode, body: res._body };
+}
+
 async function run() {
   const jar = process.env.FIRESTORE_EMULATOR_JAR || path.join(os.homedir(), '.cache/firebase/emulators/cloud-firestore-emulator-v1.19.8.jar');
   assert.ok(fs.existsSync(jar), 'Configura FIRESTORE_EMULATOR_JAR con el JAR del emulador de Firestore compatible con tu Java.');
@@ -468,6 +497,138 @@ async function run() {
     const preciosUnicos = new Set(entradasTest.map(e => e.precio));
     assert.ok(preciosUnicos.size > 1, 'Debe haber múltiples precios para probar ambigüedad');
     console.log('✓ Validación de lote ambiguo (múltiples precios) funciona');
+
+    // ========================================================================
+    // PRECIO ÚNICO CON CUARTO s/c NO ES AMBIGUO
+    // Mismo caso que limpios: Selecta 36/40 con 121.5 s/c y 113.5 Aaron.
+    // La salida escrita no lleva precio (igual que la UI) y cuartoFrio es 's/c'.
+    // ========================================================================
+
+    process.env.NODE_ENV = 'test';
+    delete require.cache[path.join(root, 'functions', 'asistente.js')];
+    const handlers = require(path.join(root, 'functions', 'asistente.js'))._testHandlers;
+    assert.ok(handlers && handlers.handlePostCrudosSalida, 'handlePostCrudosSalida debe exportarse en tests');
+
+    async function sembrarCrudos(fecha, entradas) {
+      const ref = db.collection('existenciasCrudos').doc();
+      await ref.set({
+        fecha: admin.firestore.Timestamp.fromDate(new Date(`${fecha}T06:00:00Z`)),
+        entradas,
+        salidas: [],
+        totalEntradas: entradas.reduce((sum, entrada) => sum + entrada.kilos, 0),
+        totalSalidas: 0,
+        version: 1
+      });
+      return ref;
+    }
+
+    async function docCrudos(fecha) {
+      const snap = await db.collection('existenciasCrudos').get();
+      const doc = snap.docs.find((item) => fechaRegistroAdmin(item.data().fecha) === fecha);
+      assert.ok(doc, `Debe existir el registro de crudos ${fecha}`);
+      return doc;
+    }
+
+    const lotesSelecta = [
+      { proveedor: 'Selecta', producto: '36/40', kilos: 14960, precio: 121.5, piezas: '', cuartoFrio: 's/c' },
+      { proveedor: 'Selecta', producto: '36/40', kilos: 25000, precio: 113.5, piezas: '', cuartoFrio: 'Aaron' }
+    ];
+    await sembrarCrudos('2026-11-01', lotesSelecta);
+
+    const salidaSinCuartoExplicito = await callHandler(handlers.handlePostCrudosSalida, 'POST', '/crudos/salida', {
+      fecha: '2026-11-02',
+      proveedor: 'Selecta',
+      producto: '36/40',
+      precio: 121.5,
+      kilos: 100
+    });
+    assert.equal(salidaSinCuartoExplicito.status, 200, JSON.stringify(salidaSinCuartoExplicito.body));
+    assert.equal(salidaSinCuartoExplicito.body.salida.cuartoFrio, 's/c');
+    assert.equal(salidaSinCuartoExplicito.body.salida.kilos, 100);
+    assert.equal(salidaSinCuartoExplicito.body.salida.proveedor, 'Selecta');
+    assert.equal(salidaSinCuartoExplicito.body.salida.producto, '36/40');
+    assert.equal(Object.hasOwn(salidaSinCuartoExplicito.body.salida, 'precio'), false);
+    assert.equal(salidaSinCuartoExplicito.body.kilosDisponiblesAntes, 14960);
+    assert.equal(salidaSinCuartoExplicito.body.kilosDisponiblesDespues, 14860);
+    const salidasOmitidas = (await docCrudos('2026-11-02')).data().salidas;
+    assert.equal(salidasOmitidas.length, 1);
+    assert.equal(salidasOmitidas[0].cuartoFrio, 's/c');
+    assert.equal(salidasOmitidas[0].kilos, 100);
+    assert.equal(Object.hasOwn(salidasOmitidas[0], 'precio'), false);
+    console.log('✓ Crudos: precio 121.5 sin cuarto toma el lote s/c y guarda cuartoFrio="s/c" sin precio');
+
+    const salidaCuartoSc = await callHandler(handlers.handlePostCrudosSalida, 'POST', '/crudos/salida', {
+      fecha: '2026-11-03',
+      proveedor: 'Selecta',
+      producto: '36/40',
+      precio: 121.5,
+      kilos: 100,
+      cuarto: 's/c'
+    });
+    assert.equal(salidaCuartoSc.status, 200, JSON.stringify(salidaCuartoSc.body));
+    assert.equal(salidaCuartoSc.body.salida.cuartoFrio, 's/c');
+    assert.equal(Object.hasOwn(salidaCuartoSc.body.salida, 'precio'), false);
+    assert.equal(salidaCuartoSc.body.kilosDisponiblesAntes, 14860);
+    const salidasSc = (await docCrudos('2026-11-03')).data().salidas;
+    assert.equal(salidasSc[0].cuartoFrio, 's/c');
+    console.log('✓ Crudos: precio 121.5 con cuarto "s/c" toma el mismo lote');
+
+    const salidaAaron = await callHandler(handlers.handlePostCrudosSalida, 'POST', '/crudos/salida', {
+      fecha: '2026-11-04',
+      proveedor: 'Selecta',
+      producto: '36/40',
+      precio: 113.5,
+      kilos: 50,
+      cuarto: 'Aaron'
+    });
+    assert.equal(salidaAaron.status, 200, JSON.stringify(salidaAaron.body));
+    assert.equal(salidaAaron.body.kilosDisponiblesAntes, 25000);
+    assert.equal(salidaAaron.body.salida.cuartoFrio, 'Aaron');
+    console.log('✓ Crudos: el lote Aaron 113.5 sigue intacto (25000 kg)');
+
+    await sembrarCrudos('2026-11-05', [
+      { proveedor: 'Selecta', producto: '31/35', kilos: 1000, precio: null, piezas: '', cuartoFrio: 's/c' },
+      { proveedor: 'Selecta', producto: '31/35', kilos: 25000, precio: 113.5, piezas: '', cuartoFrio: 'Aaron' }
+    ]);
+    const sinDatos = await callHandler(handlers.handlePostCrudosSalida, 'POST', '/crudos/salida', {
+      fecha: '2026-11-05',
+      proveedor: 'Selecta',
+      producto: '31/35',
+      kilos: 100
+    });
+    assert.equal(sinDatos.status, 400, JSON.stringify(sinDatos.body));
+    assert.equal(sinDatos.body.error.code, 'PRECIO_CUARTO_AMBIGUO');
+    assert.equal((await docCrudos('2026-11-05')).data().salidas.length, 0);
+    console.log('✓ Crudos: sin precio ni cuarto, varias opciones siguen siendo PRECIO_CUARTO_AMBIGUO');
+
+    await sembrarCrudos('2026-11-06', [
+      { proveedor: 'Selecta', producto: '41/50', kilos: 14960, precio: 121.5, piezas: '', cuartoFrio: 's/c' },
+      { proveedor: 'Selecta', producto: '41/50', kilos: 25000, precio: 121.5, piezas: '', cuartoFrio: 'Aaron' }
+    ]);
+    const mismoPrecio = await callHandler(handlers.handlePostCrudosSalida, 'POST', '/crudos/salida', {
+      fecha: '2026-11-06',
+      proveedor: 'Selecta',
+      producto: '41/50',
+      precio: 121.5,
+      kilos: 100
+    });
+    assert.equal(mismoPrecio.status, 400, JSON.stringify(mismoPrecio.body));
+    assert.equal(mismoPrecio.body.error.code, 'PRECIO_CUARTO_AMBIGUO');
+    assert.equal((await docCrudos('2026-11-06')).data().salidas.length, 0);
+
+    const mismoPrecioSc = await callHandler(handlers.handlePostCrudosSalida, 'POST', '/crudos/salida', {
+      fecha: '2026-11-06',
+      proveedor: 'Selecta',
+      producto: '41/50',
+      precio: 121.5,
+      kilos: 100,
+      cuarto: 's/c'
+    });
+    assert.equal(mismoPrecioSc.status, 200, JSON.stringify(mismoPrecioSc.body));
+    assert.equal(mismoPrecioSc.body.kilosDisponiblesAntes, 14960);
+    assert.equal(mismoPrecioSc.body.salida.cuartoFrio, 's/c');
+    assert.equal(Object.hasOwn(mismoPrecioSc.body.salida, 'precio'), false);
+    console.log('✓ Crudos: el mismo precio en dos cuartos sigue ambiguo; cuarto "s/c" lo resuelve');
     
     console.log('\n✅ TODOS LOS TESTS DE CRUDOS PASARON (Admin SDK)');
     console.log('Resumen:');

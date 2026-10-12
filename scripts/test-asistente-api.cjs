@@ -21,6 +21,35 @@ async function puertoLibre() {
   return port;
 }
 
+function mockRequest(method, urlPath, body = {}) {
+  const url = new URL(urlPath, 'http://localhost:5001');
+  return {
+    method,
+    path: url.pathname,
+    query: Object.fromEntries(url.searchParams),
+    headers: { authorization: 'Bearer test-key' },
+    body
+  };
+}
+
+function mockResponse() {
+  return {
+    statusCode: 200,
+    _body: null,
+    status(code) { this.statusCode = code; return this; },
+    json(data) { this._body = data; return this; },
+    send(data) { this._body = data; return this; },
+    setHeader() { return this; }
+  };
+}
+
+async function callHandler(handlerFn, method, urlPath, body) {
+  const req = mockRequest(method, urlPath, body);
+  const res = mockResponse();
+  await handlerFn(req, res);
+  return { status: res.statusCode, body: res._body };
+}
+
 async function run() {
   const jar = process.env.FIRESTORE_EMULATOR_JAR || path.join(os.homedir(), '.cache/firebase/emulators/cloud-firestore-emulator-v1.19.8.jar');
   assert.ok(fs.existsSync(jar), 'Configura FIRESTORE_EMULATOR_JAR con el JAR del emulador de Firestore compatible con tu Java.');
@@ -369,6 +398,143 @@ async function run() {
     assert.equal(salidaGuardadaConCuarto.cuartoFrio, 'Cuarto 3', 
       'Salida con cuarto debe respetar el cuarto especificado');
     console.log('✓ Forma de salida CON cuarto: cuartoFrio="Cuarto 3" (igual que UI)');
+
+    // ========================================================================
+    // PRECIO ÚNICO CON CUARTO s/c NO ES AMBIGUO
+    // Selecta 36/40: {121.5, s/c, 14960} y {113.5, Aaron, 25000}.
+    // POST con precio 121.5 (cuarto s/c u omitido) toma el lote s/c.
+    // ========================================================================
+
+    process.env.NODE_ENV = 'test';
+    delete require.cache[path.join(root, 'functions', 'asistente.js')];
+    const handlers = require(path.join(root, 'functions', 'asistente.js'))._testHandlers;
+    assert.ok(handlers && handlers.handlePostSalida, 'handlePostSalida debe exportarse en tests');
+
+    async function sembrarLimpios(fecha, entradas) {
+      const ref = db.collection('sacadas').doc();
+      await ref.set({
+        fecha: admin.firestore.Timestamp.fromDate(new Date(`${fecha}T06:00:00Z`)),
+        entradas,
+        salidas: [],
+        totalEntradas: entradas.reduce((sum, entrada) => sum + entrada.kilos, 0),
+        totalSalidas: 0,
+        version: 1
+      });
+      await db.collection('sacadasDias').doc(fecha).set({ fecha, sacadaId: ref.id });
+      return ref;
+    }
+
+    async function salidaGuardada(fecha) {
+      const indice = await db.collection('sacadasDias').doc(fecha).get();
+      assert.ok(indice.exists, `Debe existir el día ${fecha}`);
+      const sacada = await db.collection('sacadas').doc(indice.data().sacadaId).get();
+      return sacada.data().salidas;
+    }
+
+    const lotesSelecta = [
+      { proveedor: 'Selecta', medida: '36/40', precio: 121.5, kilos: 14960, cajas: 748, cuartoFrio: 's/c' },
+      { proveedor: 'Selecta', medida: '36/40', precio: 113.5, kilos: 25000, cajas: 1250, cuartoFrio: 'Aaron' }
+    ];
+    await sembrarLimpios('2027-04-01', lotesSelecta);
+
+    const salidaSinCuartoExplicito = await callHandler(handlers.handlePostSalida, 'POST', '/salida', {
+      fecha: '2027-04-02',
+      proveedor: 'Selecta',
+      medida: '36/40',
+      precio: 121.5,
+      kilos: 100
+    });
+    assert.equal(salidaSinCuartoExplicito.status, 200, JSON.stringify(salidaSinCuartoExplicito.body));
+    assert.equal(salidaSinCuartoExplicito.body.success, true);
+    assert.equal(salidaSinCuartoExplicito.body.salida.precio, 121.5);
+    assert.equal(salidaSinCuartoExplicito.body.salida.cuartoFrio, 's/c');
+    assert.equal(salidaSinCuartoExplicito.body.salida.kilos, 100);
+    assert.equal(salidaSinCuartoExplicito.body.salida.tipo, 'proveedor');
+    assert.equal(salidaSinCuartoExplicito.body.kilosDisponiblesAntes, 14960);
+    assert.equal(salidaSinCuartoExplicito.body.kilosDisponiblesDespues, 14860);
+    const salidasOmitidas = await salidaGuardada('2027-04-02');
+    assert.equal(salidasOmitidas.length, 1);
+    assert.equal(salidasOmitidas[0].cuartoFrio, 's/c');
+    assert.equal(salidasOmitidas[0].precio, 121.5);
+    assert.equal(salidasOmitidas[0].medida, '36/40');
+    assert.equal(salidasOmitidas[0].proveedor, 'Selecta');
+    console.log('✓ Precio 121.5 sin cuarto toma el lote s/c (14960 kg) y guarda cuartoFrio="s/c"');
+
+    const salidaCuartoSc = await callHandler(handlers.handlePostSalida, 'POST', '/salida', {
+      fecha: '2027-04-03',
+      proveedor: 'Selecta',
+      medida: '36/40',
+      precio: 121.5,
+      kilos: 100,
+      cuarto: 's/c'
+    });
+    assert.equal(salidaCuartoSc.status, 200, JSON.stringify(salidaCuartoSc.body));
+    assert.equal(salidaCuartoSc.body.salida.cuartoFrio, 's/c');
+    assert.equal(salidaCuartoSc.body.salida.precio, 121.5);
+    assert.equal(salidaCuartoSc.body.kilosDisponiblesAntes, 14860);
+    const salidasSc = await salidaGuardada('2027-04-03');
+    assert.equal(salidasSc[0].cuartoFrio, 's/c');
+    assert.equal(salidasSc[0].precio, 121.5);
+    console.log('✓ Precio 121.5 con cuarto "s/c" toma el mismo lote y guarda cuartoFrio="s/c"');
+
+    const salidaAaron = await callHandler(handlers.handlePostSalida, 'POST', '/salida', {
+      fecha: '2027-04-04',
+      proveedor: 'Selecta',
+      medida: '36/40',
+      precio: 113.5,
+      kilos: 50,
+      cuarto: 'Aaron'
+    });
+    assert.equal(salidaAaron.status, 200, JSON.stringify(salidaAaron.body));
+    assert.equal(salidaAaron.body.kilosDisponiblesAntes, 25000);
+    assert.equal(salidaAaron.body.salida.cuartoFrio, 'Aaron');
+    assert.equal(salidaAaron.body.salida.precio, 113.5);
+    console.log('✓ El lote Aaron 113.5 sigue intacto (25000 kg)');
+
+    await sembrarLimpios('2027-04-05', [
+      { proveedor: 'Selecta', medida: '31/35', precio: null, kilos: 1000, cajas: 50, cuartoFrio: 's/c' },
+      { proveedor: 'Selecta', medida: '31/35', precio: 113.5, kilos: 25000, cajas: 1250, cuartoFrio: 'Aaron' }
+    ]);
+    const sinDatos = await callHandler(handlers.handlePostSalida, 'POST', '/salida', {
+      fecha: '2027-04-05',
+      proveedor: 'Selecta',
+      medida: '31/35',
+      kilos: 100
+    });
+    assert.equal(sinDatos.status, 400, JSON.stringify(sinDatos.body));
+    assert.equal(sinDatos.body.error.code, 'PRECIO_CUARTO_AMBIGUO');
+    const salidasSinDatos = await salidaGuardada('2027-04-05');
+    assert.equal(salidasSinDatos.length, 0, 'La ambigüedad no debe escribir la salida');
+    console.log('✓ Sin precio ni cuarto, varias opciones siguen siendo PRECIO_CUARTO_AMBIGUO');
+
+    await sembrarLimpios('2027-04-06', [
+      { proveedor: 'Selecta', medida: '41/50', precio: 121.5, kilos: 14960, cajas: 748, cuartoFrio: 's/c' },
+      { proveedor: 'Selecta', medida: '41/50', precio: 121.5, kilos: 25000, cajas: 1250, cuartoFrio: 'Aaron' }
+    ]);
+    const mismoPrecio = await callHandler(handlers.handlePostSalida, 'POST', '/salida', {
+      fecha: '2027-04-06',
+      proveedor: 'Selecta',
+      medida: '41/50',
+      precio: 121.5,
+      kilos: 100
+    });
+    assert.equal(mismoPrecio.status, 400, JSON.stringify(mismoPrecio.body));
+    assert.equal(mismoPrecio.body.error.code, 'PRECIO_CUARTO_AMBIGUO');
+    assert.equal((await salidaGuardada('2027-04-06')).length, 0);
+
+    const mismoPrecioSc = await callHandler(handlers.handlePostSalida, 'POST', '/salida', {
+      fecha: '2027-04-06',
+      proveedor: 'Selecta',
+      medida: '41/50',
+      precio: 121.5,
+      kilos: 100,
+      cuarto: 's/c'
+    });
+    assert.equal(mismoPrecioSc.status, 200, JSON.stringify(mismoPrecioSc.body));
+    assert.equal(mismoPrecioSc.body.kilosDisponiblesAntes, 14960);
+    assert.equal(mismoPrecioSc.body.salida.cuartoFrio, 's/c');
+    assert.equal(mismoPrecioSc.body.salida.precio, 121.5);
+    console.log('✓ El mismo precio en dos cuartos sigue ambiguo; cuarto "s/c" lo resuelve');
     
     console.log('\n✅ TODOS LOS TESTS PASARON (Admin SDK)');
     console.log('Resumen:');
