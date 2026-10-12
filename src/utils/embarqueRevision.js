@@ -161,7 +161,7 @@ export function fotoCampos(data, lista) {
  *   que el servidor no tiene ya iguales).
  * @returns {{accion:'crear'|'escribir'|'fusionar'|'parcial'|'omitir'|'conflicto', rev:number, campos:Object, camposEnConflicto:string[]}}
  */
-export function planearEscritura({ remoto, baseRev, baseCampos, campos, sinBase = 'conflicto' } = {}) {
+export function planearEscritura({ remoto, baseRev, baseCampos, campos, sinBase = 'conflicto', forzar = false } = {}) {
   const cambios = campos || {};
   const claves = Object.keys(cambios);
   const revRemota = remoto ? (Number(remoto.rev) || 0) : 0;
@@ -173,13 +173,22 @@ export function planearEscritura({ remoto, baseRev, baseCampos, campos, sinBase 
 
   const porEscribir = {};
   const enConflicto = [];
+  const coincidentes = {};
   const baseConocida = baseCampos != null;
   claves.forEach(clave => {
     const remotoValor = leerCampo(remoto, clave);
     const nuevo = cambios[clave];
-    // Ya está en el servidor el valor que íbamos a guardar: no es conflicto
-    // aunque la revisión haya subido por otro campo.
-    if (equivalentes(remotoValor, nuevo)) return;
+    // Ya está en el servidor el valor que íbamos a guardar. No se reescribe,
+    // pero la base de esta pantalla tiene que reconocerlo: si se queda en el
+    // valor viejo, el siguiente cambio se marca conflicto sin serlo.
+    if (equivalentes(remotoValor, nuevo)) {
+      coincidentes[clave] = nuevo;
+      return;
+    }
+    if (forzar) {
+      porEscribir[clave] = nuevo;
+      return;
+    }
     // Con foto de base se compara campo por campo aunque `rev` coincida.
     // Una fusión anterior no nos deja leer los campos que no escribimos;
     // adoptar esa rev y volver a mandar el formulario completo no puede
@@ -195,14 +204,65 @@ export function planearEscritura({ remoto, baseRev, baseCampos, campos, sinBase 
 
   const hayEscritura = Object.keys(porEscribir).length > 0;
   if (!hayEscritura && enConflicto.length === 0) {
-    return { accion: 'omitir', rev: revRemota, campos: {}, camposEnConflicto: [] };
+    return { accion: 'omitir', rev: revRemota, campos: {}, camposEnConflicto: [], camposCoincidentes: coincidentes };
   }
   if (!hayEscritura) {
-    return { accion: 'conflicto', rev: revRemota, campos: cambios, camposEnConflicto: enConflicto };
+    return { accion: 'conflicto', rev: revRemota, campos: cambios, camposEnConflicto: enConflicto, camposCoincidentes: coincidentes };
   }
   let accion = revRemota === revBase ? 'escribir' : 'fusionar';
   if (enConflicto.length) accion = 'parcial';
-  return { accion, rev: revRemota + 1, campos: porEscribir, camposEnConflicto: enConflicto };
+  return { accion, rev: revRemota + 1, campos: porEscribir, camposEnConflicto: enConflicto, camposCoincidentes: coincidentes };
+}
+
+/**
+ * Parte `kilosCrudos` por medida (`kilosCrudos.<medida>`) para que dos
+ * equipos puedan guardar tallas distintas sin pisarse el mapa entero.
+ */
+export function expandirKilosCrudos(campos) {
+  const salida = { ...(campos || {}) };
+  const mapa = salida.kilosCrudos;
+  if (mapa == null || typeof mapa !== 'object' || Array.isArray(mapa)) return salida;
+  delete salida.kilosCrudos;
+  Object.keys(mapa).forEach(medida => {
+    salida[`kilosCrudos.${medida}`] = mapa[medida];
+  });
+  return salida;
+}
+
+/**
+ * Lo que sí puede ir al servidor: kilos por medida, sin las claves bloqueadas.
+ * El mapa completo se queda en la copia de este equipo.
+ */
+export function prepararPayloadServidor(campos, bloqueadas) {
+  const lista = bloqueadas || [];
+  let salida = expandirKilosCrudos(campos);
+  if (lista.includes('kilosCrudos')) {
+    Object.keys(salida).forEach(clave => {
+      if (clave === 'kilosCrudos' || clave.indexOf('kilosCrudos.') === 0) delete salida[clave];
+    });
+  }
+  salida = sinClavesBloqueadas(salida, lista);
+  return salida;
+}
+
+/** Mete escrituras `padre.hijo` dentro del mapa de la base. */
+export function integrarCamposEnBase(base, campos) {
+  const siguiente = { ...(base || {}) };
+  Object.keys(campos || {}).forEach(clave => {
+    const punto = clave.indexOf('.');
+    if (punto > 0) {
+      const padre = clave.slice(0, punto);
+      const hijo = clave.slice(punto + 1);
+      const mapa = siguiente[padre] && typeof siguiente[padre] === 'object' && !Array.isArray(siguiente[padre])
+        ? { ...siguiente[padre] }
+        : {};
+      mapa[hijo] = campos[clave];
+      siguiente[padre] = mapa;
+    } else {
+      siguiente[clave] = campos[clave];
+    }
+  });
+  return siguiente;
 }
 
 /** Quita claves que ya están en conflicto hasta que la persona reintente o recargue. */

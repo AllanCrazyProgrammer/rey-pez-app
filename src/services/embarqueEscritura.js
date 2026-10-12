@@ -1,5 +1,5 @@
-import { collection, doc, runTransaction, serverTimestamp } from 'firebase/firestore';
-import { MENSAJE_CONFLICTO_EMBARQUE, planearEscritura } from '@/utils/embarqueRevision';
+import { collection, doc, FieldPath, runTransaction, serverTimestamp } from 'firebase/firestore';
+import { equivalentes, integrarCamposEnBase, leerCampo, MENSAJE_CONFLICTO_EMBARQUE, planearEscritura } from '@/utils/embarqueRevision';
 
 function crearErrorConflicto({ code, mensaje, camposEnConflicto, revRemota, camposPendientes }) {
   const error = new Error(mensaje || MENSAJE_CONFLICTO_EMBARQUE);
@@ -8,6 +8,29 @@ function crearErrorConflicto({ code, mensaje, camposEnConflicto, revRemota, camp
   error.camposPendientes = camposPendientes || {};
   error.revRemota = revRemota;
   return error;
+}
+
+function escribirActualizacion(transaction, ref, payload) {
+  const planos = {};
+  const especiales = [];
+  Object.keys(payload).forEach(clave => {
+    if (clave.indexOf('kilosCrudos.') === 0) {
+      especiales.push(new FieldPath('kilosCrudos', clave.slice('kilosCrudos.'.length)));
+      especiales.push(payload[clave]);
+      return;
+    }
+    planos[clave] = payload[clave];
+  });
+  if (!especiales.length) {
+    transaction.update(ref, planos);
+    return;
+  }
+  const args = [];
+  Object.keys(planos).forEach(clave => {
+    args.push(clave);
+    args.push(planos[clave]);
+  });
+  transaction.update(ref, ...args, ...especiales);
 }
 
 function seleccionar(campos, claves) {
@@ -30,6 +53,7 @@ async function escribirUnaVez(db, embarqueId, opciones) {
     respaldo = true,
     crearSiNoExiste = false,
     sinBase = 'conflicto',
+    forzar = false,
   } = opciones;
 
   if (!Object.keys(campos).length) {
@@ -64,7 +88,7 @@ async function escribirUnaVez(db, embarqueId, opciones) {
       return;
     }
 
-    const plan = planearEscritura({ remoto, baseRev, baseCampos, campos, sinBase });
+    const plan = planearEscritura({ remoto, baseRev, baseCampos, campos, sinBase, forzar });
     if (plan.accion === 'omitir') {
       resultado = {
         rev: plan.rev,
@@ -73,6 +97,7 @@ async function escribirUnaVez(db, embarqueId, opciones) {
         remoto,
         camposEscritos: {},
         camposEnConflicto: [],
+        camposCoincidentes: plan.camposCoincidentes || {},
       };
       return;
     }
@@ -99,9 +124,27 @@ async function escribirUnaVez(db, embarqueId, opciones) {
     }
 
     const payload = { ...plan.campos, ...meta, rev: plan.rev };
-    if (remoto) transaction.update(embarqueRef, payload);
+    if (forzar && remoto && respaldo) {
+      const reemplazados = {};
+      Object.keys(plan.campos).forEach(clave => {
+        const remotoValor = leerCampo(remoto, clave);
+        if (!equivalentes(remotoValor, plan.campos[clave])) reemplazados[clave] = remotoValor;
+      });
+      if (Object.keys(reemplazados).length) {
+        transaction.set(backupRef, {
+          embarqueOriginalId: embarqueId,
+          datosOriginales: reemplazados,
+          fechaRespaldo: serverTimestamp(),
+          razonRespaldo: 'conservar_valor_ajeno',
+          camposEnConflicto: Object.keys(reemplazados),
+          tipoRespaldo: 'emergencia',
+          version: '1.0',
+        });
+      }
+    }
+    if (remoto) escribirActualizacion(transaction, embarqueRef, payload);
     else transaction.set(embarqueRef, payload);
-    if (plan.camposEnConflicto.length && respaldo && remoto) {
+    if (!forzar && plan.camposEnConflicto.length && respaldo && remoto) {
       transaction.set(backupRef, {
         embarqueOriginalId: embarqueId,
         datosOriginales: seleccionar(campos, plan.camposEnConflicto),
@@ -119,6 +162,7 @@ async function escribirUnaVez(db, embarqueId, opciones) {
       remoto,
       camposEscritos: plan.campos,
       camposEnConflicto: plan.camposEnConflicto,
+      camposCoincidentes: plan.camposCoincidentes || {},
     };
   });
 
@@ -130,10 +174,10 @@ const colas = new Map();
 
 function ajustarContraAnterior(opciones, ultimo) {
   if (!ultimo || ultimo.rev == null) return opciones;
-  const baseCampos = {
-    ...(opciones.baseCampos || {}),
+  const baseCampos = integrarCamposEnBase(opciones.baseCampos, {
+    ...(ultimo.camposCoincidentes || {}),
     ...(ultimo.camposEscritos || {}),
-  };
+  });
   // Una fusión o un parcial no leyó el resto del documento: la rev nueva no
   // es nuestra base. Solo una escritura limpia (el servidor seguía en
   // nuestra revisión) autoriza a subir baseRev.

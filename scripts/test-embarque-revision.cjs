@@ -66,7 +66,16 @@ function partirHost(valor) {
     runTransaction: (db, fn) => firestoreReal.runTransaction(db, async (transaction) => fn({
       get: (ref) => transaction.get(ref),
       set: (ref, data, opciones) => transaction.set(ref, alRealm(data), opciones),
-      update: (ref, data) => transaction.update(ref, alRealm(data)),
+      update: (ref, first, ...rest) => {
+      const proto = first && typeof first === 'object' ? Object.getPrototypeOf(first) : null;
+      const nombre = first && first.constructor && first.constructor.name;
+      const plano = Boolean(first) && typeof first === 'object' && !Array.isArray(first) &&
+        (proto === Object.prototype || proto === null || nombre === 'Object');
+      if (plano) return transaction.update(ref, alRealm(first));
+      const args = [first];
+      rest.forEach((item, index) => args.push(index % 2 === 0 ? alRealm(item) : item));
+      return transaction.update(ref, ...args);
+    },
       delete: (ref) => transaction.delete(ref),
     })),
   };
@@ -584,6 +593,90 @@ function partirHost(valor) {
     assert.equal(costosVs.costosPorMedida['21/25'], 8);
     assert.equal(costosVs.costoExtra, 20);
     console.log('✓ Costos no restaura costosPorMedida viejos después de que Rendimientos los completó');
+
+    const { prepararPayloadServidor, integrarCamposEnBase } = revision;
+    const idR9 = 'revision-r9';
+    referencia(idR9);
+    await setDoc(doc(db, 'embarques', idR9), { rev: 2, kilosCrudos: { '16/20': 300 } });
+    const parcialR9 = await escribirCamposEmbarque(db, idR9, {
+      baseRev: 1,
+      baseCampos: { kilosCrudos: { '16/20': 100 } },
+      campos: prepararPayloadServidor({ kilosCrudos: { '16/20': 100, '21/25': 40 } }, []),
+    });
+    assert.ok(parcialR9.camposEnConflicto.includes('kilosCrudos.16/20'));
+    let r9 = await leer(idR9);
+    assert.equal(r9.kilosCrudos['16/20'], 300);
+    assert.equal(r9.kilosCrudos['21/25'], 40);
+    const baseR9 = integrarCamposEnBase(
+      { kilosCrudos: { '16/20': 100 } },
+      { ...(parcialR9.camposCoincidentes || {}), ...(parcialR9.camposEscritos || {}) }
+    );
+    await escribirCamposEmbarque(db, idR9, {
+      baseRev: parcialR9.fusiono ? 1 : parcialR9.rev,
+      baseCampos: baseR9,
+      campos: prepararPayloadServidor(
+        { kilosCrudos: { '16/20': 80, '21/25': 55 } },
+        parcialR9.camposEnConflicto
+      ),
+    });
+    r9 = await leer(idR9);
+    assert.equal(r9.kilosCrudos['21/25'], 55, 'la talla nueva no se pierde');
+    assert.equal(r9.kilosCrudos['16/20'], 300, 'la talla en conflicto no se pisa sola');
+    console.log('✓ R9: los kilos nuevos se guardan y cada talla se fusiona por separado');
+
+    const idR10 = 'revision-r10';
+    referencia(idR10);
+    await setDoc(doc(db, 'embarques', idR10), {
+      rev: 4,
+      analizarGanancia: { '16/20': true },
+    });
+    const yaEstaba = await escribirCamposEmbarque(db, idR10, {
+      baseRev: 1,
+      baseCampos: { analizarGanancia: { '16/20': false } },
+      campos: { analizarGanancia: { '16/20': true } },
+    });
+    assert.equal(yaEstaba.omitida, true);
+    assert.equal(yaEstaba.camposCoincidentes.analizarGanancia['16/20'], true);
+    const baseR10 = integrarCamposEnBase(
+      { analizarGanancia: { '16/20': false } },
+      yaEstaba.camposCoincidentes
+    );
+    await escribirCamposEmbarque(db, idR10, {
+      baseRev: 1,
+      baseCampos: baseR10,
+      campos: { analizarGanancia: { '16/20': false } },
+    });
+    assert.equal((await leer(idR10)).analizarGanancia['16/20'], false);
+    console.log('✓ R10: si el servidor ya tenía el valor, la base avanza y el cambio siguiente no es conflicto');
+
+    const formServidor = prepararPayloadServidor({ kilosCrudos: { '16/20': 300 } }, []);
+    assert.equal(formServidor['kilosCrudos.16/20'], 300);
+    assert.equal(Object.prototype.hasOwnProperty.call(
+      prepararPayloadServidor({ kilosCrudos: { '16/20': 80, '21/25': 55 } }, ['kilosCrudos.16/20']),
+      'kilosCrudos.16/20'
+    ), false);
+    await escribirCamposEmbarque(db, idR9, {
+      baseRev: (await leer(idR9)).rev,
+      baseCampos: { kilosCrudos: { '16/20': 300, '21/25': 55 } },
+      campos: formServidor,
+    });
+    assert.equal((await leer(idR9)).kilosCrudos['16/20'], 300);
+    console.log('✓ al cargar el servidor el bloqueo no reenvía la talla en conflicto');
+
+    await escribirCamposEmbarque(db, idR9, {
+      forzar: true,
+      baseRev: 1,
+      baseCampos: { kilosCrudos: { '16/20': 100 } },
+      campos: { 'kilosCrudos.16/20': 250 },
+    });
+    assert.equal((await leer(idR9)).kilosCrudos['16/20'], 250);
+    const respaldosMio = await getDocs(collection(db, 'respaldos_emergencia'));
+    const respaldoMio = respaldosMio.docs.map(item => item.data()).find(item =>
+      item.embarqueOriginalId === idR9 && item.razonRespaldo === 'conservar_valor_ajeno'
+    );
+    assert.ok(respaldoMio);
+    assert.equal(respaldoMio.datosOriginales['kilosCrudos.16/20'], 300);
+    console.log('✓ Reintentar guarda lo de esta pantalla y respalda lo del otro equipo');
 
     console.log('PASS embarque revision (' + projectId + ' @ ' + hostEmulador + ')');
   } finally {

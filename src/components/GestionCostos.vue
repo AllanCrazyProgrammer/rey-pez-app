@@ -334,7 +334,7 @@
 <script>
 import { getFirestore, doc, getDoc, collection, onSnapshot, addDoc, deleteDoc, query, where, getDocs } from 'firebase/firestore';
 import { escribirCamposEmbarque } from '@/services/embarqueEscritura';
-import { CAMPOS_COSTOS, esErrorConflictoEmbarque, fotoCampos, pedirRecargaPorConflicto } from '@/utils/embarqueRevision';
+import { CAMPOS_COSTOS, esErrorConflictoEmbarque, fotoCampos, integrarCamposEnBase, pedirRecargaPorConflicto } from '@/utils/embarqueRevision';
 import { debounce } from 'lodash';
 import CostoModal from './CostoModal.vue';
 import CostoProveedorModal from './CostoProveedorModal.vue';
@@ -786,11 +786,14 @@ export default {
           baseCampos: this._baseCamposCostos,
           campos,
         });
-        if (resultado && !resultado.omitida) {
-          if (!resultado.fusiono) this._revBase = resultado.rev;
-          const escritos = resultado.camposEscritos || {};
-          if (Object.keys(escritos).length) {
-            this._baseCamposCostos = { ...(this._baseCamposCostos || {}), ...escritos };
+        if (resultado) {
+          if (!resultado.omitida && !resultado.fusiono) this._revBase = resultado.rev;
+          const reconocidos = {
+            ...(resultado.camposCoincidentes || {}),
+            ...(resultado.camposEscritos || {}),
+          };
+          if (Object.keys(reconocidos).length) {
+            this._baseCamposCostos = integrarCamposEnBase(this._baseCamposCostos, reconocidos);
           }
         }
         return resultado;

@@ -1,7 +1,7 @@
 import { getFirestore, doc, getDoc, collection, getDocs, query, orderBy } from 'firebase/firestore';
 import { normalizarNombreProductoPrecio } from '@/utils/preciosHistoricos';
 import { escribirCamposEmbarque } from '@/services/embarqueEscritura';
-import { CAMPOS_RENDIMIENTOS, fotoCampos } from '@/utils/embarqueRevision';
+import { CAMPOS_RENDIMIENTOS, fotoCampos, integrarCamposEnBase } from '@/utils/embarqueRevision';
 
 /**
  * Servicio para manejar operaciones de Firebase relacionadas con rendimientos
@@ -116,13 +116,11 @@ export class RendimientosService {
         baseCampos: opciones.baseCampos !== undefined ? opciones.baseCampos : this._baseCampos,
         campos: datos,
       });
-      if (!resultado.omitida) {
-        if (!resultado.fusiono) this._revBase = resultado.rev;
-        const escritos = resultado.camposEscritos || {};
-        if (Object.keys(escritos).length) {
-          this._baseCampos = { ...(this._baseCampos || {}), ...escritos };
-        }
-      }
+      if (!resultado.omitida && !resultado.fusiono) this._revBase = resultado.rev;
+      this._baseCampos = integrarCamposEnBase(this._baseCampos, {
+        ...(resultado.camposCoincidentes || {}),
+        ...(resultado.camposEscritos || {}),
+      });
       return resultado;
     } catch (error) {
       console.error('Error al guardar cambios:', error);

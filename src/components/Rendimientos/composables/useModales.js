@@ -1,7 +1,7 @@
 import { reactive, computed } from 'vue';
 import { getFirestore } from 'firebase/firestore';
 import { escribirCamposEmbarque } from '@/services/embarqueEscritura';
-import { esErrorConflictoEmbarque, pedirRecargaPorConflicto } from '@/utils/embarqueRevision';
+import { esErrorConflictoEmbarque, integrarCamposEnBase, pedirRecargaPorConflicto } from '@/utils/embarqueRevision';
 
 export function useModales(embarqueId) {
   const state = reactive({
@@ -26,6 +26,10 @@ export function useModales(embarqueId) {
       campos
     });
     if (resultado && !resultado.omitida && !resultado.fusiono) state.revBase = resultado.rev;
+    resultado.reconocidos = integrarCamposEnBase({}, {
+      ...(resultado.camposCoincidentes || {}),
+      ...(resultado.camposEscritos || {}),
+    });
     return resultado;
   };
 
@@ -46,8 +50,8 @@ export function useModales(embarqueId) {
         { notaRendimientos: state.nota },
         { notaRendimientos: state.baseNota }
       );
-      if (resultado && resultado.camposEscritos && resultado.camposEscritos.notaRendimientos !== undefined) {
-        state.baseNota = resultado.camposEscritos.notaRendimientos;
+      if (resultado && resultado.reconocidos && resultado.reconocidos.notaRendimientos !== undefined) {
+        state.baseNota = resultado.reconocidos.notaRendimientos;
       }
       
       cerrarModal();
@@ -78,9 +82,9 @@ export function useModales(embarqueId) {
         pesoTaraCosto: state.baseTaraCosto,
         pesoTaraVenta: state.baseTaraVenta
       });
-      const escritos = (resultado && resultado.camposEscritos) || {};
-      if (escritos.pesoTaraCosto !== undefined) state.baseTaraCosto = escritos.pesoTaraCosto;
-      if (escritos.pesoTaraVenta !== undefined) state.baseTaraVenta = escritos.pesoTaraVenta;
+      const reconocidos = (resultado && resultado.reconocidos) || {};
+      if (reconocidos.pesoTaraCosto !== undefined) state.baseTaraCosto = reconocidos.pesoTaraCosto;
+      if (reconocidos.pesoTaraVenta !== undefined) state.baseTaraVenta = reconocidos.pesoTaraVenta;
       
       console.log('Configuración de pesos guardada correctamente');
       cerrarModalConfiguracion();
@@ -103,8 +107,8 @@ export function useModales(embarqueId) {
         { medidaOculta: state.medidaOculta },
         { medidaOculta: state.baseOculta }
       );
-      if (resultado && resultado.camposEscritos && resultado.camposEscritos.medidaOculta !== undefined) {
-        state.baseOculta = { ...resultado.camposEscritos.medidaOculta };
+      if (resultado && resultado.reconocidos && resultado.reconocidos.medidaOculta !== undefined) {
+        state.baseOculta = { ...resultado.reconocidos.medidaOculta };
       }
       
       console.log('Estado de ocultación guardado correctamente');

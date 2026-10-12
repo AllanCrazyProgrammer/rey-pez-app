@@ -1,7 +1,7 @@
 import { reactive, computed } from 'vue';
 import { getFirestore, doc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { escribirCamposEmbarque } from '@/services/embarqueEscritura';
-import { esErrorConflictoEmbarque, pedirRecargaPorConflicto } from '@/utils/embarqueRevision';
+import { esErrorConflictoEmbarque, integrarCamposEnBase, pedirRecargaPorConflicto } from '@/utils/embarqueRevision';
 import { debounce } from 'lodash';
 
 export function useRendimientos(embarqueId) {
@@ -233,9 +233,11 @@ export function useRendimientos(embarqueId) {
           campos: { nombresMedidasPersonalizados: state.nombresMedidasPersonalizados }
         });
         if (resultado && !resultado.omitida && !resultado.fusiono) state.revBase = resultado.rev;
-        if (resultado && resultado.camposEscritos && resultado.camposEscritos.nombresMedidasPersonalizados !== undefined) {
-          state.baseNombres = { ...resultado.camposEscritos.nombresMedidasPersonalizados };
-        }
+        const nombres = integrarCamposEnBase({}, {
+          ...(resultado && resultado.camposCoincidentes || {}),
+          ...(resultado && resultado.camposEscritos || {}),
+        }).nombresMedidasPersonalizados;
+        if (nombres !== undefined) state.baseNombres = { ...nombres };
         console.log('Nombre de medida actualizado correctamente');
       } catch (error) {
         if (esErrorConflictoEmbarque(error) && pedirRecargaPorConflicto(error)) window.location.reload();
@@ -305,8 +307,15 @@ export function useRendimientos(embarqueId) {
         }
       });
       if (resultado && !resultado.omitida && !resultado.fusiono) state.revBase = resultado.rev;
-      if (resultado && resultado.camposEscritos && resultado.camposEscritos.kilosCrudos !== undefined) {
-        state.baseKilos = JSON.parse(JSON.stringify(resultado.camposEscritos.kilosCrudos));
+      const kilosReconocidos = integrarCamposEnBase({}, {
+        ...(resultado && resultado.camposCoincidentes || {}),
+        ...(resultado && resultado.camposEscritos || {}),
+      }).kilosCrudos;
+      if (kilosReconocidos !== undefined) {
+        state.baseKilos = {
+          ...(state.baseKilos || {}),
+          ...JSON.parse(JSON.stringify(kilosReconocidos)),
+        };
       }
       console.log('Rendimientos guardados:', state.kilosCrudos);
     } catch (error) {

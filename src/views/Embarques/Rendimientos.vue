@@ -32,9 +32,9 @@
     </div>
 
     <div v-if="avisoConflicto" class="aviso-conflicto" role="status">
-      <p>{{ avisoConflicto }} Tus cambios siguen guardados en este equipo.</p>
-      <button type="button" @click="reintentarCambiosPendientes">Reintentar</button>
-      <button type="button" @click="recargarPantalla">Recargar</button>
+      <p>{{ avisoConflicto }}</p>
+      <button type="button" @click="reintentarCambiosPendientes">Usar lo de esta pantalla</button>
+      <button type="button" @click="recargarPantalla">Usar lo del otro equipo</button>
     </div>
     
     <div class="resumen-header-row">
@@ -534,11 +534,11 @@ import { getFirestore, doc, getDoc, collection, getDocs, query, where, orderBy }
 import { escribirCamposEmbarque } from '@/services/embarqueEscritura';
 import {
   CAMPOS_RENDIMIENTOS,
-  MENSAJE_CONFLICTO_EMBARQUE,
   equivalentes,
   esErrorConflictoEmbarque,
   fotoCampos,
-  sinClavesBloqueadas,
+  integrarCamposEnBase,
+  prepararPayloadServidor,
 } from '@/utils/embarqueRevision';
 import { debounce } from 'lodash';
 import { generarPDFRendimientos } from '@/utils/RendimientosPdf';
@@ -600,7 +600,8 @@ export default {
       _baseCamposRendimientos: null,
       _hidratandoRendimientos: false,
       avisoConflicto: '',
-      _clavesEnConflicto: []
+      _clavesEnConflicto: [],
+      _clavesConservarMio: []
     }
   },
 
@@ -623,10 +624,6 @@ export default {
       this.preciosVenta = this.deepClone(registroOffline.preciosVentaCache);
     }
 
-    if (navigator.onLine) {
-      await this.syncOfflineRendimientos();
-    }
-
     if (!navigator.onLine && registroOffline) {
       await this.cargarEmbarquesRelacionadosOffline(embarqueId, registroOffline);
       await this.precargarCostos();
@@ -638,6 +635,7 @@ export default {
     }
 
     await this.cargarEmbarque();
+    if (navigator.onLine) await this.syncOfflineRendimientos();
     await this.cargarPreciosVenta();
     await this.precargarCostos();
     await this.cargarResumenSacadasHoy();
@@ -646,9 +644,6 @@ export default {
   // Recargar datos cuando se vuelve a este componente
   async activated() {
     console.log('Recargando datos de rendimientos...');
-    if (navigator.onLine) {
-      await this.syncOfflineRendimientos();
-    }
     const embarqueId = this.$route.params.id;
     const registroOffline = await EmbarquesOfflineService.getById(embarqueId).catch(() => null);
 
@@ -663,6 +658,7 @@ export default {
     }
 
     await this.cargarEmbarque();
+    if (navigator.onLine) await this.syncOfflineRendimientos();
     await this.cargarPreciosVenta();
     await this.precargarCostos();
     await this.cargarResumenSacadasHoy();
@@ -818,15 +814,58 @@ export default {
       } catch (error) {
         this._baseCamposRendimientos = foto;
       }
+      // Una copia recién leída del servidor no arrastra el bloqueo de la sesión anterior.
+      this._clavesEnConflicto = [];
+      this.avisoConflicto = '';
     },
     mostrarAvisoConflicto(mensaje) {
-      this.avisoConflicto = mensaje || MENSAJE_CONFLICTO_EMBARQUE;
+      this.avisoConflicto = mensaje || (
+        'Otro equipo guardó los mismos datos. Lo que escribiste aquí sigue guardado en este equipo. '
+        + '«Usar lo de esta pantalla» lo sube y respalda lo del otro equipo en respaldos de emergencia. '
+        + '«Usar lo del otro equipo» recarga y deja el valor de ellos.'
+      );
     },
     recargarPantalla() {
       window.location.reload();
     },
-    reintentarCambiosPendientes() {
-      this.syncOfflineRendimientos();
+    async reintentarCambiosPendientes() {
+      const embarqueId = this.$route.params.id;
+      const record = await EmbarquesOfflineService.getById(embarqueId).catch(() => null);
+      const claves = (this._clavesConservarMio && this._clavesConservarMio.length)
+        ? this._clavesConservarMio
+        : ((record && record.clavesEnConflicto) || this._clavesEnConflicto || []);
+      if (!claves.length) {
+        this.avisoConflicto = '';
+        return;
+      }
+      const payload = this.payloadParaConservar(record, claves);
+      await this.persistirCamposRendimientos(payload, { forzar: true, reintentar: true });
+      this._clavesConservarMio = [];
+      this._clavesEnConflicto = [];
+      this.avisoConflicto = '';
+      if (record) {
+        await this.actualizarOfflineRendimientos(false, payload, { limpiarConflicto: true });
+      }
+    },
+    payloadParaConservar(record, claves) {
+      const payload = {};
+      const kilosGuardados = (record && record.docData && record.docData.kilosCrudos) || this.kilosCrudos || {};
+      const kilos = {};
+      (claves || []).forEach(clave => {
+        if (clave.indexOf('kilosCrudos.') === 0) {
+          const medida = clave.slice('kilosCrudos.'.length);
+          if (kilosGuardados[medida] !== undefined) kilos[medida] = kilosGuardados[medida];
+          return;
+        }
+        if (clave === 'kilosCrudos') {
+          Object.assign(kilos, kilosGuardados);
+          return;
+        }
+        const origen = (record && record.docData) || {};
+        if (origen[clave] !== undefined) payload[clave] = origen[clave];
+      });
+      if (Object.keys(kilos).length) payload.kilosCrudos = kilos;
+      return payload;
     },
     async actualizarOfflineRendimientos(pending, payload = {}, options = {}) {
       const includeInDocData = options.includeInDocData !== false;
@@ -852,6 +891,31 @@ export default {
 
         if (docData !== undefined) {
           record.docData = docData;
+        }
+
+        if (options.limpiarConflicto) {
+          record.clavesEnConflicto = [];
+          record.camposPendientesRendimientos = [];
+        } else if (options.clavesEnConflicto) {
+          record.clavesEnConflicto = options.clavesEnConflicto;
+        }
+
+        if (includeInDocData && clonedPayload.kilosCrudos && existing && existing.docData && existing.docData.kilosCrudos) {
+          const conservar = new Set([
+            ...(existing.clavesEnConflicto || []),
+            ...(options.clavesEnConflicto || []),
+          ]);
+          conservar.forEach(clave => {
+            if (clave.indexOf('kilosCrudos.') !== 0) return;
+            const medida = clave.slice('kilosCrudos.'.length);
+            if (!options.respetarConflictos) return;
+            if (existing.docData.kilosCrudos[medida] !== undefined) {
+              docData.kilosCrudos = {
+                ...(docData.kilosCrudos || {}),
+                [medida]: existing.docData.kilosCrudos[medida],
+              };
+            }
+          });
         }
 
         if (includeInDocData && claves.length) {
@@ -894,20 +958,18 @@ export default {
       });
     },
     registrarEscrituraRendimientos(resultado) {
-      if (!resultado || resultado.omitida) return;
+      if (!resultado) return;
       // Solo una escritura limpia leyó el documento entero que mandamos.
       // Tras fusionar, la rev del servidor incluye campos que esta pantalla
       // no volvió a leer: adoptarla haría que el siguiente guardado completo
       // pisara esos campos sin comparar.
-      if (!resultado.fusiono) this._revBase = resultado.rev;
-      const escritos = resultado.camposEscritos || {};
-      if (!Object.keys(escritos).length) return;
-      let copia = escritos;
-      try { copia = JSON.parse(JSON.stringify(escritos)); } catch (error) { copia = escritos; }
-      this._baseCamposRendimientos = {
-        ...(this._baseCamposRendimientos || {}),
-        ...copia,
+      if (!resultado.omitida && !resultado.fusiono) this._revBase = resultado.rev;
+      const reconocidos = {
+        ...(resultado.camposCoincidentes || {}),
+        ...(resultado.camposEscritos || {}),
       };
+      if (!Object.keys(reconocidos).length) return;
+      this._baseCamposRendimientos = integrarCamposEnBase(this._baseCamposRendimientos, reconocidos);
     },
     marcarClavesEnConflicto(claves) {
       const juntas = new Set([...(this._clavesEnConflicto || []), ...(claves || [])]);
@@ -924,48 +986,73 @@ export default {
       if (!payload || Object.keys(payload).length === 0) {
         return;
       }
-      let clonedPayload = this.deepClone(payload);
-      if (!opts.reintentar) {
-        clonedPayload = sinClavesBloqueadas(clonedPayload, this._clavesEnConflicto);
-      }
-      if (!clonedPayload || Object.keys(clonedPayload).length === 0) return;
+      const completo = this.deepClone(payload);
+      const bloqueadas = (opts.forzar || opts.reintentar)
+        ? []
+        : [...(this._clavesEnConflicto || []), ...(opts.clavesBloqueadas || [])];
+      const paraServidor = prepararPayloadServidor(completo, bloqueadas);
       const baseRev = opts.baseRev != null ? opts.baseRev : (Number(this._revBase) || 0);
       const baseCampos = opts.baseCampos !== undefined ? opts.baseCampos : this._baseCamposRendimientos;
       const sinBase = opts.sinBase || (baseCampos ? 'conflicto' : 'ultima');
-      await this.actualizarOfflineRendimientos(true, clonedPayload, opts);
       if (!navigator.onLine) {
+        await this.actualizarOfflineRendimientos(true, completo, {
+          ...opts,
+          clavesEnConflicto: bloqueadas,
+        });
         return;
       }
       try {
-        const db = getFirestore();
-        const resultado = await escribirCamposEmbarque(db, this.$route.params.id, {
-          baseRev,
-          baseCampos,
-          campos: clonedPayload,
-          sinBase,
-        });
+        let resultado = {
+          rev: baseRev,
+          omitida: true,
+          fusiono: false,
+          camposEscritos: {},
+          camposCoincidentes: {},
+          camposEnConflicto: [],
+        };
+        if (Object.keys(paraServidor).length) {
+          const db = getFirestore();
+          resultado = await escribirCamposEmbarque(db, this.$route.params.id, {
+            baseRev,
+            baseCampos,
+            campos: paraServidor,
+            sinBase,
+            forzar: Boolean(opts.forzar),
+          });
+        }
         this.registrarEscrituraRendimientos(resultado);
         const enConflicto = resultado.camposEnConflicto || [];
         if (enConflicto.length) {
           this.marcarClavesEnConflicto(enConflicto);
-          const pendiente = {};
-          enConflicto.forEach(clave => {
-            if (Object.prototype.hasOwnProperty.call(clonedPayload, clave)) {
-              pendiente[clave] = clonedPayload[clave];
-            }
+          this._clavesConservarMio = Array.from(new Set([...(this._clavesConservarMio || []), ...enConflicto]));
+          await this.actualizarOfflineRendimientos(true, completo, {
+            ...opts,
+            replacePendientes: true,
+            clavesEnConflicto: this._clavesConservarMio,
           });
-          await this.actualizarOfflineRendimientos(true, pendiente, { ...opts, replacePendientes: true });
           return;
         }
-        this.liberarClavesConflicto(resultado.camposEscritos || clonedPayload);
-        await this.actualizarOfflineRendimientos(false, clonedPayload, opts);
+        this.liberarClavesConflicto(resultado.camposEscritos || {});
+        const escritas = Object.keys(resultado.camposEscritos || {});
+        this._clavesConservarMio = (this._clavesConservarMio || []).filter(clave => !escritas.includes(clave));
+        if (!this._clavesConservarMio.length && !(this._clavesEnConflicto || []).length) {
+          this.avisoConflicto = '';
+        }
+        await this.actualizarOfflineRendimientos(false, completo, {
+          ...opts,
+          clavesEnConflicto: this._clavesConservarMio || [],
+          limpiarConflicto: !(this._clavesConservarMio || []).length,
+        });
       } catch (error) {
         if (esErrorConflictoEmbarque(error)) {
-          this.marcarClavesEnConflicto(error.camposEnConflicto || Object.keys(clonedPayload));
-          const pendiente = error.camposPendientes && Object.keys(error.camposPendientes).length
-            ? error.camposPendientes
-            : clonedPayload;
-          await this.actualizarOfflineRendimientos(true, pendiente, { ...opts, replacePendientes: true });
+          const claves = error.camposEnConflicto || Object.keys(paraServidor);
+          this.marcarClavesEnConflicto(claves);
+          this._clavesConservarMio = Array.from(new Set([...(this._clavesConservarMio || []), ...claves]));
+          await this.actualizarOfflineRendimientos(true, completo, {
+            ...opts,
+            replacePendientes: true,
+            clavesEnConflicto: this._clavesConservarMio,
+          });
           return;
         }
         console.error('[Rendimientos] Error al guardar cambios en Firestore:', error);
@@ -1272,12 +1359,13 @@ export default {
           return;
         }
 
-        const baseCampos = record.baseCamposRendimientos || null;
+        const baseFresca = this._baseCamposRendimientos;
+        const baseCampos = baseFresca || record.baseCamposRendimientos || null;
         await this.persistirCamposRendimientos(payload, {
-          baseRev: Number(record.baseRev ?? record.docData?.rev) || 0,
+          baseRev: baseFresca ? (Number(this._revBase) || 0) : (Number(record.baseRev ?? record.docData?.rev) || 0),
           baseCampos,
           sinBase: baseCampos ? 'conflicto' : 'ultima',
-          reintentar: true,
+          clavesBloqueadas: record.clavesEnConflicto || [],
         });
       } catch (error) {
         console.error('[Rendimientos] Error al sincronizar datos offline:', error);
@@ -1544,7 +1632,13 @@ export default {
           }
 
           const combinado = this.combinarEmbarquesPorFecha(embarquesRelacionados, embarqueId);
+          const previoOffline = await EmbarquesOfflineService.getById(embarqueId).catch(() => null);
           this.aplicarEmbarqueCargado(combinado || embarqueBase);
+          const conservar = (previoOffline && previoOffline.clavesEnConflicto) || [];
+          if (conservar.length) {
+            this._clavesConservarMio = conservar;
+            this.mostrarAvisoConflicto();
+          }
 
           await EmbarquesOfflineService.mergeSave(embarqueId, existing => {
             const record = {
@@ -1561,7 +1655,7 @@ export default {
             };
           });
 
-          await this.actualizarOfflineRendimientos(false, this.crearPayloadRendimientos());
+          await this.actualizarOfflineRendimientos(false, this.crearPayloadRendimientos(), { respetarConflictos: true });
 
           
           
