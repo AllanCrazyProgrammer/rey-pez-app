@@ -4,6 +4,7 @@ import EmbarquesOfflineService from '@/services/EmbarquesOfflineService';
 import { normalizarFechaISO, obtenerFechaActualISO } from '@/utils/dateUtils';
 import { crearNuevoProducto } from '@/constants.js/embarque';
 import { embarqueTieneContenidoOperativoDoc, embarqueTieneContenidoOperativoEstado, productoTieneContenido, serializarEstable, fusionarProductoTresVias } from '@/utils/embarqueContenido';
+import { esEcoDeRevisionLocal } from '@/utils/embarqueRevision';
 
 export const esUUIDValido = (id) => {
   const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -48,6 +49,7 @@ export const embarqueCargaMixin = {
         this._crudosBase = new Map();
         this._cargaConBase = undefined;
         this._revBase = 0;
+        this._baseCamposEditor = null;
       }
 
       this._inicializandoEmbarque = true;
@@ -81,8 +83,11 @@ export const embarqueCargaMixin = {
           // re-aplicar el eco dispara watchers y provoca un bucle de
           // subidas/aplicaciones sin cambios reales.
           const revRemota = Number(data.rev) || 0;
-          if (!this._inicializandoEmbarque && revRemota !== 0 &&
-              revRemota === (Number(this._revBase) || 0)) {
+          if (esEcoDeRevisionLocal({
+            revRemota,
+            revBase: this._revBase,
+            inicializando: this._inicializandoEmbarque,
+          })) {
             return;
           }
 
@@ -456,6 +461,10 @@ export const embarqueCargaMixin = {
             this.embarqueId = id;
             this.modoEdicion = true;
             this.guardadoAutomaticoActivo = true;
+            if ((Number(this._revBase) || 0) === (Number(data.rev) || 0) &&
+                typeof this.capturarBaseEditor === 'function') {
+              this.capturarBaseEditor(data);
+            }
 
           } finally {
             this._inicializandoEmbarque = false;
@@ -677,6 +686,7 @@ export const embarqueCargaMixin = {
         preciosActuales: safeClone(this.preciosActuales || [], []),
         clientes: safeClone(docData?.clientes || [], []),
         docData: safeClone(docData || {}, {}),
+        baseCamposEditor: safeClone(this._baseCamposEditor || null, null),
       };
     },
 
@@ -706,6 +716,9 @@ export const embarqueCargaMixin = {
       this.embarqueBloqueado = Boolean(record.embarqueBloqueado);
       this.hasPendingChanges = Boolean(record.pendingSync);
       this._revBase = Number(record.baseRev ?? record.docData?.rev) || 0;
+      if (typeof this.capturarBaseEditor === 'function') {
+        this.capturarBaseEditor(record.docData || record);
+      }
       this._productosEliminadosDoc = safeClone(record.docData?.productosEliminados || {}, {});
       if (record.mergeBase) {
         this._productosBase = new Map(record.mergeBase.productos || []);

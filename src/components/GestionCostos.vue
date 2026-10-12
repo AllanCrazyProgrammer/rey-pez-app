@@ -332,7 +332,9 @@
 </template>
 
 <script>
-import { getFirestore, doc, getDoc, updateDoc, collection, onSnapshot, addDoc, deleteDoc, query, where, getDocs } from 'firebase/firestore';
+import { getFirestore, doc, getDoc, collection, onSnapshot, addDoc, deleteDoc, query, where, getDocs } from 'firebase/firestore';
+import { escribirCamposEmbarque } from '@/services/embarqueEscritura';
+import { CAMPOS_COSTOS, esErrorConflictoEmbarque, fotoCampos, integrarCamposEnBase, pedirRecargaPorConflicto } from '@/utils/embarqueRevision';
 import { debounce } from 'lodash';
 import CostoModal from './CostoModal.vue';
 import CostoProveedorModal from './CostoProveedorModal.vue';
@@ -367,7 +369,9 @@ export default {
       medidaOculta: {}, // Para el sistema de ocultación en PDF
       aplicarCostoExtra: {}, // Para controlar a qué medidas aplicar costo extra
       rendimientos: {},
-      costoExtra: 18, // Valor por defecto
+      costoExtra: 18,
+      _revBase: 0,
+      _baseCamposCostos: null,
       mostrarModalCostoProveedor: false,
       modoEdicionCostoProveedor: false,
       mostrarModalCostoEmbarque: false,
@@ -469,13 +473,14 @@ export default {
         
         if (embarqueDoc.exists()) {
           this.embarqueData = embarqueDoc.data();
+          this._revBase = Number(this.embarqueData.rev) || 0;
+          this._baseCamposCostos = fotoCampos(this.embarqueData, CAMPOS_COSTOS);
           console.log('[GestionCostos] Embarque cargado:', this.embarqueData);
           
           // Si el embarque no tiene fecha, establecer la fecha actual
           if (!this.embarqueData.fecha) {
             this.embarqueData.fecha = new Date().toISOString().split('T')[0];
-            // Guardar la fecha en el embarque
-            await updateDoc(embarqueRef, {
+            await this.persistirCamposCostos({
               fecha: this.embarqueData.fecha
             });
           }
@@ -773,13 +778,37 @@ export default {
 
     // Métodos de diagnóstico eliminados
 
+    async persistirCamposCostos(campos) {
+      const db = getFirestore();
+      try {
+        const resultado = await escribirCamposEmbarque(db, this.$route.params.id, {
+          baseRev: Number(this._revBase) || 0,
+          baseCampos: this._baseCamposCostos,
+          campos,
+        });
+        if (resultado) {
+          if (!resultado.omitida && !resultado.fusiono) this._revBase = resultado.rev;
+          const reconocidos = {
+            ...(resultado.camposCoincidentes || {}),
+            ...(resultado.camposEscritos || {}),
+          };
+          if (Object.keys(reconocidos).length) {
+            this._baseCamposCostos = integrarCamposEnBase(this._baseCamposCostos, reconocidos);
+          }
+        }
+        return resultado;
+      } catch (error) {
+        if (esErrorConflictoEmbarque(error)) {
+          if (pedirRecargaPorConflicto(error)) window.location.reload();
+        }
+        throw error;
+      }
+    },
+
     async seleccionarProveedorActivo(medidaKey, costoKey) {
       this.$set(this.proveedorActivoPorMedida, medidaKey, costoKey);
       try {
-        const db = getFirestore();
-        const embarqueId = this.$route.params.id;
-        const embarqueRef = doc(db, 'embarques', embarqueId);
-        await updateDoc(embarqueRef, {
+        await this.persistirCamposCostos( {
           proveedorActivoPorMedida: this.proveedorActivoPorMedida
         });
       } catch (error) {
@@ -1006,9 +1035,6 @@ export default {
 
     async guardarCostoEmbarque(nuevoCosto) {
       try {
-        const db = getFirestore();
-        const embarqueId = this.$route.params.id;
-        const embarqueRef = doc(db, 'embarques', embarqueId);
         const medida = this.costoEmbarqueEditando.medida;
         
         // Actualizar el costo local
@@ -1024,7 +1050,7 @@ export default {
         }
         
         // Guardar en Firebase
-        await updateDoc(embarqueRef, {
+        await this.persistirCamposCostos( {
           costosPorMedida: this.costosEmbarque,
           costosPorMedidaManuales: this.costosEmbarqueManuales
         });
@@ -1032,6 +1058,7 @@ export default {
         this.cerrarModalCostoEmbarque();
         console.log('Costo del embarque actualizado correctamente');
       } catch (error) {
+        if (esErrorConflictoEmbarque(error)) return;
         console.error('Error al actualizar el costo del embarque:', error);
         alert('Error al actualizar el costo del embarque');
       }
@@ -1040,22 +1067,19 @@ export default {
     async limpiarCostoEspecifico(medida) {
       if (confirm(`¿Volver al costo global para "${medida}"?`)) {
         try {
-          const db = getFirestore();
-          const embarqueId = this.$route.params.id;
-          const embarqueRef = doc(db, 'embarques', embarqueId);
-          
           // Eliminar el costo específico
           this.$delete(this.costosEmbarque, medida);
           this.$delete(this.costosEmbarqueManuales, medida);
           
           // Guardar en Firebase
-          await updateDoc(embarqueRef, {
+          await this.persistirCamposCostos( {
             costosPorMedida: this.costosEmbarque,
             costosPorMedidaManuales: this.costosEmbarqueManuales
           });
           
           console.log(`Costo específico eliminado para ${medida}, volviendo al costo global`);
         } catch (error) {
+          if (esErrorConflictoEmbarque(error)) return;
           console.error('Error al eliminar el costo específico:', error);
           alert('Error al eliminar el costo específico');
         }
@@ -1064,11 +1088,7 @@ export default {
 
     async guardarSeleccionMedidas() {
       try {
-        const db = getFirestore();
-        const embarqueId = this.$route.params.id;
-        const embarqueRef = doc(db, 'embarques', embarqueId);
-        
-        await updateDoc(embarqueRef, {
+        await this.persistirCamposCostos( {
           medidaSeleccionada: this.medidaSeleccionada
         });
 
@@ -1080,11 +1100,7 @@ export default {
 
     async guardarConfiguracionCostoExtra() {
       try {
-        const db = getFirestore();
-        const embarqueId = this.$route.params.id;
-        const embarqueRef = doc(db, 'embarques', embarqueId);
-        
-        await updateDoc(embarqueRef, {
+        await this.persistirCamposCostos( {
           aplicarCostoExtra: this.aplicarCostoExtra
         });
 
@@ -1096,12 +1112,9 @@ export default {
 
     async guardarCostoExtra() {
       try {
-        const db = getFirestore();
-        const embarqueId = this.$route.params.id;
-        const embarqueRef = doc(db, 'embarques', embarqueId);
         const costoExtraNumerico = Number(this.costoExtra);
         
-        await updateDoc(embarqueRef, {
+        await this.persistirCamposCostos( {
           costoExtra: Number.isNaN(costoExtraNumerico) ? 18 : costoExtraNumerico
         });
 
@@ -1463,11 +1476,7 @@ export default {
       // Guardar automáticamente en Firebase si hubo cambios
       if (costosActualizados) {
         try {
-          const db = getFirestore();
-          const embarqueId = this.$route.params.id;
-          const embarqueRef = doc(db, 'embarques', embarqueId);
-          
-          await updateDoc(embarqueRef, {
+          await this.persistirCamposCostos( {
             costosPorMedida: this.costosEmbarque
           });
           
@@ -1560,11 +1569,7 @@ export default {
       // Guardar automáticamente en Firebase si hubo cambios
       if (costosActualizados) {
         try {
-          const db = getFirestore();
-          const embarqueId = this.$route.params.id;
-          const embarqueRef = doc(db, 'embarques', embarqueId);
-          
-          await updateDoc(embarqueRef, {
+          await this.persistirCamposCostos( {
             costosPorMedida: this.costosEmbarque,
             costosPorMedidaManuales: this.costosEmbarqueManuales
           });

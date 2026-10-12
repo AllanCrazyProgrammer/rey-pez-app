@@ -30,6 +30,15 @@
         </button>
       </div>
     </div>
+
+    <div v-if="avisoError" class="aviso-conflicto aviso-error" role="alert">
+      <p>{{ avisoError }}</p>
+    </div>
+    <div v-if="avisoConflicto" class="aviso-conflicto" role="status">
+      <p>{{ avisoConflicto }}</p>
+      <button type="button" @click="reintentarCambiosPendientes">Usar lo de esta pantalla</button>
+      <button type="button" @click="recargarPantalla">Usar lo del otro equipo</button>
+    </div>
     
     <div class="resumen-header-row">
       <div class="resumen-tabs" role="tablist" aria-label="Vistas del embarque">
@@ -112,7 +121,7 @@
                   type="number" 
                   step="0.01"
                   v-model="precioMaquila[medida]"
-                  @input="guardarEstadoAnalisis"
+                  @input="programarGuardadoAnalisis"
                   placeholder="Precio por kg"
                   class="precio-maquila-input"
                 >
@@ -524,7 +533,16 @@
 </template>
 
 <script>
-import { getFirestore, doc, getDoc, updateDoc, collection, getDocs, query, where, orderBy } from 'firebase/firestore';
+import { getFirestore, doc, getDoc, collection, getDocs, query, where, orderBy } from 'firebase/firestore';
+import { escribirCamposEmbarque } from '@/services/embarqueEscritura';
+import {
+  CAMPOS_RENDIMIENTOS,
+  equivalentes,
+  esErrorConflictoEmbarque,
+  fotoCampos,
+  integrarCamposEnBase,
+  prepararPayloadServidor,
+} from '@/utils/embarqueRevision';
 import { debounce } from 'lodash';
 import { generarPDFRendimientos } from '@/utils/RendimientosPdf';
 import { prepararGuardadoReporte } from '@/utils/pdf/reportDelivery';
@@ -580,12 +598,20 @@ export default {
         loading: false,
         error: '',
         grupos: []
-      }
+      },
+      _revBase: 0,
+      _baseCamposRendimientos: null,
+      _hidratandoRendimientos: false,
+      avisoConflicto: '',
+      avisoError: '',
+      _clavesEnConflicto: [],
+      _clavesConservarMio: []
     }
   },
 
   async created() {
     this.guardarCambiosEnTiempoReal = debounce(this.guardarCambiosEnTiempoReal, 300);
+    this.programarGuardadoAnalisis = debounce(() => this.guardarEstadoAnalisis(), 300);
 
     await EmbarquesOfflineService.init();
     window.addEventListener('online', this.syncOfflineRendimientos);
@@ -602,10 +628,6 @@ export default {
       this.preciosVenta = this.deepClone(registroOffline.preciosVentaCache);
     }
 
-    if (navigator.onLine) {
-      await this.syncOfflineRendimientos();
-    }
-
     if (!navigator.onLine && registroOffline) {
       await this.cargarEmbarquesRelacionadosOffline(embarqueId, registroOffline);
       await this.precargarCostos();
@@ -616,6 +638,7 @@ export default {
       return;
     }
 
+    if (navigator.onLine) await this.syncOfflineRendimientos();
     await this.cargarEmbarque();
     await this.cargarPreciosVenta();
     await this.precargarCostos();
@@ -625,9 +648,6 @@ export default {
   // Recargar datos cuando se vuelve a este componente
   async activated() {
     console.log('Recargando datos de rendimientos...');
-    if (navigator.onLine) {
-      await this.syncOfflineRendimientos();
-    }
     const embarqueId = this.$route.params.id;
     const registroOffline = await EmbarquesOfflineService.getById(embarqueId).catch(() => null);
 
@@ -641,6 +661,7 @@ export default {
       return;
     }
 
+    if (navigator.onLine) await this.syncOfflineRendimientos();
     await this.cargarEmbarque();
     await this.cargarPreciosVenta();
     await this.precargarCostos();
@@ -789,13 +810,97 @@ export default {
         notaRendimientos: this.embarqueData?.notaRendimientos || ''
       };
     },
+    fijarBaseRendimientos(embarqueData) {
+      this._revBase = Number(embarqueData && embarqueData.rev) || 0;
+      const foto = fotoCampos(embarqueData || {}, CAMPOS_RENDIMIENTOS);
+      try {
+        this._baseCamposRendimientos = JSON.parse(JSON.stringify(foto));
+      } catch (error) {
+        this._baseCamposRendimientos = foto;
+      }
+      // Una copia recién leída del servidor no arrastra el bloqueo de la sesión anterior.
+      this._clavesEnConflicto = [];
+      this.avisoConflicto = '';
+    },
+    mostrarAvisoConflicto(mensaje) {
+      this.avisoConflicto = mensaje || (
+        'Otro equipo guardó los mismos datos. Lo que escribiste aquí sigue guardado en este equipo. '
+        + '«Usar lo de esta pantalla» lo sube y respalda lo del otro equipo en respaldos de emergencia. '
+        + '«Usar lo del otro equipo» recarga y deja el valor de ellos.'
+      );
+    },
+    async recargarPantalla() {
+      this.avisoConflicto = '';
+      this._clavesEnConflicto = [];
+      this._clavesConservarMio = [];
+      await EmbarquesOfflineService.mergeSave(this.$route.params.id, existing => {
+        if (!existing) return null;
+        const editorPendiente = Boolean(existing.pendingEditor);
+        return {
+          record: {
+            ...existing,
+            clavesEnConflicto: [],
+            camposPendientesRendimientos: [],
+          },
+          options: {
+            pendingSync: editorPendiente,
+            syncState: editorPendiente ? 'pending' : 'synced',
+          },
+        };
+      }).catch(() => {});
+      if (typeof window !== 'undefined' && window.location && typeof window.location.reload === 'function') {
+        window.location.reload();
+      }
+    },
+    async reintentarCambiosPendientes() {
+      const embarqueId = this.$route.params.id;
+      const record = await EmbarquesOfflineService.getById(embarqueId).catch(() => null);
+      const claves = (this._clavesConservarMio && this._clavesConservarMio.length)
+        ? this._clavesConservarMio
+        : ((record && record.clavesEnConflicto) || this._clavesEnConflicto || []);
+      if (!claves.length) {
+        this.avisoConflicto = '';
+        return;
+      }
+      const payload = this.payloadParaConservar(record, claves);
+      await this.persistirCamposRendimientos(payload, { forzar: true, reintentar: true });
+      this._clavesConservarMio = [];
+      this._clavesEnConflicto = [];
+      this.avisoConflicto = '';
+      if (record) {
+        await this.actualizarOfflineRendimientos(false, payload, { limpiarConflicto: true });
+      }
+    },
+    payloadParaConservar(record, claves) {
+      const payload = {};
+      const kilosGuardados = (record && record.docData && record.docData.kilosCrudos) || this.kilosCrudos || {};
+      const kilos = {};
+      (claves || []).forEach(clave => {
+        if (clave.indexOf('kilosCrudos.') === 0) {
+          const medida = clave.slice('kilosCrudos.'.length);
+          if (kilosGuardados[medida] !== undefined) kilos[medida] = kilosGuardados[medida];
+          return;
+        }
+        if (clave === 'kilosCrudos') {
+          Object.assign(kilos, kilosGuardados);
+          return;
+        }
+        const origen = (record && record.docData) || {};
+        if (origen[clave] !== undefined) payload[clave] = origen[clave];
+      });
+      if (Object.keys(kilos).length) payload.kilosCrudos = kilos;
+      return payload;
+    },
     async actualizarOfflineRendimientos(pending, payload = {}, options = {}) {
       const includeInDocData = options.includeInDocData !== false;
       const embarqueId = this.$route.params.id;
       await EmbarquesOfflineService.mergeSave(embarqueId, existing => {
         const base = existing ? { ...existing } : {};
         const clonedPayload = this.deepClone(payload) || {};
+        const claves = Object.keys(clonedPayload).filter(clave => CAMPOS_RENDIMIENTOS.includes(clave));
+        const docPrevio = existing && existing.docData ? { ...existing.docData } : {};
         let docData = existing && existing.docData ? { ...existing.docData } : undefined;
+        const yaPendiente = Boolean(pending && existing && existing.pendingSync && existing.camposPendientesRendimientos);
 
         if (includeInDocData) {
           docData = docData || {};
@@ -812,31 +917,175 @@ export default {
           record.docData = docData;
         }
 
+        if (options.limpiarConflicto) {
+          record.clavesEnConflicto = [];
+          record.camposPendientesRendimientos = [];
+        } else if (options.clavesEnConflicto) {
+          record.clavesEnConflicto = options.clavesEnConflicto;
+        }
+
+        if (includeInDocData && clonedPayload.kilosCrudos && existing && existing.docData && existing.docData.kilosCrudos) {
+          const conservar = new Set([
+            ...(existing.clavesEnConflicto || []),
+            ...(options.clavesEnConflicto || []),
+          ]);
+          conservar.forEach(clave => {
+            if (clave.indexOf('kilosCrudos.') !== 0) return;
+            const medida = clave.slice('kilosCrudos.'.length);
+            if (!options.respetarConflictos) return;
+            if (existing.docData.kilosCrudos[medida] !== undefined) {
+              docData.kilosCrudos = {
+                ...(docData.kilosCrudos || {}),
+                [medida]: existing.docData.kilosCrudos[medida],
+              };
+            }
+          });
+        }
+
+        if (includeInDocData && claves.length) {
+          const previas = yaPendiente && !options.replacePendientes
+            ? existing.camposPendientesRendimientos
+            : [];
+          record.camposPendientesRendimientos = pending
+            ? Array.from(new Set([...previas, ...claves]))
+            : [];
+          record.baseCamposRendimientos = pending
+            ? (yaPendiente && existing.baseCamposRendimientos
+              ? existing.baseCamposRendimientos
+              : (this._baseCamposRendimientos || fotoCampos(docPrevio, claves)))
+            : {
+              ...(existing && existing.baseCamposRendimientos || {}),
+              ...fotoCampos(docData || {}, claves),
+            };
+          if (pending) {
+            record.baseRev = existing && existing.baseRev != null
+              ? existing.baseRev
+              : (Number(docPrevio.rev) || Number(this._revBase) || 0);
+          } else if (!existing || existing.baseRev == null || !existing.camposPendientesRendimientos?.length) {
+            record.baseRev = Number(this._revBase) || Number(docData && docData.rev) || 0;
+          }
+          if (!pending) {
+            const siguen = (existing && existing.camposPendientesRendimientos || [])
+              .filter(clave => !claves.includes(clave));
+            record.camposPendientesRendimientos = siguen;
+          }
+        }
+
+        const editorPendiente = Boolean(existing && existing.pendingEditor);
+        const siguePendiente = pending
+          || (record.camposPendientesRendimientos || []).length > 0
+          || editorPendiente;
         return {
           record,
           options: {
-            pendingSync: pending,
-            syncState: pending ? 'pending' : 'synced'
+            pendingSync: siguePendiente,
+            syncState: siguePendiente ? 'pending' : 'synced'
           }
         };
       });
     },
+    registrarEscrituraRendimientos(resultado) {
+      if (!resultado) return;
+      // Solo una escritura limpia leyó el documento entero que mandamos.
+      // Tras fusionar, la rev del servidor incluye campos que esta pantalla
+      // no volvió a leer: adoptarla haría que el siguiente guardado completo
+      // pisara esos campos sin comparar.
+      if (!resultado.omitida && !resultado.fusiono) this._revBase = resultado.rev;
+      const reconocidos = {
+        ...(resultado.camposCoincidentes || {}),
+        ...(resultado.camposEscritos || {}),
+      };
+      if (!Object.keys(reconocidos).length) return;
+      this._baseCamposRendimientos = integrarCamposEnBase(this._baseCamposRendimientos, reconocidos);
+    },
+    marcarClavesEnConflicto(claves) {
+      const juntas = new Set([...(this._clavesEnConflicto || []), ...(claves || [])]);
+      this._clavesEnConflicto = Array.from(juntas);
+      if (this._clavesEnConflicto.length) this.mostrarAvisoConflicto();
+    },
+    liberarClavesConflicto(payload) {
+      const escritas = new Set(Object.keys(payload || {}));
+      this._clavesEnConflicto = (this._clavesEnConflicto || []).filter(clave => !escritas.has(clave));
+      if (!this._clavesEnConflicto.length) this.avisoConflicto = '';
+    },
     async persistirCamposRendimientos(payload, opts = {}) {
+      if (this._hidratandoRendimientos) return;
       if (!payload || Object.keys(payload).length === 0) {
         return;
       }
-      const clonedPayload = this.deepClone(payload);
-      await this.actualizarOfflineRendimientos(!navigator.onLine, clonedPayload, opts);
+      const completo = this.deepClone(payload);
+      const bloqueadas = (opts.forzar || opts.reintentar)
+        ? []
+        : [...(this._clavesEnConflicto || []), ...(opts.clavesBloqueadas || [])];
+      const baseRev = opts.baseRev != null ? opts.baseRev : (Number(this._revBase) || 0);
+      const baseCampos = opts.baseCampos !== undefined ? opts.baseCampos : this._baseCamposRendimientos;
+      const paraServidor = prepararPayloadServidor(completo, bloqueadas, baseCampos);
+      const sinBase = opts.sinBase || (baseCampos ? 'conflicto' : 'ultima');
       if (!navigator.onLine) {
+        await this.actualizarOfflineRendimientos(true, completo, {
+          ...opts,
+          clavesEnConflicto: bloqueadas,
+        });
         return;
       }
       try {
-        const db = getFirestore();
-        const embarqueRef = doc(db, 'embarques', this.$route.params.id);
-        await updateDoc(embarqueRef, clonedPayload);
-        await this.actualizarOfflineRendimientos(false, clonedPayload, opts);
+        let resultado = {
+          rev: baseRev,
+          omitida: true,
+          fusiono: false,
+          camposEscritos: {},
+          camposCoincidentes: {},
+          camposEnConflicto: [],
+        };
+        if (Object.keys(paraServidor).length) {
+          const db = getFirestore();
+          resultado = await escribirCamposEmbarque(db, this.$route.params.id, {
+            baseRev,
+            baseCampos,
+            campos: paraServidor,
+            sinBase,
+            forzar: Boolean(opts.forzar),
+          });
+        }
+        this.registrarEscrituraRendimientos(resultado);
+        const enConflicto = resultado.camposEnConflicto || [];
+        if (enConflicto.length) {
+          this.marcarClavesEnConflicto(enConflicto);
+          this._clavesConservarMio = Array.from(new Set([...(this._clavesConservarMio || []), ...enConflicto]));
+          await this.actualizarOfflineRendimientos(true, completo, {
+            ...opts,
+            replacePendientes: true,
+            clavesEnConflicto: this._clavesConservarMio,
+          });
+          return;
+        }
+        this.liberarClavesConflicto(resultado.camposEscritos || {});
+        const escritas = Object.keys(resultado.camposEscritos || {});
+        this._clavesConservarMio = (this._clavesConservarMio || []).filter(clave => !escritas.includes(clave));
+        if (!this._clavesConservarMio.length && !(this._clavesEnConflicto || []).length) {
+          this.avisoConflicto = '';
+        }
+        await this.actualizarOfflineRendimientos(false, completo, {
+          ...opts,
+          clavesEnConflicto: this._clavesConservarMio || [],
+          limpiarConflicto: !(this._clavesConservarMio || []).length,
+        });
       } catch (error) {
+        if (esErrorConflictoEmbarque(error)) {
+          const claves = error.camposEnConflicto || Object.keys(paraServidor);
+          this.marcarClavesEnConflicto(claves);
+          this._clavesConservarMio = Array.from(new Set([...(this._clavesConservarMio || []), ...claves]));
+          await this.actualizarOfflineRendimientos(true, completo, {
+            ...opts,
+            replacePendientes: true,
+            clavesEnConflicto: this._clavesConservarMio,
+          });
+          return;
+        }
         console.error('[Rendimientos] Error al guardar cambios en Firestore:', error);
+        const mensaje = 'No se pudieron guardar los rendimientos. ' + (error && error.message ? error.message : 'Intenta de nuevo.');
+        this.avisoError = mensaje;
+        if (typeof alert === 'function') alert(mensaje);
       }
     },
     /**
@@ -918,6 +1167,8 @@ export default {
       this.preciosVenta = this.deepClone(record?.preciosVentaCache || this.preciosVenta || {});
     },
     aplicarEmbarqueCargado(embarqueData) {
+      this._hidratandoRendimientos = true;
+      this.fijarBaseRendimientos(embarqueData);
       this.embarqueData = embarqueData;
       this.nombresMedidasPersonalizados = this.deepClone(this.embarqueData.nombresMedidasPersonalizados || {});
       this.obtenerMedidasUnicas();
@@ -950,6 +1201,9 @@ export default {
       });
 
       this.guardadoAutomaticoActivo = true;
+      this.$nextTick(() => {
+        this._hidratandoRendimientos = false;
+      });
     },
     obtenerFechaISODesdeValor(valor) {
       const fechaNormalizada = this.normalizarFecha(valor);
@@ -1110,32 +1364,47 @@ export default {
           return;
         }
 
-        const payloadKeys = [
-          'kilosCrudos',
-          'medidaOculta',
-          'analizarGanancia',
-          'analizarGananciaCrudos',
-          'analizarMaquilaGanancia',
-          'precioMaquila',
-          'pesoTaraCosto',
-          'pesoTaraVenta',
-          'nombresMedidasPersonalizados',
-          'notaRendimientos'
-        ];
+        const pendientes = (record.camposPendientesRendimientos || [])
+          .filter(clave => CAMPOS_RENDIMIENTOS.includes(clave));
+        if (!pendientes.length) {
+          return;
+        }
+
         const payload = {};
-        payloadKeys.forEach(key => {
-          if (record[key] !== undefined) {
-            payload[key] = record[key];
-          } else if (record.docData && record.docData[key] !== undefined) {
-            payload[key] = record.docData[key];
-          }
+        pendientes.forEach(key => {
+          if (record[key] !== undefined) payload[key] = record[key];
+          else if (record.docData && record.docData[key] !== undefined) payload[key] = record.docData[key];
         });
+
+        const baseFresca = this._baseCamposRendimientos;
+        const baseCampos = baseFresca || record.baseCamposRendimientos || null;
+        if (!baseCampos) {
+          this._clavesConservarMio = pendientes.slice();
+          this.marcarClavesEnConflicto(pendientes);
+          await EmbarquesOfflineService.mergeSave(embarqueId, existing => {
+            if (!existing) return null;
+            return {
+              record: {
+                ...existing,
+                clavesEnConflicto: pendientes.slice(),
+                camposPendientesRendimientos: pendientes.slice(),
+              },
+              options: { pendingSync: true, syncState: 'pending' },
+            };
+          }).catch(() => {});
+          return;
+        }
 
         if (Object.keys(payload).length === 0) {
           return;
         }
 
-        await this.persistirCamposRendimientos(payload);
+        await this.persistirCamposRendimientos(payload, {
+          baseRev: baseFresca ? (Number(this._revBase) || 0) : (Number(record.baseRev ?? record.docData?.rev) || 0),
+          baseCampos,
+          sinBase: 'conflicto',
+          clavesBloqueadas: record.clavesEnConflicto || [],
+        });
       } catch (error) {
         console.error('[Rendimientos] Error al sincronizar datos offline:', error);
       }
@@ -1362,6 +1631,40 @@ export default {
       return null; // Cliente no reconocido
     },
 
+    documentoConPendientesRendimientos(servidor, offline) {
+      const docOffline = (offline && offline.docData) || {};
+      const base = offline && offline.baseCamposRendimientos;
+      const pendientes = new Set((offline && offline.camposPendientesRendimientos) || []);
+      const salida = { ...(servidor || {}) };
+      const mapas = new Set([
+        'kilosCrudos', 'rendimientoManual', 'costosPorMedida', 'precioMaquila',
+        'analizarGanancia', 'analizarGananciaCrudos', 'analizarMaquilaGanancia',
+        'medidaOculta', 'nombresMedidasPersonalizados',
+      ]);
+      CAMPOS_RENDIMIENTOS.forEach(clave => {
+        if (!pendientes.has(clave)) return;
+        const local = docOffline[clave] !== undefined ? docOffline[clave] : (offline && offline[clave]);
+        if (local === undefined) return;
+        if (mapas.has(clave) && local && typeof local === 'object' && !Array.isArray(local)) {
+          const mapa = { ...(salida[clave] || {}) };
+          const baseMapa = base && base[clave];
+          Object.keys(local).forEach(medida => {
+            if (!String(medida).trim()) return;
+            if (base && equivalentes(local[medida], baseMapa && baseMapa[medida])) return;
+            mapa[medida] = local[medida];
+          });
+          salida[clave] = mapa;
+          return;
+        }
+        if (base && equivalentes(local, base[clave])) return;
+        salida[clave] = local;
+      });
+      salida.fecha = servidor && servidor.fecha;
+      salida.clientes = (servidor && servidor.clientes) || [];
+      salida.rev = servidor && servidor.rev;
+      return salida;
+    },
+
     async cargarEmbarque() {
       try {
         const db = getFirestore();
@@ -1401,24 +1704,46 @@ export default {
           }
 
           const combinado = this.combinarEmbarquesPorFecha(embarquesRelacionados, embarqueId);
-          this.aplicarEmbarqueCargado(combinado || embarqueBase);
+          const previoOffline = await EmbarquesOfflineService.getById(embarqueId).catch(() => null);
+          const baseServidor = combinado || embarqueBase;
+          const pendientesRendi = ((previoOffline && previoOffline.camposPendientesRendimientos) || [])
+            .filter(clave => CAMPOS_RENDIMIENTOS.includes(clave));
+          const clavesPrevias = (previoOffline && previoOffline.clavesEnConflicto) || [];
+          const habiaPendienteRendi = pendientesRendi.length > 0 || clavesPrevias.length > 0;
 
-          await EmbarquesOfflineService.mergeSave(embarqueId, existing => {
-            const record = {
-              ...(existing || {}),
-              id: embarqueId,
-              docData: this.deepClone(embarqueBase)
-            };
-            return {
-              record,
-              options: {
-                pendingSync: existing?.pendingSync ?? false,
-                syncState: existing?.pendingSync ? existing.syncState : 'synced'
+          if (habiaPendienteRendi) {
+            this.aplicarEmbarqueCargado(this.documentoConPendientesRendimientos(baseServidor, previoOffline));
+            if (previoOffline.baseCamposRendimientos) {
+              try {
+                this._baseCamposRendimientos = JSON.parse(JSON.stringify(previoOffline.baseCamposRendimientos));
+              } catch (error) {
+                this._baseCamposRendimientos = previoOffline.baseCamposRendimientos;
               }
-            };
-          });
-
-          await this.actualizarOfflineRendimientos(false, this.crearPayloadRendimientos());
+            }
+            if (previoOffline.baseRev != null) this._revBase = Number(previoOffline.baseRev) || 0;
+            const claves = clavesPrevias.slice();
+            this._clavesEnConflicto = claves;
+            this._clavesConservarMio = claves.slice();
+            if (claves.length) this.mostrarAvisoConflicto();
+            else this.avisoConflicto = '';
+          } else if (previoOffline && previoOffline.pendingSync) {
+            this.aplicarEmbarqueCargado(baseServidor);
+          } else {
+            this.aplicarEmbarqueCargado(baseServidor);
+            await EmbarquesOfflineService.mergeSave(embarqueId, existing => {
+              const record = {
+                ...(existing || {}),
+                id: embarqueId,
+                docData: this.deepClone(embarqueBase),
+                clavesEnConflicto: []
+              };
+              return {
+                record,
+                options: { pendingSync: false, syncState: 'synced' }
+              };
+            });
+            await this.actualizarOfflineRendimientos(false, this.crearPayloadRendimientos());
+          }
 
           
           
@@ -2474,7 +2799,10 @@ export default {
         });
         
         // Aplicar costos a las medidas del embarque si no tienen costo asignado
-        const costosEmbarque = this.embarqueData?.costosPorMedida || {};
+        const costosAntes = this.deepClone(this.embarqueData?.costosPorMedida || {});
+        const costosEmbarque = this.embarqueData?.costosPorMedida
+          ? { ...this.embarqueData.costosPorMedida }
+          : {};
         let costosActualizados = false;
         
         // Obtener todas las tallas de crudos para aplicar costos
@@ -2505,15 +2833,14 @@ export default {
           }
         });
         
-        // Guardar cambios en Firebase si hubo actualizaciones
-        if (costosActualizados) {
+        if (costosActualizados && !equivalentes(costosAntes, costosEmbarque)) {
           if (!this.embarqueData.costosPorMedida) {
             this.embarqueData.costosPorMedida = {};
           }
           Object.assign(this.embarqueData.costosPorMedida, costosEmbarque);
 
           await this.persistirCamposRendimientos({
-            costosPorMedida: this.deepClone(this.embarqueData.costosPorMedida)
+            costosPorMedida: this.deepClone(costosEmbarque)
           });
 
           console.log('✅ Costos inicializados y guardados automáticamente');
@@ -2590,35 +2917,10 @@ export default {
     },
 
     async guardarCambiosEnTiempoReal() {
+      if (this._hidratandoRendimientos) return;
       if (!this.guardadoAutomaticoActivo) return;
       const payload = this.crearPayloadRendimientos();
-      await this.actualizarOfflineRendimientos(!navigator.onLine, payload);
-
-      if (!navigator.onLine) {
-        return;
-      }
-
-      try {
-        const db = getFirestore();
-        const embarqueRef = doc(db, 'embarques', this.$route.params.id);
-        await updateDoc(embarqueRef, {
-          kilosCrudos: payload.kilosCrudos,
-          medidaOculta: payload.medidaOculta,
-          analizarGanancia: payload.analizarGanancia,
-          analizarGananciaCrudos: payload.analizarGananciaCrudos,
-          rendimientoManual: payload.rendimientoManual,
-          analizarMaquilaGanancia: payload.analizarMaquilaGanancia,
-          precioMaquila: payload.precioMaquila,
-          pesoTaraCosto: payload.pesoTaraCosto,
-          pesoTaraVenta: payload.pesoTaraVenta,
-          nombresMedidasPersonalizados: payload.nombresMedidasPersonalizados,
-          notaRendimientos: payload.notaRendimientos
-        });
-        await this.actualizarOfflineRendimientos(false, payload);
-        console.log('Rendimientos guardados (online).');
-      } catch (error) {
-        console.error('Error al guardar los rendimientos:', error);
-      }
+      await this.persistirCamposRendimientos(payload);
     },
 
     obtenerMedidasUnicas() {
@@ -2631,6 +2933,7 @@ export default {
         cliente.productos.forEach(producto => {
           if (producto.medida) {
             const medidaNormalizada = producto.medida.toLowerCase().trim();
+            if (!medidaNormalizada) return;
             let nombreMedida = producto.medida.trim();
             let claveUnica = medidaNormalizada;
             
@@ -2824,10 +3127,7 @@ export default {
         kilosCrudos = Number(this.kilosCrudos[medida] || 0);
       }
       
-      const rendimiento = kilosCrudos / totalEmbarcado;
-      
-      this.guardarCambiosEnTiempoReal();
-      return rendimiento;
+      return kilosCrudos / totalEmbarcado;
     },
 
     debeAlertarCero(medida, valor) {
@@ -2874,7 +3174,7 @@ export default {
     },
 
     getRendimiento(medida) {
-      return this.calcularRendimiento(medida) || 0;
+      return this.obtenerRendimientoActual(medida) || 0;
     },
 
     volverAEmbarque() {
@@ -3272,6 +3572,7 @@ export default {
   watch: {
     kilosCrudos: {
       handler() {
+        if (this._hidratandoRendimientos) return;
         this.guardarCambiosEnTiempoReal();
         // Recalcular ganancias cuando cambien los kilos crudos
         this.$nextTick(async () => {
@@ -3335,20 +3636,9 @@ export default {
       }
     },
 
-    // Watchers para maquila ganancia
-    analizarMaquilaGanancia: {
-      handler() {
-        this.guardarCambiosEnTiempoReal();
-      },
-      deep: true
-    },
-
-    precioMaquila: {
-      handler() {
-        this.guardarCambiosEnTiempoReal();
-      },
-      deep: true
-    },
+    // Maquila y precio se guardan en guardarEstadoAnalisis (el @change / @input).
+    // Un watcher además de eso disparaba un segundo guardado con la revisión
+    // vieja y lo interpretaba como conflicto.
 
 
 
@@ -3358,6 +3648,9 @@ export default {
     if (this.guardarCambiosEnTiempoReal.cancel) {
       this.guardarCambiosEnTiempoReal.cancel();
     }
+    if (this.programarGuardadoAnalisis && this.programarGuardadoAnalisis.cancel) {
+      this.programarGuardadoAnalisis.cancel();
+    }
     window.removeEventListener('online', this.syncOfflineRendimientos);
   }
 }
@@ -3366,6 +3659,46 @@ export default {
 <style scoped>
 .rendimientos-container {
   padding: 20px;
+}
+
+.aviso-conflicto {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 0;
+  padding: 12px 14px;
+  border: 1px solid #e0b15a;
+  border-radius: 8px;
+  background: #fff4e5;
+  color: #6a4b12;
+}
+
+.aviso-error {
+  border-color: #d36b6b;
+  background: #fdecec;
+  color: #7a2424;
+}
+
+.aviso-conflicto p {
+  margin: 0;
+  flex: 1 1 220px;
+  line-height: 1.35;
+}
+
+.aviso-conflicto button {
+  border: 1px solid #c4923a;
+  background: #fff;
+  color: #6a4b12;
+  border-radius: 6px;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+@media (max-width: 640px) {
+  .aviso-conflicto button {
+    flex: 1 1 calc(50% - 8px);
+  }
 }
 
 .rendimientos-grid {

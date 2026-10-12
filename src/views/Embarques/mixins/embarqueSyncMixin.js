@@ -4,6 +4,14 @@ import EmbarquesOfflineService from '@/services/EmbarquesOfflineService';
 import { normalizarFechaISO, normalizarFechaValor, obtenerFechaActualISO } from '@/utils/dateUtils';
 import { crearNuevoProducto } from '@/constants.js/embarque';
 import { embarqueTieneContenidoOperativoEstado, serializarEstable } from '@/utils/embarqueContenido';
+import {
+  CAMPOS_AJENOS_AL_EDITOR,
+  CAMPOS_EDITOR,
+  conservarCamposAjenos,
+  fotoCampos,
+  planearEscritura,
+  seleccionarCampos,
+} from '@/utils/embarqueRevision';
 
 /**
  * Normaliza los datos de un embarque para escribirlos en Firestore.
@@ -77,35 +85,28 @@ export function normalizarDocDataParaFirestore(docData, record = {}, contexto = 
     }
   });
 
-  // Campos que otras vistas escriben DIRECTO en Firestore sin pasar por el
-  // espejo offline: Rendimientos (totalGanancias, rendimientoManual) y Cuenta
-  // de Fletes (fletePagado, fletePagos, fletePagoActualizado*). Para estos, el
-  // valor remoto SIEMPRE es el más fresco — el espejo offline puede traer una
-  // copia vieja que revertiría pagos de fletes ya marcados. Preferir
-  // remoto → snapshot local → record; omitirlos borraba las marcas de pago en
-  // cada sincronización y los fletes viejos volvían a aparecer "pendientes".
-  const pickPreferRemoto = (key) => {
+  // Campos de Rendimientos, Costos, Fletes y la lista. Si el documento
+  // remoto existe, su valor gana: el espejo offline del editor suele traer
+  // una copia vieja (kilosCrudos, pagos, ganancias) que no debe resucitar.
+  const pickSoloRemotoSiHayDoc = (key) => {
     const remoto = contexto.dataRemota;
-    if (remoto && remoto[key] !== undefined && remoto[key] !== null) return remoto[key];
+    if (remoto) {
+      return Object.prototype.hasOwnProperty.call(remoto, key) ? remoto[key] : undefined;
+    }
     return pickConRemoto(key);
   };
-  [
-    'totalGanancias',
-    'rendimientoManual',
-    'fletePagado',
-    'fletePagos',
-    'fletePagoActualizadoEn',
-    'fletePagoActualizadoPor'
-  ].forEach((key) => {
-    const valor = pickPreferRemoto(key);
-    if (valor !== undefined) {
-      data[key] = valor;
+  CAMPOS_AJENOS_AL_EDITOR.forEach((key) => {
+    const valor = pickSoloRemotoSiHayDoc(key);
+    if (contexto.dataRemota && valor === undefined) {
+      delete data[key];
+      return;
     }
+    if (valor !== undefined) data[key] = valor;
   });
 
   // Señal de cambio para los editores en vivo: cada sincronización cuenta
   // como una revisión nueva sobre lo remoto.
-  data.rev = (Number(pickPreferRemoto('rev')) || 0) + 1;
+  data.rev = (Number(pickSoloRemotoSiHayDoc('rev')) || 0) + 1;
 
   // Lápidas de borrado de productos: unión de lo local y lo remoto para que
   // una sincronización no reviva productos borrados por otro editor.
@@ -273,6 +274,30 @@ export const embarqueSyncMixin = {
       }
     },
 
+    capturarBaseEditor(data) {
+      this._baseCamposEditor = fotoCampos(data || {}, CAMPOS_EDITOR);
+    },
+
+    aplicarCamposAjenos(ajenos) {
+      if (!ajenos || !this.embarque) return;
+      this._aplicandoRemoto = true;
+      if (ajenos.kilosCrudos !== undefined) {
+        this.embarque.kilosCrudos = JSON.parse(JSON.stringify(ajenos.kilosCrudos || {}));
+      }
+      if (ajenos.costosPorMedida !== undefined) {
+        this.costosPorMedida = { ...(ajenos.costosPorMedida || {}) };
+      }
+      if (ajenos.aplicarCostoExtra !== undefined) {
+        this.aplicarCostoExtra = { ...(ajenos.aplicarCostoExtra || {}) };
+      }
+      if (ajenos.costoExtra !== undefined) {
+        this.costoExtra = ajenos.costoExtra;
+      }
+      this.$nextTick(() => {
+        this._aplicandoRemoto = false;
+      });
+    },
+
     async guardarSnapshotOffline(options = {}) {
       if (!this.embarqueId || this._inicializandoEmbarque) {
         return;
@@ -280,11 +305,29 @@ export const embarqueSyncMixin = {
 
       try {
         await EmbarquesOfflineService.init();
-        const snapshot = this.buildOfflineSnapshot(options.docData);
+        let docData = options.docData || this.prepararDatosEmbarque();
+        const previo = await EmbarquesOfflineService.getById(this.embarqueId).catch(() => null);
+        docData = conservarCamposAjenos(docData, previo && previo.docData);
+        const snapshot = this.buildOfflineSnapshot(docData);
+        const pendingSync = options.pendingSync !== undefined ? options.pendingSync : !navigator.onLine;
+        if (snapshot && previo) {
+          if (snapshot.camposPendientesRendimientos == null && previo.camposPendientesRendimientos) {
+            snapshot.camposPendientesRendimientos = previo.camposPendientesRendimientos;
+          }
+          if (snapshot.baseCamposRendimientos == null && previo.baseCamposRendimientos) {
+            snapshot.baseCamposRendimientos = previo.baseCamposRendimientos;
+          }
+          if (snapshot.baseCamposEditor == null && previo.baseCamposEditor) {
+            snapshot.baseCamposEditor = previo.baseCamposEditor;
+          }
+          if (snapshot.clavesEnConflicto == null && previo.clavesEnConflicto) {
+            snapshot.clavesEnConflicto = previo.clavesEnConflicto;
+          }
+        }
+        if (snapshot) snapshot.pendingEditor = pendingSync;
         if (!snapshot) {
           return;
         }
-        const pendingSync = options.pendingSync !== undefined ? options.pendingSync : !navigator.onLine;
         await EmbarquesOfflineService.save(snapshot, {
           pendingSync,
           syncState: options.syncState,
@@ -425,21 +468,29 @@ export const embarqueSyncMixin = {
         // compartidos con el estado vivo: las teclas escritas durante la
         // transacción se colaban a medias en la escritura y en la base.
         const docData = JSON.parse(JSON.stringify(this.prepararDatosEmbarque()));
-        const payload = {
-          ...docData,
-          ultimaEdicion: {
-            userId: this.authStore.userId,
-            username: this.authStore.user?.username || 'Usuario desconocido',
-            timestamp: serverTimestamp()
-          }
+        // El editor no reescribe kilos, ganancias, costos ni fletes: si lo
+        // hiciera con la copia que tenía al abrir, desharía Rendimientos.
+        const payloadEditor = seleccionarCampos(docData, CAMPOS_EDITOR);
+        const baseEditor = this._baseCamposEditor
+          ? JSON.parse(JSON.stringify(this._baseCamposEditor))
+          : null;
+        const ultimaEdicion = {
+          userId: this.authStore.userId,
+          username: this.authStore.user?.username || 'Usuario desconocido',
+          timestamp: serverTimestamp()
         };
 
         const respaldoConflicto = doc(collection(db, 'respaldos_emergencia'));
         let dataConflicto = null;
         let revEscrita = null;
+        let ajenosServidor = null;
+
+        let planAplicado = null;
+        let remotoLeido = null;
 
         await runTransaction(db, async (transaction) => {
           dataConflicto = null;
+          ajenosServidor = null;
           const snapshot = await transaction.get(embarqueRef);
 
           if (!snapshot.exists()) {
@@ -447,14 +498,30 @@ export const embarqueSyncMixin = {
               throw new Error('El embarque fue eliminado en otro equipo. La copia local se conserva; no se volverá a crear automáticamente.');
             }
             revEscrita = revCapturada + 1;
-            transaction.set(embarqueRef, { ...payload, rev: revEscrita });
+            transaction.set(embarqueRef, { ...payloadEditor, ultimaEdicion, rev: revEscrita });
             return;
           }
 
-          const revRemota = Number(snapshot.data().rev) || 0;
-          if (revRemota !== revCapturada) {
-            // Alguien más guardó desde nuestra base: no escribir nada.
-            dataConflicto = snapshot.data();
+          const remoto = snapshot.data();
+          const plan = planearEscritura({
+            remoto,
+            baseRev: revCapturada,
+            baseCampos: baseEditor,
+            campos: payloadEditor,
+          });
+          planAplicado = plan;
+          remotoLeido = remoto;
+
+          if (plan.accion === 'omitir') {
+            revEscrita = plan.rev;
+            ajenosServidor = seleccionarCampos(remoto, CAMPOS_AJENOS_AL_EDITOR);
+            return;
+          }
+
+          if (plan.accion === 'conflicto' || plan.accion === 'parcial') {
+            // Otro editor tocó clientes, productos o la carga. No se pisa:
+            // se respalda y se fusiona al salir de la transacción.
+            dataConflicto = remoto;
             transaction.set(respaldoConflicto, {
               embarqueOriginalId: idCapturado, datosOriginales: docData,
               fechaRespaldo: serverTimestamp(), razonRespaldo: 'cambios_locales_antes_de_combinar',
@@ -463,10 +530,11 @@ export const embarqueSyncMixin = {
             return;
           }
 
-          revEscrita = revRemota + 1;
-          // update (no set): conserva campos que otras vistas escriben en el
-          // mismo documento (fletePagos, totalGanancias, etc.).
-          transaction.update(embarqueRef, { ...payload, rev: revEscrita });
+          revEscrita = plan.rev;
+          ajenosServidor = seleccionarCampos(remoto, CAMPOS_AJENOS_AL_EDITOR);
+          // Solo los campos que el plan dejó escribir. El resto del formulario
+          // puede estar viejo: otro editor ya lo cambió y esta pantalla no lo tocó.
+          transaction.update(embarqueRef, { ...plan.campos, ultimaEdicion, rev: revEscrita });
         });
 
         if (this._editorCerrado || this.embarqueId !== idCapturado) return;
@@ -493,7 +561,25 @@ export const embarqueSyncMixin = {
           return;
         }
 
+        const distintos = (planAplicado && planAplicado.camposRemotosDistintos) || [];
+        if (distintos.length && remotoLeido) {
+          const fusionado = {
+            ...remotoLeido,
+            ...(planAplicado.campos || {}),
+            rev: revEscrita != null ? revEscrita : (Number(remotoLeido.rev) || 0),
+          };
+          delete fusionado.ultimaEdicion;
+          if ((Number(this._dirtyGen) || 0) === genCapturada) this.hasPendingChanges = false;
+          this._snapshotRemotoDiferido = null;
+          await this.aplicarDocRemoto(idCapturado, fusionado);
+          this._reintentosSubidaEnVivo = 0;
+          console.log('[subirCambiosEnVivo] Campos ajenos del otro editor incorporados (rev', (fusionado.rev) + ').');
+          return;
+        }
+
         this._revBase = revEscrita;
+        this.capturarBaseEditor(payloadEditor);
+        if (ajenosServidor) this.aplicarCamposAjenos(ajenosServidor);
         this._reintentosSubidaEnVivo = 0;
         // Cualquier snapshot diferido es anterior a la revisión recién
         // escrita (la transacción habría detectado conflicto si no): ya es
@@ -586,7 +672,6 @@ export const embarqueSyncMixin = {
         fecha: this.embarque.fecha,
         cargaCon: this.embarque.cargaCon,
         camionNumero: this.embarque.camionNumero || 1,
-        kilosCrudos: this.embarque.kilosCrudos || {},
         productosEliminados,
         clientes: [],
         borrador: !embarqueTieneContenidoOperativoEstado({

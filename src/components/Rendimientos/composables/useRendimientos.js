@@ -1,5 +1,7 @@
 import { reactive, computed } from 'vue';
-import { getFirestore, doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { getFirestore, doc, getDoc, serverTimestamp } from 'firebase/firestore';
+import { escribirCamposEmbarque } from '@/services/embarqueEscritura';
+import { esErrorConflictoEmbarque, integrarCamposEnBase, pedirRecargaPorConflicto } from '@/utils/embarqueRevision';
 import { debounce } from 'lodash';
 
 export function useRendimientos(embarqueId) {
@@ -8,7 +10,10 @@ export function useRendimientos(embarqueId) {
     medidasUnicas: [],
     embarqueData: null,
     guardadoAutomaticoActivo: false,
-    nombresMedidasPersonalizados: {}
+    nombresMedidasPersonalizados: {},
+    revBase: 0,
+    baseKilos: null,
+    baseNombres: null
   });
 
   // Métodos para manejar medidas
@@ -165,10 +170,7 @@ export function useRendimientos(embarqueId) {
       kilosCrudos = Number(state.kilosCrudos[medida] || 0);
     }
     
-    const rendimiento = kilosCrudos / totalEmbarcado;
-    
-    guardarCambiosEnTiempoReal();
-    return rendimiento;
+    return kilosCrudos / totalEmbarcado;
   };
 
   const getRendimiento = (medida) => {
@@ -225,14 +227,20 @@ export function useRendimientos(embarqueId) {
       
       try {
         const db = getFirestore();
-        const embarqueRef = doc(db, 'embarques', embarqueId);
-        
-        await updateDoc(embarqueRef, {
-          nombresMedidasPersonalizados: state.nombresMedidasPersonalizados
+        const resultado = await escribirCamposEmbarque(db, embarqueId, {
+          baseRev: state.revBase,
+          baseCampos: { nombresMedidasPersonalizados: state.baseNombres },
+          campos: { nombresMedidasPersonalizados: state.nombresMedidasPersonalizados }
         });
-        
+        if (resultado && !resultado.omitida && !resultado.fusiono) state.revBase = resultado.rev;
+        const nombres = integrarCamposEnBase({}, {
+          ...(resultado && resultado.camposCoincidentes || {}),
+          ...(resultado && resultado.camposEscritos || {}),
+        }).nombresMedidasPersonalizados;
+        if (nombres !== undefined) state.baseNombres = { ...nombres };
         console.log('Nombre de medida actualizado correctamente');
       } catch (error) {
+        if (esErrorConflictoEmbarque(error) && pedirRecargaPorConflicto(error)) window.location.reload();
         console.error('Error al guardar el nuevo nombre:', error);
       }
     }
@@ -247,7 +255,10 @@ export function useRendimientos(embarqueId) {
       
       if (embarqueDoc.exists()) {
         state.embarqueData = embarqueDoc.data();
+        state.revBase = Number(state.embarqueData.rev) || 0;
+        state.baseKilos = state.embarqueData.kilosCrudos || {};
         state.nombresMedidasPersonalizados = state.embarqueData.nombresMedidasPersonalizados || {};
+        state.baseNombres = { ...state.nombresMedidasPersonalizados };
         obtenerMedidasUnicas();
         
         const kilosCrudosGuardados = state.embarqueData.kilosCrudos || {};
@@ -283,19 +294,32 @@ export function useRendimientos(embarqueId) {
 
     try {
       const db = getFirestore();
-      const embarqueRef = doc(db, 'embarques', embarqueId);
-      
-      await updateDoc(embarqueRef, {
-        kilosCrudos: state.kilosCrudos,
-        ultimaEdicion: {
-          userId: state.authStore?.userId,
-          username: state.authStore?.user?.username,
-          timestamp: serverTimestamp()
+      const resultado = await escribirCamposEmbarque(db, embarqueId, {
+        baseRev: state.revBase,
+        baseCampos: { kilosCrudos: state.baseKilos },
+        campos: { kilosCrudos: state.kilosCrudos },
+        meta: {
+          ultimaEdicion: {
+            userId: state.authStore?.userId,
+            username: state.authStore?.user?.username,
+            timestamp: serverTimestamp()
+          }
         }
       });
-      
+      if (resultado && !resultado.omitida && !resultado.fusiono) state.revBase = resultado.rev;
+      const kilosReconocidos = integrarCamposEnBase({}, {
+        ...(resultado && resultado.camposCoincidentes || {}),
+        ...(resultado && resultado.camposEscritos || {}),
+      }).kilosCrudos;
+      if (kilosReconocidos !== undefined) {
+        state.baseKilos = {
+          ...(state.baseKilos || {}),
+          ...JSON.parse(JSON.stringify(kilosReconocidos)),
+        };
+      }
       console.log('Rendimientos guardados:', state.kilosCrudos);
     } catch (error) {
+      if (esErrorConflictoEmbarque(error) && pedirRecargaPorConflicto(error)) window.location.reload();
       console.error('Error al guardar los rendimientos:', error);
     }
   }, 300);

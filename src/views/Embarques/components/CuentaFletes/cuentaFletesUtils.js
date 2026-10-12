@@ -192,7 +192,12 @@ export function transformarEmbarqueAFlete(docSnapshot) {
     cargaCon,
     pagado,
     pagadoLegacy: data.fletePagado === true,
-    pagosPorChofer: data.fletePagos || {}
+    pagosPorChofer: data.fletePagos || {},
+    rev: Number(data.rev) || 0,
+    fletePagado: data.fletePagado === true,
+    fletePagos: data.fletePagos || {},
+    fletePagoActualizadoEn: data.fletePagoActualizadoEn || null,
+    fletePagoActualizadoPor: data.fletePagoActualizadoPor || null
   };
 }
 
@@ -223,12 +228,28 @@ export function agruparFletesPorFechaYCarga(fletesBase) {
         pagosPorChofer: {
           ...flete.pagosPorChofer,
           [pagoKey]: flete.pagado
-        }
+        },
+        documentos: [{
+          id: flete.id,
+          rev: flete.rev || 0,
+          fletePagado: flete.fletePagado === true,
+          fletePagos: flete.fletePagos || {},
+          fletePagoActualizadoEn: flete.fletePagoActualizadoEn || null,
+          fletePagoActualizadoPor: flete.fletePagoActualizadoPor || null
+        }]
       });
       return;
     }
 
     existente.ids.push(flete.id);
+    existente.documentos.push({
+      id: flete.id,
+      rev: flete.rev || 0,
+      fletePagado: flete.fletePagado === true,
+      fletePagos: flete.fletePagos || {},
+      fletePagoActualizadoEn: flete.fletePagoActualizadoEn || null,
+      fletePagoActualizadoPor: flete.fletePagoActualizadoPor || null
+    });
     existente.tarasLimpioJoselito += flete.tarasLimpioJoselito;
     existente.tarasCrudoJoselito += flete.tarasCrudoJoselito;
     existente.tarasLimpioVeronica += flete.tarasLimpioVeronica;
