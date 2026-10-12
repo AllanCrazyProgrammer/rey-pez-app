@@ -309,6 +309,7 @@ export const embarqueSyncMixin = {
         const previo = await EmbarquesOfflineService.getById(this.embarqueId).catch(() => null);
         docData = conservarCamposAjenos(docData, previo && previo.docData);
         const snapshot = this.buildOfflineSnapshot(docData);
+        const pendingSync = options.pendingSync !== undefined ? options.pendingSync : !navigator.onLine;
         if (snapshot && previo) {
           if (snapshot.camposPendientesRendimientos == null && previo.camposPendientesRendimientos) {
             snapshot.camposPendientesRendimientos = previo.camposPendientesRendimientos;
@@ -316,11 +317,14 @@ export const embarqueSyncMixin = {
           if (snapshot.baseCamposRendimientos == null && previo.baseCamposRendimientos) {
             snapshot.baseCamposRendimientos = previo.baseCamposRendimientos;
           }
+          if (snapshot.clavesEnConflicto == null && previo.clavesEnConflicto) {
+            snapshot.clavesEnConflicto = previo.clavesEnConflicto;
+          }
         }
+        if (snapshot) snapshot.pendingEditor = pendingSync;
         if (!snapshot) {
           return;
         }
-        const pendingSync = options.pendingSync !== undefined ? options.pendingSync : !navigator.onLine;
         await EmbarquesOfflineService.save(snapshot, {
           pendingSync,
           syncState: options.syncState,
@@ -520,7 +524,9 @@ export const embarqueSyncMixin = {
 
           revEscrita = plan.rev;
           ajenosServidor = seleccionarCampos(remoto, CAMPOS_AJENOS_AL_EDITOR);
-          transaction.update(embarqueRef, { ...payloadEditor, ultimaEdicion, rev: revEscrita });
+          // Solo los campos que el plan dejó escribir. El resto del formulario
+          // puede estar viejo: otro editor ya lo cambió y esta pantalla no lo tocó.
+          transaction.update(embarqueRef, { ...plan.campos, ultimaEdicion, rev: revEscrita });
         });
 
         if (this._editorCerrado || this.embarqueId !== idCapturado) return;

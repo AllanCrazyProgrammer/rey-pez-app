@@ -14,10 +14,12 @@ function escribirActualizacion(transaction, ref, payload) {
   const planos = {};
   const especiales = [];
   Object.keys(payload).forEach(clave => {
-    if (clave.indexOf('kilosCrudos.') === 0) {
-      const medida = clave.slice('kilosCrudos.'.length);
+    const punto = clave.indexOf('.');
+    const padre = punto > 0 ? clave.slice(0, punto) : '';
+    if (padre === 'kilosCrudos' || padre === 'rendimientoManual') {
+      const medida = clave.slice(punto + 1);
       if (!String(medida).trim()) return;
-      especiales.push(new FieldPath('kilosCrudos', medida));
+      especiales.push(new FieldPath(padre, medida));
       especiales.push(payload[clave]);
       return;
     }

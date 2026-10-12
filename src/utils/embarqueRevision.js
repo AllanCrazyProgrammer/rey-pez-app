@@ -100,11 +100,15 @@ export function esEcoDeRevisionLocal({ revRemota, revBase, inicializando = false
  * `kilosCrudos.<medida>`: todo lo que va después del primer punto es el
  * nombre de la medida, aunque tenga puntos (`7.5`). No se parte en segmentos.
  */
+const PREFIJOS_POR_MEDIDA = ['kilosCrudos.', 'rendimientoManual.'];
+
 export function segmentosDeClave(clave) {
   if (Array.isArray(clave)) return clave;
   if (typeof clave !== 'string') return [String(clave)];
-  const prefijo = 'kilosCrudos.';
-  if (clave.indexOf(prefijo) === 0) return ['kilosCrudos', clave.slice(prefijo.length)];
+  for (let i = 0; i < PREFIJOS_POR_MEDIDA.length; i += 1) {
+    const prefijo = PREFIJOS_POR_MEDIDA[i];
+    if (clave.indexOf(prefijo) === 0) return [prefijo.slice(0, -1), clave.slice(prefijo.length)];
+  }
   if (clave.indexOf('.') === -1) return [clave];
   return clave.split('.');
 }
@@ -233,15 +237,20 @@ export function planearEscritura({ remoto, baseRev, baseCampos, campos, sinBase 
  * Parte `kilosCrudos` por medida (`kilosCrudos.<medida>`) para que dos
  * equipos puedan guardar tallas distintas sin pisarse el mapa entero.
  */
-export function expandirKilosCrudos(campos) {
-  const salida = { ...(campos || {}) };
-  const mapa = salida.kilosCrudos;
-  if (mapa == null || typeof mapa !== 'object' || Array.isArray(mapa)) return salida;
-  delete salida.kilosCrudos;
+function expandirMapaPorMedida(salida, campo) {
+  const mapa = salida[campo];
+  if (mapa == null || typeof mapa !== 'object' || Array.isArray(mapa)) return;
+  delete salida[campo];
   Object.keys(mapa).forEach(medida => {
     if (!String(medida).trim()) return;
-    salida[`kilosCrudos.${medida}`] = mapa[medida];
+    salida[`${campo}.${medida}`] = mapa[medida];
   });
+}
+
+export function expandirKilosCrudos(campos) {
+  const salida = { ...(campos || {}) };
+  expandirMapaPorMedida(salida, 'kilosCrudos');
+  expandirMapaPorMedida(salida, 'rendimientoManual');
   return salida;
 }
 
@@ -252,13 +261,17 @@ export function expandirKilosCrudos(campos) {
 export function prepararPayloadServidor(campos, bloqueadas, baseCampos) {
   const lista = bloqueadas || [];
   let salida = expandirKilosCrudos(campos);
-  if (lista.includes('kilosCrudos')) {
+  ['kilosCrudos', 'rendimientoManual'].forEach(campo => {
+    if (!lista.includes(campo)) return;
     Object.keys(salida).forEach(clave => {
-      if (clave === 'kilosCrudos' || clave.indexOf('kilosCrudos.') === 0) delete salida[clave];
+      if (clave === campo || clave.indexOf(`${campo}.`) === 0) delete salida[clave];
     });
-  }
+  });
   Object.keys(salida).forEach(clave => {
-    if (clave.indexOf('kilosCrudos.') === 0 && !clave.slice('kilosCrudos.'.length).trim()) {
+    const punto = clave.indexOf('.');
+    if (punto <= 0) return;
+    const padre = clave.slice(0, punto);
+    if ((padre === 'kilosCrudos' || padre === 'rendimientoManual') && !clave.slice(punto + 1).trim()) {
       delete salida[clave];
     }
   });

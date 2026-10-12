@@ -835,9 +835,17 @@ export default {
       this._clavesConservarMio = [];
       await EmbarquesOfflineService.mergeSave(this.$route.params.id, existing => {
         if (!existing) return null;
+        const editorPendiente = Boolean(existing.pendingEditor);
         return {
-          record: { ...existing, clavesEnConflicto: [] },
-          options: { pendingSync: false, syncState: 'synced' }
+          record: {
+            ...existing,
+            clavesEnConflicto: [],
+            camposPendientesRendimientos: [],
+          },
+          options: {
+            pendingSync: editorPendiente,
+            syncState: editorPendiente ? 'pending' : 'synced',
+          },
         };
       }).catch(() => {});
       if (typeof window !== 'undefined' && window.location && typeof window.location.reload === 'function') {
@@ -963,7 +971,10 @@ export default {
           }
         }
 
-        const siguePendiente = pending || (record.camposPendientesRendimientos || []).length > 0;
+        const editorPendiente = Boolean(existing && existing.pendingEditor);
+        const siguePendiente = pending
+          || (record.camposPendientesRendimientos || []).length > 0
+          || editorPendiente;
         return {
           record,
           options: {
@@ -1353,37 +1364,45 @@ export default {
           return;
         }
 
-        const payloadKeys = [
-          'kilosCrudos',
-          'medidaOculta',
-          'analizarGanancia',
-          'analizarGananciaCrudos',
-          'analizarMaquilaGanancia',
-          'precioMaquila',
-          'pesoTaraCosto',
-          'pesoTaraVenta',
-          'nombresMedidasPersonalizados',
-          'notaRendimientos'
-        ];
+        const pendientes = (record.camposPendientesRendimientos || [])
+          .filter(clave => CAMPOS_RENDIMIENTOS.includes(clave));
+        if (!pendientes.length) {
+          return;
+        }
+
         const payload = {};
-        payloadKeys.forEach(key => {
-          if (record[key] !== undefined) {
-            payload[key] = record[key];
-          } else if (record.docData && record.docData[key] !== undefined) {
-            payload[key] = record.docData[key];
-          }
+        pendientes.forEach(key => {
+          if (record[key] !== undefined) payload[key] = record[key];
+          else if (record.docData && record.docData[key] !== undefined) payload[key] = record.docData[key];
         });
+
+        const baseFresca = this._baseCamposRendimientos;
+        const baseCampos = baseFresca || record.baseCamposRendimientos || null;
+        if (!baseCampos) {
+          this._clavesConservarMio = pendientes.slice();
+          this.marcarClavesEnConflicto(pendientes);
+          await EmbarquesOfflineService.mergeSave(embarqueId, existing => {
+            if (!existing) return null;
+            return {
+              record: {
+                ...existing,
+                clavesEnConflicto: pendientes.slice(),
+                camposPendientesRendimientos: pendientes.slice(),
+              },
+              options: { pendingSync: true, syncState: 'pending' },
+            };
+          }).catch(() => {});
+          return;
+        }
 
         if (Object.keys(payload).length === 0) {
           return;
         }
 
-        const baseFresca = this._baseCamposRendimientos;
-        const baseCampos = baseFresca || record.baseCamposRendimientos || null;
         await this.persistirCamposRendimientos(payload, {
           baseRev: baseFresca ? (Number(this._revBase) || 0) : (Number(record.baseRev ?? record.docData?.rev) || 0),
           baseCampos,
-          sinBase: baseCampos ? 'conflicto' : 'ultima',
+          sinBase: 'conflicto',
           clavesBloqueadas: record.clavesEnConflicto || [],
         });
       } catch (error) {
@@ -1612,6 +1631,40 @@ export default {
       return null; // Cliente no reconocido
     },
 
+    documentoConPendientesRendimientos(servidor, offline) {
+      const docOffline = (offline && offline.docData) || {};
+      const base = offline && offline.baseCamposRendimientos;
+      const pendientes = new Set((offline && offline.camposPendientesRendimientos) || []);
+      const salida = { ...(servidor || {}) };
+      const mapas = new Set([
+        'kilosCrudos', 'rendimientoManual', 'costosPorMedida', 'precioMaquila',
+        'analizarGanancia', 'analizarGananciaCrudos', 'analizarMaquilaGanancia',
+        'medidaOculta', 'nombresMedidasPersonalizados',
+      ]);
+      CAMPOS_RENDIMIENTOS.forEach(clave => {
+        if (!pendientes.has(clave)) return;
+        const local = docOffline[clave] !== undefined ? docOffline[clave] : (offline && offline[clave]);
+        if (local === undefined) return;
+        if (mapas.has(clave) && local && typeof local === 'object' && !Array.isArray(local)) {
+          const mapa = { ...(salida[clave] || {}) };
+          const baseMapa = base && base[clave];
+          Object.keys(local).forEach(medida => {
+            if (!String(medida).trim()) return;
+            if (base && equivalentes(local[medida], baseMapa && baseMapa[medida])) return;
+            mapa[medida] = local[medida];
+          });
+          salida[clave] = mapa;
+          return;
+        }
+        if (base && equivalentes(local, base[clave])) return;
+        salida[clave] = local;
+      });
+      salida.fecha = servidor && servidor.fecha;
+      salida.clientes = (servidor && servidor.clientes) || [];
+      salida.rev = servidor && servidor.rev;
+      return salida;
+    },
+
     async cargarEmbarque() {
       try {
         const db = getFirestore();
@@ -1652,20 +1705,14 @@ export default {
 
           const combinado = this.combinarEmbarquesPorFecha(embarquesRelacionados, embarqueId);
           const previoOffline = await EmbarquesOfflineService.getById(embarqueId).catch(() => null);
-          const habiaPendiente = Boolean(previoOffline && previoOffline.pendingSync);
+          const baseServidor = combinado || embarqueBase;
+          const pendientesRendi = ((previoOffline && previoOffline.camposPendientesRendimientos) || [])
+            .filter(clave => CAMPOS_RENDIMIENTOS.includes(clave));
+          const clavesPrevias = (previoOffline && previoOffline.clavesEnConflicto) || [];
+          const habiaPendienteRendi = pendientesRendi.length > 0 || clavesPrevias.length > 0;
 
-          if (habiaPendiente) {
-            const docOffline = previoOffline.docData || {};
-            const baseServidor = combinado || embarqueBase;
-            this.aplicarEmbarqueCargado({
-              ...baseServidor,
-              ...docOffline,
-              fecha: docOffline.fecha || baseServidor.fecha,
-              clientes: (docOffline.clientes && docOffline.clientes.length)
-                ? docOffline.clientes
-                : (baseServidor.clientes || []),
-              kilosCrudos: docOffline.kilosCrudos || baseServidor.kilosCrudos,
-            });
+          if (habiaPendienteRendi) {
+            this.aplicarEmbarqueCargado(this.documentoConPendientesRendimientos(baseServidor, previoOffline));
             if (previoOffline.baseCamposRendimientos) {
               try {
                 this._baseCamposRendimientos = JSON.parse(JSON.stringify(previoOffline.baseCamposRendimientos));
@@ -1674,13 +1721,15 @@ export default {
               }
             }
             if (previoOffline.baseRev != null) this._revBase = Number(previoOffline.baseRev) || 0;
-            const claves = Array.isArray(previoOffline.clavesEnConflicto) ? previoOffline.clavesEnConflicto.slice() : [];
+            const claves = clavesPrevias.slice();
             this._clavesEnConflicto = claves;
             this._clavesConservarMio = claves.slice();
             if (claves.length) this.mostrarAvisoConflicto();
             else this.avisoConflicto = '';
+          } else if (previoOffline && previoOffline.pendingSync) {
+            this.aplicarEmbarqueCargado(baseServidor);
           } else {
-            this.aplicarEmbarqueCargado(combinado || embarqueBase);
+            this.aplicarEmbarqueCargado(baseServidor);
             await EmbarquesOfflineService.mergeSave(embarqueId, existing => {
               const record = {
                 ...(existing || {}),
