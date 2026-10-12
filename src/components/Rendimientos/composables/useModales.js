@@ -25,7 +25,7 @@ export function useModales(embarqueId) {
       baseCampos,
       campos
     });
-    if (!resultado.omitida) state.revBase = resultado.rev;
+    if (resultado && !resultado.omitida && !resultado.fusiono) state.revBase = resultado.rev;
     return resultado;
   };
 
@@ -42,11 +42,13 @@ export function useModales(embarqueId) {
 
   const guardarNota = async () => {
     try {
-      await guardarCampos(
+      const resultado = await guardarCampos(
         { notaRendimientos: state.nota },
         { notaRendimientos: state.baseNota }
       );
-      state.baseNota = state.nota;
+      if (resultado && resultado.camposEscritos && resultado.camposEscritos.notaRendimientos !== undefined) {
+        state.baseNota = resultado.camposEscritos.notaRendimientos;
+      }
       
       cerrarModal();
       console.log('Nota guardada correctamente');
@@ -69,15 +71,16 @@ export function useModales(embarqueId) {
 
   const guardarConfiguracion = async () => {
     try {
-      await guardarCampos({
+      const resultado = await guardarCampos({
         pesoTaraCosto: Number(state.pesoTaraCosto),
         pesoTaraVenta: Number(state.pesoTaraVenta)
       }, {
         pesoTaraCosto: state.baseTaraCosto,
         pesoTaraVenta: state.baseTaraVenta
       });
-      state.baseTaraCosto = Number(state.pesoTaraCosto);
-      state.baseTaraVenta = Number(state.pesoTaraVenta);
+      const escritos = (resultado && resultado.camposEscritos) || {};
+      if (escritos.pesoTaraCosto !== undefined) state.baseTaraCosto = escritos.pesoTaraCosto;
+      if (escritos.pesoTaraVenta !== undefined) state.baseTaraVenta = escritos.pesoTaraVenta;
       
       console.log('Configuración de pesos guardada correctamente');
       cerrarModalConfiguracion();
@@ -96,11 +99,13 @@ export function useModales(embarqueId) {
   // Gestión de estado de ocultación
   const guardarEstadoOculto = async () => {
     try {
-      await guardarCampos(
+      const resultado = await guardarCampos(
         { medidaOculta: state.medidaOculta },
         { medidaOculta: state.baseOculta }
       );
-      state.baseOculta = { ...state.medidaOculta };
+      if (resultado && resultado.camposEscritos && resultado.camposEscritos.medidaOculta !== undefined) {
+        state.baseOculta = { ...resultado.camposEscritos.medidaOculta };
+      }
       
       console.log('Estado de ocultación guardado correctamente');
     } catch (error) {

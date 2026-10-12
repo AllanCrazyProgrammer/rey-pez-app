@@ -538,6 +538,7 @@ import {
   equivalentes,
   esErrorConflictoEmbarque,
   fotoCampos,
+  sinClavesBloqueadas,
 } from '@/utils/embarqueRevision';
 import { debounce } from 'lodash';
 import { generarPDFRendimientos } from '@/utils/RendimientosPdf';
@@ -864,29 +865,43 @@ export default {
             ? (yaPendiente && existing.baseCamposRendimientos
               ? existing.baseCamposRendimientos
               : fotoCampos(docPrevio, claves))
-            : fotoCampos(docData || {}, CAMPOS_RENDIMIENTOS);
+            : {
+              ...(existing && existing.baseCamposRendimientos || {}),
+              ...fotoCampos(docData || {}, claves),
+            };
           if (pending) {
             record.baseRev = existing && existing.baseRev != null
               ? existing.baseRev
               : (Number(docPrevio.rev) || Number(this._revBase) || 0);
-          } else {
+          } else if (!existing || existing.baseRev == null || !existing.camposPendientesRendimientos?.length) {
             record.baseRev = Number(this._revBase) || Number(docData && docData.rev) || 0;
+          }
+          if (!pending) {
+            const siguen = (existing && existing.camposPendientesRendimientos || [])
+              .filter(clave => !claves.includes(clave));
+            record.camposPendientesRendimientos = siguen;
           }
         }
 
+        const siguePendiente = pending || (record.camposPendientesRendimientos || []).length > 0;
         return {
           record,
           options: {
-            pendingSync: pending,
-            syncState: pending ? 'pending' : 'synced'
+            pendingSync: siguePendiente,
+            syncState: siguePendiente ? 'pending' : 'synced'
           }
         };
       });
     },
-    registrarEscrituraRendimientos(resultado, payload) {
+    registrarEscrituraRendimientos(resultado) {
       if (!resultado || resultado.omitida) return;
-      this._revBase = resultado.rev;
-      const escritos = resultado.camposEscritos || payload || {};
+      // Solo una escritura limpia leyó el documento entero que mandamos.
+      // Tras fusionar, la rev del servidor incluye campos que esta pantalla
+      // no volvió a leer: adoptarla haría que el siguiente guardado completo
+      // pisara esos campos sin comparar.
+      if (!resultado.fusiono) this._revBase = resultado.rev;
+      const escritos = resultado.camposEscritos || {};
+      if (!Object.keys(escritos).length) return;
       let copia = escritos;
       try { copia = JSON.parse(JSON.stringify(escritos)); } catch (error) { copia = escritos; }
       this._baseCamposRendimientos = {
@@ -909,7 +924,11 @@ export default {
       if (!payload || Object.keys(payload).length === 0) {
         return;
       }
-      const clonedPayload = this.deepClone(payload);
+      let clonedPayload = this.deepClone(payload);
+      if (!opts.reintentar) {
+        clonedPayload = sinClavesBloqueadas(clonedPayload, this._clavesEnConflicto);
+      }
+      if (!clonedPayload || Object.keys(clonedPayload).length === 0) return;
       const baseRev = opts.baseRev != null ? opts.baseRev : (Number(this._revBase) || 0);
       const baseCampos = opts.baseCampos !== undefined ? opts.baseCampos : this._baseCamposRendimientos;
       const sinBase = opts.sinBase || (baseCampos ? 'conflicto' : 'ultima');
@@ -925,7 +944,7 @@ export default {
           campos: clonedPayload,
           sinBase,
         });
-        this.registrarEscrituraRendimientos(resultado, clonedPayload);
+        this.registrarEscrituraRendimientos(resultado);
         const enConflicto = resultado.camposEnConflicto || [];
         if (enConflicto.length) {
           this.marcarClavesEnConflicto(enConflicto);
@@ -1258,6 +1277,7 @@ export default {
           baseRev: Number(record.baseRev ?? record.docData?.rev) || 0,
           baseCampos,
           sinBase: baseCampos ? 'conflicto' : 'ultima',
+          reintentar: true,
         });
       } catch (error) {
         console.error('[Rendimientos] Error al sincronizar datos offline:', error);

@@ -787,8 +787,11 @@ export default {
           campos,
         });
         if (resultado && !resultado.omitida) {
-          this._revBase = resultado.rev;
-          this._baseCamposCostos = { ...(this._baseCamposCostos || {}), ...campos };
+          if (!resultado.fusiono) this._revBase = resultado.rev;
+          const escritos = resultado.camposEscritos || {};
+          if (Object.keys(escritos).length) {
+            this._baseCamposCostos = { ...(this._baseCamposCostos || {}), ...escritos };
+          }
         }
         return resultado;
       } catch (error) {

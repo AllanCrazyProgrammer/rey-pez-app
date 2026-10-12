@@ -173,22 +173,23 @@ export function planearEscritura({ remoto, baseRev, baseCampos, campos, sinBase 
 
   const porEscribir = {};
   const enConflicto = [];
+  const baseConocida = baseCampos != null;
   claves.forEach(clave => {
     const remotoValor = leerCampo(remoto, clave);
     const nuevo = cambios[clave];
     // Ya está en el servidor el valor que íbamos a guardar: no es conflicto
     // aunque la revisión haya subido por otro campo.
     if (equivalentes(remotoValor, nuevo)) return;
-    if (revRemota === revBase) {
-      porEscribir[clave] = nuevo;
-      return;
-    }
-    if (!baseCampos) {
-      if (sinBase === 'ultima') porEscribir[clave] = nuevo;
+    // Con foto de base se compara campo por campo aunque `rev` coincida.
+    // Una fusión anterior no nos deja leer los campos que no escribimos;
+    // adoptar esa rev y volver a mandar el formulario completo no puede
+    // pisar un valor remoto más nuevo.
+    if (baseConocida) {
+      if (equivalentes(remotoValor, leerCampo(baseCampos, clave))) porEscribir[clave] = nuevo;
       else enConflicto.push(clave);
       return;
     }
-    if (equivalentes(remotoValor, leerCampo(baseCampos, clave))) porEscribir[clave] = nuevo;
+    if (revRemota === revBase || sinBase === 'ultima') porEscribir[clave] = nuevo;
     else enConflicto.push(clave);
   });
 
@@ -202,6 +203,13 @@ export function planearEscritura({ remoto, baseRev, baseCampos, campos, sinBase 
   let accion = revRemota === revBase ? 'escribir' : 'fusionar';
   if (enConflicto.length) accion = 'parcial';
   return { accion, rev: revRemota + 1, campos: porEscribir, camposEnConflicto: enConflicto };
+}
+
+/** Quita claves que ya están en conflicto hasta que la persona reintente o recargue. */
+export function sinClavesBloqueadas(campos, bloqueadas) {
+  const copia = { ...(campos || {}) };
+  (bloqueadas || []).forEach(clave => { delete copia[clave]; });
+  return copia;
 }
 
 export function quitarCamposAjenosAlEditor(payload, hayRemoto, camposPendientes = []) {

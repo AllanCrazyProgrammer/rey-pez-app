@@ -130,15 +130,18 @@ const colas = new Map();
 
 function ajustarContraAnterior(opciones, ultimo) {
   if (!ultimo || ultimo.rev == null) return opciones;
-  if ((Number(opciones.baseRev) || 0) >= ultimo.rev) return opciones;
-  return {
-    ...opciones,
-    baseRev: ultimo.rev,
-    baseCampos: {
-      ...(opciones.baseCampos || {}),
-      ...(ultimo.camposEscritos || {}),
-    },
+  const baseCampos = {
+    ...(opciones.baseCampos || {}),
+    ...(ultimo.camposEscritos || {}),
   };
+  // Una fusión o un parcial no leyó el resto del documento: la rev nueva no
+  // es nuestra base. Solo una escritura limpia (el servidor seguía en
+  // nuestra revisión) autoriza a subir baseRev.
+  if (ultimo.fusiono || (ultimo.camposEnConflicto && ultimo.camposEnConflicto.length)) {
+    return { ...opciones, baseCampos };
+  }
+  if ((Number(opciones.baseRev) || 0) >= ultimo.rev) return { ...opciones, baseCampos };
+  return { ...opciones, baseRev: ultimo.rev, baseCampos };
 }
 
 /**

@@ -441,6 +441,150 @@ function partirHost(valor) {
     assert.equal((await leer(fleteB)).fletePagado, true);
     console.log('✓ el pago agrupado de fletes es atómico: o entran todos o no entra ninguno');
 
+    const idR5 = 'revision-r5b';
+    referencia(idR5);
+    await setDoc(doc(db, 'embarques', idR5), {
+      rev: 1,
+      kilosCrudos: { '16/20': 100 },
+      notaRendimientos: '',
+    });
+    await escribirCamposEmbarque(db, idR5, {
+      baseRev: 1,
+      baseCampos: { kilosCrudos: { '16/20': 100 } },
+      campos: { kilosCrudos: { '16/20': 300 } },
+    });
+    const parcialR5 = await escribirCamposEmbarque(db, idR5, {
+      baseRev: 1,
+      baseCampos: { kilosCrudos: { '16/20': 100 }, notaRendimientos: '' },
+      campos: { kilosCrudos: { '16/20': 250 }, notaRendimientos: 'sigue' },
+    });
+    assert.ok(parcialR5.camposEnConflicto.includes('kilosCrudos'));
+    assert.equal((await leer(idR5)).notaRendimientos, 'sigue');
+    assert.equal((await leer(idR5)).kilosCrudos['16/20'], 300);
+    const baseR5 = {
+      kilosCrudos: { '16/20': 100 },
+      notaRendimientos: 'sigue',
+      ...(parcialR5.camposEscritos || {}),
+    };
+    let pisóR5 = false;
+    try {
+      const pleno = await escribirCamposEmbarque(db, idR5, {
+        baseRev: parcialR5.rev,
+        baseCampos: baseR5,
+        campos: { kilosCrudos: { '16/20': 250 }, notaRendimientos: 'sigue' },
+      });
+      pisóR5 = !(pleno.camposEnConflicto || []).includes('kilosCrudos');
+    } catch (error) {
+      assert.equal(error.code, 'embarque-modificado-externamente');
+    }
+    assert.equal(pisóR5, false);
+    assert.equal((await leer(idR5)).kilosCrudos['16/20'], 300);
+    console.log('✓ R5b: el guardado completo posterior no pisa el kilo en conflicto');
+
+    const idR6 = 'revision-r6';
+    referencia(idR6);
+    await setDoc(doc(db, 'embarques', idR6), {
+      rev: 1,
+      kilosCrudos: { '16/20': 100 },
+      analizarGanancia: { '16/20': false },
+    });
+    await escribirCamposEmbarque(db, idR6, {
+      baseRev: 1,
+      baseCampos: { kilosCrudos: { '16/20': 100 } },
+      campos: { kilosCrudos: { '16/20': 300 } },
+    });
+    const baseR6 = { kilosCrudos: { '16/20': 100 }, analizarGanancia: { '16/20': false } };
+    const colaR6 = await Promise.allSettled([
+      escribirCamposEmbarque(db, idR6, {
+        baseRev: 1,
+        baseCampos: baseR6,
+        campos: { analizarGanancia: { '16/20': true } },
+      }),
+      escribirCamposEmbarque(db, idR6, {
+        baseRev: 1,
+        baseCampos: baseR6,
+        campos: { kilosCrudos: { '16/20': 100 }, analizarGanancia: { '16/20': true } },
+      }),
+    ]);
+    assert.equal(colaR6[0].status, 'fulfilled');
+    assert.equal((await leer(idR6)).kilosCrudos['16/20'], 300);
+    assert.equal((await leer(idR6)).analizarGanancia['16/20'], true);
+    console.log('✓ R6: dos guardados en fila desde una pestaña vieja no devuelven los kilos');
+
+    const idR7 = 'revision-r7';
+    referencia(idR7);
+    await setDoc(doc(db, 'embarques', idR7), {
+      rev: 1,
+      kilosCrudos: { '16/20': 100 },
+      analizarGanancia: { '16/20': false },
+    });
+    await escribirCamposEmbarque(db, idR7, {
+      baseRev: 1,
+      baseCampos: { kilosCrudos: { '16/20': 100 } },
+      campos: { kilosCrudos: { '16/20': 300 } },
+    });
+    const baseR7 = { kilosCrudos: { '16/20': 100 }, analizarGanancia: { '16/20': false } };
+    const checkbox = await escribirCamposEmbarque(db, idR7, {
+      baseRev: 1,
+      baseCampos: baseR7,
+      campos: { analizarGanancia: { '16/20': true } },
+    });
+    assert.equal(checkbox.fusiono, true);
+    const revQueAdoptaLaPantalla = checkbox.fusiono ? baseR7 && 1 : checkbox.rev;
+    const baseTrasCheckbox = { ...baseR7, ...(checkbox.camposEscritos || {}) };
+    let pisóR7 = false;
+    try {
+      const pleno = await escribirCamposEmbarque(db, idR7, {
+        baseRev: checkbox.rev,
+        baseCampos: baseTrasCheckbox,
+        campos: { kilosCrudos: { '16/20': 100 }, analizarGanancia: { '16/20': true } },
+      });
+      pisóR7 = !(pleno.camposEnConflicto || []).includes('kilosCrudos');
+    } catch (error) {
+      assert.equal(error.code, 'embarque-modificado-externamente');
+    }
+    assert.equal(pisóR7, false);
+    assert.equal(revQueAdoptaLaPantalla, 1);
+    assert.equal((await leer(idR7)).kilosCrudos['16/20'], 300);
+    assert.equal((await leer(idR7)).analizarGanancia['16/20'], true);
+    console.log('✓ R7: tras fusionar, el formulario completo no restaura kilos viejos');
+
+    const idCostosVs = 'revision-costos-vs-rendimientos';
+    referencia(idCostosVs);
+    await setDoc(doc(db, 'embarques', idCostosVs), {
+      rev: 1,
+      costosPorMedida: { '16/20': 10 },
+      costoExtra: 18,
+    });
+    await escribirCamposEmbarque(db, idCostosVs, {
+      baseRev: 1,
+      baseCampos: { costosPorMedida: { '16/20': 10 } },
+      campos: { costosPorMedida: { '16/20': 10, '21/25': 8 } },
+    });
+    const costosViejos = { costosPorMedida: { '16/20': 10 }, costoExtra: 18 };
+    const extra = await escribirCamposEmbarque(db, idCostosVs, {
+      baseRev: 1,
+      baseCampos: costosViejos,
+      campos: { costoExtra: 20 },
+    });
+    assert.equal(extra.fusiono, true);
+    let pisóCostos = false;
+    try {
+      const pleno = await escribirCamposEmbarque(db, idCostosVs, {
+        baseRev: extra.rev,
+        baseCampos: { ...costosViejos, ...(extra.camposEscritos || {}) },
+        campos: { costosPorMedida: { '16/20': 10 }, costoExtra: 20 },
+      });
+      pisóCostos = !(pleno.camposEnConflicto || []).includes('costosPorMedida');
+    } catch (error) {
+      assert.equal(error.code, 'embarque-modificado-externamente');
+    }
+    assert.equal(pisóCostos, false);
+    const costosVs = await leer(idCostosVs);
+    assert.equal(costosVs.costosPorMedida['21/25'], 8);
+    assert.equal(costosVs.costoExtra, 20);
+    console.log('✓ Costos no restaura costosPorMedida viejos después de que Rendimientos los completó');
+
     console.log('PASS embarque revision (' + projectId + ' @ ' + hostEmulador + ')');
   } finally {
     for (const idDoc of creado) {

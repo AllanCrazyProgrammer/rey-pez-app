@@ -232,8 +232,10 @@ export function useRendimientos(embarqueId) {
           baseCampos: { nombresMedidasPersonalizados: state.baseNombres },
           campos: { nombresMedidasPersonalizados: state.nombresMedidasPersonalizados }
         });
-        if (!resultado.omitida) state.revBase = resultado.rev;
-        state.baseNombres = { ...state.nombresMedidasPersonalizados };
+        if (resultado && !resultado.omitida && !resultado.fusiono) state.revBase = resultado.rev;
+        if (resultado && resultado.camposEscritos && resultado.camposEscritos.nombresMedidasPersonalizados !== undefined) {
+          state.baseNombres = { ...resultado.camposEscritos.nombresMedidasPersonalizados };
+        }
         console.log('Nombre de medida actualizado correctamente');
       } catch (error) {
         if (esErrorConflictoEmbarque(error) && pedirRecargaPorConflicto(error)) window.location.reload();
@@ -302,8 +304,10 @@ export function useRendimientos(embarqueId) {
           }
         }
       });
-      if (!resultado.omitida) state.revBase = resultado.rev;
-      state.baseKilos = JSON.parse(JSON.stringify(state.kilosCrudos));
+      if (resultado && !resultado.omitida && !resultado.fusiono) state.revBase = resultado.rev;
+      if (resultado && resultado.camposEscritos && resultado.camposEscritos.kilosCrudos !== undefined) {
+        state.baseKilos = JSON.parse(JSON.stringify(resultado.camposEscritos.kilosCrudos));
+      }
       console.log('Rendimientos guardados:', state.kilosCrudos);
     } catch (error) {
       if (esErrorConflictoEmbarque(error) && pedirRecargaPorConflicto(error)) window.location.reload();

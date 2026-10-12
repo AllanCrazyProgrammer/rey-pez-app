@@ -117,8 +117,11 @@ export class RendimientosService {
         campos: datos,
       });
       if (!resultado.omitida) {
-        this._revBase = resultado.rev;
-        this._baseCampos = { ...(this._baseCampos || {}), ...datos };
+        if (!resultado.fusiono) this._revBase = resultado.rev;
+        const escritos = resultado.camposEscritos || {};
+        if (Object.keys(escritos).length) {
+          this._baseCampos = { ...(this._baseCampos || {}), ...escritos };
+        }
       }
       return resultado;
     } catch (error) {
