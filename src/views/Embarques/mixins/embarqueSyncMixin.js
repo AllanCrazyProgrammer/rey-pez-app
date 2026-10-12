@@ -317,6 +317,9 @@ export const embarqueSyncMixin = {
           if (snapshot.baseCamposRendimientos == null && previo.baseCamposRendimientos) {
             snapshot.baseCamposRendimientos = previo.baseCamposRendimientos;
           }
+          if (snapshot.baseCamposEditor == null && previo.baseCamposEditor) {
+            snapshot.baseCamposEditor = previo.baseCamposEditor;
+          }
           if (snapshot.clavesEnConflicto == null && previo.clavesEnConflicto) {
             snapshot.clavesEnConflicto = previo.clavesEnConflicto;
           }
@@ -482,6 +485,9 @@ export const embarqueSyncMixin = {
         let revEscrita = null;
         let ajenosServidor = null;
 
+        let planAplicado = null;
+        let remotoLeido = null;
+
         await runTransaction(db, async (transaction) => {
           dataConflicto = null;
           ajenosServidor = null;
@@ -503,6 +509,8 @@ export const embarqueSyncMixin = {
             baseCampos: baseEditor,
             campos: payloadEditor,
           });
+          planAplicado = plan;
+          remotoLeido = remoto;
 
           if (plan.accion === 'omitir') {
             revEscrita = plan.rev;
@@ -550,6 +558,22 @@ export const embarqueSyncMixin = {
           await this.aplicarDocRemoto(this.embarqueId, dataConflicto);
           await this.guardarSnapshotOffline({ pendingSync: true });
           this.programarSubidaEnVivo();
+          return;
+        }
+
+        const distintos = (planAplicado && planAplicado.camposRemotosDistintos) || [];
+        if (distintos.length && remotoLeido) {
+          const fusionado = {
+            ...remotoLeido,
+            ...(planAplicado.campos || {}),
+            rev: revEscrita != null ? revEscrita : (Number(remotoLeido.rev) || 0),
+          };
+          delete fusionado.ultimaEdicion;
+          if ((Number(this._dirtyGen) || 0) === genCapturada) this.hasPendingChanges = false;
+          this._snapshotRemotoDiferido = null;
+          await this.aplicarDocRemoto(idCapturado, fusionado);
+          this._reintentosSubidaEnVivo = 0;
+          console.log('[subirCambiosEnVivo] Campos ajenos del otro editor incorporados (rev', (fusionado.rev) + ').');
           return;
         }
 

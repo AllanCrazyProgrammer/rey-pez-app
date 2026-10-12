@@ -185,18 +185,23 @@ export function planearEscritura({ remoto, baseRev, baseCampos, campos, sinBase 
   const revBase = Number(baseRev) || 0;
 
   if (!remoto) {
-    return { accion: 'crear', rev: revBase + 1, campos: cambios, camposEnConflicto: [] };
+    return { accion: 'crear', rev: revBase + 1, campos: cambios, camposEnConflicto: [], camposRemotosDistintos: [] };
   }
 
   const porEscribir = {};
   const enConflicto = [];
   const coincidentes = {};
+  const remotosDistintos = [];
   const baseConocida = baseCampos != null;
   claves.forEach(clave => {
     const remotoValor = leerCampo(remoto, clave);
     const nuevo = cambios[clave];
-    // Esta pantalla no tocó el campo: se queda lo del otro equipo.
-    if (baseConocida && equivalentes(nuevo, leerCampo(baseCampos, clave))) return;
+    // Esta pantalla no tocó el campo. Si el servidor ya lo cambió, no se
+    // adopta la rev nueva sin traer ese valor: el que llama tiene que fusionar.
+    if (baseConocida && equivalentes(nuevo, leerCampo(baseCampos, clave))) {
+      if (!equivalentes(remotoValor, nuevo)) remotosDistintos.push(clave);
+      return;
+    }
     // Ya está en el servidor el valor que íbamos a guardar. No se reescribe,
     // pero la base de esta pantalla tiene que reconocerlo: si se queda en el
     // valor viejo, el siguiente cambio se marca conflicto sin serlo.
@@ -223,19 +228,22 @@ export function planearEscritura({ remoto, baseRev, baseCampos, campos, sinBase 
 
   const hayEscritura = Object.keys(porEscribir).length > 0;
   if (!hayEscritura && enConflicto.length === 0) {
-    return { accion: 'omitir', rev: revRemota, campos: {}, camposEnConflicto: [], camposCoincidentes: coincidentes };
+    return { accion: 'omitir', rev: revRemota, campos: {}, camposEnConflicto: [], camposCoincidentes: coincidentes, camposRemotosDistintos: remotosDistintos };
   }
   if (!hayEscritura) {
-    return { accion: 'conflicto', rev: revRemota, campos: cambios, camposEnConflicto: enConflicto, camposCoincidentes: coincidentes };
+    return { accion: 'conflicto', rev: revRemota, campos: cambios, camposEnConflicto: enConflicto, camposCoincidentes: coincidentes, camposRemotosDistintos: remotosDistintos };
   }
   let accion = revRemota === revBase ? 'escribir' : 'fusionar';
   if (enConflicto.length) accion = 'parcial';
-  return { accion, rev: revRemota + 1, campos: porEscribir, camposEnConflicto: enConflicto, camposCoincidentes: coincidentes };
+  return { accion, rev: revRemota + 1, campos: porEscribir, camposEnConflicto: enConflicto, camposCoincidentes: coincidentes, camposRemotosDistintos: remotosDistintos };
 }
 
 /**
- * Parte `kilosCrudos` por medida (`kilosCrudos.<medida>`) para que dos
- * equipos puedan guardar tallas distintas sin pisarse el mapa entero.
+ * Parte `kilosCrudos` y `rendimientoManual` por medida para que dos equipos
+ * guarden tallas distintas sin pisarse el mapa entero.
+ * Borrar una talla no viaja aquí: no se manda `FieldValue.delete()`.
+ * Una medida que desaparece del mapa se queda en el servidor hasta que alguien
+ * la vuelva a escribir. Una clave vacía sí se omite, para no tumbar el guardado.
  */
 function expandirMapaPorMedida(salida, campo) {
   const mapa = salida[campo];

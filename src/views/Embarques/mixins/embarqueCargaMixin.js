@@ -686,6 +686,7 @@ export const embarqueCargaMixin = {
         preciosActuales: safeClone(this.preciosActuales || [], []),
         clientes: safeClone(docData?.clientes || [], []),
         docData: safeClone(docData || {}, {}),
+        baseCamposEditor: safeClone(this._baseCamposEditor || null, null),
       };
     },
 

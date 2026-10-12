@@ -3,7 +3,7 @@ import { collection, doc, documentId, getDocsFromServer, limit, orderBy, query, 
 import { db } from '@/firebase';
 import offline from './EmbarquesOfflineService';
 import { snapshotEmbarque } from '@/utils/embarqueOfflineSnapshot';
-import { quitarCamposAjenosAlEditor } from '@/utils/embarqueRevision';
+import { quitarCamposAjenosAlEditor, planearEscritura, seleccionarCampos, CAMPOS_EDITOR } from '@/utils/embarqueRevision';
 import { useAuthStore } from '@/stores/auth';
 
 export const estadoOffline = Vue.observable({
@@ -120,19 +120,60 @@ class EmbarquesSync {
               return;
             }
             if (!record.docData) throw new Error('Falta el contenido local del embarque');
-            const payload = quitarCamposAjenosAlEditor({
-              ...record.docData,
-              rev: baseRev + 1,
+            if (!remoteData) {
+              const payload = quitarCamposAjenosAlEditor({
+                ...record.docData,
+                rev: baseRev + 1,
+                ultimaEdicion: { userId: auth.userId, username: auth.user.username, timestamp: serverTimestamp() }
+              }, false, record.camposPendientesRendimientos);
+              transaction.set(reference, payload);
+              confirmed = snapshotEmbarque(record.id, {
+                ...payload,
+                ultimaEdicion: { userId: auth.userId, username: auth.user.username }
+              });
+              confirmed.baseRev = baseRev + 1;
+              confirmed.baseCamposEditor = seleccionarCampos(record.docData, CAMPOS_EDITOR);
+              confirmed.pendingEditor = false;
+              return;
+            }
+            const docPlano = quitarCamposAjenosAlEditor({ ...record.docData }, true, record.camposPendientesRendimientos);
+            delete docPlano.rev;
+            delete docPlano.ultimaEdicion;
+            const baseCampos = record.baseCamposEditor || null;
+            const plan = planearEscritura({
+              remoto: remoteData,
+              baseRev,
+              baseCampos,
+              campos: docPlano,
+              sinBase: baseCampos ? 'conflicto' : 'ultima',
+            });
+            if (plan.accion === 'conflicto' || (plan.camposEnConflicto || []).length) {
+              const error = new Error('Este embarque cambió en otro equipo. Ábrelo para revisar y combinar los cambios.');
+              error.code = 'offline-conflict';
+              throw error;
+            }
+            if (plan.accion === 'omitir' || !Object.keys(plan.campos || {}).length) {
+              confirmed = snapshotEmbarque(record.id, remoteData);
+              confirmed.baseRev = Number(remoteData.rev) || 0;
+              confirmed.baseCamposEditor = seleccionarCampos(remoteData, CAMPOS_EDITOR);
+              confirmed.pendingEditor = false;
+              return;
+            }
+            const payload = {
+              ...plan.campos,
+              rev: plan.rev,
               ultimaEdicion: { userId: auth.userId, username: auth.user.username, timestamp: serverTimestamp() }
-            }, Boolean(remoteData), record.camposPendientesRendimientos);
-            // Preserve fields owned by other screens unless this device still
-            // has a pending Rendimientos edit for those exact fields.
-            if (remote.exists()) transaction.update(reference, payload);
-            else transaction.set(reference, payload);
+            };
+            transaction.update(reference, payload);
             confirmed = snapshotEmbarque(record.id, {
-              ...remoteData, ...payload,
+              ...remoteData,
+              ...plan.campos,
+              rev: plan.rev,
               ultimaEdicion: { userId: auth.userId, username: auth.user.username }
             });
+            confirmed.baseRev = plan.rev;
+            confirmed.baseCamposEditor = seleccionarCampos({ ...remoteData, ...plan.campos }, CAMPOS_EDITOR);
+            confirmed.pendingEditor = false;
           });
           await offline.acknowledge(record, confirmed);
         } catch (error) {

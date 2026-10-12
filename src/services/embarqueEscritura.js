@@ -11,6 +11,8 @@ function crearErrorConflicto({ code, mensaje, camposEnConflicto, revRemota, camp
 }
 
 function escribirActualizacion(transaction, ref, payload) {
+  // Las tallas se escriben con FieldPath. Quitar una talla no manda delete():
+  // el valor anterior permanece hasta una escritura explícita de esa medida.
   const planos = {};
   const especiales = [];
   Object.keys(payload).forEach(clave => {

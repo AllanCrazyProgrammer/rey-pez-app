@@ -74,11 +74,18 @@ function partirHost(valor) {
     if (id === '@/utils/embarqueRevision') return revision;
     throw new Error(id);
   });
+  const puenteOffline = {
+    real: null,
+    init(...args) { return this.real.init(...args); },
+    getById(...args) { return this.real.getById(...args); },
+    save(...args) { return this.real.save(...args); },
+    mergeSave(...args) { return this.real.mergeSave(...args); },
+  };
   const mixin = compilar('src/views/Embarques/mixins/embarqueSyncMixin.js', (id) => {
     if (id === 'firebase/firestore') return firestore;
     if (id === '@/utils/embarqueRevision') return revision;
     if (id === 'uuid') return { v4: () => 'id' };
-    if (id === '@/services/EmbarquesOfflineService') return { init: async () => {}, getById: async () => null, save: async () => {}, mergeSave: async () => {} };
+    if (id === '@/services/EmbarquesOfflineService') return puenteOffline;
     if (id === '@/utils/dateUtils') return { normalizarFechaISO: (v) => v, normalizarFechaValor: (v) => v, obtenerFechaActualISO: () => '2026-10-12' };
     if (id === '@/constants.js/embarque') return { crearNuevoProducto: () => ({}) };
     if (id === '@/utils/embarqueContenido') return { embarqueTieneContenidoOperativoEstado: () => true, serializarEstable: (v) => JSON.stringify(v) };
@@ -105,7 +112,19 @@ function partirHost(valor) {
       disco.set(id, JSON.parse(JSON.stringify(merged)));
       return id;
     },
+    async save(embarque, options = {}) {
+      const prev = disco.get(embarque.id) || {};
+      const merged = {
+        ...prev,
+        ...embarque,
+        pendingSync: options.pendingSync ?? false,
+        syncState: options.syncState || (options.pendingSync ? 'pending' : 'synced'),
+      };
+      disco.set(embarque.id, JSON.parse(JSON.stringify(merged)));
+      return embarque.id;
+    },
   };
+  puenteOffline.real = offline;
   const nav = { onLine: true };
   const alertas = [];
   const Pantalla = compilar('src/views/Embarques/Rendimientos.vue', (id) => {
@@ -152,8 +171,52 @@ function partirHost(valor) {
   };
   const viejos = [{ id: '1', productos: [{ id: 'p1', medida: '16/20' }] }];
   const nuevos = [{ id: '1', productos: [{ id: 'p1', medida: '16/20' }, { id: 'p2', medida: '21/25' }] }];
+  const dateUtils = compilar('src/utils/dateUtils.js', (id) => {
+    if (id === 'moment' || id.startsWith('moment/')) return require(id);
+    throw new Error(id);
+  });
+  const contenido = compilar('src/utils/embarqueContenido.js', () => { throw new Error('contenido'); });
+  const snapshotMod = compilar('src/utils/embarqueOfflineSnapshot.js', (id) => {
+    if (id === './dateUtils') return dateUtils;
+    throw new Error(id);
+  });
+  const carga = compilar('src/views/Embarques/mixins/embarqueCargaMixin.js', (id) => {
+    if (id === 'firebase/firestore') return firestore;
+    if (id === 'uuid') return { v4: () => 'id' };
+    if (id === '@/services/EmbarquesOfflineService') return puenteOffline;
+    if (id === '@/utils/dateUtils') return dateUtils;
+    if (id === '@/constants.js/embarque') return { crearNuevoProducto: () => ({}) };
+    if (id === '@/utils/embarqueContenido') return contenido;
+    if (id === '@/utils/embarqueRevision') return revision;
+    throw new Error('Carga: ' + id);
+  }, {
+    navigator: { onLine: true },
+    localStorage: { setItem() {}, getItem() { return null; }, removeItem() {} },
+  });
+  const colaSync = new Map();
+  const registrosOffline = {
+    async getAllRecords() { return [...colaSync.values()].map((item) => JSON.parse(JSON.stringify(item))); },
+    ordenarPorFecha(records) { return records; },
+    async acknowledge(record, remote) {
+      colaSync.set(record.id, { ...remote, pendingSync: false, localVersion: record.localVersion });
+    },
+    async mutate(id, transform) {
+      const next = transform(colaSync.get(id) || null);
+      if (next) colaSync.set(id, next);
+    },
+  };
+  const syncMod = compilar('src/services/EmbarquesSync.js', (id) => {
+    if (id === 'vue') return { observable: (valor) => valor };
+    if (id === 'firebase/firestore') return firestore;
+    if (id === '@/firebase') return { db };
+    if (id === './EmbarquesOfflineService') return registrosOffline;
+    if (id === '@/utils/embarqueOfflineSnapshot') return snapshotMod;
+    if (id === '@/utils/embarqueRevision') return revision;
+    if (id === '@/stores/auth') return { useAuthStore: () => ({ isAuthenticated: true, userId: 'editor', user: { username: 'Editor' } }) };
+    throw new Error('Sync: ' + id);
+  }, { navigator: { onLine: true }, window: { dispatchEvent() {}, addEventListener() {} } });
 
-  function editorGuarda(id, rev, base, datos) {
+  function editorGuarda(id, rev, base, datos, opciones = {}) {
     const ctx = {
       embarqueId: id,
       hasPendingChanges: true,
@@ -163,15 +226,22 @@ function partirHost(valor) {
       _editorCerrado: false,
       _subiendoEnVivo: false,
       authStore: { userId: 'editor', user: { username: 'Editor' } },
-      embarque: {},
+      embarque: { cargaCon: datos.cargaCon, productos: [], fecha: '2026-10-12' },
       fusiono: false,
+      clientesPredefinidos: [{ id: '1', nombre: 'Uno' }],
+      clienteCrudos: {},
+      $set: (objeto, clave, valor) => { objeto[clave] = valor; },
       $nextTick: (fn) => Promise.resolve().then(() => fn && fn()),
+      ...(opciones.estado || {}),
     };
     Object.assign(ctx, mixin.embarqueSyncMixin.methods);
+    if (opciones.aplicarReal) Object.assign(ctx, carga.embarqueCargaMixin.methods);
     ctx.prepararDatosEmbarque = () => datos;
-    ctx.guardarSnapshotOffline = async () => {};
     ctx.programarSubidaEnVivo = () => {};
-    ctx.aplicarDocRemoto = async () => { ctx.fusiono = true; };
+    if (!opciones.aplicarReal) {
+      ctx.guardarSnapshotOffline = async () => {};
+      ctx.aplicarDocRemoto = async () => { ctx.fusiono = true; };
+    }
     return ctx.subirCambiosEnVivo().then(() => ctx);
   }
   function abrir(id) {
@@ -580,6 +650,54 @@ function partirHost(valor) {
     assert.equal(reabiertoC.kilosCrudos['16/20'], 250);
     assert.ok(reabiertoC.avisoConflicto);
     console.log('✓ reabrir en línea con conflicto conserva lo de esta pantalla y el aviso');
+
+    const idX1 = 'matriz-x1';
+    await semilla(idX1, { rev: 2, clientes: nuevos, cargaCon: 'Porro' });
+    const productoLocal = { id: 'p1', medida: '16/20', clienteId: '1', nombreCliente: 'Uno' };
+    const editorX1 = await editorGuarda(
+      idX1,
+      1,
+      { clientes: viejos, cargaCon: 'Porro' },
+      { clientes: viejos, cargaCon: 'Chito' },
+      {
+        aplicarReal: true,
+        estado: {
+          embarque: { cargaCon: 'Chito', productos: [productoLocal], fecha: '2026-10-12' },
+          _cargaConBase: 'Porro',
+          _productosBase: new Map([[productoLocal.id, { obj: { ...productoLocal }, str: contenido.serializarEstable(productoLocal) }]]),
+        },
+      }
+    );
+    const docX1 = await leer(idX1);
+    assert.equal(docX1.clientes[0].productos.length, 2);
+    assert.equal(docX1.cargaCon, 'Chito');
+    assert.equal(editorX1.embarque.productos.length, 2, 'la pantalla carga el producto del otro editor');
+    assert.equal(editorX1.embarque.cargaCon, 'Chito');
+    assert.equal(editorX1._revBase, docX1.rev);
+    assert.equal(revision.esEcoDeRevisionLocal({ revRemota: docX1.rev, revBase: editorX1._revBase, inicializando: false }), true);
+    assert.equal(editorX1._baseCamposEditor.clientes[0].productos.length, 2);
+    const copiaX1 = await offline.getById(idX1);
+    assert.equal(copiaX1.docData.clientes[0].productos.length, 2);
+    assert.equal(copiaX1.baseCamposEditor.clientes[0].productos.length, 2);
+    console.log('✓ X1 el editor incorpora lo del otro antes de adoptar la revisión');
+
+    const idX2 = 'matriz-x2';
+    await semilla(idX2, { rev: 3, clientes: nuevos, cargaCon: 'Chito', camionNumero: 1 });
+    colaSync.set(idX2, {
+      id: idX2,
+      pendingSync: true,
+      localVersion: 'x2',
+      baseRev: 3,
+      syncState: 'pending',
+      baseCamposEditor: { clientes: viejos, cargaCon: 'Porro', camionNumero: 1 },
+      docData: { clientes: viejos, cargaCon: 'Porro', camionNumero: 2, fecha: '2026-10-12', rev: 3 },
+    });
+    await syncMod.default.drain();
+    const docX2 = await leer(idX2);
+    assert.equal(docX2.clientes[0].productos.some((p) => p.id === 'p2'), true, 'la copia vieja no borra el producto');
+    assert.equal(docX2.cargaCon, 'Chito');
+    assert.equal(docX2.camionNumero, 2);
+    console.log('✓ X2 la sincronización offline no pisa campos que esta copia no cambió');
 
     console.log('PASS matriz embarques (' + projectId + ')');
   } finally {
