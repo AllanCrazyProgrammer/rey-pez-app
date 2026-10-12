@@ -416,6 +416,26 @@ async function run() {
     testsPassed++;
     
     await db.collection('pedidos').doc(res.body.pedidoId).delete();
+
+    // TEST 9: taras de 25 kg para Ozuna/Joselito/Lorena; Otilio sigue en 27
+    console.log('\n📝 Test 9: Taras por cliente en kg (Ozuna 25, Otilio 27)');
+    const casosTara = [
+      ['ozuna', 250, 10, '2026-10-16'], ['joselito', 250, 10, '2026-10-17'],
+      ['lorena', 250, 10, '2026-10-18'], ['otilio', 270, 10, '2026-10-19'], ['Ozuna', 250, 10, '2026-10-20']
+    ];
+    for (const [cli, kg, esperado, fecha] of casosTara) {
+      res = await callHandler(handlers.handlePostPedidosLimpio, 'POST', '/pedidos/limpio', {
+        fecha, idempotencyKey: `test-tara-${cli}-${Date.now()}`,
+        lineas: [{ cliente: cli, cantidad: kg, unidad: 'kg', medida: '36/40', tipo: 'S/H20' }]
+      });
+      assert.equal(res.status, 200, JSON.stringify(res.body));
+      const d = (await db.collection('pedidos').doc(res.body.pedidoId).get()).data();
+      assert.ok(d, 'doc creado');
+      assert.equal(res.body.totales.taras, esperado, `${cli} ${kg} kg -> ${esperado} taras (resp: ${res.body.totales.taras})`);
+      console.log(`  ✓ ${cli} ${kg} kg -> ${res.body.totales.taras} taras`);
+      await db.collection('pedidos').doc(res.body.pedidoId).delete();
+    }
+    testsPassed++;
     
     console.log('\n' + '='.repeat(60));
     console.log(`✅ TODOS LOS TESTS PASARON (${testsPassed} tests)`);

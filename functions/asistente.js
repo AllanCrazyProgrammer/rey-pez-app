@@ -2059,7 +2059,7 @@ const KILOS_BASE_TARA_POR_TIPO = {
   '1.5': 20
 };
 
-const CLIENTES_CON_TARA_DE_27 = new Set(['otilio', 'catarro', 'ozuna', 'temporal']);
+const CLIENTES_CON_TARA_DE_27 = new Set(['otilio', 'catarro', 'temporal']);
 const CLIENTES_FIJOS = ['otilio', 'catarro', 'joselito', 'lorena', 'ozuna'];
 
 function numeroPositivo(valor) {
@@ -2967,7 +2967,8 @@ if (process.env.NODE_ENV === 'test') {
   exports._testHandlers = {
     handlePostPedidosLimpio,
     handleGetPedidosLimpio,
-    handlePostPedidosLimpioDeshacer
+    handlePostPedidosLimpioDeshacer,
+    calcularTotalesClientePedidoLimpio
   };
 }
 
