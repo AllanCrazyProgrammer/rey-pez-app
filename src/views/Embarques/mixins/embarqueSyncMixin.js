@@ -506,7 +506,7 @@ export const embarqueSyncMixin = {
             return;
           }
 
-          if (plan.accion === 'conflicto') {
+          if (plan.accion === 'conflicto' || plan.accion === 'parcial') {
             // Otro editor tocó clientes, productos o la carga. No se pisa:
             // se respalda y se fusiona al salir de la transacción.
             dataConflicto = remoto;

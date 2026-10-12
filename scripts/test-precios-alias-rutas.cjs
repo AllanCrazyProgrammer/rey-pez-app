@@ -52,7 +52,9 @@ function firestoreFor(records, calls = []) {
 }
 const revisionMock = {
   CAMPOS_RENDIMIENTOS: [],
+  MENSAJE_CONFLICTO_EMBARQUE: 'conflicto',
   fotoCampos: () => ({}),
+  equivalentes: (a, b) => JSON.stringify(a) === JSON.stringify(b),
   esErrorConflictoEmbarque: () => false,
   pedirRecargaPorConflicto: () => false,
 };

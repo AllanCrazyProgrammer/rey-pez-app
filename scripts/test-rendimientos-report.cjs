@@ -34,7 +34,9 @@ test('automatic report reuses real screen calculations, includes current product
     '@/services/embarqueEscritura': { escribirCamposEmbarque: async () => { throw new Error('el reporte no debe escribir el embarque'); } },
     '@/utils/embarqueRevision': {
       CAMPOS_RENDIMIENTOS: [],
+      MENSAJE_CONFLICTO_EMBARQUE: 'conflicto',
       fotoCampos: () => ({}),
+      equivalentes: (a, b) => JSON.stringify(a) === JSON.stringify(b),
       esErrorConflictoEmbarque: () => false,
       pedirRecargaPorConflicto: () => false,
     }

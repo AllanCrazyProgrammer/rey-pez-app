@@ -105,7 +105,7 @@
 
 <script>
 import { getFirestore, collection, getDocs, doc, addDoc, deleteDoc } from 'firebase/firestore';
-import { escribirCamposEmbarque } from '@/services/embarqueEscritura';
+import { escribirCamposEmbarquesAtomico } from '@/services/embarqueEscritura';
 import { esErrorConflictoEmbarque, pedirRecargaPorConflicto } from '@/utils/embarqueRevision';
 import html2pdf from 'html2pdf.js';
 
@@ -357,10 +357,11 @@ export default {
             fletePagoActualizadoPor: flete.fletePagoActualizadoPor || null
           }];
 
-        for (const documento of documentos) {
+        const marca = new Date();
+        const operaciones = documentos.map(documento => {
           const campos = {
             [`fletePagos.${pagoKey}`]: nuevoEstado,
-            fletePagoActualizadoEn: new Date(),
+            fletePagoActualizadoEn: marca,
             fletePagoActualizadoPor: this.choferSeleccionado
           };
           const baseCampos = {
@@ -372,17 +373,25 @@ export default {
             campos.fletePagado = nuevoEstado;
             baseCampos.fletePagado = documento.fletePagado === true;
           }
-          const resultado = await escribirCamposEmbarque(db, documento.id, {
+          return {
+            embarqueId: documento.id,
             baseRev: Number(documento.rev) || 0,
             baseCampos,
             campos,
-          });
-          documento.rev = resultado.rev;
+          };
+        });
+        const resultados = await escribirCamposEmbarquesAtomico(db, operaciones);
+        const revPorId = {};
+        resultados.forEach(item => { revPorId[item.embarqueId] = item.rev; });
+        documentos.forEach(documento => {
+          documento.rev = revPorId[documento.id] != null ? revPorId[documento.id] : documento.rev;
           documento.fletePagos = { ...(documento.fletePagos || {}), [pagoKey]: nuevoEstado };
-          documento.fletePagoActualizadoEn = campos.fletePagoActualizadoEn;
-          documento.fletePagoActualizadoPor = campos.fletePagoActualizadoPor;
-          if (campos.fletePagado !== undefined) documento.fletePagado = campos.fletePagado;
-        }
+          documento.fletePagoActualizadoEn = marca;
+          documento.fletePagoActualizadoPor = this.choferSeleccionado;
+          if (esCargaDeUnSoloChofer(flete.cargaCon, this.choferSeleccionado)) {
+            documento.fletePagado = nuevoEstado;
+          }
+        });
 
         this.fletes = this.fletes.map(fleteLocal => {
           if (fleteLocal.id !== flete.id) return fleteLocal;

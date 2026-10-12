@@ -30,6 +30,12 @@
         </button>
       </div>
     </div>
+
+    <div v-if="avisoConflicto" class="aviso-conflicto" role="status">
+      <p>{{ avisoConflicto }} Tus cambios siguen guardados en este equipo.</p>
+      <button type="button" @click="reintentarCambiosPendientes">Reintentar</button>
+      <button type="button" @click="recargarPantalla">Recargar</button>
+    </div>
     
     <div class="resumen-header-row">
       <div class="resumen-tabs" role="tablist" aria-label="Vistas del embarque">
@@ -112,7 +118,7 @@
                   type="number" 
                   step="0.01"
                   v-model="precioMaquila[medida]"
-                  @input="guardarEstadoAnalisis"
+                  @input="programarGuardadoAnalisis"
                   placeholder="Precio por kg"
                   class="precio-maquila-input"
                 >
@@ -528,9 +534,10 @@ import { getFirestore, doc, getDoc, collection, getDocs, query, where, orderBy }
 import { escribirCamposEmbarque } from '@/services/embarqueEscritura';
 import {
   CAMPOS_RENDIMIENTOS,
+  MENSAJE_CONFLICTO_EMBARQUE,
+  equivalentes,
   esErrorConflictoEmbarque,
   fotoCampos,
-  pedirRecargaPorConflicto,
 } from '@/utils/embarqueRevision';
 import { debounce } from 'lodash';
 import { generarPDFRendimientos } from '@/utils/RendimientosPdf';
@@ -591,12 +598,14 @@ export default {
       _revBase: 0,
       _baseCamposRendimientos: null,
       _hidratandoRendimientos: false,
-      _conflictoRevision: false
+      avisoConflicto: '',
+      _clavesEnConflicto: []
     }
   },
 
   async created() {
     this.guardarCambiosEnTiempoReal = debounce(this.guardarCambiosEnTiempoReal, 300);
+    this.programarGuardadoAnalisis = debounce(() => this.guardarEstadoAnalisis(), 300);
 
     await EmbarquesOfflineService.init();
     window.addEventListener('online', this.syncOfflineRendimientos);
@@ -802,17 +811,21 @@ export default {
     },
     fijarBaseRendimientos(embarqueData) {
       this._revBase = Number(embarqueData && embarqueData.rev) || 0;
-      this._baseCamposRendimientos = fotoCampos(embarqueData || {}, CAMPOS_RENDIMIENTOS);
-      this._conflictoRevision = false;
+      const foto = fotoCampos(embarqueData || {}, CAMPOS_RENDIMIENTOS);
+      try {
+        this._baseCamposRendimientos = JSON.parse(JSON.stringify(foto));
+      } catch (error) {
+        this._baseCamposRendimientos = foto;
+      }
     },
-    anunciarConflictoRendimientos(error) {
-      this._conflictoRevision = true;
-      if (this.guardarCambiosEnTiempoReal && this.guardarCambiosEnTiempoReal.cancel) {
-        this.guardarCambiosEnTiempoReal.cancel();
-      }
-      if (pedirRecargaPorConflicto(error)) {
-        window.location.reload();
-      }
+    mostrarAvisoConflicto(mensaje) {
+      this.avisoConflicto = mensaje || MENSAJE_CONFLICTO_EMBARQUE;
+    },
+    recargarPantalla() {
+      window.location.reload();
+    },
+    reintentarCambiosPendientes() {
+      this.syncOfflineRendimientos();
     },
     async actualizarOfflineRendimientos(pending, payload = {}, options = {}) {
       const includeInDocData = options.includeInDocData !== false;
@@ -841,8 +854,11 @@ export default {
         }
 
         if (includeInDocData && claves.length) {
+          const previas = yaPendiente && !options.replacePendientes
+            ? existing.camposPendientesRendimientos
+            : [];
           record.camposPendientesRendimientos = pending
-            ? Array.from(new Set([...(yaPendiente ? existing.camposPendientesRendimientos : []), ...claves]))
+            ? Array.from(new Set([...previas, ...claves]))
             : [];
           record.baseCamposRendimientos = pending
             ? (yaPendiente && existing.baseCamposRendimientos
@@ -867,15 +883,37 @@ export default {
         };
       });
     },
+    registrarEscrituraRendimientos(resultado, payload) {
+      if (!resultado || resultado.omitida) return;
+      this._revBase = resultado.rev;
+      const escritos = resultado.camposEscritos || payload || {};
+      let copia = escritos;
+      try { copia = JSON.parse(JSON.stringify(escritos)); } catch (error) { copia = escritos; }
+      this._baseCamposRendimientos = {
+        ...(this._baseCamposRendimientos || {}),
+        ...copia,
+      };
+    },
+    marcarClavesEnConflicto(claves) {
+      const juntas = new Set([...(this._clavesEnConflicto || []), ...(claves || [])]);
+      this._clavesEnConflicto = Array.from(juntas);
+      if (this._clavesEnConflicto.length) this.mostrarAvisoConflicto();
+    },
+    liberarClavesConflicto(payload) {
+      const escritas = new Set(Object.keys(payload || {}));
+      this._clavesEnConflicto = (this._clavesEnConflicto || []).filter(clave => !escritas.has(clave));
+      if (!this._clavesEnConflicto.length) this.avisoConflicto = '';
+    },
     async persistirCamposRendimientos(payload, opts = {}) {
-      if (this._conflictoRevision || this._hidratandoRendimientos) return;
+      if (this._hidratandoRendimientos) return;
       if (!payload || Object.keys(payload).length === 0) {
         return;
       }
       const clonedPayload = this.deepClone(payload);
       const baseRev = opts.baseRev != null ? opts.baseRev : (Number(this._revBase) || 0);
       const baseCampos = opts.baseCampos !== undefined ? opts.baseCampos : this._baseCamposRendimientos;
-      await this.actualizarOfflineRendimientos(!navigator.onLine, clonedPayload, opts);
+      const sinBase = opts.sinBase || (baseCampos ? 'conflicto' : 'ultima');
+      await this.actualizarOfflineRendimientos(true, clonedPayload, opts);
       if (!navigator.onLine) {
         return;
       }
@@ -885,18 +923,30 @@ export default {
           baseRev,
           baseCampos,
           campos: clonedPayload,
+          sinBase,
         });
-        if (!resultado.omitida) {
-          this._revBase = resultado.rev;
-          this._baseCamposRendimientos = {
-            ...(this._baseCamposRendimientos || {}),
-            ...clonedPayload,
-          };
+        this.registrarEscrituraRendimientos(resultado, clonedPayload);
+        const enConflicto = resultado.camposEnConflicto || [];
+        if (enConflicto.length) {
+          this.marcarClavesEnConflicto(enConflicto);
+          const pendiente = {};
+          enConflicto.forEach(clave => {
+            if (Object.prototype.hasOwnProperty.call(clonedPayload, clave)) {
+              pendiente[clave] = clonedPayload[clave];
+            }
+          });
+          await this.actualizarOfflineRendimientos(true, pendiente, { ...opts, replacePendientes: true });
+          return;
         }
+        this.liberarClavesConflicto(resultado.camposEscritos || clonedPayload);
         await this.actualizarOfflineRendimientos(false, clonedPayload, opts);
       } catch (error) {
         if (esErrorConflictoEmbarque(error)) {
-          this.anunciarConflictoRendimientos(error);
+          this.marcarClavesEnConflicto(error.camposEnConflicto || Object.keys(clonedPayload));
+          const pendiente = error.camposPendientes && Object.keys(error.camposPendientes).length
+            ? error.camposPendientes
+            : clonedPayload;
+          await this.actualizarOfflineRendimientos(true, pendiente, { ...opts, replacePendientes: true });
           return;
         }
         console.error('[Rendimientos] Error al guardar cambios en Firestore:', error);
@@ -1203,9 +1253,11 @@ export default {
           return;
         }
 
+        const baseCampos = record.baseCamposRendimientos || null;
         await this.persistirCamposRendimientos(payload, {
           baseRev: Number(record.baseRev ?? record.docData?.rev) || 0,
-          baseCampos: record.baseCamposRendimientos || null,
+          baseCampos,
+          sinBase: baseCampos ? 'conflicto' : 'ultima',
         });
       } catch (error) {
         console.error('[Rendimientos] Error al sincronizar datos offline:', error);
@@ -2545,7 +2597,10 @@ export default {
         });
         
         // Aplicar costos a las medidas del embarque si no tienen costo asignado
-        const costosEmbarque = this.embarqueData?.costosPorMedida || {};
+        const costosAntes = this.deepClone(this.embarqueData?.costosPorMedida || {});
+        const costosEmbarque = this.embarqueData?.costosPorMedida
+          ? { ...this.embarqueData.costosPorMedida }
+          : {};
         let costosActualizados = false;
         
         // Obtener todas las tallas de crudos para aplicar costos
@@ -2576,15 +2631,14 @@ export default {
           }
         });
         
-        // Guardar cambios en Firebase si hubo actualizaciones
-        if (costosActualizados) {
+        if (costosActualizados && !equivalentes(costosAntes, costosEmbarque)) {
           if (!this.embarqueData.costosPorMedida) {
             this.embarqueData.costosPorMedida = {};
           }
           Object.assign(this.embarqueData.costosPorMedida, costosEmbarque);
 
           await this.persistirCamposRendimientos({
-            costosPorMedida: this.deepClone(this.embarqueData.costosPorMedida)
+            costosPorMedida: this.deepClone(costosEmbarque)
           });
 
           console.log('✅ Costos inicializados y guardados automáticamente');
@@ -2661,7 +2715,7 @@ export default {
     },
 
     async guardarCambiosEnTiempoReal() {
-      if (this._conflictoRevision || this._hidratandoRendimientos) return;
+      if (this._hidratandoRendimientos) return;
       if (!this.guardadoAutomaticoActivo) return;
       const payload = this.crearPayloadRendimientos();
       await this.persistirCamposRendimientos(payload);
@@ -3315,7 +3369,7 @@ export default {
   watch: {
     kilosCrudos: {
       handler() {
-        if (this._hidratandoRendimientos || this._conflictoRevision) return;
+        if (this._hidratandoRendimientos) return;
         this.guardarCambiosEnTiempoReal();
         // Recalcular ganancias cuando cambien los kilos crudos
         this.$nextTick(async () => {
@@ -3391,6 +3445,9 @@ export default {
     if (this.guardarCambiosEnTiempoReal.cancel) {
       this.guardarCambiosEnTiempoReal.cancel();
     }
+    if (this.programarGuardadoAnalisis && this.programarGuardadoAnalisis.cancel) {
+      this.programarGuardadoAnalisis.cancel();
+    }
     window.removeEventListener('online', this.syncOfflineRendimientos);
   }
 }
@@ -3399,6 +3456,40 @@ export default {
 <style scoped>
 .rendimientos-container {
   padding: 20px;
+}
+
+.aviso-conflicto {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 0;
+  padding: 12px 14px;
+  border: 1px solid #e0b15a;
+  border-radius: 8px;
+  background: #fff4e5;
+  color: #6a4b12;
+}
+
+.aviso-conflicto p {
+  margin: 0;
+  flex: 1 1 220px;
+  line-height: 1.35;
+}
+
+.aviso-conflicto button {
+  border: 1px solid #c4923a;
+  background: #fff;
+  color: #6a4b12;
+  border-radius: 6px;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+@media (max-width: 640px) {
+  .aviso-conflicto button {
+    flex: 1 1 calc(50% - 8px);
+  }
 }
 
 .rendimientos-grid {

@@ -41,6 +41,7 @@ export const CAMPOS_RENDIMIENTOS = [
   'nombresMedidasPersonalizados',
   'notaRendimientos',
   'totalGanancias',
+  'costosPorMedida',
 ];
 
 export const CAMPOS_COSTOS = [
@@ -155,39 +156,52 @@ export function fotoCampos(data, lista) {
 }
 
 /**
- * @returns {{accion:'crear'|'escribir'|'fusionar'|'omitir'|'conflicto', rev:number, campos:Object, camposEnConflicto?:string[]}}
+ * @param {string} [sinBase] Si no hay foto de la base: 'conflicto' (pide
+ *   recargar) o 'ultima' (el pendiente viejo, sin foto, gana en los campos
+ *   que el servidor no tiene ya iguales).
+ * @returns {{accion:'crear'|'escribir'|'fusionar'|'parcial'|'omitir'|'conflicto', rev:number, campos:Object, camposEnConflicto:string[]}}
  */
-export function planearEscritura({ remoto, baseRev, baseCampos, campos } = {}) {
+export function planearEscritura({ remoto, baseRev, baseCampos, campos, sinBase = 'conflicto' } = {}) {
   const cambios = campos || {};
   const claves = Object.keys(cambios);
   const revRemota = remoto ? (Number(remoto.rev) || 0) : 0;
   const revBase = Number(baseRev) || 0;
 
   if (!remoto) {
-    return { accion: 'crear', rev: revBase + 1, campos: cambios };
+    return { accion: 'crear', rev: revBase + 1, campos: cambios, camposEnConflicto: [] };
   }
 
-  const sinCambios = claves.every(clave => equivalentes(leerCampo(remoto, clave), cambios[clave]));
-  if (sinCambios) {
-    return { accion: 'omitir', rev: revRemota, campos: cambios };
-  }
+  const porEscribir = {};
+  const enConflicto = [];
+  claves.forEach(clave => {
+    const remotoValor = leerCampo(remoto, clave);
+    const nuevo = cambios[clave];
+    // Ya está en el servidor el valor que íbamos a guardar: no es conflicto
+    // aunque la revisión haya subido por otro campo.
+    if (equivalentes(remotoValor, nuevo)) return;
+    if (revRemota === revBase) {
+      porEscribir[clave] = nuevo;
+      return;
+    }
+    if (!baseCampos) {
+      if (sinBase === 'ultima') porEscribir[clave] = nuevo;
+      else enConflicto.push(clave);
+      return;
+    }
+    if (equivalentes(remotoValor, leerCampo(baseCampos, clave))) porEscribir[clave] = nuevo;
+    else enConflicto.push(clave);
+  });
 
-  if (revRemota === revBase) {
-    return { accion: 'escribir', rev: revRemota + 1, campos: cambios };
+  const hayEscritura = Object.keys(porEscribir).length > 0;
+  if (!hayEscritura && enConflicto.length === 0) {
+    return { accion: 'omitir', rev: revRemota, campos: {}, camposEnConflicto: [] };
   }
-
-  if (!baseCampos) {
-    return { accion: 'conflicto', rev: revRemota, campos: cambios, camposEnConflicto: claves };
+  if (!hayEscritura) {
+    return { accion: 'conflicto', rev: revRemota, campos: cambios, camposEnConflicto: enConflicto };
   }
-
-  const cambiados = claves.filter(clave => !equivalentes(
-    leerCampo(remoto, clave),
-    leerCampo(baseCampos, clave)
-  ));
-  if (cambiados.length) {
-    return { accion: 'conflicto', rev: revRemota, campos: cambios, camposEnConflicto: cambiados };
-  }
-  return { accion: 'fusionar', rev: revRemota + 1, campos: cambios };
+  let accion = revRemota === revBase ? 'escribir' : 'fusionar';
+  if (enConflicto.length) accion = 'parcial';
+  return { accion, rev: revRemota + 1, campos: porEscribir, camposEnConflicto: enConflicto };
 }
 
 export function quitarCamposAjenosAlEditor(payload, hayRemoto, camposPendientes = []) {

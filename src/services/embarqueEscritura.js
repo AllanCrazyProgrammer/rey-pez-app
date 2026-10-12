@@ -1,21 +1,27 @@
 import { collection, doc, runTransaction, serverTimestamp } from 'firebase/firestore';
 import { MENSAJE_CONFLICTO_EMBARQUE, planearEscritura } from '@/utils/embarqueRevision';
 
-function crearErrorConflicto({ code, mensaje, camposEnConflicto, revRemota }) {
+function crearErrorConflicto({ code, mensaje, camposEnConflicto, revRemota, camposPendientes }) {
   const error = new Error(mensaje || MENSAJE_CONFLICTO_EMBARQUE);
   error.code = code || 'embarque-modificado-externamente';
   error.camposEnConflicto = camposEnConflicto || [];
+  error.camposPendientes = camposPendientes || {};
   error.revRemota = revRemota;
   return error;
 }
 
+function seleccionar(campos, claves) {
+  const salida = {};
+  (claves || []).forEach(clave => {
+    if (campos && Object.prototype.hasOwnProperty.call(campos, clave)) salida[clave] = campos[clave];
+  });
+  return salida;
+}
+
 /**
- * Escribe campos de un embarque dentro de una transacción.
- * Sube `rev` solo si realmente cambia algo. Si otra pantalla cambió otros
- * campos, fusiona. Si cambió estos mismos, no escribe el embarque: deja un
- * respaldo y lanza `embarque-modificado-externamente`.
+ * Una escritura. La cola de afuera serializa las de la misma pestaña.
  */
-export async function escribirCamposEmbarque(db, embarqueId, opciones = {}) {
+async function escribirUnaVez(db, embarqueId, opciones) {
   const {
     baseRev = 0,
     baseCampos = null,
@@ -23,10 +29,18 @@ export async function escribirCamposEmbarque(db, embarqueId, opciones = {}) {
     meta = {},
     respaldo = true,
     crearSiNoExiste = false,
+    sinBase = 'conflicto',
   } = opciones;
 
   if (!Object.keys(campos).length) {
-    return { rev: Number(baseRev) || 0, omitida: true, fusiono: false, remoto: null };
+    return {
+      rev: Number(baseRev) || 0,
+      omitida: true,
+      fusiono: false,
+      remoto: null,
+      camposEscritos: {},
+      camposEnConflicto: [],
+    };
   }
 
   const embarqueRef = doc(db, 'embarques', embarqueId);
@@ -44,13 +58,22 @@ export async function escribirCamposEmbarque(db, embarqueId, opciones = {}) {
       conflicto = {
         code: 'embarque-eliminado',
         mensaje: 'Este embarque ya no existe. Recarga la página.',
+        camposEnConflicto: Object.keys(campos),
+        camposPendientes: campos,
       };
       return;
     }
 
-    const plan = planearEscritura({ remoto, baseRev, baseCampos, campos });
+    const plan = planearEscritura({ remoto, baseRev, baseCampos, campos, sinBase });
     if (plan.accion === 'omitir') {
-      resultado = { rev: plan.rev, omitida: true, fusiono: false, remoto };
+      resultado = {
+        rev: plan.rev,
+        omitida: true,
+        fusiono: false,
+        remoto,
+        camposEscritos: {},
+        camposEnConflicto: [],
+      };
       return;
     }
     if (plan.accion === 'conflicto') {
@@ -58,12 +81,13 @@ export async function escribirCamposEmbarque(db, embarqueId, opciones = {}) {
         code: 'embarque-modificado-externamente',
         mensaje: MENSAJE_CONFLICTO_EMBARQUE,
         camposEnConflicto: plan.camposEnConflicto,
+        camposPendientes: seleccionar(campos, plan.camposEnConflicto),
         revRemota: plan.rev,
       };
       if (respaldo && remoto) {
         transaction.set(backupRef, {
           embarqueOriginalId: embarqueId,
-          datosOriginales: campos,
+          datosOriginales: seleccionar(campos, plan.camposEnConflicto),
           fechaRespaldo: serverTimestamp(),
           razonRespaldo: 'conflicto_campos_embarque',
           camposEnConflicto: plan.camposEnConflicto,
@@ -74,17 +98,144 @@ export async function escribirCamposEmbarque(db, embarqueId, opciones = {}) {
       return;
     }
 
-    const payload = { ...campos, ...meta, rev: plan.rev };
+    const payload = { ...plan.campos, ...meta, rev: plan.rev };
     if (remoto) transaction.update(embarqueRef, payload);
     else transaction.set(embarqueRef, payload);
+    if (plan.camposEnConflicto.length && respaldo && remoto) {
+      transaction.set(backupRef, {
+        embarqueOriginalId: embarqueId,
+        datosOriginales: seleccionar(campos, plan.camposEnConflicto),
+        fechaRespaldo: serverTimestamp(),
+        razonRespaldo: 'conflicto_campos_embarque',
+        camposEnConflicto: plan.camposEnConflicto,
+        tipoRespaldo: 'emergencia',
+        version: '1.0',
+      });
+    }
     resultado = {
       rev: plan.rev,
       omitida: false,
-      fusiono: plan.accion === 'fusionar',
+      fusiono: plan.accion === 'fusionar' || plan.accion === 'parcial',
       remoto,
+      camposEscritos: plan.campos,
+      camposEnConflicto: plan.camposEnConflicto,
     };
   });
 
   if (conflicto) throw crearErrorConflicto(conflicto);
   return resultado;
+}
+
+const colas = new Map();
+
+function ajustarContraAnterior(opciones, ultimo) {
+  if (!ultimo || ultimo.rev == null) return opciones;
+  if ((Number(opciones.baseRev) || 0) >= ultimo.rev) return opciones;
+  return {
+    ...opciones,
+    baseRev: ultimo.rev,
+    baseCampos: {
+      ...(opciones.baseCampos || {}),
+      ...(ultimo.camposEscritos || {}),
+    },
+  };
+}
+
+/**
+ * Escrituras del mismo documento en esta pestaña entran en fila. La que ya
+ * salió termina; la siguiente usa la revisión que esa dejó, así dos guardados
+ * seguidos no se pelean entre sí. El valor más nuevo es el último de la fila.
+ */
+export function escribirCamposEmbarque(db, embarqueId, opciones = {}) {
+  let estado = colas.get(embarqueId);
+  if (!estado) {
+    estado = { cadena: Promise.resolve(null), profundidad: 0 };
+    colas.set(embarqueId, estado);
+  }
+  const detras = estado.profundidad > 0;
+  estado.profundidad += 1;
+  const registrada = estado.cadena.then(
+    (ultimo) => escribirUnaVez(db, embarqueId, detras ? ajustarContraAnterior(opciones, ultimo) : opciones),
+    () => escribirUnaVez(db, embarqueId, opciones)
+  );
+  estado.cadena = registrada.then(
+    (resultado) => resultado,
+    () => null
+  );
+  return registrada.finally(() => {
+    estado.profundidad -= 1;
+  });
+}
+
+/**
+ * Varios embarques de un mismo pago (flete agrupado) se leen y se escriben
+ * en una sola transacción. Si uno entra en conflicto, no queda ninguno marcado.
+ */
+export async function escribirCamposEmbarquesAtomico(db, operaciones = []) {
+  if (!operaciones.length) return [];
+  const backupRef = doc(collection(db, 'respaldos_emergencia'));
+  let conflicto = null;
+  let resultados = [];
+
+  await runTransaction(db, async (transaction) => {
+    conflicto = null;
+    resultados = [];
+    const planes = [];
+    for (let i = 0; i < operaciones.length; i += 1) {
+      const op = operaciones[i];
+      const ref = doc(db, 'embarques', op.embarqueId);
+      const snapshot = await transaction.get(ref);
+      const remoto = snapshot.exists() ? snapshot.data() : null;
+      if (!remoto) {
+        conflicto = {
+          code: 'embarque-eliminado',
+          mensaje: 'Este embarque ya no existe. Recarga la página.',
+          camposEnConflicto: Object.keys(op.campos || {}),
+          camposPendientes: op.campos || {},
+        };
+        return;
+      }
+      const plan = planearEscritura({
+        remoto,
+        baseRev: op.baseRev,
+        baseCampos: op.baseCampos,
+        campos: op.campos,
+        sinBase: op.sinBase || 'conflicto',
+      });
+      planes.push({ op, ref, plan });
+    }
+
+    const bloqueado = planes.find(item => item.plan.accion === 'conflicto' || item.plan.camposEnConflicto.length);
+    if (bloqueado) {
+      conflicto = {
+        code: 'embarque-modificado-externamente',
+        mensaje: MENSAJE_CONFLICTO_EMBARQUE,
+        camposEnConflicto: bloqueado.plan.camposEnConflicto,
+        camposPendientes: seleccionar(bloqueado.op.campos, bloqueado.plan.camposEnConflicto),
+        revRemota: bloqueado.plan.rev,
+      };
+      transaction.set(backupRef, {
+        embarqueOriginalId: bloqueado.op.embarqueId,
+        datosOriginales: seleccionar(bloqueado.op.campos, bloqueado.plan.camposEnConflicto),
+        fechaRespaldo: serverTimestamp(),
+        razonRespaldo: 'conflicto_campos_embarque',
+        camposEnConflicto: bloqueado.plan.camposEnConflicto,
+        tipoRespaldo: 'emergencia',
+        version: '1.0',
+      });
+      return;
+    }
+
+    planes.forEach(({ op, ref, plan }) => {
+      if (plan.accion === 'omitir') {
+        resultados.push({ embarqueId: op.embarqueId, rev: plan.rev, omitida: true });
+        return;
+      }
+      transaction.update(ref, { ...plan.campos, ...(op.meta || {}), rev: plan.rev });
+      resultados.push({ embarqueId: op.embarqueId, rev: plan.rev, omitida: false });
+    });
+  });
+
+  if (conflicto) throw crearErrorConflicto(conflicto);
+  return resultados;
 }

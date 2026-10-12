@@ -74,7 +74,7 @@ function partirHost(valor) {
   const revision = compilar('src/utils/embarqueRevision.js', () => {
     throw new Error('embarqueRevision no tiene dependencias');
   });
-  const { escribirCamposEmbarque } = compilar('src/services/embarqueEscritura.js', (id) => {
+  const { escribirCamposEmbarque, escribirCamposEmbarquesAtomico } = compilar('src/services/embarqueEscritura.js', (id) => {
     if (id === 'firebase/firestore') return firestore;
     if (id === '@/utils/embarqueRevision') return revision;
     throw new Error('Dependencia inesperada: ' + id);
@@ -305,6 +305,141 @@ function partirHost(valor) {
       rev: 2,
     }, true)), JSON.stringify({ clientes: [{ id: '1' }], rev: 2 }));
     console.log('✓ la sincronización offline del editor no reenvía campos de otras pantallas');
+
+    const idCola = 'revision-cola';
+    referencia(idCola);
+    await setDoc(doc(db, 'embarques', idCola), { rev: 1, precioMaquila: { a: 0 } });
+    const baseCola = { precioMaquila: { a: 0 } };
+    const primero = escribirCamposEmbarque(db, idCola, {
+      baseRev: 1,
+      baseCampos: baseCola,
+      campos: { precioMaquila: { a: 1 } },
+    });
+    const segundo = escribirCamposEmbarque(db, idCola, {
+      baseRev: 1,
+      baseCampos: baseCola,
+      campos: { precioMaquila: { a: 18 } },
+    });
+    const [r1, r2] = await Promise.all([primero, segundo]);
+    assert.ok(r1.rev < r2.rev);
+    const cola = await leer(idCola);
+    assert.equal(cola.precioMaquila.a, 18);
+    assert.equal(cola.rev, 3);
+    console.log('✓ dos guardados seguidos de la misma pestaña aplican; queda el último');
+
+    const idIgual = 'revision-igual';
+    referencia(idIgual);
+    await setDoc(doc(db, 'embarques', idIgual), {
+      rev: 4,
+      kilosCrudos: { '16/20': 250 },
+      notaRendimientos: '',
+    });
+    await escribirCamposEmbarque(db, idIgual, {
+      baseRev: 1,
+      baseCampos: { kilosCrudos: { '16/20': 100 }, notaRendimientos: '' },
+      campos: { kilosCrudos: { '16/20': 250 }, notaRendimientos: 'nota nueva' },
+    });
+    const igual = await leer(idIgual);
+    assert.equal(igual.kilosCrudos['16/20'], 250);
+    assert.equal(igual.notaRendimientos, 'nota nueva');
+    assert.equal(igual.rev, 5);
+    console.log('✓ un valor que ya está en el servidor no cuenta como conflicto');
+
+    const idCostos = 'revision-costos';
+    referencia(idCostos);
+    await setDoc(doc(db, 'embarques', idCostos), {
+      rev: 1,
+      costosPorMedida: { '16/20': 10 },
+      clientes: [{ id: '1', productos: [] }],
+      kilosCrudos: { '16/20': 80 },
+    });
+    await escribirCamposEmbarque(db, idCostos, {
+      baseRev: 1,
+      baseCampos: { clientes: [{ id: '1', productos: [] }] },
+      campos: { clientes: [{ id: '1', productos: [{ id: 'editor' }] }] },
+    });
+    await escribirCamposEmbarque(db, idCostos, {
+      baseRev: 1,
+      baseCampos: { costosPorMedida: { '16/20': 10 } },
+      campos: { costosPorMedida: { '16/20': 10, '21/25': 8 } },
+    });
+    const costos = await leer(idCostos);
+    assert.equal(costos.costosPorMedida['16/20'], 10);
+    assert.equal(costos.costosPorMedida['21/25'], 8);
+    assert.equal(costos.clientes[0].productos[0].id, 'editor');
+    assert.equal(costos.kilosCrudos['16/20'], 80);
+    console.log('✓ costosPorMedida después de un guardado del editor no entra en conflicto');
+
+    const idDespues = 'revision-despues';
+    referencia(idDespues);
+    await setDoc(doc(db, 'embarques', idDespues), {
+      rev: 2,
+      kilosCrudos: { '16/20': 250 },
+      notaRendimientos: '',
+    });
+    const parcial = await escribirCamposEmbarque(db, idDespues, {
+      baseRev: 1,
+      baseCampos: { kilosCrudos: { '16/20': 100 }, notaRendimientos: '' },
+      campos: { kilosCrudos: { '16/20': 100 }, notaRendimientos: 'sigue' },
+    });
+    assert.ok(parcial.camposEnConflicto.includes('kilosCrudos'));
+    assert.equal((await leer(idDespues)).notaRendimientos, 'sigue');
+    assert.equal((await leer(idDespues)).kilosCrudos['16/20'], 250);
+    await escribirCamposEmbarque(db, idDespues, {
+      baseRev: parcial.rev,
+      baseCampos: { notaRendimientos: 'sigue' },
+      campos: { notaRendimientos: 'despues' },
+    });
+    const despues = await leer(idDespues);
+    assert.equal(despues.notaRendimientos, 'despues');
+    assert.equal(despues.kilosCrudos['16/20'], 250);
+    console.log('✓ lo tecleado después de un conflicto real no se pierde');
+
+    const idViejo = 'revision-offline-viejo';
+    referencia(idViejo);
+    await setDoc(doc(db, 'embarques', idViejo), {
+      rev: 6,
+      kilosCrudos: { '16/20': 250 },
+      notaRendimientos: '',
+    });
+    await escribirCamposEmbarque(db, idViejo, {
+      baseRev: 1,
+      baseCampos: null,
+      sinBase: 'ultima',
+      campos: { kilosCrudos: { '16/20': 250 }, notaRendimientos: 'pendiente viejo' },
+    });
+    const viejo = await leer(idViejo);
+    assert.equal(viejo.notaRendimientos, 'pendiente viejo');
+    assert.equal(viejo.kilosCrudos['16/20'], 250);
+    console.log('✓ un pendiente offline sin foto de base no pide conflicto si el campo ya coincide');
+
+    const fleteA = 'flete-atomico-a';
+    const fleteB = 'flete-atomico-b';
+    referencia(fleteA);
+    referencia(fleteB);
+    await setDoc(doc(db, 'embarques', fleteA), { rev: 1, fletePagado: false, fletePagos: {} });
+    await setDoc(doc(db, 'embarques', fleteB), { rev: 1, fletePagado: false, fletePagos: {} });
+    const pago = {
+      baseRev: 1,
+      baseCampos: { fletePagado: false, 'fletePagos.porro': undefined },
+      campos: { fletePagado: true, 'fletePagos.porro': true },
+    };
+    await escribirCamposEmbarquesAtomico(db, [
+      { embarqueId: fleteA, ...pago },
+      { embarqueId: fleteB, ...pago },
+    ]);
+    assert.equal((await leer(fleteA)).fletePagado, true);
+    assert.equal((await leer(fleteB)).fletePagos.porro, true);
+    await assert.rejects(
+      () => escribirCamposEmbarquesAtomico(db, [
+        { embarqueId: fleteA, baseRev: 2, baseCampos: { fletePagado: true }, campos: { fletePagado: false } },
+        { embarqueId: fleteB, baseRev: 1, baseCampos: { fletePagado: false }, campos: { fletePagado: false } },
+      ]),
+      (error) => error.code === 'embarque-modificado-externamente'
+    );
+    assert.equal((await leer(fleteA)).fletePagado, true);
+    assert.equal((await leer(fleteB)).fletePagado, true);
+    console.log('✓ el pago agrupado de fletes es atómico: o entran todos o no entra ninguno');
 
     console.log('PASS embarque revision (' + projectId + ' @ ' + hostEmulador + ')');
   } finally {
