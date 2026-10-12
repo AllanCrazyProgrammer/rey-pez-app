@@ -30,7 +30,14 @@ test('automatic report reuses real screen calculations, includes current product
     '@/utils/pdf/reportDelivery': { prepararGuardadoReporte: () => { throw new Error('automatic export must not open another save picker'); } },
     '@/utils/pdf/sacadas': {}, '@/components/MedidasParaHoyCards.vue': {}, '@/services/EmbarquesOfflineService': offline, '@/utils/formatters': { formatearFecha: value => value },
     '@/utils/preciosHistoricos': preciosHistoricos,
-    '@/utils/preciosAliasCatalogo': preciosAliasCatalogo
+    '@/utils/preciosAliasCatalogo': preciosAliasCatalogo,
+    '@/services/embarqueEscritura': { escribirCamposEmbarque: async () => { throw new Error('el reporte no debe escribir el embarque'); } },
+    '@/utils/embarqueRevision': {
+      CAMPOS_RENDIMIENTOS: [],
+      fotoCampos: () => ({}),
+      esErrorConflictoEmbarque: () => false,
+      pedirRecargaPorConflicto: () => false,
+    }
   }).default;
   const source = fs.readFileSync('src/services/RendimientosReport.js', 'utf8').replace("await import('@/views/Embarques/Rendimientos.vue')", '({ default: injectedScreen })');
   const { generarRendimientosParaResumen } = compile(source, { './EmbarquesOfflineService': offline, 'firebase/firestore': firestore }, { injectedScreen: screen });

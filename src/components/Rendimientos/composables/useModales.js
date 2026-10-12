@@ -1,5 +1,7 @@
 import { reactive, computed } from 'vue';
-import { getFirestore, doc, updateDoc } from 'firebase/firestore';
+import { getFirestore } from 'firebase/firestore';
+import { escribirCamposEmbarque } from '@/services/embarqueEscritura';
+import { esErrorConflictoEmbarque, pedirRecargaPorConflicto } from '@/utils/embarqueRevision';
 
 export function useModales(embarqueId) {
   const state = reactive({
@@ -8,8 +10,24 @@ export function useModales(embarqueId) {
     nota: '',
     medidaOculta: {},
     pesoTaraCosto: 19,
-    pesoTaraVenta: 20
+    pesoTaraVenta: 20,
+    revBase: 0,
+    baseNota: '',
+    baseOculta: {},
+    baseTaraCosto: 19,
+    baseTaraVenta: 20
   });
+
+  const guardarCampos = async (campos, baseCampos) => {
+    const db = getFirestore();
+    const resultado = await escribirCamposEmbarque(db, embarqueId, {
+      baseRev: state.revBase,
+      baseCampos,
+      campos
+    });
+    if (!resultado.omitida) state.revBase = resultado.rev;
+    return resultado;
+  };
 
   // Gestión del modal de notas
   const abrirModalNota = (notaExistente = '') => {
@@ -24,17 +42,17 @@ export function useModales(embarqueId) {
 
   const guardarNota = async () => {
     try {
-      const db = getFirestore();
-      const embarqueRef = doc(db, 'embarques', embarqueId);
-      
-      await updateDoc(embarqueRef, {
-        notaRendimientos: state.nota
-      });
+      await guardarCampos(
+        { notaRendimientos: state.nota },
+        { notaRendimientos: state.baseNota }
+      );
+      state.baseNota = state.nota;
       
       cerrarModal();
       console.log('Nota guardada correctamente');
       return true;
     } catch (error) {
+      if (esErrorConflictoEmbarque(error) && pedirRecargaPorConflicto(error)) window.location.reload();
       console.error('Error al guardar la nota:', error);
       return false;
     }
@@ -51,18 +69,24 @@ export function useModales(embarqueId) {
 
   const guardarConfiguracion = async () => {
     try {
-      const db = getFirestore();
-      const embarqueRef = doc(db, 'embarques', embarqueId);
-      
-      await updateDoc(embarqueRef, {
+      await guardarCampos({
         pesoTaraCosto: Number(state.pesoTaraCosto),
         pesoTaraVenta: Number(state.pesoTaraVenta)
+      }, {
+        pesoTaraCosto: state.baseTaraCosto,
+        pesoTaraVenta: state.baseTaraVenta
       });
+      state.baseTaraCosto = Number(state.pesoTaraCosto);
+      state.baseTaraVenta = Number(state.pesoTaraVenta);
       
       console.log('Configuración de pesos guardada correctamente');
       cerrarModalConfiguracion();
       return true;
     } catch (error) {
+      if (esErrorConflictoEmbarque(error)) {
+        if (pedirRecargaPorConflicto(error)) window.location.reload();
+        return false;
+      }
       console.error('Error al guardar configuración de pesos:', error);
       alert('Error al guardar la configuración. Intente nuevamente.');
       return false;
@@ -72,15 +96,15 @@ export function useModales(embarqueId) {
   // Gestión de estado de ocultación
   const guardarEstadoOculto = async () => {
     try {
-      const db = getFirestore();
-      const embarqueRef = doc(db, 'embarques', embarqueId);
-      
-      await updateDoc(embarqueRef, {
-        medidaOculta: state.medidaOculta
-      });
+      await guardarCampos(
+        { medidaOculta: state.medidaOculta },
+        { medidaOculta: state.baseOculta }
+      );
+      state.baseOculta = { ...state.medidaOculta };
       
       console.log('Estado de ocultación guardado correctamente');
     } catch (error) {
+      if (esErrorConflictoEmbarque(error) && pedirRecargaPorConflicto(error)) window.location.reload();
       console.error('Error al guardar estado de ocultación:', error);
     }
   };
@@ -88,9 +112,14 @@ export function useModales(embarqueId) {
   // Cargar configuración desde embarque
   const cargarConfiguracion = (embarqueData) => {
     if (embarqueData) {
+      state.revBase = Number(embarqueData.rev) || 0;
+      state.baseNota = embarqueData.notaRendimientos || '';
       state.medidaOculta = embarqueData.medidaOculta || {};
+      state.baseOculta = { ...state.medidaOculta };
       state.pesoTaraCosto = embarqueData.pesoTaraCosto || 19;
       state.pesoTaraVenta = embarqueData.pesoTaraVenta || 20;
+      state.baseTaraCosto = state.pesoTaraCosto;
+      state.baseTaraVenta = state.pesoTaraVenta;
     }
   };
 

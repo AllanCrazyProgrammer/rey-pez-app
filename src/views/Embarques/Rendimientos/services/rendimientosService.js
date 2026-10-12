@@ -1,5 +1,7 @@
-import { getFirestore, doc, getDoc, updateDoc, collection, getDocs, query, where, orderBy } from 'firebase/firestore';
+import { getFirestore, doc, getDoc, collection, getDocs, query, orderBy } from 'firebase/firestore';
 import { normalizarNombreProductoPrecio } from '@/utils/preciosHistoricos';
+import { escribirCamposEmbarque } from '@/services/embarqueEscritura';
+import { CAMPOS_RENDIMIENTOS, fotoCampos } from '@/utils/embarqueRevision';
 
 /**
  * Servicio para manejar operaciones de Firebase relacionadas con rendimientos
@@ -7,6 +9,13 @@ import { normalizarNombreProductoPrecio } from '@/utils/preciosHistoricos';
 export class RendimientosService {
   constructor() {
     this.db = getFirestore();
+    this._revBase = 0;
+    this._baseCampos = null;
+  }
+
+  recordarEmbarque(datos) {
+    this._revBase = Number(datos && datos.rev) || 0;
+    this._baseCampos = fotoCampos(datos || {}, CAMPOS_RENDIMIENTOS);
   }
 
   /**
@@ -20,7 +29,9 @@ export class RendimientosService {
       const embarqueDoc = await getDoc(embarqueRef);
       
       if (embarqueDoc.exists()) {
-        return embarqueDoc.data();
+        const datos = embarqueDoc.data();
+        this.recordarEmbarque(datos);
+        return datos;
       }
       return null;
     } catch (error) {
@@ -98,10 +109,18 @@ export class RendimientosService {
    * @param {string} embarqueId - ID del embarque
    * @param {Object} datos - Datos a guardar
    */
-  async guardarCambios(embarqueId, datos) {
+  async guardarCambios(embarqueId, datos, opciones = {}) {
     try {
-      const embarqueRef = doc(this.db, 'embarques', embarqueId);
-      await updateDoc(embarqueRef, datos);
+      const resultado = await escribirCamposEmbarque(this.db, embarqueId, {
+        baseRev: opciones.baseRev != null ? opciones.baseRev : this._revBase,
+        baseCampos: opciones.baseCampos !== undefined ? opciones.baseCampos : this._baseCampos,
+        campos: datos,
+      });
+      if (!resultado.omitida) {
+        this._revBase = resultado.rev;
+        this._baseCampos = { ...(this._baseCampos || {}), ...datos };
+      }
+      return resultado;
     } catch (error) {
       console.error('Error al guardar cambios:', error);
       throw error;
@@ -114,15 +133,7 @@ export class RendimientosService {
    * @param {string} nota - Nota a guardar
    */
   async guardarNota(embarqueId, nota) {
-    try {
-      const embarqueRef = doc(this.db, 'embarques', embarqueId);
-      await updateDoc(embarqueRef, {
-        notaRendimientos: nota
-      });
-    } catch (error) {
-      console.error('Error al guardar la nota:', error);
-      throw error;
-    }
+    return this.guardarCambios(embarqueId, { notaRendimientos: nota });
   }
 
   /**
@@ -132,16 +143,10 @@ export class RendimientosService {
    * @param {number} pesoTaraVenta - Peso de tara para ventas
    */
   async guardarConfiguracionPesos(embarqueId, pesoTaraCosto, pesoTaraVenta) {
-    try {
-      const embarqueRef = doc(this.db, 'embarques', embarqueId);
-      await updateDoc(embarqueRef, {
-        pesoTaraCosto: Number(pesoTaraCosto),
-        pesoTaraVenta: Number(pesoTaraVenta)
-      });
-    } catch (error) {
-      console.error('Error al guardar configuración de pesos:', error);
-      throw error;
-    }
+    return this.guardarCambios(embarqueId, {
+      pesoTaraCosto: Number(pesoTaraCosto),
+      pesoTaraVenta: Number(pesoTaraVenta)
+    });
   }
 
   /**
@@ -150,14 +155,8 @@ export class RendimientosService {
    * @param {Object} nombresMedidas - Nombres personalizados
    */
   async actualizarNombresMedidas(embarqueId, nombresMedidas) {
-    try {
-      const embarqueRef = doc(this.db, 'embarques', embarqueId);
-      await updateDoc(embarqueRef, {
-        nombresMedidasPersonalizados: nombresMedidas
-      });
-    } catch (error) {
-      console.error('Error al actualizar nombres de medidas:', error);
-      throw error;
-    }
+    return this.guardarCambios(embarqueId, {
+      nombresMedidasPersonalizados: nombresMedidas
+    });
   }
 }

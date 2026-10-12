@@ -50,10 +50,18 @@ function firestoreFor(records, calls = []) {
     }
   };
 }
+const revisionMock = {
+  CAMPOS_RENDIMIENTOS: [],
+  fotoCampos: () => ({}),
+  esErrorConflictoEmbarque: () => false,
+  pedirRecargaPorConflicto: () => false,
+};
 const screenMocks = firestore => ({
   'firebase/firestore': firestore, lodash: {}, '@/utils/RendimientosPdf': {},
   '@/utils/pdf/reportDelivery': {}, '@/utils/pdf/sacadas': {},
-  '@/services/EmbarquesOfflineService': {}, '@/utils/formatters': {}
+  '@/services/EmbarquesOfflineService': {}, '@/utils/formatters': {},
+  '@/services/embarqueEscritura': { escribirCamposEmbarque: async () => ({ rev: 0, omitida: true }) },
+  '@/utils/embarqueRevision': revisionMock,
 });
 
 test('old offline alias groups merge by the existing date order, keep ties stable and never mutate inputs', () => {

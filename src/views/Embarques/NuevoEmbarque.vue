@@ -262,7 +262,9 @@
 </template>
 
 <script>
-import { getFirestore, collection, addDoc, doc, getDoc, updateDoc, onSnapshot, serverTimestamp, getDocs, setDoc, deleteDoc, query, where, orderBy, runTransaction } from 'firebase/firestore';
+import { getFirestore, collection, addDoc, doc, getDoc, onSnapshot, serverTimestamp, getDocs, setDoc, deleteDoc, query, where, orderBy, runTransaction } from 'firebase/firestore';
+import { escribirCamposEmbarque } from '@/services/embarqueEscritura';
+import { esErrorConflictoEmbarque, pedirRecargaPorConflicto } from '@/utils/embarqueRevision';
 import { debounce } from 'lodash';
 import { useAuthStore } from '@/stores/auth'
 import { getSaveManager } from '@/services/SaveManager'
@@ -1169,32 +1171,41 @@ export default {
 
       console.log(`[ELIMINAR-PRODUCTO] ✅ Producto eliminado exitosamente. Productos restantes: ${this.embarque.productos.length}`);
 
-      // Publicar la lápida DE INMEDIATO con un update puntual: si otro editor
-      // está tecleando, la subida completa puede perder la carrera de
-      // revisiones una y otra vez, pero este update pequeño entra igual y la
-      // fusión del otro lado respeta la lápida (el borrado no se pierde).
-      if (this.embarqueId && navigator.onLine) {
-        const db = getFirestore();
+      // Publicar la lápida en una transacción. Si Rendimientos (u otra
+      // pantalla) subió `rev` con otros campos, se fusiona: no se rebobina
+      // la revisión ni se tocan esos campos. Si alguien más ya marcó este
+      // mismo producto, se pide recargar en lugar de pisar a ciegas.
+      const publicarLapida = async () => {
         const marcaLapida = Date.now();
-        const revNueva = (Number(this._revBase) || 0) + 1;
-        updateDoc(doc(db, "embarques", this.embarqueId), {
-          [`productosEliminados.${producto.id}`]: marcaLapida,
-          rev: revNueva
-        }).then(() => {
-          this._revBase = revNueva;
-          this._productosEliminadosDoc = {
-            ...(this._productosEliminadosDoc || {}),
-            [producto.id]: marcaLapida
-          };
-        }).catch((error) => {
-          console.warn('[ELIMINAR-PRODUCTO] No se pudo publicar la lápida de inmediato (se subirá con el guardado normal):', error);
-        });
-      }
-
-      // Guardar cambios si es necesario
-      if (this.embarqueId) {
-        this.guardarCambiosEnTiempoReal();
-      }
+        if (this.embarqueId && navigator.onLine) {
+          try {
+            const db = getFirestore();
+            const ruta = `productosEliminados.${producto.id}`;
+            const resultado = await escribirCamposEmbarque(db, this.embarqueId, {
+              baseRev: Number(this._revBase) || 0,
+              baseCampos: { [ruta]: undefined },
+              campos: { [ruta]: marcaLapida },
+            });
+            const mapaRemoto = (resultado.remoto && resultado.remoto.productosEliminados) || {};
+            this._productosEliminadosDoc = {
+              ...mapaRemoto,
+              ...(this._productosEliminadosDoc || {}),
+              [producto.id]: marcaLapida
+            };
+            if (!resultado.fusiono && !resultado.omitida) {
+              this._revBase = resultado.rev;
+            }
+          } catch (error) {
+            if (esErrorConflictoEmbarque(error)) {
+              if (pedirRecargaPorConflicto(error)) window.location.reload();
+              return;
+            }
+            console.warn('[ELIMINAR-PRODUCTO] No se pudo publicar la lápida de inmediato (se subirá con el guardado normal):', error);
+          }
+        }
+        if (this.embarqueId) this.guardarCambiosEnTiempoReal();
+      };
+      publicarLapida();
 
       // Actualizar las medidas usadas después de eliminar
       this.actualizarMedidasUsadas();
@@ -1479,23 +1490,39 @@ export default {
       this.sidebarCollapsed = !this.sidebarCollapsed;
     },
 
-    toggleBloqueo() {
+    async toggleBloqueo() {
+      const anterior = this.embarqueBloqueado;
       this.embarqueBloqueado = !this.embarqueBloqueado;
 
-      // Guardar el estado en Firebase si estamos en modo edición.
-      // Incrementar rev: sin señal de cambio, los demás editores descartan
-      // el snapshot como eco repetido y no se enteran del bloqueo.
-      if (this.modoEdicion && this.embarqueId) {
+      if (!(this.modoEdicion && this.embarqueId)) return;
+
+      if (!navigator.onLine) {
+        this.guardarCambiosEnTiempoReal();
+        return;
+      }
+
+      try {
         const db = getFirestore();
-        const revNueva = (Number(this._revBase) || 0) + 1;
-        updateDoc(doc(db, "embarques", this.embarqueId), {
-          embarqueBloqueado: this.embarqueBloqueado,
-          rev: revNueva
-        }).then(() => {
-          this._revBase = revNueva;
-        }).catch(error => {
-          console.error("Error al guardar estado de bloqueo:", error);
+        const resultado = await escribirCamposEmbarque(db, this.embarqueId, {
+          baseRev: Number(this._revBase) || 0,
+          baseCampos: { embarqueBloqueado: anterior },
+          campos: { embarqueBloqueado: this.embarqueBloqueado },
         });
+        if (!resultado.fusiono && !resultado.omitida) {
+          this._revBase = resultado.rev;
+        }
+        if (this._baseCamposEditor) {
+          this._baseCamposEditor = {
+            ...this._baseCamposEditor,
+            embarqueBloqueado: this.embarqueBloqueado,
+          };
+        }
+      } catch (error) {
+        this.embarqueBloqueado = anterior;
+        console.error("Error al guardar estado de bloqueo:", error);
+        if (esErrorConflictoEmbarque(error) && pedirRecargaPorConflicto(error)) {
+          window.location.reload();
+        }
       }
     },
 

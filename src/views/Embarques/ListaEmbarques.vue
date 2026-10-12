@@ -278,7 +278,9 @@
 </template>
 
 <script>
-import { getFirestore, collection, getDocs, doc, deleteDoc, getDoc, updateDoc, serverTimestamp, query, orderBy, limit } from 'firebase/firestore';
+import { getFirestore, collection, getDocs, doc, deleteDoc, getDoc, serverTimestamp, query, orderBy, limit } from 'firebase/firestore';
+import { escribirCamposEmbarque } from '@/services/embarqueEscritura';
+import { esErrorConflictoEmbarque, pedirRecargaPorConflicto } from '@/utils/embarqueRevision';
 import BackupService from './BackupService.js';
 import { snapshotEmbarque } from '@/utils/embarqueOfflineSnapshot';
 import EmbarquesSync, { estadoOffline } from '@/services/EmbarquesSync';
@@ -870,11 +872,13 @@ export default {
                 }
               };
               
-              // Actualización puntual para no pisar cambios concurrentes de otros dispositivos
-              await updateDoc(embarqueRef, {
-                noEnviadoMexico: nuevoEstado,
-                ultimaEdicion: dataActualizada.ultimaEdicion
+              const resultado = await escribirCamposEmbarque(db, embarqueId, {
+                baseRev: Number(dataActual.rev) || 0,
+                baseCampos: { noEnviadoMexico: dataActual.noEnviadoMexico },
+                campos: { noEnviadoMexico: nuevoEstado },
+                meta: { ultimaEdicion: dataActualizada.ultimaEdicion }
               });
+              dataActualizada.rev = resultado.rev;
 
               // Actualizar en IndexedDB también
               const snapshotOffline = this.construirSnapshotOfflineDesdeRemoto(
@@ -896,10 +900,14 @@ export default {
         }
       } catch (error) {
         console.error('[toggleNoEnviadoMexico] Error:', error);
+        if (esErrorConflictoEmbarque(error) && pedirRecargaPorConflicto(error)) {
+          window.location.reload();
+          return;
+        }
         this.mostrarNotificacionRespaldo(
           'error',
           '❌ Error',
-          'No se pudo actualizar el estado del embarque.'
+          esErrorConflictoEmbarque(error) ? error.message : 'No se pudo actualizar el estado del embarque.'
         );
         
         // Revertir el cambio local en caso de error

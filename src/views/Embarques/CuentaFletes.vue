@@ -104,7 +104,9 @@
 </template>
 
 <script>
-import { getFirestore, collection, getDocs, doc, writeBatch, addDoc, deleteDoc } from 'firebase/firestore';
+import { getFirestore, collection, getDocs, doc, addDoc, deleteDoc } from 'firebase/firestore';
+import { escribirCamposEmbarque } from '@/services/embarqueEscritura';
+import { esErrorConflictoEmbarque, pedirRecargaPorConflicto } from '@/utils/embarqueRevision';
 import html2pdf from 'html2pdf.js';
 
 import { formatearFecha } from '@/utils/formatters';
@@ -342,25 +344,45 @@ export default {
       this.$set(this.procesandoPagoPorId, flete.id, true);
       try {
         const db = getFirestore();
-        const ids = Array.isArray(flete.ids) && flete.ids.length > 0 ? flete.ids : [flete.id];
         const nuevoEstado = !flete.pagado;
         const pagoKey = obtenerClaveChoferPago(this.choferSeleccionado);
-        const datosPago = {
-          [`fletePagos.${pagoKey}`]: nuevoEstado,
-          fletePagoActualizadoEn: new Date(),
-          fletePagoActualizadoPor: this.choferSeleccionado
-        };
+        const documentos = Array.isArray(flete.documentos) && flete.documentos.length
+          ? flete.documentos
+          : [{
+            id: flete.id,
+            rev: flete.rev || 0,
+            fletePagado: flete.fletePagado === true,
+            fletePagos: flete.fletePagos || flete.pagosPorChofer || {},
+            fletePagoActualizadoEn: flete.fletePagoActualizadoEn || null,
+            fletePagoActualizadoPor: flete.fletePagoActualizadoPor || null
+          }];
 
-        if (esCargaDeUnSoloChofer(flete.cargaCon, this.choferSeleccionado)) {
-          datosPago.fletePagado = nuevoEstado;
+        for (const documento of documentos) {
+          const campos = {
+            [`fletePagos.${pagoKey}`]: nuevoEstado,
+            fletePagoActualizadoEn: new Date(),
+            fletePagoActualizadoPor: this.choferSeleccionado
+          };
+          const baseCampos = {
+            [`fletePagos.${pagoKey}`]: documento.fletePagos ? documento.fletePagos[pagoKey] : undefined,
+            fletePagoActualizadoEn: documento.fletePagoActualizadoEn,
+            fletePagoActualizadoPor: documento.fletePagoActualizadoPor
+          };
+          if (esCargaDeUnSoloChofer(flete.cargaCon, this.choferSeleccionado)) {
+            campos.fletePagado = nuevoEstado;
+            baseCampos.fletePagado = documento.fletePagado === true;
+          }
+          const resultado = await escribirCamposEmbarque(db, documento.id, {
+            baseRev: Number(documento.rev) || 0,
+            baseCampos,
+            campos,
+          });
+          documento.rev = resultado.rev;
+          documento.fletePagos = { ...(documento.fletePagos || {}), [pagoKey]: nuevoEstado };
+          documento.fletePagoActualizadoEn = campos.fletePagoActualizadoEn;
+          documento.fletePagoActualizadoPor = campos.fletePagoActualizadoPor;
+          if (campos.fletePagado !== undefined) documento.fletePagado = campos.fletePagado;
         }
-
-        const batch = writeBatch(db);
-        ids.forEach(id => {
-          batch.update(doc(db, 'embarques', id), datosPago);
-        });
-
-        await batch.commit();
 
         this.fletes = this.fletes.map(fleteLocal => {
           if (fleteLocal.id !== flete.id) return fleteLocal;
@@ -380,7 +402,11 @@ export default {
         this.marcarSync(nuevoEstado ? 'PAGO_OK' : 'PENDIENTE_OK');
       } catch (error) {
         console.error('Error al actualizar el estado de pago:', error);
-        alert('Error al actualizar el estado de pago. Por favor, intente de nuevo.');
+        if (esErrorConflictoEmbarque(error)) {
+          if (pedirRecargaPorConflicto(error)) window.location.reload();
+        } else {
+          alert('Error al actualizar el estado de pago. Por favor, intente de nuevo.');
+        }
       } finally {
         this.$delete(this.procesandoPagoPorId, flete.id);
       }

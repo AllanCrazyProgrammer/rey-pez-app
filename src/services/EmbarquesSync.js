@@ -3,6 +3,7 @@ import { collection, doc, documentId, getDocsFromServer, limit, orderBy, query, 
 import { db } from '@/firebase';
 import offline from './EmbarquesOfflineService';
 import { snapshotEmbarque } from '@/utils/embarqueOfflineSnapshot';
+import { quitarCamposAjenosAlEditor } from '@/utils/embarqueRevision';
 import { useAuthStore } from '@/stores/auth';
 
 export const estadoOffline = Vue.observable({
@@ -119,12 +120,13 @@ class EmbarquesSync {
               return;
             }
             if (!record.docData) throw new Error('Falta el contenido local del embarque');
-            const payload = { ...record.docData, rev: baseRev + 1,
-              ultimaEdicion: { userId: auth.userId, username: auth.user.username, timestamp: serverTimestamp() } };
-            if (remoteData) {
-              ['totalGanancias', 'rendimientoManual', 'fletePagado', 'fletePagos', 'fletePagoActualizadoEn', 'fletePagoActualizadoPor'].forEach(key => delete payload[key]);
-            }
-            // Preserve fields owned by other screens (freight payments, totals).
+            const payload = quitarCamposAjenosAlEditor({
+              ...record.docData,
+              rev: baseRev + 1,
+              ultimaEdicion: { userId: auth.userId, username: auth.user.username, timestamp: serverTimestamp() }
+            }, Boolean(remoteData), record.camposPendientesRendimientos);
+            // Preserve fields owned by other screens unless this device still
+            // has a pending Rendimientos edit for those exact fields.
             if (remote.exists()) transaction.update(reference, payload);
             else transaction.set(reference, payload);
             confirmed = snapshotEmbarque(record.id, {
