@@ -217,3 +217,31 @@ export const combinarKilosRefrigerados = (medidasPedido = [], ...fuentes) => {
 
   return resultado
 }
+
+// Desglose de solo lectura: no usa kilosRefrigerados guardados del pedido ni
+// suma embarques históricos. Conserva las variantes tal como fueron capturadas.
+export const desglosarRefriEmbarques = (embarques = []) => {
+  const filas = []
+  const vistos = new Set()
+  embarques.forEach((embarque, indiceEmbarque) => {
+    const embarqueId = embarque.id || `embarque-${indiceEmbarque}`
+    obtenerProductosRefri(embarque).forEach((producto, indiceProducto) => {
+      const id = `${embarqueId}:${producto.id || `producto-${indiceProducto}`}`
+      if (vistos.has(id)) return
+      vistos.add(id)
+      const kilos = calcularKilosProductoEmbarque(producto)
+      if (!(kilos > 0) || !Number.isFinite(kilos)) return
+      const tipo = (producto.tipo || '').toString().trim()
+      filas.push({
+        id,
+        medida: producto.nombreAlternativoPDF || producto.medida || 'Sin medida',
+        etiqueta: producto.etiqueta || '',
+        proveedor: producto.proveedor || '',
+        tipo: tipo === 'Otro' ? (producto.tipoPersonalizado || tipo) : tipo,
+        agua: tipo.toLowerCase() === 'c/h20' ? (Number(producto.camaronNeto) || 0.65) : null,
+        kilos
+      })
+    })
+  })
+  return filas
+}

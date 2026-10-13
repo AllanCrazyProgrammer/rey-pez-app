@@ -371,6 +371,7 @@
       </div>
 
       <!-- Sección de resumen por medida (solo en vista previa) -->
+      <div class="resumen-con-refri" :class="{ 'con-refri': refriAnterior.filas.length }">
       <div class="resumen-medidas">
         <div class="resumen-header-row">
           <h3 class="resumen-header">Resumen por Medida</h3>
@@ -635,6 +636,33 @@
           </p>
         </div>
       </div>
+      <aside v-if="refriAnterior.filas.length" class="refri-anterior" aria-labelledby="refri-anterior-titulo">
+        <header class="refri-anterior-header">
+          <span class="refri-anterior-icono" aria-hidden="true">🧊</span>
+          <div>
+            <h3 id="refri-anterior-titulo">Refri del embarque anterior</h3>
+            <p>{{ refriAnterior.fecha.split('-').reverse().join('/') }}</p>
+          </div>
+        </header>
+        <p class="refri-anterior-descripcion">Lo que quedó refrigerado en ese embarque.</p>
+        <ul class="refri-anterior-lista">
+          <li v-for="fila in refriAnterior.filas" :key="fila.id">
+            <div class="refri-anterior-producto">
+              <strong>{{ fila.medida }}</strong>
+              <small v-if="fila.etiqueta || fila.proveedor">{{ [fila.etiqueta, fila.proveedor].filter(Boolean).join(' · ') }}</small>
+              <small v-if="fila.tipo">{{ fila.tipo }}<template v-if="fila.agua !== null"> · Neto {{ fila.agua }}</template></small>
+            </div>
+            <span class="refri-anterior-kilos">{{ formatDecimal(fila.kilos) }} <small>kg</small></span>
+          </li>
+        </ul>
+        <footer class="refri-anterior-total">
+          <span>Total refrigerado</span>
+          <strong>{{ formatDecimal(refriAnterior.filas.reduce((total, fila) => total + fila.kilos, 0)) }} kg</strong>
+        </footer>
+        <p class="refri-anterior-nota">Solo consulta · Kilos netos registrados</p>
+      </aside>
+      </div>
+      <p v-if="refriAnterior.error" class="refri-anterior-error" role="status">{{ refriAnterior.error }}</p>
     </div>
 
     <ImagenCajasModal
@@ -680,6 +708,7 @@ import { formatearAgua, aguaEsPersonalizada } from '@/utils/factorAgua'
 import { normalizarFechaValor } from '@/utils/dateUtils'
 import {
   sumarKilosRefriPorMedida,
+  desglosarRefriEmbarques,
   sumarLimpiosResumenDiaPorMedida,
   combinarKilosRefrigerados
 } from '@/utils/kilosRefrigerados'
@@ -761,6 +790,8 @@ export default {
   },
   data() {
     return {
+      refriAnterior: { fecha: null, filas: [], error: '' },
+      refriAnteriorSolicitud: 0,
       rendimientos: this.rendimientosGuardados || {},
       divisores: this.divisoresGuardados || {},
       mostrarImagenCajas: false,
@@ -831,8 +862,21 @@ export default {
     this.aplicarEstadosCompletado();
     this.cargarResumenSacadaHoy();
     this.cargarMedidasCatalogo();
+    this.cargarRefriAnterior();
   },
   methods: {
+    async cargarRefriAnterior() {
+      const solicitud = ++this.refriAnteriorSolicitud
+      this.refriAnterior = { fecha: null, filas: [], error: '' }
+      try {
+        const anterior = await this.obtenerEmbarquesDelDiaAnterior()
+        if (solicitud !== this.refriAnteriorSolicitud) return
+        this.refriAnterior = { fecha: anterior.fecha, filas: desglosarRefriEmbarques(anterior.embarques), error: '' }
+      } catch (error) {
+        if (solicitud !== this.refriAnteriorSolicitud) return
+        this.refriAnterior = { fecha: null, filas: [], error: 'No se pudo consultar el Refri del embarque anterior.' }
+      }
+    },
     abrirImagenCajas() {
       this.pendientesImagenCajas = []
       this.filasImagenCajas = this.calcularTotalesPorMedida().reduce((filas, medida) => {
@@ -1092,6 +1136,7 @@ export default {
           medidasPedido
         })
         const embarqueAnterior = await this.obtenerEmbarquesDelDiaAnterior()
+        this.refriAnterior = { fecha: embarqueAnterior.fecha, filas: desglosarRefriEmbarques(embarqueAnterior.embarques), error: '' }
         const kilosRefriAnteriores = sumarKilosRefriPorMedida(
           embarqueAnterior.embarques,
           medidasPedido
@@ -1965,6 +2010,7 @@ export default {
     }
   },
   watch: {
+    fecha() { this.cargarRefriAnterior() },
     // Observar cambios en las props para actualizar los estados locales
     rendimientosGuardados: {
       handler(newVal) {
@@ -3902,3 +3948,31 @@ h4.cliente-header.ozuna-header {
 }
 
 </style> 
+
+<style scoped>
+.resumen-con-refri { max-width: 1200px; margin: 30px auto 0; }
+.resumen-con-refri.con-refri { display: grid; grid-template-columns: minmax(0, 1fr) 310px; gap: 24px; align-items: start; }
+.resumen-con-refri > .resumen-medidas { width: 100%; min-width: 0; margin-top: 0; }
+.refri-anterior { margin-top: 0; border: 1px solid #53c9c8; border-radius: 16px; overflow: hidden; background: #f5fffd; color: #193e43; box-shadow: 0 12px 28px #001d3933; }
+.refri-anterior-header { display: flex; align-items: center; gap: 12px; padding: 20px 18px; background: linear-gradient(120deg, #087e8b, #119d8b); color: white; }
+.refri-anterior-icono { font-size: 28px; }
+.refri-anterior-header h3 { margin: 0; font-size: 18px; line-height: 1.3; text-align: left; background: none; padding: 0; color: white; }
+.refri-anterior-header p { margin: 5px 0 0; font-size: 14px; color: #defffa; }
+.refri-anterior-descripcion { margin: 0; padding: 16px 18px 8px; font-size: 13px; line-height: 1.5; }
+.refri-anterior-lista { list-style: none; margin: 0; padding: 0 18px; }
+.refri-anterior-lista li { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 16px 0; border-bottom: 1px solid #d2e9e5; }
+.refri-anterior-producto { min-width: 0; overflow-wrap: anywhere; }
+.refri-anterior-producto strong { display: block; font-size: 18px; }
+.refri-anterior-producto small { display: block; margin-top: 4px; color: #506b70; font-size: 12px; }
+.refri-anterior-kilos { flex-shrink: 0; font-size: 20px; font-weight: 700; color: #087e80; font-variant-numeric: tabular-nums; }
+.refri-anterior-kilos small { font-size: 12px; }
+.refri-anterior-total { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 14px 12px 0; padding: 14px 10px; background: #ddf3ec; border-radius: 8px; font-size: 13px; }
+.refri-anterior-total strong { font-size: 18px; white-space: nowrap; }
+.refri-anterior-nota { margin: 12px 18px 16px; font-size: 11px; color: #506b70; }
+.refri-anterior-error { max-width: 1200px; margin: 12px auto; color: #9e3019; background: #fff2e9; padding: 12px; }
+@media (max-width: 1050px) {
+  .resumen-con-refri.con-refri { grid-template-columns: minmax(0, 1fr); }
+  .refri-anterior { width: 100%; max-width: 800px; margin: 0 auto; }
+}
+@media print { .refri-anterior, .refri-anterior-error { display: none !important; } }
+</style>
