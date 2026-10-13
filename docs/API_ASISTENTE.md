@@ -4,7 +4,7 @@ Cloud Function HTTPS para que el asistente de Allan pueda registrar movimientos 
 
 ## Descripción
 
-La función `asistente` expone nueve endpoints protegidos con autenticación por Bearer token:
+La función `asistente` expone endpoints protegidos con autenticación por Bearer token:
 
 **Limpios:**
 - **POST /salida** - Registra una salida de producto limpio
@@ -18,6 +18,12 @@ La función `asistente` expone nueve endpoints protegidos con autenticación por
 - **POST /crudos/deshacer** - Deshace una entrada o salida de crudos registrada previamente
 - **GET /crudos/existencias** - Consulta el inventario actual de crudos
 - **GET /crudos/dia** - Obtiene las entradas y salidas de un día específico de crudos
+
+**Pedidos, abonos y precios:**
+- **POST /pedidos/limpio**, **GET /pedidos/limpio**, **POST /pedidos/limpio/deshacer**
+- **POST /pedidos/crudo**, **GET /pedidos/crudo**, **POST /pedidos/crudo/deshacer**
+- **POST /abonos**, **GET /abonos**, **POST /abonos/deshacer**
+- **POST /precios**, **GET /precios**
 
 Todos los endpoints requieren autenticación mediante el header `Authorization: Bearer <API_KEY>`.
 
@@ -1766,6 +1772,175 @@ Cualquier otro nombre de cliente se trata como un cliente temporal y se guarda e
   createdAt: Timestamp
 }
 ```
+
+En `POST /pedidos/limpio` cada línea acepta además:
+
+- `etiqueta`: nombre de un botón ya creado en ese pedido (`pedido.etiquetas`). La comparación no distingue mayúsculas y se guarda el texto exacto del botón, por ejemplo `61 Selecta`. Si no existe, la respuesta es `VALIDACION_ERROR` e incluye `disponibles`.
+- Kilos en blanco: `cantidad: null`, `kilos: ""` o el campo omitido. Se guarda `kilos: null`, igual que una fila nueva de la UI. Con kilos presentes la cantidad sigue teniendo que ser mayor a 0.
+- Medida libre solo cuando los kilos van en blanco (por ejemplo `piojo con agua`). Con kilos, la medida tiene que existir.
+- `macuil` y `maquila` aceptan `tipo` de texto libre, incluido vacío. No se fuerza un glaseo del catálogo. En las demás medidas el tipo sigue siendo uno de la lista de la UI y se guarda con su escritura original (`1.35 y .15`, no en mayúsculas).
+- Si la fila va en blanco y no se envía `unidad`, Otilio queda en taras (`esTara: true`) y el resto en kilos. Si no se envía `tipo`, se usa el default de la fila nueva: Catarro y Ozuna `S/H20`, los demás vacío. Una fila en blanco de Ozuna guarda `esMaquila: true`.
+
+Las reglas de taras no cambian: 25 kg para Ozuna, Joselito y Lorena; 27 kg para Otilio, Catarro y temporales.
+
+## API de Abonos
+
+Registra un pago de cliente con la misma forma que el modal Sistema de Abonos (`StashModalV2`). Verónica y Lorena usan `cuentasVeronica`. Cada nota es un documento y los pagos viven en el arreglo `abonos`.
+
+Colecciones: `cuentasVeronica`, `cuentasOtilio`, `cuentasCatarro`, `cuentasJoselito`, `cuentasOzuna`, `cuentasOtilioIndependiente`. El alias `lorena` apunta a Verónica.
+
+### POST /abonos
+
+**Body:**
+
+```json
+{
+  "cliente": "lorena",
+  "monto": 1000,
+  "metodo": "Transferencia",
+  "fecha": "2026-10-13",
+  "modo": "cascada",
+  "idempotencyKey": "abono-13-oct"
+}
+```
+
+`metodo` es `Transferencia`, `Efectivo` o `Deposito`. `esEfectivo` queda en true solo para Efectivo. La descripción se arma como la UI: `13/10/2026 - Transferencia`.
+
+`modo: "cascada"` reparte el monto desde la nota pendiente más antigua. El tope de cada nota es su saldo (`totalGeneralVenta - cobros - correcciones - abonos`). Todas las partes comparten el mismo `stashItemId`. La ventana es la de la UI: las 50 notas con fecha más reciente. Una nota con `estadoPagado: true` no entra.
+
+`modo: "nota"` exige `nota` (id del documento o su fecha) y aplica el monto completo a esa nota, aunque supere el saldo.
+
+Cada elemento agregado al arreglo queda así:
+
+```json
+{
+  "descripcion": "13/10/2026 - Transferencia",
+  "monto": 400,
+  "fecha": "2026-10-13T00:00:00",
+  "fechaOriginalStash": "2026-10-13",
+  "esEfectivo": false,
+  "stashItemId": "abc123"
+}
+```
+
+La nota también actualiza `nuevoSaldoAcumulado`, `estadoPagado` (`nuevoSaldoAcumulado <= 0.01`) y `ultimaActualizacion`, como `aplicarAbonosACuenta`.
+
+Ozuna no tiene `totalGeneralVenta`. La cascada usa `nuevoSaldoAcumulado`, que es el saldo que el propio modal muestra como pendiente, y lo descuenta. El ciclo literal de la UI volvería a calcular con `totalGeneralVenta` y se saltaría la nota.
+
+Si el monto no cabe en las notas pendientes, el sobrante se guarda en `stash_<cliente>` con la forma de "agregar al stash" (`fecha`, `descripcion`, `monto`, `fechaCreacion`, `esEfectivo`, `metodo`) para que siga visible en el modal. El botón de la UI borra el stash completo, incluido ese sobrante; la API no lo descarta.
+
+`dryRun: true` no escribe. Repetir `idempotencyKey` devuelve la misma respuesta.
+
+**Respuesta:**
+
+```json
+{
+  "success": true,
+  "operation": "abonos_create",
+  "cliente": "veronica",
+  "coleccion": "cuentasVeronica",
+  "modo": "cascada",
+  "monto": 1000,
+  "stashItemId": "abc123",
+  "totalAplicado": 1000,
+  "sobrante": 0,
+  "stashSobranteId": null,
+  "aplicaciones": [
+    {
+      "notaId": "2026-08-01",
+      "fecha": "2026-08-01",
+      "monto": 400,
+      "saldoPendienteAntes": 400,
+      "saldoPendienteDespues": 0,
+      "nuevoSaldoAcumulado": 0,
+      "estadoPagado": true,
+      "abono": { "descripcion": "13/10/2026 - Transferencia", "monto": 400, "fecha": "2026-10-13T00:00:00", "fechaOriginalStash": "2026-10-13", "esEfectivo": false, "stashItemId": "abc123" }
+    }
+  ]
+}
+```
+
+### GET /abonos?cliente=veronica
+
+Devuelve el saldo de la nota más reciente (`nuevoSaldoAcumulado`, igual que el modal) y las notas con saldo pendiente. `enCascada` indica si esa nota entra en la ventana de 50.
+
+### POST /abonos/deshacer
+
+```json
+{ "idempotencyKey": "abono-13-oct", "undoIdempotencyKey": "undo-abono-13-oct" }
+```
+
+Quita de cada nota el abono creado por el asistente, recalcula el saldo y borra el sobrante del stash si sigue con el mismo monto. Si el abono o el sobrante fueron editados, responde `409 FILA_MODIFICADA`. La segunda vez, con otra llave de deshacer, responde `400 YA_DESHECHO`.
+
+## API de Pedido Crudo
+
+El grid de `PedidosCrudo.vue` guarda `pedidos[Cliente][columna]` en taras. Los clientes son `8a`, `Catarro`, `Otilio`, `Ozuna` y `Veronica`. Lorena se escribe en Veronica. Las columnas base se guardan como `Med`, `Med-Esp`, `Med-gde`, `Gde`, `Extra`, `Jumbo` y `Cam s/c` (la pantalla les agrega ` c/c` al mostrarlas, salvo `Cam s/c`). La clave interna va en minúsculas.
+
+### POST /pedidos/crudo
+
+```json
+{
+  "fecha": "2026-10-11",
+  "idempotencyKey": "crudo-11",
+  "celdas": [
+    { "cliente": "lorena", "medida": "Med c/c", "taras": 10 },
+    { "cliente": "8a", "medida": "Cam s/c", "taras": 4 }
+  ]
+}
+```
+
+También acepta `pedidos: { "Ozuna": { "Jumbo c/c": 2 } }`. Si ya hay un pedido `tipo: "crudo"` de esa fecha, solo se reemplazan las celdas enviadas. Kilos y taras del documento se recalculan con todas las celdas (`kilos = floor(suma de taras * 19)`, `taras = floor(suma)`), igual que al guardar en la UI. Si no existe, se crea con las columnas base. Una columna que no sea de la base se agrega a `columnas` y `columnasAdicionales`.
+
+### GET /pedidos/crudo?fecha=YYYY-MM-DD
+
+Devuelve el pedido. Si hay más de uno para la fecha, usa el de `createdAt` más reciente e informa `pedidosEnFecha`.
+
+### POST /pedidos/crudo/deshacer
+
+```json
+{ "idempotencyKey": "crudo-11", "undoIdempotencyKey": "undo-crudo-11" }
+```
+
+Si el asistente creó el documento y nadie agregó otras celdas, lo borra. Si solo mezcló celdas, restaura los valores anteriores y conserva el resto. Una celda editada después responde `409 FILA_MODIFICADA`.
+
+## API de Precios de venta
+
+Escribe en la colección `precios` el mismo documento que `PreciosHistorialModal.vue`:
+
+```json
+{
+  "producto": "Med-Esp c/c",
+  "precio": 185,
+  "fecha": "2026-10-13",
+  "categoria": "Camarón C/C",
+  "timestamp": 1760000000000,
+  "fechaCreacion": "2026-10-13",
+  "horaCreacion": "9:30:00"
+}
+```
+
+`clienteId` solo se agrega en un precio de cliente, en minúsculas (`joselito`, `catarro`, `otilio`, `ozuna`, `veronica`). Lorena se guarda como `veronica`, que es el id del modal. La categoría sale del nombre: `s/c` o una talla `21/25` es `Camarón S/C`; `c/c` es `Camarón C/C`; el resto es `Otros`.
+
+El nombre pasa por los alias de `normalizarNombreProductoPrecio` (`Med Esp c/c` y `Med Gde c/c` quedan en `Med-Esp c/c` y `Med-Gde c/c`). Un nombre que no cae en un producto ya registrado, en esos alias o en `Precio maquila Ozuna` se rechaza con `PRODUCTO_DESCONOCIDO` y `sugerencias`. `51-60` se guarda como el `51/60` que ya esté en el catálogo.
+
+`fechaCreacion` y `horaCreacion` usan la zona `America/Mexico_City`.
+
+### POST /precios
+
+```json
+{
+  "producto": "Med esp c/c",
+  "precio": 185,
+  "fecha": "2026-10-13",
+  "clienteId": "veronica",
+  "idempotencyKey": "precio-med-esp",
+  "dryRun": false
+}
+```
+
+### GET /precios?fecha=YYYY-MM-DD&cliente=veronica&producto=51/60
+
+Sin `fecha` se usa el día en México. El precio vigente es el de `preciosHistoricos.js`: el más reciente con fecha menor o igual a la consultada; un precio del cliente gana sobre el general; la talla base se usa solo si no hay coincidencia exacta. Sin `cliente`, la respuesta trae `generales` y `porCliente` para los cinco clientes del modal.
 
 ## Contacto
 

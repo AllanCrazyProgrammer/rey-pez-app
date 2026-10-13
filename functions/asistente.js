@@ -11,6 +11,10 @@ const {
   calcularDisponibles,
   obtenerOpcionesDisponibles
 } = require('./lib/inventario');
+const { construirLineasPedidoLimpio } = require('./lib/pedidosLimpioLineas');
+const { crearHandlersAbonos } = require('./lib/abonosClientes');
+const { crearHandlersPedidosCrudo } = require('./lib/pedidosCrudo');
+const { crearHandlersPrecios } = require('./lib/preciosVenta');
 
 /**
  * Genera un ID único para identificar filas creadas por el asistente.
@@ -2280,139 +2284,28 @@ async function handlePostPedidosLimpio(req, res) {
     medidaNombresMap.set('macuil', 'macuil');
     medidaNombresMap.set('maquila', 'maquila');
 
-    // Validar y normalizar líneas
-    const errores = [];
-    const lineasNormalizadas = [];
+    // Los botones de etiqueta viven en el pedido del día. Hay que conocerlos
+    // antes de aceptar item.etiqueta.
+    const pedidosExistentes = await db.collection('pedidos')
+      .where('fecha', '==', fecha)
+      .where('tipo', '==', 'limpio')
+      .get();
+    const etiquetasDisponibles = pedidosExistentes.empty
+      ? []
+      : (Array.isArray(pedidosExistentes.docs[0].data().etiquetas)
+        ? pedidosExistentes.docs[0].data().etiquetas
+        : []);
 
-    for (let i = 0; i < lineas.length; i++) {
-      const linea = lineas[i];
-      const idx = i + 1;
-
-      // Validar cliente
-      const cliente = String(linea.cliente || '').trim().toLowerCase();
-      if (!cliente) {
-        errores.push({ linea: idx, campo: 'cliente', mensaje: 'El cliente es requerido' });
-        continue;
-      }
-
-      // Validar cantidad y unidad
-      const cantidad = numeroPositivo(linea.cantidad);
-      if (!cantidad) {
-        errores.push({ linea: idx, campo: 'cantidad', mensaje: 'La cantidad debe ser mayor a 0' });
-        continue;
-      }
-
-      const unidad = String(linea.unidad || '').trim().toLowerCase();
-      if (!['taras', 'kg'].includes(unidad)) {
-        errores.push({ linea: idx, campo: 'unidad', mensaje: 'La unidad debe ser "taras" o "kg"' });
-        continue;
-      }
-
-      // Validar medida
-      const medidaNombre = String(linea.medida || '').trim();
-      if (!medidaNombre) {
-        errores.push({ linea: idx, campo: 'medida', mensaje: 'La medida es requerida' });
-        continue;
-      }
-
-      const medidaKey = medidaNombre.toLowerCase();
-      
-      // Check if valid (ANY doc with this nombre has tipo granja/especial)
-      if (!validMedidaNombres.has(medidaKey)) {
-        // Sugerir medidas similares
-        const sugerencias = Array.from(medidaNombresMap.values())
-          .filter(n => n.toLowerCase().includes(medidaKey) || medidaKey.includes(n.toLowerCase()))
-          .slice(0, 3);
-        
-        errores.push({
-          linea: idx,
-          campo: 'medida',
-          mensaje: `Medida "${medidaNombre}" no encontrada o no es válida para pedidos limpio`,
-          sugerencias: sugerencias.length > 0 ? sugerencias : undefined
-        });
-        continue;
-      }
-      
-      // Use exact nombre from valid doc (prefer granja/especial version)
-      const exactNombre = medidaNombresMap.get(medidaKey) || medidaNombre;
-
-      // Normalizar tipo (glaseo)
-      let tipo = String(linea.tipo || linea.glaseo || '').trim();
-      if (tipo) {
-        tipo = tipo.toUpperCase();
-        if (!['S/H20', 'C/H20', '1.4', '1.5', '1.35 Y .15', '1.3 Y .2', '1.5 Y .3', '.7 Y .3', '.9 Y .1', '.9'].includes(tipo)) {
-          errores.push({
-            linea: idx,
-            campo: 'tipo',
-            mensaje: `Tipo/glaseo inválido: ${tipo}. Opciones: S/H20, C/H20, 1.4, 1.5, 1.35 y .15, 1.3 y .2, 1.5 y .3, .7 y .3, .9 y .1, .9`
-          });
-          continue;
-        }
-      } else {
-        tipo = '';
-      }
-
-      // Normalizar nota (Notas/Sellado/Kileado)
-      const notaValor = linea.nota || '';
-      const nota = ['Sellado', 'Kileado'].includes(notaValor) ? notaValor : '';
-
-      lineasNormalizadas.push({
-        cliente,
-        cantidad,
-        unidad,
-        medida: exactNombre,
-        tipo,
-        nota,
-        proveedor: linea.proveedor || ''
-      });
-    }
+    const { errores, lineasNormalizadas, pedidoPorCliente } = construirLineasPedidoLimpio(lineas, {
+      validMedidaNombres,
+      medidaNombresMap,
+      etiquetasDisponibles,
+      generarAsistenteId
+    });
 
     if (errores.length > 0) {
       return errorResponse(res, 400, 'VALIDACION_ERROR', 
         'Errores de validación en las líneas', { errores });
-    }
-
-    // Agrupar líneas por cliente
-    const pedidoPorCliente = {
-      otilio: [],
-      catarro: [],
-      joselito: [],
-      lorena: [],
-      ozuna: [],
-      clientesTemporales: {}
-    };
-
-    for (const linea of lineasNormalizadas) {
-      const item = {
-        kilos: linea.cantidad,
-        esTara: linea.unidad === 'taras',
-        medida: linea.medida,
-        tipo: linea.tipo,
-        nota: linea.nota,
-        esProveedor: !!linea.proveedor,
-        proveedor: linea.proveedor,
-        etiqueta: '',
-        _asistenteId: generarAsistenteId()
-      };
-      
-      // Set agua field for C/H20 lines (like the UI does)
-      if (linea.tipo === 'C/H20') {
-        item.agua = AGUA_DEFAULT;
-      }
-
-      if (CLIENTES_FIJOS.includes(linea.cliente)) {
-        pedidoPorCliente[linea.cliente].push(item);
-      } else {
-        // Cliente temporal
-        if (!pedidoPorCliente.clientesTemporales[linea.cliente]) {
-          pedidoPorCliente.clientesTemporales[linea.cliente] = {
-            id: linea.cliente,
-            nombre: linea.cliente.charAt(0).toUpperCase() + linea.cliente.slice(1),
-            pedidos: []
-          };
-        }
-        pedidoPorCliente.clientesTemporales[linea.cliente].pedidos.push(item);
-      }
     }
 
     // Calcular totales
@@ -2450,12 +2343,6 @@ async function handlePostPedidosLimpio(req, res) {
       });
     }
     
-    // Buscar si ya existe un pedido para esta fecha
-    const pedidosExistentes = await db.collection('pedidos')
-      .where('fecha', '==', fecha)
-      .where('tipo', '==', 'limpio')
-      .get();
-
     let pedidoId;
     let operation;
     let before = null;
@@ -2493,6 +2380,18 @@ async function handlePostPedidosLimpio(req, res) {
         }
         
         const currentData = freshSnap.data();
+        const etiquetasFrescas = Array.isArray(currentData.etiquetas) ? currentData.etiquetas : [];
+        const etiquetaFuera = lineasNormalizadas.find((linea) =>
+          linea.etiqueta && !etiquetasFrescas.includes(linea.etiqueta)
+        );
+        if (etiquetaFuera) {
+          throw {
+            code: 'ETIQUETA_DESCONOCIDA',
+            message: `La etiqueta "${etiquetaFuera.etiqueta}" ya no está entre los botones de este pedido`,
+            status: 400,
+            details: { disponibles: etiquetasFrescas }
+          };
+        }
         
         // APPEND assistant lines to existing arrays
         const updatedData = {
@@ -3013,6 +2912,10 @@ async function handlePostPedidosLimpioDeshacer(req, res) {
 }
 
 // Export handlers for testing
+const abonosHandlers = crearHandlersAbonos({ db, admin, errorResponse });
+const pedidosCrudoHandlers = crearHandlersPedidosCrudo({ db, admin, errorResponse, generarAsistenteId });
+const preciosHandlers = crearHandlersPrecios({ db, admin, errorResponse });
+
 if (process.env.NODE_ENV === 'test') {
   exports._testHandlers = {
     handlePostPedidosLimpio,
@@ -3020,7 +2923,10 @@ if (process.env.NODE_ENV === 'test') {
     handlePostPedidosLimpioDeshacer,
     calcularTotalesClientePedidoLimpio,
     handlePostSalida,
-    handlePostCrudosSalida
+    handlePostCrudosSalida,
+    ...abonosHandlers,
+    ...pedidosCrudoHandlers,
+    ...preciosHandlers
   };
 }
 
@@ -3096,9 +3002,41 @@ exports.asistente = onRequest(
     if (path === '/pedidos/limpio/deshacer' && method === 'POST') {
       return handlePostPedidosLimpioDeshacer(req, res);
     }
+
+    if (path === '/pedidos/crudo/deshacer' && method === 'POST') {
+      return pedidosCrudoHandlers.handlePostPedidosCrudoDeshacer(req, res);
+    }
+
+    if (path === '/pedidos/crudo' && method === 'POST') {
+      return pedidosCrudoHandlers.handlePostPedidosCrudo(req, res);
+    }
+
+    if (path === '/pedidos/crudo' && method === 'GET') {
+      return pedidosCrudoHandlers.handleGetPedidosCrudo(req, res);
+    }
+
+    if (path === '/abonos/deshacer' && method === 'POST') {
+      return abonosHandlers.handlePostAbonosDeshacer(req, res);
+    }
+
+    if (path === '/abonos' && method === 'POST') {
+      return abonosHandlers.handlePostAbonos(req, res);
+    }
+
+    if (path === '/abonos' && method === 'GET') {
+      return abonosHandlers.handleGetAbonos(req, res);
+    }
+
+    if (path === '/precios' && method === 'POST') {
+      return preciosHandlers.handlePostPrecios(req, res);
+    }
+
+    if (path === '/precios' && method === 'GET') {
+      return preciosHandlers.handleGetPrecios(req, res);
+    }
     
     return res.status(404).json({ 
-      error: 'Ruta no encontrada. Rutas disponibles: POST /salida, POST /deshacer, GET /existencias, GET /dia, POST /crudos/entrada, POST /crudos/salida, POST /crudos/deshacer, GET /crudos/existencias, GET /crudos/dia, POST /pedidos/limpio, GET /pedidos/limpio, POST /pedidos/limpio/deshacer' 
+      error: 'Ruta no encontrada. Rutas disponibles: POST /salida, POST /deshacer, GET /existencias, GET /dia, POST /crudos/entrada, POST /crudos/salida, POST /crudos/deshacer, GET /crudos/existencias, GET /crudos/dia, POST /pedidos/limpio, GET /pedidos/limpio, POST /pedidos/limpio/deshacer, POST /pedidos/crudo, GET /pedidos/crudo, POST /pedidos/crudo/deshacer, POST /abonos, GET /abonos, POST /abonos/deshacer, POST /precios, GET /precios' 
     });
   }
 );
