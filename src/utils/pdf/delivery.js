@@ -19,5 +19,30 @@ export async function entregarPdf(pdf, filename, webAction = 'download', buffer 
     const bytes = buffer || await obtenerBufferPdf(pdf);
     return window.desktop.savePdf(new Uint8Array(bytes), filename, notePeriod);
   }
+  // pdfMake mutates its layout while rendering. Reuse the bytes already made
+  // for Drive instead of rendering the same document again in the browser.
+  if (buffer) {
+    const url = URL.createObjectURL(new Blob([buffer], { type: 'application/pdf' }));
+    try {
+      const link = document.createElement('a');
+      link.href = url;
+      if (webAction === 'open') {
+        link.target = '_blank';
+        link.rel = 'noopener';
+      } else {
+        link.download = filename;
+      }
+      document.body.appendChild(link);
+      try {
+        link.click();
+      } finally {
+        link.remove();
+      }
+    } finally {
+      // Allow browser viewers/downloads time to consume the object URL.
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    }
+    return;
+  }
   return webAction === 'open' ? pdf.open() : pdf.download(filename);
 }
