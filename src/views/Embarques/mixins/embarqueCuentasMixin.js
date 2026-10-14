@@ -1,6 +1,22 @@
 import EmbarqueCuentasService from '@/utils/services/EmbarqueCuentasService';
-import { ozunaCuentas, veronicaCuentas } from '@/services/cuentas.service';
+import { catarrosCuentas, ozunaCuentas, veronicaCuentas } from '@/services/cuentas.service';
 import { normalizarFechaISO } from '@/utils/dateUtils';
+import {
+  CUENTAS_AUTOMATICAS_RESUMEN,
+  cuentasFaltantesParaResumen,
+} from '@/utils/cuentasResumenEmbarque';
+
+const SERVICIOS_CUENTA_RESUMEN = {
+  ozuna: ozunaCuentas,
+  veronica: veronicaCuentas,
+  catarro: catarrosCuentas,
+};
+
+const CREADORES_CUENTA_RESUMEN = {
+  ozuna: (datos) => EmbarqueCuentasService.crearCuentaOzuna(datos, null),
+  veronica: (datos) => EmbarqueCuentasService.crearCuentaVeronica(datos, null),
+  catarro: (datos) => EmbarqueCuentasService.crearCuentaCatarro(datos, null),
+};
 
 export const embarqueCuentasMixin = {
   data() {
@@ -68,18 +84,16 @@ export const embarqueCuentasMixin = {
         }
 
         const fecha = normalizarFechaISO(this.embarque?.fecha);
-        const [existeOzuna, existeVeronica] = await Promise.all([
-          this.existeCuentaParaResumen(ozunaCuentas, fecha),
-          this.existeCuentaParaResumen(veronicaCuentas, fecha),
-        ]);
-
-        const faltantes = [];
-        if (!existeOzuna) {
-          faltantes.push({ id: 'ozuna', clienteId: '4', nombre: 'Ozuna' });
-        }
-        if (!existeVeronica) {
-          faltantes.push({ id: 'veronica', clienteId: '5', nombre: 'Lorena / Verónica' });
-        }
+        const existencia = await Promise.all(
+          CUENTAS_AUTOMATICAS_RESUMEN.map((cuenta) =>
+            this.existeCuentaParaResumen(SERVICIOS_CUENTA_RESUMEN[cuenta.id], fecha)
+          )
+        );
+        const existePorId = {};
+        CUENTAS_AUTOMATICAS_RESUMEN.forEach((cuenta, index) => {
+          existePorId[cuenta.id] = existencia[index];
+        });
+        const faltantes = cuentasFaltantesParaResumen(existePorId);
 
         if (faltantes.length === 0) return true;
 
@@ -90,7 +104,7 @@ export const embarqueCuentasMixin = {
       } catch (error) {
         console.error('[Resumen Embarque] No se pudieron verificar las cuentas:', error);
         alert(
-          'No se pudo comprobar si ya existen las cuentas de Ozuna y Lorena/Verónica. ' +
+          'No se pudo comprobar si ya existen las cuentas de Ozuna, Lorena/Verónica y Catarro. ' +
           'Revisa tu conexión e intenta nuevamente.'
         );
         return false;
@@ -124,11 +138,11 @@ export const embarqueCuentasMixin = {
           const datosCuenta = this.construirDatosCuentaResumen(cuenta.clienteId);
 
           try {
-            if (cuenta.id === 'ozuna') {
-              await EmbarqueCuentasService.crearCuentaOzuna(datosCuenta, null);
-            } else {
-              await EmbarqueCuentasService.crearCuentaVeronica(datosCuenta, null);
+            const crearCuenta = CREADORES_CUENTA_RESUMEN[cuenta.id];
+            if (!crearCuenta) {
+              throw new Error(`No hay creación automática de cuenta para ${cuenta.nombre || cuenta.id}.`);
             }
+            await crearCuenta(datosCuenta);
           } catch (error) {
             // Si otro dispositivo la creó después de la verificación, ya se
             // cumplió el objetivo y podemos continuar con la siguiente.
