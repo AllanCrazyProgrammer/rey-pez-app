@@ -5,6 +5,8 @@ export const useUIStore = defineStore('ui', {
     activeModal: null,
     modalData: null,
     notifications: [],
+    pdfPreview: null,
+    pdfAlert: '',
     navbarVisibleEnEmbarque: false,
   }),
 
@@ -13,6 +15,20 @@ export const useUIStore = defineStore('ui', {
   },
 
   actions: {
+    showPdfAlert(message) { this.pdfAlert = message; },
+    showPdfPreview(data, name) {
+      this.closePdfPreview();
+      this.pdfPreview = { name, url: URL.createObjectURL(new Blob([data], { type: 'application/pdf' })) };
+    },
+
+    closePdfPreview() {
+      if (this.pdfPreview) URL.revokeObjectURL(this.pdfPreview.url);
+      this.pdfPreview = null;
+    },
+
+    dismissNotification(id) {
+      this.notifications = this.notifications.filter(n => n.id !== id);
+    },
     openModal(name, data = null) {
       this.activeModal = name;
       this.modalData = data;

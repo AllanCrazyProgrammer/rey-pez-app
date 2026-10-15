@@ -21,33 +21,43 @@ function load(file, mocks = {}, window = {}) {
   return module.exports;
 }
 
-test('real summary PDF uses shipment date and delivers identical bytes to local storage and Drive', async () => {
+test('summary asks each time, previews without saving, and only queues PDFs with consent', async () => {
   const delivered = [];
   const queued = [];
-  const window = { desktop: { savePdf: async (data, name, period) => { delivered.push({ data, name, period }); return { canceled: false }; } } };
+  let consent = false;
+  let prompts = 0;
+  let batches = 0;
+  const ui = { showPdfPreview: (data, name) => delivered.push({ data, name }) };
+  const window = { desktop: { savePdf: async () => { throw new Error('Preview must not save to disk'); } } };
   const filenames = load('src/utils/pdf/filename.js');
-  const delivery = load('src/utils/pdf/delivery.js', {}, window);
-  const summary = load('src/utils/pdf/resumenEmbarque.js', {}, window);
+  const summary = load('src/utils/pdf/resumenEmbarque.js', { '@/stores/ui': { useUIStore: () => ui } }, window);
   const mixin = load('src/views/Embarques/mixins/pdfGenerationMixin.js', {
-    '@/utils/pdfGenerator': {}, '@/utils/pdf/resumenTaras': {
+    '@/stores/ui': { useUIStore: () => ui },
+    '@/utils/pdfGenerator': { generarNotaVentaPDF: async () => ({ data: new Uint8Array([37,80,68,70]) }) }, '@/utils/pdf/resumenTaras': {
       generarResumenTarasPDF: async () => ({ data: new Uint8Array([37,80,68,70]), name: 'taras.pdf' })
     },
     '@/services/RendimientosReport': { generarRendimientosParaResumen: async () => ({ data: new Uint8Array([37,80,68,70]), name: 'rendimientos.pdf' }) },
-    '@/utils/pdf/reportDelivery': { guardarYRespaldarReporte: async (tipo, shipment, data, destination) => {
-      delivered.push({ data, name: destination.name }); queued.push({ id: tipo, data, name: destination.name });
-    } },
     '@/utils/pdf/resumenEmbarque': summary, '@/utils/pdf/filename': filenames,
-    '@/utils/pdf/delivery': delivery,
-    '@/services/DriveNotasSync': { agruparRespaldoDrive: async work => work(), driveNotasDisponible: () => true, encolarNotaDrive: async data => queued.push(data) }
+    '@/services/DriveNotasSync': { agruparRespaldoDrive: async work => { batches++; return work(); }, driveNotasDisponible: () => true, encolarNotaDrive: async data => queued.push(data) }
   }).default;
-  const instance = { ...mixin.methods, embarque: { id: 'shipment-1', fecha: '2025-02-03', cargaCon: 'José / Porro' },
+  const instance = { ...mixin.methods, $refs: { subirResumen: { solicitar: async () => { prompts++; return consent; } } }, embarque: { id: 'shipment-1', fecha: '2025-02-03', cargaCon: 'José / Porro' },
     clienteCrudos: {}, productosPorCliente: {}, clientesDisponibles: [], obtenerNombreCliente: id => id };
   await instance.generarPDFResumen(100);
+  assert.equal(delivered.length, 1);
+  assert.equal(queued.length, 0, 'declining never enqueues a PDF');
+  assert.equal(batches, 0, 'declining never starts a Drive sync');
+  consent = null;
+  await instance.generarPDFResumen(100);
+  assert.equal(delivered.length, 1, 'closing cancels generation');
+  assert.equal(queued.length, 0);
+  consent = true;
+  delivered.length = 0;
+  await instance.generarPDFResumen(100);
   assert.equal(queued.length, 3);
-  assert.equal(delivered.length, 3);
+  assert.equal(delivered.length, 1, 'only the summary is previewed');
   assert.equal(queued[0].name, 'Resumen-Embarque-Jose-Porro-3-feb-25.pdf');
   assert.equal(delivered[0].name, queued[0].name);
-  assert.equal(JSON.stringify(delivered[0].period), '{"year":2025,"month":2,"day":3}');
+  assert.equal(JSON.stringify(queued[0].period), '{"year":2025,"month":2,"day":3}');
   assert.deepEqual(Buffer.from(delivered[0].data), Buffer.from(queued[0].data));
   assert.equal(Buffer.from(queued[0].data).subarray(0, 5).toString(), '%PDF-');
   assert.ok(queued[0].data.length > 5000);
@@ -57,6 +67,7 @@ test('real summary PDF uses shipment date and delivers identical bytes to local 
   instance.embarqueId = 'shipment-2';
   await instance.generarPDFResumen(100);
   assert.notEqual(queued[0].id, queued[6].id, 'another shipment has a distinct queue entry');
+  assert.equal(prompts, 5, 'the choice is requested for every summary');
   assert.throws(() => filenames.nombreArchivoResumen({ fecha: 'invalid' }), /fecha/);
   assert.equal(filenames.nombreArchivoResumen({ fecha: { seconds: Date.UTC(2026, 8, 25) / 1000 } }), 'Resumen-Embarque-25-sept-26.pdf');
 });

@@ -64,17 +64,25 @@ test('disk failure aborts the write and never claims or queues a successful loca
   assert.equal(queued.length, 0);
 });
 
-test('real taras PDF is saved and queued with shipment identity and date', async () => {
-  const saved = [];
-  const window = { desktop: { savePdf: async (data, name, period) => { saved.push({ data, name, period }); return {}; } } };
+test('real taras PDF is previewed without saving or queuing and can be prepared for an authorized backup', async () => {
+  const previews = [];
+  const window = {
+    desktop: { savePdf: async () => { throw new Error('Must not save'); } },
+    showSaveFilePicker: async () => { throw new Error('Must not ask to save'); }
+  };
   const { mocks, queued } = setup(window);
+  mocks['@/stores/ui'] = { useUIStore: () => ({ showPdfPreview: (data, name) => previews.push({ data, name }) }) };
   const { generarResumenTarasPDF } = load('src/utils/pdf/resumenTaras.js', mocks, window);
   await generarResumenTarasPDF(shipment, []);
-  assert.equal(saved.length, 1);
-  assert.equal(queued.length, 1);
-  assert.equal(saved[0].name, 'Resumen-Taras-Jose-Porro-26-sept-26.pdf');
-  assert.equal(Buffer.from(saved[0].data).subarray(0,5).toString(), '%PDF-');
-  assert.deepEqual(Buffer.from(saved[0].data), Buffer.from(queued[0].data));
+  assert.equal(previews.length, 1);
+  assert.equal(queued.length, 0);
+  assert.equal(previews[0].name, 'Resumen-Taras-Jose-Porro-26-sept-26.pdf');
+  assert.equal(Buffer.from(previews[0].data).subarray(0,5).toString(), '%PDF-');
+  const report = await generarResumenTarasPDF(shipment, [], { returnForDrive: true });
+  assert.equal(report.name, previews[0].name);
+  assert.equal(Buffer.from(report.data).subarray(0,5).toString(), '%PDF-');
+  assert.equal(previews.length, 1, 'preparing a backup must not open another viewer');
+  assert.equal(queued.length, 0, 'only the authorized caller queues the PDF');
 });
 
 test('rendimientos generates once, saves and queues the same PDF, and cancellation skips generation', async () => {

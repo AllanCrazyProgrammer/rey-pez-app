@@ -1,11 +1,13 @@
 <template>
   <div>
-    <aside v-if="state.pending || state.syncing || state.error" class="drive-progress" role="status">
+    <aside v-if="!noticeDismissed && (state.pending || state.syncing || state.error)" class="drive-progress" role="status">
       <span class="drive-progress-icon" aria-hidden="true">☁</span>
       <div><strong>{{ title }}</strong><p>{{ detail }}</p></div>
       <button type="button" @click="$emit('open-settings')">Ver respaldos</button>
+      <button type="button" @click="noticeDismissed = true">Cerrar</button>
     </aside>
     <dialog ref="confirm" class="drive-confirm" aria-labelledby="drive-confirm-title" aria-describedby="drive-confirm-description" @cancel.prevent="answer(false)">
+      <button type="button" class="postpone" @click="answer(false)">Cerrar</button>
       <div class="drive-confirm-icon" aria-hidden="true">↻</div>
       <p class="drive-eyebrow">RESPALDO EN GOOGLE DRIVE</p>
       <h2 id="drive-confirm-title">{{ files.length === 1 ? 'Este PDF ya existe' : 'Estos PDF ya existen' }}</h2>
@@ -26,13 +28,15 @@
 <script>
 import { estadoDrive, iniciarSincronizacionDrive, responderReemplazoDrive } from '@/services/DriveNotasSync';
 export default {
-  data: () => ({ state: estadoDrive, selectedFiles: [] }),
+  data: () => ({ state: estadoDrive, selectedFiles: [], noticeDismissed: false }),
   computed: {
     files() { return this.state.replacementRequest || []; },
     title() { return this.state.syncing ? 'Respaldando PDF en Drive…' : this.state.error ? 'No se completó el respaldo' : `${this.state.pending} PDF pendientes en este equipo`; },
     detail() { return this.state.error || (!this.state.connected ? 'Conecta Google Drive para subirlos.' : this.state.needsAuth ? 'Reconecta Google Drive para continuar.' : 'Revisa los archivos pendientes desde Respaldos.'); }
   },
   watch: {
+    'state.error'(value) { if (value) this.noticeDismissed = false; },
+    'state.pending'(value, previous) { if (value > previous) this.noticeDismissed = false; },
     'state.replacementRequest': { immediate: true, async handler(request) {
       this.selectedFiles = [];
       await this.$nextTick();

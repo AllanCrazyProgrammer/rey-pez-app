@@ -1,7 +1,7 @@
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import { periodoNota, nombreArchivoReporte } from './filename';
-import { prepararGuardadoReporte, guardarYRespaldarReporte } from './reportDelivery';
+import { useUIStore } from '@/stores/ui';
 
 // Agregar constantes para los colores de los clientes
 const COLORES_CLIENTES = {
@@ -13,8 +13,7 @@ const COLORES_CLIENTES = {
 };
 
 export async function generarResumenTarasPDF(embarqueData, clientesDisponibles, options = {}) {
-  const destino = options.returnForDrive ? { name: nombreArchivoReporte('taras', embarqueData) } : await prepararGuardadoReporte('taras', embarqueData);
-  if (destino.canceled) return destino;
+  const name = nombreArchivoReporte('taras', embarqueData);
   const doc = new jsPDF();
 
   // Configurar el título con el estilo de Rey Pez
@@ -82,10 +81,11 @@ export async function generarResumenTarasPDF(embarqueData, clientesDisponibles, 
     }
   });
 
-  // Guardar el PDF
+  // Mantener el PDF en memoria para verlo o respaldarlo con autorización.
   const data = new Uint8Array(doc.output('arraybuffer'));
-  if (options.returnForDrive) return { name: destino.name, period: periodoNota(embarqueData), data };
-  return guardarYRespaldarReporte('taras', embarqueData, data, destino);
+  if (options.returnForDrive) return { name, period: periodoNota(embarqueData), data };
+  useUIStore().showPdfPreview(data, name);
+  return { name };
 }
 
 function prepararDatosTabla(embarqueData, clientesDisponibles) {

@@ -1,3 +1,4 @@
+import { useUIStore } from '@/stores/ui';
 import EmbarqueCuentasService from '@/utils/services/EmbarqueCuentasService';
 import { catarrosCuentas, ozunaCuentas, veronicaCuentas } from '@/services/cuentas.service';
 import { normalizarFechaISO } from '@/utils/dateUtils';
@@ -79,7 +80,7 @@ export const embarqueCuentasMixin = {
 
       try {
         if (!this.embarque?.fecha) {
-          alert('Selecciona la fecha del embarque antes de generar el resumen.');
+          useUIStore().showPdfAlert('Selecciona la fecha del embarque antes de generar el resumen.');
           return false;
         }
 
@@ -103,7 +104,7 @@ export const embarqueCuentasMixin = {
         return false;
       } catch (error) {
         console.error('[Resumen Embarque] No se pudieron verificar las cuentas:', error);
-        alert(
+        useUIStore().showPdfAlert(
           'No se pudo comprobar si ya existen las cuentas de Ozuna, Lorena/Verónica y Catarro. ' +
           'Revisa tu conexión e intenta nuevamente.'
         );

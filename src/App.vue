@@ -11,6 +11,7 @@
     <Footer v-if="mostrarFooter && !esArcade" />
 
     <DriveBackupNotice @open-settings="abrirOpcionesOffline" />
+    <PdfPreview />
     <WebUpdateNotice v-if="!desktopApp" :before-update="guardarAntesDeActualizarWeb" />
     <dialog ref="offlineDialog" class="offline-dialog" aria-labelledby="offline-dialog-title">
       <header class="offline-dialog-header">
@@ -26,7 +27,8 @@
         :key="n.id"
         :class="['toast', `toast--${n.type}`]"
       >
-        {{ n.message }}
+        <span>{{ n.message }}</span>
+        <button type="button" class="toast-close" @click="cerrarNotificacion(n.id)">Cerrar</button>
       </div>
     </transition-group>
   </div>
@@ -34,6 +36,7 @@
 
 <script>
 import DriveBackupNotice from './components/DriveBackupNotice.vue';
+import PdfPreview from './components/PdfPreview.vue';
 import WebUpdateNotice from './components/WebUpdateNotice.vue';
 import EmbarquesSync from './services/EmbarquesSync';
 import EmbarquesOfflineStatus from './components/EmbarquesOfflineStatus.vue';
@@ -47,6 +50,7 @@ export default {
   components: {
     Navbar,
     DriveBackupNotice,
+    PdfPreview,
     WebUpdateNotice,
     EmbarquesOfflineStatus,
     Footer
@@ -54,6 +58,7 @@ export default {
   data: () => ({ offlineOpened: false, desktopApp: Boolean(window.desktop) }),
   watch: { '$route'() { this.$refs.offlineDialog?.close(); } },
   methods: {
+    cerrarNotificacion(id) { useUIStore().dismissNotification(id); },
     async abrirOpcionesOffline() {
       this.offlineOpened = true;
       await this.$nextTick();
@@ -458,6 +463,10 @@ h1 {
 }
 
 .toast {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  pointer-events: auto;
   padding: 0.65rem 1.1rem;
   border-radius: 6px;
   font-size: 0.875rem;
@@ -471,6 +480,7 @@ h1 {
 }
 
 .toast--info    { background: rgba(62, 120, 255, 0.85); }
+.toast-close { color: inherit; background: transparent; border: 1px solid currentColor; border-radius: 5px; padding: 4px 7px; cursor: pointer; }
 .toast--success { background: rgba(34, 197, 94, 0.85); }
 .toast--warning { background: rgba(234, 179, 8, 0.85); color: #1a1a1a; }
 .toast--error   { background: rgba(239, 68, 68, 0.85); }

@@ -51,7 +51,7 @@
         </div>
 
         <p class="aclaracion">
-          ¿Deseas crear {{ cuentas.length === 1 ? 'esta cuenta' : 'estas cuentas' }} antes de descargar el resumen?
+          ¿Deseas crear {{ cuentas.length === 1 ? 'esta cuenta' : 'estas cuentas' }} antes de ver el resumen?
         </p>
 
         <div v-if="error" class="mensaje-error" role="alert">
@@ -62,7 +62,7 @@
 
       <footer class="cuentas-resumen-footer">
         <button type="button" class="btn-modal btn-cancelar" :disabled="cargando" @click="cerrar">
-          Cancelar
+          Cerrar
         </button>
         <button type="button" class="btn-modal btn-solo-resumen" :disabled="cargando" @click="$emit('omitir')">
           Solo generar resumen

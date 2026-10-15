@@ -1,7 +1,8 @@
 import pdfMake from 'pdfmake/build/pdfmake';
 import pdfFonts from 'pdfmake/build/vfs_fonts';
 import { generarResumenLimpios } from '../resumenLimpios';
-import { entregarPdf, obtenerBufferPdf } from './delivery';
+import { obtenerBufferPdf } from './delivery';
+import { useUIStore } from '@/stores/ui';
 import { nombreArchivoResumen, periodoNota } from './filename';
 
 // Verificar y asignar vfs de manera segura
@@ -491,7 +492,8 @@ export const generarResumenEmbarquePDF = async (embarque, productosPorCliente, o
   const pdf = pdfMake.createPdf(docDefinition);
   const data = new Uint8Array(await obtenerBufferPdf(pdf));
   if (options.returnForDrive) return { pdf, data, name, period };
-  return entregarPdf(pdf, name, 'download', data, period);
+  useUIStore().showPdfPreview(data, name);
+  return { name };
 };
 
 // Función auxiliar para calcular kilos

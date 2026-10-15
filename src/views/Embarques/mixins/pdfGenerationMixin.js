@@ -3,9 +3,8 @@ import { generarNotaVentaPDF } from "@/utils/pdfGenerator";
 import { generarResumenTarasPDF } from "@/utils/pdf/resumenTaras";
 import { generarResumenEmbarquePDF } from "@/utils/pdf/resumenEmbarque";
 import { nombreArchivoNota, periodoNota } from '@/utils/pdf/filename';
-import { entregarPdf } from '@/utils/pdf/delivery';
+import { useUIStore } from '@/stores/ui';
 import { generarRendimientosParaResumen } from '@/services/RendimientosReport';
-import { guardarYRespaldarReporte } from '@/utils/pdf/reportDelivery';
 import { encolarNotaDrive, driveNotasDisponible, agruparRespaldoDrive } from '@/services/DriveNotasSync';
 
 export default {
@@ -16,6 +15,7 @@ export default {
      * @param {string} [clienteId] - ID del cliente (solo necesario para tipo 'cliente')
      */
     async generarPDF(type, clienteId = null, options = {}) {
+      if (this.isGeneratingPdf) return;
       // Configurar indicador de carga
       this.$set(this, "isGeneratingPdf", true);
       this.$set(this, "pdfType", clienteId ? `${type}-${clienteId}` : type);
@@ -41,7 +41,7 @@ export default {
         console.log(`PDF ${type} generado con éxito`);
       } catch (error) {
         console.error(`Error al generar PDF ${type}:`, error);
-        alert(`Hubo un error al generar el PDF: ${error.message}`);
+        useUIStore().showPdfAlert(error.message || 'No se pudo generar el PDF. Intenta nuevamente.');
       } finally {
         // Ocultar indicador de carga
         this.$set(this, "isGeneratingPdf", false);
@@ -127,10 +127,13 @@ export default {
     },
 
     async generarPDFResumen(escala = 100) {
-      return agruparRespaldoDrive(() => this.generarPDFResumenCompleto(escala));
+      const subirANube = await this.$refs.subirResumen.solicitar();
+      if (subirANube === null) return;
+      if (subirANube) return agruparRespaldoDrive(() => this.generarPDFResumenCompleto(escala, true));
+      return this.generarPDFResumenCompleto(escala, false);
     },
 
-    async generarPDFResumenCompleto(escala = 100) {
+    async generarPDFResumenCompleto(escala = 100, subirANube = false) {
       // Obtener las medidas únicas de los crudos
       const medidasCrudos = new Set();
       Object.values(this.clienteCrudos).forEach((crudos) => {
@@ -157,13 +160,16 @@ export default {
         { returnForDrive: true }
       );
 
+      useUIStore().showPdfPreview(resumen.data, resumen.name);
+      if (!subirANube) return;
+      if (!driveNotasDisponible()) throw new Error('El resumen está listo, pero Google Drive no está disponible para subirlo.');
+
       const embarqueId = String(this.embarqueId || this.embarque.id || this.$route?.params?.id || 'embarque');
       if (driveNotasDisponible()) {
         const { period, name, data } = resumen;
         const id = `resumen-${embarqueId.replace(/[^a-zA-Z0-9._:-]/g, '_')}-${period.year}-${period.month}-${period.day}`;
         await encolarNotaDrive({ id, name, period, data });
       }
-      await entregarPdf(resumen.pdf, resumen.name, 'download', resumen.data, resumen.period);
 
       const fallosReportes = [];
       const datosReportes = { ...this.embarque, id: embarqueId, clienteCrudos: this.clienteCrudos };
@@ -178,7 +184,9 @@ export default {
           const reporte = tipo === 'taras'
             ? await generarResumenTarasPDF(datosReportes, this.clientesDisponibles, { returnForDrive: true })
             : await generarRendimientosParaResumen(datosReportes);
-          await guardarYRespaldarReporte(tipo, datosReportes, reporte.data, { name: reporte.name, open: false });
+          const period = resumen.period;
+          const id = `${tipo}-${embarqueId.replace(/[^a-zA-Z0-9._:-]/g, '_')}-${period.year}-${period.month}-${period.day}`;
+          await encolarNotaDrive({ id, name: reporte.name, period, data: reporte.data });
         } catch (error) {
           fallosReportes.push(`${tipo}: ${error.message}`);
         }

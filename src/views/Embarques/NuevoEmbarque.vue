@@ -67,7 +67,7 @@
         <button
           class="btn btn-primary"
           data-sonido="mision-cumplida"
-          :disabled="verificandoCuentasResumen"
+          :disabled="verificandoCuentasResumen || isGeneratingPdf"
           @click="generarPDFResumenConEscala"
         >
           <i v-if="verificandoCuentasResumen" class="fas fa-spinner fa-spin"></i>
@@ -238,6 +238,7 @@
       @confirmar="generarNotasPdfMultiples"
     />
 
+    <SubirResumenModal ref="subirResumen" />
     <CuentasResumenModal
       :mostrar="mostrarModalCuentasResumen"
       :cuentas="cuentasFaltantesResumen"
@@ -309,6 +310,7 @@ import ConfiguracionMedidasModal from './components/modals/ConfiguracionMedidasM
 import PedidoClienteModal from './components/modals/PedidoClienteModal.vue';
 import NotasPdfMultipleModal from './components/modals/NotasPdfMultipleModal.vue';
 import CuentasResumenModal from './components/modals/CuentasResumenModal.vue';
+import SubirResumenModal from './components/modals/SubirResumenModal.vue';
 import PedidoDelDiaModal from './components/PedidoDelDiaModal.vue';
 
 
@@ -364,6 +366,7 @@ export default {
     PedidoClienteModal,
     NotasPdfMultipleModal,
     CuentasResumenModal,
+    SubirResumenModal,
     PedidoDelDiaModal,
     SaveStatusIndicator,
     AuthErrorNotification
