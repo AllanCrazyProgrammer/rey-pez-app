@@ -7,7 +7,7 @@ const fuente = fs.readFileSync(path.join(__dirname, '../src/utils/equiposCuarto.
 const ejecutable = fuente.replace(/^export /gm, '');
 const sandbox = { api: null };
 vm.runInNewContext(
-  `${ejecutable}\nthis.api = { columnasParaAncho, serializarEquipo, validarEquipo, equiposDesdeDocumento, equipoVacio, etiquetaTipo };`,
+  `${ejecutable}\nthis.api = { columnasParaAncho, serializarEquipo, validarEquipo, equiposDesdeDocumento, equipoVacio, etiquetaTipo, nombreDeCuarto, fotoMaquinaDesdeDocumento, CUARTOS_FRIOS };`,
   sandbox
 );
 const {
@@ -17,13 +17,16 @@ const {
   equiposDesdeDocumento,
   equipoVacio,
   etiquetaTipo,
+  nombreDeCuarto,
+  fotoMaquinaDesdeDocumento,
+  CUARTOS_FRIOS,
 } = sandbox.api;
 
 assert.strictEqual(columnasParaAncho(320), 1);
 assert.strictEqual(columnasParaAncho(639), 1);
 assert.strictEqual(columnasParaAncho(640), 2);
 assert.strictEqual(columnasParaAncho(1099), 2);
-assert.strictEqual(columnasParaAncho(1100), 5);
+assert.strictEqual(columnasParaAncho(1100), 3);
 
 assert.strictEqual(validarEquipo({ nombre: '  ' }), 'El nombre del equipo es obligatorio.');
 assert.strictEqual(validarEquipo({ nombre: 'Compresor', tipo: 'raro' }), 'Selecciona un tipo de equipo válido.');
@@ -73,6 +76,19 @@ assert.strictEqual(cargados.length, 2);
 assert.strictEqual(cargados[0].tipo, 'evaporador');
 assert.strictEqual(cargados[1].tipo, '');
 assert.ok(cargados[1].id);
+assert.strictEqual(nombreDeCuarto('1'), 'Cuarto frío #1');
+assert.strictEqual(nombreDeCuarto('agua-fria'), 'Agua fría');
+assert.strictEqual(nombreDeCuarto('9'), 'Cuarto frío #9');
+assert.strictEqual(nombreDeCuarto(''), '');
+assert.ok(CUARTOS_FRIOS.some((cuarto) => cuarto.id === 'agua-fria'));
+assert.strictEqual(fotoMaquinaDesdeDocumento(null), null);
+assert.deepStrictEqual(
+  JSON.parse(JSON.stringify(fotoMaquinaDesdeDocumento({
+    fotoMaquina: { url: ' https://ejemplo/foto.jpg ', path: ' bitacoras/cuarto-1/maquina-1.jpg ' },
+    equipos: [],
+  }))),
+  { url: 'https://ejemplo/foto.jpg', path: 'bitacoras/cuarto-1/maquina-1.jpg' }
+);
 assert.strictEqual(etiquetaTipo('condensador'), 'Condensador');
 assert.strictEqual(etiquetaTipo(''), '');
 

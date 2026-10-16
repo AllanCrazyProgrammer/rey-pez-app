@@ -1,48 +1,60 @@
 <template>
-  <button
-    type="button"
-    class="room-card"
-    :class="{ selected: seleccionado }"
-    :aria-expanded="seleccionado ? 'true' : 'false'"
-    aria-controls="panel-cuarto"
-    @click="$emit('alternar')"
-  >
-    <span class="room-topline">
-      <span class="room-name">
-        <i class="far fa-snowflake" aria-hidden="true"></i>
-        {{ cuarto.nombre }}
+  <article class="room-card" :class="{ selected: seleccionado }">
+    <button
+      type="button"
+      class="room-main"
+      :aria-expanded="seleccionado ? 'true' : 'false'"
+      aria-controls="panel-cuarto"
+      @click="$emit('alternar')"
+    >
+      <span class="room-topline">
+        <span class="room-name">
+          <i :class="icono" aria-hidden="true"></i>
+          {{ cuarto.nombre }}
+        </span>
+        <i class="fas fa-chevron-down chevron" aria-hidden="true"></i>
       </span>
-      <i class="fas fa-chevron-down chevron" aria-hidden="true"></i>
-    </span>
 
-    <template v-if="!cargando && !errorCarga && cuarto.ultimo">
-      <strong v-if="tieneTemperatura" class="room-temperature">
-        {{ cuarto.ultimo.temperatura }} <small>°C</small>
-      </strong>
-      <span v-else class="room-empty">Sin temperatura</span>
-      <EstadoMantenimiento :estado="cuarto.ultimo.estado" />
-      <span class="room-date">{{ formatearFecha(cuarto.ultimo.fecha) }}</span>
-    </template>
-    <span v-else class="room-empty">{{ textoVacio }}</span>
+      <template v-if="!cargando && !errorCarga && cuarto.ultimo">
+        <strong v-if="tieneTemperatura" class="room-temperature">
+          {{ cuarto.ultimo.temperatura }} <small>°C</small>
+        </strong>
+        <span v-else class="room-empty">Sin temperatura</span>
+        <EstadoMantenimiento :estado="cuarto.ultimo.estado" />
+        <span class="room-date">{{ formatearFecha(cuarto.ultimo.fecha) }}</span>
+      </template>
+      <span v-else class="room-empty">{{ textoVacio }}</span>
 
-    <span class="room-meta">{{ textoMeta }}</span>
-    <span class="room-cta">{{ seleccionado ? 'Ocultar registros' : 'Ver registros' }}</span>
-  </button>
+      <span class="room-meta">{{ textoMeta }}</span>
+      <span class="room-cta">{{ seleccionado ? 'Ocultar registros' : 'Ver registros' }}</span>
+    </button>
+    <FotoMaquinaCuarto
+      :nombre="cuarto.nombre"
+      :foto="cuarto.fotoMaquina"
+      :ocupada="ocupadaFoto"
+      :error="errorFoto"
+      @elegir="$emit('elegir-foto', $event)"
+      @quitar="$emit('quitar-foto')"
+    />
+  </article>
 </template>
 
 <script>
 import { formatearFecha } from '@/utils/formatters';
 import EstadoMantenimiento from '@/components/bitacoras/EstadoMantenimiento.vue';
+import FotoMaquinaCuarto from '@/components/bitacoras/FotoMaquinaCuarto.vue';
 
 export default {
   name: 'TarjetaCuarto',
-  components: { EstadoMantenimiento },
+  components: { EstadoMantenimiento, FotoMaquinaCuarto },
   props: {
     cuarto: { type: Object, required: true },
     seleccionado: { type: Boolean, default: false },
     cargando: { type: Boolean, default: false },
     errorCarga: { type: String, default: '' },
     equiposListos: { type: Boolean, default: false },
+    ocupadaFoto: { type: String, default: '' },
+    errorFoto: { type: String, default: '' },
   },
   computed: {
     tieneTemperatura() {
@@ -53,6 +65,9 @@ export default {
       if (this.cargando) return 'Cargando…';
       if (this.errorCarga) return 'No disponible';
       return 'Sin registros';
+    },
+    icono() {
+      return this.cuarto.id === 'agua-fria' ? 'fas fa-tint' : 'far fa-snowflake';
     },
     textoMeta() {
       if (this.cargando) return 'Cargando registros…';
@@ -79,28 +94,42 @@ export default {
   width: 100%;
   min-height: 168px;
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
+  flex-direction: row;
+  align-items: stretch;
   gap: 10px;
-  padding: 16px;
+  padding: 12px;
   border: 1px solid var(--line);
   border-radius: 16px;
   background: #fff;
   color: var(--ink);
   box-shadow: 0 1px 2px rgba(23, 59, 54, 0.05);
   font: inherit;
-  cursor: pointer;
   animation: aparecer-tarjeta 0.46s ease backwards;
   animation-delay: calc(var(--i, 0) * 60ms);
 }
 .room-card:hover {
   border-color: #8db3a3;
-  background: #f7fbf8;
 }
-.room-card:active {
+.room-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 4px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.room-main:active {
   transform: scale(0.985);
 }
-.room-card:focus-visible {
+.room-main:focus-visible {
   outline: 3px solid #378c73;
   outline-offset: 3px;
 }
@@ -176,7 +205,7 @@ export default {
     animation: none;
     transition: none;
   }
-  .room-card:active,
+  .room-main:active,
   .room-card.selected .chevron {
     transform: none;
   }

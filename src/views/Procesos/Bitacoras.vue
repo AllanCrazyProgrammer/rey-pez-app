@@ -38,8 +38,12 @@
             :cargando="cargando"
             :error-carga="errorCarga"
             :equipos-listos="equiposListos"
+            :ocupada-foto="fotoOcupada[cuarto.id] || ''"
+            :error-foto="errorFoto[cuarto.id] || ''"
             :style="{ '--i': indiceFila * columnas + indiceEnFila }"
             @alternar="alternarCuarto(cuarto.id)"
+            @elegir-foto="guardarFotoMaquina(cuarto.id, $event)"
+            @quitar-foto="quitarFotoMaquina(cuarto.id)"
           />
           <transition
             mode="out-in"
@@ -111,14 +115,12 @@
           </p>
           <fieldset :disabled="guardando || procesandoFotos" class="form-fields">
             <div class="form-group">
-              <label for="cuarto">Cuarto Frío:</label>
+              <label for="cuarto">Cuarto:</label>
               <select id="cuarto" v-model="bitacoraActual.cuartoId" class="form-control" required>
-                <option value="" disabled>Seleccione un cuarto frío</option>
-                <option value="1">Cuarto Frío #1</option>
-                <option value="2">Cuarto Frío #2</option>
-                <option value="3">Cuarto Frío #3</option>
-                <option value="4">Cuarto Frío #4</option>
-                <option value="5">Cuarto Frío #5</option>
+                <option value="" disabled>Seleccione un cuarto</option>
+                <option v-for="cuarto in cuartos" :key="cuarto.id" :value="cuarto.id">
+                  {{ cuarto.nombre }}
+                </option>
               </select>
             </div>
 
@@ -394,6 +396,7 @@ import {
   doc,
   updateDoc,
   deleteDoc,
+  deleteField,
   query,
   orderBy,
   serverTimestamp,
@@ -407,6 +410,7 @@ import {
   conTiempo,
   mensajeErrorFoto,
   prepararFoto,
+  rutaFotoMaquina,
   tipoDeArchivo,
 } from '@/utils/fotosBitacora';
 import TarjetaCuarto from '@/components/bitacoras/TarjetaCuarto.vue';
@@ -414,7 +418,9 @@ import PanelCuarto from '@/components/bitacoras/PanelCuarto.vue';
 import {
   CUARTOS_FRIOS,
   equiposDesdeDocumento,
+  fotoMaquinaDesdeDocumento,
   mensajeErrorCuartos,
+  nombreDeCuarto,
   serializarEquipo,
   validarEquipo,
 } from '@/utils/equiposCuarto';
@@ -441,6 +447,9 @@ export default {
       cuartoActivo: '',
       columnas: 1,
       equiposPorCuarto: {},
+      fotosMaquina: {},
+      fotoOcupada: {},
+      errorFoto: {},
       equiposListos: false,
       cargandoEquipos: true,
       errorEquipos: '',
@@ -471,6 +480,7 @@ export default {
           ultimo: registros[0] || null,
           totalRegistros: registros.length,
           totalEquipos: (this.equiposPorCuarto[cuarto.id] || []).length,
+          fotoMaquina: this.fotosMaquina[cuarto.id] || null,
         };
       });
     },
@@ -562,7 +572,7 @@ export default {
         .sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)));
     },
     actualizarColumnas() {
-      if (window.matchMedia('(min-width: 1100px)').matches) this.columnas = 5;
+      if (window.matchMedia('(min-width: 1100px)').matches) this.columnas = 3;
       else if (window.matchMedia('(min-width: 640px)').matches) this.columnas = 2;
       else this.columnas = 1;
     },
@@ -757,15 +767,19 @@ export default {
         const snapshot = await getDocs(collection(db, 'cuartos'));
         if (this._desmontado) return;
         const mapa = {};
+        const fotos = {};
         this.cuartos.forEach((cuarto) => {
           mapa[cuarto.id] = [];
+          fotos[cuarto.id] = null;
         });
         snapshot.forEach((documento) => {
           if (Object.prototype.hasOwnProperty.call(mapa, documento.id)) {
             mapa[documento.id] = equiposDesdeDocumento(documento.data());
+            fotos[documento.id] = fotoMaquinaDesdeDocumento(documento.data());
           }
         });
         this.equiposPorCuarto = mapa;
+        this.fotosMaquina = fotos;
         this.equiposListos = true;
       } catch (error) {
         console.error('Error al cargar equipos de cuartos:', error);
@@ -803,8 +817,66 @@ export default {
       }
     },
     formatearNombreCuarto(cuartoId) {
-      if (!cuartoId) return '';
-      return `Cuarto Frío #${cuartoId}`;
+      return nombreDeCuarto(cuartoId);
+    },
+    async guardarFotoMaquina(cuartoId, archivo) {
+      if (!cuartoId || this.fotoOcupada[cuartoId]) return;
+      this.$set(this.errorFoto, cuartoId, '');
+      if (!tipoDeArchivo(archivo) || !archivo.size || archivo.size > 10 * 1024 * 1024) {
+        this.$set(this.errorFoto, cuartoId, 'Selecciona una foto JPG, PNG o WebP de máximo 10 MB.');
+        return;
+      }
+      this.$set(this.fotoOcupada, cuartoId, 'preparando');
+      let path = '';
+      try {
+        const preparada = await prepararFoto(archivo);
+        if (this._desmontado) return;
+        path = rutaFotoMaquina(cuartoId);
+        this.$set(this.fotoOcupada, cuartoId, 'subiendo');
+        const fotoRef = ref(storage, path);
+        await this.subirFoto(fotoRef, preparada.blob, preparada.contentType || 'image/jpeg');
+        const url = await conTiempo(
+          getDownloadURL(fotoRef),
+          TIEMPO_GUARDADO_MS,
+          'No pudimos confirmar la foto de la máquina.'
+        );
+        const anterior = this.fotosMaquina[cuartoId];
+        await conTiempo(
+          setDoc(doc(db, 'cuartos', String(cuartoId)), { fotoMaquina: { url, path } }, { merge: true }),
+          TIEMPO_GUARDADO_MS,
+          'No pudimos guardar la foto de la máquina.'
+        );
+        if (this._desmontado) return;
+        this.$set(this.fotosMaquina, cuartoId, { url, path });
+        if (anterior && anterior.path && anterior.path !== path) this.borrarArchivosFotos([anterior]);
+      } catch (error) {
+        console.error('Error al guardar la foto de la máquina:', error);
+        if (path) this.borrarArchivosFotos([{ path }]);
+        if (!this._desmontado) this.$set(this.errorFoto, cuartoId, mensajeErrorFoto(error));
+      } finally {
+        if (!this._desmontado) this.$set(this.fotoOcupada, cuartoId, '');
+      }
+    },
+    async quitarFotoMaquina(cuartoId) {
+      const actual = this.fotosMaquina[cuartoId];
+      if (!actual || this.fotoOcupada[cuartoId]) return;
+      this.$set(this.errorFoto, cuartoId, '');
+      this.$set(this.fotoOcupada, cuartoId, 'quitando');
+      try {
+        await conTiempo(
+          setDoc(doc(db, 'cuartos', String(cuartoId)), { fotoMaquina: deleteField() }, { merge: true }),
+          TIEMPO_GUARDADO_MS,
+          'No pudimos quitar la foto de la máquina.'
+        );
+        if (this._desmontado) return;
+        this.$set(this.fotosMaquina, cuartoId, null);
+        if (actual.path) this.borrarArchivosFotos([actual]);
+      } catch (error) {
+        console.error('Error al quitar la foto de la máquina:', error);
+        if (!this._desmontado) this.$set(this.errorFoto, cuartoId, mensajeErrorFoto(error));
+      } finally {
+        if (!this._desmontado) this.$set(this.fotoOcupada, cuartoId, '');
+      }
     },
     editarBitacora(bitacora) {
       this.errorFormulario = '';
@@ -1488,7 +1560,7 @@ textarea.form-control {
 }
 @media (min-width: 1100px) {
   .fila-cuartos {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 @media (prefers-reduced-motion: reduce) {

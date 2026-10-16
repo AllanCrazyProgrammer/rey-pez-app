@@ -5,9 +5,12 @@ const vm = require('vm');
 
 const fuente = fs.readFileSync(path.join(__dirname, '../src/utils/fotosBitacora.js'), 'utf8');
 const sandbox = { URL: { createObjectURL() {}, revokeObjectURL() {} }, Blob, Promise, setTimeout, clearTimeout };
-vm.runInNewContext(fuente.replace(/^export /gm, '') + '\nthis.api = { conTiempo, tipoDeArchivo, mensajeErrorFoto, TIEMPO_SUBIDA_MS };', sandbox);
-const { conTiempo, tipoDeArchivo, mensajeErrorFoto, TIEMPO_SUBIDA_MS } = sandbox.api;
+vm.runInNewContext(fuente.replace(/^export /gm, '') + '\nthis.api = { conTiempo, tipoDeArchivo, mensajeErrorFoto, TIEMPO_SUBIDA_MS, rutaFotoMaquina };', sandbox);
+const { conTiempo, tipoDeArchivo, mensajeErrorFoto, TIEMPO_SUBIDA_MS, rutaFotoMaquina } = sandbox.api;
 
+assert.strictEqual(rutaFotoMaquina('agua-fria', 99), 'bitacoras/cuarto-agua-fria/maquina-99.jpg');
+assert.strictEqual(rutaFotoMaquina('1', 5), 'bitacoras/cuarto-1/maquina-5.jpg');
+assert.strictEqual(rutaFotoMaquina('../1', 5), 'bitacoras/cuarto-1/maquina-5.jpg');
 assert.strictEqual(tipoDeArchivo({ type: 'image/jpg', name: '41540.jpg' }), 'image/jpeg');
 assert.strictEqual(tipoDeArchivo({ type: '', name: '41540.JPG' }), 'image/jpeg');
 assert.strictEqual(tipoDeArchivo({ type: 'image/png', name: 'a.png' }), 'image/png');
