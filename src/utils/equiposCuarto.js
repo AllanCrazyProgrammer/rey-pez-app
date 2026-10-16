@@ -9,6 +9,7 @@ export const CUARTOS_FRIOS = [
   { id: '3', nombre: 'Cuarto frío #3' },
   { id: '4', nombre: 'Cuarto frío #4' },
   { id: '5', nombre: 'Cuarto frío #5' },
+  { id: 'agua-fria', nombre: 'Agua fría' },
 ];
 
 export const TIPOS_EQUIPO = [
@@ -20,9 +21,26 @@ export const TIPOS_EQUIPO = [
 ];
 
 export function columnasParaAncho(ancho) {
-  if (ancho >= CORTE_CINCO_COLUMNAS) return 5;
+  if (ancho >= CORTE_CINCO_COLUMNAS) return 3;
   if (ancho >= CORTE_DOS_COLUMNAS) return 2;
   return 1;
+}
+
+export function nombreDeCuarto(cuartoId) {
+  const id = cuartoId === null || cuartoId === undefined ? '' : String(cuartoId);
+  const cuarto = CUARTOS_FRIOS.find((item) => item.id === id);
+  if (cuarto) return cuarto.nombre;
+  if (!id) return '';
+  return `Cuarto frío #${id}`;
+}
+
+export function fotoMaquinaDesdeDocumento(data) {
+  const foto = data && data.fotoMaquina;
+  if (!foto || typeof foto !== 'object') return null;
+  const url = String(foto.url || '').trim();
+  const path = String(foto.path || '').trim();
+  if (!url || !path) return null;
+  return { url, path };
 }
 
 export function nuevoIdEquipo() {

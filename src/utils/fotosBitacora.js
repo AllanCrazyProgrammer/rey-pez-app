@@ -32,6 +32,11 @@ export function conTiempo(promesa, ms, mensaje) {
   });
 }
 
+export function rutaFotoMaquina(cuartoId, ahora = Date.now()) {
+  const id = String(cuartoId || '').replace(/[^a-zA-Z0-9-]/g, '');
+  return `bitacoras/cuarto-${id}/maquina-${ahora}.jpg`;
+}
+
 export function tipoDeArchivo(archivo) {
   const tipo = String((archivo && archivo.type) || '').toLowerCase();
   if (tipo === 'image/jpg') return 'image/jpeg';
