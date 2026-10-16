@@ -32,6 +32,7 @@ assert.strictEqual(validarEquipo({ nombre: '  ' }), 'El nombre del equipo es obl
 assert.strictEqual(validarEquipo({ nombre: 'Compresor', tipo: 'raro' }), 'Selecciona un tipo de equipo válido.');
 assert.strictEqual(validarEquipo({ nombre: 'Compresor', tipo: '' }), '');
 assert.strictEqual(validarEquipo({ nombre: 'Compresor', tipo: 'tablero' }), '');
+assert.strictEqual(validarEquipo({ nombre: 'Difusor norte', tipo: 'difusor' }), '');
 
 const limpio = JSON.parse(JSON.stringify(serializarEquipo({
   id: 'eq-1',
@@ -51,11 +52,29 @@ assert.deepStrictEqual(limpio, {
   refrigerante: '',
   voltaje: '220',
   notas: 'Revisar aceite',
+  fotos: [],
 });
 assert.strictEqual(Object.prototype.hasOwnProperty.call(limpio, 'extra'), false);
+const conFotos = JSON.parse(JSON.stringify(serializarEquipo({
+  id: 'eq-2',
+  nombre: 'Difusor norte',
+  tipo: 'difusor',
+  fotosNuevas: [{ file: {} }],
+  fotos: [
+    { url: ' https://ejemplo/a.jpg ', path: ' bitacoras/cuarto-1/equipo-eq-2-1.jpg ', file: {} },
+    { url: '', path: 'bitacoras/x' },
+  ],
+})));
+assert.strictEqual(conFotos.tipo, 'difusor');
+assert.deepStrictEqual(conFotos.fotos, [{
+  url: 'https://ejemplo/a.jpg',
+  path: 'bitacoras/cuarto-1/equipo-eq-2-1.jpg',
+}]);
+assert.strictEqual(Object.prototype.hasOwnProperty.call(conFotos, 'fotosNuevas'), false);
 
 const vacio = JSON.parse(JSON.stringify(equipoVacio()));
 assert.deepStrictEqual(Object.keys(vacio).sort(), [
+  'fotos',
   'id',
   'marcaModelo',
   'nombre',

@@ -32,6 +32,12 @@ export function conTiempo(promesa, ms, mensaje) {
   });
 }
 
+export function rutaFotoEquipo(cuartoId, equipoId, ahora = Date.now()) {
+  const cuarto = String(cuartoId || '').replace(/[^a-zA-Z0-9-]/g, '');
+  const equipo = String(equipoId || '').replace(/[^a-zA-Z0-9-]/g, '');
+  return `bitacoras/cuarto-${cuarto}/equipo-${equipo}-${ahora}.jpg`;
+}
+
 export function rutaFotoMaquina(cuartoId, ahora = Date.now()) {
   const id = String(cuartoId || '').replace(/[^a-zA-Z0-9-]/g, '');
   return `bitacoras/cuarto-${id}/maquina-${ahora}.jpg`;

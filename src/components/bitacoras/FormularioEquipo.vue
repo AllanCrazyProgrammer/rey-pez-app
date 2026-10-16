@@ -64,6 +64,43 @@
         />
       </div>
       <div class="campo campo-ancho">
+        <label :for="idCampo('fotos')">Fotos</label>
+        <input
+          :id="idCampo('fotos')"
+          class="control"
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          multiple
+          :disabled="guardando || procesandoFotos || totalFotos >= 6"
+          @change="agregarFotos"
+        />
+        <p class="ayuda">Hasta 6 fotos JPG, PNG o WebP. Se reducen al elegirlas.</p>
+        <div v-if="campos.fotos.length || fotosNuevas.length" class="miniaturas">
+          <figure v-for="(foto, indice) in campos.fotos" :key="foto.path" class="mini">
+            <img :src="foto.url" alt="Foto del equipo" />
+            <button
+              type="button"
+              :disabled="guardando || procesandoFotos"
+              :aria-label="'Quitar foto ' + (indice + 1)"
+              @click="quitarExistente(indice)"
+            >
+              Quitar
+            </button>
+          </figure>
+          <figure v-for="(foto, indice) in fotosNuevas" :key="foto.id" class="mini">
+            <img :src="foto.preview" alt="Foto nueva del equipo" />
+            <button
+              type="button"
+              :disabled="guardando || procesandoFotos"
+              :aria-label="'Quitar foto nueva ' + (indice + 1)"
+              @click="quitarNueva(indice)"
+            >
+              Quitar
+            </button>
+          </figure>
+        </div>
+      </div>
+      <div class="campo campo-ancho">
         <label :for="idCampo('notas')">Notas</label>
         <textarea
           :id="idCampo('notas')"
@@ -80,15 +117,16 @@
       <button type="button" class="btn-secundario" :disabled="guardando" @click="$emit('cancelar')">
         Cancelar
       </button>
-      <button type="submit" class="btn-primario" :disabled="guardando">
-        {{ guardando ? 'Guardando…' : 'Guardar equipo' }}
+      <button type="submit" class="btn-primario" :disabled="guardando || procesandoFotos">
+        {{ guardando ? 'Guardando…' : procesandoFotos ? 'Preparando fotos…' : 'Guardar equipo' }}
       </button>
     </div>
   </form>
 </template>
 
 <script>
-import { TIPOS_EQUIPO, equipoVacio, validarEquipo } from '@/utils/equiposCuarto';
+import { MAX_FOTOS_EQUIPO, TIPOS_EQUIPO, equipoVacio, validarEquipo } from '@/utils/equiposCuarto';
+import { prepararFoto, tipoDeArchivo } from '@/utils/fotosBitacora';
 
 export default {
   name: 'FormularioEquipo',
@@ -99,20 +137,92 @@ export default {
   },
   data() {
     const base = equipoVacio();
+    const fotos = Array.isArray(this.equipo.fotos)
+      ? this.equipo.fotos.filter((foto) => foto && foto.url && foto.path).map((foto) => ({
+        url: foto.url,
+        path: foto.path,
+      }))
+      : [];
     return {
       tipos: TIPOS_EQUIPO,
       error: '',
-      campos: { ...base, ...this.equipo },
+      procesandoFotos: false,
+      fotosNuevas: [],
+      campos: { ...base, ...this.equipo, fotos },
     };
+  },
+  computed: {
+    totalFotos() {
+      return this.campos.fotos.length + this.fotosNuevas.length;
+    },
+  },
+  beforeDestroy() {
+    this.fotosNuevas.forEach((foto) => {
+      if (foto.preview) URL.revokeObjectURL(foto.preview);
+    });
   },
   methods: {
     idCampo(nombre) {
       return `equipo-${this.campos.id || 'nuevo'}-${nombre}`;
     },
+    async agregarFotos(event) {
+      const archivos = Array.from(event.target.files || []);
+      event.target.value = '';
+      if (!archivos.length || this.guardando) return;
+      this.error = '';
+      this.procesandoFotos = true;
+      try {
+        for (const archivo of archivos) {
+          if (this.totalFotos >= MAX_FOTOS_EQUIPO) {
+            this.error = 'Puedes adjuntar hasta 6 fotos por equipo.';
+            break;
+          }
+          if (!tipoDeArchivo(archivo) || !archivo.size || archivo.size > 10 * 1024 * 1024) {
+            this.error = 'Selecciona fotos JPG, PNG o WebP de máximo 10 MB.';
+            continue;
+          }
+          const preparada = await prepararFoto(archivo);
+          this.fotosNuevas.push({
+            id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            file: preparada.blob,
+            contentType: preparada.contentType,
+            preparada: true,
+            preview: URL.createObjectURL(preparada.blob),
+          });
+        }
+      } catch (errorLectura) {
+        console.warn('No se pudo preparar una foto del equipo:', errorLectura);
+        this.error = 'No pudimos leer una foto. Vuelve a elegirla.';
+      } finally {
+        this.procesandoFotos = false;
+      }
+    },
+    quitarExistente(indice) {
+      if (this.guardando) return;
+      this.campos.fotos.splice(indice, 1);
+    },
+    quitarNueva(indice) {
+      if (this.guardando) return;
+      const foto = this.fotosNuevas[indice];
+      if (foto && foto.preview) URL.revokeObjectURL(foto.preview);
+      this.fotosNuevas.splice(indice, 1);
+    },
     enviar() {
       this.error = validarEquipo(this.campos);
       if (this.error) return;
-      this.$emit('guardar', { ...this.campos });
+      if (this.totalFotos > MAX_FOTOS_EQUIPO) {
+        this.error = 'Puedes adjuntar hasta 6 fotos por equipo.';
+        return;
+      }
+      this.$emit('guardar', {
+        ...this.campos,
+        fotos: this.campos.fotos.map((foto) => ({ url: foto.url, path: foto.path })),
+        fotosNuevas: this.fotosNuevas.map((foto) => ({
+          file: foto.file,
+          contentType: foto.contentType,
+          preparada: true,
+        })),
+      });
     },
   },
 };
@@ -183,6 +293,40 @@ textarea.control {
 .control:focus-visible {
   outline: 3px solid #378c73;
   outline-offset: 2px;
+}
+.miniaturas {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+.mini {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.mini img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: 10px;
+  background: #eef5f1;
+}
+.mini button {
+  min-height: 40px;
+  border: 1px solid #f0d0d0;
+  border-radius: 8px;
+  background: #fff;
+  color: #ac4747;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.mini button:disabled {
+  opacity: 0.55;
+  cursor: wait;
 }
 .acciones-form {
   display: flex;
