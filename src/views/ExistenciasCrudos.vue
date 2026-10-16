@@ -86,9 +86,9 @@
                 <td v-if="tieneCuartos(productos)" data-label="Cuarto">
                   <button 
                     class="cuarto-button"
-                    @click="abrirModalCambioCuarto(producto)"
-                    aria-label="Editar cuarto"
-                    title="Editar cuarto"
+                    @click="onClickCuarto(producto)"
+                    :aria-label="producto.cuartos && producto.cuartos.length > 1 ? 'Ver desglose por cuarto' : 'Editar cuarto'"
+                    :title="producto.cuartos && producto.cuartos.length > 1 ? 'Ver desglose por cuarto' : 'Editar cuarto'"
                   >
                     {{ producto.cuarto }}
                   </button>
@@ -106,6 +106,33 @@
           </div>
         </div>
       </div>
+    <div
+      v-if="modalDesgloseCuartos.abierto"
+      class="modal-overlay"
+      @click.self="cerrarModalDesgloseCuartos"
+    >
+      <div class="modal-content modal-cambio-cuarto">
+        <div class="modal-header">
+          <h3>Desglose por cuarto</h3>
+          <button class="close-button" @click="cerrarModalDesgloseCuartos">&times;</button>
+        </div>
+        <div class="modal-body">
+          <p><strong>{{ modalDesgloseCuartos.producto?.proveedor }}</strong> · {{ modalDesgloseCuartos.producto?.nombre }}</p>
+          <table class="productos-table">
+            <thead><tr><th>Cuarto</th><th>Kilos</th><th v-if="!soloInventario">Taras</th><th></th></tr></thead>
+            <tbody>
+              <tr v-for="sub in modalDesgloseCuartos.producto?.cuartos || []" :key="sub.cuarto">
+                <td>{{ sub.cuarto }}</td>
+                <td>{{ formatNumber(sub.kilos) }}</td>
+                <td v-if="!soloInventario">{{ (sub.kilos / 19).toFixed(1) }}</td>
+                <td><button class="cuarto-button" @click="moverDesdeDesglose(sub)">Mover</button></td>
+              </tr>
+            </tbody>
+            <tfoot><tr><td><strong>Total</strong></td><td><strong>{{ formatNumber(modalDesgloseCuartos.producto?.kilos || 0) }}</strong></td><td v-if="!soloInventario"></td><td></td></tr></tfoot>
+          </table>
+        </div>
+      </div>
+    </div>
     <div 
       v-if="modalCambioCuarto.abierto" 
       class="modal-overlay" 
@@ -287,6 +314,7 @@ export default {
       proveedoresRegistradosCrudos: [],
       filtroCuarto: 'Todos los cuartos',
       cuartosDisponibles: ['s/c', 'Cuarto 1', 'Cuarto 2', 'Cuarto 3', 'Cuarto 4', 'Cuarto 5'],
+      modalDesgloseCuartos: { abierto: false, producto: null },
       modalCambioCuarto: {
         abierto: false,
         producto: null,
@@ -337,7 +365,12 @@ export default {
       }
       const filtradas = {};
       Object.entries(this.existenciasPorProveedor).forEach(([prov, productos]) => {
-        const lista = productos.filter(p => p.cuarto === this.filtroCuarto);
+        const lista = productos
+          .map(p => {
+            const sub = (p.cuartos || [p]).find(c => c.cuarto === this.filtroCuarto);
+            return sub ? { ...p, ...sub, clave: p.clave, cuartos: [sub], valor: sub.kilos * sub.ultimoPrecio } : null;
+          })
+          .filter(Boolean);
         if (lista.length) filtradas[prov] = lista;
       });
       return filtradas;
@@ -354,6 +387,20 @@ export default {
       return valor.toLowerCase() === 'sin cuarto designado' ? 's/c' : valor;
     },
 
+    onClickCuarto(producto) {
+      if (producto.cuartos && producto.cuartos.length > 1) {
+        this.modalDesgloseCuartos = { abierto: true, producto };
+      } else {
+        this.abrirModalCambioCuarto(producto.cuartos ? producto.cuartos[0] : producto);
+      }
+    },
+    cerrarModalDesgloseCuartos() {
+      this.modalDesgloseCuartos = { abierto: false, producto: null };
+    },
+    moverDesdeDesglose(sub) {
+      this.cerrarModalDesgloseCuartos();
+      this.abrirModalCambioCuarto(sub);
+    },
     abrirModalCambioCuarto(producto) {
       this.modalCambioCuarto = {
         abierto: true,
@@ -571,7 +618,8 @@ export default {
                   ultimoPrecio: entrada.precio || 0,
                   proveedor: entrada.proveedor,
                   producto: entrada.producto,
-                  cuarto: cuarto
+                  cuarto: cuarto,
+                  precioKey
                 };
               }
               existencias[entrada.proveedor][claveProducto].kilos += Number(entrada.kilos) || 0;
@@ -627,15 +675,34 @@ export default {
         await this.actualizarPreciosDelHistorial(existencias);
 
         // Convertir a formato para mostrar y filtrar productos con kilos <= 0
+        // Los lotes se calculan por cuarto (para que las salidas descuenten del cuarto correcto),
+        // pero se muestran agrupados por producto + precio + piezas, con desglose por cuarto.
         const existenciasFiltradas = {};
         Object.keys(existencias).forEach(proveedor => {
-          const productos = Object.values(existencias[proveedor])
+          const grupos = {};
+          Object.values(existencias[proveedor])
             .filter(producto => this.tieneKilosVisibles(producto.kilos))
-            .map(producto => ({
-              ...producto,
-              clave: JSON.stringify([producto.producto, producto.ultimoPrecio, producto.cuarto, producto.piezas]),
-              valor: producto.kilos * producto.ultimoPrecio
-            }));
+            .forEach(producto => {
+              const claveGrupo = JSON.stringify([producto.producto, producto.precioKey, producto.piezas]);
+              if (!grupos[claveGrupo]) {
+                grupos[claveGrupo] = {
+                  ...producto,
+                  clave: claveGrupo,
+                  kilos: 0,
+                  cuartos: []
+                };
+              }
+              grupos[claveGrupo].kilos += producto.kilos;
+              grupos[claveGrupo].cuartos.push({ ...producto });
+            });
+          const productos = Object.values(grupos).map(grupo => {
+            grupo.cuartos.sort((a, b) => a.cuarto.localeCompare(b.cuarto));
+            return {
+              ...grupo,
+              cuarto: grupo.cuartos.length === 1 ? grupo.cuartos[0].cuarto : `${grupo.cuartos.length} cuartos`,
+              valor: grupo.kilos * grupo.ultimoPrecio
+            };
+          });
           
           if (productos.length > 0) {
             existenciasFiltradas[proveedor] = productos;
@@ -731,7 +798,8 @@ export default {
     },
 
     tieneCuartos(productos) {
-      return productos.some(producto => this.tieneKilosVisibles(producto.kilos) && this.normalizeCuarto(producto.cuarto) !== 's/c');
+      return productos.some(producto => this.tieneKilosVisibles(producto.kilos) &&
+        (producto.cuartos || [producto]).some(c => this.normalizeCuarto(c.cuarto) !== 's/c'));
     },
 
     tienePreciosValidos(productos) {
