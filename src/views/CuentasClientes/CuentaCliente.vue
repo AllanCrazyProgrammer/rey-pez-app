@@ -11,7 +11,7 @@
     </div>
     <h1>{{ config.titulo }}</h1>
 
-    <div class="precios-button-container">
+    <div v-if="clienteId !== 'catarro'" class="precios-button-container">
       <PreciosClienteButton :clienteId="config.clienteId" />
     </div>
 
@@ -48,7 +48,7 @@
       </p>
     </div>
 
-    <div class="input-section card">
+    <div v-if="clienteId !== 'catarro'" class="input-section card">
       <h2>Ingresar Datos</h2>
       <div class="input-row">
         <input v-model.number="newItem.kilos" type="number" placeholder="Kilos" inputmode="decimal" pattern="[0-9]*" class="responsive-input" :disabled="isNotaLocked">
@@ -59,13 +59,13 @@
       </div>
     </div>
 
-    <div class="toggle-costos-row">
+    <div v-if="clienteId !== 'catarro'" class="toggle-costos-row">
       <button class="toggle-costos-btn" @click="mostrarTablaCostos = !mostrarTablaCostos">
         {{ mostrarTablaCostos ? 'Ocultar tabla de costos' : 'Mostrar tabla de costos' }}
       </button>
     </div>
 
-    <div v-if="mostrarTablaCostos" class="table-card table-responsive">
+    <div v-if="clienteId !== 'catarro' && mostrarTablaCostos" class="table-card table-responsive">
       <table class="tabla-principal">
         <thead>
           <tr>
@@ -130,7 +130,7 @@
       </table>
     </div>
 
-    <h2>Precios de Venta</h2>
+    <h2 v-if="clienteId !== 'catarro'">Precios de Venta</h2>
     <div class="add-product-button">
       <button @click="showAddProductModal = true" :disabled="isNotaLocked">Agregar Producto</button>
     </div>
@@ -142,7 +142,7 @@
             <th>Medida</th>
             <th>Precio</th>
             <th>Total</th>
-            <th class="desktop-only">Ganancias</th>
+            <th v-if="clienteId !== 'catarro'" class="desktop-only">Ganancias</th>
           </tr>
         </thead>
         <tbody>
@@ -184,11 +184,11 @@
               >
             </td>
             <td>${{ formatNumber(item.totalVenta) }}</td>
-            <td :class="{ 'desktop-only': true, 'ganancia-positiva': item.ganancia > 0, 'ganancia-negativa': item.ganancia < 0 }">
+            <td v-if="clienteId !== 'catarro'" :class="{ 'desktop-only': true, 'ganancia-positiva': item.ganancia > 0, 'ganancia-negativa': item.ganancia < 0 }">
               ${{ formatNumber(item.ganancia) }}
             </td>
           </tr>
-          <tr v-if="selectedRowIndex !== null" class="mobile-only ganancia-row">
+          <tr v-if="clienteId !== 'catarro' && selectedRowIndex !== null" class="mobile-only ganancia-row">
             <td colspan="4">
               <strong>Ganancias:</strong>
               <span :class="{ 'ganancia-positiva': itemsVenta[selectedRowIndex].ganancia > 0, 'ganancia-negativa': itemsVenta[selectedRowIndex].ganancia < 0 }">
@@ -201,13 +201,13 @@
           <tr class="total">
             <td colspan="3" class="text-right"><strong>Total General Venta:</strong></td>
             <td><strong>${{ formatNumber(totalGeneralVenta) }}</strong></td>
-            <td class="desktop-only"><strong>${{ formatNumber(gananciaTotal) }}</strong></td>
+            <td v-if="clienteId !== 'catarro'" class="desktop-only"><strong>${{ formatNumber(gananciaTotal) }}</strong></td>
           </tr>
         </tfoot>
       </table>
     </div>
 
-    <div class="ganancia-del-dia">
+    <div v-if="clienteId !== 'catarro'" class="ganancia-del-dia">
       <h3>Ganancia del Día</h3>
       <p :class="{ 'ganancia-positiva': gananciaDelDia > 0, 'ganancia-negativa': gananciaDelDia < 0 }">
         ${{ formatNumber(gananciaDelDia) }}
@@ -240,19 +240,21 @@
       <button @click="addCobro" class="add-btn" :disabled="isNotaLocked">Agregar Flete</button>
     </div>
 
-    <h2>Correcciones</h2>
-    <div class="correcciones card">
-      <div class="input-row" v-for="(correccion, index) in correcciones" :key="index">
-        <input v-model="correccion.descripcion" type="text" placeholder="Descripción (ej: SI 406x5)" class="responsive-input" :disabled="isNotaLocked">
-        <input v-model.number="correccion.monto" type="number" placeholder="Monto" class="responsive-input" :disabled="isNotaLocked">
-        <button @click="removeCorreccion(index)" class="delete-btn" :disabled="isNotaLocked">Eliminar</button>
+    <template v-if="clienteId !== 'catarro'">
+      <h2>Correcciones</h2>
+      <div class="correcciones card">
+        <div class="input-row" v-for="(correccion, index) in correcciones" :key="index">
+          <input v-model="correccion.descripcion" type="text" placeholder="Descripción (ej: SI 406x5)" class="responsive-input" :disabled="isNotaLocked">
+          <input v-model.number="correccion.monto" type="number" placeholder="Monto" class="responsive-input" :disabled="isNotaLocked">
+          <button @click="removeCorreccion(index)" class="delete-btn" :disabled="isNotaLocked">Eliminar</button>
+        </div>
+        <button @click="addCorreccion" class="add-btn correccion-btn" :disabled="isNotaLocked">Agregar Corrección</button>
       </div>
-      <button @click="addCorreccion" class="add-btn correccion-btn" :disabled="isNotaLocked">Agregar Corrección</button>
-    </div>
+    </template>
 
     <h2>Abonos</h2>
     <div class="abonos card">
-      <div v-if="$route.params.id && !config.features.abonosGenerales" class="abonos-tools">
+      <div v-if="clienteId !== 'catarro' && $route.params.id && !config.features.abonosGenerales" class="abonos-tools">
         <button @click="reacomodarAbonosPosteriores" class="secondary-button" type="button">
           Reacomodar abonos posteriores
         </button>
@@ -1249,6 +1251,7 @@ export default {
     },
 
     toggleGananciasMobile(index) {
+      if (this.clienteId === 'catarro') return;
       if (window.innerWidth <= 600) {
         this.selectedRowIndex = this.selectedRowIndex === index ? null : index;
       }

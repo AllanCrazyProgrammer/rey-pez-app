@@ -16,6 +16,9 @@
       <StashModalV2 cliente="catarro" />
     </div>
 
+    <DeudasCatarro @seleccion="pestanaActiva = $event" />
+
+    <div v-show="pestanaActiva === 'actuales'" id="cuentas-actuales-catarro" role="tabpanel" aria-labelledby="pestana-catarro-actuales">
     <div class="filter-container">
       <label for="filter-select">Filtrar por estado:</label>
       <select id="filter-select" v-model="filtroEstado">
@@ -68,6 +71,7 @@
         <button @click="paginaActual = totalPaginas" :disabled="paginaActual === totalPaginas" class="pagination-btn">&raquo;</button>
       </div>
     </div>
+    </div>
 
     <template v-if="showSaveMessage && lastSaveMessage">
       <div class="save-message">
@@ -84,6 +88,7 @@ import PapeleraService from '@/services/PapeleraService';
 import BackButton from '@/components/BackButton.vue';
 import PreciosHistorialModal from '@/components/PreciosHistorialModal.vue';
 import StashModalV2 from '@/components/StashModalV2.vue';
+import DeudasCatarro from '@/components/Cuentas/DeudasCatarro.vue';
 import { formatNumber, formatearFecha as formatDate } from '@/utils/formatters';
 import { sonMontosIguales } from '@/utils/dinero';
 
@@ -92,10 +97,12 @@ export default {
   components: {
     BackButton,
     PreciosHistorialModal,
-    StashModalV2
+    StashModalV2,
+    DeudasCatarro
   },
   data() {
     return {
+      pestanaActiva: 'actuales',
       cuentas: [],
       isLoading: true,
       filtroEstado: 'todas',
