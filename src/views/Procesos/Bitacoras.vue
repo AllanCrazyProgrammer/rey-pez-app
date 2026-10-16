@@ -8,10 +8,10 @@
         <p class="eyebrow">CONTROL DE MANTENIMIENTO</p>
         <h1>Bitácoras de cuartos fríos</h1>
         <p class="page-description">
-          Consulta las revisiones y registra el mantenimiento de cada cuarto.
+          Abre un cuarto para ver sus revisiones, registrar mantenimiento y anotar sus equipos.
         </p>
       </div>
-      <button @click="nuevaBitacora" class="btn-primary">
+      <button type="button" @click="nuevaBitacora()" class="btn-primary">
         <i class="fas fa-plus" aria-hidden="true"></i> Nueva bitácora
       </button>
     </header>
@@ -25,203 +25,60 @@
 
     <section class="room-section" aria-labelledby="room-heading">
       <div class="section-heading">
-        <h2 id="room-heading">Último registro por cuarto</h2>
-        <span>Selecciona un cuarto para filtrar</span>
+        <h2 id="room-heading">Cuartos fríos</h2>
+        <span>Toca un cuarto para ver sus registros y equipos</span>
       </div>
-      <div class="room-grid">
-        <button
-          v-for="cuarto in resumenCuartos"
-          :key="cuarto.id"
-          class="room-card"
-          :class="{ selected: filtrosCuarto === cuarto.id }"
-          :aria-pressed="filtrosCuarto === cuarto.id"
-          @click="filtrosCuarto = filtrosCuarto === cuarto.id ? '' : cuarto.id"
-        >
-          <span class="room-name"
-            ><i class="far fa-snowflake" aria-hidden="true"></i> {{ cuarto.nombre }}</span
+      <div class="lista-cuartos">
+        <div v-for="(fila, indiceFila) in filasCuartos" :key="fila.clave" class="fila-cuartos">
+          <TarjetaCuarto
+            v-for="(cuarto, indiceEnFila) in fila.cuartos"
+            :key="cuarto.id"
+            :cuarto="cuarto"
+            :seleccionado="cuartoActivo === cuarto.id"
+            :cargando="cargando"
+            :error-carga="errorCarga"
+            :equipos-listos="equiposListos"
+            :style="{ '--i': indiceFila * columnas + indiceEnFila }"
+            @alternar="alternarCuarto(cuarto.id)"
+          />
+          <transition
+            mode="out-in"
+            @before-enter="antesDeAbrir"
+            @enter="abrirPanel"
+            @after-enter="despuesDeAbrir"
+            @before-leave="antesDeCerrar"
+            @leave="cerrarPanel"
           >
-          <template v-if="!cargando && !errorCarga && cuarto.ultimo">
-            <strong v-if="tieneTemperatura(cuarto.ultimo.temperatura)" class="room-temperature"
-              >{{ cuarto.ultimo.temperatura }} <small>°C</small></strong
+            <div
+              v-if="fila.abierta && cuartoSeleccionado"
+              :key="cuartoActivo"
+              id="panel-cuarto"
+              class="panel-cuarto-slot"
+              role="region"
+              aria-labelledby="panel-cuarto-titulo"
             >
-            <span v-else class="room-empty">Sin registro</span>
-            <span class="estado-tag" :class="claseEstado(cuarto.ultimo.estado)">{{
-              cuarto.ultimo.estado || 'Sin estado'
-            }}</span>
-            <span class="room-date">{{ formatearFecha(cuarto.ultimo.fecha) }}</span>
-          </template>
-          <span v-else class="room-empty">{{
-            cargando ? 'Cargando…' : errorCarga ? 'No disponible' : 'Sin registros'
-          }}</span>
-        </button>
-      </div>
-    </section>
-
-    <section class="history-panel" aria-labelledby="history-heading" :aria-busy="cargando">
-      <div class="section-heading history-heading">
-        <h2 id="history-heading">Historial de mantenimiento</h2>
-        <span aria-live="polite">{{
-          cargando
-            ? 'Cargando…'
-            : bitacorasFiltradas.length + ' de ' + bitacoras.length + ' registros'
-        }}</span>
-      </div>
-      <div class="filters-container">
-        <div class="filter-group search-group">
-          <label for="buscar">Buscar en bitácoras</label
-          ><input
-            id="buscar"
-            v-model="busqueda"
-            type="search"
-            class="form-control"
-            placeholder="Técnico, observaciones o acciones…"
-          />
+              <PanelCuarto
+                :cuarto="cuartoSeleccionado"
+                :registros="registrosCuartoActivo"
+                :cargando="cargando"
+                :error-carga="errorCarga"
+                :equipos="equiposPorCuarto[cuartoSeleccionado.id] || []"
+                :equipos-listos="equiposListos"
+                :cargando-equipos="cargandoEquipos"
+                :error-equipos="errorEquipos"
+                :guardando-equipos="guardandoEquipos"
+                :error-guardado-equipos="errorGuardadoEquipos"
+                :aviso-equipos="avisoEquipos"
+                @nueva="nuevaBitacora(cuartoSeleccionado.id)"
+                @ver="verDetalles"
+                @editar="editarBitacora"
+                @eliminar="confirmarEliminarBitacora"
+                @guardar-equipos="guardarEquipos"
+                @reintentar-equipos="cargarEquipos"
+              />
+            </div>
+          </transition>
         </div>
-        <div class="filter-group">
-          <label for="cuarto-select">Cuarto frío</label
-          ><select id="cuarto-select" v-model="filtrosCuarto" class="form-control">
-            <option value="">Todos los cuartos</option>
-            <option v-for="cuarto in cuartos" :key="cuarto.id" :value="cuarto.id">
-              {{ cuarto.nombre }}
-            </option>
-          </select>
-        </div>
-        <div class="filter-group">
-          <label for="estado-filtro">Estado</label
-          ><select id="estado-filtro" v-model="filtroEstado" class="form-control">
-            <option value="">Todos los estados</option>
-            <option v-for="estado in estados" :key="estado">{{ estado }}</option>
-          </select>
-        </div>
-        <div class="filter-group">
-          <label for="fecha-desde">Desde</label
-          ><input
-            type="date"
-            id="fecha-desde"
-            v-model="filtroFechaDesde"
-            :max="filtroFechaHasta || undefined"
-            class="form-control"
-          />
-        </div>
-        <div class="filter-group">
-          <label for="fecha-hasta">Hasta</label
-          ><input
-            type="date"
-            id="fecha-hasta"
-            v-model="filtroFechaHasta"
-            :min="filtroFechaDesde || undefined"
-            class="form-control"
-          />
-        </div>
-      </div>
-      <div class="filter-caption">
-        <span
-          :class="{ 'date-error': rangoInvalido }"
-          :role="rangoInvalido ? 'alert' : undefined"
-          >{{
-            rangoInvalido
-              ? 'La fecha inicial debe ser anterior o igual a la final.'
-              : 'Los filtros se aplican automáticamente · Más recientes primero'
-          }}</span
-        ><button v-if="hayFiltros" class="text-button" @click="limpiarFiltros">
-          Limpiar filtros
-        </button>
-      </div>
-      <div v-if="cargando" class="empty-state" role="status">
-        <i class="fas fa-circle-notch fa-spin" aria-hidden="true"></i>
-        <h3>Cargando bitácoras…</h3>
-      </div>
-      <div v-else-if="errorCarga" class="empty-state">
-        <h3>No se pudo cargar el historial</h3>
-        <p>Reintenta para consultar los registros.</p>
-      </div>
-      <div v-else-if="!bitacorasFiltradas.length" class="empty-state">
-        <i class="far fa-clipboard" aria-hidden="true"></i>
-        <h3>
-          {{ hayFiltros ? 'No encontramos coincidencias' : 'Registra el primer mantenimiento' }}
-        </h3>
-        <p>
-          {{
-            hayFiltros
-              ? 'Prueba con otro cuarto, estado o rango de fechas.'
-              : 'Guarda la temperatura, el diagnóstico y las acciones realizadas.'
-          }}
-        </p>
-        <button v-if="hayFiltros" class="btn-secondary" @click="limpiarFiltros">
-          Limpiar filtros</button
-        ><button v-else class="btn-primary" @click="nuevaBitacora">Crear primera bitácora</button>
-      </div>
-      <div v-else class="table-responsive">
-        <table class="bitacoras-table">
-          <thead>
-            <tr>
-              <th scope="col">Fecha / cuarto</th>
-              <th scope="col">Temperatura</th>
-              <th scope="col">Técnico</th>
-              <th scope="col">Mantenimiento</th>
-              <th scope="col">Estado</th>
-              <th scope="col">Acciones</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="bitacora in bitacorasFiltradas" :key="bitacora.id">
-              <td class="record-title">
-                <strong>{{ formatearNombreCuarto(bitacora.cuartoId) }}</strong
-                ><span>{{ formatearFecha(bitacora.fecha) }}</span>
-              </td>
-              <td data-label="Temperatura" class="temperature-cell">
-                {{ mostrarTemperatura(bitacora.temperatura) }}
-              </td>
-              <td data-label="Técnico">{{ bitacora.tecnico }}</td>
-              <td data-label="Mantenimiento">{{ bitacora.tipoMantenimiento }}</td>
-              <td data-label="Estado">
-                <span class="estado-tag" :class="claseEstado(bitacora.estado)">{{
-                  bitacora.estado || 'Sin estado'
-                }}</span>
-              </td>
-              <td>
-                <div class="acciones">
-                  <button
-                    @click="verDetalles(bitacora)"
-                    class="btn-detail"
-                    :aria-label="
-                      'Ver detalles de ' +
-                      formatearNombreCuarto(bitacora.cuartoId) +
-                      ', ' +
-                      formatearFecha(bitacora.fecha)
-                    "
-                  >
-                    Ver detalle</button
-                  ><button
-                    @click="editarBitacora(bitacora)"
-                    class="btn-accion"
-                    title="Editar bitácora"
-                    :aria-label="
-                      'Editar bitácora de ' +
-                      formatearNombreCuarto(bitacora.cuartoId) +
-                      ', ' +
-                      formatearFecha(bitacora.fecha)
-                    "
-                  >
-                    <i class="fas fa-pen" aria-hidden="true"></i></button
-                  ><button
-                    @click="confirmarEliminarBitacora(bitacora)"
-                    class="btn-accion eliminar"
-                    title="Eliminar bitácora"
-                    :aria-label="
-                      'Eliminar bitácora de ' +
-                      formatearNombreCuarto(bitacora.cuartoId) +
-                      ', ' +
-                      formatearFecha(bitacora.fecha)
-                    "
-                  >
-                    <i class="far fa-trash-alt" aria-hidden="true"></i>
-                  </button>
-                </div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
       </div>
     </section>
 
@@ -532,23 +389,23 @@ import {
 } from 'firebase/firestore';
 import { formatearFecha } from '@/utils/formatters';
 import DictadoTextarea from '@/components/DictadoTextarea.vue';
+import TarjetaCuarto from '@/components/bitacoras/TarjetaCuarto.vue';
+import PanelCuarto from '@/components/bitacoras/PanelCuarto.vue';
+import {
+  CUARTOS_FRIOS,
+  equiposDesdeDocumento,
+  mensajeErrorCuartos,
+  serializarEquipo,
+  validarEquipo,
+} from '@/utils/equiposCuarto';
 
 export default {
   name: 'Bitacoras',
-  components: { DictadoTextarea },
+  components: { DictadoTextarea, TarjetaCuarto, PanelCuarto },
   data() {
     return {
       bitacoras: [],
-      cuartos: [
-        { id: '1', nombre: 'Cuarto frío #1' },
-        { id: '2', nombre: 'Cuarto frío #2' },
-        { id: '3', nombre: 'Cuarto frío #3' },
-        { id: '4', nombre: 'Cuarto frío #4' },
-        { id: '5', nombre: 'Cuarto frío #5' },
-      ],
-      estados: ['Óptimo', 'Regular', 'Requiere Atención', 'Crítico'],
-      busqueda: '',
-      filtroEstado: '',
+      cuartos: CUARTOS_FRIOS,
       mensaje: '',
       errorCarga: '',
       errorFormulario: '',
@@ -561,9 +418,15 @@ export default {
       bitacoraActual: this.inicializarBitacora(),
       bitacoraDetalle: {},
       bitacoraEliminar: {},
-      filtrosCuarto: '',
-      filtroFechaDesde: '',
-      filtroFechaHasta: '',
+      cuartoActivo: '',
+      columnas: 1,
+      equiposPorCuarto: {},
+      equiposListos: false,
+      cargandoEquipos: true,
+      errorEquipos: '',
+      guardandoEquipos: false,
+      errorGuardadoEquipos: '',
+      avisoEquipos: '',
       cargando: true,
       guardando: false,
       eliminando: false,
@@ -579,61 +442,35 @@ export default {
         ? 'eliminar'
         : '';
     },
-    hayFiltros() {
-      return !!(
-        this.busqueda ||
-        this.filtroEstado ||
-        this.filtrosCuarto ||
-        this.filtroFechaDesde ||
-        this.filtroFechaHasta
-      );
-    },
-    rangoInvalido() {
-      return !!(
-        this.filtroFechaDesde &&
-        this.filtroFechaHasta &&
-        this.filtroFechaDesde > this.filtroFechaHasta
-      );
-    },
     resumenCuartos() {
-      return this.cuartos.map((cuarto) => ({
-        ...cuarto,
-        ultimo: this.bitacoras
-          .filter((b) => String(b.cuartoId) === cuarto.id)
-          .sort((a, b) => new Date(b.fecha) - new Date(a.fecha))[0],
-      }));
+      return this.cuartos.map((cuarto) => {
+        const registros = this.registrosDe(cuarto.id);
+        return {
+          ...cuarto,
+          ultimo: registros[0] || null,
+          totalRegistros: registros.length,
+          totalEquipos: (this.equiposPorCuarto[cuarto.id] || []).length,
+        };
+      });
     },
-    bitacorasFiltradas() {
-      if (this.rangoInvalido) return [];
-      let resultado = [...this.bitacoras];
-      const texto = this.normalizarTexto(this.busqueda.trim());
-      if (texto)
-        resultado = resultado.filter((b) =>
-          this.normalizarTexto(
-            [
-              b.tecnico,
-              b.observaciones,
-              b.accionesRealizadas,
-              b.tipoMantenimiento,
-              this.formatearNombreCuarto(b.cuartoId),
-            ].join(' ')
-          ).includes(texto)
-        );
-      if (this.filtroEstado) resultado = resultado.filter((b) => b.estado === this.filtroEstado);
-
-      if (this.filtrosCuarto) {
-        resultado = resultado.filter((b) => String(b.cuartoId) === this.filtrosCuarto);
+    filasCuartos() {
+      const filas = [];
+      const columnas = this.columnas || 1;
+      for (let inicio = 0; inicio < this.resumenCuartos.length; inicio += columnas) {
+        const cuartos = this.resumenCuartos.slice(inicio, inicio + columnas);
+        filas.push({
+          clave: cuartos.map((cuarto) => cuarto.id).join('-'),
+          cuartos,
+          abierta: cuartos.some((cuarto) => cuarto.id === this.cuartoActivo),
+        });
       }
-
-      if (this.filtroFechaDesde) {
-        resultado = resultado.filter((b) => new Date(b.fecha) >= new Date(this.filtroFechaDesde));
-      }
-
-      if (this.filtroFechaHasta) {
-        resultado = resultado.filter((b) => new Date(b.fecha) <= new Date(this.filtroFechaHasta));
-      }
-
-      return resultado.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+      return filas;
+    },
+    cuartoSeleccionado() {
+      return this.resumenCuartos.find((cuarto) => cuarto.id === this.cuartoActivo) || null;
+    },
+    registrosCuartoActivo() {
+      return this.cuartoActivo ? this.registrosDe(this.cuartoActivo) : [];
     },
   },
   watch: {
@@ -658,14 +495,24 @@ export default {
   },
   mounted() {
     document.addEventListener('keydown', this.tecladoModal);
+    this.consultaDos = window.matchMedia('(min-width: 640px)');
+    this.consultaCinco = window.matchMedia('(min-width: 1100px)');
+    this._alCambiarColumnas = () => this.actualizarColumnas();
+    this.consultaDos.addEventListener('change', this._alCambiarColumnas);
+    this.consultaCinco.addEventListener('change', this._alCambiarColumnas);
   },
   beforeDestroy() {
+    this._desmontado = true;
     document.removeEventListener('keydown', this.tecladoModal);
+    if (this.consultaDos) this.consultaDos.removeEventListener('change', this._alCambiarColumnas);
+    if (this.consultaCinco) this.consultaCinco.removeEventListener('change', this._alCambiarColumnas);
     this.liberarPreviews();
     if (this.modalActivo) document.body.style.overflow = this.overflowAnterior || '';
   },
   created() {
+    this.actualizarColumnas();
     this.cargarBitacoras();
+    this.cargarEquipos();
   },
   methods: {
     formatearFecha,
@@ -688,21 +535,100 @@ export default {
     claseEstado(estado) {
       return 'estado-' + this.normalizarTexto(estado).replace(/\s+/g, '-');
     },
-    nuevaBitacora() {
+    registrosDe(cuartoId) {
+      return this.bitacoras
+        .filter((bitacora) => String(bitacora.cuartoId) === String(cuartoId))
+        .sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)));
+    },
+    actualizarColumnas() {
+      if (window.matchMedia('(min-width: 1100px)').matches) this.columnas = 5;
+      else if (window.matchMedia('(min-width: 640px)').matches) this.columnas = 2;
+      else this.columnas = 1;
+    },
+    alternarCuarto(cuartoId) {
+      if (this.guardandoEquipos) return;
+      this.avisoEquipos = '';
+      this.errorGuardadoEquipos = '';
+      this.cuartoActivo = this.cuartoActivo === cuartoId ? '' : cuartoId;
+    },
+    movimientoReducido() {
+      return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    },
+    finalizarTransicion(el, done) {
+      let cerrado = false;
+      const finalizar = () => {
+        if (cerrado) return;
+        cerrado = true;
+        clearTimeout(timer);
+        el.removeEventListener('transitionend', alTerminar);
+        done();
+      };
+      const alTerminar = (event) => {
+        if (event.target !== el || event.propertyName !== 'height') return;
+        finalizar();
+      };
+      const timer = setTimeout(finalizar, 800);
+      el.addEventListener('transitionend', alTerminar);
+    },
+    antesDeAbrir(el) {
+      el.style.overflow = 'hidden';
+      if (this.movimientoReducido()) return;
+      el.style.height = '0px';
+      el.style.opacity = '0';
+    },
+    abrirPanel(el, done) {
+      if (this.movimientoReducido()) {
+        el.style.height = 'auto';
+        el.style.opacity = '1';
+        done();
+        return;
+      }
+      requestAnimationFrame(() => {
+        const alto = el.scrollHeight;
+        el.style.transition = 'height 0.34s ease, opacity 0.34s ease';
+        requestAnimationFrame(() => {
+          el.style.height = `${alto}px`;
+          el.style.opacity = '1';
+        });
+      });
+      this.finalizarTransicion(el, done);
+    },
+    despuesDeAbrir(el) {
+      el.style.height = 'auto';
+      el.style.overflow = 'visible';
+      el.style.transition = '';
+      el.style.opacity = '';
+      if (el.scrollIntoView) {
+        el.scrollIntoView({
+          behavior: this.movimientoReducido() ? 'auto' : 'smooth',
+          block: 'nearest',
+        });
+      }
+    },
+    antesDeCerrar(el) {
+      el.style.overflow = 'hidden';
+      el.style.height = `${el.scrollHeight}px`;
+    },
+    cerrarPanel(el, done) {
+      if (this.movimientoReducido()) {
+        done();
+        return;
+      }
+      el.style.transition = 'height 0.28s ease, opacity 0.28s ease';
+      requestAnimationFrame(() => {
+        el.style.height = '0px';
+        el.style.opacity = '0';
+      });
+      this.finalizarTransicion(el, done);
+    },
+    nuevaBitacora(cuartoId) {
+      const id = typeof cuartoId === 'string' ? cuartoId : this.cuartoActivo;
       this.liberarPreviews();
       this.modoEdicion = false;
       this.errorFormulario = '';
       this.bitacoraActual = this.inicializarBitacora();
-      this.bitacoraActual.cuartoId = this.filtrosCuarto;
+      this.bitacoraActual.cuartoId = id || '';
       this.mostrarFormulario = true;
-    },
-    limpiarFiltros() {
-      this.busqueda =
-        this.filtroEstado =
-        this.filtrosCuarto =
-        this.filtroFechaDesde =
-        this.filtroFechaHasta =
-          '';
     },
     cerrarConfirmacion() {
       if (!this.eliminando) this.mostrarConfirmacionEliminar = false;
@@ -768,6 +694,7 @@ export default {
         const bitacorasRef = collection(db, 'bitacoras');
         const q = query(bitacorasRef, orderBy('fecha', 'desc'));
         const querySnapshot = await getDocs(q);
+        if (this._desmontado) return;
 
         this.bitacoras = querySnapshot.docs.map((doc) => {
           const data = doc.data();
@@ -794,10 +721,64 @@ export default {
         console.log(`Se cargaron ${this.bitacoras.length} bitácoras`);
       } catch (error) {
         console.error('Error al cargar bitácoras:', error);
-        this.errorCarga =
-          'No pudimos cargar las bitácoras. Revisa tu conexión e inténtalo de nuevo.';
+        if (!this._desmontado) {
+          this.errorCarga =
+            'No pudimos cargar las bitácoras. Revisa tu conexión e inténtalo de nuevo.';
+        }
       } finally {
-        this.cargando = false;
+        if (!this._desmontado) this.cargando = false;
+      }
+    },
+    async cargarEquipos() {
+      this.errorEquipos = '';
+      this.cargandoEquipos = true;
+      try {
+        const snapshot = await getDocs(collection(db, 'cuartos'));
+        if (this._desmontado) return;
+        const mapa = {};
+        this.cuartos.forEach((cuarto) => {
+          mapa[cuarto.id] = [];
+        });
+        snapshot.forEach((documento) => {
+          if (Object.prototype.hasOwnProperty.call(mapa, documento.id)) {
+            mapa[documento.id] = equiposDesdeDocumento(documento.data());
+          }
+        });
+        this.equiposPorCuarto = mapa;
+        this.equiposListos = true;
+      } catch (error) {
+        console.error('Error al cargar equipos de cuartos:', error);
+        if (!this._desmontado) {
+          this.equiposListos = false;
+          this.errorEquipos = mensajeErrorCuartos(error, 'cargar');
+        }
+      } finally {
+        if (!this._desmontado) this.cargandoEquipos = false;
+      }
+    },
+    async guardarEquipos(lista) {
+      const cuartoId = this.cuartoActivo;
+      if (!cuartoId || !this.equiposListos || this.guardandoEquipos) return;
+      const serializados = (lista || []).map((equipo) => serializarEquipo(equipo));
+      const invalido = serializados.map((equipo) => validarEquipo(equipo)).find(Boolean);
+      this.avisoEquipos = '';
+      this.errorGuardadoEquipos = invalido || '';
+      if (invalido) return;
+      this.guardandoEquipos = true;
+      try {
+        await setDoc(
+          doc(db, 'cuartos', String(cuartoId)),
+          { equipos: serializados },
+          { merge: true }
+        );
+        if (this._desmontado) return;
+        this.$set(this.equiposPorCuarto, cuartoId, serializados);
+        this.avisoEquipos = 'Equipos guardados.';
+      } catch (error) {
+        console.error('Error al guardar equipos del cuarto:', error);
+        if (!this._desmontado) this.errorGuardadoEquipos = mensajeErrorCuartos(error, 'guardar');
+      } finally {
+        if (!this._desmontado) this.guardandoEquipos = false;
       }
     },
     formatearNombreCuarto(cuartoId) {
@@ -1007,7 +988,8 @@ export default {
   width: 100%;
   max-width: 1440px;
   margin: 0 auto;
-  padding: 28px 32px 64px;
+  padding: 20px max(16px, env(safe-area-inset-right)) calc(32px + env(safe-area-inset-bottom))
+    max(16px, env(safe-area-inset-left));
   color: var(--ink);
   font-family: 'Roboto', sans-serif;
 }
@@ -1024,10 +1006,13 @@ export default {
 }
 .page-header {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 24px;
-  margin-bottom: 28px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.page-header .btn-primary {
+  width: 100%;
 }
 .eyebrow {
   font-size: 11px;
@@ -1107,10 +1092,10 @@ a:focus-visible,
 }
 .section-heading {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 15px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  margin-bottom: 14px;
 }
 .section-heading h2 {
   font-size: 17px;
@@ -1121,87 +1106,21 @@ a:focus-visible,
   color: var(--muted);
   font-size: 12px;
 }
-.room-grid {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 12px;
-  margin-bottom: 30px;
-}
-.room-card {
-  text-align: left;
-  background: #fff;
-  border: 1px solid var(--line);
-  border-radius: 13px;
-  padding: 18px;
-  min-height: 170px;
+.lista-cuartos {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
   gap: 12px;
-  color: var(--ink);
 }
-.room-card:hover {
-  background: #f6faf7;
-  border-color: #8db3a3;
-}
-.room-card.selected {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 1px var(--accent);
-  background: #eef7f1;
-}
-.room-name {
-  font-size: 13px;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.room-name i {
-  color: #43816d;
-}
-.room-temperature {
-  font-size: 29px;
-  line-height: 1;
-  letter-spacing: -0.7px;
-  font-variant-numeric: tabular-nums;
-}
-.room-temperature small {
-  font-size: 16px;
-  font-weight: 400;
-  color: var(--muted);
-}
-.room-date,
-.room-empty {
-  font-size: 12px;
-  color: var(--muted);
-}
-.room-date {
-  margin-top: auto;
-}
-.room-empty {
-  margin: auto 0;
-}
-.history-panel {
-  background: #fff;
-  border: 1px solid var(--line);
-  border-radius: 15px;
-  overflow: hidden;
-  box-shadow: 0 6px 24px #193e3010;
-}
-.history-heading {
-  padding: 24px 24px 0;
-  margin-bottom: 20px;
-}
-.filters-container {
+.fila-cuartos {
   display: grid;
-  grid-template-columns: 1.6fr 1fr 1.1fr 1fr 1fr;
+  grid-template-columns: 1fr;
   gap: 12px;
-  padding: 0 24px;
+  align-items: stretch;
 }
-.filter-group {
+.panel-cuarto-slot {
+  grid-column: 1 / -1;
   min-width: 0;
 }
-.filter-group label,
 .form-group label {
   font-size: 12px;
   font-weight: 600;
@@ -1219,78 +1138,11 @@ a:focus-visible,
   background: white;
   color: var(--ink);
   font: inherit;
-  font-size: 14px;
+  font-size: 16px;
   color-scheme: light;
 }
 .form-control::placeholder {
   color: #6c7b74;
-}
-.filter-caption {
-  min-height: 53px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 12px 24px;
-  color: var(--muted);
-  font-size: 12px;
-}
-.text-button {
-  background: none;
-  color: var(--accent);
-  border: none;
-  padding: 8px 0;
-  font-weight: 600;
-}
-.date-error {
-  color: #ad3030;
-}
-.table-responsive {
-  overflow-x: auto;
-}
-.bitacoras-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 13px;
-}
-.bitacoras-table th {
-  text-align: left;
-  padding: 13px 18px;
-  background: #f3f7f4;
-  border-block: 1px solid var(--line);
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: #587164;
-}
-.bitacoras-table td {
-  padding: 18px;
-  border-bottom: 1px solid #e9efea;
-  vertical-align: middle;
-  overflow-wrap: anywhere;
-}
-.bitacoras-table tr:last-child td {
-  border-bottom: 0;
-}
-.bitacoras-table tbody tr:hover {
-  background: #fafcfb;
-}
-.record-title strong,
-.record-title > span {
-  display: block;
-}
-.record-title strong {
-  font-weight: 600;
-  margin-bottom: 5px;
-}
-.record-title > span {
-  font-size: 12px;
-  color: var(--muted);
-}
-.temperature-cell {
-  font-weight: 600;
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
 }
 .estado-tag {
   display: inline-block;
@@ -1317,56 +1169,6 @@ a:focus-visible,
 .estado-critico {
   background: #fce8e8;
   color: #a33232;
-}
-.acciones {
-  display: flex;
-  gap: 5px;
-  align-items: center;
-}
-.btn-detail,
-.btn-accion {
-  border: 1px solid var(--line);
-  color: var(--accent);
-  background: white;
-  border-radius: 7px;
-  min-height: 40px;
-  padding: 8px 10px;
-  white-space: nowrap;
-  font-size: 12px;
-}
-.btn-accion {
-  min-width: 40px;
-}
-.btn-detail:hover,
-.btn-accion:hover {
-  background: #edf5ef;
-}
-.btn-accion.eliminar {
-  color: #ac4747;
-  border-color: transparent;
-}
-.btn-accion.eliminar:hover {
-  background: #fce8e8;
-}
-.empty-state {
-  padding: 58px 20px;
-  text-align: center;
-  color: var(--muted);
-  border-top: 1px solid var(--line);
-}
-.empty-state > i {
-  font-size: 30px;
-  color: #719584;
-  margin-bottom: 18px;
-}
-.empty-state h3 {
-  font-size: 19px;
-  color: var(--ink);
-  margin-bottom: 10px;
-}
-.empty-state p {
-  font-size: 14px;
-  margin-bottom: 22px;
 }
 .notice {
   display: flex;
@@ -1400,8 +1202,8 @@ a:focus-visible,
   backdrop-filter: blur(4px);
   display: flex;
   justify-content: center;
-  align-items: center;
-  padding: 20px;
+  align-items: flex-end;
+  padding: 10px;
   z-index: 10000;
 }
 .modal-content {
@@ -1457,7 +1259,7 @@ a:focus-visible,
 }
 .form-fields {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr;
   gap: 18px;
   padding: 0;
   margin: 0;
@@ -1549,140 +1351,42 @@ textarea.form-control {
 .btn-eliminar:hover {
   background: #8e2929;
 }
-@media (max-width: 1100px) {
-  .filters-container {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+@media (min-width: 640px) {
+  .form-fields {
+    grid-template-columns: 1fr 1fr;
   }
-  .search-group {
-    grid-column: 1 / -1;
-  }
-  .room-card {
-    padding: 14px;
-  }
-}
-@media (max-width: 760px) {
   .bitacoras-container {
-    padding: 20px 16px 40px;
+    padding: 28px 32px 64px;
   }
   .page-header {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 18px;
-  }
-  .page-header .btn-primary {
-    align-self: flex-start;
-  }
-  .room-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 10px;
-  }
-  .room-card {
-    min-height: 162px;
-  }
-  .room-card:last-child {
-    grid-column: 1 / -1;
-    min-height: auto;
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    align-items: center;
-  }
-  .section-heading {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 7px;
-  }
-  .history-heading {
-    padding: 20px 16px 0;
-  }
-  .filters-container {
-    padding: 0 16px;
-    grid-template-columns: 1fr 1fr;
-  }
-  .form-control {
-    font-size: 16px;
-  }
-  .filter-caption {
-    padding: 12px 16px;
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 0;
-  }
-  .bitacoras-table,
-  .bitacoras-table tbody,
-  .bitacoras-table tr,
-  .bitacoras-table td {
-    display: block;
-    width: 100%;
-  }
-  .bitacoras-table thead {
-    display: none;
-  }
-  .bitacoras-table tbody {
-    padding: 0 12px 12px;
-  }
-  .bitacoras-table tr {
-    border: 1px solid var(--line);
-    border-radius: 10px;
-    margin-bottom: 12px;
-    padding: 14px;
-  }
-  .bitacoras-table tr:last-child {
-    margin-bottom: 0;
-  }
-  .bitacoras-table td {
-    border: none;
-    padding: 7px 0;
-  }
-  .bitacoras-table td[data-label] {
-    display: flex;
+    flex-direction: row;
     align-items: center;
     justify-content: space-between;
-    gap: 16px;
-    text-align: right;
   }
-  .bitacoras-table td[data-label]::before {
-    content: attr(data-label);
-    color: var(--muted);
-    font-size: 12px;
-    font-weight: 400;
-    flex-shrink: 0;
+  .page-header .btn-primary {
+    width: auto;
   }
-  .record-title {
-    border-bottom: 1px solid var(--line) !important;
-    padding: 0 0 12px !important;
-    margin-bottom: 7px;
+  .section-heading {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
   }
-  .acciones {
-    margin-top: 7px;
-  }
-  .btn-detail {
-    flex: 1;
-  }
-  .btn-detail,
-  .btn-accion {
-    min-height: 44px;
+  .fila-cuartos {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .modal-overlay {
-    padding: 10px;
-  }
-  .modal-content {
-    max-height: calc(100dvh - 20px);
-    border-radius: 12px;
-  }
-  .modal-header,
-  .modal-body {
-    padding: 18px;
-  }
-  .modal-footer {
-    padding: 14px 18px;
+    align-items: center;
+    padding: 20px;
   }
 }
-@media (max-width: 400px) {
-  .form-fields {
-    grid-template-columns: 1fr;
+@media (min-width: 1100px) {
+  .fila-cuartos {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
   }
-  .modal-header h2 {
-    font-size: 19px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .panel-cuarto-slot {
+    transition: none;
   }
 }
 </style>
