@@ -7,6 +7,7 @@ import * as pdfFonts from 'pdfmake/build/vfs_fonts';
 import { db } from '@/firebase';
 import { collection, query, getDocs } from 'firebase/firestore';
 import { normalizarNombreProductoPrecio } from './preciosHistoricos';
+import { prepararKilosCatarroParaNota, normalizarKilosCatarro, formatearKilosCatarro } from './kilosCatarro';
 
 let activePdfMake = pdfMake;
 
@@ -674,6 +675,8 @@ async function generarContenidoClientes(embarque, clientesDisponibles, clientesJ
     clientesDisponibles = [];
   }
 
+  embarque = prepararKilosCatarroParaNota(embarque, clientesDisponibles, clientesSumarKgCatarro);
+
   // Agrupar productos por cliente
   const productosPorCliente = embarque.productos.reduce((acc, producto) => {
     if (!acc[producto.clienteId]) {
@@ -781,6 +784,11 @@ async function generarContenidoClientes(embarque, clientesDisponibles, clientesJ
               }))
             };
           } else {
+            if (producto.kilosNotaCatarro !== undefined) {
+              productosAgrupados[clave].kilosNotaCatarro = normalizarKilosCatarro(
+                productosAgrupados[clave].kilosNotaCatarro + producto.kilosNotaCatarro
+              );
+            }
             // Combinar los kilos y taras
             productosAgrupados[clave].kilos.push(...producto.kilos);
             productosAgrupados[clave].taras.push(...producto.taras);
@@ -968,7 +976,7 @@ async function generarContenidoClientes(embarque, clientesDisponibles, clientesJ
             // Usar exactamente los mismos kilos que se muestran en la tabla
             const esLorena = nombreCliente.toLowerCase().includes('lorena') || nombreCliente.toLowerCase().includes('veronica');
             const mostrarDecimales = nombreCliente.toLowerCase().includes('ozuna') || esLorena;
-            const kilosMostrados = mostrarDecimales ? 
+            const kilosMostrados = producto.kilosNotaCatarro !== undefined ? kilos : mostrarDecimales ?
               Number(kilos.toFixed(1)) : Math.round(kilos);
             totalProducto = kilosMostrados * Number(producto.precio);
           }
@@ -1001,7 +1009,7 @@ async function generarContenidoClientes(embarque, clientesDisponibles, clientesJ
             const kilos = parseFloat(calcularKilosCrudos(item, nombreCliente, multiplicadorLorenaGdeCc));
             // Usar exactamente los mismos kilos que se muestran en la tabla (redondeados)
             const esLorena = nombreCliente.toLowerCase().includes('lorena') || nombreCliente.toLowerCase().includes('veronica');
-            const kilosMostrados = esLorena ? Number(kilos.toFixed(1)) : Math.round(kilos);
+            const kilosMostrados = item.kilosNotaCatarro !== undefined ? kilos : esLorena ? Number(kilos.toFixed(1)) : Math.round(kilos);
             totalDineroCrudosCliente += kilosMostrados * Number(item.precio);
             
             // Acumular taras para calcular flete de crudos
@@ -1364,12 +1372,12 @@ function generarTablaProductos(productos, estiloCliente, nombreCliente, aplicarR
       const esLorena = nombreCliente.toLowerCase().includes('lorena') || nombreCliente.toLowerCase().includes('veronica');
       const mostrarDecimales = nombreCliente.toLowerCase().includes('ozuna') || esLorena;
 
-      const kilosMostrados = mostrarDecimales ? 
+      const kilosMostrados = producto.kilosNotaCatarro !== undefined ? kilos : mostrarDecimales ?
         Number(kilos.toFixed(1)) : Math.round(kilos);
       
       const row = [
         // Mostrar un decimal para Ozuna y Lorena
-        mostrarDecimales ? `${kilos.toFixed(1)} kg` : `${Math.round(kilos)} kg`,
+        producto.kilosNotaCatarro !== undefined ? `${formatearKilosCatarro(kilos)} kg` : mostrarDecimales ? `${kilos.toFixed(1)} kg` : `${Math.round(kilos)} kg`,
         // Construir el texto del producto según los casos
         hayPrecios 
           ? (mostrarColumnaPrecio 
@@ -1715,10 +1723,10 @@ function generarTablaCrudos(crudos, estiloCliente, incluirPreciosCliente = false
     
     // Calcular los kilos que se mostrarán en la tabla (exactamente como aparecen)
     const esLorena = nombreCliente.toLowerCase().includes('lorena') || nombreCliente.toLowerCase().includes('veronica');
-    const kilosMostrados = esLorena ? Number(kilos.toFixed(1)) : Math.round(kilos);
+    const kilosMostrados = item.kilosNotaCatarro !== undefined ? kilos : esLorena ? Number(kilos.toFixed(1)) : Math.round(kilos);
     
     const row = [
-      esLorena ? `${kilos.toFixed(1)} kg` : `${kilosMostrados} kg`,
+      item.kilosNotaCatarro !== undefined ? `${formatearKilosCatarro(kilos)} kg` : esLorena ? `${kilos.toFixed(1)} kg` : `${kilosMostrados} kg`,
       {
         text: item.talla.replace(/\s*c\/\s*c$/i, ' c/c'),
         // Aplicar estilo azul si la talla contiene "c/c" (que indica "con cascaron")
@@ -1981,6 +1989,7 @@ function totalTaras(producto) {
 }
 
 function totalKilos(producto, nombreCliente, aplicarReglaOtilio = true, sumarKgCatarro = true) {
+  if (producto.kilosNotaCatarro !== undefined) return producto.kilosNotaCatarro;
   const sumaKilos = (producto.kilos || []).reduce((sum, kilo) => sum + (kilo || 0), 0);
   
   // Calcular el descuento de taras
@@ -2048,6 +2057,7 @@ function totalKilos(producto, nombreCliente, aplicarReglaOtilio = true, sumarKgC
 }
 
 function calcularKilosCrudos(item, clienteNombre, multiplicadorLorenaGdeCc = 20) {
+  if (item.kilosNotaCatarro !== undefined) return formatearKilosCatarro(item.kilosNotaCatarro);
   let kilosTotales = 0;
   const nombreClienteNormalizado = (clienteNombre || '').toLowerCase();
   const tallaNormalizada = (item?.talla || '')
@@ -2506,6 +2516,8 @@ async function generarContenidoClientesSinPrecios(embarque, clientesDisponibles,
     clientesDisponibles = [];
   }
 
+  embarque = prepararKilosCatarroParaNota(embarque, clientesDisponibles, clientesSumarKgCatarro);
+
   // Agrupar productos por cliente
   const productosPorCliente = embarque.productos.reduce((acc, producto) => {
     if (!acc[producto.clienteId]) {
@@ -2611,6 +2623,11 @@ async function generarContenidoClientesSinPrecios(embarque, clientesDisponibles,
               }))
             };
           } else {
+            if (producto.kilosNotaCatarro !== undefined) {
+              productosAgrupados[clave].kilosNotaCatarro = normalizarKilosCatarro(
+                productosAgrupados[clave].kilosNotaCatarro + producto.kilosNotaCatarro
+              );
+            }
             // Combinar los kilos y taras
             productosAgrupados[clave].kilos.push(...producto.kilos);
             productosAgrupados[clave].taras.push(...producto.taras);
@@ -2753,7 +2770,7 @@ async function generarContenidoClientesSinPrecios(embarque, clientesDisponibles,
           // Usar exactamente los mismos kilos que se muestran en la tabla
           const esLorena = nombreCliente.toLowerCase().includes('lorena') || nombreCliente.toLowerCase().includes('veronica');
           const mostrarDecimales = nombreCliente.toLowerCase().includes('ozuna') || esLorena;
-          const kilosMostrados = mostrarDecimales ? 
+          const kilosMostrados = producto.kilosNotaCatarro !== undefined ? kilos : mostrarDecimales ?
             Number(kilos.toFixed(1)) : Math.round(kilos);
           totalProducto = kilosMostrados * Number(producto.precio);
         }
@@ -2767,7 +2784,7 @@ async function generarContenidoClientesSinPrecios(embarque, clientesDisponibles,
         if (item.precio) {
           const kilos = parseFloat(calcularKilosCrudos(item, nombreCliente, multiplicadorLorenaGdeCc));
           // Usar exactamente los mismos kilos que se muestran en la tabla (redondeados)
-          const kilosMostrados = Math.round(kilos);
+          const kilosMostrados = item.kilosNotaCatarro !== undefined ? kilos : Math.round(kilos);
           totalDineroCliente += kilosMostrados * Number(item.precio);
         }
       });
@@ -2850,7 +2867,7 @@ function generarTablaProductosSinPrecios(productos, estiloCliente, nombreCliente
 
       const row = [
         // Mostrar decimales para Ozuna y Lorena
-        mostrarDecimales ? `${kilos.toFixed(1)} kg` : `${Math.round(kilos)} kg`,
+        producto.kilosNotaCatarro !== undefined ? `${formatearKilosCatarro(kilos)} kg` : mostrarDecimales ? `${kilos.toFixed(1)} kg` : `${Math.round(kilos)} kg`,
         // Formatear el nombre del producto según configuración de precios
         incluirPreciosCliente 
           ? (cuentaEnPdfCliente 
@@ -2999,7 +3016,7 @@ function generarTablaCrudosSinPrecios(crudos, estiloCliente) {
       // Solo procesar items con kilos > 0
       if (kilos > 0) {
         const esLorena = nombreCliente.toLowerCase().includes('lorena') || nombreCliente.toLowerCase().includes('veronica');
-        const kilosMostrados = esLorena ? kilos.toFixed(1) : Math.round(kilos);
+        const kilosMostrados = item.kilosNotaCatarro !== undefined ? formatearKilosCatarro(kilos) : esLorena ? kilos.toFixed(1) : Math.round(kilos);
         
         const row = [
           // Mostrar decimales para Lorena

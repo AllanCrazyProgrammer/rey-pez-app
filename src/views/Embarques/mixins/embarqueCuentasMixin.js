@@ -61,6 +61,7 @@ export const embarqueCuentasMixin = {
         productos: clienteProductos,
         clienteCrudos: { [clienteId]: clienteCrudos },
         kilosCrudos: this.embarque.kilosCrudos || {},
+        clientesSumarKgCatarro: { ...this.clientesSumarKgCatarro },
       };
     },
 
@@ -214,6 +215,7 @@ export const embarqueCuentasMixin = {
           ...this.embarque,
           productos: clienteProductos,
           clienteCrudos: { '2': clienteCrudos },
+          clientesSumarKgCatarro: { ...this.clientesSumarKgCatarro },
           productosTotales: this.embarque.productos,
           clienteCrudosTotales: this.clienteCrudos,
           costosPorMedida: { ...this.costosPorMedida },

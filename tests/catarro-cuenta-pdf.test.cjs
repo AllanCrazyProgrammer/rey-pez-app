@@ -16,6 +16,8 @@ function loadModule(filename, mocks = {}, cache = new Map()) {
   }).code;
   vm.runInNewContext(code, {
     module,
+    process,
+    Uint8Array,
     exports: module.exports,
     console: { log() {}, error() {}, warn() {} },
     require(id) {
@@ -190,4 +192,107 @@ test('Catarro: un fallo al leer el saldo anterior no guarda la cuenta en 0', asy
     /saldo anterior/
   );
   assert.equal(cuenta(), null);
+});
+
+async function generarNota(embarque, { juntar = false, sumarKg = false, precios = true, clientes } = {}) {
+  let documento;
+  const { generarNotaVentaPDF } = loadModule(path.resolve(__dirname, '../src/utils/pdfGenerator.js'), {
+    'pdfmake/build/pdfmake': { createPdf(definition) { documento = definition; return {}; } },
+    'pdfmake/build/vfs_fonts': {},
+    '@/firebase': { db: {} },
+    'firebase/firestore': {},
+    './pdf/delivery': { obtenerBufferPdf: async () => new Uint8Array(), entregarPdf: async () => {} },
+  });
+  await generarNotaVentaPDF(embarque, clientes || [{ id: '2', nombre: 'Catarro' }],
+    { '2': juntar }, {}, { '2': precios }, { '2': sumarKg }, { '2': precios });
+  assert.ok(documento, 'se debe generar la nota completa');
+  const filas = [];
+  function recorrer(node) {
+    if (!node || typeof node !== 'object') return;
+    if (node.table) filas.push(...node.table.body.filter(row => typeof row[0] === 'string' && / kg$/.test(row[0])));
+    Object.values(node).forEach(value => Array.isArray(value) ? value.forEach(recorrer) : recorrer(value));
+  }
+  recorrer(documento.content);
+  return filas;
+}
+
+function productoCatarro(cambios = {}) {
+  return { clienteId: '2', medida: '41/50', tipo: 's/h20', kilos: [100.25], taras: [2],
+    reporteTaras: [], reporteBolsas: [], tarasExtra: [1], restarTaras: true, precio: 100, ...cambios };
+}
+
+for (const fecha of ['2026-10-16', '2026-10-17']) {
+  for (const sumarKg of [false, true]) {
+    test(`Catarro ${fecha}, sumar kg ${sumarKg}: nota, copia y cuenta conservan los mismos decimales`, async () => {
+      const embarque = { fecha, productos: [productoCatarro()], clienteCrudos: { '2': [] },
+        clientesSumarKgCatarro: { '2': sumarKg } };
+      const original = JSON.stringify(embarque);
+      const { servicio, cuenta } = cargarServicio();
+      await servicio.crearCuentaCatarro(embarque, null);
+      const esperado = sumarKg ? 95.25 : 94.25;
+      assert.equal(cuenta().items[0].kilos, esperado);
+      assert.equal(cuenta().itemsVenta[0].kilosVenta, esperado);
+      assert.equal(cuenta().itemsVenta[0].totalVenta, esperado * 100);
+      const filas = await generarNota(embarque, { sumarKg });
+      assert.deepEqual(filas.map(row => row[0]), [`${esperado} kg`, `${esperado} kg`]);
+      assert.equal(filas[0][4].text, `$${(esperado * 100).toLocaleString('en-US')}`);
+      assert.equal(JSON.stringify(embarque), original, 'generar la nota no modifica el embarque');
+    });
+  }
+}
+
+test('Catarro: juntar medidas suma los mismos pesos y ajustes por producto que la cuenta', async () => {
+  const embarque = { fecha: '2026-10-16', productos: [
+    productoCatarro(),
+    productoCatarro({ kilos: [50.5], restarTaras: false, noSumarKilos: true }),
+    productoCatarro({ kilos: [20.1], restarTaras: false }),
+  ], clientesSumarKgCatarro: { '2': true } };
+  const { servicio, cuenta } = cargarServicio();
+  await servicio.crearCuentaCatarro(embarque, null);
+  assert.equal(cuenta().itemsVenta.reduce((sum, item) => sum + item.kilosVenta, 0), 166.85);
+  const filas = await generarNota(embarque, { sumarKg: true, juntar: true, precios: false });
+  assert.deepEqual(filas.map(row => row[0]), ['166.85 kg', '166.85 kg']);
+});
+
+test('Catarro: c/h20 conserva el peso neto decimal en las dos hojas y en la cuenta', async () => {
+  const embarque = { fecha: '2026-10-16', productos: [productoCatarro({
+    tipo: 'c/h20', kilos: [], reporteTaras: [1], reporteBolsas: [3], camaronNeto: 0.65,
+  })] };
+  const { servicio, cuenta } = cargarServicio();
+  await servicio.crearCuentaCatarro(embarque, null);
+  assert.equal(cuenta().itemsVenta[0].kilosVenta, 1.95);
+  const filas = await generarNota(embarque);
+  assert.deepEqual(filas.map(row => row[0]), ['1.95 kg', '1.95 kg']);
+  assert.equal(filas[0][4].text, '$195');
+});
+
+test('Catarro: crudos con dos sobrantes, fracciones sueltas y sobrantes ocultos coinciden con la cuenta', async () => {
+  const embarque = { fecha: '2026-10-16', productos: [productoCatarro({ kilos: [], taras: [] })],
+    clienteCrudos: { '2': [{ items: [
+      { talla: 'Med c/c', taras: '10-19', sobrante: '1-10.25', mostrarSobrante: true,
+        sobrante2: '1-0.5', mostrarSobrante2: true, precio: 100 },
+      { talla: 'Ch c/c', taras: '0.25', sobrante: '1-9.5', mostrarSobrante: false, precio: 100 },
+      { talla: 'Gde c/c', taras: '2-18.5', sobrantes: ['1-2.5', '1-3.25'], precio: 100 },
+    ] }] } };
+  const { servicio, cuenta } = cargarServicio();
+  await servicio.crearCuentaCatarro(embarque, null);
+  assert.deepEqual(Array.from(cuenta().itemsVenta, item => item.kilosVenta), [210.75, 0.25, 45.75]);
+  const filas = await generarNota(embarque);
+  assert.deepEqual(filas.map(row => row[0]), ['210.75 kg', '0.25 kg', '45.75 kg', '210.75 kg', '0.25 kg', '45.75 kg']);
+  assert.equal(filas[0][4].text, '$21,075');
+});
+
+test('Catarro: antes del 16 de octubre las notas y cuentas conservan el redondeo anterior', async () => {
+  const embarque = { fecha: '2026-10-15', productos: [productoCatarro({ kilos: [100.4] })] };
+  const { servicio, cuenta } = cargarServicio();
+  await servicio.crearCuentaCatarro(embarque, null);
+  assert.equal(cuenta().itemsVenta[0].kilosVenta, 94);
+  const filas = await generarNota(embarque);
+  assert.deepEqual(filas.map(row => row[0]), ['94 kg', '94 kg']);
+});
+
+test('el cambio de Catarro no cambia el redondeo de Elizabeth', async () => {
+  const embarque = { fecha: '2026-10-16', productos: [productoCatarro({ clienteId: '5', kilos: [100.4] })] };
+  const filas = await generarNota(embarque, { clientes: [{ id: '5', nombre: 'Elizabeth' }] });
+  assert.deepEqual(filas.map(row => row[0]), ['94 kg', '94 kg']);
 });

@@ -7,6 +7,7 @@ import {
 } from '../dateUtils';
 import { acumularLote } from '../dinero';
 import { obtenerSobrantesDeItem } from '../sobrantesCrudos';
+import { usarKilosDecimalesCatarro, calcularKilosProductoCatarro, calcularKilosCrudoCatarro } from '../kilosCatarro';
 
 /**
  * Servicio para gestionar la creación y actualización de cuentas de clientes a partir de embarques
@@ -771,6 +772,8 @@ const prepararDatosCuentaJoselito = async (embarqueData) => {
  */
 const prepararDatosCuentaCatarro = async (embarqueData) => {
   const { fecha, productos, clienteCrudos } = embarqueData;
+  const conservarDecimales = usarKilosDecimalesCatarro(fecha);
+  const sumarKg = embarqueData.clientesSumarKgCatarro?.['2'] !== false;
   
   // Obtener los crudos del cliente Catarro
   const crudosCatarro = clienteCrudos ? (clienteCrudos['2'] || []) : [];
@@ -853,26 +856,26 @@ const prepararDatosCuentaCatarro = async (embarqueData) => {
         const kilosVenta = calcularKilosCrudos(medida, kilos, false);
         
         // Solo agregar el item si tiene kilos
-        if (kilos > 0) {
-          // REDONDEAR los kilos cuando se crea automáticamente desde el botón "Crear Cuenta"
-          const kilosCostoRedondeados = Math.round(kilosCosto);
-          const kilosVentaRedondeados = Math.round(kilosVenta);
+        if ((conservarDecimales ? calcularKilosProductoCatarro(producto, sumarKg) : kilos) > 0) {
+          // Desde la fecha de corte, usar exactamente los kilos de la nota.
+          const kilosCostoCuenta = conservarDecimales ? calcularKilosProductoCatarro(producto, sumarKg) : Math.round(kilosCosto);
+          const kilosVentaCuenta = conservarDecimales ? kilosCostoCuenta : Math.round(kilosVenta);
           
           // Item para costos
           items.push({
-            kilos: kilosCostoRedondeados,
+            kilos: kilosCostoCuenta,
             medida,
             costo,
-            total: kilosCostoRedondeados * costo
+            total: kilosCostoCuenta * costo
           });
           
           // Item para ventas
           itemsVenta.push({
-            kilosVenta: kilosVentaRedondeados,
+            kilosVenta: kilosVentaCuenta,
             medida,
             precioVenta,
-            totalVenta: kilosVentaRedondeados * precioVenta,
-            ganancia: kilosVentaRedondeados * precioVenta - kilosCostoRedondeados * costo
+            totalVenta: kilosVentaCuenta * precioVenta,
+            ganancia: kilosVentaCuenta * precioVenta - kilosCostoCuenta * costo
           });
         }
       }
@@ -978,27 +981,29 @@ const prepararDatosCuentaCatarro = async (embarqueData) => {
             const kilosVenta = esProductoEspecifico ? 210 : kilosTarasVenta + kilosSobranteVenta + kilosSobranteVenta2;
             
             // Solo agregar el item si tiene kilos
-            if (kilosCosto > 0) {
-              // REDONDEAR los kilos cuando se crea automáticamente desde el botón "Crear Cuenta"
-              const kilosCostoRedondeados = Math.round(kilosCosto);
-              const kilosVentaRedondeados = Math.round(kilosVenta);
+            if ((conservarDecimales ? calcularKilosCrudoCatarro(item) : kilosCosto) > 0) {
+              // Conservar también los decimales de los sobrantes.
+              const kilosVentaCuenta = conservarDecimales ? calcularKilosCrudoCatarro(item) : Math.round(kilosVenta);
+              const kilosCostoCuenta = conservarDecimales
+                ? (esProductoEspecifico ? kilosCosto : kilosVentaCuenta)
+                : Math.round(kilosCosto);
               
               // Item para costos
               items.push({
-                kilos: kilosCostoRedondeados,
+                kilos: kilosCostoCuenta,
                 medida,
                 costo,
-                total: kilosCostoRedondeados * costo,
+                total: kilosCostoCuenta * costo,
                 esCrudo: true
               });
               
               // Item para ventas
               itemsVenta.push({
-                kilosVenta: kilosVentaRedondeados,
+                kilosVenta: kilosVentaCuenta,
                 medida,
                 precioVenta,
-                totalVenta: kilosVentaRedondeados * precioVenta,
-                ganancia: kilosVentaRedondeados * precioVenta - kilosCostoRedondeados * costo,
+                totalVenta: kilosVentaCuenta * precioVenta,
+                ganancia: kilosVentaCuenta * precioVenta - kilosCostoCuenta * costo,
                 esCrudo: true
               });
             }
