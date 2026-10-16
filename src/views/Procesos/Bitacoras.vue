@@ -410,6 +410,7 @@ import {
   conTiempo,
   mensajeErrorFoto,
   prepararFoto,
+  rutaFotoEquipo,
   rutaFotoMaquina,
   tipoDeArchivo,
 } from '@/utils/fotosBitacora';
@@ -794,27 +795,72 @@ export default {
     async guardarEquipos(lista) {
       const cuartoId = this.cuartoActivo;
       if (!cuartoId || !this.equiposListos || this.guardandoEquipos) return;
-      const serializados = (lista || []).map((equipo) => serializarEquipo(equipo));
-      const invalido = serializados.map((equipo) => validarEquipo(equipo)).find(Boolean);
+      const invalido = (lista || []).map((equipo) => validarEquipo(equipo)).find(Boolean);
       this.avisoEquipos = '';
       this.errorGuardadoEquipos = invalido || '';
       if (invalido) return;
+      const anteriores = (this.equiposPorCuarto[cuartoId] || []).map((equipo) => serializarEquipo(equipo));
       this.guardandoEquipos = true;
+      const subidas = [];
       try {
-        await setDoc(
-          doc(db, 'cuartos', String(cuartoId)),
-          { equipos: serializados },
-          { merge: true }
+        const serializados = [];
+        for (const equipo of lista || []) {
+          const base = serializarEquipo(equipo);
+          const nuevas = Array.isArray(equipo.fotosNuevas) ? equipo.fotosNuevas : [];
+          if (base.fotos.length + nuevas.length > 6) {
+            const error = new Error('Puedes adjuntar hasta 6 fotos por equipo.');
+            error.code = 'validacion';
+            throw error;
+          }
+          for (const nueva of nuevas) {
+            const preparada = nueva.preparada
+              ? { blob: nueva.file, contentType: nueva.contentType || 'image/jpeg' }
+              : await prepararFoto(nueva.file);
+            const path = rutaFotoEquipo(cuartoId, base.id, `${Date.now()}-${base.fotos.length}`);
+            const fotoRef = ref(storage, path);
+            await this.subirFoto(fotoRef, preparada.blob, preparada.contentType || 'image/jpeg');
+            const url = await conTiempo(
+              getDownloadURL(fotoRef),
+              TIEMPO_GUARDADO_MS,
+              'No pudimos confirmar una foto del equipo.'
+            );
+            base.fotos.push({ url, path });
+            subidas.push({ path });
+          }
+          serializados.push(base);
+        }
+        await conTiempo(
+          setDoc(doc(db, 'cuartos', String(cuartoId)), { equipos: serializados }, { merge: true }),
+          TIEMPO_GUARDADO_MS,
+          'No pudimos guardar los equipos.'
         );
         if (this._desmontado) return;
         this.$set(this.equiposPorCuarto, cuartoId, serializados);
         this.avisoEquipos = 'Equipos guardados.';
+        const quedan = {};
+        serializados.forEach((equipo) => {
+          equipo.fotos.forEach((foto) => {
+            quedan[foto.path] = true;
+          });
+        });
+        this.borrarArchivosFotos(anteriores.reduce((acumulado, equipo) => (
+          acumulado.concat(equipo.fotos.filter((foto) => !quedan[foto.path]))
+        ), []));
       } catch (error) {
         console.error('Error al guardar equipos del cuarto:', error);
-        if (!this._desmontado) this.errorGuardadoEquipos = mensajeErrorCuartos(error, 'guardar');
+        this.borrarArchivosFotos(subidas);
+        if (!this._desmontado) this.errorGuardadoEquipos = this.mensajeErrorEquipo(error);
       } finally {
         if (!this._desmontado) this.guardandoEquipos = false;
       }
+    },
+    mensajeErrorEquipo(error) {
+      const codigo = String((error && error.code) || '');
+      if (codigo === 'validacion') return error.message;
+      if (codigo === 'timeout' || codigo.indexOf('storage') !== -1 || codigo.indexOf('unauthorized') !== -1) {
+        return mensajeErrorFoto(error);
+      }
+      return mensajeErrorCuartos(error, 'guardar');
     },
     formatearNombreCuarto(cuartoId) {
       return nombreDeCuarto(cuartoId);

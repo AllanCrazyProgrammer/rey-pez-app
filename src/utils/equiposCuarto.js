@@ -17,8 +17,11 @@ export const TIPOS_EQUIPO = [
   { valor: 'condensador', etiqueta: 'Condensador' },
   { valor: 'evaporador', etiqueta: 'Evaporador' },
   { valor: 'tablero', etiqueta: 'Tablero' },
+  { valor: 'difusor', etiqueta: 'Difusor' },
   { valor: 'otro', etiqueta: 'Otro' },
 ];
+
+export const MAX_FOTOS_EQUIPO = 6;
 
 export function columnasParaAncho(ancho) {
   if (ancho >= CORTE_CINCO_COLUMNAS) return 3;
@@ -56,7 +59,19 @@ export function equipoVacio() {
     refrigerante: '',
     voltaje: '',
     notas: '',
+    fotos: [],
   };
+}
+
+export function fotosDeEquipo(origen) {
+  const lista = origen && Array.isArray(origen.fotos) ? origen.fotos : [];
+  return lista
+    .filter((foto) => foto && foto.url && foto.path)
+    .slice(0, MAX_FOTOS_EQUIPO)
+    .map((foto) => ({
+      url: String(foto.url).trim(),
+      path: String(foto.path).trim(),
+    }));
 }
 
 export function etiquetaTipo(tipo) {
@@ -75,6 +90,7 @@ export function serializarEquipo(equipo) {
     refrigerante: String(origen.refrigerante || '').trim(),
     voltaje: String(origen.voltaje || '').trim(),
     notas: String(origen.notas || '').trim(),
+    fotos: fotosDeEquipo(origen),
   };
 }
 

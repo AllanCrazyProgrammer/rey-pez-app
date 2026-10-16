@@ -5,9 +5,13 @@ const vm = require('vm');
 
 const fuente = fs.readFileSync(path.join(__dirname, '../src/utils/fotosBitacora.js'), 'utf8');
 const sandbox = { URL: { createObjectURL() {}, revokeObjectURL() {} }, Blob, Promise, setTimeout, clearTimeout };
-vm.runInNewContext(fuente.replace(/^export /gm, '') + '\nthis.api = { conTiempo, tipoDeArchivo, mensajeErrorFoto, TIEMPO_SUBIDA_MS, rutaFotoMaquina };', sandbox);
-const { conTiempo, tipoDeArchivo, mensajeErrorFoto, TIEMPO_SUBIDA_MS, rutaFotoMaquina } = sandbox.api;
+vm.runInNewContext(fuente.replace(/^export /gm, '') + '\nthis.api = { conTiempo, tipoDeArchivo, mensajeErrorFoto, TIEMPO_SUBIDA_MS, rutaFotoMaquina, rutaFotoEquipo };', sandbox);
+const { conTiempo, tipoDeArchivo, mensajeErrorFoto, TIEMPO_SUBIDA_MS, rutaFotoMaquina, rutaFotoEquipo } = sandbox.api;
 
+assert.strictEqual(
+  rutaFotoEquipo('agua-fria', 'eq-1', 42),
+  'bitacoras/cuarto-agua-fria/equipo-eq-1-42.jpg'
+);
 assert.strictEqual(rutaFotoMaquina('agua-fria', 99), 'bitacoras/cuarto-agua-fria/maquina-99.jpg');
 assert.strictEqual(rutaFotoMaquina('1', 5), 'bitacoras/cuarto-1/maquina-5.jpg');
 assert.strictEqual(rutaFotoMaquina('../1', 5), 'bitacoras/cuarto-1/maquina-5.jpg');

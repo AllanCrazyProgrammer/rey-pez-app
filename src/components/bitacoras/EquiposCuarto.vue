@@ -3,7 +3,7 @@
     <div class="equipos-encabezado">
       <div>
         <h4 id="equipos-titulo">Equipos</h4>
-        <p>Compresores, condensadores, evaporadores, tableros u otro equipo de este cuarto.</p>
+        <p>Compresores, condensadores, evaporadores, difusores, tableros u otro equipo de este cuarto.</p>
       </div>
       <button
         v-if="listo && modo !== 'alta'"
@@ -65,6 +65,18 @@
               </div>
             </dl>
             <p v-if="equipo.notas" class="notas">{{ equipo.notas }}</p>
+            <div v-if="equipo.fotos && equipo.fotos.length" class="fotos-vista">
+              <button
+                v-for="foto in equipo.fotos"
+                :key="foto.path"
+                type="button"
+                class="mini-vista"
+                :aria-label="'Ver foto de ' + (equipo.nombre || 'equipo')"
+                @click="fotoGrande = foto.url"
+              >
+                <img :src="foto.url" alt="" />
+              </button>
+            </div>
             <div class="acciones">
               <template v-if="confirmarId === equipo.id">
                 <p class="confirmar-texto">¿Eliminar este equipo del cuarto?</p>
@@ -94,11 +106,13 @@
         </li>
       </ul>
     </template>
+    <VisorFoto v-if="fotoGrande" :url="fotoGrande" @cerrar="fotoGrande = ''" />
   </section>
 </template>
 
 <script>
 import FormularioEquipo from '@/components/bitacoras/FormularioEquipo.vue';
+import VisorFoto from '@/components/bitacoras/VisorFoto.vue';
 import {
   equipoVacio,
   etiquetaTipo,
@@ -108,7 +122,7 @@ import {
 
 export default {
   name: 'EquiposCuarto',
-  components: { FormularioEquipo },
+  components: { FormularioEquipo, VisorFoto },
   props: {
     equipos: { type: Array, default: () => [] },
     listo: { type: Boolean, default: false },
@@ -124,6 +138,7 @@ export default {
       editandoId: '',
       confirmarId: '',
       borrador: equipoVacio(),
+      fotoGrande: '',
     };
   },
   watch: {
@@ -165,13 +180,12 @@ export default {
       this.borrador = equipoVacio();
     },
     guardarAlta(campos) {
-      this.$emit('guardar', this.equipos.concat([serializarEquipo(campos)]));
+      this.$emit('guardar', this.equipos.concat([campos]));
     },
     guardarEdicion(campos) {
-      const limpio = serializarEquipo(campos);
       this.$emit(
         'guardar',
-        this.equipos.map((equipo) => (equipo.id === limpio.id ? limpio : serializarEquipo(equipo)))
+        this.equipos.map((equipo) => (equipo.id === campos.id ? campos : equipo))
       );
     },
     eliminar(equipo) {
@@ -344,6 +358,31 @@ export default {
 .notas {
   white-space: pre-line;
   color: var(--ink);
+}
+.fotos-vista {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+.mini-vista {
+  border: 0;
+  padding: 0;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #eef5f1;
+  cursor: pointer;
+  min-height: 72px;
+}
+.mini-vista img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  display: block;
+}
+.mini-vista:focus-visible {
+  outline: 3px solid #378c73;
+  outline-offset: 2px;
 }
 .acciones {
   display: flex;
