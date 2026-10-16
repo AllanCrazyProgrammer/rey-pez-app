@@ -109,10 +109,7 @@
             Completa los datos del mantenimiento. Temperatura, observaciones y acciones son
             opcionales.
           </p>
-          <p v-if="errorFormulario" class="notice notice-error form-help" role="alert">
-            {{ errorFormulario }}
-          </p>
-          <fieldset :disabled="guardando" class="form-fields">
+          <fieldset :disabled="guardando || procesandoFotos" class="form-fields">
             <div class="form-group">
               <label for="cuarto">Cuarto Frío:</label>
               <select id="cuarto" v-model="bitacoraActual.cuartoId" class="form-control" required>
@@ -215,8 +212,10 @@
                 @change="agregarFotos"
               />
               <p id="fotos-ayuda" class="form-help">
-                Hasta 12 fotos JPG, PNG o WebP, de máximo 10 MB cada una.
+                Hasta 12 fotos JPG, PNG o WebP, de máximo 10 MB cada una. Las fotos grandes se
+                reducen al elegirlas.
               </p>
+              <p v-if="procesandoFotos" class="form-help" role="status">Preparando foto…</p>
               <div v-if="bitacoraActual.fotos.length" class="fotos-grid">
                 <figure v-for="(foto, index) in bitacoraActual.fotos" :key="foto.id" class="foto-card">
                   <img :src="foto.preview || foto.url" :alt="foto.nombre || 'Foto del mantenimiento'" />
@@ -229,23 +228,35 @@
           </fieldset>
         </form>
         <div class="modal-footer">
-          <button @click="cerrarFormulario" class="btn-cancelar" :disabled="guardando">
-            Cancelar
-          </button>
-          <button
-            type="submit"
-            form="bitacora-form"
-            class="btn-guardar"
-            :disabled="guardando || !!campoDictado"
+          <p
+            v-if="errorFormulario"
+            ref="errorFormulario"
+            class="notice notice-error footer-error"
+            role="alert"
           >
-            {{
-              guardando
-                ? 'Guardando...'
-                : campoDictado
-                ? 'Detén el dictado'
-                : 'Guardar'
-            }}
-          </button>
+            {{ errorFormulario }}
+          </p>
+          <div class="footer-acciones">
+            <button @click="cerrarFormulario" class="btn-cancelar" :disabled="guardando">
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              form="bitacora-form"
+              class="btn-guardar"
+              :disabled="guardando || procesandoFotos || !!campoDictado"
+            >
+              {{
+                guardando
+                  ? 'Guardando...'
+                  : procesandoFotos
+                  ? 'Preparando foto...'
+                  : campoDictado
+                  ? 'Detén el dictado'
+                  : 'Guardar'
+              }}
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -375,7 +386,7 @@
 
 <script>
 import { db, storage } from '@/firebase';
-import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
 import {
   collection,
   setDoc,
@@ -389,6 +400,15 @@ import {
 } from 'firebase/firestore';
 import { formatearFecha } from '@/utils/formatters';
 import DictadoTextarea from '@/components/DictadoTextarea.vue';
+import {
+  TIEMPO_GUARDADO_MS,
+  TIEMPO_REINTENTO_SUBIDA_MS,
+  TIEMPO_SUBIDA_MS,
+  conTiempo,
+  mensajeErrorFoto,
+  prepararFoto,
+  tipoDeArchivo,
+} from '@/utils/fotosBitacora';
 import TarjetaCuarto from '@/components/bitacoras/TarjetaCuarto.vue';
 import PanelCuarto from '@/components/bitacoras/PanelCuarto.vue';
 import {
@@ -429,6 +449,7 @@ export default {
       avisoEquipos: '',
       cargando: true,
       guardando: false,
+      procesandoFotos: false,
       eliminando: false,
     };
   },
@@ -804,28 +825,53 @@ export default {
       this.bitacoraActual = this.inicializarBitacora();
       this.guardando = false;
     },
-    agregarFotos(event) {
-      if (this.guardando) return;
+    mostrarErrorFormulario(mensaje) {
+      this.errorFormulario = mensaje;
+      this.$nextTick(() => {
+        const aviso = this.$refs.errorFormulario;
+        if (aviso && aviso.scrollIntoView) aviso.scrollIntoView({ block: 'nearest' });
+      });
+    },
+    async agregarFotos(event) {
+      if (this.guardando || this.procesandoFotos) return;
       this.errorFormulario = '';
       const archivos = Array.from(event.target.files || []);
       event.target.value = '';
+      if (!archivos.length) return;
       if (this.bitacoraActual.fotos.length + archivos.length > 12) {
-        this.errorFormulario = 'Puedes adjuntar un máximo de 12 fotos por bitácora.';
+        this.mostrarErrorFormulario('Puedes adjuntar un máximo de 12 fotos por bitácora.');
         return;
       }
-      if (archivos.some((archivo) => !['image/jpeg', 'image/png', 'image/webp'].includes(archivo.type)
-        || archivo.size > 10 * 1024 * 1024 || !archivo.size)) {
-        this.errorFormulario = 'Selecciona fotos JPG, PNG o WebP de máximo 10 MB cada una.';
+      if (archivos.some((archivo) => !tipoDeArchivo(archivo) || archivo.size > 10 * 1024 * 1024 || !archivo.size)) {
+        this.mostrarErrorFormulario('Selecciona fotos JPG, PNG o WebP de máximo 10 MB cada una.');
         return;
       }
-      archivos.forEach((archivo) => {
-        this.bitacoraActual.fotos.push({
-          id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-          nombre: archivo.name,
-          file: archivo,
-          preview: URL.createObjectURL(archivo),
-        });
-      });
+      const lote = {};
+      this._loteFotos = lote;
+      this.procesandoFotos = true;
+      try {
+        for (const archivo of archivos) {
+          const preparada = await prepararFoto(archivo);
+          if (this._loteFotos !== lote || !this.mostrarFormulario) return;
+          this.bitacoraActual.fotos.push({
+            id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+            nombre: archivo.name || 'foto.jpg',
+            file: preparada.blob,
+            contentType: preparada.contentType,
+            preview: URL.createObjectURL(preparada.blob),
+          });
+        }
+      } catch (error) {
+        if (this._loteFotos === lote && this.mostrarFormulario) {
+          this.mostrarErrorFormulario(
+            error && error.code === 'timeout'
+              ? mensajeErrorFoto(error)
+              : 'No pudimos leer la foto. Vuelve a elegirla.'
+          );
+        }
+      } finally {
+        if (this._loteFotos === lote) this.procesandoFotos = false;
+      }
     },
     quitarFoto(index) {
       if (this.guardando) return;
@@ -839,18 +885,51 @@ export default {
       });
     },
     async borrarArchivosFotos(fotos) {
-      await Promise.all(fotos.filter((foto) => foto.path && foto.path.startsWith('bitacoras/'))
+      await Promise.all((fotos || []).filter((foto) => foto.path && foto.path.startsWith('bitacoras/'))
         .map(async (foto) => {
-          try { await deleteObject(ref(storage, foto.path)); }
-          catch (error) { console.warn('No se pudo limpiar una foto de bitácora:', error); }
+          try {
+            await conTiempo(deleteObject(ref(storage, foto.path)), TIEMPO_GUARDADO_MS, 'limpieza');
+          } catch (error) {
+            console.warn('No se pudo limpiar una foto de bitácora:', error);
+          }
         }));
     },
+    subirFoto(referencia, blob, contentType) {
+      const reintentoAnterior = storage.maxUploadRetryTime;
+      storage.maxUploadRetryTime = TIEMPO_REINTENTO_SUBIDA_MS;
+      return new Promise((resolve, reject) => {
+        let cerrado = false;
+        let timer = null;
+        const terminar = (fn, valor) => {
+          if (cerrado) return;
+          cerrado = true;
+          clearTimeout(timer);
+          fn(valor);
+        };
+        const tarea = uploadBytesResumable(referencia, blob, {
+          contentType: contentType || 'image/jpeg',
+        });
+        timer = setTimeout(() => {
+          try { tarea.cancel(); } catch (error) { /* la subida ya terminó */ }
+          const error = new Error('La subida de la foto tardó demasiado. Revisa tu conexión y vuelve a intentarlo.');
+          error.code = 'timeout';
+          terminar(reject, error);
+        }, TIEMPO_SUBIDA_MS);
+        tarea.on('state_changed', null, (error) => terminar(reject, error), () => terminar(resolve, tarea.snapshot));
+      }).finally(() => {
+        storage.maxUploadRetryTime = reintentoAnterior;
+      });
+    },
     async guardarBitacora() {
-      if (this.guardando || this.campoDictado) return;
+      if (this.guardando || this.procesandoFotos || this.campoDictado) return;
       this.errorFormulario = '';
       if (!this.validarFormulario()) return;
       this.guardando = true;
       const subidas = [];
+      let guardada = null;
+      let escrituraIniciada = false;
+      let anteriores = [];
+      let fotos = [];
       try {
         if (this.modoEdicion && !this.bitacoraActual.id) {
           throw new Error('ID de bitácora no válido para actualización');
@@ -858,55 +937,70 @@ export default {
         const bitacoraRef = this.modoEdicion
           ? doc(db, 'bitacoras', this.bitacoraActual.id.toString())
           : doc(collection(db, 'bitacoras'));
-        const anteriores = (this.bitacoras.find((b) => b.id === bitacoraRef.id) || {}).fotos || [];
-        const fotos = [];
+        anteriores = (this.bitacoras.find((b) => b.id === bitacoraRef.id) || {}).fotos || [];
+        fotos = [];
         for (const foto of this.bitacoraActual.fotos) {
           if (foto.file) {
             const path = `bitacoras/${bitacoraRef.id}/${foto.id}`;
             const fotoRef = ref(storage, path);
             subidas.push({ path });
-            await uploadBytes(fotoRef, foto.file, { contentType: foto.file.type });
-            fotos.push({ id: foto.id, nombre: foto.nombre, path, url: await getDownloadURL(fotoRef) });
+            await this.subirFoto(fotoRef, foto.file, foto.contentType || tipoDeArchivo(foto.file) || 'image/jpeg');
+            const url = await conTiempo(
+              getDownloadURL(fotoRef),
+              TIEMPO_GUARDADO_MS,
+              'No pudimos confirmar la foto subida. Revisa tu conexión y vuelve a intentarlo.'
+            );
+            fotos.push({ id: foto.id, nombre: foto.nombre || '', path, url });
           } else {
             fotos.push({ id: foto.id, nombre: foto.nombre || '', path: foto.path || '', url: foto.url });
           }
         }
-        const campos = { ...this.bitacoraActual };
-        delete campos.id;
         const bitacoraData = {
-          ...campos,
           cuartoId: this.bitacoraActual.cuartoId.toString(),
+          fecha: this.bitacoraActual.fecha,
           temperatura: this.tieneTemperatura(this.bitacoraActual.temperatura)
             ? Number(this.bitacoraActual.temperatura) : null,
           tecnico: this.bitacoraActual.tecnico.trim(),
+          tipoMantenimiento: this.bitacoraActual.tipoMantenimiento,
+          estado: this.bitacoraActual.estado,
           observaciones: this.bitacoraActual.observaciones || '',
           accionesRealizadas: this.bitacoraActual.accionesRealizadas || '',
           fotos,
           updatedAt: serverTimestamp(),
         };
-        if (this.modoEdicion) await updateDoc(bitacoraRef, bitacoraData);
-        else {
-          bitacoraData.createdAt = serverTimestamp();
-          await setDoc(bitacoraRef, bitacoraData);
+        if (!this.modoEdicion) bitacoraData.createdAt = serverTimestamp();
+        const escritura = this.modoEdicion
+          ? updateDoc(bitacoraRef, bitacoraData)
+          : setDoc(bitacoraRef, bitacoraData);
+        try {
+          await conTiempo(
+            escritura,
+            TIEMPO_GUARDADO_MS,
+            'El guardado de la bitácora tardó demasiado. Revisa tu conexión y vuelve a intentarlo.'
+          );
+          guardada = { ...bitacoraData, id: bitacoraRef.id };
+          escrituraIniciada = true;
+        } catch (error) {
+          if (error && error.code === 'timeout') escrituraIniciada = true;
+          throw error;
         }
-        const guardada = { ...bitacoraData, id: bitacoraRef.id };
-        const index = this.bitacoras.findIndex((b) => b.id === bitacoraRef.id);
-        if (index !== -1) this.bitacoras.splice(index, 1, guardada);
-        else this.bitacoras.unshift(guardada);
-        this.mensaje = this.modoEdicion
-          ? 'Bitácora actualizada correctamente.' : 'Bitácora creada correctamente.';
-        // El registro ya está guardado: limpiar únicamente fotos que dejaron de usarse.
-        await this.borrarArchivosFotos(anteriores.filter((foto) => !fotos.some((f) => f.path === foto.path)));
-        this.guardando = false;
-        this.cerrarFormulario();
       } catch (error) {
-        await this.borrarArchivosFotos(subidas);
         console.error('Error al guardar bitácora:', error);
-        this.errorFormulario =
-          'No se pudo guardar la bitácora o sus fotos. Tus cambios siguen aquí; revisa tu conexión y vuelve a intentarlo.';
+        this.mostrarErrorFormulario(mensajeErrorFoto(error));
       } finally {
         this.guardando = false;
       }
+      if (!guardada) {
+        if (!escrituraIniciada) this.borrarArchivosFotos(subidas);
+        return;
+      }
+      const index = this.bitacoras.findIndex((b) => b.id === guardada.id);
+      if (index !== -1) this.bitacoras.splice(index, 1, guardada);
+      else this.bitacoras.unshift(guardada);
+      this.mensaje = this.modoEdicion
+        ? 'Bitácora actualizada correctamente.' : 'Bitácora creada correctamente.';
+      this.cerrarFormulario();
+      this.borrarArchivosFotos(anteriores.filter((foto) => !fotos.some((actual) => actual.path === foto.path)));
     },
     validarFormulario() {
       // Validación básica
@@ -919,8 +1013,9 @@ export default {
         !this.bitacoraActual.tipoMantenimiento ||
         !this.bitacoraActual.estado
       ) {
-        this.errorFormulario =
-          'Completa los campos obligatorios e introduce una temperatura válida.';
+        this.mostrarErrorFormulario(
+          'Completa los campos obligatorios e introduce una temperatura válida.'
+        );
         return false;
       }
       return true;
@@ -1306,12 +1401,24 @@ textarea.form-control {
 }
 .modal-footer {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
   gap: 10px;
   padding: 16px 24px;
   background: #f8faf8;
   border-top: 1px solid var(--line);
   flex-shrink: 0;
+}
+.footer-error {
+  flex: 1 0 100%;
+  margin: 0;
+}
+.footer-acciones {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-left: auto;
 }
 .detalle-grupo {
   margin-bottom: 24px;
