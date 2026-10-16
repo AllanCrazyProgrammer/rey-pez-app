@@ -17,7 +17,7 @@ const firebaseConfig = {
   apiKey: "AIzaSyDEXrriJ15Gg2IyPYh56gNktfGaSsP6KeE",
   authDomain: "reypezapp-1ced2.firebaseapp.com",
   projectId: "reypezapp-1ced2",
-  storageBucket: "reypezapp-1ced2.appspot.com",
+  storageBucket: "reypezapp-1ced2.firebasestorage.app",
   messagingSenderId: "512757841511",
   appId: "1:512757841511:web:d15e6a6276e84c42959ec2",
   databaseURL: "https://reypezapp-1ced2-default-rtdb.firebaseio.com/"
