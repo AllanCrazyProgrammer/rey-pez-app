@@ -85,6 +85,16 @@ function componente(file) {
           deudas.find(deuda => deuda.id === id).totalAbonadoCentavos -= pago.montoCentavos;
           avisar();
         },
+        async actualizarMontoInicial(id, monto) {
+          if (window.fallarMonto) { window.fallarMonto = false; throw Object.assign(new Error('Sin red'), { code: 'unavailable' }); }
+          deudas.find(deuda => deuda.id === id).montoInicialCentavos = Math.round(Number(monto) * 100);
+          avisar();
+        },
+        async borrarDeuda(id) {
+          if (window.fallarBorrado) { window.fallarBorrado = false; throw Object.assign(new Error('Sin red'), { code: 'unavailable' }); }
+          deudas.splice(deudas.findIndex(deuda => deuda.id === id), 1);
+          avisar();
+        },
       };
       window.numeroOyentes = () => oyentes.size + oyentesAbonos.size;
       const mocks = {
@@ -113,7 +123,7 @@ function componente(file) {
           },
         },
         '@/services/PapeleraService': {}, '@/utils/dinero': { sonMontosIguales: (a, b) => a === b, redondearCentavos: n => Math.round(n * 100) / 100 },
-        '@/utils/saldosCatarro': { saldoDiaCatarro: () => 0 },
+        '@/utils/saldosCatarro': { saldoDiaCatarro: cuenta => Number(cuenta.totalGeneralVenta || 0) },
         '@/components/BackButton.vue': { template: '<span></span>' },
         '@/components/PreciosHistorialModal.vue': { template: '<button>Precios de venta</button>' },
         '@/components/StashModalV2.vue': { template: '<button>Stash</button>' },
@@ -185,6 +195,48 @@ function componente(file) {
     await page.screenshot({ path: '/tmp/deudas-catarro-mobile.png', fullPage: true });
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true, 'sin desbordamiento horizontal en móvil');
 
+    assert.equal(await page.locator('.total-deuda strong').textContent(), '$38,000.25');
+    await page.getByRole('button', { name: 'Modificar monto inicial', exact: true }).click();
+    await page.getByLabel('Nuevo monto inicial ($)').fill('5000');
+    await page.getByRole('button', { name: 'Guardar monto inicial', exact: true }).click();
+    assert.equal(await page.getByLabel('Nuevo monto inicial ($)').evaluate(input => input.validity.rangeUnderflow), true);
+    await page.getByLabel('Nuevo monto inicial ($)').fill('30000.75');
+    await page.evaluate(() => { window.fallarMonto = true; });
+    await page.getByRole('button', { name: 'Guardar monto inicial', exact: true }).click();
+    await page.getByRole('alert').filter({ hasText: 'No se pudo confirmar' }).waitFor();
+    assert.equal(await page.getByLabel('Nuevo monto inicial ($)').inputValue(), '30000.75');
+    await page.getByRole('button', { name: 'Guardar monto inicial', exact: true }).click();
+    await page.getByText('Monto inicial actualizado.', { exact: true }).waitFor();
+    assert.equal(await page.locator('.resumen .saldo strong').textContent(), '$25,000.50');
+    assert.equal(await page.locator('.total-deuda strong').textContent(), '$43,000.50');
+    assert.equal(await page.locator('.historial li').count(), 1);
+    await page.evaluate(() => window.cargarCuentas([
+      { id: '2026-10-15', fecha: '2026-10-15', totalGeneralVenta: 100 },
+      { id: '2026-10-16', fecha: '2026-10-16', totalGeneralVenta: 250.25 },
+    ]));
+    assert.equal(await page.locator('.total-deuda strong').textContent(), '$43,350.75', 'usa solo el último acumulado');
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.screenshot({ path: '/tmp/deudas-catarro-mobile.png', fullPage: true });
+    await page.setViewportSize({ width: 1100, height: 1100 });
+    await page.screenshot({ path: '/tmp/deudas-catarro-desktop.png', fullPage: true });
+    page.once('dialog', dialog => dialog.dismiss());
+    await page.getByRole('button', { name: 'Borrar pestaña de deuda', exact: true }).click();
+    assert.equal(await page.getByRole('tab', { name: /Deuda anterior 1/ }).count(), 1);
+    await page.evaluate(() => { window.fallarBorrado = true; });
+    page.once('dialog', dialog => dialog.accept());
+    await page.getByRole('button', { name: 'Borrar pestaña de deuda', exact: true }).click();
+    await page.getByRole('alert').filter({ hasText: 'No se pudo confirmar' }).waitFor();
+    assert.equal(await page.getByRole('tab', { name: /Deuda anterior 1/ }).count(), 1);
+    page.once('dialog', dialog => dialog.accept());
+    await page.getByRole('button', { name: 'Borrar pestaña de deuda', exact: true }).click();
+    await page.getByText('Pestaña de deuda borrada.', { exact: true }).waitFor();
+    assert.equal(await page.getByRole('tab', { name: /Deuda anterior 1/ }).count(), 0);
+    assert.equal(await page.getByRole('tab', { name: 'Cuentas actuales', exact: true }).getAttribute('aria-selected'), 'true');
+    assert.equal(await page.locator('.total-deuda strong').textContent(), '$18,350.25');
+    await page.evaluate(() => { vm.$destroy(); montar(); });
+    assert.equal(await page.getByRole('tab', { name: /Deuda anterior 1/ }).count(), 0);
+    await page.setViewportSize({ width: 390, height: 844 });
+
     await page.getByRole('tab', { name: 'Cuentas actuales', exact: true }).click();
     await page.evaluate(async () => {
       await window.cargarCuentas([{ id: '2026-10-16', fecha: '2026-10-16', estadoPagado: true }]);
@@ -215,6 +267,6 @@ function componente(file) {
     assert.equal(await page.evaluate(() => window.cuentaCreada.productos[0].kilos[0]), 25);
     assert.equal(await page.evaluate(() => window.cuentaCreada.clientesSumarKgCatarro['2']), false);
     assert.deepEqual(errors, []);
-    console.log('PASS: deudas independientes y cuentas faltantes desde el 15/10/2026, filtros, creación, reintento y móvil.');
+    console.log('PASS: deudas independientes, edición de monto, borrado, total acumulado, reintentos, cuentas faltantes y móvil.');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

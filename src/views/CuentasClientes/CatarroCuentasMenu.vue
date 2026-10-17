@@ -16,7 +16,8 @@
       <StashModalV2 cliente="catarro" />
     </div>
 
-    <DeudasCatarro @seleccion="pestanaActiva = $event" />
+    <DeudasCatarro :saldo-cuentas-centavos="saldoCuentasCentavos" :cargando-cuentas="isLoading"
+      :error-cuentas="!!errorCuentas" @seleccion="pestanaActiva = $event" />
 
     <div v-show="pestanaActiva === 'actuales'" id="cuentas-actuales-catarro" role="tabpanel" aria-labelledby="pestana-catarro-actuales">
     <div class="filter-container">
@@ -127,6 +128,7 @@ export default {
       creatingFecha: null,
       unsubscribeEmbarques: null,
       isLoading: true,
+      errorCuentas: '',
       filtroEstado: 'todas',
       unsubscribe: null,
       lastSaveMessage: '',
@@ -136,6 +138,10 @@ export default {
     };
   },
   computed: {
+    saldoCuentasCentavos() {
+      // La primera cuenta es la más reciente y ya incluye las anteriores.
+      return Math.max(0, Math.round(Number(this.cuentas[0]?.nuevoSaldoAcumulado || 0) * 100));
+    },
     cuentasConPendientes() {
       return [...this.cuentas, ...cuentasPendientesCatarro(this.cuentas, this.embarques)]
         .sort((a, b) => normalizarFechaValor(b.fecha).localeCompare(normalizarFechaValor(a.fecha)));
@@ -208,6 +214,7 @@ export default {
     async loadCuentas() {
       try {
         this.isLoading = true;
+        this.errorCuentas = '';
         const cuentasRef = collection(db, 'cuentasCatarro');
         const q = query(cuentasRef, orderBy('fecha', 'asc'));
         
@@ -230,11 +237,14 @@ export default {
             observacion: cuenta.observacion || '',
           })).sort((a, b) => normalizarFechaValor(b.fecha).localeCompare(normalizarFechaValor(a.fecha)));
           this.isLoading = false;
+        }, error => {
+          this.errorCuentas = error.message || 'No se pudieron cargar las cuentas.';
+          this.isLoading = false;
         });
 
       } catch (error) {
         console.error("Error al cargar cuentas: ", error);
-        this.error = error.message;
+        this.errorCuentas = error.message;
         this.cuentas = [];
         this.isLoading = false;
       }

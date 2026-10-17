@@ -32,7 +32,8 @@ export const nuevoIdAbono = deudaId => doc(collection(db, COLECCION, deudaId, 'a
 
 export function escucharDeudas(callback, alError) {
   return onSnapshot(collection(db, COLECCION), snapshot => {
-    const deudas = snapshot.docs.map(documento => ({ ...documento.data(), id: documento.id }));
+    const deudas = snapshot.docs.map(documento => ({ ...documento.data(), id: documento.id }))
+      .filter(deuda => !deuda.eliminada);
     deudas.sort((a, b) => (a.creadoEn?.seconds || 0) - (b.creadoEn?.seconds || 0) || a.id.localeCompare(b.id));
     callback(deudas);
   }, alError);
@@ -58,6 +59,7 @@ export async function crearDeuda(id, datos) {
     // Conservar el ID al reintentar evita duplicar una operación ya confirmada.
     if (existente.exists()) {
       const deuda = existente.data();
+      if (deuda.eliminada) throw new Error('Esta pestaña fue borrada. Crea una nueva pestaña.');
       if (deuda.nombre !== nombre || deuda.montoInicialCentavos !== montoInicialCentavos || deuda.fecha !== fecha) {
         throw new Error('Esta pestaña ya existe con otros datos. Vuelve a abrir el formulario.');
       }
@@ -67,6 +69,29 @@ export async function crearDeuda(id, datos) {
       creadoEn: serverTimestamp(), actualizadoEn: serverTimestamp() });
   });
   return id;
+}
+
+export async function actualizarMontoInicial(deudaId, monto) {
+  const montoInicialCentavos = montoACentavos(monto);
+  const ref = referenciaDeuda(deudaId);
+  await runTransaction(db, async transaccion => {
+    const documento = await transaccion.get(ref);
+    if (!documento.exists() || documento.data().eliminada) throw new Error('La deuda ya no está disponible.');
+    if (montoInicialCentavos < documento.data().totalAbonadoCentavos) {
+      throw new Error('El monto inicial no puede ser menor que el total ya abonado.');
+    }
+    transaccion.update(ref, { montoInicialCentavos, actualizadoEn: serverTimestamp() });
+  });
+}
+
+export async function borrarDeuda(deudaId) {
+  const ref = referenciaDeuda(deudaId);
+  await runTransaction(db, async transaccion => {
+    const documento = await transaccion.get(ref);
+    if (!documento.exists() || documento.data().eliminada) return;
+    // Borrado lógico: conserva los abonos y bloquea operaciones concurrentes.
+    transaccion.update(ref, { eliminada: true, eliminadaEn: serverTimestamp(), actualizadoEn: serverTimestamp() });
+  });
 }
 
 export async function registrarAbono(deudaId, id, datos) {
@@ -79,7 +104,7 @@ export async function registrarAbono(deudaId, id, datos) {
   await runTransaction(db, async transaccion => {
     const deudaDoc = await transaccion.get(deudaRef);
     const abonoDoc = await transaccion.get(abonoRef);
-    if (!deudaDoc.exists()) throw new Error('La deuda ya no está disponible.');
+    if (!deudaDoc.exists() || deudaDoc.data().eliminada) throw new Error('La deuda ya no está disponible.');
     if (abonoDoc.exists()) {
       const abono = abonoDoc.data();
       if (abono.montoCentavos !== montoCentavos || abono.fecha !== fecha || abono.descripcion !== descripcion) {
@@ -104,6 +129,7 @@ export async function anularAbono(deudaId, id) {
     const deudaDoc = await transaccion.get(deudaRef);
     const abonoDoc = await transaccion.get(abonoRef);
     if (!deudaDoc.exists() || !abonoDoc.exists()) throw new Error('No se encontró la deuda o el abono.');
+    if (deudaDoc.data().eliminada) throw new Error('La deuda ya no está disponible.');
     const abono = abonoDoc.data();
     if (abono.anulado) return;
     const totalAbonadoCentavos = deudaDoc.data().totalAbonadoCentavos - abono.montoCentavos;

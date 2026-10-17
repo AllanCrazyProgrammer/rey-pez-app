@@ -11,6 +11,15 @@
         <small v-if="pestana.id !== 'actuales'">{{ saldo(pestana) === 0 ? 'Pagada' : moneda(saldo(pestana)) + ' pendiente' }}</small>
       </button>
     </div>
+    <div class="total-deuda" role="status">
+      <span>Deuda total de Catarro</span>
+      <strong v-if="cargando || cargandoCuentas">Calculando…</strong>
+      <strong v-else-if="errorCarga || errorCuentas">No disponible</strong>
+      <template v-else>
+        <strong>{{ moneda(deudaTotalCentavos) }}</strong>
+        <small>Cuentas actuales: {{ moneda(saldoCuentasCentavos) }} · Deudas: {{ moneda(totalDeudasCentavos) }}</small>
+      </template>
+    </div>
     <button type="button" class="agregar-pestana" :disabled="guardando || cargando || !!errorCarga"
       @click="seleccionar('nueva')">+ Agregar pestaña de deuda</button>
 
@@ -50,10 +59,25 @@
           <span :class="['estado', { pagada: saldo(deudaActiva) === 0 }]">{{ saldo(deudaActiva) === 0 ? 'Pagada' : 'Pendiente' }}</span>
         </div>
         <div class="resumen">
-          <div><span>Monto inicial</span><strong>{{ moneda(deudaActiva.montoInicialCentavos) }}</strong></div>
+          <div class="monto-inicial"><span>Monto inicial</span><strong>{{ moneda(deudaActiva.montoInicialCentavos) }}</strong>
+            <button type="button" class="editar-monto" :disabled="guardando || !!errorCarga" @click="editarMonto">Modificar monto inicial</button>
+          </div>
           <div><span>Total abonado</span><strong>{{ moneda(deudaActiva.totalAbonadoCentavos) }}</strong></div>
           <div class="saldo"><span>Saldo pendiente</span><strong>{{ moneda(saldo(deudaActiva)) }}</strong></div>
         </div>
+
+        <form v-if="editandoMonto" class="formulario-abono editar-monto-form" @submit.prevent="guardarMonto">
+          <fieldset :disabled="guardando || !!errorCarga">
+            <label for="nuevo-monto-catarro">Nuevo monto inicial ($)</label>
+            <input id="nuevo-monto-catarro" ref="montoInicial" v-model="montoEditado" type="number" inputmode="decimal"
+              :min="Math.max(0.01, deudaActiva.totalAbonadoCentavos / 100)" step="0.01" required>
+            <p class="ayuda">El monto no puede ser menor que el total abonado: {{ moneda(deudaActiva.totalAbonadoCentavos) }}.</p>
+            <div class="botones">
+              <button type="button" class="secundario" @click="editandoMonto = false">Cancelar</button>
+              <button type="submit" class="principal">{{ guardando ? 'Guardando…' : 'Guardar monto inicial' }}</button>
+            </div>
+          </fieldset>
+        </form>
 
         <form v-if="saldo(deudaActiva) > 0" class="formulario-abono" @submit.prevent="guardarAbono">
           <h3>Registrar abono</h3>
@@ -89,6 +113,9 @@
             </li>
           </ul>
         </div>
+        <div class="botones">
+          <button type="button" class="anular" :disabled="guardando || !!errorCarga" @click="confirmarBorrado">Borrar pestaña de deuda</button>
+        </div>
       </template>
       <p v-else role="status">Cargando deuda…</p>
     </section>
@@ -104,17 +131,25 @@ const nuevoAbono = () => ({ monto: '', fecha: obtenerFechaActualISO(), descripci
 
 export default {
   name: 'DeudasCatarro',
+  props: {
+    saldoCuentasCentavos: { type: Number, default: 0 },
+    cargandoCuentas: { type: Boolean, default: false },
+    errorCuentas: { type: Boolean, default: false },
+  },
   data() {
     return {
       deudas: [], abonos: [], seleccion: 'actuales', cargando: true, cargandoAbonos: false,
       guardando: false, errorCarga: '', errorAbonos: '', errorAccion: '', mensaje: '',
       nueva: { nombre: '', monto: '', fecha: obtenerFechaActualISO() }, abono: nuevoAbono(),
       intentoDeuda: null, intentoAbono: null, dejarDeudas: null, dejarAbonos: null,
+      editandoMonto: false, montoEditado: '',
     };
   },
   computed: {
     pestanas() { return [{ id: 'actuales', nombre: 'Cuentas actuales' }, ...this.deudas]; },
     deudaActiva() { return this.deudas.find(deuda => deuda.id === this.seleccion); },
+    totalDeudasCentavos() { return this.deudas.reduce((total, deuda) => total + this.saldo(deuda), 0); },
+    deudaTotalCentavos() { return this.saldoCuentasCentavos + this.totalDeudasCentavos; },
   },
   mounted() { this.cargarDeudas(); },
   beforeDestroy() {
@@ -130,8 +165,10 @@ export default {
       this.cargando = true;
       this.errorCarga = '';
       this.dejarDeudas = deudasService.escucharDeudas(deudas => {
+        const seleccionEliminada = this.deudaActiva && !deudas.some(deuda => deuda.id === this.seleccion);
         this.deudas = deudas;
         this.cargando = false;
+        if (seleccionEliminada) this.restablecerSeleccion();
       }, () => {
         this.cargando = false;
         this.errorCarga = 'No se pudieron cargar las deudas atrasadas. Revisa tu conexión e intenta de nuevo.';
@@ -158,6 +195,7 @@ export default {
     seleccionar(id) {
       if (this.guardando || this.seleccion === id) return;
       this.seleccion = id;
+      this.editandoMonto = false;
       this.abono = nuevoAbono();
       this.errorAccion = '';
       this.mensaje = '';
@@ -174,6 +212,46 @@ export default {
     errorGuardado(error) {
       if (error.code) return 'No se pudo confirmar el guardado. Revisa tu conexión y vuelve a intentar; se conservaron los datos del formulario.';
       return error.message || 'No se pudo guardar. Intenta de nuevo.';
+    },
+    restablecerSeleccion() {
+      this.seleccion = 'actuales';
+      this.editandoMonto = false;
+      this.abono = nuevoAbono();
+      this.$emit('seleccion', 'actuales');
+      this.cargarAbonos('actuales');
+    },
+    editarMonto() {
+      this.montoEditado = (this.deudaActiva.montoInicialCentavos / 100).toFixed(2);
+      this.editandoMonto = true;
+      this.errorAccion = '';
+      this.mensaje = '';
+      this.$nextTick(() => this.$refs.montoInicial && this.$refs.montoInicial.focus());
+    },
+    async guardarMonto() {
+      if (this.guardando || !this.deudaActiva || this.errorCarga) return;
+      this.guardando = true;
+      this.errorAccion = '';
+      this.mensaje = '';
+      try {
+        await deudasService.actualizarMontoInicial(this.seleccion, this.montoEditado);
+        this.editandoMonto = false;
+        this.mensaje = 'Monto inicial actualizado.';
+      } catch (error) { this.errorAccion = this.errorGuardado(error); }
+      finally { this.guardando = false; }
+    },
+    async confirmarBorrado() {
+      if (this.guardando || !this.deudaActiva || this.errorCarga) return;
+      const deuda = this.deudaActiva;
+      if (!confirm(`¿Borrar la pestaña «${deuda.nombre}» con saldo pendiente de ${this.moneda(this.saldo(deuda))}? Se quitará del total de deuda. Sus abonos se conservarán como respaldo.`)) return;
+      this.guardando = true;
+      this.errorAccion = '';
+      this.mensaje = '';
+      try {
+        await deudasService.borrarDeuda(deuda.id);
+        this.restablecerSeleccion();
+        this.mensaje = 'Pestaña de deuda borrada.';
+      } catch (error) { this.errorAccion = this.errorGuardado(error); }
+      finally { this.guardando = false; }
     },
     async guardarDeuda() {
       if (this.guardando || this.errorCarga) return;
@@ -235,6 +313,11 @@ export default {
 .pestanas button { flex: 0 0 auto; max-width: 240px; overflow-wrap: anywhere; border: 1px solid #cbd5e1; border-radius: 10px; padding: 12px 16px; background: #fff; color: #334155; text-align: left; font: inherit; font-weight: 600; }
 .pestanas button.activa { background: #fff1f2; border: 2px solid #c62828; color: #9f2020; }
 .pestanas small { display: block; margin-top: 4px; font-size: 12px; font-weight: normal; }
+.total-deuda { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 16px; padding: 16px; margin-bottom: 16px; border-radius: 10px; background: #fff1f2; color: #9f2020; border: 1px solid #e7b9bb; }
+.total-deuda strong { font-size: 22px; overflow-wrap: anywhere; }
+.total-deuda small { flex-basis: 100%; color: #526176; }
+.editar-monto { margin-top: 10px; border: 0; background: transparent; color: #9f2020; padding: 0; text-decoration: underline; text-align: left; }
+.editar-monto-form { margin-bottom: 20px; }
 .agregar-pestana { color: #fff; background: #b42328; border: 0; border-radius: 8px; padding: 10px 16px; font-weight: 600; }
 .panel { margin-top: 16px; background: #fff; padding: 24px; border-radius: 12px; box-shadow: 0 3px 14px #0002; }
 .panel h2 { margin: 0; font-size: 24px; color: #a91f27; overflow-wrap: anywhere; }
@@ -282,6 +365,8 @@ button:focus-visible, input:focus-visible { outline: 3px solid #2563eb; outline-
   .campos { grid-template-columns: 1fr; gap: 0; }
   .resumen { grid-template-columns: 1fr; }
   .resumen > div { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  .resumen .monto-inicial { flex-wrap: wrap; }
+  .monto-inicial .editar-monto { flex-basis: 100%; margin-top: 0; }
   .resumen strong { font-size: 18px; margin: 0; }
   .encabezado { flex-wrap: wrap; }
   .detalle-abono span { display: block; margin-top: 4px; }

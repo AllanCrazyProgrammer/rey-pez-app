@@ -2,6 +2,17 @@
 
 Esta aplicación contiene todas las pantallas y herramientas dentro de la instalación. Abre desde su icono aunque no haya internet, aunque la web esté caída y aunque nunca se haya abierto la web en ese equipo. No necesita Node, una terminal, Chrome ni un servidor local instalado.
 
+## Versión 0.3.18: resumen sin internet y cuentas de Catarro
+
+El resumen se genera con los datos locales aunque no haya internet. Si el equipo indica conexión pero la consulta de cuentas falla o tarda más de cinco segundos, se permite generar el PDF sin verificar ni crear cuentas. Con conexión, se mantiene la opción de crear las cuentas faltantes antes del resumen.
+
+En la vista previa, **Abrir para imprimir** permite elegir dónde guardar el PDF y abrirlo en el visor de la Mac. Desde ese visor se imprime sin conexión. Ver el resumen no lo guarda ni lo sube automáticamente; el respaldo en Drive sigue siendo opcional.
+
+Incluye los cambios de Catarro: detección de cuentas faltantes desde sus embarques, pestañas de deudas y abonos, crédito a favor y conservación de kilos decimales. La creación desde el resumen respeta la opción de sumar kilos del editor; la creación desde el embarque abre la cuenta dentro de la app local. El registro de cuentas sigue requiriendo conexión; generar un PDF sin internet no crea una cuenta pendiente.
+
+Instalador Mac: `release/offline-0.3.18/ReyPez-0.3.18-mac-arm64.dmg`.
+Pruebas: `node --test scripts/test-resumen-offline.cjs scripts/test-resumen-backup.cjs tests/catarro-*.test.cjs tests/deudas-catarro.test.cjs`, `node scripts/test-deudas-catarro-ui.cjs` y `REYPEZ_DESKTOP_EXECUTABLE="ruta/al/ejecutable/ReyPez" node scripts/test-desktop-pdf.cjs`. Esta última bloquea la red y usa un perfil temporal; comprueba generación, vista previa, guardado y apertura solicitada al visor. No envía trabajos a una impresora física.
+
 ## Versión 0.3.16: elegir reemplazos de Drive
 
 Al revisar los PDF que ya existen en Drive, puedes seleccionar cuáles reemplazar. Los no seleccionados se conservan; los PDF nuevos se siguen subiendo.
@@ -18,13 +29,13 @@ La confirmación de Drive muestra todos los archivos existentes en una sola vent
 
 El proceso principal de Electron prepara los archivos y devuelve identificadores temporales; solo sube las copias preparadas tras la decisión del usuario. Si cambia la carpeta o el archivo de destino durante la confirmación, exige revisar la subida otra vez. Las pruebas `npm run test:drive-notas` cubren la cola agrupada, la confirmación, la cancelación, archivos nuevos, reintentos y la validación de IPC.
 
-El instalador actual de Mac es `release/offline-0.3.16/ReyPez-0.3.16-mac-arm64.dmg`. El código compartido incluye Windows; para generar un instalador Windows con Drive, la validación exige configurar primero el cliente OAuth de Windows en `electron/google-drive-clients.local.json`. No se generó un instalador Windows 0.3.16 sin esas credenciales.
+El instalador actual de Mac es `release/offline-0.3.18/ReyPez-0.3.18-mac-arm64.dmg`. El código compartido incluye Windows; para generar un instalador Windows con Drive, la validación exige configurar primero el cliente OAuth de Windows en `electron/google-drive-clients.local.json`. No se generó un instalador Windows 0.3.18.
 
 ## Mac (Apple Silicon: M1, M2, M3, M4 y posteriores)
 
 - Aplicaciones locales actualizadas: `/Applications/ReyPez.app` y `~/Applications/ReyPez.app`.
 - Copia del Escritorio actualizada: `~/Desktop/ReyPez.app`.
-- Instalador para trasladar a otra Mac: `release/offline-0.3.16/ReyPez-0.3.16-mac-arm64.dmg`.
+- Instalador para trasladar a otra Mac: `release/offline-0.3.18/ReyPez-0.3.18-mac-arm64.dmg`.
 - Abrir el DMG y arrastrar ReyPez a Aplicaciones. Luego abrir desde Aplicaciones o Spotlight. El instalador no necesita internet.
 
 ## Windows de 64 bits (Intel/AMD)

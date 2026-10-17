@@ -78,6 +78,8 @@ export const embarqueCuentasMixin = {
       this.verificandoCuentasResumen = true;
       this.errorCuentasResumen = '';
       this.cuentasFaltantesResumen = [];
+      this.mostrarModalCuentasResumen = false;
+      let timeout;
 
       try {
         if (!this.embarque?.fecha) {
@@ -85,12 +87,19 @@ export const embarqueCuentasMixin = {
           return false;
         }
 
+        // El resumen usa la captura local; revisar cuentas es opcional y nunca
+        // debe impedir imprimir cuando la nube no responde.
+        if (typeof navigator !== 'undefined' && navigator.onLine === false) return true;
+
         const fecha = normalizarFechaISO(this.embarque?.fecha);
-        const existencia = await Promise.all(
-          CUENTAS_AUTOMATICAS_RESUMEN.map((cuenta) =>
+        const existencia = await Promise.race([
+          Promise.all(CUENTAS_AUTOMATICAS_RESUMEN.map((cuenta) =>
             this.existeCuentaParaResumen(SERVICIOS_CUENTA_RESUMEN[cuenta.id], fecha)
-          )
-        );
+          )),
+          new Promise((_, reject) => {
+            timeout = setTimeout(() => reject(new Error('La consulta de cuentas no respondió.')), 5000);
+          }),
+        ]);
         const existePorId = {};
         CUENTAS_AUTOMATICAS_RESUMEN.forEach((cuenta, index) => {
           existePorId[cuenta.id] = existencia[index];
@@ -104,13 +113,10 @@ export const embarqueCuentasMixin = {
         this.mostrarModalCuentasResumen = true;
         return false;
       } catch (error) {
-        console.error('[Resumen Embarque] No se pudieron verificar las cuentas:', error);
-        useUIStore().showPdfAlert(
-          'No se pudo comprobar si ya existen las cuentas de Ozuna, Lorena/Verónica y Catarro. ' +
-          'Revisa tu conexión e intenta nuevamente.'
-        );
-        return false;
+        console.warn('[Resumen Embarque] Se generará solo el PDF; no se verificaron ni crearon cuentas:', error);
+        return true;
       } finally {
+        clearTimeout(timeout);
         this.verificandoCuentasResumen = false;
       }
     },
@@ -120,6 +126,7 @@ export const embarqueCuentasMixin = {
         ...this.embarque,
         productos: this.productosPorCliente[clienteId] || [],
         clienteCrudos: { [clienteId]: this.clienteCrudos[clienteId] || [] },
+        clientesSumarKgCatarro: { ...this.clientesSumarKgCatarro },
         productosTotales: this.embarque.productos,
         clienteCrudosTotales: this.clienteCrudos,
         costosPorMedida: { ...this.costosPorMedida },
@@ -223,7 +230,7 @@ export const embarqueCuentasMixin = {
           costoExtra: this.costoExtra,
         };
         await EmbarqueCuentasService.crearCuentaCatarro(embarqueCliente, this.$router);
-        alert('Cuenta de Catarro creada exitosamente y abierta en una nueva pestaña.');
+        alert('Cuenta de Catarro creada exitosamente.');
       } catch (error) {
         console.error('Error al crear cuenta para Catarro:', error);
         alert(`Error al crear cuenta para Catarro: ${error.message}`);

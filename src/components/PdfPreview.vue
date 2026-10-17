@@ -4,6 +4,9 @@
       <header>
         <h2 id="pdf-preview-title">{{ pdf ? pdf.name : 'Vista previa del PDF' }}</h2>
         <a v-if="pdf" :href="pdf.url" :download="pdf.name">Guardar PDF</a>
+        <button v-if="pdf && esEscritorio" type="button" :disabled="abriendo" @click="abrirParaImprimir">
+          {{ abriendo ? 'Abriendo...' : 'Abrir para imprimir' }}
+        </button>
         <button type="button" autofocus @click="cerrar">Cerrar</button>
       </header>
       <iframe v-if="pdf" :src="pdf.url" title="Vista previa del PDF"></iframe>
@@ -20,6 +23,9 @@
 import { useUIStore } from '@/stores/ui';
 
 export default {
+  data() {
+    return { esEscritorio: Boolean(window.desktop), abriendo: false };
+  },
   computed: {
     pdf() { return useUIStore().pdfPreview; },
     alert() { return useUIStore().pdfAlert; }
@@ -41,6 +47,22 @@ export default {
   },
   beforeDestroy() { this.cerrar(); this.cerrarAlerta(); },
   methods: {
+    async abrirParaImprimir() {
+      if (!this.pdf || this.abriendo) return;
+      const pdf = this.pdf;
+      this.abriendo = true;
+      try {
+        // El blob ya está en este equipo. El visor del sistema permite imprimir
+        // sin depender del visor integrado ni de una conexión a internet.
+        const response = await fetch(pdf.url);
+        const bytes = new Uint8Array(await response.arrayBuffer());
+        await window.desktop.savePdf(bytes, pdf.name);
+      } catch (error) {
+        useUIStore().showPdfAlert(error.message || 'No se pudo abrir el PDF para imprimir.');
+      } finally {
+        this.abriendo = false;
+      }
+    },
     cerrar() { useUIStore().closePdfPreview(); },
     cerrarAlerta() { useUIStore().showPdfAlert(''); }
   }

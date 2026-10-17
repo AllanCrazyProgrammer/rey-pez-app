@@ -20,6 +20,7 @@ function loadModule(filename, mocks = {}, cache = new Map()) {
     Uint8Array,
     exports: module.exports,
     console: { log() {}, error() {}, warn() {} },
+    window: mocks.window,
     require(id) {
       if (id in mocks) return mocks[id];
       if (id.startsWith('.')) return loadModule(path.resolve(path.dirname(filename), id + '.js'), mocks, cache);
@@ -29,7 +30,7 @@ function loadModule(filename, mocks = {}, cache = new Map()) {
   return module.exports;
 }
 
-function cargarServicio({ previas = [], precios = [], mismaFecha = [], alLeerSaldo = null } = {}) {
+function cargarServicio({ previas = [], precios = [], mismaFecha = [], alLeerSaldo = null, window } = {}) {
   let cuenta = null;
   const firestore = {
     getFirestore: () => ({}),
@@ -76,7 +77,7 @@ function cargarServicio({ previas = [], precios = [], mismaFecha = [], alLeerSal
 
   const servicio = loadModule(
     path.resolve(__dirname, '../src/utils/services/EmbarqueCuentasService.js'),
-    { 'firebase/firestore': firestore }
+    { 'firebase/firestore': firestore, window }
   );
   return {
     servicio,
@@ -135,6 +136,24 @@ test('Catarro: colección vacía deja saldo anterior en 0 y arma items e itemsVe
   assert.equal(data.cobros[0].monto, 200);
   assert.equal(data.nuevoSaldoAcumulado, 800);
   assert.equal(data.abonos.length, 0);
+});
+
+test('Catarro: escritorio abre la cuenta creada dentro de la app', async () => {
+  const rutas = [];
+  const { servicio } = cargarServicio({ window: {
+    desktop: {}, open() { throw new Error('No debe abrir una ventana externa'); },
+  } });
+  await servicio.crearCuentaCatarro(embarqueBase, { push: async ruta => rutas.push(ruta) });
+  assert.deepEqual(rutas, ['/cuentas-catarro/2026-10-14?edit=true']);
+});
+
+test('Catarro: web conserva la apertura de la cuenta en otra pestaña', async () => {
+  const rutas = [];
+  const { servicio } = cargarServicio({ window: {
+    location: { origin: 'https://reypez.test' }, open: (...args) => rutas.push(args),
+  } });
+  await servicio.crearCuentaCatarro(embarqueBase, { push() { throw new Error('Debe conservar la pestaña del embarque'); } });
+  assert.deepEqual(rutas, [['https://reypez.test/cuentas-catarro/2026-10-14?edit=true', '_blank']]);
 });
 
 test('Catarro: encadena el nuevoSaldoAcumulado de la nota anterior', async () => {

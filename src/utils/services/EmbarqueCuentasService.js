@@ -1731,8 +1731,9 @@ export const crearCuentaCatarro = async (embarqueData, router) => {
 
     // Abrir la cuenta en una nueva pestaña en lugar de navegar directamente
     if (router) {
-      const rutaCompleta = `${window.location.origin}/cuentas-catarro/${fechaNormalizada}?edit=true`;
-      window.open(rutaCompleta, '_blank');
+      const ruta = `/cuentas-catarro/${fechaNormalizada}?edit=true`;
+      if (window.desktop) await router.push(ruta);
+      else window.open(`${window.location.origin}${ruta}`, '_blank');
     }
 
     return fechaNormalizada;

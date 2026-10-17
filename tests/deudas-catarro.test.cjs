@@ -20,7 +20,12 @@ function contexto() {
     collection: (_, ...partes) => ref(partes),
     doc: (base, ...partes) => ref(base.path ? [base, ...partes, ...(partes.length ? [] : ['auto-' + ++secuencia])] : partes),
     serverTimestamp: () => ({ seconds: 1 }),
-    onSnapshot: () => () => {},
+    onSnapshot: (referencia, callback) => {
+      callback({ docs: [...registros].filter(([ruta]) => ruta.startsWith(referencia.path + '/') &&
+        !ruta.slice(referencia.path.length + 1).includes('/'))
+        .map(([ruta, data]) => ({ id: ruta.split('/').pop(), data: () => structuredClone(data) })) });
+      return () => {};
+    },
     async runTransaction(_, callback) {
       for (let intento = 0; intento < 5; intento++) {
         const leidos = new Map();
@@ -151,4 +156,48 @@ test('registrar o anular en una deuda inexistente no crea documentos sueltos', a
   await assert.rejects(servicio.registrarAbono('no-existe', 'pago', datosAbono), /disponible/);
   await assert.rejects(servicio.anularAbono('no-existe', 'pago'), /encontró/);
   assert.equal(registros.size, 2);
+});
+
+test('editar monto conserva abonos, permite liquidar y rechaza montos inferiores a lo abonado', async () => {
+  const { servicio, registros } = contexto();
+  await servicio.crearDeuda('uno', datosDeuda);
+  await servicio.registrarAbono('uno', 'pago', datosAbono);
+  await servicio.actualizarMontoInicial('uno', '200.55');
+  assert.equal(registros.get(ruta('uno')).montoInicialCentavos, 20055);
+  assert.equal(registros.get(ruta('uno')).totalAbonadoCentavos, 5010);
+  await assert.rejects(servicio.actualizarMontoInicial('uno', '50.09'), /menor/);
+  await servicio.actualizarMontoInicial('uno', '50.10');
+  assert.equal(registros.get(ruta('uno')).montoInicialCentavos, 5010);
+  assert.equal(registros.get(ruta('uno') + '/abonos/pago').montoCentavos, 5010);
+  for (const monto of [0, -1, '1.001', 'NaN']) await assert.rejects(servicio.actualizarMontoInicial('uno', monto));
+  await assert.rejects(servicio.actualizarMontoInicial('ausente', 100), /disponible/);
+});
+
+test('editar y abonar simultáneamente nunca produce un saldo negativo', async () => {
+  const { servicio, registros } = contexto();
+  await servicio.crearDeuda('uno', datosDeuda);
+  const resultados = await Promise.allSettled([
+    servicio.actualizarMontoInicial('uno', 40),
+    servicio.registrarAbono('uno', 'pago', datosAbono),
+  ]);
+  assert.equal(resultados.filter(resultado => resultado.status === 'fulfilled').length, 1);
+  const deuda = registros.get(ruta('uno'));
+  assert.ok(deuda.montoInicialCentavos >= deuda.totalAbonadoCentavos);
+});
+
+test('borrar quita la deuda del listado, conserva respaldo y bloquea nuevas operaciones', async () => {
+  const { servicio, registros } = contexto();
+  await servicio.crearDeuda('uno', datosDeuda);
+  await servicio.crearDeuda('dos', datosDeuda);
+  await servicio.registrarAbono('uno', 'pago', datosAbono);
+  await servicio.borrarDeuda('uno');
+  await servicio.borrarDeuda('uno');
+  assert.equal(registros.get(ruta('uno')).eliminada, true);
+  assert.equal(registros.get(ruta('uno') + '/abonos/pago').montoCentavos, 5010);
+  servicio.escucharDeudas(deudas => assert.equal(deudas.map(deuda => deuda.id).join(','), 'dos'));
+  await assert.rejects(servicio.actualizarMontoInicial('uno', 200), /disponible/);
+  await assert.rejects(servicio.registrarAbono('uno', 'nuevo', datosAbono), /disponible/);
+  await assert.rejects(servicio.anularAbono('uno', 'pago'), /disponible/);
+  await assert.rejects(servicio.crearDeuda('uno', datosDeuda), /borrada/);
+  assert.equal(registros.get(ruta('dos')).montoInicialCentavos, 10030);
 });
