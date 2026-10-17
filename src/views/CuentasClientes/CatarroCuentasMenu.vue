@@ -25,22 +25,30 @@
         <option value="todas">Todas</option>
         <option value="pagadas">Pagadas</option>
         <option value="no-pagadas">No Pagadas</option>
+        <option value="sin-nota">Sin cuenta</option>
       </select>
     </div>
 
     <div class="cuentas-list card">
       <h2>Registros de Cuentas</h2>
+      <p v-if="cargandoEmbarques" class="loading">Buscando cuentas faltantes desde el 15 de octubre de 2026…</p>
+      <p v-if="errorEmbarques" class="error-pendientes" role="alert">
+        No se pudieron consultar las cuentas faltantes.
+        <button type="button" @click="escucharEmbarques">Reintentar</button>
+      </p>
+      <p v-if="errorCreacion" class="error-pendientes" role="alert">{{ errorCreacion }}</p>
       <div v-if="isLoading" class="loading">Cargando registros...</div>
       <div v-else-if="cuentasFiltradas.length === 0" class="no-records">
         No hay registros de cuentas que coincidan con el filtro.
       </div>
       <ul v-else>
-        <li v-for="cuenta in cuentasPaginadas" :key="cuenta.id" class="cuenta-item" :class="{ 'tiene-observacion': cuenta.tieneObservacion || (cuenta.observacion && cuenta.observacion.trim().length) }">
+        <li v-for="cuenta in cuentasPaginadas" :key="cuenta.id" class="cuenta-item" :class="{ 'cuenta-sin-nota': cuenta.missingNota, 'tiene-observacion': cuenta.tieneObservacion || (cuenta.observacion && cuenta.observacion.trim().length) }">
           <div class="cuenta-content">
             <span class="cuenta-date">{{ formatDate(cuenta.fecha) }}</span>
-            <p class="cuenta-summary">
+            <p v-if="cuenta.missingNota" class="texto-sin-nota">Sin cuenta registrada</p>
+            <p v-else class="cuenta-summary">
               <span>Saldo Hoy: ${{ formatNumber(cuenta.saldoHoy) }}</span>
-              <span>Total Acumulado: ${{ formatNumber(cuenta.totalNota) }}</span>
+              <span>{{ cuenta.totalNota < 0 ? 'Saldo a favor' : 'Total Acumulado' }}: ${{ formatNumber(Math.abs(cuenta.totalNota)) }}</span>
             </p>
             <div v-if="cuenta.tieneObservacion || (cuenta.observacion && cuenta.observacion.trim().length)" class="observacion-container">
               <p class="observacion-texto">{{ cuenta.observacion }}</p>
@@ -53,13 +61,18 @@
                 <span class="abono-descripcion">{{ abono.descripcion || 'Sin descripción' }}</span>
               </p>
             </div>
-            <span :class="['estado-cuenta', cuenta.estadoPagado ? 'pagado' : 'no-pagado']">
+            <span v-if="!cuenta.missingNota" :class="['estado-cuenta', cuenta.estadoPagado ? 'pagado' : 'no-pagado']">
               {{ cuenta.estadoPagado ? 'Pagado' : 'No Pagado' }}
             </span>
           </div>
           <div class="cuenta-actions">
-            <button @click="editarCuenta(cuenta.id)" class="edit-btn">Editar</button>  
-            <button @click="borrarCuenta(cuenta.id)" class="delete-btn">Borrar</button>
+            <template v-if="!cuenta.missingNota">
+              <button @click="editarCuenta(cuenta.id)" class="edit-btn">Editar</button>
+              <button @click="borrarCuenta(cuenta.id)" class="delete-btn">Borrar</button>
+            </template>
+            <button v-else type="button" class="nota-pendiente-hint" :disabled="creatingFecha !== null" @click="crearNota(cuenta.fecha)">
+              {{ creatingFecha === cuenta.fecha ? 'Creando...' : 'Crear nota' }}
+            </button>
           </div>
         </li>
       </ul>
@@ -83,14 +96,18 @@
 
 <script>
 import { db } from '@/firebase';
-import { collection, query, orderBy, doc, onSnapshot, where, updateDoc } from 'firebase/firestore';
+import { collection, query, orderBy, doc, onSnapshot, where, updateDoc, getDoc } from 'firebase/firestore';
+import EmbarqueCuentasService from '@/utils/services/EmbarqueCuentasService';
+import { normalizarFechaValor } from '@/utils/dateUtils';
+import { INICIO_CUENTAS_PENDIENTES_CATARRO, cuentasPendientesCatarro, combinarEmbarquesCatarro } from '@/utils/cuentasPendientesCatarro';
 import PapeleraService from '@/services/PapeleraService';
 import BackButton from '@/components/BackButton.vue';
 import PreciosHistorialModal from '@/components/PreciosHistorialModal.vue';
 import StashModalV2 from '@/components/StashModalV2.vue';
 import DeudasCatarro from '@/components/Cuentas/DeudasCatarro.vue';
 import { formatNumber, formatearFecha as formatDate } from '@/utils/formatters';
-import { sonMontosIguales } from '@/utils/dinero';
+import { sonMontosIguales, redondearCentavos } from '@/utils/dinero';
+import { saldoDiaCatarro } from '@/utils/saldosCatarro';
 
 export default {
   name: 'CatarroCuentasMenu',
@@ -104,6 +121,12 @@ export default {
     return {
       pestanaActiva: 'actuales',
       cuentas: [],
+      embarques: [],
+      cargandoEmbarques: true,
+      errorEmbarques: false,
+      errorCreacion: '',
+      creatingFecha: null,
+      unsubscribeEmbarques: null,
       isLoading: true,
       filtroEstado: 'todas',
       unsubscribe: null,
@@ -114,14 +137,20 @@ export default {
     };
   },
   computed: {
+    cuentasConPendientes() {
+      return [...this.cuentas, ...cuentasPendientesCatarro(this.cuentas, this.embarques)]
+        .sort((a, b) => normalizarFechaValor(b.fecha).localeCompare(normalizarFechaValor(a.fecha)));
+    },
     cuentasFiltradas() {
       switch (this.filtroEstado) {
         case 'pagadas':
-          return this.cuentas.filter(cuenta => cuenta.estadoPagado);
+          return this.cuentasConPendientes.filter(cuenta => cuenta.estadoPagado);
         case 'no-pagadas':
-          return this.cuentas.filter(cuenta => !cuenta.estadoPagado);
+          return this.cuentasConPendientes.filter(cuenta => !cuenta.estadoPagado);
+        case 'sin-nota':
+          return this.cuentasConPendientes.filter(cuenta => cuenta.missingNota);
         default:
-          return this.cuentas;
+          return this.cuentasConPendientes;
       }
     },
     totalPaginas() {
@@ -133,6 +162,9 @@ export default {
     }
   },
   watch: {
+    totalPaginas(total) {
+      this.paginaActual = Math.min(this.paginaActual, total);
+    },
     filtroEstado() {
       this.paginaActual = 1;
     }
@@ -140,6 +172,40 @@ export default {
   methods: {
     formatNumber,
     formatDate,
+    escucharEmbarques() {
+      if (this.unsubscribeEmbarques) this.unsubscribeEmbarques();
+      this.cargandoEmbarques = true;
+      this.errorEmbarques = false;
+      this.unsubscribeEmbarques = onSnapshot(query(collection(db, 'embarques'),
+        where('fecha', '>=', INICIO_CUENTAS_PENDIENTES_CATARRO), orderBy('fecha', 'desc')), snapshot => {
+        this.embarques = snapshot.docs.map(documento => ({ ...documento.data(), id: documento.id }));
+        this.cargandoEmbarques = false;
+      }, () => {
+        this.errorEmbarques = true;
+        this.cargandoEmbarques = false;
+      });
+    },
+    async crearNota(fecha) {
+      if (this.creatingFecha) return;
+      const fechaNormalizada = normalizarFechaValor(fecha);
+      if (!fechaNormalizada || fechaNormalizada < INICIO_CUENTAS_PENDIENTES_CATARRO) return;
+      this.creatingFecha = fechaNormalizada;
+      this.errorCreacion = '';
+      try {
+        const fuentes = this.embarques.filter(embarque => normalizarFechaValor(embarque.fecha) === fechaNormalizada);
+        const documentos = await Promise.all(fuentes.map(embarque => getDoc(doc(db, 'embarques', embarque.id))));
+        const actuales = documentos.filter(documento => documento.exists()).map(documento => documento.data());
+        const datos = combinarEmbarquesCatarro(actuales, fechaNormalizada);
+        const id = await EmbarqueCuentasService.crearCuentaCatarro(datos, null);
+        this.editarCuenta(id);
+      } catch (error) {
+        this.errorCreacion = error.code === 'cuenta-duplicada'
+          ? 'Esta cuenta ya fue creada. Abre la cuenta existente desde la lista.'
+          : `No se pudo crear la cuenta: ${error.message || error}`;
+      } finally {
+        this.creatingFecha = null;
+      }
+    },
     async loadCuentas() {
       try {
         this.isLoading = true;
@@ -154,7 +220,7 @@ export default {
               sum + (parseFloat(cobro.monto) || 0), 0);
             const totalAbonos = (data.abonos || []).reduce((sum, abono) => 
               sum + (parseFloat(abono.monto) || 0), 0);
-            const totalDiaActual = (data.totalGeneralVenta || 0) - totalCobros - totalAbonos;
+            const totalDiaActual = saldoDiaCatarro(data);
 
             return {
               id: doc.id,
@@ -162,8 +228,9 @@ export default {
               saldoHoy: data.totalGeneralVenta || 0,
               totalCobros,
               totalAbonos,
+              totalDiaActual,
               totalNota: data.nuevoSaldoAcumulado || 0,
-              estadoPagado: totalDiaActual === 0,
+              estadoPagado: data.estadoPagado,
               nuevoSaldoAcumulado: data.nuevoSaldoAcumulado || 0,
               saldoAcumuladoAnterior: data.saldoAcumuladoAnterior || 0,
               abonos: data.abonos || [],
@@ -183,21 +250,20 @@ export default {
           // Procesar cada cuenta y preparar las actualizaciones
           for (let i = 0; i < cuentasOrdenadas.length; i++) {
             const cuenta = cuentasOrdenadas[i];
-            const totalDia = cuenta.saldoHoy - cuenta.totalCobros - cuenta.totalAbonos;
-            saldoAcumulado += totalDia;
-
-            const saldoAnterior = i === 0 ? 0 : cuentasOrdenadas[i-1].nuevoSaldoAcumulado;
+            const saldoAnterior = saldoAcumulado;
+            saldoAcumulado = redondearCentavos(saldoAcumulado + cuenta.totalDiaActual);
             
             // Solo actualizar si los valores han cambiado (con tolerancia de centavos)
             if (!sonMontosIguales(cuenta.saldoAcumuladoAnterior, saldoAnterior) ||
-                !sonMontosIguales(cuenta.nuevoSaldoAcumulado, saldoAcumulado)) {
+                !sonMontosIguales(cuenta.nuevoSaldoAcumulado, saldoAcumulado) ||
+                cuenta.estadoPagado !== (saldoAcumulado <= 0)) {
               
               actualizaciones.push({
                 id: cuenta.id,
                 updates: {
                   saldoAcumuladoAnterior: saldoAnterior,
                   nuevoSaldoAcumulado: saldoAcumulado,
-                  estadoPagado: totalDia === 0
+                  estadoPagado: saldoAcumulado <= 0
                 }
               });
             }
@@ -205,12 +271,8 @@ export default {
             // Actualizar el objeto local
             cuenta.totalNota = saldoAcumulado;
             cuenta.saldoAcumuladoAnterior = saldoAnterior;
-            cuenta.estadoPagado = totalDia === 0;
-
-            // Reiniciar saldo si la cuenta está pagada
-            if (saldoAcumulado <= 0) {
-              saldoAcumulado = 0;
-            }
+            cuenta.nuevoSaldoAcumulado = saldoAcumulado;
+            cuenta.estadoPagado = saldoAcumulado <= 0;
           }
 
           // Realizar todas las actualizaciones en paralelo (evitando recálculos solapados)
@@ -300,12 +362,15 @@ export default {
   },
   mounted() {
     this.loadCuentas();
+    this.escucharEmbarques();
   },
-  beforeUnmount() {
+  beforeDestroy() {
     // Limpiar el listener cuando el componente se desmonte
     if (this.unsubscribe) {
       this.unsubscribe();
     }
+    if (this.unsubscribeEmbarques) this.unsubscribeEmbarques();
+    if (this.saveMessageTimer) clearTimeout(this.saveMessageTimer);
   }
 };
 </script>
@@ -400,6 +465,12 @@ h1, h2 {
 .cuenta-item:hover {
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
 }
+
+.cuenta-item.cuenta-sin-nota { background: #f2f2f2; border-left: 4px solid #bdbdbd; }
+.texto-sin-nota { color: #666; font-weight: 600; }
+.error-pendientes { color: #b71c1c; }
+.nota-pendiente-hint { color: #b71c1c; font-weight: 700; background: #fff2e6; border: 1px dashed #d32f2f; border-radius: 8px; padding: 8px 14px; cursor: pointer; min-width: 140px; }
+.nota-pendiente-hint:disabled { opacity: 0.7; cursor: not-allowed; }
 
 .cuenta-content {
   margin-bottom: 10px;

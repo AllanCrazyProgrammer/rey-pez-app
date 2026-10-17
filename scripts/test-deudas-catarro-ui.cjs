@@ -25,9 +25,14 @@ function componente(file) {
     await page.route('https://**/*', route => route.abort());
     await page.setContent('<div id="app"></div>');
     await page.addScriptTag({ path: require.resolve('vue/dist/vue.js') });
+    await page.addScriptTag({ path: require.resolve('moment/min/moment.min.js') });
     const componentes = {
       deudas: componente('src/components/Cuentas/DeudasCatarro.vue'),
       menu: componente('src/views/CuentasClientes/CatarroCuentasMenu.vue'),
+      utilidades: Object.fromEntries(['dateUtils', 'cuentasPendientesCatarro'].map(nombre => [nombre,
+        babel.transformSync(fs.readFileSync(path.join(root, `src/utils/${nombre}.js`), 'utf8'), {
+          configFile: false, babelrc: false, plugins: ['@babel/plugin-transform-modules-commonjs'],
+        }).code])),
     };
     await page.addStyleTag({ content: 'body{font-family:Arial,sans-serif;background:#eef1f6;margin:0}*{box-sizing:border-box}' +
       Object.values(componentes).map(componente => componente.styles).join('\n') });
@@ -39,6 +44,15 @@ function componente(file) {
           return mocks[id];
         }, module, module.exports);
         return module.exports.default;
+      };
+      const utilidades = {};
+      const cargarUtilidad = nombre => {
+        if (utilidades[nombre]) return utilidades[nombre];
+        const module = { exports: {} };
+        new Function('require', 'module', 'exports', componentes.utilidades[nombre])(
+          id => id === 'moment' ? window.moment : id === 'moment/locale/es' ? {} : cargarUtilidad(id.replace('./', '')), module, module.exports);
+        utilidades[nombre] = module.exports;
+        return module.exports;
       };
       const deudas = [], pagos = {};
       const oyentes = new Set(), oyentesAbonos = new Map();
@@ -75,11 +89,31 @@ function componente(file) {
       window.numeroOyentes = () => oyentes.size + oyentesAbonos.size;
       const mocks = {
         '@/services/deudasCatarro.service': servicio,
-        '@/utils/dateUtils': { obtenerFechaActualISO: () => '2026-10-16' },
+        '@/utils/dateUtils': { ...cargarUtilidad('dateUtils'), obtenerFechaActualISO: () => '2026-10-16' },
+        '@/utils/cuentasPendientesCatarro': cargarUtilidad('cuentasPendientesCatarro'),
+        '@/utils/services/EmbarqueCuentasService': {
+          async crearCuentaCatarro(datos) {
+            if (window.fallarCreacion) { window.fallarCreacion = false; throw new Error('Sin conexión'); }
+            window.cuentaCreada = datos;
+            await window.cargarCuentas([...(window.cuentasPrueba || []), { id: datos.fecha, fecha: datos.fecha, estadoPagado: true }]);
+            return datos.fecha;
+          },
+        },
         '@/utils/formatters': { formatNumber: value => Number(value).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), formatearFecha: fecha => fecha },
         '@/firebase': { db: {} },
-        'firebase/firestore': { collection() {}, query() {}, orderBy() {}, onSnapshot(_, fn) { fn({ docs: [] }); return () => {}; } },
-        '@/services/PapeleraService': {}, '@/utils/dinero': { sonMontosIguales: (a, b) => a === b },
+        'firebase/firestore': {
+          collection: (_, nombre) => nombre, query: ref => ref, orderBy() {}, where() {}, doc: (_, nombre, id) => ({ nombre, id }),
+          async getDoc(ref) { const data = (window.embarquesPrueba || []).find(item => item.id === ref.id); return { exists: () => !!data, data: () => data }; },
+          async updateDoc() {},
+          onSnapshot(ref, fn) {
+            const emitir = datos => fn({ docs: datos.map(data => ({ id: data.id, data: () => data })) });
+            if (ref === 'cuentasCatarro') window.cargarCuentas = datos => { window.cuentasPrueba = datos; return emitir(datos); };
+            if (ref === 'embarques') window.cargarEmbarques = datos => { window.embarquesPrueba = datos; return emitir(datos); };
+            emitir([]); return () => {};
+          },
+        },
+        '@/services/PapeleraService': {}, '@/utils/dinero': { sonMontosIguales: (a, b) => a === b, redondearCentavos: n => Math.round(n * 100) / 100 },
+        '@/utils/saldosCatarro': { saldoDiaCatarro: () => 0 },
         '@/components/BackButton.vue': { template: '<span></span>' },
         '@/components/PreciosHistorialModal.vue': { template: '<button>Precios de venta</button>' },
         '@/components/StashModalV2.vue': { template: '<button>Stash</button>' },
@@ -87,6 +121,7 @@ function componente(file) {
       mocks['@/components/Cuentas/DeudasCatarro.vue'] = { ...load(componentes.deudas.script, mocks), template: componentes.deudas.template };
       const menu = { ...load(componentes.menu.script, mocks), template: componentes.menu.template };
       Vue.component('router-link', { props: ['to'], template: '<a :href="to"><slot /></a>' });
+      Vue.prototype.$router = { push(ruta) { window.rutaAbierta = ruta; } };
       window.montar = () => {
         document.body.innerHTML = '<div id="app"></div>';
         window.vm = new Vue({ el: '#app', render: h => h(menu) });
@@ -149,7 +184,37 @@ function componente(file) {
     await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
     await page.screenshot({ path: '/tmp/deudas-catarro-mobile.png', fullPage: true });
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true, 'sin desbordamiento horizontal en móvil');
+
+    await page.getByRole('tab', { name: 'Cuentas actuales', exact: true }).click();
+    await page.evaluate(async () => {
+      await window.cargarCuentas([{ id: '2026-10-16', fecha: '2026-10-16', estadoPagado: true }]);
+      window.cargarEmbarques([
+        { id: 'antes', fecha: '2026-10-14', clientes: [{ id: '2', productos: [{ medida: '41/50', kilos: [10] }] }] },
+        { id: 'pendiente', fecha: '2026-10-15', clientes: [{ id: '2', productos: [{ medida: '41/50', kilos: [25], precio: 100 }], crudos: [] }], clientesSumarKgCatarro: { '2': false } },
+        { id: 'existe', fecha: '2026-10-16', clientes: [{ id: '2', productos: [{ medida: '41/50', kilos: [10] }] }] },
+        { id: 'vacio', fecha: '2026-10-17', clientes: [{ id: '2', productos: [{ medida: '', kilos: [] }] }] },
+        { id: 'otro', fecha: '2026-10-18', clientes: [{ id: '5', productos: [{ medida: '41/50', kilos: [10] }] }] },
+      ]);
+    });
+    await page.getByRole('button', { name: 'Crear nota', exact: true }).waitFor();
+    assert.equal(await page.locator('.cuenta-sin-nota').count(), 1);
+    assert.match(await page.locator('.cuenta-sin-nota').innerText(), /2026-10-15/);
+    assert.equal(await page.locator('.cuenta-sin-nota .delete-btn').count(), 0);
+    await page.selectOption('#filter-select', 'pagadas');
+    assert.equal(await page.locator('.cuenta-sin-nota').count(), 0);
+    await page.selectOption('#filter-select', 'sin-nota');
+    await page.locator('.cuenta-sin-nota').scrollIntoViewIfNeeded();
+    await page.screenshot({ path: '/tmp/catarro-cuenta-pendiente-mobile.png' });
+    await page.evaluate(() => { window.fallarCreacion = true; });
+    await page.getByRole('button', { name: 'Crear nota', exact: true }).click();
+    await page.getByRole('alert').filter({ hasText: 'Sin conexión' }).waitFor();
+    assert.equal(await page.getByRole('button', { name: 'Crear nota', exact: true }).isEnabled(), true);
+    await page.getByRole('button', { name: 'Crear nota', exact: true }).click();
+    await page.waitForFunction(() => window.rutaAbierta === '/cuentas-catarro/2026-10-15?edit=true');
+    assert.equal(await page.locator('.cuenta-sin-nota').count(), 0);
+    assert.equal(await page.evaluate(() => window.cuentaCreada.productos[0].kilos[0]), 25);
+    assert.equal(await page.evaluate(() => window.cuentaCreada.clientesSumarKgCatarro['2']), false);
     assert.deepEqual(errors, []);
-    console.log('PASS: varias pestañas, abonos independientes, reintento, liquidación, anulación, recarga y móvil.');
+    console.log('PASS: deudas independientes y cuentas faltantes desde el 15/10/2026, filtros, creación, reintento y móvil.');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

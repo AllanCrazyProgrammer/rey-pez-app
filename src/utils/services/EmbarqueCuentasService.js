@@ -5,7 +5,7 @@ import {
   obtenerFechaActualISO,
   esFechaValida
 } from '../dateUtils';
-import { acumularLote } from '../dinero';
+import { acumularLote, redondearCentavos } from '../dinero';
 import { obtenerSobrantesDeItem } from '../sobrantesCrudos';
 import { usarKilosDecimalesCatarro, calcularKilosProductoCatarro, calcularKilosCrudoCatarro } from '../kilosCatarro';
 
@@ -1046,8 +1046,8 @@ const prepararDatosCuentaCatarro = async (embarqueData) => {
     abonos: [],
     totalGeneral,
     totalGeneralVenta,
-    nuevoSaldoAcumulado: saldoAcumuladoAnterior + totalGeneralVenta - fleteTotal, // Ajustar el saldo con el flete
-    estadoPagado: false,
+    nuevoSaldoAcumulado: redondearCentavos(saldoAcumuladoAnterior + totalGeneralVenta - fleteTotal),
+    estadoPagado: redondearCentavos(saldoAcumuladoAnterior + totalGeneralVenta - fleteTotal) <= 0,
     tieneObservacion: false,
     observacion: '',
     ultimaActualizacion: new Date().toISOString()

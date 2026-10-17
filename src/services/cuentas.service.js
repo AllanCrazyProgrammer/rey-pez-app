@@ -66,11 +66,11 @@ const createCuentasService = (coleccion) => ({
     return (ultima.saldoAcumuladoAnterior || 0) + saldoDia;
   },
 
-  subscribe(opts, callback) {
+  subscribe(opts, callback, alError) {
     const constraints = [];
     if (opts.orderBy) constraints.push(orderBy(opts.orderBy, opts.direction || 'asc'));
     if (opts.where) constraints.push(where(opts.where[0], opts.where[1], opts.where[2]));
-    return onSnapshot(query(this._ref(), ...constraints), callback);
+    return onSnapshot(query(this._ref(), ...constraints), callback, alError);
   },
 
   async create(data) {

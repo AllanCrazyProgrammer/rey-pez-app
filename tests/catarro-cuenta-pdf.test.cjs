@@ -160,6 +160,16 @@ test('Catarro: el precio propio del cliente gana al precio general', async () =>
   assert.equal(cuenta().nuevoSaldoAcumulado, 9300);
 });
 
+test('Catarro: una cuenta futura usa el crédito anterior y conserva el remanente a favor', async () => {
+  const { servicio, cuenta } = cargarServicio({
+    previas: [{ fecha: '2026-10-13', nuevoSaldoAcumulado: -1000.35 }],
+  });
+  await servicio.crearCuentaCatarro(embarqueBase, null);
+  assert.equal(cuenta().saldoAcumuladoAnterior, -1000.35);
+  assert.equal(cuenta().nuevoSaldoAcumulado, -200.35);
+  assert.equal(cuenta().estadoPagado, true);
+});
+
 test('Catarro: generar la cuenta otra vez no duplica ni pisa abonos', async () => {
   const contexto = cargarServicio();
   await contexto.servicio.crearCuentaCatarro(embarqueBase, null);

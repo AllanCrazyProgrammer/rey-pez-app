@@ -297,10 +297,24 @@
         <td>-${{ formatNumber(abono.monto) }}</td>
       </tr>
       <tr class="total">
-        <td>Nuevo Saldo Acumulado</td>
-        <td>${{ formatNumber(nuevoSaldoAcumulado) }}</td>
+        <td>{{ clienteId === 'catarro' && nuevoSaldoAcumulado < 0 ? 'Excedente a favor' : 'Nuevo Saldo Acumulado' }}</td>
+        <td>${{ formatNumber(clienteId === 'catarro' && nuevoSaldoAcumulado < 0 ? -nuevoSaldoAcumulado : nuevoSaldoAcumulado) }}</td>
       </tr>
     </table>
+
+    <section v-if="clienteId === 'catarro' && excedenteCatarro.excedente > 0" class="excedente-catarro card" aria-live="polite">
+      <h3>Aplicación del excedente</h3>
+      <p>Esta nota queda pagada. El excedente se conserva para las siguientes cuentas.</p>
+      <p v-if="errorCuentasPosteriores" role="alert">No se pudieron consultar las cuentas siguientes. El excedente se conserva a favor; vuelve a abrir la nota para consultar su aplicación.</p>
+      <p v-else-if="!cuentasPosterioresCargadas">Consultando las cuentas siguientes…</p>
+      <template v-else>
+        <p v-for="aplicacion in excedenteCatarro.aplicaciones" :key="aplicacion.id">
+          Abono a la cuenta del {{ fechaExcedente(aplicacion.fecha) }}:
+          <strong>${{ formatNumber(aplicacion.monto) }}</strong>
+        </p>
+        <p v-if="excedenteCatarro.aFavor > 0">Saldo a favor para futuras cuentas: <strong>${{ formatNumber(excedenteCatarro.aFavor) }}</strong></p>
+      </template>
+    </section>
 
     <div class="button-container">
       <button @click="guardarNota" class="save-button" :disabled="isGuardando">
@@ -411,6 +425,7 @@ import PreciosClienteButton from '@/components/PreciosClienteButton.vue';
 import { formatNumber } from '@/utils/formatters';
 import { normalizarFechaISO } from '@/utils/dateUtils';
 import { redondearCentavos, sumarMontos } from '@/utils/dinero';
+import { encadenarSaldosCatarro, resumenExcedenteCatarro } from '@/utils/saldosCatarro';
 import { crearCuentaSegura as crearCuentaSeguraEnColeccion } from '@/utils/services/EmbarqueCuentasService';
 import {
   joselitoCuentas,
@@ -446,6 +461,9 @@ export default {
       cobros: [],
       correcciones: [],
       abonos: [],
+      cuentasPosterioresCatarro: [],
+      cuentasPosterioresCargadas: false,
+      errorCuentasPosteriores: false,
       saldoAnteriorEsperado: null,
       fechaSeleccionada: this.obtenerFechaActual(),
       showMobileActions: false,
@@ -512,7 +530,11 @@ export default {
       return this.saldoAcumuladoAnterior + this.totalGeneralVenta + totalCobros - totalAbonos;
     },
     nuevoSaldoAcumulado() {
-      return (this.saldoAcumuladoAnterior || 0) + (this.totalDiaActual || 0);
+      const saldo = (this.saldoAcumuladoAnterior || 0) + (this.totalDiaActual || 0);
+      return this.clienteId === 'catarro' ? redondearCentavos(saldo) : saldo;
+    },
+    excedenteCatarro() {
+      return resumenExcedenteCatarro(this.nuevoSaldoAcumulado, this.cuentasPosterioresCatarro);
     },
     gananciaDelDia() {
       const costoTotal = this.items.reduce((sum, item) => sum + (item.total || 0), 0);
@@ -522,6 +544,7 @@ export default {
       return this.totalGeneralVenta - this.abonos.reduce((sum, a) => sum + (a.monto || 0), 0);
     },
     estadoCuenta() {
+      if (this.clienteId === 'catarro') return this.nuevoSaldoAcumulado <= 0 ? 'Pagado' : 'No Pagado';
       return this.nuevoSaldoAcumulado <= 0.01 ? 'Pagado' : 'No Pagado';
     },
     gananciaTotal() {
@@ -551,6 +574,7 @@ export default {
       async handler(newFecha, oldFecha) {
         if (!newFecha || newFecha === oldFecha) return;
         await this.loadSaldoAcumuladoAnterior();
+        this.escucharCuentasPosterioresCatarro();
         if (this.config.features.verificarEmbarques) {
           await this.verificarNotaFaltante();
         }
@@ -575,9 +599,33 @@ export default {
     if (this.config.features.verificarEmbarques) {
       await this.verificarNotaFaltante();
     }
+    this.escucharCuentasPosterioresCatarro();
+  },
+  beforeDestroy() {
+    if (this._cancelarPosterioresCatarro) this._cancelarPosterioresCatarro();
+    clearTimeout(this.autoSaveTimer);
+    clearTimeout(this.saveMessageTimer);
   },
   methods: {
     formatNumber,
+
+    fechaExcedente(fecha) {
+      return fecha.split('-').reverse().join('/');
+    },
+
+    escucharCuentasPosterioresCatarro() {
+      if (this.clienteId !== 'catarro') return;
+      if (this._cancelarPosterioresCatarro) this._cancelarPosterioresCatarro();
+      this.cuentasPosterioresCargadas = false;
+      this.errorCuentasPosteriores = false;
+      this.cuentasPosterioresCatarro = [];
+      this._cancelarPosterioresCatarro = this.service.subscribe({
+        where: ['fecha', '>', this.fechaSeleccionada], orderBy: 'fecha',
+      }, snap => {
+        this.cuentasPosterioresCatarro = snap.docs.map(d => ({ ...d.data(), id: d.id }));
+        this.cuentasPosterioresCargadas = true;
+      }, () => { this.errorCuentasPosteriores = true; });
+    },
 
     obtenerFechaActual() {
       const fecha = new Date();
@@ -599,7 +647,7 @@ export default {
       try {
         const data = await this.service.getById(id);
         if (!data) throw new Error('No se encontró la cuenta con el ID proporcionado');
-        this.$nextTick(() => {
+        await this.$nextTick(() => {
           this.items = (data.items || []).map(item => {
             const kilos = parseFloat(item.kilos) || 0;
             return { ...item, kilos, total: kilos * (item.costo || 0) };
@@ -653,11 +701,24 @@ export default {
         return 0;
       } catch (error) {
         console.error('Error al obtener saldo acumulado anterior:', error);
+        if (this.clienteId === 'catarro') throw error;
         return 0;
       }
     },
 
     async actualizarCuentasPosteriores(fechaActual) {
+      if (this.clienteId === 'catarro') {
+        const posteriores = await this.service.getAll({ where: ['fecha', '>', fechaActual], orderBy: 'fecha' });
+        const recalculadas = encadenarSaldosCatarro(posteriores, this.nuevoSaldoAcumulado);
+        for (const cuenta of recalculadas) {
+          await this.service.update(cuenta.id, {
+            saldoAcumuladoAnterior: cuenta.saldoAcumuladoAnterior,
+            nuevoSaldoAcumulado: cuenta.nuevoSaldoAcumulado,
+            estadoPagado: cuenta.estadoPagado,
+          });
+        }
+        return;
+      }
       try {
         const q = query(
           this.service._ref(),
@@ -749,7 +810,17 @@ export default {
           tieneObservacion: this.tieneObservacion,
           observacion: this.observacion,
         };
+        if (this.clienteId === 'catarro') {
+          this.saldoAcumuladoAnterior = notaData.saldoAcumuladoAnterior;
+          Object.assign(notaData, {
+            cobros: this.cobros, correcciones: this.correcciones, abonos: this.abonos,
+            totalGeneralVenta: this.totalGeneralVenta,
+            nuevoSaldoAcumulado: this.nuevoSaldoAcumulado,
+            estadoPagado: this.nuevoSaldoAcumulado <= 0,
+          });
+        }
         const nuevoId = await this.crearCuentaSegura(notaData);
+        if (this.clienteId === 'catarro') await this.actualizarCuentasPosteriores(this.fechaSeleccionada);
         this.$router.replace({ name: this.$route.name, params: { id: nuevoId }, query: { edit: 'true' } });
         return nuevoId;
       } catch (error) {
@@ -778,8 +849,9 @@ export default {
         // cobros, correcciones y abonos, para que ambos caminos den el mismo saldo.
         const totalDia = this.totalDiaActual;
         const saldoActualizado = await this.obtenerSaldoAcumuladoAnterior();
+        if (this.clienteId === 'catarro') this.saldoAcumuladoAnterior = saldoActualizado;
         const nuevoSaldo = saldoActualizado + totalDia;
-        const estadoPagado = nuevoSaldo <= 0.01;
+        const estadoPagado = this.clienteId === 'catarro' ? redondearCentavos(nuevoSaldo) <= 0 : nuevoSaldo <= 0.01;
         const notaData = {
           fecha: this.fechaSeleccionada,
           items: this.items.map(item => { const kilos = parseFloat(item.kilos) || 0; return { ...item, kilos, total: kilos * (item.costo || 0) }; }),
@@ -790,7 +862,7 @@ export default {
           abonos: this.abonos,
           totalGeneral: this.totalGeneral,
           totalGeneralVenta: this.totalGeneralVenta,
-          nuevoSaldoAcumulado: estadoPagado ? 0 : nuevoSaldo,
+          nuevoSaldoAcumulado: this.clienteId === 'catarro' ? redondearCentavos(nuevoSaldo) : (estadoPagado ? 0 : nuevoSaldo),
           gananciaDelDia: this.gananciaDelDia,
           estadoPagado,
           tieneObservacion: this.tieneObservacion,
@@ -801,12 +873,12 @@ export default {
         const isEditing = this.$route.query.edit === 'true';
         if (id && isEditing) {
           await this.service.update(id, notaData);
-          this.actualizarCuentasPosteriores(this.fechaSeleccionada).catch(console.error);
+          await this.actualizarCuentasPosteriores(this.fechaSeleccionada);
           this.showMessage('Cuenta guardada exitosamente');
           setTimeout(() => { this.$router.push(this.config.backPath); }, 500);
         } else {
           await this.crearCuentaSegura(notaData);
-          this.actualizarCuentasPosteriores(this.fechaSeleccionada).catch(console.error);
+          await this.actualizarCuentasPosteriores(this.fechaSeleccionada);
           this.showMessage('Cuenta guardada exitosamente');
           setTimeout(() => { this.$router.push(this.config.backPath); }, 500);
         }
@@ -1331,7 +1403,9 @@ export default {
       if (!this.$route.params.id) return;
       try {
         const id = this.$route.params.id;
+        if (this.clienteId === 'catarro') this.saldoAcumuladoAnterior = await this.obtenerSaldoAcumuladoAnterior();
         const notaData = {
+          ...(this.clienteId === 'catarro' ? { saldoAcumuladoAnterior: this.saldoAcumuladoAnterior } : {}),
           items: this.items.map(item => { const k = parseFloat(item.kilos) || 0; return { kilos: k, medida: item.medida, costo: item.costo, total: k * (item.costo || 0) }; }),
           itemsVenta: this.itemsVenta.map(item => { const k = parseFloat(item.kilosVenta) || 0; return { kilosVenta: k, medida: item.medida, precioVenta: item.precioVenta, totalVenta: k * (item.precioVenta || 0), ganancia: item.ganancia, ...(item.verificado !== undefined ? { verificado: item.verificado } : {}) }; }),
           totalGeneral: this.totalGeneral,
@@ -1346,6 +1420,7 @@ export default {
           ultimaActualizacion: new Date().toISOString(),
         };
         await this.service.update(id, notaData);
+        if (this.clienteId === 'catarro') await this.actualizarCuentasPosteriores(this.fechaSeleccionada);
         this.lastSaveMessage = '';
         this.showSaveMessage = false;
       } catch (error) {
@@ -1448,7 +1523,13 @@ export default {
         ${this.correcciones.map(c => `<tr><td>${c.descripcion} (Corrección)</td><td>-$${this.formatNumber(c.monto)}</td></tr>`).join('')}
         ${this.abonos.map(a => `<tr><td>${a.descripcion} (Abono)</td><td>-$${this.formatNumber(a.monto)}</td></tr>`).join('')}
         <tr class="total"><td>Total</td><td>$${this.formatNumber(this.totalDiaActual)}</td></tr>
-        <tr class="highlight"><td>Nuevo Saldo Acumulado</td><td>$${this.formatNumber(this.nuevoSaldoAcumulado)}</td></tr>
+        <tr class="highlight"><td>${this.clienteId === 'catarro' && this.nuevoSaldoAcumulado < 0 ? 'Excedente a favor' : 'Nuevo Saldo Acumulado'}</td><td>$${this.formatNumber(this.clienteId === 'catarro' && this.nuevoSaldoAcumulado < 0 ? -this.nuevoSaldoAcumulado : this.nuevoSaldoAcumulado)}</td></tr>
+        ${this.clienteId === 'catarro' && this.excedenteCatarro.excedente > 0 ? (
+          this.errorCuentasPosteriores || !this.cuentasPosterioresCargadas
+            ? '<tr><td colspan="2">Excedente conservado a favor. Aplicación a cuentas siguientes pendiente de consultar.</td></tr>'
+            : this.excedenteCatarro.aplicaciones.map(a => `<tr><td>Abono a la cuenta del ${this.fechaExcedente(a.fecha)}</td><td>$${this.formatNumber(a.monto)}</td></tr>`).join('') +
+              (this.excedenteCatarro.aFavor > 0 ? `<tr><td>Saldo a favor para futuras cuentas</td><td>$${this.formatNumber(this.excedenteCatarro.aFavor)}</td></tr>` : '')
+        ) : ''}
         </table></body></html>`;
       const w = window.open('', '_blank');
       w.document.write(html);
@@ -1710,6 +1791,9 @@ th { background-color: #4CAF50; color: white; position: sticky; top: 0; z-index:
 .ganancia-negativa { color: #f44336; font-weight: bold; }
 
 .saldo-pendiente, .correcciones, .abonos { margin-bottom: 20px; }
+.excedente-catarro { margin-bottom: 20px; background: #edf7ed; border-left: 4px solid #388e3c; color: #205823; }
+.excedente-catarro h3 { margin: 0 0 12px; }
+.excedente-catarro p:last-child { margin-bottom: 0; }
 
 .verificacion-saldo-row { flex-direction: column; align-items: flex-start; gap: 6px; }
 .verificacion-saldo { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
