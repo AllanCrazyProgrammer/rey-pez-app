@@ -29,7 +29,7 @@ function componente(file) {
     const componentes = {
       deudas: componente('src/components/Cuentas/DeudasCatarro.vue'),
       menu: componente('src/views/CuentasClientes/CatarroCuentasMenu.vue'),
-      utilidades: Object.fromEntries(['dateUtils', 'cuentasPendientesCatarro'].map(nombre => [nombre,
+      utilidades: Object.fromEntries(['dateUtils', 'cuentasPendientesCatarro', 'saldosCatarro', 'dinero', '../constants/clientesConfig'].map(nombre => [nombre,
         babel.transformSync(fs.readFileSync(path.join(root, `src/utils/${nombre}.js`), 'utf8'), {
           configFile: false, babelrc: false, plugins: ['@babel/plugin-transform-modules-commonjs'],
         }).code])),
@@ -50,7 +50,7 @@ function componente(file) {
         if (utilidades[nombre]) return utilidades[nombre];
         const module = { exports: {} };
         new Function('require', 'module', 'exports', componentes.utilidades[nombre])(
-          id => id === 'moment' ? window.moment : id === 'moment/locale/es' ? {} : cargarUtilidad(id.replace('./', '')), module, module.exports);
+          id => id === 'moment' ? window.moment : id === 'moment/locale/es' ? {} : cargarUtilidad(id.replace(/^\.\//, '')), module, module.exports);
         utilidades[nombre] = module.exports;
         return module.exports;
       };
@@ -122,8 +122,8 @@ function componente(file) {
             emitir([]); return () => {};
           },
         },
-        '@/services/PapeleraService': {}, '@/utils/dinero': { sonMontosIguales: (a, b) => a === b, redondearCentavos: n => Math.round(n * 100) / 100 },
-        '@/utils/saldosCatarro': { saldoDiaCatarro: cuenta => Number(cuenta.totalGeneralVenta || 0) },
+        '@/services/PapeleraService': {}, '@/utils/dinero': cargarUtilidad('dinero'),
+        '@/utils/saldosCatarro': cargarUtilidad('saldosCatarro'),
         '@/components/BackButton.vue': { template: '<span></span>' },
         '@/components/PreciosHistorialModal.vue': { template: '<button>Precios de venta</button>' },
         '@/components/StashModalV2.vue': { template: '<button>Stash</button>' },
