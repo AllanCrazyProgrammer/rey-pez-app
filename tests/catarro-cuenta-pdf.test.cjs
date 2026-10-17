@@ -147,6 +147,21 @@ test('Catarro: escritorio abre la cuenta creada dentro de la app', async () => {
   assert.deepEqual(rutas, ['/cuentas-catarro/2026-10-14?edit=true']);
 });
 
+test('Catarro: las cuentas automáticas redondean el total al peso después de sumar las partidas', async () => {
+  for (const [precio, esperado] of [[100.30, 201], [100.20, 200]]) {
+    const { servicio, cuenta } = cargarServicio();
+    await servicio.crearCuentaCatarro({
+      fecha: '2026-10-17',
+      productos: ['41/50', '51/60'].map(medida => ({ medida, kilos: [1], taras: [], restarTaras: false, precio })),
+      clienteCrudos: { '2': [] },
+    }, null);
+    assert.equal(cuenta().totalGeneralVenta, esperado);
+    assert.equal(cuenta().nuevoSaldoAcumulado, esperado);
+    assert.equal(cuenta().itemsVenta[0].totalVenta, precio);
+    assert.equal(cuenta().itemsVenta[1].totalVenta, precio);
+  }
+});
+
 test('Catarro: web conserva la apertura de la cuenta en otra pestaña', async () => {
   const rutas = [];
   const { servicio } = cargarServicio({ window: {

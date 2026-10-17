@@ -1,26 +1,23 @@
 <template>
   <div class="catarro-cuentas-menu-container">
-    <h1>Menú de Cuentas Catarro</h1>
-    
-    <div class="actions-container actions-sticky">
-      <router-link to="/cuentas-mexico" class="action-button back-btn">
-        Cuentas México
-      </router-link>
+    <router-link to="/cuentas-mexico" class="action-button menu-regresar">
+      <span aria-hidden="true">←</span> Cuentas México
+    </router-link>
+    <header class="menu-encabezado">
+      <h1>Cuentas de Catarro</h1>
       <router-link to="/cuentas-catarro/nueva" class="action-button new-cuenta-btn">
-        Nueva Cuenta
+        <span aria-hidden="true">+</span> Nueva Cuenta
       </router-link>
-      <router-link to="/ventas-ganancias-catarro" class="action-button ventas-ganancias-btn">
-        Ventas y Ganancias
-      </router-link>
-      <PreciosHistorialModal />
-      <StashModalV2 cliente="catarro" />
-    </div>
+    </header>
 
     <DeudasCatarro :saldo-cuentas-centavos="saldoCuentasCentavos" :cargando-cuentas="isLoading"
       :error-cuentas="!!errorCuentas" @seleccion="pestanaActiva = $event" />
 
     <div v-show="pestanaActiva === 'actuales'" id="cuentas-actuales-catarro" role="tabpanel" aria-labelledby="pestana-catarro-actuales">
-    <div class="filter-container">
+    <div class="cuentas-list card">
+    <div class="registros-encabezado">
+      <h2>Registros de Cuentas</h2>
+      <div class="filter-container">
       <label for="filter-select">Filtrar por estado:</label>
       <select id="filter-select" v-model="filtroEstado">
         <option value="todas">Todas</option>
@@ -28,10 +25,8 @@
         <option value="no-pagadas">No Pagadas</option>
         <option value="sin-nota">Sin cuenta</option>
       </select>
+      </div>
     </div>
-
-    <div class="cuentas-list card">
-      <h2>Registros de Cuentas</h2>
       <p v-if="cargandoEmbarques" class="loading">Buscando cuentas faltantes desde el 15 de octubre de 2026…</p>
       <p v-if="errorEmbarques" class="error-pendientes" role="alert">
         No se pudieron consultar las cuentas faltantes.
@@ -102,9 +97,6 @@ import EmbarqueCuentasService from '@/utils/services/EmbarqueCuentasService';
 import { normalizarFechaValor } from '@/utils/dateUtils';
 import { INICIO_CUENTAS_PENDIENTES_CATARRO, cuentasPendientesCatarro, combinarEmbarquesCatarro } from '@/utils/cuentasPendientesCatarro';
 import PapeleraService from '@/services/PapeleraService';
-import BackButton from '@/components/BackButton.vue';
-import PreciosHistorialModal from '@/components/PreciosHistorialModal.vue';
-import StashModalV2 from '@/components/StashModalV2.vue';
 import DeudasCatarro from '@/components/Cuentas/DeudasCatarro.vue';
 import { formatNumber, formatearFecha as formatDate } from '@/utils/formatters';
 import { encadenarSaldosCatarro } from '@/utils/saldosCatarro';
@@ -112,9 +104,6 @@ import { encadenarSaldosCatarro } from '@/utils/saldosCatarro';
 export default {
   name: 'CatarroCuentasMenu',
   components: {
-    BackButton,
-    PreciosHistorialModal,
-    StashModalV2,
     DeudasCatarro
   },
   data() {
@@ -327,59 +316,35 @@ export default {
 
 <style scoped>
 .catarro-cuentas-menu-container {
-  max-width: 800px;
-  width: 95%;
-  margin: 0 auto;
-  padding: 20px;
+  box-sizing: border-box;
+  max-width: 1000px;
+  width: calc(100% - 32px);
+  margin: 24px auto;
+  padding: 24px;
   min-height: calc(100vh - 160px);
   display: flex;
   flex-direction: column;
+  background: #e9edf2;
+  border: 1px solid #c5cdd6;
+  border-top: 5px solid #a41021;
+  border-radius: 14px;
+  color: #243047;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
-
-h1, h2 {
-  color: #d32f2f;
-  text-align: center;
-}
-
-.actions-container {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 20px;
-}
-
-.actions-sticky {
-  position: sticky;
-  top: 0;
-  z-index: 10;
-  background: linear-gradient(180deg, rgba(255,255,255,1) 70%, rgba(255,255,255,0));
-  padding-top: 8px;
-  padding-bottom: 8px;
-}
-
-.action-button {
-  background-color: #d32f2f;
-  color: white;
-  border: none;
-  padding: 10px 20px;
-  border-radius: 4px;
-  cursor: pointer;
-  text-decoration: none;
-  display: inline-block;
-  font-size: 16px;
-  transition: background-color 0.3s ease;
-}
-
-.action-button:hover {
-  background-color: #b71c1c;
-}
-
-.back-btn {
-  background-color: #6c757d;
-}
-
-.back-btn:hover {
-  background-color: #5a6268;
-}
+.menu-encabezado { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; margin-bottom: 20px; }
+.menu-encabezado h1 { margin: 0; color: #8e1424; font-size: clamp(25px, 3vw, 32px); line-height: 1.2; letter-spacing: -.5px; text-align: left; }
+h2 { color: #243047; }
+.action-button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; box-sizing: border-box; min-height: 44px; padding: 10px 16px; border: 1px solid #a41021; border-radius: 7px; font-size: 14px; font-weight: 600; line-height: 1.2; cursor: pointer; text-decoration: none; text-align: center; background: #a41021; color: #fff; transition: background-color .2s; }
+.menu-encabezado .new-cuenta-btn:hover { background: #7f0f1d; }
+.menu-regresar { align-self: flex-start; margin-bottom: 16px; background: #fff; color: #243047; border-color: #a3afbe; }
+.menu-regresar:hover { background: #243047; color: #fff; }
+.menu-regresar span { font-size: 20px; line-height: 1; }
+.action-button:focus-visible { outline: 3px solid #a41021; outline-offset: 3px; }
+.registros-encabezado { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 18px; }
+.registros-encabezado h2 { margin: 0; font-size: 21px; }
+.registros-encabezado .filter-container { display: flex; align-items: center; gap: 10px; margin: 0; text-align: left; font-size: 13px; }
+.registros-encabezado select { min-height: 38px; padding: 6px 10px; background: #fff; color: #243047; border: 1px solid #a3afbe; border-radius: 6px; }
+.cuentas-list > ul { margin: 0; padding: 0; list-style: none; }
 
 .card {
   background: #fff;
@@ -389,8 +354,9 @@ h1, h2 {
 }
 
 .cuentas-list {
-  background-color: #f0f4f8;
-  border-radius: 8px;
+  background: #fff;
+  border: 1px solid #c5cdd6;
+  border-radius: 10px;
   padding: 20px;
   flex-grow: 1;
 }
@@ -486,15 +452,12 @@ h1, h2 {
     width: 100%;
   }
 
-  .actions-container {
-    flex-direction: column;
-    gap: 10px;
-  }
+  .menu-encabezado { align-items: flex-start; }
+  .menu-encabezado .new-cuenta-btn { width: auto; }
+  .registros-encabezado { align-items: flex-start; }
+  .registros-encabezado .filter-container { flex-wrap: wrap; }
+  .cuentas-list { padding: 14px; }
 
-  .action-button {
-    width: 100%;
-    text-align: center;
-  }
 
   .cuenta-item {
     padding: 10px;

@@ -1,5 +1,10 @@
 import { redondearCentavos, sumarMontos } from './dinero';
 
+// Redondear una sola vez el total de venta, conservando kilos y precios por partida.
+export function redondearTotalVentaCatarro(total) {
+  return Math.round(redondearCentavos(total));
+}
+
 export function saldoDiaCatarro(cuenta) {
   return redondearCentavos((Number(cuenta.totalGeneralVenta) || 0)
     - sumarMontos((cuenta.cobros || []).map(item => item.monto))

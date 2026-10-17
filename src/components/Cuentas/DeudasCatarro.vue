@@ -5,20 +5,29 @@
         type="button" role="tab" :aria-selected="seleccion === pestana.id ? 'true' : 'false'"
         :aria-controls="pestana.id === 'actuales' ? 'cuentas-actuales-catarro' : 'panel-deuda-catarro'"
         :tabindex="seleccion === pestana.id ? 0 : -1" :disabled="guardando"
-        :class="{ activa: seleccion === pestana.id }" @click="seleccionar(pestana.id)"
+        :class="{ activa: seleccion === pestana.id, 'pestana-actuales': pestana.id === 'actuales' }" @click="seleccionar(pestana.id)"
         @keydown.right.prevent="moverPestana(index, 1)" @keydown.left.prevent="moverPestana(index, -1)">
         {{ pestana.nombre }}
         <small v-if="pestana.id !== 'actuales'">{{ saldo(pestana) === 0 ? 'Pagada' : moneda(saldo(pestana)) + ' pendiente' }}</small>
       </button>
     </div>
-    <div class="total-deuda" role="status">
-      <span>Deuda total de Catarro</span>
-      <strong v-if="cargando || cargandoCuentas">Calculando…</strong>
-      <strong v-else-if="errorCarga || errorCuentas">No disponible</strong>
-      <template v-else>
-        <strong>{{ moneda(deudaTotalCentavos) }}</strong>
-        <small>Cuentas actuales: {{ moneda(saldoCuentasCentavos) }} · Deudas: {{ moneda(totalDeudasCentavos) }}</small>
-      </template>
+    <div class="resumen-deudas" role="status">
+      <div class="desglose-deuda">
+        <div class="resumen-cuentas-actuales">
+          <span>Cuentas actuales</span>
+          <strong>{{ cargandoCuentas ? 'Calculando…' : errorCuentas ? 'No disponible' : moneda(saldoCuentasCentavos) }}</strong>
+          <small>Saldo de las cuentas actuales</small>
+        </div>
+        <div class="resumen-cuentas-pendientes">
+          <span>Cuentas pendientes</span>
+          <strong>{{ cargando ? 'Calculando…' : errorCarga ? 'No disponible' : moneda(totalDeudasCentavos) }}</strong>
+          <small>Deudas de las pestañas adicionales</small>
+        </div>
+      </div>
+      <div class="total-deuda">
+        <span>Deuda total de Catarro</span>
+        <strong>{{ cargando || cargandoCuentas ? 'Calculando…' : errorCarga || errorCuentas ? 'No disponible' : moneda(deudaTotalCentavos) }}</strong>
+      </div>
     </div>
     <button type="button" class="agregar-pestana" :disabled="guardando || cargando || !!errorCarga"
       @click="seleccionar('nueva')">+ Agregar pestaña de deuda</button>
@@ -309,16 +318,28 @@ export default {
 
 <style scoped>
 .deudas-catarro { margin-bottom: 20px; color: #243047; }
-.pestanas { display: flex; gap: 8px; overflow-x: auto; padding: 4px 0 12px; }
+.pestanas { display: flex; gap: 8px; overflow-x: auto; padding: 8px; margin-bottom: 16px; background: #fff; border: 1px solid #c5cdd6; border-radius: 10px; }
 .pestanas button { flex: 0 0 auto; max-width: 240px; overflow-wrap: anywhere; border: 1px solid #cbd5e1; border-radius: 10px; padding: 12px 16px; background: #fff; color: #334155; text-align: left; font: inherit; font-weight: 600; }
 .pestanas button.activa { background: #fff1f2; border: 2px solid #c62828; color: #9f2020; }
 .pestanas small { display: block; margin-top: 4px; font-size: 12px; font-weight: normal; }
-.total-deuda { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 16px; padding: 16px; margin-bottom: 16px; border-radius: 10px; background: #fff1f2; color: #9f2020; border: 1px solid #e7b9bb; }
-.total-deuda strong { font-size: 22px; overflow-wrap: anywhere; }
-.total-deuda small { flex-basis: 100%; color: #526176; }
+.pestanas button.pestana-actuales { border: 2px solid #a41021; color: #a41021; font-weight: 800; }
+.pestanas button.pestana-actuales.activa { background: #a41021; color: #fff; }
+.resumen-deudas { margin: 4px 0 18px; }
+.desglose-deuda { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.desglose-deuda > div { min-width: 0; border-radius: 10px; padding: 18px; }
+.desglose-deuda span { display: block; font-size: 15px; font-weight: 700; }
+.desglose-deuda strong { display: block; margin: 8px 0; font-size: 28px; line-height: 1.2; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.desglose-deuda small { display: block; font-size: 12px; }
+.resumen-cuentas-actuales { background: #a41021; color: #fff; border: 2px solid #a41021; }
+.resumen-cuentas-pendientes { background: #fff; color: #243047; border: 1px solid #a3afbe; border-top: 4px solid #243047; }
+.resumen-cuentas-pendientes small { color: #526176; }
+.total-deuda { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; padding: 18px; margin-top: 12px; border-radius: 10px; background: #fff; color: #9f2020; border: 2px solid #a41021; border-left-width: 6px; }
+.total-deuda span { font-size: 16px; font-weight: 700; }
+.total-deuda strong { font-size: 30px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .editar-monto { margin-top: 10px; border: 0; background: transparent; color: #9f2020; padding: 0; text-decoration: underline; text-align: left; }
 .editar-monto-form { margin-bottom: 20px; }
-.agregar-pestana { color: #fff; background: #b42328; border: 0; border-radius: 8px; padding: 10px 16px; font-weight: 600; }
+.agregar-pestana { display: block; min-height: 40px; margin-left: auto; color: #a41021; background: #fff; border: 1px solid #a41021; border-radius: 7px; padding: 9px 14px; font-size: 13px; font-weight: 700; }
+.agregar-pestana:hover { background: #a41021; color: #fff; }
 .panel { margin-top: 16px; background: #fff; padding: 24px; border-radius: 12px; box-shadow: 0 3px 14px #0002; }
 .panel h2 { margin: 0; font-size: 24px; color: #a91f27; overflow-wrap: anywhere; }
 .panel h3 { font-size: 18px; margin: 0 0 16px; }
@@ -361,6 +382,7 @@ button:focus-visible, input:focus-visible { outline: 3px solid #2563eb; outline-
 .error { background: #fff1f2; color: #a91f27; }
 .exito { background: #eaf7ef; color: #166534; }
 @media (max-width: 600px) {
+  .desglose-deuda { grid-template-columns: 1fr; }
   .panel { padding: 16px; }
   .campos { grid-template-columns: 1fr; gap: 0; }
   .resumen { grid-template-columns: 1fr; }

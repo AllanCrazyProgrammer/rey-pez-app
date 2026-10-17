@@ -14,6 +14,8 @@ const compile = source => babel.transformSync(source, { configFile: false, babel
 const sources = {
   '@/utils/dinero': compile(fs.readFileSync(path.join(root, 'src/utils/dinero.js'), 'utf8')),
   '@/utils/saldosCatarro': compile(fs.readFileSync(path.join(root, 'src/utils/saldosCatarro.js'), 'utf8')),
+  '@/utils/pdf/cuentaCliente': compile(fs.readFileSync(path.join(root, 'src/utils/pdf/cuentaCliente.js'), 'utf8')),
+  '@/utils/pdf/delivery': compile(fs.readFileSync(path.join(root, 'src/utils/pdf/delivery.js'), 'utf8')),
   component: compile(sfc.script.content),
   menu: compile(compiler.parseComponent(fs.readFileSync(path.join(root, 'src/views/CuentasClientes/CatarroCuentasMenu.vue'), 'utf8')).script.content),
 };
@@ -213,20 +215,40 @@ function sumarDias(iso, dias) {
   return fecha.toISOString().slice(0, 10);
 }
 
+test('Catarro redondea solo el total al peso y mantiene decimales en partidas y abonos', async () => {
+  for (const [importe, esperado] of [[37889.30, 37889], [37889.50, 37890], [37889.99, 37890]]) {
+    const { ctx, registros } = formulario({
+      itemsVenta: [{ kilosVenta: 1.25, precioVenta: importe / 1.25, totalVenta: importe }],
+      abonos: [{ descripcion: 'Transferencia', monto: 100.25 }], saldoAnterior: 0.75,
+    });
+    assert.equal(ctx.totalGeneralVenta, esperado);
+    assert.equal(ctx.itemsVenta[0].totalVenta, importe);
+    assert.equal(ctx.itemsVenta[0].kilosVenta, 1.25);
+    await ctx.guardarNota();
+    assert.equal(registros.get('2026-10-17').totalGeneralVenta, esperado);
+    assert.equal(registros.get('2026-10-17').nuevoSaldoAcumulado, esperado - 99.5);
+    assert.equal(registros.get('2026-10-17').abonos[0].monto, 100.25);
+    ctx.clienteId = 'elizabeth';
+    assert.equal(ctx.totalGeneralVenta, importe, 'otros clientes conservan sus decimales');
+  }
+  const { ctx } = formulario({ itemsVenta: [{ totalVenta: 100.30 }, { totalVenta: 100.30 }] });
+  assert.equal(ctx.totalGeneralVenta, 201, 'se suma antes de redondear');
+});
+
 for (const metodo of ['guardarNota', 'autoSaveNota']) {
   test(`${metodo}: persiste el crédito, actualiza posteriores una sola vez y revierte al reducir el abono`, async () => {
     const { ctx, registros } = formulario();
     await ctx[metodo]();
-    assert.equal(registros.get('2026-10-17').nuevoSaldoAcumulado, -3965.8);
-    assert.equal(registros.get('2026-10-18').saldoAcumuladoAnterior, -3965.8);
-    assert.equal(registros.get('2026-10-18').nuevoSaldoAcumulado, 1034.2);
+    assert.equal(registros.get('2026-10-17').nuevoSaldoAcumulado, -3966);
+    assert.equal(registros.get('2026-10-18').saldoAcumuladoAnterior, -3966);
+    assert.equal(registros.get('2026-10-18').nuevoSaldoAcumulado, 1034);
     assert.equal(registros.get('2026-10-18').abonos.length, 0);
     await ctx[metodo]();
-    assert.equal(registros.get('2026-10-18').nuevoSaldoAcumulado, 1034.2, 'repetir guardado no duplica el descuento');
+    assert.equal(registros.get('2026-10-18').nuevoSaldoAcumulado, 1034, 'repetir guardado no duplica el descuento');
     ctx.abonos[0].monto = 35000;
     await ctx[metodo]();
-    assert.equal(registros.get('2026-10-17').nuevoSaldoAcumulado, 1034.2);
-    assert.equal(registros.get('2026-10-18').nuevoSaldoAcumulado, 6034.2);
+    assert.equal(registros.get('2026-10-17').nuevoSaldoAcumulado, 1034);
+    assert.equal(registros.get('2026-10-18').nuevoSaldoAcumulado, 6034);
   });
 }
 
@@ -249,11 +271,11 @@ test('guardar Catarro recalcula más de 50 cuentas y no suma el día actual otra
   });
   await ctx.guardarNota();
   assert.equal(guardados.get('2026-10-16').saldoAcumuladoAnterior, -965.8);
-  assert.equal(guardados.get('2026-10-16').nuevoSaldoAcumulado, 36223.5);
+  assert.equal(guardados.get('2026-10-16').nuevoSaldoAcumulado, 36223.2);
   assert.equal(guardados.get('2026-10-15').nuevoSaldoAcumulado, -965.8, 'no reescribe días anteriores');
   const ultima = sumarDias('2026-10-16', 55);
-  assert.equal(guardados.get(ultima).saldoAcumuladoAnterior, 36277.5);
-  assert.equal(guardados.get(ultima).nuevoSaldoAcumulado, 36278.5);
+  assert.equal(guardados.get(ultima).saldoAcumuladoAnterior, 36277.2);
+  assert.equal(guardados.get(ultima).nuevoSaldoAcumulado, 36278.2);
   assert.equal(guardados.get(ultima).estadoPagado, false);
 });
 
@@ -267,9 +289,13 @@ test('interfaz: vista previa al escribir, impresión, crédito futuro y presenta
     await page.route('https://**/*', route => route.abort());
     await page.setContent('<div id="app"></div>');
     await page.addScriptTag({ path: require.resolve('vue/dist/vue.js') });
+    await page.addScriptTag({ path: require.resolve('jspdf/dist/jspdf.umd.min.js') });
+    await page.addScriptTag({ path: require.resolve('jspdf-autotable') });
     await page.addStyleTag({ content: 'body{font-family:Arial,sans-serif;margin:0}*{box-sizing:border-box} ' + sfc.styles.map(s => s.content).join('\n') });
     await page.evaluate(({ sources, template }) => {
       const mocks = {
+        jspdf: { __esModule: true, default: window.jspdf.jsPDF },
+        'jspdf-autotable': { __esModule: true, default: (pdf, options) => pdf.autoTable(options) },
         '@/constants/clientesConfig': { CLIENTES_CONFIG: { catarro: { titulo: 'Cuenta Catarro', features: {} } } },
         '@/utils/formatters': { formatNumber: n => Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) },
       };
@@ -300,22 +326,145 @@ test('interfaz: vista previa al escribir, impresión, crédito futuro y presenta
     }, { sources, template: sfc.template.content });
     assert.equal(await page.locator('.excedente-catarro').count(), 0);
     await page.locator('.abonos input[type=number]').fill('40000');
-    await page.getByRole('heading', { name: 'Aplicación del excedente' }).waitFor();
-    assert.match(await page.locator('.excedente-catarro').innerText(), /18\/10\/2026:\s*\$3,965.80/);
+    await page.locator('.tabla-saldo .total.saldo-a-favor').waitFor();
+    assert.equal(await page.locator('.excedente-catarro').count(), 0);
+    assert.match(await page.locator('.tabla-saldo .total').innerText(), /Saldo a favor — se abonará a la siguiente nota\s*\$3,966.00/);
     await page.getByRole('button', { name: 'Imprimir', exact: true }).click();
-    assert.match(await page.evaluate(() => window.impresion), /Abono a la cuenta del 18\/10\/2026/);
-    await page.locator('.excedente-catarro').scrollIntoViewIfNeeded();
+    assert.match(await page.evaluate(() => window.impresion), /Saldo a favor — se abonará a la siguiente nota/);
+    assert.doesNotMatch(await page.evaluate(() => window.impresion), /Abono a la cuenta del/);
+    assert.match(await page.evaluate(() => window.impresion), /Total Venta<\/td><td>\$36,834.00/);
+    await page.locator('.tabla-saldo').scrollIntoViewIfNeeded();
     await page.screenshot({ path: '/tmp/catarro-excedente-desktop.png' });
     await page.evaluate(() => { form.cuentasPosterioresCatarro = []; });
-    assert.match(await page.locator('.excedente-catarro').innerText(), /Saldo a favor para futuras cuentas: \$3,965.80/);
+    assert.match(await page.locator('.tabla-saldo .total').innerText(), /\$3,966.00/);
     await page.getByRole('button', { name: 'Imprimir', exact: true }).click();
-    assert.match(await page.evaluate(() => window.impresion), /Saldo a favor para futuras cuentas/);
+    assert.match(await page.evaluate(() => window.impresion), /Saldo a favor — se abonará a la siguiente nota/);
+    assert.doesNotMatch(await page.evaluate(() => window.impresion), /Saldo a favor para futuras cuentas/);
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.locator('.excedente-catarro').scrollIntoViewIfNeeded();
+    await page.locator('.tabla-saldo').scrollIntoViewIfNeeded();
     await page.screenshot({ path: '/tmp/catarro-excedente-mobile.png' });
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
-    await page.locator('.abonos input[type=number]').fill('36034.20');
+    await page.locator('.abonos input[type=number]').fill('36034');
     assert.equal(await page.locator('.excedente-catarro').count(), 0);
+
+    // La impresión debe conservar el orden y los importes de la tabla visible.
+    await page.evaluate(() => {
+      Object.assign(form, {
+        fechaSeleccionada: '2026-10-15', saldoAcumuladoAnterior: 0,
+        itemsVenta: [
+          [35, '71/90', 170], [58, '51/60', 178], [31, '41/50', 185],
+          [32, '36/40', 190], [24, 'pulpa', 360],
+        ].map(([kilosVenta, medida, precioVenta]) => ({ kilosVenta, medida, precioVenta, totalVenta: kilosVenta * precioVenta })),
+        cobros: [{ descripcion: 'Flete', monto: 800 }], correcciones: [],
+        abonos: [{ descripcion: 'chofer', monto: 10000 }, { descripcion: 'transf', monto: 20000 }, { descripcion: 'liquida', monto: 5929 }],
+      });
+      form.imprimirTablas();
+    });
+    await page.setViewportSize({ width: 1100, height: 900 });
+    await page.evaluate(() => { document.activeElement.blur(); window.scrollTo(0, 0); });
+    await page.screenshot({ path: '/tmp/catarro-interfaz-desktop.png', fullPage: true });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    await page.screenshot({ path: '/tmp/catarro-interfaz-mobile.png', fullPage: true });
+    await page.setViewportSize({ width: 1100, height: 900 });
+    const impresa = await browser.newPage({ viewport: { width: 820, height: 1100 } });
+    await impresa.emulateMedia({ media: 'print' });
+    await impresa.setContent(await page.evaluate(() => window.impresion));
+    const filas = locator => locator.locator('tr').evaluateAll(rows => rows.map(row => Array.from(row.cells, cell => cell.textContent.trim())));
+    const colores = locator => locator.locator('tr').evaluateAll(rows => rows.map(row => ({
+      fondo: getComputedStyle(row).backgroundColor,
+      texto: getComputedStyle(row.cells[0]).color,
+    })));
+    assert.deepEqual(await filas(impresa.locator('.tabla-resumen')), await filas(page.locator('.tabla-saldo')));
+    assert.deepEqual(await colores(impresa.locator('.tabla-resumen')), await colores(page.locator('.tabla-saldo')));
+    assert.deepEqual(await impresa.locator('.tabla-resumen tr td:first-child').allTextContents(), [
+      'Saldo Hoy', 'Flete', 'Total de hoy',
+      'chofer (Abono)', 'transf (Abono)', 'liquida (Abono)', 'Saldo pendiente',
+    ]);
+    assert.equal(await impresa.locator('.subtotal td:last-child').textContent(), '$35,929.00');
+    assert.equal(await impresa.locator('.saldo-anterior').count(), 0);
+    assert.equal(await impresa.locator('.total-hoy').count(), 1);
+    assert.equal(await impresa.locator('.highlight td:last-child').textContent(), '$0.00');
+    assert.notEqual(await impresa.locator('.flete').evaluate(row => getComputedStyle(row).backgroundColor),
+      await impresa.locator('.abono').first().evaluate(row => getComputedStyle(row).backgroundColor));
+    assert.equal(await impresa.locator('body').evaluate(body => getComputedStyle(body).printColorAdjust), 'exact');
+    await impresa.screenshot({ path: '/tmp/catarro-impresion-color.png', fullPage: true });
+    assert.equal(await impresa.locator('.marco-catarro').evaluate(frame => getComputedStyle(frame).borderTopColor), 'rgb(169, 31, 39)');
+    await impresa.pdf({ path: '/tmp/catarro-marco-rojo.pdf', format: 'Letter', printBackground: true });
+    const descargaPromesa = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'Generar PDF', exact: true }).click();
+    const descarga = await descargaPromesa;
+    assert.equal(descarga.suggestedFilename(), 'Cuenta-Catarro-2026-10-15.pdf');
+    await descarga.saveAs('/tmp/catarro-boton-generar.pdf');
+    await page.getByRole('button', { name: 'Generar PDF', exact: true }).waitFor();
+    assert.equal(await page.locator('iframe[title="Preparando PDF de la cuenta"]').count(), 0);
+
+    await page.evaluate(() => {
+      form.cobros = [];
+      form.abonos = [];
+      form.imprimirTablas();
+    });
+    await impresa.setContent(await page.evaluate(() => window.impresion));
+    assert.deepEqual(await filas(impresa.locator('.tabla-resumen')), [['Total de hoy', '$36,729.00']]);
+    assert.deepEqual(await filas(impresa.locator('.tabla-resumen')), await filas(page.locator('.tabla-saldo')));
+    assert.deepEqual(await colores(impresa.locator('.tabla-resumen')), await colores(page.locator('.tabla-saldo')));
+
+    await page.evaluate(() => {
+      form.saldoAcumuladoAnterior = 150;
+      form.cobros = [];
+      form.abonos = [{ descripcion: '<b>Transferencia & efectivo</b>', monto: 100 }];
+      form.correcciones = [{ descripcion: 'Ajuste', monto: 25 }];
+      form.imprimirTablas();
+    });
+    await impresa.setContent(await page.evaluate(() => window.impresion));
+    assert.deepEqual(await filas(impresa.locator('.tabla-resumen')), await filas(page.locator('.tabla-saldo')));
+    assert.equal(await impresa.locator('.subtotal').count(), 0);
+    assert.equal(await impresa.locator('.abono b').count(), 0, 'la descripción se imprime como texto');
+    assert.equal(await impresa.locator('.highlight.pendiente td:last-child').textContent(), '$36,754.00');
+    assert.deepEqual(await colores(impresa.locator('.tabla-resumen')), await colores(page.locator('.tabla-saldo')));
+    await page.evaluate(() => {
+      form.abonos = [];
+      form.correcciones = [];
+      form.imprimirTablas();
+    });
+    await impresa.setContent(await page.evaluate(() => window.impresion));
+    assert.deepEqual(await filas(impresa.locator('.tabla-resumen')), await filas(page.locator('.tabla-saldo')));
+    assert.equal(await impresa.locator('.highlight').count(), 0, 'no repite el mismo total al final');
+    assert.equal(await page.locator('.tabla-saldo tr.total').count(), 0);
+    assert.equal(await impresa.locator('.tabla-resumen tr:last-child td:first-child').textContent(), 'Total de hoy + pendiente');
+    assert.equal(await page.locator('.total-catarro-principal').count(), 1);
+    await impresa.screenshot({ path: '/tmp/catarro-total-destacado.png', fullPage: true });
+    await page.evaluate(() => {
+      form.saldoAcumuladoAnterior = -71;
+      form.imprimirTablas();
+    });
+    await impresa.setContent(await page.evaluate(() => window.impresion));
+    assert.deepEqual(await filas(impresa.locator('.tabla-resumen')), await filas(page.locator('.tabla-saldo')));
+    assert.equal(await impresa.locator('.saldo-anterior.saldo-a-favor td:first-child').textContent(), 'Saldo a favor');
+    assert.equal(await impresa.locator('.saldo-anterior.saldo-a-favor td:last-child').textContent(), '$71.00');
+    assert.equal(await impresa.locator('.total-sin-abono td:first-child').textContent(), 'Total de hoy menos saldo a favor');
+    assert.equal(await impresa.locator('.total-sin-abono td:last-child').textContent(), '$36,658.00', 'el crédito sigue restándose');
+    assert.equal(await page.locator('.tabla-saldo .saldo-a-favor td').first().evaluate(cell => getComputedStyle(cell).color), 'rgb(194, 65, 12)');
+    assert.equal(await impresa.locator('.saldo-anterior.saldo-a-favor').evaluate(row => getComputedStyle(row).color), 'rgb(194, 65, 12)');
+    assert.deepEqual(await colores(impresa.locator('.tabla-resumen')), await colores(page.locator('.tabla-saldo')));
+    await impresa.close();
+    await page.evaluate(() => {
+      window.desktop = { async savePdf(bytes, filename) {
+        window.pdfEscritorio = { bytes: Array.from(bytes), filename };
+      } };
+      form.itemsVenta = Array.from({ length: 60 }, (_, indice) => ({
+        kilosVenta: 1.25, medida: `Producto ${indice + 1}`, precioVenta: 100,
+        totalVenta: 125,
+      }));
+    });
+    await page.getByRole('button', { name: 'Generar PDF', exact: true }).click();
+    await page.waitForFunction(() => !!window.pdfEscritorio);
+    const escritorio = await page.evaluate(() => window.pdfEscritorio);
+    assert.equal(escritorio.filename, 'Cuenta-Catarro-2026-10-15.pdf');
+    assert.equal(Buffer.from(escritorio.bytes).subarray(0, 5).toString(), '%PDF-');
+    fs.writeFileSync('/tmp/catarro-boton-multipagina.pdf', Buffer.from(escritorio.bytes));
+    await page.getByRole('button', { name: 'Generar PDF', exact: true }).waitFor();
+    assert.equal(await page.locator('iframe[title="Preparando PDF de la cuenta"]').count(), 0);
     assert.deepEqual(errors, []);
   } finally { await browser.close(); }
 });

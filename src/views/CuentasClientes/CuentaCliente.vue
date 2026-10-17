@@ -1,5 +1,5 @@
 <template>
-  <div class="cuenta-cliente-container">
+  <div class="cuenta-cliente-container" :class="{ 'cuenta-catarro-ui': clienteId === 'catarro' }">
     <div v-if="isSaving && !showSaveMessage" class="auto-save-indicator">
       <span class="save-dot"></span> Guardando...
     </div>
@@ -9,6 +9,7 @@
       <PreciosHistorialModal :clienteActual="config.clienteId" />
       <StashModalV2 :cliente="config.clienteId" />
     </div>
+    <header class="cabecera-cuenta">
     <h1>{{ config.titulo }}</h1>
 
     <div v-if="clienteId !== 'catarro'" class="precios-button-container">
@@ -17,7 +18,9 @@
 
     <div class="fecha-actual" :class="{ 'bloque-sin-nota': config.features.verificarEmbarques && faltaNotaCliente }">
       <div class="fecha-input">
+        <label v-if="clienteId === 'catarro'" for="fecha-cuenta-cliente" class="fecha-label">Fecha de la cuenta</label>
         <input
+          id="fecha-cuenta-cliente"
           type="date"
           v-model="fechaSeleccionada"
           :class="{ 'fecha-sin-nota': config.features.verificarEmbarques && faltaNotaCliente }"
@@ -31,6 +34,7 @@
         Existe un embarque sin nota para este día.
       </p>
     </div>
+    </header>
 
     <!-- Nota lock — solo Veronica -->
     <div v-if="config.features.notaLock" class="nota-lock card">
@@ -130,9 +134,11 @@
       </table>
     </div>
 
-    <h2 v-if="clienteId !== 'catarro'">Precios de Venta</h2>
-    <div class="add-product-button">
-      <button @click="showAddProductModal = true" :disabled="isNotaLocked">Agregar Producto</button>
+    <div class="venta-encabezado">
+      <h2>{{ clienteId === 'catarro' ? 'Detalle de venta' : 'Precios de Venta' }}</h2>
+      <div class="add-product-button">
+        <button @click="showAddProductModal = true" :disabled="isNotaLocked">Agregar Producto</button>
+      </div>
     </div>
     <div class="table-card table-responsive">
       <table class="tabla-venta">
@@ -178,6 +184,7 @@
                 type="number"
                 @input="calcularTotalVenta(index)"
                 class="precio-venta-input"
+                :aria-label="'Precio de venta de ' + item.medida"
                 inputmode="decimal"
                 pattern="[0-9]*"
                 :disabled="isNotaLocked"
@@ -214,11 +221,13 @@
       </p>
     </div>
 
-    <h2>Saldo pendiente</h2>
+    <div class="gestion-cuenta">
+    <div class="movimientos-cuenta">
+    <h2>{{ clienteId === 'catarro' ? 'Saldo anterior y fletes' : 'Saldo pendiente' }}</h2>
     <div class="saldo-pendiente card">
       <div class="input-row verificacion-saldo-row">
-        <span>Saldo Acumulado Anterior: ${{ formatNumber(saldoAcumuladoAnterior) }}</span>
-        <div class="verificacion-saldo">
+        <span :class="{ 'saldo-a-favor': saldoAnteriorAFavor }">{{ saldoAnteriorAFavor ? 'Saldo a favor' : 'Saldo Acumulado Anterior' }}: ${{ formatNumber(saldoAnteriorAFavor ? -saldoAcumuladoAnterior : saldoAcumuladoAnterior) }}</span>
+        <div v-if="clienteId !== 'catarro'" class="verificacion-saldo">
           <input
             v-model.number="saldoAnteriorEsperado"
             type="number"
@@ -254,73 +263,70 @@
 
     <h2>Abonos</h2>
     <div class="abonos card">
+      <div v-if="clienteId === 'catarro' && abonos.length" class="abonos-etiquetas" aria-hidden="true">
+        <span>Descripción del abono</span><span>Monto ($)</span><span></span>
+      </div>
       <div v-if="clienteId !== 'catarro' && $route.params.id && !config.features.abonosGenerales" class="abonos-tools">
         <button @click="reacomodarAbonosPosteriores" class="secondary-button" type="button">
           Reacomodar abonos posteriores
         </button>
       </div>
       <div class="input-row" v-for="(abono, index) in abonos" :key="index">
-        <input v-model="abono.descripcion" type="text" placeholder="Descripción" class="responsive-input">
-        <input v-model.number="abono.monto" type="number" placeholder="Monto" class="responsive-input">
+        <input v-model="abono.descripcion" type="text" placeholder="Descripción" aria-label="Descripción del abono" class="responsive-input">
+        <input v-model.number="abono.monto" type="number" placeholder="Monto" aria-label="Monto del abono" class="responsive-input">
         <button @click="removeAbono(index)" class="delete-btn">Eliminar</button>
       </div>
       <button @click="addAbono" class="add-btn">Agregar Abono</button>
     </div>
 
-    <table class="tabla-saldo">
-      <tr>
+    </div>
+    <div class="resumen-cuenta">
+    <h2 v-if="clienteId === 'catarro'">Resumen de la cuenta</h2>
+    <table class="tabla-saldo" :class="{ 'cuenta-catarro': clienteId === 'catarro' }">
+      <tr v-if="!sinSaldoAnteriorCatarro || cobros.length > 0" class="saldo-hoy">
         <td>Saldo Hoy</td>
         <td>${{ formatNumber(totalGeneralVenta) }}</td>
       </tr>
-      <tr v-for="(cobro, index) in cobros" :key="index">
+      <tr v-for="(cobro, index) in cobros" :key="index" class="flete">
         <td>{{ cobro.descripcion }}</td>
         <td>-${{ formatNumber(cobro.monto) }}</td>
       </tr>
-      <tr v-if="cobros.length > 0" class="subtotal-neto-row">
-        <td>Subtotal</td>
+      <tr v-if="cobros.length > 0 || sinSaldoAnteriorCatarro" class="subtotal-neto-row subtotal" :class="{ 'total-catarro-principal': sinSaldoAnteriorCatarro }">
+        <td>{{ sinSaldoAnteriorCatarro ? 'Total de hoy' : 'Subtotal' }}</td>
         <td>${{ formatNumber(subtotalSinFlete) }}</td>
       </tr>
-      <tr>
-        <td>Saldo Acumulado Anterior</td>
-        <td>${{ formatNumber(saldoAcumuladoAnterior) }}</td>
+      <tr v-if="!sinSaldoAnteriorCatarro" class="saldo-anterior" :class="{ 'saldo-a-favor': saldoAnteriorAFavor }">
+        <td>{{ saldoAnteriorAFavor ? 'Saldo a favor' : 'Saldo Acumulado Anterior' }}</td>
+        <td>${{ formatNumber(saldoAnteriorAFavor ? -saldoAcumuladoAnterior : saldoAcumuladoAnterior) }}</td>
       </tr>
-      <tr class="subtotal-neto-row">
-        <td><strong>Total sin abono</strong></td>
+      <tr v-if="!sinSaldoAnteriorCatarro" class="subtotal-neto-row" :class="{ 'total-catarro-principal': clienteId === 'catarro' }">
+        <td><strong>{{ etiquetaTotalHoy }}</strong></td>
         <td><strong>${{ formatNumber(totalSinAbono) }}</strong></td>
       </tr>
-      <tr v-for="(correccion, index) in correcciones" :key="'correccion-'+index" class="correccion-row">
+      <tr v-for="(correccion, index) in correcciones" :key="'correccion-'+index" class="correccion-row correccion">
         <td>{{ correccion.descripcion }} (Corrección)</td>
         <td>-${{ formatNumber(correccion.monto) }}</td>
       </tr>
-      <tr v-for="(abono, index) in abonos" :key="'abono-'+index">
+      <tr v-for="(abono, index) in abonos" :key="'abono-'+index" class="abono">
         <td>{{ abono.descripcion }} (Abono)</td>
         <td>-${{ formatNumber(abono.monto) }}</td>
       </tr>
-      <tr class="total">
-        <td>{{ clienteId === 'catarro' && nuevoSaldoAcumulado < 0 ? 'Excedente a favor' : 'Nuevo Saldo Acumulado' }}</td>
+      <tr v-if="mostrarSaldoFinal" class="total" :class="{ highlight: clienteId === 'catarro', pendiente: clienteId === 'catarro' && nuevoSaldoAcumulado > 0, 'saldo-a-favor': clienteId === 'catarro' && nuevoSaldoAcumulado < 0 }">
+        <td>{{ etiquetaSaldoFinal }}</td>
         <td>${{ formatNumber(clienteId === 'catarro' && nuevoSaldoAcumulado < 0 ? -nuevoSaldoAcumulado : nuevoSaldoAcumulado) }}</td>
       </tr>
     </table>
-
-    <section v-if="clienteId === 'catarro' && excedenteCatarro.excedente > 0" class="excedente-catarro card" aria-live="polite">
-      <h3>Aplicación del excedente</h3>
-      <p>Esta nota queda pagada. El excedente se conserva para las siguientes cuentas.</p>
-      <p v-if="errorCuentasPosteriores" role="alert">No se pudieron consultar las cuentas siguientes. El excedente se conserva a favor; vuelve a abrir la nota para consultar su aplicación.</p>
-      <p v-else-if="!cuentasPosterioresCargadas">Consultando las cuentas siguientes…</p>
-      <template v-else>
-        <p v-for="aplicacion in excedenteCatarro.aplicaciones" :key="aplicacion.id">
-          Abono a la cuenta del {{ fechaExcedente(aplicacion.fecha) }}:
-          <strong>${{ formatNumber(aplicacion.monto) }}</strong>
-        </p>
-        <p v-if="excedenteCatarro.aFavor > 0">Saldo a favor para futuras cuentas: <strong>${{ formatNumber(excedenteCatarro.aFavor) }}</strong></p>
-      </template>
-    </section>
 
     <div class="button-container">
       <button @click="guardarNota" class="save-button" :disabled="isGuardando">
         {{ isGuardando ? 'Guardando...' : 'Guardar Nota' }}
       </button>
       <button @click="imprimirTablas" class="print-button">Imprimir</button>
+      <button v-if="clienteId === 'catarro'" type="button" @click="generarPdf" class="pdf-button" :disabled="generandoPdf">
+        {{ generandoPdf ? 'Generando PDF…' : 'Generar PDF' }}
+      </button>
+    </div>
+    </div>
     </div>
 
     <!-- Modal acciones móviles -->
@@ -425,7 +431,7 @@ import PreciosClienteButton from '@/components/PreciosClienteButton.vue';
 import { formatNumber } from '@/utils/formatters';
 import { normalizarFechaISO } from '@/utils/dateUtils';
 import { redondearCentavos, sumarMontos } from '@/utils/dinero';
-import { aplicarCadenaCatarro, estaPagadoCatarro, resumenExcedenteCatarro } from '@/utils/saldosCatarro';
+import { aplicarCadenaCatarro, estaPagadoCatarro, resumenExcedenteCatarro, redondearTotalVentaCatarro } from '@/utils/saldosCatarro';
 import { crearCuentaSegura as crearCuentaSeguraEnColeccion } from '@/utils/services/EmbarqueCuentasService';
 import {
   joselitoCuentas,
@@ -435,6 +441,8 @@ import {
   otilioIndependienteCuentas,
 } from '@/services/cuentas.service';
 import { CLIENTES_CONFIG } from '@/constants/clientesConfig';
+import { crearPdfCuentaCliente } from '@/utils/pdf/cuentaCliente';
+import { entregarPdf } from '@/utils/pdf/delivery';
 
 const SERVICE_MAP = {
   joselito: joselitoCuentas,
@@ -490,6 +498,7 @@ export default {
       showObservacionModal: false,
       observacion: '',
       isGuardando: false,
+      generandoPdf: false,
       lastSaveMessage: '',
       showSaveMessage: false,
       saveMessageTimer: null,
@@ -522,7 +531,8 @@ export default {
       return this.items.reduce((sum, item) => sum + (item.total || 0), 0);
     },
     totalGeneralVenta() {
-      return this.itemsVenta.reduce((sum, item) => sum + (item.totalVenta || 0), 0);
+      const total = this.itemsVenta.reduce((sum, item) => sum + (item.totalVenta || 0), 0);
+      return this.clienteId === 'catarro' ? redondearTotalVentaCatarro(total) : total;
     },
     totalSaldo() {
       const totalCobros = this.cobros.reduce((sum, c) => sum + (c.monto || 0), 0);
@@ -556,6 +566,24 @@ export default {
     },
     totalSinAbono() {
       return this.subtotalSinFlete + this.saldoAcumuladoAnterior;
+    },
+    sinSaldoAnteriorCatarro() {
+      return this.clienteId === 'catarro' && redondearCentavos(this.saldoAcumuladoAnterior) === 0;
+    },
+    mostrarSaldoFinal() {
+      return this.clienteId !== 'catarro' ||
+        Math.round(this.nuevoSaldoAcumulado * 100) !== Math.round(this.totalSinAbono * 100);
+    },
+    saldoAnteriorAFavor() {
+      return this.clienteId === 'catarro' && this.saldoAcumuladoAnterior < 0;
+    },
+    etiquetaTotalHoy() {
+      if (this.clienteId !== 'catarro') return 'Total sin abono';
+      return this.saldoAnteriorAFavor ? 'Total de hoy menos saldo a favor' : 'Total de hoy + pendiente';
+    },
+    etiquetaSaldoFinal() {
+      if (this.clienteId !== 'catarro') return 'Nuevo Saldo Acumulado';
+      return this.nuevoSaldoAcumulado < 0 ? 'Saldo a favor — se abonará a la siguiente nota' : 'Saldo pendiente';
     },
     saldoAnteriorDiscrepancia() {
       if (this.saldoAnteriorEsperado === null || this.saldoAnteriorEsperado === '') return null;
@@ -1557,35 +1585,84 @@ export default {
       return kilosOriginales;
     },
 
-    imprimirTablas() {
-      const html = `<html><head><title>${this.config.titulo} - ${this.fechaFormateada}</title>
+    crearHtmlImpresion() {
+      const esCatarro = this.clienteId === 'catarro';
+      const escapar = valor => String(valor == null ? '' : valor).replace(/[&<>"']/g,
+        caracter => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[caracter]));
+      const resumenCatarro = `
+        ${!this.sinSaldoAnteriorCatarro || this.cobros.length ? `<tr class="saldo-hoy"><td>Saldo Hoy</td><td>$${this.formatNumber(this.totalGeneralVenta)}</td></tr>` : ''}
+        ${this.cobros.map(c => `<tr class="flete"><td>${escapar(c.descripcion)}</td><td>-$${this.formatNumber(c.monto)}</td></tr>`).join('')}
+        ${this.cobros.length || this.sinSaldoAnteriorCatarro ? `<tr class="subtotal${this.sinSaldoAnteriorCatarro ? ' total-sin-abono total-hoy' : ''}"><td>${this.sinSaldoAnteriorCatarro ? 'Total de hoy' : 'Subtotal'}</td><td>$${this.formatNumber(this.subtotalSinFlete)}</td></tr>` : ''}
+        ${!this.sinSaldoAnteriorCatarro ? `<tr class="saldo-anterior${this.saldoAnteriorAFavor ? ' saldo-a-favor' : ''}"><td>${this.saldoAnteriorAFavor ? 'Saldo a favor' : 'Saldo Acumulado Anterior'}</td><td>$${this.formatNumber(this.saldoAnteriorAFavor ? -this.saldoAcumuladoAnterior : this.saldoAcumuladoAnterior)}</td></tr>
+        <tr class="total-sin-abono"><td>${this.etiquetaTotalHoy}</td><td>$${this.formatNumber(this.totalSinAbono)}</td></tr>` : ''}
+        ${this.correcciones.map(c => `<tr class="correccion"><td>${escapar(c.descripcion)} (Corrección)</td><td>-$${this.formatNumber(c.monto)}</td></tr>`).join('')}
+        ${this.abonos.map(a => `<tr class="abono"><td>${escapar(a.descripcion)} (Abono)</td><td>-$${this.formatNumber(a.monto)}</td></tr>`).join('')}`;
+      const html = `<html lang="es"><head><meta charset="utf-8"><title>${escapar(this.config.titulo)} - ${escapar(this.fechaFormateada)}</title>
         <style>body{font-family:Arial,sans-serif;font-size:14pt;max-width:800px;margin:0 auto;padding:15px;text-align:center}
         h1{font-size:22pt}h2{font-size:18pt;margin-top:20px}table{width:100%;border-collapse:collapse;margin-bottom:20px}
         th,td{border:1px solid #ddd;padding:8px 10px;text-align:left}th{background-color:#f2f2f2;font-weight:bold}
-        .total{font-weight:bold}.highlight{background-color:#e8f5e9;font-weight:bold}</style></head>
-        <body><h1>${this.config.titulo} - ${this.fechaFormateada}</h1>
+        .total{font-weight:bold}.highlight{background-color:#e8f5e9;font-weight:bold}
+        .cuenta-catarro{color:#243047;font-size:11pt;print-color-adjust:exact;-webkit-print-color-adjust:exact}
+        .cuenta-catarro h1{font-size:21pt;color:#a91f27;margin:8px 0 24px}
+        .cuenta-catarro h2{font-size:15pt;color:#a91f27;background:#fff1f2;border-left:6px solid #a91f27;padding:8px 12px;text-align:left;margin:20px 0 10px;break-after:avoid}
+        .cuenta-catarro table{border:3px solid #a91f27}
+        .cuenta-catarro th{background:#a91f27;color:#fff}
+        .cuenta-catarro th,.cuenta-catarro td{padding:9px 12px;border-color:#ead3d5;overflow-wrap:anywhere}
+        .cuenta-catarro td:last-child,.cuenta-catarro th:last-child{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+        .cuenta-catarro .tabla-resumen td:last-child{width:28%}
+        .cuenta-catarro .flete{background:#fff7e6;color:#92400e}
+        .cuenta-catarro .subtotal{background:#eff6ff;color:#1d4ed8;font-weight:bold}
+        .cuenta-catarro .saldo-anterior{background:#fff1f2;color:#a91f27;font-weight:bold}
+        .cuenta-catarro .total-sin-abono{background:#dbeafe;color:#1e40af;font-weight:bold;font-size:14pt;border-top:2px solid #2563eb;border-bottom:2px solid #2563eb}
+        .cuenta-catarro .total-sin-abono td{padding:14px 12px}
+        .cuenta-catarro .correccion{background:#f5f3ff;color:#6d28d9}
+        .cuenta-catarro .abono{background:#ecfdf5;color:#166534}
+        .cuenta-catarro .total{background:#eef2f6}
+        .cuenta-catarro .highlight{background:#dcfce7;color:#166534;font-size:12pt;border-top:2px solid #86efac}
+        .cuenta-catarro .highlight.pendiente{background:#fff1f2;color:#9f2020;border-top-color:#fda4af}
+        .cuenta-catarro .saldo-a-favor{background:#fff7ed;color:#c2410c;font-weight:bold;border-color:#fdba74}
+        .cuenta-catarro .saldo-hoy{background:#fff;color:#243047}
+        .cuenta-catarro tr{break-inside:avoid;page-break-inside:avoid}
+        .cuenta-catarro thead{display:table-header-group}
+        .cuenta-catarro tfoot{display:table-row-group}
+        .marco-catarro{position:fixed;inset:8px;border:2px solid #a91f27;border-radius:10px;pointer-events:none}
+        ${esCatarro ? '@page{margin:14mm}' : ''}
+        @media print{.cuenta-catarro{max-width:none;padding:6mm}.marco-catarro{inset:0;border-radius:3mm}}
+        </style></head>
+        <body class="${esCatarro ? 'cuenta-catarro' : ''}">${esCatarro ? '<div class="marco-catarro" aria-hidden="true"></div>' : ''}<h1>${escapar(this.config.titulo)} - ${escapar(this.fechaFormateada)}</h1>
         <h2>Precios de Venta</h2><table><thead><tr><th>Kilos</th><th>Medida</th><th>Precio</th><th>Total</th></tr></thead>
-        <tbody>${this.itemsVenta.map(i => `<tr><td>${this.formatNumber(i.kilosVenta)}</td><td>${i.medida}</td><td>$${this.formatNumber(i.precioVenta)}</td><td>$${this.formatNumber(i.totalVenta)}</td></tr>`).join('')}</tbody>
+        <tbody>${this.itemsVenta.map(i => `<tr><td>${this.formatNumber(i.kilosVenta)}</td><td>${escapar(i.medida)}</td><td>$${this.formatNumber(i.precioVenta)}</td><td>$${this.formatNumber(i.totalVenta)}</td></tr>`).join('')}</tbody>
         <tfoot><tr class="total"><td colspan="3">Total Venta</td><td>$${this.formatNumber(this.totalGeneralVenta)}</td></tr></tfoot></table>
-        <h2>Resumen de saldo</h2><table>
+        <h2>Resumen de saldo</h2><table class="tabla-resumen">
+        ${esCatarro ? resumenCatarro : `
         <tr><td>Saldo Acumulado Anterior</td><td>$${this.formatNumber(this.saldoAcumuladoAnterior)}</td></tr>
         <tr><td>Saldo Hoy</td><td>$${this.formatNumber(this.totalGeneralVenta)}</td></tr>
-        ${this.cobros.map(c => `<tr><td>${c.descripcion}</td><td>-$${this.formatNumber(c.monto)}</td></tr>`).join('')}
-        ${this.correcciones.map(c => `<tr><td>${c.descripcion} (Corrección)</td><td>-$${this.formatNumber(c.monto)}</td></tr>`).join('')}
-        ${this.abonos.map(a => `<tr><td>${a.descripcion} (Abono)</td><td>-$${this.formatNumber(a.monto)}</td></tr>`).join('')}
-        <tr class="total"><td>Total</td><td>$${this.formatNumber(this.totalDiaActual)}</td></tr>
-        <tr class="highlight"><td>${this.clienteId === 'catarro' && this.nuevoSaldoAcumulado < 0 ? 'Excedente a favor' : 'Nuevo Saldo Acumulado'}</td><td>$${this.formatNumber(this.clienteId === 'catarro' && this.nuevoSaldoAcumulado < 0 ? -this.nuevoSaldoAcumulado : this.nuevoSaldoAcumulado)}</td></tr>
-        ${this.clienteId === 'catarro' && this.excedenteCatarro.excedente > 0 ? (
-          this.errorCuentasPosteriores || !this.cuentasPosterioresCargadas
-            ? '<tr><td colspan="2">Excedente conservado a favor. Aplicación a cuentas siguientes pendiente de consultar.</td></tr>'
-            : this.excedenteCatarro.aplicaciones.map(a => `<tr><td>Abono a la cuenta del ${this.fechaExcedente(a.fecha)}</td><td>$${this.formatNumber(a.monto)}</td></tr>`).join('') +
-              (this.excedenteCatarro.aFavor > 0 ? `<tr><td>Saldo a favor para futuras cuentas</td><td>$${this.formatNumber(this.excedenteCatarro.aFavor)}</td></tr>` : '')
-        ) : ''}
+        ${this.cobros.map(c => `<tr><td>${escapar(c.descripcion)}</td><td>-$${this.formatNumber(c.monto)}</td></tr>`).join('')}
+        ${this.correcciones.map(c => `<tr><td>${escapar(c.descripcion)} (Corrección)</td><td>-$${this.formatNumber(c.monto)}</td></tr>`).join('')}
+        ${this.abonos.map(a => `<tr><td>${escapar(a.descripcion)} (Abono)</td><td>-$${this.formatNumber(a.monto)}</td></tr>`).join('')}
+        <tr class="total"><td>Total</td><td>$${this.formatNumber(this.totalDiaActual)}</td></tr>`}
+        ${this.mostrarSaldoFinal ? `<tr class="highlight${esCatarro && this.nuevoSaldoAcumulado > 0 ? ' pendiente' : ''}${esCatarro && this.nuevoSaldoAcumulado < 0 ? ' saldo-a-favor' : ''}"><td>${this.etiquetaSaldoFinal}</td><td>$${this.formatNumber(esCatarro && this.nuevoSaldoAcumulado < 0 ? -this.nuevoSaldoAcumulado : this.nuevoSaldoAcumulado)}</td></tr>` : ''}
         </table></body></html>`;
+      return html;
+    },
+    imprimirTablas() {
+      const html = this.crearHtmlImpresion();
       const w = window.open('', '_blank');
       w.document.write(html);
       w.document.close();
       w.print();
+    },
+    async generarPdf() {
+      if (this.generandoPdf) return;
+      this.generandoPdf = true;
+      try {
+        const bytes = await crearPdfCuentaCliente(this.crearHtmlImpresion());
+        await entregarPdf(null, `Cuenta-Catarro-${this.fechaSeleccionada}.pdf`, 'download', bytes);
+      } catch (error) {
+        this.showMessage(error.message || 'No se pudo generar el PDF. Intenta de nuevo.', 6000);
+      } finally {
+        this.generandoPdf = false;
+      }
     },
 
     agregarObservacion() { this.showObservacionModal = true; },
@@ -1842,9 +1919,6 @@ th { background-color: #4CAF50; color: white; position: sticky; top: 0; z-index:
 .ganancia-negativa { color: #f44336; font-weight: bold; }
 
 .saldo-pendiente, .correcciones, .abonos { margin-bottom: 20px; }
-.excedente-catarro { margin-bottom: 20px; background: #edf7ed; border-left: 4px solid #388e3c; color: #205823; }
-.excedente-catarro h3 { margin: 0 0 12px; }
-.excedente-catarro p:last-child { margin-bottom: 0; }
 
 .verificacion-saldo-row { flex-direction: column; align-items: flex-start; gap: 6px; }
 .verificacion-saldo { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
@@ -1857,6 +1931,20 @@ th { background-color: #4CAF50; color: white; position: sticky; top: 0; z-index:
 .correccion-row td { color: #e65100; font-style: italic; }
 
 .subtotal-neto-row td { border-top: 1px solid #ddd; padding-top: 8px; color: #1565c0; }
+.tabla-saldo .total-catarro-principal td { background: #dbeafe; color: #1e40af; font-size: 1.2em; font-weight: 800; padding: 16px 12px; border-top: 2px solid #2563eb; border-bottom: 2px solid #2563eb; }
+.saldo-a-favor, .tabla-saldo .saldo-a-favor td { color: #c2410c; background: #fff7ed; font-weight: 700; }
+.tabla-saldo.cuenta-catarro { color: #243047; }
+.tabla-saldo.cuenta-catarro tr > td { color: inherit; background: inherit; }
+.cuenta-catarro .saldo-hoy { background: #fff; color: #243047; }
+.cuenta-catarro .flete { background: #fff7e6; color: #92400e; }
+.cuenta-catarro .subtotal { background: #eff6ff; color: #1d4ed8; font-weight: bold; }
+.cuenta-catarro .saldo-anterior { background: #fff1f2; color: #a91f27; font-weight: bold; }
+.cuenta-catarro .total-catarro-principal { background: #dbeafe; color: #1e40af; }
+.cuenta-catarro .correccion { background: #f5f3ff; color: #6d28d9; }
+.cuenta-catarro .abono { background: #ecfdf5; color: #166534; }
+.cuenta-catarro .highlight { background: #dcfce7; color: #166534; border-top: 2px solid #86efac; }
+.cuenta-catarro .highlight.pendiente { background: #fff1f2; color: #9f2020; border-top-color: #fda4af; }
+.cuenta-catarro .saldo-a-favor { background: #fff7ed; color: #c2410c; border-color: #fdba74; }
 .abonos-tools { display: flex; justify-content: flex-end; margin-bottom: 12px; }
 
 .button-container { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
@@ -1864,6 +1952,9 @@ th { background-color: #4CAF50; color: white; position: sticky; top: 0; z-index:
 .save-button:hover { background-color: #1976D2; }
 .print-button { background-color: #FF9800; }
 .print-button:hover { background-color: #F57C00; }
+.pdf-button { background-color: #a91f27; color: #fff; }
+.pdf-button:hover { background-color: #891921; }
+.pdf-button:disabled { opacity: .65; cursor: wait; }
 
 .mobile-actions-modal, .edit-modal {
   position: fixed; bottom: 0; left: 0; right: 0;
@@ -1909,6 +2000,101 @@ th { background-color: #4CAF50; color: white; position: sticky; top: 0; z-index:
 
 .ganancia-row td { font-size: 1.1rem; }
 
+/* Interfaz de Catarro; el documento de impresión conserva su orden y estilos. */
+.cuenta-catarro-ui {
+  box-sizing: border-box;
+  background: #e9edf2;
+  border: 1px solid #c5cdd6;
+  border-top: 5px solid #a41021;
+  border-radius: 12px;
+  padding: 24px;
+}
+.cuenta-catarro-ui .back-button-container {
+  background: #e9edf2;
+  border-bottom: 1px solid #c5cdd6;
+  margin-bottom: 18px;
+}
+.cuenta-catarro-ui .cabecera-cuenta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+  padding: 24px;
+  margin-bottom: 24px;
+  border-radius: 10px;
+  background: #991326;
+  border-left: 7px solid #dc263a;
+  color: #fff;
+}
+.cuenta-catarro-ui .cabecera-cuenta h1 {
+  color: #fff;
+  font-size: clamp(28px, 3vw, 36px);
+  line-height: 1.15;
+  letter-spacing: -.5px;
+  margin: 0;
+}
+.cuenta-catarro-ui .fecha-actual { margin: 0; gap: 8px; align-items: flex-end; }
+.cuenta-catarro-ui .fecha-input { margin: 0; display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.cuenta-catarro-ui .fecha-label { color: #fff; font-size: 13px; font-weight: 600; }
+.cuenta-catarro-ui .fecha-input input { padding: 8px 10px; border: 1px solid #fff; border-radius: 6px; background: #fff; color: #671222; font: inherit; font-weight: 600; }
+.cuenta-catarro-ui .fecha-display { color: #fff; font-size: 14px; font-weight: 500; }
+.cuenta-catarro-ui .venta-encabezado {
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;
+  margin: 0; padding: 14px 18px; border-radius: 8px 8px 0 0; background: #202b3c; color: #fff;
+}
+.cuenta-catarro-ui .venta-encabezado h2 { color: #fff; font-size: 20px; line-height: 1.3; margin: 0; }
+.cuenta-catarro-ui .add-product-button { margin: 0; }
+.cuenta-catarro-ui .table-card { margin-bottom: 26px; border: 1px solid #a41021; border-radius: 0 0 8px 8px; background: #fff; }
+.cuenta-catarro-ui .tabla-venta { margin: 0; border-radius: 0; box-shadow: none; font-variant-numeric: tabular-nums; }
+.cuenta-catarro-ui .tabla-venta th { background: #a41021; padding: 14px 16px; font-size: 14px; font-weight: 700; }
+.cuenta-catarro-ui .tabla-venta td { padding: 12px 16px; color: #202b3c; border-color: #d7dde4; }
+.cuenta-catarro-ui .tabla-venta th:not(:nth-child(2)), .cuenta-catarro-ui .tabla-venta td:not(:nth-child(2)) { text-align: right; }
+.cuenta-catarro-ui .tabla-venta tbody tr:nth-child(even) { background: #f0f2f5; }
+.cuenta-catarro-ui .tabla-venta tbody tr:hover { background: #e2e7ee; }
+.cuenta-catarro-ui .tabla-venta tbody td:first-child,
+.cuenta-catarro-ui .tabla-venta td:nth-child(2) { font-weight: 700; }
+.cuenta-catarro-ui .tabla-venta tfoot td { background: #831122; color: #fff; border-top: 2px solid #a41021; padding: 16px; font-size: 17px; }
+.cuenta-catarro-ui .tabla-venta tfoot td:last-child { text-align: right; }
+.cuenta-catarro-ui .precio-venta-input { width: 100px; max-width: 100%; min-height: 38px; box-sizing: border-box; padding: 8px 10px; text-align: right; font: inherit; font-weight: 600; color: #202b3c; background: #fff; border: 1px solid #98a4b3; border-radius: 6px; }
+.cuenta-catarro-ui .gestion-cuenta { display: grid; gap: 24px; align-items: start; margin-bottom: 24px; }
+.cuenta-catarro-ui .movimientos-cuenta, .cuenta-catarro-ui .resumen-cuenta { min-width: 0; }
+.cuenta-catarro-ui .movimientos-cuenta > h2 { color: #202b3c; font-size: 20px; line-height: 1.3; margin: 0 0 12px; padding-left: 10px; border-left: 5px solid #b5162a; }
+.cuenta-catarro-ui .movimientos-cuenta > h2:not(:first-child) { margin-top: 24px; }
+.cuenta-catarro-ui .saldo-pendiente, .cuenta-catarro-ui .abonos { background: #fff; border: 1px solid #bdc6d2; border-top: 3px solid #a41021; border-radius: 8px; padding: 16px; box-shadow: 0 3px 9px #202b3c0a; margin-bottom: 0; }
+.cuenta-catarro-ui .movimientos-cuenta .input-row:not(.verificacion-saldo-row) { display: grid; grid-template-columns: minmax(0, 1fr) minmax(90px, .6fr) auto; gap: 10px; }
+.cuenta-catarro-ui .movimientos-cuenta .responsive-input { max-width: none; width: 100%; min-width: 0; box-sizing: border-box; min-height: 40px; border: 1px solid #a2adba; background: #fff; color: #202b3c; }
+.cuenta-catarro-ui .movimientos-cuenta input[type=number] { text-align: right; font-variant-numeric: tabular-nums; }
+.cuenta-catarro-ui .verificacion-saldo-row { color: #202b3c; line-height: 1.5; }
+.cuenta-catarro-ui .verificacion-input { max-width: 100%; box-sizing: border-box; min-height: 36px; border-color: #a2adba; }
+.cuenta-catarro-ui .abonos-etiquetas { display: grid; grid-template-columns: minmax(0, 1fr) minmax(90px, .6fr) 70px; gap: 10px; color: #354256; font-size: 12px; font-weight: 700; margin-bottom: 8px; }
+.cuenta-catarro-ui .abonos-etiquetas span:nth-child(2) { text-align: right; }
+.cuenta-catarro-ui .movimientos-cuenta .delete-btn { min-width: 70px; padding: 7px 10px; background: #fff; color: #a41021; border: 1px solid #a41021; font-size: 12px; font-weight: 600; }
+.cuenta-catarro-ui .movimientos-cuenta .delete-btn:hover { background: #a41021; color: #fff; }
+.cuenta-catarro-ui .add-btn, .cuenta-catarro-ui .add-product-button button { padding: 7px 12px; min-height: 36px; border: 1px solid #bd182e; border-radius: 6px; background: #bd182e; color: #fff; font-size: 13px; font-weight: 700; }
+.cuenta-catarro-ui .add-btn:hover, .cuenta-catarro-ui .add-product-button button:hover { background: #8e1023; border-color: #8e1023; transform: none; }
+.cuenta-catarro-ui .add-btn:disabled, .cuenta-catarro-ui .add-product-button button:disabled { opacity: .5; cursor: not-allowed; }
+.cuenta-catarro-ui .resumen-cuenta { padding: 18px; border: 1px solid #a3aebd; border-top: 4px solid #202b3c; border-radius: 8px; background: #fff; }
+.cuenta-catarro-ui .resumen-cuenta > h2 { margin: 0 0 16px; color: #202b3c; font-size: 20px; line-height: 1.3; }
+.cuenta-catarro-ui .resumen-cuenta .tabla-saldo { margin-bottom: 18px; }
+.cuenta-catarro-ui .button-container { margin: 0; gap: 8px; }
+.cuenta-catarro-ui .button-container button { min-height: 42px; font-size: 13px; font-weight: 600; border-radius: 6px; flex: 1 1 auto; }
+.cuenta-catarro-ui .save-button { background: #a41021; }
+.cuenta-catarro-ui .save-button:hover { background: #7f0f1d; }
+.cuenta-catarro-ui .print-button { background: #fff; color: #202b3c; border: 1px solid #67758a; }
+.cuenta-catarro-ui .print-button:hover { background: #e2e7ee; }
+.cuenta-catarro-ui .pdf-button { background: #202b3c; }
+.cuenta-catarro-ui .pdf-button:hover { background: #0f172a; }
+.cuenta-catarro-ui .estado-cuenta { width: fit-content; padding: 8px 18px; border-radius: 6px; font-size: 15px; text-align: left; }
+.cuenta-catarro-ui .estado-cuenta.pagado { background: #166534; color: #fff; }
+.cuenta-catarro-ui .estado-cuenta.no-pagado { background: #a41021; color: #fff; }
+.cuenta-catarro-ui .btn-agregar-observacion { background: #354256; }
+.cuenta-catarro-ui .precio-venta-input:focus-visible, .cuenta-catarro-ui .movimientos-cuenta input:focus-visible, .cuenta-catarro-ui .fecha-input input:focus-visible { outline: 2px solid #a41021; outline-offset: 2px; border-color: #a41021; }
+.cuenta-catarro-ui button:focus-visible { outline: 2px solid #a41021; outline-offset: 3px; }
+@media (min-width: 960px) {
+  .cuenta-catarro-ui .gestion-cuenta { grid-template-columns: minmax(0, 1fr) minmax(0, 1.08fr); }
+}
+
 @media (max-width: 600px) {
   .back-button-container { justify-content: center; gap: 10px; }
   .back-button-container a, .back-button-container button { min-width: 100px; padding: 8px 15px; font-size: 14px; }
@@ -1921,6 +2107,19 @@ th { background-color: #4CAF50; color: white; position: sticky; top: 0; z-index:
   th, td { padding: 8px 10px; font-size: 13px; }
   .button-container { flex-direction: column; }
   .save-button, .print-button { width: 100%; }
+  .cuenta-catarro-ui { box-sizing: border-box; width: 100%; padding: 14px; }
+  .cuenta-catarro-ui .cabecera-cuenta { padding: 18px; gap: 18px; }
+  .cuenta-catarro-ui .fecha-actual { align-items: flex-start; }
+  .cuenta-catarro-ui .fecha-input { align-items: flex-start; }
+  .cuenta-catarro-ui .venta-encabezado { padding: 12px; }
+  .cuenta-catarro-ui .venta-encabezado h2 { font-size: 18px; }
+  .cuenta-catarro-ui .tabla-venta th, .cuenta-catarro-ui .tabla-venta td { padding: 10px 8px; font-size: 13px; }
+  .cuenta-catarro-ui .precio-venta-input { width: 84px; padding: 7px 6px; }
+  .cuenta-catarro-ui .movimientos-cuenta .input-row:not(.verificacion-saldo-row) { grid-template-columns: minmax(0, 1fr) auto; }
+  .cuenta-catarro-ui .movimientos-cuenta .input-row > input[type=text] { grid-column: 1 / -1; }
+  .cuenta-catarro-ui .abonos-etiquetas { display: none; }
+  .cuenta-catarro-ui .resumen-cuenta { padding: 12px; }
+  .cuenta-catarro-ui .add-btn, .cuenta-catarro-ui .add-product-button button, .cuenta-catarro-ui .abonos .delete-btn { min-height: 44px; }
 }
 @media (min-width: 601px) {
   .mobile-only { display: none; }

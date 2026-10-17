@@ -11,7 +11,7 @@ function componente(file) {
   const sfc = compiler.parseComponent(fs.readFileSync(path.join(root, file), 'utf8'));
   const result = compiler.compile(sfc.template.content);
   assert.deepEqual(result.errors, [], file);
-  return { template: sfc.template.content, styles: sfc.styles.map(style => style.content).join('\n'),
+  return { template: sfc.template.content, styles: sfc.styles.map(style => style.content.replace(/::v-deep\s*/g, '')).join('\n'),
     script: babel.transformSync(sfc.script.content, { configFile: false, babelrc: false,
       plugins: ['@babel/plugin-transform-modules-commonjs'] }).code };
 }
@@ -125,8 +125,8 @@ function componente(file) {
         '@/services/PapeleraService': {}, '@/utils/dinero': cargarUtilidad('dinero'),
         '@/utils/saldosCatarro': cargarUtilidad('saldosCatarro'),
         '@/components/BackButton.vue': { template: '<span></span>' },
-        '@/components/PreciosHistorialModal.vue': { template: '<button>Precios de venta</button>' },
-        '@/components/StashModalV2.vue': { template: '<button>Stash</button>' },
+        '@/components/PreciosHistorialModal.vue': { template: '<div><button class="precio-historial-btn">Precios</button></div>' },
+        '@/components/StashModalV2.vue': { template: '<span><button class="stash-button">Stash</button></span>' },
       };
       mocks['@/components/Cuentas/DeudasCatarro.vue'] = { ...load(componentes.deudas.script, mocks), template: componentes.deudas.template };
       const menu = { ...load(componentes.menu.script, mocks), template: componentes.menu.template };
@@ -215,9 +215,16 @@ function componente(file) {
       { id: '2026-10-16', fecha: '2026-10-16', totalGeneralVenta: 250.25 },
     ]));
     assert.equal(await page.locator('.total-deuda strong').textContent(), '$43,350.75', 'usa solo el último acumulado');
+    assert.equal(await page.locator('.resumen-cuentas-actuales strong').textContent(), '$350.25');
+    assert.equal(await page.locator('.resumen-cuentas-pendientes strong').textContent(), '$43,000.50');
     await page.evaluate(() => window.scrollTo(0, 0));
     await page.screenshot({ path: '/tmp/deudas-catarro-mobile.png', fullPage: true });
     await page.setViewportSize({ width: 1100, height: 1100 });
+    await page.evaluate(() => {
+      document.activeElement.blur();
+      window.scrollTo(0, 0);
+      return new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    });
     await page.screenshot({ path: '/tmp/deudas-catarro-desktop.png', fullPage: true });
     page.once('dialog', dialog => dialog.dismiss());
     await page.getByRole('button', { name: 'Borrar pestaña de deuda', exact: true }).click();
