@@ -106,8 +106,7 @@ import PreciosHistorialModal from '@/components/PreciosHistorialModal.vue';
 import StashModalV2 from '@/components/StashModalV2.vue';
 import DeudasCatarro from '@/components/Cuentas/DeudasCatarro.vue';
 import { formatNumber, formatearFecha as formatDate } from '@/utils/formatters';
-import { sonMontosIguales, redondearCentavos } from '@/utils/dinero';
-import { saldoDiaCatarro } from '@/utils/saldosCatarro';
+import { encadenarSaldosCatarro } from '@/utils/saldosCatarro';
 
 export default {
   name: 'CatarroCuentasMenu',
@@ -213,82 +212,23 @@ export default {
         const q = query(cuentasRef, orderBy('fecha', 'asc'));
         
         // Usar onSnapshot para actualizaciones en tiempo real
-        this.unsubscribe = onSnapshot(q, async (querySnapshot) => {
-          const cuentasActualizadas = querySnapshot.docs.map((doc) => {
-            const data = doc.data();
-            const totalCobros = (data.cobros || []).reduce((sum, cobro) => 
-              sum + (parseFloat(cobro.monto) || 0), 0);
-            const totalAbonos = (data.abonos || []).reduce((sum, abono) => 
-              sum + (parseFloat(abono.monto) || 0), 0);
-            const totalDiaActual = saldoDiaCatarro(data);
-
-            return {
-              id: doc.id,
-              fecha: data.fecha,
-              saldoHoy: data.totalGeneralVenta || 0,
-              totalCobros,
-              totalAbonos,
-              totalDiaActual,
-              totalNota: data.nuevoSaldoAcumulado || 0,
-              estadoPagado: data.estadoPagado,
-              nuevoSaldoAcumulado: data.nuevoSaldoAcumulado || 0,
-              saldoAcumuladoAnterior: data.saldoAcumuladoAnterior || 0,
-              abonos: data.abonos || [],
-              tieneObservacion: data.tieneObservacion || false,
-              observacion: data.observacion || ''
-            };
-          });
-
-          // Ordenar las cuentas por fecha
-          const cuentasOrdenadas = cuentasActualizadas.sort((a, b) => 
-            new Date(a.fecha) - new Date(b.fecha)
-          );
-
-          let saldoAcumulado = 0;
-          const actualizaciones = [];
-
-          // Procesar cada cuenta y preparar las actualizaciones
-          for (let i = 0; i < cuentasOrdenadas.length; i++) {
-            const cuenta = cuentasOrdenadas[i];
-            const saldoAnterior = saldoAcumulado;
-            saldoAcumulado = redondearCentavos(saldoAcumulado + cuenta.totalDiaActual);
-            
-            // Solo actualizar si los valores han cambiado (con tolerancia de centavos)
-            if (!sonMontosIguales(cuenta.saldoAcumuladoAnterior, saldoAnterior) ||
-                !sonMontosIguales(cuenta.nuevoSaldoAcumulado, saldoAcumulado) ||
-                cuenta.estadoPagado !== (saldoAcumulado <= 0)) {
-              
-              actualizaciones.push({
-                id: cuenta.id,
-                updates: {
-                  saldoAcumuladoAnterior: saldoAnterior,
-                  nuevoSaldoAcumulado: saldoAcumulado,
-                  estadoPagado: saldoAcumulado <= 0
-                }
-              });
-            }
-
-            // Actualizar el objeto local
-            cuenta.totalNota = saldoAcumulado;
-            cuenta.saldoAcumuladoAnterior = saldoAnterior;
-            cuenta.nuevoSaldoAcumulado = saldoAcumulado;
-            cuenta.estadoPagado = saldoAcumulado <= 0;
-          }
-
-          // Realizar todas las actualizaciones en paralelo (evitando recálculos solapados)
-          if (actualizaciones.length > 0 && !this._recalculandoSaldos) {
-            this._recalculandoSaldos = true;
-            try {
-              await Promise.all(actualizaciones.map(({ id, updates }) =>
-                updateDoc(doc(db, 'cuentasCatarro', id), updates)
-              ));
-            } finally {
-              this._recalculandoSaldos = false;
-            }
-          }
-
-          // Actualizar el estado local con las cuentas ordenadas por fecha descendente
-          this.cuentas = cuentasOrdenadas.reverse(); // Revertir para mostrar las más recientes primero
+        // Solo lectura: los saldos se muestran con la cadena compartida y se
+        // escriben al guardar una cuenta, no cada vez que se abre el menú.
+        this.unsubscribe = onSnapshot(q, (querySnapshot) => {
+          const crudas = querySnapshot.docs.map((documento) => ({ id: documento.id, ...documento.data() }));
+          const cadena = encadenarSaldosCatarro(crudas);
+          this.cuentas = cadena.map((cuenta) => ({
+            id: cuenta.id,
+            fecha: cuenta.fecha,
+            saldoHoy: Number(cuenta.totalGeneralVenta) || 0,
+            totalNota: cuenta.nuevoSaldoAcumulado,
+            estadoPagado: cuenta.estadoPagado,
+            nuevoSaldoAcumulado: cuenta.nuevoSaldoAcumulado,
+            saldoAcumuladoAnterior: cuenta.saldoAcumuladoAnterior,
+            abonos: cuenta.abonos || [],
+            tieneObservacion: cuenta.tieneObservacion || false,
+            observacion: cuenta.observacion || '',
+          })).sort((a, b) => normalizarFechaValor(b.fecha).localeCompare(normalizarFechaValor(a.fecha)));
           this.isLoading = false;
         });
 

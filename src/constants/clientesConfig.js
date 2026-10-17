@@ -1,3 +1,7 @@
+// Id del cliente Catarro en embarques (CLIENTES_PREDEFINIDOS). Las cuentas
+// usan la clave `catarro`; el embarque siempre usa este id, no el nombre.
+export const ID_CLIENTE_CATARRO = '2';
+
 export const CLIENTES_CONFIG = {
   joselito: {
     coleccion: 'cuentasJoselito',
@@ -27,6 +31,7 @@ export const CLIENTES_CONFIG = {
     coleccion: 'cuentasCatarro',
     titulo: 'Cuentas Catarro',
     clienteId: 'catarro',
+    idEmbarque: ID_CLIENTE_CATARRO,
     backPath: '/cuentas-catarro',
     routeName: 'CuentasCatarro',
     features: {},
@@ -40,3 +45,10 @@ export const CLIENTES_CONFIG = {
     features: { abonosGenerales: true },
   },
 };
+
+export function esClienteCatarro(clienteOrId) {
+  const id = clienteOrId && typeof clienteOrId === 'object'
+    ? (clienteOrId.id ?? clienteOrId.clienteId)
+    : clienteOrId;
+  return String(id ?? '') === String(CLIENTES_CONFIG.catarro.idEmbarque);
+}

@@ -5,18 +5,22 @@ const path = require('node:path');
 const vm = require('node:vm');
 const babel = require('@babel/core');
 
-function load(filename) {
+function load(filename, mocks = {}) {
   const module = { exports: {} };
   const code = babel.transformSync(fs.readFileSync(filename, 'utf8'), {
     configFile: false, babelrc: false, plugins: ['@babel/plugin-transform-modules-commonjs'],
   }).code;
   vm.runInNewContext(code, { module, exports: module.exports, require(id) {
-    return id.startsWith('.') ? load(path.resolve(path.dirname(filename), id + '.js')) : require(id);
+    if (id in mocks) return mocks[id];
+    return id.startsWith('.') ? load(path.resolve(path.dirname(filename), id + '.js'), mocks) : require(id);
   } });
   return module.exports;
 }
+const loadAlias = load;
 const { cuentasPendientesCatarro, datosCuentaCatarroDesdeEmbarque, combinarEmbarquesCatarro } =
   load(path.resolve(__dirname, '../src/utils/cuentasPendientesCatarro.js'));
+const { esClienteCatarro, ID_CLIENTE_CATARRO } =
+  load(path.resolve(__dirname, '../src/constants/clientesConfig.js'));
 const producto = { medida: '41/50', kilos: [25.5], taras: [1], restarTaras: true, precio: 100 };
 const crudo = { items: [{ talla: 'Med c/c', taras: '2-19', precio: 90 }] };
 const embarque = (fecha, cliente = '2') => ({ fecha, clientes: [{ id: cliente, productos: [producto], crudos: [] }] });
@@ -65,6 +69,38 @@ test('dos embarques del mismo día generan una sola nota con todo el producto', 
   assert.equal(datos.clienteCrudos['2'].length, 1);
   assert.equal(datos.clientesSumarKgCatarro['2'], true);
   assert.equal(primero.clientes[0].productos[0].noSumarKilos, undefined, 'no modifica el embarque');
+});
+
+test('Catarro se reconoce por su id fijo y no por el nombre', () => {
+  assert.equal(ID_CLIENTE_CATARRO, '2');
+  assert.equal(esClienteCatarro('2'), true);
+  assert.equal(esClienteCatarro(2), true);
+  assert.equal(esClienteCatarro({ id: '2', nombre: 'Pescados del Norte' }), true);
+  assert.equal(esClienteCatarro({ clienteId: 2 }), true);
+  assert.equal(esClienteCatarro({ id: '9', nombre: 'Catarro' }), false);
+  assert.equal(esClienteCatarro({ id: '9', nombre: 'Catarro Especial' }), false);
+
+  const pendientes = cuentasPendientesCatarro([], [
+    embarque('2026-10-15'),
+    { fecha: '2026-10-16', clientes: [{ id: '9', nombre: 'Catarro', productos: [producto], crudos: [] }] },
+    { fecha: '2026-10-17', clientes: [{ id: 2, nombre: 'Otro nombre', productos: [producto], crudos: [] }] },
+  ]);
+  assert.deepEqual(Array.from(pendientes, nota => nota.fecha).sort(), ['2026-10-15', '2026-10-17']);
+
+  const mixin = loadAlias(path.resolve(__dirname, '../src/views/Embarques/mixins/embarqueCuentasMixin.js'), {
+    '@/constants/clientesConfig': { esClienteCatarro, ID_CLIENTE_CATARRO },
+    '@/stores/ui': {},
+    '@/utils/services/EmbarqueCuentasService': {},
+    '@/services/cuentas.service': {},
+    '@/utils/dateUtils': {},
+    '@/utils/cuentasResumenEmbarque': { CUENTAS_AUTOMATICAS_RESUMEN: [], cuentasFaltantesParaResumen() { return []; } },
+  }).embarqueCuentasMixin;
+  const ctx = { clientesDisponibles: [
+    { id: '2', nombre: 'Pescados del Norte' },
+    { id: '9', nombre: 'Catarro' },
+  ] };
+  assert.equal(mixin.methods.esClienteCatarro.call(ctx, '2'), true);
+  assert.equal(mixin.methods.esClienteCatarro.call(ctx, 9), false);
 });
 
 test('no crea una nota vacía si el embarque se borró o cambió de fecha', () => {

@@ -301,6 +301,44 @@ test('Catarro: antes del 16 de octubre las notas y cuentas conservan el redondeo
   assert.deepEqual(filas.map(row => row[0]), ['94 kg', '94 kg']);
 });
 
+test('listarDesdeFecha trae más de 50 cuentas de Catarro', async () => {
+  const todos = Array.from({ length: 80 }, (_, indice) => {
+    const fecha = new Date(Date.UTC(2026, 0, 1 + indice)).toISOString().slice(0, 10);
+    return {
+      id: fecha,
+      data: () => ({ fecha, totalGeneralVenta: 1, cobros: [], correcciones: [], abonos: [] }),
+    };
+  });
+  const firestore = {
+    collection: () => 'cuentasCatarro',
+    doc: (_, __, id) => ({ id }),
+    query: (ref, ...constraints) => ({ ref, constraints }),
+    where: (...args) => ({ type: 'where', args }),
+    orderBy: (...args) => ({ type: 'orderBy', args }),
+    limit: (n) => ({ type: 'limit', n }),
+    startAfter: (cursor) => ({ type: 'startAfter', cursor }),
+    onSnapshot() {},
+    writeBatch: () => ({}),
+    async getDocs(consulta) {
+      const limite = consulta.constraints.find(item => item.type === 'limit').n;
+      const cursor = consulta.constraints.find(item => item.type === 'startAfter');
+      const inicio = cursor ? todos.findIndex(doc => doc.id === cursor.cursor.id) + 1 : 0;
+      return { docs: todos.slice(inicio, inicio + limite) };
+    },
+    async getDoc() { return { exists: () => false }; },
+    async addDoc() {},
+    async updateDoc() {},
+    async deleteDoc() {},
+  };
+  const { createCuentasService } = loadModule(
+    path.resolve(__dirname, '../src/services/cuentas.service.js'),
+    { 'firebase/firestore': firestore, '@/firebase': { db: {} } }
+  );
+  const cuentas = await createCuentasService('cuentasCatarro').listarDesdeFecha('2026-01-01', 50);
+  assert.equal(cuentas.length, 80);
+  assert.equal(cuentas[79].fecha, todos[79].id);
+});
+
 test('el cambio de Catarro no cambia el redondeo de Elizabeth', async () => {
   const embarque = { fecha: '2026-10-16', productos: [productoCatarro({ clienteId: '5', kilos: [100.4] })] };
   const filas = await generarNota(embarque, { clientes: [{ id: '5', nombre: 'Elizabeth' }] });
