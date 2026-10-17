@@ -1,5 +1,6 @@
 import { normalizarFechaValor } from './dateUtils';
 import { obtenerSobrantesDeItem } from './sobrantesCrudos';
+import { esClienteCatarro } from '../constants/clientesConfig';
 
 export const FECHA_KILOS_DECIMALES_CATARRO = '2026-10-16';
 
@@ -54,8 +55,7 @@ export function calcularKilosCrudoCatarro(item) {
 // Se calcula antes de juntar medidas para sumar los mismos renglones que la cuenta.
 export function prepararKilosCatarroParaNota(embarque, clientes, sumarKgPorCliente = {}) {
   if (!usarKilosDecimalesCatarro(embarque?.fecha)) return embarque;
-  const esCatarro = id => String(id) === '2' || clientes.some(cliente =>
-    String(cliente.id) === String(id) && /catarro/i.test(cliente.nombre || cliente.nombreNotas || ''));
+  const esCatarro = id => esClienteCatarro(id);
   return {
     ...embarque,
     productos: (embarque.productos || []).map(producto => esCatarro(producto.clienteId)

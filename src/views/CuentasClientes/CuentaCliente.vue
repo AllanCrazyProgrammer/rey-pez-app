@@ -425,7 +425,7 @@ import PreciosClienteButton from '@/components/PreciosClienteButton.vue';
 import { formatNumber } from '@/utils/formatters';
 import { normalizarFechaISO } from '@/utils/dateUtils';
 import { redondearCentavos, sumarMontos } from '@/utils/dinero';
-import { encadenarSaldosCatarro, resumenExcedenteCatarro } from '@/utils/saldosCatarro';
+import { aplicarCadenaCatarro, estaPagadoCatarro, resumenExcedenteCatarro } from '@/utils/saldosCatarro';
 import { crearCuentaSegura as crearCuentaSeguraEnColeccion } from '@/utils/services/EmbarqueCuentasService';
 import {
   joselitoCuentas,
@@ -544,7 +544,7 @@ export default {
       return this.totalGeneralVenta - this.abonos.reduce((sum, a) => sum + (a.monto || 0), 0);
     },
     estadoCuenta() {
-      if (this.clienteId === 'catarro') return this.nuevoSaldoAcumulado <= 0 ? 'Pagado' : 'No Pagado';
+      if (this.clienteId === 'catarro') return estaPagadoCatarro(this.nuevoSaldoAcumulado) ? 'Pagado' : 'No Pagado';
       return this.nuevoSaldoAcumulado <= 0.01 ? 'Pagado' : 'No Pagado';
     },
     gananciaTotal() {
@@ -706,17 +706,60 @@ export default {
       }
     },
 
-    async actualizarCuentasPosteriores(fechaActual) {
-      if (this.clienteId === 'catarro') {
-        const posteriores = await this.service.getAll({ where: ['fecha', '>', fechaActual], orderBy: 'fecha' });
-        const recalculadas = encadenarSaldosCatarro(posteriores, this.nuevoSaldoAcumulado);
-        for (const cuenta of recalculadas) {
-          await this.service.update(cuenta.id, {
+    async escribirCadenaCatarro(escrituras) {
+      const tamano = 450;
+      for (let inicio = 0; inicio < escrituras.length; inicio += tamano) {
+        const batch = this.service.newBatch();
+        escrituras.slice(inicio, inicio + tamano).forEach(({ id, data }) => {
+          batch.update(this.service._docRef(id), data);
+        });
+        await batch.commit();
+      }
+    },
+
+    async persistirCadenaCatarro(notaData, id) {
+      const fecha = this.fechaSeleccionada;
+      const cuentas = await this.service.listarDesdeFecha(fecha);
+      const cadena = aplicarCadenaCatarro({
+        saldoAnterior: this.saldoAcumuladoAnterior || 0,
+        cuentaActual: { ...notaData, id, fecha },
+        cuentas,
+      });
+      const actual = cadena.find(cuenta => cuenta.id === id);
+      await this.escribirCadenaCatarro(cadena.map(cuenta => ({
+        id: cuenta.id,
+        data: cuenta.id === id
+          ? {
+            ...notaData,
+            fecha,
+            saldoAcumuladoAnterior: actual.saldoAcumuladoAnterior,
+            nuevoSaldoAcumulado: actual.nuevoSaldoAcumulado,
+            estadoPagado: actual.estadoPagado,
+          }
+          : {
             saldoAcumuladoAnterior: cuenta.saldoAcumuladoAnterior,
             nuevoSaldoAcumulado: cuenta.nuevoSaldoAcumulado,
             estadoPagado: cuenta.estadoPagado,
-          });
-        }
+          },
+      })));
+    },
+
+    async actualizarCuentasPosteriores(fechaActual) {
+      if (this.clienteId === 'catarro') {
+        const id = this.$route.params.id;
+        await this.persistirCadenaCatarro({
+          fecha: fechaActual,
+          items: this.items,
+          itemsVenta: this.itemsVenta,
+          cobros: this.cobros,
+          correcciones: this.correcciones,
+          abonos: this.abonos,
+          totalGeneral: this.totalGeneral,
+          totalGeneralVenta: this.totalGeneralVenta,
+          gananciaDelDia: this.gananciaDelDia,
+          tieneObservacion: this.tieneObservacion,
+          observacion: this.observacion,
+        }, id);
         return;
       }
       try {
@@ -816,11 +859,11 @@ export default {
             cobros: this.cobros, correcciones: this.correcciones, abonos: this.abonos,
             totalGeneralVenta: this.totalGeneralVenta,
             nuevoSaldoAcumulado: this.nuevoSaldoAcumulado,
-            estadoPagado: this.nuevoSaldoAcumulado <= 0,
+            estadoPagado: estaPagadoCatarro(this.nuevoSaldoAcumulado),
           });
         }
         const nuevoId = await this.crearCuentaSegura(notaData);
-        if (this.clienteId === 'catarro') await this.actualizarCuentasPosteriores(this.fechaSeleccionada);
+        if (this.clienteId === 'catarro') await this.persistirCadenaCatarro(notaData, nuevoId);
         this.$router.replace({ name: this.$route.name, params: { id: nuevoId }, query: { edit: 'true' } });
         return nuevoId;
       } catch (error) {
@@ -851,7 +894,7 @@ export default {
         const saldoActualizado = await this.obtenerSaldoAcumuladoAnterior();
         if (this.clienteId === 'catarro') this.saldoAcumuladoAnterior = saldoActualizado;
         const nuevoSaldo = saldoActualizado + totalDia;
-        const estadoPagado = this.clienteId === 'catarro' ? redondearCentavos(nuevoSaldo) <= 0 : nuevoSaldo <= 0.01;
+        const estadoPagado = this.clienteId === 'catarro' ? estaPagadoCatarro(redondearCentavos(nuevoSaldo)) : nuevoSaldo <= 0.01;
         const notaData = {
           fecha: this.fechaSeleccionada,
           items: this.items.map(item => { const kilos = parseFloat(item.kilos) || 0; return { ...item, kilos, total: kilos * (item.costo || 0) }; }),
@@ -871,17 +914,22 @@ export default {
         };
         const id = this.$route.params.id;
         const isEditing = this.$route.query.edit === 'true';
-        if (id && isEditing) {
+        if (this.clienteId === 'catarro') {
+          if (id && isEditing) {
+            await this.persistirCadenaCatarro(notaData, id);
+          } else {
+            const nuevoId = await this.crearCuentaSegura(notaData);
+            await this.persistirCadenaCatarro(notaData, nuevoId);
+          }
+        } else if (id && isEditing) {
           await this.service.update(id, notaData);
           await this.actualizarCuentasPosteriores(this.fechaSeleccionada);
-          this.showMessage('Cuenta guardada exitosamente');
-          setTimeout(() => { this.$router.push(this.config.backPath); }, 500);
         } else {
           await this.crearCuentaSegura(notaData);
           await this.actualizarCuentasPosteriores(this.fechaSeleccionada);
-          this.showMessage('Cuenta guardada exitosamente');
-          setTimeout(() => { this.$router.push(this.config.backPath); }, 500);
         }
+        this.showMessage('Cuenta guardada exitosamente');
+        setTimeout(() => { this.$router.push(this.config.backPath); }, 500);
       } catch (error) {
         if (error.esDuplicado) {
           alert('Ya existe una nota registrada para esta fecha. No se puede crear una nueva.');
@@ -1419,8 +1467,11 @@ export default {
           observacion: this.observacion,
           ultimaActualizacion: new Date().toISOString(),
         };
-        await this.service.update(id, notaData);
-        if (this.clienteId === 'catarro') await this.actualizarCuentasPosteriores(this.fechaSeleccionada);
+        if (this.clienteId === 'catarro') {
+          await this.persistirCadenaCatarro(notaData, id);
+        } else {
+          await this.service.update(id, notaData);
+        }
         this.lastSaveMessage = '';
         this.showSaveMessage = false;
       } catch (error) {

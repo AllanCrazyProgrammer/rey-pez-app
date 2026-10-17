@@ -5,6 +5,7 @@ import { normalizarFechaISO, obtenerFechaActualISO } from '@/utils/dateUtils';
 import { crearNuevoProducto } from '@/constants.js/embarque';
 import { embarqueTieneContenidoOperativoDoc, embarqueTieneContenidoOperativoEstado, productoTieneContenido, serializarEstable, fusionarProductoTresVias } from '@/utils/embarqueContenido';
 import { esEcoDeRevisionLocal } from '@/utils/embarqueRevision';
+import { esClienteCatarro } from '@/constants/clientesConfig';
 
 export const esUUIDValido = (id) => {
   const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -226,8 +227,7 @@ export const embarqueCargaMixin = {
             } else {
               this.clientesSumarKgCatarro = {};
               data.clientes.forEach(cliente => {
-                const esCatarro = cliente.nombre && cliente.nombre.toLowerCase().includes('catarro');
-                this.$set(this.clientesSumarKgCatarro, cliente.id, esCatarro);
+                this.$set(this.clientesSumarKgCatarro, cliente.id, esClienteCatarro(cliente));
               });
             }
 

@@ -6,6 +6,7 @@ import {
   CUENTAS_AUTOMATICAS_RESUMEN,
   cuentasFaltantesParaResumen,
 } from '@/utils/cuentasResumenEmbarque';
+import { esClienteCatarro as clienteEsCatarro } from '@/constants/clientesConfig';
 
 const SERVICIOS_CUENTA_RESUMEN = {
   ozuna: ozunaCuentas,
@@ -39,8 +40,7 @@ export const embarqueCuentasMixin = {
     },
 
     esClienteCatarro(clienteId) {
-      const clienteInfo = this.clientesDisponibles.find(c => c.id.toString() === clienteId.toString());
-      return clienteInfo && clienteInfo.nombre.toLowerCase().includes('catarro');
+      return clienteEsCatarro(clienteId);
     },
 
     esClienteVeronica(clienteId) {

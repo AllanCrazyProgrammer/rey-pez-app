@@ -13,7 +13,9 @@ import {
   limit,
   onSnapshot,
   writeBatch,
+  startAfter,
 } from 'firebase/firestore';
+import { juntarPaginas } from '../utils/paginas';
 
 const createCuentasService = (coleccion) => ({
   coleccion,
@@ -32,6 +34,22 @@ const createCuentasService = (coleccion) => ({
     if (opts.where) constraints.push(where(opts.where[0], opts.where[1], opts.where[2]));
     const snap = await getDocs(query(this._ref(), ...constraints));
     return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  },
+
+  async listarDesdeFecha(fecha, pageSize = 100) {
+    return juntarPaginas(async (cursor) => {
+      const constraints = [
+        where('fecha', '>=', fecha),
+        orderBy('fecha', 'asc'),
+      ];
+      if (cursor) constraints.push(startAfter(cursor));
+      constraints.push(limit(pageSize));
+      const snap = await getDocs(query(this._ref(), ...constraints));
+      return {
+        docs: snap.docs.map(d => ({ id: d.id, ...d.data() })),
+        next: snap.docs.length < pageSize ? null : snap.docs[snap.docs.length - 1],
+      };
+    });
   },
 
   async getByFecha(fecha) {

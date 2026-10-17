@@ -293,6 +293,7 @@ import ClienteProductos from './components/ClienteProductos.vue';
 import { v4 as uuidv4 } from 'uuid';
 
 // Importar constantes y utilidades
+import { esClienteCatarro } from '@/constants/clientesConfig';
 import { 
   CLIENTES_PREDEFINIDOS, 
   crearNuevoProducto, 
@@ -1337,8 +1338,7 @@ export default {
     // Métodos de carga y guardado
     // Métodos auxiliares
     setTipoDefaultParaCliente(producto) {
-      const clienteNombre = this.obtenerNombreCliente(producto.clienteId);
-      if (clienteNombre === 'Catarro') {
+      if (esClienteCatarro(producto.clienteId)) {
         producto.tipo = 's/h20';
       }
     },

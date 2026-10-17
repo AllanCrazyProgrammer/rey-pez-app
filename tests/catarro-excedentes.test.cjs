@@ -26,7 +26,9 @@ function load(id, mocks = {}) {
     require: dep => load(dep, mocks), console, setTimeout: () => 0, clearTimeout() {} });
   return module.exports;
 }
-const { encadenarSaldosCatarro, resumenExcedenteCatarro } = load('@/utils/saldosCatarro');
+const { encadenarSaldosCatarro, aplicarCadenaCatarro, saldoDiaCatarro, estaPagadoCatarro, resumenExcedenteCatarro } = load('@/utils/saldosCatarro');
+sources['@/utils/paginas'] = compile(fs.readFileSync(path.join(root, 'src/utils/paginas.js'), 'utf8'));
+const { juntarPaginas } = load('@/utils/paginas');
 const cuenta = (fecha, total, abono = 0) => ({ id: fecha, fecha, totalGeneralVenta: total,
   cobros: [], correcciones: [], abonos: abono ? [{ descripcion: 'Depósito', monto: abono }] : [] });
 const plain = value => JSON.parse(JSON.stringify(value));
@@ -70,8 +72,74 @@ test('el excedente considera deuda anterior, flete, correcciones y abonos existe
   assert.equal(resumen.aFavor, 120.5);
 });
 
-test('abrir el listado mantiene el crédito y recalcula saldos anteriores coherentes', async () => {
-  const registros = [cuenta('2026-10-17', 100, 300.25), cuenta('2026-10-18', 120), cuenta('2026-10-19', 90)];
+test('el saldo a favor del 15/10 pasa al 16/10 y las correcciones se restan', () => {
+  assert.equal(saldoDiaCatarro({
+    totalGeneralVenta: 1000, cobros: [{ monto: 10 }], correcciones: [{ monto: 1955.8 }], abonos: [],
+  }), -965.8);
+  const cadena = encadenarSaldosCatarro([
+    { id: '15', fecha: '2026-10-15', totalGeneralVenta: 1000, cobros: [], correcciones: [{ monto: 1965.8 }], abonos: [] },
+    cuenta('2026-10-16', 37189.30),
+  ]);
+  assert.equal(cadena[0].nuevoSaldoAcumulado, -965.8);
+  assert.equal(cadena[0].estadoPagado, true);
+  assert.equal(cadena[1].saldoAcumuladoAnterior, -965.8);
+  assert.equal(cadena[1].nuevoSaldoAcumulado, 36223.5);
+  assert.equal(cadena[1].estadoPagado, false);
+});
+
+test('guardar no cuenta el día dos veces aunque la consulta lo devuelva', () => {
+  const actual = cuenta('2026-10-16', 37189.30);
+  const cadena = aplicarCadenaCatarro({
+    saldoAnterior: -965.8,
+    cuentaActual: actual,
+    cuentas: [actual, { ...actual }, cuenta('2026-10-17', 10)],
+  });
+  assert.equal(cadena.length, 2);
+  assert.equal(cadena[0].nuevoSaldoAcumulado, 36223.5);
+  assert.equal(cadena[1].saldoAcumuladoAnterior, 36223.5);
+  assert.equal(cadena[1].nuevoSaldoAcumulado, 36233.5);
+});
+
+test('pagado compara centavos y un residuo como 8292.1999 no queda pendiente', () => {
+  assert.equal(estaPagadoCatarro(0.004), true);
+  assert.equal(estaPagadoCatarro(-965.8), true);
+  assert.equal(estaPagadoCatarro(0.01), false);
+  const exacto = encadenarSaldosCatarro([{
+    id: '16', fecha: '2026-10-16', totalGeneralVenta: 8292.1999,
+    cobros: [], correcciones: [], abonos: [{ monto: 8292.1999 }],
+  }])[0];
+  assert.equal(exacto.estadoPagado, true);
+  const residuo = encadenarSaldosCatarro([{
+    id: '16', fecha: '2026-10-16', totalGeneralVenta: 8292.20,
+    cobros: [], correcciones: [], abonos: [{ monto: 8292.1999 }],
+  }])[0];
+  assert.equal(residuo.estadoPagado, true);
+  const deuda = encadenarSaldosCatarro([{
+    id: '16', fecha: '2026-10-16', totalGeneralVenta: 8292.20,
+    cobros: [], correcciones: [], abonos: [{ monto: 8292.19 }],
+  }])[0];
+  assert.equal(deuda.nuevoSaldoAcumulado, 0.01);
+  assert.equal(deuda.estadoPagado, false);
+});
+
+test('la lectura de la cadena no se corta en 50 cuentas', async () => {
+  const docs = Array.from({ length: 105 }, (_, i) => ({ id: String(i) }));
+  let llamadas = 0;
+  const leidas = await juntarPaginas(async (cursor) => {
+    llamadas += 1;
+    const inicio = cursor ? docs.findIndex(d => d.id === cursor.id) + 1 : 0;
+    const pagina = docs.slice(inicio, inicio + 50);
+    return { docs: pagina, next: pagina.length === 50 ? pagina[pagina.length - 1] : null };
+  });
+  assert.equal(leidas.length, 105);
+  assert.equal(llamadas, 3);
+});
+
+test('abrir el listado solo lee y muestra el crédito, sin escribir saldos', async () => {
+  const registros = [
+    { ...cuenta('2026-10-15', 0, 965.8), nuevoSaldoAcumulado: 0, estadoPagado: false, correcciones: [{ monto: 0 }] },
+    { ...cuenta('2026-10-16', 37189.30), nuevoSaldoAcumulado: 37189.30, estadoPagado: false },
+  ];
   const actualizaciones = [];
   let escuchar;
   const menu = load('menu', {
@@ -81,24 +149,46 @@ test('abrir el listado mantiene el crédito y recalcula saldos anteriores cohere
       async updateDoc(id, updates) { actualizaciones.push({ id, ...plain(updates) }); },
     },
     '@/utils/formatters': { formatNumber: String },
+    '@/utils/dateUtils': { normalizarFechaValor: valor => String(valor || '').slice(0, 10) },
   }).default;
-  const ctx = {};
+  const ctx = { cuentas: [] };
   await menu.methods.loadCuentas.call(ctx);
   await escuchar({ docs: registros.map(c => ({ id: c.id, data: () => c })) });
-  assert.deepEqual(actualizaciones.map(c => c.nuevoSaldoAcumulado), [-200.25, -80.25, 9.75]);
-  assert.deepEqual(actualizaciones.map(c => c.saldoAcumuladoAnterior), [0, -200.25, -80.25]);
-  assert.deepEqual(actualizaciones.map(c => c.estadoPagado), [true, true, false]);
-  assert.equal(ctx.cuentas[0].totalNota, 9.75);
+  assert.deepEqual(actualizaciones, []);
+  const porFecha = Object.fromEntries(ctx.cuentas.map(c => [c.fecha, c]));
+  assert.equal(porFecha['2026-10-15'].totalNota, -965.8);
+  assert.equal(porFecha['2026-10-15'].estadoPagado, true);
+  assert.equal(porFecha['2026-10-16'].saldoAcumuladoAnterior, -965.8);
+  assert.equal(porFecha['2026-10-16'].totalNota, 36223.5);
+  assert.equal(porFecha['2026-10-16'].estadoPagado, false);
 });
 
-function formulario() {
-  const registros = new Map([
+function formulario(opciones = {}) {
+  const registros = opciones.registros || new Map([
     ['2026-10-17', cuenta('2026-10-17', 36034.2)],
     ['2026-10-18', cuenta('2026-10-18', 5000)],
   ]);
   const service = {
     async update(id, data) { registros.set(id, { ...registros.get(id), ...plain(data) }); },
-    async getAll(opts) { return [...registros.values()].filter(c => c.fecha > opts.where[2]); },
+    async getAll(opts) {
+      let filas = [...registros.values()].filter(c => c.fecha >= opts.where[2]);
+      if (opts.limit) filas = filas.slice(0, opts.limit);
+      return filas;
+    },
+    async listarDesdeFecha(fecha) {
+      return [...registros.values()].filter(c => c.fecha >= fecha)
+        .sort((a, b) => a.fecha.localeCompare(b.fecha));
+    },
+    _docRef(id) { return { id }; },
+    newBatch() {
+      const ops = [];
+      return {
+        update(ref, data) { ops.push({ id: ref.id, data: plain(data) }); },
+        async commit() {
+          for (const op of ops) registros.set(op.id, { ...(registros.get(op.id) || {}), ...op.data });
+        },
+      };
+    },
   };
   const component = load('component', {
     '@/constants/clientesConfig': { CLIENTES_CONFIG: { catarro: { features: {}, backPath: '/' } } },
@@ -109,11 +199,18 @@ function formulario() {
   for (const [key, fn] of Object.entries(component.methods)) ctx[key] = fn.bind(ctx);
   Object.assign(ctx, component.data.call(ctx));
   for (const [key, fn] of Object.entries(component.computed)) Object.defineProperty(ctx, key, { get: () => fn.call(ctx) });
-  ctx.fechaSeleccionada = '2026-10-17';
-  ctx.itemsVenta = [{ kilosVenta: 1, precioVenta: 36034.2, totalVenta: 36034.2, ganancia: 0 }];
-  ctx.abonos = [{ descripcion: 'Transferencia', monto: 40000 }];
-  ctx.obtenerSaldoAcumuladoAnterior = async () => 0;
+  ctx.fechaSeleccionada = opciones.fecha || '2026-10-17';
+  ctx.$route.params.id = opciones.id || ctx.$route.params.id;
+  ctx.itemsVenta = opciones.itemsVenta || [{ kilosVenta: 1, precioVenta: 36034.2, totalVenta: 36034.2, ganancia: 0 }];
+  ctx.abonos = opciones.abonos || [{ descripcion: 'Transferencia', monto: 40000 }];
+  ctx.obtenerSaldoAcumuladoAnterior = async () => opciones.saldoAnterior || 0;
   return { ctx, registros };
+}
+
+function sumarDias(iso, dias) {
+  const fecha = new Date(`${iso}T00:00:00Z`);
+  fecha.setUTCDate(fecha.getUTCDate() + dias);
+  return fecha.toISOString().slice(0, 10);
 }
 
 for (const metodo of ['guardarNota', 'autoSaveNota']) {
@@ -132,6 +229,33 @@ for (const metodo of ['guardarNota', 'autoSaveNota']) {
     assert.equal(registros.get('2026-10-18').nuevoSaldoAcumulado, 6034.2);
   });
 }
+
+test('guardar Catarro recalcula más de 50 cuentas y no suma el día actual otra vez', async () => {
+  const registros = new Map([
+    ['2026-10-15', { ...cuenta('2026-10-15', 0, 965.8), nuevoSaldoAcumulado: -965.8 }],
+    ['2026-10-16', cuenta('2026-10-16', 37189.30)],
+  ]);
+  for (let i = 1; i <= 55; i += 1) {
+    const fecha = sumarDias('2026-10-16', i);
+    registros.set(fecha, { ...cuenta(fecha, 1), nuevoSaldoAcumulado: 0, saldoAcumuladoAnterior: 0 });
+  }
+  const { ctx, registros: guardados } = formulario({
+    registros,
+    id: '2026-10-16',
+    fecha: '2026-10-16',
+    saldoAnterior: -965.8,
+    itemsVenta: [{ kilosVenta: 1, precioVenta: 37189.30, totalVenta: 37189.30, ganancia: 0 }],
+    abonos: [],
+  });
+  await ctx.guardarNota();
+  assert.equal(guardados.get('2026-10-16').saldoAcumuladoAnterior, -965.8);
+  assert.equal(guardados.get('2026-10-16').nuevoSaldoAcumulado, 36223.5);
+  assert.equal(guardados.get('2026-10-15').nuevoSaldoAcumulado, -965.8, 'no reescribe días anteriores');
+  const ultima = sumarDias('2026-10-16', 55);
+  assert.equal(guardados.get(ultima).saldoAcumuladoAnterior, 36277.5);
+  assert.equal(guardados.get(ultima).nuevoSaldoAcumulado, 36278.5);
+  assert.equal(guardados.get(ultima).estadoPagado, false);
+});
 
 test('interfaz: vista previa al escribir, impresión, crédito futuro y presentación móvil', async () => {
   assert.deepEqual(compiler.compile(sfc.template.content).errors, []);

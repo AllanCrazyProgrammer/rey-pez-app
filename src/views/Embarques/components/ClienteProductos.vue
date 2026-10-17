@@ -158,6 +158,7 @@
 
 import ProductoItem from './ProductoItem.vue';
 import CrudoItem from './CrudoItem.vue';
+import { esClienteCatarro as clienteEsCatarro } from '@/constants/clientesConfig';
 
 export default {
     name: 'ClienteProductos',
@@ -300,9 +301,9 @@ export default {
             return this.nombreCliente && this.nombreCliente.toLowerCase().includes('joselito');
         },
 
-        // Verificar si el cliente es Catarro
+        // Verificar si el cliente es Catarro por su id fijo, no por el nombre.
         esClienteCatarro() {
-            return this.nombreCliente && this.nombreCliente.toLowerCase().includes('catarro');
+            return clienteEsCatarro(this.clienteId);
         },
 
         // Verificar si el cliente es Ozuna

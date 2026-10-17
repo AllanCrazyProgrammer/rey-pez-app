@@ -8,6 +8,7 @@ import {
 import { acumularLote, redondearCentavos } from '../dinero';
 import { obtenerSobrantesDeItem } from '../sobrantesCrudos';
 import { usarKilosDecimalesCatarro, calcularKilosProductoCatarro, calcularKilosCrudoCatarro } from '../kilosCatarro';
+import { estaPagadoCatarro } from '../saldosCatarro';
 
 /**
  * Servicio para gestionar la creación y actualización de cuentas de clientes a partir de embarques
@@ -1047,7 +1048,7 @@ const prepararDatosCuentaCatarro = async (embarqueData) => {
     totalGeneral,
     totalGeneralVenta,
     nuevoSaldoAcumulado: redondearCentavos(saldoAcumuladoAnterior + totalGeneralVenta - fleteTotal),
-    estadoPagado: redondearCentavos(saldoAcumuladoAnterior + totalGeneralVenta - fleteTotal) <= 0,
+    estadoPagado: estaPagadoCatarro(redondearCentavos(saldoAcumuladoAnterior + totalGeneralVenta - fleteTotal)),
     tieneObservacion: false,
     observacion: '',
     ultimaActualizacion: new Date().toISOString()

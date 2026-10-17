@@ -1,9 +1,9 @@
 import { normalizarFechaValor } from './dateUtils';
+import { esClienteCatarro, ID_CLIENTE_CATARRO } from '../constants/clientesConfig';
 
 export const INICIO_CUENTAS_PENDIENTES_CATARRO = '2026-10-15';
 
-const esCatarro = cliente => String(cliente.id ?? cliente.clienteId ?? '') === '2' ||
-  String(cliente.nombre || '').toLowerCase().includes('catarro');
+const esCatarro = esClienteCatarro;
 const tieneProducto = producto => producto && (producto.medida ||
   (producto.kilos || []).some(kilos => Number(kilos) > 0));
 const tieneCrudo = crudo => crudo && Array.isArray(crudo.items) &&
@@ -16,15 +16,15 @@ export function datosCuentaCatarroDesdeEmbarque(embarque) {
   const productosCliente = clientes.flatMap(cliente => cliente.productos || []);
   const crudosCliente = clientes.flatMap(cliente => cliente.crudos || []);
   const productos = productosCliente.length ? productosCliente :
-    (embarque.productos || []).filter(producto => String(producto.clienteId ?? producto.cliente ?? '') === '2');
+    (embarque.productos || []).filter(producto => esCatarro(producto.clienteId ?? producto.cliente));
   const crudos = crudosCliente.length ? crudosCliente :
-    (embarque.clienteCrudos || embarque.clientesCrudos || {})['2'] || [];
+    (embarque.clienteCrudos || embarque.clientesCrudos || {})[ID_CLIENTE_CATARRO] || [];
   if (!productos.some(tieneProducto) && !crudos.some(tieneCrudo)) return null;
   return {
     ...embarque,
     fecha: normalizarFechaValor(embarque.fecha),
     productos: productos.filter(tieneProducto),
-    clienteCrudos: { '2': crudos.filter(tieneCrudo) },
+    clienteCrudos: { [ID_CLIENTE_CATARRO]: crudos.filter(tieneCrudo) },
   };
 }
 
@@ -45,9 +45,9 @@ export function combinarEmbarquesCatarro(embarques, fecha) {
     ...datos[0],
     productos: datos.flatMap(data => data.productos.map(producto => ({
       ...producto,
-      noSumarKilos: producto.noSumarKilos || data.clientesSumarKgCatarro?.['2'] === false,
+      noSumarKilos: producto.noSumarKilos || data.clientesSumarKgCatarro?.[ID_CLIENTE_CATARRO] === false,
     }))),
-    clienteCrudos: { '2': datos.flatMap(data => data.clienteCrudos['2']) },
-    clientesSumarKgCatarro: { ...datos[0].clientesSumarKgCatarro, '2': true },
+    clienteCrudos: { [ID_CLIENTE_CATARRO]: datos.flatMap(data => data.clienteCrudos[ID_CLIENTE_CATARRO]) },
+    clientesSumarKgCatarro: { ...datos[0].clientesSumarKgCatarro, [ID_CLIENTE_CATARRO]: true },
   };
 }
