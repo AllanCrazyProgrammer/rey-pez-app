@@ -248,15 +248,48 @@ test('en móvil se elige el tipo, Otro es obligatorio y el modal filtra sin perd
     assert.deepEqual(await page.getByRole('radio').allTextContents(), ['Transferencia', 'Depósito', 'Efectivo', 'Otro']);
     const altoPastilla = await page.getByRole('radio', { name: 'Transferencia' }).evaluate(boton => boton.getBoundingClientRect().height);
     assert.ok(altoPastilla >= 44, `la pastilla mide ${altoPastilla}px`);
+    await page.locator('.abonos').screenshot({ path: path.join(artefactos, 'catarro-tipo-antes.png') });
 
     await page.getByRole('radio', { name: 'Transferencia' }).click();
     assert.equal(await page.locator('.abonos input[aria-label="Descripción del abono"]').first().inputValue(), 'Transferencia - domingo 18/oct/26');
     assert.equal(await page.locator('.abonos input[aria-label="Descripción del abono"]').nth(1).inputValue(), 'spei');
+    const animacion = await page.evaluate(() => new Promise(resolve => {
+      const inicio = performance.now();
+      const leer = () => {
+        const opacidades = [...document.querySelectorAll('.hueco.oculta')].map(el => Number(getComputedStyle(el).opacity));
+        const transicion = getComputedStyle(document.querySelector('.hueco.oculta')).transitionDuration;
+        const t = performance.now() - inicio;
+        if (opacidades.some(opacidad => opacidad > 0.05 && opacidad < 0.95) || t > 400) {
+          resolve({ opacidades, transicion, t });
+        } else requestAnimationFrame(leer);
+      };
+      requestAnimationFrame(leer);
+    }));
+    assert.ok(String(animacion.transicion).split(',').every(valor => valor.trim() === '0.18s'), animacion.transicion);
+    assert.ok(animacion.opacidades.some(opacidad => opacidad > 0.05 && opacidad < 0.95), `la opacidad no se anima: ${animacion.opacidades.join(', ')}`);
+    await page.waitForTimeout(220);
+    assert.deepEqual(await page.getByRole('radio').allTextContents(), ['Transferencia']);
+    assert.equal(await page.locator('.icono-editar').count(), 1);
+    const altoColapsada = await page.getByRole('radio', { name: 'Transferencia' }).evaluate(boton => boton.getBoundingClientRect().height);
+    assert.ok(altoColapsada >= 44, `la pastilla colapsada mide ${altoColapsada}px`);
+    const alturaOcultas = await page.locator('.hueco.oculta').evaluateAll(huecos => huecos.map(hueco => hueco.getBoundingClientRect().height));
+    assert.deepEqual(alturaOcultas, [0, 0, 0]);
+    await page.locator('.abonos').screenshot({ path: path.join(artefactos, 'catarro-tipo-colapsado.png') });
     await page.locator('.abonos').screenshot({ path: path.join(artefactos, 'catarro-selector-tipo-pago.png') });
+
+    await page.getByRole('radio', { name: 'Transferencia' }).click();
+    await page.waitForTimeout(220);
+    assert.deepEqual(await page.getByRole('radio').allTextContents(), ['Transferencia', 'Depósito', 'Efectivo', 'Otro']);
+    assert.equal(await page.evaluate(() => form.abonos[0].metodoPago), 'transferencia');
+    assert.equal(await page.evaluate(() => form.abonos[0].descripcion), 'Transferencia - domingo 18/oct/26');
+    await page.locator('.abonos').screenshot({ path: path.join(artefactos, 'catarro-tipo-expandido.png') });
 
     await page.getByRole('radio', { name: 'Otro' }).click();
     const campoOtro = page.getByLabel('Escribe el tipo de pago');
     await campoOtro.waitFor();
+    await page.waitForTimeout(220);
+    assert.deepEqual(await page.getByRole('radio').allTextContents(), ['Otro']);
+    assert.equal(await page.locator('.icono-editar').count(), 1);
     assert.ok(await campoOtro.evaluate(campo => campo.getBoundingClientRect().height) >= 44);
     await campoOtro.fill('Cheque');
     assert.equal(await page.locator('.abonos input[aria-label="Descripción del abono"]').first().inputValue(), 'Cheque - domingo 18/oct/26');
@@ -270,6 +303,8 @@ test('en móvil se elige el tipo, Otro es obligatorio y el modal filtra sin perd
 
     await page.locator('.abonos input[aria-label="Descripción del abono"]').first().fill('Cheque de caja - domingo 18/oct/26');
     await page.locator('.abonos input[aria-label="Descripción del abono"]').first().blur();
+    await page.getByRole('radio', { name: 'Otro' }).click();
+    assert.deepEqual(await page.getByRole('radio').allTextContents(), ['Transferencia', 'Depósito', 'Efectivo', 'Otro']);
     await page.getByRole('radio', { name: 'Efectivo' }).click();
     assert.equal(await page.evaluate(() => form.abonos[0].descripcion), 'Cheque de caja - domingo 18/oct/26');
     assert.equal(await page.evaluate(() => form.abonos[0].metodoPago), 'efectivo');
@@ -296,6 +331,23 @@ test('en móvil se elige el tipo, Otro es obligatorio y el modal filtra sin perd
       return form.abonosCatarroPuedenGuardarse();
     }), true);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
+
+    await page.evaluate(() => {
+      form.abonos = [{
+        descripcion: 'Depósito - domingo 18/oct/26',
+        monto: 200,
+        fechaAbono: '2026-10-18',
+        metodoPago: 'deposito',
+        metodoPagoOtro: '',
+      }];
+    });
+    await page.locator('.selector-metodo-pago').waitFor();
+    assert.deepEqual(await page.getByRole('radio').allTextContents(), ['Depósito']);
+    assert.equal(await page.locator('.icono-editar').count(), 1);
+    await page.getByRole('radio', { name: 'Depósito' }).click();
+    assert.deepEqual(await page.getByRole('radio').allTextContents(), ['Transferencia', 'Depósito', 'Efectivo', 'Otro']);
+    assert.equal(await page.evaluate(() => form.abonos[0].metodoPago), 'deposito');
+    assert.equal(await page.evaluate(() => form.abonos[0].descripcion), 'Depósito - domingo 18/oct/26');
 
     await page.evaluate(plantilla => {
       window.app.$destroy();
