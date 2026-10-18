@@ -272,7 +272,7 @@
         </button>
       </div>
       <div class="input-row" v-for="(abono, index) in abonos" :key="index">
-        <input v-model="abono.descripcion" type="text" placeholder="Descripción" aria-label="Descripción del abono" class="responsive-input">
+        <input v-model="abono.descripcion" type="text" placeholder="Descripción" aria-label="Descripción del abono" class="responsive-input" @focus="abonoDescripcionEnFoco = index" @blur="cerrarDescripcionAbono(index)">
         <input v-model.number="abono.monto" type="number" placeholder="Monto" aria-label="Monto del abono" class="responsive-input">
         <button @click="removeAbono(index)" class="delete-btn">Eliminar</button>
       </div>
@@ -432,6 +432,7 @@ import { formatNumber } from '@/utils/formatters';
 import { normalizarFechaISO } from '@/utils/dateUtils';
 import { redondearCentavos, sumarMontos } from '@/utils/dinero';
 import { aplicarCadenaCatarro, estaPagadoCatarro, resumenExcedenteCatarro, redondearTotalVentaCatarro } from '@/utils/saldosCatarro';
+import { crearAbonoCatarro, normalizarAbonoCatarro } from '@/utils/fechaAbonoCatarro';
 import { crearCuentaSegura as crearCuentaSeguraEnColeccion } from '@/utils/services/EmbarqueCuentasService';
 import {
   joselitoCuentas,
@@ -469,6 +470,7 @@ export default {
       cobros: [],
       correcciones: [],
       abonos: [],
+      abonoDescripcionEnFoco: null,
       cuentasPosterioresCatarro: [],
       cuentasPosterioresCargadas: false,
       errorCuentasPosteriores: false,
@@ -781,7 +783,7 @@ export default {
           itemsVenta: this.itemsVenta,
           cobros: this.cobros,
           correcciones: this.correcciones,
-          abonos: this.abonos,
+          abonos: this.abonosParaPersistir(),
           totalGeneral: this.totalGeneral,
           totalGeneralVenta: this.totalGeneralVenta,
           gananciaDelDia: this.gananciaDelDia,
@@ -884,7 +886,7 @@ export default {
         if (this.clienteId === 'catarro') {
           this.saldoAcumuladoAnterior = notaData.saldoAcumuladoAnterior;
           Object.assign(notaData, {
-            cobros: this.cobros, correcciones: this.correcciones, abonos: this.abonos,
+            cobros: this.cobros, correcciones: this.correcciones, abonos: this.abonosParaPersistir(),
             totalGeneralVenta: this.totalGeneralVenta,
             nuevoSaldoAcumulado: this.nuevoSaldoAcumulado,
             estadoPagado: estaPagadoCatarro(this.nuevoSaldoAcumulado),
@@ -930,7 +932,7 @@ export default {
           saldoAcumuladoAnterior: saldoActualizado,
           cobros: this.cobros,
           correcciones: this.correcciones,
-          abonos: this.abonos,
+          abonos: this.abonosParaPersistir(),
           totalGeneral: this.totalGeneral,
           totalGeneralVenta: this.totalGeneralVenta,
           nuevoSaldoAcumulado: this.clienteId === 'catarro' ? redondearCentavos(nuevoSaldo) : (estadoPagado ? 0 : nuevoSaldo),
@@ -985,7 +987,30 @@ export default {
     removeCobro(index) { this.cobros.splice(index, 1); },
     addCorreccion() { this.correcciones.push({ descripcion: '', monto: 0 }); },
     removeCorreccion(index) { this.correcciones.splice(index, 1); },
-    addAbono() { this.abonos.push({ descripcion: '', monto: 0 }); },
+    addAbono() {
+      if (this.clienteId === 'catarro') {
+        this.abonos.push(crearAbonoCatarro());
+        return;
+      }
+      this.abonos.push({ descripcion: '', monto: 0 });
+    },
+    cerrarDescripcionAbono(index) {
+      if (this.abonoDescripcionEnFoco === index) this.abonoDescripcionEnFoco = null;
+      if (this.clienteId !== 'catarro') return;
+      const actual = this.abonos[index];
+      const normalizado = normalizarAbonoCatarro(actual);
+      if (normalizado !== actual) this.$set(this.abonos, index, normalizado);
+    },
+    abonosParaPersistir() {
+      if (this.clienteId !== 'catarro') return this.abonos;
+      return this.abonos.map((abono, index) => {
+        const normalizado = normalizarAbonoCatarro(abono);
+        if (normalizado !== abono && index !== this.abonoDescripcionEnFoco) {
+          this.$set(this.abonos, index, normalizado);
+        }
+        return normalizado;
+      });
+    },
 
     redondearMonto(monto) {
       return redondearCentavos(monto);
@@ -1489,7 +1514,7 @@ export default {
           nuevoSaldoAcumulado: this.nuevoSaldoAcumulado,
           cobros: this.cobros,
           correcciones: this.correcciones,
-          abonos: this.abonos,
+          abonos: this.abonosParaPersistir(),
           estadoPagado: this.estadoCuenta === 'Pagado',
           tieneObservacion: this.tieneObservacion,
           observacion: this.observacion,
