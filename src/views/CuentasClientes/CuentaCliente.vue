@@ -271,10 +271,19 @@
           Reacomodar abonos posteriores
         </button>
       </div>
-      <div class="input-row" v-for="(abono, index) in abonos" :key="index">
-        <input v-model="abono.descripcion" type="text" placeholder="Descripción" aria-label="Descripción del abono" class="responsive-input" @focus="abonoDescripcionEnFoco = index" @blur="cerrarDescripcionAbono(index)">
-        <input v-model.number="abono.monto" type="number" placeholder="Monto" aria-label="Monto del abono" class="responsive-input">
-        <button @click="removeAbono(index)" class="delete-btn">Eliminar</button>
+      <div class="abono-fila" v-for="(abono, index) in abonos" :key="index">
+        <SelectorMetodoPagoCatarro
+          v-if="clienteId === 'catarro' && abonoUsaMetodoPago(abono)"
+          :metodo="abono.metodoPago"
+          :otro="abono.metodoPagoOtro"
+          :error="errorMetodoAbono(index)"
+          @cambiar="cambiarMetodoAbono(index, $event)"
+        />
+        <div class="input-row">
+          <input v-model="abono.descripcion" type="text" placeholder="Descripción" aria-label="Descripción del abono" class="responsive-input" @focus="abonoDescripcionEnFoco = index" @blur="cerrarDescripcionAbono(index)">
+          <input v-model.number="abono.monto" type="number" placeholder="Monto" aria-label="Monto del abono" class="responsive-input">
+          <button @click="removeAbono(index)" class="delete-btn">Eliminar</button>
+        </div>
       </div>
       <button @click="addAbono" class="add-btn">Agregar Abono</button>
     </div>
@@ -432,7 +441,16 @@ import { formatNumber } from '@/utils/formatters';
 import { normalizarFechaISO } from '@/utils/dateUtils';
 import { redondearCentavos, sumarMontos } from '@/utils/dinero';
 import { aplicarCadenaCatarro, estaPagadoCatarro, resumenExcedenteCatarro, redondearTotalVentaCatarro } from '@/utils/saldosCatarro';
-import { crearAbonoCatarro, normalizarAbonoCatarro } from '@/utils/fechaAbonoCatarro';
+import {
+  abonoCatarroParaGuardar,
+  abonoUsaMetodoPago,
+  aplicarMetodoPagoAbono,
+  crearAbonoCatarro,
+  errorMetodoPagoAbono,
+  normalizarAbonoCatarro,
+  validarAbonosCatarro,
+} from '@/utils/fechaAbonoCatarro';
+import SelectorMetodoPagoCatarro from '@/components/Cuentas/SelectorMetodoPagoCatarro.vue';
 import { crearCuentaSegura as crearCuentaSeguraEnColeccion } from '@/utils/services/EmbarqueCuentasService';
 import {
   joselitoCuentas,
@@ -455,7 +473,7 @@ const SERVICE_MAP = {
 
 export default {
   name: 'CuentaCliente',
-  components: { BackButton, PreciosHistorialModal, StashModalV2, PreciosClienteButton },
+  components: { BackButton, PreciosHistorialModal, StashModalV2, PreciosClienteButton, SelectorMetodoPagoCatarro },
   props: {
     clienteId: {
       type: String,
@@ -471,6 +489,7 @@ export default {
       correcciones: [],
       abonos: [],
       abonoDescripcionEnFoco: null,
+      mostrarErroresMetodoPago: false,
       cuentasPosterioresCatarro: [],
       cuentasPosterioresCargadas: false,
       errorCuentasPosteriores: false,
@@ -868,6 +887,7 @@ export default {
 
     async crearNuevaCuenta() {
       try {
+        if (!this.abonosCatarroPuedenGuardarse()) return null;
         const notaData = {
           fecha: this.fechaSeleccionada,
           items: this.items.map(item => { const kilos = parseFloat(item.kilos) || 0; return { ...item, kilos, total: kilos * (item.costo || 0) }; }),
@@ -917,6 +937,7 @@ export default {
 
     async guardarNota() {
       try {
+        if (this.avisarMetodoPagoPendiente()) return;
         this.isGuardando = true;
         // Misma fórmula que el auto-guardado (computed totalDiaActual): incluye
         // cobros, correcciones y abonos, para que ambos caminos den el mismo saldo.
@@ -994,6 +1015,28 @@ export default {
       }
       this.abonos.push({ descripcion: '', monto: 0 });
     },
+    abonoUsaMetodoPago,
+    errorMetodoAbono(index) {
+      if (!this.mostrarErroresMetodoPago) return '';
+      return errorMetodoPagoAbono(this.abonos[index]);
+    },
+    cambiarMetodoAbono(index, { metodoPago, metodoPagoOtro }) {
+      const actual = this.abonos[index];
+      if (!actual) return;
+      this.$set(this.abonos, index, aplicarMetodoPagoAbono(actual, metodoPago, metodoPagoOtro));
+    },
+    abonosCatarroPuedenGuardarse() {
+      if (this.clienteId !== 'catarro') return true;
+      return validarAbonosCatarro(this.abonos).valido;
+    },
+    avisarMetodoPagoPendiente() {
+      if (this.clienteId !== 'catarro') return false;
+      const validacion = validarAbonosCatarro(this.abonos);
+      if (validacion.valido) return false;
+      this.mostrarErroresMetodoPago = true;
+      this.showMessage(validacion.mensaje, 4500);
+      return true;
+    },
     cerrarDescripcionAbono(index) {
       if (this.abonoDescripcionEnFoco === index) this.abonoDescripcionEnFoco = null;
       if (this.clienteId !== 'catarro') return;
@@ -1004,8 +1047,9 @@ export default {
     abonosParaPersistir() {
       if (this.clienteId !== 'catarro') return this.abonos;
       return this.abonos.map((abono, index) => {
-        const normalizado = normalizarAbonoCatarro(abono);
-        if (normalizado !== abono && index !== this.abonoDescripcionEnFoco) {
+        const normalizado = abonoCatarroParaGuardar(abono);
+        const descripcionCambio = normalizado && normalizado.descripcion !== abono.descripcion;
+        if (descripcionCambio && index !== this.abonoDescripcionEnFoco) {
           this.$set(this.abonos, index, normalizado);
         }
         return normalizado;
@@ -1460,6 +1504,7 @@ export default {
         this.showMessage('Ya existe una nota para esta fecha; los cambios NO se están guardando.');
         return;
       }
+      if (!this.abonosCatarroPuedenGuardarse()) return;
       this.saveQueue.push({
         timestamp: Date.now(),
         operation: async () => {
@@ -1502,6 +1547,7 @@ export default {
 
     async autoSaveNota() {
       if (!this.$route.params.id) return;
+      if (!this.abonosCatarroPuedenGuardarse()) return;
       try {
         const id = this.$route.params.id;
         if (this.clienteId === 'catarro') this.saldoAcumuladoAnterior = await this.obtenerSaldoAcumuladoAnterior();
@@ -2093,6 +2139,8 @@ th { background-color: #4CAF50; color: white; position: sticky; top: 0; z-index:
 .cuenta-catarro-ui .verificacion-saldo-row { color: #202b3c; line-height: 1.5; }
 .cuenta-catarro-ui .verificacion-input { max-width: 100%; box-sizing: border-box; min-height: 36px; border-color: #a2adba; }
 .cuenta-catarro-ui .abonos-etiquetas { display: grid; grid-template-columns: minmax(0, 1fr) minmax(90px, .6fr) 70px; gap: 10px; color: #354256; font-size: 12px; font-weight: 700; margin-bottom: 8px; }
+.cuenta-catarro-ui .abono-fila { min-width: 0; }
+.cuenta-catarro-ui .abono-fila + .abono-fila { margin-top: 14px; padding-top: 14px; border-top: 1px solid #e6ebf1; }
 .cuenta-catarro-ui .abonos-etiquetas span:nth-child(2) { text-align: right; }
 .cuenta-catarro-ui .movimientos-cuenta .delete-btn { min-width: 70px; padding: 7px 10px; background: #fff; color: #a41021; border: 1px solid #a41021; font-size: 12px; font-weight: 600; }
 .cuenta-catarro-ui .movimientos-cuenta .delete-btn:hover { background: #a41021; color: #fff; }

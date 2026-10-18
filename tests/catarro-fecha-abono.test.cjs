@@ -67,6 +67,8 @@ test('el abono nuevo guarda la fecha ISO y no reescribe abonos anteriores', () =
     descripcion: 'domingo 18/oct/26',
     monto: 1500,
     fechaAbono: '2026-10-18',
+    metodoPago: '',
+    metodoPagoOtro: '',
   });
 
   const viejo = { descripcion: 'spei', monto: 100 };

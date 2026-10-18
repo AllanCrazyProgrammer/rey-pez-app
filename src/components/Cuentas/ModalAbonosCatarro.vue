@@ -33,6 +33,13 @@
           Hasta
           <input v-model="hasta" type="date" aria-label="Fecha final de la cuenta">
         </label>
+        <label class="filtro-tipo">
+          Tipo de pago
+          <select v-model="metodo" aria-label="Filtrar por tipo de pago">
+            <option value="">Todos</option>
+            <option v-for="opcion in metodosFiltro" :key="opcion.valor" :value="opcion.valor">{{ opcion.etiqueta }}</option>
+          </select>
+        </label>
         <button type="button" class="limpiar-filtro" @click="limpiarFiltros">Quitar filtro</button>
       </form>
 
@@ -44,6 +51,7 @@
               <span class="fecha-cuenta">{{ textoFecha(abono.fechaCuenta) }}</span>
               <span class="monto-abono">${{ formatNumber(abono.monto) }}</span>
             </div>
+            <p v-if="abono.etiquetaMetodo" class="tipo-pago">{{ abono.etiquetaMetodo }}</p>
             <p class="descripcion-abono">{{ abono.descripcion }}</p>
           </li>
         </ul>
@@ -55,6 +63,7 @@
 <script>
 import { formatNumber, formatearFecha } from '@/utils/formatters';
 import {
+  METODOS_PAGO_CATARRO,
   filtrarAbonosCatarro,
   listarAbonosCuentasCatarro,
   totalAbonosCatarro,
@@ -66,14 +75,19 @@ export default {
     cuentas: { type: Array, default: () => [] },
   },
   data() {
-    return { mes: '', desde: '', hasta: '' };
+    return { mes: '', desde: '', hasta: '', metodo: '' };
   },
   computed: {
     todos() { return listarAbonosCuentasCatarro(this.cuentas); },
     visibles() {
-      return filtrarAbonosCatarro(this.todos, { mes: this.mes, desde: this.desde, hasta: this.hasta });
+      return filtrarAbonosCatarro(this.todos, {
+        mes: this.mes, desde: this.desde, hasta: this.hasta, metodo: this.metodo,
+      });
     },
     total() { return totalAbonosCatarro(this.visibles); },
+    metodosFiltro() {
+      return METODOS_PAGO_CATARRO.concat([{ valor: 'sin-tipo', etiqueta: 'Sin tipo' }]);
+    },
     meses() {
       const vistos = new Set(this.todos.map(abono => (abono.fechaReferencia || '').slice(0, 7)).filter(Boolean));
       return [...vistos].sort((a, b) => b.localeCompare(a)).map(valor => ({ valor, etiqueta: this.etiquetaMes(valor) }));
@@ -98,7 +112,7 @@ export default {
         .format(new Date(Date.UTC(Number(anio), Number(numero) - 1, 1)));
       return `${nombre} ${anio}`;
     },
-    limpiarFiltros() { this.mes = ''; this.desde = ''; this.hasta = ''; },
+    limpiarFiltros() { this.mes = ''; this.desde = ''; this.hasta = ''; this.metodo = ''; },
     cerrar() { this.$emit('cerrar'); },
     alTecla(evento) { if (evento.key === 'Escape') this.cerrar(); },
   },
@@ -181,11 +195,13 @@ export default {
 .resumen-abonos > div:last-child strong { color: #243047; text-align: right; }
 .filtros-abonos {
   display: grid;
-  grid-template-columns: 1.2fr 1fr 1fr auto;
+  grid-template-columns: 1fr 1fr;
   gap: 8px;
   align-items: end;
   padding: 0 14px 12px;
 }
+.filtro-tipo,
+.limpiar-filtro { grid-column: 1 / -1; }
 .filtros-abonos label { display: flex; flex-direction: column; gap: 4px; min-width: 0; font-size: 12px; font-weight: 700; color: #526176; }
 .filtros-abonos select,
 .filtros-abonos input {
@@ -220,17 +236,35 @@ export default {
 .fecha-cuenta { color: #526176; font-size: 13px; }
 .monto-abono { color: #166534; font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .descripcion-abono { margin: 6px 0 0; color: #243047; font-size: 15px; line-height: 1.35; overflow-wrap: anywhere; white-space: pre-wrap; }
+.tipo-pago {
+  display: inline-block;
+  width: fit-content;
+  max-width: 100%;
+  margin: 8px 0 0;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #fff1f2;
+  color: #9f1239;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
 .vacio-abonos { margin: 8px 0 12px; color: #64748b; }
 @media (min-width: 700px) {
   .overlay-abonos-catarro { align-items: center; padding: 24px; }
   .dialogo-abonos-catarro { border-radius: 14px; }
+  .filtros-abonos { grid-template-columns: 1fr 1fr 1fr auto; }
+  .filtro-tipo,
+  .limpiar-filtro { grid-column: auto; }
 }
 @media (max-width: 480px) {
   .overlay-abonos-catarro { padding: 0; align-items: flex-end; }
   .dialogo-abonos-catarro { width: 100%; max-height: calc(100vh - 150px); border-radius: 16px 16px 0 0; }
-  .filtros-abonos { grid-template-columns: 1fr 1fr; }
-  .filtros-abonos label:first-child,
-  .limpiar-filtro { grid-column: 1 / -1; }
+  .filtros-abonos { grid-template-columns: 1fr; }
+  .filtro-tipo,
+  .limpiar-filtro,
+  .filtros-abonos label { grid-column: auto; }
   .resumen-abonos strong { font-size: 20px; }
 }
 </style>
