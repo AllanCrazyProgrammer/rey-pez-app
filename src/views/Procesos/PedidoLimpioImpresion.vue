@@ -112,264 +112,21 @@
     </div>
 
     <div id="pdfPreview" class="pdf-preview">
-      <div class="preview-page">
-        <h3 class="cliente-header otilio-header">Otilio</h3>
-        <table class="preview-table">
-          <thead>
-            <tr>
-              <th>✓</th>
-              <th>Kilos/Taras</th>
-              <th>Medida</th>
-              <th>Tipo</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="(item, index) in (pedidoOtilio || [])" :key="'otilio-'+index">
-              <td><input type="checkbox" v-model="item.completado" @change="actualizarCompletado('otilio', index, item.completado)" class="pedido-checkbox"></td>
-              <td>{{ item.kilos }}<i v-if="item.esTara" class="tara-marca">T</i></td>
-              <td :class="{ 'text-orange': esMedidaMacuil(item.medida) }">
-                {{ item.medida }}
-                <span v-if="item.etiqueta" class="etiqueta-tag" :style="estiloEtiquetaItem(item)">{{ textoEtiquetaItem(item) }}</span>
-                <span v-if="item.proveedor" class="proveedor-tag">{{ item.proveedor }}</span>
-              </td>
-              <td :class="{ 
-                'text-blue': item.tipo === 'C/H20', 
-                'text-blue compact': item.tipo === '1.35 y .15' || item.tipo === '1.5 y .3'
-              }">
-                {{ tipoParaImpresion(item.tipo) }}
-                <span v-if="item.tipo === 'C/H20' && aguaPersonalizada(item)" class="neto-tag">Neto {{ textoAgua(item) }}</span>
-                <span v-if="item.nota" class="nota-tag">{{ item.nota }}</span>
-              </td>
-            </tr>
-          </tbody>
-          <tfoot>
-            <tr class="total-cliente-row">
-              <td></td>
-              <td class="total-kilos-cliente">{{ calcularTotalKilosCliente(pedidoOtilio) }} kg</td>
-              <td></td>
-              <td></td>
-            </tr>
-          </tfoot>
-        </table>
+      <div class="clientes-grid" aria-label="Pedidos por cliente">
+        <TarjetaClientePedido
+          v-for="cliente in clientesTarjetas"
+          :key="cliente.key"
+          :nombre="cliente.nombre"
+          :clase-encabezado="cliente.clase"
+          :variante="cliente.variante"
+          :items="cliente.items"
+          :total-kg="cliente.total"
+          :etiquetas-pedido="etiquetasPedido"
+          :etiquetas-colores-pedido="etiquetasColoresPedido"
+          :guardar-completado="cliente.guardar"
+          @cambio-completado="cliente.guardar && actualizarCompletado(cliente.clave, $event.index, $event.completado)"
+        />
       </div>
-
-      <!-- Vista previa de otros clientes -->
-      <div class="preview-page">
-        <!-- Joselito -->
-        <div class="cliente-seccion" :class="{ compacto: pedidoJoselito && pedidoJoselito.length >= 5 }">
-          <h4 class="cliente-header joselito-header" :class="{ compacto: pedidoJoselito && pedidoJoselito.length >= 5 }">Joselito</h4>
-          <table class="preview-table" :class="{ compacto: pedidoJoselito && pedidoJoselito.length >= 5 }">
-            <thead>
-              <tr>
-                <th>✓</th>
-                <th>Kilos/Taras</th>
-                <th>Medida</th>
-                <th>Tipo</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="(item, index) in (pedidoJoselito || [])" :key="'joselito-'+index">
-                <td><input type="checkbox" v-model="item.completado" @change="actualizarCompletado('joselito', index, item.completado)" class="pedido-checkbox"></td>
-                <td>{{ item.kilos }}<i v-if="item.esTara" class="tara-marca">T</i></td>
-                <td :class="{ 'text-orange': esMedidaMacuil(item.medida) }">
-                  {{ item.medida }}
-                  <span v-if="item.etiqueta" class="etiqueta-tag" :style="estiloEtiquetaItem(item)">{{ textoEtiquetaItem(item) }}</span>
-                  <span v-if="item.proveedor" class="proveedor-tag">{{ item.proveedor }}</span>
-                </td>
-                <td :class="{
-                  'text-blue': item.tipo === 'C/H20',
-                  'text-blue compact': item.tipo === '1.35 y .15' || item.tipo === '1.3 y .2' || item.tipo === '1.5 y .3'
-                }">
-                  {{ tipoParaImpresion(item.tipo) }}
-                  <span v-if="item.tipo === 'C/H20' && aguaPersonalizada(item)" class="neto-tag">Neto {{ textoAgua(item) }}</span>
-                  <span v-if="item.nota" class="nota-tag">{{ item.nota }}</span>
-                </td>
-              </tr>
-            </tbody>
-            <tfoot>
-              <tr class="total-cliente-row">
-                <td></td>
-                <td class="total-kilos-cliente">{{ calcularTotalKilosCliente(pedidoJoselito) }} kg</td>
-                <td></td>
-                <td></td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-
-        <!-- Lorena -->
-        <div class="cliente-seccion" :class="{ compacto: pedidoLorena && pedidoLorena.length >= 5 }">
-          <h4 class="cliente-header lorena-header" :class="{ compacto: pedidoLorena && pedidoLorena.length >= 5 }">Lorena</h4>
-          <table class="preview-table" :class="{ compacto: pedidoLorena && pedidoLorena.length >= 5 }">
-            <thead>
-              <tr>
-                <th>✓</th>
-                <th>Kilos/Taras</th>
-                <th>Medida</th>
-                <th>Tipo</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="(item, index) in (pedidoLorena || [])" :key="'lorena-'+index">
-                <td><input type="checkbox" v-model="item.completado" @change="actualizarCompletado('lorena', index, item.completado)" class="pedido-checkbox"></td>
-                <td>{{ item.kilos }}<i v-if="item.esTara" class="tara-marca">T</i></td>
-                <td :class="{ 'text-orange': esMedidaMacuil(item.medida) }">
-                  {{ item.medida }}
-                  <span v-if="item.etiqueta" class="etiqueta-tag" :style="estiloEtiquetaItem(item)">{{ textoEtiquetaItem(item) }}</span>
-                  <span v-if="item.proveedor" class="proveedor-tag">{{ item.proveedor }}</span>
-                </td>
-                <td :class="{ 
-                  'text-blue': item.tipo === 'C/H20', 
-                  'text-blue compact': item.tipo === '1.35 y .15' || item.tipo === '1.5 y .3'
-                }">
-                  {{ tipoParaImpresion(item.tipo) }}
-                  <span v-if="item.tipo === 'C/H20' && aguaPersonalizada(item)" class="neto-tag">Neto {{ textoAgua(item) }}</span>
-                  <span v-if="item.nota" class="nota-tag">{{ item.nota }}</span>
-                </td>
-              </tr>
-            </tbody>
-            <tfoot>
-              <tr class="total-cliente-row">
-                <td></td>
-                <td class="total-kilos-cliente">{{ calcularTotalKilosCliente(pedidoLorena) }} kg</td>
-                <td></td>
-                <td></td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-
-        <div class="bottom-section">
-          <!-- Catarro -->
-          <div class="bottom-cliente">
-            <h4 class="cliente-header catarro-header">Catarro</h4>
-            <table class="preview-table">
-              <thead>
-                <tr>
-                  <th>✓</th>
-                  <th>Kilos/Taras</th>
-                  <th>Medida</th>
-                  <th>Tipo</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="(item, index) in (pedidoCatarro || [])" :key="'catarro-'+index">
-                  <td><input type="checkbox" v-model="item.completado" @change="actualizarCompletado('catarro', index, item.completado)" class="pedido-checkbox"></td>
-                  <td>{{ item.kilos }}<i v-if="item.esTara" class="tara-marca">T</i></td>
-                  <td :class="{ 'text-orange': esMedidaMacuil(item.medida) }">
-                    {{ item.medida }}
-                    <span v-if="item.etiqueta" class="etiqueta-tag" :style="estiloEtiquetaItem(item)">{{ textoEtiquetaItem(item) }}</span>
-                    <span v-if="item.proveedor" class="proveedor-tag">{{ item.proveedor }}</span>
-                  </td>
-                  <td :class="{ 
-                    'text-blue': item.tipo === 'C/H20' || item.tipo === '.7 y .3', 
-                    'text-blue compact': item.tipo === '1.35 y .15' || item.tipo === '1.5 y .3'
-                  }">
-                    {{ tipoParaImpresion(item.tipo) }}
-                    <span v-if="item.tipo === 'C/H20' && aguaPersonalizada(item)" class="neto-tag">Neto {{ textoAgua(item) }}</span>
-                    <span v-if="item.nota" class="nota-tag">{{ item.nota }}</span>
-                  </td>
-                </tr>
-              </tbody>
-              <tfoot>
-                <tr class="total-cliente-row">
-                  <td></td>
-                  <td class="total-kilos-cliente">{{ calcularTotalKilosCliente(pedidoCatarro) }} kg</td>
-                  <td></td>
-                  <td></td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-
-          <!-- Ozuna -->
-          <div class="bottom-cliente">
-            <h4 class="cliente-header ozuna-header">Ozuna</h4>
-            <table class="preview-table">
-              <thead>
-                <tr>
-                  <th>✓</th>
-                  <th>Kilos/Taras</th>
-                  <th>Medida</th>
-                  <th>Tipo</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="(item, index) in (pedidoOzuna || [])" :key="'ozuna-'+index">
-                  <td><input type="checkbox" v-model="item.completado" @change="actualizarCompletado('ozuna', index, item.completado)" class="pedido-checkbox"></td>
-                  <td>{{ item.kilos }}<i v-if="item.esTara" class="tara-marca">T</i></td>
-                  <td :class="{ 'text-orange': esMedidaMacuil(item.medida) }">
-                    {{ item.medida }}
-                    <span v-if="item.etiqueta" class="etiqueta-tag" :style="estiloEtiquetaItem(item)">{{ textoEtiquetaItem(item) }}</span>
-                    <span v-if="item.proveedor" class="proveedor-tag">{{ item.proveedor }}</span>
-                  </td>
-                  <td :class="{ 
-                    'text-blue': item.tipo === 'C/H20' || item.tipo === '.7 y .3', 
-                    'text-blue compact': item.tipo === '1.35 y .15' || item.tipo === '1.5 y .3'
-                  }">
-                    {{ tipoParaImpresion(item.tipo) }}
-                    <span v-if="item.tipo === 'C/H20' && aguaPersonalizada(item)" class="neto-tag">Neto {{ textoAgua(item) }}</span>
-                    <span v-if="item.nota" class="nota-tag">{{ item.nota }}</span>
-                  </td>
-                </tr>
-              </tbody>
-              <tfoot>
-                <tr class="total-cliente-row">
-                  <td></td>
-                  <td class="total-kilos-cliente">{{ calcularTotalKilosCliente(pedidoOzuna, true) }} kg</td>
-                  <td></td>
-                  <td></td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-        </div>
-      </div>
-
-      <!-- Clientes Temporales -->
-      <div v-if="clientesTemporales && Object.keys(clientesTemporales).length > 0" class="preview-page">
-        <div v-for="(cliente, id) in clientesTemporales" :key="id" class="cliente-seccion temporal">
-          <h3 class="cliente-header temporal-header">{{ cliente.nombre }}</h3>
-          <table class="preview-table">
-            <thead>
-              <tr>
-                <th>✓</th>
-                <th>Kilos/Taras</th>
-                <th>Medida</th>
-                <th>Tipo</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="(item, index) in (cliente.pedidos || [])" :key="'temp-'+id+'-'+index">
-                <td><input type="checkbox" v-model="item.completado" class="pedido-checkbox"></td>
-                <td>{{ item.kilos }}<i v-if="item.esTara" class="tara-marca">T</i></td>
-                <td :class="{ 'text-orange': esMedidaMacuil(item.medida) }">
-                  {{ item.medida }}
-                  <span v-if="item.etiqueta" class="etiqueta-tag" :style="estiloEtiquetaItem(item)">{{ textoEtiquetaItem(item) }}</span>
-                  <span v-if="item.proveedor" class="proveedor-tag">{{ item.proveedor }}</span>
-                </td>
-                <td :class="{ 
-                  'text-blue': item.tipo === 'C/H20', 
-                  'text-blue compact': item.tipo === '1.35 y .15' || item.tipo === '1.5 y .3'
-                }">
-                  {{ tipoParaImpresion(item.tipo) }}
-                  <span v-if="item.tipo === 'C/H20' && aguaPersonalizada(item)" class="neto-tag">Neto {{ textoAgua(item) }}</span>
-                  <span v-if="item.nota" class="nota-tag">{{ item.nota }}</span>
-                </td>
-              </tr>
-            </tbody>
-            <tfoot>
-              <tr class="total-cliente-row">
-                <td></td>
-                <td class="total-kilos-cliente">{{ calcularTotalKilosCliente(cliente.pedidos) }} kg</td>
-                <td></td>
-                <td></td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-      </div>
-
       <!-- Sección de resumen por medida (solo en vista previa) -->
       <div class="resumen-con-refri" :class="{ 'con-refri': refriAnterior.filas.length }">
       <div class="resumen-medidas">
@@ -438,112 +195,26 @@
           v-if="showCalculadoraResumen"
           class="resumen-calculadora-panel"
         />
-        <table v-if="activeResumenTab === 'medida'" class="resumen-table">
-          <thead>
-            <tr>
-              <th>Medida</th>
-              <th>Total Kilos</th>
-              <th>Rendimientos</th>
-              <th>Masters</th>
-              <th>Cajas</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="(medida, index) in calcularTotalesPorMedida()" :key="index">
-              <td data-label="Medida">{{ medida.medida }}</td>
-              <td data-label="Total Kilos" class="total-kilos-cell">
-                <div class="kilos-container">
-                  <div class="kilos-column">
-                    <span
-                      class="total-kilos-clickeable" 
-                      @click="abrirModalKilosRefrigerados(medida)"
-                      :title="'Click para agregar kilos refrigerados'"
-                    >
-                      {{ medida.total }} kg
-                    </span>
-                  </div>
-                  <div v-if="kilosRefrigerados[medida.medida]" class="kilos-column kilos-refrigerados-column">
-                    <span class="kilos-refrigerados">
-                      🧊 {{ formatDecimal(kilosRefrigerados[medida.medida]) }} kg
-                    </span>
-                  </div>
-                  <div v-if="kilosRefrigerados[medida.medida]" class="kilos-column kilos-faltantes-column">
-                    <span class="kilos-faltantes" :class="{ 
-                      'suficientes': obtenerKilosFaltantes(medida) <= 0,
-                      'sobra': obtenerKilosFaltantes(medida) < 0 
-                    }">
-                      <template v-if="obtenerKilosFaltantes(medida) > 0">
-                        Faltan: {{ formatDecimal(obtenerKilosFaltantes(medida)) }} kg
-                      </template>
-                      <template v-else-if="obtenerKilosFaltantes(medida) < 0">
-                        Sobra: {{ formatDecimal(Math.abs(obtenerKilosFaltantes(medida))) }} kg
-                      </template>
-                      <template v-else>
-                        Exactos: 0.0 kg
-                      </template>
-                    </span>
-                  </div>
-                </div>
-              </td>
-              <td data-label="Rendimientos">
-                <div class="rendimientos-column">
-                  <input 
-                    type="number" 
-                    step="0.01"
-                    v-model="rendimientos[medida.medida]"
-                    @input="calcularRendimiento(medida)"
-                    placeholder="1.00"
-                    class="rendimiento-box"
-                    :aria-label="'Rendimiento de ' + medida.medida"
-                    inputmode="decimal"
-                  >
-                  <div v-if="rendimientos[medida.medida]" class="rendimiento-total">
-                    {{ Math.round(medida.total * rendimientos[medida.medida]) }}
-                  </div>
-                </div>
-              </td>
-              <td data-label="Masters">
-                <div v-if="esMedidaGranja(medida.medida)" class="checkbox-group">
-                  <label>
-                    <input 
-                      type="radio" 
-                      :name="'master-' + medida.medida"
-                      :checked="divisores[medida.medida] === 20"
-                      @click="toggleDivisor(medida, 20)"
-                    >
-                    <span>20</span>
-                  </label>
-                  <label>
-                    <input 
-                      type="radio" 
-                      :name="'master-' + medida.medida"
-                      :checked="divisores[medida.medida] === 22"
-                      @click="toggleDivisor(medida, 22)"
-                    >
-                    <span>22</span>
-                  </label>
-                </div>
-              </td>
-              <td data-label="Cajas">
-                <template v-if="rendimientos[medida.medida]">
-                  <span v-if="esMedidaGranja(medida.medida) && divisores[medida.medida]" class="cajas-result" :class="{ 'cajas-faltantes': kilosRefrigerados[medida.medida] > 0 }">
-                    {{ Math.round((Math.max(0, obtenerKilosFaltantes(medida)) * rendimientos[medida.medida]) / divisores[medida.medida]) }}
-                  </span>
-                  <span v-else class="cajas-result" :class="{ 'cajas-faltantes': kilosRefrigerados[medida.medida] > 0 }">
-                    {{ Math.round(Math.max(0, obtenerKilosFaltantes(medida)) * rendimientos[medida.medida]) }} kg
-                  </span>
-                </template>
-              </td>
-            </tr>
-            <tr class="total-row">
-              <td>Total:</td>
-              <td>{{ calcularTotalKilos() }} kg</td>
-              <td></td>
-              <td></td>
-              <td></td>
-            </tr>
-          </tbody>
-        </table>
+        <div v-if="activeResumenTab === 'medida'" class="medidas-grid" aria-label="Resumen por medida">
+          <TarjetaMedidaResumen
+            v-for="(medida, index) in calcularTotalesPorMedida()"
+            :key="medida.medida + '-' + index"
+            :medida="medida"
+            :rendimiento="rendimientos[medida.medida]"
+            :divisor="divisores[medida.medida]"
+            :kilos-refri="kilosRefrigerados[medida.medida] || 0"
+            :faltantes="obtenerKilosFaltantes(medida)"
+            :es-granja="esMedidaGranja(medida.medida)"
+            @abrir-refri="abrirModalKilosRefrigerados(medida)"
+            @input-rendimiento="asignarRendimientoMedida(medida, $event)"
+            @toggle-divisor="toggleDivisor(medida, $event)"
+          />
+          <p v-if="!calcularTotalesPorMedida().length" class="medidas-vacio">Sin medidas en este pedido.</p>
+          <p class="medidas-total-general">
+            <span>Total</span>
+            <strong>{{ calcularTotalKilos() }} kg</strong>
+          </p>
+        </div>
         <div v-else class="resumen-dia-panel">
           <p v-if="resumenSacadaHoy.loading" class="resumen-dia-estado">
             Cargando resumen del día...
@@ -703,6 +374,8 @@ import KilosRefrigeradosModal from '@/components/KilosRefrigeradosModal.vue'
 import ListaMedidasPedidoModal from '@/components/ListaMedidasPedidoModal.vue'
 import ResumenCalculadora from '@/components/ResumenCalculadora.vue'
 import ImagenCajasModal from '@/components/ImagenCajasModal.vue'
+import TarjetaClientePedido from './components/TarjetaClientePedido.vue'
+import TarjetaMedidaResumen from './components/TarjetaMedidaResumen.vue'
 import { colorParaEtiqueta } from '@/utils/coloresEtiquetas'
 import { formatearAgua, aguaEsPersonalizada } from '@/utils/factorAgua'
 import { normalizarFechaValor } from '@/utils/dateUtils'
@@ -728,7 +401,9 @@ export default {
     KilosRefrigeradosModal,
     ListaMedidasPedidoModal,
     ResumenCalculadora,
-    ImagenCajasModal
+    ImagenCajasModal,
+    TarjetaClientePedido,
+    TarjetaMedidaResumen
   },
   props: {
     fecha: {
@@ -831,6 +506,31 @@ export default {
       acomodandoKilosRefrigerados: false,
       mensajeAcomodoRefrigerados: '',
       errorAcomodoRefrigerados: false
+    }
+  },
+  computed: {
+    clientesTarjetas() {
+      const fijos = [
+        { key: 'otilio', clave: 'otilio', nombre: 'Otilio', clase: 'otilio', variante: 'otilio', items: this.pedidoOtilio || [], guardar: true },
+        { key: 'joselito', clave: 'joselito', nombre: 'Joselito', clase: 'joselito', variante: 'joselito', items: this.pedidoJoselito || [], guardar: true },
+        { key: 'lorena', clave: 'lorena', nombre: 'Lorena', clase: 'lorena', variante: 'lorena', items: this.pedidoLorena || [], guardar: true },
+        { key: 'catarro', clave: 'catarro', nombre: 'Catarro', clase: 'catarro', variante: 'catarro', items: this.pedidoCatarro || [], guardar: true },
+        { key: 'ozuna', clave: 'ozuna', nombre: 'Ozuna', clase: 'ozuna', variante: 'ozuna', items: this.pedidoOzuna || [], guardar: true, totalExtra: true }
+      ].map(cliente => ({
+        ...cliente,
+        total: this.calcularTotalKilosCliente(cliente.items, cliente.totalExtra)
+      }))
+      const temporales = Object.entries(this.clientesTemporales || {}).map(([id, cliente]) => ({
+        key: 'temp-' + id,
+        clave: id,
+        nombre: cliente.nombre,
+        clase: 'temporal',
+        variante: 'temporal',
+        items: cliente.pedidos || [],
+        guardar: false,
+        total: this.calcularTotalKilosCliente(cliente.pedidos)
+      }))
+      return fijos.concat(temporales)
     }
   },
   created() {
@@ -1920,6 +1620,10 @@ export default {
           total: Math.round(value.total)
         }));
     },
+    asignarRendimientoMedida(medida, valor) {
+      this.$set(this.rendimientos, medida.medida, valor)
+      this.calcularRendimiento(medida)
+    },
     calcularRendimiento(medida) {
       // Asegurarse de que el valor sea numérico
       const valor = parseFloat(this.rendimientos[medida.medida]);
@@ -2982,7 +2686,7 @@ h4.cliente-header.ozuna-header {
 .resumen-medidas {
   margin-top: 30px;
   page-break-before: avoid;
-  max-width: 800px;
+  max-width: 100%;
   margin-left: auto;
   margin-right: auto;
 }
@@ -3975,4 +3679,74 @@ h4.cliente-header.ozuna-header {
   .refri-anterior { width: 100%; max-width: 800px; margin: 0 auto; }
 }
 @media print { .refri-anterior, .refri-anterior-error { display: none !important; } }
+
+.clientes-grid,
+.medidas-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+  align-items: stretch;
+}
+
+.medidas-vacio {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 14px;
+  border: 1px dashed #c5d0d6;
+  border-radius: 16px;
+  background: #fff;
+  color: #5c6e78;
+  text-align: center;
+  font-size: 13px;
+}
+
+.medidas-total-general {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 12px 14px;
+  background: #f8f9fa;
+  color: #212529;
+  border: 1px solid rgba(28, 43, 51, 0.12);
+  border-radius: 18px;
+  box-shadow: 0 6px 16px rgba(16, 32, 48, 0.08);
+  font-weight: 800;
+}
+
+.medidas-total-general strong {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (min-width: 768px) {
+  .clientes-grid,
+  .medidas-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+  }
+}
+
+@media (min-width: 1100px) {
+  .clientes-grid,
+  .medidas-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 480px) {
+  .pdf-preview { padding: 8px; }
+  .impresion-container { padding: 8px; }
+}
+
+@media print {
+  .clientes-grid,
+  .medidas-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+}
 </style>
