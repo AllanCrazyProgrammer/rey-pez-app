@@ -438,112 +438,26 @@
           v-if="showCalculadoraResumen"
           class="resumen-calculadora-panel"
         />
-        <table v-if="activeResumenTab === 'medida'" class="resumen-table">
-          <thead>
-            <tr>
-              <th>Medida</th>
-              <th>Total Kilos</th>
-              <th>Rendimientos</th>
-              <th>Masters</th>
-              <th>Cajas</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="(medida, index) in calcularTotalesPorMedida()" :key="index">
-              <td data-label="Medida">{{ medida.medida }}</td>
-              <td data-label="Total Kilos" class="total-kilos-cell">
-                <div class="kilos-container">
-                  <div class="kilos-column">
-                    <span
-                      class="total-kilos-clickeable" 
-                      @click="abrirModalKilosRefrigerados(medida)"
-                      :title="'Click para agregar kilos refrigerados'"
-                    >
-                      {{ medida.total }} kg
-                    </span>
-                  </div>
-                  <div v-if="kilosRefrigerados[medida.medida]" class="kilos-column kilos-refrigerados-column">
-                    <span class="kilos-refrigerados">
-                      🧊 {{ formatDecimal(kilosRefrigerados[medida.medida]) }} kg
-                    </span>
-                  </div>
-                  <div v-if="kilosRefrigerados[medida.medida]" class="kilos-column kilos-faltantes-column">
-                    <span class="kilos-faltantes" :class="{ 
-                      'suficientes': obtenerKilosFaltantes(medida) <= 0,
-                      'sobra': obtenerKilosFaltantes(medida) < 0 
-                    }">
-                      <template v-if="obtenerKilosFaltantes(medida) > 0">
-                        Faltan: {{ formatDecimal(obtenerKilosFaltantes(medida)) }} kg
-                      </template>
-                      <template v-else-if="obtenerKilosFaltantes(medida) < 0">
-                        Sobra: {{ formatDecimal(Math.abs(obtenerKilosFaltantes(medida))) }} kg
-                      </template>
-                      <template v-else>
-                        Exactos: 0.0 kg
-                      </template>
-                    </span>
-                  </div>
-                </div>
-              </td>
-              <td data-label="Rendimientos">
-                <div class="rendimientos-column">
-                  <input 
-                    type="number" 
-                    step="0.01"
-                    v-model="rendimientos[medida.medida]"
-                    @input="calcularRendimiento(medida)"
-                    placeholder="1.00"
-                    class="rendimiento-box"
-                    :aria-label="'Rendimiento de ' + medida.medida"
-                    inputmode="decimal"
-                  >
-                  <div v-if="rendimientos[medida.medida]" class="rendimiento-total">
-                    {{ Math.round(medida.total * rendimientos[medida.medida]) }}
-                  </div>
-                </div>
-              </td>
-              <td data-label="Masters">
-                <div v-if="esMedidaGranja(medida.medida)" class="checkbox-group">
-                  <label>
-                    <input 
-                      type="radio" 
-                      :name="'master-' + medida.medida"
-                      :checked="divisores[medida.medida] === 20"
-                      @click="toggleDivisor(medida, 20)"
-                    >
-                    <span>20</span>
-                  </label>
-                  <label>
-                    <input 
-                      type="radio" 
-                      :name="'master-' + medida.medida"
-                      :checked="divisores[medida.medida] === 22"
-                      @click="toggleDivisor(medida, 22)"
-                    >
-                    <span>22</span>
-                  </label>
-                </div>
-              </td>
-              <td data-label="Cajas">
-                <template v-if="rendimientos[medida.medida]">
-                  <span v-if="esMedidaGranja(medida.medida) && divisores[medida.medida]" class="cajas-result" :class="{ 'cajas-faltantes': kilosRefrigerados[medida.medida] > 0 }">
-                    {{ Math.round((Math.max(0, obtenerKilosFaltantes(medida)) * rendimientos[medida.medida]) / divisores[medida.medida]) }}
-                  </span>
-                  <span v-else class="cajas-result" :class="{ 'cajas-faltantes': kilosRefrigerados[medida.medida] > 0 }">
-                    {{ Math.round(Math.max(0, obtenerKilosFaltantes(medida)) * rendimientos[medida.medida]) }} kg
-                  </span>
-                </template>
-              </td>
-            </tr>
-            <tr class="total-row">
-              <td>Total:</td>
-              <td>{{ calcularTotalKilos() }} kg</td>
-              <td></td>
-              <td></td>
-              <td></td>
-            </tr>
-          </tbody>
-        </table>
+        <div v-if="activeResumenTab === 'medida'" class="medidas-grid" aria-label="Resumen por medida">
+          <TarjetaMedidaResumen
+            v-for="(medida, index) in calcularTotalesPorMedida()"
+            :key="medida.medida + '-' + index"
+            :medida="medida"
+            :rendimiento="rendimientos[medida.medida]"
+            :divisor="divisores[medida.medida]"
+            :kilos-refri="kilosRefrigerados[medida.medida] || 0"
+            :faltantes="obtenerKilosFaltantes(medida)"
+            :es-granja="esMedidaGranja(medida.medida)"
+            @abrir-refri="abrirModalKilosRefrigerados(medida)"
+            @input-rendimiento="asignarRendimientoMedida(medida, $event)"
+            @toggle-divisor="toggleDivisor(medida, $event)"
+          />
+          <p v-if="!calcularTotalesPorMedida().length" class="medidas-vacio">Sin medidas en este pedido.</p>
+          <p class="medidas-total-general">
+            <span>Total</span>
+            <strong>{{ calcularTotalKilos() }} kg</strong>
+          </p>
+        </div>
         <div v-else class="resumen-dia-panel">
           <p v-if="resumenSacadaHoy.loading" class="resumen-dia-estado">
             Cargando resumen del día...
@@ -703,6 +617,7 @@ import KilosRefrigeradosModal from '@/components/KilosRefrigeradosModal.vue'
 import ListaMedidasPedidoModal from '@/components/ListaMedidasPedidoModal.vue'
 import ResumenCalculadora from '@/components/ResumenCalculadora.vue'
 import ImagenCajasModal from '@/components/ImagenCajasModal.vue'
+import TarjetaMedidaResumen from './components/TarjetaMedidaResumen.vue'
 import { colorParaEtiqueta } from '@/utils/coloresEtiquetas'
 import { formatearAgua, aguaEsPersonalizada } from '@/utils/factorAgua'
 import { normalizarFechaValor } from '@/utils/dateUtils'
@@ -728,7 +643,8 @@ export default {
     KilosRefrigeradosModal,
     ListaMedidasPedidoModal,
     ResumenCalculadora,
-    ImagenCajasModal
+    ImagenCajasModal,
+    TarjetaMedidaResumen
   },
   props: {
     fecha: {
@@ -1920,6 +1836,10 @@ export default {
           total: Math.round(value.total)
         }));
     },
+    asignarRendimientoMedida(medida, valor) {
+      this.$set(this.rendimientos, medida.medida, valor)
+      this.calcularRendimiento(medida)
+    },
     calcularRendimiento(medida) {
       // Asegurarse de que el valor sea numérico
       const valor = parseFloat(this.rendimientos[medida.medida]);
@@ -2982,7 +2902,7 @@ h4.cliente-header.ozuna-header {
 .resumen-medidas {
   margin-top: 30px;
   page-break-before: avoid;
-  max-width: 800px;
+  max-width: 100%;
   margin-left: auto;
   margin-right: auto;
 }
@@ -3975,4 +3895,65 @@ h4.cliente-header.ozuna-header {
   .refri-anterior { width: 100%; max-width: 800px; margin: 0 auto; }
 }
 @media print { .refri-anterior, .refri-anterior-error { display: none !important; } }
+
+.medidas-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+  align-items: stretch;
+}
+
+.medidas-vacio {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 14px;
+  border: 1px dashed #c5d0d6;
+  border-radius: 16px;
+  background: #fff;
+  color: #5c6e78;
+  text-align: center;
+  font-size: 13px;
+}
+
+.medidas-total-general {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 12px 14px;
+  background: #f8f9fa;
+  color: #212529;
+  border: 1px solid rgba(28, 43, 51, 0.12);
+  border-radius: 18px;
+  box-shadow: 0 6px 16px rgba(16, 32, 48, 0.08);
+  font-weight: 800;
+}
+
+.medidas-total-general strong {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (min-width: 768px) {
+  .medidas-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+  }
+}
+
+@media (min-width: 1100px) {
+  .medidas-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media print {
+  .medidas-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+}
 </style>
