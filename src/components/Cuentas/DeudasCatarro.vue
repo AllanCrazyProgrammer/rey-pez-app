@@ -29,8 +29,11 @@
         <strong>{{ cargando || cargandoCuentas ? 'Calculando…' : errorCarga || errorCuentas ? 'No disponible' : moneda(deudaTotalCentavos) }}</strong>
       </div>
     </div>
-    <button type="button" class="agregar-pestana" :disabled="guardando || cargando || !!errorCarga"
-      @click="seleccionar('nueva')">+ Agregar pestaña de deuda</button>
+    <div class="acciones-pestana">
+      <slot name="acciones"></slot>
+      <button type="button" class="agregar-pestana" :disabled="guardando || cargando || !!errorCarga"
+        @click="seleccionar('nueva')">+ Agregar pestaña de deuda</button>
+    </div>
 
     <p v-if="cargando" class="aviso" role="status">Cargando deudas atrasadas…</p>
     <div v-if="errorCarga" class="error" role="alert">
@@ -338,7 +341,8 @@ export default {
 .total-deuda strong { font-size: 30px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .editar-monto { margin-top: 10px; border: 0; background: transparent; color: #9f2020; padding: 0; text-decoration: underline; text-align: left; }
 .editar-monto-form { margin-bottom: 20px; }
-.agregar-pestana { display: block; min-height: 40px; margin-left: auto; color: #a41021; background: #fff; border: 1px solid #a41021; border-radius: 7px; padding: 9px 14px; font-size: 13px; font-weight: 700; }
+.acciones-pestana { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 8px; }
+.agregar-pestana { display: inline-flex; align-items: center; justify-content: center; min-height: 40px; margin-left: 0; color: #a41021; background: #fff; border: 1px solid #a41021; border-radius: 7px; padding: 9px 14px; font-size: 13px; font-weight: 700; }
 .agregar-pestana:hover { background: #a41021; color: #fff; }
 .panel { margin-top: 16px; background: #fff; padding: 24px; border-radius: 12px; box-shadow: 0 3px 14px #0002; }
 .panel h2 { margin: 0; font-size: 24px; color: #a91f27; overflow-wrap: anywhere; }
@@ -382,6 +386,8 @@ button:focus-visible, input:focus-visible { outline: 3px solid #2563eb; outline-
 .error { background: #fff1f2; color: #a91f27; }
 .exito { background: #eaf7ef; color: #166534; }
 @media (max-width: 600px) {
+  .acciones-pestana { flex-direction: column; align-items: stretch; }
+  .acciones-pestana .agregar-pestana { width: 100%; }
   .desglose-deuda { grid-template-columns: 1fr; }
   .panel { padding: 16px; }
   .campos { grid-template-columns: 1fr; gap: 0; }

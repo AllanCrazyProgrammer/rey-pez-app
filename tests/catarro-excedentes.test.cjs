@@ -14,6 +14,7 @@ const compile = source => babel.transformSync(source, { configFile: false, babel
 const sources = {
   '@/utils/dinero': compile(fs.readFileSync(path.join(root, 'src/utils/dinero.js'), 'utf8')),
   '@/utils/saldosCatarro': compile(fs.readFileSync(path.join(root, 'src/utils/saldosCatarro.js'), 'utf8')),
+  '@/utils/fechaAbonoCatarro': compile(fs.readFileSync(path.join(root, 'src/utils/fechaAbonoCatarro.js'), 'utf8')),
   '@/utils/pdf/cuentaCliente': compile(fs.readFileSync(path.join(root, 'src/utils/pdf/cuentaCliente.js'), 'utf8')),
   '@/utils/pdf/delivery': compile(fs.readFileSync(path.join(root, 'src/utils/pdf/delivery.js'), 'utf8')),
   component: compile(sfc.script.content),

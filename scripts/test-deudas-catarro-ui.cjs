@@ -129,6 +129,7 @@ function componente(file) {
         '@/components/StashModalV2.vue': { template: '<span><button class="stash-button">Stash</button></span>' },
       };
       mocks['@/components/Cuentas/DeudasCatarro.vue'] = { ...load(componentes.deudas.script, mocks), template: componentes.deudas.template };
+      mocks['@/components/Cuentas/ModalAbonosCatarro.vue'] = { template: '<div />' };
       const menu = { ...load(componentes.menu.script, mocks), template: componentes.menu.template };
       Vue.component('router-link', { props: ['to'], template: '<a :href="to"><slot /></a>' });
       Vue.prototype.$router = { push(ruta) { window.rutaAbierta = ruta; } };

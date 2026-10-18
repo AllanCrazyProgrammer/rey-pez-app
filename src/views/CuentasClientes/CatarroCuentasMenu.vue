@@ -11,7 +11,13 @@
     </header>
 
     <DeudasCatarro :saldo-cuentas-centavos="saldoCuentasCentavos" :cargando-cuentas="isLoading"
-      :error-cuentas="!!errorCuentas" @seleccion="pestanaActiva = $event" />
+      :error-cuentas="!!errorCuentas" @seleccion="pestanaActiva = $event">
+      <template v-slot:acciones>
+        <button type="button" class="ver-abonos-btn" @click="mostrarAbonos = true">Ver abonos</button>
+      </template>
+    </DeudasCatarro>
+
+    <ModalAbonosCatarro v-if="mostrarAbonos" :cuentas="cuentas" @cerrar="mostrarAbonos = false" />
 
     <div v-show="pestanaActiva === 'actuales'" id="cuentas-actuales-catarro" role="tabpanel" aria-labelledby="pestana-catarro-actuales">
     <div class="cuentas-list card">
@@ -98,13 +104,15 @@ import { normalizarFechaValor } from '@/utils/dateUtils';
 import { INICIO_CUENTAS_PENDIENTES_CATARRO, cuentasPendientesCatarro, combinarEmbarquesCatarro } from '@/utils/cuentasPendientesCatarro';
 import PapeleraService from '@/services/PapeleraService';
 import DeudasCatarro from '@/components/Cuentas/DeudasCatarro.vue';
+import ModalAbonosCatarro from '@/components/Cuentas/ModalAbonosCatarro.vue';
 import { formatNumber, formatearFecha as formatDate } from '@/utils/formatters';
 import { encadenarSaldosCatarro } from '@/utils/saldosCatarro';
 
 export default {
   name: 'CatarroCuentasMenu',
   components: {
-    DeudasCatarro
+    DeudasCatarro,
+    ModalAbonosCatarro,
   },
   data() {
     return {
@@ -123,7 +131,8 @@ export default {
       lastSaveMessage: '',
       showSaveMessage: false,
       saveMessageTimer: null,
-      paginaActual: 1
+      paginaActual: 1,
+      mostrarAbonos: false
     };
   },
   computed: {
@@ -340,6 +349,12 @@ h2 { color: #243047; }
 .menu-regresar:hover { background: #243047; color: #fff; }
 .menu-regresar span { font-size: 20px; line-height: 1; }
 .action-button:focus-visible { outline: 3px solid #a41021; outline-offset: 3px; }
+.ver-abonos-btn { display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; min-height: 40px; color: #a41021; background: #fff; border: 1px solid #a41021; border-radius: 7px; padding: 9px 14px; font-size: 13px; font-weight: 700; line-height: 1.2; cursor: pointer; }
+.ver-abonos-btn:hover { background: #a41021; color: #fff; }
+.ver-abonos-btn:focus-visible { outline: 3px solid #2563eb; outline-offset: 2px; }
+@media (max-width: 600px) {
+  .ver-abonos-btn { width: 100%; }
+}
 .registros-encabezado { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 18px; }
 .registros-encabezado h2 { margin: 0; font-size: 21px; }
 .registros-encabezado .filter-container { display: flex; align-items: center; gap: 10px; margin: 0; text-align: left; font-size: 13px; }
