@@ -46,21 +46,129 @@ export function componerDescripcionAbonoCatarro(texto, fecha = new Date()) {
   return `${limpio} - ${fechaTexto}`;
 }
 
+export const METODOS_PAGO_CATARRO = [
+  { valor: 'transferencia', etiqueta: 'Transferencia' },
+  { valor: 'deposito', etiqueta: 'Depósito' },
+  { valor: 'efectivo', etiqueta: 'Efectivo' },
+  { valor: 'otro', etiqueta: 'Otro' },
+];
+
+const ETIQUETA_POR_METODO = METODOS_PAGO_CATARRO.reduce((mapa, metodo) => {
+  mapa[metodo.valor] = metodo.etiqueta;
+  return mapa;
+}, {});
+
+// Los abonos viejos no traen la propiedad. Los nuevos la traen, aunque todavía esté vacía.
+export function abonoUsaMetodoPago(abono) {
+  return Boolean(abono) && Object.prototype.hasOwnProperty.call(abono, 'metodoPago');
+}
+
+export function etiquetaMetodoPagoCatarro(metodoPago, metodoPagoOtro = '') {
+  if (metodoPago === 'otro') return String(metodoPagoOtro || '').trim();
+  return ETIQUETA_POR_METODO[metodoPago] || '';
+}
+
+// Texto para listas. Otro incluye lo escrito; un abono viejo no tiene etiqueta.
+export function textoMetodoPagoVisible(abono) {
+  if (!abono || !abono.metodoPago) return '';
+  if (abono.metodoPago === 'otro') {
+    const texto = String(abono.metodoPagoOtro || '').trim();
+    return texto ? `Otro: ${texto}` : 'Otro';
+  }
+  return ETIQUETA_POR_METODO[abono.metodoPago] || '';
+}
+
+export function descripcionAutomaticaMetodoPago(metodoPago, metodoPagoOtro, fecha) {
+  const etiqueta = etiquetaMetodoPagoCatarro(metodoPago, metodoPagoOtro);
+  if (!etiqueta) return formatearFechaAbonoCatarro(fecha);
+  return componerDescripcionAbonoCatarro(etiqueta, fecha);
+}
+
+function descripcionSiguePlantilla(descripcion, fecha, plantillaAnterior) {
+  const actual = String(descripcion || '').trim();
+  if (!actual) return true;
+  if (actual === formatearFechaAbonoCatarro(fecha)) return true;
+  return actual === plantillaAnterior;
+}
+
+// Cambia el tipo y recompone la descripción solo si todavía es la automática.
+export function aplicarMetodoPagoAbono(abono, metodoPago, metodoPagoOtro = '') {
+  const base = abono && typeof abono === 'object' ? abono : {};
+  const fecha = base.fechaAbono;
+  const plantillaAnterior = descripcionAutomaticaMetodoPago(base.metodoPago, base.metodoPagoOtro, fecha);
+  const otro = metodoPago === 'otro' ? String(metodoPagoOtro == null ? '' : metodoPagoOtro) : '';
+  const siguiente = {
+    ...base,
+    metodoPago,
+    metodoPagoOtro: metodoPago === 'otro' ? otro : '',
+  };
+  const actual = String(base.descripcion || '').trim();
+  if (descripcionSiguePlantilla(actual, fecha, plantillaAnterior)) {
+    siguiente.descripcion = descripcionAutomaticaMetodoPago(metodoPago, otro, fecha);
+  } else {
+    siguiente.descripcion = componerDescripcionAbonoCatarro(actual, fecha);
+  }
+  return siguiente;
+}
+
+export function errorMetodoPagoAbono(abono) {
+  if (!abonoUsaMetodoPago(abono)) return '';
+  if (!abono.metodoPago) return 'Elige el tipo de pago del abono.';
+  if (!ETIQUETA_POR_METODO[abono.metodoPago]) return 'Elige un tipo de pago válido.';
+  if (abono.metodoPago === 'otro' && !String(abono.metodoPagoOtro || '').trim()) {
+    return 'Escribe el tipo de pago.';
+  }
+  return '';
+}
+
+export function validarAbonosCatarro(abonos) {
+  const lista = abonos || [];
+  for (let indice = 0; indice < lista.length; indice += 1) {
+    const mensaje = errorMetodoPagoAbono(lista[indice]);
+    if (mensaje) return { valido: false, indice, mensaje };
+  }
+  return { valido: true, indice: -1, mensaje: '' };
+}
+
 export function crearAbonoCatarro(fecha = new Date(), monto = 0) {
   const fechaAbono = fechaISOEnMexico(fecha);
   return {
     descripcion: formatearFechaAbonoCatarro(fechaAbono),
     monto,
     fechaAbono,
+    metodoPago: '',
+    metodoPagoOtro: '',
   };
+}
+
+function descripcionNormalizadaAbono(abono) {
+  if (abonoUsaMetodoPago(abono) && abono.metodoPago) {
+    const soloFecha = formatearFechaAbonoCatarro(abono.fechaAbono);
+    const limpio = String(abono.descripcion || '').trim();
+    if (!limpio || limpio === soloFecha) {
+      return descripcionAutomaticaMetodoPago(abono.metodoPago, abono.metodoPagoOtro, abono.fechaAbono);
+    }
+    return componerDescripcionAbonoCatarro(limpio, abono.fechaAbono);
+  }
+  return componerDescripcionAbonoCatarro(abono.descripcion, abono.fechaAbono);
 }
 
 // Los abonos viejos no tienen fechaAbono: se devuelven tal cual.
 export function normalizarAbonoCatarro(abono) {
   if (!abono || typeof abono !== 'object' || !/^\d{4}-\d{2}-\d{2}$/.test(abono.fechaAbono || '')) return abono;
-  const descripcion = componerDescripcionAbonoCatarro(abono.descripcion, abono.fechaAbono);
+  const descripcion = descripcionNormalizadaAbono(abono);
   if (descripcion === abono.descripcion) return abono;
   return { ...abono, descripcion };
+}
+
+// Quita el texto de Otro cuando el tipo no lo usa, para no guardarlo de más.
+export function abonoCatarroParaGuardar(abono) {
+  const normalizado = normalizarAbonoCatarro(abono);
+  if (!abonoUsaMetodoPago(normalizado)) return normalizado;
+  const salida = { ...normalizado, metodoPago: normalizado.metodoPago };
+  if (normalizado.metodoPago === 'otro') salida.metodoPagoOtro = String(normalizado.metodoPagoOtro || '').trim();
+  else delete salida.metodoPagoOtro;
+  return salida;
 }
 
 export function fechaReferenciaAbono(abono, fechaCuenta) {
@@ -77,6 +185,7 @@ export function listarAbonosCuentasCatarro(cuentas) {
     (cuenta?.abonos || []).forEach((abono, indice) => {
       const monto = Number(abono?.monto);
       const descripcion = String(abono?.descripcion || '').trim();
+      const metodoPago = ETIQUETA_POR_METODO[abono?.metodoPago] ? abono.metodoPago : '';
       filas.push({
         id: `${cuenta?.id || fechaCuenta}-${indice}`,
         fechaCuenta,
@@ -84,6 +193,9 @@ export function listarAbonosCuentasCatarro(cuentas) {
         descripcion: descripcion || 'Sin descripción',
         fechaAbono: abono?.fechaAbono || null,
         fechaReferencia: fechaReferenciaAbono(abono, fechaCuenta),
+        metodoPago,
+        metodoPagoOtro: metodoPago === 'otro' ? String(abono?.metodoPagoOtro || '').trim() : '',
+        etiquetaMetodo: textoMetodoPagoVisible(abono),
         indice,
       });
     });
@@ -98,12 +210,14 @@ export function listarAbonosCuentasCatarro(cuentas) {
   return filas;
 }
 
-export function filtrarAbonosCatarro(abonos, { mes = '', desde = '', hasta = '' } = {}) {
+export function filtrarAbonosCatarro(abonos, { mes = '', desde = '', hasta = '', metodo = '' } = {}) {
   return (abonos || []).filter(abono => {
     const fecha = abono.fechaReferencia || abono.fechaCuenta || '';
     if (mes && !fecha.startsWith(mes)) return false;
     if (desde && (!fecha || fecha < desde)) return false;
     if (hasta && (!fecha || fecha > hasta)) return false;
+    if (metodo === 'sin-tipo') return !abono.metodoPago;
+    if (metodo && abono.metodoPago !== metodo) return false;
     return true;
   });
 }
