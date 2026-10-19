@@ -3867,6 +3867,68 @@ h4.cliente-header.ozuna-header {
   }
 }
 
+/* Tipografía amplia para consultar y capturar el resumen en pantalla. */
+@media screen {
+  .resumen-medidas {
+    max-width: 1100px;
+  }
+
+  .resumen-table th,
+  .resumen-table tbody tr td:nth-child(n) {
+    font-size: 20px;
+    line-height: 1.4;
+  }
+
+  .resumen-table tbody tr:not(.total-row) td:first-child {
+    font-size: 24px;
+    font-weight: 700;
+    overflow-wrap: anywhere;
+  }
+
+  .resumen-table td::before {
+    font-size: 16px;
+  }
+
+  .resumen-table .rendimiento-box {
+    width: 112px;
+    min-width: 112px;
+    max-width: 112px;
+    min-height: 52px;
+    font-size: 24px;
+  }
+
+  .resumen-table .rendimiento-total,
+  .resumen-table .checkbox-group label {
+    font-size: 20px;
+  }
+
+  .resumen-table .checkbox-group {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .resumen-table .checkbox-group input[type="radio"] {
+    width: 22px;
+    height: 22px;
+  }
+
+  .resumen-table .total-kilos-clickeable,
+  .resumen-table tr.total-row td:nth-child(n) {
+    font-size: 24px;
+  }
+
+  .resumen-table .kilos-refrigerados,
+  .resumen-table .kilos-faltantes {
+    font-size: 18px;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .resumen-table .cajas-result {
+    font-size: 28px;
+  }
+}
+
 </style> 
 
 <style scoped>
