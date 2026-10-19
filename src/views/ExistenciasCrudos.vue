@@ -55,6 +55,18 @@
       <div v-if="!isLoadingExistencias && Object.keys(existenciasFiltradasPorCuarto).length > 0" class="existencias-grid">
         <div v-for="(productos, proveedor) in existenciasFiltradasPorCuarto" :key="proveedor" class="proveedor-card">
           <h3>{{ proveedor }}</h3>
+          <div class="crudos-tarjetas-movil" :aria-label="`Productos de ${proveedor}`">
+            <button v-for="producto in productos" v-if="tieneKilosVisibles(producto.kilos)" :key="producto.clave"
+              type="button" class="crudo-tarjeta" aria-haspopup="dialog"
+              :aria-label="`Ver detalle de ${producto.nombre}, ${proveedor}, ${formatNumber(producto.kilos)} kg`"
+              @click="abrirDetalleCrudo(producto, proveedor, productos, $event.currentTarget)">
+              <span class="crudo-tarjeta-cuarto">{{ producto.cuarto || 's/c' }}</span>
+              <span class="crudo-tarjeta-nombre">{{ producto.nombre }}</span>
+              <span class="crudo-tarjeta-kilos">{{ formatNumber(producto.kilos) }} <small>kg</small></span>
+              <span v-if="tieneDato(producto.piezas)" class="crudo-tarjeta-piezas">Pcz: {{ producto.piezas }}</span>
+              <span class="crudo-tarjeta-detalle">Ver detalle <span aria-hidden="true">↗</span></span>
+            </button>
+          </div>
           <table class="productos-table" :aria-label="`Existencias de ${proveedor}`" role="table">
             <thead>
               <tr>
@@ -175,6 +187,9 @@
         <h3 v-if="tieneAlgunPrecioValido">Valor Total General: ${{ formatearValor(valorTotalGeneral) }}</h3>
       </div>
     </div>
+    <ModalDetalleCrudo v-if="detalleCrudo" :producto="detalleCrudo.producto" :proveedor="detalleCrudo.proveedor"
+      :solo-inventario="soloInventario" :mostrar-precio="detalleCrudo.mostrarPrecio" :disparador="detalleCrudo.disparador"
+      @cerrar="cerrarDetalleCrudo" @historial="accionDetalleCrudo('historial')" @cuarto="accionDetalleCrudo('cuarto')" />
     <div v-if="modalHistorial.abierto" class="modal-overlay" @click.self="cerrarModalHistorial">
       <div class="modal-content modal-historial-producto">
         <div class="modal-header">
@@ -286,6 +301,7 @@ import { db } from '@/firebase';
 import { collection, getDocs, getDoc, query, orderBy, doc, addDoc } from 'firebase/firestore';
 import moment from 'moment';
 import PapeleraService from '@/services/PapeleraService';
+import ModalDetalleCrudo from '@/components/ModalDetalleCrudo.vue';
 import GestionProveedoresCrudos from '@/components/GestionProveedoresCrudos.vue';
 import EntradasPorProveedorModal from '@/components/EntradasPorProveedorModal.vue';
 import RegistroCrudos from './RegistroCrudos.vue';
@@ -296,12 +312,14 @@ export default {
   name: 'ExistenciasCrudos',
   props: { soloInventario: { type: Boolean, default: false } },
   components: {
+    ModalDetalleCrudo,
     GestionProveedoresCrudos,
     EntradasPorProveedorModal,
     RegistroCrudos
   },
   data() {
     return {
+      detalleCrudo: null,
       registros: [],
       existenciasPorProveedor: {},
       isLoadingRegistros: true,
@@ -377,6 +395,22 @@ export default {
     }
   },
   methods: {
+    abrirDetalleCrudo(producto, proveedor, productos, disparador = null) {
+      this.detalleCrudo = { producto, proveedor, disparador, mostrarPrecio: this.tienePreciosValidos(productos) };
+      useUIStore().openModal('detalle-crudo');
+    },
+    cerrarDetalleCrudo() {
+      this.detalleCrudo = null;
+      useUIStore().closeModal();
+    },
+    accionDetalleCrudo(accion) {
+      const producto = this.detalleCrudo.producto;
+      this.cerrarDetalleCrudo();
+      this.$nextTick(() => {
+        if (accion === 'historial') this.abrirModalHistorialProducto(producto);
+        else this.onClickCuarto(producto);
+      });
+    },
     formatNumber,
     formatDate(fecha) {
       if (!fecha) return '';
@@ -1682,4 +1716,27 @@ h1, h2, h3 {
 }
 .asignar-cuarto { display: block; font-size: 12px; color: #3760b0; text-decoration: underline; }
 .medida-button:focus-visible, .cuarto-button:focus-visible { outline: 2px solid #3760b0; outline-offset: 3px; }
+
+.crudos-tarjetas-movil { display: none; }
+@media screen and (max-width: 768px) {
+  .proveedor-card > .productos-table { display: none; }
+  .crudos-tarjetas-movil { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 12px 0; }
+  .crudo-tarjeta { min-width: 0; display: flex; flex-direction: column; align-items: stretch; gap: 8px; text-align: left; padding: 12px; border: 1px solid #c4d4ec; border-radius: 16px; background: linear-gradient(150deg, #fff, #edf3fc); color: #213652; cursor: pointer; overflow-wrap: anywhere; font-family: inherit; box-shadow: 0 2px 6px #17376a0a; }
+  .crudo-tarjeta-cuarto { align-self: flex-start; max-width: 100%; padding: 3px 7px; border-radius: 8px; background: #e1eaf8; color: #3b5680; font-size: 12px; line-height: 1.4; }
+  .crudo-tarjeta-nombre { font-size: 15px; font-weight: 700; line-height: 1.3; }
+  .crudo-tarjeta-kilos { color: #28569f; font-size: 19px; line-height: 1.25; font-weight: 700; }
+  .crudo-tarjeta-kilos small { font-size: 12px; }
+  .crudo-tarjeta-piezas { font-size: 12px; color: #53647d; }
+  .crudo-tarjeta-detalle { margin-top: auto; padding-top: 9px; border-top: 1px solid #d6e1f2; display: flex; justify-content: space-between; gap: 4px; font-size: 12px; font-weight: 600; color: #315eae; }
+  .crudo-tarjeta:hover { border-color: #315eae; background: #edf3fc; }
+  .crudo-tarjeta:focus-visible { outline: 3px solid #e9a526; outline-offset: 2px; }
+}
+@media screen and (max-width: 360px) {
+  .existencias-crudos-container, .resumen-existencias { padding: 8px; }
+  .proveedor-card { padding: 8px; }
+  .crudos-tarjetas-movil { gap: 8px; }
+  .crudo-tarjeta { padding: 10px; }
+  .crudo-tarjeta-kilos { font-size: 17px; }
+}
+@media print { .crudos-tarjetas-movil { display: none !important; } }
 </style> 
