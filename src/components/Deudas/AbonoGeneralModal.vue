@@ -651,3 +651,37 @@ export default {
 
 @media(max-width:720px){ .modal-overlay{padding:8px;} .abono-general-modal{width:100%;max-height:97vh;} .provider-summary,.form-grid{grid-template-columns:1fr;} .provider-summary>div{border-right:0;border-bottom:1px solid rgba(0,255,136,.18);} .deuda-distribucion{grid-template-columns:34px 1fr auto;} .distribution-arrow{display:none;} .abono-aplicado{grid-column:2;} .result-badge{grid-column:3;grid-row:1;} .modal-actions{grid-template-columns:1fr 1fr;} .distribution-total{grid-column:1/-1;} }
 </style>
+<style scoped>
+/* Match the readable debt list and payment controls. */
+.abono-general-modal { font: 1.125rem/1.5 Arial, sans-serif; background: #07110c; }
+.abono-general-modal :focus-visible { outline: 3px solid #ffc247; outline-offset: 3px; }
+.terminal-title small, .provider-summary span, .distribution-total span { font-size: .9375rem; color: #b6d0bf; letter-spacing: 0; }
+.terminal-title h2 { font: 700 1.625rem/1.3 Arial, sans-serif; letter-spacing: 0; text-shadow: none; }
+.close-button { min-width: 44px; min-height: 44px; font-size: 2rem; }
+.provider-summary strong, .distribution-total strong { font-size: 1.5rem; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.provider-summary > div { min-width: 0; }
+.section-label h3 { font: 700 1.25rem/1.4 Arial, sans-serif; }
+.section-label small, .amount-field small, .saldo-actual, .saldo-restante { font-size: 1rem; color: #b6d0bf; }
+.form-grid { grid-template-columns: minmax(170px, 1fr) minmax(200px, 1.5fr) minmax(150px, 1fr); gap: 16px; }
+.form-group { min-width: 0; }
+.form-group label { font-size: 1rem; color: #c5ddce; text-transform: none; }
+.form-group input { width: 100%; min-width: 0; min-height: 48px; font: 1.125rem/1.5 Arial, sans-serif; }
+.form-group input::placeholder { color: #b6d0bf; opacity: 1; }
+.preview-empty, .preview-error, .fecha { font-size: 1.0625rem; }
+.preview-empty { color: #b6d0bf; }
+.deudas-list { max-height: 380px; }
+.monto-abono { font-size: 1.375rem; }
+.result-badge { font-size: .9375rem; text-transform: none; }
+.priority-number { font: 1rem/1.4 Arial, sans-serif; }
+.btn-cancelar, .btn-aplicar { min-height: 48px; font: 600 1rem/1.4 Arial, sans-serif; text-transform: none; }
+.btn-aplicar:disabled { color: #a8c8b3; opacity: 1; }
+@media (max-width: 800px) {
+  .form-grid, .provider-summary { grid-template-columns: minmax(0, 1fr); }
+  .deuda-distribucion { grid-template-columns: 34px minmax(0, 1fr); }
+  .distribution-arrow { display: none; }
+  .abono-aplicado, .result-badge { grid-column: 2; grid-row: auto; }
+  .result-badge { justify-self: start; }
+  .modal-actions { grid-template-columns: minmax(0, 1fr); }
+  .distribution-total { grid-column: auto; }
+}
+</style>

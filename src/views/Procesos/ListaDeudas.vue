@@ -87,13 +87,15 @@
               class="proveedor-color-circle" 
               :style="{ backgroundColor: grupo.proveedor.color }"
             ></div>
-            <h2
-               class="proveedor-nombre clickeable"
+            <h2 class="proveedor-nombre">
+              <button type="button" class="proveedor-filtro"
                @click="filtrarPorProveedor(grupo.proveedor.id)" 
+               :aria-pressed="filtroProveedor === grupo.proveedor.id"
                :title="filtroProveedor === grupo.proveedor.id ? 'Haz clic para quitar el filtro' : 'Haz clic para filtrar por este proveedor'"
              >
                {{ grupo.proveedor.nombre }}
-               <i class="fas fa-filter filter-icon"></i>
+               <i class="fas fa-filter filter-icon" aria-hidden="true"></i>
+              </button>
              </h2>
             <button
               type="button"
@@ -126,35 +128,35 @@
         
         <!-- Tabla de deudas del proveedor -->
         <div class="tabla-container-proveedor">
-          <table class="tabla-deudas-proveedor">
+          <table class="tabla-deudas-proveedor" role="table" :aria-label="`Deudas de ${grupo.proveedor.nombre}`">
             <thead>
-              <tr>
-                <th>Fecha</th>
-                <th>Monto Total</th>
-                <th>Saldo Pendiente</th>
-                <th>Estado</th>
-                <th>Acciones</th>
+              <tr role="row">
+                <th scope="col" role="columnheader">Fecha</th>
+                <th scope="col" role="columnheader">Monto Total</th>
+                <th scope="col" role="columnheader">Saldo Pendiente</th>
+                <th scope="col" role="columnheader">Estado</th>
+                <th scope="col" role="columnheader">Acciones</th>
               </tr>
             </thead>
             <tbody>
-              <tr v-for="deuda in grupo.deudas" :key="deuda.id" :class="{ 'deuda-pagada': deuda.estado === 'pagado' }">
-                <td>{{ formatearFecha(deuda.fecha) }}</td>
-                <td>${{ formatNumber(deuda.total) }}</td>
-                <td :class="{ sobrepago: deuda.saldoPendiente < 0 }">{{ deuda.saldoPendiente < 0 ? 'Sobrepago ' : '' }}${{ formatNumber(Math.abs(deuda.saldoPendiente || 0)) }}</td>
-                <td>
+              <tr v-for="deuda in grupo.deudas" :key="deuda.id" role="row" :class="{ 'deuda-pagada': deuda.estado === 'pagado' }">
+                <td data-label="Fecha" role="cell">{{ formatearFecha(deuda.fecha) }}</td>
+                <td data-label="Monto total" class="importe-deuda" role="cell">${{ formatNumber(deuda.total) }}</td>
+                <td data-label="Saldo pendiente" class="saldo-deuda" role="cell" :class="{ sobrepago: deuda.saldoPendiente < 0 }">{{ deuda.saldoPendiente < 0 ? 'Sobrepago ' : '' }}${{ formatNumber(Math.abs(deuda.saldoPendiente || 0)) }}</td>
+                <td data-label="Estado" role="cell">
                   <span :class="'estado-badge ' + deuda.estado">
                     {{ deuda.estado === 'pendiente' ? 'Pendiente' : 'Pagado' }}
                   </span>
                 </td>
-                <td class="acciones">
+                <td class="acciones" role="cell">
                   <button @click="verDetalle(deuda)" class="btn-detalle" :aria-label="`Ver detalle de la deuda del ${formatearFecha(deuda.fecha)}`">
                     <i class="fas fa-eye"></i><span>Detalle</span>
                   </button>
                   <button @click="agregarAbono(deuda)" class="btn-abono" :disabled="deuda.estado === 'pagado'" :aria-label="`Abonar a la deuda del ${formatearFecha(deuda.fecha)}`">
                     <i class="fas fa-money-bill"></i><span>Abonar</span>
                   </button>
-                  <button @click="eliminarDeuda(deuda)" class="btn-eliminar" aria-label="Eliminar deuda">
-                    <i class="fas fa-trash-alt"></i>
+                  <button @click="eliminarDeuda(deuda)" class="btn-eliminar" :aria-label="`Eliminar deuda del ${formatearFecha(deuda.fecha)} de ${grupo.proveedor.nombre}`">
+                    <i class="fas fa-trash-alt" aria-hidden="true"></i><span>Eliminar</span>
                   </button>
                 </td>
               </tr>
@@ -176,7 +178,7 @@
           <div class="deuda-info editable-container">
             <p>
               <strong>Proveedor:</strong> 
-              <span class="editable-field" @click="habilitarEdicionDeuda('proveedorNombre')">
+              <span class="editable-field" @click="habilitarEdicionDeuda('proveedorNombre')" @keyup.enter.self="habilitarEdicionDeuda('proveedorNombre')" @keydown.space.self.prevent="habilitarEdicionDeuda('proveedorNombre')" :tabindex="campoEditandoDeuda === 'proveedorNombre' ? -1 : 0" :role="campoEditandoDeuda === 'proveedorNombre' ? null : 'button'" aria-label="Editar proveedor">
                 <span v-if="!campoEditandoDeuda || campoEditandoDeuda !== 'proveedorNombre'">
                   {{ deudaSeleccionada?.proveedorNombre }}
                 </span>
@@ -186,13 +188,14 @@
                   @blur="guardarCambiosDeuda" 
                   @keyup.enter="guardarCambiosDeuda"
                   ref="inputProveedorNombre"
+                  aria-label="Proveedor"
                   type="text"
                 >
               </span>
             </p>
             <p>
               <strong>Fecha:</strong> 
-              <span class="editable-field" @click="habilitarEdicionDeuda('fecha')">
+              <span class="editable-field" @click="habilitarEdicionDeuda('fecha')" @keyup.enter.self="habilitarEdicionDeuda('fecha')" @keydown.space.self.prevent="habilitarEdicionDeuda('fecha')" :tabindex="campoEditandoDeuda === 'fecha' ? -1 : 0" :role="campoEditandoDeuda === 'fecha' ? null : 'button'" aria-label="Editar fecha">
                 <span v-if="!campoEditandoDeuda || campoEditandoDeuda !== 'fecha'">
                   {{ formatearFecha(deudaSeleccionada?.fecha) }}
                 </span>
@@ -202,6 +205,7 @@
                   @blur="guardarCambiosDeuda" 
                   @keyup.enter="guardarCambiosDeuda"
                   ref="inputFecha"
+                  aria-label="Fecha"
                   type="date"
                 >
               </span>
@@ -214,8 +218,9 @@
             </p>
           </div>
           
-          <h3>Productos <span class="small-text">(haga clic en un campo para editarlo)</span></h3>
-          <table class="tabla-productos">
+          <h3>Productos <span class="small-text">(Haz clic o usa Tab y Enter para editar un campo)</span></h3>
+          <p id="productos-scroll-hint" class="table-scroll-hint">Desliza la tabla para ver todas las columnas.</p>
+          <table class="tabla-productos" tabindex="0" aria-label="Productos de la deuda" aria-describedby="productos-scroll-hint">
             <thead>
               <tr>
                 <th>Kilos</th>
@@ -227,7 +232,7 @@
             </thead>
             <tbody>
               <tr v-for="(producto, index) in productos" :key="index">
-                <td @click="habilitarEdicionProducto(index, 'kilos')" class="editable-cell">
+                <td @click="habilitarEdicionProducto(index, 'kilos')" @keyup.enter.self="habilitarEdicionProducto(index, 'kilos')" @keydown.space.self.prevent="habilitarEdicionProducto(index, 'kilos')" tabindex="0" aria-label="Editar kilos" class="editable-cell">
                   <span v-if="!producto.editando || producto.campoEditando !== 'kilos'">
                     {{ formatNumber(producto.kilos) }}
                   </span>
@@ -237,11 +242,12 @@
                     @blur="guardarCambiosProducto(index)" 
                     @keyup.enter="guardarCambiosProducto(index)"
                     ref="inputKilos"
+                    aria-label="Kilos"
                     type="number"
                     step="0.01"
                   >
                 </td>
-                <td @click="habilitarEdicionProducto(index, 'producto')" class="editable-cell">
+                <td @click="habilitarEdicionProducto(index, 'producto')" @keyup.enter.self="habilitarEdicionProducto(index, 'producto')" @keydown.space.self.prevent="habilitarEdicionProducto(index, 'producto')" tabindex="0" aria-label="Editar producto" class="editable-cell">
                   <span v-if="!producto.editando || producto.campoEditando !== 'producto'">
                     {{ producto.producto }}
                   </span>
@@ -251,10 +257,11 @@
                     @blur="guardarCambiosProducto(index)" 
                     @keyup.enter="guardarCambiosProducto(index)"
                     ref="inputProducto"
+                    aria-label="Producto"
                     type="text"
                   >
                 </td>
-                <td @click="habilitarEdicionProducto(index, 'precio')" class="editable-cell">
+                <td @click="habilitarEdicionProducto(index, 'precio')" @keyup.enter.self="habilitarEdicionProducto(index, 'precio')" @keydown.space.self.prevent="habilitarEdicionProducto(index, 'precio')" tabindex="0" aria-label="Editar precio" class="editable-cell">
                   <span v-if="!producto.editando || producto.campoEditando !== 'precio'">
                     ${{ formatNumber(producto.precio) }}
                   </span>
@@ -264,13 +271,14 @@
                     @blur="guardarCambiosProducto(index)" 
                     @keyup.enter="guardarCambiosProducto(index)"
                     ref="inputPrecio"
+                    aria-label="Precio por kilo"
                     type="number"
                     step="0.01"
                   >
                 </td>
                 <td>${{ formatNumber(producto.total) }}</td>
                 <td>
-                  <button @click="eliminarProducto(index)" class="btn-eliminar-sm">
+                  <button @click="eliminarProducto(index)" class="btn-eliminar-sm" :aria-label="`Eliminar producto ${producto.producto}`">
                     <i class="fas fa-trash-alt"></i>
                   </button>
                 </td>
@@ -308,7 +316,7 @@
             </thead>
             <tbody>
               <tr v-for="(abono, index) in abonos" :key="index">
-                <td @click="habilitarEdicionAbono(index, 'fecha')" class="editable-cell">
+                <td @click="habilitarEdicionAbono(index, 'fecha')" @keyup.enter.self="habilitarEdicionAbono(index, 'fecha')" @keydown.space.self.prevent="habilitarEdicionAbono(index, 'fecha')" tabindex="0" aria-label="Editar fecha" class="editable-cell">
                   <span v-if="!abono.editando || abono.campoEditando !== 'fecha'">
                     {{ formatearFecha(abono.fecha) }}
                   </span>
@@ -318,10 +326,11 @@
                     @blur="guardarCambiosAbono(index)" 
                     @keyup.enter="guardarCambiosAbono(index)"
                     ref="inputFechaAbono"
+                    aria-label="Fecha del abono"
                     type="date"
                   >
                 </td>
-                <td @click="habilitarEdicionAbono(index, 'descripcion')" class="editable-cell">
+                <td @click="habilitarEdicionAbono(index, 'descripcion')" @keyup.enter.self="habilitarEdicionAbono(index, 'descripcion')" @keydown.space.self.prevent="habilitarEdicionAbono(index, 'descripcion')" tabindex="0" aria-label="Editar descripcion" class="editable-cell">
                   <span v-if="!abono.editando || abono.campoEditando !== 'descripcion'">
                     {{ abono.descripcion }}
                   </span>
@@ -331,10 +340,11 @@
                     @blur="guardarCambiosAbono(index)" 
                     @keyup.enter="guardarCambiosAbono(index)"
                     ref="inputDescripcionAbono"
+                    aria-label="Descripción del abono"
                     type="text"
                   >
                 </td>
-                <td @click="habilitarEdicionAbono(index, 'monto')" class="editable-cell">
+                <td @click="habilitarEdicionAbono(index, 'monto')" @keyup.enter.self="habilitarEdicionAbono(index, 'monto')" @keydown.space.self.prevent="habilitarEdicionAbono(index, 'monto')" tabindex="0" aria-label="Editar monto" class="editable-cell">
                   <span v-if="!abono.editando || abono.campoEditando !== 'monto'">
                     ${{ formatNumber(abono.monto) }}
                   </span>
@@ -344,12 +354,13 @@
                     @blur="guardarCambiosAbono(index)" 
                     @keyup.enter="guardarCambiosAbono(index)"
                     ref="inputMontoAbono"
+                    aria-label="Monto del abono"
                     type="number"
                     step="0.01"
                   >
                 </td>
                 <td>
-                  <button @click="eliminarAbono(index)" class="btn-eliminar-sm">
+                  <button @click="eliminarAbono(index)" class="btn-eliminar-sm" :aria-label="`Eliminar abono del ${formatearFecha(abono.fecha)}`">
                     <i class="fas fa-trash-alt"></i>
                   </button>
                 </td>
@@ -3349,3 +3360,5 @@ export default {
 @media(max-width:800px){.debt-detail-modal .deuda-info{grid-template-columns:1fr}.debt-detail-modal .deuda-info p{border-right:0;border-bottom:1px solid rgba(57,246,160,.24)}.debt-detail-modal .deuda-info p:last-child{border-bottom:0}.debt-detail-modal .modal-body{padding:14px}.debt-detail-modal .tabla-productos,.debt-detail-modal .tabla-abonos{display:block;overflow-x:auto}}
 @media(max-width:620px){.debts-shell{width:min(100% - 22px,1240px);padding-top:12px}.terminal-nav>span,.online-status{display:none}.terminal-window-bar{grid-template-columns:1fr auto}.header-command{padding:20px 17px;gap:9px}.header-command h1{font-size:2.15rem}.primary-actions{align-items:stretch;flex-direction:column}.terminal-button{width:100%;box-sizing:border-box}.fecha-inputs{grid-template-columns:1fr}.fecha-separator{display:none}.abonos-actions{flex-direction:column}.proveedor-header{align-items:flex-start;flex-direction:column}.proveedor-title{align-items:flex-start;flex-wrap:wrap}.provider-general-payment{flex-basis:100%;justify-content:center}.proveedor-resumen{width:100%;justify-content:space-between}.acciones button span{display:none}.balance-preview{grid-template-columns:1fr}.balance-preview>i{transform:rotate(90deg);justify-self:center}.specific-payment-modal .form-actions{flex-direction:column}.specific-payment-modal .form-actions button{width:100%}}
 </style>
+
+<style scoped src="./deudas-legibilidad.css"></style>
