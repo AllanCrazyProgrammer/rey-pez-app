@@ -453,10 +453,15 @@
             @toggle-divisor="toggleDivisor(medida, $event)"
           />
           <p v-if="!calcularTotalesPorMedida().length" class="medidas-vacio">Sin medidas en este pedido.</p>
-          <p class="medidas-total-general">
-            <span>Total</span>
-            <strong>{{ calcularTotalKilos() }} kg</strong>
-          </p>
+          <div class="medidas-total-general" :class="{ 'con-maquila': totalesResumen.tieneMaquila }" aria-label="Totales de pedidos limpios sin Robalo">
+            <div v-for="total in totalesResumenVisibles" :key="total.nombre" class="medidas-total-item">
+              <span class="medidas-total-label">{{ total.nombre }}</span>
+              <strong>
+                <span class="medidas-total-valor">{{ total.kilos.toLocaleString('en-US', { maximumFractionDigits: 2 }) }}</span>
+                <span class="medidas-total-unidad">kg</span>
+              </strong>
+            </div>
+          </div>
         </div>
         <div v-else class="resumen-dia-panel">
           <p v-if="resumenSacadaHoy.loading" class="resumen-dia-estado">
@@ -620,6 +625,7 @@ import ImagenCajasModal from '@/components/ImagenCajasModal.vue'
 import TarjetaMedidaResumen from './components/TarjetaMedidaResumen.vue'
 import { colorParaEtiqueta } from '@/utils/coloresEtiquetas'
 import { fondoMedidaPorNombre } from '@/utils/coloresMedidas'
+import { resumirTotalesPedidoLimpio } from '@/utils/resumenTotalesPedidoLimpio'
 import { formatearAgua, aguaEsPersonalizada } from '@/utils/factorAgua'
 import { normalizarFechaValor } from '@/utils/dateUtils'
 import {
@@ -748,6 +754,27 @@ export default {
       acomodandoKilosRefrigerados: false,
       mensajeAcomodoRefrigerados: '',
       errorAcomodoRefrigerados: false
+    }
+  },
+  computed: {
+    totalesResumen() {
+      return resumirTotalesPedidoLimpio({
+        tipo: 'limpio',
+        otilio: this.pedidoOtilio,
+        catarro: this.pedidoCatarro,
+        joselito: this.pedidoJoselito,
+        lorena: this.pedidoLorena,
+        ozuna: this.pedidoOzuna,
+        clientesTemporales: this.clientesTemporales
+      })
+    },
+    totalesResumenVisibles() {
+      const totales = [{ nombre: 'Venta', kilos: this.totalesResumen.venta }]
+      if (this.totalesResumen.tieneMaquila) {
+        totales.push({ nombre: 'Maquila', kilos: this.totalesResumen.maquila })
+      }
+      totales.push({ nombre: 'Total', kilos: this.totalesResumen.total })
+      return totales
     }
   },
   created() {
@@ -1920,11 +1947,6 @@ export default {
     esMedidaGranja(medida) {
       // Verifica si la medida comienza con un número
       return /^\d/.test(medida);
-    },
-    calcularTotalKilos() {
-      const totales = this.calcularTotalesPorMedida();
-      const sumaTotal = totales.reduce((sum, medida) => sum + medida.total, 0);
-      return sumaTotal.toLocaleString(); // Formateamos con comas para mejor legibilidad
     },
     abrirModalKilosRefrigerados(medida) {
       this.medidaSeleccionada = medida.medida;
@@ -3961,9 +3983,9 @@ h4.cliente-header.ozuna-header {
 
 .medidas-total-general {
   grid-column: 1 / -1;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
   gap: 8px;
   margin: 0;
   padding: 12px 14px;
@@ -3975,14 +3997,44 @@ h4.cliente-header.ozuna-header {
   font-weight: 800;
 }
 
+.medidas-total-general.con-maquila {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.medidas-total-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 0;
+  gap: 4px;
+  text-align: center;
+}
+
+.medidas-total-label,
+.medidas-total-unidad {
+  font-size: 0.75em;
+}
+
+.medidas-total-valor {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
 @media screen {
   .medidas-total-general {
     font-size: 24px;
-    flex-wrap: wrap;
   }
 }
 
 .medidas-total-general strong {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: baseline;
+  min-width: 0;
+  max-width: 100%;
+  gap: 0 0.25em;
   font-variant-numeric: tabular-nums;
 }
 
