@@ -3957,12 +3957,6 @@ h4.cliente-header.ozuna-header {
   }
 }
 
-@media screen and (max-width: 480px) {
-  .medidas-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
 @media print {
   .medidas-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));

@@ -359,6 +359,10 @@ export default {
   .total-kilos-clickeable { font-size: 24px; }
 }
 
+@media screen and (max-width: 480px) {
+  .campo > span { overflow-wrap: anywhere; }
+}
+
 @media print {
   .tarjeta-medida {
     box-shadow: none;
