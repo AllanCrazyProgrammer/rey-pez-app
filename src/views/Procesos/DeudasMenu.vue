@@ -134,8 +134,8 @@
             </div>
 
             <div :class="['quick-supplier-balance', { clear: proveedor.totalPendiente <= 0 }]">
-              <span>SALDO</span>
-              <strong>${{ formatNumber(proveedor.totalPendiente) }}</strong>
+              <span>{{ proveedor.totalPendiente < 0 ? 'SOBREPAGO' : 'SALDO' }}</span>
+              <strong>${{ formatNumber(Math.abs(proveedor.totalPendiente)) }}</strong>
             </div>
 
             <div class="quick-supplier-actions">
@@ -411,6 +411,7 @@
 
 <script>
 import { db } from '@/firebase';
+import { proveedorTieneDeudas, redondear } from '@/utils/deudas';
 import { collection, addDoc, getDocs, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import BackButton from '@/components/BackButton.vue';
 import AbonoGeneralModal from '@/components/Deudas/AbonoGeneralModal.vue';
@@ -468,7 +469,7 @@ export default {
         .map(proveedor => {
           const deudasProveedor = this.deudas.filter(deuda => deuda.proveedorId === proveedor.id);
           const totalPendiente = deudasProveedor.reduce(
-            (total, deuda) => total + Math.max(0, Number(deuda.saldoPendiente) || 0),
+            (total, deuda) => redondear(total + (Number(deuda.saldoPendiente) || 0)),
             0
           );
           const notasPendientes = deudasProveedor.filter(
@@ -613,6 +614,10 @@ export default {
     async deleteProveedor(proveedorId) {
       if (confirm('¿Estás seguro de que quieres eliminar este proveedor? Esta acción no se puede deshacer.')) {
         try {
+          if (await proveedorTieneDeudas(proveedorId)) {
+            alert('No se puede eliminar: este proveedor tiene deudas registradas. Elimina o reasigna sus deudas primero.');
+            return;
+          }
           await deleteDoc(doc(db, 'proveedoresDeuda', proveedorId));
           this.loadProveedores();
           alert('Proveedor eliminado exitosamente');

@@ -63,6 +63,7 @@
 
 <script>
 import { db } from '@/firebase';
+import { aplicarAbonoGeneral as aplicarAbonoGeneralDeudas } from '@/utils/deudas';
 import { collection, doc, getDocs, query, where, writeBatch } from 'firebase/firestore';
 import { formatNumber, formatearFecha } from '@/utils/formatters';
 
@@ -221,49 +222,27 @@ export default {
     
     async aplicarAbonoGeneral() {
       if (!this.puedeAplicar) return;
-      
       try {
         this.guardando = true;
-        const batch = writeBatch(db);
-        const fechaCreacion = new Date();
-        const abonoGeneralId = doc(collection(db, 'abonosGenerales')).id;
-
-        // La distribución ya está ordenada FIFO. Todas las escrituras se confirman juntas.
-        for (const distribucion of this.distribucionCalculada) {
-          if (distribucion.montoAbono > 0) {
-            const abonoRef = doc(collection(db, 'deudas', distribucion.deudaId, 'abonos'));
-            batch.set(abonoRef, {
-              descripcion: `${this.nuevoAbono.descripcion} (Abono General)`,
-              monto: distribucion.montoAbono,
-              fecha: this.nuevoAbono.fecha,
-              fechaCreacion,
-              esAbonoGeneral: true,
-              abonoGeneralId
-            });
-
-            const nuevoSaldoPendiente = distribucion.saldoRestante;
-            const nuevoEstado = nuevoSaldoPendiente <= 0 ? 'pagado' : 'pendiente';
-            batch.update(doc(db, 'deudas', distribucion.deudaId), {
-              saldoPendiente: nuevoSaldoPendiente,
-              estado: nuevoEstado
-            });
-          }
-        }
-
-        await batch.commit();
-
+        // La distribución FIFO se recalcula dentro de la transacción con los saldos reales,
+        // así dos abonos simultáneos no se pisan.
+        const ids = [...this.deudasPendientes].sort(this.compararDeudasFIFO).map(d => d.id);
+        await aplicarAbonoGeneralDeudas(ids, {
+          monto: this.nuevoAbono.monto,
+          descripcion: this.nuevoAbono.descripcion,
+          fecha: this.nuevoAbono.fecha
+        });
         alert(`Abono general de $${this.formatNumber(this.nuevoAbono.monto)} aplicado correctamente`);
         this.$emit('abono-aplicado');
         this.$emit('cerrar');
-        
       } catch (error) {
         console.error('Error al aplicar abono general:', error);
         alert('Error al aplicar el abono general: ' + error.message);
       } finally {
         this.guardando = false;
       }
-    },
-    
+    }
+
   },
   
   watch: {
