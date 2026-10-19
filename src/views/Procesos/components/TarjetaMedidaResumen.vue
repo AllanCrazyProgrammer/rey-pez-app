@@ -334,6 +334,31 @@ export default {
   .kilos-faltantes { font-size: 11px; }
 }
 
+/* Fuentes amplias en pantalla sin modificar el formato impreso. */
+@media screen {
+  .tarjeta-franja { padding: 12px; }
+  .tarjeta-franja h3 { font-size: 24px; }
+  .tarjeta-cuerpo { gap: 12px; padding: 12px; }
+  .kilos-refrigerados,
+  .kilos-faltantes { font-size: 16px; padding: 5px 8px; }
+  .campo,
+  .cajas-linea { font-size: 16px; }
+  .rendimiento-box {
+    max-width: 120px;
+    min-height: 48px;
+    font-size: 24px;
+  }
+  .rendimiento-total,
+  .checkbox-group label { font-size: 20px; }
+  .checkbox-group label { min-height: 44px; }
+  .checkbox-group input { width: 22px; height: 22px; flex-shrink: 0; }
+  .cajas-linea { flex-wrap: wrap; }
+  .cajas-result,
+  .cajas-result.cajas-faltantes { font-size: 28px; }
+  .tarjeta-pie { font-size: 18px; padding: 10px 12px; flex-wrap: wrap; }
+  .total-kilos-clickeable { font-size: 24px; }
+}
+
 @media print {
   .tarjeta-medida {
     box-shadow: none;
