@@ -24,18 +24,29 @@
               placeholder="Nombre de la medida" 
               class="medida-input"
             >
-            <button @click="agregarMedida" class="add-btn">Agregar</button>
+            <label class="color-control">
+              Color PDF
+              <input type="color" :value="colorBaseMedida(newMedida)" @input="newMedida.colorPdf = $event.target.value" aria-label="Color PDF de la nueva medida">
+            </label>
+            <button @click="agregarMedida" :disabled="guardandoAlgunColor" class="add-btn">Agregar</button>
           </div>
+          <span v-if="newMedida.nombre" class="medida-muestra" :style="{ backgroundColor: fondoMedida(newMedida) }">{{ newMedida.nombre }}</span>
         </div>
 
         <!-- Lista de medidas -->
         <div class="medidas-list">
+          <p class="color-ayuda">Cada medida tiene un fondo distinto con texto negro. Los tonos repetidos o demasiado parecidos se reasignan automáticamente. Si eliges un color, debe distinguirse de los demás. Los cambios se guardan automáticamente.</p>
+          <p v-if="estadoColor" class="color-estado" role="status">{{ estadoColor }}</p>
           <div class="medidas-grid">
             <div v-for="medida in medidasOrdenadas" :key="medida.id" class="medida-card">
-              <span class="medida-nombre">{{ medida.nombre }}</span>
-              <button @click="eliminarMedida(medida.id)" class="delete-btn" title="Eliminar medida">
+              <span class="medida-nombre medida-muestra" :style="{ backgroundColor: fondoMedida(medida) }">{{ medida.nombre }}</span>
+              <button @click="eliminarMedida(medida.id)" :disabled="guardandoColores[medida.id]" class="delete-btn" title="Eliminar medida" :aria-label="`Eliminar medida ${medida.nombre}`">
                 &times;
               </button>
+              <label class="color-control color-medida">
+                {{ guardandoColores[medida.id] ? 'Guardando…' : 'Color PDF' }}
+                <input type="color" :value="colorBaseMedida(medida)" :disabled="guardandoAlgunColor" @change="guardarColorMedida(medida, $event)" :aria-label="`Color PDF de ${medida.nombre}`">
+              </label>
             </div>
           </div>
         </div>
@@ -50,7 +61,8 @@
 
 <script>
 import { db } from '@/firebase'
-import { collection, addDoc, getDocs, deleteDoc, doc, query, orderBy } from 'firebase/firestore'
+import { collection, addDoc, getDocs, deleteDoc, doc, query, orderBy, updateDoc } from 'firebase/firestore'
+import { colorBaseMedida, fondoDeColor, medidaConColorSimilar } from '@/utils/coloresMedidas'
 
 export default {
   name: 'MedidasModal',
@@ -58,13 +70,19 @@ export default {
     return {
       showModal: false,
       medidas: [],
+      guardandoColores: {},
+      estadoColor: '',
       newMedida: {
         tipo: 'granja',
-        nombre: ''
+        nombre: '',
+        colorPdf: ''
       }
     }
   },
   computed: {
+    guardandoAlgunColor() {
+      return Object.keys(this.guardandoColores).length > 0
+    },
     medidasOrdenadas() {
       // Separar medidas especiales y de granja
       const medidasEspeciales = this.medidas.filter(m => m.tipo === 'especial')
@@ -85,6 +103,38 @@ export default {
     }
   },
   methods: {
+    colorBaseMedida(medida) {
+      if (medida === this.newMedida && medida.colorPdf) return medida.colorPdf
+      return colorBaseMedida(medida, this.medidas)
+    },
+    fondoMedida(medida) {
+      return fondoDeColor(this.colorBaseMedida(medida))
+    },
+    async guardarColorMedida(medida, event) {
+      const input = event.target
+      const colorPdf = input.value
+      if (Object.keys(this.guardandoColores).length || !/^#[0-9a-f]{6}$/i.test(colorPdf)) return
+      const similar = medidaConColorSimilar(colorPdf, medida.nombre, this.medidas)
+      if (similar) {
+        input.value = this.colorBaseMedida(medida)
+        this.estadoColor = `Ese color se parece al de ${similar.nombre}. Elige otro tono más diferente.`
+        return
+      }
+      this.$set(this.guardandoColores, medida.id, true)
+      this.estadoColor = ''
+      try {
+        await updateDoc(doc(db, 'medidas', medida.id), { colorPdf })
+        this.$set(medida, 'colorPdf', colorPdf)
+        this.estadoColor = `Color de ${medida.nombre} guardado.`
+        this.$emit('medidas-actualizadas', this.medidas)
+      } catch (error) {
+        input.value = this.colorBaseMedida(medida)
+        this.estadoColor = `No se pudo guardar el color de ${medida.nombre}. Intenta nuevamente.`
+        console.error('Error al guardar color de medida:', error)
+      } finally {
+        this.$delete(this.guardandoColores, medida.id)
+      }
+    },
     async cargarMedidas() {
       try {
         const medidasRef = collection(db, 'medidas')
@@ -100,24 +150,34 @@ export default {
       }
     },
     async agregarMedida() {
+      if (Object.keys(this.guardandoColores).length) return
       if (!this.newMedida.nombre) {
         alert('Por favor ingrese el nombre de la medida')
         return
       }
 
+      const colorPdf = this.colorBaseMedida(this.newMedida)
+      const similar = medidaConColorSimilar(colorPdf, this.newMedida.nombre, this.medidas)
+      if (similar) {
+        this.estadoColor = `Ese color se parece al de ${similar.nombre}. Elige otro tono más diferente.`
+        return
+      }
+
       try {
-        const docRef = await addDoc(collection(db, 'medidas'), {
+        const nuevaMedida = {
           tipo: this.newMedida.tipo,
-          nombre: this.newMedida.nombre
-        })
+          nombre: this.newMedida.nombre,
+          colorPdf
+        }
+        const docRef = await addDoc(collection(db, 'medidas'), nuevaMedida)
 
         this.medidas.push({
           id: docRef.id,
-          tipo: this.newMedida.tipo,
-          nombre: this.newMedida.nombre
+          ...nuevaMedida
         })
 
         this.newMedida.nombre = ''
+        this.newMedida.colorPdf = ''
       } catch (error) {
         console.error('Error al agregar medida:', error)
         alert('Error al guardar la medida')
@@ -213,6 +273,7 @@ export default {
 }
 
 .medida-input {
+  min-width: 0;
   padding: 8px;
   border: 1px solid #ddd;
   border-radius: 4px;
@@ -243,14 +304,31 @@ export default {
   background-color: #f5f5f5;
   padding: 10px;
   border-radius: 4px;
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
   justify-content: space-between;
   align-items: center;
 }
 
+.medida-muestra {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 4px;
+  color: #000;
+  overflow-wrap: anywhere;
+}
+
+.add-medida-form > .medida-muestra { margin-top: 10px; }
+.color-ayuda, .color-estado { font-size: 14px; color: #444; line-height: 1.5; }
+.color-control { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #444; margin: 0; }
+.color-medida { grid-column: 1 / -1; justify-content: space-between; }
+.color-control input { width: 44px; height: 34px; padding: 2px; border: 1px solid #bbb; border-radius: 4px; background: white; cursor: pointer; }
+.color-control input:disabled { cursor: wait; }
+
 .medida-nombre {
   font-size: 16px;
-  color: #333;
+  color: #000;
 }
 
 .delete-btn {
@@ -297,4 +375,4 @@ export default {
     padding: 15px;
   }
 }
-</style> 
+</style>

@@ -80,7 +80,7 @@
             <i class="fas fa-sync-alt"></i>
             {{ generandoPreviewPdf ? 'Actualizando...' : 'Aplicar escala' }}
           </button>
-          <button type="button" class="btn-download-preview" @click="generarPDF">
+          <button type="button" class="btn-download-preview" :disabled="generandoPreviewPdf" @click="generarPDF">
             <i class="fas fa-download"></i> Descargar PDF
           </button>
         </div>
@@ -128,7 +128,7 @@
               <td><input type="checkbox" v-model="item.completado" @change="actualizarCompletado('otilio', index, item.completado)" class="pedido-checkbox"></td>
               <td>{{ item.kilos }}<i v-if="item.esTara" class="tara-marca">T</i></td>
               <td :class="{ 'text-orange': esMedidaMacuil(item.medida) }">
-                {{ item.medida }}
+                <span class="medida-sombreada" :style="estiloMedida(item.medida)">{{ item.medida }}</span>
                 <span v-if="item.etiqueta" class="etiqueta-tag" :style="estiloEtiquetaItem(item)">{{ textoEtiquetaItem(item) }}</span>
                 <span v-if="item.proveedor" class="proveedor-tag">{{ item.proveedor }}</span>
               </td>
@@ -172,7 +172,7 @@
                 <td><input type="checkbox" v-model="item.completado" @change="actualizarCompletado('joselito', index, item.completado)" class="pedido-checkbox"></td>
                 <td>{{ item.kilos }}<i v-if="item.esTara" class="tara-marca">T</i></td>
                 <td :class="{ 'text-orange': esMedidaMacuil(item.medida) }">
-                  {{ item.medida }}
+                  <span class="medida-sombreada" :style="estiloMedida(item.medida)">{{ item.medida }}</span>
                   <span v-if="item.etiqueta" class="etiqueta-tag" :style="estiloEtiquetaItem(item)">{{ textoEtiquetaItem(item) }}</span>
                   <span v-if="item.proveedor" class="proveedor-tag">{{ item.proveedor }}</span>
                 </td>
@@ -214,7 +214,7 @@
                 <td><input type="checkbox" v-model="item.completado" @change="actualizarCompletado('lorena', index, item.completado)" class="pedido-checkbox"></td>
                 <td>{{ item.kilos }}<i v-if="item.esTara" class="tara-marca">T</i></td>
                 <td :class="{ 'text-orange': esMedidaMacuil(item.medida) }">
-                  {{ item.medida }}
+                  <span class="medida-sombreada" :style="estiloMedida(item.medida)">{{ item.medida }}</span>
                   <span v-if="item.etiqueta" class="etiqueta-tag" :style="estiloEtiquetaItem(item)">{{ textoEtiquetaItem(item) }}</span>
                   <span v-if="item.proveedor" class="proveedor-tag">{{ item.proveedor }}</span>
                 </td>
@@ -257,7 +257,7 @@
                   <td><input type="checkbox" v-model="item.completado" @change="actualizarCompletado('catarro', index, item.completado)" class="pedido-checkbox"></td>
                   <td>{{ item.kilos }}<i v-if="item.esTara" class="tara-marca">T</i></td>
                   <td :class="{ 'text-orange': esMedidaMacuil(item.medida) }">
-                    {{ item.medida }}
+                    <span class="medida-sombreada" :style="estiloMedida(item.medida)">{{ item.medida }}</span>
                     <span v-if="item.etiqueta" class="etiqueta-tag" :style="estiloEtiquetaItem(item)">{{ textoEtiquetaItem(item) }}</span>
                     <span v-if="item.proveedor" class="proveedor-tag">{{ item.proveedor }}</span>
                   </td>
@@ -299,7 +299,7 @@
                   <td><input type="checkbox" v-model="item.completado" @change="actualizarCompletado('ozuna', index, item.completado)" class="pedido-checkbox"></td>
                   <td>{{ item.kilos }}<i v-if="item.esTara" class="tara-marca">T</i></td>
                   <td :class="{ 'text-orange': esMedidaMacuil(item.medida) }">
-                    {{ item.medida }}
+                    <span class="medida-sombreada" :style="estiloMedida(item.medida)">{{ item.medida }}</span>
                     <span v-if="item.etiqueta" class="etiqueta-tag" :style="estiloEtiquetaItem(item)">{{ textoEtiquetaItem(item) }}</span>
                     <span v-if="item.proveedor" class="proveedor-tag">{{ item.proveedor }}</span>
                   </td>
@@ -344,7 +344,7 @@
                 <td><input type="checkbox" v-model="item.completado" class="pedido-checkbox"></td>
                 <td>{{ item.kilos }}<i v-if="item.esTara" class="tara-marca">T</i></td>
                 <td :class="{ 'text-orange': esMedidaMacuil(item.medida) }">
-                  {{ item.medida }}
+                  <span class="medida-sombreada" :style="estiloMedida(item.medida)">{{ item.medida }}</span>
                   <span v-if="item.etiqueta" class="etiqueta-tag" :style="estiloEtiquetaItem(item)">{{ textoEtiquetaItem(item) }}</span>
                   <span v-if="item.proveedor" class="proveedor-tag">{{ item.proveedor }}</span>
                 </td>
@@ -619,6 +619,7 @@ import ResumenCalculadora from '@/components/ResumenCalculadora.vue'
 import ImagenCajasModal from '@/components/ImagenCajasModal.vue'
 import TarjetaMedidaResumen from './components/TarjetaMedidaResumen.vue'
 import { colorParaEtiqueta } from '@/utils/coloresEtiquetas'
+import { fondoMedidaPorNombre } from '@/utils/coloresMedidas'
 import { formatearAgua, aguaEsPersonalizada } from '@/utils/factorAgua'
 import { normalizarFechaValor } from '@/utils/dateUtils'
 import {
@@ -777,7 +778,7 @@ export default {
     // Aplicar estados guardados a los pedidos
     this.aplicarEstadosCompletado();
     this.cargarResumenSacadaHoy();
-    this.cargarMedidasCatalogo();
+    this._cargaMedidasCatalogo = this.cargarMedidasCatalogo();
     this.cargarRefriAnterior();
   },
   methods: {
@@ -833,8 +834,18 @@ export default {
       try {
         const querySnapshot = await getDocs(collection(db, 'medidas'));
         this.medidasCatalogo = querySnapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+        return true;
       } catch (e) {
         console.error('Error al cargar medidas:', e);
+        return false;
+      }
+    },
+    async prepararColoresPDF() {
+      // Esperar el catálogo evita imprimir colores por defecto mientras llegan los guardados.
+      const cargadas = await this._cargaMedidasCatalogo;
+      if (!cargadas) {
+        this._cargaMedidasCatalogo = this.cargarMedidasCatalogo();
+        if (!await this._cargaMedidasCatalogo) throw new Error('No se pudieron cargar los colores de las medidas');
       }
     },
     async abrirModalMedidasSacadaPedido() {
@@ -1300,6 +1311,25 @@ export default {
     obtenerMedidaVisible(medida) {
       return this.esMedidaMacuil(medida) ? '' : (medida || '');
     },
+    estiloMedida(medida) {
+      if (this.esMedidaMacuil(medida)) return {};
+      return {
+        backgroundColor: this.colorMedida(medida),
+        color: '#000000'
+      };
+    },
+    colorMedida(medida) {
+      return fondoMedidaPorNombre(medida, this.medidasCatalogo);
+    },
+    bloqueMedidaPDF(medida, fontSize) {
+      const text = this.obtenerMedidaVisible(medida);
+      return {
+        text,
+        fontSize,
+        color: '#000000',
+        background: this.colorMedida(medida)
+      };
+    },
     tipoParaImpresion(tipo) {
       const tipoNormalizado = (tipo || '').toString().trim();
       return tipoNormalizado === '1.4' || tipoNormalizado === '1.5'
@@ -1351,7 +1381,7 @@ export default {
         },
         {
           stack: [
-            { text: this.obtenerMedidaVisible(item.medida), fontSize: fontSize * 2 },
+            this.bloqueMedidaPDF(item.medida, fontSize * 2),
             (item.etiqueta || item.proveedor) ? {
               columns: [
                 ...(item.etiqueta ? [{ ...this.bloqueEtiquetaPDF(item, fontSize), width: 'auto' }] : []),
@@ -1627,11 +1657,18 @@ export default {
 
       return docDefinition;
     },
-    generarPDF() {
-      const docDefinition = this.construirDefinicionPDF();
-      crearDocumentoPedidoLimpio(docDefinition).download('Ped-limpio-' + this.fecha + '.pdf');
+    async generarPDF() {
+      try {
+        await this.prepararColoresPDF();
+        const docDefinition = this.construirDefinicionPDF();
+        crearDocumentoPedidoLimpio(docDefinition).download('Ped-limpio-' + this.fecha + '.pdf');
+      } catch (error) {
+        console.error('Error al generar PDF:', error);
+        alert('No se pudo generar el PDF con los colores de las medidas. Intenta nuevamente.');
+      }
     },
-    crearBlobPDF() {
+    async crearBlobPDF() {
+      await this.prepararColoresPDF();
       return crearPreviewPedidoLimpio(this.construirDefinicionPDF());
     },
     liberarPreviewPdfUrl() {
@@ -1693,7 +1730,7 @@ export default {
         },
         { 
           stack: [
-            { text: this.obtenerMedidaVisible(item.medida), fontSize: fontSize * 2 },
+            this.bloqueMedidaPDF(item.medida, fontSize * 2),
             (item.tipo && item.tipo !== 'S/H20') ? {
               text: (item.tipo === 'C/H20' && aguaEsPersonalizada(item))
                 ? [{ text: this.tipoParaImpresion(item.tipo) }, { text: '  Neto ' + formatearAgua(item), background: '#FF0000', color: '#FFFFFF' }]
@@ -3403,6 +3440,11 @@ h4.cliente-header.ozuna-header {
 .text-blue,
 .text-blue.compact {
   color: #0000FF;
+}
+
+.medida-sombreada {
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
 }
 
 .text-orange {
