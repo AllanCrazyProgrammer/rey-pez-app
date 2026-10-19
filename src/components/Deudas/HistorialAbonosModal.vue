@@ -250,6 +250,7 @@
 
 <script>
 import { db } from '@/firebase';
+import { eliminarAbono as eliminarAbonoDeuda } from '@/utils/deudas';
 import { collection, getDocs, query, where, orderBy, deleteDoc, doc, updateDoc, getDoc } from 'firebase/firestore';
 import { formatNumber, formatearFecha } from '@/utils/formatters';
 
@@ -654,99 +655,19 @@ export default {
     
     async eliminarAbono(abono) {
       try {
-        // Obtener la deuda actual para calcular el nuevo saldo
-        const deudaRef = doc(db, 'deudas', abono.deudaId);
-        const deudaDoc = await getDoc(deudaRef);
-        
-        if (!deudaDoc.exists()) {
-          alert('Error: No se encontró la deuda asociada a este abono.');
-          return;
-        }
-        
-        const deudaData = deudaDoc.data();
-        const saldoActual = deudaData.saldoPendiente || 0;
-        const montoTotal = deudaData.total || 0;
-        const nuevoSaldo = saldoActual + abono.monto; // Devolver el monto al saldo
-        
-        // Determinar el nuevo estado de la deuda basado en el nuevo saldo
-        let nuevoEstado;
-        if (nuevoSaldo <= 0) {
-          nuevoEstado = 'pagado'; // Si no queda saldo, está pagado
-        } else {
-          nuevoEstado = 'pendiente'; // Si queda saldo, está pendiente
-        }
-        
-        console.log('=== ELIMINANDO ABONO ===');
-        console.log('Deuda ID:', abono.deudaId);
-        console.log('Monto total de la deuda:', montoTotal);
-        console.log('Saldo antes de eliminar:', saldoActual);
-        console.log('Monto del abono eliminado:', abono.monto);
-        console.log('Nuevo saldo calculado:', nuevoSaldo);
-        console.log('Estado actual:', deudaData.estado);
-        console.log('Nuevo estado calculado:', nuevoEstado);
-        
-        // Eliminar el abono de la subcolección
-        const abonoRef = doc(db, 'deudas', abono.deudaId, 'abonos', abono.id);
-        await deleteDoc(abonoRef);
-        console.log('Abono eliminado de Firebase');
-        
-        // Crear el objeto de actualización con validación adicional
-        const actualizacionDeuda = {
-          saldoPendiente: Math.max(0, nuevoSaldo), // Asegurar que el saldo no sea negativo
-          estado: nuevoEstado,
-          fechaActualizacion: new Date().toISOString()
-        };
-        
-        // Si el saldo nuevo es mayor que el total, algo está mal, usar el total como saldo
-        if (nuevoSaldo > montoTotal) {
-          console.warn('Saldo calculado mayor que el total, ajustando...');
-          actualizacionDeuda.saldoPendiente = montoTotal;
-          actualizacionDeuda.estado = 'pendiente';
-        }
-        
-        console.log('Datos que se actualizarán en Firebase:', actualizacionDeuda);
-        
-        // Actualizar la deuda con el nuevo saldo y estado
-        await updateDoc(deudaRef, actualizacionDeuda);
-        console.log('Deuda actualizada en Firebase exitosamente');
-        
-        // Verificar que la actualización se aplicó correctamente
-        const deudaVerificacion = await getDoc(deudaRef);
-        if (deudaVerificacion.exists()) {
-          const datosVerificacion = deudaVerificacion.data();
-          console.log('=== VERIFICACIÓN POST-ACTUALIZACIÓN ===');
-          console.log('Estado en Firebase:', datosVerificacion.estado);
-          console.log('Saldo Pendiente en Firebase:', datosVerificacion.saldoPendiente);
-          console.log('Fecha actualización:', datosVerificacion.fechaActualizacion);
-          
-          if (datosVerificacion.estado !== nuevoEstado) {
-            console.error('¡ALERTA! El estado no se actualizó correctamente en Firebase');
-            console.error('Esperado:', nuevoEstado, 'Encontrado:', datosVerificacion.estado);
-          }
-          
-          if (Math.abs(datosVerificacion.saldoPendiente - actualizacionDeuda.saldoPendiente) > 0.01) {
-            console.error('¡ALERTA! El saldo pendiente no se actualizó correctamente en Firebase');
-            console.error('Esperado:', actualizacionDeuda.saldoPendiente, 'Encontrado:', datosVerificacion.saldoPendiente);
-          }
-        }
-        
-        // Mostrar mensaje de éxito con información detallada
-        alert(`Abono eliminado exitosamente.\n\nDetalles:\n• Nuevo saldo pendiente: $${this.formatNumber(actualizacionDeuda.saldoPendiente)}\n• Estado: ${nuevoEstado.toUpperCase()}\n• Fecha: ${new Date().toLocaleString('es-MX')}`);
-        
-        // Recargar el historial de abonos
+        // Borra el abono y recalcula total − abonos en la misma transacción.
+        const res = await eliminarAbonoDeuda(abono.deudaId, abono.id);
+        alert(`Abono eliminado exitosamente.\n\nDetalles:\n• Nuevo saldo pendiente: $${this.formatNumber(res.saldoPendiente)}\n• Estado: ${res.estado.toUpperCase()}`);
         await this.cargarHistorialAbonos();
-        
-        // Emitir evento para actualizar la lista de deudas en el componente padre
         this.$emit('abono-eliminado', {
           deudaId: abono.deudaId,
           proveedorId: this.proveedor.id,
-          nuevoSaldo: actualizacionDeuda.saldoPendiente,
-          nuevoEstado: nuevoEstado
+          nuevoSaldo: res.saldoPendiente,
+          nuevoEstado: res.estado
         });
-        
       } catch (error) {
         console.error('Error al eliminar el abono:', error);
-        alert('Error al eliminar el abono. Por favor, intente de nuevo.');
+        alert('Error al eliminar el abono: ' + error.message);
       }
     },
 

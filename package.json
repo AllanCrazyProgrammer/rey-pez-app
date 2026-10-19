@@ -26,7 +26,8 @@
     "android:apk": "node scripts/build-android.cjs",
     "test:android:inventarios": "node scripts/test-inventarios-android.cjs",
     "test:android:arranque": "node scripts/test-inventarios-build.cjs",
-    "test:sacadas:dias": "node scripts/test-sacadas-dias.cjs"
+    "test:sacadas:dias": "node scripts/test-sacadas-dias.cjs",
+    "test:deudas": "node --test scripts/test-deudas-saldo.cjs"
   },
   "dependencies": {
     "@capacitor/android": "6.1.2",

@@ -140,7 +140,7 @@
               <tr v-for="deuda in grupo.deudas" :key="deuda.id" :class="{ 'deuda-pagada': deuda.estado === 'pagado' }">
                 <td>{{ formatearFecha(deuda.fecha) }}</td>
                 <td>${{ formatNumber(deuda.total) }}</td>
-                <td>${{ formatNumber(deuda.saldoPendiente) }}</td>
+                <td :class="{ sobrepago: deuda.saldoPendiente < 0 }">{{ deuda.saldoPendiente < 0 ? 'Sobrepago ' : '' }}${{ formatNumber(Math.abs(deuda.saldoPendiente || 0)) }}</td>
                 <td>
                   <span :class="'estado-badge ' + deuda.estado">
                     {{ deuda.estado === 'pendiente' ? 'Pendiente' : 'Pagado' }}
@@ -459,6 +459,14 @@
 
 <script>
 import { db } from '@/firebase';
+import {
+  registrarAbono,
+  agregarProducto as agregarProductoDeuda,
+  actualizarProducto,
+  eliminarProducto as eliminarProductoDeuda,
+  validarProducto,
+  totalProducto
+} from '@/utils/deudas';
 import { collection, addDoc, getDocs, query, where, orderBy, doc, getDoc, updateDoc, deleteDoc, writeBatch } from 'firebase/firestore';
 import BackButton from '@/components/BackButton.vue';
 import PreciosProveedorPanel from '@/components/Deudas/Precios/PreciosProveedorPanel.vue';
@@ -752,59 +760,40 @@ export default {
       };
       this.showAbonoModal = true;
     },
+    aplicarResultadoDeuda(deudaId, res) {
+      const cambios = { total: res.total, saldoPendiente: res.saldoPendiente, estado: res.estado };
+      this.deudas = this.deudas.map(d => (d.id === deudaId ? { ...d, ...cambios } : d));
+      if (this.deudaSeleccionada && this.deudaSeleccionada.id === deudaId) {
+        Object.assign(this.deudaSeleccionada, cambios);
+      }
+    },
+    async recargarDetalleSiAbierto() {
+      if (this.showDetalleModal && this.deudaSeleccionada) {
+        await this.verDetalle(this.deudaSeleccionada);
+      }
+    },
     async guardarAbono() {
       if (!this.nuevoAbono.descripcion || !this.nuevoAbono.monto) {
         alert('Por favor complete todos los campos del abono');
         return;
       }
-      
-      if (this.nuevoAbono.monto <= 0) {
+      if (!(Number(this.nuevoAbono.monto) > 0)) {
         alert('El monto del abono debe ser mayor a cero');
         return;
       }
-      
-      if (this.nuevoAbono.monto > this.deudaSeleccionada.saldoPendiente) {
-        alert('El monto del abono no puede ser mayor al saldo pendiente');
-        return;
-      }
-      
       try {
         this.guardando = true;
-        const batch = writeBatch(db);
-        const abonoRef = doc(collection(db, 'deudas', this.deudaSeleccionada.id, 'abonos'));
-        batch.set(abonoRef, {
+        // El saldo se recalcula en una transacción con los abonos reales de Firestore;
+        // si el abono dejara un sobrepago, la transacción se rechaza.
+        const res = await registrarAbono(this.deudaSeleccionada.id, {
           descripcion: this.nuevoAbono.descripcion,
           monto: this.nuevoAbono.monto,
           fecha: this.nuevoAbono.fecha,
-          fechaCreacion: new Date(),
           esAbonoGeneral: false
         });
-
-        const nuevoSaldoPendiente = this.deudaSeleccionada.saldoPendiente - this.nuevoAbono.monto;
-        const nuevoEstado = nuevoSaldoPendiente <= 0 ? 'pagado' : 'pendiente';
-        batch.update(doc(db, 'deudas', this.deudaSeleccionada.id), {
-          saldoPendiente: nuevoSaldoPendiente,
-          estado: nuevoEstado
-        });
-
-        await batch.commit();
-        
-        // Actualizar la deuda en el array local
-        this.deudas = this.deudas.map(d => {
-          if (d.id === this.deudaSeleccionada.id) {
-            return {
-              ...d,
-              saldoPendiente: nuevoSaldoPendiente,
-              estado: nuevoEstado
-            };
-          }
-          return d;
-        });
-        
-        this.deudaSeleccionada.saldoPendiente = nuevoSaldoPendiente;
-        this.deudaSeleccionada.estado = nuevoEstado;
-        
+        this.aplicarResultadoDeuda(this.deudaSeleccionada.id, res);
         this.showAbonoModal = false;
+        await this.recargarDetalleSiAbierto();
         alert('Abono registrado correctamente');
       } catch (error) {
         console.error("Error al guardar abono: ", error);
@@ -813,45 +802,30 @@ export default {
         this.guardando = false;
       }
     },
+
     async eliminarDeuda(deuda) {
       if (confirm(`¿Está seguro que desea eliminar la deuda de ${deuda.proveedorNombre}? Esta acción no se puede deshacer.`)) {
         try {
           this.cargando = true;
-          
-          // Eliminar los productos de la deuda
+          // Productos, abonos y la deuda se eliminan en un solo batch.
           const productosSnapshot = await getDocs(collection(db, 'deudas', deuda.id, 'productos'));
-          const batch = writeBatch(db);
-          
-          productosSnapshot.forEach((documento) => {
-            batch.delete(doc(db, 'deudas', deuda.id, 'productos', documento.id));
-          });
-          
-          // Eliminar los abonos de la deuda
           const abonosSnapshot = await getDocs(collection(db, 'deudas', deuda.id, 'abonos'));
-          
-          abonosSnapshot.forEach((documento) => {
-            batch.delete(doc(db, 'deudas', deuda.id, 'abonos', documento.id));
-          });
-          
-          // Ejecutar el batch para eliminar todos los documentos relacionados
+          const batch = writeBatch(db);
+          productosSnapshot.forEach(documento => batch.delete(documento.ref));
+          abonosSnapshot.forEach(documento => batch.delete(documento.ref));
+          batch.delete(doc(db, 'deudas', deuda.id));
           await batch.commit();
-          
-          // Eliminar la deuda principal
-          await deleteDoc(doc(db, 'deudas', deuda.id));
-          
-          // Actualizar la lista de deudas localmente
           this.deudas = this.deudas.filter(d => d.id !== deuda.id);
-          
           alert('Deuda eliminada correctamente');
         } catch (error) {
-          console.error("Error al eliminar la deuda: ", error);
+          console.error("Error al eliminar deuda: ", error);
           alert('Error al eliminar la deuda: ' + error.message);
         } finally {
           this.cargando = false;
         }
       }
     },
-    // Métodos para edición de deuda
+
     habilitarEdicionDeuda(campo) {
       this.campoEditandoDeuda = campo;
       if (campo === 'proveedorNombre') {
@@ -930,171 +904,45 @@ export default {
     async guardarCambiosProducto(index) {
       const producto = this.productos[index];
       if (!producto.editando) return;
-      
-      // Recalcular total
-      if (producto.campoEditando === 'kilos' || producto.campoEditando === 'precio') {
-        producto.total = producto.kilos * producto.precio;
+      const error = validarProducto(producto);
+      if (error) {
+        alert(error);
+        return;
       }
-      
       try {
-        // Actualizar en Firestore
-        await updateDoc(doc(db, 'deudas', this.deudaSeleccionada.id, 'productos', producto.id), {
-          kilos: producto.kilos,
-          producto: producto.producto,
-          precio: producto.precio,
-          total: producto.total
-        });
-        
-        // Actualizar el total de la deuda
-        const nuevoTotal = this.productos.reduce((sum, p) => sum + p.total, 0);
-        const nuevoSaldoPendiente = nuevoTotal - this.totalAbonos;
-        
-        await updateDoc(doc(db, 'deudas', this.deudaSeleccionada.id), {
-          total: nuevoTotal,
-          saldoPendiente: nuevoSaldoPendiente,
-          estado: nuevoSaldoPendiente <= 0 ? 'pagado' : 'pendiente'
-        });
-        
-        // Actualizar deuda local
-        this.deudaSeleccionada.total = nuevoTotal;
-        this.deudaSeleccionada.saldoPendiente = nuevoSaldoPendiente;
-        this.deudaSeleccionada.estado = nuevoSaldoPendiente <= 0 ? 'pagado' : 'pendiente';
-        
-        // Actualizar en la lista principal
-        this.deudas = this.deudas.map(d => {
-          if (d.id === this.deudaSeleccionada.id) {
-            return {
-              ...d,
-              total: nuevoTotal,
-              saldoPendiente: nuevoSaldoPendiente,
-              estado: nuevoSaldoPendiente <= 0 ? 'pagado' : 'pendiente'
-            };
-          }
-          return d;
-        });
-        
-        // Desactivar modo edición
+        this.guardando = true;
+        const res = await actualizarProducto(this.deudaSeleccionada.id, producto.id, producto);
+        this.aplicarResultadoDeuda(this.deudaSeleccionada.id, res);
+        producto.total = totalProducto(producto.kilos, producto.precio);
         producto.editando = false;
         producto.campoEditando = null;
       } catch (error) {
         console.error("Error al actualizar producto: ", error);
         alert('Error al guardar cambios del producto: ' + error.message);
-      }
-    },
-    
-    async agregarProducto() {
-      if (!this.nuevoProducto.kilos || !this.nuevoProducto.producto || !this.nuevoProducto.precio) {
-        alert('Por favor complete todos los campos del producto');
-        return;
-      }
-      
-      try {
-        this.guardando = true;
-        
-        const total = this.nuevoProducto.kilos * this.nuevoProducto.precio;
-        
-        // Guardar en Firestore
-        const productoRef = await addDoc(collection(db, 'deudas', this.deudaSeleccionada.id, 'productos'), {
-          kilos: this.nuevoProducto.kilos,
-          producto: this.nuevoProducto.producto,
-          precio: this.nuevoProducto.precio,
-          total: total
-        });
-        
-        // Agregar a la lista local
-        this.productos.push({
-          id: productoRef.id,
-          kilos: this.nuevoProducto.kilos,
-          producto: this.nuevoProducto.producto,
-          precio: this.nuevoProducto.precio,
-          total: total,
-          editando: false,
-          campoEditando: null
-        });
-        
-        // Actualizar el total de la deuda
-        const nuevoTotal = this.productos.reduce((sum, p) => sum + p.total, 0);
-        const nuevoSaldoPendiente = nuevoTotal - this.totalAbonos;
-        
-        await updateDoc(doc(db, 'deudas', this.deudaSeleccionada.id), {
-          total: nuevoTotal,
-          saldoPendiente: nuevoSaldoPendiente,
-          estado: nuevoSaldoPendiente <= 0 ? 'pagado' : 'pendiente'
-        });
-        
-        // Actualizar deuda local
-        this.deudaSeleccionada.total = nuevoTotal;
-        this.deudaSeleccionada.saldoPendiente = nuevoSaldoPendiente;
-        this.deudaSeleccionada.estado = nuevoSaldoPendiente <= 0 ? 'pagado' : 'pendiente';
-        
-        // Actualizar en la lista principal
-        this.deudas = this.deudas.map(d => {
-          if (d.id === this.deudaSeleccionada.id) {
-            return {
-              ...d,
-              total: nuevoTotal,
-              saldoPendiente: nuevoSaldoPendiente,
-              estado: nuevoSaldoPendiente <= 0 ? 'pagado' : 'pendiente'
-            };
-          }
-          return d;
-        });
-        
-        // Limpiar formulario
-        this.nuevoProducto = {
-          kilos: null,
-          producto: '',
-          precio: null
-        };
-      } catch (error) {
-        console.error("Error al agregar producto: ", error);
-        alert('Error al agregar producto: ' + error.message);
+        await this.recargarDetalleSiAbierto();
       } finally {
         this.guardando = false;
       }
     },
-    
+
+    async agregarProducto() {
+      const error = validarProducto(this.nuevoProducto);
+      if (error) {
+        alert(error);
+        return;
+      }
+      await this.agregarProductoDirecto(this.nuevoProducto);
+      this.nuevoProducto = { kilos: null, producto: '', precio: null };
+    },
+
     async eliminarProducto(index) {
       if (!confirm('¿Está seguro de eliminar este producto?')) return;
-      
       const producto = this.productos[index];
-      
       try {
         this.guardando = true;
-        
-        // Eliminar de Firestore
-        await deleteDoc(doc(db, 'deudas', this.deudaSeleccionada.id, 'productos', producto.id));
-        
-        // Eliminar de la lista local
-        this.productos.splice(index, 1);
-        
-        // Actualizar el total de la deuda
-        const nuevoTotal = this.productos.reduce((sum, p) => sum + p.total, 0);
-        const nuevoSaldoPendiente = nuevoTotal - this.totalAbonos;
-        
-        await updateDoc(doc(db, 'deudas', this.deudaSeleccionada.id), {
-          total: nuevoTotal,
-          saldoPendiente: nuevoSaldoPendiente,
-          estado: nuevoSaldoPendiente <= 0 ? 'pagado' : 'pendiente'
-        });
-        
-        // Actualizar deuda local
-        this.deudaSeleccionada.total = nuevoTotal;
-        this.deudaSeleccionada.saldoPendiente = nuevoSaldoPendiente;
-        this.deudaSeleccionada.estado = nuevoSaldoPendiente <= 0 ? 'pagado' : 'pendiente';
-        
-        // Actualizar en la lista principal
-        this.deudas = this.deudas.map(d => {
-          if (d.id === this.deudaSeleccionada.id) {
-            return {
-              ...d,
-              total: nuevoTotal,
-              saldoPendiente: nuevoSaldoPendiente,
-              estado: nuevoSaldoPendiente <= 0 ? 'pagado' : 'pendiente'
-            };
-          }
-          return d;
-        });
+        const res = await eliminarProductoDeuda(this.deudaSeleccionada.id, producto.id);
+        this.aplicarResultadoDeuda(this.deudaSeleccionada.id, res);
+        await this.recargarDetalleSiAbierto();
       } catch (error) {
         console.error("Error al eliminar producto: ", error);
         alert('Error al eliminar producto: ' + error.message);
@@ -1102,8 +950,7 @@ export default {
         this.guardando = false;
       }
     },
-    
-    // Métodos para edición de abonos
+
     habilitarEdicionAbono(index, campo) {
       this.abonos = this.abonos.map((abono, i) => {
         if (i === index) {
@@ -1423,56 +1270,16 @@ export default {
     },
     
     async agregarProductoDirecto(producto) {
+      const error = validarProducto(producto);
+      if (error) {
+        alert(error);
+        return;
+      }
       try {
         this.guardando = true;
-        
-        // Guardar en Firestore
-        const productoRef = await addDoc(collection(db, 'deudas', this.deudaSeleccionada.id, 'productos'), {
-          kilos: producto.kilos,
-          producto: producto.producto,
-          precio: producto.precio,
-          total: producto.total
-        });
-        
-        // Agregar a la lista local
-        this.productos.push({
-          id: productoRef.id,
-          kilos: producto.kilos,
-          producto: producto.producto,
-          precio: producto.precio,
-          total: producto.total,
-          editando: false,
-          campoEditando: null
-        });
-        
-        // Actualizar el total de la deuda
-        const nuevoTotal = this.productos.reduce((sum, p) => sum + p.total, 0);
-        const nuevoSaldoPendiente = nuevoTotal - this.totalAbonos;
-        
-        await updateDoc(doc(db, 'deudas', this.deudaSeleccionada.id), {
-          total: nuevoTotal,
-          saldoPendiente: nuevoSaldoPendiente,
-          estado: nuevoSaldoPendiente <= 0 ? 'pagado' : 'pendiente'
-        });
-        
-        // Actualizar deuda local
-        this.deudaSeleccionada.total = nuevoTotal;
-        this.deudaSeleccionada.saldoPendiente = nuevoSaldoPendiente;
-        this.deudaSeleccionada.estado = nuevoSaldoPendiente <= 0 ? 'pagado' : 'pendiente';
-        
-        // Actualizar en la lista principal
-        this.deudas = this.deudas.map(d => {
-          if (d.id === this.deudaSeleccionada.id) {
-            return {
-              ...d,
-              total: nuevoTotal,
-              saldoPendiente: nuevoSaldoPendiente,
-              estado: nuevoSaldoPendiente <= 0 ? 'pagado' : 'pendiente'
-            };
-          }
-          return d;
-        });
-        
+        const res = await agregarProductoDeuda(this.deudaSeleccionada.id, producto);
+        this.aplicarResultadoDeuda(this.deudaSeleccionada.id, res);
+        await this.recargarDetalleSiAbierto();
       } catch (error) {
         console.error("Error al agregar producto: ", error);
         alert('Error al agregar producto: ' + error.message);
@@ -1480,6 +1287,7 @@ export default {
         this.guardando = false;
       }
     }
+
   },
   watch: {
     // Resetear página cuando cambien los filtros

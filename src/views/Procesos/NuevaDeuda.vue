@@ -160,6 +160,7 @@
 
 <script>
 import { db } from '@/firebase';
+import { calcularSaldo, totalProducto, redondear, validarProducto } from '@/utils/deudas';
 import { collection, getDocs, doc, writeBatch } from 'firebase/firestore';
 import BackButton from '@/components/BackButton.vue';
 import ProductoSelector from '@/components/Deudas/ProductoSelector.vue';
@@ -187,14 +188,17 @@ export default {
       const opciones = { year: 'numeric', month: 'long', day: 'numeric' };
       return fecha.toLocaleDateString('es-ES', opciones);
     },
+    resumenSaldo() {
+      return calcularSaldo(this.items, this.abonos);
+    },
     totalGeneral() {
-      return this.items.reduce((sum, item) => sum + item.total, 0);
+      return this.resumenSaldo.total;
     },
     totalAbonos() {
-      return this.abonos.reduce((sum, abono) => sum + (abono.monto || 0), 0);
+      return this.resumenSaldo.totalAbonos;
     },
     saldoPendiente() {
-      return this.totalGeneral - this.totalAbonos;
+      return this.resumenSaldo.saldoPendiente;
     },
     abonosValidos() {
       return this.totalAbonos <= this.totalGeneral && this.abonos.every(abono => (
@@ -251,7 +255,7 @@ export default {
         kilos: item.kilos,
         producto: item.producto,
         precio: item.precio,
-        total: item.total,
+        total: totalProducto(item.kilos, item.precio),
         editando: false,
         campoEditando: null
       });
@@ -279,7 +283,12 @@ export default {
     finalizarEdicion(index) {
       const item = this.items[index];
       // Recalcular el total
-      item.total = item.kilos * item.precio;
+      const error = validarProducto(item);
+      if (error) {
+        alert(error);
+        return;
+      }
+      item.total = totalProducto(item.kilos, item.precio);
       
       // Finalizar edición
       item.editando = false;
@@ -306,6 +315,12 @@ export default {
         return;
       }
 
+      const productoInvalido = this.items.map(validarProducto).find(Boolean);
+      if (productoInvalido) {
+        alert(productoInvalido);
+        return;
+      }
+
       if (!this.abonosValidos) {
         alert('Revise los abonos iniciales. Todos deben tener fecha, descripción y un monto válido sin superar el total de la deuda.');
         return;
@@ -322,9 +337,9 @@ export default {
           proveedorNombre: this.getNombreProveedor(),
           fecha: this.fechaSeleccionada,
           fechaCreacion: new Date(),
-          total: this.totalGeneral,
-          saldoPendiente: this.saldoPendiente,
-          estado: this.saldoPendiente > 0 ? 'pendiente' : 'pagado'
+          total: this.resumenSaldo.total,
+          saldoPendiente: this.resumenSaldo.saldoPendiente,
+          estado: this.resumenSaldo.estado
         });
 
         for (const item of this.items) {
@@ -333,7 +348,7 @@ export default {
             kilos: item.kilos,
             producto: item.producto,
             precio: item.precio,
-            total: item.total
+            total: totalProducto(item.kilos, item.precio)
           });
         }
 
@@ -341,7 +356,7 @@ export default {
           const abonoRef = doc(collection(db, 'deudas', deudaRef.id, 'abonos'));
           batch.set(abonoRef, {
             descripcion: abono.descripcion,
-            monto: Number(abono.monto),
+            monto: redondear(abono.monto),
             fecha: abono.fecha,
             fechaCreacion: new Date(),
             esAbonoGeneral: false
