@@ -5537,6 +5537,7 @@ input {
   .rendimientos-title-block { width: 100%; }
   .header-actions { width: 100%; justify-content: flex-start; }
   .header-actions button { flex: 1 1 105px; justify-content: center; }
+  .header-actions .btn-pesadas { flex-basis: 148px; white-space: nowrap; }
 }
 
 @media (max-width: 768px) {
