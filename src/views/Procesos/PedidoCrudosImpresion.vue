@@ -31,7 +31,15 @@
               {{ cliente }}
             </td>
             <td v-for="columna in obtenerColumnasConDatos()" :key="columna">
-              {{ pedidos[cliente][columna.toLowerCase()] || '' }}
+              <label v-if="pedidos[cliente][columna.toLowerCase()]" class="tara-preparada">
+                {{ pedidos[cliente][columna.toLowerCase()] }}
+                <input
+                  v-model="tarasPreparadas[claveTara(cliente, columna)]"
+                  type="checkbox"
+                  :aria-label="`Taras preparadas de ${cliente}, ${formatearMedidaPedidoCrudo(columna)}`"
+                >
+                <span class="casilla-impresa" aria-hidden="true"></span>
+              </label>
             </td>
           </tr>
           <tr class="fila-totales">
@@ -48,6 +56,13 @@
           </tr>
         </tbody>
       </table>
+      <div class="barcos">
+        <label v-for="columna in obtenerColumnasConDatos()" :key="columna" class="barco-fila">
+          <span>{{ formatearMedidaPedidoCrudo(columna) }} — Barco:</span>
+          <input v-model="barcos[columna]" type="text" class="barco-input">
+          <span class="barco-impreso">{{ barcos[columna] }}</span>
+        </label>
+      </div>
     </div>
   </div>
 </template>
@@ -72,8 +87,17 @@ export default {
       required: true
     }
   },
+  data() {
+    return {
+      tarasPreparadas: {},
+      barcos: {}
+    }
+  },
   methods: {
     formatearMedidaPedidoCrudo,
+    claveTara(cliente, columna) {
+      return JSON.stringify([cliente, columna])
+    },
     obtenerClientesConDatos() {
       return Object.keys(this.pedidos).filter(cliente => {
         return Object.values(this.pedidos[cliente]).some(valor => {
@@ -127,12 +151,26 @@ export default {
       const clientesConDatos = this.obtenerClientesConDatos()
       const columnasConDatos = this.obtenerColumnasConDatos()
       const diaSemana = this.obtenerDiaSemana(this.fecha)
+      const fontSize = columnasConDatos.length > 4 ? 28 : 34
       
       const body = clientesConDatos.map(cliente => {
         const fila = [cliente]
         columnasConDatos.forEach(columna => {
           const valor = this.pedidos[cliente][columna.toLowerCase()] || ''
-          fila.push({ text: valor.toString(), alignment: 'center' })
+          const casilla = [{ type: 'rect', x: 0, y: 0, w: 10, h: 10, lineWidth: 1 }]
+          if (this.tarasPreparadas[this.claveTara(cliente, columna)]) {
+            casilla.push(
+              { type: 'line', x1: 2, y1: 5, x2: 4, y2: 8, lineWidth: 1 },
+              { type: 'line', x1: 4, y1: 8, x2: 8, y2: 2, lineWidth: 1 }
+            )
+          }
+          fila.push(valor ? {
+            columns: [
+              { text: valor.toString(), alignment: 'center', width: '*' },
+              { canvas: casilla, width: 10, margin: [0, fontSize / 2 - 5, 0, 0] }
+            ],
+            columnGap: 3
+          } : { text: '' })
         })
         return fila
       })
@@ -144,7 +182,6 @@ export default {
 
       // Calcular el tamaño de la tabla basado en el número de columnas
       const tableWidth = headers.length > 5 ? '100%' : 'auto'
-      const fontSize = headers.length > 5 ? 28 : 34
 
       const estilosCeldas = {}
       clientesConDatos.forEach((cliente, index) => {
@@ -207,7 +244,21 @@ export default {
               paddingBottom: function(i) { return 10; }
             },
             width: tableWidth
-          }
+          },
+          ...(columnasConDatos.length ? [{
+            margin: [0, 16, 0, 0],
+            fontSize: 14,
+            bold: false,
+            table: {
+              widths: ['auto', '*'],
+              dontBreakRows: true,
+              body: columnasConDatos.map(columna => [
+                { text: `${formatearMedidaPedidoCrudo(columna)} — Barco:`, margin: [0, 4, 8, 4] },
+                { text: this.barcos[columna]?.trim() || '______________________________', margin: [0, 4, 0, 4] }
+              ])
+            },
+            layout: 'noBorders'
+          }] : [])
         ],
         styles: {
           header: {
@@ -316,6 +367,52 @@ export default {
   font-size: 18px;
 }
 
+.tara-preparada {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.tara-preparada input,
+.casilla-impresa {
+  width: 13px;
+  height: 13px;
+  flex: 0 0 13px;
+  margin: 0;
+}
+
+.casilla-impresa,
+.barco-impreso {
+  display: none;
+}
+
+.barcos {
+  margin-top: 16px;
+}
+
+.barco-fila {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 8px;
+  break-inside: avoid;
+}
+
+.barco-input {
+  flex: 1;
+  min-width: 0;
+  max-width: 420px;
+  border: 0;
+  border-bottom: 1px solid #000;
+  border-radius: 0;
+  background: white;
+  color: #000;
+  font: inherit;
+}
+
 .fila-totales td {
   background-color: #34495e;
   color: white;
@@ -331,6 +428,41 @@ export default {
 }
 
 @media print {
+  .tara-preparada input,
+  .barco-input {
+    display: none;
+  }
+
+  .casilla-impresa {
+    display: inline-block;
+    box-sizing: border-box;
+    border: 1px solid #000;
+    position: relative;
+  }
+
+  .tara-preparada input:checked + .casilla-impresa::after {
+    content: '';
+    position: absolute;
+    left: 3px;
+    top: 0;
+    width: 4px;
+    height: 8px;
+    border: solid #000;
+    border-width: 0 1px 1px 0;
+    transform: rotate(45deg);
+  }
+
+  .barco-impreso {
+    display: block;
+    flex: 1;
+    min-width: 0;
+    max-width: 420px;
+    min-height: 1.2em;
+    border-bottom: 1px solid #000;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
   .buttons-container,
   .impresion-container > h2,
   footer,
