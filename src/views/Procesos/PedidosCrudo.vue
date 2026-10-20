@@ -442,10 +442,12 @@ export default {
       
       this.$router.push({
         name: 'PedidoCrudosImpresion',
+        query: this.pedidoId ? { id: this.pedidoId } : {},
         params: {
           fecha: this.fecha,
           pedidos: pedidosConDatos,
-          columnas: this.columnas
+          columnas: this.columnas,
+          barcosPorPedido: this.barcosPorPedido
         }
       })
     }
