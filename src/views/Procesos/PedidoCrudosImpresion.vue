@@ -2,119 +2,203 @@
   <div class="impresion-container">
     <h2>Vista previa de impresión - Pedido de Camarón Crudo</h2>
     <div class="buttons-container">
-      <button @click="generarPDF" class="btn-generar">
+      <button @click="generarPDF" class="btn-generar" :disabled="!barcosListos">
         <span class="icon">📄</span> Generar PDF
       </button>
       <button @click="$router.push('/procesos/pedidos')" class="btn-volver">
         Volver
       </button>
     </div>
-    <div id="pdfPreview" class="pdf-preview">
-      <h3>Pedido de Crudos - {{ fecha }}</h3>
-      <table class="preview-table">
-        <thead>
-          <tr>
-            <th>Cliente</th>
-            <th v-for="columna in obtenerColumnasConDatos()" :key="columna">
-              {{ formatearMedidaPedidoCrudo(columna) }}
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="cliente in obtenerClientesConDatos()" :key="cliente">
-            <td 
-              :style="{
-                backgroundColor: obtenerColorCliente(cliente),
-                color: obtenerColorTextoCliente(cliente)
-              }"
-            >
-              {{ cliente }}
-            </td>
-            <td v-for="columna in obtenerColumnasConDatos()" :key="columna">
-              <label v-if="pedidos[cliente][columna.toLowerCase()]" class="tara-preparada">
-                {{ pedidos[cliente][columna.toLowerCase()] }}
-                <input
-                  v-model="tarasPreparadas[claveTara(cliente, columna)]"
-                  type="checkbox"
-                  :aria-label="`Taras preparadas de ${cliente}, ${formatearMedidaPedidoCrudo(columna)}`"
-                >
-                <span class="casilla-impresa" aria-hidden="true"></span>
-              </label>
-            </td>
-          </tr>
-          <tr class="fila-totales">
-            <td><strong>Total</strong></td>
-            <td v-for="columna in obtenerColumnasConDatos()" :key="columna + '-total'">
-              {{ calcularTotalColumna(columna) }}
-            </td>
-          </tr>
-          <tr class="fila-kilos">
-            <td><strong>Kilos</strong></td>
-            <td v-for="columna in obtenerColumnasConDatos()" :key="columna + '-kilos'">
-              {{ calcularKilosColumna(columna) }}
-            </td>
-          </tr>
-        </tbody>
-      </table>
+    <p v-if="!barcosListos" class="estado-carga">Cargando pedido…</p>
+    <p v-if="errorCarga" class="barco-error" role="alert">{{ errorCarga }}</p>
+    <div v-if="barcosListos" id="pdfPreview" class="pdf-preview">
+      <h3>Pedido de Crudos - {{ fechaVisible }}</h3>
+      <div class="tabla-scroll">
+        <table class="preview-table">
+          <thead>
+            <tr>
+              <th>Cliente</th>
+              <th v-for="columna in columnasConDatos" :key="columna">
+                {{ formatearMedidaPedidoCrudo(columna) }}
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="cliente in clientesConDatos" :key="cliente">
+              <td 
+                :style="{
+                  backgroundColor: obtenerColorCliente(cliente),
+                  color: obtenerColorTextoCliente(cliente)
+                }"
+              >
+                {{ cliente }}
+              </td>
+              <td v-for="columna in columnasConDatos" :key="columna">
+                <label v-if="cantidadCelda(cliente, columna)" class="tara-preparada">
+                  {{ cantidadCelda(cliente, columna) }}
+                  <input
+                    v-model="tarasPreparadas[claveTara(cliente, columna)]"
+                    type="checkbox"
+                    :aria-label="`Taras preparadas de ${cliente}, ${formatearMedidaPedidoCrudo(columna)}`"
+                  >
+                  <span class="casilla-impresa" aria-hidden="true"></span>
+                </label>
+              </td>
+            </tr>
+            <tr class="fila-totales">
+              <td><strong>Total</strong></td>
+              <td v-for="columna in columnasConDatos" :key="columna + '-total'">
+                {{ calcularTotalColumna(columna) }}
+              </td>
+            </tr>
+            <tr class="fila-kilos">
+              <td><strong>Kilos</strong></td>
+              <td v-for="columna in columnasConDatos" :key="columna + '-kilos'">
+                {{ calcularKilosColumna(columna) }}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
       <div class="barcos">
-        <label v-for="columna in obtenerColumnasConDatos()" :key="columna" class="barco-fila">
-          <span>{{ formatearMedidaPedidoCrudo(columna) }} — Barco:</span>
-          <input v-model="barcos[columna]" type="text" class="barco-input">
-          <span class="barco-impreso">{{ barcos[columna] }}</span>
-        </label>
+        <FilaBarcoMedida
+          v-for="columna in columnasConDatos"
+          :key="columna"
+          :etiqueta="formatearMedidaPedidoCrudo(columna)"
+          :value="barcos[columna] || ''"
+          @input="onBarcoInput(columna, $event)"
+          @blur="onBarcoBlur(columna)"
+        />
+        <p v-if="errorGuardado" class="barco-error" role="alert">{{ errorGuardado }}</p>
       </div>
     </div>
   </div>
 </template>
 
 <script>
+import { db } from '@/firebase'
+import { doc, getDoc, updateDoc, FieldPath } from 'firebase/firestore'
 import { crearPdfConFuentesLocales } from '@/utils/pdf/config'
 import { formatearMedidaPedidoCrudo } from '@/utils/medidasPedidoCrudo'
+import {
+  barcoInicial,
+  cambioBarcoPorMedida,
+  claveBarcoPorMedida,
+  debePersistirBarco,
+  textoGuardadoBarco
+} from '@/utils/barcosPorMedida'
+import FilaBarcoMedida from './components/FilaBarcoMedida.vue'
+
+const ESPERA_GUARDADO_MS = 500
+const ORDEN_CLIENTES = ['8a', 'catarro', 'otilio', 'ozuna', 'veronica']
 
 export default {
   name: 'PedidoCrudosImpresion',
+  components: {
+    FilaBarcoMedida
+  },
   props: {
     fecha: {
       type: String,
-      required: true
+      default: ''
     },
     pedidos: {
       type: Object,
-      required: true
+      default: () => ({})
     },
     columnas: {
       type: Array,
-      required: true
+      default: () => []
+    },
+    barcosPorPedido: {
+      type: Object,
+      default: () => ({})
     }
   },
   data() {
     return {
       tarasPreparadas: {},
-      barcos: {}
+      barcos: {},
+      barcosEditados: {},
+      ultimoGuardado: {},
+      guardadosSeq: {},
+      temporizadores: {},
+      pedidoId: '',
+      pedidoRemoto: null,
+      barcosListos: false,
+      errorCarga: '',
+      errorGuardado: ''
     }
+  },
+  computed: {
+    fechaVisible() {
+      return this.pedidoRemoto?.fecha || this.fecha || ''
+    },
+    pedidosVisibles() {
+      return this.pedidoRemoto?.pedidos || this.pedidos || {}
+    },
+    columnasVisibles() {
+      const remotas = this.pedidoRemoto?.columnas
+      if (Array.isArray(remotas) && remotas.length) return remotas
+      return this.columnas || []
+    },
+    barcosPorPedidoVisibles() {
+      return this.pedidoRemoto?.barcosPorPedido || this.barcosPorPedido || {}
+    },
+    clientesConDatos() {
+      return Object.keys(this.pedidosVisibles).filter(cliente => {
+        const fila = this.pedidosVisibles[cliente]
+        if (!fila || typeof fila !== 'object') return false
+        return Object.values(fila).some(valor => this.tieneCantidad(valor))
+      }).sort((a, b) => {
+        const ia = ORDEN_CLIENTES.indexOf(a.toLowerCase())
+        const ib = ORDEN_CLIENTES.indexOf(b.toLowerCase())
+        const ra = ia === -1 ? ORDEN_CLIENTES.length : ia
+        const rb = ib === -1 ? ORDEN_CLIENTES.length : ib
+        if (ra !== rb) return ra - rb
+        return a.localeCompare(b, 'es')
+      })
+    },
+    columnasConDatos() {
+      return this.columnasVisibles.filter(columna => {
+        return this.clientesConDatos.some(cliente => this.tieneCantidad(this.cantidadCelda(cliente, columna)))
+      })
+    }
+  },
+  created() {
+    const id = this.$route.query.id
+    this.pedidoId = typeof id === 'string' ? id : ''
+    if (this.pedidoId) {
+      this.cargarPedido(this.pedidoId)
+    } else {
+      this.aplicarBarcos()
+      this.barcosListos = true
+    }
+  },
+  beforeDestroy() {
+    Object.keys(this.temporizadores).forEach(columna => clearTimeout(this.temporizadores[columna]))
+  },
+  async beforeRouteLeave(to, from, next) {
+    try {
+      await this.flushBarcosEditados()
+    } catch (error) {
+      console.error('Error al guardar barcos al salir:', error)
+    }
+    next()
   },
   methods: {
     formatearMedidaPedidoCrudo,
     claveTara(cliente, columna) {
       return JSON.stringify([cliente, columna])
     },
-    obtenerClientesConDatos() {
-      return Object.keys(this.pedidos).filter(cliente => {
-        return Object.values(this.pedidos[cliente]).some(valor => {
-          const numero = parseFloat(valor)
-          return valor !== null && valor !== '' && !isNaN(numero) && numero > 0
-        })
-      })
+    tieneCantidad(valor) {
+      const numero = parseFloat(valor)
+      return valor !== null && valor !== '' && !isNaN(numero) && numero > 0
     },
-    obtenerColumnasConDatos() {
-      return this.columnas.filter(columna => {
-        const nombreProp = columna.toLowerCase()
-        return this.obtenerClientesConDatos().some(cliente => {
-          const valor = this.pedidos[cliente][nombreProp]
-          const numero = parseFloat(valor)
-          return valor !== null && valor !== '' && !isNaN(numero) && numero > 0
-        })
-      })
+    cantidadCelda(cliente, columna) {
+      const fila = this.pedidosVisibles[cliente]
+      if (!fila || typeof fila !== 'object') return ''
+      return fila[columna.toLowerCase()] || ''
     },
     obtenerColorCliente(cliente) {
       const colores = {
@@ -138,8 +222,9 @@ export default {
     },
     calcularTotalColumna(columna) {
       const col = columna.toLowerCase();
-      return Object.keys(this.pedidos).reduce((sum, cliente) => {
-        const valor = parseFloat(this.pedidos[cliente][col]) || 0;
+      return Object.keys(this.pedidosVisibles).reduce((sum, cliente) => {
+        const fila = this.pedidosVisibles[cliente] || {}
+        const valor = parseFloat(fila[col]) || 0;
         return sum + valor;
       }, 0);
     },
@@ -148,15 +233,16 @@ export default {
       return totalTaras * 19;
     },
     generarPDF() {
-      const clientesConDatos = this.obtenerClientesConDatos()
-      const columnasConDatos = this.obtenerColumnasConDatos()
-      const diaSemana = this.obtenerDiaSemana(this.fecha)
+      if (!this.barcosListos) return
+      const clientesConDatos = this.clientesConDatos
+      const columnasConDatos = this.columnasConDatos
+      const diaSemana = this.obtenerDiaSemana(this.fechaVisible)
       const fontSize = columnasConDatos.length > 4 ? 28 : 34
       
       const body = clientesConDatos.map(cliente => {
         const fila = [cliente]
         columnasConDatos.forEach(columna => {
-          const valor = this.pedidos[cliente][columna.toLowerCase()] || ''
+          const valor = this.cantidadCelda(cliente, columna)
           const casilla = [{ type: 'rect', x: 0, y: 0, w: 10, h: 10, lineWidth: 1 }]
           if (this.tarasPreparadas[this.claveTara(cliente, columna)]) {
             casilla.push(
@@ -214,7 +300,7 @@ export default {
         pageMargins: [40, 40, 40, 40],
         content: [
           {
-            text: `Pedido de Crudos - ${diaSemana} ${this.fecha}`,
+            text: `Pedido de Crudos - ${diaSemana} ${this.fechaVisible}`,
             style: 'header'
           },
           {
@@ -275,7 +361,99 @@ export default {
         }
       }
 
-      crearPdfConFuentesLocales(docDefinition).download('Ped-crudos-' + this.fecha + '.pdf')
+      crearPdfConFuentesLocales(docDefinition).download('Ped-crudos-' + this.fechaVisible + '.pdf')
+    },
+    async cargarPedido(id) {
+      this.errorCarga = ''
+      try {
+        const snap = await getDoc(doc(db, 'pedidos', id))
+        if (!snap.exists()) {
+          this.errorCarga = 'No se encontró el pedido.'
+          this.aplicarBarcos()
+          return
+        }
+        this.pedidoRemoto = snap.data()
+        this.aplicarBarcos()
+        await this.flushBarcosEditados()
+      } catch (error) {
+        console.error('Error al cargar el pedido de crudos:', error)
+        this.errorCarga = 'No se pudieron cargar los barcos guardados. Se muestran los datos disponibles.'
+        this.aplicarBarcos()
+      } finally {
+        this.barcosListos = true
+      }
+    },
+    aplicarBarcos() {
+      const fuentes = {
+        barcosPorMedida: this.pedidoRemoto?.barcosPorMedida,
+        barcosPorPedido: this.barcosPorPedidoVisibles
+      }
+      this.columnasConDatos.forEach(columna => {
+        if (this.barcosEditados[columna]) return
+        this.$set(this.barcos, columna, barcoInicial(columna, fuentes))
+        const guardado = textoGuardadoBarco(fuentes.barcosPorMedida, columna)
+        if (guardado !== null) {
+          this.$set(this.ultimoGuardado, claveBarcoPorMedida(columna), guardado)
+        }
+      })
+    },
+    onBarcoInput(columna, valor) {
+      this.$set(this.barcos, columna, valor)
+      this.$set(this.barcosEditados, columna, true)
+      this.programarGuardado(columna)
+    },
+    onBarcoBlur(columna) {
+      if (!this.barcosEditados[columna]) return
+      const recortado = String(this.barcos[columna] ?? '').trim()
+      if (recortado !== this.barcos[columna]) this.$set(this.barcos, columna, recortado)
+      this.cancelarTemporizador(columna)
+      this.guardarBarco(columna)
+    },
+    programarGuardado(columna) {
+      this.cancelarTemporizador(columna)
+      const temporizador = setTimeout(() => {
+        this.$delete(this.temporizadores, columna)
+        this.guardarBarco(columna)
+      }, ESPERA_GUARDADO_MS)
+      this.$set(this.temporizadores, columna, temporizador)
+    },
+    cancelarTemporizador(columna) {
+      if (!this.temporizadores[columna]) return
+      clearTimeout(this.temporizadores[columna])
+      this.$delete(this.temporizadores, columna)
+    },
+    async flushBarcosEditados() {
+      const columnas = Object.keys(this.temporizadores)
+      columnas.forEach(columna => this.cancelarTemporizador(columna))
+      const pendientes = Object.keys(this.barcosEditados).filter(columna => this.barcosEditados[columna])
+      await Promise.all(pendientes.map(columna => this.guardarBarco(columna)))
+    },
+    async guardarBarco(columna) {
+      const cambio = cambioBarcoPorMedida(columna, this.barcos[columna])
+      if (!debePersistirBarco({
+        editado: this.barcosEditados[columna],
+        pedidoId: this.pedidoId,
+        valor: cambio.valor,
+        ultimoGuardado: this.ultimoGuardado[cambio.clave]
+      })) return
+
+      const seq = (this.guardadosSeq[cambio.clave] || 0) + 1
+      this.$set(this.guardadosSeq, cambio.clave, seq)
+      try {
+        await updateDoc(
+          doc(db, 'pedidos', this.pedidoId),
+          new FieldPath(cambio.campo, cambio.clave),
+          cambio.valor
+        )
+        if (this.guardadosSeq[cambio.clave] !== seq) return
+        this.$set(this.ultimoGuardado, cambio.clave, cambio.valor)
+        this.errorGuardado = ''
+      } catch (error) {
+        console.error('No se pudo guardar el barco de', cambio.clave, error)
+        if (this.guardadosSeq[cambio.clave] === seq) {
+          this.errorGuardado = 'No se pudo guardar el barco. Revisa la conexión e inténtalo de nuevo.'
+        }
+      }
     }
   }
 }
@@ -316,6 +494,11 @@ export default {
   background-color: #2c3e50;
 }
 
+.btn-generar:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .btn-volver {
   background-color: #95a5a6;
   color: white;
@@ -342,6 +525,12 @@ export default {
   margin-bottom: 20px;
   font-size: 24px;
   font-weight: bold;
+}
+
+.tabla-scroll {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .preview-table {
@@ -384,8 +573,7 @@ export default {
   margin: 0;
 }
 
-.casilla-impresa,
-.barco-impreso {
+.casilla-impresa {
   display: none;
 }
 
@@ -393,24 +581,14 @@ export default {
   margin-top: 16px;
 }
 
-.barco-fila {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  margin-bottom: 8px;
-  break-inside: avoid;
+.estado-carga,
+.barco-error {
+  margin: 12px 0;
+  font-size: 15px;
 }
 
-.barco-input {
-  flex: 1;
-  min-width: 0;
-  max-width: 420px;
-  border: 0;
-  border-bottom: 1px solid #000;
-  border-radius: 0;
-  background: white;
-  color: #000;
-  font: inherit;
+.barco-error {
+  color: #8a1f11;
 }
 
 .fila-totales td {
@@ -427,9 +605,31 @@ export default {
   border: 2px solid #c8e6c9 !important;
 }
 
+@media (max-width: 640px) {
+  .impresion-container {
+    padding: 12px;
+  }
+
+  .buttons-container {
+    flex-wrap: wrap;
+  }
+
+  .btn-generar,
+  .btn-volver {
+    flex: 1 1 140px;
+    justify-content: center;
+    min-height: 44px;
+  }
+
+  .preview-table th,
+  .preview-table td {
+    padding: 8px 6px;
+    font-size: 15px;
+  }
+}
+
 @media print {
-  .tara-preparada input,
-  .barco-input {
+  .tara-preparada input {
     display: none;
   }
 
@@ -452,15 +652,9 @@ export default {
     transform: rotate(45deg);
   }
 
-  .barco-impreso {
-    display: block;
-    flex: 1;
-    min-width: 0;
-    max-width: 420px;
-    min-height: 1.2em;
-    border-bottom: 1px solid #000;
-    white-space: pre-wrap;
-    overflow-wrap: anywhere;
+  .estado-carga,
+  .barco-error {
+    display: none !important;
   }
 
   .buttons-container,

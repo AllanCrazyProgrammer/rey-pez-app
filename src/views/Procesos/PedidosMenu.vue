@@ -223,10 +223,12 @@ export default {
 
         this.$router.push({
           name: 'PedidoCrudosImpresion',
+          query: pedido.id ? { id: pedido.id } : {},
           params: {
             fecha: pedido.fecha,
             pedidos: pedidosConDatos,
-            columnas: pedido.columnas
+            columnas: pedido.columnas,
+            barcosPorPedido: pedido.barcosPorPedido || {}
           }
         });
       } else {
