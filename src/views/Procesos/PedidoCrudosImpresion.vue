@@ -90,6 +90,7 @@ import {
 import FilaBarcoMedida from './components/FilaBarcoMedida.vue'
 
 const ESPERA_GUARDADO_MS = 500
+const ORDEN_CLIENTES = ['8a', 'catarro', 'otilio', 'ozuna', 'veronica']
 
 export default {
   name: 'PedidoCrudosImpresion',
@@ -149,6 +150,13 @@ export default {
         const fila = this.pedidosVisibles[cliente]
         if (!fila || typeof fila !== 'object') return false
         return Object.values(fila).some(valor => this.tieneCantidad(valor))
+      }).sort((a, b) => {
+        const ia = ORDEN_CLIENTES.indexOf(a.toLowerCase())
+        const ib = ORDEN_CLIENTES.indexOf(b.toLowerCase())
+        const ra = ia === -1 ? ORDEN_CLIENTES.length : ia
+        const rb = ib === -1 ? ORDEN_CLIENTES.length : ib
+        if (ra !== rb) return ra - rb
+        return a.localeCompare(b, 'es')
       })
     },
     columnasConDatos() {
