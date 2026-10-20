@@ -537,10 +537,7 @@
       :error="pesadasModal.error"
       :fecha="pesadasModal.fecha"
       :fecha-texto="pesadasModal.fechaTexto"
-      :grupos="pesadasModal.grupos"
-      :total-kilos="pesadasModal.totalKilos"
-      :total-taras="pesadasModal.totalTaras"
-      :tiene-taras="pesadasModal.tieneTaras"
+      :comparacion="comparacionPesadas"
       :tiene-pesadas="pesadasModal.tienePesadas"
       :mensaje-vacio="pesadasModal.mensajeVacio"
       @cerrar="cerrarPesadasDelDia"
@@ -570,7 +567,7 @@ import { formatearFecha } from '@/utils/formatters';
 import { normalizarNombreProductoPrecio, obtenerClavesBusquedaMedida } from '@/utils/preciosHistoricos';
 import { obtenerGrupoPreciosPorNombre } from '@/utils/preciosAliasCatalogo';
 import { formatoFechaPesadas } from '@/utils/pesadas';
-import { agruparPesadasPorMedida, fechaPesadasDelEmbarque, filtrarPesadasPorDia } from '@/utils/pesadasPorMedida';
+import { agruparPesadasPorMedida, compararDespiqueEmbarcado, fechaPesadasDelEmbarque, filtrarPesadasPorDia } from '@/utils/pesadasPorMedida';
 import PesadasDelDiaModal from './components/PesadasDelDiaModal.vue';
 
 export default {
@@ -640,6 +637,22 @@ export default {
       },
       _clavesEnConflicto: [],
       _clavesConservarMio: []
+    }
+  },
+
+  computed: {
+    comparacionPesadas() {
+      const embarcado = [];
+      for (const cliente of this.embarqueData?.clientes || []) {
+        for (const producto of cliente.productos || []) {
+          if (!producto.medida) continue;
+          const kilos = producto.tipo === 'c/h20'
+            ? this.calcularTotalBolsas(producto) * (parseFloat(producto.camaronNeto) || 0.65)
+            : this.calcularTotalKilos(producto);
+          embarcado.push({ medida: producto.medida, kilos });
+        }
+      }
+      return compararDespiqueEmbarcado(this.pesadasModal.tienePesadas ? this.pesadasModal.grupos : [], embarcado);
     }
   },
 

@@ -41,6 +41,51 @@ function claveMedida(medida) {
   return String(medida || '').trim().replace(/\s+/g, ' ').replace(/\s*\/\s*/g, '/').toLocaleLowerCase('es-MX');
 }
 
+// La hoja de despique suele usar la talla corta (36) y el embarque la completa
+// (36/40). Mantener separados otros rangos, sufijos y nombres de producto.
+function claveComparacion(medida) {
+  const clave = claveMedida(medida);
+  const tallas = ['26/30', '31/35', '36/40', '41/50', '51/60', '61/70', '71/90', '91/110'];
+  return tallas.includes(clave) ? clave.split('/')[0] : clave;
+}
+
+export function compararDespiqueEmbarcado(despique = [], embarcado = []) {
+  const filas = new Map();
+  const obtener = medida => {
+    const clave = claveComparacion(medida) || 'sin medida';
+    if (!filas.has(clave)) filas.set(clave, {
+      medida: String(medida || '').trim() || 'Sin medida',
+      despique: null,
+      embarcado: 0
+    });
+    return filas.get(clave);
+  };
+  const centavos = valor => Number.isFinite(Number(valor)) ? Math.round(Number(valor) * 100) : 0;
+  despique.forEach(grupo => {
+    const fila = obtener(grupo.medida);
+    fila.despique = (fila.despique || 0) + centavos(grupo.kilos);
+  });
+  embarcado.forEach(grupo => {
+    obtener(grupo.medida).embarcado += centavos(grupo.kilos);
+  });
+  const grupos = [...filas.values()].map(fila => ({
+    medida: fila.medida,
+    despique: fila.despique === null ? null : fila.despique / 100,
+    embarcado: fila.embarcado / 100,
+    diferencia: fila.despique === null ? null : (fila.despique - fila.embarcado) / 100
+  }));
+  const despiqueTotal = [...filas.values()].reduce((total, fila) => total + (fila.despique || 0), 0);
+  const embarcadoTotal = [...filas.values()].reduce((total, fila) => total + fila.embarcado, 0);
+  return {
+    grupos,
+    totalDespique: despiqueTotal / 100,
+    totalEmbarcado: embarcadoTotal / 100,
+    // Si falta una medida del despique, no presentar un faltante inventado.
+    diferencia: grupos.length && grupos.every(fila => fila.despique !== null)
+      ? (despiqueTotal - embarcadoTotal) / 100 : null
+  };
+}
+
 export function filtrarPesadasPorDia(jornadas, fecha) {
   const objetivo = fechaPesadasDelEmbarque(fecha);
   if (!objetivo) return [];

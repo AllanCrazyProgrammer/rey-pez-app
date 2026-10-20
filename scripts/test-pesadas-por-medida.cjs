@@ -18,9 +18,49 @@ require.extensions['.js'] = (module, filename) => {
 const { resumenPesadas } = require('../src/utils/pesadas');
 const {
   agruparPesadasPorMedida,
+  compararDespiqueEmbarcado,
   fechaPesadasDelEmbarque,
   filtrarPesadasPorDia
 } = require('../src/utils/pesadasPorMedida');
+
+test('compara despique y embarcado por talla corta o completa, sumando clientes sin duplicar el despique', () => {
+  const resumen = compararDespiqueEmbarcado(
+    [{ medida: '36', kilos: 674.4 }, { medida: 'Laguna', kilos: 10 }],
+    [{ medida: ' 36 / 40 ', kilos: 300 }, { medida: '36', kilos: 374.4 }, { medida: 'LAGUNA', kilos: 12.25 }]
+  );
+  assert.deepEqual(resumen.grupos, [
+    { medida: '36', despique: 674.4, embarcado: 674.4, diferencia: 0 },
+    { medida: 'Laguna', despique: 10, embarcado: 12.25, diferencia: -2.25 }
+  ]);
+  assert.equal(resumen.totalDespique, 684.4);
+  assert.equal(resumen.totalEmbarcado, 686.65);
+  assert.equal(resumen.diferencia, -2.25);
+});
+
+test('incluye medidas de un solo lado y distingue falta de registro de un cero capturado', () => {
+  const resumen = compararDespiqueEmbarcado(
+    [{ medida: '41', kilos: 20 }, { medida: '51', kilos: 0 }],
+    [{ medida: '51/60', kilos: 5 }, { medida: '61/70', kilos: 10 }]
+  );
+  assert.deepEqual(resumen.grupos, [
+    { medida: '41', despique: 20, embarcado: 0, diferencia: 20 },
+    { medida: '51', despique: 0, embarcado: 5, diferencia: -5 },
+    { medida: '61/70', despique: null, embarcado: 10, diferencia: null }
+  ]);
+  assert.equal(resumen.diferencia, null);
+  assert.equal(compararDespiqueEmbarcado([], [{ medida: '36', kilos: 1 }]).grupos[0].diferencia, null);
+  assert.equal(compararDespiqueEmbarcado().diferencia, null);
+});
+
+test('no combina sufijos ni otros rangos con una talla conocida', () => {
+  const resumen = compararDespiqueEmbarcado([{ medida: '36', kilos: 10 }], [
+    { medida: '36/40', kilos: 3 }, { medida: '36/50', kilos: 4 }, { medida: '36/40 selecta', kilos: 2 }
+  ]);
+  assert.equal(resumen.grupos.length, 3);
+  assert.equal(resumen.grupos[0].diferencia, 7);
+  assert.equal(resumen.grupos[1].despique, null);
+  assert.equal(resumen.grupos[2].despique, null);
+});
 
 const jornada = (extra = {}) => ({
   fecha: '2026-10-18',

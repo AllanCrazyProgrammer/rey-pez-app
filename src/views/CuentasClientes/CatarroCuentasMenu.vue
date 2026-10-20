@@ -50,7 +50,7 @@
             <p v-if="cuenta.missingNota" class="texto-sin-nota">Sin cuenta registrada</p>
             <p v-else class="cuenta-summary">
               <span>Saldo Hoy: ${{ formatNumber(cuenta.saldoHoy) }}</span>
-              <span>{{ cuenta.totalNota < 0 ? 'Saldo a favor' : 'Total Acumulado' }}: ${{ formatNumber(Math.abs(cuenta.totalNota)) }}</span>
+              <span v-if="cuenta.totalNota > 0">Saldo pendiente: ${{ formatNumber(cuenta.totalNota) }}</span>
             </p>
             <div v-if="cuenta.tieneObservacion || (cuenta.observacion && cuenta.observacion.trim().length)" class="observacion-container">
               <p class="observacion-texto">{{ cuenta.observacion }}</p>
@@ -63,9 +63,6 @@
                 <span class="abono-descripcion">{{ abono.descripcion || 'Sin descripción' }}</span>
               </p>
             </div>
-            <span v-if="!cuenta.missingNota" :class="['estado-cuenta', cuenta.estadoPagado ? 'pagado' : 'no-pagado']">
-              {{ cuenta.estadoPagado ? 'Pagado' : 'No Pagado' }}
-            </span>
           </div>
           <div class="cuenta-actions">
             <template v-if="!cuenta.missingNota">
@@ -253,7 +250,7 @@ export default {
     async borrarCuenta(id) {
       const cuenta = this.cuentas.find(c => c.id === id);
       const detalleCuenta = cuenta
-        ? `la cuenta del ${this.formatDate(cuenta.fecha)} (Saldo Hoy: $${this.formatNumber(cuenta.saldoHoy)}, Total Acumulado: $${this.formatNumber(cuenta.totalNota)})`
+        ? `la cuenta del ${this.formatDate(cuenta.fecha)} (Saldo Hoy: $${this.formatNumber(cuenta.saldoHoy)}${cuenta.totalNota > 0 ? `, Saldo pendiente: $${this.formatNumber(cuenta.totalNota)}` : ''})`
         : 'este registro de cuenta';
       if (confirm(`¿Estás seguro de que quieres borrar ${detalleCuenta}?`)) {
         try {
@@ -512,24 +509,6 @@ h2 { color: #243047; }
   padding: 5px;
   border-radius: 4px;
   border: 1px solid #ccc;
-}
-
-.estado-cuenta {
-  font-weight: bold;
-  padding: 5px 10px;
-  border-radius: 4px;
-  display: inline-block;
-  margin-top: 10px;
-}
-
-.pagado {
-  background-color: #4CAF50;
-  color: white;
-}
-
-.no-pagado {
-  background-color: #f44336;
-  color: white;
 }
 
 .ventas-ganancias-btn {

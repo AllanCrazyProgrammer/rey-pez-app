@@ -15,7 +15,7 @@
       <header class="pesadas-dia-header">
         <div>
           <p class="pesadas-dia-eyebrow">Solo lectura</p>
-          <h2 id="pesadas-dia-titulo">Pesadas por medida</h2>
+          <h2 id="pesadas-dia-titulo">Despique y embarcado</h2>
           <p v-if="fechaTexto" class="pesadas-dia-fecha">{{ fechaTexto }}</p>
         </div>
         <button ref="cerrar" type="button" class="pesadas-dia-cerrar" aria-label="Cerrar pesadas" @click="cerrar">
@@ -26,31 +26,42 @@
       <div id="pesadas-dia-descripcion" class="pesadas-dia-cuerpo">
         <p v-if="cargando" class="pesadas-dia-estado" role="status">Buscando las pesadas de este día…</p>
         <p v-else-if="error" class="pesadas-dia-alerta" role="alert">{{ error }}</p>
-        <p v-else-if="!tienePesadas" class="pesadas-dia-estado">{{ mensajeVacio || 'No hay pesadas registradas para este día.' }}</p>
+        <p v-else-if="!fecha || !comparacion.grupos.length" class="pesadas-dia-estado">{{ mensajeVacio || 'No hay pesadas registradas para este día.' }}</p>
         <template v-else>
           <p class="pesadas-dia-ayuda">
-            Kilos del día agrupados por medida.
-            <span v-if="!tieneTaras">Esta jornada no tiene taras capturadas.</span>
+            Kilos por medida. Diferencia = despique − embarcado.
+            Positiva: queda producto; negativa: se embarcó de más.
+            <span v-if="!tienePesadas">No hay pesadas registradas para este día.</span>
+            El guion indica que no hay registro de despique para esa medida.
           </p>
           <ul class="pesadas-dia-lista">
-            <li v-for="grupo in grupos" :key="grupo.medida" class="pesadas-dia-fila">
+            <li v-for="grupo in comparacion.grupos" :key="grupo.medida" class="pesadas-dia-fila">
               <h3>{{ grupo.medida }}</h3>
               <div class="pesadas-dia-metricas">
                 <div>
-                  <small>Kilos</small>
-                  <strong>{{ numero(grupo.kilos) }} kg</strong>
+                  <small>Despique</small>
+                  <strong>{{ kilos(grupo.despique) }}</strong>
                 </div>
                 <div>
-                  <small>Taras</small>
-                  <strong>{{ textoTaras(grupo.taras) }}</strong>
+                  <small>Embarcado</small>
+                  <strong>{{ kilos(grupo.embarcado) }}</strong>
+                </div>
+                <div class="pesadas-dia-diferencia" :class="{ 'es-diferente': grupo.diferencia !== null && grupo.diferencia !== 0 }">
+                  <small>Diferencia</small>
+                  <strong>{{ kilos(grupo.diferencia, true) }}</strong>
                 </div>
               </div>
             </li>
           </ul>
           <div class="pesadas-dia-total" aria-label="Total del día">
-            <span>Total del día</span>
-            <strong>{{ numero(totalKilos) }} kg</strong>
-            <strong>{{ textoTaras(totalTaras) }}</strong>
+            <h3>Total del día</h3>
+            <div class="pesadas-dia-metricas">
+              <div><small>Despique</small><strong>{{ tienePesadas ? kilos(comparacion.totalDespique) : '—' }}</strong></div>
+              <div><small>Embarcado</small><strong>{{ kilos(comparacion.totalEmbarcado) }}</strong></div>
+              <div class="pesadas-dia-diferencia" :class="{ 'es-diferente': comparacion.diferencia !== null && comparacion.diferencia !== 0 }">
+                <small>Diferencia</small><strong>{{ kilos(comparacion.diferencia, true) }}</strong>
+              </div>
+            </div>
           </div>
         </template>
       </div>
@@ -65,8 +76,6 @@
 </template>
 
 <script>
-import { formatoPesada } from '@/utils/pesadas';
-
 export default {
   name: 'PesadasDelDiaModal',
   props: {
@@ -75,10 +84,7 @@ export default {
     error: { type: String, default: '' },
     fecha: { type: String, default: '' },
     fechaTexto: { type: String, default: '' },
-    grupos: { type: Array, default: () => [] },
-    totalKilos: { type: Number, default: 0 },
-    totalTaras: { type: Number, default: 0 },
-    tieneTaras: { type: Boolean, default: false },
+    comparacion: { type: Object, default: () => ({ grupos: [], totalDespique: 0, totalEmbarcado: 0, diferencia: null }) },
     tienePesadas: { type: Boolean, default: false },
     mensajeVacio: { type: String, default: '' }
   },
@@ -109,10 +115,11 @@ export default {
     this.liberar();
   },
   methods: {
-    numero: formatoPesada,
-    textoTaras(valor) {
-      if (!this.tieneTaras) return '—';
-      return String(formatoPesada(valor));
+    kilos(valor, firmado = false) {
+      if (valor === null) return '—';
+      const numero = Number(valor);
+      const texto = new Intl.NumberFormat('es-MX', { maximumFractionDigits: 2 }).format(numero);
+      return `${firmado && numero > 0 ? '+' : ''}${texto} kg`;
     },
     cerrar() {
       this.$emit('cerrar');
@@ -146,7 +153,7 @@ export default {
 .pesadas-dia-dialog {
   display: flex;
   flex-direction: column;
-  width: min(520px, 100%);
+  width: min(680px, 100%);
   max-height: calc(100dvh - 16px);
   overflow: hidden;
   color: #e8f1ff;
@@ -286,19 +293,29 @@ export default {
 }
 
 .pesadas-dia-total {
-  display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 0.8fr);
-  gap: 8px;
-  align-items: center;
   margin-top: 12px;
   color: #e0f7ff;
   border: 1px solid rgba(56, 217, 255, 0.28);
 }
 
-.pesadas-dia-total span {
+.pesadas-dia-total h3 {
+  margin: 0 0 8px;
   color: #b7c6dc;
   font-size: 0.82rem;
   font-weight: 800;
+}
+
+.pesadas-dia-diferencia {
+  grid-column: 1 / -1;
+}
+
+.pesadas-dia-diferencia.es-diferente strong {
+  color: #ffcc80;
+}
+
+@media (min-width: 480px) {
+  .pesadas-dia-metricas { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .pesadas-dia-diferencia { grid-column: auto; }
 }
 
 .pesadas-dia-enlace {
