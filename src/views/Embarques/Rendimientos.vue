@@ -13,6 +13,9 @@
         <button type="button" @click="volverAEmbarque" class="btn-volver">
           <i class="fas fa-arrow-left"></i> Embarque
         </button>
+        <button type="button" class="btn-pesadas" aria-label="Ver pesadas del día del embarque" @click="abrirPesadasDelDia">
+          <i class="fas fa-balance-scale"></i> Ver pesadas
+        </button>
         <button type="button" @click="abrirModalNota" class="btn-nota">
           <i class="fas fa-sticky-note"></i> Nota
         </button>
@@ -528,6 +531,20 @@
       </div>
     </div>
 
+    <PesadasDelDiaModal
+      :abierto="pesadasModal.abierto"
+      :cargando="pesadasModal.cargando"
+      :error="pesadasModal.error"
+      :fecha="pesadasModal.fecha"
+      :fecha-texto="pesadasModal.fechaTexto"
+      :grupos="pesadasModal.grupos"
+      :total-kilos="pesadasModal.totalKilos"
+      :total-taras="pesadasModal.totalTaras"
+      :tiene-taras="pesadasModal.tieneTaras"
+      :tiene-pesadas="pesadasModal.tienePesadas"
+      :mensaje-vacio="pesadasModal.mensajeVacio"
+      @cerrar="cerrarPesadasDelDia"
+    />
 
   </div>
 </template>
@@ -552,11 +569,15 @@ import EmbarquesOfflineService from '@/services/EmbarquesOfflineService';
 import { formatearFecha } from '@/utils/formatters';
 import { normalizarNombreProductoPrecio, obtenerClavesBusquedaMedida } from '@/utils/preciosHistoricos';
 import { obtenerGrupoPreciosPorNombre } from '@/utils/preciosAliasCatalogo';
+import { formatoFechaPesadas } from '@/utils/pesadas';
+import { agruparPesadasPorMedida, fechaPesadasDelEmbarque, filtrarPesadasPorDia } from '@/utils/pesadasPorMedida';
+import PesadasDelDiaModal from './components/PesadasDelDiaModal.vue';
 
 export default {
   name: 'Rendimientos',
   components: {
-    MedidasParaHoyCards
+    MedidasParaHoyCards,
+    PesadasDelDiaModal
   },
   data() {
     return {
@@ -604,6 +625,19 @@ export default {
       _hidratandoRendimientos: false,
       avisoConflicto: '',
       avisoError: '',
+      pesadasModal: {
+        abierto: false,
+        cargando: false,
+        error: '',
+        fecha: '',
+        fechaTexto: '',
+        grupos: [],
+        totalKilos: 0,
+        totalTaras: 0,
+        tieneTaras: false,
+        tienePesadas: false,
+        mensajeVacio: ''
+      },
       _clavesEnConflicto: [],
       _clavesConservarMio: []
     }
@@ -3477,6 +3511,63 @@ export default {
       }
     },
 
+    async abrirPesadasDelDia() {
+      const ticket = (this._pesadasTicket || 0) + 1;
+      this._pesadasTicket = ticket;
+      const fecha = fechaPesadasDelEmbarque(this.embarqueData && this.embarqueData.fecha);
+      this.pesadasModal = {
+        abierto: true,
+        cargando: Boolean(fecha),
+        error: '',
+        fecha: fecha || '',
+        fechaTexto: fecha ? formatoFechaPesadas(fecha) : '',
+        grupos: [],
+        totalKilos: 0,
+        totalTaras: 0,
+        tieneTaras: false,
+        tienePesadas: false,
+        mensajeVacio: fecha
+          ? 'No hay pesadas registradas para este día.'
+          : 'Este embarque no tiene una fecha válida, así que no hay un día de pesadas que consultar.'
+      };
+      if (!fecha) return;
+      try {
+        const jornada = await this.consultarPesadasDia(fecha);
+        if (this._pesadasTicket !== ticket || !this.pesadasModal.abierto) return;
+        const delDia = filtrarPesadasPorDia(jornada ? [jornada] : [], fecha);
+        const resumen = agruparPesadasPorMedida(delDia[0] || {});
+        this.pesadasModal = {
+          ...this.pesadasModal,
+          cargando: false,
+          grupos: resumen.grupos,
+          totalKilos: resumen.totalKilos,
+          totalTaras: resumen.totalTaras,
+          tieneTaras: resumen.tieneTaras,
+          tienePesadas: resumen.tienePesadas
+        };
+      } catch (error) {
+        if (this._pesadasTicket !== ticket || !this.pesadasModal.abierto) return;
+        console.error('[Rendimientos] No se pudieron leer las pesadas:', error);
+        this.pesadasModal = {
+          ...this.pesadasModal,
+          cargando: false,
+          error: 'No se pudieron leer las pesadas de este día. No se modificó nada.'
+        };
+      }
+    },
+
+    async consultarPesadasDia(fecha) {
+      const db = getFirestore();
+      const snap = await getDoc(doc(db, 'pesadasDiarias', fecha));
+      if (!snap.exists()) return null;
+      return { id: snap.id, ...snap.data() };
+    },
+
+    cerrarPesadasDelDia() {
+      this._pesadasTicket = (this._pesadasTicket || 0) + 1;
+      this.pesadasModal = { ...this.pesadasModal, abierto: false, cargando: false };
+    },
+
 
 
     formatearPrecio(precio) {
@@ -4291,6 +4382,12 @@ input {
   margin-right: 10px;
 }
 
+.btn-pesadas {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .btn-preparacion {
   display: inline-flex;
   align-items: center;
@@ -4862,6 +4959,7 @@ input {
 }
 
 .header-actions .btn-volver,
+.header-actions .btn-pesadas,
 .header-actions .btn-nota,
 .header-actions .btn-costos,
 .header-actions .btn-preparacion,
@@ -4888,6 +4986,7 @@ input {
 }
 
 .header-actions .btn-volver:hover,
+.header-actions .btn-pesadas:hover,
 .header-actions .btn-nota:hover,
 .header-actions .btn-costos:hover,
 .header-actions .btn-preparacion:hover,
@@ -4901,6 +5000,7 @@ input {
 }
 
 .header-actions .btn-volver i { color: #93c5fd; }
+.header-actions .btn-pesadas i { color: #7dd3fc; }
 .header-actions .btn-nota i { color: #fbbf24; }
 .header-actions .btn-costos i { color: #4ade80; }
 .header-actions .btn-preparacion i { color: #38d9ff; }
@@ -5437,6 +5537,7 @@ input {
   .rendimientos-title-block { width: 100%; }
   .header-actions { width: 100%; justify-content: flex-start; }
   .header-actions button { flex: 1 1 105px; justify-content: center; }
+  .header-actions .btn-pesadas { flex-basis: 148px; white-space: nowrap; }
 }
 
 @media (max-width: 768px) {
