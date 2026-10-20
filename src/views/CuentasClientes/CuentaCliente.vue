@@ -1,24 +1,24 @@
 <template>
-  <div class="cuenta-cliente-container" :class="{ 'cuenta-catarro-ui': clienteId === 'catarro' }">
+  <div class="cuenta-cliente-container" :class="{ 'cuenta-catarro-ui': clienteId === 'catarro', 'cuenta-lorena-ui': clienteId === 'veronica', 'cuenta-moderna-ui': ['catarro', 'veronica'].includes(clienteId) }">
     <div v-if="isSaving && !showSaveMessage" class="auto-save-indicator">
       <span class="save-dot"></span> Guardando...
     </div>
 
     <div class="back-button-container">
       <BackButton :to="config.backPath" />
-      <PreciosHistorialModal :clienteActual="config.clienteId" />
+      <PreciosHistorialModal :clienteActual="config.clienteId" :compact="clienteId === 'veronica'" />
       <StashModalV2 :cliente="config.clienteId" />
     </div>
     <header class="cabecera-cuenta">
-    <h1>{{ config.titulo }}</h1>
+    <h1>{{ clienteId === 'veronica' ? 'Cuentas de Lorena' : config.titulo }}</h1>
 
-    <div v-if="clienteId !== 'catarro'" class="precios-button-container">
+    <div v-if="!['catarro', 'veronica'].includes(clienteId)" class="precios-button-container">
       <PreciosClienteButton :clienteId="config.clienteId" />
     </div>
 
     <div class="fecha-actual" :class="{ 'bloque-sin-nota': config.features.verificarEmbarques && faltaNotaCliente }">
       <div class="fecha-input">
-        <label v-if="clienteId === 'catarro'" for="fecha-cuenta-cliente" class="fecha-label">Fecha de la cuenta</label>
+        <label v-if="['catarro', 'veronica'].includes(clienteId)" for="fecha-cuenta-cliente" class="fecha-label">Fecha de la cuenta</label>
         <input
           id="fecha-cuenta-cliente"
           type="date"
@@ -52,7 +52,7 @@
       </p>
     </div>
 
-    <div v-if="clienteId !== 'catarro'" class="input-section card">
+    <div v-if="!['catarro', 'veronica'].includes(clienteId)" class="input-section card">
       <h2>Ingresar Datos</h2>
       <div class="input-row">
         <input v-model.number="newItem.kilos" type="number" placeholder="Kilos" inputmode="decimal" pattern="[0-9]*" class="responsive-input" :disabled="isNotaLocked">
@@ -63,13 +63,13 @@
       </div>
     </div>
 
-    <div v-if="clienteId !== 'catarro'" class="toggle-costos-row">
+    <div v-if="!['catarro', 'veronica'].includes(clienteId)" class="toggle-costos-row">
       <button class="toggle-costos-btn" @click="mostrarTablaCostos = !mostrarTablaCostos">
         {{ mostrarTablaCostos ? 'Ocultar tabla de costos' : 'Mostrar tabla de costos' }}
       </button>
     </div>
 
-    <div v-if="clienteId !== 'catarro' && mostrarTablaCostos" class="table-card table-responsive">
+    <div v-if="!['catarro', 'veronica'].includes(clienteId) && mostrarTablaCostos" class="table-card table-responsive">
       <table class="tabla-principal">
         <thead>
           <tr>
@@ -148,11 +148,11 @@
             <th>Medida</th>
             <th>Precio</th>
             <th>Total</th>
-            <th v-if="clienteId !== 'catarro'" class="desktop-only">Ganancias</th>
+            <th v-if="mostrarGanancias" class="desktop-only">Ganancias</th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="(item, index) in itemsVenta" :key="index" @click="toggleGananciasMobile(index)">
+          <tr v-for="(item, index) in itemsVenta" :key="index" :class="{ 'medida-con-cabeza': clienteId === 'veronica' && esMedidaConCabeza(item.medida) }" @click="toggleGananciasMobile(index)">
             <td @click="editKilos(index)" @touchstart="startLongPress(index)" @touchend="endLongPress">
               {{ editingKilosIndex === index ? '' : formatNumber(item.kilosVenta) }}
               <input
@@ -191,11 +191,11 @@
               >
             </td>
             <td>${{ formatNumber(item.totalVenta) }}</td>
-            <td v-if="clienteId !== 'catarro'" :class="{ 'desktop-only': true, 'ganancia-positiva': item.ganancia > 0, 'ganancia-negativa': item.ganancia < 0 }">
+            <td v-if="mostrarGanancias" :class="{ 'desktop-only': true, 'ganancia-positiva': item.ganancia > 0, 'ganancia-negativa': item.ganancia < 0 }">
               ${{ formatNumber(item.ganancia) }}
             </td>
           </tr>
-          <tr v-if="clienteId !== 'catarro' && selectedRowIndex !== null" class="mobile-only ganancia-row">
+          <tr v-if="mostrarGanancias && selectedRowIndex !== null" class="mobile-only ganancia-row">
             <td colspan="4">
               <strong>Ganancias:</strong>
               <span :class="{ 'ganancia-positiva': itemsVenta[selectedRowIndex].ganancia > 0, 'ganancia-negativa': itemsVenta[selectedRowIndex].ganancia < 0 }">
@@ -208,13 +208,13 @@
           <tr class="total">
             <td colspan="3" class="text-right"><strong>Total General Venta:</strong></td>
             <td><strong>${{ formatNumber(totalGeneralVenta) }}</strong></td>
-            <td v-if="clienteId !== 'catarro'" class="desktop-only"><strong>${{ formatNumber(gananciaTotal) }}</strong></td>
+            <td v-if="mostrarGanancias" class="desktop-only"><strong>${{ formatNumber(gananciaTotal) }}</strong></td>
           </tr>
         </tfoot>
       </table>
     </div>
 
-    <div v-if="clienteId !== 'catarro'" class="ganancia-del-dia">
+    <div v-if="mostrarGanancias" class="ganancia-del-dia">
       <h3>Ganancia del Día</h3>
       <p :class="{ 'ganancia-positiva': gananciaDelDia > 0, 'ganancia-negativa': gananciaDelDia < 0 }">
         ${{ formatNumber(gananciaDelDia) }}
@@ -223,8 +223,8 @@
 
     <div class="gestion-cuenta">
     <div class="movimientos-cuenta">
-    <h2>{{ clienteId === 'catarro' ? 'Saldo anterior y fletes' : 'Saldo pendiente' }}</h2>
-    <div class="saldo-pendiente card">
+    <h2 v-if="clienteId !== 'veronica'">{{ clienteId === 'catarro' ? 'Saldo anterior y fletes' : 'Saldo pendiente' }}</h2>
+    <div v-if="clienteId !== 'veronica'" class="saldo-pendiente card">
       <div class="input-row verificacion-saldo-row">
         <span :class="{ 'saldo-a-favor': saldoAnteriorAFavor }">{{ saldoAnteriorAFavor ? 'Saldo a favor' : 'Saldo Acumulado Anterior' }}: ${{ formatNumber(saldoAnteriorAFavor ? -saldoAcumuladoAnterior : saldoAcumuladoAnterior) }}</span>
         <div v-if="clienteId !== 'catarro'" class="verificacion-saldo">
@@ -249,7 +249,7 @@
       <button @click="addCobro" class="add-btn" :disabled="isNotaLocked">Agregar Flete</button>
     </div>
 
-    <template v-if="clienteId !== 'catarro'">
+    <template v-if="!['catarro', 'veronica'].includes(clienteId)">
       <h2>Correcciones</h2>
       <div class="correcciones card">
         <div class="input-row" v-for="(correccion, index) in correcciones" :key="index">
@@ -290,7 +290,7 @@
 
     </div>
     <div class="resumen-cuenta">
-    <h2 v-if="clienteId === 'catarro'">Resumen de la cuenta</h2>
+    <h2 v-if="['catarro', 'veronica'].includes(clienteId)">Resumen de la cuenta</h2>
     <table class="tabla-saldo" :class="{ 'cuenta-catarro': clienteId === 'catarro' }">
       <tr v-if="!sinSaldoAnteriorCatarro || cobros.length > 0" class="saldo-hoy">
         <td>Saldo Hoy</td>
@@ -312,10 +312,12 @@
         <td><strong>{{ etiquetaTotalHoy }}</strong></td>
         <td><strong>${{ formatNumber(totalSinAbono) }}</strong></td>
       </tr>
-      <tr v-for="(correccion, index) in correcciones" :key="'correccion-'+index" class="correccion-row correccion">
-        <td>{{ correccion.descripcion }} (Corrección)</td>
-        <td>-${{ formatNumber(correccion.monto) }}</td>
-      </tr>
+      <template v-if="clienteId !== 'veronica'">
+        <tr v-for="(correccion, index) in correcciones" :key="'correccion-'+index" class="correccion-row correccion">
+          <td>{{ correccion.descripcion }} (Corrección)</td>
+          <td>-${{ formatNumber(correccion.monto) }}</td>
+        </tr>
+      </template>
       <tr v-for="(abono, index) in abonos" :key="'abono-'+index" class="abono">
         <td>{{ abono.descripcion }} (Abono)</td>
         <td>-${{ formatNumber(abono.monto) }}</td>
@@ -534,6 +536,9 @@ export default {
     };
   },
   computed: {
+    mostrarGanancias() {
+      return !['catarro', 'veronica'].includes(this.clienteId);
+    },
     config() {
       return CLIENTES_CONFIG[this.clienteId] || {};
     },
@@ -657,6 +662,9 @@ export default {
   },
   methods: {
     formatNumber,
+    esMedidaConCabeza(medida) {
+      return /\bc\s*\/\s*c\b/i.test(String(medida || ''));
+    },
 
     fechaExcedente(fecha) {
       return fecha.split('-').reverse().join('/');
@@ -1468,7 +1476,7 @@ export default {
     },
 
     toggleGananciasMobile(index) {
-      if (this.clienteId === 'catarro') return;
+      if (!this.mostrarGanancias) return;
       if (window.innerWidth <= 600) {
         this.selectedRowIndex = this.selectedRowIndex === index ? null : index;
       }
@@ -2071,21 +2079,21 @@ th { background-color: #4CAF50; color: white; position: sticky; top: 0; z-index:
 
 .ganancia-row td { font-size: 1.1rem; }
 
-/* Interfaz de Catarro; el documento de impresión conserva su orden y estilos. */
-.cuenta-catarro-ui {
+/* Diseño compartido de Catarro y Lorena. Los estilos de impresión son independientes. */
+.cuenta-moderna-ui {
   box-sizing: border-box;
   background: #e9edf2;
   border: 1px solid #c5cdd6;
-  border-top: 5px solid #a41021;
+  border-top: 5px solid var(--cuenta-acento, #a41021);
   border-radius: 12px;
   padding: 24px;
 }
-.cuenta-catarro-ui .back-button-container {
+.cuenta-moderna-ui .back-button-container {
   background: #e9edf2;
   border-bottom: 1px solid #c5cdd6;
   margin-bottom: 18px;
 }
-.cuenta-catarro-ui .cabecera-cuenta {
+.cuenta-moderna-ui .cabecera-cuenta {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -2094,78 +2102,78 @@ th { background-color: #4CAF50; color: white; position: sticky; top: 0; z-index:
   padding: 24px;
   margin-bottom: 24px;
   border-radius: 10px;
-  background: #991326;
-  border-left: 7px solid #dc263a;
+  background: var(--cuenta-cabecera, #991326);
+  border-left: 7px solid var(--cuenta-borde, #dc263a);
   color: #fff;
 }
-.cuenta-catarro-ui .cabecera-cuenta h1 {
+.cuenta-moderna-ui .cabecera-cuenta h1 {
   color: #fff;
   font-size: clamp(28px, 3vw, 36px);
   line-height: 1.15;
   letter-spacing: -.5px;
   margin: 0;
 }
-.cuenta-catarro-ui .fecha-actual { margin: 0; gap: 8px; align-items: flex-end; }
-.cuenta-catarro-ui .fecha-input { margin: 0; display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
-.cuenta-catarro-ui .fecha-label { color: #fff; font-size: 13px; font-weight: 600; }
-.cuenta-catarro-ui .fecha-input input { padding: 8px 10px; border: 1px solid #fff; border-radius: 6px; background: #fff; color: #671222; font: inherit; font-weight: 600; }
-.cuenta-catarro-ui .fecha-display { color: #fff; font-size: 14px; font-weight: 500; }
-.cuenta-catarro-ui .venta-encabezado {
+.cuenta-moderna-ui .fecha-actual { margin: 0; gap: 8px; align-items: flex-end; }
+.cuenta-moderna-ui .fecha-input { margin: 0; display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.cuenta-moderna-ui .fecha-label { color: #fff; font-size: 13px; font-weight: 600; }
+.cuenta-moderna-ui .fecha-input input { padding: 8px 10px; border: 1px solid #fff; border-radius: 6px; background: #fff; color: var(--cuenta-oscuro, #671222); font: inherit; font-weight: 600; }
+.cuenta-moderna-ui .fecha-display { color: #fff; font-size: 14px; font-weight: 500; }
+.cuenta-moderna-ui .venta-encabezado {
   display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;
   margin: 0; padding: 14px 18px; border-radius: 8px 8px 0 0; background: #202b3c; color: #fff;
 }
-.cuenta-catarro-ui .venta-encabezado h2 { color: #fff; font-size: 20px; line-height: 1.3; margin: 0; }
-.cuenta-catarro-ui .add-product-button { margin: 0; }
-.cuenta-catarro-ui .table-card { margin-bottom: 26px; border: 1px solid #a41021; border-radius: 0 0 8px 8px; background: #fff; }
-.cuenta-catarro-ui .tabla-venta { margin: 0; border-radius: 0; box-shadow: none; font-variant-numeric: tabular-nums; }
-.cuenta-catarro-ui .tabla-venta th { background: #a41021; padding: 14px 16px; font-size: 14px; font-weight: 700; }
-.cuenta-catarro-ui .tabla-venta td { padding: 12px 16px; color: #202b3c; border-color: #d7dde4; }
-.cuenta-catarro-ui .tabla-venta th:not(:nth-child(2)), .cuenta-catarro-ui .tabla-venta td:not(:nth-child(2)) { text-align: right; }
-.cuenta-catarro-ui .tabla-venta tbody tr:nth-child(even) { background: #f0f2f5; }
-.cuenta-catarro-ui .tabla-venta tbody tr:hover { background: #e2e7ee; }
-.cuenta-catarro-ui .tabla-venta tbody td:first-child,
-.cuenta-catarro-ui .tabla-venta td:nth-child(2) { font-weight: 700; }
-.cuenta-catarro-ui .tabla-venta tfoot td { background: #831122; color: #fff; border-top: 2px solid #a41021; padding: 16px; font-size: 17px; }
-.cuenta-catarro-ui .tabla-venta tfoot td:last-child { text-align: right; }
-.cuenta-catarro-ui .precio-venta-input { width: 100px; max-width: 100%; min-height: 38px; box-sizing: border-box; padding: 8px 10px; text-align: right; font: inherit; font-weight: 600; color: #202b3c; background: #fff; border: 1px solid #98a4b3; border-radius: 6px; }
-.cuenta-catarro-ui .gestion-cuenta { display: grid; gap: 24px; align-items: start; margin-bottom: 24px; }
-.cuenta-catarro-ui .movimientos-cuenta, .cuenta-catarro-ui .resumen-cuenta { min-width: 0; }
-.cuenta-catarro-ui .movimientos-cuenta > h2 { color: #202b3c; font-size: 20px; line-height: 1.3; margin: 0 0 12px; padding-left: 10px; border-left: 5px solid #b5162a; }
-.cuenta-catarro-ui .movimientos-cuenta > h2:not(:first-child) { margin-top: 24px; }
-.cuenta-catarro-ui .saldo-pendiente, .cuenta-catarro-ui .abonos { background: #fff; border: 1px solid #bdc6d2; border-top: 3px solid #a41021; border-radius: 8px; padding: 16px; box-shadow: 0 3px 9px #202b3c0a; margin-bottom: 0; }
-.cuenta-catarro-ui .movimientos-cuenta .input-row:not(.verificacion-saldo-row) { display: grid; grid-template-columns: minmax(0, 1fr) minmax(90px, .6fr) auto; gap: 10px; }
-.cuenta-catarro-ui .movimientos-cuenta .responsive-input { max-width: none; width: 100%; min-width: 0; box-sizing: border-box; min-height: 40px; border: 1px solid #a2adba; background: #fff; color: #202b3c; }
-.cuenta-catarro-ui .movimientos-cuenta input[type=number] { text-align: right; font-variant-numeric: tabular-nums; }
-.cuenta-catarro-ui .verificacion-saldo-row { color: #202b3c; line-height: 1.5; }
-.cuenta-catarro-ui .verificacion-input { max-width: 100%; box-sizing: border-box; min-height: 36px; border-color: #a2adba; }
-.cuenta-catarro-ui .abonos-etiquetas { display: grid; grid-template-columns: minmax(0, 1fr) minmax(90px, .6fr) 70px; gap: 10px; color: #354256; font-size: 12px; font-weight: 700; margin-bottom: 8px; }
-.cuenta-catarro-ui .abono-fila { min-width: 0; }
-.cuenta-catarro-ui .abono-fila + .abono-fila { margin-top: 14px; padding-top: 14px; border-top: 1px solid #e6ebf1; }
-.cuenta-catarro-ui .abonos-etiquetas span:nth-child(2) { text-align: right; }
-.cuenta-catarro-ui .movimientos-cuenta .delete-btn { min-width: 70px; padding: 7px 10px; background: #fff; color: #a41021; border: 1px solid #a41021; font-size: 12px; font-weight: 600; }
-.cuenta-catarro-ui .movimientos-cuenta .delete-btn:hover { background: #a41021; color: #fff; }
-.cuenta-catarro-ui .add-btn, .cuenta-catarro-ui .add-product-button button { padding: 7px 12px; min-height: 36px; border: 1px solid #bd182e; border-radius: 6px; background: #bd182e; color: #fff; font-size: 13px; font-weight: 700; }
-.cuenta-catarro-ui .add-btn:hover, .cuenta-catarro-ui .add-product-button button:hover { background: #8e1023; border-color: #8e1023; transform: none; }
-.cuenta-catarro-ui .add-btn:disabled, .cuenta-catarro-ui .add-product-button button:disabled { opacity: .5; cursor: not-allowed; }
-.cuenta-catarro-ui .resumen-cuenta { padding: 18px; border: 1px solid #a3aebd; border-top: 4px solid #202b3c; border-radius: 8px; background: #fff; }
-.cuenta-catarro-ui .resumen-cuenta > h2 { margin: 0 0 16px; color: #202b3c; font-size: 20px; line-height: 1.3; }
-.cuenta-catarro-ui .resumen-cuenta .tabla-saldo { margin-bottom: 18px; }
-.cuenta-catarro-ui .button-container { margin: 0; gap: 8px; }
-.cuenta-catarro-ui .button-container button { min-height: 42px; font-size: 13px; font-weight: 600; border-radius: 6px; flex: 1 1 auto; }
-.cuenta-catarro-ui .save-button { background: #a41021; }
-.cuenta-catarro-ui .save-button:hover { background: #7f0f1d; }
-.cuenta-catarro-ui .print-button { background: #fff; color: #202b3c; border: 1px solid #67758a; }
-.cuenta-catarro-ui .print-button:hover { background: #e2e7ee; }
-.cuenta-catarro-ui .pdf-button { background: #202b3c; }
-.cuenta-catarro-ui .pdf-button:hover { background: #0f172a; }
-.cuenta-catarro-ui .estado-cuenta { width: fit-content; padding: 8px 18px; border-radius: 6px; font-size: 15px; text-align: left; }
-.cuenta-catarro-ui .estado-cuenta.pagado { background: #166534; color: #fff; }
-.cuenta-catarro-ui .estado-cuenta.no-pagado { background: #a41021; color: #fff; }
-.cuenta-catarro-ui .btn-agregar-observacion { background: #354256; }
-.cuenta-catarro-ui .precio-venta-input:focus-visible, .cuenta-catarro-ui .movimientos-cuenta input:focus-visible, .cuenta-catarro-ui .fecha-input input:focus-visible { outline: 2px solid #a41021; outline-offset: 2px; border-color: #a41021; }
-.cuenta-catarro-ui button:focus-visible { outline: 2px solid #a41021; outline-offset: 3px; }
+.cuenta-moderna-ui .venta-encabezado h2 { color: #fff; font-size: 20px; line-height: 1.3; margin: 0; }
+.cuenta-moderna-ui .add-product-button { margin: 0; }
+.cuenta-moderna-ui .table-card { margin-bottom: 26px; border: 1px solid var(--cuenta-acento, #a41021); border-radius: 0 0 8px 8px; background: #fff; }
+.cuenta-moderna-ui .tabla-venta { margin: 0; border-radius: 0; box-shadow: none; font-variant-numeric: tabular-nums; }
+.cuenta-moderna-ui .tabla-venta th { background: var(--cuenta-acento, #a41021); padding: 14px 16px; font-size: 14px; font-weight: 700; }
+.cuenta-moderna-ui .tabla-venta td { padding: 12px 16px; color: #202b3c; border-color: #d7dde4; }
+.cuenta-moderna-ui .tabla-venta th:not(:nth-child(2)), .cuenta-moderna-ui .tabla-venta td:not(:nth-child(2)) { text-align: right; }
+.cuenta-moderna-ui .tabla-venta tbody tr:nth-child(even) { background: #f0f2f5; }
+.cuenta-moderna-ui .tabla-venta tbody tr:hover { background: #e2e7ee; }
+.cuenta-moderna-ui .tabla-venta tbody td:first-child,
+.cuenta-moderna-ui .tabla-venta td:nth-child(2) { font-weight: 700; }
+.cuenta-moderna-ui .tabla-venta tfoot td { background: var(--cuenta-oscuro, #831122); color: #fff; border-top: 2px solid var(--cuenta-acento, #a41021); padding: 16px; font-size: 17px; }
+.cuenta-moderna-ui .tabla-venta tfoot td:last-child { text-align: right; }
+.cuenta-moderna-ui .precio-venta-input { width: 100px; max-width: 100%; min-height: 38px; box-sizing: border-box; padding: 8px 10px; text-align: right; font: inherit; font-weight: 600; color: #202b3c; background: #fff; border: 1px solid #98a4b3; border-radius: 6px; }
+.cuenta-moderna-ui .gestion-cuenta { display: grid; gap: 24px; align-items: start; margin-bottom: 24px; }
+.cuenta-moderna-ui .movimientos-cuenta, .cuenta-moderna-ui .resumen-cuenta { min-width: 0; }
+.cuenta-moderna-ui .movimientos-cuenta > h2 { color: #202b3c; font-size: 20px; line-height: 1.3; margin: 0 0 12px; padding-left: 10px; border-left: 5px solid var(--cuenta-acento, #b5162a); }
+.cuenta-moderna-ui .movimientos-cuenta > h2:not(:first-child) { margin-top: 24px; }
+.cuenta-moderna-ui .saldo-pendiente, .cuenta-moderna-ui .abonos { background: #fff; border: 1px solid #bdc6d2; border-top: 3px solid var(--cuenta-acento, #a41021); border-radius: 8px; padding: 16px; box-shadow: 0 3px 9px #202b3c0a; margin-bottom: 0; }
+.cuenta-moderna-ui .movimientos-cuenta .input-row:not(.verificacion-saldo-row) { display: grid; grid-template-columns: minmax(0, 1fr) minmax(90px, .6fr) auto; gap: 10px; }
+.cuenta-moderna-ui .movimientos-cuenta .responsive-input { max-width: none; width: 100%; min-width: 0; box-sizing: border-box; min-height: 40px; border: 1px solid #a2adba; background: #fff; color: #202b3c; }
+.cuenta-moderna-ui .movimientos-cuenta input[type=number] { text-align: right; font-variant-numeric: tabular-nums; }
+.cuenta-moderna-ui .verificacion-saldo-row { color: #202b3c; line-height: 1.5; }
+.cuenta-moderna-ui .verificacion-input { max-width: 100%; box-sizing: border-box; min-height: 36px; border-color: #a2adba; }
+.cuenta-moderna-ui .abonos-etiquetas { display: grid; grid-template-columns: minmax(0, 1fr) minmax(90px, .6fr) 70px; gap: 10px; color: #354256; font-size: 12px; font-weight: 700; margin-bottom: 8px; }
+.cuenta-moderna-ui .abono-fila { min-width: 0; }
+.cuenta-moderna-ui .abono-fila + .abono-fila { margin-top: 14px; padding-top: 14px; border-top: 1px solid #e6ebf1; }
+.cuenta-moderna-ui .abonos-etiquetas span:nth-child(2) { text-align: right; }
+.cuenta-moderna-ui .movimientos-cuenta .delete-btn { min-width: 70px; padding: 7px 10px; background: #fff; color: var(--cuenta-acento, #a41021); border: 1px solid var(--cuenta-acento, #a41021); font-size: 12px; font-weight: 600; }
+.cuenta-moderna-ui .movimientos-cuenta .delete-btn:hover { background: var(--cuenta-acento, #a41021); color: #fff; }
+.cuenta-moderna-ui .add-btn, .cuenta-moderna-ui .add-product-button button { padding: 7px 12px; min-height: 36px; border: 1px solid var(--cuenta-acento, #bd182e); border-radius: 6px; background: var(--cuenta-acento, #bd182e); color: #fff; font-size: 13px; font-weight: 700; }
+.cuenta-moderna-ui .add-btn:hover, .cuenta-moderna-ui .add-product-button button:hover { background: var(--cuenta-oscuro, #8e1023); border-color: var(--cuenta-oscuro, #8e1023); transform: none; }
+.cuenta-moderna-ui .add-btn:disabled, .cuenta-moderna-ui .add-product-button button:disabled { opacity: .5; cursor: not-allowed; }
+.cuenta-moderna-ui .resumen-cuenta { padding: 18px; border: 1px solid #a3aebd; border-top: 4px solid #202b3c; border-radius: 8px; background: #fff; }
+.cuenta-moderna-ui .resumen-cuenta > h2 { margin: 0 0 16px; color: #202b3c; font-size: 20px; line-height: 1.3; }
+.cuenta-moderna-ui .resumen-cuenta .tabla-saldo { margin-bottom: 18px; }
+.cuenta-moderna-ui .button-container { margin: 0; gap: 8px; }
+.cuenta-moderna-ui .button-container button { min-height: 42px; font-size: 13px; font-weight: 600; border-radius: 6px; flex: 1 1 auto; }
+.cuenta-moderna-ui .save-button { background: var(--cuenta-acento, #a41021); }
+.cuenta-moderna-ui .save-button:hover { background: var(--cuenta-oscuro, #7f0f1d); }
+.cuenta-moderna-ui .print-button { background: #fff; color: #202b3c; border: 1px solid #67758a; }
+.cuenta-moderna-ui .print-button:hover { background: #e2e7ee; }
+.cuenta-moderna-ui .pdf-button { background: #202b3c; }
+.cuenta-moderna-ui .pdf-button:hover { background: #0f172a; }
+.cuenta-moderna-ui .estado-cuenta { width: fit-content; padding: 8px 18px; border-radius: 6px; font-size: 15px; text-align: left; }
+.cuenta-moderna-ui .estado-cuenta.pagado { background: #166534; color: #fff; }
+.cuenta-moderna-ui .estado-cuenta.no-pagado { background: var(--cuenta-acento, #a41021); color: #fff; }
+.cuenta-moderna-ui .btn-agregar-observacion { background: #354256; }
+.cuenta-moderna-ui .precio-venta-input:focus-visible, .cuenta-moderna-ui .movimientos-cuenta input:focus-visible, .cuenta-moderna-ui .fecha-input input:focus-visible { outline: 2px solid var(--cuenta-acento, #a41021); outline-offset: 2px; border-color: var(--cuenta-acento, #a41021); }
+.cuenta-moderna-ui button:focus-visible { outline: 2px solid var(--cuenta-acento, #a41021); outline-offset: 3px; }
 @media (min-width: 960px) {
-  .cuenta-catarro-ui .gestion-cuenta { grid-template-columns: minmax(0, 1fr) minmax(0, 1.08fr); }
+  .cuenta-moderna-ui .gestion-cuenta { grid-template-columns: minmax(0, 1fr) minmax(0, 1.08fr); }
 }
 
 @media (max-width: 600px) {
@@ -2180,21 +2188,78 @@ th { background-color: #4CAF50; color: white; position: sticky; top: 0; z-index:
   th, td { padding: 8px 10px; font-size: 13px; }
   .button-container { flex-direction: column; }
   .save-button, .print-button { width: 100%; }
-  .cuenta-catarro-ui { box-sizing: border-box; width: 100%; padding: 14px; }
-  .cuenta-catarro-ui .cabecera-cuenta { padding: 18px; gap: 18px; }
-  .cuenta-catarro-ui .fecha-actual { align-items: flex-start; }
-  .cuenta-catarro-ui .fecha-input { align-items: flex-start; }
-  .cuenta-catarro-ui .venta-encabezado { padding: 12px; }
-  .cuenta-catarro-ui .venta-encabezado h2 { font-size: 18px; }
-  .cuenta-catarro-ui .tabla-venta th, .cuenta-catarro-ui .tabla-venta td { padding: 10px 8px; font-size: 13px; }
-  .cuenta-catarro-ui .precio-venta-input { width: 84px; padding: 7px 6px; }
-  .cuenta-catarro-ui .movimientos-cuenta .input-row:not(.verificacion-saldo-row) { grid-template-columns: minmax(0, 1fr) auto; }
-  .cuenta-catarro-ui .movimientos-cuenta .input-row > input[type=text] { grid-column: 1 / -1; }
-  .cuenta-catarro-ui .abonos-etiquetas { display: none; }
-  .cuenta-catarro-ui .resumen-cuenta { padding: 12px; }
-  .cuenta-catarro-ui .add-btn, .cuenta-catarro-ui .add-product-button button, .cuenta-catarro-ui .abonos .delete-btn { min-height: 44px; }
+  .cuenta-moderna-ui { box-sizing: border-box; width: 100%; padding: 14px; }
+  .cuenta-moderna-ui .cabecera-cuenta { padding: 18px; gap: 18px; }
+  .cuenta-moderna-ui .fecha-actual { align-items: flex-start; }
+  .cuenta-moderna-ui .fecha-input { align-items: flex-start; }
+  .cuenta-moderna-ui .venta-encabezado { padding: 12px; }
+  .cuenta-moderna-ui .venta-encabezado h2 { font-size: 18px; }
+  .cuenta-moderna-ui .tabla-venta th, .cuenta-moderna-ui .tabla-venta td { padding: 10px 8px; font-size: 13px; }
+  .cuenta-moderna-ui .precio-venta-input { width: 84px; padding: 7px 6px; }
+  .cuenta-moderna-ui .movimientos-cuenta .input-row:not(.verificacion-saldo-row) { grid-template-columns: minmax(0, 1fr) auto; }
+  .cuenta-moderna-ui .movimientos-cuenta .input-row > input[type=text] { grid-column: 1 / -1; }
+  .cuenta-moderna-ui .abonos-etiquetas { display: none; }
+  .cuenta-moderna-ui .resumen-cuenta { padding: 12px; }
+  .cuenta-moderna-ui .add-btn, .cuenta-moderna-ui .add-product-button button, .cuenta-moderna-ui .abonos .delete-btn { min-height: 44px; }
 }
 @media (min-width: 601px) {
   .mobile-only { display: none; }
+}
+
+/* Lorena mantiene sus herramientas de costos, correcciones y bloqueo. */
+.cuenta-lorena-ui {
+  --cuenta-acento: #b45309;
+  --cuenta-cabecera: #92400e;
+  --cuenta-borde: #f59e0b;
+  --cuenta-oscuro: #78350f;
+}
+.cuenta-lorena-ui .back-button-container { position: static; display: flex; justify-content: flex-start; gap: 10px; padding: 0 0 16px; }
+.cuenta-lorena-ui .back-button-container ::v-deep .precio-historial-btn,
+.cuenta-lorena-ui .back-button-container ::v-deep .stash-button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 42px; min-width: 100px; margin: 0; padding: 10px 16px; border: 1px solid #b7c2d0; border-radius: 7px; background: #fff; color: #334155; font-family: inherit; font-size: 14px; font-weight: 600; line-height: 1.3; letter-spacing: normal; text-transform: none; box-shadow: none; text-shadow: none; animation: none; }
+.cuenta-lorena-ui .back-button-container ::v-deep .precio-historial-btn:hover,
+.cuenta-lorena-ui .back-button-container ::v-deep .stash-button:hover { background: #fff7ed; border-color: #b45309; transform: none; }
+.cuenta-lorena-ui .cabecera-cuenta { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 24px; padding: 24px; margin-bottom: 16px; }
+.cuenta-lorena-ui .cabecera-cuenta h1 { text-align: left; min-width: 0; }
+.cuenta-lorena-ui .fecha-actual { align-items: flex-start; min-width: 0; text-align: left; }
+.cuenta-lorena-ui .fecha-input { display: grid; gap: 6px; width: 100%; }
+.cuenta-lorena-ui .fecha-input input { box-sizing: border-box; min-height: 42px; width: 100%; min-width: 0; }
+.cuenta-lorena-ui .fecha-display { margin-top: 6px; font-size: 13px; }
+.cuenta-lorena-ui .nota-lock { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; border: 1px solid #c5cdd6; border-left: 4px solid #b45309; border-radius: 8px; padding: 18px 20px; gap: 6px 24px; margin-bottom: 24px; text-align: left; }
+.cuenta-lorena-ui .nota-lock-info { grid-column: 1; grid-row: 1; justify-content: flex-start; flex-wrap: wrap; }
+.cuenta-lorena-ui .nota-lock-label { color: #334155; }
+.cuenta-lorena-ui .nota-lock-btn { grid-column: 2; grid-row: 1 / 3; justify-self: end; width: auto; margin: 0; background: #243047; min-height: 42px; border-radius: 6px; }
+.cuenta-lorena-ui .nota-lock-help { grid-column: 1; grid-row: 2; width: auto; font-size: 13px; line-height: 1.5; }
+.cuenta-lorena-ui .input-section { border: 1px solid #c5cdd6; margin-bottom: 16px; }
+.cuenta-lorena-ui .input-section h2 { margin: 0 0 16px; color: #243047; font-size: 20px; }
+.cuenta-lorena-ui .input-section .input-row { display: flex; flex-wrap: wrap; gap: 10px; }
+.cuenta-lorena-ui .input-section input { flex: 1 1 130px; min-width: 0; max-width: none; min-height: 42px; border: 1px solid #a2adba; background: #fff; color: #243047; box-sizing: border-box; }
+.cuenta-lorena-ui .input-section button { background: #b45309; min-height: 42px; border-radius: 6px; }
+.cuenta-lorena-ui .toggle-costos-btn { background: #fff; border: 1px solid #a2adba; color: #334155; min-height: 40px; border-radius: 6px; }
+.cuenta-lorena-ui .tabla-principal { margin: 0; box-shadow: none; font-variant-numeric: tabular-nums; }
+.cuenta-lorena-ui .tabla-principal th { background: #334155; }
+.cuenta-lorena-ui .tabla-venta tbody tr.medida-con-cabeza > td { background: #eff6ff; }
+.cuenta-lorena-ui .tabla-venta tbody tr.medida-con-cabeza > td:nth-child(2) { color: #1d4ed8; }
+.cuenta-lorena-ui .tabla-venta tbody tr.medida-con-cabeza > td:first-child { box-shadow: inset 4px 0 #2563eb; }
+.cuenta-lorena-ui .tabla-venta tbody tr.medida-con-cabeza:hover > td { background: #dbeafe; }
+.cuenta-lorena-ui .tabla-venta td.ganancia-positiva { color: #166534; }
+.cuenta-lorena-ui .tabla-venta td.ganancia-negativa { color: #b91c1c; }
+.cuenta-lorena-ui .ganancia-del-dia { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; padding: 16px 20px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; }
+.cuenta-lorena-ui .ganancia-del-dia h3 { margin: 0; font-size: 17px; color: #334155; }
+.cuenta-lorena-ui .ganancia-del-dia p { margin: 0; font-size: 24px; font-variant-numeric: tabular-nums; }
+.cuenta-lorena-ui .correcciones { background: #fff; border: 1px solid #bdc6d2; border-top: 3px solid #b45309; border-radius: 8px; padding: 16px; margin-bottom: 0; }
+.cuenta-lorena-ui .tabla-saldo { box-shadow: none; font-variant-numeric: tabular-nums; }
+.cuenta-lorena-ui .tabla-saldo td:last-child { text-align: right; white-space: nowrap; }
+.cuenta-lorena-ui .tabla-saldo .total td { background: #fff7ed; color: #78350f; border-top: 2px solid #b45309; }
+.cuenta-lorena-ui .fecha-actual.bloque-sin-nota { background: #fff1f2; border-radius: 6px; padding: 12px; }
+.cuenta-lorena-ui .bloque-sin-nota .fecha-label, .cuenta-lorena-ui .bloque-sin-nota .fecha-display, .cuenta-lorena-ui .alerta-sin-nota { color: #9f1239; }
+.cuenta-lorena-ui button:disabled, .cuenta-lorena-ui input:disabled { opacity: .6; cursor: not-allowed; }
+@media (max-width: 600px) {
+  .cuenta-lorena-ui .back-button-container { justify-content: flex-start; }
+  .cuenta-lorena-ui .cabecera-cuenta { grid-template-columns: minmax(0, 1fr); padding: 18px; gap: 20px; }
+  .cuenta-lorena-ui .fecha-actual { width: 100%; }
+  .cuenta-lorena-ui .nota-lock { grid-template-columns: minmax(0, 1fr); padding: 16px; gap: 10px; }
+  .cuenta-lorena-ui .nota-lock-btn { grid-column: 1; grid-row: 3; justify-self: stretch; width: 100%; margin-top: 4px; }
+  .cuenta-lorena-ui .input-section input { flex-basis: calc(50% - 10px); width: calc(50% - 10px); }
+  .cuenta-lorena-ui .input-section button { width: 100%; }
 }
 </style>

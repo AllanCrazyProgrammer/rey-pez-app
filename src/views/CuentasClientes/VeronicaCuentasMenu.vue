@@ -1,34 +1,54 @@
 <template>
   <div class="veronica-cuentas-menu-container">
-    <h1>Menú de Cuentas Veronica</h1>
-    
-    <div class="actions-container actions-sticky">
-      <router-link to="/cuentas-mexico" class="action-button back-btn">
-        Cuentas México
-      </router-link>
+    <router-link to="/cuentas-mexico" class="action-button menu-regresar">
+      <span aria-hidden="true">←</span> Cuentas México
+    </router-link>
+    <header class="menu-encabezado">
+      <div>
+        <p class="menu-eyebrow">CUENTAS MÉXICO / LORENA</p>
+        <h1>Cuentas de Lorena</h1>
+        <p class="menu-descripcion">Verónica · Notas, abonos y seguimiento de ventas.</p>
+      </div>
       <router-link to="/cuentas-veronica/nueva" class="action-button new-cuenta-btn">
-        Nueva Cuenta
+        <span aria-hidden="true">+</span> Nueva cuenta
       </router-link>
+    </header>
+
+    <div class="actions-container" aria-label="Herramientas de Lorena">
       <router-link to="/ventas-ganancias-veronica" class="action-button ventas-ganancias-btn">
-        Ventas y Ganancias
+        Ventas y ganancias
       </router-link>
       <PreciosHistorialModal />
       <StashModalV2 cliente="veronica" />
     </div>
 
-    <div class="reporte-cuentas-card card">
-      <h2>Generar reporte PDF</h2>
-      <ReporteCuentasVeronicaButton />
-      <button @click="generarReporteSemanal" class="action-button reporte-semanal-btn" style="margin-top: 10px; width: 100%;">
-        📊 Reporte Semanal
-      </button>
+    <div class="herramientas-grid">
+      <section class="reporte-cuentas-card card">
+        <p class="seccion-eyebrow">REPORTES</p>
+        <h2>Cuentas en PDF</h2>
+        <p class="seccion-descripcion">Selecciona un periodo para generar tu reporte.</p>
+        <ReporteCuentasVeronicaButton />
+      </section>
+      <section class="resumen-ventas-card card">
+        <p class="seccion-eyebrow">ANÁLISIS DE VENTAS</p>
+        <h2>El detalle de tu operación</h2>
+        <p class="seccion-descripcion">Consulta ventas por producto o revisa los abonos y el faltante de cada semana.</p>
+        <div class="analisis-acciones">
+          <ResumenVentasVeronicaModal />
+          <button type="button" @click="generarReporteSemanal" class="action-button reporte-semanal-btn">
+            Reporte semanal
+          </button>
+        </div>
+      </section>
     </div>
 
-    <div class="resumen-ventas-card card">
-      <h2>Resumen de Ventas por Tipo de Producto</h2>
-      <ResumenVentasVeronicaModal />
-    </div>
-
+    <section class="cuentas-list card" aria-labelledby="registros-lorena">
+      <div class="registros-encabezado">
+        <div>
+          <h2 id="registros-lorena">Registros de cuentas</h2>
+          <p class="seccion-descripcion" aria-live="polite">{{ isLoading ? 'Consultando registros…' : cuentasFiltradas.length + ' registros encontrados' }}</p>
+        </div>
+      </div>
     <div class="filter-container">
       <div class="filter-group">
         <label for="filter-select">Filtrar por estado:</label>
@@ -36,6 +56,7 @@
           <option value="todas">Todas</option>
           <option value="pagadas">Pagadas</option>
           <option value="no-pagadas">No Pagadas</option>
+          <option value="sin-nota">Sin nota</option>
         </select>
       </div>
       <div class="filter-group">
@@ -53,13 +74,12 @@
           class="filter-medida-clear"
           @click="filtroMedida = ''"
           title="Limpiar filtro de medida"
+          aria-label="Limpiar filtro de medida"
         >×</button>
       </div>
     </div>
 
-    <div class="cuentas-list card">
-      <h2>Registros de Cuentas</h2>
-      <div v-if="isLoading" class="loading">Cargando registros...</div>
+      <div v-if="isLoading" class="loading" role="status">Cargando registros...</div>
       <div v-else-if="cuentasFiltradas.length === 0" class="no-records">
         No hay registros de cuentas que coincidan con el filtro.
       </div>
@@ -74,11 +94,16 @@
           }"
         >
           <div class="cuenta-content">
-            <span class="cuenta-date">{{ formatDate(cuenta.fecha) }}</span>
+            <div class="cuenta-cabecera">
+              <span class="cuenta-date">{{ formatDate(cuenta.fecha) }}</span>
+              <span :class="['estado-cuenta', cuenta.missingNota ? 'estado-sin-nota' : cuenta.estadoPagado ? 'pagado' : 'no-pagado']">
+                {{ cuenta.missingNota ? 'Sin nota' : cuenta.estadoPagado ? 'Pagado' : 'No pagado' }}
+              </span>
+            </div>
             <p class="cuenta-summary">
-              <span v-if="!cuenta.missingNota">Saldo Hoy: ${{ formatNumber(cuenta.saldoHoy) }}</span>
+              <span v-if="!cuenta.missingNota">Venta del día <strong>${{ formatNumber(cuenta.saldoHoy) }}</strong></span>
               <span v-else class="texto-sin-nota">Sin nota registrada</span>
-              <span v-if="!cuenta.missingNota">Total Acumulado: ${{ formatNumber(cuenta.totalNota) }}</span>
+              <span v-if="!cuenta.missingNota">Saldo acumulado <strong>${{ formatNumber(cuenta.totalNota) }}</strong></span>
             </p>
             <div v-if="!cuenta.missingNota" class="lock-status">
               <span :class="['lock-badge', cuenta.notaBloqueada ? 'lock-on' : 'lock-off']">
@@ -102,13 +127,6 @@
                 Total abonos: ${{ formatNumber(cuenta.totalAbonos) }}
               </p>
             </div>
-            <span
-              v-if="!cuenta.missingNota"
-              :class="['estado-cuenta', cuenta.estadoPagado ? 'pagado' : 'no-pagado']"
-            >
-              {{ cuenta.estadoPagado ? 'Pagado' : 'No Pagado' }}
-            </span>
-            <span v-else class="estado-cuenta estado-sin-nota">Sin nota</span>
           </div>
           <div v-if="!cuenta.missingNota && cuenta.saldoNegativoDetectado" class="saldo-negativo-alerta">
             <span class="alerta-icono">⚠️</span>
@@ -150,10 +168,10 @@
         <button @click="paginaActual++" :disabled="paginaActual === totalPaginas" class="pagination-btn">Siguiente &rsaquo;</button>
         <button @click="paginaActual = totalPaginas" :disabled="paginaActual === totalPaginas" class="pagination-btn">&raquo;</button>
       </div>
-    </div>
+    </section>
 
     <template v-if="showSaveMessage && lastSaveMessage">
-      <div class="save-message">
+      <div class="save-message" role="status">
         {{ lastSaveMessage }}
       </div>
     </template>
@@ -270,7 +288,6 @@ import { db } from '@/firebase';
 import { collection, query, orderBy, doc, onSnapshot, updateDoc, getDocs, limit, writeBatch } from 'firebase/firestore';
 import EmbarqueCuentasService from '@/utils/services/EmbarqueCuentasService';
 import PapeleraService from '@/services/PapeleraService';
-import BackButton from '@/components/BackButton.vue';
 import PreciosHistorialModal from '@/components/PreciosHistorialModal.vue';
 import StashModalV2 from '@/components/StashModalV2.vue';
 import ReporteCuentasVeronicaButton from '@/components/Cuentas/ReporteCuentasVeronicaButton.vue';
@@ -285,7 +302,6 @@ import { normalizarFechaValor } from '@/utils/dateUtils';
 export default {
   name: 'VeronicaCuentasMenu',
   components: {
-    BackButton,
     PreciosHistorialModal,
     StashModalV2,
     ReporteCuentasVeronicaButton,
@@ -341,6 +357,9 @@ export default {
         case 'pagadas':
           resultado = this.cuentas.filter(cuenta => cuenta.estadoPagado);
           break;
+        case 'sin-nota':
+          resultado = this.cuentas.filter(cuenta => cuenta.missingNota);
+          break;
         case 'no-pagadas':
           resultado = this.cuentas.filter(cuenta => !cuenta.estadoPagado);
           break;
@@ -366,6 +385,9 @@ export default {
     }
   },
   watch: {
+    totalPaginas(total) {
+      this.paginaActual = Math.min(this.paginaActual, total);
+    },
     filtroEstado() {
       this.paginaActual = 1;
     },
@@ -1014,747 +1036,111 @@ export default {
 
 <style scoped>
 .veronica-cuentas-menu-container {
-  max-width: 800px;
-  width: 95%;
-  margin: 0 auto;
-  padding: 20px;
-  min-height: calc(100vh - 160px);
-  display: flex;
-  flex-direction: column;
-}
-
-h1, h2 {
-  color: #ff8c00;
-  text-align: center;
-}
-
-.actions-container {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 20px;
-}
-
-.actions-sticky {
-  position: sticky;
-  top: 0;
-  z-index: 10;
-  background: linear-gradient(180deg, rgba(255,255,255,1) 70%, rgba(255,255,255,0));
-  padding-top: 8px;
-  padding-bottom: 8px;
-}
-
-.action-button {
-  background-color: #ff8c00;
-  color: white;
-  border: none;
-  padding: 10px 20px;
-  border-radius: 4px;
-  cursor: pointer;
-  text-decoration: none;
-  display: inline-block;
-  font-size: 16px;
-  transition: background-color 0.3s ease;
-}
-
-.action-button:hover {
-  background-color: #e07600;
-}
-
-.back-btn {
-  background-color: #6c757d;
-}
-
-.back-btn:hover {
-  background-color: #5a6268;
-}
-
-.card {
-  background: #fff;
-  border-radius: 10px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-  padding: 16px;
-}
-
-.reporte-cuentas-card {
-  margin-bottom: 20px;
-}
-
-.reporte-cuentas-card h2 {
-  margin: 0 0 8px;
-  font-size: 1.2em;
-  color: #ff8c00;
-}
-
-.resumen-ventas-card {
-  margin-bottom: 20px;
-}
-
-.resumen-ventas-card h2 {
-  margin: 0 0 8px;
-  font-size: 1.2em;
-  color: #ff8c00;
-}
-
-.cuentas-list {
-  background-color: #fff8f0;
-  border-radius: 8px;
-  padding: 20px;
-  flex-grow: 1;
-}
-
-.loading, .no-records {
-  text-align: center;
-  color: #666;
-  padding: 20px;
-}
-
-.cuenta-item {
-  background-color: white;
-  border-radius: 4px;
-  margin-bottom: 15px;
-  padding: 15px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  display: flex;
-  flex-direction: column;
-  transition: box-shadow 0.3s ease;
-  border-left: 4px solid #ff8c00;
-}
-
-.cuenta-item.cuenta-sin-nota {
-  background: #f2f2f2;
-  border-left-color: #bdbdbd;
-}
-
-.cuenta-item:hover {
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
-}
-
-.cuenta-content {
-  margin-bottom: 10px;
-}
-
-.cuenta-date {
-  color: #ff8c00;
-  font-weight: bold;
-  font-size: 1.1em;
-  display: block;
-  margin-bottom: 5px;
-}
-
-.cuenta-summary {
-  font-size: 0.9em;
-  color: #666;
-  margin: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.cuenta-summary span {
-  flex: 1 1 auto;
-}
-
-.cuenta-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-}
-
-.edit-btn, .delete-btn {
-  padding: 5px 10px;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 0.9em;
-  transition: background-color 0.3s ease;
-}
-
-.edit-btn {
-  background-color: #4CAF50;
-  color: white;
-}
-
-.edit-btn:hover {
-  background-color: #45a049;
-}
-
-.delete-btn {
-  background-color: #f44336;
-  color: white;
-}
-
-.delete-btn:hover {
-  background-color: #d32f2f;
-}
-
-.adjust-btn {
-  padding: 5px 10px;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 0.9em;
-  transition: background-color 0.3s ease;
-  background-color: #ff8c00;
-  color: white;
-}
-
-.adjust-btn:hover {
-  background-color: #e07600;
-}
-
-.saldo-negativo-alerta {
-  margin: 10px 0;
-  padding: 8px 10px;
-  background-color: #ffebee;
-  border-left: 4px solid #f44336;
-  border-radius: 4px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  align-items: center;
-  font-size: 0.9em;
-}
-
-.alerta-texto {
-  font-weight: bold;
-  color: #c62828;
-}
-
-.btn-ajustar-auto {
-  background-color: #f44336;
-  color: white;
-  border: none;
-  padding: 6px 12px;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 0.85em;
-  font-weight: 600;
-  transition: background-color 0.2s ease;
-}
-
-.btn-ajustar-auto:hover:not(:disabled) {
-  background-color: #d32f2f;
-}
-
-.btn-ajustar-auto:disabled {
-  opacity: 0.7;
-  cursor: not-allowed;
-}
-
-.ajuste-info {
-  margin: 10px 0;
-  padding: 8px 10px;
-  background-color: #fff8e1;
-  border-left: 4px solid #ff8c00;
-  border-radius: 4px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-  font-size: 0.9em;
-}
-
-.ajuste-label {
-  font-weight: bold;
-  color: #b84300;
-}
-
-.ajuste-monto {
-  font-weight: bold;
-  color: #d67a00;
-}
-
-.ajuste-motivo {
-  color: #666;
-  font-style: italic;
-}
-
-.ajuste-modal-fecha {
-  text-align: center;
-  color: #ff8c00;
-  font-weight: bold;
-  margin: 0 0 8px;
-}
-
-.ajuste-modal-hint {
-  color: #666;
-  font-size: 0.85em;
-  margin: 0 0 16px;
-}
-
-.ajuste-form-row {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin-bottom: 12px;
-}
-
-.ajuste-form-row label {
-  font-weight: 600;
-  color: #444;
-  font-size: 0.9em;
-}
-
-.ajuste-input {
-  padding: 8px 10px;
-  border-radius: 4px;
-  border: 1px solid #ccc;
-  font-size: 14px;
-}
-
-.ajuste-input:focus {
-  outline: none;
-  border-color: #ff8c00;
-  box-shadow: 0 0 0 2px rgba(255, 140, 0, 0.2);
-}
-
-@media (max-width: 768px) {
-  .veronica-cuentas-menu-container {
-    padding: 10px;
-    width: 100%;
-  }
-
-  .actions-container {
-    flex-direction: column;
-    gap: 10px;
-  }
-
-  .action-button {
-    width: 100%;
-    text-align: center;
-  }
-
-  .cuenta-item {
-    padding: 10px;
-  }
-
-  .cuenta-date {
-    font-size: 1em;
-  }
-
-  .cuenta-summary {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .cuenta-summary span {
-    width: 100%;
-  }
-
-  .cuenta-actions {
-    flex-direction: row;
-    justify-content: space-between;
-  }
-
-  .edit-btn, .delete-btn, .adjust-btn {
-    padding: 8px 15px;
-    font-size: 0.8em;
-    flex-grow: 1;
-  }
-}
-
-.filter-container {
-  margin-bottom: 20px;
-  display: flex;
-  justify-content: flex-end;
-  align-items: center;
-  gap: 16px;
-  flex-wrap: wrap;
-}
-
-.filter-group {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  color: #fff;
-}
-
-.filter-group label {
-  color: #fff;
-  font-weight: 600;
-  font-size: 14px;
-}
-
-.filter-container select,
-.filter-medida-input {
-  padding: 5px 8px;
-  border-radius: 4px;
-  border: 1px solid #ccc;
-  font-size: 14px;
-  color: #222;
-  background-color: #fff;
-}
-
-.filter-medida-input {
-  min-width: 160px;
-}
-
-.filter-medida-input::placeholder {
-  color: #888;
-  opacity: 1;
-}
-
-.filter-medida-input:focus {
-  outline: none;
-  border-color: #ff8c00;
-  box-shadow: 0 0 0 2px rgba(255, 140, 0, 0.2);
-}
-
-.filter-medida-clear {
-  background: #f5f5f5;
-  border: 1px solid #ccc;
-  border-radius: 50%;
-  width: 24px;
-  height: 24px;
-  line-height: 1;
-  font-size: 16px;
-  cursor: pointer;
-  color: #444;
-  padding: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.filter-medida-clear:hover {
-  background: #e0e0e0;
-  color: #000;
-}
-
-@media (max-width: 768px) {
-  .filter-container {
-    justify-content: stretch;
-    flex-direction: column;
-    align-items: stretch;
-  }
-  .filter-group {
-    justify-content: space-between;
-  }
-  .filter-medida-input {
-    flex: 1;
-  }
-}
-
-.estado-cuenta {
-  font-weight: bold;
-  padding: 5px 10px;
-  border-radius: 4px;
-  display: inline-block;
-  margin-top: 10px;
-}
-
-.pagado {
-  background-color: #4CAF50;
-  color: white;
-}
-
-.no-pagado {
-  background-color: #f44336;
-  color: white;
-}
-
-.estado-sin-nota {
-  background-color: #bdbdbd;
-  color: white;
-}
-
-.texto-sin-nota {
-  color: #666;
-  font-weight: 600;
-}
-
-.nota-pendiente-hint {
-  color: #ff8c00;
-  font-weight: 700;
-  align-self: center;
-  background: #fff2e6;
-  border: 1px dashed #ffb366;
-  border-radius: 8px;
-  padding: 8px 14px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  min-width: 140px;
-  text-align: center;
-}
-
-.nota-pendiente-hint[disabled] {
-  opacity: 0.7;
-  cursor: not-allowed;
-  transform: none;
-  box-shadow: none;
-}
-
-.nota-pendiente-hint:hover,
-.nota-pendiente-hint:focus {
-  background: #ffe0c2;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.12);
-  transform: translateY(-1px);
-}
-
-.nota-pendiente-hint:active {
-  transform: translateY(0);
-}
-
-.nota-pendiente-hint:focus {
-  outline: 2px solid #ff8c00;
-  outline-offset: 2px;
-}
-
-@media (max-width: 768px) {
-  .nota-pendiente-hint {
-    width: 100%;
-  }
-}
-
-.ventas-ganancias-btn {
-  background-color: #4CAF50;
-}
-
-.ventas-ganancias-btn:hover {
-  background-color: #45a049;
-}
-
-.abonos-info {
-  margin: 10px 0;
-  padding: 5px 0;
-}
-
-.abono-detail {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  margin: 5px 0;
-  font-size: 0.9em;
-  color: #ff8c00;
-}
-
-.abono-total {
-  margin: 8px 0 0;
-  padding-top: 6px;
-  border-top: 1px dashed #ffcc80;
-  font-weight: 700;
-  color: #d67a00;
-  font-size: 0.95em;
-}
-
-.abono-label {
-  font-weight: bold;
-}
-
-.abono-monto {
-  color: #4CAF50;
-  font-weight: bold;
-}
-
-.abono-descripcion {
-  color: #666;
-  font-style: italic;
-}
-
-@media (max-width: 768px) {
-  .abono-detail {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 5px;
-  }
-}
-
-.tiene-observacion {
-  border: 2px solid #ff0000 !important;
-}
-
-.observacion-container {
-  margin: 10px 0;
-  padding: 10px;
-  background-color: #fff3f3;
-  border-left: 4px solid #ff0000;
-  border-radius: 4px;
-  position: relative;
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-}
-
-.lock-status {
-  margin-top: 8px;
-}
-
-.precio-venta-vacio {
-  display: inline-block;
-  margin-top: 8px;
-  padding: 6px 10px;
-  border-radius: 6px;
-  background: #ffeb3b;
-  color: #3f2f00;
-  font-weight: 700;
-  font-size: 13px;
-  text-transform: uppercase;
-  letter-spacing: 0.3px;
-  border: 2px solid #f1c40f;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
-}
-
-.lock-badge {
-  display: inline-block;
-  padding: 4px 10px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 700;
-  border: 1px solid transparent;
-}
-
-.lock-on {
-  color: #b71c1c;
-  background: #ffebee;
-  border-color: #ef9a9a;
-}
-
-.lock-off {
-  color: #1b5e20;
-  background: #e8f5e9;
-  border-color: #a5d6a7;
-}
-
-.observacion-texto {
-  margin: 0;
-  flex-grow: 1;
-  white-space: pre-wrap;
-  color: #ff8c00;
-  font-size: 0.9em;
-}
-
-.delete-observacion-btn {
-  background: none;
-  border: none;
-  color: #ff0000;
-  font-size: 1.2em;
-  cursor: pointer;
-  padding: 0 5px;
-  line-height: 1;
-  border-radius: 50%;
-  transition: background-color 0.3s ease;
-}
-
-.delete-observacion-btn:hover {
-  background-color: rgba(255, 0, 0, 0.1);
-}
-
-@media (max-width: 768px) {
-  .observacion-container {
-    padding: 8px;
-    margin: 8px 0;
-  }
-  
-  .observacion-texto {
-    font-size: 0.85em;
-  }
-}
-
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(0, 0, 0, 0.5);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 1000;
-}
-
-.modal-content {
-  background-color: white;
-  padding: 20px;
-  border-radius: 8px;
-  width: 90%;
-  max-width: 500px;
-}
-
-.observacion-text {
-  margin: 15px 0;
-  padding: 10px;
-  background-color: #f5f5f5;
-  border-radius: 4px;
-  white-space: pre-wrap;
-}
-
-.btn-cerrar {
-  background-color: #4CAF50;
-  color: white;
-  border: none;
-  padding: 8px 16px;
-  border-radius: 4px;
-  cursor: pointer;
-}
-
-.modal-buttons {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 15px;
-}
-
-.save-message {
-  position: fixed;
-  bottom: 20px;
-  left: 50%;
-  transform: translateX(-50%);
-  background-color: rgba(0, 0, 0, 0.7);
-  color: white;
-  padding: 8px 16px;
-  border-radius: 4px;
-  font-size: 15px;
-  z-index: 2000;
-  box-shadow: 0 4px 8px rgba(0,0,0,0.2);
-  max-width: 90vw;
-  text-align: center;
-}
-
-.pagination-controls {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 8px;
-  margin-top: 20px;
-  flex-wrap: wrap;
-}
-
-.pagination-btn {
-  background-color: #ff8c00;
-  color: white;
-  border: none;
-  padding: 8px 14px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 14px;
-  font-weight: 600;
-  transition: background-color 0.2s ease;
-}
-
-.pagination-btn:disabled {
-  background-color: #ccc;
-  cursor: not-allowed;
-}
-
-.pagination-btn:not(:disabled):hover {
-  background-color: #e07600;
-}
-
-.pagination-info {
-  font-weight: 700;
-  font-size: 15px;
-  color: #ff8c00;
-  min-width: 60px;
-  text-align: center;
-}
-
-@media (max-width: 768px) {
-  .pagination-controls {
-    gap: 6px;
-  }
-  .pagination-btn {
-    padding: 6px 10px;
-    font-size: 13px;
-  }
+  box-sizing: border-box; width: calc(100% - 32px); max-width: 1080px; margin: 24px auto;
+  padding: 24px; background: #eef0f3; border: 1px solid #cbd2da; border-top: 5px solid #b45309;
+  border-radius: 14px; color: #243047; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+.veronica-cuentas-menu-container *, .veronica-cuentas-menu-container *::before { box-sizing: border-box; }
+h1, h2, p { overflow-wrap: anywhere; }
+h1 { margin: 0; font-size: clamp(28px, 3vw, 36px); font-weight: 750; letter-spacing: -.7px; color: #92400e; }
+h2 { margin: 0; font-size: 20px; color: #243047; text-align: left; }
+.menu-encabezado, .registros-encabezado, .cuenta-cabecera { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; }
+.menu-encabezado { margin: 20px 0; }
+.menu-eyebrow, .seccion-eyebrow { margin: 0 0 8px; color: #92501f; font-size: 11px; font-weight: 750; letter-spacing: 1.4px; }
+.menu-descripcion, .seccion-descripcion { margin: 8px 0 0; color: #5d6879; font-size: 14px; line-height: 1.6; }
+button, input, select { font: inherit; }
+button, .action-button { cursor: pointer; }
+.action-button, .cuenta-actions button, .pagination-btn, .btn-cerrar, .btn-secondary, .btn-ajustar-auto {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 42px;
+  padding: 9px 16px; border: 1px solid #b45309; border-radius: 7px; background: #b45309;
+  color: #fff; font-size: 14px; font-weight: 650; text-decoration: none; line-height: 1.3;
+}
+.action-button:hover, .edit-btn:hover, .btn-cerrar:hover { background: #92400e; }
+.menu-regresar { background: #fff; color: #344256; border-color: #bac4d0; }
+.menu-regresar:hover { background: #243047; color: #fff; }
+.actions-container { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; padding: 16px; margin-bottom: 20px; border: 1px solid #cbd2da; border-radius: 10px; background: #fff; }
+.ventas-ganancias-btn { background: #243047; border-color: #243047; }
+.ventas-ganancias-btn:hover { background: #111827; }
+.herramientas-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 24px; }
+.card { min-width: 0; padding: 22px; background: #fff; border: 1px solid #cbd2da; border-radius: 10px; box-shadow: 0 3px 10px #24304705; }
+.reporte-cuentas-card .seccion-descripcion { margin-bottom: 18px; }
+.analisis-acciones { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 22px; }
+.reporte-semanal-btn { background: #fff7ed; color: #92400e; border-color: #e8b58e; }
+.reporte-semanal-btn:hover { background: #ffedd5; }
+.registros-encabezado { margin-bottom: 18px; }
+.filter-container { display: flex; align-items: end; flex-wrap: wrap; gap: 16px; padding: 16px; margin-bottom: 20px; background: #f3f5f7; border: 1px solid #e1e5eb; border-radius: 8px; }
+.filter-group { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; flex: 1; }
+.filter-group label { flex-basis: 100%; color: #475569; font-size: 12px; font-weight: 700; }
+.filter-container select, .filter-medida-input, .ajuste-input { min-height: 42px; width: 100%; min-width: 0; padding: 9px 12px; border: 1px solid #b6c0cc; border-radius: 6px; background: #fff; color: #243047; }
+.filter-medida-input { width: auto; flex: 1; }
+.filter-medida-clear { width: 42px; height: 42px; padding: 0; border: 1px solid #b6c0cc; border-radius: 6px; background: white; color: #475569; font-size: 22px; }
+.loading, .no-records { padding: 40px 16px; text-align: center; color: #5d6879; }
+.cuentas-list > ul { list-style: none; margin: 0; padding: 0; }
+.cuenta-item { padding: 20px; margin-bottom: 14px; border: 1px solid #d5dce5; border-left: 4px solid #b45309; border-radius: 9px; background: #fff; }
+.cuenta-item:last-child { margin-bottom: 0; }
+.cuenta-item.cuenta-sin-nota { background: #f8fafc; border-left-color: #94a3b8; }
+.cuenta-item.tiene-observacion { border-left-color: #d97706; }
+.cuenta-cabecera { gap: 10px; margin-bottom: 16px; }
+.cuenta-date { color: #243047; font-size: 16px; font-weight: 750; }
+.estado-cuenta, .lock-badge { display: inline-flex; padding: 5px 10px; border-radius: 6px; font-size: 12px; font-weight: 700; }
+.pagado { background: #dcfce7; color: #166534; }
+.no-pagado { background: #fff1f2; color: #9f1239; }
+.estado-sin-nota { background: #e2e8f0; color: #475569; }
+.cuenta-summary { display: flex; flex-wrap: wrap; gap: 16px 40px; margin: 0 0 12px; color: #64748b; font-size: 12px; }
+.cuenta-summary > span { display: grid; gap: 4px; }
+.cuenta-summary strong { color: #243047; font-size: 20px; font-variant-numeric: tabular-nums; }
+.lock-status { margin-top: 8px; }
+.lock-on { background: #f1f5f9; color: #475569; }
+.lock-off { background: #eff6ff; color: #1d4ed8; }
+.precio-venta-vacio { display: inline-block; margin-top: 10px; padding: 8px 12px; border: 1px solid #f5cd74; border-radius: 6px; background: #fffbeb; color: #854d0e; font-size: 13px; font-weight: 650; }
+.observacion-container { display: flex; align-items: start; gap: 12px; padding: 12px; margin-top: 12px; background: #fff7ed; border-left: 3px solid #d97706; border-radius: 6px; }
+.observacion-texto { flex: 1; white-space: pre-wrap; margin: 0; color: #92400e; font-size: 14px; }
+.delete-observacion-btn { min-width: 36px; min-height: 36px; border: 0; border-radius: 6px; background: #fff; color: #9f1239; font-size: 22px; }
+.abonos-info { margin-top: 14px; padding: 12px 14px; background: #f0fdf4; border-radius: 6px; }
+.abono-detail { display: flex; flex-wrap: wrap; gap: 6px 12px; margin: 5px 0; font-size: 13px; color: #166534; }
+.abono-label, .abono-monto, .abono-total { font-weight: 700; }
+.abono-monto, .ajuste-monto { font-variant-numeric: tabular-nums; }
+.abono-descripcion { color: #526257; overflow-wrap: anywhere; }
+.abono-total { border-top: 1px solid #bbdfc6; padding-top: 8px; margin: 10px 0 0; color: #166534; font-size: 13px; }
+.cuenta-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; margin-top: 16px; padding-top: 14px; border-top: 1px solid #edf0f4; }
+.cuenta-actions .adjust-btn { background: #fff7ed; color: #92400e; border-color: #e8b58e; }
+.cuenta-actions .delete-btn { background: #fff; color: #be123c; border-color: #f1c7d1; }
+.cuenta-actions .delete-btn:hover { background: #fff1f2; }
+.cuenta-actions .nota-pendiente-hint { background: #fff; color: #92400e; border-style: dashed; }
+.saldo-negativo-alerta, .ajuste-info { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 12px; margin-top: 12px; border-radius: 6px; font-size: 13px; }
+.saldo-negativo-alerta { background: #fff1f2; color: #9f1239; border: 1px solid #fecdd3; }
+.btn-ajustar-auto { background: #9f1239; border-color: #9f1239; font-size: 12px; }
+.ajuste-info { background: #fff7ed; color: #92400e; }
+.ajuste-label, .ajuste-monto { font-weight: 700; }
+.ajuste-motivo { overflow-wrap: anywhere; }
+.pagination-controls { display: flex; justify-content: center; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 24px; }
+.pagination-btn { background: #fff; color: #475569; border-color: #cbd2da; padding: 8px 12px; }
+.pagination-btn:not(:disabled):hover { background: #fff7ed; border-color: #b45309; }
+.pagination-info { font-size: 13px; font-weight: 700; padding: 0 8px; }
+button:disabled { opacity: .5; cursor: not-allowed; }
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible { outline: 3px solid #b45309; outline-offset: 3px; }
+.modal-overlay { position: fixed; inset: 0; display: flex; justify-content: center; align-items: center; padding: 16px; background: #0f172a99; z-index: 1000; }
+.modal-content { width: 100%; max-width: 500px; max-height: calc(100dvh - 32px); overflow-y: auto; padding: 24px; border-radius: 12px; background: #fff; }
+.modal-content h2 { margin-bottom: 20px; }
+.ajuste-modal-fecha { color: #92400e; font-weight: 700; }
+.ajuste-modal-hint { color: #5d6879; font-size: 14px; line-height: 1.6; }
+.ajuste-form-row { display: grid; gap: 6px; margin-bottom: 16px; }
+.ajuste-form-row label { font-size: 13px; font-weight: 650; }
+.modal-buttons { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
+.btn-secondary { background: #fff; color: #475569; border-color: #cbd2da; }
+.save-message { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); max-width: 90vw; padding: 12px 20px; border-radius: 8px; color: #fff; background: #243047; text-align: center; z-index: 2000; }
+@media (max-width: 700px) {
+  .veronica-cuentas-menu-container { width: calc(100% - 16px); margin: 12px auto; padding: 16px; }
+  .herramientas-grid { grid-template-columns: 1fr; gap: 12px; }
+  .card { padding: 16px; }
+  .menu-encabezado { align-items: flex-start; }
+  .actions-container { gap: 10px; padding: 12px; }
+  .filter-container { flex-direction: column; align-items: stretch; padding: 12px; }
+  .cuenta-item { padding: 14px; }
+  .cuenta-summary { gap: 12px 24px; }
+  .cuenta-summary strong { font-size: 18px; }
+  .cuenta-actions button { flex: 1 1 auto; }
+  .pagination-controls { gap: 5px; }
+  .pagination-btn { padding: 8px; font-size: 12px; }
 }
 </style>
