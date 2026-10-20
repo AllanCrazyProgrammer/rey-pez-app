@@ -58,30 +58,34 @@ test('las 17 medidas de la captura tienen fondos diferenciados, sin depender del
   });
 });
 
-test('reasigna colores antiguos repetidos o cercanos, también en PDF, sin modificar el catálogo', () => {
+test('conserva colores guardados repetidos o cercanos, también en PDF, sin modificar el catálogo', () => {
   const catalogo = nombresCatalogo.map((nombre, i) => ({ nombre, colorPdf: i % 2 ? '#2196F3' : '#2296F3' }));
   const original = JSON.stringify(catalogo);
   const fondos = catalogo.map(m => colors.fondoMedidaPorNombre(m.nombre, catalogo));
-  assert.equal(new Set(fondos).size, 17);
+  assert.equal(new Set(fondos).size, 2);
   fondos.forEach((fondo, i) => {
-    for (const otro of fondos.slice(0, i)) assert.ok(colors.distanciaColores(fondo, otro) >= 20);
+    assert.equal(fondo, colors.fondoDeColor(catalogo[i].colorPdf));
+    assert.equal(colors.colorBaseMedida(catalogo[i], [...catalogo].reverse()), catalogo[i].colorPdf);
   });
   assert.equal(JSON.stringify(catalogo), original);
 });
 
-test('rechaza selecciones manuales casi iguales antes de escribir en la base', async () => {
-  let writes = 0;
+test('guarda selecciones manuales similares o repetidas y conserva su color', async () => {
+  const writes = [];
   const modal = load('src/components/MedidasModal.vue', {
-    'firebase/firestore': { doc() {}, updateDoc: async () => { writes++; } }
+    'firebase/firestore': { doc() {}, updateDoc: async (_, data) => { writes.push(data); } }
   }).default;
   const vm = context(modal, modal.data());
   vm.medidas = nombresCatalogo.map((nombre, id) => ({ nombre, id: String(id) }));
-  const input = { value: '#70C0EF' };
-  const original = vm.colorBaseMedida(vm.medidas[1]);
-  await vm.guardarColorMedida(vm.medidas[1], { target: input });
-  assert.equal(writes, 0);
-  assert.equal(input.value, original);
-  assert.match(vm.estadoColor, /26\/30/);
+  for (const color of ['#70C0EF', '#70C0F0']) {
+    const input = { value: color };
+    await vm.guardarColorMedida(vm.medidas[1], { target: input });
+    assert.deepEqual(writes.at(-1), { colorPdf: color });
+    assert.equal(input.value, color);
+    assert.equal(vm.colorBaseMedida(vm.medidas[1]), color);
+    assert.match(vm.estadoColor, /guardado/);
+  }
+  assert.equal(writes.length, 2);
   const nueva = { nombre: 'Medida adicional' };
   const sugerido = vm.colorBaseMedida(nueva);
   assert.equal(colors.medidaConColorSimilar(sugerido, nueva.nombre, vm.medidas), undefined);
@@ -109,6 +113,41 @@ test('guardar, recargar y crear una medida conservan su color sin modificar los 
   await vm.agregarMedida();
   assert.equal(records[1].colorPdf, '#123456');
   assert.equal(vm.newMedida.colorPdf, '');
+});
+
+test('agrega medidas con colores similares o repetidos y los conserva al recargar y generar ambos PDF', async () => {
+  const records = [{ id: 'm1', nombre: '41/50 soles', tipo: 'granja', colorPdf: '#C08040' }];
+  const modal = load('src/components/MedidasModal.vue', {
+    'firebase/firestore': {
+      collection() {}, query() {}, orderBy() {},
+      getDocs: async () => ({ docs: records.map(row => ({ id: row.id, data: () => ({ ...row }) })) }),
+      addDoc: async (_, data) => {
+        const id = `m${records.length + 1}`;
+        records.push({ id, ...data });
+        return { id };
+      }
+    }
+  }).default;
+  const vm = context(modal, modal.data());
+  await vm.cargarMedidas();
+  for (const [nombre, colorPdf] of [['Piojo panga', '#C08041'], ['Otra medida', '#C08040']]) {
+    vm.newMedida = { nombre, tipo: 'granja', colorPdf };
+    assert.equal(colors.colorBaseMedida(vm.newMedida, vm.medidas), colorPdf);
+    await vm.agregarMedida();
+    await vm.cargarMedidas();
+    const guardada = vm.medidas.find(m => m.nombre === nombre);
+    assert.ok(guardada);
+    assert.equal(vm.colorBaseMedida(guardada), colorPdf);
+    assert.equal(vm.newMedida.nombre, '');
+    assert.equal(vm.newMedida.colorPdf, '');
+  }
+  const pdf = context(print, { medidasCatalogo: vm.medidas, etiquetasPedido: [], etiquetasColoresPedido: {} });
+  const items = records.map(m => ({ kilos: 5, medida: m.nombre }));
+  for (const table of [pdf.generarTablaCliente(items), pdf.generarTablaClienteReducido(items)]) {
+    records.forEach((m, i) => {
+      assert.equal(table.table.body[i][1].stack[0].background, colors.fondoDeColor(m.colorPdf));
+    });
+  }
 });
 
 test('si falla el guardado, el selector y la muestra conservan el color anterior', async () => {

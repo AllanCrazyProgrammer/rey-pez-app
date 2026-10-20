@@ -35,7 +35,7 @@
 
         <!-- Lista de medidas -->
         <div class="medidas-list">
-          <p class="color-ayuda">Cada medida tiene un fondo distinto con texto negro. Los tonos repetidos o demasiado parecidos se reasignan automáticamente. Si eliges un color, debe distinguirse de los demás. Los cambios se guardan automáticamente.</p>
+          <p class="color-ayuda">Puedes elegir colores similares o repetidos para las medidas. Los colores oscuros se aclaran en la vista previa y el PDF para mantener legible el texto negro. Los cambios se guardan automáticamente.</p>
           <p v-if="estadoColor" class="color-estado" role="status">{{ estadoColor }}</p>
           <div class="medidas-grid">
             <div v-for="medida in medidasOrdenadas" :key="medida.id" class="medida-card">
@@ -62,7 +62,7 @@
 <script>
 import { db } from '@/firebase'
 import { collection, addDoc, getDocs, deleteDoc, doc, query, orderBy, updateDoc } from 'firebase/firestore'
-import { colorBaseMedida, fondoDeColor, medidaConColorSimilar } from '@/utils/coloresMedidas'
+import { colorBaseMedida, fondoDeColor } from '@/utils/coloresMedidas'
 
 export default {
   name: 'MedidasModal',
@@ -114,12 +114,6 @@ export default {
       const input = event.target
       const colorPdf = input.value
       if (Object.keys(this.guardandoColores).length || !/^#[0-9a-f]{6}$/i.test(colorPdf)) return
-      const similar = medidaConColorSimilar(colorPdf, medida.nombre, this.medidas)
-      if (similar) {
-        input.value = this.colorBaseMedida(medida)
-        this.estadoColor = `Ese color se parece al de ${similar.nombre}. Elige otro tono más diferente.`
-        return
-      }
       this.$set(this.guardandoColores, medida.id, true)
       this.estadoColor = ''
       try {
@@ -157,11 +151,7 @@ export default {
       }
 
       const colorPdf = this.colorBaseMedida(this.newMedida)
-      const similar = medidaConColorSimilar(colorPdf, this.newMedida.nombre, this.medidas)
-      if (similar) {
-        this.estadoColor = `Ese color se parece al de ${similar.nombre}. Elige otro tono más diferente.`
-        return
-      }
+      this.estadoColor = ''
 
       try {
         const nuevaMedida = {

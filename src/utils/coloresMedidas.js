@@ -86,7 +86,8 @@ export function asignarColoresMedidas(catalogo) {
   const colores = new Map(), usados = []
   for (const medida of registros) {
     if (colores.has(medida.nombre)) continue
-    const color = elegirLibre(medida.color || preferido(medida.nombre), usados)
+    // Respetar los colores guardados, incluso si se repiten o son similares.
+    const color = medida.color || elegirLibre(preferido(medida.nombre), usados)
     colores.set(medida.nombre, color)
     usados.push(color)
   }
@@ -100,7 +101,8 @@ export function colorBaseMedida(medida, catalogo = []) {
   if (!nombre) return '#FFFFFF'
   const asignados = asignarColoresMedidas(catalogo)
   if (asignados.has(nombre)) return asignados.get(nombre)
-  return elegirLibre(esColor(medida?.colorPdf) ? medida.colorPdf.toUpperCase() : preferido(nombre), [...asignados.values()])
+  if (esColor(medida?.colorPdf)) return medida.colorPdf.toUpperCase()
+  return elegirLibre(preferido(nombre), [...asignados.values()])
 }
 
 export function fondoMedida(medida, catalogo = []) {
