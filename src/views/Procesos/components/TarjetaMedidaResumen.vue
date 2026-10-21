@@ -1,7 +1,15 @@
 <template>
   <article class="tarjeta-medida">
-    <header class="tarjeta-franja">
-      <h3>{{ medida.medida }}</h3>
+    <header
+      class="tarjeta-franja"
+      role="button"
+      tabindex="0"
+      :aria-label="'Kilos refrigerados de ' + medida.medida"
+      @click="$emit('abrir-refri')"
+      @keydown.enter="$emit('abrir-refri')"
+      @keydown.space.prevent="$emit('abrir-refri')"
+    >
+      <h3>{{ medida.medida }}<span class="refri-icono" aria-hidden="true"> ❄️</span></h3>
       <span v-if="medida.soloRefri" class="solo-refri-etiqueta">Solo refrigerado</span>
     </header>
 
@@ -347,7 +355,19 @@ export default {
 
 /* Fuentes amplias en pantalla sin modificar el formato impreso. */
 @media screen {
-  .tarjeta-franja { padding: 12px; }
+  .tarjeta-franja {
+    padding: 12px;
+    min-height: 44px;
+    box-sizing: border-box;
+    cursor: pointer;
+  }
+  .tarjeta-franja:hover { background: #3e454c; }
+  .tarjeta-franja:active { background: #2b3035; }
+  .tarjeta-franja:focus-visible {
+    outline: 2px solid #a9e8f5;
+    outline-offset: -3px;
+  }
+  .refri-icono { font-size: 0.65em; }
   .tarjeta-franja h3 { font-size: 24px; }
   .tarjeta-cuerpo { gap: 12px; padding: 12px; }
   .kilos-refrigerados,
@@ -375,6 +395,8 @@ export default {
 }
 
 @media print {
+  .refri-icono { display: none; }
+
   .tarjeta-medida {
     box-shadow: none;
     break-inside: avoid;
