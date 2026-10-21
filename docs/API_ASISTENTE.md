@@ -20,6 +20,7 @@ La función `asistente` expone endpoints protegidos con autenticación por Beare
 - **GET /crudos/dia** - Obtiene las entradas y salidas de un día específico de crudos
 
 **Pedidos, abonos y precios:**
+- **GET /pedidos/limpio/refrigerados**, **POST /pedidos/limpio/refrigerados**
 - **POST /pedidos/limpio**, **GET /pedidos/limpio**, **POST /pedidos/limpio/deshacer**
 - **POST /pedidos/crudo**, **GET /pedidos/crudo**, **POST /pedidos/crudo/deshacer**
 - **POST /abonos**, **GET /abonos**, **POST /abonos/deshacer**
@@ -1945,3 +1946,90 @@ Sin `fecha` se usa el día en México. El precio vigente es el de `preciosHistor
 ## Contacto
 
 Para dudas o problemas, contacta a Allan (propietario de Rey Pez).
+
+
+### GET /pedidos/limpio/refrigerados
+
+Lee los kilos refrigerados de un pedido de tipo `limpio`. Requiere el mismo
+header `Authorization: Bearer <token>` que las demás rutas.
+
+Parámetros: `pedidoId` o `fecha` (`YYYY-MM-DD`). Si hay un ID válido tiene
+prioridad; de lo contrario se usa la fecha válida. Por fecha se toma el primer
+pedido limpio encontrado, igual que en GET /pedidos/limpio.
+
+```bash
+curl "https://asistente-<hash>-uc.a.run.app/pedidos/limpio/refrigerados?fecha=2026-10-21" \
+  -H "Authorization: Bearer <token>"
+# También: ?pedidoId=abc123
+```
+
+**Respuesta (200 OK):**
+
+```json
+{
+  "success": true,
+  "pedidoId": "abc123",
+  "fecha": "2026-10-21",
+  "kilosRefrigerados": {"41/50 Selecta": 10},
+  "totalKilos": 10,
+  "medidasPedido": ["41/50 Selecta", "21/25", "36/40 Maq Honduras"]
+}
+```
+
+`medidasPedido` incluye etiquetas de clientes regulares y temporales, con ` Maq`
+para Ozuna maquila y la etiqueta personalizada (o Selecta/Honduras antiguos).
+
+### POST /pedidos/limpio/refrigerados
+
+Edita únicamente el campo `kilosRefrigerados`, dentro de una transacción.
+Acepta `pedidoId` o `fecha` con la misma resolución que GET. `medidas` debe ser
+un mapa no vacío o un arreglo no vacío de `{medida, kilos}`. Cada cantidad debe
+ser un número finito >= 0; `0` y `null` eliminan la clave.
+
+```bash
+curl -X POST https://asistente-<hash>-uc.a.run.app/pedidos/limpio/refrigerados \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"pedidoId":"abc123","medidas":{"41/50  selecta":120,"21/25":0},"dryRun":true}'
+```
+
+Alternativa por fecha y arreglo:
+
+```json
+{"fecha":"2026-10-21","medidas":[{"medida":"41/50 Selecta","kilos":120},{"medida":"21/25","kilos":null}]}
+```
+
+Las cantidades reemplazan el valor anterior; nunca se suman. Repetir una
+asignación es idempotente y no requiere `idempotencyKey`. Las claves se comparan
+sin acentos, mayúsculas, paréntesis ni espacios repetidos: primero se conserva
+la etiqueta exacta existente en refrigerados; luego la del resumen del pedido;
+si no hay coincidencia se usa la entrada con trim. Otras claves se conservan.
+`dryRun` es un boolean opcional (predeterminado `false`); con `true` devuelve el
+resultado y los cambios sin escribir.
+
+**Respuesta (200 OK):** incluye los campos del GET para el mapa resultante y:
+
+```json
+{
+  "success": true,
+  "pedidoId": "abc123",
+  "fecha": "2026-10-21",
+  "dryRun": true,
+  "kilosRefrigerados": {"41/50 Selecta":120},
+  "totalKilos": 120,
+  "medidasPedido": ["41/50 Selecta", "21/25"],
+  "antes": {"41/50 Selecta":10,"21/25":5},
+  "despues": {"41/50 Selecta":120},
+  "cambios": [
+    {"medida":"41/50  selecta","clave":"41/50 Selecta","anterior":10,"nuevo":120,"accion":"set"},
+    {"medida":"21/25","clave":"21/25","anterior":5,"nuevo":null,"accion":"delete"}
+  ]
+}
+```
+
+`anterior` es `null` si la clave no existía; `nuevo` es `null` al borrar.
+Errores con formato `{ "error": { "code": "...", "message": "..." } }`:
+400 `PEDIDO_O_FECHA_REQUERIDO` sin selector válido; 400 `VALIDACION_ERROR` por
+medidas, kilos o dryRun inválidos; 404 `PEDIDO_NO_ENCONTRADO` si falta el pedido
+limpio (incluido ID de un pedido crudo). La autenticación responde 401 como las
+demás rutas.

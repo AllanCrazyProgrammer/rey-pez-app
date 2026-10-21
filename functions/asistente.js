@@ -15,6 +15,7 @@ const { construirLineasPedidoLimpio } = require('./lib/pedidosLimpioLineas');
 const { crearHandlersAbonos } = require('./lib/abonosClientes');
 const { crearHandlersPedidosCrudo } = require('./lib/pedidosCrudo');
 const { crearHandlersPrecios } = require('./lib/preciosVenta');
+const { crearHandlersRefrigerados } = require('./lib/pedidosLimpioRefrigerados');
 
 /**
  * Genera un ID único para identificar filas creadas por el asistente.
@@ -2912,6 +2913,7 @@ async function handlePostPedidosLimpioDeshacer(req, res) {
 }
 
 // Export handlers for testing
+const refrigeradosHandlers = crearHandlersRefrigerados({ db, errorResponse });
 const abonosHandlers = crearHandlersAbonos({ db, admin, errorResponse });
 const pedidosCrudoHandlers = crearHandlersPedidosCrudo({ db, admin, errorResponse, generarAsistenteId });
 const preciosHandlers = crearHandlersPrecios({ db, admin, errorResponse });
@@ -2924,6 +2926,7 @@ if (process.env.NODE_ENV === 'test') {
     calcularTotalesClientePedidoLimpio,
     handlePostSalida,
     handlePostCrudosSalida,
+    ...refrigeradosHandlers,
     ...abonosHandlers,
     ...pedidosCrudoHandlers,
     ...preciosHandlers
@@ -2990,6 +2993,13 @@ exports.asistente = onRequest(
       return handlePostCrudosDeshacer(req, res);
     }
     
+    if (path === '/pedidos/limpio/refrigerados' && method === 'GET') {
+      return refrigeradosHandlers.handleGetPedidosLimpioRefrigerados(req, res);
+    }
+    if (path === '/pedidos/limpio/refrigerados' && method === 'POST') {
+      return refrigeradosHandlers.handlePostPedidosLimpioRefrigerados(req, res);
+    }
+
     // Rutas de pedidos limpio
     if (path === '/pedidos/limpio' && method === 'POST') {
       return handlePostPedidosLimpio(req, res);
@@ -3036,7 +3046,7 @@ exports.asistente = onRequest(
     }
     
     return res.status(404).json({ 
-      error: 'Ruta no encontrada. Rutas disponibles: POST /salida, POST /deshacer, GET /existencias, GET /dia, POST /crudos/entrada, POST /crudos/salida, POST /crudos/deshacer, GET /crudos/existencias, GET /crudos/dia, POST /pedidos/limpio, GET /pedidos/limpio, POST /pedidos/limpio/deshacer, POST /pedidos/crudo, GET /pedidos/crudo, POST /pedidos/crudo/deshacer, POST /abonos, GET /abonos, POST /abonos/deshacer, POST /precios, GET /precios' 
+      error: 'Ruta no encontrada. Rutas disponibles: GET /pedidos/limpio/refrigerados, POST /pedidos/limpio/refrigerados, POST /salida, POST /deshacer, GET /existencias, GET /dia, POST /crudos/entrada, POST /crudos/salida, POST /crudos/deshacer, GET /crudos/existencias, GET /crudos/dia, POST /pedidos/limpio, GET /pedidos/limpio, POST /pedidos/limpio/deshacer, POST /pedidos/crudo, GET /pedidos/crudo, POST /pedidos/crudo/deshacer, POST /abonos, GET /abonos, POST /abonos/deshacer, POST /precios, GET /precios'
     });
   }
 );
