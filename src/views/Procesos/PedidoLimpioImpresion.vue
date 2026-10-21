@@ -1377,17 +1377,34 @@ export default {
       return item.etiqueta;
     },
     bloqueEtiquetaPDF(item, fontSize) {
-      const color = this.colorEtiquetaItem(item);
-      if (!color) return null;
+      if (!item || !item.etiqueta) return null;
       return {
         text: this.textoEtiquetaItem(item),
         fontSize: fontSize * 1.1,
-        color: color.text,
-        background: color.bg,
+        color: '#FFFFFF',
+        background: '#000000',
         bold: true,
         margin: [0, 2, 0, 0],
         padding: [2, 1],
         alignment: 'center'
+      };
+    },
+    bloqueEncabezadoClientePDF(contenido, color, margin = [0, 0, 0, 0]) {
+      // El relleno de la celda cubre el ancho disponible, incluso en columnas.
+      return {
+        table: {
+          widths: ['*'],
+          body: [[{ ...contenido, fillColor: color }]]
+        },
+        layout: {
+          hLineWidth: () => 0,
+          vLineWidth: () => 0,
+          paddingLeft: () => 0,
+          paddingRight: () => 0,
+          paddingTop: () => 0,
+          paddingBottom: () => 0
+        },
+        margin
       };
     },
     generarTablaCliente(items, fontSize = 16) {
@@ -1416,7 +1433,7 @@ export default {
                   text: item.proveedor,
                   fontSize: fontSize * 1.1,
                   color: '#FFFFFF',
-                  background: '#FF0000',
+                  background: '#000000',
                   margin: [0, 2, 0, 0],
                   padding: [2, 1],
                   alignment: 'center',
@@ -1456,7 +1473,7 @@ export default {
               margin: [0, 1, 0, 0],
               padding: [1, 1],
               bold: true,
-              background: '#FF0000',
+              background: '#000000',
               color: '#FFFFFF'
             } : ''
           ],
@@ -1507,15 +1524,14 @@ export default {
 
       if (tieneOtilio) {
         const seccionOtilio = [
-          {
+          this.bloqueEncabezadoClientePDF({
             columns: [
               {
                 text: 'OTILIO',
                 style: 'clienteHeader',
                 fontSize: fontSizeBase.otilio,
                 width: '*',
-                alignment: 'left',
-                background: '#FFEB3B'
+                alignment: 'left'
               },
               {
                 text: this.fecha,
@@ -1524,9 +1540,8 @@ export default {
                 width: 'auto',
                 alignment: 'right'
               }
-            ],
-            margin: [0, 0, 0, 10 * escala]
-          },
+            ]
+          }, '#FFEB3B', [0, 0, 0, 10 * escala]),
           this.generarTablaCliente(this.pedidoOtilio, fontSizeBase.tabla)
         ];
         content.push(...seccionOtilio);
@@ -1541,13 +1556,11 @@ export default {
 
       if (tieneJoselito) {
         seccionesCentrales.push(
-          {
+          this.bloqueEncabezadoClientePDF({
             text: 'JOSELITO',
             style: 'clienteHeader',
-            fontSize: fontSizeBase.joselito,
-            margin: [0, 0, 0, necesitaCompacto ? 0.5 : 0],
-            background: '#2196F3'
-          },
+            fontSize: fontSizeBase.joselito
+          }, '#2196F3', [0, 0, 0, necesitaCompacto ? 0.5 : 0]),
           this.generarTablaCliente(this.pedidoJoselito, fontSizeBase.tablaJoselito),
           { text: '', margin: [0, espaciadoReducido, 0, 0] }
         );
@@ -1555,13 +1568,11 @@ export default {
 
       if (tieneLorena) {
         seccionesCentrales.push(
-          {
+          this.bloqueEncabezadoClientePDF({
             text: 'LORENA',
             style: 'clienteHeader',
-            fontSize: fontSizeBase.inferior,
-            margin: [0, 0, 0, necesitaCompacto ? 1 : 0],
-            background: '#e67e22'
-          },
+            fontSize: fontSizeBase.inferior
+          }, '#e67e22', [0, 0, 0, necesitaCompacto ? 1 : 0]),
           this.generarTablaCliente(this.pedidoLorena, fontSizeBase.tablaJoselito),
           { text: '', margin: [0, espaciadoReducido, 0, 0] }
         );
@@ -1571,13 +1582,11 @@ export default {
       if (tieneCatarro) {
         columnasInferiores.push({
           stack: [
-            {
+            this.bloqueEncabezadoClientePDF({
               text: 'CATARRO',
               style: 'clienteHeader',
-              fontSize: fontSizeBase.inferior,
-              margin: [0, 0, 0, necesitaCompacto ? 1 : 0],
-              background: '#FF5252'
-            },
+              fontSize: fontSizeBase.inferior
+            }, '#FF5252', [0, 0, 0, necesitaCompacto ? 1 : 0]),
             this.generarTablaClienteReducido(this.pedidoCatarro, fontSizeBase.tablaJoselito)
           ],
           width: tieneCatarro && tieneOzuna ? '47%' : '*'
@@ -1604,13 +1613,11 @@ export default {
       if (tieneOzuna) {
         columnasInferiores.push({
           stack: [
-            {
+            this.bloqueEncabezadoClientePDF({
               text: 'OZUNA',
               style: 'clienteHeader',
-              fontSize: fontSizeBase.inferior,
-              margin: [0, 0, 0, necesitaCompacto ? 1 : 0],
-              background: '#4CAF50'
-            },
+              fontSize: fontSizeBase.inferior
+            }, '#4CAF50', [0, 0, 0, necesitaCompacto ? 1 : 0]),
             this.generarTablaClienteReducido(this.pedidoOzuna, fontSizeBase.tablaJoselito)
           ],
           width: tieneCatarro && tieneOzuna ? '47%' : '*'
@@ -1633,13 +1640,11 @@ export default {
           const tabla = this.generarTablaCliente(cliente.pedidos, 22);
           if (!tabla) return;
           content.push(
-            {
+            this.bloqueEncabezadoClientePDF({
               text: cliente.nombre.toUpperCase(),
               style: 'clienteHeader',
-              fontSize: 36,
-              margin: [0, 0, 0, 10],
-              background: '#95a5a6'
-            },
+              fontSize: 36
+            }, '#95a5a6', [0, 0, 0, 10]),
             tabla,
             { text: '', margin: [0, 20, 0, 20] }
           );
@@ -1775,7 +1780,7 @@ export default {
                   text: item.proveedor,
                   fontSize: fontSize * 1.1,
                   color: '#FFFFFF',
-                  background: '#FF0000',
+                  background: '#000000',
                   padding: [2, 1],
                   alignment: 'center',
                   width: 'auto'
@@ -1788,7 +1793,7 @@ export default {
               fontSize: fontSize * 0.9,
               padding: [1, 0],
               bold: true,
-              background: '#FF0000',
+              background: '#000000',
               color: '#FFFFFF'
             } : ''
           ],
