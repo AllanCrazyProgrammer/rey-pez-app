@@ -343,9 +343,11 @@ export default {
                   const columna = columnasConDatos[fila * 2 + offset]
                   if (columna === undefined) return { text: '' }
                   return {
-                    stack: [
-                      { text: `${formatearMedidaPedidoCrudo(columna)} — Barco:`, fontSize: 9 },
+                    columnGap: 6,
+                    columns: [
+                      { text: formatearMedidaPedidoCrudo(columna), fontSize: 9, width: 'auto', noWrap: true },
                       {
+                        width: '*',
                         table: {
                           widths: ['*'],
                           body: [[{
@@ -661,7 +663,17 @@ export default {
   }
 }
 
+@media screen and (max-width: 420px) {
+  .barcos {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 @media print {
+  .barcos {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .tara-preparada input {
     display: none;
   }

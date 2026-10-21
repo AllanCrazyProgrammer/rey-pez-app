@@ -1,12 +1,13 @@
 <template>
   <label class="barco-fila">
-    <span class="barco-etiqueta">{{ etiqueta }} — Barco:</span>
+    <span class="barco-etiqueta">{{ etiqueta }}</span>
     <span class="barco-campo">
       <span class="barco-espejo" aria-hidden="true">{{ value + '\n' }}</span>
       <textarea
         class="barco-input"
         rows="1"
         autocomplete="off"
+        :aria-label="`${etiqueta} — Barco`"
         :value="value"
         @input="$emit('input', $event.target.value)"
         @blur="$emit('blur')"
@@ -35,8 +36,8 @@ export default {
 <style scoped>
 .barco-fila {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  align-items: baseline;
+  gap: 6px;
   min-width: 0;
   margin: 0;
   break-inside: avoid;
@@ -45,12 +46,14 @@ export default {
 .barco-etiqueta {
   font-size: 12px;
   line-height: 1.3;
-  overflow-wrap: anywhere;
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 .barco-campo {
   position: relative;
   display: block;
+  flex: 1 1 0;
   min-width: 0;
 }
 
@@ -98,6 +101,7 @@ export default {
 
   .barco-impreso {
     display: block;
+    flex: 1 1 0;
     min-width: 0;
     min-height: 1.3em;
     border-bottom: 1px solid #000;
