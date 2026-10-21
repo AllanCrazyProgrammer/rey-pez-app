@@ -332,16 +332,41 @@ export default {
             width: tableWidth
           },
           ...(columnasConDatos.length ? [{
-            margin: [0, 16, 0, 0],
-            fontSize: 14,
+            margin: [0, 8, 0, 0],
+            fontSize: 11,
             bold: false,
             table: {
-              widths: ['auto', '*'],
+              widths: ['*', '*'],
               dontBreakRows: true,
-              body: columnasConDatos.map(columna => [
-                { text: `${formatearMedidaPedidoCrudo(columna)} — Barco:`, margin: [0, 4, 8, 4] },
-                { text: this.barcos[columna]?.trim() || '______________________________', margin: [0, 4, 0, 4] }
-              ])
+              body: Array.from({ length: Math.ceil(columnasConDatos.length / 2) }, (_, fila) =>
+                [0, 1].map(offset => {
+                  const columna = columnasConDatos[fila * 2 + offset]
+                  if (columna === undefined) return { text: '' }
+                  return {
+                    stack: [
+                      { text: `${formatearMedidaPedidoCrudo(columna)} — Barco:`, fontSize: 9 },
+                      {
+                        table: {
+                          widths: ['*'],
+                          body: [[{
+                            text: this.barcos[columna]?.trim() || ' ',
+                            border: [false, false, false, true],
+                            margin: [0, 1, 0, 0]
+                          }]]
+                        },
+                        layout: {
+                          hLineWidth: () => 0.5,
+                          paddingLeft: () => 0,
+                          paddingRight: () => 0,
+                          paddingTop: () => 0,
+                          paddingBottom: () => 1
+                        }
+                      }
+                    ],
+                    margin: [0, 0, 8, 4]
+                  }
+                })
+              )
             },
             layout: 'noBorders'
           }] : [])
@@ -578,7 +603,15 @@ export default {
 }
 
 .barcos {
-  margin-top: 16px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 6px 12px;
+  margin-top: 10px;
+}
+
+.barcos > .barco-error {
+  grid-column: 1 / -1;
 }
 
 .estado-carga,
