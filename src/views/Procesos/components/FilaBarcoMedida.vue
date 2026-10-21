@@ -1,15 +1,18 @@
 <template>
   <label class="barco-fila">
-    <span class="barco-etiqueta">{{ etiqueta }} — Barco:</span>
-    <input
-      class="barco-input"
-      type="text"
-      autocomplete="off"
-      enterkeyhint="done"
-      :value="value"
-      @input="$emit('input', $event.target.value)"
-      @blur="$emit('blur')"
-    >
+    <span class="barco-etiqueta">{{ etiqueta }}</span>
+    <span class="barco-campo">
+      <span class="barco-espejo" aria-hidden="true">{{ value + '\n' }}</span>
+      <textarea
+        class="barco-input"
+        rows="1"
+        autocomplete="off"
+        :aria-label="`${etiqueta} — Barco`"
+        :value="value"
+        @input="$emit('input', $event.target.value)"
+        @blur="$emit('blur')"
+      ></textarea>
+    </span>
     <span class="barco-impreso">{{ value }}</span>
   </label>
 </template>
@@ -34,69 +37,78 @@ export default {
 .barco-fila {
   display: flex;
   align-items: baseline;
-  gap: 8px;
-  margin-bottom: 8px;
+  gap: 6px;
+  min-width: 0;
+  margin: 0;
   break-inside: avoid;
 }
 
 .barco-etiqueta {
+  font-size: 12px;
+  line-height: 1.3;
   flex: 0 0 auto;
+  white-space: nowrap;
 }
 
-.barco-input {
-  flex: 1 1 160px;
+.barco-campo {
+  position: relative;
+  display: block;
+  flex: 1 1 0;
   min-width: 0;
-  max-width: 420px;
+}
+
+.barco-input,
+.barco-espejo {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  margin: 0;
+  padding: 1px 0;
   border: 0;
   border-bottom: 1px solid #000;
   border-radius: 0;
+  font: inherit;
+  font-size: 16px;
+  line-height: 1.3;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* The mirror grows with wrapped text so every line stays visible while editing. */
+.barco-espejo {
+  visibility: hidden;
+}
+
+.barco-input {
+  position: absolute;
+  inset: 0;
+  height: 100%;
+  min-height: 0;
   background: white;
   color: #000;
-  font: inherit;
+  resize: none;
+  overflow: hidden;
 }
 
 .barco-impreso {
   display: none;
 }
 
-@media (max-width: 640px) {
-  .barco-fila {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 4px;
-    margin-bottom: 14px;
-  }
-
-  .barco-input {
-    max-width: none;
-    width: 100%;
-    min-height: 44px;
-    font-size: 16px;
-  }
-}
-
 @media print {
-  .barco-fila {
-    flex-direction: row;
-    align-items: baseline;
-    gap: 8px;
-    margin-bottom: 8px;
-  }
-
-  .barco-input {
+  .barco-campo {
     display: none;
   }
 
   .barco-impreso {
     display: block;
-    flex: 1;
+    flex: 1 1 0;
     min-width: 0;
-    max-width: 420px;
-    min-height: 1.2em;
+    min-height: 1.3em;
     border-bottom: 1px solid #000;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
-    font-size: 14pt;
+    font-size: 11pt;
+    line-height: 1.3;
   }
 }
 </style>
