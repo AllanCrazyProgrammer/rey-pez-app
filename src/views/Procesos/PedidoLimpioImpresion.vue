@@ -414,6 +414,12 @@
             </button>
             <button
               type="button"
+              class="resumen-refrigerados-btn"
+              :aria-expanded="mostrarFormularioRefri ? 'true' : 'false'"
+              @click="mostrarFormularioRefri = !mostrarFormularioRefri"
+            >+ Medida refrigerada</button>
+            <button
+              type="button"
               class="resumen-medidas-sacar-btn"
               :disabled="cargandoSacadaParaModal"
               :aria-busy="cargandoSacadaParaModal ? 'true' : 'false'"
@@ -426,6 +432,25 @@
             </button>
           </div>
         </div>
+        <form
+          v-if="mostrarFormularioRefri"
+          class="medida-refri-form"
+          @submit.prevent="guardarNuevaMedidaRefrigerada"
+        >
+          <label>
+            Medida
+            <input v-model="nuevaMedidaRefri" type="text" placeholder="41/50 o 51/60 Selecta" required :disabled="guardandoMedidaRefri">
+          </label>
+          <label>
+            Kilos refrigerados
+            <input v-model.number="nuevosKilosRefri" type="number" min="0" step="any" inputmode="decimal" required :disabled="guardandoMedidaRefri">
+          </label>
+          <button type="submit" class="resumen-refrigerados-btn" :disabled="guardandoMedidaRefri">
+            {{ guardandoMedidaRefri ? 'Guardando…' : 'Guardar' }}
+          </button>
+          <button type="button" class="resumen-refrigerados-btn" :disabled="guardandoMedidaRefri" @click="mostrarFormularioRefri = false">Cancelar</button>
+          <p v-if="errorMedidaRefri" class="medida-refri-error" role="alert">{{ errorMedidaRefri }}</p>
+        </form>
         <p
           v-if="mensajeAcomodoRefrigerados"
           class="resumen-refrigerados-estado"
@@ -445,7 +470,7 @@
             :medida="medida"
             :rendimiento="rendimientos[medida.medida]"
             :divisor="divisores[medida.medida]"
-            :kilos-refri="kilosRefrigerados[medida.medida] || 0"
+            :kilos-refri="obtenerKilosRefrigerados(medida.medida)"
             :faltantes="obtenerKilosFaltantes(medida)"
             :es-granja="esMedidaGranja(medida.medida)"
             @abrir-refri="abrirModalKilosRefrigerados(medida)"
@@ -597,7 +622,7 @@
       :mostrar="modalKilosVisible"
       :medida="medidaSeleccionada"
       :total-kilos="totalKilosSeleccionados"
-      :kilos-refrigerados-iniciales="kilosRefrigerados[medidaSeleccionada] || 0"
+      :kilos-refrigerados-iniciales="obtenerKilosRefrigerados(medidaSeleccionada)"
       @cerrar="cerrarModalKilosRefrigerados"
       @guardar="guardarKilosRefrigerados"
     />
@@ -632,7 +657,8 @@ import {
   sumarKilosRefriPorMedida,
   desglosarRefriEmbarques,
   sumarLimpiosResumenDiaPorMedida,
-  combinarKilosRefrigerados
+  combinarKilosRefrigerados,
+  normalizarClaveMedida
 } from '@/utils/kilosRefrigerados'
 import {
   calcularKilosItemPedidoLimpio,
@@ -728,6 +754,11 @@ export default {
       bodyOverflowAntesPreview: '',
       completados: this.completadosGuardados || {},
       kilosRefrigerados: this.kilosRefrigeradosGuardados || {},
+      mostrarFormularioRefri: false,
+      nuevaMedidaRefri: '',
+      nuevosKilosRefri: '',
+      guardandoMedidaRefri: false,
+      errorMedidaRefri: '',
       modalKilosVisible: false,
       medidaSeleccionada: '',
       totalKilosSeleccionados: 0,
@@ -823,7 +854,7 @@ export default {
     },
     abrirImagenCajas() {
       this.pendientesImagenCajas = []
-      this.filasImagenCajas = this.calcularTotalesPorMedida().reduce((filas, medida) => {
+      this.filasImagenCajas = this.calcularTotalesPorMedida().filter(medida => !medida.soloRefri).reduce((filas, medida) => {
         const rendimiento = Number(this.rendimientos[medida.medida])
         if (!Number.isFinite(rendimiento) || rendimiento <= 0) {
           this.pendientesImagenCajas.push(medida.medida)
@@ -1057,7 +1088,7 @@ export default {
       }
     },
     async acomodarKilosRefrigeradosAutomaticamente() {
-      const medidasPedido = this.calcularTotalesPorMedida()
+      const medidasPedido = this.calcularTotalesPorMedida().filter(medida => !medida.soloRefri)
       if (!medidasPedido.length) {
         this.errorAcomodoRefrigerados = true
         this.mensajeAcomodoRefrigerados = 'No hay medidas en el pedido para acomodar.'
@@ -1114,6 +1145,13 @@ export default {
           return
         }
 
+        // Conservar las medidas manuales que todavía no pertenecen a un pedido.
+        const clavesPedido = new Set(medidasPedido.map(item => normalizarClaveMedida(item.medida)))
+        Object.entries(this.kilosRefrigerados).forEach(([clave, kilos]) => {
+          if (Number(kilos) > 0 && !clavesPedido.has(normalizarClaveMedida(clave))) {
+            nuevosKilos[clave] = kilos
+          }
+        })
         this.kilosRefrigerados = { ...nuevosKilos }
         await this.persistirKilosRefrigerados()
 
@@ -1883,6 +1921,13 @@ export default {
         });
       }
 
+      const clavesPedido = new Set(Array.from(medidasMap.values(), item => normalizarClaveMedida(item.medida)))
+      Object.entries(this.kilosRefrigerados).forEach(([medida, kilos]) => {
+        if (Number(kilos) > 0 && !clavesPedido.has(normalizarClaveMedida(medida))) {
+          medidasMap.set('refri:' + medida, { medida, total: 0, soloRefri: true })
+        }
+      })
+
       // Convertir el mapa a un array ordenado
       return Array.from(medidasMap.values())
         .sort((a, b) => {
@@ -1897,7 +1942,8 @@ export default {
         })
         .map(value => ({
           medida: value.medida,
-          total: Math.round(value.total)
+          total: Math.round(value.total),
+          ...(value.soloRefri ? { soloRefri: true } : {})
         }));
     },
     asignarRendimientoMedida(medida, valor) {
@@ -1958,8 +2004,45 @@ export default {
       this.medidaSeleccionada = '';
       this.totalKilosSeleccionados = 0;
     },
+    resolverClaveRefrigerados(medida) {
+      if (Object.prototype.hasOwnProperty.call(this.kilosRefrigerados, medida)) return medida
+      const normalizada = normalizarClaveMedida(medida)
+      return Object.keys(this.kilosRefrigerados).find(clave => normalizarClaveMedida(clave) === normalizada)
+    },
+    obtenerKilosRefrigerados(medida) {
+      return Number(this.kilosRefrigerados[this.resolverClaveRefrigerados(medida)]) || 0
+    },
+    async guardarNuevaMedidaRefrigerada() {
+      const medida = this.nuevaMedidaRefri.trim()
+      const kilos = Number(this.nuevosKilosRefri)
+      this.errorMedidaRefri = ''
+      if (!normalizarClaveMedida(medida) || !Number.isFinite(kilos) || kilos <= 0) {
+        this.errorMedidaRefri = 'Captura una medida y kilos mayores a 0.'
+        return
+      }
+      const existente = this.calcularTotalesPorMedida().find(item => (
+        normalizarClaveMedida(item.medida) === normalizarClaveMedida(medida)
+      ))
+      const clave = this.resolverClaveRefrigerados(medida) || (existente && existente.medida) || medida
+      this.guardandoMedidaRefri = true
+      this.$set(this.kilosRefrigerados, clave, kilos)
+      try {
+        await this.persistirKilosRefrigerados()
+        this.mostrarFormularioRefri = false
+        this.nuevaMedidaRefri = ''
+        this.nuevosKilosRefri = ''
+      } catch (error) {
+        this.errorMedidaRefri = 'No se pudo guardar. Intenta nuevamente.'
+      } finally {
+        this.guardandoMedidaRefri = false
+      }
+    },
     guardarKilosRefrigerados(datos) {
-      this.$set(this.kilosRefrigerados, datos.medida, datos.kilosRefrigerados);
+      const clave = this.resolverClaveRefrigerados(datos.medida) || datos.medida
+      const kilos = Number(datos.kilosRefrigerados)
+      if (!Number.isFinite(kilos) || kilos < 0) return
+      if (kilos === 0) this.$delete(this.kilosRefrigerados, clave)
+      else this.$set(this.kilosRefrigerados, clave, kilos)
       this.persistirKilosRefrigerados().catch(() => {
         // El método ya registra el detalle; se evita una promesa rechazada sin manejar.
       });
@@ -1981,7 +2064,7 @@ export default {
       this.$emit('actualizar-kilos-refrigerados', this.kilosRefrigerados);
     },
     obtenerKilosFaltantes(medida) {
-      const refrigerados = this.kilosRefrigerados[medida.medida] || 0;
+      const refrigerados = this.obtenerKilosRefrigerados(medida.medida);
       return Math.round((medida.total - refrigerados) * 10) / 10;
     },
     calcularTotalKilosCliente(pedido) {
@@ -3217,6 +3300,39 @@ h4.cliente-header.ozuna-header {
   white-space: nowrap;
   flex-shrink: 0;
 }
+
+.medida-refri-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  padding: 14px;
+  margin: 12px 0;
+  border: 1px solid #91d7d4;
+  border-radius: 8px;
+  background: #e8f8f7;
+}
+
+.medida-refri-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1 1 180px;
+  min-width: 0;
+  color: #126763;
+}
+
+.medida-refri-form input {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 44px;
+  padding: 8px;
+  border: 1px solid #91d7d4;
+  border-radius: 6px;
+  font-size: 16px;
+}
+
+.medida-refri-error { flex-basis: 100%; margin: 0; color: #b42318; }
 
 .resumen-refrigerados-btn {
   background-color: #0f9f9a;

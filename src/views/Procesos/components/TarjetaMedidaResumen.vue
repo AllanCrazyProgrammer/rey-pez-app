@@ -2,6 +2,7 @@
   <article class="tarjeta-medida">
     <header class="tarjeta-franja">
       <h3>{{ medida.medida }}</h3>
+      <span v-if="medida.soloRefri" class="solo-refri-etiqueta">Solo refrigerado</span>
     </header>
 
     <div class="tarjeta-cuerpo">
@@ -138,6 +139,16 @@ export default {
   background: #343a40;
   color: #fff;
   text-align: center;
+}
+
+.solo-refri-etiqueta {
+  display: inline-block;
+  margin-top: 6px;
+  padding: 3px 7px;
+  border-radius: 10px;
+  background: #d5f5ef;
+  color: #126763;
+  font-size: 11px;
 }
 
 .tarjeta-franja h3 {
