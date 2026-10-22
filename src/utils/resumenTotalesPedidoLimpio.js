@@ -26,7 +26,7 @@ export function resumirTotalesPedidoLimpio(pedido) {
     const medida = normalizarClaveMedida(fila.item?.medida)
     if (!medida || medida === 'robalo') return
 
-    const kilos = calcularKilosItemPedidoLimpio(fila.item)
+    const kilos = calcularKilosItemPedidoLimpio(fila.item, fila.clienteId)
     if (esMaquila(fila)) maquila += kilos
     else venta += kilos
   })

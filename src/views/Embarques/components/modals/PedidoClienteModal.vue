@@ -112,6 +112,7 @@
 
 <script>
 import { getFirestore, collection, getDocs, query, where, doc, updateDoc } from 'firebase/firestore';
+import { kilosPorTaraCliente } from '@/utils/calculosPedidoLimpio';
 import { factorAgua } from '@/utils/factorAgua';
 
 export default {
@@ -219,15 +220,20 @@ export default {
     },
     calcularKilosPedidoLimpio() {
       let totalKilos = 0;
+      const clienteEncontrado = Object.keys(this.pedidoLimpio || {}).find(id =>
+        Array.isArray(this.pedidoLimpio[id]) && this.pedidoLimpio[id] === this.itemsPedidoLimpio
+      ) || 'temporal';
+      const clienteNormalizado = clienteEncontrado.trim().toLowerCase();
+      const clienteId = { '8a': 'joselito', veronica: 'lorena' }[clienteNormalizado] || clienteNormalizado;
       this.itemsPedidoLimpio.forEach(item => {
         if (item.kilos) {
           if (item.esTara) {
             if (item.tipo === 'C/H20') {
-              totalKilos += Number(item.kilos) * 30 * factorAgua(item);
+              totalKilos += Number(item.kilos) * kilosPorTaraCliente(item, clienteId) * factorAgua(item);
             } else if (item.tipo === '1.35 y .15' || item.tipo === '1.3 y .2') {
-              totalKilos += Number(item.kilos) * 30;
+              totalKilos += Number(item.kilos) * kilosPorTaraCliente(item, clienteId);
             } else {
-              totalKilos += Number(item.kilos) * 30;
+              totalKilos += Number(item.kilos) * kilosPorTaraCliente(item, clienteId);
             }
           } else if (item.tipo === 'S/H20') {
             totalKilos += Number(item.kilos);

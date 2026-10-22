@@ -229,6 +229,7 @@
 
 <script>
 import { getFirestore, collection, getDocs, query, where, doc, updateDoc } from 'firebase/firestore';
+import { kilosPorTaraCliente } from '@/utils/calculosPedidoLimpio';
 import { factorAgua } from '@/utils/factorAgua';
 
 export default {
@@ -426,19 +427,19 @@ export default {
         let totalKilos = 0;
         
         if (pedido.otilio) {
-          totalKilos += this.calcularKilosCliente(pedido.otilio);
+          totalKilos += this.calcularKilosCliente(pedido.otilio, 'otilio');
         }
         if (pedido.catarro) {
-          totalKilos += this.calcularKilosCliente(pedido.catarro);
+          totalKilos += this.calcularKilosCliente(pedido.catarro, 'catarro');
         }
         if (pedido.joselito) {
-          totalKilos += this.calcularKilosCliente(pedido.joselito);
+          totalKilos += this.calcularKilosCliente(pedido.joselito, 'joselito');
         }
         if (pedido.ozuna) {
-          totalKilos += this.calcularKilosCliente(pedido.ozuna);
+          totalKilos += this.calcularKilosCliente(pedido.ozuna, 'ozuna');
         }
         if (pedido.lorena) {
-          totalKilos += this.calcularKilosCliente(pedido.lorena);
+          totalKilos += this.calcularKilosCliente(pedido.lorena, 'lorena');
         }
         
         if (pedido.clientesTemporales) {
@@ -488,7 +489,7 @@ export default {
         return Math.round(totalTaras).toString();
       }
     },
-    calcularKilosCliente(items) {
+    calcularKilosCliente(items, clienteId = 'temporal') {
       let kilosSinH2O = 0;
       let kilosConH2O = 0;
       let kilosTaras = 0;
@@ -501,11 +502,11 @@ export default {
         if (item.kilos) {
           if (item.esTara) {
             if (item.tipo === 'C/H20') {
-              kilosConH2O += Number(item.kilos) * 30 * factorAgua(item);
+              kilosConH2O += Number(item.kilos) * kilosPorTaraCliente(item, clienteId) * factorAgua(item);
             } else if (item.tipo === '1.35 y .15' || item.tipo === '1.3 y .2') {
-              kilosTaras135 += Number(item.kilos) * 30;
+              kilosTaras135 += Number(item.kilos) * kilosPorTaraCliente(item, clienteId);
             } else {
-              kilosTaras += Number(item.kilos) * 30;
+              kilosTaras += Number(item.kilos) * kilosPorTaraCliente(item, clienteId);
             }
           } else if (item.tipo === 'S/H20') {
             kilosSinH2O += Number(item.kilos);
