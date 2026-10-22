@@ -53,14 +53,14 @@
                 @input="handleInputChange(cliente, columna, $event)">
             </td>
           </tr>
-          <tr class="fila-totales">
-            <td><strong>Total taras</strong></td>
+          <tr class="fila-totales fila-total-taras">
+            <td><strong>Taras</strong></td>
             <td v-for="columna in columnas" :key="columna + '-total'">
               {{ totalesColumnas[columna.toLowerCase()].taras }}
             </td>
           </tr>
-          <tr class="fila-totales">
-            <td><strong>Total kilos</strong></td>
+          <tr class="fila-totales fila-total-kilos">
+            <td><strong>Kilos</strong></td>
             <td v-for="columna in columnas" :key="columna + '-kilos'">
               {{ totalesColumnas[columna.toLowerCase()].kilos }}
             </td>
@@ -731,12 +731,24 @@ input.cliente-veronica:focus {
 }
 
 .fila-totales {
-  background-color: #f8f9fa;
   font-weight: bold;
 }
 
+.fila-total-taras {
+  background-color: #dbeafe;
+  color: #1e3a8a;
+}
+
+.fila-total-kilos {
+  background-color: #fef3c7;
+  color: #78350f;
+}
+
 .fila-totales td {
-  padding: 12px;
+  padding: 4px 8px;
+  height: auto;
+  line-height: 1.2;
+  font-size: 0.9rem;
   border: 2px solid #2c3e50 !important;
 }
 
@@ -853,6 +865,11 @@ input.cliente-veronica:focus {
     font-size: 0.95rem;
   }
   
+  .fila-totales td {
+    padding: 3px 6px;
+    font-size: 0.85rem;
+  }
+
   input[type="number"] {
     width: 60px;
     padding: 6px;
