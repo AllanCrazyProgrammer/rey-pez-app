@@ -220,9 +220,11 @@ export default {
     },
     calcularKilosPedidoLimpio() {
       let totalKilos = 0;
-      const clienteId = Object.keys(this.pedidoLimpio || {}).find(id =>
+      const clienteEncontrado = Object.keys(this.pedidoLimpio || {}).find(id =>
         Array.isArray(this.pedidoLimpio[id]) && this.pedidoLimpio[id] === this.itemsPedidoLimpio
       ) || 'temporal';
+      const clienteNormalizado = clienteEncontrado.trim().toLowerCase();
+      const clienteId = { '8a': 'joselito', veronica: 'lorena' }[clienteNormalizado] || clienteNormalizado;
       this.itemsPedidoLimpio.forEach(item => {
         if (item.kilos) {
           if (item.esTara) {

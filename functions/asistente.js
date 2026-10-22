@@ -2114,7 +2114,7 @@ const KILOS_BASE_TARA_POR_TIPO = {
   '1.5': 20
 };
 
-const CLIENTES_TARA_25 = new Set(['ozuna']);
+const CLIENTES_TARA_25 = new Set(['ozuna', 'joselito', 'lorena']);
 
 const CLIENTES_CON_TARA_DE_27 = new Set(['otilio', 'catarro', 'temporal']);
 const CLIENTES_FIJOS = ['otilio', 'catarro', 'joselito', 'lorena', 'ozuna'];
