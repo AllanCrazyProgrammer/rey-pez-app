@@ -42,6 +42,7 @@ const html = `<!doctype html><html><head><meta name="viewport" content="width=de
    input.value = '3'; input.dispatchEvent(new w.Event('input', {bubbles:true}));
    await w.Vue.nextTick();
    const rows = () => [...w.document.querySelectorAll('.fila-totales')];
+   assert.deepEqual(rows().map(row => row.children[0].textContent.trim()), ['Taras', 'Kilos']);
    assert.equal(rows()[0].children[1].textContent.trim(), '3');
    assert.equal(rows()[1].children[1].textContent.trim(), '57');
    w.app.nuevaColumna = 'Adicional'; w.app.agregarColumna();
@@ -69,6 +70,25 @@ const html = `<!doctype html><html><head><meta name="viewport" content="width=de
     container.scrollLeft = 100;
     return {page:document.documentElement.scrollWidth, viewport:innerWidth, client:container.clientWidth, scroll:container.scrollWidth, left:container.scrollLeft, overflow:getComputedStyle(container).overflowX};
    });
+   const totalsStyle = await page.evaluate(() => {
+    const rows = [...document.querySelectorAll('.fila-totales')];
+    const client = document.querySelector('.tabla-pedidos tbody tr');
+    return {
+     labels: rows.map(row => row.cells[0].textContent.trim()),
+     backgrounds: rows.map(row => getComputedStyle(row).backgroundColor),
+     clientBackground: getComputedStyle(client).backgroundColor,
+     heights: rows.map(row => row.getBoundingClientRect().height),
+     clientHeight: client.getBoundingClientRect().height
+    };
+   });
+   assert.deepEqual(totalsStyle.labels, ['Taras', 'Kilos']);
+   assert.notEqual(totalsStyle.backgrounds[0], totalsStyle.backgrounds[1]);
+   for (const background of totalsStyle.backgrounds) {
+    assert.notEqual(background, totalsStyle.clientBackground);
+   }
+   for (const height of totalsStyle.heights) {
+    assert(height < totalsStyle.clientHeight, `Totales compactos a ${width}px: ${JSON.stringify(totalsStyle)}`);
+   }
    assert(sizes.page <= sizes.viewport, JSON.stringify(sizes));
    if (width === 390) {
     assert(sizes.scroll > sizes.client, JSON.stringify(sizes));
@@ -82,6 +102,22 @@ const html = `<!doctype html><html><head><meta name="viewport" content="width=de
   await page.evaluate(() => {window.app.nuevaColumna = 'Medida adicional'; window.app.agregarColumna(); window.app.$set(window.app.pedidos.Catarro, 'medida adicional', 2)});
   await page.waitForFunction(() => document.querySelector('.fila-totales').lastElementChild.textContent.trim() === '2');
   assert.equal((await page.locator('.fila-totales').nth(1).locator('td').last().textContent()).trim(), '38');
+  if (process.env.SCREENSHOT_PATH) {
+   await page.setViewportSize({width:390, height:844});
+   await page.evaluate(async () => {
+    const app = window.app;
+    app.eliminarColumna('Medida adicional');
+    for (const cliente of app.clientes) {
+     for (const columna of app.columnas) app.$set(app.pedidos[cliente], columna.toLowerCase(), 0);
+    }
+    app.$set(app.pedidos.Otilio, app.columnas[0].toLowerCase(), 5);
+    app.$set(app.pedidos.Veronica, app.columnas[0].toLowerCase(), 4);
+    await app.$nextTick();
+    document.querySelector('.tabla-pedidos').scrollLeft = 0;
+   });
+   assert.equal((await page.locator('.fila-total-taras td').nth(1).textContent()).trim(), '9');
+   await page.locator('.tabla-pedidos').screenshot({path:process.env.SCREENSHOT_PATH});
+  }
   assert.deepEqual(errors, []);
   console.log('PASS responsive 390/1440, scroll interno y totales reactivos con columna adicional');
  } finally { await browser.close(); }
