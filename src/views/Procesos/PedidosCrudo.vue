@@ -54,9 +54,15 @@
             </td>
           </tr>
           <tr class="fila-totales">
-            <td><strong>Total</strong></td>
+            <td><strong>Total taras</strong></td>
             <td v-for="columna in columnas" :key="columna + '-total'">
-              {{ totalesColumnas[columna.toLowerCase()] || 0 }}
+              {{ totalesColumnas[columna.toLowerCase()].taras }}
+            </td>
+          </tr>
+          <tr class="fila-totales">
+            <td><strong>Total kilos</strong></td>
+            <td v-for="columna in columnas" :key="columna + '-kilos'">
+              {{ totalesColumnas[columna.toLowerCase()].kilos }}
             </td>
           </tr>
         </tbody>
@@ -118,6 +124,7 @@
 </template>
 
 <script>
+import { calcularTotalesPedidosCrudo } from '@/utils/pedidosCrudoTotales'
 import { db } from '@/firebase'
 import { formatearMedidaPedidoCrudo } from '@/utils/medidasPedidoCrudo'
 import { collection, addDoc, Timestamp, doc, getDoc, updateDoc } from 'firebase/firestore'
@@ -154,33 +161,13 @@ export default {
       return [...this.columnasBase, ...this.columnasAdicionales]
     },
     kilosCrudo() {
-      let totalPiezas = 0;
-      for (const cliente in this.pedidos) {
-        for (const columna in this.pedidos[cliente]) {
-          const valor = this.pedidos[cliente][columna];
-          if (valor && !isNaN(valor)) {
-            totalPiezas += parseFloat(valor);
-          }
-        }
-      }
-      return totalPiezas * 19;
+      return this.tarasCrudo * 19
     },
     totalesColumnas() {
-      const totales = {};
-      this.columnas.forEach(columna => {
-        const col = columna.toLowerCase();
-        totales[col] = this.clientes.reduce((sum, cliente) => {
-          if (!this.pedidos[cliente] || !this.pedidos[cliente][col]) {
-            return sum;
-          }
-          const valor = parseFloat(this.pedidos[cliente][col]) || 0;
-          return sum + valor;
-        }, 0);
-      });
-      return totales;
+      return calcularTotalesPedidosCrudo(this.pedidos, this.columnas)
     },
     tarasCrudo() {
-      return this.kilosCrudo / 19;
+      return Object.values(this.totalesColumnas).reduce((total, medida) => total + medida.taras, 0)
     }
   },
   methods: {
@@ -483,6 +470,7 @@ export default {
 
 <style scoped>
 .pedidos-crudo-container {
+  min-width: 0;
   max-width: 1200px;
   margin: 0 auto;
   padding: 20px;
@@ -537,7 +525,10 @@ export default {
 
 .tabla-pedidos {
   margin-top: 20px;
+  max-width: 100%;
+  min-width: 0;
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 table {
@@ -818,6 +809,13 @@ input.cliente-veronica:focus {
 @media (max-width: 768px) {
   .pedidos-crudo-container {
     padding: 10px;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .input-nueva-columna {
+    min-width: 0;
+    box-sizing: border-box;
   }
   
   .agregar-columna {

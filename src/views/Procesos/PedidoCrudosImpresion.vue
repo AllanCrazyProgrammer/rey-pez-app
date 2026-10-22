@@ -76,6 +76,7 @@
 </template>
 
 <script>
+import { calcularTotalesPedidosCrudo } from '@/utils/pedidosCrudoTotales'
 import { db } from '@/firebase'
 import { doc, getDoc, updateDoc, FieldPath } from 'firebase/firestore'
 import { crearPdfConFuentesLocales } from '@/utils/pdf/config'
@@ -131,6 +132,9 @@ export default {
     }
   },
   computed: {
+    totalesColumnas() {
+      return calcularTotalesPedidosCrudo(this.pedidosVisibles, this.columnasVisibles)
+    },
     fechaVisible() {
       return this.pedidoRemoto?.fecha || this.fecha || ''
     },
@@ -221,16 +225,10 @@ export default {
       return dias[date.getDay()];
     },
     calcularTotalColumna(columna) {
-      const col = columna.toLowerCase();
-      return Object.keys(this.pedidosVisibles).reduce((sum, cliente) => {
-        const fila = this.pedidosVisibles[cliente] || {}
-        const valor = parseFloat(fila[col]) || 0;
-        return sum + valor;
-      }, 0);
+      return this.totalesColumnas[columna.toLowerCase()].taras
     },
     calcularKilosColumna(columna) {
-      const totalTaras = this.calcularTotalColumna(columna);
-      return totalTaras * 19;
+      return this.totalesColumnas[columna.toLowerCase()].kilos
     },
     generarPDF() {
       if (!this.barcosListos) return
@@ -295,6 +293,14 @@ export default {
         ...totales
       ]);
 
+      body.push([
+        { text: 'Kilos', bold: true, fillColor: '#f8f9fa' },
+        ...columnasConDatos.map(columna => ({
+          text: String(this.calcularKilosColumna(columna)),
+          alignment: 'center', bold: true, fillColor: '#f8f9fa'
+        }))
+      ])
+
       const docDefinition = {
         pageOrientation: 'landscape',
         pageMargins: [40, 40, 40, 40],
@@ -322,12 +328,12 @@ export default {
               vLineWidth: function(i, node) { 
                 return (node.table.body.length - 1 === node.row) ? 2 : 1;
               },
-              hLineColor: function(i) { return '#000000'; },
-              vLineColor: function(i) { return '#000000'; },
-              paddingLeft: function(i) { return 10; },
-              paddingRight: function(i) { return 10; },
-              paddingTop: function(i) { return 10; },
-              paddingBottom: function(i) { return 10; }
+              hLineColor: function() { return '#000000'; },
+              vLineColor: function() { return '#000000'; },
+              paddingLeft: function() { return 10; },
+              paddingRight: function() { return 10; },
+              paddingTop: function() { return 10; },
+              paddingBottom: function() { return 10; }
             },
             width: tableWidth
           },
