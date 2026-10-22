@@ -105,7 +105,7 @@ export function obtenerMedidasPedidosLimpio(pedidos, fechaInicio, fechaFin) {
         if (esMaquilaExcluidaDeVentaPedidoLimpio(fila)) return
         const nombre = etiquetaMedida(fila.item?.medida)
         const clave = normalizarClaveMedida(nombre)
-        const kilos = calcularKilosItemPedidoLimpio(fila.item)
+        const kilos = calcularKilosItemPedidoLimpio(fila.item, fila.clienteId)
         if (!clave || kilos <= 0 || medidas.has(clave)) return
         medidas.set(clave, { clave, nombre })
       })
@@ -180,7 +180,7 @@ export function construirAnalisisPedidosLimpio(
       extraerFilasPedidoLimpio(pedido).forEach(fila => {
         const medidaNombre = etiquetaMedida(fila.item?.medida)
         const medidaClave = normalizarClaveMedida(medidaNombre)
-        const kilos = calcularKilosItemPedidoLimpio(fila.item)
+        const kilos = calcularKilosItemPedidoLimpio(fila.item, fila.clienteId)
         const taras = calcularTarasItemPedidoLimpio(fila.item, fila.clienteId)
         if (!medidaClave || kilos <= 0) return
 

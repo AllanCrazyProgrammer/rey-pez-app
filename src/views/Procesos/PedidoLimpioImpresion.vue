@@ -145,7 +145,7 @@
           <tfoot>
             <tr class="total-cliente-row">
               <td></td>
-              <td class="total-kilos-cliente">{{ calcularTotalKilosCliente(pedidoOtilio) }} kg</td>
+              <td class="total-kilos-cliente">{{ calcularTotalKilosCliente(pedidoOtilio, 'otilio') }} kg</td>
               <td></td>
               <td></td>
             </tr>
@@ -189,7 +189,7 @@
             <tfoot>
               <tr class="total-cliente-row">
                 <td></td>
-                <td class="total-kilos-cliente">{{ calcularTotalKilosCliente(pedidoJoselito) }} kg</td>
+                <td class="total-kilos-cliente">{{ calcularTotalKilosCliente(pedidoJoselito, 'joselito') }} kg</td>
                 <td></td>
                 <td></td>
               </tr>
@@ -231,7 +231,7 @@
             <tfoot>
               <tr class="total-cliente-row">
                 <td></td>
-                <td class="total-kilos-cliente">{{ calcularTotalKilosCliente(pedidoLorena) }} kg</td>
+                <td class="total-kilos-cliente">{{ calcularTotalKilosCliente(pedidoLorena, 'lorena') }} kg</td>
                 <td></td>
                 <td></td>
               </tr>
@@ -274,7 +274,7 @@
               <tfoot>
                 <tr class="total-cliente-row">
                   <td></td>
-                  <td class="total-kilos-cliente">{{ calcularTotalKilosCliente(pedidoCatarro) }} kg</td>
+                  <td class="total-kilos-cliente">{{ calcularTotalKilosCliente(pedidoCatarro, 'catarro') }} kg</td>
                   <td></td>
                   <td></td>
                 </tr>
@@ -316,7 +316,7 @@
               <tfoot>
                 <tr class="total-cliente-row">
                   <td></td>
-                  <td class="total-kilos-cliente">{{ calcularTotalKilosCliente(pedidoOzuna, true) }} kg</td>
+                  <td class="total-kilos-cliente">{{ calcularTotalKilosCliente(pedidoOzuna, 'ozuna') }} kg</td>
                   <td></td>
                   <td></td>
                 </tr>
@@ -1868,7 +1868,7 @@ export default {
     calcularTotalesPorMedida() {
       const medidasMap = new Map();
       
-      const procesarPedido = (pedido, esPedidoOzuna = false) => {
+      const procesarPedido = (pedido, clienteId = 'temporal') => {
         if (!pedido || !Array.isArray(pedido)) return;
         pedido.forEach(item => {
           if (!item.medida) return;
@@ -1879,7 +1879,7 @@ export default {
           // Si se marcó Selecta (S) u Honduras (H) se trata como otra medida
           let sufijoClave = '';
           let sufijoEtiqueta = '';
-          if (esPedidoOzuna && item.esMaquila) {
+          if (clienteId === 'ozuna' && item.esMaquila) {
             sufijoClave += '-maq';
             sufijoEtiqueta += ' Maq';
           }
@@ -1901,16 +1901,16 @@ export default {
           }
           
           const registro = medidasMap.get(key);
-          registro.total += calcularKilosItemPedidoLimpio(item)
+          registro.total += calcularKilosItemPedidoLimpio(item, clienteId)
         });
       };
 
       // Procesar todos los pedidos regulares
-      procesarPedido(this.pedidoOtilio);
-      procesarPedido(this.pedidoCatarro);
-      procesarPedido(this.pedidoJoselito);
-      procesarPedido(this.pedidoLorena);
-      procesarPedido(this.pedidoOzuna, true); // Indicamos que es pedido de Ozuna
+      procesarPedido(this.pedidoOtilio, 'otilio');
+      procesarPedido(this.pedidoCatarro, 'catarro');
+      procesarPedido(this.pedidoJoselito, 'joselito');
+      procesarPedido(this.pedidoLorena, 'lorena');
+      procesarPedido(this.pedidoOzuna, 'ozuna'); // Indicamos que es pedido de Ozuna
       
       // Procesar clientes temporales
       if (this.clientesTemporales && typeof this.clientesTemporales === 'object') {
@@ -2067,8 +2067,8 @@ export default {
       const refrigerados = this.obtenerKilosRefrigerados(medida.medida);
       return Math.round((medida.total - refrigerados) * 10) / 10;
     },
-    calcularTotalKilosCliente(pedido) {
-      return calcularTotalesClientePedidoLimpio(pedido).kilosTotal
+    calcularTotalKilosCliente(pedido, clienteId = 'temporal') {
+      return calcularTotalesClientePedidoLimpio(pedido, clienteId).kilosTotal
     }
   },
   watch: {

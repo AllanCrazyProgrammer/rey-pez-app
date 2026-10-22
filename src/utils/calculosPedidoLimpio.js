@@ -1,4 +1,4 @@
-import { factorAgua, kilosPorTara } from '@/utils/factorAgua'
+import { factorAgua } from '@/utils/factorAgua'
 
 const FACTORES_POR_TIPO = {
   '1.4': 1.4,
@@ -17,6 +17,8 @@ const KILOS_BASE_TARA_POR_TIPO = {
   '1.4': 20,
   '1.5': 20
 }
+
+const CLIENTES_TARA_25 = new Set(['ozuna'])
 
 const CLIENTES_CON_TARA_DE_27 = new Set(['otilio', 'catarro', 'temporal'])
 const CLIENTES_FIJOS = ['otilio', 'catarro', 'joselito', 'lorena', 'ozuna']
@@ -37,7 +39,13 @@ function factorPorTipo(item) {
   return FACTORES_POR_TIPO[tipo] || 1
 }
 
-export function calcularKilosItemPedidoLimpio(item) {
+// Mantener en sincronía con functions/asistente.js.
+export function kilosPorTaraCliente(item, clienteId = 'temporal') {
+  const nota = String(item?.nota || '').trim().toLowerCase()
+  return nota === 'sellado' || CLIENTES_TARA_25.has(normalizarCliente(clienteId)) ? 25 : 30
+}
+
+export function calcularKilosItemPedidoLimpio(item, clienteId = 'temporal') {
   const cantidad = numeroPositivo(item?.kilos)
   if (!cantidad) return 0
 
@@ -47,7 +55,7 @@ export function calcularKilosItemPedidoLimpio(item) {
       return cantidad * KILOS_BASE_TARA_POR_TIPO[tipo] * FACTORES_POR_TIPO[tipo]
     }
 
-    const kilosBase = cantidad * kilosPorTara(item)
+    const kilosBase = cantidad * kilosPorTaraCliente(item, clienteId)
     return tipo === 'C/H20' ? kilosBase * factorAgua(item) : kilosBase
   }
 
@@ -73,7 +81,7 @@ export function calcularTarasItemPedidoLimpio(item, clienteId = 'temporal') {
 
 export function calcularTotalesClientePedidoLimpio(items, clienteId = 'temporal') {
   const filas = Array.isArray(items) ? items : []
-  const kilos = filas.reduce((total, item) => total + calcularKilosItemPedidoLimpio(item), 0)
+  const kilos = filas.reduce((total, item) => total + calcularKilosItemPedidoLimpio(item, clienteId), 0)
   const taras = filas.reduce(
     (total, item) => total + calcularTarasItemPedidoLimpio(item, clienteId),
     0
