@@ -27,7 +27,7 @@ test('automatic report reuses real screen calculations, includes current product
   const firestore = { getFirestore: () => ({}), collection: () => ({}), getDocs: async () => ({ docs: [], forEach: () => {} }) };
   const screen = compile(fs.readFileSync('src/views/Embarques/Rendimientos.vue', 'utf8').match(/<script>([\s\S]*?)<\/script>/)[1], {
     'firebase/firestore': firestore, lodash: {}, '@/utils/RendimientosPdf': { generarPDFRendimientos: async (...args) => { calls.push(args); return { data: new Uint8Array([37,80,68,70]), name: 'rendimientos.pdf' }; } },
-    '@/utils/pdf/reportDelivery': { prepararGuardadoReporte: () => { throw new Error('automatic export must not open another save picker'); } },
+    '@/utils/pesadas': {}, '@/utils/pesadasPorMedida': {}, './components/PesadasDelDiaModal.vue': {},
     '@/utils/pdf/sacadas': {}, '@/components/MedidasParaHoyCards.vue': {}, '@/services/EmbarquesOfflineService': offline, '@/utils/formatters': { formatearFecha: value => value },
     '@/utils/preciosHistoricos': preciosHistoricos,
     '@/utils/preciosAliasCatalogo': preciosAliasCatalogo,

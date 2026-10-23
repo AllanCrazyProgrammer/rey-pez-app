@@ -559,7 +559,6 @@ import {
 } from '@/utils/embarqueRevision';
 import { debounce } from 'lodash';
 import { generarPDFRendimientos } from '@/utils/RendimientosPdf';
-import { prepararGuardadoReporte } from '@/utils/pdf/reportDelivery';
 import { normalizarGruposListaMedidasParaPdf } from '@/utils/pdf/sacadas';
 import MedidasParaHoyCards from '@/components/MedidasParaHoyCards.vue';
 import EmbarquesOfflineService from '@/services/EmbarquesOfflineService';
@@ -3382,8 +3381,7 @@ export default {
       });
 
       try {
-        const destinoLocal = options.returnForDrive ? { returnForDrive: true } : await prepararGuardadoReporte('rendimientos', embarqueDataConNota);
-        if (destinoLocal.canceled) return;
+        const destinoLocal = { returnForDrive: Boolean(options.returnForDrive) };
         const gruposListaMedidasDiaEmbarque = navigator.onLine
           ? await this.obtenerGruposListaMedidasPedidoDiaEmbarque()
           : null;

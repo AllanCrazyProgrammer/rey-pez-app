@@ -1,6 +1,6 @@
 import { nombreArchivoReporte, periodoNota } from './filename';
 import { obtenerBufferPdf } from './delivery';
-import { prepararGuardadoReporte, guardarYRespaldarReporte } from './reportDelivery';
+import { useUIStore } from '@/stores/ui';
 import pdfMake, { configurarPdfMake, estilosPdf, configuracionDocumento } from './config';
 import { loadImageAsBase64, formatearFecha } from './formatters';
 import { generarTablaRendimientos } from './generators/rendimientos';
@@ -30,7 +30,7 @@ export const generarPDFRendimientos = async (
   destinoLocal = null
 ) => {
   try {
-    const destino = destinoLocal || await prepararGuardadoReporte('rendimientos', embarqueData);
+    const destino = destinoLocal || {};
     if (destino.canceled) return destino;
     // Rendimientos debe poder generarse con los datos locales, aunque no haya internet.
     let logoBase64 = '';
@@ -126,7 +126,9 @@ export const generarPDFRendimientos = async (
 
     const data = await obtenerBufferPdf(pdfMake.createPdf(docDefinition));
     if (destino.returnForDrive) return { name: nombreArchivoReporte('rendimientos', embarqueData), period: periodoNota(embarqueData), data };
-    return await guardarYRespaldarReporte('rendimientos', embarqueData, data, destino);
+    const name = nombreArchivoReporte('rendimientos', embarqueData);
+    useUIStore().showPdfPreview(data, name);
+    return { name, period: periodoNota(embarqueData), data };
   } catch (error) {
     console.error('Error al generar el PDF de rendimientos:', error);
     throw error;
