@@ -11,6 +11,30 @@
     </div>
     <p v-if="!barcosListos" class="estado-carga">Cargando pedido…</p>
     <p v-if="errorCarga" class="barco-error" role="alert">{{ errorCarga }}</p>
+    <section v-if="barcosListos" class="escala-impresion">
+      <h3>Tamaño de la tabla para imprimir</h3>
+      <label for="escala-tabla">Escala: {{ Math.round(escala * 100) }}%</label>
+      <input id="escala-tabla" type="range" :min="escalaMin * 100" :max="escalaMaxima * 100" step="1" :value="Math.round(escala * 100)" @input="cambiarEscala">
+      <button type="button" @click="ajustarAutomatico">Ajustar automático</button>
+      <div ref="hojaContenedor" class="hoja-contenedor" :style="{ height: (595.28 * factorHoja) + 'px' }">
+        <div class="hoja-impresion" :style="{ transform: 'scale(' + factorHoja + ')' }">
+          <div class="hoja-titulo">{{ datosImpresion.titulo }}</div>
+          <table class="hoja-tabla" :style="{ fontSize: parametrosImpresion.fontSize + 'px', '--padding-tabla': parametrosImpresion.padding + 'px' }">
+            <colgroup><col v-for="(ancho, i) in anchosImpresion" :key="i" :style="{ width: ancho + 'px' }"></colgroup>
+            <thead><tr><th v-for="(texto, i) in datosImpresion.encabezados" :key="i">{{ texto }}</th></tr></thead>
+            <tbody>
+              <tr v-for="fila in datosImpresion.filas" :key="fila.cliente">
+                <td :style="{ backgroundColor: fila.fillColor, color: fila.color }">{{ fila.cliente }}</td>
+                <td v-for="(celda, i) in fila.celdas" :key="i"><span v-if="celda.texto" class="hoja-cantidad" :style="{ gap: parametrosImpresion.gap + 'px' }">{{ celda.texto }}<svg :width="parametrosImpresion.casilla" :height="parametrosImpresion.casilla" viewBox="0 0 10 10"><rect x="0.5" y="0.5" width="9" height="9" fill="none" stroke="black"/><path v-if="celda.marcada" d="M2 5 L4 8 L8 2" fill="none" stroke="black"/></svg></span></td>
+              </tr>
+              <tr class="hoja-total"><td>Total</td><td v-for="(valor, i) in datosImpresion.taras" :key="i"><i>{{ valor }}</i></td></tr>
+              <tr class="hoja-total"><td>Kilos</td><td v-for="(valor, i) in datosImpresion.kilos" :key="i">{{ valor }}</td></tr>
+            </tbody>
+          </table>
+          <div class="hoja-barcos"><div v-for="barco in datosImpresion.barcos" :key="barco.etiqueta" class="hoja-barco"><span>{{ barco.etiqueta }}</span><span>{{ barco.texto || ' ' }}</span></div></div>
+        </div>
+      </div>
+    </section>
     <div v-if="barcosListos" id="pdfPreview" class="pdf-preview">
       <h3>Pedido de Crudos - {{ fechaVisible }}</h3>
       <div class="tabla-scroll">
@@ -76,6 +100,9 @@
 </template>
 
 <script>
+import '@fontsource/roboto/400.css'
+import '@fontsource/roboto/500.css'
+import { HOJA, ESCALA_MIN, parametrosTabla, escalaMaximaQueCabe, escalaAutoAjuste, normalizarEscala, leerEscalaGuardada, guardarEscala, anchosTabla, construirDocumentoPedidoCrudos } from '@/utils/pedidosCrudoEscalaImpresion'
 import { calcularTotalesPedidosCrudo } from '@/utils/pedidosCrudoTotales'
 import { db } from '@/firebase'
 import { doc, getDoc, updateDoc, FieldPath } from 'firebase/firestore'
@@ -118,6 +145,9 @@ export default {
   },
   data() {
     return {
+      escala: 1,
+      factorHoja: 1,
+      escalaMin: ESCALA_MIN,
       tarasPreparadas: {},
       barcos: {},
       barcosEditados: {},
@@ -132,6 +162,28 @@ export default {
     }
   },
   computed: {
+    datosImpresion() {
+      return {
+        titulo: `Pedido de Crudos - ${this.obtenerDiaSemana(this.fechaVisible)} ${this.fechaVisible}`,
+        encabezados: ['Cliente', ...this.columnasConDatos.map(formatearMedidaPedidoCrudo)],
+        filas: this.clientesConDatos.map(cliente => ({
+          cliente, fillColor: this.obtenerColorCliente(cliente), color: this.obtenerColorTextoCliente(cliente),
+          celdas: this.columnasConDatos.map(columna => ({ texto: String(this.cantidadCelda(cliente, columna)), marcada: !!this.tarasPreparadas[this.claveTara(cliente, columna)] }))
+        })),
+        taras: this.columnasConDatos.map(this.calcularTotalColumna),
+        kilos: this.columnasConDatos.map(this.calcularKilosColumna),
+        barcos: this.columnasConDatos.map(columna => ({ etiqueta: formatearMedidaPedidoCrudo(columna), texto: (this.barcos[columna] || '').trim() }))
+      }
+    },
+    escalaMaxima() {
+      const d = this.datosImpresion
+      return Math.floor(escalaMaximaQueCabe(d.encabezados, d.filas, d.taras, d.kilos) * 100) / 100
+    },
+    parametrosImpresion() { return parametrosTabla(this.escala, this.columnasConDatos.length) },
+    anchosImpresion() {
+      const d = this.datosImpresion
+      return anchosTabla(d.encabezados, d.filas, this.escala, d.taras, d.kilos).map(ancho => ancho + this.parametrosImpresion.padding * 2 + 1)
+    },
     totalesColumnas() {
       return calcularTotalesPedidosCrudo(this.pedidosVisibles, this.columnasVisibles)
     },
@@ -179,7 +231,16 @@ export default {
       this.barcosListos = true
     }
   },
+  watch: {
+    barcosListos(listos) { if (listos) this.inicializarEscala() },
+    escalaMaxima() { this.escala = normalizarEscala(this.escala, this.escalaMaxima) }
+  },
+  mounted() {
+    this.inicializarEscala()
+    window.addEventListener('resize', this.medirHoja)
+  },
   beforeDestroy() {
+    window.removeEventListener('resize', this.medirHoja)
     Object.keys(this.temporizadores).forEach(columna => clearTimeout(this.temporizadores[columna]))
   },
   async beforeRouteLeave(to, from, next) {
@@ -191,6 +252,28 @@ export default {
     next()
   },
   methods: {
+    almacenamientoEscala() {
+      try { return window.localStorage } catch (_) { return null }
+    },
+    inicializarEscala() {
+      if (!this.barcosListos) return
+      const guardada = leerEscalaGuardada(this.almacenamientoEscala())
+      if (guardada === null) this.ajustarAutomatico()
+      else this.escala = normalizarEscala(guardada, this.escalaMaxima)
+      this.$nextTick(this.medirHoja)
+    },
+    medirHoja() {
+      if (this.$refs.hojaContenedor) this.factorHoja = Math.min(1, this.$refs.hojaContenedor.clientWidth / HOJA.ancho)
+    },
+    cambiarEscala(event) {
+      this.escala = normalizarEscala(Number(event.target.value) / 100, this.escalaMaxima)
+      guardarEscala(this.almacenamientoEscala(), this.escala)
+    },
+    ajustarAutomatico() {
+      const d = this.datosImpresion
+      this.escala = escalaAutoAjuste(d.encabezados, d.filas, d.barcos, d.taras, d.kilos)
+      guardarEscala(this.almacenamientoEscala(), this.escala)
+    },
     formatearMedidaPedidoCrudo,
     claveTara(cliente, columna) {
       return JSON.stringify([cliente, columna])
@@ -232,167 +315,7 @@ export default {
     },
     generarPDF() {
       if (!this.barcosListos) return
-      const clientesConDatos = this.clientesConDatos
-      const columnasConDatos = this.columnasConDatos
-      const diaSemana = this.obtenerDiaSemana(this.fechaVisible)
-      const fontSize = columnasConDatos.length > 4 ? 28 : 34
-      
-      const body = clientesConDatos.map(cliente => {
-        const fila = [cliente]
-        columnasConDatos.forEach(columna => {
-          const valor = this.cantidadCelda(cliente, columna)
-          const casilla = [{ type: 'rect', x: 0, y: 0, w: 10, h: 10, lineWidth: 1 }]
-          if (this.tarasPreparadas[this.claveTara(cliente, columna)]) {
-            casilla.push(
-              { type: 'line', x1: 2, y1: 5, x2: 4, y2: 8, lineWidth: 1 },
-              { type: 'line', x1: 4, y1: 8, x2: 8, y2: 2, lineWidth: 1 }
-            )
-          }
-          fila.push(valor ? {
-            columns: [
-              { text: valor.toString(), alignment: 'center', width: '*' },
-              { canvas: casilla, width: 10, margin: [0, fontSize / 2 - 5, 0, 0] }
-            ],
-            columnGap: 3
-          } : { text: '' })
-        })
-        return fila
-      })
-
-      const headers = ['Cliente', ...columnasConDatos.map(formatearMedidaPedidoCrudo)].map(header => ({
-        text: header,
-        alignment: 'center'
-      }))
-
-      // Calcular el tamaño de la tabla basado en el número de columnas
-      const tableWidth = headers.length > 5 ? '100%' : 'auto'
-
-      const estilosCeldas = {}
-      clientesConDatos.forEach((cliente, index) => {
-        estilosCeldas[index] = {
-          fillColor: this.obtenerColorCliente(cliente),
-          color: this.obtenerColorTextoCliente(cliente),
-          bold: true
-        }
-      })
-
-      // Agregar fila de totales al PDF
-      const totales = columnasConDatos.map(columna => {
-        const total = this.calcularTotalColumna(columna);
-        return { 
-          text: total.toString(), 
-          alignment: 'center', 
-          bold: true,
-          italics: true,
-          fillColor: '#f8f9fa'
-        };
-      });
-      
-      body.push([
-        { text: 'Total', bold: true, fillColor: '#f8f9fa' }, 
-        ...totales
-      ]);
-
-      body.push([
-        { text: 'Kilos', bold: true, fillColor: '#f8f9fa' },
-        ...columnasConDatos.map(columna => ({
-          text: String(this.calcularKilosColumna(columna)),
-          alignment: 'center', bold: true, fillColor: '#f8f9fa'
-        }))
-      ])
-
-      const docDefinition = {
-        pageOrientation: 'landscape',
-        pageMargins: [40, 40, 40, 40],
-        content: [
-          {
-            text: `Pedido de Crudos - ${diaSemana} ${this.fechaVisible}`,
-            style: 'header'
-          },
-          {
-            table: {
-              headerRows: 1,
-              widths: Array(headers.length).fill('*'),
-              body: [headers, ...body]
-            },
-            layout: {
-              fillColor: function(rowIndex, node, columnIndex) {
-                if (rowIndex === 0) return '#f2f2f2'
-                if (columnIndex === 0) return estilosCeldas[rowIndex - 1]?.fillColor
-                return null
-              },
-              defaultBorder: true,
-              hLineWidth: function(i, node) { 
-                return (i === node.table.body.length - 1 || i === node.table.body.length) ? 2 : 1;
-              },
-              vLineWidth: function(i, node) { 
-                return (node.table.body.length - 1 === node.row) ? 2 : 1;
-              },
-              hLineColor: function() { return '#000000'; },
-              vLineColor: function() { return '#000000'; },
-              paddingLeft: function() { return 10; },
-              paddingRight: function() { return 10; },
-              paddingTop: function() { return 10; },
-              paddingBottom: function() { return 10; }
-            },
-            width: tableWidth
-          },
-          ...(columnasConDatos.length ? [{
-            margin: [0, 8, 0, 0],
-            fontSize: 11,
-            bold: false,
-            table: {
-              widths: ['*', '*'],
-              dontBreakRows: true,
-              body: Array.from({ length: Math.ceil(columnasConDatos.length / 2) }, (_, fila) =>
-                [0, 1].map(offset => {
-                  const columna = columnasConDatos[fila * 2 + offset]
-                  if (columna === undefined) return { text: '' }
-                  return {
-                    columnGap: 6,
-                    columns: [
-                      { text: formatearMedidaPedidoCrudo(columna), fontSize: 9, width: 'auto', noWrap: true },
-                      {
-                        width: '*',
-                        table: {
-                          widths: ['*'],
-                          body: [[{
-                            text: this.barcos[columna]?.trim() || ' ',
-                            border: [false, false, false, true],
-                            margin: [0, 1, 0, 0]
-                          }]]
-                        },
-                        layout: {
-                          hLineWidth: () => 0.5,
-                          paddingLeft: () => 0,
-                          paddingRight: () => 0,
-                          paddingTop: () => 0,
-                          paddingBottom: () => 1
-                        }
-                      }
-                    ],
-                    margin: [0, 0, 8, 4]
-                  }
-                })
-              )
-            },
-            layout: 'noBorders'
-          }] : [])
-        ],
-        styles: {
-          header: {
-            fontSize: 34,
-            bold: true,
-            margin: [0, 0, 0, 20],
-            alignment: 'center'
-          }
-        },
-        defaultStyle: {
-          fontSize: fontSize,
-          bold: true,
-          font: 'Roboto'
-        }
-      }
+      const docDefinition = construirDocumentoPedidoCrudos({ ...this.datosImpresion, escala: this.escala })
 
       crearPdfConFuentesLocales(docDefinition).download('Ped-crudos-' + this.fechaVisible + '.pdf')
     },
@@ -493,7 +416,33 @@ export default {
 </script>
 
 <style scoped>
+.escala-impresion { min-width: 0; margin-top: 12px; padding: 12px; background: #fff; color: #2c3e50; border: 1px solid #ddd; border-radius: 6px; }
+.escala-impresion h3 { margin: 0 0 6px; font-size: 18px; }
+.escala-impresion label { font-weight: bold; }
+.escala-impresion button { padding: 8px 14px; min-height: 40px; border: none; border-radius: 4px; background: #34495e; color: #fff; cursor: pointer; }
+.hoja-contenedor { border: 1px solid #bbb; box-shadow: 0 1px 4px rgba(0,0,0,.2); }
+.escala-impresion input { max-width: 100%; vertical-align: middle; margin: 12px; }
+/* La hoja va fuera del flujo: su ancho real (841.89px) no debe ensanchar la pantalla en el celular. */
+.hoja-contenedor { position: relative; width: 100%; max-width: 100%; overflow: hidden; margin-top: 16px; }
+.hoja-impresion { position: absolute; top: 0; left: 0; box-sizing: border-box; width: 841.89px; height: 595.28px; padding: 40px; background: white; color: black; transform-origin: top left; font-family: Roboto, sans-serif; font-weight: 500; }
+.hoja-titulo { font-size: 34px; line-height: 1.172; text-align: center; margin-bottom: 20px; }
+.hoja-tabla { width: 761.89px; table-layout: fixed; border-collapse: collapse; line-height: 1.172; }
+.hoja-tabla th, .hoja-tabla td { border: 1px solid black; padding: var(--padding-tabla); vertical-align: top; text-align: center; overflow-wrap: normal; font-weight: inherit; }
+.hoja-tabla td:first-child { text-align: left; }
+.hoja-tabla th { background: #f2f2f2; }
+.hoja-cantidad { display: flex; align-items: center; justify-content: center; }
+.hoja-cantidad svg { flex-shrink: 0; }
+.hoja-total { background: #f8f9fa; border-top: 2px solid black; border-bottom: 2px solid black; }
+.hoja-barcos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 12px; margin-top: 8px; font-size: 11px; font-weight: 400; }
+.hoja-barco { display: flex; align-items: baseline; gap: 6px; }
+.hoja-barco span:first-child { font-size: 9px; white-space: nowrap; }
+.hoja-barco span:last-child { flex: 1; min-width: 0; border-bottom: .5px solid black; white-space: pre-wrap; overflow-wrap: anywhere; }
+
 .impresion-container {
+  /* min-width: 0 evita que la tabla ensanche el contenedor flex en el celular. */
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
   max-width: 1200px;
   margin: 0 auto;
   padding: 20px;
@@ -676,6 +625,7 @@ export default {
 }
 
 @media print {
+  .escala-impresion { display: none !important; }
   .barcos {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
