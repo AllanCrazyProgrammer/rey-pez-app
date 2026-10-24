@@ -2,7 +2,7 @@
   <div class="impresion-container">
     <h2>Vista previa de impresión - Pedido de Camarón Crudo</h2>
     <div class="buttons-container">
-      <button @click="generarPDF" class="btn-generar" :disabled="!barcosListos">
+      <button @click="abrirEscala" class="btn-generar" :disabled="!barcosListos">
         <span class="icon">📄</span> Generar PDF
       </button>
       <button @click="$router.push('/procesos/pedidos')" class="btn-volver">
@@ -11,8 +11,9 @@
     </div>
     <p v-if="!barcosListos" class="estado-carga">Cargando pedido…</p>
     <p v-if="errorCarga" class="barco-error" role="alert">{{ errorCarga }}</p>
-    <section v-if="barcosListos" class="escala-impresion">
-      <h3>Tamaño de la tabla para imprimir</h3>
+    <div v-if="barcosListos && mostrarEscala" class="modal-escala" @click.self="cerrarEscala">
+    <section class="escala-impresion" role="dialog" aria-modal="true" aria-labelledby="titulo-escala">
+      <h3 id="titulo-escala">Tamaño de la tabla para imprimir</h3>
       <label for="escala-tabla">Escala: {{ Math.round(escala * 100) }}%</label>
       <input id="escala-tabla" type="range" :min="escalaMin * 100" :max="escalaMaxima * 100" step="1" :value="Math.round(escala * 100)" @input="cambiarEscala">
       <button type="button" @click="ajustarAutomatico">Ajustar automático</button>
@@ -34,7 +35,12 @@
           <div class="hoja-barcos"><div v-for="barco in datosImpresion.barcos" :key="barco.etiqueta" class="hoja-barco"><span>{{ barco.etiqueta }}</span><span>{{ barco.texto || ' ' }}</span></div></div>
         </div>
       </div>
+      <div class="modal-acciones">
+        <button type="button" class="btn-confirmar-pdf" @click="generarPDF">📄 Generar PDF</button>
+        <button type="button" class="btn-cancelar-escala" @click="cerrarEscala">Cancelar</button>
+      </div>
     </section>
+    </div>
     <div v-if="barcosListos" id="pdfPreview" class="pdf-preview">
       <h3>Pedido de Crudos - {{ fechaVisible }}</h3>
       <div class="tabla-scroll">
@@ -146,6 +152,7 @@ export default {
   data() {
     return {
       escala: 1,
+      mostrarEscala: false,
       factorHoja: 1,
       escalaMin: ESCALA_MIN,
       tarasPreparadas: {},
@@ -262,6 +269,14 @@ export default {
       else this.escala = normalizarEscala(guardada, this.escalaMaxima)
       this.$nextTick(this.medirHoja)
     },
+    abrirEscala() {
+      if (!this.barcosListos) return
+      this.mostrarEscala = true
+      this.$nextTick(this.medirHoja)
+    },
+    cerrarEscala() {
+      this.mostrarEscala = false
+    },
     medirHoja() {
       if (this.$refs.hojaContenedor) this.factorHoja = Math.min(1, this.$refs.hojaContenedor.clientWidth / HOJA.ancho)
     },
@@ -318,6 +333,7 @@ export default {
       const docDefinition = construirDocumentoPedidoCrudos({ ...this.datosImpresion, escala: this.escala })
 
       crearPdfConFuentesLocales(docDefinition).download('Ped-crudos-' + this.fechaVisible + '.pdf')
+      this.mostrarEscala = false
     },
     async cargarPedido(id) {
       this.errorCarga = ''
@@ -416,6 +432,11 @@ export default {
 </script>
 
 <style scoped>
+.modal-escala { position: fixed; inset: 0; z-index: 2000; display: flex; align-items: flex-start; justify-content: center; padding: 16px; box-sizing: border-box; overflow-y: auto; -webkit-overflow-scrolling: touch; background: rgba(0, 0, 0, .55); }
+.modal-escala .escala-impresion { box-sizing: border-box; width: 100%; max-width: 900px; margin: auto 0; box-shadow: 0 6px 24px rgba(0, 0, 0, .35); }
+.modal-acciones { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+.modal-acciones button { flex: 1 1 140px; min-height: 44px; font-size: 1em; }
+.escala-impresion .btn-cancelar-escala { background: #95a5a6; }
 .escala-impresion { min-width: 0; margin-top: 12px; padding: 12px; background: #fff; color: #2c3e50; border: 1px solid #ddd; border-radius: 6px; }
 .escala-impresion h3 { margin: 0 0 6px; font-size: 18px; }
 .escala-impresion label { font-weight: bold; }
@@ -625,7 +646,7 @@ export default {
 }
 
 @media print {
-  .escala-impresion { display: none !important; }
+  .modal-escala, .escala-impresion { display: none !important; }
   .barcos {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
