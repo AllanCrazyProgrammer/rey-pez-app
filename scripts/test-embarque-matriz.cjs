@@ -139,6 +139,13 @@ function partirHost(valor) {
     if (id === '@/components/MedidasParaHoyCards.vue') return {};
     if (id === '@/utils/formatters') return { formatearFecha: (valor) => valor };
     if (id === '@/utils/preciosHistoricos') return { normalizarNombreProductoPrecio: (valor) => valor, obtenerClavesBusquedaMedida: () => [] };
+    if (id === '@/utils/renombrarMedidaRendimientos') return require('../src/utils/renombrarMedidaRendimientos');
+    if (id === '@/utils/pesadas') return compilar('src/utils/pesadas.js', require);
+    if (id === '@/utils/pesadasPorMedida') return compilar('src/utils/pesadasPorMedida.js', dep => {
+      if (dep === './pesadas') return compilar('src/utils/pesadas.js', require);
+      throw new Error(dep);
+    });
+    if (id === './components/PesadasDelDiaModal.vue') return {};
     if (id === '@/utils/preciosAliasCatalogo') return { obtenerGrupoPreciosPorNombre: () => null };
     throw new Error('Rendimientos: ' + id);
   }, {
@@ -188,6 +195,7 @@ function partirHost(valor) {
     if (id === '@/constants.js/embarque') return { crearNuevoProducto: () => ({}) };
     if (id === '@/utils/embarqueContenido') return contenido;
     if (id === '@/utils/embarqueRevision') return revision;
+    if (id === '@/constants/clientesConfig') return compilar('src/constants/clientesConfig.js', () => { throw new Error('clientesConfig'); });
     throw new Error('Carga: ' + id);
   }, {
     navigator: { onLine: true },
