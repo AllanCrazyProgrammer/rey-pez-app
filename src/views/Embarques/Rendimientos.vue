@@ -83,7 +83,18 @@
           <div class="medida-info">
           <div class="medida-header">
             <div class="medida-identidad">
-              <span class="medida-label editable-label" @click="editarNombreMedida(medida)">
+              <input
+                    v-if="edicionNombreMedida && edicionNombreMedida.medida === medida && !edicionNombreMedida.campo"
+                    ref="editorNombreMedida"
+                    class="nombre-medida-input"
+                    type="text"
+                    aria-label="Nuevo nombre de medida"
+                    v-model="edicionNombreMedida.nombre"
+                    @keydown.enter.prevent="guardarNombreMedida"
+                    @keydown.esc.prevent="cancelarNombreMedida"
+                    @blur="guardarNombreMedida"
+                  >
+              <span v-else class="medida-label editable-label" @click="editarNombreMedida(medida)">
                 {{ obtenerNombreMedidaPersonalizado(medida) }}
               </span>
               <span v-if="requiereCompletarMedida(medida)" class="datos-pendientes">
@@ -141,7 +152,18 @@
             <template v-if="esMedidaMix(medida)">
               <div class="mix-inputs">
                 <div class="mix-input">
-                  <label @click="editarEtiqueta(medida, 'medida1')" class="editable-label">
+                  <input
+                    v-if="edicionNombreMedida && edicionNombreMedida.medida === medida && edicionNombreMedida.campo === 'medida1'"
+                    ref="editorNombreMedida"
+                    class="nombre-medida-input"
+                    type="text"
+                    aria-label="Nuevo nombre de medida"
+                    v-model="edicionNombreMedida.nombre"
+                    @keydown.enter.prevent="guardarNombreMedida"
+                    @keydown.esc.prevent="cancelarNombreMedida"
+                    @blur="guardarNombreMedida"
+                  >
+                  <label v-else @click="editarEtiqueta(medida, 'medida1')" class="editable-label">
                     {{ obtenerEtiqueta(medida, 'medida1') }}:
                   </label>
                   <input 
@@ -153,7 +175,18 @@
                   >
                 </div>
                 <div class="mix-input">
-                  <label @click="editarEtiqueta(medida, 'medida2')" class="editable-label">
+                  <input
+                    v-if="edicionNombreMedida && edicionNombreMedida.medida === medida && edicionNombreMedida.campo === 'medida2'"
+                    ref="editorNombreMedida"
+                    class="nombre-medida-input"
+                    type="text"
+                    aria-label="Nuevo nombre de medida"
+                    v-model="edicionNombreMedida.nombre"
+                    @keydown.enter.prevent="guardarNombreMedida"
+                    @keydown.esc.prevent="cancelarNombreMedida"
+                    @blur="guardarNombreMedida"
+                  >
+                  <label v-else @click="editarEtiqueta(medida, 'medida2')" class="editable-label">
                     {{ obtenerEtiqueta(medida, 'medida2') }}:
                   </label>
                   <input 
@@ -565,6 +598,7 @@ import EmbarquesOfflineService from '@/services/EmbarquesOfflineService';
 import { formatearFecha } from '@/utils/formatters';
 import { normalizarNombreProductoPrecio, obtenerClavesBusquedaMedida } from '@/utils/preciosHistoricos';
 import { obtenerGrupoPreciosPorNombre } from '@/utils/preciosAliasCatalogo';
+import { normalizarNombreMedida, renombrarMedidaRendimientos } from '@/utils/renombrarMedidaRendimientos';
 import { formatoFechaPesadas } from '@/utils/pesadas';
 import { agruparPesadasPorMedida, compararDespiqueEmbarcado, fechaPesadasDelEmbarque, filtrarPesadasPorDia } from '@/utils/pesadasPorMedida';
 import PesadasDelDiaModal from './components/PesadasDelDiaModal.vue';
@@ -582,6 +616,7 @@ export default {
       embarqueData: null,
       guardadoAutomaticoActivo: false,
       nombresMedidasPersonalizados: {},
+      edicionNombreMedida: null,
       mostrarModal: false,
       nota: '',
       medidaOculta: {},
@@ -3278,29 +3313,7 @@ export default {
     },
 
     editarEtiqueta(medida, campo) {
-      if (!this.kilosCrudos[medida]) {
-        this.$set(this.kilosCrudos, medida, {
-          medida1: 0,
-          medida2: 0,
-          etiqueta1: 'Kilos en crudo (Medida 1)',
-          etiqueta2: 'Kilos en crudo (Medida 2)'
-        });
-      }
-
-      const etiquetaActual = campo === 'medida1' ? 
-        this.kilosCrudos[medida].etiqueta1 : 
-        this.kilosCrudos[medida].etiqueta2;
-
-      const nuevaEtiqueta = prompt('Ingrese el nuevo nombre para la medida:', etiquetaActual);
-      
-      if (nuevaEtiqueta !== null) {
-        if (campo === 'medida1') {
-          this.$set(this.kilosCrudos[medida], 'etiqueta1', nuevaEtiqueta);
-        } else {
-          this.$set(this.kilosCrudos[medida], 'etiqueta2', nuevaEtiqueta);
-        }
-        this.guardarCambiosEnTiempoReal();
-      }
+      this.iniciarEdicionNombreMedida(medida, campo, this.obtenerEtiqueta(medida, campo));
     },
 
     async generarPDF(options = {}) {
@@ -3409,17 +3422,46 @@ export default {
       return this.nombresMedidasPersonalizados[medida] || medida;
     },
 
-    async editarNombreMedida(medida) {
-      const nombreActual = this.obtenerNombreMedidaPersonalizado(medida);
-      const nuevoNombre = prompt('Ingrese el nuevo nombre para la medida:', nombreActual);
-      
-      if (nuevoNombre !== null && nuevoNombre.trim() !== '') {
-        this.$set(this.nombresMedidasPersonalizados, medida, nuevoNombre.trim());
-        await this.persistirCamposRendimientos({
-          nombresMedidasPersonalizados: { ...this.nombresMedidasPersonalizados }
-        });
-        console.log('Nombre de medida actualizado correctamente');
+    editarNombreMedida(medida) {
+      this.iniciarEdicionNombreMedida(medida, null, this.obtenerNombreMedidaPersonalizado(medida));
+    },
+
+    iniciarEdicionNombreMedida(medida, campo, nombre) {
+      this.edicionNombreMedida = { medida, campo, nombre };
+      this.$nextTick(() => {
+        const refs = this.$refs.editorNombreMedida;
+        const input = Array.isArray(refs) ? refs[0] : refs;
+        if (input) {
+          input.focus();
+          input.select();
+        }
+      });
+    },
+
+    cancelarNombreMedida() {
+      this.edicionNombreMedida = null;
+    },
+
+    async guardarNombreMedida() {
+      const edicion = this.edicionNombreMedida;
+      // Enter puede provocar blur: consumir la edición antes de persistir.
+      this.edicionNombreMedida = null;
+      if (!edicion) return;
+      const { medida, campo } = edicion;
+      if (campo) {
+        const nombre = normalizarNombreMedida(edicion.nombre);
+        if (!nombre || nombre === this.obtenerEtiqueta(medida, campo)) return;
+        if (!this.kilosCrudos[medida]) {
+          this.$set(this.kilosCrudos, medida, { medida1: 0, medida2: 0 });
+        }
+        this.$set(this.kilosCrudos[medida], campo === 'medida1' ? 'etiqueta1' : 'etiqueta2', nombre);
+        this.guardarCambiosEnTiempoReal();
+        return;
       }
+      const siguiente = renombrarMedidaRendimientos(this.nombresMedidasPersonalizados, medida, edicion.nombre);
+      if (!siguiente) return;
+      this.nombresMedidasPersonalizados = siguiente;
+      await this.persistirCamposRendimientos({ nombresMedidasPersonalizados: { ...siguiente } });
     },
 
     abrirModalNota() {
@@ -4070,6 +4112,12 @@ input {
 
 .btn-pdf i {
   margin-right: 10px;
+}
+
+.nombre-medida-input {
+  max-width: 100%;
+  min-width: 0;
+  font: inherit;
 }
 
 .medida-label.editable-label {
