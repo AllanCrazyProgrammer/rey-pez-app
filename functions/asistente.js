@@ -17,6 +17,7 @@ const { crearHandlersPedidosCrudo } = require('./lib/pedidosCrudo');
 const { crearHandlersPrecios } = require('./lib/preciosVenta');
 const { crearHandlersRefrigerados } = require('./lib/pedidosLimpioRefrigerados');
 const { crearHandlersNotas } = require('./lib/notasVenta');
+const { crearHandlersDeudas } = require('./lib/deudasProveedor');
 const { pedidoLimpioVacio, pedidoLimpioNuevoAsistente, pedidoLimpioEstaVacio } = require('./lib/pedidoLimpioDia');
 
 /**
@@ -2997,6 +2998,7 @@ const abonosHandlers = crearHandlersAbonos({ db, admin, errorResponse });
 const pedidosCrudoHandlers = crearHandlersPedidosCrudo({ db, admin, errorResponse, generarAsistenteId });
 const preciosHandlers = crearHandlersPrecios({ db, admin, errorResponse });
 const notasHandlers = crearHandlersNotas({ db, FieldValue: admin.firestore.FieldValue, errorResponse, generarAsistenteId });
+const deudasHandlers = crearHandlersDeudas({ db, FieldValue: admin.firestore.FieldValue, errorResponse });
 
 if (process.env.NODE_ENV === 'test') {
   exports._testHandlers = {
@@ -3013,7 +3015,8 @@ if (process.env.NODE_ENV === 'test') {
     ...abonosHandlers,
     ...pedidosCrudoHandlers,
     ...preciosHandlers,
-    ...notasHandlers
+    ...notasHandlers,
+    ...deudasHandlers
   };
 }
 
@@ -3121,6 +3124,18 @@ exports.asistente = onRequest(
       return abonosHandlers.handleGetAbonos(req, res);
     }
 
+    if (path === '/deudas/deshacer' && method === 'POST') {
+      return deudasHandlers.handlePostDeudasDeshacer(req, res);
+    }
+
+    if (path === '/deudas' && method === 'POST') {
+      return deudasHandlers.handlePostDeudas(req, res);
+    }
+
+    if (path === '/deudas' && method === 'GET') {
+      return deudasHandlers.handleGetDeudas(req, res);
+    }
+
     if (path === '/notas/deshacer' && method === 'POST') {
       return notasHandlers.handlePostNotasDeshacer(req, res);
     }
@@ -3142,7 +3157,7 @@ exports.asistente = onRequest(
     }
     
     return res.status(404).json({ 
-      error: 'Ruta no encontrada. Rutas disponibles: GET /pedidos/limpio/refrigerados, POST /pedidos/limpio/refrigerados, POST /salida, POST /deshacer, GET /existencias, GET /dia, POST /crudos/entrada, POST /crudos/salida, POST /crudos/deshacer, GET /crudos/existencias, GET /crudos/dia, POST /pedidos/limpio, GET /pedidos/limpio, POST /pedidos/limpio/deshacer, POST /pedidos/crudo, GET /pedidos/crudo, POST /pedidos/crudo/deshacer, POST /abonos, GET /abonos, POST /abonos/deshacer, POST /precios, GET /precios, POST /notas, GET /notas, POST /notas/deshacer'
+      error: 'Ruta no encontrada. Rutas disponibles: GET /pedidos/limpio/refrigerados, POST /pedidos/limpio/refrigerados, POST /salida, POST /deshacer, GET /existencias, GET /dia, POST /crudos/entrada, POST /crudos/salida, POST /crudos/deshacer, GET /crudos/existencias, GET /crudos/dia, POST /pedidos/limpio, GET /pedidos/limpio, POST /pedidos/limpio/deshacer, POST /pedidos/crudo, GET /pedidos/crudo, POST /pedidos/crudo/deshacer, POST /abonos, GET /abonos, POST /abonos/deshacer, POST /precios, GET /precios, POST /notas, GET /notas, POST /notas/deshacer, POST /deudas, GET /deudas, POST /deudas/deshacer'
     });
   }
 );

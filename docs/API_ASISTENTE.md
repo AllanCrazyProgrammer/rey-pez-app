@@ -26,6 +26,7 @@ La función `asistente` expone endpoints protegidos con autenticación por Beare
 - **POST /abonos**, **GET /abonos**, **POST /abonos/deshacer**
 - **POST /precios**, **GET /precios**
 - **POST /notas**, **GET /notas**, **POST /notas/deshacer** (Notas por Cliente)
+- **POST /deudas**, **GET /deudas**, **POST /deudas/deshacer** (Procesos → Deudas con proveedores)
 
 Todos los endpoints requieren autenticación mediante el header `Authorization: Bearer <API_KEY>`.
 
@@ -2079,3 +2080,48 @@ un cliente con deuda normalmente tiene saldo a favor 0.
 Borra la nota y devuelve a `clientBalances` el saldo a favor que se había aplicado. Solo si la nota sigue igual (folio, cliente, fecha,
 productos, abonos, flete, isPaid); si alguien le registró un abono o la editó responde `409 NOTA_MODIFICADA`. Repetir con la misma llave
 devuelve la misma respuesta; con otra llave de deshacer responde `400 YA_DESHECHO`.
+
+## API de Deudas con proveedores (Procesos → Deudas)
+
+Escribe en `deudas` con la misma forma que `NuevaDeuda.vue`:
+`{ proveedorId, proveedorNombre, fecha: "YYYY-MM-DD", fechaCreacion (Timestamp), total, saldoPendiente, estado: "pendiente" }`
+más el campo `nota`, y la subcolección `productos` (`{ kilos, producto, precio, total }`). El proveedor debe existir en
+`proveedoresDeuda` (por id o por `nombre`, sin importar acentos ni mayúsculas). Crear una deuda no toca otras colecciones.
+
+La app recalcula `total`/`saldoPendiente` desde `productos` en cada abono (`src/utils/deudas.js`), así que la API siempre crea
+productos: con `lineas` uno por línea; con solo `total`, una línea `{ kilos: 1, producto: "Nota <nota>", precio: total, total }`
+(el nombre se puede cambiar con `producto`). El id sigue el formato de las deudas que ya escribió el asistente:
+`asistente-YYYYMMDD-<proveedor>-nota<nota>`, productos `<id>-p1`, `-p2`…
+
+### POST /deudas
+
+```json
+{ "proveedorId": "6Cz1trqhhnmscsCujDXH", "fecha": "2026-10-28", "nota": "386", "total": 21318,
+  "idempotencyKey": "deuda-memo-386", "dryRun": false }
+```
+
+También acepta `proveedor` (nombre), `referencia` en lugar de `nota`, y `lineas: [{ producto, kg, precio }]` (si mandas `total` y
+`lineas`, deben sumar lo mismo). Respuesta: `deudaId`, `deuda`, `productos` y `pendienteProveedor` (`antes`, `despues`,
+`notasPendientesAntes`, `notasPendientesDespues`). `dryRun: true` no escribe ni pide idempotencyKey.
+
+Errores: 400 `PROVEEDOR_REQUERIDO`, `PROVEEDOR_DESCONOCIDO` (con `details.proveedores`), `PROVEEDOR_NO_COINCIDE`, `FECHA_INVALIDA`,
+`NOTA_REQUERIDA`, `TOTAL_REQUERIDO`, `TOTAL_INVALIDO`, `TOTAL_NO_CUADRA`, `LINEAS_INVALIDAS`, `LINEA_INVALIDA`,
+`IDEMPOTENCY_KEY_REQUERIDA`, `IDEMPOTENCY_KEY_INVALIDA`, `VALIDACION_ERROR`; 409 `DEUDA_DUPLICADA` (mismo proveedor y misma nota,
+pagada o no), `IDEMPOTENCY_KEY_EN_USO`, `DEUDA_ID_EN_USO`. Repetir con la misma llave devuelve la misma respuesta con `replay: true`.
+Cada creación deja un `asistenteLog` con `operation: "deudas_create"`.
+
+### GET /deudas?proveedor=Memo%20Gonzáles (o proveedorId=…)[&pendientes=true]
+
+Con proveedor: `totalPendiente` (suma de `saldoPendiente` de sus deudas, igual que la tarjeta de DeudasMenu), `notasPendientes` y
+`deudas` (más reciente primero). Sin proveedor: `saldoPendienteDeudas` (suma de `saldoPendiente` con `estado: "pendiente"`, igual que
+Existencias), `proveedores` (resumen por proveedor) y todas las `deudas`. `pendientes=true` deja solo las de saldo > 0.
+
+### POST /deudas/deshacer
+
+```json
+{ "idempotencyKey": "deuda-memo-386" }
+```
+
+Borra la deuda y sus productos solo si sigue igual: sin abonos, mismos productos y sin `fechaActualizacion` (la app la pone en cada
+abono o edición). Si no, `409 DEUDA_MODIFICADA` con `details.camposCambiados`. Acepta `dryRun`. Repetir con la misma llave devuelve
+la misma respuesta; con otra llave de deshacer, `400 YA_DESHECHO`; sin la operación, `404 OPERACION_NO_ENCONTRADA`.
