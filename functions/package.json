@@ -2,7 +2,7 @@
   "name": "rey-pez-functions",
   "description": "Cloud Functions de Rey Pez (asesor experto con Claude)",
   "engines": {
-    "node": "20"
+    "node": "22"
   },
   "main": "index.js",
   "scripts": {
