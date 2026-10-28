@@ -25,6 +25,7 @@ La función `asistente` expone endpoints protegidos con autenticación por Beare
 - **POST /pedidos/crudo**, **GET /pedidos/crudo**, **POST /pedidos/crudo/deshacer**
 - **POST /abonos**, **GET /abonos**, **POST /abonos/deshacer**
 - **POST /precios**, **GET /precios**
+- **POST /notas**, **GET /notas**, **POST /notas/deshacer** (Notas por Cliente)
 
 Todos los endpoints requieren autenticación mediante el header `Authorization: Bearer <API_KEY>`.
 
@@ -2033,3 +2034,48 @@ Errores con formato `{ "error": { "code": "...", "message": "..." } }`:
 medidas, kilos o dryRun inválidos; 404 `PEDIDO_NO_ENCONTRADO` si falta el pedido
 limpio (incluido ID de un pedido crudo). La autenticación responde 401 como las
 demás rutas.
+
+## API de Notas por Cliente (notas de venta)
+
+Escribe en la colección `notes` con el mismo documento que guarda `SaleNote.vue`:
+`{ folio, client, currentDate, observaciones, products: [{ product, kilos, pricePerKilo, total }], abonos, flete, isPaid, creationDate }`
+más `_asistenteId` (para poder deshacer). `total = kilos * pricePerKilo` y el total de la nota es
+`suma(total) - flete` (el flete se RESTA, igual que en la app). El cliente debe existir en la colección `clients` (campo `name`).
+
+`clientBalances/{cliente}.balance` es el **saldo a favor** del cliente (sobrante de un abono en NoteMenu), no su deuda.
+Igual que SaleNote al agregar el primer producto: si el saldo a favor es > 0 se agrega completo como abono de la nota
+(`{ monto, fecha }`) y `clientBalances` queda en 0. Si no hay saldo a favor, `clientBalances` no se toca.
+
+### POST /notas
+
+```json
+{ "cliente": "Joel Sonny", "folio": 5798, "fecha": "2026-10-28",
+  "lineas": [{ "producto": "71/90", "kg": 88, "precio": 180 }],
+  "flete": 0, "observaciones": "", "idempotencyKey": "nota-5798", "dryRun": false }
+```
+
+Respuesta: `noteId`, `nota` (documento guardado), `totales` (`subtotal`, `flete`, `totalFinal`, `totalAbonado`, `saldoRestante`),
+`saldoAFavor` (`antes`, `aplicadoComoAbono`, `despues`, `excedenteNoDevuelto`), `deudaPendienteNotas` (`antes`, `despues`) y
+`folioEnOtrosClientes`. `dryRun: true` calcula todo sin escribir (no pide idempotencyKey).
+
+Errores: 400 `CLIENTE_REQUERIDO` / `CLIENTE_DESCONOCIDO` (con `details.clientes`), `FOLIO_INVALIDO`, `FECHA_INVALIDA`,
+`LINEAS_REQUERIDAS`, `LINEA_INVALIDA`, `FLETE_INVALIDO`, `IDEMPOTENCY_KEY_REQUERIDA`, `IDEMPOTENCY_KEY_INVALIDA`;
+409 `FOLIO_DUPLICADO` (mismo folio en el MISMO cliente; la app genera folios al azar, así que entre clientes se permite y se avisa en
+`folioEnOtrosClientes`); 409 `IDEMPOTENCY_KEY_EN_USO` si la llave es de otra operación. Repetir con la misma llave devuelve la misma
+respuesta con `replay: true`. Cada creación deja un `asistenteLog` con `operation: "notas_create"`.
+
+### GET /notas?cliente=Joel%20Sonny[&pendientes=true]
+
+Devuelve `notas` (más reciente primero, con `totalFinal`, `totalAbonado`, `saldoPendiente`, `isPaid`), `saldoAFavorGuardado.balance`
+(lo que hay en `clientBalances`) y `deudaPendienteNotas.total` (suma de saldos pendientes de sus notas). Son dos números distintos:
+un cliente con deuda normalmente tiene saldo a favor 0.
+
+### POST /notas/deshacer
+
+```json
+{ "idempotencyKey": "nota-5798" }
+```
+
+Borra la nota y devuelve a `clientBalances` el saldo a favor que se había aplicado. Solo si la nota sigue igual (folio, cliente, fecha,
+productos, abonos, flete, isPaid); si alguien le registró un abono o la editó responde `409 NOTA_MODIFICADA`. Repetir con la misma llave
+devuelve la misma respuesta; con otra llave de deshacer responde `400 YA_DESHECHO`.
